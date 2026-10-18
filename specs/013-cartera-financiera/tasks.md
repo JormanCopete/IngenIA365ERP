@@ -4903,6 +4903,18 @@ Respuestas del dueño a las preguntas abiertas de la fase 24 (notas del bloque 2
     `ICalendarioHabil` (`CalendarioDeDiasHabiles`, los `FESTIVO` nacionales replicados —Ley 51, registrados por el maestro—, sábado y domingo
     de descanso); no se duplicó ningún lector. Por la pregunta E5 ese lector **no** lee `PAY_Holidays` de Nómina (que tiene los festivos
     «Manual» de cada cooperativa). Sin calendario se comporta como antes. Pruebas: `ExcluidosYPlazoDelSicsesTests.El_ultimo_dia_habil_descuenta_los_festivos`.
+- [X] T1096 Certificado tributario: (a) el anticipo ingresado en el año Y y aplicado a intereses en Y+1 aparece en el certificado del año Y
+  como renglón «anticipo recibido»; (b) la corrección monetaria UVR del año, en renglón aparte. PDF, DTO y manual
+  - Hecho el 2026-10-18. (a) `AnticiposDelCertificado` devuelve además `RecibidoPendiente`: lo que ingresó en el año y al 31 de diciembre sigue
+    en los lotes del anticipo sin aplicar —lo que se aplicará el año siguiente; al emitir el certificado de Y la reconstrucción va hasta el 31
+    de diciembre, así que el renglón es todo el anticipo pendiente que ingresó en Y, no sólo la parte que irá a intereses—. (b) La corrección
+    monetaria **causada** en el año sobre lo que se debe (filas `MonetaryCorrection`, sin anticipo ni saldo a favor), de una reconstrucción con
+    el libro desde el 1 de enero (o el desembolso) que sólo se hace en los créditos en UVR (`CreditoParaCertificar.ConLibroDelAño`). Ninguno de
+    los dos suma a los intereses pagados. `InteresesPagadosPorCredito.AnticipoRecibido`/`.CorreccionMonetaria`, totales en
+    `CertificadoTributarioArmado`, `CreditoCertificadoTributario` con dos campos opcionales, datos `advanceReceived`, `monetaryCorrection`,
+    `totalAdvanceReceived`, `totalMonetaryCorrection`; el PDF (`DocumentosDeCarteraReport`) pinta un renglón por crédito debajo de cada tabla,
+    sólo si no es cero. Pruebas: `CertificadoTributarioTests` (+3, Domain) y `DocumentosDeCarteraReportTests` (+1, sin correr: proyecto de
+    integración). Manual `cartera-documentos-al-deudor.md` §2b y §9; adaptadores §8.1; contabilidad.md §29 (lo abierto, resuelto). Sin migración.
 
 **Checkpoint**: cada entrega promovida con su evidencia; `CLAUDE.md`, índice y runbooks al día; COOFLOPAL en vivo
 sólo con Recaudo y Tesorería reales.

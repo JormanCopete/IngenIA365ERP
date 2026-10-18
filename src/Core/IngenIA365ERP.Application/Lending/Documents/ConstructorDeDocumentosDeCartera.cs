@@ -355,9 +355,16 @@ public sealed class ConstructorDeDocumentosDeCartera(
             if (!cargado.Listo) return Falla(cargado.Error!);
             if (Origen(cargado) is not { } origen || origen > cierre) continue;
             EstadoDelCredito estado;
+            EstadoDelCredito? conLibroDelAño = null;
             try
             {
                 estado = MotorDeCartera.Reconstruir(cargado.Entrada!, cierre);
+                // Decisión del dueño del 2026-10-18: la corrección monetaria UVR del año sale del libro desde el 1 de enero (o el desembolso).
+                if (cargado.Entrada!.Uvr is not null)
+                {
+                    var desde = new DateOnly(año, 1, 1);
+                    conLibroDelAño = MotorDeCartera.Reconstruir(cargado.Entrada!, cierre, origen > desde ? origen : desde);
+                }
             }
             catch (ReglaDeCarteraException ex)
             {
@@ -365,7 +372,10 @@ public sealed class ConstructorDeDocumentosDeCartera(
             }
             if (SinUsura(cargado, estado, cierre, p.Hoy) is { } faltante) return Falla(faltante);
             var vivienda = EsVivienda(catalogo, cargado.Vigentes.ModalityCode, cargado.Vigentes.SubsegmentCode);
-            paraCertificar.Add(new CreditoParaCertificar(credito.Number, await NombreDeLineaAsync(credito.CreditLineId, ct), vivienda, estado));
+            paraCertificar.Add(new CreditoParaCertificar(credito.Number, await NombreDeLineaAsync(credito.CreditLineId, ct), vivienda, estado)
+            {
+                ConLibroDelAño = conLibroDelAño,
+            });
             porNumero[credito.Number] = (credito, estado);
         }
 
@@ -387,10 +397,13 @@ public sealed class ConstructorDeDocumentosDeCartera(
         datos["loans"] = certificado.Todos.Select(c => new
         {
             number = c.Numero, housing = c.EsVivienda, interestPaid = c.InteresesPagados, interestPaidWithAdvance = c.InteresesConAnticipo,
-            balanceAtYearEnd = c.SaldoTotal,
+            balanceAtYearEnd = c.SaldoTotal, advanceReceived = c.AnticipoRecibido, monetaryCorrection = c.CorreccionMonetaria,
         }).ToList();
         datos["totalInterestPaid"] = certificado.TotalInteresesPagados;
         datos["totalHousingInterestPaid"] = certificado.TotalInteresesDeVivienda;
+        // Decisiones del dueño del 2026-10-18: los renglones del anticipo recibido y de la corrección monetaria UVR.
+        datos["totalAdvanceReceived"] = certificado.TotalAnticipoRecibido;
+        datos["totalMonetaryCorrection"] = certificado.TotalCorreccionMonetaria;
         datos["balanceIncludes"] = saldoIncluye.ToString();
         var version = porNumero.Values.Select(x => x.Estado.RulesVersion).FirstOrDefault() ?? VersionesDeReglas.Vigente;
         return Result.Success(new DocumentoArmado(lineas,
@@ -411,7 +424,8 @@ public sealed class ConstructorDeDocumentosDeCartera(
     }
 
     private static CreditoCertificadoTributario Impreso(InteresesPagadosPorCredito c) => new(c.Numero, c.Linea, c.InteresCorrientePagado,
-        c.InteresDeMoraPagado, c.InteresesPagados, c.SaldoDeCapital, c.SaldoDeIntereses, c.SaldoDeOtros, c.SaldoTotal);
+        c.InteresDeMoraPagado, c.InteresesPagados, c.SaldoDeCapital, c.SaldoDeIntereses, c.SaldoDeOtros, c.SaldoTotal, c.AnticipoRecibido,
+        c.CorreccionMonetaria);
 
     /// <summary>La fecha valor del primer desembolso o del saldo migrado conocidos en R; nula si el crédito no tiene ninguno.</summary>
     private static DateOnly? Origen(CreditoCargado cargado) =>

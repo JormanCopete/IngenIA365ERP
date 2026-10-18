@@ -982,7 +982,7 @@ que el validador de la Superintendencia acepte el archivo de un cierre de prueba
 | `GeneralClearance` | Paz y salvo general de la persona | Ver §8.6 | K1 (I5, C88) |
 | `BalanceCertificate` | Saldo por concepto a una fecha | Crédito con historia a esa fecha | K1 (I5, C88) |
 | `Statement` | Extracto de un período | Período con movimientos o saldo | K5 |
-| `TaxCertificate` | Intereses pagados en el año por crédito y saldo al 31 de diciembre | Año terminado | K5 (vivienda separada desde K6b) |
+| `TaxCertificate` | Intereses pagados en el año por crédito y saldo al 31 de diciembre; en renglones aparte (2026-10-18) el anticipo recibido en el año y pendiente de aplicar al 31 de diciembre y la corrección monetaria UVR del año | Año terminado | K5 (vivienda separada desde K6b) |
 
 **Entregas (C88)**: las tablas `LND_IssuedDocument*` nacen en la migración `CarteraNucleo` (K1). Hasta K5, pedir un
 extracto o un certificado tributario responde `Lending.Document.KindNotAvailable`. Antes de activar Cartera no se

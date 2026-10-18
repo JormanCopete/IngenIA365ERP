@@ -1760,7 +1760,8 @@ Con K6b (vivienda Ley 546 y UVR; FR-024, D18) Cartera emite un hecho masivo nuev
 - **Comprobante**: el `CA` del día, resumido con la causación (una línea por crédito donde la cuenta exige tercero o cruce).
 - **Conciliación**: el saldo en pesos de un crédito en UVR es Σ causado + Σ corrección − Σ pagado: sin este hecho, el cuadre de
   vivienda no cierra contra el libro.
-- **Abierto**: si el certificado tributario incluye la corrección monetaria pagada junto a los intereses de vivienda (hoy no).
+- **Resuelto (decisión del dueño del 2026-10-18)**: el certificado tributario lleva la corrección monetaria UVR **causada en el año** en un
+  renglón aparte por crédito, que no suma a los intereses pagados (`docs/manual/cartera-documentos-al-deudor.md` §2b).
 
 Lo fija el caso 50 de `ConstructorDeLineasDeCarteraTests` (`Casos/50-correccion-monetaria-uvr.json`).
 

@@ -137,7 +137,11 @@ public sealed record CuerpoDeExtracto(
     decimal TotalInicial,
     decimal TotalFinal) : CuerpoDeDocumentoDeCartera;
 
-/// <summary>Un crédito del certificado tributario: los intereses pagados en el año y el saldo al 31 de diciembre. (nuevo)</summary>
+/// <summary>
+/// Un crédito del certificado tributario: los intereses pagados en el año y el saldo al 31 de diciembre. Decisiones del dueño del 2026-10-18: dos
+/// renglones informativos, el <see cref="AnticipoRecibido"/> en el año y pendiente de aplicar al 31 de diciembre y la
+/// <see cref="CorreccionMonetaria"/> UVR causada en el año (cero si no hay). (nuevo)
+/// </summary>
 public sealed record CreditoCertificadoTributario(
     string Numero,
     string Linea,
@@ -147,7 +151,9 @@ public sealed record CreditoCertificadoTributario(
     decimal SaldoDeCapital,
     decimal SaldoDeIntereses,
     decimal SaldoDeOtros,
-    decimal SaldoTotal);
+    decimal SaldoTotal,
+    decimal AnticipoRecibido = 0m,
+    decimal CorreccionMonetaria = 0m);
 
 /// <summary>
 /// El certificado tributario del año (K5, T0973; §8.6; FR-131): los créditos con sus intereses pagados y su saldo al 31 de diciembre y, aparte, la
@@ -163,6 +169,13 @@ public sealed record CuerpoDeCertificadoTributario(
 {
     public const string TituloDeVivienda = "Créditos de vivienda";
     public const string SinVivienda = "La persona no tuvo créditos de vivienda con la cooperativa en el año.";
+
+    /// <summary>Decisión del dueño del 2026-10-18: el renglón del anticipo recibido en el año y pendiente de aplicar ({0} crédito, {1} año, {2} valor).</summary>
+    public const string RenglonDeAnticipoRecibido =
+        "Crédito {0}: anticipo recibido en {1} y pendiente de aplicar al 31/12/{1}: {2}. Se aplicará el año siguiente; no suma a los intereses pagados.";
+
+    /// <summary>Decisión del dueño del 2026-10-18: el renglón de la corrección monetaria UVR del año ({0} crédito, {1} año, {2} valor).</summary>
+    public const string RenglonDeCorreccionMonetaria = "Crédito {0}: corrección monetaria UVR causada en {1}: {2}. No suma a los intereses pagados.";
 }
 
 /// <summary>Los nombres de las clases y sus leyendas (§8.10). (nuevo)</summary>

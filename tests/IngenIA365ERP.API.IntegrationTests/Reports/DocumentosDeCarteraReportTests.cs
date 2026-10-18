@@ -106,6 +106,29 @@ public class DocumentosDeCarteraReportTests
         Pintar(Tributario(conVivienda: true)).Should().NotEqual(Pintar(Tributario()));
     }
 
+    [Fact]
+    public void El_certificado_tributario_lleva_en_renglon_aparte_el_anticipo_recibido_y_la_correccion_monetaria()
+    {
+        // Decisiones del dueño del 2026-10-18: el anticipo recibido en el año y pendiente de aplicar, y la corrección monetaria UVR del año.
+        var modelo = Tributario(conVivienda: true) with
+        {
+            Cuerpo = new CuerpoDeCertificadoTributario(2026,
+                [new CreditoCertificadoTributario("CR-000123", "Consumo", 120_000m, 1_500m, 121_500m, 2_030_000m, 12_000m, 0m, 2_042_000m,
+                    AnticipoRecibido: 250_000m)],
+                [new CreditoCertificadoTributario("CR-000777", "Vivienda", 800_000m, 0m, 800_000m, 50_000_000m, 0m, 0m, 50_000_000m,
+                    CorreccionMonetaria: 1_234_567.89m)],
+                121_500m, 800_000m, 52_042_000m),
+        };
+
+        var textos = DocumentosDeCarteraReport.TextosImpresos(modelo);
+
+        textos.Should().Contain(t => t.StartsWith("Crédito CR-000123: anticipo recibido en 2026 y pendiente de aplicar al 31/12/2026: $ 250.000,00"));
+        textos.Should().Contain(t => t.StartsWith("Crédito CR-000777: corrección monetaria UVR causada en 2026: $ 1.234.567,89"));
+        textos.Should().NotContain(t => t.StartsWith("Crédito CR-000123: corrección monetaria"), "un renglón en cero no se pinta");
+        textos.Should().Contain("Total de intereses pagados: $ 121.500,00", "los renglones no suman a los intereses pagados");
+        Pintar(modelo).Should().NotEqual(Pintar(Tributario(conVivienda: true)));
+    }
+
     private static byte[] Pintar(DocumentoDeCarteraParaImprimir d) => new DocumentoDeCarteraPdfRenderer().Render(d);
 
     public static TheoryData<string> Clases => new() { "plan", "paz", "general", "certificado", "extracto", "tributario" };
