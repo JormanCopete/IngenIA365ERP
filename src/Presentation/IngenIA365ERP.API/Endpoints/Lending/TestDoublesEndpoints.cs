@@ -117,6 +117,29 @@ public class TestDoublesEndpoints : ICarterModule
             .ConClaveDeOperacion()
             .RequirePermission(Operar);
 
+        // Feature 014, US4 (T113; api.md §18.4): consultar las cuentas de una persona, simular, retirar y trasladar como lo haría Recaudo.
+        dobles.MapGet("/collector/accounts", async (Guid personPublicId, DateOnly? date, bool? includeAsSignatory, ISender sender, CancellationToken ct) =>
+                await sender.Send(new ListTestCollectorAccountsQuery(personPublicId, date, includeAsSignatory ?? false), ct))
+            .WithName("Lending_TestDoubles_CollectorAccounts")
+            .RequirePermission(Operar);
+
+        dobles.MapPost("/collector/accounts/simulations", async (SolicitudDeSimulacionDeCuenta body, ISender sender, CancellationToken ct) =>
+                await sender.Send(new SimulateTestCollectorAccountOperationQuery(body), ct))
+            .WithName("Lending_TestDoubles_CollectorAccountSimulations")
+            .RequirePermission(Operar);
+
+        dobles.MapPost("/collector/accounts/withdrawals", async (SolicitudDeRetiro body, HttpContext http, ISender sender, CancellationToken ct) =>
+                await sender.Send(new ApplyTestCollectorAccountWithdrawalCommand(body) { OperationKey = http.ClaveDeOperacion() }, ct))
+            .WithName("Lending_TestDoubles_CollectorAccountWithdrawals")
+            .ConClaveDeOperacion()
+            .RequirePermission(Operar);
+
+        dobles.MapPost("/collector/accounts/transfers", async (SolicitudDeTraslado body, HttpContext http, ISender sender, CancellationToken ct) =>
+                await sender.Send(new ApplyTestCollectorAccountTransferCommand(body) { OperationKey = http.ClaveDeOperacion() }, ct))
+            .WithName("Lending_TestDoubles_CollectorAccountTransfers")
+            .ConClaveDeOperacion()
+            .RequirePermission(Operar);
+
         // K2 (US10, T0850): el recaudador de prueba confirma el envío de un archivo de descuentos y devuelve la respuesta de la pagaduría, como REC.
         dobles.MapPost("/collector/payroll-deduction-files/{id:guid}/confirm-sent", async (Guid id, ConfirmacionDeEnvioRequest? body, HttpContext http,
                 ISender sender, CancellationToken ct) =>

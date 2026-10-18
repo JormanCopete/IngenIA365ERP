@@ -9,7 +9,8 @@ namespace IngenIA365ERP.API.Endpoints.Lending.Deposits;
 /// <summary>
 /// La exención del GMF (feature 014, US2, T078; contracts/api.md §10 de la 014), sobre <see cref="LendingGroup"/>: <c>/api/lending/gmf-exemptions</c>
 /// —las marcas de una persona, marcar una cuenta de ahorro (o reemplazar la vigente) y terminar una marca—. Leer exige <c>Lending.Accounts.Read</c>;
-/// marcar y terminar, <c>Lending.GmfExemptions.Manage</c> con <c>Idempotency-Key</c>. El uso exento del mes (<c>/usage</c>) llega con el GMF de K8 (US4).
+/// marcar y terminar, <c>Lending.GmfExemptions.Manage</c> con <c>Idempotency-Key</c>. Desde K8 (US4, T123), el uso exento del mes de una persona
+/// (<c>/usage</c>).
 /// Cada ruta sólo reenvía al <see cref="ISender"/>. (nuevo)
 /// </summary>
 public class GmfExemptionsEndpoints : ICarterModule
@@ -24,6 +25,11 @@ public class GmfExemptionsEndpoints : ICarterModule
         marcas.MapGet("/", async (Guid? personPublicId, bool? active, ISender sender, CancellationToken ct) =>
                 await sender.Send(new ListGmfExemptAccountsQuery(personPublicId, active), ct))
             .WithName("Lending_GmfExemptions_List")
+            .RequirePermission(Leer);
+
+        marcas.MapGet("/usage", async (Guid personPublicId, int? year, int? month, ISender sender, CancellationToken ct) =>
+                await sender.Send(new IngenIA365ERP.Application.Lending.Deposits.Operations.GetGmfMonthlyUsageQuery(personPublicId, year, month), ct))
+            .WithName("Lending_GmfExemptions_Usage")
             .RequirePermission(Leer);
 
         marcas.MapPost("/", async (MarcarRequest body, HttpContext http, ISender sender, CancellationToken ct) =>

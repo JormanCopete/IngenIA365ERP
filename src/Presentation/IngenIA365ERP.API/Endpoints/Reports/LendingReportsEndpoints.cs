@@ -108,6 +108,16 @@ public class LendingReportsEndpoints : ICarterModule
             (f, q) => new Application.Lending.Deposits.Reports.ContributionsByMemberReportQuery(f, Texto(q, "class")));
         group.MapVistaDeCartera(Application.Lending.Deposits.Reports.InstallmentsInArrearsReportQueryHandler.Vista,
             (f, _) => new Application.Lending.Deposits.Reports.InstallmentsInArrearsReportQuery(f));
+        // Feature 014, US4 (T121; api.md §18.1): los saldos de captaciones (groupBy), los movimientos del libro (account, kind, dateKind), el GMF del mes
+        // (year, month) y los cargos (status).
+        group.MapVistaDeCartera(Application.Lending.Deposits.Reports.DepositBalancesReportQueryHandler.Vista,
+            (f, q) => new Application.Lending.Deposits.Reports.DepositBalancesReportQuery(f, Texto(q, "groupBy")));
+        group.MapVistaDeCartera(Application.Lending.Deposits.Reports.DepositTransactionsReportQueryHandler.Vista,
+            (f, q) => new Application.Lending.Deposits.Reports.DepositTransactionsReportQuery(f, Texto(q, "account"), Texto(q, "kind"), Texto(q, "dateKind")));
+        group.MapVistaDeCartera(Application.Lending.Deposits.Reports.GmfReportQueryHandler.Vista,
+            (f, q) => new Application.Lending.Deposits.Reports.GmfReportQuery(f, Entero(q, "year"), Entero(q, "month")));
+        group.MapVistaDeCartera(Application.Lending.Deposits.Reports.ChargesReportQueryHandler.Vista,
+            (f, q) => new Application.Lending.Deposits.Reports.ChargesReportQuery(f, Texto(q, "status")));
     }
 
     private static int? Entero(IQueryCollection q, string clave) =>

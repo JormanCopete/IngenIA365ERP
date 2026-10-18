@@ -48,6 +48,12 @@ public class LinesEndpoints : ICarterModule
             .ConClaveDeOperacion()
             .RequirePermission(AdministrarCaptacion);
 
+        // US4 (T123): el catálogo de cargos de la versión vigente a una fecha.
+        lineas.MapGet("/{id:guid}/charges", async (Guid id, DateOnly? date, ISender sender, CancellationToken ct) =>
+                await sender.Send(new IngenIA365ERP.Application.Lending.Deposits.Charges.ListDepositLineChargesQuery(id, date), ct))
+            .WithName("Lending_Lines_Charges")
+            .RequirePermission(VerCaptacion);
+
         lineas.MapGet("/{id:guid}/deposit-versions", async (Guid id, ISender sender, CancellationToken ct) =>
                 await sender.Send(new ListLendingLineVersionsQuery(id, LineNature.Deposit), ct))
             .WithName("Lending_Lines_ListDepositVersions")
