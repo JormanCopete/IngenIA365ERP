@@ -26,6 +26,10 @@ public static partial class GramaticaDeClaves
     [GeneratedRegex("^REC:[^\\s]+$", RegexOptions.CultureInvariant)]
     private static partial Regex Recaudo();
 
+    /// <summary>Feature 014 (T042; contrato-de-cuentas §3.12): Tesorería, <c>TES:{documento:N}:{cuenta u obligación:N}</c>.</summary>
+    [GeneratedRegex("^TES:[0-9a-f]{32}:[0-9a-f]{32}$", RegexOptions.CultureInvariant)]
+    private static partial Regex Tesoreria();
+
     /// <summary>¿La clave cumple la gramática de la clase del recaudador?</summary>
     public static bool Cumple(ClaseDeRecaudador clase, string? clave)
     {
@@ -37,6 +41,7 @@ public static partial class GramaticaDeClaves
             ClaseDeRecaudador.Test => Prueba().IsMatch(clave),
             ClaseDeRecaudador.Receipts => Recaudo().IsMatch(clave),
             ClaseDeRecaudador.Contributions => !clave.Any(char.IsWhiteSpace),
+            ClaseDeRecaudador.Treasury => Tesoreria().IsMatch(clave),
             _ => false,
         };
     }
@@ -48,6 +53,7 @@ public static partial class GramaticaDeClaves
         ClaseDeRecaudador.OwnLoanPayoff => "La clave de la recogida es CAR:{desembolso:N}:{obligación:N}.",
         ClaseDeRecaudador.Test => "La clave del recaudador de prueba es TST:{guid:N}.",
         ClaseDeRecaudador.Receipts => "La clave de Recaudo empieza con REC: y no lleva espacios.",
+        ClaseDeRecaudador.Treasury => "La clave de Tesorería es TES:{documento:N}:{cuenta:N}.",
         _ => $"La clave no cumple la gramática del recaudador (hasta {LargoMaximo} caracteres, sin espacios).",
     };
 }

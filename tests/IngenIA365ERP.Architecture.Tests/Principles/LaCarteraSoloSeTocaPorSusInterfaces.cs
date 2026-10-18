@@ -25,6 +25,11 @@ namespace IngenIA365ERP.Architecture.Tests.Principles;
 /// mudanza de T0185; el retiro de asociado ya pasa por la consulta, T0170), y ninguna tabla <c>INV_</c> tiene FK a <c>LND_</c>.
 /// Sección B (T0184, T0185, T0190): lo conservado se mudó a <c>Savings</c> y entra al ArchUnit; la exención por nombre de
 /// <c>SavingsAccount</c> y la FK heredada de <c>PAY_SettlementDeductions</c> se retiraron con la cartera heredada.</para>
+///
+/// <para>Feature 014 (T043; research R29; contrato-de-cuentas §1): <b>seis</b> puertos ofrecidos —<c>IConsultasDeCartera</c> (con su tercer método,
+/// <c>ProductosDeCaptacionAsync</c>), <c>IReservasDeCartera</c>, <c>IConsultaDeObligaciones</c>, <c>IContratoDeObligaciones</c>,
+/// <c>IDimensionesDeCartera</c> e <c>IContratoDeCuentas</c>— más <c>IConsultaDeAportes</c>, que se mudó de <c>Common.Integration.Savings</c> y pasó de
+/// consumido a ofrecido. Sin excepciones por nombre. Las captaciones (<c>Application/Lending/Deposits</c>) entran a las carpetas de Cartera.</para>
 /// </summary>
 public class LaCarteraSoloSeTocaPorSusInterfaces
 {
@@ -56,6 +61,10 @@ public class LaCarteraSoloSeTocaPorSusInterfaces
         // IContratoDeObligaciones / IConsultaDeObligaciones; Contabilidad por IContabilidadParaCartera; la mensajería y el registro son de Common.
         "Core/IngenIA365ERP.Application/Lending/Payments",
         "Core/IngenIA365ERP.Application/Lending/Integration",
+        // Feature 014 (T043): las captaciones y aportes. Nómina, Recaudo y Tesorería llegan sólo por IContratoDeCuentas; Contabilidad, por la bandeja.
+        "Core/IngenIA365ERP.Application/Lending/Deposits",
+        "Core/IngenIA365ERP.Domain/Lending/Deposits",
+        "Core/IngenIA365ERP.Domain/Entities/Lending/Deposits",
     ];
 
     /// <summary>Espacios de otros módulos que el ArchUnit revisa (los de <see cref="CarpetasDeOtrosModulos"/>).</summary>
@@ -150,23 +159,29 @@ public class LaCarteraSoloSeTocaPorSusInterfaces
     public void Los_puertos_que_Cartera_ofrece_declaran_exactamente_sus_metodos()
     {
         // T90, R117; US7 (T0608, enmienda A1, C27): IDimensionesDeCartera, el que Contabilidad usa para la matriz y la completitud.
-        Assert.Equal(["EstadoCrediticioAsync", "EstadoDeValidacionAsync"], MetodosDe(typeof(IConsultasDeCartera)));
+        // Feature 014 (T043; FR-095): el tercer método de las consultas.
+        Assert.Equal(["EstadoCrediticioAsync", "EstadoDeValidacionAsync", "ProductosDeCaptacionAsync"], MetodosDe(typeof(IConsultasDeCartera)));
         Assert.Equal(["CatalogoAsync", "CombinacionesEnUsoAsync"], MetodosDe(typeof(IDimensionesDeCartera)));
         Assert.Equal(["LiberarAsync", "ReservarAsync"], MetodosDe(typeof(IReservasDeCartera)));
         Assert.Equal(["CuotasDeNominaAsync", "ObligacionesAsync"], MetodosDe(typeof(IConsultaDeObligaciones)));
         Assert.Equal(["AplicarAsync", "ListarAsync", "ResolverSaldoAFavorAsync", "ReversarAsync", "SimularAsync"], MetodosDe(typeof(IContratoDeObligaciones)));
         Assert.Equal(1, IContratoDeObligaciones.VersionDelContrato);
-        foreach (var puerto in new[] { typeof(IConsultasDeCartera), typeof(IReservasDeCartera), typeof(IConsultaDeObligaciones), typeof(IContratoDeObligaciones),
-                     typeof(IDimensionesDeCartera) })
+        // Feature 014 (T039, T041; R09, R20): el contrato de cuentas con sus siete métodos y la consulta de aportes en su versión 2.
+        Assert.Equal(["ConsignarAsync", "ConsultarAsync", "ListarExigiblesAsync", "RetirarAsync", "ReversarAsync", "SimularAsync", "TrasladarAsync"],
+            MetodosDe(typeof(IContratoDeCuentas)));
+        Assert.Equal(1, IContratoDeCuentas.VersionDelContrato);
+        Assert.Equal(["SaldosAsync"], MetodosDe(typeof(IConsultaDeAportes)));
+        Assert.Equal(2, IConsultaDeAportes.VersionDelContrato);
+        foreach (var puerto in PuertosOfrecidos)
             Assert.Equal("IngenIA365ERP.Application.Common.Integration.Lending", puerto.Namespace);
+        Assert.Equal(7, PuertosOfrecidos.Length);
     }
 
     [Fact]
     public void Fuera_de_Cartera_solo_los_provisionales_del_mismo_espacio_implementan_los_puertos()
     {
         // Los dobles viven en tests/ (otro ensamblado). Las implementaciones reales vivirán en Application.Lending.Integration (US5, US6).
-        var puertos = new[] { typeof(IConsultasDeCartera), typeof(IReservasDeCartera), typeof(IConsultaDeObligaciones), typeof(IContratoDeObligaciones),
-            typeof(IDimensionesDeCartera) };
+        var puertos = PuertosOfrecidos;
         var ensamblados = new[] { typeof(IngenIA365ERP.Application.DependencyInjection).Assembly, typeof(IngenIA365ERP.Domain.Common.BaseEntity).Assembly, typeof(ApplicationDbContext).Assembly };
         var ajenos = ensamblados.SelectMany(a => a.GetTypes())
             .Where(t => t is { IsClass: true, IsAbstract: false } && puertos.Any(p => p.IsAssignableFrom(t)))
@@ -299,6 +314,35 @@ public class LaCarteraSoloSeTocaPorSusInterfaces
         Assert.Equal("IngenIA365ERP.Application.Lending.Integration", dimensiones.Namespace);
         var di = FuenteSinComentarios.Leer(Path.Combine(RepoPath.FindRepoRoot(), "src", "Core", "IngenIA365ERP.Application", "DependencyInjection.cs"));
         Assert.Matches(@"IDimensionesDeCartera,\s*[\w.]*DimensionesDeCartera>", di);
+    }
+
+    /// <summary>Los seis puertos que la Cartera ofrece y la consulta de aportes (feature 014, T043).</summary>
+    private static readonly System.Type[] PuertosOfrecidos =
+    [
+        typeof(IConsultasDeCartera), typeof(IReservasDeCartera), typeof(IConsultaDeObligaciones), typeof(IContratoDeObligaciones),
+        typeof(IDimensionesDeCartera), typeof(IContratoDeCuentas), typeof(IConsultaDeAportes),
+    ];
+
+    /// <summary>
+    /// Feature 014 (T040, T041; contrato-de-cuentas §3.13, §4): mientras ninguna naturaleza esté activada, <c>DependencyInjection</c> registra el
+    /// contrato de cuentas «sin activar» de Cartera (que sólo lee la naturaleza de la cuenta y no escribe) y la consulta de aportes «no disponible»; la
+    /// carpeta <c>Common/Integration/Savings</c> ya no existe.
+    /// </summary>
+    [Fact]
+    public void El_contrato_de_cuentas_y_la_consulta_de_aportes_arrancan_sin_activar()
+    {
+        var sinActivar = typeof(IngenIA365ERP.Application.Lending.Integration.ContratoDeCuentasSinActivar);
+        Assert.True(typeof(IContratoDeCuentas).IsAssignableFrom(sinActivar));
+        Assert.True(typeof(IConsultaDeAportes).IsAssignableFrom(typeof(ConsultaDeAportesNoDisponible)));
+        var raiz = RepoPath.FindRepoRoot();
+        var di = FuenteSinComentarios.Leer(Path.Combine(raiz, "src", "Core", "IngenIA365ERP.Application", "DependencyInjection.cs"));
+        Assert.Matches(@"IContratoDeCuentas,\s*[\w.]*ContratoDeCuentasSinActivar>", di);
+        Assert.Matches(@"IConsultaDeAportes,\s*[\w.]*ConsultaDeAportesNoDisponible>", di);
+        var savings = Path.Combine(raiz, "src", "Core", "IngenIA365ERP.Application", "Common", "Integration", "Savings");
+        Assert.False(Directory.Exists(savings) && Directory.EnumerateFiles(savings, "*.cs", SearchOption.AllDirectories).Any(),
+            "IConsultaDeAportes se mudó a Common/Integration/Lending (R20).");
+        Assert.DoesNotContain(typeof(IngenIA365ERP.Application.DependencyInjection).Assembly.GetTypes(),
+            t => (t.Namespace ?? string.Empty).StartsWith("IngenIA365ERP.Application.Common.Integration.Savings", StringComparison.Ordinal));
     }
 
     private static List<string> MetodosDe(System.Type puerto) => puerto

@@ -118,12 +118,19 @@ public class InventarioNoConoceContabilidadNiCartera
     [Fact]
     public void El_puerto_de_Cartera_declara_exactamente_sus_dos_consultas()
     {
-        // I3 (T649, T651): IConsultasDeCartera existe desde el crédito provisional, en los puertos de la plataforma, con exactamente sus
-        // dos consultas; mientras IC esté pendiente (D-02) la implementación registrada responde CarteraNoHabilitada.
+        // I3 (T649, T651): IConsultasDeCartera existe desde el crédito provisional, en los puertos de la plataforma, con sus dos consultas de
+        // Inventario; mientras IC esté pendiente (D-02) la implementación registrada responde CarteraNoHabilitada. Feature 014 (T043; contrato-de-cuentas
+        // §5) suma la tercera, ProductosDeCaptacionAsync, para Personas, Asociados y Nómina: Inventario sigue usando sólo las dos suyas.
         var puerto = typeof(IngenIA365ERP.Application.Common.Integration.Lending.IConsultasDeCartera);
         Assert.Equal("IngenIA365ERP.Application.Common.Integration.Lending", puerto.Namespace);
         Assert.Single(typeof(IngenIA365ERP.Application.DependencyInjection).Assembly.GetTypes(), t => t.IsInterface && t.Name == "IConsultasDeCartera");
-        Assert.Equal(["EstadoCrediticioAsync", "EstadoDeValidacionAsync"], MetodosDe(puerto));
+        Assert.Equal(["EstadoCrediticioAsync", "EstadoDeValidacionAsync", "ProductosDeCaptacionAsync"], MetodosDe(puerto));
+        var raiz = RepoPath.FindRepoRoot();
+        var deInventario = Directory.EnumerateFiles(Path.Combine(raiz, "src", "Core", "IngenIA365ERP.Application", "Inventory"), "*.cs", SearchOption.AllDirectories)
+            .Where(f => File.ReadAllText(f).Contains("ProductosDeCaptacionAsync", StringComparison.Ordinal))
+            .Select(f => Path.GetRelativePath(raiz, f))
+            .ToList();
+        Assert.True(deInventario.Count == 0, "Inventario usa la consulta de productos de captación: " + string.Join(", ", deInventario));
 
         // Feature 013 (T0120, T22, T90): reservar y liberar el número viven en su propio puerto; una consulta no cambia estado.
         var reservas = typeof(IngenIA365ERP.Application.Common.Integration.Lending.IReservasDeCartera);

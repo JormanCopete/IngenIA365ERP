@@ -89,11 +89,31 @@ public class LosEnumsDelContratoNumeranComoElDominio
     [InlineData(typeof(IngenIA365ERP.Application.Common.Integration.Lending.EleccionDeAbono), typeof(IngenIA365ERP.Domain.Enums.Lending.PrepaymentChoice))]
     [InlineData(typeof(IngenIA365ERP.Application.Common.Integration.Lending.ConceptoDeObligacion), typeof(IngenIA365ERP.Domain.Enums.Lending.LoanConcept))]
     [InlineData(typeof(IngenIA365ERP.Application.Common.Integration.Lending.EstadoDeObligacion), typeof(IngenIA365ERP.Domain.Enums.Lending.LoanStatus))]
+    // Feature 014 (T039; contrato-de-cuentas §3.2): los enums del contrato de cuentas.
+    [InlineData(typeof(IngenIA365ERP.Application.Common.Integration.Lending.ClaseDeCaptacion), typeof(IngenIA365ERP.Domain.Enums.Lending.DepositClass))]
+    [InlineData(typeof(IngenIA365ERP.Application.Common.Integration.Lending.EstadoDeCuenta), typeof(IngenIA365ERP.Domain.Enums.Lending.MemberAccountStatus))]
+    [InlineData(typeof(IngenIA365ERP.Application.Common.Integration.Lending.ConceptoDeCuenta), typeof(IngenIA365ERP.Domain.Enums.Lending.MemberAccountConcept))]
+    [InlineData(typeof(IngenIA365ERP.Application.Common.Integration.Lending.RolEnLaCuenta), typeof(IngenIA365ERP.Domain.Enums.Lending.MemberAccountPartyRole))]
     public void Cada_enum_del_contrato_numera_como_su_par_del_dominio(Type contrato, Type dominio)
     {
         static Dictionary<string, int> Valores(Type t) => Enum.GetNames(t).ToDictionary(n => n, n => Convert.ToInt32(Enum.Parse(t, n)));
 
         Assert.Equal(Valores(dominio), Valores(contrato));
+    }
+
+    /// <summary>
+    /// Feature 014 (T039; contrato-de-cuentas §3.2): la naturaleza de una cuenta es <c>LineNature</c> sin <c>Placement</c> (con los mismos números) y la
+    /// modalidad de consignación, sin par en el dominio, lleva los números del contrato.
+    /// </summary>
+    [Fact]
+    public void Los_enums_propios_del_contrato_de_cuentas_llevan_sus_numeros()
+    {
+        static Dictionary<string, int> Valores<T>() where T : struct, Enum => Enum.GetValues<T>().ToDictionary(v => v.ToString(), v => Convert.ToInt32(v));
+        var naturalezas = Valores<IngenIA365ERP.Domain.Enums.Lending.LineNature>();
+        naturalezas.Remove(nameof(IngenIA365ERP.Domain.Enums.Lending.LineNature.Placement));
+        Assert.Equal(naturalezas, Valores<IngenIA365ERP.Application.Common.Integration.Lending.NaturalezaDeCuenta>());
+        Assert.Equal(new Dictionary<string, int> { ["Free"] = 1, ["Installments"] = 2, ["SpecificInstallments"] = 3, ["TermDepositFunding"] = 4 },
+            Valores<IngenIA365ERP.Application.Common.Integration.Lending.ModalidadDeConsignacion>());
     }
 
     /// <summary>

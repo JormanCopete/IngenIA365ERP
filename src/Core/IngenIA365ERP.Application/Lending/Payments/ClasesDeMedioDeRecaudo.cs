@@ -10,7 +10,8 @@ namespace IngenIA365ERP.Application.Lending.Payments;
 /// <item><c>AssociateCredit</c> y <c>CustomerCredit</c> se declaran y se rechazan siempre (<c>Lending.Payment.MeansClassNotAllowed</c>): pagar un
 /// crédito con crédito es recogida o novación (C30);</item>
 /// <item><c>Payroll</c>: sólo <c>OwnPayrollDeduction</c>; <c>Contributions</c> y <c>OwnLoanPayoff</c>: sólo <c>InternalOffset</c>;
-/// <c>Receipts</c>: las de la 012 y <c>ExternalPaymasterDeduction</c>; <c>Test</c>: todas salvo las de crédito;</item>
+/// <c>Receipts</c>: las de la 012 y <c>ExternalPaymasterDeduction</c>; <c>Test</c>: todas salvo las de crédito; feature 014: <c>Treasury</c>,
+/// <c>Transfer</c> y <c>BankDeposit</c>;</item>
 /// <item>la aplicación de una resolución de saldo a favor a otra obligación es siempre <c>InternalOffset</c>, sea cual sea el recaudador.</item>
 /// </list>
 /// Pura. (nuevo)
@@ -41,6 +42,8 @@ public static class ClasesDeMedioDeRecaudo
             ClaseDeRecaudador.Contributions or ClaseDeRecaudador.OwnLoanPayoff => medio == ClaseDeMedioDeRecaudo.InternalOffset,
             ClaseDeRecaudador.Receipts => DeCaja.Contains(medio) || medio == ClaseDeMedioDeRecaudo.ExternalPaymasterDeduction,
             ClaseDeRecaudador.Test => true,
+            // Feature 014 (T042; contrato-de-cuentas §3.3): Tesorería consigna las transferencias que recibe.
+            ClaseDeRecaudador.Treasury => medio is ClaseDeMedioDeRecaudo.Transfer or ClaseDeMedioDeRecaudo.BankDeposit,
             _ => false,
         };
     }

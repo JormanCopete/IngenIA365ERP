@@ -4,8 +4,9 @@ namespace IngenIA365ERP.Application.Common.Integration.Lending;
 
 /// <summary>
 /// Las consultas en proceso de Inventario a Cartera (feature 012, I3, T651; contracts/api.md §23.3; FR-014, FR-060, FR-085;
-/// decisiones-transversales T32, §2.16). Exactamente dos métodos, y <c>InventarioNoConoceContabilidadNiCartera</c> los vigila:
-/// Inventario no lee tablas de Cartera, pregunta por aquí. Mientras la entrega IC esté pendiente (D-02) la implementación
+/// decisiones-transversales T32, §2.16). Inventario usa exactamente dos métodos, y <c>InventarioNoConoceContabilidadNiCartera</c> los vigila:
+/// Inventario no lee tablas de Cartera, pregunta por aquí. La feature 014 (T043; FR-095, E-04; contrato-de-cuentas §5) suma el tercero,
+/// <see cref="ProductosDeCaptacionAsync"/>, para Personas, Asociados y Nómina. Mientras la entrega IC esté pendiente (D-02) la implementación
 /// registrada es <see cref="ConsultasDeCarteraNoHabilitada"/>, que responde <see cref="CarteraNoHabilitada"/>: rige el crédito
 /// provisional. Las respuestas son <b>provisionales y no se persisten</b> en Inventario: la forma de <c>status</c> y
 /// <c>lines</c> la fija la especificación de Cartera.
@@ -20,7 +21,46 @@ public interface IConsultasDeCartera
 
     /// <summary>La validación posterior de una <c>VentaACreditoRegistrada</c> (FR-061): pendiente mientras IC no exista.</summary>
     Task<EstadoDeValidacionDto> EstadoDeValidacionAsync(Guid messagePublicId, CancellationToken ct);
+
+    /// <summary>
+    /// Feature 014 (FR-095, E-04): las cuentas de captación, CDAT y aportes de unas personas, con estado y saldo. Lee en bloque y no aplica el alcance
+    /// de la Cartera (lo autoriza el permiso del módulo que llama). Antes de activar responde las dos naturalezas <c>NotActivated</c> y listas vacías.
+    /// </summary>
+    Task<ProductosDeCaptacionDto> ProductosDeCaptacionAsync(ConsultaDeProductosDeCaptacion consulta, CancellationToken ct);
 }
+
+/// <summary>
+/// Lo que se pregunta de los productos de captación (contrato-de-cuentas §5): las personas, la fecha, si incluye las cuentas canceladas y si incluye
+/// las cuentas donde la persona es parte (cotitular, firmante, representante, beneficiario) además de las suyas como titular. (nuevo)
+/// </summary>
+public sealed record ConsultaDeProductosDeCaptacion(
+    IReadOnlyList<Guid> PersonPublicIds, DateOnly Date, bool IncludeClosed = false, bool IncludeAsParty = true);
+
+/// <summary>Los productos de captación de unas personas, con el estado de cada naturaleza. (nuevo)</summary>
+public sealed record ProductosDeCaptacionDto(
+    EstadoDeCartera DepositsStatus,
+    EstadoDeCartera ContributionsStatus,
+    IReadOnlyList<ProductosDePersonaDto> People)
+{
+    /// <summary>La respuesta de antes de activar: las dos naturalezas sin activar y ninguna persona.</summary>
+    public static ProductosDeCaptacionDto NoHabilitada { get; } = new(EstadoDeCartera.NotActivated, EstadoDeCartera.NotActivated, []);
+}
+
+/// <summary>
+/// Los productos de una persona: si tiene alguno vivo como titular o cotitular (bloquea su baja, <c>Person.HasLiveDepositProducts</c>) y si es titular en
+/// una carga aplicada sin activar. (nuevo)
+/// </summary>
+public sealed record ProductosDePersonaDto(
+    Guid PersonPublicId,
+    bool HasLiveProducts,
+    bool MigratedNotActivated,
+    IReadOnlyList<ProductoDeCaptacionDto> Products);
+
+/// <summary>Una cuenta de la persona: número, naturaleza, clase, línea, papel, estado, saldo, disponible, vencimiento y cierre. (nuevo)</summary>
+public sealed record ProductoDeCaptacionDto(
+    Guid AccountPublicId, string Number, NaturalezaDeCuenta Nature, ClaseDeCaptacion? DepositClass,
+    string LineCode, string LineName, RolEnLaCuenta Role, EstadoDeCuenta Status,
+    decimal Balance, decimal Available, DateOnly? MaturityDate, DateOnly? ClosedOn);
 
 /// <summary>
 /// Lo que se le pregunta a Cartera de una venta a crédito (§23.3): la persona, la clase del medio (asociado o cliente), el valor,

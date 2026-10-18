@@ -2,7 +2,7 @@ using System.Globalization;
 using System.Text.Json;
 using IngenIA365ERP.Application.Attachments.Common;
 using IngenIA365ERP.Application.Common.Integration.Contracts.Lending;
-using IngenIA365ERP.Application.Common.Integration.Savings;
+using IngenIA365ERP.Application.Common.Integration.Lending;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Security;
 using IngenIA365ERP.Application.Common.Models;

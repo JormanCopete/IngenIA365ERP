@@ -297,7 +297,7 @@ public sealed class RegistroDeCuentas(IApplicationDbContext db)
     /// La posición del día de una cuenta armada desde su reconstrucción (data-model §4.3): saldos por concepto, el disponible desglosado, la memoria de
     /// lo retenido y la huella como <c>InputsSha256</c>. La versión la decide quien llama (<see cref="PosicionVersionada"/>).
     /// </summary>
-    public static MemberAccountDailyPosition Posicion(EstadoDeCuenta estado, MemberAccount cuenta, int version, DateTime registradoEn,
+    public static MemberAccountDailyPosition Posicion(SaldosDeCuenta estado, MemberAccount cuenta, int version, DateTime registradoEn,
         DisponibleDelDia? disponible = null, IssueTermBand? bandaDePlazo = null, decimal? tasaDelDia = null, int? diasAlVencimiento = null,
         int cuotasVencidas = 0, decimal valorVencido = 0m, decimal retencionDelAnio = 0m, decimal gmfDelMes = 0m, bool exentaDeGmf = false)
     {

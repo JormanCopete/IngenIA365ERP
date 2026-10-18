@@ -3,7 +3,7 @@ using System.Text;
 using System.Text.Json;
 using FluentAssertions;
 using IngenIA365ERP.Application.Attachments.Common;
-using IngenIA365ERP.Application.Common.Integration.Savings;
+using IngenIA365ERP.Application.Common.Integration.Lending;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Common.NationalValues;
 using IngenIA365ERP.Application.Lending.Common;

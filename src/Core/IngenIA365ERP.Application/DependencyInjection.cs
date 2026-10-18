@@ -278,7 +278,7 @@ public static class DependencyInjection
         // consumen las validaciones), el saldo de aportes (D19: Aportes primero, la plantilla si responde «no disponible»), los cupos y su
         // enrutamiento y revalidación, la atribución de quien decide, la decisión individual por sujeto y los asuntos de acta de la solicitud y del
         // cupo. La tarea cartera.re-escaneo-de-listas la registra Program.cs.
-        services.TryAddScoped<Common.Integration.Savings.IConsultaDeAportes, Common.Integration.Savings.ConsultaDeAportesNoDisponible>();
+        services.TryAddScoped<Common.Integration.Lending.IConsultaDeAportes, Common.Integration.Lending.ConsultaDeAportesNoDisponible>();
         services.AddScoped<Lending.Origination.CreditLimits.SaldoDeAportesVigente>();
         services.AddScoped<Lending.Origination.ConsultaDeListasDeCartera>();
         services.AddScoped<Lending.Origination.IConsultaDeListasDeCartera>(sp => sp.GetRequiredService<Lending.Origination.ConsultaDeListasDeCartera>());
@@ -487,6 +487,9 @@ public static class DependencyInjection
         services.AddScoped<Common.Integration.Lending.IConsultaDeObligaciones, Lending.Integration.ObligacionesDeCartera>();
         services.AddScoped<Common.Integration.Lending.IContratoDeObligaciones, Lending.Integration.ContratoDeObligacionesDeCartera>();
         services.AddScoped<Common.Integration.Lending.IReservasDeCartera, Lending.Integration.ReservasDeCartera>();
+        // Feature 014 (T040; contrato-de-cuentas §3.13): el contrato de cuentas responde «no habilitado» sin efectos hasta que la activación de
+        // aportes o de captaciones (T055) registre ContratoDeCuentasDeCartera.
+        services.AddScoped<Common.Integration.Lending.IContratoDeCuentas, Lending.Integration.ContratoDeCuentasSinActivar>();
         // US6 (T0582–T0594): la verificación de listas sin escribir de la consulta, y el consumidor de Comercial con sus piezas (los validadores de
         // la reserva, Integration/Reservas, los registra AddValidatorsFromAssembly).
         services.AddScoped<Lending.Origination.IVerificacionDeListas>(sp => sp.GetRequiredService<Lending.Origination.ConsultaDeListasDeCartera>());

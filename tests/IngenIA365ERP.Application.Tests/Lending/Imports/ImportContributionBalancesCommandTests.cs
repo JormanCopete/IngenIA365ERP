@@ -1,7 +1,7 @@
 using FluentAssertions;
 using IngenIA365ERP.Application.Common.Audit;
 using IngenIA365ERP.Application.Common.Imports;
-using IngenIA365ERP.Application.Common.Integration.Savings;
+using IngenIA365ERP.Application.Common.Integration.Lending;
 using IngenIA365ERP.Application.Common.Interfaces.Files;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Lending.Configuration;

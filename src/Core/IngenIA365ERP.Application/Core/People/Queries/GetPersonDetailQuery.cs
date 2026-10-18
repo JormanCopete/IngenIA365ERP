@@ -38,8 +38,9 @@ public record FinancialDataDto(
 
 /// <summary>
 /// El resumen de cartera y ahorros de la persona. Feature 013 (T0169, T94, interfaces.md §7): los créditos salen de
-/// <see cref="IConsultaDeObligaciones"/> (como deudor) y <see cref="LendingStatus"/> dice el estado de Cartera; los ahorros siguen en
-/// <c>SavingsAccounts</c>.
+/// <see cref="IConsultaDeObligaciones"/> (como deudor) y <see cref="LendingStatus"/> dice el estado de Cartera. Feature 014 (T043; contrato-de-cuentas
+/// §5): las cuentas de ahorro y CDAT y los aportes salen de <see cref="IConsultasDeCartera.ProductosDeCaptacionAsync"/> (como titular o cotitular,
+/// vivas); si Cartera no responde, en cero.
 /// </summary>
 public record PortfolioSummaryDto(
     int ActiveLoans,
@@ -95,7 +96,8 @@ public record PersonDetailDto(
 
 public record GetPersonDetailQuery(Guid PublicId) : IRequest<Result<PersonDetailDto>>;
 
-public class GetPersonDetailQueryHandler(IApplicationDbContext context, IConsultaDeObligaciones obligaciones, IDateTimeService reloj)
+public class GetPersonDetailQueryHandler(IApplicationDbContext context, IConsultaDeObligaciones obligaciones, IConsultasDeCartera consultas,
+    IDateTimeService reloj)
     : IRequestHandler<GetPersonDetailQuery, Result<PersonDetailDto>>
 {
     public async Task<Result<PersonDetailDto>> Handle(GetPersonDetailQuery request, CancellationToken ct)
@@ -169,10 +171,10 @@ public class GetPersonDetailQueryHandler(IApplicationDbContext context, IConsult
         var activeLoans = deCartera.ActiveLoans;
         var totalLoanBalance = deCartera.TotalLoanBalance;
 
-        // Feature 014 (T007): las cuentas de ahorro heredadas se retiraron; los productos de captación los informará
-        // IConsultasDeCartera.ProductosDeCaptacionAsync (T043, contrato-de-cuentas §5). Mientras tanto, cero.
-        var savingsCount = 0;
-        var totalSavings = 0m;
+        // Feature 014 (T043, contrato-de-cuentas §5): las cuentas de captación y los aportes, por la consulta de productos de Cartera.
+        var captacion = await ResumenDeCaptacionesDePersona.ArmarAsync(consultas, person.PublicId, reloj.HoyLocal, ct);
+        var savingsCount = captacion.Cuentas;
+        var totalSavings = captacion.Ahorros;
 
         var totalOverdue = deCartera.TotalOverdueAmount;
 
@@ -181,7 +183,7 @@ public class GetPersonDetailQueryHandler(IApplicationDbContext context, IConsult
             totalLoanBalance,
             savingsCount,
             totalSavings,
-            0m, // contributions - loaded separately if needed
+            captacion.Aportes,
             totalOverdue)
         {
             LendingStatus = deCartera.LendingStatus,
@@ -214,6 +216,40 @@ public class GetPersonDetailQueryHandler(IApplicationDbContext context, IConsult
             portfolioSummary);
 
         return Result.Success(dto);
+    }
+}
+
+/// <summary>
+/// La parte de captaciones del resumen de la persona (feature 014, T043; contrato-de-cuentas §5): las cuentas de ahorro y CDAT y los aportes vivos
+/// donde es titular o cotitular. (nuevo)
+/// </summary>
+public static class ResumenDeCaptacionesDePersona
+{
+    /// <summary>Cuentas de captación vivas como titular o cotitular, su saldo y el de aportes.</summary>
+    public sealed record Resumen(int Cuentas, decimal Ahorros, decimal Aportes)
+    {
+        public static Resumen Vacio { get; } = new(0, 0m, 0m);
+    }
+
+    /// <summary>
+    /// Feature 014 (T043): el resumen de captaciones de la persona, de una sola llamada a <see cref="IConsultasDeCartera.ProductosDeCaptacionAsync"/>.
+    /// Si Cartera no responde, en cero (como el resumen de créditos). (nuevo)
+    /// </summary>
+    public static async Task<Resumen> ArmarAsync(IConsultasDeCartera consultas, Guid persona, DateOnly hoy, CancellationToken ct)
+    {
+        try
+        {
+            var respuesta = await consultas.ProductosDeCaptacionAsync(new ConsultaDeProductosDeCaptacion([persona], hoy, IncludeClosed: false, IncludeAsParty: true), ct);
+            var vivos = respuesta.People.Where(p => p.PersonPublicId == persona).SelectMany(p => p.Products)
+                .Where(p => p.Status != EstadoDeCuenta.Closed && p.Role is RolEnLaCuenta.Holder or RolEnLaCuenta.CoHolder)
+                .ToList();
+            var ahorros = vivos.Where(p => p.Nature == NaturalezaDeCuenta.Deposit).ToList();
+            return new Resumen(ahorros.Count, ahorros.Sum(p => p.Balance), vivos.Where(p => p.Nature == NaturalezaDeCuenta.Contribution).Sum(p => p.Balance));
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            return Resumen.Vacio;
+        }
     }
 }
 

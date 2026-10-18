@@ -741,3 +741,22 @@ choquen.
 - **E21 · Numeración.** `LendingNumberKind` 18–20 (retiro, asamblea, fallecimiento) se piden con `NumeroDeProcesoDeCaptacionesAsync` y, hasta que sus
   tablas nazcan (US10, K10), el numerador no salta números existentes de esas clases. La orden de giro de cuentas usa el consecutivo de las de
   desembolso (data-model §3.9) y el numerador salta los números de las dos tablas.
+- **E22 · Puertos (T039–T043).** `ContratoDeCuentasSinActivar` vive en `Application/Lending/Integration` (tasks.md; contrato-de-cuentas §2 lo ponía en el
+  espacio del puerto) porque, para responder «con el código de la naturaleza» (§3.13), lee la naturaleza de la cuenta por su `PublicId` —sólo lectura,
+  sin seguimiento—; una cuenta que no existe responde como captación, y el traslado con una cuenta de aportes, como aportes. El record del motor que la
+  reconstrucción devuelve se llama `SaldosDeCuenta` (no `EstadoDeCuenta`): ese nombre es el enum del puerto (§3.2). La consulta real de productos
+  (`ProductosDeCaptacionDeCartera`, detrás de `ConsultasDeCartera.ProductosDeCaptacionAsync`) toma el estado de cada naturaleza de su fila en
+  `LND_Activations.Nature` hasta que T053 traiga las fechas a `LND_Setup`; el saldo es la suma del libro a la fecha y el disponible el de la última
+  posición. `MaturityDate` va nulo hasta K9 y `MigratedNotActivated` falso hasta la migración de captaciones (US9). `GetPersonDetailQuery` ya cuenta
+  las cuentas de ahorro vivas y suma ahorros y aportes por esta consulta (E14 pedía esperar a T043); la baja de persona (`Person.HasLiveDepositProducts`)
+  sigue en T102. Tesorería (`ClaseDeRecaudador.Treasury`) recauda con `Transfer` y `BankDeposit` y su clave es `TES:{documento:N}:{cuenta:N}`; la
+  matriz de medios es la misma de los dos contratos, así que Tesorería también puede pagar créditos por `IContratoDeObligaciones` si adopta
+  `ProveedorDeObligaciones` (research C13 dice «a cuentas y créditos»).
+- **E23 · Pruebas de arquitectura (T035–T038).** `LaRetencionYElGmfSoloLosCalculanSusMotores` se fija así: todo archivo de producción que arma filas
+  `WithholdingApplied` o `GmfCharged` nombra su motor (`RetencionSobreRendimientos`, `GravamenMovimientosFinancieros`), salvo `RegistroDeCuentas`, que
+  sólo valida la pareja; y los dos motores, cuando nazcan (K8), son clases estáticas de `Domain/Lending/Deposits` sin base ni reloj.
+  `LasCaptacionesNoUsanLaUsura` recorre las carpetas de captaciones (aplicación, dominio, entidades, rutas y pantallas). `LasCuentasSeTocanSoloPorElContrato`
+  vigila Nómina y Tesorería, y la carpeta de Recaudo (`Application/Receipts`), que todavía no existe. La ampliación de `LosHechosDeCarteraNoLlevanCuentas`
+  admite en `Contracts/Lending/Deposits` la referencia a la cuenta del asociado (`MemberAccountRefV1`, `AccountPublicId`, `AccountNumber`, `AccountCount`):
+  ahí `Account` no es una cuenta del plan. `NadieEscribeElLibroDeCarteraFueraDelRegistro` (013) admite que `RegistroDeCuentas` mueva las marcas que
+  la cuenta comparte de nombre con el crédito (`LastAccruedDate`, `LastRegisteredAt`, `LastPositionDate`), y sólo eso.

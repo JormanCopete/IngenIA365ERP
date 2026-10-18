@@ -101,6 +101,10 @@ public sealed class ConsultasDeCartera(
         return await ConEvidenciaAsync(consulta, respuesta, ct);
     }
 
+    /// <summary>Feature 014 (T043; FR-095, E-04): los productos de captación y aportes de unas personas, en bloque y sin alcance.</summary>
+    public Task<ProductosDeCaptacionDto> ProductosDeCaptacionAsync(ConsultaDeProductosDeCaptacion consulta, CancellationToken ct) =>
+        ProductosDeCaptacionDeCartera.ConsultarAsync(db, consulta, ct);
+
     public async Task<EstadoDeValidacionDto> EstadoDeValidacionAsync(Guid messagePublicId, CancellationToken ct)
     {
         var recibo = await db.LendingInboundMessages.AsNoTracking().FirstOrDefaultAsync(r => r.MessagePublicId == messagePublicId, ct);

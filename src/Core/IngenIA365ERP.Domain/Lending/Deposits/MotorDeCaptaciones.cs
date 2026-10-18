@@ -21,7 +21,7 @@ public static class MotorDeCaptaciones
     public static string VersionDeReglas => VersionesDeReglas.Vigente;
 
     /// <summary>Los saldos por concepto a D con la información hasta R (R04).</summary>
-    public static EstadoDeCuenta Reconstruir(IEnumerable<MovimientoDeCuenta> libro, DateOnly fecha, DateTime informacionHasta) =>
+    public static SaldosDeCuenta Reconstruir(IEnumerable<MovimientoDeCuenta> libro, DateOnly fecha, DateTime informacionHasta) =>
         ReconstruccionDeCuenta.Reconstruir(libro, fecha, informacionHasta);
 
     /// <summary>Los saldos al cierre de cada día de (desde, hasta] con la información hasta R (la serie del interés por saldo diario, R05).</summary>

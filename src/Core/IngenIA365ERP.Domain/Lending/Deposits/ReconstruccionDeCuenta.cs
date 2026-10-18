@@ -20,7 +20,7 @@ public sealed record MovimientoDeCuenta(
 /// Lo que una cuenta debe por concepto a la fecha <see cref="Fecha"/> con la información registrada hasta <see cref="InformacionHasta"/> (R04): los
 /// saldos de los diez conceptos (los que no tienen filas, en cero), las sumas que usa la aplicación y la huella de las filas que entraron.
 /// </summary>
-public sealed record EstadoDeCuenta(DateOnly Fecha, DateTime InformacionHasta, IReadOnlyDictionary<MemberAccountConcept, decimal> Saldos, int Filas,
+public sealed record SaldosDeCuenta(DateOnly Fecha, DateTime InformacionHasta, IReadOnlyDictionary<MemberAccountConcept, decimal> Saldos, int Filas,
     string Huella)
 {
     /// <summary>El saldo de un concepto (Σ de sus filas visibles).</summary>
@@ -73,13 +73,13 @@ public static class ReconstruccionDeCuenta
     public static IReadOnlyList<MemberAccountConcept> Conceptos { get; } = Enum.GetValues<MemberAccountConcept>();
 
     /// <summary>Los saldos por concepto a <paramref name="fecha"/> con la información hasta <paramref name="informacionHasta"/>.</summary>
-    public static EstadoDeCuenta Reconstruir(IEnumerable<MovimientoDeCuenta> libro, DateOnly fecha, DateTime informacionHasta)
+    public static SaldosDeCuenta Reconstruir(IEnumerable<MovimientoDeCuenta> libro, DateOnly fecha, DateTime informacionHasta)
     {
         ArgumentNullException.ThrowIfNull(libro);
         var filas = libro.ToList();
         ValidarEspejos(filas);
         var vistas = Visibles(filas, fecha, informacionHasta);
-        return new EstadoDeCuenta(fecha, informacionHasta, Sumar(vistas), vistas.Count, Huella(vistas, fecha, informacionHasta));
+        return new SaldosDeCuenta(fecha, informacionHasta, Sumar(vistas), vistas.Count, Huella(vistas, fecha, informacionHasta));
     }
 
     /// <summary>

@@ -26,4 +26,10 @@ public sealed class ConsultasDeCarteraDePrueba : IConsultasDeCartera
 
     public Task<EstadoDeValidacionDto> EstadoDeValidacionAsync(Guid messagePublicId, CancellationToken ct) =>
         Task.FromResult(new EstadoDeValidacionDto(EstadosDeValidacion.Pending, null, null));
+
+    /// <summary>Feature 014 (T043): los productos de captación que la prueba configure; por defecto, como la provisional.</summary>
+    public ProductosDeCaptacionDto Productos { get; set; } = ProductosDeCaptacionDto.NoHabilitada;
+
+    public Task<ProductosDeCaptacionDto> ProductosDeCaptacionAsync(ConsultaDeProductosDeCaptacion consulta, CancellationToken ct) =>
+        Task.FromResult(Productos);
 }
