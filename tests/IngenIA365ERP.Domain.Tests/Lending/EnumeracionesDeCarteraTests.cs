@@ -263,6 +263,10 @@ public class EnumeracionesDeCarteraTests
         [typeof(ContributionAmountMode)] = [("FixedAmount", 1), ("IncomeFraction", 2), ("MinimumWageFraction", 3)],
         [typeof(ExcessContributionAction)] = [("Reject", 1), ("RefundByDecision", 2)],
         [typeof(ConceptAllocationRule)] = [("Priority", 1), ("Proportional", 2)],
+        // Feature 014, US3 (T086, research E58): las solicitudes de devolución y de cesión de aportes.
+        [typeof(ContributionRequestKind)] = [("Refund", 1), ("Assignment", 2)],
+        [typeof(ContributionRequestStatus)] = [("PendingApproval", 1), ("Approved", 2), ("Rejected", 3)],
+        [typeof(ContributionRefundCause)] = [("ParticipationExcess", 1), ("Other", 99)],
         [typeof(DirectDebitScope)] = [("SingleLoan", 1), ("AllLoansOfHolder", 2)],
         [typeof(PayoutPurpose)] = [("Withdrawal", 1), ("ContributionRefund", 2), ("DeceasedDelivery", 3), ("TermDepositInterest", 4),
             ("TermDepositRedemption", 5), ("GarnishmentConsignment", 6), ("Cancellation", 7)],
