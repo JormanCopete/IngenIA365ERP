@@ -835,3 +835,9 @@ choquen.
 - **E33 · El cambio a las implementaciones reales.** Como en la 013, la implementación real responde «no habilitado» mientras su naturaleza no tenga fecha en
   `LND_Setup`: `ContratoDeCuentasDeCartera` (T083) y `ConsultaDeAportesDeCartera` (T084) leen `ActivacionesDeCaptacion` y se registran en lugar de
   `ContratoDeCuentasSinActivar` y `ConsultaDeAportesNoDisponible`. T055 deja la fecha que las cambia; el registro de la DI es de esas tareas.
+- **E34 · `CaptacionesAportes` regenerada (T056).** Con las columnas de T044 (cinco en `ACC_LendingPostingRules`), T053 (seis en `LND_Setup`) y T055
+  (`LND_Activations.MigrationLoadId` y `SessionItemId` nulos, el único de la carga filtrado), ahora `20261018170720` PostgreSQL / `20261018170634` SQL Server
+  (paridad OK, el scaffold no trajo cambios ajenos). La migración de datos de T044 es SQL a mano al final de `Up` —y su inversa al principio de `Down`—, en
+  los dos motores: sólo toca las claves de 14 posiciones, así que repetirla no hace nada; al regenerar se vuelve a poner. El cliente `CaptacionesClient`
+  (T057) nace con la activación y el grupo de menú «Captaciones y aportes» nace sin mostrarse (`HayEnlacesDeCaptaciones = false`) hasta que la primera
+  historia le ponga un enlace: un grupo vacío en el menú no lleva a ninguna parte.

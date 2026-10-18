@@ -81,7 +81,13 @@
         </NavMenuGroup>
 
         @* Feature 014 (T008, R28): el grupo «Ahorros y aportes» de lo conservado de la cartera heredada se retiró con sus 16
-           enlaces; el menú de captaciones y aportes llega con cada historia. *@
+           enlaces. T057: el grupo «Captaciones y aportes» nace vacío y sin mostrarse; cada historia suma su enlace (con el permiso de
+           consulta de su página, TodoEnlaceDelMenuTieneSuPagina) y, con el primero, pone HayEnlacesDeCaptaciones en verdadero. *@
+        @if (HayEnlacesDeCaptaciones)
+        {
+            <NavMenuGroup Icon="e-money" Title="Captaciones y aportes" Expanded="SidebarOpen">
+            </NavMenuGroup>
+        }
 
         @* Feature 013, fase 4 (T0324, T0310; US17): la Cartera nueva —gobierno, configuración y mensajes al deudor—, cada enlace con el
            permiso de consulta de su página. El detalle de una sesión se abre desde Actas, sin enlace propio; el de una línea de crédito
@@ -605,6 +611,9 @@
 </div>
 
 @code {
+    /// <summary>Feature 014 (T057): el grupo de captaciones se muestra cuando tenga su primer enlace (lo pone la primera historia).</summary>
+    private static readonly bool HayEnlacesDeCaptaciones = false;
+
     [Parameter] public bool SidebarOpen { get; set; } = true;
 
     [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }

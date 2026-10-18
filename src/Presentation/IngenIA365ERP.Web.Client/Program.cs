@@ -142,6 +142,8 @@ builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.PagosClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.NovedadesClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.CobranzaClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.CastigosClient>();
+// Feature 014 (T057): captaciones y aportes.
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.CaptacionesClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.IImpresionDeDocumentos, IngenIA365ERP.Shared.Services.ImpresionEnElNavegador>();
 // Feature 009: cliente tipado de contabilidad (mismo molde que NominaClient).
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Contabilidad.ContabilidadClient>();

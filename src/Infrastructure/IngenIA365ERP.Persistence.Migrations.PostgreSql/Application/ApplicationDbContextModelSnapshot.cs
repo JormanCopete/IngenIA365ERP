@@ -2213,6 +2213,10 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<string>("AccountFlag")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
                     b.Property<int>("AccountId")
                         .HasColumnType("integer");
 
@@ -2226,6 +2230,10 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.Property<string>("ConceptCode")
                         .HasMaxLength(30)
                         .HasColumnType("character varying(30)");
+
+                    b.Property<string>("ContributionClass")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.Property<int?>("CostCenterId")
                         .HasColumnType("integer");
@@ -2246,6 +2254,10 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.Property<string>("DeletedBy")
                         .HasColumnType("text");
 
+                    b.Property<string>("DepositClass")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
                     b.Property<string>("DimensionKey")
                         .IsRequired()
                         .HasMaxLength(300)
@@ -2259,6 +2271,14 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
 
                     b.Property<bool?>("IsEmployee")
                         .HasColumnType("boolean");
+
+                    b.Property<string>("IssueTermBand")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("LineNature")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.Property<string>("ModalityCode")
                         .HasMaxLength(30)
@@ -26484,6 +26504,15 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.Property<int?>("ActivationId")
                         .HasColumnType("integer");
 
+                    b.Property<DateTime?>("ContributionsActivatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateOnly?>("ContributionsActivationDate")
+                        .HasColumnType("date");
+
+                    b.Property<int?>("ContributionsActivationId")
+                        .HasColumnType("integer");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -26497,6 +26526,15 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.Property<string>("DeletedBy")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime?>("DepositsActivatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateOnly?>("DepositsActivationDate")
+                        .HasColumnType("date");
+
+                    b.Property<int?>("DepositsActivationId")
+                        .HasColumnType("integer");
 
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
@@ -26523,6 +26561,12 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
 
                     b.HasIndex("ActivationId")
                         .HasDatabaseName("IX_LND_Setup_ActivationId");
+
+                    b.HasIndex("ContributionsActivationId")
+                        .HasDatabaseName("IX_LND_Setup_ContributionsActivationId");
+
+                    b.HasIndex("DepositsActivationId")
+                        .HasDatabaseName("IX_LND_Setup_DepositsActivationId");
 
                     b.HasIndex("PublicId")
                         .IsUnique()
@@ -31397,7 +31441,7 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.Property<bool>("IsProductionEnvironment")
                         .HasColumnType("boolean");
 
-                    b.Property<int>("MigrationLoadId")
+                    b.Property<int?>("MigrationLoadId")
                         .HasColumnType("integer");
 
                     b.Property<int>("Nature")
@@ -31442,7 +31486,7 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
 
-                    b.Property<int>("SessionItemId")
+                    b.Property<int?>("SessionItemId")
                         .HasColumnType("integer");
 
                     b.Property<DateTime?>("UpdatedAt")
@@ -31462,7 +31506,8 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
 
                     b.HasIndex("MigrationLoadId")
                         .IsUnique()
-                        .HasDatabaseName("UK_LND_Activations_MigrationLoadId");
+                        .HasDatabaseName("UK_LND_Activations_MigrationLoadId")
+                        .HasFilter("\"MigrationLoadId\" IS NOT NULL");
 
                     b.HasIndex("Nature")
                         .IsUnique()
@@ -52897,6 +52942,16 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .WithMany()
                         .HasForeignKey("ActivationId")
                         .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Lending.Migration.LendingActivation", null)
+                        .WithMany()
+                        .HasForeignKey("ContributionsActivationId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Lending.Migration.LendingActivation", null)
+                        .WithMany()
+                        .HasForeignKey("DepositsActivationId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Lending.Configuration.UserCreditLineScope", b =>
@@ -53810,8 +53865,7 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.HasOne("IngenIA365ERP.Domain.Entities.Lending.Migration.MigrationLoad", null)
                         .WithMany()
                         .HasForeignKey("MigrationLoadId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("IngenIA365ERP.Domain.Entities.Security.User", null)
                         .WithMany()
@@ -53822,8 +53876,7 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.HasOne("IngenIA365ERP.Domain.Entities.Lending.Governance.SessionItem", null)
                         .WithMany()
                         .HasForeignKey("SessionItemId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Lending.Migration.MigrationArrearsHistoryRow", b =>

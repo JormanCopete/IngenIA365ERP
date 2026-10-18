@@ -29,9 +29,11 @@ public class LasPantallasDicenQueEstanCargando
     /// Feature 013, fase 3 (T0188): «AhorrosYAportes» entró con las 18 pantallas conservadas de la cartera heredada; la feature 014
     /// las retiró (T008, R28) y sus pantallas nuevas viven en «Cartera/Captaciones», dentro de «Cartera».
     /// Feature 013, fase 4 (T0324): «Cartera» entra con las pantallas de gobierno, configuración y mensajes al deudor.
+    /// Feature 014 (T058): «Cartera/Captaciones», donde nacen las pantallas de captaciones y aportes, entra por su nombre aunque «Cartera» ya la
+    /// recorra: si la carpeta se mueve, la prueba lo dice.
     private static readonly string[] ModulosMigrados =
         ["Maestros", "Nomina", "Asociados", "Contabilidad", "Inventario", "Ventas", "Compras", "Pos", "Administracion", "Compliance",
-            "Cartera"];
+            "Cartera", "Cartera/Captaciones"];
 
     /// <summary>Feature 013 (T0038): las pantallas de la fase 2 llevan su indicador aunque no usen <c>SfGrid</c>.</summary>
     private static readonly string[] PantallasDeLaPlataformaDeCartera =

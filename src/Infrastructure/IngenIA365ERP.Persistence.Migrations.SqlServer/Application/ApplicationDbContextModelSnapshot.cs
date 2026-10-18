@@ -2214,6 +2214,10 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<string>("AccountFlag")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
                     b.Property<int>("AccountId")
                         .HasColumnType("int");
 
@@ -2227,6 +2231,10 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.Property<string>("ConceptCode")
                         .HasMaxLength(30)
                         .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("ContributionClass")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.Property<int?>("CostCenterId")
                         .HasColumnType("int");
@@ -2247,6 +2255,10 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.Property<string>("DeletedBy")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("DepositClass")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
                     b.Property<string>("DimensionKey")
                         .IsRequired()
                         .HasMaxLength(300)
@@ -2260,6 +2272,14 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
 
                     b.Property<bool?>("IsEmployee")
                         .HasColumnType("bit");
+
+                    b.Property<string>("IssueTermBand")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("LineNature")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.Property<string>("ModalityCode")
                         .HasMaxLength(30)
@@ -26701,6 +26721,15 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.Property<int?>("ActivationId")
                         .HasColumnType("int");
 
+                    b.Property<DateTime?>("ContributionsActivatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateOnly?>("ContributionsActivationDate")
+                        .HasColumnType("date");
+
+                    b.Property<int?>("ContributionsActivationId")
+                        .HasColumnType("int");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
@@ -26714,6 +26743,15 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.Property<string>("DeletedBy")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DepositsActivatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateOnly?>("DepositsActivationDate")
+                        .HasColumnType("date");
+
+                    b.Property<int?>("DepositsActivationId")
+                        .HasColumnType("int");
 
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
@@ -26740,6 +26778,12 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
 
                     b.HasIndex("ActivationId")
                         .HasDatabaseName("IX_LND_Setup_ActivationId");
+
+                    b.HasIndex("ContributionsActivationId")
+                        .HasDatabaseName("IX_LND_Setup_ContributionsActivationId");
+
+                    b.HasIndex("DepositsActivationId")
+                        .HasDatabaseName("IX_LND_Setup_DepositsActivationId");
 
                     b.HasIndex("PublicId")
                         .IsUnique()
@@ -31654,7 +31698,7 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.Property<bool>("IsProductionEnvironment")
                         .HasColumnType("bit");
 
-                    b.Property<int>("MigrationLoadId")
+                    b.Property<int?>("MigrationLoadId")
                         .HasColumnType("int");
 
                     b.Property<int>("Nature")
@@ -31705,7 +31749,7 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasMaxLength(64)
                         .HasColumnType("nvarchar(64)");
 
-                    b.Property<int>("SessionItemId")
+                    b.Property<int?>("SessionItemId")
                         .HasColumnType("int");
 
                     b.Property<DateTime?>("UpdatedAt")
@@ -31719,7 +31763,8 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
 
                     b.HasIndex("MigrationLoadId")
                         .IsUnique()
-                        .HasDatabaseName("UK_LND_Activations_MigrationLoadId");
+                        .HasDatabaseName("UK_LND_Activations_MigrationLoadId")
+                        .HasFilter("[MigrationLoadId] IS NOT NULL");
 
                     b.HasIndex("Nature")
                         .IsUnique()
@@ -53316,6 +53361,16 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .WithMany()
                         .HasForeignKey("ActivationId")
                         .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Lending.Migration.LendingActivation", null)
+                        .WithMany()
+                        .HasForeignKey("ContributionsActivationId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Lending.Migration.LendingActivation", null)
+                        .WithMany()
+                        .HasForeignKey("DepositsActivationId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Lending.Configuration.UserCreditLineScope", b =>
@@ -54229,8 +54284,7 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.HasOne("IngenIA365ERP.Domain.Entities.Lending.Migration.MigrationLoad", null)
                         .WithMany()
                         .HasForeignKey("MigrationLoadId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("IngenIA365ERP.Domain.Entities.Security.User", null)
                         .WithMany()
@@ -54241,8 +54295,7 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.HasOne("IngenIA365ERP.Domain.Entities.Lending.Governance.SessionItem", null)
                         .WithMany()
                         .HasForeignKey("SessionItemId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Lending.Migration.MigrationArrearsHistoryRow", b =>
