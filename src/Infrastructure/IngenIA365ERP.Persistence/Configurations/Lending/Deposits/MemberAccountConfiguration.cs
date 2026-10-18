@@ -135,3 +135,30 @@ public class AccountPayoutOrderConfiguration : IEntityTypeConfiguration<AccountP
             .HasFilter("[MembershipWithdrawalId] IS NOT NULL");
     }
 }
+
+/// <summary>
+/// <c>LND_GmfExemptAccounts</c> (feature 014, US2, T072; data-model §3.8): una sola cuenta exenta del GMF vigente por persona
+/// (<c>UK_LND_GmfExemptAccounts_LivePerson</c>, filtrado a la vigencia abierta) y el índice por cuenta. Migración <c>CaptacionesAportes</c>.
+/// </summary>
+public class GmfExemptAccountConfiguration : IEntityTypeConfiguration<GmfExemptAccount>
+{
+    public const string Tabla = "LND_GmfExemptAccounts";
+
+    public void Configure(EntityTypeBuilder<GmfExemptAccount> builder)
+    {
+        builder.ComoEntidadDeCartera(Tabla);
+
+        builder.Property(e => e.ValidFrom).IsRequired();
+        builder.Property(e => e.MarkReason).HasMaxLength(GmfExemptAccount.LargoDelMotivo).IsRequired();
+        builder.Property(e => e.EndReason).HasMaxLength(GmfExemptAccount.LargoDelMotivo);
+
+        builder.HasOne<Person>().WithMany().HasForeignKey(e => e.PersonId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<MemberAccount>().WithMany().HasForeignKey(e => e.MemberAccountId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<User>().WithMany().HasForeignKey(e => e.MarkedByUserId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<User>().WithMany().HasForeignKey(e => e.EndedByUserId).OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasIndex(e => e.PersonId).IsUnique().HasDatabaseName("UK_LND_GmfExemptAccounts_LivePerson")
+            .HasFilter("[ValidTo] IS NULL AND [IsDeleted] = 0");
+        builder.HasIndex(e => e.MemberAccountId).HasDatabaseName("IX_LND_GmfExemptAccounts_MemberAccountId");
+    }
+}
