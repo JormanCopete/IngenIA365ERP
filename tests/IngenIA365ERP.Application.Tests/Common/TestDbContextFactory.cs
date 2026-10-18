@@ -485,6 +485,8 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.MemberAccount> MemberAccounts => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.MemberAccount>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.MemberAccountParty> MemberAccountParties => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.MemberAccountParty>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.GmfExemptAccount> GmfExemptAccounts => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.GmfExemptAccount>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.AccountInstallment> AccountInstallments => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.AccountInstallment>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.AccountInstallmentNonDeduction> AccountInstallmentNonDeductions => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.AccountInstallmentNonDeduction>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.AccountPayoutOrder> AccountPayoutOrders => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.AccountPayoutOrder>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Transactions.MemberAccountOperation> MemberAccountOperations => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Transactions.MemberAccountOperation>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Transactions.MemberAccountTransaction> MemberAccountTransactions => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Transactions.MemberAccountTransaction>();

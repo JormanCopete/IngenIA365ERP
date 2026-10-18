@@ -105,7 +105,7 @@ public class LectorDeIndicadoresDeLaEntidadTests : IAsyncLifetime
 
         i.Disponibles.Should().BeTrue();
         i.VigenciaMeses.Should().Be(6);
-        i.ContextoDeAportes(rigeD19: true).Should().Be(new IngenIA365ERP.Domain.Lending.Risk.ContextoDeAportes(true, true));
+        i.ContextoDeAportes(excepcionDeArrastre: true, descuentoEnDeterioro: false).Should().Be(new IngenIA365ERP.Domain.Lending.Risk.ContextoDeAportes(true, false, true));
     }
 
     [Fact]
@@ -129,7 +129,7 @@ public class LectorDeIndicadoresDeLaEntidadTests : IAsyncLifetime
         var i = await LeerAsync();
 
         (i.Disponibles, i.ConPerdidas).Should().Be((true, true));
-        i.ContextoDeAportes(rigeD19: true).Should().Be(new IngenIA365ERP.Domain.Lending.Risk.ContextoDeAportes(true, false));
+        i.ContextoDeAportes(excepcionDeArrastre: true, descuentoEnDeterioro: true).Should().Be(new IngenIA365ERP.Domain.Lending.Risk.ContextoDeAportes(true, true, false));
     }
 
     [Fact]

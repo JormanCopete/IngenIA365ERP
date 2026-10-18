@@ -257,7 +257,6 @@ public static class MotorDePerdidaEsperada
 
     /// <exception cref="InvalidOperationException">El documento no trae la PI del tipo de organización (o la voluntaria) o la PDI de la garantía:
     /// el motor se niega en vez de inventarla.</exception>
-    /// <exception cref="NotSupportedException">Aportes por descontar sin D19: su cálculo es de la feature de Aportes.</exception>
     public static PerdidaEsperadaDeCredito Calcular(Anexo2 anexo, CreditoParaPerdidaEsperada c, ContextoDelModelo contexto, ContextoDeAportes aportes,
         RedondeoDeDeterioro redondeo)
     {
@@ -267,8 +266,6 @@ public static class MotorDePerdidaEsperada
         ArgumentNullException.ThrowIfNull(aportes);
         if (c.Saldos.Capital < 0m || c.Saldos.InteresCorriente < 0m || c.Saldos.InteresDeMora < 0m || c.Saldos.Otros < 0m)
             throw new ArgumentOutOfRangeException(nameof(c), "Los saldos no son negativos.");
-        if (!aportes.RigeD19 && c.AportesAProrrata > 0m)
-            throw new NotSupportedException("El descuento de aportes del VEA es de la feature de Aportes (D19); hasta entonces no se calcula.");
 
         var p = c.Puntaje;
         var segmento = anexo.SegmentoObligatorio(p.Segmento);
@@ -310,7 +307,8 @@ public static class MotorDePerdidaEsperada
         var intereses = c.Saldos.InteresCorriente + c.Saldos.InteresDeMora;
         explicacion.Linea($"VEA = capital {N(c.Saldos.Capital)} + intereses {N(intereses)} + otros {N(c.Saldos.Otros)} = "
             + $"{N(c.Saldos.Capital + intereses + c.Saldos.Otros)}; aportes no descontados ("
-            + (aportes.RigeD19 ? "rige D19: Aportes y Ahorros no ofrecen su consulta" : "no hay aportes a prorrata") + ").");
+            + (!aportes.DescuentoEnDeterioro ? "rige D19: el parámetro Riesgo.DescuentoAportesDeterioro no está habilitado"
+                : c.AportesAProrrata > 0m ? "el Anexo 2 no descuenta los aportes de la exposición" : "no hay aportes a prorrata") + ").");
 
         var factor = pi * pdi;
         var capital = MotorDeDeterioroIndividual.Redondear(c.Saldos.Capital * factor, redondeo);

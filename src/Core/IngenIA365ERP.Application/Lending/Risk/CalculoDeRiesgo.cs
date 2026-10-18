@@ -68,9 +68,25 @@ public static class CalculoDeRiesgo
             }
         }
 
+        // Feature 014 (T084): los aportes del deudor al corte y su prorrata por capital entre sus créditos vivos del grupo.
+        var capitalPorDeudor = datos.Creditos.Values.GroupBy(c => c.Credito.DebtorPersonId)
+            .ToDictionary(g => g.Key, g => g.Sum(c => Math.Max(0m, c.Estado.Saldo(LoanConcept.Principal))));
+        decimal Prorrata(CreditoDeRiesgo c)
+        {
+            var aportes = datos.AportesPorDeudor.GetValueOrDefault(c.Credito.DebtorPersonId);
+            var total = capitalPorDeudor.GetValueOrDefault(c.Credito.DebtorPersonId);
+            return aportes <= 0m || total <= 0m
+                ? 0m
+                : decimal.Round(aportes * Math.Max(0m, c.Estado.Saldo(LoanConcept.Principal)) / total, 2, MidpointRounding.AwayFromZero);
+        }
+
         var paraCalificar = datos.Creditos.Values.Select(c =>
         {
-            var p = ParaCalificar(c, contexto, datos.CierreAnterior is not null, sinAnalisis);
+            var p = ParaCalificar(c, contexto, datos.CierreAnterior is not null, sinAnalisis) with
+            {
+                Capital = c.Estado.Saldo(LoanConcept.Principal),
+                AportesDelDeudor = datos.AportesPorDeudor.GetValueOrDefault(c.Credito.DebtorPersonId),
+            };
             return puntajes.TryGetValue(c.Credito.Id, out var x) ? p with { CalificacionDelModelo = x.Puntaje.CandidataParaCalificar } : p;
         }).ToList();
         var opciones = new OpcionesDeCalificacion(conArrastre, contexto.Aportes);
@@ -104,7 +120,8 @@ public static class CalculoDeRiesgo
                     });
                     continue;
                 }
-                var deterioro = MotorDeDeterioroIndividual.Calcular(contexto.Norma, ParaDeteriorar(credito, calificacion), contexto.Aportes, contexto.Redondeo);
+                var deterioro = MotorDeDeterioroIndividual.Calcular(contexto.Norma, ParaDeteriorar(credito, calificacion) with { AportesAProrrata = Prorrata(credito) },
+                    contexto.Aportes, contexto.Redondeo);
                 calculados.Add(new RiesgoDeCredito(credito, calificacion, deterioro, modelo));
             }
             catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or ReglaDeCarteraException or NotSupportedException)

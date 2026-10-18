@@ -32,8 +32,12 @@ public sealed record IndicadoresDeCartera(
     /// </summary>
     public bool Disponibles => PatrimonioTecnicoVigente && SolvenciaVigente;
 
-    /// <summary>El contexto de aportes del motor: en K1 siempre rige D19 (no hay consulta de Aportes).</summary>
-    public ContextoDeAportes ContextoDeAportes(bool rigeD19) => new(rigeD19, Disponibles && !ConPerdidas);
+    /// <summary>
+    /// El contexto de aportes del motor (feature 014, T084): la excepción del arrastre y el descuento en el deterioro como los dejan los parámetros de la
+    /// Cartera, con la entidad disponible y sin pérdidas.
+    /// </summary>
+    public ContextoDeAportes ContextoDeAportes(bool excepcionDeArrastre, bool descuentoEnDeterioro) =>
+        new(excepcionDeArrastre, descuentoEnDeterioro, Disponibles && !ConPerdidas);
 }
 
 /// <summary>

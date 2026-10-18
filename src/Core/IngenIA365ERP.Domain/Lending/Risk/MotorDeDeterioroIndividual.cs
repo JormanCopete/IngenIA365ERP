@@ -78,7 +78,6 @@ public static class MotorDeDeterioroIndividual
         ArgumentNullException.ThrowIfNull(norma);
         ArgumentNullException.ThrowIfNull(c);
         ArgumentNullException.ThrowIfNull(aportes);
-        aportes.ExigirQueNoApliquen(norma);
         if (c.Saldos.Capital < 0m || c.Saldos.InteresCorriente < 0m || c.Saldos.InteresDeMora < 0m || c.Saldos.Otros < 0m)
             throw new ArgumentOutOfRangeException(nameof(c), "Los saldos del deterioro no son negativos.");
 
@@ -93,10 +92,14 @@ public static class MotorDeDeterioroIndividual
             explicacion.Linea($"Garantía {g.Naturaleza} de {N(g.Valor)} × {N(fraccion)} admisible con {meses.ToString(Inv)} meses de mora = {N(valor)}.");
         }
 
-        var aporte = 0m;
-        explicacion.Linea(c.AportesAProrrata > 0m
-            ? $"Aportes a prorrata {N(c.AportesAProrrata)}: no se descuentan ({aportes.MotivoDeQueNoApliquen(norma)})."
-            : $"Aportes: no se descuentan ({aportes.MotivoDeQueNoApliquen(norma)}).");
+        // Feature 014 (T084, FR-094): con el descuento habilitado, la norma que admite aportes y la entidad con indicadores, los aportes del deudor que
+        // le tocan al crédito a prorrata se restan de la base.
+        var aporte = aportes.DescuentoAplica(norma) ? Math.Max(0m, c.AportesAProrrata) : 0m;
+        explicacion.Linea(aportes.DescuentoAplica(norma)
+            ? $"Aportes a prorrata {N(c.AportesAProrrata)}: se descuentan de la base."
+            : c.AportesAProrrata > 0m
+                ? $"Aportes a prorrata {N(c.AportesAProrrata)}: no se descuentan ({aportes.MotivoDeQueNoApliquen(norma, descuento: true)})."
+                : $"Aportes: no se descuentan ({aportes.MotivoDeQueNoApliquen(norma, descuento: true)}).");
 
         var porcentaje = norma.Porcentaje(c.SegmentoSarc, c.Categoria, c.Subcategoria, c.DiasDeMora, c.MesesEnE);
         var baseDeDeterioro = porcentaje.Base == BaseDeDeterioro.TotalBalance

@@ -114,7 +114,7 @@ public sealed record ContextoDePerdidaEsperada(
 /// por <see cref="ReglasDeParametrosDeCartera"/>, los indicadores por <see cref="LectorDeIndicadoresDeLaEntidad"/>, el perfil por
 /// <see cref="IPerfilRegulatorio"/> y la política por <see cref="PoliticaSarcVigente"/>—. Sin Anexo 1 o sin catálogo vigente no hay
 /// calificación: <c>Lending.MonthlyClose.RegulationMissing</c> (Principio IX, nunca una tabla supuesta). Mientras rija D19 los aportes no
-/// cuentan (<see cref="ContextoDeAportes"/>). (nuevo)
+/// cuentan (<see cref="ContextoDeAportes"/>); desde la 014 los habilitan sus parámetros. (nuevo)
 /// </summary>
 public sealed class LectorDelContextoDeRiesgo(
     INormativaVigente normativa,
@@ -125,9 +125,6 @@ public sealed class LectorDelContextoDeRiesgo(
     PoliticaSarcVigente politicas,
     IApplicationDbContext? db = null)
 {
-    /// <summary>Mientras Aportes y Ahorros no ofrezcan su consulta (<c>ConsultaDeAportesNoDisponible</c>), rige D19.</summary>
-    public const bool RigeD19 = true;
-
     /// <param name="fecha">La fecha de la calificación (el último día del mes en el cierre).</param>
     /// <param name="informacionHasta">R: lo conocido hasta este instante.</param>
     /// <param name="paraElCierre">Con el general, los indicadores y el perfil (el cierre); sin ellos, la calificación informativa.</param>
@@ -161,11 +158,16 @@ public sealed class LectorDelContextoDeRiesgo(
         IndicadoresDeCartera? leidos = null;
         PerfilRegulatorioDto? perfil = null;
         ParametrosDeDeterioroGeneral? general = null;
-        var aportes = ContextoDeAportes.D19SinIndicadores;
+        var aportes = ContextoDeAportes.SinAportes;
         if (paraElCierre)
         {
             leidos = await indicadores.LeerAsync(fecha, ct);
-            aportes = leidos.ContextoDeAportes(RigeD19);
+            // Feature 014 (T084; research R20, E09): fin de D19. Con la consulta de aportes real (aportes activados) la excepción del arrastre y el
+            // descuento en el deterioro los decide cada parámetro de la Cartera; sin ella siguen apagados.
+            var conAportes = db is not null && (await Deposits.Activation.ActivacionesDeCaptacion.LeerAsync(db, ct)).Aportes is { } desde && desde <= fecha;
+            aportes = leidos.ContextoDeAportes(
+                conAportes && await LogicoAsync(ParametrosDeCartera.RiesgoExcepcionAportesArrastre, fecha, informacionHasta, false, ct),
+                conAportes && await LogicoAsync(ParametrosDeCartera.RiesgoDescuentoAportesDeterioro, fecha, informacionHasta, false, ct));
             perfil = await perfiles.VigenteAsync(fecha, informacionHasta, ct);
             var limite = await valores.LeerAsync(CodigosDeValorNacional.Limite, CatalogoDeLimitesLegales.DeterioroGeneralMinimo, fecha, informacionHasta, ct);
             if (limite.IsFailure) return Result.Failure<ContextoDeRiesgo>(limite.Error);

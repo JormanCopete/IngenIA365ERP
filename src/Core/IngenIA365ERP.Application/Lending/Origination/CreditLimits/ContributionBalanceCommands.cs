@@ -90,8 +90,17 @@ public sealed class ImportContributionBalancesCommandHandler(
     IActorActual actorActual,
     IDateTimeService reloj) : IRequestHandler<ImportContributionBalancesCommand, Result<ImportResultDto>>
 {
-    public Task<Result<ImportResultDto>> Handle(ImportContributionBalancesCommand request, CancellationToken ct) =>
-        ejecutor.EjecutarAsync(CatalogoDePlantillasDeCartera.SaldosDeAportes, request, ProcesarAsync, ct);
+    /// <summary>Feature 014 (T084; api.md §7, §18.5): desde la activación de aportes la plantilla sólo es insumo de la migración.</summary>
+    public const string CodigoUsarMigracion = "Lending.Contributions.UseMigration";
+
+    public async Task<Result<ImportResultDto>> Handle(ImportContributionBalancesCommand request, CancellationToken ct)
+    {
+        if ((await Deposits.Activation.ActivacionesDeCaptacion.LeerAsync(db, ct)).Aportes is not null)
+            return Result.Failure<ImportResultDto>(new Error(CodigoUsarMigracion,
+                "Los aportes ya están activados en la Cartera: sus saldos salen de las cuentas de aportes y esta plantilla ya no se lee. Los saldos "
+                + "iniciales se cargan con la migración de aportes."));
+        return await ejecutor.EjecutarAsync(CatalogoDePlantillasDeCartera.SaldosDeAportes, request, ProcesarAsync, ct);
+    }
 
     private async Task ProcesarAsync(ContextoDeImportacion ctx, CancellationToken ct)
     {

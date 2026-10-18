@@ -359,6 +359,51 @@ public sealed class RegistroDeCuentas(IApplicationDbContext db)
         return nueva;
     }
 
+    // ------------------------------------------------------------------------------------------- cuotas exigibles (US3) --
+
+    /// <summary>
+    /// US3 (T081, T082; data-model §3.5): agrega cuotas exigibles. Cada una con valor mayor que cero, a lo sumo 2 decimales y exactamente un origen (la
+    /// corrida o la operación). La idempotencia por período la da el único de la tabla; quien genera no vuelve a pedir un período que ya tiene.
+    /// </summary>
+    public void RegistrarCuotas(IEnumerable<AccountInstallment> cuotas)
+    {
+        ArgumentNullException.ThrowIfNull(cuotas);
+        var lista = cuotas.ToList();
+        foreach (var c in lista)
+        {
+            if (c.Amount <= 0m)
+                throw new InvalidOperationException("Una cuota exigible lleva valor mayor que cero (CK_LND_AccountInstallments_Amount).");
+            if (Decimales(c.Amount) > MemberAccountTransaction.DecimalesDeOperacion)
+                throw new InvalidOperationException($"Una cuota exigible lleva a lo sumo {MemberAccountTransaction.DecimalesDeOperacion} decimales; {c.Amount} tiene más.");
+            if ((c.GeneratedByProcessRunId is not null) == (c.GeneratedByOperationId is not null))
+                throw new InvalidOperationException("Una cuota exigible tiene exactamente un origen: la corrida o la operación (CK_LND_AccountInstallments_Origin).");
+            if (c.MemberAccountId == 0 && c.MemberAccount is null)
+                throw new InvalidOperationException("Una cuota exigible nombra su cuenta.");
+        }
+        if (lista.Count > 0) db.AccountInstallments.AddRange(lista);
+    }
+
+    /// <summary>La marca del último período generado de la cuenta (<c>LastInstallmentPeriod</c>, <c>AAAA-MM-s</c>): sólo avanza.</summary>
+    public static void MarcarCuotaGenerada(MemberAccountControl control, string periodo)
+    {
+        ArgumentNullException.ThrowIfNull(control);
+        ArgumentException.ThrowIfNullOrWhiteSpace(periodo);
+        if (control.LastInstallmentPeriod is null || string.CompareOrdinal(periodo, control.LastInstallmentPeriod) > 0)
+            control.LastInstallmentPeriod = periodo;
+    }
+
+    /// <summary>
+    /// US3 (T083; data-model §3.7): lo que Nómina o una pagaduría informó que no descontó de una cuota, con su motivo. La cuota sigue exigible. No
+    /// guarda.
+    /// </summary>
+    public void RegistrarNoDescontado(AccountInstallmentNonDeduction noDescontado)
+    {
+        ArgumentNullException.ThrowIfNull(noDescontado);
+        if (noDescontado.RequestedAmount <= 0m || noDescontado.DeductedAmount < 0m || noDescontado.DeductedAmount > noDescontado.RequestedAmount)
+            throw new InvalidOperationException("Un no descontado pide más que cero y descuenta entre cero y lo pedido.");
+        db.AccountInstallmentNonDeductions.Add(noDescontado);
+    }
+
     /// <summary>Lo que el registro exige de cada fila: importe, un origen y la precisión de su clase.</summary>
     private static void Validar(MemberAccountTransaction fila)
     {

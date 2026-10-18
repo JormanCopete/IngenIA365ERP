@@ -111,6 +111,9 @@ public class MemberAccountTransactionConfiguration : IEntityTypeConfiguration<Me
         builder.HasOne(e => e.Operation).WithMany().HasForeignKey(e => e.OperationId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<LendingProcessRun>().WithMany().HasForeignKey(e => e.ProcessRunId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<MemberAccountTransaction>().WithMany().HasForeignKey(e => e.ReversesTransactionId).OnDelete(DeleteBehavior.Restrict);
+        // US3 (T081, research E17): el pago de una cuota exigible nombra su cuota.
+        builder.HasOne<AccountInstallment>().WithMany().HasForeignKey(e => e.InstallmentId).OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("FK_LND_MemberAccountTransactions_Installment");
 
         // La causación de una cuenta, un concepto y un día ocurre una vez (InterestAccrued = 6), salvo sus espejos.
         builder.HasIndex(e => new { e.MemberAccountId, e.Concept, e.ValueDate }).IsUnique()

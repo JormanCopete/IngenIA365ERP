@@ -114,7 +114,7 @@ public class CasosDoradosDeRiesgoTests
             {
                 IncumplidoPorArrastre = porArrastre.Contains(c.Id),
                 MoraActualDelDeudor = moraActual[c.Id],
-            }, contexto, ContextoDeAportes.D19SinIndicadores, pe.Redondeo);
+            }, contexto, ContextoDeAportes.SinAportes, pe.Redondeo);
             var texto = r.Explicacion.Texto + "\n" + cal.Explicacion.Texto + "\n" + h.Completado.Explicacion.Texto;
 
             if (esp.Faltantes is { } f) h.Faltantes.Should().Be(f, $"{quien}: meses que faltan\n{texto}");
@@ -194,7 +194,7 @@ public class CasosDoradosDeRiesgoTests
         var norma = CasoDoradoDeRiesgo.LeerNorma(e.Norma);
         var efectiva = PoliticaSarcEfectiva.Combinar(norma, CasoDoradoDeRiesgo.LeerPolitica(e.Politica));
         efectiva.Errores.Should().BeEmpty($"{e.Nombre}: la política de un caso sólo toca celdas que la norma trae");
-        var aportes = new ContextoDeAportes(e.Opciones.RigeD19, e.Opciones.IndicadoresDisponibles);
+        var aportes = ContextoDeAportes.DesdeD19(e.Opciones.RigeD19, e.Opciones.IndicadoresDisponibles);
 
         var dias = caso.Creditos.ToDictionary(c => c.Id, c => DiasDeMora(caso, c));
         var calificaciones = MotorDeCalificacion.Calificar(efectiva.Efectiva, caso.Creditos.Select(c => new CreditoParaCalificar(c.Id, c.Deudor, c.Segmento, dias[c.Id])

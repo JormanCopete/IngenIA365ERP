@@ -245,6 +245,8 @@ public static class DependencyInjection
         // captaciones (el primero que se registra).
         services.AddScoped<Lending.Deposits.Accounts.TitularidadDeCuentas>();
         services.AddScoped<Lending.Deposits.Accrual.ISubpasoDeCaptaciones, Lending.Deposits.Accrual.MayoriaDeEdad>();
+        // US3 (T082): las cuotas exigibles de aportes y del ahorro permanente, después de la mayoría de edad.
+        services.AddScoped<Lending.Deposits.Accrual.ISubpasoDeCaptaciones, Lending.Deposits.Contributions.GeneradorDeCuotas>();
         // Feature 013 (T0284–T0289, US17): el alcance por oficina y línea (la API registra el de la petición; aquí, el que falla
         // cerrado), el salto común de oficinas que también usa UserBranchScope, el único escritor de LND_CaseParticipations, las
         // lecturas sensibles de Cartera y el último rechazo de forma de la petición (para Lending.Request.Rejected).
@@ -293,7 +295,9 @@ public static class DependencyInjection
         // consumen las validaciones), el saldo de aportes (D19: Aportes primero, la plantilla si responde «no disponible»), los cupos y su
         // enrutamiento y revalidación, la atribución de quien decide, la decisión individual por sujeto y los asuntos de acta de la solicitud y del
         // cupo. La tarea cartera.re-escaneo-de-listas la registra Program.cs.
-        services.TryAddScoped<Common.Integration.Lending.IConsultaDeAportes, Common.Integration.Lending.ConsultaDeAportesNoDisponible>();
+        // Feature 014, US3 (T084; research E33): la consulta de aportes es ya la real; responde «no disponible» hasta la activación de aportes de la
+        // cooperativa, y SaldoDeAportesVigente usa entonces la plantilla (D19). ConsultaDeAportesNoDisponible queda para las pruebas.
+        services.TryAddScoped<Common.Integration.Lending.IConsultaDeAportes, Lending.Integration.ConsultaDeAportesDeCartera>();
         services.AddScoped<Lending.Origination.CreditLimits.SaldoDeAportesVigente>();
         services.AddScoped<Lending.Origination.ConsultaDeListasDeCartera>();
         services.AddScoped<Lending.Origination.IConsultaDeListasDeCartera>(sp => sp.GetRequiredService<Lending.Origination.ConsultaDeListasDeCartera>());
@@ -502,9 +506,15 @@ public static class DependencyInjection
         services.AddScoped<Common.Integration.Lending.IConsultaDeObligaciones, Lending.Integration.ObligacionesDeCartera>();
         services.AddScoped<Common.Integration.Lending.IContratoDeObligaciones, Lending.Integration.ContratoDeObligacionesDeCartera>();
         services.AddScoped<Common.Integration.Lending.IReservasDeCartera, Lending.Integration.ReservasDeCartera>();
-        // Feature 014 (T040; contrato-de-cuentas §3.13): el contrato de cuentas responde «no habilitado» sin efectos hasta que la activación de
-        // aportes o de captaciones (T055) registre ContratoDeCuentasDeCartera.
-        services.AddScoped<Common.Integration.Lending.IContratoDeCuentas, Lending.Integration.ContratoDeCuentasSinActivar>();
+        // Feature 014 (T040, T083; contrato-de-cuentas §3.13, research E33): el contrato de cuentas es ya el real; responde «no habilitado» sin efectos
+        // por naturaleza mientras aportes o captaciones no tengan su fecha de activación (ContratoDeCuentasSinActivar queda para las pruebas). Sus
+        // piezas: la consignación, el reverso y las reglas de aportes; los validadores (Contrato/ValidadoresDelContratoDeCuentas.cs) los registra
+        // AddValidatorsFromAssembly.
+        services.AddScoped<Lending.Deposits.Contributions.ReglasDeAportes>();
+        services.AddScoped<Lending.Deposits.Contributions.ConsignacionEnCuentas>();
+        services.AddScoped<Lending.Deposits.Contributions.ReversionDeCuentas>();
+        services.AddScoped<Lending.Integration.ContratoDeCuentasDeCartera>();
+        services.AddScoped<Common.Integration.Lending.IContratoDeCuentas>(sp => sp.GetRequiredService<Lending.Integration.ContratoDeCuentasDeCartera>());
         // US6 (T0582–T0594): la verificación de listas sin escribir de la consulta, y el consumidor de Comercial con sus piezas (los validadores de
         // la reserva, Integration/Reservas, los registra AddValidatorsFromAssembly).
         services.AddScoped<Lending.Origination.IVerificacionDeListas>(sp => sp.GetRequiredService<Lending.Origination.ConsultaDeListasDeCartera>());

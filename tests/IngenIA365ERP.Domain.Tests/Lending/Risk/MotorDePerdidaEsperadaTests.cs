@@ -29,7 +29,7 @@ public class MotorDePerdidaEsperadaTests
         var p = MotorDePerdidaEsperada.Puntuar(Sembrado, AlDia("CONSUMO_LIBRANZA"), contexto);
 
         var accion = () => MotorDePerdidaEsperada.Calcular(Sembrado, new CreditoParaPerdidaEsperada(p, RatingCategory.A, Saldos, false, "SIN_GARANTIA"),
-            contexto, ContextoDeAportes.D19SinIndicadores, RedondeoDeDeterioro.Centavo);
+            contexto, ContextoDeAportes.SinAportes, RedondeoDeDeterioro.Centavo);
 
         accion.Should().Throw<InvalidOperationException>().WithMessage("*VOLUNTARIA*");
     }
@@ -41,25 +41,26 @@ public class MotorDePerdidaEsperadaTests
         var p = MotorDePerdidaEsperada.Puntuar(Sembrado, AlDia("CONSUMO_LIBRANZA"), contexto);
 
         var accion = () => MotorDePerdidaEsperada.Calcular(Sembrado, new CreditoParaPerdidaEsperada(p, RatingCategory.A, Saldos, false, "SIN_GARANTIA"),
-            contexto, ContextoDeAportes.D19SinIndicadores, RedondeoDeDeterioro.Centavo);
+            contexto, ContextoDeAportes.SinAportes, RedondeoDeDeterioro.Centavo);
 
         accion.Should().Throw<InvalidOperationException>().WithMessage("*COOP_INTEGRAL_SECCION_AC*");
     }
 
     [Fact]
-    public void Sin_la_PDI_del_tipo_de_garantia_el_motor_se_niega_y_con_aportes_sin_D19_tambien()
+    public void Sin_la_PDI_del_tipo_de_garantia_el_motor_se_niega_y_con_aportes_explica_que_no_los_descuenta()
     {
         var contexto = Contexto("COOP_AHORRO_CREDITO");
         var p = MotorDePerdidaEsperada.Puntuar(Sembrado, AlDia("CONSUMO_LIBRANZA"), contexto);
 
         var sinPdi = () => MotorDePerdidaEsperada.Calcular(Sembrado, new CreditoParaPerdidaEsperada(p, RatingCategory.A, Saldos, false, "AVAL"),
-            contexto, ContextoDeAportes.D19SinIndicadores, RedondeoDeDeterioro.Centavo);
+            contexto, ContextoDeAportes.SinAportes, RedondeoDeDeterioro.Centavo);
         sinPdi.Should().Throw<InvalidOperationException>().WithMessage("*AVAL*");
 
-        var conAportes = () => MotorDePerdidaEsperada.Calcular(Sembrado,
+        // Feature 014 (T084): sin D19 el motor ya no se niega; el Anexo 2 no descuenta los aportes de la exposición y la explicación lo dice.
+        var conAportes = MotorDePerdidaEsperada.Calcular(Sembrado,
             new CreditoParaPerdidaEsperada(p, RatingCategory.A, Saldos, false, "SIN_GARANTIA") { AportesAProrrata = 100m },
-            contexto, new ContextoDeAportes(false, true), RedondeoDeDeterioro.Centavo);
-        conAportes.Should().Throw<NotSupportedException>();
+            contexto, new ContextoDeAportes(true, true, true), RedondeoDeDeterioro.Centavo);
+        conAportes.Explicacion.Texto.Should().Contain("el Anexo 2 no descuenta los aportes");
     }
 
     [Fact]
@@ -75,7 +76,7 @@ public class MotorDePerdidaEsperadaTests
             .Incumplido.Should().BeFalse();
 
         var r = MotorDePerdidaEsperada.Calcular(Sembrado, new CreditoParaPerdidaEsperada(p, RatingCategory.A, Saldos, false, "SIN_GARANTIA"),
-            Contexto("COOP_AHORRO_CREDITO"), ContextoDeAportes.D19SinIndicadores, RedondeoDeDeterioro.Centavo);
+            Contexto("COOP_AHORRO_CREDITO"), ContextoDeAportes.SinAportes, RedondeoDeDeterioro.Centavo);
         r.ProbabilidadDeIncumplimiento.Should().Be(1m);
         r.PerdidaDadoElIncumplimiento.Should().Be(0.75m);
         r.CalificacionContable.Should().Be(RatingCategory.D, "sin fila para 8 días, el incumplido toma la primera fila de su homologación (lectura del equipo)");
@@ -104,7 +105,7 @@ public class MotorDePerdidaEsperadaTests
 
         var r = MotorDePerdidaEsperada.Calcular(Sembrado,
             new CreditoParaPerdidaEsperada(p, RatingCategory.D, Saldos, false, "NO_IDONEA") { IncumplidoPorArrastre = true, MoraActualDelDeudor = 120 },
-            contexto, ContextoDeAportes.D19SinIndicadores, RedondeoDeDeterioro.Peso);
+            contexto, ContextoDeAportes.SinAportes, RedondeoDeDeterioro.Peso);
 
         r.Incumplido.Should().BeTrue();
         r.ProbabilidadDeIncumplimiento.Should().Be(1m);

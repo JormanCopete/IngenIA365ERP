@@ -155,9 +155,9 @@ internal sealed class CuentasDePrueba : IDisposable
         return r.Value;
     }
 
-    public async Task<LendingLineDto> LineaDeAportesAsync(string codigo = "APORTES")
+    public async Task<LendingLineDto> LineaDeAportesAsync(string codigo = "APORTES", ContributionLineVersionInput? propia = null)
     {
-        var version = new ContributionLineVersionInput
+        var version = propia ?? new ContributionLineVersionInput
         {
             ValidFrom = Hoy,
             Reason = "Estatutos, art. 20",

@@ -93,6 +93,8 @@ public class ModeloDeCarteraNucleoTests
         "LND_DepositLineVersions", "LND_DepositLineRateTiers", "LND_ContributionLineVersions",
         // Feature 014, US2 (T072, CaptacionesAportes; data-model §3.8): la cuenta exenta del GMF
         "LND_GmfExemptAccounts",
+        // Feature 014, US3 (T081, CaptacionesAportes; data-model §3.5, §3.7): las cuotas exigibles y lo no descontado
+        "LND_AccountInstallments", "LND_AccountInstallmentNonDeductions",
     ];
 
     /// <summary>Las 17 de preparación (data-model §29.3).</summary>
@@ -123,6 +125,8 @@ public class ModeloDeCarteraNucleoTests
         "MemberAccountOperation", "MemberAccountTransaction", "MemberAccountDailyPosition",
         // Feature 014, US1 (T060–T062): las versiones de las líneas de captación y de aportes y sus tramos.
         "DepositLineVersion", "DepositLineRateTier", "ContributionLineVersion",
+        // Feature 014, US3 (T081): la cuota exigible y lo no descontado.
+        "AccountInstallment", "AccountInstallmentNonDeduction",
         .. Preparacion,
     ];
 
@@ -136,7 +140,7 @@ public class ModeloDeCarteraNucleoTests
     [
         "LoanOperation", "LoanTransaction", "LoanDailyPosition", "RepaymentInstallment", "DebtorMessageEvent", "RegulatoryFileLine",
         "MigrationInstallmentRow", "MigrationBalanceRow", "MigrationArrearsHistoryRow",
-        "MemberAccountOperation", "MemberAccountTransaction", "MemberAccountDailyPosition",
+        "MemberAccountOperation", "MemberAccountTransaction", "MemberAccountDailyPosition", "AccountInstallment",
     ];
 
     /// <summary>Controles y documentos con estado cuyos únicos tampoco filtran por borrado lógico (data-model §0.1).</summary>
@@ -155,11 +159,11 @@ public class ModeloDeCarteraNucleoTests
         var tablas = DeCartera(Modelo(postgres)).Select(e => e.GetTableName()).ToList();
 
         tablas.Should().OnlyHaveUniqueItems().And.BeEquivalentTo(Tablas);
-        Tablas.Should().HaveCount(143,
+        Tablas.Should().HaveCount(145,
             "74 de negocio + 17 de preparación (data-model §14) + 2 del grupo conectado (C112) + 7 de CarteraRiesgo (US9) + 8 de CarteraLibranza (K2)"
             + " + 9 de CarteraNovedades (K3) + 11 de CarteraCobranza (K4) + 2 de CarteraInformes (K5) + 2 de CarteraPerdidaEsperada (K6a)"
             + " + 7 del libro de cuentas de la feature 014 (K7, CaptacionesAportes) + 3 de las versiones de líneas de captación y aportes (US1)"
-            + " + 1 de la cuenta exenta del GMF (US2)");
+            + " + 1 de la cuenta exenta del GMF (US2) + 2 de las cuotas exigibles (US3)");
     }
 
     [Theory]

@@ -43,13 +43,19 @@ public sealed record CreditoParaCalificar(int LoanId, int DeudorId, string Segme
 
     /// <summary>La calificación por análisis vigente a R (FR-101); nunca mejora la de las reglas.</summary>
     public CalificacionImpuesta? Analisis { get; init; }
+
+    /// <summary>Feature 014 (T084): el saldo de capital del crédito al corte, para la excepción de aportes en el arrastre.</summary>
+    public decimal Capital { get; init; }
+
+    /// <summary>Feature 014 (T084): los aportes del deudor al corte (por <c>IConsultaDeAportes</c>); cero sin la consulta de aportes.</summary>
+    public decimal AportesDelDeudor { get; init; }
 }
 
 /// <summary>Las opciones de una corrida: si hay arrastre (la informativa lo apaga con <c>Riesgo.CalificacionDiariaConArrastre</c>) y los aportes (D19).</summary>
 public sealed record OpcionesDeCalificacion(bool ConArrastre, ContextoDeAportes Aportes)
 {
     /// <summary>El cierre de K1: con arrastre y D19.</summary>
-    public static OpcionesDeCalificacion Cierre { get; } = new(true, ContextoDeAportes.D19SinIndicadores);
+    public static OpcionesDeCalificacion Cierre { get; } = new(true, ContextoDeAportes.SinAportes);
 }
 
 /// <summary>Una candidata con su causa y en palabras.</summary>
@@ -106,7 +112,6 @@ public static class MotorDeCalificacion
         ArgumentNullException.ThrowIfNull(norma);
         ArgumentNullException.ThrowIfNull(creditos);
         ArgumentNullException.ThrowIfNull(opciones);
-        opciones.Aportes.ExigirQueNoApliquen(norma);
 
         var lista = creditos.ToList();
         if (lista.Select(c => c.LoanId).Distinct().Count() != lista.Count)
@@ -209,13 +214,25 @@ public static class MotorDeCalificacion
         if (peor.Categoria < regla.DesdeCategoria || peor.Categoria <= suya)
         {
             explicacion.Linea($"Arrastre: no aplica; el peor crédito {alcance} está en {peor.Categoria} y el arrastre empieza en {regla.DesdeCategoria} "
-                + $"(las codeudas no cuentan; excepción de aportes: no, {aportes.MotivoDeQueNoApliquen(norma)}).");
+                + $"(las codeudas no cuentan; excepción de aportes: {(aportes.ExcepcionAplica(norma) ? "no hace falta" : "no, " + aportes.MotivoDeQueNoApliquen(norma, descuento: false))}).");
+            return;
+        }
+        // Feature 014 (T084, FR-094): con la excepción habilitada, la norma que admite aportes y la entidad con indicadores, el crédito cuyo capital no
+        // supera los aportes del deudor no se arrastra.
+        if (aportes.ExcepcionAplica(norma) && credito.Capital <= credito.AportesDelDeudor)
+        {
+            explicacion.Linea($"Arrastre: el crédito {peor.LoanId.ToString(Inv)} {alcance} está en {peor.Categoria} ≥ {regla.DesdeCategoria}, pero rige la "
+                + $"excepción de aportes: el capital {credito.Capital.ToString("#,##0.##", Inv)} no supera los aportes del deudor "
+                + $"{credito.AportesDelDeudor.ToString("#,##0.##", Inv)}; no se arrastra.");
             return;
         }
         candidatas.Add(new(peor.Categoria, RatingCause.Drag,
             $"arrastre: el crédito {peor.LoanId.ToString(Inv)} {alcance} está en {peor.Categoria}"));
         explicacion.Linea($"Arrastre: el crédito {peor.LoanId.ToString(Inv)} {alcance} está en {peor.Categoria} ≥ {regla.DesdeCategoria}; "
-            + $"sin excepción de aportes ({aportes.MotivoDeQueNoApliquen(norma)}); las codeudas no cuentan.");
+            + (aportes.ExcepcionAplica(norma)
+                ? $"sin excepción de aportes (el capital {credito.Capital.ToString("#,##0.##", Inv)} supera los aportes del deudor {credito.AportesDelDeudor.ToString("#,##0.##", Inv)})"
+                : $"sin excepción de aportes ({aportes.MotivoDeQueNoApliquen(norma, descuento: false)})")
+            + "; las codeudas no cuentan.");
     }
 
     // ------------------------------------------------------------------------------------------------ cierre --

@@ -324,20 +324,22 @@ public class LaCarteraSoloSeTocaPorSusInterfaces
     ];
 
     /// <summary>
-    /// Feature 014 (T040, T041; contrato-de-cuentas §3.13, §4): mientras ninguna naturaleza esté activada, <c>DependencyInjection</c> registra el
-    /// contrato de cuentas «sin activar» de Cartera (que sólo lee la naturaleza de la cuenta y no escribe) y la consulta de aportes «no disponible»; la
-    /// carpeta <c>Common/Integration/Savings</c> ya no existe.
+    /// Feature 014 (T040, T041, T083, T084; contrato-de-cuentas §3.13, §4; research E33): <c>DependencyInjection</c> registra el contrato de cuentas y la
+    /// consulta de aportes <b>reales</b> de la Cartera, que responden «no habilitado» / «no disponible» por naturaleza mientras no esté activada (las
+    /// implementaciones «sin activar» y «no disponible» siguen existiendo para las pruebas); la carpeta <c>Common/Integration/Savings</c> ya no existe.
     /// </summary>
     [Fact]
-    public void El_contrato_de_cuentas_y_la_consulta_de_aportes_arrancan_sin_activar()
+    public void El_contrato_de_cuentas_y_la_consulta_de_aportes_son_los_reales_de_la_Cartera()
     {
         var sinActivar = typeof(IngenIA365ERP.Application.Lending.Integration.ContratoDeCuentasSinActivar);
         Assert.True(typeof(IContratoDeCuentas).IsAssignableFrom(sinActivar));
         Assert.True(typeof(IConsultaDeAportes).IsAssignableFrom(typeof(ConsultaDeAportesNoDisponible)));
         var raiz = RepoPath.FindRepoRoot();
         var di = FuenteSinComentarios.Leer(Path.Combine(raiz, "src", "Core", "IngenIA365ERP.Application", "DependencyInjection.cs"));
-        Assert.Matches(@"IContratoDeCuentas,\s*[\w.]*ContratoDeCuentasSinActivar>", di);
-        Assert.Matches(@"IConsultaDeAportes,\s*[\w.]*ConsultaDeAportesNoDisponible>", di);
+        Assert.Matches(@"IContratoDeCuentas>\(sp\s*=>\s*sp\.GetRequiredService<[\w.]*ContratoDeCuentasDeCartera>\(\)\)", di);
+        Assert.Matches(@"IConsultaDeAportes,\s*[\w.]*ConsultaDeAportesDeCartera>", di);
+        Assert.True(typeof(IContratoDeCuentas).IsAssignableFrom(typeof(IngenIA365ERP.Application.Lending.Integration.ContratoDeCuentasDeCartera)));
+        Assert.True(typeof(IConsultaDeAportes).IsAssignableFrom(typeof(IngenIA365ERP.Application.Lending.Integration.ConsultaDeAportesDeCartera)));
         var savings = Path.Combine(raiz, "src", "Core", "IngenIA365ERP.Application", "Common", "Integration", "Savings");
         Assert.False(Directory.Exists(savings) && Directory.EnumerateFiles(savings, "*.cs", SearchOption.AllDirectories).Any(),
             "IConsultaDeAportes se mudó a Common/Integration/Lending (R20).");

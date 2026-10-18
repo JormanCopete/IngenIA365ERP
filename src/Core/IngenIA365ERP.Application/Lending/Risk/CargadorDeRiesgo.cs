@@ -59,7 +59,14 @@ public sealed record DatosDeRiesgo(
     IReadOnlyList<int> Tanda,
     IReadOnlyDictionary<int, CreditoDeRiesgo> Creditos,
     IReadOnlyDictionary<int, Error> Errores,
-    Domain.Entities.Lending.Risk.MonthlyClose? CierreAnterior);
+    Domain.Entities.Lending.Risk.MonthlyClose? CierreAnterior)
+{
+    /// <summary>
+    /// Feature 014 (T084): los aportes de cada deudor al corte por <c>IConsultaDeAportes</c>, sólo si la excepción del arrastre o el descuento en el
+    /// deterioro están habilitados; vacío si no (o sin la consulta real).
+    /// </summary>
+    public IReadOnlyDictionary<int, decimal> AportesPorDeudor { get; init; } = new Dictionary<int, decimal>();
+}
 
 /// <summary>
 /// La carga en bloque del riesgo (feature 013, US9, T0699; T46, T47): para una tanda de créditos y un corte con R, la reconstrucción a fin de mes
@@ -70,7 +77,8 @@ public sealed record DatosDeRiesgo(
 /// para el grupo pero no se escriben. Un crédito que no se puede reconstruir o cuya modalidad no está en el catálogo o en la norma vigentes queda
 /// en <see cref="DatosDeRiesgo.Errores"/>. No escribe. (nuevo)
 /// </summary>
-public sealed class CargadorDeRiesgo(IApplicationDbContext db, CargadorDeReconstruccion reconstruccion)
+public sealed class CargadorDeRiesgo(IApplicationDbContext db, CargadorDeReconstruccion reconstruccion,
+    IngenIA365ERP.Application.Common.Integration.Lending.IConsultaDeAportes? consultaDeAportes = null)
 {
     public const string CodigoSinSegmento = "Lending.Risk.SegmentMissing";
 
@@ -185,7 +193,10 @@ public sealed class CargadorDeRiesgo(IApplicationDbContext db, CargadorDeReconst
                 MaxDiasDeMoraDelMes = Math.Max(moraDelMes.GetValueOrDefault(id), estado.AlturaDeMora.Dias),
             };
         }
-        return new DatosDeRiesgo(ids, creditos, errores, cierreAnterior);
+        return new DatosDeRiesgo(ids, creditos, errores, cierreAnterior)
+        {
+            AportesPorDeudor = await AportesAsync(creditos.Values.Select(c => c.Credito.DebtorPersonId).Distinct().ToList(), corte, contexto, ct),
+        };
     }
 
     /// <summary>
@@ -195,4 +206,20 @@ public sealed class CargadorDeRiesgo(IApplicationDbContext db, CargadorDeReconst
     public static GarantiaParaDeterioro Garantia(Domain.Entities.Lending.Origination.Collateral g) =>
         new(g.Kind == CollateralKind.Mortgage ? NaturalezaDeGarantia.Mortgage : NaturalezaDeGarantia.NonMortgage,
             g.AdmissibleValue > 0m ? g.AdmissibleValue : g.Value);
+
+    /// <summary>
+    /// Feature 014 (T084, FR-094): los aportes de los deudores al corte, en una sola consulta al puerto, si el riesgo los va a usar; la consulta responde
+    /// «no disponible» sin aportes activados y entonces no hay aportes.
+    /// </summary>
+    private async Task<IReadOnlyDictionary<int, decimal>> AportesAsync(IReadOnlyList<int> deudores, DateOnly corte, ContextoDeRiesgo contexto,
+        CancellationToken ct)
+    {
+        if (consultaDeAportes is null || deudores.Count == 0 || !(contexto.Aportes.ExcepcionDeArrastre || contexto.Aportes.DescuentoEnDeterioro))
+            return new Dictionary<int, decimal>();
+        var publicos = await db.People.AsNoTracking().IgnoreQueryFilters().Where(p => deudores.Contains(p.Id)).ToDictionaryAsync(p => p.PublicId, p => p.Id, ct);
+        var saldos = await consultaDeAportes.SaldosAsync(new IngenIA365ERP.Application.Common.Integration.Lending.SolicitudDeSaldoDeAportes(publicos.Keys.ToList(), corte), ct);
+        return saldos.Available
+            ? saldos.Balances.Where(b => publicos.ContainsKey(b.PersonPublicId)).ToDictionary(b => publicos[b.PersonPublicId], b => b.Contributions)
+            : new Dictionary<int, decimal>();
+    }
 }

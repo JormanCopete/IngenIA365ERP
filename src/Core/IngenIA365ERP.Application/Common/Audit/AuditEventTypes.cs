@@ -283,6 +283,25 @@ public static class AuditEventTypes
     public const string LendingObligationContractListed = "Lending.ObligationContract.Listed";
     public const string LendingObligationContractSimulated = "Lending.ObligationContract.Simulated";
 
+    // Feature 014, US3 (T083; contrato-de-cuentas §3.15): el contrato de cuentas, con la misma mecánica que el de obligaciones —el intento por un
+    // contexto aparte, el hecho en COR_AuditOutbox dentro de la transacción con el antes y el después por concepto—. Consultar, listar y simular son
+    // lecturas sensibles de saldos del titular (FR-003).
+    public const string LendingAccountContractAttempted = "Lending.AccountContract.Attempted";
+    public const string LendingAccountContractDeposited = "Lending.AccountContract.Deposited";
+    public const string LendingAccountContractWithdrawn = "Lending.AccountContract.Withdrawn";
+    public const string LendingAccountContractTransferred = "Lending.AccountContract.Transferred";
+    public const string LendingAccountContractReversed = "Lending.AccountContract.Reversed";
+    public const string LendingAccountContractRejected = "Lending.AccountContract.Rejected";
+    public const string LendingAccountContractQueried = "Lending.AccountContract.Queried";
+    public const string LendingAccountContractListed = "Lending.AccountContract.Listed";
+    public const string LendingAccountContractSimulated = "Lending.AccountContract.Simulated";
+
+    // Feature 014, US3 (T086): la devolución de aportes sin retiro y la cesión entre asociados, pedidas y decididas por personas distintas.
+    public const string LendingContributionRefundRequested = "Lending.ContributionRefund.Requested";
+    public const string LendingContributionRefundApproved = "Lending.ContributionRefund.Approved";
+    public const string LendingContributionAssignmentRequested = "Lending.ContributionAssignment.Requested";
+    public const string LendingContributionAssignmentApproved = "Lending.ContributionAssignment.Approved";
+
     // US6 (la reutiliza): la reserva y liberación de números de Comercial.
     public const string LendingNumberReservationAttempted = "Lending.NumberReservation.Attempted";
     public const string LendingNumberReservationReserved = "Lending.NumberReservation.Reserved";

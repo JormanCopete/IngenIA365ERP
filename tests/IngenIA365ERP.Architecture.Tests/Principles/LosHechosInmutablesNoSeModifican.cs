@@ -258,6 +258,8 @@ public class LosHechosInmutablesNoSeModifican
         // Feature 014, US1 (T060–T062; data-model §2.1, §2.2, §2.5): las versiones de las líneas de captación y de aportes y sus tramos; una versión
         // nueva las corrige.
         ["DepositLineVersion"] = [], ["DepositLineRateTier"] = [], ["ContributionLineVersion"] = [],
+        // Feature 014, US3 (T081; data-model §3.5, §3.7): la cuota exigible sólo admite su anulación (una vez); lo no descontado, nada.
+        ["AccountInstallment"] = ["CancelledAt", "CancelReason", "CancelledByOperationId"], ["AccountInstallmentNonDeduction"] = [],
     };
 
     [Fact]
