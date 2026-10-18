@@ -3773,9 +3773,9 @@ clase de corrida. La prueba de volumen con 50.000 créditos corre bajo `RUN_PERF
 | `RegisteredByUserId` · `RegisteredAt` | int FK · datetime | no | |
 | `SessionItemId` | int FK `LND_SessionItems` | no | acta de activación, **obligatoria** (C61): declara lo que queda fuera (vivienda hasta K6b) y que se conserva el plan migrado (D5) |
 | `CheckVersion` · `BalanceCheckSha256` · `SalesReconciliationSha256` | int · char(64) · char(64) | no | el cuadre y la conciliación recalculados y aceptados |
-| `IsProductionEnvironment` | bit | no | `IHostEnvironment.IsProduction()`, sellado: dice qué requisitos se exigieron |
+| `IsProductionEnvironment` | bit | no | `IHostEnvironment.IsProduction()`, sellado. Desde el 2026-10-18 todos los requisitos se exigen en todos los ambientes; sólo dice si los dobles de prueba podían contar |
 | `RequirementsJson` | nvarchar(max) | no | cada requisito con su resultado y evidencia (abajo) |
-| `ObligatoryModelUnavailable` | bit | no | ambiente de prueba sin K6a con cooperativa obligada (FR-105) |
+| `ObligatoryModelUnavailable` | bit | no | ambiente de prueba sin K6a con cooperativa obligada (FR-105); desde el 2026-10-18 la activación ya no lo sella (la obligada sin K6a no activa en ningún ambiente) |
 | `CountsJson` | nvarchar(max) | no | créditos, saldos iniciales, castigados, cupos, bloqueos, autorizaciones, avisos, reclamos, vinculados, garantías |
 | `NonDeductionsMarked` · `CreditLimitsToRevalidate` | int | no | |
 | `ProvisionalCollectionsFileSha256` · `ProvisionalCollectionsCount` | char(64) · int | sí · no | plantilla `lending.provisional-collections` |
@@ -3797,10 +3797,13 @@ desactivación.
   `AccountingMonthOpen` sólo falta sin contabilidad iniciada;
 - **diferencias** de la versión recalculada aceptadas (`Lending.Activation.DifferencesNotAccepted`);
 - **acta** de activación (C61) y **cobros provisionales** validados (C62);
-- **en producción**: un recaudador `Receipts` y un destino `Treasury` reales en el registro con versiones vigentes
-  (no dobles); K6a desplegada si la cooperativa es obligada; Anexo 1 vigente y usura de las modalidades de las líneas
-  activas; roles de Cartera creados; toda oficina con créditos vinculada a una sucursal contable; regla
-  `RecaudoPorAplicar` con `CollectorClass = Payroll` resuelta por `IContabilidadParaCartera`;
+- **en todos los ambientes** (decisión del dueño del 2026-10-18; hasta esa fecha sólo en producción y fuera de ella
+  quedaban `Waived`): un recaudador y un destino `Treasury` en el registro con la adopción vigente de
+  `ProveedorDeObligaciones` y `OrdenDeGiroEmitida` —en producción reales, nunca dobles; fuera de ella pueden ser los
+  dobles `TST` y `TES`, que son el Recaudo y la Tesorería de esos ambientes—; K6a desplegada si la cooperativa es
+  obligada; Anexo 1 vigente y usura de las modalidades de las líneas activas; roles de Cartera creados; toda oficina con
+  créditos vinculada a una sucursal contable; regla `RecaudoPorAplicar` con `CollectorClass = Payroll` resuelta por
+  `IContabilidadParaCartera`;
 - **donde K6a esté desplegada**, para una obligada: parámetros de FR-106 vigentes al primer cierre que los use e
   historial completo de los créditos migrados de los segmentos cubiertos.
 

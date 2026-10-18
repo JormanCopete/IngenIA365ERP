@@ -193,6 +193,8 @@ public sealed class MigracionYActivacionDeCarteraTests(CentralIdentityApiFixture
         (await CarteraE2E.LeerAsync(marca)).GetProperty("classification").GetInt32().Should().Be(4);
 
         // ------------------------------------------------------------------------------------------- activar --
+        // Decisión del dueño del 2026-10-18: los requisitos de la activación se exigen en todos los ambientes.
+        await CarteraE2E.RequisitosDeActivacionAsync(fx, coop, corte);
         var punto = await CarteraE2E.ActaDeActivacionAsync(http, coop, carga, corte);
         var conductor = new ConductorDelDespachador(fx);
         using (conductor.Adelantar(TimeSpan.FromDays(1)))

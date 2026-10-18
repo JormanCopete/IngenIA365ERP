@@ -78,6 +78,8 @@ public sealed class ActivacionDeCarteraPerformanceTests(CentralIdentityApiFixtur
         aplicar.StatusCode.Should().Be(HttpStatusCode.OK, await aplicar.Content.ReadAsStringAsync());
         var aplicacion = reloj.Elapsed;
 
+        // Decisión del dueño del 2026-10-18: los requisitos de la activación se exigen en todos los ambientes.
+        await CarteraE2E.RequisitosDeActivacionAsync(fx, coop, corte);
         var punto = await CarteraE2E.ActaDeActivacionAsync(http, coop, carga, corte);
         var diferencias = (await CarteraE2E.GetAsync(http, admin, $"{Cargas}/{carga}/balance-check")).GetProperty("differences").EnumerateArray()
             .Where(d => d.GetProperty("acceptedAt").ValueKind == JsonValueKind.Null).Select(d => d.GetProperty("publicId").GetGuid()).ToList();

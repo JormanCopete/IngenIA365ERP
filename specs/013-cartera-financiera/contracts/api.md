@@ -1693,9 +1693,11 @@ que se decide en el ERP); las reclamaciones al seguro y las insolvencias viajan 
 
 `ActivationReadinessDto.requirements[].code`: `LoadApplied`, `DifferencesAccepted`, `SalesReconciled`,
 `DateInTerm`, `AccountingMonthOpen` (sólo falta sin contabilidad iniciada: el mes de C+1 cerrado queda `NotApplicable` con el aviso `AccountingMonthClosed`, respuesta del dueño del 2026-10-14), `ReceiptsCollectorRegistered`, `TreasuryDestinationRegistered`
-(producción, sin dobles), `ExpectedLossAvailable` (cooperativa obligada), `ExpectedLossParameters` y
+(con la adopción del contrato en todos los ambientes; en producción sin dobles), `ExpectedLossAvailable` (cooperativa obligada), `ExpectedLossParameters` y
 `ArrearsHistoryComplete` (donde K6a esté desplegada), `Annex1Current`, `UsuryForActiveLines`,
-`LendingRolesCreated`, `OfficesLinkedToAccountingBranches`, `PayrollBridgeRuleResolved`. Avisos que no
+`LendingRolesCreated`, `OfficesLinkedToAccountingBranches`, `PayrollBridgeRuleResolved`. Decisión del dueño del 2026-10-18: todos se exigen
+**en todos los ambientes**; el estado `Waived` (falta, pero fuera de producción no bloquea) ya no se produce y sólo puede aparecer en el
+`RequirementsJson` de una activación anterior. Avisos que no
 bloquean: `CommercialParametersToAdjust` (fecha de habilitación, política sin respuesta, quién registra la
 cuenta por cobrar), `PayrollConceptAccounts` (la pantalla pregunta a Nómina por
 `GET /api/payroll/concept-definitions/DESC_CARTERA/accounts`), `UsersWithoutScope` y `AccountingMonthClosed` (el mes de C+1

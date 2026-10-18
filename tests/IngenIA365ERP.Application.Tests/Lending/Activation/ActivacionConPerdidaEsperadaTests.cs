@@ -34,6 +34,7 @@ public sealed class ActivacionConPerdidaEsperadaTests : IAsyncLifetime
         _a = await ActivacionConCarteraDePrueba.CrearAsync();
         await _a.AplicarAsync();
         _a.ConPerdidaEsperada = true;
+        await _a.RequisitosDeLaPlataformaAsync();
         await PerdidaEsperadaDePrueba.ReglaAsync(_a.Db, _a.G.UtcNow, new DateOnly(2026, 1, 1));
         PerdidaEsperadaDePrueba.Perfil(_a.G, "COOP_AHORRO_CREDITO");
     }

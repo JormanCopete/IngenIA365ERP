@@ -4915,6 +4915,22 @@ Respuestas del dueño a las preguntas abiertas de la fase 24 (notas del bloque 2
     `totalAdvanceReceived`, `totalMonetaryCorrection`; el PDF (`DocumentosDeCarteraReport`) pinta un renglón por crédito debajo de cada tabla,
     sólo si no es cero. Pruebas: `CertificadoTributarioTests` (+3, Domain) y `DocumentosDeCarteraReportTests` (+1, sin correr: proyecto de
     integración). Manual `cartera-documentos-al-deudor.md` §2b y §9; adaptadores §8.1; contabilidad.md §29 (lo abierto, resuelto). Sin migración.
+- [X] T1097 Requisitos de activación de Cartera en **todos los ambientes**: los que sólo bloqueaban en producción se exigen también fuera de
+  ella; código, pruebas, fixtures e2e (sin ejecutarlas) y runbook
+  - Hecho el 2026-10-18. `RequisitosDeActivacion`: `Annex1Current`, `UsuryForActiveLines`, `LendingRolesCreated`,
+    `OfficesLinkedToAccountingBranches` y `PayrollBridgeRuleResolved` faltan en cualquier ambiente (se retiró `DeProduccion`/`Dispensa`; el
+    estado `Waived` ya no se produce y queda sólo para leer activaciones anteriores); `ExpectedLossAvailable` de una obligada sin K6a falta
+    también fuera de producción (la activación ya no sella `ObligatoryModelUnavailable`); la adopción de `ProveedorDeObligaciones` y de
+    `OrdenDeGiroEmitida` se exige siempre. Lo único que distingue al ambiente: fuera de producción el recaudador y la tesorería pueden ser los
+    dobles `TST`/`TES` (son el Recaudo y la Tesorería de DEV y QA); en producción, nunca. Pruebas: `RequisitosDeActivacionTests` (reescritas
+    las de fuera de producción, +2), `ActivacionConPerdidaEsperadaTests` y la fixture `ActivacionConCarteraDePrueba.RequisitosDeLaPlataformaAsync`
+    (Anexo 1, roles y oficina vinculada). **Fixtures e2e** (escritas, compilan, sin correr): `CarteraE2E.RequisitosDeActivacionAsync` (réplica de
+    valores nacionales para el Anexo 1, los trece roles por `suggested-roles` y, si ya hay líneas activas, la regla `RecaudoPorAplicar`/`Payroll`
+    con su auxiliar `24101098`), llamada desde `ActivarCarteraAsync` y antes de activar en `MigracionYActivacionDeCarteraTests`,
+    `PerdidaEsperadaTests` (dos escenarios) y `ActivacionDeCarteraPerformanceTests`; `ContabilidadDeCarteraE2E.MatrizPorPlantillaAsync` ahora
+    mira las reglas de capital para saber si la matriz ya está y no reescribe la cuenta de una regla que ya venía. Pantalla `/cartera/activacion`
+    y `TextosDeMigracion` al día. Docs: runbook `cartera-puesta-en-marcha.md` §1, data-model §30.1, api.md §19.3. Sin migración. Riesgo para la
+    corrida final: si una cooperativa de las e2e se activa con líneas de una modalidad cuya usura no registró, ahora falla (antes se dispensaba).
 
 **Checkpoint**: cada entrega promovida con su evidencia; `CLAUDE.md`, índice y runbooks al día; COOFLOPAL en vivo
 sólo con Recaudo y Tesorería reales.

@@ -312,6 +312,41 @@ internal sealed class ActivacionConCarteraDePrueba : IDisposable
 
     // ---------------------------------------------------------------------------------------------------- activar --
 
+    /// <summary>
+    /// Decisión del dueño del 2026-10-18: los requisitos de la activación se exigen en todos los ambientes. Con <see cref="ConPerdidaEsperada"/> los
+    /// requisitos miran la base, así que esta cooperativa los cumple como una real: el Anexo 1 vigente desde el corte, los roles de Cartera de las
+    /// plantillas y la oficina Norte (la de los créditos de la carga) vinculada a una sucursal contable. Hasta esa fecha, fuera de producción quedaban
+    /// dispensados.
+    /// </summary>
+    public async Task RequisitosDeLaPlataformaAsync()
+    {
+        var contenido = IngenIA365ERP.Persistence.Seeding.Parametric.PlatformNationalValuesSeeder.Contenido("sarc-anexo-1.json");
+        var replica = new IngenIA365ERP.Domain.Entities.Core.NationalValues.NationalValueReplication
+        {
+            FromSequence = 1, ToSequence = 1, DocumentCount = 1, Origin = IngenIA365ERP.Domain.Enums.Core.NationalValueReplicationOrigin.ScheduledTask,
+            StartedAt = G.UtcNow.AddDays(-1), FinishedAt = G.UtcNow.AddDays(-1), ActorName = "prueba",
+        };
+        replica.Documents.Add(new IngenIA365ERP.Domain.Entities.Core.NationalValues.RegulatoryDocument
+        {
+            Kind = nameof(IngenIA365ERP.Domain.Common.NationalValues.RegulatoryDocumentKind.SarcAnexo1), Code = "ANEXO1", ValidFrom = new DateOnly(2026, 1, 1),
+            Content = contenido, ContentSha256 = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(contenido))),
+            SchemaVersion = 1, Verified = true, Source = "Superintendencia de la Economía Solidaria", SourcePublicId = Guid.NewGuid(), SourceSequence = 90_100,
+            CentralRegisteredAt = G.UtcNow.AddDays(-1), KnownAt = G.UtcNow.AddDays(-1),
+        });
+        Db.NationalValueReplications.Add(replica);
+        foreach (var plantilla in IngenIA365ERP.Application.Security.Roles.Plantillas.PerfilesSugeridos.DelModulo(
+                     IngenIA365ERP.Application.Security.Roles.Plantillas.PerfilesSugeridos.ModuloCartera))
+        {
+            var codigo = IngenIA365ERP.Application.Security.Roles.Plantillas.CreateSuggestedLendingRolesCommand.CodigoDeRol(plantilla.Key);
+            if (!await Db.Roles.AnyAsync(r => r.Code == codigo))
+                Db.Roles.Add(new IngenIA365ERP.Domain.Entities.Security.Role { Code = codigo, Name = plantilla.Actor, CreatedBy = "test" });
+        }
+        var norte = await Db.Branches.SingleAsync(b => b.Id == O.Norte.Id);
+        norte.TenantBranchPublicId ??= Guid.NewGuid();
+        await Db.SaveChangesAsync();
+        Db.ChangeTracker.Clear();
+    }
+
     /// <summary>K6a (T1020): los requisitos con la normativa, el perfil del doble y los parámetros, para evaluar la pérdida esperada.</summary>
     public bool ConPerdidaEsperada { get; set; }
 

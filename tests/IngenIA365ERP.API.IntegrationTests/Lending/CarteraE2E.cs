@@ -196,6 +196,7 @@ public static class CarteraE2E
 
         if (opciones.RegistrarDobles) await RegistrarDoblesAsync(http, admin, corte);
         if (opciones.AdvertirSinRegla) await AdvertirSinReglaContableAsync(http, admin, corte);
+        await RequisitosDeActivacionAsync(fx, coop, corte);
 
         var alta =await ConClaveAsync(http, admin, HttpMethod.Post, "/api/lending/migration/loads", new { cutoffDate = corte, notes = "Sin cartera que migrar (e2e)" });
         alta.StatusCode.Should().Be(HttpStatusCode.Created, $"crear la carga: «{await alta.Content.ReadAsStringAsync()}»");
@@ -235,6 +236,42 @@ public static class CarteraE2E
             adoptions = new[] { new { contract = "OrdenDeGiroEmitida", version = 1 }, new { contract = "AnulacionDeOrdenDeGiro", version = 1 } },
             validFrom = corte, reason = "Tesorería de prueba para las e2e de Cartera",
         });
+    }
+
+    /// <summary>
+    /// Decisión del dueño del 2026-10-18: los requisitos de la activación se exigen en todos los ambientes (hasta esa fecha, fuera de producción el
+    /// Anexo 1, la usura de las líneas activas, los roles de Cartera, las oficinas vinculadas y la regla del recaudo por nómina quedaban
+    /// <c>Waived</c>). Deja a la cooperativa cumpliéndolos como una real, por las rutas: una pasada de la réplica de valores nacionales
+    /// (<see cref="NationalValues.ValoresNacionalesE2E.ReplicarAsync"/>: trae el Anexo 1 que siembra la central del host; no registra valores en la
+    /// central, porque hay escenarios que registran su propia usura —la usura de las líneas la registra quien las crea, con
+    /// <see cref="LineasE2E.PrepararAsync"/>—), los roles de las trece plantillas (<c>POST /api/lending/activation/suggested-roles</c>, idempotente)
+    /// y, si ya hay líneas activas, la regla <c>RecaudoPorAplicar</c> de la clase <c>Payroll</c> en la matriz de Cartera, vigente desde el primer
+    /// día del mes de <paramref name="desde"/> (sin líneas no se exige; así una cooperativa que se activa antes de crear líneas no estrena una regla).
+    /// Las oficinas de una carga las vincula quien la arma (<see cref="MigracionE2E.OficinaAsync"/>). Idempotente. No los dobles:
+    /// <see cref="RegistrarDoblesAsync"/>.
+    /// </summary>
+    public static async Task RequisitosDeActivacionAsync(CentralIdentityApiFixture fx, CooperativaAislada coop, DateOnly desde)
+    {
+        await NationalValues.ValoresNacionalesE2E.ReplicarAsync(fx, coop.TenantPublicId);
+        using var http = fx.CreateClient();
+        var admin = coop.TokenAdmin;
+        var roles = await ConClaveAsync(http, admin, HttpMethod.Post, "/api/lending/activation/suggested-roles", new { });
+        roles.IsSuccessStatusCode.Should().BeTrue($"crear los roles de Cartera: «{await roles.Content.ReadAsStringAsync()}»");
+
+        var hayLineasActivas = (await GetAsync(http, admin, "/api/lending/credit-lines")).EnumerateArray()
+            .Any(l => l.GetProperty("status").GetInt32() == (int)CreditLineStatus.Active);
+        if (!hayLineasActivas) return;
+        const string Reglas = "/api/accounting/lending/rules";
+        if ((await GetAsync(http, admin, $"{Reglas}?role=RecaudoPorAplicar&collectorClass=Payroll&pageSize=1")).GetProperty("totalCount").GetInt32() > 0) return;
+        const string Cuenta = "24101098";
+        await Accounting.ContabilidadE2E.CrearCuentaAsync(http, admin, Cuenta, "Recaudo por nómina para Cartera (e2e)", "241010", ["CNT", "CAR"]);
+        var regla = await ConClaveAsync(http, admin, HttpMethod.Post, Reglas, new
+        {
+            operation = "*", role = "RecaudoPorAplicar", dimensions = new { collectorClass = "Payroll" },
+            accountPublicId = await Accounting.ContabilidadE2E.CuentaAsync(http, admin, Cuenta), validFrom = new DateOnly(desde.Year, desde.Month, 1),
+            notes = "Requisito de la activación (e2e)", reason = "La activación exige la regla del recaudo por nómina en todos los ambientes",
+        });
+        regla.StatusCode.Should().Be(HttpStatusCode.Created, $"la regla del recaudo por nómina: «{await regla.Content.ReadAsStringAsync()}»");
     }
 
     /// <summary>
