@@ -236,6 +236,11 @@ public static class DependencyInjection
         services.AddScoped<Lending.Deposits.Accrual.SeccionDeCaptacionesDelCierre>();
         services.AddScoped<Lending.Deposits.Activation.RequisitosDeActivacionDeCaptaciones>();
         services.AddScoped<Lending.Deposits.Activation.ActivacionDeCaptacionesSinCarga>();
+        // Feature 014, US1 (T064–T067): el único que registra una versión de una línea de captación o de aportes, lo que esas líneas leen fuera de sí
+        // (perfil regulatorio, topes de aportes, anticipación del aviso, entrega) y el aviso de cambio de tasa a los titulares.
+        services.AddScoped<Lending.Deposits.Lines.AltaDeVersionDeCaptacion>();
+        services.AddScoped<Lending.Deposits.Lines.IContextoDeLineasDeCaptacion, Lending.Deposits.Lines.ContextoDeLineasDeCaptacion>();
+        services.AddScoped<Lending.Deposits.Lines.AvisoDeCambioDeTasa>();
         // Feature 013 (T0284–T0289, US17): el alcance por oficina y línea (la API registra el de la petición; aquí, el que falla
         // cerrado), el salto común de oficinas que también usa UserBranchScope, el único escritor de LND_CaseParticipations, las
         // lecturas sensibles de Cartera y el último rechazo de forma de la petición (para Lending.Request.Rejected).

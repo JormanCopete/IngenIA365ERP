@@ -11,7 +11,8 @@ namespace IngenIA365ERP.Persistence.Seeding.Parametric;
 /// Las nueve plantillas de mensaje de Cartera «pendiente de validar» (<c>COR_NotificationTemplates</c>; feature 013, T0085; T76; C90;
 /// contracts/adaptadores-y-archivos.md §4.7; data-model parte 3 §4.12; Order 91): <c>AVISOPREV</c>, <c>RECORDPREV</c>, <c>MORAADMIN</c>,
 /// <c>PREJURID</c>, <c>NOAPLICPAG</c>, <c>PASOACAJA</c>, <c>ABONOCAP</c>, <c>GASTOCOBR</c> y <c>ENVIODOC</c>, una fila por canal (correo,
-/// SMS y WhatsApp), más <c>SIMULACION</c> sólo por correo (US2, T0390: el envío de una simulación), con <c>Module = Lending</c>, <c>Version = 1</c>, <c>IsSeeded</c> y <c>ReviewPending</c>. El texto vive en
+/// SMS y WhatsApp), más <c>SIMULACION</c> sólo por correo (US2, T0390: el envío de una simulación) y <c>CAMBIOTASA</c> por los tres canales
+/// (feature 014, US1, T067: el aviso de cambio de tasa de una línea a la vista), con <c>Module = Lending</c>, <c>Version = 1</c>, <c>IsSeeded</c> y <c>ReviewPending</c>. El texto vive en
 /// <c>Data/lending-message-templates.json</c>. Idempotente por (<c>Code</c>, <c>Channel</c>, <c>Version</c>) <b>incluidas las de baja</b>:
 /// una plantilla que la cooperativa cambió (versión 2) o dio de baja no vuelve. Las columnas llegan con la migración
 /// <c>PlataformaParaCartera</c>: hasta que esté aplicada en la base, la semilla no hace nada.

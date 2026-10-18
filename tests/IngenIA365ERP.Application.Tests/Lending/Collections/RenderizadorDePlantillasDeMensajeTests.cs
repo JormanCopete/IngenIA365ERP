@@ -295,15 +295,15 @@ public sealed class RenderizadorDePlantillasDeMensajeTests
     // ---------------------------------------------------------------------------------------------------------------- semilla --
 
     [Fact]
-    public void La_semilla_trae_las_nueve_plantillas_por_correo_SMS_y_WhatsApp_la_simulacion_por_correo_y_todas_son_validas()
+    public void La_semilla_trae_las_diez_plantillas_por_correo_SMS_y_WhatsApp_la_simulacion_por_correo_y_todas_son_validas()
     {
         var plantillas = LendingMessageTemplatesSeeder.Leer();
 
         Assert.Equal(
-            ["ABONOCAP", "AVISOPREV", "ENVIODOC", "GASTOCOBR", "MORAADMIN", "NOAPLICPAG", "PASOACAJA", "PREJURID", "RECORDPREV", "SIMULACION"],
+            ["ABONOCAP", "AVISOPREV", "CAMBIOTASA", "ENVIODOC", "GASTOCOBR", "MORAADMIN", "NOAPLICPAG", "PASOACAJA", "PREJURID", "RECORDPREV", "SIMULACION"],
             plantillas.Select(p => p.Code).Distinct().Order(StringComparer.Ordinal));
-        // Nueve por correo, SMS y WhatsApp, más SIMULACION sólo por correo (US2, T0390).
-        Assert.Equal(28, plantillas.Count);
+        // Diez por correo, SMS y WhatsApp (la feature 014 suma CAMBIOTASA, T067), más SIMULACION sólo por correo (US2, T0390).
+        Assert.Equal(31, plantillas.Count);
         Assert.All(plantillas, p => Assert.True(p.Code.Length <= 10));
         Assert.All(plantillas.Where(p => p.Channel == MessageChannel.Email), p => Assert.False(string.IsNullOrWhiteSpace(p.Subject)));
         Assert.All(plantillas.Where(p => p.Channel == MessageChannel.Sms),
@@ -317,7 +317,7 @@ public sealed class RenderizadorDePlantillasDeMensajeTests
         var primera = await LendingMessageTemplatesSeeder.AplicarAsync(_db, default);
         var segunda = await LendingMessageTemplatesSeeder.AplicarAsync(_db, default);
 
-        Assert.Equal(28, primera);
+        Assert.Equal(31, primera);
         Assert.Equal(0, segunda);
         var filas = await _db.NotificationTemplates.ToListAsync();
         Assert.All(filas, f =>

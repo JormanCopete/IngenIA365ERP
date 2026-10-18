@@ -576,6 +576,16 @@ public sealed class ColaDeMensajesAlDeudor(
         }
 
         if (proposito == DebtorMessagePurpose.DocumentDelivery) return (true, ContactRole.Debtor, personId);
+        // Feature 014, US1 (T067; FR-038): un informativo sin crédito también llega al titular o cotitular de una cuenta de captación viva (el aviso
+        // de cambio de tasa); la cobranza y el aviso previo siguen exigiendo una obligación.
+        if (proposito == DebtorMessagePurpose.Informative
+            && await (from p in db.MemberAccountParties.AsNoTracking()
+                      join a in db.MemberAccounts.AsNoTracking() on p.MemberAccountId equals a.Id
+                      where p.PersonId == personId && !p.IsDeleted && (p.ValidTo == null || p.ValidTo >= hoy)
+                            && (p.Role == MemberAccountPartyRole.Holder || p.Role == MemberAccountPartyRole.CoHolder)
+                            && a.Status != MemberAccountStatus.Closed && !a.IsDeleted
+                      select p.Id).AnyAsync(ct))
+            return (true, ContactRole.Debtor, personId);
         var vivos = new[] { LoanStatus.PendingDisbursement, LoanStatus.Active };
         if (await db.Loans.AsNoTracking().AnyAsync(l => l.DebtorPersonId == personId && vivos.Contains(l.Status), ct))
             return (true, ContactRole.Debtor, personId);

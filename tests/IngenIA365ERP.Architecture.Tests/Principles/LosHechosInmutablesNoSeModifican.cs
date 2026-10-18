@@ -255,6 +255,9 @@ public class LosHechosInmutablesNoSeModifican
         // Feature 014 (T021–T025; data-model §4.1–§4.3): el libro de cuentas y su posición no admiten ninguna escritura; la operación, sólo la
         // liberación del canje y el reverso que la anula.
         ["MemberAccountTransaction"] = [], ["MemberAccountOperation"] = ["ClearedAt", "ReversedByOperationId"], ["MemberAccountDailyPosition"] = [],
+        // Feature 014, US1 (T060–T062; data-model §2.1, §2.2, §2.5): las versiones de las líneas de captación y de aportes y sus tramos; una versión
+        // nueva las corrige.
+        ["DepositLineVersion"] = [], ["DepositLineRateTier"] = [], ["ContributionLineVersion"] = [],
     };
 
     [Fact]

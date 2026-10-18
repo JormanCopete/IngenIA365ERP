@@ -884,7 +884,7 @@ Construida la historia 1. **Manda el código**; estas notas reemplazan lo dicho 
   `TasaAnterior`, `TasaNueva` y `FechaDelCambio`. Nunca tumba la versión: lo que no se encola queda en el log.
 - **E42 · Rutas y cuerpos de §3.** Hechas las de K7/K8 que no dependen de otra historia: lista (`nature`, `status`, `depositClass`, `includeClosed`; sólo
   las naturalezas cuyo `View` tiene quien pregunta), detalle con `date` y `recordedAsOf` (bitemporal), alta de captación y de aportes, versiones de cada
-  naturaleza (lista, detalle, alta) y cerrar/reabrir (16 rutas, `LinesEndpoints.cs`). Quedan para sus historias: reglas de tasa negociada (K9, US7),
+  naturaleza (lista, detalle, alta) y cerrar/reabrir (12 rutas, `LinesEndpoints.cs`). Quedan para sus historias: reglas de tasa negociada (K9, US7),
   cargos (K8, US4, T114), la cotización `rate-quote` (con el motor de interés de K8) y las plantillas `lending.deposit-lines` y `lending.contribution-lines`
   (US9). Los cuerpos siguen las columnas de data-model: `rate.kind` es `Fixed`/`Variable` y los tramos son una lista dentro de la tasa (el ejemplo decía
   `"Tiered"`); `tax.withholdingRateParameterCode` (vacío = la tarifa de la clase) en lugar de `withholdingClass`; `breachEffect` con los valores de

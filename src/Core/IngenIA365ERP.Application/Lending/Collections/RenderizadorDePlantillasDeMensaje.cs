@@ -56,7 +56,9 @@ public static partial class RenderizadorDePlantillasDeMensaje
             [DebtorMessagePurpose.PriorNotice] = ["ValorDeLaObligacion", "ValorVencido", "FechaMasTempranaDeReporte", "Centrales"],
             [DebtorMessagePurpose.CollectionFeeNotice] = ["ValorDelGasto", "Etapa", "FechaDeCausacion"],
             [DebtorMessagePurpose.Informative] =
-                ["ValorAplicado", "ModalidadAplicada", "NuevaCuota", "NuevoPlazo", "MotivoDeNoDescuento", "FormaDePagoNueva"],
+                ["ValorAplicado", "ModalidadAplicada", "NuevaCuota", "NuevoPlazo", "MotivoDeNoDescuento", "FormaDePagoNueva",
+                    // Feature 014, US1 (T067): el aviso de cambio de tasa de una línea a la vista.
+                    "NumeroDeCuenta", "NombreDeLaLinea", "TasaAnterior", "TasaNueva", "FechaDelCambio"],
             [DebtorMessagePurpose.DocumentDelivery] = ["ClaseDeDocumento", "NumeroDelDocumento", "CodigoDeVerificacion"],
         };
 

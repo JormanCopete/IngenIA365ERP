@@ -5,6 +5,8 @@
 // mensaje en lugar de 70). Los de WhatsApp no salen hasta que la cooperativa registre el identificador de la plantilla aprobada ante
 // su proveedor (pregunta I15). Los valores de cobranza se escriben «a la fecha de corte», porque el envío puede diferirse.
 // US2 (T0390, C87) suma SIMULACION, sólo por correo: el envío de una simulación a la persona simulada, con el PDF adjunto.
+// Feature 014, US1 (T067; FR-038) suma CAMBIOTASA, informativo por los tres canales: el aviso a los titulares de una línea a la vista de que
+// su tasa cambia desde una fecha.
 [
   {
     "code": "AVISOPREV",
@@ -136,6 +138,25 @@
       {
         "channel": "WhatsApp",
         "body": "{{NombreDeLaCooperativa}} aplicó un abono a capital de {{ValorAplicado}} a su crédito {{NumeroDelCredito}} ({{ModalidadAplicada}}). Nueva cuota: {{NuevaCuota}}. Nuevo plazo: {{NuevoPlazo}}."
+      }
+    ]
+  },
+  {
+    "code": "CAMBIOTASA",
+    "purpose": "Informative",
+    "templates": [
+      {
+        "channel": "Email",
+        "subject": "Cambio de tasa de su cuenta {{NumeroDeCuenta}}",
+        "body": "<p>Señor(a) {{NombreDelTitular}}:</p><p>{{NombreDeLaCooperativa}} le informa que, desde el {{FechaDelCambio}}, la tasa de la línea {{NombreDeLaLinea}} de su cuenta {{NumeroDeCuenta}} pasa de {{TasaAnterior}} a {{TasaNueva}}.</p><p>Si tiene dudas, comuníquese con nosotros al {{TelefonoDeLaCooperativa}}.</p>"
+      },
+      {
+        "channel": "Sms",
+        "body": "{{NombreDeLaCooperativa}}: desde {{FechaDelCambio}} la tasa de su cuenta {{NumeroDeCuenta}} pasa de {{TasaAnterior}} a {{TasaNueva}}. Tel {{TelefonoDeLaCooperativa}}"
+      },
+      {
+        "channel": "WhatsApp",
+        "body": "{{NombreDeLaCooperativa}} le informa que desde el {{FechaDelCambio}} la tasa de su cuenta {{NumeroDeCuenta}} ({{NombreDeLaLinea}}) pasa de {{TasaAnterior}} a {{TasaNueva}}."
       }
     ]
   },

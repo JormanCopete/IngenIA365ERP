@@ -141,6 +141,9 @@ public class LasConsultasDeCarteraRespetanElAlcance
         // K5 (US16, T1006): los excluidos del archivo de una central, por la oficina y la línea de su crédito.
         "Core/IngenIA365ERP.Application/Lending/Reports/Vistas/BureauExclusionsReportQuery.cs",
         "Core/IngenIA365ERP.Application/Lending/Reports/GetLendingDashboardQuery.cs",
+        // Feature 014, US1 (T066): el catálogo común de líneas filtra por PorLinea; el detalle y las versiones de una línea fuera del alcance (o de
+        // una naturaleza cuyo View no tiene quien pregunta) responden el 404 de la línea (LectorDeLineasDeCaptacion.LineaEnAlcanceAsync).
+        "Core/IngenIA365ERP.Application/Lending/Deposits/Lines/LendingLineQueries.cs",
     ];
 
     /// <summary>
