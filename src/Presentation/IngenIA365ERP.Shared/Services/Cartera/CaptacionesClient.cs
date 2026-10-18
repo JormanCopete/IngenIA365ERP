@@ -223,6 +223,86 @@ public sealed class CaptacionesClient(HttpClient http, CentralAuthClient auth)
         ClaveDeOperacion clave, CancellationToken ct = default) =>
         Enviar<RetiroDeAsociadoDto>(HttpMethod.Post, $"{RutaDeRetiros}/{retiro}/refund/approve", request, clave, ct);
 
+    // ------------------------------------------------------------------------------- movimientos y cargos (US4, T124) --
+
+    public const string RutaDeDebitos = Base + "/direct-debits";
+
+    /// <summary>Las operaciones de la cuenta (la más reciente primero), por clase y rango de fecha valor.</summary>
+    public Task<ResultadoDeInventario<PaginaDeInventarioDto<OperacionDeCuentaDto>>> OperacionesAsync(Guid cuenta, string? clase = null, DateOnly? desde = null,
+        DateOnly? hasta = null, int pagina = 1, int tamano = 20, CancellationToken ct = default) =>
+        Enviar<PaginaDeInventarioDto<OperacionDeCuentaDto>>(HttpMethod.Get, ConQuery($"{RutaDeCuentas}/{cuenta}/operations", Query(("kind", clase),
+            ("from", Texto(desde)), ("to", Texto(hasta)), ("page", Texto(pagina)), ("pageSize", Texto(tamano)))), null, null, ct);
+
+    /// <summary>El comprobante de una operación con su libro, sus hechos, su GMF y sus cargos.</summary>
+    public Task<ResultadoDeInventario<DetalleDeOperacionDto>> OperacionAsync(Guid cuenta, Guid operacion, CancellationToken ct = default) =>
+        Enviar<DetalleDeOperacionDto>(HttpMethod.Get, $"{RutaDeCuentas}/{cuenta}/operations/{operacion}", null, null, ct);
+
+    /// <summary>El libro de la cuenta (sólo lectura; la consulta queda auditada).</summary>
+    public Task<ResultadoDeInventario<PaginaDeInventarioDto<FilaDelLibroDeCuentaDto>>> LibroAsync(Guid cuenta, DateOnly? desde = null, DateOnly? hasta = null,
+        string tipoDeFecha = "value", int pagina = 1, int tamano = 50, CancellationToken ct = default) =>
+        Enviar<PaginaDeInventarioDto<FilaDelLibroDeCuentaDto>>(HttpMethod.Get, ConQuery($"{RutaDeCuentas}/{cuenta}/transactions", Query(("from", Texto(desde)),
+            ("to", Texto(hasta)), ("dateKind", tipoDeFecha), ("page", Texto(pagina)), ("pageSize", Texto(tamano)))), null, null, ct);
+
+    /// <summary>Simula un retiro o un traslado sin escribir (firmas, disponible con el GMF, cargos y atribución).</summary>
+    public Task<ResultadoDeInventario<SimulacionDeMovimientoDto>> SimularMovimientoAsync(Guid cuenta, SimularMovimientoRequest request,
+        CancellationToken ct = default) =>
+        Enviar<SimulacionDeMovimientoDto>(HttpMethod.Post, $"{RutaDeCuentas}/{cuenta}/operations/simulate", request, null, ct);
+
+    /// <summary>Retira por orden de giro: <c>Applied</c> con el comprobante y la orden, o <c>PendingApproval</c> si supera la atribución.</summary>
+    public Task<ResultadoDeInventario<ResultadoDeMovimientoDto>> RetirarPorGiroAsync(Guid cuenta, RetiroPorGiroRequest request, ClaveDeOperacion clave,
+        CancellationToken ct = default) =>
+        Enviar<ResultadoDeMovimientoDto>(HttpMethod.Post, $"{RutaDeCuentas}/{cuenta}/operations/withdrawals", request, clave, ct);
+
+    /// <summary>Traslada a otra cuenta (del titular o de otro): <c>Applied</c> o <c>PendingApproval</c>.</summary>
+    public Task<ResultadoDeInventario<ResultadoDeMovimientoDto>> TrasladarAsync(Guid cuenta, TrasladoRequest request, ClaveDeOperacion clave,
+        CancellationToken ct = default) =>
+        Enviar<ResultadoDeMovimientoDto>(HttpMethod.Post, $"{RutaDeCuentas}/{cuenta}/operations/transfers", request, clave, ct);
+
+    /// <summary>Reversa una operación de la Cartera (nunca deja un sobregiro; lo de un recaudador lo reversa él).</summary>
+    public Task<ResultadoDeInventario<ReversoDeMovimientoDto>> ReversarOperacionAsync(Guid cuenta, Guid operacion, string motivo, ClaveDeOperacion clave,
+        CancellationToken ct = default) =>
+        Enviar<ReversoDeMovimientoDto>(HttpMethod.Post, $"{RutaDeCuentas}/{cuenta}/operations/{operacion}/reverse", new MotivoDeCarteraRequest(motivo), clave, ct);
+
+    /// <summary>Los cargos causados de la cuenta, por estado.</summary>
+    public Task<ResultadoDeInventario<PaginaDeInventarioDto<CargoDeCuentaDto>>> CargosAsync(Guid cuenta, int? estado = null, int pagina = 1, int tamano = 50,
+        CancellationToken ct = default) =>
+        Enviar<PaginaDeInventarioDto<CargoDeCuentaDto>>(HttpMethod.Get, ConQuery($"{RutaDeCuentas}/{cuenta}/charges", Query(("status", Texto(estado)),
+            ("page", Texto(pagina)), ("pageSize", Texto(tamano)))), null, null, ct);
+
+    /// <summary>Causa un cargo por evento de pantalla del catálogo de la línea.</summary>
+    public Task<ResultadoDeInventario<CargoDeCuentaDto>> RegistrarCargoAsync(Guid cuenta, CargoDePantallaRequest request, ClaveDeOperacion clave,
+        CancellationToken ct = default) =>
+        Enviar<CargoDeCuentaDto>(HttpMethod.Post, $"{RutaDeCuentas}/{cuenta}/charges", request, clave, ct);
+
+    /// <summary>Condona un cargo (quien lo registró no lo condona).</summary>
+    public Task<ResultadoDeInventario<CargoDeCuentaDto>> CondonarCargoAsync(Guid cuenta, Guid cargo, string motivo, ClaveDeOperacion clave,
+        CancellationToken ct = default) =>
+        Enviar<CargoDeCuentaDto>(HttpMethod.Post, $"{RutaDeCuentas}/{cuenta}/charges/{cargo}/waive", new MotivoDeCarteraRequest(motivo), clave, ct);
+
+    /// <summary>Reversa un cargo (el gravado pide la nota crédito a Comercial).</summary>
+    public Task<ResultadoDeInventario<ReversoDeMovimientoDto>> ReversarCargoAsync(Guid cuenta, Guid cargo, string motivo, ClaveDeOperacion clave,
+        CancellationToken ct = default) =>
+        Enviar<ReversoDeMovimientoDto>(HttpMethod.Post, $"{RutaDeCuentas}/{cuenta}/charges/{cargo}/reverse", new MotivoDeCarteraRequest(motivo), clave, ct);
+
+    /// <summary>Las autorizaciones de débito automático de una cuenta.</summary>
+    public Task<ResultadoDeInventario<IReadOnlyList<AutorizacionDeDebitoDto>>> DebitosAsync(Guid cuenta, CancellationToken ct = default) =>
+        Enviar<IReadOnlyList<AutorizacionDeDebitoDto>>(HttpMethod.Get, ConQuery(RutaDeDebitos, Query(("accountPublicId", Texto(cuenta)))), null, null, ct);
+
+    /// <summary>Registra una autorización de débito automático con su soporte firmado.</summary>
+    public Task<ResultadoDeInventario<AutorizacionDeDebitoDto>> AutorizarDebitoAsync(AutorizarDebitoRequest request, ClaveDeOperacion clave,
+        CancellationToken ct = default) =>
+        Enviar<AutorizacionDeDebitoDto>(HttpMethod.Post, RutaDeDebitos, request, clave, ct);
+
+    /// <summary>Revoca una autorización.</summary>
+    public Task<ResultadoDeInventario<AutorizacionDeDebitoDto>> RevocarDebitoAsync(Guid autorizacion, RevocarDebitoRequest request, ClaveDeOperacion clave,
+        CancellationToken ct = default) =>
+        Enviar<AutorizacionDeDebitoDto>(HttpMethod.Post, $"{RutaDeDebitos}/{autorizacion}/revoke", request, clave, ct);
+
+    /// <summary>El uso del tope exento del GMF de una persona en el mes.</summary>
+    public Task<ResultadoDeInventario<UsoDeGmfDto>> UsoDeGmfAsync(Guid persona, int? anio = null, int? mes = null, CancellationToken ct = default) =>
+        Enviar<UsoDeGmfDto>(HttpMethod.Get, ConQuery($"{RutaDeExenciones}/usage", Query(("personPublicId", Texto(persona)), ("year", Texto(anio)),
+            ("month", Texto(mes)))), null, null, ct);
+
     private static string Ruta(int clase) => clase == TextosDeAportes.Devolucion ? "refunds" : "assignments";
 
     private Task<ResultadoDeInventario<T>> Enviar<T>(HttpMethod metodo, string url, object? cuerpo, ClaveDeOperacion? clave, CancellationToken ct) =>

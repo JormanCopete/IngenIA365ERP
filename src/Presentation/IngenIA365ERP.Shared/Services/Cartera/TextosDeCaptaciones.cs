@@ -151,6 +151,52 @@ public static class TextosDeCaptaciones
         _ => v,
     };
 
+    // ------------------------------------------------------------------------------------ movimientos (US4, T124) --
+
+    /// <summary>Las clases de operación de una cuenta (<c>MemberAccountOperationKind</c>).</summary>
+    public static IReadOnlyList<(int Valor, string Texto)> ClasesDeOperacion { get; } =
+    [
+        (1, "Saldo inicial"), (2, "Consignación"), (3, "Retiro"), (4, "Traslado"), (5, "Reverso"), (6, "Liquidación de intereses"), (7, "Constitución de CDAT"),
+        (8, "Pago de intereses de CDAT"), (9, "Prórroga de CDAT"), (10, "Renovación de CDAT"), (11, "Redención de CDAT"), (12, "Cancelación"), (13, "Cargo"),
+        (14, "Condonación de cargo"), (15, "Cruce interno"), (16, "Débito automático"), (17, "Devolución de aportes"), (18, "Abono por asamblea"),
+        (19, "Reclasificación"), (20, "Vencimiento contractual"), (21, "A no reclamados"), (22, "Entrega por fallecimiento"), (23, "Consignación de embargo"),
+    ];
+
+    /// <summary>Las clases de fila del libro (<c>MemberAccountTransactionKind</c>).</summary>
+    public static IReadOnlyList<(int Valor, string Texto)> ClasesDeFila { get; } =
+    [
+        (1, "Saldo inicial"), (2, "Consignación"), (3, "Retiro"), (4, "Traslado recibido"), (5, "Traslado enviado"), (6, "Interés causado"),
+        (7, "Ajuste de causación"), (8, "Interés abonado"), (9, "Interés pagado"), (10, "Retención"), (11, "GMF"), (12, "Cargo"), (13, "Penalidad"),
+        (14, "Capitalización"), (15, "Reclasificación"), (16, "Cruce interno"), (17, "Devolución"), (18, "A no reclamados"), (19, "Embargo consignado"),
+    ];
+
+    /// <summary>Los conceptos del libro por número (<c>MemberAccountConcept</c>).</summary>
+    public static IReadOnlyList<(int Valor, string Texto)> Conceptos { get; } =
+    [
+        (1, "Capital"), (2, "Interés por pagar"), (3, "Retención"), (4, "GMF"), (5, "Aporte mínimo"), (6, "Aportes ordinarios"), (7, "Aportes extraordinarios"),
+        (8, "Revalorización"), (9, "Cargos por cobrar"), (10, "Bonificación"),
+    ];
+
+    /// <summary>Los estados de un cargo (<c>AccountChargeStatus</c>).</summary>
+    public static IReadOnlyList<(int Valor, string Texto)> EstadosDeCargo { get; } = [(1, "Cobrado"), (2, "Pendiente"), (3, "Condonado"), (4, "Reversado")];
+
+    public const int CargoCobrado = 1;
+    public const int CargoPendiente = 2;
+
+    /// <summary>Los alcances de una autorización de débito automático (<c>DirectDebitScope</c>, por nombre al registrarla).</summary>
+    public static IReadOnlyList<(string Valor, string Texto)> AlcancesDeDebito { get; } =
+        [("AllLoansOfHolder", "Todos los créditos del titular"), ("SingleLoan", "Un crédito")];
+
+    public static string ClaseDeOperacion(int v) => De(ClasesDeOperacion, v);
+
+    public static string ClaseDeFila(int v) => De(ClasesDeFila, v);
+
+    public static string Concepto(int v) => De(Conceptos, v);
+
+    public static string EstadoDeCargo(int v) => De(EstadosDeCargo, v);
+
+    public static string AlcanceDeDebito(int v) => v == 1 ? "Un crédito" : "Todos los créditos del titular";
+
     private static string De(IReadOnlyList<(int Valor, string Texto)> lista, int v)
     {
         foreach (var (valor, texto) in lista)
