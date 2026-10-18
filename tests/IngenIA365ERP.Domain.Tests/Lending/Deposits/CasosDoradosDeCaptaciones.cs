@@ -38,6 +38,16 @@ public sealed class CasoDoradoDeCaptaciones
     /// <summary>Lo esperado de todo el caso cuando no depende de una consulta (el plan de un CDAT, una revalorización…).</summary>
     public JsonElement? Esperado { get; set; }
 
+    /// <summary>
+    /// US4 (T109, T115): lo que recibe un motor que no trabaja sobre el libro de una cuenta —las disposiciones del GMF con sus políticas, los cargos con
+    /// sus contextos—; su forma la lee la prueba de cada motor y la hoja <c>calcular.py</c>.
+    /// </summary>
+    public JsonElement? Entrada { get; set; }
+
+    /// <summary>Lee un bloque del caso (la entrada o lo esperado) con las mismas opciones que el caso.</summary>
+    public static T Leer<T>(JsonElement? bloque) =>
+        bloque is { } b ? b.Deserialize<T>(Opciones) ?? throw new InvalidOperationException("Bloque vacío.") : throw new InvalidOperationException("El caso no trae el bloque.");
+
     public static string DirectorioDeCasos => Path.Combine(AppContext.BaseDirectory, "Lending", "Deposits", "Casos");
 
     public static IEnumerable<string> Archivos() =>

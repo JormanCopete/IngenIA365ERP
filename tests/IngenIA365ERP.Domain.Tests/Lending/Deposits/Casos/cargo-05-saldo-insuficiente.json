@@ -1,0 +1,58 @@
+// Cargos: un cargo nunca deja la cuenta bajo el minimo (FR-128). Con 3.000 cobrables, la cuota de 8.000 queda pendiente
+// (KeepPending, se cobra con la siguiente consignacion); con 8.000 cobrables se cobra.
+{
+  "descripcion": "Pendiente por saldo insuficiente.",
+  "entrada": {
+    "cargo": {
+      "codigo": "CUOTAMAN",
+      "clase": "MaintenanceFee",
+      "disparador": "Periodic",
+      "modo": "FixedAmount",
+      "valorFijo": 8000,
+      "periodicidad": "Monthly"
+    },
+    "casos": [
+      {
+        "montoDeLaOperacion": 100000,
+        "saldoPromedio": 1000000,
+        "saldoMinimo": 500000,
+        "mesesDeAntiguedad": 12,
+        "titularEsEmpleado": false,
+        "cuentaExentaDeGmf": false,
+        "titularMenor": false,
+        "oficina": "11111111-1111-1111-1111-111111111111",
+        "exoneracionIndividual": false,
+        "operacionesEnElPeriodo": 1,
+        "cobrableSinBajarDelMinimo": 3000
+      },
+      {
+        "montoDeLaOperacion": 100000,
+        "saldoPromedio": 1000000,
+        "saldoMinimo": 500000,
+        "mesesDeAntiguedad": 12,
+        "titularEsEmpleado": false,
+        "cuentaExentaDeGmf": false,
+        "titularMenor": false,
+        "oficina": "11111111-1111-1111-1111-111111111111",
+        "exoneracionIndividual": false,
+        "operacionesEnElPeriodo": 1,
+        "cobrableSinBajarDelMinimo": 8000
+      }
+    ]
+  },
+  "nombre": "cargo-05-saldo-insuficiente",
+  "esperado": {
+    "casos": [
+      {
+        "resultado": "Pendiente",
+        "valor": 8000,
+        "exoneracion": null
+      },
+      {
+        "resultado": "Cobrado",
+        "valor": 8000,
+        "exoneracion": null
+      }
+    ]
+  }
+}

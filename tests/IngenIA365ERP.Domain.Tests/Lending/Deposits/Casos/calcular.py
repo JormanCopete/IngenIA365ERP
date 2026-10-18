@@ -16,6 +16,13 @@ Lo que calcula hoy (fase fundacional y US4 de captaciones; las historias siguien
 - Interes del dia por saldo diario (D31): saldo con fecha valor al cierre del dia x tasa diaria del tramo; tramos sobre el saldo
   entero (WholeBalance) o escalonados (Stepped); un dia bajo el minimo para interes causa cero. El acumulado se guarda a 6 decimales
   (MontoCausado) y la liquidacion redondea a la unidad de la version; la diferencia la absorbe la misma operacion.
+- GMF (US4, T109; R07, D32): por disposicion, con la politica vigente a su fecha (tarifa, tope en UVT, UVT, politica de exencion y
+  hechos gravados y exentos). Exencion mensual por persona: en la cuenta marcada (SingleMarkedAccount) o en todas (PerHolderLimit),
+  hasta tope - usado en el mes; valor = base gravada x tarifa al peso (mitad hacia arriba). Un reverso devuelve al tope lo que la
+  original uso y espeja su valor. Casos gmf-*.json (bloque "entrada").
+- Cargos de cuenta (US4, T115; FR-128): gratuitos del periodo, exoneraciones (la primera que aplica), valor fijo o porcentaje al peso
+  acotado por minimo y maximo, cobrado si el saldo lo deja sin bajar del minimo; si no, pendiente o condonado segun la linea. Casos
+  cargo-*.json (bloque "entrada").
 
 Uso (desde cualquier carpeta):
     python calcular.py                 # imprime lo esperado de todos los casos
@@ -183,9 +190,105 @@ def esperado_de(caso, consulta):
     raise ValueError(f"modo desconocido: {modo}")
 
 
+# ------------------------------------------------------------------------------------------------------------- GMF
+def politica_vigente(politicas, f):
+    vigentes = [p for p in politicas if fecha(p["desde"]) <= f]
+    return max(vigentes, key=lambda p: fecha(p["desde"])) if vigentes else None
+
+
+def gmf_de(p, mov, usado):
+    tope = q(D(p["topeExencionUvt"]) * D(p["uvt"]), 2, ROUND_HALF_UP)
+    nada = {"exentoAplicado": D(0), "baseGravada": D(0), "valor": D(0), "exentoUsadoDespues": usado}
+    if D(p["tarifa"]) <= 0 or p["politica"] == "NotApplicable":
+        return nada
+    hecho = mov["hecho"]
+    if hecho not in p["gravados"] or hecho in p.get("exentos", []) or not mov.get("cuentaSujeta", True):
+        return nada
+    con_exencion = p["politica"] == "PerHolderLimit" or (p["politica"] == "SingleMarkedAccount" and mov.get("esLaCuentaMarcada", False))
+    disponible = max(D(0), tope - usado) if con_exencion else D(0)
+    monto = D(mov["monto"])
+    exento = min(monto, disponible)
+    gravada = monto - exento
+    valor = q(gravada * D(p["tarifa"]), 0, ROUND_HALF_UP)
+    return {"exentoAplicado": exento, "baseGravada": gravada, "valor": valor, "exentoUsadoDespues": usado + exento}
+
+
+def esperado_gmf(caso):
+    entrada = caso["entrada"]
+    usado_por_mes, salida, por_id = {}, [], {}
+    for mov in entrada["movimientos"]:
+        f = fecha(mov["fecha"])
+        mes = (f.year, f.month)
+        usado = usado_por_mes.get(mes, D(0))
+        if mov.get("reversa"):
+            original = por_id[mov["reversa"]]
+            usado = max(D(0), usado - original["exentoAplicado"])
+            r = {"exentoAplicado": -original["exentoAplicado"], "baseGravada": -original["baseGravada"], "valor": -original["valor"],
+                 "exentoUsadoDespues": usado}
+        else:
+            r = gmf_de(politica_vigente(entrada["politicas"], f), mov, usado)
+            usado = r["exentoUsadoDespues"]
+        usado_por_mes[mes] = usado
+        por_id[mov["id"]] = r
+        salida.append(dict({"id": mov["id"]}, **r))
+    return {"movimientos": salida, "totalGmf": sum((m["valor"] for m in salida), D(0))}
+
+
+# ------------------------------------------------------------------------------------------------------------ cargos
+def exoneracion(cargo, c):
+    if c.get("exoneracionIndividual"): return "IndividualExemption"
+    if cargo.get("exentoSiSaldoPromedio") is not None and D(c.get("saldoPromedio", 0)) >= D(cargo["exentoSiSaldoPromedio"]): return "AverageBalanceAtLeast"
+    if cargo.get("exentoSiSaldoMinimo") is not None and D(c.get("saldoMinimo", 0)) >= D(cargo["exentoSiSaldoMinimo"]): return "MinimumBalanceAtLeast"
+    if cargo.get("exentoSiAntiguedadMeses") is not None and c.get("mesesDeAntiguedad") is not None             and D(c["mesesDeAntiguedad"]) >= D(cargo["exentoSiAntiguedadMeses"]): return "SeniorityAtLeast"
+    if cargo.get("exentoEmpleados") and c.get("titularEsEmpleado"): return "Employee"
+    if cargo.get("exentoCuentaExentaGmf") and c.get("cuentaExentaDeGmf"): return "GmfExemptAccount"
+    if cargo.get("exentoMenores") and c.get("titularMenor"): return "MinorHolder"
+    if c.get("oficina") and c["oficina"] in cargo.get("oficinasExentas", []): return "Branch"
+    return None
+
+
+def cargo_de(cargo, c):
+    no = lambda motivo: {"resultado": "NoSeCausa", "valor": D(0), "exoneracion": motivo}
+    if cargo["disparador"] in ("WithdrawalOverFree", "DepositOverFree") and cargo.get("gratuitos") is not None             and D(c["operacionesEnElPeriodo"]) <= D(cargo["gratuitos"]):
+        return no("FreeOperation")
+    exo = exoneracion(cargo, c)
+    if exo:
+        return no(exo)
+    if cargo["modo"] == "FixedAmount":
+        valor = D(cargo["valorFijo"])
+    else:
+        base_ = D(c.get("saldoPromedio", 0)) if cargo.get("baseDelPorcentaje") == "AverageBalance" else D(c.get("montoDeLaOperacion", 0))
+        valor = q(max(D(0), base_) * D(cargo["porcentaje"]), 0, ROUND_HALF_UP)
+    if cargo.get("minimo") is not None and valor < D(cargo["minimo"]): valor = D(cargo["minimo"])
+    if cargo.get("maximo") is not None and valor > D(cargo["maximo"]): valor = D(cargo["maximo"])
+    if valor <= 0:
+        return no(None)
+    if D(c["cobrableSinBajarDelMinimo"]) >= valor:
+        return {"resultado": "Cobrado", "valor": valor, "exoneracion": None}
+    if cargo.get("politicaSiNoAlcanza", "KeepPending") == "Waive":
+        return no("ShortfallWaived")
+    return {"resultado": "Pendiente", "valor": valor, "exoneracion": None}
+
+
+def esperado_cargo(caso):
+    entrada = caso["entrada"]
+    return {"casos": [cargo_de(entrada["cargo"], c) for c in entrada["casos"]]}
+
+
+def esperado_de_entrada(caso):
+    nombre = caso["nombre"]
+    if nombre.startswith("gmf-"): return esperado_gmf(caso)
+    if nombre.startswith("cargo-"): return esperado_cargo(caso)
+    raise ValueError(f"no se sabe calcular {nombre}")
+
+
 def iguales(a, b):
     if isinstance(a, dict) and isinstance(b, dict):
         return a.keys() == b.keys() and all(iguales(a[k], b[k]) for k in a)
+    if isinstance(a, list) and isinstance(b, list):
+        return len(a) == len(b) and all(iguales(x, y) for x, y in zip(a, b))
+    if a is None or b is None:
+        return a is None and b is None
     try:
         return D(str(a)) == D(str(b))
     except Exception:
@@ -199,6 +302,14 @@ def main(argv):
     difiere = False
     for nombre in archivos:
         caso = cargar(os.path.join(AQUI, nombre))
+        if caso.get("entrada") is not None:
+            calculado = esperado_de_entrada(caso)
+            if verificar:
+                if not iguales(calculado, caso.get("esperado")):
+                    difiere = True
+                    print(f"DIFIERE {nombre}: calculado {calculado} / esperado {caso.get('esperado')}")
+            else:
+                print(f"{nombre}: {json.dumps(calculado, default=str, ensure_ascii=False)}")
         for i, consulta in enumerate(caso.get("consultas", [])):
             calculado = esperado_de(caso, consulta)
             if verificar:

@@ -1,0 +1,59 @@
+// Cargos (US4, T115; FR-128, D35): retiro adicional de 2.000 sobre 4 gratuitos por cuenta y mes (el ejemplo de api.md §3). El cuarto
+// retiro es gratuito; el quinto se cobra.
+{
+  "descripcion": "Gratuitos del periodo.",
+  "entrada": {
+    "cargo": {
+      "codigo": "RETADIC",
+      "clase": "ExtraOperation",
+      "disparador": "WithdrawalOverFree",
+      "modo": "FixedAmount",
+      "valorFijo": 2000,
+      "gratuitos": 4,
+      "periodoDeGratuitos": "Monthly"
+    },
+    "casos": [
+      {
+        "montoDeLaOperacion": 100000,
+        "saldoPromedio": 1000000,
+        "saldoMinimo": 500000,
+        "mesesDeAntiguedad": 12,
+        "titularEsEmpleado": false,
+        "cuentaExentaDeGmf": false,
+        "titularMenor": false,
+        "oficina": "11111111-1111-1111-1111-111111111111",
+        "exoneracionIndividual": false,
+        "operacionesEnElPeriodo": 4,
+        "cobrableSinBajarDelMinimo": 1000000
+      },
+      {
+        "montoDeLaOperacion": 100000,
+        "saldoPromedio": 1000000,
+        "saldoMinimo": 500000,
+        "mesesDeAntiguedad": 12,
+        "titularEsEmpleado": false,
+        "cuentaExentaDeGmf": false,
+        "titularMenor": false,
+        "oficina": "11111111-1111-1111-1111-111111111111",
+        "exoneracionIndividual": false,
+        "operacionesEnElPeriodo": 5,
+        "cobrableSinBajarDelMinimo": 1000000
+      }
+    ]
+  },
+  "nombre": "cargo-01-gratuitos",
+  "esperado": {
+    "casos": [
+      {
+        "resultado": "NoSeCausa",
+        "valor": 0,
+        "exoneracion": "FreeOperation"
+      },
+      {
+        "resultado": "Cobrado",
+        "valor": 2000,
+        "exoneracion": null
+      }
+    ]
+  }
+}

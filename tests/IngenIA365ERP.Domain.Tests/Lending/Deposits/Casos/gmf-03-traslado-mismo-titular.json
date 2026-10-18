@@ -1,0 +1,64 @@
+// GMF: el traslado entre cuentas de ahorro del mismo titular es exento (ET art. 879 num. 14, D32) y no gasta el tope; el traslado a
+// otro titular desde una cuenta no marcada esta gravado: 5.000.000 x 0,004 = 20.000.
+{
+  "descripcion": "Traslado exento del mismo titular y traslado gravado a otro titular.",
+  "entrada": {
+    "politicas": [
+      {
+        "desde": "2026-01-01",
+        "tarifa": 0.004,
+        "topeExencionUvt": 350,
+        "uvt": 52374,
+        "politica": "SingleMarkedAccount",
+        "gravados": [
+          "Withdrawal",
+          "TransferToOtherHolder",
+          "TransferBetweenDemandAndTermDeposit",
+          "TermDepositRedemptionToAccount",
+          "Cancellation"
+        ],
+        "exentos": [
+          "TransferBetweenSameHolderSavings"
+        ]
+      }
+    ],
+    "movimientos": [
+      {
+        "id": "mismo",
+        "fecha": "2026-04-10",
+        "hecho": "TransferBetweenSameHolderSavings",
+        "monto": 5000000,
+        "cuentaSujeta": true,
+        "esLaCuentaMarcada": true
+      },
+      {
+        "id": "otro",
+        "fecha": "2026-04-11",
+        "hecho": "TransferToOtherHolder",
+        "monto": 5000000,
+        "cuentaSujeta": true,
+        "esLaCuentaMarcada": false
+      }
+    ]
+  },
+  "nombre": "gmf-03-traslado-mismo-titular",
+  "esperado": {
+    "movimientos": [
+      {
+        "id": "mismo",
+        "exentoAplicado": 0,
+        "baseGravada": 0,
+        "valor": 0,
+        "exentoUsadoDespues": 0
+      },
+      {
+        "id": "otro",
+        "exentoAplicado": 0,
+        "baseGravada": 5000000,
+        "valor": 20000,
+        "exentoUsadoDespues": 0
+      }
+    ],
+    "totalGmf": 20000
+  }
+}
