@@ -18,6 +18,8 @@ public enum ModoDeEspera
 /// <item><c>LND_DebtorControls</c>, exclusivos y por Id (deudor y codeudores de la operación); la fila que falta la crea el propio
 /// cerrojo;</item>
 /// <item><c>LND_LoanControls</c>, exclusivos y por Id, todos los de la operación en una sola sentencia;</item>
+/// <item>feature 014 (T031; R08, data-model §0.6): <c>LND_MemberAccountControls</c>, exclusivos y por Id, todas las cuentas de la operación en una
+/// sola sentencia —después del crédito: el cruce al retiro y el débito automático toman los dos en ese orden—;</item>
 /// <item>y la numeración al final (<see cref="BloquearNumeracionAsync"/>, que llama <c>NumeradorDeCartera</c>).</item>
 /// </list>
 /// <c>RowVersion</c> es la segunda defensa. Sólo dentro de <c>TransaccionExplicita</c>: sin transacción en curso lanza. Las
@@ -40,6 +42,13 @@ public interface ICerrojoDeCartera
     /// </summary>
     Task<IReadOnlyList<int>> BloquearCreditosAsync(IReadOnlyCollection<int> loanIds, ModoDeEspera modo, CancellationToken ct = default);
 
-    /// <summary>Paso 4: la fila de <c>LND_NumberSequences</c> que va a numerar, en exclusivo y al final.</summary>
+    /// <summary>
+    /// Paso 4 (feature 014, T031): las filas de <c>LND_MemberAccountControls</c> de las cuentas, en exclusivo, por Id y en una sentencia, después de
+    /// los créditos. Devuelve los <c>MemberAccountId</c> que quedaron bloqueados: con <see cref="ModoDeEspera.Esperar"/> son todos los que existen;
+    /// con <see cref="ModoDeEspera.Saltar"/>, los que no estaban ocupados (el paso de captaciones del ciclo diario).
+    /// </summary>
+    Task<IReadOnlyList<int>> BloquearCuentasAsync(IReadOnlyCollection<int> memberAccountIds, ModoDeEspera modo, CancellationToken ct = default);
+
+    /// <summary>Paso 5: la fila de <c>LND_NumberSequences</c> que va a numerar, en exclusivo y al final.</summary>
     Task BloquearNumeracionAsync(int numberSequenceId, CancellationToken ct = default);
 }

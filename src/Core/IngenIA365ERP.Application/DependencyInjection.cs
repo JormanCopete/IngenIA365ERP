@@ -228,6 +228,8 @@ public static class DependencyInjection
         // Feature 013 (T0207, T0208): el numerador y el registro del libro de Cartera, únicos escritores de lo suyo.
         services.AddScoped<Lending.Common.NumeradorDeCartera>();
         services.AddScoped<Lending.Ledger.RegistroDeCartera>();
+        // Feature 014 (T030): el único escritor del libro de cuentas de captación y aportes.
+        services.AddScoped<Lending.Deposits.Ledger.RegistroDeCuentas>();
         // Feature 013 (T0284–T0289, US17): el alcance por oficina y línea (la API registra el de la petición; aquí, el que falla
         // cerrado), el salto común de oficinas que también usa UserBranchScope, el único escritor de LND_CaseParticipations, las
         // lecturas sensibles de Cartera y el último rechazo de forma de la petición (para Lending.Request.Rejected).

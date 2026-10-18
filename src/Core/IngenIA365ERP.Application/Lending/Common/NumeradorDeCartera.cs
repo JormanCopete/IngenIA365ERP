@@ -24,6 +24,11 @@ namespace IngenIA365ERP.Application.Lending.Common;
 /// Un borrador no consume número: la solicitud se numera al radicar (<see cref="NumerarSolicitudAsync"/> rechaza un borrador) y el
 /// acta al cerrar. Nadie más escribe <c>NextValue</c> ni asigna <c>Number</c> en <c>Entities/Lending</c> (<c>SoloElNumeradorNumera</c>).
 /// (nuevo)
+///
+/// <para>Feature 014 (T032; data-model §0.4, §1.3 con los valores de research E03): numera también las cuentas de captación y aportes
+/// (<c>MemberAccount</c> 16, un consecutivo por línea con <c>ScopeKey</c> = código de la línea), sus operaciones (<c>MemberAccountOperation</c> 17,
+/// ámbito = la clase), el radicado del retiro del asociado (18), la distribución de la asamblea (19) y el caso de fallecimiento (20). Las órdenes de
+/// giro de cuentas comparten el consecutivo de las de desembolso (<c>DisbursementOrder</c>): un número no se repite entre las dos tablas.</para>
 /// </summary>
 public sealed class NumeradorDeCartera(IApplicationDbContext db, ICerrojoDeCartera cerrojo)
 {
@@ -217,6 +222,112 @@ public sealed class NumeradorDeCartera(IApplicationDbContext db, ICerrojoDeCarte
         carga.Number = Math.Max(ultimo, enEsteAmbito) + 1;
     }
 
+    // ----------------------------------------------------------------------------------------- feature 014 (T032) --
+
+    /// <summary>
+    /// El número de una cuenta de captación o de aportes (data-model §0.4): clase <c>MemberAccount</c>, un consecutivo <b>por línea</b>
+    /// (<c>ScopeKey</c> = <paramref name="codigoDeLinea"/>). Se pide al final del orden de cerrojos; un borrador de apertura no consume número y el
+    /// número no se cambia nunca (tampoco al cumplir la mayoría de edad ni al renovar un CDAT).
+    /// </summary>
+    public async Task NumerarCuentaAsync(Domain.Entities.Lending.Deposits.Accounts.MemberAccount cuenta, string codigoDeLinea, string prefijo,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(cuenta);
+        ArgumentException.ThrowIfNullOrWhiteSpace(codigoDeLinea);
+        if (!string.IsNullOrEmpty(cuenta.Number))
+            throw new InvalidOperationException($"La cuenta {cuenta.PublicId} ya tiene número.");
+        cuenta.Number = await AsignarAsync(LendingNumberKind.MemberAccount, codigoDeLinea, prefijo, ct);
+    }
+
+    /// <summary>
+    /// El comprobante de una operación de cuenta (data-model §4.1): clase <c>MemberAccountOperation</c> con ámbito = la clase de la operación. La
+    /// operación es un hecho de sólo inserción: el número se pide antes de armarla y nace en su inicializador.
+    /// </summary>
+    public Task<string> NumeroDeOperacionDeCuentaAsync(MemberAccountOperationKind clase, string prefijo, CancellationToken ct = default) =>
+        AsignarAsync(LendingNumberKind.MemberAccountOperation, clase.ToString(), prefijo, ct);
+
+    /// <summary>
+    /// <paramref name="cantidad"/> comprobantes seguidos de una clase de operación de cuenta para una tanda (la activación, la causación por lotes),
+    /// con una consulta de existencia por tanda: los que ya existen se saltan como en <see cref="AsignarAsync"/>.
+    /// </summary>
+    public async Task<IReadOnlyList<string>> NumerosDeOperacionDeCuentaAsync(MemberAccountOperationKind clase, string prefijo, int cantidad,
+        CancellationToken ct = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(cantidad);
+        var numeros = new List<string>(cantidad);
+        if (cantidad == 0) return numeros;
+        var secuencia = await SecuenciaAsync(LendingNumberKind.MemberAccountOperation, clase.ToString(), prefijo, ct);
+        while (numeros.Count < cantidad)
+        {
+            var faltan = cantidad - numeros.Count;
+            var candidatos = new List<string>(faltan);
+            for (var i = 0; i < faltan; i++)
+            {
+                var numero = Formatear(secuencia.Prefix, secuencia.NextValue, secuencia.MinDigits);
+                secuencia.NextValue = secuencia.NextValue + 1;
+                if (numero.Length > LargoMaximo)
+                    throw new InvalidOperationException($"El número {numero} de {LendingNumberKind.MemberAccountOperation} pasa de {LargoMaximo} caracteres.");
+                candidatos.Add(numero);
+            }
+            var existentes = (await db.MemberAccountOperations.IgnoreQueryFilters().Where(o => candidatos.Contains(o.Number)).Select(o => o.Number)
+                    .ToListAsync(ct))
+                .ToHashSet(StringComparer.Ordinal);
+            numeros.AddRange(candidatos.Where(c => !existentes.Contains(c)));
+        }
+        return numeros;
+    }
+
+    /// <summary>
+    /// El radicado del retiro del asociado (18), el número de una distribución de la asamblea (19) o el de un caso de fallecimiento (20), ámbito único.
+    /// Sus tablas nacen con US10 y K10: hasta entonces el numerador no sabe en qué tabla buscar un número ya usado y no salta ninguno.
+    /// </summary>
+    public Task<string> NumeroDeProcesoDeCaptacionesAsync(LendingNumberKind clase, string prefijo, CancellationToken ct = default)
+    {
+        if (clase is not (LendingNumberKind.MembershipWithdrawal or LendingNumberKind.AssemblyDistribution or LendingNumberKind.DeceasedHolderCase))
+            throw new ArgumentOutOfRangeException(nameof(clase), clase, "Sólo el retiro del asociado, la distribución de la asamblea y el caso de fallecimiento.");
+        return AsignarAsync(clase, string.Empty, prefijo, ct);
+    }
+
+    /// <summary>
+    /// El número de una orden de giro de cuentas (data-model §3.9): el mismo consecutivo de las órdenes de desembolso (<c>DisbursementOrder</c>),
+    /// que salta los números de las dos tablas.
+    /// </summary>
+    public async Task NumerarOrdenDeCuentaAsync(Domain.Entities.Lending.Deposits.Accounts.AccountPayoutOrder orden, string prefijo, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(orden);
+        if (!string.IsNullOrEmpty(orden.Number))
+            throw new InvalidOperationException($"La orden {orden.PublicId} ya tiene número.");
+        orden.Number = await AsignarAsync(LendingNumberKind.DisbursementOrder, string.Empty, prefijo, ct);
+    }
+
+    /// <summary>
+    /// Al activar captaciones o aportes con carga (data-model §0.4), el consecutivo de cuentas de una línea arranca por encima del mayor número
+    /// <b>numérico</b> migrado de esa línea (sin el prefijo de la fila, si lo trae). Un número con letras no cuenta (el numerador igual lo salta si
+    /// existe). No baja nunca el consecutivo.
+    /// </summary>
+    public async Task LlevarCuentasPorEncimaDeAsync(string codigoDeLinea, IEnumerable<string> numerosMigrados, string prefijo, CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(codigoDeLinea);
+        ArgumentNullException.ThrowIfNull(numerosMigrados);
+        var secuencia = await SecuenciaAsync(LendingNumberKind.MemberAccount, codigoDeLinea, prefijo, ct);
+        var mayor = MayorNumerico(numerosMigrados, secuencia.Prefix);
+        if (mayor >= secuencia.NextValue) secuencia.NextValue = mayor + 1;
+    }
+
+    /// <summary>El mayor número puramente numérico de <paramref name="numeros"/>, sin el <paramref name="prefijo"/> si lo trae; 0 si no hay.</summary>
+    private static long MayorNumerico(IEnumerable<string> numeros, string prefijo)
+    {
+        long mayor = 0;
+        foreach (var numero in numeros)
+        {
+            var sinPrefijo = prefijo.Length > 0 && numero.StartsWith(prefijo, StringComparison.OrdinalIgnoreCase) ? numero[prefijo.Length..] : numero;
+            if (sinPrefijo.Length > 0 && sinPrefijo.All(char.IsAsciiDigit)
+                && long.TryParse(sinPrefijo, NumberStyles.None, CultureInfo.InvariantCulture, out var valor) && valor > mayor)
+                mayor = valor;
+        }
+        return mayor;
+    }
+
     /// <summary>El ámbito del consecutivo de actas de un órgano.</summary>
     public static string AmbitoDeOrgano(GoverningBody organo) => organo.PublicId.ToString("N", CultureInfo.InvariantCulture);
 
@@ -230,7 +341,8 @@ public sealed class NumeradorDeCartera(IApplicationDbContext db, ICerrojoDeCarte
         LendingNumberKind.Loan => ExisteCreditoAsync(numero, ct),
         LendingNumberKind.Operation => db.LoanOperations.IgnoreQueryFilters().AnyAsync(o => o.Number == numero, ct),
         LendingNumberKind.Application => db.CreditApplications.IgnoreQueryFilters().AnyAsync(a => a.Number == numero, ct),
-        LendingNumberKind.DisbursementOrder => db.DisbursementOrders.IgnoreQueryFilters().AnyAsync(o => o.Number == numero, ct),
+        // Feature 014 (T032): las órdenes de giro de cuentas comparten el consecutivo de las de desembolso.
+        LendingNumberKind.DisbursementOrder => ExisteOrdenAsync(numero, ct),
         LendingNumberKind.DisbursementFile => db.DisbursementFiles.IgnoreQueryFilters().AnyAsync(f => f.Number == numero, ct),
         LendingNumberKind.SessionMinutes => db.LendingSessions.IgnoreQueryFilters().AnyAsync(s => s.Number == numero, ct),
         LendingNumberKind.IssuedDocument => db.IssuedLendingDocuments.IgnoreQueryFilters().AnyAsync(d => d.Number == numero, ct),
@@ -245,8 +357,15 @@ public sealed class NumeradorDeCartera(IApplicationDbContext db, ICerrojoDeCarte
         LendingNumberKind.LegalProcess => db.LegalProcesses.IgnoreQueryFilters().AnyAsync(p => p.Number == numero, ct),
         // K5 (T1004): el archivo regulatorio no tiene columna de número: el número encabeza su nombre (NUMERO_…).
         LendingNumberKind.RegulatoryFile => db.RegulatoryFiles.IgnoreQueryFilters().AnyAsync(f => f.FileName != null && f.FileName.StartsWith(numero + "_"), ct),
+        // Feature 014 (T032): la cuenta y su operación. El retiro del asociado, la distribución y el caso de fallecimiento suman su tabla al nacer.
+        LendingNumberKind.MemberAccount => db.MemberAccounts.IgnoreQueryFilters().AnyAsync(a => a.Number == numero, ct),
+        LendingNumberKind.MemberAccountOperation => db.MemberAccountOperations.IgnoreQueryFilters().AnyAsync(o => o.Number == numero, ct),
         _ => Task.FromResult(false),
     };
+
+    private async Task<bool> ExisteOrdenAsync(string numero, CancellationToken ct) =>
+        await db.DisbursementOrders.IgnoreQueryFilters().AnyAsync(o => o.Number == numero, ct)
+        || await db.AccountPayoutOrders.IgnoreQueryFilters().AnyAsync(o => o.Number == numero, ct);
 
     private async Task<bool> ExisteCreditoAsync(string numero, CancellationToken ct) =>
         await db.Loans.IgnoreQueryFilters().AnyAsync(l => l.Number == numero, ct)

@@ -730,3 +730,14 @@ choquen.
   sigue leyendo de una versión sin grupos. Los tres únicos de `LND_MigrationLoads` pasan a `(Nature, Status)`: las consultas de la 013 que buscan
   «la carga aplicada» o «la activada» siguen sin filtrar por naturaleza porque hoy sólo hay cargas de colocación; la activación de captaciones
   (T055, US9) las acota a `Nature = Placement` al nacer la primera carga de otra naturaleza.
+- **E20 · La reconstrucción de la cuenta trabaja sobre el libro.** `ReconstruccionDeCuenta` (T033) recibe las filas de
+  `LND_MemberAccountTransactions` con signo (`MovimientoDeCuenta`) y suma las de fecha valor ≤ D registradas hasta R; el espejo de un reverso lleva la
+  fecha valor de su original, así que lo anula desde que se registra y no antes (SC-001). R04 decía «operaciones y versiones de línea»: en K7 la cuenta
+  no causa (los aportes no tienen tasa) y el interés diario de K8 (`InteresDeCaptacion`) recibe la serie `SaldosDiarios` y devuelve filas
+  `InterestAccrued`, que entran al libro y a esta misma suma. La versión de reglas que sella es la de la Cartera (`VersionesDeReglas.Vigente`) mientras
+  ninguna regla de captación cambie un centavo. Códigos nuevos: `Lending.Savings.LedgerInconsistent` (un espejo sin su original o que no lo anula
+  exactamente) y `Lending.Savings.AmountTooPrecise` (data-model §0.3); el reverso de un reverso es `Lending.Reversal.OfReversal` en el motor (013) y
+  `Lending.Savings.ReversalOfReversal` en el registro y el contrato (contrato-de-cuentas §3.11).
+- **E21 · Numeración.** `LendingNumberKind` 18–20 (retiro, asamblea, fallecimiento) se piden con `NumeroDeProcesoDeCaptacionesAsync` y, hasta que sus
+  tablas nazcan (US10, K10), el numerador no salta números existentes de esas clases. La orden de giro de cuentas usa el consecutivo de las de
+  desembolso (data-model §3.9) y el numerador salta los números de las dos tablas.

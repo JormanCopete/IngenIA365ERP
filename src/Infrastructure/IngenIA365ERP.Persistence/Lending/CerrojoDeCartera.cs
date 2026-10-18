@@ -41,6 +41,14 @@ public sealed class CerrojoDeCartera(ApplicationDbContext db, IActorActual actor
         return await db.Database.SqlQueryRaw<int>(sentencia.Sql, [.. sentencia.Parametros]).ToListAsync(ct);
     }
 
+    public async Task<IReadOnlyList<int>> BloquearCuentasAsync(IReadOnlyCollection<int> memberAccountIds, ModoDeEspera modo, CancellationToken ct = default)
+    {
+        ExigirTransaccion();
+        var sentencia = SqlDelCerrojoDeCartera.Cuentas(Motor(), memberAccountIds, modo);
+        if (sentencia is null) return [];
+        return await db.Database.SqlQueryRaw<int>(sentencia.Sql, [.. sentencia.Parametros]).ToListAsync(ct);
+    }
+
     public async Task BloquearNumeracionAsync(int numberSequenceId, CancellationToken ct = default)
     {
         ExigirTransaccion();

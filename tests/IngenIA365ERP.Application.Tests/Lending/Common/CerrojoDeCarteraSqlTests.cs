@@ -83,6 +83,39 @@ public class CerrojoDeCarteraSqlTests
         SqlDelCerrojoDeCartera.Creditos(DatabaseProvider.SqlServer, [], ModoDeEspera.Esperar).Should().BeNull();
     }
 
+    /// <summary>
+    /// Feature 014 (T031; R08, data-model §0.6): el nivel «cuenta» —<c>LND_MemberAccountControls</c>, por Id y en una sentencia— va después del
+    /// crédito y antes de la numeración, en los dos motores, esperando en las operaciones y saltando en el proceso.
+    /// </summary>
+    [Fact]
+    public void Las_cuentas_van_en_una_sentencia_por_Id_esperando_o_saltando()
+    {
+        SqlDelCerrojoDeCartera.Cuentas(DatabaseProvider.PostgreSql, [41, 8, 41], ModoDeEspera.Esperar)!.Sql
+            .Should().Be("SELECT \"MemberAccountId\" AS \"Value\" FROM \"dbo\".\"LND_MemberAccountControls\" WHERE \"MemberAccountId\" IN (8, 41) "
+                + "ORDER BY \"Id\" FOR UPDATE;");
+        SqlDelCerrojoDeCartera.Cuentas(DatabaseProvider.PostgreSql, [5], ModoDeEspera.Saltar)!.Sql
+            .Should().EndWith("ORDER BY \"Id\" FOR UPDATE SKIP LOCKED;");
+        SqlDelCerrojoDeCartera.Cuentas(DatabaseProvider.SqlServer, [8, 41], ModoDeEspera.Esperar)!.Sql
+            .Should().Be("SELECT [MemberAccountId] AS [Value] FROM [dbo].[LND_MemberAccountControls] WITH (UPDLOCK, ROWLOCK, HOLDLOCK) "
+                + "WHERE [MemberAccountId] IN (8, 41) ORDER BY [Id];");
+        SqlDelCerrojoDeCartera.Cuentas(DatabaseProvider.SqlServer, [5], ModoDeEspera.Saltar)!.Sql
+            .Should().Contain("WITH (UPDLOCK, ROWLOCK, READPAST)");
+        SqlDelCerrojoDeCartera.Cuentas(DatabaseProvider.SqlServer, [], ModoDeEspera.Esperar).Should().BeNull();
+        SqlDelCerrojoDeCartera.Cuentas(DatabaseProvider.PostgreSql, [1], ModoDeEspera.Esperar)!.Tabla.Should().Be("LND_MemberAccountControls");
+    }
+
+    /// <summary>
+    /// Feature 014 (T031): el orden fijo de la interfaz —setup, persona, crédito, cuenta, numeración— es el orden en que se declaran sus pasos; quien
+    /// llama respeta el orden de las llamadas.
+    /// </summary>
+    [Fact]
+    public void El_orden_fijo_declara_la_cuenta_despues_del_credito_y_antes_de_la_numeracion()
+    {
+        typeof(ICerrojoDeCartera).GetMethods().Select(m => m.Name).Should().Equal(
+            nameof(ICerrojoDeCartera.TomarSetupAsync), nameof(ICerrojoDeCartera.BloquearDeudoresAsync), nameof(ICerrojoDeCartera.BloquearCreditosAsync),
+            nameof(ICerrojoDeCartera.BloquearCuentasAsync), nameof(ICerrojoDeCartera.BloquearNumeracionAsync));
+    }
+
     [Theory]
     [InlineData(DatabaseProvider.PostgreSql)]
     [InlineData(DatabaseProvider.SqlServer)]
@@ -122,6 +155,7 @@ public class CerrojoDeCarteraSqlTests
         await FluentActions.Awaiting(() => cerrojo.TomarSetupAsync(false)).Should().ThrowAsync<InvalidOperationException>();
         await FluentActions.Awaiting(() => cerrojo.BloquearDeudoresAsync([1], ModoDeEspera.Esperar)).Should().ThrowAsync<InvalidOperationException>();
         await FluentActions.Awaiting(() => cerrojo.BloquearCreditosAsync([1], ModoDeEspera.Saltar)).Should().ThrowAsync<InvalidOperationException>();
+        await FluentActions.Awaiting(() => cerrojo.BloquearCuentasAsync([1], ModoDeEspera.Esperar)).Should().ThrowAsync<InvalidOperationException>();
         await FluentActions.Awaiting(() => cerrojo.BloquearNumeracionAsync(1)).Should().ThrowAsync<InvalidOperationException>();
     }
 }

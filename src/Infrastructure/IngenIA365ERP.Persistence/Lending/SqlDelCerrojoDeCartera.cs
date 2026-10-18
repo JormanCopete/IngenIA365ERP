@@ -6,7 +6,7 @@ using IngenIA365ERP.Persistence.Providers;
 namespace IngenIA365ERP.Persistence.Lending;
 
 /// <summary>
-/// El SQL del cerrojo de Cartera para cada motor (feature 013, T34, T0206; data-model §0.10). Puro: arma las sentencias y
+/// El SQL del cerrojo de Cartera para cada motor (feature 013, T34, T0206; data-model §0.10; feature 014, T031: el nivel «cuenta»). Puro: arma las sentencias y
 /// <see cref="CerrojoDeCartera"/> las ejecuta sobre la conexión y la transacción del propio <c>ApplicationDbContext</c>. Lo prueba
 /// <c>CerrojoDeCarteraSqlTests</c>. Molde: <see cref="SqlDelCerrojo"/> del inventario.
 ///
@@ -30,6 +30,9 @@ public static class SqlDelCerrojoDeCartera
     public const string TablaSetup = "LND_Setup";
     public const string TablaDeudores = "LND_DebtorControls";
     public const string TablaCreditos = "LND_LoanControls";
+
+    /// <summary>Feature 014 (T031): el nivel «cuenta», después del crédito y antes de la numeración.</summary>
+    public const string TablaCuentas = "LND_MemberAccountControls";
     public const string TablaNumeracion = "LND_NumberSequences";
 
     private const string Esquema = "dbo";
@@ -81,7 +84,19 @@ public static class SqlDelCerrojoDeCartera
         return ids.Count == 0 ? null : new(TablaCreditos, new Dialecto(motor).BloquearPor(TablaCreditos, "LoanId", "LoanId", ids, modo), []);
     }
 
-    /// <summary>Paso 4: la fila de numeración, exclusiva y al final.</summary>
+    /// <summary>
+    /// Paso 4 (feature 014, T031; R08, data-model §0.6): los <c>LND_MemberAccountControls</c> de las cuentas, exclusivos, ordenados por Id y en una
+    /// sentencia que devuelve los <c>MemberAccountId</c> bloqueados (columna <c>Value</c>). Sin cuentas, nulo.
+    /// </summary>
+    public static SentenciaDelCerrojo? Cuentas(DatabaseProvider motor, IEnumerable<int> memberAccountIds, ModoDeEspera modo)
+    {
+        var ids = Ordenados(memberAccountIds);
+        return ids.Count == 0
+            ? null
+            : new(TablaCuentas, new Dialecto(motor).BloquearPor(TablaCuentas, "MemberAccountId", "MemberAccountId", ids, modo), []);
+    }
+
+    /// <summary>Paso 5: la fila de numeración, exclusiva y al final.</summary>
     public static SentenciaDelCerrojo Numeracion(DatabaseProvider motor, int numberSequenceId) =>
         new(TablaNumeracion, new Dialecto(motor).BloquearPor(TablaNumeracion, "Id", "Id", [numberSequenceId], ModoDeEspera.Esperar), []);
 
