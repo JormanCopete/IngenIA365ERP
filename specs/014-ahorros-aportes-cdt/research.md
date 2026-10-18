@@ -841,3 +841,54 @@ choquen.
   los dos motores: sólo toca las claves de 14 posiciones, así que repetirla no hace nada; al regenerar se vuelve a poner. El cliente `CaptacionesClient`
   (T057) nace con la activación y el grupo de menú «Captaciones y aportes» nace sin mostrarse (`HayEnlacesDeCaptaciones = false`) hasta que la primera
   historia le ponga un enlace: un grupo vacío en el menú no lleva a ninguna parte.
+
+## 8. Enmienda de las líneas de captación y de aportes (2026-10-18, T060–T071, US1)
+
+Construida la historia 1. **Manda el código**; estas notas reemplazan lo dicho en `data-model.md`, `contracts/` y `tasks.md` donde choquen.
+
+- **E35 · Las tres tablas de US1 van en `CaptacionesAportes`.** T063 decía que las versiones de captación iniciaban la migración par `CaptacionesAhorro`
+  (C08); por decisión del dueño de esta fase todo cambio de esquema va a `CaptacionesAportes` mientras sea regenerable (T056): `LND_DepositLineVersions`,
+  `LND_DepositLineRateTiers` y `LND_ContributionLineVersions` nacen allí (`20261018174431` PostgreSQL / `20261018174400` SQL Server). Si al congelarla
+  K8 necesita su migración propia, `CaptacionesAhorro` nace con lo que K8 sume después. Dos FK llevan nombre propio
+  (`FK_LND_DepositLineRateTiers_Version`, `FK_LND_ContributionLineVersions_PermanentSavingsLine`): los generados pasaban de 63 caracteres (E18).
+- **E36 · Códigos de error.** Donde `data-model.md` y `contracts/api.md` no coinciden mandan los del contrato: `Lending.DepositLine.Retroactive` y
+  `Lending.ContributionLine.Retroactive` (no `Lending.CreditLine.RetroactiveVersion`), `Lending.DepositLine.ClassImmutable` (no
+  `Lending.Savings.ClassChanged`), `Lending.DepositLine.VersionOverlaps` / `Lending.ContributionLine.VersionOverlaps` y `Lending.Line.NotFound` (404).
+  Lo mal formado responde `Lending.DepositLine.Invalid` / `Lending.ContributionLine.Invalid` (422, `data.errors[{ field, code, message }]`, como las líneas
+  de crédito). Se conservan de `data-model.md` `Lending.Savings.RateTiersOverlap`, `Lending.TermDeposit.LineIncomplete` (también para el contractual:
+  el prefijo de §0.5 cubre CDAT y contractual), `Lending.Contributions.FractionBelowLegal` y `Lending.Savings.RateChangeNoticeTooShort`. Nuevo:
+  `Lending.DepositLine.ReferencedLineInvalid` (la línea a la vista destino de un CDAT o la del ahorro permanente de los aportes no es de la clase que se
+  pide).
+- **E37 · La clase vive en la versión.** `LND_CreditLines` no gana columna de clase: la clase de una línea de captación es la de su primera versión y todas
+  la repiten (`ClassImmutable`). El filtro `depositClass` de la lista y el `depositClass` de la respuesta la leen de las versiones.
+- **E38 · Activar una línea.** El alta lleva `active`: sin él la línea queda en borrador (`Draft`); `POST /{id}/reopen` reabre una cerrada **y también
+  activa una en borrador**, revalidando lo mismo que el alta activa: la entrega desplegada (aportes con K7, captaciones con K8,
+  `Lending.Savings.DeliveryNotAvailable` con `data: { nature, availableFrom }`, en todo ambiente como E31), el perfil (captación) y la única línea de
+  aportes activa (`Lending.Contributions.LineAlreadyActive`). No se exige la naturaleza activada en `LND_Setup` (data-model §1.1): la activación de la
+  naturaleza pide líneas activas con matriz (`LinesWithMatrix`), y exigirlo al revés sería circular. Con `EntregaVigente = K6b`, hoy un despliegue crea las
+  líneas pero no las activa; las pruebas fijan la entrega.
+- **E39 · Perfil regulatorio.** El perfil de la 013 no distingue clases: `MayTakeDeposits` autoriza las cuatro y, si no, `allowedClasses` va vacío
+  (US1-1: «sólo puede ofrecer aportes»). `DepositsFromAssociatesOnly` fuerza «exige asociado» en cada versión. Un fondo de empleados es un perfil con
+  `EmployeeFundCategory`.
+- **E40 · Topes de aportes.** El tope de la cuota de un fondo de empleados (`Aportes.TopeCuotaFondoEmpleados`, acotado por `APORTES_TOPE_CUOTA_FONDO_EMPLEADOS`)
+  se controla en la línea sólo si la cuota es fracción del ingreso; con valor fijo o salarios mínimos depende del ingreso de cada asociado y lo controla la
+  cuota (US3). La fracción mínima a aportes (`Aportes.FraccionMinima`) es la parte de la cuota que no va a ahorro permanente. Los dos, sólo en fondos de
+  empleados, leídos a la fecha desde la que rige la versión, con la fuente del límite que rigió. El límite de participación propio de la línea se compara
+  con el más estricto de persona natural y jurídica (`Lending.Parameter.BelowLegalFloor`).
+- **E41 · Aviso de cambio de tasa (T067, FR-038).** Se avisa sólo en una línea a la vista que no declara tasa pactada, cuando la tasa cambia (clase, tasa,
+  índice, margen, piso, techo, modo o tramos; no el orden) y hay titulares o cotitulares vigentes de cuentas vivas. La anticipación es la mayor entre
+  `Captaciones.AnticipacionAvisoCambioDeTasaDias` (K8: no se acepta hasta subir `EntregaVigente`, y mientras tanto rige la de la línea) y
+  `RateChangeNoticeDays` de la versión. El aviso es el informativo `CAMBIOTASA` (plantilla nueva, tres canales, «pendiente de validar»; la semilla pasa de
+  28 a 31 filas) por la mensajería de la Cartera (`ColaDeMensajesAlDeudor`), por correo, con origen `DepositRateChange`; la cola admite como destinatario de
+  un informativo sin crédito al titular o cotitular de una cuenta viva, y la lista blanca de los informativos suma `NumeroDeCuenta`, `NombreDeLaLinea`,
+  `TasaAnterior`, `TasaNueva` y `FechaDelCambio`. Nunca tumba la versión: lo que no se encola queda en el log.
+- **E42 · Rutas y cuerpos de §3.** Hechas las de K7/K8 que no dependen de otra historia: lista (`nature`, `status`, `depositClass`, `includeClosed`; sólo
+  las naturalezas cuyo `View` tiene quien pregunta), detalle con `date` y `recordedAsOf` (bitemporal), alta de captación y de aportes, versiones de cada
+  naturaleza (lista, detalle, alta) y cerrar/reabrir (16 rutas, `LinesEndpoints.cs`). Quedan para sus historias: reglas de tasa negociada (K9, US7),
+  cargos (K8, US4, T114), la cotización `rate-quote` (con el motor de interés de K8) y las plantillas `lending.deposit-lines` y `lending.contribution-lines`
+  (US9). Los cuerpos siguen las columnas de data-model: `rate.kind` es `Fixed`/`Variable` y los tramos son una lista dentro de la tasa (el ejemplo decía
+  `"Tiered"`); `tax.withholdingRateParameterCode` (vacío = la tarifa de la clase) en lugar de `withholdingClass`; `breachEffect` con los valores de
+  `ContractualBreachEffect`; los cargos llegan con US4; `ContributionLineVersionInput` es `{ validFrom, reason, minimumNonReducible { kind, amount,
+  fraction }, installment { kind, amount, fraction, roundingUnit, roundingMode, periodicity, dueDay, minimumFirst }, permanentSavingsShare?
+  { depositLinePublicId, fraction }, allowsExtraordinary, maxParticipationFraction, excessAction, allowsTransferBetweenMembers, refundTermDays,
+  lossDeductionEnabled }`.

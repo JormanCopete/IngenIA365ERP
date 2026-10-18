@@ -538,6 +538,10 @@ public interface IApplicationDbContext
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Transactions.MemberAccountTransaction> MemberAccountTransactions { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Projections.MemberAccountDailyPosition> MemberAccountDailyPositions { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Projections.MemberAccountControl> MemberAccountControls { get; }
+    // Feature 014, US1 (T060–T062): las versiones de las líneas de captación y de aportes.
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Configuration.DepositLineVersion> DepositLineVersions { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Configuration.DepositLineRateTier> DepositLineRateTiers { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Configuration.ContributionLineVersion> ContributionLineVersions { get; }
 
     // Admin
     // Tenants y TenantBranches se retiraron: son del plano de control del SaaS y

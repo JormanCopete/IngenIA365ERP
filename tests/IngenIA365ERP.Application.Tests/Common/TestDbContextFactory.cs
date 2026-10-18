@@ -489,6 +489,9 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Transactions.MemberAccountTransaction> MemberAccountTransactions => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Transactions.MemberAccountTransaction>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Projections.MemberAccountDailyPosition> MemberAccountDailyPositions => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Projections.MemberAccountDailyPosition>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Projections.MemberAccountControl> MemberAccountControls => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Projections.MemberAccountControl>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Configuration.DepositLineVersion> DepositLineVersions => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Configuration.DepositLineVersion>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Configuration.DepositLineRateTier> DepositLineRateTiers => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Configuration.DepositLineRateTier>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Configuration.ContributionLineVersion> ContributionLineVersions => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Configuration.ContributionLineVersion>();
     DbSet<DebitCard> IApplicationDbContext.DebitCards => throw new NotImplementedException();
     DbSet<DebitAgreementParameter> IApplicationDbContext.DebitAgreementParameters => throw new NotImplementedException();
     DbSet<PosTerminal> IApplicationDbContext.PosTerminals => throw new NotImplementedException();

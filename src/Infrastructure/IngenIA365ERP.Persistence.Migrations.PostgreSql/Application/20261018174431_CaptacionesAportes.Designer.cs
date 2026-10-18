@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20261018170720_CaptacionesAportes")]
+    [Migration("20261018174431_CaptacionesAportes")]
     partial class CaptacionesAportes
     {
         /// <inheritdoc />
@@ -27086,6 +27086,557 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.ToTable("LND_MemberAccountParties", "dbo");
                 });
 
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Lending.Deposits.Configuration.ContributionLineVersion", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("AllowsExtraordinary")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("AllowsTransferBetweenMembers")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("ContentSha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int>("CreditLineId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int>("ExcessAction")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal?>("InstallmentAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<byte?>("InstallmentDueDay")
+                        .HasColumnType("smallint");
+
+                    b.Property<decimal?>("InstallmentFraction")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("numeric(9,6)");
+
+                    b.Property<int>("InstallmentMode")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("InstallmentPeriodicity")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("InstallmentRoundingMode")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("InstallmentRoundingUnit")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<bool>("LossDeductionEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<decimal?>("MaxParticipationFraction")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("numeric(9,6)");
+
+                    b.Property<decimal?>("MinimumAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<bool>("MinimumFirst")
+                        .HasColumnType("boolean");
+
+                    b.Property<decimal?>("MinimumFraction")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("numeric(9,6)");
+
+                    b.Property<int>("MinimumMode")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal?>("PermanentSavingsFraction")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("numeric(9,6)");
+
+                    b.Property<int?>("PermanentSavingsLineId")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<int>("RefundTermDays")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("RegisteredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateOnly>("ValidFrom")
+                        .HasColumnType("date");
+
+                    b.Property<int>("VersionNumber")
+                        .HasColumnType("integer");
+
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PermanentSavingsLineId")
+                        .HasDatabaseName("IX_LND_ContributionLineVersions_PermanentSavingsLineId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_LND_ContributionLineVersions_PublicId");
+
+                    b.HasIndex("CreditLineId", "VersionNumber")
+                        .IsUnique()
+                        .HasDatabaseName("UK_LND_ContributionLineVersions_Line_Version");
+
+                    b.HasIndex("CreditLineId", "ValidFrom", "VersionNumber")
+                        .HasDatabaseName("IX_LND_ContributionLineVersions_Line_ValidFrom");
+
+                    b.ToTable("LND_ContributionLineVersions", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Lending.Deposits.Configuration.DepositLineRateTier", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal?>("AnnualRate")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("numeric(9,6)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int>("DepositLineVersionId")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<decimal?>("Margin")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("numeric(9,6)");
+
+                    b.Property<decimal?>("MaxAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<decimal?>("MaxBalance")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<int?>("MaxTermDays")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal?>("MinAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<decimal?>("MinBalance")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<int?>("MinTermDays")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Order")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_LND_DepositLineRateTiers_PublicId");
+
+                    b.HasIndex("DepositLineVersionId", "Order")
+                        .IsUnique()
+                        .HasDatabaseName("UK_LND_DepositLineRateTiers_Version_Order");
+
+                    b.ToTable("LND_DepositLineRateTiers", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Lending.Deposits.Configuration.DepositLineVersion", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("AccruesWhileInactive")
+                        .HasColumnType("boolean");
+
+                    b.Property<int?>("AfterMaturityTreatment")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("AllowsCoHolders")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("AllowsLegalEntities")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("AllowsMinors")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("AllowsNegotiatedRate")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("AllowsPartialWithdrawals")
+                        .HasColumnType("boolean");
+
+                    b.Property<decimal?>("AnnualRate")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("numeric(9,6)");
+
+                    b.Property<bool?>("AutoRollover")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("BalanceMethod")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal?>("BonusAnnualRate")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("numeric(9,6)");
+
+                    b.Property<int?>("BonusRecognition")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("BranchPublicIdsJson")
+                        .HasColumnType("text");
+
+                    b.Property<decimal?>("BreachAnnualRate")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("numeric(9,6)");
+
+                    b.Property<int?>("BreachEffect")
+                        .HasColumnType("integer");
+
+                    b.Property<bool?>("CapitalizesOnRollover")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("ContentSha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int>("CreditLineId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("DayCount")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("DeclaresAgreedRate")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int>("DepositClass")
+                        .HasColumnType("integer");
+
+                    b.Property<bool?>("EarlyRedemptionAllowed")
+                        .HasColumnType("boolean");
+
+                    b.Property<int?>("EarlyRedemptionPenaltyMode")
+                        .HasColumnType("integer");
+
+                    b.Property<bool?>("GraceAccrues")
+                        .HasColumnType("boolean");
+
+                    b.Property<int?>("GraceBusinessDays")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("InactivityDays")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("IndexCode")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("IndexKey")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<int?>("InstallmentPeriodicity")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("InterestPeriodicities")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("InterestTimings")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<bool>("IsGmfSubject")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("KeepsNegotiatedMarginOnRollover")
+                        .HasColumnType("boolean");
+
+                    b.Property<decimal?>("Margin")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("numeric(9,6)");
+
+                    b.Property<decimal?>("MaxCashPerDay")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<decimal?>("MaxCashPerOperation")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<int?>("MaxRollovers")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("MaxTermDays")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("MaxTermMonths")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal?>("MaxWithdrawalPerDay")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<decimal?>("MaxWithdrawalPerOperation")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<decimal>("MinBalance")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<decimal>("MinBalanceForInterest")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<int?>("MinDaysBeforeRedemption")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal?>("MinInstallmentAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<decimal>("MinOpeningAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<int?>("MinTermDays")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("MinTermMonths")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("MoveToDemandLineId")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal?>("PenaltyAnnualRate")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("numeric(9,6)");
+
+                    b.Property<decimal?>("PenaltyDiscountFraction")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("numeric(9,6)");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal?>("RateCeiling")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("numeric(9,6)");
+
+                    b.Property<int>("RateChangeNoticeDays")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("RateEquivalence")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal?>("RateFloor")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("numeric(9,6)");
+
+                    b.Property<int>("RateKind")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("RateTierMode")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<DateTime>("RegisteredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("RequiresAssociate")
+                        .HasColumnType("boolean");
+
+                    b.Property<int?>("ResetPeriodicity")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("RolloverRateRule")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("RoundingMode")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("RoundingMoment")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("RoundingUnit")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<byte?>("SettlementDay")
+                        .HasColumnType("smallint");
+
+                    b.Property<int>("SettlementPeriodicity")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("SuspendsAccrualOnDeceased")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("SuspendsAccrualOnTotalGarnishment")
+                        .HasColumnType("boolean");
+
+                    b.Property<int?>("ToleratedLateInstallments")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateOnly>("ValidFrom")
+                        .HasColumnType("date");
+
+                    b.Property<int>("VersionNumber")
+                        .HasColumnType("integer");
+
+                    b.Property<bool?>("WithdrawableOnlyOnMembershipWithdrawal")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("WithholdingRateParameterCode")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
+
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MoveToDemandLineId")
+                        .HasDatabaseName("IX_LND_DepositLineVersions_MoveToDemandLineId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_LND_DepositLineVersions_PublicId");
+
+                    b.HasIndex("CreditLineId", "VersionNumber")
+                        .IsUnique()
+                        .HasDatabaseName("UK_LND_DepositLineVersions_Line_Version");
+
+                    b.HasIndex("CreditLineId", "ValidFrom", "VersionNumber")
+                        .HasDatabaseName("IX_LND_DepositLineVersions_Line_ValidFrom");
+
+                    b.ToTable("LND_DepositLineVersions", "dbo");
+                });
+
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Lending.Deposits.Projections.MemberAccountControl", b =>
                 {
                     b.Property<int>("Id")
@@ -53059,6 +53610,45 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .IsRequired();
 
                     b.Navigation("MemberAccount");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Lending.Deposits.Configuration.ContributionLineVersion", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Lending.Configuration.CreditLine", null)
+                        .WithMany()
+                        .HasForeignKey("CreditLineId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Lending.Configuration.CreditLine", null)
+                        .WithMany()
+                        .HasForeignKey("PermanentSavingsLineId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("FK_LND_ContributionLineVersions_PermanentSavingsLine");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Lending.Deposits.Configuration.DepositLineRateTier", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Lending.Deposits.Configuration.DepositLineVersion", null)
+                        .WithMany()
+                        .HasForeignKey("DepositLineVersionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("FK_LND_DepositLineRateTiers_Version");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Lending.Deposits.Configuration.DepositLineVersion", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Lending.Configuration.CreditLine", null)
+                        .WithMany()
+                        .HasForeignKey("CreditLineId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Lending.Configuration.CreditLine", null)
+                        .WithMany()
+                        .HasForeignKey("MoveToDemandLineId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Lending.Deposits.Projections.MemberAccountControl", b =>
