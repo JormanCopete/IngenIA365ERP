@@ -139,15 +139,27 @@ public sealed class EvaluacionDeCarteraTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Con_la_periodicidad_del_tipo_de_entidad_el_corte_y_el_efecto_son_los_suyos()
+    public async Task Fuera_de_la_periodicidad_del_tipo_de_entidad_se_prepara_igual_y_avisa()
     {
         await CastigosDePrueba.SembrarTipoDeEntidadAsync(_c.Db, _c.G, evaluacion: """{ "cutoffMonths": [6, 12], "effectMonthsAfterCutoff": 1 }""");
 
         var r = await PrepararAsync("2027-02");
 
-        r.Error.Code.Should().Be(EvaluacionesDeCartera.CodigoPeriodoInvalido);
-        CastigosDePrueba.Datos(r.Error).GetProperty("expectedEffectMonth").GetString().Should().Be("2027-01");
-        (await PrepararAsync("2027-01")).IsSuccess.Should().BeTrue();
+        // Decisión del dueño del 2026-10-18: las periodicidades regulatorias son informativas; antes respondía Lending.PortfolioEvaluation.PeriodInvalid.
+        r.IsSuccess.Should().BeTrue("la entidad decide según su calendario: fuera de la periodicidad sólo se avisa");
+        r.Value.Warnings.Should().ContainSingle(w => w.Code == EvaluacionesDeCartera.AvisoFueraDePeriodicidad)
+            .Which.Message.Should().Contain("2027-01", "el aviso dice el mes de efecto que esperaría la norma");
+    }
+
+    [Fact]
+    public async Task Dentro_de_la_periodicidad_no_avisa()
+    {
+        await CastigosDePrueba.SembrarTipoDeEntidadAsync(_c.Db, _c.G, evaluacion: """{ "cutoffMonths": [6, 12], "effectMonthsAfterCutoff": 1 }""");
+
+        var r = await PrepararAsync("2027-01");
+
+        r.IsSuccess.Should().BeTrue();
+        r.Value.Warnings.Should().NotContain(w => w.Code == EvaluacionesDeCartera.AvisoFueraDePeriodicidad);
     }
 
     [Fact]

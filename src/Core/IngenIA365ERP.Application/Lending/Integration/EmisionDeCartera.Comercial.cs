@@ -25,7 +25,8 @@ public sealed record AjusteComercialAEmitir(
     bool Anulacion,
     LoanPlanSummaryV1? PlanNuevo,
     bool ValidacionFallida,
-    UserRefV1? UsuarioDeOrigen);
+    UserRefV1? UsuarioDeOrigen,
+    IReadOnlyList<ReallocationV1>? Reasignaciones = null);
 
 /// <summary>Un cobro provisional incorporado tal como se emite (mensajes.md §10.16; C62). (nuevo)</summary>
 public sealed record CobroProvisionalAEmitir(
@@ -120,6 +121,8 @@ public sealed partial class EmisionDeCartera
             VoidedFromOrigin = a.Anulacion,
             NewPlan = a.PlanNuevo,
             ValidationFailed = a.ValidacionFallida,
+            // T1098 (decisión del dueño del 2026-10-18): los pagos posteriores que el ajuste redistribuye, como en PagoAplicado.
+            Reallocations = a.Reasignaciones ?? [],
         };
         List<object> contenidos = [principal];
         if (saldo.Count > 0)

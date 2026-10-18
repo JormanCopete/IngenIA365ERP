@@ -66,7 +66,8 @@ public static class TextosDeMigracion
         "Met" => "Cumplido",
         "Missing" => "Falta",
         "NotApplicable" => "No aplica",
-        "Waived" => "Falta (fuera de producción no bloquea)",
+        // Sólo en activaciones anteriores al 2026-10-18: desde entonces todo requisito se exige en todos los ambientes.
+        "Waived" => "Falta (fuera de producción no bloqueaba)",
         _ => estado,
     };
 

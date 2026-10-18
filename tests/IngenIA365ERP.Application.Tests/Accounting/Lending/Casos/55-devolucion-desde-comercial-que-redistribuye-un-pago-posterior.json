@@ -1,0 +1,260 @@
+{
+  "descripcion": "Decisión del dueño del 2026-10-18 (T1098; contabilidad.md §32): la devolución redistribuye el pago posterior PAG-000502, que ahora cubre 120 menos de interés de la cuota 2 y deja 120 más de anticipo para la cuota 3. La reasignación viaja en reallocations del CreditoAjustadoDesdeComercial con el signo de la distribución (después − antes) y se asienta en el mismo DS del ajuste con el molde de PagoRedistribuidoPorValorNacional: sin el puente del recaudo, el interés por cobrar vuelve al débito y el anticipo sale al crédito.",
+  "sobre": {
+    "version": 1,
+    "kind": "Business",
+    "originModule": "CAR",
+    "originEventKey": "Confirmation",
+    "origin": {
+      "kind": "Operation",
+      "documentClass": null,
+      "documentTypeCode": null,
+      "number": "AJC-000555",
+      "publicId": "0d0d0055-0000-4000-8000-000000000055",
+      "operationDate": "2026-11-28"
+    },
+    "related": {
+      "publicId": "0d0d9997-0000-4000-8000-000000009997",
+      "number": "DES-000501"
+    },
+    "chainRootPublicId": "0e0e0055-0000-4000-8000-000000000055",
+    "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+    "costCenterPublicId": null,
+    "warehouseCode": null,
+    "personPublicId": "a1b2c3d4-0000-4000-8000-000000000002",
+    "currency": "COP",
+    "exchangeRate": 1,
+    "originUser": {
+      "centralUserId": "d4e5f6a7-b8c9-4d0e-9f1a-2b3c4d5e6f70",
+      "name": "Usuario de ensayo"
+    },
+    "emittedAt": "2026-11-28T15:00:00Z"
+  },
+  "mensajes": [
+    {
+      "messageId": "0f0f0055-0000-4000-8000-000000000055",
+      "type": "CreditoAjustadoDesdeComercial",
+      "kind": "Business",
+      "originDocumentClass": "CommercialAdjustment",
+      "payload": {
+        "loan": {
+          "loanPublicId": "7b8c9d0e-1f2a-4b3c-9d4e-000000000501",
+          "loanNumber": "000501"
+        },
+        "debtorPersonPublicId": "a1b2c3d4-0000-4000-8000-000000000002",
+        "valueDate": "2026-11-28",
+        "registeredAt": "2026-11-28T15:00:00Z",
+        "dimensions": {
+          "creditLineCode": "COM01",
+          "modalityCode": "CONSUMO",
+          "subsegmentCode": "SinLibranza",
+          "riskCategory": "A",
+          "riskSubcategory": "None",
+          "isEmployee": false,
+          "inGracePeriod": false,
+          "restructured": false,
+          "writtenOff": false,
+          "collectorClass": null,
+          "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+          "impairmentModel": "ArrearsAnnex1",
+          "riskSegment": "CONSUMO",
+          "valueUnit": "Pesos"
+        },
+        "amounts": [
+          {
+            "concept": "Principal",
+            "installmentNumber": null,
+            "amount": -30000.0,
+            "uvrAmount": null,
+            "onBehalfOfAssociate": false,
+            "reasonCode": "Cartera"
+          },
+          {
+            "concept": "CurrentInterest",
+            "installmentNumber": 1,
+            "amount": -84.6,
+            "uvrAmount": null,
+            "onBehalfOfAssociate": false,
+            "reasonCode": null
+          }
+        ],
+        "original": {
+          "messageId": "0a0a0109-0000-4000-8000-000000000109",
+          "type": "CreditoDesembolsado",
+          "originPublicId": "0b0b0110-0000-4000-8000-000000000110",
+          "number": "DES-000501"
+        },
+        "rulesVersion": "LND-2026.1",
+        "adjustmentClass": "Return",
+        "adjustmentMessageId": "4a1e0055-0000-4000-8000-000000000055",
+        "adjustmentDocument": {
+          "module": "INV",
+          "publicId": "4a1f0055-0000-4000-8000-000000000055",
+          "documentClass": "CreditNote",
+          "number": "NC01-0155"
+        },
+        "invoice": {
+          "module": "INV",
+          "publicId": "6d7e8f90-a1b2-4c3d-8e4f-5a6b7c8d9e0f",
+          "documentClass": "PosEquivalentDocument",
+          "number": "PV01-1532"
+        },
+        "accountsReceivableRecordedBy": "Cartera",
+        "creditBalanceRecognized": 0.0,
+        "voidedFromOrigin": false,
+        "newPlan": null,
+        "validationFailed": false,
+        "reallocations": [
+          {
+            "payment": {
+              "messageId": "0a0a0055-0000-4000-8000-000000000055",
+              "type": "PagoAplicado",
+              "originPublicId": "0b0b0055-0000-4000-8000-000000000055",
+              "number": "PAG-000502"
+            },
+            "amounts": [
+              {
+                "concept": "CurrentInterest",
+                "installmentNumber": 2,
+                "amount": -120.0,
+                "uvrAmount": null,
+                "onBehalfOfAssociate": false,
+                "reasonCode": null
+              },
+              {
+                "concept": "Advance",
+                "installmentNumber": 3,
+                "amount": 120.0,
+                "uvrAmount": null,
+                "onBehalfOfAssociate": false,
+                "reasonCode": null
+              }
+            ]
+          }
+        ]
+      },
+      "relatedDocumentClass": "LoanDisbursement"
+    }
+  ],
+  "esperado": {
+    "tipo": "DS",
+    "fecha": "2026-11-28",
+    "origen": "LendingIssuedDocument",
+    "lineas": [
+      {
+        "rol": "PuenteComercial",
+        "cuenta": "13059501",
+        "debito": 30000.0,
+        "credito": 0.0,
+        "tercero": "ana",
+        "cruce": "FV PV01-1532",
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "CreditoAjustadoDesdeComercial"
+          ],
+          "concepto": "Principal",
+          "creditos": [
+            "000501"
+          ]
+        }
+      },
+      {
+        "rol": "Capital",
+        "cuenta": "14420501",
+        "debito": 0.0,
+        "credito": 30000.0,
+        "tercero": "ana",
+        "cruce": "PG 000501",
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "CreditoAjustadoDesdeComercial"
+          ],
+          "concepto": "Principal",
+          "creditos": [
+            "000501"
+          ]
+        }
+      },
+      {
+        "rol": "Ingreso",
+        "cuenta": "41502509",
+        "debito": 84.6,
+        "credito": 0.0,
+        "tercero": null,
+        "cruce": null,
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "CreditoAjustadoDesdeComercial"
+          ],
+          "concepto": "CurrentInterest",
+          "creditos": [
+            "000501"
+          ]
+        }
+      },
+      {
+        "rol": "InteresPorCobrar",
+        "cuenta": "14430501",
+        "debito": 0.0,
+        "credito": 84.6,
+        "tercero": "ana",
+        "cruce": "PG 000501",
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "CreditoAjustadoDesdeComercial"
+          ],
+          "concepto": "CurrentInterest",
+          "creditos": [
+            "000501"
+          ]
+        }
+      },
+      {
+        "rol": "InteresPorCobrar",
+        "cuenta": "14430501",
+        "debito": 120.0,
+        "credito": 0.0,
+        "tercero": "ana",
+        "cruce": "PG 000501",
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "CreditoAjustadoDesdeComercial"
+          ],
+          "concepto": "CurrentInterest",
+          "creditos": [
+            "000501"
+          ]
+        }
+      },
+      {
+        "rol": "Anticipo",
+        "cuenta": "27500501",
+        "debito": 0.0,
+        "credito": 120.0,
+        "tercero": "ana",
+        "cruce": "PG 000501",
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "CreditoAjustadoDesdeComercial"
+          ],
+          "concepto": "Advance",
+          "creditos": [
+            "000501"
+          ]
+        }
+      }
+    ]
+  }
+}

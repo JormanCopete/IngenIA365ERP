@@ -50,7 +50,8 @@ public sealed class WatchLendingProcessesCommandHandler(
     IEnumerable<ITareaProgramada> tareas,
     IngenIA365ERP.Application.Common.Parameters.ILectorDeParametros? parametros = null,
     IngenIA365ERP.Application.Common.NationalValues.IPerfilRegulatorio? perfiles = null,
-    IngenIA365ERP.Application.Common.NationalValues.INormativaVigente? normativa = null) : IRequestHandler<WatchLendingProcessesCommand, Result<VigilanciaRealizada>>
+    IngenIA365ERP.Application.Common.NationalValues.INormativaVigente? normativa = null,
+    IngenIA365ERP.Application.Common.Calendar.ICalendarioHabil? calendario = null) : IRequestHandler<WatchLendingProcessesCommand, Result<VigilanciaRealizada>>
 {
     /// <summary>Hasta esta hora local no se espera que lo de ayer esté terminado.</summary>
     public static readonly TimeOnly Tolerancia = TareasDeCartera.HoraDeInicio;
@@ -140,7 +141,9 @@ public sealed class WatchLendingProcessesCommandHandler(
             {
                 var mes = new DateOnly(hoy.Year, hoy.Month, 1).AddMonths(-atras);
                 if (activada > Domain.Entities.Lending.Risk.MonthlyClose.UltimoDiaDe(mes.Year, mes.Month)) continue;
-                var plazo = await Regulatory.ProyeccionSicsesCartera.PlazoAsync(perfiles, normativa, mes.Year, mes.Month, ct);
+                // Decisión del dueño del 2026-10-18: el plazo es informativo (sólo este aviso) y sale de la periodicidad propia de la cooperativa si la fijó.
+                var plazo = await Regulatory.ProyeccionSicsesCartera.PlazoAsync(perfiles, normativa, mes.Year, mes.Month, ct, calendario,
+                    parametros ?? new IngenIA365ERP.Application.Common.Parameters.LectorDeParametros(db));
                 if (plazo is not { SeReporta: true, Limite: { } limiteSicses, AvisoDesde: { } aviso } || hoy < aviso) continue;
                 var hecho = await db.RegulatoryFiles.AsNoTracking().AnyAsync(f => !f.IsDeleted && f.Kind == RegulatoryFileKind.Sicses
                     && f.PeriodYear == mes.Year && f.PeriodMonth == mes.Month

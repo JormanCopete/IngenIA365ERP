@@ -21,8 +21,10 @@ namespace IngenIA365ERP.Application.Lending.Risk.Evaluations;
 /// <summary>
 /// Prepara una evaluación de cartera (feature 013, K3, US14, T0912; api.md §12.6, <c>POST /api/lending/risk/evaluations</c>,
 /// <c>Lending.PortfolioEvaluations.Prepare</c>, con clave; FR-102): el corte (fin de mes) y el mes de efecto (<c>AAAA-MM</c>, posterior al corte) que,
-/// si el documento <c>TiposDeOrganizacion</c> vigente dice la periodicidad del tipo de entidad del perfil regulatorio (semestral o anual), tienen que ser
-/// los suyos (<c>Lending.PortfolioEvaluation.PeriodInvalid</c>); otra evaluación sin aplicar del mismo corte → <c>Lending.PortfolioEvaluation.Overlaps</c>;
+/// si el documento <c>TiposDeOrganizacion</c> vigente dice la periodicidad del tipo de entidad del perfil regulatorio (semestral o anual) y no son los
+/// suyos, se prepara igual con el aviso <c>PortfolioEvaluationOutsidePeriodicity</c> en <c>warnings[]</c> (decisión del dueño del 2026-10-18: las
+/// periodicidades regulatorias son informativas; hasta esa fecha respondía <c>Lending.PortfolioEvaluation.PeriodInvalid</c>); otra evaluación sin
+/// aplicar del mismo corte → <c>Lending.PortfolioEvaluation.Overlaps</c>;
 /// cada crédito, vivo al corte y del alcance, con su calificación por las reglas al corte (la oficial del cierre de ese día, <c>RuleRatingAtCutoff</c>),
 /// la propuesta y su justificación. Nace en borrador, numerada (<c>EVC-</c>); <c>warnings[]</c> trae la periodicidad de la norma si sigue pendiente de
 /// validar (bloque D, <see cref="NormaPendienteDeCartera"/>; no bloquea). (nuevo)
@@ -95,17 +97,16 @@ public sealed class PreparePortfolioEvaluationCommandHandler(
         var (anio, mes) = PreparePortfolioEvaluationCommand.Mes(request.EffectMonth)!.Value;
         var corte = request.CutoffDate;
 
-        // La periodicidad del tipo de entidad, si el documento la trae.
+        // La periodicidad del tipo de entidad, si el documento la trae. Decisión del dueño del 2026-10-18: es informativa; fuera de ella sólo se avisa.
+        AvisoDeNormaPendienteDto? fueraDePeriodicidad = null;
         var perfil = await perfiles.VigenteAsync(corte, null, ct);
         if (perfil is not null && await normativa.TiposDeOrganizacionAsync(corte, null, ct) is { IsSuccess: true } tipos
             && tipos.Value.Documento.Buscar(perfil.OrganizationTypeCode)?.PortfolioEvaluation is { } periodicidad
             && !periodicidad.Admite(corte, anio, mes))
         {
             var efecto = new DateOnly(corte.Year, corte.Month, 1).AddMonths(periodicidad.EffectMonthsAfterCutoff);
-            return Falla(EvaluacionesDeCartera.PeriodoInvalido(
-                $"El tipo de entidad ({perfil.OrganizationTypeCode}) evalúa con corte en los meses {string.Join(", ", periodicidad.CutoffMonths)} y la "
-                + $"recalificación se refleja {periodicidad.EffectMonthsAfterCutoff} mes(es) después del corte (para este corte, {efecto:yyyy-MM}).",
-                new { organizationType = perfil.OrganizationTypeCode, cutoffMonths = periodicidad.CutoffMonths, expectedEffectMonth = efecto.ToString("yyyy-MM", CultureInfo.InvariantCulture) }));
+            fueraDePeriodicidad = EvaluacionesDeCartera.FueraDePeriodicidad(perfil.OrganizationTypeCode, periodicidad.CutoffMonths,
+                periodicidad.EffectMonthsAfterCutoff, efecto);
         }
 
         var abiertas = new[] { PortfolioEvaluationStatus.Draft, PortfolioEvaluationStatus.Recommended, PortfolioEvaluationStatus.Approved };
@@ -145,6 +146,7 @@ public sealed class PreparePortfolioEvaluationCommandHandler(
         evaluacion.Recalcular(lineas);
         await db.SaveChangesAsync(ct);
         var avisos = await norma.AvisosAsync(corte, AvisosDeNorma.Evaluacion, ct);
+        if (fueraDePeriodicidad is not null) avisos = [.. avisos, fueraDePeriodicidad];
         return Result.Success((await EvaluacionesDeCartera.DtoAsync(db, evaluacion, lineas, 1, lineas.Count, ct)) with { Warnings = avisos });
     }
 

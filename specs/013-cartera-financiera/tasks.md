@@ -4850,6 +4850,114 @@ verificada **contra la base de producción**, no contra el repositorio.
     (§10). Los de esta fase (la corrección de la UVR y las pruebas nuevas) también. `Lending.Housing.UvrTranchesNotSupported` no se llevó a
     §10: es una guarda interna, no un código de respuesta.
 
+### Decisiones del dueño del 2026-10-18
+
+Respuestas del dueño a las preguntas abiertas de la fase 24 (notas del bloque 2 de la fase 23 y del cierre local). Cada tarea dice qué se hizo.
+
+- [X] T1091 Corrección de **usura** en un día con pagos: el capital del pago iba en el ajuste de causación, sin rol en Contabilidad. Aplicar el
+  mismo diseño que la UVR (pregunta (a) de las notas del bloque 2) y revisar el efecto sobre el saldo a favor que reconoce la corrida (C93)
+  - Hecho el 2026-10-18: `CorreccionDeValorNacional` separa el reparto de los pagos en toda corrida (`separarPagos` siempre), así que la de
+    una `USURA` emite también `PagoRedistribuidoPorValorNacional` (mismo `PRN`, `correctedNationalValue.code = USURA`). **Efecto sobre C93**:
+    el saldo a favor que deja un pago (filas `CreditBalanceRecognized` de la operación) es parte de su reparto y viaja en `PRN`
+    (`SaldoAFavor` al crédito, `InteresPorCobrar` al débito, que el ajuste baja contra `Ingreso`): el asiento neto es el mismo que hacía el
+    `SaldoAFavorReconocido` con causa `NationalValueCorrection`, en dos hechos; la corrida ya no emite ese hecho por un pago (el código queda
+    para un saldo a favor que no nazca de un reparto). Pruebas: `RepartoDePagoConUsuraCorregidaTests` (Domain, 3, sobre el caso dorado 14 con
+    un pago el 15-03). Contratos: contabilidad.md §30, mensajes.md §10.5 y §10.26, data-model §22.1; manual
+    `cartera-integracion-contable.md` §5 (fila 15) y runbook `valores-nacionales.md` §3a. Sin migración.
+- [X] T1092 Asentar en Contabilidad las `reallocations` de `PagoAplicado` y `PagoReversado` (pregunta (b)) con el molde de `PRN`
+  - Hecho el 2026-10-18: `ConstructorDeLineasDeCartera.Pago`/`PagoReversado` llaman a `Reasignaciones`, que pasa cada importe del signo de la
+    distribución (después − antes) al del libro y lo asienta con `Redistribucion` (el constructor de `PRN`) en el **mismo comprobante** del pago
+    o del reverso, con sus dimensiones vigentes. **Decisión: no se reutiliza `PRN` ni se crea un hecho hermano**: la reasignación nace en la
+    misma transacción, ya viaja en el mensaje de la operación (sus filas `PaymentReallocation` llevan su `MessagePublicId`) y la regla es un
+    comprobante por unidad (C01); `PRN` es masivo, por lotes y en el `CA` de una corrida. `PagoAplicado` suma a sus roles los de la
+    reasignación (`OperacionesDeCartera`). Pruebas: casos dorados 53 (pago con fecha valor anterior) y 54 (reverso) del constructor.
+    Contratos: contabilidad.md §2.1 y §31 (nuevo), mensajes.md §10.7 y §10.8; manual `cartera-integracion-contable.md` §5. Queda una
+    pregunta: un `CreditoAjustadoDesdeComercial` también escribe filas `PaymentReallocation` y su hecho no las lleva (resuelta: T1098).
+- [X] T1093 Centrales: un crédito en mora pero bajo el rango donde empieza lo negativo (`Centrales.RangosDeMora`) se reporta con sus **días
+  reales de mora, sin marca negativa** (no «al día»)
+  - Hecho el 2026-10-18. Comportamiento que había: `ProyeccionCentralDeRiesgo` lo reportaba `AlDia` con días, saldo y cuotas en mora en cero
+    (decisión del 2026-10-16). Ahora va `EnMora` con sus días, saldo y cuotas en mora, su rango y su altura (en DataCrédito el rango 1 es la
+    novedad `06`), con `EsNegativo = false` (`IsNegative` de la línea): no exige aviso previo, no levanta `Cartera.AvisoPrevioSinConstancia` y
+    no lo excluyen las causas del dato negativo. La marca negativa es una variable aparte del estado (antes se derivaba de `EnMora`); el
+    castigo sigue siendo negativo. Pruebas: `RangosYCodeudoresEnCentralesTests` (dos casos ajustados). Docs: runbook
+    `cartera-sicses-y-centrales.md` §3 y §6, manual `cartera-cobranza-y-aviso-previo.md` §12, data-model §28.1. Sin migración. Queda por
+    cotejar con cada central si la altura del rango 1 es el código correcto para una mora no negativa (T1011).
+- [X] T1094 SICSES y periodicidades regulatorias **informativas**: la entidad decide cuándo reporta; el aplicativo no restringe ni bloquea
+  por plazo, sólo informa y alerta. Revisar `sicsesReport`, la alerta de plazo y el cierre; la periodicidad de fondos de empleados y mutuales de
+  nivel 3 (y los formatos básicos trimestrales), dato informativo configurable por la entidad
+  - Hecho el 2026-10-18. Revisado: el plazo del SICSES (`ProyeccionSicsesCartera.PlazoAsync`) sólo alimenta `Cartera.PlazoRegulatorioPorVencer`
+    (`cartera.vigilancia`) y la advertencia `Lending.Regulatory.MesFueraDeLaPeriodicidad`; validar, generar, descargar y marcar cargado no lo
+    miran (nueva prueba: un mes fuera de la periodicidad se genera). `Riesgo.DiaLimiteCierre` sólo dispara el cierre programado y la alerta
+    `Cartera.CierreMensualPendiente`; el cierre manual no lo mira. El reporte de castigos al supervisor sólo anota su plazo en el lote.
+    **Lo único que bloqueaba** era la periodicidad de la evaluación de cartera (`Lending.PortfolioEvaluation.PeriodInvalid` al preparar): ahora
+    se prepara igual con el aviso `PortfolioEvaluationOutsidePeriodicity` en `warnings[]`. `Accounting.Period.LendingNotClosed` no se tocó: no
+    es un plazo regulatorio sino la regla de que Contabilidad no cierra un mes que Cartera no cerró. Nuevos parámetros de Cartera (K5,
+    vigencia, sin semilla): `Sicses.MesesDeCorte` (meses separados por coma) y `Sicses.DiasDePlazo` (días calendario), que pisan los del
+    documento `TiposDeOrganizacion` para la cooperativa (con días propios no se aplican los plazos especiales). Pruebas:
+    `ExcluidosYPlazoDelSicsesTests` (+3), `EvaluacionDeCarteraTests` (1 cambiada, +1), `ParametrosDeCarteraTests`. Docs: runbook
+    `cartera-sicses-y-centrales.md` §1.5, manual `cartera-castigo-y-evaluacion.md`, data-model §12.1, §28.1 y la tabla de errores (US14),
+    adaptadores-y-archivos.md §7.4. Sin migración.
+- [X] T1095 «Último día hábil» de Cartera descuenta los festivos con el calendario que ya existe
+  - Hecho el 2026-10-18. El único cálculo de «último día hábil» de Cartera es el plazo especial del SICSES (`PlazoEspecialDelSicses.Limite`,
+    `lastBusinessDay`), que sólo saltaba sábado y domingo. Ahora recibe el `CalendarioHabil` que arma el lector existente de Cartera,
+    `ICalendarioHabil` (`CalendarioDeDiasHabiles`, los `FESTIVO` nacionales replicados —Ley 51, registrados por el maestro—, sábado y domingo
+    de descanso); no se duplicó ningún lector. Por la pregunta E5 ese lector **no** lee `PAY_Holidays` de Nómina (que tiene los festivos
+    «Manual» de cada cooperativa). Sin calendario se comporta como antes. Pruebas: `ExcluidosYPlazoDelSicsesTests.El_ultimo_dia_habil_descuenta_los_festivos`.
+- [X] T1096 Certificado tributario: (a) el anticipo ingresado en el año Y y aplicado a intereses en Y+1 aparece en el certificado del año Y
+  como renglón «anticipo recibido»; (b) la corrección monetaria UVR del año, en renglón aparte. PDF, DTO y manual
+  - Hecho el 2026-10-18. (a) `AnticiposDelCertificado` devuelve además `RecibidoPendiente`: lo que ingresó en el año y al 31 de diciembre sigue
+    en los lotes del anticipo sin aplicar —lo que se aplicará el año siguiente; al emitir el certificado de Y la reconstrucción va hasta el 31
+    de diciembre, así que el renglón es todo el anticipo pendiente que ingresó en Y, no sólo la parte que irá a intereses—. (b) La corrección
+    monetaria **causada** en el año sobre lo que se debe (filas `MonetaryCorrection`, sin anticipo ni saldo a favor), de una reconstrucción con
+    el libro desde el 1 de enero (o el desembolso) que sólo se hace en los créditos en UVR (`CreditoParaCertificar.ConLibroDelAño`). Ninguno de
+    los dos suma a los intereses pagados. `InteresesPagadosPorCredito.AnticipoRecibido`/`.CorreccionMonetaria`, totales en
+    `CertificadoTributarioArmado`, `CreditoCertificadoTributario` con dos campos opcionales, datos `advanceReceived`, `monetaryCorrection`,
+    `totalAdvanceReceived`, `totalMonetaryCorrection`; el PDF (`DocumentosDeCarteraReport`) pinta un renglón por crédito debajo de cada tabla,
+    sólo si no es cero. Pruebas: `CertificadoTributarioTests` (+3, Domain) y `DocumentosDeCarteraReportTests` (+1, sin correr: proyecto de
+    integración). Manual `cartera-documentos-al-deudor.md` §2b y §9; adaptadores §8.1; contabilidad.md §29 (lo abierto, resuelto). Sin migración.
+- [X] T1097 Requisitos de activación de Cartera en **todos los ambientes**: los que sólo bloqueaban en producción se exigen también fuera de
+  ella; código, pruebas, fixtures e2e (sin ejecutarlas) y runbook
+  - Hecho el 2026-10-18. `RequisitosDeActivacion`: `Annex1Current`, `UsuryForActiveLines`, `LendingRolesCreated`,
+    `OfficesLinkedToAccountingBranches` y `PayrollBridgeRuleResolved` faltan en cualquier ambiente (se retiró `DeProduccion`/`Dispensa`; el
+    estado `Waived` ya no se produce y queda sólo para leer activaciones anteriores); `ExpectedLossAvailable` de una obligada sin K6a falta
+    también fuera de producción (la activación ya no sella `ObligatoryModelUnavailable`); la adopción de `ProveedorDeObligaciones` y de
+    `OrdenDeGiroEmitida` se exige siempre. Lo único que distingue al ambiente: fuera de producción el recaudador y la tesorería pueden ser los
+    dobles `TST`/`TES` (son el Recaudo y la Tesorería de DEV y QA); en producción, nunca. Pruebas: `RequisitosDeActivacionTests` (reescritas
+    las de fuera de producción, +2), `ActivacionConPerdidaEsperadaTests` y la fixture `ActivacionConCarteraDePrueba.RequisitosDeLaPlataformaAsync`
+    (Anexo 1, roles y oficina vinculada). **Fixtures e2e** (escritas, compilan, sin correr): `CarteraE2E.RequisitosDeActivacionAsync` (réplica de
+    valores nacionales para el Anexo 1, los trece roles por `suggested-roles` y, si ya hay líneas activas, la regla `RecaudoPorAplicar`/`Payroll`
+    con su auxiliar `24101098`), llamada desde `ActivarCarteraAsync` y antes de activar en `MigracionYActivacionDeCarteraTests`,
+    `PerdidaEsperadaTests` (dos escenarios) y `ActivacionDeCarteraPerformanceTests`; `ContabilidadDeCarteraE2E.MatrizPorPlantillaAsync` ahora
+    mira las reglas de capital para saber si la matriz ya está y no reescribe la cuenta de una regla que ya venía. Pantalla `/cartera/activacion`
+    y `TextosDeMigracion` al día. Docs: runbook `cartera-puesta-en-marcha.md` §1, data-model §30.1, api.md §19.3. Sin migración. Riesgo para la
+    corrida final: si una cooperativa de las e2e se activa con líneas de una modalidad cuya usura no registró, ahora falla (antes se dispensaba).
+- [X] T1098 Las `reallocations` de un ajuste de Comercial (`CreditoAjustadoDesdeComercial`) se contabilizan igual que las de `PagoAplicado` y
+  `PagoReversado` (T1092) (pregunta 50 del dueño = A, DT §5 L16)
+  - Hecho el 2026-10-18. Cartera: `AjusteDesdeComercial` arma la reasignación con `EmisionDeCartera.ReasignacionesAsync` (lo que hacía
+    `AplicacionDePagos.ReasignacionesAsync`, que ahora delega en él: un solo armador para el pago, el reverso y el ajuste) y la pasa en
+    `AjusteComercialAEmitir.Reasignaciones`; el hecho la lleva en `reallocations` con el signo de la distribución. **Versión**: campo
+    **opcional y aditivo en la v1** (precedente `generalImpairment` de `ReversoDeCierre`; mensajes.md §17 anota la excepción): ausente es la lista
+    vacía, que es lo que significaba; nada de Cartera está en producción. Las filas `PaymentReallocation` ya llevaban el mensaje del ajuste.
+    Contabilidad: `ConstructorDeLineasDeCartera.AjusteDeComercial` llama a `Reasignaciones` (el molde de `PRN`) en el mismo `DS`, con las
+    dimensiones vigentes del hecho; `OperacionesDeCartera` suma a `CreditoAjustadoDesdeComercial` los roles de la reasignación (los de la cuota,
+    `IngresoPorRecuperacion`, las órdenes y sus contras, `Anticipo`, `SaldoAFavor`); la plantilla de la matriz no suma filas (los de saldo,
+    orden y pasivo van con hecho `*`). Pruebas: caso dorado 55 (devolución que redistribuye un pago posterior) y
+    `Un_ajuste_de_Comercial_sin_reallocations_se_lee_vacio_y_con_ellas_suma_solo_sus_lineas` (`ConstructorDeLineasDeCarteraTests`), y
+    `AjusteDeVentaQueRedistribuyePagosTests` (venta, pago real por el contrato y nota crédito con fecha anterior; las fábricas
+    `VentasACreditoDePrueba.Sobre`/`VersionDeVenta` y `PagosDePrueba.CrearAsync(causacion:)` lo permiten). Contratos: contabilidad.md §2.1,
+    §31 y §32 (nuevo), mensajes.md §10.3 y §17; manual `cartera-integracion-contable.md` §5. Sin migración.
+- Respuestas del dueño del 2026-10-18 a las preguntas 47–49 (DT §5 L13–L15), que confirman lo hecho: **47 = A**, el «último día hábil» descuenta
+  los festivos nacionales `FESTIVO` replicados vía `ICalendarioHabil` (T1095, sin `PAY_Holidays`); **48 = A**, el «anticipo recibido» del
+  certificado es lo que ingresó en el año y sigue pendiente al 31/12, y la corrección monetaria UVR es la **causada** en el año (T1096); **49 =
+  A**, la mora bajo el rango negativo va a las centrales con el código de su rango (en DataCrédito, la altura del rango 1) y sin marca negativa,
+  y ese código se coteja con cada central en T1011 (T1093).
+- Anotaciones del 2026-10-18, sin código (DT §5 L8–L12): **SOLIDO no tiene créditos en UVR** (la migración no los necesita y la plantilla de
+  créditos en UVR no tendrá datos reales); **un solo tope de vivienda**, sin distinguir VIS/no VIS (`TOPE_TASA_VIVIENDA` se queda como una
+  clave); **la UVR va sin tramos** (`Lending.Housing.UvrTranchesNotSupported` se queda); el diseño de `78926dd2` —el historial de mora faltante
+  **avisa al cargar y bloquea al activar**— queda **confirmado**; y **el pago que cambiaría de cancelar o no por la UVR corregida sigue a
+  soporte** (runbook `valores-nacionales.md` §3a). Con esto se cierran las preguntas «Para el dueño» de las notas de los bloques 1 y 2 de la
+  fase 23 (salvo T1057, el SICSES, y los valores y fuentes de los cinco límites).
+
 **Checkpoint**: cada entrega promovida con su evidencia; `CLAUDE.md`, índice y runbooks al día; COOFLOPAL en vivo
 sólo con Recaudo y Tesorería reales.
 

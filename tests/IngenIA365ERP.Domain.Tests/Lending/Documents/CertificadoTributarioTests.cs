@@ -216,6 +216,60 @@ public class CertificadoTributarioTests
         credito.InteresesConAnticipo.Should().Be(0m);
     }
 
+    // ------------------------------------------------- decisiones del dueño del 2026-10-18: anticipo recibido y corrección monetaria --
+
+    [Fact]
+    public void El_anticipo_recibido_en_el_año_y_pendiente_al_cierre_va_en_su_renglon_sin_sumar_a_los_intereses()
+    {
+        var alCierre = ConAnticipoDeDiciembre();
+        alCierre.Anticipo.Should().BeGreaterThan(0m, "le sobró anticipo al 31 de diciembre");
+
+        var c = CertificadoTributario.Armar(Año, [new CreditoParaCertificar("CR-1", "L", false, alCierre)]);
+        var credito = c.Creditos.Single();
+
+        credito.AnticipoRecibido.Should().Be(alCierre.Anticipo, "todo el anticipo pendiente ingresó en el año: se aplicará a intereses el siguiente");
+        credito.InteresesPagados.Should().Be(InteresDeAnticipos(alCierre, Año), "el renglón es informativo: no suma a los intereses pagados");
+        c.TotalAnticipoRecibido.Should().Be(alCierre.Anticipo);
+        c.Explicacion.Lineas.Should().Contain(l => l.Contains("anticipo recibido en 2027"));
+    }
+
+    [Fact]
+    public void El_anticipo_ingresado_el_año_anterior_va_en_el_certificado_de_ese_año_y_no_en_el_siguiente()
+    {
+        // El 20 de diciembre de 2026 paga la cuota vencida y deja anticipo, que se aplica a cuotas de 2027.
+        var entrada = Credito(new DateOnly(2026, 11, 15), Pago("A1", new DateOnly(2026, 12, 20), 400_000m, 10, PaymentModality.Advance));
+        var alCierreDe2026 = MotorDeCartera.Reconstruir(entrada, new DateOnly(2026, 12, 31));
+        alCierreDe2026.Anticipo.Should().BeGreaterThan(0m);
+
+        var de2026 = CertificadoTributario.Armar(2026, [new CreditoParaCertificar("CR-1", "L", false, alCierreDe2026)]).Creditos.Single();
+        var de2027 = CertificadoTributario.Armar(Año, [new CreditoParaCertificar("CR-1", "L", false, MotorDeCartera.Reconstruir(entrada, Cierre))]);
+
+        de2026.AnticipoRecibido.Should().Be(alCierreDe2026.Anticipo, "el certificado de 2026 muestra el anticipo recibido que se aplicará en 2027");
+        de2027.Todos.Sum(x => x.AnticipoRecibido).Should().Be(0m, "en 2027 no ingresó anticipo");
+        de2027.Todos.Sum(x => x.InteresesConAnticipo).Should().Be(0m, "y el interés que cubrió el de 2026 no cuenta en 2027");
+    }
+
+    [Fact]
+    public void La_correccion_monetaria_UVR_del_año_va_en_su_renglon_y_un_credito_en_pesos_no_la_tiene()
+    {
+        var serie = SerieDePrueba();
+        var entrada = Credito(new DateOnly(2027, 1, 15), Pago("P1", new DateOnly(2027, 2, 15), 160_000m, 10)) with { Uvr = serie };
+        var enUvr = MotorDeCartera.Reconstruir(entrada, Cierre);
+        var conLibroDelAño = MotorDeCartera.Reconstruir(entrada, Cierre, new DateOnly(2027, 1, 15));
+        var enPesos = MotorDeCartera.Reconstruir(Credito(new DateOnly(2027, 1, 15), Pago("P1", new DateOnly(2027, 2, 15), 160_000m, 10)), Cierre);
+        var esperada = conLibroDelAño.Libro.Movimientos.Where(m => m.Dia.Year == Año && m.Clase == LoanTransactionKind.MonetaryCorrection
+                                                          && m.Concepto is not (LoanConcept.Advance or LoanConcept.CreditBalance)).Sum(m => m.Monto);
+        esperada.Should().BeGreaterThan(0m, "la serie de prueba sube cada día");
+
+        var c = CertificadoTributario.Armar(Año,
+            [new CreditoParaCertificar("CR-V", "Vivienda UVR", true, enUvr) { ConLibroDelAño = conLibroDelAño }, new CreditoParaCertificar("CR-P", "L", false, enPesos)]);
+
+        c.Vivienda.Single().CorreccionMonetaria.Should().Be(esperada);
+        c.Vivienda.Single().InteresesPagados.Should().Be(InteresDe(enUvr, "P1"), "la corrección no suma a los intereses pagados");
+        c.Creditos.Single().CorreccionMonetaria.Should().Be(0m);
+        c.TotalCorreccionMonetaria.Should().Be(esperada);
+    }
+
     [Fact]
     public void De_una_cancelacion_que_usa_un_anticipo_del_año_anterior_se_resta_el_interes_que_cubrio_ese_anticipo()
     {

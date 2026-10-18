@@ -718,6 +718,20 @@ código de verificación; los permisos `Lending.*` los siembra la API al arranca
 Verde al cierre local: e2e en PostgreSQL y SQL Server (Lending 108 pasan y 7 omitidas de rendimiento; todo el proyecto 585 y
 16). Índice de recetas: `docs/manual/cartera.md`. Pendiente del dueño o de ambiente: cotejar layouts y Anexo 2, PI voluntaria,
 UVR y topes reales en la central, T1078–T1089 (QA, MAUI, despliegue).
+**Decisiones del dueño del 2026-10-18 (T1091–T1097, sin migración)**: el reparto de un pago se corrige con
+`PagoRedistribuidoPorValorNacional` (PRN) también en la corrida de una **usura** (el saldo a favor que deja un pago viaja
+ahí; mismo asiento neto que C93), y las `reallocations` de `PagoAplicado`/`PagoReversado` se asientan **en el comprobante
+del pago o del reverso** con el constructor de PRN (`contabilidad.md` §30–§31). En las centrales, la mora bajo el rango
+negativo de `Centrales.RangosDeMora` va **con sus días reales y sin marca negativa**. Plazos y periodicidades regulatorias
+son **informativos**: nada se bloquea por ellos; la evaluación de cartera fuera de periodicidad avisa
+(`PortfolioEvaluationOutsidePeriodicity`); cada cooperativa fija su periodicidad del SICSES con
+`Sicses.MesesDeCorte`/`Sicses.DiasDePlazo`, y el último día hábil descuenta los `FESTIVO` (`ICalendarioHabil`). El
+certificado tributario lleva en renglones aparte el **anticipo recibido** en el año y pendiente al 31/12 y la **corrección
+monetaria UVR** del año. Los **requisitos de la activación se exigen en todos los ambientes** (no hay `Waived`); fuera de
+producción sólo cuentan como recaudador y tesorería los dobles `TST`/`TES`, y las e2e los cumplen con
+`CarteraE2E.RequisitosDeActivacionAsync`. Confirmado: SOLIDO sin créditos en UVR, un solo tope de vivienda, UVR sin
+tramos, avisar al cargar y bloquear al activar el historial faltante (`78926dd2`); el pago que cambia de cancelar por la
+UVR sigue a soporte.
 Rutas `/api/accounting/lending/*`, `/api/accounting/regulatory-indicators`,
   `/api/lending/accounting/*` y `/api/lending/messages`; pantallas `/contabilidad/cartera/{matriz, tipos-de-comprobante,
   completitud, lotes, lotes/{id}}`, `/contabilidad/indicadores-regulatorios`, `/cartera/conciliacion-contable`, la

@@ -202,8 +202,10 @@ public sealed record ProyeccionDeCentral(
 /// (<c>PaymasterArrearsWithinThreshold</c>) o sin aviso previo <c>Complete</c> de su episodio desde su fecha más temprana
 /// (<c>NoPriorNoticeEvidence</c>, y la alerta <c>Cartera.AvisoPrevioSinConstancia</c>).</item>
 /// <item>Decisiones del dueño del 2026-10-16: la mora se reporta por los <b>rangos de su tipo de cartera</b> (<c>Centrales.RangosDeMora</c>, vigente al
-/// corte, por la modalidad de la posición): por debajo del rango negativo la obligación va al día —sin días, saldo ni cuotas en mora y sin exigir
-/// aviso—; desde él va en mora con su rango, y la altura reportada (el código de la novedad) sale del rango. El codeudor con dato negativo se reporta
+/// corte, por la modalidad de la posición): desde el rango negativo va en mora con su rango y dato negativo, y la altura reportada (el código de la
+/// novedad) sale del rango. Decisión del dueño del 2026-10-18: por debajo de él va <b>en mora con sus días reales</b> —días, saldo y cuotas en mora,
+/// su rango y su altura— pero <b>sin marca negativa</b>: no exige aviso previo ni la excluyen las causas del dato negativo (antes iba «al día», sin
+/// días, como si no debiera nada). El codeudor con dato negativo se reporta
 /// sólo con <c>AvisoPrevio.IncluirCodeudores</c> y <b>su</b> aviso completo; sin el parámetro queda fuera con <c>NoPriorNoticeEvidence</c> y sin
 /// alerta.</item>
 /// <item>Reclamo sobre el reporte en trámite (<c>LND_CreditReportClaims</c>): incluido con su marca.</item>
@@ -285,6 +287,7 @@ public sealed class ProyeccionCentralDeRiesgo(
 
             EstadoEnCentral estado;
             RangoDeMora? rango = null;
+            var negativo = false;
             var cerrado = CerradoEl(l);
             if (cerrado is { } c && c <= corte)
             {
@@ -295,14 +298,20 @@ public sealed class ProyeccionCentralDeRiesgo(
                 }
                 estado = EstadoEnCentral.Cancelada;
             }
-            else if (l.WrittenOffOn is { } castigo && castigo <= corte) estado = EstadoEnCentral.Castigada;
+            else if (l.WrittenOffOn is { } castigo && castigo <= corte)
+            {
+                estado = EstadoEnCentral.Castigada;
+                negativo = true;
+            }
             else if ((d.Posicion?.DaysPastDue ?? 0) > 0)
             {
-                // Decisión del dueño del 2026-10-16: la mora se reporta por el rango de su tipo de cartera; por debajo del rango negativo, al día.
+                // Decisión del dueño del 2026-10-16: la mora se reporta por el rango de su tipo de cartera. Decisión del 2026-10-18: por debajo del rango
+                // negativo va en mora con sus días reales y su rango, pero sin marca negativa (no «al día»).
                 var regla = rangos.Para(d.Posicion?.ModalityCode);
                 var dias = d.Posicion!.DaysPastDue;
                 rango = regla.RangoDe(dias);
-                estado = regla.EsNegativo(dias) ? EstadoEnCentral.EnMora : EstadoEnCentral.AlDia;
+                estado = EstadoEnCentral.EnMora;
+                negativo = regla.EsNegativo(dias);
             }
             else estado = EstadoEnCentral.AlDia;
 
@@ -310,13 +319,12 @@ public sealed class ProyeccionCentralDeRiesgo(
             {
                 var b = Base(l, d, personaId, esDeudor) with { Estado = estado };
                 if (estado == EstadoEnCentral.Cancelada) b = b with { SaldoTotal = 0m, SaldoEnMora = 0m, DiasDeMora = 0, CuotasEnMora = 0, FechaDelEstadoDeOrigen = cerrado };
-                if (estado == EstadoEnCentral.AlDia && b.DiasDeMora > 0) b = b with { SaldoEnMora = 0m, DiasDeMora = 0, CuotasEnMora = 0 };
                 borradores.Add(b with
                 {
-                    EsNegativo = estado is EstadoEnCentral.EnMora or EstadoEnCentral.Castigada,
+                    EsNegativo = negativo,
                     RangoDeMora = estado == EstadoEnCentral.EnMora ? rango?.Numero : null,
                     AlturaDeMora = estado == EstadoEnCentral.EnMora ? rango?.Etiqueta : null,
-                    InicioDelEpisodio = estado is EstadoEnCentral.EnMora or EstadoEnCentral.Castigada && d.Posicion is { DaysPastDue: > 0 } p
+                    InicioDelEpisodio = negativo && d.Posicion is { DaysPastDue: > 0 } p
                         ? p.PositionDate.AddDays(-p.DaysPastDue) : null,
                     RetiroSinAviso = retirosSinAviso.Contains((l.Id, personaId)),
                 });

@@ -85,6 +85,8 @@ public sealed class PerdidaEsperadaTests(CentralIdentityApiFixture fx)
         var deudores = new List<string>();
         foreach (var n in numeros) deudores.Add((await PersonaAsync(http, admin, $"Deudor{n[^1]}", "Obligada")).Documento);
         var carga = await CargaAsync(http, admin, corte, numeros.Select((n, i) => Credito(n, deudores[i], oficina, desembolso, 1_200_000m, 12)).ToList());
+        // Decisión del dueño del 2026-10-18: los requisitos de la activación se exigen en todos los ambientes.
+        await CarteraE2E.RequisitosDeActivacionAsync(fx, coop, corte);
         var punto = await CarteraE2E.ActaDeActivacionAsync(http, coop, carga, hoy);
         await AceptarDiferenciasAsync(http, admin, carga, punto);
 
@@ -188,6 +190,8 @@ public sealed class PerdidaEsperadaTests(CentralIdentityApiFixture fx)
         comercial[C.Linea] = LineaComercial;
         var consumo = Credito("EN-CON-01", deudorConsumo, oficina, corte.AddDays(-75), 1_200_000m, 12);
         var carga = await CargaAsync(http, admin, corte, [comercial, consumo]);
+        // Decisión del dueño del 2026-10-18: los requisitos de la activación se exigen en todos los ambientes.
+        await CarteraE2E.RequisitosDeActivacionAsync(fx, coop, corte);
         var puntoDeActivacion = await CarteraE2E.ActaDeActivacionAsync(http, coop, carga, hoy);
         await AceptarDiferenciasAsync(http, admin, carga, puntoDeActivacion);
         var activar = await ActivarAsync(http, admin, carga, hoy, puntoDeActivacion);

@@ -245,9 +245,12 @@ public sealed class AjusteDesdeComercial(
         if (sucursal.IsFailure) return await ventas.NoConvertibleAsync(m, recibo, sucursal.Error, linea, ct);
         var hecho = new HechoDeCredito(credito, cargado.Vigentes, linea, persona.PublicId, persona.IsEmployee, sucursal.Value, contable.Value);
         var anulacion = contenido.EsAnulacion;
+        // T1098 (decisión del dueño del 2026-10-18): los pagos posteriores que el ajuste redistribuye viajan en su hecho, como en un pago, y
+        // Contabilidad los asienta en el comprobante del ajuste (sus filas PaymentReallocation ya llevan este mensaje).
+        var reasignaciones = await emision.ReasignacionesAsync(efecto.Reasignaciones, ct);
         var emitidos = await emision.AjusteComercialAsync(new AjusteComercialAEmitir(hecho, operacion, desembolso, clase.ToString(), m.MessageId,
             EmisionDeCartera.Factura(m), EmisionDeCartera.Relacionado(m) ?? EmisionDeCartera.Factura(m), a.AccountsReceivableRecordedBy, efecto.Propias,
-            efecto.DeCausacion, anulacion, planNuevo, falla is not null, NacimientoDeObligacionDeVenta.UsuarioDeOrigen(m)), ct);
+            efecto.DeCausacion, anulacion, planNuevo, falla is not null, NacimientoDeObligacionDeVenta.UsuarioDeOrigen(m), reasignaciones), ct);
         if (emitidos.IsFailure) return await ventas.NoConvertibleAsync(m, recibo, emitidos.Error, linea, ct);
         var u = emitidos.Value;
         registro.RegistrarTransacciones(efecto.Propias.Select(f => RegistroDeCartera.FilaDeHecho(credito.Id, f, operacion, null, contable.Value,

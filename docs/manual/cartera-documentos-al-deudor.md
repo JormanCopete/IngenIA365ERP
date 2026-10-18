@@ -85,6 +85,14 @@ que la persona es **deudora** —sólo como deudora: las codeudas no se certific
 - **Saldo al 31 de diciembre**, con la información al emitir, de los conceptos que la cooperativa configure (§8): por defecto
   capital, intereses corrientes y de mora (con sus suspensos) y los demás cargos (seguros, gastos de cobranza, otros), menos el
   anticipo. Un concepto que no se incluye sale en cero en su columna.
+- **Anticipo recibido** (decisión del dueño del 2026-10-18), en un renglón aparte debajo de la tabla: el anticipo que **ingresó en el
+  año y al 31 de diciembre sigue sin aplicar** —el que se aplicará a intereses (y a lo demás de la cuota) el año siguiente—. Es
+  informativo y **no suma** a los intereses pagados: como ingresó en este año, el interés que cubra el año siguiente no contará en el
+  certificado de ese año (regla de arriba), y así el asociado ve en el de este año lo que pagó por adelantado. Sólo sale si no es cero;
+  los datos del documento lo guardan como `advanceReceived` (y el total, `totalAdvanceReceived`).
+- **Corrección monetaria UVR** (decisión del dueño del 2026-10-18), también en renglón aparte: en un crédito en UVR, la corrección
+  monetaria **causada en el año** sobre lo que se debe (capital, intereses y cargos; no el anticipo ni el saldo a favor). No suma a los
+  intereses pagados; en un crédito en pesos no sale. Datos: `monetaryCorrection` y `totalMonetaryCorrection`.
 
 Un crédito **cancelado en el año** aparece con saldo cero y sus intereses pagados; uno desembolsado **después** del año o cancelado
 **antes** no aparece. Los créditos de **vivienda** —los de segmento SARC `VIVIENDA` según el catálogo de modalidades vigente al 31
@@ -186,5 +194,5 @@ Por la API es `GET /api/lending/documents/verify/{código}?sha256={huella en hex
 
 - **K5** (fase 20): la vista de informe «documentos emitidos» del centro de informes de Cartera.
 - **K6b**: los créditos de vivienda con la Ley 546 y la UVR; la sección «Créditos de vivienda» del certificado tributario se llena
-  sola cuando existan.
+  sola cuando existan, con el renglón de la corrección monetaria UVR de cada crédito (2026-10-18).
 - La firma digital certificada del PDF no está en el alcance de la feature.

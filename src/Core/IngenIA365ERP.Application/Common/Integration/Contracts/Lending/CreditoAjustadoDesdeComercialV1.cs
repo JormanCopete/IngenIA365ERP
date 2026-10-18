@@ -57,4 +57,13 @@ public sealed record CreditoAjustadoDesdeComercialV1
 
     /// <summary>Una nota débito evaluada en contra marca el crédito (FR-052).</summary>
     public bool ValidationFailed { get; init; }
+
+    /// <summary>
+    /// Decisión del dueño del 2026-10-18 (T1098; mensajes.md §10.3; contabilidad.md §32): los pagos posteriores que el ajuste redistribuye
+    /// (FR-081), como en <see cref="PagoAplicadoV1.Reallocations"/>: con el signo de la distribución (después − antes), suma cero por pago.
+    /// Opcional y aditivo (como <c>generalImpairment</c> de <c>ReversoDeCierre</c>, §10.18): un mensaje emitido sin el campo se lee con la lista
+    /// vacía, que es lo que siempre significó. Contabilidad lo asienta en el comprobante del ajuste con el molde de
+    /// <c>PagoRedistribuidoPorValorNacional</c>.
+    /// </summary>
+    public IReadOnlyList<ReallocationV1> Reallocations { get; init; } = [];
 }

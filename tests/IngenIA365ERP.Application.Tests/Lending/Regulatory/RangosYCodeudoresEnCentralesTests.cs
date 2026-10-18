@@ -14,8 +14,9 @@ namespace IngenIA365ERP.Application.Tests.Lending.Regulatory;
 /// <summary>
 /// Decisiones del dueño del 2026-10-16 (feature 013, K5, US16) en la proyección de una central, al corte de diciembre de 2026:
 /// <list type="bullet">
-/// <item>el dato negativo sale de los <b>rangos de mora por tipo de cartera</b> (<c>Centrales.RangosDeMora</c>): por debajo del rango negativo la
-/// obligación se reporta al día, sin mora y sin exigir aviso; desde él, en mora con su rango, y la altura (el código de la novedad) sale del rango;</item>
+/// <item>el dato negativo sale de los <b>rangos de mora por tipo de cartera</b> (<c>Centrales.RangosDeMora</c>): desde el rango negativo, en mora con su
+/// rango y dato negativo, y la altura (el código de la novedad) sale del rango; por debajo de él (decisión del dueño del 2026-10-18), en mora con sus
+/// <b>días reales</b>, su rango y su altura, pero <b>sin marca negativa</b> y sin exigir aviso (antes iba al día, sin días);</item>
 /// <item>el codeudor se reporta con dato negativo sólo con <c>AvisoPrevio.IncluirCodeudores</c> y <b>su</b> aviso completo; sin el parámetro queda fuera
 /// con <c>NoPriorNoticeEvidence</c> y sin alerta.</item>
 /// </list>
@@ -90,7 +91,7 @@ public sealed class RangosYCodeudoresEnCentralesTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Por_debajo_del_rango_negativo_se_reporta_al_dia_sin_aviso_y_desde_el_en_mora()
+    public async Task Por_debajo_del_rango_negativo_se_reporta_con_sus_dias_reales_sin_marca_negativa_y_desde_el_con_dato_negativo()
     {
         await _r.E.ParametroAsync(ParametrosDeCartera.CentralesRangosDeMora, "*=30,60,90|2");
         var (leve, grave) = (Persona("Leve"), Persona("Grave"));
@@ -99,9 +100,12 @@ public sealed class RangosYCodeudoresEnCentralesTests : IAsyncLifetime
 
         var p = await ProyectarAsync();
 
-        Titular(p, a).Should().Match<TitularDeCentral>(t => t.Incluido && !t.EsNegativo && t.Estado == EstadoEnCentral.AlDia && t.DiasDeMora == 0
-                                                            && t.SaldoEnMora == 0m && t.CuotasEnMora == 0 && t.RangoDeMora == null && t.InicioDelEpisodio == null);
-        Novedad(p, "CR-RAN-0002").Should().Be("01");
+        Titular(p, a).Should().Match<TitularDeCentral>(t => t.Incluido && !t.EsNegativo && t.Estado == EstadoEnCentral.EnMora && t.DiasDeMora == 20
+                                                            && t.RangoDeMora == 1 && t.AlturaDeMora == "1-30" && t.AvisoPrevioId == null
+                                                            && t.InicioDelEpisodio == null && t.MotivoDeExclusion == null,
+            "decisión del dueño del 2026-10-18: en mora con sus días reales, sin marca negativa y sin exigir aviso; no «al día»");
+        Novedad(p, "CR-RAN-0002").Should().Be("06", "la altura del rango 1 en DataCrédito (por cotejar), no el código de «al día»");
+        p.Alertas.Should().NotContain(x => x.Subject.EndsWith("CR-RAN-0002"), "sin dato negativo no hay aviso que exigir");
         Titular(p, b).Should().Match<TitularDeCentral>(t => !t.Incluido && t.EsNegativo && t.RangoDeMora == 2
                                                             && t.MotivoDeExclusion == MotivosDeExclusionDeCentral.NoPriorNoticeEvidence);
         p.Alertas.Should().ContainSingle(x => x.TypeCode == TiposDeAlerta.AvisoPrevioSinConstancia && x.Subject.EndsWith("CR-RAN-0003"));
@@ -119,8 +123,9 @@ public sealed class RangosYCodeudoresEnCentralesTests : IAsyncLifetime
         var p = await ProyectarAsync();
 
         Titular(p, a).Should().Match<TitularDeCentral>(t => t.Incluido && t.Estado == EstadoEnCentral.EnMora && t.RangoDeMora == 2 && t.AlturaDeMora == "31-60");
-        Titular(p, b).Should().Match<TitularDeCentral>(t => t.Incluido && t.Estado == EstadoEnCentral.AlDia && !t.EsNegativo,
-            "en vivienda 45 días caen en el rango 1-60, que no es negativo");
+        Titular(p, b).Should().Match<TitularDeCentral>(t => t.Incluido && t.Estado == EstadoEnCentral.EnMora && !t.EsNegativo && t.DiasDeMora == 45
+                                                            && t.RangoDeMora == 1 && t.AlturaDeMora == "1-60",
+            "en vivienda 45 días caen en el rango 1-60, que no es negativo: van con sus días reales y sin marca negativa");
     }
 
     // ------------------------------------------------------------------------------------------------------ codeudores --

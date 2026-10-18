@@ -109,6 +109,29 @@ public sealed partial class EmisionDeCartera
     };
 
     /// <summary>
+    /// Los pagos que una operación redistribuye (FR-081), como <c>reallocations</c> de su hecho: cada uno con la referencia a su <c>PagoAplicado</c>
+    /// (sin <c>messageId</c> si no se encuentra) y la diferencia de su distribución por concepto, con el signo de la distribución (después − antes).
+    /// La usan el pago, el reverso y, desde la decisión del dueño del 2026-10-18 (T1098), el ajuste de Comercial (<c>CreditoAjustadoDesdeComercial</c>).
+    /// </summary>
+    public async Task<IReadOnlyList<ReallocationV1>> ReasignacionesAsync(IReadOnlyList<Payments.ReasignacionDePago> reasignaciones, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(reasignaciones);
+        if (reasignaciones.Count == 0) return [];
+        var ids = reasignaciones.Select(x => long.TryParse(x.OperacionId, out var n) ? n : 0L).Where(n => n != 0).ToList();
+        var operaciones = await db.LoanOperations.AsNoTracking().Where(o => ids.Contains(o.Id)).Select(o => new { o.Id, o.PublicId, o.Number }).ToListAsync(ct);
+        var salida = new List<ReallocationV1>();
+        foreach (var x in reasignaciones)
+        {
+            var op = operaciones.FirstOrDefault(o => Engine.CargadorDeReconstruccion.Id(o.Id) == x.OperacionId);
+            if (op is null) continue;
+            var original = await HechoOriginalAsync(op.PublicId, PagoAplicadoV1.Type, op.Number, ct)
+                ?? new OriginalFactRefV1 { Type = PagoAplicadoV1.Type, OriginPublicId = op.PublicId, Number = op.Number };
+            salida.Add(new ReallocationV1 { Payment = original, Amounts = Payments.ComprobantesDePago.Reasignacion(x.Antes, x.Despues) });
+        }
+        return salida;
+    }
+
+    /// <summary>
     /// <c>PagoAplicado</c> y sus acompañantes en la unidad de la operación (T0545; C01, C03; mensajes.md §7.2): <c>AnticipoRecibido</c>,
     /// <c>CobroDeInteresEnSuspenso</c>, <c>RecuperacionDeCastigada</c>, <c>SaldoAFavorReconocido</c> (<c>cause = NoPrepaymentPreference</c>) y
     /// <c>AjusteDeCausacionPorFechaValor</c> (<c>cause = ValueDatedOperation</c>) cuando corresponden, todos con el modo sellado del principal; origen

@@ -111,8 +111,10 @@ castigado y lo recuperado en el rango. Gestiones y último contacto llegan con l
    los criterios aplicados (JSON) y, por crédito, la categoría propuesta (A a E; E1 o E2 sólo en E) con su justificación. Cada
    crédito tiene que estar vivo al corte y en su alcance; la pantalla muestra junto a la propuesta la calificación por las
    reglas en el cierre al corte. Si el documento **Tipos de organización** dice la periodicidad del tipo de entidad
-   (`portfolioEvaluation { cutoffMonths, effectMonthsAfterCutoff }`, semestral o anual), el corte y el mes de efecto tienen
-   que ser los suyos (`Lending.PortfolioEvaluation.PeriodInvalid`). Otra evaluación sin aplicar del mismo corte se rechaza
+   (`portfolioEvaluation { cutoffMonths, effectMonthsAfterCutoff }`, semestral o anual) y el corte o el mes de efecto no son
+   los suyos, la evaluación **se prepara igual** con el aviso `PortfolioEvaluationOutsidePeriodicity` (decisión del dueño del
+   2026-10-18: las periodicidades regulatorias son informativas y la entidad decide según su calendario; antes se rechazaba
+   con `Lending.PortfolioEvaluation.PeriodInvalid`). Otra evaluación sin aplicar del mismo corte se rechaza
    (`Lending.PortfolioEvaluation.Overlaps`).
 2. **Recomendar**: en Actas, un punto **«Recomendación»** del **comité de riesgos** (hace falta uno activo:
    `Lending.PortfolioEvaluation.RiskCommitteeMissing`). Un punto «Decisión» del comité también la deja recomendada.

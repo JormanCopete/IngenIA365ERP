@@ -195,6 +195,34 @@ public class ConstructorDeLineasDeCarteraTests
         validacion.Errores.Should().BeEmpty($"{nombre}: lo que arma el constructor lo acepta el contrato de la 009");
     }
 
+    /// <summary>
+    /// T1098 (decisión del dueño del 2026-10-18; mensajes.md §10.3; contabilidad.md §32): <c>reallocations</c> de <c>CreditoAjustadoDesdeComercial</c>
+    /// es opcional y aditivo en la v1. Un ajuste emitido antes, sin el campo, se lee con la lista vacía y da el comprobante de siempre; el mismo
+    /// ajuste con la reasignación suma sólo sus líneas (las del molde de <c>PRN</c>, sin el puente del recaudo) y sigue cuadrando.
+    /// </summary>
+    [Fact]
+    public async Task Un_ajuste_de_Comercial_sin_reallocations_se_lee_vacio_y_con_ellas_suma_solo_sus_lineas()
+    {
+        var sin = EscenarioContableDeCartera.Caso("24-devolucion-desde-comercial-con-signo");
+        sin["mensajes"]![0]!["payload"]!.AsObject().ContainsKey("reallocations").Should().BeFalse("el caso es de un ajuste emitido antes de T1098");
+        var contenido = (CreditoAjustadoDesdeComercialV1)EscenarioContableDeCartera.Unidad(sin)[0].Payload!;
+        contenido.Reallocations.Should().BeEmpty();
+
+        var e = new EscenarioContableDeCartera();
+        var con = EscenarioContableDeCartera.Caso("55-devolucion-desde-comercial-que-redistribuye-un-pago-posterior");
+        var hechosSin = EscenarioContableDeCartera.Unidad(sin).Select(HechoDeCartera.De).ToList();
+        var hechosCon = EscenarioContableDeCartera.Unidad(con).Select(HechoDeCartera.De).ToList();
+        var catalogos = await CatalogosDeCartera.CargarAsync(e.D.Db, new ResolutorDeReglasDeCartera(e.D.Db), new TiposDeComprobanteDeCartera(e.D.Db),
+            [hechosSin, hechosCon], e.D.Clock.TodayUtc, default);
+        var a = ConstructorDeLineasDeCartera.Construir(hechosSin, catalogos).Request!;
+        var b = ConstructorDeLineasDeCartera.Construir(hechosCon, catalogos).Request!;
+
+        b.Lines.Should().HaveCount(a.Lines.Count + 2, "la reasignación de un pago con dos conceptos suma dos partidas sueltas");
+        (b.Lines.Sum(l => l.Debit) - a.Lines.Sum(l => l.Debit)).Should().Be(120m);
+        (b.Lines.Sum(l => l.Credit) - a.Lines.Sum(l => l.Credit)).Should().Be(120m, "lo recibido por el pago posterior no cambia: la reasignación cuadra sola");
+        b.VoucherTypeCode.Should().Be(a.VoucherTypeCode, "va en el mismo DS del ajuste, no en un comprobante aparte (C01)");
+    }
+
     /// <summary>La clase del recaudador del hecho principal (la del sobre del pago o la de sus dimensiones), para el mapeo <c>DN</c>.</summary>
     private static string? ClaseDelRecaudador(object? contenido) => contenido switch
     {

@@ -11,6 +11,13 @@ public sealed record AjustePorAnticipo(decimal CorrienteAplicado, decimal MoraAp
     public decimal Aplicado => CorrienteAplicado + MoraAplicado;
 
     public decimal Excluido => CorrienteExcluido + MoraExcluido;
+
+    /// <summary>
+    /// Decisión del dueño del 2026-10-18: el anticipo que <b>ingresó en el año</b> y al 31 de diciembre sigue sin aplicar —el que se aplicará a
+    /// intereses (y a lo demás de la cuota) el año siguiente—. El certificado del año lo muestra como renglón «anticipo recibido»; en el del año
+    /// siguiente el interés que cubra no cuenta, porque no ingresó en ese año.
+    /// </summary>
+    public decimal RecibidoPendiente { get; init; }
 }
 
 /// <summary>
@@ -110,7 +117,9 @@ public static class AnticiposDelCertificado
         }
 
         foreach (var e in eventos.OrderBy(e => e.Dia).ThenBy(e => e.Prioridad).ThenBy(e => e.Orden)) e.Hacer();
-        return new AjustePorAnticipo(corrienteAplicado, moraAplicado, corrienteExcluido, moraExcluido);
+        // Decisión del dueño del 2026-10-18: lo que ingresó en el año y quedó sin aplicar al cierre.
+        var pendiente = cubetas.Values.SelectMany(l => l).Where(l => l.Ingreso?.Year == año).Sum(l => l.Monto);
+        return new AjustePorAnticipo(corrienteAplicado, moraAplicado, corrienteExcluido, moraExcluido) { RecibidoPendiente = pendiente };
     }
 
     private static void Agregar(Dictionary<int, List<Lote>> cubetas, int? cuota, DateOnly? ingreso, decimal monto)

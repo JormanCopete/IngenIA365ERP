@@ -456,6 +456,8 @@ public static class ConstructorDeLineasDeCartera
                     Causacion(x.Dimensions, a, x.Loan, x.DebtorPersonPublicId, null);
                 }
             }
+            // T1098 (decisión del dueño del 2026-10-18; contabilidad.md §32): los pagos posteriores que el ajuste redistribuye, en su mismo comprobante.
+            Reasignaciones(x.Reallocations ?? [], x.Dimensions, x.Loan, x.DebtorPersonPublicId);
         }
 
         private void Causaciones(IReadOnlyList<LoanFactLineV1> lineas)
@@ -477,6 +479,7 @@ public static class ConstructorDeLineasDeCartera
                 var saldo = Saldo(x.Dimensions, a, x.Loan, x.DebtorPersonPublicId);
                 if (saldo is not null) Asentar(Recaudo(x.Dimensions, a, x.Loan, x.Collector.CollectorClass, x.Collector.PayerPersonPublicId), saldo, a.Amount);
             }
+            Reasignaciones(x.Reallocations, x.Dimensions, x.Loan, x.DebtorPersonPublicId);
         }
 
         private void PagoReversado(PagoReversadoV1 x)
@@ -500,6 +503,22 @@ public static class ConstructorDeLineasDeCartera
                     Asentar(saldo, recaudo, a.Amount);
                 }
             }
+            Reasignaciones(x.Reallocations, x.Dimensions, x.Loan, x.DebtorPersonPublicId);
+        }
+
+        /// <summary>
+        /// Decisión del dueño del 2026-10-18 (contabilidad.md §31): las <c>reallocations</c> de un <c>PagoAplicado</c> con fecha valor anterior o de
+        /// un <c>PagoReversado</c> —los pagos posteriores que cubren otra mezcla de conceptos— y, desde T1098 (§32), las de un
+        /// <c>CreditoAjustadoDesdeComercial</c> se asientan en el comprobante de la operación que las causó, con el mismo molde que <c>PagoRedistribuidoPorValorNacional</c> (<see cref="Redistribucion"/>): sin rol nuevo y sin el puente del
+        /// recaudo, porque lo recibido por esos pagos no cambia. Cada reasignación viene con el signo de la distribución (después − antes: positivo es
+        /// que el pago cubre más del concepto o deja más anticipo o saldo a favor); se pasa al signo del libro (lo que se debe, invertido; los pasivos
+        /// con el deudor, igual) y se asienta con las dimensiones vigentes del hecho, como el resto de su comprobante (§9).
+        /// </summary>
+        private void Reasignaciones(IReadOnlyList<ReallocationV1> reasignaciones, LoanFactDimensionsV1 d, LoanRefV1 credito, Guid deudor)
+        {
+            foreach (var r in reasignaciones)
+                foreach (var a in r.Amounts)
+                    Redistribucion(d, a with { Amount = EsPasivoConElDeudor(a.Concept) ? a.Amount : -a.Amount }, credito, deudor);
         }
 
         private void AnticipoRecibido(AnticipoRecibidoV1 x)
@@ -757,7 +776,8 @@ public static class ConstructorDeLineasDeCartera
         /// día valor, con el signo del libro. Lo que se debe: positivo = el pago lo cubre de menos, vuelve al débito de su rol de saldo; el anticipo y
         /// el saldo a favor: positivo = el pago deja más, al crédito. El suspenso cobrado va por su ingreso (como en <c>CobroDeInteresEnSuspenso</c>)
         /// y su orden; en un castigado, por el ingreso de la recuperación y la castigada en orden. Las partidas sueltas cuadran entre los conceptos
-        /// del mismo pago (lo recibido no cambia); las de orden, por pares.
+        /// del mismo pago (lo recibido no cambia); las de orden, por pares. Desde la decisión del dueño del 2026-10-18 lo usan también la corrección
+        /// de una usura y las <c>reallocations</c> de un pago o un reverso (<see cref="Reasignaciones"/>).
         /// </summary>
         private void Redistribucion(LoanFactDimensionsV1 d, ConceptAmountV1 a, LoanRefV1 credito, Guid deudor)
         {
@@ -907,6 +927,9 @@ public static class ConstructorDeLineasDeCartera
     }
 
     private static bool EsSuspenso(string concepto) => concepto is R.CurrentInterestInSuspense or R.DefaultInterestInSuspense;
+
+    /// <summary>El anticipo y el saldo a favor: los pasivos con el deudor, que en el libro y en una reasignación crecen con el mismo signo.</summary>
+    private static bool EsPasivoConElDeudor(string concepto) => concepto is R.Advance or R.CreditBalance;
 
     private static string? Texto(string? texto) => string.IsNullOrWhiteSpace(texto) ? null : texto.Trim();
 

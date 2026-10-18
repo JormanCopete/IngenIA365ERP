@@ -15,7 +15,12 @@ créditos, sus saldos iniciales, el cierre base y todo lo del deudor **nacen al 
 ## 1. Lo que debe existir antes
 
 Nada de esto tiene plantilla de la carga (plantillas.md §0.2). La pantalla `/cartera/activacion` lista cada requisito con su estado y
-quién lo arregla; en producción, lo que falta **bloquea**; fuera de producción algunos aparecen como «falta (no bloquea)».
+quién lo arregla; lo que falta **bloquea en todos los ambientes** (decisión del dueño del 2026-10-18: hasta esa fecha, fuera de producción
+el Anexo 1, la usura, los roles, las oficinas, la regla del recaudo por nómina, la pérdida esperada de una obligada y la adopción de los
+contratos aparecían como «falta (no bloquea)»). Lo único que distingue a DEV y QA es que allí el recaudador y la tesorería pueden ser los
+dobles de prueba `TST` y `TES`, registrados con la adopción de `ProveedorDeObligaciones` y de `OrdenDeGiroEmitida`; en producción, nunca.
+Un ensayo en DEV o QA, entonces, prepara lo mismo que producción: valores nacionales replicados (con el Anexo 1), roles, oficinas
+vinculadas y la regla del recaudo por nómina si hay líneas activas.
 
 | Qué | Dónde | Por qué |
 |---|---|---|
@@ -32,7 +37,7 @@ quién lo arregla; en producción, lo que falta **bloquea**; fuera de producció
 | La regla `RecaudoPorAplicar` con clase de recaudador `Payroll` | Matriz contable | `PayrollBridgeRuleResolved` |
 | `DESC_CARTERA` con cuentas en Nómina | `/nomina/conceptos` | Aviso `PayrollConceptAccounts`; la pantalla de activación lo pregunta a Nómina |
 | Patrimonio técnico vigente | `/contabilidad/indicadores-regulatorios` (`ACC_RegulatoryIndicators`) | Sin él, el límite de concentración bloquea desembolsos y cupos |
-| **Recaudo y Tesorería reales** registrados | `/admin/participantes-de-integracion` | En producción, `ReceiptsCollectorRegistered` y `TreasuryDestinationRegistered` sin dobles de prueba |
+| **Recaudo y Tesorería reales** registrados (en DEV y QA, los dobles `TST` y `TES`) con la adopción de su contrato | `/admin/participantes-de-integracion` | `ReceiptsCollectorRegistered` y `TreasuryDestinationRegistered` en todos los ambientes; en producción sin dobles de prueba |
 
 Comprobación del registro de participantes (PostgreSQL / SQL Server):
 

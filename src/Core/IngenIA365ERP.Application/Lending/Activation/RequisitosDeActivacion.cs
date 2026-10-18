@@ -31,19 +31,20 @@ namespace IngenIA365ERP.Application.Lending.Activation;
 /// <b>no limita</b> (decisión del dueño, 2026-10-14): el requisito queda <c>NotApplicable</c> y sale el aviso <c>AccountingMonthClosed</c>, porque lo
 /// que emite la activación toma su fecha contable por <c>FechaContable</c>, que la lleva al primer mes abierto;</item>
 /// <item><c>ReceiptsCollectorRegistered</c> y <c>TreasuryDestinationRegistered</c>: un recaudador <c>Receipts</c> y un destino <c>Treasury</c> que
-/// cuentan en el registro —en producción, reales y con la adopción vigente de <c>ProveedorDeObligaciones</c> y de <c>OrdenDeGiroEmitida</c>—; fuera de producción también los dobles <c>Test</c>
-/// (<c>TST</c>, <c>TES</c>); en producción un doble nunca cuenta;</item>
+/// cuentan en el registro, con la adopción vigente de <c>ProveedorDeObligaciones</c> y de <c>OrdenDeGiroEmitida</c> <b>en todos los ambientes</b>
+/// (decisión del dueño del 2026-10-18); fuera de producción el recaudador y la tesorería pueden ser los dobles <c>Test</c> (<c>TST</c>, <c>TES</c>),
+/// que son los de esos ambientes; en producción un doble nunca cuenta;</item>
 /// <item><c>ExpectedLossAvailable</c>: la cooperativa obligada a la pérdida esperada a la fecha de activación —o desde una fecha posterior, por un
-/// perfil regulatorio ya registrado— necesita la entrega que la trae (K6a); fuera de producción no bloquea y la activación sella
-/// <c>ObligatoryModelUnavailable</c> (FR-105). <c>ExpectedLossParameters</c> y <c>ArrearsHistoryComplete</c> sólo aplican donde esa entrega está
-/// desplegada;</item>
-/// <item><b>en producción</b> (data-model §30.1): <c>Annex1Current</c> (el Anexo 1 vigente a la fecha de activación), <c>UsuryForActiveLines</c> (la
+/// perfil regulatorio ya registrado— necesita la entrega que la trae (K6a), en todos los ambientes (decisión del dueño del 2026-10-18: antes fuera
+/// de producción se activaba con la marca <c>ObligatoryModelUnavailable</c>, que la activación ya no sella). <c>ExpectedLossParameters</c> y
+/// <c>ArrearsHistoryComplete</c> sólo aplican donde esa entrega está desplegada;</item>
+/// <item><b>en todos los ambientes</b> (data-model §30.1; decisión del dueño del 2026-10-18: hasta esa fecha sólo bloqueaban en producción y fuera de
+/// ella quedaban <c>Waived</c>): <c>Annex1Current</c> (el Anexo 1 vigente a la fecha de activación), <c>UsuryForActiveLines</c> (la
 /// usura certificada de la modalidad de cada línea activa a esa fecha, <see cref="IValoresNacionales.LeerSerieAsync"/>, sin alertar),
 /// <c>LendingRolesCreated</c> (el rol de cada plantilla <c>cartera.*</c> de <see cref="PerfilesSugeridos"/>, por su código; notas de coordinación,
 /// contradicción 13), <c>OfficesLinkedToAccountingBranches</c> (toda oficina con créditos en la carga vinculada a una sucursal contable) y
 /// <c>PayrollBridgeRuleResolved</c> (la regla <c>RecaudoPorAplicar</c> de la clase <c>Payroll</c>, preguntada a
-/// <see cref="IContabilidadParaCartera.EvaluarAsync"/> con un <c>PagoAplicado</c> de nómina). Fuera de producción se evalúan igual y lo que falte
-/// queda <c>Waived</c>: no bloquea.</item>
+/// <see cref="IContabilidadParaCartera.EvaluarAsync"/> con un <c>PagoAplicado</c> de nómina). Lo que falte bloquea en cualquier ambiente.</item>
 /// </list>
 /// Avisos que no bloquean: <c>CommercialParametersToAdjust</c>, <c>PayrollConceptAccounts</c> (lo pregunta la pantalla a Nómina; el comando no lee
 /// <c>PAY_</c>), <c>UsersWithoutScope</c> y, desde el bloque D de K3, lo de la norma pendiente de validar (<c>WriteOffReportTermPending</c>,
@@ -148,7 +149,7 @@ public sealed class RequisitosDeActivacion(
         var participantes = await registro.QueCuentanAsync(fechaDeActivacion, ct);
         var recaudador = participantes.Any(p => p.Role == IntegrationParticipantRole.ObligationsCollector
             && (p.Class == IntegrationParticipantClass.Receipts || (!ambiente.EsProduccion && p.Class == IntegrationParticipantClass.Test))
-            && (!ambiente.EsProduccion || p.Adopciones.Any(a => a.Contrato == ContratosDeIntegracion.ProveedorDeObligaciones)));
+            && p.Adopciones.Any(a => a.Contrato == ContratosDeIntegracion.ProveedorDeObligaciones));
         requisitos.Add(recaudador
             ? Cumple(RecaudadorRegistrado, "Hay un recaudador de Recaudo en el registro.")
             : Falta(RecaudadorRegistrado, "registrar el recaudador de Recaudo en el registro de integración", "Core",
@@ -156,7 +157,7 @@ public sealed class RequisitosDeActivacion(
 
         var tesoreria = await registro.DestinoAsync(IntegrationDestinations.Treasury, fechaDeActivacion, ct);
         requisitos.Add(tesoreria is not null
-                       && (!ambiente.EsProduccion || (!tesoreria.IsTestDouble && tesoreria.Adopciones.Any(a => a.Contrato == OrdenDeGiroEmitidaV1.Type)))
+                       && (!ambiente.EsProduccion || !tesoreria.IsTestDouble) && tesoreria.Adopciones.Any(a => a.Contrato == OrdenDeGiroEmitidaV1.Type)
             ? Cumple(TesoreriaRegistrada, "Hay un destino de Tesorería en el registro.")
             : Falta(TesoreriaRegistrada, "registrar el destino de Tesorería en el registro de integración", "Core",
                 "/admin/participantes-de-integracion", "Core.IntegrationParticipants.Manage"));
@@ -200,10 +201,8 @@ public sealed class RequisitosDeActivacion(
             return (Cumple(PerdidaEsperadaDisponible, "La entrega desplegada trae la pérdida esperada."), false);
 
         var cuando = desde is { } d ? string.Create(CultureInfo.InvariantCulture, $" desde el {d:yyyy-MM-dd}") : string.Empty;
-        return ambiente.EsProduccion
-            ? (Falta(PerdidaEsperadaDisponible, $"desplegar la entrega de pérdida esperada: la cooperativa está obligada{cuando}", "Plataforma", null, null), false)
-            : (Dispensa(PerdidaEsperadaDisponible, $"La cooperativa está obligada a la pérdida esperada{cuando} y esta entrega no la trae: fuera de producción se activa con la marca «modelo obligatorio no disponible».",
-                "Plataforma", null, null), true);
+        // Decisión del dueño del 2026-10-18: en todos los ambientes (antes, fuera de producción se activaba con la marca «modelo obligatorio no disponible»).
+        return (Falta(PerdidaEsperadaDisponible, $"desplegar la entrega de pérdida esperada: la cooperativa está obligada{cuando}", "Plataforma", null, null), false);
     }
 
     /// <summary>
@@ -295,7 +294,7 @@ public sealed class RequisitosDeActivacion(
     private static bool Obligada(ReglaDePerdidaEsperada regla, PerfilRegulatorioDto? perfil) =>
         perfil is not null && regla.Obliga(perfil.OrganizationTypeCode, perfil.EmployeeFundCategory);
 
-    // ------------------------------------------------------------------------------------------------------- producción --
+    // ------------------------------------------------- los que hasta el 2026-10-18 sólo exigía producción (hoy, todos los ambientes) --
 
     private async Task<RequisitoDeActivacionDto> Anexo1Async(DateOnly fecha, CancellationToken ct)
     {
@@ -303,7 +302,7 @@ public sealed class RequisitosDeActivacion(
         var anexo = await normativa.LeerAsync(RegulatoryDocumentKind.SarcAnexo1, fecha, Anexo1.Leer, ct: ct);
         return anexo.IsSuccess
             ? Cumple(Anexo1Vigente, string.Create(CultureInfo.InvariantCulture, $"El Anexo 1 vigente rige desde el {anexo.Value.ValidFrom:yyyy-MM-dd}."))
-            : DeProduccion(Anexo1Vigente, "el Anexo 1 vigente a la fecha de activación en los documentos normativos", "Plataforma", null, null);
+            : Falta(Anexo1Vigente, "el Anexo 1 vigente a la fecha de activación en los documentos normativos", "Plataforma", null, null);
     }
 
     private async Task<RequisitoDeActivacionDto> UsuraAsync(DateOnly fecha, CancellationToken ct)
@@ -330,7 +329,7 @@ public sealed class RequisitosDeActivacion(
         }
         return faltan.Count == 0
             ? Cumple(UsuraDeLineasActivas, "Cada línea activa tiene la usura certificada de su modalidad a la fecha de activación.")
-            : DeProduccion(UsuraDeLineasActivas, $"la usura certificada de la modalidad de las líneas {string.Join(", ", faltan)} a la fecha de activación",
+            : Falta(UsuraDeLineasActivas, $"la usura certificada de la modalidad de las líneas {string.Join(", ", faltan)} a la fecha de activación",
                 "Plataforma", "/cartera/lineas", "Lending.CreditLines.View");
     }
 
@@ -343,7 +342,7 @@ public sealed class RequisitosDeActivacion(
         var faltan = esperados.Except(existentes, StringComparer.OrdinalIgnoreCase).ToList();
         return faltan.Count == 0
             ? Cumple(RolesDeCarteraCreados, "Están creados los roles de Cartera de las plantillas.")
-            : DeProduccion(RolesDeCarteraCreados, $"crear los roles de Cartera desde sus plantillas (faltan {faltan.Count})", "Seguridad",
+            : Falta(RolesDeCarteraCreados, $"crear los roles de Cartera desde sus plantillas (faltan {faltan.Count})", "Seguridad",
                 "/cartera/activacion", "Security.Roles.Create");
     }
 
@@ -361,7 +360,7 @@ public sealed class RequisitosDeActivacion(
         var faltan = oficinas.Except(vinculadas).Count();
         return faltan == 0
             ? Cumple(OficinasVinculadas, "Toda oficina con créditos en la carga está vinculada a una sucursal contable.")
-            : DeProduccion(OficinasVinculadas, $"vincular a una sucursal contable las {faltan} oficinas con créditos en la carga", "Contabilidad",
+            : Falta(OficinasVinculadas, $"vincular a una sucursal contable las {faltan} oficinas con créditos en la carga", "Contabilidad",
                 "/maestros/agencias", "Core.Branches.Manage");
     }
 
@@ -393,7 +392,7 @@ public sealed class RequisitosDeActivacion(
         var resuelta = evaluado.IsSuccess && !evaluado.Value.Errors.Any(e => string.Equals(e.Role, ReglaDelPuente, StringComparison.Ordinal));
         return resuelta
             ? Cumple(PuenteDeNominaResuelto, "La regla del recaudo por nómina para Cartera está resuelta en Contabilidad.")
-            : DeProduccion(PuenteDeNominaResuelto, "la regla «recaudo por aplicar» de la clase nómina en la matriz contable de Cartera", "Contabilidad",
+            : Falta(PuenteDeNominaResuelto, "la regla «recaudo por aplicar» de la clase nómina en la matriz contable de Cartera", "Contabilidad",
                 "/contabilidad/cartera/matriz", "Accounting.LendingRules.Manage");
     }
 
@@ -441,12 +440,6 @@ public sealed class RequisitosDeActivacion(
     private static RequisitoDeActivacionDto Falta(string codigo, string detalle, string modulo, string? pagina, string? permiso) =>
         new(codigo, false, detalle, new QuienCorrigeDto(modulo, pagina, permiso), EstadosDeRequisito.Missing);
 
-    private static RequisitoDeActivacionDto Dispensa(string codigo, string detalle, string modulo, string? pagina, string? permiso) =>
-        new(codigo, true, detalle, new QuienCorrigeDto(modulo, pagina, permiso), EstadosDeRequisito.Waived);
-
-    /// <summary>Un requisito de producción que falta: en producción bloquea; fuera de ella queda dispensado con lo que falta.</summary>
-    private RequisitoDeActivacionDto DeProduccion(string codigo, string detalle, string modulo, string? pagina, string? permiso) =>
-        ambiente.EsProduccion ? Falta(codigo, detalle, modulo, pagina, permiso) : Dispensa(codigo, $"Falta {detalle} (fuera de producción no bloquea).", modulo, pagina, permiso);
 }
 
 /// <summary>Los estados de un requisito de la activación (api.md §19.3). (nuevo)</summary>
@@ -456,7 +449,10 @@ public static class EstadosDeRequisito
     public const string Missing = "Missing";
     public const string NotApplicable = "NotApplicable";
 
-    /// <summary>Falta, pero fuera de producción no bloquea.</summary>
+    /// <summary>
+    /// Falta, pero fuera de producción no bloqueaba. Decisión del dueño del 2026-10-18: los requisitos se exigen en todos los ambientes y la evaluación
+    /// ya no lo produce; queda para leer las activaciones registradas antes (<c>LND_Activations.RequirementsJson</c>).
+    /// </summary>
     public const string Waived = "Waived";
 }
 

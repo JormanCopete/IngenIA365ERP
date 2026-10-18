@@ -7,7 +7,14 @@ namespace IngenIA365ERP.Domain.Lending.Documents;
 /// Un crédito de la persona que el certificado tributario mira: su número, su línea, si su segmento SARC es <c>VIVIENDA</c> según el catálogo de
 /// modalidades vigente al 31 de diciembre y su estado reconstruido a ese día con R = la emisión (nulo si el crédito todavía no existía). (nuevo)
 /// </summary>
-public sealed record CreditoParaCertificar(string Numero, string Linea, bool EsVivienda, EstadoDelCredito? AlCierre);
+public sealed record CreditoParaCertificar(string Numero, string Linea, bool EsVivienda, EstadoDelCredito? AlCierre)
+{
+    /// <summary>
+    /// Decisión del dueño del 2026-10-18: en un crédito en UVR, la misma reconstrucción al 31 de diciembre con el libro desde el 1 de enero (o el
+    /// desembolso), de la que sale la corrección monetaria causada en el año; nula en un crédito en pesos (su corrección es cero).
+    /// </summary>
+    public EstadoDelCredito? ConLibroDelAño { get; init; }
+}
 
 /// <summary>
 /// Lo que el certificado dice de un crédito: los intereses efectivamente pagados en el año —corrientes y de mora, incluidos los que estaban en
@@ -31,6 +38,19 @@ public sealed record InteresesPagadosPorCredito(
     /// <summary>De <see cref="InteresesPagados"/>, lo que cubrió el anticipo ingresado en el año al aplicarse a una cuota (2026-10-16).</summary>
     public decimal InteresesConAnticipo { get; init; }
 
+    /// <summary>
+    /// Renglón «anticipo recibido» (decisión del dueño del 2026-10-18): el anticipo que ingresó en el año y al 31 de diciembre sigue sin aplicar; se
+    /// aplicará a intereses el año siguiente y en ese certificado no cuenta (<see cref="AjustePorAnticipo.RecibidoPendiente"/>). Informativo: no
+    /// suma a los intereses pagados.
+    /// </summary>
+    public decimal AnticipoRecibido { get; init; }
+
+    /// <summary>
+    /// Renglón aparte (decisión del dueño del 2026-10-18): la corrección monetaria UVR causada en el año sobre lo que se debe (filas
+    /// <c>MonetaryCorrection</c> con día en el año, sin el anticipo ni el saldo a favor); cero en un crédito en pesos. No suma a los intereses pagados.
+    /// </summary>
+    public decimal CorreccionMonetaria { get; init; }
+
     public decimal SaldoTotal => SaldoDeCapital + SaldoDeIntereses + SaldoDeOtros;
 }
 
@@ -49,6 +69,12 @@ public sealed record CertificadoTributarioArmado(
 
     public decimal TotalSaldo => Todos.Sum(c => c.SaldoTotal);
 
+    /// <summary>El anticipo recibido en el año y pendiente de aplicar al 31 de diciembre, de todos los créditos (2026-10-18).</summary>
+    public decimal TotalAnticipoRecibido => Todos.Sum(c => c.AnticipoRecibido);
+
+    /// <summary>La corrección monetaria UVR causada en el año, de todos los créditos (2026-10-18).</summary>
+    public decimal TotalCorreccionMonetaria => Todos.Sum(c => c.CorreccionMonetaria);
+
     public bool Vacio => Creditos.Count == 0 && Vivienda.Count == 0;
 }
 
@@ -65,6 +91,9 @@ public sealed record CertificadoTributarioArmado(
 /// <see cref="AnticiposDelCertificado"/>;</item>
 /// <item>el <b>saldo al 31 de diciembre</b> con R = la emisión: los conceptos que diga <see cref="ConceptosDelSaldoCertificado"/> (parámetro
 /// <c>Documentos.CertificadoTributario.SaldoIncluye</c>); el defecto, todos: capital, intereses y lo demás cobrable, menos el anticipo.</item>
+/// <item>decisiones del dueño del 2026-10-18, dos renglones informativos que no suman a los intereses: el <b>anticipo recibido</b> en el año y
+/// pendiente de aplicar al 31 de diciembre (el que se aplicará a intereses el año siguiente) y la <b>corrección monetaria UVR</b> causada en el
+/// año.</item>
 /// </list>
 /// Sólo los créditos donde la persona es <b>deudora</b> (confirmado por el dueño el 2026-10-16): las codeudas no se certifican.
 /// Los de segmento SARC <c>VIVIENDA</c> van en otra sección (vacía hasta K6b). Un crédito cancelado en el año aparece con saldo cero; uno que no
@@ -111,6 +140,9 @@ public static class CertificadoTributario
             var corrientes = Corrientes.Sum(x => estado.Saldo(x));
             var deMora = DeMora.Sum(x => estado.Saldo(x));
             var otros = Otros.Sum(x => estado.Saldo(x));
+            var correccion = (c.ConLibroDelAño ?? estado).Libro.Movimientos
+                .Where(m => m.Dia.Year == año && m.Clase == LoanTransactionKind.MonetaryCorrection && !LibroTeorico.EsPasivoConElDeudor(m.Concepto))
+                .Sum(m => m.Monto);
             var conMovimiento = delAño.Count > 0 || origen.Year == año;
             if (!conMovimiento && capital == 0m && corrientes + deMora == 0m && otros - estado.Anticipo == 0m) continue;
 
@@ -121,7 +153,7 @@ public static class CertificadoTributario
                              - (Incluye(saldoIncluye, ConceptosDelSaldoCertificado.MenosAnticipo) ? estado.Anticipo : 0m);
             lista.Add(new InteresesPagadosPorCredito(c.Numero, c.Linea, c.EsVivienda, corriente, mora, saldoCapital, saldoIntereses, saldoOtros)
             {
-                InteresesConAnticipo = anticipo.Aplicado,
+                InteresesConAnticipo = anticipo.Aplicado, AnticipoRecibido = anticipo.RecibidoPendiente, CorreccionMonetaria = correccion,
             });
             explicacion.Linea($"{c.Numero}: intereses corrientes {ExplicacionDeCartera.Numero(corriente)}, de mora {ExplicacionDeCartera.Numero(mora)}; " +
                               $"saldo {ExplicacionDeCartera.Numero(saldoCapital + saldoIntereses + saldoOtros)}{(c.EsVivienda ? " (vivienda)" : string.Empty)}.");
@@ -129,6 +161,11 @@ public static class CertificadoTributario
                 explicacion.Linea($"{c.Numero}: {ExplicacionDeCartera.Numero(anticipo.Aplicado)} de intereses los cubrió un anticipo ingresado en {año}.");
             if (anticipo.Excluido != 0m)
                 explicacion.Linea($"{c.Numero}: {ExplicacionDeCartera.Numero(anticipo.Excluido)} de intereses pagados con un anticipo ingresado antes de {año} no cuentan.");
+            if (anticipo.RecibidoPendiente != 0m)
+                explicacion.Linea($"{c.Numero}: anticipo recibido en {año} y pendiente de aplicar al {ExplicacionDeCartera.Fecha(cierre)}: " +
+                                  $"{ExplicacionDeCartera.Numero(anticipo.RecibidoPendiente)} (se aplicará el año siguiente; no suma a los intereses).");
+            if (correccion != 0m)
+                explicacion.Linea($"{c.Numero}: corrección monetaria UVR causada en {año}: {ExplicacionDeCartera.Numero(correccion)}.");
         }
         var ordenados = lista.OrderBy(c => c.Numero, StringComparer.Ordinal).ToList();
         return new CertificadoTributarioArmado(año, ordenados.Where(c => !c.EsVivienda).ToList(), ordenados.Where(c => c.EsVivienda).ToList(), explicacion);

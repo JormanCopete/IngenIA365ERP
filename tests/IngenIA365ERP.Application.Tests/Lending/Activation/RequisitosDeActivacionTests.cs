@@ -27,10 +27,10 @@ namespace IngenIA365ERP.Application.Tests.Lending.Activation;
 
 /// <summary>
 /// Feature 013, US8, T0723 (FR-142, T84; api.md §19.3 <c>ActivationReadinessDto</c>; data-model §30.1): cada requisito de la activación con su estado y
-/// quién lo arregla, en producción y fuera de ella (<see cref="IAmbienteDeDespliegue"/> doble en los dos valores). Fuera de producción los dobles de
-/// Recaudo y Tesorería cuentan, la falta de la pérdida esperada de una obligada no bloquea (marca <c>ObligatoryModelUnavailable</c>) y los requisitos de
-/// producción que faltan quedan <c>Waived</c>; en producción bloquean. Los avisos no bloquean. InMemory con la normativa, la usura y el perfil reales
-/// (sus lectores únicos) y Contabilidad y el registro de integración dobles. (nuevo)
+/// quién lo arregla, en producción y fuera de ella (<see cref="IAmbienteDeDespliegue"/> doble en los dos valores). Decisión del dueño del 2026-10-18:
+/// todos los requisitos se exigen en todos los ambientes (hasta esa fecha, fuera de producción los de producción quedaban <c>Waived</c>); lo único que
+/// distingue al ambiente es que fuera de producción los dobles de Recaudo y Tesorería —con su adopción— son los de ese ambiente y cuentan. Los avisos
+/// no bloquean. InMemory con la normativa, la usura y el perfil reales (sus lectores únicos) y Contabilidad y el registro de integración dobles. (nuevo)
 /// </summary>
 public sealed class RequisitosDeActivacionTests : IAsyncLifetime
 {
@@ -160,11 +160,13 @@ public sealed class RequisitosDeActivacionTests : IAsyncLifetime
         Db.ChangeTracker.Clear();
     }
 
-    /// <summary>Todo lo de producción en su sitio: Recaudo y Tesorería reales, el Anexo 1, los roles y una línea con la usura del día.</summary>
-    private async Task TodoListoParaProduccionAsync()
+    /// <summary>
+    /// Todo en su sitio: Recaudo y Tesorería —reales en producción, los dobles fuera de ella—, el Anexo 1, los roles y una línea con la usura del día.
+    /// </summary>
+    private async Task TodoListoParaProduccionAsync(bool conDobles = false)
     {
-        Recaudador(IntegrationParticipantClass.Receipts);
-        Tesoreria(doble: false);
+        Recaudador(conDobles ? IntegrationParticipantClass.Test : IntegrationParticipantClass.Receipts);
+        Tesoreria(doble: conDobles);
         await AnexoAsync();
         await RolesAsync();
         await _l.LineaAsync("CONLIB", LineasDePrueba.Version(desde: Hoy));
@@ -176,20 +178,22 @@ public sealed class RequisitosDeActivacionTests : IAsyncLifetime
     // -------------------------------------------------------------------------------------------------------- las pruebas --
 
     [Fact]
-    public async Task Fuera_de_produccion_los_dobles_cuentan_y_lo_de_produccion_no_bloquea()
+    public async Task Fuera_de_produccion_los_dobles_cuentan_pero_los_demas_requisitos_bloquean_igual()
     {
         Recaudador(IntegrationParticipantClass.Test);
         Tesoreria(doble: true);
 
         var e = await EvaluarAsync();
 
-        e.Faltantes.Should().BeEmpty();
+        // Decisión del dueño del 2026-10-18: el Anexo 1 y los roles faltan también fuera de producción (antes quedaban Waived y no bloqueaban).
+        e.Faltantes.Select(f => f.Code).Should().BeEquivalentTo([RequisitosDeActivacion.Anexo1Vigente, RequisitosDeActivacion.RolesDeCarteraCreados]);
+        e.Requisitos.Should().NotContain(r => r.Status == EstadosDeRequisito.Waived, "ningún requisito se dispensa por el ambiente");
         De(e, RequisitosDeActivacion.CargaAplicada).Status.Should().Be(EstadosDeRequisito.Met);
-        De(e, RequisitosDeActivacion.RecaudadorRegistrado).Status.Should().Be(EstadosDeRequisito.Met);
+        De(e, RequisitosDeActivacion.RecaudadorRegistrado).Status.Should().Be(EstadosDeRequisito.Met, "fuera de producción el doble es el recaudador");
         De(e, RequisitosDeActivacion.TesoreriaRegistrada).Status.Should().Be(EstadosDeRequisito.Met);
-        De(e, RequisitosDeActivacion.Anexo1Vigente).Should().BeEquivalentTo(new { Met = true, Status = EstadosDeRequisito.Waived }, o => o.ExcludingMissingMembers());
+        De(e, RequisitosDeActivacion.Anexo1Vigente).Should().BeEquivalentTo(new { Met = false, Status = EstadosDeRequisito.Missing }, o => o.ExcludingMissingMembers());
         De(e, RequisitosDeActivacion.Anexo1Vigente).WhoFixes.Should().NotBeNull();
-        De(e, RequisitosDeActivacion.RolesDeCarteraCreados).Status.Should().Be(EstadosDeRequisito.Waived);
+        De(e, RequisitosDeActivacion.RolesDeCarteraCreados).Status.Should().Be(EstadosDeRequisito.Missing);
         // T1024 y T1037 (fase 22): con K6a desplegada los dos requisitos de la pérdida esperada aplican; sin regla de pérdida esperada vigente nadie está
         // obligado y se cumplen (lo que exigen a una obligada lo cubre ActivacionConPerdidaEsperadaTests).
         De(e, RequisitosDeActivacion.ParametrosDePerdidaEsperada).Status.Should().Be(EstadosDeRequisito.Met);
@@ -224,6 +228,31 @@ public sealed class RequisitosDeActivacionTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Fuera_de_produccion_con_todo_en_su_sitio_y_los_dobles_no_falta_nada()
+    {
+        await TodoListoParaProduccionAsync(conDobles: true);
+        await CreditoEnOficinaAsync(vinculada: true);
+
+        var e = await EvaluarAsync();
+
+        e.Faltantes.Should().BeEmpty();
+        e.ObligatoryModelUnavailable.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Fuera_de_produccion_un_doble_sin_la_adopcion_tampoco_cuenta()
+    {
+        // Decisión del dueño del 2026-10-18: la adopción del contrato se exige en todos los ambientes (antes, fuera de producción no se miraba).
+        Recaudador(IntegrationParticipantClass.Test, adoptado: false);
+        Tesoreria(doble: true, adoptado: false);
+
+        var e = await EvaluarAsync();
+
+        De(e, RequisitosDeActivacion.RecaudadorRegistrado).Met.Should().BeFalse();
+        De(e, RequisitosDeActivacion.TesoreriaRegistrada).Met.Should().BeFalse();
+    }
+
+    [Fact]
     public async Task En_produccion_un_participante_real_sin_la_adopcion_no_cuenta()
     {
         _ambiente.EsProduccion.Returns(true);
@@ -254,7 +283,7 @@ public sealed class RequisitosDeActivacionTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Una_linea_activa_sin_la_usura_de_su_modalidad_a_la_fecha_falta_en_produccion()
+    public async Task Una_linea_activa_sin_la_usura_de_su_modalidad_a_la_fecha_falta_en_todos_los_ambientes()
     {
         _ambiente.EsProduccion.Returns(true);
         await TodoListoParaProduccionAsync();
@@ -268,7 +297,8 @@ public sealed class RequisitosDeActivacionTests : IAsyncLifetime
             o => o.ExcludingMissingMembers());
         De(e, RequisitosDeActivacion.UsuraDeLineasActivas).Detail.Should().Contain("CONLIB");
         _ambiente.EsProduccion.Returns(false);
-        De(await EvaluarAsync(), RequisitosDeActivacion.UsuraDeLineasActivas).Status.Should().Be(EstadosDeRequisito.Waived);
+        De(await EvaluarAsync(), RequisitosDeActivacion.UsuraDeLineasActivas).Status.Should().Be(EstadosDeRequisito.Missing,
+            "decisión del dueño del 2026-10-18: antes fuera de producción quedaba Waived");
     }
 
     [Fact]
@@ -308,12 +338,13 @@ public sealed class RequisitosDeActivacionTests : IAsyncLifetime
         // T1037 (bloque 2): a la obligada se le exigen los parámetros de FR-106 vigentes al primer cierre (el Anexo 2 con la PI de su tipo); la carga
         // de esta escena no trae créditos, así que el historial está completo.
         await Risk.PerdidaEsperadaDePrueba.Anexo2Async(Db, _l.G.UtcNow, new DateOnly(2026, 1, 1));
-        Recaudador(IntegrationParticipantClass.Test);
-        Tesoreria(doble: true);
+        await TodoListoParaProduccionAsync(conDobles: true);
 
         var fuera = await EvaluarAsync();
+        _participantes.Clear();
         _ambiente.EsProduccion.Returns(true);
-        await TodoListoParaProduccionAsync();
+        Recaudador(IntegrationParticipantClass.Receipts);
+        Tesoreria(doble: false);
         var dentro = await EvaluarAsync();
 
         // Antes de K6a (T1024) la obligada se negaba en producción y fuera activaba con la marca «modelo obligatorio no disponible» (D28); con K6a
@@ -400,6 +431,7 @@ public sealed class RequisitosDeActivacionTests : IAsyncLifetime
     {
         Recaudador(IntegrationParticipantClass.Test);
         Tesoreria(doble: true);
+        await AnexoAsync();
         await RolesAsync();
         var rol = await Db.Roles.FirstAsync(r => r.Code.StartsWith("CARTERA-"));
         Db.UserRoles.Add(new UserRole { UserId = _l.Jefe.Id, RoleId = rol.Id, AssignedAt = LineasDePrueba.Ahora, AssignedBy = "test", CreatedBy = "test" });

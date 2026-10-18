@@ -247,6 +247,24 @@ public static class ParametrosDeCartera
     /// <summary>Días sin cobrar desde los que lo devuelto pasa a no reclamados (FR-081).</summary>
     public const string CaptacionesDiasParaNoReclamados = "Captaciones.DiasParaNoReclamados";
 
+    /// <summary>
+    /// Decisión del dueño del 2026-10-18: la periodicidad del formato de cartera del SICSES es <b>informativa</b> y la decide la entidad según su
+    /// calendario. Los meses de corte en que la cooperativa reporta, separados por coma (<c>3,6,9,12</c> si reporta trimestral); vacío, los del
+    /// documento <c>TiposDeOrganizacion</c> para su tipo y nivel. Sólo alimenta el aviso del plazo y la advertencia de mes fuera de la periodicidad:
+    /// nada se bloquea por ella. (nuevo)
+    /// </summary>
+    public const string SicsesMesesDeCorte = "Sicses.MesesDeCorte";
+
+    /// <summary>
+    /// Decisión del dueño del 2026-10-18: los días calendario de plazo para entregar el SICSES desde el fin del mes cortado, propios de la entidad;
+    /// vacío, los del documento <c>TiposDeOrganizacion</c> (con sus plazos especiales). Con valor, rige para todo corte y los plazos especiales del
+    /// documento no se aplican. Informativo, como <see cref="SicsesMesesDeCorte"/>. (nuevo)
+    /// </summary>
+    public const string SicsesDiasDePlazo = "Sicses.DiasDePlazo";
+
+    /// <summary>Forma de <see cref="SicsesMesesDeCorte"/>: meses del 1 al 12 separados por coma.</summary>
+    public const string PatronDeMesesDeCorte = @"^(1[0-2]|[1-9])(,(1[0-2]|[1-9]))*$";
+
     /// <summary>Forma de <see cref="CentralesCodigosDeSuscriptor"/>.</summary>
     public const string PatronDeCodigosDeSuscriptor = @"^[A-Z0-9_]{1,20}=[A-Za-z0-9-]{1,20}(;[A-Z0-9_]{1,20}=[A-Za-z0-9-]{1,20})*$";
 
@@ -504,12 +522,22 @@ public static class ParametrosDeCartera
         Texto(CentralesRangosDeMora,
             "Rangos de mora del reporte a centrales por tipo de cartera (modalidad) y desde qué rango el dato es negativo: TIPO=límite,límite,…|rango "
             + "separados por punto y coma, con * para los tipos que no se nombran (*=30,60,90,120,150,180|1;VIVIENDA=60,120,180|1). El rango 1 va de 1 "
-            + "al primer límite, el último queda abierto; por debajo del rango negativo la obligación se reporta al día. La altura de mora reportada "
-            + "sale del rango.",
+            + "al primer límite, el último queda abierto; por debajo del rango negativo la obligación se reporta en mora con sus días reales, sin marca "
+            + "negativa. La altura de mora reportada sale del rango.",
             Regulatory.RangosDeMoraParaCentrales.Defecto, K5, patron: Regulatory.RangosDeMoraParaCentrales.Patron) with
         {
             PendienteDeValidar = "Defecto propuesto (rangos de 30 días, negativo desde el primero: toda mora es dato negativo, como antes del parámetro), "
                                  + "pendiente de validar por el dueño y la contadora (decisión del dueño del 2026-10-16).",
+        },
+        Texto(SicsesMesesDeCorte,
+            "Meses de corte en que la cooperativa reporta el formato de cartera del SICSES, separados por coma (3,6,9,12 si reporta trimestral). "
+            + "Vacío: los del documento de tipos de organización para su tipo y nivel. Es informativo: sólo avisa el plazo; no bloquea nada.",
+            string.Empty, K5, patron: PatronDeMesesDeCorte, admiteVacio: true),
+        Entero(Modulo, SicsesDiasDePlazo,
+            "Días calendario de plazo para entregar el SICSES desde el fin del mes cortado, propios de la cooperativa. Vacío: los del documento de "
+            + "tipos de organización (con sus plazos especiales). Es informativo: sólo avisa el plazo; no bloquea nada.", "", K5, General) with
+        {
+            AdmiteVacio = true, Minimo = 1m,
         },
         SiNo(Modulo, AvisoPrevioIncluirCodeudores,
             "El aviso previo al reporte negativo se abre y se envía también a cada codeudor del crédito, con su propia constancia; la central reporta al "

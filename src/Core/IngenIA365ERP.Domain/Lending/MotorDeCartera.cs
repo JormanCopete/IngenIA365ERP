@@ -108,7 +108,7 @@ public static class MotorDeCartera
     /// Como <see cref="Verificar"/>, con la corrección monetaria de un crédito en UVR aparte
     /// (<see cref="LibroTeorico.DiferenciasSeparandoLaCorreccionMonetaria"/>): la usa la corrida de corrección por valor nacional, que registra las
     /// diferencias de la corrección monetaria como <c>MonetaryCorrection</c> y las demás como ajuste de causación (K6b, fase 24). Con
-    /// <paramref name="separarPagos"/> (la corrección de una UVR; decisión del dueño del 2026-10-17), el reparto de los pagos va aparte
+    /// <paramref name="separarPagos"/> (la corrección de una UVR, decisión del dueño del 2026-10-17, y la de una usura, del 2026-10-18), el reparto de los pagos va aparte
     /// (<see cref="DiferenciaDeLibro.DePago"/>) y se registra como <c>PaymentReallocation</c> con su hecho.
     /// </summary>
     public static IReadOnlyList<DiferenciaDeLibro> VerificarSeparandoLaCorreccionMonetaria(EntradaDeReconstruccion entrada, DateOnly hasta,

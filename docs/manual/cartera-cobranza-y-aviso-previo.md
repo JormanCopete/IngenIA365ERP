@@ -261,7 +261,7 @@ codeudores:
 | En qué etapa se abre el aviso | la acción «aviso previo» de la etapa (`/cartera/etapas-de-cobranza`) | la semilla la pone en una etapa |
 | Texto de la comunicación | la plantilla `AVISOPREV` por canal | la de la semilla |
 | Canal | el que el titular autorizó y la ventana de la Ley 2300 permite (horario y contactos por día: `Cobranza.Horario*`, `Cobranza.ContactosPorDia`) | — |
-| Desde qué mora el dato es negativo (y por tanto exige aviso) en el archivo de la central | `Centrales.RangosDeMora`, por tipo de cartera (runbook del SICSES y las centrales) | toda mora |
+| Desde qué mora el dato es negativo (y por tanto exige aviso) en el archivo de la central; la mora por debajo de ese rango se reporta con sus días reales y sin marca negativa (2026-10-18) | `Centrales.RangosDeMora`, por tipo de cartera (runbook del SICSES y las centrales) | toda mora |
 
 Lo que **no** es configurable: el aviso es por episodio de mora (recaer es otro aviso), en producción un envío `SIMULADO` no es constancia, y
 la constancia de una carta exige la guía adjunta.

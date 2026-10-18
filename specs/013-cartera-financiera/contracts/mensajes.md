@@ -751,6 +751,7 @@ con `inKind.replacesLoan`) y su `ObligacionCreada` (FR-054).
 | `voidedFromOrigin` | bool | sí | `true` en las anulaciones: el crédito queda sin efecto desde su origen |
 | `newPlan` | `LoanPlanSummaryV1` | no | El plan recalculado según la línea (FR-031) |
 | `validationFailed` | bool | sí | Una nota débito evaluada en contra marca el crédito (FR-052, FR-054) |
+| `reallocations` **(nuevo, T1098)** | [objeto] | no | Pagos posteriores que el ajuste redistribuye por su fecha valor anterior (FR-081): la forma y el signo de `PagoAplicado` (§10.7), suma cero por pago. Decisión del dueño del 2026-10-18: Contabilidad la asienta en el comprobante del ajuste con el molde de `PagoRedistribuidoPorValorNacional` (`contabilidad.md` §32). Opcional y aditivo: ausente es la lista vacía, que es lo que significaba antes |
 
 ```json
 {
@@ -840,7 +841,8 @@ Dos orígenes con la misma forma masiva de §10.0 (C03):
   causados, sólo si Cartera está activada (C05). Los códigos que la encolan son `USURA` y, desde la fase 24
   (2026-10-17), `UVR`: ésa sólo mira y recorre los créditos **en UVR**, y la diferencia de su corrección monetaria
   no viaja aquí sino en un `CorreccionMonetariaUvrCausada` de la misma parte de la corrida (§10.25), y el reparto de un pago aplicado en un
-  día corregido, en un `PagoRedistribuidoPorValorNacional` (§10.26; decisión del dueño del 2026-10-17). La corrida de una `UVR` llega
+  día corregido, en un `PagoRedistribuidoPorValorNacional` (§10.26; decisión del dueño del 2026-10-17; desde la del 2026-10-18, también en la
+  corrida de una `USURA`). La corrida de una `UVR` llega
   **hasta la marca** de los créditos, no hasta el fin de la vigencia del valor (que en la serie diaria es el mismo día): la UVR de un día
   cambia también la corrección monetaria del día siguiente y, si ese día hubo un pago, el capital en UVR y lo que sigue.
 
@@ -909,7 +911,7 @@ suspenso cobrado, lo recuperado de un castigado, el saldo a favor y el ajuste de
 | `modality` | `PaymentModality` | sí | Una de las siete (FR-071) |
 | `amountReceived` | decimal(18,2) | sí | Lo recibido |
 | `surplus` | decimal(18,2) | sí | El excedente que vuelve al recaudador (D5); no se contabiliza en Cartera |
-| `reallocations` | [objeto] | sí | Redistribución de pagos posteriores por una fecha valor anterior (FR-081, D4): `{ payment: OriginalFactRefV1, amounts: [ConceptAmountV1] }`, con signo, suma cero por pago. Vacía casi siempre |
+| `reallocations` | [objeto] | sí | Redistribución de pagos posteriores por una fecha valor anterior (FR-081, D4): `{ payment: OriginalFactRefV1, amounts: [ConceptAmountV1] }`, con el signo de la distribución (después − antes: positivo = el pago posterior cubre más del concepto o deja más anticipo o saldo a favor), suma cero por pago. Vacía casi siempre. Desde el 2026-10-18 Contabilidad la asienta en el comprobante de este hecho con el molde de `PagoRedistribuidoPorValorNacional` (`contabilidad.md` §31) |
 | `prepaymentChoice` | `PrepaymentChoice` | no | Elección del abono extraordinario (o la preferencia vigente, D24) |
 | `newPlan` | `LoanPlanSummaryV1` | no | El plan regenerado, si cambió |
 | `paidOff` | bool | sí | Si canceló el crédito |
@@ -936,7 +938,7 @@ propia del pago tiene su espejo; las diferencias de la reconstrucción van en su
 | `reason` | string | sí | Motivo (FR-080) |
 | `collector` | `CollectorRefV1` | sí | El del pago reversado |
 | `reversedAmount` | decimal(18,2) | sí | Lo aplicado que se reversa |
-| `reallocations` | [objeto] | sí | Como en `PagoAplicado`: pagos posteriores redistribuidos (FR-081) |
+| `reallocations` | [objeto] | sí | Como en `PagoAplicado`: pagos posteriores redistribuidos (FR-081), con el mismo signo; se asientan en el comprobante del reverso (`contabilidad.md` §31) |
 | `reopened` | bool | sí | El pago reversado había cancelado el crédito |
 
 ```json
@@ -1344,6 +1346,11 @@ corrida `NationalValueCorrection` de la `UVR` compara el reparto de los pagos **
 `LibroTeorico.EsDePago`), registra cada diferencia como `PaymentReallocation` **de la corrida** (fecha contable del período abierto, día valor
 del pago) y la lleva a Contabilidad en este hecho. El pago, sus filas y su `PagoAplicado` no se tocan: lo contabilizado se corrige con un
 comprobante nuevo de su propio hecho y fecha.
+
+**Usura (decisión del dueño del 2026-10-18).** La corrida de una `USURA` corregida separa el reparto igual y lo emite en este mismo hecho
+(`correctedNationalValue.code = USURA`): con la usura más baja, el pago cubre menos interés y más capital, o deja más anticipo o saldo a favor.
+El saldo a favor que deja un pago viaja aquí como parte de su reparto; la corrida ya no emite por él un `SaldoAFavorReconocido` con causa
+`NationalValueCorrection` (§10.12 queda para un saldo a favor que no nazca de un reparto). Contabilidad lo asienta igual (`contabilidad.md` §30).
 
 Forma masiva de §10.0 con el origen, la clave y el actor de la parte de la corrida (`Confirmation:{parte:N}`, admite proceso): una parte
 por sucursal y tanda; **una línea por crédito y día valor del pago** (`valueDate`). Código corto `PRN` (`LND_FactTypes`, `DeliveredIn =
@@ -2049,6 +2056,10 @@ Una respuesta nueva tras un reproceso no es un duplicado: cada evaluación tiene
   su esquema no cambian una vez publicados: agregar, quitar o renombrar un campo, cambiar un tipo, un signo, un valor
   admitido o el significado de un campo crea `<Type>V<n+1>` (012 §12). Lo emitido conserva su versión para siempre.
 - Cambiar `Destinos` o `AdmiteProceso` de un tipo es un cambio del catálogo, no del contenido: no crea versión.
+- **Excepción acotada (antes de salir a producción)**: un campo **opcional** que se agrega al final y cuya ausencia significa lo que el mensaje
+  siempre significó no crea versión: lo emitido antes se lee igual y un consumidor que no lo conoce lo ignora. Hay dos:
+  `generalImpairment` de `ReversoDeCierre` (§10.18, US9) y `reallocations` de `CreditoAjustadoDesdeComercial` (§10.3, T1098,
+  decisión del dueño del 2026-10-18). Ninguno cambia el tipo, el signo ni el significado de un campo existente.
 - Los campos que piden K6a y K6b (modelo de deterioro, segmento, unidad UVR) están en `LoanFactDimensionsV1` desde V1:
   esas entregas no crean versiones.
 

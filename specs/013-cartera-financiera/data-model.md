@@ -2470,7 +2470,9 @@ créditos con `LND_LoanTermsVersions.DenominationUnit = Uvr`, que son también l
 diferencias de corrección monetaria se registran como `MonetaryCorrection`). Decisión del dueño del 2026-10-17: la corrida de una
 `UVR` tiene `AffectedTo` = la última marca de los créditos en UVR (no el fin de la vigencia del valor, que en la serie diaria es el mismo día:
 la UVR de un día cambia la corrección monetaria del siguiente), y el reparto de los pagos de esos días se registra como `PaymentReallocation`
-de la corrida (`ProcessRunId`, sin operación) con el hecho `PagoRedistribuidoPorValorNacional`. Sin columnas nuevas.
+de la corrida (`ProcessRunId`, sin operación) con el hecho `PagoRedistribuidoPorValorNacional`. Decisión del dueño del 2026-10-18: la
+corrida de una `USURA` registra el reparto de los pagos igual (antes su capital quedaba como `AccrualAdjustment`, sin rol en Contabilidad).
+Sin columnas nuevas.
 
 **Transiciones**: `Requested` → `Running` → `Completed` | `CompletedWithErrors` (créditos en `LND_ProcessRunErrors`) |
 `Failed` (error de la corrida entera). `Failed` y `CompletedWithErrors` vuelven a `Running` con
@@ -2775,7 +2777,7 @@ FR-099). El cierre la lee a R: creada hasta R y no levantada hasta R.
 Las líneas se editan sólo en `Draft`. Aplicada, la evaluación es candidata (`RatingCause.Evaluation`) desde el cierre del
 mes de efecto hasta la siguiente evaluación aplicada (FR-102). El acta la aplica por `IAsuntoDeActa`.
 
-**Reglas de US14 (bloque B, T0912, T0913)**: el corte es fin de mes y el mes de efecto, posterior; si el documento `TiposDeOrganizacion` trae `portfolioEvaluation { cutoffMonths[], effectMonthsAfterCutoff }` para el tipo del perfil vigente, tienen que ser los suyos (`Lending.PortfolioEvaluation.PeriodInvalid`). `RuleRatingAtCutoff` es la calificación oficial del cierre al corte. Mientras no tenga recomendación la trata el comité de riesgos —un punto `Recommendation` (que el cierre no aplica: lo recoge el consejo al decidir) o un punto `Decision` del comité (la deja `Recommended`)—; recomendada, la decide el consejo. En el cierre rige **la última evaluación aplicada a R cuyo mes de efecto ya llegó**, para toda la cartera (un crédito que esa evaluación no incluye no tiene candidata `Evaluation`).
+**Reglas de US14 (bloque B, T0912, T0913)**: el corte es fin de mes y el mes de efecto, posterior; si el documento `TiposDeOrganizacion` trae `portfolioEvaluation { cutoffMonths[], effectMonthsAfterCutoff }` para el tipo del perfil vigente y no son los suyos, la evaluación se prepara con el aviso `PortfolioEvaluationOutsidePeriodicity` (decisión del dueño del 2026-10-18: informativo; antes `Lending.PortfolioEvaluation.PeriodInvalid`). `RuleRatingAtCutoff` es la calificación oficial del cierre al corte. Mientras no tenga recomendación la trata el comité de riesgos —un punto `Recommendation` (que el cierre no aplica: lo recoge el consejo al decidir) o un punto `Decision` del comité (la deja `Recommended`)—; recomendada, la decide el consejo. En el cierre rige **la última evaluación aplicada a R cuyo mes de efecto ya llegó**, para toda la cartera (un crédito que esa evaluación no incluye no tiene candidata `Evaluation`).
 
 ### 23.8 `LND_ImpairmentModelElections` — `ImpairmentModelElection` (H; K6a; FR-105; R15)
 
@@ -3594,9 +3596,14 @@ sube con `Lending.RegulatoryFiles.MarkUploaded` sólo mientras la generación es
 documento `TiposDeOrganizacion` por nivel (`cutoffMonths`, `dueDays`, `warningDays` y, nuevo, `dueExceptions: [ { cutoffMonth,
 monthsAfterCutoff, day | lastBusinessDay } ]`, sin cambio de versión de esquema; semilla: nivel 1 mensual a 20 días con diciembre al último
 día hábil de enero, nivel 2 trimestral a 30 días con diciembre el 1 de febrero —conservador, el calendario real va por el último dígito del
-NIT—, nivel 3 anual con diciembre el 1 de febrero —CE 84 de 2025—, salvo fondos de empleados y mutuales; pendiente de validar). En las
-centrales, la mora se reporta por los rangos de `Centrales.RangosDeMora` (§12.1) del tipo de cartera de la posición: bajo el rango negativo,
-al día; desde él, en mora con su rango, y el `ReportedStatusCode` es el código de la altura del rango (`TraduccionDeCentral.AlturasDeMora`).
+NIT—, nivel 3 anual con diciembre el 1 de febrero —CE 84 de 2025—, salvo fondos de empleados y mutuales; pendiente de validar). Decisiones
+del dueño del 2026-10-18: el plazo y la periodicidad son **informativos** (sólo el aviso `Cartera.PlazoRegulatorioPorVencer` y la advertencia
+`MesFueraDeLaPeriodicidad`; nada se bloquea), la entidad puede fijar los suyos con `Sicses.MesesDeCorte` y `Sicses.DiasDePlazo` (§12.1), y el
+último día hábil descuenta los festivos `FESTIVO` replicados (`ICalendarioHabil`, sábado y domingo de descanso). En las
+centrales, la mora se reporta por los rangos de `Centrales.RangosDeMora` (§12.1) del tipo de cartera de la posición: desde el rango
+negativo, en mora con su rango y `IsNegative`; bajo él (decisión del dueño del 2026-10-18), **en mora con sus días reales** y su rango pero
+**sin marca negativa** (`IsNegative = false`, sin aviso previo; antes iba al día con días en cero); en los dos el `ReportedStatusCode` es el
+código de la altura del rango (`TraduccionDeCentral.AlturasDeMora`).
 El codeudor con dato negativo exige `AvisoPrevio.IncluirCodeudores` y su propio aviso completo.
 
 ### 28.2 `LND_RegulatoryFileLines` — `RegulatoryFileLine` **(nuevo)** (H; `AuditableEntityLong`; sólo `CreditBureau`; FR-123, FR-137)
@@ -3766,9 +3773,9 @@ clase de corrida. La prueba de volumen con 50.000 créditos corre bajo `RUN_PERF
 | `RegisteredByUserId` · `RegisteredAt` | int FK · datetime | no | |
 | `SessionItemId` | int FK `LND_SessionItems` | no | acta de activación, **obligatoria** (C61): declara lo que queda fuera (vivienda hasta K6b) y que se conserva el plan migrado (D5) |
 | `CheckVersion` · `BalanceCheckSha256` · `SalesReconciliationSha256` | int · char(64) · char(64) | no | el cuadre y la conciliación recalculados y aceptados |
-| `IsProductionEnvironment` | bit | no | `IHostEnvironment.IsProduction()`, sellado: dice qué requisitos se exigieron |
+| `IsProductionEnvironment` | bit | no | `IHostEnvironment.IsProduction()`, sellado. Desde el 2026-10-18 todos los requisitos se exigen en todos los ambientes; sólo dice si los dobles de prueba podían contar |
 | `RequirementsJson` | nvarchar(max) | no | cada requisito con su resultado y evidencia (abajo) |
-| `ObligatoryModelUnavailable` | bit | no | ambiente de prueba sin K6a con cooperativa obligada (FR-105) |
+| `ObligatoryModelUnavailable` | bit | no | ambiente de prueba sin K6a con cooperativa obligada (FR-105); desde el 2026-10-18 la activación ya no lo sella (la obligada sin K6a no activa en ningún ambiente) |
 | `CountsJson` | nvarchar(max) | no | créditos, saldos iniciales, castigados, cupos, bloqueos, autorizaciones, avisos, reclamos, vinculados, garantías |
 | `NonDeductionsMarked` · `CreditLimitsToRevalidate` | int | no | |
 | `ProvisionalCollectionsFileSha256` · `ProvisionalCollectionsCount` | char(64) · int | sí · no | plantilla `lending.provisional-collections` |
@@ -3790,10 +3797,13 @@ desactivación.
   `AccountingMonthOpen` sólo falta sin contabilidad iniciada;
 - **diferencias** de la versión recalculada aceptadas (`Lending.Activation.DifferencesNotAccepted`);
 - **acta** de activación (C61) y **cobros provisionales** validados (C62);
-- **en producción**: un recaudador `Receipts` y un destino `Treasury` reales en el registro con versiones vigentes
-  (no dobles); K6a desplegada si la cooperativa es obligada; Anexo 1 vigente y usura de las modalidades de las líneas
-  activas; roles de Cartera creados; toda oficina con créditos vinculada a una sucursal contable; regla
-  `RecaudoPorAplicar` con `CollectorClass = Payroll` resuelta por `IContabilidadParaCartera`;
+- **en todos los ambientes** (decisión del dueño del 2026-10-18; hasta esa fecha sólo en producción y fuera de ella
+  quedaban `Waived`): un recaudador y un destino `Treasury` en el registro con la adopción vigente de
+  `ProveedorDeObligaciones` y `OrdenDeGiroEmitida` —en producción reales, nunca dobles; fuera de ella pueden ser los
+  dobles `TST` y `TES`, que son el Recaudo y la Tesorería de esos ambientes—; K6a desplegada si la cooperativa es
+  obligada; Anexo 1 vigente y usura de las modalidades de las líneas activas; roles de Cartera creados; toda oficina con
+  créditos vinculada a una sucursal contable; regla `RecaudoPorAplicar` con `CollectorClass = Payroll` resuelta por
+  `IContabilidadParaCartera`;
 - **donde K6a esté desplegada**, para una obligada: parámetros de FR-106 vigentes al primer cierre que los use e
   historial completo de los créditos migrados de los segmentos cubiertos.
 
@@ -5473,7 +5483,7 @@ financiera el consejo lleva la fracción de vinculados—, `RelatedPartyFraction
 | `Lending.PortfolioEvaluation.NotFound` **(K3, T0914)** | 404 | «La evaluación de cartera no existe.» | inexistente o sin créditos del alcance | T62 |
 | `Lending.PortfolioEvaluation.Overlaps` **(K3, T0914)** | 422 | «Ya hay una evaluación de cartera sin aplicar con corte {fecha} ({número}): termínela antes de preparar otra del mismo corte.» (`data: { cutoffDate, number }`) | preparar otra del mismo corte con una en borrador, recomendada o aprobada | FR-102 |
 | `Lending.PortfolioEvaluation.NotDraft` · `.InvalidStatus` **(K3, T0914)** | 422 | «La evaluación ya no admite cambios: sus líneas se editan sólo en borrador.» · «La evaluación está en «{estado}» y no puede pasar a «{hacia}».» | editar fuera de borrador; aplicar sin aprobar; descartar una aplicada, rechazada o ya descartada (bloque D); transición fuera del ciclo | FR-102 |
-| `Lending.PortfolioEvaluation.PeriodInvalid` **(K3, T0914, fijado aquí)** | 422 | «El tipo de entidad ({tipo}) evalúa con corte en los meses {meses} y la recalificación se refleja {n} mes(es) después del corte (para este corte, {AAAA-MM}).» (`data: { organizationType, cutoffMonths, expectedEffectMonth }`) | corte o mes de efecto fuera de la periodicidad del tipo | FR-102 |
+| `Lending.PortfolioEvaluation.PeriodInvalid` **(K3, T0914, fijado aquí; retirado el 2026-10-18: ahora es el aviso `PortfolioEvaluationOutsidePeriodicity` de `warnings[]`, porque las periodicidades regulatorias son informativas)** | 422 | «El tipo de entidad ({tipo}) evalúa con corte en los meses {meses} y la recalificación se refleja {n} mes(es) después del corte (para este corte, {AAAA-MM}).» (`data: { organizationType, cutoffMonths, expectedEffectMonth }`) | corte o mes de efecto fuera de la periodicidad del tipo | FR-102 |
 | `Lending.PortfolioEvaluation.LoanNotLive` **(K3, T0914, fijado aquí)** | 422 | «El crédito {numero} no estaba vigente al corte {fecha}: la evaluación recalifica sólo la cartera viva al corte.» | evaluar un crédito abierto después del corte o cancelado antes | FR-102 |
 | `Lending.PortfolioEvaluation.RiskCommitteeMissing` **(K3, T0914, fijado aquí)** | 422 | «La cooperativa no tiene un comité de riesgos activo entre sus órganos: la evaluación de cartera la recomienda ese comité. Regístrelo en Órganos.» | llevar la evaluación a una sesión sin comité de riesgos activo | FR-102 |
 | `Lending.PortfolioEvaluation.RecommendationRequired` **(K3, T0914, fijado aquí)** | 422 | «La evaluación todavía no tiene la recomendación del comité de riesgos con acta cerrada: llévela primero a una sesión del comité.» | cerrar un acta del consejo que decide una evaluación sin recomendación | FR-102 |
@@ -5765,6 +5775,8 @@ transversales deja a este documento.
 | `Canales.UmbralDeFallas` | Int | ≥ 1 | 5 **(fijado aquí)** | None | — | K1 | F-02 |
 | `Centrales.DiasDeVigenciaDeConsulta` | Int | ≥ 1 | 30 **(fijado aquí)** | None, CreditLine | — | K1 | F-19 |
 | `Centrales.CodigosDeSuscriptor` **(nuevo, fase 21, T1003)** | Text | `CENTRAL=código` separados por `;` | vacío | None | — | K5 | T1003 |
+| `Sicses.MesesDeCorte` **(nuevo, 2026-10-18)** | Text | meses de corte del 1 al 12 separados por coma; vacío = los del documento `TiposDeOrganizacion` para el tipo y nivel del perfil | vacío | None | — | K5 | decisión del dueño del 2026-10-18: la periodicidad del SICSES es informativa y la fija la entidad (fondos de empleados y mutuales de nivel 3, formatos básicos trimestrales) |
+| `Sicses.DiasDePlazo` **(nuevo, 2026-10-18)** | Integer | ≥ 1 o vacío; días calendario desde el fin del mes cortado; con valor, los plazos especiales del documento no se aplican | vacío | None | — | K5 | ídem; sólo alimenta `Cartera.PlazoRegulatorioPorVencer` |
 | `Centrales.RangosDeMora` **(nuevo, 2026-10-16)** | Text | `TIPO=límite,…\|rango` separados por `;`, `*` para los demás tipos de cartera (modalidad); límites crecientes, rango negativo de 1 a límites + 1 (`Lending.Parameter.InvalidArrearsRanges`) | `*=30,60,90,120,150,180\|1` (PV): toda mora es dato negativo, como antes | None | — | K5 | decisión del dueño del 2026-10-16 |
 | `Listas.UmbralDeCoincidenciaDeNombre` | Decimal | 0–1 | 0,90 **(fijado aquí)**, el de §0.15 | None | — | K1 | F-18 |
 

@@ -327,6 +327,7 @@ public static class DocumentosDeCarteraReport
         col.Item().Text(textos[0]);
         TablaTributaria(col, c.Creditos);
         if (c.Creditos.Count == 0) col.Item().PaddingTop(4).Text("La persona no tuvo otros créditos con la cooperativa en el año.").Italic();
+        foreach (var renglon in RenglonesAparte(c.Año, c.Creditos)) col.Item().PaddingTop(2).Text(renglon);
         col.Item().PaddingTop(4).Text(TotalTributario(c)).SemiBold();
         col.Item().PaddingTop(10).Text(CuerpoDeCertificadoTributario.TituloDeVivienda).SemiBold();
         if (c.Vivienda.Count == 0)
@@ -336,7 +337,25 @@ public static class DocumentosDeCarteraReport
         else
         {
             TablaTributaria(col, c.Vivienda);
+            foreach (var renglon in RenglonesAparte(c.Año, c.Vivienda)) col.Item().PaddingTop(2).Text(renglon);
             col.Item().PaddingTop(4).Text(TotalDeVivienda(c)).SemiBold();
+        }
+    }
+
+    /// <summary>
+    /// Decisiones del dueño del 2026-10-18: los renglones aparte de cada crédito, debajo de su tabla —el anticipo recibido en el año y pendiente de
+    /// aplicar al 31 de diciembre y la corrección monetaria UVR causada en el año—; sólo los que no son cero. No suman a los intereses pagados.
+    /// </summary>
+    private static IEnumerable<string> RenglonesAparte(short año, IReadOnlyList<CreditoCertificadoTributario> creditos)
+    {
+        var a = año.ToString(CultureInfo.InvariantCulture);
+        foreach (var x in creditos)
+        {
+            if (x.AnticipoRecibido != 0m)
+                yield return string.Format(CultureInfo.InvariantCulture, CuerpoDeCertificadoTributario.RenglonDeAnticipoRecibido, x.Numero, a, Pesos(x.AnticipoRecibido));
+            if (x.CorreccionMonetaria != 0m)
+                yield return string.Format(CultureInfo.InvariantCulture, CuerpoDeCertificadoTributario.RenglonDeCorreccionMonetaria, x.Numero, a,
+                    Pesos(x.CorreccionMonetaria));
         }
     }
 
@@ -396,6 +415,7 @@ public static class DocumentosDeCarteraReport
         var año = c.Año.ToString(CultureInfo.InvariantCulture);
         var textos = new List<string> { $"Intereses pagados durante el año {año} y saldo de la deuda al 31/12/{año}, por crédito." };
         textos.AddRange(c.Creditos.Select(x => $"{x.Numero} {x.Linea} {Pesos(x.InteresesPagados)} {Pesos(x.SaldoTotal)}"));
+        textos.AddRange(RenglonesAparte(c.Año, c.Creditos));
         textos.Add(TotalTributario(c));
         textos.Add(CuerpoDeCertificadoTributario.TituloDeVivienda);
         if (c.Vivienda.Count == 0)
@@ -405,6 +425,7 @@ public static class DocumentosDeCarteraReport
         else
         {
             textos.AddRange(c.Vivienda.Select(x => $"{x.Numero} {x.Linea} {Pesos(x.InteresesPagados)} {Pesos(x.SaldoTotal)}"));
+            textos.AddRange(RenglonesAparte(c.Año, c.Vivienda));
             textos.Add(TotalDeVivienda(c));
         }
         return textos;

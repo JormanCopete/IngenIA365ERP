@@ -80,6 +80,9 @@ public class ParametrosDeCarteraTests
         { "Centrales.CodigosDeSuscriptor", "", [N], EntregaDeCartera.K5 },
         // Decisión del dueño del 2026-10-16: los rangos de mora de las centrales y el aviso previo a los codeudores.
         { "Centrales.RangosDeMora", "*=30,60,90,120,150,180|1", [N], EntregaDeCartera.K5 },
+        // Decisión del dueño del 2026-10-18: la periodicidad del SICSES, informativa y propia de la cooperativa (vacía = la del documento).
+        { "Sicses.MesesDeCorte", "", [N], EntregaDeCartera.K5 },
+        { "Sicses.DiasDePlazo", "", [N], EntregaDeCartera.K5 },
         { "AvisoPrevio.IncluirCodeudores", "false", [N], EntregaDeCartera.K5 },
         // Feature 014 (T017; data-model §9.1, research C02, C26 y E15): captaciones y aportes, cada una desde su entrega.
         { "Retencion.TarifaAhorro", "0.07", [N, L], EntregaDeCartera.K8 },
@@ -154,7 +157,8 @@ public class ParametrosDeCarteraTests
         // (T1003, fase 21) los códigos de suscriptor de las centrales.
         ParametrosDeCartera.Definiciones.Where(d => d.DisponibleDesde == (EntregaDeModulo)EntregaDeCartera.K5).Select(d => d.Clave).Should()
             .Equal(ParametrosDeCartera.InformesDiasCarteraVencida, ParametrosDeCartera.DocumentosCertificadoTributarioSaldoIncluye,
-                ParametrosDeCartera.CentralesCodigosDeSuscriptor, ParametrosDeCartera.CentralesRangosDeMora, ParametrosDeCartera.AvisoPrevioIncluirCodeudores);
+                ParametrosDeCartera.CentralesCodigosDeSuscriptor, ParametrosDeCartera.CentralesRangosDeMora, ParametrosDeCartera.SicsesMesesDeCorte,
+                ParametrosDeCartera.SicsesDiasDePlazo, ParametrosDeCartera.AvisoPrevioIncluirCodeudores);
         ParametrosDeCartera.Definiciones.Single(d => d.Clave == ParametrosDeCartera.CentralesRangosDeMora).PendienteDeValidar.Should().NotBeNull();
         ParametrosDeCartera.Definiciones.Single(d => d.Clave == ParametrosDeCartera.InformesDiasCarteraVencida).Should()
             .Match<IngenIA365ERP.Domain.Common.Parametros.DefinicionDeParametro>(d => d.DisponibleEnLaEntrega() && d.PendienteDeValidar != null);

@@ -40,7 +40,8 @@ public sealed record DiferenciaDeLibro(DateOnly Dia, LoanConcept Concepto, int? 
     /// <summary>
     /// K6b (decisión del dueño, 2026-10-17): la diferencia es del <b>reparto de un pago</b> (filas de <see cref="LibroTeorico.EsDePago"/>) de un
     /// crédito en UVR cuyo día valor tuvo la UVR corregida: el pago es el mismo en pesos, pero a la UVR nueva cubre en pesos otra mezcla de capital,
-    /// intereses, cargos, anticipo y saldo a favor. Sólo la marca <see cref="LibroTeorico.DiferenciasSeparandoLaCorreccionMonetaria"/> con
+    /// intereses, cargos, anticipo y saldo a favor. Desde la decisión del 2026-10-18, también el de un día con la <c>USURA</c> corregida (cubre otro
+    /// interés y otro capital). Sólo la marca <see cref="LibroTeorico.DiferenciasSeparandoLaCorreccionMonetaria"/> con
     /// <c>separarPagos</c>; viaja en el hecho <c>PagoRedistribuidoPorValorNacional</c>.
     /// </summary>
     public bool DePago { get; init; }
