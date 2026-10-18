@@ -67,7 +67,7 @@ public class LendingPostingRuleCommandsTests
         regla.SubsegmentCode.Should().Be("ConLibranza", "el sub-segmento conserva su forma");
         regla.RiskCategory.Should().Be("A");
         regla.BranchId.Should().Be(e.M.D.Principal.Id);
-        regla.DimensionKey.Should().Be($"*|Capital|*|CONSUMO|ConLibranza|A|*|0|*|*|*|*|*|{e.M.D.Principal.Id}");
+        regla.DimensionKey.Should().Be($"*|Capital|*|CONSUMO|ConLibranza|A|*|0|*|*|*|*|*|{e.M.D.Principal.Id}|*|*|*|*|*");
         regla.SpecificityWeight.Should().Be(256 + 64 + 4, "empleado + sub-segmento + sucursal");
         regla.Notes.Should().Be("Matriz aprobada por la contadora", "sin notas, queda el motivo: quién decidió y por qué");
     }
@@ -76,11 +76,12 @@ public class LendingPostingRuleCommandsTests
     public void La_clave_de_los_ejemplos_de_3_1()
     {
         LendingPostingRule.ClaveDe("*", "Capital", null, "CONSUMO", "ConLibranza", "A", null, false, null, null, null, null, null, null)
-            .Should().Be("*|Capital|*|CONSUMO|ConLibranza|A|*|0|*|*|*|*|*|*");
+            .Should().Be("*|Capital|*|CONSUMO|ConLibranza|A|*|0|*|*|*|*|*|*|*|*|*|*|*");
         LendingPostingRule.ClaveDe(null, "Capital", null, "CONSUMO", null, "A", null, true, null, null, null, null, null, null)
-            .Should().Be("*|Capital|*|CONSUMO|*|A|*|1|*|*|*|*|*|*");
+            .Should().Be("*|Capital|*|CONSUMO|*|A|*|1|*|*|*|*|*|*|*|*|*|*|*");
         LendingPostingRule.ClaveDe("*", "RecaudoPorAplicar", null, null, null, null, null, null, null, null, null, "Payroll", null, null)
-            .Should().Be("*|RecaudoPorAplicar|*|*|*|*|*|*|*|*|*|Payroll|*|*");
+            .Should().Be("*|RecaudoPorAplicar|*|*|*|*|*|*|*|*|*|Payroll|*|*|*|*|*|*|*",
+                "feature 014 (T044): las cinco dimensiones de captaciones al final, en «*» en toda regla de crédito");
     }
 
     [Fact]
@@ -327,8 +328,8 @@ public class LendingPostingRuleCommandsTests
         sinRegla.MissingCode.Should().Be("Accounting.LendingRule.Missing");
 
         var catalogo = (await new GetLendingRulesCatalogQueryHandler(e.M.Dimensiones).Handle(new GetLendingRulesCatalogQuery(), default)).Value;
-        catalogo.Operations.Should().HaveCount(37);
-        catalogo.Roles.Should().HaveCount(26);
+        catalogo.Operations.Should().HaveCount(70, "37 de crédito y 33 de captaciones y aportes (feature 014, T048)");
+        catalogo.Roles.Should().HaveCount(43);
         catalogo.Dimensions.CreditLines.Select(l => l.Code).Should().Contain("VIE01");
     }
 }

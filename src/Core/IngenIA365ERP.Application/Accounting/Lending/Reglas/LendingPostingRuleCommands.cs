@@ -27,11 +27,16 @@ public sealed record DimensionesDeReglaDeCarteraDto(
     string? CollectorClass = null,
     string? ReasonCode = null,
     Guid? BranchPublicId = null,
-    Guid? CostCenterPublicId = null)
+    Guid? CostCenterPublicId = null,
+    string? LineNature = null,
+    string? DepositClass = null,
+    string? IssueTermBand = null,
+    string? ContributionClass = null,
+    string? AccountFlag = null)
 {
     public IReadOnlySet<DimensionDeCartera> PresentesCon(string? operacion) => ReglasDeLaMatrizDeCartera.Presentes(
         operacion, CreditLineCode, ModalityCode, SubsegmentCode, RiskCategory, ConceptCode, IsEmployee, InGracePeriod, OnBehalfOfAssociate,
-        Restructured, CollectorClass, ReasonCode, BranchPublicId is not null);
+        Restructured, CollectorClass, ReasonCode, BranchPublicId is not null, LineNature, DepositClass, IssueTermBand, ContributionClass, AccountFlag);
 }
 
 /// <summary>Lo que responde guardar una regla: su <c>PublicId</c> y los avisos (§3.6). (nuevo)</summary>
@@ -40,9 +45,11 @@ public sealed record ReglaDeCarteraGuardadaDto(Guid RulePublicId, IReadOnlyList<
 /// <summary>Las reglas de forma de la matriz en un validador de FluentValidation (400, <c>Validation.Invalid</c>). (nuevo)</summary>
 internal static class FormaDeLaReglaDeCartera
 {
-    public static void Agregar<T>(ValidationContext<T> contexto, string? operacion, string? rol, string? motivo, IReadOnlySet<DimensionDeCartera> presentes)
+    public static void Agregar<T>(
+        ValidationContext<T> contexto, string? operacion, string? rol, string? motivo, IReadOnlySet<DimensionDeCartera> presentes,
+        string? claseDeCaptacion = null)
     {
-        foreach (var error in ReglasDeLaMatrizDeCartera.Forma(operacion, rol, motivo, presentes))
+        foreach (var error in ReglasDeLaMatrizDeCartera.Forma(operacion, rol, motivo, presentes, claseDeCaptacion))
             contexto.AddFailure(new FluentValidation.Results.ValidationFailure("dimensions", error.Message) { ErrorCode = error.Code });
     }
 }
@@ -77,7 +84,7 @@ public sealed class CreateLendingPostingRuleCommandValidator : ValidadorConMotiv
             .WithMessage("La vigencia no puede terminar antes de empezar.");
         RuleFor(x => x.Notes).MaximumLength(300);
         RuleFor(x => x).Custom((c, ctx) => FormaDeLaReglaDeCartera.Agregar(ctx, c.Operation, c.Role, c.Dimensions?.ReasonCode,
-            c.Dimensions?.PresentesCon(c.Operation) ?? new HashSet<DimensionDeCartera>()));
+            c.Dimensions?.PresentesCon(c.Operation) ?? new HashSet<DimensionDeCartera>(), c.Dimensions?.DepositClass));
     }
 }
 
@@ -99,7 +106,8 @@ public sealed class CreateLendingPostingRuleCommandHandler(IApplicationDbContext
         var propuesta = new ReglaPropuestaDeCartera(
             ReglaPropuestaDeCartera.Valor(request.Operation) ?? LendingPostingRule.Cualquiera, request.Role.Trim(), cuenta.Value, request.ValidFrom,
             request.ValidTo, d.CreditLineCode, d.ModalityCode, d.SubsegmentCode, d.RiskCategory, d.ConceptCode, d.IsEmployee, d.InGracePeriod,
-            d.OnBehalfOfAssociate, d.Restructured, d.CollectorClass, d.ReasonCode, sucursal.Value, centro.Value);
+            d.OnBehalfOfAssociate, d.Restructured, d.CollectorClass, d.ReasonCode, sucursal.Value, centro.Value, d.LineNature, d.DepositClass,
+            d.IssueTermBand, d.ContributionClass, d.AccountFlag);
         var clave = propuesta.Clave;
         var versiones = await db.LendingPostingRules.Where(r => r.DimensionKey == clave && !r.IsDeleted).ToListAsync(ct);
 
@@ -161,7 +169,8 @@ public sealed class AddLendingPostingRuleVersionCommandHandler(IApplicationDbCon
 
         var propuesta = new ReglaPropuestaDeCartera(base_.Operation, base_.Role, cuenta.Value, request.ValidFrom, null,
             base_.CreditLineCode, base_.ModalityCode, base_.SubsegmentCode, base_.RiskCategory, base_.ConceptCode, base_.IsEmployee,
-            base_.InGracePeriod, base_.OnBehalfOfAssociate, base_.Restructured, base_.CollectorClass, base_.ReasonCode, base_.BranchId, centro);
+            base_.InGracePeriod, base_.OnBehalfOfAssociate, base_.Restructured, base_.CollectorClass, base_.ReasonCode, base_.BranchId, centro,
+            base_.LineNature, base_.DepositClass, base_.IssueTermBand, base_.ContributionClass, base_.AccountFlag);
         var versiones = await db.LendingPostingRules.Where(r => r.DimensionKey == base_.DimensionKey && !r.IsDeleted).ToListAsync(ct);
 
         var catalogos = await reglas.CargarAsync(ct);

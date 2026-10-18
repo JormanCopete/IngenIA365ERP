@@ -121,7 +121,13 @@ public sealed class MatrizVigenteDeCartera
         && Igual(r.Restructured, v.Restructured)
         && Igual(r.CollectorClass, v.CollectorClass)
         && Igual(r.ReasonCode, v.ReasonCode)
-        && (r.BranchId is null || r.BranchId == sucursal);
+        && (r.BranchId is null || r.BranchId == sucursal)
+        // Feature 014 (T049): las cinco de captaciones, por igualdad cuando la regla las fija (las exigidas siempre lo están).
+        && Igual(r.LineNature, v.LineNature)
+        && Igual(r.DepositClass, v.DepositClass)
+        && Igual(r.IssueTermBand, v.IssueTermBand)
+        && Igual(r.ContributionClass, v.ContributionClass)
+        && Igual(r.AccountFlag, v.AccountFlag);
 
     private static bool Igual(string? deLaRegla, string? buscado) =>
         deLaRegla is null || string.Equals(deLaRegla, buscado?.Trim(), StringComparison.OrdinalIgnoreCase);
@@ -135,5 +141,7 @@ public sealed class MatrizVigenteDeCartera
         riskCategory = LendingPostingRule.Categoria(v.RiskCategory), conceptCode = v.ConceptCode, isEmployee = v.IsEmployee,
         inGracePeriod = v.InGracePeriod, onBehalfOfAssociate = v.OnBehalfOfAssociate, restructured = v.Restructured,
         collectorClass = v.CollectorClass, reasonCode = v.ReasonCode, branch = v.BranchPublicId,
+        lineNature = v.LineNature, depositClass = v.DepositClass, issueTermBand = v.IssueTermBand, contributionClass = v.ContributionClass,
+        accountFlag = v.AccountFlag,
     };
 }

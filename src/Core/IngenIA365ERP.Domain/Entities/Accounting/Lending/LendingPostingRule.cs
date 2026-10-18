@@ -19,9 +19,12 @@ namespace IngenIA365ERP.Domain.Entities.Accounting.Lending;
 /// <see cref="DimensionKey"/> y <see cref="SpecificityWeight"/> se calculan en el constructor y nunca se asignan a mano. La clave es
 /// posicional (contracts/contabilidad.md §3.1; tasks.md, contradicción 4), con <c>*</c> donde la regla no fija valor, los booleanos
 /// como <c>1</c>/<c>0</c> y la sucursal por su <c>Id</c>:
-/// <c>{Operation}|{Role}|{CreditLineCode}|{ModalityCode}|{SubsegmentCode}|{RiskCategory}|{ConceptCode}|{IsEmployee}|{InGracePeriod}|{OnBehalfOfAssociate}|{Restructured}|{CollectorClass}|{ReasonCode}|{BranchId}</c>.
+/// <c>{Operation}|{Role}|{CreditLineCode}|{ModalityCode}|{SubsegmentCode}|{RiskCategory}|{ConceptCode}|{IsEmployee}|{InGracePeriod}|{OnBehalfOfAssociate}|{Restructured}|{CollectorClass}|{ReasonCode}|{BranchId}|{LineNature}|{DepositClass}|{IssueTermBand}|{ContributionClass}|{AccountFlag}</c>
+/// (las cinco últimas, de captaciones, desde la feature 014, T044: al final, nunca en medio; la migración <c>CaptacionesAportes</c> recalculó la
+/// clave de las reglas que ya existían con <c>|*|*|*|*|*</c>).
 /// El peso suma las opcionales fijadas: línea 512, empleado 256, gracia 128, sub-segmento 64, reestructurado 32, por cuenta del
-/// asociado 16, sucursal 4 y hecho 2 (el hecho sólo puede fijarse en los roles de resultado; en los demás va en <c>*</c>, lo
+/// asociado 16, sucursal 4 y hecho 2 —las cinco dimensiones de captaciones no pesan: se exigen por igualdad cuando el rol las declara
+/// (contracts/contabilidad.md §1.2 de la 014)— (el hecho sólo puede fijarse en los roles de resultado; en los demás va en <c>*</c>, lo
 /// valida <c>ReglasDeLaMatrizDeCartera</c>). Son potencias de dos: dos candidatas con el mismo peso fijan las mismas dimensiones.
 /// </para>
 ///
@@ -69,7 +72,12 @@ public class LendingPostingRule : AuditableEntity
         int? branchId = null,
         int? costCenterId = null,
         DateOnly? validTo = null,
-        string? notes = null)
+        string? notes = null,
+        string? lineNature = null,
+        string? depositClass = null,
+        string? issueTermBand = null,
+        string? contributionClass = null,
+        string? accountFlag = null)
     {
         if (string.IsNullOrWhiteSpace(role)) throw new ArgumentException("El rol es obligatorio.", nameof(role));
         if (accountId <= 0) throw new ArgumentOutOfRangeException(nameof(accountId), "La regla lleva una cuenta.");
@@ -92,9 +100,15 @@ public class LendingPostingRule : AuditableEntity
         BranchId = branchId;
         CostCenterId = costCenterId;
         Notes = notes?.Trim() ?? string.Empty;
+        LineNature = Texto(lineNature);
+        DepositClass = Texto(depositClass);
+        IssueTermBand = Texto(issueTermBand);
+        ContributionClass = Texto(contributionClass);
+        AccountFlag = Texto(accountFlag);
 
         DimensionKey = ClaveDe(Operation, Role, CreditLineCode, ModalityCode, SubsegmentCode, RiskCategory, ConceptCode, IsEmployee,
-            InGracePeriod, OnBehalfOfAssociate, Restructured, CollectorClass, ReasonCode, BranchId);
+            InGracePeriod, OnBehalfOfAssociate, Restructured, CollectorClass, ReasonCode, BranchId, LineNature, DepositClass, IssueTermBand,
+            ContributionClass, AccountFlag);
         SpecificityWeight = PesoDe(Operation, CreditLineCode, SubsegmentCode, IsEmployee, InGracePeriod, OnBehalfOfAssociate, Restructured, BranchId);
 
         if (validTo is { } hasta) CerrarVigencia(hasta);
@@ -139,6 +153,21 @@ public class LendingPostingRule : AuditableEntity
     /// <summary>Sucursal (<c>COR_Branches</c>); se compara con la sucursal del hecho.</summary>
     public int? BranchId { get; private set; }
 
+    /// <summary>Naturaleza de la línea (<c>LineNature</c> como texto: <c>Deposit</c>, <c>Contribution</c>); dimensión 14 (feature 014).</summary>
+    public string? LineNature { get; private set; }
+
+    /// <summary>Clase de captación (<c>DepositClass</c>: <c>Demand</c>, <c>Contractual</c>, <c>Permanent</c>, <c>TermDeposit</c>); dimensión 15.</summary>
+    public string? DepositClass { get; private set; }
+
+    /// <summary>Plazo de emisión (<c>IssueTermBand</c>), exigido en CDAT y contractual (contabilidad.md §1.2 de la 014); dimensión 16.</summary>
+    public string? IssueTermBand { get; private set; }
+
+    /// <summary>Clase de aporte (<c>ContributionClass</c>: <c>Minimum</c>, <c>Ordinary</c>, <c>Extraordinary</c>, <c>Revalued</c>); dimensión 17.</summary>
+    public string? ContributionClass { get; private set; }
+
+    /// <summary>Marca de la cuenta (<c>AccountFlag</c>: <c>Standard</c>, <c>GmfExempt</c>, <c>Garnished</c>, research C20); dimensión 18.</summary>
+    public string? AccountFlag { get; private set; }
+
     /// <summary>Centro de costo (<c>COR_CostCenters</c>) que se <b>asigna</b> a la línea si la cuenta lo maneja; no se compara (C77).</summary>
     public int? CostCenterId { get; private set; }
 
@@ -176,7 +205,8 @@ public class LendingPostingRule : AuditableEntity
     public static string ClaveDe(
         string? operation, string role, string? creditLineCode, string? modalityCode, string? subsegmentCode, string? riskCategory,
         string? conceptCode, bool? isEmployee, bool? inGracePeriod, bool? onBehalfOfAssociate, bool? restructured, string? collectorClass,
-        string? reasonCode, int? branchId) =>
+        string? reasonCode, int? branchId, string? lineNature = null, string? depositClass = null, string? issueTermBand = null,
+        string? contributionClass = null, string? accountFlag = null) =>
         string.Join('|',
             Texto(operation) ?? Cualquiera,
             role.Trim(),
@@ -191,7 +221,18 @@ public class LendingPostingRule : AuditableEntity
             Booleano(restructured),
             Texto(collectorClass) ?? Cualquiera,
             Texto(reasonCode) ?? Cualquiera,
-            branchId?.ToString(CultureInfo.InvariantCulture) ?? Cualquiera);
+            branchId?.ToString(CultureInfo.InvariantCulture) ?? Cualquiera,
+            Texto(lineNature) ?? Cualquiera,
+            Texto(depositClass) ?? Cualquiera,
+            Texto(issueTermBand) ?? Cualquiera,
+            Texto(contributionClass) ?? Cualquiera,
+            Texto(accountFlag) ?? Cualquiera);
+
+    /// <summary>
+    /// Lo que la migración <c>CaptacionesAportes</c> (feature 014, T044) agregó al final de la clave de las reglas que ya existían: las cinco
+    /// dimensiones de captaciones en <c>*</c>. Ninguna regla de crédito cambia de resolución (sus roles no declaran esas dimensiones).
+    /// </summary>
+    public const string SufijoDeCaptaciones = "|*|*|*|*|*";
 
     /// <summary>Línea 512, empleado 256, gracia 128, sub-segmento 64, reestructurado 32, por cuenta del asociado 16, sucursal 4, hecho 2.</summary>
     public static int PesoDe(

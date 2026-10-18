@@ -32,20 +32,27 @@ public sealed record ReglaPropuestaDeCartera(
     string? CollectorClass = null,
     string? ReasonCode = null,
     int? BranchId = null,
-    int? CostCenterId = null)
+    int? CostCenterId = null,
+    string? LineNature = null,
+    string? DepositClass = null,
+    string? IssueTermBand = null,
+    string? ContributionClass = null,
+    string? AccountFlag = null)
 {
     /// <summary>La <c>DimensionKey</c> que tendría (la de la entidad).</summary>
     public string Clave => LendingPostingRule.ClaveDe(Operation, Role, CreditLineCode, ModalityCode, SubsegmentCode, RiskCategory, ConceptCode,
-        IsEmployee, InGracePeriod, OnBehalfOfAssociate, Restructured, CollectorClass, ReasonCode, BranchId);
+        IsEmployee, InGracePeriod, OnBehalfOfAssociate, Restructured, CollectorClass, ReasonCode, BranchId, LineNature, DepositClass, IssueTermBand,
+        ContributionClass, AccountFlag);
 
     /// <summary>Las dimensiones que fija (para comprobar las exigidas y las que el rol no admite).</summary>
     public IReadOnlySet<DimensionDeCartera> Presentes => ReglasDeLaMatrizDeCartera.Presentes(
         Operation, CreditLineCode, ModalityCode, SubsegmentCode, RiskCategory, ConceptCode, IsEmployee, InGracePeriod, OnBehalfOfAssociate,
-        Restructured, CollectorClass, ReasonCode, BranchId is not null);
+        Restructured, CollectorClass, ReasonCode, BranchId is not null, LineNature, DepositClass, IssueTermBand, ContributionClass, AccountFlag);
 
     public LendingPostingRule ComoRegla(string? notas) => new(
         Operation, Role, AccountId, ValidFrom, CreditLineCode, ModalityCode, SubsegmentCode, RiskCategory, ConceptCode, IsEmployee, InGracePeriod,
-        OnBehalfOfAssociate, Restructured, CollectorClass, ReasonCode, BranchId, CostCenterId, ValidTo, notas);
+        OnBehalfOfAssociate, Restructured, CollectorClass, ReasonCode, BranchId, CostCenterId, ValidTo, notas, LineNature, DepositClass, IssueTermBand,
+        ContributionClass, AccountFlag);
 
     /// <summary>Vacío o <c>*</c> = no fija valor.</summary>
     internal static string? Valor(string? valor) =>
@@ -104,10 +111,11 @@ public sealed class ReglasDeLaMatrizDeCartera(IApplicationDbContext db, IDimensi
     /// <summary>Lo que las validaciones leen una vez.</summary>
     public async Task<CatalogosDeLaMatrizDeCartera> CargarAsync(CancellationToken ct) => new(await dimensiones.CatalogoAsync(ct));
 
-    /// <summary>Las dimensiones fijadas, a partir de sus valores (vacío o <c>*</c> = no fija).</summary>
+    /// <summary>Las dimensiones fijadas, a partir de sus valores (vacío o <c>*</c> = no fija). Las cinco últimas, de captaciones (feature 014).</summary>
     public static IReadOnlySet<DimensionDeCartera> Presentes(
         string? operacion, string? linea, string? modalidad, string? subsegmento, string? categoria, string? concepto, bool? empleado, bool? gracia,
-        bool? porCuentaDelAsociado, bool? reestructurado, string? clase, string? motivo, bool sucursal)
+        bool? porCuentaDelAsociado, bool? reestructurado, string? clase, string? motivo, bool sucursal, string? naturaleza = null,
+        string? claseDeCaptacion = null, string? plazoDeEmision = null, string? claseDeAporte = null, string? marca = null)
     {
         var presentes = new HashSet<DimensionDeCartera>();
         if (ReglaPropuestaDeCartera.Valor(operacion) is not null) presentes.Add(DimensionDeCartera.Operation);
@@ -123,15 +131,22 @@ public sealed class ReglasDeLaMatrizDeCartera(IApplicationDbContext db, IDimensi
         if (ReglaPropuestaDeCartera.Valor(clase) is not null) presentes.Add(DimensionDeCartera.CollectorClass);
         if (ReglaPropuestaDeCartera.Valor(motivo) is not null) presentes.Add(DimensionDeCartera.Reason);
         if (sucursal) presentes.Add(DimensionDeCartera.Branch);
+        if (ReglaPropuestaDeCartera.Valor(naturaleza) is not null) presentes.Add(DimensionDeCartera.LineNature);
+        if (ReglaPropuestaDeCartera.Valor(claseDeCaptacion) is not null) presentes.Add(DimensionDeCartera.DepositClass);
+        if (ReglaPropuestaDeCartera.Valor(plazoDeEmision) is not null) presentes.Add(DimensionDeCartera.IssueTermBand);
+        if (ReglaPropuestaDeCartera.Valor(claseDeAporte) is not null) presentes.Add(DimensionDeCartera.ContributionClass);
+        if (ReglaPropuestaDeCartera.Valor(marca) is not null) presentes.Add(DimensionDeCartera.AccountFlag);
         return presentes;
     }
 
     /// <summary>
     /// La forma, sin leer nada: el hecho es <c>*</c> o uno de negocio de <see cref="OperacionesDeCartera"/>; el rol existe y, con el hecho
     /// fijado, es de ese hecho y de resultado (en los demás el hecho va en <c>*</c>, C77); las exigidas están (según el motivo, en el gasto y
-    /// la recuperación del deterioro); las que el rol no admite, no. La usan los validadores (400) y el handler (422).
+    /// la recuperación del deterioro; y, desde la feature 014, según la clase de captación en el capital de captación); las que el rol no admite,
+    /// no. La usan los validadores (400) y el handler (422).
     /// </summary>
-    public static IReadOnlyList<Error> Forma(string? operacion, string? rol, string? motivo, IReadOnlySet<DimensionDeCartera> presentes)
+    public static IReadOnlyList<Error> Forma(
+        string? operacion, string? rol, string? motivo, IReadOnlySet<DimensionDeCartera> presentes, string? claseDeCaptacion = null)
     {
         var errores = new List<Error>();
         var hecho = ReglaPropuestaDeCartera.Valor(operacion);
@@ -158,7 +173,7 @@ public sealed class ReglasDeLaMatrizDeCartera(IApplicationDbContext db, IDimensi
         }
 
         var nombreDelHecho = hecho ?? LendingPostingRule.Cualquiera;
-        var (exigidas, opcionales) = R.DimensionesDe(definicion, ReglaPropuestaDeCartera.Valor(motivo));
+        var (exigidas, opcionales) = R.DimensionesDe(definicion, ReglaPropuestaDeCartera.Valor(motivo), ReglaPropuestaDeCartera.Valor(claseDeCaptacion));
         foreach (var exigida in exigidas.Where(d => !presentes.Contains(d)))
             errores.Add(AccountingErrors.LendingRuleDimensionRequired(nombreDelHecho, definicion.Codigo, R.NombreDe(exigida)));
         foreach (var presente in presentes.Where(d => !exigidas.Contains(d) && !opcionales.Contains(d)).OrderBy(d => d))
@@ -179,7 +194,7 @@ public sealed class ReglasDeLaMatrizDeCartera(IApplicationDbContext db, IDimensi
         bool esVersion,
         CancellationToken ct)
     {
-        var errores = new List<Error>(Forma(propuesta.Operation, propuesta.Role, propuesta.ReasonCode, propuesta.Presentes));
+        var errores = new List<Error>(Forma(propuesta.Operation, propuesta.Role, propuesta.ReasonCode, propuesta.Presentes, propuesta.DepositClass));
         var avisos = new List<AvisoDeReglaDeCarteraDto>();
         if (errores.Count > 0) return new ValidacionDeReglaDeCartera(errores, avisos, []);
 
@@ -250,6 +265,22 @@ public sealed class ReglasDeLaMatrizDeCartera(IApplicationDbContext db, IDimensi
 
         if (ReglaPropuestaDeCartera.Valor(p.ReasonCode) is { } motivo && !R.AdmiteMotivo(rol, motivo))
             Desconocido(DimensionDeCartera.Reason, motivo);
+
+        // Feature 014 (T049; contabilidad.md §1.1 y §4.1): las cinco de captaciones, por su enum; un rol de captaciones no admite colocación.
+        if (ReglaPropuestaDeCartera.Valor(p.LineNature) is { } naturaleza)
+        {
+            if (!R.Naturalezas.Contains(naturaleza, StringComparer.Ordinal)) Desconocido(DimensionDeCartera.LineNature, naturaleza);
+            else if (R.EsDeCaptaciones(rol.Codigo) && !R.NaturalezasDeCaptacion.Contains(naturaleza, StringComparer.Ordinal))
+                errores.Add(AccountingErrors.LendingRuleLineNatureMismatch(rol.Codigo, naturaleza));
+        }
+        if (ReglaPropuestaDeCartera.Valor(p.DepositClass) is { } claseDeCaptacion && !R.ClasesDeCaptacion.Contains(claseDeCaptacion, StringComparer.Ordinal))
+            Desconocido(DimensionDeCartera.DepositClass, claseDeCaptacion);
+        if (ReglaPropuestaDeCartera.Valor(p.IssueTermBand) is { } plazo && !R.PlazosDeEmision.Contains(plazo, StringComparer.Ordinal))
+            Desconocido(DimensionDeCartera.IssueTermBand, plazo);
+        if (ReglaPropuestaDeCartera.Valor(p.ContributionClass) is { } claseDeAporte && !R.ClasesDeAporte.Contains(claseDeAporte, StringComparer.Ordinal))
+            Desconocido(DimensionDeCartera.ContributionClass, claseDeAporte);
+        if (ReglaPropuestaDeCartera.Valor(p.AccountFlag) is { } marca && !R.MarcasDeCuenta.Contains(marca, StringComparer.Ordinal))
+            Desconocido(DimensionDeCartera.AccountFlag, marca);
     }
 
     private static void Vigencias(

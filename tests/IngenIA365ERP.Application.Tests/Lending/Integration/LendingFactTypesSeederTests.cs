@@ -30,15 +30,24 @@ public class LendingFactTypesSeederTests
     }
 
     [Fact]
-    public async Task Siembra_los_37_hechos_a_contabilidad_con_su_codigo_corto()
+    public async Task Siembra_los_70_hechos_a_contabilidad_con_su_codigo_corto()
     {
         // K6b (T1056): 35 hasta K6a, la corrección monetaria UVR y el reparto de un pago corregido por la UVR (decisión del dueño del 2026-10-17).
-        (await LendingFactTypesSeeder.AplicarAsync(_db, NullLogger.Instance, CancellationToken.None)).Should().Be(37);
+        // Feature 014 (T048): los 33 de captaciones y aportes.
+        (await LendingFactTypesSeeder.AplicarAsync(_db, NullLogger.Instance, CancellationToken.None)).Should().Be(70);
 
         var filas = await _db.LendingFactTypes.ToListAsync();
-        filas.Should().HaveCount(37);
+        filas.Should().HaveCount(70);
         filas.Select(f => f.Code).Should().BeEquivalentTo(CatalogoDeMensajesDeCarteraV1.HechosAContabilidad.Select(t => t.Type));
-        CatalogoDeMensajesDeCarteraV1.Todos.Count.Should().Be(43, "los 6 a otros destinos no son hechos contables y no tienen fila");
+        CatalogoDeMensajesDeCarteraV1.Todos.Count.Should().Be(76, "los 6 a otros destinos no son hechos contables y no tienen fila");
+        filas.Single(f => f.Code == "CaptacionesActivadas").Should().BeEquivalentTo(new
+        {
+            ShortCode = "CAV", VoucherTypeCode = (string?)null, IsInformational = true, DeliveredIn = EntregaDeCartera.K7,
+        }, "research C23: CAV, porque CTA es el documento cruce");
+        filas.Single(f => f.Code == "InteresDeCaptacionCausado").Should().BeEquivalentTo(new
+        {
+            ShortCode = "ICC", VoucherTypeCode = "CC", DefaultMode = "PorLotes", DefaultBatchTrigger = "FinDeCausacion", DeliveredIn = EntregaDeCartera.K8,
+        });
         filas.Single(f => f.Code == "CorreccionMonetariaUvrCausada").Should().BeEquivalentTo(new
         {
             ShortCode = "CMU", VoucherTypeCode = "CA", DefaultMode = "PorLotes", DefaultBatchTrigger = "FinDeCausacion", DeliveredIn = EntregaDeCartera.K6b,
@@ -64,9 +73,10 @@ public class LendingFactTypesSeederTests
         var filas = await _db.LendingFactTypes.ToListAsync();
 
         filas.Where(f => f.IsInformational).Select(f => f.Code).Should().BeEquivalentTo(
-            ["CausacionSuspendida", "CausacionReanudada", "CarteraActivada", "CargaDeCarteraAplicada", "CierreDeCarteraRealizado", "CierreDeCarteraReabierto"]);
+            ["CausacionSuspendida", "CausacionReanudada", "CarteraActivada", "CargaDeCarteraAplicada", "CierreDeCarteraRealizado", "CierreDeCarteraReabierto",
+                "DevolucionGirada", "CaptacionesActivadas", "CargaDeCaptacionesAplicada"]);
         filas.Where(f => f.IsInformational).Should().OnlyContain(f => f.VoucherTypeCode == null);
-        filas.Where(f => !f.IsInformational).Should().OnlyContain(f => new[] { "DS", "RC", "CA", "PV", "CN" }.Contains(f.VoucherTypeCode));
+        filas.Where(f => !f.IsInformational).Should().OnlyContain(f => new[] { "DS", "RC", "CA", "PV", "CN", "MA", "CC", "TD", "AO", "RA" }.Contains(f.VoucherTypeCode));
         filas.Single(f => f.Code == "InteresCausado").Should().BeEquivalentTo(new { VoucherTypeCode = "CA", DefaultMode = "PorLotes", DefaultBatchTrigger = "FinDeCausacion", DeliveredIn = EntregaDeCartera.K1 });
         filas.Single(f => f.Code == "DeterioroCalculado").DefaultBatchTrigger.Should().Be("CierreDeCartera");
         filas.Single(f => f.Code == "CreditoCastigado").DeliveredIn.Should().Be(EntregaDeCartera.K3);
@@ -99,6 +109,6 @@ public class LendingFactTypesSeederTests
         LendingFactTypesSeeder.Datos.Keys.Should().BeEquivalentTo(CatalogoDeMensajesDeCarteraV1.HechosAContabilidad.Select(t => t.Type));
         CatalogoDeMensajesDeCarteraV1.HechosAContabilidad.Should().OnlyContain(t => !string.IsNullOrWhiteSpace(t.CodigoCorto));
         CatalogoDeMensajesDeCarteraV1.HechosAContabilidad.Should().OnlyContain(t => t.Destination == IntegrationDestinations.Accounting);
-        LendingFactTypesSeeder.Catalogo().Should().HaveCount(37);
+        LendingFactTypesSeeder.Catalogo().Should().HaveCount(70);
     }
 }

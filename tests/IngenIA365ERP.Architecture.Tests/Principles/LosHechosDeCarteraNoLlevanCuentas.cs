@@ -17,8 +17,13 @@ public class LosHechosDeCarteraNoLlevanCuentas
     /// <summary>Carpetas de contratos de mensaje de Cartera (relativas a <c>src/</c>).</summary>
     private static readonly string[] Carpetas = ["Core/IngenIA365ERP.Application/Common/Integration/Contracts/Lending"];
 
-    /// <summary>Archivos exentos (rutas relativas a la raíz, con barras normales).</summary>
+    /// <summary>
+    /// Archivos exentos (rutas relativas a la raíz, con barras normales). Los de captaciones (<c>Contracts/Lending/Deposits</c>, feature 014) tienen su
+    /// propia regla abajo: allí <c>Account</c> es la cuenta del asociado.
+    /// </summary>
     private static readonly string[] Exentos = [];
+
+    private static bool EsDeCaptaciones(string relativo) => relativo.Contains("/Contracts/Lending/Deposits/", StringComparison.Ordinal);
 
     /// <summary>Propiedades que empiezan por <c>Account</c> y no son cuentas contables (los campos de mensajes.md §10.1, §10.3, §10.16).</summary>
     private static readonly string[] SellosQueNoSonCuentas = ["AccountsReceivableRecordedBy", "AccountingReference"];
@@ -35,7 +40,7 @@ public class LosHechosDeCarteraNoLlevanCuentas
     {
         var archivos = ReglaSobreFuente.ArchivosEn(Carpetas).ToList();
         Assert.True(archivos.Count > 0, "No se encontraron los contratos de Cartera: si se movieron, actualizá Carpetas.");
-        var infracciones = ReglaSobreFuente.Infracciones(archivos, Prohibidos, relativo => Exentos.Contains(relativo));
+        var infracciones = ReglaSobreFuente.Infracciones(archivos, Prohibidos, relativo => Exentos.Contains(relativo) || EsDeCaptaciones(relativo));
         ReglaSobreFuente.SinInfracciones(infracciones, "Un contrato de mensaje de Cartera lleva una cuenta (FR-126)");
     }
 
@@ -81,8 +86,12 @@ public class LosHechosDeCarteraNoLlevanCuentas
             if (!visitados.Add(tipo)) continue;
             foreach (var propiedad in tipo.GetProperties(BindingFlags.Public | BindingFlags.Instance))
             {
+                // En los hechos de captaciones (feature 014) la cuenta del asociado no es una cuenta del plan: la vigila su propia regla.
+                var esLaCuentaDelAsociado = (tipo.Namespace ?? string.Empty).StartsWith(EspacioDeCaptaciones, StringComparison.Ordinal)
+                    && (propiedad.PropertyType == typeof(IngenIA365ERP.Application.Common.Integration.Contracts.Lending.Deposits.MemberAccountRefV1)
+                        || CuentaDelAsociado.Contains(propiedad.Name));
                 if ((propiedad.Name.StartsWith("Account", StringComparison.Ordinal) || propiedad.Name.StartsWith("Cuenta", StringComparison.Ordinal))
-                    && !SellosQueNoSonCuentas.Contains(propiedad.Name))
+                    && !SellosQueNoSonCuentas.Contains(propiedad.Name) && !esLaCuentaDelAsociado)
                     infracciones.Add($"{tipo.Name}.{propiedad.Name}");
                 foreach (var hijo in TiposDeBloque(propiedad.PropertyType)) pendientes.Enqueue(hijo);
             }
@@ -104,7 +113,8 @@ public class LosHechosDeCarteraNoLlevanCuentas
     private const string EspacioDeCaptaciones = "IngenIA365ERP.Application.Common.Integration.Contracts.Lending.Deposits";
 
     /// <summary>Lo que en los hechos de captaciones es la cuenta del asociado o un conteo, no una cuenta contable.</summary>
-    private static readonly string[] CuentaDelAsociado = ["AccountPublicId", "AccountNumber", "AccountCount", "TargetAccountPublicId", "SourceAccountPublicId"];
+    private static readonly string[] CuentaDelAsociado =
+        ["AccountPublicId", "AccountNumber", "AccountCount", "AccountFlag", "TargetAccountPublicId", "SourceAccountPublicId"];
 
     private static readonly Regex CuentaContable = new(
         @"^(Puc\w*|Cuenta\w*|\w*(Ledger|Accounting)Account\w*|\w*AccountCode|\w*AccountId|Account(Code|Id)?)$", RegexOptions.Compiled);
@@ -118,7 +128,8 @@ public class LosHechosDeCarteraNoLlevanCuentas
         var infracciones = new List<string>();
         foreach (var tipo in tipos)
         {
-            if (Regex.IsMatch(tipo.Name, "(Puc|Cuenta|LedgerAccount|AccountingAccount)")) infracciones.Add($"{tipo.Name}: un bloque de cuenta contable");
+            // «Cuenta» en el nombre de un hecho de captaciones es la del asociado (CargoDeCuentaCausado, OperacionDeCuentaReversada…).
+            if (Regex.IsMatch(tipo.Name, "(Puc|CuentaContable|LedgerAccount|AccountingAccount)")) infracciones.Add($"{tipo.Name}: un bloque de cuenta contable");
             foreach (var propiedad in tipo.GetProperties(BindingFlags.Public | BindingFlags.Instance))
             {
                 var esLaCuentaDelAsociado = propiedad.PropertyType.Name == "MemberAccountRefV1" || CuentaDelAsociado.Contains(propiedad.Name);

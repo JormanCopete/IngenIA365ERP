@@ -9,7 +9,9 @@ namespace IngenIA365ERP.Application.Accounting.Lending.Reglas;
 /// Los valores que un importe de un hecho busca en la matriz (§3.3, paso 2): las dimensiones del crédito a la fecha contable (en las
 /// partes, las de cada línea por crédito), el concepto y si es «por cuenta del asociado», la clase de recaudador, el motivo y la sucursal
 /// del hecho (en un cambio de oficina, la de cada punta). La sucursal va por <c>PublicId</c>: el resolutor la traduce al <c>Id</c> de Core.
-/// Lo que el rol no admite se ignora. (nuevo)
+/// Lo que el rol no admite se ignora. Desde la feature 014 (T049; contabilidad.md §1.1) suma, al final, las cinco dimensiones de las cuentas
+/// de captación y aportes (naturaleza de la línea, clase de captación, plazo de emisión, clase de aporte y marca de la cuenta), por el nombre
+/// de su enum; un hecho de crédito las deja nulas y ninguna regla de crédito las fija. (nuevo)
 /// </summary>
 public sealed record ValoresDeCartera(
     string? CreditLineCode = null,
@@ -23,7 +25,12 @@ public sealed record ValoresDeCartera(
     bool? Restructured = null,
     string? CollectorClass = null,
     string? ReasonCode = null,
-    Guid? BranchPublicId = null);
+    Guid? BranchPublicId = null,
+    string? LineNature = null,
+    string? DepositClass = null,
+    string? IssueTermBand = null,
+    string? ContributionClass = null,
+    string? AccountFlag = null);
 
 /// <summary>
 /// Una pregunta a la matriz de Cartera: el hecho (el <c>Type</c> del mensaje), el rol, los valores, la fecha de las reglas —la fecha contable
@@ -144,6 +151,10 @@ public sealed class ResolutorDeReglasDeCartera(IApplicationDbContext db)
 
         if (!Esta(regla.CreditLineCode) || !Esta(regla.ModalityCode) || !Esta(regla.SubsegmentCode) || !Esta(regla.RiskCategory)
             || !Esta(regla.ConceptCode) || !Esta(regla.CollectorClass) || !Esta(regla.ReasonCode))
+            return false;
+        // Feature 014 (T049): las dimensiones de captaciones viajan con el nombre de su enum en el contenido del hecho.
+        if (!Esta(regla.LineNature) || !Esta(regla.DepositClass) || !Esta(regla.IssueTermBand) || !Esta(regla.ContributionClass)
+            || !Esta(regla.AccountFlag))
             return false;
         return sucursal is not { } s || valores.Contains(s.ToString());
     }

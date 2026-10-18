@@ -1,5 +1,6 @@
 using IngenIA365ERP.Application.Common.Integration.Contracts.Inventory;
 using IngenIA365ERP.Application.Common.Integration.Contracts.Lending;
+using IngenIA365ERP.Application.Common.Integration.Contracts.Lending.Deposits;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Domain.Entities.Lending.Configuration;
 using IngenIA365ERP.Domain.Enums.Integration;
@@ -12,8 +13,8 @@ namespace IngenIA365ERP.Persistence.Seeding.Parametric;
 /// <summary>
 /// Los tipos de hecho de Cartera (<c>LND_FactTypes</c>; feature 013, T0223; data-model §1.11; DC-11, T43, T56, C06, C110, C117;
 /// Order 90, CH36): una fila por cada tipo <c>CAR → Accounting</c> del catálogo de mensajes de Cartera
-/// (<see cref="CatalogoDeMensajesDeCarteraV1.HechosAContabilidad"/>, <b>37</b>, con los tres contingentes de A3 y, desde K6b, la corrección
-/// monetaria UVR y el reparto de un pago corregido por la UVR); los 6 tipos
+/// (<see cref="CatalogoDeMensajesDeCarteraV1.HechosAContabilidad"/>, <b>70</b>: 37 de crédito, con los tres contingentes de A3 y, desde K6b, la
+/// corrección monetaria UVR y el reparto de un pago corregido por la UVR, y los 33 de captaciones y aportes de la feature 014, T048); los 6 tipos
 /// restantes del catálogo no son hechos contables y no tienen fila. El <c>ShortCode</c> se lee de
 /// <see cref="TipoDeMensaje.CodigoCorto"/> (C117): un tipo sin código corto hace fallar el arranque. El resto —nombre, comprobante
 /// (contabilidad.md §2.1, §5), modo y disparador por defecto (D8, T56) y entrega— es la tabla <see cref="Datos"/>.
@@ -88,6 +89,43 @@ public sealed class LendingFactTypesSeeder : IDataSeeder
         // K6b (decisión del dueño del 2026-10-17): el reparto de un pago corregido por la UVR, por lotes con el ajuste de la corrida.
         [PagoRedistribuidoPorValorNacionalV1.Type] = new("Pago redistribuido por corrección de valor nacional", "CA", PorLotes, FinDeCausacion,
             EntregaDeCartera.K6b),
+        // Feature 014 (T048; contracts/mensajes.md §1.1 y contabilidad.md §3 y §5 de la 014): los 33 de captaciones y aportes. Los acompañantes
+        // llevan el modo y el comprobante de su principal más frecuente; rige el del principal (C01 de la 013).
+        [ConsignacionEnCuentaAplicadaV1.Type] = new("Consignación en cuenta aplicada", "MA", EnLinea, null, EntregaDeCartera.K8),
+        [AporteRecibidoV1.Type] = new("Aporte recibido", "AO", EnLinea, null, EntregaDeCartera.K7),
+        [RetiroDeCuentaAplicadoV1.Type] = new("Retiro de cuenta aplicado", "MA", EnLinea, null, EntregaDeCartera.K8),
+        [TrasladoEntreCuentasAplicadoV1.Type] = new("Traslado entre cuentas aplicado", "MA", EnLinea, null, EntregaDeCartera.K7),
+        [GmfRetenidoV1.Type] = new("GMF retenido", "MA", EnLinea, null, EntregaDeCartera.K8),
+        [InteresDeCaptacionCausadoV1.Type] = new("Interés de captación causado", "CC", PorLotes, FinDeCausacion, EntregaDeCartera.K8),
+        [AjusteDeCausacionDeCaptacionV1.Type] = new("Ajuste de causación de captación", "CC", PorLotes, FinDeCausacion, EntregaDeCartera.K8),
+        [InteresDeCaptacionLiquidadoV1.Type] = new("Interés de captación liquidado", "CC", PorLotes, FinDeCausacion, EntregaDeCartera.K8),
+        [RetencionPracticadaV1.Type] = new("Retención en la fuente practicada", "CC", PorLotes, FinDeCausacion, EntregaDeCartera.K8),
+        [CdatConstituidoV1.Type] = new("CDAT constituido", "TD", EnLinea, null, EntregaDeCartera.K9),
+        [InteresesDeCdatPagadosV1.Type] = new("Intereses de CDAT pagados", "TD", EnLinea, null, EntregaDeCartera.K9),
+        [CdatProrrogadoV1.Type] = new("CDAT prorrogado", "TD", EnLinea, null, EntregaDeCartera.K9),
+        [CdatRenovadoV1.Type] = new("CDAT renovado", "TD", EnLinea, null, EntregaDeCartera.K9),
+        [CdatRedimidoV1.Type] = new("CDAT redimido", "TD", EnLinea, null, EntregaDeCartera.K9),
+        [CdatCanceladoV1.Type] = new("CDAT cancelado", "TD", EnLinea, null, EntregaDeCartera.K9),
+        [PenalidadAplicadaV1.Type] = new("Penalidad aplicada", "TD", EnLinea, null, EntregaDeCartera.K9),
+        // En línea si la emite una operación; por lotes al fin de la causación si la emite el proceso (como DimensionContableCambiada).
+        [CaptacionReclasificadaV1.Type] = new("Captación reclasificada", "CN", EnLinea, FinDeCausacion, EntregaDeCartera.K8),
+        [BonificacionReconocidaV1.Type] = new("Bonificación reconocida", "CC", EnLinea, null, EntregaDeCartera.K9),
+        [CargoDeCuentaCausadoV1.Type] = new("Cargo de cuenta causado", "MA", EnLinea, null, EntregaDeCartera.K8),
+        [CargoPendienteCobradoV1.Type] = new("Cargo pendiente cobrado", "MA", EnLinea, null, EntregaDeCartera.K8),
+        [CargoDeCuentaCondonadoV1.Type] = new("Cargo de cuenta condonado", "MA", EnLinea, null, EntregaDeCartera.K8),
+        [RevalorizacionDeAportesAplicadaV1.Type] = new("Revalorización de aportes aplicada", "AO", EnLinea, null, EntregaDeCartera.K10),
+        [ExcedentesDistribuidosV1.Type] = new("Excedentes distribuidos", "AO", EnLinea, null, EntregaDeCartera.K10),
+        [AportesAmortizadosV1.Type] = new("Aportes amortizados", "AO", EnLinea, null, EntregaDeCartera.K10),
+        [CruceAlRetiroAplicadoV1.Type] = new("Cruce al retiro aplicado", "RA", EnLinea, null, EntregaDeCartera.K7),
+        [PerdidaAplicadaAlRetiroV1.Type] = new("Pérdida aplicada al retiro", "RA", EnLinea, null, EntregaDeCartera.K7),
+        [DevolucionOrdenadaV1.Type] = new("Devolución ordenada", "RA", EnLinea, null, EntregaDeCartera.K7),
+        [DevolucionGiradaV1.Type] = new("Devolución girada", null, EnLinea, null, EntregaDeCartera.K7),
+        [SaldoTrasladadoANoReclamadosV1.Type] = new("Saldo trasladado a no reclamados", "MA", EnLinea, null, EntregaDeCartera.K10),
+        [EmbargoConsignadoV1.Type] = new("Embargo consignado", "MA", EnLinea, null, EntregaDeCartera.K8),
+        // Hereda el modo y el comprobante de su original (C08 de la 013); el MA es sólo el de la fila.
+        [OperacionDeCuentaReversadaV1.Type] = new("Operación de cuenta reversada", "MA", EnLinea, null, EntregaDeCartera.K7),
+        [CaptacionesActivadasV1.Type] = new("Captaciones activadas", null, EnLinea, null, EntregaDeCartera.K7),
+        [CargaDeCaptacionesAplicadaV1.Type] = new("Carga de captaciones aplicada", null, EnLinea, null, EntregaDeCartera.K7),
     };
 
     public async Task<int> SeedAsync(SeedContext context, CancellationToken ct)

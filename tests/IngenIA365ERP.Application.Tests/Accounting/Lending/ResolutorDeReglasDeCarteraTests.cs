@@ -1,6 +1,7 @@
 using FluentAssertions;
 using IngenIA365ERP.Application.Accounting.Lending.Reglas;
 using IngenIA365ERP.Application.Common.Integration.Contracts.Lending;
+using IngenIA365ERP.Application.Common.Integration.Contracts.Lending.Deposits;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Domain.Entities.Accounting.Lending;
 using IngenIA365ERP.Domain.Enums.Accounting;
@@ -35,18 +36,21 @@ public class ResolutorDeReglasDeCarteraTests
     // ------------------------------------------------------------------------------------------ catálogos fijos --
 
     [Fact]
-    public void Los_hechos_son_los_37_del_catalogo_de_mensajes_con_su_codigo_corto()
+    public void Los_hechos_son_los_70_del_catalogo_de_mensajes_con_su_codigo_corto()
     {
         // K6b (T1056): suma la corrección monetaria UVR (CMU), de negocio; y el reparto de un pago corregido por la UVR (PRN, 2026-10-17).
-        O.Todas.Should().HaveCount(37);
+        // Feature 014 (T048): los 33 de captaciones y aportes al final (30 de negocio, 3 informativos).
+        O.Todas.Should().HaveCount(70);
+        O.DeCaptaciones.Should().HaveCount(33);
         O.Todas.Select(o => (o.Codigo, o.Corto, o.EsInformativo)).Should().Equal(
             CatalogoDeMensajesDeCarteraV1.HechosAContabilidad.Select(t => (t.Type, t.CodigoCorto!, t.Kind == IntegrationMessageKind.Informational)),
             "el código de operación de la matriz es el Type del mensaje (§2.1, C110)");
-        O.Todas.Count(o => o.EsInformativo).Should().Be(6);
-        O.DeNegocio.Should().HaveCount(31);
+        O.Todas.Count(o => o.EsInformativo).Should().Be(9);
+        O.DeNegocio.Should().HaveCount(61);
         O.Todas.SelectMany(o => o.Roles).Should().OnlyContain(r => R.Buscar(r) != null, "todo hecho nombra roles del catálogo");
         O.Todas.Where(o => o.EsInformativo).Should().OnlyContain(o => o.Roles.Count == 0 && o.Comprobante == null);
-        O.Todas.Where(o => o.HeredaElModo).Select(o => o.Codigo).Should().BeEquivalentTo([DesembolsoReversadoV1.Type, PagoReversadoV1.Type, ReversoDeCierreV1.Type]);
+        O.Todas.Where(o => o.HeredaElModo).Select(o => o.Codigo).Should().BeEquivalentTo(
+            [DesembolsoReversadoV1.Type, PagoReversadoV1.Type, ReversoDeCierreV1.Type, OperacionDeCuentaReversadaV1.Type]);
     }
 
     [Fact]
@@ -79,9 +83,11 @@ public class ResolutorDeReglasDeCarteraTests
     }
 
     [Fact]
-    public void Los_roles_son_los_26_de_la_tabla_de_2_2()
+    public void Los_roles_son_los_26_de_la_tabla_de_2_2_y_los_17_de_captaciones()
     {
-        R.Todos.Should().HaveCount(26);
+        // Feature 014 (T045): los 17 de captaciones y aportes al final, en español (research C10).
+        R.Todos.Should().HaveCount(43);
+        R.Todos.Take(26).Select(r => r.Codigo).Should().NotContain(R.DeCaptaciones.Select(r => r.Codigo));
         R.Buscar(R.Capital)!.Exigidas.Should().Equal(DimensionDeCartera.Modality, DimensionDeCartera.RiskCategory);
         R.Buscar(R.Capital)!.Opcionales.Should().Equal(DimensionDeCartera.CreditLine, DimensionDeCartera.IsEmployee, DimensionDeCartera.Subsegment,
             DimensionDeCartera.Restructured, DimensionDeCartera.Branch);
@@ -95,7 +101,8 @@ public class ResolutorDeReglasDeCarteraTests
         R.Buscar(R.ContingenteAcreedora)!.Naturaleza.Should().Be(AccountNature.Credit, "C91: 91xx es acreedora contingente");
         R.Buscar(R.ContraContingenteAcreedora)!.Naturaleza.Should().Be(AccountNature.Debit);
         R.Todos.Where(r => r.AdmiteHecho).Select(r => r.Codigo).Should().BeEquivalentTo(
-            [R.Ingreso, R.GastoDeterioro, R.RecuperacionDeterioro, R.GastoDeCastigoOCondonacion, R.IngresoPorRecuperacion],
+            [R.Ingreso, R.GastoDeterioro, R.RecuperacionDeterioro, R.GastoDeCastigoOCondonacion, R.IngresoPorRecuperacion,
+                R.GastoPorIntereses, R.GastoPorBonificacion, R.IngresoPorCargos, R.IngresoPorPenalidad],
             "el hecho sólo pesa en los roles de resultado (C77)");
         R.Todos.Where(r => !r.AdmiteHecho).Should().OnlyContain(r => !r.Opcionales.Contains(DimensionDeCartera.Operation));
 
@@ -199,7 +206,7 @@ public class ResolutorDeReglasDeCarteraTests
         r.Value.CostCenterId.Should().Be(m.D.Centro.Id, "el centro de la regla ganadora va a la línea");
         conCentro.SpecificityWeight.Should().Be(0, "el centro no pesa (C77)");
         conCentro.DimensionKey.Should().NotContain(m.D.Centro.Id.ToString() + "|", "el centro no entra en la clave");
-        conCentro.DimensionKey.Should().Be("*|Ingreso|*|CONSUMO|*|*|CurrentInterest|*|*|*|*|*|*|*");
+        conCentro.DimensionKey.Should().Be("*|Ingreso|*|CONSUMO|*|*|CurrentInterest|*|*|*|*|*|*|*|*|*|*|*|*");
     }
 
     [Fact]

@@ -26,11 +26,16 @@ public class SemillaDelMapeoDeCarteraTests
         semillas.Where(s => s.CollectorClass == null).Select(s => s.Operation)
             .Should().BeEquivalentTo(OperacionesDeCartera.DeNegocio.Select(o => o.Codigo), "un hecho de negocio, una fila; los informativos no tienen");
         semillas.Should().OnlyContain(s => tiposCar.Contains(s.VoucherTypeCode));
-        semillas.Should().OnlyContain(s => s.CrossDocumentTypeCode == "PG");
+        // Feature 014 (T046): los de captaciones cruzan con CTA (el número de la cuenta); los de crédito, con PG.
+        var deCaptaciones = OperacionesDeCartera.DeCaptaciones.Select(o => o.Codigo).ToHashSet();
+        semillas.Where(s => !deCaptaciones.Contains(s.Operation)).Should().OnlyContain(s => s.CrossDocumentTypeCode == "PG");
+        semillas.Where(s => deCaptaciones.Contains(s.Operation)).Should().OnlyContain(s => s.CrossDocumentTypeCode == "CTA");
+        CrossDocumentTypesSeeder.Semillas().Should().Contain(c => c.Code == "CTA" && c.Name == "Cuenta de captación o aportes");
         semillas.Where(s => s.CollectorClass != null).Select(s => (s.Operation, s.CollectorClass, s.VoucherTypeCode)).Should().BeEquivalentTo(new[]
         {
             ("PagoAplicado", (string?)"Payroll", "DN"), ("PagoReversado", "Payroll", "DN"), ("RecuperacionDeCastigada", "Payroll", "DN"),
-        }, "lo que recauda Nómina va en DN, la recuperación de castigadas incluida (C79)");
+            ("ConsignacionEnCuentaAplicada", "Payroll", "DN"), ("AporteRecibido", "Payroll", "DN"),
+        }, "lo que recauda Nómina va en DN, la recuperación de castigadas incluida (C79), y en captaciones las consignaciones y los aportes");
         foreach (var s in semillas.Where(s => s.CollectorClass == null))
             s.VoucherTypeCode.Should().Be(OperacionesDeCartera.Buscar(s.Operation)!.Comprobante, s.Operation);
     }

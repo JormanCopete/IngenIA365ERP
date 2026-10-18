@@ -25,6 +25,10 @@ public class EmisionesDeProcesoPermitidas
         "CorreccionMonetariaUvrCausada",
         // K6b (decisión del dueño del 2026-10-17): el reparto de un pago corregido por la UVR lo emite la corrida de corrección.
         "PagoRedistribuidoPorValorNacional",
+        // Feature 014 (T048; mensajes.md §1.1 de la 014, columna «Proceso»): los de captaciones que emiten el ciclo diario y sus procesos.
+        "RetiroDeCuentaAplicado", "GmfRetenido", "InteresDeCaptacionCausado", "AjusteDeCausacionDeCaptacion", "InteresDeCaptacionLiquidado",
+        "RetencionPracticada", "InteresesDeCdatPagados", "CdatProrrogado", "CdatCancelado", "PenalidadAplicada", "CaptacionReclasificada",
+        "BonificacionReconocida", "CargoDeCuentaCausado", "DevolucionOrdenada", "SaldoTrasladadoANoReclamados",
     ];
 
     /// <summary>El archivo donde se declara la marca de Cartera (relativo a <c>src/</c>).</summary>

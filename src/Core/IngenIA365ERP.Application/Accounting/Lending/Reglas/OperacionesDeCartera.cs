@@ -1,4 +1,5 @@
 using IngenIA365ERP.Application.Common.Integration.Contracts.Lending;
+using IngenIA365ERP.Application.Common.Integration.Contracts.Lending.Deposits;
 using R = IngenIA365ERP.Application.Accounting.Lending.Reglas.RolesDeCuentaDeCartera;
 
 namespace IngenIA365ERP.Application.Accounting.Lending.Reglas;
@@ -12,6 +13,24 @@ public enum EntregaDelHecho
 
     /// <summary>K6b (T1056): la corrección monetaria de los créditos en UVR.</summary>
     K6b = 7,
+
+    // Feature 014 (T048): las entregas de captaciones y aportes, con el número de EntregaDeCartera (research E06). El contrato
+    // (contabilidad.md §3 de la 014) decía K7 = 7…, pero el 7 ya es K6b (research §7, E25).
+
+    /// <summary>Aportes, traslados y retiro del asociado.</summary>
+    K7 = 8,
+
+    /// <summary>Ahorro a la vista: consignación, retiro, causación, liquidación, retención, GMF, cargos y embargos.</summary>
+    K8 = 9,
+
+    /// <summary>CDAT y ahorro contractual.</summary>
+    K9 = 10,
+
+    /// <summary>Asamblea y no reclamados.</summary>
+    K10 = 11,
+
+    /// <summary>Fondo de liquidez (sin hechos contables propios).</summary>
+    K11 = 12,
 }
 
 /// <summary>
@@ -42,7 +61,8 @@ public sealed record OperacionDeCartera(
 }
 
 /// <summary>
-/// Los 37 hechos de Cartera que van a Contabilidad (feature 013, T0640, C110; contracts/contabilidad.md §2.1): 31 de negocio (con
+/// Los 70 hechos de Cartera que van a Contabilidad: los 37 de crédito y, al final, los 33 de captaciones y aportes de la feature 014 (T048;
+/// contabilidad.md §3 de la 014: 30 de negocio y 3 informativos). Los de crédito (feature 013, T0640, C110; contracts/contabilidad.md §2.1): 31 de negocio (con
 /// comprobante; K6b suma la corrección monetaria UVR y el reparto de un pago corregido por la UVR) y 6 informativos (con recibo y sin comprobante). Catálogo fijo en código, del lado de Contabilidad: Contabilidad no depende
 /// de <c>Application.Lending</c> (lo vigila <c>CarteraNoConoceContabilidad</c> en las dos direcciones), así que el modo y el comprobante por
 /// defecto se repiten aquí y en la semilla de <c>LND_FactTypes</c>; una prueba los coteja. (nuevo)
@@ -81,6 +101,35 @@ public static class OperacionesDeCartera
     private static readonly string[] ContrasDeLaCausacion = [R.Ingreso, R.ContraOrdenContingente, R.ContraOrdenControl];
     private static readonly string[] DelDeterioro = [R.GastoDeterioro, R.DeterioroIndividual, R.DeterioroGeneral, R.RecuperacionDeterioro];
     private static readonly string[] Ninguno = [];
+
+    // ------------------------------------------------------------------------------------- captaciones (feature 014) --
+
+    /// <summary>Los roles de saldo de una cuenta de captación o de aportes: los que mueven un traslado y una reclasificación.</summary>
+    private static readonly string[] SaldosDeCuenta = [R.CapitalDeCaptacion, R.CapitalDeCaptacionInactiva, R.AportesSociales];
+
+    /// <summary>Los roles de saldo que una reclasificación mueve de una combinación a otra (contabilidad.md §3, fila 17).</summary>
+    private static readonly string[] ReclasificablesDeCaptacion = [R.CapitalDeCaptacion, R.CapitalDeCaptacionInactiva, R.InteresPorPagar];
+
+    /// <summary>A dónde va el dinero de un CDAT que se paga, redime o cancela: otra cuenta, el puente de devoluciones o el recaudador.</summary>
+    private static readonly string[] DestinosDelCdat = [R.CapitalDeCaptacion, R.DevolucionPorPagar, R.RecaudoPorAplicar];
+
+    /// <summary>
+    /// Todos los roles que un hecho de captaciones puede mover (con el puente del recaudo): el reverso de una operación de cuenta es el espejo
+    /// de cualquiera de ellos, en los dos lados.
+    /// </summary>
+    private static readonly string[] RolesDeCuenta =
+    [
+        R.CapitalDeCaptacion, R.CapitalDeCaptacionInactiva, R.InteresPorPagar, R.GastoPorIntereses, R.RetencionPorPagar, R.GmfPorPagar,
+        R.GastoPorBonificacion, R.IngresoPorCargos, R.CargoDeCuentaPorCobrar, R.AportesSociales, R.FondoDeRevalorizacion, R.FondoDeExcedentes,
+        R.DevolucionPorPagar, R.NoReclamadosPorPagar, R.EmbargosPorConsignar, R.IngresoPorPenalidad, R.PerdidaAbsorbida, R.RecaudoPorAplicar,
+    ];
+
+    private static readonly string[] AcompananDeposito = [CargoPendienteCobradoV1.Type, AjusteDeCausacionDeCaptacionV1.Type];
+    private static readonly string[] AcompananDisposicion = [GmfRetenidoV1.Type, AjusteDeCausacionDeCaptacionV1.Type];
+    private static readonly string[] AcompananPagoDelCdat = [RetencionPracticadaV1.Type, GmfRetenidoV1.Type];
+    private static readonly string[] AcompananProrroga = [RetencionPracticadaV1.Type, GmfRetenidoV1.Type, CaptacionReclasificadaV1.Type];
+    private static readonly string[] AcompananRedencion =
+        [RetencionPracticadaV1.Type, PenalidadAplicadaV1.Type, GmfRetenidoV1.Type, AjusteDeCausacionDeCaptacionV1.Type];
 
     public static IReadOnlyList<OperacionDeCartera> Todas { get; } =
     [
@@ -162,7 +211,72 @@ public static class OperacionesDeCartera
             [.. ConceptosDeLaCuota, R.Ingreso, R.IngresoPorRecuperacion, R.SuspensoEnOrden, R.CastigadaEnOrden],
             [R.Anticipo, R.SaldoAFavor, R.ContraOrdenContingente, R.ContraOrdenControl], PorLotes, FinDeCausacion, "CA", EntregaDelHecho.K6b,
             Ninguno, PorPartes: true),
+
+        // Feature 014 (T048; contracts/contabilidad.md §3 de la 014, con los roles en español de research C10): los 33 hechos de captaciones y
+        // aportes, al final (37 → 70). El lado es el del importe positivo; un negativo lo invierte. Los de saldo, puente y pasivo se resuelven con
+        // la regla de hecho «*»: el hecho sólo restringe qué roles de resultado admiten una regla con hecho fijo. Los acompañantes llevan el
+        // modo y el comprobante de su principal más frecuente; rige el del principal (C01).
+        new(ConsignacionEnCuentaAplicadaV1.Type, "CCN", false, [R.RecaudoPorAplicar], [R.CapitalDeCaptacion], EnLinea, null, "MA", EntregaDelHecho.K8,
+            AcompananDeposito),
+        new(AporteRecibidoV1.Type, "APR", false, [R.RecaudoPorAplicar], [R.AportesSociales], EnLinea, null, "AO", EntregaDelHecho.K7, AcompananDeposito),
+        new(RetiroDeCuentaAplicadoV1.Type, "RCT", false, [R.CapitalDeCaptacion, R.CapitalDeCaptacionInactiva], [R.RecaudoPorAplicar, R.DevolucionPorPagar],
+            EnLinea, null, "MA", EntregaDelHecho.K8, AcompananDisposicion),
+        new(TrasladoEntreCuentasAplicadoV1.Type, "TRC", false, SaldosDeCuenta, SaldosDeCuenta, EnLinea, null, "MA", EntregaDelHecho.K7, AcompananDisposicion),
+        new(GmfRetenidoV1.Type, "GMF", false, [R.CapitalDeCaptacion], [R.GmfPorPagar], EnLinea, null, "MA", EntregaDelHecho.K8, Ninguno),
+        new(InteresDeCaptacionCausadoV1.Type, "ICC", false, [R.GastoPorIntereses], [R.InteresPorPagar], PorLotes, FinDeCausacion, "CC", EntregaDelHecho.K8,
+            Ninguno, PorPartes: true),
+        new(AjusteDeCausacionDeCaptacionV1.Type, "AJC", false, [R.GastoPorIntereses], [R.InteresPorPagar], PorLotes, FinDeCausacion, "CC",
+            EntregaDelHecho.K8, Ninguno, PorPartes: true),
+        new(InteresDeCaptacionLiquidadoV1.Type, "ILQ", false, [R.InteresPorPagar], [R.CapitalDeCaptacion], PorLotes, FinDeCausacion, "CC",
+            EntregaDelHecho.K8, [RetencionPracticadaV1.Type], PorPartes: true),
+        new(RetencionPracticadaV1.Type, "RTF", false, [R.CapitalDeCaptacion, R.InteresPorPagar], [R.RetencionPorPagar], PorLotes, FinDeCausacion, "CC",
+            EntregaDelHecho.K8, Ninguno, PorPartes: true),
+        new(CdatConstituidoV1.Type, "CDC", false, [R.RecaudoPorAplicar, R.CapitalDeCaptacion], [R.CapitalDeCaptacion], EnLinea, null, "TD",
+            EntregaDelHecho.K9, [GmfRetenidoV1.Type]),
+        new(InteresesDeCdatPagadosV1.Type, "CDP", false, [R.InteresPorPagar], [R.CapitalDeCaptacion, R.DevolucionPorPagar], EnLinea, null, "TD",
+            EntregaDelHecho.K9, AcompananPagoDelCdat),
+        new(CdatProrrogadoV1.Type, "CDR", false, [R.InteresPorPagar], [R.CapitalDeCaptacion], EnLinea, null, "TD", EntregaDelHecho.K9, AcompananProrroga),
+        new(CdatRenovadoV1.Type, "CDN", false, [R.InteresPorPagar, R.RecaudoPorAplicar, R.CapitalDeCaptacion], DestinosDelCdat, EnLinea, null, "TD",
+            EntregaDelHecho.K9, AcompananProrroga),
+        new(CdatRedimidoV1.Type, "CDD", false, [R.CapitalDeCaptacion, R.InteresPorPagar], DestinosDelCdat, EnLinea, null, "TD", EntregaDelHecho.K9,
+            AcompananRedencion),
+        new(CdatCanceladoV1.Type, "CDX", false, [R.CapitalDeCaptacion, R.InteresPorPagar], DestinosDelCdat, EnLinea, null, "TD", EntregaDelHecho.K9,
+            AcompananRedencion),
+        new(PenalidadAplicadaV1.Type, "PEN", false, [R.InteresPorPagar, R.CapitalDeCaptacion], [R.IngresoPorPenalidad], EnLinea, null, "TD",
+            EntregaDelHecho.K9, Ninguno),
+        new(CaptacionReclasificadaV1.Type, "RCC", false, ReclasificablesDeCaptacion, ReclasificablesDeCaptacion, EnLinea, FinDeCausacion, "CN",
+            EntregaDelHecho.K8, Ninguno),
+        new(BonificacionReconocidaV1.Type, "BON", false, [R.GastoPorBonificacion], [R.InteresPorPagar], EnLinea, null, "CC", EntregaDelHecho.K9,
+            [PenalidadAplicadaV1.Type]),
+        new(CargoDeCuentaCausadoV1.Type, "CGA", false, [R.CapitalDeCaptacion, R.CargoDeCuentaPorCobrar], [R.IngresoPorCargos], EnLinea, null, "MA",
+            EntregaDelHecho.K8, Ninguno),
+        new(CargoPendienteCobradoV1.Type, "CGP", false, [R.CapitalDeCaptacion], [R.CargoDeCuentaPorCobrar], EnLinea, null, "MA", EntregaDelHecho.K8, Ninguno),
+        new(CargoDeCuentaCondonadoV1.Type, "CGN", false, [R.IngresoPorCargos], [R.CargoDeCuentaPorCobrar, R.CapitalDeCaptacion], EnLinea, null, "MA",
+            EntregaDelHecho.K8, Ninguno),
+        new(RevalorizacionDeAportesAplicadaV1.Type, "RVA", false, [R.FondoDeRevalorizacion], [R.AportesSociales], EnLinea, null, "AO", EntregaDelHecho.K10,
+            Ninguno),
+        new(ExcedentesDistribuidosV1.Type, "EXD", false, [R.FondoDeExcedentes], [R.AportesSociales, R.CapitalDeCaptacion, R.DevolucionPorPagar], EnLinea,
+            null, "AO", EntregaDelHecho.K10, Ninguno),
+        new(AportesAmortizadosV1.Type, "AMZ", false, [R.AportesSociales], [R.DevolucionPorPagar], EnLinea, null, "AO", EntregaDelHecho.K10, Ninguno),
+        // El cruce acredita el puente con OwnLoanPayoff y el PagoAplicado de cada crédito lo debita en la misma transacción (§3).
+        new(CruceAlRetiroAplicadoV1.Type, "CRR", false, SaldosDeCuenta, [R.RecaudoPorAplicar], EnLinea, null, "RA", EntregaDelHecho.K7,
+            [PerdidaAplicadaAlRetiroV1.Type]),
+        new(PerdidaAplicadaAlRetiroV1.Type, "PDR", false, [R.AportesSociales], [R.PerdidaAbsorbida], EnLinea, null, "RA", EntregaDelHecho.K7, Ninguno),
+        new(DevolucionOrdenadaV1.Type, "DVO", false, [.. SaldosDeCuenta, R.NoReclamadosPorPagar], [R.DevolucionPorPagar, R.CapitalDeCaptacion], EnLinea,
+            null, "RA", EntregaDelHecho.K7, Ninguno),
+        new(DevolucionGiradaV1.Type, "DVG", true, Ninguno, Ninguno, Siempre, null, null, EntregaDelHecho.K7, Ninguno),
+        new(SaldoTrasladadoANoReclamadosV1.Type, "SNR", false, [R.DevolucionPorPagar, R.CapitalDeCaptacion, R.CapitalDeCaptacionInactiva],
+            [R.NoReclamadosPorPagar], EnLinea, null, "MA", EntregaDelHecho.K10, Ninguno),
+        new(EmbargoConsignadoV1.Type, "EMC", false, [R.CapitalDeCaptacion], [R.EmbargosPorConsignar], EnLinea, null, "MA", EntregaDelHecho.K8, Ninguno),
+        // El espejo de lo que movió la unidad original, con las dimensiones vigentes (la 013 §9); hereda el modo y el comprobante del original.
+        new(OperacionDeCuentaReversadaV1.Type, "RVC", false, RolesDeCuenta, RolesDeCuenta, Heredado, null, "MA", EntregaDelHecho.K7,
+            [AjusteDeCausacionDeCaptacionV1.Type], HeredaElModo: true),
+        new(CaptacionesActivadasV1.Type, "CAV", true, Ninguno, Ninguno, Siempre, null, null, EntregaDelHecho.K7, Ninguno),
+        new(CargaDeCaptacionesAplicadaV1.Type, "CAC", true, Ninguno, Ninguno, Siempre, null, null, EntregaDelHecho.K7, Ninguno),
     ];
+
+    /// <summary>Los 33 hechos de captaciones y aportes (feature 014): los que se agregaron al final de <see cref="Todas"/>.</summary>
+    public static IReadOnlyList<OperacionDeCartera> DeCaptaciones { get; } = Todas.Skip(37).ToList();
 
     private static readonly Dictionary<string, OperacionDeCartera> PorCodigo = Todas.ToDictionary(o => o.Codigo, StringComparer.Ordinal);
 

@@ -12,8 +12,17 @@
   // Feature 013 (T0224, T54; contracts/contabilidad.md §5; pregunta C6, propuesta: CN sí): novedades de cartera —reestructuración,
   // modificación, novación, condonación, cambio de dimensión y contingentes—, pendiente de validar por la contadora.
   { "code": "CN", "name": "Novedades de cartera", "usage": "Module", "module": "CAR" },
-  { "code": "AH", "name": "Intereses de ahorros", "usage": "Module", "module": "CDT" },
-  { "code": "CD", "name": "Liquidación de intereses de CDT", "usage": "Module", "module": "CDT" },
+  // Feature 014 (T046; research C17): AH y CD los sembró la 009 para el módulo heredado de ahorros y CDT, que se retiró; quedan
+  // inactivos (la contadora decide si se borran de la semilla). Los de captaciones son MA, CC, TD, AO y RA.
+  { "code": "AH", "name": "Intereses de ahorros", "usage": "Module", "module": "CDT", "active": false },
+  { "code": "CD", "name": "Liquidación de intereses de CDT", "usage": "Module", "module": "CDT", "active": false },
+  // Feature 014 (T046; research R19, C17; contracts/contabilidad.md §5 de la 014): captaciones y aportes, de Cartera. Pendientes de
+  // validar por la contadora.
+  { "code": "MA", "name": "Movimientos de cuentas de captación y aportes", "usage": "Module", "module": "CAR" },
+  { "code": "CC", "name": "Causación de captaciones", "usage": "Module", "module": "CAR" },
+  { "code": "TD", "name": "Certificados de depósito de ahorro a término", "usage": "Module", "module": "CAR" },
+  { "code": "AO", "name": "Aportes sociales y asamblea", "usage": "Module", "module": "CAR" },
+  { "code": "RA", "name": "Retiro de asociados", "usage": "Module", "module": "CAR" },
   { "code": "FV", "name": "Factura de venta", "usage": "Module", "module": "INV" },
   { "code": "EI", "name": "Entrada de inventario", "usage": "Module", "module": "INV" },
   { "code": "SI", "name": "Salida de inventario", "usage": "Module", "module": "INV" },

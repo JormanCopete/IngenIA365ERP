@@ -32,13 +32,14 @@ public sealed class DimensionesDeCartera(IApplicationDbContext db, INormativaVig
                 l.Code,
                 l.Name,
                 l.Status,
+                l.Nature,
                 Version = db.CreditLineVersions.Where(v => v.CreditLineId == l.Id).OrderByDescending(v => v.VersionNumber)
                     .Select(v => new { v.ModalityCode, v.SubsegmentCode }).FirstOrDefault(),
             })
             .OrderBy(l => l.Code)
             .ToListAsync(ct);
         var deLineas = lineas.Select(l => new LineaDeCarteraDto(l.Code, l.Name, l.Version?.ModalityCode ?? string.Empty, l.Version?.SubsegmentCode,
-            l.Status == CreditLineStatus.Active)).ToList();
+            l.Status == CreditLineStatus.Active, l.Nature.ToString())).ToList();
 
         var catalogo = await normativa.CatalogoDeModalidadesAsync(reloj.HoyLocal, null, ct);
         var modalidades = catalogo.IsSuccess

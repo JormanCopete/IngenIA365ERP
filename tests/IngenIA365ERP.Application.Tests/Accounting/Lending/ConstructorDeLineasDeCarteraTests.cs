@@ -47,8 +47,9 @@ public class ConstructorDeLineasDeCarteraTests
 
         e.Matriz.Should().HaveCountGreaterThan(60);
         e.Matriz.Should().OnlyContain(r => r.Operation == "*" || R.Buscar(r.Role)!.AdmiteHecho, "hecho * en los roles que no son de resultado (C77)");
-        e.D.Db.LendingVoucherMappings.Count().Should().Be(34,
-            "31 hechos de negocio (K6b suma la corrección monetaria UVR y el reparto de un pago corregido por la UVR) y las tres excepciones de Nómina en DN (§5)");
+        e.D.Db.LendingVoucherMappings.Count().Should().Be(66,
+            "31 hechos de negocio (K6b suma la corrección monetaria UVR y el reparto de un pago corregido por la UVR) y las tres excepciones de Nómina en DN (§5); "
+            + "la feature 014 (T046) suma los 30 de captaciones y sus dos excepciones de Nómina");
         e.D.Db.AccountingPeriods.Count(p => p.Status == Domain.Enums.Accounting.PeriodStatus.Open && p.Month == 11).Should().BeGreaterThan(0);
         Casos().Should().HaveCountGreaterThanOrEqualTo(46);
     }
@@ -59,7 +60,9 @@ public class ConstructorDeLineasDeCarteraTests
         var tipos = Casos().Select(c => EscenarioContableDeCartera.Caso((string)c[0]))
             .SelectMany(c => c["mensajes"]!.AsArray().Select(m => (string)m!["type"]!))
             .ToHashSet(StringComparer.Ordinal);
-        tipos.Should().Contain(OperacionesDeCartera.DeNegocio.Select(o => o.Codigo), "un caso por cada tipo de negocio de OperacionesDeCartera (K3 y K4 incluidos)");
+        // Los de captaciones (feature 014) los cubren los casos del constructor de captaciones de US8 (T143, T148).
+        tipos.Should().Contain(OperacionesDeCartera.DeNegocio.Except(OperacionesDeCartera.DeCaptaciones).Select(o => o.Codigo),
+            "un caso por cada tipo de negocio de crédito de OperacionesDeCartera (K3 y K4 incluidos)");
 
         var sinComprobante = Casos().Select(c => EscenarioContableDeCartera.Caso((string)c[0])["esperado"]!["sinComprobante"])
             .Where(n => n is not null).Select(n => (string)n!).ToHashSet();

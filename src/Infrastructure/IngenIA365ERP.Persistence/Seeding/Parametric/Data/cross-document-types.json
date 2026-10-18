@@ -8,5 +8,8 @@
   { "code": "ND", "name": "Nota débito" },
   { "code": "CT", "name": "Contrato" },
   { "code": "PG", "name": "Pagaré" },
-  { "code": "OT", "name": "Otro documento" }
+  { "code": "OT", "name": "Otro documento" },
+  // Feature 014 (T046; contracts/contabilidad.md §5 de la 014): el número es el de la cuenta de captación o de aportes
+  // (MemberAccountRefV1.accountNumber), o el del título del CDAT si la contadora lo pide en el mapeo.
+  { "code": "CTA", "name": "Cuenta de captación o aportes" }
 ]

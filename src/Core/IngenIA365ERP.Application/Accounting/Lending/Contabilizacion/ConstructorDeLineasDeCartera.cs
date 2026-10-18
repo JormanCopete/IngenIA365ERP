@@ -1065,7 +1065,7 @@ public static class ConstructorDeLineasDeCartera
             combinacion[R.NombreDe(d)] = valor is bool b ? (b ? "true" : "false") : valor.ToString()!;
         }
         var rol = R.Buscar(p.Rol);
-        var (exigidas, opcionales) = rol is null ? ([], []) : R.DimensionesDe(rol, v.ReasonCode);
+        var (exigidas, opcionales) = rol is null ? ([], []) : R.DimensionesDe(rol, v.ReasonCode, v.DepositClass);
         bool Usa(DimensionDeCartera d) => exigidas.Contains(d) || opcionales.Contains(d);
         if (Usa(DimensionDeCartera.CreditLine)) Poner(DimensionDeCartera.CreditLine, v.CreditLineCode);
         if (Usa(DimensionDeCartera.Modality)) Poner(DimensionDeCartera.Modality, v.ModalityCode);
@@ -1078,6 +1078,11 @@ public static class ConstructorDeLineasDeCartera
         if (Usa(DimensionDeCartera.Restructured)) Poner(DimensionDeCartera.Restructured, v.Restructured);
         if (Usa(DimensionDeCartera.CollectorClass)) Poner(DimensionDeCartera.CollectorClass, v.CollectorClass);
         if (Usa(DimensionDeCartera.Reason)) Poner(DimensionDeCartera.Reason, v.ReasonCode);
+        if (Usa(DimensionDeCartera.LineNature)) Poner(DimensionDeCartera.LineNature, v.LineNature);
+        if (Usa(DimensionDeCartera.DepositClass)) Poner(DimensionDeCartera.DepositClass, v.DepositClass);
+        if (Usa(DimensionDeCartera.IssueTermBand)) Poner(DimensionDeCartera.IssueTermBand, v.IssueTermBand);
+        if (Usa(DimensionDeCartera.ContributionClass)) Poner(DimensionDeCartera.ContributionClass, v.ContributionClass);
+        if (Usa(DimensionDeCartera.AccountFlag)) Poner(DimensionDeCartera.AccountFlag, v.AccountFlag);
         Poner(DimensionDeCartera.Branch, v.BranchPublicId);
         return combinacion;
     }

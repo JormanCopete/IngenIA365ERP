@@ -1,4 +1,5 @@
 using IngenIA365ERP.Application.Common.Integration.Contracts.Inventory;
+using IngenIA365ERP.Application.Common.Integration.Contracts.Lending.Deposits;
 using IngenIA365ERP.Domain.Enums.Integration;
 
 namespace IngenIA365ERP.Application.Common.Integration.Contracts.Lending;
@@ -27,7 +28,7 @@ public static class CatalogoDeMensajesDeCarteraV1
     private const FormaDeClaveDeEvento Cierre = FormaDeClaveDeEvento.Cierre;
     private const FormaDeClaveDeEvento Reapertura = FormaDeClaveDeEvento.Reapertura;
 
-    /// <summary>Los 37 hechos <c>CAR → Accounting</c> de §2.1, en su orden.</summary>
+    /// <summary>Los 37 hechos <c>CAR → Accounting</c> de §2.1, en su orden, y los 33 de captaciones y aportes de la feature 014 (70).</summary>
     public static IReadOnlyList<TipoDeMensaje> HechosAContabilidad { get; } =
     [
         Hecho(typeof(CreditoDesembolsadoV1), CreditoDesembolsadoV1.Type, "DES", N, C, proceso: false),
@@ -72,6 +73,41 @@ public static class CatalogoDeMensajesDeCarteraV1
         Hecho(typeof(CorreccionMonetariaUvrCausadaV1), CorreccionMonetariaUvrCausadaV1.Type, "CMU", N, P, proceso: true),
         // K6b (decisión del dueño del 2026-10-17): el reparto en pesos de un pago aplicado en un día cuya UVR se corrigió, masivo como el ajuste.
         Hecho(typeof(PagoRedistribuidoPorValorNacionalV1), PagoRedistribuidoPorValorNacionalV1.Type, "PRN", N, P, proceso: true),
+        // Feature 014 (T048; contracts/mensajes.md §1.1 de la 014, research C23): los 33 hechos de captaciones y aportes, declarados en la fase
+        // fundacional; cada uno lo emite la historia de su entrega (K7 a K10). Viven en Contracts/Lending/Deposits.
+        Hecho(typeof(ConsignacionEnCuentaAplicadaV1), ConsignacionEnCuentaAplicadaV1.Type, "CCN", N, C, proceso: false),
+        Hecho(typeof(AporteRecibidoV1), AporteRecibidoV1.Type, "APR", N, C, proceso: false),
+        Hecho(typeof(RetiroDeCuentaAplicadoV1), RetiroDeCuentaAplicadoV1.Type, "RCT", N, C, proceso: true),
+        Hecho(typeof(TrasladoEntreCuentasAplicadoV1), TrasladoEntreCuentasAplicadoV1.Type, "TRC", N, C, proceso: false),
+        Hecho(typeof(GmfRetenidoV1), GmfRetenidoV1.Type, "GMF", N, C, proceso: true),
+        Hecho(typeof(InteresDeCaptacionCausadoV1), InteresDeCaptacionCausadoV1.Type, "ICC", N, P, proceso: true),
+        Hecho(typeof(AjusteDeCausacionDeCaptacionV1), AjusteDeCausacionDeCaptacionV1.Type, "AJC", N, CoP, proceso: true),
+        Hecho(typeof(InteresDeCaptacionLiquidadoV1), InteresDeCaptacionLiquidadoV1.Type, "ILQ", N, CoP, proceso: true),
+        Hecho(typeof(RetencionPracticadaV1), RetencionPracticadaV1.Type, "RTF", N, CoP, proceso: true),
+        Hecho(typeof(CdatConstituidoV1), CdatConstituidoV1.Type, "CDC", N, C, proceso: false),
+        Hecho(typeof(InteresesDeCdatPagadosV1), InteresesDeCdatPagadosV1.Type, "CDP", N, C, proceso: true),
+        Hecho(typeof(CdatProrrogadoV1), CdatProrrogadoV1.Type, "CDR", N, C, proceso: true),
+        Hecho(typeof(CdatRenovadoV1), CdatRenovadoV1.Type, "CDN", N, C, proceso: false),
+        Hecho(typeof(CdatRedimidoV1), CdatRedimidoV1.Type, "CDD", N, C, proceso: false),
+        Hecho(typeof(CdatCanceladoV1), CdatCanceladoV1.Type, "CDX", N, C, proceso: true),
+        Hecho(typeof(PenalidadAplicadaV1), PenalidadAplicadaV1.Type, "PEN", N, C, proceso: true),
+        Hecho(typeof(CaptacionReclasificadaV1), CaptacionReclasificadaV1.Type, "RCC", N, CoP, proceso: true),
+        Hecho(typeof(BonificacionReconocidaV1), BonificacionReconocidaV1.Type, "BON", N, C, proceso: true),
+        Hecho(typeof(CargoDeCuentaCausadoV1), CargoDeCuentaCausadoV1.Type, "CGA", N, C, proceso: true),
+        Hecho(typeof(CargoPendienteCobradoV1), CargoPendienteCobradoV1.Type, "CGP", N, C, proceso: false),
+        Hecho(typeof(CargoDeCuentaCondonadoV1), CargoDeCuentaCondonadoV1.Type, "CGN", N, C, proceso: false),
+        Hecho(typeof(RevalorizacionDeAportesAplicadaV1), RevalorizacionDeAportesAplicadaV1.Type, "RVA", N, C, proceso: false),
+        Hecho(typeof(ExcedentesDistribuidosV1), ExcedentesDistribuidosV1.Type, "EXD", N, C, proceso: false),
+        Hecho(typeof(AportesAmortizadosV1), AportesAmortizadosV1.Type, "AMZ", N, C, proceso: false),
+        Hecho(typeof(CruceAlRetiroAplicadoV1), CruceAlRetiroAplicadoV1.Type, "CRR", N, C, proceso: false),
+        Hecho(typeof(PerdidaAplicadaAlRetiroV1), PerdidaAplicadaAlRetiroV1.Type, "PDR", N, C, proceso: false),
+        Hecho(typeof(DevolucionOrdenadaV1), DevolucionOrdenadaV1.Type, "DVO", N, C, proceso: true),
+        Hecho(typeof(DevolucionGiradaV1), DevolucionGiradaV1.Type, "DVG", I, P, proceso: false),
+        Hecho(typeof(SaldoTrasladadoANoReclamadosV1), SaldoTrasladadoANoReclamadosV1.Type, "SNR", N, C, proceso: true),
+        Hecho(typeof(EmbargoConsignadoV1), EmbargoConsignadoV1.Type, "EMC", N, C, proceso: false),
+        Hecho(typeof(OperacionDeCuentaReversadaV1), OperacionDeCuentaReversadaV1.Type, "RVC", N, C, proceso: false),
+        Hecho(typeof(CaptacionesActivadasV1), CaptacionesActivadasV1.Type, "CAV", I, C, proceso: false),
+        Hecho(typeof(CargaDeCaptacionesAplicadaV1), CargaDeCaptacionesAplicadaV1.Type, "CAC", I, C, proceso: false),
     ];
 
     /// <summary>Los 6 mensajes de Cartera a otros destinos de §2.2, en su orden.</summary>

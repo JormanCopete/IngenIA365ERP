@@ -29,8 +29,9 @@ public class SemillasDeIntegracionContableTests
     public void Los_tipos_de_comprobante_suman_los_cinco_de_inventario()
     {
         var tipos = VoucherTypesSeeder.Semillas();
-        tipos.Should().HaveCount(24, "23 hasta la 012 y el CN de Cartera (feature 013, T0224)");
-        tipos.Where(t => t.Module == "CAR").Select(t => t.Code).Should().BeEquivalentTo(["DS", "RC", "CA", "PV", "DN", "CN"]);
+        tipos.Should().HaveCount(29, "23 hasta la 012, el CN de Cartera (feature 013, T0224) y los cinco de captaciones (feature 014, T046)");
+        tipos.Where(t => t.Module == "CAR").Select(t => t.Code).Should().BeEquivalentTo(["DS", "RC", "CA", "PV", "DN", "CN", "MA", "CC", "TD", "AO", "RA"]);
+        tipos.Where(t => !t.Active).Select(t => t.Code).Should().BeEquivalentTo(["AH", "CD"], "los del módulo heredado quedan inactivos (research C17)");
         tipos.Where(t => t.Module == "INV").Select(t => t.Code).Should().BeEquivalentTo(["FV", "EI", "SI", "NV", "CP", "TR", "AC", "CJ"]);
         tipos.Where(t => t.Module == "INV").Should().OnlyContain(t => t.Usage == VoucherUsage.Module);
         tipos.Single(t => t.Code == "NV").Name.Should().Be("Notas de venta");
@@ -117,6 +118,27 @@ public class SemillasDeIntegracionContableTests
         mapeadas.Should().Be(Operaciones.Length + FilasPorTipo - 2, "DespachoTraslado y RecepcionTraslado apuntan a TR, que no es de Inventario");
         logMapeo.Avisos.Should().NotBeEmpty();
         (await db.InventoryVoucherMappings.AnyAsync(m => m.Operation == "DespachoTraslado")).Should().BeFalse();
+    }
+
+    /// <summary>
+    /// Feature 014 (T046, research C17): AH y CD, del módulo heredado de ahorros y CDT, nacen inactivos; si la cooperativa ya los tenía sembrados y
+    /// activos se inactivan, salvo que un comprobante los use (lo decide la contadora y queda en el log).
+    /// </summary>
+    [Fact]
+    public async Task Los_tipos_del_modulo_heredado_quedan_inactivos_si_nadie_los_uso()
+    {
+        using var db = TestDbContextFactory.Create();
+        (await VoucherTypesSeeder.AplicarAsync(db, new LogEnLista(), CancellationToken.None)).Should().Be(VoucherTypesSeeder.Semillas().Count);
+        (await db.VoucherTypes.Where(v => !v.IsActive).Select(v => v.Code).ToListAsync()).Should().BeEquivalentTo(["AH", "CD"]);
+        (await db.VoucherTypes.Where(v => v.ModuleCode == "CAR").Select(v => v.Code).ToListAsync())
+            .Should().Contain(["MA", "CC", "TD", "AO", "RA"]);
+
+        using var otra = TestDbContextFactory.Create();
+        otra.VoucherTypes.Add(new VoucherType { Code = "AH", Name = "Intereses de ahorros", Usage = VoucherUsage.Module, ModuleCode = "CDT", IsActive = true, IsSeeded = true, NextNumber = 1 });
+        otra.VoucherTypes.Add(new VoucherType { Code = "CD", Name = "Liquidación de intereses de CDT", Usage = VoucherUsage.Module, ModuleCode = "CDT", IsActive = true, IsSeeded = true, NextNumber = 1 });
+        await otra.SaveChangesAsync();
+        await VoucherTypesSeeder.AplicarAsync(otra, new LogEnLista(), CancellationToken.None);
+        (await otra.VoucherTypes.Where(v => v.Code == "AH" || v.Code == "CD").AllAsync(v => !v.IsActive)).Should().BeTrue("sin comprobantes, se inactivan");
     }
 
     /// <summary>I6 (T861): las filas por tipo de documento que trae la semilla (la de la remisión).</summary>

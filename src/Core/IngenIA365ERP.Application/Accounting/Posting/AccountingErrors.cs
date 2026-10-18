@@ -379,6 +379,16 @@ public static class AccountingErrors
             $"«{code}» no es un valor de {dimension} que Cartera conozca. Elija uno del catálogo de la matriz.",
             new { dimension, code });
 
+    /// <summary>
+    /// Feature 014, T049 (contracts/contabilidad.md §4.1; research §7, E24): una regla de un rol de captaciones o aportes con
+    /// <c>lineNature = Placement</c>. El contrato lo llamaba <c>NatureMismatch</c>, pero ese código ya es el aviso de la 013 «la naturaleza de
+    /// la cuenta no es la del rol». (nuevo)
+    /// </summary>
+    public static Error LendingRuleLineNatureMismatch(string role, string lineNature) =>
+        new ErrorConDatos("Accounting.LendingRule.LineNatureMismatch",
+            $"El rol {role} es de captaciones o aportes: no admite líneas de naturaleza «{lineNature}». Use Deposit o Contribution.",
+            new { role, lineNature });
+
     /// <summary>Feature 013, T0642: la regla pedida no existe (o está borrada). (nuevo)</summary>
     public static readonly Error LendingRuleNotFound = new("Accounting.LendingRule.NotFound", "No existe esa regla de la matriz de Cartera.");
 

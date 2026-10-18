@@ -760,3 +760,47 @@ choquen.
   admite en `Contracts/Lending/Deposits` la referencia a la cuenta del asociado (`MemberAccountRefV1`, `AccountPublicId`, `AccountNumber`, `AccountCount`):
   ahí `Account` no es una cuenta del plan. `NadieEscribeElLibroDeCarteraFueraDelRegistro` (013) admite que `RegistroDeCuentas` mueva las marcas que
   la cuenta comparte de nombre con el crédito (`LastAccruedDate`, `LastRegisteredAt`, `LastPositionDate`), y sólo eso.
+
+## 7. Enmienda de la contabilidad base, el ciclo y la activación (2026-10-18, T044–T059)
+
+Construido el bloque C de la fase fundacional. **Manda el código**; estas notas reemplazan lo dicho en `data-model.md` y `contracts/` donde
+choquen.
+
+- **E24 · El error de naturaleza se llama `Accounting.LendingRule.LineNatureMismatch`.** `contracts/contabilidad.md` §4.1 lo nombraba
+  `Accounting.LendingRule.NatureMismatch`, pero ese código ya es, desde la 013, el **aviso** «la naturaleza de la cuenta no es la del rol»
+  (`ReglasDeLaMatrizDeCartera.AvisoNaturalezaDistinta`). Una regla de un rol de captaciones con `lineNature = Placement` responde
+  `LineNatureMismatch` (422, en `ReglasDeLaMatrizDeCartera`); un valor fuera de su enum en cualquiera de las cinco dimensiones nuevas, el
+  `DimensionCodeUnknown` de la 013 (el contrato decía `InvalidDimensionValue`), y una exigida en `*`, `DimensionRequired` (el contrato decía
+  `RequiredDimension`).
+- **E25 · `EntregaDelHecho` numera como `EntregaDeCartera`.** El contrato (§3) decía `K7 = 7 … K11 = 11`, pero el 7 ya es `K6b`: son
+  `K7 = 8`, `K8 = 9`, `K9 = 10`, `K10 = 11`, `K11 = 12` (E06).
+- **E26 · Los 33 hechos nacen declarados en la fase fundacional.** El catálogo de mensajes (`TipoDeMensaje.Record`), `LND_FactTypes` y la tabla
+  hecho × rol nombran el `Type` de un record, así que T048 crea los 33 records `…V1` en `Contracts/Lending/Deposits` con el contenido de
+  `mensajes.md` §4.0/§4.1 y sus bloques auxiliares (`CoveredInstallmentV1`, `InternalWithdrawalV1`, `AccrualDayV1`, `TermDepositFundingV1`,
+  `TermDepositDestinationV1`, `NegotiatedRateRefV1`, `TermDepositAmountChangeV1`, `TermDepositPenaltyV1`, `ContractualBonusV1`,
+  `AccountChargeRefV1`, `ChargeCollectedV1`, `AssemblyDistributionRefV1`, `MembershipWithdrawalRefV1`, `WithdrawalOffsetV1`, `WithdrawalLossV1`,
+  `GarnishmentRefV1`, `DepositFactMirrorV1`, `DepositLoadTotalV1`), como la 013 declaró en K1 los de K3 y K4. Las historias que los **emiten**
+  (T085, T112, T134, T174, T183) pueden completarlos mientras ninguno se haya emitido. Decisiones de detalle: los valores de enum viajan como
+  texto (`string`), igual que en la 013; los hechos que viajan como acompañante **o** como parte (`AjusteDeCausacionDeCaptacion`,
+  `InteresDeCaptacionLiquidado`, `RetencionPracticada`) tienen la forma de parte —la emisión de una operación es una parte de una línea—, con la
+  clave `ConfirmacionOPorPublicId`; `CaptacionesActivadas.AccountCount` (no `accounts`). Admiten proceso (`EmisionesDeProcesoPermitidas`) los 15 de
+  la columna «Proceso» de §1.1. Los acompañantes llevan en `LND_FactTypes`, en el mapeo y en `OperacionesDeCartera` el comprobante y el modo de su
+  principal más frecuente (`GmfRetenido` y `CargoPendienteCobrado` `MA`; `RetencionPracticada` y `AjusteDeCausacionDeCaptacion` `CC` por lotes;
+  `PenalidadAplicada` `TD`; `PerdidaAplicadaAlRetiro` `RA`); rige el del principal (C01 de la 013). `OperacionDeCuentaReversada` hereda el modo y,
+  en su fila, `MA`: tomar el comprobante del original es del constructor de US8 (T142, T143).
+- **E27 · Roles y hechos en el código.** Los 17 roles de C10 con sus exigidas de `contabilidad.md` §2 (`CapitalDeCaptacion` exige clase y marca y,
+  en CDAT y contractual, el plazo de emisión por `DimensionesDe(rol, motivo, claseDeCaptacion)`; los demás, como la tabla). Motivos:
+  `IngresoPorCargos` los `ChargeKind`; `DevolucionPorPagar` los `OrderKind` de `mensajes.md` §5.3 salvo `LoanDisbursement`. `OperacionesDeCartera`
+  pasa de 37 a 70 con la tabla de §3 en español; las «cuentas destino» del CDAT (`CapitalDeCaptacion`, `DevolucionPorPagar`, `RecaudoPorAplicar`) y
+  el espejo del reverso (todos los roles de captaciones y el puente, en los dos lados) son listas. `LosHechosDeCarteraNoLlevanCuentas` admite en
+  `Contracts/Lending/Deposits` la propiedad de tipo `MemberAccountRefV1`, `AccountFlag` y «Cuenta» en el nombre de un hecho (es la del asociado:
+  `CargoDeCuentaCausado`, `OperacionDeCuentaReversada`); el barrido de fuente de la 013 deja esa carpeta a su regla propia.
+- **E28 · Semillas contables (T046).** `voucher-types.json` suma `MA`, `CC`, `TD`, `AO`, `RA` (29 tipos) y una columna `active`: `AH` y `CD` nacen
+  inactivos y, si una cooperativa ya los tenía sembrados y activos **sin comprobantes**, la semilla los inactiva (lo único que cambia de lo
+  existente; con comprobantes los deja y lo registra, `[Semilla.TipoDeComprobanteRetiradoEnUso]`). El mapeo suma los 30 hechos de negocio con
+  cruce `CTA` y dos excepciones de Nómina (`ConsignacionEnCuentaAplicada` y `AporteRecibido` → `DN`): 66 filas.
+- **E29 · Lo que queda para US8.** La regla y su API (alta, versión, consulta, resolución, catálogo) ya llevan las cinco dimensiones
+  (`DimensionesDeReglaDeCarteraDto`, `DimensionesDeReglaDeCarteraGuardadaDto`, `ValoresDeCartera`, el catálogo de valores); la **plantilla y la
+  importación** de la matriz las suman con su versión nueva (T144), los DTO de `Shared` y las pantallas con T149, y el constructor de líneas de los
+  hechos de captaciones con T143 (hoy un hecho de captaciones no arma líneas: nadie lo emite todavía). `IDimensionesDeCartera.CatalogoAsync`
+  devuelve las líneas de las tres naturalezas con `LineaDeCarteraDto.LineNature`; `depositClass` llega con las versiones de línea de captación (K8).

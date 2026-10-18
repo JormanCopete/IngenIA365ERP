@@ -1,5 +1,6 @@
 using IngenIA365ERP.Domain.Entities.Accounting.Lending;
 using IngenIA365ERP.Domain.Enums.Accounting;
+using IngenIA365ERP.Domain.Enums.Lending;
 
 namespace IngenIA365ERP.Application.Accounting.Lending.Reglas;
 
@@ -25,6 +26,24 @@ public enum DimensionDeCartera
 
     /// <summary>El hecho (<c>Operation</c>): opcional con peso 2 sólo en los roles de resultado (C77).</summary>
     Operation = 13,
+
+    // Feature 014 (T044; contracts/contabilidad.md §1.1): las dimensiones de captaciones, al final de la clave. No pesan: se exigen por
+    // igualdad cuando el rol las declara.
+
+    /// <summary>Naturaleza de la línea (<c>LineNature</c>: <c>Deposit</c>, <c>Contribution</c>).</summary>
+    LineNature = 14,
+
+    /// <summary>Clase de captación (<c>DepositClass</c>).</summary>
+    DepositClass = 15,
+
+    /// <summary>Plazo de emisión (<c>IssueTermBand</c>), exigido sólo en el capital de CDAT y contractual (§1.2).</summary>
+    IssueTermBand = 16,
+
+    /// <summary>Clase de aporte (<c>ContributionClass</c>).</summary>
+    ContributionClass = 17,
+
+    /// <summary>Marca de la cuenta (<c>AccountFlag</c>: <c>Standard</c>, <c>GmfExempt</c>, <c>Garnished</c>; research C20).</summary>
+    AccountFlag = 18,
 }
 
 /// <summary>La familia de un rol (§2.2): decide si admite el hecho fijado y agrupa los conjuntos de cuentas de la conciliación (§14). (nuevo)</summary>
@@ -38,6 +57,12 @@ public enum FamiliaDeRol
     Resultado = 6,
     Diferido = 7,
     Contingente = 8,
+
+    /// <summary>Los saldos de las cuentas de captación (feature 014, T045).</summary>
+    Captacion = 9,
+
+    /// <summary>Los aportes sociales y los fondos patrimoniales (feature 014, T045).</summary>
+    Patrimonio = 10,
 }
 
 /// <summary>
@@ -60,6 +85,9 @@ public enum TerceroNaturalDeCartera
 
     /// <summary>El beneficiario sellado en la orden de giro (<c>payeePersonPublicId</c>).</summary>
     Beneficiario = 5,
+
+    /// <summary>El titular de la cuenta de captación o de aportes (<c>holderPersonPublicId</c>; feature 014, T045).</summary>
+    Titular = 6,
 }
 
 /// <summary>
@@ -72,6 +100,12 @@ public enum CruceDeRol
     Ninguno = 0,
     Credito = 1,
     Factura = 2,
+
+    /// <summary>
+    /// <c>CTA</c> «Cuenta de captación o aportes» con el número de la cuenta (<c>MemberAccountRefV1.accountNumber</c>; feature 014, T045,
+    /// contabilidad.md §5).
+    /// </summary>
+    Cuenta = 3,
 }
 
 /// <summary>
@@ -97,13 +131,15 @@ public sealed record RolDeCuentaDeCartera(
 }
 
 /// <summary>
-/// Los veintiséis roles de cuenta de la matriz de Cartera (feature 013, T0640, T52, C91; contracts/contabilidad.md §2.2; data-model
-/// parte 3 §5.5). Catálogo fijo en código: son datos, no parámetros. Donde <c>contabilidad.md</c> y <c>data-model.md</c> difieren en las
+/// Los cuarenta y tres roles de cuenta de la matriz de Cartera: los veintiséis de crédito (feature 013, T0640, T52, C91; contracts/contabilidad.md
+/// §2.2; data-model parte 3 §5.5) y, al final, los diecisiete de captaciones y aportes (feature 014, T045; research C10; contabilidad.md §2 de la
+/// 014). Catálogo fijo en código: son datos, no parámetros. Donde <c>contabilidad.md</c> y <c>data-model.md</c> difieren en las
 /// exigidas, rige la tabla de <c>contabilidad.md</c> (tasks.md, contradicción 3). La cuenta de cada rol la elige la contadora en la
 /// matriz: ninguna cuenta vive en código (<c>LaContabilidadNoTieneCuentasEnCodigo</c>).
 ///
 /// <para>
-/// <c>GastoDeterioro</c> y <c>RecuperacionDeterioro</c> son los únicos cuyas exigidas dependen del valor de otra: con el motivo
+/// <c>GastoDeterioro</c> y <c>RecuperacionDeterioro</c> (y, en captaciones, el capital con el plazo de emisión) son los únicos cuyas exigidas
+/// dependen del valor de otra: con el motivo
 /// <c>Individual</c> exigen también modalidad y concepto (<see cref="DimensionesDe"/>). Decisiones del dueño que rigen aquí: la dimensión
 /// «reestructurado» (C4), los roles <c>IngresoDiferido</c> y <c>GastoDeCastigoOCondonacion</c> sin cuenta sembrada (C7) y «empleado» del
 /// estado actual de la persona (C8). Los contingentes siguen el CUIF (C91): <c>ContingenteAcreedora</c> de naturaleza crédito contra
@@ -138,6 +174,25 @@ public static class RolesDeCuentaDeCartera
     public const string IngresoDiferido = "IngresoDiferido";
     public const string ContingenteAcreedora = "ContingenteAcreedora";
     public const string ContraContingenteAcreedora = "ContraContingenteAcreedora";
+
+    // Feature 014 (T045; research C10; contracts/contabilidad.md §2): los 17 roles de captaciones y aportes, en español (C10), al final.
+    public const string CapitalDeCaptacion = "CapitalDeCaptacion";
+    public const string CapitalDeCaptacionInactiva = "CapitalDeCaptacionInactiva";
+    public const string InteresPorPagar = "InteresPorPagar";
+    public const string GastoPorIntereses = "GastoPorIntereses";
+    public const string RetencionPorPagar = "RetencionPorPagar";
+    public const string GmfPorPagar = "GmfPorPagar";
+    public const string GastoPorBonificacion = "GastoPorBonificacion";
+    public const string IngresoPorCargos = "IngresoPorCargos";
+    public const string CargoDeCuentaPorCobrar = "CargoDeCuentaPorCobrar";
+    public const string AportesSociales = "AportesSociales";
+    public const string FondoDeRevalorizacion = "FondoDeRevalorizacion";
+    public const string FondoDeExcedentes = "FondoDeExcedentes";
+    public const string DevolucionPorPagar = "DevolucionPorPagar";
+    public const string NoReclamadosPorPagar = "NoReclamadosPorPagar";
+    public const string EmbargosPorConsignar = "EmbargosPorConsignar";
+    public const string IngresoPorPenalidad = "IngresoPorPenalidad";
+    public const string PerdidaAbsorbida = "PerdidaAbsorbida";
 
     // ------------------------------------------------------------------------------------------------ valores fijos --
 
@@ -183,6 +238,11 @@ public static class RolesDeCuentaDeCartera
     private const DimensionDeCartera Mot = DimensionDeCartera.Reason;
     private const DimensionDeCartera Suc = DimensionDeCartera.Branch;
     private const DimensionDeCartera Op = DimensionDeCartera.Operation;
+    private const DimensionDeCartera Nat = DimensionDeCartera.LineNature;
+    private const DimensionDeCartera Cls = DimensionDeCartera.DepositClass;
+    private const DimensionDeCartera Plz = DimensionDeCartera.IssueTermBand;
+    private const DimensionDeCartera CAp = DimensionDeCartera.ContributionClass;
+    private const DimensionDeCartera Mrc = DimensionDeCartera.AccountFlag;
 
     private const AccountNature D = AccountNature.Debit;
     private const AccountNature C = AccountNature.Credit;
@@ -192,6 +252,45 @@ public static class RolesDeCuentaDeCartera
     private static readonly string[] MotivosDelGiro = ["Transfer", "Check", "ThirdPartyPayment"];
     private static readonly string[] MotivosDelCastigo = ["WriteOff", "Waiver"];
     private static readonly string[] MotivosContingentes = ["ApprovedNotDisbursed", "RevolvingLimit", "CollateralReceived"];
+
+    // ------------------------------------------------------------------------------------- captaciones (feature 014) --
+
+    /// <summary>Las naturalezas de línea que admiten los roles de captaciones (<c>Placement</c> no: <c>LineNatureMismatch</c>).</summary>
+    public static IReadOnlyList<string> NaturalezasDeCaptacion { get; } = [nameof(LineNature.Deposit), nameof(LineNature.Contribution)];
+
+    /// <summary>Las naturalezas de línea (<c>LineNature</c> como texto).</summary>
+    public static IReadOnlyList<string> Naturalezas { get; } = Enum.GetNames<LineNature>();
+
+    /// <summary>Las clases de captación (<c>DepositClass</c> como texto).</summary>
+    public static IReadOnlyList<string> ClasesDeCaptacion { get; } = Enum.GetNames<DepositClass>();
+
+    /// <summary>Los plazos de emisión (<c>IssueTermBand</c> como texto).</summary>
+    public static IReadOnlyList<string> PlazosDeEmision { get; } = Enum.GetNames<IssueTermBand>();
+
+    /// <summary>Las clases de aporte (<c>ContributionClass</c> como texto).</summary>
+    public static IReadOnlyList<string> ClasesDeAporte { get; } = Enum.GetNames<ContributionClass>();
+
+    /// <summary>Las marcas de la cuenta (<c>AccountFlag</c> como texto; research C20).</summary>
+    public static IReadOnlyList<string> MarcasDeCuenta { get; } = Enum.GetNames<AccountFlag>();
+
+    /// <summary>Los conceptos del libro de cuentas (<c>MemberAccountConcept</c> como texto; contabilidad.md §1.2).</summary>
+    public static IReadOnlyList<string> ConceptosDeCaptacion { get; } = Enum.GetNames<MemberAccountConcept>();
+
+    /// <summary>
+    /// Las clases de captación cuyo capital exige además el plazo de emisión (§1.2): el CUIF separa 2110 por plazo y 2125 por corto y largo
+    /// plazo, no 2105 ni 2130.
+    /// </summary>
+    public static IReadOnlyList<string> ClasesConPlazoDeEmision { get; } = [nameof(DepositClass.TermDeposit), nameof(DepositClass.Contractual)];
+
+    /// <summary>Los motivos del puente de devoluciones: el <c>OrderKind</c> de la orden (mensajes.md §5.3), salvo el desembolso de un crédito.</summary>
+    public static IReadOnlyList<string> MotivosDeLaDevolucion { get; } =
+    [
+        "DepositWithdrawal", "MembershipRefund", "ContributionRefund", "DeceasedDelivery", "TermDepositInterest", "TermDepositRedemption",
+        "ContractualMaturity", "UnclaimedPayment", "GarnishmentConsignment", "SurplusPayment",
+    ];
+
+    /// <summary>Los motivos del ingreso por cargos: el <c>ChargeKind</c> del cargo.</summary>
+    public static IReadOnlyList<string> MotivosDelCargo { get; } = Enum.GetNames<ChargeKind>();
 
     public static IReadOnlyList<RolDeCuentaDeCartera> Todos { get; } =
     [
@@ -235,7 +334,36 @@ public static class RolesDeCuentaDeCartera
         new(IngresoDiferido, C, FamiliaDeRol.Diferido, [Mod], [Lin, Suc], null, null, TerceroNaturalDeCartera.Deudor, CruceDeRol.Credito),
         new(ContingenteAcreedora, C, FamiliaDeRol.Contingente, [Mot], [Lin, Suc], null, MotivosContingentes, TerceroNaturalDeCartera.Deudor, CruceDeRol.Credito),
         new(ContraContingenteAcreedora, D, FamiliaDeRol.Contingente, [Mot], [Suc], null, MotivosContingentes, TerceroNaturalDeCartera.Ninguno, CruceDeRol.Ninguno),
+        // Feature 014 (T045; contracts/contabilidad.md §2, research C10 y C20): captaciones y aportes. El plazo de emisión del capital se exige
+        // sólo en CDAT y contractual (DimensionesDe); la inactividad cambia de rol, no de marca.
+        new(CapitalDeCaptacion, C, FamiliaDeRol.Captacion, [Cls, Mrc], [Lin, Suc], null, null, TerceroNaturalDeCartera.Titular, CruceDeRol.Cuenta),
+        new(CapitalDeCaptacionInactiva, C, FamiliaDeRol.Captacion, [Cls], [Lin, Suc], null, null, TerceroNaturalDeCartera.Titular, CruceDeRol.Cuenta),
+        new(InteresPorPagar, C, FamiliaDeRol.Captacion, [Cls], [Lin, Suc], null, null, TerceroNaturalDeCartera.Titular, CruceDeRol.Cuenta),
+        new(GastoPorIntereses, D, FamiliaDeRol.Resultado, [Cls], [Op, Lin, Suc], null, null, TerceroNaturalDeCartera.Titular, CruceDeRol.Ninguno),
+        new(RetencionPorPagar, C, FamiliaDeRol.Pasivo, [Cls], [Suc], null, null, TerceroNaturalDeCartera.Ninguno, CruceDeRol.Ninguno),
+        new(GmfPorPagar, C, FamiliaDeRol.Pasivo, [Cls], [Suc], null, null, TerceroNaturalDeCartera.Ninguno, CruceDeRol.Ninguno),
+        new(GastoPorBonificacion, D, FamiliaDeRol.Resultado, [Cls], [Op, Lin, Suc], null, null, TerceroNaturalDeCartera.Ninguno, CruceDeRol.Ninguno),
+        new(IngresoPorCargos, C, FamiliaDeRol.Resultado, [Mot], [Op, Lin, Suc], null, MotivosDelCargo, TerceroNaturalDeCartera.Titular, CruceDeRol.Ninguno),
+        new(CargoDeCuentaPorCobrar, D, FamiliaDeRol.Saldo, [], [Lin, Suc], null, null, TerceroNaturalDeCartera.Titular, CruceDeRol.Cuenta),
+        new(AportesSociales, C, FamiliaDeRol.Patrimonio, [CAp], [Lin, Suc], null, null, TerceroNaturalDeCartera.Titular, CruceDeRol.Cuenta),
+        new(FondoDeRevalorizacion, D, FamiliaDeRol.Patrimonio, [], [Suc], null, null, TerceroNaturalDeCartera.Ninguno, CruceDeRol.Ninguno),
+        new(FondoDeExcedentes, D, FamiliaDeRol.Patrimonio, [], [Suc], null, null, TerceroNaturalDeCartera.Ninguno, CruceDeRol.Ninguno),
+        new(DevolucionPorPagar, C, FamiliaDeRol.Puente, [Nat, Mot], [Lin, Suc], null, MotivosDeLaDevolucion, TerceroNaturalDeCartera.Beneficiario,
+            CruceDeRol.Ninguno),
+        new(NoReclamadosPorPagar, C, FamiliaDeRol.Pasivo, [Nat], [Suc], null, null, TerceroNaturalDeCartera.Titular, CruceDeRol.Cuenta),
+        new(EmbargosPorConsignar, C, FamiliaDeRol.Puente, [], [Suc], null, null, TerceroNaturalDeCartera.Beneficiario, CruceDeRol.Ninguno),
+        new(IngresoPorPenalidad, C, FamiliaDeRol.Resultado, [Cls], [Op, Lin, Suc], null, null, TerceroNaturalDeCartera.Titular, CruceDeRol.Ninguno),
+        new(PerdidaAbsorbida, C, FamiliaDeRol.Patrimonio, [], [Suc], null, null, TerceroNaturalDeCartera.Ninguno, CruceDeRol.Ninguno),
     ];
+
+    /// <summary>Cuántos roles de crédito hay antes de los de captaciones (la 013).</summary>
+    public const int RolesDeCredito = 26;
+
+    /// <summary>Los 17 roles de captaciones y aportes (feature 014): los que se agregaron al final de <see cref="Todos"/>.</summary>
+    public static IReadOnlyList<RolDeCuentaDeCartera> DeCaptaciones { get; } = Todos.Skip(RolesDeCredito).ToList();
+
+    /// <summary>¿Es un rol de captaciones o aportes (feature 014)? Sus reglas no admiten <c>lineNature = Placement</c>.</summary>
+    public static bool EsDeCaptaciones(string? rol) => rol is not null && DeCaptaciones.Any(r => r.Codigo == rol.Trim());
 
     private static readonly Dictionary<string, RolDeCuentaDeCartera> PorCodigo = Todos.ToDictionary(r => r.Codigo, StringComparer.Ordinal);
 
@@ -245,12 +373,18 @@ public static class RolesDeCuentaDeCartera
 
     /// <summary>
     /// Las exigidas y opcionales del rol según el motivo de la regla o del hecho: <c>GastoDeterioro</c> y <c>RecuperacionDeterioro</c>
-    /// con <c>Individual</c> exigen además modalidad y concepto (§2.2); con <c>General</c> o <c>Additional</c>, no los admiten.
+    /// con <c>Individual</c> exigen además modalidad y concepto (§2.2); con <c>General</c> o <c>Additional</c>, no los admiten. Desde la
+    /// feature 014 (contabilidad.md §1.2), el capital de captación —activo o inactivo— exige además el plazo de emisión cuando la clase es
+    /// CDAT o contractual; en las demás clases no lo admite.
     /// </summary>
-    public static (IReadOnlyList<DimensionDeCartera> Exigidas, IReadOnlyList<DimensionDeCartera> Opcionales) DimensionesDe(RolDeCuentaDeCartera rol, string? motivo)
+    public static (IReadOnlyList<DimensionDeCartera> Exigidas, IReadOnlyList<DimensionDeCartera> Opcionales) DimensionesDe(
+        RolDeCuentaDeCartera rol, string? motivo, string? claseDeCaptacion = null)
     {
         if (rol.Codigo is GastoDeterioro or RecuperacionDeterioro && string.Equals(motivo?.Trim(), Individual, StringComparison.Ordinal))
             return ([.. rol.Exigidas, Mod, Con], rol.Opcionales);
+        if (rol.Codigo is CapitalDeCaptacion or CapitalDeCaptacionInactiva
+            && ClasesConPlazoDeEmision.Contains(claseDeCaptacion?.Trim() ?? string.Empty, StringComparer.Ordinal))
+            return ([.. rol.Exigidas, Plz], rol.Opcionales);
         return (rol.Exigidas, rol.Opcionales);
     }
 
@@ -279,6 +413,34 @@ public static class RolesDeCuentaDeCartera
         _ => null,
     };
 
+    /// <summary>
+    /// De concepto del libro de cuentas a rol (contabilidad.md §2 de la 014, «de concepto a rol»): el capital va a
+    /// <see cref="CapitalDeCaptacion"/> o, si la cuenta está inactiva, a <see cref="CapitalDeCaptacionInactiva"/>; los aportes de toda clase a
+    /// <see cref="AportesSociales"/> (la clase viaja como dimensión, <see cref="ClaseDeAporteDelConcepto"/>); la bonificación se reconoce como
+    /// interés por pagar. Nulo si el concepto no es del libro de cuentas.
+    /// </summary>
+    public static string? RolDelConceptoDeCuenta(string concepto, bool inactiva = false) => concepto switch
+    {
+        nameof(MemberAccountConcept.Principal) => inactiva ? CapitalDeCaptacionInactiva : CapitalDeCaptacion,
+        nameof(MemberAccountConcept.InterestPayable) or nameof(MemberAccountConcept.Bonus) => InteresPorPagar,
+        nameof(MemberAccountConcept.Withholding) => RetencionPorPagar,
+        nameof(MemberAccountConcept.Gmf) => GmfPorPagar,
+        nameof(MemberAccountConcept.ContributionMinimum) or nameof(MemberAccountConcept.ContributionOrdinary)
+            or nameof(MemberAccountConcept.ContributionExtraordinary) or nameof(MemberAccountConcept.ContributionRevaluation) => AportesSociales,
+        nameof(MemberAccountConcept.ChargeReceivable) => CargoDeCuentaPorCobrar,
+        _ => null,
+    };
+
+    /// <summary>La clase de aporte de un concepto de aportes (<c>ContributionOrdinary</c> → <c>Ordinary</c>…); nula en los demás.</summary>
+    public static string? ClaseDeAporteDelConcepto(string concepto) => concepto switch
+    {
+        nameof(MemberAccountConcept.ContributionMinimum) => nameof(ContributionClass.Minimum),
+        nameof(MemberAccountConcept.ContributionOrdinary) => nameof(ContributionClass.Ordinary),
+        nameof(MemberAccountConcept.ContributionExtraordinary) => nameof(ContributionClass.Extraordinary),
+        nameof(MemberAccountConcept.ContributionRevaluation) => nameof(ContributionClass.Revalued),
+        _ => null,
+    };
+
     /// <summary>La contrapartida de orden de un rol de orden deudora (§2.2): el suspenso contra la contingente; la castigada contra el control.</summary>
     public static string? ContraDeOrden(string rol) => rol switch
     {
@@ -304,6 +466,11 @@ public static class RolesDeCuentaDeCartera
         DimensionDeCartera.Reason => "reasonCode",
         DimensionDeCartera.Branch => "branch",
         DimensionDeCartera.Operation => "operation",
+        DimensionDeCartera.LineNature => "lineNature",
+        DimensionDeCartera.DepositClass => "depositClass",
+        DimensionDeCartera.IssueTermBand => "issueTermBand",
+        DimensionDeCartera.ContributionClass => "contributionClass",
+        DimensionDeCartera.AccountFlag => "accountFlag",
         _ => dimension.ToString(),
     };
 

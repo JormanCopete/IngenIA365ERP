@@ -33,7 +33,12 @@ public sealed record DimensionesDeReglaDeCarteraGuardadaDto(
     string? CollectorClass,
     string? ReasonCode,
     ReferenciaDeReglaDeCarteraDto? Branch,
-    ReferenciaDeReglaDeCarteraDto? CostCenter);
+    ReferenciaDeReglaDeCarteraDto? CostCenter,
+    string? LineNature = null,
+    string? DepositClass = null,
+    string? IssueTermBand = null,
+    string? ContributionClass = null,
+    string? AccountFlag = null);
 
 /// <summary>La cuenta de una regla y si hoy sigue siendo elegible para CAR (<see cref="AccountEligibility.Reparo"/>). (nuevo)</summary>
 public sealed record CuentaDeReglaDeCarteraDto(Guid PublicId, string Code, string Name, bool IsEligible);
@@ -73,7 +78,12 @@ public sealed record DimensionesDelCatalogoDeCarteraDto(
     IReadOnlyList<string> Concepts,
     IReadOnlyList<string> CollectorClasses,
     IReadOnlyList<string> RiskCategories,
-    IReadOnlyList<string> Reasons);
+    IReadOnlyList<string> Reasons,
+    IReadOnlyList<string>? LineNatures = null,
+    IReadOnlyList<string>? DepositClasses = null,
+    IReadOnlyList<string>? IssueTermBands = null,
+    IReadOnlyList<string>? ContributionClasses = null,
+    IReadOnlyList<string>? AccountFlags = null);
 
 // ============================================================================================================ catálogo --
 
@@ -99,7 +109,8 @@ public sealed class GetLendingRulesCatalogQueryHandler(IDimensionesDeCartera dim
             .ToList();
         var motivos = R.Todos.SelectMany(r => r.Motivos ?? []).Distinct(StringComparer.Ordinal).ToList();
         return Result.Success(new LendingRulesCatalogDto(hechos, roles, new DimensionesDelCatalogoDeCarteraDto(
-            catalogo.CreditLines, catalogo.Modalities, R.Conceptos, R.ClasesDeRecaudador, R.Categorias, motivos)));
+            catalogo.CreditLines, catalogo.Modalities, R.Conceptos, R.ClasesDeRecaudador, R.Categorias, motivos,
+            R.NaturalezasDeCaptacion, R.ClasesDeCaptacion, R.PlazosDeEmision, R.ClasesDeAporte, R.MarcasDeCuenta)));
     }
 }
 
@@ -252,7 +263,8 @@ public sealed class ResolveLendingRuleQueryHandler(IApplicationDbContext db, Res
         var matriz = await resolutor.CargarAsync(request.Date, request.Date, ct);
         var peticion = new PeticionDeReglaDeCartera(request.Operation.Trim(), request.Role.Trim(),
             new ValoresDeCartera(d.CreditLineCode, d.ModalityCode, d.SubsegmentCode, d.RiskCategory, d.ConceptCode, d.IsEmployee, d.InGracePeriod,
-                d.OnBehalfOfAssociate, d.Restructured, d.CollectorClass, d.ReasonCode, d.BranchPublicId),
+                d.OnBehalfOfAssociate, d.Restructured, d.CollectorClass, d.ReasonCode, d.BranchPublicId, d.LineNature, d.DepositClass,
+                d.IssueTermBand, d.ContributionClass, d.AccountFlag),
             request.Date, 1m, []);
 
         var candidatas = matriz.CandidatasDe(peticion)
@@ -290,7 +302,8 @@ internal static class VistaDeReglasDeCartera
                 new DimensionesDeReglaDeCarteraGuardadaDto(r.CreditLineCode, r.ModalityCode, r.SubsegmentCode, r.RiskCategory, r.ConceptCode,
                     r.IsEmployee, r.InGracePeriod, r.OnBehalfOfAssociate, r.Restructured, r.CollectorClass, r.ReasonCode,
                     r.BranchId is { } b ? sucursales.GetValueOrDefault(b) : null,
-                    r.CostCenterId is { } c ? centros.GetValueOrDefault(c) : null),
+                    r.CostCenterId is { } c ? centros.GetValueOrDefault(c) : null,
+                    r.LineNature, r.DepositClass, r.IssueTermBand, r.ContributionClass, r.AccountFlag),
                 new CuentaDeReglaDeCarteraDto(cuenta?.PublicId ?? Guid.Empty, cuenta?.Code ?? string.Empty, cuenta?.Name ?? string.Empty,
                     AccountEligibility.Reparo(cuenta, ModuloContable.Cartera) is null),
                 r.ValidFrom, r.ValidTo, r.Notes, r.DimensionKey, r.SpecificityWeight, r.VigenteEn(hoy), r.CreatedBy);

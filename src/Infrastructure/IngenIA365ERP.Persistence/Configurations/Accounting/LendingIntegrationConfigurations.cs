@@ -35,6 +35,12 @@ public class LendingPostingRuleConfiguration : IEntityTypeConfiguration<LendingP
         builder.Property(e => e.ConceptCode).HasMaxLength(30);
         builder.Property(e => e.CollectorClass).HasMaxLength(20);
         builder.Property(e => e.ReasonCode).HasMaxLength(40);
+        // Feature 014 (T044; contracts/contabilidad.md §1.1): las cinco dimensiones de captaciones, por nombre de su enum, nulas = cualquiera.
+        builder.Property(e => e.LineNature).HasMaxLength(20);
+        builder.Property(e => e.DepositClass).HasMaxLength(20);
+        builder.Property(e => e.IssueTermBand).HasMaxLength(20);
+        builder.Property(e => e.ContributionClass).HasMaxLength(20);
+        builder.Property(e => e.AccountFlag).HasMaxLength(20);
         builder.Property(e => e.DimensionKey).HasMaxLength(300).IsRequired();
         builder.Property(e => e.SpecificityWeight).IsRequired();
         builder.Property(e => e.ValidFrom).IsRequired();

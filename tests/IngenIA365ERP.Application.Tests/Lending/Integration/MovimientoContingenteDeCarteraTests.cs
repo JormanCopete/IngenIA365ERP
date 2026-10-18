@@ -233,7 +233,11 @@ public class MovimientoContingenteDeCarteraTests : IAsyncLifetime
             // K6b (T1056): la corrección monetaria UVR la emite el ciclo diario, como la causación.
             CorreccionMonetariaUvrCausadaV1.Type,
             // K6b (decisión del dueño del 2026-10-17): el reparto de un pago corregido por la UVR lo emite la corrida de corrección.
-            PagoRedistribuidoPorValorNacionalV1.Type);
+            PagoRedistribuidoPorValorNacionalV1.Type,
+            // Feature 014 (T048; mensajes.md §1.1 de la 014, columna «Proceso»): los de captaciones que emite el ciclo diario o el proceso.
+            "RetiroDeCuentaAplicado", "GmfRetenido", "InteresDeCaptacionCausado", "AjusteDeCausacionDeCaptacion", "InteresDeCaptacionLiquidado",
+            "RetencionPracticada", "InteresesDeCdatPagados", "CdatProrrogado", "CdatCancelado", "PenalidadAplicada", "CaptacionReclasificada",
+            "BonificacionReconocida", "CargoDeCuentaCausado", "DevolucionOrdenada", "SaldoTrasladadoANoReclamados");
         ClavesDeEvento.EsValida(CatalogoDeMensajesDeCarteraV1.HechosAContabilidad.Single(t => t.Type == CupoRotativoOtorgadoV1.Type).FormaDeClave,
             ClavesDeEvento.ConfirmacionPor(Guid.NewGuid())).Should().BeTrue();
     }
