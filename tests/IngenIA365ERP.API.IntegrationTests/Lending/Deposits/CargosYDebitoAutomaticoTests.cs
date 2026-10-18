@@ -107,7 +107,7 @@ public class CargosYDebitoAutomaticoTests(CentralIdentityApiFixture fx)
 
         var mandato = await CarteraE2E.ConClaveAsync(http, admin, HttpMethod.Post, "/api/lending/direct-debits", new
         {
-            accountPublicId = cuenta, scope = "AllHolderLoans", allowsPartial = false, validFrom = des.Hoy,
+            accountPublicId = cuenta, scope = "AllLoansOfHolder", allowsPartial = false, validFrom = des.Hoy,
             authorizationAttachmentPublicId = Guid.NewGuid(),
         });
         mandato.StatusCode.Should().Be(HttpStatusCode.Created, await mandato.Content.ReadAsStringAsync());
