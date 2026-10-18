@@ -22,6 +22,8 @@ public class TextosDeCarteraTests
         "Presentation/IngenIA365ERP.Shared/Services/Cartera/TextosDeIntegracion.cs",
         // US10 (T0852): los textos de la libranza.
         "Presentation/IngenIA365ERP.Shared/Services/Cartera/TextosDeLibranza.cs",
+        // Feature 014, US1 (T070): los textos de las captaciones y los aportes.
+        "Presentation/IngenIA365ERP.Shared/Services/Cartera/TextosDeCaptaciones.cs",
     ];
 
     private static readonly (Regex Patron, string Que)[] Prohibidos =

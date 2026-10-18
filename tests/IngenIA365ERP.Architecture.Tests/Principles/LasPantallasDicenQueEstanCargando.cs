@@ -71,6 +71,8 @@ public class LasPantallasDicenQueEstanCargando
         // K5, US16 (T1009): el formato del SICSES y los archivos para las centrales de riesgo.
         "Cartera/Sicses.razor",
         "Cartera/Centrales.razor",
+        // Feature 014, US1 (T070): las líneas de captación y de aportes dentro del catálogo común (/cartera/lineas).
+        "Cartera/Captaciones/LineasDeCaptacion.razor",
     ];
 
     [Fact]

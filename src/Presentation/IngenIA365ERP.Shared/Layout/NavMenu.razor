@@ -86,6 +86,14 @@
         @if (HayEnlacesDeCaptaciones)
         {
             <NavMenuGroup Icon="e-money" Title="Captaciones y aportes" Expanded="SidebarOpen">
+                @* US1 (T070): las líneas de captación y de aportes viven en el catálogo común de líneas, filtrado por su naturaleza. *@
+                <span class="nav-subgroup-title">Configuración</span>
+                <PermissionGate Required="Lending.DepositLines.View">
+                    <NavLink href="/cartera/lineas?naturaleza=captacion" class="nav-subitem" Match="NavLinkMatch.All">Líneas de captación</NavLink>
+                </PermissionGate>
+                <PermissionGate Required="Lending.ContributionLines.View">
+                    <NavLink href="/cartera/lineas?naturaleza=aportes" class="nav-subitem" Match="NavLinkMatch.All">Líneas de aportes</NavLink>
+                </PermissionGate>
             </NavMenuGroup>
         }
 
@@ -611,8 +619,8 @@
 </div>
 
 @code {
-    /// <summary>Feature 014 (T057): el grupo de captaciones se muestra cuando tenga su primer enlace (lo pone la primera historia).</summary>
-    private static readonly bool HayEnlacesDeCaptaciones = false;
+    /// <summary>Feature 014 (T057): el grupo de captaciones se muestra cuando tenga su primer enlace; US1 (T070) le puso las líneas.</summary>
+    private static readonly bool HayEnlacesDeCaptaciones = true;
 
     [Parameter] public bool SidebarOpen { get; set; } = true;
 

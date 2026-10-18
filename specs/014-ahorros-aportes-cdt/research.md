@@ -892,3 +892,9 @@ Construida la historia 1. **Manda el código**; estas notas reemplazan lo dicho 
   fraction }, installment { kind, amount, fraction, roundingUnit, roundingMode, periodicity, dueDay, minimumFirst }, permanentSavingsShare?
   { depositLinePublicId, fraction }, allowsExtraordinary, maxParticipationFraction, excessAction, allowsTransferBetweenMembers, refundTermDays,
   lossDeductionEnabled }`.
+- **E43 · La pantalla del catálogo común.** `/cartera/lineas` ya era la de líneas de crédito (013) y una página no comparte ruta con otra: T070 la vuelve el
+  catálogo común con selector de naturaleza (`?naturaleza=credito|captacion|aportes`, cada una para quien tiene su `View`; sin la consulta de crédito
+  abre en la primera que la persona sí puede ver). Lo de captación y aportes es el componente `Pages/Cartera/Captaciones/LineasDeCaptacion.razor` (lista,
+  alta, detalle con la versión a una fecha y su historial, versión nueva que parte de la vigente, cerrar y reabrir/activar) con el editor
+  `EditorDeLineaDeCaptacion.razor`; las tasas se digitan en puntos y viajan como fracción. El grupo de menú «Captaciones y aportes» se muestra con
+  «Líneas de captación» y «Líneas de aportes» (enlaces a la misma página con su naturaleza); «Líneas de crédito» sigue en el grupo «Cartera».
