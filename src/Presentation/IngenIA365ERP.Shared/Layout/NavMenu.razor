@@ -94,6 +94,11 @@
                 <PermissionGate Required="Lending.ContributionLines.View">
                     <NavLink href="/cartera/lineas?naturaleza=aportes" class="nav-subitem" Match="NavLinkMatch.All">Líneas de aportes</NavLink>
                 </PermissionGate>
+                @* US2 (T079): las cuentas de ahorro y de aportes, su apertura y su ficha (/cartera/ahorros/{id}, que se abre desde la lista). *@
+                <span class="nav-subgroup-title">Cuentas</span>
+                <PermissionGate Required="Lending.Accounts.Read">
+                    <NavLink href="/cartera/ahorros" class="nav-subitem">Cuentas de ahorro y aportes</NavLink>
+                </PermissionGate>
             </NavMenuGroup>
         }
 

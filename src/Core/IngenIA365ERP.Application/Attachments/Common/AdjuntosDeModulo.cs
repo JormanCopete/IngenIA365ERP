@@ -295,6 +295,19 @@ public static class AdjuntosDeModulo
     /// </summary>
     public const string SoporteDeCambioDelModelo = "LendingImpairmentModelElectionSupport";
 
+    /// <summary>
+    /// Feature 014, US2 (T074, T079; data-model §3.2; FR-033, FR-034, FR-059): los soportes de la titularidad de una cuenta de captación o de aportes —el
+    /// de la representación legal (registro civil, decisión judicial, certificado de existencia), la constancia de beneficiarios firmada por el titular,
+    /// la firma y la foto, y la declaración de origen de fondos—, con dueño el <b>titular</b> (<c>OwnerEntityPublicId</c> = el <c>PublicId</c> de la
+    /// persona: la cuenta todavía no existe al subirlos). Se lee con <c>Lending.Accounts.Read</c>; lo sube quien tiene <c>Lending.Accounts.Open</c> o
+    /// <c>Lending.Accounts.Parties.Manage</c>; no se borra: respalda quién maneja la cuenta y a quién se le entrega.
+    /// </summary>
+    public const string SoporteDeTitularidad = "LendingAccountPartySupport";
+
+    private const string LeerCuentas = "Lending.Accounts.Read";
+    private const string AbrirCuentas = "Lending.Accounts.Open";
+    private const string AdministrarPartesDeCuentas = "Lending.Accounts.Parties.Manage";
+
     private const string LeerCalificaciones = "Lending.Ratings.Read";
     private const string ElegirModeloDeDeterioro = "Lending.ImpairmentModel.Manage";
 
@@ -392,6 +405,7 @@ public static class AdjuntosDeModulo
             SoporteDeReclamoSobreElReporte => LeerReclamos,
             ComprobanteDeCargueRegulatorio => LeerArchivosRegulatorios,
             SoporteDeCambioDelModelo => LeerCalificaciones,
+            SoporteDeTitularidad => LeerCuentas,
             _ => De(ownerEntityType)?.PermisoDeLectura,
         };
         return permiso is null || await permisos.HasPermissionAsync(permiso, ct);
@@ -516,6 +530,14 @@ public static class AdjuntosDeModulo
                 return new Error("Generic.NotFound", "Persona no encontrada.");
             return null;
         }
+        if (ownerEntityType == SoporteDeTitularidad)
+        {
+            // Feature 014, US2: los soportes de la titularidad de una cuenta, del titular, de quien abre cuentas o administra sus partes.
+            var puede = await permisos.HasPermissionAsync(AbrirCuentas, ct) || await permisos.HasPermissionAsync(AdministrarPartesDeCuentas, ct);
+            if (!puede || !await db.People.AnyAsync(p => p.PublicId == ownerEntityPublicId, ct))
+                return new Error("Generic.NotFound", "Persona no encontrada.");
+            return null;
+        }
         if (ownerEntityType == SoporteDeCastigo)
         {
             // Feature 013, K3 (US14): los soportes del castigo de un crédito, de quien arma el lote.
@@ -622,6 +644,11 @@ public static class AdjuntosDeModulo
         if (ownerEntityType == SoporteDeEventoDelDeudor)
             return new ErrorConDatos(AttachmentErrorCodes.OwnerLocked,
                 "Es el soporte de un evento del deudor (fallecimiento, retiro, embargo o insolvencia): se conserva y no se puede borrar.",
+                new { ownerEntityType });
+        // Feature 014, US2: los soportes de la titularidad de una cuenta respaldan quién la maneja y a quién se entrega.
+        if (ownerEntityType == SoporteDeTitularidad)
+            return new ErrorConDatos(AttachmentErrorCodes.OwnerLocked,
+                "Es un soporte de la titularidad de una cuenta (representación, beneficiarios, firma u origen de fondos): se conserva y no se puede borrar.",
                 new { ownerEntityType });
         // Feature 013, K3 (US14): los soportes del castigo y del reporte al supervisor respaldan lo que se castigó.
         if (ownerEntityType is SoporteDeCastigo or ReporteDeCastigos)

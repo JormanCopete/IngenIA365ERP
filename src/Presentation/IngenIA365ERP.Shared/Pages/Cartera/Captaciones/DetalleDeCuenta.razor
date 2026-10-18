@@ -1,0 +1,330 @@
+@page "/cartera/ahorros/{Id:guid}"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Globalization
+@using IngenIA365ERP.Shared.Services.Adjuntos
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Inventario
+@inject CaptacionesClient Cliente
+@inject AdjuntosClient Adjuntos
+@inject INotificationService Notification
+@inject NavigationManager Navegacion
+
+<PageTitle>Cuenta - IngenIA365ERP</PageTitle>
+
+@* Feature 014, US2 (T079; FR-033 a FR-036; contracts/api.md §4 y §10): la ficha de una cuenta de captación o de aportes. Sus datos, sus saldos por
+   concepto, lo que la retiene en apertura (y aprobarla, otra persona que quien la abrió), sus partes y beneficiarios vigentes con su historia, el
+   cambio de partes (EditorDeTitularidad, con la constancia de beneficiarios), la marca de exención del GMF (marcar, reemplazar la vigente del titular,
+   terminar) y la actualización de datos que pide la mayoría de edad del titular. Las operaciones, el extracto y las cuotas llegan con sus historias. *@
+<PermissionGate Required="Lending.Accounts.Read" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>@(_cuenta is { } t ? $"Cuenta {t.Number}" : "Cuenta")</h3>
+        <div class="toolbar">
+            <SfButton CssClass="e-outline" OnClick="@(() => Navegacion.NavigateTo("/cartera/ahorros"))">Volver</SfButton>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+        @if (_cuenta is { } c)
+        {
+            <div class="info-card">
+                <h4>@c.Line.Code · @c.Line.Name</h4>
+                <dl class="form-grid">
+                    <div><dt>Titular</dt><dd>@c.Holder.FullName (@c.Holder.DocumentNumber)</dd></div>
+                    <div><dt>Clase</dt><dd>@(c.DepositClass is { } cl ? TextosDeCaptaciones.Clase(cl) : TextosDeCaptaciones.Naturaleza(c.Nature))</dd></div>
+                    <div><dt>Estado</dt><dd>@TextosDeCaptaciones.EstadoDeCuenta(c.Status)</dd></div>
+                    <div><dt>Oficina</dt><dd>@(c.Office?.Name ?? "—")</dd></div>
+                    <div><dt>Manejo</dt><dd>@TextosDeCaptaciones.Manejo(c.HandlingMode)</dd></div>
+                    <div><dt>Abierta</dt><dd>@c.OpenedOn.ToString("dd/MM/yyyy")@(c.ActivatedOn is { } a ? $" · activa desde {a:dd/MM/yyyy}" : "")</dd></div>
+                    <div><dt>Saldo del titular</dt><dd>@Pesos(c.Balances.Balance)</dd></div>
+                    <div><dt>Exención del GMF</dt><dd>@(c.GmfExempt is { } g ? $"Exenta desde {g.Since:dd/MM/yyyy}" : "No está marcada")</dd></div>
+                </dl>
+                @if (c.Balances.ByConcept.Count > 0)
+                {
+                    <p class="texto-tenue">Por concepto: @string.Join(" · ", c.Balances.ByConcept.Select(k => $"{TextosDeCaptaciones.Concepto(k.Key)} {Pesos(k.Value)}"))</p>
+                }
+                @foreach (var r in c.OpeningBlockers) { <p class="aviso aviso-info">@TextosDeCaptaciones.RetencionDeApertura(r)</p> }
+                @if (c.Marks.RequiresDataUpdate)
+                {
+                    <p class="aviso aviso-info">El titular cumplió la mayoría de edad: maneja su cuenta y debe actualizar sus datos y su autorización de tratamiento.</p>
+                }
+                @if (c.Marks.DeceasedHolder) { <p class="aviso aviso-error">El titular figura como fallecido.</p> }
+
+                <div class="form-grid">
+                    <label class="campo campo-ancho">Motivo (para aprobar, confirmar o cambiar la marca) <input class="e-input" maxlength="500" @bind="_motivo" /></label>
+                </div>
+                <div class="toolbar">
+                    @if (c.Status == TextosDeCaptaciones.EnApertura)
+                    {
+                        <PermissionGate Required="Lending.Accounts.Open">
+                            <SfButton CssClass="e-primary" Disabled="@(_accion.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@AprobarAsync">Aprobar la apertura</SfButton>
+                        </PermissionGate>
+                    }
+                    @if (c.Marks.RequiresDataUpdate)
+                    {
+                        <PermissionGate Required="Lending.Accounts.Parties.Manage">
+                            <SfButton CssClass="e-outline" Disabled="@(_accion.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@ConfirmarDatosAsync">Datos actualizados</SfButton>
+                        </PermissionGate>
+                    }
+                    @if (c.Nature == TextosDeCaptaciones.Captacion && c.DepositClass != TextosDeCaptaciones.Cdat && c.Status != TextosDeCaptaciones.Cancelada)
+                    {
+                        <PermissionGate Required="Lending.GmfExemptions.Manage">
+                            @if (c.GmfExempt is { } marca)
+                            {
+                                <SfButton CssClass="e-outline" Disabled="@(_accion.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@(() => TerminarExencionAsync(marca.PublicId))">Terminar la exención</SfButton>
+                            }
+                            else
+                            {
+                                <label class="campo-check"><input type="checkbox" @bind="_reemplazar" /> Reemplazar la cuenta exenta vigente del titular</label>
+                                <SfButton CssClass="e-outline" Disabled="@(_accion.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@MarcarExentaAsync">Marcar exenta del GMF</SfButton>
+                            }
+                        </PermissionGate>
+                    }
+                </div>
+                @foreach (var e in _erroresDeAccion) { <p class="aviso aviso-error" role="alert">@e</p> }
+            </div>
+
+            <div class="info-card">
+                <h4>Partes</h4>
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th>Papel</th><th>Persona</th><th class="numero">Proporción</th><th class="numero">Límite de firma</th><th>Representación</th><th>Desde</th></tr></thead>
+                        <tbody>
+                            @foreach (var p in c.Parties)
+                            {
+                                <tr>
+                                    <td>@TextosDeCaptaciones.Papel(p.Role)</td>
+                                    <td>@p.Person.FullName (@p.Person.DocumentNumber)</td>
+                                    <td class="numero">@(p.Share is { } s ? (s * 100m).ToString("0.####", Es) + " %" : "—")</td>
+                                    <td class="numero">@(p.SignatureLimit is { } l ? Pesos(l) : p.Role == TextosDeCaptaciones.Firmante ? "sin límite" : "—")</td>
+                                    <td>@(p.RepresentationBasis is null ? "—" : TextosDeCaptaciones.Fundamento(p.RepresentationBasis))</td>
+                                    <td>@p.ValidFrom.ToString("dd/MM/yyyy")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                <h5>Beneficiarios</h5>
+                @if (c.Beneficiaries.Count == 0)
+                {
+                    <p class="texto-tenue">Sin beneficiarios registrados.</p>
+                }
+                else
+                {
+                    <div class="tabla-desplazable">
+                        <table class="data-grid">
+                            <thead><tr><th>Persona</th><th class="numero">Porcentaje</th><th class="numero">Conjunto</th><th>Desde</th></tr></thead>
+                            <tbody>
+                                @foreach (var b in c.Beneficiaries)
+                                {
+                                    <tr>
+                                        <td>@b.Person.FullName (@b.Person.DocumentNumber)</td>
+                                        <td class="numero">@b.Percent.ToString("0.##", Es) %</td>
+                                        <td class="numero">@b.SetNumber</td>
+                                        <td>@b.ValidFrom.ToString("dd/MM/yyyy")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                <div class="toolbar">
+                    <SfButton CssClass="e-flat" OnClick="@VerHistoriaAsync">@(_historia is null ? "Ver la historia" : "Ocultar la historia")</SfButton>
+                    @if (c.Status != TextosDeCaptaciones.Cancelada)
+                    {
+                        <PermissionGate Required="Lending.Accounts.Parties.Manage">
+                            <SfButton CssClass="e-outline" OnClick="@AbrirCambioAsync">Cambiar partes y beneficiarios</SfButton>
+                        </PermissionGate>
+                    }
+                </div>
+                @if (_historia is { } h)
+                {
+                    <IndicadorDeCarga Cargando="@_cargaHistoria.Activa">
+                        <div class="tabla-desplazable">
+                            <table class="data-grid">
+                                <thead><tr><th>Papel</th><th>Persona</th><th class="numero">Proporción</th><th>Desde</th><th>Hasta</th><th>Motivo del fin</th></tr></thead>
+                                <tbody>
+                                    @foreach (var p in h)
+                                    {
+                                        <tr>
+                                            <td>@TextosDeCaptaciones.Papel(p.Role)</td>
+                                            <td>@p.Person.FullName</td>
+                                            <td class="numero">@(p.Share is { } s ? (s * 100m).ToString("0.####", Es) + " %" : "—")</td>
+                                            <td>@p.ValidFrom.ToString("dd/MM/yyyy")</td>
+                                            <td>@(p.ValidTo?.ToString("dd/MM/yyyy") ?? "vigente")</td>
+                                            <td>@(p.EndReason ?? "—")</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </IndicadorDeCarga>
+                }
+            </div>
+        }
+    </IndicadorDeCarga>
+</div>
+
+<SfDialog @bind-Visible="_mostrarCambio" Header="Cambiar partes y beneficiarios" Width="1000px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando las partes…">
+                <p class="texto-tenue">
+                    Lo que no cambia sigue; lo que cambia se cierra ayer y lo nuevo rige desde hoy. Nada se borra. Un cambio de beneficiarios lleva la constancia
+                    firmada por el titular.
+                </p>
+                @if (_cuenta is { } c)
+                {
+                    <SubirSoporte OwnerEntityType="@CaptacionesClient.DuenoDeSoportesDeTitularidad" OwnerEntityPublicId="@c.Holder.PersonPublicId"
+                                  Rotulo="Subir un soporte del titular" Ayuda="Constancia de beneficiarios o soporte de la representación" OnSubido="@CargarSoportesAsync" />
+                    <EditorDeTitularidad Partes="@_cambio.Parties" Beneficiarios="@_cambio.Beneficiaries" Soportes="@_soportes"
+                                         EsAportes="@(c.Nature == TextosDeCaptaciones.Aportes)" @bind-Manejo="_cambio.HandlingMode" Titular="@c.Holder.PersonPublicId" />
+                    <div class="form-grid">
+                        <label class="campo">Constancia de beneficiarios
+                            <select class="e-input" @bind="_cambio.EvidenceAttachmentPublicId">
+                                <option value="">Sin constancia</option>
+                                @foreach (var a in _soportes) { <option value="@a.PublicId">@a.FileName</option> }
+                            </select>
+                        </label>
+                        <label class="campo campo-ancho">Motivo * <input class="e-input" maxlength="500" @bind="_cambio.Reason" /></label>
+                    </div>
+                }
+                @foreach (var e in _erroresDeCambio) { <p class="aviso aviso-error" role="alert">@e</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(_cambio.Reason))" OnClick="@GuardarCambioAsync">Guardar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarCambio = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private static readonly CultureInfo Es = CultureInfo.GetCultureInfo("es-CO");
+
+    [Parameter] public Guid Id { get; set; }
+
+    private readonly EstadoDeCarga _carga = new(), _accion = new(), _guardado = new(), _cargaHistoria = new();
+    private CuentaDto? _cuenta;
+    private IReadOnlyList<ParteDeCuentaDto>? _historia;
+    private IReadOnlyList<AdjuntoDto> _soportes = [];
+    private CambiarPartesRequest _cambio = new();
+    private List<string> _erroresDeAccion = [], _erroresDeCambio = [];
+    private ClaveDeOperacion _claveDeAccion = new(), _claveDeCambio = new();
+    private bool _mostrarCambio, _reemplazar;
+    private string? _motivo, _error;
+
+    protected override async Task OnParametersSetAsync() => await CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        _error = null;
+        var r = await Cliente.CuentaAsync(Id);
+        if (!r.IsSuccess || r.Value is null) { _cuenta = null; _error = r.ErrorMessage ?? "No se pudo leer la cuenta."; return; }
+        _cuenta = r.Value;
+        if (_historia is not null) await LeerHistoriaAsync();
+    }
+
+    // -------------------------------------------------------------------------------------------------------- acciones --
+
+    private async Task AprobarAsync()
+    {
+        using var carga = _accion.Iniciar();
+        await DespuesDeAccionAsync(await Cliente.AprobarAperturaAsync(Id, _motivo!.Trim(), _claveDeAccion), "Apertura aprobada.");
+    }
+
+    private async Task ConfirmarDatosAsync()
+    {
+        using var carga = _accion.Iniciar();
+        await DespuesDeAccionAsync(await Cliente.ConfirmarActualizacionDeDatosAsync(Id, _motivo!.Trim(), _claveDeAccion), "Datos del titular confirmados.");
+    }
+
+    private async Task MarcarExentaAsync()
+    {
+        using var carga = _accion.Iniciar();
+        var r = await Cliente.MarcarExencionAsync(new MarcarExencionRequest(Id, null, _motivo!.Trim(), _reemplazar), _claveDeAccion);
+        await DespuesDeAccionAsync(r, "Cuenta marcada exenta del GMF.");
+    }
+
+    private async Task TerminarExencionAsync(Guid marca)
+    {
+        using var carga = _accion.Iniciar();
+        var r = await Cliente.TerminarExencionAsync(marca, new TerminarExencionRequest(null, _motivo!.Trim()), _claveDeAccion);
+        await DespuesDeAccionAsync(r, "Exención del GMF terminada.");
+    }
+
+    private async Task DespuesDeAccionAsync<T>(ResultadoDeInventario<T> r, string exito)
+    {
+        _erroresDeAccion = [];
+        if (!r.IsSuccess) { _erroresDeAccion = [.. LineasDeCreditoClient.Explicar(r)]; return; }
+        _motivo = null;
+        _reemplazar = false;
+        _claveDeAccion = new ClaveDeOperacion();
+        await Notification.SuccessAsync(exito);
+        await CargarAsync();
+    }
+
+    // --------------------------------------------------------------------------------------------------------- partes --
+
+    private async Task VerHistoriaAsync()
+    {
+        if (_historia is not null) { _historia = null; return; }
+        await LeerHistoriaAsync();
+    }
+
+    private async Task LeerHistoriaAsync()
+    {
+        using var carga = _cargaHistoria.Iniciar();
+        var r = await Cliente.PartesAsync(Id, conHistoria: true);
+        _historia = r.Value?.History ?? [];
+    }
+
+    private async Task AbrirCambioAsync()
+    {
+        if (_cuenta is not { } c) return;
+        _cambio = new CambiarPartesRequest
+        {
+            HandlingMode = c.HandlingMode,
+            Parties = c.Parties.Where(p => p.Role != TextosDeCaptaciones.Titular).Select(p => new ParteDeCuentaRequest
+            {
+                PersonPublicId = p.Person.PersonPublicId, Nombre = $"{p.Person.FullName} ({p.Person.DocumentNumber})", Role = p.Role,
+                Share = p.Role == TextosDeCaptaciones.Cotitular ? p.Share : null, SignatureLimit = p.SignatureLimit, RepresentationBasis = p.RepresentationBasis,
+                SupportAttachmentPublicId = p.SupportAttachmentPublicId, SignatureSpecimenAttachmentPublicId = p.SignatureSpecimenAttachmentPublicId,
+                PhotoAttachmentPublicId = p.PhotoAttachmentPublicId,
+            }).ToList(),
+            Beneficiaries = c.Beneficiaries.Select(b => new BeneficiarioDeCuentaRequest
+            {
+                PersonPublicId = b.Person.PersonPublicId, Percent = b.Percent, Nombre = $"{b.Person.FullName} ({b.Person.DocumentNumber})",
+            }).ToList(),
+        };
+        _erroresDeCambio = [];
+        _claveDeCambio = new ClaveDeOperacion();
+        await CargarSoportesAsync();
+        _mostrarCambio = true;
+    }
+
+    private async Task CargarSoportesAsync()
+    {
+        if (_cuenta is not { } c) { _soportes = []; return; }
+        var r = await Adjuntos.ListarAsync(CaptacionesClient.DuenoDeSoportesDeTitularidad, c.Holder.PersonPublicId);
+        _soportes = (r.Value ?? []).Where(a => a.Disponible).ToList();
+    }
+
+    private async Task GuardarCambioAsync()
+    {
+        using var carga = _guardado.Iniciar();
+        _erroresDeCambio = [];
+        var r = await Cliente.CambiarPartesAsync(Id, _cambio, _claveDeCambio);
+        if (!r.IsSuccess) { _erroresDeCambio = [.. LineasDeCreditoClient.Explicar(r)]; return; }
+        _mostrarCambio = false;
+        await Notification.SuccessAsync("Partes y beneficiarios guardados.");
+        await CargarAsync();
+    }
+
+    private static string Pesos(decimal valor) => "$ " + valor.ToString("N0", Es);
+}

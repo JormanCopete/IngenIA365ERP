@@ -76,6 +76,81 @@ public static class TextosDeCaptaciones
         _ => "credito",
     };
 
+    // ------------------------------------------------------------------------------------------- cuentas (US2, T079) --
+
+    public const int Titular = 1;
+    public const int Cotitular = 2;
+    public const int Firmante = 3;
+    public const int Representante = 4;
+    public const int Beneficiario = 5;
+
+    public const int Indistinto = 1;
+    public const int Conjunto = 2;
+
+    public const int EnApertura = 1;
+    public const int Activa = 2;
+    public const int Cancelada = 6;
+
+    public static IReadOnlyList<(int Valor, string Texto)> Papeles { get; } =
+        [(Titular, "Titular"), (Cotitular, "Cotitular"), (Firmante, "Firmante"), (Representante, "Representante legal"), (Beneficiario, "Beneficiario")];
+
+    /// <summary>Los papeles que se agregan a mano (el titular es el de la cuenta y los beneficiarios van aparte).</summary>
+    public static IReadOnlyList<(int Valor, string Texto)> PapelesQueSeAgregan { get; } =
+        [(Cotitular, "Cotitular"), (Firmante, "Firmante"), (Representante, "Representante legal")];
+
+    public static IReadOnlyList<(int Valor, string Texto)> Manejos { get; } = [(Indistinto, "Indistinto (firma cualquiera)"), (Conjunto, "Conjunto (firman juntos)")];
+
+    public static IReadOnlyList<(int Valor, string Texto)> EstadosDeCuenta { get; } =
+        [(EnApertura, "En apertura"), (Activa, "Activa"), (3, "Inactiva"), (4, "Vencida"), (5, "En cancelación"), (Cancelada, "Cancelada")];
+
+    public static IReadOnlyList<(string Valor, string Texto)> Fundamentos { get; } =
+    [
+        ("Parent", "Padre o madre"), ("Guardian", "Tutor o curador"), ("CourtOrder", "Decisión judicial"),
+        ("LegalEntityRepresentative", "Representante de la persona jurídica"),
+    ];
+
+    public static string Papel(int v) => De(Papeles, v);
+
+    public static string Manejo(int v) => De(Manejos, v);
+
+    public static string EstadoDeCuenta(int v) => De(EstadosDeCuenta, v);
+
+    public static string Fundamento(string? v) => Fundamentos.FirstOrDefault(f => f.Valor == v).Texto ?? v ?? "—";
+
+    /// <summary>Por qué una cuenta sigue en apertura (<c>openingBlockers</c>).</summary>
+    public static string RetencionDeApertura(string v) => v switch
+    {
+        "ScreeningMatch" => "Coincidencia en listas restrictivas: la libera el oficial de cumplimiento",
+        "InitialDeposit" => "Espera el depósito de apertura",
+        _ => v,
+    };
+
+    /// <summary>Los conceptos del libro de la cuenta (<c>MemberAccountConcept</c>, por nombre en <c>balances.byConcept</c>).</summary>
+    public static string Concepto(string v) => v switch
+    {
+        "Principal" => "Capital",
+        "InterestPayable" => "Interés por pagar",
+        "Withholding" => "Retención",
+        "Gmf" => "GMF",
+        "ContributionMinimum" => "Aporte mínimo",
+        "ContributionOrdinary" => "Aportes ordinarios",
+        "ContributionExtraordinary" => "Aportes extraordinarios",
+        "ContributionRevaluation" => "Revalorización",
+        "ChargeReceivable" => "Cargos por cobrar",
+        "Bonus" => "Bonificación",
+        _ => v,
+    };
+
+    /// <summary>Las marcas de la lista de cuentas.</summary>
+    public static string MarcaDeCuenta(string v) => v switch
+    {
+        "RequiresDataUpdate" => "Actualizar datos",
+        "Garnished" => "Embargada",
+        "GmfExempt" => "Exenta de GMF",
+        "OverdrawnTechnical" => "Sobregiro técnico",
+        _ => v,
+    };
+
     private static string De(IReadOnlyList<(int Valor, string Texto)> lista, int v)
     {
         foreach (var (valor, texto) in lista)

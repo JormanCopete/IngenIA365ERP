@@ -16,6 +16,11 @@ public sealed class CaptacionesClient(HttpClient http, CentralAuthClient auth)
     public const string Base = GobiernoDeCarteraClient.Base;
     public const string RutaDeActivacion = Base + "/deposits/activation";
     public const string RutaDeLineas = Base + "/lines";
+    public const string RutaDeCuentas = Base + "/accounts";
+    public const string RutaDeExenciones = Base + "/gmf-exemptions";
+
+    /// <summary>El dueño de los soportes de la titularidad de una cuenta (representación, beneficiarios, firma, origen de fondos): el titular.</summary>
+    public const string DuenoDeSoportesDeTitularidad = "LendingAccountPartySupport";
 
     /// <summary>Las naturalezas que se activan aparte de los créditos (<c>LineNature</c>).</summary>
     public const string Captaciones = "Deposit";
@@ -75,6 +80,59 @@ public sealed class CaptacionesClient(HttpClient http, CentralAuthClient auth)
     /// <summary>Reabre una línea cerrada o activa una en borrador, revalidando el perfil, la entrega y la única línea de aportes activa.</summary>
     public Task<ResultadoDeInventario<LineaDeCaptacionDto>> ReabrirLineaAsync(Guid linea, string motivo, ClaveDeOperacion clave, CancellationToken ct = default) =>
         Enviar<LineaDeCaptacionDto>(HttpMethod.Post, $"{RutaDeLineas}/{linea}/reopen", new MotivoDeCarteraRequest(motivo), clave, ct);
+
+    // ----------------------------------------------------------------------------------------- cuentas (US2, T079) --
+
+    /// <summary>Las cuentas del alcance (api.md §4): por búsqueda (número, documento o nombre), naturaleza, estado y titular; la más reciente primero.</summary>
+    public Task<ResultadoDeInventario<PaginaDeInventarioDto<CuentaEnListaDto>>> CuentasAsync(string? buscar = null, int? naturaleza = null, int? estado = null,
+        Guid? titular = null, int pagina = 1, int tamano = 20, CancellationToken ct = default) =>
+        Enviar<PaginaDeInventarioDto<CuentaEnListaDto>>(HttpMethod.Get, ConQuery(RutaDeCuentas, Query(("search", buscar), ("nature", Texto(naturaleza)),
+            ("status", Texto(estado)), ("personPublicId", Texto(titular)), ("page", Texto(pagina)), ("pageSize", Texto(tamano)))), null, null, ct);
+
+    /// <summary>Una cuenta con sus partes, beneficiarios, marca del GMF, saldos y lo que la retiene en apertura.</summary>
+    public Task<ResultadoDeInventario<CuentaDto>> CuentaAsync(Guid cuenta, CancellationToken ct = default) =>
+        Enviar<CuentaDto>(HttpMethod.Get, $"{RutaDeCuentas}/{cuenta}", null, null, ct);
+
+    /// <summary>
+    /// Abre una cuenta. Responde 201 en «activa» o «en apertura» (con el aviso <c>Lending.Screening.Blocked</c> si la retienen las listas), o 422 con
+    /// el motivo (no asociado, beneficiarios que no suman 100 %, representante, cuenta exenta ya marcada…).
+    /// </summary>
+    public Task<ResultadoDeInventario<CuentaDto>> AbrirCuentaAsync(AbrirCuentaRequest request, ClaveDeOperacion clave, CancellationToken ct = default) =>
+        Enviar<CuentaDto>(HttpMethod.Post, RutaDeCuentas, request, clave, ct);
+
+    /// <summary>Aprueba la apertura retenida (otra persona que quien la abrió, y con las coincidencias liberadas por el oficial).</summary>
+    public Task<ResultadoDeInventario<CuentaDto>> AprobarAperturaAsync(Guid cuenta, string motivo, ClaveDeOperacion clave, CancellationToken ct = default) =>
+        Enviar<CuentaDto>(HttpMethod.Post, $"{RutaDeCuentas}/{cuenta}/approve-opening", new MotivoDeCarteraRequest(motivo), clave, ct);
+
+    /// <summary>Las partes vigentes a una fecha y, si se pide, toda la historia.</summary>
+    public Task<ResultadoDeInventario<PartesDeCuentaDto>> PartesAsync(Guid cuenta, bool conHistoria = false, CancellationToken ct = default) =>
+        Enviar<PartesDeCuentaDto>(HttpMethod.Get, ConQuery($"{RutaDeCuentas}/{cuenta}/parties", Query(("includeHistory", conHistoria ? "true" : null))),
+            null, null, ct);
+
+    /// <summary>Cambia las partes (el conjunto completo): lo que no viene igual se cierra la víspera y lo nuevo rige desde hoy.</summary>
+    public Task<ResultadoDeInventario<PartesDeCuentaDto>> CambiarPartesAsync(Guid cuenta, CambiarPartesRequest request, ClaveDeOperacion clave,
+        CancellationToken ct = default) =>
+        Enviar<PartesDeCuentaDto>(HttpMethod.Put, $"{RutaDeCuentas}/{cuenta}/parties", request, clave, ct);
+
+    /// <summary>Levanta la marca «actualizar datos» tras la mayoría de edad del titular.</summary>
+    public Task<ResultadoDeInventario<CuentaDto>> ConfirmarActualizacionDeDatosAsync(Guid cuenta, string motivo, ClaveDeOperacion clave,
+        CancellationToken ct = default) =>
+        Enviar<CuentaDto>(HttpMethod.Post, $"{RutaDeCuentas}/{cuenta}/data-update", new MotivoDeCarteraRequest(motivo), clave, ct);
+
+    /// <summary>Las marcas de exención del GMF de una persona (vigentes o todas).</summary>
+    public Task<ResultadoDeInventario<IReadOnlyList<ExencionDeGmfDto>>> ExencionesAsync(Guid? persona = null, bool? vigentes = null,
+        CancellationToken ct = default) =>
+        Enviar<IReadOnlyList<ExencionDeGmfDto>>(HttpMethod.Get, ConQuery(RutaDeExenciones, Query(("personPublicId", Texto(persona)),
+            ("active", vigentes is null ? null : vigentes.Value ? "true" : "false"))), null, null, ct);
+
+    /// <summary>Marca exenta del GMF una cuenta de ahorro (o reemplaza la vigente del titular si se pide).</summary>
+    public Task<ResultadoDeInventario<ExencionDeGmfDto>> MarcarExencionAsync(MarcarExencionRequest request, ClaveDeOperacion clave, CancellationToken ct = default) =>
+        Enviar<ExencionDeGmfDto>(HttpMethod.Post, RutaDeExenciones, request, clave, ct);
+
+    /// <summary>Termina una marca de exención (el último día exento, hoy si no se dice).</summary>
+    public Task<ResultadoDeInventario<ExencionDeGmfDto>> TerminarExencionAsync(Guid marca, TerminarExencionRequest request, ClaveDeOperacion clave,
+        CancellationToken ct = default) =>
+        Enviar<ExencionDeGmfDto>(HttpMethod.Post, $"{RutaDeExenciones}/{marca}/end", request, clave, ct);
 
     private Task<ResultadoDeInventario<T>> Enviar<T>(HttpMethod metodo, string url, object? cuerpo, ClaveDeOperacion? clave, CancellationToken ct) =>
         EnvioDeVentas.EnviarAsync<T>(http, auth, metodo, url, cuerpo, clave, ct);
