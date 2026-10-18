@@ -2739,6 +2739,10 @@ una propuesta por defecto coherente con la spec y la constitución; si el dueño
 | L10 | ¿Créditos en UVR por tramos? | Sin tramos | No | **Sin tramos** (2026-10-18): `Lending.Housing.UvrTranchesNotSupported` se queda. |
 | L11 | El historial de mora faltante de una obligada: ¿avisar al cargar y bloquear al activar? (commit `78926dd2`) | Avisar al cargar, bloquear al activar | No | **Confirmado** (2026-10-18). |
 | L12 | Un pago que con la UVR corregida cambiaría de cancelar o no el crédito | Soporte (runbook `valores-nacionales.md` §3a) | No | **Sigue a soporte** (2026-10-18). |
+| L13 | (Pregunta 47) ¿Con qué calendario descuenta festivos el «último día hábil»? | Los `FESTIVO` nacionales replicados, por `ICalendarioHabil` | No | **A, confirmado** (2026-10-18, T1095): los festivos nacionales `FESTIVO` replicados vía `ICalendarioHabil`; no `PAY_Holidays` (E5). |
+| L14 | (Pregunta 48) En el certificado tributario, ¿qué es el «anticipo recibido» y qué corrección monetaria UVR va? | Lo pendiente al 31/12 que ingresó en el año; la causada en el año | No | **A, confirmado** (2026-10-18, T1096): anticipo recibido = lo pendiente al 31/12; corrección monetaria UVR **causada**. |
+| L15 | (Pregunta 49) La mora no negativa (bajo el rango negativo), ¿con qué código va a las centrales? | El de su rango (en DataCrédito, la altura del rango 1) | No | **A** (2026-10-18, T1093): con el código de su rango y sin marca negativa; se coteja con cada central en T1011. |
+| L16 | (Pregunta 50) Las filas `PaymentReallocation` de un `CreditoAjustadoDesdeComercial`, ¿viajan en su hecho y se asientan? | — | No | **A: igual que las de `PagoAplicado`/`PagoReversado`** (2026-10-18, T1098): `reallocations` opcional y aditivo en la v1 del hecho, asentadas en el `DS` del ajuste con el molde de `PRN`. `contabilidad.md` §32. |
 
 ---
 

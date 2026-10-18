@@ -456,6 +456,8 @@ public static class ConstructorDeLineasDeCartera
                     Causacion(x.Dimensions, a, x.Loan, x.DebtorPersonPublicId, null);
                 }
             }
+            // T1098 (decisión del dueño del 2026-10-18; contabilidad.md §32): los pagos posteriores que el ajuste redistribuye, en su mismo comprobante.
+            Reasignaciones(x.Reallocations ?? [], x.Dimensions, x.Loan, x.DebtorPersonPublicId);
         }
 
         private void Causaciones(IReadOnlyList<LoanFactLineV1> lineas)
@@ -506,8 +508,8 @@ public static class ConstructorDeLineasDeCartera
 
         /// <summary>
         /// Decisión del dueño del 2026-10-18 (contabilidad.md §31): las <c>reallocations</c> de un <c>PagoAplicado</c> con fecha valor anterior o de
-        /// un <c>PagoReversado</c> —los pagos posteriores que cubren otra mezcla de conceptos— se asientan en el comprobante de la operación que las
-        /// causó, con el mismo molde que <c>PagoRedistribuidoPorValorNacional</c> (<see cref="Redistribucion"/>): sin rol nuevo y sin el puente del
+        /// un <c>PagoReversado</c> —los pagos posteriores que cubren otra mezcla de conceptos— y, desde T1098 (§32), las de un
+        /// <c>CreditoAjustadoDesdeComercial</c> se asientan en el comprobante de la operación que las causó, con el mismo molde que <c>PagoRedistribuidoPorValorNacional</c> (<see cref="Redistribucion"/>): sin rol nuevo y sin el puente del
         /// recaudo, porque lo recibido por esos pagos no cambia. Cada reasignación viene con el signo de la distribución (después − antes: positivo es
         /// que el pago cubre más del concepto o deja más anticipo o saldo a favor); se pasa al signo del libro (lo que se debe, invertido; los pasivos
         /// con el deudor, igual) y se asienta con las dimensiones vigentes del hecho, como el resto de su comprobante (§9).

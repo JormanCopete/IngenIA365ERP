@@ -82,7 +82,7 @@ y los asientos de ejemplo, en §24.
 |---|---|---|---|---|---|---|---|
 | `CreditoDesembolsado` | DES | B | `Capital` | `DesembolsoPorGirar` (transferencia, cheque o giro a tercero); en especie, `PuenteComercial` (venta sellada «Cartera») o `CuentaPorCobrarComercial` (sellada «Contabilidad», FR-056) | EnLinea | DS | K1 |
 | `DesembolsoReversado` | DRV | B | lo que acreditó el desembolso; `Ingreso`, `SeguroPorPagar` y `ContraOrdenContingente` por la causación que se anula | `Capital`; `InteresPorCobrar`, `PagoPorCuentaDelAsociado` y `SuspensoEnOrden` por la causación que se anula | hereda del desembolso (§10.1) | DS | K1 |
-| `CreditoAjustadoDesdeComercial` | ACO | B | nota débito: `Capital`. Nota crédito, devolución o anulación: el rol de Comercial que selló la venta; `Ingreso` por el interés que se reversa | nota débito: el rol de Comercial. Las demás: `Capital`; `InteresPorCobrar` | EnLinea | DS | K1 |
+| `CreditoAjustadoDesdeComercial` | ACO | B | nota débito: `Capital`. Nota crédito, devolución o anulación: el rol de Comercial que selló la venta; `Ingreso` por el interés que se reversa; sus `reallocations`, como `PRN` (§32) | nota débito: el rol de Comercial. Las demás: `Capital`; `InteresPorCobrar`; sus `reallocations`, como `PRN` (§32) | EnLinea | DS | K1 |
 | `InteresCausado` | ICA | B | `InteresPorCobrar` (`CurrentInterest`); suspendido: `SuspensoEnOrden`; castigado: `CastigadaEnOrden` | `Ingreso`; suspendido: `ContraOrdenContingente`; castigado: `ContraOrdenControl` | PorLotes resumido, `FinDeCausacion` | CA | K1 |
 | `MoraCausada` | MCA | B | ídem, con `DefaultInterest` | ídem | ídem | CA | K1 |
 | `SeguroCausado` | SCA | B | `PagoPorCuentaDelAsociado` (`Insurance`) | `SeguroPorPagar` | ídem | CA | K1 |
@@ -1823,7 +1823,34 @@ posteriores** del mismo crédito: Cartera registra esa diferencia como `PaymentR
   `CastigadaEnOrden`, `Anticipo`, `SaldoAFavor` y las contras de orden); `PagoReversado` ya los tenía. Los de saldo, orden y pasivo se
   resuelven con la regla de hecho `*`; la plantilla no suma filas.
 - **Fuera de esta enmienda**: las filas `PaymentReallocation` de un `CreditoAjustadoDesdeComercial` (un ajuste de Comercial que redistribuye
-  pagos posteriores) no viajan en `reallocations` de su hecho; quedan anotadas como pregunta en `tasks.md`.
+  pagos posteriores) no viajaban en `reallocations` de su hecho; quedaron como pregunta y las resolvió el dueño el mismo día (§32).
 
 Lo fijan los casos 53 (pago con fecha valor anterior) y 54 (reverso) de `ConstructorDeLineasDeCarteraTests`.
+
+---
+
+## 32. Enmienda (2026-10-18, decisión del dueño, T1098): las `reallocations` de un ajuste de Comercial
+
+Un `AjusteDeVentaACredito` con fecha valor anterior a un pago del crédito (una nota crédito, una devolución, una nota débito o una anulación
+fechada antes de un pago ya aplicado) cambia lo que cubre ese pago. Cartera ya registraba la diferencia como `PaymentReallocation` de la
+operación `CommercialAdjustment`, con el `MessagePublicId` del `CreditoAjustadoDesdeComercial`, pero el hecho no la llevaba y Contabilidad no la
+asentaba. Ahora se trata **igual que la de un pago o un reverso** (§31):
+
+- **Viaja en el hecho**: `CreditoAjustadoDesdeComercial` suma `reallocations` (`mensajes.md` §10.3), la misma forma y el mismo signo que en
+  `PagoAplicado` (de la distribución: después − antes). El campo es **opcional y aditivo en la v1** (como `generalImpairment` de
+  `ReversoDeCierre`, `mensajes.md` §10.18 y §17): un ajuste emitido antes, sin el campo, se lee con la lista vacía, que es lo que siempre
+  significó, y da el comprobante de siempre.
+- **Se asienta en el `DS` del ajuste**, no en un hecho aparte ni en otro comprobante (C01), con el molde de `PRN`
+  (`ConstructorDeLineasDeCartera.Redistribucion`, vía `Reasignaciones`) y las dimensiones vigentes del hecho (§9): lo que el pago cubre de menos
+  vuelve al débito de su rol de saldo, el anticipo o saldo a favor que deja de más sale al crédito, el suspenso por `Ingreso` y su orden, un
+  castigado por `IngresoPorRecuperacion` y `CastigadaEnOrden`. Sin el puente del recaudo ni el rol de Comercial: lo recibido por el pago no
+  cambia y la reasignación cuadra sola.
+- **Matriz**: `CreditoAjustadoDesdeComercial` suma a sus roles los de la reasignación (`InteresPorCobrar`, `PagoPorCuentaDelAsociado`,
+  `CargoPorCobrar`, `IngresoPorRecuperacion`, `SuspensoEnOrden`, `CastigadaEnOrden`, `Anticipo`, `SaldoAFavor` y las contras de orden). Los de
+  saldo, orden y pasivo se resuelven con la regla de hecho `*`; `Ingreso` e `IngresoPorRecuperacion` admiten además una regla con el hecho
+  fijado (`CreditoAjustadoDesdeComercial`), como ya la admitía `Ingreso`. La plantilla no suma filas.
+
+Lo fija el caso 55 (devolución que redistribuye un pago posterior) de `ConstructorDeLineasDeCarteraTests`; en Cartera,
+`AjusteDeVentaQueRedistribuyePagosTests`.
+
 

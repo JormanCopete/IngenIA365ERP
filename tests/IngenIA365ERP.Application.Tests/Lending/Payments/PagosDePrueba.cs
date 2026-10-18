@@ -63,9 +63,9 @@ internal sealed class PagosDePrueba : IDisposable
     /// Arma el escenario con el crédito de Ana desembolsado hoy y los valores nacionales del tope de prepago. Con <paramref name="sinTopeDePrepago"/>
     /// no siembra ni el SMMLV ni el límite <c>PREPAGO_TOPE_SMMLV</c> (la recogida no los necesita, decisión del dueño del 2026-10-14).
     /// </summary>
-    public static async Task<PagosDePrueba> CrearAsync(bool sinTopeDePrepago = false)
+    public static async Task<PagosDePrueba> CrearAsync(bool sinTopeDePrepago = false, CausacionDePrueba? causacion = null)
     {
-        var p = new PagosDePrueba(await CausacionDePrueba.CrearAsync());
+        var p = new PagosDePrueba(causacion ?? await CausacionDePrueba.CrearAsync());
         if (!sinTopeDePrepago)
             await CopiasDePrueba.SembrarAsync(p.Db, p.G.UtcNow.AddDays(-40),
                 CopiasDePrueba.Copia(CodigosDeValorNacional.Smmlv, string.Empty, new DateOnly(2026, 1, 1), 1_750_905m, p.G.UtcNow.AddDays(-40), unidad: "Pesos"),

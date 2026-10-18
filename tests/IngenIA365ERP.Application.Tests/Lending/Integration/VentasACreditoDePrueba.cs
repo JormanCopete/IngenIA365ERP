@@ -52,14 +52,22 @@ internal sealed class VentasACreditoDePrueba : IDisposable
         Transaccion.HayEnCurso().Returns(true);
     }
 
-    public static async Task<VentasACreditoDePrueba> CrearAsync() =>
-        new(await DesembolsoDePrueba.CrearAsync(OriginacionDePrueba.VersionDeLinea() with
-        {
-            AllowsCommercialOrigin = true,
-            CommercialDefaultFor = DebtorKind.Associate,
-            InterestTaxConcept = new InterestTaxConceptInput(false, Guid.NewGuid()),
-            Amounts = new AmountRangeInput(100_000m, 30_000_000m),
-        }));
+    public static async Task<VentasACreditoDePrueba> CrearAsync() => new(await DesembolsoDePrueba.CrearAsync(VersionDeVenta()));
+
+    /// <summary>La versión de la línea que admite el origen comercial.</summary>
+    public static CreditLineVersionInput VersionDeVenta() => OriginacionDePrueba.VersionDeLinea() with
+    {
+        AllowsCommercialOrigin = true,
+        CommercialDefaultFor = DebtorKind.Associate,
+        InterestTaxConcept = new InterestTaxConceptInput(false, Guid.NewGuid()),
+        Amounts = new AmountRangeInput(100_000m, 30_000_000m),
+    };
+
+    /// <summary>
+    /// T1098: las ventas sobre un escenario ya armado (el de los pagos, creado con <see cref="VersionDeVenta"/>), para aplicar pagos reales al
+    /// crédito que nace de una venta.
+    /// </summary>
+    public static VentasACreditoDePrueba Sobre(DesembolsoDePrueba d) => new(d);
 
     public DesembolsoDePrueba D { get; }
     public OriginacionDePrueba O => D.O;

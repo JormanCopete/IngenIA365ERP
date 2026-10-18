@@ -4872,7 +4872,7 @@ Respuestas del dueño a las preguntas abiertas de la fase 24 (notas del bloque 2
     comprobante por unidad (C01); `PRN` es masivo, por lotes y en el `CA` de una corrida. `PagoAplicado` suma a sus roles los de la
     reasignación (`OperacionesDeCartera`). Pruebas: casos dorados 53 (pago con fecha valor anterior) y 54 (reverso) del constructor.
     Contratos: contabilidad.md §2.1 y §31 (nuevo), mensajes.md §10.7 y §10.8; manual `cartera-integracion-contable.md` §5. Queda una
-    pregunta: un `CreditoAjustadoDesdeComercial` también escribe filas `PaymentReallocation` y su hecho no las lleva.
+    pregunta: un `CreditoAjustadoDesdeComercial` también escribe filas `PaymentReallocation` y su hecho no las lleva (resuelta: T1098).
 - [X] T1093 Centrales: un crédito en mora pero bajo el rango donde empieza lo negativo (`Centrales.RangosDeMora`) se reporta con sus **días
   reales de mora, sin marca negativa** (no «al día»)
   - Hecho el 2026-10-18. Comportamiento que había: `ProyeccionCentralDeRiesgo` lo reportaba `AlDia` con días, saldo y cuotas en mora en cero
@@ -4931,6 +4931,26 @@ Respuestas del dueño a las preguntas abiertas de la fase 24 (notas del bloque 2
     mira las reglas de capital para saber si la matriz ya está y no reescribe la cuenta de una regla que ya venía. Pantalla `/cartera/activacion`
     y `TextosDeMigracion` al día. Docs: runbook `cartera-puesta-en-marcha.md` §1, data-model §30.1, api.md §19.3. Sin migración. Riesgo para la
     corrida final: si una cooperativa de las e2e se activa con líneas de una modalidad cuya usura no registró, ahora falla (antes se dispensaba).
+- [X] T1098 Las `reallocations` de un ajuste de Comercial (`CreditoAjustadoDesdeComercial`) se contabilizan igual que las de `PagoAplicado` y
+  `PagoReversado` (T1092) (pregunta 50 del dueño = A, DT §5 L16)
+  - Hecho el 2026-10-18. Cartera: `AjusteDesdeComercial` arma la reasignación con `EmisionDeCartera.ReasignacionesAsync` (lo que hacía
+    `AplicacionDePagos.ReasignacionesAsync`, que ahora delega en él: un solo armador para el pago, el reverso y el ajuste) y la pasa en
+    `AjusteComercialAEmitir.Reasignaciones`; el hecho la lleva en `reallocations` con el signo de la distribución. **Versión**: campo
+    **opcional y aditivo en la v1** (precedente `generalImpairment` de `ReversoDeCierre`; mensajes.md §17 anota la excepción): ausente es la lista
+    vacía, que es lo que significaba; nada de Cartera está en producción. Las filas `PaymentReallocation` ya llevaban el mensaje del ajuste.
+    Contabilidad: `ConstructorDeLineasDeCartera.AjusteDeComercial` llama a `Reasignaciones` (el molde de `PRN`) en el mismo `DS`, con las
+    dimensiones vigentes del hecho; `OperacionesDeCartera` suma a `CreditoAjustadoDesdeComercial` los roles de la reasignación (los de la cuota,
+    `IngresoPorRecuperacion`, las órdenes y sus contras, `Anticipo`, `SaldoAFavor`); la plantilla de la matriz no suma filas (los de saldo,
+    orden y pasivo van con hecho `*`). Pruebas: caso dorado 55 (devolución que redistribuye un pago posterior) y
+    `Un_ajuste_de_Comercial_sin_reallocations_se_lee_vacio_y_con_ellas_suma_solo_sus_lineas` (`ConstructorDeLineasDeCarteraTests`), y
+    `AjusteDeVentaQueRedistribuyePagosTests` (venta, pago real por el contrato y nota crédito con fecha anterior; las fábricas
+    `VentasACreditoDePrueba.Sobre`/`VersionDeVenta` y `PagosDePrueba.CrearAsync(causacion:)` lo permiten). Contratos: contabilidad.md §2.1,
+    §31 y §32 (nuevo), mensajes.md §10.3 y §17; manual `cartera-integracion-contable.md` §5. Sin migración.
+- Respuestas del dueño del 2026-10-18 a las preguntas 47–49 (DT §5 L13–L15), que confirman lo hecho: **47 = A**, el «último día hábil» descuenta
+  los festivos nacionales `FESTIVO` replicados vía `ICalendarioHabil` (T1095, sin `PAY_Holidays`); **48 = A**, el «anticipo recibido» del
+  certificado es lo que ingresó en el año y sigue pendiente al 31/12, y la corrección monetaria UVR es la **causada** en el año (T1096); **49 =
+  A**, la mora bajo el rango negativo va a las centrales con el código de su rango (en DataCrédito, la altura del rango 1) y sin marca negativa,
+  y ese código se coteja con cada central en T1011 (T1093).
 - Anotaciones del 2026-10-18, sin código (DT §5 L8–L12): **SOLIDO no tiene créditos en UVR** (la migración no los necesita y la plantilla de
   créditos en UVR no tendrá datos reales); **un solo tope de vivienda**, sin distinguir VIS/no VIS (`TOPE_TASA_VIVIENDA` se queda como una
   clave); **la UVR va sin tramos** (`Lending.Housing.UvrTranchesNotSupported` se queda); el diseño de `78926dd2` —el historial de mora faltante

@@ -165,7 +165,8 @@ pago, puede cambiar lo que cubren los pagos que vinieron después. Esa reasignac
 reverso, con el molde del reparto de la fila 15: lo que el pago posterior cubre de menos vuelve al débito de su cuenta de saldo,
 lo que cubre de más sale al crédito, y el anticipo o saldo a favor que deja de más va al crédito de su pasivo. No toca el puente
 del recaudo, porque lo recibido no cambia. Hasta esa fecha la reasignación no se asentaba y quedaba como diferencia en la
-conciliación.
+conciliación. Lo mismo vale, desde la misma fecha, para un **ajuste de Comercial** (nota crédito, devolución, nota débito o
+anulación) fechado antes de un pago ya aplicado: la reasignación de ese pago va en el mismo comprobante `DS` del ajuste.
 
 Dos efectos que conviene tener presentes: un reverso lleva las dimensiones **vigentes** del saldo que restituye (ejemplo
 5), nunca el espejo del original; y si la contadora lleva dos categorías o los dos sub-segmentos a la misma auxiliar, la

@@ -751,6 +751,7 @@ con `inKind.replacesLoan`) y su `ObligacionCreada` (FR-054).
 | `voidedFromOrigin` | bool | sí | `true` en las anulaciones: el crédito queda sin efecto desde su origen |
 | `newPlan` | `LoanPlanSummaryV1` | no | El plan recalculado según la línea (FR-031) |
 | `validationFailed` | bool | sí | Una nota débito evaluada en contra marca el crédito (FR-052, FR-054) |
+| `reallocations` **(nuevo, T1098)** | [objeto] | no | Pagos posteriores que el ajuste redistribuye por su fecha valor anterior (FR-081): la forma y el signo de `PagoAplicado` (§10.7), suma cero por pago. Decisión del dueño del 2026-10-18: Contabilidad la asienta en el comprobante del ajuste con el molde de `PagoRedistribuidoPorValorNacional` (`contabilidad.md` §32). Opcional y aditivo: ausente es la lista vacía, que es lo que significaba antes |
 
 ```json
 {
@@ -2055,6 +2056,10 @@ Una respuesta nueva tras un reproceso no es un duplicado: cada evaluación tiene
   su esquema no cambian una vez publicados: agregar, quitar o renombrar un campo, cambiar un tipo, un signo, un valor
   admitido o el significado de un campo crea `<Type>V<n+1>` (012 §12). Lo emitido conserva su versión para siempre.
 - Cambiar `Destinos` o `AdmiteProceso` de un tipo es un cambio del catálogo, no del contenido: no crea versión.
+- **Excepción acotada (antes de salir a producción)**: un campo **opcional** que se agrega al final y cuya ausencia significa lo que el mensaje
+  siempre significó no crea versión: lo emitido antes se lee igual y un consumidor que no lo conoce lo ignora. Hay dos:
+  `generalImpairment` de `ReversoDeCierre` (§10.18, US9) y `reallocations` de `CreditoAjustadoDesdeComercial` (§10.3, T1098,
+  decisión del dueño del 2026-10-18). Ninguno cambia el tipo, el signo ni el significado de un campo existente.
 - Los campos que piden K6a y K6b (modelo de deterioro, segmento, unidad UVR) están en `LoanFactDimensionsV1` desde V1:
   esas entregas no crean versiones.
 

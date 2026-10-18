@@ -428,22 +428,8 @@ public sealed class AplicacionDePagos(
     }
 
     /// <summary>Los pagos redistribuidos, como <c>reallocations</c> del hecho (con su <c>PagoAplicado</c> original).</summary>
-    public async Task<IReadOnlyList<ReallocationV1>> ReasignacionesAsync(Loan credito, IReadOnlyList<ReasignacionDePago> reasignaciones, CancellationToken ct)
-    {
-        if (reasignaciones.Count == 0) return [];
-        var ids = reasignaciones.Select(x => long.TryParse(x.OperacionId, out var n) ? n : 0L).Where(n => n != 0).ToList();
-        var operaciones = await db.LoanOperations.AsNoTracking().Where(o => ids.Contains(o.Id)).Select(o => new { o.Id, o.PublicId, o.Number }).ToListAsync(ct);
-        var salida = new List<ReallocationV1>();
-        foreach (var x in reasignaciones)
-        {
-            var op = operaciones.FirstOrDefault(o => CargadorDeReconstruccion.Id(o.Id) == x.OperacionId);
-            if (op is null) continue;
-            var original = await emision.HechoOriginalAsync(op.PublicId, PagoAplicadoV1.Type, op.Number, ct)
-                ?? new OriginalFactRefV1 { Type = PagoAplicadoV1.Type, OriginPublicId = op.PublicId, Number = op.Number };
-            salida.Add(new ReallocationV1 { Payment = original, Amounts = ComprobantesDePago.Reasignacion(x.Antes, x.Despues) });
-        }
-        return salida;
-    }
+    public Task<IReadOnlyList<ReallocationV1>> ReasignacionesAsync(Loan credito, IReadOnlyList<ReasignacionDePago> reasignaciones, CancellationToken ct) =>
+        emision.ReasignacionesAsync(reasignaciones, ct);
 
     /// <summary>Los números de los pagos redistribuidos (<c>ReallocatedPaymentNumbers</c>).</summary>
     public async Task<IReadOnlyList<string>> NumerosAsync(IReadOnlyList<ReasignacionDePago> reasignaciones, CancellationToken ct)
