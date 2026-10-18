@@ -106,6 +106,9 @@ public enum ScreeningContext
     Sale = 2,
     CreditLimit = 3,
     ListRescan = 4,
+
+    /// <summary>Feature 014, US2 (T073; FR-032): la apertura de una cuenta de captación o de aportes (titular y cotitulares).</summary>
+    AccountOpening = 5,
 }
 
 /// <summary>Resultado de una consulta a listas restrictivas.</summary>

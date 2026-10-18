@@ -6,7 +6,8 @@
 // su proveedor (pregunta I15). Los valores de cobranza se escriben «a la fecha de corte», porque el envío puede diferirse.
 // US2 (T0390, C87) suma SIMULACION, sólo por correo: el envío de una simulación a la persona simulada, con el PDF adjunto.
 // Feature 014, US1 (T067; FR-038) suma CAMBIOTASA, informativo por los tres canales: el aviso a los titulares de una línea a la vista de que
-// su tasa cambia desde una fecha.
+// su tasa cambia desde una fecha. US2 (T076; FR-033, R22) suma MAYOREDAD, informativo por los tres canales: el aviso al titular que cumplió la
+// mayoría de edad y a quien era su representante de que desde ese día el titular maneja la cuenta y debe actualizar sus datos.
 [
   {
     "code": "AVISOPREV",
@@ -157,6 +158,25 @@
       {
         "channel": "WhatsApp",
         "body": "{{NombreDeLaCooperativa}} le informa que desde el {{FechaDelCambio}} la tasa de su cuenta {{NumeroDeCuenta}} ({{NombreDeLaLinea}}) pasa de {{TasaAnterior}} a {{TasaNueva}}."
+      }
+    ]
+  },
+  {
+    "code": "MAYOREDAD",
+    "purpose": "Informative",
+    "templates": [
+      {
+        "channel": "Email",
+        "subject": "La cuenta {{NumeroDeCuenta}} pasa a su titular",
+        "body": "<p>Señor(a) {{NombreDelTitular}}:</p><p>{{NombreDeLaCooperativa}} le informa que el titular de la cuenta {{NumeroDeCuenta}} ({{NombreDeLaLinea}}) cumplió la mayoría de edad el {{FechaDeMayoriaDeEdad}}. Desde ese día el titular maneja la cuenta y su representante legal deja de firmar. El número, el saldo y las condiciones no cambian.</p><p>El titular debe acercarse a actualizar sus datos y su autorización de tratamiento de datos. Si tiene dudas, comuníquese al {{TelefonoDeLaCooperativa}}.</p>"
+      },
+      {
+        "channel": "Sms",
+        "body": "{{NombreDeLaCooperativa}}: desde {{FechaDeMayoriaDeEdad}} la cuenta {{NumeroDeCuenta}} la maneja su titular. Debe actualizar sus datos. Tel {{TelefonoDeLaCooperativa}}"
+      },
+      {
+        "channel": "WhatsApp",
+        "body": "{{NombreDeLaCooperativa}} le informa que desde el {{FechaDeMayoriaDeEdad}} la cuenta {{NumeroDeCuenta}} ({{NombreDeLaLinea}}) la maneja su titular, que cumplió la mayoría de edad. El titular debe actualizar sus datos."
       }
     ]
   },

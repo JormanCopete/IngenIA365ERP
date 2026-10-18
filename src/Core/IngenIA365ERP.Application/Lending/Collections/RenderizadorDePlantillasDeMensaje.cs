@@ -58,7 +58,9 @@ public static partial class RenderizadorDePlantillasDeMensaje
             [DebtorMessagePurpose.Informative] =
                 ["ValorAplicado", "ModalidadAplicada", "NuevaCuota", "NuevoPlazo", "MotivoDeNoDescuento", "FormaDePagoNueva",
                     // Feature 014, US1 (T067): el aviso de cambio de tasa de una línea a la vista.
-                    "NumeroDeCuenta", "NombreDeLaLinea", "TasaAnterior", "TasaNueva", "FechaDelCambio"],
+                    "NumeroDeCuenta", "NombreDeLaLinea", "TasaAnterior", "TasaNueva", "FechaDelCambio",
+                    // US2 (T076): el aviso de la mayoría de edad del titular.
+                    "FechaDeMayoriaDeEdad"],
             [DebtorMessagePurpose.DocumentDelivery] = ["ClaseDeDocumento", "NumeroDelDocumento", "CodigoDeVerificacion"],
         };
 

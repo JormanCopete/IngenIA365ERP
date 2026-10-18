@@ -103,13 +103,16 @@ public class MemberAccountParty : AuditableEntity
         };
     }
 
-    /// <summary>Cierra la vigencia de la parte el <paramref name="hasta"/> con su motivo (mayoría de edad, revocación, fallecimiento, cambio).</summary>
+    /// <summary>
+    /// Cierra la vigencia de la parte el <paramref name="hasta"/> con su motivo (mayoría de edad, revocación, fallecimiento, cambio). Una parte que se
+    /// reemplaza el mismo día en que empezó cierra la víspera de ese día: no rigió nunca, pero queda (nunca se borra).
+    /// </summary>
     public void Terminar(DateOnly hasta, string motivo, int? usuario)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(motivo);
         if (ValidTo is not null)
             throw new InvalidOperationException($"La parte ya terminó el {ValidTo:yyyy-MM-dd}.");
-        if (hasta < ValidFrom)
+        if (hasta < ValidFrom.AddDays(-1))
             throw new ArgumentOutOfRangeException(nameof(hasta), hasta, "La parte no termina antes de empezar.");
         ValidTo = hasta;
         var texto = motivo.Trim();

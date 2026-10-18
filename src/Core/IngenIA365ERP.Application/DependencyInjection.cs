@@ -241,6 +241,10 @@ public static class DependencyInjection
         services.AddScoped<Lending.Deposits.Lines.AltaDeVersionDeCaptacion>();
         services.AddScoped<Lending.Deposits.Lines.IContextoDeLineasDeCaptacion, Lending.Deposits.Lines.ContextoDeLineasDeCaptacion>();
         services.AddScoped<Lending.Deposits.Lines.AvisoDeCambioDeTasa>();
+        // Feature 014, US2 (T073–T076): la titularidad común a la apertura y al cambio de partes, y el subpaso de la mayoría de edad del paso de
+        // captaciones (el primero que se registra).
+        services.AddScoped<Lending.Deposits.Accounts.TitularidadDeCuentas>();
+        services.AddScoped<Lending.Deposits.Accrual.ISubpasoDeCaptaciones, Lending.Deposits.Accrual.MayoriaDeEdad>();
         // Feature 013 (T0284–T0289, US17): el alcance por oficina y línea (la API registra el de la petición; aquí, el que falla
         // cerrado), el salto común de oficinas que también usa UserBranchScope, el único escritor de LND_CaseParticipations, las
         // lecturas sensibles de Cartera y el último rechazo de forma de la petición (para Lending.Request.Rejected).

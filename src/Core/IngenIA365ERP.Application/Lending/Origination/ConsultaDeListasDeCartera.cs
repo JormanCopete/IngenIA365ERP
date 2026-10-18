@@ -152,7 +152,7 @@ public sealed class ConsultaDeListasDeCartera(
 
         var alerta = new AlertaALevantar(TiposDeAlerta.CoincidenciaEnListas, "Coincidencia en listas restrictivas",
             $"Una consulta de listas restrictivas ({Contexto(fila.Context)}) coincidió con una persona. Revise el resultado en Cartera › Listas restrictivas " +
-            "y libérelo con motivo si no corresponde; mientras tanto la persona no puede originar ni comprar a crédito.",
+            "y libérelo con motivo si no corresponde; mientras tanto la persona no puede originar, comprar a crédito ni abrir cuentas.",
             "ScreeningResult", fila.PublicId, DedupKey: $"{TiposDeAlerta.CoincidenciaEnListas}:{fila.PublicId:N}");
         if (trasElCommit is not null) trasElCommit.Agregar(c => alertas.LevantarAsync(alerta, c));
         else await alertas.LevantarAsync(alerta, ct);
@@ -163,6 +163,7 @@ public sealed class ConsultaDeListasDeCartera(
         ScreeningContext.Application => "radicación de una solicitud",
         ScreeningContext.Sale => "venta a crédito",
         ScreeningContext.CreditLimit => "asignación de un cupo",
+        ScreeningContext.AccountOpening => "apertura de una cuenta de ahorro o de aportes",
         _ => "re-escaneo de deudores y codeudores",
     };
 }

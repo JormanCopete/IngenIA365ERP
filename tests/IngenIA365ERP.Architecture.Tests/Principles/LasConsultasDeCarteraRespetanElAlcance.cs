@@ -144,6 +144,10 @@ public class LasConsultasDeCarteraRespetanElAlcance
         // Feature 014, US1 (T066): el catálogo común de líneas filtra por PorLinea; el detalle y las versiones de una línea fuera del alcance (o de
         // una naturaleza cuyo View no tiene quien pregunta) responden el 404 de la línea (LectorDeLineasDeCaptacion.LineaEnAlcanceAsync).
         "Core/IngenIA365ERP.Application/Lending/Deposits/Lines/LendingLineQueries.cs",
+        // Feature 014, US2 (T073, T075): las cuentas y las marcas del GMF por la oficina y la línea de la cuenta (las listas y los conteos con
+        // PorOficinaYLinea; el detalle y las partes de una cuenta fuera del alcance responden el 404 de la cuenta, LectorDeCuentas.CuentaEnAlcanceAsync).
+        "Core/IngenIA365ERP.Application/Lending/Deposits/Accounts/MemberAccountQueries.cs",
+        "Core/IngenIA365ERP.Application/Lending/Deposits/Accounts/GmfExemption/GmfExemptionCommands.cs",
     ];
 
     /// <summary>
