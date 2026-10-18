@@ -126,6 +126,35 @@ public static class ErroresDeLibranza
 
     public static Error NoAplicadoInexistente() => new(CodigoNoAplicadoInexistente, "El no aplicado no existe.");
 
+    // ------------------------------------------------------------- feature 014, K7 (T090, T091; api.md §18.3; data-model §1.4) --
+
+    public const string CodigoLineaSinGrupo = "Lending.PayrollAgreement.LineWithoutGroup";
+    public const string CodigoGrupoRepetido = "Lending.PayrollAgreement.FileGroupDuplicate";
+    public const string CodigoEquivalenciaRepetida = "Lending.PayrollAgreement.EquivalenceDuplicate";
+    public const string CodigoGruposPendientes = "Lending.PayrollFile.FileGroupsPending";
+
+    /// <summary>Una equivalencia sin grupo de archivo (o con uno que no existe) en una versión que usa grupos.</summary>
+    public static Error LineaSinGrupo(string codigo, string? grupo) => new ErrorConDatos(CodigoLineaSinGrupo,
+        grupo is null
+            ? $"El código {codigo} de la pagaduría no dice en qué archivo va: el convenio usa grupos de archivo y cada código va en uno."
+            : $"El código {codigo} de la pagaduría va en el grupo {grupo}, que el convenio no tiene: elija uno de sus grupos de archivo.",
+        new { lineCode = codigo, fileGroupCode = grupo });
+
+    public static Error GrupoRepetido(string codigo) => new ErrorConDatos(CodigoGrupoRepetido,
+        $"El grupo de archivo {codigo} aparece dos veces: cada grupo lleva su código.", new { fileGroupCode = codigo });
+
+    public static Error EquivalenciaRepetida(string codigo) => new ErrorConDatos(CodigoEquivalenciaRepetida,
+        $"El código {codigo} de la pagaduría aparece dos veces: cada código va una sola vez con todos sus ítems.", new { paymasterConceptCode = codigo });
+
+    /// <summary>La generación por grupo de archivo todavía no está disponible (T091 parcial): el convenio con grupos no genera aún.</summary>
+    public static Error GruposPendientes(string convenio) => new ErrorConDatos(CodigoGruposPendientes,
+        $"El convenio {convenio} genera un archivo por grupo, y esa generación todavía no está disponible: mientras tanto registre una versión sin grupos "
+        + "para generar el archivo de créditos.", new { agreement = convenio });
+
+    /// <summary>El problema de las equivalencias que encontró la regla pura, como error de la API.</summary>
+    public static Error DeEquivalencias(Domain.Lending.Payroll.ProblemaDeEquivalencias p) =>
+        new ErrorConDatos(p.Codigo, p.Mensaje, new { paymasterConceptCode = p.CodigoDePagaduria });
+
     /// <summary>Un valor en pesos con separadores de Colombia.</summary>
     public static string Pesos(decimal valor) => "$" + valor.ToString("N2", new CultureInfo("es-CO"));
 

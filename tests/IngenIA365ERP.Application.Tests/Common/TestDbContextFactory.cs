@@ -443,6 +443,8 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollAgreementVersion> PayrollAgreementVersions => Set<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollAgreementVersion>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollAgreementContact> PayrollAgreementContacts => Set<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollAgreementContact>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollAgreementResultCode> PayrollAgreementResultCodes => Set<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollAgreementResultCode>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollAgreementFileGroup> PayrollAgreementFileGroups => Set<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollAgreementFileGroup>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollAgreementConceptEquivalence> PayrollAgreementConceptEquivalences => Set<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollAgreementConceptEquivalence>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollDeductionFile> PayrollDeductionFiles => Set<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollDeductionFile>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollDeductionFileLine> PayrollDeductionFileLines => Set<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollDeductionFileLine>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollDeductionResult> PayrollDeductionResults => Set<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollDeductionResult>();

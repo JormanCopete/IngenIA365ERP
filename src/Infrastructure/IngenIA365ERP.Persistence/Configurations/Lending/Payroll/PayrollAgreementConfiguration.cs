@@ -122,3 +122,55 @@ public class PayrollAgreementResultCodeConfiguration : IEntityTypeConfiguration<
             .HasDatabaseName("UK_LND_PayrollAgreementResultCodes_Version_Code");
     }
 }
+
+/// <summary>
+/// <c>LND_PayrollAgreementFileGroups</c> (feature 014, K7, T090; data-model §1.4.1): <c>UK (PayrollAgreementVersionId, Code)</c>; los formatos de ida y
+/// vuelta por referencia a <c>COR_BankFileFormats</c>; calendario propio opcional. Migración <c>CaptacionesAportes</c>.
+/// </summary>
+public class PayrollAgreementFileGroupConfiguration : IEntityTypeConfiguration<PayrollAgreementFileGroup>
+{
+    public const string Tabla = "LND_PayrollAgreementFileGroups";
+
+    public void Configure(EntityTypeBuilder<PayrollAgreementFileGroup> builder)
+    {
+        builder.ComoEntidadDeCartera(Tabla);
+
+        builder.Property(e => e.Code).HasMaxLength(10).IsRequired();
+        builder.Property(e => e.Name).HasMaxLength(120).IsRequired();
+        builder.Property(e => e.Order).IsRequired();
+
+        builder.HasOne<PayrollAgreementVersion>().WithMany().HasForeignKey(e => e.PayrollAgreementVersionId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<BankFileFormat>().WithMany().HasForeignKey(e => e.OutboundFormatId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<BankFileFormat>().WithMany().HasForeignKey(e => e.ResultFormatId).OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasIndex(e => new { e.PayrollAgreementVersionId, e.Code }).IsUnique()
+            .HasDatabaseName("UK_LND_PayrollAgreementFileGroups_Version_Code");
+    }
+}
+
+/// <summary>
+/// <c>LND_PayrollAgreementConceptEquivalences</c> (feature 014, K7, T090; data-model §1.4.2): <c>UK (PayrollAgreementVersionId, PaymasterConceptCode)</c>;
+/// el grupo de archivo opcional (obligatorio si la versión usa grupos, lo dice el comando); los ítems en JSON canónico.
+/// </summary>
+public class PayrollAgreementConceptEquivalenceConfiguration : IEntityTypeConfiguration<PayrollAgreementConceptEquivalence>
+{
+    public const string Tabla = "LND_PayrollAgreementConceptEquivalences";
+
+    public void Configure(EntityTypeBuilder<PayrollAgreementConceptEquivalence> builder)
+    {
+        builder.ComoEntidadDeCartera(Tabla);
+
+        builder.Property(e => e.PaymasterConceptCode).HasMaxLength(20).IsRequired();
+        builder.Property(e => e.Description).HasMaxLength(200).IsRequired();
+        builder.Property(e => e.AllocationRule).HasConversion<int>().IsRequired();
+        builder.Property(e => e.Priority).IsRequired();
+        builder.Property(e => e.ItemsJson).IsRequired();
+
+        builder.HasOne<PayrollAgreementVersion>().WithMany().HasForeignKey(e => e.PayrollAgreementVersionId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<PayrollAgreementFileGroup>().WithMany().HasForeignKey(e => e.FileGroupId).OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasIndex(e => new { e.PayrollAgreementVersionId, e.PaymasterConceptCode }).IsUnique()
+            .HasDatabaseName("UK_LND_PayrollAgreementConceptEquivalences_Version_Code");
+        builder.HasIndex(e => e.FileGroupId).HasDatabaseName("IX_LND_PayrollAgreementConceptEquivalences_FileGroupId");
+    }
+}

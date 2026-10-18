@@ -134,24 +134,35 @@ public sealed class AltaDeVersionDeConvenio(IApplicationDbContext db, IValoresNa
 
         if (convenioId is { } id)
         {
-            var versiones = await db.PayrollAgreementVersions.AsNoTracking().Where(x => x.PayrollAgreementId == id && !x.IsDeleted).ToListAsync(ct);
-            var ultima = versiones.OrderByDescending(x => x.ValidFrom).FirstOrDefault();
-            if (ultima is not null && v.ValidFrom <= ultima.ValidFrom) return Result.Failure<(int, int)>(ErroresDeLibranza.VersionCruzada(v.ValidFrom, ultima.ValidFrom));
-            if (versiones.Any(x => x.ValidTo is { } hasta && hasta >= v.ValidFrom && x.ValidFrom < v.ValidFrom && x.Id != ultima?.Id))
-                return Result.Failure<(int, int)>(ErroresDeLibranza.VersionCruzada(v.ValidFrom, ultima!.ValidFrom));
-            if (ultima is not null)
-            {
-                // Una versión que respaldó un archivo enviado no se recorta: el período de ese archivo sigue siendo suyo (data-model §24.2).
-                var enviados = await db.PayrollDeductionFiles.AsNoTracking()
-                    .Where(f => f.PayrollAgreementVersionId == ultima.Id && f.Status == PayrollFileStatus.Sent && !f.IsDeleted)
-                    .Select(f => new { f.Number, f.PeriodYear, f.PeriodMonth }).ToListAsync(ct);
-                var cubierto = enviados.Select(f => (f.Number, Hasta: new DateOnly(f.PeriodYear, f.PeriodMonth, 1).AddMonths(1).AddDays(-1)))
-                    .OrderByDescending(f => f.Hasta).FirstOrDefault();
-                if (cubierto.Number is not null && cubierto.Hasta >= v.ValidFrom)
-                    return Result.Failure<(int, int)>(ErroresDeLibranza.VersionEnUso(cubierto.Number, cubierto.Hasta));
-            }
+            var vigencia = await VerificarVigenciaAsync(id, v.ValidFrom, ct);
+            if (vigencia.IsFailure) return Result.Failure<(int, int)>(vigencia.Error);
         }
         return Result.Success((ida.Id, vuelta.Id));
+    }
+
+    /// <summary>
+    /// Que una versión que empieza el <paramref name="desde"/> no se cruce con las registradas (<c>.VersionOverlaps</c>) ni recorte la que ya respaldó
+    /// un archivo enviado (<c>.VersionInUse</c>). Feature 014 (T090): lo comparten las versiones de grupos de archivo y de equivalencias.
+    /// </summary>
+    public async Task<Result> VerificarVigenciaAsync(int convenioId, DateOnly desde, CancellationToken ct)
+    {
+        var versiones = await db.PayrollAgreementVersions.AsNoTracking().Where(x => x.PayrollAgreementId == convenioId && !x.IsDeleted).ToListAsync(ct);
+        var ultima = versiones.OrderByDescending(x => x.ValidFrom).FirstOrDefault();
+        if (ultima is not null && desde <= ultima.ValidFrom) return Result.Failure(ErroresDeLibranza.VersionCruzada(desde, ultima.ValidFrom));
+        if (versiones.Any(x => x.ValidTo is { } hasta && hasta >= desde && x.ValidFrom < desde && x.Id != ultima?.Id))
+            return Result.Failure(ErroresDeLibranza.VersionCruzada(desde, ultima!.ValidFrom));
+        if (ultima is not null)
+        {
+            // Una versión que respaldó un archivo enviado no se recorta: el período de ese archivo sigue siendo suyo (data-model §24.2).
+            var enviados = await db.PayrollDeductionFiles.AsNoTracking()
+                .Where(f => f.PayrollAgreementVersionId == ultima.Id && f.Status == PayrollFileStatus.Sent && !f.IsDeleted)
+                .Select(f => new { f.Number, f.PeriodYear, f.PeriodMonth }).ToListAsync(ct);
+            var cubierto = enviados.Select(f => (f.Number, Hasta: new DateOnly(f.PeriodYear, f.PeriodMonth, 1).AddMonths(1).AddDays(-1)))
+                .OrderByDescending(f => f.Hasta).FirstOrDefault();
+            if (cubierto.Number is not null && cubierto.Hasta >= desde)
+                return Result.Failure(ErroresDeLibranza.VersionEnUso(cubierto.Number, cubierto.Hasta));
+        }
+        return Result.Success();
     }
 
     /// <summary>Registra la versión (y sus códigos de respuesta) cerrando la anterior la víspera. Guarda la versión para darles su Id a los códigos.</summary>

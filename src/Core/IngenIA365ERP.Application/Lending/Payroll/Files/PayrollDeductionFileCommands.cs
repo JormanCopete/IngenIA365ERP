@@ -38,6 +38,9 @@ public sealed class PreparacionDeArchivoDeDescuentos(IApplicationDbContext db, C
         var inicio = new DateOnly(anio, mes, 1);
         var version = await convenios.VersionVigenteAsync(convenio.Id, inicio, ct);
         if (version is null) return Falla(ErroresDeLibranza.SinVersionVigente(convenio.Code, inicio));
+        // Feature 014 (T091, parcial): la versión con grupos de archivo no lleva formatos propios; su generación por grupo está pendiente (research
+        // §10, E61) y hasta entonces se responde el error en vez de fallar sin formato.
+        if (version.UsesFileGroups) return Falla(ErroresDeLibranza.GruposPendientes(convenio.Code));
         var periodo = PeriodoDeLibranza.De(version.Periodicity, anio, mes, subPeriodo);
         if (periodo is null) return Falla(ErroresDeLibranza.PeriodoInvalido(anio, mes, subPeriodo));
         var preparado = await lineas.PrepararAsync(convenio, version, periodo, lote, ct);

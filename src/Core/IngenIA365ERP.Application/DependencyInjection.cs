@@ -639,6 +639,7 @@ public static class DependencyInjection
         // Feature 013, K2 (US10, bloque B): la libranza —convenios, el archivo de descuentos con el motor común y el seguimiento de los no aplicados—.
         services.AddScoped<Lending.Payroll.ConveniosDeLibranza>();
         services.AddScoped<Lending.Payroll.Agreements.AltaDeVersionDeConvenio>();
+        services.AddScoped<Lending.Payroll.Agreements.CopiaDeVersionDeConvenio>();
         services.AddScoped<Lending.Payroll.Files.PayrollDeductionLines>();
         services.AddScoped<Lending.Payroll.Files.PreparacionDeArchivoDeDescuentos>();
         services.AddScoped<Lending.Payroll.Results.SeguimientoDeNoAplicados>();

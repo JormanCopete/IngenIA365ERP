@@ -501,6 +501,8 @@ public interface IApplicationDbContext
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollAgreementVersion> PayrollAgreementVersions { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollAgreementContact> PayrollAgreementContacts { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollAgreementResultCode> PayrollAgreementResultCodes { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollAgreementFileGroup> PayrollAgreementFileGroups { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollAgreementConceptEquivalence> PayrollAgreementConceptEquivalences { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollDeductionFile> PayrollDeductionFiles { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollDeductionFileLine> PayrollDeductionFileLines { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollDeductionResult> PayrollDeductionResults { get; }
