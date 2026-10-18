@@ -898,3 +898,57 @@ Construida la historia 1. **Manda el código**; estas notas reemplazan lo dicho 
   alta, detalle con la versión a una fecha y su historial, versión nueva que parte de la vigente, cerrar y reabrir/activar) con el editor
   `EditorDeLineaDeCaptacion.razor`; las tasas se digitan en puntos y viajan como fracción. El grupo de menú «Captaciones y aportes» se muestra con
   «Líneas de captación» y «Líneas de aportes» (enlaces a la misma página con su naturaleza); «Líneas de crédito» sigue en el grupo «Cartera».
+
+## 9. Enmienda de la apertura de cuentas (2026-10-18, T072–T080, US2)
+
+Construida la historia 2. **Manda el código**; estas notas reemplazan lo dicho en `data-model.md`, `contracts/` y `tasks.md` donde choquen.
+
+- **E44 · Conocimiento, habeas data y origen de fondos en la apertura.** El conocimiento del asociado (SARLAFT) es de su propia feature (spec, «Fuera de
+  esta feature») y no hay en el código una fecha de «conocimiento al día»: la apertura exige los **datos mínimos de conocimiento** de la persona —documento,
+  nombres y apellidos o razón social y, si es persona natural, la fecha de nacimiento, sin la cual no se sabe si es menor— (`Lending.Savings.MemberDataIncomplete`,
+  `data.missing`). La autorización de tratamiento (FR-006) es la finalidad `GeneralTreatment` del titular y de cada cotitular (`Lending.Authorization.Missing`
+  con `personPublicId`). La declaración de origen de fondos se pide al abrir sólo si el depósito de apertura de la línea alcanza `Efectivo.UmbralDeclaracion`
+  (`Lending.Savings.SourceOfFundsRequired`); no tiene columna en la cuenta: viaja en el pedido y queda en la auditoría del comando. La de cada consignación
+  en efectivo (FR-059) es del contrato de cuentas (US4).
+- **E45 · Por qué una cuenta nace en apertura.** `data-model.md` §3.1 no tiene una bandera de «exige aprobación» en la línea: una cuenta nace `Opening` por
+  una **coincidencia en listas** del titular o de un cotitular (la «apertura excepcional» de FR-005) o porque la versión exige **depósito de apertura**; el
+  detalle lo dice en `openingBlockers` (`ScreeningMatch`, `InitialDeposit`). Las listas se consultan con el valor nuevo `ScreeningContext.AccountOpening = 5`
+  (al final del enum; la columna es entera y no tiene restricción); una coincidencia deja el bloqueo automático `RestrictiveListMatch` y la alerta de la 013, la
+  libera sólo el oficial por `/api/lending/screening-results/{id}/release`, y `approve-opening` exige que ya no haya bloqueos sin levantar
+  (`Lending.Screening.Blocked`, 422). La segregación usa `LND_CaseParticipations` con el expediente `MemberAccount`: abrir es `Radicar` y aprobar es `Decidir`
+  (la regla fija de la 013), así que la apertura exige un usuario con persona (`Lending.Security.UserWithoutPerson`). Con el canal de listas caído no se abre
+  (`Lending.Adapter.Unavailable`, como el cupo). Una cuenta aprobada que todavía espera el depósito de apertura sigue `Opening`: la activa el primer depósito
+  por el contrato de cuentas (US4).
+- **E46 · Número.** El consecutivo por línea lleva como prefijo el código de la línea y un guion (`AHVISTA-000001`, a lo sumo 17 caracteres): sin prefijo, dos
+  líneas se saltarían los números la una a la otra en el único sin filtro de `LND_MemberAccounts.Number`. Toda cuenta abierta tiene número, también la
+  retenida: no hay borradores de apertura.
+- **E47 · Titularidad.** Las reglas son puras (`Domain/Lending/Deposits/ReglasDeTitularidad`). La proporción del titular es el resto de las de los cotitulares:
+  todas o ninguna (sin ninguna, por igual, y el titular absorbe el redondeo a seis decimales); sin cotitulares queda nula (`ProporcionesCuadran` ya lo admitía).
+  Códigos nuevos: `Lending.Savings.JointRequiresTwoSigners` (manejo conjunto con un solo firmante), `.PartyRepeated` (una persona, un papel; el titular no repite),
+  `.PartyInvalid` (proporción fuera de un cotitular, límite fuera de un firmante, fundamento desconocido, representante menor de edad),
+  `.LegalEntitiesNotAllowed` y `Lending.Contributions.OnlyHolderAndBeneficiaries`. En aportes sólo hay titular y beneficiarios (data-model §3.2), así que los
+  aportes de un menor **no** llevan representante en la cuenta. Los beneficiarios se digitan en porcentaje (hasta 4 decimales) y suman exactamente 100 %; se
+  guardan como fracción; la constancia es opcional al abrir y obligatoria al cambiarlos (`Lending.Savings.BeneficiaryRecordRequired`). `PUT /{id}/parties` recibe
+  el conjunto completo: la parte igual sigue, lo demás se cierra la víspera y nace hoy; los beneficiarios cambian en conjunto (`BeneficiarySetNumber` + 1).
+  `MemberAccountParty.Terminar` admite cerrar la víspera de su inicio (una parte reemplazada el mismo día no rigió nunca y no se borra).
+- **E48 · Exención del GMF.** `LND_GmfExemptAccounts` es de K8 pero nace en `CaptacionesAportes` (la decisión de E35). Los comandos llevan el nombre del contrato
+  (`MarkGmfExemptAccountCommand`, `EndGmfExemptAccountCommand`; tasks.md decía `Unmark…`); el alta suma `replaceCurrent` para cambiar la marca en el mismo
+  comando (data-model §3.8), y nacen `Lending.Gmf.Retroactive` (no se marca ni se termina hacia atrás), `.AlreadyEnded` y `.NotFound`. La política se lee de
+  `Gmf.PoliticaDeExencion` (K8): antes de su entrega el lector no la acepta y rige el defecto `SingleMarkedAccount`. `GET /gmf-exemptions/usage` llega con el
+  GMF de K8 (US4).
+- **E49 · Mayoría de edad.** `MayoriaDeEdad` es el primer `ISubpasoDeCaptaciones` registrado. Cierra al representante la víspera del cumpleaños (aunque el
+  proceso corra después), marca `RequiresDataUpdate` desde el cumpleaños y avisa al titular y al representante con el informativo nuevo `MAYOREDAD` (tres canales,
+  «pendiente de validar»; la semilla pasa de 31 a 34 filas; origen `MemberAccountMajority`; la lista blanca suma `FechaDeMayoriaDeEdad`); la cola admite como
+  destinatario de un informativo sin crédito al representante legal vigente y el aviso se encola antes de cerrar su vigencia. `POST /{id}/data-update`
+  (api.md lo ponía en K8) nace aquí porque es la salida de esa marca. Los retiros del representante en espera de aprobación nacen con K8 (US4).
+- **E50 · Soportes de la titularidad.** El soporte de la representación, la constancia de beneficiarios, la firma, la foto y la declaración de origen de fondos
+  son adjuntos con dueño el **titular** (`LendingAccountPartySupport`; la cuenta todavía no existe al subirlos): se leen con `Lending.Accounts.Read`, se suben con
+  `Lending.Accounts.Open` o `Lending.Accounts.Parties.Manage` y no se borran.
+- **E51 · Rutas.** Ocho en `/api/lending/accounts` (lista, conteos, detalle, apertura, aprobar la apertura, partes GET y PUT, actualización de datos) y tres en
+  `/api/lending/gmf-exemptions` (lista, marcar, terminar). El saldo de la lista y del detalle es la suma del libro (data-model §0.2) y el disponible es el mismo
+  hasta que K8 traiga la posición diaria con sus retenciones. La marca de causación inicial del control es la fecha de apertura.
+- **E52 · Lo que la apertura todavía no abre.** Un CDAT se constituye por su ruta (`Lending.Savings.UseTermDepositRoute`); el contractual sella sus condiciones
+  y llega con K9 (`Lending.Savings.DeliveryNotAvailable`, `availableFrom = K9`). Una cuenta se abre con la fecha de hoy (`Lending.Savings.OpeningDateInvalid`).
+  Otros códigos nuevos: `Lending.Savings.LineNotOpen`, `.LineWithoutVersion`, `.OfficeNotAllowedByLine`, `.HolderDeceased`, `.PermanentAlreadyOpen`.
+- **E53 · `CaptacionesAportes` regenerada (T072).** Con `LND_GmfExemptAccounts`, ahora `20261018184016` PostgreSQL / `20261018183933` SQL Server (paridad OK, el SQL
+  de datos de T044 conservado, el scaffold sin cambios ajenos).
