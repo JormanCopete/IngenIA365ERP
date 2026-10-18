@@ -153,6 +153,10 @@ public class LasConsultasDeCarteraRespetanElAlcance
         "Core/IngenIA365ERP.Application/Lending/Deposits/Contributions/ContributionRequestCommands.cs",
         "Core/IngenIA365ERP.Application/Lending/Deposits/Contributions/ContributionQueries.cs",
         "Core/IngenIA365ERP.Application/Lending/Deposits/Accounts/GmfExemption/GmfExemptionCommands.cs",
+        // Feature 014, US10 (T097, T099): el retiro del asociado por la oficina y la línea de su cuenta de aportes (la lista con PorOficinaYLinea; el
+        // detalle, la vista previa y las escrituras de un retiro fuera del alcance responden el 404 del retiro, RetirosDeAsociado.EnAlcanceAsync).
+        "Core/IngenIA365ERP.Application/Lending/Deposits/Withdrawals/MembershipWithdrawalQueries.cs",
+        "Core/IngenIA365ERP.Application/Lending/Deposits/Withdrawals/SettleMembershipWithdrawalCommand.cs",
     ];
 
     /// <summary>

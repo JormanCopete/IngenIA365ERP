@@ -117,6 +117,12 @@ public sealed class ReversionDeCuentas(
     /// <summary>El tipo del hecho principal de la operación original (el que el reverso espeja).</summary>
     public static string TipoDelHecho(MemberAccountOperation original, LineNature naturaleza) => original.Kind switch
     {
+        // US10 (T100, T101): las operaciones del retiro del asociado —el cruce (con su pago), la pérdida y la devolución—.
+        MemberAccountOperationKind.InternalOffset when original.MembershipWithdrawalId is not null => original.RelatedLoanOperationId is not null
+            ? CruceAlRetiroAplicadoV1.Type
+            : PerdidaAplicadaAlRetiroV1.Type,
+        MemberAccountOperationKind.ContributionRefund or MemberAccountOperationKind.Withdrawal when original.MembershipWithdrawalId is not null =>
+            DevolucionOrdenadaV1.Type,
         MemberAccountOperationKind.Deposit => naturaleza == LineNature.Contribution ? AporteRecibidoV1.Type : ConsignacionEnCuentaAplicadaV1.Type,
         MemberAccountOperationKind.Transfer => TrasladoEntreCuentasAplicadoV1.Type,
         MemberAccountOperationKind.ContributionRefund => DevolucionOrdenadaV1.Type,
@@ -125,7 +131,9 @@ public sealed class ReversionDeCuentas(
     };
 
     /// <summary>La clase del documento de origen de la operación original (el <c>related</c> del reverso).</summary>
-    public static string ClaseDelOrigen(MemberAccountOperation original) => original.Kind switch
+    public static string ClaseDelOrigen(MemberAccountOperation original) => original.MembershipWithdrawalId is not null
+        ? EmisionDeCartera.ClaseLiquidacionDeRetiro
+        : original.Kind switch
     {
         MemberAccountOperationKind.Deposit => EmisionDeCartera.ClaseConsignacionDeCuenta,
         MemberAccountOperationKind.Transfer => EmisionDeCartera.ClaseTrasladoDeCuenta,

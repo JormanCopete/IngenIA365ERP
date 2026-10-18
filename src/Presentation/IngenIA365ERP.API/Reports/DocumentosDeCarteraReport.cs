@@ -68,6 +68,7 @@ public static class DocumentosDeCarteraReport
             CuerpoDeCertificadoTributario tributario => TextosDelCertificadoTributario(tributario),
             CuerpoDeConstanciaDeAportes constancia => TextosDeLaConstancia(constancia),
             CuerpoDePazYSalvoDeAportes paz => TextosDelPazYSalvoDeAportes(paz),
+            CuerpoDeLiquidacionDeRetiro retiro => TextosDeLaLiquidacionDeRetiro(retiro),
             _ => [],
         });
         textos.Add(e.Firmante);
@@ -128,6 +129,7 @@ public static class DocumentosDeCarteraReport
                     case CuerpoDeCertificadoTributario tributario: CertificadoTributario(col, tributario); break;
                     case CuerpoDeConstanciaDeAportes constancia: Constancia(col, constancia); break;
                     case CuerpoDePazYSalvoDeAportes paz: PazYSalvoDeAportes(col, paz); break;
+                    case CuerpoDeLiquidacionDeRetiro retiro: LiquidacionDeRetiro(col, retiro); break;
                 }
 
                 col.Item().PaddingTop(24).Row(row =>
@@ -487,6 +489,66 @@ public static class DocumentosDeCarteraReport
         textos.AddRange(c.PorClase.Select(x => $"{x.Clase} {Pesos(x.Valor)}"));
         textos.Add($"Total de aportes {Pesos(c.Total)}");
         textos.AddRange(c.CuotasPendientes.Select(Pendiente));
+        return textos;
+    }
+
+    // Feature 014, US10 (T103; documentos.md §2.8): la liquidación del retiro del asociado.
+    private static void LiquidacionDeRetiro(ColumnDescriptor col, CuerpoDeLiquidacionDeRetiro r)
+    {
+        foreach (var t in Encabezado(r)) col.Item().PaddingTop(2).Text(t);
+        col.Item().PaddingTop(8).Table(table =>
+        {
+            table.ColumnsDefinition(d =>
+            {
+                d.RelativeColumn(2);
+                d.RelativeColumn(5);
+                d.RelativeColumn(2);
+            });
+            table.Header(h =>
+            {
+                foreach (var titulo in new[] { "Bloque", "Detalle", "Valor" })
+                    h.Cell().Element(EncabezadoDeTabla).Text(titulo);
+            });
+            foreach (var l in r.Lineas)
+            {
+                table.Cell().Element(Celda).Text(l.Bloque);
+                table.Cell().Element(Celda).Text(l.Detalle);
+                table.Cell().Element(Celda).AlignRight().Text(Pesos(l.Valor));
+            }
+        });
+        if (r.Cruces.Count > 0)
+        {
+            col.Item().PaddingTop(8).Text("Cruces con los créditos (prelación: vencidos primero, luego mayor tasa)").SemiBold();
+            foreach (var c in r.Cruces) col.Item().Text(Cruce(c));
+        }
+        col.Item().PaddingTop(6).Text(r.Perdidas);
+        col.Item().PaddingTop(4).Text(Devolucion(r)).SemiBold();
+        foreach (var cdat in r.CdatQueSiguen) col.Item().Text($"El CDAT {cdat} sigue hasta su vencimiento.");
+    }
+
+    private static IReadOnlyList<string> Encabezado(CuerpoDeLiquidacionDeRetiro r) =>
+    [
+        $"Retiro {r.Numero} · causa: {r.Causa} · radicado el {Fecha(r.Radicado)}"
+        + (r.FechaEfectiva is { } f ? $" · fecha del retiro {Fecha(f)}" : string.Empty),
+        r.Aprobacion is { } a ? $"Aprobado por {a}" : "Sin aprobación registrada",
+        $"Liquidación {r.Version} del {Fecha(r.FechaDeLiquidacion)}",
+    ];
+
+    private static string Cruce(CruceImpreso c) =>
+        $"{c.Prelacion}. Crédito {c.Credito}: saldo antes {Pesos(c.SaldoAntes)}, aplicado {Pesos(c.Aplicado)}, saldo después {Pesos(c.SaldoDespues)}";
+
+    private static string Devolucion(CuerpoDeLiquidacionDeRetiro r) => r.DevolucionPendientePorMinimo
+        ? $"Devolución de {Pesos(r.Devolucion)}: {CuerpoDeLiquidacionDeRetiro.LeyendaPendiente}"
+        : $"Devolución de {Pesos(r.Devolucion)} por {r.FormaDeDevolucion}"
+          + (r.DevolverHasta is { } h ? $", a más tardar el {Fecha(h)}" : string.Empty) + ".";
+
+    private static IReadOnlyList<string> TextosDeLaLiquidacionDeRetiro(CuerpoDeLiquidacionDeRetiro r)
+    {
+        var textos = new List<string>(Encabezado(r));
+        textos.AddRange(r.Lineas.Select(l => $"{l.Bloque} {l.Detalle} {Pesos(l.Valor)}"));
+        textos.AddRange(r.Cruces.Select(Cruce));
+        textos.Add(r.Perdidas);
+        textos.Add(Devolucion(r));
         return textos;
     }
 

@@ -28,6 +28,9 @@ public static class DocumentErrors
     public const string CodigoPeriodoInvalido = "Lending.Document.PeriodInvalid";
     public const string CodigoAñoNoTerminado = "Lending.Document.TaxYearNotClosed";
 
+    /// <summary>Feature 014 (T103; documentos.md §3): la clase nace sola (la liquidación del retiro); por la ruta sólo se descarga.</summary>
+    public const string CodigoEmitidoAutomaticamente = "Lending.Document.IssuedAutomatically";
+
     /// <summary>El período más largo de un extracto (T0971): cinco años.</summary>
     public const int AñosMaximosDelExtracto = 5;
 
@@ -68,6 +71,9 @@ public static class DocumentErrors
         "Falta configurar el firmante de los documentos (nombre y cargo) en los parámetros de Cartera.");
 
     public static Error Inexistente() => new(CodigoInexistente, "El documento no existe.");
+
+    public static Error EmitidoAutomaticamente(IssuedDocumentKind clase) => new ErrorConDatos(CodigoEmitidoAutomaticamente,
+        $"El documento «{ModelosDeDocumentoDeCartera.Titulo(clase)}» nace solo con su operación: descárguelo desde ella.", new { kind = clase.ToString() });
 
     /// <summary>La verificación de un código inexistente o de otra cooperativa (D21): el mismo 404, con su propio mensaje.</summary>
     public static Error CodigoDesconocido() => new(CodigoInexistente, "El código no corresponde a un documento de esta cooperativa.");

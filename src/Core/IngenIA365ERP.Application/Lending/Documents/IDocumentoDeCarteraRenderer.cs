@@ -201,6 +201,38 @@ public sealed record CuerpoDePazYSalvoDeAportes(string NumeroDeCuenta, string Li
     public const string LeyendaDeAlcance = "Certifica sólo las cuotas de aportes; no certifica obligaciones de crédito ni el estado de asociado.";
 }
 
+/// <summary>Feature 014 (T103): una línea de la liquidación del retiro impresa (por bloque: aportes, ahorros, cruces, pérdidas, devolución). (nuevo)</summary>
+public sealed record LineaDeLiquidacionImpresa(string Bloque, string Detalle, decimal Valor);
+
+/// <summary>Feature 014 (T103): un cruce impreso: el crédito, su lugar en la prelación (D14), lo aplicado y si quedó cancelado. (nuevo)</summary>
+public sealed record CruceImpreso(int Prelacion, string Credito, decimal SaldoAntes, decimal Aplicado, decimal SaldoDespues);
+
+/// <summary>
+/// La liquidación del retiro del asociado (feature 014, US10, T103; contracts/documentos.md §2.8; FR-076 a FR-080): el trámite y su aprobación con el acta,
+/// los aportes por clase, los ahorros por cuenta, los CDAT que siguen, los cruces por crédito con la prelación aplicada, el descuento por pérdidas (o «sin
+/// descuento») y la devolución con su forma y su plazo, o «pendiente» si perforaría el mínimo irreducible de la entidad. Nace al liquidar. (nuevo)
+/// </summary>
+public sealed record CuerpoDeLiquidacionDeRetiro(
+    string Numero,
+    string Causa,
+    DateOnly Radicado,
+    string? Aprobacion,
+    DateOnly? FechaEfectiva,
+    DateOnly FechaDeLiquidacion,
+    int Version,
+    IReadOnlyList<LineaDeLiquidacionImpresa> Lineas,
+    IReadOnlyList<CruceImpreso> Cruces,
+    string Perdidas,
+    decimal Devolucion,
+    string FormaDeDevolucion,
+    DateOnly? DevolverHasta,
+    bool DevolucionPendientePorMinimo,
+    IReadOnlyList<string> CdatQueSiguen) : CuerpoDeDocumentoDeCartera
+{
+    public const string SinPerdidas = "Sin descuento por pérdidas.";
+    public const string LeyendaPendiente = "Devolución pendiente: perforaría el mínimo irreducible de la entidad (FR-080).";
+}
+
 /// <summary>Los nombres de las clases y sus leyendas (§8.10). (nuevo)</summary>
 public static class ModelosDeDocumentoDeCartera
 {
@@ -228,6 +260,7 @@ public static class ModelosDeDocumentoDeCartera
         IssuedDocumentKind.TaxCertificate => "Certificado tributario",
         IssuedDocumentKind.ContributionCertificate => "Constancia de aportes",
         IssuedDocumentKind.ContributionClearance => "Paz y salvo de aportes",
+        IssuedDocumentKind.MembershipWithdrawalSettlement => "Liquidación del retiro del asociado",
         _ => clase.ToString(),
     };
 

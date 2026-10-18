@@ -520,6 +520,15 @@ public static class DependencyInjection
         // US3 (T087): la constancia y el paz y salvo de aportes, y la anulación de documentos por el reverso de una operación de cuenta.
         services.AddScoped<Lending.Deposits.Documents.DocumentosDeAportes>();
         services.AddScoped<Lending.Deposits.Documents.AnulacionDeDocumentosDeCuentas>();
+        // US10 (T097–T103): el retiro del asociado —lo común del trámite, el plan de la liquidación, el cruce con la aplicación de pagos, las órdenes de
+        // giro de cuentas (también el resultado de Tesorería), la liquidación emitida, el asunto de acta y el arrastre del reverso de un pago cruzado—.
+        services.AddScoped<Lending.Deposits.Withdrawals.RetirosDeAsociado>();
+        services.AddScoped<Lending.Deposits.Withdrawals.PlanesDeLiquidacionDeRetiro>();
+        services.AddScoped<Lending.Deposits.Withdrawals.CruceDeRetiro>();
+        services.AddScoped<Lending.Deposits.Operations.OrdenesDeGiroDeCuentas>();
+        services.AddScoped<Lending.Deposits.Documents.DocumentosDeRetiro>();
+        services.AddScoped<Lending.Sessions.IAsuntoDeActa, Lending.Deposits.Withdrawals.AsuntoDeRetiroDeAsociado>();
+        services.TryAddScoped<Lending.Payments.IArrastreDeReversoDePago, Lending.Deposits.Withdrawals.ArrastreDelCruceAlRetiro>();
         services.AddScoped<Lending.Integration.ContratoDeCuentasDeCartera>();
         services.AddScoped<Common.Integration.Lending.IContratoDeCuentas>(sp => sp.GetRequiredService<Lending.Integration.ContratoDeCuentasDeCartera>());
         // US6 (T0582–T0594): la verificación de listas sin escribir de la consulta, y el consumidor de Comercial con sus piezas (los validadores de
@@ -628,6 +637,9 @@ public static class DependencyInjection
         // Feature 013, US6 (T0598; DT §2.9, CH9): Comercial como destino Inventory, el único; guarda ObligacionCreada y ObligacionRechazada v1 en
         // INV_LendingObligationResponses (número y estado, nunca saldos). La fila INV del registro lo adopta desde la semilla.
         services.AddScoped<Common.Integration.IDestinoDeMensajes, Inventory.Integration.DestinoInventario>();
+        // Feature 014, US10 (T098; mensajes.md §7, research C16, E-04): Asociados recibe el retiro aprobado en la Cartera (participante ASO, que siembra
+        // CaptacionesAportes).
+        services.AddScoped<Common.Integration.IDestinoDeMensajes, Core.Associates.Integration.DestinoAsociados>();
         services.AddScoped<Lending.Disbursements.RequisitosDelDesembolso>();
         services.AddScoped<Lending.Disbursements.TramoDeDesembolso>();
         services.AddScoped<Lending.Disbursements.RecogidaEnElDesembolso>();

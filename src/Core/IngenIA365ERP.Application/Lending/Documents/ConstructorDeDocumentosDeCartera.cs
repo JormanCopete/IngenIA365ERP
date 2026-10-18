@@ -32,6 +32,9 @@ public sealed record PedidoDeDocumentoDeCartera(IssuedDocumentKind Clase, Person
 {
     /// <summary>Feature 014 (T087): la constancia de aportes incluye el ahorro permanente.</summary>
     public bool IncluyeAhorroPermanente { get; init; }
+
+    /// <summary>Feature 014 (T103): el retiro del asociado cuya liquidación se emite.</summary>
+    public Guid? RetiroPublicId { get; init; }
 }
 
 /// <summary>Feature 014 (T087): una cuenta que cubre el documento (<c>LND_IssuedDocumentAccounts</c>). (nuevo)</summary>
@@ -93,7 +96,8 @@ public sealed class ConstructorDeDocumentosDeCartera(
     FirmezaDelPago firmeza,
     IDateTimeService reloj,
     INormativaVigente? normativa = null,
-    Deposits.Documents.DocumentosDeAportes? aportes = null)
+    Deposits.Documents.DocumentosDeAportes? aportes = null,
+    Deposits.Documents.DocumentosDeRetiro? retiros = null)
 {
     private static readonly CultureInfo Co = CultureInfo.GetCultureInfo("es-CO");
 
@@ -126,6 +130,9 @@ public sealed class ConstructorDeDocumentosDeCartera(
             IssuedDocumentKind.ContributionCertificate or IssuedDocumentKind.ContributionClearance => aportes is null
                 ? throw new InvalidOperationException("Los documentos de aportes necesitan DocumentosDeAportes.")
                 : aportes.ArmarAsync(p, ct),
+            IssuedDocumentKind.MembershipWithdrawalSettlement => retiros is null
+                ? throw new InvalidOperationException("La liquidación del retiro necesita DocumentosDeRetiro.")
+                : retiros.ArmarAsync(p, ct),
             _ => throw new ArgumentOutOfRangeException(nameof(p), p.Clase, "Clase de documento desconocida."),
         };
     }

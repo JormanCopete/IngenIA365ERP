@@ -51,7 +51,8 @@ public sealed class ConsumeTreasuryResultCommandHandler(
     IMensajesEntrantes entrantes,
     ICerrojoDeCartera cerrojo,
     ReversoDeDesembolso reverso,
-    IDateTimeService reloj) : IRequestHandler<ConsumeTreasuryResultCommand, Result<ResultadoDeConsumo>>
+    IDateTimeService reloj,
+    Deposits.Operations.OrdenesDeGiroDeCuentas? ordenesDeCuentas = null) : IRequestHandler<ConsumeTreasuryResultCommand, Result<ResultadoDeConsumo>>
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
@@ -73,6 +74,10 @@ public sealed class ConsumeTreasuryResultCommandHandler(
             var ahora = reloj.UtcNow;
             recibo ??= NuevoRecibo(mensaje, ahora);
             var orden = await db.DisbursementOrders.FirstOrDefaultAsync(o => o.PublicId == resultado.OrderPublicId && !o.IsDeleted, ct);
+            // Feature 014 (US10, T101; mensajes.md §5.3): la orden puede ser de cuentas (LND_AccountPayoutOrders, v2).
+            if (orden is null && ordenesDeCuentas is not null
+                && await db.AccountPayoutOrders.FirstOrDefaultAsync(o => o.PublicId == resultado.OrderPublicId && !o.IsDeleted, ct) is { } deCuenta)
+                return await DeCuentaAsync(recibo, mensaje, resultado, deCuenta, ct);
             if (orden is null)
                 return await RechazarAsync(recibo, mensaje, ErroresDeDesembolso.CodigoNoEncontrado, "La orden de giro no existe en Cartera.",
                     new { orderPublicId = resultado.OrderPublicId }, ct);
@@ -122,6 +127,54 @@ public sealed class ConsumeTreasuryResultCommandHandler(
             await db.SaveChangesAsync(ct);
             return Result.Success<ResultadoDeConsumo>(new ResultadoDeConsumo.Processed(null, null, null, MotivoSinComprobante.Informational));
         }, ct);
+    }
+
+    /// <summary>
+    /// El resultado de una orden de cuentas (feature 014, US10, T101; mensajes.md §5.3): la misma validación de valor y transición que las de desembolso,
+    /// el cerrojo de la persona y la cuenta, el recibo y su evaluación, y el efecto de <see cref="Deposits.Operations.OrdenesDeGiroDeCuentas"/> (girada o
+    /// reintegrada). No escribe en <c>LND_DisbursementOrderResults</c>, que exige una orden de desembolso.
+    /// </summary>
+    private async Task<Result<ResultadoDeConsumo>> DeCuentaAsync(LendingInboundMessage recibo, MensajeEntrante mensaje, ResultadoDelGiroV1 resultado,
+        Domain.Entities.Lending.Deposits.Accounts.AccountPayoutOrder orden, CancellationToken ct)
+    {
+        if (!Enum.TryParse<DisbursementOrderStatus>(resultado.Outcome, ignoreCase: false, out var hacia) || hacia == DisbursementOrderStatus.Issued)
+            return await RechazarAsync(recibo, mensaje, ErroresDeDesembolso.CodigoResultadoInvalido,
+                $"«{resultado.Outcome}» no es un resultado del giro: se admiten Disbursed, Rejected, CheckNotCashed y Voided.",
+                new { reason = "InvalidTransition", from = orden.Status.ToString(), to = resultado.Outcome }, ct);
+        if (resultado.Amount != orden.Amount)
+            return await RechazarAsync(recibo, mensaje, ErroresDeDesembolso.CodigoResultadoInvalido,
+                $"Tesorería informó {ErroresDeDesembolso.Pesos(resultado.Amount)} y la orden {orden.Number} es por {ErroresDeDesembolso.Pesos(orden.Amount)}.",
+                new { reason = "AmountMismatch", expected = orden.Amount, received = resultado.Amount }, ct);
+        if (!orden.AdmiteResultado(hacia))
+            return await RechazarAsync(recibo, mensaje, ErroresDeDesembolso.CodigoResultadoInvalido,
+                $"La orden {orden.Number} está en «{orden.Status}» y no admite el resultado «{hacia}»: queda para revisión en la bandeja.",
+                new { reason = "InvalidTransition", from = orden.Status.ToString(), to = hacia.ToString() }, ct);
+
+        var titular = await db.MemberAccounts.AsNoTracking().Where(a => a.Id == orden.MemberAccountId).Select(a => a.HolderPersonId).FirstAsync(ct);
+        await cerrojo.TomarSetupAsync(exclusivo: false, ct);
+        await cerrojo.BloquearDeudoresAsync([titular], ModoDeEspera.Esperar, ct);
+        var cuentas = await db.AccountPayoutOrders.AsNoTracking()
+            .Where(o => o.Id == orden.Id || (orden.MembershipWithdrawalId != null && o.MembershipWithdrawalId == orden.MembershipWithdrawalId))
+            .Select(o => o.MemberAccountId).Distinct().ToListAsync(ct);
+        if (orden.MembershipWithdrawalId is { } retiroId)
+            cuentas.AddRange(await db.MembershipWithdrawals.AsNoTracking().Where(w => w.Id == retiroId).Select(w => w.ContributionAccountId).ToListAsync(ct));
+        await cerrojo.BloquearCuentasAsync(cuentas.Distinct().Order().ToList(), ModoDeEspera.Esperar, ct);
+
+        var ahora = reloj.UtcNow;
+        if (recibo.Id == 0) db.LendingInboundMessages.Add(recibo);
+        recibo.Status = InboundMessageStatus.Processed;
+        recibo.LastProcessedAt = ahora;
+        recibo.EvaluationCount += 1;
+        await db.SaveChangesAsync(ct);
+
+        var efecto = await ordenesDeCuentas!.AplicarResultadoAsync(orden, hacia, resultado.TreasuryReference, resultado.OccurredOn, resultado.Reason, ct);
+        if (efecto.IsFailure) return Result.Failure<ResultadoDeConsumo>(efecto.Error);
+        var evaluacion = Evaluacion(recibo, mensaje, InboundEvaluationOutcome.Accepted, null, null, false, ahora);
+        db.LendingInboundMessageEvaluations.Add(evaluacion);
+        await db.SaveChangesAsync(ct);
+        recibo.LastEvaluationId = evaluacion.Id;
+        await db.SaveChangesAsync(ct);
+        return Result.Success<ResultadoDeConsumo>(new ResultadoDeConsumo.Processed(null, null, null, MotivoSinComprobante.Informational));
     }
 
     /// <summary>

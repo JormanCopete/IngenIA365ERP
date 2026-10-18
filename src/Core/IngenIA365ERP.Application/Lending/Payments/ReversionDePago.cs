@@ -46,6 +46,20 @@ public sealed class SinDocumentosQueAnular : IVigenciaDeDocumentosDeCartera
         Task.FromResult<IReadOnlyList<Guid>>([]);
 }
 
+/// <summary>
+/// El enganche de lo que el reverso de un pago arrastra fuera del crédito (feature 014, US10, T100; FR-077, R15): el cruce al retiro del asociado. Se
+/// valida <b>antes</b> de escribir nada (un reverso que no se puede arrastrar no empieza) y se aplica dentro de la misma unidad de trabajo, después del
+/// reverso. Sin él (las pruebas de la 013), nada se arrastra. (nuevo)
+/// </summary>
+public interface IArrastreDeReversoDePago
+{
+    /// <summary>Nulo si el reverso de <paramref name="pago"/> se puede arrastrar (o no arrastra nada); si no, el error que lo impide.</summary>
+    Task<Error?> ValidarAsync(LoanOperation pago, CancellationToken ct) => Task.FromResult<Error?>(null);
+
+    /// <summary>Aplica el arrastre sin guardar lo último (guarda quien reversa); una falla aquí aborta la unidad de trabajo.</summary>
+    Task<Result> AlReversarAsync(LoanOperation pago, LoanOperation reverso, CancellationToken ct);
+}
+
 /// <summary>Lo que pide un reverso: el pago, el motivo, quién lo inicia (<c>Collector</c> o <c>Lending</c>), su clave y el recibo que lo anula. (nuevo)</summary>
 public sealed record ReversoEnCurso(LoanOperation Pago, string Motivo, string IniciadoPor, string Clave, ReferenciaDeRecibo? Recibo = null);
 
@@ -102,7 +116,8 @@ public sealed class ReversionDePago(
     AplicacionDePagos aplicacion,
     IVigenciaDeDocumentosDeCartera documentos,
     IActorActual actorActual,
-    IDateTimeService reloj)
+    IDateTimeService reloj,
+    IArrastreDeReversoDePago? arrastre = null)
 {
     public const string PrefijoDeReverso = "REV-";
 
@@ -152,6 +167,8 @@ public sealed class ReversionDePago(
         }
         var pago = await db.LoanOperations.FirstAsync(o => o.Id == r.Pago.Id, ct);
         if (Reversable(pago) is { } error) return Result.Failure<ReversoRegistrado>(error);
+        // Feature 014 (T100): lo que el reverso arrastra (el débito del cruce al retiro) se valida antes de escribir nada.
+        if (arrastre is not null && await arrastre.ValidarAsync(pago, ct) is { } noArrastra) return Result.Failure<ReversoRegistrado>(noArrastra);
 
         var reverso = default(LoanOperation);
         var contable = await fechaContable.CalcularAsync(reloj.HoyLocal, ct);
@@ -254,6 +271,9 @@ public sealed class ReversionDePago(
 
         pago.ReversedByOperationId = reverso.Id;
         var anulados = await documentos.AnularAsync(credito.Id, pago, reverso, ct);
+        // Feature 014 (T100, US10-4): el reverso de un pago cruzado al retiro arrastra el débito de las cuentas y deja el retiro por rehacer.
+        if (arrastre is not null && await arrastre.AlReversarAsync(pago, reverso, ct) is { IsFailure: true } fallido)
+            throw new InvalidOperationException($"{fallido.Error.Code}: {fallido.Error.Message}");
         var dia = efecto.Hasta;
         var ultimas = await PosicionesDeCartera.UltimasAsync(db, [credito.Id], dia, dia, ct);
         var ultima = ultimas.GetValueOrDefault((credito.Id, dia));

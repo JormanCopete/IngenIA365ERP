@@ -99,6 +99,12 @@ public static class TiposDeAlerta
     /// crédito, con el alcance de su oficina y su línea, y la promesa vuelve a la agenda. (nuevo)
     /// </summary>
     public const string PromesaIncumplida = "Cartera.PromesaIncumplida";
+
+    /// <summary>
+    /// Feature 014, US10 (T099; FR-080): la devolución de un retiro de asociado perforaría el mínimo irreducible de la entidad
+    /// (<c>Aportes.MinimoIrreducibleEntidad</c>): queda pendiente y se avisa al gerente. (nuevo)
+    /// </summary>
+    public const string DevolucionRetenidaPorMinimo = "Cartera.DevolucionRetenidaPorMinimo";
     public const string PeriodoInexistente = "Contabilidad.PeriodoInexistente";
     public const string GrupoNiifDistinto = "Contabilidad.GrupoNiifDistinto";
     public const string ValorNacionalDistinto = "Nomina.ValorNacionalDistinto";
@@ -238,6 +244,8 @@ public static class TiposDeAlerta
             ["Lending.PriorNotices.RegisterEvidence"], SoloApp, AlertSeverity.Warning, "K4"),
         new(PromesaIncumplida, Cartera, "Una promesa de pago venció sin el pago: vuelve a la agenda del gestor.",
             ["Lending.Collections.RecordActivity"], SoloApp, AlertSeverity.Warning, "K4"),
+        new(DevolucionRetenidaPorMinimo, Cartera, "La devolución de un retiro de asociado perforaría el mínimo irreducible de la entidad: quedó pendiente.",
+            ["Lending.MembershipWithdrawals.Approve"], AppYCorreo, AlertSeverity.Critical, "K7"),
         new(PeriodoInexistente, "Accounting", "Llegó un hecho con fecha contable en un período que no existe.",
             ["Accounting.Periods.CloseYear"], AppYCorreo, AlertSeverity.Critical, "K1"),
         new(GrupoNiifDistinto, "Accounting", "El perfil regulatorio y el grupo NIIF de la configuración contable difieren.",

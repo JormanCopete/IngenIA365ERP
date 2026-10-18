@@ -96,7 +96,11 @@ public sealed record DevolucionAEmitir(
     PayeeV1 Beneficiario,
     Guid BeneficiarioPublicId,
     string Fuente,
-    string Concepto);
+    string Concepto)
+{
+    /// <summary>US10 (T101): la clase del origen de la devolución (por defecto la devolución sin retiro; la del retiro, <c>MembershipWithdrawalSettlement</c>).</summary>
+    public string Clase { get; init; } = EmisionDeCartera.ClaseDevolucionDeAportes;
+}
 
 public sealed partial class EmisionDeCartera
 {
@@ -255,7 +259,7 @@ public sealed partial class EmisionDeCartera
             PayeePersonPublicId = d.BeneficiarioPublicId,
             Source = d.Fuente,
         };
-        var unidad = await EmitirDeCuentaAsync(contenido, DevolucionOrdenadaV1.Type, h, d.Operacion, ClaseDevolucionDeAportes, d.BeneficiarioPublicId,
+        var unidad = await EmitirDeCuentaAsync(contenido, DevolucionOrdenadaV1.Type, h, d.Operacion, d.Clase, d.BeneficiarioPublicId,
             PrevalidationOutcome.NotApplicable, ct);
         if (unidad.IsFailure || d.Orden is null) return unidad;
 

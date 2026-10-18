@@ -77,9 +77,16 @@ public sealed record IssueLendingDocumentCommand(
 {
     /// <summary>Feature 014 (T087): las clases de aportes, que exigen aportes activados y cubren la cuenta de aportes de la persona.</summary>
     public static bool EsDeAportes(IssuedDocumentKind clase) =>
-        clase is IssuedDocumentKind.ContributionCertificate or IssuedDocumentKind.ContributionClearance;
+        clase is IssuedDocumentKind.ContributionCertificate or IssuedDocumentKind.ContributionClearance
+            or IssuedDocumentKind.MembershipWithdrawalSettlement;
 
     public Guid OperationKey { get; init; }
+
+    /// <summary>
+    /// Feature 014 (T103; documentos.md §2.8, §3): el retiro cuya liquidación se emite. Sólo lo pone la liquidación del retiro (la ruta no lo lee): sin él,
+    /// la clase <c>MembershipWithdrawalSettlement</c> responde <c>Lending.Document.IssuedAutomatically</c>.
+    /// </summary>
+    public Guid? MembershipWithdrawalPublicId { get; init; }
 
     /// <summary>¿La clase se emite sobre un crédito? (todas menos el paz y salvo general y el certificado tributario).</summary>
     public static bool LlevaCredito(IssuedDocumentKind clase) =>
@@ -141,6 +148,8 @@ public sealed class IssueLendingDocumentCommandHandler(
             return Falla(DocumentErrors.ClaseNoDisponible(request.Kind));
         if (IssueLendingDocumentCommand.EsDeAportes(request.Kind) && (await Deposits.Activation.ActivacionesDeCaptacion.LeerAsync(db, ct)).Aportes is null)
             return Falla(Deposits.Accounts.ErroresDeCuentas.SinActivar(LineNature.Contribution));
+        if (request.Kind == IssuedDocumentKind.MembershipWithdrawalSettlement && request.MembershipWithdrawalPublicId is null)
+            return Falla(DocumentErrors.EmitidoAutomaticamente(request.Kind));
 
         var hoy = reloj.HoyLocal;
         short? año = null;
@@ -213,6 +222,7 @@ public sealed class IssueLendingDocumentCommandHandler(
         var armado = await constructor.ArmarAsync(new PedidoDeDocumentoDeCartera(request.Kind, titular, credito, request.CutoffDate, emision, hoy, request.Period, año)
         {
             IncluyeAhorroPermanente = request.IncludePermanentSavings,
+            RetiroPublicId = request.MembershipWithdrawalPublicId,
         }, ct);
         if (armado.IsFailure) return Result.Failure<(IssuedLendingDocument, Guid?)>(armado.Error);
         var a = armado.Value;
@@ -285,6 +295,10 @@ public sealed class IssueLendingDocumentCommandHandler(
                 BalanceAtCutoff = cuenta.BalanceAtCutoff,
             });
         db.IssuedDocumentEvents.Add(IssuedDocumentEvent.Emitido(documento, emision, ActorKind.Person, usuario));
+        // Feature 014 (T103): la liquidación emitida queda en el retiro (la de su versión vigente).
+        if (request.MembershipWithdrawalPublicId is { } retiroPublicId
+            && await db.MembershipWithdrawals.FirstOrDefaultAsync(w => w.PublicId == retiroPublicId, ct) is { } retiro)
+            retiro.SettlementIssuedDocumentId = documento.Id;
 
         Guid? mensaje = null;
         if (request.Delivery == DocumentDeliveryMode.Email)
