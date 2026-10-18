@@ -237,9 +237,18 @@ public sealed class OpenMemberAccountCommandHandler(
     /// <summary>El prefijo del número de las cuentas de una línea: su código y un guion (el consecutivo es por línea, data-model §0.4).</summary>
     public static string PrefijoDe(CreditLine linea) => linea.Code + "-";
 
-    /// <summary>Una cuenta de aportes viva por persona, un ahorro permanente vivo por persona y línea.</summary>
+    /// <summary>
+    /// Una cuenta de aportes viva por persona, un ahorro permanente vivo por persona y línea. US10 (T102, FR-030, FR-085): con un retiro aprobado, liquidado
+    /// o por rehacer la persona sólo recibe operaciones del retiro (no abre cuentas); terminado el retiro, el reingreso abre cuentas nuevas y las canceladas
+    /// conservan su historia.
+    /// </summary>
     private async Task<Error?> UnicaVivaAsync(LineNature naturaleza, DepositClass? clase, int titularId, int lineaId, CancellationToken ct)
     {
+        var retiro = await db.MembershipWithdrawals.AsNoTracking()
+            .Where(w => w.PersonId == titularId && !w.IsDeleted && (w.Status == MembershipWithdrawalStatus.Approved
+                        || w.Status == MembershipWithdrawalStatus.Settled || w.Status == MembershipWithdrawalStatus.ToRedo))
+            .Select(w => new { w.Number, w.Status }).FirstOrDefaultAsync(ct);
+        if (retiro is not null) return Withdrawals.ErroresDeRetiro.EnCurso(retiro.Number, retiro.Status);
         if (naturaleza == LineNature.Contribution)
         {
             var numero = await db.MemberAccounts.AsNoTracking()
