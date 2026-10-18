@@ -998,3 +998,68 @@ Construida la historia 3. **Manda el código**; estas notas reemplazan lo dicho 
   `LND_IssuedDocumentAccounts`, `LND_PayrollAgreementFileGroups`, `LND_PayrollAgreementConceptEquivalences`, `PAY_PayrollAccountDeductions` y las columnas
   `AccountPublicId`/`AccountNumber` de `PAY_Novelties`; ahora `20261018204949` PostgreSQL / `20261018204907` SQL Server (paridad OK, el scaffold sin cambios
   ajenos). Conserva el SQL de datos de T044 y suma, a mano, la adopción de `ProveedorDeCuentas` v1 por el participante `NOM` (y su retiro en `Down`).
+
+## 11. Enmienda del retiro del asociado (2026-10-18, T096–T107, US10)
+
+Construida la historia 10. **Manda el código**; estas notas reemplazan lo dicho en `data-model.md`, `contracts/` y `tasks.md` donde choquen.
+
+- **E65 · Las líneas de la liquidación.** Una versión de la liquidación (`LND_MembershipWithdrawalLines`) lleva una línea por concepto de cada cuenta liquidada
+  (`ContributionBalance`, `SavingsBalance`, en +), por concepto del descuento por pérdidas (`LossDeduction`, −), por cuenta, concepto y crédito del cruce
+  (`LoanOffset`, −) y por cuenta y concepto de lo que se devuelve (`Refund`, **informativa en +**). La regla de data-model §6.2 se lee como: Σ de las líneas que
+  **no** son `Refund` = `RefundAmount`. La reliquidación tras `ToRedo` escribe otra versión (`SettlementVersion + 1`); las líneas son hecho.
+- **E66 · Códigos.** Se usan los de api.md §11 y se suman `Lending.MembershipWithdrawal.{NotSettled, EffectiveDateInvalid, SettlementDateInvalid,
+  LossDeductionNotEnabled, OffsetRejected, NothingToRefund, AccountsClosed, InvalidTransition}`, `Lending.Document.IssuedAutomatically`,
+  `Associate.{NotFound, WithdrawalDateMismatch, WithdrawalOwnedByLending}` y `Person.HasLiveDepositProducts`. La fecha de la liquidación va entre la fecha efectiva
+  del retiro y hoy.
+- **E67 · El cruce.** Los fondos se toman **primero de los aportes** (en el orden del débito de aportes: extraordinarios, revalorizados, ordinarios, mínimo) y
+  después de los ahorros vivos que no son CDAT (los CDAT siguen hasta su vencimiento y la vista previa lo avisa; los intereses a la fecha los suma US5). Los
+  créditos son los de la persona como deudora `Active` o `WrittenOff`, liquidados a la fecha por `IMotorDeCreditoEnDesembolso.LiquidarAsync`; la prelación D14 es
+  en mora primero (más días primero), luego mayor tasa (la de la última versión de condiciones), luego el número. El pago va por
+  `IContratoDeObligaciones.AplicarAsync` con el recaudador `CAR`/`OwnLoanPayoff`, medio `InternalOffset`, `FullPayoff` si alcanza y `FreeAmount` si no, y la clave
+  `CAR:{liquidación:N}:{crédito:N}` con una liquidación nueva en cada intento (la reliquidación no choca con la clave del cruce reversado). Por cada **crédito y
+  cuenta** nace una operación `InternalOffset` con `RelatedLoanOperationId` (el pago) y `MembershipWithdrawalId`, con su `CruceAlRetiroAplicado` (origen
+  `MembershipWithdrawalSettlement`): así el reverso de un pago arrastra sólo lo que pagó. `OffsetOperationId` es la primera. Cerrojo: `LND_Setup` compartido →
+  titular y codeudores → créditos → cuentas; el contrato vuelve a tomarlos sin esperar. Todo en una transacción: si un pago no queda aplicado, falla con
+  `OffsetRejected` y nada queda.
+- **E68 · Las pérdidas.** api.md decía `applyLossDeduction` en la vista previa y `lossDeduction: { sessionItemPublicId }` al liquidar; la proporción tiene que venir
+  del acta, así que las dos rutas reciben `lossDeduction: { sessionItemPublicId, year, proportion }` (fracción sobre el total de aportes, al centavo). Exige
+  `LossDeductionEnabled` en la versión de aportes (D15) y un punto de acta cerrado que apruebe (de cualquier asunto: lo dispone la asamblea o el consejo). Sale de los
+  aportes antes de cruzar, en su **propia** operación `InternalOffset` sin crédito con `PerdidaAplicadaAlRetiro` solo (mensajes.md §2.1 lo ponía como acompañante del
+  cruce, pero puede haber pérdida sin cruce).
+- **E69 · El arrastre del reverso.** `ReversionDePago` (013) recibe el enganche opcional `IArrastreDeReversoDePago` (`ArrastreDelCruceAlRetiro`): lo valida **antes**
+  de escribir y, después del reverso, reversa cada operación de cuenta que pagó ese crédito (`OperacionDeCuentaReversada`, que anula la liquidación emitida) y deja el
+  retiro `ToRedo`. Si el retiro ya está pagado y sus cuentas canceladas, el reverso del pago se rechaza con `Lending.MembershipWithdrawal.AccountsClosed`
+  (**pregunta para el dueño**).
+- **E70 · Decidir con acta.** La decisión la registra la ruta `/approve` o `/reject` con el punto de una sesión **cerrada** cuyo asunto es este trámite
+  (`PuntoDeActaCerrado` para aprobar; para negar, el resultado `Deny` o `Return`). Para que una sesión admita el punto se registra el asunto de acta
+  `AsuntoDeRetiroDeAsociado` (sujeto `MembershipWithdrawal`, quien radicó no vota, el cierre no aplica nada). Segregación radicar × decidir sobre el expediente del
+  trámite. La fecha efectiva no es anterior a la radicación. `RetiroDeAsociadoAprobado` sale en el mismo guardado; Asociados deja `Status = "R"` y `WithdrawalDate`
+  (no llena `WithdrawalReasonId`: la causa no es su catálogo).
+- **E71 · La devolución.** Una orden por cuenta con saldo que devolver: `AccountPayoutOrder` con propósito `ContributionRefund` y `MembershipWithdrawalId` (el
+  `OrderKind` del mensaje es `MembershipRefund`), sobre una operación `ContributionRefund` (aportes) o `Withdrawal` (ahorro) con filas `Refund`, `DevolucionOrdenada` y
+  `OrdenDeGiroEmitida` v2. El plazo es la fecha efectiva + `RefundTermDays` de la versión de aportes o, sin él, `Captaciones.DiasPlazoDevolucionAportes`. El
+  beneficiario bancario es el que se pide o la cuenta de depósito registrada del asociado si su tipo de cuenta se lee. **Mínimo irreducible**: si el capital social
+  después de todo lo que sale de aportes (pérdidas, cruces y devolución) queda bajo `Aportes.MinimoIrreducibleEntidad`, se retiene **toda** la devolución (el retiro se
+  liquida igual) y se levanta la alerta nueva `Cartera.DevolucionRetenidaPorMinimo` (K7, a `Lending.MembershipWithdrawals.Approve`). `refund/approve` ordena lo que
+  quedó por devolver —la retenida, comparando otra vez el mínimo, o la reintegrada por un giro rechazado (reemplaza al `reissue`)— con segregación propia: quien
+  liquida radica la devolución y otra persona la aprueba (raíz de expediente derivada del trámite). La atribución con monto (§1.6, `RefundDecisionId`) llega con US4.
+  En K7 sólo hay orden de giro (`TransferToAccount` → K8).
+- **E72 · Pagado y cuentas.** Sin nada que devolver el retiro queda `Paid` al liquidar y sus cuentas sin saldo se cancelan; con devolución, las cuentas quedan
+  `Closing` y el retiro pasa a `Paid` cuando todas sus órdenes vivas están giradas y no queda saldo, y entonces se cancelan. `ConsumeTreasuryResultCommand` busca la
+  orden también en `LND_AccountPayoutOrders` (así lo hace ya la devolución sin retiro de T086): girada → `DevolucionGirada` (origen la orden, clave
+  `Confirmation:{orden:N}`); rechazada, anulada o cheque no cobrado → reverso de la operación de origen (`initiatedBy = TreasuryResult`) y la cuenta sigue `Closing`.
+  No escribe `LND_DisbursementOrderResults` (exige una orden de desembolso).
+- **E73 · La liquidación emitida.** `MembershipWithdrawalSettlement` la emite el comando de liquidar **después** de confirmar, por `IssueLendingDocumentCommand` con
+  `MembershipWithdrawalPublicId` (propiedad que la ruta no lee: por `POST /documents` la clase responde `IssuedAutomatically`); si no se puede (sin firmante) el retiro
+  queda liquidado y se registra en el log. El PDF lo pinta `DocumentosDeCarteraReport` (no hay carpeta `API/Reports/Captaciones`, como en T087). Cubre las cuentas
+  liquidadas: el reverso de un cruce o de una devolución la anula.
+- **E74 · Asociados como destino.** `IntegrationParticipantClass.Associates = 9`; el participante `ASO` y su adopción de `RetiroDeAsociadoAprobado` v1 se siembran a
+  mano en `CaptacionesAportes` (y se retiran en `Down`). El recibo `COR_AssociateInboundMessages` guarda sólo lo procesado. El catálogo de Cartera pasa a 78 tipos.
+- **E75 · FR-030 y FR-085.** Con un retiro aprobado, liquidado o por rehacer la persona no abre cuentas (`AlreadyInProgress`); las consignaciones por el contrato no
+  se bloquean todavía (K8, US4). El reingreso abre cuentas nuevas: las canceladas no cuentan para la única viva.
+- **E76 · Pantallas.** La lista y la ficha se abren con cualquiera de los tres permisos; los puntos de acta se digitan por su `PublicId` (no hay selector de puntos
+  cerrados); la liquidación y la aprobación de la devolución van sin beneficiario (el servidor toma la cuenta de depósito del asociado); los soportes no se suben
+  desde la radicación todavía.
+- **E77 · `CaptacionesAportes` regenerada (US10).** Con `LND_MembershipWithdrawals`, `LND_MembershipWithdrawalLines`, `COR_AssociateInboundMessages` y las FK que
+  esperaban (E17); ahora `20261018213853` PostgreSQL / `20261018213822` SQL Server (paridad OK, el scaffold sin cambios ajenos). Los dos únicos sobre `PersonId` son
+  índices con nombre (EF junta los anónimos de las mismas columnas) y las FK largas llevan nombre propio (E18). Conserva el SQL de T044 y T089 y suma el de `ASO`.
