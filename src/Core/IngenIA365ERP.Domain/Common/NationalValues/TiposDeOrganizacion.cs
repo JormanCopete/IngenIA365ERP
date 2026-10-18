@@ -53,31 +53,33 @@ public sealed record ReporteSicsesPorNivel(int SupervisionLevel, IReadOnlyList<i
 
     /// <summary>
     /// El último día para entregar el corte de <paramref name="anio"/>-<paramref name="mes"/>: el del plazo especial del mes si lo hay; si no, el fin del
-    /// mes más los días del plazo.
+    /// mes más los días del plazo. Con <paramref name="calendario"/>, el «último día hábil» de un plazo especial descuenta también los festivos.
     /// </summary>
-    public DateOnly Limite(int anio, int mes) =>
+    public DateOnly Limite(int anio, int mes, Calendar.CalendarioHabil? calendario = null) =>
         DueExceptions.FirstOrDefault(e => e.CutoffMonth == mes) is { } especial
-            ? especial.Limite(anio, mes)
+            ? especial.Limite(anio, mes, calendario)
             : new DateOnly(anio, mes, 1).AddMonths(1).AddDays(-1).AddDays(DueDays);
 
     /// <summary>Desde qué día se avisa que vence el corte de <paramref name="anio"/>-<paramref name="mes"/>.</summary>
-    public DateOnly AvisoDesde(int anio, int mes) => Limite(anio, mes).AddDays(-WarningDays);
+    public DateOnly AvisoDesde(int anio, int mes, Calendar.CalendarioHabil? calendario = null) => Limite(anio, mes, calendario).AddDays(-WarningDays);
 }
 
 /// <summary>
 /// Un plazo especial del SICSES para un mes de corte (decisión del dueño del 2026-10-16): vence <see cref="MonthsAfterCutoff"/> meses después del mes
-/// cortado, el día <see cref="Day"/> (el último del mes si éste tiene menos) o el <b>último día hábil</b> de ese mes (<see cref="LastBusinessDay"/>: el
-/// último de lunes a viernes; los festivos no se descuentan, y en enero —el único mes que hoy lo usa— nunca caen al final). Lo que depende del último
-/// dígito del NIT se expresa con el día más temprano del calendario (plazo conservador). (nuevo)
+/// cortado, el día <see cref="Day"/> (el último del mes si éste tiene menos) o el <b>último día hábil</b> de ese mes (<see cref="LastBusinessDay"/>). Lo que
+/// depende del último dígito del NIT se expresa con el día más temprano del calendario (plazo conservador). (nuevo)
+/// <para>Decisión del dueño del 2026-10-18: el último día hábil <b>descuenta los festivos</b> —el calendario de días hábiles de la cooperativa
+/// (<c>ICalendarioHabil</c>, los <c>FESTIVO</c> nacionales replicados), con sábado y domingo de descanso—. Sin calendario (una prueba, o quien no lo
+/// tenga), sólo se saltan sábado y domingo, como antes.</para>
 /// </summary>
 public sealed record PlazoEspecialDelSicses(int CutoffMonth, int MonthsAfterCutoff, int? Day, bool LastBusinessDay)
 {
-    public DateOnly Limite(int anio, int mes)
+    public DateOnly Limite(int anio, int mes, Calendar.CalendarioHabil? calendario = null)
     {
         var primero = new DateOnly(anio, mes, 1).AddMonths(MonthsAfterCutoff);
         var ultimo = primero.AddMonths(1).AddDays(-1);
         if (!LastBusinessDay) return new DateOnly(primero.Year, primero.Month, Math.Min(Day ?? ultimo.Day, ultimo.Day));
-        while (ultimo.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday) ultimo = ultimo.AddDays(-1);
+        while (calendario is null ? ultimo.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday : !calendario.EsHabil(ultimo)) ultimo = ultimo.AddDays(-1);
         return ultimo;
     }
 }

@@ -919,7 +919,9 @@ sobre el total).
   posterior) y de sus líneas: una fila por crédito, con deudor (copia del maestro a la fecha de corte), saldos por
   concepto, días de mora, calificación y subcategoría, deterioro individual y general, garantías, reestructuración y
   modalidad. La periodicidad del reporte la da el nivel de supervisión del perfil regulatorio (FR-018). Pasado el día
-  límite que fije el perfil, se alerta `Cartera.PlazoRegulatorioPorVencer`.
+  límite que fije el perfil, se alerta `Cartera.PlazoRegulatorioPorVencer`. Decisión del dueño del 2026-10-18: periodicidad
+  y plazo son **informativos** —la entidad decide cuándo reporta; nada se bloquea por ellos— y la cooperativa puede fijar
+  los suyos (`Sicses.MesesDeCorte`, `Sicses.DiasDePlazo`); el último día hábil descuenta los festivos.
 - **`ProyeccionCentralDeRiesgo`**, por central y período: las novedades desde el último archivo `Uploaded` de esa
   central (desembolsos, pagos, mora, cancelaciones, castigos), los reclamos en trámite con su marca
   (`LND_CreditReportClaims`) y los retiros de reportes hechos sin aviso. Incluye **sólo** a quienes tienen autorización

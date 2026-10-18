@@ -29,17 +29,24 @@ subir al portal un archivo de un layout sin cotejar sin que el contador lo haya 
 4. Por cooperativa, el parámetro **`Centrales.CodigosDeSuscriptor`** (`DATACREDITO=…;TRANSUNION=…`): sin él el archivo de la central sale
    sin código de suscriptor y el validador lo señala como bloqueante.
 5. El plazo del SICSES por nivel de supervisión sale del dato `sicsesReport` del documento `TiposDeOrganizacion` (perfil regulatorio). Sin
-   él la tarea `cartera.vigilancia` no avisa `Cartera.PlazoRegulatorioPorVencer`. La semilla central lo trae (decisión del dueño del
-   2026-10-16, datos de la Supersolidaria **pendientes de validar**) para el formato 9027:
+   él la tarea `cartera.vigilancia` no avisa `Cartera.PlazoRegulatorioPorVencer`. **Es informativo** (decisión del dueño del 2026-10-18): la
+   entidad reporta cuando su calendario lo diga y el aplicativo no restringe ni bloquea nada por plazo ni por periodicidad —validar, generar,
+   descargar y marcar cargado un mes fuera de la periodicidad funcionan igual, con la advertencia `Lending.Regulatory.MesFueraDeLaPeriodicidad`;
+   el plazo sólo alimenta el aviso—. La semilla central lo trae (decisión del dueño del 2026-10-16, datos de la Supersolidaria **pendientes de
+   validar**) para el formato 9027:
 
    | Nivel | Periodicidad | Plazo | Corte de diciembre |
    |---|---|---|---|
-   | 1 | mensual | 20 días calendario tras el corte | último día hábil de enero (de lunes a viernes; los festivos no se descuentan) |
+   | 1 | mensual | 20 días calendario tras el corte | último día hábil de enero (de lunes a viernes, **descontando los festivos** `FESTIVO` replicados desde el 2026-10-18) |
    | 2 | trimestral (mar, jun, sep, dic) | 30 días calendario | en febrero según el último dígito del NIT: mientras no se cargue ese calendario, **plazo conservador el 1 de febrero** |
    | 3 (salvo fondos de empleados y mutuales) | anual, corte de diciembre (Circular Externa 84 de 2025; antes semestral) | — | en febrero: **plazo conservador el 1 de febrero** |
 
    Los plazos distintos del general van en `dueExceptions` de cada nivel (`{ cutoffMonth, monthsAfterCutoff, day | lastBusinessDay }`). Fondos
-   de empleados y mutuales de nivel 3 quedan sin plazo hasta que el dueño confirme su periodicidad. La semilla **nunca actualiza** un documento
+   de empleados y mutuales de nivel 3 no traen plazo en el documento: **cada entidad fija el suyo** (decisión del dueño del 2026-10-18) con los
+   parámetros de Cartera **`Sicses.MesesDeCorte`** (meses de corte separados por coma, por ejemplo `3,6,9,12` para quien reporta los formatos
+   básicos trimestrales) y **`Sicses.DiasDePlazo`** (días calendario desde el fin del mes cortado), con vigencia, en `/cartera/parametros`. Vacíos,
+   rige el documento; con días propios no se aplican sus plazos especiales; sin días propios ni del documento, el mes se reporta sin plazo y no hay
+   aviso. Cualquier cooperativa puede usarlos. La semilla **nunca actualiza** un documento
    ya registrado: en una base administrativa que ya tenga `TIPOS-ORGANIZACION-PROPUESTA-2026-01-01` sin estos datos, el maestro registra la
    versión corregida en `/admin/valores-nacionales` y se replica a las cooperativas.
 6. Por cooperativa, el parámetro **`Centrales.RangosDeMora`** (decisión del dueño del 2026-10-16): los rangos de mora por tipo de cartera

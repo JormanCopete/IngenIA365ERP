@@ -1,12 +1,16 @@
 using System.Globalization;
+using IngenIA365ERP.Application.Common.Calendar;
 using IngenIA365ERP.Application.Common.Integration.Accounting;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Common.NationalValues;
+using IngenIA365ERP.Application.Common.Parameters;
 using IngenIA365ERP.Application.Lending.Integration;
 using IngenIA365ERP.Domain.Common.Layouts;
 using IngenIA365ERP.Domain.Entities.Lending.Risk;
+using IngenIA365ERP.Domain.Common.NationalValues;
 using IngenIA365ERP.Domain.Enums.Lending;
+using IngenIA365ERP.Domain.Lending.Parameters;
 using Microsoft.EntityFrameworkCore;
 
 namespace IngenIA365ERP.Application.Lending.Regulatory;
@@ -123,7 +127,10 @@ public static class FilasDelSicses
 
 /// <summary>
 /// El plazo del formato de cartera del SICSES de un período según el perfil regulatorio vigente (K5, US16, T1002, T1007): el nivel de supervisión, si
-/// el mes se reporta y, si el documento <c>TiposDeOrganizacion</c> lo dice, el último día y desde cuándo se avisa. (nuevo)
+/// el mes se reporta y, si el documento <c>TiposDeOrganizacion</c> o la propia cooperativa lo dicen, el último día y desde cuándo se avisa. (nuevo)
+/// <para>Decisión del dueño del 2026-10-18: es <b>informativo</b>. La entidad reporta cuando su calendario lo diga; el plazo sólo alimenta el aviso
+/// <c>Cartera.PlazoRegulatorioPorVencer</c> y la advertencia de mes fuera de la periodicidad. Ni validar, ni generar, ni marcar cargado, ni el cierre
+/// miran este plazo.</para>
 /// </summary>
 public sealed record PlazoDelSicses(int NivelDeSupervision, bool SeReporta, DateOnly? Limite, DateOnly? AvisoDesde);
 
@@ -149,7 +156,9 @@ public sealed class ProyeccionSicsesCartera(
     IApplicationDbContext db,
     IContabilidadParaCartera contabilidad,
     IPerfilRegulatorio perfiles,
-    INormativaVigente normativa)
+    INormativaVigente normativa,
+    ICalendarioHabil? calendario = null,
+    ILectorDeParametros? parametros = null)
 {
     public async Task<Result<ProyeccionDelSicses>> ProyectarAsync(int anio, int mes, CancellationToken ct)
     {
@@ -229,7 +238,7 @@ public sealed class ProyeccionSicsesCartera(
         var advertencias = new List<AdvertenciaRegulatoria>();
         if (cierre.ObligatoryModelUnavailable) advertencias.Add(AdvertenciasRegulatorias.SinModeloObligatorio());
         if (cierre.UnvalidatedParameters) advertencias.Add(AdvertenciasRegulatorias.NormativaPendiente(cierre.UnvalidatedParametersJson));
-        var plazo = await PlazoAsync(perfiles, normativa, anio, mes, ct);
+        var plazo = await PlazoAsync(perfiles, normativa, anio, mes, ct, calendario, parametros ?? new LectorDeParametros(db));
         if (plazo is { SeReporta: false } p)
             advertencias.Add(AdvertenciasRegulatorias.MesFueraDePeriodicidad(anio, mes, p.NivelDeSupervision));
 
@@ -257,19 +266,53 @@ public sealed class ProyeccionSicsesCartera(
 
     /// <summary>
     /// El plazo del SICSES para el período según el perfil regulatorio vigente al fin del mes y el documento <c>TiposDeOrganizacion</c>
-    /// (<c>sicsesReport</c> del tipo, por nivel de supervisión). Nulo si no hay perfil; sin el dato del documento, se reporta sin plazo conocido.
+    /// (<c>sicsesReport</c> del tipo, por nivel de supervisión). Nulo si no hay perfil; sin el dato del documento ni de la cooperativa, se reporta sin
+    /// plazo conocido.
+    /// <para>Decisión del dueño del 2026-10-18 (informativo): la cooperativa puede fijar su propia periodicidad con <c>Sicses.MesesDeCorte</c> y
+    /// <c>Sicses.DiasDePlazo</c> (los fondos de empleados y mutuales de nivel 3, o quien reporte los formatos básicos trimestrales), que pisan los del
+    /// documento; con días propios no se aplican los plazos especiales. Con <paramref name="calendario"/>, el «último día hábil» de un plazo especial
+    /// descuenta los festivos (sábado y domingo de descanso).</para>
     /// </summary>
-    public static async Task<PlazoDelSicses?> PlazoAsync(IPerfilRegulatorio perfiles, INormativaVigente normativa, int anio, int mes, CancellationToken ct)
+    public static async Task<PlazoDelSicses?> PlazoAsync(IPerfilRegulatorio perfiles, INormativaVigente normativa, int anio, int mes, CancellationToken ct,
+        ICalendarioHabil? calendario = null, ILectorDeParametros? parametros = null)
     {
         var fin = MonthlyClose.UltimoDiaDe(anio, mes);
         var perfil = await perfiles.VigenteAsync(fin, null, ct);
         if (perfil is null) return null;
         var tipos = await normativa.TiposDeOrganizacionAsync(fin, null, ct);
         var reporte = tipos.IsSuccess ? tipos.Value.Documento.Buscar(perfil.OrganizationTypeCode)?.SicsesDelNivel(perfil.SupervisionLevel) : null;
-        if (reporte is null) return new PlazoDelSicses(perfil.SupervisionLevel, true, null, null);
-        return reporte.SeReporta(mes)
-            ? new PlazoDelSicses(perfil.SupervisionLevel, true, reporte.Limite(anio, mes), reporte.AvisoDesde(anio, mes))
-            : new PlazoDelSicses(perfil.SupervisionLevel, false, null, null);
+        var (mesesPropios, diasPropios) = await PeriodicidadPropiaAsync(parametros, fin, ct);
+        var meses = mesesPropios ?? reporte?.CutoffMonths;
+        if (meses is not null && !meses.Contains(mes)) return new PlazoDelSicses(perfil.SupervisionLevel, false, null, null);
+
+        var efectivo = reporte is null
+            ? diasPropios is { } d ? new ReporteSicsesPorNivel(perfil.SupervisionLevel, meses ?? [mes], d, 0) : null
+            : reporte with
+            {
+                CutoffMonths = meses!, DueDays = diasPropios ?? reporte.DueDays,
+                DueExceptions = diasPropios is null ? reporte.DueExceptions : [],
+            };
+        if (efectivo is null) return new PlazoDelSicses(perfil.SupervisionLevel, true, null, null);
+        var habiles = calendario is null
+            ? null
+            : await calendario.ObtenerAsync(fin, fin.AddMonths(13), DiasDeDescanso.SabadoYDomingo, ct: ct);
+        return new PlazoDelSicses(perfil.SupervisionLevel, true, efectivo.Limite(anio, mes, habiles), efectivo.AvisoDesde(anio, mes, habiles));
+    }
+
+    /// <summary>
+    /// La periodicidad propia de la cooperativa (<c>Sicses.MesesDeCorte</c>, <c>Sicses.DiasDePlazo</c>) vigente al fin del mes; nulos si no la fijó.
+    /// </summary>
+    private static async Task<(IReadOnlyList<int>? Meses, int? Dias)> PeriodicidadPropiaAsync(ILectorDeParametros? parametros, DateOnly fecha,
+        CancellationToken ct)
+    {
+        if (parametros is null) return (null, null);
+        var meses = await parametros.LeerAsync(ParametrosDeCartera.Modulo, ParametrosDeCartera.SicsesMesesDeCorte, fecha, ct: ct);
+        var dias = await parametros.LeerAsync(ParametrosDeCartera.Modulo, ParametrosDeCartera.SicsesDiasDePlazo, fecha, ct: ct);
+        IReadOnlyList<int>? lista = meses.IsSuccess && meses.Value.Texto is { } texto && !string.IsNullOrWhiteSpace(texto)
+            ? texto.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(m => int.Parse(m, CultureInfo.InvariantCulture)).Distinct().ToList()
+            : null;
+        return (lista, dias.IsSuccess && dias.Value.Valor is int n ? n : null);
     }
 
     /// <summary>

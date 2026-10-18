@@ -73,7 +73,11 @@ public static class EvaluacionesDeCartera
     public const string CodigoSuperpuesta = "Lending.PortfolioEvaluation.Overlaps";
     public const string CodigoNoBorrador = PortfolioEvaluation.CodigoNoBorrador;
     public const string CodigoEstadoInvalido = PortfolioEvaluation.CodigoEstadoInvalido;
-    public const string CodigoPeriodoInvalido = "Lending.PortfolioEvaluation.PeriodInvalid";
+    /// <summary>
+    /// El aviso de una evaluación fuera de la periodicidad del tipo de entidad (decisión del dueño del 2026-10-18: informativo; hasta esa fecha era el
+    /// error <c>Lending.PortfolioEvaluation.PeriodInvalid</c>).
+    /// </summary>
+    public const string AvisoFueraDePeriodicidad = "PortfolioEvaluationOutsidePeriodicity";
     public const string CodigoCreditoNoVivo = "Lending.PortfolioEvaluation.LoanNotLive";
     public const string CodigoSinComite = "Lending.PortfolioEvaluation.RiskCommitteeMissing";
     public const string CodigoSinRecomendacion = "Lending.PortfolioEvaluation.RecommendationRequired";
@@ -84,7 +88,11 @@ public static class EvaluacionesDeCartera
         $"Ya hay una evaluación de cartera sin aplicar con corte {corte:yyyy-MM-dd} ({numero}): termínela antes de preparar otra del mismo corte.",
         new { cutoffDate = corte, number = numero });
 
-    public static Error PeriodoInvalido(string mensaje, object datos) => new ErrorConDatos(CodigoPeriodoInvalido, mensaje, datos);
+    public static AvisoDeNormaPendienteDto FueraDePeriodicidad(string tipo, IReadOnlyList<int> meses, int mesesHastaElEfecto, DateOnly efectoEsperado) =>
+        new(AvisoFueraDePeriodicidad,
+            $"El tipo de entidad ({tipo}) evalúa con corte en los meses {string.Join(", ", meses)} y la recalificación se refleja {mesesHastaElEfecto} "
+            + $"mes(es) después del corte (para este corte, {efectoEsperado:yyyy-MM}). La evaluación se prepara igual: la periodicidad es informativa y la "
+            + "entidad decide según su calendario.", null);
 
     public static Error CreditoNoVivo(string numero, DateOnly corte) => new ErrorConDatos(CodigoCreditoNoVivo,
         $"El crédito {numero} no estaba vigente al corte {corte:yyyy-MM-dd}: la evaluación recalifica sólo la cartera viva al corte.",

@@ -4882,6 +4882,27 @@ Respuestas del dueño a las preguntas abiertas de la fase 24 (notas del bloque 2
     castigo sigue siendo negativo. Pruebas: `RangosYCodeudoresEnCentralesTests` (dos casos ajustados). Docs: runbook
     `cartera-sicses-y-centrales.md` §3 y §6, manual `cartera-cobranza-y-aviso-previo.md` §12, data-model §28.1. Sin migración. Queda por
     cotejar con cada central si la altura del rango 1 es el código correcto para una mora no negativa (T1011).
+- [X] T1094 SICSES y periodicidades regulatorias **informativas**: la entidad decide cuándo reporta; el aplicativo no restringe ni bloquea
+  por plazo, sólo informa y alerta. Revisar `sicsesReport`, la alerta de plazo y el cierre; la periodicidad de fondos de empleados y mutuales de
+  nivel 3 (y los formatos básicos trimestrales), dato informativo configurable por la entidad
+  - Hecho el 2026-10-18. Revisado: el plazo del SICSES (`ProyeccionSicsesCartera.PlazoAsync`) sólo alimenta `Cartera.PlazoRegulatorioPorVencer`
+    (`cartera.vigilancia`) y la advertencia `Lending.Regulatory.MesFueraDeLaPeriodicidad`; validar, generar, descargar y marcar cargado no lo
+    miran (nueva prueba: un mes fuera de la periodicidad se genera). `Riesgo.DiaLimiteCierre` sólo dispara el cierre programado y la alerta
+    `Cartera.CierreMensualPendiente`; el cierre manual no lo mira. El reporte de castigos al supervisor sólo anota su plazo en el lote.
+    **Lo único que bloqueaba** era la periodicidad de la evaluación de cartera (`Lending.PortfolioEvaluation.PeriodInvalid` al preparar): ahora
+    se prepara igual con el aviso `PortfolioEvaluationOutsidePeriodicity` en `warnings[]`. `Accounting.Period.LendingNotClosed` no se tocó: no
+    es un plazo regulatorio sino la regla de que Contabilidad no cierra un mes que Cartera no cerró. Nuevos parámetros de Cartera (K5,
+    vigencia, sin semilla): `Sicses.MesesDeCorte` (meses separados por coma) y `Sicses.DiasDePlazo` (días calendario), que pisan los del
+    documento `TiposDeOrganizacion` para la cooperativa (con días propios no se aplican los plazos especiales). Pruebas:
+    `ExcluidosYPlazoDelSicsesTests` (+3), `EvaluacionDeCarteraTests` (1 cambiada, +1), `ParametrosDeCarteraTests`. Docs: runbook
+    `cartera-sicses-y-centrales.md` §1.5, manual `cartera-castigo-y-evaluacion.md`, data-model §12.1, §28.1 y la tabla de errores (US14),
+    adaptadores-y-archivos.md §7.4. Sin migración.
+- [X] T1095 «Último día hábil» de Cartera descuenta los festivos con el calendario que ya existe
+  - Hecho el 2026-10-18. El único cálculo de «último día hábil» de Cartera es el plazo especial del SICSES (`PlazoEspecialDelSicses.Limite`,
+    `lastBusinessDay`), que sólo saltaba sábado y domingo. Ahora recibe el `CalendarioHabil` que arma el lector existente de Cartera,
+    `ICalendarioHabil` (`CalendarioDeDiasHabiles`, los `FESTIVO` nacionales replicados —Ley 51, registrados por el maestro—, sábado y domingo
+    de descanso); no se duplicó ningún lector. Por la pregunta E5 ese lector **no** lee `PAY_Holidays` de Nómina (que tiene los festivos
+    «Manual» de cada cooperativa). Sin calendario se comporta como antes. Pruebas: `ExcluidosYPlazoDelSicsesTests.El_ultimo_dia_habil_descuenta_los_festivos`.
 
 **Checkpoint**: cada entrega promovida con su evidencia; `CLAUDE.md`, índice y runbooks al día; COOFLOPAL en vivo
 sólo con Recaudo y Tesorería reales.

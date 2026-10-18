@@ -171,6 +171,68 @@ public sealed class ExcluidosYPlazoDelSicsesTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task El_ultimo_dia_habil_descuenta_los_festivos()
+    {
+        // Decisión del dueño del 2026-10-18: el «último día hábil» de un plazo especial descuenta los festivos del calendario de la cooperativa
+        // (ICalendarioHabil, los FESTIVO nacionales replicados). El 29 de enero de 2027 es viernes; como festivo de prueba, el plazo pasa al 28.
+        await _r.PerfilConSicsesAsync(1, """
+            [ { "supervisionLevel": 1, "cutoffMonths": [1,2,3,4,5,6,7,8,9,10,11,12], "dueDays": 20, "warningDays": 5,
+                "dueExceptions": [ { "cutoffMonth": 12, "monthsAfterCutoff": 1, "lastBusinessDay": true } ] } ]
+            """);
+        var festivo = new DateOnly(2027, 1, 29);
+        await IngenIA365ERP.Application.Tests.Common.NationalValues.CopiasDePrueba.SembrarAsync(_r.Db, _r.G.UtcNow.AddDays(-1),
+            IngenIA365ERP.Application.Tests.Common.NationalValues.CopiasDePrueba.Copia(
+                IngenIA365ERP.Domain.Common.NationalValues.CodigosDeValorNacional.Festivo, "2027-01-29", festivo, null, _r.G.UtcNow.AddDays(-1)));
+        _r.Db.ChangeTracker.Clear();
+        var calendario = new IngenIA365ERP.Application.Common.Calendar.CalendarioDeDiasHabiles(_r.Db);
+
+        (await new ProyeccionSicsesCartera(_r.Db, _r.D.Contabilidad, _r.G.Perfil, _r.D.O.L.Normativa(), calendario).ProyectarAsync(Anio, Mes, default))
+            .Value.Plazo!.Limite.Should().Be(new DateOnly(2027, 1, 28), "el viernes 29 es festivo: el último hábil es el jueves 28");
+        (await new ProyeccionSicsesCartera(_r.Db, _r.D.Contabilidad, _r.G.Perfil, _r.D.O.L.Normativa()).ProyectarAsync(Anio, Mes, default))
+            .Value.Plazo!.Limite.Should().Be(new DateOnly(2027, 1, 29), "sin calendario sólo se saltan sábado y domingo");
+
+        _r.G.HoyLocal = new DateOnly(2027, 1, 23);
+        (await new WatchLendingProcessesCommandHandler(_r.Db, _r.D.Alertas, _r.G.Reloj, [], null, _r.G.Perfil, _r.D.O.L.Normativa(), calendario)
+            .Handle(new WatchLendingProcessesCommand(), default)).Value.SicsesPorVencer.Should().Contain("2026-12", "con el 28 el aviso empieza el 23");
+    }
+
+    [Fact]
+    public async Task La_periodicidad_propia_de_la_cooperativa_pisa_la_del_documento_y_solo_informa()
+    {
+        // Decisión del dueño del 2026-10-18: las periodicidades regulatorias son informativas y la entidad las fija según su calendario. El documento
+        // dice nivel 2 trimestral sin diciembre; la cooperativa reporta también diciembre, con 15 días de plazo.
+        await _r.PerfilConSicsesAsync(2, """[ { "supervisionLevel": 2, "cutoffMonths": [3, 6, 9], "dueDays": 30, "warningDays": 5 } ]""");
+        var proyeccion = () => new ProyeccionSicsesCartera(_r.Db, _r.D.Contabilidad, _r.G.Perfil, _r.D.O.L.Normativa()).ProyectarAsync(Anio, Mes, default);
+        (await proyeccion()).Value.Advertencias.Should().Contain(a => a.Code == AdvertenciasRegulatorias.MesFueraDeLaPeriodicidad,
+            "sin periodicidad propia rige la del documento, y fuera de ella sólo se advierte");
+
+        await _r.E.ParametroAsync(IngenIA365ERP.Domain.Lending.Parameters.ParametrosDeCartera.SicsesMesesDeCorte, "3,6,9,12");
+        await _r.E.ParametroAsync(IngenIA365ERP.Domain.Lending.Parameters.ParametrosDeCartera.SicsesDiasDePlazo, "15");
+
+        var p = (await proyeccion()).Value;
+        p.Advertencias.Should().NotContain(a => a.Code == AdvertenciasRegulatorias.MesFueraDeLaPeriodicidad);
+        p.Plazo.Should().Be(new PlazoDelSicses(2, true, new DateOnly(2027, 1, 15), new DateOnly(2027, 1, 10)));
+        _r.G.HoyLocal = new DateOnly(2027, 1, 12);
+        (await VigilarAsync()).Value.SicsesPorVencer.Should().Contain("2026-12");
+        _r.Alertas.Single(a => a.DedupKey == $"{TiposDeAlerta.PlazoRegulatorioPorVencer}:SICSES:2026-12").Body.Should().Contain("2027-01-15");
+    }
+
+    [Fact]
+    public async Task Un_mes_fuera_de_la_periodicidad_se_genera_igual()
+    {
+        // Decisión del dueño del 2026-10-18: nada se bloquea por la periodicidad; el archivo de un mes que el nivel no reporta se genera con la advertencia.
+        await _r.PerfilConSicsesAsync(2, """[ { "supervisionLevel": 2, "cutoffMonths": [3, 6, 9], "dueDays": 30, "warningDays": 5 } ]""");
+
+        var g = await new GenerateSicsesFileCommandHandler(_r.Generacion())
+            .Handle(new GenerateSicsesFileCommand(Anio, Mes, true) { OperationKey = Guid.NewGuid() }, default);
+
+        g.IsSuccess.Should().BeTrue(g.IsFailure ? g.Error.Message : string.Empty);
+        g.Value.File.Status.Should().Be(RegulatoryFileStatus.Generated);
+        (await new ValidateSicsesFileQueryHandler(_r.Preparacion()).Handle(new ValidateSicsesFileQuery(Anio, Mes), default))
+            .Value.Warnings.Should().Contain(w => w.Code == AdvertenciasRegulatorias.MesFueraDeLaPeriodicidad, "validar lo advierte, sin bloquear");
+    }
+
+    [Fact]
     public async Task Un_nivel_que_no_reporta_el_mes_o_un_perfil_sin_el_dato_no_avisan()
     {
         await _r.PerfilConSicsesAsync(2, """[ { "supervisionLevel": 2, "cutoffMonths": [3, 6, 9], "dueDays": 30, "warningDays": 5 } ]""");
