@@ -92,6 +92,55 @@ public class LosHechosDeCarteraNoLlevanCuentas
         ReglaSobreFuente.SinInfracciones(infracciones, "Un bloque de un hecho de Cartera lleva una cuenta contable (FR-126)");
     }
 
+    // ------------------------------------------------------------------------------------- feature 014 (T037; SC-009) --
+
+    /// <summary>
+    /// Feature 014 (T037; SC-009; mensajes.md §3): los hechos de captaciones y aportes viven en <c>Contracts/Lending/Deposits</c> y tampoco llevan cuentas
+    /// contables. Allí <c>Account</c> nombra la <b>cuenta del asociado</b> (<c>MemberAccountRefV1</c>: su <c>PublicId</c> y su número, el documento
+    /// cruce) y no una cuenta del plan: se admiten sólo la referencia a ese bloque, sus dos campos y los conteos de cuentas. Lo demás que suene a cuenta
+    /// contable (<c>Puc*</c>, <c>Cuenta*</c>, <c>LedgerAccount</c>, <c>AccountingAccount</c>, <c>AccountCode</c>, <c>AccountId</c>) se rechaza igual que
+    /// en los hechos de crédito. Los bloques nacen con T047; hasta entonces la regla no tiene tipos que violar.
+    /// </summary>
+    private const string EspacioDeCaptaciones = "IngenIA365ERP.Application.Common.Integration.Contracts.Lending.Deposits";
+
+    /// <summary>Lo que en los hechos de captaciones es la cuenta del asociado o un conteo, no una cuenta contable.</summary>
+    private static readonly string[] CuentaDelAsociado = ["AccountPublicId", "AccountNumber", "AccountCount", "TargetAccountPublicId", "SourceAccountPublicId"];
+
+    private static readonly Regex CuentaContable = new(
+        @"^(Puc\w*|Cuenta\w*|\w*(Ledger|Accounting)Account\w*|\w*AccountCode|\w*AccountId|Account(Code|Id)?)$", RegexOptions.Compiled);
+
+    [Fact]
+    public void Ningun_hecho_de_captaciones_lleva_una_cuenta_contable()
+    {
+        var tipos = typeof(LoanRefV1).Assembly.GetTypes()
+            .Where(t => (t.Namespace ?? string.Empty).StartsWith(EspacioDeCaptaciones, StringComparison.Ordinal) && t.IsClass && !t.IsAbstract)
+            .ToList();
+        var infracciones = new List<string>();
+        foreach (var tipo in tipos)
+        {
+            if (Regex.IsMatch(tipo.Name, "(Puc|Cuenta|LedgerAccount|AccountingAccount)")) infracciones.Add($"{tipo.Name}: un bloque de cuenta contable");
+            foreach (var propiedad in tipo.GetProperties(BindingFlags.Public | BindingFlags.Instance))
+            {
+                var esLaCuentaDelAsociado = propiedad.PropertyType.Name == "MemberAccountRefV1" || CuentaDelAsociado.Contains(propiedad.Name);
+                if (!esLaCuentaDelAsociado && CuentaContable.IsMatch(propiedad.Name)) infracciones.Add($"{tipo.Name}.{propiedad.Name}");
+            }
+        }
+        ReglaSobreFuente.SinInfracciones(infracciones, "Un hecho de captaciones lleva una cuenta contable (FR-097, SC-009)");
+    }
+
+    [Fact]
+    public void Los_contratos_de_captaciones_no_nombran_cuentas_contables_en_el_fuente()
+    {
+        var prohibidos = new (Regex Patron, string Que)[]
+        {
+            (new Regex(@"\b(Puc\w*|Cuenta(Contable)?|\w*(Ledger|Accounting)Account\w*|\w*AccountCode|AccountId)\b\s*[{;,)]", RegexOptions.Compiled),
+                "una propiedad de cuenta contable en un hecho de captaciones"),
+        };
+        var infracciones = ReglaSobreFuente.Infracciones(
+            ReglaSobreFuente.ArchivosEn(["Core/IngenIA365ERP.Application/Common/Integration/Contracts/Lending/Deposits"]), prohibidos);
+        ReglaSobreFuente.SinInfracciones(infracciones, "Un contrato de mensaje de captaciones lleva una cuenta contable (SC-009)");
+    }
+
     /// <summary>Los bloques propios de los contratos que cuelgan de una propiedad (directo, en arreglo, lista o diccionario).</summary>
     private static IEnumerable<Type> TiposDeBloque(Type tipo)
     {

@@ -53,8 +53,13 @@ public class NadieEscribeElLibroDeCarteraFueraDelRegistro
     [Fact]
     public void Solo_el_registro_escribe_el_libro()
     {
+        // Feature 014 (T035): RegistroDeCuentas mueve las marcas que la cuenta comparte de nombre con el crédito (LastAccruedDate, LastRegisteredAt,
+        // LastPositionDate) en LND_MemberAccountControls; lo demás del libro de crédito tampoco lo toca. Lo vigila NadieEscribeElLibroDeCuentasFueraDelRegistro.
+        const string registroDeCuentas = "src/Core/IngenIA365ERP.Application/Lending/Deposits/Ledger/RegistroDeCuentas.cs";
         var infracciones = ReglaSobreFuente.Infracciones(
-            ReglaSobreFuente.ArchivosEn(Carpetas), Prohibidos, relativo => Exentos.Contains(relativo));
+                ReglaSobreFuente.ArchivosEn(Carpetas), Prohibidos, relativo => Exentos.Contains(relativo))
+            .Where(i => !(i.StartsWith(registroDeCuentas + ":", StringComparison.Ordinal) && i.EndsWith("mueve la marca de agua del crédito", StringComparison.Ordinal)))
+            .ToList();
         ReglaSobreFuente.SinInfracciones(infracciones, "Alguien escribe el libro de Cartera fuera de RegistroDeCartera (FR-001)");
     }
 
