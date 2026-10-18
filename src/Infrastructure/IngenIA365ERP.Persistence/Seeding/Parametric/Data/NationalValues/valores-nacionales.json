@@ -8,6 +8,10 @@
   // K6b (T1051): los cinco límites de vivienda de la Ley 546 de 1999 entran «pendientes de validar». TOPE_TASA_VIVIENDA y la serie UVR NO se
   // siembran: los registra el maestro con su fuente (Junta Directiva y publicación diaria del Banco de la República) por la plantilla
   // saas.national-values; ningún valor de ellos se inventa aquí.
+  // Feature 014 (T016; data-model §9.2): el componente inflacionario del año gravable 2025 entra «pendiente de validar» con su fuente; la semilla
+  // lo deja en espera hasta K8 (CodigosDeValorNacional lo admite desde esa entrega). LIMITE_INEMBARGABLE, TOPE_ENTREGA_SIN_SUCESION y
+  // TOPE_SEGURO_DEPOSITOS NO se siembran: los registra el maestro con cada publicación y su fuente (preguntas P5 y P6 de la spec). De los límites
+  // de aportes entran el tope de la cuota y la fracción mínima de los fondos de empleados; los de participación (PN y PJ) no, hasta la pregunta P12.
   "version": 1,
   "validFrom": "2026-01-01",
   "documents": [
@@ -60,6 +64,7 @@
   "values": [
     { "code": "SMMLV", "key": "", "validFrom": "2026-01-01", "value": 1750905, "unit": "Pesos", "label": "Salario mínimo mensual legal vigente 2026", "source": "Decreto 1469 de 2025 (Decreto 159 de 2026, mismo valor)" },
     { "code": "UVT", "key": "", "validFrom": "2026-01-01", "value": 52374, "unit": "Pesos", "label": "Unidad de valor tributario 2026", "source": "Resolución DIAN 000238 del 15-12-2025" },
+    { "code": "COMPONENTE_INFLACIONARIO", "key": "2025", "validFrom": "2026-01-01", "value": 0.5543, "unit": "Fraccion", "label": "Componente inflacionario del año gravable 2025", "source": "Decreto 898 de 2026 (investigación financiera de la feature 014 §3; valor semilla, pendiente de validar)" },
 
     { "code": "LIMITE", "key": "AVISO_PREVIO_DIAS", "validFrom": "2026-01-01", "value": 20, "unit": "Dias", "source": "Ley 1266 de 2008; Ley 2157 de 2021 (valor semilla, pendiente de validar)" },
     { "code": "LIMITE", "key": "COBRANZA_HORA_FIN_LV", "validFrom": "2026-01-01", "value": 19, "unit": "Horas", "source": "Ley 2300 de 2023 (valor semilla, pendiente de validar)" },
@@ -89,6 +94,8 @@
     { "code": "LIMITE", "key": "VIVIENDA_PLAZO_MAXIMO_MESES", "validFrom": "2026-01-01", "value": 360, "unit": "Meses", "source": "Ley 546 de 1999, art. 17: plazo de treinta años como máximo (valor semilla, pendiente de validar)" },
     { "code": "LIMITE", "key": "VIVIENDA_FINANCIABLE", "validFrom": "2026-01-01", "value": 0.70, "unit": "Fraccion", "source": "Ley 546 de 1999, art. 17; Decreto 145 de 2000 (compilado en el Decreto 2555 de 2010): hasta el 70 % del valor del inmueble (valor semilla, pendiente de validar)" },
     { "code": "LIMITE", "key": "VIVIENDA_FINANCIABLE_VIS", "validFrom": "2026-01-01", "value": 0.80, "unit": "Fraccion", "source": "Decreto 145 de 2000 (compilado en el Decreto 2555 de 2010): hasta el 80 % del valor de la vivienda de interés social (valor semilla, pendiente de validar)" },
+    { "code": "LIMITE", "key": "APORTES_TOPE_CUOTA_FONDO_EMPLEADOS", "validFrom": "2026-01-01", "value": 0.10, "unit": "Fraccion", "source": "Ley 2496 de 2025: la cuota obligatoria de los fondos de empleados no supera el 10 % del ingreso (feature 014; valor semilla, pendiente de validar)" },
+    { "code": "LIMITE", "key": "APORTES_FRACCION_MINIMA", "validFrom": "2026-01-01", "value": 0.10, "unit": "Fraccion", "source": "Ley 2496 de 2025: al menos una décima parte de la cuota va a aportes (feature 014; valor semilla, pendiente de validar)" },
     { "code": "LIMITE", "key": "VIVIENDA_CUOTA_INGRESO", "validFrom": "2026-01-01", "value": 0.30, "unit": "Fraccion", "source": "Decreto 145 de 2000 (compilado en el Decreto 2555 de 2010): la primera cuota no supera el 30 % de los ingresos familiares (valor semilla, pendiente de validar)" }
   ],
   "holidays": {

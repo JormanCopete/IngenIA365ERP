@@ -111,6 +111,14 @@ public sealed class PlatformNationalValuesSeeder : IDataSeeder
         {
             var clave = v.Key ?? string.Empty;
             if (existentes.Contains((v.Code, clave, v.ValidFrom))) continue;
+            // Feature 014 (T016): un código de una entrega posterior a la vigente espera, sin error, a que su entrega salga; la semilla
+            // lo inserta en el primer arranque con esa entrega (es idempotente).
+            if (Domain.Common.NationalValues.CodigosDeValorNacional.Buscar(v.Code) is { } definicion && !definicion.DisponibleEn())
+            {
+                logger.LogDebug("[ValoresNacionales.SemillaEnEspera] {Codigo} {Clave} {Desde}: llega con {Entrega}", v.Code, clave, v.ValidFrom,
+                    definicion.DisponibleDesde);
+                continue;
+            }
             var validado = await ReglasDelRegistroCentral.ValidarAsync(db, v.Code, clave, v.ValidFrom, null, v.Value, v.Unit, ct);
             if (validado.IsFailure)
             {

@@ -320,8 +320,12 @@ public class RegistroCentralDeValoresNacionalesTests
         valores.Single(v => v.Code == CodigosDeValorNacional.Smmlv).Value.Should().Be(1_750_905m);
         valores.Single(v => v.Code == CodigosDeValorNacional.Uvt).Value.Should().Be(52_374m);
         valores.Where(v => v.Code == CodigosDeValorNacional.Limite).Select(v => v.Key).Should()
-            .BeEquivalentTo(CatalogoDeLimitesLegales.Todos.Select(l => l.Codigo).Where(c => c != CatalogoDeLimitesLegales.LibranzaUmbralMoraPagaduria),
-                "todos los límites con valor semilla; el umbral de mora de pagaduría se coteja en la CBCF antes de K2");
+            .BeEquivalentTo(CatalogoDeLimitesLegales.Todos.Select(l => l.Codigo).Where(c => c != CatalogoDeLimitesLegales.LibranzaUmbralMoraPagaduria
+                    && c != CatalogoDeLimitesLegales.AportesLimiteParticipacionPersonaNatural && c != CatalogoDeLimitesLegales.AportesLimiteParticipacionPersonaJuridica),
+                "todos los límites con valor semilla; el umbral de mora de pagaduría se coteja en la CBCF antes de K2 y los de participación en aportes "
+                + "esperan la pregunta P12 (feature 014)");
+        // Feature 014 (T016): el componente inflacionario espera su entrega (K8); la semilla no lo inserta todavía.
+        valores.Should().NotContain(v => v.Code == CodigosDeValorNacional.ComponenteInflacionario);
 
         // Los festivos que sembraba Nómina (HolidaysSeeder, retirado en la feature 013): 18 por año, 2026–2028.
         var festivos = valores.Where(v => v.Code == CodigosDeValorNacional.Festivo).ToList();

@@ -81,6 +81,35 @@ public class ParametrosDeCarteraTests
         // Decisión del dueño del 2026-10-16: los rangos de mora de las centrales y el aviso previo a los codeudores.
         { "Centrales.RangosDeMora", "*=30,60,90,120,150,180|1", [N], EntregaDeCartera.K5 },
         { "AvisoPrevio.IncluirCodeudores", "false", [N], EntregaDeCartera.K5 },
+        // Feature 014 (T017; data-model §9.1, research C02, C26 y E15): captaciones y aportes, cada una desde su entrega.
+        { "Retencion.TarifaAhorro", "0.07", [N, L], EntregaDeCartera.K8 },
+        { "Retencion.TarifaCdat", "0.04", [N, L], EntregaDeCartera.K9 },
+        { "Retencion.TarifaContractual", "", [N, L], EntregaDeCartera.K9 },
+        { "Retencion.TarifaPermanente", "", [N, L], EntregaDeCartera.K8 },
+        { "Retencion.UmbralDiarioUvt", "0.055", [N], EntregaDeCartera.K8 },
+        { "Retencion.AlcanceDelUmbral", "ExceptTermDeposit", [N], EntregaDeCartera.K8 },
+        { "Retencion.ComponenteInflacionarioAplica", "true", [N], EntregaDeCartera.K8 },
+        { "Gmf.Tarifa", "0.004", [N], EntregaDeCartera.K8 },
+        { "Gmf.TopeExencionUvt", "350", [N], EntregaDeCartera.K8 },
+        { "Gmf.PoliticaDeExencion", "SingleMarkedAccount", [N], EntregaDeCartera.K8 },
+        { "Gmf.HechosGeneradores", "{\"gravados\": [\"Withdrawal\", \"TransferToOtherHolder\", \"TransferBetweenDemandAndTermDeposit\", \"TermDepositRedemptionToAccount\", \"Cancellation\"], \"exentos\": [\"TransferBetweenSameHolderSavings\"]}", [N], EntregaDeCartera.K8 },
+        { "FondoDeLiquidez.PorcentajesPorCategoria", "", [N], EntregaDeCartera.K11 },
+        { "Aportes.TopeCuotaFondoEmpleados", "", [N], EntregaDeCartera.K7 },
+        { "Aportes.FraccionMinima", "", [N], EntregaDeCartera.K7 },
+        { "Aportes.LimiteParticipacionPersonaNatural", "", [N], EntregaDeCartera.K7 },
+        { "Aportes.LimiteParticipacionPersonaJuridica", "", [N], EntregaDeCartera.K7 },
+        { "Aportes.MinimoIrreducibleEntidad", "", [N], EntregaDeCartera.K7 },
+        { "Riesgo.DescuentoAportesDeterioro", "false", [N], EntregaDeCartera.K7 },
+        { "Captaciones.MayoriaDeEdadAnios", "18", [N], EntregaDeCartera.K7 },
+        { "Captaciones.DiasMaximosFechaValor", "5", [N], EntregaDeCartera.K7 },
+        { "Captaciones.DiasDeCanjePorClaseDeMedio", "{\"Check\": 3, \"*\": 0}", [N], EntregaDeCartera.K8 },
+        { "Efectivo.UmbralDeclaracion", "", [N], EntregaDeCartera.K7 },
+        { "Embargos.OrdenDeCuentas", "", [N], EntregaDeCartera.K8 },
+        { "Captaciones.AnticipacionAvisoCambioDeTasaDias", "", [N], EntregaDeCartera.K8 },
+        { "Captaciones.DiasPlazoDevolucionAportes", "", [N], EntregaDeCartera.K7 },
+        { "Captaciones.DiasParaNoReclamados", "", [N], EntregaDeCartera.K10 },
+        { "Fallecimiento.SoportesDeEntregaSinSucesion", "", [N], EntregaDeCartera.K10 },
+        { "CuentasAbandonadas.TrasladoHabilitado", "false", [N], EntregaDeCartera.K10 },
     };
 
     [Fact]
@@ -113,7 +142,9 @@ public class ParametrosDeCarteraTests
         CatalogoDeCartera.EntregaVigente.Should().Be(EntregaDeCartera.K6b);
         var posteriores = ParametrosDeCartera.Definiciones.Where(d => d.DisponibleDesde > (EntregaDeModulo)EntregaDeCartera.K6b).ToList();
 
-        posteriores.Should().BeEmpty("K6b es la última entrega de Cartera");
+        // Feature 014 (T017): las claves de captaciones y aportes existen desde ya con su entrega (K7 a K11) y no se ofrecen hasta que salga.
+        posteriores.Should().HaveCount(28).And.OnlyContain(d => d.DisponibleDesde >= (EntregaDeModulo)EntregaDeCartera.K7
+            && d.DisponibleDesde <= (EntregaDeModulo)EntregaDeCartera.K11);
         ParametrosDeCartera.Definiciones.Where(d => d.DisponibleDesde == (EntregaDeModulo)EntregaDeCartera.K6b).Should().BeEmpty("la vivienda no trae claves");
         ParametrosDeCartera.Definiciones.Where(d => d.DisponibleDesde == (EntregaDeModulo)EntregaDeCartera.K6a).Select(d => d.Clave).Should()
             .Equal(ParametrosDeCartera.RiesgoMesesFaltantesDiasFijos);

@@ -48,6 +48,11 @@ public static class TextosDePlataforma
         "LIMITE" => "Límite legal",
         "UVR" => "Unidad de valor real",
         "TOPE_TASA_VIVIENDA" => "Tope de tasa de vivienda",
+        // Feature 014 (T016).
+        "COMPONENTE_INFLACIONARIO" => "Componente inflacionario de los rendimientos",
+        "LIMITE_INEMBARGABLE" => "Límite inembargable de los depósitos",
+        "TOPE_ENTREGA_SIN_SUCESION" => "Tope de entrega sin juicio de sucesión",
+        "TOPE_SEGURO_DEPOSITOS" => "Tope del seguro de depósitos",
         _ => codigo,
     };
 

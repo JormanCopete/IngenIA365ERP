@@ -159,6 +159,94 @@ public static class ParametrosDeCartera
     /// </summary>
     public const string AvisoPrevioIncluirCodeudores = "AvisoPrevio.IncluirCodeudores";
 
+    // ----------------------------------------------------------------------- feature 014: captaciones y aportes (T017) --
+    // research R26, C02, C09, C26 y E10; data-model §9.1. Cada clave desde la entrega que la usa: no se ofrece ni se acepta hasta que esa
+    // entrega suba CatalogoDeCartera.EntregaVigente. Los defectos son los de la spec o la investigación, sembrados pendientes de validar.
+
+    /// <summary>Tarifa de retención sobre rendimientos de ahorro a la vista (fracción).</summary>
+    public const string RetencionTarifaAhorro = "Retencion.TarifaAhorro";
+
+    /// <summary>Tarifa de retención sobre rendimientos de CDAT (fracción).</summary>
+    public const string RetencionTarifaCdat = "Retencion.TarifaCdat";
+
+    /// <summary>Tarifa de retención del ahorro contractual (fracción). Sin valor: rige la del ahorro.</summary>
+    public const string RetencionTarifaContractual = "Retencion.TarifaContractual";
+
+    /// <summary>Tarifa de retención del ahorro permanente (fracción). Sin valor: rige la del ahorro.</summary>
+    public const string RetencionTarifaPermanente = "Retencion.TarifaPermanente";
+
+    /// <summary>Umbral diario de la retención, en UVT (R06).</summary>
+    public const string RetencionUmbralDiarioUvt = "Retencion.UmbralDiarioUvt";
+
+    /// <summary>A qué clases aplica el umbral diario (<c>WithholdingThresholdScope</c>; D10).</summary>
+    public const string RetencionAlcanceDelUmbral = "Retencion.AlcanceDelUmbral";
+
+    /// <summary>Si se descuenta el componente inflacionario al retener a la persona natural no obligada a llevar contabilidad (P27).</summary>
+    public const string RetencionComponenteInflacionarioAplica = "Retencion.ComponenteInflacionarioAplica";
+
+    /// <summary>Tarifa del GMF (fracción; admite cero desde su eliminación).</summary>
+    public const string GmfTarifa = "Gmf.Tarifa";
+
+    /// <summary>Tope mensual exento de GMF por persona, en UVT.</summary>
+    public const string GmfTopeExencionUvt = "Gmf.TopeExencionUvt";
+
+    /// <summary>Política de exención del GMF (<c>GmfExemptionPolicy</c>; P25).</summary>
+    public const string GmfPoliticaDeExencion = "Gmf.PoliticaDeExencion";
+
+    /// <summary>Qué operaciones generan GMF (JSON; D32).</summary>
+    public const string GmfHechosGeneradores = "Gmf.HechosGeneradores";
+
+    /// <summary>Porcentajes del fondo de liquidez por categoría, con la tabla del Decreto 976 de 2026 y su transición (JSON).</summary>
+    public const string FondoDeLiquidezPorcentajesPorCategoria = "FondoDeLiquidez.PorcentajesPorCategoria";
+
+    /// <summary>Techo de la cuota obligatoria de los fondos de empleados (fracción del ingreso). Vacío: rige el límite legal.</summary>
+    public const string AportesTopeCuotaFondoEmpleados = "Aportes.TopeCuotaFondoEmpleados";
+
+    /// <summary>Piso de la fracción de la cuota que va a aportes. Vacío: rige el límite legal.</summary>
+    public const string AportesFraccionMinima = "Aportes.FraccionMinima";
+
+    /// <summary>Techo de participación de una persona natural en el total de aportes. Vacío: rige el límite legal.</summary>
+    public const string AportesLimiteParticipacionPersonaNatural = "Aportes.LimiteParticipacionPersonaNatural";
+
+    /// <summary>Techo de participación de una persona jurídica en el total de aportes. Vacío: rige el límite legal.</summary>
+    public const string AportesLimiteParticipacionPersonaJuridica = "Aportes.LimiteParticipacionPersonaJuridica";
+
+    /// <summary>Mínimo irreducible de aportes de la entidad (estatutos), en pesos (FR-080).</summary>
+    public const string AportesMinimoIrreducibleEntidad = "Aportes.MinimoIrreducibleEntidad";
+
+    /// <summary>Edad desde la que el titular menor pasa a manejar su cuenta (R22).</summary>
+    public const string CaptacionesMayoriaDeEdadAnios = "Captaciones.MayoriaDeEdadAnios";
+
+    /// <summary>Orden en que se embargan las cuentas por clase (JSON; R23).</summary>
+    public const string EmbargosOrdenDeCuentas = "Embargos.OrdenDeCuentas";
+
+    /// <summary>Días hacia atrás que admite la fecha valor de una operación de cuenta (D11).</summary>
+    public const string CaptacionesDiasMaximosFechaValor = "Captaciones.DiasMaximosFechaValor";
+
+    /// <summary>Días hábiles de canje por clase de medio de recaudo (JSON; C14, FR-050).</summary>
+    public const string CaptacionesDiasDeCanjePorClaseDeMedio = "Captaciones.DiasDeCanjePorClaseDeMedio";
+
+    /// <summary>Umbral en pesos desde el que una consignación en efectivo exige la declaración de origen de fondos (FR-059).</summary>
+    public const string EfectivoUmbralDeclaracion = "Efectivo.UmbralDeclaracion";
+
+    /// <summary>Si los aportes descuentan del deterioro (FR-094, R20); junto a <see cref="RiesgoExcepcionAportesArrastre"/>.</summary>
+    public const string RiesgoDescuentoAportesDeterioro = "Riesgo.DescuentoAportesDeterioro";
+
+    /// <summary>Soportes de la entrega sin juicio de sucesión (JSON; FR-082).</summary>
+    public const string FallecimientoSoportesDeEntregaSinSucesion = "Fallecimiento.SoportesDeEntregaSinSucesion";
+
+    /// <summary>Si los saldos de cuentas abandonadas se trasladan (FR-084; confirmación de la contadora, P7).</summary>
+    public const string CuentasAbandonadasTrasladoHabilitado = "CuentasAbandonadas.TrasladoHabilitado";
+
+    /// <summary>Días de anticipación del aviso de cambio de tasa de una línea a la vista (FR-038).</summary>
+    public const string CaptacionesAnticipacionAvisoCambioDeTasaDias = "Captaciones.AnticipacionAvisoCambioDeTasaDias";
+
+    /// <summary>Plazo estatutario, en días, para devolver los aportes del asociado retirado (FR-079).</summary>
+    public const string CaptacionesDiasPlazoDevolucionAportes = "Captaciones.DiasPlazoDevolucionAportes";
+
+    /// <summary>Días sin cobrar desde los que lo devuelto pasa a no reclamados (FR-081).</summary>
+    public const string CaptacionesDiasParaNoReclamados = "Captaciones.DiasParaNoReclamados";
+
     /// <summary>Forma de <see cref="CentralesCodigosDeSuscriptor"/>.</summary>
     public const string PatronDeCodigosDeSuscriptor = @"^[A-Z0-9_]{1,20}=[A-Za-z0-9-]{1,20}(;[A-Z0-9_]{1,20}=[A-Za-z0-9-]{1,20})*$";
 
@@ -426,6 +514,176 @@ public static class ParametrosDeCartera
         SiNo(Modulo, AvisoPrevioIncluirCodeudores,
             "El aviso previo al reporte negativo se abre y se envía también a cada codeudor del crédito, con su propia constancia; la central reporta al "
             + "codeudor con dato negativo sólo si su aviso está completo. En «false», los codeudores no se reportan con dato negativo.", false, K5, General),
+
+        // --------------------------------------------------------------- feature 014: captaciones y aportes (T017) --
+        // Retención en la fuente sobre rendimientos (R06).
+        NumeroDecimal(Modulo, RetencionTarifaAhorro,
+            "Tarifa de retención en la fuente sobre los rendimientos del ahorro a la vista, como fracción (0,07 = 7 %).", "0.07", K8, General, Linea) with
+        {
+            Maximo = 1m, PendienteDeValidar = "Defecto de data-model §9.1 (DUR 1625 de 2016, tarifa residual), pendiente de validar por la contadora.",
+        },
+        NumeroDecimal(Modulo, RetencionTarifaCdat,
+            "Tarifa de retención en la fuente sobre los rendimientos del CDAT, como fracción (0,04 = 4 %).", "0.04", K9, General, Linea) with
+        {
+            Maximo = 1m,
+            PendienteDeValidar = "Defecto de data-model §9.1 (DUR 1625 de 2016 art. 1.2.4.2.83; Decreto 572 de 2025), pendiente de validar por la contadora.",
+        },
+        NumeroDecimal(Modulo, RetencionTarifaContractual,
+            "Tarifa de retención del ahorro contractual, como fracción. Vacío: rige la del ahorro a la vista.", "", K9, General, Linea) with
+        {
+            AdmiteVacio = true, Maximo = 1m, PendienteDeValidar = "Sin valor (DUR 1625 de 2016): lo fija la contadora.",
+        },
+        NumeroDecimal(Modulo, RetencionTarifaPermanente,
+            "Tarifa de retención del ahorro permanente, como fracción. Vacío: rige la del ahorro a la vista.", "", K8, General, Linea) with
+        {
+            AdmiteVacio = true, Maximo = 1m, PendienteDeValidar = "Sin valor (DUR 1625 de 2016): lo fija la contadora.",
+        },
+        NumeroDecimal(Modulo, RetencionUmbralDiarioUvt,
+            "Umbral diario de la retención, en UVT: si ningún día del período lo alcanza no se retiene; si alguno lo alcanza, la base es todo el período.",
+            "0.055", K8, General) with
+        {
+            PendienteDeValidar = "Defecto de data-model §9.1 (DUR 1625 de 2016 art. 1.2.4.2.6), pendiente de validar por la contadora.",
+        },
+        Eleccion(Modulo, RetencionAlcanceDelUmbral,
+            "A qué clases de captación aplica el umbral diario de la retención.",
+            ["AllDepositClasses", "ExceptTermDeposit", "None"], "ExceptTermDeposit", K8, General) with
+        {
+            PendienteDeValidar = "Defecto D10 de la spec (el CDAT retiene sin umbral, pregunta P2), pendiente de validar por la contadora.",
+        },
+        SiNo(Modulo, RetencionComponenteInflacionarioAplica,
+            "Al retener a una persona natural no obligada a llevar contabilidad se descuenta el componente inflacionario vigente.", true, K8, General) with
+        {
+            PendienteDeValidar = "Defecto P27 de la spec (Estatuto Tributario; Decreto 898 de 2026), pendiente de validar por la contadora.",
+        },
+
+        // Gravamen a los movimientos financieros (R07).
+        NumeroDecimal(Modulo, GmfTarifa,
+            "Tarifa del GMF como fracción (0,004 = 4 por mil). Admite cero: desde esa vigencia no se calcula.", "0.004", K8, General) with
+        {
+            Maximo = 1m, PendienteDeValidar = "Defecto de data-model §9.1 (Estatuto Tributario art. 872), pendiente de validar por la contadora.",
+        },
+        NumeroDecimal(Modulo, GmfTopeExencionUvt,
+            "Tope mensual exento del GMF por persona, en UVT, en la cuenta marcada.", "350", K8, General) with
+        {
+            PendienteDeValidar = "Defecto de data-model §9.1 (Estatuto Tributario art. 879 num. 1), pendiente de validar por la contadora.",
+        },
+        Eleccion(Modulo, GmfPoliticaDeExencion,
+            "Cómo se aplica la exención del GMF: una cuenta marcada por persona, un tope por titular o no aplica.",
+            ["SingleMarkedAccount", "PerHolderLimit", "NotApplicable"], "SingleMarkedAccount", K8, General) with
+        {
+            PendienteDeValidar = "Defecto P25 de la spec (Estatuto Tributario art. 881-1), pendiente de validar por la contadora.",
+        },
+        Texto(GmfHechosGeneradores,
+            "Qué operaciones generan GMF, en JSON { \"gravados\": [...], \"exentos\": [...] } con las operaciones de la Cartera (D32).",
+            "{\"gravados\": [\"Withdrawal\", \"TransferToOtherHolder\", \"TransferBetweenDemandAndTermDeposit\", \"TermDepositRedemptionToAccount\", \"Cancellation\"], \"exentos\": [\"TransferBetweenSameHolderSavings\"]}",
+            K8, patron: @"(?s)^\s*\{.*\}\s*$") with
+        {
+            PendienteDeValidar = "Defecto D32 de la spec (Estatuto Tributario arts. 871 y 879 num. 14; Oficio DIAN 2787 de 2019), pendiente de validar por la contadora.",
+        },
+
+        // Fondo de liquidez (R25).
+        Texto(FondoDeLiquidezPorcentajesPorCategoria,
+            "Porcentajes del fondo de liquidez por categoría de la entidad y clase de depósito, con la transición, en JSON. Sin valor hasta cargar la tabla.",
+            string.Empty, K11, patron: @"(?s)^\s*\{.*\}\s*$", admiteVacio: true) with
+        {
+            PendienteDeValidar = "Sin valor: la contadora carga la tabla del Decreto 976 de 2026 y su transición.",
+        },
+
+        // Aportes (FR-040 a FR-049, FR-080, FR-094).
+        NumeroDecimal(Modulo, AportesTopeCuotaFondoEmpleados,
+            "Techo de la cuota obligatoria de los fondos de empleados, como fracción del ingreso. Vacío: rige el límite legal.", "", K7, General) with
+        {
+            AdmiteVacio = true, Maximo = 1m,
+            LimitesLegales = [CatalogoDeLimitesLegales.AportesTopeCuotaFondoEmpleados],
+            PendienteDeValidar = PendienteLimite,
+        },
+        NumeroDecimal(Modulo, AportesFraccionMinima,
+            "Fracción mínima de la cuota periódica que va a aportes sociales. Vacío: rige el límite legal.", "", K7, General) with
+        {
+            AdmiteVacio = true, Maximo = 1m,
+            LimitesLegales = [CatalogoDeLimitesLegales.AportesFraccionMinima],
+            PendienteDeValidar = PendienteLimite,
+        },
+        NumeroDecimal(Modulo, AportesLimiteParticipacionPersonaNatural,
+            "Fracción máxima del total de aportes que puede tener una persona natural. Vacío: rige el límite legal.", "", K7, General) with
+        {
+            AdmiteVacio = true, Maximo = 1m,
+            LimitesLegales = [CatalogoDeLimitesLegales.AportesLimiteParticipacionPersonaNatural],
+            PendienteDeValidar = "Sin valor (pregunta P12, Ley 79 de 1988 a validar): rige el límite legal cuando se registre.",
+        },
+        NumeroDecimal(Modulo, AportesLimiteParticipacionPersonaJuridica,
+            "Fracción máxima del total de aportes que puede tener una persona jurídica. Vacío: rige el límite legal.", "", K7, General) with
+        {
+            AdmiteVacio = true, Maximo = 1m,
+            LimitesLegales = [CatalogoDeLimitesLegales.AportesLimiteParticipacionPersonaJuridica],
+            PendienteDeValidar = "Sin valor (pregunta P12, Ley 79 de 1988 a validar): rige el límite legal cuando se registre.",
+        },
+        NumeroDecimal(Modulo, AportesMinimoIrreducibleEntidad,
+            "Mínimo irreducible de aportes de la entidad, en pesos: una devolución que lo perforaría queda pendiente y avisa al gerente. Vacío: sin mínimo.",
+            "", K7, General) with
+        {
+            AdmiteVacio = true, PendienteDeValidar = "Sin valor: lo fijan los estatutos de cada cooperativa (FR-080).",
+        },
+        SiNo(Modulo, RiesgoDescuentoAportesDeterioro,
+            "Los aportes del deudor descuentan de la base del deterioro cuando la norma lo permite. Forzado en «false» mientras rija D19.", false, K7, General),
+
+        // Cuentas: titulares, fecha valor, canje, efectivo, embargos (R22, R23, C14, D11, FR-059).
+        Entero(Modulo, CaptacionesMayoriaDeEdadAnios,
+            "Edad desde la que el titular menor maneja su cuenta: el proceso cierra la vigencia del representante y avisa.", "18", K7, General) with
+        {
+            Minimo = 1m, PendienteDeValidar = "Defecto de data-model §9.1 (Código Civil), pendiente de validar.",
+        },
+        Entero(Modulo, CaptacionesDiasMaximosFechaValor,
+            "Días hacia atrás que admite la fecha valor de una operación de cuenta.", "5", K7, General) with
+        {
+            PendienteDeValidar = "Defecto D11 de la spec (reglamento), pendiente de validar.",
+        },
+        Texto(CaptacionesDiasDeCanjePorClaseDeMedio,
+            "Días hábiles de canje por clase de medio de recaudo, en JSON { clase: días } con «*» para las demás: lo consignado suma al saldo pero no al "
+            + "disponible hasta cumplirlos.",
+            "{\"Check\": 3, \"*\": 0}", K8, patron: @"(?s)^\s*\{.*\}\s*$") with
+        {
+            PendienteDeValidar = "Defecto de contracts/contrato-de-cuentas.md (C14), pendiente de validar.",
+        },
+        NumeroDecimal(Modulo, EfectivoUmbralDeclaracion,
+            "Valor en pesos desde el que una consignación en efectivo exige la declaración de origen de fondos. Vacío: no se exige.", "", K7, General) with
+        {
+            AdmiteVacio = true, PendienteDeValidar = "Sin valor (pregunta P4): lo fija el oficial de cumplimiento con la norma SARLAFT vigente.",
+        },
+        Texto(EmbargosOrdenDeCuentas,
+            "Orden en que se embargan las cuentas de la persona, en JSON [clase, …] con las clases de captación. Sin valor: el orden de apertura.",
+            string.Empty, K8, patron: @"(?s)^\s*\[.*\]\s*$", admiteVacio: true) with
+        {
+            PendienteDeValidar = "Sin valor (pregunta P5): lo fija la cooperativa.",
+        },
+
+        // Retiro, fallecimiento, no reclamados y abandonadas (FR-038, FR-079, FR-081, FR-082, FR-084; C26).
+        Entero(Modulo, CaptacionesAnticipacionAvisoCambioDeTasaDias,
+            "Días de anticipación con que se avisa a los titulares un cambio de tasa de una línea a la vista. Vacío: se avisa el día del cambio.", "", K8, General) with
+        {
+            AdmiteVacio = true, PendienteDeValidar = "Sin valor: lo fija el reglamento de ahorro de la cooperativa (FR-038).",
+        },
+        Entero(Modulo, CaptacionesDiasPlazoDevolucionAportes,
+            "Días del plazo estatutario para devolver los aportes del asociado retirado. Vacío: sin plazo de alerta.", "", K7, General) with
+        {
+            AdmiteVacio = true, PendienteDeValidar = "Sin valor: lo fijan los estatutos (FR-079).",
+        },
+        Entero(Modulo, CaptacionesDiasParaNoReclamados,
+            "Días sin cobrar desde los que lo devuelto pasa a no reclamados. Vacío: no se traslada solo.", "", K10, General) with
+        {
+            AdmiteVacio = true, PendienteDeValidar = "Sin valor: lo fija el reglamento (FR-081).",
+        },
+        Texto(FallecimientoSoportesDeEntregaSinSucesion,
+            "Soportes que exige la entrega de depósitos sin juicio de sucesión, en JSON [soporte, …].",
+            string.Empty, K10, patron: @"(?s)^\s*\[.*\]\s*$", admiteVacio: true) with
+        {
+            PendienteDeValidar = "Sin valor (pregunta P6): lo fija el reglamento (EOSF art. 127, alcance a validar).",
+        },
+        SiNo(Modulo, CuentasAbandonadasTrasladoHabilitado,
+            "Los saldos de cuentas abandonadas se trasladan según la norma. En «false» no se trasladan.", false, K10, General) with
+        {
+            PendienteDeValidar = "Defecto P7 de la spec (Ley 1777 de 2016 a validar): la contadora confirma si aplica a la cooperativa.",
+        },
     ];
 
     private static DefinicionDeParametro Texto(string clave, string descripcion, string defecto, EntregaDeModulo desde,

@@ -67,6 +67,20 @@ public static class CodigosDeValorNacional
     public const string Festivo = "FESTIVO";
     public const string Limite = "LIMITE";
 
+    // Feature 014 (T016; research R26 y C09; data-model §9.2): los valores nacionales de captaciones, cada uno desde su entrega.
+
+    /// <summary>Porcentaje del rendimiento que no es renta (componente inflacionario) por año gravable; la clave es el año (<c>2025</c>).</summary>
+    public const string ComponenteInflacionario = "COMPONENTE_INFLACIONARIO";
+
+    /// <summary>Límite inembargable de los depósitos de ahorro (CGP art. 594), en pesos.</summary>
+    public const string LimiteInembargable = "LIMITE_INEMBARGABLE";
+
+    /// <summary>Tope de lo que se entrega a herederos sin juicio de sucesión (EOSF art. 127), en pesos.</summary>
+    public const string TopeEntregaSinSucesion = "TOPE_ENTREGA_SIN_SUCESION";
+
+    /// <summary>Tope del seguro de depósitos por ahorrador (Fogacoop), en pesos.</summary>
+    public const string TopeSeguroDepositos = "TOPE_SEGURO_DEPOSITOS";
+
     private static readonly IReadOnlyList<DefinicionDeValorNacional> Lista =
     [
         new(Usura, [UnidadDeValorNacional.EA], LlevaClave: true, LlevaValor: true, DisponibleDesde: EntregaDeCartera.K1, null, "Tasa de usura certificada por modalidad"),
@@ -81,6 +95,15 @@ public static class CodigosDeValorNacional
         new(Limite,
             [UnidadDeValorNacional.Fraccion, UnidadDeValorNacional.Dias, UnidadDeValorNacional.Meses, UnidadDeValorNacional.Horas, UnidadDeValorNacional.Veces],
             true, true, EntregaDeCartera.K1, null, "Límite legal (clave = código de CatalogoDeLimitesLegales)"),
+        // Feature 014 (T016): no se admiten hasta que su entrega suba CatalogoDeCartera.EntregaVigente.
+        new(ComponenteInflacionario, [UnidadDeValorNacional.Fraccion], LlevaClave: true, LlevaValor: true, DisponibleDesde: EntregaDeCartera.K8, null,
+            "Componente inflacionario de los rendimientos financieros (clave = año gravable)"),
+        new(LimiteInembargable, [UnidadDeValorNacional.Pesos], false, true, DisponibleDesde: EntregaDeCartera.K8, null,
+            "Límite inembargable de los depósitos de ahorro"),
+        new(TopeEntregaSinSucesion, [UnidadDeValorNacional.Pesos], false, true, DisponibleDesde: EntregaDeCartera.K10, null,
+            "Tope de entrega de depósitos sin juicio de sucesión"),
+        new(TopeSeguroDepositos, [UnidadDeValorNacional.Pesos], false, true, DisponibleDesde: EntregaDeCartera.K11, null,
+            "Tope del seguro de depósitos por ahorrador"),
     ];
 
     private static readonly Dictionary<string, DefinicionDeValorNacional> PorCodigo = Lista.ToDictionary(c => c.Codigo, StringComparer.Ordinal);
@@ -113,6 +136,8 @@ public static class CodigosDeValorNacional
             rechazos.Add(new(MotivoDeRechazoDeValorNacional.ClaveInvalida, "key", $"{def.Codigo} exige clave."));
         else if (def.Codigo == Festivo && !DateOnly.TryParseExact(clave, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _))
             rechazos.Add(new(MotivoDeRechazoDeValorNacional.ClaveInvalida, "key", "La clave del festivo es su fecha (aaaa-mm-dd)."));
+        else if (def.Codigo == ComponenteInflacionario && !(clave.Length == 4 && int.TryParse(clave, NumberStyles.None, CultureInfo.InvariantCulture, out _)))
+            rechazos.Add(new(MotivoDeRechazoDeValorNacional.ClaveInvalida, "key", "La clave del componente inflacionario es el año gravable (aaaa)."));
 
         if (def.Codigo == Limite && clave.Length > 0)
         {

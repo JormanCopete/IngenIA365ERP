@@ -1,4 +1,4 @@
-namespace IngenIA365ERP.Domain.Common.NationalValues;
+﻿namespace IngenIA365ERP.Domain.Common.NationalValues;
 
 /// <summary>Qué lado es el estricto de un límite legal: un valor mayor (<see cref="Mayor"/>) o uno menor (<see cref="Menor"/>).</summary>
 public enum DireccionDeLoEstricto
@@ -56,6 +56,21 @@ public static class CatalogoDeLimitesLegales
     public const string PermanenciaNegativoVecesMora = "PERMANENCIA_NEGATIVO_VECES_MORA";
     public const string PermanenciaNegativoMesesMaximos = "PERMANENCIA_NEGATIVO_MESES_MAXIMOS";
 
+    // Feature 014 (T017; research C02; data-model §9.1): los pisos y techos legales de los aportes. El valor (y su fuente) es un valor nacional
+    // LIMITE; el parámetro de la cooperativa sólo puede ser más estricto.
+
+    /// <summary>Techo de la cuota obligatoria de los fondos de empleados, como fracción del ingreso.</summary>
+    public const string AportesTopeCuotaFondoEmpleados = "APORTES_TOPE_CUOTA_FONDO_EMPLEADOS";
+
+    /// <summary>Piso de la fracción de la cuota periódica que va a aportes sociales.</summary>
+    public const string AportesFraccionMinima = "APORTES_FRACCION_MINIMA";
+
+    /// <summary>Techo de los aportes de una persona natural frente al total de aportes.</summary>
+    public const string AportesLimiteParticipacionPersonaNatural = "APORTES_LIMITE_PARTICIPACION_PN";
+
+    /// <summary>Techo de los aportes de una persona jurídica frente al total de aportes.</summary>
+    public const string AportesLimiteParticipacionPersonaJuridica = "APORTES_LIMITE_PARTICIPACION_PJ";
+
     /// <summary>
     /// El grado máximo de parentesco (consanguinidad o afinidad) con el que un pariente es persona vinculada (feature 013, US17, bloque D;
     /// Ley 454 de 1998, art. 61; data-model §3.12, §12.5): un vínculo <c>Relative</c> con un grado mayor no se registra. No acota un
@@ -112,6 +127,11 @@ public static class CatalogoDeLimitesLegales
         new(ViviendaFinanciable, UnidadDeValorNacional.Fraccion, DireccionDeLoEstricto.Menor, "Monto de la solicitud de vivienda frente al valor del inmueble (ReglasDeVivienda)", null, "Ley 546 de 1999, art. 17; Decreto 145 de 2000 (compilado en el Decreto 2555 de 2010)"),
         new(ViviendaFinanciableVis, UnidadDeValorNacional.Fraccion, DireccionDeLoEstricto.Menor, "Monto de la solicitud de vivienda de interés social frente al valor del inmueble (ReglasDeVivienda)", null, "Ley 546 de 1999, art. 17; Decreto 145 de 2000 (compilado en el Decreto 2555 de 2010)"),
         new(ViviendaCuotaIngreso, UnidadDeValorNacional.Fraccion, DireccionDeLoEstricto.Menor, "Primera cuota de la solicitud de vivienda frente a los ingresos familiares (ReglasDeVivienda)", null, "Ley 546 de 1999, art. 17; Decreto 145 de 2000 (compilado en el Decreto 2555 de 2010)"),
+        // Feature 014 (T017): los de aportes (data-model §9.1).
+        new(AportesTopeCuotaFondoEmpleados, UnidadDeValorNacional.Fraccion, DireccionDeLoEstricto.Menor, "Aportes.TopeCuotaFondoEmpleados", "Aportes.TopeCuotaFondoEmpleados", "Ley 2496 de 2025 (fondos de empleados; investigación financiera de la feature 014 §3.5)"),
+        new(AportesFraccionMinima, UnidadDeValorNacional.Fraccion, DireccionDeLoEstricto.Mayor, "Aportes.FraccionMinima", "Aportes.FraccionMinima", "Ley 2496 de 2025 (fondos de empleados; investigación financiera de la feature 014 §3.5)"),
+        new(AportesLimiteParticipacionPersonaNatural, UnidadDeValorNacional.Fraccion, DireccionDeLoEstricto.Menor, "Aportes.LimiteParticipacionPersonaNatural", "Aportes.LimiteParticipacionPersonaNatural", "Ley 79 de 1988 (a validar, pregunta P12)"),
+        new(AportesLimiteParticipacionPersonaJuridica, UnidadDeValorNacional.Fraccion, DireccionDeLoEstricto.Menor, "Aportes.LimiteParticipacionPersonaJuridica", "Aportes.LimiteParticipacionPersonaJuridica", "Ley 79 de 1988 (a validar, pregunta P12)"),
     ];
 
     private static readonly Dictionary<string, LimiteLegal> PorCodigo = Lista.ToDictionary(l => l.Codigo, StringComparer.Ordinal);

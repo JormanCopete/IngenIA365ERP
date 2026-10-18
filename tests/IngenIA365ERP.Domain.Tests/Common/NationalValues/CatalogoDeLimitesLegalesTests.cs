@@ -44,13 +44,18 @@ public class CatalogoDeLimitesLegalesTests
         { "VIVIENDA_FINANCIABLE", UnidadDeValorNacional.Fraccion, DireccionDeLoEstricto.Menor, "" },
         { "VIVIENDA_FINANCIABLE_VIS", UnidadDeValorNacional.Fraccion, DireccionDeLoEstricto.Menor, "" },
         { "VIVIENDA_CUOTA_INGRESO", UnidadDeValorNacional.Fraccion, DireccionDeLoEstricto.Menor, "" },
+        // Feature 014 (T017; research C02): los pisos y techos de los aportes, que acotan parámetros de la cooperativa.
+        { "APORTES_TOPE_CUOTA_FONDO_EMPLEADOS", UnidadDeValorNacional.Fraccion, DireccionDeLoEstricto.Menor, "Aportes.TopeCuotaFondoEmpleados" },
+        { "APORTES_FRACCION_MINIMA", UnidadDeValorNacional.Fraccion, DireccionDeLoEstricto.Mayor, "Aportes.FraccionMinima" },
+        { "APORTES_LIMITE_PARTICIPACION_PN", UnidadDeValorNacional.Fraccion, DireccionDeLoEstricto.Menor, "Aportes.LimiteParticipacionPersonaNatural" },
+        { "APORTES_LIMITE_PARTICIPACION_PJ", UnidadDeValorNacional.Fraccion, DireccionDeLoEstricto.Menor, "Aportes.LimiteParticipacionPersonaJuridica" },
     };
 
     [Fact]
-    public void Son_los_veintinueve_codigos_fijados_sin_repetir()
+    public void Son_los_treinta_y_tres_codigos_fijados_sin_repetir()
     {
-        // K6b (T1051) suma los cinco de vivienda a los veinticuatro de K1–K6a.
-        CatalogoDeLimitesLegales.Todos.Should().HaveCount(29);
+        // K6b (T1051) suma los cinco de vivienda a los veinticuatro de K1–K6a; la feature 014 (T017), los cuatro de aportes.
+        CatalogoDeLimitesLegales.Todos.Should().HaveCount(33);
         CatalogoDeLimitesLegales.Todos.Select(l => l.Codigo).Should().OnlyHaveUniqueItems();
         CatalogoDeLimitesLegales.Todos.Select(l => l.Codigo).Should().BeEquivalentTo(Fijados.Select(f => (string)f[0]));
     }
@@ -119,10 +124,30 @@ public class CatalogoDeLimitesLegalesTests
     // ---------- Códigos de valor nacional (§12.3) ----------
 
     [Fact]
-    public void Son_los_nueve_codigos_de_valor_nacional()
+    public void Son_los_trece_codigos_de_valor_nacional()
     {
+        // Feature 014 (T016; data-model §9.2): suma los cuatro de captaciones.
         CodigosDeValorNacional.Todos.Select(c => c.Codigo).Should().BeEquivalentTo(
-            "USURA", "IBR", "IPC", "TOPE_TASA_VIVIENDA", "UVR", "SMMLV", "UVT", "FESTIVO", "LIMITE");
+            "USURA", "IBR", "IPC", "TOPE_TASA_VIVIENDA", "UVR", "SMMLV", "UVT", "FESTIVO", "LIMITE",
+            "COMPONENTE_INFLACIONARIO", "LIMITE_INEMBARGABLE", "TOPE_ENTREGA_SIN_SUCESION", "TOPE_SEGURO_DEPOSITOS");
+    }
+
+    [Fact]
+    public void Los_valores_nacionales_de_captaciones_llegan_con_su_entrega()
+    {
+        // Feature 014 (T016; research E06): con la vigente (K6b) se rechazan; con su entrega se admiten, con su forma.
+        CodigosDeValorNacional.Validar("COMPONENTE_INFLACIONARIO", "2025", UnidadDeValorNacional.Fraccion, 0.5543m)
+            .Should().ContainSingle(r => r.Motivo == MotivoDeRechazoDeValorNacional.CodigoNoDisponible);
+        CodigosDeValorNacional.Validar("COMPONENTE_INFLACIONARIO", "2025", UnidadDeValorNacional.Fraccion, 0.5543m, IngenIA365ERP.Domain.Lending.EntregaDeCartera.K8)
+            .Should().BeEmpty();
+        CodigosDeValorNacional.Validar("COMPONENTE_INFLACIONARIO", "AG-25", UnidadDeValorNacional.Fraccion, 0.5543m, IngenIA365ERP.Domain.Lending.EntregaDeCartera.K8)
+            .Should().ContainSingle(r => r.Motivo == MotivoDeRechazoDeValorNacional.ClaveInvalida, "la clave es el año gravable");
+        CodigosDeValorNacional.Validar("LIMITE_INEMBARGABLE", "", UnidadDeValorNacional.Pesos, 1m, IngenIA365ERP.Domain.Lending.EntregaDeCartera.K8)
+            .Should().BeEmpty();
+        CodigosDeValorNacional.Buscar("TOPE_ENTREGA_SIN_SUCESION")!.DisponibleDesde.Should().Be(IngenIA365ERP.Domain.Lending.EntregaDeCartera.K10);
+        CodigosDeValorNacional.Buscar("TOPE_SEGURO_DEPOSITOS")!.DisponibleDesde.Should().Be(IngenIA365ERP.Domain.Lending.EntregaDeCartera.K11);
+        CodigosDeValorNacional.Validar("TOPE_SEGURO_DEPOSITOS", "", UnidadDeValorNacional.Fraccion, 1m, IngenIA365ERP.Domain.Lending.EntregaDeCartera.K11)
+            .Should().ContainSingle(r => r.Motivo == MotivoDeRechazoDeValorNacional.UnidadInvalida, "el tope del seguro es en pesos");
     }
 
     [Fact]

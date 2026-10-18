@@ -686,3 +686,24 @@ notas reemplazan lo dicho arriba, en `data-model.md`, `contracts/` y `tasks.md` 
   esta feature») responde `DebitCard.SavingsAccountUnavailable`. `GetPersonDetailQuery` cuenta 0 ahorros hasta T043.
   `AccountReferenceFinder` perdió sus ramas de parámetros de ahorro y CDT. Salieron además `Pages/CDT` (2 pantallas) con su grupo de
   menú «CDT» y `API/Reports/PersonPortfolioReport.cs` (los informes PDF pasan de 12 a 11).
+- **E15 · Claves definitivas de los parámetros** (T017; convención `Grupo.Nombre` de C02; reemplaza los nombres en mayúsculas de R26 y
+  data-model §9.1). Entre paréntesis, el defecto sembrado «pendiente de validar» y la entrega; «vacío» = sin valor (rige el límite legal
+  o no aplica hasta que la cooperativa lo fije).
+
+  | Referencia (R26, §9.1, C26) | Clave | Defecto · entrega |
+  |---|---|---|
+  | `RETENCION_TARIFA_AHORRO` · `_CDAT` · `_CONTRACTUAL` · `_PERMANENTE` | `Retencion.TarifaAhorro` · `.TarifaCdat` · `.TarifaContractual` · `.TarifaPermanente` | 0,07 K8 · 0,04 K9 · vacío K9 · vacío K8 (ámbitos general y línea) |
+  | `UMBRAL_RETENCION_UVT_DIA` · `RETENCION_ALCANCE_UMBRAL` · `RETENCION_COMPONENTE_INFLACIONARIO_APLICA` | `Retencion.UmbralDiarioUvt` · `.AlcanceDelUmbral` · `.ComponenteInflacionarioAplica` | 0,055 · `ExceptTermDeposit` · true (K8) |
+  | `GMF_TARIFA` · `GMF_TOPE_EXENCION_UVT` · `GMF_POLITICA_EXENCION` · `GMF_HECHOS_GENERADORES` | `Gmf.Tarifa` · `.TopeExencionUvt` · `.PoliticaDeExencion` · `.HechosGeneradores` | 0,004 · 350 · `SingleMarkedAccount` · JSON de D32 (K8) |
+  | `FONDO_LIQUIDEZ_*` | `FondoDeLiquidez.PorcentajesPorCategoria` (JSON) | vacío (K11) |
+  | `TOPE_CUOTA_FONDO_EMPLEADOS_PCT` · `FRACCION_MINIMA_APORTES` · `LIMITE_PARTICIPACION_APORTES_PN` · `_PJ` | `Aportes.TopeCuotaFondoEmpleados` · `.FraccionMinima` · `.LimiteParticipacionPersonaNatural` · `.LimiteParticipacionPersonaJuridica` | vacío (K7); son pisos y techos legales: los acotan los `LIMITE` nuevos `APORTES_TOPE_CUOTA_FONDO_EMPLEADOS` (0,10 sembrado), `APORTES_FRACCION_MINIMA` (0,10 sembrado), `APORTES_LIMITE_PARTICIPACION_PN` y `_PJ` (sin valor, P12) |
+  | `APORTES_MINIMO_IRREDUCIBLE_ENTIDAD` | `Aportes.MinimoIrreducibleEntidad` | vacío (K7) |
+  | `MAYORIA_DE_EDAD_ANIOS` · `FECHA_VALOR_DIAS_CAPTACIONES` | `Captaciones.MayoriaDeEdadAnios` · `Captaciones.DiasMaximosFechaValor` | 18 · 5 (K7) |
+  | canje (C14) · `EFECTIVO_UMBRAL_DECLARACION_ORIGEN` · `EMBARGO_ORDEN_CUENTAS` | `Captaciones.DiasDeCanjePorClaseDeMedio` · `Efectivo.UmbralDeclaracion` · `Embargos.OrdenDeCuentas` | `{"Check": 3, "*": 0}` K8 · vacío K7 · vacío K8 |
+  | `Riesgo.DescuentoAportesDeterioro` | igual | false (K7) |
+  | `ENTREGA_SIN_SUCESION_SOPORTES` · `CUENTAS_ABANDONADAS_TRASLADO_HABILITADO` | `Fallecimiento.SoportesDeEntregaSinSucesion` · `CuentasAbandonadas.TrasladoHabilitado` | vacío · false (K10) |
+  | C26 | `Captaciones.AnticipacionAvisoCambioDeTasaDias` · `.DiasPlazoDevolucionAportes` · `.DiasParaNoReclamados` | vacío K8 · vacío K7 · vacío K10 |
+
+  Valores nacionales (T016): `COMPONENTE_INFLACIONARIO` (clave = año gravable, fracción, K8; semilla 2025 = 0,5543 del Decreto 898 de 2026,
+  que el sembrador deja en espera hasta K8), `LIMITE_INEMBARGABLE` (K8), `TOPE_ENTREGA_SIN_SUCESION` (K10) y `TOPE_SEGURO_DEPOSITOS` (K11),
+  sin semilla los tres últimos. El sembrador central ya no registra error por un código de una entrega posterior: lo deja en espera.
