@@ -103,6 +103,11 @@ public class LendingReportsEndpoints : ICarterModule
         // K5 (US16, T1006): los excluidos del archivo de una central (bureau obligatorio; year y month, o el último generado).
         group.MapVistaDeCartera(BureauExclusionsReportQueryHandler.Vista,
             (f, q) => new BureauExclusionsReportQuery(f, Texto(q, "bureau"), Entero(q, "year"), Entero(q, "month")));
+        // Feature 014, US3 (T088; api.md §18.1): los aportes por asociado (class) y las cuotas de aportes en mora, con datos del titular.
+        group.MapVistaDeCartera(Application.Lending.Deposits.Reports.ContributionsByMemberReportQueryHandler.Vista,
+            (f, q) => new Application.Lending.Deposits.Reports.ContributionsByMemberReportQuery(f, Texto(q, "class")));
+        group.MapVistaDeCartera(Application.Lending.Deposits.Reports.InstallmentsInArrearsReportQueryHandler.Vista,
+            (f, _) => new Application.Lending.Deposits.Reports.InstallmentsInArrearsReportQuery(f));
     }
 
     private static int? Entero(IQueryCollection q, string clave) =>
