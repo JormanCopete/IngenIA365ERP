@@ -60,7 +60,12 @@ public class LasCaptacionesExigenPermisoYAlcance
     }
 
     /// <summary>Consultas y comandos de captaciones que no aplican el alcance, con su motivo. Nace vacía: quien agrega uno decide por qué.</summary>
-    private static readonly Dictionary<string, string> Exceptuados = new(StringComparer.Ordinal);
+    private static readonly Dictionary<string, string> Exceptuados = new(StringComparer.Ordinal)
+    {
+        // T055: la activación es de toda la cooperativa (como ActivateLendingCommand de la 013): no hay oficina ni línea que filtrar.
+        ["ActivateDepositsCommand"] = "la activación de captaciones es de toda la cooperativa, sin oficina ni línea (FR-116)",
+        ["ActivateContributionsCommand"] = "la activación de aportes es de toda la cooperativa, sin oficina ni línea (FR-116)",
+    };
 
     private static readonly Regex ConsultaOComando = new(@"public\s+sealed\s+record\s+(\w+(Query|Command))\b", RegexOptions.Compiled);
 

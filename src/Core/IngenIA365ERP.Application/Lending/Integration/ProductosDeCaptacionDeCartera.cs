@@ -15,7 +15,7 @@ namespace IngenIA365ERP.Application.Lending.Integration;
 ///
 /// <para>Lo que todavía no puede decir: el vencimiento (<c>MaturityDate</c>) nace con las condiciones del CDAT (K9) y la carga aplicada sin activar
 /// (<c>MigratedNotActivated</c>) con la migración de captaciones (US9); hasta entonces van nulo y falso. El estado de cada naturaleza sale de su
-/// activación (<c>LND_Activations.Nature</c>); T053 lo pasa a las fechas de <c>LND_Setup</c> (research E22).</para>
+/// fecha de activación en <c>LND_Setup</c> (T053; hasta entonces se deducía de <c>LND_Activations.Nature</c>, research E22).</para>
 /// </summary>
 public static class ProductosDeCaptacionDeCartera
 {
@@ -23,11 +23,10 @@ public static class ProductosDeCaptacionDeCartera
     {
         ArgumentNullException.ThrowIfNull(db);
         ArgumentNullException.ThrowIfNull(consulta);
-        var activadas = await db.LendingActivations.AsNoTracking()
-            .Where(a => a.Nature == LineNature.Deposit || a.Nature == LineNature.Contribution)
-            .Select(a => a.Nature).Distinct().ToListAsync(ct);
-        var captaciones = activadas.Contains(LineNature.Deposit) ? EstadoDeCartera.Active : EstadoDeCartera.NotActivated;
-        var aportes = activadas.Contains(LineNature.Contribution) ? EstadoDeCartera.Active : EstadoDeCartera.NotActivated;
+        // T053: el estado de cada naturaleza sale de su fecha en LND_Setup (el único lector, ActivacionesDeCaptacion).
+        var activadas = await Deposits.Activation.ActivacionesDeCaptacion.LeerAsync(db, ct);
+        var captaciones = activadas.Activada(LineNature.Deposit) ? EstadoDeCartera.Active : EstadoDeCartera.NotActivated;
+        var aportes = activadas.Activada(LineNature.Contribution) ? EstadoDeCartera.Active : EstadoDeCartera.NotActivated;
 
         var publicos = (consulta.PersonPublicIds ?? []).Distinct().ToList();
         if (publicos.Count == 0) return new ProductosDeCaptacionDto(captaciones, aportes, []);

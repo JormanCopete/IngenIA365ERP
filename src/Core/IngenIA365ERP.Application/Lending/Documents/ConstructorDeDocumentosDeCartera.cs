@@ -499,8 +499,9 @@ public sealed class ConstructorDeDocumentosDeCartera(
     /// <summary>Las ventas de la persona aceptadas sin migrar en la carga con que se activó Cartera (FR-143): no niegan el paz y salvo general.</summary>
     private async Task<IReadOnlyList<VentaFueraDeCartera>> VentasFueraDeCarteraAsync(int personId, CancellationToken ct)
     {
-        var activacion = await db.LendingActivations.AsNoTracking().OrderByDescending(a => a.Id)
-            .Select(a => new { a.MigrationLoadId, a.CheckVersion }).FirstOrDefaultAsync(ct);
+        // Feature 014 (T055): la de créditos; las de aportes y captaciones no conciliaron ventas.
+        var activacion = await db.LendingActivations.AsNoTracking().Where(a => a.Nature == Domain.Enums.Lending.LineNature.Placement)
+            .OrderByDescending(a => a.Id).Select(a => new { a.MigrationLoadId, a.CheckVersion }).FirstOrDefaultAsync(ct);
         if (activacion is null) return [];
         var aceptadas = new[] { SaleReconciliationOutcome.NotMigratedWithBalance, SaleReconciliationOutcome.OutsideLendingD29 };
         return await db.MigrationSaleReconciliations.AsNoTracking()

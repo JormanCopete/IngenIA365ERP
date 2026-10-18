@@ -51,7 +51,8 @@ public static class PasosDelCierre
 /// el general y el adicional—, el informativo <c>CierreDeCarteraRealizado</c> y el lote <c>LendingMonthlyClose</c> con
 /// <c>LendingClose:{aaaa-mm}</c>, y deja <c>TotalsJson</c> y <c>ResultSha256</c> como evento resumen de la corrida.</item>
 /// </list>
-/// Todo se fecha el último día del mes (T36). El primer cierre tras activar se compara con el base y no reconoce otra vez el deterioro migrado
+/// Desde la feature 014 (T052; R10) la transacción final suma la sección de captaciones (<see cref="Deposits.Accrual.SeccionDeCaptacionesDelCierre"/>)
+/// antes del informativo, que es el mismo. Todo se fecha el último día del mes (T36). El primer cierre tras activar se compara con el base y no reconoce otra vez el deterioro migrado
 /// (US8-5, SC-013). (nuevo)
 /// </summary>
 public sealed class CierreMensualDeCartera(
@@ -66,7 +67,8 @@ public sealed class CierreMensualDeCartera(
     ReplicacionDeValoresNacionales? replicacion = null,
     ILogger<CierreMensualDeCartera>? logger = null,
     ValidacionPreviaDeProceso? validacionDeProceso = null,
-    CargadorDePerdidaEsperada? cargadorDePerdida = null)
+    CargadorDePerdidaEsperada? cargadorDePerdida = null,
+    Deposits.Accrual.SeccionDeCaptacionesDelCierre? captaciones = null)
 {
     private const int LargoDelMensaje = 1000;
 
@@ -384,6 +386,15 @@ public sealed class CierreMensualDeCartera(
         }
         resumen.AddRange(partes.GroupBy(p => p.FactType).Select(g => new FactPartSummaryV1 { Type = g.Key, Parts = g.Count(), Total = g.Sum(p => p.TotalAmount) }));
 
+        // Feature 014 (T052; R10): la sección de captaciones (causación y posición a fin de mes, sin SARC), antes del mismo informativo de cierre.
+        var seccionDeCaptaciones = Deposits.Accrual.SeccionDeCaptacionesCerrada.NoAplica;
+        if (captaciones is not null)
+        {
+            var seccion = await captaciones.CerrarAsync(fin, ct);
+            if (seccion.IsFailure) return Result.Failure<(string, string)>(seccion.Error);
+            seccionDeCaptaciones = seccion.Value;
+        }
+
         var marcas = new List<string>();
         if (cierre.ObligatoryModelUnavailable) marcas.Add(nameof(MonthlyClose.ObligatoryModelUnavailable));
         if (cierre.UnvalidatedParameters) marcas.Add(nameof(MonthlyClose.UnvalidatedParameters));
@@ -410,6 +421,7 @@ public sealed class CierreMensualDeCartera(
         {
             loans = lineas.Count, principal = cierre.TotalPrincipal, individualImpairment = cierre.TotalIndividualImpairment,
             generalImpairment = cierre.TotalGeneralImpairment, parts = resumen, monthlyClosePublicId = cierre.PublicId,
+            deposits = seccionDeCaptaciones.Aplica ? seccionDeCaptaciones.Naturalezas.Select(n => n.ToString()).ToList() : null,
         }, Json);
         return Result.Success((totales, cierre.LinesSha256));
     }

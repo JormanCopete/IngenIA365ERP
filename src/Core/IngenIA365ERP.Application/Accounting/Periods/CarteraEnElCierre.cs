@@ -2,6 +2,7 @@ using System.Globalization;
 using IngenIA365ERP.Application.Accounting.Posting;
 using IngenIA365ERP.Application.Common.Integration;
 using IngenIA365ERP.Application.Common.Integration.Contracts.Lending;
+using IngenIA365ERP.Application.Common.Integration.Contracts.Lending.Deposits;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using Microsoft.EntityFrameworkCore;
@@ -20,7 +21,9 @@ namespace IngenIA365ERP.Application.Accounting.Periods;
 ///   <item><b>Aviso</b> (<c>Accounting.Period.LendingLoadWillExpire</c>): la última <c>CargaDeCarteraAplicada</c>, sin una <c>CarteraActivada</c>
 ///         posterior, tiene el día siguiente a su corte dentro del mes.</item>
 /// </list>
-/// Sin <c>CarteraActivada</c>, Contabilidad cierra como hoy: sólo pueden saltar los avisos. (nuevo)
+/// Sin <c>CarteraActivada</c>, Contabilidad cierra como hoy: sólo pueden saltar los avisos. Feature 014 (T052; contabilidad.md §8.3 de la 014): la
+/// activación de aportes o captaciones (<c>CaptacionesActivadas</c>) cuenta como activación para el bloqueo —el cierre de la Cartera es uno y trae la
+/// sección de captaciones— y la carga de captaciones (<c>CargaDeCaptacionesAplicada</c>) avisa como la de créditos. (nuevo)
 /// </summary>
 public static class CarteraEnElCierre
 {
@@ -35,14 +38,17 @@ public static class CarteraEnElCierre
                 join m in db.IntegrationMessages.AsNoTracking() on p.MessagePublicId equals m.PublicId into mensajes
                 from m in mensajes.DefaultIfEmpty()
                 where !p.IsDeleted && (p.MessageType == CarteraActivadaV1.Type || p.MessageType == CargaDeCarteraAplicadaV1.Type
-                                       || p.MessageType == CierreDeCarteraRealizadoV1.Type || p.MessageType == CierreDeCarteraReabiertoV1.Type)
+                                       || p.MessageType == CierreDeCarteraRealizadoV1.Type || p.MessageType == CierreDeCarteraReabiertoV1.Type
+                                       || p.MessageType == CaptacionesActivadasV1.Type || p.MessageType == CargaDeCaptacionesAplicadaV1.Type)
                 select new { p.Id, p.MessagePublicId, p.MessageType, p.OperationDate, p.SourcePublicId, p.RelatedMessagePublicId, Emitido = (long?)m.Id })
             .ToListAsync(ct);
         long Orden(long? emitido, long id) => emitido ?? id;
 
         // (a) El bloqueo.
         Error? bloqueo = null;
-        var activaciones = informativos.Where(i => i.MessageType == CarteraActivadaV1.Type && i.OperationDate <= fin).OrderBy(i => i.OperationDate).ToList();
+        // Feature 014 (T052): la activación de aportes o de captaciones también obliga a cerrar la Cartera (su cierre incluye la sección de captaciones).
+        var activaciones = informativos.Where(i => (i.MessageType == CarteraActivadaV1.Type || i.MessageType == CaptacionesActivadasV1.Type) && i.OperationDate <= fin)
+            .OrderBy(i => i.OperationDate).ToList();
         if (activaciones.Count > 0)
         {
             var reabiertos = informativos.Where(i => i.MessageType == CierreDeCarteraReabiertoV1.Type).ToList();
@@ -64,14 +70,19 @@ public static class CarteraEnElCierre
         // (b) Lo pendiente de Cartera en el mes, informativos incluidos.
         var pendientes = await ListPendingIntegrationMessagesQueryHandler.ContarAsync(db, ModulosDeOrigen.Cartera, inicio, fin, ct);
 
-        // (c) La última carga aplicada, sin activación posterior, que vence dentro del mes.
+        // (c) La última carga aplicada, sin activación posterior, que vence dentro del mes: la de créditos y, desde la feature 014 (T052), la de
+        // captaciones, cada una con su informativo de activación.
         CargaSinActivar? vence = null;
-        var carga = informativos.Where(i => i.MessageType == CargaDeCarteraAplicadaV1.Type).MaxBy(i => Orden(i.Emitido, i.Id));
-        if (carga is not null
-            && !informativos.Any(i => i.MessageType == CarteraActivadaV1.Type && Orden(i.Emitido, i.Id) > Orden(carga.Emitido, carga.Id)))
+        foreach (var (tipoDeCarga, tipoDeActivacion) in new[]
+                 {
+                     (CargaDeCarteraAplicadaV1.Type, CarteraActivadaV1.Type), (CargaDeCaptacionesAplicadaV1.Type, CaptacionesActivadasV1.Type),
+                 })
         {
+            var carga = informativos.Where(i => i.MessageType == tipoDeCarga).MaxBy(i => Orden(i.Emitido, i.Id));
+            if (carga is null || informativos.Any(i => i.MessageType == tipoDeActivacion && Orden(i.Emitido, i.Id) > Orden(carga.Emitido, carga.Id)))
+                continue;
             var siguiente = carga.OperationDate.AddDays(1);
-            if (siguiente >= inicio && siguiente <= fin) vence = new CargaSinActivar(carga.OperationDate, carga.SourcePublicId);
+            if (vence is null && siguiente >= inicio && siguiente <= fin) vence = new CargaSinActivar(carga.OperationDate, carga.SourcePublicId);
         }
 
         return new Evaluacion(bloqueo, pendientes, vence);

@@ -23,7 +23,10 @@ public class LosHechosDeCarteraNoLlevanCuentas
     /// </summary>
     private static readonly string[] Exentos = [];
 
-    private static bool EsDeCaptaciones(string relativo) => relativo.Contains("/Contracts/Lending/Deposits/", StringComparison.Ordinal);
+    private static bool EsDeCaptaciones(string relativo) =>
+        relativo.Contains("/Contracts/Lending/Deposits/", StringComparison.Ordinal)
+        // Feature 014 (T055): la v2 de la orden de giro nombra la cuenta del asociado de origen del dinero (MemberAccountRefV1, mensajes.md §5.3).
+        || relativo.EndsWith("/Contracts/Lending/OrdenDeGiroEmitidaV2.cs", StringComparison.Ordinal);
 
     /// <summary>Propiedades que empiezan por <c>Account</c> y no son cuentas contables (los campos de mensajes.md §10.1, §10.3, §10.16).</summary>
     private static readonly string[] SellosQueNoSonCuentas = ["AccountsReceivableRecordedBy", "AccountingReference"];
@@ -54,7 +57,8 @@ public class LosHechosDeCarteraNoLlevanCuentas
 
         var infracciones = records
             .SelectMany(t => t.GetProperties(BindingFlags.Public | BindingFlags.Instance).Select(p => (Tipo: t, Propiedad: p)))
-            .Where(x => NombreDeCuenta.IsMatch(x.Propiedad.Name) && !SellosQueNoSonCuentas.Contains(x.Propiedad.Name))
+            .Where(x => NombreDeCuenta.IsMatch(x.Propiedad.Name) && !SellosQueNoSonCuentas.Contains(x.Propiedad.Name)
+                        && x.Propiedad.PropertyType != typeof(IngenIA365ERP.Application.Common.Integration.Contracts.Lending.Deposits.MemberAccountRefV1))
             .Select(x => $"{x.Tipo.Name}.{x.Propiedad.Name}")
             .Concat(records.Where(t => Regex.IsMatch(t.Name, "(Account|Cuenta|Puc)")).Select(t => $"{t.Name}: un bloque de cuenta"))
             .ToList();
@@ -87,9 +91,10 @@ public class LosHechosDeCarteraNoLlevanCuentas
             foreach (var propiedad in tipo.GetProperties(BindingFlags.Public | BindingFlags.Instance))
             {
                 // En los hechos de captaciones (feature 014) la cuenta del asociado no es una cuenta del plan: la vigila su propia regla.
-                var esLaCuentaDelAsociado = (tipo.Namespace ?? string.Empty).StartsWith(EspacioDeCaptaciones, StringComparison.Ordinal)
-                    && (propiedad.PropertyType == typeof(IngenIA365ERP.Application.Common.Integration.Contracts.Lending.Deposits.MemberAccountRefV1)
-                        || CuentaDelAsociado.Contains(propiedad.Name));
+                // La v2 de la orden de giro (fuera de Deposits) también nombra la cuenta del asociado, por su bloque.
+                var esLaCuentaDelAsociado =
+                    propiedad.PropertyType == typeof(IngenIA365ERP.Application.Common.Integration.Contracts.Lending.Deposits.MemberAccountRefV1)
+                    || ((tipo.Namespace ?? string.Empty).StartsWith(EspacioDeCaptaciones, StringComparison.Ordinal) && CuentaDelAsociado.Contains(propiedad.Name));
                 if ((propiedad.Name.StartsWith("Account", StringComparison.Ordinal) || propiedad.Name.StartsWith("Cuenta", StringComparison.Ordinal))
                     && !SellosQueNoSonCuentas.Contains(propiedad.Name) && !esLaCuentaDelAsociado)
                     infracciones.Add($"{tipo.Name}.{propiedad.Name}");

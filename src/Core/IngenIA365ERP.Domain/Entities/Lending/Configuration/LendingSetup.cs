@@ -1,4 +1,5 @@
 using IngenIA365ERP.Domain.Common;
+using IngenIA365ERP.Domain.Enums.Lending;
 
 namespace IngenIA365ERP.Domain.Entities.Lending.Configuration;
 
@@ -21,4 +22,36 @@ public class LendingSetup : AuditableEntity
 
     /// <summary>Instante del registro de la activación.</summary>
     public DateTime? ActivatedAt { get; set; }
+
+    // ------------------------------------------------------------------- feature 014 (T053; data-model §1.2; FR-116, R21) --
+    // Cada naturaleza se activa una vez, después de los créditos, y no se desactiva. Sólo las escriben ActivateDepositsCommand y
+    // ActivateContributionsCommand (null → valor). Sin la fecha de su naturaleza, las operaciones de esa naturaleza responden «no habilitado».
+
+    /// <summary>Día siguiente al corte de la carga de captaciones activada (o el día elegido en la activación sin carga); nulo = sin captaciones.</summary>
+    public DateOnly? DepositsActivationDate { get; set; }
+
+    /// <summary>La fila de <c>LND_Activations</c> de las captaciones.</summary>
+    public int? DepositsActivationId { get; set; }
+
+    public DateTime? DepositsActivatedAt { get; set; }
+
+    /// <summary>Ídem para aportes; nulo = sin aportes.</summary>
+    public DateOnly? ContributionsActivationDate { get; set; }
+
+    /// <summary>La fila de <c>LND_Activations</c> de los aportes.</summary>
+    public int? ContributionsActivationId { get; set; }
+
+    public DateTime? ContributionsActivatedAt { get; set; }
+
+    /// <summary>La fecha de activación de una naturaleza: créditos, captaciones o aportes.</summary>
+    public DateOnly? FechaDeActivacion(LineNature naturaleza) => naturaleza switch
+    {
+        LineNature.Placement => ActivationDate,
+        LineNature.Deposit => DepositsActivationDate,
+        LineNature.Contribution => ContributionsActivationDate,
+        _ => null,
+    };
+
+    /// <summary>¿Rige la naturaleza el día <paramref name="fecha"/>? (activada con fecha ≤ <paramref name="fecha"/>).</summary>
+    public bool ActivadaEn(LineNature naturaleza, DateOnly fecha) => FechaDeActivacion(naturaleza) is { } desde && desde <= fecha;
 }

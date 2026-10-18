@@ -101,7 +101,12 @@ public sealed record AddRegulatoryProfileVersionCommand(
     string Source,
     Guid? SupportAttachmentPublicId,
     string Reason,
-    Guid? SupersedesPublicId = null)
+    Guid? SupersedesPublicId = null,
+    bool MayTakeDeposits = false,
+    bool DepositsFromAssociatesOnly = false,
+    string? LiquidityFundCategory = null,
+    bool DepositInsuranceEnrolled = false,
+    bool IsGmfWithholdingAgent = false)
     : IRequest<Result<RegulatoryProfileVersionCreatedDto>>, IOperacionIdempotente, IConMotivo
 {
     public Guid OperationKey { get; init; }
@@ -122,6 +127,7 @@ public sealed class AddRegulatoryProfileVersionCommandValidator : ValidadorConMo
             .MaximumLength(40);
         RuleFor(x => x.ValidFrom).NotEqual(default(DateOnly)).WithMessage("Indique desde cuándo rige.");
         RuleFor(x => x.Source).NotEmpty().WithMessage("Indique el soporte: resolución, certificado de existencia o acta.").MaximumLength(300);
+        RuleFor(x => x.LiquidityFundCategory).MaximumLength(20);
     }
 }
 
@@ -188,6 +194,12 @@ public sealed class AddRegulatoryProfileVersionCommandHandler(
             LibranzaOperatorRegistered = request.LibranzaOperatorRegistered,
             LibranzaOperatorRegistrationNumber = request.LibranzaOperatorRegistered ? request.LibranzaOperatorRegistrationNumber?.Trim() : null,
             LibranzaOperatorRegistrationDate = request.LibranzaOperatorRegistered ? request.LibranzaOperatorRegistrationDate : null,
+            // Feature 014 (T054; data-model §1.8, FR-018): lo que el perfil dice de las captaciones; la activación de captaciones exige MayTakeDeposits.
+            MayTakeDeposits = request.MayTakeDeposits,
+            DepositsFromAssociatesOnly = request.DepositsFromAssociatesOnly,
+            LiquidityFundCategory = string.IsNullOrWhiteSpace(request.LiquidityFundCategory) ? null : request.LiquidityFundCategory.Trim(),
+            DepositInsuranceEnrolled = request.DepositInsuranceEnrolled,
+            IsGmfWithholdingAgent = request.IsGmfWithholdingAgent,
             ValidFrom = request.ValidFrom,
             Source = request.Source.Trim(),
             SupportAttachmentPublicId = request.SupportAttachmentPublicId,

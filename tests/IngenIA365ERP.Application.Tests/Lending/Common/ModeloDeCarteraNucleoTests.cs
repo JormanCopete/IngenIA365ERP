@@ -237,7 +237,9 @@ public class ModeloDeCarteraNucleoTests
     {
         var modelo = Modelo(postgres);
         var setup = modelo.FindEntityType(typeof(Domain.Entities.Lending.Configuration.LendingSetup))!;
-        setup.GetForeignKeys().Should().ContainSingle(fk => fk.PrincipalEntityType.GetTableName() == "LND_Activations");
+        // Feature 014 (T053): la de créditos y, desde la 014, la de captaciones y la de aportes, las tres hacia LND_Activations.
+        setup.GetForeignKeys().Where(fk => fk.PrincipalEntityType.GetTableName() == "LND_Activations")
+            .Select(fk => fk.Properties.Single().Name).Should().BeEquivalentTo(["ActivationId", "DepositsActivationId", "ContributionsActivationId"]);
         modelo.FindEntityType(typeof(Domain.Entities.Lending.Migration.LendingActivation))!.GetForeignKeys()
             .Should().NotContain(fk => fk.PrincipalEntityType.GetTableName() == "LND_Setup");
 

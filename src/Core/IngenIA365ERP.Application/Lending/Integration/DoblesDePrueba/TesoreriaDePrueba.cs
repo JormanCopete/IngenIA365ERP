@@ -23,6 +23,8 @@ public sealed class TesoreriaDePrueba : IDestinoDeMensajes
     [
         (OrdenDeGiroEmitidaV1.Type, 1),
         (AnulacionDeOrdenDeGiroV1.Type, 1),
+        // Feature 014 (T055): la orden de giro v2 de captaciones, para que la tesorería de prueba la adopte (TreasuryDestinationRegistered).
+        (OrdenDeGiroEmitidaV2.Type, 2),
     ];
 
     public string Destino => IntegrationDestinations.Treasury;

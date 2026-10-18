@@ -29,6 +29,8 @@ public class EmisionesDeProcesoPermitidas
         "RetiroDeCuentaAplicado", "GmfRetenido", "InteresDeCaptacionCausado", "AjusteDeCausacionDeCaptacion", "InteresDeCaptacionLiquidado",
         "RetencionPracticada", "InteresesDeCdatPagados", "CdatProrrogado", "CdatCancelado", "PenalidadAplicada", "CaptacionReclasificada",
         "BonificacionReconocida", "CargoDeCuentaCausado", "DevolucionOrdenada", "SaldoTrasladadoANoReclamados",
+        // Feature 014 (T055): la orden de giro v2 de captaciones (la v1 de los desembolsos sigue sin proceso).
+        "OrdenDeGiroEmitida",
     ];
 
     /// <summary>El archivo donde se declara la marca de Cartera (relativo a <c>src/</c>).</summary>

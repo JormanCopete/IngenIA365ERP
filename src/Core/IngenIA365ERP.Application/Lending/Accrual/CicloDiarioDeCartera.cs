@@ -51,8 +51,12 @@ public static class PasosDelCiclo
     public const byte Cobranza = 7;
     public const byte Verificacion = 8;
 
+    /// <summary>Feature 014 (T051; R10): el paso de captaciones, después de la causación de los créditos (al final para no renumerar).</summary>
+    public const byte Captaciones = 9;
+
     public static string Nombre(byte paso) => paso switch
     {
+        Captaciones => "Captaciones",
         Replica => "Replica",
         Reajuste => "Reajuste",
         Causacion => "Causacion",
@@ -81,7 +85,9 @@ public static class PasosDelCiclo
 /// <item>desde K4 (T0943), la cobranza (<see cref="Collections.CobranzaDelCicloDiario"/>): etapas, reparto, mensajes de la etapa, aviso previo del episodio,
 /// gasto propuesto e informado y promesas incumplidas, sobre los créditos de la tanda —también los que ya estaban al día—; al terminar la corrida, la
 /// aceptación tácita de los reclamos, las comunicaciones de los avisos previos y las campañas;</item>
-/// <item>la muestra de verificación del libro, al terminar la corrida.</item>
+/// <item>la muestra de verificación del libro, al terminar la corrida;</item>
+/// <item>desde la feature 014 (T051; R10), antes de esa muestra, el paso de captaciones (<see cref="Deposits.Accrual.PasoDeCaptaciones"/>), sólo con
+/// aportes o captaciones activados: recorre las cuentas en tandas y anota en <c>LND_ProcessRunErrors</c> las que fallan.</item>
 /// </list>
 /// Cada tanda: transacción explícita, cerrojo con salto (el ocupado se cuenta como saltado y lo toma el ciclo siguiente), carga en bloque, motor,
 /// registro, partes y mensajes, posiciones y un <c>SaveChanges</c>. Un crédito que falla queda en <c>LND_ProcessRunErrors</c> con
@@ -105,7 +111,8 @@ public sealed class CicloDiarioDeCartera(
     MovimientoContingenteDeCartera? contingentes = null,
     Risk.CalificacionDelCiclo? calificacion = null,
     ValidacionPreviaDeProceso? validacionDeProceso = null,
-    Collections.CobranzaDelCicloDiario? cobranza = null)
+    Collections.CobranzaDelCicloDiario? cobranza = null,
+    Deposits.Accrual.PasoDeCaptaciones? captaciones = null)
 {
     /// <summary>Créditos de la muestra de verificación del paso (8).</summary>
     public const int MuestraDeVerificacion = 20;
@@ -611,6 +618,15 @@ public sealed class CicloDiarioDeCartera(
     /// </summary>
     private async Task TerminarAsync(LendingProcessRun corrida, DateOnly d, CancellationToken ct)
     {
+        // (9) Feature 014 (T051; R10): las captaciones, después de la causación de todos los créditos; sólo con aportes o captaciones activados.
+        if (captaciones is not null)
+        {
+            var paso = await captaciones.EjecutarAsync(corrida, d, ct);
+            if (paso.Corrio)
+                _logger.LogInformation("[Cartera.PasoDeCaptaciones] El ciclo {Fecha} recorrió {Cuentas} cuentas en {Tandas} tandas ({Fallidas} con error).", d,
+                    paso.Cuentas, paso.Tandas, paso.Fallidas);
+        }
+
         corrida.CurrentStep = PasosDelCiclo.Verificacion;
         var muestra = await verificacion.VerificarAsync(null, MuestraDeVerificacion, d, ct);
         if (muestra.Diferencias.Count > 0)

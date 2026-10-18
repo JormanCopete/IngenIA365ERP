@@ -10,8 +10,11 @@ namespace IngenIA365ERP.Domain.Entities.Lending.Migration;
 /// </summary>
 public class LendingActivation : AuditableEntity, IHechoInmutable
 {
-    /// <summary>La carga <c>Applied</c> (puede no traer créditos); única.</summary>
-    public int MigrationLoadId { get; init; }
+    /// <summary>
+    /// La carga <c>Applied</c> (puede no traer créditos); única. Feature 014 (T055; FR-117): nula en la activación <b>sin carga</b> de aportes o de
+    /// captaciones de una cooperativa sin historia (la de créditos siempre la tiene).
+    /// </summary>
+    public int? MigrationLoadId { get; init; }
 
     public DateOnly CutoffDate { get; init; }
 
@@ -22,8 +25,11 @@ public class LendingActivation : AuditableEntity, IHechoInmutable
 
     public DateTime RegisteredAt { get; init; }
 
-    /// <summary>Acta de activación, obligatoria (C61).</summary>
-    public int SessionItemId { get; init; }
+    /// <summary>
+    /// Acta de activación, obligatoria con carga (C61): aprueba sus diferencias. Feature 014 (T055): nula en la activación sin carga, que no tiene
+    /// diferencias que aceptar.
+    /// </summary>
+    public int? SessionItemId { get; init; }
 
     public int CheckVersion { get; init; }
 

@@ -42,7 +42,8 @@ public class LendingActivationConfiguration : IEntityTypeConfiguration<LendingAc
         builder.HasOne<User>().WithMany().HasForeignKey(e => e.RegisteredByUserId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<SessionItem>().WithMany().HasForeignKey(e => e.SessionItemId).OnDelete(DeleteBehavior.Restrict);
 
-        builder.HasIndex(e => e.MigrationLoadId).IsUnique().HasDatabaseName("UK_LND_Activations_MigrationLoadId");
+        // Feature 014 (T055): sin carga en la activación de aportes o captaciones sin historia; el único sólo entre las que tienen carga.
+        builder.HasIndex(e => e.MigrationLoadId).IsUnique().HasDatabaseName("UK_LND_Activations_MigrationLoadId").HasFilter("[MigrationLoadId] IS NOT NULL");
         // Feature 014 (T028): cada naturaleza se activa una vez y no se desactiva. Hecho: el único no filtra por baja lógica.
         builder.HasIndex(e => e.Nature).IsUnique().HasDatabaseName("UK_LND_Activations_Nature");
     }

@@ -140,7 +140,8 @@ public class PuertosDeCuentasTests
         _db.SaveChanges();
         var lineaAhorro = _db.CreditLines.Local.Single(l => l.Code == "AHO").Id;
         var lineaAportes = _db.CreditLines.Local.Single(l => l.Code == "APO").Id;
-        _db.LendingActivations.Add(new LendingActivation { MigrationLoadId = 1, Nature = LineNature.Contribution });
+        // T053: el estado sale de las fechas de LND_Setup (aportes activados; captaciones no).
+        _db.LendingSetups.Add(new LendingSetup { Id = LendingSetup.IdDeLaFilaUnica, ActivationDate = Hoy, ContributionsActivationDate = Hoy });
 
         var ahorro = Cuenta(titular.Id, LineNature.Deposit, DepositClass.Demand, lineaAhorro, "AH-1");
         var aportes = Cuenta(titular.Id, LineNature.Contribution, null, lineaAportes, "AP-1");

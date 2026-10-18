@@ -804,3 +804,34 @@ choquen.
   importación** de la matriz las suman con su versión nueva (T144), los DTO de `Shared` y las pantallas con T149, y el constructor de líneas de los
   hechos de captaciones con T143 (hoy un hecho de captaciones no arma líneas: nadie lo emite todavía). `IDimensionesDeCartera.CatalogoAsync`
   devuelve las líneas de las tres naturalezas con `LineaDeCarteraDto.LineNature`; `depositClass` llega con las versiones de línea de captación (K8).
+- **E30 · Ciclo diario y cierre (T051, T052).** El paso de captaciones corre al terminar la corrida `DailyCycle`, después de la causación de todos
+  los créditos y antes de la muestra de verificación (`PasosDelCiclo.Captaciones = 9`, al final para no renumerar). Recorre las cuentas vivas de las
+  naturalezas que rigen el día d en tandas de `Lending:Process:BatchSize` con su propio cursor en memoria —`LND_ProcessRuns` no gana columnas— y entrega
+  cada tanda a los `ISubpasoDeCaptaciones` que registre cada historia (ninguno en la fase fundacional); lo que falla queda en `LND_ProcessRunErrors` con
+  `MemberAccountId`. Si K8 necesita repartir las cuentas entre varias tandas del conductor, el cursor pasa a la corrida con una migración de su entrega.
+  La sección del cierre (`SeccionDeCaptacionesDelCierre`) va en la transacción final antes del mismo `CierreDeCarteraRealizado` y deja en los totales de la
+  corrida las naturalezas que cerró; `CarteraEnElCierre` cuenta `CaptacionesActivadas` como activación para `LendingNotClosed` y avisa
+  `LendingLoadWillExpire` también con `CargaDeCaptacionesAplicada`.
+- **E31 · Activación sin carga (T053–T055).** `LND_Setup` suma las seis columnas de data-model §1.2 y `ActivacionesDeCaptacion` es su único lector (también
+  de `ProductosDeCaptacionDeCartera`, que hasta aquí deducía el estado de `LND_Activations`, pendiente 2 del bloque B). La activación sin carga (FR-117)
+  escribe una fila de `LND_Activations` **sin carga y sin acta**: `MigrationLoadId` y `SessionItemId` pasan a nulos (el único de la carga se filtra a
+  `IS NOT NULL`) porque sin carga no hay diferencias que aprobar; el corte es la víspera de la fecha elegida. No nace ninguna carga de otra naturaleza,
+  así que las consultas de la 013 sobre `LND_MigrationLoads` (pendiente 1 del bloque B) siguen sin tocar hasta US9; la única lectura de la 013 que tomaba
+  «la última activación» (`ConstructorDeDocumentosDeCartera`, ventas fuera de Cartera) filtra ya `Nature = Placement`. Errores: `Lending.Activation.LoansFirst`
+  (créditos sin activar o después de la fecha), `Lending.Activation.LoadNotAvailable` (**nuevo**: con carga, hasta US9), `.CutoffInvalid` (fecha futura),
+  `.AlreadyActivated` (con `data.nature`), `.RequirementsMissing` y `Lending.Savings.DeliveryNotAvailable` (`data: { nature, availableFrom }`, también para
+  aportes, que llegan con K7; captaciones con K8) **en todo ambiente**: es lo que el despliegue trae. Por eso la fixture «Captaciones e2e» sólo activa con K8
+  desplegado, que es lo que habrá en la corrida final.
+- **E32 · Requisitos (T054).** `AccountingMonthOpen` sigue la decisión del dueño del 2026-10-14 para créditos (un mes cerrado no limita y avisa);
+  `AccountsCollectorRegistered` exige la adopción de `ProveedorDeCuentas` en cualquier ambiente y, en producción, un recaudador real;
+  `TreasuryDestinationRegistered` en producción exige `OrdenDeGiroEmitida` v2 adoptada, así que la v2 (mensajes.md §5.3) se declara aquí:
+  `OrdenDeGiroEmitidaV2` en `Contracts/Lending`, en el catálogo (v2, admite proceso), y `TesoreriaDePrueba` la acepta; la emite US10.
+  `PayrollConceptsReady` no se puede evaluar sin leer `PAY_` y sale como aviso. Sólo en producción (fuera queda `Waived`): `DeliveriesComplete` (K11
+  desplegada, Q1), `ProfileAllowsClasses` (captaciones: el perfil vigente con `MayTakeDeposits`; el alta del perfil regulatorio acepta ya los cinco
+  campos de data-model §1.8) y `LinesWithMatrix`, que pregunta a `IContabilidadParaCartera.EvaluarAsync` por el hecho principal de cada línea activa de la
+  naturaleza —hasta que el constructor de captaciones de US8 (T143) arme líneas la respuesta no prueba nada, pero en producción nada se activa sin K11—.
+  Por lo mismo la fixture e2e no siembra matriz: fuera de producción `LinesWithMatrix` queda dispensado y la cooperativa opera con
+  `Contabilidad.FaltaDeRegla = Advertir`.
+- **E33 · El cambio a las implementaciones reales.** Como en la 013, la implementación real responde «no habilitado» mientras su naturaleza no tenga fecha en
+  `LND_Setup`: `ContratoDeCuentasDeCartera` (T083) y `ConsultaDeAportesDeCartera` (T084) leen `ActivacionesDeCaptacion` y se registran en lugar de
+  `ContratoDeCuentasSinActivar` y `ConsultaDeAportesNoDisponible`. T055 deja la fecha que las cambia; el registro de la DI es de esas tareas.

@@ -22,5 +22,15 @@ public class LendingSetupConfiguration : IEntityTypeConfiguration<LendingSetup>
         builder.Property(e => e.ActivatedAt);
         builder.HasOne<LendingActivation>().WithMany().HasForeignKey(e => e.ActivationId).OnDelete(DeleteBehavior.Restrict);
         builder.HasIndex(e => e.ActivationId).HasDatabaseName("IX_LND_Setup_ActivationId");
+
+        // Feature 014 (T053; data-model §1.2): la activación de captaciones y la de aportes, cada una a su fila de LND_Activations.
+        builder.Property(e => e.DepositsActivationDate);
+        builder.Property(e => e.DepositsActivatedAt);
+        builder.HasOne<LendingActivation>().WithMany().HasForeignKey(e => e.DepositsActivationId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasIndex(e => e.DepositsActivationId).HasDatabaseName("IX_LND_Setup_DepositsActivationId");
+        builder.Property(e => e.ContributionsActivationDate);
+        builder.Property(e => e.ContributionsActivatedAt);
+        builder.HasOne<LendingActivation>().WithMany().HasForeignKey(e => e.ContributionsActivationId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasIndex(e => e.ContributionsActivationId).HasDatabaseName("IX_LND_Setup_ContributionsActivationId");
     }
 }

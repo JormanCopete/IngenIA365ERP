@@ -155,12 +155,12 @@ public class RegistroDeIntegracionTests
     public async Task El_escritor_rechaza_una_version_que_Cartera_no_acepta_con_las_soportadas()
     {
         var r = await Escritor().RegistrarAsync(Nuevo("TES", IntegrationParticipantClass.Treasury, IntegrationParticipantRole.MessageDestination,
-            IntegrationDestinations.Treasury, Hoy, adopciones: new VersionAdoptada("OrdenDeGiroEmitida", 2)), default);
+            IntegrationDestinations.Treasury, Hoy, adopciones: new VersionAdoptada("OrdenDeGiroEmitida", 3)), default);
 
         r.Error.Code.Should().Be("Integration.Participant.VersionNotSupported");
         var datos = r.Error.Should().BeOfType<ErrorConDatos>().Subject.Data;
         datos.GetType().GetProperty("contract")!.GetValue(datos).Should().Be("OrdenDeGiroEmitida");
-        ((IEnumerable<int>)datos.GetType().GetProperty("supported")!.GetValue(datos)!).Should().Equal(1);
+        ((IEnumerable<int>)datos.GetType().GetProperty("supported")!.GetValue(datos)!).Should().Equal([1, 2], "feature 014 (T055): la v2 de captaciones");
 
         var desconocido = await Escritor().RegistrarAsync(Nuevo("NOM", IntegrationParticipantClass.Payroll, IntegrationParticipantRole.ObligationsCollector,
             null, Hoy, adopciones: new VersionAdoptada("ContratoQueNoExiste", 1)), default);

@@ -110,7 +110,7 @@ public static class CatalogoDeMensajesDeCarteraV1
         Hecho(typeof(CargaDeCaptacionesAplicadaV1), CargaDeCaptacionesAplicadaV1.Type, "CAC", I, C, proceso: false),
     ];
 
-    /// <summary>Los 6 mensajes de Cartera a otros destinos de §2.2, en su orden.</summary>
+    /// <summary>Los 6 mensajes de Cartera a otros destinos de §2.2, en su orden, y la v2 de la orden de giro (feature 014).</summary>
     public static IReadOnlyList<TipoDeMensaje> AOtrosDestinos { get; } =
     [
         Otro(typeof(ObligacionCreadaV1), ObligacionCreadaV1.Type, IntegrationDestinations.Inventory, C, proceso: true),
@@ -121,9 +121,12 @@ public static class CatalogoDeMensajesDeCarteraV1
         Otro(typeof(PagoReversadoPorCarteraV1), PagoReversadoPorCarteraV1.Type, IntegrationDestinations.Receipts, C, proceso: false),
         // K2, declarado en K1.
         Otro(typeof(DescuentosPorPagaduriaV1), DescuentosPorPagaduriaV1.Type, IntegrationDestinations.Receipts, C, proceso: false),
+        // Feature 014 (T055; mensajes.md §1.2 y §5.3 de la 014): la orden de giro v2 de captaciones, declarada para que Tesorería pueda adoptarla; la emite
+        // US10 (también el proceso: el pago de intereses del CDAT a un tercero).
+        new(typeof(OrdenDeGiroEmitidaV2), OrdenDeGiroEmitidaV2.Type, 2, ModulosDeOrigen.Cartera, TipoDeMensaje.Un(IntegrationDestinations.Treasury), N, C, true),
     ];
 
-    /// <summary>Los 42 tipos de Cartera.</summary>
+    /// <summary>Los tipos de Cartera (77 desde la feature 014: 70 hechos a Contabilidad y 7 a otros destinos).</summary>
     public static IReadOnlyList<TipoDeMensaje> Todos { get; } = [.. HechosAContabilidad, .. AOtrosDestinos];
 
     private static TipoDeMensaje Hecho(Type record, string type, string codigoCorto, IntegrationMessageKind kind, FormaDeClaveDeEvento forma, bool proceso) =>

@@ -230,6 +230,12 @@ public static class DependencyInjection
         services.AddScoped<Lending.Ledger.RegistroDeCartera>();
         // Feature 014 (T030): el único escritor del libro de cuentas de captación y aportes.
         services.AddScoped<Lending.Deposits.Ledger.RegistroDeCuentas>();
+        // Feature 014 (T051–T055): el paso de captaciones del ciclo diario (sus subpasos, ISubpasoDeCaptaciones, los registra cada historia), la
+        // sección de captaciones del cierre, los requisitos y la activación sin carga de aportes y captaciones.
+        services.AddScoped<Lending.Deposits.Accrual.PasoDeCaptaciones>();
+        services.AddScoped<Lending.Deposits.Accrual.SeccionDeCaptacionesDelCierre>();
+        services.AddScoped<Lending.Deposits.Activation.RequisitosDeActivacionDeCaptaciones>();
+        services.AddScoped<Lending.Deposits.Activation.ActivacionDeCaptacionesSinCarga>();
         // Feature 013 (T0284–T0289, US17): el alcance por oficina y línea (la API registra el de la petición; aquí, el que falla
         // cerrado), el salto común de oficinas que también usa UserBranchScope, el único escritor de LND_CaseParticipations, las
         // lecturas sensibles de Cartera y el último rechazo de forma de la petición (para Lending.Request.Rejected).

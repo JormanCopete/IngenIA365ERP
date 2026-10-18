@@ -2,6 +2,7 @@ using System.Globalization;
 using IngenIA365ERP.Application.Common.Integration;
 using IngenIA365ERP.Application.Common.Integration.Contracts.Inventory;
 using IngenIA365ERP.Application.Common.Integration.Contracts.Lending;
+using IngenIA365ERP.Application.Common.Integration.Contracts.Lending.Deposits;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Security;
 using IngenIA365ERP.Application.Common.Models;
@@ -75,6 +76,28 @@ public sealed partial class EmisionDeCartera(
         };
         var numero = fechaDeActivacion.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
         return await EmitirAsync(contenido, CarteraActivadaV1.Type, activacionPublicId, numero, fechaDeActivacion, ct);
+    }
+
+    /// <summary>
+    /// Feature 014 (T055; mensajes.md §1.1 y §4.1 de la 014, research C23): el informativo <c>CaptacionesActivadas</c> (<c>CAV</c>) de la activación de
+    /// aportes o de captaciones, con su naturaleza; origen la activación, clave <c>Confirmation</c>, fechado el día de la activación. Sin carga
+    /// (FR-117), <c>LoadPublicId</c> va nulo.
+    /// </summary>
+    public async Task<Result<IntegrationMessage>> ActivacionDeCaptacionesAsync(
+        Guid activacionPublicId, Domain.Enums.Lending.LineNature naturaleza, DateOnly fechaDeActivacion, Guid? cargaPublicId, int cuentas,
+        int transaccionesIniciales, CancellationToken ct)
+    {
+        var contenido = new CaptacionesActivadasV1
+        {
+            Nature = naturaleza.ToString(),
+            ActivationDate = fechaDeActivacion,
+            LoadPublicId = cargaPublicId,
+            AccountCount = cuentas,
+            OpeningTransactions = transaccionesIniciales,
+        };
+        var numero = $"{naturaleza}-{fechaDeActivacion.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)}";
+        return await EmitirAsync(contenido, CaptacionesActivadasV1.Type, activacionPublicId, numero,
+            fechaDeActivacion, ct);
     }
 
     /// <summary>

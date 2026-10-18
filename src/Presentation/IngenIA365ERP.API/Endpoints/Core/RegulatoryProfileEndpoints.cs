@@ -33,7 +33,8 @@ public class RegulatoryProfileEndpoints : ICarterModule
                 var r = await sender.Send(new AddRegulatoryProfileVersionCommand(
                     body.OrganizationType ?? string.Empty, body.FinancialActivity, body.SupervisionLevel, body.Category, body.NiifGroup,
                     body.PayrollOperatorRegistration is not null, body.PayrollOperatorRegistration?.Number, body.PayrollOperatorRegistration?.Date,
-                    body.ValidFrom, body.Source ?? string.Empty, body.SupportAttachmentPublicId, body.Reason ?? string.Empty, body.SupersedesPublicId)
+                    body.ValidFrom, body.Source ?? string.Empty, body.SupportAttachmentPublicId, body.Reason ?? string.Empty, body.SupersedesPublicId,
+                    body.MayTakeDeposits, body.DepositsFromAssociatesOnly, body.LiquidityFundCategory, body.DepositInsuranceEnrolled, body.IsGmfWithholdingAgent)
                 {
                     OperationKey = http.ClaveDeOperacion(),
                 }, ct);
@@ -49,7 +50,9 @@ public class RegulatoryProfileEndpoints : ICarterModule
 
     /// <summary>
     /// El cuerpo del alta (§21.4) más <c>source</c> (columna obligatoria de data-model §4.5 que api.md no lista) y
-    /// <c>supersedesPublicId</c> para una corrección.
+    /// <c>supersedesPublicId</c> para una corrección. Feature 014 (T054; data-model §1.8, FR-018): suma lo que el perfil dice de las captaciones
+    /// (<c>mayTakeDeposits</c>, <c>depositsFromAssociatesOnly</c>, <c>liquidityFundCategory</c>, <c>depositInsuranceEnrolled</c>,
+    /// <c>isGmfWithholdingAgent</c>), opcionales y en falso por defecto.
     /// </summary>
     public sealed record VersionRequest(
         string? OrganizationType,
@@ -62,5 +65,10 @@ public class RegulatoryProfileEndpoints : ICarterModule
         string? Source,
         Guid? SupportAttachmentPublicId,
         string? Reason,
-        Guid? SupersedesPublicId);
+        Guid? SupersedesPublicId,
+        bool MayTakeDeposits = false,
+        bool DepositsFromAssociatesOnly = false,
+        string? LiquidityFundCategory = null,
+        bool DepositInsuranceEnrolled = false,
+        bool IsGmfWithholdingAgent = false);
 }

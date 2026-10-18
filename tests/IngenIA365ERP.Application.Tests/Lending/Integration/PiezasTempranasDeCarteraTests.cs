@@ -248,7 +248,8 @@ public class PiezasTempranasDeCarteraTests
         tesoreria.Destino.Should().Be(IntegrationDestinations.Treasury);
         tesoreria.Acepta(OrdenDeGiroEmitidaV1.Type, 1).Should().BeTrue();
         tesoreria.Acepta(AnulacionDeOrdenDeGiroV1.Type, 1).Should().BeTrue();
-        tesoreria.Acepta(OrdenDeGiroEmitidaV1.Type, 2).Should().BeFalse();
+        tesoreria.Acepta(OrdenDeGiroEmitidaV1.Type, 2).Should().BeTrue("feature 014 (T055): la v2 de captaciones, para TreasuryDestinationRegistered");
+        tesoreria.Acepta(OrdenDeGiroEmitidaV1.Type, 3).Should().BeFalse();
         tesoreria.Acepta(PagoAplicadoV1.Type, 1).Should().BeFalse();
 
         var unidades = new[] { Unidad(), Unidad() };

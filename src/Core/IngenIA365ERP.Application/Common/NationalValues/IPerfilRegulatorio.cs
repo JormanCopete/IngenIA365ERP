@@ -41,12 +41,18 @@ public sealed record PerfilRegulatorioDto(
     string Reason,
     Guid? SupersedesPublicId,
     string RegisteredByName,
-    DateTime RegisteredAt)
+    DateTime RegisteredAt,
+    bool MayTakeDeposits = false,
+    bool DepositsFromAssociatesOnly = false,
+    string? LiquidityFundCategory = null,
+    bool DepositInsuranceEnrolled = false,
+    bool IsGmfWithholdingAgent = false)
 {
     public static PerfilRegulatorioDto Desde(RegulatoryProfileVersion v) => new(
         v.PublicId, v.ValidFrom, v.OrganizationTypeCode, v.FinancialActivityAuthorized, v.SupervisionLevel, v.EmployeeFundCategory,
         v.NiifGroup, v.LibranzaOperatorRegistered, v.LibranzaOperatorRegistrationNumber, v.LibranzaOperatorRegistrationDate, v.Source,
-        v.SupportAttachmentPublicId, v.Reason, v.SupersedesPublicId, v.RegisteredByName, v.CreatedAt);
+        v.SupportAttachmentPublicId, v.Reason, v.SupersedesPublicId, v.RegisteredByName, v.CreatedAt, v.MayTakeDeposits, v.DepositsFromAssociatesOnly,
+        v.LiquidityFundCategory, v.DepositInsuranceEnrolled, v.IsGmfWithholdingAgent);
 }
 
 /// <summary>
