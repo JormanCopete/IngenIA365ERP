@@ -1063,3 +1063,70 @@ Construida la historia 10. **Manda el código**; estas notas reemplazan lo dicho
 - **E77 · `CaptacionesAportes` regenerada (US10).** Con `LND_MembershipWithdrawals`, `LND_MembershipWithdrawalLines`, `COR_AssociateInboundMessages` y las FK que
   esperaban (E17); ahora `20261018213853` PostgreSQL / `20261018213822` SQL Server (paridad OK, el scaffold sin cambios ajenos). Los dos únicos sobre `PersonId` son
   índices con nombre (EF junta los anónimos de las mismas columnas) y las FK largas llevan nombre propio (E18). Conserva el SQL de T044 y T089 y suma el de `ASO`.
+
+## 12. Enmienda de los movimientos por el contrato (2026-10-18, T108–T126, US4)
+
+Construida la historia 4. **Manda el código**; estas notas reemplazan lo dicho en `data-model.md`, `contracts/` y `tasks.md` donde choquen. `EntregaVigente`
+sigue en K6b: lo de K8 que ya existe se lee con los defectos del catálogo (como en K7).
+
+- **E78 · Ahorro libre, retiros y traslados (cierra E56).** El contrato consigna libre en cuentas a la vista (modalidad `Free` a capital; `Installments` sin cuotas
+  en una a la vista también va a capital) y en una cuenta en apertura sólo si la única retención es el depósito inicial (la activa cuando el capital alcanza el
+  mínimo de apertura); CDAT y contractual siguen en `DeliveryNotAvailable` (K9). `RetirarAsync` admite efectivo y cheque; `CloseAccount = true` responde
+  `DeliveryNotAvailable` hasta la cancelación de US5 (T135). `TrasladarAsync` es una sola operación `Transfer` con las dos cuentas bloqueadas en orden de `Id` (R08);
+  el destino puede ser de otro titular o de aportes (por cuotas). La consulta muestra el disponible real (`DisponibleDeCuenta`, motor puro) y `AcceptsWithdrawals`;
+  es el mismo número que valida el retiro (SC-007). Bloqueos y embargos valen cero hasta US11; la posición diaria sigue fuera (E57/E51, US5).
+- **E79 · Firmas, topes y efectivo.** `FirmasDeCuenta` (motor puro) decide con el manejo, los límites de firma de los firmantes y el representante del menor;
+  faltar una firma es `Lending.Savings.SignaturesMissing` con las personas que faltan. Topes por operación y por día de la versión de la línea
+  (`WithdrawalLimitExceeded`) y el efectivo del día (`CashLimitExceeded`). Códigos nuevos en `ErroresDeMovimientos`.
+- **E80 · Atribución con monto (cierra E71 para las cuentas).** Retirar o trasladar sobre `Lending.Accounts.Withdraw`, y consignar efectivo sobre
+  `Lending.Accounts.Deposit`, crea una solicitud de la **plataforma de aprobaciones** (sujetos nuevos `AccountWithdrawal` y `AccountCashDeposit`, fuente
+  `MemberAccountOperation`, origen = la cuenta, huella = el pedido; regla fija de un nivel con el mismo permiso y un aprobador presente con segundo factor por
+  `FuenteDeAprobacionDeCuenta`). La pantalla responde **202** `PendingApproval` con la solicitud y no mueve saldo; el contrato responde rechazo
+  `Lending.Savings.PendingApproval`. Repetir con `approvalPublicId` aprobado aplica. La atribución de la devolución del retiro del asociado (`RefundDecisionId`)
+  **no** se cableó todavía: la mecánica ya existe (`ReglasDeMovimientos.AtribucionAsync`), falta su sujeto propio (queda para US5, con la cancelación).
+- **E81 · GMF.** `GravamenMovimientosFinancieros` (motor puro): tarifa, tope exento en UVT por persona y mes, política (cuenta marcada, por titular, no aplica) y
+  hechos generadores del parámetro `Gmf.HechosGeneradores`; tarifa cero desde una fecha. El valor se redondea **al peso** (pendiente de validar por la contadora).
+  El uso del mes (`LND_GmfMonthlyUsage`) lo escribe sólo `RegistroDeCuentas`; un reverso escribe su espejo y devuelve el tope al mes del original. El GMF va en
+  pareja `GmfCharged` (−capital, +GMF) con `GmfRetenido` acompañante del retiro. El débito automático genera GMF como **retiro** (pendiente de validar).
+  `GET /gmf-exemptions/usage` responde el uso del mes de la persona en el alcance.
+- **E82 · Canje.** `Captaciones.DiasDeCanjePorClaseDeMedio` (defecto `{"Check": 3, "*": 0}`) en días hábiles con el calendario (sin sábados, domingos ni
+  festivos); la operación lleva `ClearingUntil` y lo en canje no suma al disponible. La liberación del canje la hará el paso diario de US5 (hoy se calcula por fecha).
+- **E83 · Cargos.** El catálogo vive en la versión de la línea (`LND_DepositLineCharges`, entra en su huella) y el campo `event` de api.md se llama `trigger`
+  (`Periodic`, `WithdrawalOverFree`, `DepositOverFree`, `ExtraDocument`, `MediumReplacement`, `Inactivity`, `Manual`). Cada cargo es su operación `Charge`
+  (`CGO-`): cobrado si el capital alcanza sin bajar del mínimo; si no, por cobrar (`ChargeReceivable`) y lo cobra la siguiente consignación en su misma operación
+  (`CargoPendienteCobrado`). Los periódicos se causan el último día de su período por el subpaso `CargosPeriodicos` (idempotente por cuenta, código y
+  `PeriodFrom`); los de inactividad sólo en cuentas inactivas. Condonar es `ChargeWaiver` (`CGN-`) con segregación sobre el expediente del cargo (quien lo
+  registró no lo condona); la exoneración individual la aprueba quien la registra, con la misma segregación. Reversar un cargo es reversar su operación; el cargo
+  cuya deuda ya cobró una consignación posterior **no** se reversa (`Lending.Savings.ChargeCollectedLater`): se condona. Reversar la consignación que cobró un
+  pendiente lo devuelve a `Pending` (transición nueva `Collected → Pending`).
+- **E84 · Comercial (T117 parcial).** `CargoDeCaptacionCausado` y `…Reversado` (`CAR → Inventory`) se emiten con el ítem comercial de la línea y quedan en la
+  bandeja: **no hay consumidor en Comercial** (la facturación de la 012 vive en sus documentos de venta y la emisión electrónica es I4); `DestinoInventario` sigue
+  aceptando sólo las respuestas de obligaciones, así que esos mensajes esperan `Pending`. La respuesta `FacturaDeCargoRegistrada` (`INV → Lending`, informativa)
+  sí se consume: la reparte `ConsumeCommercialCreditMessageCommand` a `FacturasDeCargos`, que sólo guarda número y estado en el cargo. **Pregunta para el dueño**:
+  dónde nace la factura del cargo gravado (¿un documento de venta de servicio con el ítem de la línea, en I3/I4?).
+- **E85 · Reversos.** Desde la pantalla de la Cartera (`POST /{id}/operations/{op}/reverse`) nunca queda un sobregiro (`ReversalWouldOverdraw` con la operación que
+  lo impide); lo de Nómina o de un recaudador que no sea consignación lo reversa él (`ReversalOwnedByCollector`); lo de un proceso (cruce del retiro, débito
+  automático, devoluciones, cargos) desde su origen (`ReversalOwnedByProcess`). La consignación de un recaudador reversada desde la Cartera emite
+  `ConsignacionReversadaPorCartera` (destino por la clase del recaudador: Recaudo o Tesorería) para que anule su recibo. Por el contrato, el reverso de una
+  consignación ya usada sí se aplica y deja **sobregiro técnico** con la alerta nueva `Cartera.SobregiroTecnico` (K8, a `Lending.Accounts.Reverse`). No hay
+  parámetro de ventana de reverso (`ReversalWindowClosed` no se implementó; el contrato reversa lo suyo sin límite de días).
+- **E86 · FR-030.** Con un retiro del asociado aprobado, liquidado o por rehacer, las consignaciones de esa persona se rechazan
+  (`Lending.Savings.MembershipWithdrawalInProgress`); consignar en aportes o en una línea que exige asociado pide afiliación activa (`MembersOnly`). Cierra E75.
+- **E87 · Débito automático.** Subpaso `DebitoAutomatico` del paso de captaciones (después de las cuotas y los cargos periódicos): por cada autorización vigente y
+  cada cuota exigible ese día (la misma consulta que usa Nómina), aplica el pago por el contrato de obligaciones con el recaudador `CAR` (`OwnLoanPayoff`), medio
+  `InternalOffset` y clave `CAR:debito-automatico:{crédito:N}:{aaaammdd}` (el validador de la recogida la admite) y debita la cuenta con una operación
+  `DirectDebit` que nombra el pago. `PagoAplicado` sigue sin admitir proceso **salvo** el del débito automático (`TipoDeMensaje.ProcesoSi`, predicado sobre el
+  contenido). El reverso del pago arrastra el del débito (`ArrastreDelCruceAlRetiro` ampliado; sin retiro que rehacer). El soporte de la autorización sólo se exige
+  presente (no se verifica que el adjunto exista).
+- **E88 · Mayoría de edad (T120).** Al pasar la cuenta al titular se anula (`Cancelled`) la solicitud de retiro en espera de la cuenta; el aviso es el de la mayoría
+  de edad (MAYOREDAD) a los dos.
+- **E89 · Informes y dobles.** Vistas `deposit-balances` (K7, sin titulares), `deposit-transactions` (K7), `gmf` y `charges` (K8), con datos del titular las tres
+  últimas. Dobles de prueba nuevos: `GET /collector/accounts`, `POST /collector/accounts/simulations` (sin clave), `/withdrawals` y `/transfers`; el recaudador de
+  prueba acepta `ConsignacionReversadaPorCartera`. El «recaudador Treasury» de T113 no tiene doble propio: la tesorería de prueba es destino de órdenes, no
+  recaudador registrado (clase de participante distinta).
+- **E90 · Pantalla.** La ficha de la cuenta suma `MovimientosDeCuenta` (componente en `Pages/Cartera/Captaciones`, sin ruta propia): operaciones con comprobante,
+  libro de sólo lectura (lectura auditada `Lending.Savings.TransactionsViewed`), retiro por orden de giro (beneficiario: el titular con su cuenta registrada) y
+  traslado a otra cuenta del titular con simulación, cargos y débito automático. El editor de la línea todavía no ofrece el catálogo de cargos: se registra por API.
+- **E91 · `CaptacionesAportes` regenerada (US4).** Con `LND_GmfMonthlyUsage`, `LND_DepositLineCharges`, `LND_AccountCharges`, `LND_AccountChargeExemptions` y
+  `LND_DirectDebitMandates`; ahora `20261018232957` PostgreSQL / `20261018232925` SQL Server (paridad OK, el scaffold sin cambios ajenos). Conserva el SQL de T044,
+  T089 y `ASO`.
