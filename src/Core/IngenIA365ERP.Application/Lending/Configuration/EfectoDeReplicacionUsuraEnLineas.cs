@@ -58,7 +58,8 @@ public sealed class EfectoDeReplicacionUsuraEnLineas : IEfectoDeReplicacion
             return new EfectoAplicado(new Dictionary<string, int> { [ConteoBloqueadas] = 0, [ConteoCerradas] = 0 },
                 ["No hay catálogo de modalidades vigente: las líneas no se pudieron revisar contra la usura nueva."], []);
 
-        var lineas = await db.CreditLines.Where(l => !l.IsDeleted && l.Status != CreditLineStatus.Closed).OrderBy(l => l.Code).ToListAsync(ct);
+        // Feature 014 (T011): la usura es sólo de la colocación (LasCaptacionesNoUsanLaUsura).
+        var lineas = await db.CreditLines.Where(l => !l.IsDeleted && l.Status != CreditLineStatus.Closed && l.Nature == LineNature.Placement).OrderBy(l => l.Code).ToListAsync(ct);
         var versiones = new VersionVigenteDeLinea(db);
         var reglas = new ReglasDeLineaDeCredito(new LectorDeDocumentoNormativo(db), new LectorDeValoresNacionales(db), new PerfilSinUso());
         var alertas = new List<AlertaALevantar>();

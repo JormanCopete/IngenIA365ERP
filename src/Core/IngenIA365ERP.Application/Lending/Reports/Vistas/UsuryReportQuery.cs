@@ -124,7 +124,7 @@ public sealed class UsuryReportQueryHandler(
         CancellationToken ct)
     {
         if (ambito.Vacio) return [];
-        var consulta = db.CreditLines.AsNoTracking().Where(l => !l.IsDeleted && l.Status == CreditLineStatus.Active)
+        var consulta = db.CreditLines.AsNoTracking().Where(l => !l.IsDeleted && l.Status == CreditLineStatus.Active && l.Nature == LineNature.Placement)
             .PorLinea(ambito.Alcance, l => l.Id);
         if (ambito.Linea is { } linea) consulta = consulta.Where(l => l.Id == linea);
         var lineas = await consulta.OrderBy(l => l.Code).ToListAsync(ct);

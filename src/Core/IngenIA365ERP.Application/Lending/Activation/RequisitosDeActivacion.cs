@@ -309,7 +309,7 @@ public sealed class RequisitosDeActivacion(
     private async Task<RequisitoDeActivacionDto> UsuraAsync(DateOnly fecha, CancellationToken ct)
     {
         if (db is null || normativa is null || valores is null) return NoAplica(UsuraDeLineasActivas, "No se evaluó la usura de las líneas.");
-        var lineas = await db.CreditLines.AsNoTracking().Where(l => l.Status == CreditLineStatus.Active && !l.IsDeleted).Select(l => new { l.Id, l.Code })
+        var lineas = await db.CreditLines.AsNoTracking().Where(l => l.Status == CreditLineStatus.Active && !l.IsDeleted && l.Nature == LineNature.Placement).Select(l => new { l.Id, l.Code })
             .ToListAsync(ct);
         if (lineas.Count == 0) return Cumple(UsuraDeLineasActivas, "No hay líneas activas.");
         var versiones = await new Configuration.VersionVigenteDeLinea(db).LeerVariasAsync(lineas.Select(l => l.Id).ToList(), fecha, ct: ct);
@@ -368,7 +368,7 @@ public sealed class RequisitosDeActivacion(
     private async Task<RequisitoDeActivacionDto> PuenteDeNominaAsync(DateOnly fecha, CancellationToken ct)
     {
         if (db is null) return NoAplica(PuenteDeNominaResuelto, "No se evaluó la regla de recaudo por nómina.");
-        var linea = await db.CreditLines.AsNoTracking().Where(l => l.Status == CreditLineStatus.Active && !l.IsDeleted).OrderBy(l => l.Id)
+        var linea = await db.CreditLines.AsNoTracking().Where(l => l.Status == CreditLineStatus.Active && !l.IsDeleted && l.Nature == LineNature.Placement).OrderBy(l => l.Id)
             .Select(l => new { l.Id, l.Code }).FirstOrDefaultAsync(ct);
         var sucursal = await db.Branches.AsNoTracking().Where(b => !b.IsDeleted).OrderBy(b => b.Id).Select(b => (Guid?)b.PublicId).FirstOrDefaultAsync(ct);
         if (linea is null || sucursal is null) return Cumple(PuenteDeNominaResuelto, "No hay líneas activas que recauden por nómina.");

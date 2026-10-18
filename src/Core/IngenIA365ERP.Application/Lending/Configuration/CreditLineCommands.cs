@@ -37,13 +37,16 @@ public sealed class AltaDeVersionDeLinea(IApplicationDbContext db, IDateTimeServ
     {
         if (lineaId is { } id)
         {
+            // Feature 014 (T011, T013): una versión de crédito sólo va sobre una línea de colocación.
+            var linea = await db.CreditLines.AsNoTracking().FirstAsync(l => l.Id == id, ct);
+            if (linea.ValidarNaturaleza(LineNature.Placement) is { } distinta) return Result.Failure(ErroresDeLineasDeCredito.De(distinta));
             var ultima = await db.CreditLineVersions.AsNoTracking().Where(v => v.CreditLineId == id && !v.IsDeleted)
                 .Select(v => (DateOnly?)v.ValidFrom).MaxAsync(ct);
             if (ultima is { } u && b.ValidFrom < u) return Result.Failure(ErroresDeLineasDeCredito.VersionCruzada(u));
         }
         if (b.CommercialDefaultFor is { } tipo)
         {
-            var otras = await db.CreditLines.AsNoTracking().Where(l => !l.IsDeleted && l.Status != CreditLineStatus.Closed && l.Id != (lineaId ?? 0))
+            var otras = await db.CreditLines.AsNoTracking().Where(l => !l.IsDeleted && l.Status != CreditLineStatus.Closed && l.Id != (lineaId ?? 0) && l.Nature == LineNature.Placement)
                 .Select(l => new { l.Id, l.Code }).ToListAsync(ct);
             var ids = otras.Select(o => o.Id).ToArray();
             var versiones = await db.CreditLineVersions.AsNoTracking().Where(v => ids.Contains(v.CreditLineId) && !v.IsDeleted).ToListAsync(ct);
@@ -64,6 +67,8 @@ public sealed class AltaDeVersionDeLinea(IApplicationDbContext db, IDateTimeServ
     /// <param name="admitirDesde">Sólo la plantilla, en una línea sin uso: admite una versión que empieza antes de hoy (plantillas.md §1).</param>
     public async Task<CreditLineVersion> RegistrarAsync(CreditLine linea, BorradorDeVersionDeLinea b, CancellationToken ct, bool admitirDesde = false)
     {
+        // Feature 014 (T011): CreditLineVersion es sólo de colocación (data-model §1.1).
+        IngenIA365ERP.Domain.Lending.ReglaDeCarteraException.SiHay(linea.ValidarNaturaleza(LineNature.Placement));
         var ultimo = await db.CreditLineVersions.IgnoreQueryFilters().Where(v => v.CreditLineId == linea.Id)
             .MaxAsync(v => (int?)v.VersionNumber, ct) ?? 0;
         var hoy = reloj.HoyLocal;
@@ -124,13 +129,19 @@ public static class ConsultasDeLineas
         return pedidas.All(vivas.ContainsKey) ? vivas : null;
     }
 
-    /// <summary>La línea viva por su PublicId y dentro del alcance de líneas; fuera, el mismo 404 que si no existiera.</summary>
+    /// <summary>
+    /// La línea viva por su PublicId y dentro del alcance de líneas; fuera, el mismo 404 que si no existiera. Feature 014 (T011, T013): por
+    /// defecto sólo de colocación —las rutas de líneas de crédito no operan una de captación o de aportes
+    /// (<c>Lending.CreditLine.NatureMismatch</c>)—; con <paramref name="naturaleza"/> nula, cualquiera (catálogo común).
+    /// </summary>
     public static async Task<Result<CreditLine>> LineaEnAlcanceAsync(IApplicationDbContext db, IAlcanceDeCartera alcance, LendingAuditEmitter auditoria,
-        Guid publicId, bool seguir, CancellationToken ct)
+        Guid publicId, bool seguir, CancellationToken ct, LineNature? naturaleza = LineNature.Placement)
     {
         var consulta = seguir ? db.CreditLines : db.CreditLines.AsNoTracking();
         var linea = await consulta.FirstOrDefaultAsync(l => l.PublicId == publicId && !l.IsDeleted, ct);
         if (linea is null) return Result.Failure<CreditLine>(ErroresDeLineasDeCredito.LineaInexistente());
+        if (naturaleza is { } esperada && linea.ValidarNaturaleza(esperada) is { } distinta)
+            return Result.Failure<CreditLine>(ErroresDeLineasDeCredito.De(distinta));
         var dentro = await alcance.AsegurarAsync(null, linea.Id, ErroresDeLineasDeCredito.LineaInexistente(), auditoria, nameof(CreditLine), linea.PublicId, ct);
         return dentro.IsFailure ? Result.Failure<CreditLine>(dentro.Error) : Result.Success(linea);
     }

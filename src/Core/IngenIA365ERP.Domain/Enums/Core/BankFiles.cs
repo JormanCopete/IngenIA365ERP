@@ -184,4 +184,14 @@ public enum BankFieldSource
 
     /// <summary>La fecha del descuento: fecha valor del pago que lo gire (FR-114, A9).</summary>
     DeductionDate = 92,
+
+    // Feature 014 (T014; data-model §1.7): orígenes de los ámbitos 5 y 6 para las cuotas de cuentas y el código de la pagaduría.
+    /// <summary>El número de la cuenta de captación o de aportes de la cuota.</summary>
+    AccountNumber = 93,
+
+    /// <summary>El período (aaaamm) de la cuota exigible de la cuenta.</summary>
+    AccountInstallmentPeriod = 94,
+
+    /// <summary>El código o concepto de la pagaduría que agrupa la línea (equivalencia del convenio).</summary>
+    PaymasterConceptCode = 95,
 }

@@ -279,7 +279,7 @@ public sealed class GetLendingDashboardQueryHandler(
     {
         var oficinas = await db.Branches.AsNoTracking().Where(b => !b.IsDeleted).PorOficina(alcance, b => b.Id)
             .OrderBy(b => b.Name).Select(b => new LendingDashboardScopeItemDto(b.PublicId, b.LegacyCode ?? string.Empty, b.Name)).ToListAsync(ct);
-        var lineas = await db.CreditLines.AsNoTracking().Where(l => !l.IsDeleted).PorLinea(alcance, l => l.Id)
+        var lineas = await db.CreditLines.AsNoTracking().Where(l => !l.IsDeleted && l.Nature == LineNature.Placement).PorLinea(alcance, l => l.Id)
             .OrderBy(l => l.Code).Select(l => new LendingDashboardScopeItemDto(l.PublicId, l.Code, l.Name)).ToListAsync(ct);
         return new LendingDashboardScopeDto(oficinas, lineas);
     }

@@ -14,6 +14,13 @@ public enum EntregaDeCartera
     K5 = 5,
     K6a = 6,
     K6b = 7,
+
+    // Feature 014 (T014; research E06): las entregas de captaciones y aportes. EntregaVigente no cambia hasta que cada una salga.
+    K7 = 8,
+    K8 = 9,
+    K9 = 10,
+    K10 = 11,
+    K11 = 12,
 }
 
 /// <summary>

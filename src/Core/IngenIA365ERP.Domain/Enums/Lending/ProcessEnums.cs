@@ -55,6 +55,9 @@ public enum AccountingFactPartSource
     NationalValueCorrectionBatch = 3,
     MonthlyClose = 4,
     CloseReopening = 5,
+
+    /// <summary>Feature 014 (T014; data-model §1.8, research E05): la puesta al día de una cuenta de captación.</summary>
+    AccountCatchUp = 6,
 }
 
 /// <summary>Estado de una carga de migración (los estados de DT §2.3; el tipo no tenía nombre).</summary>

@@ -75,7 +75,11 @@ public sealed class DocumentosDeK5Tests : IAsyncLifetime
     {
         // T1024 (fase 22): la vigente subió a K6a; las clases de K5 se siguen emitiendo.
         CatalogoDeCartera.EntregaVigente.Should().BeOneOf(EntregaDeCartera.K5, EntregaDeCartera.K6a, EntregaDeCartera.K6b);
-        Enum.GetValues<IssuedDocumentKind>().Should().OnlyContain(c => PrefijosDeDocumentosDeCartera.Disponible(c, CatalogoDeCartera.EntregaVigente));
+        // Feature 014 (T014): las clases de captaciones (7 a 15) existen desde ya pero se emiten desde su entrega (K7 en adelante).
+        Enum.GetValues<IssuedDocumentKind>().Where(c => (int)c <= 6)
+            .Should().OnlyContain(c => PrefijosDeDocumentosDeCartera.Disponible(c, CatalogoDeCartera.EntregaVigente));
+        Enum.GetValues<IssuedDocumentKind>().Where(c => (int)c > 6)
+            .Should().OnlyContain(c => !PrefijosDeDocumentosDeCartera.Disponible(c, EntregaDeCartera.K6b) && PrefijosDeDocumentosDeCartera.Disponible(c, EntregaDeCartera.K11));
         PrefijosDeDocumentosDeCartera.Disponible(IssuedDocumentKind.Statement, EntregaDeCartera.K4).Should().BeFalse();
     }
 

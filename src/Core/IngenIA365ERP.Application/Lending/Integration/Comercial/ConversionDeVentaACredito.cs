@@ -115,11 +115,11 @@ public sealed class ConversionDeVentaACredito(IApplicationDbContext db, VersionV
         foreach (var codigo in new[] { venta.CreditLineCode, venta.SuggestedCreditLineCode }.Where(c => !string.IsNullOrWhiteSpace(c)).Distinct())
         {
             var normalizado = codigo!.Trim().ToUpperInvariant();
-            var linea = await db.CreditLines.AsNoTracking().FirstOrDefaultAsync(l => l.Code == normalizado && !l.IsDeleted, ct);
+            var linea = await db.CreditLines.AsNoTracking().FirstOrDefaultAsync(l => l.Code == normalizado && !l.IsDeleted && l.Nature == LineNature.Placement, ct);
             if (linea is not null && await SirveAsync(linea, tipo, venta.Fecha, ct) is { } version) return (linea, version);
         }
 
-        var activas = await db.CreditLines.AsNoTracking().Where(l => !l.IsDeleted && l.Status == CreditLineStatus.Active).OrderBy(l => l.Code).ToListAsync(ct);
+        var activas = await db.CreditLines.AsNoTracking().Where(l => !l.IsDeleted && l.Status == CreditLineStatus.Active && l.Nature == LineNature.Placement).OrderBy(l => l.Code).ToListAsync(ct);
         if (activas.Count == 0) return null;
         var vigentes = await versiones.LeerVariasAsync(activas.Select(l => l.Id).ToList(), venta.Fecha, null, ct);
         foreach (var linea in activas)

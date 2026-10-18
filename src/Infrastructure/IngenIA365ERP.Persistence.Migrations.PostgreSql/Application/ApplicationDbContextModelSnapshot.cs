@@ -25536,6 +25536,11 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasMaxLength(120)
                         .HasColumnType("character varying(120)");
 
+                    b.Property<int>("Nature")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1);
+
                     b.Property<Guid>("PublicId")
                         .HasColumnType("uuid");
 
@@ -25574,9 +25579,17 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasDatabaseName("UK_LND_CreditLines_Code")
                         .HasFilter("\"IsDeleted\" = FALSE");
 
+                    b.HasIndex("Nature")
+                        .IsUnique()
+                        .HasDatabaseName("UK_LND_CreditLines_ActiveContribution")
+                        .HasFilter("\"Nature\" = 3 AND \"Status\" = 2 AND \"IsDeleted\" = FALSE");
+
                     b.HasIndex("PublicId")
                         .IsUnique()
                         .HasDatabaseName("UK_LND_CreditLines_PublicId");
+
+                    b.HasIndex("Nature", "Status")
+                        .HasDatabaseName("IX_LND_CreditLines_Nature_Status");
 
                     b.ToTable("LND_CreditLines", "dbo");
                 });

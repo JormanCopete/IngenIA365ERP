@@ -25745,6 +25745,11 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasMaxLength(120)
                         .HasColumnType("nvarchar(120)");
 
+                    b.Property<int>("Nature")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(1);
+
                     b.Property<Guid>("PublicId")
                         .HasColumnType("uniqueidentifier");
 
@@ -25783,9 +25788,17 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasDatabaseName("UK_LND_CreditLines_Code")
                         .HasFilter("[IsDeleted] = 0");
 
+                    b.HasIndex("Nature")
+                        .IsUnique()
+                        .HasDatabaseName("UK_LND_CreditLines_ActiveContribution")
+                        .HasFilter("[Nature] = 3 AND [Status] = 2 AND [IsDeleted] = 0");
+
                     b.HasIndex("PublicId")
                         .IsUnique()
                         .HasDatabaseName("UK_LND_CreditLines_PublicId");
+
+                    b.HasIndex("Nature", "Status")
+                        .HasDatabaseName("IX_LND_CreditLines_Nature_Status");
 
                     b.ToTable("LND_CreditLines", "dbo");
                 });

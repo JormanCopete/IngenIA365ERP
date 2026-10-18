@@ -31,9 +31,30 @@ public static class PrefijosDeDocumentosDeCartera
         IssuedDocumentKind.Statement, IssuedDocumentKind.TaxCertificate,
     };
 
-    /// <summary>¿La clase se emite en la entrega <paramref name="entrega"/>? Las de K1 siempre; el extracto y el certificado tributario desde K5.</summary>
+    /// <summary>
+    /// Feature 014 (T014; contracts/documentos.md §1): las clases de captaciones y aportes con la entrega desde la que se emiten. El extracto y el
+    /// certificado de saldo nacen con aportes (K7); el título del CDAT con K9; la respuesta al juzgado con los embargos (K8). (nuevo)
+    /// </summary>
+    public static IReadOnlyDictionary<IssuedDocumentKind, EntregaDeCartera> DeCaptaciones { get; } = new Dictionary<IssuedDocumentKind, EntregaDeCartera>
+    {
+        [IssuedDocumentKind.AccountStatement] = EntregaDeCartera.K7,
+        [IssuedDocumentKind.AccountBalanceCertificate] = EntregaDeCartera.K7,
+        [IssuedDocumentKind.DepositTaxCertificate] = EntregaDeCartera.K8,
+        [IssuedDocumentKind.WithholdingCertificate] = EntregaDeCartera.K8,
+        [IssuedDocumentKind.TermDepositTitle] = EntregaDeCartera.K9,
+        [IssuedDocumentKind.ContributionCertificate] = EntregaDeCartera.K7,
+        [IssuedDocumentKind.ContributionClearance] = EntregaDeCartera.K7,
+        [IssuedDocumentKind.MembershipWithdrawalSettlement] = EntregaDeCartera.K7,
+        [IssuedDocumentKind.GarnishmentResponse] = EntregaDeCartera.K8,
+    };
+
+    /// <summary>
+    /// ¿La clase se emite en la entrega <paramref name="entrega"/>? Las de K1 siempre; el extracto y el certificado tributario desde K5; las de
+    /// captaciones desde su entrega (<see cref="DeCaptaciones"/>).
+    /// </summary>
     public static bool Disponible(IssuedDocumentKind clase, EntregaDeCartera entrega) =>
-        DeK1.Contains(clase) || (DeK5.Contains(clase) && entrega >= EntregaDeCartera.K5);
+        DeK1.Contains(clase) || (DeK5.Contains(clase) && entrega >= EntregaDeCartera.K5)
+        || (DeCaptaciones.TryGetValue(clase, out var desde) && entrega >= desde);
 
     /// <summary>El prefijo de la clase.</summary>
     public static string De(IssuedDocumentKind clase) => clase switch
@@ -44,6 +65,15 @@ public static class PrefijosDeDocumentosDeCartera
         IssuedDocumentKind.BalanceCertificate => CertificadoDeSaldo,
         IssuedDocumentKind.Statement => Extracto,
         IssuedDocumentKind.TaxCertificate => CertificadoTributario,
+        // Feature 014 (contracts/documentos.md §1, §6): prefijos de tres letras que no chocan con los de la 013.
+        IssuedDocumentKind.AccountStatement => "EXT-",
+        IssuedDocumentKind.AccountBalanceCertificate => "CSA-",
+        IssuedDocumentKind.DepositTaxCertificate => "CTR-",
+        IssuedDocumentKind.WithholdingCertificate => "CRF-",
+        IssuedDocumentKind.TermDepositTitle => "TIT-",
+        IssuedDocumentKind.ContributionCertificate => "CNA-",
+        IssuedDocumentKind.ContributionClearance => "PSA-",
+        IssuedDocumentKind.MembershipWithdrawalSettlement => "LRA-",
         _ => throw new ArgumentOutOfRangeException(nameof(clase), clase, "Clase de documento desconocida."),
     };
 

@@ -193,6 +193,20 @@ public enum IssuedDocumentKind
     GeneralClearance = 4,
     BalanceCertificate = 5,
     TaxCertificate = 6,
+
+    // Feature 014 (T014; research §0.3, C27; contracts/documentos.md §1): las clases de captaciones y aportes, al final. Se emiten desde su
+    // entrega (PrefijosDeDocumentosDeCartera.Disponible).
+    AccountStatement = 7,
+    AccountBalanceCertificate = 8,
+    DepositTaxCertificate = 9,
+    WithholdingCertificate = 10,
+    TermDepositTitle = 11,
+    ContributionCertificate = 12,
+    ContributionClearance = 13,
+    MembershipWithdrawalSettlement = 14,
+
+    /// <summary>La respuesta a un juzgado por un embargo (data-model §5.2.1, nuevo en data-model).</summary>
+    GarnishmentResponse = 15,
 }
 
 /// <summary>Estado de un documento emitido: calculado (F-13).</summary>

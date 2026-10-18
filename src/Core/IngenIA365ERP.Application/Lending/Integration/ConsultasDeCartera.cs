@@ -182,7 +182,7 @@ public sealed class ConsultasDeCartera(
     /// </summary>
     private async Task<IReadOnlyList<LineaDeCreditoDto>> LineasAsync(PaymentMeansClass clase, DateOnly fecha, CancellationToken ct)
     {
-        var activas = await db.CreditLines.AsNoTracking().Where(l => !l.IsDeleted && l.Status == CreditLineStatus.Active && l.UsuryBlockedSince == null)
+        var activas = await db.CreditLines.AsNoTracking().Where(l => !l.IsDeleted && l.Status == CreditLineStatus.Active && l.UsuryBlockedSince == null && l.Nature == LineNature.Placement)
             .OrderBy(l => l.Code).ToListAsync(ct);
         if (activas.Count == 0) return [];
         var vigentes = await versiones.LeerVariasAsync(activas.Select(l => l.Id).ToList(), fecha, null, ct);

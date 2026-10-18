@@ -40,7 +40,9 @@ public class EnumeracionesDeCarteraTests
         [typeof(LoanNumberReservationStatus)] = [("Reserved", 1), ("Used", 2), ("Released", 3), ("Expired", 4)],
         [typeof(LendingNumberKind)] = [("Loan", 1), ("Operation", 2), ("Application", 3), ("DisbursementOrder", 4), ("DisbursementFile", 5),
             ("SessionMinutes", 6), ("IssuedDocument", 7), ("PayrollDeductionFile", 8), ("RegulatoryFile", 9), ("LoanNovelty", 10), ("Waiver", 11),
-            ("WriteOffBatch", 12), ("PortfolioEvaluation", 13), ("PaymentAgreement", 14), ("LegalProcess", 15)],
+            ("WriteOffBatch", 12), ("PortfolioEvaluation", 13), ("PaymentAgreement", 14), ("LegalProcess", 15),
+            // Feature 014 (T014; research E03).
+            ("MemberAccount", 16), ("MemberAccountOperation", 17), ("MembershipWithdrawal", 18), ("AssemblyDistribution", 19), ("DeceasedHolderCase", 20)],
 
         // ---------------------------------------------------------------------------------------- condiciones financieras --
         [typeof(DayCountConvention)] = [("Thirty360", 1), ("Actual365", 2), ("Actual360", 3)],
@@ -123,7 +125,7 @@ public class EnumeracionesDeCarteraTests
             ("ScheduledTask", 5), ("MigratedCollectionStages", 6)],
         [typeof(LendingProcessRunStatus)] = [("Requested", 0), ("Running", 1), ("Completed", 2), ("CompletedWithErrors", 3), ("Failed", 4)],
         [typeof(AccountingFactPartSource)] = [("DailyCycleBatch", 1), ("LoanCatchUp", 2), ("NationalValueCorrectionBatch", 3), ("MonthlyClose", 4),
-            ("CloseReopening", 5)],
+            ("CloseReopening", 5), ("AccountCatchUp", 6)],
         [typeof(MigrationLoadStatus)] = [("Draft", 1), ("Applied", 2), ("Replaced", 3), ("Activated", 4)],
         [typeof(MigrationPartStatus)] = [("Imported", 1), ("Superseded", 2)],
         [typeof(MigrationDifferenceKind)] = [("BalanceCheck", 1), ("SaleNotMigrated", 2), ("SaleOutsideLending", 3)],
@@ -194,12 +196,88 @@ public class EnumeracionesDeCarteraTests
         [typeof(CreditReportClaimKind)] = [("Claim", 1), ("Impersonation", 2)],
         [typeof(CreditReportClaimStatus)] = [("InProcess", 1), ("Answered", 2), ("TacitlyAccepted", 3), ("Withdrawn", 4)],
         [typeof(IssuedDocumentKind)] = [("PaymentPlan", 1), ("Statement", 2), ("LoanClearance", 3), ("GeneralClearance", 4),
-            ("BalanceCertificate", 5), ("TaxCertificate", 6)],
+            ("BalanceCertificate", 5), ("TaxCertificate", 6),
+            // Feature 014 (T014; research C27).
+            ("AccountStatement", 7), ("AccountBalanceCertificate", 8), ("DepositTaxCertificate", 9), ("WithholdingCertificate", 10),
+            ("TermDepositTitle", 11), ("ContributionCertificate", 12), ("ContributionClearance", 13), ("MembershipWithdrawalSettlement", 14),
+            ("GarnishmentResponse", 15)],
         [typeof(IssuedDocumentStatus)] = [("Valid", 1), ("SubjectToFinality", 2), ("Voided", 3)],
         [typeof(IssuedDocumentEventKind)] = [("Issued", 1), ("Delivered", 2), ("Voided", 3)],
         [typeof(DocumentDeliveryMode)] = [("Download", 1), ("Email", 2)],
         [typeof(RegulatoryFileKind)] = [("Sicses", 1), ("CreditBureau", 2)],
         [typeof(RegulatoryFileStatus)] = [("Validated", 1), ("Generated", 2), ("Superseded", 3), ("Uploaded", 4)],
+
+        // ------------------------------------------------------------------- feature 014: captaciones y aportes (T015) --
+        [typeof(LineNature)] = [("Placement", 1), ("Deposit", 2), ("Contribution", 3)],
+        [typeof(DepositClass)] = [("Demand", 1), ("Contractual", 2), ("Permanent", 3), ("TermDeposit", 4)],
+        [typeof(BalanceMethod)] = [("DailyBalance", 1), ("AverageBalance", 2), ("MinimumBalance", 3)],
+        [typeof(RateTierMode)] = [("WholeBalance", 1), ("Stepped", 2)],
+        [typeof(InterestTiming)] = [("Arrears", 1), ("Advance", 2)],
+        [typeof(RolloverRateRule)] = [("SameRate", 1), ("CurrentTableRate", 2), ("Agreed", 3)],
+        [typeof(AfterMaturityTreatment)] = [("StopAccruing", 1), ("MoveToDemand", 2)],
+        [typeof(MemberAccountStatus)] = [("Opening", 1), ("Active", 2), ("Inactive", 3), ("Matured", 4), ("Closing", 5), ("Closed", 6)],
+        [typeof(MemberAccountPartyRole)] = [("Holder", 1), ("CoHolder", 2), ("Signatory", 3), ("LegalRepresentative", 4), ("Beneficiary", 5)],
+        [typeof(HandlingMode)] = [("Indistinct", 1), ("Joint", 2)],
+        [typeof(MemberAccountConcept)] = [("Principal", 1), ("InterestPayable", 2), ("Withholding", 3), ("Gmf", 4),
+            ("ContributionMinimum", 5), ("ContributionOrdinary", 6), ("ContributionExtraordinary", 7), ("ContributionRevaluation", 8),
+            ("ChargeReceivable", 9), ("Bonus", 10)],
+        [typeof(MemberAccountTransactionKind)] = [("OpeningBalance", 1), ("Deposit", 2), ("Withdrawal", 3), ("TransferIn", 4),
+            ("TransferOut", 5), ("InterestAccrued", 6), ("AccrualAdjustment", 7), ("InterestCredited", 8), ("InterestPaid", 9),
+            ("WithholdingApplied", 10), ("GmfCharged", 11), ("ChargeApplied", 12), ("PenaltyApplied", 13), ("Capitalization", 14),
+            ("Reclassification", 15), ("InternalOffset", 16), ("Refund", 17), ("ToUnclaimed", 18), ("GarnishmentConsigned", 19),
+            ("ChargeWaived", 20), ("BonusRecognized", 21), ("AssemblyCredit", 22)],
+        [typeof(GmfExemptionPolicy)] = [("SingleMarkedAccount", 1), ("PerHolderLimit", 2), ("NotApplicable", 3)],
+        [typeof(WithholdingThresholdScope)] = [("AllDepositClasses", 1), ("ExceptTermDeposit", 2), ("None", 3)],
+        [typeof(HoldReason)] = [("Internal", 1), ("LoanCollateral", 2), ("SignaturePending", 3), ("Deceased", 4), ("ScreeningMatch", 5),
+            ("Garnishment", 6), ("Other", 99)],
+        [typeof(ChargeKind)] = [("MaintenanceFee", 1), ("ExtraOperation", 2), ("ExtraDocument", 3), ("MediumReplacement", 4),
+            ("Inactivity", 5), ("Other", 99)],
+        [typeof(MembershipWithdrawalCause)] = [("Voluntary", 1), ("Exclusion", 2), ("Death", 3), ("Other", 99)],
+        [typeof(MembershipWithdrawalStatus)] = [("Filed", 1), ("Approved", 2), ("Settled", 3), ("Paid", 4), ("Desisted", 5),
+            ("Rejected", 6), ("ToRedo", 7)],
+        [typeof(AssemblyDistributionKind)] = [("Revaluation", 1), ("SurplusDistribution", 2), ("Amortization", 3)],
+        [typeof(ContributionClass)] = [("Minimum", 1), ("Ordinary", 2), ("Extraordinary", 3), ("Revalued", 4)],
+        [typeof(IssueTermBand)] = [("UnderSixMonths", 1), ("SixToTwelve", 2), ("TwelveToEighteen", 3), ("EighteenOrMore", 4)],
+        [typeof(AccountFlag)] = [("Standard", 1), ("GmfExempt", 2), ("Garnished", 3)],
+        [typeof(MemberAccountOperationKind)] = [("OpeningBalance", 1), ("Deposit", 2), ("Withdrawal", 3), ("Transfer", 4), ("Reversal", 5),
+            ("InterestSettlement", 6), ("TermDepositConstitution", 7), ("TermDepositInterestPayment", 8), ("TermDepositRollover", 9),
+            ("TermDepositRenewal", 10), ("TermDepositRedemption", 11), ("Cancellation", 12), ("Charge", 13), ("ChargeWaiver", 14),
+            ("InternalOffset", 15), ("DirectDebit", 16), ("ContributionRefund", 17), ("AssemblyCredit", 18), ("Reclassification", 19),
+            ("ContractualMaturity", 20), ("ToUnclaimed", 21), ("DeceasedDelivery", 22), ("GarnishmentConsignment", 23)],
+        [typeof(MemberAccountOrigin)] = [("Opening", 1), ("Migration", 2)],
+        [typeof(ContractualStatus)] = [("Current", 1), ("Breached", 2), ("Fulfilled", 3)],
+        [typeof(AccountTermsCause)] = [("Constitution", 1), ("Rollover", 2), ("Renewal", 3), ("Migration", 4), ("ContractualSetup", 5),
+            ("ContractualBreach", 6), ("AgreedRate", 7), ("RateNegotiation", 8)],
+        [typeof(InterestDestination)] = [("ToAccount", 1), ("PaymentOrder", 2), ("Capitalize", 3)],
+        [typeof(MaturityInstruction)] = [("Rollover", 1), ("RenewWithNewTerms", 2), ("CancelAndPay", 3)],
+        [typeof(EarlyRedemptionPenaltyMode)] = [("PenaltyRate", 1), ("Discount", 2)],
+        [typeof(ContractualBreachEffect)] = [("BreachRate", 1), ("MoveToDemand", 2), ("Cancel", 3)],
+        [typeof(BonusRecognition)] = [("AtFulfillment", 1), ("Provisioned", 2)],
+        [typeof(ChargeTrigger)] = [("Periodic", 1), ("WithdrawalOverFree", 2), ("DepositOverFree", 3), ("ExtraDocument", 4),
+            ("MediumReplacement", 5), ("Inactivity", 6), ("Manual", 7)],
+        [typeof(ChargeCalculation)] = [("FixedAmount", 1), ("Percentage", 2)],
+        [typeof(ChargeBase)] = [("OperationAmount", 1), ("AverageBalance", 2)],
+        [typeof(ChargeShortfallPolicy)] = [("KeepPending", 1), ("Waive", 2)],
+        [typeof(AccountChargeStatus)] = [("Collected", 1), ("Pending", 2), ("Waived", 3), ("Reversed", 4)],
+        [typeof(ContributionAmountMode)] = [("FixedAmount", 1), ("IncomeFraction", 2), ("MinimumWageFraction", 3)],
+        [typeof(ExcessContributionAction)] = [("Reject", 1), ("RefundByDecision", 2)],
+        [typeof(ConceptAllocationRule)] = [("Priority", 1), ("Proportional", 2)],
+        [typeof(DirectDebitScope)] = [("SingleLoan", 1), ("AllLoansOfHolder", 2)],
+        [typeof(PayoutPurpose)] = [("Withdrawal", 1), ("ContributionRefund", 2), ("DeceasedDelivery", 3), ("TermDepositInterest", 4),
+            ("TermDepositRedemption", 5), ("GarnishmentConsignment", 6), ("Cancellation", 7)],
+        [typeof(GarnishmentStatus)] = [("Registered", 1), ("Active", 2), ("Released", 3), ("Rejected", 4)],
+        [typeof(GarnishmentResponseKind)] = [("Acknowledgement", 1), ("BalanceReport", 2), ("ContributionsNotGarnishable", 3),
+            ("ConsignmentNotice", 4), ("ReleaseAcknowledgement", 5)],
+        [typeof(MembershipWithdrawalLineKind)] = [("ContributionBalance", 1), ("SavingsBalance", 2), ("TermDepositBalance", 3),
+            ("InterestToDate", 4), ("Withholding", 5), ("Gmf", 6), ("LoanOffset", 7), ("LossDeduction", 8), ("Refund", 9)],
+        [typeof(RevaluationBase)] = [("AverageBalance", 1), ("YearEndBalance", 2)],
+        [typeof(SurplusDestination)] = [("Contributions", 1), ("Savings", 2), ("Payment", 3)],
+        [typeof(AssemblyDistributionStatus)] = [("Simulated", 1), ("Approved", 2), ("Applied", 3), ("Voided", 4)],
+        [typeof(DeliveryRoute)] = [("Beneficiaries", 1), ("WithoutProbate", 2), ("Probate", 3)],
+        [typeof(DeceasedCaseStatus)] = [("Registered", 1), ("Approved", 2), ("Delivered", 3), ("Cancelled", 4)],
+        [typeof(UnclaimedSource)] = [("UncashedRefund", 1), ("InactiveBalance", 2), ("UncashedPayout", 3)],
+        [typeof(UnclaimedStatus)] = [("Held", 1), ("Claimed", 2)],
+        [typeof(LiquidityHoldingKind)] = [("BankDeposit", 1), ("TermInvestment", 2), ("TrustFund", 3), ("Other", 99)],
     };
 
     public static TheoryData<Type> Enums()
@@ -233,7 +311,9 @@ public class EnumeracionesDeCarteraTests
     public void Las_entregas_y_la_vigente_son_las_de_R15()
     {
         Enum.GetValues<EntregaDeCartera>().Select(e => (e.ToString(), (int)e)).Should().Equal(
-            ("K1", 1), ("K2", 2), ("K3", 3), ("K4", 4), ("K5", 5), ("K6a", 6), ("K6b", 7));
+            ("K1", 1), ("K2", 2), ("K3", 3), ("K4", 4), ("K5", 5), ("K6a", 6), ("K6b", 7),
+            // Feature 014 (T014; research E06): las de captaciones, al final; la vigente no cambia hasta que salga K7.
+            ("K7", 8), ("K8", 9), ("K9", 10), ("K10", 11), ("K11", 12));
         CatalogoDeCartera.EntregaVigente.Should().Be(EntregaDeCartera.K6b, "T0969 la subió a K5, T1024 (fase 22) a K6a y T1058 (fase 23) a K6b");
     }
 
@@ -249,5 +329,21 @@ public class EnumeracionesDeCarteraTests
             "Radicar", "Analizar", "Decidir", "Votar", "Desembolsar", "AnularOrdenDeGiro", "ArmarLoteDeCastigo", "AplicarCastigo",
             "CargarMigracion", "AceptarDiferencias", "Aplicar");
         AccionesDeSegregacion.Todas.Should().OnlyContain(a => a.Length <= 30, "Action es nvarchar(30)");
+    }
+
+    /// <summary>
+    /// Feature 014 (T015; data-model §1.7, research C13 y E04): los valores agregados al final de dos enums que no son del espacio de Cartera —los
+    /// orígenes de campo de los archivos planos y la clase de recaudador del contrato (en Application)—, sin renumerar los anteriores.
+    /// </summary>
+    [Fact]
+    public void Los_valores_agregados_fuera_del_espacio_de_Cartera_quedan_al_final()
+    {
+        ((int)IngenIA365ERP.Domain.Enums.Core.BankFieldSource.DeductionDate).Should().Be(92);
+        ((int)IngenIA365ERP.Domain.Enums.Core.BankFieldSource.AccountNumber).Should().Be(93);
+        ((int)IngenIA365ERP.Domain.Enums.Core.BankFieldSource.AccountInstallmentPeriod).Should().Be(94);
+        ((int)IngenIA365ERP.Domain.Enums.Core.BankFieldSource.PaymasterConceptCode).Should().Be(95);
+
+        Enum.GetValues<IngenIA365ERP.Application.Common.Integration.Lending.ClaseDeRecaudador>().Select(e => (e.ToString(), (int)e)).Should().Equal(
+            ("Receipts", 1), ("Payroll", 2), ("Contributions", 3), ("OwnLoanPayoff", 4), ("Test", 5), ("Treasury", 6));
     }
 }

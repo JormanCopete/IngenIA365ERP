@@ -18,6 +18,15 @@ namespace IngenIA365ERP.Domain.Entities.Lending.Configuration;
 /// cierre: la línea sigue activa pero no admite créditos nuevos hasta que una versión bajo la usura lo limpie
 /// (<see cref="DesbloquearPorUsura"/>). Las transiciones se preguntan antes (<c>Validar…</c>) y lanzan si no.
 /// </para>
+///
+/// <para>
+/// Feature 014 (T011; research R01; data-model §1.1; FR-027): la línea es la identidad común del catálogo de la Cartera y tiene
+/// <see cref="Nature"/> —colocación, captación o aportes—, fija desde la creación. Su versión de condiciones depende de la naturaleza
+/// (<see cref="CreditLineVersion"/> sólo para colocación; <c>DepositLineVersion</c> y <c>ContributionLineVersion</c> para las otras dos,
+/// <see cref="ValidarNaturaleza"/>). La usura es sólo de la colocación: una línea de captación o de aportes nunca admite créditos
+/// (<see cref="AdmiteCreditosNuevos"/>) y el bloqueo y desbloqueo por usura la ignoran. <c>Code</c> sigue único entre las tres naturalezas y
+/// sigue siendo la dimensión de línea de la matriz.
+/// </para>
 /// </summary>
 public class CreditLine : AuditableEntity
 {
@@ -25,7 +34,13 @@ public class CreditLine : AuditableEntity
     public const string CodigoYaCerrada = "Lending.CreditLine.AlreadyClosed";
     public const string CodigoNoCerrada = "Lending.CreditLine.NotClosed";
 
+    /// <summary>Feature 014 (T011): la operación pide otra naturaleza de línea (una versión de crédito sobre una línea de captación, o al revés).</summary>
+    public const string CodigoNaturalezaDistinta = "Lending.CreditLine.NatureMismatch";
+
     public string Code { get; init; } = string.Empty;
+
+    /// <summary>Feature 014 (T011): colocación (todas las de la 013), captación o aportes. Inmutable desde la creación.</summary>
+    public LineNature Nature { get; init; } = LineNature.Placement;
 
     public string Name { get; set; } = string.Empty;
 
@@ -50,21 +65,50 @@ public class CreditLine : AuditableEntity
 
     // ------------------------------------------------------------------------------------------------ comportamiento --
 
-    /// <summary>Una línea nueva, en borrador: el código va en mayúsculas y sin espacios alrededor (lo valida <c>CodigoDeCatalogo</c>).</summary>
-    public static CreditLine Nueva(string code, string name, string? purpose)
+    /// <summary>
+    /// Una línea nueva, en borrador: el código va en mayúsculas y sin espacios alrededor (lo valida <c>CodigoDeCatalogo</c>). Sin
+    /// naturaleza, es de colocación (la 013 no cambia).
+    /// </summary>
+    public static CreditLine Nueva(string code, string name, string? purpose, LineNature nature = LineNature.Placement)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(code);
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        if (!Enum.IsDefined(nature)) throw new ArgumentOutOfRangeException(nameof(nature), nature, "Naturaleza de línea desconocida.");
         return new CreditLine
         {
             Code = code.Trim().ToUpperInvariant(),
             Name = name.Trim(),
             Purpose = string.IsNullOrWhiteSpace(purpose) ? null : purpose.Trim(),
+            Nature = nature,
         };
     }
 
-    /// <summary>¿Admite simular, radicar, aprobar, desembolsar o ventas nuevas? Activa y sin bloqueo por usura.</summary>
-    public bool AdmiteCreditosNuevos => Status == CreditLineStatus.Active && UsuryBlockedSince is null;
+    /// <summary>¿Es de colocación (crédito)? Sólo ésta tiene usura, modalidad y versión de crédito.</summary>
+    public bool EsDeColocacion => Nature == LineNature.Placement;
+
+    /// <summary>
+    /// ¿Admite simular, radicar, aprobar, desembolsar o ventas nuevas? De colocación, activa y sin bloqueo por usura. Una línea de captación o
+    /// de aportes nunca admite créditos (feature 014, T011).
+    /// </summary>
+    public bool AdmiteCreditosNuevos => EsDeColocacion && Status == CreditLineStatus.Active && UsuryBlockedSince is null;
+
+    /// <summary>
+    /// Lo que impide usarla con la naturaleza <paramref name="esperada"/>, o nulo (feature 014, T011): la versión de crédito y todo lo que sigue
+    /// del crédito sólo van sobre colocación; las versiones de captación y de aportes, sobre su naturaleza.
+    /// </summary>
+    public ProblemaDeCartera? ValidarNaturaleza(LineNature esperada) => Nature == esperada
+        ? null
+        : new ProblemaDeCartera(CodigoNaturalezaDistinta,
+            $"La línea {Code} es de {NombreDe(Nature)}: no admite una operación de {NombreDe(esperada)}.",
+            new Dictionary<string, object?> { ["code"] = Code, ["nature"] = Nature.ToString(), ["expected"] = esperada.ToString() });
+
+    private static string NombreDe(LineNature n) => n switch
+    {
+        LineNature.Placement => "crédito",
+        LineNature.Deposit => "captación",
+        LineNature.Contribution => "aportes",
+        _ => n.ToString(),
+    };
 
     public bool EstaBloqueadaPorUsura => UsuryBlockedSince is not null;
 
@@ -73,7 +117,10 @@ public class CreditLine : AuditableEntity
         ? ProblemaDeCartera.Con(CodigoCerrada, $"La línea {Code} está cerrada a créditos nuevos; reábrala.", "code", Code)
         : null;
 
-    /// <summary><c>Draft → Active</c>; activa, no cambia. Quien llama ya comprobó la usura y el concepto tributario (T44).</summary>
+    /// <summary>
+    /// <c>Draft → Active</c>; activa, no cambia. En colocación quien llama ya comprobó la usura y el concepto tributario (T44); en captación y
+    /// aportes (feature 014, T011) no hay usura: la activa el registro de su primera versión de su naturaleza.
+    /// </summary>
     public void Activar()
     {
         ReglaDeCarteraException.SiHay(ValidarActivacion());
@@ -124,7 +171,8 @@ public class CreditLine : AuditableEntity
     /// </summary>
     public bool BloquearPorUsura(DateOnly desde, Guid usuraPublicId)
     {
-        if (UsuryBlockedSince is not null) return false;
+        // Feature 014 (T011; LasCaptacionesNoUsanLaUsura): la usura es sólo de la colocación; una línea de captación o de aportes la ignora.
+        if (!EsDeColocacion || UsuryBlockedSince is not null) return false;
         UsuryBlockedSince = desde;
         UsuryBlockedByValuePublicId = usuraPublicId;
         return true;
@@ -133,7 +181,7 @@ public class CreditLine : AuditableEntity
     /// <summary>Limpia el bloqueo cuando una versión nueva pasa la usura. Devuelve <c>true</c> si estaba bloqueada.</summary>
     public bool DesbloquearPorUsura()
     {
-        if (UsuryBlockedSince is null) return false;
+        if (!EsDeColocacion || UsuryBlockedSince is null) return false;
         UsuryBlockedSince = null;
         UsuryBlockedByValuePublicId = null;
         return true;

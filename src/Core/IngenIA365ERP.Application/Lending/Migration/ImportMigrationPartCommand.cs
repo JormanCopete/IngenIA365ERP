@@ -202,7 +202,7 @@ public sealed class ImportMigrationPartCommandHandler(
             if (definicion.Columna(C.Linea) is not null)
             {
                 var codigos = ctx.Datos.Filas.Select(f => f.Crudo(C.Linea)?.ToUpperInvariant()).OfType<string>().Distinct().ToList();
-                var lineas = await db.CreditLines.AsNoTracking().Where(l => codigos.Contains(l.Code) && !l.IsDeleted).Select(l => new { l.Id, l.Code })
+                var lineas = await db.CreditLines.AsNoTracking().Where(l => codigos.Contains(l.Code) && !l.IsDeleted && l.Nature == LineNature.Placement).Select(l => new { l.Id, l.Code })
                     .ToListAsync(ct);
                 var versiones = await new VersionVigenteDeLinea(db).LeerVariasAsync(lineas.Select(l => l.Id).ToList(), Corte, ct: ct);
                 foreach (var l in lineas) _lineas[l.Code] = (l.Id, versiones.TryGetValue(l.Id, out var v) ? v.Version : null);

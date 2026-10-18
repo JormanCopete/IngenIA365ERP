@@ -275,7 +275,7 @@ public sealed class AssignCreditLimitCommandHandler(
     {
         if (!ReglasDeLineaDeCredito.PermiteNoAsociados(await perfil.VigenteAsync(hoy, null, ct))) return false;
         if (version is not null) return version.Version.AllowsNonAssociates;
-        var lineas = await db.CreditLines.AsNoTracking().Where(l => !l.IsDeleted && l.Status == CreditLineStatus.Active).Select(l => l.Id).ToListAsync(ct);
+        var lineas = await db.CreditLines.AsNoTracking().Where(l => !l.IsDeleted && l.Status == CreditLineStatus.Active && l.Nature == LineNature.Placement).Select(l => l.Id).ToListAsync(ct);
         var vigentes = await versiones.LeerVariasAsync(lineas, hoy, ct: ct);
         return vigentes.Values.Any(v => v.Version.AllowsNonAssociates && (clase != CreditLimitKind.Revolving || v.Version.AllowsCommercialOrigin));
     }

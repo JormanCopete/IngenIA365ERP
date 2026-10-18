@@ -119,7 +119,7 @@ public sealed class ReservasDeCartera(
 
         var linea = string.IsNullOrWhiteSpace(s.CreditLineCode)
             ? null
-            : await db.CreditLines.AsNoTracking().Where(l => l.Code == s.CreditLineCode.Trim().ToUpperInvariant() && !l.IsDeleted)
+            : await db.CreditLines.AsNoTracking().Where(l => l.Code == s.CreditLineCode.Trim().ToUpperInvariant() && !l.IsDeleted && l.Nature == LineNature.Placement)
                 .Select(l => (int?)l.Id).FirstOrDefaultAsync(ct);
         var cupo = await cupos.ParaVentaAsync(personId, linea, fecha, ct, sinElPago: s.PaymentPublicId);
         if (cupo is not null && s.Amount > cupo.Disponible)

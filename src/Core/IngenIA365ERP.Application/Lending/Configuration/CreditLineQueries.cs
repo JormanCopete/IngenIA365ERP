@@ -43,7 +43,8 @@ public sealed class ListCreditLinesQueryHandler(
     public async Task<Result<IReadOnlyList<CreditLineListItemDto>>> Handle(ListCreditLinesQuery request, CancellationToken ct)
     {
         var alcance = await alcanceDeLaPeticion.ObtenerAsync(ct);
-        var consulta = db.CreditLines.AsNoTracking().Where(l => !l.IsDeleted).PorLinea(alcance, l => l.Id);
+        // Feature 014 (T011): /api/lending/credit-lines sigue siendo de colocación; el catálogo común es /api/lending/lines.
+        var consulta = db.CreditLines.AsNoTracking().Where(l => !l.IsDeleted && l.Nature == LineNature.Placement).PorLinea(alcance, l => l.Id);
         if (request.Status is { } estado) consulta = consulta.Where(l => l.Status == estado);
         else if (request.IncludeClosed != true) consulta = consulta.Where(l => l.Status != CreditLineStatus.Closed);
         var lineas = await consulta.OrderBy(l => l.Code).ToListAsync(ct);

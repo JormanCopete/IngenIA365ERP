@@ -13,6 +13,9 @@ public enum ClaseDeRecaudador
     Contributions = 3,
     OwnLoanPayoff = 4,
     Test = 5,
+
+    /// <summary>Feature 014 (T014; research C13, E04): Tesorería, para las transferencias que recibe a cuentas y créditos.</summary>
+    Treasury = 6,
 }
 
 /// <summary>

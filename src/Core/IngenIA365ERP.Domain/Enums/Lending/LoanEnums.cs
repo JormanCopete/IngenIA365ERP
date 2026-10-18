@@ -196,4 +196,21 @@ public enum LendingNumberKind
 
     /// <summary>K4 (US12, T0947): el proceso de cobro jurídico (columna entera: sin migración).</summary>
     LegalProcess = 15,
+
+    // Feature 014 (T014; data-model §1.3 con los valores de research E03: 10 a 15 ya eran de la 013).
+
+    /// <summary>El número de una cuenta de captación o de aportes, por línea (<c>ScopeKey</c> = código de la línea).</summary>
+    MemberAccount = 16,
+
+    /// <summary>El comprobante de una operación de cuenta (<c>ScopeKey</c> = nombre de <c>MemberAccountOperationKind</c>).</summary>
+    MemberAccountOperation = 17,
+
+    /// <summary>El radicado del retiro del asociado.</summary>
+    MembershipWithdrawal = 18,
+
+    /// <summary>Una distribución de la asamblea (revalorización, excedentes, amortización).</summary>
+    AssemblyDistribution = 19,
+
+    /// <summary>Un caso de fallecimiento del titular.</summary>
+    DeceasedHolderCase = 20,
 }
