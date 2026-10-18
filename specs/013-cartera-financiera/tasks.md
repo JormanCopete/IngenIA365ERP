@@ -4931,6 +4931,12 @@ Respuestas del dueño a las preguntas abiertas de la fase 24 (notas del bloque 2
     mira las reglas de capital para saber si la matriz ya está y no reescribe la cuenta de una regla que ya venía. Pantalla `/cartera/activacion`
     y `TextosDeMigracion` al día. Docs: runbook `cartera-puesta-en-marcha.md` §1, data-model §30.1, api.md §19.3. Sin migración. Riesgo para la
     corrida final: si una cooperativa de las e2e se activa con líneas de una modalidad cuya usura no registró, ahora falla (antes se dispensaba).
+- Anotaciones del 2026-10-18, sin código (DT §5 L8–L12): **SOLIDO no tiene créditos en UVR** (la migración no los necesita y la plantilla de
+  créditos en UVR no tendrá datos reales); **un solo tope de vivienda**, sin distinguir VIS/no VIS (`TOPE_TASA_VIVIENDA` se queda como una
+  clave); **la UVR va sin tramos** (`Lending.Housing.UvrTranchesNotSupported` se queda); el diseño de `78926dd2` —el historial de mora faltante
+  **avisa al cargar y bloquea al activar**— queda **confirmado**; y **el pago que cambiaría de cancelar o no por la UVR corregida sigue a
+  soporte** (runbook `valores-nacionales.md` §3a). Con esto se cierran las preguntas «Para el dueño» de las notas de los bloques 1 y 2 de la
+  fase 23 (salvo T1057, el SICSES, y los valores y fuentes de los cinco límites).
 
 **Checkpoint**: cada entrega promovida con su evidencia; `CLAUDE.md`, índice y runbooks al día; COOFLOPAL en vivo
 sólo con Recaudo y Tesorería reales.

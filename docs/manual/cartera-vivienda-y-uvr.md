@@ -32,7 +32,8 @@ La simulación, la solicitud, el desembolso y la migración la eligen solos por 
 En **Cartera → Líneas → Nueva versión**, con modalidad Vivienda:
 
 - **Unidad del capital**: Pesos (por defecto) o **UVR**, sólo si el catálogo de modalidades vigente la marca «admite UVR» para la combinación.
-- Una línea **en UVR no admite desembolso por tramos** (`Lending.Housing.UvrTranchesNotSupported`): limitación de K6b, pendiente del dueño.
+- Una línea **en UVR no admite desembolso por tramos** (`Lending.Housing.UvrTranchesNotSupported`): decisión del dueño del 2026-10-18, la UVR va
+  sin tramos.
 - El detalle de la línea muestra el **tope y los cinco límites vigentes con su fuente**, y lo que falte registrar.
 
 ## 3. Cómo se calcula un crédito en UVR
@@ -94,12 +95,16 @@ El Anexo 1 sembrado ya trae las subcategorías **E1/E2 de vivienda por meses en 
 
 Con K6b la plantilla `loans` admite modalidad Vivienda; el cuadre de la activación la incluye por concepto, modalidad, sub-segmento, categoría y
 cuenta, y el acta ya no la declara fuera. Un crédito migrado en UVR trae los **montos en pesos**, que se convierten a la UVR del corte
-(limitación de K6b: cómo se migran los saldos en UVR del sistema anterior lo decide el dueño).
+(el sistema anterior no tiene créditos en UVR, confirmó el dueño el 2026-10-18: la conversión sólo sirve a una cooperativa que los traiga de
+otro origen).
 
 ## 9. Lo que queda para el dueño y la contadora
 
-- Valores y fuentes de los cinco límites; la clave del tope (hoy una sola: no distingue VIS/no VIS ni pesos/UVR).
-- E12: el hecho propio de la corrección monetaria y su cuenta; la corrección monetaria en el certificado.
-- Tramos en UVR; la migración de los créditos en UVR del sistema anterior; los campos de vivienda y UVR del SICSES (T1057).
+- Valores y fuentes de los cinco límites. La clave del tope es **una sola** (decisión del dueño del 2026-10-18: no distingue VIS/no VIS).
+- E12: la cuenta de la corrección monetaria (la contadora). La corrección monetaria del año ya va en el certificado tributario, en renglón aparte
+  (2026-10-18).
+- Los campos de vivienda y UVR del SICSES (T1057). Tramos en UVR y la migración de créditos en UVR: resueltos el 2026-10-18 (sin tramos; el
+  sistema anterior no los tiene).
 - El cotejo del Anexo 1 de vivienda (E8).
-- Corregir una UVR ya causada no encola todavía una corrida de corrección (sólo la usura lo hace): ver el runbook.
+- Un pago que con la UVR corregida cambiaría de cancelar o no el crédito sigue a soporte (decisión del dueño del 2026-10-18; runbook
+  `valores-nacionales.md` §3a).

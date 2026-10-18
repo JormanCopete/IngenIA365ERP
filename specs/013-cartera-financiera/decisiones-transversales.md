@@ -2723,6 +2723,23 @@ una propuesta por defecto coherente con la spec y la constitución; si el dueño
 | K6 | ¿Las plantillas de rol de Cartera hacen su propio trabajo de K3? (fases 16 y 17) | — (no se preguntó: las e2e lo suplían con roles propios) | No | **Sí, con mínimo privilegio** (2026-10-15): `Lending.Novelties.Read` a `cartera.analista` y `cartera.gerente`; `Attachments.Upload` a `cartera.jefe`, `cartera.consejo` (reporte al supervisor) y `cartera.administrador`; `Lending.Loans.Read` y `Lending.Ratings.Read` a `cartera.consejo`. |
 | K7 | ¿Cómo se retira al asociado (`IsAssociate`) por la aplicación, requisito del castigo? (fase 17) | — | No | **Llega con la feature 014** (2026-10-15); mientras tanto la e2e lo escribe en el maestro. |
 
+### L. Surgidas al cerrar K6b y la fase 24 (respondidas el 2026-10-18)
+
+| # | Pregunta | Propuesta por defecto | Bloquea | Respuesta del dueño |
+|---|---|---|---|---|
+| L1 | ¿La corrida de una `USURA` corregida separa el reparto de los pagos como la de una `UVR`? (notas del bloque 2 de la fase 23, (a)) | No tocarla (cambia el `SaldoAFavorReconocido` de C93) | No | **Sí, el mismo diseño** (2026-10-18, T1091): `PagoRedistribuidoPorValorNacional` también en la usura. El saldo a favor que deja un pago viaja en ese hecho; el asiento neto es el de C93 en dos hechos. `contabilidad.md` §30. |
+| L2 | ¿Se asientan las `reallocations` de `PagoAplicado`/`PagoReversado`? ((b)) | — | No | **Sí, con el molde de `PRN`** (2026-10-18, T1092), en el comprobante del pago o del reverso; sin hecho nuevo. `contabilidad.md` §31. |
+| L3 | La mora por debajo del rango negativo de `Centrales.RangosDeMora`, ¿va al día? | Al día, con días en cero (decisión del 2026-10-16) | No | **Con sus días reales de mora, sin marca negativa** (2026-10-18, T1093): en mora con su rango y su altura, sin aviso previo. |
+| L4 | ¿El plazo y la periodicidad del SICSES (y demás periodicidades regulatorias) bloquean algo? | Informan | No | **Informativos** (2026-10-18, T1094): la entidad decide cuándo reporta; nada se bloquea. La evaluación de cartera fuera de su periodicidad avisa en vez de rechazarse. La entidad fija su periodicidad con `Sicses.MesesDeCorte` y `Sicses.DiasDePlazo` (fondos de empleados y mutuales de nivel 3, formatos básicos trimestrales). |
+| L5 | ¿El «último día hábil» descuenta festivos? | Sólo sábado y domingo | No | **Sí** (2026-10-18, T1095), con el lector existente `ICalendarioHabil` (los `FESTIVO` replicados; E5: no `PAY_Holidays`). |
+| L6 | Certificado tributario: ¿el anticipo ingresado en Y y aplicado a intereses en Y+1, y la corrección monetaria UVR? | No se muestran | No | **Renglones aparte** (2026-10-18, T1096): «anticipo recibido» en el certificado de Y (lo pendiente al 31/12 que ingresó en Y) y la corrección monetaria UVR causada en el año; ninguno suma a los intereses pagados. |
+| L7 | ¿Los requisitos de activación que sólo bloqueaban en producción se dispensan fuera de ella? | Sí (`Waived`) | Activación (K1) | **No: se exigen en todos los ambientes** (2026-10-18, T1097); fuera de producción sólo cuentan los dobles `TST`/`TES` como recaudador y tesorería. |
+| L8 | ¿SOLIDO tiene créditos en UVR que migrar? | — | No | **No** (2026-10-18): la plantilla de migración no necesita créditos en UVR. |
+| L9 | ¿El tope de tasa de vivienda distingue VIS y no VIS (o pesos y UVR)? | Una sola clave | No | **Un solo tope** (2026-10-18): `TOPE_TASA_VIVIENDA` se queda como una clave. |
+| L10 | ¿Créditos en UVR por tramos? | Sin tramos | No | **Sin tramos** (2026-10-18): `Lending.Housing.UvrTranchesNotSupported` se queda. |
+| L11 | El historial de mora faltante de una obligada: ¿avisar al cargar y bloquear al activar? (commit `78926dd2`) | Avisar al cargar, bloquear al activar | No | **Confirmado** (2026-10-18). |
+| L12 | Un pago que con la UVR corregida cambiaría de cancelar o no el crédito | Soporte (runbook `valores-nacionales.md` §3a) | No | **Sigue a soporte** (2026-10-18). |
+
 ---
 
 ## 6. Lo que construye cada entrega
