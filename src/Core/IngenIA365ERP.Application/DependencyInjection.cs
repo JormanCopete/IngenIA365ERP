@@ -513,6 +513,8 @@ public static class DependencyInjection
         services.AddScoped<Lending.Deposits.Contributions.ReglasDeAportes>();
         services.AddScoped<Lending.Deposits.Contributions.ConsignacionEnCuentas>();
         services.AddScoped<Lending.Deposits.Contributions.ReversionDeCuentas>();
+        // US3 (T086): lo común de la devolución de aportes sin retiro y la cesión entre asociados.
+        services.AddScoped<Lending.Deposits.Contributions.SolicitudesDeAportes>();
         services.AddScoped<Lending.Integration.ContratoDeCuentasDeCartera>();
         services.AddScoped<Common.Integration.Lending.IContratoDeCuentas>(sp => sp.GetRequiredService<Lending.Integration.ContratoDeCuentasDeCartera>());
         // US6 (T0582–T0594): la verificación de listas sin escribir de la consulta, y el consumidor de Comercial con sus piezas (los validadores de

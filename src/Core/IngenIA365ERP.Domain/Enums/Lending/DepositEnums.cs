@@ -510,3 +510,25 @@ public enum LiquidityHoldingKind
     TrustFund = 3,
     Other = 99,
 }
+
+/// <summary>Qué pide una solicitud de aportes (feature 014, US3, T086; research E58): la devolución sin retiro o la cesión a otro asociado.</summary>
+public enum ContributionRequestKind
+{
+    Refund = 1,
+    Assignment = 2,
+}
+
+/// <summary>Estado de una solicitud de devolución o de cesión de aportes (api.md §7: se crea en espera de aprobación).</summary>
+public enum ContributionRequestStatus
+{
+    PendingApproval = 1,
+    Approved = 2,
+    Rejected = 3,
+}
+
+/// <summary>Por qué se pide la devolución de aportes sin retiro (api.md §7: exceso sobre el límite de participación u otra causa).</summary>
+public enum ContributionRefundCause
+{
+    ParticipationExcess = 1,
+    Other = 99,
+}
