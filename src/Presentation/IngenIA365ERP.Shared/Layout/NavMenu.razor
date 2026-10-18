@@ -80,27 +80,8 @@
             </PermissionGate>
         </NavMenuGroup>
 
-        @* Feature 013 (T0187, enmienda A10): lo conservado de la cartera heredada —ahorros, depósitos, CDT, aportes,
-           retiros, zonas y SIPLA— con sus mismas rutas /cartera/... reservadas (DT §2.16). Los enlaces de crédito
-           heredado se retiraron con la migración RetiroDeLaCarteraHeredada; la Cartera nueva trae su propio grupo. *@
-        <NavMenuGroup Icon="e-money" Title="Ahorros y aportes" Expanded="SidebarOpen">
-            <NavLink href="/cartera/ahorros" class="nav-subitem">Cuentas de Ahorro</NavLink>
-            <NavLink href="/cartera/depositos" class="nav-subitem">Depositos</NavLink>
-            <NavLink href="/cartera/retiros" class="nav-subitem">Retiros</NavLink>
-            <NavLink href="/cartera/cdt" class="nav-subitem">CDT Certificados</NavLink>
-            <NavLink href="/cartera/cdt/nuevo" class="nav-subitem">Nuevo CDT</NavLink>
-            <NavLink href="/cartera/aportes" class="nav-subitem">Aportes</NavLink>
-            <NavLink href="/cartera/retiros-asociado" class="nav-subitem">Retiro Asociado</NavLink>
-            <NavLink href="/cartera/codigos-movimiento" class="nav-subitem">Codigos Movimiento</NavLink>
-            <NavLink href="/cartera/parametros-ahorro" class="nav-subitem">Parametros Ahorro</NavLink>
-            <NavLink href="/cartera/zonas" class="nav-subitem">Zonas</NavLink>
-            <NavLink href="/cartera/tipos-zona" class="nav-subitem">Tipos de Zona</NavLink>
-            <NavLink href="/cartera/estados-retiro" class="nav-subitem">Estados Retiro</NavLink>
-            <NavLink href="/cartera/parametros-sipla" class="nav-subitem">Param. SIPLA</NavLink>
-            <NavLink href="/cartera/extractos" class="nav-subitem">Extractos</NavLink>
-            <NavLink href="/cartera/ahorros/liquidacion" class="nav-subitem">Liq. Int. Ahorros</NavLink>
-            <NavLink href="/cartera/cdt/liquidacion" class="nav-subitem">Liq. Int. CDTs</NavLink>
-        </NavMenuGroup>
+        @* Feature 014 (T008, R28): el grupo «Ahorros y aportes» de lo conservado de la cartera heredada se retiró con sus 16
+           enlaces; el menú de captaciones y aportes llega con cada historia. *@
 
         @* Feature 013, fase 4 (T0324, T0310; US17): la Cartera nueva —gobierno, configuración y mensajes al deudor—, cada enlace con el
            permiso de consulta de su página. El detalle de una sesión se abre desde Actas, sin enlace propio; el de una línea de crédito
@@ -466,11 +447,6 @@
             <NavLink href="/nomina/saldos-iniciales" class="nav-subitem">Saldos iniciales</NavLink>
             <span class="nav-subgroup-title">Reportes</span>
             <NavLink href="/reportes/nomina" class="nav-subitem">Reportes de nomina</NavLink>
-        </NavMenuGroup>
-
-        <NavMenuGroup Icon="e-description" Title="CDT" Expanded="SidebarOpen">
-            <NavLink href="/cdt/parametros" class="nav-subitem">Parametros CDT</NavLink>
-            <NavLink href="/cdt/tasas-plazo" class="nav-subitem">Tasas por Plazo</NavLink>
         </NavMenuGroup>
 
         <NavMenuGroup Icon="e-money" Title="Tarjeta Debito" Expanded="SidebarOpen">

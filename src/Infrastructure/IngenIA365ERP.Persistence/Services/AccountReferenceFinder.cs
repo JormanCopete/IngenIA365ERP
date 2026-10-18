@@ -7,8 +7,8 @@ namespace IngenIA365ERP.Persistence.Services;
 
 /// <summary>
 /// Dónde está parametrizada una cuenta (feature 009, FR-011, data-model.md §1): por FK en nómina,
-/// tesorería, la configuración y la matriz de Inventario (feature 012); por código en ahorros, CDT y bancos, que
-/// todavía guardan la cuenta como texto (E3 los pasa a FK). Vive en Persistence porque recorre
+/// tesorería, la configuración y la matriz de Inventario (feature 012); por código en bancos, que todavía
+/// guardan la cuenta como texto. Vive en Persistence porque recorre
 /// tablas de siete módulos y el contexto de pruebas de Application no las materializa todas.
 /// </summary>
 internal sealed class AccountReferenceFinder(ApplicationDbContext db) : IAccountReferenceFinder
@@ -34,11 +34,8 @@ internal sealed class AccountReferenceFinder(ApplicationDbContext db) : IAccount
             lista.Add(new(ModuloContable.Nombre(ModuloContable.Cartera), "Matriz de Cartera",
                 $"{r.DimensionKey} · desde {r.ValidFrom:yyyy-MM-dd}{(r.ValidTo is { } h ? $" hasta {h:yyyy-MM-dd}" : "")}"));
 
-        foreach (var n in await db.SavingsParameters.AsNoTracking().Where(s => !s.IsDeleted && (s.TreasuryAccount == code || s.InterestExpenseAccount == code)).Select(s => s.Id.ToString()).ToListAsync(ct))
-            lista.Add(new(ModuloContable.Nombre(ModuloContable.Cdt), "Parámetros de ahorro", n));
-
-        foreach (var n in await db.CdtParameters.AsNoTracking().Where(s => !s.IsDeleted && (s.TreasuryAccount == code || s.InterestExpenseAccount == code)).Select(s => s.Id.ToString()).ToListAsync(ct))
-            lista.Add(new(ModuloContable.Nombre(ModuloContable.Cdt), "Parámetros de CDT", n));
+        // Feature 014 (T007, R28): las ramas de LND_SavingsParameters y CDT_Parameters se retiraron con lo heredado; las cuentas de
+        // captaciones entran por la matriz de Cartera (arriba).
 
         // Feature 012 (T494, G7): la matriz de Inventario, por FK. Cuenta toda versión viva, también las cerradas: la FK es
         // Restrict y el comprobante de un mensaje viejo se resuelve con la regla vigente a su fecha.

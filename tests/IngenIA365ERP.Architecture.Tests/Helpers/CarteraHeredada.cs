@@ -3,8 +3,13 @@ namespace IngenIA365ERP.Architecture.Tests.Helpers;
 /// <summary>
 /// Feature 013 (data-model parte 3 §13.1; T2, T3, T86): la clasificación de las 93 tablas <c>LND_</c> heredadas, en un solo
 /// sitio para las pruebas que vigilan el retiro (<c>LaCarteraHeredadaNoVuelve</c>, <c>NingunaTablaConservadaApuntaALaCarteraRetirada</c>,
-/// <c>ElEspacioLendingEsSoloCartera</c>, <c>PrincipioXII_MigracionesDestructivas</c>). Es la lista del diseño, no la del modelo: el
-/// modelo es lo que se compara contra ella.
+/// <c>PrincipioXII_MigracionesDestructivas</c>). Es la lista del diseño, no la del modelo: el modelo es lo que se compara contra ella.
+///
+/// <para>
+/// Feature 014 (T009, R28, R29): <b>ya no hay conservado</b>. Las 38 que la 013 conservó (ahorros, aportes, caja, SIPLA, zonas y
+/// bienestar) y las 7 <c>CDT_*</c> las retira <c>RetiroDeCaptacionesHeredadas</c>: son las 45 de
+/// <see cref="RetiradasPorCaptaciones"/>. Los nombres heredados que ninguna tabla nueva puede reutilizar son ahora 100.
+/// </para>
 /// </summary>
 internal static class CarteraHeredada
 {
@@ -68,7 +73,10 @@ internal static class CarteraHeredada
         ("LND_Transactions", "LendingTransaction"),
     ];
 
-    /// <summary>Las 38 tablas que se conservan sin cambio de <c>ToTable</c>, con su entidad mudada a <c>Domain.Entities.Savings</c>.</summary>
+    /// <summary>
+    /// Las 38 tablas <c>LND_</c> que la 013 conservó sin cambio de <c>ToTable</c> (su entidad vivía en <c>Domain.Entities.Savings</c>);
+    /// la 014 las retira con <c>RetiroDeCaptacionesHeredadas</c>.
+    /// </summary>
     public static readonly (string Tabla, string Entidad)[] Conservadas =
     [
         ("LND_SavingsAccounts", "SavingsAccount"),
@@ -111,6 +119,25 @@ internal static class CarteraHeredada
         ("LND_ZoneTypes", "ZoneType"),
     ];
 
-    /// <summary>Los 93 nombres heredados: ninguna tabla nueva puede reutilizar uno (T2, R124).</summary>
-    public static IEnumerable<string> NombresHeredados => Retiradas.Select(r => r.Tabla).Concat(Conservadas.Select(c => c.Tabla));
+    /// <summary>Las 7 tablas del CDT heredado (su entidad vivía en <c>Domain.Entities.CDT</c>), que la 014 retira con las 38.</summary>
+    public static readonly (string Tabla, string Entidad)[] DelCdt =
+    [
+        ("CDT_AssociateReferences", "CdtAssociateReference"),
+        ("CDT_Audit", "CdtAudit"),
+        ("CDT_CertificateEntries", "CertificateEntry"),
+        ("CDT_Certificates", "Certificate"),
+        ("CDT_ParameterAudit", "CdtParameterAudit"),
+        ("CDT_Parameters", "CdtParameter"),
+        ("CDT_RatesByTerm", "CdtRateByTerm"),
+    ];
+
+    /// <summary>Feature 014 (R28): las 45 que retira <c>RetiroDeCaptacionesHeredadas</c> (las 38 conservadas y las 7 del CDT).</summary>
+    public static IEnumerable<(string Tabla, string Entidad)> RetiradasPorCaptaciones => Conservadas.Concat(DelCdt);
+
+    /// <summary>Los espacios de las entidades retiradas por la 014: ninguno vuelve.</summary>
+    public static readonly string[] EspaciosRetiradosPorCaptaciones = ["IngenIA365ERP.Domain.Entities.Savings", "IngenIA365ERP.Domain.Entities.CDT"];
+
+    /// <summary>Los 100 nombres heredados (93 <c>LND_</c> y 7 <c>CDT_</c>): ninguna tabla nueva puede reutilizar uno (T2, R124; 014 R28).</summary>
+    public static IEnumerable<string> NombresHeredados =>
+        Retiradas.Select(r => r.Tabla).Concat(RetiradasPorCaptaciones.Select(c => c.Tabla));
 }

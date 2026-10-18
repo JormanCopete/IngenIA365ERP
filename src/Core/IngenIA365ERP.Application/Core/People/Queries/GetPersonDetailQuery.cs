@@ -169,13 +169,9 @@ public class GetPersonDetailQueryHandler(IApplicationDbContext context, IConsult
         var activeLoans = deCartera.ActiveLoans;
         var totalLoanBalance = deCartera.TotalLoanBalance;
 
-        var personCode = person.LegacyCode ?? person.TaxId;
-        var savingsCount = await context.SavingsAccounts
-            .AsNoTracking()
-            .Where(sa => sa.PersonCode == personCode && !sa.IsDeleted)
-            .CountAsync(ct);
-
-        // SavingsAccount doesn't store balance directly; set to 0 for now
+        // Feature 014 (T007): las cuentas de ahorro heredadas se retiraron; los productos de captación los informará
+        // IConsultasDeCartera.ProductosDeCaptacionAsync (T043, contrato-de-cuentas §5). Mientras tanto, cero.
+        var savingsCount = 0;
         var totalSavings = 0m;
 
         var totalOverdue = deCartera.TotalOverdueAmount;

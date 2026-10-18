@@ -170,7 +170,7 @@ public class TextosDeCarteraTests
 
     /// <summary>
     /// Fase 24 (T1063; FR-144, T98): todo lo que la persona lee de Cartera —pantallas de <c>Pages/Cartera</c>, <c>Pages/CarteraFinanciera</c>,
-    /// <c>Pages/AhorrosYAportes</c> y <c>Pages/Contabilidad/Cartera</c>, sus textos y clientes (<c>Services/Cartera</c>), el menú, el manual en línea
+    /// <c>Pages/Contabilidad/Cartera</c>, sus textos y clientes (<c>Services/Cartera</c>), el menú, el manual en línea
     /// (<c>ManualCatalogo</c>), el centro de reportes, las plantillas de importación y los layouts regulatorios (en <c>Application/Lending</c>, con sus
     /// JSON), los mensajes de error y el motor (<c>Domain/Lending</c>), las semillas de Cartera (plantillas de mensaje sembradas, tipos de hecho), los
     /// documentos al deudor (<c>DocumentosDeCarteraReport</c>) y los manuales <c>docs/manual/cartera*.md</c>— no nombra el sistema anterior. En el
@@ -180,7 +180,6 @@ public class TextosDeCarteraTests
     [
         "Presentation/IngenIA365ERP.Shared/Pages/Cartera",
         "Presentation/IngenIA365ERP.Shared/Pages/CarteraFinanciera",
-        "Presentation/IngenIA365ERP.Shared/Pages/AhorrosYAportes",
         "Presentation/IngenIA365ERP.Shared/Pages/Contabilidad/Cartera",
         "Presentation/IngenIA365ERP.Shared/Services/Cartera",
         "Core/IngenIA365ERP.Application/Lending",

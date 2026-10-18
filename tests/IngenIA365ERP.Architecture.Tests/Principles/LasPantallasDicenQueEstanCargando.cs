@@ -26,11 +26,12 @@ public class LasPantallasDicenQueEstanCargando
     /// US9 (T358): «Compras» entra con sus pantallas de I1 (recepciones, compra directa, facturas, notas y devoluciones).
     /// Feature 013, fase 2 (T0038, T0095): «Administracion» y «Compliance» entran con las seis pantallas de la plataforma de Cartera
     /// (valores nacionales, perfil regulatorio, canales externos, participantes, listas restrictivas, solicitudes del titular).
-    /// Feature 013, fase 3 (T0188): «AhorrosYAportes» entra con las 18 pantallas conservadas de la cartera heredada.
+    /// Feature 013, fase 3 (T0188): «AhorrosYAportes» entró con las 18 pantallas conservadas de la cartera heredada; la feature 014
+    /// las retiró (T008, R28) y sus pantallas nuevas viven en «Cartera/Captaciones», dentro de «Cartera».
     /// Feature 013, fase 4 (T0324): «Cartera» entra con las pantallas de gobierno, configuración y mensajes al deudor.
     private static readonly string[] ModulosMigrados =
         ["Maestros", "Nomina", "Asociados", "Contabilidad", "Inventario", "Ventas", "Compras", "Pos", "Administracion", "Compliance",
-            "AhorrosYAportes", "Cartera"];
+            "Cartera"];
 
     /// <summary>Feature 013 (T0038): las pantallas de la fase 2 llevan su indicador aunque no usen <c>SfGrid</c>.</summary>
     private static readonly string[] PantallasDeLaPlataformaDeCartera =
@@ -86,33 +87,6 @@ public class LasPantallasDicenQueEstanCargando
             Assert.DoesNotMatch(@"#[0-9a-fA-F]{3,6}\b|rgb\(", texto);
             Assert.DoesNotContain("SOLIDO", texto, StringComparison.OrdinalIgnoreCase);
         }
-    }
-
-    /// <summary>
-    /// Feature 013 (T0188): las 18 pantallas mudadas a <c>AhorrosYAportes</c> cargan o guardan todas, tengan o no grilla; las
-    /// dos liquidaciones esperan dentro de <c>ProcessExecutor</c>, que lleva el indicador enlazado a su estado.
-    /// </summary>
-    [Fact]
-    public void Las_18_pantallas_de_ahorros_y_aportes_dicen_que_estan_cargando()
-    {
-        var raiz = RepoPath.FindRepoRoot();
-        var carpeta = Path.Combine(raiz, "src", "Presentation", "IngenIA365ERP.Shared", "Pages", "AhorrosYAportes");
-        var pantallas = Directory.EnumerateFiles(carpeta, "*.razor", SearchOption.AllDirectories).ToList();
-        Assert.Equal(18, pantallas.Count);
-
-        var ejecutor = File.ReadAllText(Path.Combine(raiz, "src", "Presentation", "IngenIA365ERP.Shared", "Components", "Shared", "ProcessExecutor.razor"));
-        Assert.Contains("<IndicadorDeCarga", ejecutor, StringComparison.Ordinal);
-
-        var sinIndicador = pantallas
-            .Where(f =>
-            {
-                var texto = File.ReadAllText(f);
-                return !(texto.Contains("<IndicadorDeCarga", StringComparison.Ordinal) && texto.Contains("EstadoDeCarga", StringComparison.Ordinal))
-                    && !texto.Contains("<ProcessExecutor", StringComparison.Ordinal);
-            })
-            .Select(f => Path.GetRelativePath(raiz, f))
-            .ToList();
-        Assert.True(sinIndicador.Count == 0, "Pantallas de ahorros y aportes sin indicador de carga:\n  " + string.Join("\n  ", sinIndicador));
     }
 
     private static IEnumerable<string> PantallasMigradas()

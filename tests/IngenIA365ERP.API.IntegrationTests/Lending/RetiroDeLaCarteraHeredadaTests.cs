@@ -5,7 +5,6 @@ using IngenIA365ERP.API.IntegrationTests.Accounting;
 using IngenIA365ERP.API.IntegrationTests.Identity;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Domain.Entities.Core;
-using IngenIA365ERP.Domain.Entities.Savings;
 using IngenIA365ERP.Persistence.DbContext;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
@@ -21,8 +20,14 @@ namespace IngenIA365ERP.API.IntegrationTests.Lending;
 /// aislada: se baja la base hasta la migración anterior al retiro (el <c>Down()</c> recrea vacías las 55 tablas), se deja una
 /// fila en <c>LND_LoanPortfolios</c> —con su línea en <c>LND_CreditLineParameters</c>— y otra en <c>LND_SavingsAccounts</c>; el
 /// retiro se niega nombrando la retirada y su cantidad; con la fila <c>COR_SystemSettings.SettingKey = 'LND.RetiroHeredado.Aprobado'</c>
-/// pasa, las 55 desaparecen y la de ahorros sigue. Por HTTP, el crédito heredado responde 404 sin alias y lo conservado responde
-/// en <c>/api/savings/*</c> y <c>/api/reports/savings/*</c>.
+/// pasa, las 55 desaparecen y la de ahorros sigue. Por HTTP, el crédito heredado responde 404 sin alias.
+///
+/// <para>
+/// Feature 014 (T007, T010): lo conservado de ahorros, aportes y CDT se retiró con la migración <c>RetiroDeCaptacionesHeredadas</c>
+/// (R28), así que la fila de ahorros se escribe por debajo después de bajar la base, y <c>/api/savings/*</c> y
+/// <c>/api/reports/savings/*</c> responden 404 como el crédito heredado. Antes de volver a la última migración la prueba borra esa
+/// fila: con ella, la guarda de la 014 se negaría (la prueba de esa guarda es <c>RetiroDeCaptacionesHeredadasTests</c>).
+/// </para>
 ///
 /// <para>
 /// Escribe a la base por debajo a propósito: las tablas retiradas ya no tienen entidad, y lo que se prueba es la migración. Las
@@ -61,16 +66,16 @@ public class RetiroDeLaCarteraHeredadaTests(CentralIdentityApiFixture fx)
         var db = (ApplicationDbContext)ambito.Db;
         var migrador = db.GetService<IMigrator>();
 
-        // Una cuenta de ahorro: tabla conservada, el retiro no la toca.
-        db.SavingsAccounts.Add(new SavingsAccount { PersonCode = "AHO-1", AccountNumber = 900001, CreationDate = new DateOnly(2026, 1, 2) });
-        await db.SaveChangesAsync();
-
         // (1) Bajar hasta la migración anterior al retiro: el Down() recrea vacías las 55 tablas y la columna de Nómina.
         var migraciones = db.Database.GetMigrations().ToList();
         var indice = migraciones.FindIndex(m => m.EndsWith("_" + Retiro, StringComparison.Ordinal));
         indice.Should().BePositive($"la migración {Retiro} existe en el ensamblado de {CentralIdentityApiFixture.ProviderKey}");
         await migrador.MigrateAsync(migraciones[indice - 1]);
         (await ExisteTablaAsync(db, "LND_LoanPortfolios")).Should().BeTrue("el Down() del retiro recrea las tablas heredadas");
+
+        // Una cuenta de ahorro: tabla conservada por la 013, el retiro del crédito no la toca. Desde la 014 no tiene entidad: se
+        // escribe por debajo, como las de crédito (la recreó el Down() de RetiroDeCaptacionesHeredadas).
+        await InsertarFilaMinimaAsync(db, "LND_SavingsAccounts", new Dictionary<string, object> { ["AccountNumber"] = 900001 });
 
         // (2) Un crédito heredado y sin aprobación: la guarda se niega y nombra la tabla y la cantidad.
         var personaId = await db.People.Where(p => p.PublicId == persona).Select(p => p.Id).SingleAsync();
@@ -105,14 +110,16 @@ public class RetiroDeLaCarteraHeredadaTests(CentralIdentityApiFixture fx)
 
         // (4) La cuenta de ahorro sigue ahí (tabla conservada, sin cambio de nombre).
         (await ExisteTablaAsync(db, "LND_SavingsAccounts")).Should().BeTrue();
-        (await db.SavingsAccounts.IgnoreQueryFilters().CountAsync(a => a.AccountNumber == 900001)).Should().Be(1);
+        (await FilasAsync(db, "LND_SavingsAccounts")).Should().Be(1);
 
-        // Deja la base en la última migración para el resto de la colección.
+        // Deja la base en la última migración para el resto de la colección. La fila de ahorros se borra antes: con ella, la guarda
+        // de RetiroDeCaptacionesHeredadas (feature 014) se negaría, y aquí no se prueba esa guarda.
+        await db.Database.ExecuteSqlRawAsync(EsSqlServer ? "DELETE FROM [dbo].[LND_SavingsAccounts]" : "DELETE FROM dbo.\"LND_SavingsAccounts\"");
         await migrador.MigrateAsync();
     }
 
     [Fact]
-    public void Las_rutas_de_credito_heredado_no_existen_y_lo_conservado_vive_en_api_savings()
+    public void Las_rutas_de_credito_heredado_no_existen_y_lo_conservado_tampoco_desde_la_014()
     {
         var rutas = fx.Factory.Services.GetRequiredService<EndpointDataSource>().Endpoints.OfType<RouteEndpoint>()
             .Select(r => r.RoutePattern.RawText ?? string.Empty)
@@ -136,24 +143,22 @@ public class RetiroDeLaCarteraHeredadaTests(CentralIdentityApiFixture fx)
             .Should().OnlyContain(r => System.Text.RegularExpressions.Regex.IsMatch(r, "^/api/reports/lending/?([a-z-]+)?$"),
                 "el centro de informes publica /api/reports/lending/{vista}, sin rutas con identificador ni /pdf como las heredadas");
 
-        // Las 12 familias conservadas, ahora bajo /api/savings, y ninguna bajo /api/lending.
+        // Las 12 familias que la 013 mudó a /api/savings se retiraron con la 014 (T007, R28), también sin alias; ninguna vuelve a
+        // /api/lending con su nombre heredado.
         string[] conservadas =
         [
             "contributions", "savings-accounts", "savings-interest-liquidation", "savings-parameters", "sipla-parameters", "statements",
             "sub-zones", "transaction-codes", "withdrawal-statuses", "withdrawals", "zone-types", "zones",
         ];
         foreach (var familia in conservadas)
-        {
-            rutas.Should().Contain(r => r.StartsWith($"/api/savings/{familia}", StringComparison.OrdinalIgnoreCase), $"{familia} se muda a /api/savings");
             rutas.Should().NotContain(r => r.StartsWith($"/api/lending/{familia}", StringComparison.OrdinalIgnoreCase), $"{familia} ya no está en /api/lending");
-        }
-        rutas.Should().Contain("/api/reports/savings/person-portfolio/{personId:guid}");
-        rutas.Should().Contain("/api/reports/savings/person-portfolio/{personId:guid}/pdf");
-        rutas.Should().Contain("/api/reports/savings/savings-statement/{accountId:guid}/pdf");
+        rutas.Should().NotContain(r => r.StartsWith("/api/savings", StringComparison.OrdinalIgnoreCase), "lo conservado se retiró con la 014");
+        rutas.Should().NotContain(r => r.StartsWith("/api/cdt", StringComparison.OrdinalIgnoreCase), "el CDT heredado se retiró con la 014");
+        rutas.Should().NotContain(r => r.StartsWith("/api/reports/savings", StringComparison.OrdinalIgnoreCase), "los informes heredados de ahorros se retiraron con la 014");
     }
 
     [Fact]
-    public async Task Por_HTTP_el_credito_heredado_responde_404_y_los_ahorros_responden()
+    public async Task Por_HTTP_el_credito_heredado_y_los_ahorros_heredados_responden_404()
     {
         var coop = await CarteraE2E.CooperativaAisladaAsync(fx, "retiro_http");
         using var http = fx.CreateClient();
@@ -176,7 +181,7 @@ public class RetiroDeLaCarteraHeredadaTests(CentralIdentityApiFixture fx)
             using var pedido = new HttpRequestMessage(HttpMethod.Get, ruta);
             pedido.Headers.Authorization = new AuthenticationHeaderValue("Bearer", coop.TokenAdmin);
             var resp = await http.SendAsync(pedido);
-            resp.StatusCode.Should().Be(HttpStatusCode.OK, $"{ruta}: «{await resp.Content.ReadAsStringAsync()}»");
+            resp.StatusCode.Should().Be(HttpStatusCode.NotFound, $"{ruta} se retiró sin alias con la 014");
         }
     }
 
@@ -186,7 +191,7 @@ public class RetiroDeLaCarteraHeredadaTests(CentralIdentityApiFixture fx)
     /// Inserta una fila con lo mínimo que exige la tabla: cada columna obligatoria sin valor por defecto ni identidad recibe un
     /// valor neutro según su tipo, salvo las de <paramref name="fijos"/>. Devuelve el <c>Id</c>.
     /// </summary>
-    private static async Task<long> InsertarFilaMinimaAsync(ApplicationDbContext db, string tabla, IDictionary<string, object> fijos)
+    internal static async Task<long> InsertarFilaMinimaAsync(ApplicationDbContext db, string tabla, IDictionary<string, object> fijos)
     {
         var conexion = db.Database.GetDbConnection();
         var abierta = conexion.State == System.Data.ConnectionState.Open;
@@ -248,7 +253,24 @@ public class RetiroDeLaCarteraHeredadaTests(CentralIdentityApiFixture fx)
         }
     }
 
-    private static Task<bool> ExisteTablaAsync(ApplicationDbContext db, string tabla) =>
+    internal static async Task<long> FilasAsync(ApplicationDbContext db, string tabla)
+    {
+        var conexion = db.Database.GetDbConnection();
+        var abierta = conexion.State == System.Data.ConnectionState.Open;
+        if (!abierta) await conexion.OpenAsync();
+        try
+        {
+            await using var comando = conexion.CreateCommand();
+            comando.CommandText = EsSqlServer ? $"SELECT COUNT(*) FROM [dbo].[{tabla}]" : $"SELECT COUNT(*) FROM dbo.\"{tabla}\"";
+            return Convert.ToInt64(await comando.ExecuteScalarAsync());
+        }
+        finally
+        {
+            if (!abierta) await conexion.CloseAsync();
+        }
+    }
+
+    internal static Task<bool> ExisteTablaAsync(ApplicationDbContext db, string tabla) =>
         ContarAsync(db, "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'dbo' AND table_name = @t", tabla, null);
 
     private static Task<bool> ExisteColumnaAsync(ApplicationDbContext db, string tabla, string columna) =>
@@ -283,7 +305,7 @@ public class RetiroDeLaCarteraHeredadaTests(CentralIdentityApiFixture fx)
     }
 
     /// <summary>El mensaje del fallo con sus excepciones internas (y el número de error de SQL Server), o nulo si no falló.</summary>
-    private static async Task<string?> MensajeDelFalloAsync(Func<Task> accion)
+    internal static async Task<string?> MensajeDelFalloAsync(Func<Task> accion)
     {
         try
         {

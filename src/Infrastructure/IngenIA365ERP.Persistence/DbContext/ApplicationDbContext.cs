@@ -5,14 +5,12 @@ using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Entities.Accounting;
 using IngenIA365ERP.Domain.Entities.Accounting.Transactions;
 using IngenIA365ERP.Domain.Entities.Accounting.Inventory;
-using IngenIA365ERP.Domain.Entities.Savings;
 using IngenIA365ERP.Domain.Entities.Parameters;
 using IngenIA365ERP.Domain.Entities.Payroll;
 using IngenIA365ERP.Domain.Entities.Integration;
 using IngenIA365ERP.Domain.Entities.Integration.Transactions;
 using IngenIA365ERP.Domain.Entities.Inventory;
 using IngenIA365ERP.Domain.Entities.Inventory.Documents;
-using IngenIA365ERP.Domain.Entities.CDT;
 using IngenIA365ERP.Domain.Entities.Debit;
 using IngenIA365ERP.Domain.Entities.Treasury;
 using IngenIA365ERP.Domain.Entities.Security;
@@ -158,46 +156,6 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<FixedAsset> FixedAssets => Set<FixedAsset>();
     public DbSet<FixedAssetInstallment> FixedAssetInstallments => Set<FixedAssetInstallment>();
     public DbSet<AssetRun> AssetRuns => Set<AssetRun>();
-
-    // === Ahorros y aportes (38, conservadas de la cartera heredada; feature 013, T0184: las 55 de crédito se retiraron) ===
-    public DbSet<SavingsAccount> SavingsAccounts => Set<SavingsAccount>();
-    public DbSet<SavingsParameter> SavingsParameters => Set<SavingsParameter>();
-    public DbSet<DepositAccount> DepositAccounts => Set<DepositAccount>();
-    public DbSet<DepositEntry> DepositEntries => Set<DepositEntry>();
-    public DbSet<DepositAudit> DepositAudits => Set<DepositAudit>();
-    public DbSet<DepositSeal> DepositSeals => Set<DepositSeal>();
-    public DbSet<DepositSignature> DepositSignatures => Set<DepositSignature>();
-    public DbSet<TransactionCode> TransactionCodes => Set<TransactionCode>();
-    public DbSet<LendingDocument> LendingDocuments => Set<LendingDocument>();
-    public DbSet<BiometricRecord> BiometricRecords => Set<BiometricRecord>();
-    public DbSet<BlacklistEntry> BlacklistEntries => Set<BlacklistEntry>();
-    public DbSet<MoneyLaunderingDeclaration> MoneyLaunderingDeclarations => Set<MoneyLaunderingDeclaration>();
-    public DbSet<UnusualTransaction> UnusualTransactions => Set<UnusualTransaction>();
-    public DbSet<UnusualTransactionEntry> UnusualTransactionEntries => Set<UnusualTransactionEntry>();
-    public DbSet<SiplaParameter> SiplaParameters => Set<SiplaParameter>();
-    public DbSet<SiplaGroupParameter> SiplaGroupParameters => Set<SiplaGroupParameter>();
-    public DbSet<Cashier> Cashiers => Set<Cashier>();
-    public DbSet<CashBase> CashBases => Set<CashBase>();
-    public DbSet<Checkbook> Checkbooks => Set<Checkbook>();
-    public DbSet<CheckClearing> CheckClearings => Set<CheckClearing>();
-    public DbSet<PersonAsset> PersonAssets => Set<PersonAsset>();
-    public DbSet<Minute> Minutes => Set<Minute>();
-    public DbSet<MinuteAttendee> MinuteAttendees => Set<MinuteAttendee>();
-    public DbSet<ContributionReduction> ContributionReductions => Set<ContributionReduction>();
-    public DbSet<ContributionReductionParam> ContributionReductionParams => Set<ContributionReductionParam>();
-    public DbSet<ActivityEnrollment> ActivityEnrollments => Set<ActivityEnrollment>();
-    public DbSet<AssociateActivity> AssociateActivities => Set<AssociateActivity>();
-    public DbSet<AssociateDisease> AssociateDiseases => Set<AssociateDisease>();
-    public DbSet<AssociateWithdrawal> AssociateWithdrawals => Set<AssociateWithdrawal>();
-    public DbSet<AuxiliaryApplication> LendingAuxiliaryApplications => Set<AuxiliaryApplication>();
-    public DbSet<AuxiliaryApplicationLine> AuxiliaryApplicationLines => Set<AuxiliaryApplicationLine>();
-    public DbSet<AuxAppInstallment> AuxAppInstallments => Set<AuxAppInstallment>();
-    public DbSet<AuxAppInstallmentBeneficiary> AuxAppInstallmentBeneficiaries => Set<AuxAppInstallmentBeneficiary>();
-    public DbSet<Subsidy> Subsidies => Set<Subsidy>();
-    public DbSet<WithdrawalStatus> WithdrawalStatuses => Set<WithdrawalStatus>();
-    public DbSet<Zone> Zones => Set<Zone>();
-    public DbSet<ZoneType> ZoneTypes => Set<ZoneType>();
-    public DbSet<SubZone> SubZones => Set<SubZone>();
 
     // === Payroll (27) ===
     public DbSet<Employee> Employees => Set<Employee>();
@@ -374,15 +332,6 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<IngenIA365ERP.Domain.Entities.ElectronicInvoicing.ElectronicDocument> ElectronicDocuments => Set<IngenIA365ERP.Domain.Entities.ElectronicInvoicing.ElectronicDocument>();
     public DbSet<IngenIA365ERP.Domain.Entities.ElectronicInvoicing.Transactions.ElectronicDocumentVersion> ElectronicDocumentVersions => Set<IngenIA365ERP.Domain.Entities.ElectronicInvoicing.Transactions.ElectronicDocumentVersion>();
     public DbSet<IngenIA365ERP.Domain.Entities.ElectronicInvoicing.Transactions.ElectronicDocumentTransmission> ElectronicDocumentTransmissions => Set<IngenIA365ERP.Domain.Entities.ElectronicInvoicing.Transactions.ElectronicDocumentTransmission>();
-
-    // === CDT (7) ===
-    public DbSet<Certificate> Certificates => Set<Certificate>();
-    public DbSet<CertificateEntry> CertificateEntries => Set<CertificateEntry>();
-    public DbSet<CdtParameter> CdtParameters => Set<CdtParameter>();
-    public DbSet<CdtRateByTerm> CdtRatesByTerm => Set<CdtRateByTerm>();
-    public DbSet<CdtAssociateReference> CdtAssociateReferences => Set<CdtAssociateReference>();
-    public DbSet<CdtAudit> CdtAudits => Set<CdtAudit>();
-    public DbSet<CdtParameterAudit> CdtParameterAudits => Set<CdtParameterAudit>();
 
     // === Debit (7) ===
     public DbSet<DebitCard> DebitCards => Set<DebitCard>();

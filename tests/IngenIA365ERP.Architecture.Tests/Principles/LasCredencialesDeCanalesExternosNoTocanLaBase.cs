@@ -38,8 +38,8 @@ public class LasCredencialesDeCanalesExternosNoTocanLaBase
 
     /// <summary>
     /// Archivos exentos (rutas relativas a la raíz, con barras normales). Estaba <c>Cashier</c> (su <c>PasswordTimeout</c> es un
-    /// tiempo de espera de la caja, no un secreto): <c>LND_Cashiers</c> se conserva y la entidad se mudó a
-    /// <c>Domain.Entities.Savings</c> (feature 013, T0184), fuera de Cartera, así que salió de aquí.
+    /// tiempo de espera de la caja, no un secreto): <c>LND_Cashiers</c> se conservó en la feature 013 (T0184) fuera de Cartera, así
+    /// que salió de aquí, y la feature 014 la retiró (T007, R28).
     /// </summary>
     private static readonly string[] Exentos = [];
 

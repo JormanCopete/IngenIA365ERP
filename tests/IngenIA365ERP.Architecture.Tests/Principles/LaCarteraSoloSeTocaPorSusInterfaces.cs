@@ -66,9 +66,8 @@ public class LaCarteraSoloSeTocaPorSusInterfaces
         "IngenIA365ERP.Domain.Payroll",
         "IngenIA365ERP.Application.Core.People",
         "IngenIA365ERP.Application.Inventory",
-        // Feature 013 (T0185): lo conservado de ahorros y aportes, mudado fuera del espacio Lending.
-        "IngenIA365ERP.Application.Savings",
-        "IngenIA365ERP.Domain.Entities.Savings",
+        // Feature 013 (T0185) vigilaba aquí lo conservado de ahorros y aportes (Application.Savings, Domain.Entities.Savings); la
+        // feature 014 lo retiró (T007, R28) y las captaciones son Cartera (Lending.Deposits).
         "IngenIA365ERP.Domain.Entities.Inventory",
         "IngenIA365ERP.Domain.Inventory",
     ];
@@ -113,7 +112,7 @@ public class LaCarteraSoloSeTocaPorSusInterfaces
     [Fact]
     public void Los_tipos_de_otros_modulos_no_dependen_de_Cartera_salvo_por_sus_puertos()
     {
-        // La exención por nombre de SavingsAccount se retiró con la mudanza a Domain.Entities.Savings (T0184).
+        // La exención por nombre de SavingsAccount se retiró con la mudanza a Domain.Entities.Savings (T0184); la 014 retiró la entidad.
         var cartera = Types().That().ResideInNamespaceMatching(LendingSalvoPuertos);
         foreach (var ns in EspaciosDeOtrosModulos)
             Types().That().ResideInNamespaceMatching(ConHijos(ns))

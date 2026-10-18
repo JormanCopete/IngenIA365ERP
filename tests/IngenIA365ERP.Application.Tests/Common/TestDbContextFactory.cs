@@ -6,7 +6,6 @@ using IngenIA365ERP.Domain.Entities.Approvals.Transactions;
 using IngenIA365ERP.Domain.Entities.Approvals;
 using IngenIA365ERP.Domain.Entities.Alerts;
 using IngenIA365ERP.Domain.Entities.Audit;
-using IngenIA365ERP.Domain.Entities.CDT;
 using IngenIA365ERP.Domain.Entities.Compliance;
 using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Entities.Debit;
@@ -15,7 +14,6 @@ using IngenIA365ERP.Domain.Entities.Integration.Transactions;
 using IngenIA365ERP.Domain.Entities.Accounting.Inventory;
 using IngenIA365ERP.Domain.Entities.Inventory;
 using IngenIA365ERP.Domain.Entities.Inventory.Documents;
-using IngenIA365ERP.Domain.Entities.Savings;
 using IngenIA365ERP.Domain.Entities.Parameters;
 using IngenIA365ERP.Domain.Entities.Payroll;
 using IngenIA365ERP.Domain.Entities.Security;
@@ -230,18 +228,6 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     public DbSet<Budget> Budgets => Set<Budget>();
     // Feature 010: la definitiva lee Cartera por persona (FR-018a) y, al aprobar, recauda de verdad
     // (RecaudoDeCredito: cuotas pendientes, transacción RC y comprobante por el contrato).
-    DbSet<TransactionCode> IApplicationDbContext.TransactionCodes => throw new NotImplementedException();
-    DbSet<SavingsParameter> IApplicationDbContext.SavingsParameters => throw new NotImplementedException();
-    DbSet<Zone> IApplicationDbContext.Zones => throw new NotImplementedException();
-    DbSet<SubZone> IApplicationDbContext.SubZones => throw new NotImplementedException();
-    DbSet<ZoneType> IApplicationDbContext.ZoneTypes => throw new NotImplementedException();
-    DbSet<SavingsAccount> IApplicationDbContext.SavingsAccounts => throw new NotImplementedException();
-    DbSet<DepositEntry> IApplicationDbContext.DepositEntries => throw new NotImplementedException();
-    DbSet<WithdrawalStatus> IApplicationDbContext.WithdrawalStatuses => throw new NotImplementedException();
-    DbSet<SiplaParameter> IApplicationDbContext.SiplaParameters => throw new NotImplementedException();
-    DbSet<ContributionReduction> IApplicationDbContext.ContributionReductions => throw new NotImplementedException();
-    public DbSet<AssociateWithdrawal> AssociateWithdrawals => Set<AssociateWithdrawal>();
-    DbSet<CertificateEntry> IApplicationDbContext.CertificateEntries => throw new NotImplementedException();
     public DbSet<PayrollConcept> PayrollConcepts => Set<PayrollConcept>();
     public DbSet<WorkRiskProvider> WorkRiskProviders => Set<WorkRiskProvider>();
     public DbSet<PensionProvider> PensionProviders => Set<PensionProvider>();
@@ -495,9 +481,6 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Schedules.RepaymentInstallment> RepaymentInstallments => Set<IngenIA365ERP.Domain.Entities.Lending.Schedules.RepaymentInstallment>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Schedules.RepaymentScheduleVersion> RepaymentScheduleVersions => Set<IngenIA365ERP.Domain.Entities.Lending.Schedules.RepaymentScheduleVersion>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Transactions.LoanTransaction> LoanTransactions => Set<IngenIA365ERP.Domain.Entities.Lending.Transactions.LoanTransaction>();
-    DbSet<Certificate> IApplicationDbContext.Certificates => throw new NotImplementedException();
-    DbSet<CdtParameter> IApplicationDbContext.CdtParameters => throw new NotImplementedException();
-    DbSet<CdtRateByTerm> IApplicationDbContext.CdtRatesByTerm => throw new NotImplementedException();
     DbSet<DebitCard> IApplicationDbContext.DebitCards => throw new NotImplementedException();
     DbSet<DebitAgreementParameter> IApplicationDbContext.DebitAgreementParameters => throw new NotImplementedException();
     DbSet<PosTerminal> IApplicationDbContext.PosTerminals => throw new NotImplementedException();

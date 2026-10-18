@@ -36,12 +36,10 @@ public static class ManualCatalogo
         public const string Administracion = "Administración";
         public const string Contabilidad = "Contabilidad";
         public const string Cartera = "Cartera";
-        public const string AhorrosYAportes = "Ahorros y aportes";
         public const string Inventario = "Inventario";
         public const string Compras = "Compras";
         public const string Ventas = "Ventas";
         public const string Nomina = "Nómina";
-        public const string Cdt = "CDT";
         public const string Debito = "Tarjeta Débito";
         public const string Tesoreria = "Tesorería";
         public const string Asociados = "Asociados";
@@ -56,7 +54,7 @@ public static class ManualCatalogo
     [
         Modulos.Inicio, Modulos.Cuenta, Modulos.Administracion, Modulos.Saas,
         Modulos.Asociados, Modulos.Maestros, Modulos.Contabilidad, Modulos.Cartera,
-        Modulos.AhorrosYAportes, Modulos.Cdt, Modulos.Inventario, Modulos.Compras, Modulos.Ventas, Modulos.Nomina, Modulos.Tesoreria,
+        Modulos.Inventario, Modulos.Compras, Modulos.Ventas, Modulos.Nomina, Modulos.Tesoreria,
         Modulos.Debito, Modulos.Cumplimiento, Modulos.Reportes, Modulos.Notificaciones,
     ];
 
@@ -463,7 +461,7 @@ public static class ManualCatalogo
                 P("Guardar", "El asociado queda activo y puede abrir productos (ahorros, créditos, aportes)."),
             ],
             ["asociado", "afiliar", "vincular", "ingreso", "beneficiarios", "socio"], ["Cooperativa activa.", "La persona en el registro único."],
-            ["personas", "aportes", "retiro-de-asociado"], [], TipoDeTema.Proceso));
+            ["personas"], [], TipoDeTema.Proceso));
 
         // Beneficiarios: la ruta /asociados/beneficiarios no tiene página (el menú tampoco la enlaza, ver
         // TodoEnlaceDelMenuTieneSuPagina). El tema se destapa cuando exista la pantalla:
@@ -813,83 +811,8 @@ public static class ManualCatalogo
             ["Ser el maestro de la plataforma, con segundo factor, para registrar o corregir.", "La réplica al día en cada cooperativa (la tarea programada de valores nacionales)."],
             ["cartera-lineas", "cartera-vivienda-y-uvr", "cartera-cierres"], [], TipoDeTema.Proceso));
 
-        // ------------------------------------------------------ Ahorros y aportes --
-        // Feature 013 (T0187, T0193): lo conservado de la cartera heredada, con sus rutas /cartera/... reservadas.
-        // Los temas del crédito heredado se retiraron con sus pantallas; la Cartera nueva trae los suyos en Modulos.Cartera.
-        t.Add(Proceso("cuentas-de-ahorro", "Cuentas de ahorro", Modulos.AhorrosYAportes, "/cartera/ahorros",
-            "Abrir cuentas de ahorro a la vista o programado, consignar, retirar y liquidar intereses.",
-            [
-                P("Ahorros y aportes → Cuentas de Ahorro", "Lista por asociado y tipo. «Nuevo» abre una cuenta: asociado, tipo de ahorro (sus parámetros traen tasa y condiciones) y monto de apertura.", "/cartera/ahorros", "Abrir Cuentas de Ahorro"),
-                P("Depositar", "Ahorros y aportes → Depósitos: cuenta, valor y forma de pago. Genera el comprobante.", "/cartera/depositos", "Abrir Depósitos"),
-                P("Retirar", "Ahorros y aportes → Retiros: valida saldo disponible y, si el ahorro es programado, las condiciones de retiro anticipado.", "/cartera/retiros", "Abrir Retiros"),
-                P("Liquidar intereses", "Proceso periódico (mensual, normalmente) que causa y abona intereses a todas las cuentas.", "/cartera/ahorros/liquidacion", "Abrir Liquidación de Intereses"),
-                P("Detalle y extracto", "Desde la fila: movimientos, saldos y el extracto para el asociado.", "/cartera/extractos", "Abrir Extractos"),
-            ],
-            ["ahorro", "cuenta de ahorro", "consignar", "depositar", "retirar", "intereses", "a la vista", "programado"], ["Cooperativa activa.", "Parámetros de ahorro configurados."],
-            ["cartera-parametros-ahorro", "liquidacion-intereses-ahorros"], ["/cartera/ahorros/{AccountId}", "/cartera/depositos", "/cartera/retiros"], TipoDeTema.Proceso));
-
-        t.Add(Proceso("cdt", "CDT: certificados de depósito a término", Modulos.AhorrosYAportes, "/cartera/cdt",
-            "Constituir un CDT, seguirlo hasta el vencimiento, renovarlo o cancelarlo, y liquidar sus intereses.",
-            [
-                P("Ahorros y aportes → CDT Certificados", "Lista por estado: vigente, vencido, renovado, cancelado.", "/cartera/cdt", "Abrir CDT"),
-                P("Nuevo CDT", "Asociado, monto, plazo en días y periodicidad de pago de intereses. La tasa la trae CDT → Tasas por Plazo.", "/cartera/cdt/nuevo", "Abrir Nuevo CDT"),
-                P("Emitir", "Genera el certificado con su número y el comprobante contable."),
-                P("Al vencimiento", "«Renovar CDT» constituye uno nuevo con el capital (y los intereses, si se capitalizan). «Cancelar» paga capital e intereses; una cancelación anticipada aplica la penalidad configurada."),
-                P("Liquidar intereses", "Proceso periódico para los CDT con pago de intereses periódico.", "/cartera/cdt/liquidacion", "Abrir Liquidación de Intereses CDT"),
-            ],
-            ["cdt", "certificado", "deposito a termino", "renovar", "cancelar", "plazo", "tasa"], ["Cooperativa activa.", "Parámetros y tasas de CDT configurados."],
-            ["cdt-parametros", "cdt-tasas-plazo"], ["/cartera/cdt/nuevo", "/cartera/cdt/{CertificateId}"], TipoDeTema.Proceso));
-
-        t.Add(Proceso("aportes", "Aportes sociales", Modulos.AhorrosYAportes, "/cartera/aportes",
-            "Registrar los aportes de los asociados, obligatorios o extraordinarios, y consultar su acumulado.",
-            [
-                P("Ahorros y aportes → Aportes", "Por asociado: acumulado, últimos aportes, cuota mensual pactada.", "/cartera/aportes", "Abrir Aportes"),
-                P("Registrar Aporte", "Asociado, valor, fecha y forma de pago."),
-                P("Devolución", "Al retirarse el asociado, los aportes se devuelven desde Retiro de Asociado, cruzados con lo que deba.", "/cartera/retiros-asociado", "Abrir Retiro de Asociado"),
-            ],
-            ["aportes", "aporte social", "cuota", "acumulado", "devolucion de aportes"], ["Cooperativa activa."], ["registro-de-asociados", "retiro-de-asociado"], [], TipoDeTema.Proceso));
-
-        t.Add(Proceso("retiro-de-asociado", "Retiro de asociado", Modulos.AhorrosYAportes, "/cartera/retiros-asociado",
-            "Desvincular a un asociado: cruzar sus aportes y ahorros contra sus deudas, devolver el saldo y dejarlo inactivo.",
-            [
-                P("Ahorros y aportes → Retiro Asociado", null, "/cartera/retiros-asociado", "Abrir Retiro de Asociado"),
-                P("Buscar al asociado y elegir el motivo", "Los motivos se administran en Maestros → Motivos de Retiro. La pantalla muestra aportes, ahorros y deudas."),
-                P("Cruce", "El sistema propone aplicar aportes y ahorros a las deudas. Si queda saldo a favor, se devuelve; si queda deuda, no se puede retirar hasta cubrirla."),
-                P("Confirmar Retiro", "Genera los comprobantes y deja al asociado inactivo. El estado del trámite se sigue en Estados de Retiro."),
-            ],
-            ["retiro", "desvincular", "asociado", "devolucion", "cruce", "paz y salvo"], ["Cooperativa activa.", "Permiso de retiro."],
-            ["aportes", "registro-de-asociados", "cartera-estados-retiro"], [], TipoDeTema.Proceso));
-
-        t.Add(Consulta("/cartera/extractos", "Extractos", Modulos.AhorrosYAportes,
-            "Estados de cuenta de ahorros y créditos por asociado y período, para entregar o enviar.",
-            "Asociado, producto y período.", "extracto", "estado de cuenta", "movimientos del asociado"));
-        t.Add(Proceso("liquidacion-intereses-ahorros", "Liquidación de intereses de ahorros", Modulos.AhorrosYAportes, "/cartera/ahorros/liquidacion",
-            "Causar y abonar los intereses de todas las cuentas de ahorro del período.",
-            [
-                P("Ahorros y aportes → Liq. Int. Ahorros", "Elegí el período y el tipo de ahorro (o todos).", "/cartera/ahorros/liquidacion", "Abrir la liquidación"),
-                P("Simular", "Revisá el total y los casos extremos antes de abonar."),
-                P("Liquidar", "Abona a cada cuenta y genera el comprobante. Retención en la fuente sobre intereses según la línea de retefuente."),
-            ],
-            ["liquidacion", "intereses", "ahorros", "abonar"], ["Cooperativa activa."], ["cuentas-de-ahorro"], [], TipoDeTema.Proceso));
-        t.Add(Proceso("liquidacion-intereses-cdt", "Liquidación de intereses de CDT", Modulos.AhorrosYAportes, "/cartera/cdt/liquidacion",
-            "Pagar o capitalizar los intereses de los CDT con vencimiento de intereses en el período.",
-            [
-                P("Ahorros y aportes → Liq. Int. CDTs", null, "/cartera/cdt/liquidacion", "Abrir la liquidación"),
-                P("Revisar la lista", "Qué certificados vencen intereses y cómo se pagan (abono a ahorros, cheque, capitalización)."),
-                P("Liquidar", "Genera los pagos y el comprobante."),
-            ],
-            ["liquidacion", "intereses", "cdt"], ["Cooperativa activa."], ["cdt"], [], TipoDeTema.Proceso));
-
-        t.Add(Maestro("/cartera/codigos-movimiento", "Códigos de movimiento", Modulos.AhorrosYAportes, "un código de movimiento", null, "codigos", "movimiento", "transaccion"));
-        t.Add(Maestro("/cartera/parametros-ahorro", "Parámetros de ahorro", Modulos.AhorrosYAportes, "un tipo de ahorro", "Tasa, monto mínimo, condiciones de retiro y cuentas.", "ahorro", "tipo", "tasa", "parametros"));
-        t.Add(Maestro("/cartera/zonas", "Zonas", Modulos.AhorrosYAportes, "una zona", null, "zonas", "geografia", "cobro"));
-        t.Add(Maestro("/cartera/tipos-zona", "Tipos de zona", Modulos.AhorrosYAportes, "un tipo de zona", null, "tipos de zona"));
-        t.Add(Maestro("/cartera/estados-retiro", "Estados de retiro", Modulos.AhorrosYAportes, "un estado de retiro", "El flujo del trámite de retiro de asociado.", "estados", "retiro", "tramite"));
-        t.Add(Maestro("/cartera/parametros-sipla", "Parámetros SIPLA", Modulos.AhorrosYAportes, "un parámetro SIPLA", "Umbrales de operaciones inusuales y sospechosas para el reporte a la UIAF.", "sipla", "sarlaft", "uiaf", "lavado de activos", "umbral"));
-
-        // ------------------------------------------------------------ CDT (params) --
-        t.Add(Maestro("/cdt/parametros", "Parámetros CDT", Modulos.Cdt, "un parámetro de CDT", "Monto mínimo, plazos permitidos, penalidad por cancelación anticipada, cuentas.", "cdt", "parametros", "penalidad"));
-        t.Add(Maestro("/cdt/tasas-plazo", "Tasas por plazo CDT", Modulos.Cdt, "una tasa por plazo", "Tasa según rango de días y monto; con vigencias.", "cdt", "tasas", "plazo", "vigencia"));
+        // Feature 014 (T008, R28): los temas de ahorros, aportes y CDT heredados se retiraron con sus pantallas; los de
+        // captaciones llegan con cada historia en Modulos.Cartera.
 
         // --------------------------------------------------------------- Inventario --
         // Feature 012, US12 (T437): el rol vendedor pasó a Ventas; seguridad, aprobaciones, parámetros y alertas.
@@ -1838,7 +1761,7 @@ public static class ManualCatalogo
                 P("Movimientos", "Compras, retiros y comisiones que llegan del convenio, por tarjeta y período.", "/debito/movimientos-tarjeta", "Abrir Movimientos de Tarjeta"),
             ],
             ["tarjeta", "debito", "bloquear", "activar", "convenio", "cajero"], ["Cooperativa activa.", "Convenio configurado."],
-            ["cuentas-de-ahorro", "debito-parametros-convenio"], ["/debito/tarjetas/{CardId}"], TipoDeTema.Proceso));
+            ["debito-parametros-convenio"], ["/debito/tarjetas/{CardId}"], TipoDeTema.Proceso));
         t.Add(Consulta("/debito/movimientos-tarjeta", "Movimientos de tarjeta débito", Modulos.Debito,
             "Compras, retiros y comisiones por tarjeta, con su estado de conciliación contra el convenio.",
             "Tarjeta o asociado y rango de fechas.", "movimientos", "tarjeta", "compras", "retiros"));

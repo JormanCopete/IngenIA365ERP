@@ -23,7 +23,7 @@ namespace IngenIA365ERP.Application.Tests.Audit
     using IngenIA365ERP.Application.Tests.AuditoriaDePrueba.Compliance;
     using IngenIA365ERP.Application.Tests.AuditoriaDePrueba.NationalValues;
     using IngenIA365ERP.Application.Tests.AuditoriaDePrueba.Lending;
-    using IngenIA365ERP.Application.Tests.AuditoriaDePrueba.Savings;
+    using IngenIA365ERP.Application.Tests.AuditoriaDePrueba.Lending.Deposits;
 
     /// <summary>
     /// T017, segunda mitad (feature 012; decisiones-transversales T36, T37; contracts/api.md §1.6): lo que la
@@ -70,15 +70,13 @@ namespace IngenIA365ERP.Application.Tests.Audit
         [InlineData("IngenIA365ERP.Application.Core.People", "Core")]
         [InlineData("IngenIA365ERP.Application.Inventory.Integration", "Inventory")]
         [InlineData("IngenIA365ERP.Application.Accounting.Inventory", "Accounting")]
-        // Feature 013 (T0128, C89): Cartera es Lending; lo conservado de la cartera heredada, mudado a Savings, es Savings
-        // (antes que «.Core» y que «.Lending»).
+        // Feature 013 (T0128, C89): Cartera es Lending. Feature 014 (T007, R28): la regla «.Savings» de lo conservado se retiró
+        // con él; las captaciones y los aportes son Cartera (Lending.Deposits), encadenados y de diez años como el crédito.
         [InlineData("IngenIA365ERP.Application.Lending.Collections", "Lending")]
         [InlineData("IngenIA365ERP.Domain.Entities.Lending", "Lending")]
-        [InlineData("IngenIA365ERP.Application.Savings.SavingsAccounts.Commands.OpenSavingsAccount", "Savings")]
-        [InlineData("IngenIA365ERP.Application.Savings.Withdrawals.Commands.ProcessWithdrawal", "Savings")]
-        [InlineData("IngenIA365ERP.Domain.Entities.Savings", "Savings")]
-        [InlineData("IngenIA365ERP.Application.Lending.Savings", "Savings")]
-        [InlineData("IngenIA365ERP.Application.Core.Savings", "Savings")]
+        [InlineData("IngenIA365ERP.Application.Lending.Deposits.Accounts", "Lending")]
+        [InlineData("IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts", "Lending")]
+        [InlineData("IngenIA365ERP.Application.Core.Savings", "Core")]
         [InlineData("IngenIA365ERP.Application.Audit.RegisterOptionAccess", "Navigation")]
         // Feature 013 (T0092): cumplimiento y valores nacionales, antes de .Admin y de .Core.
         [InlineData("IngenIA365ERP.Application.Compliance.HabeasData.AcceptConsent", "Compliance")]
@@ -104,8 +102,6 @@ namespace IngenIA365ERP.Application.Tests.Audit
             IngenIA365ERP.Audit.Indexes.AuditRetention.ModulosDeDiezAnios.Should().Contain(["Compliance", "NationalValues", "Lending"]);
             AuditoriaEncadenada.EsEncadenado("Accounting").Should().BeFalse("pregunta C1");
             AuditoriaEncadenada.EsEncadenado("Lending").Should().BeTrue("todo evento de Cartera va sellado por la cadena (C89)");
-            AuditoriaEncadenada.EsEncadenado("Savings").Should().BeFalse("lo conservado de ahorros sigue por Mongo hasta su feature");
-            IngenIA365ERP.Audit.Indexes.AuditRetention.ModulosDeDiezAnios.Should().NotContain("Savings");
             AuditoriaEncadenada.Flujo(Cooperativa).Should().Be(Flujo);
         }
 
@@ -231,13 +227,14 @@ namespace IngenIA365ERP.Application.Tests.Audit
         }
 
         [Fact]
-        public async Task Un_evento_de_lo_mudado_a_Savings_sigue_por_Mongo()
+        public async Task Un_evento_de_captaciones_va_por_la_cadena_como_Cartera()
         {
+            // Feature 014 (T007, R28): lo conservado de ahorros iba por Mongo como «Savings»; las captaciones son Cartera.
             await Behavior<AbrirAhorroDePruebaCommand, Result>().Handle(new AbrirAhorroDePruebaCommand(Guid.NewGuid(), "Apertura"),
                 _ => Task.FromResult(Result.Success()), CancellationToken.None);
 
-            _enMongo.Should().ContainSingle().Which.Module.Should().Be("Savings");
-            (await _db.AuditOutbox.CountAsync()).Should().Be(0);
+            _enMongo.Should().BeEmpty();
+            (await _db.AuditOutbox.ToListAsync()).Should().ContainSingle().Which.Module.Should().Be("Lending");
         }
 
         [Fact]
@@ -412,7 +409,7 @@ namespace IngenIA365ERP.Application.Tests.AuditoriaDePrueba.Lending
     public sealed record RegistrarObligacionDePruebaCommand(Guid OperationKey, string Reason) : IRequest<Result>, IOperacionIdempotente, IConMotivo;
 }
 
-namespace IngenIA365ERP.Application.Tests.AuditoriaDePrueba.Savings
+namespace IngenIA365ERP.Application.Tests.AuditoriaDePrueba.Lending.Deposits
 {
     public sealed record AbrirAhorroDePruebaCommand(Guid OperationKey, string Reason) : IRequest<Result>, IOperacionIdempotente, IConMotivo;
 }

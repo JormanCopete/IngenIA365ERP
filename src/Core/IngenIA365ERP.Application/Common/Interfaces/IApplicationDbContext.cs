@@ -6,7 +6,6 @@ using IngenIA365ERP.Domain.Entities.Approvals.Transactions;
 using IngenIA365ERP.Domain.Entities.Approvals;
 using IngenIA365ERP.Domain.Entities.Alerts;
 using IngenIA365ERP.Domain.Entities.Audit;
-using IngenIA365ERP.Domain.Entities.CDT;
 using IngenIA365ERP.Domain.Entities.Compliance;
 using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Entities.Debit;
@@ -14,7 +13,6 @@ using IngenIA365ERP.Domain.Entities.Integration;
 using IngenIA365ERP.Domain.Entities.Integration.Transactions;
 using IngenIA365ERP.Domain.Entities.Inventory;
 using IngenIA365ERP.Domain.Entities.Inventory.Documents;
-using IngenIA365ERP.Domain.Entities.Savings;
 using IngenIA365ERP.Domain.Entities.Parameters;
 using IngenIA365ERP.Domain.Entities.Payroll;
 using IngenIA365ERP.Domain.Entities.Security;
@@ -98,20 +96,6 @@ public interface IApplicationDbContext
     DbSet<FixedAsset> FixedAssets { get; }
     DbSet<FixedAssetInstallment> FixedAssetInstallments { get; }
     DbSet<AssetRun> AssetRuns { get; }
-
-    // Ahorros y aportes (conservadas de la cartera heredada; feature 013, T0184)
-    DbSet<TransactionCode> TransactionCodes { get; }
-    DbSet<SavingsParameter> SavingsParameters { get; }
-    DbSet<Zone> Zones { get; }
-    DbSet<SubZone> SubZones { get; }
-    DbSet<ZoneType> ZoneTypes { get; }
-    DbSet<SavingsAccount> SavingsAccounts { get; }
-    DbSet<DepositEntry> DepositEntries { get; }
-    DbSet<WithdrawalStatus> WithdrawalStatuses { get; }
-    DbSet<SiplaParameter> SiplaParameters { get; }
-    DbSet<ContributionReduction> ContributionReductions { get; }
-    DbSet<AssociateWithdrawal> AssociateWithdrawals { get; }
-    DbSet<CertificateEntry> CertificateEntries { get; }
 
     // Payroll
     DbSet<Employee> Employees { get; }
@@ -292,11 +276,6 @@ public interface IApplicationDbContext
     DbSet<Domain.Entities.Core.Taxes.TaxDefinition> TaxDefinitions { get; }
     DbSet<Domain.Entities.Core.Taxes.TaxRate> TaxRates { get; }
     DbSet<Domain.Entities.Core.Taxes.WithholdingConcept> WithholdingConcepts { get; }
-
-    // CDT
-    DbSet<Certificate> Certificates { get; }
-    DbSet<CdtParameter> CdtParameters { get; }
-    DbSet<CdtRateByTerm> CdtRatesByTerm { get; }
 
     // Debit
     DbSet<DebitCard> DebitCards { get; }

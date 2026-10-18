@@ -11,14 +11,18 @@ namespace IngenIA365ERP.Architecture.Tests.Principles;
 /// heredada ni <c>PAY_SettlementDeductions</c>/<c>PAY_Novelties</c> conserva una FK, una navegación o una columna
 /// <c>LoanPortfolioId</c>/<c>CreditLine</c> hacia una tabla de crédito retirada; <c>LND_SiplaGroupParameters.CreditLineId</c> queda
 /// como dato requerido, sin FK ni índice. Se revisa el modelo de los dos motores y su snapshot.
+///
+/// <para>
+/// Feature 014 (T009, R28): las 38 conservadas se retiraron con <c>RetiroDeCaptacionesHeredadas</c> (también
+/// <c>LND_SiplaGroupParameters</c>, cuya prueba de «dato requerido» salió de aquí), así que lo vigilado son las dos tablas de Nómina.
+/// Que las 38 no vuelvan lo fija <c>LaCarteraHeredadaNoVuelve</c>.
+/// </para>
 /// </summary>
 public class NingunaTablaConservadaApuntaALaCarteraRetirada
 {
     private static readonly HashSet<string> TablasRetiradas = CarteraHeredada.Retiradas.Select(r => r.Tabla).ToHashSet(StringComparer.Ordinal);
 
-    private static readonly HashSet<string> TablasVigiladas = CarteraHeredada.Conservadas.Select(c => c.Tabla)
-        .Append("PAY_SettlementDeductions").Append("PAY_Novelties")
-        .ToHashSet(StringComparer.Ordinal);
+    private static readonly HashSet<string> TablasVigiladas = new(["PAY_SettlementDeductions", "PAY_Novelties"], StringComparer.Ordinal);
 
     private static ApplicationDbContext Contexto(bool postgres)
     {
@@ -54,20 +58,6 @@ public class NingunaTablaConservadaApuntaALaCarteraRetirada
                 .Select(p => $"{tabla}: columna {p.Name}"));
         }
         Assert.True(violaciones.Count == 0, "Una tabla conservada apunta a la cartera retirada (R-07): " + string.Join("; ", violaciones));
-    }
-
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public void La_linea_de_SIPLA_queda_como_dato_requerido_sin_FK_ni_indice(bool postgres)
-    {
-        using var db = Contexto(postgres);
-        var sipla = db.Model.GetEntityTypes().Single(t => t.GetTableName() == "LND_SiplaGroupParameters");
-        var linea = sipla.FindProperty("CreditLineId");
-        Assert.NotNull(linea);
-        Assert.False(linea!.IsNullable, "CreditLineId queda requerida como dato (§7.6 de las transversales).");
-        Assert.Empty(sipla.GetForeignKeys().Where(fk => fk.Properties.Any(p => p.Name == "CreditLineId")));
-        Assert.Empty(sipla.GetIndexes().Where(i => i.Properties.Any(p => p.Name == "CreditLineId")));
     }
 
     [Theory]
