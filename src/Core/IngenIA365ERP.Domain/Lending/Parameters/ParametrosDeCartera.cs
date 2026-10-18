@@ -416,8 +416,8 @@ public static class ParametrosDeCartera
         Texto(CentralesRangosDeMora,
             "Rangos de mora del reporte a centrales por tipo de cartera (modalidad) y desde qué rango el dato es negativo: TIPO=límite,límite,…|rango "
             + "separados por punto y coma, con * para los tipos que no se nombran (*=30,60,90,120,150,180|1;VIVIENDA=60,120,180|1). El rango 1 va de 1 "
-            + "al primer límite, el último queda abierto; por debajo del rango negativo la obligación se reporta al día. La altura de mora reportada "
-            + "sale del rango.",
+            + "al primer límite, el último queda abierto; por debajo del rango negativo la obligación se reporta en mora con sus días reales, sin marca "
+            + "negativa. La altura de mora reportada sale del rango.",
             Regulatory.RangosDeMoraParaCentrales.Defecto, K5, patron: Regulatory.RangosDeMoraParaCentrales.Patron) with
         {
             PendienteDeValidar = "Defecto propuesto (rangos de 30 días, negativo desde el primero: toda mora es dato negativo, como antes del parámetro), "
