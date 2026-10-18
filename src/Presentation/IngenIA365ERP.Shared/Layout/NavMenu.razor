@@ -99,6 +99,11 @@
                 <PermissionGate Required="Lending.Accounts.Read">
                     <NavLink href="/cartera/ahorros" class="nav-subitem">Cuentas de ahorro y aportes</NavLink>
                 </PermissionGate>
+                @* US3 (T094): el resumen de aportes de un asociado, las devoluciones y las cesiones por aprobar; la ficha (/cartera/aportes/{persona})
+                   se abre desde allí. *@
+                <PermissionGate Required="Lending.Accounts.Read">
+                    <NavLink href="/cartera/aportes" class="nav-subitem">Aportes sociales</NavLink>
+                </PermissionGate>
             </NavMenuGroup>
         }
 

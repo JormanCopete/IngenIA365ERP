@@ -1,0 +1,200 @@
+@page "/cartera/aportes"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Globalization
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Http
+@inject CaptacionesClient Cliente
+@inject INotificationService Notification
+@inject NavigationManager Navegacion
+
+<PageTitle>Aportes sociales - IngenIA365ERP</PageTitle>
+
+@* Feature 014, US3 (T094; FR-040 a FR-049; contracts/api.md §7): los aportes sociales. Dos zonas: 1) el resumen de un asociado —se busca en el
+   maestro— con su saldo por clase (el mismo de la consulta de aportes, la constancia y el extracto), el mínimo irreducible, el ahorro permanente y
+   las cuotas vencidas; su ficha es /cartera/aportes/{persona}; 2) las devoluciones sin retiro y las cesiones entre asociados por aprobar, que aprueba
+   o niega otra persona con motivo. La cuota la generan el ciclo diario y la pagan los recaudadores por el contrato de cuentas: aquí no se paga. *@
+<PermissionGate Required="Lending.Accounts.Read" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Aportes sociales</h3>
+        <div class="toolbar">
+            <SfButton CssClass="@(_pestana == 0 ? "e-primary" : "e-outline")" OnClick="@(() => _pestana = 0)">Asociado</SfButton>
+            <SfButton CssClass="@(_pestana == 1 ? "e-primary" : "e-outline")" OnClick="@(() => CambiarPestanaAsync(1))">Devoluciones</SfButton>
+            <SfButton CssClass="@(_pestana == 2 ? "e-primary" : "e-outline")" OnClick="@(() => CambiarPestanaAsync(2))">Cesiones</SfButton>
+        </div>
+    </div>
+
+    @if (_pestana == 0)
+    {
+        <div class="toolbar">
+            <div class="campo campo-ancho">
+                <PersonSearchPicker Selected="@_persona" SelectedChanged="@CambiarPersonaAsync" ShowHelpText="false" Compacto="true" />
+            </div>
+        </div>
+        <IndicadorDeCarga Cargando="@_cargaResumen.Activa">
+            @if (_resumen is { } r)
+            {
+                @if (!r.Available)
+                {
+                    <p class="aviso aviso-info">Los aportes todavía no están activados: el saldo que se ve es el del libro hasta hoy.</p>
+                }
+                <div class="kpi-grid">
+                    <div class="kpi-card"><span class="kpi-value">@Pesos(r.Total)</span><span class="kpi-label">Aportes al @r.Date.ToString("dd/MM/yyyy")</span></div>
+                    <div class="kpi-card"><span class="kpi-value">@Pesos(r.MinimumNonReducible)</span><span class="kpi-label">Mínimo irreducible</span></div>
+                    <div class="kpi-card"><span class="kpi-value">@Pesos(r.PermanentSavings)</span><span class="kpi-label">Ahorro permanente</span></div>
+                    <div class="kpi-card"><span class="kpi-value">@r.InstallmentsInArrears.Count</span><span class="kpi-label">Cuotas vencidas con saldo</span></div>
+                </div>
+                <div class="info-card">
+                    <p>Mínimos @Pesos(r.ByClass.Minimum) · ordinarios @Pesos(r.ByClass.Ordinary) · extraordinarios @Pesos(r.ByClass.Extraordinary) ·
+                        revalorizados @Pesos(r.ByClass.Revalued)</p>
+                    <SfButton CssClass="e-outline" OnClick="@(() => Navegacion.NavigateTo($"/cartera/aportes/{r.Person.PersonPublicId}"))">Ver la ficha de aportes</SfButton>
+                </div>
+            }
+            else if (_persona is null)
+            {
+                <p class="texto-tenue">Busque al asociado por su documento o su nombre.</p>
+            }
+        </IndicadorDeCarga>
+    }
+    else
+    {
+        <div class="toolbar">
+            <select class="e-input" value="@_estado" @onchange="@(e => CambiarEstadoAsync(e.Value?.ToString()))">
+                <option value="PendingApproval">Por aprobar</option>
+                <option value="Approved">Aprobadas</option>
+                <option value="Rejected">Negadas</option>
+                <option value="">Todas</option>
+            </select>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_cargaSolicitudes.Activa" OnClick="@CargarSolicitudesAsync">Actualizar</SfButton>
+        </div>
+        <IndicadorDeCarga Cargando="@_cargaSolicitudes.Activa">
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead>
+                        <tr><th>Cuenta</th><th>Titular</th>@if (_pestana == 2) { <th>Recibe</th> } else { <th>Causa</th> }<th class="numero">Valor</th><th>Pedida</th><th>Estado</th><th>Motivo</th><th></th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var s in _solicitudes)
+                        {
+                            var solicitud = s;
+                            <tr>
+                                <td>@solicitud.AccountNumber</td>
+                                <td>@solicitud.Holder.FullName<br /><span class="texto-tenue">@solicitud.Holder.DocumentNumber</span></td>
+                                @if (_pestana == 2) { <td>@(solicitud.Target?.FullName ?? "—")</td> } else { <td>@TextosDeAportes.Causa(solicitud.Cause)</td> }
+                                <td class="numero">@Pesos(solicitud.Amount)</td>
+                                <td>@solicitud.RequestedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
+                                <td>@TextosDeAportes.EstadoDeSolicitud(solicitud.Status)@(solicitud.PayoutOrderNumber is { } o ? $" · orden {o}" : "")</td>
+                                <td>@(solicitud.DecisionReason ?? solicitud.Reason)</td>
+                                <td>
+                                    @if (solicitud.Status == 1)
+                                    {
+                                        <PermissionGate Required="Lending.Contributions.Manage">
+                                            <SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirDecision(solicitud, true))">Aprobar</SfButton>
+                                            <SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirDecision(solicitud, false))">Negar</SfButton>
+                                        </PermissionGate>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            @if (_solicitudes.Count == 0) { <p class="texto-tenue">No hay solicitudes en ese estado en su alcance.</p> }
+        </IndicadorDeCarga>
+    }
+</div>
+
+<SfDialog @bind-Visible="_mostrarDecision" Header="@(_aprobar ? "Aprobar la solicitud" : "Negar la solicitud")" Width="560px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_accion.Activa" Texto="Registrando la decisión…">
+                @if (_decidida is { } d)
+                {
+                    <p class="texto-apoyo">
+                        @(d.Kind == TextosDeAportes.Devolucion ? "Devolución" : "Cesión") de @Pesos(d.Amount) de la cuenta @d.AccountNumber.
+                        @if (_aprobar && d.Kind == TextosDeAportes.Devolucion) { <span>Se ordena el giro a Tesorería.</span> }
+                    </p>
+                }
+                <label class="campo campo-ancho">Motivo * <textarea class="e-input" rows="3" maxlength="500" @bind="_motivo"></textarea></label>
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_accion.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@DecidirAsync">@(_aprobar ? "Aprobar" : "Negar")</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarDecision = false)">Volver</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private static readonly CultureInfo Es = CultureInfo.GetCultureInfo("es-CO");
+
+    private readonly EstadoDeCarga _cargaResumen = new(), _cargaSolicitudes = new(), _accion = new();
+    private int _pestana;
+    private PersonSearchPicker.PersonSearchItem? _persona;
+    private ResumenDeAportesDto? _resumen;
+    private List<SolicitudDeAportesDto> _solicitudes = [];
+    private string _estado = "PendingApproval";
+    private SolicitudDeAportesDto? _decidida;
+    private bool _mostrarDecision, _aprobar;
+    private string? _motivo, _error;
+    private ClaveDeOperacion _clave = new();
+
+    private async Task CambiarPersonaAsync(PersonSearchPicker.PersonSearchItem? persona)
+    {
+        _persona = persona;
+        _resumen = null;
+        if (persona is null) return;
+        using var carga = _cargaResumen.Iniciar();
+        var r = await Cliente.ResumenDeAportesAsync(persona.PublicId);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo leer el resumen de aportes."); return; }
+        _resumen = r.Value;
+    }
+
+    private async Task CambiarPestanaAsync(int pestana)
+    {
+        _pestana = pestana;
+        await CargarSolicitudesAsync();
+    }
+
+    private async Task CambiarEstadoAsync(string? estado)
+    {
+        _estado = estado ?? string.Empty;
+        await CargarSolicitudesAsync();
+    }
+
+    private async Task CargarSolicitudesAsync()
+    {
+        using var carga = _cargaSolicitudes.Iniciar();
+        var r = await Cliente.SolicitudesDeAportesAsync(_pestana == 2 ? TextosDeAportes.Cesion : TextosDeAportes.Devolucion,
+            string.IsNullOrEmpty(_estado) ? null : _estado);
+        if (!r.IsSuccess || r.Value is null) { _solicitudes = []; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer las solicitudes."); return; }
+        _solicitudes = [.. r.Value.Items];
+    }
+
+    private void AbrirDecision(SolicitudDeAportesDto solicitud, bool aprobar)
+    {
+        _decidida = solicitud;
+        _aprobar = aprobar;
+        _motivo = _error = null;
+        _clave = new ClaveDeOperacion();
+        _mostrarDecision = true;
+    }
+
+    private async Task DecidirAsync()
+    {
+        if (_decidida is null || string.IsNullOrWhiteSpace(_motivo)) return;
+        using var carga = _accion.Iniciar();
+        _error = null;
+        var r = _aprobar
+            ? await Cliente.AprobarSolicitudDeAportesAsync(_decidida, _motivo.Trim(), _clave)
+            : await Cliente.NegarSolicitudDeAportesAsync(_decidida, _motivo.Trim(), _clave);
+        if (!r.IsSuccess) { _error = string.Join(" ", LineasDeCreditoClient.Explicar(r)); return; }
+        _mostrarDecision = false;
+        await Notification.SuccessAsync(_aprobar ? "Solicitud aprobada." : "Solicitud negada.");
+        await CargarSolicitudesAsync();
+    }
+
+    private static string Pesos(decimal valor) => "$ " + valor.ToString("N0", Es);
+}

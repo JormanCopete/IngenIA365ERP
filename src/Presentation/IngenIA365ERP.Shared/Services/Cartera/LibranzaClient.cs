@@ -56,6 +56,28 @@ public sealed class LibranzaClient(HttpClient http, CentralAuthClient auth)
         Enviar<IReadOnlyList<PendienteDeGiroDto>>(HttpMethod.Get, ConQuery($"{RutaDeConvenios}/{convenio}/pending-transfers", Query(("asOf", Texto(fecha)))),
             null, null, ct);
 
+    // ------------------------------------------------- feature 014 (T094; api.md §18.3): grupos de archivo y equivalencias --
+
+    /// <summary>Los grupos de archivo que rigen el <paramref name="fecha"/> (hoy si no viene).</summary>
+    public Task<ResultadoDeInventario<IReadOnlyList<GrupoDeArchivoDto>>> GruposAsync(Guid convenio, DateOnly? fecha = null, CancellationToken ct = default) =>
+        Enviar<IReadOnlyList<GrupoDeArchivoDto>>(HttpMethod.Get, ConQuery($"{RutaDeConvenios}/{convenio}/file-groups", Query(("date", Texto(fecha)))), null, null, ct);
+
+    /// <summary>Fija los grupos de archivo desde una fecha: registra una versión nueva del convenio.</summary>
+    public Task<ResultadoDeInventario<IReadOnlyList<GrupoDeArchivoDto>>> FijarGruposAsync(Guid convenio, GruposDeArchivoRequest request, ClaveDeOperacion clave,
+        CancellationToken ct = default) =>
+        Enviar<IReadOnlyList<GrupoDeArchivoDto>>(HttpMethod.Post, $"{RutaDeConvenios}/{convenio}/file-groups", request, clave, ct);
+
+    /// <summary>Las equivalencias de concepto que rigen el <paramref name="fecha"/> (hoy si no viene).</summary>
+    public Task<ResultadoDeInventario<IReadOnlyList<EquivalenciaDeConceptoDto>>> EquivalenciasAsync(Guid convenio, DateOnly? fecha = null,
+        CancellationToken ct = default) =>
+        Enviar<IReadOnlyList<EquivalenciaDeConceptoDto>>(HttpMethod.Get, ConQuery($"{RutaDeConvenios}/{convenio}/concept-equivalences", Query(("date", Texto(fecha)))),
+            null, null, ct);
+
+    /// <summary>Fija las equivalencias de concepto desde una fecha: registra una versión nueva del convenio.</summary>
+    public Task<ResultadoDeInventario<IReadOnlyList<EquivalenciaDeConceptoDto>>> FijarEquivalenciasAsync(Guid convenio, EquivalenciasDeConceptoRequest request,
+        ClaveDeOperacion clave, CancellationToken ct = default) =>
+        Enviar<IReadOnlyList<EquivalenciaDeConceptoDto>>(HttpMethod.Post, $"{RutaDeConvenios}/{convenio}/concept-equivalences", request, clave, ct);
+
     /// <summary>Los formatos activos de un ámbito de la libranza (<see cref="AmbitoDeIda"/> o <see cref="AmbitoDeVuelta"/>).</summary>
     public Task<ResultadoDeInventario<IReadOnlyList<FormatoBancarioResumenDto>>> FormatosAsync(string ambito, CancellationToken ct = default) =>
         Enviar<IReadOnlyList<FormatoBancarioResumenDto>>(HttpMethod.Get, ConQuery(RutaDeFormatos, Query(("scope", ambito), ("onlyActive", "true"))), null, null, ct);

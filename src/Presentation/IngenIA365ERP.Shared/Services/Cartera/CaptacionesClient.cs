@@ -18,6 +18,7 @@ public sealed class CaptacionesClient(HttpClient http, CentralAuthClient auth)
     public const string RutaDeLineas = Base + "/lines";
     public const string RutaDeCuentas = Base + "/accounts";
     public const string RutaDeExenciones = Base + "/gmf-exemptions";
+    public const string RutaDeAportes = Base + "/contributions";
 
     /// <summary>El dueño de los soportes de la titularidad de una cuenta (representación, beneficiarios, firma, origen de fondos): el titular.</summary>
     public const string DuenoDeSoportesDeTitularidad = "LendingAccountPartySupport";
@@ -133,6 +134,50 @@ public sealed class CaptacionesClient(HttpClient http, CentralAuthClient auth)
     public Task<ResultadoDeInventario<ExencionDeGmfDto>> TerminarExencionAsync(Guid marca, TerminarExencionRequest request, ClaveDeOperacion clave,
         CancellationToken ct = default) =>
         Enviar<ExencionDeGmfDto>(HttpMethod.Post, $"{RutaDeExenciones}/{marca}/end", request, clave, ct);
+
+    // ----------------------------------------------------------------------------------------- aportes (US3, T094) --
+
+    /// <summary>El resumen de aportes de una persona a una fecha: el mismo saldo de la consulta de aportes, por clase, con las cuotas vencidas.</summary>
+    public Task<ResultadoDeInventario<ResumenDeAportesDto>> ResumenDeAportesAsync(Guid persona, DateOnly? fecha = null, CancellationToken ct = default) =>
+        Enviar<ResumenDeAportesDto>(HttpMethod.Get, ConQuery($"{RutaDeAportes}/summary", Query(("personPublicId", Texto(persona)), ("date", Texto(fecha)))),
+            null, null, ct);
+
+    /// <summary>Las cuotas exigibles del alcance por persona, estado (Pending, PartiallyPaid, Paid, NotDeducted, Cancelled) y período.</summary>
+    public Task<ResultadoDeInventario<PaginaDeInventarioDto<CuotaDeCuentaDto>>> CuotasDeCuentasAsync(Guid? persona = null, string? estado = null,
+        string? periodo = null, int pagina = 1, int tamano = 50, CancellationToken ct = default) =>
+        Enviar<PaginaDeInventarioDto<CuotaDeCuentaDto>>(HttpMethod.Get, ConQuery($"{RutaDeAportes}/installments", Query(("personPublicId", Texto(persona)),
+            ("status", estado), ("period", periodo), ("page", Texto(pagina)), ("pageSize", Texto(tamano)))), null, null, ct);
+
+    /// <summary>Las devoluciones (<see cref="TextosDeAportes.Devolucion"/>) o las cesiones (<see cref="TextosDeAportes.Cesion"/>) del alcance por estado.</summary>
+    public Task<ResultadoDeInventario<PaginaDeInventarioDto<SolicitudDeAportesDto>>> SolicitudesDeAportesAsync(int clase, string? estado = null, int pagina = 1,
+        CancellationToken ct = default) =>
+        Enviar<PaginaDeInventarioDto<SolicitudDeAportesDto>>(HttpMethod.Get, ConQuery($"{RutaDeAportes}/{Ruta(clase)}", Query(("status", estado),
+            ("page", Texto(pagina)))), null, null, ct);
+
+    /// <summary>Pide una devolución de aportes sin retiro: queda por aprobar por otra persona.</summary>
+    public Task<ResultadoDeInventario<SolicitudDeAportesDto>> PedirDevolucionAsync(DevolucionDeAportesRequest request, ClaveDeOperacion clave,
+        CancellationToken ct = default) =>
+        Enviar<SolicitudDeAportesDto>(HttpMethod.Post, $"{RutaDeAportes}/refunds", request, clave, ct);
+
+    /// <summary>Pide una cesión de aportes a otro asociado: queda por aprobar por otra persona.</summary>
+    public Task<ResultadoDeInventario<SolicitudDeAportesDto>> PedirCesionAsync(CesionDeAportesRequest request, ClaveDeOperacion clave, CancellationToken ct = default) =>
+        Enviar<SolicitudDeAportesDto>(HttpMethod.Post, $"{RutaDeAportes}/assignments", request, clave, ct);
+
+    /// <summary>Aprueba una solicitud (otra persona que quien la pidió): la devolución por orden de giro; la cesión, como traslado entre cuentas.</summary>
+    public Task<ResultadoDeInventario<SolicitudDeAportesDto>> AprobarSolicitudDeAportesAsync(SolicitudDeAportesDto solicitud, string motivo, ClaveDeOperacion clave,
+        CancellationToken ct = default) =>
+        solicitud.Kind == TextosDeAportes.Devolucion
+            ? Enviar<SolicitudDeAportesDto>(HttpMethod.Post, $"{RutaDeAportes}/refunds/{solicitud.PublicId}/approve",
+                new AprobarDevolucionDeAportesRequest("DisbursementOrder", motivo), clave, ct)
+            : Enviar<SolicitudDeAportesDto>(HttpMethod.Post, $"{RutaDeAportes}/assignments/{solicitud.PublicId}/approve", new MotivoDeCarteraRequest(motivo), clave, ct);
+
+    /// <summary>Niega una solicitud con motivo.</summary>
+    public Task<ResultadoDeInventario<SolicitudDeAportesDto>> NegarSolicitudDeAportesAsync(SolicitudDeAportesDto solicitud, string motivo, ClaveDeOperacion clave,
+        CancellationToken ct = default) =>
+        Enviar<SolicitudDeAportesDto>(HttpMethod.Post, $"{RutaDeAportes}/{Ruta(solicitud.Kind)}/{solicitud.PublicId}/reject", new MotivoDeCarteraRequest(motivo),
+            clave, ct);
+
+    private static string Ruta(int clase) => clase == TextosDeAportes.Devolucion ? "refunds" : "assignments";
 
     private Task<ResultadoDeInventario<T>> Enviar<T>(HttpMethod metodo, string url, object? cuerpo, ClaveDeOperacion? clave, CancellationToken ct) =>
         EnvioDeVentas.EnviarAsync<T>(http, auth, metodo, url, cuerpo, clave, ct);

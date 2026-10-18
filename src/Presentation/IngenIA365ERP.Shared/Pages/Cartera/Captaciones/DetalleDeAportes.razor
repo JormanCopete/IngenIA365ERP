@@ -1,0 +1,216 @@
+@page "/cartera/aportes/{Id:guid}"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Globalization
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Http
+@inject CaptacionesClient Cliente
+@inject INotificationService Notification
+
+<PageTitle>Ficha de aportes - IngenIA365ERP</PageTitle>
+
+@* Feature 014, US3 (T094; FR-040 a FR-048; contracts/api.md §7): la ficha de aportes de un asociado (Id = la persona). El resumen a una fecha —el
+   mismo saldo de la consulta de aportes, por clase—, sus cuentas de aportes y de ahorro permanente o contractual, las cuotas exigibles con su estado y el
+   motivo del último no descontado, y los pedidos de devolución sin retiro y de cesión a otro asociado, que quedan por aprobar por otra persona en
+   /cartera/aportes. La cuota no se paga aquí: la pagan Nómina, la pagaduría o la caja por el contrato de cuentas. *@
+<PermissionGate Required="Lending.Accounts.Read" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>@(_resumen is { } r ? $"Aportes de {r.Person.FullName}" : "Ficha de aportes")</h3>
+        <div class="toolbar">
+            <a href="/cartera/aportes">Volver a Aportes</a>
+            <label class="campo">Al <input class="e-input" type="date" @bind="_fecha" /></label>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Consultar</SfButton>
+            <PermissionGate Required="Lending.Contributions.Manage">
+                <SfButton CssClass="e-outline" Disabled="@(_cuentasDeAportes.Count == 0)" OnClick="@(() => AbrirPedido(TextosDeAportes.Devolucion))">Pedir devolución</SfButton>
+                <SfButton CssClass="e-outline" Disabled="@(_cuentasDeAportes.Count == 0)" OnClick="@(() => AbrirPedido(TextosDeAportes.Cesion))">Pedir cesión</SfButton>
+            </PermissionGate>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        @if (_resumen is { } r)
+        {
+            <div class="kpi-grid">
+                <div class="kpi-card"><span class="kpi-value">@Pesos(r.Total)</span><span class="kpi-label">Aportes al @r.Date.ToString("dd/MM/yyyy")</span></div>
+                <div class="kpi-card"><span class="kpi-value">@Pesos(r.ByClass.Minimum)</span><span class="kpi-label">Mínimos</span></div>
+                <div class="kpi-card"><span class="kpi-value">@Pesos(r.ByClass.Ordinary)</span><span class="kpi-label">Ordinarios</span></div>
+                <div class="kpi-card"><span class="kpi-value">@Pesos(r.ByClass.Extraordinary)</span><span class="kpi-label">Extraordinarios</span></div>
+                <div class="kpi-card"><span class="kpi-value">@Pesos(r.ByClass.Revalued)</span><span class="kpi-label">Revalorizados</span></div>
+                <div class="kpi-card"><span class="kpi-value">@Pesos(r.MinimumNonReducible)</span><span class="kpi-label">Mínimo irreducible</span></div>
+                <div class="kpi-card"><span class="kpi-value">@Pesos(r.PermanentSavings)</span><span class="kpi-label">Ahorro permanente</span></div>
+            </div>
+            <div class="info-card">
+                <p>Cuentas: @(_cuentas.Count == 0 ? "ninguna" : string.Join(" · ", _cuentas.Select(c => $"{c.Number} ({TextosDeCaptaciones.Naturaleza(c.Nature)})")))</p>
+            </div>
+        }
+    </IndicadorDeCarga>
+
+    <h4>Cuotas</h4>
+    <div class="toolbar">
+        <select class="e-input" value="@_estado" @onchange="@(e => CambiarEstadoAsync(e.Value?.ToString()))">
+            <option value="">Todas las vigentes</option>
+            <option value="Pending">Pendientes</option>
+            <option value="PartiallyPaid">Abonadas</option>
+            <option value="NotDeducted">No descontadas</option>
+            <option value="Paid">Pagadas</option>
+            <option value="Cancelled">Anuladas</option>
+        </select>
+    </div>
+    <IndicadorDeCarga Cargando="@_cargaCuotas.Activa">
+        <div class="tabla-desplazable">
+            <table class="data-grid">
+                <thead>
+                    <tr><th>Cuenta</th><th>Clase</th><th>Período</th><th>Vence</th><th class="numero">Cuota</th><th class="numero">Pagado</th><th class="numero">Pendiente</th><th>Estado</th><th>No descontada por</th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var q in _cuotas)
+                    {
+                        <tr class="@(q.Pending > 0m && q.DueDate < Hoy ? "texto-alerta" : "")">
+                            <td>@q.AccountNumber</td>
+                            <td>@TextosDeAportes.Naturaleza(q.Nature)</td>
+                            <td>@q.Period</td>
+                            <td>@q.DueDate.ToString("dd/MM/yyyy")</td>
+                            <td class="numero">@Pesos(q.Amount)</td>
+                            <td class="numero">@Pesos(q.Paid)</td>
+                            <td class="numero">@Pesos(q.Pending)</td>
+                            <td>@TextosDeAportes.EstadoDeCuota(q.Status)</td>
+                            <td>@(q.NotDeductedReason ?? "—")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (_cuotas.Count == 0) { <p class="texto-tenue">No hay cuotas en ese estado.</p> }
+    </IndicadorDeCarga>
+</div>
+
+<SfDialog @bind-Visible="_mostrarPedido" Header="@(_clase == TextosDeAportes.Devolucion ? "Pedir una devolución de aportes" : "Pedir una cesión de aportes")" Width="640px"
+          IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_accion.Activa" Texto="Registrando el pedido…">
+                <p class="texto-apoyo">
+                    @(_clase == TextosDeAportes.Devolucion
+                        ? "Sin retiro del asociado: sólo lo que excede el mínimo, sin créditos vivos y sin bajar el capital mínimo de la cooperativa."
+                        : "A otro asociado, si los estatutos lo permiten: sin bajar del mínimo ni dejar créditos vivos sin respaldo.")
+                    Otra persona lo aprueba en Aportes.
+                </p>
+                <div class="form-grid">
+                    <label class="campo">Cuenta de aportes *
+                        <select class="e-input" @bind="_cuentaDelPedido">
+                            @foreach (var c in _cuentasDeAportes) { <option value="@c.PublicId">@c.Number</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Valor * <input class="e-input" type="number" min="0" step="1" @bind="_valor" /></label>
+                    @if (_clase == TextosDeAportes.Devolucion)
+                    {
+                        <label class="campo">Causa
+                            <select class="e-input" @bind="_causa">
+                                <option value="ParticipationExcess">Exceso de participación</option>
+                                <option value="Other">Otra</option>
+                            </select>
+                        </label>
+                    }
+                    else
+                    {
+                        <div class="campo campo-ancho">Asociado que recibe *
+                            <PersonSearchPicker @bind-Selected="_destino" ShowHelpText="false" Compacto="true" />
+                        </div>
+                    }
+                    <label class="campo campo-ancho">Motivo * <textarea class="e-input" rows="3" maxlength="500" @bind="_motivo"></textarea></label>
+                </div>
+                @foreach (var e in _errores) { <p class="aviso aviso-error" role="alert">@e</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_accion.Activa || !PedidoCompleto)" OnClick="@PedirAsync">Pedir</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarPedido = false)">Volver</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private static readonly CultureInfo Es = CultureInfo.GetCultureInfo("es-CO");
+    private static DateOnly Hoy => DateOnly.FromDateTime(DateTime.Today);
+
+    private readonly EstadoDeCarga _carga = new(), _cargaCuotas = new(), _accion = new();
+    private DateOnly _fecha = Hoy;
+    private ResumenDeAportesDto? _resumen;
+    private List<CuentaEnListaDto> _cuentas = [], _cuentasDeAportes = [];
+    private List<CuotaDeCuentaDto> _cuotas = [];
+    private string _estado = string.Empty;
+
+    private bool _mostrarPedido;
+    private int _clase;
+    private Guid _cuentaDelPedido;
+    private decimal _valor;
+    private string _causa = "ParticipationExcess";
+    private PersonSearchPicker.PersonSearchItem? _destino;
+    private string? _motivo;
+    private List<string> _errores = [];
+    private ClaveDeOperacion _clave = new();
+
+    private bool PedidoCompleto => _cuentaDelPedido != Guid.Empty && _valor > 0m && !string.IsNullOrWhiteSpace(_motivo)
+                                   && (_clase == TextosDeAportes.Devolucion || _destino is not null);
+
+    protected override Task OnParametersSetAsync() => CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using (var carga = _carga.Iniciar())
+        {
+            var r = await Cliente.ResumenDeAportesAsync(Id, _fecha);
+            if (!r.IsSuccess) { _resumen = null; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo leer el resumen de aportes."); return; }
+            _resumen = r.Value;
+            var cuentas = await Cliente.CuentasAsync(titular: Id, tamano: 100);
+            _cuentas = [.. (cuentas.Value?.Items ?? []).Where(c => _resumen?.AccountPublicIds.Contains(c.PublicId) == true)];
+            _cuentasDeAportes = [.. _cuentas.Where(c => c.Nature == TextosDeCaptaciones.Aportes)];
+        }
+        await CargarCuotasAsync();
+    }
+
+    private async Task CambiarEstadoAsync(string? estado)
+    {
+        _estado = estado ?? string.Empty;
+        await CargarCuotasAsync();
+    }
+
+    private async Task CargarCuotasAsync()
+    {
+        using var carga = _cargaCuotas.Iniciar();
+        var r = await Cliente.CuotasDeCuentasAsync(Id, string.IsNullOrEmpty(_estado) ? null : _estado, tamano: 200);
+        if (!r.IsSuccess || r.Value is null) { _cuotas = []; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer las cuotas."); return; }
+        _cuotas = [.. r.Value.Items];
+    }
+
+    private void AbrirPedido(int clase)
+    {
+        _clase = clase;
+        _cuentaDelPedido = _cuentasDeAportes.FirstOrDefault()?.PublicId ?? Guid.Empty;
+        _valor = 0m;
+        _causa = "ParticipationExcess";
+        _destino = null;
+        _motivo = null;
+        _errores = [];
+        _clave = new ClaveDeOperacion();
+        _mostrarPedido = true;
+    }
+
+    private async Task PedirAsync()
+    {
+        if (!PedidoCompleto) return;
+        using var carga = _accion.Iniciar();
+        _errores = [];
+        var r = _clase == TextosDeAportes.Devolucion
+            ? await Cliente.PedirDevolucionAsync(new DevolucionDeAportesRequest(_cuentaDelPedido, _valor, _causa, null, _motivo!.Trim()), _clave)
+            : await Cliente.PedirCesionAsync(new CesionDeAportesRequest(_cuentaDelPedido, _destino!.PublicId, _valor, null, _motivo!.Trim()), _clave);
+        if (!r.IsSuccess) { _errores = [.. LineasDeCreditoClient.Explicar(r)]; return; }
+        _mostrarPedido = false;
+        await Notification.SuccessAsync("Pedido registrado: queda por aprobar por otra persona en Aportes.");
+    }
+
+    private static string Pesos(decimal valor) => "$ " + valor.ToString("N0", Es);
+}
