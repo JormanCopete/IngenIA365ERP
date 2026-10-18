@@ -118,7 +118,7 @@ ciclo diario y activación. **Ninguna historia empieza antes.**
 
 ### Migración par y pantallas base
 
-- [ ] T056 Generar la migración par `CaptacionesAportes` con las tablas fundacionales (regenerable hasta el congelamiento de la fase final) en los dos proyectos de migraciones — **iniciada** el 2026-10-18 con T012 (sólo `Nature` y sus índices); se regenera al sumar las tablas fundacionales
+- [ ] T056 Generar la migración par `CaptacionesAportes` con las tablas fundacionales (regenerable hasta el congelamiento de la fase final) en los dos proyectos de migraciones — **iniciada** el 2026-10-18 con T012 (sólo `Nature` y sus índices); se regenera al sumar las tablas fundacionales; **regenerada** el 2026-10-18 con T021–T028 (`20261018153813` PostgreSQL / `20261018153740` SQL Server: las siete tablas del libro de cuentas y las columnas de §1.4, §1.5 y §1.8), faltan las de T053 y siguientes
 - [ ] T057 [P] Crear el cliente tipado `CaptacionesClient` y el grupo de menú «Captaciones y aportes» (vacío hasta cada historia) en `SH/Services/Cartera/CaptacionesClient.cs` y `SH/Layout/NavMenu.razor`
 - [ ] T058 Sumar el módulo de captaciones a `ModulosMigrados` de `TR/Principles/LasPantallasDicenQueEstanCargando.cs`
 - [ ] T059 Compilar y dejar verdes Domain, Application, Architecture, Shared y las e2e existentes de la 013 en los dos motores
