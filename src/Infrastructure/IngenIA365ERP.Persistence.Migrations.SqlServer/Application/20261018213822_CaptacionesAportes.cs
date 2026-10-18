@@ -300,6 +300,45 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                 nullable: true);
 
             migrationBuilder.CreateTable(
+                name: "COR_AssociateInboundMessages",
+                schema: "dbo",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    MessagePublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    MessageType = table.Column<string>(type: "nvarchar(60)", maxLength: 60, nullable: false),
+                    MessageVersion = table.Column<short>(type: "smallint", nullable: false),
+                    AssociateId = table.Column<int>(type: "int", nullable: false),
+                    WithdrawalPublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    WithdrawalNumber = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
+                    EffectiveDate = table.Column<DateOnly>(type: "date", nullable: false),
+                    Cause = table.Column<string>(type: "nvarchar(30)", maxLength: 30, nullable: false),
+                    AlreadyWithdrawn = table.Column<bool>(type: "bit", nullable: false),
+                    ReceivedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_COR_AssociateInboundMessages", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_COR_AssociateInboundMessages_COR_Associates_AssociateId",
+                        column: x => x.AssociateId,
+                        principalSchema: "dbo",
+                        principalTable: "COR_Associates",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "LND_ContributionLineVersions",
                 schema: "dbo",
                 columns: table => new
@@ -887,6 +926,398 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                 });
 
             migrationBuilder.CreateTable(
+                name: "LND_MemberAccountParties",
+                schema: "dbo",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    MemberAccountId = table.Column<int>(type: "int", nullable: false),
+                    PersonId = table.Column<int>(type: "int", nullable: false),
+                    Role = table.Column<int>(type: "int", nullable: false),
+                    Share = table.Column<decimal>(type: "decimal(9,6)", precision: 9, scale: 6, nullable: true),
+                    SignatureLimit = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: true),
+                    RepresentationBasis = table.Column<string>(type: "nvarchar(30)", maxLength: 30, nullable: true),
+                    RepresentationSupportAttachmentPublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    SignatureSpecimenAttachmentPublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    PhotoAttachmentPublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    BeneficiarySetNumber = table.Column<int>(type: "int", nullable: true),
+                    BeneficiaryRecordAttachmentPublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    ValidFrom = table.Column<DateOnly>(type: "date", nullable: false),
+                    ValidTo = table.Column<DateOnly>(type: "date", nullable: true),
+                    EndReason = table.Column<string>(type: "nvarchar(300)", maxLength: 300, nullable: true),
+                    EndedByUserId = table.Column<int>(type: "int", nullable: true),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_LND_MemberAccountParties", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_LND_MemberAccountParties_COR_People_PersonId",
+                        column: x => x.PersonId,
+                        principalSchema: "dbo",
+                        principalTable: "COR_People",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_LND_MemberAccountParties_LND_MemberAccounts_MemberAccountId",
+                        column: x => x.MemberAccountId,
+                        principalSchema: "dbo",
+                        principalTable: "LND_MemberAccounts",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_LND_MemberAccountParties_SEC_Users_EndedByUserId",
+                        column: x => x.EndedByUserId,
+                        principalSchema: "dbo",
+                        principalTable: "SEC_Users",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "LND_PayrollAgreementConceptEquivalences",
+                schema: "dbo",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    PayrollAgreementVersionId = table.Column<int>(type: "int", nullable: false),
+                    FileGroupId = table.Column<int>(type: "int", nullable: true),
+                    PaymasterConceptCode = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
+                    Description = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
+                    AllocationRule = table.Column<int>(type: "int", nullable: false),
+                    Priority = table.Column<int>(type: "int", nullable: false),
+                    ItemsJson = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_LND_PayrollAgreementConceptEquivalences", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_LND_PayrollAgreementConceptEquivalences_LND_PayrollAgreementFileGroups_FileGroupId",
+                        column: x => x.FileGroupId,
+                        principalSchema: "dbo",
+                        principalTable: "LND_PayrollAgreementFileGroups",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_LND_PayrollAgreementConceptEquivalences_LND_PayrollAgreementVersions_PayrollAgreementVersionId",
+                        column: x => x.PayrollAgreementVersionId,
+                        principalSchema: "dbo",
+                        principalTable: "LND_PayrollAgreementVersions",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "LND_AccountInstallmentNonDeductions",
+                schema: "dbo",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    InstallmentId = table.Column<long>(type: "bigint", nullable: false),
+                    Origin = table.Column<int>(type: "int", nullable: false),
+                    Reason = table.Column<int>(type: "int", nullable: false),
+                    RequestedAmount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    DeductedAmount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    CollectorCode = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
+                    ReferenceKey = table.Column<string>(type: "nvarchar(150)", maxLength: 150, nullable: false),
+                    OccurredOn = table.Column<DateOnly>(type: "date", nullable: false),
+                    Detail = table.Column<string>(type: "nvarchar(300)", maxLength: 300, nullable: true),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_LND_AccountInstallmentNonDeductions", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "LND_AccountInstallments",
+                schema: "dbo",
+                columns: table => new
+                {
+                    Id = table.Column<long>(type: "bigint", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    MemberAccountId = table.Column<int>(type: "int", nullable: false),
+                    PeriodYear = table.Column<short>(type: "smallint", nullable: false),
+                    PeriodMonth = table.Column<byte>(type: "tinyint", nullable: false),
+                    SubPeriodNumber = table.Column<byte>(type: "tinyint", nullable: false),
+                    DueDate = table.Column<DateOnly>(type: "date", nullable: false),
+                    Amount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    ContributionShare = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: true),
+                    PermanentSavingsShare = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: true),
+                    LinkedInstallmentId = table.Column<long>(type: "bigint", nullable: true),
+                    GeneratedByProcessRunId = table.Column<int>(type: "int", nullable: true),
+                    GeneratedByOperationId = table.Column<long>(type: "bigint", nullable: true),
+                    RulesVersion = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
+                    InputsSha256 = table.Column<string>(type: "nvarchar(64)", maxLength: 64, nullable: false),
+                    CancelledAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    CancelReason = table.Column<string>(type: "nvarchar(300)", maxLength: 300, nullable: true),
+                    CancelledByOperationId = table.Column<long>(type: "bigint", nullable: true),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_LND_AccountInstallments", x => x.Id);
+                    table.CheckConstraint("CK_LND_AccountInstallments_Amount", "[Amount] > 0");
+                    table.CheckConstraint("CK_LND_AccountInstallments_Origin", "([GeneratedByProcessRunId] IS NOT NULL AND [GeneratedByOperationId] IS NULL) OR ([GeneratedByProcessRunId] IS NULL AND [GeneratedByOperationId] IS NOT NULL)");
+                    table.ForeignKey(
+                        name: "FK_LND_AccountInstallments_LND_MemberAccounts_MemberAccountId",
+                        column: x => x.MemberAccountId,
+                        principalSchema: "dbo",
+                        principalTable: "LND_MemberAccounts",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_LND_AccountInstallments_LND_ProcessRuns_GeneratedByProcessRunId",
+                        column: x => x.GeneratedByProcessRunId,
+                        principalSchema: "dbo",
+                        principalTable: "LND_ProcessRuns",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_LND_AccountInstallments_Linked",
+                        column: x => x.LinkedInstallmentId,
+                        principalSchema: "dbo",
+                        principalTable: "LND_AccountInstallments",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "LND_AccountPayoutOrders",
+                schema: "dbo",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    MemberAccountId = table.Column<int>(type: "int", nullable: false),
+                    OperationId = table.Column<long>(type: "bigint", nullable: false),
+                    Number = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
+                    Purpose = table.Column<int>(type: "int", nullable: false),
+                    BeneficiaryPersonId = table.Column<int>(type: "int", nullable: false),
+                    BeneficiaryTaxIdType = table.Column<string>(type: "nvarchar(10)", maxLength: 10, nullable: false),
+                    BeneficiaryTaxId = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
+                    BeneficiaryName = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
+                    DestinationBankId = table.Column<int>(type: "int", nullable: true),
+                    DestinationAccountType = table.Column<byte>(type: "tinyint", nullable: true),
+                    DestinationAccountNumber = table.Column<string>(type: "nvarchar(25)", maxLength: 25, nullable: true),
+                    Amount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    Status = table.Column<int>(type: "int", nullable: false),
+                    StatusChangedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    IssuedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    IssuedByUserId = table.Column<int>(type: "int", nullable: true),
+                    ResultDueOn = table.Column<DateOnly>(type: "date", nullable: false),
+                    MembershipWithdrawalId = table.Column<int>(type: "int", nullable: true),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_LND_AccountPayoutOrders", x => x.Id);
+                    table.CheckConstraint("CK_LND_AccountPayoutOrders_Amount", "[Amount] > 0");
+                    table.ForeignKey(
+                        name: "FK_LND_AccountPayoutOrders_COR_Banks_DestinationBankId",
+                        column: x => x.DestinationBankId,
+                        principalSchema: "dbo",
+                        principalTable: "COR_Banks",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_LND_AccountPayoutOrders_COR_People_BeneficiaryPersonId",
+                        column: x => x.BeneficiaryPersonId,
+                        principalSchema: "dbo",
+                        principalTable: "COR_People",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_LND_AccountPayoutOrders_LND_MemberAccounts_MemberAccountId",
+                        column: x => x.MemberAccountId,
+                        principalSchema: "dbo",
+                        principalTable: "LND_MemberAccounts",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_LND_AccountPayoutOrders_SEC_Users_IssuedByUserId",
+                        column: x => x.IssuedByUserId,
+                        principalSchema: "dbo",
+                        principalTable: "SEC_Users",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "LND_ContributionRequests",
+                schema: "dbo",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    Kind = table.Column<int>(type: "int", nullable: false),
+                    Status = table.Column<int>(type: "int", nullable: false),
+                    MemberAccountId = table.Column<int>(type: "int", nullable: false),
+                    TargetPersonId = table.Column<int>(type: "int", nullable: true),
+                    TargetMemberAccountId = table.Column<int>(type: "int", nullable: true),
+                    Amount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    RefundCause = table.Column<int>(type: "int", nullable: true),
+                    SessionItemPublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    Reason = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: false),
+                    RequestedByUserId = table.Column<int>(type: "int", nullable: false),
+                    RequestedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    DecidedByUserId = table.Column<int>(type: "int", nullable: true),
+                    DecidedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DecisionReason = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
+                    OperationId = table.Column<long>(type: "bigint", nullable: true),
+                    PayoutOrderId = table.Column<int>(type: "int", nullable: true),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_LND_ContributionRequests", x => x.Id);
+                    table.CheckConstraint("CK_LND_ContributionRequests_Amount", "[Amount] > 0");
+                    table.ForeignKey(
+                        name: "FK_LND_ContributionRequests_COR_People_TargetPersonId",
+                        column: x => x.TargetPersonId,
+                        principalSchema: "dbo",
+                        principalTable: "COR_People",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_LND_ContributionRequests_LND_AccountPayoutOrders_PayoutOrderId",
+                        column: x => x.PayoutOrderId,
+                        principalSchema: "dbo",
+                        principalTable: "LND_AccountPayoutOrders",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_LND_ContributionRequests_LND_MemberAccounts_MemberAccountId",
+                        column: x => x.MemberAccountId,
+                        principalSchema: "dbo",
+                        principalTable: "LND_MemberAccounts",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_LND_ContributionRequests_SEC_Users_DecidedByUserId",
+                        column: x => x.DecidedByUserId,
+                        principalSchema: "dbo",
+                        principalTable: "SEC_Users",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_LND_ContributionRequests_SEC_Users_RequestedByUserId",
+                        column: x => x.RequestedByUserId,
+                        principalSchema: "dbo",
+                        principalTable: "SEC_Users",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_LND_ContributionRequests_TargetAccount",
+                        column: x => x.TargetMemberAccountId,
+                        principalSchema: "dbo",
+                        principalTable: "LND_MemberAccounts",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "LND_IssuedDocumentAccounts",
+                schema: "dbo",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    IssuedDocumentId = table.Column<int>(type: "int", nullable: false),
+                    MemberAccountId = table.Column<int>(type: "int", nullable: false),
+                    LastOperationId = table.Column<long>(type: "bigint", nullable: true),
+                    LastTransactionId = table.Column<long>(type: "bigint", nullable: true),
+                    BalanceAtCutoff = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: true),
+                    PreviousIssuedDocumentId = table.Column<int>(type: "int", nullable: true),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_LND_IssuedDocumentAccounts", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_LND_IssuedDocumentAccounts_LND_IssuedDocuments_IssuedDocumentId",
+                        column: x => x.IssuedDocumentId,
+                        principalSchema: "dbo",
+                        principalTable: "LND_IssuedDocuments",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_LND_IssuedDocumentAccounts_LND_MemberAccounts_MemberAccountId",
+                        column: x => x.MemberAccountId,
+                        principalSchema: "dbo",
+                        principalTable: "LND_MemberAccounts",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_LND_IssuedDocumentAccounts_PreviousDocument",
+                        column: x => x.PreviousIssuedDocumentId,
+                        principalSchema: "dbo",
+                        principalTable: "LND_IssuedDocuments",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "LND_MemberAccountOperations",
                 schema: "dbo",
                 columns: table => new
@@ -1018,296 +1449,6 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                 });
 
             migrationBuilder.CreateTable(
-                name: "LND_MemberAccountParties",
-                schema: "dbo",
-                columns: table => new
-                {
-                    Id = table.Column<int>(type: "int", nullable: false)
-                        .Annotation("SqlServer:Identity", "1, 1"),
-                    MemberAccountId = table.Column<int>(type: "int", nullable: false),
-                    PersonId = table.Column<int>(type: "int", nullable: false),
-                    Role = table.Column<int>(type: "int", nullable: false),
-                    Share = table.Column<decimal>(type: "decimal(9,6)", precision: 9, scale: 6, nullable: true),
-                    SignatureLimit = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: true),
-                    RepresentationBasis = table.Column<string>(type: "nvarchar(30)", maxLength: 30, nullable: true),
-                    RepresentationSupportAttachmentPublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
-                    SignatureSpecimenAttachmentPublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
-                    PhotoAttachmentPublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
-                    BeneficiarySetNumber = table.Column<int>(type: "int", nullable: true),
-                    BeneficiaryRecordAttachmentPublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
-                    ValidFrom = table.Column<DateOnly>(type: "date", nullable: false),
-                    ValidTo = table.Column<DateOnly>(type: "date", nullable: true),
-                    EndReason = table.Column<string>(type: "nvarchar(300)", maxLength: 300, nullable: true),
-                    EndedByUserId = table.Column<int>(type: "int", nullable: true),
-                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
-                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
-                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
-                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
-                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
-                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
-                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_LND_MemberAccountParties", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_LND_MemberAccountParties_COR_People_PersonId",
-                        column: x => x.PersonId,
-                        principalSchema: "dbo",
-                        principalTable: "COR_People",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_LND_MemberAccountParties_LND_MemberAccounts_MemberAccountId",
-                        column: x => x.MemberAccountId,
-                        principalSchema: "dbo",
-                        principalTable: "LND_MemberAccounts",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_LND_MemberAccountParties_SEC_Users_EndedByUserId",
-                        column: x => x.EndedByUserId,
-                        principalSchema: "dbo",
-                        principalTable: "SEC_Users",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "LND_PayrollAgreementConceptEquivalences",
-                schema: "dbo",
-                columns: table => new
-                {
-                    Id = table.Column<int>(type: "int", nullable: false)
-                        .Annotation("SqlServer:Identity", "1, 1"),
-                    PayrollAgreementVersionId = table.Column<int>(type: "int", nullable: false),
-                    FileGroupId = table.Column<int>(type: "int", nullable: true),
-                    PaymasterConceptCode = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
-                    Description = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
-                    AllocationRule = table.Column<int>(type: "int", nullable: false),
-                    Priority = table.Column<int>(type: "int", nullable: false),
-                    ItemsJson = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
-                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
-                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
-                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
-                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
-                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
-                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_LND_PayrollAgreementConceptEquivalences", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_LND_PayrollAgreementConceptEquivalences_LND_PayrollAgreementFileGroups_FileGroupId",
-                        column: x => x.FileGroupId,
-                        principalSchema: "dbo",
-                        principalTable: "LND_PayrollAgreementFileGroups",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_LND_PayrollAgreementConceptEquivalences_LND_PayrollAgreementVersions_PayrollAgreementVersionId",
-                        column: x => x.PayrollAgreementVersionId,
-                        principalSchema: "dbo",
-                        principalTable: "LND_PayrollAgreementVersions",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "LND_AccountInstallments",
-                schema: "dbo",
-                columns: table => new
-                {
-                    Id = table.Column<long>(type: "bigint", nullable: false)
-                        .Annotation("SqlServer:Identity", "1, 1"),
-                    MemberAccountId = table.Column<int>(type: "int", nullable: false),
-                    PeriodYear = table.Column<short>(type: "smallint", nullable: false),
-                    PeriodMonth = table.Column<byte>(type: "tinyint", nullable: false),
-                    SubPeriodNumber = table.Column<byte>(type: "tinyint", nullable: false),
-                    DueDate = table.Column<DateOnly>(type: "date", nullable: false),
-                    Amount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
-                    ContributionShare = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: true),
-                    PermanentSavingsShare = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: true),
-                    LinkedInstallmentId = table.Column<long>(type: "bigint", nullable: true),
-                    GeneratedByProcessRunId = table.Column<int>(type: "int", nullable: true),
-                    GeneratedByOperationId = table.Column<long>(type: "bigint", nullable: true),
-                    RulesVersion = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
-                    InputsSha256 = table.Column<string>(type: "nvarchar(64)", maxLength: 64, nullable: false),
-                    CancelledAt = table.Column<DateTime>(type: "datetime2", nullable: true),
-                    CancelReason = table.Column<string>(type: "nvarchar(300)", maxLength: 300, nullable: true),
-                    CancelledByOperationId = table.Column<long>(type: "bigint", nullable: true),
-                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
-                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
-                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
-                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
-                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
-                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
-                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_LND_AccountInstallments", x => x.Id);
-                    table.CheckConstraint("CK_LND_AccountInstallments_Amount", "[Amount] > 0");
-                    table.CheckConstraint("CK_LND_AccountInstallments_Origin", "([GeneratedByProcessRunId] IS NOT NULL AND [GeneratedByOperationId] IS NULL) OR ([GeneratedByProcessRunId] IS NULL AND [GeneratedByOperationId] IS NOT NULL)");
-                    table.ForeignKey(
-                        name: "FK_LND_AccountInstallments_CancelledByOperation",
-                        column: x => x.CancelledByOperationId,
-                        principalSchema: "dbo",
-                        principalTable: "LND_MemberAccountOperations",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_LND_AccountInstallments_GeneratedByOperation",
-                        column: x => x.GeneratedByOperationId,
-                        principalSchema: "dbo",
-                        principalTable: "LND_MemberAccountOperations",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_LND_AccountInstallments_LND_MemberAccounts_MemberAccountId",
-                        column: x => x.MemberAccountId,
-                        principalSchema: "dbo",
-                        principalTable: "LND_MemberAccounts",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_LND_AccountInstallments_LND_ProcessRuns_GeneratedByProcessRunId",
-                        column: x => x.GeneratedByProcessRunId,
-                        principalSchema: "dbo",
-                        principalTable: "LND_ProcessRuns",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_LND_AccountInstallments_Linked",
-                        column: x => x.LinkedInstallmentId,
-                        principalSchema: "dbo",
-                        principalTable: "LND_AccountInstallments",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "LND_AccountPayoutOrders",
-                schema: "dbo",
-                columns: table => new
-                {
-                    Id = table.Column<int>(type: "int", nullable: false)
-                        .Annotation("SqlServer:Identity", "1, 1"),
-                    MemberAccountId = table.Column<int>(type: "int", nullable: false),
-                    OperationId = table.Column<long>(type: "bigint", nullable: false),
-                    Number = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
-                    Purpose = table.Column<int>(type: "int", nullable: false),
-                    BeneficiaryPersonId = table.Column<int>(type: "int", nullable: false),
-                    BeneficiaryTaxIdType = table.Column<string>(type: "nvarchar(10)", maxLength: 10, nullable: false),
-                    BeneficiaryTaxId = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
-                    BeneficiaryName = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
-                    DestinationBankId = table.Column<int>(type: "int", nullable: true),
-                    DestinationAccountType = table.Column<byte>(type: "tinyint", nullable: true),
-                    DestinationAccountNumber = table.Column<string>(type: "nvarchar(25)", maxLength: 25, nullable: true),
-                    Amount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
-                    Status = table.Column<int>(type: "int", nullable: false),
-                    StatusChangedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
-                    IssuedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    IssuedByUserId = table.Column<int>(type: "int", nullable: true),
-                    ResultDueOn = table.Column<DateOnly>(type: "date", nullable: false),
-                    MembershipWithdrawalId = table.Column<int>(type: "int", nullable: true),
-                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
-                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
-                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
-                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
-                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
-                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
-                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_LND_AccountPayoutOrders", x => x.Id);
-                    table.CheckConstraint("CK_LND_AccountPayoutOrders_Amount", "[Amount] > 0");
-                    table.ForeignKey(
-                        name: "FK_LND_AccountPayoutOrders_COR_Banks_DestinationBankId",
-                        column: x => x.DestinationBankId,
-                        principalSchema: "dbo",
-                        principalTable: "COR_Banks",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_LND_AccountPayoutOrders_COR_People_BeneficiaryPersonId",
-                        column: x => x.BeneficiaryPersonId,
-                        principalSchema: "dbo",
-                        principalTable: "COR_People",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_LND_AccountPayoutOrders_LND_MemberAccountOperations_OperationId",
-                        column: x => x.OperationId,
-                        principalSchema: "dbo",
-                        principalTable: "LND_MemberAccountOperations",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_LND_AccountPayoutOrders_LND_MemberAccounts_MemberAccountId",
-                        column: x => x.MemberAccountId,
-                        principalSchema: "dbo",
-                        principalTable: "LND_MemberAccounts",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_LND_AccountPayoutOrders_SEC_Users_IssuedByUserId",
-                        column: x => x.IssuedByUserId,
-                        principalSchema: "dbo",
-                        principalTable: "SEC_Users",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "LND_AccountInstallmentNonDeductions",
-                schema: "dbo",
-                columns: table => new
-                {
-                    Id = table.Column<int>(type: "int", nullable: false)
-                        .Annotation("SqlServer:Identity", "1, 1"),
-                    InstallmentId = table.Column<long>(type: "bigint", nullable: false),
-                    Origin = table.Column<int>(type: "int", nullable: false),
-                    Reason = table.Column<int>(type: "int", nullable: false),
-                    RequestedAmount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
-                    DeductedAmount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
-                    CollectorCode = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
-                    ReferenceKey = table.Column<string>(type: "nvarchar(150)", maxLength: 150, nullable: false),
-                    OccurredOn = table.Column<DateOnly>(type: "date", nullable: false),
-                    Detail = table.Column<string>(type: "nvarchar(300)", maxLength: 300, nullable: true),
-                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
-                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
-                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
-                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
-                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
-                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
-                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_LND_AccountInstallmentNonDeductions", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_LND_AccountInstallmentNonDeductions_LND_AccountInstallments_InstallmentId",
-                        column: x => x.InstallmentId,
-                        principalSchema: "dbo",
-                        principalTable: "LND_AccountInstallments",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
                 name: "LND_MemberAccountTransactions",
                 schema: "dbo",
                 columns: table => new
@@ -1380,28 +1521,44 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                 });
 
             migrationBuilder.CreateTable(
-                name: "LND_ContributionRequests",
+                name: "LND_MembershipWithdrawals",
                 schema: "dbo",
                 columns: table => new
                 {
                     Id = table.Column<int>(type: "int", nullable: false)
                         .Annotation("SqlServer:Identity", "1, 1"),
-                    Kind = table.Column<int>(type: "int", nullable: false),
+                    Number = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
+                    PersonId = table.Column<int>(type: "int", nullable: false),
+                    ContributionAccountId = table.Column<int>(type: "int", nullable: false),
+                    Cause = table.Column<int>(type: "int", nullable: false),
+                    CauseDetail = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
+                    SupportAttachmentPublicIdsJson = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    FiledOn = table.Column<DateOnly>(type: "date", nullable: false),
+                    FiledByUserId = table.Column<int>(type: "int", nullable: false),
                     Status = table.Column<int>(type: "int", nullable: false),
-                    MemberAccountId = table.Column<int>(type: "int", nullable: false),
-                    TargetPersonId = table.Column<int>(type: "int", nullable: true),
-                    TargetMemberAccountId = table.Column<int>(type: "int", nullable: true),
-                    Amount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
-                    RefundCause = table.Column<int>(type: "int", nullable: true),
-                    SessionItemPublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
-                    Reason = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: false),
-                    RequestedByUserId = table.Column<int>(type: "int", nullable: false),
-                    RequestedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    DecidedByUserId = table.Column<int>(type: "int", nullable: true),
+                    ApprovalSessionItemId = table.Column<int>(type: "int", nullable: true),
+                    EffectiveDate = table.Column<DateOnly>(type: "date", nullable: true),
                     DecidedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DecidedByUserId = table.Column<int>(type: "int", nullable: true),
                     DecisionReason = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
-                    OperationId = table.Column<long>(type: "bigint", nullable: true),
-                    PayoutOrderId = table.Column<int>(type: "int", nullable: true),
+                    DesistedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DesistReason = table.Column<string>(type: "nvarchar(300)", maxLength: 300, nullable: true),
+                    ApprovedMessagePublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    SettlementVersion = table.Column<int>(type: "int", nullable: false),
+                    SettledAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    SettledByUserId = table.Column<int>(type: "int", nullable: true),
+                    OffsetOperationId = table.Column<long>(type: "bigint", nullable: true),
+                    ContributionsTotal = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: true),
+                    SavingsTotal = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: true),
+                    LoansOffsetTotal = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: true),
+                    LossDeductionAmount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: true),
+                    RefundAmount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: true),
+                    RefundDueOn = table.Column<DateOnly>(type: "date", nullable: true),
+                    RefundHeldByInstitutionalMinimum = table.Column<bool>(type: "bit", nullable: false),
+                    RefundDecisionId = table.Column<int>(type: "int", nullable: true),
+                    PaidAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    SettlementIssuedDocumentId = table.Column<int>(type: "int", nullable: true),
+                    ToRedoReason = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
                     PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
                     DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
@@ -1414,72 +1571,91 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_LND_ContributionRequests", x => x.Id);
-                    table.CheckConstraint("CK_LND_ContributionRequests_Amount", "[Amount] > 0");
+                    table.PrimaryKey("PK_LND_MembershipWithdrawals", x => x.Id);
+                    table.CheckConstraint("CK_LND_MembershipWithdrawals_Refund", "[RefundAmount] IS NULL OR [RefundAmount] >= 0");
                     table.ForeignKey(
-                        name: "FK_LND_ContributionRequests_COR_People_TargetPersonId",
-                        column: x => x.TargetPersonId,
+                        name: "FK_LND_MembershipWithdrawals_ApprovalSessionItem",
+                        column: x => x.ApprovalSessionItemId,
+                        principalSchema: "dbo",
+                        principalTable: "LND_SessionItems",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_LND_MembershipWithdrawals_COR_People_PersonId",
+                        column: x => x.PersonId,
                         principalSchema: "dbo",
                         principalTable: "COR_People",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
-                        name: "FK_LND_ContributionRequests_LND_AccountPayoutOrders_PayoutOrderId",
-                        column: x => x.PayoutOrderId,
-                        principalSchema: "dbo",
-                        principalTable: "LND_AccountPayoutOrders",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_LND_ContributionRequests_LND_MemberAccountOperations_OperationId",
-                        column: x => x.OperationId,
-                        principalSchema: "dbo",
-                        principalTable: "LND_MemberAccountOperations",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_LND_ContributionRequests_LND_MemberAccounts_MemberAccountId",
-                        column: x => x.MemberAccountId,
+                        name: "FK_LND_MembershipWithdrawals_ContributionAccount",
+                        column: x => x.ContributionAccountId,
                         principalSchema: "dbo",
                         principalTable: "LND_MemberAccounts",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
-                        name: "FK_LND_ContributionRequests_SEC_Users_DecidedByUserId",
+                        name: "FK_LND_MembershipWithdrawals_OffsetOperation",
+                        column: x => x.OffsetOperationId,
+                        principalSchema: "dbo",
+                        principalTable: "LND_MemberAccountOperations",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_LND_MembershipWithdrawals_RefundDecision",
+                        column: x => x.RefundDecisionId,
+                        principalSchema: "dbo",
+                        principalTable: "LND_CreditDecisions",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_LND_MembershipWithdrawals_SEC_Users_DecidedByUserId",
                         column: x => x.DecidedByUserId,
                         principalSchema: "dbo",
                         principalTable: "SEC_Users",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
-                        name: "FK_LND_ContributionRequests_SEC_Users_RequestedByUserId",
-                        column: x => x.RequestedByUserId,
+                        name: "FK_LND_MembershipWithdrawals_SEC_Users_FiledByUserId",
+                        column: x => x.FiledByUserId,
                         principalSchema: "dbo",
                         principalTable: "SEC_Users",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
-                        name: "FK_LND_ContributionRequests_TargetAccount",
-                        column: x => x.TargetMemberAccountId,
+                        name: "FK_LND_MembershipWithdrawals_SEC_Users_SettledByUserId",
+                        column: x => x.SettledByUserId,
                         principalSchema: "dbo",
-                        principalTable: "LND_MemberAccounts",
+                        principalTable: "SEC_Users",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_LND_MembershipWithdrawals_SettlementDocument",
+                        column: x => x.SettlementIssuedDocumentId,
+                        principalSchema: "dbo",
+                        principalTable: "LND_IssuedDocuments",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
-                name: "LND_IssuedDocumentAccounts",
+                name: "LND_MembershipWithdrawalLines",
                 schema: "dbo",
                 columns: table => new
                 {
                     Id = table.Column<int>(type: "int", nullable: false)
                         .Annotation("SqlServer:Identity", "1, 1"),
-                    IssuedDocumentId = table.Column<int>(type: "int", nullable: false),
-                    MemberAccountId = table.Column<int>(type: "int", nullable: false),
-                    LastOperationId = table.Column<long>(type: "bigint", nullable: true),
-                    LastTransactionId = table.Column<long>(type: "bigint", nullable: true),
-                    BalanceAtCutoff = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: true),
-                    PreviousIssuedDocumentId = table.Column<int>(type: "int", nullable: true),
+                    MembershipWithdrawalId = table.Column<int>(type: "int", nullable: false),
+                    SettlementVersion = table.Column<int>(type: "int", nullable: false),
+                    LineNumber = table.Column<int>(type: "int", nullable: false),
+                    Kind = table.Column<int>(type: "int", nullable: false),
+                    MemberAccountId = table.Column<int>(type: "int", nullable: true),
+                    LoanId = table.Column<int>(type: "int", nullable: true),
+                    Concept = table.Column<string>(type: "nvarchar(30)", maxLength: 30, nullable: true),
+                    Amount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    AccountOperationId = table.Column<long>(type: "bigint", nullable: true),
+                    LoanOperationId = table.Column<long>(type: "bigint", nullable: true),
+                    Notes = table.Column<string>(type: "nvarchar(300)", maxLength: 300, nullable: true),
                     PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
                     DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
@@ -1492,40 +1668,40 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_LND_IssuedDocumentAccounts", x => x.Id);
+                    table.PrimaryKey("PK_LND_MembershipWithdrawalLines", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_LND_IssuedDocumentAccounts_LND_IssuedDocuments_IssuedDocumentId",
-                        column: x => x.IssuedDocumentId,
-                        principalSchema: "dbo",
-                        principalTable: "LND_IssuedDocuments",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_LND_IssuedDocumentAccounts_LND_MemberAccounts_MemberAccountId",
+                        name: "FK_LND_MembershipWithdrawalLines_Account",
                         column: x => x.MemberAccountId,
                         principalSchema: "dbo",
                         principalTable: "LND_MemberAccounts",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
-                        name: "FK_LND_IssuedDocumentAccounts_LastOperation",
-                        column: x => x.LastOperationId,
+                        name: "FK_LND_MembershipWithdrawalLines_AccountOperation",
+                        column: x => x.AccountOperationId,
                         principalSchema: "dbo",
                         principalTable: "LND_MemberAccountOperations",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
-                        name: "FK_LND_IssuedDocumentAccounts_LastTransaction",
-                        column: x => x.LastTransactionId,
+                        name: "FK_LND_MembershipWithdrawalLines_LND_Loans_LoanId",
+                        column: x => x.LoanId,
                         principalSchema: "dbo",
-                        principalTable: "LND_MemberAccountTransactions",
+                        principalTable: "LND_Loans",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
-                        name: "FK_LND_IssuedDocumentAccounts_PreviousDocument",
-                        column: x => x.PreviousIssuedDocumentId,
+                        name: "FK_LND_MembershipWithdrawalLines_LoanOperation",
+                        column: x => x.LoanOperationId,
                         principalSchema: "dbo",
-                        principalTable: "LND_IssuedDocuments",
+                        principalTable: "LND_LoanOperations",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_LND_MembershipWithdrawalLines_Withdrawal",
+                        column: x => x.MembershipWithdrawalId,
+                        principalSchema: "dbo",
+                        principalTable: "LND_MembershipWithdrawals",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
                 });
@@ -1647,6 +1823,26 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                 columns: new[] { "TriggerAccountOperationId", "BranchId", "FactType" },
                 unique: true,
                 filter: "[TriggerAccountOperationId] IS NOT NULL");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_COR_AssociateInboundMessages_Associate",
+                schema: "dbo",
+                table: "COR_AssociateInboundMessages",
+                column: "AssociateId");
+
+            migrationBuilder.CreateIndex(
+                name: "UK_COR_AssociateInboundMessages_Message",
+                schema: "dbo",
+                table: "COR_AssociateInboundMessages",
+                column: "MessagePublicId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "UK_COR_AssociateInboundMessages_PublicId",
+                schema: "dbo",
+                table: "COR_AssociateInboundMessages",
+                column: "PublicId",
+                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "UK_LND_AccountInstallmentNonDeductions_Inst_Collector_Key",
@@ -2305,6 +2501,130 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                 filter: "[ReversesTransactionId] IS NOT NULL");
 
             migrationBuilder.CreateIndex(
+                name: "IX_LND_MembershipWithdrawalLines_Account",
+                schema: "dbo",
+                table: "LND_MembershipWithdrawalLines",
+                column: "MemberAccountId",
+                filter: "[MemberAccountId] IS NOT NULL");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_MembershipWithdrawalLines_AccountOperationId",
+                schema: "dbo",
+                table: "LND_MembershipWithdrawalLines",
+                column: "AccountOperationId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_MembershipWithdrawalLines_Loan",
+                schema: "dbo",
+                table: "LND_MembershipWithdrawalLines",
+                column: "LoanId",
+                filter: "[LoanId] IS NOT NULL");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_MembershipWithdrawalLines_LoanOperationId",
+                schema: "dbo",
+                table: "LND_MembershipWithdrawalLines",
+                column: "LoanOperationId");
+
+            migrationBuilder.CreateIndex(
+                name: "UK_LND_MembershipWithdrawalLines_PublicId",
+                schema: "dbo",
+                table: "LND_MembershipWithdrawalLines",
+                column: "PublicId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "UK_LND_MembershipWithdrawalLines_Version_Line",
+                schema: "dbo",
+                table: "LND_MembershipWithdrawalLines",
+                columns: new[] { "MembershipWithdrawalId", "SettlementVersion", "LineNumber" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_MembershipWithdrawals_ApprovalSessionItemId",
+                schema: "dbo",
+                table: "LND_MembershipWithdrawals",
+                column: "ApprovalSessionItemId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_MembershipWithdrawals_ContributionAccountId",
+                schema: "dbo",
+                table: "LND_MembershipWithdrawals",
+                column: "ContributionAccountId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_MembershipWithdrawals_DecidedByUserId",
+                schema: "dbo",
+                table: "LND_MembershipWithdrawals",
+                column: "DecidedByUserId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_MembershipWithdrawals_FiledByUserId",
+                schema: "dbo",
+                table: "LND_MembershipWithdrawals",
+                column: "FiledByUserId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_MembershipWithdrawals_OffsetOperationId",
+                schema: "dbo",
+                table: "LND_MembershipWithdrawals",
+                column: "OffsetOperationId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_MembershipWithdrawals_RefundDecisionId",
+                schema: "dbo",
+                table: "LND_MembershipWithdrawals",
+                column: "RefundDecisionId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_MembershipWithdrawals_SettledByUserId",
+                schema: "dbo",
+                table: "LND_MembershipWithdrawals",
+                column: "SettledByUserId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_MembershipWithdrawals_SettlementIssuedDocumentId",
+                schema: "dbo",
+                table: "LND_MembershipWithdrawals",
+                column: "SettlementIssuedDocumentId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_MembershipWithdrawals_Status",
+                schema: "dbo",
+                table: "LND_MembershipWithdrawals",
+                column: "Status");
+
+            migrationBuilder.CreateIndex(
+                name: "UK_LND_MembershipWithdrawals_Approved",
+                schema: "dbo",
+                table: "LND_MembershipWithdrawals",
+                column: "PersonId",
+                unique: true,
+                filter: "[Status] = 2 AND [IsDeleted] = 0");
+
+            migrationBuilder.CreateIndex(
+                name: "UK_LND_MembershipWithdrawals_Filed",
+                schema: "dbo",
+                table: "LND_MembershipWithdrawals",
+                column: "PersonId",
+                unique: true,
+                filter: "[Status] = 1 AND [IsDeleted] = 0");
+
+            migrationBuilder.CreateIndex(
+                name: "UK_LND_MembershipWithdrawals_Number",
+                schema: "dbo",
+                table: "LND_MembershipWithdrawals",
+                column: "Number",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "UK_LND_MembershipWithdrawals_PublicId",
+                schema: "dbo",
+                table: "LND_MembershipWithdrawals",
+                column: "PublicId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
                 name: "IX_LND_PayrollAgreementConceptEquivalences_FileGroupId",
                 schema: "dbo",
                 table: "LND_PayrollAgreementConceptEquivalences",
@@ -2427,6 +2747,96 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                 principalColumn: "Id",
                 onDelete: ReferentialAction.Restrict);
 
+            migrationBuilder.AddForeignKey(
+                name: "FK_LND_AccountInstallmentNonDeductions_LND_AccountInstallments_InstallmentId",
+                schema: "dbo",
+                table: "LND_AccountInstallmentNonDeductions",
+                column: "InstallmentId",
+                principalSchema: "dbo",
+                principalTable: "LND_AccountInstallments",
+                principalColumn: "Id",
+                onDelete: ReferentialAction.Restrict);
+
+            migrationBuilder.AddForeignKey(
+                name: "FK_LND_AccountInstallments_CancelledByOperation",
+                schema: "dbo",
+                table: "LND_AccountInstallments",
+                column: "CancelledByOperationId",
+                principalSchema: "dbo",
+                principalTable: "LND_MemberAccountOperations",
+                principalColumn: "Id",
+                onDelete: ReferentialAction.Restrict);
+
+            migrationBuilder.AddForeignKey(
+                name: "FK_LND_AccountInstallments_GeneratedByOperation",
+                schema: "dbo",
+                table: "LND_AccountInstallments",
+                column: "GeneratedByOperationId",
+                principalSchema: "dbo",
+                principalTable: "LND_MemberAccountOperations",
+                principalColumn: "Id",
+                onDelete: ReferentialAction.Restrict);
+
+            migrationBuilder.AddForeignKey(
+                name: "FK_LND_AccountPayoutOrders_LND_MemberAccountOperations_OperationId",
+                schema: "dbo",
+                table: "LND_AccountPayoutOrders",
+                column: "OperationId",
+                principalSchema: "dbo",
+                principalTable: "LND_MemberAccountOperations",
+                principalColumn: "Id",
+                onDelete: ReferentialAction.Restrict);
+
+            migrationBuilder.AddForeignKey(
+                name: "FK_LND_AccountPayoutOrders_MembershipWithdrawal",
+                schema: "dbo",
+                table: "LND_AccountPayoutOrders",
+                column: "MembershipWithdrawalId",
+                principalSchema: "dbo",
+                principalTable: "LND_MembershipWithdrawals",
+                principalColumn: "Id",
+                onDelete: ReferentialAction.Restrict);
+
+            migrationBuilder.AddForeignKey(
+                name: "FK_LND_ContributionRequests_LND_MemberAccountOperations_OperationId",
+                schema: "dbo",
+                table: "LND_ContributionRequests",
+                column: "OperationId",
+                principalSchema: "dbo",
+                principalTable: "LND_MemberAccountOperations",
+                principalColumn: "Id",
+                onDelete: ReferentialAction.Restrict);
+
+            migrationBuilder.AddForeignKey(
+                name: "FK_LND_IssuedDocumentAccounts_LastOperation",
+                schema: "dbo",
+                table: "LND_IssuedDocumentAccounts",
+                column: "LastOperationId",
+                principalSchema: "dbo",
+                principalTable: "LND_MemberAccountOperations",
+                principalColumn: "Id",
+                onDelete: ReferentialAction.Restrict);
+
+            migrationBuilder.AddForeignKey(
+                name: "FK_LND_IssuedDocumentAccounts_LastTransaction",
+                schema: "dbo",
+                table: "LND_IssuedDocumentAccounts",
+                column: "LastTransactionId",
+                principalSchema: "dbo",
+                principalTable: "LND_MemberAccountTransactions",
+                principalColumn: "Id",
+                onDelete: ReferentialAction.Restrict);
+
+            migrationBuilder.AddForeignKey(
+                name: "FK_LND_MemberAccountOperations_MembershipWithdrawal",
+                schema: "dbo",
+                table: "LND_MemberAccountOperations",
+                column: "MembershipWithdrawalId",
+                principalSchema: "dbo",
+                principalTable: "LND_MembershipWithdrawals",
+                principalColumn: "Id",
+                onDelete: ReferentialAction.Restrict);
+
             // T044 (migración de datos, a mano; se conserva al regenerar): las cinco dimensiones de captaciones van al final de la clave de toda regla
             // que ya existía, en «*». Sólo las de 14 posiciones (13 separadores): repetirla no hace nada.
             migrationBuilder.Sql(
@@ -2448,11 +2858,39 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     SELECT 1 FROM [dbo].[COR_IntegrationParticipantAdoptions] a
                     WHERE a.[ParticipantId] = p.[Id] AND a.[ContractName] = N'ProveedorDeCuentas' AND a.[Version] = 1);
                 """);
+
+            // T098 (a mano; se conserva al regenerar): el participante ASO, destino Associates, adopta RetiroDeAsociadoAprobado v1 (mensajes.md §1.4, §7;
+            // research C16, E-04). Clase Associates 9, rol MessageDestination 2, registrado por el proceso (2). Idempotente: sólo lo que falte.
+            migrationBuilder.Sql(
+                """
+                INSERT INTO [dbo].[COR_IntegrationParticipants] ([Code], [Class], [Role], [Destination], [IsTestDouble], [IsEnabled], [ValidFrom], [ValidTo], [Reason], [RegisteredByKind], [RegisteredByUserId], [RegisteredByName], [PublicId], [IsDeleted], [CreatedAt], [CreatedBy])
+                SELECT N'ASO', 9, 2, N'Associates', 0, 1, '1900-01-01', NULL, N'Asociados recibe el retiro del asociado aprobado en Cartera', 2, NULL, N'Migración CaptacionesAportes', NEWID(), 0, SYSUTCDATETIME(), N'SYSTEM'
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM [dbo].[COR_IntegrationParticipants] p
+                    WHERE p.[Code] = N'ASO' AND p.[Role] = 2 AND p.[Destination] = N'Associates' AND p.[IsDeleted] = 0);
+
+                INSERT INTO [dbo].[COR_IntegrationParticipantAdoptions] ([ParticipantId], [ContractName], [Version], [ValidFrom], [ValidTo], [Reason], [PublicId], [IsDeleted], [CreatedAt], [CreatedBy])
+                SELECT p.[Id], N'RetiroDeAsociadoAprobado', CAST(1 AS smallint), '1900-01-01', NULL, N'Migración CaptacionesAportes', NEWID(), 0, SYSUTCDATETIME(), N'SYSTEM'
+                FROM [dbo].[COR_IntegrationParticipants] p
+                WHERE p.[Code] = N'ASO' AND p.[Role] = 2 AND p.[Destination] = N'Associates' AND p.[ValidTo] IS NULL AND p.[IsDeleted] = 0
+                  AND NOT EXISTS (
+                    SELECT 1 FROM [dbo].[COR_IntegrationParticipantAdoptions] a
+                    WHERE a.[ParticipantId] = p.[Id] AND a.[ContractName] = N'RetiroDeAsociadoAprobado' AND a.[Version] = 1);
+                """);
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            // T098 (a mano): se retiran la adopción y el participante ASO que sembró esta migración.
+            migrationBuilder.Sql(
+                """
+                DELETE FROM [dbo].[COR_IntegrationParticipantAdoptions]
+                WHERE [ContractName] = N'RetiroDeAsociadoAprobado' AND [Reason] = N'Migración CaptacionesAportes';
+                DELETE p FROM [dbo].[COR_IntegrationParticipants] p
+                WHERE p.[Code] = N'ASO' AND p.[RegisteredByName] = N'Migración CaptacionesAportes'
+                  AND NOT EXISTS (SELECT 1 FROM [dbo].[COR_IntegrationParticipantAdoptions] a WHERE a.[ParticipantId] = p.[Id]);
+                """);
 
             // T089 (a mano): se retira la adopción de ProveedorDeCuentas que hizo esta migración.
             migrationBuilder.Sql(
@@ -2494,6 +2932,15 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                 schema: "dbo",
                 table: "LND_Setup");
 
+            migrationBuilder.DropForeignKey(
+                name: "FK_LND_MembershipWithdrawals_OffsetOperation",
+                schema: "dbo",
+                table: "LND_MembershipWithdrawals");
+
+            migrationBuilder.DropTable(
+                name: "COR_AssociateInboundMessages",
+                schema: "dbo");
+
             migrationBuilder.DropTable(
                 name: "LND_AccountInstallmentNonDeductions",
                 schema: "dbo");
@@ -2531,6 +2978,10 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                 schema: "dbo");
 
             migrationBuilder.DropTable(
+                name: "LND_MembershipWithdrawalLines",
+                schema: "dbo");
+
+            migrationBuilder.DropTable(
                 name: "LND_PayrollAgreementConceptEquivalences",
                 schema: "dbo");
 
@@ -2560,6 +3011,10 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
 
             migrationBuilder.DropTable(
                 name: "LND_MemberAccountOperations",
+                schema: "dbo");
+
+            migrationBuilder.DropTable(
+                name: "LND_MembershipWithdrawals",
                 schema: "dbo");
 
             migrationBuilder.DropTable(

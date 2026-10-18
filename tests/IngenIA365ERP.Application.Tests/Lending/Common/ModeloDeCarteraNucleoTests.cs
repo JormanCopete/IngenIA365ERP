@@ -101,6 +101,8 @@ public class ModeloDeCarteraNucleoTests
         "LND_IssuedDocumentAccounts",
         // Feature 014, US3 (T090; data-model §1.4.1, §1.4.2): los grupos de archivo y las equivalencias de concepto del convenio de pagaduría
         "LND_PayrollAgreementFileGroups", "LND_PayrollAgreementConceptEquivalences",
+        // Feature 014, US10 (T096; data-model §6.1, §6.2): el retiro del asociado y las líneas de su liquidación
+        "LND_MembershipWithdrawals", "LND_MembershipWithdrawalLines",
     ];
 
     /// <summary>Las 17 de preparación (data-model §29.3).</summary>
@@ -133,6 +135,8 @@ public class ModeloDeCarteraNucleoTests
         "DepositLineVersion", "DepositLineRateTier", "ContributionLineVersion",
         // Feature 014, US3 (T081): la cuota exigible y lo no descontado.
         "AccountInstallment", "AccountInstallmentNonDeduction", "IssuedDocumentAccount",
+        // Feature 014, US10 (T096): las líneas de la liquidación del retiro.
+        "MembershipWithdrawalLine",
         .. Preparacion,
     ];
 
@@ -165,12 +169,12 @@ public class ModeloDeCarteraNucleoTests
         var tablas = DeCartera(Modelo(postgres)).Select(e => e.GetTableName()).ToList();
 
         tablas.Should().OnlyHaveUniqueItems().And.BeEquivalentTo(Tablas);
-        Tablas.Should().HaveCount(149,
+        Tablas.Should().HaveCount(151,
             "74 de negocio + 17 de preparación (data-model §14) + 2 del grupo conectado (C112) + 7 de CarteraRiesgo (US9) + 8 de CarteraLibranza (K2)"
             + " + 9 de CarteraNovedades (K3) + 11 de CarteraCobranza (K4) + 2 de CarteraInformes (K5) + 2 de CarteraPerdidaEsperada (K6a)"
             + " + 7 del libro de cuentas de la feature 014 (K7, CaptacionesAportes) + 3 de las versiones de líneas de captación y aportes (US1)"
             + " + 1 de la cuenta exenta del GMF (US2) + 4 de las cuotas exigibles, las solicitudes de aportes y las cuentas de un documento (US3)"
-            + " + 2 de los grupos de archivo y las equivalencias de pagaduría (US3)");
+            + " + 2 de los grupos de archivo y las equivalencias de pagaduría (US3) + 2 del retiro del asociado y su liquidación (US10)");
     }
 
     [Theory]

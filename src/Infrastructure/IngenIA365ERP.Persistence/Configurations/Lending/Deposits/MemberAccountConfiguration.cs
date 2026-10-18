@@ -131,6 +131,9 @@ public class AccountPayoutOrderConfiguration : IEntityTypeConfiguration<AccountP
         builder.HasIndex(e => e.Number).IsUnique().HasDatabaseName("UK_LND_AccountPayoutOrders_Number");
         builder.HasIndex(e => new { e.MemberAccountId, e.Status }).HasDatabaseName("IX_LND_AccountPayoutOrders_Account_Status");
         builder.HasIndex(e => new { e.Status, e.ResultDueOn }).HasDatabaseName("IX_LND_AccountPayoutOrders_Status_ResultDueOn");
+        // US10 (T096, research E17): la FK nace con LND_MembershipWithdrawals.
+        builder.HasOne<Domain.Entities.Lending.Deposits.Processes.MembershipWithdrawal>().WithMany().HasForeignKey(e => e.MembershipWithdrawalId)
+            .OnDelete(DeleteBehavior.Restrict).HasConstraintName("FK_LND_AccountPayoutOrders_MembershipWithdrawal");
         builder.HasIndex(e => e.MembershipWithdrawalId).HasDatabaseName("IX_LND_AccountPayoutOrders_MembershipWithdrawalId")
             .HasFilter("[MembershipWithdrawalId] IS NOT NULL");
     }

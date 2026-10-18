@@ -262,6 +262,8 @@ public class LosHechosInmutablesNoSeModifican
         ["AccountInstallment"] = ["CancelledAt", "CancelReason", "CancelledByOperationId"], ["AccountInstallmentNonDeduction"] = [],
         // Feature 014, US3 (T087; data-model §1.5.1): las cuentas que cubre un documento emitido no cambian.
         ["IssuedDocumentAccount"] = [],
+        // Feature 014, US10 (T096; data-model §6.2): las líneas de una versión de la liquidación del retiro; la reliquidación escribe otra versión.
+        ["MembershipWithdrawalLine"] = [],
     };
 
     [Fact]

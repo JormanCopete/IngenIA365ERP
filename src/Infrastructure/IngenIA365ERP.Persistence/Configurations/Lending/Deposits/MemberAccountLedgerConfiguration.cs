@@ -76,6 +76,9 @@ public class MemberAccountOperationConfiguration : IEntityTypeConfiguration<Memb
             .HasFilter("[RelatedLoanOperationId] IS NOT NULL");
         builder.HasIndex(e => e.ClearingUntil).HasDatabaseName("IX_LND_MemberAccountOperations_Clearing")
             .HasFilter("[ClearedAt] IS NULL AND [ClearingUntil] IS NOT NULL");
+        // US10 (T096, research E17): la FK nace con LND_MembershipWithdrawals.
+        builder.HasOne<Domain.Entities.Lending.Deposits.Processes.MembershipWithdrawal>().WithMany().HasForeignKey(e => e.MembershipWithdrawalId)
+            .OnDelete(DeleteBehavior.Restrict).HasConstraintName("FK_LND_MemberAccountOperations_MembershipWithdrawal");
         builder.HasIndex(e => e.MembershipWithdrawalId).HasDatabaseName("IX_LND_MemberAccountOperations_MembershipWithdrawal")
             .HasFilter("[MembershipWithdrawalId] IS NOT NULL");
     }

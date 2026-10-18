@@ -14,4 +14,7 @@ public enum IntegrationParticipantClass
     Accounting = 6,
     Lending = 7,
     Inventory = 8,
+
+    /// <summary>Feature 014 (US10, T098): Asociados, destino de <c>RetiroDeAsociadoAprobado</c> (participante <c>ASO</c>).</summary>
+    Associates = 9,
 }

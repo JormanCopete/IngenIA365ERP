@@ -124,9 +124,11 @@ public static class CatalogoDeMensajesDeCarteraV1
         // Feature 014 (T055; mensajes.md §1.2 y §5.3 de la 014): la orden de giro v2 de captaciones, declarada para que Tesorería pueda adoptarla; la emite
         // US10 (también el proceso: el pago de intereses del CDAT a un tercero).
         new(typeof(OrdenDeGiroEmitidaV2), OrdenDeGiroEmitidaV2.Type, 2, ModulosDeOrigen.Cartera, TipoDeMensaje.Un(IntegrationDestinations.Treasury), N, C, true),
+        // Feature 014, US10 (T098; mensajes.md §1.2 #34 y §5.1): el retiro del asociado aprobado, a Asociados; lo origina la persona que aprueba.
+        Otro(typeof(RetiroDeAsociadoAprobadoV1), RetiroDeAsociadoAprobadoV1.Type, IntegrationDestinations.Associates, C, proceso: false),
     ];
 
-    /// <summary>Los tipos de Cartera (77 desde la feature 014: 70 hechos a Contabilidad y 7 a otros destinos).</summary>
+    /// <summary>Los tipos de Cartera (78 desde la feature 014: 70 hechos a Contabilidad y 8 a otros destinos).</summary>
     public static IReadOnlyList<TipoDeMensaje> Todos { get; } = [.. HechosAContabilidad, .. AOtrosDestinos];
 
     private static TipoDeMensaje Hecho(Type record, string type, string codigoCorto, IntegrationMessageKind kind, FormaDeClaveDeEvento forma, bool proceso) =>

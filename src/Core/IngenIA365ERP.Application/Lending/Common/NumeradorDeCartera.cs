@@ -279,7 +279,8 @@ public sealed class NumeradorDeCartera(IApplicationDbContext db, ICerrojoDeCarte
 
     /// <summary>
     /// El radicado del retiro del asociado (18), el número de una distribución de la asamblea (19) o el de un caso de fallecimiento (20), ámbito único.
-    /// Sus tablas nacen con US10 y K10: hasta entonces el numerador no sabe en qué tabla buscar un número ya usado y no salta ninguno.
+    /// El retiro salta los números de su tabla desde US10 (T096); las de K10 nacen con su entrega: hasta entonces el numerador no sabe en qué tabla buscar
+    /// un número ya usado y no salta ninguno.
     /// </summary>
     public Task<string> NumeroDeProcesoDeCaptacionesAsync(LendingNumberKind clase, string prefijo, CancellationToken ct = default)
     {
@@ -360,6 +361,8 @@ public sealed class NumeradorDeCartera(IApplicationDbContext db, ICerrojoDeCarte
         // Feature 014 (T032): la cuenta y su operación. El retiro del asociado, la distribución y el caso de fallecimiento suman su tabla al nacer.
         LendingNumberKind.MemberAccount => db.MemberAccounts.IgnoreQueryFilters().AnyAsync(a => a.Number == numero, ct),
         LendingNumberKind.MemberAccountOperation => db.MemberAccountOperations.IgnoreQueryFilters().AnyAsync(o => o.Number == numero, ct),
+        // US10 (T096): el retiro del asociado.
+        LendingNumberKind.MembershipWithdrawal => db.MembershipWithdrawals.IgnoreQueryFilters().AnyAsync(w => w.Number == numero, ct),
         _ => Task.FromResult(false),
     };
 

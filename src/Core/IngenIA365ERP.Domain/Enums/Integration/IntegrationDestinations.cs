@@ -14,4 +14,7 @@ public static class IntegrationDestinations
     public const string Inventory = "Inventory";
     public const string Treasury = "Treasury";
     public const string Receipts = "Receipts";
+
+    // Feature 014 (US10, T098; contracts/mensajes.md §1.4, research C16, enmienda E-04): Asociados recibe el retiro aprobado en la Cartera.
+    public const string Associates = "Associates";
 }

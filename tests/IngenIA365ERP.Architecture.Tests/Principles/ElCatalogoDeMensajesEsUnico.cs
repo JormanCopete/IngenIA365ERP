@@ -88,8 +88,8 @@ public class ElCatalogoDeMensajesEsUnico
         Assert.Equal(21, todos.Count(t => t.OriginModule == ModulosDeOrigen.Inventario));
         Assert.Equal(20, todos.Count(t => t.OriginModule == ModulosDeOrigen.Inventario && t.Version == 1));
         // K6b (T1056): + CorreccionMonetariaUvrCausada; decisión del dueño del 2026-10-17: + PagoRedistribuidoPorValorNacional.
-        // Feature 014 (T048): + los 33 hechos de captaciones y aportes; T055: + la v2 de OrdenDeGiroEmitida.
-        Assert.Equal(77, todos.Count(t => t.OriginModule == ModulosDeOrigen.Cartera));
+        // Feature 014 (T048): + los 33 hechos de captaciones y aportes; T055: + la v2 de OrdenDeGiroEmitida; T098: + RetiroDeAsociadoAprobado.
+        Assert.Equal(78, todos.Count(t => t.OriginModule == ModulosDeOrigen.Cartera));
         Assert.Equal(1, todos.Count(t => t.OriginModule == ModulosDeOrigen.Tesoreria));
         Assert.Equal(2, todos.Count(t => t.OriginModule == ModulosDeOrigen.Recaudo));
 
