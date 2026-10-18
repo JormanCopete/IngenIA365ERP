@@ -41,14 +41,14 @@ public class SendPayslipsCommandHandlerTests
         (await d.Db.People.SingleAsync(p => p.Id == carla.PersonId)).Email = null;
         await d.Db.SaveChangesAsync();
 
-        var calc = new CalculatePayrollRunCommandHandler(d.Db, d.Loader, d.Recurrentes, d.CuotasDeCartera, d.Lock, d.Clock, d.User, NullLogger<CalculatePayrollRunCommandHandler>.Instance);
+        var calc = new CalculatePayrollRunCommandHandler(d.Db, d.Loader, d.Recurrentes, d.CuotasDeCartera, d.CuotasDeCuentas, d.Lock, d.Clock, d.User, NullLogger<CalculatePayrollRunCommandHandler>.Instance);
         var r = await calc.Handle(new CalculatePayrollRunCommand(d.Marzo.PublicId), CancellationToken.None);
         r.IsSuccess.Should().BeTrue(r.Error.Message);
         if (aprobar)
         {
             var poster = d.Contabilizador(Contadora);
             var audit = new PayrollAuditEmitter(d.Audit, Contadora, d.Clock, NullLogger<PayrollAuditEmitter>.Instance, CooperativaDePrueba.Actual);
-            var a = await new ApprovePayrollRunCommandHandler(d.Db, poster, d.Policies, d.Permissions, d.Clock, Contadora, audit, d.StaleMarker, d.Recaudo, d.Obligaciones)
+            var a = await new ApprovePayrollRunCommandHandler(d.Db, poster, d.Policies, d.Permissions, d.Clock, Contadora, audit, d.StaleMarker, d.Recaudo, d.Obligaciones, d.RecaudoDeCuentas)
                 .Handle(new ApprovePayrollRunCommand(r.Value.RunPublicId, Confirm: true), CancellationToken.None);
             a.IsSuccess.Should().BeTrue(a.Error.Message);
         }

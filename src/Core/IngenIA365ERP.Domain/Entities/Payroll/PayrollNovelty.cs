@@ -57,6 +57,16 @@ public class PayrollNovelty : AuditableEntity
     /// <summary>Feature 013: copia del número visible de la obligación.</summary>
     [MaxLength(30)]
     public string? ObligationNumber { get; set; }
+    /// <summary>
+    /// Feature 014 (E-02; contrato-de-cuentas §6.1): la cuenta de captación o de aportes de una novedad <see cref="NoveltyOrigin.AccountDeduction"/>,
+    /// una por empleado, cuenta y período, alimentada por <c>IContratoDeCuentas.ListarExigiblesAsync</c>. Sin FK (FR-008).
+    /// </summary>
+    public Guid? AccountPublicId { get; set; }
+
+    /// <summary>Feature 014: copia del número visible de la cuenta.</summary>
+    [MaxLength(20)]
+    public string? AccountNumber { get; set; }
+
     public int? CarriedFromNoveltyId { get; set; }
 
     /// <summary>Feature 010 (R6): el movimiento de vacaciones que generó esta novedad (<see cref="NoveltyOrigin.VacationLeave"/>).</summary>

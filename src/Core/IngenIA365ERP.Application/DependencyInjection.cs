@@ -96,6 +96,8 @@ public static class DependencyInjection
         services.AddScoped<Payroll.Settlements.PropuestaDeDescuentosDeCartera>();
         services.AddScoped<Payroll.Services.RecaudoPorNomina>();
         services.AddScoped<Payroll.Services.CuotasDeCarteraEnNomina>();
+        services.AddScoped<Payroll.Services.RecaudoDeCuentasPorNomina>();
+        services.AddScoped<Payroll.Services.CuotasDeCuentasEnNomina>();
         // Feature 010 (US8): dispersión bancaria sobre el motor genérico de archivos planos (Common/BankFiles).
         services.AddScoped<Payroll.Dispersion.PayrollDisbursementLines>();
         services.AddScoped<Payroll.Dispersion.PreparacionDeDispersion>();

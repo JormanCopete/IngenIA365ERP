@@ -29,7 +29,7 @@ public class DiscardPayrollRunCommandHandlerTests
         var horas = await new RegisterNoveltyCommandHandler(d.Db, d.Clock, d.User, d.StaleMarker, d.CarryOver)
             .Handle(new RegisterNoveltyCommand { PeriodPublicId = d.Marzo.PublicId, EmployeePublicId = d.Ana.PublicId, ConceptCode = "HEX_NOCTURNA", Quantity = 4m }, CancellationToken.None);
         horas.IsSuccess.Should().BeTrue(horas.Error.Message);
-        var calc = await new CalculatePayrollRunCommandHandler(d.Db, d.Loader, d.Recurrentes, d.CuotasDeCartera, d.Lock, d.Clock, d.User, NullLogger<CalculatePayrollRunCommandHandler>.Instance)
+        var calc = await new CalculatePayrollRunCommandHandler(d.Db, d.Loader, d.Recurrentes, d.CuotasDeCartera, d.CuotasDeCuentas, d.Lock, d.Clock, d.User, NullLogger<CalculatePayrollRunCommandHandler>.Instance)
             .Handle(new CalculatePayrollRunCommand(d.Marzo.PublicId), CancellationToken.None);
         calc.IsSuccess.Should().BeTrue(calc.Error.Message);
         return calc.Value.RunPublicId;
@@ -71,7 +71,7 @@ public class DiscardPayrollRunCommandHandlerTests
         var runId = await Calculada(d);
         (await Descartador(d).Handle(new DiscardPayrollRunCommand(runId, "Corregir"), CancellationToken.None)).IsSuccess.Should().BeTrue();
 
-        var calc = await new CalculatePayrollRunCommandHandler(d.Db, d.Loader, d.Recurrentes, d.CuotasDeCartera, d.Lock, d.Clock, d.User, NullLogger<CalculatePayrollRunCommandHandler>.Instance)
+        var calc = await new CalculatePayrollRunCommandHandler(d.Db, d.Loader, d.Recurrentes, d.CuotasDeCartera, d.CuotasDeCuentas, d.Lock, d.Clock, d.User, NullLogger<CalculatePayrollRunCommandHandler>.Instance)
             .Handle(new CalculatePayrollRunCommand(d.Marzo.PublicId), CancellationToken.None);
 
         calc.IsSuccess.Should().BeTrue(calc.Error.Message);
@@ -88,7 +88,7 @@ public class DiscardPayrollRunCommandHandlerTests
         var runId = await Calculada(d);
         var contadora = NominaTestData.UsuarioDePrueba("contadora@demo", 11);
         var apr = await new ApprovePayrollRunCommandHandler(d.Db, d.Contabilizador(contadora), d.Policies, d.Permissions, d.Clock, contadora,
-                new PayrollAuditEmitter(d.Audit, contadora, d.Clock, NullLogger<PayrollAuditEmitter>.Instance, CooperativaDePrueba.Actual), d.StaleMarker, d.Recaudo, d.Obligaciones)
+                new PayrollAuditEmitter(d.Audit, contadora, d.Clock, NullLogger<PayrollAuditEmitter>.Instance, CooperativaDePrueba.Actual), d.StaleMarker, d.Recaudo, d.Obligaciones, d.RecaudoDeCuentas)
             .Handle(new ApprovePayrollRunCommand(runId, Confirm: true), CancellationToken.None);
         apr.IsSuccess.Should().BeTrue(apr.Error.Message);
 

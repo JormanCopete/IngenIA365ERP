@@ -212,6 +212,7 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<EmploymentTermination> EmploymentTerminations => Set<EmploymentTermination>();
     public DbSet<SettlementDeduction> SettlementDeductions => Set<SettlementDeduction>();
     public DbSet<Domain.Entities.Payroll.Transactions.PayrollLoanDeduction> PayrollLoanDeductions => Set<Domain.Entities.Payroll.Transactions.PayrollLoanDeduction>();
+    public DbSet<Domain.Entities.Payroll.Transactions.PayrollAccountDeduction> PayrollAccountDeductions => Set<Domain.Entities.Payroll.Transactions.PayrollAccountDeduction>();
     public DbSet<WithholdingRateCalculation> WithholdingRateCalculations => Set<WithholdingRateCalculation>();
     public DbSet<WithholdingRateCalculationMonth> WithholdingRateCalculationMonths => Set<WithholdingRateCalculationMonth>();
     public DbSet<SeveranceFundDeposit> SeveranceFundDeposits => Set<SeveranceFundDeposit>();

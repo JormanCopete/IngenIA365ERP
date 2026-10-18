@@ -147,6 +147,8 @@ public class LasConsultasDeCarteraRespetanElAlcance
         // Feature 014, US2 (T073, T075): las cuentas y las marcas del GMF por la oficina y la línea de la cuenta (las listas y los conteos con
         // PorOficinaYLinea; el detalle y las partes de una cuenta fuera del alcance responden el 404 de la cuenta, LectorDeCuentas.CuentaEnAlcanceAsync).
         "Core/IngenIA365ERP.Application/Lending/Deposits/Accounts/MemberAccountQueries.cs",
+        // Feature 014, US3 (T088): las vistas de aportes del centro de informes filtran por la oficina de la cuenta.
+        "Core/IngenIA365ERP.Application/Lending/Deposits/Reports/ContributionReportQueries.cs",
         "Core/IngenIA365ERP.Application/Lending/Deposits/Accounts/GmfExemption/GmfExemptionCommands.cs",
     ];
 
@@ -226,6 +228,11 @@ public class LasConsultasDeCarteraRespetanElAlcance
         ["GetScreeningResultQuery"] = "el oficial de cumplimiento no lleva el alcance de Cartera: exige Compliance.RestrictiveLists.Release (C84)",
         ["ListDebtorBlocksQuery"] = "los bloqueos y embargos son de la persona, no de una oficina",
         ["ListContributionBalancesQuery"] = "el saldo de aportes es de la persona, no de una oficina (D19)",
+        // Feature 014, US3 (T086, T090): las solicitudes de devolución y cesión son de la persona; los grupos de archivo y las equivalencias son del
+        // convenio, un catálogo de la cooperativa.
+        ["ListContributionRequestsQuery"] = "las devoluciones y cesiones de aportes son de la persona, no de una oficina (D19), y exigen Lending.Accounts.Read",
+        ["ListPayrollAgreementFileGroupsQuery"] = "catálogo de la cooperativa: los grupos de archivo de un convenio no tienen oficina ni deudores",
+        ["ListPayrollAgreementConceptEquivalencesQuery"] = "catálogo de la cooperativa: las equivalencias de un convenio no tienen oficina ni deudores",
         // US3 (bloque 7A): la vista previa evalúa por RequisitosDelDesembolso, que asegura el alcance de la solicitud (el 404 fuera de él).
         ["PreviewDisbursementQuery"] = "la asegura RequisitosDelDesembolso con el alcance de la solicitud (AsegurarAsync, el 404 de la solicitud)",
         // US3 (bloque 7B): la vista previa del archivo toma las órdenes por PreparacionDeArchivoDeDesembolsos, que filtra por el alcance de su

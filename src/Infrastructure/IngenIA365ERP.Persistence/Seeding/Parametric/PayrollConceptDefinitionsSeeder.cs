@@ -212,6 +212,15 @@ public sealed class PayrollConceptDefinitionsSeeder : IDataSeeder
         {
             d.RequiresAmount = true; d.AllowsRepeatInPeriod = true; d.DianElement = "Deducciones/Cooperativa";
         }));
+        // Feature 014 (T089, E-02): las cuotas de aportes y de ahorro que la Cartera informa por el contrato de cuentas.
+        lista.Add(Def(WellKnownConceptCodes.ContributionDeduction, "Descuento por nómina de aportes sociales", ConceptNature.Deduction, CalculationKind.FixedAmount, d =>
+        {
+            d.RequiresAmount = true; d.AllowsRepeatInPeriod = true; d.DianElement = "Deducciones/Cooperativa";
+        }));
+        lista.Add(Def(WellKnownConceptCodes.SavingsDeduction, "Descuento por nómina de ahorros", ConceptNature.Deduction, CalculationKind.FixedAmount, d =>
+        {
+            d.RequiresAmount = true; d.AllowsRepeatInPeriod = true; d.DianElement = "Deducciones/Cooperativa";
+        }));
         lista.Add(Def(WellKnownConceptCodes.RoundingAdjustment, "Ajuste por redondeo", ConceptNature.Earning, CalculationKind.FixedAmount, d =>
         {
             d.FixedAmount = 0m; d.IsAutomatic = true; d.DianElement = "Redondeo";

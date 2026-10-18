@@ -205,7 +205,7 @@ public class ApproveServiceBonusCommandHandlerTests
         var permisos = Substitute.For<IPermissionChecker>();
         permisos.HasPermissionAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(true);
         var ordinaria = new ApprovePayrollRunCommandHandler(d.Db, d.Contabilizador(Contadora), d.Policies, permisos, d.Clock, Contadora,
-            new PayrollAuditEmitter(d.Audit, Contadora, d.Clock, NullLogger<PayrollAuditEmitter>.Instance), d.StaleMarker, d.Recaudo, d.Obligaciones);
+            new PayrollAuditEmitter(d.Audit, Contadora, d.Clock, NullLogger<PayrollAuditEmitter>.Instance), d.StaleMarker, d.Recaudo, d.Obligaciones, d.RecaudoDeCuentas);
 
         var r = await ordinaria.Handle(new ApprovePayrollRunCommand(runId, Confirm: true), CancellationToken.None);
 

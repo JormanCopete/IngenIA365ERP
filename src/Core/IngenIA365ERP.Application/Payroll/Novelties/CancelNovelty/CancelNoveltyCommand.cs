@@ -37,7 +37,7 @@ public sealed class CancelNoveltyCommandHandler(
             return Result.Failure(new Error("Payroll.NoveltyNotFound", "No existe la novedad indicada."));
         if (novelty.Status != NoveltyStatus.Active)
             return Result.Failure(new Error("Payroll.NoveltyNotActive", $"La novedad ya está {novelty.Status}."));
-        if (novelty.Origin == NoveltyOrigin.LoanDeduction)
+        if (novelty.Origin is NoveltyOrigin.LoanDeduction or NoveltyOrigin.AccountDeduction)
             return Result.Failure(new Error("Payroll.NoveltyNotActive",
                 "El descuento lo generó Cartera: se anula desde ese módulo, no desde la nómina."));
         // Feature 010 (D-01): la ausencia por vacaciones la dejó una liquidación aprobada; la deshace la

@@ -23,7 +23,7 @@ public class ApprovePayrollRunCommandHandlerTests
 
     private static async Task<Guid> Calcular(NominaTestData d)
     {
-        var h = new CalculatePayrollRunCommandHandler(d.Db, d.Loader, d.Recurrentes, d.CuotasDeCartera, d.Lock, d.Clock, d.User, NullLogger<CalculatePayrollRunCommandHandler>.Instance);
+        var h = new CalculatePayrollRunCommandHandler(d.Db, d.Loader, d.Recurrentes, d.CuotasDeCartera, d.CuotasDeCuentas, d.Lock, d.Clock, d.User, NullLogger<CalculatePayrollRunCommandHandler>.Instance);
         var r = await h.Handle(new CalculatePayrollRunCommand(d.Marzo.PublicId), CancellationToken.None);
         r.IsSuccess.Should().BeTrue(r.Error.Message);
         return r.Value.RunPublicId;
@@ -34,7 +34,7 @@ public class ApprovePayrollRunCommandHandlerTests
         var usuario = quien ?? Contadora;
         var poster = d.Contabilizador(usuario);
         var audit = new PayrollAuditEmitter(d.Audit, usuario, d.Clock, NullLogger<PayrollAuditEmitter>.Instance, CooperativaDePrueba.Actual);
-        return new ApprovePayrollRunCommandHandler(d.Db, poster, d.Policies, d.Permissions, d.Clock, usuario, audit, d.StaleMarker, d.Recaudo, d.Obligaciones);
+        return new ApprovePayrollRunCommandHandler(d.Db, poster, d.Policies, d.Permissions, d.Clock, usuario, audit, d.StaleMarker, d.Recaudo, d.Obligaciones, d.RecaudoDeCuentas);
     }
 
     private static async Task RegistrarHoras(NominaTestData d)
@@ -214,7 +214,7 @@ public class ApprovePayrollRunCommandHandlerTests
         var otraVez = await Aprobador(d).Handle(new ApprovePayrollRunCommand(runId, true), CancellationToken.None);
         otraVez.Error.Code.Should().Be("Payroll.RunNotDraft");
 
-        var calculo = await new CalculatePayrollRunCommandHandler(d.Db, d.Loader, d.Recurrentes, d.CuotasDeCartera, d.Lock, d.Clock, d.User, NullLogger<CalculatePayrollRunCommandHandler>.Instance)
+        var calculo = await new CalculatePayrollRunCommandHandler(d.Db, d.Loader, d.Recurrentes, d.CuotasDeCartera, d.CuotasDeCuentas, d.Lock, d.Clock, d.User, NullLogger<CalculatePayrollRunCommandHandler>.Instance)
             .Handle(new CalculatePayrollRunCommand(d.Marzo.PublicId), CancellationToken.None);
         calculo.Error.Code.Should().Be("Payroll.PeriodApproved");
     }

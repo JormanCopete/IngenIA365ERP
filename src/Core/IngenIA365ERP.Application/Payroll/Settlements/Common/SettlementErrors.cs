@@ -154,6 +154,31 @@ public static class SettlementErrors
             $"{motivos.Count} descuentos de Cartera no se aplicaron: {string.Join("; ", motivos)}.",
             new { count = motivos.Count, reasons = motivos });
 
+    public const string AccountDeductionNotAppliedCode = "Payroll.AccountDeductionNotApplied";
+    public const string AccountDeductionNotPostableCode = "Payroll.AccountDeductionNotPostable";
+
+    /// <summary>Feature 014 (T089): aviso de la ordinaria, descuentos de aportes o de ahorro que la Cartera no tomó (la línea bajó a lo aplicado).</summary>
+    public static WarningDto AccountDeductionNotApplied(IReadOnlyList<string> motivos) =>
+        new(AccountDeductionNotAppliedCode,
+            $"{motivos.Count} descuentos de aportes o de ahorro no se aplicaron: {string.Join("; ", motivos)}.",
+            new { count = motivos.Count, reasons = motivos });
+
+    /// <summary>
+    /// Feature 014 (T089; A8 de la 013): la Cartera rechazó la consignación de aportes o de ahorro porque Contabilidad no tiene cómo registrarla; la
+    /// aprobación entera falla, igual que con los créditos.
+    /// </summary>
+    public static Error AccountDeductionNotPostable(IReadOnlyList<(string Cuenta, string Mensaje, object? Datos)> rechazos) =>
+        new ErrorConDatos(AccountDeductionNotPostableCode,
+            $"No se aprobó: Contabilidad no tiene cómo registrar el recaudo de aportes o de ahorro ({string.Join("; ", rechazos.Select(r => $"cuenta {r.Cuenta}: {r.Mensaje}"))}). "
+            + "Pida a la contadora completar la matriz de Cartera y apruebe de nuevo.",
+            new { lendingCode = RecaudoPorNomina.CodigoNoContabilizable, accounts = rechazos.Select(r => new { accountNumber = r.Cuenta, message = r.Mensaje, lending = r.Datos }).ToList() });
+
+    /// <summary>Feature 014 (T089): al reversar la nómina, la Cartera no reversó la consignación de una cuenta: se revierte la reversión entera.</summary>
+    public static Error AccountReversalRejected(string cuenta, string codigo, string mensaje) =>
+        new ErrorConDatos("Payroll.AccountReversalRejected",
+            $"La Cartera no reversó el descuento de la cuenta {cuenta}: {mensaje} La nómina sigue aprobada; resuelva lo que dice la Cartera y vuelva a reversar.",
+            new { account = cuenta, lendingCode = codigo });
+
     // -------------------------------------------------------- avisos (no bloquean) --
 
     public const string OpeningBalanceMissingCode = "Payroll.Settlement.OpeningBalanceMissing";

@@ -88,7 +88,7 @@ public sealed class DiscardPayrollRunCommandHandler(
         var generadas = await db.PayrollNovelties
             // Feature 013 (C55): también las cuotas de Cartera; el próximo cálculo las vuelve a pedir a Cartera.
             .Where(n => n.PayPeriodId == period.Id && n.Status == NoveltyStatus.Active
-                        && (n.Origin == NoveltyOrigin.Recurring || n.Origin == NoveltyOrigin.LoanDeduction))
+                        && (n.Origin == NoveltyOrigin.Recurring || n.Origin == NoveltyOrigin.LoanDeduction || n.Origin == NoveltyOrigin.AccountDeduction))
             .ToListAsync(ct);
         foreach (var n in generadas)
         {

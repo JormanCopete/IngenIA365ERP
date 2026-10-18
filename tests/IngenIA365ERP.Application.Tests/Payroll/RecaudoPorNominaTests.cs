@@ -39,7 +39,7 @@ public class RecaudoPorNominaTests
         var noCabe = new Guid("00000000-0000-0000-0000-000000000001");
         d.Obligaciones.AgregarCuota(new CuotaDeNominaDto(persona, cabe, "A-1", "CONSUMO", 3, new DateOnly(2026, 3, 31), 150_000m, 0m, 1));
         d.Obligaciones.AgregarCuota(new CuotaDeNominaDto(persona, noCabe, "B-1", "CONSUMO", 9, new DateOnly(2026, 3, 31), 2_500_000m, 0m, 2));
-        var calc = await new CalculatePayrollRunCommandHandler(d.Db, d.Loader, d.Recurrentes, d.CuotasDeCartera, d.Lock, d.Clock, d.User, NullLogger<CalculatePayrollRunCommandHandler>.Instance)
+        var calc = await new CalculatePayrollRunCommandHandler(d.Db, d.Loader, d.Recurrentes, d.CuotasDeCartera, d.CuotasDeCuentas, d.Lock, d.Clock, d.User, NullLogger<CalculatePayrollRunCommandHandler>.Instance)
             .Handle(new CalculatePayrollRunCommand(d.Marzo.PublicId), CancellationToken.None);
         calc.IsSuccess.Should().BeTrue(calc.Error.Message);
         return new Escenario(d, calc.Value.RunPublicId, cabe, noCabe);
@@ -47,11 +47,11 @@ public class RecaudoPorNominaTests
 
     private static ApprovePayrollRunCommandHandler Aprobador(NominaTestData d) =>
         new(d.Db, d.Contabilizador(Contadora), d.Policies, d.Permissions, d.Clock, Contadora,
-            new PayrollAuditEmitter(d.Audit, Contadora, d.Clock, NullLogger<PayrollAuditEmitter>.Instance, CooperativaDePrueba.Actual), d.StaleMarker, d.Recaudo, d.Obligaciones);
+            new PayrollAuditEmitter(d.Audit, Contadora, d.Clock, NullLogger<PayrollAuditEmitter>.Instance, CooperativaDePrueba.Actual), d.StaleMarker, d.Recaudo, d.Obligaciones, d.RecaudoDeCuentas);
 
     private static ReversePayrollRunCommandHandler Reversor(NominaTestData d) =>
         new(d.Db, d.Contabilizador(Contadora), d.Clock, Contadora,
-            new PayrollAuditEmitter(d.Audit, Contadora, d.Clock, NullLogger<PayrollAuditEmitter>.Instance, CooperativaDePrueba.Actual), d.StaleMarker, d.Recaudo);
+            new PayrollAuditEmitter(d.Audit, Contadora, d.Clock, NullLogger<PayrollAuditEmitter>.Instance, CooperativaDePrueba.Actual), d.StaleMarker, d.Recaudo, d.RecaudoDeCuentas);
 
     [Fact]
     public async Task Aprobar_entrega_a_Cartera_lo_descontado_y_lo_no_descontado_en_una_llamada_antes_del_NM()
@@ -138,7 +138,7 @@ public class RecaudoPorNominaTests
         var d = new NominaTestData();
         d.ConfigurarContabilidad();
         d.Obligaciones.MarcarMigrada(d.Db.People.Single(p => p.Id == d.Ana.PersonId).PublicId);
-        var calc = await new CalculatePayrollRunCommandHandler(d.Db, d.Loader, d.Recurrentes, d.CuotasDeCartera, d.Lock, d.Clock, d.User, NullLogger<CalculatePayrollRunCommandHandler>.Instance)
+        var calc = await new CalculatePayrollRunCommandHandler(d.Db, d.Loader, d.Recurrentes, d.CuotasDeCartera, d.CuotasDeCuentas, d.Lock, d.Clock, d.User, NullLogger<CalculatePayrollRunCommandHandler>.Instance)
             .Handle(new CalculatePayrollRunCommand(d.Marzo.PublicId), CancellationToken.None);
 
         var sin = await Aprobador(d).Handle(new ApprovePayrollRunCommand(calc.Value.RunPublicId, Confirm: true), CancellationToken.None);
@@ -200,7 +200,7 @@ public class RecaudoPorNominaTests
         var anuladas = await e.D.Db.PayrollNovelties.AsNoTracking().Where(n => n.Origin == NoveltyOrigin.LoanDeduction).ToListAsync();
         anuladas.Should().HaveCount(2).And.OnlyContain(n => n.Status == NoveltyStatus.Cancelled && n.StatusReason == CuotasDeCarteraEnNomina.RecurringNoveltiesMaterializerReason);
 
-        var otra = await new CalculatePayrollRunCommandHandler(e.D.Db, e.D.Loader, e.D.Recurrentes, e.D.CuotasDeCartera, e.D.Lock, e.D.Clock, e.D.User,
+        var otra = await new CalculatePayrollRunCommandHandler(e.D.Db, e.D.Loader, e.D.Recurrentes, e.D.CuotasDeCartera, e.D.CuotasDeCuentas, e.D.Lock, e.D.Clock, e.D.User,
             NullLogger<CalculatePayrollRunCommandHandler>.Instance).Handle(new CalculatePayrollRunCommand(e.D.Marzo.PublicId), CancellationToken.None);
 
         otra.IsSuccess.Should().BeTrue(otra.Error.Message);

@@ -77,7 +77,8 @@ public sealed class ApprovePayrollRunCommandHandler(
     PayrollAuditEmitter audit,
     IPayrollRunStaleMarker staleMarker,
     RecaudoPorNomina recaudo,
-    IConsultaDeObligaciones obligaciones)
+    IConsultaDeObligaciones obligaciones,
+    RecaudoDeCuentasPorNomina recaudoDeCuentas)
     : IRequestHandler<ApprovePayrollRunCommand, Result<ApproveRunResultDto>>
 {
     public const string AuthorizeExceptionPermission = "Payroll.Runs.AuthorizeException";
@@ -190,6 +191,9 @@ public sealed class ApprovePayrollRunCommandHandler(
         var avisos = new List<WarningDto>();
         var cartera = await RecaudarEnCarteraAsync(run, period, empleados, nombres, request.AcknowledgeLendingPendingActivation, yo, ahora, avisos, ct);
         if (cartera.IsFailure) return Result.Failure<Aprobacion>(cartera.Error);
+        // Feature 014 (T089, E-02): aportes y ahorro por el contrato de cuentas, también antes del NM.
+        var cuentas = await RecaudarEnCuentasAsync(run, period, empleados, nombres, yo, ahora, avisos, ct);
+        if (cuentas.IsFailure) return Result.Failure<Aprobacion>(cuentas.Error);
 
         // --- comprobante contable (FR-019, FR-023) ---
         var fechaDocumento = DateOnly.FromDateTime(period.EndDate);
@@ -247,6 +251,7 @@ public sealed class ApprovePayrollRunCommandHandler(
             documentPublicId = posting.Value.PublicId, exceptions = autorizadas, approvedWithoutSegregation = sinSegregacion,
             lendingActivationAcknowledgedBy = run.LendingActivationAckBy,
             loanDeductions = cartera.Value,
+            accountDeductions = cuentas.Value,
         };
 
         return Result.Success(new Aprobacion(new ApproveRunResultDto(run.PublicId, period.PublicId, posting.Value.PublicId,
@@ -370,6 +375,114 @@ public sealed class ApprovePayrollRunCommandHandler(
             notDeducted = f.NotDeductedAmount, reason = f.NotDeductedReason, applied = f.AppliedAmount, status = f.Status.ToString(),
             receipt = f.CarteraReceiptPublicId, resultCode = f.ResultCode,
         }).ToList());
+    }
+
+    /// <summary>
+    /// Feature 014 (T089; E-02, R18): entrega a la Cartera por el contrato de cuentas lo descontado de aportes y de ahorro (cubre las cuotas en orden de
+    /// vencimiento) y lo no descontado cuota por cuota, y deja el resultado en <c>PAY_PayrollAccountDeductions</c>. Como con los créditos: un rechazo no
+    /// bloquea (la línea baja y el neto sube), salvo «no contabilizable» con A8 = «Bloquear», que hace fallar la aprobación entera.
+    /// </summary>
+    private async Task<Result<IReadOnlyList<object>>> RecaudarEnCuentasAsync(PayrollRun run, PayPeriod period, List<PayrollRunEmployee> empleados,
+        IReadOnlyDictionary<int, string> nombres, string yo, DateTime ahora, List<WarningDto> avisos, CancellationToken ct)
+    {
+        var filas = await db.PayrollAccountDeductions.Where(d => d.PayrollRunId == run.Id).OrderBy(d => d.AccountPublicId).ToListAsync(ct);
+        if (filas.Count == 0) return Result.Success<IReadOnlyList<object>>([]);
+        var filaEmpleado = empleados.ToDictionary(e => e.Id);
+        var idsEmpleados = empleados.Select(e => e.EmployeeId).ToList();
+        var personas = await (
+            from e in db.Employees.AsNoTracking()
+            join p in db.People.AsNoTracking() on e.PersonId equals p.Id
+            where idsEmpleados.Contains(e.Id)
+            select new { e.Id, p.PublicId }).ToDictionaryAsync(x => x.Id, x => x.PublicId, ct);
+
+        var recibo = new ReferenciaDeRecibo(
+            $"Nómina {period.StartDate:dd/MM/yyyy}-{period.EndDate:dd/MM/yyyy} v{run.Version}", clock.HoyLocal, null, null, "NM");
+        var descuentos = filas.Select(f => new DescuentoDeCuentaDeNomina(f.AccountPublicId, personas[filaEmpleado[f.PayrollRunEmployeeId].EmployeeId],
+            f.DeductedAmount, f.NotDeductedAmount, Enum.TryParse<MotivoDeNoDescuento>(f.NotDeductedReason, out var m) ? m : MotivoDeNoDescuento.Other,
+            $"Nómina {period.StartDate:dd/MM/yyyy}–{period.EndDate:dd/MM/yyyy}", f.PublicId)).ToList();
+        IReadOnlyList<RecaudoDeCuentaDeNomina> resultado;
+        try
+        {
+            resultado = await recaudoDeCuentas.AplicarAsync(run.PublicId, recibo, DateOnly.FromDateTime(period.EndDate), clock.HoyLocal,
+                DateOnly.FromDateTime(period.StartDate), DateOnly.FromDateTime(period.EndDate), descuentos, ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
+        {
+            return Result.Failure<IReadOnlyList<object>>(new Error(SettlementErrors.PortfolioUnavailableCode,
+                $"La Cartera no respondió al confirmar los descuentos de aportes y de ahorro ({ex.Message}). Intente aprobar de nuevo en unos minutos."));
+        }
+
+        var noContabilizables = resultado.Where(r => r.NoContabilizable).ToList();
+        if (noContabilizables.Count > 0)
+            return Result.Failure<IReadOnlyList<object>>(SettlementErrors.AccountDeductionNotPostable(noContabilizables
+                .Select(r => (filas.First(f => f.AccountPublicId == r.AccountPublicId).AccountNumber, r.Consignacion!.Message, (object?)r.Consignacion.Data)).ToList()));
+
+        var porCuenta = resultado.ToDictionary(r => r.AccountPublicId);
+        var motivos = new List<string>();
+        foreach (var f in filas)
+        {
+            f.UpdatedAt = ahora;
+            f.UpdatedBy = yo;
+            var r = porCuenta[f.AccountPublicId];
+            if (f.DeductedAmount <= 0m)
+            {
+                f.AppliedAmount = 0m;
+                f.Status = PayrollLoanDeductionStatus.NotApplied;
+                var registro = r.NoDescontados.FirstOrDefault();
+                f.ResultCode = registro is null ? null : registro.Result == ResultadoDelContrato.Rejected ? registro.Code : registro.Result.ToString();
+                f.ResultMessage = Recortar(registro?.Message);
+                continue;
+            }
+
+            var aplicado = Math.Min(r.ValorAplicado, f.DeductedAmount);
+            f.AppliedAmount = aplicado;
+            f.CarteraReceiptPublicId = r.Aplicado ? r.Consignacion!.Value!.OperationPublicId : null;
+            f.ResultCode = r.Aplicado ? r.Consignacion!.Result.ToString() : r.Consignacion?.Code;
+            f.ResultMessage = Recortar(r.Consignacion?.Message);
+            f.Status = !r.Aplicado ? PayrollLoanDeductionStatus.Rejected
+                : aplicado < f.DeductedAmount ? PayrollLoanDeductionStatus.PartiallyApplied
+                : PayrollLoanDeductionStatus.Applied;
+            if (aplicado >= f.DeductedAmount) continue;
+
+            var diferencia = f.DeductedAmount - aplicado;
+            var fila = filaEmpleado[f.PayrollRunEmployeeId];
+            var linea = f.PayrollRunLineId is { } lid ? fila.Lines.FirstOrDefault(l => l.Id == lid) : null;
+            if (linea is not null)
+            {
+                linea.Amount -= diferencia;
+                linea.ExplanationJson = ConNotaDeCuenta(linea.ExplanationJson, aplicado, f, r.Consignacion?.Message);
+                linea.UpdatedAt = ahora;
+                linea.UpdatedBy = yo;
+            }
+            fila.TotalDeductions -= diferencia;
+            fila.NetPay += diferencia;
+            fila.UpdatedAt = ahora;
+            fila.UpdatedBy = yo;
+            run.TotalDeductions -= diferencia;
+            run.TotalNet += diferencia;
+            motivos.Add($"{nombres.GetValueOrDefault(fila.EmployeeId, string.Empty)}, cuenta {f.AccountNumber}: " +
+                        (r.Aplicado ? $"la Cartera tomó {Fmt.Num(aplicado)} de {Fmt.Num(f.DeductedAmount)}; la diferencia vuelve al neto" : r.Consignacion?.Message));
+        }
+        if (motivos.Count > 0) avisos.Add(SettlementErrors.AccountDeductionNotApplied(motivos));
+
+        return Result.Success<IReadOnlyList<object>>(filas.Select(f => (object)new
+        {
+            accountPublicId = f.AccountPublicId, accountNumber = f.AccountNumber, concept = f.ConceptCode, expected = f.ExpectedAmount,
+            deducted = f.DeductedAmount, notDeducted = f.NotDeductedAmount, reason = f.NotDeductedReason, applied = f.AppliedAmount,
+            status = f.Status.ToString(), receipt = f.CarteraReceiptPublicId, resultCode = f.ResultCode,
+        }).ToList());
+    }
+
+    private static string ConNotaDeCuenta(string explicacionJson, decimal aplicado, PayrollAccountDeduction f, string? respuesta)
+    {
+        Explanation? exp = null;
+        try { exp = JsonSerializer.Deserialize<Explanation>(explicacionJson, RunJson.Options); }
+        catch (JsonException) { exp = null; }
+        exp ??= new Explanation { Form = "Cuota de aportes o de ahorro" };
+        exp.Step("Aplicado por la Cartera al aprobar", aplicado);
+        if (!string.IsNullOrWhiteSpace(respuesta)) exp.Note("Respuesta de la Cartera", respuesta);
+        exp.Summary = $"Cuota de la cuenta {f.AccountNumber}: {Fmt.Money(aplicado)} (la Cartera no tomó {Fmt.Money(f.DeductedAmount - aplicado)})";
+        return JsonSerializer.Serialize(exp, RunJson.Options);
     }
 
     private static string? Recortar(string? texto) => texto is null ? null : texto.Length <= 500 ? texto : texto[..500];

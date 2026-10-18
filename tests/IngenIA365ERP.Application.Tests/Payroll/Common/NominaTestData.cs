@@ -54,6 +54,11 @@ public sealed class NominaTestData
     public ContratoDeObligacionesDePrueba Contrato { get; } = new();
     public RecaudoPorNomina Recaudo { get; }
     public CuotasDeCarteraEnNomina CuotasDeCartera { get; }
+
+    // Feature 014 (T089): aportes y ahorro por el contrato de cuentas, con un doble (sin cuotas por defecto).
+    public ContratoDeCuentasDePrueba Cuentas { get; } = new();
+    public RecaudoDeCuentasPorNomina RecaudoDeCuentas { get; }
+    public CuotasDeCuentasEnNomina CuotasDeCuentas { get; }
     public IngenIA365ERP.Application.Payroll.Settlements.PropuestaDeDescuentosDeCartera PropuestaDeCartera { get; }
 
     public PayrollPlan Plan { get; }
@@ -86,6 +91,8 @@ public sealed class NominaTestData
         SaldosDeProvision = new ProvisionBalanceReader(Db);
         Recaudo = new RecaudoPorNomina(Contrato);
         CuotasDeCartera = new CuotasDeCarteraEnNomina(Db, Obligaciones, Clock, User, NullLogger<CuotasDeCarteraEnNomina>.Instance);
+        RecaudoDeCuentas = new RecaudoDeCuentasPorNomina(Cuentas);
+        CuotasDeCuentas = new CuotasDeCuentasEnNomina(Db, Cuentas, Clock, User, NullLogger<CuotasDeCuentasEnNomina>.Instance);
         PropuestaDeCartera = new IngenIA365ERP.Application.Payroll.Settlements.PropuestaDeDescuentosDeCartera(Obligaciones, Clock,
             NullLogger<IngenIA365ERP.Application.Payroll.Settlements.PropuestaDeDescuentosDeCartera>.Instance);
         SettlementLoader = new SettlementInputLoader(Db, Policies, SaldosDeProvision, PropuestaDeCartera, NullLogger<SettlementInputLoader>.Instance);

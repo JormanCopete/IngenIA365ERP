@@ -47,7 +47,8 @@ public sealed class ReversePayrollRunCommandHandler(
     ICurrentUserService user,
     PayrollAuditEmitter audit,
     IPayrollRunStaleMarker staleMarker,
-    RecaudoPorNomina recaudo)
+    RecaudoPorNomina recaudo,
+    RecaudoDeCuentasPorNomina recaudoDeCuentas)
     : IRequestHandler<ReversePayrollRunCommand, Result<ReverseRunResultDto>>
 {
     public async Task<Result<ReverseRunResultDto>> Handle(ReversePayrollRunCommand request, CancellationToken ct)
@@ -125,6 +126,23 @@ public sealed class ReversePayrollRunCommandHandler(
                 return Result.Failure<Reversion>(new ErrorConDatos("Payroll.LoanReversalRejected",
                     $"Cartera no reversó el descuento del crédito {d.ObligationNumber}: {reverso.Message} La nómina sigue aprobada; resuelva lo que dice Cartera y vuelva a reversar.",
                     new { obligationNumber = d.ObligationNumber, lendingCode = reverso.Code }));
+            d.CarteraReversalPublicId = reverso.Value.OperationPublicId;
+            d.Status = PayrollLoanDeductionStatus.Reversed;
+            d.UpdatedAt = ahora;
+            d.UpdatedBy = yo;
+        }
+
+        // --- feature 014 (T089): las consignaciones de aportes y de ahorro se reversan por el contrato de cuentas, también todo o nada ---
+        var consignaciones = await db.PayrollAccountDeductions
+            .Where(d => d.PayrollRunId == run.Id && d.CarteraReceiptPublicId != null
+                        && (d.Status == PayrollLoanDeductionStatus.Applied || d.Status == PayrollLoanDeductionStatus.PartiallyApplied))
+            .OrderBy(d => d.AccountPublicId)
+            .ToListAsync(ct);
+        foreach (var d in consignaciones)
+        {
+            var reverso = await recaudoDeCuentas.ReversarAsync(run.PublicId, d.AccountPublicId, request.Reason.Trim(), recibo, ct);
+            if (reverso.Result is not (ResultadoDelContrato.Applied or ResultadoDelContrato.AlreadyApplied) || reverso.Value is null)
+                return Result.Failure<Reversion>(Settlements.Common.SettlementErrors.AccountReversalRejected(d.AccountNumber, reverso.Code ?? string.Empty, reverso.Message ?? string.Empty));
             d.CarteraReversalPublicId = reverso.Value.OperationPublicId;
             d.Status = PayrollLoanDeductionStatus.Reversed;
             d.UpdatedAt = ahora;

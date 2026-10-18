@@ -267,7 +267,7 @@ public class ApproveSettlementCommandHandlerTests
         var p = new DefinitivaDePrueba(conCartera: false);
         p.ConContabilidad();
         // Septiembre ya calculado con Ana, antes de registrar el retiro del 15.
-        var ordinaria = new CalculatePayrollRunCommandHandler(p.D.Db, p.D.Loader, p.D.Recurrentes, p.D.CuotasDeCartera, p.D.Lock, p.D.Clock, p.D.User, NullLogger<CalculatePayrollRunCommandHandler>.Instance);
+        var ordinaria = new CalculatePayrollRunCommandHandler(p.D.Db, p.D.Loader, p.D.Recurrentes, p.D.CuotasDeCartera, p.D.CuotasDeCuentas, p.D.Lock, p.D.Clock, p.D.User, NullLogger<CalculatePayrollRunCommandHandler>.Instance);
         var calculada = await ordinaria.Handle(new CalculatePayrollRunCommand(p.Septiembre.PublicId), CancellationToken.None);
         calculada.IsSuccess.Should().BeTrue(calculada.Error.Message);
         (await p.D.Db.PayrollRunEmployees.CountAsync(e => e.Run!.PublicId == calculada.Value.RunPublicId && e.EmployeeId == p.D.Ana.Id)).Should().Be(1);
@@ -294,11 +294,11 @@ public class ApproveSettlementCommandHandlerTests
         var p = new DefinitivaDePrueba(conCartera: false);
         p.ConContabilidad();
         var t = await p.RegistrarAnaAsync();
-        var ordinaria = new CalculatePayrollRunCommandHandler(p.D.Db, p.D.Loader, p.D.Recurrentes, p.D.CuotasDeCartera, p.D.Lock, p.D.Clock, p.D.User, NullLogger<CalculatePayrollRunCommandHandler>.Instance);
+        var ordinaria = new CalculatePayrollRunCommandHandler(p.D.Db, p.D.Loader, p.D.Recurrentes, p.D.CuotasDeCartera, p.D.CuotasDeCuentas, p.D.Lock, p.D.Clock, p.D.User, NullLogger<CalculatePayrollRunCommandHandler>.Instance);
         var calculada = await ordinaria.Handle(new CalculatePayrollRunCommand(p.Septiembre.PublicId), CancellationToken.None);
         calculada.IsSuccess.Should().BeTrue(calculada.Error.Message);
         var audit = new PayrollAuditEmitter(p.D.Audit, DefinitivaDePrueba.Contadora, p.D.Clock, NullLogger<PayrollAuditEmitter>.Instance);
-        var aprobador = new ApprovePayrollRunCommandHandler(p.D.Db, p.D.Contabilizador(DefinitivaDePrueba.Contadora), p.D.Policies, p.D.Permissions, p.D.Clock, DefinitivaDePrueba.Contadora, audit, p.D.StaleMarker, p.D.Recaudo, p.D.Obligaciones);
+        var aprobador = new ApprovePayrollRunCommandHandler(p.D.Db, p.D.Contabilizador(DefinitivaDePrueba.Contadora), p.D.Policies, p.D.Permissions, p.D.Clock, DefinitivaDePrueba.Contadora, audit, p.D.StaleMarker, p.D.Recaudo, p.D.Obligaciones, p.D.RecaudoDeCuentas);
 
         var aprobada = await aprobador.Handle(new ApprovePayrollRunCommand(calculada.Value.RunPublicId, Confirm: true), CancellationToken.None);
 

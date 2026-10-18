@@ -52,6 +52,7 @@ public sealed class CalculatePayrollRunCommandHandler(
     CalculationInputLoader loader,
     Novelties.RecurringNovelties.RecurringNoveltiesMaterializer recurring,
     CuotasDeCarteraEnNomina cuotasDeCartera,
+    CuotasDeCuentasEnNomina cuotasDeCuentas,
     IDistributedLock distributedLock,
     IDateTimeService clock,
     ICurrentUserService user,
@@ -81,6 +82,8 @@ public sealed class CalculatePayrollRunCommandHandler(
         var recurrentes = await recurring.MaterializeAsync(period, ct);
         // Feature 013 (T0162): las cuotas de Cartera del período entran como novedades LoanDeduction, una por empleado y obligación.
         var cartera = await cuotasDeCartera.MaterializeAsync(period, ct);
+        // Feature 014 (T089, E-02): las cuotas de aportes y de ahorro entran como novedades AccountDeduction, una por empleado y cuenta.
+        var cuentas = await cuotasDeCuentas.MaterializeAsync(period, ct);
 
         var batch = await loader.LoadAsync(period, ct);
         var faltantes = batch.MissingRequiredParameters;
@@ -116,7 +119,9 @@ public sealed class CalculatePayrollRunCommandHandler(
         var avisos = new List<string>();
         avisos.AddRange(recurrentes.Warnings);
         avisos.AddRange(cartera.Avisos);
+        avisos.AddRange(cuentas.Avisos);
         var cuotasPorNovedad = await CuotasDeCarteraAsync(period, ct);
+        var cuentasPorNovedad = await CuotasDeCuentasAsync(period, ct);
         var cambiados = 0;
         decimal devengos = 0m, deducciones = 0m, aportes = 0m, provisiones = 0m, neto = 0m, ajuste = 0m;
 
@@ -207,6 +212,30 @@ public sealed class CalculatePayrollRunCommandHandler(
                 });
             }
 
+            // Feature 014 (T089): un descuento por empleado y cuenta de aportes o de ahorro, enlazado a su línea DESC_APORTES / DESC_AHORROS.
+            foreach (var linea in runEmployee.Lines.Where(l => l.NoveltyId is { } nid && cuentasPorNovedad.ContainsKey(nid)))
+            {
+                var cuota = cuentasPorNovedad[linea.NoveltyId!.Value];
+                var calculada = resultado.Lines.First(l => l.Order == linea.Order);
+                var esperado = cuota.Amount ?? linea.Amount;
+                db.PayrollAccountDeductions.Add(new PayrollAccountDeduction
+                {
+                    PayrollRun = run,
+                    PayrollRunEmployee = runEmployee,
+                    PayrollRunLine = linea.Amount > 0m ? linea : null,
+                    AccountPublicId = cuota.AccountPublicId!.Value,
+                    AccountNumber = cuota.AccountNumber ?? string.Empty,
+                    ConceptCode = linea.ConceptCode,
+                    ExpectedAmount = esperado,
+                    DeductedAmount = linea.Amount,
+                    NotDeductedAmount = Math.Max(0m, esperado - linea.Amount),
+                    NotDeductedReason = esperado > linea.Amount ? calculada.NotDeductedReason ?? LoanNonDeductionReasons.DeductionCap : null,
+                    Status = PayrollLoanDeductionStatus.Calculated,
+                    CreatedAt = ahora,
+                    CreatedBy = usuario,
+                });
+            }
+
             runEmployee.ChangedFromPreviousRun = Cambio(lineasAnteriores, e.Employee.Id, runEmployee);
             if (runEmployee.ChangedFromPreviousRun) cambiados++;
 
@@ -265,6 +294,12 @@ public sealed class CalculatePayrollRunCommandHandler(
     private async Task<Dictionary<int, PayrollNovelty>> CuotasDeCarteraAsync(PayPeriod period, CancellationToken ct) =>
         await db.PayrollNovelties.AsNoTracking()
             .Where(n => n.PayPeriodId == period.Id && n.Status == NoveltyStatus.Active && n.Origin == NoveltyOrigin.LoanDeduction && n.ObligationPublicId != null)
+            .ToDictionaryAsync(n => n.Id, ct);
+
+    /// <summary>Las novedades de aportes y de ahorro activas del período, por Id: su cuenta y su valor esperado (feature 014, T089).</summary>
+    private async Task<Dictionary<int, PayrollNovelty>> CuotasDeCuentasAsync(PayPeriod period, CancellationToken ct) =>
+        await db.PayrollNovelties.AsNoTracking()
+            .Where(n => n.PayPeriodId == period.Id && n.Status == NoveltyStatus.Active && n.Origin == NoveltyOrigin.AccountDeduction && n.AccountPublicId != null)
             .ToDictionaryAsync(n => n.Id, ct);
 
     private async Task<Dictionary<int, string>> LineasDeComparacionAsync(PayrollRun? anterior, CancellationToken ct)

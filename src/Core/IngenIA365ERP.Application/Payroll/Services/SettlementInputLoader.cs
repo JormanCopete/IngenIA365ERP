@@ -366,7 +366,9 @@ public sealed class SettlementInputLoader(
                 // Feature 013: la cuota de Cartera de la ordinaria (LoanDeduction) no entra a la definitiva: ésta propone los
                 // créditos por la consulta de obligaciones y una novedad de ese origen los descontaría dos veces.
                 .Where(n => idsEmpleados.Contains(n.EmployeeId) && n.Status == NoveltyStatus.Active && idsAbiertos.Contains(n.PayPeriodId)
-                            && n.Origin != NoveltyOrigin.LoanDeduction)
+                            && n.Origin != NoveltyOrigin.LoanDeduction
+                            // Feature 014 (T089): tampoco la de aportes o de ahorro; la definitiva no recauda cuentas en K7 (E59).
+                            && n.Origin != NoveltyOrigin.AccountDeduction)
                 .Join(db.PayrollConceptDefinitions.AsNoTracking().IgnoreQueryFilters(), n => n.ConceptDefinitionId, c => c.Id,
                     (n, c) => new { Novelty = n, ConceptName = c.Name, c.Nature })
                 .OrderBy(x => x.Novelty.Id)

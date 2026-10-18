@@ -142,6 +142,7 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     public DbSet<EmploymentTermination> EmploymentTerminations => Set<EmploymentTermination>();
     public DbSet<SettlementDeduction> SettlementDeductions => Set<SettlementDeduction>();
     public DbSet<IngenIA365ERP.Domain.Entities.Payroll.Transactions.PayrollLoanDeduction> PayrollLoanDeductions => Set<IngenIA365ERP.Domain.Entities.Payroll.Transactions.PayrollLoanDeduction>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Payroll.Transactions.PayrollAccountDeduction> PayrollAccountDeductions => Set<IngenIA365ERP.Domain.Entities.Payroll.Transactions.PayrollAccountDeduction>();
     public DbSet<WithholdingRateCalculation> WithholdingRateCalculations => Set<WithholdingRateCalculation>();
     public DbSet<WithholdingRateCalculationMonth> WithholdingRateCalculationMonths => Set<WithholdingRateCalculationMonth>();
     public DbSet<SeveranceFundDeposit> SeveranceFundDeposits => Set<SeveranceFundDeposit>();

@@ -219,18 +219,20 @@ public sealed class PayrollCalculationEngine
         var autorizadas = novedades
             .Where(x => x.Def.Nature == ConceptNature.Deduction && x.Def.CalculationKind != CalculationKind.CompositeOfConcepts)
             .Select((x, i) => (x.Nov, x.Def, Posicion: i))
-            .OrderBy(x => x.Nov.Origin == NoveltyOrigin.LoanDeduction ? 0 : 1).ThenBy(x => x.Posicion)
+            .OrderBy(x => PrelacionDeCartera(x.Nov)).ThenBy(x => x.Posicion)
             .ToList();
         foreach (var (nov, def, _) in autorizadas)
         {
             var line = Evaluate(def, nov, ctx);
             if (line is null) continue;
 
-            if (nov.Origin == NoveltyOrigin.LoanDeduction)
+            if (nov.Origin is NoveltyOrigin.LoanDeduction or NoveltyOrigin.AccountDeduction)
             {
                 var esperado = line.RawAmount;
                 var cabe = Math.Min(disponible, netoDisponible);
-                line.Explanation.Note("Origen", "Cuota de Cartera del período: va primera entre las deducciones autorizadas, después de las de ley, y Cartera la recibe al aprobar la nómina.");
+                line.Explanation.Note("Origen", nov.Origin == NoveltyOrigin.LoanDeduction
+                    ? "Cuota de Cartera del período: va primera entre las deducciones autorizadas, después de las de ley, y Cartera la recibe al aprobar la nómina."
+                    : "Cuota de aportes o de ahorro del período: entra con las de Cartera (aportes, créditos y ahorros, en ese orden) y la Cartera la recibe al aprobar la nómina.");
                 if (esperado > cabe)
                 {
                     var motivo = netoDisponible <= disponible ? LoanNonDeductionReasons.InsufficientNet : LoanNonDeductionReasons.DeductionCap;
@@ -497,4 +499,17 @@ public sealed class PayrollCalculationEngine
             InputsHash = hash,
         };
     }
+
+    /// <summary>
+    /// Feature 014 (E-02; contrato-de-cuentas §6.1): la prelación entre los descuentos de la Cartera dentro de las deducciones autorizadas —aportes
+    /// (<c>DESC_APORTES</c>), créditos (<c>DESC_CARTERA</c>) y ahorros (<c>DESC_AHORROS</c>), en ese orden— y después las demás. Sin cuotas de cuentas, el
+    /// orden de la 013 no cambia: Cartera primero.
+    /// </summary>
+    public static int PrelacionDeCartera(NoveltyInput n) => n.Origin switch
+    {
+        NoveltyOrigin.AccountDeduction when string.Equals(n.ConceptCode, WellKnownConceptCodes.ContributionDeduction, StringComparison.OrdinalIgnoreCase) => 0,
+        NoveltyOrigin.LoanDeduction => 1,
+        NoveltyOrigin.AccountDeduction => 2,
+        _ => 3,
+    };
 }

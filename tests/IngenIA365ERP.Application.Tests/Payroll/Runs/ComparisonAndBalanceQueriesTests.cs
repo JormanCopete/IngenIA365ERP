@@ -15,7 +15,7 @@ public class ComparisonAndBalanceQueriesTests
 {
     private static async Task<Guid> Calcular(NominaTestData d, Domain.Entities.Payroll.PayPeriod periodo)
     {
-        var h = new CalculatePayrollRunCommandHandler(d.Db, d.Loader, d.Recurrentes, d.CuotasDeCartera, d.Lock, d.Clock, d.User, NullLogger<CalculatePayrollRunCommandHandler>.Instance);
+        var h = new CalculatePayrollRunCommandHandler(d.Db, d.Loader, d.Recurrentes, d.CuotasDeCartera, d.CuotasDeCuentas, d.Lock, d.Clock, d.User, NullLogger<CalculatePayrollRunCommandHandler>.Instance);
         var r = await h.Handle(new CalculatePayrollRunCommand(periodo.PublicId), CancellationToken.None);
         r.IsSuccess.Should().BeTrue(r.Error.Message);
         return r.Value.RunPublicId;
@@ -25,7 +25,7 @@ public class ComparisonAndBalanceQueriesTests
     {
         var contadora = NominaTestData.UsuarioDePrueba("contadora@demo", 9);
         var h = new ApprovePayrollRunCommandHandler(d.Db, d.Contabilizador(contadora), d.Policies, d.Permissions, d.Clock, contadora,
-            new PayrollAuditEmitter(d.Audit, contadora, d.Clock, NullLogger<PayrollAuditEmitter>.Instance, CooperativaDePrueba.Actual), d.StaleMarker, d.Recaudo, d.Obligaciones);
+            new PayrollAuditEmitter(d.Audit, contadora, d.Clock, NullLogger<PayrollAuditEmitter>.Instance, CooperativaDePrueba.Actual), d.StaleMarker, d.Recaudo, d.Obligaciones, d.RecaudoDeCuentas);
         var r = await h.Handle(new ApprovePayrollRunCommand(runId, true), CancellationToken.None);
         r.IsSuccess.Should().BeTrue(r.Error.Message);
     }

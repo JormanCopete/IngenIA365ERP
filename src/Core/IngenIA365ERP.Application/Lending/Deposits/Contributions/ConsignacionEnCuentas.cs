@@ -334,15 +334,17 @@ public sealed class ConsignacionEnCuentas(
     }
 
     /// <summary>
-    /// La fecha valor (D11, FR-050): nunca futura, nunca antes de la activación de la naturaleza (lo de antes va en la carga) y, salvo Nómina —que fecha
-    /// al fin de su período—, no más atrás que <c>Captaciones.DiasMaximosFechaValor</c>.
+    /// La fecha valor (D11, FR-050): nunca antes de la activación de la naturaleza (lo de antes va en la carga) y, salvo Nómina —que fecha al fin de su
+    /// período, aunque apruebe antes—, nunca futura ni más atrás que <c>Captaciones.DiasMaximosFechaValor</c>.
     /// </summary>
     public async Task<Error?> FechaValorAsync(ClaseDeRecaudador recaudador, LineNature naturaleza, DateOnly fecha, CancellationToken ct)
     {
         var hoy = reloj.HoyLocal;
         var activacion = (await ActivacionesDeCaptacion.LeerAsync(db, ct)).De(naturaleza);
         if (activacion is { } desde && fecha < desde) return ErroresDeAportes.AntesDelCorte(fecha, desde);
-        var minima = recaudador == ClaseDeRecaudador.Payroll ? activacion ?? DateOnly.MinValue : hoy.AddDays(-await DiasHaciaAtrasAsync(hoy, ct));
+        // Nómina fecha al fin de su período, aunque apruebe antes de que termine (la fecha la fija la spec, como en el contrato de obligaciones).
+        if (recaudador == ClaseDeRecaudador.Payroll) return null;
+        var minima = hoy.AddDays(-await DiasHaciaAtrasAsync(hoy, ct));
         if (activacion is { } a && minima < a) minima = a;
         return fecha > hoy || fecha < minima ? ErroresDeAportes.FechaValor(fecha, minima, hoy) : null;
     }

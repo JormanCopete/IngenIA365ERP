@@ -107,7 +107,7 @@ public sealed class ListNoveltiesQueryHandler(
             x.n.InstallmentNumber, x.n.InstallmentTotal,
             x.n.CreatedAt, x.n.CreatedBy, x.n.UpdatedAt, x.n.UpdatedBy,
             x.n.SupersedesNoveltyId is { } sid ? publicIdsDeAnteriores.GetValueOrDefault(sid) : null,
-            x.n.Notes) { ObligationNumber = x.n.ObligationNumber }).ToList();
+            x.n.Notes) { ObligationNumber = x.n.ObligationNumber ?? x.n.AccountNumber }).ToList();
 
         return Result.Success<IReadOnlyList<NoveltyDto>>(dtos);
     }
@@ -202,7 +202,7 @@ public sealed class GetNoveltyHistoryQueryHandler(IApplicationDbContext db)
             x.n.Quantity, x.n.Amount, x.n.StartDate, x.n.EndDate, x.n.DaysInPeriod, x.n.CarryOverDays, null,
             x.n.Status.ToString(), x.n.StatusReason, x.n.Origin.ToString(), x.n.InstallmentNumber, x.n.InstallmentTotal,
             x.n.CreatedAt, x.n.CreatedBy, x.n.UpdatedAt, x.n.UpdatedBy,
-            x.n.SupersedesNoveltyId is { } sid ? publicIds.GetValueOrDefault(sid) : null, x.n.Notes) { ObligationNumber = x.n.ObligationNumber }).ToList();
+            x.n.SupersedesNoveltyId is { } sid ? publicIds.GetValueOrDefault(sid) : null, x.n.Notes) { ObligationNumber = x.n.ObligationNumber ?? x.n.AccountNumber }).ToList();
 
         return Result.Success<IReadOnlyList<NoveltyDto>>(dtos);
     }

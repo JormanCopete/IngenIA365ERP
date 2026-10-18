@@ -36,6 +36,9 @@ public static class ReportesDeNomina
         "Recurring" => total is { } t ? $"Recurrente (cuota {cuota}/{t})" : $"Recurrente (cuota {cuota})",
         "Retroactive" => "Ajuste retroactivo",
         "LoanDeduction" => "Cartera",
+        // Feature 014 (T089): la cuota de aportes o de ahorro dice de qué cuenta es.
+        "AccountDeduction" when !string.IsNullOrWhiteSpace(obligacion) => $"Aportes y ahorro (cuenta {obligacion})",
+        "AccountDeduction" => "Aportes y ahorro",
         "CarryOver" => "Arrastre",
         _ => origin,
     };

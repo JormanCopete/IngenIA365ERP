@@ -144,6 +144,7 @@ public interface IApplicationDbContext
 
     /// <summary>Feature 013 (T0155): descuentos de Cartera de la nómina ordinaria por empleado y obligación.</summary>
     DbSet<Domain.Entities.Payroll.Transactions.PayrollLoanDeduction> PayrollLoanDeductions { get; }
+    DbSet<Domain.Entities.Payroll.Transactions.PayrollAccountDeduction> PayrollAccountDeductions { get; }
     DbSet<WithholdingRateCalculation> WithholdingRateCalculations { get; }
     DbSet<WithholdingRateCalculationMonth> WithholdingRateCalculationMonths { get; }
     DbSet<SeveranceFundDeposit> SeveranceFundDeposits { get; }

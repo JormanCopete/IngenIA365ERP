@@ -26,6 +26,10 @@ public class PayrollNoveltyConfiguration : IEntityTypeConfiguration<PayrollNovel
         builder.HasIndex(e => e.ImportBatchId).HasDatabaseName("IX_PAY_Novelties_ImportBatch");
         // Feature 013 (T0156, data-model parte 3 §7.3): la obligación de Cartera de una novedad LoanDeduction, sin FK (FR-008).
         builder.Property(e => e.ObligationNumber).HasMaxLength(30);
+        // Feature 014 (T089, E-02): la cuenta de una novedad AccountDeduction, por su PublicId y sin FK.
+        builder.Property(e => e.AccountNumber).HasMaxLength(20);
+        builder.HasIndex(e => e.AccountPublicId).HasDatabaseName("IX_PAY_Novelties_AccountPublicId")
+            .HasFilter("[AccountPublicId] IS NOT NULL AND [IsDeleted] = 0");
         builder.HasIndex(e => e.ObligationPublicId).HasDatabaseName("IX_PAY_Novelties_ObligationPublicId")
             .HasFilter("[ObligationPublicId] IS NOT NULL AND [IsDeleted] = 0");
 
