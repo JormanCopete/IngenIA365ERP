@@ -66,6 +66,15 @@ public class MigrationLoad : AuditableEntity
 
     public DateTime? ActivatedAt { get; set; }
 
+    /// <summary>
+    /// Feature 014 (T028; data-model §1.8, FR-116): de qué naturaleza es la carga —créditos, captaciones o aportes—. Un borrador, una aplicada y
+    /// una activada <b>por naturaleza</b>. Toda carga de la 013 es de colocación (defecto).
+    /// </summary>
+    public LineNature Nature { get; set; } = LineNature.Placement;
+
+    /// <summary>Feature 014: cuentas de la carga (captaciones o aportes); 0 en una de créditos.</summary>
+    public int AccountCount { get; set; }
+
     // ------------------------------------------------------------------------------------------------- comportamiento (US8) --
 
     /// <summary>Sólo un borrador recibe partes y se aplica (<c>Lending.Migration.LoadNotDraft</c>).</summary>

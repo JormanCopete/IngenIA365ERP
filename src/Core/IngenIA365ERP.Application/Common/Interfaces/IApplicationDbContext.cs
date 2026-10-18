@@ -530,6 +530,14 @@ public interface IApplicationDbContext
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Schedules.RepaymentInstallment> RepaymentInstallments { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Schedules.RepaymentScheduleVersion> RepaymentScheduleVersions { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Transactions.LoanTransaction> LoanTransactions { get; }
+    // Feature 014 (T021–T026): las cuentas de captación y aportes y su libro.
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.MemberAccount> MemberAccounts { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.MemberAccountParty> MemberAccountParties { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.AccountPayoutOrder> AccountPayoutOrders { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Transactions.MemberAccountOperation> MemberAccountOperations { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Transactions.MemberAccountTransaction> MemberAccountTransactions { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Projections.MemberAccountDailyPosition> MemberAccountDailyPositions { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Projections.MemberAccountControl> MemberAccountControls { get; }
 
     // Admin
     // Tenants y TenantBranches se retiraron: son del plano de control del SaaS y

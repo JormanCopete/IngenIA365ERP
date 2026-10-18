@@ -86,6 +86,9 @@ public class ModeloDeCarteraNucleoTests
         "LND_RegulatoryFiles", "LND_RegulatoryFileLines",
         // Pérdida esperada (K6a, CarteraPerdidaEsperada; data-model §23.8, §23.9)
         "LND_ImpairmentModelElections", "LND_ArrearsHistoryLoads",
+        // Captaciones y aportes (feature 014, K7, CaptacionesAportes; data-model §3.1, §3.2, §3.9, §4.1–§4.4)
+        "LND_MemberAccounts", "LND_MemberAccountParties", "LND_AccountPayoutOrders", "LND_MemberAccountOperations", "LND_MemberAccountTransactions",
+        "LND_MemberAccountDailyPositions", "LND_MemberAccountControls",
     ];
 
     /// <summary>Las 17 de preparación (data-model §29.3).</summary>
@@ -112,23 +115,26 @@ public class ModeloDeCarteraNucleoTests
         "RiskPolicyVersion", "PayrollDeductionFileLine", "PayrollDeductionResult", "NonDeductionFollowUp",
         "CollectionStageHistoryEntry", "CollectorAssignment", "CollectionAction", "PaymentPromise", "PaymentAgreementInstallment", "LegalProcessAction",
         "RegulatoryFileLine", "ImpairmentModelElection", "ArrearsHistoryLoad",
+        // Feature 014 (T021–T025): el hecho primario de la cuenta, su libro y su posición.
+        "MemberAccountOperation", "MemberAccountTransaction", "MemberAccountDailyPosition",
         .. Preparacion,
     ];
 
     /// <summary>Sin diferencias de auditoría (T67, C46).</summary>
     private static readonly string[] SinDiff =
         ["LoanDailyPosition", "LoanControl", "DebtorControl", "AccountingFactPart", "LendingProcessRunError", "MonthlyCloseLoan", "LoanArrearsHistoryEntry",
-            "PayrollDeductionFileLine", "RegulatoryFileLine", "ArrearsHistoryLoad", .. Preparacion];
+            "PayrollDeductionFileLine", "RegulatoryFileLine", "ArrearsHistoryLoad", "MemberAccountDailyPosition", "MemberAccountControl", .. Preparacion];
 
     /// <summary><c>bigint</c> (data-model §0.1, C43, §26.2, §29.3).</summary>
     private static readonly string[] Largas =
     [
         "LoanOperation", "LoanTransaction", "LoanDailyPosition", "RepaymentInstallment", "DebtorMessageEvent", "RegulatoryFileLine",
         "MigrationInstallmentRow", "MigrationBalanceRow", "MigrationArrearsHistoryRow",
+        "MemberAccountOperation", "MemberAccountTransaction", "MemberAccountDailyPosition",
     ];
 
     /// <summary>Controles y documentos con estado cuyos únicos tampoco filtran por borrado lógico (data-model §0.1).</summary>
-    private static readonly string[] SinBajaLogica = ["Loan", "LoanControl", "DebtorControl", "LendingSetup"];
+    private static readonly string[] SinBajaLogica = ["Loan", "LoanControl", "DebtorControl", "LendingSetup", "MemberAccountControl"];
 
     public static TheoryData<bool> Motores => new() { true, false };
 
@@ -143,9 +149,10 @@ public class ModeloDeCarteraNucleoTests
         var tablas = DeCartera(Modelo(postgres)).Select(e => e.GetTableName()).ToList();
 
         tablas.Should().OnlyHaveUniqueItems().And.BeEquivalentTo(Tablas);
-        Tablas.Should().HaveCount(132,
+        Tablas.Should().HaveCount(139,
             "74 de negocio + 17 de preparación (data-model §14) + 2 del grupo conectado (C112) + 7 de CarteraRiesgo (US9) + 8 de CarteraLibranza (K2)"
-            + " + 9 de CarteraNovedades (K3) + 11 de CarteraCobranza (K4) + 2 de CarteraInformes (K5) + 2 de CarteraPerdidaEsperada (K6a)");
+            + " + 9 de CarteraNovedades (K3) + 11 de CarteraCobranza (K4) + 2 de CarteraInformes (K5) + 2 de CarteraPerdidaEsperada (K6a)"
+            + " + 7 del libro de cuentas de la feature 014 (K7, CaptacionesAportes)");
     }
 
     [Theory]

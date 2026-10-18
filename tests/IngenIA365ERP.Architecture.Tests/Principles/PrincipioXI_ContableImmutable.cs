@@ -19,6 +19,8 @@ public class PrincipioXI_ContableImmutable
     [
         "Entities/Accounting/Transactions",
         "Entities/Lending/Transactions",
+        // Feature 014 (T029; data-model §0.1): el libro de cuentas de captación y aportes y su hecho primario.
+        "Entities/Lending/Deposits/Transactions",
         "Entities/Payroll/Transactions",
         // Feature 012 (T019; decisiones-transversales §2.18, T7, T33): los mensajes de integración y sus
         // entregas, y las solicitudes y decisiones de aprobación, son hechos: no se borran.
@@ -85,6 +87,31 @@ public class PrincipioXI_ContableImmutable
             .ToList();
         Assert.True(infractores.Count == 0, "Posiciones, partes u operaciones de Cartera borradas o actualizadas en bloque (Principio XI):\n  "
             + string.Join("\n  ", infractores));
+    }
+
+    /// <summary>
+    /// Feature 014 (T029; data-model §0.1, §4.1–§4.3): el libro de cuentas (<c>MemberAccountTransaction</c>) vive en
+    /// <c>Entities/Lending/Deposits/Transactions</c>, dentro del espacio protegido, y nadie borra ni actualiza en bloque sus filas, sus operaciones
+    /// ni sus posiciones diarias (se corrigen con un espejo o una versión nueva, FR-002).
+    /// </summary>
+    [Fact]
+    public void El_libro_de_cuentas_esta_en_el_espacio_protegido_y_nadie_lo_borra_ni_lo_actualiza()
+    {
+        var root = RepoPath.FindRepoRoot();
+        var carpeta = Path.Combine(root, "src", "Core", "IngenIA365ERP.Domain", "Entities", "Lending", "Deposits", "Transactions");
+        Assert.True(File.Exists(Path.Combine(carpeta, "MemberAccountTransaction.cs")), "MemberAccountTransaction vive en Entities/Lending/Deposits/Transactions.");
+        Assert.Equal("IngenIA365ERP.Domain.Entities.Lending.Deposits.Transactions",
+            typeof(IngenIA365ERP.Domain.Entities.Lending.Deposits.Transactions.MemberAccountTransaction).Namespace);
+        Assert.Contains("Entities/Lending/Deposits/Transactions", ProtectedNamespaces);
+
+        var escritura = new Regex(
+            @"\.(MemberAccountTransactions|MemberAccountOperations|MemberAccountDailyPositions)\s*\.\s*(Remove|RemoveRange|Update|UpdateRange|ExecuteDelete|ExecuteDeleteAsync|ExecuteUpdate|ExecuteUpdateAsync)\b",
+            RegexOptions.Compiled);
+        var infractores = RepoPath.ProductionCSharpFiles()
+            .Where(f => escritura.IsMatch(File.ReadAllText(f)))
+            .Select(f => Path.GetRelativePath(root, f))
+            .ToList();
+        Assert.True(infractores.Count == 0, "Filas del libro de cuentas borradas o actualizadas (Principio XI):\n  " + string.Join("\n  ", infractores));
     }
 
     private static readonly Regex RemoveCall = new(

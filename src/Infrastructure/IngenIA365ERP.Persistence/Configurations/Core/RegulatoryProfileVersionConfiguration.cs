@@ -28,6 +28,12 @@ public class RegulatoryProfileVersionConfiguration : IEntityTypeConfiguration<Re
         builder.Property(e => e.LibranzaOperatorRegistered).IsRequired();
         builder.Property(e => e.LibranzaOperatorRegistrationNumber).HasMaxLength(40);
         builder.Property(e => e.LibranzaOperatorRegistrationDate);
+        // Feature 014 (T028; data-model §1.8, FR-018): lo que el perfil dice de las captaciones, con defecto falso (migración CaptacionesAportes).
+        builder.Property(e => e.MayTakeDeposits).IsRequired().HasDefaultValue(false);
+        builder.Property(e => e.DepositsFromAssociatesOnly).IsRequired().HasDefaultValue(false);
+        builder.Property(e => e.LiquidityFundCategory).HasMaxLength(20);
+        builder.Property(e => e.DepositInsuranceEnrolled).IsRequired().HasDefaultValue(false);
+        builder.Property(e => e.IsGmfWithholdingAgent).IsRequired().HasDefaultValue(false);
         builder.Property(e => e.ValidFrom).IsRequired();
         builder.Property(e => e.Source).HasMaxLength(300).IsRequired();
         builder.Property(e => e.SupportAttachmentPublicId);

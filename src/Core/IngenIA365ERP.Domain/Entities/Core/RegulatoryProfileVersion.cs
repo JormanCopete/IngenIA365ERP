@@ -39,6 +39,23 @@ public class RegulatoryProfileVersion : AuditableEntity, IHechoInmutable, IVersi
 
     public DateOnly? LibranzaOperatorRegistrationDate { get; init; }
 
+    // ------------------------------------------------------------------------- feature 014, K7 (data-model §1.8; FR-018) --
+
+    /// <summary>Feature 014 (FR-018): la cooperativa puede captar ahorro (lo exige la activación de captaciones); defecto falso.</summary>
+    public bool MayTakeDeposits { get; init; }
+
+    /// <summary>Feature 014: sólo capta de sus asociados (FR-030).</summary>
+    public bool DepositsFromAssociatesOnly { get; init; }
+
+    /// <summary>Feature 014 (FR-025, R25): categoría del fondo de liquidez según <c>FondoDeLiquidez.PorcentajesPorCategoria</c>; nula = no aplica.</summary>
+    public string? LiquidityFundCategory { get; init; }
+
+    /// <summary>Feature 014: inscrita en el seguro de depósitos (Fogacoop).</summary>
+    public bool DepositInsuranceEnrolled { get; init; }
+
+    /// <summary>Feature 014 (R07): agente retenedor del GMF.</summary>
+    public bool IsGmfWithholdingAgent { get; init; }
+
     public DateOnly ValidFrom { get; init; }
 
     /// <summary>Resolución, certificado de existencia o acta.</summary>

@@ -89,14 +89,15 @@ public static class ConsultasDeConvenios
         var ids = versiones.Select(v => v.Id).ToList();
         var codigos = (await db.PayrollAgreementResultCodes.AsNoTracking().Where(r => ids.Contains(r.PayrollAgreementVersionId) && !r.IsDeleted)
             .OrderBy(r => r.PaymasterCode).ToListAsync(ct)).ToLookup(r => r.PayrollAgreementVersionId);
-        var formatos = versiones.SelectMany(v => new[] { v.OutboundFormatId, v.ResultFormatId }).Distinct().ToList();
+        // Feature 014 (T028): con grupos de archivo la versión no lleva formatos (cada grupo los suyos).
+        var formatos = versiones.SelectMany(v => new[] { v.OutboundFormatId, v.ResultFormatId }).OfType<int>().Distinct().ToList();
         var deFormato = await db.BankFileFormats.AsNoTracking().IgnoreQueryFilters().Where(f => formatos.Contains(f.Id))
             .ToDictionaryAsync(f => f.Id, f => (f.PublicId, f.Code), ct);
         var dtos = versiones.Select(v =>
         {
             var reglas = ReglasDelConvenio.Leer(v.NoveltyRulesJson);
-            var ida = deFormato.GetValueOrDefault(v.OutboundFormatId);
-            var vuelta = deFormato.GetValueOrDefault(v.ResultFormatId);
+            var ida = v.OutboundFormatId is { } idaId ? deFormato.GetValueOrDefault(idaId) : default;
+            var vuelta = v.ResultFormatId is { } vueltaId ? deFormato.GetValueOrDefault(vueltaId) : default;
             return new PayrollAgreementVersionDto(v.PublicId, v.ValidFrom, v.ValidTo, v.Periodicity.ToString(), v.CutoffDay, reglas.SendDay, v.PaymentDay,
                 v.SendLeadDays, ida.PublicId, ida.Code ?? string.Empty, vuelta.PublicId, vuelta.Code ?? string.Empty, v.DeductionCapFraction, v.IncludesPastDue,
                 reglas.Reports ?? ReglasDelConvenio.TodasLasNovedades, v.TransferWindowDays, v.NonDeductionAction.ToString(),

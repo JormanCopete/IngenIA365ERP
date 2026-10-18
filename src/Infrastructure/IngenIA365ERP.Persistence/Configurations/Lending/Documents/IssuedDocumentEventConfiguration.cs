@@ -18,6 +18,9 @@ public class IssuedDocumentEventConfiguration : IEntityTypeConfiguration<IssuedD
     public void Configure(EntityTypeBuilder<IssuedDocumentEvent> builder)
     {
         builder.ComoEntidadDeCartera(Tabla);
+        // Feature 014 (T028; data-model §1.5): la causa es un reverso de crédito o uno de cuenta, nunca los dos.
+        builder.ToTable(t => t.HasCheckConstraint("CK_LND_IssuedDocumentEvents_Cause",
+            "[CausingOperationId] IS NULL OR [CausingAccountOperationId] IS NULL"));
 
         builder.Property(e => e.Kind).HasConversion<int>().IsRequired();
         builder.Property(e => e.OccurredAt).IsRequired();
@@ -28,6 +31,8 @@ public class IssuedDocumentEventConfiguration : IEntityTypeConfiguration<IssuedD
         builder.HasOne<User>().WithMany().HasForeignKey(e => e.ActorUserId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<LoanOperation>().WithMany().HasForeignKey(e => e.CausingOperationId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<DebtorMessage>().WithMany().HasForeignKey(e => e.DebtorMessageId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<Domain.Entities.Lending.Deposits.Transactions.MemberAccountOperation>().WithMany()
+            .HasForeignKey(e => e.CausingAccountOperationId).OnDelete(DeleteBehavior.Restrict);
 
         builder.HasIndex(e => e.IssuedDocumentId).IsUnique()
             .HasDatabaseName("UK_LND_IssuedDocumentEvents_Voided").HasFilter("[Kind] = 3");

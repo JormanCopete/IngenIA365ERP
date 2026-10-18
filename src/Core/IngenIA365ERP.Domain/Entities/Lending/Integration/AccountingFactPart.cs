@@ -24,6 +24,15 @@ public class AccountingFactPart : AuditableEntity, IHechoInmutable
     /// <summary><c>LoanCatchUp</c>: la operación que pidió poner al día el crédito.</summary>
     public long? TriggerOperationId { get; init; }
 
+    /// <summary>
+    /// Feature 014 (T028; data-model §1.8): <c>AccountCatchUp</c>, la operación de cuenta que pidió poner al día la cuenta
+    /// (<c>LND_MemberAccountOperations</c>).
+    /// </summary>
+    public long? TriggerAccountOperationId { get; init; }
+
+    /// <summary>Feature 014: cuentas de la parte (la causación de captaciones resumida por día, <c>CC</c>); 0 en las de créditos.</summary>
+    public int AccountCount { get; init; }
+
     /// <summary>Partes del cierre (T47). FK desde <c>CarteraRiesgo</c> (C66).</summary>
     public int? MonthlyCloseId { get; init; }
 

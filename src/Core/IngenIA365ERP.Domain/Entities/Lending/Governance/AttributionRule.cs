@@ -58,6 +58,12 @@ public class AttributionRule : AuditableEntity, IHechoInmutable
     /// <summary>Nivel mínimo exigido, de la misma matriz.</summary>
     public int MinimumLevelId { get; init; }
 
+    /// <summary>
+    /// Feature 014 (T028; data-model §1.8, R13): criterio «puntos adicionales» del sujeto <c>NegotiatedRate</c>: el margen máximo sobre la tasa de
+    /// la tabla que el nivel puede conceder, como fracción EA; nulo = no importa. Lo usa K9.
+    /// </summary>
+    public decimal? MaxNegotiatedSpread { get; init; }
+
     /// <summary>La regla de una matriz ya validada por <see cref="AttributionMatrix.Validar"/>, con el Id de su nivel mínimo.</summary>
     internal static AttributionRule Nueva(int matrixId, int minimumLevelId, BorradorDeRegla r) => new()
     {

@@ -252,6 +252,9 @@ public class LosHechosInmutablesNoSeModifican
         // K6a (T1031; data-model §23.8, §23.9): la elección voluntaria del modelo (un cambio es otra elección) y la carga complementaria del
         // historial (volver a cargar es otra carga) no admiten ninguna escritura después de insertarse.
         ["ImpairmentModelElection"] = [], ["ArrearsHistoryLoad"] = [],
+        // Feature 014 (T021–T025; data-model §4.1–§4.3): el libro de cuentas y su posición no admiten ninguna escritura; la operación, sólo la
+        // liberación del canje y el reverso que la anula.
+        ["MemberAccountTransaction"] = [], ["MemberAccountOperation"] = ["ClearedAt", "ReversedByOperationId"], ["MemberAccountDailyPosition"] = [],
     };
 
     [Fact]

@@ -707,3 +707,26 @@ notas reemplazan lo dicho arriba, en `data-model.md`, `contracts/` y `tasks.md` 
   Valores nacionales (T016): `COMPONENTE_INFLACIONARIO` (clave = año gravable, fracción, K8; semilla 2025 = 0,5543 del Decreto 898 de 2026,
   que el sembrador deja en espera hasta K8), `LIMITE_INEMBARGABLE` (K8), `TOPE_ENTREGA_SIN_SUCESION` (K10) y `TOPE_SEGURO_DEPOSITOS` (K11),
   sin semilla los tres últimos. El sembrador central ya no registra error por un código de una entrega posterior: lo deja en espera.
+
+## 6. Enmienda del libro de cuentas (2026-10-18, T021–T043)
+
+Construido el bloque B de la fase fundacional. **Manda el código**; estas notas reemplazan lo dicho en `data-model.md` y `contracts/` donde
+choquen.
+
+- **E16 · La operación no nombra su orden de giro.** `LND_MemberAccountOperations.PayoutOrderId` (data-model §4.1) no existe: la operación es
+  hecho de sólo inserción y la orden necesita la operación (`LND_AccountPayoutOrders.OperationId`, único) para nacer, así que el enlace de ida y
+  vuelta obligaría a reescribir el hecho. Se navega desde la orden. Tampoco nacen todavía, por la regla de §0.9 y §8.2, `GarnishmentId` y
+  `AccountChargeId` (K8), `AssemblyDistributionId` y `DeceasedHolderCaseId` (K10) de la operación, `TermsVersionId` (K9) de la transacción, ni
+  `GarnishmentId` y `DeceasedHolderCaseId` de la orden.
+- **E17 · FK de K7 que esperan su tabla.** `MemberAccountOperation.MembershipWithdrawalId` y `AccountPayoutOrder.MembershipWithdrawalId` nacen como
+  columnas nulas con índice y su FK la pone T096 (`LND_MembershipWithdrawals`); `MemberAccountTransaction.InstallmentId` (bigint), igual con T081
+  (`LND_AccountInstallments`). Como `CaptacionesAportes` es regenerable hasta T056, la FK entra en la misma migración.
+- **E18 · Únicos de hechos sin filtro de baja.** `UK_LND_Activations_Nature` va sin `[IsDeleted] = 0` (data-model §1.8 dice «filtrado vivos»):
+  la activación es hecho y los únicos de hechos no filtran por baja lógica (`ModeloDeCarteraNucleoTests`); como un hecho nunca se da de baja, es
+  lo mismo. Los dos FK autorreferidos de la operación llevan nombre propio (`FK_LND_MemberAccountOperations_Reverses` / `_ReversedBy`): los
+  generados pasaban de 63 caracteres y PostgreSQL los truncaba al mismo prefijo.
+- **E19 · Lo que cambia en la 013 por las columnas nuevas.** `LND_PayrollAgreementVersions.OutboundFormatId`/`ResultFormatId` pasan a nulos con
+  `CK_LND_PayrollAgreementVersions_Formats` (sin grupos, los dos; con grupos, ninguno); la consulta del convenio los lee nulos y el resto de K2 los
+  sigue leyendo de una versión sin grupos. Los tres únicos de `LND_MigrationLoads` pasan a `(Nature, Status)`: las consultas de la 013 que buscan
+  «la carga aplicada» o «la activada» siguen sin filtrar por naturaleza porque hoy sólo hay cargas de colocación; la activación de captaciones
+  (T055, US9) las acota a `Nature = Placement` al nacer la primera carga de otra naturaleza.

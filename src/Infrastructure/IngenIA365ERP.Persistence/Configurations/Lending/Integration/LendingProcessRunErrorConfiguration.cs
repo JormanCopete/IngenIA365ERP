@@ -16,6 +16,8 @@ public class LendingProcessRunErrorConfiguration : IEntityTypeConfiguration<Lend
     public void Configure(EntityTypeBuilder<LendingProcessRunError> builder)
     {
         builder.ComoEntidadDeCartera(Tabla);
+        // Feature 014 (T028; data-model §1.8): un error es de un crédito o de una cuenta, nunca de los dos.
+        builder.ToTable(t => t.HasCheckConstraint("CK_LND_ProcessRunErrors_Subject", "[LoanId] IS NULL OR [MemberAccountId] IS NULL"));
 
         builder.Property(e => e.BatchNumber).IsRequired();
         builder.Property(e => e.AttemptNumber).IsRequired();
@@ -27,10 +29,14 @@ public class LendingProcessRunErrorConfiguration : IEntityTypeConfiguration<Lend
 
         builder.HasOne<LendingProcessRun>().WithMany().HasForeignKey(e => e.ProcessRunId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<Loan>().WithMany().HasForeignKey(e => e.LoanId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<Domain.Entities.Lending.Deposits.Accounts.MemberAccount>().WithMany()
+            .HasForeignKey(e => e.MemberAccountId).OnDelete(DeleteBehavior.Restrict);
 
         builder.HasIndex(e => new { e.ProcessRunId, e.LoanId, e.AttemptNumber }).IsUnique()
             .HasDatabaseName("UK_LND_ProcessRunErrors_Run_Loan_Attempt").HasFilter("[LoanId] IS NOT NULL");
         builder.HasIndex(e => e.LoanId)
             .HasDatabaseName("IX_LND_ProcessRunErrors_LoanId_Unresolved").HasFilter("[ResolvedAt] IS NULL");
+        builder.HasIndex(e => new { e.ProcessRunId, e.MemberAccountId, e.AttemptNumber }).IsUnique()
+            .HasDatabaseName("UK_LND_ProcessRunErrors_Run_Account_Attempt").HasFilter("[MemberAccountId] IS NOT NULL");
     }
 }

@@ -32,11 +32,35 @@ public class PayrollAgreementVersion : AuditableEntity
     /// <summary>Antelación con que se genera el archivo frente al corte (FR-113); la vigila <c>cartera.archivos-de-descuento</c>.</summary>
     public int SendLeadDays { get; set; }
 
-    /// <summary>Formato de ida: ámbito <c>PayrollDeductionRequest</c>, genérico.</summary>
-    public int OutboundFormatId { get; set; }
+    /// <summary>
+    /// Formato de ida: ámbito <c>PayrollDeductionRequest</c>, genérico. Feature 014 (T028; data-model §1.4): nulo cuando la versión usa grupos de
+    /// archivo (<see cref="UsesFileGroups"/>), y entonces cada grupo lleva el suyo (<c>CK_LND_PayrollAgreementVersions_Formats</c>).
+    /// </summary>
+    public int? OutboundFormatId { get; set; }
 
-    /// <summary>Formato de vuelta: ámbito <c>PayrollDeductionResult</c>, genérico (lo usa Recaudo y la vista previa).</summary>
-    public int ResultFormatId { get; set; }
+    /// <summary>Formato de vuelta: ámbito <c>PayrollDeductionResult</c>, genérico (lo usa Recaudo y la vista previa); nulo con grupos.</summary>
+    public int? ResultFormatId { get; set; }
+
+    /// <summary>
+    /// Feature 014 (T028; data-model §1.4, FR-125): falso = un solo archivo con los formatos de la versión (lo de K2); verdadero = un archivo por
+    /// grupo (<c>LND_PayrollAgreementFileGroups</c>) y los formatos de la versión dejan de usarse.
+    /// </summary>
+    public bool UsesFileGroups { get; set; }
+
+    /// <summary>
+    /// Feature 014: con qué identifica la pagaduría a la persona en ida y vuelta: <see cref="IdentificacionPorCodigoDeEmpleado"/> (defecto) o
+    /// <see cref="IdentificacionPorDocumento"/>.
+    /// </summary>
+    public string EmployeeIdentification { get; set; } = IdentificacionPorCodigoDeEmpleado;
+
+    /// <summary>Feature 014: el convenio cobra también cuotas de aportes, ahorro permanente y contractual (defecto falso).</summary>
+    public bool IncludesAccountInstallments { get; set; }
+
+    /// <summary>La pagaduría identifica a la persona por su código de empleado en ella.</summary>
+    public const string IdentificacionPorCodigoDeEmpleado = "EmployeeIdAtPaymaster";
+
+    /// <summary>La pagaduría identifica a la persona por su documento.</summary>
+    public const string IdentificacionPorDocumento = "TaxId";
 
     /// <summary>Tope propio del convenio como fracción; nunca por encima de <c>LIBRANZA_CAPACIDAD_DESCUENTO</c> (T42). Nulo = sin tope propio.</summary>
     public decimal? DeductionCapFraction { get; set; }

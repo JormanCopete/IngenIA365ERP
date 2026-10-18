@@ -7,7 +7,8 @@ namespace IngenIA365ERP.Persistence.Configurations.Lending.Migration;
 
 /// <summary>
 /// <c>LND_MigrationLoads</c> (feature 013, K1; data-model §29.1): <c>Number</c> único; un borrador, una aplicada y una activada por
-/// cooperativa (tres únicos filtrados sobre <c>Status</c>); <c>ReplacedByLoadId</c> se autorreferencia.
+/// cooperativa (tres únicos filtrados sobre <c>Status</c>); <c>ReplacedByLoadId</c> se autorreferencia. Feature 014 (T028): los tres únicos pasan
+/// a <c>(Nature, Status)</c>: uno de cada uno por naturaleza.
 /// </summary>
 public class MigrationLoadConfiguration : IEntityTypeConfiguration<MigrationLoad>
 {
@@ -27,6 +28,9 @@ public class MigrationLoadConfiguration : IEntityTypeConfiguration<MigrationLoad
         builder.Property(e => e.SalesReconciliationSha256).HasMaxLength(EntidadDeCartera.Huella);
         builder.Property(e => e.ValidationSummaryJson);
         builder.Property(e => e.TotalsJson);
+        // Feature 014 (T028; data-model §1.8): la naturaleza de la carga y sus cuentas.
+        builder.Property(e => e.Nature).HasConversion<int>().IsRequired().HasDefaultValue(Domain.Enums.Lending.LineNature.Placement);
+        builder.Property(e => e.AccountCount).IsRequired().HasDefaultValue(0);
 
         builder.HasOne<User>().WithMany().HasForeignKey(e => e.CreatedByUserId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<User>().WithMany().HasForeignKey(e => e.AppliedByUserId).OnDelete(DeleteBehavior.Restrict);
@@ -34,11 +38,12 @@ public class MigrationLoadConfiguration : IEntityTypeConfiguration<MigrationLoad
 
         builder.HasIndex(e => e.Number).IsUnique().HasDatabaseName("UK_LND_MigrationLoads_Number");
 
-        builder.HasIndex(e => e.Status, "UK_LND_MigrationLoads_Draft").IsUnique()
+        // Feature 014 (T028; FR-116): un borrador, una aplicada y una activada por naturaleza.
+        builder.HasIndex(e => new { e.Nature, e.Status }, "UK_LND_MigrationLoads_Draft").IsUnique()
             .HasFilter("[Status] = 1 AND [IsDeleted] = 0");
-        builder.HasIndex(e => e.Status, "UK_LND_MigrationLoads_Applied").IsUnique()
+        builder.HasIndex(e => new { e.Nature, e.Status }, "UK_LND_MigrationLoads_Applied").IsUnique()
             .HasFilter("[Status] = 2 AND [IsDeleted] = 0");
-        builder.HasIndex(e => e.Status, "UK_LND_MigrationLoads_Activated").IsUnique()
+        builder.HasIndex(e => new { e.Nature, e.Status }, "UK_LND_MigrationLoads_Activated").IsUnique()
             .HasFilter("[Status] = 4 AND [IsDeleted] = 0");
     }
 }

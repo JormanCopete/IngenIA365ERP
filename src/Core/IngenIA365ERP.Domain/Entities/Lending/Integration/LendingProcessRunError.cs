@@ -14,11 +14,17 @@ public class LendingProcessRunError : AuditableEntity
     /// <summary>Nulo = error de la tanda o de un grupo (p. ej. usura faltante de una modalidad).</summary>
     public int? LoanId { get; set; }
 
+    /// <summary>
+    /// Feature 014 (T028; data-model §1.8): la cuenta de captación o aportes que falló en el paso <c>Captaciones</c>; excluyente con
+    /// <see cref="LoanId"/> (<c>CK_LND_ProcessRunErrors_Subject</c>).
+    /// </summary>
+    public int? MemberAccountId { get; set; }
+
     public int BatchNumber { get; set; }
 
     public int AttemptNumber { get; set; }
 
-    /// <summary><c>Replica</c>, <c>Reajuste</c>, <c>Causacion</c>, <c>Suspension</c>, <c>Anticipos</c>, <c>Bloqueos</c>, <c>Dimension</c>, <c>Cobranza</c>, <c>Verificacion</c>, <c>CierreLineas</c>, <c>CierreFinal</c>.</summary>
+    /// <summary><c>Replica</c>, <c>Reajuste</c>, <c>Causacion</c>, <c>Suspension</c>, <c>Anticipos</c>, <c>Bloqueos</c>, <c>Dimension</c>, <c>Cobranza</c>, <c>Verificacion</c>, <c>CierreLineas</c>, <c>CierreFinal</c>; feature 014: <c>Captaciones</c>.</summary>
     public string Step { get; set; } = string.Empty;
 
     public string ErrorCode { get; set; } = string.Empty;

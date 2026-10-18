@@ -22,6 +22,8 @@ public class AttributionRuleConfiguration : IEntityTypeConfiguration<Attribution
         builder.Property(e => e.ModalityCode).HasMaxLength(40);
         builder.Property(e => e.MinConsolidatedAmount).Monto();
         builder.Property(e => e.MaxConsolidatedAmount).Monto();
+        // Feature 014 (T028; R13): margen máximo de la tasa negociada (K9).
+        builder.Property(e => e.MaxNegotiatedSpread).TasaAnual();
         builder.Property(e => e.CollateralKind).HasConversion<int?>();
         builder.Property(e => e.Concept).HasConversion<int?>();
         builder.Property(e => e.NoveltyMechanism).HasConversion<int?>();

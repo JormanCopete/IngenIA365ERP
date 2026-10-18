@@ -28,6 +28,8 @@ public class AccountingFactPartConfiguration : IEntityTypeConfiguration<Accounti
         builder.Property(e => e.OriginEventKey).HasMaxLength(80).IsRequired();
         builder.Property(e => e.MessageCount).IsRequired();
         builder.Property(e => e.LoanCount).IsRequired();
+        // Feature 014 (T028; data-model §1.8): las partes de captaciones cuentan cuentas.
+        builder.Property(e => e.AccountCount).IsRequired().HasDefaultValue(0);
         builder.Property(e => e.TotalAmount).Monto().IsRequired();
         builder.Property(e => e.TotalsByDimensionJson).IsRequired();
         builder.Property(e => e.LoanListSha256).HasMaxLength(EntidadDeCartera.Huella).IsRequired();
@@ -35,6 +37,8 @@ public class AccountingFactPartConfiguration : IEntityTypeConfiguration<Accounti
 
         builder.HasOne<LendingProcessRun>().WithMany().HasForeignKey(e => e.ProcessRunId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<LoanOperation>().WithMany().HasForeignKey(e => e.TriggerOperationId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<Domain.Entities.Lending.Deposits.Transactions.MemberAccountOperation>().WithMany()
+            .HasForeignKey(e => e.TriggerAccountOperationId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<AccountingFactPart>().WithMany().HasForeignKey(e => e.ReversedPartId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<Branch>().WithMany().HasForeignKey(e => e.BranchId).OnDelete(DeleteBehavior.Restrict);
         // US9 (T0697, C66): las que la base dejó sin crear hasta que existieran el cierre y su reapertura.
@@ -49,6 +53,8 @@ public class AccountingFactPartConfiguration : IEntityTypeConfiguration<Accounti
             .HasDatabaseName("UK_LND_AccountingFactParts_Batch").HasFilter("[ProcessRunId] IS NOT NULL");
         builder.HasIndex(e => new { e.TriggerOperationId, e.BranchId, e.FactType }).IsUnique()
             .HasDatabaseName("UK_LND_AccountingFactParts_Trigger_Branch_Fact").HasFilter("[TriggerOperationId] IS NOT NULL");
+        builder.HasIndex(e => new { e.TriggerAccountOperationId, e.BranchId, e.FactType }).IsUnique()
+            .HasDatabaseName("UK_LND_AccountingFactParts_AccTrigger_Branch_Fact").HasFilter("[TriggerAccountOperationId] IS NOT NULL");
         builder.HasIndex(e => new { e.AccountingDate, e.FactType }).HasDatabaseName("IX_LND_AccountingFactParts_AccountingDate_FactType");
         builder.HasIndex(e => e.MonthlyCloseId).HasDatabaseName("IX_LND_AccountingFactParts_MonthlyCloseId");
         builder.HasIndex(e => e.MonthlyCloseReopeningId).HasDatabaseName("IX_LND_AccountingFactParts_MonthlyCloseReopeningId");

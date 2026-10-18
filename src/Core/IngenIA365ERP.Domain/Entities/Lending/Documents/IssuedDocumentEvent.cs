@@ -33,6 +33,12 @@ public class IssuedDocumentEvent : AuditableEntity, IHechoInmutable
     /// <summary>El reverso que lo anuló (<c>VigenciaDeDocumentos</c>).</summary>
     public long? CausingOperationId { get; init; }
 
+    /// <summary>
+    /// Feature 014 (T028; data-model §1.5): el reverso de una operación de <b>cuenta</b> que lo anuló (<c>LND_MemberAccountOperations</c>);
+    /// excluyente con <see cref="CausingOperationId"/> (<c>CK_LND_IssuedDocumentEvents_Cause</c>).
+    /// </summary>
+    public long? CausingAccountOperationId { get; init; }
+
     /// <summary><c>Delivered</c> por correo.</summary>
     public int? DebtorMessageId { get; init; }
 

@@ -19,7 +19,7 @@ public class LosSaldosYTasasDeCarteraTienenSuPrecision
     /// <summary>Archivos exentos (rutas relativas a la raíz, con barras normales).</summary>
     private static readonly string[] Exentos = ["src/Infrastructure/IngenIA365ERP.Persistence/Configurations/Lending/PrecisionDeCartera.cs"];
 
-    private static readonly string[] Alias = ["Monto", "TasaAnual", "TasaEquivalente", "Fraccion", "Puntaje", "ValorUvr"];
+    private static readonly string[] Alias = ["Monto", "MontoCausado", "TasaAnual", "TasaEquivalente", "Fraccion", "Puntaje", "ValorUvr"];
 
     [Fact]
     public void Toda_propiedad_decimal_de_Cartera_declara_su_alias()
@@ -161,6 +161,28 @@ public class LosSaldosYTasasDeCarteraTienenSuPrecision
         var mal = AliasDeLaLibranza.Where(x => !new Regex($@"\bProperty\(\s*\w+\s*=>\s*\w+\.{x.Propiedad}\s*\)\s*\.{x.Alias}\(").IsMatch(texto))
             .Select(x => $"{x.Propiedad} debe ser {x.Alias}").ToList();
         Assert.True(mal.Count == 0, "Columnas de la libranza con un alias que no es el de su clase (T35):\n  " + string.Join("\n  ", mal));
+    }
+
+    /// <summary>
+    /// Feature 014 (T027; data-model §0.3, §4.2–§4.3): el libro de cuentas guarda lo causado con 6 decimales (<c>MontoCausado</c>), igual que el
+    /// interés por pagar de la posición; los saldos de la posición son pesos (<c>Monto</c>), la proporción de una parte es <c>Fraccion</c> y su
+    /// límite de firma, <c>Monto</c>.
+    /// </summary>
+    private static readonly (string Propiedad, string Alias)[] AliasDeLasCuentas =
+    [
+        ("Amount", "MontoCausado"), ("InterestPayable", "MontoCausado"), ("Principal", "Monto"), ("ContributionMinimum", "Monto"),
+        ("AvailableBalance", "Monto"), ("AppliedAnnualRate", "TasaAnual"), ("Share", "Fraccion"), ("SignatureLimit", "Monto"),
+    ];
+
+    [Fact]
+    public void Las_cuentas_y_su_libro_usan_el_alias_de_su_clase_de_numero()
+    {
+        var carpeta = Path.Combine(RepoPath.FindRepoRoot(), "src", "Infrastructure", "IngenIA365ERP.Persistence", "Configurations", "Lending", "Deposits");
+        var texto = string.Join("\n", Directory.GetFiles(carpeta, "*.cs").Select(File.ReadAllText));
+        var mal = AliasDeLasCuentas.Where(x => !new Regex($@"\bProperty\(\s*\w+\s*=>\s*\w+\.{x.Propiedad}\s*\)\s*\.{x.Alias}\(").IsMatch(texto))
+            .Select(x => $"{x.Propiedad} debe ser {x.Alias}").ToList();
+        Assert.True(mal.Count == 0, "Columnas de las cuentas con un alias que no es el de su clase (data-model §0.3):\n  " + string.Join("\n  ", mal));
+        Assert.Matches(@"Property\(\s*e\s*=>\s*e\.Amount\s*\)\s*\.MontoCausado\(", File.ReadAllText(Path.Combine(carpeta, "MemberAccountLedgerConfiguration.cs")));
     }
 
     private static readonly (Regex Patron, string Que)[] Prohibidos = [

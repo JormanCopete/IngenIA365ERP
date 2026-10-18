@@ -597,6 +597,14 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Schedules.RepaymentInstallment> RepaymentInstallments => Set<IngenIA365ERP.Domain.Entities.Lending.Schedules.RepaymentInstallment>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Schedules.RepaymentScheduleVersion> RepaymentScheduleVersions => Set<IngenIA365ERP.Domain.Entities.Lending.Schedules.RepaymentScheduleVersion>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Transactions.LoanTransaction> LoanTransactions => Set<IngenIA365ERP.Domain.Entities.Lending.Transactions.LoanTransaction>();
+    // Feature 014 (T021–T026): las cuentas de captación y aportes y su libro.
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.MemberAccount> MemberAccounts => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.MemberAccount>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.MemberAccountParty> MemberAccountParties => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.MemberAccountParty>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.AccountPayoutOrder> AccountPayoutOrders => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.AccountPayoutOrder>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Transactions.MemberAccountOperation> MemberAccountOperations => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Transactions.MemberAccountOperation>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Transactions.MemberAccountTransaction> MemberAccountTransactions => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Transactions.MemberAccountTransaction>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Projections.MemberAccountDailyPosition> MemberAccountDailyPositions => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Projections.MemberAccountDailyPosition>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Projections.MemberAccountControl> MemberAccountControls => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Projections.MemberAccountControl>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

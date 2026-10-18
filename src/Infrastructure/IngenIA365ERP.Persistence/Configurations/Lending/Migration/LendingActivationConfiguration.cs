@@ -35,11 +35,15 @@ public class LendingActivationConfiguration : IEntityTypeConfiguration<LendingAc
         builder.Property(e => e.CommercialAdjustmentsJson).IsRequired();
         builder.Property(e => e.PayrollWarningAcknowledged).IsRequired();
         builder.Property(e => e.ActivatedMessagePublicId).IsRequired();
+        // Feature 014 (T028; data-model §1.8): la naturaleza que activa.
+        builder.Property(e => e.Nature).HasConversion<int>().IsRequired().HasDefaultValue(Domain.Enums.Lending.LineNature.Placement);
 
         builder.HasOne<MigrationLoad>().WithMany().HasForeignKey(e => e.MigrationLoadId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<User>().WithMany().HasForeignKey(e => e.RegisteredByUserId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<SessionItem>().WithMany().HasForeignKey(e => e.SessionItemId).OnDelete(DeleteBehavior.Restrict);
 
         builder.HasIndex(e => e.MigrationLoadId).IsUnique().HasDatabaseName("UK_LND_Activations_MigrationLoadId");
+        // Feature 014 (T028): cada naturaleza se activa una vez y no se desactiva. Hecho: el único no filtra por baja lógica.
+        builder.HasIndex(e => e.Nature).IsUnique().HasDatabaseName("UK_LND_Activations_Nature");
     }
 }

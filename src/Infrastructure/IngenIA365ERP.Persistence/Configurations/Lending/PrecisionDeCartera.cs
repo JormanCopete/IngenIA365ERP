@@ -47,6 +47,16 @@ public static class PrecisionDeCartera
     public static PropertyBuilder<decimal?> Puntaje(this PropertyBuilder<decimal?> propiedad) => propiedad.HasPrecision(12, 4);
 
     /// <summary>
+    /// (18,6): pesos <b>causados</b> (feature 014, data-model §0.3; FR-010, R05): toda fila del libro de cuentas
+    /// (<c>LND_MemberAccountTransactions.Amount</c>), el interés por pagar de la posición diaria de una cuenta y, en K8, lo causado y la diferencia de
+    /// redondeo de una liquidación. La causación diaria guarda hasta 6 decimales; las demás filas, a lo sumo 2 (lo hace cumplir <c>RegistroDeCuentas</c>).
+    /// </summary>
+    public static PropertyBuilder<decimal> MontoCausado(this PropertyBuilder<decimal> propiedad) => propiedad.HasPrecision(18, 6);
+
+    /// <inheritdoc cref="MontoCausado(PropertyBuilder{decimal})"/>
+    public static PropertyBuilder<decimal?> MontoCausado(this PropertyBuilder<decimal?> propiedad) => propiedad.HasPrecision(18, 6);
+
+    /// <summary>
     /// (18,4): valores en UVR y el valor de la UVR. K6b (<c>CarteraVivienda</c>): la cuota en UVR (<c>LND_RepaymentInstallments</c>), la UVR del plan,
     /// el valor en UVR de una fila del libro y su UVR, y la valoración de la posición diaria.
     /// </summary>

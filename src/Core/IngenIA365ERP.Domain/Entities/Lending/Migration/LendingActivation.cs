@@ -1,4 +1,5 @@
 using IngenIA365ERP.Domain.Common;
+using IngenIA365ERP.Domain.Enums.Lending;
 
 namespace IngenIA365ERP.Domain.Entities.Lending.Migration;
 
@@ -61,4 +62,10 @@ public class LendingActivation : AuditableEntity, IHechoInmutable
 
     /// <summary><c>CarteraActivada</c> (bandeja, sin FK).</summary>
     public Guid ActivatedMessagePublicId { get; init; }
+
+    /// <summary>
+    /// Feature 014 (T028; data-model §1.8, R21): la naturaleza que activa —créditos, captaciones o aportes—, una vez cada una
+    /// (<c>UK_LND_Activations_Nature</c>). Toda activación de la 013 es de colocación (defecto).
+    /// </summary>
+    public LineNature Nature { get; init; } = LineNature.Placement;
 }
