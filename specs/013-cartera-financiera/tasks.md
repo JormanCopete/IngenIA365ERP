@@ -4873,6 +4873,15 @@ Respuestas del dueño a las preguntas abiertas de la fase 24 (notas del bloque 2
     reasignación (`OperacionesDeCartera`). Pruebas: casos dorados 53 (pago con fecha valor anterior) y 54 (reverso) del constructor.
     Contratos: contabilidad.md §2.1 y §31 (nuevo), mensajes.md §10.7 y §10.8; manual `cartera-integracion-contable.md` §5. Queda una
     pregunta: un `CreditoAjustadoDesdeComercial` también escribe filas `PaymentReallocation` y su hecho no las lleva.
+- [X] T1093 Centrales: un crédito en mora pero bajo el rango donde empieza lo negativo (`Centrales.RangosDeMora`) se reporta con sus **días
+  reales de mora, sin marca negativa** (no «al día»)
+  - Hecho el 2026-10-18. Comportamiento que había: `ProyeccionCentralDeRiesgo` lo reportaba `AlDia` con días, saldo y cuotas en mora en cero
+    (decisión del 2026-10-16). Ahora va `EnMora` con sus días, saldo y cuotas en mora, su rango y su altura (en DataCrédito el rango 1 es la
+    novedad `06`), con `EsNegativo = false` (`IsNegative` de la línea): no exige aviso previo, no levanta `Cartera.AvisoPrevioSinConstancia` y
+    no lo excluyen las causas del dato negativo. La marca negativa es una variable aparte del estado (antes se derivaba de `EnMora`); el
+    castigo sigue siendo negativo. Pruebas: `RangosYCodeudoresEnCentralesTests` (dos casos ajustados). Docs: runbook
+    `cartera-sicses-y-centrales.md` §3 y §6, manual `cartera-cobranza-y-aviso-previo.md` §12, data-model §28.1. Sin migración. Queda por
+    cotejar con cada central si la altura del rango 1 es el código correcto para una mora no negativa (T1011).
 
 **Checkpoint**: cada entrega promovida con su evidencia; `CLAUDE.md`, índice y runbooks al día; COOFLOPAL en vivo
 sólo con Recaudo y Tesorería reales.

@@ -3597,8 +3597,10 @@ documento `TiposDeOrganizacion` por nivel (`cutoffMonths`, `dueDays`, `warningDa
 monthsAfterCutoff, day | lastBusinessDay } ]`, sin cambio de versión de esquema; semilla: nivel 1 mensual a 20 días con diciembre al último
 día hábil de enero, nivel 2 trimestral a 30 días con diciembre el 1 de febrero —conservador, el calendario real va por el último dígito del
 NIT—, nivel 3 anual con diciembre el 1 de febrero —CE 84 de 2025—, salvo fondos de empleados y mutuales; pendiente de validar). En las
-centrales, la mora se reporta por los rangos de `Centrales.RangosDeMora` (§12.1) del tipo de cartera de la posición: bajo el rango negativo,
-al día; desde él, en mora con su rango, y el `ReportedStatusCode` es el código de la altura del rango (`TraduccionDeCentral.AlturasDeMora`).
+centrales, la mora se reporta por los rangos de `Centrales.RangosDeMora` (§12.1) del tipo de cartera de la posición: desde el rango
+negativo, en mora con su rango y `IsNegative`; bajo él (decisión del dueño del 2026-10-18), **en mora con sus días reales** y su rango pero
+**sin marca negativa** (`IsNegative = false`, sin aviso previo; antes iba al día con días en cero); en los dos el `ReportedStatusCode` es el
+código de la altura del rango (`TraduccionDeCentral.AlturasDeMora`).
 El codeudor con dato negativo exige `AvisoPrevio.IncluirCodeudores` y su propio aviso completo.
 
 ### 28.2 `LND_RegulatoryFileLines` — `RegulatoryFileLine` **(nuevo)** (H; `AuditableEntityLong`; sólo `CreditBureau`; FR-123, FR-137)

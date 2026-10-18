@@ -83,8 +83,10 @@ carga el archivo así o espera.
 2. **Generar**, **Descargar**, cargar en el portal de la central y **Marcar cargado** con el radicado (y su comprobante), igual que el
    SICSES. Un período anterior al último cargado tampoco se regenera.
 3. **Mora por rangos** (`Centrales.RangosDeMora`, vigente al corte, por la modalidad de la posición del crédito): una obligación con mora
-   por debajo del rango negativo de su tipo de cartera se reporta **al día** (sin días, saldo ni cuotas en mora, y sin exigir aviso previo);
-   desde el rango negativo va en mora y la **altura** reportada sale del rango: en DataCrédito el rango 1 es la novedad `06`, el 2 `07`, el 3
+   por debajo del rango negativo de su tipo de cartera se reporta **con sus días reales de mora** (días, saldo y cuotas en mora, su rango y su
+   altura) pero **sin marca negativa**: no exige aviso previo ni la excluyen la reclamación al seguro, la insolvencia o la libranza (decisión
+   del dueño del 2026-10-18; antes iba «al día», con días en cero). Desde el rango negativo va en mora **con dato negativo**. En los dos casos la
+   **altura** reportada sale del rango: en DataCrédito el rango 1 es la novedad `06`, el 2 `07`, el 3
    `08` y del 4 en adelante `09` (por cotejar, `TraduccionesRegulatorias`); la genérica (TransUnion) no distingue alturas y lleva `MO`. Un
    castigado siempre es dato negativo.
 4. **Codeudores**: con `AvisoPrevio.IncluirCodeudores = false` un codeudor con dato negativo queda excluido con `NoPriorNoticeEvidence` sin
@@ -144,7 +146,7 @@ git diff tests/IngenIA365ERP.Application.Tests/Lending/Regulatory/Casos/
 - La e2e `SicsesYCentralesTests` (T0993) recorre el ciclo por HTTP en los dos motores; se corre en la corrida final de la feature.
 - Pendiente de validar (2026-10-16): los plazos del formato 9027 por nivel (en especial el calendario de diciembre del nivel 2 por dígito del
   NIT y el día de febrero del nivel 3, hoy el 1 como plazo conservador, y la periodicidad de fondos de empleados y mutuales de nivel 3); el
-  defecto de `Centrales.RangosDeMora` y los códigos de altura de DataCrédito; si una mora bajo el rango negativo debe ir al día con días y saldo
-  en mora en cero (así va hoy).
+  defecto de `Centrales.RangosDeMora` y los códigos de altura de DataCrédito. Resuelto el 2026-10-18: una mora bajo el rango negativo va con
+  sus días reales y sin marca negativa, no al día.
 - Pendiente del dueño (T1011): pasar el archivo del SICSES de un cierre de prueba por el validador de la Superintendencia y el de cada
   central por su validador, y cotejar campo por campo contra el instructivo (SC-019).
