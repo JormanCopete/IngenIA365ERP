@@ -244,10 +244,12 @@ public sealed class OrdenesDeGiroDeCuentas(
     /// <summary>Las cuentas del retiro: la de aportes y las que la liquidación vigente nombra.</summary>
     public async Task<IReadOnlyList<MemberAccount>> CuentasDelRetiroAsync(MembershipWithdrawal retiro, CancellationToken ct)
     {
-        var nombradas = db.MembershipWithdrawalLines.AsNoTracking()
+        // Los Id primero: un AsNoTracking en una subconsulta vuelve sin seguimiento la consulta entera y el cierre no se guardaría.
+        var nombradas = await db.MembershipWithdrawalLines.AsNoTracking()
             .Where(l => l.MembershipWithdrawalId == retiro.Id && l.SettlementVersion == retiro.SettlementVersion && l.MemberAccountId != null)
-            .Select(l => l.MemberAccountId!.Value);
-        return await db.MemberAccounts.Where(a => a.Id == retiro.ContributionAccountId || nombradas.Contains(a.Id)).OrderBy(a => a.Id).ToListAsync(ct);
+            .Select(l => l.MemberAccountId!.Value).Distinct().ToListAsync(ct);
+        nombradas.Add(retiro.ContributionAccountId);
+        return await db.MemberAccounts.Where(a => nombradas.Contains(a.Id)).OrderBy(a => a.Id).ToListAsync(ct);
     }
 
     /// <summary>Cancela las cuentas del retiro que quedaron sin saldo del titular (FR-076): se piden en cierre si hace falta y se cierran.</summary>

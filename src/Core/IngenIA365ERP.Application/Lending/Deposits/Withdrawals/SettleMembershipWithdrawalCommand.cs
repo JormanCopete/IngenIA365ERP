@@ -406,9 +406,9 @@ public sealed class SettleMembershipWithdrawalCommandHandler(
                 retiro.Pagar(reloj.UtcNow);
                 await ordenes.CerrarCuentasAsync(retiro, hoy, ct);
             }
-            else
+            else if (!retenida)
             {
-                await PedirCierreAsync(plan, ct);
+                await PedirCierreAsync(devoluciones.Select(d => d.CuentaId).ToList(), ct);
             }
             intervenciones.Registrar(verificada.Value, RetirosDeAsociado.ExpedienteDeDevolucion, retiro.PublicId);
             await db.SaveChangesAsync(ct);
@@ -448,16 +448,12 @@ public sealed class SettleMembershipWithdrawalCommandHandler(
     }
 
     /// <summary>Las cuentas que se devuelven quedan en cierre hasta que la orden se gire (FR-076).</summary>
-    private Task PedirCierreAsync(PlanDeLiquidacionDeRetiro plan, CancellationToken ct)
+    private async Task PedirCierreAsync(IReadOnlyList<int> ids, CancellationToken ct)
     {
         var ahora = reloj.UtcNow;
-        foreach (var id in plan.Calculo.Devolucion.Select(d => d.CuentaId).Append(plan.Cuentas.Keys.First()).Distinct())
-        {
-            var cuenta = db.MemberAccounts.Local.FirstOrDefault(a => a.Id == id);
-            if (cuenta is not null && cuenta.Status != MemberAccountStatus.Closing && MemberAccount.PuedePasar(cuenta.Status, MemberAccountStatus.Closing))
+        foreach (var cuenta in await db.MemberAccounts.Where(a => ids.Contains(a.Id)).ToListAsync(ct))
+            if (cuenta.Status != MemberAccountStatus.Closing && MemberAccount.PuedePasar(cuenta.Status, MemberAccountStatus.Closing))
                 cuenta.PedirCierre(ahora);
-        }
-        return Task.CompletedTask;
     }
 
     private static Result<MembershipWithdrawalDto> Falla(Error e) => Result.Failure<MembershipWithdrawalDto>(e);
@@ -515,6 +511,10 @@ public sealed class ApproveMembershipRefundCommandHandler(
             var devueltas = await ordenes.DevolverRetiroAsync(retiro, pendiente, beneficiario.Value, hoy, retiro.RefundDueOn ?? hoy, ct);
             if (devueltas.IsFailure) return Result.Failure<MembershipWithdrawal>(devueltas.Error);
             retiro.MarcarRetencionPorMinimo(false);
+            var ahora = reloj.UtcNow;
+            foreach (var cuenta in cuentas.Where(c => devueltas.Value.Any(d => d.CuentaId == c.Id)))
+                if (cuenta.Status != MemberAccountStatus.Closing && MemberAccount.PuedePasar(cuenta.Status, MemberAccountStatus.Closing))
+                    cuenta.PedirCierre(ahora);
             intervenciones.Registrar(verificada.Value, RetirosDeAsociado.ExpedienteDeDevolucion, retiro.PublicId);
             await db.SaveChangesAsync(ct);
             return Result.Success(retiro);
