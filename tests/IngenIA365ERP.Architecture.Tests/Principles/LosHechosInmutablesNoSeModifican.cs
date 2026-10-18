@@ -260,6 +260,8 @@ public class LosHechosInmutablesNoSeModifican
         ["DepositLineVersion"] = [], ["DepositLineRateTier"] = [], ["ContributionLineVersion"] = [],
         // Feature 014, US3 (T081; data-model §3.5, §3.7): la cuota exigible sólo admite su anulación (una vez); lo no descontado, nada.
         ["AccountInstallment"] = ["CancelledAt", "CancelReason", "CancelledByOperationId"], ["AccountInstallmentNonDeduction"] = [],
+        // Feature 014, US3 (T087; data-model §1.5.1): las cuentas que cubre un documento emitido no cambian.
+        ["IssuedDocumentAccount"] = [],
     };
 
     [Fact]

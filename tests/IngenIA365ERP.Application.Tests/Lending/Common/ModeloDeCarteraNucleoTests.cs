@@ -97,6 +97,8 @@ public class ModeloDeCarteraNucleoTests
         "LND_AccountInstallments", "LND_AccountInstallmentNonDeductions",
         // Feature 014, US3 (T086, research E58): las solicitudes de devolución y de cesión de aportes
         "LND_ContributionRequests",
+        // Feature 014, US3 (T087; data-model §1.5.1): las cuentas que cubre un documento emitido
+        "LND_IssuedDocumentAccounts",
     ];
 
     /// <summary>Las 17 de preparación (data-model §29.3).</summary>
@@ -128,7 +130,7 @@ public class ModeloDeCarteraNucleoTests
         // Feature 014, US1 (T060–T062): las versiones de las líneas de captación y de aportes y sus tramos.
         "DepositLineVersion", "DepositLineRateTier", "ContributionLineVersion",
         // Feature 014, US3 (T081): la cuota exigible y lo no descontado.
-        "AccountInstallment", "AccountInstallmentNonDeduction",
+        "AccountInstallment", "AccountInstallmentNonDeduction", "IssuedDocumentAccount",
         .. Preparacion,
     ];
 
@@ -161,11 +163,11 @@ public class ModeloDeCarteraNucleoTests
         var tablas = DeCartera(Modelo(postgres)).Select(e => e.GetTableName()).ToList();
 
         tablas.Should().OnlyHaveUniqueItems().And.BeEquivalentTo(Tablas);
-        Tablas.Should().HaveCount(146,
+        Tablas.Should().HaveCount(147,
             "74 de negocio + 17 de preparación (data-model §14) + 2 del grupo conectado (C112) + 7 de CarteraRiesgo (US9) + 8 de CarteraLibranza (K2)"
             + " + 9 de CarteraNovedades (K3) + 11 de CarteraCobranza (K4) + 2 de CarteraInformes (K5) + 2 de CarteraPerdidaEsperada (K6a)"
             + " + 7 del libro de cuentas de la feature 014 (K7, CaptacionesAportes) + 3 de las versiones de líneas de captación y aportes (US1)"
-            + " + 1 de la cuenta exenta del GMF (US2) + 3 de las cuotas exigibles y las solicitudes de aportes (US3)");
+            + " + 1 de la cuenta exenta del GMF (US2) + 4 de las cuotas exigibles, las solicitudes de aportes y las cuentas de un documento (US3)");
     }
 
     [Theory]

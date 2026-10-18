@@ -72,8 +72,13 @@ public sealed record IssueLendingDocumentCommand(
     DateOnly? CutoffDate,
     PeriodoDeDocumento? Period,
     short? Year,
-    DocumentDeliveryMode Delivery) : IRequest<Result<IssuedLendingDocumentDto>>, IOperacionIdempotente
+    DocumentDeliveryMode Delivery,
+    bool IncludePermanentSavings = false) : IRequest<Result<IssuedLendingDocumentDto>>, IOperacionIdempotente
 {
+    /// <summary>Feature 014 (T087): las clases de aportes, que exigen aportes activados y cubren la cuenta de aportes de la persona.</summary>
+    public static bool EsDeAportes(IssuedDocumentKind clase) =>
+        clase is IssuedDocumentKind.ContributionCertificate or IssuedDocumentKind.ContributionClearance;
+
     public Guid OperationKey { get; init; }
 
     /// <summary>¿La clase se emite sobre un crédito? (todas menos el paz y salvo general y el certificado tributario).</summary>
@@ -90,8 +95,10 @@ public sealed class IssueLendingDocumentCommandValidator : AbstractValidator<Iss
         RuleFor(x => x.PersonPublicId).NotEmpty().WithMessage("Elija a nombre de quién se emite el documento.");
         RuleFor(x => x.LoanPublicId).NotEmpty().When(x => IssueLendingDocumentCommand.LlevaCredito(x.Kind))
             .WithMessage("Elija el crédito del documento.");
-        RuleFor(x => x.CutoffDate).Null().When(x => x.Kind != IssuedDocumentKind.BalanceCertificate)
-            .WithMessage("Sólo el certificado de saldo lleva fecha de corte.");
+        RuleFor(x => x.CutoffDate).Null().When(x => x.Kind is not (IssuedDocumentKind.BalanceCertificate or IssuedDocumentKind.ContributionCertificate))
+            .WithMessage("Sólo el certificado de saldo y la constancia de aportes llevan fecha de corte.");
+        RuleFor(x => x.IncludePermanentSavings).Equal(false).When(x => x.Kind != IssuedDocumentKind.ContributionCertificate)
+            .WithMessage("Sólo la constancia de aportes incluye el ahorro permanente.");
         RuleFor(x => x.Period).Must(p => p is null || p.From <= p.To).WithMessage("La fecha inicial del período no puede ser posterior a la final.");
         RuleFor(x => x.Period).Null().When(x => x.Kind != IssuedDocumentKind.Statement).WithMessage("Sólo el extracto lleva período.");
         RuleFor(x => x.Year).Null().When(x => x.Kind != IssuedDocumentKind.TaxCertificate).WithMessage("Sólo el certificado tributario lleva año.");
@@ -132,6 +139,8 @@ public sealed class IssueLendingDocumentCommandHandler(
             return Falla(ErroresDeMensajesAlDeudor.CarteraSinActivar());
         if (!PrefijosDeDocumentosDeCartera.Disponible(request.Kind, entregaVigente ?? CatalogoDeCartera.EntregaVigente))
             return Falla(DocumentErrors.ClaseNoDisponible(request.Kind));
+        if (IssueLendingDocumentCommand.EsDeAportes(request.Kind) && (await Deposits.Activation.ActivacionesDeCaptacion.LeerAsync(db, ct)).Aportes is null)
+            return Falla(Deposits.Accounts.ErroresDeCuentas.SinActivar(LineNature.Contribution));
 
         var hoy = reloj.HoyLocal;
         short? año = null;
@@ -186,6 +195,13 @@ public sealed class IssueLendingDocumentCommandHandler(
         await cerrojo.TomarSetupAsync(exclusivo: false, ct);
         IReadOnlyCollection<int> aBloquear = credito is not null ? [credito.Id] : await CreditosDeLaPersonaAsync(titular.Id, ct);
         if (aBloquear.Count > 0) await cerrojo.BloquearCreditosAsync(aBloquear, ModoDeEspera.Esperar, ct);
+        // Feature 014 (T087): las cuentas de aportes de la persona, después de los créditos (orden fijo del cerrojo, R08).
+        if (IssueLendingDocumentCommand.EsDeAportes(request.Kind))
+        {
+            var cuentas = await db.MemberAccounts.AsNoTracking().Where(a => a.HolderPersonId == titular.Id && a.Nature == LineNature.Contribution)
+                .Select(a => a.Id).OrderBy(id => id).ToListAsync(ct);
+            if (cuentas.Count > 0) await cerrojo.BloquearCuentasAsync(cuentas, ModoDeEspera.Esperar, ct);
+        }
 
         // R = el instante de emisión, nunca anterior al último registro de los créditos que cubre (el sello del registro puede ir unos ticks por
         // delante del reloj): así el documento ve todo lo registrado antes que él y el reverso de cualquiera de esas operaciones lo anula.
@@ -194,7 +210,10 @@ public sealed class IssueLendingDocumentCommandHandler(
             : await db.LoanControls.AsNoTracking().Where(c => aBloquear.Contains(c.LoanId)).MaxAsync(c => (DateTime?)c.LastRegisteredAt, ct);
         var ahora = reloj.UtcNow;
         var emision = ultimoRegistro is { } u && u > ahora ? DateTime.SpecifyKind(u, DateTimeKind.Utc) : ahora;
-        var armado = await constructor.ArmarAsync(new PedidoDeDocumentoDeCartera(request.Kind, titular, credito, request.CutoffDate, emision, hoy, request.Period, año), ct);
+        var armado = await constructor.ArmarAsync(new PedidoDeDocumentoDeCartera(request.Kind, titular, credito, request.CutoffDate, emision, hoy, request.Period, año)
+        {
+            IncluyeAhorroPermanente = request.IncludePermanentSavings,
+        }, ct);
         if (armado.IsFailure) return Result.Failure<(IssuedLendingDocument, Guid?)>(armado.Error);
         var a = armado.Value;
 
@@ -255,6 +274,15 @@ public sealed class IssueLendingDocumentCommandHandler(
                 LastTransactionId = linea.LastTransactionId,
                 BalanceAtCutoff = linea.BalanceAtCutoff,
                 PayoffOperationId = linea.PayoffOperationId,
+            });
+        foreach (var cuenta in a.Cuentas)
+            db.IssuedDocumentAccounts.Add(new IssuedDocumentAccount
+            {
+                IssuedDocumentId = documento.Id,
+                MemberAccountId = cuenta.MemberAccountId,
+                LastOperationId = cuenta.LastOperationId,
+                LastTransactionId = cuenta.LastTransactionId,
+                BalanceAtCutoff = cuenta.BalanceAtCutoff,
             });
         db.IssuedDocumentEvents.Add(IssuedDocumentEvent.Emitido(documento, emision, ActorKind.Person, usuario));
 

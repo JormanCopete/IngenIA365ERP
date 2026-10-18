@@ -165,6 +165,42 @@ public sealed record CuerpoDeCertificadoTributario(
     public const string SinVivienda = "La persona no tuvo créditos de vivienda con la cooperativa en el año.";
 }
 
+/// <summary>Feature 014 (T087): el saldo de una clase de aporte en la constancia. (nuevo)</summary>
+public sealed record ClaseDeAporteCertificada(string Clase, decimal Valor);
+
+/// <summary>Feature 014 (T087): una cuota de aportes o del ahorro permanente pendiente al corte. (nuevo)</summary>
+public sealed record CuotaDeAportesPendiente(string Cuenta, string Periodo, DateOnly Vencimiento, decimal Pendiente);
+
+/// <summary>
+/// La constancia de aportes (feature 014, US3, T087; contracts/documentos.md §2.6; FR-106): la cuenta, la fecha de vinculación del asociado, el saldo de
+/// aportes al corte por clase y su total, el mínimo no reducible, el ahorro permanente si se pidió, las cuotas pendientes y la leyenda de la garantía.
+/// Sale del mismo saldo que <c>IConsultaDeAportes</c> (SC-010). (nuevo)
+/// </summary>
+public sealed record CuerpoDeConstanciaDeAportes(
+    string NumeroDeCuenta,
+    string Linea,
+    DateOnly? Vinculacion,
+    DateOnly Corte,
+    IReadOnlyList<ClaseDeAporteCertificada> PorClase,
+    decimal Total,
+    decimal Minimo,
+    decimal? AhorroPermanente,
+    IReadOnlyList<CuotaDeAportesPendiente> CuotasPendientes) : CuerpoDeDocumentoDeCartera
+{
+    public const string LeyendaDeGarantia =
+        "Los aportes sociales son garantía de las obligaciones del asociado con la cooperativa y son inembargables (Ley 79 de 1988, art. 49).";
+}
+
+/// <summary>
+/// El paz y salvo de aportes (feature 014, US3, T087; contracts/documentos.md §2.7; FR-106): sin cuotas de aportes pendientes a hoy, con la firmeza del
+/// último pago que las dejó al día y la leyenda de su alcance. (nuevo)
+/// </summary>
+public sealed record CuerpoDePazYSalvoDeAportes(string NumeroDeCuenta, string Linea, DateOnly Corte, decimal SaldoDeAportes, DateOnly? FirmezaHasta)
+    : CuerpoDeDocumentoDeCartera
+{
+    public const string LeyendaDeAlcance = "Certifica sólo las cuotas de aportes; no certifica obligaciones de crédito ni el estado de asociado.";
+}
+
 /// <summary>Los nombres de las clases y sus leyendas (§8.10). (nuevo)</summary>
 public static class ModelosDeDocumentoDeCartera
 {
@@ -190,6 +226,8 @@ public static class ModelosDeDocumentoDeCartera
         IssuedDocumentKind.BalanceCertificate => "Certificado de saldo",
         IssuedDocumentKind.Statement => "Extracto",
         IssuedDocumentKind.TaxCertificate => "Certificado tributario",
+        IssuedDocumentKind.ContributionCertificate => "Constancia de aportes",
+        IssuedDocumentKind.ContributionClearance => "Paz y salvo de aportes",
         _ => clase.ToString(),
     };
 

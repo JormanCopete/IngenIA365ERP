@@ -66,6 +66,8 @@ public static class DocumentosDeCarteraReport
             CuerpoDeCertificadoDeSaldo certificado => TextosDelCertificado(certificado),
             CuerpoDeExtracto extracto => TextosDelExtracto(extracto),
             CuerpoDeCertificadoTributario tributario => TextosDelCertificadoTributario(tributario),
+            CuerpoDeConstanciaDeAportes constancia => TextosDeLaConstancia(constancia),
+            CuerpoDePazYSalvoDeAportes paz => TextosDelPazYSalvoDeAportes(paz),
             _ => [],
         });
         textos.Add(e.Firmante);
@@ -124,6 +126,8 @@ public static class DocumentosDeCarteraReport
                     case CuerpoDeCertificadoDeSaldo certificado: Certificado(col, certificado); break;
                     case CuerpoDeExtracto extracto: Extracto(col, extracto); break;
                     case CuerpoDeCertificadoTributario tributario: CertificadoTributario(col, tributario); break;
+                    case CuerpoDeConstanciaDeAportes constancia: Constancia(col, constancia); break;
+                    case CuerpoDePazYSalvoDeAportes paz: PazYSalvoDeAportes(col, paz); break;
                 }
 
                 col.Item().PaddingTop(24).Row(row =>
@@ -435,6 +439,74 @@ public static class DocumentosDeCarteraReport
         textos.AddRange(p.VentasFueraDeCartera.Select(v => $"Factura {v.Factura} del {Fecha(v.Fecha)}: {Pesos(v.Valor)}"));
         return textos;
     }
+
+    // ----------------------------------------------------------------------------------- aportes (feature 014, T087) --
+
+    private static void Constancia(ColumnDescriptor col, CuerpoDeConstanciaDeAportes c)
+    {
+        var textos = TextosDeLaConstancia(c);
+        col.Item().Text(textos[0]);
+        col.Item().PaddingTop(8).Table(table =>
+        {
+            table.ColumnsDefinition(d =>
+            {
+                d.RelativeColumn(4);
+                d.RelativeColumn(2);
+            });
+            table.Header(h =>
+            {
+                foreach (var titulo in new[] { "Clase de aporte", "Saldo" })
+                    h.Cell().Element(EncabezadoDeTabla).Text(titulo);
+            });
+            foreach (var x in c.PorClase)
+            {
+                table.Cell().Element(Celda).Text(x.Clase);
+                table.Cell().Element(Celda).AlignRight().Text(Pesos(x.Valor));
+            }
+            table.Cell().Element(Celda).Text("Total de aportes").SemiBold();
+            table.Cell().Element(Celda).AlignRight().Text(Pesos(c.Total)).SemiBold();
+        });
+        foreach (var t in textos.Skip(1).Take(c.AhorroPermanente is null ? 1 : 2)) col.Item().PaddingTop(4).Text(t);
+        if (c.CuotasPendientes.Count > 0)
+        {
+            col.Item().PaddingTop(8).Text("Cuotas pendientes al corte").SemiBold();
+            foreach (var q in c.CuotasPendientes) col.Item().Text(Pendiente(q));
+        }
+        else col.Item().PaddingTop(4).Text("Sin cuotas de aportes pendientes al corte.").Italic();
+    }
+
+    private static IReadOnlyList<string> TextosDeLaConstancia(CuerpoDeConstanciaDeAportes c)
+    {
+        var textos = new List<string>
+        {
+            $"Cuenta de aportes {c.NumeroDeCuenta} · {c.Linea} · saldo al {Fecha(c.Corte)}"
+            + (c.Vinculacion is { } v ? $" · asociado desde el {Fecha(v)}" : string.Empty),
+            $"Mínimo no reducible: {Pesos(c.Minimo)}",
+        };
+        if (c.AhorroPermanente is { } p) textos.Add($"Ahorro permanente: {Pesos(p)}");
+        textos.AddRange(c.PorClase.Select(x => $"{x.Clase} {Pesos(x.Valor)}"));
+        textos.Add($"Total de aportes {Pesos(c.Total)}");
+        textos.AddRange(c.CuotasPendientes.Select(Pendiente));
+        return textos;
+    }
+
+    private static void PazYSalvoDeAportes(ColumnDescriptor col, CuerpoDePazYSalvoDeAportes p)
+    {
+        foreach (var t in TextosDelPazYSalvoDeAportes(p)) col.Item().PaddingTop(4).Text(t);
+    }
+
+    private static IReadOnlyList<string> TextosDelPazYSalvoDeAportes(CuerpoDePazYSalvoDeAportes p)
+    {
+        var textos = new List<string>
+        {
+            $"El asociado se encuentra a paz y salvo por las cuotas de aportes de la cuenta {p.NumeroDeCuenta} ({p.Linea}) al {Fecha(p.Corte)}.",
+            $"Saldo de aportes: {Pesos(p.SaldoDeAportes)}",
+        };
+        if (p.FirmezaHasta is { } f) textos.Add($"Sujeto a firmeza hasta el {Fecha(f)}.");
+        return textos;
+    }
+
+    private static string Pendiente(CuotaDeAportesPendiente q) => $"Cuota {q.Periodo} de la cuenta {q.Cuenta}, vence el {Fecha(q.Vencimiento)}: {Pesos(q.Pendiente)}";
 
     private static IReadOnlyList<string> TextosDelCertificado(CuerpoDeCertificadoDeSaldo c)
     {

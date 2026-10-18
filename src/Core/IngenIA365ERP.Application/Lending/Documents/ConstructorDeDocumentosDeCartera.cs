@@ -28,7 +28,14 @@ namespace IngenIA365ERP.Application.Lending.Documents;
 /// del extracto y el año del certificado tributario. (nuevo)
 /// </summary>
 public sealed record PedidoDeDocumentoDeCartera(IssuedDocumentKind Clase, Person Titular, Loan? Credito, DateOnly? Corte, DateTime Emision, DateOnly Hoy,
-    PeriodoDeDocumento? Periodo = null, short? Año = null);
+    PeriodoDeDocumento? Periodo = null, short? Año = null)
+{
+    /// <summary>Feature 014 (T087): la constancia de aportes incluye el ahorro permanente.</summary>
+    public bool IncluyeAhorroPermanente { get; init; }
+}
+
+/// <summary>Feature 014 (T087): una cuenta que cubre el documento (<c>LND_IssuedDocumentAccounts</c>). (nuevo)</summary>
+public sealed record CuentaDeDocumentoDeCartera(int MemberAccountId, long? LastOperationId, long? LastTransactionId, decimal? BalanceAtCutoff);
 
 /// <summary>Un crédito que cubre el documento (<c>LND_IssuedDocumentLoans</c>). (nuevo)</summary>
 public sealed record LineaDeDocumentoDeCartera(int LoanId, long? LastOperationId, long? LastTransactionId, decimal? BalanceAtCutoff, long? PayoffOperationId);
@@ -50,7 +57,11 @@ public sealed record DocumentoArmado(
     string? SettlementSha256,
     string RulesVersion,
     Dictionary<string, object?> DatosEsenciales,
-    IReadOnlyList<string> Leyendas);
+    IReadOnlyList<string> Leyendas)
+{
+    /// <summary>Feature 014 (T087): las cuentas de captación o de aportes que cubre.</summary>
+    public IReadOnlyList<CuentaDeDocumentoDeCartera> Cuentas { get; init; } = [];
+}
 
 /// <summary>
 /// Arma cada clase de documento de K1 (feature 013, US13, T0783; adaptadores-y-archivos.md §8.5, §8.6; FR-131, FR-068, T24, D23). Lee, no escribe:
@@ -81,7 +92,8 @@ public sealed class ConstructorDeDocumentosDeCartera(
     ReglasDeParametrosDeCartera parametros,
     FirmezaDelPago firmeza,
     IDateTimeService reloj,
-    INormativaVigente? normativa = null)
+    INormativaVigente? normativa = null,
+    Deposits.Documents.DocumentosDeAportes? aportes = null)
 {
     private static readonly CultureInfo Co = CultureInfo.GetCultureInfo("es-CO");
 
@@ -111,6 +123,9 @@ public sealed class ConstructorDeDocumentosDeCartera(
             IssuedDocumentKind.BalanceCertificate => CertificadoDeSaldoAsync(p, Requerido(p), ct),
             IssuedDocumentKind.Statement => ExtractoAsync(p, Requerido(p), ct),
             IssuedDocumentKind.TaxCertificate => CertificadoTributarioAsync(p, ct),
+            IssuedDocumentKind.ContributionCertificate or IssuedDocumentKind.ContributionClearance => aportes is null
+                ? throw new InvalidOperationException("Los documentos de aportes necesitan DocumentosDeAportes.")
+                : aportes.ArmarAsync(p, ct),
             _ => throw new ArgumentOutOfRangeException(nameof(p), p.Clase, "Clase de documento desconocida."),
         };
     }

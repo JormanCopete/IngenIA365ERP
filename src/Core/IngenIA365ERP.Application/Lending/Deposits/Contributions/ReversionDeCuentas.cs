@@ -32,7 +32,8 @@ public sealed class ReversionDeCuentas(
     NumeradorDeCartera numerador,
     EmisionDeCartera emision,
     IActorActual actorActual,
-    IDateTimeService reloj)
+    IDateTimeService reloj,
+    Documents.AnulacionDeDocumentosDeCuentas? documentos = null)
 {
     /// <summary>El prefijo del comprobante del reverso de una operación de cuenta.</summary>
     public const string PrefijoReverso = "RVC-";
@@ -53,7 +54,7 @@ public sealed class ReversionDeCuentas(
         if (original.ReversedByOperationId is { } yaId)
         {
             var existente = await db.MemberAccountOperations.AsNoTracking().FirstAsync(o => o.Id == yaId, ct);
-            return Result.Success(new ReversoDeCuentaAplicado(await ComprobanteAsync(existente, original, false, ct), true));
+            return Result.Success(new ReversoDeCuentaAplicado(await ComprobanteAsync(existente, original, false, [], ct), true));
         }
 
         var cuenta = await db.MemberAccounts.FirstAsync(a => a.Id == original.MemberAccountId, ct);
@@ -102,13 +103,15 @@ public sealed class ReversionDeCuentas(
         if (espejos.IsFailure) return Result.Failure<ReversoDeCuentaAplicado>(espejos.Error);
         await db.SaveChangesAsync(ct);
         RegistroDeCuentas.MarcarReversada(original, reverso);
+        // T087 (documentos.md §4): los documentos que vieron la operación y que el reverso deja sin validez, en la misma unidad de trabajo.
+        var anulados = documentos is null ? [] : await documentos.AnularAsync(original, reverso, ct);
 
         // FR-056: si el dinero ya se usó, el reverso deja la cuenta en negativo técnico (bloquea retiros y avisa).
         var saldos = (await LectorDeCuentas.SaldosAsync(db, [cuenta.Id], ct)).GetValueOrDefault(cuenta.Id) ?? [];
         var negativo = LectorDeCuentas.SaldoDelTitular(cuenta.Nature, saldos) < 0m;
         if (negativo && cuenta.TechnicalNegativeSince is null) cuenta.TechnicalNegativeSince = reloj.HoyLocal;
         await db.SaveChangesAsync(ct);
-        return Result.Success(new ReversoDeCuentaAplicado(await ComprobanteAsync(reverso, original, negativo, ct), false));
+        return Result.Success(new ReversoDeCuentaAplicado(await ComprobanteAsync(reverso, original, negativo, anulados, ct), false));
     }
 
     /// <summary>El tipo del hecho principal de la operación original (el que el reverso espeja).</summary>
@@ -131,13 +134,13 @@ public sealed class ReversionDeCuentas(
     };
 
     private async Task<ComprobanteDeReversoDeCuentaDto> ComprobanteAsync(MemberAccountOperation reverso, MemberAccountOperation original, bool negativo,
-        CancellationToken ct)
+        IReadOnlyList<Guid> anulados, CancellationToken ct)
     {
         var filas = await db.MemberAccountTransactions.AsNoTracking().Where(t => t.OperationId == reverso.Id).OrderBy(t => t.Id).ToListAsync(ct);
         var cuentas = filas.Select(f => f.MemberAccountId).Append(reverso.MemberAccountId).Distinct().ToList();
         var publicos = await db.MemberAccounts.AsNoTracking().Where(a => cuentas.Contains(a.Id)).Select(a => a.PublicId).ToListAsync(ct);
         return new ComprobanteDeReversoDeCuentaDto(reverso.PublicId, reverso.Number, original.PublicId, original.Number, publicos, reverso.AccountingDate,
             reverso.RegisteredAt, original.Amount, filas.Select(f => new LineaDeCuentaDto((ConceptoDeCuenta)(int)f.Concept, f.Kind.ToString(), f.Amount)).ToList(),
-            negativo, []);
+            negativo, anulados);
     }
 }

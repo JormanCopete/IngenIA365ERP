@@ -65,9 +65,13 @@ public class IssuedDocumentEvent : AuditableEntity, IHechoInmutable
     /// La anulación: manual (una persona, con motivo) o por el reverso de <paramref name="operacionCausa"/> (con su motivo «Se reversó…»). El
     /// motivo es obligatorio en las dos: es lo que muestra la verificación.
     /// </summary>
-    public static IssuedDocumentEvent Anulado(int documentoId, string motivo, DateTime en, ActorKind actorKind, int? actorUserId, long? operacionCausa = null)
+    public static IssuedDocumentEvent Anulado(int documentoId, string motivo, DateTime en, ActorKind actorKind, int? actorUserId, long? operacionCausa = null,
+        long? operacionDeCuentaCausa = null)
     {
         if (string.IsNullOrWhiteSpace(motivo)) throw new ArgumentException("La anulación de un documento lleva motivo.", nameof(motivo));
+        // Feature 014 (T087; data-model §1.5): la causa es una operación de crédito o una de cuenta, nunca las dos (CK_LND_IssuedDocumentEvents_Cause).
+        if (operacionCausa is not null && operacionDeCuentaCausa is not null)
+            throw new ArgumentException("La anulación la causa una operación de crédito o una de cuenta, no las dos.", nameof(operacionDeCuentaCausa));
         _ = Nuevo(documentoId, IssuedDocumentEventKind.Voided, en, actorKind, actorUserId);
         var texto = motivo.Trim();
         return new IssuedDocumentEvent
@@ -79,6 +83,7 @@ public class IssuedDocumentEvent : AuditableEntity, IHechoInmutable
             ActorUserId = actorUserId,
             Reason = texto.Length <= LargoDelMotivo ? texto : texto[..LargoDelMotivo],
             CausingOperationId = operacionCausa,
+            CausingAccountOperationId = operacionDeCuentaCausa,
         };
     }
 
