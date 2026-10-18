@@ -56,6 +56,17 @@ public class LaCarteraNoTieneValoresLegalesFijos
     }
 
     [Fact]
+    public void Las_captaciones_estan_en_las_dos_reglas()
+    {
+        // Feature 014 (T020; R26): Domain/Lending/Deposits y Application/Lending/Deposits se revisan por literales decimales (la carpeta de cada
+        // capa es recursiva) y los motores de Domain/Lending/Deposits, además, por los días de la semana y de la década.
+        Assert.Contains(Carpetas, c => "Core/IngenIA365ERP.Domain/Lending/Deposits".StartsWith(c + "/", StringComparison.Ordinal));
+        Assert.Contains(Carpetas, c => "Core/IngenIA365ERP.Application/Lending/Deposits".StartsWith(c + "/", StringComparison.Ordinal));
+        Assert.Contains("Core/IngenIA365ERP.Domain/Lending/Deposits", CarpetasDelMotor);
+        Assert.DoesNotContain(Exentos, e => e.Contains("/Lending/Deposits/", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void La_cobranza_esta_en_la_regla()
     {
         // K4 (T0932, T0937): los motores puros de la cobranza (Domain/Lending/Collections) están entre los archivos que se revisan.
@@ -126,6 +137,9 @@ public class LaCarteraNoTieneValoresLegalesFijos
         // K6b (T1053, T1054): la vivienda —la UVR, sus conversiones, la reconstrucción en UVR y las reglas de la Ley 546—. Los límites de vivienda,
         // el tope y la UVR llegan como valores nacionales; ninguno es un número del código.
         "Core/IngenIA365ERP.Domain/Lending/Housing",
+        // Feature 014 (T020; R26): los motores de captaciones —interés, retención, GMF, CDAT, contractual, cargos, revalorización, fondo de
+        // liquidez, inembargabilidad—. Tarifas, umbrales, topes, plazos y porcentajes llegan como parámetros o valores nacionales.
+        "Core/IngenIA365ERP.Domain/Lending/Deposits",
     ];
 
     private static readonly Regex SieteODiez = new(@"(?<![\w.])(7|10)(?:[mM])?(?![\w.])", RegexOptions.Compiled);

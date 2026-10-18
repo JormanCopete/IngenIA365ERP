@@ -20,7 +20,7 @@ public class PermisosDeCarteraTests
          .. ElectronicInvoicingPermissionCatalogSeeder.Catalog.Select(p => $"{p.Resource}.{p.Action}"),
          .. LendingPermissionCatalogSeeder.Catalog.Select(p => $"{p.Resource}.{p.Action}")];
 
-    /// <summary>DT §2.14 y api.md §2.1, tal cual, más <c>PrepaymentPreferences.Manage</c> (C85): 123.</summary>
+    /// <summary>DT §2.14 y api.md §2.1, tal cual, más <c>PrepaymentPreferences.Manage</c> (C85): 123; con los 39 de la feature 014, 162.</summary>
     private static readonly string[] Cartera =
     [
         "CreditLines.View", "CreditLines.Manage", "Parameters.View", "Parameters.Manage", "Scoring.View", "Scoring.Manage",
@@ -50,6 +50,14 @@ public class PermisosDeCarteraTests
         "Reports.ExportPersonalData", "Dashboard.View", "RegulatoryFiles.Read", "RegulatoryFiles.MarkUploaded",
         "RegulatoryReports.Generate", "CreditBureauFiles.Generate",
         "Migration.Load", "Migration.AcceptDifferences", "Activation.Execute", "Alerts.View", "Alerts.Attend", "Alerts.Manage",
+        // Feature 014 (T018; contracts/api.md §2): los 39 de captaciones y aportes.
+        "DepositLines.View", "DepositLines.Manage", "ContributionLines.View", "ContributionLines.Manage", "Accounts.View", "Accounts.Read",
+        "Accounts.Open", "Accounts.Close", "Accounts.Deposit", "Accounts.Withdraw", "Accounts.Transfer", "Accounts.Reverse",
+        "Accounts.Parties.Manage", "TermDeposits.Constitute", "TermDeposits.Renew", "TermDeposits.Redeem", "NegotiatedRates.Request",
+        "NegotiatedRates.Approve", "Contributions.Manage", "Holds.Manage", "Garnishments.Register", "Garnishments.Release",
+        "DirectDebits.Manage", "GmfExemptions.Manage", "Charges.Manage", "Charges.Waive", "Interest.Settle", "MembershipWithdrawals.File",
+        "MembershipWithdrawals.Approve", "MembershipWithdrawals.Settle", "Assembly.Register", "Assembly.Approve", "DeceasedCases.Register",
+        "DeceasedCases.Approve", "Unclaimed.Manage", "LiquidityFund.View", "LiquidityFund.Manage", "Deposits.Migration", "Deposits.Activate",
     ];
 
     private static bool DeCartera(string c) => c.StartsWith("Lending.", StringComparison.Ordinal);
@@ -57,7 +65,7 @@ public class PermisosDeCarteraTests
     [Fact]
     public void El_catalogo_de_Cartera_es_exactamente_el_de_DT_2_14_mas_la_preferencia_de_abono()
     {
-        Cartera.Should().HaveCount(123).And.OnlyHaveUniqueItems();
+        Cartera.Should().HaveCount(162).And.OnlyHaveUniqueItems();
         LendingPermissionCatalogSeeder.Catalog.Select(p => $"{p.Resource}.{p.Action}")
             .Should().BeEquivalentTo(Cartera.Select(c => "Lending." + c));
         LendingPermissionCatalogSeeder.Catalog.Should().OnlyContain(p => !string.IsNullOrWhiteSpace(p.Description));
@@ -72,6 +80,8 @@ public class PermisosDeCarteraTests
             "Lending.CreditLimits", "Lending.NumberReservations", "Lending.Loans", "Lending.Payoffs", "Lending.Messages", "Lending.Ratings",
             "Lending.PayrollDeductionFiles", "Lending.Novelties", "Lending.DebtorMessages", "Lending.Collections", "Lending.PriorNotices",
             "Lending.CreditReportClaims", "Lending.Documents", "Lending.RegulatoryFiles",
+            // Feature 014 (T018): las garantías de captaciones con titular (las cuentas tienen View sin titular y Read con él).
+            "Lending.Accounts.Parties", "Lending.TermDeposits", "Lending.Garnishments", "Lending.MembershipWithdrawals", "Lending.DeceasedCases",
         ];
 
         LendingPermissionCatalogSeeder.Catalog.Where(p => conDatosDelDeudor.Contains(p.Resource))
@@ -91,7 +101,7 @@ public class PermisosDeCarteraTests
 
         concedidos.Should().NotContain(c => c.StartsWith("Lending.Decisions.", StringComparison.Ordinal), "administrar no es aprobar crédito (T61)");
         concedidos.Should().NotContain("Lending.Sessions.Vote");
-        concedidos.Should().HaveCount(123 - 4 - 1);
+        concedidos.Should().HaveCount(162 - 4 - 1);
         concedidos.Should().Contain(["Lending.Sessions.Close", "Lending.Disbursements.Execute", "Lending.Activation.Execute"]);
     }
 

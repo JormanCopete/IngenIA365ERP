@@ -13,6 +13,9 @@ public class ElMotorDeCarteraEsDecimal
     /// <summary>Carpetas del motor (relativas a <c>src/</c>).</summary>
     private static readonly string[] Carpetas = [
         "Core/IngenIA365ERP.Domain/Lending",
+        // Feature 014 (T020; R29): los motores de captaciones viven en Domain/Lending/Deposits (cubiertos por la carpeta de arriba) y su
+        // aplicación tampoco calcula en coma flotante (interés, retención, GMF, revalorización y fondo de liquidez se pasan en decimal).
+        "Core/IngenIA365ERP.Application/Lending/Deposits",
     ];
 
     /// <summary>Archivos exentos (rutas relativas a la raíz, con barras normales).</summary>
@@ -38,6 +41,15 @@ public class ElMotorDeCarteraEsDecimal
         Path.Combine("Lending", "MotorDeCartera.cs"),
         Path.Combine("Lending", "RedondeoDeCartera.cs"),
     ];
+
+    [Fact]
+    public void La_regla_mira_las_captaciones()
+    {
+        // Feature 014 (T020): los motores puros de captaciones (research §0.4) y su aplicación están en el recorrido, también antes de
+        // que existan sus archivos (la carpeta del dominio es recursiva).
+        Assert.Contains(Carpetas, c => "Core/IngenIA365ERP.Domain/Lending/Deposits".StartsWith(c + "/", StringComparison.Ordinal));
+        Assert.Contains("Core/IngenIA365ERP.Application/Lending/Deposits", Carpetas);
+    }
 
     [Fact]
     public void La_regla_mira_los_dias_las_tasas_la_usura_y_el_plan()

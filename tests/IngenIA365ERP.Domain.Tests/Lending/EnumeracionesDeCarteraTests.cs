@@ -322,7 +322,11 @@ public class EnumeracionesDeCarteraTests
     {
         LendingDecisionSubjects.Todos.Should().Equal(
             "CreditApplication", "CreditLimit", "Novelty", "Condonation", "WriteOffBatch", "PortfolioEvaluation", "ImpairmentModelChange",
-            "ActivationDifferences", "ValidationFailureException", "RiskPolicyVersion");
+            "ActivationDifferences", "ValidationFailureException", "RiskPolicyVersion",
+            // Feature 014 (T019; research C06): los de captaciones, al final.
+            "DepositWithdrawal", "NegotiatedRate", "MembershipWithdrawal", "DeceasedDelivery", "ChargeWaiver", "TermDepositRedemption",
+            "ContributionRefund", "AssemblyDistribution", "GarnishmentRegistration");
+        LendingDecisionSubjects.DeCaptaciones.Should().Equal(LendingDecisionSubjects.Todos.Skip(10));
         LendingDecisionSubjects.Todos.Should().OnlyContain(s => s.Length <= 40, "SubjectType es nvarchar(40)");
 
         AccionesDeSegregacion.Todas.Should().Equal(

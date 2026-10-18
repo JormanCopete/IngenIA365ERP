@@ -180,12 +180,13 @@ public sealed class UsuariosDeCartera
         return new UsuariosDeCartera { Todos = todos, O1 = o1, O2 = o2, RolesSugeridos = sugeridos };
     }
 
-    /// <summary>Las trece plantillas de Cartera (quickstart §2.3).</summary>
+    /// <summary>Las plantillas de Cartera (quickstart §2.3): las trece del crédito y, desde la feature 014 (T018), las cuatro de captaciones.</summary>
     public static readonly string[] PlantillasDeCartera =
     [
         "cartera.administrador", "cartera.asesor", "cartera.analista", "cartera.jefe", "cartera.comite-credito", "cartera.comite-riesgos",
         "cartera.gerente", "cartera.consejo", "cartera.gestor-cobranza", "cartera.oficial-cumplimiento", "cartera.contador", "cartera.auditor",
         "cartera.revisor-fiscal",
+        "cartera.jefe-captaciones", "cartera.asesor-captaciones", "cartera.analista-aportes", "cartera.tesorero-liquidez",
     ];
 
     private static async Task<Usuario> UsuarioAsync(CentralIdentityApiFixture fx, HttpClient http, CarteraE2E.CooperativaAislada coop, string clave,

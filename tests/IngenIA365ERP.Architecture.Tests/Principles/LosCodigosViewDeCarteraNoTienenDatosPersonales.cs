@@ -37,6 +37,8 @@ public class LosCodigosViewDeCarteraNoTienenDatosPersonales
     [
         "CreditLines", "Parameters", "Scoring", "Attributions", "GoverningBodies", "MessageTemplates", "Processes", "PayrollAgreements",
         "Dashboard", "Templates", "Alerts", "Reconciliation", "Reports",
+        // Feature 014 (T018; api.md §2): catálogos de líneas, cifras agregadas de cuentas sin titular y el fondo de liquidez.
+        "DepositLines", "ContributionLines", "Accounts", "LiquidityFund",
     ];
 
     /// <summary>Rutas que devuelven datos personales, el permiso que exigen y el archivo de rutas que lo declara.</summary>

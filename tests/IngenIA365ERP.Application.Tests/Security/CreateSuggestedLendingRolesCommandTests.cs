@@ -52,11 +52,12 @@ public sealed class CreateSuggestedLendingRolesCommandTests : IDisposable
         var r = await Crear();
 
         r.IsSuccess.Should().BeTrue(r.IsFailure ? r.Error.Message : string.Empty);
-        r.Value.Created.Should().HaveCount(13);
+        // Feature 014 (T018): las trece del crédito y las cuatro de captaciones.
+        r.Value.Created.Should().HaveCount(17);
         r.Value.AlreadyExisting.Should().BeEmpty();
         r.Value.Omitted.Should().BeEmpty();
         var roles = await _db.Roles.ToListAsync();
-        roles.Should().HaveCount(13).And.OnlyContain(x => !x.IsBuiltIn && x.IsAssignable && x.TenantId == 1);
+        roles.Should().HaveCount(17).And.OnlyContain(x => !x.IsBuiltIn && x.IsAssignable && x.TenantId == 1);
         roles.Select(x => x.Code).Should().Contain(["CARTERA-ADMINISTRADOR", "CARTERA-COMITE-CREDITO", "CARTERA-REVISOR-FISCAL"]);
     }
 

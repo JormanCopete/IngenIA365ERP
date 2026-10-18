@@ -24,13 +24,15 @@ public class PerfilesSugeridosDeCarteraTests
     private static IReadOnlyList<string> Codigos(string clave) => PerfilesSugeridos.Expandir(PerfilesSugeridos.Buscar(clave)!, Catalogo).Codigos;
 
     [Fact]
-    public void Hay_trece_plantillas_de_Cartera()
+    public void Hay_diecisiete_plantillas_de_Cartera()
     {
+        // Feature 014 (T018; api.md §2; research E07): las trece del crédito y las cuatro de captaciones y aportes.
         PerfilesSugeridos.DelModulo("Lending").Select(p => p.Key).Should().BeEquivalentTo(
         [
             "cartera.administrador", "cartera.asesor", "cartera.analista", "cartera.jefe", "cartera.comite-credito", "cartera.comite-riesgos",
             "cartera.gerente", "cartera.consejo", "cartera.gestor-cobranza", "cartera.oficial-cumplimiento", "cartera.contador",
             "cartera.auditor", "cartera.revisor-fiscal",
+            "cartera.jefe-captaciones", "cartera.asesor-captaciones", "cartera.analista-aportes", "cartera.tesorero-liquidez",
         ]);
         PerfilesSugeridos.DelModulo("Lending").Should().OnlyContain(p => !string.IsNullOrWhiteSpace(p.Actor) && !string.IsNullOrWhiteSpace(p.Notes));
     }
@@ -54,7 +56,9 @@ public class PerfilesSugeridosDeCarteraTests
         codigos.Should().NotContain(c => c.StartsWith("Lending.Decisions.", StringComparison.Ordinal));
         codigos.Should().NotContain("Lending.Sessions.Vote");
         codigos.Where(c => c.StartsWith("Lending.", StringComparison.Ordinal)).Should()
-            .HaveCount(LendingPermissionCatalogSeeder.Catalog.Length - 6, "todo Lending.* menos los cuatro Decisions, el voto y los dobles de prueba");
+            .HaveCount(LendingPermissionCatalogSeeder.Catalog.Length - 7,
+                "todo Lending.* menos los cuatro Decisions, el voto, los dobles de prueba y aprobar una tasa negociada (feature 014)");
+        codigos.Should().NotContain("Lending.NegotiatedRates.Approve", "administrar no es aprobar una tasa negociada (api.md §2)");
         codigos.Where(c => !c.StartsWith("Lending.", StringComparison.Ordinal)).Should().BeEquivalentTo(["Attachments.Upload", "Attachments.Download"], "sube y elige soportes (bloque D)");
     }
 

@@ -45,7 +45,10 @@ public static class PerfilesSugeridos
 {
     public const string ModuloInventario = "Inventory";
 
-    /// <summary>El módulo de las trece plantillas de Cartera (feature 013, T0221; DT §2.14; contracts/api.md §2.5).</summary>
+    /// <summary>
+    /// El módulo de las plantillas de Cartera (feature 013, T0221; DT §2.14; contracts/api.md §2.5): las trece del crédito y, desde la feature 014
+    /// (T018; api.md §2; research E07), las cuatro de captaciones y aportes. La activación las exige todas (<c>LendingRolesCreated</c>).
+    /// </summary>
     public const string ModuloCartera = "Lending";
 
     public static IReadOnlyList<PerfilSugerido> Todos { get; } =
@@ -135,7 +138,8 @@ public static class PerfilesSugeridos
             ["Lending.*", "Attachments.Upload", "Attachments.Download"],
             "Todas las oficinas y líneas (trae Lending.Scope.AllOffices y AllLines); sin límite de monto.",
             // US5 (T0555, api.md §2.5): Lending.TestDoubles.Operate no lo trae ninguna plantilla; se concede a mano fuera de producción.
-            ["Lending.Decisions.*", "Lending.Sessions.Vote", "Lending.TestDoubles.Operate"]),
+            // Feature 014 (T018; api.md §2): administrar no es aprobar una tasa negociada.
+            ["Lending.Decisions.*", "Lending.Sessions.Vote", "Lending.TestDoubles.Operate", "Lending.NegotiatedRates.Approve"]),
 
         new("cartera.asesor", ModuloCartera, "Asesor de crédito",
             "Consulta las líneas, simula, radica y envía solicitudes, consulta centrales, registra garantías y pagarés, emite documentos y escribe al deudor.",
@@ -269,6 +273,49 @@ public static class PerfilesSugeridos
                 "AuditLog.View", "AuditLog.Export", "AuditLog.VerifyIntegrity", "Lending.Scope.AllOffices", "Lending.Scope.AllLines",
             ],
             "Todas las oficinas y líneas, sin escritura."),
+
+        // ------------------------------------------------------- captaciones y aportes (feature 014, T018; api.md §2) --
+        new("cartera.jefe-captaciones", ModuloCartera, "Jefe de captaciones",
+            "Administra las líneas de captación y de aportes, abre y cancela cuentas, decide tasas negociadas, redime CDAT, lleva embargos, cargos, "
+            + "retiros del asociado, fallecimientos y no reclamados, y carga la migración de captaciones.",
+            [
+                "Lending.DepositLines.*", "Lending.ContributionLines.*", "Lending.Accounts.*", "Lending.TermDeposits.*", "Lending.NegotiatedRates.*",
+                "Lending.Contributions.Manage", "Lending.Holds.Manage", "Lending.Garnishments.*", "Lending.DirectDebits.Manage",
+                "Lending.GmfExemptions.Manage", "Lending.Charges.*", "Lending.Interest.Settle", "Lending.MembershipWithdrawals.*",
+                "Lending.DeceasedCases.*", "Lending.Unclaimed.Manage", "Lending.Deposits.Migration", "Lending.Documents.Read", "Lending.Documents.Issue",
+                "Lending.Reports.View", "Lending.Reports.Export", "Lending.Scope.AllOffices", "Lending.Scope.AllLines",
+                "Attachments.Upload", "Attachments.Download",
+            ],
+            "Todas las oficinas y líneas; límite de monto en Lending.Accounts.Withdraw, TermDeposits.Redeem y MembershipWithdrawals.Settle si la "
+            + "cooperativa lo fija. La segregación impide decidir lo que la misma persona registró."),
+
+        new("cartera.asesor-captaciones", ModuloCartera, "Asesor de captaciones",
+            "Abre cuentas y administra sus titulares y beneficiarios, constituye CDAT, pide tasas negociadas, marca la exención de GMF, autoriza "
+            + "débitos automáticos, radica el retiro del asociado y emite documentos al titular.",
+            [
+                "Lending.DepositLines.View", "Lending.ContributionLines.View", "Lending.Accounts.View", "Lending.Accounts.Read", "Lending.Accounts.Open",
+                "Lending.Accounts.Parties.Manage", "Lending.TermDeposits.Constitute", "Lending.NegotiatedRates.Request", "Lending.GmfExemptions.Manage",
+                "Lending.DirectDebits.Manage", "Lending.MembershipWithdrawals.File", "Lending.Documents.Read", "Lending.Documents.Issue",
+                "Core.People.Create", "Compliance.HabeasData.RecordConsent", "Attachments.Upload", "Attachments.Download",
+            ],
+            "Sus oficinas y líneas: hay que asignárselas (alcance de Cartera)."),
+
+        new("cartera.analista-aportes", ModuloCartera, "Analista de aportes",
+            "Lleva los aportes: devoluciones sin retiro y cesiones, la liquidación del retiro del asociado y la simulación de la asamblea.",
+            [
+                "Lending.ContributionLines.View", "Lending.Accounts.View", "Lending.Accounts.Read", "Lending.Contributions.Manage",
+                "Lending.MembershipWithdrawals.File", "Lending.MembershipWithdrawals.Settle", "Lending.Assembly.Register", "Lending.Documents.Read",
+                "Lending.Documents.Issue", "Lending.Reports.View", "Lending.Scope.AllOffices", "Lending.Scope.AllLines",
+            ],
+            "Todas las oficinas y líneas; límite de monto en Lending.MembershipWithdrawals.Settle si la cooperativa lo fija."),
+
+        new("cartera.tesorero-liquidez", ModuloCartera, "Tesorero (fondo de liquidez)",
+            "Registra el constituido del fondo de liquidez y sus instantáneas, y consulta saldos agregados y la conciliación.",
+            [
+                "Lending.LiquidityFund.*", "Lending.Accounts.View", "Lending.Reconciliation.View", "Lending.Reports.View", "Lending.Reports.Export",
+                "Lending.Scope.AllOffices", "Lending.Scope.AllLines",
+            ],
+            "Todas las oficinas y líneas; sólo cifras, sin datos de titulares."),
     ];
 
     /// <summary>La plantilla por clave (sin distinguir mayúsculas), o <c>null</c>.</summary>

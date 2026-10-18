@@ -19,6 +19,12 @@ namespace IngenIA365ERP.Identity.Seed;
 /// (segregación). A <c>CompanyAdmin</c> se le excluyen <c>Lending.Decisions.*</c> y <c>Lending.Sessions.Vote</c>
 /// (<see cref="BuiltInRolesSeeder"/>, T61): administrar no es aprobar crédito.
 /// </para>
+///
+/// <para>
+/// Feature 014 (T018; contracts/api.md §2; research §0.7): suma los <b>39</b> de captaciones y aportes, enteros desde K7 también los de K8 a
+/// K11 —162 en total—. Misma convención: <c>Lending.Accounts.Read</c> trae datos del titular; <c>Lending.Accounts.View</c>, sólo conteos y
+/// saldos agregados.
+/// </para>
 /// </summary>
 public static class LendingPermissionCatalogSeeder
 {
@@ -168,6 +174,47 @@ public static class LendingPermissionCatalogSeeder
         ("Lending.Alerts",              "View",                "Ver la bandeja de alertas de Cartera"),
         ("Lending.Alerts",              "Attend",              "Atender alertas de Cartera"),
         ("Lending.Alerts",              "Manage",              "Configurar los tipos de alerta de Cartera"),
+
+        // ------------------------------------------------------------ captaciones y aportes (feature 014, T018; api.md §2) --
+        ("Lending.DepositLines",        "View",                "Ver líneas de captación, sus versiones, tramos, cargos y reglas de tasa negociada"),
+        ("Lending.DepositLines",        "Manage",              "Crear, versionar, cerrar, reabrir e importar líneas de captación"),
+        ("Lending.ContributionLines",   "View",                "Ver la línea de aportes y sus versiones"),
+        ("Lending.ContributionLines",   "Manage",              "Crear, versionar, cerrar, reabrir e importar la línea de aportes"),
+        ("Lending.Accounts",            "View",                "Ver conteos, saldos agregados y vencimientos de cuentas, sin titular"),
+        ("Lending.Accounts",            "Read",                "Ver cuentas, saldos, disponible, libro, operaciones, cuotas y condiciones (lectura auditada)"),
+        ("Lending.Accounts",            "Open",                "Abrir cuentas y aprobar una apertura excepcional"),
+        ("Lending.Accounts",            "Close",               "Cancelar cuentas"),
+        ("Lending.Accounts",            "Deposit",             "Consignar en efectivo por el contrato hasta el monto atribuido"),
+        ("Lending.Accounts",            "Withdraw",            "Retirar por orden de giro y por el contrato hasta el monto atribuido"),
+        ("Lending.Accounts",            "Transfer",            "Trasladar entre cuentas desde la pantalla"),
+        ("Lending.Accounts",            "Reverse",             "Reversar una operación de cuenta registrada por la Cartera"),
+        ("Lending.Accounts.Parties",    "Manage",              "Administrar titulares, firmantes, representantes y beneficiarios de las cuentas"),
+        ("Lending.TermDeposits",        "Constitute",          "Simular y constituir CDAT"),
+        ("Lending.TermDeposits",        "Renew",               "Renovar un CDAT o cambiar su instrucción al vencimiento"),
+        ("Lending.TermDeposits",        "Redeem",              "Redimir un CDAT hasta el monto atribuido"),
+        ("Lending.NegotiatedRates",     "Request",             "Pedir una tasa negociada"),
+        ("Lending.NegotiatedRates",     "Approve",             "Decidir una tasa negociada según la matriz de atribuciones"),
+        ("Lending.Contributions",       "Manage",              "Registrar devoluciones sin retiro y cesiones de aportes y aprobarlas"),
+        ("Lending.Holds",               "Manage",              "Registrar y levantar bloqueos de cuentas"),
+        ("Lending.Garnishments",        "Register",            "Registrar embargos, sus respuestas y las consignaciones al juzgado"),
+        ("Lending.Garnishments",        "Release",             "Desembargar cuentas"),
+        ("Lending.DirectDebits",        "Manage",              "Administrar autorizaciones de débito automático"),
+        ("Lending.GmfExemptions",       "Manage",              "Marcar y desmarcar la cuenta exenta de GMF"),
+        ("Lending.Charges",             "Manage",              "Registrar y reversar cargos de cuentas"),
+        ("Lending.Charges",             "Waive",               "Condonar cargos y exonerar cuentas"),
+        ("Lending.Interest",            "Settle",              "Liquidar a mano un período de intereses de captaciones"),
+        ("Lending.MembershipWithdrawals", "File",              "Radicar y desistir el retiro del asociado"),
+        ("Lending.MembershipWithdrawals", "Approve",           "Aprobar o negar el retiro del asociado con acta y aprobar la devolución"),
+        ("Lending.MembershipWithdrawals", "Settle",            "Liquidar el retiro del asociado hasta el monto atribuido"),
+        ("Lending.Assembly",            "Register",            "Registrar y simular revalorización, excedentes y amortización"),
+        ("Lending.Assembly",            "Approve",             "Aprobar, aplicar y reversar una distribución de la asamblea"),
+        ("Lending.DeceasedCases",       "Register",            "Registrar el fallecimiento de un titular y la entrega"),
+        ("Lending.DeceasedCases",       "Approve",             "Aprobar la entrega de un titular fallecido"),
+        ("Lending.Unclaimed",           "Manage",              "Trasladar saldos a no reclamados y pagarlos"),
+        ("Lending.LiquidityFund",       "View",                "Ver la base, el requerido y el constituido del fondo de liquidez"),
+        ("Lending.LiquidityFund",       "Manage",              "Registrar el constituido y las instantáneas del fondo de liquidez"),
+        ("Lending.Deposits",            "Migration",           "Cargar la migración de captaciones y aportes y sus cifras de referencia"),
+        ("Lending.Deposits",            "Activate",            "Ver la preparación y activar aportes o captaciones"),
     ];
 
     /// <summary>Los que se excluyen del glob <c>*</c> de <c>CompanyAdmin</c> y de la plantilla <c>cartera.administrador</c> (T61, C86).</summary>

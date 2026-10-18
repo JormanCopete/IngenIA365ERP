@@ -113,7 +113,8 @@ public class LosEnumsDelContratoNumeranComoElDominio
             Valores<IngenIA365ERP.Application.Common.Integration.Lending.ResultadoDelContrato>());
         Assert.Equal(new Dictionary<string, int> { ["NotActivated"] = 1, ["Active"] = 2 },
             Valores<IngenIA365ERP.Application.Common.Integration.Lending.EstadoDeCartera>());
-        Assert.Equal(new Dictionary<string, int> { ["Receipts"] = 1, ["Payroll"] = 2, ["Contributions"] = 3, ["OwnLoanPayoff"] = 4, ["Test"] = 5 },
+        // Feature 014 (T014; research C13, E04): Tesorería recibe transferencias a cuentas y créditos.
+        Assert.Equal(new Dictionary<string, int> { ["Receipts"] = 1, ["Payroll"] = 2, ["Contributions"] = 3, ["OwnLoanPayoff"] = 4, ["Test"] = 5, ["Treasury"] = 6 },
             Valores<IngenIA365ERP.Application.Common.Integration.Lending.ClaseDeRecaudador>());
         Assert.Equal(new Dictionary<string, int> { ["PendingDisbursement"] = 1, ["Active"] = 2, ["PaidOff"] = 3, ["WrittenOff"] = 4, ["Voided"] = 5, ["Novated"] = 6 },
             Valores<IngenIA365ERP.Application.Common.Integration.Lending.EstadoDeObligacion>());

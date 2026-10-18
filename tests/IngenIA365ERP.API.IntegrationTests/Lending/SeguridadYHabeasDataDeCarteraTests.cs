@@ -59,7 +59,7 @@ public sealed class SeguridadYHabeasDataDeCarteraTests(CentralIdentityApiFixture
 
         var catalogo = (await CarteraE2E.GetAsync(http, admin, "/api/admin/permissions")).EnumerateArray()
             .Select(p => p.GetProperty("code").GetString()!).Where(c => c.StartsWith("Lending.", StringComparison.Ordinal)).ToList();
-        catalogo.Should().HaveCount(CatalogoDeCartera, "LendingPermissionCatalogSeeder siembra los 123 Lending.* enteros desde K1");
+        catalogo.Should().HaveCount(CatalogoDeCartera, "LendingPermissionCatalogSeeder siembra los 162 Lending.* enteros desde K1 (123 y los 39 de la 014)");
 
         var mios = await CarteraE2E.GetAsync(http, admin, "/api/admin/permissions/mine");
         var deCartera = mios.GetProperty("permissions").EnumerateArray().Select(p => p.GetString()!)
@@ -80,8 +80,8 @@ public sealed class SeguridadYHabeasDataDeCarteraTests(CentralIdentityApiFixture
         otraVez.GetProperty("alreadyExisting").EnumerateArray().Select(k => k.GetString()).Should().BeEquivalentTo(UsuariosDeCartera.PlantillasDeCartera);
     }
 
-    /// <summary>El tamaño del catálogo <c>Lending.*</c> de <c>LendingPermissionCatalogSeeder</c> (contracts/api.md §2.1).</summary>
-    private const int CatalogoDeCartera = 123;
+    /// <summary>El tamaño del catálogo <c>Lending.*</c> de <c>LendingPermissionCatalogSeeder</c> (contracts/api.md §2.1; feature 014 T018: +39).</summary>
+    private const int CatalogoDeCartera = 162;
 
     /// <summary>
     /// US17-1 por desembolso (US3, bloque 7C): <c>lectura</c> no desembolsa, no anula órdenes ni créditos, no genera archivos de desembolsos ni
