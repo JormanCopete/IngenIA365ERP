@@ -96,6 +96,48 @@ public sealed class SolicitudDeReversoDeCuentaValidator : AbstractValidator<Soli
     }
 }
 
+/// <summary>La forma de un retiro (§3.9; US4, T111). (nuevo)</summary>
+public sealed class SolicitudDeRetiroValidator : AbstractValidator<SolicitudDeRetiro>
+{
+    public SolicitudDeRetiroValidator()
+    {
+        RuleFor(x => x.Collector).NotNull().SetValidator(new RecaudadorValidator());
+        RuleFor(x => x.IdempotencyKey).NotEmpty().MaximumLength(GramaticaDeClaves.LargoMaximo).WithErrorCode("IdempotencyKey");
+        RuleFor(x => x).Must(x => GramaticaDeClaves.Cumple(x.Collector.Class, x.IdempotencyKey)).When(x => x.Collector is not null)
+            .WithErrorCode("IdempotencyKey").WithMessage(x => GramaticaDeClaves.Mensaje(x.Collector.Class));
+        RuleFor(x => x.AccountPublicId).NotEmpty().WithErrorCode("AccountPublicId");
+        RuleFor(x => x.Amount).GreaterThan(0m).WithErrorCode("Amount")
+            .Must(m => Deposits.Ledger.RegistroDeCuentas.Decimales(m) <= MemberAccountTransaction.DecimalesDeOperacion).WithErrorCode("AmountTooPrecise")
+            .WithMessage("El valor lleva a lo sumo dos decimales.");
+        RuleFor(x => x.MeansClass).IsInEnum().WithErrorCode("MeansClass");
+        RuleFor(x => x.SignerPersonPublicIds).NotNull().WithErrorCode("SignerPersonPublicIds");
+        RuleFor(x => x.ReceiverPersonPublicId).NotEmpty().WithErrorCode("ReceiverPersonPublicId");
+        RuleFor(x => x.Receipt).NotNull().WithErrorCode("Receipt");
+        RuleFor(x => x.Receipt.Number).NotEmpty().MaximumLength(40).When(x => x.Receipt is not null).WithErrorCode("ReceiptNumber");
+    }
+}
+
+/// <summary>La forma de un traslado (§3.10; US4, T111). (nuevo)</summary>
+public sealed class SolicitudDeTrasladoValidator : AbstractValidator<SolicitudDeTraslado>
+{
+    public SolicitudDeTrasladoValidator()
+    {
+        RuleFor(x => x.Collector).NotNull().SetValidator(new RecaudadorValidator());
+        RuleFor(x => x.IdempotencyKey).NotEmpty().MaximumLength(GramaticaDeClaves.LargoMaximo).WithErrorCode("IdempotencyKey");
+        RuleFor(x => x).Must(x => GramaticaDeClaves.Cumple(x.Collector.Class, x.IdempotencyKey)).When(x => x.Collector is not null)
+            .WithErrorCode("IdempotencyKey").WithMessage(x => GramaticaDeClaves.Mensaje(x.Collector.Class));
+        RuleFor(x => x.SourceAccountPublicId).NotEmpty().WithErrorCode("SourceAccountPublicId");
+        RuleFor(x => x.TargetAccountPublicId).NotEmpty().NotEqual(x => x.SourceAccountPublicId).WithErrorCode("TargetAccountPublicId")
+            .WithMessage("El traslado es entre dos cuentas distintas.");
+        RuleFor(x => x.Amount).GreaterThan(0m).WithErrorCode("Amount")
+            .Must(m => Deposits.Ledger.RegistroDeCuentas.Decimales(m) <= MemberAccountTransaction.DecimalesDeOperacion).WithErrorCode("AmountTooPrecise")
+            .WithMessage("El valor lleva a lo sumo dos decimales.");
+        RuleFor(x => x.SignerPersonPublicIds).NotNull().WithErrorCode("SignerPersonPublicIds");
+        RuleFor(x => x.Receipt).NotNull().WithErrorCode("Receipt");
+        RuleFor(x => x.TargetModality).IsInEnum().NotEqual(ModalidadDeConsignacion.TermDepositFunding).WithErrorCode("TargetModality");
+    }
+}
+
 /// <summary>La forma de una consulta de cuentas (§3.5). (nuevo)</summary>
 public sealed class SolicitudDeConsultaDeCuentasValidator : AbstractValidator<SolicitudDeConsultaDeCuentas>
 {

@@ -9,7 +9,9 @@ using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Lending.Common;
 using IngenIA365ERP.Application.Lending.Deposits.Accounts;
 using IngenIA365ERP.Application.Lending.Deposits.Activation;
+using IngenIA365ERP.Application.Lending.Deposits.Charges;
 using IngenIA365ERP.Application.Lending.Deposits.Ledger;
+using IngenIA365ERP.Application.Lending.Deposits.Operations;
 using IngenIA365ERP.Application.Lending.Integration;
 using IngenIA365ERP.Application.Lending.Payments;
 using IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts;
@@ -18,12 +20,13 @@ using IngenIA365ERP.Domain.Entities.Lending.Deposits.Transactions;
 using IngenIA365ERP.Domain.Enums.Integration;
 using IngenIA365ERP.Domain.Enums.Lending;
 using IngenIA365ERP.Domain.Lending;
+using IngenIA365ERP.Domain.Lending.Deposits;
 using IngenIA365ERP.Domain.Lending.Parameters;
 using Microsoft.EntityFrameworkCore;
 
 namespace IngenIA365ERP.Application.Lending.Deposits.Contributions;
 
-/// <summary>Una porción de una consignación: la cuota que cubre (nula en un extraordinario), el concepto del libro y el valor. (nuevo)</summary>
+/// <summary>Una porción de una consignación: la cuota que cubre (nula en un extraordinario o al saldo), el concepto del libro y el valor. (nuevo)</summary>
 public sealed record PorcionDeConsignacion(CuotaLeida? Cuota, MemberAccountConcept Concepto, decimal Monto);
 
 /// <summary>El reparto de una consignación: las porciones, lo que excede lo exigible y adónde fue (<c>Extraordinary</c>). (nuevo)</summary>
@@ -43,24 +46,24 @@ public sealed record ConsignacionEnCurso(Recaudador Recaudador, ConsignacionAApl
 public sealed record ConsignacionAplicada(ComprobanteDeCuentaDto Comprobante, bool YaAplicada);
 
 /// <summary>
-/// La consignación en una cuenta por el contrato (feature 014, US3, T083, T085; contrato-de-cuentas §3.8; FR-040, FR-041, FR-043, FR-087, FR-089): en
-/// la transacción del recaudador y bajo el cerrojo que ya tomó el contrato:
+/// La consignación en una cuenta por el contrato (feature 014, US3, T083, T085; US4, T111, T116; contrato-de-cuentas §3.8; FR-040, FR-041, FR-043, FR-050,
+/// FR-059, FR-087, FR-089, FR-128): en la transacción del recaudador y bajo el cerrojo que ya tomó el contrato:
 /// <list type="number">
 /// <item>la idempotencia por <c>(recaudador, clave)</c> con la huella de la solicitud (misma huella: el comprobante original; otra:
 /// <c>Lending.Contract.KeyReused</c>);</item>
-/// <item>la cuenta operable (activa o inactiva —una consignación la reactiva—, titular vivo), la clase de medio del recaudador, la fecha valor
-/// (después de la activación de la naturaleza, no futura y, salvo Nómina, no más atrás que <c>Captaciones.DiasMaximosFechaValor</c>) y el origen de
-/// fondos del efectivo sobre <c>Efectivo.UmbralDeclaracion</c>;</item>
-/// <item>el <b>reparto</b> (<see cref="RepartirAsync"/>): las cuotas en orden de vencimiento (o las nombradas), completando el mínimo no reducible
-/// primero si la línea lo dice; lo que excede lo exigible va como aporte extraordinario si la línea lo admite, y si no se rechaza; sin cuotas
-/// pendientes, todo es extraordinario. El límite individual de participación (FR-043) rechaza un aporte que lo supera si la línea rechaza el
-/// exceso;</item>
-/// <item>la operación y sus filas por <see cref="RegistroDeCuentas"/> (el único escritor del libro), el número por <see cref="NumeradorDeCartera"/> y
-/// el hecho —<c>AporteRecibido</c> en aportes, <c>ConsignacionEnCuentaAplicada</c> en la cuota del ahorro permanente— por
-/// <see cref="EmisionDeCartera"/> en la misma unidad (T5).</item>
+/// <item>la cuenta operable (activa o inactiva —una consignación la reactiva—, o en apertura esperando sólo su depósito inicial; titular vivo), sólo
+/// asociados (FR-030), la clase de medio del recaudador, la fecha valor (después de la activación de la naturaleza, no futura y, salvo Nómina, no más atrás
+/// que <c>Captaciones.DiasMaximosFechaValor</c>), el efectivo —origen de fondos sobre <c>Efectivo.UmbralDeclaracion</c>, máximo de la línea y la atribución
+/// con monto <c>Lending.Accounts.Deposit</c> del usuario que actúa—;</item>
+/// <item>el <b>reparto</b> (<see cref="RepartirAsync"/>): en aportes y en las cuotas del ahorro permanente, las cuotas en orden de vencimiento (o las
+/// nombradas) y el excedente como extraordinario si la línea lo admite; en una cuenta de captación, <c>Free</c> va al saldo;</item>
+/// <item>el <b>canje</b> del medio (C14: <c>ClearingUntil</c> por los días hábiles de <c>Captaciones.DiasDeCanjePorClaseDeMedio</c>), el cobro de los
+/// <b>cargos pendientes</b> en la misma operación (acompañante <c>CargoPendienteCobrado</c>) y el depósito inicial que activa una cuenta en apertura;</item>
+/// <item>la operación y sus filas por <see cref="RegistroDeCuentas"/>, el número por <see cref="NumeradorDeCartera"/> y el hecho —<c>AporteRecibido</c> en
+/// aportes, <c>ConsignacionEnCuentaAplicada</c> en captación— por <see cref="EmisionDeCartera"/> en la misma unidad (T5); los cargos por consignación sobre
+/// los gratuitos, en su propia operación.</item>
 /// </list>
-/// No guarda: el contrato guarda una vez al final del lote. Las consignaciones libres en cuentas de captación (con canje, cargos y GMF) llegan con K8
-/// (US4): aquí sólo la cuota del ahorro permanente (research E56). (nuevo)
+/// Guarda dentro de la transacción de quien llama (los cargos nombran su operación). (nuevo)
 /// </summary>
 public sealed class ConsignacionEnCuentas(
     IApplicationDbContext db,
@@ -70,7 +73,9 @@ public sealed class ConsignacionEnCuentas(
     ReglasDeAportes reglas,
     ReglasDeParametrosDeCartera parametros,
     IActorActual actorActual,
-    IDateTimeService reloj)
+    IDateTimeService reloj,
+    ReglasDeMovimientos movimientos,
+    CargosDeCuentas cargos)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
@@ -105,13 +110,26 @@ public sealed class ConsignacionEnCuentas(
         var cuenta = await db.MemberAccounts.FirstOrDefaultAsync(a => a.PublicId == item.AccountPublicId && !a.IsDeleted, ct);
         if (cuenta is null) return Falla(new Error(ErroresDePagos.CodigoNoEncontrado, "La cuenta no existe."));
         if (await OperableAsync(cuenta, ct) is { } noOperable) return Falla(noOperable);
-        if (cuenta.Nature == LineNature.Deposit && cuenta.DepositClass != DepositClass.Permanent)
-            return Falla(ErroresDeAportes.EntregaNoDisponible("La consignación en una cuenta de captación", nameof(EntregaDeCartera.K8)));
+        if (cuenta.DepositClass is DepositClass.TermDeposit or DepositClass.Contractual)
+            return Falla(ErroresDeAportes.EntregaNoDisponible("La consignación en un CDAT o en un ahorro contractual", nameof(EntregaDeCartera.K9)));
         if (ClaseDeMedio(c.Recaudador.Class, item.MeansClass) is { } medio) return Falla(medio);
         if (await FechaValorAsync(c.Recaudador.Class, cuenta.Nature, item.ValueDate, ct) is { } fecha) return Falla(fecha);
         if (item.MeansClass == ClaseDeMedioDeRecaudo.Cash && item.SourceOfFundsAttachmentPublicId is null
             && await LectorDeCuentas.UmbralDeOrigenDeFondosAsync(parametros, item.ValueDate, ct) is { } umbral && item.Amount >= umbral)
             return Falla(ErroresDeAportes.OrigenDeFondos(umbral, item.Amount));
+
+        var leida = await movimientos.LeerAsync(cuenta, item.ValueDate, ct);
+        if (await movimientos.SoloAsociadosAsync(leida, item.ValueDate, ct) is { } soloAsociados) return Falla(soloAsociados);
+        if (await movimientos.TopesAsync(leida, item.Amount, item.MeansClass, esRetiro: false, item.ValueDate, ct) is { } tope) return Falla(tope);
+        AtribucionEvaluada atribucion = AtribucionEvaluada.SinAprobacion;
+        if (item.MeansClass == ClaseDeMedioDeRecaudo.Cash)
+        {
+            var evaluada = await movimientos.AtribucionAsync(ReglasDeMovimientos.PermisoDeConsignacion, cuenta, item.Amount,
+                ReglasDeMovimientos.HuellaDeOperacion(nameof(MemberAccountOperationKind.Deposit), c.Recaudador.Code, item.IdempotencyKey, cuenta.PublicId, item.Amount),
+                $"Consignación en efectivo de {item.Amount:N0} en la cuenta {cuenta.Number}", item.ApprovalPublicId, item.ValueDate, ct);
+            if (evaluada.IsFailure) return Falla(evaluada.Error);
+            atribucion = evaluada.Value;
+        }
 
         var reparto = await RepartirAsync(cuenta, item.Modality, item.Amount, item.InstallmentPublicIds, item.ValueDate, ct);
         if (reparto.IsFailure) return Falla(reparto.Error);
@@ -120,6 +138,7 @@ public sealed class ConsignacionEnCuentas(
         if (hecho.IsFailure) return Falla(hecho.Error);
         var control = await db.MemberAccountControls.FirstAsync(x => x.MemberAccountId == cuenta.Id, ct);
         var numero = await numerador.NumeroDeOperacionDeCuentaAsync(MemberAccountOperationKind.Deposit, PrefijoConsignacion, ct);
+        var canjeHasta = cuenta.Nature == LineNature.Deposit ? await movimientos.CanjeHastaAsync(item.MeansClass, item.ValueDate, ct) : null;
         var ahora = reloj.UtcNow;
         var actor = await actorActual.ObtenerAsync(ct);
         var r = reparto.Value;
@@ -152,12 +171,15 @@ public sealed class ConsignacionEnCuentas(
             ReceiptDate = item.Receipt.Date,
             ReceiptBranchPublicId = item.Receipt.OfficePublicId,
             ReceiptMeansReference = item.Receipt.MeansReference,
+            ClearingUntil = canjeHasta,
             CashOriginDeclarationAttachmentPublicId = item.SourceOfFundsAttachmentPublicId,
+            AuthorizedByUserId = atribucion.AprobadoPor,
             Payload = JsonSerializer.Serialize(item, Json),
             InputsSha256 = entradas,
             RulesVersion = VersionesDeReglas.Vigente,
             PrevalidationOutcome = c.Validacion.ToString(),
         });
+        await db.SaveChangesAsync(ct);
 
         var reactivada = false;
         if (cuenta.Status == MemberAccountStatus.Inactive)
@@ -166,6 +188,24 @@ public sealed class ConsignacionEnCuentas(
             reactivada = true;
         }
         RegistroDeCuentas.MarcarActividadDelTitular(control, item.ValueDate);
+
+        // FR-128: los cargos pendientes se cobran con esta consignación, enteros y sin dejar el capital bajo el mínimo (en la misma operación).
+        IReadOnlyList<(AccountCharge Cargo, decimal Monto)> cobrados = [];
+        if (cuenta.Nature == LineNature.Deposit)
+        {
+            var capitalDespues = leida.Saldos.GetValueOrDefault(MemberAccountConcept.Principal) + r.Porciones.Where(p => p.Concepto == MemberAccountConcept.Principal)
+                .Sum(p => p.Monto) - (canjeHasta is null ? 0m : item.Amount);
+            cobrados = await cargos.PendientesACobrarAsync(cuenta, capitalDespues, leida.Disponible.Minimo, ct);
+        }
+
+        // El depósito inicial que activa una cuenta en apertura (E45): la apertura ya aprobada espera sólo el capital de apertura de la línea.
+        var esInicial = false;
+        if (cuenta.Status == MemberAccountStatus.Opening)
+        {
+            var capital = leida.Saldos.GetValueOrDefault(MemberAccountConcept.Principal) + item.Amount;
+            esInicial = true;
+            if (capital >= (leida.Version?.MinOpeningAmount ?? 0m)) cuenta.Activar(item.ValueDate, ahora);
+        }
 
         var valores = r.Porciones.GroupBy(p => p.Concepto)
             .Select(g => new DepositConceptAmountV1
@@ -179,15 +219,22 @@ public sealed class ConsignacionEnCuentas(
                 r.PorCuota.Select(q => new CoveredInstallmentV1 { InstallmentPublicId = q.InstallmentPublicId, Period = q.Period, Amount = q.Amount }).ToList(),
                 r.ExcedenteComo, c.Validacion), ct)
             : await emision.ConsignacionEnCuentaAsync(new ConsignacionAEmitir(hecho.Value, operacion, c.Recaudador, item.IdempotencyKey, item.MeansClass,
-                item.DepositorPublicId, item.Receipt, item.Modality.ToString(), valores, reactivada, c.Validacion), ct);
+                item.DepositorPublicId, item.Receipt, item.Modality.ToString(), valores, reactivada, c.Validacion)
+            {
+                EnCanje = canjeHasta is null ? 0m : item.Amount,
+                EsDepositoInicial = esInicial,
+                Cobrados = cobrados,
+            }, ct);
         // Todo lo que podía rechazar ya pasó: si el hecho no se emite es un fallo técnico, se propaga y el recaudador reintenta su transacción entera.
         if (emitida.IsFailure) throw new InvalidOperationException($"{emitida.Error.Code}: {emitida.Error.Message}");
         var mensaje = emitida.Value.Mensajes.FirstOrDefault()?.PublicId;
+        var mensajeDeCobro = emitida.Value.De(CargoPendienteCobradoV1.Type);
 
         var filas = r.Porciones.Select(p => new MemberAccountTransaction
         {
             MemberAccountId = cuenta.Id,
             Operation = operacion,
+            OperationId = operacion.Id,
             Kind = MemberAccountTransactionKind.Deposit,
             Concept = p.Concepto,
             InstallmentId = p.Cuota?.Cuota.Id,
@@ -197,23 +244,42 @@ public sealed class ConsignacionEnCuentas(
             RegisteredAt = operacion.RegisteredAt,
             MessagePublicId = mensaje,
         }).ToList();
+        filas.AddRange(CargosDeCuentas.FilasDeCobro(cuenta, operacion, cobrados, item.ValueDate, hecho.Value.FechaContable, mensajeDeCobro));
         registro.RegistrarTransacciones(filas);
+        foreach (var (cargo, _) in cobrados) cargo.Cobrar(operacion.Id);
+        await db.SaveChangesAsync(ct);
 
-        var saldos = (await LectorDeCuentas.SaldosAsync(db, [cuenta.Id], ct)).GetValueOrDefault(cuenta.Id) ?? [];
-        var despues = LectorDeCuentas.SaldoDelTitular(cuenta.Nature, saldos) + item.Amount;
+        // FR-128: el cargo por consignación sobre los gratuitos del período, en su propia operación (no se cobra de lo que sigue en canje).
+        var cargosCausados = new List<CargoCalculadoDto>();
+        if (cuenta.Nature == LineNature.Deposit && cuenta.Status != MemberAccountStatus.Opening)
+        {
+            var despues = await movimientos.LeerAsync(cuenta, item.ValueDate, ct);
+            foreach (var p in await cargos.PorEventoAsync(despues, ChargeTrigger.DepositOverFree, item.Amount, item.ValueDate, despues.Disponible.Disponible, ct))
+            {
+                if (!p.Calculo.SeCausa) continue;
+                var causado = await cargos.CausarAsync(despues, p, item.ValueDate, operacion.Id, nameof(MemberAccountOperationKind.Deposit), null, ct);
+                if (causado.IsFailure) throw new InvalidOperationException($"{causado.Error.Code}: {causado.Error.Message}");
+                cargosCausados.Add(new CargoCalculadoDto(p.Definicion.Code, p.Calculo.Valor, p.Definicion.IsVatTaxed, causado.Value.Cargo.Status.ToString()));
+                despues = await movimientos.LeerAsync(cuenta, item.ValueDate, ct);
+            }
+        }
+
+        var final = await movimientos.LeerAsync(cuenta, item.ValueDate, ct);
         var comprobante = new ComprobanteDeCuentaDto(operacion.PublicId, operacion.Number, cuenta.PublicId, cuenta.Number, item.IdempotencyKey,
             nameof(MemberAccountOperationKind.Deposit), operacion.ValueDate, operacion.AccountingDate, operacion.RegisteredAt, item.Amount,
-            filas.Select(f => new LineaDeCuentaDto((ConceptoDeCuenta)(int)f.Concept, f.Kind.ToString(), f.Amount)).ToList(), null, [], r.PorCuota,
-            Disponible(cuenta.Nature, despues), null, null, reactivada, entradas, operacion.RulesVersion, c.Avisos);
+            filas.Select(f => new LineaDeCuentaDto((ConceptoDeCuenta)(int)f.Concept, f.Kind.ToString(), f.Amount)).ToList(), null,
+            [.. cobrados.Select(x => new CargoCalculadoDto(x.Cargo.ChargeCode, x.Monto, x.Cargo.IsVatTaxed, nameof(AccountChargeStatus.Collected))), .. cargosCausados],
+            r.PorCuota, ReglasDeMovimientos.Dto(final.Disponible), null, null, reactivada, entradas, operacion.RulesVersion, c.Avisos);
         return Result.Success(new ConsignacionAplicada(comprobante, false));
     }
 
     // --------------------------------------------------------------------------------------------------------- repartir --
 
     /// <summary>
-    /// El reparto de una consignación en la cuenta (también para simular): las cuotas pendientes en orden de vencimiento (<c>Installments</c>) o las
-    /// nombradas (<c>SpecificInstallments</c>), el mínimo no reducible primero si la línea lo dice, y el excedente como extraordinario si la línea lo
-    /// admite; <c>Free</c> en aportes es un extraordinario. En el ahorro permanente sólo cuotas: el excedente no se admite. No escribe.
+    /// El reparto de una consignación en la cuenta (también para simular): en aportes, las cuotas pendientes en orden de vencimiento (<c>Installments</c>) o
+    /// las nombradas (<c>SpecificInstallments</c>), el mínimo no reducible primero si la línea lo dice, y el excedente como extraordinario si la línea lo
+    /// admite; <c>Free</c> en aportes es un extraordinario. En una cuenta de captación, <c>Free</c> (y <c>Installments</c> sin cuotas pendientes) va al
+    /// saldo; con cuotas (el ahorro permanente) cubre las cuotas y el excedente no se admite por cuotas. No escribe.
     /// </summary>
     public async Task<Result<RepartoDeConsignacion>> RepartirAsync(MemberAccount cuenta, ModalidadDeConsignacion modalidad, decimal monto,
         IReadOnlyList<Guid>? nombradas, DateOnly fecha, CancellationToken ct)
@@ -221,7 +287,7 @@ public sealed class ConsignacionEnCuentas(
         ArgumentNullException.ThrowIfNull(cuenta);
         if (modalidad == ModalidadDeConsignacion.TermDepositFunding) return FallaReparto(ErroresDeAportes.ModalidadNoAdmitida(modalidad));
         if (cuenta.Nature == LineNature.Deposit && modalidad == ModalidadDeConsignacion.Free)
-            return FallaReparto(ErroresDeAportes.EntregaNoDisponible("La consignación libre en una cuenta de captación", nameof(EntregaDeCartera.K8)));
+            return Result.Success(new RepartoDeConsignacion([new PorcionDeConsignacion(null, MemberAccountConcept.Principal, monto)], 0m, null));
 
         ContributionLineVersion? version = null;
         if (cuenta.Nature == LineNature.Contribution)
@@ -250,6 +316,10 @@ public sealed class ConsignacionEnCuentas(
         {
             cuotas.AddRange((await LectorDeCuotas.DeCuentasAsync(db, [cuenta.Id], ct)).Where(q => q.Pendiente > 0m));
         }
+
+        // Una cuenta a la vista no tiene cuotas: por cuotas, sin ninguna pendiente, va al saldo (contrato-de-cuentas §3.8, «sin cuotas pendientes, Free»).
+        if (cuenta.Nature == LineNature.Deposit && cuotas.Count == 0 && cuenta.DepositClass == DepositClass.Demand)
+            return Result.Success(new RepartoDeConsignacion([new PorcionDeConsignacion(null, MemberAccountConcept.Principal, monto)], 0m, null));
 
         // El mínimo no reducible que falta, si la línea lo completa primero (MinimumFirst).
         var faltaDelMinimo = 0m;
@@ -302,11 +372,23 @@ public sealed class ConsignacionEnCuentas(
 
     // ----------------------------------------------------------------------------------------------------------- reglas --
 
-    /// <summary>Nulo si la cuenta recibe la consignación: activa o inactiva (una consignación la reactiva) y con su titular vivo.</summary>
+    /// <summary>
+    /// Nulo si la cuenta recibe la consignación: activa o inactiva (una consignación la reactiva), o en apertura esperando <b>sólo</b> su depósito inicial
+    /// —sin coincidencias en listas sin liberar— (E45); con su titular vivo.
+    /// </summary>
     public async Task<Error?> OperableAsync(MemberAccount cuenta, CancellationToken ct)
     {
-        if (cuenta.Status is not (MemberAccountStatus.Active or MemberAccountStatus.Inactive))
+        if (cuenta.Status == MemberAccountStatus.Opening)
+        {
+            var retenciones = await LectorDeCuentas.RetencionesDeAperturaAsync(db, cuenta, reloj.HoyLocal, ct);
+            if (retenciones.Count != 1 || retenciones[0] != LectorDeCuentas.EsperaDepositoInicial)
+                return ErroresDeAportes.NoOperable(cuenta.Number, cuenta.Status,
+                    $"La cuenta {cuenta.Number} sigue en apertura ({string.Join(", ", retenciones)}): recibe sólo su depósito inicial cuando nada más la retiene.");
+        }
+        else if (cuenta.Status is not (MemberAccountStatus.Active or MemberAccountStatus.Inactive))
+        {
             return ErroresDeAportes.NoOperable(cuenta.Number, cuenta.Status);
+        }
         var fallecido = await db.People.AsNoTracking().IgnoreQueryFilters().Where(p => p.Id == cuenta.HolderPersonId).Select(p => p.IsDeceased)
             .FirstOrDefaultAsync(ct);
         return fallecido
@@ -365,21 +447,8 @@ public sealed class ConsignacionEnCuentas(
     // ------------------------------------------------------------------------------------------------------ comprobante --
 
     /// <summary>El comprobante de una operación ya registrada (el reintento con la misma clave devuelve el original).</summary>
-    public async Task<ComprobanteDeCuentaDto> ComprobanteAsync(MemberAccountOperation operacion, CancellationToken ct)
-    {
-        var cuenta = await db.MemberAccounts.AsNoTracking().FirstAsync(a => a.Id == operacion.MemberAccountId, ct);
-        var filas = await db.MemberAccountTransactions.AsNoTracking().Where(t => t.OperationId == operacion.Id).OrderBy(t => t.Id).ToListAsync(ct);
-        var ids = filas.Where(f => f.InstallmentId is not null).Select(f => f.InstallmentId!.Value).Distinct().ToList();
-        var cuotas = await db.AccountInstallments.AsNoTracking().Where(q => ids.Contains(q.Id)).ToDictionaryAsync(q => q.Id, ct);
-        var porCuota = filas.Where(f => f.InstallmentId is not null).GroupBy(f => f.InstallmentId!.Value)
-            .Select(g => new DistribucionEnCuotaDto(cuotas[g.Key].PublicId, cuotas[g.Key].Periodo, g.Sum(f => f.Amount))).ToList();
-        var saldos = (await LectorDeCuentas.SaldosAsync(db, [cuenta.Id], ct)).GetValueOrDefault(cuenta.Id) ?? [];
-        return new ComprobanteDeCuentaDto(operacion.PublicId, operacion.Number, cuenta.PublicId, cuenta.Number, operacion.IdempotencyKey ?? string.Empty,
-            operacion.Kind.ToString(), operacion.ValueDate, operacion.AccountingDate, operacion.RegisteredAt, operacion.Amount,
-            filas.Select(f => new LineaDeCuentaDto((ConceptoDeCuenta)(int)f.Concept, f.Kind.ToString(), f.Amount)).ToList(), null, [], porCuota,
-            Disponible(cuenta.Nature, LectorDeCuentas.SaldoDelTitular(cuenta.Nature, saldos)), null, null, false, operacion.InputsSha256,
-            operacion.RulesVersion, []);
-    }
+    public async Task<ComprobanteDeCuentaDto> ComprobanteAsync(MemberAccountOperation operacion, CancellationToken ct) =>
+        await ComprobantesDeCuenta.DeAsync(db, movimientos, operacion, reloj.HoyLocal, ct);
 
     /// <summary>El disponible de una cuenta sin restricciones (K7): en aportes nada es disponible para retirar; en el ahorro, el saldo.</summary>
     public static DisponibleDto Disponible(LineNature naturaleza, decimal saldo) =>

@@ -38,6 +38,8 @@ public sealed class AltaDeVersionDeCaptacion(IApplicationDbContext db, IDateTime
         db.DepositLineVersions.Add(version);
         await db.SaveChangesAsync(ct);
         db.DepositLineRateTiers.AddRange(DepositLineVersion.Tramos(version.Id, b));
+        // US4 (T114): el catálogo de cargos de la versión, en el mismo guardado que sus tramos.
+        db.DepositLineCharges.AddRange(DepositLineVersion.Cargos(version.Id, b));
         await db.SaveChangesAsync(ct);
         return version;
     }
@@ -99,6 +101,10 @@ public static class LectorDeLineasDeCaptacion
     public static async Task<List<DepositLineRateTier>> TramosAsync(IApplicationDbContext db, int versionId, CancellationToken ct) =>
         await db.DepositLineRateTiers.AsNoTracking().Where(t => t.DepositLineVersionId == versionId && !t.IsDeleted).OrderBy(t => t.Order).ToListAsync(ct);
 
+    /// <summary>US4 (T114): los cargos de una versión de captación, por código.</summary>
+    public static async Task<List<DepositLineCharge>> CargosAsync(IApplicationDbContext db, int versionId, CancellationToken ct) =>
+        await db.DepositLineCharges.AsNoTracking().Where(c => c.DepositLineVersionId == versionId && !c.IsDeleted).OrderBy(c => c.Code).ToListAsync(ct);
+
     /// <summary>El fin de vigencia implícito de una versión: la víspera de la siguiente.</summary>
     public static DateOnly? VigenteHasta<T>(T version, IEnumerable<T> versiones) where T : BaseEntity, IVersionDeCartera
     {
@@ -119,7 +125,7 @@ public static class LectorDeLineasDeCaptacion
     {
         var versiones = await db.DepositLineVersions.AsNoTracking().Where(v => v.CreditLineId == version.CreditLineId && !v.IsDeleted).ToListAsync(ct);
         return DepositLineVersionDto.De(version, await TramosAsync(db, version.Id, ct), VigenteHasta(version, versiones),
-            await ReferenciaAsync(db, version.MoveToDemandLineId, ct));
+            await ReferenciaAsync(db, version.MoveToDemandLineId, ct), await CargosAsync(db, version.Id, ct));
     }
 
     public static async Task<ContributionLineVersionDto> DtoDeAportesAsync(IApplicationDbContext db, ContributionLineVersion version, CancellationToken ct)

@@ -65,6 +65,8 @@ public class LasCaptacionesExigenPermisoYAlcance
         // T055: la activación es de toda la cooperativa (como ActivateLendingCommand de la 013): no hay oficina ni línea que filtrar.
         ["ActivateDepositsCommand"] = "la activación de captaciones es de toda la cooperativa, sin oficina ni línea (FR-116)",
         ["ActivateContributionsCommand"] = "la activación de aportes es de toda la cooperativa, sin oficina ni línea (FR-116)",
+        // US4 (T117): lo manda la bandeja con el actor «Proceso de integración», sin usuario ni alcance (I-2); sólo guarda el estado de la factura.
+        ["ConsumeChargeInvoiceRegisteredCommand"] = "consumo de la bandeja (Comercial informa la factura de un cargo): sin usuario, sin ruta ni alcance (I-2)",
     };
 
     private static readonly Regex ConsultaOComando = new(@"public\s+sealed\s+record\s+(\w+(Query|Command))\b", RegexOptions.Compiled);

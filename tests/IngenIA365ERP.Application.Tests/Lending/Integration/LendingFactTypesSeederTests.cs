@@ -39,7 +39,7 @@ public class LendingFactTypesSeederTests
         var filas = await _db.LendingFactTypes.ToListAsync();
         filas.Should().HaveCount(70);
         filas.Select(f => f.Code).Should().BeEquivalentTo(CatalogoDeMensajesDeCarteraV1.HechosAContabilidad.Select(t => t.Type));
-        CatalogoDeMensajesDeCarteraV1.Todos.Count.Should().Be(78, "los 8 a otros destinos (con la v2 de la orden de giro y el retiro a Asociados) no son hechos contables y no tienen fila");
+        CatalogoDeMensajesDeCarteraV1.Todos.Count.Should().Be(81, "los 11 a otros destinos (con la v2 de la orden de giro, el retiro a Asociados, la consignación reversada y los cargos a Comercial) no son hechos contables y no tienen fila");
         filas.Single(f => f.Code == "CaptacionesActivadas").Should().BeEquivalentTo(new
         {
             ShortCode = "CAV", VoucherTypeCode = (string?)null, IsInformational = true, DeliveredIn = EntregaDeCartera.K7,

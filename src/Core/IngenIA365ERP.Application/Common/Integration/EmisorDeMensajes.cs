@@ -240,7 +240,7 @@ public sealed class EmisorDeMensajes(IApplicationDbContext db, IActorActual acto
         if (solicitud.UsuarioDeOrigen is { CentralUserId: { } delOrigen } usuario)
             return new UsuarioDeOrigenResuelto(ActorKind.Person, delOrigen, Recortar(usuario.Name, 150));
 
-        var sinProceso = contenidos.Where(c => !c.Tipo.AdmiteProceso).Select(c => c.Tipo.Type).Distinct(StringComparer.Ordinal).ToList();
+        var sinProceso = contenidos.Where(c => !c.Tipo.AdmiteProcesoPara(c.Record)).Select(c => c.Tipo.Type).Distinct(StringComparer.Ordinal).ToList();
         if (sinProceso.Count > 0)
         {
             throw new InvalidOperationException(

@@ -1,3 +1,4 @@
+using IngenIA365ERP.Application.Common.Alerts;
 using IngenIA365ERP.Application.Common.Integration.Contracts.Inventory;
 using IngenIA365ERP.Application.Common.Integration.Contracts.Lending.Deposits;
 using IngenIA365ERP.Application.Common.Integration.Lending;
@@ -8,6 +9,7 @@ using IngenIA365ERP.Application.Lending.Common;
 using IngenIA365ERP.Application.Lending.Deposits.Accounts;
 using IngenIA365ERP.Application.Lending.Deposits.Ledger;
 using IngenIA365ERP.Application.Lending.Integration;
+using IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts;
 using IngenIA365ERP.Domain.Entities.Lending.Deposits.Transactions;
 using IngenIA365ERP.Domain.Enums.Lending;
 using IngenIA365ERP.Domain.Lending;
@@ -16,14 +18,20 @@ using Microsoft.EntityFrameworkCore;
 namespace IngenIA365ERP.Application.Lending.Deposits.Contributions;
 
 /// <summary>Lo que dejó un reverso: el comprobante y si ya estaba reversada. (nuevo)</summary>
-public sealed record ReversoDeCuentaAplicado(ComprobanteDeReversoDeCuentaDto Comprobante, bool YaReversada);
+public sealed record ReversoDeCuentaAplicado(ComprobanteDeReversoDeCuentaDto Comprobante, bool YaReversada)
+{
+    /// <summary>US4 (T111): la operación de reverso (para el aviso al recaudador).</summary>
+    public MemberAccountOperation? Reverso { get; init; }
+}
 
 /// <summary>
-/// El reverso de una operación de cuenta (feature 014, US3, T083, T085, T089; contrato-de-cuentas §3.11; FR-002, FR-092): la operación de reverso con la
-/// clave derivada <c>{clave}:reverso</c>, los espejos de todas las filas de la original —en todas sus cuentas— por <see cref="RegistroDeCuentas"/>, con la
-/// fecha valor de la original y la fecha contable de hoy, la marca en la original y el hecho <c>OperacionDeCuentaReversada</c> (que hereda el modo del
-/// original). Un reverso no se reversa (<c>Lending.Savings.ReversalOfReversal</c>); una ya reversada responde el reverso existente. Si el reverso deja
-/// una cuenta en negativo (la consignación ya se usó) la cuenta queda con sobregiro técnico (FR-056). Guarda dos veces dentro de la transacción de
+/// El reverso de una operación de cuenta (feature 014, US3, T083, T085, T089; US4, T111, T116; contrato-de-cuentas §3.11; FR-002, FR-056, FR-092): la
+/// operación de reverso con la clave derivada <c>{clave}:reverso</c>, los espejos de todas las filas de la original —en todas sus cuentas— por
+/// <see cref="RegistroDeCuentas"/>, con la fecha valor de la original y la fecha contable de hoy, la marca en la original y el hecho
+/// <c>OperacionDeCuentaReversada</c> (que hereda el modo del original). Arrastra a sus dependientes (FR-002): el uso del tope del GMF del mes, los cargos que
+/// disparó (cada uno con su propio reverso y, si estaba gravado, la nota crédito a Comercial) y los cargos pendientes que cobró (vuelven a deberse). Un reverso
+/// no se reversa (<c>Lending.Savings.ReversalOfReversal</c>); una ya reversada responde el reverso existente. Si el reverso deja una cuenta en negativo (la
+/// consignación ya se usó) la cuenta queda con sobregiro técnico y se alerta <c>Cartera.SobregiroTecnico</c> (FR-056). Guarda dentro de la transacción de
 /// quien llama: la marca de la original necesita el Id del reverso. (nuevo)
 /// </summary>
 public sealed class ReversionDeCuentas(
@@ -33,10 +41,14 @@ public sealed class ReversionDeCuentas(
     EmisionDeCartera emision,
     IActorActual actorActual,
     IDateTimeService reloj,
-    Documents.AnulacionDeDocumentosDeCuentas? documentos = null)
+    Documents.AnulacionDeDocumentosDeCuentas? documentos = null,
+    IAlertas? alertas = null)
 {
     /// <summary>El prefijo del comprobante del reverso de una operación de cuenta.</summary>
     public const string PrefijoReverso = "RVC-";
+
+    /// <summary>El cargo lo cobró una consignación posterior: reversarlo descuadraría lo por cobrar; se condona (con reintegro).</summary>
+    public const string CodigoCargoCobradoDespues = "Lending.Savings.ChargeCollectedLater";
 
     /// <summary>La clave derivada del reverso (contrato-de-cuentas §3.12).</summary>
     public static string ClaveDeReverso(string clave) => $"{clave}:reverso";
@@ -54,8 +66,17 @@ public sealed class ReversionDeCuentas(
         if (original.ReversedByOperationId is { } yaId)
         {
             var existente = await db.MemberAccountOperations.AsNoTracking().FirstAsync(o => o.Id == yaId, ct);
-            return Result.Success(new ReversoDeCuentaAplicado(await ComprobanteAsync(existente, original, false, [], ct), true));
+            return Result.Success(new ReversoDeCuentaAplicado(await ComprobanteAsync(existente, original, false, [], ct), true) { Reverso = existente });
         }
+
+        // El cargo cuya deuda ya cobró una consignación posterior no se reversa: se condona (su reintegro) o se reversa esa consignación primero.
+        var delCargo = original.Kind == MemberAccountOperationKind.Charge
+            ? await db.AccountCharges.FirstOrDefaultAsync(c => c.AppliedOperationId == original.Id, ct)
+            : null;
+        if (delCargo is { CollectedOperationId: not null })
+            return Result.Failure<ReversoDeCuentaAplicado>(new ErrorConDatos(CodigoCargoCobradoDespues,
+                $"El cargo {delCargo.ChargeCode} ya lo cobró una consignación posterior: condónelo (con reintegro) en lugar de reversarlo.",
+                new { chargePublicId = delCargo.PublicId }));
 
         var cuenta = await db.MemberAccounts.FirstAsync(a => a.Id == original.MemberAccountId, ct);
         var filas = await db.MemberAccountTransactions.AsNoTracking().Where(t => t.OperationId == original.Id && !t.IsDeleted).OrderBy(t => t.Id)
@@ -103,15 +124,50 @@ public sealed class ReversionDeCuentas(
         if (espejos.IsFailure) return Result.Failure<ReversoDeCuentaAplicado>(espejos.Error);
         await db.SaveChangesAsync(ct);
         RegistroDeCuentas.MarcarReversada(original, reverso);
+
+        // FR-002: los dependientes. El uso del tope exento del GMF del mes vuelve (fila espejo).
+        var usos = await db.GmfMonthlyUsages.AsNoTracking().Where(u => u.OperationId == original.Id && u.ReversesUsageId == null && !u.IsDeleted).ToListAsync(ct);
+        registro.ReversarUsosDeGmf(usos, reverso);
+        // Los cargos pendientes que la consignación cobró vuelven a deberse.
+        foreach (var cobrado in await db.AccountCharges.Where(c => c.CollectedOperationId == original.Id).ToListAsync(ct))
+            cobrado.DevolverAPendiente(original.Id);
+        // El cargo de esta operación (si es un cargo) queda reversado; si estaba gravado, Comercial emite la nota crédito.
+        if (delCargo is not null)
+        {
+            delCargo.Reversar(reverso.Id);
+            var def = await db.DepositLineCharges.AsNoTracking().FirstOrDefaultAsync(d => d.Id == delCargo.DepositLineChargeId, ct);
+            delCargo.ReversalMessagePublicId = await emision.CargoReversadoAComercialAsync(hecho.Value, reverso, original, delCargo, def?.Name ?? delCargo.ChargeCode,
+                def?.CommercialItemCode, texto, ct);
+        }
+        await db.SaveChangesAsync(ct);
+        // Los cargos que disparó, cada uno en su propio reverso.
+        foreach (var disparado in await db.AccountCharges.AsNoTracking()
+                     .Where(c => c.TriggerOperationId == original.Id && (c.Status == AccountChargeStatus.Collected || c.Status == AccountChargeStatus.Pending)
+                                 && c.CollectedOperationId == null)
+                     .ToListAsync(ct))
+        {
+            var operacionDelCargo = await db.MemberAccountOperations.FirstAsync(o => o.Id == disparado.AppliedOperationId, ct);
+            if (operacionDelCargo.ReversedByOperationId is not null) continue;
+            var arrastrado = await ReversarAsync(operacionDelCargo, $"Se reversó la operación {original.Number} que lo disparó: {texto}", iniciadoPor, ct);
+            if (arrastrado.IsFailure) return arrastrado;
+        }
+
         // T087 (documentos.md §4): los documentos que vieron la operación y que el reverso deja sin validez, en la misma unidad de trabajo.
         var anulados = documentos is null ? [] : await documentos.AnularAsync(original, reverso, ct);
 
         // FR-056: si el dinero ya se usó, el reverso deja la cuenta en negativo técnico (bloquea retiros y avisa).
         var saldos = (await LectorDeCuentas.SaldosAsync(db, [cuenta.Id], ct)).GetValueOrDefault(cuenta.Id) ?? [];
         var negativo = LectorDeCuentas.SaldoDelTitular(cuenta.Nature, saldos) < 0m;
-        if (negativo && cuenta.TechnicalNegativeSince is null) cuenta.TechnicalNegativeSince = reloj.HoyLocal;
+        var nuevoSobregiro = negativo && cuenta.TechnicalNegativeSince is null;
+        if (nuevoSobregiro) cuenta.TechnicalNegativeSince = reloj.HoyLocal;
         await db.SaveChangesAsync(ct);
-        return Result.Success(new ReversoDeCuentaAplicado(await ComprobanteAsync(reverso, original, negativo, anulados, ct), false));
+        if (nuevoSobregiro && alertas is not null)
+            await alertas.LevantarAsync(new AlertaALevantar(TiposDeAlerta.SobregiroTecnico, $"Sobregiro técnico en la cuenta {cuenta.Number}",
+                $"El reverso {reverso.Number} de la operación {original.Number} ({texto}) dejó la cuenta {cuenta.Number} en negativo: el dinero ya se había usado. "
+                + "La cuenta queda bloqueada para retiros hasta que se cubra el saldo.",
+                nameof(MemberAccount), cuenta.PublicId, DedupKey: $"{TiposDeAlerta.SobregiroTecnico}:{cuenta.PublicId:N}",
+                RecipientPermissions: ["Lending.Accounts.Reverse"], ModuloDeOrigen: "Lending"), ct);
+        return Result.Success(new ReversoDeCuentaAplicado(await ComprobanteAsync(reverso, original, negativo, anulados, ct), false) { Reverso = reverso });
     }
 
     /// <summary>El tipo del hecho principal de la operación original (el que el reverso espeja).</summary>
@@ -126,7 +182,10 @@ public sealed class ReversionDeCuentas(
         MemberAccountOperationKind.Deposit => naturaleza == LineNature.Contribution ? AporteRecibidoV1.Type : ConsignacionEnCuentaAplicadaV1.Type,
         MemberAccountOperationKind.Transfer => TrasladoEntreCuentasAplicadoV1.Type,
         MemberAccountOperationKind.ContributionRefund => DevolucionOrdenadaV1.Type,
-        MemberAccountOperationKind.Withdrawal => RetiroDeCuentaAplicadoV1.Type,
+        MemberAccountOperationKind.Withdrawal or MemberAccountOperationKind.DirectDebit => RetiroDeCuentaAplicadoV1.Type,
+        // US4 (T116): el cargo y su condonación.
+        MemberAccountOperationKind.Charge => CargoDeCuentaCausadoV1.Type,
+        MemberAccountOperationKind.ChargeWaiver => CargoDeCuentaCondonadoV1.Type,
         _ => original.Kind.ToString(),
     };
 
@@ -138,6 +197,8 @@ public sealed class ReversionDeCuentas(
         MemberAccountOperationKind.Deposit => EmisionDeCartera.ClaseConsignacionDeCuenta,
         MemberAccountOperationKind.Transfer => EmisionDeCartera.ClaseTrasladoDeCuenta,
         MemberAccountOperationKind.ContributionRefund => EmisionDeCartera.ClaseDevolucionDeAportes,
+        MemberAccountOperationKind.Withdrawal or MemberAccountOperationKind.DirectDebit => EmisionDeCartera.ClaseRetiroDeCuenta,
+        MemberAccountOperationKind.Charge or MemberAccountOperationKind.ChargeWaiver => EmisionDeCartera.ClaseCargoDeCuenta,
         _ => original.Kind.ToString(),
     };
 

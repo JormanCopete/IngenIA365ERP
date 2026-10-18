@@ -14,12 +14,15 @@ using IngenIA365ERP.Application.Lending.Common;
 using IngenIA365ERP.Application.Lending.Deposits.Accounts;
 using IngenIA365ERP.Application.Lending.Deposits.Activation;
 using IngenIA365ERP.Application.Lending.Deposits.Contributions;
+using IngenIA365ERP.Application.Lending.Deposits.Charges;
 using IngenIA365ERP.Application.Lending.Deposits.Ledger;
+using IngenIA365ERP.Application.Lending.Deposits.Operations;
 using IngenIA365ERP.Application.Lending.Payments;
 using IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts;
 using IngenIA365ERP.Domain.Enums.Integration;
 using IngenIA365ERP.Domain.Enums.Lending;
 using IngenIA365ERP.Domain.Lending;
+using IngenIA365ERP.Domain.Lending.Deposits;
 using Microsoft.EntityFrameworkCore;
 
 namespace IngenIA365ERP.Application.Lending.Integration;
@@ -35,9 +38,12 @@ namespace IngenIA365ERP.Application.Lending.Integration;
 /// <see cref="ReversionDeCuentas"/>, y el hecho de auditoría de cada ítem en <c>COR_AuditOutbox</c>.
 ///
 /// <para>Lo que hace en K7 (US3): <b>aportes</b> enteros —exigibles, consignar a cuotas o como extraordinario, no descontados, simular la
-/// consignación, consultar y reversar— y la cuota del <b>ahorro permanente</b> (exigibles y su consignación por cuotas). Retirar, trasladar y la
-/// consignación libre en captación son de K8 (US4): responden <c>Lending.Savings.DeliveryNotAvailable</c>; los aportes no se retiran por el contrato
-/// (<c>Lending.Contributions.NotWithdrawable</c>).</para> (nuevo)
+/// consignación, consultar y reversar— y la cuota del <b>ahorro permanente</b> (exigibles y su consignación por cuotas).</para>
+/// <para>K8 (US4, T111): la consignación libre en el ahorro a la vista (con canje, cargos pendientes, depósito inicial y atribución de efectivo), el
+/// <b>retiro</b> (firmas y manejo, disponible, topes, atribución con aprobador presente, GMF) y el <b>traslado</b> entre cuentas, la simulación de las tres y
+/// el disponible desglosado de la consulta (el mismo que valida el retiro, SC-007). Los aportes no se retiran por el contrato
+/// (<c>Lending.Contributions.NotWithdrawable</c>); la cancelación con entrega (<c>CloseAccount</c>) llega con la liquidación de intereses (US5).</para>
+/// (nuevo)
 /// </summary>
 public sealed class ContratoDeCuentasDeCartera(
     IApplicationDbContext db,
@@ -55,12 +61,21 @@ public sealed class ContratoDeCuentasDeCartera(
     IValidator<SolicitudDeExigibles> validadorDeExigibles,
     IValidator<SolicitudDeSimulacionDeCuenta> validadorDeSimulacion,
     IValidator<SolicitudDeConsultaDeCuentas> validadorDeConsulta,
-    IDateTimeService reloj) : IContratoDeCuentas
+    IDateTimeService reloj,
+    ReglasDeMovimientos movimientos,
+    RetiroDeCuenta retiros,
+    TrasladoDeCuenta traslados,
+    CargosDeCuentas cargos,
+    IValidator<SolicitudDeRetiro> validadorDeRetiro,
+    IValidator<SolicitudDeTraslado> validadorDeTraslado) : IContratoDeCuentas
 {
     /// <summary>El tipo de entidad de los eventos de auditoría del contrato.</summary>
     public const string Entidad = "AccountContract";
 
     public const string MensajeConsignada = "Consignación aplicada.";
+    public const string MensajeRetirada = "Retiro autorizado y aplicado: el recaudador entrega el dinero.";
+    public const string MensajeYaRetirada = "El retiro ya estaba aplicado con esta clave: se devuelve el comprobante original.";
+    public const string MensajeTrasladada = "Traslado aplicado.";
     public const string MensajeYaConsignada = "La consignación ya estaba aplicada con esta clave: se devuelve el comprobante original.";
     public const string MensajeReversada = "Operación reversada.";
     public const string MensajeNoDescontado = "No descontado registrado: la cuota sigue exigible.";
@@ -109,20 +124,31 @@ public sealed class ContratoDeCuentasDeCartera(
         var firmantes = await FirmantesAsync(ids, ct);
         var exentas = await db.GmfExemptAccounts.AsNoTracking().Where(g => ids.Contains(g.MemberAccountId) && g.ValidTo == null && !g.IsDeleted)
             .Select(g => g.MemberAccountId).ToListAsync(ct);
+        // US4 (T111, SC-007): el disponible desglosado es el mismo que valida el retiro (DisponibleDeCuenta, por ReglasDeMovimientos).
+        var disponibles = await movimientos.DisponiblesAsync(cuentas.Select(c => c.Cuenta).ToList(), solicitud.Date, ct);
+        var retirables = new Dictionary<int, bool>();
+        foreach (var c in cuentas.Where(x => x.Cuenta.Nature == LineNature.Deposit))
+            retirables[c.Cuenta.Id] = (await Deposits.Lines.LectorDeLineasDeCaptacion.VigenteDeCaptacionAsync(db, c.Cuenta.CreditLineId, solicitud.Date, null, ct))
+                ?.AllowsPartialWithdrawals ?? false;
 
         var consultadas = cuentas.Select(c =>
         {
-            var saldo = LectorDeCuentas.SaldoDelTitular(c.Cuenta.Nature, saldos.GetValueOrDefault(c.Cuenta.Id) ?? []);
             var linea = lineas.GetValueOrDefault(c.Cuenta.CreditLineId);
             var bloqueos = new List<string>();
             if (c.Cuenta.TechnicalNegativeSince is not null) bloqueos.Add("Sobregiro técnico");
             if (c.Cuenta.Status == MemberAccountStatus.Opening) bloqueos.Add("Apertura pendiente");
+            var disponible = disponibles.GetValueOrDefault(c.Cuenta.Id) ?? Domain.Lending.Deposits.DisponibleCalculado.Cero;
+            if (disponible.EnCanje > 0m) bloqueos.Add("Valores en canje");
+            var retira = c.Cuenta.Nature == LineNature.Deposit && retirables.GetValueOrDefault(c.Cuenta.Id) && c.Cuenta.TechnicalNegativeSince is null
+                         && (c.Cuenta.DepositClass == DepositClass.TermDeposit
+                             ? c.Cuenta.Status == MemberAccountStatus.Matured
+                             : c.Cuenta.Status is MemberAccountStatus.Active or MemberAccountStatus.Inactive);
             return new CuentaConsultadaDto(c.Cuenta.PublicId, c.Cuenta.Number, (NaturalezaDeCuenta)(int)c.Cuenta.Nature,
                 c.Cuenta.DepositClass is { } k ? (ClaseDeCaptacion)(int)k : null, linea.Code ?? string.Empty, linea.Name ?? string.Empty,
                 (RolEnLaCuenta)(int)c.Rol, (EstadoDeCuenta)(int)c.Cuenta.Status, c.Cuenta.HandlingMode.ToString(), firmantes.GetValueOrDefault(c.Cuenta.Id) ?? [],
-                ConsignacionEnCuentas.Disponible(c.Cuenta.Nature, saldo),
+                ReglasDeMovimientos.Dto(disponible),
                 c.Cuenta.Status is MemberAccountStatus.Active or MemberAccountStatus.Inactive,
-                false, exentas.Contains(c.Cuenta.Id), bloqueos);
+                retira, exentas.Contains(c.Cuenta.Id), bloqueos);
         }).ToList();
         var respuesta = new CuentasDePersonaDto(captaciones, aportes, solicitud.PersonPublicId, solicitud.Date, consultadas);
         await auditoria.LecturaAsync(AuditEventTypes.LendingAccountContractQueried, "Person", solicitud.PersonPublicId, solicitud.Collector,
@@ -213,36 +239,107 @@ public sealed class ContratoDeCuentasDeCartera(
         if (await RecaudadorAsync(solicitud.Collector, ct) is { } noCuenta) return Rechazo<SimulacionDeCuentaDto>(noCuenta);
         if (cuenta is null) return Rechazo<SimulacionDeCuentaDto>(new Error(ErroresDePagos.CodigoNoEncontrado, "La cuenta no existe."));
 
-        Error? rechazo = solicitud.Operation switch
+        var simulacion = solicitud.Operation switch
         {
-            "Withdrawal" when cuenta.Nature == LineNature.Contribution => ErroresDeAportes.NoRetirable(),
-            "Withdrawal" or "Transfer" => ErroresDeAportes.EntregaNoDisponible("El retiro y el traslado por el contrato", nameof(EntregaDeCartera.K8)),
-            _ => null,
+            "Withdrawal" => await SimularRetiroAsync(cuenta, solicitud, ct),
+            "Transfer" => await SimularTrasladoAsync(cuenta, solicitud, ct),
+            _ => await SimularConsignacionAsync(cuenta, solicitud, ct),
         };
-        rechazo ??= await consignacion.OperableAsync(cuenta, ct) ?? ConsignacionEnCuentas.ClaseDeMedio(solicitud.Collector.Class, solicitud.MeansClass);
-        var saldos = (await LectorDeCuentas.SaldosAsync(db, [cuenta.Id], ct)).GetValueOrDefault(cuenta.Id) ?? [];
-        var saldo = LectorDeCuentas.SaldoDelTitular(cuenta.Nature, saldos);
-        var antes = ConsignacionEnCuentas.Disponible(cuenta.Nature, saldo);
+        var (dto, rechazo) = simulacion;
+        await auditoria.LecturaAsync(AuditEventTypes.LendingAccountContractSimulated, nameof(MemberAccount), cuenta.PublicId, solicitud.Collector,
+            new { operation = solicitud.Operation, amount = solicitud.Amount, valueDate = solicitud.ValueDate, allowed = dto.Allowed,
+                  sha256 = dto.SimulationId }, ct);
+        return new(ResultadoDelContrato.Answered, rechazo?.Code ?? AuditEventTypes.LendingAccountContractSimulated, rechazo?.Message ?? "Operación simulada.", dto);
+    }
+
+    /// <summary>La simulación de una consignación (§3.7): el reparto, el canje, el origen de fondos, la atribución del efectivo y los cargos.</summary>
+    private async Task<(SimulacionDeCuentaDto, Error?)> SimularConsignacionAsync(MemberAccount cuenta, SolicitudDeSimulacionDeCuenta s, CancellationToken ct)
+    {
+        var leida = await movimientos.LeerAsync(cuenta, s.ValueDate, ct);
+        var antes = ReglasDeMovimientos.Dto(leida.Disponible);
+        Error? rechazo = await consignacion.OperableAsync(cuenta, ct) ?? ConsignacionEnCuentas.ClaseDeMedio(s.Collector.Class, s.MeansClass)
+            ?? await movimientos.SoloAsociadosAsync(leida, s.ValueDate, ct)
+            ?? await movimientos.TopesAsync(leida, s.Amount, s.MeansClass, esRetiro: false, s.ValueDate, ct);
         IReadOnlyList<DistribucionEnCuotaDto> cubiertas = [];
+        var modalidad = s.Modality ?? (cuenta.Nature == LineNature.Deposit && cuenta.DepositClass == DepositClass.Demand
+            ? ModalidadDeConsignacion.Free
+            : ModalidadDeConsignacion.Installments);
         if (rechazo is null)
         {
-            var reparto = await consignacion.RepartirAsync(cuenta, solicitud.Modality ?? ModalidadDeConsignacion.Installments, solicitud.Amount, null,
-                solicitud.ValueDate, ct);
+            var reparto = await consignacion.RepartirAsync(cuenta, modalidad, s.Amount, null, s.ValueDate, ct);
             if (reparto.IsFailure) rechazo = reparto.Error;
             else cubiertas = reparto.Value.PorCuota;
         }
-        var simulacion = new SimulacionDeCuentaDto(
-            HuellaDeOperacion.Calcular("Lending.AccountContract.Simulate", solicitud), rechazo is null, antes,
-            rechazo is null ? ConsignacionEnCuentas.Disponible(cuenta.Nature, saldo + solicitud.Amount) : antes, null, [], [], null,
-            solicitud.MeansClass == ClaseDeMedioDeRecaudo.Cash
-            && await LectorDeCuentas.UmbralDeOrigenDeFondosAsync(parametros, solicitud.ValueDate, ct) is { } umbral && solicitud.Amount >= umbral,
-            cubiertas, rechazo is null ? [] : [rechazo.Message]);
-        await auditoria.LecturaAsync(AuditEventTypes.LendingAccountContractSimulated, nameof(MemberAccount), cuenta.PublicId, solicitud.Collector,
-            new { operation = solicitud.Operation, amount = solicitud.Amount, valueDate = solicitud.ValueDate, allowed = simulacion.Allowed,
-                  sha256 = simulacion.SimulationId }, ct);
-        return new(ResultadoDelContrato.Answered, rechazo?.Code ?? AuditEventTypes.LendingAccountContractSimulated,
-            rechazo?.Message ?? "Operación simulada.", simulacion);
+        var canje = cuenta.Nature == LineNature.Deposit && await movimientos.CanjeHastaAsync(s.MeansClass, s.ValueDate, ct) is not null ? s.Amount : 0m;
+        var despues = DisponibleDeCuenta.Calcular(cuenta.Nature, leida.Disponible.Saldo + s.Amount, leida.Disponible.Retenido, leida.Disponible.Embargado,
+            leida.Disponible.EnCanje + canje, leida.Disponible.Minimo);
+        var atribucion = s.MeansClass == ClaseDeMedioDeRecaudo.Cash
+            ? await movimientos.AtribucionRequeridaAsync(ReglasDeMovimientos.PermisoDeConsignacion, s.Amount, s.ValueDate, ct)
+            : null;
+        var propuestos = cuenta.Nature == LineNature.Deposit && rechazo is null
+            ? await cargos.PorEventoAsync(leida, ChargeTrigger.DepositOverFree, s.Amount, s.ValueDate, despues.Disponible, ct)
+            : [];
+        var dto = new SimulacionDeCuentaDto(HuellaDeOperacion.Calcular("Lending.AccountContract.Simulate", s), rechazo is null, antes,
+            rechazo is null ? ReglasDeMovimientos.Dto(despues) : antes, null, Cargos(propuestos), [], atribucion,
+            s.MeansClass == ClaseDeMedioDeRecaudo.Cash && await LectorDeCuentas.UmbralDeOrigenDeFondosAsync(parametros, s.ValueDate, ct) is { } umbral
+            && s.Amount >= umbral,
+            cubiertas, rechazo is null ? Avisos(atribucion) : [rechazo.Message]);
+        return (dto, rechazo);
     }
+
+    /// <summary>La simulación de un retiro (§3.7, §3.9): firmas, disponible con el GMF, topes, atribución y cargos, sin pedir aprobaciones.</summary>
+    private async Task<(SimulacionDeCuentaDto, Error?)> SimularRetiroAsync(MemberAccount cuenta, SolicitudDeSimulacionDeCuenta s, CancellationToken ct)
+    {
+        var pedido = new RetiroPedido(s.Collector, null, null, cuenta.PublicId, s.Amount, s.ValueDate, s.MeansClass, s.SignerPersonPublicIds, null, null, null,
+            PrevalidationOutcome.NotApplicable, [], null);
+        var revisado = await retiros.RevisarAsync(cuenta, pedido, pedirAprobacion: false, ct);
+        return await SimulacionDeSalidaAsync(cuenta, s, revisado.IsSuccess ? revisado.Value : null, revisado.IsFailure ? revisado.Error : null,
+            ClaseDeMedio(s), ct);
+    }
+
+    /// <summary>La simulación de un traslado (§3.7, §3.10): el retiro en el origen y la consignación en el destino, con el GMF de su hecho generador.</summary>
+    private async Task<(SimulacionDeCuentaDto, Error?)> SimularTrasladoAsync(MemberAccount cuenta, SolicitudDeSimulacionDeCuenta s, CancellationToken ct)
+    {
+        var destino = s.TargetAccountPublicId is { } d
+            ? await db.MemberAccounts.AsNoTracking().FirstOrDefaultAsync(a => a.PublicId == d && !a.IsDeleted, ct)
+            : null;
+        if (destino is null)
+            return await SimulacionDeSalidaAsync(cuenta, s, null, new Error(ErroresDePagos.CodigoNoEncontrado, "La cuenta destino no existe."), null, ct);
+        var pedido = new TrasladoPedido(s.Collector, null, null, cuenta.PublicId, destino.PublicId, s.Amount, s.ValueDate, s.SignerPersonPublicIds,
+            s.Modality ?? ModalidadDeConsignacion.Free, null, null, PrevalidationOutcome.NotApplicable, [], null);
+        var revisado = await traslados.RevisarAsync(cuenta, destino, pedido, pedirAprobacion: false, ct);
+        var (dto, rechazo) = await SimulacionDeSalidaAsync(cuenta, s, revisado.IsSuccess ? revisado.Value.Origen : null,
+            revisado.IsFailure ? revisado.Error : null, null, ct);
+        return (revisado.IsSuccess ? dto with { InstallmentsCovered = revisado.Value.Reparto.PorCuota } : dto, rechazo);
+    }
+
+    private async Task<(SimulacionDeCuentaDto, Error?)> SimulacionDeSalidaAsync(MemberAccount cuenta, SolicitudDeSimulacionDeCuenta s, RetiroRevisado? revisado,
+        Error? rechazo, Error? medio, CancellationToken ct)
+    {
+        rechazo ??= medio;
+        var leida = revisado?.Cuenta ?? await movimientos.LeerAsync(cuenta, s.ValueDate, ct);
+        var (firmas, personas) = revisado is { Firmas: { } f } ? (f, revisado.Personas) : await movimientos.FirmasAsync(leida, s.SignerPersonPublicIds, s.Amount, s.ValueDate, ct);
+        var atribucion = await movimientos.AtribucionRequeridaAsync(ReglasDeMovimientos.PermisoDeRetiro, s.Amount, s.ValueDate, ct);
+        var dto = new SimulacionDeCuentaDto(HuellaDeOperacion.Calcular("Lending.AccountContract.Simulate", s), rechazo is null,
+            ReglasDeMovimientos.Dto(leida.Disponible), revisado is null || rechazo is not null ? ReglasDeMovimientos.Dto(leida.Disponible) : ReglasDeMovimientos.Dto(revisado.Despues),
+            ReglasDeMovimientos.Dto(revisado?.Gmf), Cargos(revisado?.Cargos ?? []), firmas.Faltantes.Select(x => personas.GetValueOrDefault(x)).ToList(), atribucion,
+            false, [], rechazo is null ? Avisos(atribucion) : [rechazo.Message]);
+        return (dto, rechazo);
+    }
+
+    /// <summary>El efectivo o el cheque los entrega el recaudador (§3.9): otra clase de medio no se retira por el contrato.</summary>
+    private static Error? ClaseDeMedio(SolicitudDeSimulacionDeCuenta s) =>
+        s.MeansClass is ClaseDeMedioDeRecaudo.Cash or ClaseDeMedioDeRecaudo.Check ? null : ErroresDeAportes.ClaseDeMedio(s.MeansClass, s.Collector.Class);
+
+    private static IReadOnlyList<CargoCalculadoDto> Cargos(IReadOnlyList<Deposits.Charges.CargoPropuesto> propuestos) =>
+        propuestos.Where(p => p.Calculo.SeCausa)
+            .Select(p => new CargoCalculadoDto(p.Definicion.Code, p.Calculo.Valor, p.Definicion.IsVatTaxed,
+                p.Calculo.Resultado == ResultadoDeCargo.Cobrado ? nameof(AccountChargeStatus.Collected) : nameof(AccountChargeStatus.Pending)))
+            .ToList();
+
+    private static IReadOnlyList<string> Avisos(AtribucionRequeridaDto? atribucion) => atribucion is null
+        ? []
+        : [$"La operación supera la atribución de quien la registra ({atribucion.MaxAmount:N2}): necesitará un aprobador presente con segundo factor."];
 
     // ------------------------------------------------------------------------------------------------------------ consignar --
 
@@ -359,25 +456,93 @@ public sealed class ContratoDeCuentasDeCartera(
     public async Task<RespuestaDelContratoDto<ComprobanteDeCuentaDto>> RetirarAsync(SolicitudDeRetiro solicitud, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(solicitud);
-        var naturaleza = await NaturalezaAsync(solicitud.AccountPublicId, ct);
-        var fechas = await ActivacionesDeCaptacion.LeerAsync(db, ct);
-        if (!fechas.Activada(naturaleza)) return Rechazo<ComprobanteDeCuentaDto>(NoActivada(naturaleza));
-        return Rechazo<ComprobanteDeCuentaDto>(naturaleza == LineNature.Contribution
-            ? ErroresDeAportes.NoRetirable()
-            : ErroresDeAportes.EntregaNoDisponible("El retiro por el contrato", nameof(EntregaDeCartera.K8)));
+        var huella = HuellaDeOperacion.Calcular(RetiroDeCuenta.Metodo, solicitud);
+        await auditoria.IntentoAsync(AuditEventTypes.LendingAccountContractAttempted, Entidad, solicitud.IdempotencyKey ?? string.Empty,
+            new { method = nameof(RetirarAsync), collector = solicitud.Collector?.Code, account = solicitud.AccountPublicId, amount = solicitud.Amount, sha256 = huella },
+            ct);
+        var forma = await validadorDeRetiro.ValidateAsync(solicitud, ct);
+        Error? lote = !forma.IsValid ? Invalida(forma) : !transaccion.HayEnCurso() ? ErroresDePagos.TransaccionRequerida() : null;
+        if (lote is not null) return await RechazoAuditadoAsync<ComprobanteDeCuentaDto>(lote, solicitud.IdempotencyKey, solicitud.Collector, ct);
+        var cuenta = await db.MemberAccounts.AsNoTracking().FirstOrDefaultAsync(a => a.PublicId == solicitud.AccountPublicId && !a.IsDeleted, ct);
+        var naturaleza = cuenta?.Nature ?? LineNature.Deposit;
+        if (!(await ActivacionesDeCaptacion.LeerAsync(db, ct)).Activada(naturaleza))
+            return await RechazoAuditadoAsync<ComprobanteDeCuentaDto>(NoActivada(naturaleza), solicitud.IdempotencyKey, solicitud.Collector, ct);
+        if (await RecaudadorAsync(solicitud.Collector, ct) is { } noCuenta)
+            return await RechazoAuditadoAsync<ComprobanteDeCuentaDto>(noCuenta, solicitud.IdempotencyKey, solicitud.Collector, ct);
+        if (cuenta is null)
+            return await RechazoAuditadoAsync<ComprobanteDeCuentaDto>(new Error(ErroresDePagos.CodigoNoEncontrado, "La cuenta no existe."), solicitud.IdempotencyKey,
+                solicitud.Collector, ct);
+        // Un retiro en efectivo lo autoriza la Cartera y lo entrega el recaudador (FR-088): efectivo o cheque; otra clase de medio no.
+        Error? previo = solicitud.MeansClass is ClaseDeMedioDeRecaudo.Cash or ClaseDeMedioDeRecaudo.Check
+            ? ConsignacionEnCuentas.ClaseDeMedio(solicitud.Collector.Class, solicitud.MeansClass)
+            : ErroresDeAportes.ClaseDeMedio(solicitud.MeansClass, solicitud.Collector.Class);
+        if (cuenta.Nature == LineNature.Contribution) previo ??= ErroresDeAportes.NoRetirable();
+        // La cancelación con entrega liquida los intereses a la fecha: llega con la liquidación de captaciones (US5, T135).
+        if (solicitud.CloseAccount) previo ??= ErroresDeAportes.EntregaNoDisponible("La cancelación de la cuenta por el contrato", "US5");
+        if (previo is not null) return await RechazoAuditadoAsync<ComprobanteDeCuentaDto>(previo, solicitud.IdempotencyKey, solicitud.Collector, ct);
+
+        var previa = (await ValidacionPreviaAsync(solicitud.Collector, [cuenta], ct, RetiroDeCuentaAplicadoV1.Type)).GetValueOrDefault(cuenta.Id);
+        if (previa is { Bloqueo: { } bloqueo }) return await RechazoAuditadoAsync<ComprobanteDeCuentaDto>(bloqueo, solicitud.IdempotencyKey, solicitud.Collector, ct);
+
+        await cerrojo.TomarSetupAsync(exclusivo: false, ct);
+        await cerrojo.BloquearDeudoresAsync([cuenta.HolderPersonId], ModoDeEspera.Esperar, ct);
+        await cerrojo.BloquearCuentasAsync([cuenta.Id], ModoDeEspera.Esperar, ct);
+
+        var r = await retiros.AplicarAsync(new RetiroPedido(solicitud.Collector, solicitud.IdempotencyKey, huella, solicitud.AccountPublicId, solicitud.Amount,
+            solicitud.ValueDate, solicitud.MeansClass, solicitud.SignerPersonPublicIds, solicitud.ReceiverPersonPublicId, solicitud.Receipt, solicitud.ApprovalPublicId,
+            previa?.Outcome ?? PrevalidationOutcome.NotApplicable, previa?.Avisos ?? [], null), ct);
+        if (r.IsFailure) return await RechazoAuditadoAsync<ComprobanteDeCuentaDto>(r.Error, solicitud.IdempotencyKey, solicitud.Collector, ct);
+        var c = r.Value.Comprobante;
+        await AuditarAsync(AuditEventTypes.LendingAccountContractWithdrawn, solicitud.IdempotencyKey, solicitud.Collector,
+            new { operation = c.Number, account = c.AccountNumber, valueDate = c.ValueDate, amount = c.Amount, gmf = c.Gmf?.Amount, transactions = c.Transactions,
+                  approval = solicitud.ApprovalPublicId, alreadyApplied = r.Value.YaAplicado }, ct);
+        await db.SaveChangesAsync(ct);
+        return new(r.Value.YaAplicado ? ResultadoDelContrato.AlreadyApplied : ResultadoDelContrato.Applied, AuditEventTypes.LendingAccountContractWithdrawn,
+            r.Value.YaAplicado ? MensajeYaRetirada : MensajeRetirada, c);
     }
 
     public async Task<RespuestaDelContratoDto<ComprobanteDeCuentaDto>> TrasladarAsync(SolicitudDeTraslado solicitud, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(solicitud);
-        var origen = await NaturalezaAsync(solicitud.SourceAccountPublicId, ct);
-        var destino = await NaturalezaAsync(solicitud.TargetAccountPublicId, ct);
+        var huella = HuellaDeOperacion.Calcular(TrasladoDeCuenta.Metodo, solicitud);
+        await auditoria.IntentoAsync(AuditEventTypes.LendingAccountContractAttempted, Entidad, solicitud.IdempotencyKey ?? string.Empty,
+            new { method = nameof(TrasladarAsync), collector = solicitud.Collector?.Code, source = solicitud.SourceAccountPublicId,
+                  target = solicitud.TargetAccountPublicId, amount = solicitud.Amount, sha256 = huella }, ct);
+        var forma = await validadorDeTraslado.ValidateAsync(solicitud, ct);
+        Error? lote = !forma.IsValid ? Invalida(forma) : !transaccion.HayEnCurso() ? ErroresDePagos.TransaccionRequerida() : null;
+        if (lote is not null) return await RechazoAuditadoAsync<ComprobanteDeCuentaDto>(lote, solicitud.IdempotencyKey, solicitud.Collector, ct);
+        var origen = await db.MemberAccounts.AsNoTracking().FirstOrDefaultAsync(a => a.PublicId == solicitud.SourceAccountPublicId && !a.IsDeleted, ct);
+        var destino = await db.MemberAccounts.AsNoTracking().FirstOrDefaultAsync(a => a.PublicId == solicitud.TargetAccountPublicId && !a.IsDeleted, ct);
         var fechas = await ActivacionesDeCaptacion.LeerAsync(db, ct);
-        foreach (var n in new[] { origen, destino }.Distinct())
-            if (!fechas.Activada(n)) return Rechazo<ComprobanteDeCuentaDto>(NoActivada(n));
-        return Rechazo<ComprobanteDeCuentaDto>(origen == LineNature.Contribution
-            ? ErroresDeAportes.NoRetirable()
-            : ErroresDeAportes.EntregaNoDisponible("El traslado por el contrato", nameof(EntregaDeCartera.K8)));
+        foreach (var n in new[] { origen?.Nature ?? LineNature.Deposit, destino?.Nature ?? LineNature.Deposit }.Distinct())
+            if (!fechas.Activada(n)) return await RechazoAuditadoAsync<ComprobanteDeCuentaDto>(NoActivada(n), solicitud.IdempotencyKey, solicitud.Collector, ct);
+        if (await RecaudadorAsync(solicitud.Collector, ct) is { } noCuenta)
+            return await RechazoAuditadoAsync<ComprobanteDeCuentaDto>(noCuenta, solicitud.IdempotencyKey, solicitud.Collector, ct);
+        if (origen is null || destino is null)
+            return await RechazoAuditadoAsync<ComprobanteDeCuentaDto>(new Error(ErroresDePagos.CodigoNoEncontrado, "Una de las cuentas no existe."),
+                solicitud.IdempotencyKey, solicitud.Collector, ct);
+        if (origen.Nature == LineNature.Contribution)
+            return await RechazoAuditadoAsync<ComprobanteDeCuentaDto>(ErroresDeAportes.NoRetirable(), solicitud.IdempotencyKey, solicitud.Collector, ct);
+
+        var previa = (await ValidacionPreviaAsync(solicitud.Collector, [origen], ct, TrasladoEntreCuentasAplicadoV1.Type)).GetValueOrDefault(origen.Id);
+        if (previa is { Bloqueo: { } bloqueo }) return await RechazoAuditadoAsync<ComprobanteDeCuentaDto>(bloqueo, solicitud.IdempotencyKey, solicitud.Collector, ct);
+
+        // R08: setup → personas → cuentas, cada nivel por Id, en una pasada.
+        await cerrojo.TomarSetupAsync(exclusivo: false, ct);
+        await cerrojo.BloquearDeudoresAsync(new[] { origen.HolderPersonId, destino.HolderPersonId }.Distinct().Order().ToList(), ModoDeEspera.Esperar, ct);
+        await cerrojo.BloquearCuentasAsync(new[] { origen.Id, destino.Id }.Order().ToList(), ModoDeEspera.Esperar, ct);
+
+        var r = await traslados.AplicarAsync(new TrasladoPedido(solicitud.Collector, solicitud.IdempotencyKey, huella, solicitud.SourceAccountPublicId,
+            solicitud.TargetAccountPublicId, solicitud.Amount, solicitud.ValueDate, solicitud.SignerPersonPublicIds, solicitud.TargetModality, solicitud.Receipt,
+            solicitud.ApprovalPublicId, previa?.Outcome ?? PrevalidationOutcome.NotApplicable, previa?.Avisos ?? [], null), ct);
+        if (r.IsFailure) return await RechazoAuditadoAsync<ComprobanteDeCuentaDto>(r.Error, solicitud.IdempotencyKey, solicitud.Collector, ct);
+        var c = r.Value.Comprobante;
+        await AuditarAsync(AuditEventTypes.LendingAccountContractTransferred, solicitud.IdempotencyKey, solicitud.Collector,
+            new { operation = c.Number, account = c.AccountNumber, target = c.TargetAccountPublicId, amount = c.Amount, gmf = c.Gmf?.Amount,
+                  transactions = c.Transactions, alreadyApplied = r.Value.YaAplicado }, ct);
+        await db.SaveChangesAsync(ct);
+        return new(r.Value.YaAplicado ? ResultadoDelContrato.AlreadyApplied : ResultadoDelContrato.Applied, AuditEventTypes.LendingAccountContractTransferred,
+            r.Value.YaAplicado ? "El traslado ya estaba aplicado con esta clave: se devuelve el comprobante original." : MensajeTrasladada, c);
     }
 
     // ------------------------------------------------------------------------------------------------------------- reversar --
@@ -479,7 +644,7 @@ public sealed class ContratoDeCuentasDeCartera(
     /// el sello va en la operación y el aviso en el comprobante.
     /// </summary>
     private async Task<IReadOnlyDictionary<int, DecisionDeValidacionPrevia>> ValidacionPreviaAsync(Recaudador recaudador, IReadOnlyList<MemberAccount> cuentas,
-        CancellationToken ct)
+        CancellationToken ct, string? tipoDeSalida = null)
     {
         if (cuentas.Count == 0) return new Dictionary<int, DecisionDeValidacionPrevia>();
         var lineas = await LineasAsync(cuentas.Select(c => c.CreditLineId), ct);
@@ -490,15 +655,19 @@ public sealed class ContratoDeCuentasDeCartera(
         {
             var k = grupo.Key;
             var hecho = Representativo(recaudador, lineas.GetValueOrDefault(k.CreditLineId).Code ?? string.Empty, k.Nature, k.DepositClass,
-                sucursales.GetValueOrDefault(k.BranchId));
+                sucursales.GetValueOrDefault(k.BranchId), tipoDeSalida);
             var decision = await validacionPrevia.DecidirAsync([hecho], OrigenDeValidacionPrevia.Contrato, $"el lote de {recaudador.Class}", ct);
             foreach (var cuenta in grupo) decisiones[cuenta.Id] = decision;
         }
         return decisiones;
     }
 
-    /// <summary>El hecho principal de una combinación, sin importes reales: la validación previa sólo mira hecho, sucursal y dimensiones.</summary>
-    private static MensajeContableDto Representativo(Recaudador recaudador, string linea, LineNature naturaleza, DepositClass? clase, Guid sucursal)
+    /// <summary>
+    /// El hecho principal de una combinación, sin importes reales: la validación previa sólo mira hecho, sucursal y dimensiones. US4 (T123): también lo
+    /// usa la pantalla (retiro por giro y traslado), que bloquea (D23).
+    /// </summary>
+    public static MensajeContableDto Representativo(Recaudador recaudador, string linea, LineNature naturaleza, DepositClass? clase, Guid sucursal,
+        string? tipoDeSalida = null)
     {
         var dimensiones = new DepositFactDimensionsV1
         {
@@ -506,6 +675,12 @@ public sealed class ContratoDeCuentasDeCartera(
             BranchPublicId = sucursal,
         };
         var cobro = new CollectorRefV1 { CollectorCode = recaudador.Code, CollectorClass = recaudador.Class.ToString() };
+        var principal = new[] { new DepositConceptAmountV1 { Concept = nameof(MemberAccountConcept.Principal), Amount = -1m } };
+        if (tipoDeSalida == RetiroDeCuentaAplicadoV1.Type)
+            return Sobre(new RetiroDeCuentaAplicadoV1 { Dimensions = dimensiones, Collector = cobro, Amounts = principal }, RetiroDeCuentaAplicadoV1.Type, sucursal);
+        if (tipoDeSalida == TrasladoEntreCuentasAplicadoV1.Type)
+            return Sobre(new TrasladoEntreCuentasAplicadoV1 { Dimensions = dimensiones, Amounts = principal, TargetDimensions = dimensiones },
+                TrasladoEntreCuentasAplicadoV1.Type, sucursal);
         object contenido = naturaleza == LineNature.Contribution
             ? new AporteRecibidoV1
             {
@@ -526,13 +701,27 @@ public sealed class ContratoDeCuentasDeCartera(
             contenido);
     }
 
+    private static MensajeContableDto Sobre(object contenido, string tipo, Guid sucursal) => new(
+        new IntegrationEnvelopeV1
+        {
+            MessageId = Guid.Empty, Type = tipo, Kind = IntegrationMessageKind.Business, OriginModule = ModulosDeOrigen.Cartera,
+            OriginEventKey = ClavesDeEvento.Confirmacion, BranchPublicId = sucursal,
+        },
+        contenido);
+
     private async Task AuditarAsync(string evento, string clave, Recaudador? recaudador, object detalle, CancellationToken ct) =>
         await auditoria.HechoAsync(evento, Entidad, clave ?? string.Empty,
             new { collector = recaudador?.Code, collectorClass = recaudador?.Class.ToString(), detail = detalle }, ct);
 
-    private async Task<RespuestaDelContratoDto<T>> RechazoAuditadoAsync<T>(Error e, SolicitudDeReversoDeCuenta s, CancellationToken ct)
+    private Task<RespuestaDelContratoDto<T>> RechazoAuditadoAsync<T>(Error e, SolicitudDeReversoDeCuenta s, CancellationToken ct) =>
+        RechazoAuditadoAsync<T>(e, s.IdempotencyKey, s.Collector, ct);
+
+    /// <summary>
+    /// Un rechazo auditado en <c>COR_AuditOutbox</c> y guardado (salvo sin transacción): también la solicitud de aprobación que dejó una atribución superada.
+    /// </summary>
+    private async Task<RespuestaDelContratoDto<T>> RechazoAuditadoAsync<T>(Error e, string? clave, Recaudador? recaudador, CancellationToken ct)
     {
-        await AuditarAsync(AuditEventTypes.LendingAccountContractRejected, s.IdempotencyKey, s.Collector, new { code = e.Code, message = e.Message }, ct);
+        await AuditarAsync(AuditEventTypes.LendingAccountContractRejected, clave ?? string.Empty, recaudador, new { code = e.Code, message = e.Message }, ct);
         if (e.Code != ErroresDePagos.CodigoTransaccionRequerida) await db.SaveChangesAsync(ct);
         return Rechazo<T>(e);
     }

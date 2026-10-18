@@ -105,6 +105,12 @@ public static class TiposDeAlerta
     /// (<c>Aportes.MinimoIrreducibleEntidad</c>): queda pendiente y se avisa al gerente. (nuevo)
     /// </summary>
     public const string DevolucionRetenidaPorMinimo = "Cartera.DevolucionRetenidaPorMinimo";
+
+    /// <summary>
+    /// Feature 014, US4 (T111; contrato-de-cuentas §3.11; FR-056): el recaudador reversó una consignación ya usada (cheque devuelto) y la cuenta quedó con
+    /// sobregiro técnico: se bloquea para retiros y se avisa a quien reversa operaciones de cuentas. (nuevo)
+    /// </summary>
+    public const string SobregiroTecnico = "Cartera.SobregiroTecnico";
     public const string PeriodoInexistente = "Contabilidad.PeriodoInexistente";
     public const string GrupoNiifDistinto = "Contabilidad.GrupoNiifDistinto";
     public const string ValorNacionalDistinto = "Nomina.ValorNacionalDistinto";
@@ -246,6 +252,8 @@ public static class TiposDeAlerta
             ["Lending.Collections.RecordActivity"], SoloApp, AlertSeverity.Warning, "K4"),
         new(DevolucionRetenidaPorMinimo, Cartera, "La devolución de un retiro de asociado perforaría el mínimo irreducible de la entidad: quedó pendiente.",
             ["Lending.MembershipWithdrawals.Approve"], AppYCorreo, AlertSeverity.Critical, "K7"),
+        new(SobregiroTecnico, Cartera, "El reverso de una consignación ya usada dejó una cuenta con sobregiro técnico: quedó bloqueada para retiros.",
+            ["Lending.Accounts.Reverse"], AppYCorreo, AlertSeverity.Critical, "K8"),
         new(PeriodoInexistente, "Accounting", "Llegó un hecho con fecha contable en un período que no existe.",
             ["Accounting.Periods.CloseYear"], AppYCorreo, AlertSeverity.Critical, "K1"),
         new(GrupoNiifDistinto, "Accounting", "El perfil regulatorio y el grupo NIIF de la configuración contable difieren.",

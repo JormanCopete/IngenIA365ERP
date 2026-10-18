@@ -84,12 +84,14 @@ public class ElCatalogoDeMensajesEsUnico
     public void El_catalogo_tiene_las_partes_de_la_013_y_los_hechos_de_Cartera_su_codigo_corto()
     {
         var todos = CatalogoDeMensajes.Todos;
-        // Los veinte de la 012 y la v2 de VentaACreditoRegistrada (T0175, T18), que también es de Comercial.
-        Assert.Equal(21, todos.Count(t => t.OriginModule == ModulosDeOrigen.Inventario));
-        Assert.Equal(20, todos.Count(t => t.OriginModule == ModulosDeOrigen.Inventario && t.Version == 1));
+        // Los veinte de la 012 y la v2 de VentaACreditoRegistrada (T0175, T18), que también es de Comercial; feature 014, US4 (T112): +
+        // FacturaDeCargoRegistrada, que Comercial le informa a la Cartera.
+        Assert.Equal(22, todos.Count(t => t.OriginModule == ModulosDeOrigen.Inventario));
+        Assert.Equal(21, todos.Count(t => t.OriginModule == ModulosDeOrigen.Inventario && t.Version == 1));
         // K6b (T1056): + CorreccionMonetariaUvrCausada; decisión del dueño del 2026-10-17: + PagoRedistribuidoPorValorNacional.
-        // Feature 014 (T048): + los 33 hechos de captaciones y aportes; T055: + la v2 de OrdenDeGiroEmitida; T098: + RetiroDeAsociadoAprobado.
-        Assert.Equal(78, todos.Count(t => t.OriginModule == ModulosDeOrigen.Cartera));
+        // Feature 014 (T048): + los 33 hechos de captaciones y aportes; T055: + la v2 de OrdenDeGiroEmitida; T098: + RetiroDeAsociadoAprobado;
+        // US4 (T112): + ConsignacionReversadaPorCartera, CargoDeCaptacionCausado y CargoDeCaptacionReversado.
+        Assert.Equal(81, todos.Count(t => t.OriginModule == ModulosDeOrigen.Cartera));
         Assert.Equal(1, todos.Count(t => t.OriginModule == ModulosDeOrigen.Tesoreria));
         Assert.Equal(2, todos.Count(t => t.OriginModule == ModulosDeOrigen.Recaudo));
 

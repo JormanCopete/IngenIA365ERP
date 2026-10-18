@@ -17,7 +17,11 @@ public static partial class GramaticaDeClaves
     [GeneratedRegex("^NOM:[0-9a-f]{32}:[0-9a-f]{32}$", RegexOptions.CultureInvariant)]
     private static partial Regex Nomina();
 
-    [GeneratedRegex("^CAR:[0-9a-f]{32}:[0-9a-f]{32}$", RegexOptions.CultureInvariant)]
+    /// <summary>
+    /// La recogida <c>CAR:{desembolso:N}:{obligación:N}</c> y, desde la feature 014 (US4, T119; R16), el débito automático
+    /// <c>CAR:debito-automatico:{obligación:N}:{aaaammdd}</c>.
+    /// </summary>
+    [GeneratedRegex("^CAR:([0-9a-f]{32}:[0-9a-f]{32}|debito-automatico:[0-9a-f]{32}:[0-9]{8})$", RegexOptions.CultureInvariant)]
     private static partial Regex Recogida();
 
     [GeneratedRegex("^TST:[0-9a-f]{32}(:[0-9a-f]{32})?$", RegexOptions.CultureInvariant)]

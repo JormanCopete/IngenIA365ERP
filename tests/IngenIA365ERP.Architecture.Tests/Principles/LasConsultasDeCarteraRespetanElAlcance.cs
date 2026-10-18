@@ -157,6 +157,13 @@ public class LasConsultasDeCarteraRespetanElAlcance
         // detalle, la vista previa y las escrituras de un retiro fuera del alcance responden el 404 del retiro, RetirosDeAsociado.EnAlcanceAsync).
         "Core/IngenIA365ERP.Application/Lending/Deposits/Withdrawals/MembershipWithdrawalQueries.cs",
         "Core/IngenIA365ERP.Application/Lending/Deposits/Withdrawals/SettleMembershipWithdrawalCommand.cs",
+        // Feature 014, US4 (T111, T116, T119, T121, T123): las operaciones, el libro, los cargos, las autorizaciones de débito automático y el uso del
+        // GMF por la oficina y la línea de la cuenta (una cuenta fuera del alcance responde su 404, LectorDeCuentas.CuentaEnAlcanceAsync); el
+        // catálogo de cargos de una línea, el 404 de la línea; las vistas de captaciones del centro de informes, con PorOficinaYLinea.
+        "Core/IngenIA365ERP.Application/Lending/Deposits/Operations/MemberAccountOperationCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/Deposits/Operations/DirectDebitMandateCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/Deposits/Charges/AccountChargeCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/Deposits/Reports/DepositReportQueries.cs",
     ];
 
     /// <summary>
@@ -238,6 +245,9 @@ public class LasConsultasDeCarteraRespetanElAlcance
         // Feature 014, US3 (T090, T093): el resumen de aportes es de la persona; los grupos de archivo y las equivalencias son del convenio, un
         // catálogo de la cooperativa.
         ["ListTestCollectorAccountInstallmentsQuery"] = "doble de prueba de Recaudo fuera de producción (T20): llama al contrato de cuentas, que no aplica el alcance",
+        // Feature 014, US4 (T113): los mismos dobles para consultar y simular sobre el contrato de cuentas.
+        ["ListTestCollectorAccountsQuery"] = "doble de prueba de Recaudo fuera de producción (T20): llama al contrato de cuentas, que no aplica el alcance",
+        ["SimulateTestCollectorAccountOperationQuery"] = "doble de prueba de Recaudo fuera de producción (T20): llama al contrato de cuentas, que no aplica el alcance",
         ["GetContributionsSummaryQuery"] = "el resumen de aportes es de la persona, no de una oficina (D19): el mismo saldo de IConsultaDeAportes",
         ["ListPayrollAgreementFileGroupsQuery"] = "catálogo de la cooperativa: los grupos de archivo de un convenio no tienen oficina ni deudores",
         ["ListPayrollAgreementConceptEquivalencesQuery"] = "catálogo de la cooperativa: las equivalencias de un convenio no tienen oficina ni deudores",

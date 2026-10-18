@@ -41,6 +41,15 @@ public sealed record TipoDeMensaje(
 
     /// <summary>El conjunto de un solo destino, con comparación ordinal.</summary>
     public static IReadOnlySet<string> Un(string destino) => new HashSet<string>([destino], StringComparer.Ordinal);
+
+    /// <summary>
+    /// Feature 014, US4 (T119; mensajes.md §1.4 de la 014): un tipo que no admite proceso puede admitirlo para un contenido concreto —el
+    /// <c>PagoAplicado</c> del débito automático—. Nulo: sólo cuenta <see cref="AdmiteProceso"/>.
+    /// </summary>
+    public Func<object, bool>? ProcesoSi { get; init; }
+
+    /// <summary>¿Admite el proceso este contenido? (<see cref="AdmiteProceso"/> o la condición del contenido).</summary>
+    public bool AdmiteProcesoPara(object contenido) => AdmiteProceso || (ProcesoSi?.Invoke(contenido) ?? false);
 }
 
 /// <summary>Las cinco formas de <c>originEventKey</c> de contracts/mensajes.md §10.1, y la combinación de dos de ellas que usa Cartera.</summary>

@@ -10,8 +10,8 @@ using MediatR;
 namespace IngenIA365ERP.Application.Lending.Integration.DoblesDePrueba;
 
 // Feature 014, US3 (T093, T095; api.md §18.4): el recaudador de prueba TST sobre el contrato de cuentas —listar las cuotas exigibles de una persona,
-// consignar y reversar—, sólo fuera de producción y con Lending.TestDoubles.Operate, como sus rutas de obligaciones. Retirar y trasladar llegan con K8.
-// (nuevo)
+// consignar y reversar—, sólo fuera de producción y con Lending.TestDoubles.Operate, como sus rutas de obligaciones. Desde K8 (US4, T113) también
+// consultar las cuentas de una persona, simular, retirar y trasladar. (nuevo)
 
 /// <summary><c>GET /api/lending/test-doubles/collector/accounts/installments</c>: <c>ListarExigiblesAsync</c> de la persona a una fecha. (nuevo)</summary>
 public sealed record ListTestCollectorAccountInstallmentsQuery(Guid PersonPublicId, DateOnly? Date = null)
@@ -82,5 +82,78 @@ public sealed class ReverseTestCollectorAccountOperationCommandHandler(IApplicat
             return Result.Failure<RespuestaDelContratoDto<ComprobanteDeReversoDeCuentaDto>>(RecaudadorDePruebaRegistrado.NoExiste());
         return await TransaccionExplicita.EjecutarAsync(db, async () => Result.Success(await contrato.ReversarAsync(
             new SolicitudDeReversoDeCuenta(RecaudadorDePrueba.Recaudador, request.IdempotencyKey, request.Reason.Trim()), ct)), ct);
+    }
+}
+
+// ------------------------------------------------------------------------------------------------------- K8 (US4, T113) --
+
+/// <summary><c>GET /api/lending/test-doubles/collector/accounts</c>: <c>ConsultarAsync</c> de la persona a una fecha. (nuevo)</summary>
+public sealed record ListTestCollectorAccountsQuery(Guid PersonPublicId, DateOnly? Date = null, bool IncludeAsSignatory = false)
+    : IRequest<Result<RespuestaDelContratoDto<CuentasDePersonaDto>>>;
+
+public sealed class ListTestCollectorAccountsQueryHandler(IContratoDeCuentas contrato, IEnumerable<IDestinoDeMensajes> destinos, IDateTimeService reloj)
+    : IRequestHandler<ListTestCollectorAccountsQuery, Result<RespuestaDelContratoDto<CuentasDePersonaDto>>>
+{
+    public async Task<Result<RespuestaDelContratoDto<CuentasDePersonaDto>>> Handle(ListTestCollectorAccountsQuery request, CancellationToken ct)
+    {
+        if (!RecaudadorDePruebaRegistrado.Esta(destinos))
+            return Result.Failure<RespuestaDelContratoDto<CuentasDePersonaDto>>(RecaudadorDePruebaRegistrado.NoExiste());
+        return Result.Success(await contrato.ConsultarAsync(
+            new SolicitudDeConsultaDeCuentas(RecaudadorDePrueba.Recaudador, request.PersonPublicId, request.Date ?? reloj.HoyLocal, request.IncludeAsSignatory), ct));
+    }
+}
+
+/// <summary><c>POST /api/lending/test-doubles/collector/accounts/simulations</c> (sin clave): <c>SimularAsync</c> con el recaudador de prueba. (nuevo)</summary>
+public sealed record SimulateTestCollectorAccountOperationQuery(SolicitudDeSimulacionDeCuenta Request) : IRequest<Result<RespuestaDelContratoDto<SimulacionDeCuentaDto>>>;
+
+public sealed class SimulateTestCollectorAccountOperationQueryHandler(IContratoDeCuentas contrato, IEnumerable<IDestinoDeMensajes> destinos)
+    : IRequestHandler<SimulateTestCollectorAccountOperationQuery, Result<RespuestaDelContratoDto<SimulacionDeCuentaDto>>>
+{
+    public async Task<Result<RespuestaDelContratoDto<SimulacionDeCuentaDto>>> Handle(SimulateTestCollectorAccountOperationQuery request, CancellationToken ct)
+    {
+        if (!RecaudadorDePruebaRegistrado.Esta(destinos))
+            return Result.Failure<RespuestaDelContratoDto<SimulacionDeCuentaDto>>(RecaudadorDePruebaRegistrado.NoExiste());
+        return Result.Success(await contrato.SimularAsync(request.Request with { Collector = RecaudadorDePrueba.Recaudador }, ct));
+    }
+}
+
+/// <summary>
+/// <c>POST /api/lending/test-doubles/collector/accounts/withdrawals</c> (con clave de pantalla): <c>RetirarAsync</c> con el recaudador de prueba; la clave de
+/// negocio <c>TST:{guid:N}</c> la propone quien prueba. (nuevo)
+/// </summary>
+public sealed record ApplyTestCollectorAccountWithdrawalCommand(SolicitudDeRetiro Request)
+    : IRequest<Result<RespuestaDelContratoDto<ComprobanteDeCuentaDto>>>, IOperacionIdempotente
+{
+    public Guid OperationKey { get; init; }
+}
+
+public sealed class ApplyTestCollectorAccountWithdrawalCommandHandler(IApplicationDbContext db, IContratoDeCuentas contrato, IEnumerable<IDestinoDeMensajes> destinos)
+    : IRequestHandler<ApplyTestCollectorAccountWithdrawalCommand, Result<RespuestaDelContratoDto<ComprobanteDeCuentaDto>>>
+{
+    public async Task<Result<RespuestaDelContratoDto<ComprobanteDeCuentaDto>>> Handle(ApplyTestCollectorAccountWithdrawalCommand request, CancellationToken ct)
+    {
+        if (!RecaudadorDePruebaRegistrado.Esta(destinos))
+            return Result.Failure<RespuestaDelContratoDto<ComprobanteDeCuentaDto>>(RecaudadorDePruebaRegistrado.NoExiste());
+        return await TransaccionExplicita.EjecutarAsync(db, async () =>
+            Result.Success(await contrato.RetirarAsync(request.Request with { Collector = RecaudadorDePrueba.Recaudador }, ct)), ct);
+    }
+}
+
+/// <summary><c>POST /api/lending/test-doubles/collector/accounts/transfers</c> (con clave de pantalla): <c>TrasladarAsync</c> con el recaudador de prueba. (nuevo)</summary>
+public sealed record ApplyTestCollectorAccountTransferCommand(SolicitudDeTraslado Request)
+    : IRequest<Result<RespuestaDelContratoDto<ComprobanteDeCuentaDto>>>, IOperacionIdempotente
+{
+    public Guid OperationKey { get; init; }
+}
+
+public sealed class ApplyTestCollectorAccountTransferCommandHandler(IApplicationDbContext db, IContratoDeCuentas contrato, IEnumerable<IDestinoDeMensajes> destinos)
+    : IRequestHandler<ApplyTestCollectorAccountTransferCommand, Result<RespuestaDelContratoDto<ComprobanteDeCuentaDto>>>
+{
+    public async Task<Result<RespuestaDelContratoDto<ComprobanteDeCuentaDto>>> Handle(ApplyTestCollectorAccountTransferCommand request, CancellationToken ct)
+    {
+        if (!RecaudadorDePruebaRegistrado.Esta(destinos))
+            return Result.Failure<RespuestaDelContratoDto<ComprobanteDeCuentaDto>>(RecaudadorDePruebaRegistrado.NoExiste());
+        return await TransaccionExplicita.EjecutarAsync(db, async () =>
+            Result.Success(await contrato.TrasladarAsync(request.Request with { Collector = RecaudadorDePrueba.Recaudador }, ct)), ct);
     }
 }

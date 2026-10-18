@@ -64,7 +64,17 @@ public sealed record ConsignacionAEmitir(
     string Modalidad,
     IReadOnlyList<DepositConceptAmountV1> Valores,
     bool Reactivada,
-    PrevalidationOutcome ValidacionPrevia);
+    PrevalidationOutcome ValidacionPrevia)
+{
+    /// <summary>US4 (T111): lo que queda en canje (C14).</summary>
+    public decimal EnCanje { get; init; }
+
+    /// <summary>US4 (T111): el depósito inicial que activa una cuenta en apertura.</summary>
+    public bool EsDepositoInicial { get; init; }
+
+    /// <summary>US4 (T116): los cargos pendientes que la consignación cobró (acompañante <c>CargoPendienteCobrado</c>).</summary>
+    public IReadOnlyList<(AccountCharge Cargo, decimal Monto)> Cobrados { get; init; } = [];
+}
 
 /// <summary>El reverso de una operación de cuenta tal como se emite (mensajes.md §4.1, <c>OperacionDeCuentaReversada</c>). (nuevo)</summary>
 public sealed record ReversoDeCuentaAEmitir(
@@ -205,9 +215,13 @@ public sealed partial class EmisionDeCartera
             Collector = Recaudador(c.Recaudador, c.Clave, c.ClaseDeMedio, c.DepositantePublicId, c.Recibo),
             Modality = c.Modalidad,
             Reactivated = c.Reactivada,
+            PendingClearance = c.EnCanje,
+            IsOpeningDeposit = c.EsDepositoInicial,
         };
-        return await EmitirDeCuentaAsync(contenido, ConsignacionEnCuentaAplicadaV1.Type, h, c.Operacion, ClaseConsignacionDeCuenta, c.DepositantePublicId,
-            c.ValidacionPrevia, ct);
+        List<object> contenidos = [contenido];
+        if (c.Cobrados.Count > 0) contenidos.Add(CargoPendienteCobrado(h, c.Operacion, c.Cobrados));
+        return await EmitirUnidadDeCuentaAsync(contenidos, ConsignacionEnCuentaAplicadaV1.Type, h, c.Operacion, ClaseConsignacionDeCuenta,
+            c.DepositantePublicId, c.ValidacionPrevia, ct);
     }
 
     /// <summary>

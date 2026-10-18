@@ -1,6 +1,8 @@
 using FluentAssertions;
 using IngenIA365ERP.Application.Common.Alerts;
+using IngenIA365ERP.Application.Common.Approvals;
 using IngenIA365ERP.Application.Common.Audit;
+using IngenIA365ERP.Application.Common.Calendar;
 using IngenIA365ERP.Application.Common.Integration;
 using IngenIA365ERP.Application.Common.Integration.Accounting;
 using IngenIA365ERP.Application.Common.Integration.Lending;
@@ -8,14 +10,17 @@ using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Lending.Common;
 using IngenIA365ERP.Application.Lending.Deposits.Accounts;
+using IngenIA365ERP.Application.Lending.Deposits.Charges;
 using IngenIA365ERP.Application.Lending.Deposits.Contributions;
 using IngenIA365ERP.Application.Lending.Deposits.Ledger;
 using IngenIA365ERP.Application.Lending.Deposits.Lines;
+using IngenIA365ERP.Application.Lending.Deposits.Operations;
 using IngenIA365ERP.Application.Lending.Integration;
 using IngenIA365ERP.Application.Lending.Integration.Contrato;
 using IngenIA365ERP.Application.Tests.Common;
 using IngenIA365ERP.Application.Tests.Lending.Deposits.Accounts;
 using IngenIA365ERP.Application.Tests.Payroll.Common;
+using IngenIA365ERP.Domain.Common.Calendar;
 using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Entities.Lending.Integration;
 using IngenIA365ERP.Domain.Enums.Integration;
@@ -54,6 +59,9 @@ internal sealed class AportesDePrueba : IDisposable
         });
         Contabilidad.EstadoDelPeriodoAsync(Arg.Any<DateOnly>(), Arg.Any<CancellationToken>())
             .Returns(ci => Task.FromResult(Result.Success(new EstadoDelPeriodoDto(true, EstadoDePeriodoContable.Open, ci.Arg<DateOnly>()))));
+        Calendario.ObtenerAsync(Arg.Any<DateOnly>(), Arg.Any<DateOnly>(), Arg.Any<IReadOnlyCollection<DayOfWeek>>(), Arg.Any<DateTime?>(),
+                Arg.Any<CancellationToken>())
+            .Returns(ci => Task.FromResult(new CalendarioHabil(Festivos, ci.ArgAt<IReadOnlyCollection<DayOfWeek>>(2))));
         Contabilidad.EvaluarAsync(Arg.Any<IReadOnlyList<MensajeContableDto>>(), Arg.Any<CancellationToken>())
             .Returns(Result.Success(new ResultadoDeEvaluacionContableDto(true, [], [])));
         var tenant = Substitute.For<ICurrentTenantService>();
@@ -76,6 +84,11 @@ internal sealed class AportesDePrueba : IDisposable
     public IRegistroDeIntegracion Registro { get; } = Substitute.For<IRegistroDeIntegracion>();
     public IContabilidadParaCartera Contabilidad { get; } = Substitute.For<IContabilidadParaCartera>();
     public IAlertas Alertas { get; } = Substitute.For<IAlertas>();
+    public ICalendarioHabil Calendario { get; } = Substitute.For<ICalendarioHabil>();
+    public List<DateOnly> Festivos { get; } = [];
+
+    /// <summary>El motor de aprobaciones (US4): nulo, la atribución excedida responde «pendiente» sin solicitud.</summary>
+    public IMotorDeAprobaciones? Aprobaciones { get; set; }
 
     public Dictionary<string, IntegrationParticipantClass> Recaudadores { get; } = new()
     {
@@ -94,14 +107,20 @@ internal sealed class AportesDePrueba : IDisposable
     public NumeradorDeCartera Numerador() => new(Db, C.Cerrojo);
     public RegistroDeCuentas RegistroDeCuentas() => new(Db);
     public ReglasDeAportes Reglas() => new(Db, C.Parametros(), G.Valores);
-    public ConsignacionEnCuentas Consignacion() => new(Db, RegistroDeCuentas(), Numerador(), Emision(), Reglas(), C.Parametros(), G.Actor, G.Reloj);
-    public ReversionDeCuentas Reversion() => new(Db, RegistroDeCuentas(), Numerador(), Emision(), G.Actor, G.Reloj);
+    public ReglasDeMovimientos Movimientos() => new(Db, C.Parametros(), G.Valores, Calendario, G.Actor, G.Reloj, Aprobaciones);
+    public CargosDeCuentas Cargos() => new(Db, RegistroDeCuentas(), Numerador(), Emision(), G.Actor, G.Reloj);
+    public ConsignacionEnCuentas Consignacion() =>
+        new(Db, RegistroDeCuentas(), Numerador(), Emision(), Reglas(), C.Parametros(), G.Actor, G.Reloj, Movimientos(), Cargos());
+    public ReversionDeCuentas Reversion() => new(Db, RegistroDeCuentas(), Numerador(), Emision(), G.Actor, G.Reloj, alertas: Alertas);
+    public RetiroDeCuenta Retiro() => new(Db, RegistroDeCuentas(), Numerador(), Emision(), Movimientos(), Cargos(), G.Actor, G.Reloj);
+    public TrasladoDeCuenta Traslado() => new(Db, RegistroDeCuentas(), Numerador(), Emision(), Movimientos(), Retiro(), Consignacion(), G.Actor, G.Reloj);
     public AuditoriaDeEscriturasDeCartera Auditoria() => new(Servicios, Db);
     public ValidacionPreviaContableDeCartera ValidacionPrevia() => new(Contabilidad, G.Parametros(), G.Reloj);
 
     public ContratoDeCuentasDeCartera Contrato() => new(Db, Transaccion, Registro, ValidacionPrevia(), C.Cerrojo, Consignacion(), Reversion(),
         RegistroDeCuentas(), C.Parametros(), Auditoria(), new SolicitudDeConsignacionValidator(), new SolicitudDeReversoDeCuentaValidator(),
-        new SolicitudDeExigiblesValidator(), new SolicitudDeSimulacionDeCuentaValidator(), new SolicitudDeConsultaDeCuentasValidator(), G.Reloj);
+        new SolicitudDeExigiblesValidator(), new SolicitudDeSimulacionDeCuentaValidator(), new SolicitudDeConsultaDeCuentasValidator(), G.Reloj,
+        Movimientos(), Retiro(), Traslado(), Cargos(), new SolicitudDeRetiroValidator(), new SolicitudDeTrasladoValidator());
 
     public GeneradorDeCuotas Generador() => new(Db, RegistroDeCuentas(), G.Valores);
 

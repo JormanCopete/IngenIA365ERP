@@ -29,6 +29,8 @@ public class EmisionesDeProcesoPermitidas
         "RetiroDeCuentaAplicado", "GmfRetenido", "InteresDeCaptacionCausado", "AjusteDeCausacionDeCaptacion", "InteresDeCaptacionLiquidado",
         "RetencionPracticada", "InteresesDeCdatPagados", "CdatProrrogado", "CdatCancelado", "PenalidadAplicada", "CaptacionReclasificada",
         "BonificacionReconocida", "CargoDeCuentaCausado", "DevolucionOrdenada", "SaldoTrasladadoANoReclamados",
+        // US4 (T116): el cargo periódico gravado lo causa el ciclo diario y pide la factura a Comercial en la misma unidad.
+        "CargoDeCaptacionCausado",
         // Feature 014 (T055): la orden de giro v2 de captaciones (la v1 de los desembolsos sigue sin proceso).
         "OrdenDeGiroEmitida",
     ];
@@ -61,6 +63,30 @@ public class EmisionesDeProcesoPermitidas
             Assert.True(CatalogoDeMensajes.Todos.Single(t => t.Type == tipo).AdmiteProceso, $"{tipo} lo emite el ciclo diario: admite proceso (T11).");
         foreach (var tipo in new[] { "CreditoDesembolsado", "PagoAplicado" })
             Assert.False(CatalogoDeMensajes.Todos.Single(t => t.Type == tipo).AdmiteProceso, $"{tipo} lo origina una persona: no admite proceso (T11).");
+    }
+
+    /// <summary>
+    /// Feature 014, US4 (T119; mensajes.md §1.4): el <c>PagoAplicado</c> sigue sin admitir proceso, salvo el del débito automático —recaudador
+    /// <c>OwnLoanPayoff</c> con la clave <c>CAR:debito-automatico:…</c>—, que lo aplica el ciclo diario.
+    /// </summary>
+    [Fact]
+    public void El_pago_aplicado_admite_proceso_solo_en_el_debito_automatico()
+    {
+        var pago = CatalogoDeMensajes.Todos.Single(t => t.Type == "PagoAplicado");
+        var debito = new IngenIA365ERP.Application.Common.Integration.Contracts.Lending.PagoAplicadoV1
+        {
+            Collector = new IngenIA365ERP.Application.Common.Integration.Contracts.Lending.CollectorRefV1
+            {
+                CollectorCode = "CAR", CollectorClass = "OwnLoanPayoff", IdempotencyKey = "CAR:debito-automatico:0123456789abcdef0123456789abcdef:20261201",
+            },
+        };
+        var cruce = debito with { Collector = debito.Collector with { IdempotencyKey = "CAR:0123456789abcdef0123456789abcdef:0123456789abcdef0123456789abcdef" } };
+        var nomina = debito with { Collector = debito.Collector with { CollectorCode = "NOM", CollectorClass = "Payroll" } };
+
+        Assert.False(pago.AdmiteProceso);
+        Assert.True(pago.AdmiteProcesoPara(debito));
+        Assert.False(pago.AdmiteProcesoPara(cruce));
+        Assert.False(pago.AdmiteProcesoPara(nomina));
     }
 
     [Fact]

@@ -515,6 +515,17 @@ public static class DependencyInjection
         services.AddScoped<Lending.Deposits.Contributions.ReglasDeAportes>();
         services.AddScoped<Lending.Deposits.Contributions.ConsignacionEnCuentas>();
         services.AddScoped<Lending.Deposits.Contributions.ReversionDeCuentas>();
+        // US4 (T111, T116): las reglas comunes de los movimientos (disponible, firmas, topes, atribución, GMF, canje), el retiro, el traslado y los cargos.
+        services.AddScoped<Lending.Deposits.Operations.ReglasDeMovimientos>();
+        services.AddScoped<Lending.Deposits.Operations.RetiroDeCuenta>();
+        services.AddScoped<Lending.Deposits.Operations.TrasladoDeCuenta>();
+        services.AddScoped<Lending.Deposits.Charges.CargosDeCuentas>();
+        services.AddScoped<Lending.Deposits.Charges.FacturasDeCargos>();
+        // US4 (T116, T119): los subpasos de los cargos periódicos y del débito automático, después de las cuotas.
+        services.AddScoped<Lending.Deposits.Accrual.ISubpasoDeCaptaciones, Lending.Deposits.Charges.CargosPeriodicos>();
+        services.AddScoped<Lending.Deposits.Accrual.ISubpasoDeCaptaciones, Lending.Deposits.Operations.DebitoAutomatico>();
+        // US4 (T111): la aprobación de un retiro o una consignación en efectivo sobre la atribución (aprobador presente, mecánica de la plataforma).
+        services.AddScoped<Common.Approvals.IFuenteDeAprobacion, Lending.Deposits.Operations.FuenteDeAprobacionDeCuenta>();
         // US3 (T086): lo común de la devolución de aportes sin retiro y la cesión entre asociados.
         services.AddScoped<Lending.Deposits.Contributions.SolicitudesDeAportes>();
         // US3 (T087): la constancia y el paz y salvo de aportes, y la anulación de documentos por el reverso de una operación de cuenta.

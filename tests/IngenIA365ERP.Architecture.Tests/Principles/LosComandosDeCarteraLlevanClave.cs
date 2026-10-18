@@ -100,6 +100,8 @@ public class LosComandosDeCarteraLlevanClave
             "\"/verify\"",
             // US5 (bloque 9C): simular un pago, la vista previa de su reverso y la simulación del recaudador de prueba (no escriben).
             "/payment-simulations\"", "/reversal-preview\"", "\"/collector/simulations\"",
+            // Feature 014, US4 (T113): la simulación del recaudador de prueba sobre el contrato de cuentas (no escribe).
+            "\"/collector/accounts/simulations\"",
             // K3 (bloque C, T0890): simular la novedad (api.md §11.1, «sin clave»: no escribe).
             "/simulate\"",
             // K4 (bloque C, T0956): la vista previa de una campaña (api.md §14.9: «sin clave», no escribe).

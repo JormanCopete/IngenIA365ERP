@@ -243,19 +243,27 @@ public sealed class ArrastreDelCruceAlRetiro(IApplicationDbContext db, Reversion
             var r = await reversion.ReversarAsync(operacion, motivo, IniciadoPorElReversoDelPago, ct);
             if (r.IsFailure) return Result.Failure(r.Error);
         }
-        var retiro = await db.MembershipWithdrawals.FirstAsync(w => w.Id == operaciones[0].MembershipWithdrawalId, ct);
-        if (retiro.Status is MembershipWithdrawalStatus.Settled or MembershipWithdrawalStatus.ToRedo)
-            retiro.PorRehacer($"Se reversó el pago {pago.Number} del cruce ({reverso.Number}): vuelva a liquidar.");
+        // US4 (T119): el débito automático no tiene retiro que rehacer; el cruce sí.
+        if (operaciones.FirstOrDefault(o => o.MembershipWithdrawalId is not null)?.MembershipWithdrawalId is { } retiroId)
+        {
+            var retiro = await db.MembershipWithdrawals.FirstAsync(w => w.Id == retiroId, ct);
+            if (retiro.Status is MembershipWithdrawalStatus.Settled or MembershipWithdrawalStatus.ToRedo)
+                retiro.PorRehacer($"Se reversó el pago {pago.Number} del cruce ({reverso.Number}): vuelva a liquidar.");
+        }
         return Result.Success();
     }
 
-    /// <summary>Las operaciones de cuenta vivas del cruce que pagaron <paramref name="pago"/>.</summary>
+    /// <summary>
+    /// Las operaciones de cuenta vivas que pagaron <paramref name="pago"/>: las del cruce al retiro y, desde US4 (T119), las del débito automático (el
+    /// reverso del pago arrastra el reverso del débito, Edge Cases).
+    /// </summary>
     private async Task<List<MemberAccountOperation>> OperacionesAsync(LoanOperation pago, bool seguir, CancellationToken ct)
     {
         var consulta = seguir ? db.MemberAccountOperations : db.MemberAccountOperations.AsNoTracking();
         return await consulta
-            .Where(o => o.RelatedLoanOperationId == pago.Id && o.MembershipWithdrawalId != null && o.ReversesOperationId == null
-                        && o.ReversedByOperationId == null && o.Kind == MemberAccountOperationKind.InternalOffset)
+            .Where(o => o.RelatedLoanOperationId == pago.Id && o.ReversesOperationId == null && o.ReversedByOperationId == null
+                        && ((o.MembershipWithdrawalId != null && o.Kind == MemberAccountOperationKind.InternalOffset)
+                            || o.Kind == MemberAccountOperationKind.DirectDebit))
             .OrderBy(o => o.Id).ToListAsync(ct);
     }
 }

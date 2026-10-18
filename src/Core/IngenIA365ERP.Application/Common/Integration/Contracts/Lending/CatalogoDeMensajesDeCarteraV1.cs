@@ -40,7 +40,9 @@ public static class CatalogoDeMensajesDeCarteraV1
         Hecho(typeof(AjusteDeCausacionPorFechaValorV1), AjusteDeCausacionPorFechaValorV1.Type, "AFV", N, CoP, proceso: true),
         Hecho(typeof(CausacionSuspendidaV1), CausacionSuspendidaV1.Type, "CSU", I, P, proceso: true),
         Hecho(typeof(CausacionReanudadaV1), CausacionReanudadaV1.Type, "CRE", I, P, proceso: true),
-        Hecho(typeof(PagoAplicadoV1), PagoAplicadoV1.Type, "PAP", N, C, proceso: false),
+        // Feature 014, US4 (T119; mensajes.md §1.4 de la 014): el proceso sólo lo origina en el débito automático (recaudador OwnLoanPayoff con la clave
+        // CAR:debito-automatico:…); para Recaudo sigue la regla C14 de la 013.
+        Hecho(typeof(PagoAplicadoV1), PagoAplicadoV1.Type, "PAP", N, C, proceso: false) with { ProcesoSi = EsDebitoAutomatico },
         Hecho(typeof(PagoReversadoV1), PagoReversadoV1.Type, "PRV", N, C, proceso: false),
         Hecho(typeof(AnticipoRecibidoV1), AnticipoRecibidoV1.Type, "ANR", N, C, proceso: false),
         Hecho(typeof(AnticipoAplicadoV1), AnticipoAplicadoV1.Type, "ANA", N, P, proceso: true),
@@ -126,10 +128,28 @@ public static class CatalogoDeMensajesDeCarteraV1
         new(typeof(OrdenDeGiroEmitidaV2), OrdenDeGiroEmitidaV2.Type, 2, ModulosDeOrigen.Cartera, TipoDeMensaje.Un(IntegrationDestinations.Treasury), N, C, true),
         // Feature 014, US10 (T098; mensajes.md §1.2 #34 y §5.1): el retiro del asociado aprobado, a Asociados; lo origina la persona que aprueba.
         Otro(typeof(RetiroDeAsociadoAprobadoV1), RetiroDeAsociadoAprobadoV1.Type, IntegrationDestinations.Associates, C, proceso: false),
+        // Feature 014, US4 (T112; mensajes.md §1.2 #35, #38, #39): la consignación reversada desde la Cartera al destino de su recaudador (Recaudo o
+        // Tesorería; la solicitud dice cuál) y los cargos gravados a Comercial, que los factura (el causado lo emite también el ciclo diario).
+        new(typeof(ConsignacionReversadaPorCarteraV1), ConsignacionReversadaPorCarteraV1.Type, 1, ModulosDeOrigen.Cartera,
+            new HashSet<string>([IntegrationDestinations.Receipts, IntegrationDestinations.Treasury], StringComparer.Ordinal), N, C, false),
+        Otro(typeof(CargoDeCaptacionCausadoV1), CargoDeCaptacionCausadoV1.Type, IntegrationDestinations.Inventory, C, proceso: true),
+        Otro(typeof(CargoDeCaptacionReversadoV1), CargoDeCaptacionReversadoV1.Type, IntegrationDestinations.Inventory, P, proceso: false),
     ];
 
-    /// <summary>Los tipos de Cartera (78 desde la feature 014: 70 hechos a Contabilidad y 8 a otros destinos).</summary>
+    /// <summary>Los tipos de Cartera (81 desde la feature 014: 70 hechos a Contabilidad y 11 a otros destinos).</summary>
     public static IReadOnlyList<TipoDeMensaje> Todos { get; } = [.. HechosAContabilidad, .. AOtrosDestinos];
+
+    /// <summary>
+    /// US4 (T119): el <c>PagoAplicado</c> que origina el débito automático del ciclo diario —recaudador <c>OwnLoanPayoff</c> y clave
+    /// <c>CAR:debito-automatico:…</c>— admite proceso; cualquier otro, no.
+    /// </summary>
+    public static bool EsDebitoAutomatico(object contenido) =>
+        contenido is PagoAplicadoV1 { Collector: { } recaudador }
+        && string.Equals(recaudador.CollectorClass, nameof(Integration.Lending.ClaseDeRecaudador.OwnLoanPayoff), StringComparison.Ordinal)
+        && recaudador.IdempotencyKey.StartsWith(PrefijoDelDebitoAutomatico, StringComparison.Ordinal);
+
+    /// <summary>El prefijo de la clave del débito automático (contrato-de-cuentas §3.12, R16).</summary>
+    public const string PrefijoDelDebitoAutomatico = "CAR:debito-automatico:";
 
     private static TipoDeMensaje Hecho(Type record, string type, string codigoCorto, IntegrationMessageKind kind, FormaDeClaveDeEvento forma, bool proceso) =>
         new(record, type, 1, ModulosDeOrigen.Cartera, TipoDeMensaje.Un(A), kind, forma, proceso, codigoCorto);

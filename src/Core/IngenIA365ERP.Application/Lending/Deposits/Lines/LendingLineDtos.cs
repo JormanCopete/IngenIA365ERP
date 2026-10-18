@@ -31,6 +31,78 @@ public sealed record DepositRateInput
     public IReadOnlyList<DepositRateTierInput> Tiers { get; init; } = [];
 }
 
+/// <summary>
+/// US4 (T114; data-model §2.3; FR-128): las exoneraciones combinables de un cargo —cualquiera exonera—: saldo promedio o mínimo, antigüedad como asociado,
+/// empleados, la cuenta marcada exenta del GMF, menores y oficinas.
+/// </summary>
+public sealed record DepositChargeExemptionsInput(
+    decimal? AverageBalanceAtLeast = null,
+    decimal? MinimumBalanceAtLeast = null,
+    int? SeniorityMonthsAtLeast = null,
+    bool Employees = false,
+    bool GmfExemptAccount = false,
+    bool Minors = false,
+    IReadOnlyList<Guid>? OfficePublicIds = null);
+
+/// <summary>
+/// US4 (T114; api.md §3 <c>charges[]</c>; data-model §2.3): un cargo del catálogo de la versión, <b>apagado</b> salvo <see cref="Enabled"/> (D35). El
+/// disparador (<see cref="Trigger"/>) reemplaza al <c>event</c> del ejemplo del contrato (research §12).
+/// </summary>
+public sealed record DepositChargeInput
+{
+    public string Code { get; init; } = string.Empty;
+    public string Name { get; init; } = string.Empty;
+    public ChargeKind Kind { get; init; } = ChargeKind.Other;
+    public ChargeTrigger Trigger { get; init; } = ChargeTrigger.Manual;
+    public bool Enabled { get; init; }
+    public ChargeCalculation Calculation { get; init; } = ChargeCalculation.FixedAmount;
+    public decimal? FixedAmount { get; init; }
+    public decimal? Percent { get; init; }
+    public ChargeBase? PercentBase { get; init; }
+    public decimal? Min { get; init; }
+    public decimal? Max { get; init; }
+    public RepaymentPeriodicity? Periodicity { get; init; }
+    public int? FreePerPeriod { get; init; }
+    public RepaymentPeriodicity? FreePeriod { get; init; }
+    public bool TaxedWithVat { get; init; }
+    public string? CommercialItemCode { get; init; }
+    public ChargeShortfallPolicy UncollectedPolicy { get; init; } = ChargeShortfallPolicy.KeepPending;
+    public DepositChargeExemptionsInput? Exemptions { get; init; }
+
+    public BorradorDeCargoDeCaptacion Borrador() => new(Code ?? string.Empty, Name ?? string.Empty, Kind, Trigger, Calculation)
+    {
+        IsEnabled = Enabled,
+        Periodicity = Periodicity,
+        FreeOperationsPerPeriod = FreePerPeriod,
+        FreePeriod = FreePeriod,
+        FixedAmount = FixedAmount,
+        Percentage = Percent,
+        PercentageBase = PercentBase,
+        MinAmount = Min,
+        MaxAmount = Max,
+        ExemptIfAverageBalanceAtLeast = Exemptions?.AverageBalanceAtLeast,
+        ExemptIfMinimumBalanceAtLeast = Exemptions?.MinimumBalanceAtLeast,
+        ExemptIfSeniorityMonthsAtLeast = Exemptions?.SeniorityMonthsAtLeast,
+        ExemptEmployees = Exemptions?.Employees ?? false,
+        ExemptGmfExemptAccount = Exemptions?.GmfExemptAccount ?? false,
+        ExemptMinors = Exemptions?.Minors ?? false,
+        ExemptBranchPublicIds = Exemptions?.OfficePublicIds ?? [],
+        ShortfallPolicy = UncollectedPolicy,
+        IsVatTaxed = TaxedWithVat,
+        CommercialItemCode = CommercialItemCode,
+    };
+
+    public static DepositChargeInput De(DepositLineCharge c) => new()
+    {
+        Code = c.Code, Name = c.Name, Kind = c.Kind, Trigger = c.Trigger, Enabled = c.IsEnabled, Calculation = c.CalculationMode, FixedAmount = c.FixedAmount,
+        Percent = c.Percentage, PercentBase = c.PercentageBase, Min = c.MinAmount, Max = c.MaxAmount, Periodicity = c.Periodicity,
+        FreePerPeriod = c.FreeOperationsPerPeriod, FreePeriod = c.FreePeriod, TaxedWithVat = c.IsVatTaxed, CommercialItemCode = c.CommercialItemCode,
+        UncollectedPolicy = c.ShortfallPolicy,
+        Exemptions = new DepositChargeExemptionsInput(c.ExemptIfAverageBalanceAtLeast, c.ExemptIfMinimumBalanceAtLeast, c.ExemptIfSeniorityMonthsAtLeast,
+            c.ExemptEmployees, c.ExemptGmfExemptAccount, c.ExemptMinors, c.LeerOficinasExoneradas()),
+    };
+}
+
 /// <summary>Los mínimos para abrir, mantener (entra al disponible) y ganar interés.</summary>
 public sealed record DepositMinimumsInput(decimal ToOpen = 0m, decimal ToMaintain = 0m, decimal ToEarnInterest = 0m);
 
@@ -130,6 +202,9 @@ public sealed record DepositLineVersionInput
     public ContractualLineInput? Contractual { get; init; }
     public PermanentLineInput? Permanent { get; init; }
 
+    /// <summary>US4 (T114): el catálogo de cargos de la versión; vacío = sin cargos (D35).</summary>
+    public IReadOnlyList<DepositChargeInput>? Charges { get; init; }
+
     /// <summary>
     /// El borrador del dominio para la clase <paramref name="clase"/>. <paramref name="lineaALaVistaId"/> es el Id interno de la línea a la vista
     /// destino del CDAT (la resolvió quien llama); <paramref name="soloAsociados"/> fuerza «exige asociado» (perfil que capta sólo de asociados).
@@ -211,6 +286,7 @@ public sealed record DepositLineVersionInput
             WithdrawableOnlyOnMembershipWithdrawal = Permanent?.WithdrawableOnlyOnMembershipWithdrawal,
             RateTiers = tasa.Tiers.Select((t, i) => new BorradorDeTramoDeCaptacion(i + 1, t.BalanceFrom, t.BalanceTo, t.TermDaysFrom, t.TermDaysTo,
                 t.AmountFrom, t.AmountTo, tasa.Kind == RateKind.Fixed ? t.EffectiveAnnual : null, tasa.Kind == RateKind.Variable ? t.Margin : null)).ToList(),
+            Charges = (Charges ?? []).Select(c => c.Borrador()).ToList(),
         };
     }
 }
@@ -376,7 +452,11 @@ public sealed record DepositLineVersionDto(
     PermanentLineInput? Permanent,
     string ContentSha256)
 {
-    public static DepositLineVersionDto De(DepositLineVersion v, IEnumerable<DepositLineRateTier> tramos, DateOnly? vigenteHasta, LendingLineRefDto? destino)
+    /// <summary>US4 (T114): el catálogo de cargos de la versión.</summary>
+    public IReadOnlyList<DepositChargeInput> Charges { get; init; } = [];
+
+    public static DepositLineVersionDto De(DepositLineVersion v, IEnumerable<DepositLineRateTier> tramos, DateOnly? vigenteHasta, LendingLineRefDto? destino,
+        IEnumerable<DepositLineCharge>? cargos = null)
     {
         var cdat = v.DepositClass == Domain.Enums.Lending.DepositClass.TermDeposit
             ? new TermDepositLineInput
@@ -422,7 +502,10 @@ public sealed record DepositLineVersionDto(
             v.MaxCashPerOperation, v.MaxCashPerDay, v.InactivityDays, v.AccruesWhileInactive, v.SuspendsAccrualOnTotalGarnishment, v.SuspendsAccrualOnDeceased,
             cdat, destino, contractual,
             v.DepositClass == Domain.Enums.Lending.DepositClass.Permanent ? new PermanentLineInput(v.WithdrawableOnlyOnMembershipWithdrawal ?? true) : null,
-            v.ContentSha256);
+            v.ContentSha256)
+        {
+            Charges = (cargos ?? []).OrderBy(c => c.Code, StringComparer.Ordinal).Select(DepositChargeInput.De).ToList(),
+        };
     }
 }
 

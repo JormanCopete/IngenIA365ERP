@@ -93,7 +93,7 @@ internal sealed class VentasACreditoDePrueba : IDisposable
     public ConsumeCommercialCreditMessageCommandHandler Consumir()
     {
         _emision = D.Emision();
-        return new(Db, new MensajesEntrantes(Db), Recibos(), Consumo(), Ajustes(), Anteriores());
+        return new(Db, new MensajesEntrantes(Db), Recibos(), Consumo(), Ajustes(), Anteriores(), new Application.Lending.Deposits.Charges.FacturasDeCargos(Db));
     }
 
     public ConsultasDeCartera Consultas() =>

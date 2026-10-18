@@ -28,15 +28,17 @@ namespace IngenIA365ERP.Application.Lending.Deposits.Accrual;
 /// <item>marca la cuenta «actualizar datos» desde el cumpleaños, hasta que el titular actualice su conocimiento y su autorización de datos
 /// (<c>POST /{id}/data-update</c>).</item>
 /// </list>
-/// No cambia el número, el saldo ni las condiciones. Es idempotente: una cuenta ya sin representante vigente no vuelve a entrar. Los retiros del
-/// representante en espera de aprobación (R22) nacen con K8 (US4); hasta entonces no hay ninguno que anular. Una cuenta que falla queda en
+/// No cambia el número, el saldo ni las condiciones. Es idempotente: una cuenta ya sin representante vigente no vuelve a entrar. Desde K8 (US4, T120;
+/// R22, FR-033) anula el retiro en espera de aprobación de la cuenta (la solicitud de la plataforma queda <c>Cancelled</c>): lo pidió el representante,
+/// que desde el cumpleaños ya no firma; el aviso de la mayoría de edad les llega a los dos. Una cuenta que falla queda en
 /// <c>LND_ProcessRunErrors</c> y las demás siguen. (nuevo)
 /// </summary>
 public sealed class MayoriaDeEdad(
     IApplicationDbContext db,
     ReglasDeParametrosDeCartera parametros,
     ColaDeMensajesAlDeudor? cola = null,
-    ILogger<MayoriaDeEdad>? logger = null) : ISubpasoDeCaptaciones
+    ILogger<MayoriaDeEdad>? logger = null,
+    IngenIA365ERP.Application.Common.Approvals.IMotorDeAprobaciones? aprobaciones = null) : ISubpasoDeCaptaciones
 {
     public const string CodigoDePlantilla = "MAYOREDAD";
 
@@ -101,6 +103,12 @@ public sealed class MayoriaDeEdad(
             await AvisarAsync(cuenta, [cuenta.HolderPersonId, representante.PersonId], candidata.Cumple, ct);
             var hasta = candidata.Cumple.AddDays(-1);
             representante.Terminar(hasta < representante.ValidFrom.AddDays(-1) ? representante.ValidFrom.AddDays(-1) : hasta, MotivoDeFin, null);
+            // US4 (T120): el retiro que esperaba un aprobador ya no vale (lo pidió quien desde hoy no firma).
+            if (aprobaciones is not null
+                && await aprobaciones.InvalidarAsync(Domain.Approvals.ApprovalSourceTypes.MemberAccountOperation, cuenta.PublicId,
+                    Domain.Approvals.ApprovalSubjects.AccountWithdrawal, ct) is { } anulada)
+                _log.LogInformation("[Cartera.RetiroAnuladoPorMayoriaDeEdad] Se anuló la solicitud {Solicitud} del retiro de la cuenta {Cuenta}.",
+                    anulada.PublicId, cuenta.Number);
             if (!cuenta.RequiresDataUpdate)
             {
                 cuenta.RequiresDataUpdate = true;

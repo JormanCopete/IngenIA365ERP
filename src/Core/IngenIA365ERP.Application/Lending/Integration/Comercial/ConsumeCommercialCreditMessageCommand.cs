@@ -46,13 +46,17 @@ public sealed class ConsumeCommercialCreditMessageCommandHandler(
     RecibosDeCartera recibos,
     ConsumoDeVentaACredito ventas,
     AjusteDesdeComercial ajustes,
-    VentasAnterioresAlCorte anteriores) : IRequestHandler<ConsumeCommercialCreditMessageCommand, Result<ResultadoDeConsumo>>
+    VentasAnterioresAlCorte anteriores,
+    Deposits.Charges.FacturasDeCargos facturas) : IRequestHandler<ConsumeCommercialCreditMessageCommand, Result<ResultadoDeConsumo>>
 {
     public async Task<Result<ResultadoDeConsumo>> Handle(ConsumeCommercialCreditMessageCommand request, CancellationToken ct)
     {
         var leidos = await entrantes.LeerAsync(request.MessagePublicIds, IntegrationDestinations.Lending, ct);
         if (leidos.IsFailure) return Result.Failure<ResultadoDeConsumo>(leidos.Error);
         var mensaje = leidos.Value[0];
+        // Feature 014, US4 (T117): la factura de un cargo de captación es informativa y no lleva recibo de venta.
+        if (mensaje.Type == IngenIA365ERP.Application.Common.Integration.Contracts.Lending.Deposits.FacturaDeCargoRegistradaV1.Type)
+            return Result.Success(await facturas.ConsumirAsync(mensaje, ct));
 
         try
         {

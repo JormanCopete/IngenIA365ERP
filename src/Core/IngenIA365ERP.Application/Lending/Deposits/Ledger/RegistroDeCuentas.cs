@@ -404,6 +404,73 @@ public sealed class RegistroDeCuentas(IApplicationDbContext db)
         db.AccountInstallmentNonDeductions.Add(noDescontado);
     }
 
+    // ------------------------------------------------------------------------------------------- GMF del mes (US4) --
+
+    /// <summary>
+    /// US4 (T110, T111; data-model §4.7): el uso del tope exento y el GMF de una disposición, por persona y mes, tal como lo calculó
+    /// <c>GravamenMovimientosFinancieros</c>, en la misma operación que la disposición. Sin valor ni exención no hay fila (con tarifa cero o «no aplica» no se
+    /// escribe nada, FR-022). No guarda.
+    /// </summary>
+    public GmfMonthlyUsage? RegistrarUsoDeGmf(int persona, MemberAccountOperation operacion, int cuenta, DateOnly fecha, string hecho, decimal dispuesto,
+        decimal exento, decimal baseGravada, decimal gmf, GmfExemptionPolicy politica, decimal tarifa)
+    {
+        ArgumentNullException.ThrowIfNull(operacion);
+        if (gmf == 0m && exento == 0m) return null;
+        if (gmf < 0m || exento < 0m || baseGravada < 0m)
+            throw new InvalidOperationException("El uso del GMF de una disposición no es negativo: el reverso es otra fila con ReversesUsageId.");
+        var uso = new GmfMonthlyUsage
+        {
+            PersonId = persona,
+            Year = (short)fecha.Year,
+            Month = (byte)fecha.Month,
+            MemberAccountId = cuenta,
+            Operation = operacion,
+            OperationId = operacion.Id,
+            TaxableEventCode = hecho.Length <= GmfMonthlyUsage.LargoDelHecho ? hecho : hecho[..GmfMonthlyUsage.LargoDelHecho],
+            DisposedAmount = dispuesto,
+            ExemptAmount = exento,
+            TaxableBase = baseGravada,
+            GmfAmount = gmf,
+            Policy = politica,
+            Rate = tarifa,
+            Origin = GmfMonthlyUsage.OrigenOperacion,
+        };
+        db.GmfMonthlyUsages.Add(uso);
+        return uso;
+    }
+
+    /// <summary>
+    /// US4 (T111; FR-002): el reverso de una disposición devuelve al tope del mes lo que usó: una fila espejo por cada fila de la original, con los valores en
+    /// negativo y <c>ReversesUsageId</c>, en el mes de la original. No guarda.
+    /// </summary>
+    public void ReversarUsosDeGmf(IEnumerable<GmfMonthlyUsage> originales, MemberAccountOperation reverso)
+    {
+        ArgumentNullException.ThrowIfNull(originales);
+        ArgumentNullException.ThrowIfNull(reverso);
+        foreach (var o in originales)
+        {
+            if (o.ReversesUsageId is not null) continue;
+            db.GmfMonthlyUsages.Add(new GmfMonthlyUsage
+            {
+                PersonId = o.PersonId,
+                Year = o.Year,
+                Month = o.Month,
+                MemberAccountId = o.MemberAccountId,
+                Operation = reverso,
+                OperationId = reverso.Id == 0 ? 0 : reverso.Id,
+                TaxableEventCode = o.TaxableEventCode,
+                DisposedAmount = -o.DisposedAmount,
+                ExemptAmount = -o.ExemptAmount,
+                TaxableBase = -o.TaxableBase,
+                GmfAmount = -o.GmfAmount,
+                Policy = o.Policy,
+                Rate = o.Rate,
+                ReversesUsageId = o.Id,
+                Origin = o.Origin,
+            });
+        }
+    }
+
     /// <summary>Lo que el registro exige de cada fila: importe, un origen y la precisión de su clase.</summary>
     private static void Validar(MemberAccountTransaction fila)
     {

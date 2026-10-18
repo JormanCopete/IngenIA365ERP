@@ -174,6 +174,13 @@ public sealed class LendingAuditEmitter(IServiceProvider servicios, ILogger<Lend
     public Task<Guid?> EmitirHistorialComplementarioAplicadoAsync(Guid loadPublicId, object resumen, CancellationToken ct = default) =>
         EmitAsync(AuditEventTypes.LendingArrearsHistoryLoadApplied, "ArrearsHistoryLoad", loadPublicId, resumen, ct);
 
+    /// <summary>
+    /// Feature 014, US4 (T123; api.md §4): las operaciones o el libro de una cuenta de un titular vistos en la pantalla (FR-003). Como los archivos de módulo,
+    /// no va en <see cref="LecturasSensibles"/>, la lista cerrada de la 013.
+    /// </summary>
+    public Task<Guid?> EmitirMovimientosDeCuentaVistosAsync(Guid accountPublicId, object filtros, int filas, CancellationToken ct = default) =>
+        EmitAsync(AuditEventTypes.LendingSavingsTransactionsViewed, "MemberAccount", accountPublicId, new { filters = filtros, rows = filas }, ct);
+
     private async Task<Guid?> EmitAsync(string action, string entityType, Guid? entityPublicId, object? after, CancellationToken ct, bool aparte = false)
     {
         try
