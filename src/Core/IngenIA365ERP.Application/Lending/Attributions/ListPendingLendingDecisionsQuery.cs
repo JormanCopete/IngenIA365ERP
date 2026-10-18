@@ -48,7 +48,7 @@ public static class RutasDePendiente
 /// <c>/cartera/aprobaciones</c>): lo que el usuario puede decidir ahora —tiene el permiso del nivel o uno mayor (<see cref="AtribucionDelDecisor"/>),
 /// el asunto está en su alcance de oficina y línea— con <c>canDecide</c> y, si la segregación lo excluye (radicó, intervino o no tiene persona),
 /// <c>excludedReason</c>; y lo que está en la agenda de sus órganos (niveles colegiados de órganos donde es miembro con voto vigente), que va a
-/// sesión. Solicitudes que esperan decisión (también las aprobadas y vencidas, C53) y cupos que esperan decisión. Los más antiguos primero. (nuevo)
+/// sesión. Solicitudes que esperan decisión (también las aprobadas y vencidas, C53) cupos que esperan decisión y, desde K3 (T0879, T0884), novedades y condonaciones radicadas. Los más antiguos primero. (nuevo)
 /// </summary>
 public sealed record ListPendingLendingDecisionsQuery(string? Subject = null, int Page = 1, int PageSize = 20)
     : IRequest<Result<PagedResult<PendingLendingDecisionDto>>>;
@@ -64,6 +64,7 @@ public sealed class ListPendingLendingDecisionsQueryHandler(
     AtribucionDelDecisor atribucion,
     RegistroDeIntervenciones intervenciones,
     IAlcanceDeCartera alcanceDeLaPeticion,
+    Waivers.CondonacionesDeCartera enrutador,
     IActorActual actorActual,
     IDateTimeService reloj) : IRequestHandler<ListPendingLendingDecisionsQuery, Result<PagedResult<PendingLendingDecisionDto>>>
 {
@@ -126,11 +127,55 @@ public sealed class ListPendingLendingDecisionsQueryHandler(
             }
         }
 
+        if (request.Subject is null or LendingDecisionSubjects.Novelty)
+        {
+            var novedades = await (from n in db.LoanNovelties.AsNoTracking()
+                                   join l in db.Loans.AsNoTracking().PorOficinaYLinea(alcance, l => l.BranchId, l => l.CreditLineId) on n.LoanId equals l.Id
+                                   where !n.IsDeleted && n.Status == LoanNoveltyStatus.Submitted
+                                   select new { n.PublicId, n.Number, n.Mechanism, n.SimulationJson, n.RequestedAt, LoanId = l.Id, LoanNumber = l.Number, l.DebtorPersonId })
+                .ToListAsync(ct);
+            var partes = await PartesAsync(novedades.Select(n => n.LoanId).ToList(), ct);
+            foreach (var n in novedades)
+            {
+                var guardada = Novelties.SimulacionGuardada.Leer(n.SimulationJson);
+                if (guardada?.LevelId is not { } nivelId || !porId.TryGetValue(nivelId, out var nivel)) continue;
+                var resumen = $"Novedad {n.Mechanism} del crédito {n.LoanNumber}";
+                var esParte = persona is { } yo && (n.DebtorPersonId == yo || partes.Contains((n.LoanId, yo)));
+                var item = await ItemAsync(LendingDecisionSubjects.Novelty, n.PublicId, n.Number, resumen, guardada.RoutingResult?.Amount ?? 0m, nivel, niveles,
+                    n.RequestedAt, Novelties.NovedadesDeCartera.Expediente, esParte, usuario, persona, misOrganos, organos, hoy, ct);
+                if (item is not null) items.Add(item);
+            }
+        }
+
+        if (request.Subject is null or LendingDecisionSubjects.Condonation)
+        {
+            var condonaciones = await (from w in db.Waivers.AsNoTracking().Include(x => x.Lines)
+                                       join l in db.Loans.AsNoTracking().PorOficinaYLinea(alcance, l => l.BranchId, l => l.CreditLineId) on w.LoanId equals l.Id
+                                       where !w.IsDeleted && w.Status == WaiverStatus.Submitted
+                                       select new { Condonacion = w, Credito = l }).ToListAsync(ct);
+            var partes = await PartesAsync(condonaciones.Select(c => c.Credito.Id).ToList(), ct);
+            foreach (var c in condonaciones)
+            {
+                var enrutada = await enrutador.EnrutarAsync(c.Condonacion, c.Credito, hoy, ct);
+                if (enrutada.IsFailure || !porId.TryGetValue(enrutada.Value.Nivel.Id, out var nivel)) continue;
+                var resumen = $"Condonación del crédito {c.Credito.Number} por {ErroresDeOriginacion.Pesos(c.Condonacion.TotalAmount)}";
+                var esParte = persona is { } yo && (c.Credito.DebtorPersonId == yo || partes.Contains((c.Credito.Id, yo)));
+                var item = await ItemAsync(LendingDecisionSubjects.Condonation, c.Condonacion.PublicId, c.Condonacion.Number, resumen, c.Condonacion.TotalAmount,
+                    nivel, niveles, c.Condonacion.RequestedAt, Waivers.CondonacionesDeCartera.Expediente, esParte, usuario, persona, misOrganos, organos, hoy, ct);
+                if (item is not null) items.Add(item);
+            }
+        }
+
         var ordenados = items.OrderBy(i => i.Since ?? DateTime.MaxValue).ThenBy(i => i.SubjectPublicId).ToList();
         var pagina = new PageRequest(request.Page, request.PageSize);
         return Result.Success(new PagedResult<PendingLendingDecisionDto>(
             ordenados.Skip((pagina.SafePage - 1) * pagina.SafePageSize).Take(pagina.SafePageSize).ToList(), pagina.SafePage, pagina.SafePageSize, ordenados.Count));
     }
+
+    /// <summary>Las partes vivas (codeudores, avalistas) de los créditos, para excluir a quien es parte del asunto.</summary>
+    private async Task<HashSet<(int LoanId, int PersonId)>> PartesAsync(IReadOnlyCollection<int> loanIds, CancellationToken ct) =>
+        (await db.LoanParties.AsNoTracking().Where(p => loanIds.Contains(p.LoanId) && !p.IsDeleted && p.ReleasedOn == null && p.ExtinguishedOn == null)
+            .Select(p => new { p.LoanId, p.PersonId }).ToListAsync(ct)).Select(p => (p.LoanId, p.PersonId)).ToHashSet();
 
     private async Task<PendingLendingDecisionDto?> ItemAsync(string sujeto, Guid publicId, string? numero, string resumen, decimal monto, AttributionLevel nivel,
         IReadOnlyList<AttributionLevel> niveles, DateTime? desde, string expediente, bool esParte, int? usuario, int? persona, IReadOnlySet<int> misOrganos,

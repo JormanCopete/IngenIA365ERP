@@ -92,14 +92,14 @@ public class ReglasDeParametrosDeCarteraTests
     }
 
     [Theory]
-    [InlineData(ParametrosDeCartera.LibranzaVentanaDeGiroDias, "K2")]
     [InlineData(ParametrosDeCartera.AvisoPrevioDiasMinimos, "K4")]
     public async Task Una_clave_de_una_entrega_posterior_es_NotYetAvailable_con_availableFrom(string clave, string entrega)
     {
+        // K4 ya es la vigente: con ella se aceptan las de K4 (rige el límite legal y, sin él replicado, NationalValues.Missing); ninguna clave es de K5.
         var r = await Registrar(clave, "3");
 
-        r.Error.Code.Should().Be("Lending.Parameter.NotYetAvailable");
-        Datos(r.Error).GetProperty("availableFrom").GetString().Should().Contain(entrega);
+        r.Error.Code.Should().NotBe("Lending.Parameter.NotYetAvailable");
+        CatalogoDeParametros.Buscar(Lnd, clave)!.DisponibleDesde.ToString().Should().Contain(entrega);
     }
 
     [Fact]

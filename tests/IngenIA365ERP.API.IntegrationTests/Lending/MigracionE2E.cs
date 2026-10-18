@@ -151,7 +151,11 @@ public static class MigracionE2E
         version["interestTaxConcept"] = new { taxed = false, supportAttachmentPublicId = Guid.NewGuid() };
         version["amounts"] = new { min = 100_000m, max = 30_000_000m };
         version["periodicities"] = new[] { "Monthly", "SinglePayment" };
-        await LineasE2E.CrearExitoAsync(http, coop.TokenAdmin, Linea, "Consumo migrado", version);
+        // Un corte anterior a hoy necesita la versión vigente en el corte, y por la ruta una versión no rige antes de hoy (sólo la plantilla, en
+        // una línea sin uso, la admite): la línea se crea con el reloj de la suite en el corte, como si se hubiera registrado ese día.
+        var hoy = CarteraE2E.Hoy(fx);
+        using (desde < hoy ? CausacionE2E.RelojEn(fx, desde) : null)
+            await LineasE2E.CrearExitoAsync(http, coop.TokenAdmin, Linea, "Consumo migrado", version);
     }
 
     /// <summary>Una consulta tipada sobre la base de la cooperativa.</summary>

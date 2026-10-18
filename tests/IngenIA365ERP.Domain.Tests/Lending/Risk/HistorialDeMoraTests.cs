@@ -112,6 +112,89 @@ public class HistorialDeMoraTests
         h.Completo.Should().BeTrue();
     }
 
+    // --------------------------------------------------------------------------------------------- K6a (T1015) --
+
+    [Fact]
+    public void Un_antecesor_que_no_nacio_en_Cartera_cuenta_por_su_numero_y_manda_la_mayor_mora()
+    {
+        // PredecessorLoanNumber (data-model §23.5): el historial migrado de un crédito refinanciado fuera de Cartera se carga en el nuevo con el
+        // número del antecesor; en julio el crédito trae 5 y el antecesor 40: cuenta 40.
+        var entradas = new[]
+        {
+            E(1, 2026, 7, 5, ArrearsHistoryOrigin.Migration),
+            E(1, 2026, 7, 40, ArrearsHistoryOrigin.Migration) with { NumeroDelAntecesor = "LEG-0099" },
+            E(1, 2026, 8, 0, ArrearsHistoryOrigin.Migration), E(1, 2026, 9, 0, ArrearsHistoryOrigin.Migration),
+        };
+
+        var h = HistorialDeMora.Construir(new(1, new DateOnly(2025, 1, 1)), entradas, Corte, Corte, 3);
+
+        h.Meses.Select(m => m.MaxDiasDeMora).Should().Equal(40, 0, 0);
+    }
+
+    private static HistorialDeMoraConstruido Parcial(int diasObservados) =>
+        // Ventana de 6 meses hasta diciembre (julio a diciembre); filas de septiembre (corte) y transacciones de octubre a diciembre: faltan
+        // julio y agosto.
+        HistorialDeMora.Construir(new(1, new DateOnly(2025, 1, 1)), [E(1, 2026, 9, diasObservados, ArrearsHistoryOrigin.Migration)], Corte,
+            new DateOnly(2026, 12, 31), 6);
+
+    private static readonly Dictionary<(int, int), int> Transacciones = new() { [(2026, 10)] = 3, [(2026, 11)] = 25, [(2026, 12)] = 0 };
+
+    [Theory]
+    [InlineData(ReglaDeMesesFaltantes.MayorObservada, 25)]
+    [InlineData(ReglaDeMesesFaltantes.DelCorte, 12)]
+    [InlineData(ReglaDeMesesFaltantes.Fija, 90)]
+    public void La_regla_de_meses_faltantes_completa_lo_que_falta(ReglaDeMesesFaltantes regla, int esperado)
+    {
+        var h = HistorialDeMora.Completar(Parcial(12), Transacciones, regla, diasDelCorte: 12, diasFijos: 90);
+
+        h.Meses.Select(m => (m.Mes, m.MaxDiasDeMora, m.PorRegla)).Should().Equal(
+            (7, esperado, true), (8, esperado, true), (9, 12, false), (10, 3, false), (11, 25, false), (12, 0, false));
+        h.Completados.Should().HaveCount(2);
+        h.ReglaAplicada.Should().Be(regla);
+        h.Explicacion.Texto.Should().Contain($"Faltan 2 meses: se completan con {esperado} días");
+    }
+
+    [Fact]
+    public void Sin_mora_observada_la_mayor_observada_toma_la_del_corte_o_cero()
+    {
+        HistorialDeMora.Completar(Parcial(0), new Dictionary<(int, int), int> { [(2026, 10)] = 0, [(2026, 11)] = 0, [(2026, 12)] = 0 },
+            ReglaDeMesesFaltantes.MayorObservada, null, null).Completados.Should().OnlyContain(m => m.MaxDiasDeMora == 0);
+    }
+
+    [Fact]
+    public void La_regla_sin_su_dato_se_niega_y_un_mes_de_transacciones_sin_mora_tambien()
+    {
+        var sinDias = () => HistorialDeMora.Completar(Parcial(0), Transacciones, ReglaDeMesesFaltantes.Fija, 0, null);
+        sinDias.Should().Throw<ArgumentException>().WithMessage("*Riesgo.MesesFaltantesDiasFijos*");
+        var sinCorte = () => HistorialDeMora.Completar(Parcial(0), Transacciones, ReglaDeMesesFaltantes.DelCorte, null, 90);
+        sinCorte.Should().Throw<ArgumentException>();
+        var sinTransacciones = () => HistorialDeMora.Completar(Parcial(0), new Dictionary<(int, int), int>(), ReglaDeMesesFaltantes.MayorObservada, 0, null);
+        sinTransacciones.Should().Throw<ArgumentException>().WithMessage("*2026-10*");
+    }
+
+    [Fact]
+    public void Un_historial_completo_no_aplica_la_regla()
+    {
+        var completo = HistorialDeMora.Construir(new(7, new DateOnly(2026, 10, 1)), [], null, new DateOnly(2026, 12, 31), 36);
+
+        var h = HistorialDeMora.Completar(completo, Transacciones, ReglaDeMesesFaltantes.Fija, null, null);
+
+        h.ReglaAplicada.Should().BeNull();
+        h.Completados.Should().BeEmpty();
+        h.Meses.Select(m => m.MaxDiasDeMora).Should().Equal(3, 25, 0);
+    }
+
+    [Theory]
+    [InlineData("MayorObservada", ReglaDeMesesFaltantes.MayorObservada)]
+    [InlineData("DelCorte", ReglaDeMesesFaltantes.DelCorte)]
+    [InlineData("Fija", ReglaDeMesesFaltantes.Fija)]
+    public void La_regla_se_lee_del_valor_del_parametro(string valor, ReglaDeMesesFaltantes regla)
+    {
+        HistorialDeMora.LeerRegla(valor).Should().Be(regla);
+        var numero = () => HistorialDeMora.LeerRegla("1");
+        numero.Should().Throw<ArgumentException>();
+    }
+
     [Fact]
     public void Los_meses_exigidos_son_mayores_que_cero()
     {

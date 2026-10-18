@@ -46,7 +46,10 @@ public static class PrecisionDeCartera
     /// <inheritdoc cref="Puntaje(PropertyBuilder{decimal})"/>
     public static PropertyBuilder<decimal?> Puntaje(this PropertyBuilder<decimal?> propiedad) => propiedad.HasPrecision(12, 4);
 
-    /// <summary>(18,4): valores en UVR. Reservado para K6b (<c>CarteraVivienda</c>); ninguna tabla de K1 lo usa.</summary>
+    /// <summary>
+    /// (18,4): valores en UVR y el valor de la UVR. K6b (<c>CarteraVivienda</c>): la cuota en UVR (<c>LND_RepaymentInstallments</c>), la UVR del plan,
+    /// el valor en UVR de una fila del libro y su UVR, y la valoración de la posición diaria.
+    /// </summary>
     public static PropertyBuilder<decimal> ValorUvr(this PropertyBuilder<decimal> propiedad) => propiedad.HasPrecision(18, 4);
 
     /// <inheritdoc cref="ValorUvr(PropertyBuilder{decimal})"/>

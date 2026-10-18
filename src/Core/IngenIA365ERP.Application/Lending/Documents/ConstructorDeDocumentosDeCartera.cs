@@ -4,14 +4,18 @@ using IngenIA365ERP.Application.Common.Integration.Lending;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Security;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Application.Common.NationalValues;
 using IngenIA365ERP.Application.Lending.Common;
 using IngenIA365ERP.Application.Lending.Engine;
 using IngenIA365ERP.Application.Lending.Payments;
 using IngenIA365ERP.Application.Lending.Settlement;
+using IngenIA365ERP.Application.Saas.NationalValues;
+using IngenIA365ERP.Domain.Common.NationalValues;
 using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Entities.Lending.Loans;
 using IngenIA365ERP.Domain.Enums.Lending;
 using IngenIA365ERP.Domain.Lending;
+using IngenIA365ERP.Domain.Lending.Documents;
 using IngenIA365ERP.Domain.Lending.Parameters;
 using IngenIA365ERP.Domain.Lending.Rates;
 using IngenIA365ERP.Domain.Lending.Replay;
@@ -19,8 +23,12 @@ using Microsoft.EntityFrameworkCore;
 
 namespace IngenIA365ERP.Application.Lending.Documents;
 
-/// <summary>Lo que se pide armar: la clase, el titular, el crédito (si la clase lo lleva), la fecha de corte del certificado y el instante R. (nuevo)</summary>
-public sealed record PedidoDeDocumentoDeCartera(IssuedDocumentKind Clase, Person Titular, Loan? Credito, DateOnly? Corte, DateTime Emision, DateOnly Hoy);
+/// <summary>
+/// Lo que se pide armar: la clase, el titular, el crédito (si la clase lo lleva), la fecha de corte del certificado, el instante R y, en K5, el período
+/// del extracto y el año del certificado tributario. (nuevo)
+/// </summary>
+public sealed record PedidoDeDocumentoDeCartera(IssuedDocumentKind Clase, Person Titular, Loan? Credito, DateOnly? Corte, DateTime Emision, DateOnly Hoy,
+    PeriodoDeDocumento? Periodo = null, short? Año = null);
 
 /// <summary>Un crédito que cubre el documento (<c>LND_IssuedDocumentLoans</c>). (nuevo)</summary>
 public sealed record LineaDeDocumentoDeCartera(int LoanId, long? LastOperationId, long? LastTransactionId, decimal? BalanceAtCutoff, long? PayoffOperationId);
@@ -56,7 +64,12 @@ public sealed record DocumentoArmado(
 /// lo niega con la factura (US13-4); una venta aceptada sin migrar en la activación (<c>NotMigratedWithBalance</c>, <c>OutsideLendingD29</c> de la
 /// conciliación de la carga activada) no lo niega y queda en <c>OutsideLendingNote</c>;</item>
 /// <item><b>certificado de saldo</b>: la liquidación a la fecha D con R = el instante de emisión por <see cref="LecturaDelCredito"/>, con su huella y
-/// su versión de reglas; una D futura se proyecta sin pagos y dice hasta cuándo vale.</item>
+/// su versión de reglas; una D futura se proyecta sin pagos y dice hasta cuándo vale;</item>
+/// <item><b>extracto</b> (K5, T0971): la reconstrucción a la víspera del período y a su último día (con el libro teórico desde el primero), las dos
+/// con R = la emisión, por <see cref="ExtractoDeCredito"/>; los reversos conocidos se informan con lo que reversaron;</item>
+/// <item><b>certificado tributario</b> (K5, T0971): todos los créditos de la persona como deudora reconstruidos al 31 de diciembre con R = la emisión,
+/// por <see cref="CertificadoTributario"/>; los de segmento SARC <c>VIVIENDA</c> según el catálogo de modalidades vigente a ese día, aparte. Sin
+/// créditos en el año, <c>Lending.Document.NothingToCertify</c>.</item>
 /// </list>
 /// Cada crédito que toca pasa por el alcance de oficina y línea (<see cref="LecturaDelCredito"/>): fuera, el 404 genérico. (nuevo)
 /// </summary>
@@ -67,7 +80,8 @@ public sealed class ConstructorDeDocumentosDeCartera(
     LendingAuditEmitter auditoria,
     ReglasDeParametrosDeCartera parametros,
     FirmezaDelPago firmeza,
-    IDateTimeService reloj)
+    IDateTimeService reloj,
+    INormativaVigente? normativa = null)
 {
     private static readonly CultureInfo Co = CultureInfo.GetCultureInfo("es-CO");
 
@@ -95,7 +109,9 @@ public sealed class ConstructorDeDocumentosDeCartera(
             IssuedDocumentKind.LoanClearance => PazYSalvoAsync(p, Requerido(p), ct),
             IssuedDocumentKind.GeneralClearance => PazYSalvoGeneralAsync(p, ct),
             IssuedDocumentKind.BalanceCertificate => CertificadoDeSaldoAsync(p, Requerido(p), ct),
-            _ => throw new ArgumentOutOfRangeException(nameof(p), p.Clase, "Clase de documento que no se arma en K1."),
+            IssuedDocumentKind.Statement => ExtractoAsync(p, Requerido(p), ct),
+            IssuedDocumentKind.TaxCertificate => CertificadoTributarioAsync(p, ct),
+            _ => throw new ArgumentOutOfRangeException(nameof(p), p.Clase, "Clase de documento desconocida."),
         };
     }
 
@@ -250,6 +266,182 @@ public sealed class ConstructorDeDocumentosDeCartera(
                 liquidacion.DaysPastDue, proyectada, validaHasta, liquidacion.Fingerprint, estado.RulesVersion),
             d, null, null, null, estado.Huella, estado.RulesVersion, datos, leyendas));
     }
+
+    // ------------------------------------------------------------------------------------------------------- extracto (K5) --
+
+    private async Task<Result<DocumentoArmado>> ExtractoAsync(PedidoDeDocumentoDeCartera p, Loan credito, CancellationToken ct)
+    {
+        var periodo = p.Periodo ?? throw new ArgumentException("El extracto lleva período.", nameof(p));
+        if (SinObligacion.Contains(credito.Status))
+            return Falla(DocumentErrors.NadaQueCertificar($"el crédito {credito.Number} no tiene desembolso"));
+        var cargado = await cargador.CargarAsync(credito.Id, p.Emision, periodo.To, ct);
+        if (cargado is null) return Falla(LecturaDelCredito.Inexistente());
+        if (!cargado.Listo) return Falla(cargado.Error!);
+        var origen = Origen(cargado);
+        if (origen is null || periodo.To < origen)
+            return Falla(DocumentErrors.NadaQueCertificar($"el crédito {credito.Number} no existía en el período"));
+
+        ExtractoArmado extracto;
+        EstadoDelCredito alFinal;
+        try
+        {
+            var vispera = periodo.From.AddDays(-1);
+            var alInicio = vispera >= origen ? MotorDeCartera.Reconstruir(cargado.Entrada!, vispera) : null;
+            alFinal = MotorDeCartera.Reconstruir(cargado.Entrada!, periodo.To, periodo.From);
+            if (SinUsura(cargado, alFinal, periodo.To, p.Hoy) is { } faltante) return Falla(faltante);
+            var porId = cargado.Operaciones.ToDictionary(o => o.Id);
+            var operaciones = cargado.Operaciones.ToDictionary(o => CargadorDeReconstruccion.Id(o.Id),
+                o => new OperacionDelExtracto(CargadorDeReconstruccion.Id(o.Id), o.Number, o.Kind), StringComparer.Ordinal);
+            var reversos = cargado.Operaciones
+                .Where(o => o.ReversesOperationId is { } r && porId.ContainsKey(r))
+                .Select(o => (Reverso: o, Original: porId[o.ReversesOperationId!.Value]))
+                .Select(x => new ReversoDelExtracto(x.Original.ValueDate, x.Reverso.Number, x.Original.Number, x.Original.Kind, x.Original.Amount))
+                .ToList();
+            extracto = ExtractoDeCredito.Armar(alInicio, alFinal, periodo.From, periodo.To, operaciones, reversos);
+        }
+        catch (ReglaDeCarteraException ex)
+        {
+            return Falla(ex.Codigo == ExtractoDeCredito.CodigoNadaQueExtractar
+                ? DocumentErrors.NadaQueCertificar($"el crédito {credito.Number} no tuvo movimientos ni saldo en el período")
+                : ErroresDeGobierno.De(ex.Problema));
+        }
+
+        var (ultimaOperacion, ultimaTransaccion) = await UltimasAsync(credito.Id, p.Emision, ct);
+        var lineas = extracto.Lineas.Select(l =>
+        {
+            var intereses = Intereses.Sum(c => l.De(c));
+            var capital = l.De(LoanConcept.Principal);
+            return new LineaDeExtractoImpresa(l.FechaValor, l.Descripcion, capital, intereses, l.Neto - capital - intereses, l.Neto, l.ValorInformativo);
+        }).ToList();
+        var datos = Datos(p.Hoy);
+        datos["loan"] = credito.Number;
+        datos["periodFrom"] = periodo.From;
+        datos["periodTo"] = periodo.To;
+        datos["openingBalance"] = extracto.TotalInicial;
+        datos["closingBalance"] = extracto.TotalFinal;
+        datos["movements"] = extracto.Lineas.Count;
+        return Result.Success(new DocumentoArmado(
+            [new LineaDeDocumentoDeCartera(credito.Id, ultimaOperacion, ultimaTransaccion, extracto.TotalFinal, null)],
+            new CuerpoDeExtracto(credito.Number, await NombreDeLineaAsync(credito.CreditLineId, ct), periodo.From, periodo.To, Conceptos(extracto.SaldoInicial),
+                lineas, Conceptos(extracto.SaldoFinal), extracto.TotalInicial, extracto.TotalFinal),
+            null, null, null, null, alFinal.Huella, alFinal.RulesVersion, datos, [ModelosDeDocumentoDeCartera.LeyendaDelExtracto]));
+    }
+
+    // ------------------------------------------------------------------------------------------ certificado tributario (K5) --
+
+    private async Task<Result<DocumentoArmado>> CertificadoTributarioAsync(PedidoDeDocumentoDeCartera p, CancellationToken ct)
+    {
+        var año = p.Año ?? throw new ArgumentException("El certificado tributario lleva año.", nameof(p));
+        var cierre = new DateOnly(año, 12, 31);
+        var creditos = await db.Loans.AsNoTracking()
+            .Where(l => l.DebtorPersonId == p.Titular.Id && !l.IsDeleted && !SinObligacion.Contains(l.Status) && l.OpenedOn <= cierre)
+            .OrderBy(l => l.Id).ToListAsync(ct);
+        foreach (var credito in creditos)
+        {
+            var dentro = await alcance.AsegurarAsync(credito.BranchId, credito.CreditLineId, LecturaDelCredito.Inexistente(), auditoria, "Loan",
+                credito.PublicId, ct);
+            if (dentro.IsFailure) return Falla(dentro.Error);
+        }
+        var cargados = creditos.Count == 0
+            ? new Dictionary<int, CreditoCargado>()
+            : await cargador.CargarAsync(creditos.Select(c => c.Id).ToList(), p.Emision, cierre, ct);
+        var catalogo = normativa is null ? null : await normativa.CatalogoDeModalidadesAsync(cierre, p.Emision, ct);
+
+        var paraCertificar = new List<CreditoParaCertificar>();
+        var porNumero = new Dictionary<string, (Loan Credito, EstadoDelCredito Estado)>(StringComparer.Ordinal);
+        foreach (var credito in creditos)
+        {
+            if (!cargados.TryGetValue(credito.Id, out var cargado)) continue;
+            if (!cargado.Listo) return Falla(cargado.Error!);
+            if (Origen(cargado) is not { } origen || origen > cierre) continue;
+            EstadoDelCredito estado;
+            try
+            {
+                estado = MotorDeCartera.Reconstruir(cargado.Entrada!, cierre);
+            }
+            catch (ReglaDeCarteraException ex)
+            {
+                return Falla(ErroresDeGobierno.De(ex.Problema));
+            }
+            if (SinUsura(cargado, estado, cierre, p.Hoy) is { } faltante) return Falla(faltante);
+            var vivienda = EsVivienda(catalogo, cargado.Vigentes.ModalityCode, cargado.Vigentes.SubsegmentCode);
+            paraCertificar.Add(new CreditoParaCertificar(credito.Number, await NombreDeLineaAsync(credito.CreditLineId, ct), vivienda, estado));
+            porNumero[credito.Number] = (credito, estado);
+        }
+
+        var saldoIncluye = await SaldoDelCertificadoAsync(p.Hoy, ct);
+        var certificado = CertificadoTributario.Armar(año, paraCertificar, saldoIncluye);
+        if (certificado.Vacio)
+            return Falla(DocumentErrors.NadaQueCertificar($"la persona no tuvo créditos con la cooperativa en {año}"));
+
+        var lineas = new List<LineaDeDocumentoDeCartera>();
+        foreach (var c in certificado.Todos)
+        {
+            var credito = porNumero[c.Numero].Credito;
+            var (ultimaOperacion, ultimaTransaccion) = await UltimasAsync(credito.Id, p.Emision, ct);
+            lineas.Add(new LineaDeDocumentoDeCartera(credito.Id, ultimaOperacion, ultimaTransaccion, c.SaldoTotal, null));
+        }
+
+        var datos = Datos(p.Hoy);
+        datos["year"] = año;
+        datos["loans"] = certificado.Todos.Select(c => new
+        {
+            number = c.Numero, housing = c.EsVivienda, interestPaid = c.InteresesPagados, interestPaidWithAdvance = c.InteresesConAnticipo,
+            balanceAtYearEnd = c.SaldoTotal,
+        }).ToList();
+        datos["totalInterestPaid"] = certificado.TotalInteresesPagados;
+        datos["totalHousingInterestPaid"] = certificado.TotalInteresesDeVivienda;
+        datos["balanceIncludes"] = saldoIncluye.ToString();
+        var version = porNumero.Values.Select(x => x.Estado.RulesVersion).FirstOrDefault() ?? VersionesDeReglas.Vigente;
+        return Result.Success(new DocumentoArmado(lineas,
+            new CuerpoDeCertificadoTributario(año, certificado.Creditos.Select(Impreso).ToList(), certificado.Vivienda.Select(Impreso).ToList(),
+                certificado.TotalInteresesPagados, certificado.TotalInteresesDeVivienda, certificado.TotalSaldo),
+            cierre, null, null, null, null, version, datos,
+            [CuerpoDePazYSalvo.LeyendaDeAlcance, ModelosDeDocumentoDeCartera.LeyendaDeInteresesPagados]));
+    }
+
+    /// <summary>
+    /// Los conceptos del saldo al 31 de diciembre vigentes el día de la emisión (<c>Documentos.CertificadoTributario.SaldoIncluye</c>, decisión del dueño
+    /// del 2026-10-16); sin valor legible, todos (el saldo de antes del parámetro).
+    /// </summary>
+    private async Task<ConceptosDelSaldoCertificado> SaldoDelCertificadoAsync(DateOnly hoy, CancellationToken ct)
+    {
+        var leido = await parametros.LeerAsync(ParametrosDeCartera.DocumentosCertificadoTributarioSaldoIncluye, hoy, ct: ct);
+        return (leido.IsSuccess ? SaldoDelCertificadoTributario.Leer(leido.Value.Texto) : null) ?? ConceptosDelSaldoCertificado.Todos;
+    }
+
+    private static CreditoCertificadoTributario Impreso(InteresesPagadosPorCredito c) => new(c.Numero, c.Linea, c.InteresCorrientePagado,
+        c.InteresDeMoraPagado, c.InteresesPagados, c.SaldoDeCapital, c.SaldoDeIntereses, c.SaldoDeOtros, c.SaldoTotal);
+
+    /// <summary>La fecha valor del primer desembolso o del saldo migrado conocidos en R; nula si el crédito no tiene ninguno.</summary>
+    private static DateOnly? Origen(CreditoCargado cargado) =>
+        cargado.Operaciones.Where(o => o.Kind is LoanOperationKind.Disbursement or LoanOperationKind.OpeningBalance)
+            .Select(o => (DateOnly?)o.ValueDate).Min();
+
+    /// <summary>
+    /// ¿El segmento SARC de la modalidad es <c>VIVIENDA</c> en el catálogo vigente al 31 de diciembre? Sin catálogo legible, la modalidad
+    /// <c>VIVIENDA</c> misma (hasta K6b ninguna línea la usa).
+    /// </summary>
+    private static bool EsVivienda(Result<DocumentoNormativoVigente<CatalogoDeModalidades>>? catalogo, string modalidad, string? subsegmento)
+    {
+        const string vivienda = "VIVIENDA";
+        if (catalogo is { IsSuccess: true } leido && leido.Value.Documento.Buscar(modalidad, subsegmento) is { } combinacion)
+            return string.Equals(combinacion.SarcSegment, vivienda, StringComparison.OrdinalIgnoreCase);
+        return string.Equals(modalidad, vivienda, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>Como la liquidación (<see cref="LecturaDelCredito"/>): un día hasta D ≤ hoy sin usura certificada no se certifica.</summary>
+    private static Error? SinUsura(CreditoCargado cargado, EstadoDelCredito estado, DateOnly d, DateOnly hoy) =>
+        d <= hoy && cargado.Entrada!.Condiciones.UsuraRequerida && estado.PrimerDiaSinUsura is { } sinUsura && sinUsura <= d
+            ? ErroresDeValoresNacionales.Faltante(CodigosDeValorNacional.Usura, cargado.Series?.ClaveDeUsura ?? cargado.Pactadas.ModalityCode, sinUsura)
+            : null;
+
+    private static readonly LoanConcept[] Intereses =
+        [LoanConcept.CurrentInterest, LoanConcept.DefaultInterest, LoanConcept.CurrentInterestInSuspense, LoanConcept.DefaultInterestInSuspense];
+
+    /// <summary>Los conceptos con saldo distinto de cero, en el orden del enum, como los imprime el documento.</summary>
+    private static List<ConceptoCertificado> Conceptos(IReadOnlyDictionary<LoanConcept, decimal> saldos) =>
+        saldos.Where(x => x.Value != 0m).OrderBy(x => (int)x.Key).Select(x => new ConceptoCertificado(x.Key.ToString(), x.Value)).ToList();
 
     // ---------------------------------------------------------------------------------------------------------- piezas --
 

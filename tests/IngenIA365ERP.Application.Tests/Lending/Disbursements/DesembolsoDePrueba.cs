@@ -91,7 +91,7 @@ internal sealed class DesembolsoDePrueba : IDisposable
     // recuerda algo entre llamadas (la puesta al día preparada antes del tramo y escrita después).
     private PuestaAlDiaDeCredito? _puestaAlDia;
     public SeriesRegulatoriasDeCartera Series() => new(O.L.Valores(), O.L.Normativa(), new CalendarioDeDiasHabiles(Db), Parametros());
-    public CargadorDeReconstruccion Cargador() => new(Db, Series());
+    public CargadorDeReconstruccion Cargador() => new(Db, Series(), Parametros());
     public PartesDeHechosDeCartera Partes() => new(Db, Emision(), FechaContable());
     public PuestaAlDiaDeCredito PuestaAlDia() => _puestaAlDia ??= new(Db, Cargador(), Registro(), Partes(), G.Reloj);
     public ValidacionPreviaContableDeCartera ValidacionPrevia() => new(Contabilidad, G.Parametros(), G.Reloj);

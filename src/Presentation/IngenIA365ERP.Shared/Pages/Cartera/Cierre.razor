@@ -66,7 +66,14 @@
                     {
                         <p class="aviso aviso-alerta">Algunas tablas de la norma están pendientes de validar por la contadora: el cierre las usó tal como están.</p>
                     }
-                    @if (c.Close.Marks.IncompleteHistory) { <p class="aviso aviso-info">Hay créditos sin historial de mora completo.</p> }
+                    @if (c.Close.Marks.IncompleteHistory)
+                    {
+                        <p class="aviso aviso-info">Hay créditos en pérdida esperada sin historial de mora completo: el cierre completó los meses que faltaban con la regla @ReglaDeMesesFaltantes(c.IncompleteHistory).</p>
+                        @if (CreditosSinHistorial(c.IncompleteHistory) is { Count: > 0 } sinHistorial)
+                        {
+                            <p class="texto-apoyo">Créditos: @string.Join(", ", sinHistorial). También aparecen en el reporte de cambios.</p>
+                        }
+                    }
                     @if (c.PreviousClosePublicId is { } anterior) { <p><a href="@($"/cartera/cierres/{anterior}")">Cierre con el que se compara</a></p> }
                     @if (c.SupersedesClosePublicId is { } reemplaza) { <p><a href="@($"/cartera/cierres/{reemplaza}")">Versión que reemplaza</a></p> }
                     <p>Política SARC: @(c.RiskPolicyVersionNumber is { } v ? $"versión {v} del consejo" : "sin política propia: rige la norma")</p>
@@ -166,7 +173,7 @@
                             <tr class="@(linea.Current ? "" : "texto-tenue")">
                                 <td><a href="@($"/cartera/creditos/{linea.LoanPublicId}")">@linea.LoanNumber</a></td>
                                 <td>@linea.Debtor.Name</td>
-                                <td>@linea.Modality</td>
+                                <td>@linea.Modality@if (linea.ExpectedLoss is not null) { <br /><span class="texto-tenue">Pérdida esperada</span> }</td>
                                 <td class="numero">@linea.DaysPastDue</td>
                                 <td>@TextosDeRiesgo.Categoria(linea.Category, linea.Subcategory)</td>
                                 <td>@linea.AccountingCategory</td>
@@ -181,7 +188,26 @@
                             </tr>
                             @if (_explicada == linea.LoanPublicId)
                             {
-                                <tr><td colspan="14"><ul>@foreach (var e in linea.Explanation) { <li>@e</li> }</ul></td></tr>
+                                <tr>
+                                    <td colspan="14">
+                                        @if (linea.ExpectedLoss is { } pe)
+                                        {
+                                            <div class="kpi-grid">
+                                                <div class="kpi-card"><span class="kpi-value">@Porcentaje(pe.ProbabilityOfDefault)</span><span class="kpi-label">Probabilidad de incumplimiento (@TextosDeRiesgo.TablaDePi(pe.ProbabilityOfDefaultKey))</span></div>
+                                                <div class="kpi-card"><span class="kpi-value">@Porcentaje(pe.LossGivenDefault)</span><span class="kpi-label">Pérdida dado el incumplimiento (@TextosDeRiesgo.GarantiaDePdi(pe.CollateralType))</span></div>
+                                                <div class="kpi-card"><span class="kpi-value">@(pe.ExposureAtDefault?.ToString("N2") ?? "—")</span><span class="kpi-label">Exposición</span></div>
+                                                <div class="kpi-card"><span class="kpi-value">@linea.TotalImpairment.ToString("N2")</span><span class="kpi-label">Deterioro</span></div>
+                                            </div>
+                                            <p class="texto-apoyo">
+                                                @TextosDeRiesgo.Segmento(pe.Segment) · puntaje @(pe.Score?.ToString("N4") ?? "—") (Z @(pe.Z?.ToString("N4") ?? "—"))
+                                                · calificación del modelo @(pe.ModelRating ?? "—") · homologada @linea.AccountingCategory
+                                                · @(pe.IsInDefault == true ? $"en incumplimiento desde hace {pe.DaysInDefault ?? 0} días" : "sin incumplimiento")
+                                            </p>
+                                            @if (pe.IncompleteArrearsHistory) { <p class="aviso aviso-info">El historial de mora de este crédito se completó con la regla de meses faltantes.</p> }
+                                        }
+                                        <ul>@foreach (var e in linea.Explanation) { <li>@e</li> }</ul>
+                                    </td>
+                                </tr>
                             }
                         }
                         @if (_lineas.Count == 0 && !_cargaLineas.Activa) { <tr><td colspan="14" class="texto-tenue">Sin líneas con estos filtros.</td></tr> }
@@ -206,7 +232,7 @@
                                 <td>@c.Debtor.Name</td>
                                 <td>@(c.Previous ?? "Nuevo")</td>
                                 <td>@c.Current</td>
-                                <td>@TextosDeRiesgo.Causa(c.Cause)</td>
+                                <td>@TextosDeRiesgo.Causa(c.Cause)@if (c.IncompleteHistory) { <br /><span class="texto-tenue">Historial de mora completado con la regla</span> }</td>
                             </tr>
                         }
                         @if (_cambios.Count == 0 && !_cargaCambios.Activa) { <tr><td colspan="5" class="texto-tenue">Ningún crédito cambió de categoría frente al cierre anterior.</td></tr> }
@@ -355,6 +381,31 @@
         JsonValueKind.String => e.GetString() ?? string.Empty,
         _ => e.ToString(),
     };
+
+    /// <summary>K6a: la regla de meses faltantes sellada en el encabezado (<c>missingMonthsRule</c>, con <c>fixedDays</c> si es «Fija»).</summary>
+    private static string ReglaDeMesesFaltantes(JsonElement? json)
+    {
+        if (json is not { ValueKind: JsonValueKind.Object } j || !j.TryGetProperty("missingMonthsRule", out var regla)) return "de la cooperativa";
+        var texto = regla.ToString() switch
+        {
+            "MayorObservada" => "«la mayor mora observada»",
+            "DelCorte" => "«la mora del corte»",
+            "Fija" => "«días fijos»",
+            var otra => $"«{otra}»",
+        };
+        return j.TryGetProperty("fixedDays", out var dias) && dias.ValueKind == JsonValueKind.Number ? $"{texto} ({dias} días)" : texto;
+    }
+
+    /// <summary>K6a: los números de crédito de <c>loans[]</c> del encabezado (cada uno objeto con <c>loanNumber</c>, o el número como texto).</summary>
+    private static List<string> CreditosSinHistorial(JsonElement? json)
+    {
+        if (json is not { ValueKind: JsonValueKind.Object } j || !j.TryGetProperty("loans", out var creditos) || creditos.ValueKind != JsonValueKind.Array) return [];
+        return creditos.EnumerateArray()
+            .Select(e => e.ValueKind == JsonValueKind.Object && e.TryGetProperty("loanNumber", out var n) ? n.ToString() : e.ToString())
+            .ToList();
+    }
+
+    private static string Porcentaje(decimal? v) => v is { } x ? (x * 100m).ToString("N2") + " %" : "—";
 
     private static string Corta(string huella) => huella.Length > 12 ? huella[..12] + "…" : huella;
 }

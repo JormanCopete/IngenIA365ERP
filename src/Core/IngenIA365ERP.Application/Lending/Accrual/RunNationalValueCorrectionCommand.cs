@@ -27,6 +27,14 @@ namespace IngenIA365ERP.Application.Lending.Accrual;
 /// (desde US5, un interés ya pagado que la corrección baja), lo reconoce como <c>CreditBalanceRecognized</c> con <c>SaldoAFavorReconocido</c> por
 /// crédito. Una liquidación con R anterior a la corrección no cambia (la reconstrucción es bitemporal). Cada día cambiado deja una versión nueva de
 /// su posición. (nuevo)
+/// <para>K6b (fase 24): la corrección de una <c>UVR</c> recorre sólo los créditos en UVR
+/// (<see cref="EfectoDeReplicacionCorreccionDeValorNacional.CreditosAfectados"/>), y la diferencia de su corrección monetaria se registra como
+/// <c>MonetaryCorrection</c> con el hecho <c>CorreccionMonetariaUvrCausada</c> (la corrida en <c>runKind</c>), no como ajuste de causación: el
+/// ajuste de causación no tiene rol para el capital y la corrección monetaria sí.</para>
+/// <para>K6b (decisión del dueño del 2026-10-17): en la corrección de una <c>UVR</c>, el <b>reparto de los pagos</b> se compara aparte
+/// (<see cref="DiferenciaDeLibro.DePago"/>): un pago aplicado en el día corregido es el mismo en pesos pero cubre otra mezcla de conceptos. Su
+/// diferencia se registra como <c>PaymentReallocation</c> de la corrida con el hecho <c>PagoRedistribuidoPorValorNacional</c> (una parte por
+/// sucursal, una línea por crédito y día valor del pago), con la fecha contable del período abierto: el pago y su comprobante no se tocan.</para>
 /// </summary>
 public sealed class CorreccionDeValorNacional(
     IApplicationDbContext db,
@@ -37,7 +45,8 @@ public sealed class CorreccionDeValorNacional(
     FechaContable fechaContable,
     ParametrosDeLaTandaDeCartera tanda,
     IngenIA365ERP.Application.Common.NationalValues.IValoresNacionales valores,
-    IDateTimeService reloj)
+    IDateTimeService reloj,
+    ValidacionPreviaDeProceso? validacionDeProceso = null)
 {
     public async Task<AvanceDeCorrida> TandaAsync(LendingProcessRun corrida, CancellationToken ct)
     {
@@ -46,17 +55,20 @@ public sealed class CorreccionDeValorNacional(
             throw new InvalidOperationException("La tanda de la corrección es de una corrida NationalValueCorrection con los días que toca.");
 
         var valor = await ValorCorregidoAsync(corrida, ct);
+        // K6b (decisión del dueño del 2026-10-17): en la corrección de una UVR el reparto de los pagos va en su propio hecho.
+        var separarPagos = valor.Code == IngenIA365ERP.Domain.Common.NationalValues.CodigosDeValorNacional.Uvr;
         if (corrida.InformationCutoffAt is null)
         {
             corrida.InformationCutoffAt = reloj.UtcNow;
             corrida.NationalValueReplicationId ??= valor.ReplicationId;
-            corrida.TotalLoans = await db.LoanControls.AsNoTracking().CountAsync(c => c.LastAccruedDate >= desde, ct);
+            corrida.TotalLoans = await EfectoDeReplicacionCorreccionDeValorNacional.CreditosAfectados(db, valor.Code).CountAsync(c => c.LastAccruedDate >= desde, ct);
         }
-        var ids = await db.LoanControls.AsNoTracking()
+        var ids = await EfectoDeReplicacionCorreccionDeValorNacional.CreditosAfectados(db, valor.Code)
             .Where(c => c.LastAccruedDate >= desde && (corrida.CursorLoanId == null || c.LoanId > corrida.CursorLoanId))
             .OrderBy(c => c.LoanId).Select(c => c.LoanId).Take(Math.Max(1, tanda.TamanoDeTanda)).ToListAsync(ct);
         if (ids.Count == 0) return AvanceDeCorrida.Terminada;
 
+        DecisionDeValidacionPrevia? detenida = null;
         await TransaccionExplicita.EjecutarAsync(db, async () =>
         {
             await cerrojo.TomarSetupAsync(exclusivo: false, ct);
@@ -78,7 +90,8 @@ public sealed class CorreccionDeValorNacional(
             {
                 if (!cargados.TryGetValue(id, out var cargado) || !cargado.Listo) { corrida.FailedLoans += 1; continue; }
                 var tope = controles[id].LastAccruedDate < hasta ? controles[id].LastAccruedDate : hasta;
-                var diferencias = MotorDeCartera.Verificar(cargado.Entrada!, tope, libros[id]).Where(x => x.Dia >= desde && x.Dia <= tope).ToList();
+                var diferencias = MotorDeCartera.VerificarSeparandoLaCorreccionMonetaria(cargado.Entrada!, tope, libros[id], separarPagos: separarPagos)
+                    .Where(x => x.Dia >= desde && x.Dia <= tope).ToList();
                 if (diferencias.Count > 0) conAjuste.Add((cargado, diferencias));
                 corrida.ProcessedLoans += 1;
             }
@@ -91,11 +104,27 @@ public sealed class CorreccionDeValorNacional(
             };
             var origen = new OrigenDePartes(AccountingFactPartSource.NationalValueCorrectionBatch, corrida, null,
                 new Dictionary<DateOnly, int> { [hasta] = corrida.BatchCount + 1 }, null) { FechaDeRegistro = hoy };
-            var lineas = conAjuste.SelectMany(c => c.Diferencias.Where(x => x.Concepto != LoanConcept.CreditBalance).GroupBy(x => x.Dia)
+            var lineas = conAjuste.SelectMany(c => c.Diferencias.Where(EsAjuste).GroupBy(x => x.Dia)
                 .Select(g => new LineaDeCausacion(datos[c.Cargado.Credito.Id], g.Key,
                     g.Select(x => new MovimientoDeLibro(x.Dia, LoanTransactionKind.AccrualAdjustment, x.Concepto, x.Cuota, x.Diferencia)).ToList()))).ToList();
             var masivas = await partes.MasivasAsync(origen, lineas, AjusteDeCausacionPorFechaValorV1.Type, corregido, ct);
             if (masivas.IsFailure) throw new InvalidOperationException($"{masivas.Error.Code}: {masivas.Error.Message}");
+            // K6b (fase 24): la corrección monetaria de los créditos en UVR, en su propio hecho.
+            var lineasCmu = conAjuste.SelectMany(c => c.Diferencias.Where(x => x.DeCorreccionMonetaria).GroupBy(x => x.Dia)
+                .Select(g => new LineaDeCausacion(datos[c.Cargado.Credito.Id], g.Key,
+                    g.Select(x => new MovimientoDeLibro(x.Dia, LoanTransactionKind.MonetaryCorrection, x.Concepto, x.Cuota, x.Diferencia)).ToList()))).ToList();
+            var cmu = lineasCmu.Count == 0
+                ? Result.Success(PartesEmitidas.Vacias)
+                : await partes.MasivasAsync(origen, lineasCmu, CorreccionMonetariaUvrCausadaV1.Type, corregido, ct);
+            if (cmu.IsFailure) throw new InvalidOperationException($"{cmu.Error.Code}: {cmu.Error.Message}");
+            // K6b (decisión del dueño del 2026-10-17): el reparto de los pagos de los días corregidos, en su propio hecho.
+            var lineasDeReparto = conAjuste.SelectMany(c => c.Diferencias.Where(x => x.DePago).GroupBy(x => x.Dia)
+                .Select(g => new LineaDeCausacion(datos[c.Cargado.Credito.Id], g.Key,
+                    g.Select(x => new MovimientoDeLibro(x.Dia, LoanTransactionKind.PaymentReallocation, x.Concepto, x.Cuota, x.Diferencia)).ToList()))).ToList();
+            var reparto = lineasDeReparto.Count == 0
+                ? Result.Success(PartesEmitidas.Vacias)
+                : await partes.MasivasAsync(origen, lineasDeReparto, PagoRedistribuidoPorValorNacionalV1.Type, corregido, ct);
+            if (reparto.IsFailure) throw new InvalidOperationException($"{reparto.Error.Code}: {reparto.Error.Message}");
 
             var hechos = new List<HechoPorCredito>();
             var filas = new List<LoanTransaction>();
@@ -104,9 +133,13 @@ public sealed class CorreccionDeValorNacional(
             foreach (var (cargado, diferencias) in conAjuste)
             {
                 var loanId = cargado.Credito.Id;
-                foreach (var x in diferencias.Where(x => x.Concepto != LoanConcept.CreditBalance))
+                foreach (var x in diferencias.Where(EsAjuste))
                     filas.AddRange(RegistroDeCartera.Diferencias(loanId, [x], null, corrida.Id, contable.Value, ahora, masivas.Value.Mensaje(loanId, x.Dia, x.Concepto)));
-                var aFavor = diferencias.Where(x => x.Concepto == LoanConcept.CreditBalance).ToList();
+                foreach (var x in diferencias.Where(x => x.DeCorreccionMonetaria))
+                    filas.Add(RegistroDeCartera.DiferenciaDeCorreccionMonetaria(loanId, x, corrida.Id, contable.Value, ahora, cmu.Value.Mensaje(loanId, x.Dia, x.Concepto)));
+                foreach (var x in diferencias.Where(x => x.DePago))
+                    filas.Add(RegistroDeCartera.DiferenciaDeReparto(loanId, x, corrida.Id, contable.Value, ahora, reparto.Value.Mensaje(loanId, x.Dia, x.Concepto)));
+                var aFavor = diferencias.Where(x => x.Concepto == LoanConcept.CreditBalance && !x.DeCorreccionMonetaria && !x.DePago).ToList();
                 if (aFavor.Count > 0)
                 {
                     var dd = datos[loanId];
@@ -143,14 +176,31 @@ public sealed class CorreccionDeValorNacional(
                     registro.PosicionVersionada(control, MotorDeCartera.Reconstruir(cargado.Entrada!, dia), cargado.Credito, cargado.Vigentes, u.Version, u.Huella, ahora);
                 }
             }
+            // A8 = «Bloquear todo» (2026-10-14): con la política en Bloquear, una tanda con ajustes que Contabilidad no puede registrar no se guarda.
+            if (validacionDeProceso is not null && await validacionDeProceso.BloqueoAsync(ct) is { } bloqueo)
+            {
+                detenida = bloqueo;
+                return Result.Failure(bloqueo.Bloqueo!);
+            }
             await db.SaveChangesAsync(ct);
             return Result.Success();
         }, ct);
+
+        if (detenida is not null)
+        {
+            db.DescartarCambiosSalvo(corrida);
+            throw await validacionDeProceso!.DetenerAsync(detenida, $"la corrección por {valor.Code}", ct);
+        }
 
         db.DescartarCambiosSalvo(corrida);
         corrida.CursorLoanId = ids.Max();
         return AvanceDeCorrida.Pendiente;
     }
+
+    /// <summary>
+    /// Lo que va como ajuste de causación: ni el saldo a favor (va por crédito), ni la corrección monetaria ni el reparto de un pago (van en su hecho).
+    /// </summary>
+    private static bool EsAjuste(DiferenciaDeLibro x) => x.Concepto != LoanConcept.CreditBalance && !x.DeCorreccionMonetaria && !x.DePago;
 
     private sealed record ValorLeido(string Code, string Key, DateOnly ValidFrom, Guid SourcePublicId, long SourceSequence, int? ReplicationId);
 

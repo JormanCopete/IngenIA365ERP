@@ -43,7 +43,7 @@ public static class PlantillaDeValoresNacionales
     [
         new HojaDePlantilla("Datos",
         [
-            new(Codigo, TipoDeValor.Texto, Obligatoria: true, Largo: 30, Reglas: "USURA, IBR, IPC, SMMLV, UVT, FESTIVO o LIMITE (TOPE_TASA_VIVIENDA y UVR desde K6b).", Ejemplo: "USURA"),
+            new(Codigo, TipoDeValor.Texto, Obligatoria: true, Largo: 30, Reglas: "USURA, IBR, IPC, TOPE_TASA_VIVIENDA, UVR, SMMLV, UVT, FESTIVO o LIMITE (TOPE_TASA_VIVIENDA y UVR desde K6b; la UVR, un valor por día, sin clave).", Ejemplo: "USURA"),
             new(ClaveDelValor, TipoDeValor.Texto, Largo: 60, Reglas: "USURA: modalidad certificada del catálogo vigente; IBR/IPC: plazo o serie; FESTIVO: la fecha; LIMITE: código del límite.", Ejemplo: "CONSUMO"),
             new(VigenteDesde, TipoDeValor.Fecha, Obligatoria: true, Ejemplo: "2026-11-01"),
             new(VigenteHasta, TipoDeValor.Fecha, Reglas: "Sólo cuando la norma lo trae (período certificado de la usura).", Ejemplo: "2026-11-30"),
@@ -152,9 +152,10 @@ public sealed class ImportNationalValuesCommandHandler(
             }
             if (fila.TieneErrores || codigo is null || desde is null || fuente is null) continue;
 
-            if (codigo is CodigosDeValorNacional.Uvr or CodigosDeValorNacional.TopeTasaVivienda)
+            // K6b (T1050): un código de una entrega posterior a la vigente (UVR y TOPE_TASA_VIVIENDA antes de K6b) todavía no se carga.
+            if (CodigosDeValorNacional.Buscar(codigo) is { } definicion && !definicion.DisponibleEn())
             {
-                fila.TodaviaNoDisponible(PlantillaDeValoresNacionales.Codigo, "K6b");
+                fila.TodaviaNoDisponible(PlantillaDeValoresNacionales.Codigo, definicion.DisponibleDesde.ToString());
                 continue;
             }
 

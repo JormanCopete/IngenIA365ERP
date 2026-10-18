@@ -1,0 +1,35 @@
+{
+  // pe04 (K6a, T1013, T1015; FR-105, R57): historial parcial completado con la regla «MayorObservada» (el defecto de
+  // Riesgo.ReglaMesesFaltantes, pendiente de validar). Crédito migrado con corte 2026-06-30 y filas de migración de 2025-07 a 2026-06 (0 días,
+  // salvo 45 en 2025-08 y 12 en 2026-06); de 2026-07 a 2026-10 lo cubren las transacciones (0 días). Ventana de 36 meses hasta 2026-10:
+  // 2023-11..2026-10; faltan 2023-11..2025-06 = 20 meses, que se completan con la mayor observada, 45 días. Repasado con Casos/riesgo-pe.py.
+  // PENDIENTE DE FIRMA DE LA CONTADORA (pregunta E9: ¿«la mayor observada» es la regla correcta?).
+  //   Variables: máxima de 36 = 45 → SINMORA 0; máxima de 24 (2024-11..2026-10, con los meses completados) = 45 → en 31–60, y máxima de 12
+  //   (2025-11..2026-10) = 12 → MORA2430N = 1; MORA1230 = MORA1260 = MORA3660 = 0. Z = −1,523 − 2,081 + 0,319 = −3,285; puntaje 0,0361 → A.
+  "nombre": "pe04-historial-parcial-mayor-observada",
+  "perdidaEsperada": {
+    "anexo2": "sembrado",
+    "contexto": { "tipoDeOrganizacion": "COOP_AHORRO_CREDITO", "fondoDeEmpleados": false, "smmlv": 1750905, "voluntaria": false },
+    "creditos": [
+      { "id": 401, "deudor": 401, "segmento": "CONSUMO_LIBRANZA", "diasDeMora": 0, "asociadoActivo": true, "cuota": 200000, "plazoEnMeses": 60,
+        "historial": {
+          "inicioDeLaCadena": "2022-05-10", "corteDeMigracion": "2026-06-30", "fechaDeReferencia": "2026-10-31", "mesesExigidos": 36,
+          "regla": "MayorObservada", "diasDelCorte": 12,
+          "filas": [
+            { "credito": 401, "desde": "2025-07", "hasta": "2026-06", "dias": 0, "origen": "Migration" },
+            { "credito": 401, "desde": "2025-08", "dias": 45, "origen": "Migration" },
+            { "credito": 401, "desde": "2026-06", "dias": 12, "origen": "Migration" }
+          ],
+          "transacciones": [ { "desde": "2026-07", "hasta": "2026-10", "dias": 0 } ]
+        },
+        "garantia": "SIN_GARANTIA", "saldos": { "capital": 4000000, "interesCorriente": 20000, "interesDeMora": 0, "otros": 0 } }
+    ],
+    "esperado": [
+      { "id": 401, "faltantes": 20, "completadosCon": 45, "incumplido": false, "z": -3.285, "puntaje": 0.0361, "calificacionDelModelo": "A",
+        "variables": [ "EA=1", "FE=0", "VALCUOTA=0", "FONDPLAZO=0", "MORA1230=0", "MORA1260=0", "SINMORA=0", "MORA2430N=1", "MORA3660=0" ],
+        "calificacionFinal": "A", "causa": "Arrears", "pi": 0.005, "pdi": 0.45, "exposicion": 4020000,
+        "deterioroCapital": 9000.00, "deterioroIntereses": 45.00, "deterioroOtros": 0, "total": 9045.00, "contable": "A", "homologada": true,
+        "explicacionContiene": [ "Faltan 20 meses: se completan con 45 días (la mayor mora observada en la ventana, regla MayorObservada)." ] }
+    ]
+  }
+}

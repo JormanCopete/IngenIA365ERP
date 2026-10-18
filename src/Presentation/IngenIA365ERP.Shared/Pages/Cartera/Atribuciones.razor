@@ -211,7 +211,7 @@
                 <h4>Reglas</h4>
                 <div class="tabla-desplazable">
                     <table class="data-grid">
-                        <thead><tr><th class="numero">Orden</th><th>Sujeto</th><th class="numero">Monto desde</th><th class="numero">Monto hasta</th><th class="numero">Mora desde</th><th>Excepción</th><th>Nivel mínimo</th><th></th></tr></thead>
+                        <thead><tr><th class="numero">Orden</th><th>Sujeto</th><th class="numero">Monto desde</th><th class="numero">Monto hasta</th><th class="numero">Mora desde</th><th>Mecanismo</th><th>Causa</th><th>Excepción</th><th>Nivel mínimo</th><th></th></tr></thead>
                         <tbody>
                             @foreach (var r in _reglas)
                             {
@@ -226,6 +226,18 @@
                                     <td><input class="e-input" type="number" min="0" @bind="regla.MinAmount" /></td>
                                     <td><input class="e-input" type="number" min="0" @bind="regla.MaxAmount" /></td>
                                     <td><input class="e-input" type="number" min="0" @bind="regla.MinDaysPastDue" /></td>
+                                    <td>
+                                        <select class="e-input" @bind="regla.NoveltyMechanism" disabled="@(regla.Subject != "Novelty")">
+                                            <option value="">Cualquiera</option>
+                                            @foreach (var m in TextosDeCartera.MecanismosDeNovedad) { <option value="@m.Valor">@m.Texto</option> }
+                                        </select>
+                                    </td>
+                                    <td>
+                                        <select class="e-input" @bind="regla.NoveltyCause" disabled="@(regla.Subject != "Novelty")">
+                                            <option value="">Cualquiera</option>
+                                            @foreach (var c in TextosDeCartera.CausasDeNovedad) { <option value="@c.Valor">@c.Texto</option> }
+                                        </select>
+                                    </td>
                                     <td><input type="checkbox" @bind="regla.PolicyException" /></td>
                                     <td>
                                         <select class="e-input" @bind="regla.MinimumLevelCode">
@@ -348,6 +360,8 @@
         if (c.PolicyException == true) partes.Add("excepción a la política");
         if (c.MinDaysPastDue is { } dmin) partes.Add($"mora ≥ {dmin} días");
         if (c.MaxDaysPastDue is { } dmax) partes.Add($"mora ≤ {dmax} días");
+        if (c.NoveltyMechanism is { } mec) partes.Add($"mecanismo {TextosDeCartera.MecanismoDeNovedad(mec)}");
+        if (c.NoveltyCause is { } causa) partes.Add($"causa {TextosDeCartera.CausaDeNovedad(causa)}");
         return partes.Count == 0 ? "Siempre" : string.Join(", ", partes);
     }
 
@@ -364,6 +378,7 @@
             Order = r.Order, Subject = r.Subject, MinimumLevelCode = r.MinimumLevelCode, Original = r.Conditions,
             MinAmount = r.Conditions.MinConsolidatedAmount, MaxAmount = r.Conditions.MaxConsolidatedAmount,
             MinDaysPastDue = r.Conditions.MinDaysPastDue, PolicyException = r.Conditions.PolicyException == true,
+            NoveltyMechanism = r.Conditions.NoveltyMechanism, NoveltyCause = r.Conditions.NoveltyCause,
         }).ToList() ?? [];
         _desde = DateOnly.FromDateTime(DateTime.Today).AddDays(1);
         _fuente = vigente?.Source;
@@ -386,6 +401,8 @@
             MaxConsolidatedAmount = r.MaxAmount,
             MinDaysPastDue = r.MinDaysPastDue,
             PolicyException = r.PolicyException ? true : null,
+            NoveltyMechanism = r.Subject == "Novelty" ? r.NoveltyMechanism : null,
+            NoveltyCause = r.Subject == "Novelty" ? r.NoveltyCause : null,
         })).ToList();
         using var carga = _guardado.Iniciar();
         _error = null;
@@ -477,6 +494,8 @@
         public decimal? MaxAmount { get; set; }
         public int? MinDaysPastDue { get; set; }
         public bool PolicyException { get; set; }
+        public int? NoveltyMechanism { get; set; }
+        public int? NoveltyCause { get; set; }
         public CondicionesDeReglaDto? Original { get; set; }
     }
 }

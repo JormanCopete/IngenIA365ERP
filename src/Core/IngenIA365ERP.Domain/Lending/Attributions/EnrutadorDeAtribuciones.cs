@@ -37,6 +37,12 @@ public sealed record ReglaDeAtribucion(int Orden, string Sujeto, string NivelMin
     public int? MoraMinima { get; init; }
     public int? MoraMaxima { get; init; }
     public LoanConcept? Concepto { get; init; }
+
+    /// <summary>Mecanismo de la novedad (K3, T0879); nulo = no importa.</summary>
+    public NoveltyMechanism? Mecanismo { get; init; }
+
+    /// <summary>Causa de la novedad (K3, T0879); nulo = no importa.</summary>
+    public NoveltyCause? Causa { get; init; }
 }
 
 /// <summary>La matriz vigente como datos: niveles y reglas. (nuevo)</summary>
@@ -58,6 +64,10 @@ public sealed record SujetoAEnrutar(string Sujeto, decimal MontoConsolidado)
     public bool ExcepcionALaPolitica { get; init; }
     public int? DiasDeMora { get; init; }
     public LoanConcept? Concepto { get; init; }
+
+    /// <summary>Mecanismo y causa de la novedad (sujeto <c>Novelty</c>, K3); nulos en los demás sujetos.</summary>
+    public NoveltyMechanism? Mecanismo { get; init; }
+    public NoveltyCause? Causa { get; init; }
     public bool HayVinculado { get; init; }
     public IReadOnlyCollection<MotivoNoExceptuable> Hallazgos { get; init; } = [];
 }
@@ -222,6 +232,16 @@ public static class EnrutadorDeAtribuciones
         {
             if (s.Concepto != concepto) return false;
             partes.Add($"concepto {concepto}");
+        }
+        if (r.Mecanismo is { } mecanismo)
+        {
+            if (s.Mecanismo != mecanismo) return false;
+            partes.Add($"mecanismo {mecanismo}");
+        }
+        if (r.Causa is { } causa)
+        {
+            if (s.Causa != causa) return false;
+            partes.Add($"causa {causa}");
         }
 
         condiciones = partes.Count == 0 ? $"todo {s.Sujeto}" : string.Join(", ", partes);

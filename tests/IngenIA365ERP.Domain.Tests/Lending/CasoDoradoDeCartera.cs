@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using IngenIA365ERP.Domain.Enums.Lending;
 using IngenIA365ERP.Domain.Lending;
+using IngenIA365ERP.Domain.Lending.Housing;
 using IngenIA365ERP.Domain.Lending.Payments;
 using IngenIA365ERP.Domain.Lending.Rates;
 using IngenIA365ERP.Domain.Lending.Replay;
@@ -56,6 +57,8 @@ public sealed class CasoDoradoDeCartera
     public List<OperacionJson> Operaciones { get; set; } = [];
     public List<ConsultaJson> Consultas { get; set; } = [];
     public EsperadoJson? Esperado { get; set; }
+    /// <summary>K3 (T0858): las novedades del crédito de las condiciones, cada una con su plan esperado.</summary>
+    public List<NovedadJson> Novedades { get; set; } = [];
 
     public static string DirectorioDeCasos => Path.Combine(AppContext.BaseDirectory, "Lending", "Casos");
 
@@ -116,8 +119,15 @@ public sealed class CasoDoradoDeCartera
     /// series de la modalidad. La usura lleva su <c>Sequence</c> por el orden del archivo, como en la hoja.
     /// </summary>
     public EntradaDeReconstruccion Entrada(CondicionesJson c, IReadOnlyList<OperacionJson> operaciones, DateTime r) =>
-        new(c.Credito(VersionesDeReglas.Vigente), c.Entrada(), operaciones.Select((o, i) => Operacion(o, i)).ToList(), r)
+        new(c.Credito(c.RulesVersion), c.Entrada(), operaciones.Select((o, i) => Operacion(o, i)).ToList(), r)
         {
+            // K6b (T1042): el tope de vivienda (bitemporal, como la usura) y, en un crédito en UVR, la serie diaria.
+            TopeDeVivienda = Series.TopeDeVivienda.Select((u, i) => new ValorDeUsura(u.Desde, u.Ea, u.RegistradoEn, i + 1, u.PublicId ?? Guid.Empty)
+            {
+                ValidTo = u.Hasta,
+                SupersedesPublicId = u.Corrige,
+            }).ToList(),
+            Uvr = c.Unidad == DenominationUnit.Uvr ? new SerieUvr(Series.Uvr.Select(x => new ValorDeUvr(x.Fecha, x.Valor))) : null,
             Usura = Series.Usura.Select((u, i) => (u, i)).Where(x => x.u.Clave == c.Modalidad)
                 .Select(x => new ValorDeUsura(x.u.Desde, x.u.Ea, x.u.RegistradoEn, x.i + 1, x.u.PublicId ?? Guid.Empty)
                 {
@@ -127,6 +137,9 @@ public sealed class CasoDoradoDeCartera
             Festivos = Series.Festivos,
             UmbralesDeSuspension = Series.UmbralesDeSuspension.Select(u => new ValorConVigencia<int>(u.Desde, u.Dias)).ToList(),
             Tolerancias = Series.Tolerancias.Select(t => new ValorConVigencia<decimal>(t.Desde, t.Valor)).ToList(),
+            PendientesDeGiro = Series.PendientesDeGiro
+                .Select(g => new CuotaPendienteDeGiro(g.Cuota, g.FechaDelDescuento, g.VencimientoDelGiro, g.Monto, g.RegistradoEn) { UmbralDias = g.Umbral })
+                .ToList(),
         };
 
     private EntradaDeOperacion Operacion(OperacionJson o, int indice) =>
@@ -182,6 +195,12 @@ public sealed class CasoDoradoDeCartera
         public bool SuspensoConSuConcepto { get; set; } = true;
         public bool CuotaEspecificaFueraDeOrden { get; set; }
         public bool GastosInformados { get; set; }
+        // K6b (T1042): las reglas de vivienda (<c>"Vivienda"</c>) y la unidad del capital (Pesos o Uvr).
+        public string? Reglas { get; set; }
+        public DenominationUnit Unidad { get; set; } = DenominationUnit.Pesos;
+
+        /// <summary>La versión de reglas que sella el crédito: la de vivienda si el caso lo dice; si no, la vigente.</summary>
+        public string RulesVersion => Reglas == "Vivienda" ? VersionesDeReglas.Vivienda : VersionesDeReglas.Vigente;
 
         public Prelacion PrelacionSellada() =>
             new(Prelacion, ConceptosDePrelacion ?? [], SuspensoConSuConcepto, CuotaEspecificaFueraDeOrden, GastosInformados);
@@ -216,8 +235,64 @@ public sealed class CasoDoradoDeCartera
             TratamientoDeGracia = Gracia?.Tratamiento,
             CuotasDeDistribucion = Gracia?.CuotasDeDistribucion,
             Seguros = Seguros.Select(s => new SeguroDelPlan(s.Codigo, s.Base, s.Tarifa, s.Periodicidad, s.Computa)).ToList(),
+            RulesVersion = RulesVersion,
         };
     }
+
+    /// <summary>
+    /// K3 (T0858): una novedad sobre el crédito de las condiciones —su mecanismo, la fecha de la decisión, el saldo de capital a esa fecha, lo
+    /// capitalizado, lo recogido, los costos y las condiciones nuevas— y el plan que la hoja espera, con su primera cuota y su usura.
+    /// </summary>
+    public sealed class NovedadJson
+    {
+        public string Nombre { get; set; } = string.Empty;
+        public NoveltyMechanism Mecanismo { get; set; }
+        public NoveltyCause Causa { get; set; }
+        public DateOnly Fecha { get; set; }
+        public decimal SaldoDeCapital { get; set; }
+        public decimal InteresCapitalizado { get; set; }
+        public List<decimal> SaldosRecogidos { get; set; } = [];
+        public decimal Costos { get; set; }
+        public int Cuotas { get; set; }
+        public decimal? TasaEA { get; set; }
+        public RepaymentPeriodicity? Periodicidad { get; set; }
+        public int? DiaDePago { get; set; }
+        public DateOnly? PrimerVencimiento { get; set; }
+        public bool CreditoEnlazado { get; set; }
+        public EsperadoDeNovedadJson Esperado { get; set; } = new();
+
+        /// <summary>La entrada del motor: las condiciones selladas del crédito como base y la primera cuota que la hoja numeró.</summary>
+        public EntradaDeNovedadDePlan Entrada(CondicionesJson condiciones) =>
+            new(Mecanismo, Fecha, condiciones.Entrada(), SaldoDeCapital, Cuotas)
+            {
+                InteresCapitalizado = InteresCapitalizado,
+                SaldosRecogidos = SaldosRecogidos,
+                Costos = Costos,
+                TasaEfectivaAnual = TasaEA,
+                Periodicidad = Periodicidad,
+                DiaDePago = DiaDePago,
+                PrimerVencimiento = PrimerVencimiento,
+                PrimeraCuota = Esperado.PrimeraCuota,
+            };
+    }
+
+    public sealed class EsperadoDeNovedadJson
+    {
+        public int PrimeraCuota { get; set; } = 1;
+        public decimal Capital { get; set; }
+        public TasasJson Tasas { get; set; } = new();
+        public PlanJson Plan { get; set; } = new();
+        public UsuraEsperadaJson Usura { get; set; } = new();
+    }
+
+    /// <summary>La usura vigente de la modalidad a una fecha (la de la decisión de una novedad).</summary>
+    public UsuraCertificada? UsuraA(string? clave, DateOnly fecha) =>
+        clave is null
+            ? null
+            : Series.Usura.Where(u => u.Clave == clave && u.Desde <= fecha)
+                .OrderByDescending(u => u.Desde).ThenByDescending(u => u.RegistradoEn)
+                .Select(u => new UsuraCertificada(u.Ea, u.PublicId ?? Guid.Empty, u.Clave, u.Desde))
+                .FirstOrDefault();
 
     public sealed class VarianteJson
     {
@@ -272,6 +347,28 @@ public sealed class CasoDoradoDeCartera
         public List<IndiceJson> Indices { get; set; } = [];
         public List<UmbralJson> UmbralesDeSuspension { get; set; } = [];
         public List<ToleranciaJson> Tolerancias { get; set; } = [];
+        /// <summary>K2 (T0804): lo descontado por la pagaduría y pendiente de giro, con su ventana y su umbral sellados.</summary>
+        public List<PendienteDeGiroJson> PendientesDeGiro { get; set; } = [];
+        /// <summary>K6b (T1042): la UVR publicada de cada día (serie de prueba, no oficial).</summary>
+        public List<UvrJson> Uvr { get; set; } = [];
+        /// <summary>K6b (T1042): el tope de tasa de vivienda (<c>TOPE_TASA_VIVIENDA</c>), como la usura.</summary>
+        public List<UsuraJson> TopeDeVivienda { get; set; } = [];
+    }
+
+    public sealed class UvrJson
+    {
+        public DateOnly Fecha { get; set; }
+        public decimal Valor { get; set; }
+    }
+
+    public sealed class PendienteDeGiroJson
+    {
+        public int Cuota { get; set; }
+        public DateOnly FechaDelDescuento { get; set; }
+        public DateOnly VencimientoDelGiro { get; set; }
+        public decimal Monto { get; set; }
+        public int? Umbral { get; set; }
+        public DateTime RegistradoEn { get; set; }
     }
 
     public sealed class UmbralJson
@@ -339,8 +436,36 @@ public sealed class CasoDoradoDeCartera
             {
                 Recalculo = Recalculo ?? PrepaymentChoice.ReduceInstallment,
             },
+            // K3 (T0874): la novedad con su mecanismo, sus cuotas nuevas, lo que capitaliza y, en el enlazado, lo que recibe.
+            nameof(LoanOperationKind.TermsChange) => new ContenidoDeNovedad(
+                Mecanismo ?? throw new InvalidOperationException("La novedad lleva su mecanismo."), CuotasNuevas ?? 0)
+            {
+                TasaEfectivaAnual = TasaNueva,
+                DiaDePago = DiaDePago,
+                PrimerVencimiento = PrimerVencimiento,
+                Periodicidad = Periodicidad,
+                ReestructuracionesDespues = ReestructuracionesDespues,
+                Lado = Lado ?? LadoDeLaNovedad.Credito,
+                Capitalizaciones = Capitalizaciones.Select(c => new PartidaDeNovedad(c.Concepto, c.Cuota, c.Valor)).ToList(),
+                Traslados = Traslados.Select(c => new PartidaDeNovedad(c.Concepto, c.Cuota, c.Valor)).ToList(),
+            },
+            // K3 (T0884): la condonación por concepto y cuota.
+            nameof(LoanOperationKind.Waiver) => new ContenidoDeCondonacion(Condonaciones.Select(c => new PartidaDeNovedad(c.Concepto, c.Cuota, c.Valor)).ToList()),
             _ => null,
         };
+
+        // K3 (T0874, T0884): la novedad y la condonación.
+        public NoveltyMechanism? Mecanismo { get; set; }
+        public int? CuotasNuevas { get; set; }
+        public decimal? TasaNueva { get; set; }
+        public int? DiaDePago { get; set; }
+        public DateOnly? PrimerVencimiento { get; set; }
+        public RepaymentPeriodicity? Periodicidad { get; set; }
+        public int? ReestructuracionesDespues { get; set; }
+        public LadoDeLaNovedad? Lado { get; set; }
+        public List<SaldoInicialJson> Capitalizaciones { get; set; } = [];
+        public List<SaldoInicialJson> Traslados { get; set; } = [];
+        public List<SaldoInicialJson> Condonaciones { get; set; } = [];
 
         // US6 (T0565): la clase del ajuste de Comercial (CreditNote, Return, DebitNote, Voiding, VoidingByDianRejection) y el recálculo.
         public string? Clase { get; set; }
@@ -411,6 +536,11 @@ public sealed class CasoDoradoDeCartera
         public List<FilaDeLibroJson>? Causacion { get; set; }
         public List<FilaDeLibroJson>? Diferencias { get; set; }
         public List<PagoEsperadoJson>? Pagos { get; set; }
+        // K6b (T1042): la valoración de un crédito en UVR.
+        public decimal? UvrDelDia { get; set; }
+        public bool? UvrProyectada { get; set; }
+        public Dictionary<string, decimal>? SaldosEnUvr { get; set; }
+        public decimal? ValorParaCancelarEnUvr { get; set; }
     }
 
     /// <summary>US5: lo que se espera de la distribución de un pago (quickstart §1.2).</summary>

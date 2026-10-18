@@ -40,6 +40,7 @@ public static class PosicionesDeCartera
             MotivoDeSuspension.Reestructuraciones => "RepeatedRestructuring",
             MotivoDeSuspension.Insolvencia => "Insolvency",
             MotivoDeSuspension.Castigo => "WriteOff",
+            MotivoDeSuspension.Fallecimiento => "Deceased",
             _ => "ArrearsThreshold",
         }
         : "ArrearsCured";
@@ -155,7 +156,7 @@ public sealed class PuestaAlDiaDeCredito(
                 causaciones.Add(new CausacionAEscribir(p.Control, d.Dia, d.Filas
                     .Where(f => f.Monto != 0m)
                     .Select(f => RegistroDeCartera.FilaDeCausacion(p.Control.LoanId, f, null, disparadora, d.Dia, ahora,
-                        masivas.Value.Mensaje(p.Control.LoanId, d.Dia, f.Concepto)))
+                        masivas.Value.Mensaje(p.Control.LoanId, d.Dia, f.Concepto, f.Clase)))
                     .ToList()));
         registro.CausarEnBloque(causaciones);
 

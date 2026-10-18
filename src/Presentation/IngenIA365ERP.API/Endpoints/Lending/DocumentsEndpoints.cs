@@ -39,8 +39,9 @@ public class DocumentsEndpoints : ICarterModule
             .WithName("Lending_Documents_Images")
             .RequirePermission(VerParametros);
 
-        documentos.MapGet("/verify/{code}", async (string code, ISender sender, CancellationToken ct) =>
-                await sender.Send(new VerifyLendingDocumentQuery(code), ct))
+        // K5 (T0974, R149): ?sha256= compara la huella de un PDF calculada en el navegador con la guardada (pdfMatches); el archivo nunca sube.
+        documentos.MapGet("/verify/{code}", async (string code, string? sha256, ISender sender, CancellationToken ct) =>
+                await sender.Send(new VerifyLendingDocumentQuery(code, sha256), ct))
             .WithName("Lending_Documents_Verify")
             .RequirePermission(Verificar);
 

@@ -67,7 +67,8 @@
             <div class="info-card">
                 <p><strong>Solicitante:</strong> @s.Applicant.FullName · <strong>Línea:</strong> @s.Line.Code · @s.Line.Name · <strong>Oficina:</strong> @(s.Office?.Name)</p>
                 <p><strong>Periodicidad:</strong> @TextosDeOriginacion.Periodicidad(s.Periodicity) · <strong>Abonos a capital:</strong> @TextosDeOriginacion.PreferenciaDeAbono(s.PrepaymentPreference)
-                    @if (s.IsRelatedParty) { <span> · <strong>Persona vinculada</strong> (decide el consejo)</span> }</p>
+                    @if (s.IsRelatedParty) { <span> · <strong>Persona vinculada</strong> (decide el consejo)</span> }
+                    @if (s.IsSocialHousing is { } vis) { <span> · <strong>Vivienda:</strong> @(vis ? "de interés social (VIS)" : "no VIS")</span> }</p>
                 @if (s.Parties.Count > 0)
                 {
                     <p><strong>Partes:</strong> @string.Join(", ", s.Parties.Select(p => p.Person.FullName))</p>

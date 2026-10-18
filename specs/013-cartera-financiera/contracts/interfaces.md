@@ -427,11 +427,11 @@ public sealed record ComprobanteDeAplicacionDto(
 | Abono extraordinario | `Choice` obligatorio (la elección del deudor en ese pago) | `Choice` nulo: se aplica la preferencia vigente del deudor (`LND_PrepaymentPreferences`, D24); sin preferencia, el valor queda como saldo a favor y el comprobante lleva el aviso `Lending.Payment.PreferenceMissing` |
 | Dos recaudadores a la vez | el segundo espera el cerrojo y recibe «la distribución cambió» | el segundo espera y aplica sobre el estado nuevo («cambió» rige sólo para la forma interactiva, C39) |
 
-**Fechas** (FR-012, FR-142, D4, D16; enmienda A9):
+**Fechas** (FR-012, FR-142, D4, D16; enmienda A9, respondida «sí» por el dueño el 2026-10-14):
 
 | Regla | Si falla |
 |---|---|
-| `ValueDate` ≤ `HoyLocal` (T9) | `Lending.Payment.ValueDateOutOfRange` |
+| `ValueDate` ≤ `HoyLocal` (T9). **No rige** para `Payroll` ni, desde K2, para la pagaduría con referencia (A9): la ordinaria aprobada antes del fin del período recauda con la fecha valor del fin del período, futura. Una persona (Recaudo, la simulación de pantalla) nunca registra fecha futura | `Lending.Payment.ValueDateOutOfRange` |
 | `ValueDate` ≥ `HoyLocal` − `Pagos.DiasMaximosFechaValor` (5). **No rige** para `Payroll` ni, desde K2, para el pago de pagaduría con `DeductionFileLinePublicId` (A9) | `Lending.Payment.ValueDateOutOfRange` |
 | Si `ValueDate` cae en un mes con cierre de Cartera vigente: el usuario que actúa (`IActorActual`) tiene `Lending.Payments.BackdateBeforeClose` y el pago no supera su límite de monto (`SEC_PermissionAmountLimits`). **El contrato lo verifica** por `IPermissionChecker` (permiso y límite; nunca el alcance de oficina, línea ni monto de Cartera, C41). Misma exención de A9 | `Lending.Payment.ValueDateBeforeClosing` |
 | `ValueDate` > fecha de corte de la carga activada (los pagos que Recaudo conservó con fecha valor hasta el corte ya están en la carga) | `Lending.Payment.BeforeCutoff` |
@@ -650,14 +650,18 @@ nómina crea otra versión y por tanto otra clave; volver a aprobar la misma ver
   el contrato pone al día el crédito que encuentre atrasado (paso 9).
 - Las validaciones previas (registro, validación previa contable) corren **fuera** del cerrojo.
 
-### 3.12 Validación previa contable en el contrato (T56, enmienda A8)
+### 3.12 Validación previa contable en el contrato (T56; A8 = «Bloquear todo», respuesta del dueño del 2026-10-14)
 
-`ValidacionPreviaContableDeCartera` reduce los hechos que produciría el lote a una combinación de dimensiones por
-regla y pregunta una vez cada una a `IContabilidadParaCartera.EvaluarAsync`, con el tiempo de
-`Contabilidad.ValidacionPreviaSegundos`. En el contrato la falta de regla **siempre advierte**, aunque
-`Contabilidad.FaltaDeRegla = Bloquear`: sella `PrevalidationOutcome` en el mensaje, suma el aviso
-`Lending.Prevalidation.NotPostable` al comprobante y alerta. Sin respuesta rige D7 (`Lending.Prevalidation.NoResponse`
-como aviso). Un pago que ya ocurrió no se rechaza por un vacío de la matriz, y la nómina es «todo o nada».
+`ValidacionPreviaContableDeCartera` reduce los hechos que produciría el lote a una combinación de dimensiones (línea,
+modalidad, sub-segmento, sucursal y clase del recaudador) y pregunta una vez por cada una a
+`IContabilidadParaCartera.EvaluarAsync`, con el tiempo de `Contabilidad.ValidacionPreviaSegundos`. Con
+`Contabilidad.FaltaDeRegla = Advertir` la falta de regla sella `PrevalidationOutcome` en el mensaje, suma
+el aviso `Lending.Prevalidation.NotPostable` al comprobante y alerta. Con `Bloquear` (el defecto desde el 2026-10-14), los pagos de la combinación sin
+regla se **rechazan** (`Rejected`, `Lending.Prevalidation.NotPostable` con `data.errors[] { factType, role, combination,
+account, rule, whoFixes }`) sin escribir nada de ellos, con la alerta; los de otras combinaciones siguen. Nómina
+convierte ese rechazo en la falla de la aprobación entera (`Payroll.LoanDeductionNotPostable`, §6). Sin contabilidad
+iniciada o con `PagoAplicado` en `NoPasa` no se pregunta y no se rechaza. Sin respuesta rige D7
+(`Lending.Prevalidation.NoResponse` como aviso, nunca rechazo).
 
 ### 3.13 Auditoría del intento y del hecho (T68, enmienda A11)
 

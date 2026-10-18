@@ -103,6 +103,33 @@ public class RiskPolicyCommandsTests : IAsyncLifetime
         GobiernoDePrueba.Datos(r.Error).GetProperty("errors")[0].GetProperty("path").GetString().Should().Be("$.segments[0].code", "el esquema de la política ya conoce los segmentos del anexo");
     }
 
+    // ------------------------------------------------------------------------------- K6a: celdas de la pérdida esperada (T1016, bloque 2) --
+
+    private const string PiMenor = """{ "expectedLoss": { "probabilityOfDefault": [ { "segment": "CONSUMO_LIBRANZA", "organizationType": "COOP_AHORRO_CREDITO", "rating": "B", "rate": 0.001 } ] } }""";
+    private const string PiMayor = """{ "expectedLoss": { "probabilityOfDefault": [ { "segment": "CONSUMO_LIBRANZA", "organizationType": "COOP_AHORRO_CREDITO", "rating": "B", "rate": 0.05 } ] } }""";
+
+    [Fact]
+    public async Task Una_PI_menor_que_la_del_Anexo_2_responde_LessStrict_con_la_celda()
+    {
+        await PerdidaEsperadaDePrueba.Anexo2Async(_c.Db, _c.G.UtcNow, new DateOnly(2026, 1, 1));
+
+        var r = await RegistrarAsync(PiMenor);
+
+        r.Error.Code.Should().Be(ErroresDeRiesgo.CodigoPoliticaMenosEstricta);
+        GobiernoDePrueba.Datos(r.Error).GetProperty("cells")[0].GetProperty("path").GetString()
+            .Should().Be("expectedLoss.probabilityOfDefault.CONSUMO_LIBRANZA.COOP_AHORRO_CREDITO.B");
+        (await RegistrarAsync(PiMayor)).IsSuccess.Should().BeTrue("más estricta que la norma sí se registra");
+    }
+
+    [Fact]
+    public async Task Celdas_de_perdida_esperada_sin_Anexo_2_vigente_no_se_registran()
+    {
+        var r = await RegistrarAsync(PiMayor);
+
+        r.IsFailure.Should().BeTrue("no hay contra qué comparar las celdas de la pérdida esperada");
+        (await _c.Db.RiskPolicyVersions.CountAsync()).Should().Be(0);
+    }
+
     [Fact]
     public async Task Antes_de_hoy_responde_RetroactiveValidFrom()
     {

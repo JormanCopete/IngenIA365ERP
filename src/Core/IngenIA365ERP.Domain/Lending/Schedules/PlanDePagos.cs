@@ -51,6 +51,12 @@ public sealed record EntradaDePlan(
     public int? CuotasDeDistribucion { get; init; }
 
     public IReadOnlyList<SeguroDelPlan> Seguros { get; init; } = [];
+
+    /// <summary>
+    /// K6b (T1053): la versión de reglas con que se calcula y se sella el plan. Por defecto la vigente; un crédito de vivienda lleva
+    /// <see cref="VersionesDeReglas.Vivienda"/> (la elige quien arma la entrada con <see cref="VersionesDeReglas.ParaCreditoNuevo"/>).
+    /// </summary>
+    public string RulesVersion { get; init; } = VersionesDeReglas.Vigente;
 }
 
 /// <summary>
@@ -80,6 +86,50 @@ public sealed record EntradaDeRegeneracion(DateOnly Fecha)
     public PrepaymentChoice? Eleccion { get; init; }
 }
 
+/// <summary>
+/// Lo que regenera el plan por una <b>novedad</b> (K3, T0874; FR-091, T29): el mecanismo, la fecha de la decisión (desde la que corre el plan
+/// nuevo), las condiciones selladas de las que parte (<see cref="Base"/>: sistema, convención, equivalencia, redondeo, seguros, periodicidad,
+/// tasa y día de pago que no cambian), el saldo de capital del crédito a esa fecha y las cuotas nuevas. Opcionales: el interés que se
+/// capitaliza, los saldos de los créditos que recoge una refinanciación, la tasa, la periodicidad, el día de pago, el primer vencimiento y la
+/// gracia nuevos, y la primera cuota del plan nuevo cuando el crédito conserva su número (prórroga, cambio de fecha o de tasa: la siguiente a
+/// la última que ya venció; en un crédito enlazado, 1). <see cref="Costos"/> son los de tramitarla: nunca entran al plan del deudor.
+/// </summary>
+public sealed record EntradaDeNovedadDePlan(
+    NoveltyMechanism Mecanismo,
+    DateOnly Fecha,
+    EntradaDePlan Base,
+    decimal SaldoDeCapital,
+    int Cuotas)
+{
+    public decimal InteresCapitalizado { get; init; }
+
+    /// <summary>Refinanciación: el saldo de capital de cada crédito que recoge (el principal va en <see cref="SaldoDeCapital"/>).</summary>
+    public IReadOnlyList<decimal> SaldosRecogidos { get; init; } = [];
+
+    public decimal Costos { get; init; }
+
+    public decimal? TasaEfectivaAnual { get; init; }
+
+    public RepaymentPeriodicity? Periodicidad { get; init; }
+
+    public int? DiaDePago { get; init; }
+
+    public DateOnly? PrimerVencimiento { get; init; }
+
+    public GraceKind? Gracia { get; init; }
+
+    public int PeriodosDeGracia { get; init; }
+
+    public GraceInterestTreatment? TratamientoDeGracia { get; init; }
+
+    public int? CuotasDeDistribucion { get; init; }
+
+    public int PrimeraCuota { get; init; } = 1;
+
+    /// <summary>El capital del plan nuevo: el saldo, lo recogido y lo capitalizado (los costos no).</summary>
+    public decimal Capital => SaldoDeCapital + SaldosRecogidos.Sum() + InteresCapitalizado;
+}
+
 /// <summary>Una cuota de un plan migrado (D5): número, vencimiento y capital pendiente al corte; el inicio de su período si se conoce.</summary>
 public sealed record CuotaMigrada(int Numero, DateOnly Vencimiento, decimal Capital)
 {
@@ -99,7 +149,11 @@ public sealed record EntradaDePlanMigrado(
     decimal TasaEfectivaAnual,
     DayCountConvention Convencion,
     RateEquivalence Equivalencia,
-    RedondeoDeCartera Redondeo);
+    RedondeoDeCartera Redondeo)
+{
+    /// <summary>K6b (T1053): la versión de reglas del crédito migrado (la de vivienda para un crédito de vivienda).</summary>
+    public string RulesVersion { get; init; } = VersionesDeReglas.Vigente;
+}
 
 /// <summary>Lo causado de un concepto en una cuota hasta una fecha (proyección con pagos a tiempo, US4).</summary>
 public sealed record CausadoDeCuota(int Cuota, LoanConcept Concepto, decimal Valor);

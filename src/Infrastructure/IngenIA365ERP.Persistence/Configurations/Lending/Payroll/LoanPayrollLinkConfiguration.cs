@@ -9,7 +9,8 @@ namespace IngenIA365ERP.Persistence.Configurations.Lending.Payroll;
 
 /// <summary>
 /// <c>LND_LoanPayrollLinks</c> (feature 013, C.3; data-model §24.5): un vínculo vigente por crédito y la pagaduría obligatoria sólo
-/// en nómina propia y descuento por pagaduría (<c>CK_LND_LoanPayrollLinks_Paymaster</c>). Sin <c>PayrollAgreementId</c> hasta K2.
+/// en nómina propia y descuento por pagaduría (<c>CK_LND_LoanPayrollLinks_Paymaster</c>). <c>PayrollAgreementId</c> nace con K2
+/// (<c>CarteraLibranza</c>).
 /// </summary>
 public class LoanPayrollLinkConfiguration : IEntityTypeConfiguration<LoanPayrollLink>
 {
@@ -35,8 +36,11 @@ public class LoanPayrollLinkConfiguration : IEntityTypeConfiguration<LoanPayroll
         builder.HasOne<Person>().WithMany().HasForeignKey(e => e.PaymasterPersonId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<LoanOperation>().WithMany().HasForeignKey(e => e.OperationId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<LoanPayrollLink>().WithMany().HasForeignKey(e => e.PreviousLinkId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<PayrollAgreement>().WithMany().HasForeignKey(e => e.PayrollAgreementId).OnDelete(DeleteBehavior.Restrict);
 
         builder.HasIndex(e => e.LoanId).IsUnique()
             .HasDatabaseName("UK_LND_LoanPayrollLinks_Loan_Current").HasFilter("[ValidTo] IS NULL AND [IsDeleted] = 0");
+        builder.HasIndex(e => e.PayrollAgreementId)
+            .HasDatabaseName("IX_LND_LoanPayrollLinks_PayrollAgreementId").HasFilter("[PayrollAgreementId] IS NOT NULL");
     }
 }

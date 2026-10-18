@@ -312,7 +312,13 @@ internal sealed class ActivacionConCarteraDePrueba : IDisposable
 
     // ---------------------------------------------------------------------------------------------------- activar --
 
-    public RequisitosDeActivacion Requisitos() => new(new RegistroDeIntegracion(Db, [new TesoreriaDePrueba()], Ambiente), D.Contabilidad, Ambiente);
+    /// <summary>K6a (T1020): los requisitos con la normativa, el perfil del doble y los parámetros, para evaluar la pérdida esperada.</summary>
+    public bool ConPerdidaEsperada { get; set; }
+
+    public RequisitosDeActivacion Requisitos() => ConPerdidaEsperada
+        ? new(new RegistroDeIntegracion(Db, [new TesoreriaDePrueba()], Ambiente), D.Contabilidad, Ambiente, Db, new LectorDeDocumentoNormativo(Db), G.Perfil,
+            O.L.Valores(), null, D.Parametros())
+        : new(new RegistroDeIntegracion(Db, [new TesoreriaDePrueba()], Ambiente), D.Contabilidad, Ambiente);
 
     public ValidacionDeCobrosProvisionales Cobros() => new(Db, Lector, G.Permisos, new MensajesEntrantes(Db), Almacen);
 

@@ -63,6 +63,40 @@ public class AlturaDeMoraTests
         AlturaDeMora.Calcular(F("2027-02-25"), cuotas, 0m).Dias.Should().Be(10, "sin umbral de pagaduría cuenta como cualquier vencida");
     }
 
+    /// <summary>
+    /// K2 (T0826): con los giros sellados por resultado, la mora de la pagaduría se mide desde el vencimiento de la ventana; lo descontado se
+    /// resta del saldo vencido mientras no supere su umbral (un parcial deja contar lo que falta); sin umbral, nunca se imputa (C71).
+    /// </summary>
+    [Fact]
+    public void Lo_descontado_con_ventana_y_umbral_sellados_se_resta_mientras_la_pagaduria_no_supere_el_umbral()
+    {
+        var giro = new GiroPendiente(250_000m, F("2027-02-18"), 10);
+        var completa = new[] { new CuotaParaMora(1, F("2027-02-15"), 250_000m) { Giros = [giro] } };
+        AlturaDeMora.Calcular(F("2027-02-28"), completa, 0m).Should().Be(ResultadoDeAlturaDeMora.AlDia, "la pagaduría lleva 10 días: el umbral");
+        AlturaDeMora.Calcular(F("2027-03-01"), completa, 0m).Should().Be(new ResultadoDeAlturaDeMora(14, 1, 1), "superado, cuenta desde el vencimiento");
+
+        var parcial = new[] { new CuotaParaMora(1, F("2027-02-15"), 250_000m) { Giros = [giro with { Monto = 249_000m }] } };
+        AlturaDeMora.Calcular(F("2027-02-20"), parcial, 1_000m).Should().Be(ResultadoDeAlturaDeMora.AlDia, "lo que falta no supera la tolerancia");
+        AlturaDeMora.Calcular(F("2027-02-20"), parcial, 999.99m).Dias.Should().Be(5, "lo que falta cuenta");
+
+        var sinUmbral = new[] { new CuotaParaMora(1, F("2027-02-15"), 250_000m) { Giros = [giro with { UmbralDias = null }] } };
+        AlturaDeMora.Calcular(F("2028-01-01"), sinUmbral, 0m).Should().Be(ResultadoDeAlturaDeMora.AlDia, "sin umbral la mora de la pagaduría no se imputa");
+
+        giro.MoraDeLaPagaduria(F("2027-02-10")).Should().Be(0, "antes del vencimiento de la ventana no hay mora de la pagaduría");
+        AlturaDeMora.CubiertoPorGiro(F("2027-02-28"), [giro, giro with { Monto = 5m, UmbralDias = 2 }]).Should().Be(250_000m);
+    }
+
+    /// <summary>K2 (T0839): girado, lo descontado cubre la cuota hasta la víspera del pago que lo giró; desde ese día, el pago.</summary>
+    [Fact]
+    public void Lo_descontado_y_girado_cubre_hasta_la_vispera_del_giro()
+    {
+        var giro = new GiroPendiente(250_000m, F("2027-02-18"), 10) { GiradoDesde = F("2027-02-20") };
+        giro.DentroDelUmbral(F("2027-02-19")).Should().BeTrue();
+        giro.DentroDelUmbral(F("2027-02-20")).Should().BeFalse("desde el giro lo cubre el pago");
+        AlturaDeMora.CubiertoPorGiro(F("2027-02-19"), [giro]).Should().Be(250_000m);
+        AlturaDeMora.CubiertoPorGiro(F("2027-02-20"), [giro]).Should().Be(0m);
+    }
+
     [Fact]
     public void La_fachada_da_lo_mismo_y_una_tolerancia_negativa_es_un_error()
     {

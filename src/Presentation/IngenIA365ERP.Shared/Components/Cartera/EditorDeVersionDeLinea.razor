@@ -29,7 +29,7 @@
                     <option value="">Elija…</option>
                     @foreach (var m in Modalidades?.Modalities ?? [])
                     {
-                        <option value="@m.Code" disabled="@(m.Code == "VIVIENDA")">@m.Name@(m.Code == "VIVIENDA" ? " (llega con K6b)" : "")@(m.Verified ? "" : " · pendiente de validar")</option>
+                        <option value="@m.Code">@m.Name@(m.Verified ? "" : " · pendiente de validar")</option>
                     }
                 </select>
             </label>
@@ -43,6 +43,24 @@
                 </label>
             }
             @if (ClaveDeUsura is { } clave) { <p class="texto-tenue campo-ancho">Se controla contra la usura certificada <b>@clave</b>.</p> }
+            @if (AdmiteUvr || V.DenominationUnit == 2)
+            {
+                @* K6b (T1060; FR-024, D18): sólo una combinación de vivienda que el catálogo marca «admite UVR» se pacta en UVR, en un solo tramo. *@
+                <label class="campo">Unidad del capital *
+                    <select class="e-input" @bind="V.DenominationUnit">
+                        <option value="1">Pesos</option>
+                        <option value="2" disabled="@(!AdmiteUvr)">UVR</option>
+                    </select>
+                </label>
+            }
+            @if (EsVivienda)
+            {
+                <p class="texto-tenue campo-ancho">
+                    Vivienda (Ley 546 de 1999): tasa fija bajo el tope de vivienda del día (el menor entre ese tope y la usura), interés vencido sin
+                    capitalizar, sin mora sobre intereses y prepago sin penalidad; el plazo y lo financiable se controlan contra los límites vigentes.
+                    @(V.DenominationUnit == 2 ? "En UVR la línea no admite desembolso por tramos." : "")
+                </p>
+            }
             <label class="campo-check"><input type="checkbox" @bind="V.ForEmployees" /> Línea para empleados de la cooperativa</label>
             <label class="campo-check"><input type="checkbox" @bind="V.AllowsNonAssociates" /> Admite no asociados (si el perfil regulatorio lo permite)</label>
             <label class="campo-check"><input type="checkbox" @bind="V.AllowsCommercialOrigin" /> Admite ventas a crédito de Comercio</label>
@@ -458,6 +476,14 @@
 
     private IReadOnlyList<string> Subsegmentos => Modalidad?.Subsegments ?? [];
 
+    /// <summary>K6b: ¿la combinación elegida admite UVR (catálogo de modalidades)?</summary>
+    private bool AdmiteUvr =>
+        Modalidad?.Combinations.FirstOrDefault(c => c.SubsegmentCode == V.SubsegmentCode)?.AdmitsUvr ?? Modalidad?.AdmitsUvr ?? false;
+
+    /// <summary>K6b: ¿la modalidad es de vivienda (sigue las reglas de la Ley 546)?</summary>
+    private bool EsVivienda => V.ModalityCode == "VIVIENDA"
+        || (Modalidad?.Combinations.FirstOrDefault(c => c.SubsegmentCode == V.SubsegmentCode) is { } c && (c.HousingRateCap || c.AdmitsUvr));
+
     private string? ClaveDeUsura =>
         Modalidad?.Combinations.FirstOrDefault(c => c.SubsegmentCode == V.SubsegmentCode)?.UsuryKey ?? Modalidad?.UsuryKey;
 
@@ -483,6 +509,7 @@
     {
         V.ModalityCode = codigo ?? string.Empty;
         V.SubsegmentCode = Subsegmentos.Count == 1 ? Subsegmentos[0] : null;
+        if (!AdmiteUvr) V.DenominationUnit = 1;
     }
 
     private void CambiarClaseDeTasa(int clase)

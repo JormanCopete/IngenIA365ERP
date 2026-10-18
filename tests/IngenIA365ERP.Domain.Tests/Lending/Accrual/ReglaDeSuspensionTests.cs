@@ -31,6 +31,10 @@ public class ReglaDeSuspensionTests
         ReglaDeSuspension.Evaluar(new EntradaDeSuspension(0, 61, 2, false, false)).Should().Be(MotivoDeSuspension.Reestructuraciones);
         ReglaDeSuspension.Evaluar(new EntradaDeSuspension(0, 61, 0, true, false)).Should().Be(MotivoDeSuspension.Insolvencia);
         ReglaDeSuspension.Evaluar(new EntradaDeSuspension(90, 61, 3, true, true)).Should().Be(MotivoDeSuspension.Castigo, "el castigo manda");
+        // K3 (FR-097, bloque B2): tras el fallecimiento con Causacion.ContinuaTrasFallecimiento = false; la insolvencia y el castigo mandan sobre él.
+        ReglaDeSuspension.Evaluar(new EntradaDeSuspension(0, 61, 0, false, false, TrasFallecimiento: true)).Should().Be(MotivoDeSuspension.Fallecimiento);
+        ReglaDeSuspension.Evaluar(new EntradaDeSuspension(90, 61, 2, true, false, TrasFallecimiento: true)).Should().Be(MotivoDeSuspension.Insolvencia);
+        ReglaDeSuspension.Evaluar(new EntradaDeSuspension(90, 61, 2, false, false, TrasFallecimiento: true)).Should().Be(MotivoDeSuspension.Fallecimiento);
     }
 
     [Fact]

@@ -100,6 +100,7 @@ namespace IngenIA365ERP.App
             builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.DesembolsosClient>();
             builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.GarantiasClient>();
             builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.ArchivosDeDesembolsoClient>();
+            builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.LibranzaClient>();
             builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.DoblesDePruebaClient>();
             builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.CreditosClient>();
             builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.CorridasDeCarteraClient>();
@@ -107,6 +108,9 @@ namespace IngenIA365ERP.App
             builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.MensajesRecibidosClient>();
             // Feature 013, US5 (T0561): pagos por pantalla (simular, reversar, preferencia del deudor).
             builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.PagosClient>();
+            builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.NovedadesClient>();
+            builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.CobranzaClient>();
+            builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.CastigosClient>();
             builder.Services.AddSingleton<IImpresionDeDocumentos, ImpresionNativa>();
             // Feature 012, US7 (T532): el lado contable de la integración con Inventario; misma salvedad (CentralAuthClient, verificacion de MAUI).
             builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Contabilidad.IntegracionContableClient>();
@@ -117,6 +121,8 @@ namespace IngenIA365ERP.App
             builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.RiesgoClient>();
             // Feature 013, US15 (T0799): el centro de informes de Cartera.
             builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.InformesDeCarteraClient>();
+            builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.TableroDeCarteraClient>();
+            builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.RegulatorioDeCarteraClient>();
             builder.Services.AddSingleton<INotificationService, NotificationService>();
             builder.Services.AddSingleton<ILoadingService, LoadingService>();
 

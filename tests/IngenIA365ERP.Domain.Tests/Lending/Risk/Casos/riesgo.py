@@ -3,12 +3,23 @@
 """
 Hoja de calculo de los casos dorados de riesgo de Cartera (feature 013, US9, T0672; quickstart 1.3).
 
-Repasa, con decimal de 40 digitos y SIN tocar el codigo C# que se prueba, lo que esperan los casos r01-r16 de esta carpeta: la
+Repasa, con decimal de 40 digitos y SIN tocar el codigo C# que se prueba, lo que esperan los casos r01-r16 y r-k3-* de esta carpeta: la
 altura de mora con el calendario del art. 829 (domingos y festivos nacionales no son habiles; el sabado si), la calificacion (mora,
 pago unico, credito nuevo, reestructurado, insolvencia, analisis, arrastre por deudor y segmento), la subcategoria, la contable, el
 deterioro individual del Anexo 1 (garantias por meses de mora, D19, suspension al 100 %, redondeo al centavo o al peso), la politica
 efectiva (lo mas estricto por celda), el deterioro general y el selector de modelo. Las reglas se escribieron desde la spec
 (FR-093, FR-098-FR-105), las decisiones T45-T50 y D19/D28, no desde el C#.
+
+K3 (fase 16, T0859; fase 17, T0905) suma, tambien desde la spec:
+- insolvencia con su inicio, su fracaso y los cierres del credito: a la fecha de corte, antes del inicio no hay insolvencia; en
+  negociacion (o fracasada despues del corte) la calificacion se mantiene en la del ultimo cierre ANTERIOR al inicio; fracasada desde
+  su fecha, la que fija la norma; con acuerdo, nada (el acuerdo es una reestructuracion) (FR-098, data-model 25.8);
+- reestructurado mas de una vez: su interes se reconoce solo al cobrarlo, asi que esta en suspenso y se deteriora al 100 % (FR-065,
+  FR-093, T30);
+- el historial de mora que sigue el enlace de una novacion (FR-090, FR-105, T49): ventana de los meses exigidos hasta el de referencia
+  (o desde el inicio de la cadena), por mes manda el cierre vigente sobre la carga complementaria mas reciente sobre la migracion, entre
+  los creditos de la cadena la mayor mora, y los meses posteriores al corte de la migracion los cubren las transacciones;
+- la evaluacion de cartera como una candidata mas (la peor gana; en el empate, la causa mas especifica) (FR-102, T46).
 
 Uso (desde cualquier carpeta):
     python riesgo.py              # imprime lo calculado de cada caso y variante
@@ -24,6 +35,9 @@ getcontext().prec = 40
 
 AQUI = os.path.dirname(os.path.abspath(__file__))
 NORMAS = os.path.join(AQUI, "..", "Normas")
+# K6b (T1043): la norma «sembrado» es el Anexo 1 de la semilla central (el mismo archivo que siembra PlatformNationalValuesSeeder).
+SEMBRADO = os.path.join(AQUI, *[".."] * 5, "src", "Infrastructure", "IngenIA365ERP.Persistence", "Seeding", "Parametric", "Data",
+                        "NationalValues", "sarc-anexo-1.json")
 CATS = ["A", "B", "C", "D", "E"]
 PE_SEGMENTOS = ["CONSUMO_LIBRANZA", "CONSUMO_SIN_LIBRANZA", "COMERCIAL_PN"]
 ENTREGAS = ["K1", "K2", "K3", "K4", "K5", "K6a", "K6b"]
@@ -158,10 +172,23 @@ def porcentaje(n, codigo, cat, sub, dias, meses_en_e):
 
 
 # ------------------------------------------------------------------------------------------------ calificacion
-def candidatas(n, cr, dias):
+def insolvencia_al_corte(caso, ins):
+    """K3: el proceso a la fecha de corte del caso, si el credito trae su inicio y sus cierres; si no, tal como viene."""
+    if not ins or "inicio" not in ins:
+        return ins
+    corte, inicio = dt.date.fromisoformat(caso["corte"]), dt.date.fromisoformat(ins["inicio"])
+    if corte < inicio or ins["estado"] == "Agreement":
+        return None
+    previos = [c for c in ins.get("cierres") or [] if dt.date.fromisoformat(c["fecha"]) < inicio]
+    cat = max(previos, key=lambda c: c["fecha"])["categoria"] if previos else ins["sinCierreAnterior"]
+    fracaso = ins["estado"] == "Failed" and (not ins.get("fracasoEl") or dt.date.fromisoformat(ins["fracasoEl"]) <= corte)
+    return {"estado": "Failed" if fracaso else "Negotiating", "categoriaAlIniciar": cat}
+
+
+def candidatas(n, cr, dias, caso=None):
     c = []
     mora = cat_por_mora(n, cr["segmento"], dias)
-    ins = cr.get("insolvencia")
+    ins = insolvencia_al_corte(caso, cr.get("insolvencia")) if caso else cr.get("insolvencia")
     if ins and ins["estado"] == "Negotiating":
         c.append(("Insolvency", ins["categoriaAlIniciar"]))
     else:
@@ -201,7 +228,7 @@ def calificar(n, caso, creditos, con_arrastre):
     dias = {cr["id"]: dias_de_mora(caso, cr) for cr in creditos}
     fase1 = {}
     for cr in creditos:
-        cs, mora = candidatas(n, cr, dias[cr["id"]])
+        cs, mora = candidatas(n, cr, dias[cr["id"]], caso)
         fase1[cr["id"]] = (cs, mora)
     propia = {k: peor(v[0]) for k, v in fase1.items()}
     regla = n["drag"]
@@ -254,7 +281,9 @@ def deteriorar(n, cr, cal, modo):
     dcap = redondear(base * p["rate"], modo)
     susp = cr.get("suspendido")
     if susp is None:
-        susp = idx(cal["categoria"]) >= idx(segmento(n, cr["segmento"])["accrualSuspensionCategory"])
+        # K3: reestructurado mas de una vez, el interes solo al cobrarlo (en suspenso).
+        susp = (idx(cal["categoria"]) >= idx(segmento(n, cr["segmento"])["accrualSuspensionCategory"])
+                or int(cr.get("reestructuraciones") or 0) > 1)
     di = redondear(s.get("interesCorriente", D(0)) + s.get("interesDeMora", D(0)), modo) if susp else D(0)
     do = redondear(s.get("otros", D(0)), modo) if susp else D(0)
     return {"garantiaAdmisible": adm, "aportes": aportes, "base": base, "porcentaje": p["rate"], "deterioroCapital": dcap,
@@ -304,6 +333,37 @@ def selector(sel):
     return out
 
 
+# ------------------------------------------------------------------------------------------------ historial (K3)
+PRIORIDAD = {"MonthlyClose": 3, "ComplementaryLoad": 2, "Migration": 1}
+
+
+def historial(h):
+    cadena = {int(h["credito"])} | {int(x) for x in h.get("antecesores", [])}
+    filas = [e for e in h["entradas"] if int(e["credito"]) in cadena and (e["origen"] != "MonthlyClose" or e.get("vigente", True))]
+    ref = dt.date.fromisoformat(h["fechaDeReferencia"]); i_ref = ref.year * 12 + ref.month - 1
+    ini = dt.date.fromisoformat(h["inicioDeLaCadena"]); i_ini = ini.year * 12 + ini.month - 1
+    corte = dt.date.fromisoformat(h["corteDeMigracion"]) if h.get("corteDeMigracion") else None
+    i_corte = corte.year * 12 + corte.month - 1 if corte else None
+    meses, faltan = [], []
+    for i in range(max(i_ref - int(h["mesesExigidos"]) + 1, i_ini), i_ref + 1):
+        a, m = divmod(i, 12); m += 1
+        etiqueta = "%04d-%02d" % (a, m)
+        por_credito = {}
+        for e in (x for x in filas if int(x["anio"]) == a and int(x["mes"]) == m):
+            k = int(e["credito"])
+            if k not in por_credito or (PRIORIDAD[e["origen"]], int(e["secuencia"])) > (PRIORIDAD[por_credito[k]["origen"]], int(por_credito[k]["secuencia"])):
+                por_credito[k] = e
+        transacciones = i_corte is None or i > i_corte
+        if por_credito:
+            e = sorted(por_credito.values(), key=lambda e: (-int(e["dias"]), int(e["credito"])))[0]
+            meses.append("%s %d %s %d" % (etiqueta, int(e["dias"]), e["origen"], int(e["credito"])))
+        elif transacciones:
+            meses.append("%s transacciones" % etiqueta)
+        else:
+            meses.append("%s falta" % etiqueta); faltan.append(etiqueta)
+    return {"meses": meses, "faltantes": faltan}
+
+
 # ------------------------------------------------------------------------------------------------ casos
 def escenarios(caso):
     base = {"nombre": caso["nombre"], "norma": caso.get("norma", "anexo1-prueba"), "politica": caso.get("politica"),
@@ -328,10 +388,11 @@ def igual(a, b):
 
 def correr(verificar):
     fallas = 0
-    for nombre in sorted(f for f in os.listdir(AQUI) if f.endswith(".json")):
+    # Los casos pe* (K6a, perdida esperada) los repasa riesgo-pe.py.
+    for nombre in sorted(f for f in os.listdir(AQUI) if f.endswith(".json") and not f.startswith("pe")):
         caso = leer(os.path.join(AQUI, nombre))
         for e in escenarios(caso):
-            norma = leer(os.path.join(NORMAS, e["norma"] + ".json"))
+            norma = leer(SEMBRADO if e["norma"] == "sembrado" else os.path.join(NORMAS, e["norma"] + ".json"))
             n, celdas, adicional, compensa = efectiva(norma, e["politica"])
             op = e["opciones"]
             cal = calificar(n, caso, caso["creditos"], op.get("conArrastre", True))
@@ -380,6 +441,12 @@ def correr(verificar):
                     fallas += 1; print("  !! selector: esperado %s" % b)
                 if esp.get("marca") is not None and any(t[3] for t in s) != esp["marca"]:
                     fallas += 1; print("  !! marca")
+        for h in caso.get("historiales") or []:
+            calc = historial(h)
+            print("  historial %s: %s" % (h["credito"], calc))
+            if calc != {"meses": h["esperado"]["meses"], "faltantes": h["esperado"].get("faltantes", [])}:
+                fallas += 1
+                print("  !! historial %s: esperado %s" % (h["credito"], h["esperado"]))
     if verificar:
         print("\n%s" % ("todo coincide" if fallas == 0 else "%d diferencias" % fallas))
         sys.exit(1 if fallas else 0)

@@ -134,14 +134,15 @@ public sealed class CierreMensualDeCarteraTests(CentralIdentityApiFixture fx)
             cambios.Should().Contain(c => c.GetProperty("loanPublicId").GetGuid() == consumo2 && c.GetProperty("current").GetString() == "C"
                                           && c.GetProperty("cause").GetString() == "Drag", "el reporte de cambios dice la anterior, la nueva y la causa (US9-3)");
 
-            // US9-8 (D28): una cooperativa de ahorro y crédito está obligada al modelo de pérdida esperada, que no llega hasta K6a.
+            // US9-8 (D28) con K6a desplegada (fase 22, bloque 3): la cooperativa de ahorro y crédito está obligada y ya no queda la marca «modelo
+            // obligatorio no disponible»: los segmentos de pérdida esperada van por el Anexo 2 (los demás, por el Anexo 1). El recorrido completo de la
+            // pérdida esperada lo hace PerdidaEsperadaTests (T1023).
             var modelo = (await CarteraE2E.GetAsync(http, jefe, $"{CierreE2E.Riesgo}/impairment-model")).EnumerateArray().ToList();
-            var obligada = modelo.Any(s => s.GetProperty("mark").ValueKind == JsonValueKind.String);
-            encabezado.GetProperty("close").GetProperty("marks").GetProperty("obligatoryModelUnavailable").GetBoolean().Should().Be(obligada,
+            modelo.Should().OnlyContain(s => s.GetProperty("mark").ValueKind != JsonValueKind.String, $"con K6a no hay marca: {string.Join(", ", modelo)}");
+            encabezado.GetProperty("close").GetProperty("marks").GetProperty("obligatoryModelUnavailable").GetBoolean().Should().BeFalse(
                 "la marca del cierre es la del modelo por segmento");
-            obligada.Should().BeTrue($"COOP_AHORRO_CREDITO está obligada y sin K6a aplica el Anexo 1 con la marca: {string.Join(", ", modelo)}");
-            modelo.Where(s => s.GetProperty("mark").ValueKind == JsonValueKind.String)
-                .Should().OnlyContain(s => s.GetProperty("model").GetString() == "ArrearsAnnex1");
+            modelo.Where(s => s.GetProperty("basis").GetString() == "Obligated" && s.GetProperty("model").GetString() == "ExpectedLossAnnex2")
+                .Should().NotBeEmpty($"COOP_AHORRO_CREDITO está obligada: {string.Join(", ", modelo)}");
 
             // ------------------------------------------------------------------------- reabrir: nunca el base (C58) --
             var alBase = await CarteraE2E.ConClaveAsync(http, admin, HttpMethod.Post, $"{Cierres}/{cierreBase}/reopen", new { reason = "Intento sobre el base (e2e)" });

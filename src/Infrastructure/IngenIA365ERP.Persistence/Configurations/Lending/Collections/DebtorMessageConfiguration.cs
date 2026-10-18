@@ -11,7 +11,7 @@ namespace IngenIA365ERP.Persistence.Configurations.Lending.Collections;
 
 /// <summary>
 /// <c>LND_DebtorMessages</c> (feature 013, C.3; data-model §26.1): hecho. Único <c>IdempotencyKey</c>; canal, adaptador y plantilla
-/// sellados. Sin <c>CampaignId</c> (ni su índice) hasta K4.
+/// sellados. K4 (T0939) suma <c>CampaignId</c> con su índice filtrado.
 /// </summary>
 public class DebtorMessageConfiguration : IEntityTypeConfiguration<DebtorMessage>
 {
@@ -41,9 +41,11 @@ public class DebtorMessageConfiguration : IEntityTypeConfiguration<DebtorMessage
         builder.HasOne<IssuedLendingDocument>().WithMany().HasForeignKey(e => e.IssuedDocumentId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<InstallmentNonDeduction>().WithMany().HasForeignKey(e => e.InstallmentNonDeductionId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<User>().WithMany().HasForeignKey(e => e.RequestedByUserId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<MessageCampaign>().WithMany().HasForeignKey(e => e.CampaignId).OnDelete(DeleteBehavior.Restrict);
 
         builder.HasIndex(e => e.IdempotencyKey).IsUnique().HasDatabaseName("UK_LND_DebtorMessages_IdempotencyKey");
         builder.HasIndex(e => new { e.PersonId, e.RequestedAt }).HasDatabaseName("IX_LND_DebtorMessages_PersonId_RequestedAt");
         builder.HasIndex(e => e.LoanId).HasDatabaseName("IX_LND_DebtorMessages_LoanId");
+        builder.HasIndex(e => e.CampaignId).HasDatabaseName("IX_LND_DebtorMessages_CampaignId").HasFilter("[CampaignId] IS NOT NULL");
     }
 }

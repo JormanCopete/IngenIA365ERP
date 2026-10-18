@@ -156,6 +156,12 @@ public class AttributionMatrix : AuditableEntity, IHechoInmutable, IVersionDeCar
                 || regla.MinDaysPastDue > regla.MaxDaysPastDue
                 || regla.MinConsolidatedAmount < 0m || regla.MinTermMonths < 0 || regla.MinDaysPastDue < 0)
                 return Invalida("RuleRangeInvalid", $"La regla {regla.Order.ToString(Inv)} tiene un rango con el mínimo por encima del máximo o negativo.");
+            if ((regla.NoveltyMechanism is not null || regla.NoveltyCause is not null)
+                && !string.Equals(regla.Subject, LendingDecisionSubjects.Novelty, StringComparison.Ordinal))
+                return Invalida("RuleNoveltyCriteriaOutOfSubject",
+                    $"La regla {regla.Order.ToString(Inv)} filtra por mecanismo o causa de la novedad: sólo aplica al sujeto {LendingDecisionSubjects.Novelty}.");
+            if (regla.NoveltyMechanism is { } m && !Enum.IsDefined(m) || regla.NoveltyCause is { } c && !Enum.IsDefined(c))
+                return Invalida("RuleNoveltyCriteriaUnknown", $"La regla {regla.Order.ToString(Inv)} nombra un mecanismo o una causa de novedad que no existe.");
         }
 
         return null;
@@ -204,24 +210,35 @@ public class AttributionMatrix : AuditableEntity, IHechoInmutable, IVersionDeCar
                 .Decimal("maxConsolidatedAmount", n.MaxConsolidatedAmount)
                 .Logico("isExceptionLevel", n.IsExceptionLevel)
                 .Logico("isBoardLevel", n.IsBoardLevel))
-            .Lista("rules", borrador.Reglas.OrderBy(r => r.Order), (h, r) => h
-                .Entero("order", r.Order)
-                .Texto("subject", r.Subject)
-                .Entero("creditLineId", r.CreditLineId)
-                .Texto("modalityCode", string.IsNullOrWhiteSpace(r.ModalityCode) ? null : r.ModalityCode.Trim())
-                .Decimal("minConsolidatedAmount", r.MinConsolidatedAmount)
-                .Decimal("maxConsolidatedAmount", r.MaxConsolidatedAmount)
-                .Entero("minTermMonths", r.MinTermMonths)
-                .Entero("maxTermMonths", r.MaxTermMonths)
-                .Enumeracion("collateralKind", r.CollateralKind)
-                .Logico("scoreBelowMinimum", r.ScoreBelowMinimum)
-                .Logico("hasWarnings", r.HasWarnings)
-                .Logico("policyException", r.PolicyException)
-                .Entero("minDaysPastDue", r.MinDaysPastDue)
-                .Entero("maxDaysPastDue", r.MaxDaysPastDue)
-                .Enumeracion("concept", r.Concept)
-                .Texto("minimumLevelCode", r.MinimumLevelCode.Trim().ToUpperInvariant()))
+            .Lista("rules", borrador.Reglas.OrderBy(r => r.Order), ReglaEnLaHuella)
             .Calcular();
+
+    /// <summary>
+    /// Una regla en la huella. El mecanismo y la causa de la novedad (K3, T0879) entran sólo cuando no son nulos: así la huella de las matrices
+    /// publicadas antes de K3 no cambia.
+    /// </summary>
+    private static void ReglaEnLaHuella(HuellaDeCartera h, BorradorDeRegla r)
+    {
+        h
+            .Entero("order", r.Order)
+            .Texto("subject", r.Subject)
+            .Entero("creditLineId", r.CreditLineId)
+            .Texto("modalityCode", string.IsNullOrWhiteSpace(r.ModalityCode) ? null : r.ModalityCode.Trim())
+            .Decimal("minConsolidatedAmount", r.MinConsolidatedAmount)
+            .Decimal("maxConsolidatedAmount", r.MaxConsolidatedAmount)
+            .Entero("minTermMonths", r.MinTermMonths)
+            .Entero("maxTermMonths", r.MaxTermMonths)
+            .Enumeracion("collateralKind", r.CollateralKind)
+            .Logico("scoreBelowMinimum", r.ScoreBelowMinimum)
+            .Logico("hasWarnings", r.HasWarnings)
+            .Logico("policyException", r.PolicyException)
+            .Entero("minDaysPastDue", r.MinDaysPastDue)
+            .Entero("maxDaysPastDue", r.MaxDaysPastDue)
+            .Enumeracion("concept", r.Concept)
+            .Texto("minimumLevelCode", r.MinimumLevelCode.Trim().ToUpperInvariant());
+        if (r.NoveltyMechanism is { } mecanismo) h.Enumeracion<NoveltyMechanism>("noveltyMechanism", mecanismo);
+        if (r.NoveltyCause is { } causa) h.Enumeracion<NoveltyCause>("noveltyCause", causa);
+    }
 
     /// <summary>
     /// La huella de una matriz ya guardada, para verificar que nadie la cambió: la misma de <see cref="Huella"/>, reconstruida de las

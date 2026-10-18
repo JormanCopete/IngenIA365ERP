@@ -238,4 +238,37 @@ public sealed class ColaDeMensajesAlDeudorTests : IDisposable
         r.Evento.Motivos().Should().Equal(ContactWindowReason.AuthorizationWithoutEvidence);
         r.Evento.ActorKind.Should().Be(ActorKind.Process);
     }
+
+    // ------------------------------------------------------------------------------- K3: reclamación e insolvencia (T0886) --
+
+    [Fact]
+    public async Task Con_la_reclamacion_al_seguro_en_tramite_el_cobro_nace_excluido_aunque_la_persona_no_tenga_la_marca()
+    {
+        _e.Db.InsuranceClaims.Add(new Domain.Entities.Lending.Loans.InsuranceClaim
+        {
+            LoanId = _e.Credito.Id, InsurerPersonId = _e.Beto.Id, DeceasedPersonId = _e.Ana.Id, DeathDate = _e.G.HoyLocal, Status = InsuranceClaimStatus.InProcess,
+        });
+        await _e.Db.SaveChangesAsync();
+
+        var r = await _e.EncolarYGuardarAsync(MensajesDePrueba.Mora(_e.Ana, _e.Credito));
+
+        r.Evento.Kind.Should().Be(DebtorMessageEventKind.Excluded);
+        r.Evento.Motivos().Should().Equal(ContactWindowReason.DebtorDeceased);
+    }
+
+    [Fact]
+    public async Task Con_el_proceso_de_insolvencia_en_negociacion_el_cobro_nace_excluido()
+    {
+        _e.Db.InsolvencyProceedings.Add(new Domain.Entities.Lending.Loans.InsolvencyProceeding
+        {
+            PersonId = _e.Ana.Id, StartDate = _e.G.HoyLocal.AddDays(-3), Status = InsolvencyProceedingStatus.Negotiating,
+            Regime = InsolvencyRegime.NaturalPersonDebtNegotiation, Authority = "Centro de conciliación",
+        });
+        await _e.Db.SaveChangesAsync();
+
+        var r = await _e.EncolarYGuardarAsync(MensajesDePrueba.Mora(_e.Ana, _e.Credito));
+
+        r.Evento.Kind.Should().Be(DebtorMessageEventKind.Excluded);
+        r.Evento.Motivos().Should().Equal(ContactWindowReason.Insolvency);
+    }
 }

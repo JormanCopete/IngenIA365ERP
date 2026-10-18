@@ -28,7 +28,7 @@
     <div class="page-header">
         <h3>Informes de cartera</h3>
         <div class="toolbar">
-            @if (_tabla is not null && _vista is not null && _puedeExportar)
+            @if (_tabla is not null && _vista is not null && PuedeExportar)
             {
                 <PermissionGate Required="Lending.Reports.Export">
                     <SfButton CssClass="e-outline" IconCss="e-icons e-download" Disabled="@_carga.Activa" OnClick="@(() => DescargarAsync("xlsx"))">Excel</SfButton>
@@ -146,16 +146,43 @@
                     <label class="campo">Estado
                         <select class="e-input" value="@Otro("status")" @onchange="@(e => PonerOtro("status", e.Value?.ToString()))">
                             <option value="">Todos</option>
-                            <option value="Queued">En cola</option>
-                            <option value="Deferred">Diferido</option>
-                            <option value="Excluded">Excluido</option>
-                            <option value="Sent">Enviado</option>
-                            <option value="Delivered">Entregado</option>
-                            <option value="Failed">Fallido</option>
-                            <option value="Simulated">Simulado</option>
-                            <option value="Cancelled">Cancelado</option>
+                            @foreach (var (valor, texto) in EstadosDeLaVista) { <option value="@valor">@texto</option> }
                         </select>
                     </label>
+                }
+                @if (UsaPropio("kind") && _vista?.Key == "issued-documents")
+                {
+                    <label class="campo">Clase
+                        <select class="e-input" value="@Otro("kind")" @onchange="@(e => PonerOtro("kind", e.Value?.ToString()))">
+                            <option value="">Todas</option>
+                            <option value="PaymentPlan">Plan de pagos</option>
+                            <option value="Statement">Extracto</option>
+                            <option value="LoanClearance">Paz y salvo de la obligación</option>
+                            <option value="GeneralClearance">Paz y salvo general</option>
+                            <option value="BalanceCertificate">Certificado de saldo</option>
+                            <option value="TaxCertificate">Certificado tributario</option>
+                        </select>
+                    </label>
+                }
+                @if (UsaPropio("by"))
+                {
+                    <label class="campo">Concentración por
+                        <select class="e-input" value="@Otro("by")" @onchange="@(e => PonerOtro("by", e.Value?.ToString()))">
+                            <option value="debtor">Deudor</option>
+                            <option value="group">Grupo conectado</option>
+                            <option value="line">Línea</option>
+                            <option value="sector">Sector</option>
+                            <option value="payer">Pagaduría</option>
+                        </select>
+                    </label>
+                }
+                @if (UsaPropio("top"))
+                {
+                    <label class="campo">Mayores <input type="number" min="1" max="500" class="e-input" value="@Otro("top")" placeholder="20" @onchange="@(e => PonerOtro("top", e.Value?.ToString()))" /></label>
+                }
+                @if (UsaPropio("warnAt"))
+                {
+                    <label class="campo">Señal desde (% del límite) <input type="number" min="1" max="100" class="e-input" value="@Otro("warnAt")" placeholder="80" @onchange="@(e => PonerOtro("warnAt", e.Value?.ToString()))" /></label>
                 }
                 @if (UsaPropio("load"))
                 {
@@ -189,6 +216,7 @@
     private static readonly HashSet<string> ConControl = new(StringComparer.Ordinal)
     {
         "branch", "line", "modality", "collector", "groupBy", "dateKind", "ranges", "points", "purpose", "channel", "status", "load",
+        "by", "top", "warnAt",
     };
 
     private readonly EstadoDeCarga _cargaVistas = new(), _carga = new();
@@ -199,7 +227,7 @@
     private FiltrosDeInformeDeInventarioModelo _filtros = new();
     private FiltrosDeInformeDeInventarioModelo _aplicados = new();
     private TablaReporteDto? _tabla;
-    private bool _iniciado, _puedeExportar;
+    private bool _iniciado, _exportaDatosPersonales;
 
     [SupplyParameterFromQuery(Name = "vista")] public string? Vista { get; set; }
 
@@ -248,7 +276,7 @@
         _vista = _vistas.FirstOrDefault(v => v.Key == clave);
         _tabla = null;
         // Los filtros propios de una vista no significan lo mismo en otra (groupBy de colocación no es el de recaudo).
-        foreach (var propio in new[] { "groupBy", "dateKind", "ranges", "points", "purpose", "channel", "status", "load", "kind", "loan" })
+        foreach (var propio in new[] { "groupBy", "dateKind", "ranges", "points", "purpose", "channel", "status", "load", "kind", "loan", "by", "top", "warnAt" })
             _filtros.Otros.Remove(propio);
         await EvaluarExportacionAsync();
     }
@@ -256,9 +284,14 @@
     /// <summary>En una vista con datos del deudor, exportar exige además ExportPersonalData (el botón no se ofrece sin él).</summary>
     private async Task EvaluarExportacionAsync()
     {
-        _puedeExportar = _vista is not null
-                         && (!_vista.PersonalData || await Permisos.TieneAsync("Lending.Reports.ExportPersonalData"));
+        _exportaDatosPersonales = _vista is not null && _vista.PersonalData && await Permisos.TieneAsync("Lending.Reports.ExportPersonalData");
     }
+
+    /// <summary>
+    /// Se ofrece exportar si la consulta aplicada no trae datos del deudor o si la persona puede exportarlos. K5: la concentración por línea, sector
+    /// o pagaduría no los trae (<c>personalDataExceptWhen</c>).
+    /// </summary>
+    private bool PuedeExportar => _vista is not null && (_exportaDatosPersonales || !_vista.TraeDatosDelDeudor(_aplicados.Otros));
 
     private bool Usa(string filtro) => _vista is not null && _vista.Filters.Contains(filtro, StringComparer.OrdinalIgnoreCase);
 
@@ -273,12 +306,27 @@
     }
 
     /// <summary>Las dimensiones de «groupBy» de la vista elegida (colocación y recaudo no abren por lo mismo).</summary>
-    private IReadOnlyList<(string Valor, string Texto)> DimensionesDeLaVista => _vista?.Key == "receipts"
-        ? [("line", "Línea"), ("collector", "Recaudador"), ("modality", "Modalidad de pago"), ("meansClass", "Clase de medio")]
-        : [("line", "Línea"), ("office", "Oficina"), ("advisor", "Asesor"), ("month", "Mes")];
+    private IReadOnlyList<(string Valor, string Texto)> DimensionesDeLaVista => _vista?.Key switch
+    {
+        "receipts" => [("line", "Línea"), ("collector", "Recaudador"), ("modality", "Modalidad de pago"), ("meansClass", "Clase de medio")],
+        // K5 (T0985): la calidad, en total o por oficina, línea o modalidad.
+        "quality" => [("total", "Total"), ("office", "Oficina"), ("line", "Línea"), ("modality", "Modalidad")],
+        _ => [("line", "Línea"), ("office", "Oficina"), ("advisor", "Asesor"), ("month", "Mes")],
+    };
+
+    /// <summary>Los estados del filtro «status» de la vista elegida: cada vista filtra por los suyos.</summary>
+    private IReadOnlyList<(string Valor, string Texto)> EstadosDeLaVista => _vista?.Key switch
+    {
+        "issued-documents" => [("Valid", "Vigente"), ("SubjectToFinality", "Sujeto a firmeza"), ("Voided", "Anulado")],
+        "promises" => [("Pending", "Pendiente"), ("Kept", "Cumplida"), ("Broken", "Incumplida")],
+        "payment-agreements" => [("Proposed", "Propuesto"), ("Approved", "Aprobado"), ("Rejected", "Rechazado"), ("Cancelled", "Anulado")],
+        "prior-notices" => [("Pending", "Pendiente"), ("InProgress", "En curso"), ("Valid", "Vigente"), ("Closed", "Cerrado")],
+        _ => [("Queued", "En cola"), ("Deferred", "Diferido"), ("Excluded", "Excluido"), ("Sent", "Enviado"), ("Delivered", "Entregado"),
+            ("Failed", "Fallido"), ("Simulated", "Simulado"), ("Cancelled", "Cancelado")],
+    };
 
     /// <summary>La tabla trae con qué profundizar: el crédito, la operación o el mensaje.</summary>
-    private bool Profundiza => _tabla is not null && _tabla.Columnas.Any(c => c.Clave is "_credito" or "_mensaje");
+    private bool Profundiza => _tabla is not null && _tabla.Columnas.Any(c => c.Clave is "_credito" or "_mensaje" or "_documento");
 
     /// <summary>A dónde lleva la fila: el crédito (también desde su operación) o, sin crédito, el mensaje en la bandeja.</summary>
     private string? Destino(FilaReporteDto fila)
@@ -288,6 +336,7 @@
         if (_vista?.Key == "transactions" && TablaDeReporte.Oculto(_tabla, fila, "_mensaje") is { } m && Guid.TryParse(m, out var mensaje))
             return $"/cartera/bandeja-de-mensajes?mensaje={mensaje}";
         if (_vista?.Key == "debtor-messages" && TablaDeReporte.Oculto(_tabla, fila, "_mensaje") is not null) return "/cartera/mensajes";
+        if (_vista?.Key == "issued-documents" && TablaDeReporte.Oculto(_tabla, fila, "_documento") is not null) return "/cartera/documentos";
         return null;
     }
 

@@ -1,6 +1,7 @@
 using IngenIA365ERP.Domain.Common.NationalValues;
 using IngenIA365ERP.Domain.Common.Parametros;
 using IngenIA365ERP.Domain.Enums.Parameters;
+using IngenIA365ERP.Domain.Lending.Documents;
 using static IngenIA365ERP.Domain.Common.Parametros.CatalogoDeParametros;
 using static IngenIA365ERP.Domain.Lending.EntregaDeCartera;
 
@@ -49,6 +50,12 @@ public static class ParametrosDeCartera
 
     // ------------------------------------------------------------------------------------------------ riesgo y cierres --
     public const string RiesgoReglaMesesFaltantes = "Riesgo.ReglaMesesFaltantes";
+
+    /// <summary>
+    /// K6a (T1027; data-model §12.1): los días de mora con que se completan los meses de historial que faltan cuando
+    /// <see cref="RiesgoReglaMesesFaltantes"/> es «Fija» (<c>HistorialDeMora.Completar</c>). Sin valor; con la regla «Fija» es obligatoria. (nuevo)
+    /// </summary>
+    public const string RiesgoMesesFaltantesDiasFijos = "Riesgo.MesesFaltantesDiasFijos";
     public const string RiesgoDiaLimiteCierre = "Riesgo.DiaLimiteCierre";
     public const string RiesgoCierreProgramado = "Riesgo.CierreProgramado";
     public const string RiesgoRedondeoDeterioro = "Riesgo.RedondeoDeterioro";
@@ -82,10 +89,27 @@ public static class ParametrosDeCartera
     public const string LibranzaVentanaDeGiroDias = "Libranza.VentanaDeGiroDias";
     public const string LibranzaUmbralDeMoraDePagaduria = "Libranza.UmbralDeMoraDePagaduria";
 
+    // ------------------------------------------------------------------------------------------------- castigo (K3) --
+    public const string CastigoExigeDeterioroTotal = "Castigo.ExigeDeterioroTotal";
+    public const string CastigoDiasMinimosDeMora = "Castigo.DiasMinimosDeMora";
+    public const string CastigoGestionesMinimas = "Castigo.GestionesMinimas";
+
     // -------------------------------------------------------------------- cobranza, aviso previo, mensajes y canales --
     public const string CobranzaHorarioLunesAViernes = "Cobranza.HorarioLunesAViernes";
     public const string CobranzaHorarioSabado = "Cobranza.HorarioSabado";
     public const string CobranzaContactosPorDia = "Cobranza.ContactosPorDia";
+
+    /// <summary>K4 (US12, T0943; data-model §26.8): lo que se perdona, en pesos, para dar por cumplida una promesa de pago. (nuevo)</summary>
+    public const string CobranzaToleranciaDePromesa = "Cobranza.ToleranciaDePromesa";
+
+    /// <summary>
+    /// K4, bloque D (decisión del dueño del 2026-10-16): el tope del gasto de cobranza como fracción de la base del gasto (lo vencido o el capital
+    /// vencido, la base de la regla de la etapa). Vacío = sin tope. (nuevo)
+    /// </summary>
+    public const string CobranzaTopeGastoPorcentaje = "Cobranza.TopeGasto.Porcentaje";
+
+    /// <summary>K4, bloque D: el tope del gasto de cobranza en pesos. Vacío = sin máximo. Con los dos, rige el menor. (nuevo)</summary>
+    public const string CobranzaTopeGastoValorMaximo = "Cobranza.TopeGasto.ValorMaximo";
     public const string AvisoPrevioDiasMinimos = "AvisoPrevio.DiasMinimos";
     public const string AvisoPrevioUmbralDosComunicaciones = "AvisoPrevio.UmbralDosComunicaciones";
     public const string MensajesReintentos = "Mensajes.Reintentos";
@@ -99,6 +123,44 @@ public static class ParametrosDeCartera
     public const string DocumentosPazYSalvoIncluyeCodeudas = "Documentos.PazYSalvoIncluyeCodeudas";
     public const string InformesRangosDeEdad = "Informes.RangosDeEdad";
     public const string InformesPuntosAlertaUsura = "Informes.PuntosAlertaUsura";
+
+    /// <summary>
+    /// K5 (US15, T0980; data-model §12.1): desde qué días de mora un crédito cuenta como cartera <b>vencida</b> en los indicadores de calidad
+    /// (<c>quality</c>) y en el tablero: vencida = saldo de capital con días de mora mayores que este valor. Pendiente de validar por la contadora. (nuevo)
+    /// </summary>
+    public const string InformesDiasCarteraVencida = "Informes.DiasCarteraVencida";
+
+    /// <summary>
+    /// K5 (US13; decisión del dueño del 2026-10-16): qué conceptos suma el saldo al 31 de diciembre del certificado tributario, como nombres de
+    /// <c>ConceptosDelSaldoCertificado</c> separados por coma (<c>Capital</c>, <c>InteresCorriente</c>, <c>InteresDeMora</c>, <c>OtrosCargos</c> y
+    /// <c>MenosAnticipo</c>, que resta el anticipo). El defecto los lleva todos: el saldo de antes del parámetro. Se lee vigente el día de la emisión. (nuevo)
+    /// </summary>
+    public const string DocumentosCertificadoTributarioSaldoIncluye = "Documentos.CertificadoTributario.SaldoIncluye";
+
+    /// <summary>
+    /// K5 (US16, T1003; adaptadores-y-archivos.md §7.4): el código de suscriptor (fuente) de la cooperativa en cada central de riesgo, como
+    /// <c>CENTRAL=código</c> separados por punto y coma (<c>DATACREDITO=123456;TRANSUNION=ABC123</c>). Va en el archivo de la central
+    /// (<c>Archivo.CodigoDeSuscriptor</c>); sin el de una central, el validador lo señala como obligatorio vacío y su archivo no se genera. (nuevo)
+    /// </summary>
+    public const string CentralesCodigosDeSuscriptor = "Centrales.CodigosDeSuscriptor";
+
+    /// <summary>
+    /// K5 (US16; decisión del dueño del 2026-10-16): los rangos de mora del reporte a centrales por tipo de cartera (modalidad) y desde qué rango el
+    /// dato es negativo, como <c>TIPO=límite,límite,…|rango</c> separados por punto y coma (<see cref="Regulatory.RangosDeMoraParaCentrales"/>). El
+    /// defecto (rangos de 30 días, negativo desde el primero) reproduce el comportamiento de antes: toda mora es dato negativo. Se lee vigente al corte
+    /// del archivo. (nuevo)
+    /// </summary>
+    public const string CentralesRangosDeMora = "Centrales.RangosDeMora";
+
+    /// <summary>
+    /// K5 (decisión del dueño del 2026-10-16): el aviso previo al reporte negativo se abre y se envía también a cada codeudor vigente del crédito, con su
+    /// propia constancia, y la central reporta al codeudor con dato negativo sólo si <b>su</b> aviso está completo. En <c>false</c> (el defecto), los
+    /// codeudores no reciben aviso y no se reportan con dato negativo (quedan fuera con <c>NoPriorNoticeEvidence</c>). (nuevo)
+    /// </summary>
+    public const string AvisoPrevioIncluirCodeudores = "AvisoPrevio.IncluirCodeudores";
+
+    /// <summary>Forma de <see cref="CentralesCodigosDeSuscriptor"/>.</summary>
+    public const string PatronDeCodigosDeSuscriptor = @"^[A-Z0-9_]{1,20}=[A-Za-z0-9-]{1,20}(;[A-Z0-9_]{1,20}=[A-Za-z0-9-]{1,20})*$";
 
     /// <summary>Forma de un horario de cobranza: <c>HH:mm-HH:mm</c>.</summary>
     public const string PatronDeHorario = @"^([01]\d|2[0-3]):[0-5]\d-([01]\d|2[0-3]):[0-5]\d$";
@@ -131,6 +193,13 @@ public static class ParametrosDeCartera
         Eleccion(Modulo, RiesgoReglaMesesFaltantes,
             "Cómo se completan los meses de historial que faltan para la pérdida esperada (se usa desde K6a).",
             ["MayorObservada", "DelCorte", "Fija"], "MayorObservada", K1, General) with { PendienteDeValidar = PendienteContadora },
+        Entero(Modulo, RiesgoMesesFaltantesDiasFijos,
+            "Días de mora con que se completan los meses de historial que faltan si la regla de meses faltantes es «Fija». Sin valor; "
+            + "obligatoria con esa regla.", "", K6a, General) with
+        {
+            AdmiteVacio = true, Minimo = 0m,
+            PendienteDeValidar = "Sin valor: la cooperativa lo fija si elige la regla «Fija» (pregunta E9 de la contadora).",
+        },
         Entero(Modulo, RiesgoDiaLimiteCierre, "Día del mes siguiente hasta el que se puede cerrar el mes de cartera.", "10", K1, General)
             with { Minimo = 1, Maximo = 28 },
         SiNo(Modulo, RiesgoCierreProgramado, "El cierre mensual corre solo el día límite si nadie lo ordenó antes.", false, K1, General),
@@ -176,13 +245,14 @@ public static class ParametrosDeCartera
         Eleccion(Modulo, ContabilidadPoliticaSinRespuesta,
             "Qué pasa si la validación previa contable no responde a tiempo. «Bloquear» sólo muerde en las operaciones de pantalla "
             + "de Cartera (desembolso, novedad, condonación, castigo); en el contrato, el consumidor y los procesos se confirma con "
-            + "pendiente (enmienda A8).",
+            + "pendiente (A8 tocó sólo la falta de regla).",
             ["ConfirmarConPendiente", "Bloquear"], "ConfirmarConPendiente", K1, General),
         Eleccion(Modulo, ContabilidadFaltaDeRegla,
-            "Qué pasa cuando la evaluación contable encuentra un hallazgo (falta la regla, la cuenta o un dato). «Bloquear» sólo muerde "
-            + "en las operaciones de pantalla de Cartera (desembolso, novedad, condonación, castigo); en el contrato, el consumidor y "
-            + "los procesos siempre advierte (enmienda A8).",
-            ["Advertir", "Bloquear"], "Advertir", K1, General, TipoDeHecho),
+            "Qué pasa cuando la evaluación contable encuentra un hallazgo (falta la regla, la cuenta o un dato). «Bloquear» detiene "
+            + "todo (A8, respuesta del dueño del 2026-10-14): la pantalla no confirma, el contrato rechaza el pago (Nómina no aprueba), "
+            + "la venta de Comercial queda en reproceso y el proceso detiene su tanda y alerta. «Advertir» confirma y alerta. "
+            + "Arranca en «Bloquear» (decisión del dueño del 2026-10-14).",
+            ["Advertir", "Bloquear"], "Bloquear", K1, General, TipoDeHecho),
         Entero(Modulo, ContabilidadValidacionPreviaSegundos, "Segundos que espera la validación previa contable.", "3", K1, General)
             with { Minimo = 1m, Maximo = 30m },
         Eleccion(Modulo, ContabilidadDisminucionDeDeterioro,
@@ -208,7 +278,7 @@ public static class ParametrosDeCartera
         Texto(SegregacionIncompatibilidades,
             "Pares de acciones que una misma persona no puede hacer sobre el mismo expediente, en JSON "
             + "[{ \"a\": acción, \"b\": acción, \"activo\": true|false }] (Radicar, Analizar, Decidir, Votar, Desembolsar, "
-            + "AnularOrdenDeGiro, ArmarLoteDeCastigo, AplicarCastigo, CargarMigracion, AceptarDiferencias). Por defecto (F6, T0290) "
+            + "AnularOrdenDeGiro, ArmarLoteDeCastigo, AplicarCastigo, CargarMigracion, AceptarDiferencias, Aplicar). Por defecto (F6, T0290) "
             + "Decidir × Desembolsar activo y sugeridos inactivos Analizar × Decidir, Desembolsar × AnularOrdenDeGiro, "
             + "ArmarLoteDeCastigo × AplicarCastigo y CargarMigracion × AceptarDiferencias.",
             "[{\"a\": \"Decidir\", \"b\": \"Desembolsar\", \"activo\": true}, {\"a\": \"Analizar\", \"b\": \"Decidir\", \"activo\": false}, {\"a\": \"Desembolsar\", \"b\": \"AnularOrdenDeGiro\", \"activo\": false}, {\"a\": \"ArmarLoteDeCastigo\", \"b\": \"AplicarCastigo\", \"activo\": false}, {\"a\": \"CargarMigracion\", \"b\": \"AceptarDiferencias\", \"activo\": false}]", K1, patron: @"(?s)^\s*\[.*\]\s*$")
@@ -237,6 +307,27 @@ public static class ParametrosDeCartera
             PendienteDeValidar = "Sin valor hasta que el dueño coteje la Circular Básica Contable y Financiera antes de K2 (C71).",
         },
 
+        // --------------------------------------------------------------------------------------------- castigo (K3) --
+        // US14 (T0910; FR-095): la política de castigo de la cooperativa, que evalúa RequisitosDeCastigo junto con lo que exige la norma.
+        SiNo(Modulo, CastigoExigeDeterioroTotal,
+            "El castigo exige que el deterioro individual del último cierre cubra todo el saldo del crédito.", true, K3, General) with
+        {
+            PendienteDeValidar = "Defecto propuesto (exigir el deterioro total), sembrado pendiente de validar por el dueño y la contadora.",
+        },
+        Entero(Modulo, CastigoDiasMinimosDeMora,
+            "Días de mora mínimos para castigar un crédito. Vacío: no se exige altura mínima.", "", K3, General) with
+        {
+            AdmiteVacio = true, Minimo = 0m,
+            PendienteDeValidar = "Sin valor hasta que el dueño lo fije: mientras esté vacío, el castigo no exige altura mínima.",
+        },
+        Entero(Modulo, CastigoGestionesMinimas,
+            "Gestiones de cobranza registradas mínimas para castigar. Mientras no exista el registro de gestiones (K4), las acredita el informe motivado.",
+            "0", K3, General) with
+        {
+            Minimo = 0m,
+            PendienteDeValidar = "Cero hasta K4: sin registro de gestiones, el informe motivado acredita que se agotaron.",
+        },
+
         // ---------------------------------------------------------------- cobranza, aviso previo, mensajes y canales --
         Texto(CobranzaHorarioLunesAViernes,
             "Franja de contacto de cobranza de lunes a viernes (HH:mm-HH:mm), dentro del techo legal. Informativo en K1; se aplica en K4.",
@@ -256,12 +347,33 @@ public static class ParametrosDeCartera
             Minimo = 1m,
             LimitesLegales = [CatalogoDeLimitesLegales.CobranzaContactosDia],
         },
+        NumeroDecimal(Modulo, CobranzaToleranciaDePromesa,
+            "Valor, en pesos, que se perdona para dar por cumplida una promesa de pago: la promesa se cumple si lo pagado llega a lo prometido menos "
+            + "esta tolerancia. Se sella en la promesa al registrarla.", "0", K4, General) with
+        {
+            Minimo = 0m,
+            PendienteDeValidar = "Defecto de data-model §26.8 (sin tolerancia), sembrado pendiente de validar por el dueño y la contadora (T0962).",
+        },
+        NumeroDecimal(Modulo, CobranzaTopeGastoPorcentaje,
+            "Tope del gasto de cobranza como fracción (de 0 a 1) de la base del gasto: lo vencido o el capital vencido, según la regla de "
+            + "la etapa. Ninguna regla de etapa puede tener una tarifa mayor y el gasto propuesto se recorta a él. Vacío: sin tope.", "", K4, General) with
+        {
+            AdmiteVacio = true, Minimo = 0m, Maximo = 1m,
+            PendienteDeValidar = "Sin valor (sin tope) hasta que el dueño y la contadora lo fijen (decisión del dueño del 2026-10-16, K4 bloque D).",
+        },
+        NumeroDecimal(Modulo, CobranzaTopeGastoValorMaximo,
+            "Tope del gasto de cobranza en pesos por gasto propuesto. Con el porcentaje, rige el menor. Vacío: sin valor máximo.", "", K4, General) with
+        {
+            AdmiteVacio = true, Minimo = 0m,
+            PendienteDeValidar = "Sin valor (sin máximo) hasta que el dueño y la contadora lo fijen (decisión del dueño del 2026-10-16, K4 bloque D).",
+        },
         Entero(Modulo, AvisoPrevioDiasMinimos, "Días calendario mínimos entre el aviso previo y el reporte negativo.", "20", K4, General) with
         {
             LimitesLegales = [CatalogoDeLimitesLegales.AvisoPrevioDias],
         },
         NumeroDecimal(Modulo, AvisoPrevioUmbralDosComunicaciones,
-            "Saldo, en veces el SMMLV, desde el que el aviso previo exige dos comunicaciones. Vacío: rige el límite legal.", "", K4, General) with
+            "Saldo de la obligación, en veces el SMMLV, hasta el cual (inferior o igual) el aviso previo exige dos comunicaciones en días distintos "
+            + "(Ley 2157 de 2021); por encima basta una. Vacío: rige el límite legal.", "", K4, General) with
         {
             AdmiteVacio = true,
             LimitesLegales = [CatalogoDeLimitesLegales.AvisoPrevioUmbralSmmlv],
@@ -290,6 +402,30 @@ public static class ParametrosDeCartera
         NumeroDecimal(Modulo, InformesPuntosAlertaUsura,
             "Puntos de tasa efectiva anual bajo la usura desde los que se alerta.", "2.0", K1, General)
             with { PendienteDeValidar = PendienteContadora },
+        Entero(Modulo, InformesDiasCarteraVencida,
+            "Días de mora desde los que un crédito cuenta como cartera vencida en los indicadores de calidad y el tablero (más de este número).",
+            "30", K5, General) with { Minimo = 0m, PendienteDeValidar = PendienteContadora },
+        Texto(DocumentosCertificadoTributarioSaldoIncluye,
+            "Conceptos que suma el saldo al 31 de diciembre del certificado tributario, separados por coma: Capital, InteresCorriente, InteresDeMora, "
+            + "OtrosCargos (seguros, gastos de cobranza y otros cargos) y MenosAnticipo (resta el anticipo). El defecto los lleva todos.",
+            SaldoDelCertificadoTributario.Defecto, K5, patron: SaldoDelCertificadoTributario.Patron),
+        Texto(CentralesCodigosDeSuscriptor,
+            "Código de suscriptor de la cooperativa en cada central de riesgo, como CENTRAL=código separados por punto y coma "
+            + "(DATACREDITO=123456;TRANSUNION=ABC123). Sin el de una central, su archivo no se genera.",
+            string.Empty, K5, patron: PatronDeCodigosDeSuscriptor, admiteVacio: true),
+        Texto(CentralesRangosDeMora,
+            "Rangos de mora del reporte a centrales por tipo de cartera (modalidad) y desde qué rango el dato es negativo: TIPO=límite,límite,…|rango "
+            + "separados por punto y coma, con * para los tipos que no se nombran (*=30,60,90,120,150,180|1;VIVIENDA=60,120,180|1). El rango 1 va de 1 "
+            + "al primer límite, el último queda abierto; por debajo del rango negativo la obligación se reporta al día. La altura de mora reportada "
+            + "sale del rango.",
+            Regulatory.RangosDeMoraParaCentrales.Defecto, K5, patron: Regulatory.RangosDeMoraParaCentrales.Patron) with
+        {
+            PendienteDeValidar = "Defecto propuesto (rangos de 30 días, negativo desde el primero: toda mora es dato negativo, como antes del parámetro), "
+                                 + "pendiente de validar por el dueño y la contadora (decisión del dueño del 2026-10-16).",
+        },
+        SiNo(Modulo, AvisoPrevioIncluirCodeudores,
+            "El aviso previo al reporte negativo se abre y se envía también a cada codeudor del crédito, con su propia constancia; la central reporta al "
+            + "codeudor con dato negativo sólo si su aviso está completo. En «false», los codeudores no se reportan con dato negativo.", false, K5, General),
     ];
 
     private static DefinicionDeParametro Texto(string clave, string descripcion, string defecto, EntregaDeModulo desde,

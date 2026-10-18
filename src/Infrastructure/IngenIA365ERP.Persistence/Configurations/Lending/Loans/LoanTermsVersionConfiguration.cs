@@ -1,3 +1,4 @@
+using IngenIA365ERP.Domain.Enums.Lending;
 using IngenIA365ERP.Domain.Entities.Lending.Configuration;
 using IngenIA365ERP.Domain.Entities.Lending.Loans;
 using IngenIA365ERP.Domain.Entities.Lending.Operations;
@@ -52,6 +53,8 @@ public class LoanTermsVersionConfiguration : IEntityTypeConfiguration<LoanTermsV
         builder.Property(e => e.RoundingUnit).Monto().IsRequired();
         builder.Property(e => e.RoundingMode).HasConversion<int>().IsRequired();
         builder.Property(e => e.RoundingMoment).HasConversion<int>().IsRequired();
+        // K6b (T1059; CarteraVivienda): la unidad del capital; las filas anteriores son en pesos.
+        builder.Property(e => e.DenominationUnit).HasConversion<int>().IsRequired().HasDefaultValue(DenominationUnit.Pesos);
 
         builder.Property(e => e.AllocationOrder).HasConversion<int>().IsRequired();
         builder.Property(e => e.ConceptPriority).HasMaxLength(200).IsRequired();
@@ -65,8 +68,11 @@ public class LoanTermsVersionConfiguration : IEntityTypeConfiguration<LoanTermsV
         builder.HasOne(e => e.Loan).WithMany().HasForeignKey(e => e.LoanId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(e => e.Operation).WithMany().HasForeignKey(e => e.OperationId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<CreditLineVersion>().WithMany().HasForeignKey(e => e.CreditLineVersionId).OnDelete(DeleteBehavior.Restrict);
+        // K3 (CarteraNovedades): la novedad que produjo la versión.
+        builder.HasOne<LoanNovelty>().WithMany().HasForeignKey(e => e.NoveltyId).OnDelete(DeleteBehavior.Restrict);
 
         builder.HasIndex(e => new { e.LoanId, e.VersionNumber }).IsUnique()
             .HasDatabaseName("UK_LND_LoanTermsVersions_Loan_Version");
+        builder.HasIndex(e => e.NoveltyId).HasDatabaseName("IX_LND_LoanTermsVersions_NoveltyId").HasFilter("[NoveltyId] IS NOT NULL");
     }
 }

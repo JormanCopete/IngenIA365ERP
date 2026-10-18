@@ -85,7 +85,8 @@ public sealed record DisponibleDto(
 
 /// <summary>
 /// Un bloqueo del deudor: clase 1 manual, 2 mora, 3 validación fallida, 4 castigo, 5 listas, 6 retiro, 7 fallecimiento, 8 insolvencia,
-/// 9 embargo, 10 cupo por revalidar; <c>Origin</c> Manual o Automatic; <c>HowItLifts</c> dice cómo se levanta.
+/// 9 embargo, 10 cupo por revalidar; <c>Origin</c> Manual o Automatic; <c>HowItLifts</c> dice cómo se levanta; <c>CanLiftManually</c>, si lo
+/// levanta a mano quien tenga <c>Lending.Blocks.Manage</c> (el manual, el embargo y el de insolvencia con la negociación fracasada).
 /// </summary>
 public sealed record BloqueoDto(
     Guid PublicId,
@@ -98,7 +99,8 @@ public sealed record BloqueoDto(
     UsuarioDeCarteraDto? LiftedBy,
     string? LiftReason,
     Guid? Support,
-    string HowItLifts);
+    string HowItLifts,
+    bool CanLiftManually = false);
 
 public sealed record FiltrosDeBloqueos(Guid? PersonPublicId = null, int? Kind = null, bool? Active = null, int Page = 1, int PageSize = 20);
 

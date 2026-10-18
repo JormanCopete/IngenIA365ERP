@@ -243,6 +243,17 @@ public static class AuditEventTypes
     // US8 (T0752): la activación de Cartera con sus requisitos, conteos y huellas; no es lectura.
     public const string LendingActivationRegistered = "Lending.Activation.Registered";
 
+    // K3, bloque D (decisión del dueño del 2026-10-15): el crédito que se excluye de un lote de castigo al aplicarlo porque ya no cumple; no es lectura.
+    public const string LendingWriteOffItemExcluded = "Lending.WriteOffItem.Excluded";
+
+    // K4 (T0944; C64): el evento resumen del registro de la etapa de cobranza migrada al desplegar K4, por cooperativa, con la tabla de equivalencia
+    // de códigos; no es lectura.
+    public const string LendingMigratedCollectionStagesRegistered = "Lending.CollectionStages.MigratedRegistered";
+    /// <summary>K6a (T1034): la adopción o el desistimiento voluntario del modelo de pérdida esperada.</summary>
+    public const string LendingImpairmentModelElectionRegistered = "Lending.ImpairmentModel.ElectionRegistered";
+    /// <summary>K6a (T1035; C46): el resumen de una carga complementaria del historial de mora.</summary>
+    public const string LendingArrearsHistoryLoadApplied = "Lending.ArrearsHistory.LoadApplied";
+
     // US13 (T0784, T0785): la emisión de un documento al deudor (también lectura de sus datos: cuenta como lectura sensible, nota 10 de PG) y su
     // anulación manual. La reimpresión y la verificación son Lending.Document.Reprinted y .Verified, de la lista cerrada.
     public const string LendingDocumentIssued = "Lending.Document.Issued";
@@ -250,6 +261,16 @@ public static class AuditEventTypes
 
     // US3 (T0454, bloque 7B): la emisión del enlace de descarga de un archivo de desembolsos (adaptadores §6.2: «enlace firmado de 60 s, auditado»).
     public const string LendingDisbursementFileDownloaded = "Lending.DisbursementFile.Downloaded";
+
+    // K2 (T0836; C46): el evento resumen de cada archivo de descuentos (sus líneas van con [SinDiffDeAuditoria]) y el enlace de descarga.
+    public const string LendingPayrollDeductionFileGenerated = "Lending.PayrollDeductionFile.Generated";
+    public const string LendingPayrollDeductionFileDownloaded = "Lending.PayrollDeductionFile.Downloaded";
+
+    // K5 (US16, T1004; C46): el evento resumen de cada generación regulatoria (SICSES o central; las líneas de las centrales van con
+    // [SinDiffDeAuditoria]), su marca de cargado con el radicado y el enlace de descarga (trae deudores: se registra cada emisión).
+    public const string LendingRegulatoryFileGenerated = "Lending.RegulatoryFile.Generated";
+    public const string LendingRegulatoryFileUploaded = "Lending.RegulatoryFile.Uploaded";
+    public const string LendingRegulatoryFileDownloaded = "Lending.RegulatoryFile.Downloaded";
 
     // US5 (bloque 9B, T0546; interfaces §3.13; T68, A11): el contrato de obligaciones. El intento va por un contexto aparte (sobrevive a la
     // reversión del recaudador); el hecho, en COR_AuditOutbox dentro de la transacción con la distribución completa. Las lecturas del contrato

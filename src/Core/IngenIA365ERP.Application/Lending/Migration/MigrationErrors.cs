@@ -74,11 +74,15 @@ public static class ErroresDeMigracion
     public static string PlanDescuadrado(string numero, decimal plan, decimal capital) =>
         $"El plan pendiente del crédito {numero} suma {Pesos(plan)} de capital y su saldo de capital es {Pesos(capital)}. Corrija las cuotas o el saldo.";
 
-    public static Error PlazoVencido(DateOnly fechaLimite, string? mesCerrado = null) =>
+    /// <summary>
+    /// Venció el plazo de la carga. El mes de C+1 cerrado en Contabilidad ya no responde esto (decisión del dueño, 2026-10-14): sólo informa, como aviso
+    /// <c>AccountingMonthClosed</c> de la activación.
+    /// </summary>
+    public static Error PlazoVencido(DateOnly fechaLimite) =>
         new ErrorConDatos(CodigoPlazoVencido,
             string.Create(CultureInfo.InvariantCulture,
-                $"Ya no se puede activar con esta carga: venció el plazo ({fechaLimite:yyyy-MM-dd}) o Contabilidad cerró {mesCerrado ?? "el mes"}. Aplique una carga con un corte nuevo."),
-            new { deadline = fechaLimite, closedMonth = mesCerrado });
+                $"Ya no se puede activar con esta carga: venció el plazo ({fechaLimite:yyyy-MM-dd}). Aplique una carga con un corte nuevo."),
+            new { deadline = fechaLimite });
 
     public static Error DiferenciasSinAceptar(int pendientes) =>
         new ErrorConDatos(CodigoDiferenciasSinAceptar,

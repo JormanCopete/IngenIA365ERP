@@ -145,6 +145,25 @@ public class ApproveSettlementCommandHandlerTests
     }
 
     [Fact]
+    public async Task Un_descuento_que_Contabilidad_no_puede_registrar_responde_LoanDeductionNotPostable_y_nada_queda_aprobado()
+    {
+        // Feature 013, T0801 (A8 = «Bloquear todo», 2026-10-14): el rechazo por la matriz contable tiene su propio código y dice qué regla falta.
+        var p = new DefinitivaDePrueba();
+        p.ConContabilidad();
+        var t = await p.RegistrarAnaAsync();
+        p.Contrato.ComoRespondeAplicar[p.Credito1001.ObligationPublicId] = ContratoDeObligacionesDePrueba.Rechazo(RecaudoPorNomina.CodigoNoContabilizable,
+            "Contabilidad no tiene cómo registrar PagoAplicado en el rol RecaudoPorAplicar. Pida a la contadora completar la matriz de Cartera.");
+
+        var r = await p.Aprobar().Handle(Aprobar(t.RunPublicId), CancellationToken.None);
+
+        r.IsFailure.Should().BeTrue();
+        r.Error.Code.Should().Be("Payroll.LoanDeductionNotPostable");
+        r.Error.Message.Should().Contain("1001").And.Contain("RecaudoPorAplicar");
+        (await p.D.Db.PayrollRuns.AsNoTracking().SingleAsync(x => x.PublicId == t.RunPublicId)).Status.Should().Be(PayrollRunStatus.Draft);
+        (await p.D.Db.EmploymentTerminations.AsNoTracking().SingleAsync(x => x.PublicId == t.TerminationPublicId)).Status.Should().Be(TerminationStatus.Registered);
+    }
+
+    [Fact]
     public async Task Un_excedente_tambien_responde_LoanAmountsChanged()
     {
         var p = new DefinitivaDePrueba();

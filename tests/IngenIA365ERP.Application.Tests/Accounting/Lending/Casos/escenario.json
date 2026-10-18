@@ -38,6 +38,23 @@
   ],
   "cuentas": [
     {
+      "codigo": "14050501",
+      "nombre": "Capital vivienda categoría A (K6b)",
+      "naturaleza": "Debit",
+      "tercero": true,
+      "cruce": true
+    },
+    {
+      "codigo": "14050601",
+      "nombre": "Interés corriente vivienda categoría A (K6b)",
+      "naturaleza": "Debit"
+    },
+    {
+      "codigo": "41505001",
+      "nombre": "Corrección monetaria UVR de la cartera de vivienda (K6b)",
+      "naturaleza": "Credit"
+    },
+    {
       "codigo": "14410501",
       "nombre": "Capital consumo con libranza categoría A",
       "naturaleza": "Debit",

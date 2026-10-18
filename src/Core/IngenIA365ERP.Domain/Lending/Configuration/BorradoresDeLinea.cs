@@ -70,6 +70,12 @@ public sealed record BorradorDeVersionDeLinea(DateOnly ValidFrom, string Reason,
     public RoundingMode RoundingMode { get; init; } = RoundingMode.AwayFromZero;
     public RoundingMoment RoundingMoment { get; init; } = RoundingMoment.PerConcept;
 
+    /// <summary>
+    /// K6b (T1048, T1055): la unidad del capital de los créditos de la versión: pesos o UVR (sólo una combinación de vivienda que el catálogo marca
+    /// «admite UVR»).
+    /// </summary>
+    public DenominationUnit DenominationUnit { get; init; } = DenominationUnit.Pesos;
+
     // -------------------------------------------------------------------------------------------- prelación --
     public AllocationOrder AllocationOrder { get; init; } = AllocationOrder.OldestInstallmentFirst;
     public IReadOnlyList<LoanConcept> ConceptPriority { get; init; } = PrelacionPorDefecto;
@@ -152,6 +158,7 @@ public sealed record BorradorDeVersionDeLinea(DateOnly ValidFrom, string Reason,
             RoundingUnit = v.RoundingUnit,
             RoundingMode = v.RoundingMode,
             RoundingMoment = v.RoundingMoment,
+            DenominationUnit = v.DenominationUnit,
             AllocationOrder = v.AllocationOrder,
             ConceptPriority = v.LeerPrelacion(),
             SuspenseWithItsConcept = v.SuspenseWithItsConcept,

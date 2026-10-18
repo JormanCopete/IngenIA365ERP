@@ -237,6 +237,21 @@ public class LosHechosInmutablesNoSeModifican
         // después de insertarse; la versión de la política sólo su validación con el punto de acta (C52).
         ["MonthlyClose"] = [], ["MonthlyCloseLoan"] = [], ["MonthlyCloseGeneralImpairment"] = [], ["MonthlyCloseReopening"] = [],
         ["LoanArrearsHistoryEntry"] = [], ["RiskPolicyVersion"] = ["ValidatedAt", "ValidatedByUserId", "SessionItemId"],
+        // K2 (T0824; data-model §24.7, §24.8, §24.10): la línea del archivo de descuentos, el resultado de la pagaduría y el seguimiento de un
+        // no aplicado no admiten ninguna escritura después de insertarse (un resultado posterior reemplaza al anterior con SupersedesResultId). El
+        // archivo no es hecho: su contenido es de sólo init y sólo avanza el estado.
+        ["PayrollDeductionFileLine"] = [], ["PayrollDeductionResult"] = [], ["NonDeductionFollowUp"] = [],
+        // K4 (T0936, T0932; data-model §26.5–§26.10): la historia de etapas, la asignación, la gestión (una corrección es otra gestión), la
+        // promesa y la cuota del acuerdo no admiten ninguna escritura; la actuación jurídica, sólo la operación Charge que la cobra al deudor,
+        // que llega cuando el aviso del gasto salió (T77).
+        ["CollectionStageHistoryEntry"] = [], ["CollectorAssignment"] = [], ["CollectionAction"] = [], ["PaymentPromise"] = [],
+        ["PaymentAgreementInstallment"] = [], ["LegalProcessAction"] = ["ChargeOperationId"],
+        // K5 (T0997; data-model §28.2): la línea del archivo de una central no admite ninguna escritura después de insertarse. El archivo no es
+        // hecho: su contenido es de sólo init y sólo avanzan el estado, el reemplazo y la carga con su radicado.
+        ["RegulatoryFileLine"] = [],
+        // K6a (T1031; data-model §23.8, §23.9): la elección voluntaria del modelo (un cambio es otra elección) y la carga complementaria del
+        // historial (volver a cargar es otra carga) no admiten ninguna escritura después de insertarse.
+        ["ImpairmentModelElection"] = [], ["ArrearsHistoryLoad"] = [],
     };
 
     [Fact]
@@ -291,6 +306,41 @@ public class LosHechosInmutablesNoSeModifican
             Assert.True(HechosDeCartera.TryGetValue(nombre, out var declaradas), $"{nombre} no está en HechosDeCartera (T0263).");
             Assert.Equal(unicas, declaradas);
         }
+    }
+
+    /// <summary>
+    /// K4 (T0932; data-model §26): los hechos de la cobranza están en <see cref="HechosDeCartera"/> con su escritura única y sus conjuntos son
+    /// de hechos; la etapa, la regla de reparto, el acuerdo, el proceso jurídico y la campaña no son hechos (cierran vigencia o avanzan de
+    /// estado).
+    /// </summary>
+    [Fact]
+    public void Los_hechos_de_la_cobranza_estan_en_la_lista()
+    {
+        var esperados = new Dictionary<string, string[]>(StringComparer.Ordinal)
+        {
+            ["CollectionStageHistoryEntry"] = [], ["CollectorAssignment"] = [], ["CollectionAction"] = [], ["PaymentPromise"] = [],
+            ["PaymentAgreementInstallment"] = [], ["LegalProcessAction"] = ["ChargeOperationId"],
+        };
+        foreach (var (nombre, unicas) in esperados)
+        {
+            Assert.True(HechosDeCartera.TryGetValue(nombre, out var declaradas), $"{nombre} no está en HechosDeCartera (T0932).");
+            Assert.Equal(unicas, declaradas);
+        }
+        var hecho = typeof(IngenIA365ERP.Domain.Common.IHechoInmutable);
+        foreach (var t in new[] { typeof(IngenIA365ERP.Domain.Entities.Lending.Collections.CollectionStage),
+                     typeof(IngenIA365ERP.Domain.Entities.Lending.Collections.CollectorAssignmentRule),
+                     typeof(IngenIA365ERP.Domain.Entities.Lending.Collections.PaymentAgreement),
+                     typeof(IngenIA365ERP.Domain.Entities.Lending.Collections.LegalProcess),
+                     typeof(IngenIA365ERP.Domain.Entities.Lending.Collections.MessageCampaign) })
+            Assert.False(hecho.IsAssignableFrom(t), $"{t.Name} no es hecho: cierra vigencia o avanza de estado.");
+
+        var conjuntos = typeof(IngenIA365ERP.Application.Common.Interfaces.IApplicationDbContext).GetProperties()
+            .Where(p => p.PropertyType.IsGenericType && hecho.IsAssignableFrom(p.PropertyType.GetGenericArguments()[0]))
+            .Select(p => p.Name)
+            .ToList();
+        foreach (var conjunto in new[] { "CollectionStageHistory", "CollectorAssignments", "CollectionActions", "PaymentPromises",
+                     "PaymentAgreementInstallments", "LegalProcessActions" })
+            Assert.Contains(conjunto, conjuntos);
     }
 
     /// <summary>

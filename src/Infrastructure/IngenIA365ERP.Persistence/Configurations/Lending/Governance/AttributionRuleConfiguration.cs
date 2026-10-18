@@ -24,6 +24,8 @@ public class AttributionRuleConfiguration : IEntityTypeConfiguration<Attribution
         builder.Property(e => e.MaxConsolidatedAmount).Monto();
         builder.Property(e => e.CollateralKind).HasConversion<int?>();
         builder.Property(e => e.Concept).HasConversion<int?>();
+        builder.Property(e => e.NoveltyMechanism).HasConversion<int?>();
+        builder.Property(e => e.NoveltyCause).HasConversion<int?>();
 
         builder.HasOne<AttributionMatrix>().WithMany().HasForeignKey(e => e.MatrixId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<CreditLine>().WithMany().HasForeignKey(e => e.CreditLineId).OnDelete(DeleteBehavior.Restrict);

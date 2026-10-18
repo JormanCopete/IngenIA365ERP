@@ -8,6 +8,7 @@ using IngenIA365ERP.Domain.Entities.Lending.Configuration;
 using IngenIA365ERP.Domain.Enums.Lending;
 using IngenIA365ERP.Domain.Lending;
 using IngenIA365ERP.Domain.Lending.Configuration;
+using IngenIA365ERP.Domain.Lending.Housing;
 using IngenIA365ERP.Domain.Lending.Rates;
 using IngenIA365ERP.Domain.Lending.Schedules;
 
@@ -60,6 +61,14 @@ public sealed record SimulacionCalculada(
     DateOnly Fecha,
     string Huella)
 {
+    /// <summary>
+    /// K6b (T1054, T1055): en una línea en UVR, el plan tal como lo calcula el motor (en UVR) y la UVR del desembolso con que <see cref="Plan"/> lo
+    /// valora en pesos (capital por acumulado contra el monto); nulos en pesos.
+    /// </summary>
+    public PlanDePagos? PlanEnUvr { get; init; }
+
+    public decimal? ValorUvr { get; init; }
+
     /// <summary>La primera cuota que amortiza, llevada a un mes (FR-036: lo que la cuota simulada le quita a la capacidad de pago).</summary>
     public decimal CuotaMensual
     {
@@ -187,8 +196,11 @@ public sealed class SimuladorDeCredito(IApplicationDbContext db, ReglasDeLineaDe
             .FirstOrDefault(x => x.Casa(pedido.Amount, meses, perfil.TipoDeDeudor, perfil.EsEmpleado, perfil.AntiguedadMeses));
         var tasa = PlanTipoDeLinea.TasaEfectiva(b, banda is null ? null : b.RateBands.First(r => r.Order == banda.Order), indice.Value);
 
+        // K6b (T1053): un crédito de vivienda sella la versión de reglas de vivienda (Ley 546 de 1999); los demás, la vigente.
+        var esVivienda = ReglasDeLineaDeCredito.EsVivienda(b.ModalityCode.Trim().ToUpperInvariant(), combinacion.Value);
         var entrada = new EntradaDePlan(pedido.Amount, fecha, cuotas, periodicidad, sistema, tasa, b.DayCount, b.RateEquivalence, version.Version.Redondeo())
         {
+            RulesVersion = VersionesDeReglas.ParaCreditoNuevo(esVivienda),
             PrimerVencimiento = periodicidad == RepaymentPeriodicity.SinglePayment ? pedido.FirstDueDate ?? fecha.AddMonths(Math.Max(1, meses)) : pedido.FirstDueDate,
             DiaDePago = b.PaymentDay,
             Extraordinarias = extraordinarias,
@@ -201,9 +213,31 @@ public sealed class SimuladorDeCredito(IApplicationDbContext db, ReglasDeLineaDe
 
         PlanDePagos plan;
         ResultadoDeUsura control;
+        PlanDePagos? planEnUvr = null;
+        decimal? valorUvr = null;
         try
         {
-            (plan, control) = MotorDeCartera.SimularConUsura(entrada, usura.Value);
+            if (b.DenominationUnit == DenominationUnit.Uvr)
+            {
+                // K6b (T1054, T1055): en UVR el motor proyecta el plan en UVR (el monto a la UVR publicada del desembolso) y el plan en pesos lo
+                // valora a esa UVR, con el capital por acumulado contra el monto.
+                var uvr = await reglas.UvrAsync(fecha, ct);
+                if (uvr.IsFailure) return Result.Failure<SimulacionCalculada>(uvr.Error);
+                var modo = entrada.Redondeo.Modo;
+                var entradaEnUvr = entrada with
+                {
+                    Monto = ConversionUvr.AUvr(entrada.Monto, uvr.Value, modo),
+                    Redondeo = RedondeoDeCartera.EnUvr(entrada.Redondeo),
+                    Extraordinarias = entrada.Extraordinarias.Select(x => x with { Valor = ConversionUvr.AUvr(x.Valor, uvr.Value, modo) }).ToList(),
+                };
+                (planEnUvr, control) = MotorDeCartera.SimularConUsura(entradaEnUvr, usura.Value);
+                plan = ConversionUvr.PlanAlDesembolso(planEnUvr, uvr.Value, entrada);
+                valorUvr = uvr.Value;
+            }
+            else
+            {
+                (plan, control) = MotorDeCartera.SimularConUsura(entrada, usura.Value);
+            }
         }
         catch (ArgumentException e)
         {
@@ -211,7 +245,11 @@ public sealed class SimuladorDeCredito(IApplicationDbContext db, ReglasDeLineaDe
         }
 
         var huella = Huella(linea, version, entrada, usura.Value, pedido.PersonPublicId);
-        return Result.Success(new SimulacionCalculada(version, entrada, plan, control, tasa, combinacion.Value, meses, fecha, huella));
+        return Result.Success(new SimulacionCalculada(version, entrada, plan, control, tasa, combinacion.Value, meses, fecha, huella)
+        {
+            PlanEnUvr = planEnUvr,
+            ValorUvr = valorUvr,
+        });
     }
 
     /// <summary>
@@ -222,7 +260,7 @@ public sealed class SimuladorDeCredito(IApplicationDbContext db, ReglasDeLineaDe
         new HuellaDeCartera()
             .Identificador("creditLine", linea.PublicId)
             .Identificador("version", version.Version.PublicId)
-            .Texto("rulesVersion", MotorDeCartera.VersionDeReglas)
+            .Texto("rulesVersion", e.RulesVersion)
             .Decimal("amount", e.Monto)
             .Fecha("disbursementDate", e.FechaDesembolso)
             .Entero("periods", e.Periodos)

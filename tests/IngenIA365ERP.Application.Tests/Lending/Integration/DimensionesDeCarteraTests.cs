@@ -55,7 +55,7 @@ public class DimensionesDeCarteraTests : IAsyncLifetime
         c.Modalities.Should().Contain(m => m.SubsegmentCodes.Count > 0, "las modalidades llevan sus sub-segmentos del catálogo vigente");
         c.Concepts.Should().BeEquivalentTo(Enum.GetNames<LoanConcept>());
         c.CollectorClasses.Should().BeEquivalentTo(Enum.GetNames<ClaseDeRecaudador>());
-        c.FactTypes.Should().HaveCount(35).And.Contain(CreditoDesembolsadoV1.Type).And.NotContain(OrdenDeGiroEmitidaV1.Type);
+        c.FactTypes.Should().HaveCount(37).And.Contain(CreditoDesembolsadoV1.Type).And.NotContain(OrdenDeGiroEmitidaV1.Type);
     }
 
     [Fact]

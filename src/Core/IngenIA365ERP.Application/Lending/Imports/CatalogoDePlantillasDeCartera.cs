@@ -346,10 +346,11 @@ public static class CatalogoDePlantillasDeCartera
             ["Datos"], "/api/lending/activation/provisional-collections", "Lending.Templates.View", DefinicionesDeMigracion.PermisoDeCobrosProvisionales,
             EntregaDeCartera.K1, PersonalData: false, DefinicionesDeMigracion.CobrosProvisionales),
         new("lending.arrears-history", "Historial de mora complementario", "Los meses de mora que faltan para la pérdida esperada.",
-            ["Datos"], "/api/lending/risk/arrears-history", "Lending.Templates.View", "Lending.ArrearsHistory.Import", EntregaDeCartera.K6a, PersonalData: true),
+            ["Datos"], "/api/lending/risk/arrears-history", "Lending.Templates.View", "Lending.ArrearsHistory.Import", EntregaDeCartera.K6a, PersonalData: true,
+            Risk.PlantillaDeHistorialComplementario.Definicion),
         new("lending.payroll-agreements", "Convenios de pagaduría", "Pagadurías, convenios, contactos y códigos de respuesta.",
             ["Convenios", "Contactos", "CodigosDeRespuesta"], "/api/lending/payroll-agreements", "Lending.PayrollAgreements.View",
-            "Lending.PayrollAgreements.Manage", EntregaDeCartera.K2, PersonalData: false),
+            "Lending.PayrollAgreements.Manage", EntregaDeCartera.K2, PersonalData: false, PayrollAgreementsTemplate.Definicion),
     ];
 
     /// <summary>La fila del registro de las 17 partes de la migración: cada parte es <c>lending.migration.{parte}</c> (US8, T0737).</summary>

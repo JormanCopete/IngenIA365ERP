@@ -102,12 +102,34 @@ public sealed record ContactoRegistrado(DateTime En, CollectionActionChannel Can
 
 /// <summary>
 /// Los contactos que cuentan para la ventana: los mensajes que salieron y, desde K4, las gestiones con contacto directo (las anuladas
-/// no). Quien llama trae al menos la semana calendario del día pedido y la de los 14 siguientes. (nuevo)
+/// no; <see cref="Componer"/>). Quien llama trae al menos la semana calendario del día pedido y la de los 14 siguientes. (nuevo)
 /// </summary>
 public sealed record HistorialDeContactos(IReadOnlyList<ContactoRegistrado> Contactos)
 {
     public static HistorialDeContactos Vacio { get; } = new([]);
+
+    /// <summary>
+    /// K4 (T0938; <c>adaptadores-y-archivos.md</c> §4.8): los mensajes que salieron más las gestiones con <b>contacto directo</b> que nadie
+    /// anuló. Una gestión sin contacto directo (no contestó, número errado) no es un contacto para la ley; una anulada deja de contar, y la
+    /// que la anula cuenta por sí misma si fue contacto directo. Quedan en orden de instante.
+    /// </summary>
+    public static HistorialDeContactos Componer(IEnumerable<ContactoRegistrado> mensajes, IEnumerable<GestionParaHistorial> gestiones)
+    {
+        ArgumentNullException.ThrowIfNull(mensajes);
+        ArgumentNullException.ThrowIfNull(gestiones);
+        var todas = gestiones.ToList();
+        var anuladas = todas.Where(g => g.AnulaA is not null).Select(g => g.AnulaA!.Value).ToHashSet();
+        var directas = todas.Where(g => g.ContactoDirecto && !anuladas.Contains(g.Id))
+            .Select(g => ContactoRegistrado.DeGestion(g.En, g.Canal, contactoDirecto: true));
+        return new HistorialDeContactos(mensajes.Concat(directas).OrderBy(c => c.En).ToList());
+    }
 }
+
+/// <summary>
+/// Una gestión de cobranza (<c>LND_CollectionActions</c>, K4) como la mira el historial: su <c>Id</c>, el instante local, el canal, si fue
+/// contacto directo y la gestión que anula, si es una corrección. (nuevo)
+/// </summary>
+public sealed record GestionParaHistorial(int Id, DateTime En, CollectionActionChannel Canal, bool ContactoDirecto, int? AnulaA = null);
 
 /// <summary>Una autorización de canal del titular y si tiene evidencia (FR-006). (nuevo)</summary>
 public sealed record AutorizacionDeCanal(MessageChannel Canal, bool ConEvidencia);
@@ -246,6 +268,36 @@ public static class VentanaLegalDeContacto
         return siguiente is { } en
             ? new Diferido(en, motivos)
             : new Excluido(ContactWindowReason.NoWindow);
+    }
+
+    /// <summary>
+    /// K4 (T0945; <c>adaptadores-y-archivos.md</c> §4.8; Ley 2300): la decisión para una gestión que <b>no es un mensaje</b> —una llamada, una
+    /// visita o una atención en persona— en el instante en que ocurrió (local). Aplica las reglas 1 a 3 (obligado, fallecido con reclamación,
+    /// insolvencia o cobro suspendido) y después el horario: domingo, festivo o fuera de la franja. Una gestión con <b>contacto directo</b>
+    /// además cuenta para el tope del día y respeta el canal fijado en la semana. La atención en persona (el titular vino a la cooperativa) no
+    /// tiene horario: sólo las reglas 1 a 3. No busca otra ventana: lo que ya ocurrió fuera de la ley se rechaza (<see cref="Diferido"/> con el
+    /// siguiente instante permitido, para decirlo). (nuevo)
+    /// </summary>
+    public static DecisionDeContacto EvaluarGestion(DateTime instante, CollectionActionChannel canal, bool contactoDirecto, ReglasDeContacto reglas,
+        HistorialDeContactos historial, EstadoDelTitular titular)
+    {
+        ArgumentNullException.ThrowIfNull(reglas);
+        ArgumentNullException.ThrowIfNull(historial);
+        ArgumentNullException.ThrowIfNull(titular);
+        if (!Enum.IsDefined(canal)) throw new ArgumentOutOfRangeException(nameof(canal), canal, "Canal de gestión desconocido.");
+
+        if (!titular.Obligado) return new Excluido(ContactWindowReason.RecipientNotObligated);
+        if (titular.DeudorFallecidoConReclamacion) return new Excluido(ContactWindowReason.DebtorDeceased);
+        if (titular.EnInsolvencia) return new Excluido(ContactWindowReason.Insolvency);
+        if (titular.CobroSuspendido) return new Excluido(ContactWindowReason.CollectionSuspended);
+        if (canal == CollectionActionChannel.InPerson) return new Permitido(instante);
+
+        var noHabiles = reglas.NoHabiles.ToHashSet();
+        var motivos = Motivos(instante, reglas, noHabiles, historial, cobranza: contactoDirecto, canal);
+        if (!contactoDirecto) motivos.RemoveAll(m => m is ContactWindowReason.DailyLimitReached or ContactWindowReason.WeeklyChannelLocked);
+        if (motivos.Count == 0) return new Permitido(instante);
+        var siguiente = Buscar(instante, reglas, noHabiles, historial, contactoDirecto, canal);
+        return siguiente is { } en ? new Diferido(en, motivos) : new Excluido(ContactWindowReason.NoWindow);
     }
 
     private static List<ContactWindowReason> Motivos(

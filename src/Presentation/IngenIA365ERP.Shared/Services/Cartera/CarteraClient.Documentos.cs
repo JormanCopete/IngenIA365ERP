@@ -28,7 +28,8 @@ public sealed partial class CarteraClient
 
     /// <summary>
     /// Emite en un paso. Se puede negar con <c>Lending.Document.ClearanceDenied</c> (<c>data.obligations[]</c>, <c>data.pendingSales[]</c>),
-    /// <c>.KindNotAvailable</c>, <c>.SignerMissing</c> o, con correo, <c>Lending.DebtorMessage.ChannelNotAuthorized</c>.
+    /// <c>.KindNotAvailable</c>, <c>.SignerMissing</c>, <c>.NothingToCertify</c>, en K5 <c>.PeriodInvalid</c> (extracto) y <c>.TaxYearNotClosed</c>
+    /// (certificado tributario) o, con correo, <c>Lending.DebtorMessage.ChannelNotAuthorized</c>.
     /// </summary>
     public Task<ResultadoDeInventario<DocumentoEmitidoRespuestaDto>> EmitirDocumentoAsync(EmitirDocumentoRequest request, ClaveDeOperacion clave,
         CancellationToken ct = default) =>
@@ -46,9 +47,13 @@ public sealed partial class CarteraClient
         CancellationToken ct = default) =>
         Enviar<EmptyResponse>(HttpMethod.Post, $"{RutaDeDocumentos}/{documento}/void", new MotivoDeCarteraRequest(motivo), clave, ct);
 
-    /// <summary>Verifica un código (acepta minúsculas, guiones y espacios); un código de otra cooperativa o inexistente es <c>Lending.Document.NotFound</c>.</summary>
-    public Task<ResultadoDeInventario<DocumentoVerificadoDto>> VerificarDocumentoAsync(string codigo, CancellationToken ct = default) =>
-        Enviar<DocumentoVerificadoDto>(HttpMethod.Get, $"{RutaDeDocumentos}/verify/{Uri.EscapeDataString(codigo.Trim())}", null, null, ct);
+    /// <summary>
+    /// Verifica un código (acepta minúsculas, guiones y espacios); un código de otra cooperativa o inexistente es <c>Lending.Document.NotFound</c>.
+    /// Con <paramref name="sha256"/> (K5) compara además la huella de un PDF calculada en el navegador con la guardada (<c>pdfMatches</c>).
+    /// </summary>
+    public Task<ResultadoDeInventario<DocumentoVerificadoDto>> VerificarDocumentoAsync(string codigo, string? sha256 = null, CancellationToken ct = default) =>
+        Enviar<DocumentoVerificadoDto>(HttpMethod.Get, ConQuery($"{RutaDeDocumentos}/verify/{Uri.EscapeDataString(codigo.Trim())}", Query(("sha256", sha256))),
+            null, null, ct);
 
     /// <summary>El dueño de las imágenes de los documentos y las vigentes (<c>Lending.Parameters.View</c>).</summary>
     public Task<ResultadoDeInventario<ImagenesDeDocumentosDto>> ImagenesDeDocumentosAsync(CancellationToken ct = default) =>

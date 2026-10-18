@@ -99,6 +99,50 @@ internal sealed class LineasDePrueba : IDisposable
         return copia;
     }
 
+    /// <summary>
+    /// K6b (T1044): los cinco límites de vivienda y el tope de tasa de vivienda como copias replicadas desde <paramref name="desde"/> (por defecto el
+    /// 2026-01-01). Valores DE PRUEBA con la fuente de la semilla (plazo 60 a 360 meses, 70 % y 80 % VIS, cuota-ingreso 30 %); el tope, inventado.
+    /// </summary>
+    public async Task ViviendaAsync(decimal tope = 0.13m, DateOnly? desde = null)
+    {
+        var d = desde ?? new DateOnly(2026, 1, 1);
+        var conocida = Ahora.AddDays(-1);
+        await CopiasDePrueba.SembrarAsync(Db, conocida,
+            CopiasDePrueba.Copia(CodigosDeValorNacional.Limite, CatalogoDeLimitesLegales.ViviendaPlazoMinimoMeses, d, 60m, conocida, unidad: "Meses"),
+            CopiasDePrueba.Copia(CodigosDeValorNacional.Limite, CatalogoDeLimitesLegales.ViviendaPlazoMaximoMeses, d, 360m, conocida, unidad: "Meses"),
+            CopiasDePrueba.Copia(CodigosDeValorNacional.Limite, CatalogoDeLimitesLegales.ViviendaFinanciable, d, 0.70m, conocida, unidad: "Fraccion"),
+            CopiasDePrueba.Copia(CodigosDeValorNacional.Limite, CatalogoDeLimitesLegales.ViviendaFinanciableVis, d, 0.80m, conocida, unidad: "Fraccion"),
+            CopiasDePrueba.Copia(CodigosDeValorNacional.Limite, CatalogoDeLimitesLegales.ViviendaCuotaIngreso, d, 0.30m, conocida, unidad: "Fraccion"),
+            CopiasDePrueba.Copia(CodigosDeValorNacional.TopeTasaVivienda, string.Empty, d, tope, conocida, unidad: "EA"));
+        Db.ChangeTracker.Clear();
+    }
+
+    /// <summary>K6b (T1044): la UVR publicada de unos días (vigencia de un día cada una). Valores de prueba.</summary>
+    public async Task UvrAsync(params (DateOnly Dia, decimal Valor)[] dias)
+    {
+        var conocida = Ahora.AddDays(-1);
+        await CopiasDePrueba.SembrarAsync(Db, conocida,
+            dias.Select(x => CopiasDePrueba.Copia(CodigosDeValorNacional.Uvr, string.Empty, x.Dia, x.Valor, conocida, hasta: x.Dia, unidad: "Pesos")).ToArray());
+        Db.ChangeTracker.Clear();
+    }
+
+    /// <summary>K6b: las reglas de línea con una entrega dada (la guarda de vivienda antes de K6b).</summary>
+    public ReglasDeLineaDeCredito Reglas(Domain.Lending.EntregaDeCartera entrega) => new(Normativa(), Valores(), G.Perfil, entrega);
+
+    /// <summary>
+    /// K6b (T1044): una versión de vivienda: tasa fija del 11 % EA, mora relativa, montos de 20 a 300 millones, 60 a 240 meses, mensual, 30/360; en
+    /// pesos o en UVR.
+    /// </summary>
+    public static CreditLineVersionInput Vivienda(decimal tasa = 0.11m, DateOnly? desde = null, DenominationUnit unidad = DenominationUnit.Pesos,
+        int plazoMinimo = 60, int plazoMaximo = 240) =>
+        Version(tasa, desde, "VIVIENDA", null) with
+        {
+            Amounts = new AmountRangeInput(20_000_000m, 300_000_000m),
+            Terms = new TermRangeInput(plazoMinimo, plazoMaximo, plazoMaximo),
+            DayCount = DayCountConvention.Thirty360,
+            DenominationUnit = unidad,
+        };
+
     public async Task IbrAsync(decimal valor, DateOnly desde, string clave = "3M")
     {
         await CopiasDePrueba.SembrarAsync(Db, Ahora.AddDays(-1),

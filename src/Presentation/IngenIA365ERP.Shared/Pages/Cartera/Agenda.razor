@@ -1,0 +1,383 @@
+@page "/cartera/agenda"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Inventario
+@inject CobranzaClient Cliente
+@inject CreditosClient Creditos
+@inject InventarioClient Inventario
+@inject INotificationService Notification
+
+<PageTitle>Agenda de cobranza - IngenIA365ERP</PageTitle>
+
+@* Feature 013, K4, US12 (T0958; contracts/api.md §14.5, §14.6; FR-119, FR-120): lo que el gestor tiene que hacer un día —promesas que vencen,
+   seguimientos, cuotas de acuerdos y créditos que cambiaron de etapa— y el registro de la gestión con su promesa. Antes de guardar la gestión se
+   muestra lo que dice la ventana de contacto de la Ley 2300 (horario, domingos y festivos, tope diario y canal de la semana); un contacto directo
+   fija el canal de la semana. Sólo se puede contactar al deudor o a un codeudor del crédito: las referencias personales no se ofrecen. «Promesas» y
+   «Gestiones» son la historia. Leer exige Lending.Collections.Read; registrar y anular, Lending.Collections.RecordActivity. *@
+<PermissionGate Required="Lending.Collections.Read" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Agenda de cobranza</h3>
+        <div class="toolbar">
+            <SfButton CssClass="@(_pestana == 0 ? "e-primary" : "e-outline")" OnClick="@(() => CambiarAsync(0))">Agenda</SfButton>
+            <SfButton CssClass="@(_pestana == 1 ? "e-primary" : "e-outline")" OnClick="@(() => CambiarAsync(1))">Promesas</SfButton>
+            <SfButton CssClass="@(_pestana == 2 ? "e-primary" : "e-outline")" OnClick="@(() => CambiarAsync(2))">Gestiones</SfButton>
+        </div>
+    </div>
+
+    @if (_pestana == 0)
+    {
+        <div class="toolbar">
+            <label class="campo">Día <input class="e-input" type="date" @bind="_dia" /></label>
+            <label class="campo">Gestor
+                <select class="e-input" @bind="_gestor">
+                    <option value="">Yo</option>
+                    @foreach (var u in _usuarios) { <option value="@u.PublicId">@u.Username</option> }
+                </select>
+            </label>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAgendaAsync">Consultar</SfButton>
+            <PermissionGate Required="Lending.Collections.RecordActivity">
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@(() => AbrirGestionAsync(null))">Registrar gestión</SfButton>
+            </PermissionGate>
+        </div>
+        <IndicadorDeCarga Cargando="@_carga.Activa">
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Qué</th><th>Crédito</th><th>Deudor</th><th>Fecha</th><th class="numero">Valor</th><th>Detalle</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var i in _agenda?.Items ?? [])
+                        {
+                            var item = i;
+                            <tr>
+                                <td>@TextosDeCobranza.ClaseDeAgenda(item.Kind)</td>
+                                <td><a href="@item.Route">@item.Loan.Number</a></td>
+                                <td>@item.Debtor.FullName</td>
+                                <td>@item.Due.ToString("dd/MM/yyyy")</td>
+                                <td class="numero">@(item.Amount is { } m ? TextosDeCreditos.Pesos(m) : "—")</td>
+                                <td>@item.Detail</td>
+                                <td>
+                                    <PermissionGate Required="Lending.Collections.RecordActivity">
+                                        <SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirGestionAsync(item.Loan.LoanPublicId))">Gestionar…</SfButton>
+                                    </PermissionGate>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            @if ((_agenda?.Items.Count ?? 0) == 0) { <p class="texto-tenue">No hay compromisos para ese día.</p> }
+        </IndicadorDeCarga>
+    }
+    else if (_pestana == 1)
+    {
+        <div class="toolbar">
+            <label class="campo">Estado
+                <select class="e-input" @bind="_estadoDePromesa">
+                    <option value="">Todos</option>
+                    @foreach (var e in TextosDeCobranza.EstadosDePromesa) { <option value="@e.Valor">@e.Texto</option> }
+                </select>
+            </label>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@(() => CargarPromesasAsync(1))">Consultar</SfButton>
+        </div>
+        <IndicadorDeCarga Cargando="@_carga.Activa">
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Crédito</th><th>Deudor</th><th>Fecha prometida</th><th class="numero">Prometido</th><th class="numero">Pagado</th><th>Estado</th><th>Gestor</th></tr></thead>
+                    <tbody>
+                        @foreach (var p in _promesas)
+                        {
+                            <tr>
+                                <td><a href="/cartera/creditos/@p.Loan.LoanPublicId">@p.Loan.Number</a></td>
+                                <td>@p.Debtor.FullName</td>
+                                <td>@p.Date.ToString("dd/MM/yyyy")</td>
+                                <td class="numero">@TextosDeCreditos.Pesos(p.Amount)</td>
+                                <td class="numero">@TextosDeCreditos.Pesos(p.Paid)</td>
+                                <td>@(p.Voided ? "Anulada" : TextosDeCobranza.EstadoDePromesa(p.Status))@(p.KeptOn is { } k ? $" el {k:dd/MM/yyyy}" : "")</td>
+                                <td>@p.Collector.Name</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            @if (_promesas.Count == 0) { <p class="texto-tenue">No hay promesas con ese filtro.</p> }
+            <Paginador Pagina="@_pagina" Total="@_total" Tamano="@TamanoDePagina" Cambia="@CargarPromesasAsync" />
+        </IndicadorDeCarga>
+    }
+    else
+    {
+        <div class="toolbar">
+            <label class="campo">Desde <input class="e-input" type="date" @bind="_desde" /></label>
+            <label class="campo">Hasta <input class="e-input" type="date" @bind="_hasta" /></label>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@(() => CargarGestionesAsync(1))">Consultar</SfButton>
+        </div>
+        <IndicadorDeCarga Cargando="@_carga.Activa">
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Fecha</th><th>Crédito</th><th>Contactó a</th><th>Canal</th><th>Resultado</th><th>Notas</th><th>Gestor</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var g in _gestiones)
+                        {
+                            var gestion = g;
+                            <tr>
+                                <td>@gestion.At.LocalDateTime.ToString("dd/MM/yyyy HH:mm")</td>
+                                <td>@if (gestion.Loan is { } c) { <a href="/cartera/creditos/@c.LoanPublicId">@c.Number</a> } else { <span>—</span> }</td>
+                                <td>@gestion.ContactedPerson.FullName (@TextosDeCobranza.RolDeContacto(gestion.ContactRole))@(gestion.IsDirectContact ? " · contacto directo" : "")</td>
+                                <td>@TextosDeCobranza.CanalDeGestion(gestion.Channel)</td>
+                                <td>@TextosDeCobranza.ResultadoDeGestion(gestion.Result)@(gestion.VoidedByPublicId is not null ? " · anulada" : "")</td>
+                                <td>@(gestion.Notes ?? "—")</td>
+                                <td>@(gestion.Collector?.Name ?? "Sistema")</td>
+                                <td>
+                                    @if (gestion.VoidedByPublicId is null && gestion.VoidsActionPublicId is null && gestion.Channel != TextosDeCobranza.CanalDeSistema)
+                                    {
+                                        <PermissionGate Required="Lending.Collections.RecordActivity">
+                                            <SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirAnulacion(gestion))">Anular…</SfButton>
+                                        </PermissionGate>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            @if (_gestiones.Count == 0) { <p class="texto-tenue">No hay gestiones en ese rango.</p> }
+            <Paginador Pagina="@_pagina" Total="@_total" Tamano="@TamanoDePagina" Cambia="@CargarGestionesAsync" />
+        </IndicadorDeCarga>
+    }
+</div>
+
+<SfDialog @bind-Visible="_mostrarGestion" Header="Registrar gestión de cobranza" Width="680px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_accion.Activa" Texto="Registrando…">
+                <SelectorDeCredito @bind-Value="_credito" Elegido="@ElegirCreditoAsync" MoraMinima="1" />
+                <div class="form-grid">
+                    <label class="campo">Contactó a *
+                        <select class="e-input" value="@_persona" @onchange="@(e => CambiarPersonaAsync(e.Value?.ToString()))">
+                            <option value="">Elija…</option>
+                            @foreach (var c in _contactables) { <option value="@c.Id">@c.Nombre (@c.Rol)</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Canal *
+                        <select class="e-input" value="@_canal" @onchange="@(e => CambiarCanalAsync(e.Value?.ToString()))">
+                            @foreach (var c in TextosDeCobranza.CanalesDeGestion) { <option value="@c.Nombre">@c.Texto</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Cuándo * <input class="e-input" type="datetime-local" @bind="_cuando" /></label>
+                    <label class="campo">Resultado *
+                        <select class="e-input" @bind="_resultado">
+                            @foreach (var r in TextosDeCobranza.ResultadosDeGestion) { <option value="@r.Nombre">@r.Texto</option> }
+                        </select>
+                    </label>
+                    <label class="campo"><input type="checkbox" @bind="_contactoDirecto" /> Hubo contacto directo con la persona</label>
+                </div>
+                @if (_ventana is { } v)
+                {
+                    <p class="aviso @(v.Decision is "Allowed" or "Permitido" ? "aviso-ok" : "aviso-info")">
+                        Ley 2300: @TextosDeCartera.DecisionDeContacto(v.Decision)@(v.NextAllowedAt is { } n ? $", a partir del {n.LocalDateTime:dd/MM/yyyy HH:mm}" : "")
+                        @foreach (var r in v.Reasons) { <span> · @TextosDeCartera.RazonDeContacto(r)</span> }
+                        @if (v.ChannelUsed is { } cu) { <span> · canal de la semana: @cu</span> }
+                    </p>
+                }
+                @if (_resultado == "PromiseToPay")
+                {
+                    <div class="toolbar">
+                        <label class="campo">Promete pagar el * <input class="e-input" type="date" @bind="_fechaPrometida" /></label>
+                        <label class="campo">Valor prometido ($) * <input class="e-input" type="number" min="1" step="1" @bind="_valorPrometido" /></label>
+                    </div>
+                }
+                <label class="campo campo-ancho">Notas <input class="e-input" @bind="_notas" maxlength="1000" /></label>
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_accion.Activa || _credito is null || string.IsNullOrEmpty(_persona) || (_resultado == "PromiseToPay" && (_fechaPrometida is null || _valorPrometido is not > 0)))"
+                              OnClick="@RegistrarAsync">Registrar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarGestion = false)">Volver</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarAnulacion" Header="Anular la gestión" Width="520px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_accion.Activa" Texto="Anulando…">
+                <p class="texto-tenue">La gestión no se borra: queda anulada con su motivo y la corrección es una gestión nueva.</p>
+                <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" maxlength="500" /></label>
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_accion.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@AnularAsync">Anular</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarAnulacion = false)">Volver</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private const int TamanoDePagina = 20;
+
+    private sealed record Contactable(Guid Id, string Nombre, string Rol);
+
+    private readonly EstadoDeCarga _carga = new(), _accion = new();
+    private int _pestana, _pagina = 1;
+    private long _total;
+    private DateTime? _dia = DateTime.Today, _desde = DateTime.Today.AddDays(-7), _hasta = DateTime.Today, _fechaPrometida;
+    private DateTime _cuando = DateTime.Now;
+    private string? _gestor, _estadoDePromesa, _persona, _canal = "Phone", _resultado = "ContactedNoCommitment", _notas, _error, _motivo;
+    private bool _mostrarGestion, _mostrarAnulacion, _contactoDirecto;
+    private decimal? _valorPrometido;
+    private Guid? _credito;
+    private AgendaDelGestorDto? _agenda;
+    private List<PromesaDePagoDto> _promesas = [];
+    private List<GestionDeCobranzaDto> _gestiones = [];
+    private List<PersonaDeLaCooperativaDto> _usuarios = [];
+    private List<Contactable> _contactables = [];
+    private VentanaDeContactoDto? _ventana;
+    private GestionDeCobranzaDto? _gestionElegida;
+    private ClaveDeOperacion _clave = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var u = await Inventario.ListarPersonasParaContarAsync();
+        if (u.IsSuccess) _usuarios = [.. (u.Value?.Items ?? []).Where(x => x.IsActive).OrderBy(x => x.Username, StringComparer.OrdinalIgnoreCase)];
+        await CargarAgendaAsync();
+    }
+
+    private async Task CambiarAsync(int pestana)
+    {
+        _pestana = pestana;
+        if (pestana == 0) await CargarAgendaAsync();
+        else if (pestana == 1) await CargarPromesasAsync(1);
+        else await CargarGestionesAsync(1);
+    }
+
+    private async Task CargarAgendaAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Cliente.AgendaAsync(_dia is { } d ? DateOnly.FromDateTime(d) : null, Guid.TryParse(_gestor, out var g) ? g : null);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo leer la agenda."); return; }
+        _agenda = r.Value;
+    }
+
+    private async Task CargarPromesasAsync(int pagina)
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Cliente.PromesasAsync(int.TryParse(_estadoDePromesa, out var e) ? e : null, null, null, pagina);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer las promesas."); return; }
+        _promesas = [.. r.Value?.Items ?? []];
+        _total = r.Value?.TotalCount ?? 0;
+        _pagina = pagina;
+    }
+
+    private async Task CargarGestionesAsync(int pagina)
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Cliente.GestionesAsync(null, null, _desde is { } d ? DateOnly.FromDateTime(d) : null, _hasta is { } h ? DateOnly.FromDateTime(h) : null, pagina);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer las gestiones."); return; }
+        _gestiones = [.. r.Value?.Items ?? []];
+        _total = r.Value?.TotalCount ?? 0;
+        _pagina = pagina;
+    }
+
+    // ---------------------------------------------------------------------------------------------- gestión --
+
+    private async Task AbrirGestionAsync(Guid? credito)
+    {
+        _error = _persona = _notas = null;
+        _canal = "Phone";
+        _resultado = "ContactedNoCommitment";
+        _contactoDirecto = false;
+        _fechaPrometida = null;
+        _valorPrometido = null;
+        _ventana = null;
+        _cuando = DateTime.Now;
+        _contactables = [];
+        _credito = credito;
+        _clave = new ClaveDeOperacion();
+        _mostrarGestion = true;
+        if (credito is { } c)
+        {
+            var r = await Creditos.CreditoAsync(c);
+            if (r.IsSuccess) await ElegirCreditoAsync(r.Value);
+        }
+    }
+
+    private async Task ElegirCreditoAsync(CreditoDto? credito)
+    {
+        _persona = null;
+        _ventana = null;
+        // Sólo el deudor y los codeudores: nunca las referencias personales.
+        _contactables = credito is null ? [] :
+        [
+            new Contactable(credito.Debtor.PublicId, credito.Debtor.Name, "deudor"),
+            .. credito.CoDebtors.Select(c => new Contactable(c.PublicId, c.Name, "codeudor")),
+        ];
+        await Task.CompletedTask;
+    }
+
+    private async Task CambiarPersonaAsync(string? valor)
+    {
+        _persona = valor;
+        await ConsultarVentanaAsync();
+    }
+
+    private async Task CambiarCanalAsync(string? valor)
+    {
+        _canal = valor ?? "Phone";
+        await ConsultarVentanaAsync();
+    }
+
+    private async Task ConsultarVentanaAsync()
+    {
+        _ventana = null;
+        if (!Guid.TryParse(_persona, out var persona)) return;
+        var canal = TextosDeCobranza.CanalesDeGestion.FirstOrDefault(c => c.Nombre == _canal).Valor;
+        // La ventana se evalúa para los canales de mensaje; en llamada o visita la ley sólo exige horario, que el servidor revisa al registrar.
+        var canalDeMensaje = canal switch { 3 => 1, 4 => 2, 5 => 3, 6 => 4, _ => 0 };
+        if (canalDeMensaje == 0) canalDeMensaje = 2;
+        var r = await Cliente.VentanaDeContactoAsync(persona, canalDeMensaje, _credito);
+        if (r.IsSuccess) _ventana = r.Value;
+    }
+
+    private async Task RegistrarAsync()
+    {
+        if (_credito is not { } credito || !Guid.TryParse(_persona, out var persona)) return;
+        using var carga = _accion.Iniciar();
+        _error = null;
+        var promesa = _resultado == "PromiseToPay" && _fechaPrometida is { } f && _valorPrometido is { } v ? new PromesaRequest(DateOnly.FromDateTime(f), v) : null;
+        var cuando = new DateTimeOffset(DateTime.SpecifyKind(_cuando, DateTimeKind.Local));
+        var r = await Cliente.RegistrarGestionAsync(new GestionRequest(credito, cuando, _canal!, persona, _contactoDirecto, _resultado!, string.IsNullOrWhiteSpace(_notas) ? null : _notas.Trim(), promesa), _clave);
+        if (!r.IsSuccess)
+        {
+            _error = r.ErrorMessage ?? "No se pudo registrar la gestión.";
+            if (r.ErrorCode == "Lending.DebtorMessage.OutsideLegalWindow" && r.Dato<DateTimeOffset?>("nextAllowedAt") is { } siguiente)
+                _error += $" Se puede contactar desde el {siguiente.LocalDateTime:dd/MM/yyyy HH:mm}.";
+            return;
+        }
+        _mostrarGestion = false;
+        await Notification.SuccessAsync("Gestión registrada.");
+        await CambiarAsync(_pestana);
+    }
+
+    private void AbrirAnulacion(GestionDeCobranzaDto gestion)
+    {
+        _gestionElegida = gestion;
+        _motivo = _error = null;
+        _clave = new ClaveDeOperacion();
+        _mostrarAnulacion = true;
+    }
+
+    private async Task AnularAsync()
+    {
+        if (_gestionElegida is not { } g || string.IsNullOrWhiteSpace(_motivo)) return;
+        using var carga = _accion.Iniciar();
+        _error = null;
+        var r = await Cliente.AnularGestionAsync(g.PublicId, _motivo.Trim(), _clave);
+        if (!r.IsSuccess) { _error = r.ErrorMessage ?? "No se pudo anular la gestión."; return; }
+        _mostrarAnulacion = false;
+        await Notification.SuccessAsync("Gestión anulada.");
+        await CargarGestionesAsync(_pagina);
+    }
+}

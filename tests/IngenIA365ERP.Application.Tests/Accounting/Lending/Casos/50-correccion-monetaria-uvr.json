@@ -1,0 +1,233 @@
+{
+  "descripcion": "K6b (T1056; pregunta E12, propuesta por defecto): la corrección monetaria UVR del día de dos créditos de vivienda en UVR. El capital sube en pesos contra el Ingreso con el hecho CorreccionMonetariaUvrCausada fijado en la regla; la cuenta de capital exige tercero y cruce (una línea por crédito) y el ingreso se suma. Comprobante CA, como la causación.",
+  "sobre": {
+    "version": 1,
+    "kind": "Business",
+    "originModule": "CAR",
+    "originEventKey": "Confirmation:00000000000000000000000000000000",
+    "origin": {
+      "kind": "Operation",
+      "documentClass": null,
+      "documentTypeCode": null,
+      "number": "CAU-20261114-2",
+      "publicId": "0d0d0050-0000-4000-8000-000000000050",
+      "operationDate": "2026-11-14"
+    },
+    "related": null,
+    "chainRootPublicId": "0e0e0051-0000-4000-8000-000000000051",
+    "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+    "costCenterPublicId": null,
+    "warehouseCode": null,
+    "personPublicId": null,
+    "currency": "COP",
+    "exchangeRate": 1,
+    "originUser": {
+      "centralUserId": null,
+      "name": "Proceso de integración"
+    },
+    "emittedAt": "2026-11-14T15:00:00Z"
+  },
+  "mensajes": [
+    {
+      "messageId": "0f0f0053-0000-4000-8000-000000000053",
+      "type": "CorreccionMonetariaUvrCausada",
+      "kind": "Business",
+      "originDocumentClass": "AccountingFactPart",
+      "payload": {
+        "runKind": "DailyCycle",
+        "runPublicId": "0c0c0052-0000-4000-8000-000000000052",
+        "factDate": "2026-11-14",
+        "batchNumber": 1,
+        "partNumber": 2,
+        "catchUpOperation": null,
+        "totals": [
+          {
+            "dimensions": {
+              "creditLineCode": "VIV01",
+              "modalityCode": "VIVIENDA",
+              "subsegmentCode": null,
+              "riskCategory": "A",
+              "riskSubcategory": "None",
+              "isEmployee": false,
+              "inGracePeriod": false,
+              "restructured": false,
+              "writtenOff": false,
+              "collectorClass": null,
+              "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+              "impairmentModel": "ArrearsAnnex1",
+              "riskSegment": "VIVIENDA",
+              "valueUnit": "Uvr"
+            },
+            "amounts": [
+              {
+                "concept": "Principal",
+                "installmentNumber": null,
+                "amount": 15914.72,
+                "uvrAmount": null,
+                "onBehalfOfAssociate": false,
+                "reasonCode": null
+              }
+            ],
+            "loanCount": 2
+          }
+        ],
+        "lines": [
+          {
+            "loan": {
+              "loanPublicId": "7b8c9d0e-1f2a-4b3c-9d4e-000000000123",
+              "loanNumber": "000123"
+            },
+            "debtorPersonPublicId": "a1b2c3d4-0000-4000-8000-000000000002",
+            "counterpartyPersonPublicId": null,
+            "dimensions": {
+              "creditLineCode": "VIV01",
+              "modalityCode": "VIVIENDA",
+              "subsegmentCode": null,
+              "riskCategory": "A",
+              "riskSubcategory": "None",
+              "isEmployee": false,
+              "inGracePeriod": false,
+              "restructured": false,
+              "writtenOff": false,
+              "collectorClass": null,
+              "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+              "impairmentModel": "ArrearsAnnex1",
+              "riskSegment": "VIVIENDA",
+              "valueUnit": "Uvr"
+            },
+            "previousDimensions": null,
+            "amounts": [
+              {
+                "concept": "Principal",
+                "installmentNumber": null,
+                "amount": 12704.17,
+                "uvrAmount": null,
+                "onBehalfOfAssociate": false,
+                "reasonCode": null
+              }
+            ],
+            "valueDate": null
+          },
+          {
+            "loan": {
+              "loanPublicId": "7b8c9d0e-1f2a-4b3c-9d4e-000000000124",
+              "loanNumber": "000124"
+            },
+            "debtorPersonPublicId": "a1b2c3d4-0000-4000-8000-000000000003",
+            "counterpartyPersonPublicId": null,
+            "dimensions": {
+              "creditLineCode": "VIV01",
+              "modalityCode": "VIVIENDA",
+              "subsegmentCode": null,
+              "riskCategory": "A",
+              "riskSubcategory": "None",
+              "isEmployee": false,
+              "inGracePeriod": false,
+              "restructured": false,
+              "writtenOff": false,
+              "collectorClass": null,
+              "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+              "impairmentModel": "ArrearsAnnex1",
+              "riskSegment": "VIVIENDA",
+              "valueUnit": "Uvr"
+            },
+            "previousDimensions": null,
+            "amounts": [
+              {
+                "concept": "Principal",
+                "installmentNumber": null,
+                "amount": 3210.55,
+                "uvrAmount": null,
+                "onBehalfOfAssociate": false,
+                "reasonCode": null
+              }
+            ],
+            "valueDate": null
+          }
+        ],
+        "lineCount": 2,
+        "controlTotal": 15914.72
+      }
+    }
+  ],
+  "esperado": {
+    "tipo": "CA",
+    "fecha": "2026-11-14",
+    "origen": "LendingIssuedDocument",
+    "lineas": [
+      {
+        "rol": "Capital",
+        "cuenta": "14050501",
+        "debito": 12704.17,
+        "credito": 0.0,
+        "tercero": "ana",
+        "cruce": "PG 000123",
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "CorreccionMonetariaUvrCausada"
+          ],
+          "concepto": "Principal",
+          "creditos": [
+            "000123"
+          ]
+        }
+      },
+      {
+        "rol": "Capital",
+        "cuenta": "14050501",
+        "debito": 3210.55,
+        "credito": 0.0,
+        "tercero": "luis",
+        "cruce": "PG 000124",
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "CorreccionMonetariaUvrCausada"
+          ],
+          "concepto": "Principal",
+          "creditos": [
+            "000124"
+          ]
+        }
+      },
+      {
+        "rol": "Ingreso",
+        "cuenta": "41505001",
+        "debito": 0.0,
+        "credito": 15914.72,
+        "tercero": null,
+        "cruce": null,
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "CorreccionMonetariaUvrCausada"
+          ],
+          "concepto": "Principal",
+          "creditos": [
+            "000123",
+            "000124"
+          ]
+        }
+      }
+    ]
+  },
+  "matrizExtra": [
+    {
+      "rol": "Capital",
+      "cuenta": "14050501",
+      "modalidad": "VIVIENDA",
+      "categoria": "A"
+    },
+    {
+      "rol": "Ingreso",
+      "cuenta": "41505001",
+      "op": "CorreccionMonetariaUvrCausada",
+      "modalidad": "VIVIENDA",
+      "concepto": "Principal"
+    }
+  ]
+}

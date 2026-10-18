@@ -50,4 +50,12 @@ public class LoanTransaction : AuditableEntityLong, IHechoInmutable
 
     /// <summary>El hecho que la llevó (bandeja, sin FK; T12, T14); nulo sólo en <c>OpeningBalance</c> (FR-140).</summary>
     public Guid? MessagePublicId { get; init; }
+
+    /// <summary>
+    /// K6b (T1048, T1059; data-model §5.1): en un crédito en UVR, el valor de la fila en UVR (alias <c>ValorUvr</c>) —cero en la corrección monetaria,
+    /// que es sólo el cambio de la UVR— y la UVR con que se valoró en pesos; nulas en pesos.
+    /// </summary>
+    public decimal? UvrAmount { get; init; }
+
+    public decimal? UvrValue { get; init; }
 }

@@ -1,7 +1,10 @@
 using System.Text.Json;
 using Carter;
+using IngenIA365ERP.API.Endpoints.Common;
 using IngenIA365ERP.API.Filters;
+using IngenIA365ERP.Application.Common.Audit;
 using IngenIA365ERP.Application.Lending.Risk;
+using IngenIA365ERP.Application.Lending.Risk.Evaluations;
 using IngenIA365ERP.Domain.Enums.Lending;
 using MediatR;
 
@@ -18,8 +21,9 @@ namespace IngenIA365ERP.API.Endpoints.Lending;
 /// <item><c>/risk/monthly-closes</c>: la lista, la preparación y la orden del cierre del mes (<c>Lending.MonthlyClose.Execute</c>, 202: sólo encola
 /// la corrida <c>MonthlyClose</c>), el encabezado, las líneas, el reporte de cambios, el cuadre con Contabilidad
 /// (<c>Lending.Reconciliation.View</c>) y la reapertura (<c>Lending.MonthlyClose.Reopen</c>, 202: encola la corrida <c>CloseReopen</c>);</item>
-/// <item><c>/risk/impairment-model</c> (sólo <c>GET</c>: <c>POST /elections</c> no existe hasta K6a y responde 404) y
-/// <c>/risk/arrears-history/completeness</c>;</item>
+/// <item><c>/risk/impairment-model</c> y, desde K6a (T1038), sus elecciones voluntarias (<c>GET /elections</c> con <c>Lending.Ratings.Read</c>;
+/// <c>POST /elections</c> con <c>Lending.ImpairmentModel.Manage</c>); <c>/risk/arrears-history/completeness</c> y, desde K6a, la plantilla
+/// <c>lending.arrears-history</c> (<c>GET /template.xlsx</c> y <c>POST /import?mode=review|apply</c> con <c>Lending.ArrearsHistory.Import</c>);</item>
 /// <item><c>GET /api/lending/loans/{id}/rating</c>: la informativa del crédito con sus candidatas, la oficial del último cierre y el análisis.</item>
 /// </list>
 /// Toda escritura lleva <c>Idempotency-Key</c> (<c>LosComandosDeCarteraLlevanClave</c>); cada ruta sólo reenvía al <see cref="ISender"/>. (nuevo)
@@ -34,6 +38,10 @@ public class RiskEndpoints : ICarterModule
     public const string Cerrar = "Lending.MonthlyClose.Execute";
     public const string Reabrir = "Lending.MonthlyClose.Reopen";
     public const string VerConciliacion = "Lending.Reconciliation.View";
+    public const string PrepararEvaluacion = "Lending.PortfolioEvaluations.Prepare";
+    public const string AplicarEvaluacion = "Lending.PortfolioEvaluations.Apply";
+    public const string ElegirModelo = "Lending.ImpairmentModel.Manage";
+    public const string ImportarHistorial = "Lending.ArrearsHistory.Import";
 
     public void AddRoutes(IEndpointRouteBuilder app)
     {
@@ -149,6 +157,71 @@ public class RiskEndpoints : ICarterModule
             .WithName("Lending_Risk_ArrearsHistory_Completeness")
             .RequirePermission(LeerCalificaciones);
 
+        // K6a (T1038; api.md §12.4): la adopción y el desistimiento voluntarios del modelo de pérdida esperada. La elección nace con el PublicId de la
+        // propuesta que el consejo decidió (el sujeto del punto del acta, ImpairmentModelChange).
+        riesgo.MapGet("/impairment-model/elections", async (ISender sender, CancellationToken ct) =>
+                await sender.Send(new ListImpairmentModelElectionsQuery(), ct))
+            .WithName("Lending_Risk_ImpairmentModel_Elections_List")
+            .RequirePermission(LeerCalificaciones);
+
+        riesgo.MapPost("/impairment-model/elections", async (EleccionDelModeloRequest body, HttpContext http, ISender sender, CancellationToken ct) =>
+                LendingGroup.Creado(await sender.Send(new RegisterImpairmentModelElectionCommand(body.ElectionPublicId, body.Kind, body.ValidFrom,
+                    body.Segments, body.SessionItemPublicId, body.ImpactStudyAttachmentPublicId, body.NoticeDate, body.NoticeAttachmentPublicId,
+                    body.Reason ?? string.Empty) { OperationKey = http.ClaveDeOperacion() }, ct),
+                    $"{LendingGroup.Prefijo}/risk/impairment-model/elections"))
+            .WithName("Lending_Risk_ImpairmentModel_Elections_Register")
+            .ConClaveDeOperacion()
+            .RequirePermission(ElegirModelo);
+
+        // K6a (T1038; api.md §12.5, plantillas.md §7): la carga complementaria del historial de mora. La plantilla vacía y la importación con el mismo
+        // permiso; sin descarga con datos.
+        var historial = LendingGroup.Grupo(app, "/risk/arrears-history", "Cartera Riesgo y cierres");
+        historial.MapPlantilla(
+            () => PlantillaDeHistorialComplementario.Definicion,
+            "plantilla-cartera-historial-de-mora",
+            ImportarHistorial,
+            ImportarHistorial,
+            "Lending_Risk_ArrearsHistory",
+            "Lending.Reports.ExportPersonalData",
+            AuditEventTypes.LendingReportExported,
+            importar: (modo, archivo, motivo, clave) =>
+                new ImportArrearsHistoryCommand(modo, archivo, motivo ?? string.Empty) { OperationKey = clave });
+
+        // ------------------------------------------------------------------------------- evaluación de cartera (§12.6, K3) --
+        // La recomienda el comité de riesgos y la aprueba el consejo por sus puntos de acta (AsuntoDeEvaluacionDeCartera); aquí sólo se lee,
+        // se prepara y se aplica con esos dos puntos.
+        riesgo.MapGet("/evaluations", async (PortfolioEvaluationStatus? status, ISender sender, CancellationToken ct) =>
+                await sender.Send(new ListPortfolioEvaluationsQuery(status), ct))
+            .WithName("Lending_Risk_Evaluations_List")
+            .RequirePermission(LeerCalificaciones);
+
+        riesgo.MapGet("/evaluations/{id:guid}", async (Guid id, int? page, int? pageSize, ISender sender, CancellationToken ct) =>
+                await sender.Send(new GetPortfolioEvaluationQuery(id, page ?? 1, pageSize ?? 50), ct))
+            .WithName("Lending_Risk_Evaluations_Get")
+            .RequirePermission(LeerCalificaciones);
+
+        riesgo.MapPost("/evaluations", async (EvaluacionRequest body, HttpContext http, ISender sender, CancellationToken ct) =>
+                LendingGroup.Creado(await sender.Send(new PreparePortfolioEvaluationCommand(body.CutoffDate, body.EffectMonth ?? string.Empty,
+                    Criterios(body.Criteria), body.Loans ?? []) { OperationKey = http.ClaveDeOperacion() }, ct),
+                    e => $"{LendingGroup.Prefijo}/risk/evaluations/{e.PublicId}"))
+            .WithName("Lending_Risk_Evaluations_Prepare")
+            .ConClaveDeOperacion()
+            .RequirePermission(PrepararEvaluacion);
+
+        // Bloque D (decisión del dueño del 2026-10-15): descartar la evaluación mientras no se aplique, con motivo (va a la auditoría).
+        riesgo.MapPost("/evaluations/{id:guid}/discard", async (Guid id, MotivoRequest body, HttpContext http, ISender sender, CancellationToken ct) =>
+                await sender.Send(new DiscardPortfolioEvaluationCommand(id, body.Reason ?? string.Empty) { OperationKey = http.ClaveDeOperacion() }, ct))
+            .WithName("Lending_Risk_Evaluations_Discard")
+            .ConClaveDeOperacion()
+            .RequirePermission(PrepararEvaluacion);
+
+        riesgo.MapPost("/evaluations/{id:guid}/apply", async (Guid id, AplicarEvaluacionRequest body, HttpContext http, ISender sender, CancellationToken ct) =>
+                await sender.Send(new ApplyPortfolioEvaluationCommand(id, body.RecommendationSessionItemPublicId, body.ApprovalSessionItemPublicId)
+                    { OperationKey = http.ClaveDeOperacion() }, ct))
+            .WithName("Lending_Risk_Evaluations_Apply")
+            .ConClaveDeOperacion()
+            .RequirePermission(AplicarEvaluacion);
+
         // --------------------------------------------------------------------------------- la calificación de un crédito --
         var creditos = LendingGroup.Grupo(app, "/loans", "Cartera Riesgo y cierres");
         creditos.MapGet("/{id:guid}/rating", async (Guid id, DateOnly? date, DateTime? recordedAsOf, ISender sender, CancellationToken ct) =>
@@ -156,6 +229,21 @@ public class RiskEndpoints : ICarterModule
             .WithName("Lending_Loans_Rating")
             .RequirePermission(LeerCalificaciones);
     }
+
+    /// <summary><c>{ cutoffDate, effectMonth (AAAA-MM), criteria (objeto JSON o su texto), loans: [{ loanPublicId, proposedCategory, reason, … }] }</c> (§12.6).</summary>
+    public sealed record EvaluacionRequest(DateOnly CutoffDate, string? EffectMonth, JsonElement? Criteria, IReadOnlyList<PortfolioEvaluationLoanInput>? Loans);
+
+    /// <summary><c>{ recommendationSessionItemPublicId, approvalSessionItemPublicId }</c> (§12.6).</summary>
+    public sealed record AplicarEvaluacionRequest(Guid RecommendationSessionItemPublicId, Guid ApprovalSessionItemPublicId);
+
+    /// <summary>Los criterios llegan como objeto JSON o como su texto; ausentes, nulos.</summary>
+    private static string? Criterios(JsonElement? criterios) => criterios switch
+    {
+        null => null,
+        { ValueKind: JsonValueKind.Null or JsonValueKind.Undefined } => null,
+        { ValueKind: JsonValueKind.String } c => c.GetString(),
+        { } c => c.GetRawText(),
+    };
 
     /// <summary><c>{ validFrom, overrides (esquema parcial del Anexo 1: el objeto o su texto JSON), reason }</c> (§12.1).</summary>
     public sealed record VersionDePoliticaRequest(DateOnly ValidFrom, JsonElement? Overrides, string? Reason);
@@ -178,6 +266,14 @@ public class RiskEndpoints : ICarterModule
 
     /// <summary>El motivo de levantar la calificación por análisis.</summary>
     public sealed record MotivoRequest(string? Reason);
+
+    /// <summary>
+    /// <c>{ electionPublicId, kind: VoluntaryAdoption | VoluntaryWithdrawal, segments[]?, validFrom, sessionItemPublicId,
+    /// impactStudyAttachmentPublicId, noticeDate, noticeAttachmentPublicId, reason }</c> (api.md §12.4, K6a). <c>electionPublicId</c> es el sujeto
+    /// del punto del acta; sin segmentos, los tres de la pérdida esperada.
+    /// </summary>
+    public sealed record EleccionDelModeloRequest(Guid ElectionPublicId, ImpairmentModelElectionKind Kind, IReadOnlyList<string>? Segments, DateOnly ValidFrom,
+        Guid SessionItemPublicId, Guid ImpactStudyAttachmentPublicId, DateOnly NoticeDate, Guid NoticeAttachmentPublicId, string? Reason);
 
     /// <summary><c>{ reason? }</c> de la orden del cierre.</summary>
     public sealed record OrdenDeCierreRequest(string? Reason);

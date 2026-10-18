@@ -106,6 +106,10 @@ pasa a *Desembolsada* y su pagaré y garantías pasan al crédito.
 
 ## 5. Recogida de créditos propios y reestructuración
 
+La recogida **no se mide contra el tope legal del abono sin penalidad** (FR-075, Ley 2032): no es un abono del deudor sino
+Cartera pagándose un crédito con el desembolso de otro. No se sella el tope y no se bloquea porque falte el SMMLV o el límite
+`PREPAGO_TOPE_SMMLV` (respuesta del dueño del 2026-10-14).
+
 La solicitud puede autorizar **recoger** créditos propios del deudor con el desembolso (total o parcial). Cada
 recogida se paga **por el mismo contrato que usa cualquier recaudador** (clase de recaudador «recogida propia», clave
 `CAR:{desembolso}:{obligación}`), dentro de la transacción del desembolso: si una no se aplica, el desembolso no existe.

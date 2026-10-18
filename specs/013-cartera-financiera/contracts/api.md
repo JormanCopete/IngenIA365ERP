@@ -458,7 +458,7 @@ Plantillas en código (`PerfilesSugeridos`, módulo `Lending`), servidas por
 | Plantilla | Actor | Permisos | Alcance y montos |
 |---|---|---|---|
 | `cartera.administrador` | Administrador de Cartera | `Lending.*` **salvo** `Lending.Decisions.*` y `Lending.Sessions.Vote` (C86) | todas las oficinas y líneas; sin límite |
-| `cartera.asesor` | Asesor de crédito | `Simulations.Run`, `Applications.{Read,Create,Submit}`, `PrepaymentPreferences.Manage`, `CreditBureau.Query`, `Guarantees.{Read,Manage}`, `PromissoryNotes.Manage`, `CreditLimits.Read`, `Loans.Read`, `Payoffs.Read`, `Documents.{Read,Issue}`, `DebtorMessages.{Read,Send}`, `Core.People.Create`, `Compliance.HabeasData.RecordConsent` | sus oficinas y líneas |
+| `cartera.asesor` | Asesor de crédito | `CreditLines.View` (respuesta del dueño, 2026-10-14: sólo consultar), `Simulations.Run`, `Applications.{Read,Create,Submit}`, `PrepaymentPreferences.Manage`, `CreditBureau.Query`, `Guarantees.{Read,Manage}`, `PromissoryNotes.Manage`, `CreditLimits.Read`, `Loans.Read`, `Payoffs.Read`, `Documents.{Read,Issue}`, `DebtorMessages.{Read,Send}`, `Core.People.Create`, `Compliance.HabeasData.RecordConsent` | sus oficinas y líneas |
 | `cartera.analista` | Analista | `Applications.{Read,Analyze}`, `Decisions.Analyst`, `CreditBureau.{Query,ReadReports}`, `Guarantees.Read`, `CreditLimits.Read`, `Loans.Read`, `Payoffs.Read`, `Ratings.Read` | sus oficinas y líneas |
 | `cartera.jefe` | Jefe de cartera | `Decisions.Coordinator`, `Applications.{Read,Cancel}`, `PrepaymentPreferences.Manage`, `CreditLimits.{Read,Assign}`, `Blocks.Manage`, `Disbursements.{Execute,Void}`, `DisbursementOrders.Void`, `DisbursementFiles.Generate`, `Loans.Read`, `Payoffs.Read`, `Payments.{Simulate,Reverse}`, `MonthlyClose.Execute`, `Ratings.Read`, `Novelties.{Read,Request}`, `WriteOffs.Prepare`, `Sessions.{Read,Manage}`, `Messages.*`, `Processes.*`, `Reconciliation.View`, `Migration.Load`, `PayrollNotApplied.Manage`, `Collections.{Read,Assign}`, `CollectionStages.Manage`, `Alerts.*`, `Reports.{View,Export}`, `Parameters.View`, `Templates.View` | todas las oficinas y líneas; límite en `Disbursements.Execute` y `CreditLimits.Assign` si la cooperativa lo fija |
 | `cartera.comite-credito` | Secretaría del comité de crédito | `Sessions.{Read,Manage,RecordVotes,Close}`, `Applications.Read`, `RelatedParties.Read` | todas las oficinas y líneas |
@@ -603,7 +603,9 @@ Una ruta para todas las claves del módulo `LND` de `COR_ParameterVersions` (cat
 `subject` es una de las constantes `LendingDecisionSubjects` (§27): `CreditApplication`, `CreditLimit`,
 `Novelty`, `Condonation`, `WriteOffBatch`, `PortfolioEvaluation`, `ImpairmentModelChange`,
 `ActivationDifferences`, `ValidationFailureException`, `RiskPolicyVersion` (C52, C100). El consejo para
-vinculados es forzado y no se configura (FR-040).
+vinculados es forzado y no se configura (FR-040). Las `conditions` de una regla del sujeto `Novelty` admiten también
+`noveltyMechanism` y `noveltyCause` (K3, T0879, bloque B2 del 2026-10-15; nulo = no importa; con otro sujeto,
+`Lending.Attribution.MatrixInvalid` con `reason = RuleNoveltyCriteriaOutOfSubject`), y la vista previa recibe los mismos dos campos.
 
 #### 3.5.2 Montos de las atribuciones operativas — `/amount-limits`
 
@@ -971,7 +973,7 @@ vivos − reservas vigentes − aprobadas sin desembolsar (FR-058).
 |---|---|---|---|---|---|
 | `GET /?personPublicId=&kind=&active=&page=` | Loans.Read | `ListDebtorBlocksQuery` | → lista `{ publicId, person, kind, origin: Manual \| Automatic, reason, since, liftedAt?, liftedBy?, support? }` | | K1 |
 | `POST /` | Blocks.Manage | `RegisterDebtorBlockCommand` | `{ personPublicId, kind: Manual \| Garnishment, reason, supportAttachmentPublicId? }` → 201 | `Lending.Block.Duplicate` | K1 |
-| `POST /{id}/lift` | Blocks.Manage | `LiftDebtorBlockCommand` | `{ reason }` → 204 | `Lending.Block.Automatic` (`data: { kind, howItLifts }`): un bloqueo automático se levanta solo cuando desaparece su causa | K1 |
+| `POST /{id}/lift` | Blocks.Manage | `LiftDebtorBlockCommand` | `{ reason }` → 204 | `Lending.Block.Automatic` (`data: { kind, howItLifts }`): un bloqueo automático se levanta solo cuando desaparece su causa; salvo el de insolvencia con la negociación fracasada (K3, decisión del dueño del 2026-10-15), que lo levanta una persona —la lista lo marca `canLiftManually: true`— | K1 |
 
 `DebtorBlockReason` (`data-model.md`): `Manual`, `Arrears`, `ValidationFailed`, `WrittenOff`, `RestrictiveListMatch`,
 `AssociateWithdrawal`, `Deceased`, `Insolvency`, `Garnishment`, `LimitRevalidation`. Un bloqueo
@@ -1193,7 +1195,8 @@ sea el mecanismo; si no, `Modification`). Enums de `data-model.md` (§27): `Nove
 | `POST /{id}/submit` | Novelties.Request | `SubmitLoanNoveltyCommand` | → `LoanNoveltyDto` en `Submitted` con `routing` (vinculados: consejo) | `Lending.Usury.Exceeded`, `Lending.Concentration.LimitExceeded` | K3 |
 | `POST /{id}/consents` | Novelties.Request | `RegisterNoveltyConsentCommand` | `{ partyPersonPublicId, consented, attachmentPublicId, addendumAttachmentPublicId? }` → 201 (adjunto `LendingNoveltyConsent`) | `Lending.Novelty.PartyUnknown` | K3 |
 | `POST /{id}/decisions` | Novelties.Read (+ nivel) | `RecordCreditDecisionCommand` | §4.3 | §4.3 | K3 |
-| `POST /{id}/apply` | Novelties.Apply | `ApplyLoanNoveltyCommand` | `{ withoutConsent?: [{ partyPersonPublicId, decision: DoNotApply \| ApplyWithGuaranteeExtinguished, reason }], acknowledgeWarnings? }` → `{ operationPublicId, scheduleVersion, newLoanPublicId?, messages[] }`; emite `CreditoReestructurado`, `CreditoModificado` o `CreditoNovado` | `Lending.Novelty.NotApproved`, `.ConsentMissing` (`data: { parties[] }`), `.CoverageInsufficient` (`data: { required, remaining }`), `Lending.Prevalidation.NotPostable`, `Lending.Segregation.Conflict` | K3 |
+| `POST /{id}/coverage-exception` | Novelties.Read (+ nivel de excepción) | `ApproveNoveltyCoverageExceptionCommand` | `{ reason }` (con clave) → `LoanNoveltyDto`. Bloque D (decisión del dueño del 2026-10-15): la excepción de cobertura la aprueba **otra persona** antes de aplicar, con la atribución del nivel de excepción de la matriz vigente; queda como decisión individual `Approve` con `isPolicyException` sobre la novedad (en `decisions[]` con `policyException: true`). Sólo con la novedad `Approved`, una vez, y quien la radicó no la aprueba | `Lending.Novelty.NotApproved`, `.AlreadyApplied`, `.CoverageExceptionExists`, `.CoverageInsufficient` (la matriz no tiene nivel de excepción), `Lending.Attribution.LevelRequired`, `Lending.Segregation.Conflict` | K3 |
+| `POST /{id}/apply` | Novelties.Apply | `ApplyLoanNoveltyCommand` | `{ withoutConsent?: [{ partyPersonPublicId, decision: DoNotApply \| ApplyWithGuaranteeExtinguished, reason, collateralPublicId?, useCoverageException? }], acknowledgeWarnings? }` (`useCoverageException`, bloque D: si la cobertura restante no cumple la línea, usa la excepción que aprobó otra persona por `/coverage-exception` y la sella en `ExceptionDecisionId` del consentimiento; sin ella, `Lending.Novelty.CoverageExceptionMissing`; si la aprobó quien aplica —usuario o persona—, `.CoverageExceptionSameUser`) → `{ operationPublicId, scheduleVersion, newLoanPublicId?, messages[] }`; emite `CreditoReestructurado`, `CreditoModificado` o `CreditoNovado` | `Lending.Novelty.NotApproved`, `.ConsentMissing` (`data: { parties[] }`), `.CoverageInsufficient` (`data: { required, remaining }`), `.CoverageExceptionMissing` (`data: { required, remaining }`), `.CoverageExceptionSameUser`, `Lending.Prevalidation.NotPostable`, `Lending.Segregation.Conflict` | K3 |
 | `POST /{id}/cancel` | Novelties.Request | `CancelLoanNoveltyCommand` | `{ reason }` → 204 | `Lending.Novelty.AlreadyApplied` | K3 |
 
 Una novación o refinanciación crea un crédito enlazado que hereda marca, conteo, calificación e historial de
@@ -1215,11 +1218,12 @@ deudor (FR-091).
 | Ruta | Permiso | Comando / consulta | Cuerpo → respuesta | Errores | E |
 |---|---|---|---|---|---|
 | `GET /?status=&page=` | Loans.Read | `ListWriteOffBatchesQuery` | → lista `{ publicId, number, status: Draft \| Submitted \| Approved \| Rejected \| Applied \| Cancelled, items, total, preparedBy, sessionItem?, appliedAt? }` | | K3 |
-| `GET /{id}` | Loans.Read | `GetWriteOffBatchQuery` | → el lote con `items: [{ loan, balance, impairment, daysPastDue, requirements: [{ code, met, evidence? }] }]` y `rejected: [{ loan, missing[] }]` | `Lending.WriteOffBatch.NotFound` | K3 |
-| `POST /` | WriteOffs.Prepare | `CreateWriteOffBatchCommand` | `{ loanPublicIds[], reason, reports: [{ loanPublicId, irrecoverabilityAttachmentPublicId, reportAttachmentPublicId }] }` → 201; los que no cumplen quedan en `rejected` con lo que falta | | K3 |
+| `GET /{id}` | Loans.Read | `GetWriteOffBatchQuery` | → el lote con `items: [{ loan, balance, impairment, daysPastDue, requirements: [{ code, met, evidence? }] }]` y `rejected: [{ loan, missing[], reason }]` (también los excluidos al aplicar) | `Lending.WriteOffBatch.NotFound` | K3 |
+| `POST /` | WriteOffs.Prepare | `CreateWriteOffBatchCommand` | `{ loanPublicIds[], reason, reports: [{ loanPublicId, irrecoverabilityAttachmentPublicId, reportAttachmentPublicId }] }` → 201; los que no cumplen quedan en `rejected` con lo que falta; `warnings: [{ code, message, whoFixes? }]` (bloque D) con lo de la norma y la política que sigue pendiente de validar —`WriteOffReportTermPending`, `WriteOffMinimumArrearsPending`—, sin bloquear | | K3 |
 | `POST /{id}/items` · `DELETE /{id}/items/{itemId}` | WriteOffs.Prepare | `AddWriteOffBatchItemCommand` · `RemoveWriteOffBatchItemCommand` | ídem por crédito, sólo en `Draft` | `Lending.WriteOff.RequirementMissing` (`data: { missing[] }`, C98), `Lending.WriteOffBatch.NotDraft` | K3 |
 | `POST /{id}/submit` | WriteOffs.Prepare | `SubmitWriteOffBatchCommand` | → el lote en `Submitted` (congelado para llevarlo al consejo, §5) | | K3 |
-| `POST /{id}/apply` | WriteOffs.Apply | `ApplyWriteOffBatchCommand` | `{ sessionItemPublicId }` → `{ operations[], messages: [CreditoCastigado] }`; si el tipo de entidad debe reportar castigos, alerta `Cartera.PlazoRegulatorioPorVencer` | `Lending.WriteOff.ApprovalRequired`, `Lending.Session.ItemMismatch`, `Lending.Segregation.Conflict` (`ArmarLoteDeCastigo × AplicarCastigo`), `Lending.Prevalidation.NotPostable` | K3 |
+| `POST /{id}/void` | WriteOffs.Prepare | `VoidWriteOffBatchCommand` | `{ reason }` (con clave) → el lote en `Cancelled`. Bloque D: se anula mientras no se aplique (`Draft`, `Submitted` o `Approved`); el motivo va a la auditoría del comando; sus créditos quedan libres para otro lote | `Lending.WriteOffBatch.InvalidStatus`, `Validation.Invalid` (sin motivo) | K3 |
+| `POST /{id}/apply` | WriteOffs.Apply | `ApplyWriteOffBatchCommand` | `{ sessionItemPublicId }` → `{ operations[], messages: [CreditoCastigado], excluded: [{ loanPublicId, loanNumber, missing[], reason }] }`; los requisitos se vuelven a verificar y el crédito que ya no cumple (o ya no está vigente) se **excluye** con su motivo —ítem `Rejected`, evento `Lending.WriteOffItem.Excluded`— y el resto se castiga (bloque D); si no queda ninguno, el lote no se aplica. Si el tipo de entidad debe reportar castigos, alerta `Cartera.PlazoRegulatorioPorVencer` | `Lending.WriteOff.ApprovalRequired`, `Lending.WriteOff.NoLoansLeft` (`data: { batchNumber, excluded[] }`), `Lending.Session.ItemMismatch`, `Lending.Segregation.Conflict` (`ArmarLoteDeCastigo × AplicarCastigo`), `Lending.Prevalidation.NotPostable` | K3 |
 
 La cartera castigada sigue en cobranza; sus pagos entran por el contrato y emiten `RecuperacionDeCastigada`
 desde K1 (FR-096); la vista `charge-offs` la sigue (§17).
@@ -1237,10 +1241,10 @@ bloquea; su registro y trámite por pantalla son de K3. En K1 se leen en el esta
 | `POST /insurance-claims/{id}/status` | DebtorEvents.Manage | `ChangeInsuranceClaimStatusCommand` | `{ status: Denied \| Withdrawn, reason, supportAttachmentPublicId? }` → la reclamación. `Paid` lo pone sólo el contrato cuando la aseguradora paga | `Lending.InsuranceClaim.NotInProcess` | K3 |
 | `GET /insolvency-proceedings?status=&personPublicId=&page=` | Loans.Read | `ListInsolvencyProceedingsQuery` | → lista `{ publicId, person, status: Negotiating \| Agreement \| Failed, startDate, authority, loans[], noveltyPublicId? }` | | K1 |
 | `POST /insolvency-proceedings` | Insolvency.Manage | `OpenInsolvencyProceedingCommand` | `{ personPublicId, startDate, authority, fileNumber, supportAttachmentPublicId }` → 201 en `Negotiating`: suspende causación y cobro y mantiene la calificación | `Lending.Insolvency.AlreadyOpen` | K3 |
-| `POST /insolvency-proceedings/{id}/failure` | Insolvency.Manage | `RecordInsolvencyFailureCommand` | `{ date, reason, supportAttachmentPublicId }` → en `Failed`; la calificación pasa a la que fija la norma | `Lending.Insolvency.NotNegotiating` | K3 |
+| `POST /insolvency-proceedings/{id}/failure` | Insolvency.Manage | `RecordInsolvencyFailureCommand` | `{ date, reason, supportAttachmentPublicId }` → en `Failed`; la calificación pasa a la que fija la norma. El bloqueo `Insolvency` de crédito nuevo **se mantiene** (decisión del dueño del 2026-10-15): lo levanta una persona con `Lending.Blocks.Manage` y motivo por `POST /blocks/{id}/lift` (§7.2) | `Lending.Insolvency.NotNegotiating` | K3 |
 
 El acuerdo de insolvencia es una novedad `Restructuring` ligada al proceso (`LND_LoanNovelties.InsolvencyProceedingId`,
-§11.1) que, al aplicarse, cierra el proceso en `Agreement`.
+§11.1) que, al aplicarse, cierra el proceso en `Agreement` y levanta solo el bloqueo `Insolvency` de crédito nuevo.
 
 ---
 
@@ -1294,7 +1298,7 @@ reapertura y volver a cerrar crea `Version + 1`.
 |---|---|---|---|---|---|
 | `GET /?date=` | Ratings.Read | `GetImpairmentModelBySegmentQuery` | → `[{ segment, model: ArrearsAnnex1 \| ExpectedLossAnnex2, basis: NotObligated \| Obligated \| Voluntary, mark?: "ObligatoryModelUnavailable", since, election? }]` (`SelectorDeModeloDeDeterioro`) | | K1 |
 | `GET /elections` | Ratings.Read | `ListImpairmentModelElectionsQuery` | → arreglo de adopciones y desistimientos | | K6a |
-| `POST /elections` | ImpairmentModel.Manage | `RegisterImpairmentModelElectionCommand` | `{ kind: VoluntaryAdoption \| VoluntaryWithdrawal, segments[], validFrom, sessionItemPublicId, impactStudyAttachmentPublicId, noticeDate, noticeAttachmentPublicId, probabilityTablesDocumentPublicId? }` → 201 | `Lending.ImpairmentModel.HistoryIncomplete` (`data: { loans[] }`), `.NoticeOutOfTerm` (`data: { earliestValidFrom }`), `.ObligatoryNoWithdrawal`, `Lending.Session.ItemMismatch` | K6a |
+| `POST /elections` | ImpairmentModel.Manage | `RegisterImpairmentModelElectionCommand` | `{ electionPublicId, kind: VoluntaryAdoption \| VoluntaryWithdrawal, segments[]?, validFrom, sessionItemPublicId, impactStudyAttachmentPublicId, noticeDate, noticeAttachmentPublicId, reason }` → 201 con la elección. `electionPublicId` es el sujeto del punto del acta (`ImpairmentModelChange`) que la pantalla genera al proponer; sin segmentos, los tres. **Enmienda del bloque 3 de K6a (2026-10-17)**: sin `probabilityTablesDocumentPublicId` (la PI voluntaria es la del Anexo 2 vigente, clave `VOLUNTARIA`); el estudio y el aviso son adjuntos `LendingImpairmentModelElectionSupport` de la propuesta | Los de data-model §23.8: `Lending.ImpairmentModel.IncompleteHistory` (`data: { loans[] }`; aquí decía `HistoryIncomplete`), `.NoticeOutOfTerm` (`data: { earliestValidFrom }`), `.Obligated` (aquí decía `ObligatoryNoWithdrawal`), `.NotAlternating`, `.ValidFromTaken`, `.RetroactiveValidFrom`, `.RuleMissing`, `.SegmentInvalid`, `.VoluntaryPdMissing`, `.SupportInvalid` **(nuevo)**, `Lending.Session.ItemMismatch`, `Lending.Security.UserWithoutPerson` | K6a |
 
 Antes de K6a la ruta `POST /elections` no existe (404): ninguna cooperativa puede adoptar el modelo
 voluntariamente (FR-105).
@@ -1304,7 +1308,7 @@ voluntariamente (FR-105).
 | Ruta | Permiso | Comando / consulta | Cuerpo → respuesta | Errores | E |
 |---|---|---|---|---|---|
 | `GET /completeness?date=&segment=` | Ratings.Read | `GetArrearsHistoryCompletenessQuery` | → `{ date, monthsRequired, ruleDocument { publicId, code }, incomplete: [{ loan, segment, monthsAvailable, missingMonths[] }] }` (`HistorialDeMora.Construir`) | | K1 |
-| `GET /template.xlsx` · `POST /import?mode=` | ArrearsHistory.Import | `ImportArrearsHistoryCommand` | plantilla `lending.arrears-history` (crédito, mes, máxima mora del mes) → `ImportResultDto`; información, sin transacciones ni hechos | `Import.Invalid`, `Lending.ArrearsHistory.LoanNotInLoad` | K6a |
+| `GET /template.xlsx` · `POST /import?mode=` | ArrearsHistory.Import | `ImportArrearsHistoryCommand` | plantilla `lending.arrears-history` (`numeroDeCredito`, `mes`, `moraMaximaDias`, `moraAlCierreDias`, `fuente`) → `ImportResultDto` con `extra.completeness[]` en la revisión; información, sin transacciones ni hechos; también antes de activar. Sin descarga con datos | `Import.Invalid`, `Lending.ArrearsHistory.LoanNotInLoad`, `.MonthClosed`, `.LoadClosed`, `.NoAppliedLoad` | K6a |
 
 ### 12.6 Evaluación de cartera — `/risk/evaluations` (K3; FR-102)
 
@@ -1312,7 +1316,8 @@ voluntariamente (FR-105).
 |---|---|---|---|---|---|
 | `GET /?status=` | Ratings.Read | `ListPortfolioEvaluationsQuery` | → arreglo `{ publicId, cutoffDate, effectMonth, status: Draft \| Recommended \| Approved \| Applied \| Rejected \| Discarded, loans, recommendationItem?, approvalItem? }` | | K3 |
 | `GET /{id}?page=` | Ratings.Read | `GetPortfolioEvaluationQuery` | → la evaluación con sus créditos (`proposedCategory`, `reason`) | `Lending.PortfolioEvaluation.NotFound` | K3 |
-| `POST /` | PortfolioEvaluations.Prepare | `PreparePortfolioEvaluationCommand` | `{ cutoffDate, effectMonth, criteria, loans: [{ loanPublicId, proposedCategory, reason }] }` → 201 | `Lending.PortfolioEvaluation.Overlaps` | K3 |
+| `POST /` | PortfolioEvaluations.Prepare | `PreparePortfolioEvaluationCommand` | `{ cutoffDate, effectMonth, criteria, loans: [{ loanPublicId, proposedCategory, reason }] }` → 201; `warnings: [{ code, message, whoFixes? }]` (bloque D) con `PortfolioEvaluationPeriodicityPending` si la periodicidad de la norma sigue pendiente de validar, sin bloquear | `Lending.PortfolioEvaluation.Overlaps` | K3 |
+| `POST /{id}/discard` | PortfolioEvaluations.Prepare | `DiscardPortfolioEvaluationCommand` | `{ reason }` (con clave) → la evaluación `Discarded`. Bloque D: se descarta mientras no se aplique (`Draft`, `Recommended` o `Approved`); el motivo va a la auditoría del comando; libera su corte | `Lending.PortfolioEvaluation.InvalidStatus`, `Validation.Invalid` (sin motivo) | K3 |
 | `POST /{id}/apply` | PortfolioEvaluations.Apply | `ApplyPortfolioEvaluationCommand` | `{ recommendationSessionItemPublicId, approvalSessionItemPublicId }` → la evaluación `Applied`; la recalificación se refleja en el cierre del mes de efecto y dura hasta la siguiente | `Lending.Session.ItemMismatch` | K3 |
 
 ---
@@ -1462,17 +1467,18 @@ corte o período, `InformationCutoff` (R), código de verificación de 16 caract
 `LendingIssuedDocument`, no borrable). El estado se **calcula**: `Voided` si hay anulación; `SubjectToFinality`
 mientras hoy < `FinalityUntil`; `Valid` en otro caso. Clases (`IssuedDocumentKind`): `PaymentPlan`,
 `LoanClearance`, `GeneralClearance` y `BalanceCertificate` en K1 (propuesta I5); `Statement` y `TaxCertificate`
-en K5.
+en K5 (fase 19: la ruta de emisión no cambia; `period` es obligatorio en el extracto y `year` opcional en el
+certificado tributario —sin él, el año anterior—).
 
 | Ruta | Permiso | Comando / consulta | Cuerpo → respuesta | Errores | E |
 |---|---|---|---|---|---|
 | `GET /?kind=&personPublicId=&loanPublicId=&status=&from=&to=&page=` | Documents.Read | `ListIssuedLendingDocumentsQuery` | → lista `IssuedDocumentDto { publicId, kind, number, holder { personPublicId, fullName, documentNumber }, loans[], cutoffDate?, period?, year?, issuedAt, issuedBy, status, finalityUntil?, coversCoDebts?, verificationCode }` | | K1 |
 | `GET /{id}` | Documents.Read | `GetIssuedLendingDocumentQuery` | → `IssuedDocumentDto` + `essentialData` + `events: [{ kind: Issued \| Delivered \| Voided, at, by, reason?, causeOperation? }]` | `Lending.Document.NotFound` | K1 |
-| `POST /` | Documents.Issue | `IssueLendingDocumentCommand` | `{ kind, personPublicId, loanPublicId?, cutoffDate?, period?: { from, to }, year?, delivery: Download \| Email }` → 201 `{ documentPublicId, number, verificationCode, status, download?: { url, expiresAt }, debtorMessagePublicId? }` en **un paso** (FR-013) | `Lending.Document.ClearanceDenied` (`data: { obligations?: [{ loanPublicId, number, balance }], pendingSales?: [{ invoice, messagePublicId }] }`), `.KindNotAvailable` (`data: { availableFrom: "K5" }`), `.SignerMissing` (sin `Documentos.Firmante.*`), `Lending.DebtorMessage.ChannelNotAuthorized` (correo), `NationalValues.Missing` | K1 |
+| `POST /` | Documents.Issue | `IssueLendingDocumentCommand` | `{ kind, personPublicId, loanPublicId?, cutoffDate?, period?: { from, to }, year?, delivery: Download \| Email }` → 201 `{ documentPublicId, number, verificationCode, status, download?: { url, expiresAt }, debtorMessagePublicId? }` en **un paso** (FR-013) | `Lending.Document.ClearanceDenied` (`data: { obligations?: [{ loanPublicId, number, balance }], pendingSales?: [{ invoice, messagePublicId }] }`), `.KindNotAvailable` (`data: { availableFrom: "K5" }`, antes de K5), `.SignerMissing` (sin `Documentos.Firmante.*`), `.NothingToCertify`, **K5**: `.PeriodInvalid` (`data: { periodFrom, periodTo, maxYears }`: extracto sin período, al revés, que termina después de hoy o de cinco años o más), `.TaxYearNotClosed` (`data: { year, availableFrom }`); `Lending.DebtorMessage.ChannelNotAuthorized` (correo), `NationalValues.Missing` | K1 · K5 |
 | `POST /{id}/download-link` | Documents.Reprint | `IssueLendingDocumentDownloadLinkCommand` | → `{ url, expiresAt }` del PDF guardado (idéntico); auditado `Lending.Document.Reprinted` | | K1 |
 | `POST /{id}/send` | Documents.Issue | `SendLendingDocumentCommand` | `{ recipientPersonPublicId? }` → 201 `{ debtorMessagePublicId }` (propósito `DocumentDelivery`, exento de ventanas si lo pidió el titular, I3) | `Lending.Document.VoidedCannotReissue`, `Lending.DebtorMessage.ChannelNotAuthorized` | K1 |
 | `POST /{id}/void` | Documents.Void | `VoidLendingDocumentCommand` | `{ reason }` → 204 | `Lending.Document.AlreadyVoided` | K1 |
-| `GET /verify/{code}` | Documents.Verify | `VerifyLendingDocumentQuery` | → `{ authentic, status, kind, number, issuedAt, holder { fullName, documentNumberMasked }, essentialData, voidedReason? }`; auditado `Lending.Document.Verified` | `Lending.Document.NotFound` (código inexistente, con el mensaje «el código no corresponde a un documento de esta cooperativa») | K1 |
+| `GET /verify/{code}?sha256=` | Documents.Verify | `VerifyLendingDocumentQuery` | → `{ authentic, status, kind, number, issuedAt, holder { fullName, documentNumberMasked }, essentialData, voided?: { at, reason }, pdfMatches? }`; auditado `Lending.Document.Verified` (con `pdfMatches` si se comparó). **K5 (T0972, T0974)**: `sha256` opcional, la huella SHA-256 en hexadecimal de un PDF calculada en el navegador (el archivo nunca sube); `pdfMatches = true` sólo si es la del PDF guardado | `Lending.Document.NotFound` (código inexistente, con el mensaje «el código no corresponde a un documento de esta cooperativa»); `Validation.Invalid` (huella que no son 64 caracteres hexadecimales) | K1 · K5 |
 | `GET /images` | Parameters.View | `GetLendingDocumentImagesQuery` | → `{ setupPublicId, logoOwnerType, signatureOwnerType, logo?, signature? }` (`{ attachmentPublicId, fileName, contentType, uploadedAt }`): el dueño de los adjuntos `LendingLogo` y `LendingSignatureImage` (la fila única de `LND_Setup`) y la imagen vigente de cada uno, para su carga en `/cartera/parametros` (I6, propuesta por defecto; bloque 14B). La subida va por `POST /api/attachments/uploads` con `Lending.Parameters.Manage` | | K1 |
 
 - **Paz y salvo** (FR-131): sólo con saldo cero y sujeto a firmeza (D23); el general certifica sólo las
@@ -1480,6 +1486,12 @@ en K5.
   ventas aceptadas fuera de Cartera y aplica `Documentos.PazYSalvoIncluyeCodeudas`.
 - **Certificado de saldo** (FR-068): es la liquidación a una fecha impresa; la liquidación en pantalla (§8.1)
   no emite documento.
+- **Extracto** (K5): saldo inicial a la víspera, operaciones del período por fecha valor (causación agregada por mes y
+  concepto; los reversos conocidos, informativos) y saldo final, todo con R = la emisión; saldo inicial + movimientos =
+  saldo final al centavo.
+- **Certificado tributario** (K5): por crédito de la persona como deudora, los intereses pagados con fecha valor en el
+  año (corriente y mora con sus suspensos, netos de los reversos conocidos a la emisión) y el saldo al 31 de diciembre;
+  los de vivienda en su propia sección (vacía hasta K6b).
 - **Anulación automática** (T80): el comando que reversa un pago anula, en la misma transacción, todo documento
   cuyo `InformationCutoff` sea igual o posterior al registro de lo reversado (`VigenciaDeDocumentos`).
 - **Verificación sólo interna** (D21): no hay ruta anónima; fuera de producción el PDF lleva «AMBIENTE DE
@@ -1577,8 +1589,10 @@ publicada con `MapVistaDeCartera` y su metadato `VistaDeInformeDeCartera`.
   `Lending.Report.RangeInvalid` / `.RangeTooLong`; un filtro propio inválido, `Lending.Report.FilterInvalid`
   con los admitidos.
 - **Registro**: `GET /api/reports/lending` (`Reports.View`) → `[{ key, name, description, fileName, filters[],
-  ownFilters?[], personalData, availableFrom, requiredPermission? }]`, sin las vistas que exigen un permiso
-  que quien pregunta no tiene. Pantalla `/cartera/informes?vista=`.
+  ownFilters?[], personalData, availableFrom, requiredPermission?, personalDataExceptWhen? { filter, values[] } }]`, sin las vistas que exigen un permiso
+  que quien pregunta no tiene. Pantalla `/cartera/informes?vista=`. K5 (T0982): una vista con `personalDataExceptWhen` (la
+  concentración por `by=line|sector|payer`) se ofrece a todos y su ruta pide `requiredPermission` y, al exportar, `ExportPersonalData` sólo
+  cuando el filtro trae datos del deudor.
 
 | Vista | E | Filtros propios | PD | Columnas (· ocultas) |
 |---|---|---|---|---|
@@ -1597,9 +1611,9 @@ publicada con `MapVistaDeCartera` y su metadato `VistaDeInformeDeCartera`.
 | `promises` | K4 | `status?` | sí | Crédito, Deudor, Fecha, Valor, Estado, Gestor · `_credito` |
 | `payment-agreements` | K4 | `status?` | sí | Crédito, Deudor, Cuotas, Cumplidas, Vencidas, Estado · `_credito` |
 | `prior-notices` | K4 | `status?` | sí | Crédito, Deudor, Episodio, Comunicaciones, Constancia, Fecha más temprana de reporte · `_credito` |
-| `quality` | K5 | `asOf`, `groupBy?` | no | Cartera bruta, Vencida, Vencida/bruta, En riesgo (B–E), Riesgo/bruta, Deterioro, Cobertura |
-| `vintages` | K5 | `from`, `to` (meses de desembolso) | no | Mes de desembolso, Monto, Mes de maduración, Mora 30, Mora 60, Mora 90 (%) |
-| `concentration` | K5 | `asOf`, `top?`, `by=debtor\|group\|line\|sector\|payer` | sí con `by=debtor\|group` | Dimensión, Saldo, Participación, % del límite individual, Señal |
+| `quality` | K5 | `asOf`, `groupBy=total\|office\|line\|modality` (por defecto `total`) | no | Dimensión, Cartera bruta, Vencida, Vencida/bruta, En riesgo (B–E), Riesgo/bruta, Deterioro, Cobertura (del último cierre vigente al corte; vencida con `Informes.DiasCarteraVencida`) |
+| `vintages` | K5 | `from`, `to` (meses de desembolso; sin `from`, los doce hasta `to`) | no | Mes de desembolso, Monto, Mes de maduración, Mes del cierre, Mora 30, Mora 60, Mora 90 (%) |
+| `concentration` | K5 | `asOf`, `top?` (1–500, 20), `warnAt?` (% del límite, 80), `by=debtor\|group\|line\|sector\|payer` | sí con `by=debtor\|group` (`personalDataExceptWhen`) | Dimensión, Saldo, Participación, % del límite individual, Señal · `_persona` |
 | `issued-documents` | K5 | `from`, `to`, `kind?`, `status?` | sí | Fecha, Clase, Número, Titular, Estado, Código, Emitido por · `_documento` |
 | `bureau-exclusions` | K5 | `bureau`, `year`, `month` | sí | Crédito, Deudor, Motivo (sin autorización, sin aviso previo, reclamo en trámite), Gestión sugerida · `_credito` |
 
@@ -1607,6 +1621,11 @@ publicada con `MapVistaDeCartera` y su metadato `VistaDeInformeDeCartera`.
 { asOf, scope { branches[], lines[] }, tiles: [{ key, label, value, previousValue?, unit: Money \| Count \| Percent \| Days, severity?,
 link: { page, query } }] }`, sobre las posiciones diarias dentro del alcance (FR-135). Fichas: saldo, colocación del mes, calidad, deterioro,
 recaudo frente al esperado, cosechas, cumplimiento de promesas, mensajes pendientes y rechazados, alertas pendientes. **E: K5.**
+Implementado en la fase 20 (T0983, T0984; `DashboardEndpoints`): las claves son `saldo`, `colocacion-del-mes`, `calidad`, `deterioro`,
+`recaudo-vs-esperado`, `cosechas`, `cumplimiento-de-promesas`, `mensajes-pendientes-y-rechazados`, `alertas-pendientes`; cada ficha suma
+`note?` (cómo se lee o por qué no tiene dato) y su `link` a `/cartera/informes?vista=…`, `/cartera/bandeja-de-mensajes` o `/cartera/alertas`;
+`scope.branches[]`/`lines[]` son `{ publicId, code, name }`. Una oficina o línea fuera del alcance da cifras en cero. Definiciones en
+`docs/manual/cartera-informes-y-tablero.md` §4.
 
 ---
 
@@ -1673,13 +1692,18 @@ que se decide en el ERP); las reclamaciones al seguro y las insolvencias viajan 
 | `POST /activation` | Activation.Execute | `ActivateLendingCommand` | `{ migrationLoadPublicId, activationDate, provisionalCollectionsAttachmentPublicId?, sessionItemPublicId, acknowledgeWarnings, reason }` → 201 `{ activationPublicId, activationDate, loans, openingTransactions, baseClosePublicId, creditLimits, revalidatedLimits, nonDeductionsMarked, provisionalCollectionsStored, messages: [CarteraActivada, …] }`. `sessionItemPublicId` es **obligatorio** (acta de activación, `LND_Activations.SessionItemId` no nulo, C61) | `Lending.Activation.RequirementsMissing` (`data: { missing: [{ code, detail, whoFixes }] }`), `.CutoffInvalid` (`data: { expected }`: día siguiente al corte), `.DeadlinePassed` (plazo vencido o mes contable cerrado: pida una carga con corte nuevo), `.DifferencesNotAccepted` (sin aceptar o cambiaron desde que se aceptaron: vuelva a aceptar), `.AlreadyActivated`, `Lending.Session.ItemMismatch`, `Import.Invalid` y `Lending.ProvisionalCollection.ExceedsSale` (cobros provisionales) | K1 |
 
 `ActivationReadinessDto.requirements[].code`: `LoadApplied`, `DifferencesAccepted`, `SalesReconciled`,
-`DateInTerm`, `AccountingMonthOpen`, `ReceiptsCollectorRegistered`, `TreasuryDestinationRegistered`
+`DateInTerm`, `AccountingMonthOpen` (sólo falta sin contabilidad iniciada: el mes de C+1 cerrado queda `NotApplicable` con el aviso `AccountingMonthClosed`, respuesta del dueño del 2026-10-14), `ReceiptsCollectorRegistered`, `TreasuryDestinationRegistered`
 (producción, sin dobles), `ExpectedLossAvailable` (cooperativa obligada), `ExpectedLossParameters` y
 `ArrearsHistoryComplete` (donde K6a esté desplegada), `Annex1Current`, `UsuryForActiveLines`,
 `LendingRolesCreated`, `OfficesLinkedToAccountingBranches`, `PayrollBridgeRuleResolved`. Avisos que no
 bloquean: `CommercialParametersToAdjust` (fecha de habilitación, política sin respuesta, quién registra la
 cuenta por cobrar), `PayrollConceptAccounts` (la pantalla pregunta a Nómina por
-`GET /api/payroll/concept-definitions/DESC_CARTERA/accounts`), `UsersWithoutScope`.
+`GET /api/payroll/concept-definitions/DESC_CARTERA/accounts`), `UsersWithoutScope` y `AccountingMonthClosed` (el mes de C+1
+cerrado o sin crear en Contabilidad: la activación procede y lo que emite queda en el primer mes abierto; 2026-10-14) y,
+desde K3 (bloque D, decisión del dueño del 2026-10-15), lo de la norma y la política que sigue vacío y pendiente de validar:
+`WriteOffReportTermPending` (plazo del reporte de castigos, `writeOffReport` del tipo de entidad), `PortfolioEvaluationPeriodicityPending`
+(`portfolioEvaluation`) y `WriteOffMinimumArrearsPending` (`Castigo.DiasMinimosDeMora`). La
+respuesta de `POST /activation` lleva los mismos avisos en `warnings`.
 
 **Cómo corre la activación** (C60): `ActivateLendingCommand` abre una transacción explícita y guarda **por tandas
 de 1.000 créditos** con `ChangeTracker.Clear()` entre tandas; el destino `Lending` del registro de participantes se
@@ -2315,3 +2339,26 @@ Además se aplicaron aquí C28 (`Answered` en listar y simular, §20), C35 (clav
 (`destination` e `isEnabled` del registro), C38, C60–C63 (activación), C64 (partes de la migración), C69, C71 (códigos
 de `data-model.md` §10, literales) y C82 (importación de valores nacionales).
 
+
+---
+
+## 29. Enmienda K6b (2026-10-17): vivienda Ley 546 y UVR
+
+Ninguna ruta nueva. Las respuestas ganan campos **opcionales** (nulos o con su defecto fuera de vivienda y UVR), así lo de K1–K6a
+no cambia; las entradas aceptan dos campos nuevos.
+
+| Ruta | Campo | Qué es |
+|---|---|---|
+| `POST /credit-lines`, `POST /credit-lines/{id}/versions` (entrada) · `CreditLineVersionDto` | `denominationUnit` (`Pesos` por defecto, `Uvr`) | La unidad del capital. `Uvr` sólo en una combinación «admite UVR» del catálogo de modalidades y sin tramos (`Lending.Housing.UvrNotAdmitted`, `Lending.Housing.UvrTranchesNotSupported`) |
+| `GET /credit-lines/{id}` | `housing` | En una línea de vivienda: `{ date, rateCap: { rate, validFrom, source, nationalValuePublicId } \| null, limits: [{ code, value, source, nationalValuePublicId }], missing: [string] }`, el tope y los cinco límites de la Ley 546 vigentes a `date`; lo que falta va en `missing` sin romper la consulta |
+| `POST /applications`, `PUT /applications/{id}` (entrada) · `CreditApplicationDto` | `isSocialHousing` (bool?) | Sólo en una solicitud de vivienda: VIS elige `VIVIENDA_FINANCIABLE_VIS`; nulo en las demás |
+| `POST /simulations/schedule` → `ScheduleSimulationDto` | `isHousing` · `uvr` | `isHousing`: la línea sigue la Ley 546 (sella `LND-2026.2`). `uvr`, en una línea en UVR: `{ uvrDate, uvrValue, amountUvr, toPayUvr, installments: [{ number, dueDate, principal, interest, insurance, total, balanceAfter }], legend }`; las cuotas de `installments` (en pesos) son su equivalencia a esa UVR |
+| `GET /loans/{id}` → `LoanTermsDto` | `denominationUnit` (`Pesos` \| `Uvr`) | La unidad sellada |
+| `GET /loans/{id}/schedule` | `uvrValue` · `installments[].uvr` | La UVR con que se valoró el plan y la cuota en UVR `{ openingPrincipal, principal, interest, insurance, total, closingPrincipal }` |
+| `GET /loans/{id}/transactions` | `uvrAmount` · `uvrValue` | El movimiento en UVR y la UVR de su fecha valor; la clase nueva `MonetaryCorrection` es la corrección monetaria diaria |
+| `GET /loans/{id}/settlement` · `GET /loans/{id}/statement` | `uvr` | `{ uvrDate, uvrValue, projected, lastPublished, principalUvr, toPayOffUvr, balancesUvr, legend }`: la UVR del día (a una fecha sin UVR publicada, **proyectada** desde la última, sólo para mostrar, con aviso en `warnings`) y los saldos en UVR; los montos en pesos de la respuesta son su valor a esa UVR |
+
+Errores (todos 422 con su dato y fuente): `Lending.Housing.VariableRateNotAllowed`, `.RateCapExceeded` (con el tope del día y su
+fuente), `.TermOutOfLimits`, `.UvrNotAdmitted`, `.FinancingExceeded`, `.InstallmentToIncomeExceeded`, `.DataRequired`,
+`.FirstRankMortgageRequired` (desembolso) y `NationalValues.Missing` (sin tope, límite o UVR del día). Antes de K6b siguen
+`Lending.CreditLine.HousingNotAvailable` y `Lending.Migration.HousingNotAvailable`.

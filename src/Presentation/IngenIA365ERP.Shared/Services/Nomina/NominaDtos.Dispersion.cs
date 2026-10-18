@@ -16,6 +16,9 @@ public sealed record FormatoBancarioResumenDto(
         "PayrollDisbursement" => "Dispersión de nómina",
         "SeveranceDeposit" => "Consignación de cesantías",
         "SupplierPayments" => "Pagos a proveedores (tesorería)",
+        "LoanDisbursement" => "Desembolsos de crédito",
+        "PayrollDeductionRequest" => "Libranza: archivo de descuentos (ida)",
+        "PayrollDeductionResult" => "Libranza: respuesta de la pagaduría (vuelta)",
         _ => Scope,
     };
     public string BancoTexto => BankName ?? "Genérico (cualquier banco)";

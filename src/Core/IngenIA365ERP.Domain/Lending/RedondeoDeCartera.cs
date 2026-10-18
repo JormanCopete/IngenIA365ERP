@@ -29,15 +29,37 @@ public sealed record RedondeoDeCartera
     /// <summary>Al centavo, alejándose de cero, por concepto: el defecto cuando la línea no dice otra cosa.</summary>
     public static RedondeoDeCartera AlCentavo { get; } = new(Centavo, RoundingMode.AwayFromZero, RoundingMoment.PerConcept);
 
+    /// <summary>
+    /// K6b (T1054; data-model §0.4, alias <c>ValorUvr</c> 18,4): la diezmilésima, la unidad mínima de un valor en UVR. No es una unidad que una línea
+    /// pueda sellar para pesos: sólo la usa <see cref="EnUvr"/>.
+    /// </summary>
+    public static decimal DiezMilesima { get; } = new(1, 0, 0, false, 4);
+
     public RedondeoDeCartera(decimal unidad, RoundingMode modo, RoundingMoment momento)
+        : this(unidad, modo, momento, Centavo)
     {
         if (!UnidadesAdmitidas.Contains(unidad))
             throw new ArgumentOutOfRangeException(nameof(unidad), unidad, "La unidad de redondeo es 0,01; 1; 10; 100 o 1.000.");
+    }
+
+    private RedondeoDeCartera(decimal unidad, RoundingMode modo, RoundingMoment momento, decimal minima)
+    {
         if (!Enum.IsDefined(modo)) throw new ArgumentOutOfRangeException(nameof(modo), modo, "Modo de redondeo desconocido.");
         if (!Enum.IsDefined(momento)) throw new ArgumentOutOfRangeException(nameof(momento), momento, "Momento de redondeo desconocido.");
         Unidad = unidad;
         Modo = modo;
         Momento = momento;
+        Minima = minima;
+    }
+
+    /// <summary>
+    /// K6b (T1054): el redondeo con que el motor lleva un crédito en UVR —plan, causación, pagos y saldos en UVR—: a la diezmilésima (alias
+    /// <c>ValorUvr</c>), con el modo y el momento que selló la línea. La unidad de la línea (en pesos) rige al convertir a pesos, no aquí.
+    /// </summary>
+    public static RedondeoDeCartera EnUvr(RedondeoDeCartera dePesos)
+    {
+        ArgumentNullException.ThrowIfNull(dePesos);
+        return new RedondeoDeCartera(DiezMilesima, dePesos.Modo, dePesos.Momento, DiezMilesima);
     }
 
     public decimal Unidad { get; }
@@ -46,11 +68,17 @@ public sealed record RedondeoDeCartera
 
     public RoundingMoment Momento { get; }
 
+    /// <summary>La unidad mínima de un monto: el centavo en pesos; la diezmilésima en UVR (K6b).</summary>
+    public decimal Minima { get; }
+
+    /// <summary>¿Lleva valores en UVR (K6b)?</summary>
+    public bool EsDeUvr => Minima == DiezMilesima;
+
     /// <summary>A la unidad sellada, con el modo sellado.</summary>
     public decimal Redondear(decimal valor) => AUnidad(valor, Unidad, Modo);
 
-    /// <summary>Al centavo, con el modo sellado.</summary>
-    public decimal RedondearAlCentavo(decimal valor) => AUnidad(valor, Centavo, Modo);
+    /// <summary>A la unidad mínima (el centavo; en UVR, la diezmilésima), con el modo sellado.</summary>
+    public decimal RedondearAlCentavo(decimal valor) => AUnidad(valor, Minima, Modo);
 
     /// <summary>Un concepto del plan (interés, seguro, extraordinaria): a la unidad si el momento es por concepto; si no, al centavo.</summary>
     public decimal Concepto(decimal valor) => Momento == RoundingMoment.PerConcept ? Redondear(valor) : RedondearAlCentavo(valor);

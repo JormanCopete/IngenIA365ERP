@@ -222,7 +222,7 @@ public class ProcesadorDeCarteraTests
         await pasada.CorrerAsync(Parametros, null, CancellationToken.None);
 
         conducidas.Should().Equal([LendingProcessKind.DailyCycle, LendingProcessKind.MonthlyClose, LendingProcessKind.CloseReopen]);
-        ConductorDeCorridasDeCartera.Clases.TakeLast(2).Should().Equal(LendingProcessKind.MonthlyClose, LendingProcessKind.CloseReopen);
+        ConductorDeCorridasDeCartera.Clases.Skip(1).Take(3).Should().Equal(LendingProcessKind.DailyCycle, LendingProcessKind.MonthlyClose, LendingProcessKind.CloseReopen);
         typeof(Application.Lending.Risk.EjecutorDelCierreMensual).Should().Implement<IEjecutorDeCorridaDeCartera>();
         typeof(Application.Lending.Risk.EjecutorDeLaReapertura).Should().Implement<IEjecutorDeCorridaDeCartera>();
     }
@@ -281,8 +281,9 @@ public class ProcesadorDeCarteraTests
         (Parametros with { DuracionDelArrendamiento = TimeSpan.FromSeconds(60) }).Problemas().Should().NotBeEmpty();
         (Parametros with { MaxParallelCooperatives = 0 }).Problemas().Should().NotBeEmpty();
         ConductorDeCorridasDeCartera.Clases.Should().BeEquivalentTo(
-            [LendingProcessKind.DailyCycle, LendingProcessKind.MonthlyClose, LendingProcessKind.CloseReopen, LendingProcessKind.NationalValueCorrection],
-            "las cuatro clases de corrida de C59");
+            [LendingProcessKind.DailyCycle, LendingProcessKind.MonthlyClose, LendingProcessKind.CloseReopen, LendingProcessKind.NationalValueCorrection,
+                LendingProcessKind.MigratedCollectionStages],
+            "las cuatro clases de corrida de C59 y, desde K4, el registro de la etapa migrada");
     }
 
     // ----------------------------------------------------------------------------------------------- US4 (T0474) --

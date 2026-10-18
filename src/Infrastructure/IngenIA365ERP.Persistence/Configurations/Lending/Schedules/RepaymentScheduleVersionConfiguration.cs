@@ -25,6 +25,7 @@ public class RepaymentScheduleVersionConfiguration : IEntityTypeConfiguration<Re
         builder.Property(e => e.FirstRegeneratedInstallment).IsRequired();
         builder.Property(e => e.InstallmentCount).IsRequired();
         builder.Property(e => e.RulesVersion).HasMaxLength(20).IsRequired();
+        builder.Property(e => e.UvrValue).ValorUvr();
         builder.Property(e => e.InputsSha256).HasMaxLength(EntidadDeCartera.Huella).IsRequired();
 
         builder.HasOne(e => e.Loan).WithMany().HasForeignKey(e => e.LoanId).OnDelete(DeleteBehavior.Restrict);

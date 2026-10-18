@@ -40,11 +40,15 @@ public static class ReglasDeSegregacion
 {
     public const string CodigoDeError = "Lending.Segregation.Conflict";
 
-    /// <summary>La regla fija (R135): radicar frente a decidir y a votar.</summary>
+    /// <summary>
+    /// La regla fija (R135): radicar frente a decidir y a votar. K3 (T0863): radicar frente a aplicar —quien radicó una novedad o una condonación no
+    /// la aplica—.
+    /// </summary>
     public static IReadOnlyList<ParIncompatible> ReglaFija { get; } =
     [
         new(AccionesDeSegregacion.Radicar, AccionesDeSegregacion.Decidir, Activo: true),
         new(AccionesDeSegregacion.Radicar, AccionesDeSegregacion.Votar, Activo: true),
+        new(AccionesDeSegregacion.Radicar, AccionesDeSegregacion.Aplicar, Activo: true),
     ];
 
     /// <summary>El defecto «pendiente de validar» de <c>Segregacion.Incompatibilidades</c> (F6): <c>Decidir × Desembolsar</c> activo.</summary>

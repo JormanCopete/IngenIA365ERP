@@ -163,6 +163,29 @@ public static class AdjuntosDeModulo
     public const string ArchivoDeDesembolsos = "LendingDisbursementFile";
 
     /// <summary>
+    /// Feature 013, K2 (T0837, T78; adaptadores-y-archivos.md §9): el archivo de descuentos de una pagaduría tal como se generó (SHA-256 en
+    /// <c>LND_PayrollDeductionFiles</c>; viaja a Recaudo por su <c>PublicId</c> en <c>DescuentosPorPagaduria</c>). Lo genera Cartera: se lee con
+    /// <c>Lending.PayrollDeductionFiles.Read</c>, no recibe subidas y no se borra.
+    /// </summary>
+    public const string ArchivoDeDescuentos = "LendingPayrollDeductionFile";
+
+    /// <summary>
+    /// Feature 013, K5 (US16, T1005, T81; DT §2.24; adaptadores-y-archivos.md §7.5, §9): el formato de cartera del SICSES o el archivo de una central de
+    /// riesgo tal como se generó (SHA-256 en <c>LND_RegulatoryFiles</c>; el dueño es la generación, <c>OwnerEntityPublicId</c> = su <c>PublicId</c>). Lo
+    /// genera Cartera y lo sube <b>antes</b> de guardar la fila: se lee con <c>Lending.RegulatoryFiles.Read</c> (trae deudores; también el auditor y el
+    /// revisor fiscal), no recibe subidas y no se borra —es la evidencia de lo que se cargó en el portal (Principio XI, FR-003)—.
+    /// </summary>
+    public const string ArchivoRegulatorio = "LendingRegulatoryFile";
+
+    /// <summary>
+    /// Feature 013, K2 (T0837; FR-109; adaptadores-y-archivos.md §9): la certificación laboral y de descuentos de la pagaduría. El dueño es la
+    /// <b>solicitud</b> que se radica por libranza —se lee con <c>Lending.Applications.Read</c>, se sube con <c>Lending.Applications.Create</c> mientras
+    /// la solicitud no esté decidida y decidida queda bloqueada (<c>Attachments.OwnerLocked</c>)— o el <b>crédito</b> que se traslada a otra pagaduría
+    /// (FR-116: se sube con <c>Lending.PayrollTransfers.Manage</c> y no se borra: respalda el vínculo nuevo).
+    /// </summary>
+    public const string CertificacionDeLibranza = "LendingPayrollCertification";
+
+    /// <summary>
     /// Feature 013, US8 (T0748, C62; plantillas.md §6): el archivo de cobros provisionales tal como se revisó antes de activar Cartera. El dueño es la
     /// carga aplicada (<c>OwnerEntityPublicId</c> = su <c>PublicId</c>); la activación lo vuelve a leer y lo valida en su transacción. Lo genera Cartera:
     /// se lee con <c>Lending.Activation.Execute</c>, no recibe subidas y no se borra.
@@ -202,6 +225,99 @@ public static class AdjuntosDeModulo
     public static readonly IReadOnlySet<string> TiposDeImagenDeCartera =
         new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "image/jpeg", "image/png" };
 
+    /// <summary>
+    /// Feature 013, K3 (T0880; transversales §2.24): la aceptación firmada (o la constancia del rechazo) de un codeudor, avalista o propietario de una
+    /// garantía a una novedad, con dueño la <b>novedad</b> (<c>OwnerEntityPublicId</c> = su <c>PublicId</c>). Se lee con <c>Lending.Novelties.Read</c>; se
+    /// sube y se borra con <c>Lending.Novelties.Request</c> mientras la novedad no esté decidida (borrador o radicada); decidida, queda bloqueado
+    /// (<c>Attachments.OwnerLocked</c>): es lo que respalda la decisión.
+    /// </summary>
+    public const string ConsentimientoDeNovedad = "LendingNoveltyConsent";
+
+    /// <summary>
+    /// Feature 013, K3 (bloque C, T0890, T0892): el soporte de un evento del deudor (acta de defunción, constancia de retiro, oficio de embargo), del
+    /// proceso de insolvencia (auto de admisión, constancia del fracaso) o del cambio de estado de una reclamación al seguro, con dueño la
+    /// <b>persona</b> (<c>OwnerEntityPublicId</c> = su <c>PublicId</c>). Se lee con <c>Lending.Loans.Read</c>; lo sube quien tiene
+    /// <c>Lending.DebtorEvents.Manage</c> o <c>Lending.Insolvency.Manage</c>; no se borra: es la evidencia de lo que suspendió el cobro (Principio XI).
+    /// </summary>
+    public const string SoporteDeEventoDelDeudor = "LendingDebtorEventSupport";
+
+    /// <summary>
+    /// Feature 013, K3 (US14, T0906): el informe motivado, el concepto de irrecuperabilidad o el soporte del cruce de aportes de un crédito que se
+    /// propone castigar, con dueño el <b>crédito</b> (<c>OwnerEntityPublicId</c> = su <c>PublicId</c>: el lote todavía no existe al subirlos). Se lee con
+    /// <c>Lending.Loans.Read</c>; lo sube quien tiene <c>Lending.WriteOffs.Prepare</c> sobre un crédito que exista; no se borra: respalda el castigo.
+    /// </summary>
+    public const string SoporteDeCastigo = "LendingWriteOffSupport";
+
+    /// <summary>
+    /// Feature 013, K3 (US14, T0909): el soporte del reporte de los castigos al supervisor, con dueño el <b>lote</b> (<c>OwnerEntityPublicId</c> = su
+    /// <c>PublicId</c>). Se lee con <c>Lending.Loans.Read</c>; lo sube quien tiene <c>Lending.WriteOffs.Apply</c> mientras el lote esté aplicado, deba
+    /// reportarse y el reporte no se haya registrado; no se borra.
+    /// </summary>
+    public const string ReporteDeCastigos = "LendingWriteOffSupervisorReport";
+
+    /// <summary>
+    /// Feature 013, K4 (US12, T0947): un documento del cobro jurídico —demanda, auto, embargo, sentencia, cuenta de honorarios—, con dueño el
+    /// <b>proceso</b> (<c>OwnerEntityPublicId</c> = su <c>PublicId</c>). Se lee con <c>Lending.Collections.Read</c>; lo sube quien tiene
+    /// <c>Lending.LegalProcesses.Manage</c> mientras el proceso esté abierto; no se borra: respalda la actuación.
+    /// </summary>
+    public const string DocumentoDeProcesoJuridico = "LendingLegalProcessDocument";
+
+    /// <summary>
+    /// Feature 013, K4 (US12, T0950): la guía de envío de la carta de un aviso previo al reporte negativo, con dueño el <b>aviso</b>
+    /// (<c>OwnerEntityPublicId</c> = su <c>PublicId</c>). Se lee con <c>Lending.PriorNotices.Read</c>; lo sube quien tiene
+    /// <c>Lending.PriorNotices.RegisterEvidence</c> sobre un aviso que exista; no se borra: es la constancia (Leyes 1266 y 2157).
+    /// </summary>
+    public const string ConstanciaDeAvisoPrevio = "LendingPriorNoticeEvidence";
+
+    /// <summary>
+    /// Feature 013, K4 (US12, T0951): un soporte de un reclamo o una suplantación sobre el reporte a centrales —lo que trae el titular y la
+    /// respuesta—, con dueño la <b>persona</b> (<c>OwnerEntityPublicId</c> = su <c>PublicId</c>: el reclamo todavía no existe al subirlo). Se lee con
+    /// <c>Lending.CreditReportClaims.Read</c>; lo sube quien tiene <c>Lending.CreditReportClaims.Manage</c>; no se borra: es evidencia del titular.
+    /// </summary>
+    public const string SoporteDeReclamoSobreElReporte = "LendingCreditReportClaimSupport";
+
+    /// <summary>
+    /// Feature 013, K5 (US16; decisión del dueño del 2026-10-16): el comprobante del cargue en el portal de un archivo regulatorio (la constancia o el
+    /// pantallazo del radicado del SICSES o de la central), con dueño la <b>generación</b> (<c>OwnerEntityPublicId</c> = el <c>PublicId</c> de la fila de
+    /// <c>LND_RegulatoryFiles</c>). Se lee con <c>Lending.RegulatoryFiles.Read</c>; lo sube quien tiene <c>Lending.RegulatoryFiles.MarkUploaded</c>
+    /// mientras la generación esté <c>Generated</c> (antes de marcarla cargada, que lo cita en <c>ReceiptAttachmentPublicId</c>); se borra sólo hasta
+    /// entonces: marcada cargada, es la evidencia del cargue y queda bloqueado (<c>Attachments.OwnerLocked</c>).
+    /// </summary>
+    public const string ComprobanteDeCargueRegulatorio = "LendingRegulatoryFileReceipt";
+
+    /// <summary>
+    /// Feature 013, K6a (T1039; api.md §12.4; FR-105): el estudio de impacto y el soporte del aviso a la Superintendencia de una adopción o un
+    /// desistimiento voluntario del modelo de pérdida esperada, con dueño la <b>propuesta</b> (<c>OwnerEntityPublicId</c> = el <c>PublicId</c> que la
+    /// pantalla genera al proponer el cambio, que es el sujeto del punto del acta y el de la elección registrada). Se sube <b>antes</b> de registrar la
+    /// elección, que los cita en <c>ImpactStudyAttachmentPublicId</c> y <c>SupervisorNoticeAttachmentPublicId</c>. Se lee con
+    /// <c>Lending.Ratings.Read</c>; se sube y se borra con <c>Lending.ImpairmentModel.Manage</c> mientras no haya una elección con ese <c>PublicId</c>;
+    /// registrada, queda bloqueado (<c>Attachments.OwnerLocked</c>): es el soporte de un hecho de sólo inserción.
+    /// </summary>
+    public const string SoporteDeCambioDelModelo = "LendingImpairmentModelElectionSupport";
+
+    private const string LeerCalificaciones = "Lending.Ratings.Read";
+    private const string ElegirModeloDeDeterioro = "Lending.ImpairmentModel.Manage";
+
+    private const string LeerArchivosRegulatorios = "Lending.RegulatoryFiles.Read";
+    private const string MarcarArchivosRegulatoriosCargados = "Lending.RegulatoryFiles.MarkUploaded";
+
+    private const string LeerCobranza = "Lending.Collections.Read";
+    private const string GestionarCobroJuridico = "Lending.LegalProcesses.Manage";
+    private const string LeerAvisosPrevios = "Lending.PriorNotices.Read";
+    private const string RegistrarConstanciaDeAviso = "Lending.PriorNotices.RegisterEvidence";
+    private const string LeerReclamos = "Lending.CreditReportClaims.Read";
+    private const string TramitarReclamos = "Lending.CreditReportClaims.Manage";
+
+    private const string ArmarLotesDeCastigo = "Lending.WriteOffs.Prepare";
+    private const string AplicarLotesDeCastigo = "Lending.WriteOffs.Apply";
+
+    private const string LeerCreditos = "Lending.Loans.Read";
+    private const string GestionarEventosDelDeudor = "Lending.DebtorEvents.Manage";
+    private const string GestionarInsolvencia = "Lending.Insolvency.Manage";
+
+    private const string LeerNovedades = "Lending.Novelties.Read";
+    private const string PedirNovedades = "Lending.Novelties.Request";
+
     private const string LeerDocumentosDeCartera = "Lending.Documents.Read";
     private const string AdministrarParametrosDeCartera = "Lending.Parameters.Manage";
 
@@ -212,6 +328,7 @@ public static class AdjuntosDeModulo
     private const string AdministrarGarantias = "Lending.Guarantees.Manage";
 
     private const string LeerSolicitudesDeCredito = "Lending.Applications.Read";
+    private const string TrasladarLibranzas = "Lending.PayrollTransfers.Manage";
     private const string CrearSolicitudesDeCredito = "Lending.Applications.Create";
 
     private const string VerLineas = "Lending.CreditLines.View";
@@ -238,6 +355,8 @@ public static class AdjuntosDeModulo
         [InformeDeCentrales] = new("Lending.CreditBureau.ReadReports", Borrable: false, "el informe de una consulta a centrales de riesgo"),
         [SimulacionEnviada] = new("Lending.DebtorMessages.Read", Borrable: false, "la simulación enviada a la persona"),
         [ArchivoDeDesembolsos] = new("Lending.DisbursementFiles.Generate", Borrable: false, "el archivo de desembolsos de crédito que se entregó al banco"),
+        [ArchivoDeDescuentos] = new("Lending.PayrollDeductionFiles.Read", Borrable: false, "el archivo de descuentos que se entregó a una pagaduría"),
+        [ArchivoRegulatorio] = new("Lending.RegulatoryFiles.Read", Borrable: false, "el archivo del SICSES o de una central de riesgo tal como se generó"),
         [CobrosProvisionales] = new("Lending.Activation.Execute", Borrable: false, "el archivo de cobros provisionales revisado para la activación de Cartera"),
         [DocumentoEmitidoDeCartera] = new(LeerDocumentosDeCartera, Borrable: false, "un documento emitido de Cartera (plan de pagos, paz y salvo o certificado)"),
     };
@@ -262,10 +381,17 @@ public static class AdjuntosDeModulo
             AutorizacionDeDatos => VerHabeasData,
             SolicitudDelTitular => LeerSolicitudes,
             SoporteTributarioDeLinea => VerLineas,
-            DocumentoDeSolicitud => LeerSolicitudesDeCredito,
+            DocumentoDeSolicitud or CertificacionDeLibranza => LeerSolicitudesDeCredito,
             DocumentoDeGarantia => LeerGarantias,
+            ConsentimientoDeNovedad => LeerNovedades,
+            SoporteDeEventoDelDeudor or SoporteDeCastigo or ReporteDeCastigos => LeerCreditos,
             SoporteDeIndicadorRegulatorio => VerIndicadores,
             LogotipoDeCartera or ImagenDeFirmaDeCartera => LeerDocumentosDeCartera,
+            DocumentoDeProcesoJuridico => LeerCobranza,
+            ConstanciaDeAvisoPrevio => LeerAvisosPrevios,
+            SoporteDeReclamoSobreElReporte => LeerReclamos,
+            ComprobanteDeCargueRegulatorio => LeerArchivosRegulatorios,
+            SoporteDeCambioDelModelo => LeerCalificaciones,
             _ => De(ownerEntityType)?.PermisoDeLectura,
         };
         return permiso is null || await permisos.HasPermissionAsync(permiso, ct);
@@ -339,6 +465,23 @@ public static class AdjuntosDeModulo
                 return new Error("Generic.NotFound", "Solicitud de crédito no encontrada.");
             return SolicitudDecidida(solicitud.Value) ? SolicitudBloqueada() : null;
         }
+        if (ownerEntityType == CertificacionDeLibranza)
+        {
+            // Feature 013, K2 (T0837): la certificación de una solicitud por libranza (como sus demás soportes) o la de un traslado (el crédito).
+            var solicitudDeLibranza = await db.CreditApplications.AsNoTracking()
+                .Where(a => a.PublicId == ownerEntityPublicId && !a.IsDeleted)
+                .Select(a => (Domain.Enums.Lending.CreditApplicationStatus?)a.Status)
+                .FirstOrDefaultAsync(ct);
+            if (solicitudDeLibranza is { } estadoDeLibranza)
+            {
+                if (!await permisos.HasPermissionAsync(CrearSolicitudesDeCredito, ct)) return new Error("Generic.NotFound", "Solicitud de crédito no encontrada.");
+                return SolicitudDecidida(estadoDeLibranza) ? SolicitudBloqueada() : null;
+            }
+            if (!await permisos.HasPermissionAsync(TrasladarLibranzas, ct)
+                || !await db.Loans.AnyAsync(l => l.PublicId == ownerEntityPublicId && !l.IsDeleted, ct))
+                return new Error("Generic.NotFound", "Crédito no encontrado.");
+            return null;
+        }
         if (ownerEntityType == DocumentoDeGarantia)
         {
             if (!await permisos.HasPermissionAsync(AdministrarGarantias, ct)) return new Error("Generic.NotFound", "Garantía no encontrada.");
@@ -358,6 +501,77 @@ public static class AdjuntosDeModulo
             if (!await permisos.HasPermissionAsync(AdministrarIndicadores, ct)) return new Error("Generic.NotFound", "Indicador no encontrado.");
             return await IndicadorRegistradoAsync(db, ownerEntityPublicId, ct) ? IndicadorBloqueado() : null;
         }
+        if (ownerEntityType == ConsentimientoDeNovedad)
+        {
+            // Feature 013, K3 (T0880): el consentimiento de una novedad, mientras no se decida.
+            var novedad = await EstadoDeNovedadAsync(db, ownerEntityPublicId, ct);
+            if (novedad is null || !await permisos.HasPermissionAsync(PedirNovedades, ct)) return new Error("Generic.NotFound", "Novedad no encontrada.");
+            return NovedadDecidida(novedad.Value) ? NovedadBloqueada() : null;
+        }
+        if (ownerEntityType == SoporteDeEventoDelDeudor)
+        {
+            // Feature 013, K3 (bloque C): el soporte de un evento del deudor, de su insolvencia o de su reclamación.
+            var puede = await permisos.HasPermissionAsync(GestionarEventosDelDeudor, ct) || await permisos.HasPermissionAsync(GestionarInsolvencia, ct);
+            if (!puede || !await db.People.AnyAsync(p => p.PublicId == ownerEntityPublicId, ct))
+                return new Error("Generic.NotFound", "Persona no encontrada.");
+            return null;
+        }
+        if (ownerEntityType == SoporteDeCastigo)
+        {
+            // Feature 013, K3 (US14): los soportes del castigo de un crédito, de quien arma el lote.
+            if (!await permisos.HasPermissionAsync(ArmarLotesDeCastigo, ct)
+                || !await db.Loans.AnyAsync(l => l.PublicId == ownerEntityPublicId && !l.IsDeleted, ct))
+                return new Error("Generic.NotFound", "Crédito no encontrado.");
+            return null;
+        }
+        if (ownerEntityType == ReporteDeCastigos)
+        {
+            // Feature 013, K3 (US14): el soporte del reporte al supervisor de un lote aplicado que debe reportarse y todavía no se reportó.
+            var lote = await db.WriteOffBatches.AsNoTracking().Where(b => b.PublicId == ownerEntityPublicId && !b.IsDeleted)
+                .Select(b => new { b.Status, b.SupervisorReportRequired, b.SupervisorReportedAt }).FirstOrDefaultAsync(ct);
+            if (lote is null || !await permisos.HasPermissionAsync(AplicarLotesDeCastigo, ct))
+                return new Error("Generic.NotFound", "Lote de castigo no encontrado.");
+            return lote.Status == Domain.Enums.Lending.WriteOffBatchStatus.Applied && lote.SupervisorReportRequired && lote.SupervisorReportedAt is null
+                ? null
+                : new ErrorConDatos(AttachmentErrorCodes.OwnerLocked,
+                    "El lote no espera el soporte del reporte al supervisor: no está aplicado, no debe reportarse o el reporte ya se registró.",
+                    new { ownerEntityType });
+        }
+        if (ownerEntityType == DocumentoDeProcesoJuridico)
+        {
+            // Feature 013, K4 (US12): los documentos de un proceso de cobro jurídico abierto.
+            var proceso = await db.LegalProcesses.AsNoTracking().Where(p => p.PublicId == ownerEntityPublicId && !p.IsDeleted)
+                .Select(p => (Domain.Enums.Lending.LegalProcessStatus?)p.Status).FirstOrDefaultAsync(ct);
+            if (proceso is null || !await permisos.HasPermissionAsync(GestionarCobroJuridico, ct))
+                return new Error("Generic.NotFound", "Proceso de cobro jurídico no encontrado.");
+            return proceso is Domain.Enums.Lending.LegalProcessStatus.Concluded or Domain.Enums.Lending.LegalProcessStatus.Withdrawn
+                ? new ErrorConDatos(AttachmentErrorCodes.OwnerLocked, "El proceso de cobro jurídico ya terminó: no recibe más documentos.",
+                    new { ownerEntityType })
+                : null;
+        }
+        if (ownerEntityType == ConstanciaDeAvisoPrevio)
+        {
+            // Feature 013, K4 (US12): la guía de la carta de un aviso previo.
+            if (!await permisos.HasPermissionAsync(RegistrarConstanciaDeAviso, ct)
+                || !await db.PriorNotices.AnyAsync(n => n.PublicId == ownerEntityPublicId && !n.IsDeleted, ct))
+                return new Error("Generic.NotFound", "Aviso previo no encontrado.");
+            return null;
+        }
+        if (ownerEntityType == SoporteDeReclamoSobreElReporte)
+        {
+            // Feature 013, K4 (US12): los soportes de un reclamo sobre el reporte a centrales, de la persona que reclama.
+            if (!await permisos.HasPermissionAsync(TramitarReclamos, ct) || !await db.People.AnyAsync(p => p.PublicId == ownerEntityPublicId, ct))
+                return new Error("Generic.NotFound", "Persona no encontrada.");
+            return null;
+        }
+        if (ownerEntityType == ComprobanteDeCargueRegulatorio)
+        {
+            // Feature 013, K5 (decisión del dueño del 2026-10-16): el comprobante del cargue, antes de marcar cargada la generación.
+            var archivo = await EstadoDelArchivoRegulatorioAsync(db, ownerEntityPublicId, ct);
+            if (archivo is null || !await permisos.HasPermissionAsync(MarcarArchivosRegulatoriosCargados, ct))
+                return new Error("Generic.NotFound", "Archivo regulatorio no encontrado.");
+            return archivo == Domain.Enums.Lending.RegulatoryFileStatus.Generated ? null : ComprobanteDeCargueBloqueado();
+        }
         if (ownerEntityType is LogotipoDeCartera or ImagenDeFirmaDeCartera)
         {
             if (contentType is not null && !TiposDeImagenDeCartera.Contains(contentType))
@@ -366,6 +580,12 @@ public static class AdjuntosDeModulo
                 || !await db.LendingSetups.AnyAsync(x => x.PublicId == ownerEntityPublicId, ct))
                 return new Error("Generic.NotFound", "Configuración de Cartera no encontrada.");
             return null;
+        }
+        if (ownerEntityType == SoporteDeCambioDelModelo)
+        {
+            // Feature 013, K6a (T1039): el estudio de impacto y el aviso de una propuesta de cambio del modelo, mientras no se registre la elección.
+            if (!await permisos.HasPermissionAsync(ElegirModeloDeDeterioro, ct)) return new Error("Generic.NotFound", "Propuesta no encontrada.");
+            return await EleccionRegistradaAsync(db, ownerEntityPublicId, ct) ? CambioDelModeloBloqueado() : null;
         }
         if (ownerEntityType != Comprobante)
             return new Error(AttachmentErrorCodes.OwnerNotAllowed,
@@ -398,6 +618,31 @@ public static class AdjuntosDeModulo
             return new ErrorConDatos(AttachmentErrorCodes.OwnerLocked,
                 "Es evidencia del titular de los datos (autorización o solicitud): se conserva y no se puede borrar.",
                 new { ownerEntityType });
+        // Feature 013, K3 (bloque C): el soporte de un evento del deudor es la evidencia de lo que suspendió el cobro.
+        if (ownerEntityType == SoporteDeEventoDelDeudor)
+            return new ErrorConDatos(AttachmentErrorCodes.OwnerLocked,
+                "Es el soporte de un evento del deudor (fallecimiento, retiro, embargo o insolvencia): se conserva y no se puede borrar.",
+                new { ownerEntityType });
+        // Feature 013, K3 (US14): los soportes del castigo y del reporte al supervisor respaldan lo que se castigó.
+        if (ownerEntityType is SoporteDeCastigo or ReporteDeCastigos)
+            return new ErrorConDatos(AttachmentErrorCodes.OwnerLocked,
+                "Es un soporte del castigo de cartera (informe, concepto, cruce de aportes o reporte al supervisor): se conserva y no se puede borrar.",
+                new { ownerEntityType });
+        // Feature 013, K4 (US12): los documentos del cobro jurídico, la guía de la carta del aviso previo y los soportes de un reclamo sobre el reporte
+        // son evidencia: se conservan.
+        if (ownerEntityType is DocumentoDeProcesoJuridico or ConstanciaDeAvisoPrevio or SoporteDeReclamoSobreElReporte)
+            return new ErrorConDatos(AttachmentErrorCodes.OwnerLocked,
+                "Es evidencia de la cobranza (documento del cobro jurídico, constancia del aviso previo o soporte de un reclamo): se conserva y no se puede borrar.",
+                new { ownerEntityType });
+        // Feature 013, K5 (decisión del dueño del 2026-10-16): el comprobante del cargue se borra sólo antes de marcar cargada la generación.
+        if (ownerEntityType == ComprobanteDeCargueRegulatorio)
+        {
+            if (permisos is not null && !await permisos.HasPermissionAsync(MarcarArchivosRegulatoriosCargados, ct))
+                return new Error("Generic.NotFound", "Adjunto no encontrado.");
+            return await EstadoDelArchivoRegulatorioAsync(db, ownerEntityPublicId, ct) is Domain.Enums.Lending.RegulatoryFileStatus.Generated or null
+                ? null
+                : ComprobanteDeCargueBloqueado();
+        }
         // Feature 013 (T0361): el soporte del concepto tributario respalda una versión sellada de la línea.
         if (ownerEntityType == SoporteTributarioDeLinea)
             return new ErrorConDatos(AttachmentErrorCodes.OwnerLocked,
@@ -414,12 +659,42 @@ public static class AdjuntosDeModulo
                 return new Error("Generic.NotFound", "Adjunto no encontrado.");
             return solicitud is { } estadoDeLaSolicitud && SolicitudDecidida(estadoDeLaSolicitud) ? SolicitudBloqueada() : null;
         }
+        // Feature 013, K2 (T0837): la certificación de libranza se borra como un soporte de la solicitud; la de un traslado respalda el vínculo nuevo.
+        if (ownerEntityType == CertificacionDeLibranza)
+        {
+            var solicitudDeLibranza = await db.CreditApplications.AsNoTracking()
+                .Where(a => a.PublicId == ownerEntityPublicId)
+                .Select(a => (Domain.Enums.Lending.CreditApplicationStatus?)a.Status)
+                .FirstOrDefaultAsync(ct);
+            if (solicitudDeLibranza is null)
+                return new ErrorConDatos(AttachmentErrorCodes.OwnerLocked,
+                    "Es la certificación que respalda el traslado de una libranza: se conserva y no se puede borrar.", new { ownerEntityType });
+            if (permisos is not null && !await permisos.HasPermissionAsync(CrearSolicitudesDeCredito, ct))
+                return new Error("Generic.NotFound", "Adjunto no encontrado.");
+            return SolicitudDecidida(solicitudDeLibranza.Value) ? SolicitudBloqueada() : null;
+        }
         // Feature 013 (T0450, T81): el soporte de una garantía o de un pagaré se borra sólo antes de perfeccionarse y de decidirse su dueño.
         if (ownerEntityType == DocumentoDeGarantia)
         {
             if (permisos is not null && !await permisos.HasPermissionAsync(AdministrarGarantias, ct))
                 return new Error("Generic.NotFound", "Adjunto no encontrado.");
             return await GarantiaBorrableAsync(db, ownerEntityPublicId, ct) ? null : GarantiaBloqueada();
+        }
+        // Feature 013, K3 (T0880): el consentimiento de una novedad se borra sólo antes de decidirla, con el permiso de pedirla.
+        if (ownerEntityType == ConsentimientoDeNovedad)
+        {
+            if (permisos is not null && !await permisos.HasPermissionAsync(PedirNovedades, ct))
+                return new Error("Generic.NotFound", "Adjunto no encontrado.");
+            return await EstadoDeNovedadAsync(db, ownerEntityPublicId, ct) is { } estadoDeLaNovedad && NovedadDecidida(estadoDeLaNovedad)
+                ? NovedadBloqueada()
+                : null;
+        }
+        // Feature 013, K6a (T1039): el soporte de un cambio del modelo se borra sólo antes de registrar la elección.
+        if (ownerEntityType == SoporteDeCambioDelModelo)
+        {
+            if (permisos is not null && !await permisos.HasPermissionAsync(ElegirModeloDeDeterioro, ct))
+                return new Error("Generic.NotFound", "Adjunto no encontrado.");
+            return await EleccionRegistradaAsync(db, ownerEntityPublicId, ct) ? CambioDelModeloBloqueado() : null;
         }
         // Feature 013 (T0638): el soporte de un indicador regulatorio se borra sólo antes de registrar el indicador que lo cita.
         if (ownerEntityType == SoporteDeIndicadorRegulatorio)
@@ -466,6 +741,28 @@ public static class AdjuntosDeModulo
             : null;
     }
 
+    /// <summary>K5: el estado de una generación regulatoria por su <c>PublicId</c>, o nulo si no existe.</summary>
+    private static Task<Domain.Enums.Lending.RegulatoryFileStatus?> EstadoDelArchivoRegulatorioAsync(IApplicationDbContext db, Guid publicId, CancellationToken ct) =>
+        db.RegulatoryFiles.AsNoTracking().Where(f => f.PublicId == publicId && !f.IsDeleted)
+            .Select(f => (Domain.Enums.Lending.RegulatoryFileStatus?)f.Status).FirstOrDefaultAsync(ct);
+
+    /// <summary>K5: la generación ya no espera el comprobante (cargada, reemplazada o sin archivo): el que tenga se conserva.</summary>
+    public static Error ComprobanteDeCargueBloqueado() => new ErrorConDatos(AttachmentErrorCodes.OwnerLocked,
+        "El archivo regulatorio ya no espera el comprobante del cargue: sólo uno generado y sin marcar cargado lo recibe, y marcado cargado su comprobante "
+        + "es la evidencia del cargue y no se puede borrar.", new { ownerEntityType = ComprobanteDeCargueRegulatorio });
+
+    /// <summary>K3: el estado de una novedad por su <c>PublicId</c>, o nulo si no existe.</summary>
+    private static Task<Domain.Enums.Lending.LoanNoveltyStatus?> EstadoDeNovedadAsync(IApplicationDbContext db, Guid publicId, CancellationToken ct) =>
+        db.LoanNovelties.AsNoTracking().Where(n => n.PublicId == publicId && !n.IsDeleted)
+            .Select(n => (Domain.Enums.Lending.LoanNoveltyStatus?)n.Status).FirstOrDefaultAsync(ct);
+
+    /// <summary>K3: decidida (aprobada, rechazada, aplicada o anulada): sus consentimientos se conservan con ella.</summary>
+    public static bool NovedadDecidida(Domain.Enums.Lending.LoanNoveltyStatus estado) =>
+        estado is not (Domain.Enums.Lending.LoanNoveltyStatus.Draft or Domain.Enums.Lending.LoanNoveltyStatus.Submitted);
+
+    public static Error NovedadBloqueada() => new ErrorConDatos(AttachmentErrorCodes.OwnerLocked,
+        "La novedad ya se decidió: sus consentimientos respaldan la decisión y no se cambian.", new { ownerEntityType = ConsentimientoDeNovedad });
+
     /// <summary>Decidida (o terminada): sus soportes se conservan con ella (T81).</summary>
     public static bool SolicitudDecidida(Domain.Enums.Lending.CreditApplicationStatus estado) =>
         estado is Domain.Enums.Lending.CreditApplicationStatus.Approved or Domain.Enums.Lending.CreditApplicationStatus.Denied
@@ -507,6 +804,15 @@ public static class AdjuntosDeModulo
         return adjuntos.Count > 0
             && await db.RegulatoryIndicators.AsNoTracking().AnyAsync(i => i.SupportAttachmentPublicId != null && adjuntos.Contains(i.SupportAttachmentPublicId.Value), ct);
     }
+
+    /// <summary>Feature 013, K6a (T1039): ¿ya hay una elección del modelo registrada con ese <c>PublicId</c>?</summary>
+    private static Task<bool> EleccionRegistradaAsync(IApplicationDbContext db, Guid dueno, CancellationToken ct) =>
+        db.ImpairmentModelElections.AsNoTracking().AnyAsync(e => e.PublicId == dueno, ct);
+
+    /// <summary>El estudio de impacto o el aviso de una elección ya registrada no se cambia ni se borra (K6a, T1039).</summary>
+    public static Error CambioDelModeloBloqueado() => new ErrorConDatos(AttachmentErrorCodes.OwnerLocked,
+        "Es el soporte de una adopción o un desistimiento del modelo de pérdida esperada ya registrado: se conserva con la elección y no se puede cambiar.",
+        new { ownerEntityType = SoporteDeCambioDelModelo });
 
     /// <summary>
     /// Feature 013, US13 (T0781): ¿<paramref name="adjunto"/> ya fue reemplazado? La imagen vigente de un tipo es la última disponible (la de mayor

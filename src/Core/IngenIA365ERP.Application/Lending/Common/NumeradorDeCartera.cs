@@ -234,7 +234,17 @@ public sealed class NumeradorDeCartera(IApplicationDbContext db, ICerrojoDeCarte
         LendingNumberKind.DisbursementFile => db.DisbursementFiles.IgnoreQueryFilters().AnyAsync(f => f.Number == numero, ct),
         LendingNumberKind.SessionMinutes => db.LendingSessions.IgnoreQueryFilters().AnyAsync(s => s.Number == numero, ct),
         LendingNumberKind.IssuedDocument => db.IssuedLendingDocuments.IgnoreQueryFilters().AnyAsync(d => d.Number == numero, ct),
-        // K2 (archivo de descuentos) y K5 (archivos regulatorios): sus tablas nacen con su entrega.
+        LendingNumberKind.PayrollDeductionFile => db.PayrollDeductionFiles.IgnoreQueryFilters().AnyAsync(f => f.Number == numero, ct),
+        // K3 (T0878, T0884): la novedad y la condonación.
+        LendingNumberKind.LoanNovelty => db.LoanNovelties.IgnoreQueryFilters().AnyAsync(n => n.Number == numero, ct),
+        LendingNumberKind.Waiver => db.Waivers.IgnoreQueryFilters().AnyAsync(w => w.Number == numero, ct),
+        LendingNumberKind.WriteOffBatch => db.WriteOffBatches.IgnoreQueryFilters().AnyAsync(b => b.Number == numero, ct),
+        LendingNumberKind.PortfolioEvaluation => db.PortfolioEvaluations.IgnoreQueryFilters().AnyAsync(e => e.Number == numero, ct),
+        // K4 (T0946, T0947): el acuerdo de pago y el proceso de cobro jurídico.
+        LendingNumberKind.PaymentAgreement => db.PaymentAgreements.IgnoreQueryFilters().AnyAsync(a => a.Number == numero, ct),
+        LendingNumberKind.LegalProcess => db.LegalProcesses.IgnoreQueryFilters().AnyAsync(p => p.Number == numero, ct),
+        // K5 (T1004): el archivo regulatorio no tiene columna de número: el número encabeza su nombre (NUMERO_…).
+        LendingNumberKind.RegulatoryFile => db.RegulatoryFiles.IgnoreQueryFilters().AnyAsync(f => f.FileName != null && f.FileName.StartsWith(numero + "_"), ct),
         _ => Task.FromResult(false),
     };
 

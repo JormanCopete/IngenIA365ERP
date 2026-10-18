@@ -5,6 +5,9 @@
   // «pendientes de validar» hasta que el dueño y la contadora los coteje con su fuente. Los festivos 2026–2028 los calcula
   // FestivosLey51 (Ley 51 de 1983); los años siguientes los registra el maestro por la plantilla saas.national-values.
   // LIBRANZA_UMBRAL_MORA_PAGADURIA no se siembra: su valor está «a cotejar en la CBCF antes de K2» (data-model §12.5).
+  // K6b (T1051): los cinco límites de vivienda de la Ley 546 de 1999 entran «pendientes de validar». TOPE_TASA_VIVIENDA y la serie UVR NO se
+  // siembran: los registra el maestro con su fuente (Junta Directiva y publicación diaria del Banco de la República) por la plantilla
+  // saas.national-values; ningún valor de ellos se inventa aquí.
   "version": 1,
   "validFrom": "2026-01-01",
   "documents": [
@@ -43,6 +46,15 @@
       "verified": false,
       "source": "Circular Externa 100 del 2026-05-12 (Supersolidaria), pendiente de cotejo (pregunta E8)",
       "file": "regla-de-perdida-esperada.json"
+    },
+    {
+      "kind": "SarcAnexo2",
+      "code": "ANEXO2-2024-07-25",
+      "validFrom": "2024-07-25",
+      "schemaVersion": 1,
+      "verified": false,
+      "source": "CBCF (Supersolidaria) Tít. IV Cap. II Anexo 2, texto de la CE 68 del 2024-07-24 (DO 52.828); tablas en imagen transcritas por el equipo el 2026-10-16, pendiente de cotejo (E8); sin la PI VOLUNTARIA de la CE 100",
+      "file": "sarc-anexo-2.json"
     }
   ],
   "values": [
@@ -71,7 +83,13 @@
     { "code": "LIMITE", "key": "TITULAR_LEYENDA_RECLAMO_DIAS", "validFrom": "2026-01-01", "value": 2, "unit": "Dias", "source": "Ley 1266 de 2008, días hábiles (valor semilla, pendiente de validar)" },
     { "code": "LIMITE", "key": "PERMANENCIA_NEGATIVO_VECES_MORA", "validFrom": "2026-01-01", "value": 2, "unit": "Veces", "source": "Ley 2157 de 2021 (valor semilla, pendiente de validar)" },
     { "code": "LIMITE", "key": "PERMANENCIA_NEGATIVO_MESES_MAXIMOS", "validFrom": "2026-01-01", "value": 48, "unit": "Meses", "source": "Ley 2157 de 2021 (valor semilla, pendiente de validar)" },
-    { "code": "LIMITE", "key": "VINCULADOS_GRADO_PARENTESCO", "validFrom": "2026-01-01", "value": 2, "unit": "Veces", "source": "Ley 454 de 1998, art. 61: segundo grado de consanguinidad o afinidad (valor semilla, pendiente de validar)" }
+    { "code": "LIMITE", "key": "VINCULADOS_GRADO_PARENTESCO", "validFrom": "2026-01-01", "value": 2, "unit": "Veces", "source": "Ley 454 de 1998, art. 61: segundo grado de consanguinidad o afinidad (valor semilla, pendiente de validar)" },
+
+    { "code": "LIMITE", "key": "VIVIENDA_PLAZO_MINIMO_MESES", "validFrom": "2026-01-01", "value": 60, "unit": "Meses", "source": "Ley 546 de 1999, art. 17: plazo de cinco años como mínimo (valor semilla, pendiente de validar)" },
+    { "code": "LIMITE", "key": "VIVIENDA_PLAZO_MAXIMO_MESES", "validFrom": "2026-01-01", "value": 360, "unit": "Meses", "source": "Ley 546 de 1999, art. 17: plazo de treinta años como máximo (valor semilla, pendiente de validar)" },
+    { "code": "LIMITE", "key": "VIVIENDA_FINANCIABLE", "validFrom": "2026-01-01", "value": 0.70, "unit": "Fraccion", "source": "Ley 546 de 1999, art. 17; Decreto 145 de 2000 (compilado en el Decreto 2555 de 2010): hasta el 70 % del valor del inmueble (valor semilla, pendiente de validar)" },
+    { "code": "LIMITE", "key": "VIVIENDA_FINANCIABLE_VIS", "validFrom": "2026-01-01", "value": 0.80, "unit": "Fraccion", "source": "Decreto 145 de 2000 (compilado en el Decreto 2555 de 2010): hasta el 80 % del valor de la vivienda de interés social (valor semilla, pendiente de validar)" },
+    { "code": "LIMITE", "key": "VIVIENDA_CUOTA_INGRESO", "validFrom": "2026-01-01", "value": 0.30, "unit": "Fraccion", "source": "Decreto 145 de 2000 (compilado en el Decreto 2555 de 2010): la primera cuota no supera el 30 % de los ingresos familiares (valor semilla, pendiente de validar)" }
   ],
   "holidays": {
     "years": [ 2026, 2027, 2028 ],

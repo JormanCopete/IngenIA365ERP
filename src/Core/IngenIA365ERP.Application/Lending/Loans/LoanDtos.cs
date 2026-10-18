@@ -44,7 +44,11 @@ public sealed record LoanTermsDto(
     string Rounding,
     string AllocationOrder,
     string PrepaymentPreference,
-    string RulesVersion);
+    string RulesVersion)
+{
+    /// <summary>K6b (bloque 2; FR-024): la unidad del capital sellada (<c>Pesos</c> o <c>Uvr</c>).</summary>
+    public string DenominationUnit { get; init; } = nameof(Domain.Enums.Lending.DenominationUnit.Pesos);
+}
 
 /// <summary>Montos aprobado, desembolsado y tramos. (nuevo)</summary>
 public sealed record LoanAmountsDto(decimal Approved, decimal Disbursed, int Tranches);
@@ -95,11 +99,23 @@ public sealed record LoanValidationFailureDto(string Code, string? Reason, DateT
 /// <summary>Una cuota del plan guardado. (nuevo)</summary>
 public sealed record ScheduleInstallmentDto(int Number, DateOnly PeriodStart, DateOnly DueDate, DateOnly ExigibleDate, decimal OpeningPrincipal,
     decimal Principal, decimal Interest, decimal GraceInterest, decimal Insurance, decimal OtherCharges, decimal Total, decimal ClosingPrincipal,
-    bool IsExtraordinary, bool IsGraceInstallment);
+    bool IsExtraordinary, bool IsGraceInstallment)
+{
+    /// <summary>K6b (bloque 2): la cuota en UVR de un plan en UVR (capital, interés, seguro, cuota y saldo final); nula en pesos.</summary>
+    public UvrInstallmentAmountsDto? Uvr { get; init; }
+}
+
+/// <summary>Los valores en UVR de una cuota del plan guardado (K6b; <c>LND_RepaymentInstallments.*Uvr</c>). (nuevo)</summary>
+public sealed record UvrInstallmentAmountsDto(decimal? OpeningPrincipal, decimal? Principal, decimal? Interest, decimal? Insurance, decimal? Total,
+    decimal? ClosingPrincipal);
 
 /// <summary>Una versión del plan (api.md §8.1, <c>GET /{id}/schedule</c>). (nuevo)</summary>
 public sealed record RepaymentScheduleDto(int Version, DateOnly ValidFrom, string Reason, string RulesVersion, int FirstRegeneratedInstallment,
-    decimal PrincipalBase, IReadOnlyList<ScheduleInstallmentDto> Installments);
+    decimal PrincipalBase, IReadOnlyList<ScheduleInstallmentDto> Installments)
+{
+    /// <summary>K6b (bloque 2): en un plan en UVR, la UVR con que se valoraron en pesos sus cuotas; nula en pesos.</summary>
+    public decimal? UvrValue { get; init; }
+}
 
 /// <summary>El recaudador de una operación. (nuevo)</summary>
 public sealed record OperationCollectorDto(string? Code, string? Class);
@@ -163,7 +179,13 @@ public sealed record LoanTransactionDto(
     Guid? ProcessRunPublicId,
     Guid? ReversesTransaction,
     Guid? ReversedBy,
-    Guid? MessagePublicId);
+    Guid? MessagePublicId)
+{
+    /// <summary>K6b (bloque 2): en un crédito en UVR, el monto en UVR del movimiento y la UVR de su fecha valor; nulos en pesos.</summary>
+    public decimal? UvrAmount { get; init; }
+
+    public decimal? UvrValue { get; init; }
+}
 
 /// <summary>El crédito en el alcance de quien consulta (404 genérico con <c>Lending.Access.OutOfScope</c> si no). (nuevo)</summary>
 public static class CreditoEnAlcance

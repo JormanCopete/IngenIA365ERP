@@ -30,14 +30,25 @@ public class LendingFactTypesSeederTests
     }
 
     [Fact]
-    public async Task Siembra_los_35_hechos_a_contabilidad_con_su_codigo_corto()
+    public async Task Siembra_los_37_hechos_a_contabilidad_con_su_codigo_corto()
     {
-        (await LendingFactTypesSeeder.AplicarAsync(_db, NullLogger.Instance, CancellationToken.None)).Should().Be(35);
+        // K6b (T1056): 35 hasta K6a, la corrección monetaria UVR y el reparto de un pago corregido por la UVR (decisión del dueño del 2026-10-17).
+        (await LendingFactTypesSeeder.AplicarAsync(_db, NullLogger.Instance, CancellationToken.None)).Should().Be(37);
 
         var filas = await _db.LendingFactTypes.ToListAsync();
-        filas.Should().HaveCount(35);
+        filas.Should().HaveCount(37);
         filas.Select(f => f.Code).Should().BeEquivalentTo(CatalogoDeMensajesDeCarteraV1.HechosAContabilidad.Select(t => t.Type));
-        CatalogoDeMensajesDeCarteraV1.Todos.Count.Should().Be(41, "los 6 a otros destinos no son hechos contables y no tienen fila");
+        CatalogoDeMensajesDeCarteraV1.Todos.Count.Should().Be(43, "los 6 a otros destinos no son hechos contables y no tienen fila");
+        filas.Single(f => f.Code == "CorreccionMonetariaUvrCausada").Should().BeEquivalentTo(new
+        {
+            ShortCode = "CMU", VoucherTypeCode = "CA", DefaultMode = "PorLotes", DefaultBatchTrigger = "FinDeCausacion", DeliveredIn = EntregaDeCartera.K6b,
+            IsInformational = false,
+        });
+        filas.Single(f => f.Code == "PagoRedistribuidoPorValorNacional").Should().BeEquivalentTo(new
+        {
+            ShortCode = "PRN", VoucherTypeCode = "CA", DefaultMode = "PorLotes", DefaultBatchTrigger = "FinDeCausacion", DeliveredIn = EntregaDeCartera.K6b,
+            IsInformational = false,
+        });
         filas.Select(f => f.ShortCode).Should().OnlyHaveUniqueItems()
             .And.OnlyContain(c => c.Length >= 3 && c.Length <= 4 && c.All(char.IsUpper));
         filas.Should().Contain(f => f.Code == "CreditoAprobadoSinDesembolsar" && f.ShortCode == "CAD" && f.DefaultMode == "NoPasa" && f.VoucherTypeCode == "CN");
@@ -88,6 +99,6 @@ public class LendingFactTypesSeederTests
         LendingFactTypesSeeder.Datos.Keys.Should().BeEquivalentTo(CatalogoDeMensajesDeCarteraV1.HechosAContabilidad.Select(t => t.Type));
         CatalogoDeMensajesDeCarteraV1.HechosAContabilidad.Should().OnlyContain(t => !string.IsNullOrWhiteSpace(t.CodigoCorto));
         CatalogoDeMensajesDeCarteraV1.HechosAContabilidad.Should().OnlyContain(t => t.Destination == IntegrationDestinations.Accounting);
-        LendingFactTypesSeeder.Catalogo().Should().HaveCount(35);
+        LendingFactTypesSeeder.Catalogo().Should().HaveCount(37);
     }
 }

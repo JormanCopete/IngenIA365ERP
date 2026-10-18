@@ -62,6 +62,26 @@ public class LasPantallasDeCarteraEstanEnElMenu
         ("Pages/Cartera/Verificar.razor", "/cartera/verificar", "Lending.Documents.Verify"),
         // Fase 14, US15 (T0800): el centro de informes de Cartera (las siete vistas de K1).
         ("Pages/Cartera/Informes.razor", "/cartera/informes", "Lending.Reports.View"),
+        // Fase 15, US10 (T0852, T0853; K2): la libranza —pagadurías, archivos de descuento y no aplicados—.
+        ("Pages/Cartera/Pagadurias.razor", "/cartera/pagadurias", "Lending.PayrollAgreements.View"),
+        ("Pages/Cartera/ArchivosDeDescuento.razor", "/cartera/archivos-de-descuento", "Lending.PayrollDeductionFiles.Read"),
+        ("Pages/Cartera/NoAplicados.razor", "/cartera/no-aplicados", "Lending.PayrollDeductionFiles.Read"),
+        // Fase 16, US11 (T0892, T0893; K3): las novedades y las condonaciones. Los eventos del deudor, la insolvencia y las reclamaciones viven
+        // en el detalle del crédito (se comprueba aparte).
+        ("Pages/Cartera/Novedades.razor", "/cartera/novedades", "Lending.Novelties.Read"),
+        ("Pages/Cartera/Condonaciones.razor", "/cartera/condonaciones", "Lending.Loans.Read"),
+        // Fase 17, US14 (T0917, T0918; K3): los lotes de castigo y la evaluación de cartera.
+        ("Pages/Cartera/Castigos.razor", "/cartera/castigos", "Lending.Loans.Read"),
+        ("Pages/Cartera/Evaluaciones.razor", "/cartera/evaluaciones", "Lending.Ratings.Read"),
+        // Fase 18, US12 (T0958, T0959; K4): la cobranza —etapas y reparto, cartera por gestor, agenda, acuerdos, campañas, avisos previos con
+        // reclamos y cobro jurídico—. Ninguna deja elegir una referencia personal (LaCobranzaNuncaContactaReferencias).
+        ("Pages/Cartera/EtapasDeCobranza.razor", "/cartera/etapas-de-cobranza", "Lending.Collections.Read"),
+        ("Pages/Cartera/Cobranza.razor", "/cartera/cobranza", "Lending.Collections.Read"),
+        ("Pages/Cartera/Agenda.razor", "/cartera/agenda", "Lending.Collections.Read"),
+        ("Pages/Cartera/AcuerdosDePago.razor", "/cartera/acuerdos-de-pago", "Lending.Collections.Read"),
+        ("Pages/Cartera/Campanas.razor", "/cartera/campanas", "Lending.Campaigns.Manage"),
+        ("Pages/Cartera/AvisosPrevios.razor", "/cartera/avisos-previos", "Lending.PriorNotices.Read"),
+        ("Pages/Cartera/Juridico.razor", "/cartera/juridico", "Lending.Collections.Read"),
     ];
 
     /// <summary>Las pantallas de detalle, sin enlace en el menú: existen, protegidas y con indicador.</summary>
@@ -77,6 +97,9 @@ public class LasPantallasDeCarteraEstanEnElMenu
         ("Pages/Contabilidad/Cartera/Lote.razor", "/contabilidad/cartera/lotes/{Id:guid}", "Accounting.LendingBatches.View"),
         // US9 (T0714): el detalle de un cierre se abre desde Cierres y desde la calificación del crédito.
         ("Pages/Cartera/Cierre.razor", "/cartera/cierres/{Id:guid}", "Lending.Ratings.Read"),
+        // US10 (T0852): el detalle de una pagaduría y el de un archivo de descuentos se abren desde sus listas.
+        ("Pages/Cartera/Pagaduria.razor", "/cartera/pagadurias/{Id:guid}", "Lending.PayrollAgreements.View"),
+        ("Pages/Cartera/ArchivoDeDescuento.razor", "/cartera/archivos-de-descuento/{Id:guid}", "Lending.PayrollDeductionFiles.Read"),
     ];
 
     /// <summary>
@@ -96,6 +119,20 @@ public class LasPantallasDeCarteraEstanEnElMenu
         Assert.Contains("<PoliticaSarc", File.ReadAllText(Path.Combine(Shared, "Pages", "Cartera", "Parametros.razor")), StringComparison.Ordinal);
         Assert.Contains("<CalificacionDelCredito", File.ReadAllText(Path.Combine(Shared, "Pages", "Cartera", "CreditoDetalle.razor")), StringComparison.Ordinal);
         Assert.Contains("href=\"/cartera/cierres\"", File.ReadAllText(Path.Combine(Shared, "Pages", "Contabilidad", "Periodos.razor")), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// US11 (T0892): el detalle del crédito ofrece «Registrar evento del deudor» e «Insolvencia» detrás de sus permisos y la pestaña de
+    /// reclamaciones al seguro, con su indicador; «Mis pendientes» lista también novedades y condonaciones.
+    /// </summary>
+    [Fact]
+    public void El_detalle_del_credito_registra_eventos_del_deudor_e_insolvencia()
+    {
+        var eventos = File.ReadAllText(Path.Combine(Shared, "Components", "Cartera", "EventosDelDeudor.razor"));
+        Assert.Contains("Required=\"Lending.DebtorEvents.Manage\"", eventos, StringComparison.Ordinal);
+        Assert.Contains("Required=\"Lending.Insolvency.Manage\"", eventos, StringComparison.Ordinal);
+        Assert.Contains("<IndicadorDeCarga", eventos, StringComparison.Ordinal);
+        Assert.Contains("<EventosDelDeudor", File.ReadAllText(Path.Combine(Shared, "Pages", "Cartera", "CreditoDetalle.razor")), StringComparison.Ordinal);
     }
 
     [Fact]

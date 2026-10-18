@@ -3,6 +3,7 @@
 @using IngenIA365ERP.Shared.Services.Cartera
 @inject CarteraClient Cartera
 @inject NavigationManager Navegacion
+@inject IJSRuntime JS
 
 <PageTitle>Verificar documento - IngenIA365ERP</PageTitle>
 
@@ -10,7 +11,9 @@
    página con ?codigo=XXXX-XXXX-XXXX-XXXX; sin sesión, el ingreso con ?returnUrl= devuelve aquí. Sólo la usan personas de la cooperativa con
    Lending.Documents.Verify —no hay verificación anónima—, y un código de otra cooperativa o inexistente no corresponde a ningún documento de esta.
    Muestra si es auténtico, su estado (vigente, sujeto a firmeza o anulado con el motivo y la fecha), clase, número, fecha, el titular con el
-   documento enmascarado y los datos esenciales. Cada verificación queda en la auditoría. *@
+   documento enmascarado y los datos esenciales. Cada verificación queda en la auditoría.
+   K5 (T0975, R149): «Comparar con un PDF» calcula en el navegador la huella SHA-256 del archivo que la persona tiene (wwwroot/js/huella-de-archivo.js)
+   y la manda con el código; la API responde si coincide con la del PDF guardado. El archivo nunca sale del equipo. *@
 <PermissionGate Required="Lending.Documents.Verify" MostrarAviso="true">
 <div class="pagina">
     <div class="page-header">
@@ -49,6 +52,15 @@
                     <p class="aviso aviso-error">Anulado el @TextosDeDocumentos.Momento(anulacion.At): @anulacion.Reason</p>
                 }
                 <p>Emitido el @TextosDeDocumentos.Momento(v.IssuedAt) a nombre de <strong>@v.Holder.FullName</strong> (documento @v.Holder.DocumentNumberMasked).</p>
+                @if (TextosDeDocumentos.ComparacionDelPdf(v.PdfMatches) is { } comparacion)
+                {
+                    <p class="aviso @(v.PdfMatches == true ? "aviso-ok" : "aviso-error")" role="status">@comparacion @(_archivo is null ? "" : $"({_archivo})")</p>
+                }
+                <div class="toolbar">
+                    <label class="boton boton-secundario" for="pdf-a-comparar">Comparar con un PDF…</label>
+                    <input type="file" id="pdf-a-comparar" hidden accept=".pdf,application/pdf" disabled="@_carga.Activa" @onchange="CompararAsync" />
+                    <span class="texto-tenue">El archivo no se sube: el navegador calcula su huella y sólo ésta se compara con la del PDF emitido.</span>
+                </div>
                 <div class="tabla-desplazable">
                     <table class="data-grid">
                         <thead><tr><th>Dato</th><th>Valor</th></tr></thead>
@@ -72,7 +84,7 @@
     [SupplyParameterFromQuery(Name = "codigo")] public string? CodigoInicial { get; set; }
 
     private readonly EstadoDeCarga _carga = new();
-    private string? _codigo, _error;
+    private string? _codigo, _error, _archivo;
     private DocumentoVerificadoDto? _verificado;
 
     protected override async Task OnInitializedAsync()
@@ -82,13 +94,34 @@
         await VerificarAsync();
     }
 
-    private async Task VerificarAsync()
+    private Task VerificarAsync() => VerificarAsync(null);
+
+    /// <summary>K5: la huella del PDF elegido, calculada en el navegador, y la verificación del mismo código con ella.</summary>
+    private async Task CompararAsync()
+    {
+        HuellaDeArchivoDto? huella;
+        try
+        {
+            huella = await JS.InvokeAsync<HuellaDeArchivoDto?>("huellaDeArchivo.calcular", "pdf-a-comparar");
+        }
+        catch (JSException)
+        {
+            _error = "Este navegador no pudo calcular la huella del archivo.";
+            return;
+        }
+        if (huella is null) return;
+        _archivo = huella.Name;
+        await VerificarAsync(huella.Sha256);
+    }
+
+    private async Task VerificarAsync(string? sha256)
     {
         if (string.IsNullOrWhiteSpace(_codigo)) return;
         using var carga = _carga.Iniciar();
         _error = null;
         _verificado = null;
-        var r = await Cartera.VerificarDocumentoAsync(_codigo);
+        if (sha256 is null) _archivo = null;
+        var r = await Cartera.VerificarDocumentoAsync(_codigo, sha256);
         if (!r.IsSuccess)
         {
             _error = r.ErrorCode == NoEncontrado

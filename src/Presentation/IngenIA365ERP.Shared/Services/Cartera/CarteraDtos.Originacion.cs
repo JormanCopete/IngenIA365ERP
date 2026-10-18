@@ -65,7 +65,21 @@ public sealed record SimulacionDto(
     IReadOnlyList<TramoDeSimulacionDto> Explanation,
     IReadOnlyList<string> ExplanationLines,
     IReadOnlyList<AvisoDto> Warnings,
-    string SimulationSha256);
+    string SimulationSha256)
+{
+    /// <summary>K6b: en una línea en UVR, el plan en UVR y la UVR del desembolso con que se valoraron las cuotas en pesos; nulo en pesos.</summary>
+    public PlanEnUvrDto? Uvr { get; init; }
+
+    /// <summary>K6b: ¿la línea es de vivienda? La solicitud pregunta entonces si el inmueble es VIS.</summary>
+    public bool IsHousing { get; init; }
+}
+
+/// <summary>Una cuota del plan en UVR.</summary>
+public sealed record CuotaEnUvrDto(int Number, DateOnly DueDate, decimal Principal, decimal Interest, decimal Insurance, decimal Total, decimal BalanceAfter);
+
+/// <summary>El plan simulado en UVR con la UVR del desembolso y la leyenda de la equivalencia en pesos.</summary>
+public sealed record PlanEnUvrDto(DateOnly UvrDate, decimal UvrValue, decimal AmountUvr, decimal ToPayUvr, IReadOnlyList<CuotaEnUvrDto> Installments,
+    string Legend);
 
 /// <summary>El envío de la simulación por correo a la persona.</summary>
 public sealed record EnviarSimulacionRequest(SimulacionRequest Simulation, Guid RecipientPersonPublicId);
@@ -113,6 +127,9 @@ public sealed class SolicitudRequest
     public bool PolicyExceptionRequested { get; set; }
     public string? PolicyExceptionReason { get; set; }
     public string? SimulationSha256 { get; set; }
+
+    /// <summary>K6b: en una solicitud de vivienda, si el inmueble es de interés social (elige el límite de financiación VIS).</summary>
+    public bool? IsSocialHousing { get; set; }
 }
 
 public sealed record LineaDeSolicitudDto(Guid PublicId, string Code, string Name, Guid? VersionPublicId);
@@ -175,7 +192,11 @@ public sealed record SolicitudDto(
     bool BlockedByRestrictiveLists,
     DateTime? SubmittedAt,
     string CreatedBy,
-    DateTime CreatedAt);
+    DateTime CreatedAt)
+{
+    /// <summary>K6b: en una solicitud de vivienda, si el inmueble es VIS; nulo en las demás.</summary>
+    public bool? IsSocialHousing { get; init; }
+}
 
 /// <summary>Una fila de la lista de solicitudes.</summary>
 public sealed record SolicitudEnListaDto(

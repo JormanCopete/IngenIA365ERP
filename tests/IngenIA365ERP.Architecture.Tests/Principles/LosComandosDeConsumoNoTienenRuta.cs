@@ -49,6 +49,13 @@ public class LosComandosDeConsumoNoTienenRuta
         "ExecuteMonthlyCloseCommand",
         "CreateBaseCloseCommand",
         "RunScheduledMonthlyCloseCommand",
+        // K2 (US10, bloque B; T0818): lo que Recaudo devuelve del archivo de descuentos (lo manda DestinoCartera, que reparte por tipo con
+        // ConsumeReceiptsMessageCommand) y los comandos de las dos tareas de la libranza (los manda cada ITareaProgramada).
+        "ConsumeReceiptsMessageCommand",
+        "ConsumePayrollFileSentCommand",
+        "ConsumePayrollDeductionResultCommand",
+        "AlertPendingPayrollDeductionFilesCommand",
+        "AlertOverduePayrollTransfersCommand",
     ];
 
     [Fact]

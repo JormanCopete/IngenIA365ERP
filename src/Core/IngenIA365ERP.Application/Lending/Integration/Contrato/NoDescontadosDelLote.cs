@@ -22,7 +22,8 @@ namespace IngenIA365ERP.Application.Lending.Integration.Contrato;
 /// <c>LND_InstallmentNonDeductions</c> no tiene columna para el ítem de Nómina que lo informó (<c>SourceItemPublicId</c>): va en el hecho de
 /// auditoría. (nuevo)
 /// </summary>
-public sealed class NoDescontadosDelLote(IApplicationDbContext db, CargadorDeReconstruccion cargador, IAlertas alertas, IDateTimeService reloj)
+public sealed class NoDescontadosDelLote(IApplicationDbContext db, CargadorDeReconstruccion cargador, IAlertas alertas, IDateTimeService reloj,
+    Payroll.Results.SeguimientoDeNoAplicados? seguimiento = null)
 {
     /// <summary>Los destinatarios de la alerta (en el alcance de la oficina del crédito).</summary>
     public const string PermisoDeLaAlerta = "Lending.Loans.Read";
@@ -69,6 +70,14 @@ public sealed class NoDescontadosDelLote(IApplicationDbContext db, CargadorDeRec
             AlertPublicId = alerta.IsSuccess ? alerta.Value.AlertPublicId : null,
         };
         db.InstallmentNonDeductions.Add(fila);
+
+        // K2 (T0841; FR-115, C32): desde K2 rige la regla del convenio de la nómina propia —el aviso al deudor y su seguimiento automático—, en la
+        // misma transacción de Nómina. Sin convenio de nómina propia, como en K1: sólo la marca y la alerta.
+        if (seguimiento is not null && await ReglaDeLaNominaPropiaAsync(cuota.Value.Vencimiento, ct) is { } regla)
+        {
+            await db.SaveChangesAsync(ct);
+            await seguimiento.AplicarReglaAsync(fila, credito.DebtorPersonId, regla, ct);
+        }
         return new(ResultadoDelContrato.Applied, AuditEventTypes.LendingObligationContractApplied, ErroresDePagos.MensajeNoDescontado,
             new NoDescontadoRegistradoDto(fila.PublicId, credito.PublicId, cuota.Value.Numero, n.NotDeductedAmount));
     }
@@ -98,6 +107,15 @@ public sealed class NoDescontadosDelLote(IApplicationDbContext db, CargadorDeRec
             .OrderBy(i => i.InstallmentNumber).Select(i => new { i.Id, i.InstallmentNumber, i.DueDate }).ToListAsync(ct);
         var cuota = numero is { } n ? cuotas.FirstOrDefault(c => c.InstallmentNumber == n) : cuotas.FirstOrDefault(c => c.DueDate >= hoy) ?? cuotas.LastOrDefault();
         return cuota is null ? null : (cuota.Id, cuota.InstallmentNumber, cuota.DueDate);
+    }
+
+    /// <summary>La regla del no aplicado del convenio de la nómina propia vigente a la fecha, o nula si no hay convenio (K1) o versión vigente.</summary>
+    private async Task<NonDeductionFollowUpAction?> ReglaDeLaNominaPropiaAsync(DateOnly fecha, CancellationToken ct)
+    {
+        var convenio = await db.PayrollAgreements.AsNoTracking().Where(a => a.IsOwnPayroll && !a.IsDeleted).Select(a => (int?)a.Id).FirstOrDefaultAsync(ct);
+        if (convenio is null) return null;
+        var versiones = await db.PayrollAgreementVersions.AsNoTracking().Where(v => v.PayrollAgreementId == convenio && !v.IsDeleted).ToListAsync(ct);
+        return Domain.Entities.Lending.Payroll.PayrollAgreementVersion.Vigente(versiones, fecha)?.NonDeductionAction;
     }
 
     private static string Motivo(MotivoDeNoDescuento m) => m switch

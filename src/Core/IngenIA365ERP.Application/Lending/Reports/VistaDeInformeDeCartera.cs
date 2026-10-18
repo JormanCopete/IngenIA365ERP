@@ -31,6 +31,20 @@ public sealed record VistaDeInformeDeCartera(
     EntregaDeCartera AvailableFrom = EntregaDeCartera.K1,
     string? RequiredPermission = null)
 {
+    /// <summary>
+    /// K5 (T0981): la vista trae datos del deudor <b>salvo</b> cuando su filtro propio <see cref="ExcepcionDeDatosDelDeudor.Filter"/> vale uno de
+    /// <see cref="ExcepcionDeDatosDelDeudor.Values"/> (<c>concentration</c> con <c>by=line|sector|payer</c> es agregada; por deudor y por grupo,
+    /// no). La ruta exige entonces <see cref="RequiredPermission"/> y, al exportar, el permiso de datos personales sólo fuera de la excepción, y el
+    /// registro la ofrece aunque falte <see cref="RequiredPermission"/>. Nula: la marca <see cref="PersonalData"/> vale para toda consulta.
+    /// </summary>
+    public ExcepcionDeDatosDelDeudor? PersonalDataExceptWhen { get; init; }
+
+    /// <summary>¿Esta consulta (por el valor de su filtro propio) trae datos del deudor?</summary>
+    public bool TraeDatosDelDeudor(string? valorDelFiltro) =>
+        PersonalData && (PersonalDataExceptWhen is not { } e
+                         || string.IsNullOrWhiteSpace(valorDelFiltro)
+                         || !e.Values.Contains(valorDelFiltro.Trim(), StringComparer.OrdinalIgnoreCase));
+
     /// <summary>El permiso que exige toda vista con datos del deudor para consultarla (C84).</summary>
     public const string PermisoDeDatosDelDeudor = "Lending.Loans.Read";
 
@@ -39,3 +53,9 @@ public sealed record VistaDeInformeDeCartera(
         IReadOnlyList<string>? ownFilters = null, EntregaDeCartera availableFrom = EntregaDeCartera.K1) =>
         new(key, name, description, fileName, filters, ownFilters, PersonalData: true, availableFrom, PermisoDeDatosDelDeudor);
 }
+
+/// <summary>
+/// Cuándo una vista con datos del deudor deja de traerlos (K5, T0981): con su filtro propio <paramref name="Filter"/> en uno de
+/// <paramref name="Values"/>. Sin el filtro, la vista trae datos del deudor (el defecto es el que los trae). (nuevo)
+/// </summary>
+public sealed record ExcepcionDeDatosDelDeudor(string Filter, IReadOnlyList<string> Values);

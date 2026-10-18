@@ -40,6 +40,130 @@ public sealed class CasoDoradoDeRiesgo
     public SelectorJson? Selector { get; set; }
     public List<VarianteJson> Variantes { get; set; } = [];
     public EsperadoJson Esperado { get; set; } = new();
+    /// <summary>K3 (T0859): historiales de mora que siguen el enlace de una novación, con lo que esperan.</summary>
+    public List<HistorialJson> Historiales { get; set; } = [];
+
+    /// <summary>K6a (T1013): la pérdida esperada del Anexo 2 de los casos pe01–pe10, con lo que esperan.</summary>
+    public PerdidaEsperadaJson? PerdidaEsperada { get; set; }
+
+    /// <summary>El Anexo 2: «sembrado» es el de la semilla central (<c>sarc-anexo-2.json</c>); otro nombre, el de <c>Normas/</c>.</summary>
+    public static Anexo2 LeerAnexo2(string nombre)
+    {
+        var contenido = nombre == "sembrado"
+            ? IngenIA365ERP.Persistence.Seeding.Parametric.PlatformNationalValuesSeeder.Contenido("sarc-anexo-2.json")
+            : File.ReadAllText(Path.Combine(Directorio, "Normas", nombre + ".json"));
+        var r = Anexo2.Leer(contenido, 1);
+        return r.Documento ?? throw new InvalidOperationException($"El Anexo 2 {nombre} no se lee: {string.Join("; ", r.Errores.Select(e => $"{e.Ruta} {e.Mensaje}"))}");
+    }
+
+    /// <summary>El Anexo 1 de la semilla central, para calificar los casos de pérdida esperada con los datos sembrados.</summary>
+    public static Anexo1 Anexo1Sembrado() =>
+        Anexo1.Leer(IngenIA365ERP.Persistence.Seeding.Parametric.PlatformNationalValuesSeeder.Contenido("sarc-anexo-1.json"), 1).Documento
+        ?? throw new InvalidOperationException("El Anexo 1 sembrado no se lee.");
+
+    public sealed class PerdidaEsperadaJson
+    {
+        public string Anexo2 { get; set; } = "sembrado";
+        public ContextoPeJson Contexto { get; set; } = new();
+        public RedondeoDeDeterioro Redondeo { get; set; } = RedondeoDeDeterioro.Centavo;
+        public List<CreditoPeJson> Creditos { get; set; } = [];
+        public List<EsperadoPeJson> Esperado { get; set; } = [];
+    }
+
+    public sealed class ContextoPeJson
+    {
+        public string TipoDeOrganizacion { get; set; } = string.Empty;
+        public bool FondoDeEmpleados { get; set; }
+        public decimal Smmlv { get; set; }
+        public bool Voluntaria { get; set; }
+    }
+
+    public sealed class CreditoPeJson
+    {
+        public int Id { get; set; }
+        public int Deudor { get; set; }
+        public string? Segmento { get; set; }
+        public string? SegmentoSarc { get; set; }
+        public int DiasDeMora { get; set; }
+        public bool AsociadoActivo { get; set; }
+        public decimal Cuota { get; set; }
+        public int PlazoEnMeses { get; set; }
+        public bool PagoUnico { get; set; }
+        public MoraMensualJson? MoraMensual { get; set; }
+        public HistorialPeJson? Historial { get; set; }
+        public ImpuestaJson? Analisis { get; set; }
+        public string Garantia { get; set; } = string.Empty;
+        public SaldosJson Saldos { get; set; } = new();
+        public bool? Suspendido { get; set; }
+    }
+
+    /// <summary>La mora máxima mensual de los <see cref="Meses"/> meses que terminan en <see cref="Hasta"/> (aaaa-mm); los que no estén en <see cref="Dias"/>, 0.</summary>
+    public sealed class MoraMensualJson
+    {
+        public string Hasta { get; set; } = string.Empty;
+        public int Meses { get; set; }
+        public Dictionary<string, int> Dias { get; set; } = [];
+    }
+
+    /// <summary>Un historial por construir (<c>HistorialDeMora.Construir</c>) y completar con su regla (<c>HistorialDeMora.Completar</c>).</summary>
+    public sealed class HistorialPeJson
+    {
+        public DateOnly InicioDeLaCadena { get; set; }
+        public List<int> Antecesores { get; set; } = [];
+        public DateOnly? CorteDeMigracion { get; set; }
+        public DateOnly FechaDeReferencia { get; set; }
+        public int MesesExigidos { get; set; }
+        public ReglaDeMesesFaltantes Regla { get; set; } = ReglaDeMesesFaltantes.MayorObservada;
+        public int? DiasDelCorte { get; set; }
+        public int? DiasFijos { get; set; }
+        public List<FilaPeJson> Filas { get; set; } = [];
+        public List<TramoPeJson> Transacciones { get; set; } = [];
+    }
+
+    /// <summary>Filas del historial de un crédito, de <see cref="Desde"/> a <see cref="Hasta"/> (aaaa-mm); las que vienen después mandan.</summary>
+    public sealed class FilaPeJson
+    {
+        public int Credito { get; set; }
+        public string Desde { get; set; } = string.Empty;
+        public string? Hasta { get; set; }
+        public int Dias { get; set; }
+        public ArrearsHistoryOrigin Origen { get; set; }
+    }
+
+    public sealed class TramoPeJson
+    {
+        public string Desde { get; set; } = string.Empty;
+        public string? Hasta { get; set; }
+        public int Dias { get; set; }
+    }
+
+    public sealed class EsperadoPeJson
+    {
+        public int Id { get; set; }
+        public ImpairmentModel? Modelo { get; set; }
+        public int? Faltantes { get; set; }
+        public int? CompletadosCon { get; set; }
+        public bool? Incumplido { get; set; }
+        public int? DiasEnIncumplimiento { get; set; }
+        public decimal? Z { get; set; }
+        public decimal? Puntaje { get; set; }
+        public RatingCategory? CalificacionDelModelo { get; set; }
+        public List<string>? Variables { get; set; }
+        public string? ClaveDePi { get; set; }
+        public RatingCategory? CalificacionFinal { get; set; }
+        public RatingCause? Causa { get; set; }
+        public decimal? Pi { get; set; }
+        public decimal? Pdi { get; set; }
+        public decimal? Exposicion { get; set; }
+        public bool? Suspendido { get; set; }
+        public decimal? DeterioroCapital { get; set; }
+        public decimal? DeterioroIntereses { get; set; }
+        public decimal? DeterioroOtros { get; set; }
+        public decimal? Total { get; set; }
+        public RatingCategory? Contable { get; set; }
+        public bool? Homologada { get; set; }
+        public List<string>? ExplicacionContiene { get; set; }
+    }
 
     public static string Directorio => Path.Combine(AppContext.BaseDirectory, "Lending", "Risk");
 
@@ -50,9 +174,10 @@ public sealed class CasoDoradoDeRiesgo
         JsonSerializer.Deserialize<CasoDoradoDeRiesgo>(File.ReadAllText(ruta), Lectura)
         ?? throw new InvalidOperationException($"El caso {ruta} está vacío.");
 
-    /// <summary>La norma de prueba por nombre.</summary>
+    /// <summary>La norma de prueba por nombre; K6b (T1043): «sembrado» es el Anexo 1 de la semilla central (<c>sarc-anexo-1.json</c>).</summary>
     public static Anexo1 LeerNorma(string nombre)
     {
+        if (nombre == "sembrado") return Anexo1Sembrado();
         var r = Anexo1.Leer(File.ReadAllText(Path.Combine(Directorio, "Normas", nombre + ".json")), 1);
         return r.Documento ?? throw new InvalidOperationException($"La norma {nombre} no se lee: {string.Join("; ", r.Errores.Select(e => $"{e.Ruta} {e.Mensaje}"))}");
     }
@@ -105,6 +230,8 @@ public sealed class CasoDoradoDeRiesgo
         public bool PagoUnico { get; set; }
         public bool Nuevo { get; set; }
         public ReestructuracionJson? Reestructuracion { get; set; }
+        /// <summary>K3: el conteo de reestructuraciones; más de una suspende (el interés sólo al cobrarlo).</summary>
+        public int Reestructuraciones { get; set; }
         public InsolvenciaJson? Insolvencia { get; set; }
         public ImpuestaJson? Analisis { get; set; }
         public ImpuestaJson? Evaluacion { get; set; }
@@ -132,6 +259,47 @@ public sealed class CasoDoradoDeRiesgo
     {
         public InsolvencyProceedingStatus Estado { get; set; }
         public RatingCategory CategoriaAlIniciar { get; set; }
+        // K3 (T0859): con su inicio, su fracaso y los cierres, la categoría mantenida se deriva al corte del caso.
+        public DateOnly? Inicio { get; set; }
+        public DateOnly? FracasoEl { get; set; }
+        public RatingCategory? SinCierreAnterior { get; set; }
+        public List<CierreJson> Cierres { get; set; } = [];
+    }
+
+    public sealed class CierreJson
+    {
+        public DateOnly Fecha { get; set; }
+        public RatingCategory Categoria { get; set; }
+    }
+
+    /// <summary>K3 (T0859): un historial de mora con su cadena (antecesores), sus filas y los meses que espera, como texto.</summary>
+    public sealed class HistorialJson
+    {
+        public int Credito { get; set; }
+        public List<int> Antecesores { get; set; } = [];
+        public DateOnly InicioDeLaCadena { get; set; }
+        public DateOnly? CorteDeMigracion { get; set; }
+        public DateOnly FechaDeReferencia { get; set; }
+        public int MesesExigidos { get; set; }
+        public List<EntradaDeHistorialJson> Entradas { get; set; } = [];
+        public HistorialEsperadoJson Esperado { get; set; } = new();
+    }
+
+    public sealed class EntradaDeHistorialJson
+    {
+        public int Credito { get; set; }
+        public int Anio { get; set; }
+        public int Mes { get; set; }
+        public int Dias { get; set; }
+        public ArrearsHistoryOrigin Origen { get; set; }
+        public long Secuencia { get; set; }
+        public bool Vigente { get; set; } = true;
+    }
+
+    public sealed class HistorialEsperadoJson
+    {
+        public List<string> Meses { get; set; } = [];
+        public List<string> Faltantes { get; set; } = [];
     }
 
     public sealed class ImpuestaJson

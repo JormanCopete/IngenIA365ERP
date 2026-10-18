@@ -65,9 +65,21 @@ public static class ErroresDeDesembolso
         $"Lo recogido ({Pesos(recogido)}) no deja nada por girar del tramo de {Pesos(bruto)}: el neto debe ser mayor que cero.",
         new { grossAmount = bruto, payoffAmount = recogido });
 
+    /// <summary>
+    /// K3 (T0882; FR-046): recoger un crédito en mora es una reestructuración; desde K3 se tramita como novedad de <b>refinanciación</b> en Novedades
+    /// (<c>/cartera/novedades</c>), que recoge los créditos en mora y nace como crédito enlazado. <c>data.link</c> lleva la pantalla.
+    /// </summary>
+    public const string PantallaDeNovedades = "/cartera/novedades";
+
     public static Error RequiereReestructuracion(IReadOnlyList<RecogidaEnMoraDto> creditos) => new ErrorConDatos(CodigoRequiereReestructuracion,
-        $"El crédito {string.Join(", ", creditos.Select(c => c.Number))} está en mora: recogerlo es una reestructuración. Trámitela como novedad.",
-        new { loans = creditos.Select(c => new { loanPublicId = c.LoanPublicId, number = c.Number, daysPastDue = c.DaysPastDue }).ToList() });
+        $"El crédito {string.Join(", ", creditos.Select(c => c.Number))} está en mora: recogerlo es una reestructuración. Tramítela en Novedades como "
+        + "una refinanciación que lo recoge.",
+        new
+        {
+            loans = creditos.Select(c => new { loanPublicId = c.LoanPublicId, number = c.Number, daysPastDue = c.DaysPastDue }).ToList(),
+            link = PantallaDeNovedades,
+            mechanism = nameof(Domain.Enums.Lending.NoveltyMechanism.Refinancing),
+        });
 
     public static Error RecogidaNoAutorizada(Guid credito) => new ErrorConDatos(CodigoRecogidaNoAutorizada,
         "Ese crédito no está entre los que la solicitud aprobada autoriza a recoger. Sólo se recoge lo aprobado.", new { loanPublicId = credito });

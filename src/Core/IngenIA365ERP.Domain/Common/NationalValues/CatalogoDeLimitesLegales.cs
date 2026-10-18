@@ -63,6 +63,24 @@ public static class CatalogoDeLimitesLegales
     /// </summary>
     public const string VinculadosGradoParentesco = "VINCULADOS_GRADO_PARENTESCO";
 
+    // K6b (T1051; FR-024, D18; data-model §12.5): los límites de la Ley 546 de 1999 para los créditos de vivienda. Los valores semilla van «pendientes
+    // de validar» con su fuente en la semilla central; la versión de línea y la solicitud de vivienda los cumplen (ReglasDeVivienda). (nuevo)
+
+    /// <summary>Plazo mínimo de un crédito de vivienda, en meses (Ley 546 de 1999, art. 17).</summary>
+    public const string ViviendaPlazoMinimoMeses = "VIVIENDA_PLAZO_MINIMO_MESES";
+
+    /// <summary>Plazo máximo de un crédito de vivienda, en meses (Ley 546 de 1999, art. 17).</summary>
+    public const string ViviendaPlazoMaximoMeses = "VIVIENDA_PLAZO_MAXIMO_MESES";
+
+    /// <summary>Fracción máxima del valor del inmueble que se financia en vivienda que no es de interés social.</summary>
+    public const string ViviendaFinanciable = "VIVIENDA_FINANCIABLE";
+
+    /// <summary>Fracción máxima del valor del inmueble que se financia en vivienda de interés social (VIS).</summary>
+    public const string ViviendaFinanciableVis = "VIVIENDA_FINANCIABLE_VIS";
+
+    /// <summary>Fracción máxima de los ingresos familiares que puede representar la primera cuota (relación cuota-ingreso).</summary>
+    public const string ViviendaCuotaIngreso = "VIVIENDA_CUOTA_INGRESO";
+
     private static readonly IReadOnlyList<LimiteLegal> Lista =
     [
         new(AvisoPrevioDias, UnidadDeValorNacional.Dias, DireccionDeLoEstricto.Mayor, "AvisoPrevio.DiasMinimos", "AvisoPrevio.DiasMinimos", "Ley 1266 de 2008; Ley 2157 de 2021"),
@@ -89,6 +107,11 @@ public static class CatalogoDeLimitesLegales
         new(PermanenciaNegativoVecesMora, UnidadDeValorNacional.Veces, DireccionDeLoEstricto.Menor, "ProyeccionCentralDeRiesgo; ReglaDeRevocacion", null, "Ley 2157 de 2021"),
         new(PermanenciaNegativoMesesMaximos, UnidadDeValorNacional.Meses, DireccionDeLoEstricto.Menor, "ProyeccionCentralDeRiesgo; ReglaDeRevocacion", null, "Ley 2157 de 2021"),
         new(VinculadosGradoParentesco, UnidadDeValorNacional.Veces, DireccionDeLoEstricto.Menor, "Grado de parentesco de un vinculado pariente (LND_RelatedParties)", null, "Ley 454 de 1998, art. 61"),
+        new(ViviendaPlazoMinimoMeses, UnidadDeValorNacional.Meses, DireccionDeLoEstricto.Mayor, "Plazo mínimo de la versión de línea y de la solicitud de vivienda (ReglasDeVivienda)", null, "Ley 546 de 1999, art. 17"),
+        new(ViviendaPlazoMaximoMeses, UnidadDeValorNacional.Meses, DireccionDeLoEstricto.Menor, "Plazo máximo de la versión de línea y de la solicitud de vivienda (ReglasDeVivienda)", null, "Ley 546 de 1999, art. 17"),
+        new(ViviendaFinanciable, UnidadDeValorNacional.Fraccion, DireccionDeLoEstricto.Menor, "Monto de la solicitud de vivienda frente al valor del inmueble (ReglasDeVivienda)", null, "Ley 546 de 1999, art. 17; Decreto 145 de 2000 (compilado en el Decreto 2555 de 2010)"),
+        new(ViviendaFinanciableVis, UnidadDeValorNacional.Fraccion, DireccionDeLoEstricto.Menor, "Monto de la solicitud de vivienda de interés social frente al valor del inmueble (ReglasDeVivienda)", null, "Ley 546 de 1999, art. 17; Decreto 145 de 2000 (compilado en el Decreto 2555 de 2010)"),
+        new(ViviendaCuotaIngreso, UnidadDeValorNacional.Fraccion, DireccionDeLoEstricto.Menor, "Primera cuota de la solicitud de vivienda frente a los ingresos familiares (ReglasDeVivienda)", null, "Ley 546 de 1999, art. 17; Decreto 145 de 2000 (compilado en el Decreto 2555 de 2010)"),
     ];
 
     private static readonly Dictionary<string, LimiteLegal> PorCodigo = Lista.ToDictionary(l => l.Codigo, StringComparer.Ordinal);

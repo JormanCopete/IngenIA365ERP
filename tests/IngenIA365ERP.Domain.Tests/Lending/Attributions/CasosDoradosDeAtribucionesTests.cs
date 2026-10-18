@@ -94,4 +94,37 @@ public class CasosDoradosDeAtribucionesTests
         var accion = () => EnrutadorDeAtribuciones.Enrutar(new SujetoAEnrutar("Prestamo", 1m), new MatrizDeAtribuciones([], []));
         accion.Should().Throw<ArgumentException>().WithMessage("*Prestamo*");
     }
+    [Fact]
+    public void Las_reglas_de_novedad_casan_por_mecanismo_y_causa_y_la_condonacion_sigue_por_concepto_y_mora()
+    {
+        // T0879 (K3): nulo = no importa; el mecanismo y la causa sólo los trae el sujeto Novelty.
+        var matriz = new MatrizDeAtribuciones(
+        [
+            new NivelDeAtribucion("ANALISTA", "Analista", 10, AttributionLevelKind.Individual, 50_000_000m, false, false, "Lending.Decisions.Analyst", null),
+            new NivelDeAtribucion("GERENCIA", "Gerencia", 20, AttributionLevelKind.Individual, 50_000_000m, true, false, "Lending.Decisions.Management", null),
+            new NivelDeAtribucion("CONSEJO", "Consejo", 30, AttributionLevelKind.Collegiate, null, false, true, null, "CONSEJO"),
+        ],
+        [
+            new ReglaDeAtribucion(1, LendingDecisionSubjects.Novelty, "CONSEJO") { Mecanismo = NoveltyMechanism.Novation },
+            new ReglaDeAtribucion(2, LendingDecisionSubjects.Novelty, "GERENCIA") { Causa = NoveltyCause.Restructuring },
+            new ReglaDeAtribucion(3, LendingDecisionSubjects.Condonation, "GERENCIA") { Concepto = LoanConcept.DefaultInterest, MoraMinima = 91 },
+        ]);
+
+        string Nivel(SujetoAEnrutar s) => EnrutadorDeAtribuciones.Enrutar(s, matriz).NivelEfectivo.Codigo;
+
+        Nivel(new SujetoAEnrutar(LendingDecisionSubjects.Novelty, 1m) { Mecanismo = NoveltyMechanism.Extension, Causa = NoveltyCause.Modification })
+            .Should().Be("ANALISTA");
+        var prorroga = EnrutadorDeAtribuciones.Enrutar(
+            new SujetoAEnrutar(LendingDecisionSubjects.Novelty, 1m) { Mecanismo = NoveltyMechanism.Extension, Causa = NoveltyCause.Restructuring }, matriz);
+        prorroga.NivelEfectivo.Codigo.Should().Be("GERENCIA");
+        prorroga.Razones.Should().Contain(r => r.Detalle.Contains("causa Restructuring"));
+        Nivel(new SujetoAEnrutar(LendingDecisionSubjects.Novelty, 1m) { Mecanismo = NoveltyMechanism.Novation, Causa = NoveltyCause.Modification })
+            .Should().Be("CONSEJO");
+        // Sin mecanismo en el sujeto, la regla que lo exige no casa.
+        Nivel(new SujetoAEnrutar(LendingDecisionSubjects.Novelty, 1m)).Should().Be("ANALISTA");
+
+        Nivel(new SujetoAEnrutar(LendingDecisionSubjects.Condonation, 1m) { Concepto = LoanConcept.DefaultInterest, DiasDeMora = 120 }).Should().Be("GERENCIA");
+        Nivel(new SujetoAEnrutar(LendingDecisionSubjects.Condonation, 1m) { Concepto = LoanConcept.DefaultInterest, DiasDeMora = 30 }).Should().Be("ANALISTA");
+        Nivel(new SujetoAEnrutar(LendingDecisionSubjects.Condonation, 1m) { Concepto = LoanConcept.CurrentInterest, DiasDeMora = 120 }).Should().Be("ANALISTA");
+    }
 }

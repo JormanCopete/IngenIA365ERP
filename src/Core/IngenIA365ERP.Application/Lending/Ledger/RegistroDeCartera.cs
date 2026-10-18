@@ -207,15 +207,16 @@ public sealed class RegistroDeCartera(IApplicationDbContext db)
         DateTime registradoEn, Guid? mensaje)
     {
         ArgumentNullException.ThrowIfNull(fila);
-        if (fila.Clase != LoanTransactionKind.Accrual)
-            throw new InvalidOperationException("La causación sólo escribe filas Accrual.");
+        // K6b (T1054, T1056): la causación de un crédito en UVR escribe también su corrección monetaria (MonetaryCorrection).
+        if (fila.Clase is not (LoanTransactionKind.Accrual or LoanTransactionKind.MonetaryCorrection))
+            throw new InvalidOperationException("La causación sólo escribe filas Accrual y, en UVR, MonetaryCorrection.");
         return new LoanTransaction
         {
             LoanId = loanId,
             ProcessRunId = operacion is null ? processRunId : null,
             Operation = operacion,
             OperationId = operacion is { Id: not 0 } op ? op.Id : null,
-            Kind = LoanTransactionKind.Accrual,
+            Kind = fila.Clase,
             Concept = fila.Concepto,
             InstallmentNumber = fila.Cuota,
             Amount = fila.Monto,
@@ -223,6 +224,8 @@ public sealed class RegistroDeCartera(IApplicationDbContext db)
             AccountingDate = fechaContable,
             RegisteredAt = Utc(registradoEn),
             MessagePublicId = mensaje,
+            UvrAmount = fila.MontoEnUvr,
+            UvrValue = fila.ValorUvr,
         };
     }
 
@@ -238,7 +241,8 @@ public sealed class RegistroDeCartera(IApplicationDbContext db)
         var filas = new List<LoanTransaction>();
         foreach (var c in causaciones)
         {
-            if (c.Filas.Any(f => f.Kind != LoanTransactionKind.Accrual || f.ValueDate != c.Dia || f.Amount == 0m || f.LoanId != c.Control.LoanId))
+            // K6b: la corrección monetaria de un crédito en UVR es fila de la causación del día, igual que la causación misma.
+            if (c.Filas.Any(f => f.Kind is not (LoanTransactionKind.Accrual or LoanTransactionKind.MonetaryCorrection) || f.ValueDate != c.Dia || f.Amount == 0m || f.LoanId != c.Control.LoanId))
                 throw new InvalidOperationException($"La causación del {c.Dia:yyyy-MM-dd} del crédito {c.Control.LoanId} trae filas que no son suyas.");
             if (c.Filas.Any(f => (f.OperationId is not null || f.Operation is not null) == (f.ProcessRunId is not null)))
                 throw new InvalidOperationException("Una fila del libro tiene exactamente un origen: la operación o la corrida (CK_LND_LoanTransactions_Origin).");
@@ -287,6 +291,57 @@ public sealed class RegistroDeCartera(IApplicationDbContext db)
             MessagePublicId = mensaje,
         }).ToList();
 
+    /// <summary>
+    /// K6b (fase 24): la fila de una diferencia de la corrección monetaria de un crédito en UVR
+    /// (<see cref="DiferenciaDeLibro.DeCorreccionMonetaria"/>) que registra la corrida de corrección por valor nacional: clase
+    /// <c>MonetaryCorrection</c>, cero en UVR (es sólo el cambio de la UVR), con el mensaje de su hecho <c>CorreccionMonetariaUvrCausada</c>.
+    /// </summary>
+    public static LoanTransaction DiferenciaDeCorreccionMonetaria(int loanId, DiferenciaDeLibro d, int processRunId, DateOnly fechaContable,
+        DateTime registradoEn, Guid? mensaje)
+    {
+        ArgumentNullException.ThrowIfNull(d);
+        if (!d.DeCorreccionMonetaria) throw new InvalidOperationException("La diferencia no es de la corrección monetaria.");
+        return new LoanTransaction
+        {
+            LoanId = loanId,
+            ProcessRunId = processRunId,
+            Kind = LoanTransactionKind.MonetaryCorrection,
+            Concept = d.Concepto,
+            InstallmentNumber = d.Cuota,
+            Amount = d.Diferencia,
+            ValueDate = d.Dia,
+            AccountingDate = fechaContable,
+            RegisteredAt = Utc(registradoEn),
+            MessagePublicId = mensaje,
+            UvrAmount = 0m,
+        };
+    }
+
+    /// <summary>
+    /// K6b (decisión del dueño del 2026-10-17): la fila de una diferencia del <b>reparto de un pago</b> (<see cref="DiferenciaDeLibro.DePago"/>) que
+    /// registra la corrida de corrección de una UVR: clase <c>PaymentReallocation</c> de la corrida, con el día valor del pago, la fecha contable del
+    /// período abierto y el mensaje de su hecho <c>PagoRedistribuidoPorValorNacional</c>. El pago y sus filas no se tocan.
+    /// </summary>
+    public static LoanTransaction DiferenciaDeReparto(int loanId, DiferenciaDeLibro d, int processRunId, DateOnly fechaContable, DateTime registradoEn,
+        Guid? mensaje)
+    {
+        ArgumentNullException.ThrowIfNull(d);
+        if (!d.DePago) throw new InvalidOperationException("La diferencia no es del reparto de un pago.");
+        return new LoanTransaction
+        {
+            LoanId = loanId,
+            ProcessRunId = processRunId,
+            Kind = LoanTransactionKind.PaymentReallocation,
+            Concept = d.Concepto,
+            InstallmentNumber = d.Cuota,
+            Amount = d.Diferencia,
+            ValueDate = d.Dia,
+            AccountingDate = fechaContable,
+            RegisteredAt = Utc(registradoEn),
+            MessagePublicId = mensaje,
+        };
+    }
+
     /// <summary>La clase de la fila que registra una diferencia de la conciliación.</summary>
     public static LoanTransactionKind ClaseDeDiferencia(DiferenciaDeLibro d, IReadOnlyList<DiferenciaDeLibro> todas)
     {
@@ -314,6 +369,10 @@ public sealed class RegistroDeCartera(IApplicationDbContext db)
         LoanTransactionKind.CreditBalanceRecognized, LoanTransactionKind.CreditBalanceSettled, LoanTransactionKind.PaymentReallocation,
         // US6 (T0591): las filas de un ajuste de Comercial (nota crédito o débito, devolución, anulación).
         LoanTransactionKind.CommercialAdjustment,
+        // K3 (T0874, T0881, T0884): la capitalización y el traslado al enlazado de una novedad, y la condonación.
+        LoanTransactionKind.Capitalization, LoanTransactionKind.TransferToLinkedLoan, LoanTransactionKind.TransferFromLinkedLoan, LoanTransactionKind.Waiver,
+        // K4 (T0948): el cargo de un gasto de cobranza causado. Faltaba: causar un gasto informado respondía 500 (lo destapó la e2e T0933).
+        LoanTransactionKind.Charge,
     };
 
     /// <summary>
@@ -341,6 +400,8 @@ public sealed class RegistroDeCartera(IApplicationDbContext db)
             AccountingDate = fechaContable,
             RegisteredAt = Utc(registradoEn),
             MessagePublicId = mensaje,
+            UvrAmount = fila.MontoEnUvr,
+            UvrValue = fila.ValorUvr,
         };
     }
 
@@ -486,6 +547,10 @@ public sealed class RegistroDeCartera(IApplicationDbContext db)
             UsuryCapped = estado.UsuraTopada,
             AppliedAnnualRate = estado.TasaDelDia?.CorrienteEA,
             InputsSha256 = estado.Huella,
+            // K6b (T1059): la valoración de un crédito en UVR.
+            UvrValue = estado.Uvr?.Valor,
+            PrincipalUvr = estado.Uvr?.CapitalEnUvr,
+            PayoffAmountUvr = estado.Uvr?.Estado.ValorParaCancelar,
             // US9 (T0701): la copia de la calificación informativa del día (la calcula el ciclo con el mismo motor del cierre).
             DailyRating = calificacion?.Categoria,
             DailyRatingSubcategory = calificacion?.Subcategoria,
@@ -539,6 +604,10 @@ public sealed class RegistroDeCartera(IApplicationDbContext db)
                 break;
             case LoanStatus.PaidOff:
                 credito.PaidOffOn = fecha;
+                break;
+            case LoanStatus.WrittenOff:
+                // K3 (T0908): la fecha del castigo; la causación se suspende desde el día siguiente (CastigoDesde de la reconstrucción).
+                credito.WrittenOffOn = fecha;
                 break;
             case LoanStatus.Active:
                 credito.PaidOffOn = null;

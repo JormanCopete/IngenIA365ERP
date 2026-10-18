@@ -39,7 +39,13 @@ public sealed record CondicionesDelCreditoDto(
     string Rounding,
     string AllocationOrder,
     string PrepaymentPreference,
-    string RulesVersion);
+    string RulesVersion)
+{
+    /// <summary>K6b: la unidad del capital («Pesos» o «Uvr»).</summary>
+    public string DenominationUnit { get; init; } = "Pesos";
+
+    public bool EnUvr => DenominationUnit == "Uvr";
+}
 
 public sealed record MontosDelCreditoDto(decimal Approved, decimal Disbursed, int Tranches);
 
@@ -82,11 +88,23 @@ public sealed record ValidacionFallidaDelCreditoDto(string Code, string? Reason,
 /// <summary>Una cuota del plan guardado.</summary>
 public sealed record CuotaDelPlanDto(int Number, DateOnly PeriodStart, DateOnly DueDate, DateOnly ExigibleDate, decimal OpeningPrincipal,
     decimal Principal, decimal Interest, decimal GraceInterest, decimal Insurance, decimal OtherCharges, decimal Total, decimal ClosingPrincipal,
-    bool IsExtraordinary, bool IsGraceInstallment);
+    bool IsExtraordinary, bool IsGraceInstallment)
+{
+    /// <summary>K6b: la cuota en UVR de un plan en UVR; nula en pesos.</summary>
+    public CuotaDelPlanEnUvrDto? Uvr { get; init; }
+}
+
+/// <summary>Los valores en UVR de una cuota del plan guardado.</summary>
+public sealed record CuotaDelPlanEnUvrDto(decimal? OpeningPrincipal, decimal? Principal, decimal? Interest, decimal? Insurance, decimal? Total,
+    decimal? ClosingPrincipal);
 
 /// <summary>Una versión del plan con sus cuotas (<c>GET /{id}/schedule?version=</c>).</summary>
 public sealed record PlanDelCreditoDto(int Version, DateOnly ValidFrom, string Reason, string RulesVersion, int FirstRegeneratedInstallment,
-    decimal PrincipalBase, IReadOnlyList<CuotaDelPlanDto> Installments);
+    decimal PrincipalBase, IReadOnlyList<CuotaDelPlanDto> Installments)
+{
+    /// <summary>K6b: en un plan en UVR, la UVR con que se valoraron en pesos sus cuotas.</summary>
+    public decimal? UvrValue { get; init; }
+}
 
 /// <summary>Una versión del plan, sin cuotas (<c>GET /{id}/schedule/versions</c> y el estado de cuenta).</summary>
 public sealed record VersionDelPlanDto(int Version, DateOnly ValidFrom, string Cause, string RulesVersion, int InstallmentCount, int FirstRegeneratedInstallment);
@@ -132,7 +150,13 @@ public sealed record FilaDelLibroDto(
     Guid? ProcessRunPublicId,
     Guid? ReversesTransaction,
     Guid? ReversedBy,
-    Guid? MessagePublicId);
+    Guid? MessagePublicId)
+{
+    /// <summary>K6b: en un crédito en UVR, el monto en UVR y la UVR de la fecha valor.</summary>
+    public decimal? UvrAmount { get; init; }
+
+    public decimal? UvrValue { get; init; }
+}
 
 // ------------------------------------------------------------------------------------- estado de cuenta (FR-069) --
 
@@ -163,7 +187,15 @@ public sealed record EstadoDeCuentaDto(
     IReadOnlyList<NoAplicadoDto> NotApplied,
     string? InformativeRating,
     string? OfficialRating,
-    string? CollectionStage);
+    string? CollectionStage)
+{
+    /// <summary>K6b: en un crédito en UVR, la UVR del día y los saldos en UVR.</summary>
+    public CreditoEnUvrDto? Uvr { get; init; }
+}
+
+/// <summary>Lo de un crédito en UVR a una fecha: la UVR del día (publicada o proyectada), el capital y lo que cuesta cancelar en UVR.</summary>
+public sealed record CreditoEnUvrDto(DateOnly UvrDate, decimal UvrValue, bool Projected, DateOnly LastPublished, decimal PrincipalUvr, decimal ToPayOffUvr,
+    IReadOnlyDictionary<string, decimal> BalancesUvr, string Legend);
 
 // --------------------------------------------------------------------------------------- liquidación (FR-068) --
 
@@ -191,7 +223,11 @@ public sealed record LiquidacionDto(
     IReadOnlyList<TramoDeLaExplicacionDto> Explanation,
     IReadOnlyList<string> ExplanationText,
     DateOnly? ValidUntil,
-    IReadOnlyList<string> Warnings);
+    IReadOnlyList<string> Warnings)
+{
+    /// <summary>K6b: en un crédito en UVR, la UVR del día y los saldos en UVR.</summary>
+    public CreditoEnUvrDto? Uvr { get; init; }
+}
 
 // ------------------------------------------------------------------------------------------- §16.4 corridas --
 

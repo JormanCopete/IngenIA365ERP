@@ -78,7 +78,9 @@ public static class PasosDelCiclo
 /// crédito y día;</item>
 /// <item>los bloqueos automáticos por mora (<c>Bloqueos.DiasDeMoraParaBloquear</c>) y por retiro del asociado según el maestro (FR-060), con su
 /// levantamiento automático, y la dimensión contable cambiada (el deudor que deja de ser empleado o pasa a serlo, C8);</item>
-/// <item>el gancho de cobranza (vacío hasta K4);</item>
+/// <item>desde K4 (T0943), la cobranza (<see cref="Collections.CobranzaDelCicloDiario"/>): etapas, reparto, mensajes de la etapa, aviso previo del episodio,
+/// gasto propuesto e informado y promesas incumplidas, sobre los créditos de la tanda —también los que ya estaban al día—; al terminar la corrida, la
+/// aceptación tácita de los reclamos, las comunicaciones de los avisos previos y las campañas;</item>
 /// <item>la muestra de verificación del libro, al terminar la corrida.</item>
 /// </list>
 /// Cada tanda: transacción explícita, cerrojo con salto (el ocupado se cuenta como saltado y lo toma el ciclo siguiente), carga en bloque, motor,
@@ -101,7 +103,9 @@ public sealed class CicloDiarioDeCartera(
     IDateTimeService reloj,
     ILogger<CicloDiarioDeCartera>? logger = null,
     MovimientoContingenteDeCartera? contingentes = null,
-    Risk.CalificacionDelCiclo? calificacion = null)
+    Risk.CalificacionDelCiclo? calificacion = null,
+    ValidacionPreviaDeProceso? validacionDeProceso = null,
+    Collections.CobranzaDelCicloDiario? cobranza = null)
 {
     /// <summary>Créditos de la muestra de verificación del paso (8).</summary>
     public const int MuestraDeVerificacion = 20;
@@ -143,13 +147,25 @@ public sealed class CicloDiarioDeCartera(
         corrida.CurrentStep = PasosDelCiclo.Causacion;
         var pendientes = new List<AlertaPendiente>();
         var errores = new List<LendingProcessRunError>();
+        // A8 = «Bloquear todo» (2026-10-14): con Contabilidad.FaltaDeRegla = Bloquear, una tanda con hechos que Contabilidad no puede registrar no
+        // se guarda; la corrida se detiene con el código y la alerta, y «Reintentar» la retoma desde el mismo cursor.
+        DecisionDeValidacionPrevia? detenida = null;
+        async Task<Result> GuardarSiEsContabilizableAsync()
+        {
+            if (validacionDeProceso is not null && await validacionDeProceso.BloqueoAsync(ct) is { } bloqueo)
+            {
+                detenida = bloqueo;
+                return Result.Failure(bloqueo.Bloqueo!);
+            }
+            await db.SaveChangesAsync(ct);
+            return Result.Success();
+        }
         try
         {
             await TransaccionExplicita.EjecutarAsync(db, async () =>
             {
                 await UnaTandaAsync(corrida, d, ids, intento: 1, pendientes, errores, ct);
-                await db.SaveChangesAsync(ct);
-                return Result.Success();
+                return await GuardarSiEsContabilizableAsync();
             }, ct);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -169,15 +185,17 @@ public sealed class CicloDiarioDeCartera(
                     await TransaccionExplicita.EjecutarAsync(db, async () =>
                     {
                         await UnaTandaAsync(corrida, d, [id], intento: 2, suyas, suyos, ct);
-                        await db.SaveChangesAsync(ct);
-                        return Result.Success();
+                        return await GuardarSiEsContabilizableAsync();
                     }, ct);
+                    if (detenida is not null) break;
                     pendientes.AddRange(suyas);
                     errores.AddRange(suyos);
                 }
                 catch (Exception otra) when (otra is not OperationCanceledException)
                 {
-                    Soltar(corrida, []);
+                    // Se conservan los errores ya guardados de los créditos anteriores: soltarlos y volver a adjuntarlos perdía su token de
+                    // concurrencia (xmin) y el guardado de su alerta fallaba por concurrencia (T0933).
+                    Soltar(corrida, errores);
                     var error = Error(corrida, id, 2, PasosDelCiclo.Causacion, otra.GetType().Name, otra.Message, null);
                     db.LendingProcessRunErrors.Add(error);
                     corrida.FailedLoans += 1;
@@ -186,6 +204,13 @@ public sealed class CicloDiarioDeCartera(
                     pendientes.Add(new AlertaPendiente(AlertaDeCredito(id, d, otra.Message), error));
                 }
             }
+        }
+
+        if (detenida is not null)
+        {
+            // La tanda no se guardó: el cursor no se mueve, la alerta sale y la corrida queda Failed con el código (quien conduce lo anota).
+            Soltar(corrida, []);
+            throw await validacionDeProceso!.DetenerAsync(detenida, string.Create(CultureInfo.InvariantCulture, $"la causación del {d:yyyy-MM-dd}"), ct);
         }
 
         // Sin seguimiento entre tandas (T67): la corrida y los errores siguen, lo demás se suelta. El cursor se mueve después de soltar, para
@@ -201,13 +226,14 @@ public sealed class CicloDiarioDeCartera(
     }
 
     /// <summary>
-    /// Los créditos vivos después del cursor. Los que ya están al día a d (una operación los puso al día, o nacieron después) se recorren y se
-    /// cuentan como saltados (<c>SkippedLoans</c>, data-model §22.4); los demás se causan desde su marca.
+    /// Los créditos vivos después del cursor —vigentes y, desde K3 (US14, T0898; FR-096), castigados: su interés se sigue causando en suspenso, en
+    /// control—. Los que ya están al día a d (una operación los puso al día, o nacieron después) se recorren y se cuentan como saltados
+    /// (<c>SkippedLoans</c>, data-model §22.4); los demás se causan desde su marca.
     /// </summary>
     private IQueryable<LoanControl> CandidatosAsync(DateOnly d, int? cursor) =>
         from c in db.LoanControls.AsNoTracking()
         join l in db.Loans.AsNoTracking() on c.LoanId equals l.Id
-        where l.Status == LoanStatus.Active && (cursor == null || c.LoanId > cursor)
+        where (l.Status == LoanStatus.Active || l.Status == LoanStatus.WrittenOff) && (cursor == null || c.LoanId > cursor)
         select c;
 
     /// <summary>
@@ -235,6 +261,8 @@ public sealed class CicloDiarioDeCartera(
 
         var causados = new List<(CreditoCargado Cargado, LoanControl Control, IReadOnlyList<DiaCausado> Dias)>();
         var sinUsura = new Dictionary<(string Modalidad, string? Clave), DateOnly>();
+        // K6b (T1054): los días sin UVR publicada de los créditos en UVR (un error de grupo y una alerta por día; esos créditos no se causan).
+        var sinUvr = new SortedSet<DateOnly>();
         foreach (var id in vivos.Order())
         {
             var control = controles[id];
@@ -268,7 +296,10 @@ public sealed class CicloDiarioDeCartera(
                 {
                     var faltante = dias.Count == 0 ? control.LastAccruedDate.AddDays(1) : dias[^1].Dia.AddDays(1);
                     if (cargado.Series is { ExigeUsura: true } s && s.UsuraDe(faltante).IsFailure)
-                        sinUsura.TryAdd((cargado.Pactadas.ModalityCode, s.ClaveDeUsura), faltante);
+                        sinUsura.TryAdd((cargado.Pactadas.ModalityCode, s.ClaveDeUsura ?? CodigosDeValorNacional.TopeTasaVivienda), faltante);
+                    else if (entrada.Uvr is { } serie && new[] { faltante.AddDays(-1), faltante }.FirstOrDefault(x => serie.Publicada(x) is null) is var sinPublicar
+                             && sinPublicar != default)
+                        sinUvr.Add(sinPublicar);
                     corrida.SkippedLoans += dias.Count == 0 ? 1 : 0;
                 }
                 if (dias.Count > 0) causados.Add((cargado, control, dias));
@@ -280,9 +311,21 @@ public sealed class CicloDiarioDeCartera(
             }
         }
 
-        // Una modalidad sin usura del día: un error de grupo por modalidad y fecha, con su alerta.
+        // Una modalidad sin usura del día: un error de grupo por modalidad y fecha, con su alerta. K6b: en vivienda, el tope de vivienda.
         foreach (var ((modalidad, clave), fecha) in sinUsura)
         {
+            if (clave == CodigosDeValorNacional.TopeTasaVivienda)
+            {
+                var tope = ErroresDeValoresNacionales.Faltante(CodigosDeValorNacional.TopeTasaVivienda, string.Empty, fecha);
+                var errorDeTope = Error(corrida, null, intento, PasosDelCiclo.Causacion, tope.Code, tope.Message,
+                    JsonSerializer.Serialize(new { modality = modalidad, code = CodigosDeValorNacional.TopeTasaVivienda, date = fecha }, Json));
+                db.LendingProcessRunErrors.Add(errorDeTope);
+                errores.Add(errorDeTope);
+                alertasPendientes.Add(new AlertaPendiente(new AlertaALevantar(TiposDeAlerta.ValorNacionalFaltante, "Falta el tope de tasa de vivienda",
+                    $"{tope.Message} Los créditos de {modalidad} no se causan desde ese día hasta que se replique.", ModuloDeOrigen: "Lending",
+                    DedupKey: AlertasDeValoresNacionales.ClaveDeFaltante(CodigosDeValorNacional.TopeTasaVivienda, string.Empty, fecha)), errorDeTope));
+                continue;
+            }
             var e = ErroresDeValoresNacionales.Faltante(CodigosDeValorNacional.Usura, clave ?? modalidad, fecha);
             var error = Error(corrida, null, intento, PasosDelCiclo.Causacion, e.Code, e.Message,
                 JsonSerializer.Serialize(new { modality = modalidad, usuryKey = clave, date = fecha }, Json));
@@ -292,7 +335,23 @@ public sealed class CicloDiarioDeCartera(
                 $"{e.Message} Los créditos de {modalidad} no se causan desde ese día hasta que se replique.", ModuloDeOrigen: "Lending",
                 DedupKey: AlertasDeValoresNacionales.ClaveDeFaltante(CodigosDeValorNacional.Usura, clave ?? modalidad, fecha)), error));
         }
-        if (causados.Count == 0) return;
+        // K6b (T1054): un día sin UVR publicada: un error de grupo y su alerta; los créditos en UVR no se causan desde ese día (sólo ellos).
+        foreach (var fecha in sinUvr)
+        {
+            var e = ErroresDeValoresNacionales.Faltante(CodigosDeValorNacional.Uvr, string.Empty, fecha);
+            var error = Error(corrida, null, intento, PasosDelCiclo.Causacion, e.Code, e.Message,
+                JsonSerializer.Serialize(new { code = CodigosDeValorNacional.Uvr, date = fecha }, Json));
+            db.LendingProcessRunErrors.Add(error);
+            errores.Add(error);
+            alertasPendientes.Add(new AlertaPendiente(new AlertaALevantar(TiposDeAlerta.ValorNacionalFaltante, "Falta la UVR del día",
+                $"{e.Message} Los créditos en UVR no se causan desde ese día hasta que se replique; los demás siguen.", ModuloDeOrigen: "Lending",
+                DedupKey: AlertasDeValoresNacionales.ClaveDeFaltante(CodigosDeValorNacional.Uvr, string.Empty, fecha)), error));
+        }
+        if (causados.Count == 0)
+        {
+            await CobranzaAsync(corrida, d, causados, controles, alertasPendientes, ct);
+            return;
+        }
 
         // Las tandas de la corrida: una por fecha causada (la conducción suma la primera).
         var fechas = causados.SelectMany(c => c.Dias.Select(x => x.Dia)).Distinct().Order().ToList();
@@ -308,7 +367,7 @@ public sealed class CicloDiarioDeCartera(
 
         var resumen = registro.CausarEnBloque(causados.SelectMany(c => c.Dias.Select(x => new CausacionAEscribir(c.Control, x.Dia,
             x.Filas.Where(f => f.Monto != 0m)
-                .Select(f => RegistroDeCartera.FilaDeCausacion(c.Control.LoanId, f, corrida.Id, null, x.Dia, ahora, masivas.Value.Mensaje(c.Control.LoanId, x.Dia, f.Concepto)))
+                .Select(f => RegistroDeCartera.FilaDeCausacion(c.Control.LoanId, f, corrida.Id, null, x.Dia, ahora, masivas.Value.Mensaje(c.Control.LoanId, x.Dia, f.Concepto, f.Clase)))
                 .ToList()))).ToList());
 
         // Las posiciones de cada día causado, con la calificación informativa del día (US9, T0701: el mismo motor del cierre).
@@ -367,6 +426,9 @@ public sealed class CicloDiarioDeCartera(
         var porCredito = await partes.PorCreditoAsync(origen, hechos, ct);
         if (porCredito.IsFailure) throw new InvalidOperationException($"{porCredito.Error.Code}: {porCredito.Error.Message}");
 
+        // (7) Cobranza (K4).
+        await CobranzaAsync(corrida, d, causados, controles, alertasPendientes, ct);
+
         // La usura topada, una alerta por crédito y mes.
         foreach (var c in causados.Where(c => c.Dias.Any(x => x.Estado.UsuraTopada)))
         {
@@ -384,6 +446,24 @@ public sealed class CicloDiarioDeCartera(
 
         corrida.ProcessedLoans += causados.Count;
         Acumular(corrida, resumen);
+    }
+
+    /// <summary>
+    /// El paso (7) sobre la tanda (K4, T0943): los causados con el estado de su último día y los que ya estaban al día a <paramref name="d"/> (los
+    /// reconstruye la cobranza). No guarda: va en el guardado de la tanda. Sus alertas salen después, con las demás.
+    /// </summary>
+    private async Task CobranzaAsync(LendingProcessRun corrida, DateOnly d,
+        IReadOnlyList<(CreditoCargado Cargado, LoanControl Control, IReadOnlyList<DiaCausado> Dias)> causados, IReadOnlyDictionary<int, LoanControl> controles,
+        List<AlertaPendiente> alertasPendientes, CancellationToken ct)
+    {
+        if (cobranza is not { Habilitada: true }) return;
+        corrida.CurrentStep = PasosDelCiclo.Cobranza;
+        var conEstado = causados.Select(c => new Collections.CreditoParaCobranza(c.Cargado.Credito, c.Dias[^1].Estado)).ToList();
+        // Los controles están seguidos: la causación de la tanda ya les movió la marca a d. Los causados van con su estado, no como «al día».
+        var causadosIds = causados.Select(c => c.Control.LoanId).ToHashSet();
+        var alDia = controles.Values.Where(c => c.LastAccruedDate >= d && !causadosIds.Contains(c.LoanId)).Select(c => c.LoanId).ToList();
+        var r = await cobranza.CreditosAsync(corrida, d, conEstado, alDia, ct);
+        foreach (var a in r.Alertas) alertasPendientes.Add(new AlertaPendiente(a, null));
     }
 
     private void FallarCredito(LendingProcessRun corrida, int loanId, int intento, byte paso, string codigo, string mensaje, DateOnly d,
@@ -543,7 +623,19 @@ public sealed class CicloDiarioDeCartera(
                 contingente.Error.Message);
 
         // T0654, C09: toma las entregas InBatch sin lote de AccrualRun:{x} con x ≤ d (las de la causación de d y los hechos FinDeCausacion
-        // nacidos fuera de una corrida anterior, sellados con su día siguiente), en el mismo guardado con que termina la corrida.
+        // nacidos fuera de una corrida anterior, sellados con su día siguiente), en el mismo guardado con que termina la corrida. Lo pendiente
+        // (los contadores de la corrida, los contingentes) se guarda antes: el punto de guardado del lote sólo puede tocar el lote, el contador y las
+        // entregas, porque al volver a él EF ya dio por guardado lo que se escribió adentro. Los contingentes pasan antes por la validación previa
+        // de los procesos (A8 = «Bloquear todo»): si no se pueden contabilizar, la corrida se detiene sin terminar.
+        // (7) Lo de la cobranza que es de la cooperativa (K4, T0943): reclamos con aceptación tácita, comunicaciones de los avisos previos, campañas.
+        var cierreDeCobranza = cobranza is { Habilitada: true } ? await cobranza.CierreAsync(d, ct) : null;
+        if (validacionDeProceso is not null && await validacionDeProceso.BloqueoAsync(ct) is { } bloqueo)
+        {
+            Soltar(corrida, []);
+            throw await validacionDeProceso.DetenerAsync(bloqueo, string.Create(CultureInfo.InvariantCulture, $"el cierre del ciclo del {d:yyyy-MM-dd}"), ct);
+        }
+        await db.SaveChangesAsync(ct);
+        foreach (var a in cierreDeCobranza?.Alertas ?? []) await alertas.LevantarAsync(a, ct);
         var alcance = EmisionDeCartera.AlcanceDeLoteDeCausacion(d);
         var entregas = await db.IntegrationMessageDeliveries
             .Where(x => x.Destination == IntegrationDestinations.Accounting && x.Status == DeliveryStatus.InBatch && x.BatchId == null
@@ -553,15 +645,35 @@ public sealed class CicloDiarioDeCartera(
         if (entregas.Count > 0)
         {
             var actor = IngenIA365ERP.Application.Common.Execution.Actor.ProcesoDeIntegracion(IngenIA365ERP.Application.Common.Execution.Actor.OrigenDeTarea(TareaDelCiclo));
-            var lote = LotesDeIntegracion.Nuevo(await LotesDeIntegracion.TomarNumeroAsync(db, ct), IntegrationDestinations.Accounting,
-                BatchTrigger.LendingAccrualRun, actor, null, reloj.UtcNow);
-            lote.MessageCount = entregas.Count;
-            lote.CutoffMessageId = entregas[^1].MessageId;
-            lote.DateFrom = await db.IntegrationMessages.AsNoTracking().Where(m => m.Id == entregas[0].MessageId).Select(m => (DateOnly?)m.OperationDate).FirstOrDefaultAsync(ct) ?? d;
-            lote.DateTo = d;
-            db.IntegrationBatches.Add(lote);
-            await db.SaveChangesAsync(ct);
-            LotesDeIntegracion.Asignar(lote, entregas);
+            var desde = await db.IntegrationMessages.AsNoTracking().Where(m => m.Id == entregas[0].MessageId).Select(m => (DateOnly?)m.OperationDate)
+                .FirstOrDefaultAsync(ct) ?? d;
+            IntegrationBatch? lote = null;
+            // Dos corridas que terminan a la vez (la de un día atrasado y la de hoy) ven las mismas entregas sin lote: la segunda en guardar pierde por
+            // la RowVersion del contador o de la entrega. El lote y su asignación van juntos bajo un punto de guardado: la que pierde vuelve al punto,
+            // suelta lo suyo y sigue (las entregas quedaron en el lote de la otra, o las toma el ciclo siguiente, que recoge todo AccrualRun ≤ d).
+            // Hasta el 2026-10-14 la asignación se guardaba en el guardado de quien conduce y la corrida terminaba con ConcurrencyConflictException.
+            var tomado = await TransaccionExplicita.EjecutarAsync(db, () => PuntoDeGuardado.EjecutarAsync(db, "lote_de_causacion", async () =>
+            {
+                lote = LotesDeIntegracion.Nuevo(await LotesDeIntegracion.TomarNumeroAsync(db, ct), IntegrationDestinations.Accounting,
+                    BatchTrigger.LendingAccrualRun, actor, null, reloj.UtcNow);
+                lote.MessageCount = entregas.Count;
+                lote.CutoffMessageId = entregas[^1].MessageId;
+                lote.DateFrom = desde;
+                lote.DateTo = d;
+                db.IntegrationBatches.Add(lote);
+                await db.SaveChangesAsync(ct);
+                LotesDeIntegracion.Asignar(lote, entregas);
+                await db.SaveChangesAsync(ct);
+                return true;
+            }, e => e is Domain.Exceptions.ConcurrencyConflictException or DbUpdateConcurrencyException ? false : throw new InvalidOperationException(
+                "No se pudo armar el lote de la causación del día.", e), ct), ct);
+            if (!tomado)
+            {
+                _logger.LogInformation("[Cartera.LoteDeCausacionTomado] Otra corrida tomó a la vez las entregas de la causación hasta {Fecha}: van en su lote.", d);
+                foreach (var entrega in entregas) db.IntegrationMessageDeliveries.Entry(entrega).State = EntityState.Detached;
+                foreach (var contador in db.IntegrationBatchCounters.Local.ToList()) db.IntegrationBatchCounters.Entry(contador).State = EntityState.Detached;
+                if (lote is not null) db.IntegrationBatches.Entry(lote).State = EntityState.Detached;
+            }
         }
 
         var totales = Totales(corrida);

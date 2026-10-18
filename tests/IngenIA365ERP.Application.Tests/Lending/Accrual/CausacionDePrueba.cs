@@ -75,7 +75,15 @@ internal sealed class CausacionDePrueba : IDisposable
     public ReajusteDeTasa Reajuste() => new(Db, D.O.L.Valores(), D.Registro(), D.Numerador());
     public VerificacionDelLibro Verificacion() => new(Db, Cargador(), D.Alertas);
     public CicloDiarioDeCartera Ciclo() => new(Db, D.O.Cerrojo, Cargador(), D.Registro(), Partes(), Reajuste(), Verificacion(), D.Parametros(), D.Alertas,
-        Tanda, D.G.Reloj, NullLogger<CicloDiarioDeCartera>.Instance);
+        Tanda, D.G.Reloj, NullLogger<CicloDiarioDeCartera>.Instance, validacionDeProceso: ValidacionDeProceso);
+
+    /// <summary>La validación previa de los procesos (A8 = «Bloquear todo», T0801); nula salvo que la prueba la pida.</summary>
+    public ValidacionPreviaDeProceso? ValidacionDeProceso { get; private set; }
+
+    /// <summary>Arma la validación previa de los procesos con la Contabilidad del escenario, sus parámetros y sus alertas.</summary>
+    public void ConValidacionPreviaDeProceso() =>
+        ValidacionDeProceso = new ValidacionPreviaDeProceso(Db, new ValidacionPreviaContableDeCartera(D.Contabilidad, D.G.Parametros(), D.G.Reloj, null,
+            new ModoDePasoDeCartera(Db, D.Contabilidad), D.Alertas, Db));
     public RunDailyAccrualCommandHandler Causar() => new(Db, Ciclo(), D.G.Reloj);
     public CorreccionDeValorNacional Correccion() =>
         new(Db, D.O.Cerrojo, Cargador(), D.Registro(), Partes(), D.FechaContable(), Tanda, D.O.L.Valores(), D.G.Reloj);

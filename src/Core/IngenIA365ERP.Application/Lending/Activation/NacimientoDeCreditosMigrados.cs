@@ -453,7 +453,8 @@ public sealed class NacimientoDeCreditosMigrados(
             VersionNumber = 1,
             EffectiveValueDate = corte,
             Cause = TermsVersionCause.Migration,
-            RulesVersion = VersionesDeReglas.Vigente,
+            // K6b (T1053, T1055): un crédito de vivienda migrado sella las reglas de vivienda; los demás, la vigente.
+            RulesVersion = VersionesDeReglas.ParaCreditoNuevo(string.Equals(v.ModalityCode, ReglasDeLineaDeCredito.ModalidadDeVivienda, StringComparison.OrdinalIgnoreCase)),
             CreditLineVersionId = v.Id,
             ModalityCode = v.ModalityCode,
             SubsegmentCode = v.SubsegmentCode,
@@ -483,6 +484,7 @@ public sealed class NacimientoDeCreditosMigrados(
             RoundingUnit = Decimal(t, "roundingUnit") ?? v.RoundingUnit,
             RoundingMode = Enumeracion(t, "roundingMode", v.RoundingMode),
             RoundingMoment = Enumeracion(t, "roundingMoment", v.RoundingMoment),
+            DenominationUnit = v.DenominationUnit,
             AllocationOrder = Enumeracion(t, "allocationOrder", v.AllocationOrder),
             ConceptPriority = v.ConceptPriority,
             SuspenseWithItsConcept = v.SuspenseWithItsConcept,
@@ -508,7 +510,7 @@ public sealed class NacimientoDeCreditosMigrados(
         RoundingUnit = c.RoundingUnit, RoundingMode = c.RoundingMode, RoundingMoment = c.RoundingMoment, AllocationOrder = c.AllocationOrder,
         ConceptPriority = c.ConceptPriority, SuspenseWithItsConcept = c.SuspenseWithItsConcept, AllowsSpecificInstallmentOutOfOrder = c.AllowsSpecificInstallmentOutOfOrder,
         NoteRecalculation = c.NoteRecalculation, Insurances = c.Insurances, RestructuringCount = c.RestructuringCount, RestructuredOn = c.RestructuredOn,
-        InputsSha256 = c.InputsSha256,
+        InputsSha256 = c.InputsSha256, DenominationUnit = c.DenominationUnit,
     };
 
     /// <summary>Una garantía de la carga: un pagaré nace como <c>LND_PromissoryNotes</c> con su canal e id externo; las demás, como garantía del crédito.</summary>

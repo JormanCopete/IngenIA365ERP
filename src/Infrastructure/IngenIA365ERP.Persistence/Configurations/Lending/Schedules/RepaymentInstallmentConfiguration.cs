@@ -28,6 +28,13 @@ public class RepaymentInstallmentConfiguration : IEntityTypeConfiguration<Repaym
         builder.Property(e => e.OtherCharges).Monto().IsRequired();
         builder.Property(e => e.Total).Monto().IsRequired();
         builder.Property(e => e.ClosingPrincipal).Monto().IsRequired();
+        // K6b (T1059; CarteraVivienda): la cuota en UVR de un crédito en UVR.
+        builder.Property(e => e.OpeningPrincipalUvr).ValorUvr();
+        builder.Property(e => e.PrincipalUvr).ValorUvr();
+        builder.Property(e => e.InterestUvr).ValorUvr();
+        builder.Property(e => e.InsuranceUvr).ValorUvr();
+        builder.Property(e => e.TotalUvr).ValorUvr();
+        builder.Property(e => e.ClosingPrincipalUvr).ValorUvr();
 
         builder.HasOne(e => e.ScheduleVersion).WithMany().HasForeignKey(e => e.ScheduleVersionId).OnDelete(DeleteBehavior.Restrict);
 

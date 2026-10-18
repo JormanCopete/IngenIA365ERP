@@ -38,7 +38,11 @@ public sealed record PagoAEmitir(
     DateOnly? Firmeza,
     string? SimulationId,
     PrevalidationOutcome ValidacionPrevia,
-    Guid? ReclamacionPublicId);
+    Guid? ReclamacionPublicId)
+{
+    /// <summary>K2 (T0840): la línea «descontado pendiente de giro» que el pago de la pagaduría gira.</summary>
+    public Guid? DeductionFileLinePublicId { get; init; }
+}
 
 /// <summary>El reverso de un pago tal como se emite (mensajes.md §10.8, §11.5; C08, C13). (nuevo)</summary>
 public sealed record ReversoDePagoAEmitir(
@@ -144,6 +148,7 @@ public sealed partial class EmisionDeCartera
             FinalityUntil = p.Firmeza,
             SimulationId = p.SimulationId,
             InsuranceClaimPublicId = p.ReclamacionPublicId,
+            DeductionFileLinePublicId = p.DeductionFileLinePublicId,
             RulesVersion = h.Condiciones.RulesVersion,
         };
         List<object> contenidos = [principal];

@@ -55,7 +55,11 @@ public sealed record LoanStatementDto(
     IReadOnlyList<StatementNonDeductionDto> NotApplied,
     string? InformativeRating,
     string? OfficialRating,
-    string? CollectionStage);
+    string? CollectionStage)
+{
+    /// <summary>K6b (bloque 2; FR-024): en un crédito en UVR, la UVR del día (publicada o proyectada) y los saldos en UVR; nulo en pesos.</summary>
+    public Housing.LoanUvrDto? Uvr { get; init; }
+}
 
 /// <summary>
 /// <c>GET /api/lending/loans/{id}/statement?date=&amp;recordedAsOf=</c> (feature 013, US4, T0503; api.md §8.1, <c>Lending.Loans.Read</c>; FR-069): de
@@ -113,6 +117,9 @@ public sealed class GetLoanStatementQueryHandler(
             estado.AlturaDeMora.Dias, estado.AlturaDeMora.CuotaMasAntigua, estado.AlturaDeMora.CuotasVencidas, estado.ValorParaCancelar,
             estado.SaldosPorConcepto.ToDictionary(s => s.Key.ToString(), s => s.Value), cuotas, versiones,
             new StatementMarksDto(estado.Suspendida, estado.UsuraTopada, (condiciones?.RestructuringCount ?? 0) > 0, condiciones?.RestructuringCount ?? 0),
-            noAplicados, null, null, null));
+            noAplicados, null, null, null)
+        {
+            Uvr = Housing.LoanUvrDto.De(estado),
+        });
     }
 }

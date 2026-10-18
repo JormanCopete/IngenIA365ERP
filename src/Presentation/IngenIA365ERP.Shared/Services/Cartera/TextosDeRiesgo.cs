@@ -75,6 +75,43 @@ public static class TextosDeRiesgo
         _ => v,
     };
 
+    /// <summary>Los tres segmentos de la pérdida esperada del Anexo 2 (K6a).</summary>
+    public static IReadOnlyList<(string Codigo, string Texto)> SegmentosDePerdidaEsperada { get; } =
+    [
+        ("CONSUMO_LIBRANZA", "Consumo con libranza"),
+        ("CONSUMO_SIN_LIBRANZA", "Consumo sin libranza"),
+        ("COMERCIAL_PN", "Comercial persona natural"),
+    ];
+
+    public static string Segmento(string? v) => SegmentosDePerdidaEsperada.FirstOrDefault(s => s.Codigo == v).Texto ?? v ?? "—";
+
+    public static string ClaseDeEleccion(string? v) => v switch
+    {
+        "VoluntaryAdoption" => "Adopción voluntaria",
+        "VoluntaryWithdrawal" => "Desistimiento",
+        _ => v ?? "—",
+    };
+
+    /// <summary>El tipo de garantía con que se tomó la pérdida dado el incumplimiento (claves del Anexo 2).</summary>
+    public static string GarantiaDePdi(string? v) => v switch
+    {
+        "PRENDARIA" => "Prendaria",
+        "HIPOTECARIA" => "Hipotecaria",
+        "FONDOS_GARANTIAS" => "Fondo de garantías",
+        "NO_IDONEA" => "Garantía no idónea",
+        "SIN_GARANTIA" => "Sin garantía",
+        null or "" => "—",
+        _ => v,
+    };
+
+    /// <summary>La tabla de probabilidad de incumplimiento que se usó: la del tipo de organización o la de la aplicación voluntaria.</summary>
+    public static string TablaDePi(string? v) => v switch
+    {
+        "VOLUNTARIA" => "Aplicación voluntaria",
+        null or "" => "—",
+        _ => v.Replace('_', ' ').ToLowerInvariant(),
+    };
+
     public static string EstadoDeVersion(string? v) => v switch
     {
         "PendingValidation" => "Pendiente de validar",

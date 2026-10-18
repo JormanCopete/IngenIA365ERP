@@ -59,6 +59,33 @@ public class LosComandosDeCarteraLlevanClave
         "Presentation/IngenIA365ERP.API/Endpoints/Lending/RiskEndpoints.cs",
         // US13 (bloque 14B, T0790): emitir, enviar y anular un documento; el enlace del PDF guardado (reimprimir) es "/download-link", sin clave.
         "Presentation/IngenIA365ERP.API/Endpoints/Lending/DocumentsEndpoints.cs",
+        // K2, US10 (bloque 15C, T0850): convenios y su plantilla, archivos de descuento, no aplicados y el traslado; las dos rutas del doble van
+        // en TestDoublesEndpoints. Sin clave sólo la vista previa del archivo ("/preview") y su enlace ("/download-link").
+        "Presentation/IngenIA365ERP.API/Endpoints/Lending/PayrollAgreementsEndpoints.cs",
+        "Presentation/IngenIA365ERP.API/Endpoints/Lending/PayrollDeductionFilesEndpoints.cs",
+        "Presentation/IngenIA365ERP.API/Endpoints/Lending/PayrollNotAppliedEndpoints.cs",
+        // K3, US11 (bloque C, T0890, T0868): novedades, condonaciones, eventos del deudor, reclamación al seguro e insolvencia. Sin clave sólo la
+        // simulación de la novedad ("/simulate", una consulta por POST).
+        "Presentation/IngenIA365ERP.API/Endpoints/Lending/NoveltiesEndpoints.cs",
+        "Presentation/IngenIA365ERP.API/Endpoints/Lending/WaiversEndpoints.cs",
+        "Presentation/IngenIA365ERP.API/Endpoints/Lending/DebtorEventsEndpoints.cs",
+        // K3, US14 (bloque C, T0915): el lote de castigo con el reporte al supervisor. La evaluación de cartera (/risk/evaluations) vive en
+        // RiskEndpoints.cs, que ya está en la lista.
+        "Presentation/IngenIA365ERP.API/Endpoints/Lending/WriteOffBatchesEndpoints.cs",
+        // K4, US12 (bloque C, T0956): la cobranza —etapas, reparto, gestiones, acuerdos, jurídico, campañas, gastos, avisos previos y reclamos—. La vista
+        // previa de la campaña es una consulta por POST (sin clave).
+        "Presentation/IngenIA365ERP.API/Endpoints/Lending/CollectionStagesEndpoints.cs",
+        "Presentation/IngenIA365ERP.API/Endpoints/Lending/CollectorAssignmentsEndpoints.cs",
+        "Presentation/IngenIA365ERP.API/Endpoints/Lending/CollectionActionsEndpoints.cs",
+        "Presentation/IngenIA365ERP.API/Endpoints/Lending/PaymentAgreementsEndpoints.cs",
+        "Presentation/IngenIA365ERP.API/Endpoints/Lending/LegalProcessesEndpoints.cs",
+        "Presentation/IngenIA365ERP.API/Endpoints/Lending/CampaignsEndpoints.cs",
+        "Presentation/IngenIA365ERP.API/Endpoints/Lending/CollectionFeesEndpoints.cs",
+        "Presentation/IngenIA365ERP.API/Endpoints/Lending/PriorNoticesEndpoints.cs",
+        "Presentation/IngenIA365ERP.API/Endpoints/Lending/CreditReportClaimsEndpoints.cs",
+        // K5, US16 (fase 21, bloque 3, T1008): generar el SICSES y los archivos de las centrales y marcar cargado. Sin clave sólo validar ("/validate",
+        // no guarda) y el enlace de descarga ("/download-link").
+        "Presentation/IngenIA365ERP.API/Endpoints/Lending/RegulatoryEndpoints.cs",
     ];
 
     /// <summary>
@@ -72,7 +99,13 @@ public class LosComandosDeCarteraLlevanClave
             // US4 (bloque 8C): verificar el libro (api.md §16.5: no corrige nada).
             "\"/verify\"",
             // US5 (bloque 9C): simular un pago, la vista previa de su reverso y la simulación del recaudador de prueba (no escriben).
-            "/payment-simulations\"", "/reversal-preview\"", "\"/collector/simulations\""];
+            "/payment-simulations\"", "/reversal-preview\"", "\"/collector/simulations\"",
+            // K3 (bloque C, T0890): simular la novedad (api.md §11.1, «sin clave»: no escribe).
+            "/simulate\"",
+            // K4 (bloque C, T0956): la vista previa de una campaña (api.md §14.9: «sin clave», no escribe).
+            "/{id:guid}/preview\"",
+            // K5 (fase 21, bloque 3, T1008): validar el SICSES o el archivo de una central (api.md §18, «no guarda; sin clave»).
+            "/validate\""];
 
     /// <summary>
     /// Los comandos de esta fase que llegan por pantalla (US17, T0265, T0273): cada uno es <c>IOperacionIdempotente</c>, así
@@ -188,9 +221,90 @@ public class LosComandosDeCarteraLlevanClave
         typeof(IngenIA365ERP.Application.Lending.Documents.IssueLendingDocumentCommand),
         typeof(IngenIA365ERP.Application.Lending.Documents.SendLendingDocumentCommand),
         typeof(IngenIA365ERP.Application.Lending.Documents.VoidLendingDocumentCommand),
+        // K2 (US10, bloque B; T0818): convenios y su plantilla, el archivo de descuentos, el traslado, los no aplicados y el recaudador de prueba de
+        // la libranza. Sin clave sólo la vista previa del archivo (una consulta por POST) y su enlace de descarga (/download-link). Sus archivos de rutas
+        // (PayrollAgreementsEndpoints, PayrollDeductionFilesEndpoints, PayrollNotAppliedEndpoints) están en Archivos desde el bloque C (T0850).
+        typeof(IngenIA365ERP.Application.Lending.Payroll.Agreements.CreatePayrollAgreementCommand),
+        typeof(IngenIA365ERP.Application.Lending.Payroll.Agreements.AddPayrollAgreementVersionCommand),
+        typeof(IngenIA365ERP.Application.Lending.Payroll.Agreements.SetPayrollAgreementContactsCommand),
+        typeof(IngenIA365ERP.Application.Lending.Imports.ImportPayrollAgreementsCommand),
+        typeof(IngenIA365ERP.Application.Lending.Payroll.Files.GeneratePayrollDeductionFileCommand),
+        typeof(IngenIA365ERP.Application.Lending.Payroll.Files.VoidPayrollDeductionFileCommand),
+        typeof(IngenIA365ERP.Application.Lending.Payroll.Transfers.TransferLoanPayrollCommand),
+        typeof(IngenIA365ERP.Application.Lending.Payroll.NotApplied.ResolveInstallmentNonDeductionCommand),
+        typeof(IngenIA365ERP.Application.Lending.Integration.DoblesDePrueba.ConfirmTestPayrollFileSentCommand),
+        typeof(IngenIA365ERP.Application.Lending.Integration.DoblesDePrueba.EmitTestPayrollDeductionResultCommand),
+        // K3 (US11, bloque B; T0868): novedades (radicar, enviar, consentimiento, aplicar, anular), condonaciones (pedir, aplicar, anular), eventos del
+        // deudor, reclamación al seguro e insolvencia. La simulación de la novedad es una consulta por POST (sin clave). Sus archivos de rutas
+        // (NoveltiesEndpoints, WaiversEndpoints, DebtorEventsEndpoints) están en Archivos desde el bloque C (T0890).
+        typeof(IngenIA365ERP.Application.Lending.Novelties.RequestLoanNoveltyCommand),
+        typeof(IngenIA365ERP.Application.Lending.Novelties.SubmitLoanNoveltyCommand),
+        typeof(IngenIA365ERP.Application.Lending.Novelties.RegisterNoveltyConsentCommand),
+        typeof(IngenIA365ERP.Application.Lending.Novelties.ApplyLoanNoveltyCommand),
+        typeof(IngenIA365ERP.Application.Lending.Novelties.CancelLoanNoveltyCommand),
+        typeof(IngenIA365ERP.Application.Lending.Waivers.RequestWaiverCommand),
+        typeof(IngenIA365ERP.Application.Lending.Waivers.ApplyWaiverCommand),
+        typeof(IngenIA365ERP.Application.Lending.Waivers.CancelWaiverCommand),
+        typeof(IngenIA365ERP.Application.Lending.DebtorEvents.RegisterDebtorEventCommand),
+        typeof(IngenIA365ERP.Application.Lending.DebtorEvents.ChangeInsuranceClaimStatusCommand),
+        typeof(IngenIA365ERP.Application.Lending.DebtorEvents.OpenInsolvencyProceedingCommand),
+        typeof(IngenIA365ERP.Application.Lending.DebtorEvents.RecordInsolvencyFailureCommand),
+        // K3 (US14, bloque B; T0901): el lote de castigo (armar, agregar y quitar créditos, enviar, aplicar, el reporte al supervisor) y la evaluación de
+        // cartera (preparar y aplicar). Sus archivos de rutas (WriteOffBatchesEndpoints y /risk/evaluations en RiskEndpoints) están en Archivos desde el bloque C (T0915).
+        typeof(IngenIA365ERP.Application.Lending.WriteOffs.CreateWriteOffBatchCommand),
+        typeof(IngenIA365ERP.Application.Lending.WriteOffs.AddWriteOffBatchItemCommand),
+        typeof(IngenIA365ERP.Application.Lending.WriteOffs.RemoveWriteOffBatchItemCommand),
+        typeof(IngenIA365ERP.Application.Lending.WriteOffs.SubmitWriteOffBatchCommand),
+        typeof(IngenIA365ERP.Application.Lending.WriteOffs.ApplyWriteOffBatchCommand),
+        typeof(IngenIA365ERP.Application.Lending.WriteOffs.RegisterWriteOffSupervisorReportCommand),
+        typeof(IngenIA365ERP.Application.Lending.Risk.Evaluations.PreparePortfolioEvaluationCommand),
+        typeof(IngenIA365ERP.Application.Lending.Risk.Evaluations.ApplyPortfolioEvaluationCommand),
+        // K3, bloque D (decisiones del dueño del 2026-10-15): la excepción de cobertura que aprueba otra persona, anular el lote y descartar la evaluación.
+        typeof(IngenIA365ERP.Application.Lending.Novelties.ApproveNoveltyCoverageExceptionCommand),
+        typeof(IngenIA365ERP.Application.Lending.WriteOffs.VoidWriteOffBatchCommand),
+        typeof(IngenIA365ERP.Application.Lending.Risk.Evaluations.DiscardPortfolioEvaluationCommand),
+        // K4 (US12, bloques B y C; T0932): la cobranza. La vista previa de la campaña (consulta) y las listas no son comandos.
+        typeof(IngenIA365ERP.Application.Lending.Collections.Stages.AddCollectionStageVersionCommand),
+        typeof(IngenIA365ERP.Application.Lending.Collections.Assignments.CreateCollectorAssignmentRuleCommand),
+        typeof(IngenIA365ERP.Application.Lending.Collections.Assignments.CloseCollectorAssignmentRuleCommand),
+        typeof(IngenIA365ERP.Application.Lending.Collections.Assignments.AssignCollectorCommand),
+        typeof(IngenIA365ERP.Application.Lending.Collections.Assignments.DistributeCollectionsCommand),
+        typeof(IngenIA365ERP.Application.Lending.Collections.Actions.RecordCollectionActionCommand),
+        typeof(IngenIA365ERP.Application.Lending.Collections.Actions.VoidCollectionActionCommand),
+        typeof(IngenIA365ERP.Application.Lending.Collections.Agreements.CreatePaymentAgreementCommand),
+        typeof(IngenIA365ERP.Application.Lending.Collections.Agreements.ApprovePaymentAgreementCommand),
+        typeof(IngenIA365ERP.Application.Lending.Collections.Agreements.RejectPaymentAgreementCommand),
+        typeof(IngenIA365ERP.Application.Lending.Collections.Agreements.CancelPaymentAgreementCommand),
+        typeof(IngenIA365ERP.Application.Lending.Collections.Legal.OpenLegalProcessCommand),
+        typeof(IngenIA365ERP.Application.Lending.Collections.Legal.RecordLegalProcessActionCommand),
+        typeof(IngenIA365ERP.Application.Lending.Collections.Legal.CloseLegalProcessCommand),
+        typeof(IngenIA365ERP.Application.Lending.Collections.Fees.CauseCollectionFeesCommand),
+        typeof(IngenIA365ERP.Application.Lending.Collections.Campaigns.CreateMessageCampaignCommand),
+        typeof(IngenIA365ERP.Application.Lending.Collections.Campaigns.ScheduleMessageCampaignCommand),
+        typeof(IngenIA365ERP.Application.Lending.Collections.Campaigns.CancelMessageCampaignCommand),
+        typeof(IngenIA365ERP.Application.Lending.Collections.PriorNotices.SendPriorNoticeCommand),
+        typeof(IngenIA365ERP.Application.Lending.Collections.PriorNotices.RegisterPriorNoticeEvidenceCommand),
+        typeof(IngenIA365ERP.Application.Lending.Collections.Claims.RegisterCreditReportClaimCommand),
+        typeof(IngenIA365ERP.Application.Lending.Collections.Claims.ExtendCreditReportClaimCommand),
+        typeof(IngenIA365ERP.Application.Lending.Collections.Claims.AnswerCreditReportClaimCommand),
+        typeof(IngenIA365ERP.Application.Lending.Collections.Claims.WithdrawCreditReportClaimCommand),
+        // K5 (US16, fase 21, T1004): generar el SICSES y el archivo de una central, y marcar cargado. Validar y el enlace de descarga no son comandos
+        // con clave.
+        typeof(IngenIA365ERP.Application.Lending.Regulatory.GenerateSicsesFileCommand),
+        typeof(IngenIA365ERP.Application.Lending.Regulatory.GenerateCreditBureauFileCommand),
+        typeof(IngenIA365ERP.Application.Lending.Regulatory.MarkRegulatoryFileUploadedCommand),
+        // K6a (fase 22, bloque 3, T1038): la adopción o el desistimiento voluntario del modelo y la carga complementaria del historial de mora (sus
+        // rutas viven en RiskEndpoints.cs, que ya está en Archivos).
+        typeof(IngenIA365ERP.Application.Lending.Risk.RegisterImpairmentModelElectionCommand),
+        typeof(IngenIA365ERP.Application.Lending.Risk.ImportArrearsHistoryCommand),
     ];
 
-    private static readonly Regex Requerido = new(@"Idempotency|ConClave|RequiereClave", RegexOptions.Compiled);
+    /// <summary>
+    /// Fase 24 (T1062): <c>MapPlantilla(</c> cuenta, porque <c>RutasDePlantilla</c> pone <c>.ConClaveDeOperacion()</c> en la importación. Con los
+    /// comentarios fuera del recorrido (<see cref="ReglaSobreFuente.Faltantes"/>), <c>ContributionBalancesEndpoints</c> —cuya única escritura es la
+    /// plantilla— pasaba sólo porque un comentario decía «Idempotency-Key».
+    /// </summary>
+    private static readonly Regex Requerido = new(@"Idempotency|ConClave|RequiereClave|\.MapPlantilla\(", RegexOptions.Compiled);
 
     /// <summary>
     /// US5 (T0526, T21): el contrato de obligaciones no es una escritura de pantalla: su clave es la de negocio del recaudador (<c>NOM:</c>,

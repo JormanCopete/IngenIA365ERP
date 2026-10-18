@@ -50,7 +50,10 @@ public sealed class GetLoanQueryHandler(IApplicationDbContext db, IAlcanceDeCart
         var terminos = condiciones is null ? null : new LoanTermsDto(condiciones.VersionNumber, condiciones.RateKind.ToString(), condiciones.AnnualRate,
             condiciones.IndexCode, condiciones.Margin, condiciones.DayCount.ToString(), condiciones.RateEquivalence.ToString(),
             $"{condiciones.RoundingUnit}/{condiciones.RoundingMode}/{condiciones.RoundingMoment}", condiciones.AllocationOrder.ToString(),
-            preferencia ?? condiciones.NoteRecalculation.ToString(), condiciones.RulesVersion);
+            preferencia ?? condiciones.NoteRecalculation.ToString(), condiciones.RulesVersion)
+        {
+            DenominationUnit = condiciones.DenominationUnit.ToString(),
+        };
         return Result.Success(new LoanDto(
             c.PublicId, c.Number, c.Status.ToString(), c.Origin.ToString(), personas[c.DebtorPersonId], codeudores.Select(p => personas[p]).ToList(),
             oficinas[c.BranchId], lineas[c.CreditLineId], pactadas?.ModalityCode ?? string.Empty, pactadas?.SubsegmentCode, terminos,

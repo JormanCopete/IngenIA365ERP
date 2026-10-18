@@ -58,6 +58,9 @@ public class LendingInboundMessage : AuditableEntity
     /// <summary>Venta o ajuste fechado hasta el corte (FR-143).</summary>
     public int? SaleReconciliationId { get; set; }
 
+    /// <summary>K2 (<c>CarteraLibranza</c>): el archivo de descuentos de un <c>EnvioDeDescuentosConfirmado</c> o un <c>ResultadoDeDescuentos</c>.</summary>
+    public int? PayrollDeductionFileId { get; set; }
+
     public int EvaluationCount { get; set; }
 
     public int? LastEvaluationId { get; set; }

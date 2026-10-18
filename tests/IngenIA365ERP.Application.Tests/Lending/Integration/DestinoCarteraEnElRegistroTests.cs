@@ -54,7 +54,9 @@ public class DestinoCarteraEnElRegistroTests
         _destino.Acepta("VentaACreditoRegistrada", 2).Should().BeTrue();
         _destino.Acepta("VentaACreditoRegistrada", 7).Should().BeTrue("una versión desconocida la responde el consumidor, no el despachador (C16)");
         _destino.Acepta("AjusteDeVentaACredito", 1).Should().BeTrue();
-        _destino.Acepta("EnvioDeDescuentosConfirmado", 1).Should().BeFalse("llega con K2");
+        _destino.Acepta("EnvioDeDescuentosConfirmado", 1).Should().BeTrue("desde K2 (T0838)");
+        _destino.Acepta("ResultadoDeDescuentos", 1).Should().BeTrue("desde K2 (T0838)");
+        _destino.Acepta("ResultadoDeDescuentos", 2).Should().BeFalse();
     }
 
     [Fact]
@@ -71,7 +73,7 @@ public class DestinoCarteraEnElRegistroTests
     [Fact]
     public async Task Si_la_fila_adopta_algo_que_Cartera_todavia_no_acepta_el_destino_no_cuenta()
     {
-        SembrarCar(("VentaACreditoRegistrada", 2), ("EnvioDeDescuentosConfirmado", 1));
+        SembrarCar(("VentaACreditoRegistrada", 2), ("EnvioDeDescuentosConfirmado", 2));
 
         (await Registro().DestinoHabilitadoAsync(IntegrationDestinations.Lending, Hoy, default)).Should().BeFalse();
     }

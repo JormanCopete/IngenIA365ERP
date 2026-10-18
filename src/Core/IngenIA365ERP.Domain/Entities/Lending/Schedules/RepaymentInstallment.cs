@@ -43,4 +43,19 @@ public class RepaymentInstallment : AuditableEntityLong, IHechoInmutable
     public bool IsExtraordinary { get; init; }
 
     public bool IsGraceInstallment { get; init; }
+
+    // K6b (T1048, T1059; data-model §0.4, §4.5): la cuota en UVR de un crédito en UVR (alias ValorUvr, 18,4); nulas en pesos. Los montos de arriba son
+    // su valor en pesos a la UVR con que se generó el plan (RepaymentScheduleVersion.UvrValue).
+
+    public decimal? OpeningPrincipalUvr { get; init; }
+
+    public decimal? PrincipalUvr { get; init; }
+
+    public decimal? InterestUvr { get; init; }
+
+    public decimal? InsuranceUvr { get; init; }
+
+    public decimal? TotalUvr { get; init; }
+
+    public decimal? ClosingPrincipalUvr { get; init; }
 }

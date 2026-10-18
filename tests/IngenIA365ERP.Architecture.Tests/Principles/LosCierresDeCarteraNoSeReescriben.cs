@@ -52,5 +52,26 @@ public class LosCierresDeCarteraNoSeReescriben
         // US8 (bloque 13C, T0728): la activación hace nacer el cierre base una sola vez, después de todas las tandas; también está en el recorrido.
         Assert.Contains(archivos, a => a.EndsWith(Path.Combine("Activation", "ActivateLendingCommand.cs"), StringComparison.Ordinal));
         Assert.Contains(archivos, a => a.EndsWith(Path.Combine("Activation", "NacimientoDeCreditosMigrados.cs"), StringComparison.Ordinal));
+        // K3 (US14, bloque B; T0901): la evaluación de cartera y su asunto de acta también están en el recorrido.
+        Assert.Contains(archivos, a => a.EndsWith(Path.Combine("Evaluations", "PortfolioEvaluationCommands.cs"), StringComparison.Ordinal));
+        Assert.Contains(archivos, a => a.EndsWith(Path.Combine("Evaluations", "AsuntoDeEvaluacionDeCartera.cs"), StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// K3 (US14, bloque B; T0901, T0913; FR-102): la evaluación de cartera entra al cálculo del cierre sólo por el cargador del riesgo, como candidata, y
+    /// sólo desde el cierre de su mes de efecto con lo aplicado hasta R; aplicarla no toca ningún cierre (las piezas de la evaluación no nombran los
+    /// cierres ni sus líneas).
+    /// </summary>
+    [Fact]
+    public void La_evaluacion_entra_solo_al_cierre_de_su_mes_de_efecto_y_no_toca_cierres()
+    {
+        var raiz = RepoPath.FindRepoRoot();
+        var cargador = FuenteSinComentarios.Leer(Path.Combine(raiz, "src", "Core", "IngenIA365ERP.Application", "Lending", "Risk", "CargadorDeRiesgo.cs"));
+        Assert.Matches(@"PortfolioEvaluations[\s\S]*?Status == PortfolioEvaluationStatus\.Applied && e\.AppliedAt <= r && e\.EffectiveYear \* 12 \+ e\.EffectiveMonth <= mesDelCorte", cargador);
+        var carpeta = Path.Combine(raiz, "src", "Core", "IngenIA365ERP.Application", "Lending", "Risk", "Evaluations");
+        var infracciones = Directory.EnumerateFiles(carpeta, "*.cs")
+            .Where(a => Regex.IsMatch(FuenteSinComentarios.Leer(a), @"\b(MonthlyCloses|MonthlyCloseLoans)\b"))
+            .Select(a => Path.GetFileName(a)).ToList();
+        ReglaSobreFuente.SinInfracciones(infracciones, "La evaluación de cartera toca un cierre (Principio XI)");
     }
 }

@@ -43,7 +43,7 @@ frena el propio registro (`NationalValues.Value.AlreadyRegistered`, o «sin camb
 
 ### Lo que falta para los próximos días (C69)
 
-La misma pantalla muestra arriba lo que falta (`GET /api/saas/national-values/missing?days=31`): el salario mínimo y la UVT, los 23
+La misma pantalla muestra arriba lo que falta (`GET /api/saas/national-values/missing?days=31`): el salario mínimo y la UVT, los 29
 límites, la usura de cada modalidad del catálogo vigente y los festivos del año del horizonte. Se calcula **sin leer cooperativas**.
 Es la lista de trabajo del maestro: la usura del mes siguiente aparece en cuanto el horizonte la alcanza.
 
@@ -61,6 +61,67 @@ Es la lista de trabajo del maestro: la usura del mes siguiente aparece en cuanto
 **DT §7.6 — nada que necesite valores ficticios en la central se ensaya en DEV ni en QA**: la central es una por ambiente y todas sus
 cooperativas la replican. Un valor de prueba registrado en DEV llega a todas las cooperativas de DEV. Las pruebas que inventan valores
 corren en las e2e, en un host propio («Valores nacionales e2e»).
+
+### 3a. La UVR día a día y el tope de vivienda (K6b, 2026-10-17)
+
+Desde la entrega K6b (vivienda Ley 546 y UVR) la central espera dos códigos más, sin clave y **sin semilla** (nadie los inventa):
+
+| Código | Unidad | Cómo se registra | Sin él |
+|---|---|---|---|
+| `UVR` | `Pesos` (cuatro decimales o más, como la publica el Banco de la República) | **un valor por día**: `vigenteDesde` = `vigenteHasta` = ese día. El Banco la publica por adelantado para el período del 16 de un mes al 15 del siguiente: se carga ese período entero de una vez | un crédito en UVR no se causa ese día ni los siguientes (error de grupo `NationalValues.Missing` en la corrida, alerta `Cartera.ValorNacionalFaltante`); los créditos en pesos siguen. Una línea en UVR no simula ni desembolsa sin la UVR del día del desembolso |
+| `TOPE_TASA_VIVIENDA` | `EA` (fracción: 12 % es `0,12`) | una fila con su vigencia; al cambiar el tope, otra fila desde la fecha nueva | ninguna línea de vivienda se crea ni se versiona, ninguna solicitud de vivienda se radica y los créditos de vivienda no se causan (error de grupo `NationalValues.Missing` con la clave del tope) |
+
+**Cargar la UVR del período** (lo recomendado): plantilla `saas.national-values`, una fila por día:
+
+| codigo | clave | vigenteDesde | vigenteHasta | fechaDeReferencia | valor | unidad | fuente |
+|---|---|---|---|---|---|---|---|
+| `UVR` | | 2026-10-16 | 2026-10-16 | | 405,1234 | `Pesos` | Banco de la República, serie UVR publicada el aaaa-mm-dd |
+| `UVR` | | 2026-10-17 | 2026-10-17 | | 405,2045 | `Pesos` | ídem |
+| … | | … | | | … | | |
+
+(Los valores del ejemplo **no** son publicados: son de la forma.) Revisar primero (`mode=review`) y aplicar después; una fila igual a una
+vigente es «sin cambio», así que volver a cargar el período entero no duplica. La lista de lo que falta (C69) pide la UVR **día por día
+hasta siete días adelante** (`RegistroCentralQueries.DiasDeUvrPorAdelantado`) y el tope vigente: si aparece «La UVR del día», el período
+siguiente no se cargó.
+
+**Si falta la UVR de un día**: registrarla (con su fuente) y esperar la réplica; la corrida del día siguiente **pone al día** los créditos
+en UVR desde el primer día sin UVR (no hay que reprocesar nada a mano). Una liquidación a una fecha **futura** sin UVR publicada se muestra
+con la UVR **proyectada** desde la última publicada, con aviso y sólo para mostrar: nunca se causa ni se contabiliza una proyección.
+
+**Corregir una UVR ya replicada**: «Corregir» con motivo, como cualquier valor. Desde la fase 24 (2026-10-17) la corrección se trata
+como la de la usura: al replicarla, cada cooperativa con Cartera activada que tenga **créditos en UVR** causados en o después del día
+corregido encola una corrida `NationalValueCorrection` (`EfectoDeReplicacionCorreccionDeValorNacional`; `ExecutionOrigin` =
+`Replica:{valor}`) **desde el día corregido hasta la última marca** de los créditos en UVR: aunque la UVR diaria rige un solo día, cambia
+también la corrección monetaria del día siguiente (la víspera se valora con ella) y, si ese día hubo pagos, el capital en UVR y lo que sigue
+(decisión del dueño del 2026-10-17; antes la corrida tocaba sólo el día corregido y el siguiente quedaba descuadrado contra la reconstrucción).
+La corrida recorre **sólo los créditos en UVR** y registra cada diferencia, fechada en el período abierto:
+
+- la de la **corrección monetaria**, como `MonetaryCorrection` con su hecho `CorreccionMonetariaUvrCausada` (`runKind =
+  NationalValueCorrection`);
+- la del **reparto de un pago** aplicado en un día tocado (decisión del dueño del 2026-10-17): lo recibido en pesos es el mismo, pero a la UVR
+  nueva el pago cubre otra mezcla —con la UVR más alta, más interés (fijo en UVR) y menos capital; con la más baja, al revés; y lo mismo con el
+  anticipo o el saldo a favor que dejó—. Se registra como `PaymentReallocation` de la corrida, con el día valor del pago, y va a Contabilidad
+  en su hecho `PagoRedistribuidoPorValorNacional` (`PRN`, comprobante `CA`): entre los roles de saldo (y el ingreso del suspenso o de la
+  recuperación), sin el puente del recaudo, y cuadra solo. **El pago, sus filas y su comprobante no se tocan**; el certificado tributario sale
+  de la reconstrucción y ya trae los intereses del reparto nuevo;
+- el resto (la causación que cambia porque cambió el capital en UVR), como `AccrualAdjustment` con `AjusteDeCausacionPorFechaValor`
+  (`cause = NationalValueCorrection`).
+
+Sin créditos en UVR, o si el día corregido no está causado, no se encola nada (la liquidación y lo que se cause después ya usan el valor
+corregido). Qué revisar: en `/cartera/procesos` la corrida termina `Completed`; si la política `Contabilidad.FaltaDeRegla` está en
+«Bloquear» y falta la regla de `CMU`, `PRN` o `AFV` (para `PRN`: las de saldo de capital, intereses, cargos, anticipo y saldo a favor de la
+línea, y el ingreso del suspenso si hubo), la tanda se detiene y alerta como cualquier proceso; se crea la regla y se reanuda. Después, el
+libro del crédito cuadra con la reconstrucción (la verificación del libro, `VerifyLendingLedgerIntegrityQuery`, no la marca). Límite que queda: un pago que con la UVR
+nueva cambiaría de **cancelar o no** el crédito (o su excedente) se redistribuye igual, pero el estado del crédito no cambia solo: escalarlo a
+soporte.
+
+Los **cinco límites de vivienda** (`VIVIENDA_PLAZO_MINIMO_MESES`, `VIVIENDA_PLAZO_MAXIMO_MESES`, `VIVIENDA_FINANCIABLE`,
+`VIVIENDA_FINANCIABLE_VIS`, `VIVIENDA_CUOTA_INGRESO`) son `LIMITE` y **sí** vienen sembrados, «pendiente de validar» (60 y 360 meses;
+0,70, 0,80 y 0,30), con la fuente de la Ley 546 de 1999 y el Decreto 145 de 2000 por cotejar. El dueño los confirma o los corrige con
+«Corregir». Detalle funcional: [manual de vivienda y UVR](../manual/cartera-vivienda-y-uvr.md).
+
+**Nunca en DEV ni QA con valores inventados** (DT §7.6): la e2e `ViviendaConUvrTests` registra una serie sintética marcada como de prueba
+en la central de su propio host.
 
 ## 4. La réplica
 

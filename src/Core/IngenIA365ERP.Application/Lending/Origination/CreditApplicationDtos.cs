@@ -78,6 +78,9 @@ public sealed record CreditApplicationInput
     public string? PolicyExceptionReason { get; init; }
     public string? SimulationSha256 { get; init; }
 
+    /// <summary>K6b (T1055): en una solicitud de vivienda, si el inmueble es de interés social (elige el límite de financiación VIS).</summary>
+    public bool? IsSocialHousing { get; init; }
+
     /// <summary>La simulación que corresponde a esta solicitud (las mismas entradas del simulador).</summary>
     public ScheduleSimulationInput Simulacion() => new(CreditLinePublicId, Amount, Installments, Periodicity, ExpectedDisbursementDate, FirstDueDate,
         AmortizationSystem, Extraordinary, Grace, Insurances, ApplicantPersonPublicId);
@@ -156,7 +159,11 @@ public sealed record CreditApplicationDto(
     bool BlockedByRestrictiveLists,
     DateTime? SubmittedAt,
     string CreatedBy,
-    DateTime CreatedAt);
+    DateTime CreatedAt)
+{
+    /// <summary>K6b (bloque 2; FR-024): en una solicitud de vivienda, si el inmueble es de interés social (VIS); nulo en las demás.</summary>
+    public bool? IsSocialHousing { get; init; }
+}
 
 /// <summary>Una fila de la lista de solicitudes (api.md §4.2 <c>CreditApplicationListItemDto</c>).</summary>
 public sealed record CreditApplicationListItemDto(
@@ -229,7 +236,10 @@ public static class ConsultasDeSolicitudes
             s.Status == CreditApplicationStatus.Approved || s.ApprovalDecisionId is not null
                 ? new CreditApplicationApprovalDto(s.ApprovedAmount, s.ApprovedTerms, s.ApprovalValidUntil, s.AprobacionVencida(hoy))
                 : null,
-            listas, s.SubmittedAt, s.CreatedBy ?? string.Empty, s.CreatedAt);
+            listas, s.SubmittedAt, s.CreatedBy ?? string.Empty, s.CreatedAt)
+        {
+            IsSocialHousing = s.IsSocialHousing,
+        };
     }
 
     private static CreditApplicationScoreDto Puntaje(CreditScore p)

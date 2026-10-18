@@ -1,0 +1,27 @@
+{
+  // r-k3 (T0905; FR-102, T46): la evaluación de cartera aplicada es una candidata más (causa «Evaluation»): la peor gana, nunca mejora la
+  // de las reglas y, en un empate, gana la causa más específica (reestructurado antes que evaluación). A mano, con la norma de prueba:
+  //  1. 10 días (A) evaluado en C → C por «Evaluation»;
+  //  2. 75 días (C) evaluado en B → la evaluación no mejora: C por la mora;
+  //  3. 20 días (A) evaluado en E con subcategoría E2 → E2 por «Evaluation» (la subcategoría es la de la evaluación);
+  //  4. reestructurado en D y evaluado en D: empate en D → «Restructured»;
+  //  5. otro consumo del deudor del 1, al día → C por arrastre de la calificación de la evaluación.
+  "nombre": "r-k3-evaluacion",
+  "creditos": [
+    { "id": 1, "deudor": 921, "segmento": "CONSUMO", "diasDeMora": 10, "evaluacion": { "categoria": "C" } },
+    { "id": 2, "deudor": 922, "segmento": "CONSUMO", "diasDeMora": 75, "evaluacion": { "categoria": "B" } },
+    { "id": 3, "deudor": 923, "segmento": "CONSUMO", "diasDeMora": 20, "evaluacion": { "categoria": "E", "subcategoria": "E2" } },
+    { "id": 4, "deudor": 924, "segmento": "CONSUMO", "diasDeMora": 0, "evaluacion": { "categoria": "D" },
+      "reestructuracion": { "categoriaAlReestructurar": "D", "cuotasPagadasSeguidas": 0 } },
+    { "id": 5, "deudor": 921, "segmento": "CONSUMO", "diasDeMora": 0 }
+  ],
+  "esperado": {
+    "creditos": [
+      { "id": 1, "categoriaPorMora": "A", "categoria": "C", "causa": "Evaluation", "candidatas": [ "Arrears:A", "Evaluation:C" ] },
+      { "id": 2, "categoriaPorMora": "C", "categoria": "C", "causa": "Arrears", "candidatas": [ "Arrears:C", "Evaluation:B" ] },
+      { "id": 3, "categoria": "E", "subcategoria": "E2", "causa": "Evaluation", "candidatas": [ "Arrears:A", "Evaluation:E" ] },
+      { "id": 4, "categoria": "D", "causa": "Restructured", "candidatas": [ "Arrears:A", "Restructured:D", "Evaluation:D" ] },
+      { "id": 5, "categoria": "C", "causa": "Drag", "candidatas": [ "Arrears:A", "Drag:C" ] }
+    ]
+  }
+}

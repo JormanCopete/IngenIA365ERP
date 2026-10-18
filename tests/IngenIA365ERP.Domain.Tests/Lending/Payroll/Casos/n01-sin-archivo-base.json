@@ -1,0 +1,21 @@
+// K2, T0803 (FR-113): el primer archivo del convenio, sin archivo base: todas las obligaciones van como alta («New»). El convenio no
+// lleva lo vencido, así que el vencido de la obligación 103 no viaja. Las líneas salen en el orden de la fecha de la libranza (FR-111),
+// no en el que llegan. Calculado con novedades.py (decimal), nunca con el motor.
+{
+  "nombre": "Primer archivo sin base",
+  "incluyeVencido": false,
+  "base": null,
+  "obligaciones": [
+    { "credito": 101, "vinculo": 501, "persona": 9001, "fechaLibranza": "2026-03-10", "exigible": 355570.06, "vencido": 0 },
+    { "credito": 102, "vinculo": 502, "persona": 9002, "fechaLibranza": "2025-11-02", "exigible": 412000, "vencido": 0 },
+    { "credito": 103, "vinculo": 503, "persona": 9003, "fechaLibranza": "2026-01-15", "exigible": 198450.33, "vencido": 198450.33 }
+  ],
+  "esperado": {
+    "lineas": [
+      {"linea": 1, "credito": 102, "novedad": "New", "corriente": 412000, "vencido": 0, "total": 412000, "anterior": null},
+      {"linea": 2, "credito": 103, "novedad": "New", "corriente": 198450.33, "vencido": 0, "total": 198450.33, "anterior": null},
+      {"linea": 3, "credito": 101, "novedad": "New", "corriente": 355570.06, "vencido": 0, "total": 355570.06, "anterior": null}
+    ],
+    "totales": {"nuevas": 3, "cambios": 0, "cancelaciones": 0, "sinCambio": 0, "montoNuevas": 966020.39, "montoCambios": 0, "montoSinCambio": 0, "lineas": 3, "total": 966020.39}
+  }
+}

@@ -1,0 +1,23 @@
+// K4 (T0921, FR-121, T77): el aviso del gasto de cobranza (CollectionFeeNotice) es cobranza: pide autorización con evidencia y respeta
+// el canal de la semana fijado por un contacto directo. Lunes 9 de noviembre de 2026: la gestión; miércoles 11: el aviso. El lunes 16
+// es festivo, así que la apertura siguiente es el martes 17 a las 7:00.
+{
+  "caso": "18-aviso-de-gasto-sujeto-al-canal-semanal",
+  "reglas": { "horario": { "lunesAViernes": ["07:00", "19:00"], "sabado": ["08:00", "15:00"] }, "contactosPorDia": 1, "noHabiles": ["2026-11-02", "2026-11-16"] },
+  "titular": {},
+  "escenarios": [
+    { "nombre": "tras contacto directo por teléfono, aviso por SMS",
+      "historial": [ { "id": 1, "en": "2026-11-09T10:15", "canal": "Phone", "directo": true } ],
+      "solicitud": { "pedido": "2026-11-11T09:00", "canal": "Sms", "proposito": "CollectionFeeNotice" },
+      "esperado": { "decision": "Diferido", "siguiente": "2026-11-17T07:00", "motivos": ["WeeklyChannelLocked"] } },
+    { "nombre": "tras contacto directo por WhatsApp, aviso por WhatsApp",
+      "historial": [ { "id": 1, "en": "2026-11-09T10:15", "canal": "WhatsApp", "directo": true } ],
+      "solicitud": { "pedido": "2026-11-11T09:00", "canal": "WhatsApp", "proposito": "CollectionFeeNotice" },
+      "esperado": { "decision": "Permitido", "en": "2026-11-11T09:00" } },
+    { "nombre": "aviso con la autorización sin evidencia",
+      "titular": { "conEvidencia": false },
+      "historial": [],
+      "solicitud": { "pedido": "2026-11-11T09:00", "canal": "Sms", "proposito": "CollectionFeeNotice" },
+      "esperado": { "decision": "Excluido", "motivo": "AuthorizationWithoutEvidence" } }
+  ]
+}

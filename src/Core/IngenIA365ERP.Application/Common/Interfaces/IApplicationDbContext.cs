@@ -434,6 +434,8 @@ public interface IApplicationDbContext
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Documents.IssuedDocumentEvent> IssuedDocumentEvents { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Documents.IssuedDocumentLoan> IssuedDocumentLoans { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Documents.IssuedLendingDocument> IssuedLendingDocuments { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Documents.RegulatoryFile> RegulatoryFiles { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Documents.RegulatoryFileLine> RegulatoryFileLines { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Governance.AttributionLevel> AttributionLevels { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Governance.AttributionMatrix> AttributionMatrices { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Governance.AttributionRule> AttributionRules { get; }
@@ -464,6 +466,8 @@ public interface IApplicationDbContext
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Risk.LoanArrearsHistoryEntry> LoanArrearsHistory { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Risk.AnalysisRating> AnalysisRatings { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Risk.RiskPolicyVersion> RiskPolicyVersions { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Risk.ImpairmentModelElection> ImpairmentModelElections { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Risk.ArrearsHistoryLoad> ArrearsHistoryLoads { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Loans.Loan> Loans { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Loans.LoanControl> LoanControls { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Loans.LoanParty> LoanParties { get; }
@@ -512,6 +516,37 @@ public interface IApplicationDbContext
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Origination.PromissoryNote> PromissoryNotes { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Origination.ScreeningResult> ScreeningResults { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.LoanPayrollLink> LoanPayrollLinks { get; }
+    // K2 (CarteraLibranza): convenios de libranza, archivo de descuentos, resultados y seguimientos de los no aplicados.
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollAgreement> PayrollAgreements { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollAgreementVersion> PayrollAgreementVersions { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollAgreementContact> PayrollAgreementContacts { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollAgreementResultCode> PayrollAgreementResultCodes { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollDeductionFile> PayrollDeductionFiles { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollDeductionFileLine> PayrollDeductionFileLines { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollDeductionResult> PayrollDeductionResults { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.NonDeductionFollowUp> NonDeductionFollowUps { get; }
+    // K3 (feature 013, CarteraNovedades): novedades, condonaciones, castigo y evaluación de cartera.
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Operations.LoanNovelty> LoanNovelties { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Operations.LoanNoveltyLoan> LoanNoveltyLoans { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Operations.LoanNoveltyConsent> LoanNoveltyConsents { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Operations.Waiver> Waivers { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Operations.WaiverLine> WaiverLines { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Operations.WriteOffBatch> WriteOffBatches { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Operations.WriteOffBatchItem> WriteOffBatchItems { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Risk.PortfolioEvaluation> PortfolioEvaluations { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Risk.PortfolioEvaluationLoan> PortfolioEvaluationLoans { get; }
+    // K4 (feature 013, CarteraCobranza; data-model §26.3–§26.10).
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Collections.MessageCampaign> MessageCampaigns { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Collections.CollectionStage> CollectionStages { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Collections.CollectionStageHistoryEntry> CollectionStageHistory { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Collections.CollectorAssignmentRule> CollectorAssignmentRules { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Collections.CollectorAssignment> CollectorAssignments { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Collections.CollectionAction> CollectionActions { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Collections.PaymentPromise> PaymentPromises { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Collections.PaymentAgreement> PaymentAgreements { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Collections.PaymentAgreementInstallment> PaymentAgreementInstallments { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Collections.LegalProcess> LegalProcesses { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Collections.LegalProcessAction> LegalProcessActions { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Projections.LoanDailyPosition> LoanDailyPositions { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Schedules.RepaymentInstallment> RepaymentInstallments { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Schedules.RepaymentScheduleVersion> RepaymentScheduleVersions { get; }

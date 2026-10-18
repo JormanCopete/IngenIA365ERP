@@ -104,6 +104,12 @@ public class TodoEnlaceDelMenuTieneSuPagina
     [InlineData("/cartera/verificar", true)]
     // US15 (T0800): el centro de informes de Cartera; las tarjetas de Cartera del Centro de Reportes llevan a él con ?vista=.
     [InlineData("/cartera/informes", true)]
+    // US10 (T0853, K2): la libranza; el detalle de una pagaduría y el de un archivo se abren desde sus listas.
+    [InlineData("/cartera/pagadurias", true)]
+    [InlineData("/cartera/pagadurias/{Id:guid}", false)]
+    [InlineData("/cartera/archivos-de-descuento", true)]
+    [InlineData("/cartera/archivos-de-descuento/{Id:guid}", false)]
+    [InlineData("/cartera/no-aplicados", true)]
     public void Las_pantallas_de_la_integracion_contable_de_Cartera_tienen_su_pagina(string ruta, bool enElMenu)
     {
         var shared = Shared();

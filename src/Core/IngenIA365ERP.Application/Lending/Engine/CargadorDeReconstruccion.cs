@@ -7,6 +7,7 @@ using IngenIA365ERP.Domain.Entities.Lending.Loans;
 using IngenIA365ERP.Domain.Entities.Lending.Operations;
 using IngenIA365ERP.Domain.Enums.Lending;
 using IngenIA365ERP.Domain.Lending;
+using IngenIA365ERP.Domain.Lending.Parameters;
 using IngenIA365ERP.Domain.Lending.Payments;
 using IngenIA365ERP.Domain.Lending.Replay;
 using IngenIA365ERP.Domain.Lending.Schedules;
@@ -55,12 +56,15 @@ public sealed record CreditoCargado(
 /// </list>
 /// No escribe. (nuevo)
 /// </summary>
-public sealed class CargadorDeReconstruccion(IApplicationDbContext db, ISeriesRegulatorias series)
+public sealed class CargadorDeReconstruccion(IApplicationDbContext db, ISeriesRegulatorias series, ReglasDeParametrosDeCartera? parametros = null)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
-    /// <summary>Las clases de operación que no mueven saldos y la reconstrucción no recibe.</summary>
-    public static IReadOnlySet<LoanOperationKind> SinEfectoEnSaldos { get; } = new HashSet<LoanOperationKind> { LoanOperationKind.PreferenceChange };
+    /// <summary>
+    /// Las clases de operación que no mueven saldos y la reconstrucción no recibe. K3 (T0908): el castigo (<c>WriteOff</c>) no cambia lo que el deudor
+    /// debe —su efecto en la causación lo lleva <c>CastigoDesde</c>, la fecha del castigo del crédito— y no deja filas propias en el libro.
+    /// </summary>
+    public static IReadOnlySet<LoanOperationKind> SinEfectoEnSaldos { get; } = new HashSet<LoanOperationKind> { LoanOperationKind.PreferenceChange, LoanOperationKind.WriteOff };
 
     /// <summary>
     /// Los créditos de <paramref name="loanIds"/> con lo conocido en <paramref name="informacionHasta"/> (nulo = todo) y las series hasta
@@ -93,6 +97,10 @@ public sealed class CargadorDeReconstruccion(IApplicationDbContext db, ISeriesRe
                      select new { v.LoanId, v.OperationId, i.InstallmentNumber, i.PeriodStart, i.DueDate, i.Principal })
                 .ToListAsync(ct);
 
+        var giros = await PendientesDeGiroAsync(ids, operaciones, r, ct);
+        var insolvencias = await InsolvenciasAsync(creditos, operaciones, r, ct);
+        var fallecimientos = await FallecimientosAsync(creditos, r, informacionHasta, ct);
+
         var versionesDeLinea = condiciones.Where(t => t.VersionNumber == 1).Select(t => t.CreditLineVersionId).Distinct().ToList();
         var momentosDeSeguro = (await db.CreditLineInsurances.AsNoTracking().Where(s => versionesDeLinea.Contains(s.CreditLineVersionId))
                 .Select(s => new { s.CreditLineVersionId, s.Code, s.AccrualTiming }).ToListAsync(ct))
@@ -118,11 +126,14 @@ public sealed class CargadorDeReconstruccion(IApplicationDbContext db, ISeriesRe
             try
             {
                 var entrada = new EntradaDeReconstruccion(
-                    Condiciones(pactadas, vigentes, leidas.Value) with
+                    Condiciones(pactadas, AntesDeLasNovedades(suyas), leidas.Value) with
                     {
                         CausacionDeSeguros = momentosDeSeguro.GetValueOrDefault(pactadas.CreditLineVersionId, InsuranceAccrualTiming.AtDueDate),
                         Prelacion = PrelacionSellada(vigentes),
                         CastigoDesde = credito.WrittenOffOn,
+                        InsolvenciaDesde = insolvencias.TryGetValue(credito.DebtorPersonId, out var insolvencia) ? insolvencia.Desde : null,
+                        InsolvenciaHasta = insolvencias.ContainsKey(credito.DebtorPersonId) ? insolvencia.Hasta : null,
+                        FallecimientoDesde = fallecimientos.TryGetValue(credito.Id, out var fallecimiento) ? fallecimiento : null,
                     },
                     credito.Origin == LoanOrigin.Migration ? null : Plan(pactadas, ops),
                     ops.Where(o => !SinEfectoEnSaldos.Contains(o.Kind))
@@ -132,7 +143,10 @@ public sealed class CargadorDeReconstruccion(IApplicationDbContext db, ISeriesRe
                                 .OrderBy(p => p.InstallmentNumber)
                                 .Select(p => new CuotaMigrada(p.InstallmentNumber, p.DueDate, p.Principal) { Desde = p.PeriodStart }).ToList()))
                         .ToList(),
-                    r);
+                    r) { PendientesDeGiro = giros.TryGetValue(credito.Id, out var suyos) ? suyos : [] };
+                // K6b (T1054): un crédito en UVR lleva la serie diaria de la UVR del rango; la reconstrucción lo calcula en UVR y lo valora en pesos.
+                if (pactadas.DenominationUnit == DenominationUnit.Uvr)
+                    entrada = entrada with { Uvr = await series.LeerUvrAsync(origen, hasta, informacionHasta, ct) };
                 resultado[credito.Id] = new CreditoCargado(credito, pactadas, vigentes, ops, leidas.Value.Aplicar(entrada), leidas.Value, null);
             }
             catch (ReglaDeCarteraException ex)
@@ -141,6 +155,43 @@ public sealed class CargadorDeReconstruccion(IApplicationDbContext db, ISeriesRe
             }
         }
         return resultado;
+    }
+
+    /// <summary>
+    /// K2 (T0839; T30, FR-114; data-model §24.8): lo descontado por la pagaduría y pendiente de giro de cada crédito, conocido en R —resultados
+    /// <c>Deducted</c> o <c>PartiallyDeducted</c> registrados hasta R y no reemplazados por otro registrado hasta R—, con la cuota de su línea, la
+    /// fecha del descuento y la ventana y el umbral sellados. Uno que ya giró un pago de las operaciones conocidas no reversado sigue en la entrada
+    /// con <c>GiradoDesde</c> (la fecha valor del pago): cubre la cuota hasta la víspera, así girar no cambia lo que el libro ya causó. Una línea sin
+    /// cuota (sólo vencido) no entra: la reconstrucción la mide como cualquier saldo vencido.
+    /// </summary>
+    private async Task<IReadOnlyDictionary<int, IReadOnlyList<CuotaPendienteDeGiro>>> PendientesDeGiroAsync(IReadOnlyCollection<int> ids,
+        IReadOnlyList<LoanOperation> operaciones, DateTime r, CancellationToken ct)
+    {
+        var resultados = (await (from res in db.PayrollDeductionResults.AsNoTracking()
+                                 join lin in db.PayrollDeductionFileLines.AsNoTracking() on res.PayrollDeductionFileLineId equals lin.Id
+                                 where ids.Contains(res.LoanId) && !res.IsDeleted && res.DeductedAmount > 0m
+                                       && (res.Outcome == PayrollResultOutcome.Deducted || res.Outcome == PayrollResultOutcome.PartiallyDeducted)
+                                 select new
+                                 {
+                                     res.Id, res.LoanId, res.DeductedAmount, res.DeductionDate, res.TransferDueDate, res.PaymasterArrearsThresholdDays,
+                                     res.SupersedesResultId, res.CreatedAt, lin.InstallmentNumber,
+                                 }).ToListAsync(ct))
+            .Where(x => x.CreatedAt <= r).ToList();
+        if (resultados.Count == 0) return new Dictionary<int, IReadOnlyList<CuotaPendienteDeGiro>>();
+        var reemplazados = resultados.Where(x => x.SupersedesResultId is not null).Select(x => x.SupersedesResultId!.Value).ToHashSet();
+        var reversados = operaciones.Where(o => o.ReversesOperationId is not null).Select(o => o.ReversesOperationId!.Value).ToHashSet();
+        var girados = operaciones.Where(o => o.PayrollDeductionResultId is not null && !reversados.Contains(o.Id))
+            .GroupBy(o => o.PayrollDeductionResultId!.Value).ToDictionary(g => g.Key, g => g.OrderBy(o => o.ValueDate).ThenBy(o => o.Sequence).First());
+        return resultados
+            .Where(x => !reemplazados.Contains(x.Id) && x.InstallmentNumber is not null && x.DeductionDate is not null)
+            .GroupBy(x => x.LoanId)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<CuotaPendienteDeGiro>)g.Select(x => new CuotaPendienteDeGiro(x.InstallmentNumber!.Value,
+                x.DeductionDate!.Value, x.TransferDueDate ?? x.DeductionDate!.Value, x.DeductedAmount, x.CreatedAt)
+            {
+                UmbralDias = x.PaymasterArrearsThresholdDays,
+                GiradoDesde = girados.TryGetValue(x.Id, out var girado) ? girado.ValueDate : null,
+                GiradoPor = girado is null ? null : Id(girado.Id),
+            }).ToList());
     }
 
     /// <summary>Un crédito (atajo de <see cref="CargarAsync"/>); nulo si no existe o no tiene condiciones.</summary>
@@ -217,7 +268,17 @@ public sealed class CargadorDeReconstruccion(IApplicationDbContext db, ISeriesRe
 
     // ---------------------------------------------------------------------------------------------------------- mapeos --
 
-    private static CondicionesDeCredito Condiciones(LoanTermsVersion p, LoanTermsVersion vigentes, SeriesDeModalidad series) =>
+
+    /// <summary>
+    /// La última versión de condiciones anterior a la primera que nació de una novedad (K3, T0874); sin novedades, la vigente. Su conteo de
+    /// reestructuraciones es el de partida de la reconstrucción: las novedades lo cambian desde su fecha valor.
+    /// </summary>
+    private static LoanTermsVersion AntesDeLasNovedades(IReadOnlyList<LoanTermsVersion> ordenadas)
+    {
+        var primera = ordenadas.Select((t, i) => (t, i)).FirstOrDefault(x => x.t.NoveltyId is not null);
+        return primera.t is null ? ordenadas[^1] : ordenadas[Math.Max(0, primera.i - 1)];
+    }
+    private static CondicionesDeCredito Condiciones(LoanTermsVersion p, LoanTermsVersion deLaReconstruccion, SeriesDeModalidad series) =>
         new(p.RulesVersion, p.AnnualRate ?? 0m, p.DefaultRateKind, p.DayCount, p.RateEquivalence, p.Periodicity, Redondeo(p))
         {
             MoraFijaEA = p.DefaultRateKind == DefaultRateKind.Fixed ? p.DefaultRate : null,
@@ -227,7 +288,9 @@ public sealed class CargadorDeReconstruccion(IApplicationDbContext db, ISeriesRe
             Margen = p.Margin ?? 0m,
             Piso = p.RateFloor,
             Techo = p.RateCeiling,
-            Reestructuraciones = vigentes.RestructuringCount,
+            // K3 (T0874): las de la última versión anterior a la primera novedad (lo migrado, lo heredado por un enlazado o una versión manual);
+            // cada novedad las cambia desde su fecha valor (ContenidoDeNovedad.ReestructuracionesDespues).
+            Reestructuraciones = deLaReconstruccion.RestructuringCount,
             UsuraRequerida = series.ExigeUsura,
         };
 
@@ -237,10 +300,16 @@ public sealed class CargadorDeReconstruccion(IApplicationDbContext db, ISeriesRe
             ? new RedondeoDeCartera(t.RoundingUnit, t.RoundingMode, t.RoundingMoment)
             : RedondeoDeCartera.AlCentavo;
 
-    /// <summary>El plan pactado del primer tramo con las condiciones selladas; nulo si todavía no hay desembolso.</summary>
+    /// <summary>
+    /// El plan pactado del primer tramo con las condiciones selladas; nulo si todavía no hay desembolso. K3 (T0874): el crédito enlazado de una
+    /// novación o refinanciación no tiene desembolso: su plan pactado es el de su operación de origen (<c>TermsChange</c> del lado enlazado), con su
+    /// monto (lo trasladado más lo capitalizado) y su fecha.
+    /// </summary>
     public static EntradaDePlan? Plan(LoanTermsVersion p, IEnumerable<LoanOperation> operaciones)
     {
-        var primero = operaciones.Where(o => o.Kind == LoanOperationKind.Disbursement).OrderBy(o => o.ValueDate).ThenBy(o => o.Sequence).FirstOrDefault();
+        var lista = operaciones.ToList();
+        var primero = lista.Where(o => o.Kind == LoanOperationKind.Disbursement).OrderBy(o => o.ValueDate).ThenBy(o => o.Sequence).FirstOrDefault()
+            ?? lista.Where(EsOrigenDeEnlazado).OrderBy(o => o.ValueDate).ThenBy(o => o.Sequence).FirstOrDefault();
         if (primero is null) return null;
         return new EntradaDePlan(primero.Amount, primero.ValueDate, p.Installments, p.Periodicity, p.AmortizationSystem, p.AnnualRate ?? 0m,
             p.DayCount, p.RateEquivalence, Redondeo(p))
@@ -253,6 +322,8 @@ public sealed class CargadorDeReconstruccion(IApplicationDbContext db, ISeriesRe
             TratamientoDeGracia = p.GraceInterestTreatment,
             CuotasDeDistribucion = p.GraceDistributionInstallments,
             Seguros = Seguros(p.Insurances),
+            // K6b (T1053): el plan lleva la versión de reglas sellada (la de vivienda en un crédito de vivienda).
+            RulesVersion = VersionesDeReglas.EsConocida(p.RulesVersion) ? p.RulesVersion : VersionesDeReglas.Vigente,
         };
     }
 
@@ -278,8 +349,78 @@ public sealed class CargadorDeReconstruccion(IApplicationDbContext db, ISeriesRe
         LoanOperationKind.CreditBalanceResolution => Payments.DecisionDeResolucion.Leer(o.Payload)?.Contenido(),
         // US6 (T0591): el ajuste de Comercial con su clase, su valor con signo y el recálculo sellado.
         LoanOperationKind.CommercialAdjustment => Integration.Comercial.DecisionDeAjusteComercial.Leer(o.Payload)?.Contenido(),
+        // K3 (T0874, T0884): la novedad (en el crédito, en el anterior o en el enlazado) y la condonación, con su decisión.
+        LoanOperationKind.TermsChange => Novelties.DecisionDeNovedad.Leer(o.Payload)?.Contenido(o.NoveltyId),
+        LoanOperationKind.Waiver => Novelties.DecisionDeCondonacion.Leer(o.Payload)?.Contenido(),
+        // K4 (T0948): el gasto de cobranza informado, con su decisión.
+        LoanOperationKind.Charge => Collections.Fees.DecisionDeCargo.Leer(o.Payload)?.Contenido(),
         _ => null,
     };
+
+    /// <summary>K3: la operación con que nace el enlazado de una novación o refinanciación.</summary>
+    public static bool EsOrigenDeEnlazado(LoanOperation o) =>
+        o.Kind == LoanOperationKind.TermsChange && Novelties.DecisionDeNovedad.Leer(o.Payload) is { } d
+        && string.Equals(d.Side, nameof(LadoDeLaNovedad.Enlazado), StringComparison.Ordinal);
+
+    /// <summary>
+    /// K3 (T0886; T30, FR-098; data-model §25.8): la negociación de insolvencia de cada deudor conocida en R —la del inicio más reciente—, con su
+    /// fin si ya terminó en R: el fracaso (<c>FailedOn</c>) o el acuerdo (la fecha valor de la novedad que lo tramitó). La causación de todos sus
+    /// créditos queda en suspenso desde el inicio hasta ese fin; lo migrado y lo abierto por pantalla se leen igual.
+    /// </summary>
+    /// <summary>
+    /// K3 (FR-097, T102): por crédito, el día del fallecimiento de su deudor (el evento <c>Deceased</c> vigente, conocido en R) cuando la causación no
+    /// sigue tras él: <c>Causacion.ContinuaTrasFallecimiento</c> leído a esa fecha para la línea del crédito (con su excepción por línea). Con el valor
+    /// por defecto (<c>true</c>) o sin lector de parámetros el crédito no aparece y causa como siempre.
+    /// </summary>
+    private async Task<IReadOnlyDictionary<int, DateOnly>> FallecimientosAsync(IReadOnlyList<Loan> creditos, DateTime r, DateTime? informacionHasta,
+        CancellationToken ct)
+    {
+        var resultado = new Dictionary<int, DateOnly>();
+        if (parametros is null || creditos.Count == 0) return resultado;
+        var personas = creditos.Select(c => c.DebtorPersonId).Distinct().ToList();
+        var eventos = (await db.DebtorBlocks.AsNoTracking()
+                .Where(b => personas.Contains(b.PersonId) && b.Reason == DebtorBlockReason.Deceased && !b.IsDeleted)
+                .Select(b => new { b.PersonId, b.StartedOn, b.CreatedAt, b.LiftedAt })
+                .ToListAsync(ct))
+            .Where(b => b.CreatedAt <= r && (b.LiftedAt is not { } levantado || levantado > r))
+            .GroupBy(b => b.PersonId).ToDictionary(g => g.Key, g => g.Min(b => b.StartedOn));
+        if (eventos.Count == 0) return resultado;
+        foreach (var credito in creditos)
+        {
+            if (!eventos.TryGetValue(credito.DebtorPersonId, out var dia)) continue;
+            var sigue = await parametros.LeerAsync(ParametrosDeCartera.CausacionContinuaTrasFallecimiento, dia, informacionHasta,
+                Domain.Enums.Parameters.ParameterScopeKind.CreditLine, credito.CreditLineId, ct);
+            if (sigue.IsSuccess && sigue.Value.Valor is false) resultado[credito.Id] = dia;
+        }
+        return resultado;
+    }
+
+    private async Task<IReadOnlyDictionary<int, (DateOnly Desde, DateOnly? Hasta)>> InsolvenciasAsync(IReadOnlyList<Loan> creditos,
+        IReadOnlyList<LoanOperation> operaciones, DateTime r, CancellationToken ct)
+    {
+        var personas = creditos.Select(c => c.DebtorPersonId).Distinct().ToList();
+        if (personas.Count == 0) return new Dictionary<int, (DateOnly, DateOnly?)>();
+        var procesos = (await db.InsolvencyProceedings.AsNoTracking().Where(i => personas.Contains(i.PersonId) && !i.IsDeleted).ToListAsync(ct))
+            .Where(i => i.CreatedAt <= r).ToList();
+        if (procesos.Count == 0) return new Dictionary<int, (DateOnly, DateOnly?)>();
+        var novedades = procesos.Where(i => i.AgreementNoveltyId is not null).Select(i => i.AgreementNoveltyId!.Value).ToList();
+        var acuerdos = novedades.Count == 0
+            ? new Dictionary<int, DateOnly>()
+            : await (from n in db.LoanNovelties.AsNoTracking()
+                     join o in db.LoanOperations.AsNoTracking() on n.AppliedOperationId equals o.Id
+                     where novedades.Contains(n.Id)
+                     select new { n.Id, o.ValueDate }).ToDictionaryAsync(x => x.Id, x => x.ValueDate, ct);
+        return procesos.GroupBy(i => i.PersonId).ToDictionary(g => g.Key, g =>
+        {
+            var p = g.OrderByDescending(i => i.StartDate).ThenByDescending(i => i.Id).First();
+            DateOnly? hasta = null;
+            if (p.ClosedAt is { } cerrado && cerrado <= r)
+                hasta = p.Status == InsolvencyProceedingStatus.Failed
+                    ? p.FailedOn
+                    : p.AgreementNoveltyId is { } n && acuerdos.TryGetValue(n, out var fecha) ? fecha : null;
+            return (p.StartDate, hasta);
+        });
+    }
 
     private sealed record ExtraordinariaSellada(int Installment, decimal Amount);
 

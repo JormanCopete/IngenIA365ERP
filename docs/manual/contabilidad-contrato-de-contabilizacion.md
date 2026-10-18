@@ -276,13 +276,15 @@ muestra la regla ganadora y las candidatas.
 **Validación previa.** Antes de confirmar, Cartera pregunta si lo que va a emitir es contabilizable
 (`IContabilidadParaCartera.EvaluarAsync`, que usa el mismo constructor y `AccountingPoster.ValidarVariosAsync`: sin
 numerar ni guardar), una pregunta por combinación distinta, fuera del cerrojo y con `Contabilidad.ValidacionPreviaSegundos`.
-**«Bloquear» sólo muerde en las pantallas de Cartera** (el desembolso; en K3, la novedad, la condonación y el castigo):
-con `Contabilidad.FaltaDeRegla = Bloquear` responde 422 `Lending.Prevalidation.NotPostable` con el hecho, el rol, la
-combinación, la cuenta, la regla y **quién corrige**; sin respuesta y con `Contabilidad.PoliticaSinRespuesta = Bloquear`,
-422 `Lending.Prevalidation.NoResponse`. El contrato de obligaciones (Recaudo, Nómina, Aportes), el consumidor de las
-ventas de Comercial y los procesos **nunca se detienen** por la matriz: aplican, sellan el resultado (`NotPostable`,
-`NoResponse`) y levantan la alerta `Cartera.HechoNoContabilizable`. Un pago que ya ocurrió no se rechaza por un vacío
-de parametrización: queda rechazado en la bandeja y se recupera.
+Con `Contabilidad.FaltaDeRegla = Advertir` toda operación confirma, sella el resultado (`NotPostable`,
+`NoResponse`) y levanta la alerta `Cartera.HechoNoContabilizable`; lo que no se contabilizó queda rechazado en la bandeja
+y se recupera reprocesando. Con `Bloquear` —el defecto desde el 2026-10-14— **se detiene todo** (A8 = «Bloquear todo», respuesta del dueño del
+2026-10-14): las pantallas de Cartera responden 422 `Lending.Prevalidation.NotPostable` con el hecho, el rol, la
+combinación, la cuenta, la regla y **quién corrige**; el contrato de obligaciones rechaza el pago con ese código (Nómina
+no aprueba: `Payroll.LoanDeductionNotPostable`); el consumidor de Comercial deja la venta en reproceso; y los procesos de
+Cartera detienen su tanda, dejan la corrida fallida y alertan. Sin contabilidad iniciada o con el hecho en «no pasa» no
+se bloquea nada. Sin respuesta y con `Contabilidad.PoliticaSinRespuesta = Bloquear`, sólo las pantallas responden 422
+`Lending.Prevalidation.NoResponse`.
 
 **Modos y lotes** (`Contabilidad.ModoDePaso` por tipo de hecho, en los parámetros de Cartera; se **sella** en cada hecho
 al emitirse). Por defecto: en línea casi todo; **por lotes resumido** la causación (disparada al terminar la corrida

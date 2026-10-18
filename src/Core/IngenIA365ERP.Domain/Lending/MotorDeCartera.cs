@@ -104,28 +104,74 @@ public static class MotorDeCartera
         return estado.Libro.Diferencias(libro, hasta);
     }
 
+    /// <summary>
+    /// Como <see cref="Verificar"/>, con la corrección monetaria de un crédito en UVR aparte
+    /// (<see cref="LibroTeorico.DiferenciasSeparandoLaCorreccionMonetaria"/>): la usa la corrida de corrección por valor nacional, que registra las
+    /// diferencias de la corrección monetaria como <c>MonetaryCorrection</c> y las demás como ajuste de causación (K6b, fase 24). Con
+    /// <paramref name="separarPagos"/> (la corrección de una UVR; decisión del dueño del 2026-10-17), el reparto de los pagos va aparte
+    /// (<see cref="DiferenciaDeLibro.DePago"/>) y se registra como <c>PaymentReallocation</c> con su hecho.
+    /// </summary>
+    public static IReadOnlyList<DiferenciaDeLibro> VerificarSeparandoLaCorreccionMonetaria(EntradaDeReconstruccion entrada, DateOnly hasta,
+        IEnumerable<MovimientoDeLibro> libro, IReadOnlyDictionary<LoanOperationKind, IInterpreteDeOperacion>? interpretes = null, bool separarPagos = false)
+    {
+        ArgumentNullException.ThrowIfNull(entrada);
+        var operaciones = ReconstruccionDeCredito.OperacionesVigentes(entrada, hasta);
+        if (operaciones.Count == 0) return LibroTeorico.Vacio.DiferenciasSeparandoLaCorreccionMonetaria(libro, hasta, separarPagos);
+        var estado = ReconstruccionDeCredito.Reconstruir(entrada, hasta, operaciones[0].FechaValor, interpretes);
+        return estado.Libro.DiferenciasSeparandoLaCorreccionMonetaria(libro, hasta, separarPagos);
+    }
+
     // ------------------------------------------------------------------------------------------------ US5 (T0534–T0536)
 
     /// <summary>
     /// Reparte un pago sobre el estado a su fecha valor con la prelación sellada (FR-071, FR-072): la misma función para simular y para
     /// aplicar; la reconstrucción la usa con cada pago.
     /// </summary>
+    /// <remarks>K6b (T1054): sobre un crédito en UVR (<see cref="EstadoDelCredito.Uvr"/>) el valor pasa a UVR a su fecha valor, se distribuye en UVR y
+    /// vuelve a pesos con la misma función que usa la reconstrucción (<see cref="Housing.ConversionUvr.Distribuir"/>): simular = aplicar.</remarks>
     public static Payments.DistribucionDePago DistribuirPago(EstadoDelCredito estado, Payments.SolicitudDeDistribucion solicitud,
         Payments.Prelacion prelacion, RedondeoDeCartera redondeo) =>
-        Payments.AplicadorDePagos.Distribuir(estado, solicitud, prelacion, redondeo);
+        estado?.Uvr is { } uvr
+            ? Housing.ConversionUvr.Distribuir(uvr, solicitud, prelacion)
+            : Payments.AplicadorDePagos.Distribuir(estado!, solicitud, prelacion, redondeo);
 
     /// <summary>Las dos alternativas de un abono extraordinario sin elección (reducir plazo, reducir cuota), cada una con su plan (SC-003).</summary>
     public static IReadOnlyList<Payments.DistribucionDePago> AlternativasDeAbono(EstadoDelCredito estado, Payments.SolicitudDeDistribucion solicitud,
         Payments.Prelacion prelacion, RedondeoDeCartera redondeo) =>
-        Payments.AplicadorDePagos.Alternativas(estado, solicitud, prelacion, redondeo);
+        estado?.Uvr is { } uvr
+            ? Housing.ConversionUvr.Alternativas(uvr, solicitud, prelacion)
+            : Payments.AplicadorDePagos.Alternativas(estado!, solicitud, prelacion, redondeo);
 
     /// <summary>El anticipo aplicado a una cuota en su vencimiento (paso (5) del ciclo diario; D6).</summary>
+    /// <remarks>K6b: sobre un crédito en UVR, en UVR y en pesos a la UVR del día.</remarks>
     public static Payments.AplicacionDeAnticipo? AplicarAnticipo(EstadoDelCredito estado, int cuota, Payments.Prelacion prelacion) =>
-        Payments.AplicadorDePagos.AplicarAnticipo(estado, cuota, prelacion);
+        estado?.Uvr is { } uvr
+            ? Payments.AplicadorDePagos.AplicarAnticipo(uvr.Estado, cuota, prelacion) is { } a
+                ? Housing.ConversionUvr.AnticipoEnPesos(a, uvr.Serie.Del(a.Fecha).Valor, uvr.RedondeoDePesos.Modo)
+                : null
+            : Payments.AplicadorDePagos.AplicarAnticipo(estado!, cuota, prelacion);
 
     /// <summary>El <c>SimulationId</c>: la huella canónica de la simulación (T32).</summary>
     public static string HuellaDeSimulacion(Guid credito, string rulesVersion, Payments.DistribucionDePago distribucion) =>
         HuellaDeCartera.DeSimulacion(credito, rulesVersion, distribucion);
+
+    // ------------------------------------------------------------------------------------------------ K3 (T0874)
+
+    /// <summary>El plan de una novedad desde la fecha de la decisión (prórroga, cambio de fecha o de tasa, novación, refinanciación).</summary>
+    public static PlanDePagos RegenerarPlanPorNovedad(EntradaDeNovedadDePlan entrada) => GeneradorDePlan.RegenerarPorNovedad(entrada);
+
+    /// <summary>
+    /// La simulación del plan de una novedad (FR-091): el plan nuevo controlado contra la usura vigente a la fecha de la decisión
+    /// (<c>Lending.Usury.Exceeded</c> si la pasa).
+    /// </summary>
+    public static (PlanDePagos Plan, ResultadoDeUsura Usura) SimularNovedad(EntradaDeNovedadDePlan entrada, UsuraCertificada? usura)
+    {
+        var plan = GeneradorDePlan.RegenerarPorNovedad(entrada);
+        return (plan, ControlDeUsura.Evaluar(plan, usura));
+    }
+
+    /// <summary>La versión completa del plan de un crédito que conserva su número tras la novedad.</summary>
+    public static PlanDePagos UnirPlanConAnterior(PlanDePagos anterior, PlanDePagos novedad) => GeneradorDePlan.UnirConAnterior(anterior, novedad);
 
     /// <summary>Los días de mora con tolerancia y fecha exigible (T30).</summary>
     public static ResultadoDeAlturaDeMora AlturaDeMora(DateOnly dia, IEnumerable<CuotaParaMora> cuotas, decimal tolerancia, int? umbralDePagaduria = null) =>

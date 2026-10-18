@@ -91,6 +91,18 @@ public enum RateKind
     Variable = 2,
 }
 
+/// <summary>
+/// La unidad en que se pacta y se lleva el capital de una línea y de su crédito (feature 013, K6b, T1048; FR-024, D18; data-model §0.4): en
+/// <see cref="Pesos"/> (todo lo de K1 a K6a) o en <see cref="Uvr"/> (sólo las combinaciones de vivienda que el catálogo de modalidades marca
+/// «admite UVR»). En UVR, el plan y los saldos van en UVR (alias <c>ValorUvr</c>, 18,4) y se convierten a pesos con la serie diaria
+/// <c>UVR</c>; los pagos entran en pesos y se convierten a UVR a su fecha valor. (nuevo)
+/// </summary>
+public enum DenominationUnit
+{
+    Pesos = 1,
+    Uvr = 2,
+}
+
 /// <summary>Tasa de mora fija o relativa a la corriente.</summary>
 public enum DefaultRateKind
 {

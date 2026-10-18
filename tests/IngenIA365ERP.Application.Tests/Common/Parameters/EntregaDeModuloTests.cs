@@ -67,18 +67,26 @@ public class EntregaDeModuloTests
 
         CatalogoDeParametros.EntregaVigenteDe("INV").Should().Be((EntregaDeModulo)CatalogoDeParametros.EntregaVigente);
         CatalogoDeParametros.EntregaVigenteDe("LND").Should().Be((EntregaDeModulo)CatalogoDeCartera.EntregaVigente);
-        CatalogoDeCartera.EntregaVigente.Should().Be(EntregaDeCartera.K1);
+        CatalogoDeCartera.EntregaVigente.Should().Be(EntregaDeCartera.K6b, "T0849 la subió a K2, T0889 a K3, T0955 a K4, T0969 a K5, T1024 a K6a y T1058 a K6b");
     }
 
     [Fact]
-    public async Task Una_clave_de_Cartera_de_K2_no_se_acepta_con_la_entrega_vigente_en_K1()
+    public async Task Una_clave_de_Cartera_de_K4_no_se_acepta_con_la_entrega_vigente_en_K3()
     {
-        var r = await Alta().Handle(Comando("LND", ParametrosDeCartera.LibranzaVentanaDeGiroDias, "3"), CancellationToken.None);
+        var r = await Alta(EntregaDeCartera.K3).Handle(Comando("LND", ParametrosDeCartera.AvisoPrevioDiasMinimos, "3"), CancellationToken.None);
 
         r.Error.Code.Should().Be("Lending.Parameter.NotYetAvailable");
         var datos = JsonSerializer.SerializeToElement(r.Error.Should().BeOfType<ErrorConDatos>().Subject.Data);
-        datos.GetProperty("availableFrom").GetString().Should().Be("K2");
-        datos.GetProperty("key").GetString().Should().Be(ParametrosDeCartera.LibranzaVentanaDeGiroDias);
+        datos.GetProperty("availableFrom").GetString().Should().Be("K4");
+        datos.GetProperty("key").GetString().Should().Be(ParametrosDeCartera.AvisoPrevioDiasMinimos);
+    }
+
+    [Fact]
+    public async Task Con_la_entrega_de_Cartera_en_K1_una_clave_de_K2_no_se_acepta()
+    {
+        var r = await Alta(EntregaDeCartera.K1).Handle(Comando("LND", ParametrosDeCartera.LibranzaVentanaDeGiroDias, "3"), CancellationToken.None);
+
+        r.Error.Code.Should().Be("Lending.Parameter.NotYetAvailable");
     }
 
     [Fact]
@@ -90,13 +98,19 @@ public class EntregaDeModuloTests
     }
 
     [Fact]
-    public async Task Una_clave_de_Cartera_de_K2_no_se_ofrece_y_las_de_K1_si()
+    public async Task Las_claves_de_Cartera_de_K4_a_K6a_se_ofrecen_con_K6a_vigente_junto_a_las_de_K1_a_K3()
     {
+        // T0980 (fase 20): con K5 vigente se ofrecen también las claves de K5: Informes.DiasCarteraVencida y (2026-10-16)
+        // Documentos.CertificadoTributario.SaldoIncluye; T1003 (fase 21): Centrales.CodigosDeSuscriptor.
         var claves = (await Listar("LND")).Select(p => p.Key).ToList();
 
-        claves.Should().Contain(ParametrosDeCartera.PagosDiasMaximosFechaValor).And.Contain(ParametrosDeCartera.CobranzaHorarioLunesAViernes);
-        claves.Should().NotContain(ParametrosDeCartera.LibranzaVentanaDeGiroDias).And.NotContain(ParametrosDeCartera.AvisoPrevioDiasMinimos);
-        (await Listar("LND")).Should().OnlyContain(p => p.AvailableFrom == "K1");
+        claves.Should().Contain(ParametrosDeCartera.PagosDiasMaximosFechaValor).And.Contain(ParametrosDeCartera.CobranzaHorarioLunesAViernes)
+            .And.Contain(ParametrosDeCartera.LibranzaVentanaDeGiroDias).And.Contain(ParametrosDeCartera.CastigoExigeDeterioroTotal);
+        claves.Should().Contain(ParametrosDeCartera.AvisoPrevioDiasMinimos).And.Contain(ParametrosDeCartera.CobranzaToleranciaDePromesa)
+            .And.Contain(ParametrosDeCartera.InformesDiasCarteraVencida).And.Contain(ParametrosDeCartera.DocumentosCertificadoTributarioSaldoIncluye)
+            .And.Contain(ParametrosDeCartera.CentralesCodigosDeSuscriptor).And.Contain(ParametrosDeCartera.RiesgoMesesFaltantesDiasFijos);
+        (await Listar("LND")).Should().OnlyContain(p => p.AvailableFrom == "K1" || p.AvailableFrom == "K2" || p.AvailableFrom == "K3" || p.AvailableFrom == "K4"
+                                                       || p.AvailableFrom == "K5" || p.AvailableFrom == "K6a");
     }
 
     [Fact]
@@ -169,7 +183,7 @@ public class EntregaDeModuloTests
     [InlineData(ParametrosDeCartera.BloqueosDiasDeMoraParaBloquear, "30", EntregaDeCartera.K1)]
     [InlineData(ParametrosDeCartera.ContabilidadDiferirComisiones, "false", EntregaDeCartera.K1)]
     [InlineData(ParametrosDeCartera.ContabilidadPoliticaSinRespuesta, "ConfirmarConPendiente", EntregaDeCartera.K1)]
-    [InlineData(ParametrosDeCartera.ContabilidadFaltaDeRegla, "Advertir", EntregaDeCartera.K1)]
+    [InlineData(ParametrosDeCartera.ContabilidadFaltaDeRegla, "Bloquear", EntregaDeCartera.K1)]
     [InlineData(ParametrosDeCartera.InformesRangosDeEdad, "30,60,90,180,360", EntregaDeCartera.K1)]
     [InlineData(ParametrosDeCartera.ListasUmbralDeCoincidenciaDeNombre, "0.90", EntregaDeCartera.K1)]
     [InlineData(ParametrosDeCartera.CobranzaHorarioLunesAViernes, "07:00-19:00", EntregaDeCartera.K1)]

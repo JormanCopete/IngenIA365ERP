@@ -60,7 +60,17 @@ public sealed record ScheduleSimulationDto(
     IReadOnlyList<ScheduleExplanationDto> Explanation,
     IReadOnlyList<string> ExplanationLines,
     IReadOnlyList<SimulationWarningDto> Warnings,
-    string SimulationSha256);
+    string SimulationSha256)
+{
+    /// <summary>
+    /// K6b (bloque 2; FR-024): en una línea en UVR, el plan en UVR y la UVR publicada del desembolso con que se valoraron en pesos las cuotas de
+    /// arriba (una equivalencia, con su leyenda); nulo en pesos.
+    /// </summary>
+    public Housing.ScheduleUvrDto? Uvr { get; init; }
+
+    /// <summary>K6b (bloque 2): ¿la línea es de vivienda (Ley 546)? La solicitud pregunta entonces si el inmueble es VIS.</summary>
+    public bool IsHousing { get; init; }
+}
 
 /// <summary>La forma de la simulación (Principio VIII): lo que no necesita la base. (nuevo)</summary>
 public sealed class ScheduleSimulationInputValidator : AbstractValidator<ScheduleSimulationInput>
@@ -148,7 +158,11 @@ public sealed class SimulacionEnAlcance(
                 .ToList(),
             plan.Explicacion.Lineas.Concat(u.Explicacion.Lineas).ToList(),
             avisos,
-            s.Huella);
+            s.Huella)
+        {
+            Uvr = Housing.ScheduleUvrDto.De(s.PlanEnUvr, s.ValorUvr, s.Fecha),
+            IsHousing = Housing.ValidacionDeVivienda.EsVivienda(s),
+        };
     }
 
     private static string Porcentaje(decimal fraccion) =>

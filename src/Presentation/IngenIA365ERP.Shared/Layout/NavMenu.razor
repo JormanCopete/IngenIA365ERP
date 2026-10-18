@@ -148,6 +148,45 @@
             <PermissionGate Required="Lending.Loans.Read">
                 <NavLink href="/cartera/creditos" class="nav-subitem">Créditos</NavLink>
             </PermissionGate>
+            @* K3, US11 (T0893): las novedades (prórroga, fecha, tasa, novación, refinanciación) y las condonaciones. Los eventos del deudor, la
+               insolvencia y las reclamaciones al seguro viven en el detalle del crédito. *@
+            <PermissionGate Required="Lending.Novelties.Read">
+                <NavLink href="/cartera/novedades" class="nav-subitem">Novedades</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Lending.Loans.Read">
+                <NavLink href="/cartera/condonaciones" class="nav-subitem">Condonaciones</NavLink>
+            </PermissionGate>
+            @* K3, US14 (T0918): los lotes de castigo y la evaluación de cartera; los decide el consejo (y el comité de riesgos) en Actas. *@
+            <PermissionGate Required="Lending.Loans.Read">
+                <NavLink href="/cartera/castigos" class="nav-subitem">Castigos</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Lending.Ratings.Read">
+                <NavLink href="/cartera/evaluaciones" class="nav-subitem">Evaluación de cartera</NavLink>
+            </PermissionGate>
+            @* K4, US12 (T0959): la cobranza —etapas y reparto, cartera por gestor, agenda del día, acuerdos de pago, campañas, avisos previos y
+               reclamos sobre el reporte, y el cobro jurídico—. *@
+            <span class="nav-subgroup-title">Cobranza</span>
+            <PermissionGate Required="Lending.Collections.Read">
+                <NavLink href="/cartera/etapas-de-cobranza" class="nav-subitem">Etapas de cobranza</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Lending.Collections.Read">
+                <NavLink href="/cartera/cobranza" class="nav-subitem">Cobranza</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Lending.Collections.Read">
+                <NavLink href="/cartera/agenda" class="nav-subitem">Agenda</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Lending.Collections.Read">
+                <NavLink href="/cartera/acuerdos-de-pago" class="nav-subitem">Acuerdos de pago</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Lending.Campaigns.Manage">
+                <NavLink href="/cartera/campanas" class="nav-subitem">Campañas</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Lending.PriorNotices.Read">
+                <NavLink href="/cartera/avisos-previos" class="nav-subitem">Avisos previos</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Lending.Collections.Read">
+                <NavLink href="/cartera/juridico" class="nav-subitem">Cobro jurídico</NavLink>
+            </PermissionGate>
             @* US13 (T0793): los documentos al deudor (plan de pagos, paz y salvo, certificado de saldo) y la verificación de su código. *@
             <PermissionGate Required="Lending.Documents.Read">
                 <NavLink href="/cartera/documentos" class="nav-subitem">Documentos</NavLink>
@@ -170,6 +209,29 @@
             @* US15 (T0800): el centro de informes de Cartera (edades, colocación, recaudo, movimientos, usura, mensajes y migración en K1). *@
             <PermissionGate Required="Lending.Reports.View">
                 <NavLink href="/cartera/informes" class="nav-subitem">Informes de cartera</NavLink>
+            </PermissionGate>
+            @* K5, US15 (T0985): el tablero de Cartera —saldo, colocación, calidad, deterioro, recaudo, cosechas, promesas, mensajes y alertas—
+               del alcance de quien lo abre. *@
+            <PermissionGate Required="Lending.Dashboard.View">
+                <NavLink href="/cartera/tablero" class="nav-subitem">Tablero de cartera</NavLink>
+            </PermissionGate>
+            @* K5, US16 (T1009): el formato de cartera del SICSES y los archivos para las centrales de riesgo —validar, generar, descargar y marcar
+               cargado—; traen deudores, así que se abren con RegulatoryFiles.Read, nunca con un View. *@
+            <PermissionGate Required="Lending.RegulatoryFiles.Read">
+                <NavLink href="/cartera/sicses" class="nav-subitem">Formato SICSES</NavLink>
+                <NavLink href="/cartera/centrales" class="nav-subitem">Centrales de riesgo</NavLink>
+            </PermissionGate>
+            @* K2, US10 (T0853): la libranza —pagadurías con su convenio, archivos de descuento por período y las cuotas no aplicadas—. El detalle de
+               una pagaduría y el de un archivo se abren desde sus listas. *@
+            <span class="nav-subgroup-title">Libranza</span>
+            <PermissionGate Required="Lending.PayrollAgreements.View">
+                <NavLink href="/cartera/pagadurias" class="nav-subitem">Pagadurías</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Lending.PayrollDeductionFiles.Read">
+                <NavLink href="/cartera/archivos-de-descuento" class="nav-subitem">Archivos de descuento</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Lending.PayrollDeductionFiles.Read">
+                <NavLink href="/cartera/no-aplicados" class="nav-subitem">No aplicados</NavLink>
             </PermissionGate>
             <span class="nav-subgroup-title">Gobierno</span>
             <PermissionGate Required="Lending.Sessions.Read">

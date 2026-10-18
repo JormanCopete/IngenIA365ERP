@@ -102,7 +102,16 @@ public sealed class GetLendingRulesTemplateQueryHandler(IApplicationDbContext db
                 filas.Add(new(R.GastoDeterioro, m, null, concepto, null, R.Individual));
                 filas.Add(new(R.RecuperacionDeterioro, m, null, concepto, null, R.Individual));
             }
+            // K3 (US11, US14; 2026-10-15): el ingreso diferido de la capitalización en una reestructuración.
+            filas.Add(new(R.IngresoDiferido, m, null, null, null, null));
         }
+
+        // La castigada en orden por concepto (K1: la recuperación de lo migrado castigado; K3: el castigo) y el gasto del castigo o la condonación
+        // por motivo y concepto (C7, «pendiente de validar»). Hasta el 2026-10-15 la plantilla no los sugería y un CreditoCastigado o una
+        // CondonacionAprobada sin el faltante cubierto por el deterioro quedaban sin regla.
+        filas.AddRange(R.Buscar(R.CastigadaEnOrden)!.Conceptos!.Select(c => new FilaSugerida(R.CastigadaEnOrden, null, null, c, null, null)));
+        var gasto = R.Buscar(R.GastoDeCastigoOCondonacion)!;
+        filas.AddRange(gasto.Motivos!.SelectMany(mo => gasto.Conceptos!.Select(c => new FilaSugerida(R.GastoDeCastigoOCondonacion, null, null, c, null, mo))));
 
         var clases = catalogo.CollectorClasses.Append(nameof(ClaseDeRecaudador.OwnLoanPayoff)).Distinct(StringComparer.Ordinal).ToList();
         filas.AddRange(clases.Select(c => new FilaSugerida(R.RecaudoPorAplicar, null, null, null, c, null)));

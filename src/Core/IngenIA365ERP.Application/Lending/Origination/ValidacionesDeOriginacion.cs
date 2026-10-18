@@ -15,6 +15,13 @@ using Microsoft.EntityFrameworkCore;
 namespace IngenIA365ERP.Application.Lending.Origination;
 
 /// <summary>
+/// K2 (T0842): el detalle de la capacidad de descuento de una libranza con pagaduría (lo que se guarda en la validación y lo que responde el 422):
+/// la base certificada, el tope que rige y de dónde salió, lo permitido, lo que ya descuenta la pagaduría, la cuota nueva y lo disponible. (nuevo)
+/// </summary>
+public sealed record DetalleDeCapacidadDeLibranza(decimal Income, decimal Cap, string CapSource, decimal Allowed, decimal CurrentDeductions,
+    decimal Requested, decimal Available);
+
+/// <summary>
 /// Una validación evaluada que todavía no es fila (feature 013, T0394): la parte (nula = de la solicitud), la clase, el resultado, si se puede
 /// exceptuar, el código que la explica, el detalle con las cifras y la evidencia enlazada (el resultado de listas, la consulta a centrales),
 /// que se guardan antes que la validación para que ésta lleve sus Ids. <see cref="Hallazgo"/> es el motivo no exceptuable que aporta (R132).
@@ -113,7 +120,8 @@ public sealed class ValidacionesDeOriginacion(
     VinculadosVigentes vinculados,
     IBloqueosDelDeudor bloqueos,
     IAutorizacionDeDatos autorizaciones,
-    CreditLimits.SaldoDeAportesVigente saldosDeAportes)
+    CreditLimits.SaldoDeAportesVigente saldosDeAportes,
+    Payroll.ConveniosDeLibranza? convenios = null)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
@@ -179,7 +187,9 @@ public sealed class ValidacionesDeOriginacion(
         // ---------------------------------------------------------------------------------------- capacidad de descuento --
         if (c.Corre(ApplicationCheckKind.DeductionCapacity))
         {
-            if (s.RepaymentChannel != RepaymentChannel.OwnPayroll)
+            if (s.RepaymentChannel == RepaymentChannel.PaymasterDeduction)
+                pendientes.Add(await CapacidadDeLibranzaAsync(s, solicitante, c, ct));
+            else if (s.RepaymentChannel != RepaymentChannel.OwnPayroll)
                 pendientes.Add(new ValidacionPendiente(solicitante.Id, ApplicationCheckKind.DeductionCapacity, CheckOutcome.NotApplicable, true, null, null));
             else
             {
@@ -435,6 +445,37 @@ public sealed class ValidacionesDeOriginacion(
     /// Los valores de cada fuente del puntaje para el solicitante (FR-037; <see cref="FuentesDePuntaje"/>). Lo que el programa todavía no sabe
     /// medir (antigüedad laboral, cobertura de garantías, mora en centrales) va sin dato y toma el rango «sin dato» de la línea.
     /// </summary>
+    /// <summary>
+    /// K2 (T0842; FR-110, D13; Ley 1527 de 2012): la capacidad de descuento de una libranza con pagaduría, con el motor
+    /// <see cref="Domain.Lending.Payroll.CapacidadDeDescuento"/>: sobre el ingreso neto certificado del solicitante, el tope más estricto entre el límite
+    /// legal, el parámetro de la cooperativa y el del convenio, contra lo que ya descuenta esa pagaduría más la cuota simulada. Excedida, bloquea con
+    /// <c>Lending.Payroll.DeductionCapacityExceeded</c> y lo disponible (al radicar detiene la radicación: <c>SubmitCreditApplicationCommand</c>); sin
+    /// ingreso certificado, sin convenio vigente o sin el límite legal, queda <c>Unavailable</c>. No exceptuable (es un límite legal).
+    /// </summary>
+    private async Task<ValidacionPendiente> CapacidadDeLibranzaAsync(CreditApplication s, CreditApplicationParty solicitante, ContextoDeValidacion c,
+        CancellationToken ct)
+    {
+        ValidacionPendiente NoDisponible(string codigo, string motivo) =>
+            new(solicitante.Id, ApplicationCheckKind.DeductionCapacity, CheckOutcome.Unavailable, false, codigo, new { reason = motivo });
+
+        if (convenios is null || s.PayrollAgreementId is not { } convenioId)
+            return NoDisponible(Payroll.ErroresDeLibranza.CodigoConvenioNoDisponible, "La solicitud no tiene convenio de libranza.");
+        var version = await convenios.VersionVigenteAsync(convenioId, c.Fecha, ct);
+        if (version is null) return NoDisponible(Payroll.ErroresDeLibranza.CodigoSinVersionVigente, "El convenio no tiene versión vigente.");
+        if (solicitante.MonthlyIncome is not { } ingreso || ingreso <= 0m)
+            return NoDisponible(Payroll.ErroresDeLibranza.CodigoCertificacionRequerida, "Falta el ingreso neto que certificó la pagaduría.");
+        var topes = await convenios.TopesAsync(version.DeductionCapFraction, c.Fecha, ct);
+        if (topes.IsFailure) return NoDisponible(topes.Error.Code, topes.Error.Message);
+        var vigentes = await convenios.DescuentosVigentesAsync(solicitante.PersonId, convenioId, null, c.Fecha, s.LoanId, ct);
+        var r = Domain.Lending.Payroll.CapacidadDeDescuento.Evaluar(ingreso, topes.Value, vigentes, c.Simulacion.CuotaMensual);
+        var detalle = new DetalleDeCapacidadDeLibranza(r.Base, r.TopeEfectivo, r.OrigenDelTope.ToString(), r.Permitido, r.DescuentosVigentes, r.CuotaNueva,
+            r.Disponible);
+        return r.Alcanza
+            ? new ValidacionPendiente(solicitante.Id, ApplicationCheckKind.DeductionCapacity, CheckOutcome.Passed, false, null, detalle)
+            : new ValidacionPendiente(solicitante.Id, ApplicationCheckKind.DeductionCapacity, CheckOutcome.Blocking, false,
+                Payroll.ErroresDeLibranza.CodigoCapacidadExcedida, detalle);
+    }
+
     public async Task<IReadOnlyDictionary<string, decimal?>> ValoresDePuntajeAsync(ContextoDeValidacion c, ValidacionesEvaluadas v, CancellationToken ct)
     {
         var solicitante = c.Solicitante;

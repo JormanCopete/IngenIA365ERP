@@ -45,7 +45,10 @@ public sealed class AsuntoDeDiferenciasDeActivacion(IApplicationDbContext db) : 
         var sinMigrar = vigentes.Count(d => d.Kind == MigrationDifferenceKind.SaleNotMigrated);
         var resumen = string.Create(CultureInfo.InvariantCulture,
             $"Cuadre: {delCuadre.Count} diferencias por {delCuadre.Sum(d => d.Difference):N2}. Ventas no migradas con saldo: {sinMigrar}; fuera de Cartera: {fuera}. {carga.LoanCount} créditos y {carga.ChargedOffCount} castigados al corte.")
-            + " El acta declara que los créditos de vivienda quedan fuera hasta una entrega posterior y que el plan migrado se conserva: el interés lo causa el motor desde el corte.";
+            + (Housing.LectorDeVivienda.Disponible()
+                // K6b (T1055, FR-141): la vivienda entra a la carga y al cuadre; el acta ya no la declara fuera.
+                ? " El acta declara que el plan migrado se conserva: el interés lo causa el motor desde el corte."
+                : " El acta declara que los créditos de vivienda quedan fuera hasta una entrega posterior y que el plan migrado se conserva: el interés lo causa el motor desde el corte.");
         return Result.Success(new AsuntoDeActa(
             string.Create(CultureInfo.InvariantCulture, $"Diferencias y activación de la carga de migración {carga.Number} (corte {carga.CutoffDate:yyyy-MM-dd})"),
             string.IsNullOrWhiteSpace(carga.Description) ? resumen : $"{carga.Description}. {resumen}",

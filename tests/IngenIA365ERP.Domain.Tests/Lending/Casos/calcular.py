@@ -12,6 +12,9 @@ US5 (fase 9, T0513) suma los pagos (bloque «US5»): prelacion, las siete modali
 cancelacion y resolucion de saldos; el "esperado" de cada operacion de pago (su distribucion con la informacion hasta su registro) y,
 en las consultas con "conPagos", la distribucion de cada pago a (D, R), que muestra la redistribucion.
 
+K3 (fase 16, T0858) suma las NOVEDADES (bloque «K3»): el plan regenerado desde la fecha de la decision por una prorroga, un cambio
+de fecha o de tasa, una novacion o una refinanciacion, con su usura; el "esperado" de cada novedad del arreglo "novedades".
+
 US4 (fase 8, T0464) la amplia con la causacion, la mora, la suspension, la regeneracion del plan (tramos, reajustes), el plan
 migrado y la reconstruccion a (D, R), calculadas DIA POR DIA (el C# avanza por segmentos entre eventos), para los "esperado" de
 las "consultas" de cada caso y de cada variante: modo "Reconstruccion" (defecto), "PagosATiempo", "Causacion" y "Diferencias".
@@ -203,6 +206,8 @@ def vencimientos(desembolso, periodicidad, periodos, dia_de_pago, primer):
 class Redondeo:
     def __init__(self, r):
         self.unidad, self.modo, self.momento = D(r["unidad"]), MODOS[r["modo"]], r["momento"]
+        # K6b (T1042): la unidad minima de un monto; el centavo en pesos, la diezmilesima en UVR (la pone vivienda.py).
+        self.minima = D(r.get("minima", "0.01"))
 
     def a(self, v, unidad):
         return (v / unidad).quantize(D(1), rounding=self.modo) * unidad
@@ -211,7 +216,7 @@ class Redondeo:
         return self.a(v, self.unidad)
 
     def centavo(self, v):
-        return self.a(v, D("0.01"))
+        return self.a(v, self.minima)
 
     def concepto(self, v):
         return self.unidad_(v) if self.momento == "PerConcept" else self.centavo(v)
@@ -406,6 +411,85 @@ def esperado_completo(caso):
     return salida
 
 
+# ===================================================================================================== K3 (fase 16, T0858)
+# El plan de una NOVEDAD (FR-090, FR-091, T29), escrito desde la spec y no desde el C#:
+# - Se regenera DESDE LA FECHA DE LA DECISION como un plan nuevo: capital = saldo de capital del credito a esa fecha (lo vencido y lo
+#   por vencer) + lo que recoge una refinanciacion + el interes que se capitaliza. Los COSTOS de la novedad nunca entran (FR-091).
+# - Parte de las condiciones del credito (sistema, convencion, equivalencia, redondeo, seguros) y cambia lo que pide la novedad:
+#   cuotas (prorroga), dia de pago o primer vencimiento (cambio de fecha), tasa (cambio de tasa), periodicidad. Las extraordinarias
+#   pactadas no pasan. [decision] Si el dia de pago no cambia, es el del credito (el pactado, el del primer vencimiento o el del
+#   desembolso): las fechas no se corren.
+# - Prorroga, cambio de fecha o de tasa conservan el numero del credito: las cuotas nuevas siguen la numeracion desde la siguiente a
+#   la ultima que vencio hasta la fecha de la decision (con el plan original). Novacion y refinanciacion: credito enlazado, desde 1.
+# - La usura es la vigente de la modalidad a la fecha de la decision; la efectiva, la TIR de los flujos del plan nuevo desde esa fecha.
+
+def novedad_condiciones(c, n):
+    base_dia = int(c["diaDePago"]) if c.get("diaDePago") else (fecha(c["primerVencimiento"]) if c.get("primerVencimiento") else fecha(c["fechaDesembolso"])).day
+    capital = D(n["saldoDeCapital"]) + sum((D(x) for x in n.get("saldosRecogidos") or []), D(0)) + D(n.get("interesCapitalizado") or 0)
+    nc = dict(c)
+    nc["monto"] = capital
+    nc["fechaDesembolso"] = n["fecha"]
+    nc["plazoCuotas"] = n["cuotas"]
+    nc["periodicidad"] = n.get("periodicidad") or c["periodicidad"]
+    nc["tasaEA"] = n["tasaEA"] if n.get("tasaEA") is not None else c["tasaEA"]
+    nc["diaDePago"] = int(n["diaDePago"]) if n.get("diaDePago") else base_dia
+    nc["primerVencimiento"] = n.get("primerVencimiento")
+    nc["extraordinarias"] = []
+    nc["gracia"] = None
+    return nc
+
+
+def primera_cuota(c, n):
+    if n.get("creditoEnlazado"):
+        return 1
+    original = generar_plan(c)
+    f = fecha(n["fecha"])
+    return sum(1 for x in original["cuotas"] if fecha(x["vencimiento"]) <= f) + 1
+
+
+def usura_a(caso, clave, f):
+    vigentes = [u for u in (caso.get("series") or {}).get("usura") or [] if u["clave"] == clave and fecha(u["desde"]) <= f]
+    return max(vigentes, key=lambda u: u["desde"])["ea"] if vigentes else None
+
+
+def esperado_de_novedad(caso, n):
+    c = caso["condiciones"]
+    nc = novedad_condiciones(c, n)
+    plan = generar_plan(nc)
+    p1 = primera_cuota(c, n)
+    d0 = plan["desembolso"]
+    sin = [(d0, -plan["monto"])] + [(fecha(x["vencimiento"]), x["capital"] + x["interes"]) for x in plan["cuotas"]]
+    e_sin = efectiva(d0, sin)
+    u = usura_a(caso, c.get("modalidad"), d0)
+    usura = {"veredicto": "SinUsura"} if u is None else {
+        "veredicto": "Excede" if e_sin > u else "Pasa", "usura": u, "holgura": q(u - e_sin, 6)}
+    cuotas = []
+    for x in plan["cuotas"]:
+        y = {k: v for k, v in x.items() if not k.startswith("_")}
+        y["numero"] = int(x["numero"]) + p1 - 1
+        cuotas.append(y)
+    return {
+        "primeraCuota": p1,
+        "capital": plan["monto"],
+        "tasas": {"diaria": plan["rd"], "nominalDelPeriodo": plan["nominal"], "cuotaNivelada": plan["cuotaNivelada"],
+                  "efectiva": q(e_sin, 6), "efectivaSinCargos": q(e_sin, 6)},
+        "plan": {"interesDeGracia": plan["interesDeGracia"], "residuo": plan["residuo"],
+                 "totales": {"capital": sum(x["capital"] for x in cuotas), "interes": sum(x["interes"] for x in cuotas),
+                             "seguro": sum(x["seguro"] for x in cuotas)},
+                 "cuotas": cuotas},
+        "usura": usura,
+    }
+
+
+def novedades_calculadas(caso):
+    salida = []
+    for n in caso.get("novedades") or []:
+        m = dict(n)
+        m["esperado"] = esperado_de_novedad(caso, n)
+        salida.append(m)
+    return salida
+
+
 # ===================================================================================================== US4 (fase 8, T0464)
 # Causacion por diferencia de acumulados, mora, suspension, regeneracion del plan y reconstruccion a (D, R).
 # Se calcula DIA POR DIA (el C# avanza por segmentos entre eventos): si al motor le falta un punto de cambio, los casos lo
@@ -424,9 +508,15 @@ def esperado_completo(caso):
 #   con la ultima conocida y se informa ValidaHasta (D11).
 # - Altura: dia - exigible de la cuota vencida mas antigua cuyo saldo vencido supere la tolerancia; [decision] el saldo vencido de
 #   la cuota es su capital pendiente mas su corriente (con suspenso) y su seguro al dia anterior: la mora no cuenta.
-# - Suspension el dia d: castigo, insolvencia, mas de una reestructuracion o altura >= umbral vigente [decision: el umbral es la
+# - Suspension el dia d: castigo (desde el dia siguiente a su fecha, K3), insolvencia, mas de una reestructuracion o altura >= umbral vigente [decision: el umbral es la
 #   primera altura que suspende]; lo nuevo va a *InSuspense, lo causado antes no se reclasifica.
 # - Seguros: al vencer la cuota (AtDueDate) o a prorrata de los dias del periodo (Daily), D9.
+# - K2 (fase 15, T0804; T30, FR-114): la serie "pendientesDeGiro" trae lo que la pagaduria desconto de una cuota y no ha girado
+#   (cuota, monto, vencimiento de la ventana de giro, umbral sellado, registradoEn). Conocido a R, mientras la mora de la pagaduria
+#   (dias desde el vencimiento de la ventana, nunca negativos) no supere el umbral (sin umbral: nunca), lo descontado se resta del
+#   saldo vencido de la cuota para la altura, y cubre la cuota en el orden seguro -> corriente -> capital: lo cubierto no causa mora
+#   [decision: FR-114 dice que al deudor no se le imputa]. Superado el umbral, la cuota cuenta entera desde su exigible y causa mora
+#   desde ese dia en adelante (lo de antes no se recalcula).
 
 CONCEPTOS = ["Principal", "CurrentInterest", "DefaultInterest", "CurrentInterestInSuspense", "DefaultInterestInSuspense",
              "Insurance", "CollectionFee", "OtherCharge", "Advance", "CreditBalance"]
@@ -1060,7 +1150,19 @@ def reconstruir(caso, cond_json, ops_json, D_, R, libro_desde=None, plan_json=No
     us = usuras(series, cond["modalidad"])
     umbrales = [(fecha(x["desde"]), int(x["dias"])) for x in series.get("umbralesDeSuspension") or []]
     tolerancias = [(fecha(x["desde"]), D(x["valor"])) for x in series.get("tolerancias") or []]
+    giros = {}
+    for g in series.get("pendientesDeGiro") or []:
+        if instante(g["registradoEn"]) <= R and D(g["monto"]) > 0:
+            giros.setdefault(int(g["cuota"]), []).append(
+                (D(g["monto"]), fecha(g["vencimientoDelGiro"]), int(g["umbral"]) if g.get("umbral") is not None else None))
     r = cond["r"]
+
+    def cubierto_por_giro(n_, d):
+        total = D(0)
+        for monto, vence, umbral in giros.get(n_, []):
+            if umbral is None or max((d - vence).days, 0) <= umbral:
+                total += monto
+        return total
 
     ops = [dict(o, _seq=o.get("secuencia", i + 1)) for i, o in enumerate(ops_json) if instante(o["registradoEn"]) <= R]
     reversadas = {o["reversa"] for o in ops if o.get("reversa")}
@@ -1071,7 +1173,8 @@ def reconstruir(caso, cond_json, ops_json, D_, R, libro_desde=None, plan_json=No
     origen = fecha(ops[0]["fechaValor"])
     # "apertura": lo que no sale de la causacion por (concepto, cuota): saldos iniciales y, desde US5, lo que mueven los pagos (en
     # ("Principal", n) el capital pendiente de la cuota n fuera del plan).
-    estado = {"plan": None, "ea": cond["ea"], "apertura": {}, "libro": [], "pagos": {}, "anticipos": [], "antHasta": origen}
+    estado = {"plan": None, "ea": cond["ea"], "apertura": {}, "libro": [], "pagos": {}, "anticipos": [], "antHasta": origen,
+              "reestructuraciones": cond["reestructuraciones"], "extinguido": None}
     prel = prelacion_de(cond_json)
 
     def mover(dia, clase, concepto, cuota, monto):
@@ -1147,6 +1250,9 @@ def reconstruir(caso, cond_json, ops_json, D_, R, libro_desde=None, plan_json=No
         elif t in ("Payment", "ProvisionalCollection"):
             snap = instantanea(v)
             sol = solicitud_de(o, v)
+            # K6b (T1042): un credito en UVR convierte lo recibido en pesos a UVR con el estado del dia (lo pone vivienda.py).
+            if cond_json.get("_pagoEnUvr") is not None:
+                sol["valor"] = cond_json["_pagoEnUvr"](snap, sol["valor"], v)
             pr = prel
             problema = problema_de_pago(snap, sol, pr)
             if problema == "Lending.Payment.SpecificInstallmentBlocked":
@@ -1176,6 +1282,10 @@ def reconstruir(caso, cond_json, ops_json, D_, R, libro_desde=None, plan_json=No
                     queda -= t_
         elif t == "CommercialAdjustment":
             ajuste_comercial(o, v)
+        elif t == "TermsChange":
+            novedad_op(o, v)
+        elif t == "Waiver":
+            condonacion(o, v)
         else:
             raise ValueError(f"operacion {t} no soportada en K1")
 
@@ -1235,6 +1345,89 @@ def reconstruir(caso, cond_json, ops_json, D_, R, libro_desde=None, plan_json=No
         if exceso > 0:
             mover(v, "CreditBalanceRecognized", "CreditBalance", None, exceso)
 
+    # K3 (fase 16, T0874): la NOVEDAD en la reconstruccion, escrita desde la spec (FR-090, FR-091) y no desde el C#:
+    # - lo que se capitaliza sale de su concepto y su cuota (fila Capitalization, -) sin pasar de su saldo a la fecha valor;
+    # - prorroga, cambio de fecha o de tasa: el capital capitalizado entra sin cuota (Capitalization, +Principal) y el plan se regenera
+    #   desde la fecha valor sobre TODO el capital pendiente mas lo capitalizado, con las condiciones del credito (las del bloque «K3» de
+    #   arriba) y la numeracion desde la siguiente a la ultima vencida; las vencidas se conservan y su capital se consolida en el plan nuevo;
+    # - novacion o refinanciacion, en el credito anterior: todo lo que queda a la fecha valor pasa al enlazado (TransferToLinkedLoan, -) y
+    #   el credito deja de causar desde el dia siguiente;
+    # - novacion o refinanciacion, en el enlazado: nace con su plan pactado (monto = capital trasladado + capitalizado, fecha = la de la
+    #   novedad) y recibe el capital sin cuota (TransferFromLinkedLoan) y lo capitalizado (Capitalization) como capital.
+    # El conteo de reestructuraciones y la tasa nueva rigen desde el dia siguiente.
+    def partidas(lista):
+        return [(x["concepto"], int(x["cuota"]) if x.get("cuota") is not None else None, D(x["valor"])) for x in lista or []]
+
+    def novedad_op(o, v):
+        mec = o["mecanismo"]
+        crea = mec in ("Novation", "Refinancing")
+        caps = partidas(o.get("capitalizaciones"))
+        if o.get("lado") == "Enlazado":
+            assert crea and estado["plan"] is None, "el enlazado nace con la novacion o la refinanciacion"
+            tras = partidas(o.get("traslados"))
+            capital = sum((x for c_, _, x in tras if c_ == "Principal"), D(0))
+            cap = sum((x for _, _, x in caps), D(0))
+            assert D(cond_json["monto"]) == capital + cap and fecha(cond_json["fechaDesembolso"]) == v, "plan pactado del enlazado"
+            estado["plan"] = generar_plan(cond_json)
+            if capital:
+                estado["libro"].append((v, "TransferFromLinkedLoan", "Principal", None, capital))
+            if cap:
+                estado["libro"].append((v, "Capitalization", "Principal", None, cap))
+            for c_, cu, x in tras:
+                if c_ != "Principal":
+                    mover(v, "TransferFromLinkedLoan", c_, cu, x)
+            if o.get("reestructuracionesDespues") is not None:
+                estado["reestructuraciones"] = int(o["reestructuracionesDespues"])
+            return
+        snap = instantanea(v)
+        total = D(0)
+        for c_, cu, x in caps:
+            assert x <= snap["por"].get((cu, c_), D(0)), "no se capitaliza mas que el saldo"
+            mover(v, "Capitalization", c_, cu, -x)
+            total += x
+        if crea:
+            snap = instantanea(v)
+            for (cu, c_), x in sorted(snap["por"].items(), key=lambda kv: (kv[0][0] or 0, ORDEN[kv[0][1]])):
+                if x:
+                    mover(v, "TransferToLinkedLoan", c_, cu, -x)
+            estado["extinguido"] = v
+            if o.get("reestructuracionesDespues") is not None:
+                estado["reestructuraciones"] = int(o["reestructuracionesDespues"])
+            return
+        if total:
+            estado["libro"].append((v, "Capitalization", "Principal", None, total))
+        p = estado["plan"]
+        saldo = sum((pend(x) for x in p["cuotas"]), D(0))
+        vencidas = [x for x in p["cuotas"] if fecha(x["vencimiento"]) <= v]
+        primera = vencidas[-1]["numero"] + 1 if vencidas else p["cuotas"][0]["numero"]
+        n = {"saldoDeCapital": saldo, "saldosRecogidos": [], "interesCapitalizado": total, "fecha": v.isoformat(),
+             "cuotas": int(o["cuotasNuevas"]), "periodicidad": o.get("periodicidad"),
+             "tasaEA": o["tasaNueva"] if o.get("tasaNueva") is not None else estado["ea"],
+             "diaDePago": o.get("diaDePago"), "primerVencimiento": o.get("primerVencimiento")}
+        nuevo = generar_plan(novedad_condiciones(cond_json, n))
+        for x in nuevo["cuotas"]:
+            x["numero"] = int(x["numero"]) + primera - 1
+        completo = dict(nuevo, cuotas=vencidas + nuevo["cuotas"],
+                        periodosGracia=[pg for pg in p["periodosGracia"] if pg[1] <= v] + nuevo["periodosGracia"])
+        for x in p["cuotas"]:
+            objetivo = -x["capital"] if fecha(x["vencimiento"]) <= v else D(0)
+            if objetivo:
+                estado["apertura"][("Principal", x["numero"])] = objetivo
+            else:
+                estado["apertura"].pop(("Principal", x["numero"]), None)
+        if o.get("tasaNueva") is not None:
+            estado["ea"] = D(o["tasaNueva"])
+        estado["plan"] = completo
+        if o.get("reestructuracionesDespues") is not None:
+            estado["reestructuraciones"] = int(o["reestructuracionesDespues"])
+
+    # K3 (T0884): la CONDONACION baja cada concepto de su cuota (fila Waiver, -) sin pasar de su saldo a la fecha valor.
+    def condonacion(o, v):
+        snap = instantanea(v)
+        for c_, cu, x in partidas(o.get("condonaciones")):
+            assert x <= snap["por"].get((cu, c_), D(0)), "no se condona mas que el saldo"
+            mover(v, "Waiver", c_, cu, -x)
+
     def regenerar_con(v, cambio, eleccion):
         p = estado["plan"]
         ajustes = {x["numero"]: estado["apertura"][("Principal", x["numero"])] for x in p["cuotas"]
@@ -1275,6 +1468,8 @@ def reconstruir(caso, cond_json, ops_json, D_, R, libro_desde=None, plan_json=No
 
     def seguro_exacto(numero, d):
         x = next((y for y in plan()["cuotas"] if y["numero"] == numero), None)
+        if estado["extinguido"] is not None and d > estado["extinguido"]:
+            d = estado["extinguido"]
         if x is None or not x["seguro"] or d <= origen:
             return D(0)
         venc = fecha(x["vencimiento"])
@@ -1295,24 +1490,32 @@ def reconstruir(caso, cond_json, ops_json, D_, R, libro_desde=None, plan_json=No
         tol = serie_vigente(tolerancias, d) or D(0)
         umb = serie_vigente(umbrales, d)
         cands = []
+        cub = {}
         for x in cuotas:
             n_ = x["numero"]
             if not vencida[n_]:
                 continue
-            sv = pend(x) + interes_corriente(n_, d - UN_DIA) + saldo(n_, "Insurance", d - UN_DIA)
-            if sv > tol:
+            ic = interes_corriente(n_, d - UN_DIA)
+            seg = saldo(n_, "Insurance", d - UN_DIA)
+            sv = pend(x) + ic + seg
+            c_ = cubierto_por_giro(n_, d)
+            if c_ > 0:
+                tras = max(c_ - seg, D(0))
+                cub[n_] = (min(ic, tras), min(pend(x), max(tras - ic, D(0))))
+            if sv - c_ > tol:
                 cands.append(n_)
         altura = (d - ex[min(cands)]).days if cands else 0
         motivo = None
-        if cond["castigo"] is not None and cond["castigo"] <= d:
+        # K3 (T0908): el castigo suspende desde el dia siguiente a su fecha valor.
+        if cond["castigo"] is not None and cond["castigo"] < d:
             motivo = "WriteOff"
         elif cond["insolvencia"] is not None and cond["insolvencia"] <= d:
             motivo = "Insolvency"
-        elif cond["reestructuraciones"] > 1:
+        elif estado["reestructuraciones"] > 1:
             motivo = "Restructuring"
         elif umb is not None and altura >= umb:
             motivo = "Delinquency"
-        return {"ex": ex, "vencida": vencida, "altura": altura, "cands": cands, "motivo": motivo}
+        return {"ex": ex, "vencida": vencida, "altura": altura, "cands": cands, "motivo": motivo, "cub": cub}
 
     def interes_corriente(numero, d):
         """La corriente (con su suspenso) que se cobra a una cuota, con la gracia repartida atribuida a su cuota (US5)."""
@@ -1328,6 +1531,8 @@ def reconstruir(caso, cond_json, ops_json, D_, R, libro_desde=None, plan_json=No
     def deseadas(d, ev):
         nonlocal primer_sin_usura
         p = plan()
+        if estado["extinguido"] is not None and d > estado["extinguido"]:
+            return {}
         u, cert = usura_del_dia(us, d, R)
         if cond["usuraRequerida"] and not cert and primer_sin_usura is None:
             primer_sin_usura = d
@@ -1349,9 +1554,10 @@ def reconstruir(caso, cond_json, ops_json, D_, R, libro_desde=None, plan_json=No
         for x in cuotas:
             n_ = x["numero"]
             if ev["vencida"][n_]:
-                b = pend(x)
+                ic_cub, k_cub = ev["cub"].get(n_, (D(0), D(0)))
+                b = pend(x) - k_cub
                 if cond["moraSobreIntereses"]:
-                    b += interes_corriente(n_, d - UN_DIA)
+                    b += interes_corriente(n_, d - UN_DIA) - ic_cub
                 if b > 0:
                     out[(mor, n_, False)] = (b, dm, periodo)
         return out
@@ -1464,6 +1670,8 @@ def reconstruir(caso, cond_json, ops_json, D_, R, libro_desde=None, plan_json=No
         "validaHasta": (primer_sin_usura - UN_DIA).isoformat() if primer_sin_usura is not None else None,
         "transiciones": transiciones,
         "_libro": filas_libro, "_plan": p, "_pagos": estado["pagos"], "_anticipos": estado["anticipos"],
+        "_vencidas": [x["numero"] for x in p["cuotas"] if ev["vencida"][x["numero"]]],
+        "_por": por, "_origen": origen,
     }
 
 
@@ -1621,8 +1829,12 @@ def main():
     for nombre in archivos:
         ruta = os.path.join(AQUI, nombre)
         caso = cargar(ruta)
+        # K6b (T1042): los casos de vivienda los calcula vivienda.py (la misma hoja, en UVR y valorada en pesos).
+        if (caso.get("condiciones") or {}).get("reglas") == "Vivienda":
+            continue
         esperado = esperado_completo(caso) if "esperado" in caso else None
         consultas = consultas_calculadas(caso)
+        novedades = novedades_calculadas(caso)
         operaciones = operaciones_calculadas(caso, caso["condiciones"], caso.get("operaciones") or [])
         for var in caso.get("variantes") or []:
             if var.get("operaciones"):
@@ -1639,6 +1851,9 @@ def main():
             if consultas:
                 a, b = bloque(crudo, "consultas")
                 crudo = crudo[:a] + a_json(consultas, 2, 2) + crudo[b:]
+            if novedades:
+                a, b = bloque(crudo, "novedades")
+                crudo = crudo[:a] + a_json(novedades, 2, 2) + crudo[b:]
             if any(v.get("consultas") or v.get("operaciones") for v in caso.get("variantes") or []):
                 a, b = bloque(crudo, "variantes")
                 crudo = crudo[:a] + a_json(caso["variantes"], 2, 2) + crudo[b:]
@@ -1659,6 +1874,8 @@ def main():
             for calc, orig in zip(operaciones, original.get("operaciones") or []):
                 if "esperado" in orig:
                     ok = ok and iguales(json.loads(a_json(calc["esperado"]), parse_float=D, parse_int=D), orig.get("esperado"))
+            for calc, orig in zip(novedades, original.get("novedades") or []):
+                ok = ok and iguales(json.loads(a_json(calc["esperado"]), parse_float=D, parse_int=D), orig.get("esperado"))
             print(f"{nombre}: {'coincide' if ok else 'DIFIERE'}")
             malos += 0 if ok else 1
         else:
@@ -1669,6 +1886,8 @@ def main():
                 print(a_json(consultas, 2, 2))
             if any("esperado" in o for o in operaciones):
                 print(a_json(operaciones, 2, 2))
+            if novedades:
+                print(a_json(novedades, 2, 2))
     sys.exit(1 if malos else 0)
 
 

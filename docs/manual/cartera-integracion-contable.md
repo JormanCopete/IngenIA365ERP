@@ -166,12 +166,24 @@ reclasificación entre ellas no produce líneas (el recibo dice «mismas cuentas
 
 ## 6. Cuando un hecho no se contabiliza
 
-**Antes de confirmar.** Cartera pregunta a Contabilidad si lo que va a emitir es contabilizable. En las **pantallas** de
-Cartera (el desembolso; en K3, novedad, condonación y castigo), con `Contabilidad.FaltaDeRegla = Bloquear` la operación
-no se confirma y el mensaje dice qué falta y quién lo corrige; con `Advertir` (el defecto) se confirma con aviso. Lo que
-llega por el contrato (Recaudo, Nómina, Aportes), las ventas de Comercial y los procesos **nunca se detienen**: aplican,
-quedan marcados como no contabilizables y avisan a la contadora con la alerta `Cartera.HechoNoContabilizable` (una por
-combinación y día).
+**Antes de confirmar.** Cartera pregunta a Contabilidad si lo que va a emitir es contabilizable. Con
+`Contabilidad.FaltaDeRegla = Advertir` todo se confirma, queda marcado como no contabilizable y la contadora recibe la
+alerta `Cartera.HechoNoContabilizable` (una por combinación y día). Con `Bloquear` —**el defecto**, decisión del dueño del
+2026-10-14— **todo se detiene** («Bloquear todo»), cada operación a su manera:
+
+| Dónde | Con «Bloquear» y sin regla |
+|---|---|
+| Pantallas de Cartera (el desembolso; en K3, novedad, condonación y castigo) | no se confirma; el mensaje dice qué falta y quién lo corrige |
+| Pagos por el contrato (Recaudo, Aportes, la recogida, el recaudador de prueba) | el pago se **rechaza** con `Lending.Prevalidation.NotPostable` y lo que falta; no se escribe nada de él |
+| Nómina (ordinaria y definitiva) | la aprobación **entera falla** con `Payroll.LoanDeductionNotPostable`, que nombra el crédito y la regla que falta; nada queda aprobado |
+| Ventas a crédito de Comercial | la obligación no nace: el mensaje queda **rechazado y reprocesable** en la bandeja de Cartera (la venta ya está confirmada en Comercial); corregida la matriz, se reprocesa |
+| Procesos (causación diaria, corrección por valor nacional, cierre mensual) | la tanda **no avanza**: la corrida queda fallida con `Lending.Prevalidation.NotPostable` y sale la alerta; corregida la matriz, «Reintentar» la retoma |
+
+Fuera de las pantallas el bloqueo también levanta la alerta, porque quien opera no corrige la matriz. **Sin contabilidad
+iniciada, o con el hecho en «no pasa», no se pregunta nada y nada se bloquea.** Sin respuesta de Contabilidad sólo la
+pantalla puede bloquear (`Contabilidad.PoliticaSinRespuesta`). Como el defecto es `Bloquear`, una nómina o una tanda
+esperan a la matriz: hay que completarla (`/contabilidad/cartera/completitud`) **antes de iniciar la contabilidad con
+Cartera activa**, o fijar `Advertir` con su vigencia en `/cartera/parametros` mientras se completa.
 
 **Después de confirmar.** Si Contabilidad rechaza un hecho, la operación **no se deshace**: el hecho queda «rechazado» en
 la pestaña «Emitidos» de `/cartera/bandeja-de-mensajes`, con el motivo y quién lo corrige, y la alerta
@@ -265,6 +277,7 @@ Lo que el diseño adopta con la propuesta por defecto y espera su visto bueno (e
 | **C10** (pregunta) | Las comisiones y costos de originación **no** se difieren (`Contabilidad.DiferirComisiones` = no); si se decide diferirlos, harán falta un hecho de amortización y otra entrega | — |
 | **C77** | El hecho va en `*` en los roles de saldo, orden, pasivo, puente, diferido y contingentes (peso 2 sólo en resultados), y el centro de costo se asigna sin pesar | §2 |
 | **C81** | Al castigar, el interés en suspenso sale de `SuspensoEnOrden` y entra a `CastigadaEnOrden` (contra `ContraOrdenControl`) | Ejemplo 14 |
+| Fallecimiento (K3, decisión del dueño del 2026-10-15) | Si el parámetro `Causacion.ContinuaTrasFallecimiento` de la línea dice que no, desde el fallecimiento la causación pasa a suspenso y sale `CausacionSuspendida` con el motivo **`Deceased`** (el interés va a la orden contingente como en la mora). El motivo se queda; falta confirmar que ese tratamiento contable es el que corresponde | `CausacionSuspendida`, motivo `Deceased`; [cartera-novedades-y-condonaciones](cartera-novedades-y-condonaciones.md) §8 |
 | Capitalización (propuesta del 2026-10-13) | Al capitalizar interés **en suspenso** en una reestructuración, modificación o novación, además de llevarlo a `Capital` contra `IngresoDiferido`, se **cancela su orden**: débito `ContraOrdenContingente`, crédito `SuspensoEnOrden` | §5, capitalización |
 
 También quedan a su criterio, sin ser preguntas: la orientación de cuentas del CUIF de las filas sugeridas, si las

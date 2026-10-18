@@ -157,4 +157,14 @@ public static class PagosE2E
         return (numero, DateOnly.Parse(cuota.GetProperty("dueDate").GetString()!, System.Globalization.CultureInfo.InvariantCulture),
             cuota.GetProperty("total").GetDecimal());
     }
+
+    /// <summary>La fecha exigible de una cuota (art. 829: si vence en un día no hábil, el siguiente hábil). La mora se cuenta
+    /// desde ella, así que una prueba que espera N días de mora pone el reloj N días después de esta fecha, no del vencimiento:
+    /// si no, el resultado depende del día de la semana y de los festivos. (nuevo)</summary>
+    public static async Task<DateOnly> ExigibleAsync(HttpClient http, string token, Guid credito, int numero = 1)
+    {
+        var plan = await CarteraE2E.GetAsync(http, token, $"{DesembolsoE2E.Creditos}/{credito}/schedule");
+        var cuota = plan.GetProperty("installments").EnumerateArray().Single(c => c.GetProperty("number").GetInt32() == numero);
+        return DateOnly.Parse(cuota.GetProperty("exigibleDate").GetString()!, System.Globalization.CultureInfo.InvariantCulture);
+    }
 }

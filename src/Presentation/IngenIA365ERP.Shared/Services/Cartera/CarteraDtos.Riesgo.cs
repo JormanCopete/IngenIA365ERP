@@ -149,7 +149,27 @@ public sealed record CierreDto(
     Guid? SupersedesClosePublicId,
     Guid? ProcessRunPublicId,
     IReadOnlyList<ReaperturaDelCierreDto> Reopenings,
-    IReadOnlyList<ParteDelCierreDto> Parts);
+    IReadOnlyList<ParteDelCierreDto> Parts)
+{
+    /// <summary>K6a: los créditos en pérdida esperada con el historial completado por la regla de meses faltantes (<c>missingMonthsRule</c>,
+    /// <c>fixedDays</c>, <c>loans[]</c>); nulo si no hubo ninguno.</summary>
+    public JsonElement? IncompleteHistory { get; init; }
+}
+
+/// <summary>K6a: los componentes de la pérdida esperada de una línea (PI, PDI, exposición, puntaje, incumplimiento, garantía).</summary>
+public sealed record PerdidaEsperadaDeLineaDto(
+    string? Segment,
+    decimal? Z,
+    decimal? Score,
+    string? ModelRating,
+    bool? IsInDefault,
+    int? DaysInDefault,
+    string? ProbabilityOfDefaultKey,
+    decimal? ProbabilityOfDefault,
+    string? CollateralType,
+    decimal? LossGivenDefault,
+    decimal? ExposureAtDefault,
+    bool IncompleteArrearsHistory);
 
 /// <summary>La línea de un crédito en el cierre.</summary>
 public sealed record LineaDelCierreDto(
@@ -170,10 +190,21 @@ public sealed record LineaDelCierreDto(
     decimal TotalImpairment,
     decimal ImpairmentDelta,
     bool Current,
-    IReadOnlyList<string> Explanation);
+    IReadOnlyList<string> Explanation)
+{
+    /// <summary><c>ArrearsAnnex1</c> o <c>ExpectedLossAnnex2</c> (K6a).</summary>
+    public string ImpairmentModel { get; init; } = "ArrearsAnnex1";
+
+    /// <summary>Los componentes de la pérdida esperada; nulo en las líneas del Anexo 1 (K6a).</summary>
+    public PerdidaEsperadaDeLineaDto? ExpectedLoss { get; init; }
+}
 
 /// <summary>Un cambio de calificación frente al cierre anterior (el primero, frente al base).</summary>
-public sealed record CambioDeCalificacionDto(Guid LoanPublicId, string LoanNumber, ReferenciaDeCreditoDto Debtor, string? Previous, string Current, string Cause);
+public sealed record CambioDeCalificacionDto(Guid LoanPublicId, string LoanNumber, ReferenciaDeCreditoDto Debtor, string? Previous, string Current, string Cause)
+{
+    /// <summary>K6a: el crédito está en pérdida esperada y su historial de mora se completó con la regla de meses faltantes.</summary>
+    public bool IncompleteHistory { get; init; }
+}
 
 /// <summary>Un requisito del cierre: código, si se cumple y el detalle.</summary>
 public sealed record RequisitoDelCierreDto(string Code, bool Met, string Detail);
@@ -199,3 +230,33 @@ public sealed record HistorialIncompletoDto(Guid LoanPublicId, string LoanNumber
 /// <summary>La completitud del historial de mora a una fecha.</summary>
 public sealed record CompletitudDelHistorialDto(DateOnly Date, int MonthsRequired, Guid? RuleDocumentPublicId, string? RuleDocumentCode,
     IReadOnlyList<HistorialIncompletoDto> Incomplete);
+
+/// <summary>Una adopción o un desistimiento voluntario del modelo de pérdida esperada (K6a; <c>Kind</c>: <c>VoluntaryAdoption</c>,
+/// <c>VoluntaryWithdrawal</c>).</summary>
+public sealed record EleccionDelModeloDto(
+    Guid PublicId,
+    string Kind,
+    DateOnly ValidFrom,
+    IReadOnlyList<string> Segments,
+    Guid? SessionItemPublicId,
+    Guid ImpactStudyAttachmentPublicId,
+    DateOnly SupervisorNoticeDate,
+    Guid SupervisorNoticeAttachmentPublicId,
+    int NoticeLeadDays,
+    Guid RegulatoryDocumentPublicId,
+    string Reason,
+    string? RegisteredBy,
+    DateTime RegisteredAt);
+
+/// <summary><c>POST /risk/impairment-model/elections</c> (K6a): la propuesta (sujeto del punto del acta), la clase por nombre, los segmentos (vacío =
+/// los tres), desde cuándo rige, el punto del acta, el estudio de impacto, la fecha y el soporte del aviso y el motivo.</summary>
+public sealed record NuevaEleccionDelModeloRequest(
+    Guid ElectionPublicId,
+    string Kind,
+    IReadOnlyList<string>? Segments,
+    DateOnly ValidFrom,
+    Guid SessionItemPublicId,
+    Guid ImpactStudyAttachmentPublicId,
+    DateOnly NoticeDate,
+    Guid NoticeAttachmentPublicId,
+    string Reason);

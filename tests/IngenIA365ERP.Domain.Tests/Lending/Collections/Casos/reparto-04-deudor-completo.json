@@ -1,0 +1,129 @@
+{
+  "caso": "reparto-04-deudor-completo",
+  "descripcion": "FR-118: la regla pide el deudor completo: sus creditos que casan van a un solo gestor en una asignacion sin credito, y la unidad pesa por su cantidad de creditos. El deudor cuyos creditos ya tienen todos un mismo gestor de la regla lo conserva; el que tiene gestores distintos se reparte. Un credito del mismo deudor que no casa con la regla va por la siguiente.",
+  "reglas": [
+    {
+      "publicId": "a0000000-0000-0000-0000-000000000001",
+      "prioridad": 1,
+      "distribucion": "ByCount",
+      "deudorCompleto": true,
+      "etapa": "PREJ",
+      "gestores": [
+        {
+          "usuario": "e0000000-0000-0000-0000-000000000001",
+          "peso": 1
+        },
+        {
+          "usuario": "e0000000-0000-0000-0000-000000000002",
+          "peso": 1
+        }
+      ]
+    },
+    {
+      "publicId": "a0000000-0000-0000-0000-000000000002",
+      "prioridad": 2,
+      "distribucion": "ByCount",
+      "gestores": [
+        {
+          "usuario": "e0000000-0000-0000-0000-000000000003",
+          "peso": 1
+        }
+      ]
+    }
+  ],
+  "creditos": [
+    {
+      "credito": "c0000000-0000-0000-0000-000000000001",
+      "deudor": "d0000000-0000-0000-0000-000000000001",
+      "saldo": 100000,
+      "etapa": "PREJ"
+    },
+    {
+      "credito": "c0000000-0000-0000-0000-000000000002",
+      "deudor": "d0000000-0000-0000-0000-000000000001",
+      "saldo": 200000,
+      "etapa": "PREJ"
+    },
+    {
+      "credito": "c0000000-0000-0000-0000-000000000005",
+      "deudor": "d0000000-0000-0000-0000-000000000001",
+      "saldo": 300000,
+      "etapa": "PREJ"
+    },
+    {
+      "credito": "c0000000-0000-0000-0000-000000000007",
+      "deudor": "d0000000-0000-0000-0000-000000000001",
+      "saldo": 400000,
+      "etapa": "ADMIN"
+    },
+    {
+      "credito": "c0000000-0000-0000-0000-000000000003",
+      "deudor": "d0000000-0000-0000-0000-000000000002",
+      "saldo": 100000,
+      "etapa": "PREJ",
+      "gestorActual": "e0000000-0000-0000-0000-000000000002"
+    },
+    {
+      "credito": "c0000000-0000-0000-0000-000000000004",
+      "deudor": "d0000000-0000-0000-0000-000000000003",
+      "saldo": 100000,
+      "etapa": "PREJ",
+      "gestorActual": "e0000000-0000-0000-0000-000000000001"
+    },
+    {
+      "credito": "c0000000-0000-0000-0000-000000000006",
+      "deudor": "d0000000-0000-0000-0000-000000000003",
+      "saldo": 100000,
+      "etapa": "PREJ",
+      "gestorActual": "e0000000-0000-0000-0000-000000000002"
+    }
+  ],
+  "esperado": {
+    "asignaciones": [
+      {
+        "credito": null,
+        "deudor": "d0000000-0000-0000-0000-000000000002",
+        "creditos": [
+          "c0000000-0000-0000-0000-000000000003"
+        ],
+        "gestor": "e0000000-0000-0000-0000-000000000002",
+        "regla": "a0000000-0000-0000-0000-000000000001",
+        "seMantiene": true
+      },
+      {
+        "credito": null,
+        "deudor": "d0000000-0000-0000-0000-000000000001",
+        "creditos": [
+          "c0000000-0000-0000-0000-000000000001",
+          "c0000000-0000-0000-0000-000000000002",
+          "c0000000-0000-0000-0000-000000000005"
+        ],
+        "gestor": "e0000000-0000-0000-0000-000000000001",
+        "regla": "a0000000-0000-0000-0000-000000000001",
+        "seMantiene": false
+      },
+      {
+        "credito": null,
+        "deudor": "d0000000-0000-0000-0000-000000000003",
+        "creditos": [
+          "c0000000-0000-0000-0000-000000000004",
+          "c0000000-0000-0000-0000-000000000006"
+        ],
+        "gestor": "e0000000-0000-0000-0000-000000000002",
+        "regla": "a0000000-0000-0000-0000-000000000001",
+        "seMantiene": false
+      },
+      {
+        "credito": "c0000000-0000-0000-0000-000000000007",
+        "deudor": "d0000000-0000-0000-0000-000000000001",
+        "creditos": [
+          "c0000000-0000-0000-0000-000000000007"
+        ],
+        "gestor": "e0000000-0000-0000-0000-000000000003",
+        "regla": "a0000000-0000-0000-0000-000000000002",
+        "seMantiene": false
+      }
+    ],
+    "sinRegla": []
+  }
+}

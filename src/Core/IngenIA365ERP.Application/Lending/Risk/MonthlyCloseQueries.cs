@@ -57,7 +57,33 @@ public sealed record MonthlyCloseDto(
     Guid? SupersedesClosePublicId,
     Guid? ProcessRunPublicId,
     IReadOnlyList<MonthlyCloseReopeningDto> Reopenings,
-    IReadOnlyList<MonthlyClosePartDto> Parts);
+    IReadOnlyList<MonthlyClosePartDto> Parts)
+{
+    /// <summary>
+    /// K6a (T1039; FR-105): los créditos en pérdida esperada cuyo historial de mora se completó con la regla de meses faltantes, tal como los selló el
+    /// cierre (<c>IncompleteHistoryJson</c>: <c>missingMonthsRule</c>, <c>fixedDays</c>, <c>loans[]</c>); nulo si no hubo ninguno.
+    /// </summary>
+    public JsonElement? IncompleteHistory { get; init; }
+}
+
+/// <summary>
+/// K6a (T1039; data-model §23.2; FR-106): lo que la pérdida esperada dejó en la línea de un crédito: el segmento del Anexo 2, Z y el puntaje, la
+/// calificación del modelo, si está en incumplimiento y desde cuántos días, la clave de la tabla de PI, la PI, el tipo de garantía y la PDI, la
+/// exposición y si su historial se completó con la regla de meses faltantes. La explicación por componente va en <c>Explanation</c> de la línea.
+/// </summary>
+public sealed record MonthlyCloseLoanExpectedLossDto(
+    string? Segment,
+    decimal? Z,
+    decimal? Score,
+    string? ModelRating,
+    bool? IsInDefault,
+    int? DaysInDefault,
+    string? ProbabilityOfDefaultKey,
+    decimal? ProbabilityOfDefault,
+    string? CollateralType,
+    decimal? LossGivenDefault,
+    decimal? ExposureAtDefault,
+    bool IncompleteArrearsHistory);
 
 /// <summary>Una línea del cierre por crédito (api.md §12.3, <c>GET /{id}/loans</c>). (nuevo)</summary>
 public sealed record MonthlyCloseLoanDto(
@@ -78,10 +104,21 @@ public sealed record MonthlyCloseLoanDto(
     decimal TotalImpairment,
     decimal ImpairmentDelta,
     bool Current,
-    IReadOnlyList<string> Explanation);
+    IReadOnlyList<string> Explanation)
+{
+    /// <summary>El modelo con que se deterioró la línea (<c>ArrearsAnnex1</c> o <c>ExpectedLossAnnex2</c>; K6a, T1039).</summary>
+    public string ImpairmentModel { get; init; } = nameof(Domain.Enums.Lending.ImpairmentModel.ArrearsAnnex1);
+
+    /// <summary>Los componentes de la pérdida esperada; nulo en las líneas del Anexo 1 (K6a, T1039).</summary>
+    public MonthlyCloseLoanExpectedLossDto? ExpectedLoss { get; init; }
+}
 
 /// <summary>Un cambio de calificación frente al cierre anterior (api.md §12.3, <c>GET /{id}/changes</c>). (nuevo)</summary>
-public sealed record MonthlyCloseChangeDto(Guid LoanPublicId, string LoanNumber, RefDto Debtor, string? Previous, string Current, string Cause);
+public sealed record MonthlyCloseChangeDto(Guid LoanPublicId, string LoanNumber, RefDto Debtor, string? Previous, string Current, string Cause)
+{
+    /// <summary>K6a (T1036; FR-105): el crédito está en pérdida esperada y su historial de mora se completó con la regla de meses faltantes.</summary>
+    public bool IncompleteHistory { get; init; }
+}
 
 /// <summary>
 /// <c>GET /api/lending/risk/monthly-closes?year=&amp;kind=</c> (feature 013, US9, T0709; api.md §12.3, <c>Lending.Ratings.Read</c>): los cierres
@@ -141,7 +178,10 @@ public sealed class GetMonthlyCloseQueryHandler(IApplicationDbContext db) : IReq
             c.UnvalidatedParametersJson is null ? null : ConsultasDeCierres.Json(c.UnvalidatedParametersJson), ConsultasDeCierres.Json(c.TotalsJson),
             c.LinesSha256, c.PreviousCloseId is { } previo ? otros.GetValueOrDefault(previo) : null,
             c.SupersedesCloseId is { } reemplazado ? otros.GetValueOrDefault(reemplazado) : null,
-            corrida, reaperturas, partes));
+            corrida, reaperturas, partes)
+        {
+            IncompleteHistory = string.IsNullOrWhiteSpace(c.IncompleteHistoryJson) ? null : ConsultasDeCierres.Json(c.IncompleteHistoryJson),
+        });
     }
 }
 
@@ -175,7 +215,15 @@ public sealed class ListMonthlyCloseLoansQueryHandler(IApplicationDbContext db, 
         var items = lineas.Select(l => new MonthlyCloseLoanDto(creditos[l.LoanId].PublicId, creditos[l.LoanId].Number, personas[l.PersonId], l.ModalityCode,
             l.SarcSegmentCode, l.DaysPastDueAtClose, l.FinalRating.ToString(), l.FinalSubcategory == RatingSubcategory.None ? null : l.FinalSubcategory.ToString(),
             l.AccountingRating.ToString(), l.RatingCause.ToString(), l.PrincipalBalance, l.ImpairmentBase, l.CollateralAdmissibleValue, l.ImpairmentPercentage,
-            l.TotalImpairment, l.ImpairmentDelta, vigente, JsonSerializer.Deserialize<List<string>>(l.ExplanationJson) ?? [])).ToList();
+            l.TotalImpairment, l.ImpairmentDelta, vigente, JsonSerializer.Deserialize<List<string>>(l.ExplanationJson) ?? [])
+        {
+            ImpairmentModel = l.ImpairmentModel.ToString(),
+            ExpectedLoss = l.ImpairmentModel == ImpairmentModel.ExpectedLossAnnex2
+                ? new MonthlyCloseLoanExpectedLossDto(l.ExpectedLossSegmentCode, l.ExpectedLossZ, l.ExpectedLossScore, l.ModelRating?.ToString(), l.IsInDefault,
+                    l.DaysInDefault, l.ProbabilityOfDefaultKey, l.ProbabilityOfDefault, l.LossGivenDefaultCollateralType, l.LossGivenDefault, l.ExposureAtDefault,
+                    l.IncompleteArrearsHistory == true)
+                : null,
+        }).ToList();
         return Result.Success(new PagedResult<MonthlyCloseLoanDto>(items, pagina.SafePage, pagina.SafePageSize, total));
     }
 }
@@ -202,14 +250,16 @@ public sealed class GetMonthlyCloseChangesQueryHandler(IApplicationDbContext db,
             ? new Dictionary<int, MonthlyCloseLoan>()
             : await CategoriaContableDeCartera.LineasDe(db, anterior).Where(l => ids.Contains(l.LoanId)).ToDictionaryAsync(l => l.LoanId, ct);
         static string Texto(RatingCategory cat, RatingSubcategory sub) => sub == RatingSubcategory.None ? cat.ToString() : sub.ToString();
-        var cambios = lineas.Where(l => !previas.TryGetValue(l.LoanId, out var p) || p.FinalRating != l.FinalRating || p.FinalSubcategory != l.FinalSubcategory)
+        // K6a (T1036): también los créditos sin historial completo, aunque no cambien de calificación (FR-105: quedan listados en el reporte).
+        var cambios = lineas.Where(l => !previas.TryGetValue(l.LoanId, out var p) || p.FinalRating != l.FinalRating || p.FinalSubcategory != l.FinalSubcategory
+                || l.IncompleteArrearsHistory == true)
             .OrderBy(l => l.LoanId).ToList();
         var pagina = new PageRequest(request.Page, request.PageSize);
         var vista = cambios.Skip((pagina.SafePage - 1) * pagina.SafePageSize).Take(pagina.SafePageSize).ToList();
         var (creditos, personas) = await ConsultasDeCierres.ReferenciasAsync(db, vista, ct);
         var items = vista.Select(l => new MonthlyCloseChangeDto(creditos[l.LoanId].PublicId, creditos[l.LoanId].Number, personas[l.PersonId],
             previas.TryGetValue(l.LoanId, out var p) ? Texto(p.FinalRating, p.FinalSubcategory) : null, Texto(l.FinalRating, l.FinalSubcategory),
-            l.RatingCause.ToString())).ToList();
+            l.RatingCause.ToString()) { IncompleteHistory = l.IncompleteArrearsHistory == true }).ToList();
         return Result.Success(new PagedResult<MonthlyCloseChangeDto>(items, pagina.SafePage, pagina.SafePageSize, cambios.Count));
     }
 }

@@ -20,6 +20,8 @@ public class TextosDeCarteraTests
         "Presentation/IngenIA365ERP.Shared/Services/Cartera/TextosDeCreditos.cs",
         // US6 (T0602, T0603): lo que llega a Cartera y las reservas de número (la pantalla nombra permisos en sus PermissionGate, como las demás).
         "Presentation/IngenIA365ERP.Shared/Services/Cartera/TextosDeIntegracion.cs",
+        // US10 (T0852): los textos de la libranza.
+        "Presentation/IngenIA365ERP.Shared/Services/Cartera/TextosDeLibranza.cs",
     ];
 
     private static readonly (Regex Patron, string Que)[] Prohibidos =
@@ -82,6 +84,64 @@ public class TextosDeCarteraTests
         "Core/IngenIA365ERP.Application/Lending/Documents/ConstructorDeDocumentosDeCartera.cs",
         "Core/IngenIA365ERP.Application/Lending/Documents/SendLendingDocumentCommand.cs",
         "Core/IngenIA365ERP.Application/Lending/Documents/AnulacionDeDocumentosPorReverso.cs",
+        // K2 (US10, bloque B; T0848): los errores de la libranza y los textos que lee la persona (avisos, alertas, plantilla, informes).
+        "Core/IngenIA365ERP.Application/Lending/Payroll/ErroresDeLibranza.cs",
+        "Core/IngenIA365ERP.Application/Lending/Payroll/Results/SeguimientoDeNoAplicados.cs",
+        "Core/IngenIA365ERP.Application/Lending/Payroll/Results/ConsumoDeLibranza.cs",
+        "Core/IngenIA365ERP.Application/Lending/Payroll/Tasks/TareasDeLibranza.cs",
+        "Core/IngenIA365ERP.Application/Lending/Payroll/Transfers/TransferLoanPayrollCommand.cs",
+        "Core/IngenIA365ERP.Application/Lending/Imports/PayrollAgreementsTemplate.cs",
+        "Core/IngenIA365ERP.Application/Lending/Reports/Vistas/PayrollReportQueries.cs",
+        // K3 (US11, bloque B; T0888): los errores de novedades, condonaciones y eventos del deudor y los textos que lee la persona (motivos,
+        // efectos, asuntos de acta, el informe de reestructurados).
+        "Core/IngenIA365ERP.Application/Lending/Novelties/ErroresDeNovedades.cs",
+        "Core/IngenIA365ERP.Application/Lending/Novelties/RequestLoanNoveltyCommand.cs",
+        "Core/IngenIA365ERP.Application/Lending/Novelties/ApplyLoanNoveltyCommand.cs",
+        "Core/IngenIA365ERP.Application/Lending/Novelties/DecisionSobreNovedad.cs",
+        "Core/IngenIA365ERP.Application/Lending/Waivers/CondonacionesDeCartera.cs",
+        "Core/IngenIA365ERP.Application/Lending/Waivers/RequestWaiverCommand.cs",
+        "Core/IngenIA365ERP.Application/Lending/Waivers/DecisionSobreCondonacion.cs",
+        "Core/IngenIA365ERP.Application/Lending/Waivers/WaiverQueries.cs",
+        "Core/IngenIA365ERP.Application/Lending/DebtorEvents/ErroresDeEventosDelDeudor.cs",
+        "Core/IngenIA365ERP.Application/Lending/DebtorEvents/DebtorEventCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/DebtorEvents/InsuranceClaimAndInsolvencyCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/Reports/Vistas/RestructuredReportQuery.cs",
+        "Core/IngenIA365ERP.Domain/Entities/Lending/Operations/LoanNovelty.cs",
+        "Core/IngenIA365ERP.Domain/Entities/Lending/Operations/Waiver.cs",
+        "Core/IngenIA365ERP.Domain/Lending/Replay/NovedadEnLaReconstruccion.cs",
+        // K3 (US14, bloque B; T0914): los errores y los textos del castigo, de la evaluación de cartera y de la vista de la cartera castigada.
+        "Core/IngenIA365ERP.Application/Lending/WriteOffs/ErroresDeCastigo.cs",
+        "Core/IngenIA365ERP.Application/Lending/WriteOffs/CastigosDeCartera.cs",
+        "Core/IngenIA365ERP.Application/Lending/WriteOffs/WriteOffBatchCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/WriteOffs/AsuntoDeLoteDeCastigo.cs",
+        "Core/IngenIA365ERP.Application/Lending/WriteOffs/ApplyWriteOffBatchCommand.cs",
+        "Core/IngenIA365ERP.Application/Lending/WriteOffs/RegisterWriteOffSupervisorReportCommand.cs",
+        "Core/IngenIA365ERP.Application/Lending/Risk/Evaluations/EvaluacionesDeCartera.cs",
+        "Core/IngenIA365ERP.Application/Lending/Risk/Evaluations/PortfolioEvaluationCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/Risk/Evaluations/AsuntoDeEvaluacionDeCartera.cs",
+        "Core/IngenIA365ERP.Application/Lending/Reports/Vistas/ChargeOffsReportQuery.cs",
+        "Core/IngenIA365ERP.Domain/Entities/Lending/Operations/WriteOffBatch.cs",
+        "Core/IngenIA365ERP.Domain/Entities/Lending/Risk/PortfolioEvaluation.cs",
+        "Core/IngenIA365ERP.Domain/Lending/Risk/RequisitosDeCastigo.cs",
+        // K4 (US12, bloque B; T0954): los errores de la cobranza y los textos que lee la persona (alertas del ciclo, variables de los mensajes,
+        // asuntos de las vistas, motivos de las entradas de etapa).
+        "Core/IngenIA365ERP.Application/Lending/Collections/ErroresDeCobranza.cs",
+        "Core/IngenIA365ERP.Application/Lending/Collections/CobranzaDelCicloDiario.cs",
+        "Core/IngenIA365ERP.Application/Lending/Collections/Stages/CollectionStageCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/Collections/Stages/RegisterMigratedCollectionStagesCommand.cs",
+        "Core/IngenIA365ERP.Application/Lending/Collections/Assignments/CollectorAssignmentCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/Collections/Actions/CollectionActionCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/Collections/Agreements/PaymentAgreementCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/Collections/Legal/LegalProcessCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/Collections/Fees/CollectionFeeCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/Collections/Campaigns/MessageCampaignCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/Collections/PriorNotices/PriorNoticeCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/Collections/Claims/CreditReportClaimCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/Reports/Vistas/CollectionReportQueries.cs",
+        "Core/IngenIA365ERP.Domain/Lending/Collections/GastoDeCobranza.cs",
+        "Core/IngenIA365ERP.Domain/Entities/Lending/Collections/PaymentAgreement.cs",
+        "Core/IngenIA365ERP.Domain/Entities/Lending/Collections/LegalProcess.cs",
+        "Core/IngenIA365ERP.Domain/Entities/Lending/Collections/MessageCampaign.cs",
     ];
 
     private static readonly Regex Literal = new("\"((?:[^\"\\\\]|\\\\.)*)\"", RegexOptions.Compiled);
@@ -106,6 +166,61 @@ public class TextosDeCarteraTests
             }
         }
         ReglaSobreFuente.SinInfracciones(infracciones, "Mensajes de error de Cartera con códigos o el nombre del sistema anterior (§7.6)");
+    }
+
+    /// <summary>
+    /// Fase 24 (T1063; FR-144, T98): todo lo que la persona lee de Cartera —pantallas de <c>Pages/Cartera</c>, <c>Pages/CarteraFinanciera</c>,
+    /// <c>Pages/AhorrosYAportes</c> y <c>Pages/Contabilidad/Cartera</c>, sus textos y clientes (<c>Services/Cartera</c>), el menú, el manual en línea
+    /// (<c>ManualCatalogo</c>), el centro de reportes, las plantillas de importación y los layouts regulatorios (en <c>Application/Lending</c>, con sus
+    /// JSON), los mensajes de error y el motor (<c>Domain/Lending</c>), las semillas de Cartera (plantillas de mensaje sembradas, tipos de hecho), los
+    /// documentos al deudor (<c>DocumentosDeCarteraReport</c>) y los manuales <c>docs/manual/cartera*.md</c>— no nombra el sistema anterior. En el
+    /// código se miran las líneas que no son comentario; en las pantallas, los JSON y los manuales, todo el texto.
+    /// </summary>
+    private static readonly string[] CarpetasVisibles =
+    [
+        "Presentation/IngenIA365ERP.Shared/Pages/Cartera",
+        "Presentation/IngenIA365ERP.Shared/Pages/CarteraFinanciera",
+        "Presentation/IngenIA365ERP.Shared/Pages/AhorrosYAportes",
+        "Presentation/IngenIA365ERP.Shared/Pages/Contabilidad/Cartera",
+        "Presentation/IngenIA365ERP.Shared/Services/Cartera",
+        "Core/IngenIA365ERP.Application/Lending",
+        "Core/IngenIA365ERP.Domain/Lending",
+    ];
+
+    private static readonly string[] ArchivosVisibles =
+    [
+        "Presentation/IngenIA365ERP.Shared/Layout/NavMenu.razor",
+        "Presentation/IngenIA365ERP.Shared/Services/Manual/ManualCatalogo.cs",
+        "Presentation/IngenIA365ERP.Shared/Pages/CentroReportes.razor",
+        "Presentation/IngenIA365ERP.API/Reports/DocumentosDeCarteraReport.cs",
+        "Infrastructure/IngenIA365ERP.Persistence/Seeding/Parametric/LendingMessageTemplatesSeeder.cs",
+    ];
+
+    private static readonly Regex SistemaAnterior = new(@"\bs[oó]lido\b", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    [Fact]
+    public void Nada_de_lo_que_se_lee_de_Cartera_nombra_el_sistema_anterior()
+    {
+        var root = RepoPath.FindRepoRoot();
+        var codigo = CarpetasVisibles.SelectMany(c => ReglaSobreFuente.ArchivosEn([c]))
+            .Concat(ReglaSobreFuente.ArchivosNombrados(ArchivosVisibles))
+            .Concat(ReglaSobreFuente.ArchivosEn(["Infrastructure/IngenIA365ERP.Persistence/Seeding"]).Where(a => Path.GetFileName(a).StartsWith("Lending", StringComparison.Ordinal)))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var textos = CarpetasVisibles.SelectMany(c => ReglaSobreFuente.ArchivosEn([c], "*.razor").Concat(ReglaSobreFuente.ArchivosEn([c], "*.json")))
+            .Concat(Directory.EnumerateFiles(Path.Combine(root, "docs", "manual"), "cartera*.md"))
+            .ToList();
+        Assert.Contains(codigo, a => a.EndsWith("ManualCatalogo.cs", StringComparison.Ordinal));
+        Assert.Contains(codigo, a => a.EndsWith("CatalogoDePlantillasDeCartera.cs", StringComparison.Ordinal));
+        Assert.Contains(textos, a => a.EndsWith(".json", StringComparison.Ordinal) && a.Contains("Regulatory", StringComparison.Ordinal));
+        Assert.Contains(textos, a => Path.GetFileName(a) == "cartera.md");
+
+        var infracciones = ReglaSobreFuente.Infracciones(codigo, [(SistemaAnterior, "nombra el sistema anterior")]);
+        infracciones.AddRange(textos
+            .SelectMany(a => File.ReadAllLines(a).Select((l, i) => (Archivo: a, Linea: l, Numero: i + 1)))
+            .Where(x => SistemaAnterior.IsMatch(x.Linea))
+            .Select(x => $"{ReglaSobreFuente.Relativo(root, x.Archivo)}:{x.Numero}: nombra el sistema anterior"));
+        ReglaSobreFuente.SinInfracciones(infracciones, "Un texto de Cartera nombra el sistema anterior (FR-144, T98)");
     }
 
     [Fact]

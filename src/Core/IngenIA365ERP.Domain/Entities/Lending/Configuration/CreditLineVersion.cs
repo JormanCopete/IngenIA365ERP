@@ -123,6 +123,12 @@ public class CreditLineVersion : AuditableEntity, IHechoInmutable, IVersionDeCar
 
     public RoundingMoment RoundingMoment { get; init; }
 
+    /// <summary>
+    /// K6b (T1048; FR-024, D18): la unidad del capital de los créditos de la versión (<c>Pesos</c> o <c>Uvr</c>); en UVR, plan y saldos van en UVR
+    /// con la serie diaria. Las versiones de K1 a K6a son en pesos.
+    /// </summary>
+    public DenominationUnit DenominationUnit { get; init; } = DenominationUnit.Pesos;
+
     // -------------------------------------------------------------------------------------------------- prelación --
 
     public AllocationOrder AllocationOrder { get; init; } = AllocationOrder.OldestInstallmentFirst;
@@ -275,6 +281,7 @@ public class CreditLineVersion : AuditableEntity, IHechoInmutable, IVersionDeCar
         }
         if (!RedondeoDeCartera.UnidadesAdmitidas.Contains(b.RoundingUnit))
             return Invalida("roundingUnit", "La unidad de redondeo es 0,01; 1; 10; 100 o 1.000.");
+        if (!Enum.IsDefined(b.DenominationUnit)) return Invalida("denominationUnit", "La unidad del capital es pesos o UVR.");
 
         if (b.AllowsCommercialOrigin && b.CobraInteres && (b.InterestTaxTreatment is null || b.InterestTaxSupportAttachmentPublicId is null))
             return ProblemaDeCartera.Con(CodigoSinConceptoTributario,
@@ -359,6 +366,7 @@ public class CreditLineVersion : AuditableEntity, IHechoInmutable, IVersionDeCar
             RoundingUnit = b.RoundingUnit,
             RoundingMode = b.RoundingMode,
             RoundingMoment = b.RoundingMoment,
+            DenominationUnit = b.DenominationUnit,
             AllocationOrder = b.AllocationOrder,
             ConceptPriority = ListaDeEnums.Secuencia(b.ConceptPriority),
             SuspenseWithItsConcept = b.SuspenseWithItsConcept,
@@ -495,6 +503,8 @@ public class CreditLineVersion : AuditableEntity, IHechoInmutable, IVersionDeCar
                 .Decimal("minimumCoverage", x.MinimumCoverage, 6)
                 .Logico("contributionsCountAsCollateral", x.ContributionsCountAsCollateral)
                 .Enumeracion("requiredPromissoryNoteKind", x.RequiredPromissoryNoteKind))
+            // K6b (T1048): la unidad sólo entra a la huella si es UVR, así las versiones en pesos conservan la suya.
+            .Si(b.DenominationUnit != DenominationUnit.Pesos, h => h.Enumeracion("denominationUnit", (DenominationUnit?)b.DenominationUnit))
             .Calcular();
 
     /// <summary>La huella de esta versión ya guardada con sus hijas, para verificar que nadie la cambió.</summary>

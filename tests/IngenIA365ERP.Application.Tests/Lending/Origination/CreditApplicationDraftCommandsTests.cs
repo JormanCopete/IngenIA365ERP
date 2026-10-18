@@ -114,11 +114,11 @@ public sealed class CreditApplicationDraftCommandsTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task La_pagaduria_externa_llega_con_K2()
+    public async Task Un_convenio_de_pagaduria_sin_la_forma_de_pago_libranza_no_se_admite()
     {
+        // K2 (T0842): el convenio sólo va con la forma de pago «libranza con pagaduría»; la libranza completa la prueban RadicacionPorLibranzaTests.
         var error = await FallaAlCrear(_o.Solicitud() with { Payroll = new PayrollInput(PayrollAgreementPublicId: Guid.NewGuid()) });
         error.Code.Should().Be("Lending.PayrollAgreement.NotAvailable");
-        OriginacionDePrueba.Datos(error).GetProperty("availableFrom").GetString().Should().Be("K2");
     }
 
     [Fact]

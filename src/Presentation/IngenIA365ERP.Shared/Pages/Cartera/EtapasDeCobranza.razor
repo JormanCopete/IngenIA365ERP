@@ -1,0 +1,405 @@
+@page "/cartera/etapas-de-cobranza"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Inventario
+@inject CobranzaClient Cliente
+@inject InventarioClient Inventario
+@inject INotificationService Notification
+
+<PageTitle>Etapas de cobranza - IngenIA365ERP</PageTitle>
+
+@* Feature 013, K4, US12 (T0958; contracts/api.md §14.5; FR-117, FR-118): las etapas de cobranza por días de mora —preventiva, administrativa,
+   prejurídica, jurídica— versionadas con su vigencia, y las reglas de reparto de gestores. Una versión nueva reemplaza a la vigente desde su fecha y no
+   toca lo ya registrado; la regla de gasto de cada etapa no pasa del techo nacional. Las etapas sembradas se marcan «pendiente de validar» hasta que la
+   cooperativa las confirme. Las reglas se evalúan por prioridad, de menor a mayor, y la primera que casa reparte entre sus gestores por cantidad o por
+   saldo. Leer exige Lending.Collections.Read; versiones de etapas, Lending.CollectionStages.Manage; reglas, Lending.Collections.Assign. *@
+<PermissionGate Required="Lending.Collections.Read" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Etapas de cobranza</h3>
+        <div class="toolbar">
+            <SfButton CssClass="@(_pestana == 0 ? "e-primary" : "e-outline")" OnClick="@(() => _pestana = 0)">Etapas</SfButton>
+            <SfButton CssClass="@(_pestana == 1 ? "e-primary" : "e-outline")" OnClick="@(() => _pestana = 1)">Reglas de reparto</SfButton>
+        </div>
+    </div>
+
+    @if (_pestana == 0)
+    {
+        <div class="toolbar">
+            <label class="campo">Vigente a <input class="e-input" type="date" @bind="_fecha" /></label>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarEtapasAsync">Consultar</SfButton>
+            <PermissionGate Required="Lending.CollectionStages.Manage">
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@AbrirVersion">Nueva versión</SfButton>
+            </PermissionGate>
+        </div>
+        <IndicadorDeCarga Cargando="@_carga.Activa">
+            @if (_version is { Version: > 0 } v)
+            {
+                <p>Versión @v.Version, vigente desde el @v.ValidFrom?.ToString("dd/MM/yyyy").</p>
+                @if (v.Stages.Any(s => s.ReviewPending))
+                {
+                    <p class="aviso aviso-info">Hay etapas sembradas por el sistema pendientes de validar: confirme los rangos, las acciones y el gasto con la cooperativa.</p>
+                }
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th>Código</th><th>Etapa</th><th>Días de mora</th><th>Acciones sugeridas</th><th>Plantillas</th><th>Gasto de cobranza</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var e in v.Stages)
+                            {
+                                <tr>
+                                    <td>@e.Code</td>
+                                    <td>@e.Name@(e.IsLegal ? " · jurídica" : "")@(e.ReviewPending ? " · por validar" : "")</td>
+                                    <td>@e.DaysFrom @(e.DaysTo is { } h ? $"a {h}" : "en adelante")</td>
+                                    <td>@(e.SuggestedActions.Count == 0 ? "—" : string.Join(", ", e.SuggestedActions.Select(TextosDeCobranza.AccionSugerida)))</td>
+                                    <td>@(e.TemplateCodes.Count == 0 ? "—" : string.Join(", ", e.TemplateCodes))</td>
+                                    <td>
+                                        @if (e.FeeRule is { } g)
+                                        {
+                                            <span>@TextosDeCobranza.BaseDeGasto(g.Base): @(g.Rate.ToString("P2")) @(g.Cap is { } t ? $"con tope {TextosDeCreditos.Pesos(t)}" : "sin tope") · @TextosDeCobranza.MomentoDeGasto(g.Moment)</span>
+                                        }
+                                        else { <span>—</span> }
+                                    </td>
+                                    <td></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+            else { <p class="texto-tenue">No hay etapas vigentes en esa fecha.</p> }
+        </IndicadorDeCarga>
+    }
+    else
+    {
+        <div class="toolbar">
+            <label class="campo"><input type="checkbox" @bind="_incluirCerradas" /> Incluir las cerradas</label>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarReglasAsync">Consultar</SfButton>
+            <PermissionGate Required="Lending.Collections.Assign">
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@AbrirRegla">Nueva regla</SfButton>
+            </PermissionGate>
+        </div>
+        <IndicadorDeCarga Cargando="@_carga.Activa">
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Prioridad</th><th>Casa con</th><th>Reparte</th><th>Gestores</th><th>Vigencia</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var r in _reglas)
+                        {
+                            var regla = r;
+                            <tr>
+                                <td>@regla.Priority</td>
+                                <td>@Condiciones(regla)</td>
+                                <td>@TextosDeCobranza.BaseDeReparto(regla.Distribution)@(regla.AssignWholeDebtor ? " · todo el deudor al mismo gestor" : "")</td>
+                                <td>@string.Join(", ", regla.Collectors.Select(g => $"{g.Name} ({g.Weight:0.##})"))</td>
+                                <td>@regla.ValidFrom.ToString("dd/MM/yyyy") @(regla.ValidTo is { } h ? $"al {h:dd/MM/yyyy}" : "en adelante")</td>
+                                <td>
+                                    @if (regla.ValidTo is null)
+                                    {
+                                        <PermissionGate Required="Lending.Collections.Assign">
+                                            <SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirCierre(regla))">Cerrar vigencia…</SfButton>
+                                        </PermissionGate>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            @if (_reglas.Count == 0) { <p class="texto-tenue">No hay reglas de reparto vigentes: sin ellas los créditos se asignan a mano.</p> }
+        </IndicadorDeCarga>
+    }
+</div>
+
+<SfDialog @bind-Visible="_mostrarVersion" Header="Nueva versión de etapas" Width="900px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_accion.Activa" Texto="Guardando…">
+                <div class="form-grid">
+                    <label class="campo">Vigente desde * <input class="e-input" type="date" @bind="_vigenteDesde" /></label>
+                    <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" maxlength="500" /></label>
+                </div>
+                @foreach (var l in _lineas)
+                {
+                    var linea = l;
+                    <div class="info-card">
+                        <div class="toolbar">
+                            <label class="campo">Código * <input class="e-input" @bind="linea.Codigo" maxlength="10" /></label>
+                            <label class="campo">Nombre * <input class="e-input" @bind="linea.Nombre" maxlength="100" /></label>
+                            <label class="campo">Mora desde (días) <input class="e-input" type="number" min="0" @bind="linea.Desde" /></label>
+                            <label class="campo">Mora hasta (días) <input class="e-input" type="number" min="0" @bind="linea.Hasta" placeholder="sin tope" /></label>
+                            <label class="campo"><input type="checkbox" @bind="linea.EsJuridica" /> Es la etapa jurídica</label>
+                            <SfButton CssClass="e-flat e-small" OnClick="@(() => _lineas.Remove(linea))">Quitar etapa</SfButton>
+                        </div>
+                        <div class="toolbar">
+                            @foreach (var a in TextosDeCobranza.AccionesSugeridas)
+                            {
+                                var codigo = a.Codigo;
+                                <label class="campo"><input type="checkbox" checked="@linea.Acciones.Contains(codigo)" @onchange="@(e => AlternarAccion(linea, codigo, e.Value is true))" /> @a.Texto</label>
+                            }
+                        </div>
+                        <div class="toolbar">
+                            <label class="campo campo-ancho">Plantillas de mensaje (códigos separados por coma)
+                                <input class="e-input" @bind="linea.Plantillas" maxlength="200" /></label>
+                            <label class="campo"><input type="checkbox" @bind="linea.ConGasto" /> Cobra gasto de cobranza</label>
+                            @if (linea.ConGasto)
+                            {
+                                <label class="campo">Sobre
+                                    <select class="e-input" @bind="linea.BaseDelGasto">
+                                        @foreach (var b in TextosDeCobranza.BasesDeGasto) { <option value="@b.Codigo">@b.Texto</option> }
+                                    </select>
+                                </label>
+                                <label class="campo">Tarifa (%) <input class="e-input" type="number" min="0" step="0.01" @bind="linea.TarifaPorCiento" /></label>
+                                <label class="campo">Tope ($) <input class="e-input" type="number" min="0" step="1" @bind="linea.Tope" placeholder="sin tope" /></label>
+                            }
+                        </div>
+                    </div>
+                }
+                <SfButton CssClass="e-flat e-small" OnClick="@(() => _lineas.Add(new LineaDeEtapa()))">Agregar etapa</SfButton>
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_accion.Activa || _lineas.Count == 0 || string.IsNullOrWhiteSpace(_motivo))" OnClick="@GuardarVersionAsync">Guardar versión</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarVersion = false)">Volver</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarRegla" Header="Nueva regla de reparto" Width="720px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_accion.Activa" Texto="Guardando…">
+                <div class="form-grid">
+                    <label class="campo">Prioridad * <input class="e-input" type="number" min="1" @bind="_prioridad" /></label>
+                    <label class="campo">Reparte
+                        <select class="e-input" @bind="_basePorSaldo">
+                            <option value="false">Por cantidad de créditos</option>
+                            <option value="true">Por saldo</option>
+                        </select>
+                    </label>
+                    <label class="campo">Sólo la etapa
+                        <select class="e-input" @bind="_etapa">
+                            <option value="">Cualquiera</option>
+                            @foreach (var e in _version?.Stages ?? []) { <option value="@e.Code">@e.Name</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Línea de crédito <SelectorDeLineaDeCredito @bind-Value="_linea" /></label>
+                    <label class="campo">Saldo desde ($) <input class="e-input" type="number" min="0" @bind="_saldoDesde" /></label>
+                    <label class="campo">Saldo hasta ($) <input class="e-input" type="number" min="0" @bind="_saldoHasta" /></label>
+                    <label class="campo">Vigente desde * <input class="e-input" type="date" @bind="_vigenteDesde" /></label>
+                    <label class="campo"><input type="checkbox" @bind="_todoElDeudor" /> Todos los créditos del deudor al mismo gestor</label>
+                </div>
+                <h4>Gestores y su peso</h4>
+                @foreach (var g in _gestoresDeRegla)
+                {
+                    var fila = g;
+                    <div class="toolbar">
+                        <select class="e-input" @bind="fila.Usuario" aria-label="Gestor">
+                            <option value="">Elija un gestor…</option>
+                            @foreach (var u in _usuarios) { <option value="@u.PublicId">@u.Username</option> }
+                        </select>
+                        <input class="e-input" type="number" min="0.01" step="0.01" @bind="fila.Peso" aria-label="Peso" />
+                        <SfButton CssClass="e-flat e-small" OnClick="@(() => _gestoresDeRegla.Remove(fila))">Quitar</SfButton>
+                    </div>
+                }
+                <SfButton CssClass="e-flat e-small" OnClick="@(() => _gestoresDeRegla.Add(new GestorDeRegla()))">Agregar gestor</SfButton>
+                <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" maxlength="500" /></label>
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_accion.Activa || string.IsNullOrWhiteSpace(_motivo) || _gestoresDeRegla.All(g => string.IsNullOrEmpty(g.Usuario)))"
+                              OnClick="@GuardarReglaAsync">Guardar regla</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarRegla = false)">Volver</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarCierre" Header="Cerrar la vigencia de la regla" Width="520px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_accion.Activa" Texto="Cerrando…">
+                <label class="campo">Hasta * <input class="e-input" type="date" @bind="_cierraEl" /></label>
+                <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" maxlength="500" /></label>
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_accion.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@CerrarReglaAsync">Cerrar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarCierre = false)">Volver</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private sealed class LineaDeEtapa
+    {
+        public string Codigo { get; set; } = string.Empty;
+        public string Nombre { get; set; } = string.Empty;
+        public int Desde { get; set; }
+        public int? Hasta { get; set; }
+        public bool EsJuridica { get; set; }
+        public HashSet<string> Acciones { get; } = [];
+        public string? Plantillas { get; set; }
+        public bool ConGasto { get; set; }
+        public string BaseDelGasto { get; set; } = "PastDueAmount";
+        public decimal TarifaPorCiento { get; set; }
+        public decimal? Tope { get; set; }
+    }
+
+    private sealed class GestorDeRegla
+    {
+        public string? Usuario { get; set; }
+        public decimal Peso { get; set; } = 1;
+    }
+
+    private readonly EstadoDeCarga _carga = new(), _accion = new();
+    private int _pestana;
+    private DateTime? _fecha = DateTime.Today;
+    private VersionDeEtapasDto? _version;
+    private List<ReglaDeRepartoDto> _reglas = [];
+    private List<PersonaDeLaCooperativaDto> _usuarios = [];
+    private List<LineaDeEtapa> _lineas = [];
+    private List<GestorDeRegla> _gestoresDeRegla = [];
+    private ReglaDeRepartoDto? _reglaElegida;
+    private bool _mostrarVersion, _mostrarRegla, _mostrarCierre, _incluirCerradas, _todoElDeudor, _basePorSaldo;
+    private string? _motivo, _error, _etapa;
+    private int _prioridad = 1;
+    private Guid? _linea;
+    private decimal? _saldoDesde, _saldoHasta;
+    private DateTime? _vigenteDesde = DateTime.Today, _cierraEl = DateTime.Today;
+    private ClaveDeOperacion _clave = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarEtapasAsync();
+        await CargarReglasAsync();
+    }
+
+    private async Task CargarEtapasAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Cliente.EtapasAsync(_fecha is { } f ? DateOnly.FromDateTime(f) : null);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer las etapas."); return; }
+        _version = r.Value;
+    }
+
+    private async Task CargarReglasAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Cliente.ReglasDeRepartoAsync(null, _incluirCerradas);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer las reglas de reparto."); return; }
+        _reglas = [.. r.Value ?? []];
+    }
+
+    private static string Condiciones(ReglaDeRepartoDto r)
+    {
+        var partes = new List<string>();
+        if (r.StageCode is { } e) partes.Add($"etapa {e}");
+        if (r.CreditLinePublicId is not null) partes.Add("una línea");
+        if (r.Paymaster is { } p) partes.Add($"pagaduría {p.FullName}");
+        if (r.OfficePublicId is not null) partes.Add("una oficina");
+        if (r.MinBalance is { } d) partes.Add($"saldo desde {TextosDeCreditos.Pesos(d)}");
+        if (r.MaxBalance is { } h) partes.Add($"saldo hasta {TextosDeCreditos.Pesos(h)}");
+        return partes.Count == 0 ? "Cualquier crédito" : string.Join(" · ", partes);
+    }
+
+    private static void AlternarAccion(LineaDeEtapa linea, string codigo, bool marcada)
+    {
+        if (marcada) linea.Acciones.Add(codigo); else linea.Acciones.Remove(codigo);
+    }
+
+    // --------------------------------------------------------------------------------------- versión de etapas --
+
+    private void AbrirVersion()
+    {
+        _error = _motivo = null;
+        _vigenteDesde = DateTime.Today;
+        _clave = new ClaveDeOperacion();
+        _lineas = [.. (_version?.Stages ?? []).Select(e =>
+        {
+            var l = new LineaDeEtapa
+            {
+                Codigo = e.Code, Nombre = e.Name, Desde = e.DaysFrom, Hasta = e.DaysTo, EsJuridica = e.IsLegal, Plantillas = string.Join(", ", e.TemplateCodes),
+                ConGasto = e.FeeRule is not null, BaseDelGasto = e.FeeRule?.Base ?? "PastDueAmount", TarifaPorCiento = (e.FeeRule?.Rate ?? 0m) * 100m, Tope = e.FeeRule?.Cap,
+            };
+            foreach (var a in e.SuggestedActions) l.Acciones.Add(a);
+            return l;
+        })];
+        if (_lineas.Count == 0) _lineas.Add(new LineaDeEtapa());
+        _mostrarVersion = true;
+    }
+
+    private async Task GuardarVersionAsync()
+    {
+        using var carga = _accion.Iniciar();
+        _error = null;
+        var etapas = _lineas.Select(l => new EtapaDeCobranzaRequest(l.Codigo.Trim(), l.Nombre.Trim(), l.Desde, l.Hasta, l.EsJuridica, [.. l.Acciones],
+            (l.Plantillas ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList(),
+            l.ConGasto ? new ReglaDeGastoDeEtapaDto(l.BaseDelGasto, l.TarifaPorCiento / 100m, l.Tope, "OnStageEntry") : null)).ToList();
+        var r = await Cliente.AgregarVersionDeEtapasAsync(new VersionDeEtapasRequest(etapas, DateOnly.FromDateTime(_vigenteDesde ?? DateTime.Today), _motivo!.Trim()), _clave);
+        if (!r.IsSuccess) { _error = r.ErrorMessage ?? "No se pudo guardar la versión."; return; }
+        _mostrarVersion = false;
+        await Notification.SuccessAsync($"Versión {r.Value?.Version} de las etapas guardada.");
+        await CargarEtapasAsync();
+    }
+
+    // ------------------------------------------------------------------------------------- reglas de reparto --
+
+    private async Task AbrirRegla()
+    {
+        _error = _motivo = _etapa = null;
+        _prioridad = (_reglas.Count == 0 ? 0 : _reglas.Max(r => r.Priority)) + 1;
+        _basePorSaldo = false;
+        _todoElDeudor = false;
+        _linea = null;
+        _saldoDesde = _saldoHasta = null;
+        _vigenteDesde = DateTime.Today;
+        _gestoresDeRegla = [new GestorDeRegla()];
+        _clave = new ClaveDeOperacion();
+        if (_usuarios.Count == 0)
+        {
+            var u = await Inventario.ListarPersonasParaContarAsync();
+            if (u.IsSuccess) _usuarios = [.. (u.Value?.Items ?? []).Where(x => x.IsActive).OrderBy(x => x.Username, StringComparer.OrdinalIgnoreCase)];
+            else await Notification.ErrorAsync(u.ErrorMessage ?? "No se pudo leer la lista de usuarios (exige Security.Users.View).");
+        }
+        _mostrarRegla = true;
+    }
+
+    private async Task GuardarReglaAsync()
+    {
+        using var carga = _accion.Iniciar();
+        _error = null;
+        var gestores = _gestoresDeRegla.Where(g => Guid.TryParse(g.Usuario, out _)).Select(g => new PesoDeGestorRequest(Guid.Parse(g.Usuario!), g.Peso)).ToList();
+        var r = await Cliente.CrearReglaDeRepartoAsync(new ReglaDeRepartoRequest(_prioridad, _basePorSaldo ? "ByBalance" : "ByCount", gestores,
+            DateOnly.FromDateTime(_vigenteDesde ?? DateTime.Today), _motivo!.Trim(), null, string.IsNullOrEmpty(_etapa) ? null : _etapa, _linea, null, _saldoDesde, _saldoHasta,
+            _todoElDeudor), _clave);
+        if (!r.IsSuccess) { _error = r.ErrorMessage ?? "No se pudo guardar la regla."; return; }
+        _mostrarRegla = false;
+        await Notification.SuccessAsync("Regla de reparto guardada.");
+        await CargarReglasAsync();
+    }
+
+    private void AbrirCierre(ReglaDeRepartoDto regla)
+    {
+        _reglaElegida = regla;
+        _motivo = _error = null;
+        _cierraEl = DateTime.Today;
+        _clave = new ClaveDeOperacion();
+        _mostrarCierre = true;
+    }
+
+    private async Task CerrarReglaAsync()
+    {
+        if (_reglaElegida is not { } regla) return;
+        using var carga = _accion.Iniciar();
+        _error = null;
+        var r = await Cliente.CerrarReglaDeRepartoAsync(regla.PublicId, DateOnly.FromDateTime(_cierraEl ?? DateTime.Today), _motivo!.Trim(), _clave);
+        if (!r.IsSuccess) { _error = r.ErrorMessage ?? "No se pudo cerrar la vigencia."; return; }
+        _mostrarCierre = false;
+        await Notification.SuccessAsync("Vigencia cerrada.");
+        await CargarReglasAsync();
+    }
+}

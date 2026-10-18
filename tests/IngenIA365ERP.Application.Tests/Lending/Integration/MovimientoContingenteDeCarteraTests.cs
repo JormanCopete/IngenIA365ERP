@@ -229,7 +229,11 @@ public class MovimientoContingenteDeCarteraTests : IAsyncLifetime
         conProceso.Except(MovimientoContingenteDeCartera.Tipos).Should().BeEquivalentTo(
             InteresCausadoV1.Type, MoraCausadaV1.Type, SeguroCausadoV1.Type, AjusteDeCausacionPorFechaValorV1.Type, CausacionSuspendidaV1.Type,
             CausacionReanudadaV1.Type, AnticipoAplicadoV1.Type, SaldoAFavorReconocidoV1.Type, DimensionContableCambiadaV1.Type, DeterioroCalculadoV1.Type,
-            CarteraReclasificadaPorCalificacionV1.Type, ReversoDeCierreV1.Type, CierreDeCarteraRealizadoV1.Type, CierreDeCarteraReabiertoV1.Type);
+            CarteraReclasificadaPorCalificacionV1.Type, ReversoDeCierreV1.Type, CierreDeCarteraRealizadoV1.Type, CierreDeCarteraReabiertoV1.Type,
+            // K6b (T1056): la corrección monetaria UVR la emite el ciclo diario, como la causación.
+            CorreccionMonetariaUvrCausadaV1.Type,
+            // K6b (decisión del dueño del 2026-10-17): el reparto de un pago corregido por la UVR lo emite la corrida de corrección.
+            PagoRedistribuidoPorValorNacionalV1.Type);
         ClavesDeEvento.EsValida(CatalogoDeMensajesDeCarteraV1.HechosAContabilidad.Single(t => t.Type == CupoRotativoOtorgadoV1.Type).FormaDeClave,
             ClavesDeEvento.ConfirmacionPor(Guid.NewGuid())).Should().BeTrue();
     }

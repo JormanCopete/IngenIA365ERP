@@ -168,4 +168,33 @@ public class AttributionMatrixTests
         niveles[i] = nuevo;
         return niveles;
     }
+    [Fact]
+    public void El_mecanismo_y_la_causa_de_novedad_sólo_van_en_reglas_de_novedad_y_sin_ellos_la_huella_no_cambia()
+    {
+        // T0879 (K3): columnas nulas nacidas en CarteraNovedades.
+        var antes = AttributionMatrix.Huella(Borrador());
+        var conNovedad = ReglasDelEnsayo();
+        conNovedad.Add(new(3, LendingDecisionSubjects.Novelty, "COMITE") { NoveltyMechanism = NoveltyMechanism.Refinancing, NoveltyCause = NoveltyCause.Restructuring });
+        AttributionMatrix.Validar(Borrador(reglas: conNovedad), Hoy, Organos).Should().BeNull();
+        var sinCriterios = ReglasDelEnsayo();
+        sinCriterios.Add(new(3, LendingDecisionSubjects.Novelty, "COMITE"));
+        AttributionMatrix.Huella(Borrador(reglas: conNovedad)).Should().NotBe(AttributionMatrix.Huella(Borrador(reglas: sinCriterios)));
+        AttributionMatrix.Huella(Borrador()).Should().Be(antes);
+
+        Motivo(AttributionMatrix.Validar(Borrador(reglas:
+            [new(1, LendingDecisionSubjects.Condonation, "COMITE") { NoveltyCause = NoveltyCause.Restructuring }]), Hoy))
+            .Should().Be("RuleNoveltyCriteriaOutOfSubject");
+        Motivo(AttributionMatrix.Validar(Borrador(reglas:
+            [new(1, LendingDecisionSubjects.Novelty, "COMITE") { NoveltyMechanism = (NoveltyMechanism)99 }]), Hoy))
+            .Should().Be("RuleNoveltyCriteriaUnknown");
+
+        var publicada = AttributionMatrix.Publicar(Borrador(reglas: conNovedad), 1, Hoy, new DateTime(2026, 10, 8, 14, 0, 0), 7, Organos);
+        publicada.Matriz.Id = 40;
+        var niveles = publicada.Niveles(40).ToList();
+        for (var k = 0; k < niveles.Count; k++) niveles[k].Id = 100 + k;
+        var reglas = publicada.Reglas(40, niveles.ToDictionary(n => n.Code, n => n.Id));
+        reglas.Single(r => r.Order == 3).NoveltyMechanism.Should().Be(NoveltyMechanism.Refinancing);
+        reglas.Single(r => r.Order == 3).NoveltyCause.Should().Be(NoveltyCause.Restructuring);
+        publicada.Matriz.HuellaDeLoGuardado(niveles, reglas).Should().Be(publicada.Matriz.ContentSha256);
+    }
 }

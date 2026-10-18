@@ -20,8 +20,9 @@ namespace IngenIA365ERP.Application.Lending.Integration;
 /// con <c>IncludeClosed</c>, también las cerradas con <c>ClosedOn</c>; los saldos salen de la reconstrucción a <c>Date</c> cargada en bloque
 /// (<see cref="CargadorDeReconstruccion"/>); la clase y la pagaduría, del vínculo vigente de <c>LND_LoanPayrollLinks</c> (C44).</item>
 /// <item><see cref="CuotasDeNominaAsync"/>: las cuotas que vencen en el período de las obligaciones vivas como deudor con forma de pago nómina
-/// propia, por lo que les falta a la fecha de fin del período —sin las cubiertas por anticipo— y sin vencido acumulado (<c>PastDueIncluded = 0</c>
-/// en K1, C32), en el orden de la libranza.</item>
+/// propia, por lo que les falta a la fecha de fin del período —sin las cubiertas por anticipo—, en el orden de la libranza. Sin vencido acumulado
+/// en K1 (<c>PastDueIncluded = 0</c>, C32); desde K2 decide el convenio de la nómina propia: si lleva lo vencido o su regla del no aplicado es
+/// incluirlo en el siguiente, lo impago de antes del período va con la primera cuota del período (o solo, si no vence ninguna).</item>
 /// <item>Sin activar: <c>NotActivated</c>, sin obligaciones, con <c>MigratedNotActivated</c> para los deudores y codeudores de la carga aplicada
 /// vigente (C26).</item>
 /// </list>
@@ -106,6 +107,8 @@ public sealed class ObligacionesDeCartera(IApplicationDbContext db, CargadorDeRe
         var deNomina = creditos.Where(l => vinculos.TryGetValue(l.Id, out var v) && v.RepaymentChannel == RepaymentChannel.OwnPayroll).ToList();
         var cargados = await cargador.CargarAsync(deNomina.Select(l => l.Id).ToList(), null, fin, ct);
         var lineas = await LineasAsync(deNomina, ct);
+        // K2 (T0841; FR-112, FR-115, C32): el convenio de la nómina propia decide si lo no descontado del período anterior va en este.
+        var llevaLoVencido = await NominaPropiaLlevaLoVencidoAsync(consulta.PeriodStart, ct);
 
         var cuotas = new List<CuotaDeNominaDto>();
         foreach (var persona in personas)
@@ -117,13 +120,32 @@ public sealed class ObligacionesDeCartera(IApplicationDbContext db, CargadorDeRe
                 if (!cargados.TryGetValue(credito.Id, out var cargado) || !cargado.Listo) continue;
                 var estado = MotorDeCartera.Reconstruir(cargado.Entrada!, fin);
                 if (estado.Plan is null) continue;
+                var codigo = lineas.GetValueOrDefault(credito.CreditLineId).Code ?? string.Empty;
+                var anteriores = estado.Plan.Cuotas.Where(c => c.Vencimiento < consulta.PeriodStart).OrderBy(c => c.Numero).ToList();
+                var vencido = 0m;
+                if (llevaLoVencido)
+                {
+                    var numeros = anteriores.Select(c => c.Numero).ToHashSet();
+                    vencido = estado.Saldos.Where(s => s.Cuota is { } n && numeros.Contains(n) && Cobrables.Contains(s.Concepto) && s.Valor > 0m).Sum(s => s.Valor);
+                }
+                var conVencido = false;
                 foreach (var cuota in estado.Plan.Cuotas.Where(c => c.Vencimiento >= consulta.PeriodStart && c.Vencimiento <= fin).OrderBy(c => c.Numero))
                 {
                     var falta = estado.Saldos.Where(s => s.Cuota == cuota.Numero && Cobrables.Contains(s.Concepto) && s.Valor > 0m).Sum(s => s.Valor);
-                    if (falta <= 0m) continue;
+                    var incluido = conVencido ? 0m : vencido;
+                    if (falta + incluido <= 0m) continue;
+                    conVencido = true;
                     orden += 1;
-                    cuotas.Add(new CuotaDeNominaDto(persona.PublicId, credito.PublicId, credito.Number, lineas.GetValueOrDefault(credito.CreditLineId).Code ?? string.Empty,
-                        cuota.Numero, cuota.Vencimiento, falta, 0m, orden));
+                    cuotas.Add(new CuotaDeNominaDto(persona.PublicId, credito.PublicId, credito.Number, codigo, cuota.Numero, cuota.Vencimiento, falta + incluido,
+                        incluido, orden));
+                }
+                if (!conVencido && vencido > 0m)
+                {
+                    // Sin cuota en el período, lo vencido va solo, con la cuota impaga más antigua.
+                    var masAntigua = anteriores.First(c => estado.Saldos.Any(s => s.Cuota == c.Numero && Cobrables.Contains(s.Concepto) && s.Valor > 0m));
+                    orden += 1;
+                    cuotas.Add(new CuotaDeNominaDto(persona.PublicId, credito.PublicId, credito.Number, codigo, masAntigua.Numero, masAntigua.Vencimiento, vencido,
+                        vencido, orden));
                 }
             }
         }
@@ -179,6 +201,18 @@ public sealed class ObligacionesDeCartera(IApplicationDbContext db, CargadorDeRe
             var f = g.OrderByDescending(x => x.ValidFrom).First();
             return new VinculoVigente(f.RepaymentChannel, f.LibranzaDate, f.Pagaduria);
         });
+    }
+
+    /// <summary>
+    /// ¿El convenio de la nómina propia vigente al inicio del período lleva lo vencido (K2, T0841)? Sin convenio de nómina propia, como en K1: no.
+    /// </summary>
+    private async Task<bool> NominaPropiaLlevaLoVencidoAsync(DateOnly inicio, CancellationToken ct)
+    {
+        var convenio = await db.PayrollAgreements.AsNoTracking().Where(a => a.IsOwnPayroll && !a.IsDeleted).Select(a => (int?)a.Id).FirstOrDefaultAsync(ct);
+        if (convenio is null) return false;
+        var versiones = await db.PayrollAgreementVersions.AsNoTracking().Where(v => v.PayrollAgreementId == convenio && !v.IsDeleted).ToListAsync(ct);
+        return Domain.Entities.Lending.Payroll.PayrollAgreementVersion.Vigente(versiones, inicio) is { } vigente
+               && Payroll.Files.PayrollDeductionLines.LlevaLoVencido(vigente);
     }
 
     private Task<bool> ActivadaAsync(CancellationToken ct) =>

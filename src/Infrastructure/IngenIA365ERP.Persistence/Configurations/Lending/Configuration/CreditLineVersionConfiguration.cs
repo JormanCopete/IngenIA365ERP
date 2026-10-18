@@ -1,3 +1,4 @@
+using IngenIA365ERP.Domain.Enums.Lending;
 using IngenIA365ERP.Domain.Entities.Lending.Configuration;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
@@ -55,6 +56,8 @@ public class CreditLineVersionConfiguration : IEntityTypeConfiguration<CreditLin
         builder.Property(e => e.RoundingUnit).Monto().IsRequired();
         builder.Property(e => e.RoundingMode).HasConversion<int>().IsRequired();
         builder.Property(e => e.RoundingMoment).HasConversion<int>().IsRequired();
+        // K6b (T1059; CarteraVivienda): la unidad del capital; las filas anteriores son en pesos.
+        builder.Property(e => e.DenominationUnit).HasConversion<int>().IsRequired().HasDefaultValue(DenominationUnit.Pesos);
 
         builder.Property(e => e.AllocationOrder).HasConversion<int>().IsRequired();
         builder.Property(e => e.ConceptPriority).HasMaxLength(200).IsRequired();

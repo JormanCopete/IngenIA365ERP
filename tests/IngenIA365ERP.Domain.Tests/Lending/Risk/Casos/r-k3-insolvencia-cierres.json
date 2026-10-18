@@ -1,0 +1,38 @@
+{
+  // r-k3 (T0859; FR-098, data-model §25.8, T102): la insolvencia con su inicio, su fracaso y los cierres del crédito, al corte del
+  // 30-09-2026. A mano, con la norma de prueba (consumo: B 31–60, D 91–180, E 181+; insolvency.failedCategory = E):
+  //  1. negociando desde el 20-06, cierres de abril (B), mayo (C) y junio (D): se mantiene la del último cierre ANTERIOR al inicio, el de
+  //     mayo → C por «Insolvency» (la mora daría D);
+  //  2. fracasó el 15-09 (antes del corte): la que fija la norma, E; 100 días no caben en E1 (desde 181) → E1;
+  //  3. fracasó el 15-10, DESPUÉS del corte: al corte se negociaba → se mantiene la del cierre de marzo (B), aunque la mora dé E;
+  //  4. la negociación empieza el 01-10, después del corte: todavía no hay insolvencia → la mora (45 días, B);
+  //  5. negociando sin cierre anterior al inicio: la del crédito al iniciar (A);
+  //  6. con acuerdo: el acuerdo es una reestructuración y entra como tal; la insolvencia no pone candidata → la mora (A).
+  "nombre": "r-k3-insolvencia-cierres",
+  "corte": "2026-09-30",
+  "creditos": [
+    { "id": 1, "deudor": 911, "segmento": "CONSUMO", "diasDeMora": 150,
+      "insolvencia": { "estado": "Negotiating", "inicio": "2026-06-20",
+        "cierres": [ { "fecha": "2026-04-30", "categoria": "B" }, { "fecha": "2026-05-31", "categoria": "C" }, { "fecha": "2026-06-30", "categoria": "D" } ] } },
+    { "id": 2, "deudor": 912, "segmento": "CONSUMO", "diasDeMora": 100,
+      "insolvencia": { "estado": "Failed", "inicio": "2026-05-10", "fracasoEl": "2026-09-15", "cierres": [ { "fecha": "2026-04-30", "categoria": "A" } ] } },
+    { "id": 3, "deudor": 913, "segmento": "CONSUMO", "diasDeMora": 200,
+      "insolvencia": { "estado": "Failed", "inicio": "2026-04-05", "fracasoEl": "2026-10-15", "cierres": [ { "fecha": "2026-03-31", "categoria": "B" } ] } },
+    { "id": 4, "deudor": 914, "segmento": "CONSUMO", "diasDeMora": 45,
+      "insolvencia": { "estado": "Negotiating", "inicio": "2026-10-01", "cierres": [ { "fecha": "2026-09-30", "categoria": "B" } ] } },
+    { "id": 5, "deudor": 915, "segmento": "CONSUMO", "diasDeMora": 100,
+      "insolvencia": { "estado": "Negotiating", "inicio": "2026-02-01", "sinCierreAnterior": "A", "cierres": [ { "fecha": "2026-02-28", "categoria": "D" } ] } },
+    { "id": 6, "deudor": 916, "segmento": "CONSUMO", "diasDeMora": 10,
+      "insolvencia": { "estado": "Agreement", "inicio": "2026-03-01", "cierres": [ { "fecha": "2026-02-28", "categoria": "C" } ] } }
+  ],
+  "esperado": {
+    "creditos": [
+      { "id": 1, "categoriaPorMora": "D", "categoria": "C", "causa": "Insolvency", "candidatas": [ "Insolvency:C" ] },
+      { "id": 2, "categoriaPorMora": "D", "categoria": "E", "subcategoria": "E1", "causa": "Insolvency", "candidatas": [ "Arrears:D", "Insolvency:E" ] },
+      { "id": 3, "categoriaPorMora": "E", "categoria": "B", "causa": "Insolvency", "candidatas": [ "Insolvency:B" ] },
+      { "id": 4, "categoria": "B", "causa": "Arrears", "candidatas": [ "Arrears:B" ] },
+      { "id": 5, "categoriaPorMora": "D", "categoria": "A", "causa": "Insolvency", "candidatas": [ "Insolvency:A" ] },
+      { "id": 6, "categoria": "A", "causa": "Arrears", "candidatas": [ "Arrears:A" ] }
+    ]
+  }
+}

@@ -34,6 +34,14 @@ public static class ReferenciasDeGobierno
             .ToDictionaryAsync(u => u.Id, u => new UsuarioRefDto(u.PublicId, u.Email ?? u.Username), ct);
     }
 
+    /// <summary>Los usuarios de los <paramref name="ids"/> que no son nulos (una gestión o una asignación de sistema no tiene usuario).</summary>
+    public static Task<IReadOnlyDictionary<int, UsuarioRefDto>> UsuariosAsync(IApplicationDbContext db, IEnumerable<int?> ids, CancellationToken ct) =>
+        UsuariosAsync(db, ids.Where(i => i is not null).Select(i => i!.Value), ct);
+
+    /// <summary>El usuario de <paramref name="id"/>, o nulo si no hay (lo hizo el sistema) o no se encontró.</summary>
+    public static UsuarioRefDto? Usuario(IReadOnlyDictionary<int, UsuarioRefDto> usuarios, int? id) =>
+        id is { } i && usuarios.TryGetValue(i, out var u) ? u : null;
+
     /// <summary>El nombre completo de una persona natural o la razón social de una jurídica.</summary>
     public static string Nombre(Person p) =>
         string.IsNullOrWhiteSpace(p.BusinessName) || !string.IsNullOrWhiteSpace(p.FirstName) ? NombreDePersona.Completo(p) : p.BusinessName!;

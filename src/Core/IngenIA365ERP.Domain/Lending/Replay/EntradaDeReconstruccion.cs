@@ -49,7 +49,23 @@ public sealed record CondicionesDeCredito(
 
     public DateOnly? InsolvenciaDesde { get; init; }
 
+    /// <summary>
+    /// K3 (T0886): el último día de la negociación de insolvencia que terminó —el fracaso (<c>FailedOn</c>) o el acuerdo—; nulo mientras sigue en
+    /// negociación. Desde el día siguiente la causación vuelve a la regla de siempre (T30).
+    /// </summary>
+    public DateOnly? InsolvenciaHasta { get; init; }
+
+    /// <summary>
+    /// La fecha del castigo (<c>LND_Loans.WrittenOffOn</c>). Un pago con fecha valor desde ese día es recuperación; la causación se suspende desde
+    /// el día siguiente (K3, T0908: como todo hecho con fecha valor v, rige desde v + 1; el día del castigo ya se causó normal).
+    /// </summary>
     public DateOnly? CastigoDesde { get; init; }
+
+    /// <summary>
+    /// K3 (FR-097, T102): el día del fallecimiento del deudor cuando la causación <b>no</b> sigue tras él (<c>Causacion.ContinuaTrasFallecimiento =
+    /// false</c> para la línea, leído a esa fecha); desde ese día se causa en suspenso. Nulo si no falleció o si la causación sigue (el defecto).
+    /// </summary>
+    public DateOnly? FallecimientoDesde { get; init; }
 
     /// <summary>Si la modalidad exige usura certificada para causar (sin ella la causación real se bloquea, D11).</summary>
     public bool UsuraRequerida { get; init; } = true;
@@ -101,6 +117,27 @@ public sealed record EntradaDeOperacion(string Id, LoanOperationKind Clase, Date
 }
 
 /// <summary>
+/// Lo que la pagaduría descontó de una cuota y todavía no giró (feature 013, K2, T0826; T30, FR-114; data-model §24.8): un resultado
+/// <c>Deducted</c> o <c>PartiallyDeducted</c> de <c>LND_PayrollDeductionResults</c>, no reemplazado ni girado, con la fecha del descuento, el
+/// vencimiento de la ventana de giro y el umbral de mora de la pagaduría <b>sellados</b> al recibirlo, y cuándo se supo (R = su registro). Lo
+/// carga <c>CargadorDeReconstruccion</c> (T0839). Mientras la mora de la pagaduría no supere el umbral, la cuota no cuenta para la altura de
+/// mora por lo descontado ni causa mora sobre ello; superado, cuenta desde su vencimiento. Umbral nulo: nunca se imputa (C71). (nuevo)
+/// </summary>
+public sealed record CuotaPendienteDeGiro(int Cuota, DateOnly FechaDelDescuento, DateOnly VencimientoDelGiro, decimal Monto, DateTime ConocidaEn)
+{
+    public int? UmbralDias { get; init; }
+
+    /// <summary>
+    /// La fecha valor del pago que lo giró: desde ese día ya no cubre la cuota. Nula mientras siga pendiente. Girado, lo descontado sigue en la
+    /// entrada para los días anteriores: si saliera, la reconstrucción causaría mora que el libro no causó.
+    /// </summary>
+    public DateOnly? GiradoDesde { get; init; }
+
+    /// <summary>El <see cref="EntradaDeOperacion.Id"/> del pago que lo giró: si la entrada trae su reverso, vuelve a estar pendiente.</summary>
+    public string? GiradoPor { get; init; }
+}
+
+/// <summary>
 /// Todo lo que la reconstrucción de un crédito necesita (T24): las condiciones selladas, el plan pactado del primer tramo (para un
 /// migrado, el plan sale de su <c>OpeningBalance</c>), las operaciones, R y las series regulatorias de la modalidad (usura, festivos
 /// nacionales, umbral de suspensión, tolerancia de saldo vencido).
@@ -118,4 +155,23 @@ public sealed record EntradaDeReconstruccion(
     public IReadOnlyList<ValorConVigencia<int>> UmbralesDeSuspension { get; init; } = [];
 
     public IReadOnlyList<ValorConVigencia<decimal>> Tolerancias { get; init; } = [];
+
+    /// <summary>
+    /// K2 (T0826): lo descontado por la pagaduría y pendiente de giro, por cuota. Sin pendientes la reconstrucción es la de K1 (no cambia la
+    /// versión de reglas).
+    /// </summary>
+    public IReadOnlyList<CuotaPendienteDeGiro> PendientesDeGiro { get; init; } = [];
+
+    /// <summary>
+    /// K6b (T1053; FR-024, D18): el tope de tasa de vivienda (<c>TOPE_TASA_VIVIENDA</c>), bitemporal como la usura. Sólo lo mira un crédito con las
+    /// reglas de vivienda: el tope del día es el menor entre él y la usura que llegue en <see cref="Usura"/>.
+    /// </summary>
+    public IReadOnlyList<ValorDeUsura> TopeDeVivienda { get; init; } = [];
+
+    /// <summary>
+    /// K6b (T1054; FR-024, D18): la serie diaria de la <c>UVR</c> de un crédito <b>en UVR</b>; nula en un crédito en pesos. Con ella, la
+    /// reconstrucción lleva plan y saldos en UVR y devuelve el estado valorado en pesos con la UVR del día (<c>Housing.ReconstruccionEnUvr</c>).
+    /// Los montos de la entrada (desembolsos, pagos, saldos iniciales, tolerancias) siguen en pesos: la reconstrucción los convierte a su fecha.
+    /// </summary>
+    public Housing.SerieUvr? Uvr { get; init; }
 }

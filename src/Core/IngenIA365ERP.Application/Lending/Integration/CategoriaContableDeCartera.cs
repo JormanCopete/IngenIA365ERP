@@ -47,7 +47,7 @@ public sealed class CategoriaContableDeCartera(IApplicationDbContext? db = null)
 
         var ids = resultado.Keys.ToList();
         var origenes = await db.Loans.AsNoTracking().IgnoreQueryFilters()
-            .Where(l => ids.Contains(l.Id) && l.OriginLoanId != null && l.OriginLinkKind == LoanLinkKind.Novation)
+            .Where(l => ids.Contains(l.Id) && l.OriginLoanId != null && (l.OriginLinkKind == LoanLinkKind.Novation || l.OriginLinkKind == LoanLinkKind.Refinancing))
             .Select(l => new { l.Id, Origen = l.OriginLoanId!.Value })
             .ToDictionaryAsync(x => x.Id, x => x.Origen, ct);
         var buscados = ids.Concat(origenes.Values).Distinct().ToList();

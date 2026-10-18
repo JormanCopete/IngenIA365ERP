@@ -53,6 +53,7 @@ public static class ErroresDeCorridas
         LendingProcessKind.MonthlyClose => "cierre mensual",
         LendingProcessKind.CloseReopen => "reapertura de cierre",
         LendingProcessKind.NationalValueCorrection => "corrección por valor nacional",
+        LendingProcessKind.MigratedCollectionStages => "registro de la etapa de cobranza migrada",
         _ => "proceso",
     };
 }
@@ -65,16 +66,23 @@ public sealed record ProcessRunRequestedDto(Guid ProcessRunPublicId, string Stat
 /// <c>DailyCycle</c> de <see cref="Date"/> (hoy si no viene) con la persona como quien la ordenó (T8): el procesador la corre y sus mensajes van a
 /// nombre de ella. Otra corrida de la misma clase y fecha <c>Requested</c> o <c>Running</c> → <c>Lending.Process.AlreadyRunning</c>; una ya terminada
 /// → <c>Lending.ProcessRun.AlreadyCompleted</c> (el único del ciclo por día no admite otra: se reintenta); el cierre, su reapertura y la corrección
-/// por valor nacional no se ordenan aquí (<c>Lending.ProcessRun.KindNotOrderable</c>). (nuevo)
+/// por valor nacional no se ordenan aquí (<c>Lending.ProcessRun.KindNotOrderable</c>). K4 (T0944; C64): también el registro de la etapa de cobranza
+/// migrada (<c>MigratedCollectionStages</c>), con motivo; repetirlo no registra dos veces la etapa de un crédito. (nuevo)
 /// </summary>
-public sealed record RequestLendingProcessRunCommand(LendingProcessKind Kind, DateOnly? Date = null) : IRequest<Result<ProcessRunRequestedDto>>, IOperacionIdempotente
+public sealed record RequestLendingProcessRunCommand(LendingProcessKind Kind, DateOnly? Date = null, string? Reason = null)
+    : IRequest<Result<ProcessRunRequestedDto>>, IOperacionIdempotente
 {
     public Guid OperationKey { get; init; }
 }
 
 public sealed class RequestLendingProcessRunCommandValidator : AbstractValidator<RequestLendingProcessRunCommand>
 {
-    public RequestLendingProcessRunCommandValidator() => RuleFor(x => x.Kind).IsInEnum();
+    public RequestLendingProcessRunCommandValidator()
+    {
+        RuleFor(x => x.Kind).IsInEnum();
+        RuleFor(x => x.Reason).NotEmpty().MaximumLength(500).When(x => x.Kind == LendingProcessKind.MigratedCollectionStages)
+            .WithMessage("Indique el motivo del registro de la etapa migrada.");
+    }
 }
 
 public sealed class RequestLendingProcessRunCommandHandler(IApplicationDbContext db, IActorActual actorActual, IDateTimeService reloj)
@@ -82,6 +90,7 @@ public sealed class RequestLendingProcessRunCommandHandler(IApplicationDbContext
 {
     public async Task<Result<ProcessRunRequestedDto>> Handle(RequestLendingProcessRunCommand request, CancellationToken ct)
     {
+        if (request.Kind == LendingProcessKind.MigratedCollectionStages) return await EtapasMigradasAsync(request, ct);
         if (request.Kind != LendingProcessKind.DailyCycle) return Result.Failure<ProcessRunRequestedDto>(ErroresDeCorridas.ClaseNoOrdenable(request.Kind));
         var fecha = request.Date ?? reloj.HoyLocal;
         if (fecha > reloj.HoyLocal) return Result.Failure<ProcessRunRequestedDto>(ErroresDeCorridas.FechaFutura(fecha, reloj.HoyLocal));
@@ -105,6 +114,35 @@ public sealed class RequestLendingProcessRunCommandHandler(IApplicationDbContext
             RequestedByName = Recortar(actor.Name, 150),
             RequestedByIp = Recortar(actor.Ip, 45),
             ExecutionOrigin = actor.UserPublicId is { } usuario ? $"Orden:{usuario:D}" : Accrual.CicloDiarioDeCartera.OrigenDelDia(fecha),
+            RequestedAt = reloj.UtcNow,
+        };
+        db.LendingProcessRuns.Add(corrida);
+        await db.SaveChangesAsync(ct);
+        return Result.Success(new ProcessRunRequestedDto(corrida.PublicId, corrida.Status.ToString()));
+    }
+
+    /// <summary>K4 (T0944): la corrida del registro de la etapa migrada, hoy y con el motivo; una en curso responde <c>Lending.Process.AlreadyRunning</c>.</summary>
+    private async Task<Result<ProcessRunRequestedDto>> EtapasMigradasAsync(RequestLendingProcessRunCommand request, CancellationToken ct)
+    {
+        var enCurso = await db.LendingProcessRuns.AsNoTracking()
+            .Where(r => r.Kind == LendingProcessKind.MigratedCollectionStages && !r.IsDeleted
+                        && (r.Status == LendingProcessRunStatus.Requested || r.Status == LendingProcessRunStatus.Running))
+            .Select(r => (Guid?)r.PublicId).FirstOrDefaultAsync(ct);
+        if (enCurso is { } corriendo) return Result.Failure<ProcessRunRequestedDto>(ErroresDeCorridas.EnCurso(request.Kind, corriendo));
+        var actor = await actorActual.ObtenerAsync(ct);
+        var corrida = new LendingProcessRun
+        {
+            Kind = request.Kind,
+            ProcessDate = reloj.HoyLocal,
+            Status = LendingProcessRunStatus.Requested,
+            RequestedByKind = actor.Kind == ActorKind.Person ? ActorKind.Person : ActorKind.Process,
+            RequestedByUserId = actor.UserId,
+            RequestedByCentralUserId = actor.CentralUserId,
+            RequestedByName = Recortar(actor.Name, 150),
+            RequestedByIp = Recortar(actor.Ip, 45),
+            ExecutionOrigin = actor.UserPublicId is { } usuario ? $"Orden:{usuario:D}"
+                : IngenIA365ERP.Application.Common.Execution.Actor.OrigenDeTarea(Collections.Stages.TareaDeEtapasMigradas.NombreDeLaTarea),
+            Reason = Recortar(request.Reason?.Trim(), 500),
             RequestedAt = reloj.UtcNow,
         };
         db.LendingProcessRuns.Add(corrida);

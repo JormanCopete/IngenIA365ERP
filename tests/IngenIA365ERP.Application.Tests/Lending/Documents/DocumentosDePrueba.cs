@@ -140,13 +140,16 @@ internal sealed class DocumentosDePrueba : IDisposable
     public ConstructorDeDocumentosDeCartera Constructor() =>
         new(Db, P.C.Cargador(), G.Alcance, G.Auditoria, D.Parametros(), P.Firmeza(), G.Reloj);
 
+    /// <summary>La entrega de Cartera con que emite el manejador (nula: la vigente, K5 desde T0969).</summary>
+    public Domain.Lending.EntregaDeCartera? EntregaDeCartera { get; set; }
+
     public IssueLendingDocumentCommandHandler Emisor()
     {
         var ambiente = Substitute.For<IAmbienteDeDespliegue>();
         ambiente.EsProduccion.Returns(_ => EnProduccion);
         return new(Db, Constructor(), Entrega(), Codigos, D.Numerador(), D.O.Cerrojo, Renderizador, Sender, Almacen,
             Options.Create(new LimitesDeAdjuntos()), G.Alcance, G.Auditoria, G.Actor, G.Reloj,
-            Options.Create(new IdentityEmailOptions { BaseUrl = "https://erp.coop.test/" }), ambiente);
+            Options.Create(new IdentityEmailOptions { BaseUrl = "https://erp.coop.test/" }), ambiente, entregaVigente: EntregaDeCartera);
     }
 
     public ListIssuedLendingDocumentsQueryHandler Listar() => new(Db, G.Alcance, G.Reloj);
@@ -162,6 +165,15 @@ internal sealed class DocumentosDePrueba : IDisposable
     public static IssueLendingDocumentCommand Pedido(IssuedDocumentKind clase, Guid persona, Guid? credito = null, DateOnly? corte = null,
         DocumentDeliveryMode entrega = DocumentDeliveryMode.Download) =>
         new(clase, persona, credito, corte, null, null, entrega) { OperationKey = Guid.NewGuid() };
+
+    /// <summary>K5: el pedido de un extracto del período o de un certificado tributario del año.</summary>
+    public static IssueLendingDocumentCommand Extracto(Guid persona, Guid credito, DateOnly? desde, DateOnly? hasta,
+        DocumentDeliveryMode entrega = DocumentDeliveryMode.Download) =>
+        new(IssuedDocumentKind.Statement, persona, credito, null, desde is null || hasta is null ? null : new PeriodoDeDocumento(desde.Value, hasta.Value),
+            null, entrega) { OperationKey = Guid.NewGuid() };
+
+    public static IssueLendingDocumentCommand CertificadoTributario(Guid persona, short? año, DocumentDeliveryMode entrega = DocumentDeliveryMode.Download) =>
+        new(IssuedDocumentKind.TaxCertificate, persona, null, null, null, año, entrega) { OperationKey = Guid.NewGuid() };
 
     public async Task<Result<IssuedLendingDocumentDto>> EmitirAsync(IssueLendingDocumentCommand pedido)
     {

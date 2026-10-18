@@ -126,6 +126,37 @@ public sealed class NominaRecaudaPorElContratoTests(CentralIdentityApiFixture fx
     }
 
     [Fact]
+    public async Task La_ordinaria_aprobada_antes_del_fin_del_periodo_recauda_con_la_fecha_valor_del_fin_del_periodo()
+    {
+        // A9 (respuesta del dueño, 2026-10-14): la fecha valor de Nómina la fija la spec (el fin del período en la ordinaria) y se aplica aunque sea
+        // futura. Hasta ese día el contrato la rechazaba (Lending.Payment.ValueDateOutOfRange) y la ordinaria se aprobaba sin recaudar.
+        var esc = await EscenarioAsync(fx);
+        using var http = fx.CreateClient();
+        var plan = await PlanAsync(http, esc, "ANT");
+        await CuentasDelConceptoAsync(http, esc.Admin, ConceptoDeCartera);
+        var (_, _, credito) = await EmpleadoConCreditoAsync(http, esc, plan, "Anticipada");
+        var cuota = await CuotaAsync(http, esc.Usuarios.Jefe.Token, credito);
+        var desde = new DateOnly(cuota.Vence.Year, cuota.Vence.Month, 1);
+        var hasta = desde.AddMonths(1).AddDays(-1);
+        var periodo = await PeriodoAsync(http, esc, plan, desde, hasta);
+
+        using (RelojEn(fx, hasta.AddDays(-3)))
+        {
+            var corrida = await CalcularAsync(http, esc, periodo);
+            var aprobada = await AprobarAsync(http, esc, corrida);
+            aprobada.StatusCode.Should().Be(HttpStatusCode.OK, await aprobada.Content.ReadAsStringAsync());
+            (await aprobada.Content.ReadAsStringAsync()).Should().NotContain("Payroll.LoanDeductionNotApplied", "Cartera tomó la cuota");
+
+            Estado((await DescuentosAsync(http, esc, corrida)).Single(d => d.GetProperty("obligationPublicId").GetGuid() == credito)).Should().Be("Applied");
+            var pago = (await OperacionesAsync(fx, esc.Desembolso, credito)).Single(o => o.Clave == $"NOM:{corrida:N}:{credito:N}");
+            pago.Clase.Should().Be(LoanOperationKind.Payment);
+            var fechaValor = await DesembolsoE2E.EnLaBaseAsync(fx, esc.Desembolso,
+                db => db.LoanOperations.AsNoTracking().Where(o => o.PublicId == pago.PublicId).Select(o => o.ValueDate).SingleAsync());
+            fechaValor.Should().Be(hasta, "la fecha valor de la ordinaria es el fin del período, tres días adelante de hoy");
+        }
+    }
+
+    [Fact]
     public async Task La_definitiva_con_un_credito_nuevo_entre_la_propuesta_y_la_aprobacion_se_rechaza_y_recalculada_recauda()
     {
         var esc = await EscenarioAsync(fx);

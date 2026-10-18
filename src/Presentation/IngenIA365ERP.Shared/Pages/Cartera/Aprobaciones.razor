@@ -3,6 +3,7 @@
 @using IngenIA365ERP.Shared.Services.Cartera
 @using IngenIA365ERP.Shared.Services.Http
 @inject OriginacionClient Originacion
+@inject NovedadesClient Novedades
 @inject INotificationService Notification
 @inject NavigationManager Navegacion
 
@@ -10,7 +11,8 @@
 
 @* Feature 013, US2 (T0412; T65, FR-038; contracts/api.md §4.3): lo que la persona puede decidir ahora (tiene el permiso del nivel, el alcance y
    no está excluida) y lo que está en agenda de sus órganos. Decidir es un paso con la huella del enrutamiento que se vio; si el contenido
-   cambió, la solicitud se reenruta y se avisa. Lo colegiado se lleva a sesión en Actas. El motivo de exclusión se muestra tal cual. *@
+   cambió, la solicitud se reenruta y se avisa. Lo colegiado se lleva a sesión en Actas. El motivo de exclusión se muestra tal cual.
+   K3 (T0892): también las novedades y las condonaciones radicadas, que se deciden por sus propias rutas con la huella de su enrutamiento. *@
 <PermissionGate Required="Lending.Applications.Read" MostrarAviso="true">
 <div class="pagina">
     <div class="page-header">
@@ -20,6 +22,8 @@
                 <option value="">Todos los asuntos</option>
                 <option value="CreditApplication">Solicitudes</option>
                 <option value="CreditLimit">Cupos</option>
+                <option value="Novelty">Novedades</option>
+                <option value="Condonation">Condonaciones</option>
             </select>
             <SfButton CssClass="e-primary" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
         </div>
@@ -59,6 +63,10 @@
                                 @if (pendiente.Subject == "CreditApplication")
                                 {
                                     <SfButton CssClass="e-flat e-small" OnClick="@(() => Navegacion.NavigateTo($"/cartera/solicitudes/{pendiente.SubjectPublicId}"))">Ver</SfButton>
+                                }
+                                else if (pendiente.Subject == "Novelty")
+                                {
+                                    <SfButton CssClass="e-flat e-small" OnClick="@(() => Navegacion.NavigateTo($"/cartera/novedades?id={pendiente.SubjectPublicId}"))">Ver</SfButton>
                                 }
                             </td>
                         </tr>
@@ -118,6 +126,10 @@
             var r = await Originacion.EnrutamientoAsync(pendiente.SubjectPublicId);
             _huella = r.Value?.ContentSha256;
         }
+        else if (pendiente.Subject == "Novelty")
+            _huella = (await Novedades.NovedadAsync(pendiente.SubjectPublicId)).Value?.Routing?.ContentSha256;
+        else if (pendiente.Subject == "Condonation")
+            _huella = (await Novedades.CondonacionAsync(pendiente.SubjectPublicId)).Value?.Routing?.ContentSha256;
         _mostrarDecision = true;
     }
 
@@ -127,9 +139,13 @@
         using var carga = _guardado.Iniciar();
         _error = null;
         var pedido = _pedido.ComoRequest(_huella);
-        var r = p.Subject == "CreditLimit"
-            ? await Originacion.DecidirCupoAsync(p.SubjectPublicId, pedido, _clave)
-            : await Originacion.DecidirSolicitudAsync(p.SubjectPublicId, pedido, _clave);
+        var r = p.Subject switch
+        {
+            "CreditLimit" => await Originacion.DecidirCupoAsync(p.SubjectPublicId, pedido, _clave),
+            "Novelty" => await Novedades.DecidirNovedadAsync(p.SubjectPublicId, pedido, _clave),
+            "Condonation" => await Novedades.DecidirCondonacionAsync(p.SubjectPublicId, pedido, _clave),
+            _ => await Originacion.DecidirSolicitudAsync(p.SubjectPublicId, pedido, _clave),
+        };
         if (!r.IsSuccess)
         {
             _error = r.ErrorCode == "Lending.Decision.ContentChanged"

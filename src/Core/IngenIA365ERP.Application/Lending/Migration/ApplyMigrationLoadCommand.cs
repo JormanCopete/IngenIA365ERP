@@ -77,8 +77,9 @@ public sealed class ApplyMigrationLoadCommandValidator : ValidadorConMotivo<Appl
 /// <item>Las validaciones entre partes de §5.4 (<see cref="ValidacionEntrePartes"/>): referencias, cada crédito con cuotas, saldos y riesgo, los
 /// cuadres de <see cref="CuadresDeMigracion"/>, ventas y créditos uno a uno, número en <c>loans</c> y <c>charged-off</c> a la vez, cupos que se
 /// cruzan, personas dadas de baja; con un error, 422 <c>Lending.Migration.CrossPartErrors</c> (<c>data.errors[] { part, batch, row, column,
-/// message }</c>) y la carga sigue <c>Draft</c>. El historial de mora de los segmentos cubiertos de una cooperativa obligada (por el selector de
-/// modelo de deterioro y <c>ReglaDePerdidaEsperada</c>) completo, o <c>Lending.Migration.ArrearsHistoryRequired</c>.</item>
+/// message }</c>) y la carga sigue <c>Draft</c>. El historial de mora incompleto de los segmentos cubiertos de una cooperativa obligada (por el
+/// selector de modelo de deterioro y <c>ReglaDePerdidaEsperada</c>) no niega: queda como aviso <c>Lending.Migration.ArrearsHistoryRequired</c> por
+/// crédito, la carga complementaria lo completa y la activación lo exige (US8-10, FR-140).</item>
 /// <item>Con todo: la <c>Applied</c> anterior pasa a <c>Replaced</c> (<c>ReplacedByLoadId</c>), la carga queda <c>Applied</c> con quién y cuándo,
 /// <c>ActivationDeadline</c> = corte + <c>Pagos.DiasMaximosFechaValor</c>, conteos, totales y <c>ValidationSummaryJson</c> con los avisos y
 /// <c>manualPrevails</c>; el cuadre (<see cref="CuadreDeMigracion"/>) y la conciliación de ventas (<see cref="ConciliacionDeVentasDeMigracion"/>)
@@ -134,11 +135,12 @@ public sealed class ApplyMigrationLoadCommandHandler(
                 if (validacion.Errores.Count > 0)
                     return Result.Failure<AppliedMigrationLoadDto>(ErroresDeMigracion.ErroresEntrePartes(validacion.Errores));
 
-                var historial = await HistorialFaltanteAsync(carga, validacion, ct);
-                if (historial.Count > 0)
-                    return Result.Failure<AppliedMigrationLoadDto>(new ErrorConDatos(ErroresDeMigracion.CodigoHistorialRequerido,
-                        ErroresDeMigracion.HistorialRequerido(historial.Count),
-                        new { loans = historial.Select(h => new { loanNumber = h.Numero, months = h.Meses }).ToList() }));
+                // El historial faltante de una obligada no impide aplicar: la carga complementaria se admite desde que hay una carga aplicada
+                // (FR-140) y es la activación la que se niega y lo lista (US8-10, ArrearsHistoryComplete). Al aplicar queda como aviso por crédito.
+                foreach (var (numero, meses) in await HistorialFaltanteAsync(carga, validacion, ct))
+                    validacion.Avisos.Add(new ErrorEntrePartes(P.ArrearsHistory, null, 0, "mes", ErroresDeMigracion.CodigoHistorialRequerido,
+                        string.Create(CultureInfo.InvariantCulture,
+                            $"El crédito {numero} no tiene el historial de mora de {string.Join(", ", meses)}: complételo con la carga complementaria antes de activar.")));
             }
 
             var hoy = reloj.HoyLocal;

@@ -26,6 +26,8 @@ public class ParametrosDeCarteraTests
         { "Mora.SobreIntereses", "false", [N], EntregaDeCartera.K1 },
         { "Causacion.ContinuaTrasFallecimiento", "true", [N, L], EntregaDeCartera.K1 },
         { "Riesgo.ReglaMesesFaltantes", "MayorObservada", [N], EntregaDeCartera.K1 },
+        // K6a (T1027): los días fijos de la regla «Fija», sin valor.
+        { "Riesgo.MesesFaltantesDiasFijos", "", [N], EntregaDeCartera.K6a },
         { "Riesgo.DiaLimiteCierre", "10", [N], EntregaDeCartera.K1 },
         { "Riesgo.CierreProgramado", "false", [N], EntregaDeCartera.K1 },
         { "Riesgo.RedondeoDeterioro", "Centavo", [N], EntregaDeCartera.K1 },
@@ -38,7 +40,7 @@ public class ParametrosDeCarteraTests
         { "Contabilidad.DisparadorDeLote", "FinDeCausacion", [N, F], EntregaDeCartera.K1 },
         { "Contabilidad.HoraDeLote", "", [N, F], EntregaDeCartera.K1 },
         { "Contabilidad.PoliticaSinRespuesta", "ConfirmarConPendiente", [N], EntregaDeCartera.K1 },
-        { "Contabilidad.FaltaDeRegla", "Advertir", [N, F], EntregaDeCartera.K1 },
+        { "Contabilidad.FaltaDeRegla", "Bloquear", [N, F], EntregaDeCartera.K1 },
         { "Contabilidad.ValidacionPreviaSegundos", "3", [N], EntregaDeCartera.K1 },
         { "Contabilidad.DisminucionDeDeterioro", "MismoEjercicioPrimero", [N], EntregaDeCartera.K1 },
         { "Contabilidad.IndicadoresVigenciaMeses", "6", [N], EntregaDeCartera.K1 },
@@ -52,6 +54,13 @@ public class ParametrosDeCarteraTests
         { "Libranza.CapacidadDeDescuento", "", [N], EntregaDeCartera.K2 },
         { "Libranza.VentanaDeGiroDias", "3", [N], EntregaDeCartera.K2 },
         { "Libranza.UmbralDeMoraDePagaduria", "", [N], EntregaDeCartera.K2 },
+        { "Castigo.ExigeDeterioroTotal", "true", [N], EntregaDeCartera.K3 },
+        { "Castigo.DiasMinimosDeMora", "", [N], EntregaDeCartera.K3 },
+        { "Castigo.GestionesMinimas", "0", [N], EntregaDeCartera.K3 },
+        { "Cobranza.ToleranciaDePromesa", "0", [N], EntregaDeCartera.K4 },
+        // K4, bloque D (decisión del dueño del 2026-10-16): el tope del gasto de cobranza, sin valor sembrado (vacío = sin tope).
+        { "Cobranza.TopeGasto.Porcentaje", "", [N], EntregaDeCartera.K4 },
+        { "Cobranza.TopeGasto.ValorMaximo", "", [N], EntregaDeCartera.K4 },
         { "Cobranza.HorarioLunesAViernes", "07:00-19:00", [N], EntregaDeCartera.K1 },
         { "Cobranza.HorarioSabado", "08:00-15:00", [N], EntregaDeCartera.K1 },
         { "Cobranza.ContactosPorDia", "1", [N], EntregaDeCartera.K1 },
@@ -66,6 +75,12 @@ public class ParametrosDeCarteraTests
         { "Documentos.PazYSalvoIncluyeCodeudas", "false", [N], EntregaDeCartera.K1 },
         { "Informes.RangosDeEdad", "30,60,90,180,360", [N], EntregaDeCartera.K1 },
         { "Informes.PuntosAlertaUsura", "2.0", [N], EntregaDeCartera.K1 },
+        { "Informes.DiasCarteraVencida", "30", [N], EntregaDeCartera.K5 },
+        { "Documentos.CertificadoTributario.SaldoIncluye", "Capital,InteresCorriente,InteresDeMora,OtrosCargos,MenosAnticipo", [N], EntregaDeCartera.K5 },
+        { "Centrales.CodigosDeSuscriptor", "", [N], EntregaDeCartera.K5 },
+        // Decisión del dueño del 2026-10-16: los rangos de mora de las centrales y el aviso previo a los codeudores.
+        { "Centrales.RangosDeMora", "*=30,60,90,120,150,180|1", [N], EntregaDeCartera.K5 },
+        { "AvisoPrevio.IncluirCodeudores", "false", [N], EntregaDeCartera.K5 },
     };
 
     [Fact]
@@ -90,14 +105,31 @@ public class ParametrosDeCarteraTests
     }
 
     [Fact]
-    public void Con_K1_vigente_no_se_ofrece_ninguna_clave_de_K2_en_adelante()
+    public void Con_K6b_vigente_se_ofrecen_todas_las_claves_hasta_K6b()
     {
-        CatalogoDeCartera.EntregaVigente.Should().Be(EntregaDeCartera.K1);
-        var posteriores = ParametrosDeCartera.Definiciones.Where(d => d.DisponibleDesde > (EntregaDeModulo)EntregaDeCartera.K1).ToList();
+        // T0849: K2 habilita las claves Libranza.*; T0889 sube a K3 y T0910 le suma las Castigo.*; T0955 sube a K4 y T0969 a K5 (fase 19: el
+        // extracto y el certificado tributario no traen claves nuevas); T1024 (fase 22) sube a K6a, con Riesgo.MesesFaltantesDiasFijos (T1027); T1058
+        // (fase 23) sube a K6b, la última entrega, sin claves nuevas (los límites de vivienda son valores nacionales LIMITE, T1051).
+        CatalogoDeCartera.EntregaVigente.Should().Be(EntregaDeCartera.K6b);
+        var posteriores = ParametrosDeCartera.Definiciones.Where(d => d.DisponibleDesde > (EntregaDeModulo)EntregaDeCartera.K6b).ToList();
 
-        posteriores.Select(d => d.Clave).Should().BeEquivalentTo(
-            ["Libranza.CapacidadDeDescuento", "Libranza.VentanaDeGiroDias", "Libranza.UmbralDeMoraDePagaduria",
-             "AvisoPrevio.DiasMinimos", "AvisoPrevio.UmbralDosComunicaciones"]);
+        posteriores.Should().BeEmpty("K6b es la última entrega de Cartera");
+        ParametrosDeCartera.Definiciones.Where(d => d.DisponibleDesde == (EntregaDeModulo)EntregaDeCartera.K6b).Should().BeEmpty("la vivienda no trae claves");
+        ParametrosDeCartera.Definiciones.Where(d => d.DisponibleDesde == (EntregaDeModulo)EntregaDeCartera.K6a).Select(d => d.Clave).Should()
+            .Equal(ParametrosDeCartera.RiesgoMesesFaltantesDiasFijos);
+        ParametrosDeCartera.Definiciones.Single(d => d.Clave == ParametrosDeCartera.RiesgoMesesFaltantesDiasFijos).Should()
+            .Match<IngenIA365ERP.Domain.Common.Parametros.DefinicionDeParametro>(d => d.DisponibleEnLaEntrega() && d.AdmiteVacio && d.PendienteDeValidar != null);
+        // T0980 (fase 20): Informes.DiasCarteraVencida, pendiente de validar por la contadora; 2026-10-16: el saldo del certificado tributario y
+        // (T1003, fase 21) los códigos de suscriptor de las centrales.
+        ParametrosDeCartera.Definiciones.Where(d => d.DisponibleDesde == (EntregaDeModulo)EntregaDeCartera.K5).Select(d => d.Clave).Should()
+            .Equal(ParametrosDeCartera.InformesDiasCarteraVencida, ParametrosDeCartera.DocumentosCertificadoTributarioSaldoIncluye,
+                ParametrosDeCartera.CentralesCodigosDeSuscriptor, ParametrosDeCartera.CentralesRangosDeMora, ParametrosDeCartera.AvisoPrevioIncluirCodeudores);
+        ParametrosDeCartera.Definiciones.Single(d => d.Clave == ParametrosDeCartera.CentralesRangosDeMora).PendienteDeValidar.Should().NotBeNull();
+        ParametrosDeCartera.Definiciones.Single(d => d.Clave == ParametrosDeCartera.InformesDiasCarteraVencida).Should()
+            .Match<IngenIA365ERP.Domain.Common.Parametros.DefinicionDeParametro>(d => d.DisponibleEnLaEntrega() && d.PendienteDeValidar != null);
+        ParametrosDeCartera.Definiciones.Where(d => d.Clave.StartsWith("Libranza.", StringComparison.Ordinal)).Should().OnlyContain(d => d.DisponibleEnLaEntrega());
+        ParametrosDeCartera.Definiciones.Where(d => d.Clave.StartsWith("Castigo.", StringComparison.Ordinal)).Should().HaveCount(3)
+            .And.OnlyContain(d => d.DisponibleEnLaEntrega() && d.DisponibleDesde == (EntregaDeModulo)EntregaDeCartera.K3 && d.PendienteDeValidar != null);
         posteriores.Should().OnlyContain(d => !d.DisponibleEnLaEntrega());
         ParametrosDeCartera.Definiciones.Except(posteriores).Should().OnlyContain(d => d.DisponibleEnLaEntrega());
     }

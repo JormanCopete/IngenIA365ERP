@@ -220,6 +220,9 @@ public static class DependencyInjection
         // Feature 013 (T0085; T76): las nueve plantillas de mensaje de Cartera «pendiente de validar» (Tenant, Order 91). No hace nada
         // hasta que la base tenga PlataformaParaCartera, que agrega las columnas de versión a COR_NotificationTemplates.
         services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.LendingMessageTemplatesSeeder>();
+        // Feature 013, K4 (T0941): las cuatro etapas de cobranza por defecto «pendiente de validar» (Tenant, Order 92). No hace nada hasta que la
+        // base tenga CarteraCobranza ni si la cooperativa ya tiene etapas.
+        services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.CollectionStagesSeeder>();
         // Feature 013 (T0223; C110, C117): los 35 tipos de hecho de Cartera con su código corto (Tenant, Order 90). No hace nada hasta
         // que la base tenga CarteraNucleo, que crea LND_FactTypes.
         services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.LendingFactTypesSeeder>();

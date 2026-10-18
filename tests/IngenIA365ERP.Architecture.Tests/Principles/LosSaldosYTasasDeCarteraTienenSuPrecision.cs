@@ -143,6 +143,26 @@ public class LosSaldosYTasasDeCarteraTienenSuPrecision
         Assert.True(mal.Count == 0, "Columnas de Cartera de US4 con un alias que no es el de su clase (T35):\n  " + string.Join("\n  ", mal));
     }
 
+    /// <summary>
+    /// K2 (T0818; data-model §24): la libranza. Los pesos del vínculo, del archivo de descuentos y de sus resultados son <c>Monto</c>; el tope de
+    /// descuento del convenio es una proporción del ingreso (<c>Fraccion</c>), no una tasa.
+    /// </summary>
+    private static readonly (string Propiedad, string Alias)[] AliasDeLaLibranza =
+    [
+        ("CertifiedNetIncome", "Monto"), ("CertifiedAvailableCapacity", "Monto"), ("DeductionCapFraction", "Fraccion"), ("TotalAmount", "Monto"),
+        ("CurrentAmount", "Monto"), ("PastDueAmount", "Monto"), ("PreviousAmount", "Monto"), ("DeductedAmount", "Monto"), ("NotDeductedAmount", "Monto"),
+    ];
+
+    [Fact]
+    public void La_libranza_usa_el_alias_de_su_clase_de_numero()
+    {
+        var carpeta = Path.Combine(RepoPath.FindRepoRoot(), "src", "Infrastructure", "IngenIA365ERP.Persistence", "Configurations", "Lending", "Payroll");
+        var texto = string.Join("\n", Directory.GetFiles(carpeta, "*.cs").Select(File.ReadAllText));
+        var mal = AliasDeLaLibranza.Where(x => !new Regex($@"\bProperty\(\s*\w+\s*=>\s*\w+\.{x.Propiedad}\s*\)\s*\.{x.Alias}\(").IsMatch(texto))
+            .Select(x => $"{x.Propiedad} debe ser {x.Alias}").ToList();
+        Assert.True(mal.Count == 0, "Columnas de la libranza con un alias que no es el de su clase (T35):\n  " + string.Join("\n  ", mal));
+    }
+
     private static readonly (Regex Patron, string Que)[] Prohibidos = [
         (new Regex(@"\.HasPrecision\(\s*\d", RegexOptions.Compiled), "precisión con números sueltos"),
         (new Regex(@"HasColumnType\(\s*\""(numeric|decimal)\(", RegexOptions.Compiled), "tipo decimal con números sueltos"),

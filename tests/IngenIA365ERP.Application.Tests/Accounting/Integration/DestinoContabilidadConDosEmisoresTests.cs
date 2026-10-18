@@ -45,7 +45,7 @@ public class DestinoContabilidadConDosEmisoresTests
         destino.Acepta(InteresCausadoV1.Type, 2).Should().BeFalse();
         destino.Acepta(VentaACreditoRegistradaV1.Type, 1).Should().BeFalse("va a Cartera, no a Contabilidad");
         VersionesAceptadas.Todas.Should().HaveCount(18, "las de Inventario no cambian");
-        VersionesAceptadas.DeCartera.Should().HaveCount(35);
+        VersionesAceptadas.DeCartera.Should().HaveCount(37, "K6b: + CorreccionMonetariaUvrCausada y PagoRedistribuidoPorValorNacional");
         VersionesAceptadas.Acepta(ModulosDeOrigen.Inventario, InteresCausadoV1.Type, 1).Should().BeFalse("por módulo");
     }
 

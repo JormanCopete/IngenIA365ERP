@@ -132,6 +132,12 @@ public sealed record ListMissingPlatformNationalValuesQuery(int Days = 31) : IRe
 public sealed class ListMissingPlatformNationalValuesQueryHandler(IAdminDbContext db, IDateTimeService reloj)
     : IRequestHandler<ListMissingPlatformNationalValuesQuery, Result<IReadOnlyList<MissingNationalValueDto>>>
 {
+    /// <summary>
+    /// K6b (T1050): cuántos días por adelantado se exige la UVR publicada. El Banco de la República la publica para el período del 16 de un mes al
+    /// 15 del siguiente; una semana deja margen para registrarla. Configuración técnica del aviso, no un valor legal.
+    /// </summary>
+    public const int DiasDeUvrPorAdelantado = 7;
+
     public async Task<Result<IReadOnlyList<MissingNationalValueDto>>> Handle(ListMissingPlatformNationalValuesQuery request, CancellationToken ct)
     {
         var hoy = reloj.HoyLocal;
@@ -159,6 +165,23 @@ public sealed class ListMissingPlatformNationalValuesQueryHandler(IAdminDbContex
             Exigir(CodigosDeValorNacional.Limite, limite.Codigo, $"Acota {limite.Acota}.");
         foreach (var modalidad in await ReglasDelRegistroCentral.ClavesDeUsuraAsync(db, horizonte, ct))
             Exigir(CodigosDeValorNacional.Usura, modalidad, "La usura del período: sin ella no se causa ni se origina en esa modalidad.");
+
+        // K6b (T1050): con la vivienda desplegada se esperan el tope de vivienda y la UVR de cada día. La UVR se publica por adelantado hasta el
+        // 15 del mes siguiente: se exige día por día hasta DiasDeUvrPorAdelantado; el primero que falte es el aviso.
+        if (CodigosDeValorNacional.Buscar(CodigosDeValorNacional.TopeTasaVivienda)!.DisponibleEn())
+            Exigir(CodigosDeValorNacional.TopeTasaVivienda, string.Empty, "El tope de tasa de vivienda: sin él no se origina ni se causa un crédito de vivienda.");
+        if (CodigosDeValorNacional.Buscar(CodigosDeValorNacional.Uvr)!.DisponibleEn())
+        {
+            var dias = porSerie[(CodigosDeValorNacional.Uvr, string.Empty)].Select(v => v.ValidFrom).ToHashSet();
+            var hasta = hoy.AddDays(Math.Min(DiasDeUvrPorAdelantado, Math.Clamp(request.Days, 0, 400)));
+            for (var d = hoy; d <= hasta; d = d.AddDays(1))
+            {
+                if (dias.Contains(d)) continue;
+                faltan.Add(new MissingNationalValueDto(CodigosDeValorNacional.Uvr, string.Empty, d,
+                    "La UVR del día: sin ella no se causa un crédito en UVR (cada día lleva su valor publicado)."));
+                break;
+            }
+        }
 
         var año = (short)horizonte.Year;
         var primero = new DateOnly(año, 1, 1);

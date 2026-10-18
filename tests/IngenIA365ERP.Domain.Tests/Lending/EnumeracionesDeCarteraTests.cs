@@ -21,7 +21,11 @@ public class EnumeracionesDeCarteraTests
         [typeof(LoanTransactionKind)] = [("Disbursement", 1), ("OpeningBalance", 2), ("Accrual", 3), ("AccrualAdjustment", 4),
             ("SuspenseReclassification", 5), ("PaymentAllocation", 6), ("PaymentReallocation", 7), ("AdvanceReceived", 8),
             ("AdvanceApplied", 9), ("CreditBalanceRecognized", 10), ("CreditBalanceSettled", 11), ("Charge", 12), ("Waiver", 13),
-            ("CommercialAdjustment", 14), ("WriteOff", 15), ("Recovery", 16)],
+            ("CommercialAdjustment", 14), ("WriteOff", 15), ("Recovery", 16),
+            // K3 (T0874): la capitalización y el traslado al crédito enlazado de una novación o refinanciación.
+            ("Capitalization", 17), ("TransferToLinkedLoan", 18), ("TransferFromLinkedLoan", 19),
+            // K6b (T1054, T1056): la corrección monetaria de un crédito en UVR.
+            ("MonetaryCorrection", 20)],
         [typeof(LoanOperationKind)] = [("Disbursement", 1), ("OpeningBalance", 2), ("Payment", 3), ("PaymentReversal", 4),
             ("DisbursementReversal", 5), ("RateReset", 6), ("TermsChange", 7), ("Charge", 8), ("Waiver", 9), ("CommercialAdjustment", 10),
             ("WriteOff", 11), ("PreferenceChange", 12), ("CreditBalanceResolution", 13), ("ProvisionalCollection", 14)],
@@ -35,7 +39,8 @@ public class EnumeracionesDeCarteraTests
         [typeof(DisbursementOrderStatus)] = [("Issued", 1), ("Disbursed", 2), ("Rejected", 3), ("CheckNotCashed", 4), ("Voided", 5)],
         [typeof(LoanNumberReservationStatus)] = [("Reserved", 1), ("Used", 2), ("Released", 3), ("Expired", 4)],
         [typeof(LendingNumberKind)] = [("Loan", 1), ("Operation", 2), ("Application", 3), ("DisbursementOrder", 4), ("DisbursementFile", 5),
-            ("SessionMinutes", 6), ("IssuedDocument", 7), ("PayrollDeductionFile", 8), ("RegulatoryFile", 9)],
+            ("SessionMinutes", 6), ("IssuedDocument", 7), ("PayrollDeductionFile", 8), ("RegulatoryFile", 9), ("LoanNovelty", 10), ("Waiver", 11),
+            ("WriteOffBatch", 12), ("PortfolioEvaluation", 13), ("PaymentAgreement", 14), ("LegalProcess", 15)],
 
         // ---------------------------------------------------------------------------------------- condiciones financieras --
         [typeof(DayCountConvention)] = [("Thirty360", 1), ("Actual365", 2), ("Actual360", 3)],
@@ -50,6 +55,8 @@ public class EnumeracionesDeCarteraTests
         [typeof(RoundingMoment)] = [("PerConcept", 1), ("PerInstallment", 2), ("PerTotal", 3)],
         [typeof(RoundingMode)] = [("AwayFromZero", 1), ("ToEven", 2), ("Up", 3), ("Down", 4)],
         [typeof(RateKind)] = [("Fixed", 1), ("Variable", 2)],
+        // K6b (T1048): la unidad del capital de la línea y del crédito.
+        [typeof(DenominationUnit)] = [("Pesos", 1), ("Uvr", 2)],
         [typeof(DefaultRateKind)] = [("Fixed", 1), ("RelativeToCurrent", 2)],
         // El valor ES la base de proporción (precedente de PayrollPeriodicity; CH39).
         [typeof(RepaymentPeriodicity)] = [("SinglePayment", 0), ("Weekly", 7), ("TenDay", 10), ("Biweekly", 15), ("Monthly", 30),
@@ -146,7 +153,8 @@ public class EnumeracionesDeCarteraTests
         [typeof(NonDeductionFollowUpAction)] = [("DebtorNotified", 1), ("IncludedInNextFile", 2), ("MovedToCashPayment", 3), ("SentToCollection", 4), ("Closed", 5)],
         [typeof(PayrollFileStatus)] = [("Generated", 1), ("Superseded", 2), ("Sent", 3), ("Voided", 4)],
         [typeof(PayrollNoveltyKind)] = [("New", 1), ("Change", 2), ("Cancellation", 3), ("Unchanged", 4)],
-        [typeof(NoveltyMechanism)] = [("Extension", 1), ("PaymentDateChange", 2), ("RateChange", 3), ("Novation", 4), ("Refinancing", 5)],
+        [typeof(NoveltyMechanism)] = [("Extension", 1), ("PaymentDateChange", 2), ("RateChange", 3), ("Novation", 4), ("Refinancing", 5),
+            ("BranchChange", 6)],
         [typeof(NoveltyCause)] = [("Restructuring", 1), ("Modification", 2)],
         [typeof(LoanNoveltyStatus)] = [("Draft", 1), ("Submitted", 2), ("Approved", 3), ("Rejected", 4), ("Applied", 5), ("Cancelled", 6)],
         [typeof(NoveltyLoanRole)] = [("Modified", 1), ("Collected", 2), ("Resulting", 3)],
@@ -171,9 +179,9 @@ public class EnumeracionesDeCarteraTests
         [typeof(ContactWindowReason)] = [("RecipientNotObligated", 1), ("DebtorDeceased", 2), ("Insolvency", 3), ("CollectionSuspended", 4),
             ("ChannelNotAuthorized", 5), ("AuthorizationWithoutEvidence", 6), ("NoDestination", 7), ("Sunday", 8), ("Holiday", 9),
             ("OutsideHours", 10), ("DailyLimitReached", 11), ("WeeklyChannelLocked", 12), ("NoWindow", 13), ("ChannelUnavailable", 14)],
-        [typeof(CollectionActionChannel)] = [("Phone", 1), ("InPerson", 2), ("Email", 3), ("Sms", 4), ("WhatsApp", 5), ("Letter", 6), ("Visit", 7)],
+        [typeof(CollectionActionChannel)] = [("Phone", 1), ("InPerson", 2), ("Email", 3), ("Sms", 4), ("WhatsApp", 5), ("Letter", 6), ("Visit", 7), ("System", 8)],
         [typeof(CollectionActionResult)] = [("NoAnswer", 1), ("WrongNumber", 2), ("ContactedNoCommitment", 3), ("PromiseToPay", 4), ("Refused", 5),
-            ("RequestsAgreement", 6), ("ReportsDeceased", 7), ("Other", 8)],
+            ("RequestsAgreement", 6), ("ReportsDeceased", 7), ("Other", 8), ("LeftCollection", 9)],
         [typeof(AssignmentDistribution)] = [("ByCount", 1), ("ByBalance", 2)],
         [typeof(PaymentPromiseStatus)] = [("Pending", 1), ("Kept", 2), ("Broken", 3)],
         [typeof(PaymentAgreementStatus)] = [("Proposed", 1), ("Approved", 2), ("Rejected", 3), ("Cancelled", 4)],
@@ -226,7 +234,7 @@ public class EnumeracionesDeCarteraTests
     {
         Enum.GetValues<EntregaDeCartera>().Select(e => (e.ToString(), (int)e)).Should().Equal(
             ("K1", 1), ("K2", 2), ("K3", 3), ("K4", 4), ("K5", 5), ("K6a", 6), ("K6b", 7));
-        CatalogoDeCartera.EntregaVigente.Should().Be(EntregaDeCartera.K1);
+        CatalogoDeCartera.EntregaVigente.Should().Be(EntregaDeCartera.K6b, "T0969 la subió a K5, T1024 (fase 22) a K6a y T1058 (fase 23) a K6b");
     }
 
     [Fact]
@@ -239,7 +247,7 @@ public class EnumeracionesDeCarteraTests
 
         AccionesDeSegregacion.Todas.Should().Equal(
             "Radicar", "Analizar", "Decidir", "Votar", "Desembolsar", "AnularOrdenDeGiro", "ArmarLoteDeCastigo", "AplicarCastigo",
-            "CargarMigracion", "AceptarDiferencias");
+            "CargarMigracion", "AceptarDiferencias", "Aplicar");
         AccionesDeSegregacion.Todas.Should().OnlyContain(a => a.Length <= 30, "Action es nvarchar(30)");
     }
 }

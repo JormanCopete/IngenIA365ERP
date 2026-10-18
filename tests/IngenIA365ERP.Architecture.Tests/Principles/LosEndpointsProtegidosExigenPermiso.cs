@@ -180,6 +180,33 @@ public class LosEndpointsProtegidosExigenPermiso
         Assert.Contains(Path.Combine("Endpoints", "Lending", "DocumentsEndpoints.cs"), archivos);
     }
 
+    /// <summary>
+    /// Feature 013, K5 (US16, T0994; api.md §18, DT §2.25): las nueve rutas de <c>Endpoints/Lending/RegulatoryEndpoints.cs</c> entran al recorrido por el
+    /// glob de <c>Endpoints/Lending</c> y cada una exige uno de los cuatro permisos del contrato —<c>RegulatoryFiles.Read</c>,
+    /// <c>RegulatoryReports.Generate</c>, <c>CreditBureauFiles.Generate</c>, <c>RegulatoryFiles.MarkUploaded</c>—, nunca un <c>View</c>.
+    /// </summary>
+    [Fact]
+    public void Las_rutas_regulatorias_de_Cartera_exigen_los_permisos_del_contrato()
+    {
+        var relativo = Path.Combine("Endpoints", "Lending", "RegulatoryEndpoints.cs");
+        Assert.Contains(relativo, Archivos().ToHashSet(StringComparer.OrdinalIgnoreCase));
+
+        var fuente = File.ReadAllText(Path.Combine(Api, relativo));
+        var tramos = Tramos(fuente);
+        Assert.Equal(9, tramos.Count);
+        string[] permitidos = ["Leer", "GenerarSicses", "GenerarCentral", "MarcarCargado"];
+        var infracciones = tramos
+            .Where(t => !permitidos.Any(p => t.Contains($".RequirePermission({p})", StringComparison.Ordinal)))
+            .Select(t => t[..Math.Min(90, t.Length)])
+            .ToList();
+        ReglaSobreFuente.SinInfracciones(infracciones, "Una ruta regulatoria de Cartera sin uno de los permisos de api.md §18");
+        Assert.Contains("Leer = \"Lending.RegulatoryFiles.Read\"", fuente, StringComparison.Ordinal);
+        Assert.Contains("GenerarSicses = \"Lending.RegulatoryReports.Generate\"", fuente, StringComparison.Ordinal);
+        Assert.Contains("GenerarCentral = \"Lending.CreditBureauFiles.Generate\"", fuente, StringComparison.Ordinal);
+        Assert.Contains("MarcarCargado = \"Lending.RegulatoryFiles.MarkUploaded\"", fuente, StringComparison.Ordinal);
+        Assert.DoesNotContain(".View\"", fuente, StringComparison.Ordinal);
+    }
+
     [Theory]
     [MemberData(nameof(LosArchivos))]
     public void Cada_ruta_lleva_RequirePermission(string relativo)

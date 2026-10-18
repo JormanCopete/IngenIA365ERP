@@ -152,7 +152,7 @@ public sealed class ImportCreditLinesCommandTests : IDisposable
     }
 
     [Fact]
-    public async Task Una_modalidad_inexistente_y_vivienda_son_errores_de_la_columna_modalidad()
+    public async Task Una_modalidad_inexistente_es_error_de_la_columna_modalidad_y_vivienda_ya_no_es_NotYetAvailable()
     {
         Fila(H.Lineas, Linea("RARA", modalidad: "FANTASIA", subsegmento: null));
         Fila(H.Lineas, Linea("VIV", modalidad: "VIVIENDA", subsegmento: null));
@@ -162,7 +162,8 @@ public sealed class ImportCreditLinesCommandTests : IDisposable
 
         r.Value.Valid.Should().BeFalse();
         r.Value.Errors.Should().Contain(e => e.Row == 2 && e.Column == C.Modalidad && e.Code == "Lending.CreditLine.ModalityUnknown");
-        r.Value.Errors.Should().Contain(e => e.Row == 3 && e.Column == C.Modalidad && e.Code == ImportErrors.CellNotYetAvailable);
+        // K6b (T1055): con la entrega vigente en K6b la vivienda ya no es Import.Cell.NotYetAvailable: pasa a las reglas de la Ley 546.
+        r.Value.Errors.Should().NotContain(e => e.Row == 3 && e.Code == ImportErrors.CellNotYetAvailable);
         r.Value.Errors.Should().Contain(e => e.Row == 4 && e.Column == C.TasaCorriente && e.Code == ImportErrors.CellFormat, "más de 4 decimales en puntos");
     }
 

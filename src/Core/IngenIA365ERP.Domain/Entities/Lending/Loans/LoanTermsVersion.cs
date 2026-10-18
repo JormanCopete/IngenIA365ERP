@@ -8,7 +8,7 @@ namespace IngenIA365ERP.Domain.Entities.Lending.Loans;
 /// del crédito <b>selladas</b> por versión, con su <see cref="RulesVersion"/>. Lo regulatorio (usura, calificación, deterioro,
 /// suspensión) no se sella: se lee a cada fecha valor (D2). Hecho de sólo inserción (<see cref="IHechoInmutable"/>): nace con cada
 /// operación que cambia condiciones; la reconstrucción toma las versiones con <see cref="RegisteredAt"/> ≤ R (T24). Rige desde
-/// <see cref="EffectiveValueDate"/> (no es <c>ValidFrom</c>). La columna <c>NoveltyId</c> nace con K3.
+/// <see cref="EffectiveValueDate"/> (no es <c>ValidFrom</c>). La columna <c>NoveltyId</c> nace con K3 (<c>CarteraNovedades</c>).
 /// </summary>
 public class LoanTermsVersion : AuditableEntity, IHechoInmutable
 {
@@ -32,6 +32,9 @@ public class LoanTermsVersion : AuditableEntity, IHechoInmutable
     public DateTime RegisteredAt { get; init; }
 
     public TermsVersionCause Cause { get; init; }
+
+    /// <summary>K3 (data-model §4.3): la novedad que produjo esta versión; la reconstrucción la reconoce por aquí.</summary>
+    public int? NoveltyId { get; init; }
 
     /// <summary><c>LND-AAAA.n</c> (<c>VersionesDeReglas</c>, T29).</summary>
     public string RulesVersion { get; init; } = string.Empty;
@@ -116,6 +119,12 @@ public class LoanTermsVersion : AuditableEntity, IHechoInmutable
     public RoundingMode RoundingMode { get; init; }
 
     public RoundingMoment RoundingMoment { get; init; }
+
+    /// <summary>
+    /// K6b (T1048, T1055; FR-024, D18): la unidad del capital sellada de la versión de la línea: <c>Pesos</c> o <c>Uvr</c>. En UVR la reconstrucción
+    /// lleva plan y saldos en UVR con la serie diaria y los valora en pesos con la UVR del día.
+    /// </summary>
+    public DenominationUnit DenominationUnit { get; init; } = DenominationUnit.Pesos;
 
     // -------------------------------------------------------------------------------- prelación sellada (§1.8) --
 

@@ -308,6 +308,14 @@ public sealed class ApprovePayrollRunCommandHandler(
                     $"Nómina {period.StartDate:dd/MM/yyyy}–{period.EndDate:dd/MM/yyyy}", f.PublicId)).ToList());
         var resultado = await recaudo.AplicarAsync(lote, ct);
 
+        // Feature 013, T0801 (A8 = «Bloquear todo», 2026-10-14): un descuento que Contabilidad no puede registrar no baja la línea: la aprobación
+        // entera falla y dice qué regla falta (la transacción de Nómina revierte lo que Cartera alcanzó a aplicar, I-4).
+        var noContabilizables = resultado.Pagos.Where(p => p.NoContabilizable).ToList();
+        if (noContabilizables.Count > 0)
+            return Result.Failure<IReadOnlyList<object>>(SettlementErrors.LoanDeductionNotPostable(noContabilizables
+                .Select(p => (filas.First(f => f.ObligationPublicId == p.ObligationPublicId).ObligationNumber,
+                    p.Respuesta.Message, (object?)p.Respuesta.Data)).ToList()));
+
         var motivos = new List<string>();
         foreach (var f in filas)
         {

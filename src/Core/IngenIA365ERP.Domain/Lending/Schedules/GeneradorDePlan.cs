@@ -67,7 +67,7 @@ public static class GeneradorDePlan
             extra[graciaTotal ? x.Cuota - 1 + g : x.Cuota - 1] += r.Concepto(x.Valor);
 
         var explicacion = new ExplicacionDeCartera()
-            .Linea($"Reglas {VersionesDeReglas.Vigente}; convención {e.Convencion}, equivalencia {e.Equivalencia}, redondeo a "
+            .Linea($"Reglas {e.RulesVersion}; convención {e.Convencion}, equivalencia {e.Equivalencia}, redondeo a "
                 + $"{ExplicacionDeCartera.Numero(r.Unidad)} {r.Modo} {r.Momento}.")
             .Linea(TextoDeLaTasaDiaria(e, tasaDiaria))
             .Linea($"Nominal del período (informativa): (1 + {ExplicacionDeCartera.Numero(e.TasaEfectivaAnual)})^(1/"
@@ -199,7 +199,7 @@ public static class GeneradorDePlan
                 "difference", sumaDeCapital - e.Monto));
 
         explicacion.Linea($"La última cuota paga el saldo de capital y absorbe el residuo de redondeo: {ExplicacionDeCartera.Numero(residuo)}.");
-        return new PlanDePagos(VersionesDeReglas.Vigente, e, tasaDiaria, nominal, cuotaNivelada, interesDeGracia, residuo, cuotas, explicacion)
+        return new PlanDePagos(e.RulesVersion, e, tasaDiaria, nominal, cuotaNivelada, interesDeGracia, residuo, cuotas, explicacion)
         {
             PeriodosDeGracia = graciaTotal ? Enumerable.Range(0, g).Select(k => new PeriodoDeGracia(desde[k], fechas[k])).ToList() : [],
         };
@@ -396,6 +396,121 @@ public static class GeneradorDePlan
         };
     }
 
+    /// <summary>Las condiciones de una novedad no alcanzan para regenerar el plan (K3).</summary>
+    public const string CodigoNovedadInvalida = "Lending.Novelty.InvalidTerms";
+
+    /// <summary>
+    /// El plan de una <b>novedad</b> (K3, T0874; FR-090, FR-091, T29): se regenera <b>desde la fecha de la decisión</b> con la versión de
+    /// reglas vigente, como un plan nuevo cuyo capital es el saldo de capital del crédito a esa fecha, más lo que recoge una refinanciación y
+    /// lo que se capitaliza; los costos de tramitarla nunca entran (FR-091). Parte de las condiciones selladas (<see cref="EntradaDeNovedadDePlan.Base"/>)
+    /// y cambia lo que la novedad pide: cuotas (prórroga), día de pago o primer vencimiento (cambio de fecha), tasa (cambio de tasa), periodicidad
+    /// y gracia. Las extraordinarias pactadas no pasan: si la novedad las quiere, son condiciones nuevas. El día de pago, si no cambia, es el
+    /// del crédito (o el del primer vencimiento o el del desembolso, si no lo pactó), así las fechas no se corren.
+    /// <list type="bullet">
+    /// <item>Prórroga, cambio de fecha o de tasa: el crédito conserva su número y las cuotas nuevas siguen la numeración desde
+    /// <see cref="EntradaDeNovedadDePlan.PrimeraCuota"/> (la siguiente a la última que ya venció); <see cref="UnirConAnterior"/> arma la
+    /// versión completa con las anteriores como estaban.</item>
+    /// <item>Novación o refinanciación: el plan del crédito enlazado, desde la cuota 1, sobre el saldo del anterior (y de los recogidos).</item>
+    /// </list>
+    /// El plan que devuelve es el de las cuotas nuevas: su <see cref="PlanDePagos.Entrada"/> (monto = capital nuevo, desembolso = fecha de la
+    /// decisión) es la que controla la usura vigente a esa fecha. Σ capital = saldo + recogido + capitalizado al centavo. Pura.
+    /// </summary>
+    public static PlanDePagos RegenerarPorNovedad(EntradaDeNovedadDePlan n)
+    {
+        ArgumentNullException.ThrowIfNull(n);
+        ArgumentNullException.ThrowIfNull(n.Base);
+        ValidarNovedad(n);
+        var b = n.Base;
+        var dia = n.DiaDePago ?? b.DiaDePago ?? (b.PrimerVencimiento ?? b.FechaDesembolso).Day;
+        var periodicidad = n.Periodicidad ?? b.Periodicidad;
+        var entrada = b with
+        {
+            Monto = n.Capital,
+            FechaDesembolso = n.Fecha,
+            Periodos = n.Cuotas,
+            Periodicidad = periodicidad,
+            TasaEfectivaAnual = n.TasaEfectivaAnual ?? b.TasaEfectivaAnual,
+            DiaDePago = periodicidad == RepaymentPeriodicity.SinglePayment ? null : dia,
+            PrimerVencimiento = n.PrimerVencimiento,
+            Extraordinarias = [],
+            Gracia = n.Gracia ?? GraceKind.None,
+            PeriodosDeGracia = n.Gracia is null or GraceKind.None ? 0 : n.PeriodosDeGracia,
+            TratamientoDeGracia = n.TratamientoDeGracia,
+            CuotasDeDistribucion = n.CuotasDeDistribucion,
+        };
+        var plan = Generar(entrada);
+        var desplazamiento = n.PrimeraCuota - 1;
+        var cuotas = desplazamiento == 0 ? plan.Cuotas : plan.Cuotas.Select(c => c with { Numero = c.Numero + desplazamiento }).ToList();
+        var explicacion = new ExplicacionDeCartera()
+            .Linea($"Novedad {n.Mecanismo} decidida el {ExplicacionDeCartera.Fecha(n.Fecha)}: plan nuevo desde esa fecha con las reglas "
+                + $"{b.RulesVersion}, {n.Cuotas.ToString(Inv)} cuotas desde la {n.PrimeraCuota.ToString(Inv)}.")
+            .Linea($"Capital: saldo {ExplicacionDeCartera.Numero(n.SaldoDeCapital)}"
+                + (n.SaldosRecogidos.Count > 0 ? $" + recogido {string.Join(" + ", n.SaldosRecogidos.Select(ExplicacionDeCartera.Numero))}" : string.Empty)
+                + (n.InteresCapitalizado != 0m ? $" + capitalizado {ExplicacionDeCartera.Numero(n.InteresCapitalizado)}" : string.Empty)
+                + $" = {ExplicacionDeCartera.Numero(n.Capital)}"
+                + (n.Costos != 0m ? $"; los costos de la novedad ({ExplicacionDeCartera.Numero(n.Costos)}) no se trasladan al deudor." : "."))
+            .Agregar(plan.Explicacion);
+        return plan with { Cuotas = cuotas, Explicacion = explicacion, PrimeraCuotaRegenerada = n.PrimeraCuota };
+    }
+
+    /// <summary>
+    /// La versión completa del plan de un crédito que conserva su número (K3, T0874): las cuotas del plan anterior que vencieron hasta la
+    /// fecha de la decisión, tal como estaban, y después las de la novedad (<see cref="RegenerarPorNovedad"/>), que siguen su numeración. Su
+    /// <see cref="PlanDePagos.Entrada"/> es la de la novedad con el monto igual a la suma de todas las cuotas, como en
+    /// <see cref="Regenerar(PlanDePagos, EntradaDeRegeneracion)"/>: lo que de las anteriores se pagó o se consolidó en el plan nuevo lo lleva la
+    /// reconstrucción fuera del plan.
+    /// </summary>
+    public static PlanDePagos UnirConAnterior(PlanDePagos anterior, PlanDePagos novedad)
+    {
+        ArgumentNullException.ThrowIfNull(anterior);
+        ArgumentNullException.ThrowIfNull(novedad);
+        var fecha = novedad.Entrada.FechaDesembolso;
+        var vencidas = anterior.Cuotas.Where(c => c.Vencimiento <= fecha).ToList();
+        var siguiente = vencidas.Count == 0 ? 1 : vencidas[^1].Numero + 1;
+        if (novedad.PrimeraCuotaRegenerada != siguiente)
+            throw new ReglaDeCarteraException(ProblemaDeCartera.Con(CodigoNovedadInvalida,
+                $"El plan de la novedad empieza en la cuota {novedad.PrimeraCuotaRegenerada.ToString(Inv)} y la siguiente a la última vencida "
+                + $"al {ExplicacionDeCartera.Fecha(fecha)} es la {siguiente.ToString(Inv)}.", "firstInstallment", siguiente));
+        var cuotas = vencidas.Concat(novedad.Cuotas).ToList();
+        var explicacion = new ExplicacionDeCartera().Agregar(anterior.Explicacion).Agregar(novedad.Explicacion);
+        return novedad with
+        {
+            Entrada = novedad.Entrada with { Monto = cuotas.Sum(c => c.Capital) },
+            Cuotas = cuotas,
+            Explicacion = explicacion,
+            PeriodosDeGracia = [.. anterior.PeriodosDeGracia.Where(p => p.Hasta <= fecha), .. novedad.PeriodosDeGracia],
+        };
+    }
+
+    private static void ValidarNovedad(EntradaDeNovedadDePlan n)
+    {
+        static ReglaDeCarteraException Falla(string mensaje, string campo, object? valor) =>
+            new(ProblemaDeCartera.Con(CodigoNovedadInvalida, mensaje, campo, valor));
+        if (n.SaldoDeCapital < 0m) throw Falla("El saldo de capital no es negativo.", "principalBalance", n.SaldoDeCapital);
+        if (n.InteresCapitalizado < 0m) throw Falla("Lo capitalizado no es negativo.", "capitalizedInterest", n.InteresCapitalizado);
+        if (n.Costos < 0m) throw Falla("Los costos no son negativos.", "costs", n.Costos);
+        if (n.SaldosRecogidos.Any(s => s <= 0m)) throw Falla("Cada crédito recogido tiene saldo.", "payoffLoans", n.SaldosRecogidos.Count);
+        if (n.Capital <= 0m) throw Falla("La novedad necesita capital por pagar.", "principalBalance", n.Capital);
+        if (n.Cuotas < 1) throw Falla("La novedad deja al menos una cuota.", "installments", n.Cuotas);
+        if (n.PrimeraCuota < 1) throw Falla("La primera cuota es 1 o más.", "firstInstallment", n.PrimeraCuota);
+        switch (n.Mecanismo)
+        {
+            case NoveltyMechanism.RateChange when n.TasaEfectivaAnual is null:
+                throw Falla("Un cambio de tasa lleva la tasa nueva.", "rate", null);
+            case NoveltyMechanism.PaymentDateChange when n.DiaDePago is null && n.PrimerVencimiento is null:
+                throw Falla("Un cambio de fecha lleva el día de pago o el primer vencimiento nuevos.", "paymentDay", null);
+            case NoveltyMechanism.Novation or NoveltyMechanism.Refinancing when n.PrimeraCuota != 1:
+                throw Falla("El crédito enlazado de una novación o refinanciación empieza en la cuota 1.", "firstInstallment", n.PrimeraCuota);
+            case NoveltyMechanism.Extension or NoveltyMechanism.PaymentDateChange or NoveltyMechanism.RateChange when n.SaldosRecogidos.Count > 0:
+                throw Falla("Sólo una refinanciación recoge otros créditos.", "payoffLoans", n.SaldosRecogidos.Count);
+            case NoveltyMechanism.Novation when n.SaldosRecogidos.Count > 0:
+                throw Falla("Una novación no recoge otros créditos: eso es una refinanciación.", "payoffLoans", n.SaldosRecogidos.Count);
+        }
+        if (n.TasaEfectivaAnual is { } t && !EquivalenciaDeTasas.EsTasaPactable(t))
+            throw new ReglaDeCarteraException(ProblemaDeCartera.Con(EquivalenciaDeTasas.CodigoTasaDemasiadoPrecisa,
+                "La tasa nueva tiene más de seis decimales de fracción.", "rate", t));
+    }
+
     /// <summary>
     /// «Reducir el plazo» (US5, T0536; FR-075): desde la cuota <paramref name="k"/> (que causa en sus <paramref name="tramos"/>), en cuota fija
     /// con la nivelada sellada hasta acabar el saldo; si no, conservando el capital de cada cuota y quitando el abono desde la última.
@@ -546,8 +661,8 @@ public static class GeneradorDePlan
                 + "causa el motor desde el corte.")
             .Linea($"La última cuota absorbe la diferencia entre el saldo de capital y las cuotas cargadas: {ExplicacionDeCartera.Numero(residuo)}.");
         var entrada = new EntradaDePlan(m.SaldoDeCapital, m.Corte, filas.Count, m.Periodicidad, m.Sistema, m.TasaEfectivaAnual, m.Convencion,
-            m.Equivalencia, red);
-        return new PlanDePagos(VersionesDeReglas.Vigente, entrada, rd, EquivalenciaDeTasas.NominalDelPeriodo(m.TasaEfectivaAnual, m.Periodicidad),
+            m.Equivalencia, red) { RulesVersion = m.RulesVersion };
+        return new PlanDePagos(m.RulesVersion, entrada, rd, EquivalenciaDeTasas.NominalDelPeriodo(m.TasaEfectivaAnual, m.Periodicidad),
             null, 0m, residuo, cuotas, explicacion);
     }
 
@@ -666,7 +781,8 @@ public static class GeneradorDePlan
         ArgumentNullException.ThrowIfNull(e);
         ArgumentNullException.ThrowIfNull(e.Redondeo);
         if (e.Monto <= 0m) throw new ArgumentOutOfRangeException(nameof(e), e.Monto, "El monto es mayor que cero.");
-        if (decimal.Round(e.Monto, 2) != e.Monto) throw new ArgumentException("El monto va en pesos con centavos.", nameof(e));
+        if (e.Redondeo.RedondearAlCentavo(e.Monto) != e.Monto)
+            throw new ArgumentException(e.Redondeo.EsDeUvr ? "El monto en UVR va con cuatro decimales." : "El monto va en pesos con centavos.", nameof(e));
         ArgumentOutOfRangeException.ThrowIfLessThan(e.Periodos, 1, nameof(e.Periodos));
 
         var unico = e.Periodicidad == RepaymentPeriodicity.SinglePayment;

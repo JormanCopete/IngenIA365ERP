@@ -28,7 +28,7 @@ quién lo arregla; en producción, lo que falta **bloquea**; fuera de producció
 | Órganos de gobierno con sus miembros | `/cartera/actas` | La aceptación de diferencias y la activación citan un **punto de acta cerrada** |
 | Oficinas vinculadas a su sucursal contable | Maestros › Agencias | `OfficesLinkedToAccountingBranches`; la plantilla rechaza una oficina sin vincular |
 | Contabilidad iniciada, con la **apertura al corte** | `/contabilidad/apertura` | El cuadre compara contra los saldos contables a C; sin contabilidad, `Lending.Accounting.NotStarted` |
-| Matriz contable de Cartera con la **completitud vacía** | `/contabilidad/cartera/matriz`, `/contabilidad/cartera/completitud` | Sin reglas, el cuadre sale «sin regla en la matriz» y todo es diferencia |
+| Matriz contable de Cartera con la **completitud vacía** | `/contabilidad/cartera/matriz`, `/contabilidad/cartera/completitud` | Sin reglas, el cuadre sale «sin regla en la matriz» y todo es diferencia; y como `Contabilidad.FaltaDeRegla` arranca en **Bloquear** (decisión del dueño del 2026-10-14), con la contabilidad iniciada nada de lo que falte en la matriz se confirma: ni el desembolso, ni los pagos, ni la nómina, ni la causación. Para operar mientras se completa, fijar `Advertir` con su vigencia en `/cartera/parametros` |
 | La regla `RecaudoPorAplicar` con clase de recaudador `Payroll` | Matriz contable | `PayrollBridgeRuleResolved` |
 | `DESC_CARTERA` con cuentas en Nómina | `/nomina/conceptos` | Aviso `PayrollConceptAccounts`; la pantalla de activación lo pregunta a Nómina |
 | Patrimonio técnico vigente | `/contabilidad/indicadores-regulatorios` (`ACC_RegulatoryIndicators`) | Sin él, el límite de concentración bloquea desembolsos y cupos |
@@ -49,6 +49,14 @@ El orden de carga de una cooperativa que inicia es el de plantillas.md §0.1:
 
 1. Lo de §1, que no tiene plantilla.
 2. Líneas de crédito (`/cartera/lineas`) y matriz contable, con la contadora, hasta dejar vacía la completitud.
+   **Con un corte en el pasado, las líneas se crean con la plantilla** `lending.credit-lines` (`/cartera/lineas` → «Importar»,
+   plantillas.md §1), no con la pantalla: la ruta (`POST /api/lending/credit-lines` y «Nueva versión») fecha toda versión **desde hoy**
+   aunque se le pida otra fecha, y los créditos migrados con desembolso o corte anteriores no tendrían versión vigente. Sólo la plantilla
+   admite un `ValidFrom` anterior a hoy, y sólo en una línea **sin uso** (sin solicitudes ni créditos; `admitirDesde` de
+   `RegistrarAsync`): por eso se cargan antes de la carga de migración, con `ValidFrom` en o antes del desembolso más antiguo que se va
+   a migrar en esa línea, y la usura y los límites de esa fecha replicados (la versión se controla a su `ValidFrom` y a hoy). Si la línea
+   ya tiene uso, la plantilla rechaza la fila (`Lending.CreditLine.RetroactiveVersion`: lo pactado no se reescribe) y la ruta la fecha
+   hoy; para un corte anterior hay que crear otra línea con la plantilla. (Brecha conocida, fase 24 de la feature 013.)
 3. Vinculados, saldos de aportes y listas restrictivas, en cualquier orden.
 4. **La carga de migración** (§3): crear la carga con su corte, importar las partes en el orden de §5.2, revisar y aplicar.
 5. Aceptar con acta las diferencias del cuadre y de la conciliación de ventas (§4).
@@ -83,7 +91,8 @@ Se puede aplicar en producción una carga con un corte anterior para validar per
 - cada nómina quincenal y cada liquidación definitiva con deudores de la carga exige reconocer «Cartera por activar»
   (`Payroll.LendingPendingActivationAckRequired`);
 - Personas no deja borrar a sus deudores ni codeudores (`Person.HasActiveLoans`) y su detalle dice «migrada, sin activar»;
-- Contabilidad avisa al cerrar el mes que contiene C+1 (`Accounting.Period.LendingLoadWillExpire`).
+- Contabilidad avisa al cerrar el mes que contiene C+1 (`Accounting.Period.LendingLoadWillExpire`): cerrarlo ya no impide activar,
+  pero lo que emita la activación quedará en el primer mes abierto siguiente.
 
 Coordinarlo con Nómina y Contabilidad antes de aplicarla. La carga real la deja `Replaced`.
 
@@ -114,8 +123,10 @@ de Comercial aplica al nacer la obligación de cada venta. Errores: `Import.Inva
 1. **Requisitos** sin faltantes (en producción) y **avisos** revisados: lo que Comercial ajusta el mismo día (§7), las cuentas de
    `DESC_CARTERA` en Nómina (casilla de reconocimiento) y los usuarios sin alcance.
 2. **La fecha es C+1** y no se edita. Se registra **dentro del plazo** (`Pagos.DiasMaximosFechaValor` días desde C; vencido,
-   `Lending.Activation.DeadlinePassed`) y con el **mes contable de C+1 abierto** (si está cerrado, la activación responde
-   `RequirementsMissing` con `AccountingMonthOpen`).
+   `Lending.Activation.DeadlinePassed`). Con la contabilidad iniciada (si no, falta `AccountingMonthOpen`). Si Contabilidad ya cerró el
+   mes de C+1, **no limita, sólo informa** (respuesta del dueño del 2026-10-14): sale el aviso `AccountingMonthClosed` en los avisos y en
+   la respuesta, la activación procede y lo que emite (`CarteraActivada`) queda fechado en el primer mes abierto —la fecha de activación
+   sigue siendo C+1—.
 3. **El acta de activación** (C61) es obligatoria: el punto de una sesión cerrada sobre la carga. Declara que el consejo conoce la carga,
    su corte, el cuadre y las diferencias aceptadas, los cobros provisionales y que la cuota puede diferir en centavos porque el interés lo
    causa el motor desde el corte.
@@ -185,8 +196,53 @@ después de activar queda fuera de Cartera con la alerta `Cartera.VentaNoIncorpo
 - **La activación es todo o nada**: si algo falla (una tanda, el cierre base, los cobros), no queda nada —ningún crédito, ningún cierre base,
   el destino `Lending` inactivo y la carga `Applied`—. Corregir la causa (en la carga: otra carga con el mismo corte, o reemplazar la parte) y
   volver a activar. La misma `Idempotency-Key` con el mismo cuerpo devuelve la misma activación.
-- **Con el plazo vencido** (`DeadlinePassed`) o el mes de C+1 cerrado en Contabilidad: pedir una carga con **corte nuevo**, aplicarla
-  (la anterior queda `Replaced`), volver a cuadrar y aceptar, y activar en su C+1.
+- **Con el plazo vencido** (`DeadlinePassed`): pedir una carga con **corte nuevo**, aplicarla (la anterior queda `Replaced`), volver a
+  cuadrar y aceptar, y activar en su C+1. El mes de C+1 cerrado en Contabilidad ya no obliga a esto: es un aviso.
 - **Diferencias que cambiaron** al activar (`DifferencesNotAccepted` después de aceptar): alguien contabilizó en Contabilidad entre la
   aceptación y la activación; revisar la versión nueva del cuadre y volver a aceptar con acta.
 - Un requisito de producción que no se cumple: la lista de `RequirementsMissing` dice quién lo corrige y en qué pantalla.
+
+## 10. El ensayo general en QA y las condiciones de salida (quickstart §11)
+
+> Fase 24 (T1073). La fuente es `specs/013-cartera-financiera/quickstart.md` §11; aquí va lo que el operador sigue. Todo con autorización
+> expresa del dueño, en las fechas que él defina y con la evidencia de cada paso en las notas de release.
+
+**El ensayo general en QA** (§11.2), antes de tocar producción:
+
+1. Una cooperativa de QA con la parametrización real: líneas, matriz de la contadora con la completitud vacía, atribuciones, órganos con sus
+   miembros, vinculados, plantillas de mensaje validadas, roles, alcances y perfil regulatorio.
+2. Una contabilidad de ensayo con la apertura a un corte pasado y la carga de migración real a ese corte (las personas se registran antes).
+3. El recorrido completo (quickstart §3) con los dobles de prueba hasta el **primer cierre mensual con la conciliación en cero**.
+4. La comparación con cifras de referencia de una muestra por línea (saldo por concepto, cuota, días de mora, calificación), cada
+   diferencia explicada y aprobada por el jefe de cartera.
+
+**La salida** (§11.4) sigue este runbook (§1 a §8) en el orden: retiro con respaldo y segundo revisor
+([cartera-retiro-heredado.md](cartera-retiro-heredado.md)) → valores nacionales al día ([valores-nacionales.md](valores-nacionales.md)) →
+perfil regulatorio → seguridad → contabilidad → Comercial → corte C → carga real → cuadre y conciliación → activación C+1 → Comercial el
+mismo día → primeros días → primer cierre.
+
+**Las doce condiciones de salida** (§11.5): no se activa en producción si falta alguna.
+
+| # | Condición | Se comprueba con |
+|---|---|---|
+| 1 | **Recaudo y Tesorería reales** registrados con versiones vigentes; ningún doble de prueba | `/admin/participantes-de-integracion`; la activación lo exige (`Lending.Activation.RequirementsMissing`) |
+| 2 | Pérdida esperada (K6a) sólo si el perfil la hace obligada | perfil y selector; la activación lo exige |
+| 3 | Retiro con diagnóstico, respaldo, segundo revisor y aprobación por base | [cartera-retiro-heredado.md](cartera-retiro-heredado.md) |
+| 4 | Anexo 1 vigente y usura de las modalidades de las líneas activas | la activación lo exige |
+| 5 | Cuadre en cero o aceptado con acta; conciliación de ventas resuelta | `/cartera/migracion` (cuadre y ventas) |
+| 6 | Toda oficina con créditos vinculada a una sucursal contable | la activación lo exige |
+| 7 | Roles, alcances y personas vinculadas a los usuarios que deciden | `/cartera/activacion` |
+| 8 | Matriz completa, recaudo de Nómina resuelto, `DESC_CARTERA` con cuentas, patrimonio técnico vigente | `/contabilidad/cartera/completitud` |
+| 9 | Líneas de origen comercial con el concepto tributario del interés | la línea no se activa sin él |
+| 10 | Parámetros legales y plantillas de mensaje validados por la contadora y el oficial | parámetros sin «pendiente de validar» en lo que se usa |
+| 11 | Ensayo general terminado con el primer cierre en cero y las diferencias aprobadas | acta del ensayo |
+| 12 | QA por rol, pasos de SC-009 y la app MAUI probados a mano | notas de release |
+
+## 11. Respaldo por entrega al promover a producción
+
+Cada entrega se promueve con su `pg_dump -Fc` de **cada base** (la administrativa y la de cada cooperativa) antes de aplicar sus
+migraciones: `<base>-AAAAMMDD-pre-f013.dump` para K1 (que trae la destructiva `RetiroDeLaCarteraHeredada`) y
+`<base>-AAAAMMDD-pre-f013-kN.dump` para K2 a K6b (aditivas: `CarteraLibranza`, `CarteraNovedades`, `CarteraCobranza` y
+`CarteraCobranzaSalida`, `CarteraInformes` y `CarteraComprobanteDeCargue`, `CarteraPerdidaEsperada`, `CarteraVivienda`). La verificación es **contra la base**
+(tablas de la migración, permisos `Lending.*` sembrados por la API al arrancar, `/health/ready`, réplica de valores nacionales al día), no
+contra el repositorio. El estado de cada entrega por ambiente se anota en [estado-y-pendientes.md](estado-y-pendientes.md).

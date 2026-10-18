@@ -114,6 +114,25 @@ public class RecaudoPorNominaTests
     }
 
     [Fact]
+    public async Task Un_descuento_que_Contabilidad_no_puede_registrar_tumba_la_aprobacion_entera_y_dice_que_regla_falta()
+    {
+        // Feature 013, T0801 (A8 = «Bloquear todo», respuesta del dueño del 2026-10-14): con Contabilidad.FaltaDeRegla = Bloquear el contrato rechaza
+        // el pago con Lending.Prevalidation.NotPostable; la ordinaria no baja la línea como con otro rechazo: no se aprueba.
+        var e = await CalculadoAsync();
+        e.D.Contrato.ComoRespondeAplicar[e.Cabe] = ContratoDeObligacionesDePrueba.Rechazo(RecaudoPorNomina.CodigoNoContabilizable,
+            "Contabilidad no tiene cómo registrar PagoAplicado en el rol RecaudoPorAplicar. Pida a la contadora completar la matriz de Cartera.");
+
+        var r = await Aprobador(e.D).Handle(new ApprovePayrollRunCommand(e.RunPublicId, Confirm: true), CancellationToken.None);
+
+        r.IsFailure.Should().BeTrue();
+        r.Error.Code.Should().Be("Payroll.LoanDeductionNotPostable");
+        r.Error.Message.Should().Contain("A-1").And.Contain("RecaudoPorAplicar").And.Contain("contadora");
+        (await e.D.Db.PayrollRuns.AsNoTracking().SingleAsync(x => x.PublicId == e.RunPublicId)).Status.Should().Be(PayrollRunStatus.Draft);
+        (await e.D.Db.PayrollLoanDeductions.AsNoTracking().ToListAsync()).Should().OnlyContain(f => f.Status != PayrollLoanDeductionStatus.Applied,
+            "nada se dio por aplicado");
+    }
+
+    [Fact]
     public async Task Con_personas_migradas_sin_activar_la_aprobacion_exige_reconocerlo()
     {
         var d = new NominaTestData();

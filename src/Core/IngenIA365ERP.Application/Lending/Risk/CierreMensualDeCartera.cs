@@ -64,9 +64,14 @@ public sealed class CierreMensualDeCartera(
     ParametrosDeLaTandaDeCartera tanda,
     IDateTimeService reloj,
     ReplicacionDeValoresNacionales? replicacion = null,
-    ILogger<CierreMensualDeCartera>? logger = null)
+    ILogger<CierreMensualDeCartera>? logger = null,
+    ValidacionPreviaDeProceso? validacionDeProceso = null,
+    CargadorDePerdidaEsperada? cargadorDePerdida = null)
 {
     private const int LargoDelMensaje = 1000;
+
+    /// <summary>La decisión de la validación previa que detuvo la transacción final (A8); nula si siguió.</summary>
+    private DecisionDeValidacionPrevia? _detenida;
 
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
@@ -100,7 +105,15 @@ public sealed class CierreMensualDeCartera(
         if (contexto.IsFailure) throw new ReglaDeCarteraException(new ProblemaDeCartera(contexto.Error.Code, contexto.Error.Message));
         var anterior = RequisitosDelCierreMensual.Anterior(await RequisitosDelCierreMensual.CierresVigentesAsync(db, ct), anio, mes);
         var datos = await cargador.CargarAsync(ids, fin, r, contexto.Value, anterior, ct);
-        var calculo = CalculoDeRiesgo.Calcular(datos, contexto.Value, conArrastre: true);
+        // K6a (T1036): los créditos (de la tanda y de sus grupos) cuyo segmento está en pérdida esperada se puntúan y deterioran por el Anexo 2.
+        IReadOnlyDictionary<int, DatosDePerdidaEsperada>? perdida = null;
+        if (contexto.Value.PerdidaEsperada is { } pe)
+        {
+            var enPerdida = datos.Creditos.Values
+                .Where(c => contexto.Value.Seleccion.ParaCredito(c.Combinacion.ExpectedLossSegment).Modelo == ImpairmentModel.ExpectedLossAnnex2).ToList();
+            perdida = await (cargadorDePerdida ?? new CargadorDePerdidaEsperada(db)).CargarAsync(enPerdida, fin, r, pe.MesesDeHistorial, ct);
+        }
+        var calculo = CalculoDeRiesgo.Calcular(datos, contexto.Value, conArrastre: true, perdidaEsperada: perdida);
 
         var numeroDeTanda = corrida.BatchCount + 1;
         var errores = new List<LendingProcessRunError>();
@@ -164,7 +177,15 @@ public sealed class CierreMensualDeCartera(
     private async Task<AvanceDeCorrida> TransaccionFinalAsync(LendingProcessRun corrida, int anio, int mes, DateOnly fin, CancellationToken ct)
     {
         var corridaId = corrida.Id;
+        _detenida = null;
         var resultado = await TransaccionExplicita.EjecutarAsync(db, () => FinalAsync(corridaId, anio, mes, fin, ct), ct);
+        if (_detenida is not null)
+        {
+            // A8 = «Bloquear todo» (2026-10-14): el cierre no se guardó; la alerta sale y la corrida queda Failed con el código.
+            var seguidaAlDetener = db.LendingProcessRuns.Local.FirstOrDefault(x => x.Id == corridaId) ?? corrida;
+            db.DescartarCambiosSalvo(seguidaAlDetener);
+            throw await validacionDeProceso!.DetenerAsync(_detenida, $"el cierre de {ErroresDeRiesgo.Mes(anio, mes)}", ct);
+        }
         if (resultado.IsFailure) throw new ReglaDeCarteraException(new ProblemaDeCartera(resultado.Error.Code, resultado.Error.Message));
         var (totales, huella) = resultado.Value;
         // La corrida pudo haberse descartado al repetir la transacción: se toma la que está en seguimiento.
@@ -206,6 +227,25 @@ public sealed class CierreMensualDeCartera(
             contexto.ModelosConGeneral,
             contexto.Redondeo);
 
+        // K6a (T1036; FR-105): los créditos en pérdida esperada cuyo historial se completó con la regla de meses faltantes.
+        var incompletas = lineas.Where(l => l.IncompleteArrearsHistory == true).ToList();
+        string? incompletasJson = null;
+        if (incompletas.Count > 0)
+        {
+            var deIncompletas = incompletas.Select(l => l.LoanId).ToList();
+            var numeros = await db.Loans.AsNoTracking().Where(l => deIncompletas.Contains(l.Id)).ToDictionaryAsync(l => l.Id, l => new { l.PublicId, l.Number }, ct);
+            incompletasJson = JsonSerializer.Serialize(new
+            {
+                missingMonthsRule = contexto.PerdidaEsperada?.ReglaDeMesesFaltantes.ToString(),
+                fixedDays = contexto.PerdidaEsperada?.DiasFijos,
+                loans = incompletas.Select(l => new
+                {
+                    loanPublicId = numeros.GetValueOrDefault(l.LoanId)?.PublicId, loanNumber = numeros.GetValueOrDefault(l.LoanId)?.Number,
+                    segment = l.ExpectedLossSegmentCode,
+                }).ToList(),
+            }, Json);
+        }
+
         var ahora = reloj.UtcNow;
         var cierre = new MonthlyClose
         {
@@ -228,7 +268,8 @@ public sealed class CierreMensualDeCartera(
             ObligatoryModelUnavailable = contexto.Seleccion.ModeloObligatorioNoDisponible,
             UnvalidatedParameters = contexto.ConParametrosSinValidar,
             UnvalidatedParametersJson = contexto.SinValidarJson,
-            IncompleteHistory = false,
+            IncompleteHistory = incompletas.Count > 0,
+            IncompleteHistoryJson = incompletasJson,
             LoanCount = lineas.Count,
             TotalPrincipal = lineas.Sum(l => l.PrincipalBalance),
             TotalInterest = lineas.Sum(l => l.CurrentInterestBalance + l.DefaultInterestBalance),
@@ -353,6 +394,14 @@ public sealed class CierreMensualDeCartera(
             InformationCutoffAt = new DateTimeOffset(DateTime.SpecifyKind(r, DateTimeKind.Utc)), Marks = marcas, FactParts = resumen,
         }, usuario, ct);
         if (informativo.IsFailure) return Result.Failure<(string, string)>(informativo.Error);
+
+        // A8 = «Bloquear todo» (2026-10-14): con Contabilidad.FaltaDeRegla = Bloquear, un cierre con hechos que Contabilidad no puede registrar no se
+        // guarda (la transacción vuelve atrás, el cierre incluido).
+        if (validacionDeProceso is not null && await validacionDeProceso.BloqueoAsync(ct) is { } contableNo)
+        {
+            _detenida = contableNo;
+            return Result.Failure<(string, string)>(contableNo.Bloqueo!);
+        }
 
         await db.SaveChangesAsync(ct);
         await LoteAsync(fin, ct);

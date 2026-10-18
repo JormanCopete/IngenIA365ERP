@@ -1,0 +1,283 @@
+@page "/cartera/pagadurias/{Id:guid}"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Nomina
+@inject LibranzaClient Libranza
+@inject INotificationService Notification
+
+<PageTitle>Pagaduría - IngenIA365ERP</PageTitle>
+
+@* Feature 013, K2, US10 (T0852; contracts/api.md §13.1; FR-108, FR-112–FR-114, C84): el detalle de una pagaduría. Cuatro pestañas: las versiones
+   del convenio (una nueva cierra la anterior la víspera; lo usado por un archivo enviado no se edita), los contactos (personas del maestro con su
+   papel y su contacto institucional, nunca su documento), los códigos de respuesta de la versión que rige y lo descontado pendiente de giro por
+   período, con los días de mora de la pagaduría y si superó el umbral. Leer exige Lending.PayrollAgreements.View; escribir, .Manage; los
+   pendientes de giro son de créditos y van bajo Lending.PayrollDeductionFiles.Read con el alcance de quien pregunta. *@
+<PermissionGate Required="Lending.PayrollAgreements.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>@(_convenio is { } c ? $"{c.Code} · {c.Name}" : "Pagaduría")</h3>
+        <div class="toolbar">
+            <a href="/cartera/pagadurias">Volver a Pagadurías</a>
+            <SfButton CssClass="@(_pestana == 0 ? "e-primary" : "e-outline")" OnClick="@(() => _pestana = 0)">Versiones</SfButton>
+            <SfButton CssClass="@(_pestana == 1 ? "e-primary" : "e-outline")" OnClick="@(() => _pestana = 1)">Contactos</SfButton>
+            <SfButton CssClass="@(_pestana == 2 ? "e-primary" : "e-outline")" OnClick="@(() => _pestana = 2)">Códigos de respuesta</SfButton>
+            <PermissionGate Required="Lending.PayrollDeductionFiles.Read">
+                <SfButton CssClass="@(_pestana == 3 ? "e-primary" : "e-outline")" OnClick="@AbrirPendientesAsync">Pendientes de giro</SfButton>
+            </PermissionGate>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        @if (_convenio is { } c)
+        {
+            <div class="info-card">
+                <p><strong>@c.Payer.LegalName</strong> · NIT @c.Payer.TaxId@(c.IsOwnPayroll ? " · nómina propia de la cooperativa" : "") ·
+                    @TextosDeLibranza.EstadoDeConvenio(c.Status) · @c.ActiveLoans créditos vinculados</p>
+            </div>
+
+            @if (_pestana == 0)
+            {
+                <div class="toolbar">
+                    <PermissionGate Required="Lending.PayrollAgreements.Manage">
+                        <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@AbrirVersionAsync">Nueva versión</SfButton>
+                    </PermissionGate>
+                </div>
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th>Vigencia</th><th>Periodicidad</th><th>Corte · envío · pago</th><th>Ida</th><th>Vuelta</th><th>Tope</th><th>Ventana</th><th>Lo vencido</th><th>No aplicado</th><th>Forma alterna</th></tr></thead>
+                        <tbody>
+                            @foreach (var v in c.Versions.OrderByDescending(v => v.ValidFrom))
+                            {
+                                <tr>
+                                    <td>@v.ValidFrom.ToString("dd/MM/yyyy") – @(v.ValidTo?.ToString("dd/MM/yyyy") ?? "abierta")</td>
+                                    <td>@TextosDeLibranza.Periodicidad(v.Periodicity)</td>
+                                    <td>@v.CutoffDay · @(v.SendDay?.ToString() ?? "—") · @v.PayDay</td>
+                                    <td>@v.OutboundFormatCode</td>
+                                    <td>@v.ResultFormatCode</td>
+                                    <td>@TextosDeLibranza.Tope(v.DeductionCap)</td>
+                                    <td>@(v.TransferWindowDays is { } d ? $"{d} días" : "La de la cooperativa")</td>
+                                    <td>@(v.IncludesPastDue ? "Sí" : "No")</td>
+                                    <td>@TextosDeLibranza.Seguimiento(v.NotAppliedAction)</td>
+                                    <td>@TextosDeLibranza.FormaDePago(v.AlternateRepaymentChannel)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+            else if (_pestana == 1)
+            {
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th>Nombre</th><th>Papel</th><th>Correo</th><th>Teléfono</th><th>Desde</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var k in c.Contacts)
+                            {
+                                <tr><td>@k.Name@(k.IsPrimary ? " (principal)" : "")</td><td>@k.Role</td><td>@k.Email</td><td>@k.Phone</td><td>@k.ValidFrom.ToString("dd/MM/yyyy")</td><td></td></tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                @if (c.Contacts.Count == 0) { <p class="texto-tenue">El convenio no tiene contactos.</p> }
+                <PermissionGate Required="Lending.PayrollAgreements.Manage">
+                    <div class="info-card">
+                        <h4>Contactos del convenio</h4>
+                        <p class="texto-apoyo">Los contactos son personas del maestro; guardar reemplaza los vigentes.</p>
+                        @foreach (var f in _contactos)
+                        {
+                            var fila = f;
+                            <div class="toolbar">
+                                <span>@fila.Nombre</span>
+                                <input class="e-input" @bind="fila.Papel" placeholder="Papel (Nómina, Tesorería…)" maxlength="60" />
+                                <label><input type="checkbox" @bind="fila.Principal" /> Principal</label>
+                                <SfButton CssClass="e-flat e-small" OnClick="@(() => _contactos.Remove(fila))">Quitar</SfButton>
+                            </div>
+                        }
+                        <div class="campo campo-ancho">Agregar persona
+                            <PersonSearchPicker Selected="@_nuevoContacto" SelectedChanged="@AgregarContacto" ShowHelpText="false" Compacto="true" />
+                        </div>
+                        <SfButton CssClass="e-primary" Disabled="@_accion.Activa" OnClick="@GuardarContactosAsync">Guardar contactos</SfButton>
+                    </div>
+                </PermissionGate>
+            }
+            else if (_pestana == 2)
+            {
+                var vigente = c.Versions.FirstOrDefault(v => v.PublicId == c.CurrentVersion?.VersionPublicId) ?? c.Versions.OrderByDescending(v => v.ValidFrom).FirstOrDefault();
+                @if (vigente is null)
+                {
+                    <p class="texto-tenue">El convenio no tiene versiones.</p>
+                }
+                else
+                {
+                    <p class="texto-apoyo">Los de la versión desde el @vigente.ValidFrom.ToString("dd/MM/yyyy"). Para cambiarlos, registre una versión nueva.</p>
+                    <table class="data-grid">
+                        <thead><tr><th>Código</th><th>Descripción</th><th>Resultado</th><th>Motivo</th></tr></thead>
+                        <tbody>
+                            @foreach (var r in vigente.ResultCodes)
+                            {
+                                <tr><td>@r.Code</td><td>@r.Description</td><td>@TextosDeLibranza.Resultado(r.Outcome)</td><td>@(r.Reason is null ? "—" : TextosDeLibranza.Motivo(r.Reason))</td></tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            }
+        }
+    </IndicadorDeCarga>
+
+    @if (_pestana == 3)
+    {
+        <div class="toolbar">
+            <label class="campo">Al <input class="e-input" type="date" @bind="_fechaDePendientes" /></label>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_cargaPendientes.Activa" OnClick="@CargarPendientesAsync">Consultar</SfButton>
+        </div>
+        <IndicadorDeCarga Cargando="@_cargaPendientes.Activa">
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Período</th><th>Archivo</th><th class="numero">Líneas</th><th class="numero">Descontado</th><th>Descuento</th><th>Debe girar</th><th class="numero">Días de mora de la pagaduría</th><th>Umbral</th></tr></thead>
+                    <tbody>
+                        @foreach (var p in _pendientes)
+                        {
+                            <tr class="@(p.ThresholdExceeded ? "texto-alerta" : "")">
+                                <td>@TextosDeLibranza.Periodo(p.Year, p.Month, p.SubPeriod)</td>
+                                <td><a href="/cartera/archivos-de-descuento/@p.FilePublicId">@p.FileNumber</a></td>
+                                <td class="numero">@p.Lines</td>
+                                <td class="numero">@TextosDeCreditos.Pesos(p.Amount)</td>
+                                <td>@(p.FirstDeductionDate?.ToString("dd/MM/yyyy") ?? "—")</td>
+                                <td>@(p.TransferDueDate?.ToString("dd/MM/yyyy") ?? "—")</td>
+                                <td class="numero">@p.PaymasterArrearsDays</td>
+                                <td>@(p.ThresholdDays is { } u ? $"{u} días{(p.ThresholdExceeded ? " · superado" : "")}" : "Sin umbral: no se imputa al deudor")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            @if (_pendientes.Count == 0) { <p class="texto-tenue">No hay descuentos pendientes de giro.</p> }
+        </IndicadorDeCarga>
+    }
+</div>
+
+<SfDialog @bind-Visible="_mostrarVersion" Header="Nueva versión del convenio" Width="760px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_accion.Activa" Texto="Registrando la versión…">
+                <EditorDeVersionDeConvenio Version="@_version" FormatosDeIda="@_formatosDeIda" FormatosDeVuelta="@_formatosDeVuelta" />
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_accion.Activa || !_version.Completo)" OnClick="@RegistrarVersionAsync">Registrar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarVersion = false)">Volver</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private sealed class FilaDeContacto
+    {
+        public Guid Persona { get; init; }
+        public string Nombre { get; init; } = string.Empty;
+        public string? Papel { get; set; }
+        public bool Principal { get; set; }
+    }
+
+    private readonly EstadoDeCarga _carga = new(), _accion = new(), _cargaPendientes = new();
+    private int _pestana;
+    private ConvenioDto? _convenio;
+    private List<FilaDeContacto> _contactos = [];
+    private PersonSearchPicker.PersonSearchItem? _nuevoContacto;
+    private List<PendienteDeGiroDto> _pendientes = [];
+    private DateOnly _fechaDePendientes = DateOnly.FromDateTime(DateTime.Today);
+    private bool _mostrarVersion;
+    private string? _error;
+    private EditorDeVersionDeConvenio.Modelo _version = new();
+    private List<FormatoBancarioResumenDto> _formatosDeIda = [], _formatosDeVuelta = [];
+    private ClaveDeOperacion _clave = new(), _claveDeContactos = new();
+
+    protected override Task OnParametersSetAsync() => CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Libranza.ConvenioAsync(Id);
+        if (!r.IsSuccess) { _convenio = null; await Notification.ErrorAsync(r.ErrorMessage ?? "La pagaduría no existe."); return; }
+        _convenio = r.Value;
+        _contactos = [.. (_convenio?.Contacts ?? []).Select(k => new FilaDeContacto { Persona = k.PersonPublicId, Nombre = k.Name, Papel = k.Role, Principal = k.IsPrimary })];
+    }
+
+    private void AgregarContacto(PersonSearchPicker.PersonSearchItem? persona)
+    {
+        if (persona is null || _contactos.Any(k => k.Persona == persona.PublicId)) return;
+        _contactos.Add(new FilaDeContacto { Persona = persona.PublicId, Nombre = persona.FullName });
+        _nuevoContacto = null;
+    }
+
+    private async Task GuardarContactosAsync()
+    {
+        using var carga = _accion.Iniciar();
+        var r = await Libranza.ContactosAsync(Id, _contactos.Select(k => new ContactoDeConvenioRequest(k.Persona, k.Papel, k.Principal)).ToList(), _claveDeContactos);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron guardar los contactos."); return; }
+        _claveDeContactos = new ClaveDeOperacion();
+        await Notification.SuccessAsync("Contactos guardados.");
+        await CargarAsync();
+    }
+
+    private async Task AbrirVersionAsync()
+    {
+        _error = null;
+        _version = new EditorDeVersionDeConvenio.Modelo();
+        if (_convenio?.Versions.OrderByDescending(v => v.ValidFrom).FirstOrDefault() is { } ultima)
+        {
+            _version.ValidFrom = ultima.ValidFrom.AddDays(1) > _version.ValidFrom ? ultima.ValidFrom.AddDays(1) : _version.ValidFrom;
+            _version.CutoffDay = ultima.CutoffDay;
+            _version.SendDay = ultima.SendDay;
+            _version.PayDay = ultima.PayDay;
+            _version.SendLeadDays = ultima.SendLeadDays;
+            _version.OutboundFormat = ultima.OutboundFormatPublicId.ToString();
+            _version.ResultFormat = ultima.ResultFormatPublicId.ToString();
+            _version.TopePorcentaje = ultima.DeductionCap is { } t ? t * 100m : null;
+            _version.TransferWindowDays = ultima.TransferWindowDays;
+            _version.IncludesPastDue = ultima.IncludesPastDue;
+            _version.NotAppliedAction = ultima.NotAppliedAction;
+            _version.AlternateRepaymentChannel = ultima.AlternateRepaymentChannel;
+            _version.Periodicity = ultima.Periodicity;
+            _version.Codigos = [.. ultima.ResultCodes.Select(x => new EditorDeVersionDeConvenio.FilaDeCodigo
+            {
+                Code = x.Code, Description = x.Description, Outcome = x.Outcome, Reason = x.Reason ?? "Other",
+            })];
+        }
+        _clave = new ClaveDeOperacion();
+        _mostrarVersion = true;
+        using var carga = _accion.Iniciar();
+        _formatosDeIda = [.. (await Libranza.FormatosAsync(LibranzaClient.AmbitoDeIda)).Value ?? []];
+        _formatosDeVuelta = [.. (await Libranza.FormatosAsync(LibranzaClient.AmbitoDeVuelta)).Value ?? []];
+    }
+
+    private async Task RegistrarVersionAsync()
+    {
+        using var carga = _accion.Iniciar();
+        _error = null;
+        var r = await Libranza.VersionAsync(Id, _version.Pedido(), _clave);
+        if (!r.IsSuccess) { _error = r.ErrorMessage ?? "No se pudo registrar la versión."; return; }
+        _mostrarVersion = false;
+        _convenio = r.Value;
+        await Notification.SuccessAsync("Versión registrada.");
+    }
+
+    private async Task AbrirPendientesAsync()
+    {
+        _pestana = 3;
+        await CargarPendientesAsync();
+    }
+
+    private async Task CargarPendientesAsync()
+    {
+        using var carga = _cargaPendientes.Iniciar();
+        var r = await Libranza.PendientesDeGiroAsync(Id, _fechaDePendientes);
+        if (!r.IsSuccess) { _pendientes = []; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer los pendientes de giro."); return; }
+        _pendientes = [.. r.Value ?? []];
+    }
+}

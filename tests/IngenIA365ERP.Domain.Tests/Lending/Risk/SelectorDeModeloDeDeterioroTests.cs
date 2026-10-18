@@ -16,9 +16,10 @@ public class SelectorDeModeloDeDeterioroTests
     private static readonly ReglaDePerdidaEsperada Regla = CasoDoradoDeRiesgo.LeerRegla("regla-prueba");
 
     [Fact]
-    public void La_entrega_desplegada_hoy_no_trae_la_perdida_esperada()
+    public void La_entrega_desplegada_hoy_trae_la_perdida_esperada()
     {
-        SelectorDeModeloDeDeterioro.PerdidaEsperadaDisponible(CatalogoDeCartera.EntregaVigente).Should().BeFalse();
+        // T1024 (fase 22, 2026-10-16): la entrega vigente subió a K6a; antes de ella el selector deja la marca (r15, D28).
+        SelectorDeModeloDeDeterioro.PerdidaEsperadaDisponible(CatalogoDeCartera.EntregaVigente).Should().BeTrue();
         SelectorDeModeloDeDeterioro.PerdidaEsperadaDisponible(EntregaDeCartera.K5).Should().BeFalse();
         SelectorDeModeloDeDeterioro.PerdidaEsperadaDisponible(EntregaDeCartera.K6a).Should().BeTrue();
         SelectorDeModeloDeDeterioro.PerdidaEsperadaDisponible(EntregaDeCartera.K6b).Should().BeTrue();
@@ -91,5 +92,76 @@ public class SelectorDeModeloDeDeterioroTests
         var desistimiento = new EleccionDeModelo(ImpairmentModelElectionKind.VoluntaryWithdrawal, ["CONSUMO_LIBRANZA"]);
         SelectorDeModeloDeDeterioro.Seleccionar(Regla, perfil, desistimiento, EntregaDeCartera.K6a).ParaCredito("CONSUMO_LIBRANZA").Modelo
             .Should().Be(ImpairmentModel.ArrearsAnnex1);
+    }
+
+    // --------------------------------------------------------------------------------------------- K6a (T1014) --
+
+    private static readonly IReadOnlyList<string> Los3 = ReglaDePerdidaEsperada.SegmentosConocidos;
+
+    [Fact]
+    public void Con_K6a_la_obligada_va_a_perdida_esperada_en_los_tres_segmentos_y_al_Anexo_1_en_los_demas_sin_marca()
+    {
+        var s = SelectorDeModeloDeDeterioro.SeleccionarAl(new DateOnly(2026, 10, 31), Regla,
+            [new VigenciaDePerfil(new DateOnly(2026, 1, 1), new("COOP_AHORRO_CREDITO", null))], [], EntregaDeCartera.K6a);
+
+        s.ModeloObligatorioNoDisponible.Should().BeFalse();
+        s.Segmentos.Should().OnlyContain(m => m.Modelo == ImpairmentModel.ExpectedLossAnnex2 && m.Fundamento == ModelBasis.Obligated && !m.ModeloObligatorioNoDisponible);
+        s.ParaCredito(null).Should().Be(new ModeloDelSegmento(string.Empty, ImpairmentModel.ArrearsAnnex1, ModelBasis.NotObligated, false));
+    }
+
+    [Fact]
+    public void Sin_K6a_la_obligada_sigue_como_en_r15_con_la_marca()
+    {
+        var s = SelectorDeModeloDeDeterioro.SeleccionarAl(new DateOnly(2026, 10, 31), Regla,
+            [new VigenciaDePerfil(new DateOnly(2026, 1, 1), new("COOP_AHORRO_CREDITO", null))], [], EntregaDeCartera.K5);
+
+        s.Segmentos.Should().OnlyContain(m => m.Modelo == ImpairmentModel.ArrearsAnnex1 && m.ModeloObligatorioNoDisponible);
+    }
+
+    [Fact]
+    public void La_adopcion_voluntaria_rige_desde_su_fecha_y_el_desistimiento_desde_la_suya_sin_tocar_cierres_anteriores()
+    {
+        var perfil = new[] { new VigenciaDePerfil(new DateOnly(2026, 1, 1), new("COOP_MULTIACTIVA", null)) };
+        var elecciones = new[]
+        {
+            new EleccionDeModelo(ImpairmentModelElectionKind.VoluntaryAdoption, Los3) { Desde = new DateOnly(2026, 11, 30) },
+            new EleccionDeModelo(ImpairmentModelElectionKind.VoluntaryWithdrawal, Los3) { Desde = new DateOnly(2027, 6, 30) },
+        };
+        ModeloAl(new DateOnly(2026, 10, 31)).Should().Be((ImpairmentModel.ArrearsAnnex1, ModelBasis.NotObligated), "el cierre anterior a la adopción no cambia");
+        ModeloAl(new DateOnly(2026, 11, 30)).Should().Be((ImpairmentModel.ExpectedLossAnnex2, ModelBasis.Voluntary), "desde su ValidFrom");
+        ModeloAl(new DateOnly(2027, 5, 31)).Should().Be((ImpairmentModel.ExpectedLossAnnex2, ModelBasis.Voluntary));
+        ModeloAl(new DateOnly(2027, 6, 30)).Should().Be((ImpairmentModel.ArrearsAnnex1, ModelBasis.NotObligated), "el desistimiento rige desde su fecha");
+
+        (ImpairmentModel, ModelBasis) ModeloAl(DateOnly cierre)
+        {
+            var m = SelectorDeModeloDeDeterioro.SeleccionarAl(cierre, Regla, perfil, elecciones, EntregaDeCartera.K6a).ParaCredito("CONSUMO_SIN_LIBRANZA");
+            return (m.Modelo, m.Fundamento);
+        }
+    }
+
+    [Fact]
+    public void La_obligacion_sobrevenida_por_el_perfil_rige_desde_el_primer_cierre_dentro_de_su_vigencia()
+    {
+        var perfiles = new[]
+        {
+            new VigenciaDePerfil(new DateOnly(2026, 1, 1), new("COOP_MULTIACTIVA", null)),
+            new VigenciaDePerfil(new DateOnly(2027, 1, 1), new("COOP_MULTIACTIVA_SECCION_AC", null)),
+        };
+
+        SelectorDeModeloDeDeterioro.SeleccionarAl(new DateOnly(2026, 12, 31), Regla, perfiles, [], EntregaDeCartera.K6a).Obligada.Should().BeFalse();
+        var enero = SelectorDeModeloDeDeterioro.SeleccionarAl(new DateOnly(2027, 1, 31), Regla, perfiles, [], EntregaDeCartera.K6a);
+        enero.Obligada.Should().BeTrue();
+        enero.Segmentos.Should().OnlyContain(m => m.Modelo == ImpairmentModel.ExpectedLossAnnex2 && m.Fundamento == ModelBasis.Obligated);
+    }
+
+    [Fact]
+    public void Una_obligada_con_una_eleccion_registrada_sigue_obligada()
+    {
+        var s = SelectorDeModeloDeDeterioro.SeleccionarAl(new DateOnly(2026, 10, 31), Regla,
+            [new VigenciaDePerfil(new DateOnly(2026, 1, 1), new("FONDO_EMPLEADOS", "PLENA"))],
+            [new EleccionDeModelo(ImpairmentModelElectionKind.VoluntaryWithdrawal, Los3) { Desde = new DateOnly(2026, 1, 31) }], EntregaDeCartera.K6a);
+
+        s.Segmentos.Should().OnlyContain(m => m.Fundamento == ModelBasis.Obligated && m.Modelo == ImpairmentModel.ExpectedLossAnnex2,
+            "una obligada no desiste: la elección no la toca (Lending.ImpairmentModel.Obligated la niega al registrarla)");
     }
 }

@@ -262,7 +262,9 @@ public sealed class ImportCreditLinesCommandHandler(
                 Activa = f.SiNo(C.Activa, porDefecto: true),
             };
             var modalidad = f.Codigo(C.Modalidad, 40);
-            if (modalidad is not null && string.Equals(modalidad, ReglasDeLineaDeCredito.ModalidadDeVivienda, StringComparison.OrdinalIgnoreCase))
+            // D18: hasta K6b la vivienda no se carga; desde K6b (T1055) la línea pasa las reglas de la Ley 546 al registrarse (ReglasDeLineaDeCredito).
+            if (modalidad is not null && string.Equals(modalidad, ReglasDeLineaDeCredito.ModalidadDeVivienda, StringComparison.OrdinalIgnoreCase)
+                && !Housing.LectorDeVivienda.Disponible())
                 f.TodaviaNoDisponible(C.Modalidad, ErroresDeLineasDeCredito.EntregaDeVivienda);
 
             var tipoDeTasa = f.Enumeracion<RateKind>(C.TipoDeTasa, new Dictionary<string, RateKind> { ["fija"] = RateKind.Fixed, ["variable"] = RateKind.Variable });

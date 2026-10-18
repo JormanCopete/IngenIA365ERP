@@ -32,6 +32,15 @@ public sealed record ResultadoDePoliticaEfectiva(
 }
 
 /// <summary>
+/// K6a (T1016): el resultado de combinar el <see cref="Anexo2"/> vigente con la política: el que rige, cada celda tocada y las que la norma no
+/// tiene (con su ruta).
+/// </summary>
+public sealed record ResultadoDePoliticaEfectivaAnexo2(Anexo2 Efectiva, IReadOnlyList<CeldaDePolitica> Celdas, IReadOnlyList<ErrorDeDocumentoNormativo> Errores)
+{
+    public IReadOnlyList<CeldaDePolitica> MenosEstrictas => Celdas.Where(c => c.MenosEstricta).ToList();
+}
+
+/// <summary>
 /// La política SARC efectiva (feature 013, US9, T0692; T45, R54; FR-099, FR-103, FR-104): <b>el máximo por celda</b> entre la norma
 /// vigente y la política validada, «máximo» en el sentido de lo más estricto:
 /// <list type="bullet">
@@ -75,6 +84,66 @@ public static class PoliticaSarcEfectiva
 
         return new(norma.ConTablas(segmentos, garantias, general), celdas, politica.DeterioroGeneralAdicional,
             politica.AdicionalCompensaIndividual, errores);
+    }
+
+    /// <summary>
+    /// K6a (T1016; data-model §23.10): el <see cref="Anexo2"/> que rige con la política del consejo, <b>el máximo por celda</b> en la PI de cada
+    /// calificación, en cada tramo de PDI y en la PDI sin incumplimiento (más alta es más estricta). Una celda que la norma vigente no tiene es un
+    /// error con su ruta; una menos estricta deja la de la norma. Ni los coeficientes, ni los cortes, ni la homologación se tocan: son el modelo, no
+    /// una tolerancia.
+    /// </summary>
+    public static ResultadoDePoliticaEfectivaAnexo2 CombinarAnexo2(Anexo2 norma, PoliticaSarc? politica)
+    {
+        ArgumentNullException.ThrowIfNull(norma);
+        politica ??= PoliticaSarc.Vacia;
+        var celdas = new List<CeldaDePolitica>();
+        var errores = new List<ErrorDeDocumentoNormativo>();
+
+        var pi = norma.ProbabilidadesDeIncumplimiento.Select(t => t with
+        {
+            PorCalificacion = t.PorCalificacion.Select(p =>
+            {
+                var propuesta = politica.ProbabilidadesDeIncumplimiento.FirstOrDefault(x => x.Segmento == t.Segmento && x.TipoDeOrganizacion == t.TipoDeOrganizacion
+                    && x.Categoria == p.Categoria);
+                if (propuesta is null) return p;
+                var efectiva = Math.Max(p.Fraccion, propuesta.Fraccion);
+                celdas.Add(new(PoliticaSarc.RutaDePi(t.Segmento, t.TipoDeOrganizacion, p.Categoria), p.Fraccion, propuesta.Fraccion, efectiva));
+                return p with { Fraccion = efectiva };
+            }).ToList(),
+        }).ToList();
+        foreach (var x in politica.ProbabilidadesDeIncumplimiento.Where(x => norma.TablaDePi(x.Segmento, x.TipoDeOrganizacion) is null))
+            errores.Add(new(PoliticaSarc.RutaDePi(x.Segmento, x.TipoDeOrganizacion, x.Categoria), "La norma vigente no trae esa PI."));
+
+        var pdi = norma.PerdidasDadoElIncumplimiento.Select(g => g with
+        {
+            Tramos = g.Tramos.Select(t =>
+            {
+                var propuesta = politica.PerdidasDadoElIncumplimiento.FirstOrDefault(x => x.TipoDeGarantia == g.TipoDeGarantia && x.DiasDesde == t.DiasDesde);
+                if (propuesta is null) return t;
+                var efectiva = Math.Max(t.Fraccion, propuesta.Fraccion);
+                celdas.Add(new(PoliticaSarc.RutaDePdi(g.TipoDeGarantia, t.DiasDesde), t.Fraccion, propuesta.Fraccion, efectiva));
+                return t with { Fraccion = efectiva };
+            }).ToList(),
+        }).ToList();
+        foreach (var x in politica.PerdidasDadoElIncumplimiento.Where(x => norma.Pdi(x.TipoDeGarantia)?.Tramos.Any(t => t.DiasDesde == x.DiasDesde) != true))
+            errores.Add(new(PoliticaSarc.RutaDePdi(x.TipoDeGarantia, x.DiasDesde), "La norma vigente no trae ese tramo de PDI."));
+
+        var segmentos = norma.Segmentos.Select(s => s with
+        {
+            PdiSinIncumplimiento = s.PdiSinIncumplimiento.Select(p =>
+            {
+                var propuesta = politica.PerdidasSinIncumplimiento.FirstOrDefault(x => x.Segmento == s.Codigo && x.TipoDeGarantia == p.TipoDeGarantia);
+                if (propuesta is null) return p;
+                var efectiva = Math.Max(p.Fraccion, propuesta.Fraccion);
+                celdas.Add(new(PoliticaSarc.RutaDePdiSinIncumplimiento(s.Codigo, p.TipoDeGarantia), p.Fraccion, propuesta.Fraccion, efectiva));
+                return p with { Fraccion = efectiva };
+            }).ToList(),
+        }).ToList();
+        foreach (var x in politica.PerdidasSinIncumplimiento.Where(x =>
+                     norma.Segmento(x.Segmento)?.PdiSinIncumplimiento.Any(p => p.TipoDeGarantia == x.TipoDeGarantia) != true))
+            errores.Add(new(PoliticaSarc.RutaDePdiSinIncumplimiento(x.Segmento, x.TipoDeGarantia), "La norma vigente no trae esa PDI sin incumplimiento."));
+
+        return new(norma.ConTablas(segmentos, pi, pdi), celdas, errores);
     }
 
     private static SegmentoSarc CombinarSegmento(SegmentoSarc s, PoliticaSarc politica, List<CeldaDePolitica> celdas, List<ErrorDeDocumentoNormativo> errores)

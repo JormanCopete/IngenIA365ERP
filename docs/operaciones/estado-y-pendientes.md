@@ -803,6 +803,48 @@ Pendientes abiertos de la feature, fuera de las entregas:
   pantallas de Inventario y Compras de I1 y la aprobación presencial con llave se verifican a mano en
   Windows y Android y se anota el resultado.
 
+#### P19 — Feature 013 (cartera financiera): K1 a K6b construidas en su rama, **sin desplegar**
+
+**Estado: rama local `013-cartera-financiera`, sin merge a `develop` y sin desplegar en DEV, QA ni producción** (corte 2026-10-17, fase 24
+de Polish hecha en local). Cartera desde cero en reemplazo de la heredada, por entregas; el índice de manuales y runbooks es
+[cartera.md](../manual/cartera.md) y la puesta en marcha, [cartera-puesta-en-marcha.md](cartera-puesta-en-marcha.md).
+
+| Entrega | Qué trae | DEV | QA | Producción | Release | Respaldo antes de promover |
+|---|---|---|---|---|---|---|
+| K1 | plataforma, retiro de lo heredado, gobierno, líneas, originación, desembolso, causación, pagos por el contrato, ventas a crédito, integración contable, riesgo y cierre, migración y activación, documentos | — | — | — | — | `<base>-AAAAMMDD-pre-f013.dump` por base (destructiva `RetiroDeLaCarteraHeredada`, segundo revisor H7) |
+| K2 | libranza (`CarteraLibranza`) | — | — | — | — | `<base>-AAAAMMDD-pre-f013-k2.dump` |
+| K3 | novedades, condonaciones y castigo (`CarteraNovedades`) | — | — | — | — | `…-pre-f013-k3.dump` |
+| K4 | cobranza y aviso previo (`CarteraCobranza`, `CarteraCobranzaSalida`) | — | — | — | — | `…-pre-f013-k4.dump` |
+| K5 | extracto, certificado tributario, informes, tablero, SICSES y centrales (`CarteraInformes`, `CarteraComprobanteDeCargue`) | — | — | — | — | `…-pre-f013-k5.dump` |
+| K6a | pérdida esperada (`CarteraPerdidaEsperada`) | — | — | — | — | `…-pre-f013-k6a.dump` |
+| K6b | vivienda y UVR (`CarteraVivienda`) | — | — | — | — | `…-pre-f013-k6b.dump` |
+
+Lo que hay que saber antes de llevarla a un ambiente:
+
+- **K1 no sale en vivo sin Recaudo y Tesorería reales** (Q1 B): en producción la activación responde
+  `Lending.Activation.RequirementsMissing` mientras no haya un recaudador `Receipts` y un destino `Treasury` registrados sin dobles de
+  prueba. Las doce condiciones de salida están en el runbook de puesta en marcha §10.
+- Las migraciones de K1 están **congeladas** (T0802): todo cambio de esquema es una migración nueva. El orden y la cabecera
+  `MIGRACION-DESTRUCTIVA-APROBADA` del retiro (diagnóstico, respaldo y segundo revisor, hoy «pendiente») en
+  [cartera-retiro-heredado.md](cartera-retiro-heredado.md).
+- Los permisos `Lending.*` los siembra la API al arrancar, no el DbMigrator.
+
+Pendientes abiertos de la feature (dueño, contadora o ambiente):
+
+1. **Recaudo y Tesorería** (Q1): especificarlas, construirlas y desplegarlas; sin ellas COOFLOPAL no sale en vivo con Cartera.
+2. **Cotejos de layouts** (I7, SC-019): el SICSES y los archivos de centrales llevan campos `verified = false` hasta que el dueño los coteje
+   con el instructivo vigente y un archivo aceptado; mientras tanto generar exige reconocer la alerta.
+3. **Anexo 2** (E8): cotejar el Anexo 2 sembrado (PI de la aplicación voluntaria, integrales con sección de ahorro, el «00») antes de la primera
+   cooperativa obligada.
+4. **Corrección monetaria UVR** (T1049, E12): la cuenta de la corrección monetaria la elige la contadora; los créditos en UVR van en un solo
+   tramo; la corrección de una UVR ya causada recalcula los días causados desde la fase 24 (runbook de valores nacionales §3a), salvo el
+   reparto de un pago aplicado en un día corregido.
+5. **Verificación en MAUI** (T1081): no hay pruebas de navegador ni de la app; las pantallas de Cartera, el simulador, la votación en presencia
+   con llave o código y los documentos se prueban a mano en Windows y Android.
+6. **Corrida final** (T1064, T1071): las e2e de Cartera (colección «Cartera e2e») y las de volumen (`RUN_PERF_TESTS=1`) en PostgreSQL y SQL
+   Server, de una vez, antes de promover; el guion `tools/scripts/carga-cartera-sintetica.ps1` sirve para medir con volumen en DEV y QA.
+7. **QA por rol, ensayo general de COOFLOPAL, validación de la contadora y promoción** (T1078–T1089): con autorización expresa del dueño.
+
 ### 🟡 Prioridad media
 
 #### P4 — Sellado mensual regulatorio suspendido
@@ -846,6 +888,15 @@ found`), y la Web arrancaba mostrando una página en blanco.
 
 Se agregó una comprobación puntual en el `Dockerfile` de la Web, pero un paso de
 CI que ejecute cada imagen (`--help`, *health check*) cerraría la clase completa.
+
+#### P18 — Feature nueva de Ahorros: ahorros, aportes y CDT (después de K1 de la 013)
+
+Respuesta del dueño a la pregunta A10 de la 013 (2026-10-14, `specs/013-cartera-financiera/decisiones-transversales.md` §5):
+ahorros, aportes y CDT se **renuevan en una feature propia de Ahorros**, que se especifica **después de K1** de Cartera.
+Hasta entonces sigue lo construido en la 013: las 38 tablas conservadas de la cartera heredada, en el espacio de nombres
+`Savings`, con rutas `/api/savings/*` y `/api/reports/savings/*`, sin cambios funcionales (FR-144). **No se ha construido
+nada de la feature nueva**: falta especificarla (`/speckit-specify`), con lo que Cartera ya consume de aportes (saldos de
+aportes para el cupo, D19) y el retiro de asociado (FR-061) como interfaces que esa feature tendrá que ofrecer.
 
 ### 🟢 Prioridad baja
 

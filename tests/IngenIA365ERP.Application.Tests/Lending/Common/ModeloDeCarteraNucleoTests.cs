@@ -16,10 +16,27 @@ namespace IngenIA365ERP.Application.Tests.Lending.Common;
 ///
 /// <para>US9 (bloque 12B, T0697): suma las siete tablas de <c>CarteraRiesgo</c> (data-model §23.1–§23.6, §23.10) con sus marcas, y las FK de
 /// <c>LND_AccountingFactParts</c> hacia el cierre y su reapertura, que la base dejó sin crear (C66).</para>
+///
+/// <para>K2 (fase 15, T0827): suma las ocho tablas de <c>CarteraLibranza</c> con sus marcas: la línea del archivo, el resultado y el seguimiento
+/// son hechos; la línea va sin diferencias de auditoría (C46).</para>
+///
+/// <para>K3 (fases 16 y 17, T0875): suma las nueve tablas de <c>CarteraNovedades</c> (data-model §25.1–§25.6, §23.7); ninguna es hecho: las
+/// novedades, condonaciones, lotes y evaluaciones avanzan de estado.</para>
+///
+/// <para>K4 (fase 18, T0939): suma las once tablas de <c>CarteraCobranza</c> (data-model §26.3–§26.10). Son hechos la historia de etapas, la
+/// asignación, la gestión, la promesa, la cuota del acuerdo y la actuación jurídica; la etapa, la regla, el acuerdo, el proceso y la campaña
+/// cambian de vigencia o de estado.</para>
+///
+/// <para>K5 (fase 21, T0997, T1001): suma las dos tablas de <c>CarteraInformes</c> (data-model §28): el archivo regulatorio avanza de estado; su
+/// línea de central es hecho <c>bigint</c> sin diferencias de auditoría (C46).</para>
+///
+/// <para>K6a (fase 22, T1032, T1033): suma las dos tablas de <c>CarteraPerdidaEsperada</c> (data-model §23.8, §23.9): la elección voluntaria y la carga
+/// complementaria del historial son hechos; la carga, sin diferencias de auditoría (C46). La FK de <c>LND_LoanArrearsHistory.ArrearsHistoryLoadId</c>
+/// nace con ella.</para>
 /// </summary>
 public class ModeloDeCarteraNucleoTests
 {
-    /// <summary>Las 74 + 17 de data-model §14 más las dos del grupo conectado (C112): 93.</summary>
+    /// <summary>Las 74 + 17 de data-model §14 más las dos del grupo conectado (C112), y las de CarteraRiesgo, CarteraLibranza y CarteraNovedades.</summary>
     private static readonly string[] Tablas =
     [
         // Configuración (19)
@@ -55,6 +72,20 @@ public class ModeloDeCarteraNucleoTests
         // Riesgo y cierres (US9, CarteraRiesgo)
         "LND_RiskPolicyVersions", "LND_MonthlyCloses", "LND_MonthlyCloseLoans", "LND_MonthlyCloseGeneralImpairments", "LND_MonthlyCloseReopenings",
         "LND_LoanArrearsHistory", "LND_AnalysisRatings",
+        // Libranza (K2, CarteraLibranza; data-model §24.1–§24.4, §24.6–§24.8, §24.10)
+        "LND_PayrollAgreements", "LND_PayrollAgreementVersions", "LND_PayrollAgreementContacts", "LND_PayrollAgreementResultCodes",
+        "LND_PayrollDeductionFiles", "LND_PayrollDeductionFileLines", "LND_PayrollDeductionResults", "LND_NonDeductionFollowUps",
+        // Novedades, condonaciones, castigo y evaluación (K3, CarteraNovedades; data-model §25.1–§25.6, §23.7)
+        "LND_LoanNovelties", "LND_LoanNoveltyLoans", "LND_LoanNoveltyConsents", "LND_Waivers", "LND_WaiverLines", "LND_WriteOffBatches",
+        "LND_WriteOffBatchItems", "LND_PortfolioEvaluations", "LND_PortfolioEvaluationLoans",
+        // Cobranza (K4, CarteraCobranza; data-model §26.3–§26.10)
+        "LND_MessageCampaigns", "LND_CollectionStages", "LND_CollectionStageHistory", "LND_CollectorAssignmentRules", "LND_CollectorAssignments",
+        "LND_CollectionActions", "LND_PaymentPromises", "LND_PaymentAgreements", "LND_PaymentAgreementInstallments", "LND_LegalProcesses",
+        "LND_LegalProcessActions",
+        // Archivos regulatorios (K5, CarteraInformes; data-model §28)
+        "LND_RegulatoryFiles", "LND_RegulatoryFileLines",
+        // Pérdida esperada (K6a, CarteraPerdidaEsperada; data-model §23.8, §23.9)
+        "LND_ImpairmentModelElections", "LND_ArrearsHistoryLoads",
     ];
 
     /// <summary>Las 17 de preparación (data-model §29.3).</summary>
@@ -78,18 +109,21 @@ public class ModeloDeCarteraNucleoTests
         "LendingInboundMessageEvaluation", "AccountingFactPart", "DebtorMessage", "DebtorMessageEvent", "PriorNotice",
         "IssuedLendingDocument", "IssuedDocumentLoan", "IssuedDocumentEvent", "MigrationLoadDifference", "ProvisionalCollection",
         "LendingActivation", "MonthlyClose", "MonthlyCloseLoan", "MonthlyCloseGeneralImpairment", "MonthlyCloseReopening", "LoanArrearsHistoryEntry",
-        "RiskPolicyVersion", .. Preparacion,
+        "RiskPolicyVersion", "PayrollDeductionFileLine", "PayrollDeductionResult", "NonDeductionFollowUp",
+        "CollectionStageHistoryEntry", "CollectorAssignment", "CollectionAction", "PaymentPromise", "PaymentAgreementInstallment", "LegalProcessAction",
+        "RegulatoryFileLine", "ImpairmentModelElection", "ArrearsHistoryLoad",
+        .. Preparacion,
     ];
 
     /// <summary>Sin diferencias de auditoría (T67, C46).</summary>
     private static readonly string[] SinDiff =
         ["LoanDailyPosition", "LoanControl", "DebtorControl", "AccountingFactPart", "LendingProcessRunError", "MonthlyCloseLoan", "LoanArrearsHistoryEntry",
-            .. Preparacion];
+            "PayrollDeductionFileLine", "RegulatoryFileLine", "ArrearsHistoryLoad", .. Preparacion];
 
     /// <summary><c>bigint</c> (data-model §0.1, C43, §26.2, §29.3).</summary>
     private static readonly string[] Largas =
     [
-        "LoanOperation", "LoanTransaction", "LoanDailyPosition", "RepaymentInstallment", "DebtorMessageEvent",
+        "LoanOperation", "LoanTransaction", "LoanDailyPosition", "RepaymentInstallment", "DebtorMessageEvent", "RegulatoryFileLine",
         "MigrationInstallmentRow", "MigrationBalanceRow", "MigrationArrearsHistoryRow",
     ];
 
@@ -109,7 +143,9 @@ public class ModeloDeCarteraNucleoTests
         var tablas = DeCartera(Modelo(postgres)).Select(e => e.GetTableName()).ToList();
 
         tablas.Should().OnlyHaveUniqueItems().And.BeEquivalentTo(Tablas);
-        Tablas.Should().HaveCount(100, "74 de negocio + 17 de preparación (data-model §14) + 2 del grupo conectado (C112) + 7 de CarteraRiesgo (US9)");
+        Tablas.Should().HaveCount(132,
+            "74 de negocio + 17 de preparación (data-model §14) + 2 del grupo conectado (C112) + 7 de CarteraRiesgo (US9) + 8 de CarteraLibranza (K2)"
+            + " + 9 de CarteraNovedades (K3) + 11 de CarteraCobranza (K4) + 2 de CarteraInformes (K5) + 2 de CarteraPerdidaEsperada (K6a)");
     }
 
     [Theory]
@@ -203,6 +239,63 @@ public class ModeloDeCarteraNucleoTests
         // US9 (T0697, C66): CarteraRiesgo crea las FK hacia el cierre y su reapertura.
         partes.GetForeignKeys().Should().Contain(fk => fk.Properties.Single().Name == "MonthlyCloseId" && fk.PrincipalEntityType.GetTableName() == "LND_MonthlyCloses")
             .And.Contain(fk => fk.Properties.Single().Name == "MonthlyCloseReopeningId" && fk.PrincipalEntityType.GetTableName() == "LND_MonthlyCloseReopenings");
+    }
+
+    [Theory]
+    [MemberData(nameof(Motores))]
+    public void Las_columnas_de_K3_en_tablas_de_K1_apuntan_a_sus_tablas(bool postgres)
+    {
+        // K3 (T0876; data-model §14, parte 3): cinco columnas nacen con CarteraNovedades en tablas de K1.
+        var modelo = Modelo(postgres);
+        void Apunta(Type entidad, string columna, string tabla) =>
+            modelo.FindEntityType(entidad)!.GetForeignKeys()
+                .Should().Contain(fk => fk.Properties.Single().Name == columna && fk.PrincipalEntityType.GetTableName() == tabla, $"{entidad.Name}.{columna}");
+
+        Apunta(typeof(Domain.Entities.Lending.Loans.InsolvencyProceeding), "AgreementNoveltyId", "LND_LoanNovelties");
+        Apunta(typeof(Domain.Entities.Lending.Loans.LoanTermsVersion), "NoveltyId", "LND_LoanNovelties");
+        Apunta(typeof(Domain.Entities.Lending.Operations.LoanOperation), "NoveltyId", "LND_LoanNovelties");
+        Apunta(typeof(Domain.Entities.Lending.Operations.LoanOperation), "WaiverId", "LND_Waivers");
+        Apunta(typeof(Domain.Entities.Lending.Operations.LoanOperation), "WriteOffBatchItemId", "LND_WriteOffBatchItems");
+    }
+
+    [Theory]
+    [MemberData(nameof(Motores))]
+    public void La_columna_de_K6a_del_historial_apunta_a_la_carga_complementaria(bool postgres)
+    {
+        // K6a (T1032): la columna nació nula en CarteraRiesgo; su FK e índice nacen con CarteraPerdidaEsperada.
+        var historial = Modelo(postgres).FindEntityType(typeof(Domain.Entities.Lending.Risk.LoanArrearsHistoryEntry))!;
+        historial.GetForeignKeys().Should().Contain(fk => fk.Properties.Single().Name == "ArrearsHistoryLoadId"
+            && fk.PrincipalEntityType.GetTableName() == "LND_ArrearsHistoryLoads");
+        historial.GetIndexes().Should().Contain(i => i.GetDatabaseName() == "IX_LND_LoanArrearsHistory_ArrearsHistoryLoadId");
+    }
+
+    [Theory]
+    [MemberData(nameof(Motores))]
+    public void Las_columnas_de_K6b_son_nulas_en_UVR_o_con_su_defecto_en_pesos(bool postgres)
+    {
+        // K6b (T1048, T1059; CarteraVivienda): ninguna tabla nueva; la unidad del capital nace en pesos para lo anterior y los valores en UVR son
+        // nulos fuera de un crédito en UVR, con el alias ValorUvr (18,4).
+        var modelo = Modelo(postgres);
+        foreach (var tipo in new[] { typeof(Domain.Entities.Lending.Configuration.CreditLineVersion), typeof(Domain.Entities.Lending.Loans.LoanTermsVersion) })
+        {
+            var unidad = modelo.FindEntityType(tipo)!.FindProperty("DenominationUnit")!;
+            unidad.IsNullable.Should().BeFalse();
+            unidad.GetDefaultValue().Should().Be(Domain.Enums.Lending.DenominationUnit.Pesos, tipo.Name);
+        }
+        foreach (var (tipo, columnas) in new (Type, string[])[]
+                 {
+                     (typeof(Domain.Entities.Lending.Schedules.RepaymentInstallment),
+                         ["OpeningPrincipalUvr", "PrincipalUvr", "InterestUvr", "InsuranceUvr", "TotalUvr", "ClosingPrincipalUvr"]),
+                     (typeof(Domain.Entities.Lending.Schedules.RepaymentScheduleVersion), ["UvrValue"]),
+                     (typeof(Domain.Entities.Lending.Transactions.LoanTransaction), ["UvrAmount", "UvrValue"]),
+                     (typeof(Domain.Entities.Lending.Projections.LoanDailyPosition), ["UvrValue", "PrincipalUvr", "PayoffAmountUvr"]),
+                 })
+            foreach (var columna in columnas)
+            {
+                var p = modelo.FindEntityType(tipo)!.FindProperty(columna)!;
+                (p.IsNullable, p.GetPrecision(), p.GetScale()).Should().Be((true, 18, 4), $"{tipo.Name}.{columna}");
+            }
+        modelo.FindEntityType(typeof(Domain.Entities.Lending.Origination.CreditApplication))!.FindProperty("IsSocialHousing")!.IsNullable.Should().BeTrue();
     }
 
     private static IModel Modelo(bool postgres)

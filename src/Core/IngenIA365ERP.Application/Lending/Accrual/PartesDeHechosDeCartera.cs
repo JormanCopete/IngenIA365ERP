@@ -30,8 +30,14 @@ public sealed record DatosDeHecho(
 {
     public LoanRefV1 Referencia => new() { LoanPublicId = Credito.PublicId, LoanNumber = Credito.Number };
 
+    /// <summary>
+    /// K2 (T0843; FR-116, C44): el sub-segmento que rige después de un traslado de libranza o del paso a la forma alterna, si cambió frente al de
+    /// las condiciones; nulo = el de las condiciones.
+    /// </summary>
+    public string? Subsegmento { get; init; }
+
     public HechoDeCredito Hecho(DateOnly fechaContable) =>
-        new(Credito, Condiciones, CodigoDeLinea, DeudorPublicId, DeudorEsEmpleado, SucursalPublicId, fechaContable);
+        new(Credito, Condiciones, CodigoDeLinea, DeudorPublicId, DeudorEsEmpleado, SucursalPublicId, fechaContable) { Subsegmento = Subsegmento };
 }
 
 /// <summary>
@@ -66,8 +72,21 @@ public sealed record PartesEmitidas(
 {
     public static PartesEmitidas Vacias { get; } = new([], [], new Dictionary<(int, DateOnly, LoanConcept), Guid>());
 
+    /// <summary>
+    /// K6b (T1056): el mensaje de cada (crédito, día, concepto) de las filas de corrección monetaria (<c>MonetaryCorrection</c>), que comparten
+    /// concepto con las de causación del mismo día y van en otro hecho.
+    /// </summary>
+    public IReadOnlyDictionary<(int LoanId, DateOnly Dia, LoanConcept Concepto), Guid> MensajePorCorreccion { get; init; } =
+        new Dictionary<(int, DateOnly, LoanConcept), Guid>();
+
     public Guid? Mensaje(int loanId, DateOnly dia, LoanConcept concepto) =>
         MensajePorFila.TryGetValue((loanId, dia, concepto), out var m) ? m : null;
+
+    /// <summary>El mensaje de una fila según su clase: la corrección monetaria (K6b) tiene el suyo; lo demás, el de su concepto.</summary>
+    public Guid? Mensaje(int loanId, DateOnly dia, LoanConcept concepto, LoanTransactionKind clase) =>
+        clase == LoanTransactionKind.MonetaryCorrection
+            ? MensajePorCorreccion.TryGetValue((loanId, dia, concepto), out var m) ? m : null
+            : Mensaje(loanId, dia, concepto);
 }
 
 /// <summary>
@@ -97,6 +116,13 @@ public sealed class PartesDeHechosDeCartera(IApplicationDbContext db, EmisionDeC
     public static string TipoDe(LoanConcept concepto) =>
         ConceptosDe.First(kv => kv.Value.Contains(concepto)).Key;
 
+    /// <summary>El tipo masivo de una fila de causación: la corrección monetaria de un crédito en UVR (K6b, T1056) va en el suyo, de cualquier concepto.</summary>
+    public static string TipoDe(MovimientoDeLibro fila)
+    {
+        ArgumentNullException.ThrowIfNull(fila);
+        return fila.Clase == LoanTransactionKind.MonetaryCorrection ? CorreccionMonetariaUvrCausadaV1.Type : TipoDe(fila.Concepto);
+    }
+
     /// <summary>Los datos de hecho de los créditos cargados, en bloque.</summary>
     public async Task<IReadOnlyDictionary<int, DatosDeHecho>> DatosAsync(IEnumerable<CreditoCargado> cargados, CancellationToken ct)
     {
@@ -115,14 +141,26 @@ public sealed class PartesDeHechosDeCartera(IApplicationDbContext db, EmisionDeC
                              where versiones.Contains(s.CreditLineVersionId)
                              select new { s.CreditLineVersionId, s.Code, p.PublicId }).ToListAsync(ct);
 
+        // K2 (T0843): el vínculo de libranza vigente de los créditos cuya forma de pago cambió después de nacer (traslado o forma alterna).
+        var creditos = lista.Select(c => c.Credito.Id).ToList();
+        var cambiados = (await db.LoanPayrollLinks.AsNoTracking()
+                .Where(v => creditos.Contains(v.LoanId) && !v.IsDeleted && v.ValidTo == null
+                            && (v.Origin == LoanPayrollLinkOrigin.Transfer || v.Origin == LoanPayrollLinkOrigin.ChannelChange))
+                .ToListAsync(ct))
+            .GroupBy(v => v.LoanId).ToDictionary(g => g.Key, g => g.OrderByDescending(v => v.ValidFrom).First());
+
         var datos = new Dictionary<int, DatosDeHecho>();
         foreach (var c in lista)
         {
             var deudor = deudores.GetValueOrDefault(c.Credito.DebtorPersonId);
             var suyos = seguros.Where(s => s.CreditLineVersionId == c.Pactadas.CreditLineVersionId).ToList();
+            var subsegmento = EmisionDeCartera.SubsegmentoVigente(c.Vigentes.SubsegmentCode, cambiados.GetValueOrDefault(c.Credito.Id));
             datos[c.Credito.Id] = new DatosDeHecho(c.Credito, c.Vigentes, codigos.GetValueOrDefault(c.Credito.CreditLineId) ?? string.Empty,
                 deudor?.PublicId ?? Guid.Empty, deudor?.IsEmployee ?? false, sucursales.GetValueOrDefault(c.Credito.BranchId),
-                suyos.Count == 1 ? suyos[0].PublicId : null);
+                suyos.Count == 1 ? suyos[0].PublicId : null)
+            {
+                Subsegmento = subsegmento == c.Vigentes.SubsegmentCode ? null : subsegmento,
+            };
         }
         return datos;
     }
@@ -136,7 +174,7 @@ public sealed class PartesDeHechosDeCartera(IApplicationDbContext db, EmisionDeC
     {
         ArgumentNullException.ThrowIfNull(origen);
         var porDia = origen.Fuente == AccountingFactPartSource.DailyCycleBatch;
-        var filas = lineas.SelectMany(l => l.Filas.Where(f => f.Monto != 0m).Select(f => (Linea: l, Fila: f, Tipo: tipoUnico ?? TipoDe(f.Concepto))));
+        var filas = lineas.SelectMany(l => l.Filas.Where(f => f.Monto != 0m).Select(f => (Linea: l, Fila: f, Tipo: tipoUnico ?? TipoDe(f))));
         var grupos = filas
             .GroupBy(x => (Dia: porDia ? x.Linea.Dia : DateOnly.MinValue, x.Linea.Datos.Credito.BranchId, x.Tipo))
             .OrderBy(g => g.Key.Dia).ThenBy(g => g.Key.BranchId).ThenBy(g => g.Key.Tipo, StringComparer.Ordinal)
@@ -144,6 +182,7 @@ public sealed class PartesDeHechosDeCartera(IApplicationDbContext db, EmisionDeC
         var partes = new List<AccountingFactPart>();
         var mensajes = new List<IntegrationMessage>();
         var mensajePorFila = new Dictionary<(int, DateOnly, LoanConcept), Guid>();
+        var mensajePorCorreccion = new Dictionary<(int, DateOnly, LoanConcept), Guid>();
         var ordinal = 0;
         foreach (var g in grupos)
         {
@@ -225,9 +264,11 @@ public sealed class PartesDeHechosDeCartera(IApplicationDbContext db, EmisionDeC
             db.AccountingFactParts.Add(parte);
             partes.Add(parte);
             mensajes.Add(emitido.Value);
-            foreach (var x in g) mensajePorFila[(x.Linea.Datos.Credito.Id, x.Linea.Dia, x.Fila.Concepto)] = emitido.Value.PublicId;
+            foreach (var x in g)
+                (x.Fila.Clase == LoanTransactionKind.MonetaryCorrection && tipoUnico is null ? mensajePorCorreccion : mensajePorFila)
+                    [(x.Linea.Datos.Credito.Id, x.Linea.Dia, x.Fila.Concepto)] = emitido.Value.PublicId;
         }
-        return Result.Success(new PartesEmitidas(partes, mensajes, mensajePorFila));
+        return Result.Success(new PartesEmitidas(partes, mensajes, mensajePorFila) { MensajePorCorreccion = mensajePorCorreccion });
     }
 
     /// <summary>
@@ -348,6 +389,18 @@ public sealed class PartesDeHechosDeCartera(IApplicationDbContext db, EmisionDeC
             {
                 RunKind = deCorrida, RunPublicId = corrida?.PublicId, FactDate = dia, BatchNumber = tanda, PartNumber = parte, CatchUpOperation = puesta,
                 Totals = totales, Lines = lineas, LineCount = lineas.Count, ControlTotal = control,
+            },
+            // K6b (T1056): la corrección monetaria de los créditos en UVR.
+            CorreccionMonetariaUvrCausadaV1.Type => new CorreccionMonetariaUvrCausadaV1
+            {
+                RunKind = deCorrida, RunPublicId = corrida?.PublicId, FactDate = dia, BatchNumber = tanda, PartNumber = parte, CatchUpOperation = puesta,
+                Totals = totales, Lines = lineas, LineCount = lineas.Count, ControlTotal = control,
+            },
+            // K6b (decisión del dueño del 2026-10-17): el reparto de un pago corregido por la UVR, sólo de la corrida de corrección.
+            PagoRedistribuidoPorValorNacionalV1.Type => new PagoRedistribuidoPorValorNacionalV1
+            {
+                RunKind = deCorrida, RunPublicId = corrida?.PublicId, FactDate = dia, BatchNumber = tanda, PartNumber = parte,
+                CorrectedNationalValue = valorCorregido, Totals = totales, Lines = lineas, LineCount = lineas.Count, ControlTotal = control,
             },
             AjusteDeCausacionPorFechaValorV1.Type => new AjusteDeCausacionPorFechaValorV1
             {

@@ -52,6 +52,8 @@ public sealed record BorradorDeRegla(int Order, string Subject, string MinimumLe
     public int? MinDaysPastDue { get; init; }
     public int? MaxDaysPastDue { get; init; }
     public LoanConcept? Concept { get; init; }
+    public NoveltyMechanism? NoveltyMechanism { get; init; }
+    public NoveltyCause? NoveltyCause { get; init; }
 
     public static BorradorDeRegla De(AttributionRule r, string codigoDelNivelMinimo) => new(r.Order, r.Subject, codigoDelNivelMinimo)
     {
@@ -68,6 +70,8 @@ public sealed record BorradorDeRegla(int Order, string Subject, string MinimumLe
         MinDaysPastDue = r.MinDaysPastDue,
         MaxDaysPastDue = r.MaxDaysPastDue,
         Concept = r.Concept,
+        NoveltyMechanism = r.NoveltyMechanism,
+        NoveltyCause = r.NoveltyCause,
     };
 }
 

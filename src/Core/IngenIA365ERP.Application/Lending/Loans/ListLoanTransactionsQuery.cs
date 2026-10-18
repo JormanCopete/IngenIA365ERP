@@ -60,7 +60,11 @@ public sealed class ListLoanTransactionsQueryHandler(IApplicationDbContext db, I
             t.ProcessRunId is { } r && deCorrida.TryGetValue(r, out var run) ? run : null,
             t.ReversesTransactionId is { } x && reversadas.TryGetValue(x, out var original) ? original : null,
             espejos.TryGetValue(t.Id, out var espejo) ? espejo : null,
-            t.MessagePublicId)).ToList();
+            t.MessagePublicId)
+        {
+            UvrAmount = t.UvrAmount,
+            UvrValue = t.UvrValue,
+        }).ToList();
         return Result.Success(new PagedResult<LoanTransactionDto>(items, pagina.SafePage, pagina.SafePageSize, total));
     }
 }

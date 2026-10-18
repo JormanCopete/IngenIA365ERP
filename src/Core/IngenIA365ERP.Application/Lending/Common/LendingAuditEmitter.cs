@@ -52,9 +52,12 @@ public sealed class LendingAuditEmitter(IServiceProvider servicios, ILogger<Lend
     public Task<Guid?> EmitirDocumentoReimpresoAsync(Guid documentPublicId, string clase, string formato, CancellationToken ct = default) =>
         EmitAsync(AuditEventTypes.LendingDocumentReprinted, "IssuedLendingDocument", documentPublicId, new { kind = clase, format = formato }, ct);
 
-    /// <summary>La verificación de un documento emitido (por su código de verificación) y su resultado.</summary>
-    public Task<Guid?> EmitirDocumentoVerificadoAsync(Guid documentPublicId, bool valido, CancellationToken ct = default) =>
-        EmitAsync(AuditEventTypes.LendingDocumentVerified, "IssuedLendingDocument", documentPublicId, new { valid = valido }, ct);
+    /// <summary>
+    /// La verificación de un documento emitido (por su código de verificación) y su resultado; en K5 (T0972), si se comparó la huella de un PDF, si
+    /// coincidió con la guardada (<c>pdfMatches</c>, nulo si no se comparó).
+    /// </summary>
+    public Task<Guid?> EmitirDocumentoVerificadoAsync(Guid documentPublicId, bool valido, CancellationToken ct = default, bool? pdfCoincide = null) =>
+        EmitAsync(AuditEventTypes.LendingDocumentVerified, "IssuedLendingDocument", documentPublicId, new { valid = valido, pdfMatches = pdfCoincide }, ct);
 
     /// <summary>
     /// US13 (T0784): la emisión de un documento al deudor, con su clase, número, entrega y el SHA-256 del PDF guardado. La emisión muestra los datos
@@ -108,11 +111,68 @@ public sealed class LendingAuditEmitter(IServiceProvider servicios, ILogger<Lend
         EmitAsync(AuditEventTypes.LendingDisbursementFileDownloaded, "DisbursementFile", filePublicId, new { number = numero, sha256 }, ct);
 
     /// <summary>
+    /// K2 (T0836; C46): el evento resumen de un archivo de descuentos —número, convenio, período, versión, conteos por novedad, total y huella—, en
+    /// la transacción de la generación (se llama después de su guardado). Sus líneas van con <c>[SinDiffDeAuditoria]</c>: no es una lectura sensible.
+    /// </summary>
+    public Task<Guid?> EmitirArchivoDeDescuentosGeneradoAsync(Guid filePublicId, object resumen, CancellationToken ct = default) =>
+        EmitAsync(AuditEventTypes.LendingPayrollDeductionFileGenerated, "PayrollDeductionFile", filePublicId, resumen, ct);
+
+    /// <summary>
+    /// K2 (T0836): el enlace de descarga de un archivo de descuentos (documentos, créditos y cuotas de los deudores). Se registra como el de los
+    /// demás archivos de módulo; no va en <see cref="LecturasSensibles"/>, que es la lista cerrada de research §13.
+    /// </summary>
+    public Task<Guid?> EmitirArchivoDeDescuentosDescargadoAsync(Guid filePublicId, string numero, string sha256, CancellationToken ct = default) =>
+        EmitAsync(AuditEventTypes.LendingPayrollDeductionFileDownloaded, "PayrollDeductionFile", filePublicId, new { number = numero, sha256 }, ct);
+
+    /// <summary>
+    /// K5 (T1004; C46): el evento resumen de una generación regulatoria —clase, central, período, versión, estado, layout, advertencias, conteos de
+    /// filas, bloqueantes y excluidos, y la huella—, en la transacción de la generación (se llama después de su guardado). Las líneas de las centrales
+    /// van con <c>[SinDiffDeAuditoria]</c>: no es una lectura sensible.
+    /// </summary>
+    public Task<Guid?> EmitirArchivoRegulatorioGeneradoAsync(Guid filePublicId, object resumen, CancellationToken ct = default) =>
+        EmitAsync(AuditEventTypes.LendingRegulatoryFileGenerated, "RegulatoryFile", filePublicId, resumen, ct);
+
+    /// <summary>K5 (T1004): la marca de cargado en el portal, con el radicado, su fecha y el comprobante si se adjuntó.</summary>
+    public Task<Guid?> EmitirArchivoRegulatorioCargadoAsync(Guid filePublicId, object detalle, CancellationToken ct = default) =>
+        EmitAsync(AuditEventTypes.LendingRegulatoryFileUploaded, "RegulatoryFile", filePublicId, detalle, ct);
+
+    /// <summary>
+    /// K5 (T1004): el enlace de descarga de un archivo regulatorio (trae los deudores del período), con su huella. Se registra como los demás archivos de
+    /// módulo; no va en <see cref="LecturasSensibles"/>, que es la lista cerrada de research §13.
+    /// </summary>
+    public Task<Guid?> EmitirArchivoRegulatorioDescargadoAsync(Guid filePublicId, string archivo, string? sha256, CancellationToken ct = default) =>
+        EmitAsync(AuditEventTypes.LendingRegulatoryFileDownloaded, "RegulatoryFile", filePublicId, new { fileName = archivo, sha256 }, ct);
+
+    /// <summary>
     /// US8 (T0752): la activación de Cartera, en su transacción, con los requisitos evaluados, lo que nació y las huellas del cuadre, la conciliación y
     /// los cobros provisionales. No es una lectura sensible: no va en <see cref="LecturasSensibles"/>.
     /// </summary>
     public Task<Guid?> EmitirActivacionRegistradaAsync(Guid activationPublicId, object detalle, CancellationToken ct = default) =>
         EmitAsync(AuditEventTypes.LendingActivationRegistered, "LendingActivation", activationPublicId, detalle, ct);
+
+    /// <summary>
+    /// K3, bloque D: el crédito que se excluye de un lote de castigo al aplicarlo porque ya no cumple, con lo que le falta y el motivo, en la transacción del
+    /// lote (se llama después de su guardado). No es una lectura sensible: no va en <see cref="LecturasSensibles"/>.
+    /// </summary>
+    public Task<Guid?> EmitirCreditoExcluidoDelCastigoAsync(Guid batchPublicId, string lote, string credito, IReadOnlyList<string> faltan, string motivo,
+        CancellationToken ct = default) =>
+        EmitAsync(AuditEventTypes.LendingWriteOffItemExcluded, "WriteOffBatch", batchPublicId,
+            new { batch = lote, loanNumber = credito, missing = faltan, reason = motivo }, ct);
+
+    /// <summary>
+    /// K4 (T0944; C64): el resumen del registro de la etapa migrada de una cooperativa —cuántos créditos, la equivalencia de códigos de origen a etapas,
+    /// los que no casaron y los que ya estaban—, al terminar la corrida. No es una lectura sensible.
+    /// </summary>
+    public Task<Guid?> EmitirEtapasMigradasRegistradasAsync(Guid processRunPublicId, object resumen, CancellationToken ct = default) =>
+        EmitAsync(AuditEventTypes.LendingMigratedCollectionStagesRegistered, "LendingProcessRun", processRunPublicId, resumen, ct);
+
+    /// <summary>K6a (T1034): la elección voluntaria del modelo de pérdida esperada, en la transacción que la registra. No es una lectura sensible.</summary>
+    public Task<Guid?> EmitirEleccionDelModeloRegistradaAsync(Guid electionPublicId, object detalle, CancellationToken ct = default) =>
+        EmitAsync(AuditEventTypes.LendingImpairmentModelElectionRegistered, "ImpairmentModelElection", electionPublicId, detalle, ct);
+
+    /// <summary>K6a (T1035; C46): el evento resumen de una carga complementaria del historial de mora (sus filas van sin diferencias). No es una lectura sensible.</summary>
+    public Task<Guid?> EmitirHistorialComplementarioAplicadoAsync(Guid loadPublicId, object resumen, CancellationToken ct = default) =>
+        EmitAsync(AuditEventTypes.LendingArrearsHistoryLoadApplied, "ArrearsHistoryLoad", loadPublicId, resumen, ct);
 
     private async Task<Guid?> EmitAsync(string action, string entityType, Guid? entityPublicId, object? after, CancellationToken ct, bool aparte = false)
     {

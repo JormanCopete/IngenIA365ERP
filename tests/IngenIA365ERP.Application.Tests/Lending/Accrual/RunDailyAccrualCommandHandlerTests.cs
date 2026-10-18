@@ -9,7 +9,9 @@ using IngenIA365ERP.Domain.Entities.Lending.Operations;
 using IngenIA365ERP.Domain.Enums.Integration;
 using IngenIA365ERP.Domain.Enums.Lending;
 using IngenIA365ERP.Domain.Lending;
+using IngenIA365ERP.Application.Common.Models;
 using Microsoft.EntityFrameworkCore;
+using NSubstitute;
 
 namespace IngenIA365ERP.Application.Tests.Lending.Accrual;
 
@@ -169,6 +171,47 @@ public class RunDailyAccrualCommandHandlerTests : IAsyncLifetime
         var lote = await _c.Db.IntegrationBatches.SingleAsync();
         lote.Trigger.Should().Be(BatchTrigger.LendingAccrualRun);
         entrega.BatchId.Should().Be(lote.Id);
+    }
+
+    [Fact]
+    public async Task Con_FaltaDeRegla_Bloquear_y_la_causacion_sin_regla_la_tanda_no_avanza_alerta_y_reintentada_sigue()
+    {
+        // Feature 013, T0801 (A8 = «Bloquear todo», respuesta del dueño del 2026-10-14): los procesos también se detienen.
+        await _c.SembrarTiposDeHechoAsync();
+        _c.ConValidacionPreviaDeProceso();
+        _c.Db.ParameterVersions.Add(new Domain.Entities.Parameters.ParameterVersion
+        {
+            Module = Domain.Lending.Parameters.ParametrosDeCartera.Modulo, Key = Domain.Lending.Parameters.ParametrosDeCartera.ContabilidadFaltaDeRegla,
+            ScopeKind = Domain.Enums.Parameters.ParameterScopeKind.None, Value = "Bloquear", ValidFrom = new DateOnly(2026, 1, 1), Reason = "prueba",
+            CreatedBy = "test",
+        });
+        await _c.Db.SaveChangesAsync();
+        _c.D.Contabilidad.EvaluarAsync(Arg.Any<IReadOnlyList<Application.Common.Integration.Accounting.MensajeContableDto>>(), Arg.Any<CancellationToken>())
+            .Returns(Result.Success(new Application.Common.Integration.Accounting.ResultadoDeEvaluacionContableDto(false,
+                [new Application.Common.Integration.Accounting.HallazgoDeCarteraDto(InteresCausadoV1.Type, "InteresPorCobrar", null, null,
+                    "Accounting.LendingRule.Missing", "No hay regla para el interés por cobrar.",
+                    new Application.Common.Integration.Accounting.QuienCorrigeDto("Contabilidad", "/contabilidad/cartera/matriz", "Accounting.LendingRules.Manage"))],
+                [])));
+        var d = Hoy.AddDays(1);
+        _c.Ir(d);
+        var corrida = await _c.CicloAsync(d);
+
+        var tanda = async () => await _c.Causar().Handle(new RunDailyAccrualCommand(corrida.PublicId), default);
+
+        (await tanda.Should().ThrowAsync<ReglaDeCarteraException>()).Which.Codigo.Should().Be("Lending.Prevalidation.NotPostable");
+        await _c.D.Alertas.Received().LevantarAsync(Arg.Is<AlertaALevantar>(a => a.TypeCode == TiposDeAlerta.HechoNoContabilizable && a.Body.Contains("no se confirmó")),
+            Arg.Any<CancellationToken>());
+        _c.Db.ChangeTracker.Clear();
+        (await _c.ControlAsync()).LastAccruedDate.Should().Be(Hoy, "la tanda no avanzó");
+        (await _c.Db.LoanTransactions.AnyAsync(t => t.Kind == LoanTransactionKind.Accrual)).Should().BeFalse();
+        (await _c.Db.IntegrationMessages.AnyAsync(m => m.Type == InteresCausadoV1.Type)).Should().BeFalse();
+
+        // Corregida la matriz, la misma corrida sigue desde su cursor.
+        _c.D.Contabilidad.EvaluarAsync(Arg.Any<IReadOnlyList<Application.Common.Integration.Accounting.MensajeContableDto>>(), Arg.Any<CancellationToken>())
+            .Returns(Result.Success(new Application.Common.Integration.Accounting.ResultadoDeEvaluacionContableDto(true, [], [])));
+        var terminada = await _c.CorrerCicloAsync(corrida);
+        terminada.Status.Should().Be(LendingProcessRunStatus.Completed);
+        (await _c.ControlAsync()).LastAccruedDate.Should().Be(d);
     }
 
     [Fact]

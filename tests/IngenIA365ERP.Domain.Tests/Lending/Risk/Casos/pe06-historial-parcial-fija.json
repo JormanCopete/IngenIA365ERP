@@ -1,0 +1,30 @@
+{
+  // pe06 (K6a, T1013, T1015, T1027): historial parcial completado con la regla «Fija» y Riesgo.MesesFaltantesDiasFijos = 70. Filas de
+  // 2025-07 a 2026-06 y transacciones de 2026-07 a 2026-10, todo en 0 días; faltan 2023-11..2025-06 (20 meses), que valen 70.
+  // Repasado con Casos/riesgo-pe.py. PENDIENTE DE FIRMA DE LA CONTADORA.
+  //   Máxima de 36 = 70 → SINMORA 0; máxima de 24 (2024-11..2026-10) = 70 → MORA3660 = 0 (pide 24 meses sin más de 60) y MORA2430N = 0;
+  //   máxima de 12 = 0. Z = −1,523 − 2,081 = −3,604; puntaje 0,0265 → A. Con «MayorObservada» los meses valdrían 0, SINMORA sería 1 y Z
+  //   −4,179: la regla mueve Z, aunque aquí no la calificación.
+  "nombre": "pe06-historial-parcial-fija",
+  "perdidaEsperada": {
+    "anexo2": "sembrado",
+    "contexto": { "tipoDeOrganizacion": "COOP_AHORRO_CREDITO", "fondoDeEmpleados": false, "smmlv": 1750905, "voluntaria": false },
+    "creditos": [
+      { "id": 601, "deudor": 601, "segmento": "CONSUMO_LIBRANZA", "diasDeMora": 0, "asociadoActivo": true, "cuota": 200000, "plazoEnMeses": 60,
+        "historial": {
+          "inicioDeLaCadena": "2022-05-10", "corteDeMigracion": "2026-06-30", "fechaDeReferencia": "2026-10-31", "mesesExigidos": 36,
+          "regla": "Fija", "diasDelCorte": 0, "diasFijos": 70,
+          "filas": [ { "credito": 601, "desde": "2025-07", "hasta": "2026-06", "dias": 0, "origen": "Migration" } ],
+          "transacciones": [ { "desde": "2026-07", "hasta": "2026-10", "dias": 0 } ]
+        },
+        "garantia": "SIN_GARANTIA", "saldos": { "capital": 2000000, "interesCorriente": 0, "interesDeMora": 0, "otros": 0 } }
+    ],
+    "esperado": [
+      { "id": 601, "faltantes": 20, "completadosCon": 70, "incumplido": false, "z": -3.604, "puntaje": 0.0265, "calificacionDelModelo": "A",
+        "variables": [ "EA=1", "FE=0", "VALCUOTA=0", "FONDPLAZO=0", "MORA1230=0", "MORA1260=0", "SINMORA=0", "MORA2430N=0", "MORA3660=0" ],
+        "calificacionFinal": "A", "causa": "Arrears", "pi": 0.005, "pdi": 0.45, "exposicion": 2000000,
+        "deterioroCapital": 4500.00, "deterioroIntereses": 0, "deterioroOtros": 0, "total": 4500.00, "contable": "A", "homologada": true,
+        "explicacionContiene": [ "los días fijos de Riesgo.MesesFaltantesDiasFijos, regla Fija" ] }
+    ]
+  }
+}

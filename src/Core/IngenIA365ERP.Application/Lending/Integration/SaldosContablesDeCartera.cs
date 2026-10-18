@@ -46,7 +46,7 @@ public sealed record MovimientoDeCombinacionDeCartera(ClaveDeSaldoDeCartera Clav
 /// combinación vigente al corte es la del último hecho que movió o reclasificó ese saldo, y lo que todavía no pasó lo explica la conciliación.
 /// <list type="bullet">
 /// <item>Concepto → rol (§2.2): <c>Principal</c> → <c>Capital</c>; intereses → <c>InteresPorCobrar</c>; en suspenso → <c>SuspensoEnOrden</c>, o
-/// <c>CastigadaEnOrden</c> si la fila está en control; seguro → <c>PagoPorCuentaDelAsociado</c>; cobranza y otros cargos → <c>CargoPorCobrar</c>
+/// <c>CastigadaEnOrden</c> si la fila está en control; en un crédito castigado al corte, todo el activo en <c>CastigadaEnOrden</c>; seguro → <c>PagoPorCuentaDelAsociado</c>; cobranza y otros cargos → <c>CargoPorCobrar</c>
 /// (el libro no guarda «por cuenta del asociado»); anticipo → <c>Anticipo</c>; saldo a favor → <c>SaldoAFavor</c>. El deterioro llega con el
 /// cierre de Cartera (fase 12).</item>
 /// <item><c>DesembolsoPorGirar</c>: las órdenes de giro emitidas (no en especie) sin «girada» ni anulación y sin reemisión, por forma, línea y
@@ -81,9 +81,18 @@ public sealed class SaldosContablesDeCartera(IApplicationDbContext db, IContabil
     /// <summary>+1 en los roles de naturaleza débito, −1 en los de crédito: el saldo contable (débito − crédito) por éste es el de Cartera.</summary>
     public static int Signo(string rol) => NaturalezaCredito.Contains(rol) ? -1 : 1;
 
-    /// <summary>El rol de saldo de un concepto del libro (§2.2, «de concepto a rol»).</summary>
-    public static string RolDelConcepto(LoanConcept concepto, bool enControl) => concepto switch
+    /// <summary>
+    /// El rol de saldo de un concepto del libro (§2.2, «de concepto a rol»). En un crédito <paramref name="castigado"/> al corte, todo lo del activo
+    /// —capital, intereses, suspenso, seguro y cargos— está en <c>CastigadaEnOrden</c> con su concepto (contabilidad.md §2.1, <c>CreditoCastigado</c>,
+    /// y el ejemplo 14: el castigo lo saca de su rol y lo lleva a control; la recuperación sale de ahí); los pasivos (anticipo, saldo a favor) no
+    /// cambian. Hasta el 2026-10-15 la conciliación dejaba el capital y el interés del castigado en <c>Capital</c> e <c>InteresPorCobrar</c> y cada
+    /// castigado (también los migrados) salía como diferencia.
+    /// </summary>
+    public static string RolDelConcepto(LoanConcept concepto, bool enControl, bool castigado = false) => concepto switch
     {
+        LoanConcept.Principal or LoanConcept.CurrentInterest or LoanConcept.DefaultInterest or LoanConcept.CurrentInterestInSuspense
+            or LoanConcept.DefaultInterestInSuspense or LoanConcept.Insurance or LoanConcept.CollectionFee or LoanConcept.OtherCharge
+            when castigado => "CastigadaEnOrden",
         LoanConcept.Principal => "Capital",
         LoanConcept.CurrentInterest or LoanConcept.DefaultInterest => "InteresPorCobrar",
         LoanConcept.CurrentInterestInSuspense or LoanConcept.DefaultInterestInSuspense => enControl ? "CastigadaEnOrden" : "SuspensoEnOrden",
@@ -115,7 +124,7 @@ public sealed class SaldosContablesDeCartera(IApplicationDbContext db, IContabil
 
         var dimensiones = await DimensionesAsync(filas.Select(f => f.LoanId).Distinct().ToList(), corte, alcance, ct);
         return filas.Where(f => dimensiones.ContainsKey(f.LoanId))
-            .Select(f => new MovimientoDeCombinacionDeCartera(Clave(dimensiones[f.LoanId], RolDelConcepto(f.Concept, f.InControl), f.Concept), f.LoanId,
+            .Select(f => new MovimientoDeCombinacionDeCartera(Clave(dimensiones[f.LoanId], RolDelConcepto(f.Concept, f.InControl, dimensiones[f.LoanId].Castigado), f.Concept), f.LoanId,
                 f.Amount, f.AccountingDate, f.MessagePublicId, f.Operacion))
             .ToList();
     }
@@ -197,7 +206,7 @@ public sealed class SaldosContablesDeCartera(IApplicationDbContext db, IContabil
                            join b in db.Branches.AsNoTracking().IgnoreQueryFilters() on l.BranchId equals b.Id
                            join p in db.People.AsNoTracking().IgnoreQueryFilters() on l.DebtorPersonId equals p.Id
                            where creditos.Contains(l.Id)
-                           select new { l.Id, l.BranchId, l.CreditLineId, Linea = c.Code, Sucursal = b.PublicId, p.IsEmployee })
+                           select new { l.Id, l.BranchId, l.CreditLineId, Linea = c.Code, Sucursal = b.PublicId, p.IsEmployee, l.WrittenOffOn })
             .ToListAsync(ct);
         if (alcance is not null) datos = datos.Where(d => alcance.IncluyeOficina(d.BranchId) && alcance.IncluyeLinea(d.CreditLineId)).ToList();
         var ids = datos.Select(d => d.Id).ToList();
@@ -213,12 +222,16 @@ public sealed class SaldosContablesDeCartera(IApplicationDbContext db, IContabil
             var vigente = delCredito.LastOrDefault(v => v.EffectiveValueDate <= corte) ?? delCredito.FirstOrDefault();
             var cat = categorias[d.Id];
             resultado[d.Id] = new DimensionesDeCreditoDeCartera(d.Linea, vigente?.ModalityCode, vigente?.SubsegmentCode, cat.Category, d.IsEmployee,
-                (vigente?.RestructuringCount ?? 0) > 0, d.Sucursal, d.BranchId);
+                (vigente?.RestructuringCount ?? 0) > 0, d.Sucursal, d.BranchId, Castigado: d.WrittenOffOn is { } castigo && castigo <= corte);
         }
         return resultado;
     }
 }
 
-/// <summary>Las dimensiones de un crédito con que Cartera informa sus saldos a un corte. (nuevo)</summary>
+/// <summary>
+/// Las dimensiones de un crédito con que Cartera informa sus saldos a un corte. <see cref="Castigado"/>: castigado en o antes del corte
+/// (<c>WrittenOffOn</c>, también el migrado), y entonces su activo está en <c>CastigadaEnOrden</c>. (nuevo)
+/// </summary>
 public sealed record DimensionesDeCreditoDeCartera(
-    string Linea, string? Modalidad, string? Subsegmento, string Categoria, bool Empleado, bool Reestructurado, Guid Sucursal, int OficinaId);
+    string Linea, string? Modalidad, string? Subsegmento, string Categoria, bool Empleado, bool Reestructurado, Guid Sucursal, int OficinaId,
+    bool Castigado = false);

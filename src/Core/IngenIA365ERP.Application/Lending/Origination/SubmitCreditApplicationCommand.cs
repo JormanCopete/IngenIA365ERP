@@ -57,7 +57,8 @@ public sealed class SubmitCreditApplicationCommandHandler(
     IAutorizacionDeDatos autorizaciones,
     IAlcanceDeCartera alcance,
     LendingAuditEmitter auditoria,
-    IDateTimeService reloj) : IRequestHandler<SubmitCreditApplicationCommand, Result<CreditApplicationDto>>
+    IDateTimeService reloj,
+    Housing.LectorDeVivienda? vivienda = null) : IRequestHandler<SubmitCreditApplicationCommand, Result<CreditApplicationDto>>
 {
     /// <summary>El prefijo del radicado de una solicitud (fila de <c>LND_NumberSequences</c> de la clase <c>Application</c>).</summary>
     public const string PrefijoDelRadicado = "SOL-";
@@ -85,6 +86,10 @@ public sealed class SubmitCreditApplicationCommandHandler(
         if (!c.Simulacion.Usura.Pasa)
             return Falla(Configuration.ErroresDeLineasDeCredito.UsuraExcedida("amount", c.Simulacion.Fecha, c.Simulacion.Usura,
                 c.Simulacion.Combinacion.ModalityCode));
+        // K6b (T1044, T1055): una solicitud de vivienda cumple la Ley 546 (plazo, porcentaje financiable general o VIS y relación cuota-ingreso).
+        if (vivienda is not null
+            && await Housing.ValidacionDeVivienda.SolicitudAsync(db, vivienda, s, c.Simulacion, c.Simulacion.Entrada.Monto, hoy, ct) is { IsFailure: true } ley546)
+            return Falla(ley546.Error);
         // La versión que rige hoy (o la de la fecha del desembolso) es la que se sella al radicar (FR-042).
         s.CreditLineVersionId = c.Simulacion.Version.Version.Id;
 
@@ -124,6 +129,9 @@ public sealed class SubmitCreditApplicationCommandHandler(
     public static Error? DetenerAlRadicar(ValidacionesEvaluadas v)
     {
         if (v.Concentracion?.Error is { } excedida) return excedida;
+        // K2 (T0842; api.md §13.3): la libranza con pagaduría que excede la capacidad de descuento no se radica (422 con lo disponible).
+        if (v.Bloqueante(ApplicationCheckKind.DeductionCapacity) is { Codigo: Payroll.ErroresDeLibranza.CodigoCapacidadExcedida, Detalle: DetalleDeCapacidadDeLibranza d })
+            return Payroll.ErroresDeLibranza.CapacidadExcedida(d.Available, d.Requested);
         return v.Bloqueante(ApplicationCheckKind.Concentration) is { Codigo: ErroresDeOriginacion.CodigoSinPatrimonioTecnico }
             ? new Error(ErroresDeOriginacion.CodigoSinPatrimonioTecnico,
                 "No hay patrimonio técnico vigente registrado en Contabilidad: no se puede validar el límite de concentración. Pida al contador registrarlo.")

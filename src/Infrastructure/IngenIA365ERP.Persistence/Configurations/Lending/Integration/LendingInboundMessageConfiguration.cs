@@ -4,6 +4,7 @@ using IngenIA365ERP.Domain.Entities.Lending.Integration;
 using IngenIA365ERP.Domain.Entities.Lending.Loans;
 using IngenIA365ERP.Domain.Entities.Lending.Migration;
 using IngenIA365ERP.Domain.Entities.Lending.Operations;
+using IngenIA365ERP.Domain.Entities.Lending.Payroll;
 using IngenIA365ERP.Domain.Entities.Security;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
@@ -43,6 +44,8 @@ public class LendingInboundMessageConfiguration : IEntityTypeConfiguration<Lendi
         builder.HasOne<Loan>().WithMany().HasForeignKey(e => e.LoanId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<DisbursementOrder>().WithMany().HasForeignKey(e => e.DisbursementOrderId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<MigrationSaleReconciliation>().WithMany().HasForeignKey(e => e.SaleReconciliationId).OnDelete(DeleteBehavior.Restrict);
+        // K2 (CarteraLibranza): el archivo de descuentos de una confirmación de envío o de un resultado.
+        builder.HasOne<PayrollDeductionFile>().WithMany().HasForeignKey(e => e.PayrollDeductionFileId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<LendingInboundMessageEvaluation>().WithMany().HasForeignKey(e => e.LastEvaluationId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<CreditDecision>().WithMany().HasForeignKey(e => e.ExceptionDecisionId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<User>().WithMany().HasForeignKey(e => e.NotRetryableByUserId).OnDelete(DeleteBehavior.Restrict);
@@ -53,6 +56,8 @@ public class LendingInboundMessageConfiguration : IEntityTypeConfiguration<Lendi
             .HasFilter("[CreditPaymentPublicId] IS NOT NULL");
         builder.HasIndex(e => e.OriginPublicId).HasDatabaseName("IX_LND_InboundMessages_OriginPublicId");
         builder.HasIndex(e => e.LoanId).HasDatabaseName("IX_LND_InboundMessages_LoanId");
+        builder.HasIndex(e => e.PayrollDeductionFileId)
+            .HasDatabaseName("IX_LND_InboundMessages_PayrollDeductionFileId").HasFilter("[PayrollDeductionFileId] IS NOT NULL");
         builder.HasIndex(e => new { e.Status, e.LastProcessedAt }).HasDatabaseName("IX_LND_InboundMessages_Status_LastProcessedAt");
     }
 }

@@ -17,6 +17,15 @@ public sealed record PorcentajeDePolitica(string Segmento, RatingCategory Catego
 /// <summary>Una celda de la política sobre un tramo de garantía: una fracción admisible más baja es más estricta.</summary>
 public sealed record TramoDeGarantiaDePolitica(NaturalezaDeGarantia Naturaleza, int MesesDesde, decimal FraccionAdmisible);
 
+/// <summary>K6a (T1016): una celda de la política sobre la PI de una calificación del Anexo 2: más alta es más estricta.</summary>
+public sealed record PiDePolitica(string Segmento, string TipoDeOrganizacion, RatingCategory Categoria, decimal Fraccion);
+
+/// <summary>K6a: una celda de la política sobre un tramo de PDI del Anexo 2 (por días en incumplimiento): más alta es más estricta.</summary>
+public sealed record PdiDePolitica(string TipoDeGarantia, int DiasDesde, decimal Fraccion);
+
+/// <summary>K6a: una celda de la política sobre la PDI sin incumplimiento de un segmento del Anexo 2: más alta es más estricta.</summary>
+public sealed record PdiSinIncumplimientoDePolitica(string Segmento, string TipoDeGarantia, decimal Fraccion);
+
 /// <summary>
 /// La política SARC del consejo (feature 013, US9, T0690, T0692; T45, R54; data-model §23.10): el <b>esquema parcial</b> del
 /// <see cref="Anexo1"/> con sólo las celdas que la cooperativa endurece, más el deterioro general adicional, que la norma no tiene.
@@ -24,13 +33,18 @@ public sealed record TramoDeGarantiaDePolitica(NaturalezaDeGarantia Naturaleza, 
 ///
 /// <para>Esquema 1 (camelCase): <c>{ segments: [ { code, categories: [ { category, minDaysPastDue } ], impairmentRates: [ { category,
 /// subcategory?, conditionFrom?, rate } ] } ], collateral: [ { nature, brackets: [ { fromMonths, admissibleFraction } ] } ],
-/// generalImpairment: { minimumRate?, additionalRate?, additionalCompensatesIndividual? } }</c>. Todo es opcional; una celda que no
+/// generalImpairment: { minimumRate?, additionalRate?, additionalCompensatesIndividual? }, expectedLoss?: { probabilityOfDefault: [ { segment,
+/// organizationType, rating, rate } ], lossGivenDefault: [ { collateralType, fromDaysAfterDefault, rate } ], performingLossGivenDefault: [ {
+/// segment, collateralType, rate } ] } }</c>. <c>expectedLoss</c> (K6a, T1016; data-model §23.10) endurece celdas del <see cref="Anexo2"/> y las combina
+/// <c>PoliticaSarcEfectiva.CombinarAnexo2</c>. Todo es opcional; una celda que no
 /// existe en la norma es un error de la combinación, no de la lectura (la norma puede cambiar).</para>
 ///
 /// <para>Rutas de celda (las que devuelve <c>PoliticaSarcEfectiva</c> y nombra <c>Lending.RiskPolicy.LessStrict</c>):
 /// <c>segments.{segmento}.categories.{categoría}.minDaysPastDue</c>, <c>segments.{segmento}.impairmentRates.{categoría}[.{sub}][.from{n}]</c>,
 /// <c>collateral.{naturaleza}.brackets.{desde}.admissibleFraction</c>, <c>generalImpairment.minimumRate</c>,
-/// <c>generalImpairment.additionalRate</c>. Sin valores legales: sólo la forma.</para>
+/// <c>generalImpairment.additionalRate</c>; del Anexo 2, <c>expectedLoss.probabilityOfDefault.{segmento}.{tipo}.{calificación}</c>,
+/// <c>expectedLoss.lossGivenDefault.{garantía}.{días}</c> y <c>expectedLoss.performingLossGivenDefault.{segmento}.{garantía}</c>. Sin valores
+/// legales: sólo la forma.</para>
 /// </summary>
 public sealed class PoliticaSarc
 {
@@ -57,6 +71,15 @@ public sealed class PoliticaSarc
 
     /// <summary>¿El adicional se usa para compensar el deterioro individual (FR-104)?</summary>
     public bool AdicionalCompensaIndividual { get; private init; }
+
+    /// <summary>K6a: las PI del Anexo 2 que la política sube.</summary>
+    public IReadOnlyList<PiDePolitica> ProbabilidadesDeIncumplimiento { get; private init; } = [];
+
+    /// <summary>K6a: los tramos de PDI del Anexo 2 que la política sube.</summary>
+    public IReadOnlyList<PdiDePolitica> PerdidasDadoElIncumplimiento { get; private init; } = [];
+
+    /// <summary>K6a: las PDI sin incumplimiento del Anexo 2 que la política sube.</summary>
+    public IReadOnlyList<PdiSinIncumplimientoDePolitica> PerdidasSinIncumplimiento { get; private init; } = [];
 
     public static ResultadoDeDocumento<PoliticaSarc> Leer(string contenido, short versionDeEsquema)
     {
@@ -119,6 +142,15 @@ public sealed class PoliticaSarc
             }
         }
 
+        var pi = new List<PiDePolitica>();
+        var pdi = new List<PdiDePolitica>();
+        var sinIncumplimiento = new List<PdiSinIncumplimientoDePolitica>();
+        if (raiz.TryGetProperty("expectedLoss", out var perdida) && perdida.ValueKind != JsonValueKind.Null)
+        {
+            if (perdida.ValueKind != JsonValueKind.Object) errores.Add(new("$.expectedLoss", "Es un objeto."));
+            else LeerPerdidaEsperada(perdida, pi, pdi, sinIncumplimiento, errores);
+        }
+
         return errores.Count > 0
             ? new(null, errores)
             : new(new PoliticaSarc
@@ -129,7 +161,62 @@ public sealed class PoliticaSarc
                 DeterioroGeneralMinimo = minimo,
                 DeterioroGeneralAdicional = adicional,
                 AdicionalCompensaIndividual = compensa,
+                ProbabilidadesDeIncumplimiento = pi,
+                PerdidasDadoElIncumplimiento = pdi,
+                PerdidasSinIncumplimiento = sinIncumplimiento,
             }, errores);
+    }
+
+    /// <summary>K6a (T1016): <c>expectedLoss</c>, las celdas del Anexo 2 que la política endurece; todas opcionales y sin repetir.</summary>
+    private static void LeerPerdidaEsperada(JsonElement p, List<PiDePolitica> pi, List<PdiDePolitica> pdi, List<PdiSinIncumplimientoDePolitica> sinIncumplimiento,
+        List<ErrorDeDocumentoNormativo> errores)
+    {
+        const string ruta = "$.expectedLoss";
+        if (p.TryGetProperty("probabilityOfDefault", out _))
+        {
+            var lista = LecturaDeDocumento.Arreglo(p, "probabilityOfDefault", ruta, noVacio: false, errores);
+            for (var i = 0; i < lista.Count; i++)
+            {
+                var r = $"{ruta}.probabilityOfDefault[{i}]";
+                var segmento = LecturaDeDocumento.Texto(lista[i], "segment", r, requerido: true, errores);
+                var tipo = LecturaDeDocumento.Texto(lista[i], "organizationType", r, requerido: true, errores);
+                var cat = Anexo1.Categoria(lista[i], "rating", r, errores);
+                var tasa = Anexo1.Fraccion(lista[i], "rate", r, errores);
+                if (segmento is null || tipo is null || cat is null || tasa is null) continue;
+                if (pi.Any(x => x.Segmento == segmento && x.TipoDeOrganizacion == tipo && x.Categoria == cat))
+                    errores.Add(new(r, $"La PI de {cat} de {tipo} en {segmento} está repetida."));
+                pi.Add(new(segmento, tipo, cat.Value, tasa.Value));
+            }
+        }
+        if (p.TryGetProperty("lossGivenDefault", out _))
+        {
+            var lista = LecturaDeDocumento.Arreglo(p, "lossGivenDefault", ruta, noVacio: false, errores);
+            for (var i = 0; i < lista.Count; i++)
+            {
+                var r = $"{ruta}.lossGivenDefault[{i}]";
+                var tipo = LecturaDeDocumento.Texto(lista[i], "collateralType", r, requerido: true, errores);
+                var desde = Anexo1.Entero(lista[i], "fromDaysAfterDefault", r, requerido: true, errores);
+                var tasa = Anexo1.Fraccion(lista[i], "rate", r, errores);
+                if (tipo is null || desde is null || tasa is null) continue;
+                if (pdi.Any(x => x.TipoDeGarantia == tipo && x.DiasDesde == desde)) errores.Add(new(r, $"El tramo de PDI de {tipo} desde {desde} días está repetido."));
+                pdi.Add(new(tipo, desde.Value, tasa.Value));
+            }
+        }
+        if (p.TryGetProperty("performingLossGivenDefault", out _))
+        {
+            var lista = LecturaDeDocumento.Arreglo(p, "performingLossGivenDefault", ruta, noVacio: false, errores);
+            for (var i = 0; i < lista.Count; i++)
+            {
+                var r = $"{ruta}.performingLossGivenDefault[{i}]";
+                var segmento = LecturaDeDocumento.Texto(lista[i], "segment", r, requerido: true, errores);
+                var tipo = LecturaDeDocumento.Texto(lista[i], "collateralType", r, requerido: true, errores);
+                var tasa = Anexo1.Fraccion(lista[i], "rate", r, errores);
+                if (segmento is null || tipo is null || tasa is null) continue;
+                if (sinIncumplimiento.Any(x => x.Segmento == segmento && x.TipoDeGarantia == tipo))
+                    errores.Add(new(r, $"La PDI sin incumplimiento de {tipo} en {segmento} está repetida."));
+                sinIncumplimiento.Add(new(segmento, tipo, tasa.Value));
+            }
+        }
     }
 
     private static void LeerSegmento(JsonElement s, string ruta, List<InicioDeCategoriaDePolitica> inicios, List<PorcentajeDePolitica> porcentajes,
@@ -199,4 +286,11 @@ public sealed class PoliticaSarc
     internal const string RutaDelMinimoGeneral = "generalImpairment.minimumRate";
 
     internal const string RutaDelAdicionalGeneral = "generalImpairment.additionalRate";
+
+    internal static string RutaDePi(string segmento, string tipo, RatingCategory categoria) => $"expectedLoss.probabilityOfDefault.{segmento}.{tipo}.{categoria}";
+
+    internal static string RutaDePdi(string tipo, int desde) =>
+        $"expectedLoss.lossGivenDefault.{tipo}.{desde.ToString(CultureInfo.InvariantCulture)}";
+
+    internal static string RutaDePdiSinIncumplimiento(string segmento, string tipo) => $"expectedLoss.performingLossGivenDefault.{segmento}.{tipo}";
 }

@@ -32,6 +32,12 @@ public sealed record RecaudoDeNomina(
 
     /// <summary>Lo que vuelve al recaudador.</summary>
     public decimal Excedente => Aplicado ? Respuesta.Value!.Surplus : 0m;
+
+    /// <summary>
+    /// Cartera lo rechazó porque Contabilidad no tiene cómo registrar el pago (A8 = «Bloquear todo», 2026-10-14): la aprobación de la nómina entera
+    /// falla, no baja la línea.
+    /// </summary>
+    public bool NoContabilizable => !Aplicado && Respuesta.Code == RecaudoPorNomina.CodigoNoContabilizable;
 }
 
 /// <summary>El resultado del lote: un recaudo por pago, en el orden en que se envió, y la respuesta de cada no descontado.</summary>
@@ -58,6 +64,9 @@ public sealed class RecaudoPorNomina(IContratoDeObligaciones contrato)
 {
     /// <summary>La clave de un pago de Nómina (interfaces §3.10, T21): la versión aprobada de la corrida y la obligación.</summary>
     public static string Clave(Guid runPublicId, Guid obligationPublicId) => $"NOM:{runPublicId:N}:{obligationPublicId:N}";
+
+    /// <summary>El código con que el contrato rechaza un pago que Contabilidad no puede registrar (contabilidad.md §13.2, A8).</summary>
+    public const string CodigoNoContabilizable = "Lending.Prevalidation.NotPostable";
 
     /// <summary>El largo del número del recibo que el contrato admite (<c>LND_LoanOperations.ReceiptNumber</c>, varchar(40)).</summary>
     public const int LargoDelRecibo = 40;

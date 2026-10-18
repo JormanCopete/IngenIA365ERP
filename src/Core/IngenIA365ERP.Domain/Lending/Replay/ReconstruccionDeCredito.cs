@@ -38,6 +38,7 @@ public sealed class ContextoDeReconstruccion
         Entrada = entrada;
         Origen = origen;
         TasaCorrienteEA = entrada.Condiciones.TasaEfectivaAnual;
+        Reestructuraciones = entrada.Condiciones.Reestructuraciones;
     }
 
     public EntradaDeReconstruccion Entrada { get; }
@@ -51,6 +52,12 @@ public sealed class ContextoDeReconstruccion
 
     /// <summary>La corriente pactada o reajustada (EA), antes de topar.</summary>
     public decimal TasaCorrienteEA { get; private set; }
+
+    /// <summary>
+    /// K3 (T0874): las reestructuraciones que rigen desde el día siguiente al último hecho aplicado. Parte de las de las condiciones (las del
+    /// origen: lo migrado o lo heredado de la novación) y cada novedad aplicada la cambia desde su fecha valor (T30: más de una suspende).
+    /// </summary>
+    public int Reestructuraciones { get; private set; }
 
     /// <summary>Cambió algo que mueve los cortes o los saldos vencidos: la corrida recalcula lo suyo.</summary>
     internal int Version { get; private set; }
@@ -68,6 +75,27 @@ public sealed class ContextoDeReconstruccion
     public void CambiarTasa(decimal efectivaAnual)
     {
         TasaCorrienteEA = efectivaAnual;
+        Version++;
+    }
+
+    /// <summary>K3: el conteo de reestructuraciones que deja una novedad aplicada.</summary>
+    public void CambiarReestructuraciones(int conteo)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(conteo);
+        Reestructuraciones = conteo;
+        Version++;
+    }
+
+    /// <summary>
+    /// K3 (T0874): el día desde el cual el crédito ya no existe para la causación —el anterior de una novación o refinanciación, que trasladó todo
+    /// al enlazado—. Desde el día siguiente no causa interés, mora ni seguro.
+    /// </summary>
+    public DateOnly? ExtinguidoDesde { get; private set; }
+
+    /// <summary>K3: el crédito trasladó todo lo que debía a otro con fecha valor <paramref name="fecha"/>; deja de causar desde el día siguiente.</summary>
+    public void Extinguir(DateOnly fecha)
+    {
+        ExtinguidoDesde = fecha;
         Version++;
     }
 
@@ -233,6 +261,12 @@ public static class ReconstruccionDeCredito
         [LoanOperationKind.CreditBalanceResolution] = new InterpreteDeResolucion(),
         // US6 (T0566): los ajustes de una venta a crédito de Comercial (FR-054).
         [LoanOperationKind.CommercialAdjustment] = new InterpreteDeAjusteComercial(),
+        // K3 (T0874): la novedad —prórroga, cambio de fecha o de tasa; la novación o refinanciación en el anterior y en el enlazado— y la
+        // condonación (T0884).
+        [LoanOperationKind.TermsChange] = new InterpreteDeNovedad(),
+        [LoanOperationKind.Waiver] = new InterpreteDeCondonacion(),
+        // K4 (T0948): el gasto de cobranza ya informado al deudor.
+        [LoanOperationKind.Charge] = new InterpreteDeCargo(),
     };
 
     /// <summary>Las tasas del día ya calculadas: la raíz de cada EA es cara y los créditos comparten tasas y usuras (memo puro).</summary>
@@ -248,10 +282,25 @@ public static class ReconstruccionDeCredito
         IReadOnlyDictionary<LoanOperationKind, IInterpreteDeOperacion>? interpretes = null)
     {
         ArgumentNullException.ThrowIfNull(entrada);
+        // K6b (T1054): un crédito en UVR se reconstruye en UVR y se valora en pesos con la UVR del día.
+        if (entrada.Uvr is not null) return Housing.ReconstruccionEnUvr.Reconstruir(entrada, fecha, libroDesde, interpretes);
+        return EnSuUnidad(entrada, fecha, libroDesde, interpretes);
+    }
+
+    /// <summary>
+    /// La reconstrucción en la unidad de la entrada, sin valorar (K6b: la que corre <see cref="Housing.ReconstruccionEnUvr"/> sobre la entrada ya
+    /// convertida a UVR).
+    /// </summary>
+    internal static EstadoDelCredito EnSuUnidad(EntradaDeReconstruccion entrada, DateOnly fecha, DateOnly? libroDesde,
+        IReadOnlyDictionary<LoanOperationKind, IInterpreteDeOperacion>? interpretes)
+    {
         var reglas = VersionesDeReglas.Para(entrada.Condiciones.RulesVersion);
         ValidarTasasSelladas(entrada.Condiciones);
         return new Corrida(entrada, fecha, libroDesde, interpretes, reglas).Ejecutar();
     }
+
+    /// <summary>El intérprete propio de una clase de operación (K6b: el de UVR envuelve los de pago y resolución); nulo si no hay.</summary>
+    internal static IInterpreteDeOperacion? InterpretePropio(LoanOperationKind clase) => Propios.GetValueOrDefault(clase);
 
     /// <summary>
     /// Una tasa sellada (corriente, mora fija, factor, margen, piso, techo) lleva a lo sumo seis decimales de fracción: con más, la
@@ -297,6 +346,21 @@ public static class ReconstruccionDeCredito
         private readonly CondicionesDeCredito _c = entrada.Condiciones;
         private readonly CalendarioHabil _calendario = FechasDeVencimiento.CalendarioDelArticulo829(entrada.Festivos);
         private readonly List<ValorDeUsura> _usura = [.. entrada.Usura];
+
+        // K6b (T1053): el tope de vivienda (TOPE_TASA_VIVIENDA) de un crédito con las reglas de vivienda; rige el menor entre él y la usura.
+        private readonly List<ValorDeUsura> _topeDeVivienda = reglas.DeVivienda ? [.. entrada.TopeDeVivienda] : [];
+
+        // K2 (T0826): lo descontado y pendiente de giro conocido en R, por número de cuota, con su ventana y su umbral sellados. Girado (T0839),
+        // cubre hasta la víspera del pago que lo giró, salvo que la entrada traiga el reverso de ese pago conocido en R.
+        private readonly Dictionary<int, GiroPendiente[]> _giros = entrada.PendientesDeGiro
+            .Where(p => p.ConocidaEn <= entrada.InformacionHasta && p.Monto > 0m)
+            .GroupBy(p => p.Cuota)
+            .ToDictionary(g => g.Key, g => g.Select(p => new GiroPendiente(p.Monto, p.VencimientoDelGiro, p.UmbralDias)
+            {
+                GiradoDesde = p.GiradoPor is { } por && entrada.Operaciones.Any(o => o.Reversa == por && o.RegistradoEn <= entrada.InformacionHasta)
+                    ? null
+                    : p.GiradoDesde,
+            }).ToArray());
         private ContextoDeReconstruccion _ctx = null!;
         private RegistroDeVentanas _ventanas = null!;
         private int _versionDelPlan = -1;
@@ -497,7 +561,7 @@ public static class ReconstruccionDeCredito
             foreach (var op in pendientes) Poner(op.FechaValor);
             foreach (var d in _cortesDePeriodo) Poner(d);
             foreach (var d in _exigibles) Poner(d);
-            foreach (var u in _usura)
+            foreach (var u in _usura.Concat(_topeDeVivienda))
             {
                 Poner(u.ValidFrom.AddDays(-1));
                 if (u.ValidTo is { } h) Poner(h);
@@ -508,12 +572,24 @@ public static class ReconstruccionDeCredito
                 foreach (var ex in _exigibles) Poner(ex.AddDays(u.Valor - 1));
             }
             foreach (var t in entrada.Tolerancias) Poner(t.Desde.AddDays(-1));
+            // K2: el último día en que lo descontado no cuenta (la mora de la pagaduría llega a su umbral); al día siguiente cambia la altura.
+            foreach (var g in _giros.Values.SelectMany(x => x))
+                if (g.UmbralDias is { } umbralDeGiro) Poner(g.VencimientoDelGiro.AddDays(umbralDeGiro));
             if (_c.InsolvenciaDesde is { } i) Poner(i.AddDays(-1));
-            if (_c.CastigoDesde is { } k) Poner(k.AddDays(-1));
+            if (_c.InsolvenciaHasta is { } fin) Poner(fin);
+            if (_ctx.ExtinguidoDesde is { } extinguido) Poner(extinguido);
+            // K3 (T0908): el castigo suspende desde el día siguiente a su fecha valor (como todo hecho con fecha valor v, rige desde v + 1).
+            if (_c.CastigoDesde is { } k) Poner(k);
+            if (_c.FallecimientoDesde is { } fallecido) Poner(fallecido.AddDays(-1));
             return s;
         }
 
-        private sealed record Evaluacion(bool[] Vencidas, ResultadoDeAlturaDeMora Altura, MotivoDeSuspension? Motivo);
+        /// <summary>
+        /// Lo evaluado un día: las cuotas vencidas, la altura, el motivo de suspensión y, por cuota (K2), el interés corriente y el capital
+        /// cubiertos por lo descontado y pendiente de giro dentro del umbral, que no causan mora.
+        /// </summary>
+        private sealed record Evaluacion(bool[] Vencidas, ResultadoDeAlturaDeMora Altura, MotivoDeSuspension? Motivo,
+            decimal[]? InteresCubierto = null, decimal[]? CapitalCubierto = null);
 
         private Evaluacion Evaluar(DateOnly d)
         {
@@ -521,18 +597,48 @@ public static class ReconstruccionDeCredito
             var plan = _ctx.Plan!;
             var vencidas = new bool[plan.Cuotas.Count];
             var paraMora = new List<CuotaParaMora>();
+            decimal[]? interesCubierto = null, capitalCubierto = null;
             for (var i = 0; i < plan.Cuotas.Count; i++)
             {
                 vencidas[i] = AlturaDeMora.EstaVencida(_exigibles[i], d);
-                if (vencidas[i]) paraMora.Add(new CuotaParaMora(plan.Cuotas[i].Numero, _exigibles[i], SaldoVencido(i, d)));
+                if (!vencidas[i]) continue;
+                var numero = plan.Cuotas[i].Numero;
+                var saldoVencido = SaldoVencido(i, d);
+                if (_giros.TryGetValue(numero, out var giros))
+                {
+                    paraMora.Add(new CuotaParaMora(numero, _exigibles[i], saldoVencido) { Giros = giros });
+                    // Lo descontado cubre la cuota en el orden de la prelación: seguro, corriente, capital (T31).
+                    var cubierto = AlturaDeMora.CubiertoPorGiro(d, giros);
+                    if (cubierto > 0m)
+                    {
+                        interesCubierto ??= new decimal[plan.Cuotas.Count];
+                        capitalCubierto ??= new decimal[plan.Cuotas.Count];
+                        var vispera = d.AddDays(-1);
+                        var tras = Math.Max(cubierto - Saldo(numero, LoanConcept.Insurance, vispera), 0m);
+                        var interes = InteresCorriente(numero, vispera);
+                        interesCubierto[i] = Math.Min(interes, tras);
+                        capitalCubierto[i] = Math.Min(_ctx.CapitalPendiente(plan.Cuotas[i]), Math.Max(tras - interes, 0m));
+                    }
+                }
+                else
+                {
+                    paraMora.Add(new CuotaParaMora(numero, _exigibles[i], saldoVencido));
+                }
             }
             var tolerancia = Vigente(entrada.Tolerancias, d) ?? 0m;
             var umbral = Vigente(entrada.UmbralesDeSuspension, d);
             var altura = AlturaDeMora.Calcular(d, paraMora, tolerancia);
-            var motivo = ReglaDeSuspension.Evaluar(new EntradaDeSuspension(altura.Dias, umbral, _c.Reestructuraciones,
-                _c.InsolvenciaDesde is { } ins && ins <= d, _c.CastigoDesde is { } cas && cas <= d));
-            return new Evaluacion(vencidas, altura, motivo);
+            var motivo = ReglaDeSuspension.Evaluar(new EntradaDeSuspension(altura.Dias, umbral, _ctx.Reestructuraciones,
+                EnInsolvencia(d), _c.CastigoDesde is { } cas && cas < d, _c.FallecimientoDesde is { } fal && fal <= d));
+            return new Evaluacion(vencidas, altura, motivo, interesCubierto, capitalCubierto);
         }
+
+        /// <summary>
+        /// En negociación de insolvencia ese día (T30, FR-098): desde su inicio y, si ya terminó (fracaso o acuerdo), hasta ese día incluido; desde
+        /// el siguiente vuelve a causar normal.
+        /// </summary>
+        private bool EnInsolvencia(DateOnly d) =>
+            _c.InsolvenciaDesde is { } ins && ins <= d && (_c.InsolvenciaHasta is not { } fin || d <= fin);
 
         /// <summary>
         /// El saldo vencido de la cuota i (capital pendiente, su corriente con su suspenso y su seguro, a la víspera del día): no cambia
@@ -587,6 +693,8 @@ public static class ReconstruccionDeCredito
 
         private decimal SeguroExacto(int numero, DateOnly dia)
         {
+            // K3: el crédito extinguido por una novación no causa seguro después de la fecha valor (lo causado hasta ahí pasó al enlazado).
+            if (_ctx.ExtinguidoDesde is { } extinguido && dia > extinguido) dia = extinguido;
             var cuota = _ctx.Plan!.Cuotas.FirstOrDefault(q => q.Numero == numero);
             return cuota is null ? 0m : Causacion.SeguroExacto(cuota, dia, _c.CausacionDeSeguros, _c.Convencion, _ctx.Origen);
         }
@@ -594,6 +702,8 @@ public static class ReconstruccionDeCredito
         private (Dictionary<ClaveDeCausacion, VentanaDeseada> Deseadas, bool Certificada) Deseadas(DateOnly d, Evaluacion ev)
         {
             var plan = _ctx.Plan!;
+            // K3: extinguido por una novación o refinanciación, el crédito ya no causa nada desde el día siguiente a la fecha valor.
+            if (_ctx.ExtinguidoDesde is { } extinguido && d > extinguido) return (new Dictionary<ClaveDeCausacion, VentanaDeseada>(), true);
             var (usura, certificada) = Usura(d);
             var tasa = TasaDelDia(EntradaDeTasa(usura));
             var periodo = _cortesDePeriodo.BinarySearch(d);
@@ -627,9 +737,11 @@ public static class ReconstruccionDeCredito
             {
                 if (!ev.Vencidas[i]) continue;
                 var q = cuotas[i];
-                var b = _ctx.CapitalPendiente(q);
-                if (_c.MoraSobreIntereses)
-                    b += InteresCorriente(q.Numero, d.AddDays(-1));
+                // K2: lo descontado y pendiente de giro dentro del umbral no causa mora (FR-114: al deudor no se le imputa).
+                var b = _ctx.CapitalPendiente(q) - (ev.CapitalCubierto?[i] ?? 0m);
+                // K6b (T1053): con las reglas de vivienda nunca hay mora sobre intereses, aunque la condición sellada lo diga (Ley 546 de 1999).
+                if (_c.MoraSobreIntereses && reglas.AdmiteMoraSobreIntereses)
+                    b += InteresCorriente(q.Numero, d.AddDays(-1)) - (ev.InteresCubierto?[i] ?? 0m);
                 if (b > 0m)
                     salida[new ClaveDeCausacion(mora, q.Numero)] = new VentanaDeseada(
                         new ParametrosDeVentana(b, tasa.TasaDiariaMora, periodo), tasa.MoraEA, tasa.TopeDiarioMora, tasa.MoraTopada, suspendida);
@@ -637,13 +749,26 @@ public static class ReconstruccionDeCredito
             return (salida, certificada || !_c.UsuraRequerida);
         }
 
-        /// <summary>La usura del día conocida en R y si está certificada; sin certificar, la última conocida que empezó antes (D11).</summary>
+        /// <summary>
+        /// La usura del día conocida en R y si está certificada; sin certificar, la última conocida que empezó antes (D11). K6b (T1053): con las
+        /// reglas de vivienda, el tope del día es el menor entre la usura y el tope de vivienda que lleguen, y está certificado sólo si lo están
+        /// todas las series que llegaron.
+        /// </summary>
         private (decimal? Valor, bool Certificada) Usura(DateOnly d)
         {
+            if (!reglas.DeVivienda) return DeLaSerie(_usura, d);
+            var series = new[] { _usura, _topeDeVivienda }.Where(s => s.Count > 0).Select(s => DeLaSerie(s, d)).ToList();
+            if (series.Count == 0) return (null, false);
+            var valores = series.Where(s => s.Valor is not null).Select(s => s.Valor!.Value).ToList();
+            return (valores.Count == 0 ? null : valores.Min(), series.All(s => s.Certificada));
+        }
+
+        private (decimal? Valor, bool Certificada) DeLaSerie(List<ValorDeUsura> serie, DateOnly d)
+        {
             var r = entrada.InformacionHasta;
-            var vigente = VigenciaBitemporal.Vigente(_usura, d, r);
+            var vigente = VigenciaBitemporal.Vigente(serie, d, r);
             if (vigente is not null) return (vigente.Ea, true);
-            var conocidas = _usura.Where(u => u.ConocidaEn <= r).ToList();
+            var conocidas = serie.Where(u => u.ConocidaEn <= r).ToList();
             var reemplazadas = conocidas.Where(u => u.SupersedesPublicId is not null).Select(u => u.SupersedesPublicId!.Value).ToHashSet();
             var ultima = conocidas.Where(u => !reemplazadas.Contains(u.PublicId) && u.ValidFrom <= d)
                 .OrderByDescending(u => u.ValidFrom).ThenByDescending(u => u.Sequence).FirstOrDefault();
@@ -695,7 +820,9 @@ public static class ReconstruccionDeCredito
                 if (plan.Monto != monto || plan.FechaDesembolso != operacion.FechaValor)
                     throw new ReglaDeCarteraException(ProblemaDeCartera.Con(CodigoOrigenInvalido,
                         "El plan pactado es el del primer tramo: su monto y su fecha son los del desembolso.", "operation", operacion.Id));
-                contexto.CambiarPlan(GeneradorDePlan.Generar(plan));
+                // K6b (T1053): el plan lleva la versión de reglas sellada en las condiciones (la de vivienda en un crédito de vivienda).
+                var version = contexto.Condiciones.RulesVersion;
+                contexto.CambiarPlan(GeneradorDePlan.Generar(VersionesDeReglas.EsConocida(version) ? plan with { RulesVersion = version } : plan));
             }
             else
             {
@@ -718,7 +845,10 @@ public static class ReconstruccionDeCredito
             var c = contexto.Condiciones;
             var capital = operacion.Saldos.Where(s => s.Concepto == LoanConcept.Principal).Sum(s => s.Monto);
             contexto.CambiarPlan(GeneradorDePlan.DesdeMigracion(new EntradaDePlanMigrado(operacion.FechaValor, capital, operacion.CuotasMigradas,
-                c.Periodicidad, contexto.Entrada.Plan?.Sistema ?? AmortizationSystem.LevelPayment, c.TasaEfectivaAnual, c.Convencion, c.Equivalencia, c.Redondeo)));
+                c.Periodicidad, contexto.Entrada.Plan?.Sistema ?? AmortizationSystem.LevelPayment, c.TasaEfectivaAnual, c.Convencion, c.Equivalencia, c.Redondeo)
+            {
+                RulesVersion = VersionesDeReglas.EsConocida(c.RulesVersion) ? c.RulesVersion : VersionesDeReglas.Vigente,
+            }));
             foreach (var s in operacion.Saldos)
             {
                 contexto.AgregarFila(new MovimientoDeLibro(operacion.FechaValor, LoanTransactionKind.OpeningBalance, s.Concepto, s.Cuota, s.Monto)

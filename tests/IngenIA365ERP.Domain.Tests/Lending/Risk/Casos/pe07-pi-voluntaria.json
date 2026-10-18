@@ -1,0 +1,31 @@
+{
+  // pe07 (K6a, T1013; US9-7, CE 100): una multiactiva sin sección de ahorro que ADOPTA el modelo voluntariamente usa la PI de la clave
+  // VOLUNTARIA. La semilla no la trae (no se consiguió el texto de la CE 100): el caso usa el Anexo 2 DE PRUEBA (Normas/anexo2-prueba.json),
+  // con cifras VOLUNTARIA inventadas. Repasado con Casos/riesgo-pe.py. Cuando el dueño transcriba la PI voluntaria, este caso se rehace
+  // sobre la semilla y lo firma la contadora.
+  //   1: consumo con libranza al día: A; PI VOLUNTARIA A 1 % (de prueba) × PDI 45 % → 4.500 sobre 1.000.000.
+  //   2: comercial persona natural con 130 días: incumplido (más de 120), 10 días en incumplimiento; PI del incumplido 100 %; PDI sin garantía
+  //      75 % (antes de 30 días). La mora da C y suspende: intereses al 100 %. Homologación del incumplido con 130 días → D.
+  "nombre": "pe07-pi-voluntaria",
+  "perdidaEsperada": {
+    "anexo2": "anexo2-prueba",
+    "contexto": { "tipoDeOrganizacion": "COOP_MULTIACTIVA", "fondoDeEmpleados": false, "smmlv": 1750905, "voluntaria": true },
+    "creditos": [
+      { "id": 701, "deudor": 701, "segmento": "CONSUMO_LIBRANZA", "diasDeMora": 0, "asociadoActivo": true, "cuota": 90000, "plazoEnMeses": 12,
+        "moraMensual": { "hasta": "2026-10", "meses": 36 }, "garantia": "SIN_GARANTIA",
+        "saldos": { "capital": 1000000, "interesCorriente": 0, "interesDeMora": 0, "otros": 0 } },
+      { "id": 702, "deudor": 702, "segmento": "COMERCIAL_PN", "diasDeMora": 130, "asociadoActivo": true, "cuota": 90000, "plazoEnMeses": 12,
+        "moraMensual": { "hasta": "2026-10", "meses": 36, "dias": { "2026-07": 40, "2026-08": 70, "2026-09": 100, "2026-10": 130 } },
+        "garantia": "SIN_GARANTIA", "saldos": { "capital": 500000, "interesCorriente": 15000, "interesDeMora": 5000, "otros": 0 } }
+    ],
+    "esperado": [
+      { "id": 701, "incumplido": false, "z": -4.179, "puntaje": 0.0151, "calificacionDelModelo": "A", "claveDePi": "VOLUNTARIA",
+        "calificacionFinal": "A", "causa": "Arrears", "pi": 0.01, "pdi": 0.45, "exposicion": 1000000,
+        "deterioroCapital": 4500.00, "deterioroIntereses": 0, "deterioroOtros": 0, "total": 4500.00, "contable": "A", "homologada": true },
+      { "id": 702, "incumplido": true, "diasEnIncumplimiento": 10, "claveDePi": "VOLUNTARIA", "calificacionFinal": "C", "causa": "Arrears",
+        "pi": 1, "pdi": 0.75, "exposicion": 520000, "suspendido": true,
+        "deterioroCapital": 375000.00, "deterioroIntereses": 20000.00, "deterioroOtros": 0, "total": 395000.00, "contable": "D", "homologada": true,
+        "explicacionContiene": [ "PI = 1: la del incumplido (VOLUNTARIA, COMERCIAL_PN)." ] }
+    ]
+  }
+}

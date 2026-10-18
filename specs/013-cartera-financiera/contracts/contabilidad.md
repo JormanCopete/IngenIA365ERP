@@ -87,6 +87,8 @@ y los asientos de ejemplo, en §24.
 | `MoraCausada` | MCA | B | ídem, con `DefaultInterest` | ídem | ídem | CA | K1 |
 | `SeguroCausado` | SCA | B | `PagoPorCuentaDelAsociado` (`Insurance`) | `SeguroPorPagar` | ídem | CA | K1 |
 | `AjusteDeCausacionPorFechaValor` | AFV | B | los roles de `InteresCausado`, `MoraCausada` o `SeguroCausado`, con signo | ídem | ídem | CA | K1 |
+| `CorreccionMonetariaUvrCausada` | CMU | B | si la UVR sube: el rol de saldo del concepto (`Capital`, `InteresPorCobrar`, `PagoPorCuentaDelAsociado`, `CargoPorCobrar`; suspendido o castigado, el de orden como en `InteresCausado`); si baja, al revés | `Ingreso` con el hecho fijado en la regla (`CMU`); en un `Anticipo` o `SaldoAFavor` del deudor, el signo se invierte | PorLotes resumido, `FinDeCausacion` | CA | K6b (E12) |
+| `PagoRedistribuidoPorValorNacional` | PRN | B | positivo: el rol de saldo del concepto que el pago cubre de menos (`Capital`, `InteresPorCobrar`, `PagoPorCuentaDelAsociado`, `CargoPorCobrar`); el suspenso, `Ingreso` y `SuspensoEnOrden`; en un castigado, `IngresoPorRecuperacion` y `CastigadaEnOrden` | positivo: `Anticipo` o `SaldoAFavor` que el pago deja de más; las contras de orden. Negativo, al revés; sin el puente del recaudo | PorLotes resumido, `FinDeCausacion` | CA | K6b |
 | `PagoAplicado` | PAP | B | `RecaudoPorAplicar` (clase del recaudador) | por concepto: `Capital`, `InteresPorCobrar`, `PagoPorCuentaDelAsociado`, `CargoPorCobrar` | EnLinea | RC; DN si `Payroll` | K1 |
 | `PagoReversado` | PRV | B | lo que acreditó el pago, con las dimensiones vigentes (§9) | `RecaudoPorAplicar` | hereda del pago | RC; DN si `Payroll` | K1 |
 | `AnticipoRecibido` | ANR | B | `RecaudoPorAplicar` | `Anticipo` | EnLinea (unidad del pago) | RC | K1 |
@@ -123,7 +125,8 @@ Reglas que valen para todos:
   en un DS. El `AjusteDeCausacionPorFechaValor` que provoca una operación fechada atrás es acompañante de esa
   operación (C03); el que emite la corrida `NationalValueCorrection` va por partes y por lotes. El mapeo de un hecho
   que viaja en la unidad de otro no se usa.
-- **Masivos por partes** (T14): `InteresCausado`, `MoraCausada`, `SeguroCausado`, `DeterioroCalculado`,
+- **Masivos por partes** (T14): `InteresCausado`, `MoraCausada`, `SeguroCausado`, `CorreccionMonetariaUvrCausada` (K6b),
+  `PagoRedistribuidoPorValorNacional` (K6b), `DeterioroCalculado`,
   `CarteraReclasificadaPorCalificacion` y `ReversoDeCierre` llegan por partes (fecha o cierre × sucursal × tipo ×
   tanda), con totales por combinación y **la lista por crédito**. El constructor arma las líneas desde la lista por
   crédito: así una cuenta que exige tercero o cruce conserva el detalle (§10.4).
@@ -487,7 +490,7 @@ contadora (C6).
 | `DS` | Desembolso, su reverso y los ajustes desde Comercial | `CreditoDesembolsado\|*`, `DesembolsoReversado\|*`, `CreditoAjustadoDesdeComercial\|*` |
 | `RC` | Pagos, reversos, anticipos, saldos a favor, cobro de suspenso, recuperación de castigada, cobro provisional | `PagoAplicado\|*`, `PagoReversado\|*`, `AnticipoRecibido\|*`, `AnticipoAplicado\|*`, `CobroDeInteresEnSuspenso\|*`, `SaldoAFavorReconocido\|*`, `SaldoAFavorResuelto\|*`, `RecuperacionDeCastigada\|*`, `CobroProvisionalIncorporado\|*` |
 | `DN` | Lo que recauda Nómina (la recuperación de castigadas incluida, C79) | `PagoAplicado\|Payroll`, `PagoReversado\|Payroll`, `RecuperacionDeCastigada\|Payroll` |
-| `CA` | Interés, mora, seguro, gasto de cobranza y ajuste por fecha valor | `InteresCausado\|*`, `MoraCausada\|*`, `SeguroCausado\|*`, `AjusteDeCausacionPorFechaValor\|*`, `GastoDeCobranzaCausado\|*` |
+| `CA` | Interés, mora, seguro, gasto de cobranza, ajuste por fecha valor, corrección monetaria UVR y reparto de un pago corregido por la UVR (K6b) | `InteresCausado\|*`, `MoraCausada\|*`, `SeguroCausado\|*`, `AjusteDeCausacionPorFechaValor\|*`, `GastoDeCobranzaCausado\|*`, `CorreccionMonetariaUvrCausada\|*`, `PagoRedistribuidoPorValorNacional\|*` |
 | `PV` | Deterioro, reclasificación por calificación, castigo y reverso de cierre | `DeterioroCalculado\|*`, `CarteraReclasificadaPorCalificacion\|*`, `ReversoDeCierre\|*`, `CreditoCastigado\|*` |
 | `CN` (nuevo) | Novedades: reestructuración, modificación, novación, condonación, cambio de dimensión y contingentes | `DimensionContableCambiada\|*`, `CreditoReestructurado\|*`, `CreditoModificado\|*`, `CreditoNovado\|*`, `CondonacionAprobada\|*`, `CreditoAprobadoSinDesembolsar\|*`, `CupoRotativoOtorgado\|*`, `GarantiaConstituida\|*` |
 
@@ -700,7 +703,7 @@ decide con los parámetros de Cartera (módulo `LND`, ámbito `LendingFactType` 
 
 | Tipos | Defecto (D8) |
 |---|---|
-| `InteresCausado`, `MoraCausada`, `SeguroCausado`, `AjusteDeCausacionPorFechaValor` | PorLotes, resumido, disparador `FinDeCausacion` |
+| `InteresCausado`, `MoraCausada`, `SeguroCausado`, `AjusteDeCausacionPorFechaValor`, `CorreccionMonetariaUvrCausada` (K6b), `PagoRedistribuidoPorValorNacional` (K6b) | PorLotes, resumido, disparador `FinDeCausacion` |
 | `DimensionContableCambiada` | sin vigencia propia: EnLinea si la emite una operación, PorLotes resumido `FinDeCausacion` si la emite el proceso; con vigencia propia, rige para los dos (`ElModoDeLaDimensionCambiadaDependeDeQuienLaEmite`) |
 | `DeterioroCalculado`, `CarteraReclasificadaPorCalificacion` | PorLotes, resumido, disparador `CierreDeCartera` |
 | `DesembolsoReversado`, `PagoReversado`, `ReversoDeCierre` | **heredan** el modo sellado de su original (`ModoDeEntrega.Heredado`, el mecanismo de la 012 para las anulaciones), con el alcance de lote de su propia operación |
@@ -910,23 +913,30 @@ inactivo, hecho que no cuadra, más de dos decimales. Sólo evalúa lo que pasar
 
 | Origen de la operación | Con hallazgos (`IsPostable = false`) | Sin respuesta |
 |---|---|---|
-| **Pantallas de Cartera**: desembolso, novedad (reestructuración, modificación, novación), condonación, castigo | `Contabilidad.FaltaDeRegla = Bloquear`: no confirma, `Lending.Prevalidation.NotPostable` (422) con `data.errors[]`. `Advertir` (defecto): confirma, sella `PrevalidationOutcome = NotPostable` y alerta | `Contabilidad.PoliticaSinRespuesta = Bloquear`: `Lending.Prevalidation.NoResponse` (422). `ConfirmarConPendiente` (defecto, D7): confirma y sella `NoResponse` |
-| **Contrato de obligaciones** (Recaudo, Nómina, Aportes, recogida de créditos propios, recaudador de prueba) | **siempre advierte**: aplica, sella `NotPostable` y alerta | siempre aplica y sella `NoResponse` |
-| **Consumidor de Comercial** (obligación desde una venta, ajustes) | siempre advierte: D9 manda crear la obligación aunque la evaluación falle; **la venta de Comercial nunca se detiene por la matriz de Cartera** | ídem |
-| **Procesos** (causación, cierre, réplica, corrida de corrección, tareas) y cobros provisionales al activar | siempre advierte | ídem |
+| **Pantallas de Cartera**: desembolso, novedad (reestructuración, modificación, novación), condonación, castigo | `Contabilidad.FaltaDeRegla = Bloquear` (el defecto desde el 2026-10-14): no confirma, `Lending.Prevalidation.NotPostable` (422) con `data.errors[]`. `Advertir`: confirma, sella `PrevalidationOutcome = NotPostable` y alerta | `Contabilidad.PoliticaSinRespuesta = Bloquear`: `Lending.Prevalidation.NoResponse` (422). `ConfirmarConPendiente` (defecto, D7): confirma y sella `NoResponse` |
+| **Contrato de obligaciones** (Recaudo, Nómina, Aportes, recogida de créditos propios, recaudador de prueba) | `Bloquear`: **rechaza el ítem** (`Rejected`) con `Lending.Prevalidation.NotPostable` y `data.errors[]`, no escribe nada de ese pago y alerta; los ítems de otras combinaciones del lote siguen. **Nómina** no aprueba: la ordinaria y la definitiva fallan enteras con `Payroll.LoanDeductionNotPostable` (422, `data.loans[] { loanNumber, message, lending }`) y su transacción revierte lo que Cartera alcanzó a aplicar (I-4). `Advertir`: aplica, sella `NotPostable` y alerta | siempre aplica y sella `NoResponse` |
+| **Consumidor de Comercial** (obligación desde una venta, ajustes) | `Bloquear`: la obligación **no nace**; el recibo queda `Rejected` y reprocesable (como lo no convertible, C95: sin `ObligacionRechazada`, la venta se informa `Pending` con el motivo) y alerta; corregida la matriz, se reprocesa desde la bandeja. La venta de Comercial ya está confirmada: lo que espera es su obligación en Cartera. `Advertir`: D9, crea la obligación aunque la evaluación falle | ídem |
+| **Procesos** (causación diaria, corrección por valor nacional, cierre mensual) | `Bloquear`: la tanda **no avanza** —no se guarda nada de ella, el cursor no se mueve—, la corrida queda `Failed` con `Lending.Prevalidation.NotPostable` en `LND_ProcessRunErrors` y sale la alerta; corregida la matriz, «Reintentar» la retoma. Con `Advertir` los procesos **no preguntan** (`ValidacionPreviaDeProceso` sólo evalúa si la política podría bloquear, sin tiempo máximo porque corre dentro de la transacción de la tanda) | no preguntan |
+| **Cobros provisionales al activar** | advierte (no se evalúan en K1) | — |
 | **Reserva de número de crédito** | no se evalúa: corre dentro de la confirmación de Comercial y no produce hecho (T22) | — |
 
 - `Contabilidad.FaltaDeRegla` gobierna **todo** hallazgo de la evaluación, no sólo la regla faltante: una cuenta
-  inactiva en la matriz es el mismo vacío de parametrización. `PoliticaSinRespuesta = Bloquear` también se limita a
-  las operaciones de pantalla (C80, coherente con A8).
+  inactiva en la matriz es el mismo vacío de parametrización. `PoliticaSinRespuesta = Bloquear` se limita a las
+  operaciones de pantalla (C80): la respuesta a A8 no la tocó.
+- **Sin contabilidad iniciada o con el hecho en `NoPasa` no se pregunta nada y no se bloquea nada** (§10.1), en ningún
+  origen.
+- **El defecto de `Contabilidad.FaltaDeRegla` es `Bloquear`** (decisión del dueño del 2026-10-14): con la contabilidad
+  iniciada, la matriz de Cartera tiene que estar completa para lo que la cooperativa opere, o `Advertir` fijado a
+  propósito (por vigencia o por tipo de hecho).
 - `PrevalidationOutcome` gana `NotPostable = 4` («evaluado no contabilizable, confirmado con advertencia») además de
   `Postable`, `NoResponse` y `NotApplicable`. La bandeja compara lo sellado con el resultado de la entrega.
 - Alerta `Cartera.HechoNoContabilizable` para quienes tienen `Accounting.LendingRules.Manage` y
   `Lending.Messages.Reprocess`, con la combinación y la operación; una por combinación y día (`DedupKey`).
-- **Por qué**: un pago que ya ocurrió en el mundo no se rechaza por un vacío de la matriz, y la nómina es «todo o
-  nada» (I-4, FR-088): bloquearla por una regla tumbaría la aprobación entera. Que «Bloquear» no alcance al contrato,
-  al consumidor ni a los procesos recorta FR-127 y US7-2: es la **enmienda A8** (T97). Lo que se aplicó sin regla
-  queda rechazado en la bandeja, se ve en la conciliación y se recupera creando la regla y reprocesando.
+- **Por qué**: la propuesta de la enmienda A8 limitaba «Bloquear» a las pantallas (un pago que ya ocurrió no se
+  rechaza por un vacío de la matriz); el dueño respondió **«Bloquear todo»** el 2026-10-14 (decisiones-transversales §5,
+  A8): quien elige `Bloquear` prefiere que nada pase sin poder contabilizarse, aunque eso detenga una nómina o una
+  tanda. FR-127 y US7-2 quedan como estaban (sin recorte). Con `Advertir`, lo que se aplicó sin regla queda rechazado
+  en la bandeja, se ve en la conciliación y se recupera creando la regla y reprocesando.
 
 ### 13.3 Respuesta de Cartera y quién corrige
 
@@ -1733,4 +1743,50 @@ aplica cada decisión.
 | CON-18 · carpeta común | C82: `Application/Accounting/Integration` (§1.1) |
 | — · usuario de origen del proceso | C23: «registrado por» = `Actor.NombreDelProceso` (§7.3, §22) |
 | — · roles de saldo del contrato | C29: lista publicada en §16.1 |
+
+---
+
+## 29. Enmienda K6b (2026-10-17): la corrección monetaria UVR (E12)
+
+Con K6b (vivienda Ley 546 y UVR; FR-024, D18) Cartera emite un hecho masivo nuevo, `CorreccionMonetariaUvrCausada` (código corto
+`CMU`, `LND_FactTypes.DeliveredIn = K6b`, comprobante `CA`, modo de los masivos, admite proceso; `mensajes.md` §10.25). Rige la
+**propuesta por defecto de E12** (DT §7.7) mientras la contadora no responda:
+
+- **Sin rol nuevo**: el lado de resultado es el rol `Ingreso` con el hecho fijado en la regla (`hecho = CMU`, peso 2 de la matriz);
+  el lado del saldo, el rol del concepto que cambió de valor, con las mismas dimensiones (y `valueUnit = Uvr`). La contadora crea la
+  regla de `CMU` × `Ingreso` con la cuenta que elija para la corrección monetaria; sin ella, con `Contabilidad.FaltaDeRegla =
+  Bloquear` el ciclo detiene su tanda y alerta, como con cualquier hecho sin regla. El hecho viaja con signo: una UVR que baja
+  invierte los lados.
+- **Comprobante**: el `CA` del día, resumido con la causación (una línea por crédito donde la cuenta exige tercero o cruce).
+- **Conciliación**: el saldo en pesos de un crédito en UVR es Σ causado + Σ corrección − Σ pagado: sin este hecho, el cuadre de
+  vivienda no cierra contra el libro.
+- **Abierto**: si el certificado tributario incluye la corrección monetaria pagada junto a los intereses de vivienda (hoy no).
+
+Lo fija el caso 50 de `ConstructorDeLineasDeCarteraTests` (`Casos/50-correccion-monetaria-uvr.json`).
+
+---
+
+## 30. Enmienda K6b (2026-10-17, decisión del dueño): el pago aplicado en un día cuya UVR se corrige
+
+Corregir la `UVR` de un día ya causado encola la corrida `NationalValueCorrection` de los créditos en UVR (§29, `mensajes.md` §10.5). Si ese día
+se aplicó un pago, lo recibido en pesos no cambia pero el pago cubre en pesos otra mezcla de conceptos. Hasta esta enmienda esa diferencia
+viajaba mezclada en el `AjusteDeCausacionPorFechaValor` y su capital no tenía rol (concepto sin rol: el ajuste de causación sólo conoce
+intereses, seguro y cargos contra su ingreso). Ahora Cartera la separa y la emite en un hecho masivo nuevo, `PagoRedistribuidoPorValorNacional`
+(código corto `PRN`, `LND_FactTypes.DeliveredIn = K6b`, comprobante `CA`, modo de los masivos, admite proceso; `mensajes.md` §10.26):
+
+- **Sin rol nuevo y sin el puente del recaudo**: es una redistribución entre los saldos del mismo crédito. Con el signo del libro, un importe
+  positivo de lo que se debe va al **débito** de su rol de saldo (el pago lo cubrió de menos) y uno positivo del anticipo o del saldo a favor
+  va al **crédito** de `Anticipo` o `SaldoAFavor` (el pago dejó más); un negativo invierte. Cuadra solo, porque lo recibido no cambia.
+- **Suspenso y castigado**: lo cobrado del suspenso se reconoce como ingreso al cobrarlo (`CobroDeInteresEnSuspenso`), así que su
+  redistribución mueve el `Ingreso` (concepto del suspenso, hecho `*` o `PRN`) y la orden (`SuspensoEnOrden` contra `ContraOrdenContingente`);
+  en un crédito castigado lo cobrado es recuperación: `IngresoPorRecuperacion` y `CastigadaEnOrden` contra `ContraOrdenControl`.
+- **Matriz**: todos son roles de saldo, orden o pasivo (hecho `*`) salvo los dos ingresos, que admiten hecho fijo; las reglas de `*` ya
+  sugeridas en la plantilla los resuelven, así que **la plantilla no suma filas** para este hecho. Con `Contabilidad.FaltaDeRegla =
+  Bloquear` y sin regla, la tanda de la corrida se detiene y alerta, como con cualquier hecho.
+- **Comprobante**: el `CA` de la corrida, con la fecha contable del período abierto; el día valor del pago va en la línea (`valueDate`). El
+  pago y su comprobante `RC`/`DN` no se tocan.
+- **Sólo la UVR**: la corrida de una `USURA` sigue llevando todo en el ajuste de causación (pregunta abierta en `tasks.md`, fase 24).
+
+Lo fijan los casos 51 (UVR que sube: capital al débito, interés por cobrar al crédito) y 52 (UVR que baja con anticipo) de
+`ConstructorDeLineasDeCarteraTests`, y en Cartera `RepartoDePagoConUvrCorregidaTests` (Domain) y `CorreccionDeValorNacionalTests`.
 

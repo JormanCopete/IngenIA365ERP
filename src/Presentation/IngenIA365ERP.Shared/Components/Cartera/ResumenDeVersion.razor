@@ -10,6 +10,7 @@
         <div class="campo"><b>Tasa</b> @Tasa</div>
         <div class="campo"><b>Mora</b> @(V.DefaultRateKind == 1 ? $"{Pct(V.DefaultRate)} EA" : $"{V.DefaultRateFactor?.ToString("0.######", Es)} veces la corriente")</div>
         <div class="campo"><b>Días</b> @TextosDeCartera.Convencion(V.DayCount)</div>
+        <div class="campo"><b>Unidad del capital</b> @(V.DenominationUnit == 2 ? "UVR" : "Pesos")</div>
         <div class="campo"><b>Montos</b> @V.MinAmount.ToString("N0", Es) a @V.MaxAmount.ToString("N0", Es)</div>
         <div class="campo"><b>Plazos</b> @V.MinTermMonths a @V.MaxTermMonths meses@(V.MaxInstallments is { } c ? $" · hasta {c} cuotas" : "")</div>
         <div class="campo"><b>Periodicidades</b> @TextosDeCartera.Lista(TextosDeCartera.Periodicidades, V.Periodicities)</div>

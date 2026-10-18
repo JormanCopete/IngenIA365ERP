@@ -120,5 +120,81 @@ public static class ErroresDeRiesgo
 
     public static Error BaseYaExiste() => new(CodigoBaseYaExiste, "La cooperativa ya tiene su cierre base.");
 
+    // ---------------------------------------------------------------------------------------- pérdida esperada (K6a) --
+    public const string CodigoModeloNoDisponible = "Lending.ImpairmentModel.NotAvailable";
+    public const string CodigoModeloHistorialIncompleto = "Lending.ImpairmentModel.IncompleteHistory";
+    public const string CodigoModeloAvisoFueraDePlazo = "Lending.ImpairmentModel.NoticeOutOfTerm";
+    public const string CodigoModeloObligada = "Lending.ImpairmentModel.Obligated";
+    public const string CodigoModeloNoAlterna = "Lending.ImpairmentModel.NotAlternating";
+    public const string CodigoModeloSinPiVoluntaria = "Lending.ImpairmentModel.VoluntaryPdMissing";
+    public const string CodigoModeloSegmentoInvalido = "Lending.ImpairmentModel.SegmentInvalid";
+    public const string CodigoModeloFechaOcupada = "Lending.ImpairmentModel.ValidFromTaken";
+    public const string CodigoModeloSinRegla = "Lending.ImpairmentModel.RuleMissing";
+    public const string CodigoModeloRetroactivo = "Lending.ImpairmentModel.RetroactiveValidFrom";
+    public const string CodigoModeloSoporteInvalido = "Lending.ImpairmentModel.SupportInvalid";
+    public const string CodigoHistorialFueraDeLaCarga = "Lending.ArrearsHistory.LoanNotInLoad";
+    public const string CodigoHistorialMesCerrado = "Lending.ArrearsHistory.MonthClosed";
+    public const string CodigoHistorialCargaCerrada = "Lending.ArrearsHistory.LoadClosed";
+    public const string CodigoHistorialSinCarga = "Lending.ArrearsHistory.NoAppliedLoad";
+
+    public static Error ModeloNoDisponible() => new(CodigoModeloNoDisponible,
+        "La entrega desplegada no trae el modelo de pérdida esperada: todavía no se puede adoptar ni desistir.");
+
+    public static Error ModeloHistorialIncompleto(IReadOnlyList<IncompleteArrearsHistoryDto> incompletos) => new ErrorConDatos(CodigoModeloHistorialIncompleto,
+        $"{incompletos.Count.ToString(Inv)} créditos vivos de los segmentos cubiertos no tienen el historial de mora completo: complételo con la carga "
+        + "complementaria antes de adoptar el modelo.",
+        new { loans = incompletos.Select(i => new { loanPublicId = i.LoanPublicId, loanNumber = i.LoanNumber, segment = i.Segment, missingMonths = i.MissingMonths }).ToList() });
+
+    public static Error ModeloAvisoFueraDePlazo(DateOnly desde, DateOnly masTemprana, int dias) => new ErrorConDatos(CodigoModeloAvisoFueraDePlazo,
+        $"El cambio no puede regir desde el {desde:yyyy-MM-dd}: la norma pide {dias.ToString(Inv)} días desde el aviso a la Superintendencia; lo más "
+        + $"temprano es el {masTemprana:yyyy-MM-dd}.",
+        new { validFrom = desde, earliestValidFrom = masTemprana, noticeLeadDays = dias });
+
+    public static Error ModeloObligada() => new(CodigoModeloObligada,
+        "La cooperativa está obligada al modelo de pérdida esperada: no lo adopta ni desiste voluntariamente (la obligación no admite desistimiento).");
+
+    public static Error ModeloNoAlterna(ImpairmentModelElectionKind pedida) => new ErrorConDatos(CodigoModeloNoAlterna,
+        pedida == ImpairmentModelElectionKind.VoluntaryAdoption
+            ? "La cooperativa ya adoptó el modelo de pérdida esperada: la siguiente elección es el desistimiento."
+            : "La cooperativa no tiene una adopción voluntaria vigente de la que desistir.",
+        new { kind = pedida.ToString() });
+
+    public static Error ModeloSinPiVoluntaria(IReadOnlyList<string> segmentos) => new ErrorConDatos(CodigoModeloSinPiVoluntaria,
+        $"El Anexo 2 vigente no trae la probabilidad de incumplimiento de la aplicación voluntaria en {string.Join(", ", segmentos)}: no se puede "
+        + "adoptar el modelo hasta que la plataforma registre esa tabla.",
+        new { segments = segmentos });
+
+    public static Error ModeloSegmentoInvalido(IReadOnlyList<string> segmentos) => new ErrorConDatos(CodigoModeloSegmentoInvalido,
+        $"Los segmentos {string.Join(", ", segmentos)} no son segmentos de pérdida esperada.", new { segments = segmentos });
+
+    public static Error ModeloFechaOcupada(DateOnly desde) => new ErrorConDatos(CodigoModeloFechaOcupada,
+        $"Ya hay una elección del modelo que rige desde el {desde:yyyy-MM-dd}.", new { validFrom = desde });
+
+    public static Error ModeloSinRegla(DateOnly desde) => new ErrorConDatos(CodigoModeloSinRegla,
+        $"No hay regla de pérdida esperada vigente el {desde:yyyy-MM-dd}: falta la antelación del aviso que la norma exige.", new { validFrom = desde });
+
+    public static Error ModeloRetroactivo(DateOnly desde, DateOnly ultimoCierre) => new ErrorConDatos(CodigoModeloRetroactivo,
+        $"El cambio no puede regir desde el {desde:yyyy-MM-dd}: el {ultimoCierre:yyyy-MM-dd} ya hay un cierre de Cartera y los cierres no se recalculan.",
+        new { validFrom = desde, lastCloseDate = ultimoCierre });
+
+    /// <summary>K6a, bloque 3 (T1039): el estudio de impacto o el soporte del aviso no es un adjunto disponible de esta propuesta.</summary>
+    public static Error ModeloSoporteInvalido(IReadOnlyList<string> campos) => new ErrorConDatos(CodigoModeloSoporteInvalido,
+        "El estudio de impacto y el soporte del aviso se suben a la propuesta del cambio antes de registrarlo: "
+        + $"{string.Join(" y ", campos)} no es un archivo disponible de esta propuesta.",
+        new { fields = campos });
+
+    public static string HistorialFueraDeLaCarga(string numero) =>
+        $"El crédito {numero} no es de la carga de migración que se complementa.";
+
+    public static string HistorialMesCerrado(int anio, int mes) =>
+        $"{Mes(anio, mes)} ya tiene un cierre mensual de Cartera: su historial lo da el cierre, no la carga complementaria.";
+
+    public static Error HistorialCargaCerrada(DateOnly primerCierre) => new ErrorConDatos(CodigoHistorialCargaCerrada,
+        $"La carga complementaria del historial de mora se cerró con el primer cierre en pérdida esperada ({primerCierre:yyyy-MM-dd}).",
+        new { firstExpectedLossClose = primerCierre });
+
+    public static Error HistorialSinCarga() => new(CodigoHistorialSinCarga,
+        "No hay una carga de migración aplicada o activada cuyos créditos complementar.");
+
     private static DateOnly MonthlyCloseFin(int anio, int mes) => Domain.Entities.Lending.Risk.MonthlyClose.UltimoDiaDe(anio, mes);
 }

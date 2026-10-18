@@ -127,6 +127,30 @@ public class MonthlyCloseLoan : AuditableEntity, IHechoInmutable
     /// <summary>K6a.</summary>
     public decimal? ExposureAtDefault { get; init; }
 
+    // K6a (bloque 2, migración CarteraPerdidaEsperada): lo que el formato 9083 del SICSES («cálculo de deterioro de cartera») y los 9027 y 9081
+    // por pérdida esperada piden por crédito además de PI, PDI y exposición. Nulas fuera de la pérdida esperada (el crédito en el Anexo 1).
+
+    /// <summary>K6a: Z del modelo (intercepto más coeficientes); nulo si el crédito está incumplido (no se puntúa).</summary>
+    public decimal? ExpectedLossZ { get; init; }
+
+    /// <summary>K6a: el puntaje <c>1 / (1 + e^(−Z))</c> redondeado a la escala del documento; nulo si está incumplido.</summary>
+    public decimal? ExpectedLossScore { get; init; }
+
+    /// <summary>K6a: ¿incumplido (por su mora o por arrastre) al cierre?</summary>
+    public bool? IsInDefault { get; init; }
+
+    /// <summary>K6a: días en incumplimiento (los que pasan del umbral del segmento); 0 si no está incumplido.</summary>
+    public int? DaysInDefault { get; init; }
+
+    /// <summary>K6a: la clave de la tabla de PI usada (tipo de organización o <c>VOLUNTARIA</c>).</summary>
+    public string? ProbabilityOfDefaultKey { get; init; }
+
+    /// <summary>K6a: el tipo de garantía de la tabla de PDI.</summary>
+    public string? LossGivenDefaultCollateralType { get; init; }
+
+    /// <summary>K6a: el historial de mora no estaba completo y sus meses faltantes se completaron con la regla (FR-105).</summary>
+    public bool? IncompleteArrearsHistory { get; init; }
+
     /// <summary>La explicación crédito por crédito (FR-106).</summary>
     public string ExplanationJson { get; init; } = "[]";
 

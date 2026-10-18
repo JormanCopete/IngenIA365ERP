@@ -1,4 +1,4 @@
-using FluentAssertions;
+﻿using FluentAssertions;
 using IngenIA365ERP.Application.Security.Roles.Plantillas;
 using IngenIA365ERP.Identity.Seed;
 
@@ -53,7 +53,9 @@ public class PerfilesSugeridosDeCarteraTests
 
         codigos.Should().NotContain(c => c.StartsWith("Lending.Decisions.", StringComparison.Ordinal));
         codigos.Should().NotContain("Lending.Sessions.Vote");
-        codigos.Should().HaveCount(LendingPermissionCatalogSeeder.Catalog.Length - 6, "todo Lending.* menos los cuatro Decisions, el voto y los dobles de prueba");
+        codigos.Where(c => c.StartsWith("Lending.", StringComparison.Ordinal)).Should()
+            .HaveCount(LendingPermissionCatalogSeeder.Catalog.Length - 6, "todo Lending.* menos los cuatro Decisions, el voto y los dobles de prueba");
+        codigos.Where(c => !c.StartsWith("Lending.", StringComparison.Ordinal)).Should().BeEquivalentTo(["Attachments.Upload", "Attachments.Download"], "sube y elige soportes (bloque D)");
     }
 
     /// <summary>
@@ -67,6 +69,17 @@ public class PerfilesSugeridosDeCarteraTests
         Codigos("cartera.gerente").Should().Contain("Lending.Payments.BackdateBeforeClose");
         foreach (var plantilla in PerfilesSugeridos.DelModulo("Lending"))
             Codigos(plantilla.Key).Should().NotContain("Lending.TestDoubles.Operate", $"«{plantilla.Key}» no trae los dobles de prueba");
+    }
+
+    /// <summary>
+    /// Respuesta del dueño (2026-10-14): el asesor consulta las líneas de crédito (sólo consultar); cada cooperativa lo ajusta en los permisos del rol
+    /// (Seguridad › Roles), porque el rol creado desde la plantilla es suyo y se edita.
+    /// </summary>
+    [Fact]
+    public void El_asesor_consulta_las_lineas_y_no_las_administra()
+    {
+        Codigos("cartera.asesor").Should().Contain("Lending.CreditLines.View");
+        Codigos("cartera.asesor").Should().NotContain("Lending.CreditLines.Manage");
     }
 
     [Fact]
@@ -93,5 +106,44 @@ public class PerfilesSugeridosDeCarteraTests
         Codigos("cartera.analista").Should().Contain("Lending.Decisions.Analyst");
         Codigos("cartera.jefe").Should().Contain("Lending.Decisions.Coordinator");
         Codigos("cartera.gerente").Should().Contain(["Lending.Decisions.Management", "Lending.Decisions.Exceptions"]);
+    }
+
+    /// <summary>
+    /// K3, bloque D (decisión del dueño del 2026-10-15): los roles sugeridos hacen su propio trabajo con mínimo privilegio —analista y gerente deciden
+    /// novedades (la ruta de decisiones exige verlas), quien sube soportes de novedades, eventos del deudor y castigo trae <c>Attachments.Upload</c> y el
+    /// consejo lee los créditos y las calificaciones de lo que aplica—; quien sube también lista y descarga para elegir el soporte, y nadie borra adjuntos.
+    /// </summary>
+    [Fact]
+    public void Los_roles_de_Cartera_pueden_hacer_su_propio_trabajo_de_K3()
+    {
+        Codigos("cartera.analista").Should().Contain("Lending.Novelties.Read");
+        Codigos("cartera.gerente").Should().Contain("Lending.Novelties.Read");
+        Codigos("cartera.consejo").Should().Contain(["Lending.Loans.Read", "Lending.Ratings.Read", "Attachments.Upload"]);
+        foreach (var clave in new[] { "cartera.administrador", "cartera.jefe", "cartera.consejo" })
+            Codigos(clave).Should().Contain(["Attachments.Upload", "Attachments.Download"], $"«{clave}» sube y elige soportes");
+        foreach (var plantilla in PerfilesSugeridos.DelModulo("Lending"))
+            Codigos(plantilla.Key).Should().NotContain(["Attachments.Delete"], $"«{plantilla.Key}» no borra adjuntos");
+        // El gestor de cobranza sube desde K4, bloque D, la guía de la carta del aviso previo (abajo); los soportes de K3 le siguen vedados por permiso del dueño.
+        foreach (var clave in new[] { "cartera.asesor", "cartera.analista", "cartera.gerente", "cartera.auditor" })
+            Codigos(clave).Should().NotContain("Attachments.Upload", $"«{clave}» no sube soportes de K3");
+        Codigos("cartera.gestor-cobranza").Should().NotContain(["Lending.Novelties.Request", "Lending.WriteOffs.Prepare", "Lending.DebtorEvents.Manage"],
+            "el gestor no sube soportes de novedades, castigo ni eventos del deudor");
+    }
+
+    /// <summary>
+    /// K4, bloque D (decisión del dueño del 2026-10-16): el jefe aprueba acuerdos, lleva el cobro jurídico y las campañas y envía y registra avisos
+    /// previos; el gestor envía avisos previos y registra la carta (sube la guía). La segregación de los acuerdos sigue en pie: quien propone (el gestor)
+    /// no aprueba, y el jefe, que aprueba, no propone; aunque una cooperativa le dé los dos a la misma persona, el comando rechaza aprobar lo propio.
+    /// </summary>
+    [Fact]
+    public void Los_roles_de_Cartera_pueden_hacer_su_propio_trabajo_de_K4()
+    {
+        Codigos("cartera.jefe").Should().Contain(["Lending.PaymentAgreements.Approve", "Lending.LegalProcesses.Manage", "Lending.Campaigns.Manage",
+            "Lending.PriorNotices.Send", "Lending.PriorNotices.RegisterEvidence"]);
+        Codigos("cartera.jefe").Should().NotContain("Lending.PaymentAgreements.Create", "quien aprueba no propone");
+        Codigos("cartera.gestor-cobranza").Should().Contain(["Lending.PriorNotices.Send", "Lending.PriorNotices.RegisterEvidence", "Attachments.Upload",
+            "Attachments.Download"]);
+        Codigos("cartera.gestor-cobranza").Should().NotContain(["Lending.PaymentAgreements.Approve", "Lending.LegalProcesses.Manage", "Lending.Campaigns.Manage"],
+            "el gestor propone y gestiona; aprobar, el cobro jurídico y las campañas son del jefe");
     }
 }

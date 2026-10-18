@@ -88,6 +88,12 @@ public enum NoveltyMechanism
     RateChange = 3,
     Novation = 4,
     Refinancing = 5,
+
+    /// <summary>
+    /// K3 (T0883, C51): el cambio de oficina del crédito, sin efecto en la causa (siempre modificación) ni en el plan; mueve los saldos a la sucursal
+    /// contable nueva con <c>DimensionContableCambiada</c>. Sujeto a la confirmación del dueño (tasks.md, notas 10). (nuevo)
+    /// </summary>
+    BranchChange = 6,
 }
 
 /// <summary>Causa de una novedad (K3).</summary>

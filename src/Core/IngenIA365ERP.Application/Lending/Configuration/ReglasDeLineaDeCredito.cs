@@ -2,11 +2,14 @@ using System.Globalization;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Common.NationalValues;
+using IngenIA365ERP.Application.Lending.Housing;
+using IngenIA365ERP.Application.Saas.NationalValues;
 using IngenIA365ERP.Domain.Common.NationalValues;
 using IngenIA365ERP.Domain.Entities.Lending.Configuration;
 using IngenIA365ERP.Domain.Enums.Lending;
 using IngenIA365ERP.Domain.Lending;
 using IngenIA365ERP.Domain.Lending.Configuration;
+using IngenIA365ERP.Domain.Lending.Housing;
 using IngenIA365ERP.Domain.Lending.Rates;
 using IngenIA365ERP.Domain.Lending.Schedules;
 
@@ -148,7 +151,9 @@ public static class PlanTipoDeLinea
 /// <item>la forma de la versión con sus hijas (<see cref="CreditLineVersion.Validar"/>: retroactiva, precisión, D20, bandas, mínimos,
 /// listas);</item>
 /// <item>la modalidad y el sub-segmento contra el <c>CatalogoDeModalidades</c> vigente en <c>ValidFrom</c> (<c>ModalityUnknown</c>; sin
-/// documento, <c>NationalValues.Missing</c>); vivienda o UVR, hasta K6b, <c>HousingNotAvailable</c> (D18);</item>
+/// documento, <c>NationalValues.Missing</c>); vivienda o UVR, hasta K6b, <c>HousingNotAvailable</c> (D18); desde K6b (T1055), las reglas de la
+/// Ley 546 de 1999 (<see cref="ReglasDeVivienda.ValidarLinea"/>: tasa fija, tope de vivienda con su fuente, plazo entre los límites, UVR sólo si el
+/// catálogo la admite), y la usura del plan tipo se controla contra el tope de vivienda;</item>
 /// <item>los no asociados contra el perfil regulatorio vigente (<c>NonAssociatesNotAllowed</c>);</item>
 /// <item>la usura: la versión y cada banda pasan <see cref="ControlDeUsura"/> sobre el plan tipo (<see cref="PlanTipoDeLinea"/>) con la
 /// usura certificada que el catálogo asigna a la combinación, a <c>ValidFrom</c> y a hoy (<c>Lending.Usury.Exceeded</c> con la usura,
@@ -157,7 +162,8 @@ public static class PlanTipoDeLinea
 /// </list>
 /// No escribe nada. (nuevo)
 /// </summary>
-public sealed class ReglasDeLineaDeCredito(INormativaVigente normativa, IValoresNacionales valores, IPerfilRegulatorio perfil)
+public sealed class ReglasDeLineaDeCredito(INormativaVigente normativa, IValoresNacionales valores, IPerfilRegulatorio perfil,
+    EntregaDeCartera? entrega = null)
 {
     /// <summary>
     /// Verifica una versión completa. <paramref name="hoy"/> es la fecha local; <paramref name="admitirDesde"/> (sólo la plantilla, en
@@ -171,6 +177,25 @@ public sealed class ReglasDeLineaDeCredito(INormativaVigente normativa, IValores
 
         var combinacion = await CombinacionAsync(b.ModalityCode, b.SubsegmentCode, b.ValidFrom, ct);
         if (combinacion.IsFailure) return Result.Failure<LineaVerificada>(combinacion.Error);
+
+        // K6b (T1055): las reglas de vivienda de la Ley 546 a ValidFrom y a hoy; una línea en UVR sólo donde el catálogo la admite y en un solo tramo.
+        if (EsVivienda(b.ModalityCode.Trim().ToUpperInvariant(), combinacion.Value))
+        {
+            foreach (var fecha in new[] { b.ValidFrom, hoy }.Where(f => f >= referencia).Distinct().OrderBy(f => f))
+            {
+                var vivienda = await ViviendaAsync(b, combinacion.Value, fecha, ct);
+                if (vivienda.IsFailure) return Result.Failure<LineaVerificada>(vivienda.Error);
+            }
+        }
+        else if (b.DenominationUnit == DenominationUnit.Uvr && !combinacion.Value.AdmitsUvr)
+        {
+            return Result.Failure<LineaVerificada>(LectorDeVivienda.Error(ProblemaDeCartera.Con(ReglasDeVivienda.CodigoUvrNoAdmitida,
+                "La combinación de modalidad y sub-segmento no admite UVR en el catálogo de modalidades vigente: la línea va en pesos.", "field",
+                "denominationUnit")));
+        }
+        if (b.DenominationUnit == DenominationUnit.Uvr && b.AllowsTranches)
+            return Result.Failure<LineaVerificada>(ErroresDeLineasDeCredito.Invalido("allowsTranches",
+                "Una línea en UVR se desembolsa en un solo tramo: desmarque «admite tramos» o pacte la línea en pesos."));
 
         if (b.AllowsNonAssociates)
         {
@@ -246,7 +271,7 @@ public sealed class ReglasDeLineaDeCredito(INormativaVigente normativa, IValores
     public static bool PermiteNoAsociados(PerfilRegulatorioDto? perfilVigente) =>
         perfilVigente is { FinancialActivityAuthorized: false, EmployeeFundCategory: null };
 
-    /// <summary>¿La combinación es de vivienda o UVR? (D18: no se admite hasta K6b.)</summary>
+    /// <summary>¿La combinación es de vivienda o UVR? (D18: no se admite hasta K6b; desde K6b pasa las reglas de la Ley 546.)</summary>
     public static bool EsVivienda(string modalidad, CombinacionDeModalidad? combinacion) =>
         string.Equals(modalidad, ModalidadDeVivienda, StringComparison.OrdinalIgnoreCase)
         || combinacion is { HousingRateCap: true } or { AdmitsUvr: true } or { UsuryKey: null };
@@ -266,9 +291,61 @@ public sealed class ReglasDeLineaDeCredito(INormativaVigente normativa, IValores
     public static IndiceDeReferencia Indice(ValorNacionalVigente v) =>
         new(v.Valor ?? 0m, string.Equals(v.Unidad, nameof(UnidadDeValorNacional.NominalMV), StringComparison.Ordinal) ? 12 : null);
 
-    /// <summary>La usura certificada de la combinación a la fecha (<c>USURA</c> con la clave que asigna el catálogo).</summary>
+    /// <summary>
+    /// K6b (T1054, T1055): la UVR publicada <b>para</b> la fecha (la de un día rige ese día); sin ella, <c>NationalValues.Missing</c>. La usan la
+    /// simulación y el desembolso de una línea en UVR para pasar el monto a UVR.
+    /// </summary>
+    public async Task<Result<decimal>> UvrAsync(DateOnly fecha, CancellationToken ct)
+    {
+        var leida = await valores.LeerAsync(CodigosDeValorNacional.Uvr, string.Empty, fecha, null, ct);
+        if (leida.IsFailure) return Result.Failure<decimal>(leida.Error);
+        return leida.Value.ValidFrom == fecha && leida.Value.Valor is { } uvr && uvr > 0m
+            ? Result.Success(uvr)
+            : Result.Failure<decimal>(ErroresDeValoresNacionales.Faltante(CodigosDeValorNacional.Uvr, string.Empty, fecha));
+    }
+
+    /// <summary>
+    /// K6b (T1055): las reglas de vivienda de una versión a una fecha —los límites de la Ley 546 y el tope de vivienda vigentes, con su fuente— por
+    /// <see cref="ReglasDeVivienda.ValidarLinea"/>; el primer problema como error del contrato.
+    /// </summary>
+    public async Task<Result> ViviendaAsync(BorradorDeVersionDeLinea b, CombinacionDeModalidad combinacion, DateOnly fecha, CancellationToken ct)
+    {
+        var lector = new LectorDeVivienda(valores);
+        var limites = await lector.LimitesAsync(fecha, ct);
+        if (limites.IsFailure) return Result.Failure(limites.Error);
+        TopeDeTasaDeVivienda? tope = null;
+        if (combinacion.HousingRateCap)
+        {
+            var leido = await lector.TopeAsync(fecha, ct);
+            if (leido.IsFailure) return Result.Failure(leido.Error);
+            tope = leido.Value;
+        }
+        decimal? usura = null;
+        if (combinacion.UsuryKey is { } clave)
+        {
+            var leida = await valores.LeerAsync(CodigosDeValorNacional.Usura, clave, fecha, null, ct);
+            if (leida.IsFailure) return Result.Failure(leida.Error);
+            usura = leida.Value.Valor;
+        }
+        var tasas = b.RateBands.Select(x => x.AnnualRate).Append(b.AnnualRate).OfType<decimal>().ToList();
+        var problemas = ReglasDeVivienda.ValidarLinea(new LineaDeVivienda(b.RateKind, tasas.Count == 0 ? null : tasas.Max(), b.MinTermMonths, b.MaxTermMonths,
+            b.DenominationUnit, combinacion.AdmitsUvr), tope, usura, limites.Value);
+        return problemas.Count == 0 ? Result.Success() : Result.Failure(LectorDeVivienda.Error(problemas[0]));
+    }
+
+    /// <summary>
+    /// La usura certificada de la combinación a la fecha (<c>USURA</c> con la clave que asigna el catálogo). K6b (T1055): una combinación con tope de
+    /// vivienda controla el plan tipo contra el <c>TOPE_TASA_VIVIENDA</c> vigente (rige el menor si también tuviera usura).
+    /// </summary>
     public async Task<Result<UsuraCertificada>> UsuraAsync(CombinacionDeModalidad combinacion, DateOnly fecha, CancellationToken ct)
     {
+        if (combinacion.UsuryKey is null && combinacion.HousingRateCap)
+        {
+            var tope = await new LectorDeVivienda(valores).TopeAsync(fecha, ct);
+            return tope.IsFailure
+                ? Result.Failure<UsuraCertificada>(tope.Error)
+                : Result.Success(new UsuraCertificada(tope.Value.Tasa, tope.Value.PublicId, CodigosDeValorNacional.TopeTasaVivienda, tope.Value.VigenteDesde));
+        }
         var leida = await valores.LeerAsync(CodigosDeValorNacional.Usura, combinacion.UsuryKey!, fecha, null, ct);
         return leida.IsFailure
             ? Result.Failure<UsuraCertificada>(leida.Error)
@@ -285,7 +362,8 @@ public sealed class ReglasDeLineaDeCredito(INormativaVigente normativa, IValores
 
         var combinacion = catalogo.Value.Documento.Buscar(codigo, sub);
         var modalidadDelCatalogo = catalogo.Value.Documento.Modalidades.FirstOrDefault(m => m.Code == codigo);
-        if (EsVivienda(codigo, combinacion))
+        // D18: hasta K6b la vivienda y la UVR no se admiten; desde K6b (T1055) siguen las reglas de la Ley 546 (ViviendaAsync).
+        if (EsVivienda(codigo, combinacion) && !LectorDeVivienda.Disponible(entrega))
             return Result.Failure<CombinacionDeModalidad>(ErroresDeLineasDeCredito.ViviendaNoDisponible(codigo));
         if (combinacion is null) return Result.Failure<CombinacionDeModalidad>(ErroresDeLineasDeCredito.ModalidadDesconocida(codigo, sub, fecha));
         if (modalidadDelCatalogo?.RetiredFrom is { } retirada && retirada <= fecha)

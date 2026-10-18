@@ -122,6 +122,11 @@ public class MonthlyCloseLoanConfiguration : IEntityTypeConfiguration<MonthlyClo
         builder.Property(e => e.ProbabilityOfDefault).TasaEquivalente();
         builder.Property(e => e.LossGivenDefault).Fraccion();
         builder.Property(e => e.ExposureAtDefault).Monto();
+        // K6a (CarteraPerdidaEsperada): lo que piden los formatos del SICSES por pérdida esperada (9083, 9027, 9081), nulo en el Anexo 1.
+        builder.Property(e => e.ExpectedLossZ).TasaEquivalente();
+        builder.Property(e => e.ExpectedLossScore).TasaEquivalente();
+        builder.Property(e => e.ProbabilityOfDefaultKey).HasMaxLength(40);
+        builder.Property(e => e.LossGivenDefaultCollateralType).HasMaxLength(40);
         builder.Property(e => e.ExplanationJson).IsRequired();
 
         builder.HasOne<LendingProcessRun>().WithMany().HasForeignKey(e => e.ProcessRunId).OnDelete(DeleteBehavior.Restrict);
@@ -200,7 +205,7 @@ public class MonthlyCloseReopeningConfiguration : IEntityTypeConfiguration<Month
 
 /// <summary>
 /// <c>LND_LoanArrearsHistory</c>: índice por crédito y mes, y único <c>(ProcessRunId, LoanId)</c> filtrado (una fila por crédito en cada
-/// corrida del cierre). <c>ArrearsHistoryLoadId</c> no lleva FK hasta K6a.
+/// corrida del cierre). <c>ArrearsHistoryLoadId</c> lleva FK e índice desde K6a (<c>CarteraPerdidaEsperada</c>).
 /// </summary>
 public class LoanArrearsHistoryEntryConfiguration : IEntityTypeConfiguration<LoanArrearsHistoryEntry>
 {
@@ -219,11 +224,13 @@ public class LoanArrearsHistoryEntryConfiguration : IEntityTypeConfiguration<Loa
         builder.HasOne<Loan>().WithMany().HasForeignKey(e => e.LoanId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<MigrationLoad>().WithMany().HasForeignKey(e => e.MigrationLoadId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<LendingProcessRun>().WithMany().HasForeignKey(e => e.ProcessRunId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<ArrearsHistoryLoad>().WithMany().HasForeignKey(e => e.ArrearsHistoryLoadId).OnDelete(DeleteBehavior.Restrict);
 
         builder.HasIndex(e => new { e.LoanId, e.PeriodYear, e.PeriodMonth }).HasDatabaseName("IX_LND_LoanArrearsHistory_Loan_Period");
         builder.HasIndex(e => new { e.ProcessRunId, e.LoanId }).IsUnique()
             .HasDatabaseName("UK_LND_LoanArrearsHistory_Run_Loan").HasFilter("[ProcessRunId] IS NOT NULL");
         builder.HasIndex(e => e.MigrationLoadId).HasDatabaseName("IX_LND_LoanArrearsHistory_MigrationLoadId");
+        builder.HasIndex(e => e.ArrearsHistoryLoadId).HasDatabaseName("IX_LND_LoanArrearsHistory_ArrearsHistoryLoadId");
     }
 }
 
@@ -283,5 +290,66 @@ public class RiskPolicyVersionConfiguration : IEntityTypeConfiguration<RiskPolic
         builder.HasIndex(e => e.RegisteredByUserId).HasDatabaseName("IX_LND_RiskPolicyVersions_RegisteredByUserId");
         builder.HasIndex(e => e.ValidatedByUserId).HasDatabaseName("IX_LND_RiskPolicyVersions_ValidatedByUserId");
         builder.HasIndex(e => e.SessionItemId).HasDatabaseName("IX_LND_RiskPolicyVersions_SessionItemId");
+    }
+}
+
+// Feature 013, K6a (T1032; data-model §23.8, §23.9): las dos tablas de la migración par CarteraPerdidaEsperada.
+
+/// <summary>
+/// <c>LND_ImpairmentModelElections</c>: única por <c>ValidFrom</c> (un hecho: el único no filtra por baja), FK al punto del acta del consejo y a quien
+/// la registró.
+/// </summary>
+public class ImpairmentModelElectionConfiguration : IEntityTypeConfiguration<ImpairmentModelElection>
+{
+    public const string Tabla = "LND_ImpairmentModelElections";
+
+    public void Configure(EntityTypeBuilder<ImpairmentModelElection> builder)
+    {
+        builder.ComoEntidadDeCartera(Tabla);
+        builder.Ignore(e => e.Segmentos);
+
+        builder.Property(e => e.Kind).HasConversion<int>().IsRequired();
+        builder.Property(e => e.ValidFrom).IsRequired();
+        builder.Property(e => e.SegmentCodes).HasMaxLength(200).IsRequired();
+        builder.Property(e => e.ImpactStudyAttachmentPublicId).IsRequired();
+        builder.Property(e => e.SupervisorNoticeDate).IsRequired();
+        builder.Property(e => e.SupervisorNoticeAttachmentPublicId).IsRequired();
+        builder.Property(e => e.NoticeLeadDays).IsRequired();
+        builder.Property(e => e.RegulatoryDocumentPublicId).IsRequired();
+        builder.Property(e => e.IncompleteHistoryCheckJson).IsRequired();
+        builder.Property(e => e.Reason).HasMaxLength(1000).IsRequired();
+        builder.Property(e => e.RegisteredAt).IsRequired();
+
+        builder.HasOne<SessionItem>().WithMany().HasForeignKey(e => e.SessionItemId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<User>().WithMany().HasForeignKey(e => e.RegisteredByUserId).OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasIndex(e => e.ValidFrom).IsUnique().HasDatabaseName("UK_LND_ImpairmentModelElections_ValidFrom");
+        builder.HasIndex(e => e.SessionItemId).HasDatabaseName("IX_LND_ImpairmentModelElections_SessionItemId");
+        builder.HasIndex(e => e.RegisteredByUserId).HasDatabaseName("IX_LND_ImpairmentModelElections_RegisteredByUserId");
+    }
+}
+
+/// <summary><c>LND_ArrearsHistoryLoads</c>: FK a la carga de migración que complementa y a quien la aplicó.</summary>
+public class ArrearsHistoryLoadConfiguration : IEntityTypeConfiguration<ArrearsHistoryLoad>
+{
+    public const string Tabla = "LND_ArrearsHistoryLoads";
+
+    public void Configure(EntityTypeBuilder<ArrearsHistoryLoad> builder)
+    {
+        builder.ComoEntidadDeCartera(Tabla);
+
+        builder.Property(e => e.FileName).HasMaxLength(260).IsRequired();
+        builder.Property(e => e.FileSha256).HasMaxLength(EntidadDeCartera.Huella).IsRequired();
+        builder.Property(e => e.RowCount).IsRequired();
+        builder.Property(e => e.Source).HasMaxLength(120).IsRequired();
+        builder.Property(e => e.RowsJson).IsRequired();
+        builder.Property(e => e.AppliedAt).IsRequired();
+        builder.Property(e => e.CoverageJson).IsRequired();
+
+        builder.HasOne<MigrationLoad>().WithMany().HasForeignKey(e => e.MigrationLoadId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<User>().WithMany().HasForeignKey(e => e.AppliedByUserId).OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasIndex(e => e.MigrationLoadId).HasDatabaseName("IX_LND_ArrearsHistoryLoads_MigrationLoadId");
+        builder.HasIndex(e => e.AppliedByUserId).HasDatabaseName("IX_LND_ArrearsHistoryLoads_AppliedByUserId");
     }
 }

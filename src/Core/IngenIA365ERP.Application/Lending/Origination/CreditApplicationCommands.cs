@@ -67,14 +67,20 @@ public sealed record SolicitudArmada(
     IReadOnlyList<(Person Persona, CreditApplicationPartyInput Entrada)> Codeudores,
     int OficinaId,
     CreditLine Linea,
-    SimulacionCalculada Simulacion);
+    SimulacionCalculada Simulacion)
+{
+    /// <summary>K2 (T0842): el convenio de la pagaduría externa de una solicitud por libranza.</summary>
+    public int? ConvenioId { get; init; }
+}
 
 /// <summary>
 /// Las reglas que comparten crear y editar una solicitud (feature 013, T0396; FR-035, FR-018; data-model §2.1): Cartera activada; la oficina y la
 /// línea dentro del alcance (fuera, el 404); el solicitante asociado activo salvo que la línea y el perfil regulatorio admitan no asociados
 /// (<c>Lending.Application.NotAssociate</c>); los codeudores existen y nadie está dos veces (<c>.DuplicateParty</c>); la forma de pago está en la
-/// línea y la nómina propia exige que el solicitante sea empleado (<c>.PaymentFormNotAllowed</c>); la pagaduría externa es K2
-/// (<c>Lending.PayrollAgreement.NotAvailable</c>); y la simulación con la línea vigente: monto, plazo, periodicidad y usura
+/// línea y la nómina propia exige que el solicitante sea empleado (<c>.PaymentFormNotAllowed</c>); desde K2 la libranza con una pagaduría exige un
+/// convenio vivo, activo y con versión vigente (<c>Lending.PayrollAgreement.NotAvailable</c>), el registro de operador de libranza en el perfil
+/// regulatorio (<c>.OperatorRegistrationMissing</c>) y la certificación con su fecha (<c>Lending.Payroll.CertificationRequired</c>); y la
+/// simulación con la línea vigente: monto, plazo, periodicidad y usura
 /// (<c>Lending.Schedule.OutOfLineRange</c>, <c>Lending.CreditLine.Closed</c>, <c>Lending.Usury.Exceeded</c>). (nuevo)
 /// </summary>
 public sealed class ArmadoDeSolicitud(
@@ -103,10 +109,16 @@ public sealed class ArmadoDeSolicitud(
         var codeudores = await db.People.AsNoTracking().Where(p => pedidos.Contains(p.PublicId) && !p.IsDeleted).ToListAsync(ct);
         if (codeudores.Count != pedidos.Count) return Falla(ErroresDeGobierno.PersonaInexistente());
 
-        if (e.Payroll?.PayrollAgreementPublicId is not null || e.PaymentForm == RepaymentChannel.PaymasterDeduction)
-            return Falla(ErroresDeOriginacion.LibranzaNoDisponible());
-
         var fecha = e.ExpectedDisbursementDate ?? hoy;
+        int? convenioId = null;
+        if (e.PaymentForm == RepaymentChannel.PaymasterDeduction)
+        {
+            var libranza = await LibranzaAsync(e, fecha, ct);
+            if (libranza.IsFailure) return Falla(libranza.Error);
+            convenioId = libranza.Value;
+        }
+        else if (e.Payroll?.PayrollAgreementPublicId is not null)
+            return Falla(Payroll.ErroresDeLibranza.ConvenioNoDisponible(null, "la forma de pago de la solicitud no es la libranza con una pagaduría"));
         var perfilDeBanda = await PersonaDeOriginacion.PerfilAsync(db, solicitante, fecha, ct);
         var simulada = await simulador.SimularAsync(linea.Value, e.Simulacion(), perfilDeBanda, hoy, ct);
         if (simulada.IsFailure) return Falla(simulada.Error);
@@ -127,7 +139,30 @@ public sealed class ArmadoDeSolicitud(
 
         return Result.Success(new SolicitudArmada(solicitante, asociado ? DebtorKind.Associate : DebtorKind.Customer,
             (e.CoDebtors ?? []).Select(c => (codeudores.Single(p => p.PublicId == c.PersonPublicId), c)).ToList(), oficina.Value, linea.Value,
-            simulada.Value));
+            simulada.Value) { ConvenioId = convenioId });
+    }
+
+    /// <summary>
+    /// K2 (T0842; FR-108, FR-109): el convenio de una solicitud por libranza —vivo, de una pagaduría externa, activo y con versión vigente a la fecha—,
+    /// el registro de la cooperativa como operadora de libranza y la certificación de la pagaduría con su fecha.
+    /// </summary>
+    private async Task<Result<int>> LibranzaAsync(CreditApplicationInput e, DateOnly fecha, CancellationToken ct)
+    {
+        if (e.Payroll?.PayrollAgreementPublicId is not { } publico)
+            return Result.Failure<int>(Payroll.ErroresDeLibranza.ConvenioNoDisponible(null, "elija el convenio de la pagaduría"));
+        var convenio = await db.PayrollAgreements.AsNoTracking().FirstOrDefaultAsync(a => a.PublicId == publico && !a.IsDeleted, ct);
+        if (convenio is null) return Result.Failure<int>(Payroll.ErroresDeLibranza.ConvenioNoDisponible(null, "el convenio no existe"));
+        if (convenio.IsOwnPayroll)
+            return Result.Failure<int>(Payroll.ErroresDeLibranza.ConvenioNoDisponible(convenio.Code, "es la nómina propia: use la forma de pago nómina propia"));
+        if (!convenio.Operable) return Result.Failure<int>(Payroll.ErroresDeLibranza.ConvenioNoDisponible(convenio.Code, "no está activo"));
+        var versiones = await db.PayrollAgreementVersions.AsNoTracking().Where(v => v.PayrollAgreementId == convenio.Id && !v.IsDeleted).ToListAsync(ct);
+        if (Domain.Entities.Lending.Payroll.PayrollAgreementVersion.Vigente(versiones, fecha) is null)
+            return Result.Failure<int>(Payroll.ErroresDeLibranza.ConvenioNoDisponible(convenio.Code, $"no tiene una versión vigente al {fecha:yyyy-MM-dd}"));
+        if (await perfil.VigenteAsync(fecha, null, ct) is not { LibranzaOperatorRegistered: true })
+            return Result.Failure<int>(Payroll.ErroresDeLibranza.SinRegistroDeOperador(fecha));
+        if (e.Payroll.CertificationAttachmentPublicId is null || e.Payroll.CertificationDate is null)
+            return Result.Failure<int>(Payroll.ErroresDeLibranza.CertificacionRequerida());
+        return Result.Success(convenio.Id);
     }
 
     /// <summary>Copia en la solicitud lo pedido y lo que selló la simulación (versión de la línea, plazo, huella).</summary>
@@ -156,10 +191,17 @@ public sealed class ArmadoDeSolicitud(
         s.SimulationSha256 = a.Simulacion.Huella;
         s.Purpose = string.IsNullOrWhiteSpace(e.Purpose) ? null : e.Purpose.Trim();
         s.RepaymentChannel = e.PaymentForm;
+        // K2 (T0842): el convenio y la identificación del empleado ante la pagaduría pasan al vínculo al desembolsar (FR-109).
+        s.PayrollAgreementId = e.PaymentForm == RepaymentChannel.PaymasterDeduction ? a.ConvenioId : null;
+        s.PayrollEmployeeIdentifier = e.PaymentForm == RepaymentChannel.PaymasterDeduction && !string.IsNullOrWhiteSpace(e.Payroll?.EmployeeId)
+            ? e.Payroll.EmployeeId.Trim()
+            : null;
         s.PrepaymentChoice = e.PrepaymentPreference;
         s.PayoffRequest = e.OwnLoanPayoffs is { Count: > 0 } r ? ConsultasDeSolicitudes.Serializar(r) : null;
         s.PolicyExceptionRequested = e.PolicyExceptionRequested;
         s.PolicyExceptionReason = e.PolicyExceptionRequested ? e.PolicyExceptionReason?.Trim() : null;
+        // K6b (T1055): sólo una solicitud de vivienda dice si el inmueble es VIS.
+        s.IsSocialHousing = Housing.ValidacionDeVivienda.EsVivienda(a.Simulacion) ? e.IsSocialHousing ?? false : null;
     }
 
     /// <summary>

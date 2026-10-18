@@ -75,7 +75,7 @@ completa está en §10. Las columnas de detalle no llevan marca (T1, «Lo que no
 | `Monto` | decimal(18,2) | pesos: libro, plan, posiciones, operaciones, cupos, garantías, órdenes, archivos |
 | `TasaAnual` | decimal(9,6) | toda tasa **como fracción** (0,265000 = 26,5 % EA): EA pactada, usura, índice, margen, piso, techo, tasa de mora fija, factor relativo de mora, tarifa de seguro |
 | `TasaEquivalente` | decimal(28,18) | tasas derivadas selladas o explicadas: diaria, del período, sobretasa de cargos (`ChargesSpread`) |
-| `ValorUvr` | decimal(18,4) | K6b: valores en UVR (`CarteraVivienda`, sólo si hace falta) |
+| `ValorUvr` | decimal(18,4) | K6b: cantidades en UVR y el valor de una UVR (migración `CarteraVivienda`, 2026-10-17; ver abajo) |
 | `Fraccion` **(fijado aquí)** | decimal(9,6) | proporciones que no son tasas: cobertura mínima, veces los aportes, pesos del puntaje, umbral de coincidencia de nombre, retención de prima |
 | `Puntaje` **(fijado aquí)** | decimal(12,4) | puntajes propios y de centrales (admite escalas de 0 a 1.000 con decimales) |
 
@@ -85,6 +85,19 @@ completa está en §10. Las columnas de detalle no llevan marca (T1, «Lo que no
   10; 100; 1.000), modo (`RoundingMode`) y momento (`RoundingMoment`). El residuo queda visible en la
   explicación (`RedondeoDeCartera`).
 - Los porcentajes no se guardan como 0–100: siempre fracción. Días, meses y cuotas son `int`.
+- **K6b (T1048, T1059; decidido el 2026-10-17): sí hacen falta columnas UVR.** Todas con el alias `ValorUvr` (18,4), nulas en un
+  crédito en pesos; los montos en pesos siguen en `Monto` (su valor a la UVR de la fecha que dice cada tabla). Un crédito en UVR se
+  reconstruye en UVR (redondeo a la diezmilésima, `RedondeoDeCartera.EnUvr`) y se valora en pesos al centavo:
+
+  | Tabla | Columna | Qué es |
+  |---|---|---|
+  | `LND_CreditLineVersions` | `DenominationUnit` (`int`, no nula, defecto `1` = `Pesos`) | La unidad del capital de la versión; `2` = `Uvr` sólo si la combinación del catálogo «admite UVR», en un solo tramo. Entra a la huella sólo si es UVR |
+  | `LND_LoanTermsVersions` | `DenominationUnit` (ídem) | La unidad sellada del crédito |
+  | `LND_RepaymentScheduleVersions` | `UvrValue` | La UVR con que se valoraron en pesos las cuotas del plan |
+  | `LND_RepaymentInstallments` | `OpeningPrincipalUvr`, `PrincipalUvr`, `InterestUvr`, `InsuranceUvr`, `TotalUvr`, `ClosingPrincipalUvr` | La cuota en UVR |
+  | `LND_LoanTransactions` | `UvrAmount`, `UvrValue` | El movimiento en UVR y la UVR de su fecha valor; la corrección monetaria diaria es la clase `MonetaryCorrection` (`UvrAmount = 0`) |
+  | `LND_LoanDailyPositions` | `UvrValue`, `PrincipalUvr`, `PayoffAmountUvr` | La posición del día en UVR |
+  | `LND_CreditApplications` | `IsSocialHousing` (`bit`, nula) | Sólo en una solicitud de vivienda: si el inmueble es VIS (elige `VIVIENDA_FINANCIABLE_VIS`) |
 
 ### 0.5 Fechas
 
@@ -550,7 +563,7 @@ actas (`SessionMinutes`, ámbito = el órgano; el prefijo vive en `LND_Governing
 
 | Columna | Tipo | Nulo | Notas |
 |---|---|---|---|
-| `Kind` | int (`LendingNumberKind`, fijado aquí) | no | `Loan` 1, `Operation` 2, `Application` 3, `DisbursementOrder` 4, `DisbursementFile` 5, `SessionMinutes` 6, `IssuedDocument` 7, `PayrollDeductionFile` 8 (K2), `RegulatoryFile` 9 (K5) |
+| `Kind` | int (`LendingNumberKind`, fijado aquí) | no | `Loan` 1, `Operation` 2, `Application` 3, `DisbursementOrder` 4, `DisbursementFile` 5, `SessionMinutes` 6, `IssuedDocument` 7, `PayrollDeductionFile` 8 (K2), `RegulatoryFile` 9 (K5), `LoanNovelty` 10 y `Waiver` 11 (K3, T0878, T0884), `WriteOffBatch` 12 y `PortfolioEvaluation` 13 (K3, US14, T0906, T0912) |
 | `ScopeKey` | nvarchar(40) | no | `''` o el ámbito: clase de operación (`LoanOperationKind` por nombre), órgano (`PublicId:N` del órgano), clase de documento |
 | `Prefix` | nvarchar(10) | no | `''` admitido; se antepone al número (`AP-`, `DS-`, prefijo del acta del órgano) |
 | `NextValue` | bigint | no | ≥ 1 |
@@ -1067,6 +1080,7 @@ colegiado sin techo, para que ninguna solicitud quede sin quién la decida
 | `ScoreBelowMinimum` · `HasWarnings` · `PolicyException` | bit | sí | nulo = no importa |
 | `MinDaysPastDue` · `MaxDaysPastDue` | int | sí | novedades y condonaciones |
 | `Concept` | int (`LoanConcept`) | sí | condonaciones (FR-094) |
+| `NoveltyMechanism` · `NoveltyCause` | int (`NoveltyMechanism`) · int (`NoveltyCause`) | sí | novedades (sujeto `Novelty`, FR-038, FR-090): nulo = no importa; con otro sujeto la matriz no se publica (`RuleNoveltyCriteriaOutOfSubject`). **Columnas nacidas en K3, migración `CarteraNovedades`** (T0879); entran en la huella de la matriz sólo cuando no son nulas, así la de las matrices anteriores no cambia |
 | `MinimumLevelId` | int FK `LND_AttributionLevels` | no | de la misma matriz |
 
 **Reglas**. `EnrutadorDeAtribuciones` toma el **mayor** entre el nivel del techo de monto consolidado, el de
@@ -1248,6 +1262,34 @@ IX `(PersonId)`, `(RelatedThroughPersonId)`. **Reglas**. Un vínculo vigente lle
 novedad o la condonación al consejo con la regla calificada (T63, T64). Dos vigencias del mismo vínculo no se
 cruzan (lo valida el comando). Leerla es lectura sensible (`Lending.RelatedParties.Read`, auditada). **H**: no.
 
+### 3.12a `LND_ConnectedGroups` · `LND_ConnectedGroupMembers` — `ConnectedGroup` · `ConnectedGroupMember` (K1, H; FR-041, SC-022, C112)
+
+> Llevado aquí en la fase 24 (T1090, C111): las dos tablas nacieron en `CarteraNucleo` (T0213) con la decisión C112 y no tenían su ficha.
+
+Grupos conectados que registra el jefe de cartera con su fundamento; la concentración se mide por deudor **y** por grupo con el mismo
+límite (`GrupoConectadoDelDeudor` arma el grupo transitivo con los grupos registrados, los vinculados y los codeudores comunes).
+
+| Columna (`LND_ConnectedGroups`) | Tipo | Nulo | Notas |
+|---|---|---|---|
+| `Name` | nvarchar(120) | no | |
+| `Basis` | int (`ConnectedGroupBasis`, parte 3 §9.1) | no | `EconomicLink` 1, `LegalLink` 2, `CommonCoDebtor` 3, `RelatedParty` 4 |
+| `Grounds` | nvarchar(1000) | no | fundamento escrito, obligatorio |
+| `SupportAttachmentPublicId` | uniqueidentifier | sí | soporte |
+| `RegisteredByUserId` | int FK `SEC_Users` | no | |
+| `ValidFrom` | date | no | |
+| `EndedAt` · `EndReason` | datetime · nvarchar(500) | sí | escritura única (`[EscrituraUnica]`): terminar el grupo |
+
+| Columna (`LND_ConnectedGroupMembers`) | Tipo | Nulo | Notas |
+|---|---|---|---|
+| `GroupId` | int FK `LND_ConnectedGroups` | no | |
+| `PersonId` | int FK `COR_People` | no | UK `UK_LND_ConnectedGroupMembers_Group_Person (GroupId, PersonId)` filtrado `[EndedAt] IS NULL` |
+| `ValidFrom` | date | no | |
+| `EndedAt` | datetime | sí | escritura única: retirar a la persona del grupo |
+
+**Reglas**. Vigente en D si empezó y no terminó antes de que acabe D (`EndedAt` ≤ D no cuenta). Errores
+`Lending.ConnectedGroup.NotFound` y `.Ended`. Leerlos es lectura sensible (`Lending.RelatedParties.Read`, auditada como
+`Lending.RelatedParty.Viewed`). **H**: sí (sólo la terminación se escribe después).
+
 ### 3.13 `LND_CaseParticipations` — `CaseParticipation` (K1, H; FR-005, T66)
 
 Registro único de intervenciones para la segregación; lo escribe sólo `RegistroDeIntervenciones` en la misma
@@ -1257,13 +1299,13 @@ transacción del acto.
 |---|---|---|---|
 | `CaseRootType` · `CaseRootPublicId` | nvarchar(40) · uniqueidentifier | no | expediente: la solicitud (y su crédito y desembolsos), el crédito sin solicitud (venta), la novedad, la condonación, el lote de castigo, la carga de migración |
 | `SubjectType` · `SubjectPublicId` | nvarchar(40) · uniqueidentifier | no | sobre qué actuó |
-| `Action` | nvarchar(30) | no | `AccionesDeSegregacion` (fijado aquí), con los tokens de T66: `Radicar`, `Analizar`, `Decidir`, `Votar`, `Desembolsar`, `AnularOrdenDeGiro`, `ArmarLoteDeCastigo`, `AplicarCastigo`, `CargarMigracion`, `AceptarDiferencias` |
+| `Action` | nvarchar(30) | no | `AccionesDeSegregacion` (fijado aquí), con los tokens de T66: `Radicar`, `Analizar`, `Decidir`, `Votar`, `Desembolsar`, `AnularOrdenDeGiro`, `ArmarLoteDeCastigo`, `AplicarCastigo`, `CargarMigracion`, `AceptarDiferencias` y, desde K3 (T0881, T0884), `Aplicar` (aplicar una novedad o una condonación aprobada) |
 | `UserId` | int FK `SEC_Users` | no | |
 | `PersonId` | int FK `COR_People` | no | obligatorio (`Lending.Security.UserWithoutPerson`) |
 | `At` | datetime | no | |
 
 IX `(CaseRootPublicId, Action)`, `(PersonId, CaseRootPublicId)`. **Reglas**. `ReglasDeSegregacion` aplica la
-regla fija (quien radica o solicita no decide ni vota sobre lo suyo) y los pares de
+regla fija (quien radica o solicita no decide ni vota sobre lo suyo y, desde K3, no aplica la novedad o la condonación que radicó) y los pares de
 `Segregacion.Incompatibilidades` (defecto `Decidir × Desembolsar`), por `UserId` y, si los dos la tienen, por
 persona: `Lending.Segregation.Conflict` con la acción previa. **H**: sí.
 
@@ -1491,7 +1533,9 @@ filas. Vive en `Domain/Entities/Lending/Transactions` (`PrincipioXI_ContableImmu
 | `CreditBalanceRecognized` · `CreditBalanceSettled` | `+CreditBalance` · `−CreditBalance` |
 | `Charge` · `Waiver` | `+CollectionFee`/`+OtherCharge` (K4) · `−` el concepto condonado (K3) |
 | `CommercialAdjustment` | `±Principal` por nota o anulación (FR-054) |
-| `WriteOff` | K3; su forma la fija la parte 2 (novedades) |
+| `WriteOff` | K3 (US14, T0908, **fijado aquí**): la operación `WriteOff` **no deja filas propias**: el castigo no cambia lo que el deudor debe (la reconstrucción no la recibe, `SinEfectoEnSaldos`) y su efecto en la causación lo lleva `LND_Loans.WrittenOffOn` (`CastigoDesde`): desde el **día siguiente** a la fecha del castigo lo nuevo se causa en `*InSuspense` (el día del castigo ya se causó normal), y la cartera castigada sigue en el ciclo diario. Lo que sale del activo, contra el deterioro y del suspenso a control lo dice el `CreditoCastigado` (`Payload` de la operación: `DecisionDeCastigo`) |
+| `Capitalization` (K3, T0874) | `−` el interés (o el seguro o el cargo) de cada concepto y cuota que una novedad capitaliza y `+Principal` sin cuota por el total; en una novación o refinanciación el `−` va en el crédito anterior y el `+Principal`, en el enlazado |
+| `TransferToLinkedLoan` · `TransferFromLinkedLoan` (K3, T0874) | el crédito anterior de una novación o refinanciación traslada todo lo que queda (`−` por concepto y cuota) y queda en cero; el enlazado lo recibe: `+Principal` sin cuota y los demás conceptos en su cuota 1 (anticipo y saldo a favor sin cuota) |
 
 **Reglas**.
 - Sólo inserción; un solo escritor (`RegistroDeCartera`); la causación del proceso se escribe en bloque, sin
@@ -1783,7 +1827,7 @@ sus filas `PaymentAllocation` por cuota y concepto y la referencia del recibo.
 - **Validaciones**: transacción del recaudador en curso (`Lending.Contract.TransactionRequired`), recaudador
   registrado salvo `OwnLoanPayoff` (`Lending.Contract.CollectorNotRegistered`), Cartera activada
   (`Lending.NotActivated`), fecha valor dentro de `Pagos.DiasMaximosFechaValor`
-  (`Lending.Payment.ValueDateOutOfRange`; Nómina y la pagaduría con referencia exentas, A9), posterior al corte
+  (`Lending.Payment.ValueDateOutOfRange`; Nómina y la pagaduría con referencia exentas, también de la fecha futura, A9), posterior al corte
   de la migración (`Lending.Contract.BeforeCutoff`, C71) y, antes de un cierre, con
   `Lending.Payments.BackdateBeforeClose` y su límite, que el contrato consulta del usuario que actúa por
   `IPermissionChecker` (`Lending.Payment.ValueDateBeforeClosing`; C41), clase de medio conocida
@@ -2024,7 +2068,7 @@ negocio pasan de las 101 de §2.3 a **113** (recuento en §14).
 | `CollateralKind` · `PromissoryNoteKind` | `PromissoryNote` 1, `CoDebtor` 2, `Pledge` 3, `Mortgage` 4, `GuaranteeFund` 5, `Contributions` 6 · `Physical` 1, `Dematerialized` 2 |
 | `PromissoryNoteStatus` (valores de F-19, que §2.7 no listaba) | `Created` 1, `PendingSignature` 2, `Signed` 3, `InCustody` 4, `Endorsed` 5, `Voided` 6 |
 | `CommercialTermKind` | `Periodicity` 1, `TermUnit` 2 |
-| `LendingNumberKind` | `Loan` 1, `Operation` 2, `Application` 3, `DisbursementOrder` 4, `DisbursementFile` 5, `SessionMinutes` 6, `IssuedDocument` 7, `PayrollDeductionFile` 8, `RegulatoryFile` 9 |
+| `LendingNumberKind` | `Loan` 1, `Operation` 2, `Application` 3, `DisbursementOrder` 4, `DisbursementFile` 5, `SessionMinutes` 6, `IssuedDocument` 7, `PayrollDeductionFile` 8, `RegulatoryFile` 9, `LoanNovelty` 10, `Waiver` 11, `WriteOffBatch` 12, `PortfolioEvaluation` 13 (K3) |
 | `ApplicationKind` · `CreditApplicationStatus` | `Loan` 1, `RevolvingLimit` 2 · `Draft` 1, `Submitted` 2, `PendingDecision` 3, `Returned` 4, `Approved` 5, `Denied` 6, `Disbursed` 7, `Granted` 8, `Cancelled` 9 |
 | `ApplicationCheckKind` | `RestrictiveLists` 1, `CreditBureau` 2, `PaymentCapacity` 3, `DeductionCapacity` 4, `ConsolidatedExposure` 5, `CreditLimit` 6, `Concentration` 7, `Usury` 8, `LineRequirements` 9, `DataAuthorization` 10, `Scoring` 11, `RelatedParty` 12, `Documents` 13 |
 | `CheckStage` · `CheckOutcome` | `AtSubmission` 1, `BeforeDecision` 2, `BeforeDisbursement` 3 · `Passed` 1, `Warning` 2, `Blocking` 3, `NotApplicable` 4, `Unavailable` 5 |
@@ -2059,6 +2103,15 @@ También se fija aquí la **numeración** de los enums de §2.7 que no la traía
 `.AlreadyInFile`, `.InvalidResult`; `Lending.DisbursementFile.BankMismatch`, `.HasResults`;
 `Lending.Contract.UnknownMeansClass`; `Lending.Reversal.DisbursementPaidOut`; y `Lending.Payment.MeansClassNotAllowed`
 (C30).
+
+**Códigos de error de K2** (libranza, T0848; mensajes en español en `Application/Lending/Payroll/ErroresDeLibranza.cs`, vigilados por
+`TextosDeCarteraTests`): `Lending.PayrollAgreement.NotFound`, `.PayerNotLegalEntity`, `.OperatorRegistrationMissing`,
+`.OwnPayrollAlreadyExists`, `.OwnPayrollNotCooperative`, `.VersionOverlaps`, `.VersionInUse`, `.NoCurrentVersion`, `.NotAvailable`,
+`.ResultCodeDuplicate`; `Lending.Payroll.DeductionCapacityExceeded` (`data: { available, requested }`), `.CertificationRequired`;
+`Lending.Loan.NotPayroll`; `Lending.PayrollFile.AlreadySent`, `.Superseded`, `.HashMismatch`, `.LineMismatch` (`data.lines[]`),
+`.OwnPayrollHasNoFile`, `.Empty`, `.LineTooLong`, `.PeriodInvalid`; `Lending.PayrollDeductionFile.NotFound`;
+`Lending.Payment.PaymasterReferenceRequired`, `.PaymasterReferenceInvalid`; `Lending.InstallmentNonDeduction.AlreadyResolved`, `.NotFound`.
+Reusa `Catalogo.CodigoDuplicado`, `Core.BankFileFormat.ScopeMismatch` y `Lending.Parameter.BelowLegalFloor`.
 
 **Defectos de parámetros** que §2.20 dejaba a este documento (§0.15), sembrados «pendiente de validar»:
 `Originacion.DiasVigenciaDeAprobacion` 30, `Reservas.DiasDeVigencia` 5, `Giros.DiasSinResultado` 3 hábiles,
@@ -2412,7 +2465,12 @@ completa, uno a la vez, hasta `HoyLocal` (si ya pasó `StartTimeLocal`); por úl
 clases de corrida son cuatro (C59); la activación no es corrida (§30.1, C60). La `NationalValueCorrection` **la
 encola la réplica**, no el ciclo: `EfectoDeReplicacionCorreccionDeValorNacional` (un `IEfectoDeReplicacion`) inserta en
 la misma transacción una corrida `Requested` cuando llega una fila con `SupersedesPublicId` que cubre días ya causados,
-sólo si Cartera está activada (C05).
+sólo si Cartera está activada (C05). Reacciona a `USURA` (todos los créditos) y, desde la fase 24, a `UVR` (sólo los
+créditos con `LND_LoanTermsVersions.DenominationUnit = Uvr`, que son también los únicos que recorre la corrida; sus
+diferencias de corrección monetaria se registran como `MonetaryCorrection`). Decisión del dueño del 2026-10-17: la corrida de una
+`UVR` tiene `AffectedTo` = la última marca de los créditos en UVR (no el fin de la vigencia del valor, que en la serie diaria es el mismo día:
+la UVR de un día cambia la corrección monetaria del siguiente), y el reparto de los pagos de esos días se registra como `PaymentReallocation`
+de la corrida (`ProcessRunId`, sin operación) con el hecho `PagoRedistribuidoPorValorNacional`. Sin columnas nuevas.
 
 **Transiciones**: `Requested` → `Running` → `Completed` | `CompletedWithErrors` (créditos en `LND_ProcessRunErrors`) |
 `Failed` (error de la corrida entera). `Failed` y `CompletedWithErrors` vuelven a `Running` con
@@ -2613,7 +2671,15 @@ Una línea por crédito vivo (y castigado en control) del cierre. En el mensual 
 | `PrincipalImpairment` · `InterestImpairment` · `OtherImpairment` · `TotalImpairment` | `Monto` | no | conceptos suspendidos al 100 % (FR-103) |
 | `PreviousTotalImpairment` · `ImpairmentDelta` | `Monto` | no | contra la línea vigente del cierre anterior o del base |
 | `ProbabilityOfDefault` · `LossGivenDefault` · `ExposureAtDefault` | `TasaEquivalente` · `Fraccion` · `Monto` | sí | K6a; nacen nulas en K1 para no alterar una tabla grande después |
+| `ExpectedLossZ` · `ExpectedLossScore` | `TasaEquivalente` | sí | **(nuevo, K6a bloque 2, `CarteraPerdidaEsperada`)** Z y puntaje del modelo; nulos si el crédito está incumplido o en el Anexo 1 |
+| `IsInDefault` · `DaysInDefault` | bit · int | sí | **(nuevo)** incumplido (por su mora o por arrastre) y días en incumplimiento |
+| `ProbabilityOfDefaultKey` · `LossGivenDefaultCollateralType` | nvarchar(40) | sí | **(nuevo)** la clave de la tabla de PI (tipo de organización o `VOLUNTARIA`) y el tipo de garantía de la PDI |
+| `IncompleteArrearsHistory` | bit | sí | **(nuevo)** el historial se completó con la regla de meses faltantes (FR-105) |
 | `ExplanationJson` | nvarchar(max) | no | explicación crédito por crédito (FR-106) |
+
+Las siete columnas **(nuevas)** de K6a son lo que el formato 9083 del SICSES («cálculo de deterioro de cartera») y los 9027 y 9081 por pérdida
+esperada piden por crédito además de PI, PDI y exposición (aviso del dueño del 2026-10-16); la calificación del modelo es `ModelRating` y la homologada,
+`AccountingRating`. El layout lo arma el bloque 3 cuando haya instructivo.
 
 Índices: `UK (ProcessRunId, LoanId)` filtrado `[ProcessRunId] IS NOT NULL`; `UK (MonthlyCloseId, LoanId)` filtrado
 `[MonthlyCloseId] IS NOT NULL`; `(LoanId)`. Unas 600.000 filas al año con 50.000 créditos: `int` alcanza.
@@ -2709,6 +2775,8 @@ FR-099). El cierre la lee a R: creada hasta R y no levantada hasta R.
 Las líneas se editan sólo en `Draft`. Aplicada, la evaluación es candidata (`RatingCause.Evaluation`) desde el cierre del
 mes de efecto hasta la siguiente evaluación aplicada (FR-102). El acta la aplica por `IAsuntoDeActa`.
 
+**Reglas de US14 (bloque B, T0912, T0913)**: el corte es fin de mes y el mes de efecto, posterior; si el documento `TiposDeOrganizacion` trae `portfolioEvaluation { cutoffMonths[], effectMonthsAfterCutoff }` para el tipo del perfil vigente, tienen que ser los suyos (`Lending.PortfolioEvaluation.PeriodInvalid`). `RuleRatingAtCutoff` es la calificación oficial del cierre al corte. Mientras no tenga recomendación la trata el comité de riesgos —un punto `Recommendation` (que el cierre no aplica: lo recoge el consejo al decidir) o un punto `Decision` del comité (la deja `Recommended`)—; recomendada, la decide el consejo. En el cierre rige **la última evaluación aplicada a R cuyo mes de efecto ya llegó**, para toda la cartera (un crédito que esa evaluación no incluye no tiene candidata `Evaluation`).
+
 ### 23.8 `LND_ImpairmentModelElections` — `ImpairmentModelElection` (H; K6a; FR-105; R15)
 
 | Columna | Tipo | Nulo | Notas |
@@ -2730,6 +2798,18 @@ incompleto, `Lending.ImpairmentModel.IncompleteHistory` y la lista; `ValidFrom` 
 (`Lending.ImpairmentModel.Obligated`); adopción y desistimiento alternan. La obligación sobrevenida no es una elección:
 la deriva `SelectorDeModeloDeDeterioro` del perfil y de la regla vigentes (T50).
 
+**Bloque 2 de K6a (2026-10-16)**: el punto del acta es del sujeto `ImpairmentModelChange` y su `SubjectPublicId` es el `PublicId` que tendrá la
+elección (la pantalla lo genera al proponer el cambio; `AsuntoDeActaCambioDelModelo` describe la propuesta mientras no se registra). Además
+(**nuevos**): sin alternancia, `.NotAlternating`; `ValidFrom` no posterior a la última elección, `.ValidFromTaken`, ni al último cierre de
+Cartera, `.RetroactiveValidFrom`; sin `ReglaDePerdidaEsperada` vigente en `ValidFrom`, `.RuleMissing`; un segmento que no es de pérdida
+esperada, `.SegmentInvalid`; al adoptar, sin la PI `VOLUNTARIA` del Anexo 2 vigente en cada segmento, `.VoluntaryPdMissing` (la semilla no la
+trae: la de la CE 100 está por registrar). El historial se verifica a la fecha del primer cierre en que rige (el fin del mes de `ValidFrom`).
+
+**Bloque 3 de K6a (2026-10-17)**: el estudio de impacto y el soporte del aviso son adjuntos del dueño **(nuevo)** `LendingImpairmentModelElectionSupport`
+con `OwnerEntityPublicId` = la propuesta (el `PublicId` de la elección): se suben con `Lending.ImpairmentModel.Manage` mientras no haya elección con
+ese `PublicId`, se leen con `Lending.Ratings.Read` y, registrada, quedan bloqueados (`Attachments.OwnerLocked`). Registrar exige que los dos sean
+adjuntos disponibles de la propuesta: si no, `Lending.ImpairmentModel.SupportInvalid` **(nuevo)** con `data.fields`.
+
 ### 23.9 `LND_ArrearsHistoryLoads` — `ArrearsHistoryLoad` (H; K6a; FR-140, US8-10; T49)
 
 | Columna | Tipo | Nulo | Notas |
@@ -2738,9 +2818,16 @@ la deriva `SelectorDeModeloDeDeterioro` del perfil y de la regla vigentes (T50).
 | `FileName` · `FileSha256` · `RowCount` | nvarchar(260) · char(64) · int | no | plantilla `lending.arrears-history` |
 | `AppliedByUserId` · `AppliedAt` | int FK · datetime | no | `Lending.ArrearsHistory.Import` |
 | `CoverageJson` | nvarchar(max) | no | créditos que quedan con historial completo y los que siguen incompletos |
+| `Source` | nvarchar(120) | no | **(nuevo, bloque 2 de K6a)** la columna `fuente`, la misma en todas las filas |
+| `RowsJson` | nvarchar(max) | no | **(nuevo)** las filas normalizadas (`loanNumber`, `year`, `month`, `maxDaysPastDue`, `daysPastDueAtMonthEnd`) |
 
 Todo o nada; escribe `LND_LoanArrearsHistory` con origen `ComplementaryLoad`, sin transacciones ni hechos. Se admite
 desde que hay una carga aplicada (también antes de activar) hasta el primer cierre en PE de los segmentos cubiertos.
+**Antes de activar** los créditos no existen (nacen en la activación): la carga guarda sus filas en `RowsJson` y el cierre base de la
+activación las escribe en `LND_LoanArrearsHistory` con su `ArrearsHistoryLoadId`, en el orden en que se aplicaron (manda la más reciente);
+después de activar, las escribe la carga misma. La completitud por segmento (revisión y activación) se calcula sobre la preparación de la carga
+(`CoberturaDelHistorialMigrado`): los meses hasta el anterior al del corte —el mes del corte lo cubren la mora migrada al corte y las
+transacciones—.
 
 ### 23.10 `LND_RiskPolicyVersions` — `RiskPolicyVersion` (H; K1, `CarteraRiesgo`; FR-099, FR-103, FR-104, FR-106; T45, R11)
 
@@ -2994,7 +3081,7 @@ decisiones por atribución son filas de `LND_CreditDecisions` con el sujeto (`No
 |---|---|---|---|
 | `Number` | nvarchar(20) | no | `NumeradorDeCartera`; único |
 | `LoanId` | int FK | no | crédito principal; los demás van en `LND_LoanNoveltyLoans` |
-| `Mechanism` | int (`NoveltyMechanism`) **(nuevo)** | no | `Extension` (prórroga), `PaymentDateChange`, `RateChange`, `Novation`, `Refinancing` |
+| `Mechanism` | int (`NoveltyMechanism`) **(nuevo)** | no | `Extension` (prórroga), `PaymentDateChange`, `RateChange`, `Novation`, `Refinancing`, `BranchChange` 6 (cambio de oficina sin efecto en la causa, T0883, **sujeto a confirmación del dueño**) |
 | `Cause` | int (`NoveltyCause`) **(nuevo)** | no | `Restructuring` o `Modification`, por la causa y no por el mecanismo (FR-090) |
 | `CauseDeterminationJson` | nvarchar(max) | no | por qué: mora, solicitud por dificultades de pago, historial reciente frente al límite de la norma para una modificación |
 | `InsolvencyProceedingId` | int FK `LND_InsolvencyProceedings` | sí | el acuerdo de insolvencia es una reestructuración (FR-098) |
@@ -3040,7 +3127,7 @@ crédito; una novación o refinanciación crea el enlazado.
 | `SignedAttachmentPublicId` | uniqueidentifier | sí | aceptación firmada (`LendingNoveltyConsent`); obligatoria con `Accepted` |
 | `RecordedByUserId` · `RecordedAt` | int FK · datetime | sí | |
 | `RefusalResolution` | int (`ConsentRefusalResolution`) **(nuevo)** | sí | con `Refused`: `DoNotApply` o `ApplyWithGuaranteeExtinguished` |
-| `ResolutionReason` · `CoverageAfterJson` · `ExceptionDecisionId` | nvarchar(500) · nvarchar(max) · int FK | sí | cobertura restante frente a la línea y la excepción aprobada, si hizo falta |
+| `ResolutionReason` · `CoverageAfterJson` · `ExceptionDecisionId` | nvarchar(500) · nvarchar(max) · int FK | sí | cobertura restante frente a la línea y la excepción aprobada, si hizo falta: la decisión individual `Approve` con `IsPolicyException` sobre la novedad (sujeto `Novelty`), del nivel de excepción de la matriz vigente, que registra **otra persona** con esa atribución antes de aplicar (`POST /novelties/{id}/coverage-exception`; quien aplica no puede ser su autor: bloque D, decisión del dueño del 2026-10-15) |
 
 `UK (LoanNoveltyId, PersonId, CollateralId)`. Aplicar con la garantía extinguida recalcula cobertura y deterioro; una
 novación exige constituir sus propias garantías.
@@ -3102,6 +3189,8 @@ novación exige constituir sus propias garantías.
 **Seguimiento de la castigada** (FR-096, sin tabla propia): el crédito queda `WrittenOff` con su interés en control;
 sus pagos entran por el contrato como recuperación (`RecuperacionDeCastigada`) y la vista `charge-offs` reúne lo
 castigado, lo recuperado y las gestiones. Sigue en cobranza y en centrales mientras la ley lo permita.
+
+**Reglas de US14 (bloque B, T0906–T0909)**: un crédito va a lo sumo en un lote abierto (borrador, enviado o aprobado; `Lending.WriteOff.LoanInAnotherBatch`); los soportes de cada crédito son adjuntos `LendingWriteOffSupport` del crédito y el del reporte al supervisor, `LendingWriteOffSupervisorReport` del lote (ninguno se borra); el lote lo decide el consejo de administración activo (`IAsuntoDeActa` sujeto `WriteOffBatch`, regla `Majority`, quien lo armó no vota); aplicarlo vuelve a verificar los requisitos a la fecha (el que ya no cumple —o ya no está vigente— se excluye con su motivo: ítem `Rejected` con `RejectionReason` y los requisitos de ese día, evento `Lending.WriteOffItem.Excluded`; el resto se castiga y los totales del lote quedan con lo castigado; si no queda ninguno, `Lending.WriteOff.NoLoansLeft`; bloque D, decisión del dueño del 2026-10-15; el lote se anula con motivo —a la auditoría— mientras no se aplique, también aprobado) y sella el reporte al supervisor con el dato `writeOffReport { required, dueDays }` del tipo de organización vigente (documento `TiposDeOrganizacion`, opcional; sin él no se exige); la alerta `Cartera.PlazoRegulatorioPorVencer` la atiende el registro del reporte.
 
 ### 25.7 `LND_InsuranceClaims` — `InsuranceClaim` (K1 datos / K3 proceso; FR-085, FR-097; T102)
 
@@ -3239,12 +3328,17 @@ Semilla «pendiente de validar»: preventiva, administrativa, prejurídica y jur
 | `LoanId` | int FK | no | |
 | `CollectionStageId` · `StageCode` | int FK · nvarchar(10) | no | la versión de la etapa y su código |
 | `EnteredOn` · `DaysPastDueAtEntry` | date · int | no | |
-| `Source` | nvarchar(20) | no | `DailyCycle` (paso 7), `Manual`, `Migration` |
+| `Source` | nvarchar(20) | no | `DailyCycle` (paso 7), `Manual`, `Migration`, `Exit` (salida de cobranza, K4 bloque D) |
 | `ProcessRunId` · `ActorUserId` · `Reason` | int FK · int FK · nvarchar(300) | sí | |
 | `PreviousEntryId` | int FK (misma tabla) | sí | |
 
-`(LoanId, EnteredOn)`. La etapa vigente es la última entrada. Al desplegar K4, la etapa migrada (`LND_MigrationLoans`)
-de los créditos vivos se registra como primera entrada con `Source = Migration` (paso de despliegue de K4, C64).
+`(LoanId, EnteredOn)`. La etapa vigente es la última entrada, **salvo que sea una salida** (`Source = Exit`, K4 bloque D,
+decisión del dueño del 2026-10-16): el ciclo diario la escribe cuando el crédito con etapa vigente queda sin mora y ninguna
+etapa (preventiva) le corresponde por los días que faltan a su próximo vencimiento; lleva la etapa de la que sale, sus días
+(cero o negativos), la corrida y el motivo «Salida por pago al día». Un crédito salido no tiene etapa vigente; si recae,
+entra como episodio nuevo (enlazado a la salida por `PreviousEntryId`). Al desplegar K4, la etapa migrada
+(`LND_MigrationLoans`) de los créditos vivos se registra como primera entrada con `Source = Migration` (paso de despliegue
+de K4, C64).
 
 ### 26.6 `LND_CollectorAssignmentRules` — `CollectorAssignmentRule` **(nuevo)** (K4) y `LND_CollectorAssignments` — `CollectorAssignment` (H; K4; FR-118)
 
@@ -3260,14 +3354,15 @@ de los créditos vivos se registra como primera entrada con `Source = Migration`
 | Columna (`CollectorAssignment`) | Tipo | Nulo | Notas |
 |---|---|---|---|
 | `LoanId` · `PersonId` | int FK | sí · no | crédito, o el deudor completo si `LoanId` es nulo |
-| `CollectorUserId` | int FK `SEC_Users` | no | |
+| `CollectorUserId` | int FK `SEC_Users` | sí **(K4 bloque D, migración `CarteraCobranzaSalida`)** | nulo = **cierre** de la asignación del crédito al salir de cobranza |
 | `AssignedOn` | date | no | |
 | `CollectorAssignmentRuleId` | int FK | sí | nulo = asignación manual |
 | `Reason` | nvarchar(300) | sí | obligatorio en manual y en reasignación |
 | `ActorUserId` | int FK | sí | `Lending.Collections.Assign`; nulo = proceso |
 | `PreviousAssignmentId` | int FK (misma tabla) | sí | |
 
-`(LoanId, AssignedOn)`; `(CollectorUserId, AssignedOn)`. La vigente es la última; la agenda del gestor es una consulta.
+`(LoanId, AssignedOn)`; `(CollectorUserId, AssignedOn)`. La vigente es la última; si la última es un cierre (sin gestor), el
+crédito no tiene gestor vigente. La agenda del gestor es una consulta.
 
 ### 26.7 `LND_CollectionActions` — `CollectionAction` (H; K4; FR-119, FR-122)
 
@@ -3275,12 +3370,12 @@ de los créditos vivos se registra como primera entrada con `Source = Migration`
 |---|---|---|---|
 | `LoanId` | int FK | sí | |
 | `PersonId` · `ContactRole` | int FK · int (`ContactRole`) | no | `Debtor`, `CoDebtor` o `Paymaster` (gestión ante la pagaduría, FR-114) |
-| `Channel` | int (`CollectionActionChannel`) **(nuevo)** | no | `Phone`, `InPerson`, `Email`, `Sms`, `WhatsApp`, `Letter`, `Visit` |
+| `Channel` | int (`CollectionActionChannel`) **(nuevo)** | no | `Phone`, `InPerson`, `Email`, `Sms`, `WhatsApp`, `Letter`, `Visit`; `System` (K4 bloque D: la gestión que deja el ciclo, nunca una persona) |
 | `OccurredAt` | datetime | no | |
 | `IsDirectContact` | bit | no | comunicación efectiva con el titular: fija el canal de la semana (Ley 2300) |
-| `Result` | int (`CollectionActionResult`) **(nuevo)** | no | `NoAnswer`, `WrongNumber`, `ContactedNoCommitment`, `PromiseToPay`, `Refused`, `RequestsAgreement`, `ReportsDeceased`, `Other` |
+| `Result` | int (`CollectionActionResult`) **(nuevo)** | no | `NoAnswer`, `WrongNumber`, `ContactedNoCommitment`, `PromiseToPay`, `Refused`, `RequestsAgreement`, `ReportsDeceased`, `Other`; `LeftCollection` (K4 bloque D, sólo en la gestión de sistema) |
 | `Notes` | nvarchar(2000) | sí | |
-| `CollectorUserId` | int FK | no | `Lending.Collections.RecordActivity` |
+| `CollectorUserId` | int FK | sí **(K4 bloque D, migración `CarteraCobranzaSalida`)** | `Lending.Collections.RecordActivity`; nulo en la gestión de sistema (sin contacto directo: no cuenta en la ventana legal; no se anula) |
 | `DebtorMessageId` | int FK | sí | si la gestión fue un mensaje |
 | `VoidsActionId` · `VoidReason` | int FK (misma tabla) · nvarchar(500) | sí | una corrección es una gestión nueva que anula la anterior |
 
@@ -3329,7 +3424,7 @@ esto: es una novedad (`LND_LoanNovelties.PaymentAgreementId`).
 | `LawyerPersonId` | int FK `COR_People` | no | el abogado es una persona del maestro |
 | `AssignedOn` | date | no | |
 | `Authority` · `CaseNumber` · `ProcessType` | nvarchar(150) · nvarchar(60) · nvarchar(60) | sí | juzgado, radicado, clase de proceso |
-| `Status` | int (`LegalProcessStatus`) **(nuevo)** | no | `Assigned`, `Filed`, `InProgress`, `Suspended`, `Concluded`, `Withdrawn` |
+| `Status` | int (`LegalProcessStatus`) **(nuevo)** | no | `Assigned`, `Filed`, `InProgress`, `Suspended`, `Concluded`, `Withdrawn`; `Suspended` se **reanuda a mano** (K4 bloque D, `ResumeLegalProcessCommand`, con motivo) cuando la insolvencia ya no negocia, al estado que dicen sus actuaciones |
 | `SuspendedByInsolvencyId` | int FK `LND_InsolvencyProceedings` | sí | la insolvencia lo suspende (FR-098) |
 | `FeeAgreementJson` | nvarchar(max) | sí | honorarios pactados |
 | `ClosedAt` · `CloseReason` | datetime · nvarchar(500) | sí | |
@@ -3351,7 +3446,7 @@ guía adjunta (`Lending.PriorNotices.RegisterEvidence`: mensaje `Letter` con eve
 
 | Columna | Tipo | Nulo | Notas |
 |---|---|---|---|
-| `LoanId` · `PersonId` | int FK | no | titular avisado |
+| `LoanId` · `PersonId` | int FK | no | titular avisado: el deudor o, con `AvisoPrevio.IncluirCodeudores` (2026-10-16, sin cambio de esquema), cada codeudor vigente con su propio aviso |
 | `EpisodeStartDate` | date | no | vencimiento de la primera cuota impaga del episodio; `UK (LoanId, PersonId, EpisodeStartDate)` |
 | `RequiredCommunications` | tinyint | no | 1, o 2 en días distintos bajo `AvisoPrevio.UmbralDosComunicaciones` |
 | `MinimumDays` | int | no | `AvisoPrevio.DiasMinimos` vigente (piso nacional 20), sellado |
@@ -3403,8 +3498,8 @@ dueño acepta I6, el logo y la imagen de la firma de los documentos son adjuntos
 | `Number` | nvarchar(30) | no | prefijo por clase + `NextValue` de `LND_NumberSequences`; `UK` |
 | `PersonId` | int FK `COR_People` | no | titular |
 | `HolderTaxIdType` · `HolderTaxId` · `HolderName` | nvarchar(10) · nvarchar(30) · nvarchar(300) | no | **copia** de la identificación tal como se emitió (I-1) |
-| `AsOfDate` | date | sí | corte (paz y salvo, certificado de saldo, plan) |
-| `PeriodFrom` · `PeriodTo` · `TaxYear` | date · date · smallint | sí | extracto; certificado tributario |
+| `AsOfDate` | date | sí | corte (paz y salvo, certificado de saldo, plan); el 31 de diciembre del año en el certificado tributario; nulo en el extracto (K5) |
+| `PeriodFrom` · `PeriodTo` · `TaxYear` | date · date · smallint | sí | extracto (período de hasta cinco años que no termina después de la emisión); certificado tributario (año terminado; sin año, el anterior) |
 | `InformationCutoff` | datetime | no | R de la liquidación que respalda el documento |
 | `VerificationCode` | char(16) | no | Crockford base32 aleatorio (80 bits), se muestra `XXXX-XXXX-XXXX-XXXX` con QR a `/cartera/verificar?codigo=`; `UK` |
 | `ContentSha256` | char(64) | no | del PDF guardado |
@@ -3423,6 +3518,17 @@ Estado **calculado** (`IssuedDocumentStatus`): `Voided` si tiene evento `Voided`
 `FinalityUntil`; `Valid` en otro caso. Un paz y salvo con saldo, o con una venta en reproceso, se niega con la
 obligación o la factura (`Lending.Document.ClearanceDenied`). Un anulado no se reemite: se emite otro
 (`Lending.Document.VoidedCannotReissue`).
+
+**K5 (fase 19, T0970–T0972, sin migración: las columnas ya estaban en `CarteraNucleo`)**: el **extracto** (`EX-`) guarda el período,
+`SettlementSha256`/`RulesVersion` del estado al último día y una línea por crédito con su saldo final; el **certificado tributario**
+(`CT-`) guarda el año, `AsOfDate` = 31/12, una línea por crédito certificado con su saldo a esa fecha y `SettlementSha256` nulo (cubre
+varios créditos). Sus `EssentialDataJson`: extracto `{ asOfDate, loan, periodFrom, periodTo, openingBalance, closingBalance, movements }`;
+certificado `{ asOfDate, year, loans: [{ number, housing, interestPaid, balanceAtYearEnd }], totalInterestPaid, totalHousingInterestPaid }`.
+**Intereses pagados (definición nueva, la valida la contadora, quickstart §12)**: las filas `PaymentAllocation` y `PaymentReallocation`
+del libro teórico sobre `CurrentInterest`, `DefaultInterest` y sus suspensos con fecha valor en el año, reconstruidas con R = la emisión
+(lo reversado antes de emitir no está; lo reversado después anula el certificado por `VigenciaDeDocumentos`). Vivienda = segmento SARC
+`VIVIENDA` del catálogo de modalidades vigente al 31/12 (vacía hasta K6b). La verificación compara, si se pide, el SHA-256 de un PDF
+calculado en el navegador con `ContentSha256` (`pdfMatches`).
 
 ### 27.2 `LND_IssuedDocumentLoans` — `IssuedDocumentLoan` (H)
 
@@ -3474,10 +3580,24 @@ Molde `PilaGeneration` de la 010. Validar no guarda; generar con bloqueantes dej
 | `GeneratedByUserId` · `GeneratedAt` | int FK · datetime | no | `Lending.RegulatoryReports.Generate` / `Lending.CreditBureauFiles.Generate` |
 | `SupersededAt` | datetime | sí | |
 | `UploadedAt` · `UploadedByUserId` · `FilingNumber` · `FilingDate` | datetime · int FK · nvarchar(60) · date | sí | `MarkRegulatoryFileUploadedCommand` (`Lending.RegulatoryFiles.MarkUploaded`); después, el período no se regenera |
+| `ReceiptAttachmentPublicId` **(nuevo, 2026-10-16, migración `CarteraComprobanteDeCargue`)** | uniqueidentifier | sí | decisión del dueño: el comprobante del cargue en el portal, adjunto `LendingRegulatoryFileReceipt` de la generación (sin FK); se fija al marcar cargado (`Lending.RegulatoryFile.ReceiptInvalid` si no es un adjunto disponible de ella) |
 
 Índices: `UK (PeriodYear, PeriodMonth, Version)` filtrado `[Kind] = 1 AND [IsDeleted] = 0`; `UK (BureauCode,
 PeriodYear, PeriodMonth, Version)` filtrado `[Kind] = 2 AND [IsDeleted] = 0`. La lista y la descarga exigen
 `Lending.RegulatoryFiles.Read` (traen deudores, T60).
+
+Adjunto `LendingRegulatoryFileReceipt` (2026-10-16, `AdjuntosDeModulo`): dueño la generación; se lee con `Lending.RegulatoryFiles.Read`; se
+sube con `Lending.RegulatoryFiles.MarkUploaded` sólo mientras la generación esté `Generated`; se borra sólo hasta marcarla cargada (después,
+`Attachments.OwnerLocked`).
+
+**Plazo del SICSES (formato 9027) y mora de las centrales (decisiones del dueño del 2026-10-16).** El plazo sale de `sicsesReport` del
+documento `TiposDeOrganizacion` por nivel (`cutoffMonths`, `dueDays`, `warningDays` y, nuevo, `dueExceptions: [ { cutoffMonth,
+monthsAfterCutoff, day | lastBusinessDay } ]`, sin cambio de versión de esquema; semilla: nivel 1 mensual a 20 días con diciembre al último
+día hábil de enero, nivel 2 trimestral a 30 días con diciembre el 1 de febrero —conservador, el calendario real va por el último dígito del
+NIT—, nivel 3 anual con diciembre el 1 de febrero —CE 84 de 2025—, salvo fondos de empleados y mutuales; pendiente de validar). En las
+centrales, la mora se reporta por los rangos de `Centrales.RangosDeMora` (§12.1) del tipo de cartera de la posición: bajo el rango negativo,
+al día; desde él, en mora con su rango, y el `ReportedStatusCode` es el código de la altura del rango (`TraduccionDeCentral.AlturasDeMora`).
+El codeudor con dato negativo exige `AvisoPrevio.IncluirCodeudores` y su propio aviso completo.
 
 ### 28.2 `LND_RegulatoryFileLines` — `RegulatoryFileLine` **(nuevo)** (H; `AuditableEntityLong`; sólo `CreditBureau`; FR-123, FR-137)
 
@@ -3662,9 +3782,12 @@ desactivación.
 
 **Requisitos** (si falta alguno, se niega con la lista: `Lending.Activation.RequirementsMissing`, §10.1):
 - **fechas**: `ActivationDate` = corte + 1 (`Lending.Activation.CutoffInvalid`); registrada a más tardar en
-  `ActivationDeadline` y con el mes que contiene `ActivationDate` abierto en Contabilidad
-  (`Lending.Activation.DeadlinePassed`); una segunda activación, `Lending.Activation.AlreadyActivated` (códigos de
-  §10.1, C71);
+  `ActivationDeadline` (`Lending.Activation.DeadlinePassed`); una segunda activación, `Lending.Activation.AlreadyActivated`
+  (códigos de §10.1, C71). El mes que contiene `ActivationDate` **cerrado en Contabilidad no limita, sólo informa**
+  (respuesta del dueño del 2026-10-14, decisiones-transversales §5 J2): el requisito `AccountingMonthOpen` queda
+  `NotApplicable` y sale el aviso `AccountingMonthClosed` en `warnings` del estado y de la respuesta; lo que emite la
+  activación (`CarteraActivada`) toma su fecha contable por `FechaContable`, que la lleva al primer mes abierto.
+  `AccountingMonthOpen` sólo falta sin contabilidad iniciada;
 - **diferencias** de la versión recalculada aceptadas (`Lending.Activation.DifferencesNotAccepted`);
 - **acta** de activación (C61) y **cobros provisionales** validados (C62);
 - **en producción**: un recaudador `Receipts` y un destino `Treasury` reales en el registro con versiones vigentes
@@ -3697,7 +3820,8 @@ los mensajes acumulados de Comercial.
 | `CarteraNovedades` (K3) | `LND_LoanNovelties`, `LND_LoanNoveltyLoans`, `LND_LoanNoveltyConsents`, `LND_Waivers`, `LND_WaiverLines`, `LND_WriteOffBatches`, `…Items`, `LND_PortfolioEvaluations`, `…Loans` | `LND_InsolvencyProceedings.AgreementNoveltyId` |
 | `CarteraCobranza` (K4) | `LND_MessageCampaigns`, `LND_CollectionStages`, `LND_CollectionStageHistory`, `LND_CollectorAssignmentRules`, `LND_CollectorAssignments`, `LND_CollectionActions`, `LND_PaymentPromises`, `LND_PaymentAgreements`, `…Installments`, `LND_LegalProcesses`, `…Actions` | `LND_DebtorMessages.CampaignId`; `LND_LoanNovelties.PaymentAgreementId` |
 | `CarteraInformes` (K5) | `LND_RegulatoryFiles`, `LND_RegulatoryFileLines` (y `LND_IssuedDocument*` si no se adelantaron) | — |
-| `CarteraPerdidaEsperada` (K6a) | `LND_ImpairmentModelElections`, `LND_ArrearsHistoryLoads` | `LND_LoanArrearsHistory.ArrearsHistoryLoadId` |
+| `CarteraPerdidaEsperada` (K6a) | `LND_ImpairmentModelElections`, `LND_ArrearsHistoryLoads` | FK e índice de `LND_LoanArrearsHistory.ArrearsHistoryLoadId` (la columna nació nula en `CarteraRiesgo`); siete columnas nulas en `LND_MonthlyCloseLoans` para el SICSES por pérdida esperada (§23.2) |
+| `CarteraVivienda` (K6b, 2026-10-17) | — | 15 columnas (§0.4): `DenominationUnit` en `LND_CreditLineVersions` y `LND_LoanTermsVersions` (no nulas, defecto `Pesos`); `UvrValue` en `LND_RepaymentScheduleVersions`; seis `*Uvr` en `LND_RepaymentInstallments`; `UvrAmount` y `UvrValue` en `LND_LoanTransactions`; `UvrValue`, `PrincipalUvr` y `PayoffAmountUvr` en `LND_LoanDailyPositions`; `IsSocialHousing` en `LND_CreditApplications`. Ninguna tabla nueva |
 
 Todas son aditivas y pares (PostgreSQL y SQL Server, `tools/scripts/add-migration.ps1`); la fila `lending.process` de
 `COR_BackgroundLeases` la siembra `PlataformaParaCartera`.
@@ -3846,7 +3970,7 @@ completa (§23.10).
 - `NonDeductionFollowUpAction { DebtorNotified, IncludedInNextFile, MovedToCashPayment, SentToCollection, Closed }`
 - `LoanPayrollLinkOrigin { Origination, Migration, Transfer, CommercialSale, ChannelChange }` (C44)
 - `RiskPolicyVersionStatus { PendingValidation, Validated }` (calculado; §23.10)
-- `NoveltyMechanism { Extension, PaymentDateChange, RateChange, Novation, Refinancing }`
+- `NoveltyMechanism { Extension, PaymentDateChange, RateChange, Novation, Refinancing, BranchChange }` (`BranchChange` = 6, T0883, sujeto a confirmación)
 - `NoveltyCause { Restructuring, Modification }`
 - `LoanNoveltyStatus { Draft, Submitted, Approved, Rejected, Applied, Cancelled }`
 - `NoveltyLoanRole { Modified, Collected, Resulting }`
@@ -3856,8 +3980,8 @@ completa (§23.10).
   `WriteOffItemStatus { Included, Rejected, WrittenOff }`
 - `InsolvencyRegime { BusinessReorganization, NaturalPersonDebtNegotiation }`
 - `ContactRole { Debtor, CoDebtor, Paymaster }`
-- `CollectionActionChannel { Phone, InPerson, Email, Sms, WhatsApp, Letter, Visit }`
-- `CollectionActionResult { NoAnswer, WrongNumber, ContactedNoCommitment, PromiseToPay, Refused, RequestsAgreement, ReportsDeceased, Other }`
+- `CollectionActionChannel { Phone, InPerson, Email, Sms, WhatsApp, Letter, Visit, System }` (`System` = 8, K4 bloque D)
+- `CollectionActionResult { NoAnswer, WrongNumber, ContactedNoCommitment, PromiseToPay, Refused, RequestsAgreement, ReportsDeceased, Other, LeftCollection }` (`LeftCollection` = 9, K4 bloque D)
 - `AssignmentDistribution { ByCount, ByBalance }`
 - `PaymentPromiseStatus { Pending, Kept, Broken }` (calculado) · `PaymentAgreementStatus { Proposed, Approved, Rejected, Cancelled }` ·
   `PaymentAgreementPerformance { Current, Fulfilled, Broken }` (calculado)
@@ -3870,16 +3994,17 @@ completa (§23.10).
 
 **Valores de texto cerrados**: `LND_ProcessRunErrors.Step` (§22.2); `LND_DebtorMessages.OriginKind` (§26.1);
 `LND_PayrollAgreementContacts.Role` (`Payroll`, `Treasury`, `Legal`, `Other`); `LND_CollectionStageHistory.Source`
-(`DailyCycle`, `Manual`, `Migration`); `LND_RegulatoryFileLines.ExclusionReason` (§28.2);
+(`DailyCycle`, `Manual`, `Migration`, `Exit`); `LND_RegulatoryFileLines.ExclusionReason` (§28.2);
 `LND_MigrationRiskData.RecordKind` (`LOAN`, `GENERAL`); `LND_ProcessRuns.ExecutionOrigin` (§22.1).
 
-**Parámetro** (`ParametrosDeCartera`, módulo `LND`): `Cobranza.ToleranciaDePromesa` (decimal en pesos, defecto 0,
-ámbito `None`, K4).
+**Parámetros** (`ParametrosDeCartera`, módulo `LND`): `Cobranza.ToleranciaDePromesa` (decimal en pesos, defecto 0,
+ámbito `None`, K4); `Cobranza.TopeGasto.Porcentaje` y `Cobranza.TopeGasto.ValorMaximo` (K4 bloque D, sin valor; §12.1).
 
 **Códigos de error**: `Lending.PayrollFile.Superseded`; `Lending.MonthlyClose.PreviousMissing`, `.AlreadyClosed`,
 `.AccountingPeriodClosed`, `.AccrualBehind`, `.ReplicationUnavailable`, `.NotLast`, `.BaseNotReopenable`;
 `Lending.AnalysisRating.NotWorse`; `Lending.ImpairmentModel.NotAvailable`, `.IncompleteHistory`, `.NoticeOutOfTerm`,
-`.Obligated`; `Lending.Payment.PaymasterReferenceRequired`, `.PaymasterReferenceInvalid`;
+`.Obligated` y, desde el bloque 2 de K6a **(nuevos)**, `.NotAlternating`, `.VoluntaryPdMissing`, `.SegmentInvalid`, `.ValidFromTaken`, `.RuleMissing`,
+`.RetroactiveValidFrom` y, desde el bloque 3, `.SupportInvalid`; `Lending.ArrearsHistory.LoanNotInLoad`, `.MonthClosed`, `.LoadClosed` y `.NoAppliedLoad` **(nuevo)**; `Lending.Payment.PaymasterReferenceRequired`, `.PaymasterReferenceInvalid`;
 `Lending.Novelty.ConsentMissing`, `.ModificationNotAllowed`; `Lending.Waiver.PrincipalRequiresException`;
 `Lending.WriteOff.RequirementMissing`; `Lending.Migration.AlreadyActivated`. Los de la activación
 (`Lending.Activation.RequirementsMissing`, `.CutoffInvalid`, `.DeadlinePassed`, `.DifferencesNotAccepted`,
@@ -4786,7 +4911,9 @@ contrato (`RecaudoPorNomina`), en la misma transacción que el NM.
 Índice `UK_PAY_PayrollLoanDeductions_Run_Employee_Obligation (PayrollRunId, PayrollRunEmployeeId, ObligationPublicId)`
 filtrado vivos. Ruta `GET /api/payroll/runs/{runId}/loan-deductions` (`Payroll.Runs.View`). Los `NoDescontado` viajan en
 la misma llamada al contrato y Cartera los guarda en `LND_InstallmentNonDeductions` (origen `Contract`). Un rechazo o
-excedente no bloquea la aprobación (FR-112); sí deja el aviso `Payroll.LoanDeductionNotApplied`.
+excedente no bloquea la aprobación (FR-112); sí deja el aviso `Payroll.LoanDeductionNotApplied`. **Salvo** el rechazo
+`Lending.Prevalidation.NotPostable` (con `Contabilidad.FaltaDeRegla = Bloquear`, A8 = «Bloquear todo», 2026-10-14): la
+aprobación entera falla con `Payroll.LoanDeductionNotPostable` y nada queda en Nómina ni en Cartera.
 
 ### 7.2 `PAY_SettlementDeductions` (definitiva)
 
@@ -4936,10 +5063,11 @@ partes 1 y 2 la usan (§0.7.1 la copia); los enums que esas partes fijan llevan 
 | Enum | Valores | Dónde se guarda | Origen |
 |---|---|---|---|
 | `LoanConcept` | `Principal = 1`, `CurrentInterest = 2`, `DefaultInterest = 3`, `CurrentInterestInSuspense = 4`, `DefaultInterestInSuspense = 5`, `Insurance = 6`, `CollectionFee = 7`, `OtherCharge = 8`, `Advance = 9`, `CreditBalance = 10` | `LND_LoanTransactions`; texto en `ACC_LendingPostingRules.ConceptCode` | M |
-| `LoanTransactionKind` | `Disbursement = 1`, `OpeningBalance = 2`, `Accrual = 3`, `AccrualAdjustment = 4`, `SuspenseReclassification = 5`, `PaymentAllocation = 6`, `PaymentReallocation = 7`, `AdvanceReceived = 8`, `AdvanceApplied = 9`, `CreditBalanceRecognized = 10`, `CreditBalanceSettled = 11`, `Charge = 12`, `Waiver = 13`, `CommercialAdjustment = 14`, `WriteOff = 15`, `Recovery = 16` | `LND_LoanTransactions` | M |
+| `LoanTransactionKind` | `Disbursement = 1`, `OpeningBalance = 2`, `Accrual = 3`, `AccrualAdjustment = 4`, `SuspenseReclassification = 5`, `PaymentAllocation = 6`, `PaymentReallocation = 7`, `AdvanceReceived = 8`, `AdvanceApplied = 9`, `CreditBalanceRecognized = 10`, `CreditBalanceSettled = 11`, `Charge = 12`, `Waiver = 13`, `CommercialAdjustment = 14`, `WriteOff = 15`, `Recovery = 16`; **K3 (T0874, 2026-10-15)**: `Capitalization = 17`, `TransferToLinkedLoan = 18`, `TransferFromLinkedLoan = 19` (la capitalización de una novedad y el traslado del saldo de la novación o refinanciación al crédito enlazado; parte 1 §5.1; columna entera, sin migración) | `LND_LoanTransactions` | M |
 | `LoanOperationKind` | `Disbursement = 1`, `OpeningBalance = 2`, `Payment = 3`, `PaymentReversal = 4`, `DisbursementReversal = 5`, `RateReset = 6`, `TermsChange = 7`, `Charge = 8`, `Waiver = 9`, `CommercialAdjustment = 10`, `WriteOff = 11`, `PreferenceChange = 12`, `CreditBalanceResolution = 13`, `ProvisionalCollection = 14` | `LND_LoanOperations` | M, FR-048, FR-142 |
 | `LoanStatus` | `PendingDisbursement = 1`, `Active = 2`, `PaidOff = 3`, `WrittenOff = 4`, `Voided = 5`, `Novated = 6` | `LND_Loans` | spec |
 | `LoanOrigin` | `Origination = 1`, `Commercial = 2`, `Migration = 3` | `LND_Loans` | spec |
+| `ConnectedGroupBasis` **(C112; llevado aquí en la fase 24, T1090)** | `EconomicLink = 1`, `LegalLink = 2`, `CommonCoDebtor = 3`, `RelatedParty = 4` | `LND_ConnectedGroups` | FR-041 |
 | `DisbursementOrderStatus` | `Issued = 1`, `Disbursed = 2`, `Rejected = 3`, `CheckNotCashed = 4`, `Voided = 5` | `LND_DisbursementOrders` | FR-045 |
 | `CollateralStatus` | `Constituted = 1`, `Valid = 2`, `Released = 3`, `Extinguished = 4`, `Executed = 5` | `LND_Collaterals` | FR-043 |
 | `DayCountConvention` | `Thirty360 = 1`, `Actual365 = 2`, `Actual360 = 3` | versión de línea y condiciones selladas | M |
@@ -5068,7 +5196,7 @@ demás códigos que fijan las partes 1 y 2 (§9 y «Nombres fijados») completan
 | `Lending.NotActivated` | 422 · puerto | «Cartera todavía no está activada en esta cooperativa. Esta operación estará disponible cuando se registre la activación.» | contrato (aplicar, reversar, resolver), consulta de obligaciones; rutas que exigen Cartera activa (radicar, desembolsar…) | R-03, T85 |
 | `Lending.Activation.RequirementsMissing` **(fijado aquí)** | 422 | «No se puede activar Cartera todavía. Falta: {lista}. Complete lo que falta y vuelva a intentarlo.» (`data.missing[]`) | Recaudo y Tesorería reales, K6a si es obligada, Anexo 1 y usura, roles, oficinas vinculadas, regla `RecaudoPorAplicar` de Nómina, carga aplicada | T84 |
 | `Lending.Activation.CutoffInvalid` **(fijado aquí)** | 422 | «La fecha de activación debe ser el día siguiente al corte de la carga aplicada ({corte}).» | FR-142 | T84 |
-| `Lending.Activation.DeadlinePassed` **(fijado aquí)** | 422 | «Ya no se puede activar con esta carga: venció el plazo ({fechaLimite}) o Contabilidad cerró {mes}. Aplique una carga con un corte nuevo.» | FR-142 | T84 |
+| `Lending.Activation.DeadlinePassed` **(fijado aquí)** | 422 | «Ya no se puede activar con esta carga: venció el plazo ({fechaLimite}). Aplique una carga con un corte nuevo.» (`data.deadline`; desde el 2026-10-14 el mes de C+1 cerrado ya no responde esto: es el aviso `AccountingMonthClosed`, decisiones-transversales §5 J2) | FR-142 | T84 |
 | `Lending.Activation.DifferencesNotAccepted` **(fijado aquí)** | 422 | «El cuadre o la conciliación de ventas tienen diferencias sin aceptar, o cambiaron desde que se aceptaron. Revíselas y acéptelas con motivo y acta, o corrija la carga.» | FR-141, FR-143, D17 | T83, T84 |
 | `Lending.Activation.AlreadyActivated` **(fijado aquí)** | 422 | «Cartera ya está activada desde el {fecha}.» | segunda activación | T84 |
 | `Lending.Activation.ZeroObligationNotPossible` **(nuevo, C111; T0752)** | 422 | «La venta {factura} cancelada antes del corte no puede nacer en Cartera como obligación en cero: {motivo}. Corríjalo y vuelva a activar.» (`data.invoice`) | la activación no encuentra la línea de la obligación en cero (ni la de la parte `sales` ni una de origen comercial por defecto del tipo de deudor) o la venta no nombra a una persona del maestro | FR-143 |
@@ -5091,7 +5219,7 @@ demás códigos que fijan las partes 1 y 2 (§9 y «Nombres fijados») completan
 | `Lending.Contract.BeforeCutoff` **(fijado aquí)** | puerto | «El pago tiene fecha valor {fecha}, igual o anterior al corte de la migración ({corte}): debía venir en la carga.» | FR-142 | T84 |
 | `Lending.Contract.UnknownMeansClass` **(fijado aquí)** | puerto | «Cartera no acepta la clase de medio {clase}.» | FR-082 | T31 |
 | `Lending.Payment.DistributionChanged` | 422 · puerto | «El crédito cambió desde la simulación. Revise la distribución nueva y confirme otra vez.» (`data.simulation`) | forma interactiva, huella distinta | T32 |
-| `Lending.Payment.ValueDateOutOfRange` | 422 · puerto | «La fecha valor {fecha} está fuera de lo permitido: hasta {dias} días antes de hoy y nunca futura.» | D4 (exentos: Nómina y, desde K2, pagaduría con referencia; A9) | T33 |
+| `Lending.Payment.ValueDateOutOfRange` | 422 · puerto | «La fecha valor {fecha} está fuera de lo permitido: hasta {dias} días antes de hoy y nunca futura.» | D4 y T9 (exentos de las dos reglas —ventana y fecha futura— y de la atribución antes de un cierre: Nómina y, desde K2, pagaduría con referencia; A9, respuesta del dueño del 2026-10-14) | T33 |
 | `Lending.Payment.ValueDateBeforeClosing` | 422 · puerto | «La fecha valor cae antes del cierre de {mes}: necesita la atribución para aplicar con fecha anterior a un cierre por este valor.» | FR-012, D16 | T33 |
 | `Lending.Payment.PreferenceMissing` | 422 · puerto | «El abono a capital necesita que el deudor elija si reduce el plazo o la cuota.» | forma interactiva sin elección | T31 |
 | `Lending.Payment.SpecificInstallmentBlocked` **(fijado aquí, C115)** | 422 · puerto | «Antes de la cuota {n} hay cuotas exigibles sin cubrir ({pendientes}): la línea no permite pagarla fuera de orden.» (`data.pendingBefore[]`) | `AplicadorDePagos` (US5, T0534) | FR-071 |
@@ -5151,6 +5279,7 @@ demás códigos que fijan las partes 1 y 2 (§9 y «Nombres fijados») completan
 | `Lending.Parameter.BelowLegalFloor` | 422 | «El valor {valor} es menos estricto que el límite legal vigente ({limite}, {fuente}). La cooperativa sólo puede ser más estricta.» | vigencia de parámetro | T42 |
 | `Lending.Parameter.NotYetAvailable` **(fijado en api.md §3.4)** | 422 | ««{clave}» todavía no está disponible: llega con la entrega {entrega}.» (`data: { key, availableFrom }`) | vigencia de una clave de una entrega posterior a `CatalogoDeCartera.EntregaVigente` (T43) | T43 |
 | `Lending.Parameter.NotSupportedYet` **(nuevo, C111, C123)** | 422 | «La cooperativa todavía no puede diferir comisiones y costos de originación: ninguna entrega lo implementa.» (`data: { key, availableFrom: null }`) | vigencia de `Contabilidad.DiferirComisiones = true` (FR-017, C10) | FR-017 |
+| `Lending.Parameter.FixedDaysRequired` **(nuevo, K6a, T1027)** | 422 | «La regla de meses faltantes «Fija» necesita los días de mora con que se completan…» (`data: { key, requires }`) | vigencia de `Riesgo.ReglaMesesFaltantes = Fija` sin `Riesgo.MesesFaltantesDiasFijos` en la fecha, o vaciar los días mientras rige «Fija» | FR-105 |
 | `Lending.Parameter.CompanionHasNoMode` **(nuevo, C111; T0653)** | 422 | ««{tipo}» viaja siempre con «{principal}» y pasa a contabilidad como él: configure «{clave}» en el tipo de hecho principal.» (`data: { key, factType, principal }`) | vigencia de `Contabilidad.ModoDePaso`, `.Granularidad`, `.DisparadorDeLote` o `.HoraDeLote` en el ámbito `LendingFactType` de `AnticipoRecibido`, `CobroDeInteresEnSuspenso` o `RecuperacionDeCastigada` (C01) | T56 |
 | `Lending.Process.AlreadyRunning` | 422 | «Ya hay una corrida de {clase} en curso. Espere a que termine.» | `RequestLendingProcessRunCommand`, `OrderMonthlyCloseCommand` | PM-13 |
 | `Lending.ProcessRun.KindNotOrderable` **(nuevo, US4 bloque 8B, C111)** | 422 | «El cierre mensual y su reapertura se ordenan desde el cierre de Cartera, no desde las corridas.» · «Las corridas de {clase} no se ordenan a mano: las encola el sistema.» (`data.kind`) | `RequestLendingProcessRunCommand` con `MonthlyClose`, `CloseReopen` o `NationalValueCorrection` | PM-13, C59 |
@@ -5231,11 +5360,13 @@ financiera el consejo lleva la fracción de vinculados—, `RelatedPartyFraction
 | `Lending.Document.NotFound` **(nuevo, US13, C111)** | 404 | «El documento no existe.» · al verificar: «El código no corresponde a un documento de esta cooperativa.» | documento inexistente o fuera del alcance de oficina y línea de los créditos que cubre; código desconocido o de otra cooperativa (D21) | T80 |
 | `Lending.Document.AlreadyVoided` **(nuevo, US13, C111)** | 422 | «El documento {número} ya está anulado: una anulación no se repite.» (`data: { number, voidedAt }`) | `VoidLendingDocumentCommand` sobre un anulado (una sola anulación por documento) | T80 |
 | `Lending.Document.HolderNotObligated` **(nuevo, US13, C111)** | 422 | «{persona} no es deudora ni codeudora del crédito {número}: el documento se emite a nombre de quien está obligado.» (`data.loanNumber`) | plan de pagos, paz y salvo o certificado de saldo a nombre de quien no es deudor ni codeudor vigente del crédito | T80 |
-| `Lending.Document.NothingToCertify` **(nuevo, US13, C111)** | 422 | «No hay nada que certificar: {motivo}.» (`data.reason`) | plan de pagos de un crédito no vigente o sin plan; paz y salvo o certificado de saldo de un crédito sin desembolso; certificado a una fecha anterior al desembolso. K5 lo usa también para el extracto sin movimientos | T80 |
+| `Lending.Document.NothingToCertify` **(nuevo, US13, C111)** | 422 | «No hay nada que certificar: {motivo}.» (`data.reason`) | plan de pagos de un crédito no vigente o sin plan; paz y salvo o certificado de saldo de un crédito sin desembolso; certificado a una fecha anterior al desembolso. K5: extracto de un período sin movimientos ni saldo o en que el crédito no existía; certificado tributario de una persona sin créditos en el año | T80 |
+| `Lending.Document.PeriodInvalid` **(nuevo, K5, T0971)** | 422 | «El período del extracto no es válido: {motivo}.» (`data: { periodFrom, periodTo, maxYears }`) | extracto sin período, con la fecha inicial posterior a la final, que termina después de hoy o de cinco años o más | C88 |
+| `Lending.Document.TaxYearNotClosed` **(nuevo, K5, T0971)** | 422 | «El certificado tributario de {año} se emite cuando el año termine: desde el 1 de enero de {año + 1}.» (`data: { year, availableFrom }`) | certificado tributario del año en curso o de uno futuro (fecha local de la cooperativa) | C88 |
 | `Lending.PayrollFile.AlreadySent` | 422 | «El archivo ya se envió a la pagaduría: la corrección va como novedad del período siguiente.» | K2 | T78 |
 | `Lending.Regulatory.LayoutSinCotejar` | aviso | «El formato {codigo} tiene campos sin cotejar contra el instructivo vigente.» | K5 | T79 |
 | `Lending.Regulatory.BlockingIssues` | 422 | «Hay {n} inconsistencias que impiden generar el archivo. Revise el detalle.» | K5 | T79 |
-| `Lending.Prevalidation.NotPostable` | 422 · aviso | «Contabilidad no tiene regla para {combinacion}. Pida a la contadora completar la matriz.» | 422 sólo en pantallas de Cartera con `Contabilidad.FaltaDeRegla = Bloquear`; en el contrato, el consumidor y los procesos, aviso sellado (A8) | T56 |
+| `Lending.Prevalidation.NotPostable` | 422 · aviso · rechazo del contrato · corrida detenida | «Contabilidad no tiene cómo registrar {hecho} en el rol {rol}. Pida a la contadora completar la matriz de Cartera.» (`data.errors[]`) | Con `Contabilidad.FaltaDeRegla = Bloquear`, en todo origen (A8 = «Bloquear todo», respuesta del dueño del 2026-10-14): 422 en pantallas; ítem `Rejected` en el contrato; recibo del consumidor de Comercial `Rejected` y reprocesable; error de la corrida `Failed` en los procesos («La tanda de {operación} no avanzó: … Corregida la matriz, reintente la corrida.»). Con `Advertir`, aviso sellado | T56 |
 | `Lending.Prevalidation.NoResponse` | 422 · aviso | «Contabilidad no respondió a tiempo: la operación sigue y queda marcada para revisión.» (aviso); con `Contabilidad.PoliticaSinRespuesta = Bloquear` en una pantalla de Cartera, 422 «Contabilidad no respondió a tiempo y la cooperativa pide no confirmar sin su respuesta. Intente de nuevo en unos minutos.» | D7; el 422 sólo en pantallas (C80, T0655) | T56 |
 | `Lending.Accounting.NotStarted` **(nuevo, C111; T0658)** | 409 | «La contabilidad de la cooperativa no está iniciada: no hay con qué conciliar la cartera. Iníciela en Contabilidad › Configuración.» | conciliación contable de Cartera (`GET /api/lending/accounting/reconciliation`) sin contabilidad iniciada (§14.2) | T58 |
 | `Lending.AccountingFactPart.NotFound` **(nuevo, C111; T0658)** | 404 | «La parte de hechos contables no existe.» | `GET /api/lending/accounting/fact-parts/{id}` de una parte inexistente o de una oficina fuera del alcance de quien pregunta (el mismo 404, T62) | T58 |
@@ -5252,6 +5383,7 @@ financiera el consejo lleva la fracción de vinculados—, `RelatedPartyFraction
 | `Lending.Collateral.CoDebtorsInsufficient` **(nuevo, C123; US2)** | validación `Blocking` · 422 (desembolso, US3) | «La línea exige {required} codeudores para este monto y plazo; la solicitud tiene {present}.» (`data: { required, present, ruleOrder }`) | menos codeudores de los que pide la regla de `LND_CreditLineCollateralRules` que casa por monto y plazo | FR-026 |
 | `Lending.DebtorMessage.DestinationMissing` **(nuevo, US2, C111)** | 422 | «{persona} no tiene correo registrado en el maestro de personas. Regístrelo para enviarle la simulación.» (`data.personPublicId`) | enviar una simulación a una persona sin correo | C87 |
 | `Lending.ConnectedGroup.NotFound` **(nuevo, US2, C111)** | 404 | «El grupo conectado no existe.» | grupo inexistente o sin `Lending.RelatedParties.Manage` en las escrituras | C112 |
+| `Lending.ConnectedGroup.Ended` **(nuevo, US2, C111; llevado aquí en la fase 24, T1090)** | 422 | «El grupo ya está terminado.» (`data.endedAt`) | terminar otra vez un grupo, o agregarle miembros | C112 |
 | `Lending.ConnectedGroup.MemberDuplicate` · `.MemberNotFound` · `.Ended` **(nuevo, US2, C111)** | 422 · 404 · 422 | «La persona ya está en el grupo.» · «La persona no está en el grupo.» · «El grupo ya está terminado: registre uno nuevo.» | agregar dos veces; retirar a quien no está; cambiar un grupo terminado | C112 |
 | `Lending.Screening.NotPending` **(fijado en tasks T0376, US2)** | 422 | «Este resultado no tiene una coincidencia pendiente de liberar.» (`data.outcome`) | liberar un resultado sin coincidencia o ya liberado | T70 |
 | `Lending.Block.AlreadyLifted` **(nuevo, US2, C111)** | 422 | «El bloqueo ya se levantó.» (`data.liftedOn`) | levantar dos veces (el levantamiento es `[EscrituraUnica]`) | FR-060 |
@@ -5305,6 +5437,90 @@ financiera el consejo lleva la fracción de vinculados—, `RelatedPartyFraction
 | `Lending.DisbursementFile.FormatNotCurrent` **(nuevo, US3 bloque 7B, C111)** | 422 | «El formato {código} no está activo y vigente para la fecha de pago {fecha}.» (`data: { code, paymentDate }`) | formato inactivo o fuera de vigencia a la fecha de pago | FR-047 |
 | `Lending.DisbursementFile.AlreadyVoided` **(nuevo, US3 bloque 7B, C111)** | 422 | «El archivo {número} ya está anulado.» (`data.number`) | anular dos veces | FR-047 |
 | `Lending.DisbursementFile.LineTooLong` **(nuevo, US3 bloque 7B, C111)** | 422 | «La orden {orden} no cabe en el formato: el campo «{campo}» es más largo de lo que admite.» (`data: { line, field, order }`) | `BankFileWriteException` del motor común en un campo sin truncar | FR-047 |
+| `Lending.Novelty.NotFound` **(K3, T0888)** | 404 | «La novedad no existe.» | inexistente o de un crédito fuera del alcance | T62 |
+| `Lending.Novelty.ModificationNotAllowed` **(K3, T0888)** | 422 | «El historial de mora reciente ({dias} días) pasa del límite de la norma para una modificación ({limite} días): tramítela como reestructuración.» · «La norma vigente no permite tramitar esta novedad como modificación (…); tramítela como reestructuración.» (`data: { recentDaysPastDue, limit }`) | a petición del deudor y sin deterioro, con la mora de los meses que observa el Anexo 1 sobre el límite del segmento o sin regla en la norma | FR-090 |
+| `Lending.Novelty.PartyUnknown` **(K3, T0888)** | 422 | «Esa persona no es codeudora, avalista ni propietaria de una garantía de los créditos de la novedad: no tiene que consentir.» | registrar o resolver el consentimiento de alguien que no es parte | FR-092 |
+| `Lending.Novelty.ConsentAttachmentRequired` **(K3, T0888)** | 422 | «La aceptación del codeudor o garante va con su documento firmado.» · «El documento no está entre los soportes de consentimiento de esta novedad: súbalo a la novedad y vuelva a registrarlo.» (`data.attachmentPublicId`) | aceptar sin adjunto `LendingNoveltyConsent` disponible de la novedad | FR-092 |
+| `Lending.Novelty.ConsentMissing` **(K3, T0888)** | 422 | «Falta el consentimiento de codeudores o garantes. Registre su aceptación firmada o decida qué hacer ante cada rechazo antes de aplicar.» (`data.parties[] { personPublicId, fullName, role, status }`) | aplicar con un consentimiento pendiente o un rechazo sin resolver | FR-092 |
+| `Lending.Novelty.CoverageInsufficient` **(K3, T0888)** | 422 | «Sin esa garantía la cobertura que queda ({restante}) no cumple la que exige la línea ({exigida}). No aplique la novedad, constituya otra garantía o pida que otra persona apruebe la excepción de cobertura.» (`data: { required, remaining }`) · «La matriz de atribuciones vigente no tiene nivel de excepción: la cobertura que falta no se puede aprobar por excepción.» | aplicar extinguiendo una garantía real o un codeudor que la regla de garantías de la línea vigente exige, sin pedir la excepción; aprobar la excepción sin nivel de excepción en la matriz | FR-092 |
+| `Lending.Novelty.CoverageExceptionMissing` **(K3, bloque D)** | 422 | «Sin esa garantía la cobertura que queda ({restante}) no cumple la que exige la línea ({exigida}) y nadie aprobó la excepción de cobertura. Otra persona con la atribución del nivel de excepción debe aprobarla en la novedad («Aprobar excepción de cobertura») antes de aplicar.» (`data: { required, remaining }`) | aplicar con `useCoverageException` sin la excepción aprobada por `/coverage-exception` | FR-092 (cuatro ojos, decisión del dueño del 2026-10-15) |
+| `Lending.Novelty.CoverageExceptionSameUser` **(K3, bloque D)** | 422 | «La excepción de cobertura la aprobó usted: quien la aprueba no aplica la novedad. Pida a otra persona que la aplique.» | aplicar la novedad quien aprobó su excepción (mismo `SEC_Users.Id` o misma persona) | FR-092 |
+| `Lending.Novelty.CoverageExceptionExists` **(K3, bloque D)** | 422 | «La excepción de cobertura de la novedad {número} ya está aprobada: ya se puede aplicar con la garantía extinguida.» | aprobar la excepción dos veces | FR-092 |
+| `Lending.Novelty.NotApproved` **(K3, T0888)** | 422 | «Sólo se aplica una novedad aprobada.» (`data.status`) | aplicar una novedad en borrador, radicada o rechazada | FR-091 |
+| `Lending.Novelty.AlreadyApplied` **(K3, T0888)** | 422 | «La novedad ya se aplicó: no se modifica ni se anula.» (`data.status`) | aplicar dos veces, editar o anular una aplicada | FR-091 |
+| `Lending.Novelty.InvalidStatus` **(K3, T0888)** | 422 | «La novedad está en «{estado}» y no puede pasar a «{hacia}».» (`data: { status, requested }`) | cualquier otra transición fuera de `LoanNoveltyStatus` | FR-091 |
+| `Lending.Novelty.RefusalNotResolved` **(K3, T0888)** | 422 | «Sólo se decide qué hacer ante un rechazo cuando la parte no consintió.» | resolver un consentimiento que no está rehusado | FR-092 |
+| `Lending.Waiver.NotFound` **(K3, T0888)** | 404 | «La condonación no existe.» | inexistente o de un crédito fuera del alcance | T62 |
+| `Lending.Waiver.ExceedsBalance` **(K3, T0888)** | 422 | «Se pide condonar {valor} de {concepto} y el saldo es {saldo}.» (`data: { concept, balance }`) | una línea sobre el saldo del concepto (y la cuota) a la fecha base al pedirla, o sobre el de hoy al aplicarla | FR-094 |
+| `Lending.Waiver.PrincipalRequiresException` **(K3, T0888)** | 422 | «Condonar capital sólo lo decide el nivel de excepción de la matriz de atribuciones, y la matriz vigente no lo tiene. Quite el capital o pida que se defina ese nivel.» | condonación con capital y matriz sin nivel de excepción | FR-094 |
+| `Lending.Waiver.NotApproved` **(K3, T0888)** | 422 | «Sólo se aplica una condonación aprobada.» (`data.status`) | aplicar una condonación que no está aprobada | FR-094 |
+| `Lending.Waiver.InvalidStatus` **(K3, T0888)** | 422 | «La condonación está en «{estado}» y no puede pasar a «{hacia}».» (`data: { status, requested }`) | anular una aplicada; cualquier otra transición fuera de `WaiverStatus` | FR-094 |
+| `Lending.DebtorEvent.Duplicate` **(K3, T0888)** | 422 | «Ese evento ya está registrado para la persona desde el {fecha}.» (`data: { kind, since, eventPublicId }`) | registrar un fallecimiento, retiro o embargo con otro vigente de la misma clase | FR-097 |
+| `Lending.InsuranceClaim.NotFound` **(K3, T0888)** | 404 | «La reclamación al seguro no existe.» | inexistente o de un crédito fuera del alcance | T62 |
+| `Lending.InsuranceClaim.NotInProcess` **(K3, T0888)** | 422 | «La reclamación al seguro ya no está en trámite: sólo una en trámite se niega o se desiste.» (`data.status`) | negar o desistir una reclamación pagada, negada o desistida | FR-097, T102 |
+| `Lending.Insolvency.NotFound` **(K3, T0888)** | 404 | «El proceso de insolvencia no existe.» | inexistente | FR-098 |
+| `Lending.Insolvency.AlreadyOpen` **(K3, T0888)** | 422 | «La persona ya tiene un proceso de insolvencia en negociación desde el {fecha}.» (`data: { proceedingPublicId, startDate }`) | abrir un segundo proceso en negociación para la misma persona | FR-098 |
+| `Lending.WriteOffBatch.NotFound` **(K3, T0914)** | 404 | «El lote de castigo no existe.» | inexistente o con algún crédito fuera del alcance | T62 |
+| `Lending.WriteOffBatch.NotDraft` **(K3, T0914)** | 422 | «El lote ya no admite cambios: sólo se arma en borrador.» (`data.status`) | agregar o quitar créditos de un lote enviado, aprobado o aplicado | FR-095 |
+| `Lending.WriteOffBatch.InvalidStatus` **(K3, T0914; anular, bloque D)** | 422 | «El lote está en «{estado}» y no puede pasar a «{hacia}».» · «El lote lleva al menos un crédito que cumple.» · «Sólo se registra el reporte de un lote aplicado que debe reportarse al supervisor.» · «El reporte al supervisor ya se registró.» | transición fuera del ciclo (anular uno aplicado, rechazado o ya anulado); enviar sin incluidos; reportar sin deber o dos veces | FR-095 |
+| `Lending.WriteOffBatch.LoanAlreadyIncluded` **(K3, T0914, fijado aquí)** | 422 | «El crédito {numero} ya está en este lote de castigo.» (`data.loanNumber`) | agregar dos veces el mismo crédito | FR-095 |
+| `Lending.WriteOffBatch.ItemNotFound` **(K3, T0914, fijado aquí)** | 404 | «Ese crédito no está en el lote de castigo.» | quitar un ítem que no es del lote | FR-095 |
+| `Lending.WriteOff.ApprovalRequired` **(K3, T0914)** | 422 | «El lote se aplica con la aprobación del consejo con acta.» (`data.status`) | aplicar un lote que el consejo no aprobó | FR-095 |
+| `Lending.WriteOff.NoLoansLeft` **(K3, bloque D)** | 422 | «Ningún crédito del lote {número} cumple ya los requisitos del castigo: el lote no se aplica. Revise lo que falta en cada uno o anule el lote.» (`data: { batchNumber, excluded[] { loanPublicId, loanNumber, missing[], reason } }`) | aplicar un lote cuyos créditos ya no cumplen todos (el que no cumple se excluye con su motivo y el resto se castiga; si no queda ninguno, no se aplica; decisión del dueño del 2026-10-15) | FR-095, C98 |
+| `Lending.WriteOff.LoanInAnotherBatch` **(K3, T0914, fijado aquí)** | 422 | «El crédito {numero} ya está en el lote de castigo {lote}, que todavía no se aplicó ni se anuló.» (`data: { loanNumber, batchNumber }`) | armar o ampliar un lote con un crédito incluido en otro abierto | FR-095 |
+| `Lending.WriteOff.BoardMissing` **(K3, T0914, fijado aquí)** | 422 | «La cooperativa no tiene un consejo de administración activo entre sus órganos: el castigo lo aprueba el consejo con acta. Regístrelo en Órganos.» | enviar el lote o llevarlo a una sesión sin consejo activo | FR-095 |
+| `Lending.WriteOff.AttachmentInvalid` **(K3, T0914, fijado aquí)** | 422 | «El soporte del reporte al supervisor no es un adjunto disponible de este lote. Súbalo como soporte del reporte del lote y vuelva a intentarlo.» | registrar el reporte con un adjunto que no es `LendingWriteOffSupervisorReport` del lote | FR-095 |
+| `Lending.PortfolioEvaluation.NotFound` **(K3, T0914)** | 404 | «La evaluación de cartera no existe.» | inexistente o sin créditos del alcance | T62 |
+| `Lending.PortfolioEvaluation.Overlaps` **(K3, T0914)** | 422 | «Ya hay una evaluación de cartera sin aplicar con corte {fecha} ({número}): termínela antes de preparar otra del mismo corte.» (`data: { cutoffDate, number }`) | preparar otra del mismo corte con una en borrador, recomendada o aprobada | FR-102 |
+| `Lending.PortfolioEvaluation.NotDraft` · `.InvalidStatus` **(K3, T0914)** | 422 | «La evaluación ya no admite cambios: sus líneas se editan sólo en borrador.» · «La evaluación está en «{estado}» y no puede pasar a «{hacia}».» | editar fuera de borrador; aplicar sin aprobar; descartar una aplicada, rechazada o ya descartada (bloque D); transición fuera del ciclo | FR-102 |
+| `Lending.PortfolioEvaluation.PeriodInvalid` **(K3, T0914, fijado aquí)** | 422 | «El tipo de entidad ({tipo}) evalúa con corte en los meses {meses} y la recalificación se refleja {n} mes(es) después del corte (para este corte, {AAAA-MM}).» (`data: { organizationType, cutoffMonths, expectedEffectMonth }`) | corte o mes de efecto fuera de la periodicidad del tipo | FR-102 |
+| `Lending.PortfolioEvaluation.LoanNotLive` **(K3, T0914, fijado aquí)** | 422 | «El crédito {numero} no estaba vigente al corte {fecha}: la evaluación recalifica sólo la cartera viva al corte.» | evaluar un crédito abierto después del corte o cancelado antes | FR-102 |
+| `Lending.PortfolioEvaluation.RiskCommitteeMissing` **(K3, T0914, fijado aquí)** | 422 | «La cooperativa no tiene un comité de riesgos activo entre sus órganos: la evaluación de cartera la recomienda ese comité. Regístrelo en Órganos.» | llevar la evaluación a una sesión sin comité de riesgos activo | FR-102 |
+| `Lending.PortfolioEvaluation.RecommendationRequired` **(K3, T0914, fijado aquí)** | 422 | «La evaluación todavía no tiene la recomendación del comité de riesgos con acta cerrada: llévela primero a una sesión del comité.» | cerrar un acta del consejo que decide una evaluación sin recomendación | FR-102 |
+| `Lending.Insolvency.NotNegotiating` **(K3, T0888)** | 422 | «El proceso de insolvencia ya no está en negociación.» (`data.status`) | registrar el fracaso o cerrar con acuerdo un proceso que no está `Negotiating` | FR-098 |
+| `Lending.CollectionStage.RangesInvalid` **(K4, T0954)** | 422 | «La etapa «{etapa}» empieza en {n} días y «{anterior}» llega hasta {m}: se cruzan.» y equivalentes (`data: { kind, stage, previous }`, `kind` = `Empty`, `DuplicateCode`, `Inverted`, `Overlap`, `Gap`, `OpenNotLast`, `OrderMismatch`) | versión de etapas cuyos rangos de días se cruzan, dejan huecos, no siguen el orden o tienen una sin tope que no es la última | FR-117 |
+| `Lending.CollectionStage.FeeRuleInvalid` **(K4, T0954, fijado aquí)** | 422 | «La tarifa del gasto de la etapa «{etapa}» es una fracción mayor que cero y hasta uno.» y equivalentes (`data.field` = `base`, `rate`, `cap`, `moment`) | regla de gasto con base o momento desconocidos, tarifa fuera de (0, 1] o tope no positivo | FR-121, T77 |
+| `Lending.CollectionStage.FeeAboveCap` **(nuevo, K4 bloque D)** | 422 | «La tarifa del gasto de la etapa «{etapa}» ({tarifa}) supera el tope de la cooperativa ({tope} de la base del gasto). Baje la tarifa o cambie el tope en los parámetros de Cartera.» (`data: { field: rate, stage, rate, capRate, capAmount }`) | versión de etapas con una regla de gasto cuya tarifa supera `Cobranza.TopeGasto.Porcentaje` vigente desde su inicio | FR-121 |
+| `Lending.CollectionStage.ValidityInvalid` **(K4, T0954, fijado aquí)** | 422 | «Ya hay una versión de etapas desde el {fecha}: la nueva empieza después.» (`data.validFrom`) | versión que no empieza después de la vigente; cerrar una etapa ya cerrada o antes de su inicio | FR-117 |
+| `Lending.CollectorAssignmentRule.Invalid` **(K4, T0954, fijado aquí)** | 422 | «La regla de reparto necesita al menos un gestor.» · «Un gestor está dos veces en la regla.» · «El peso de cada gestor es mayor que cero.» · «El saldo máximo de la regla es menor que el mínimo.» | crear una regla de reparto inválida | FR-118 |
+| `Lending.CollectorAssignmentRule.ValidityInvalid` **(K4, T0954, fijado aquí)** | 422 | «La regla ya está cerrada o se pide cerrarla antes de empezar.» (`data.validFrom`) | cerrar la vigencia de una regla ya cerrada o antes de su inicio | FR-118 |
+| `Lending.CollectorAssignmentRule.NotFound` **(K4, T0954, fijado aquí)** | 404 | «La regla de reparto no existe.» | cerrar una regla inexistente | FR-118 |
+| `Lending.Collections.CollectorNotFound` **(K4, T0954, fijado aquí)** | 422 | «El gestor no es un usuario activo de esta cooperativa. Elíjalo de la lista de usuarios.» | regla, asignación o reparto con un gestor que no es usuario activo | FR-118 |
+| `Lending.Collections.LoanNotInCollection` **(K4, T0954; escritor desde el bloque D)** | 422 | «El crédito {numero} no está en cobranza: no tiene etapa vigente (nunca entró o salió al ponerse al día). Se gestiona cuando el proceso diario lo haga entrar a una etapa.» (`data.loanNumber`) | registrar una gestión con el titular (no ante la pagaduría) sobre un crédito sin etapa vigente | FR-117 |
+| `Lending.CollectionAction.ContactNotObligated` **(K4, T0954)** | 422 | «La gestión sólo se hace con el deudor o un codeudor obligado del crédito {numero}, o ante su pagaduría. Nunca con una referencia.» (`data.loanNumber`) | gestión con una persona que no es deudor, codeudor vigente ni la pagaduría; la pagaduría marcada como contacto directo | FR-119, FR-122 |
+| `Lending.CollectionAction.NotFound` **(K4, T0954, fijado aquí)** | 404 | «La gestión de cobranza no existe.» | anular una gestión inexistente o fuera del alcance | T62 |
+| `Lending.CollectionAction.AlreadyVoided` **(K4, T0954, fijado aquí)** | 422 | «La gestión ya fue anulada por otra: corrija la gestión que la anuló.» | anular dos veces, o anular una gestión que anula | FR-119, T77 |
+| `Lending.CollectionAction.SystemRecord` **(nuevo, K4 bloque D)** | 422 | «Esa gestión la dejó el proceso diario (la salida de cobranza): es la constancia de lo que pasó y no se anula.» | anular la gestión de sistema | FR-119 |
+| `Lending.PaymentAgreement.NotFound` **(K4, T0954, fijado aquí)** | 404 | «El acuerdo de pago no existe.» | inexistente o fuera del alcance | T62 |
+| `Lending.PaymentAgreement.ChangesTerms` **(K4, T0954)** | 422 | «El acuerdo suma {acordado} y lo vencido es {vencido}: un acuerdo de pago es sólo sobre lo vencido, sin cambiar las condiciones del crédito. Para cambiar plazo, cuota o tasa, tramite una novedad.» (`data: { agreed, pastDue }`) | calendario que suma más que lo vencido, o crédito sin nada vencido | FR-120, FR-090 |
+| `Lending.PaymentAgreement.NotProposed` **(K4, T0954)** | 422 | «Sólo se aprueba un acuerdo propuesto.» · «Sólo se rechaza un acuerdo propuesto.» (`data.status`) | aprobar o rechazar uno que no está `Proposed` | FR-120 |
+| `Lending.PaymentAgreement.InvalidStatus` **(K4, T0954, fijado aquí)** | 422 | «El acuerdo está en «{estado}»: sólo se anula uno propuesto o aprobado.» (`data.status`) | anular uno rechazado o ya anulado | FR-120 |
+| `Lending.PaymentAgreement.ScheduleInvalid` **(K4, T0954, fijado aquí)** | 422 | «La cuota {n} vence el {fecha}: los vencimientos van desde el inicio y crecen.» y equivalentes (`data.number`) | calendario vacío, con una cuota no positiva o con vencimientos antes de hoy o que no crecen | FR-120 |
+| `Lending.PaymentAgreement.AlreadyOpen` **(K4, T0954, fijado aquí)** | 422 | «El crédito ya tiene el acuerdo de pago {numero} propuesto o vigente. Anúlelo antes de proponer otro.» (`data.number`) | proponer un segundo acuerdo con uno propuesto o aprobado | FR-120 |
+| `Lending.LegalProcess.NotFound` **(K4, T0954, fijado aquí)** | 404 | «El proceso de cobro jurídico no existe.» | inexistente o fuera del alcance | T62 |
+| `Lending.LegalProcess.LoanNotInLegalStage` **(K4, T0954)** | 422 | «El crédito {numero} está en la etapa {etapa}: sólo un crédito en la etapa jurídica se entrega a un abogado.» (`data: { loanNumber, stage }`) | abrir el proceso de un crédito cuya etapa vigente no es jurídica, o sin etapa | FR-124 |
+| `Lending.LegalProcess.AlreadyOpen` **(K4, T0954, fijado aquí)** | 422 | «El crédito {numero} ya está en el proceso de cobro jurídico {proceso}, que sigue abierto.» (`data: { loanNumber, number }`) | abrir un segundo proceso para el mismo crédito | FR-124 |
+| `Lending.LegalProcess.InvalidStatus` **(K4, T0954, fijado aquí)** | 422 | «El proceso está en «{estado}» y no puede pasar a «{hacia}».» · «El proceso de cobro jurídico ya terminó.» (`data: { status, requested }`) | actuación o cierre de un proceso concluido o retirado; transición fuera de `LegalProcessStatus` | FR-124 |
+| `Lending.LegalProcess.LawyerIsDebtor` **(K4, T0954, fijado aquí)** | 422 | «El abogado no puede ser el deudor demandado. Elija como abogado a otra persona del maestro.» | abrir con el demandado como abogado | FR-124 |
+| `Lending.LegalProcess.InsolvencyNegotiating` **(nuevo, K4 bloque D)** | 422 | «El proceso {numero} sigue suspendido: el deudor está en una negociación de insolvencia. Se reanuda cuando la insolvencia termine (con acuerdo o con su fracaso registrado).» (`data: { number, insolvencyPublicId }`) | reanudar un proceso suspendido mientras el deudor negocia | FR-098, FR-124 |
+| `Lending.LegalProcess.AttachmentInvalid` **(K4, T0954, fijado aquí)** | 422 | «El soporte no es un documento disponible de este proceso. Súbalo como documento del proceso y vuelva a intentarlo.» | actuación con un adjunto que no es `LendingLegalProcessDocument` disponible del proceso | FR-124 |
+| `Lending.CollectionFee.NotFound` **(K4, T0954, fijado aquí)** | 404 | «El gasto de cobranza no existe o no es de este deudor.» | causar un aviso que no es un gasto de la persona | FR-121 |
+| `Lending.CollectionFee.NoticeNotSent` **(K4, T0954, fijado aquí)** | 422 | «El gasto de cobranza del crédito {numero} todavía no se le informó al deudor: se causa sólo después de que el aviso salga. Espere a que el aviso quede enviado.» (`data.loanNumber`) | causar un gasto cuyo `CollectionFeeNotice` no tiene `Sent` ni `Delivered` | FR-121, T77 |
+| `Lending.CollectionFee.AlreadyCaused` **(K4, T0954, fijado aquí)** | 422 | «El gasto de cobranza del crédito {numero} ya se causó.» (`data.loanNumber`) | causar dos veces el gasto de un aviso | FR-121 |
+| `Lending.CollectionFee.AboveCap` **(nuevo, K4 bloque D)** | 422 | «Lo que se cobraría al deudor del crédito {numero} ({valor}) supera el tope del gasto de cobranza de la cooperativa ({maximo}). Registre a cargo del deudor a lo sumo ese valor, o el resto sin cobrárselo.» (`data: { loanNumber, amount, maxAmount }`) | honorario o gasto jurídico a cargo del deudor por encima del tope (base: lo vencido de la última posición diaria) | FR-121 |
+| `Lending.Campaign.NotFound` **(K4, T0954, fijado aquí)** | 404 | «La campaña no existe.» | inexistente | FR-122 |
+| `Lending.Campaign.CodeDuplicate` **(K4, T0954, fijado aquí)** | 422 | «Ya hay una campaña con el código {codigo}. Use otro código.» (`data.code`) | crear una campaña con el código de otra viva | FR-122 |
+| `Lending.Campaign.InvalidStatus` **(K4, T0954, fijado aquí)** | 422 | «La campaña está en «{estado}» y no puede pasar a «{hacia}».» | programar una que no está en borrador; cancelar una terminada o cancelada | FR-122 |
+| `Lending.Campaign.FiltersInvalid` **(K4, T0954; escritor desde el bloque D)** | 422 | {motivo} (`data.reason`): la etapa no existe en la versión vigente el día programado; la mora mínima supera el tope de la etapa elegida; la oficina, la línea o la pagaduría no existen | crear una campaña con criterios que no pueden casar con nada | FR-122 |
+| `Lending.PriorNotice.NotFound` **(K4, T0954, fijado aquí)** | 404 | «El aviso previo no existe.» | inexistente o fuera del alcance | T62 |
+| `Lending.PriorNotice.AlreadyEvidenced` **(K4, T0954)** | 422 | «El aviso previo del crédito {numero} ya tiene las constancias que exige este episodio: no hace falta otra comunicación.» (`data.loanNumber`) | enviar o registrar la carta de un aviso `Valid` | FR-123 |
+| `Lending.PriorNotice.EvidenceDuplicate` **(K4, T0954)** | 422 | «La comunicación {n} de este aviso ya tiene su constancia.» (`data.communicationNumber`) | registrar dos veces la carta de la misma comunicación | FR-123 |
+| `Lending.PriorNotice.AttachmentInvalid` **(K4, T0954, fijado aquí)** | 422 | «La guía de la carta no es un documento disponible de este aviso. Súbala como constancia del aviso y vuelva a intentarlo.» | carta con un adjunto que no es `LendingPriorNoticeEvidence` disponible del aviso | FR-123 |
+| `Lending.PriorNotice.EpisodeClosed` **(K4, T0954, fijado aquí)** | 422 | «El crédito {numero} se puso al día y el episodio de este aviso terminó: si vuelve a caer en mora, se abre un aviso nuevo.» (`data.loanNumber`) | enviar una comunicación de un aviso `Closed` | FR-123, US12-5 |
+| `Lending.CreditReportClaim.NotFound` **(K4, T0954, fijado aquí)** | 404 | «El reclamo sobre el reporte no existe.» | inexistente o fuera del alcance | T62 |
+| `Lending.CreditReportClaim.NotInProcess` **(K4, T0954)** | 422 | «El reclamo ya no está en trámite ({estado}): sólo un reclamo en trámite se prorroga, se responde o se retira.» (`data.status`) | prorrogar, responder o retirar uno `Answered`, `TacitlyAccepted` o `Withdrawn` | FR-006, T69 |
+| `Lending.CreditReportClaim.AlreadyExtended` **(K4, T0954)** | 422 | «El reclamo ya se prorrogó (vence el {fecha}): la prórroga se concede una sola vez.» (`data.extendedDueDate`) | segunda prórroga | FR-006, T69 |
+| `Lending.CreditReportClaim.AttachmentInvalid` **(K4, T0954, fijado aquí)** | 422 | «El soporte no es un documento disponible del reclamo de esta persona. Súbalo como soporte del reclamo y vuelva a intentarlo.» | registrar o responder con un adjunto que no es `LendingCreditReportClaimSupport` disponible de la persona | FR-006 |
 
 ### 10.2 Otras familias
 
@@ -5343,7 +5559,7 @@ financiera el consejo lleva la fracción de vinculados—, `RelatedPartyFraction
 | `Accounting.LendingFact.WaitingForOriginal` | consumo `Retry` | «Espera a que se contabilice el hecho original.» | T12 |
 | `Accounting.Period.LendingNotClosed` | 422 | «Cartera no ha cerrado {mes}. Ciérrelo en Cartera antes de cerrar Contabilidad.» (sin reconocimiento posible) | T57 |
 | `Accounting.Period.LendingPending` | aviso (422 sin reconocimiento) | «Hay {n} hechos de Cartera de {mes} pendientes, en lote o rechazados. Reconózcalos para cerrar de todos modos.» | T57 |
-| `Accounting.Period.LendingLoadWillExpire` | aviso (422 sin reconocimiento) | «Cerrar {mes} impedirá activar la carga de Cartera con corte {corte}.» | T57 |
+| `Accounting.Period.LendingLoadWillExpire` | aviso (422 sin reconocimiento) | «La carga de Cartera con corte al {corte} todavía no se activó y su día de activación cae en este mes: si lo cierra, la activación sigue siendo posible, pero lo que emita se registrará en el primer mes abierto siguiente. Active Cartera primero o cierre de todos modos.» (desde el 2026-10-14: el mes de C+1 cerrado ya no impide activar, §5 J2 de decisiones-transversales) | T57 |
 | `Accounting.Document.LendingCorrectsWithNewVoucher` | 422 | «Los comprobantes de Cartera no se reversan aquí: se corrigen con un hecho nuevo desde Cartera.» | T55 |
 | `Accounting.LendingRule.DimensionRequired` **(nuevo, T0642, C111)** | 400 · 422 | «El rol {rol} exige la dimensión {dimensión}: indíquela (no admite «*»).» (`data: { operation, role, dimension }`) | T52 |
 | `Accounting.LendingRule.DimensionNotAllowed` **(nuevo, T0642, C111)** | 400 · 422 | «El rol {rol} no admite la dimensión {dimensión}: déjela en «*».» (también el hecho fijado en un rol que no es de resultado, C77) | T52 |
@@ -5370,6 +5586,7 @@ financiera el consejo lleva la fracción de vinculados—, `RelatedPartyFraction
 | `Payroll.LendingPendingActivation` | aviso | «Hay empleados con créditos en una carga de Cartera sin activar: esta nómina no les descuenta cuotas.» | DE-10 |
 | `Payroll.LendingPendingActivationAckRequired` | 422 | «Confirme que sabe que Cartera está por activar para {n} empleados ({nombres}).» | DE-10 |
 | `Payroll.LoanDeductionNotApplied` | aviso | «{n} descuentos de Cartera no se aplicaron: {motivos}.» | T92 |
+| `Payroll.LoanDeductionNotPostable` **(nuevo, C111; T0801)** | 422 | «No se aprobó: Contabilidad no tiene cómo registrar el recaudo de Cartera (crédito {numero}: {mensaje de Cartera}; …). Pida a la contadora completar la matriz de Cartera y apruebe de nuevo.» (`data.lendingCode`, `data.loans[] { loanNumber, message, lending }`) | ordinaria o definitiva cuando el contrato rechaza un descuento con `Lending.Prevalidation.NotPostable` (A8 = «Bloquear todo», 2026-10-14) | T92, A8 |
 | `Payroll.LegalParameter.NationalValue` | 422 | «El {codigo} es un valor nacional: lo registra la plataforma, no Nómina.» | T93 |
 | `Inventory.Credit.LendingBlocked` | 422 | «{persona} tiene el crédito bloqueado en Cartera ({motivo}).» | T95 |
 | `Inventory.Credit.QuotaExceeded` | 422 | «El valor supera el cupo disponible ({disponible}).» (`data.availableQuota`) | T95 |
@@ -5437,6 +5654,7 @@ Los destinatarios por defecto están cotejados con las plantillas `cartera.*` de
 | `Cartera.GiroDePagaduriaAtrasado` | Lending | `cartera.giros-de-pagaduria`: venció `Libranza.VentanaDeGiroDias` | `Lending.PayrollTransfers.Manage` | App+C | Warning | K2 | `…:{pagaduría}:{período}` |
 | `Cartera.ArchivoDeDescuentosPendiente` | Lending | `cartera.archivos-de-descuento`: archivo por generar según el convenio | `Lending.PayrollDeductionFiles.Generate` | App | Warning | K2 | `…:{convenio}:{período}` |
 | `Cartera.AvisoPrevioSinConstancia` | Lending | un episodio de mora sin constancia del aviso previo | `Lending.PriorNotices.RegisterEvidence` | App | Warning | K4 | `…:{aviso}` |
+| `Cartera.PromesaIncumplida` **(nuevo, K4, T0943)** | Lending | el paso 7 del ciclo: una promesa de pago venció ayer sin el pago (estado derivado `Broken`); vuelve a la agenda del gestor | `Lending.Collections.RecordActivity` | App | Warning | K4 | `…:{promesa}` |
 | `Contabilidad.PeriodoInexistente` | Accounting | llegó un hecho con fecha contable en un período que no existe (`Retry`) | `Accounting.Periods.CloseYear` | App+C | Critical | K1 | `…:{aaaa-mm}` |
 | `Contabilidad.GrupoNiifDistinto` **(fijado aquí)** | Accounting | el perfil regulatorio y `AccountingSetup.NiifGroup` difieren | `Core.RegulatoryProfile.Manage` | App | Warning | K1 | `…` |
 | `Nomina.ValorNacionalDistinto` | Payroll | la réplica trajo un SMMLV, UVT o festivo distinto del que Nómina tenía (T93) | `Payroll.LegalParameters.Manage` | App+C | Warning | K1 | `…:{código}:{fecha}` |
@@ -5479,6 +5697,7 @@ transversales deja a este documento.
 | Clave | Tipo | Valores | Defecto | Ámbitos | Límite | E | Origen |
 |---|---|---|---|---|---|---|---|
 | `Riesgo.ReglaMesesFaltantes` | Choice | `MayorObservada`, `DelCorte`, `Fija` | `MayorObservada` (PV) | None | — | K1 (uso K6a) | R14 |
+| `Riesgo.MesesFaltantesDiasFijos` **(nuevo, K6a, T1027)** | Int | ≥ 0 | sin valor (PV); obligatoria si `Riesgo.ReglaMesesFaltantes = Fija`: sin ella la regla «Fija» se rechaza al guardar y no se vacía mientras rige (`Lending.Parameter.FixedDaysRequired` **(nuevo)**, 422, `data: { key, requires }`) | None | — | K6a | R14, T1027 |
 | `Riesgo.DiaLimiteCierre` | Int | 1–28 | 10 | None | — | K1 | R17 |
 | `Riesgo.CierreProgramado` | Bool | | false | None | — | K1 | R17, E6 |
 | `Riesgo.RedondeoDeterioro` | Choice | `Centavo`, `Peso` | `Centavo` | None | — | K1 | R17, E9 |
@@ -5495,8 +5714,8 @@ transversales deja a este documento.
 | `Contabilidad.Granularidad` | Choice | `PorDia`, `PorDiaYSucursal`, `PorHecho` (C07) | `PorDia` | LendingFactType | K1 | DC-12, FR-128 |
 | `Contabilidad.DisparadorDeLote` | Choice | `Hora`, `FinDeCausacion`, `CierreDeCartera` | `FinDeCausacion` en los de causación; `CierreDeCartera` en los del cierre | LendingFactType | K1 | DC-11 |
 | `Contabilidad.HoraDeLote` | Time | | sin valor (sólo con disparador `Hora`) | LendingFactType | K1 | DC-11 |
-| `Contabilidad.PoliticaSinRespuesta` | Choice | `ConfirmarConPendiente`, `Bloquear` | `ConfirmarConPendiente` (D7). «Bloquear» sólo muerde en las operaciones de pantalla (A8, C80) | None | K1 | DC-15 |
-| `Contabilidad.FaltaDeRegla` | Choice | `Advertir`, `Bloquear` | `Advertir`. «Bloquear» sólo muerde en desembolso, novedad, condonación y castigo; en el contrato, el consumidor y los procesos siempre advierte (A8). Gobierna todo hallazgo de la evaluación (C80) | None, LendingFactType | K1 | DC-15 |
+| `Contabilidad.PoliticaSinRespuesta` | Choice | `ConfirmarConPendiente`, `Bloquear` | `ConfirmarConPendiente` (D7). «Bloquear» sólo muerde en las operaciones de pantalla (C80; la respuesta a A8 no la tocó) | None | K1 | DC-15 |
+| `Contabilidad.FaltaDeRegla` | Choice | `Advertir`, `Bloquear` | **Bloquear** (decisión del dueño del 2026-10-14; hasta ese día `Advertir`). «Bloquear» detiene todo (A8 = «Bloquear todo», respuesta del dueño del 2026-10-14): la pantalla no confirma, el contrato rechaza el pago (Nómina no aprueba), la venta de Comercial queda en reproceso y el proceso detiene su tanda y alerta. Gobierna todo hallazgo de la evaluación (C80) | None, LendingFactType | K1 | DC-15 |
 | `Contabilidad.ValidacionPreviaSegundos` | Int | 1–30 | 3 | None | K1 | DC-11 |
 | `Contabilidad.DisminucionDeDeterioro` | Choice | `MismoEjercicioPrimero`, `TodoARecuperacion` | `MismoEjercicioPrimero` (PV; C2) | None | K1 | DC-13 |
 | `Contabilidad.IndicadoresVigenciaMeses` | Int | ≥ 1 | 6 | None | K1 | DC-18 |
@@ -5511,7 +5730,7 @@ transversales deja a este documento.
 | `Giros.DiasSinResultado` | Int | ≥ 1 | 3 **(fijado aquí)** | None | — | K1 | FR-045 |
 | `Cupo.MoraMaximaParaVender` | Int | días ≥ 0 | 0 **(fijado aquí)**: en mora no se vende | None | — | K1 | FR-059 |
 | `Bloqueos.DiasDeMoraParaBloquear` | Int | ≥ 1 | 30 **(fijado aquí)**, el de §0.15 (para validar por la contadora, §7.7 de las transversales) | None | — | K1 | FR-060 |
-| `Segregacion.Incompatibilidades` | Text (JSON) | pares de acciones (`Radicar`, `Analizar`, `Decidir`, `Votar`, `Desembolsar`, `AnularOrdenDeGiro`, `ArmarLoteDeCastigo`, `AplicarCastigo`, `CargarMigracion`, `AceptarDiferencias`) con `activo` | `Decidir × Desembolsar` activo; los demás sugeridos e inactivos (F6) | None | — | K1 | S7 |
+| `Segregacion.Incompatibilidades` | Text (JSON) | pares de acciones (`Radicar`, `Analizar`, `Decidir`, `Votar`, `Desembolsar`, `AnularOrdenDeGiro`, `ArmarLoteDeCastigo`, `AplicarCastigo`, `CargarMigracion`, `AceptarDiferencias` y, desde K3, `Aplicar`) con `activo` | `Decidir × Desembolsar` activo; los demás sugeridos e inactivos (F6) | None | — | K1 | S7 |
 
 **Libranza (K2)**
 
@@ -5521,6 +5740,14 @@ transversales deja a este documento.
 | `Libranza.VentanaDeGiroDias` | Int | ≥ 1 | 3 (FR-114) | None | `LIBRANZA_VENTANA_GIRO_DIAS` | K2 | F-11 |
 | `Libranza.UmbralDeMoraDePagaduria` | Int | días | el de la CBCF vigente (PV; se coteja antes de K2) | None | `LIBRANZA_UMBRAL_MORA_PAGADURIA` | K2 | FR-114 |
 
+**Castigo (K3, T0910)**
+
+| Clave | Tipo | Valores | Defecto | Ámbitos | Límite | E | Origen |
+|---|---|---|---|---|---|---|---|
+| `Castigo.ExigeDeterioroTotal` **(fijado aquí)** | Bool | | `true` (PV, dueño) | None | — | K3 | FR-095 |
+| `Castigo.DiasMinimosDeMora` **(fijado aquí)** | Int | ≥ 0; vacío = no se exige | vacío hasta que el dueño lo fije (PV) | None | — | K3 | FR-095 |
+| `Castigo.GestionesMinimas` **(fijado aquí)** | Int | ≥ 0 | 0 hasta K4: sin registro de gestiones, el informe motivado las acredita (PV) | None | — | K3 | FR-095 |
+
 **Cobranza, aviso previo, mensajes, canales y listas**
 
 | Clave | Tipo | Valores | Defecto | Ámbitos | Límite | E | Origen |
@@ -5528,11 +5755,17 @@ transversales deja a este documento.
 | `Cobranza.HorarioLunesAViernes` | Text | `HH:mm-HH:mm` | `07:00-19:00` (techo) | None | `COBRANZA_HORA_INICIO_LV`, `COBRANZA_HORA_FIN_LV` | K1 (informativos) / K4 | F-05 |
 | `Cobranza.HorarioSabado` | Text | `HH:mm-HH:mm` | `08:00-15:00` (techo) | None | `COBRANZA_HORA_INICIO_SAB`, `COBRANZA_HORA_FIN_SAB` | K1 / K4 | F-05 |
 | `Cobranza.ContactosPorDia` | Int | ≥ 1 | 1 (techo) | None | `COBRANZA_CONTACTOS_DIA` | K1 / K4 | F-05 |
+| `Cobranza.ToleranciaDePromesa` **(nuevo, K4, T0962)** | Decimal | pesos, ≥ 0 | 0 (PV) | None | — | K4 | §26.8, FR-119 |
+| `Cobranza.TopeGasto.Porcentaje` **(nuevo, K4 bloque D)** | Decimal | fracción de 0 a 1 de la base del gasto | vacío = sin tope (PV) | None | — | K4 | decisión del dueño del 2026-10-16, FR-121 |
+| `Cobranza.TopeGasto.ValorMaximo` **(nuevo, K4 bloque D)** | Decimal | pesos, ≥ 0 | vacío = sin máximo (PV) | None | — | K4 | decisión del dueño del 2026-10-16, FR-121 |
 | `AvisoPrevio.DiasMinimos` | Int | días calendario | 20 (piso) | None | `AVISO_PREVIO_DIAS` | K4 | F-09 |
 | `AvisoPrevio.UmbralDosComunicaciones` | Decimal | veces el SMMLV | el nacional (PV) | None | `AVISO_PREVIO_UMBRAL_SMMLV` | K4 | F-09 |
+| `AvisoPrevio.IncluirCodeudores` **(nuevo, 2026-10-16)** | Bool | | false: los codeudores no reciben aviso ni se reportan con dato negativo | None | — | K5 | decisión del dueño del 2026-10-16 |
 | `Mensajes.Reintentos` | Int | ≥ 0 | 3 **(fijado aquí)** | None | — | K1 | F-06 |
 | `Canales.UmbralDeFallas` | Int | ≥ 1 | 5 **(fijado aquí)** | None | — | K1 | F-02 |
 | `Centrales.DiasDeVigenciaDeConsulta` | Int | ≥ 1 | 30 **(fijado aquí)** | None, CreditLine | — | K1 | F-19 |
+| `Centrales.CodigosDeSuscriptor` **(nuevo, fase 21, T1003)** | Text | `CENTRAL=código` separados por `;` | vacío | None | — | K5 | T1003 |
+| `Centrales.RangosDeMora` **(nuevo, 2026-10-16)** | Text | `TIPO=límite,…\|rango` separados por `;`, `*` para los demás tipos de cartera (modalidad); límites crecientes, rango negativo de 1 a límites + 1 (`Lending.Parameter.InvalidArrearsRanges`) | `*=30,60,90,120,150,180\|1` (PV): toda mora es dato negativo, como antes | None | — | K5 | decisión del dueño del 2026-10-16 |
 | `Listas.UmbralDeCoincidenciaDeNombre` | Decimal | 0–1 | 0,90 **(fijado aquí)**, el de §0.15 | None | — | K1 | F-18 |
 
 **Documentos e informes**
@@ -5543,6 +5776,8 @@ transversales deja a este documento.
 | `Documentos.PazYSalvoIncluyeCodeudas` | Bool | | false | None | K1 | FR-131 |
 | `Informes.RangosDeEdad` | Text | lista de días en orden creciente | `30,60,90,180,360` (rangos 1–30, 31–60, 61–90, 91–180, 181–360, más de 360) **(fijado aquí)** | None | K1 | F-15 |
 | `Informes.PuntosAlertaUsura` | Decimal | puntos de tasa efectiva anual | 2,0 (PV) **(fijado aquí)** | None | K1 | FR-133 |
+| `Informes.DiasCarteraVencida` | Int | ≥ 0; vencida = días de mora **mayores** que este valor | 30 (PV, a validar por la contadora) **(nuevo, fase 20, T0980)** | None | K5 | FR-134, FR-135 |
+| `Documentos.CertificadoTributario.SaldoIncluye` | Text | nombres separados por coma: `Capital`, `InteresCorriente`, `InteresDeMora`, `OtrosCargos`, `MenosAnticipo` | los cinco (el saldo de antes del parámetro) **(nuevo, decisión del dueño del 2026-10-16)** | None | K5 | FR-131 |
 
 **Técnicos** (appsettings, no son de la cooperativa): `Lending:Process:Enabled`, `IntervalSeconds` 30, `BudgetSeconds`
 60, `LeaseTtlSeconds` 120, `MaxParallelCooperatives` 2, `StartTimeLocal` «00:30», `BatchSize` 250;
@@ -5577,7 +5812,7 @@ que lo que admite el catálogo de códigos para ese índice.
 | `RegulatoryDocumentKind` | Tipado en | Qué trae | Semilla central (`PlatformNationalValuesSeeder`, Admin, Order 6, JSON embebidos) | E |
 |---|---|---|---|---|
 | `CatalogoDeModalidades` | `Domain/Common/NationalValues` | modalidades (`CONSUMO`, `COMERCIAL`, `VIVIENDA`, `MICROCREDITO`, `POPULAR_PRODUCTIVO_RURAL`, `POPULAR_PRODUCTIVO_URBANO`, `PRODUCTIVO_RURAL`, `PRODUCTIVO_URBANO`, `PRODUCTIVO_MAYOR_MONTO`), sub-segmentos (`ConLibranza`/`SinLibranza`, `PersonaNatural`/`PersonaJuridica`, `Empleados`, `Inmobiliario`/`Empresarial` en microcrédito), y por combinación: segmento SARC, segmento de pérdida esperada, clave de `USURA` o tope de vivienda, si admite UVR | versión inicial, `Verified = 0` (preguntas E4, E10) | K1 |
-| `TiposDeOrganizacion` | `Domain/Common/NationalValues` | códigos de tipo de organización solidaria, categorías de fondos de empleados, si exigen o admiten la pérdida esperada | versión inicial, `Verified = 0` | K1 |
+| `TiposDeOrganizacion` | `Domain/Common/NationalValues` | códigos de tipo de organización solidaria, categorías de fondos de empleados, si exigen o admiten la pérdida esperada; desde K3 (US14, opcionales, sin cambiar la versión de esquema) `writeOffReport { required, dueDays }` —si reporta los castigos al supervisor y en cuántos días calendario desde que se aplican— y `portfolioEvaluation { cutoffMonths[], effectMonthsAfterCutoff }` —la periodicidad de la evaluación de cartera— | versión inicial, `Verified = 0`; los datos de K3 **no se siembran**: los aporta el dueño (T0910) | K1 |
 | `SarcAnexo1` | `Domain/Lending/Risk/Normativa` (`Anexo1`) | segmentos SARC, rangos, reglas especiales, porcentajes con condición de subcategoría, garantías por meses, aportes, arrastre, suspensión, reestructurados, general | Anexo 1 del 2025-01-31, `Verified = 0` salvo lo cotejado (E8) | K1 |
 | `ReglaDePerdidaEsperada` | `Domain/Lending/Risk/Normativa` | perfiles obligados, segmentos cubiertos, meses de historial que pide el modelo, antelación del aviso voluntario | CE 100 del 2026-05-12, `Verified = 0` | K1 |
 | `SarcAnexo2` | `Domain/Lending/Risk/Normativa` (`Anexo2`) | variables, coeficientes, cortes, PI por tipo de organización (clave `VOLUNTARIA`), PDI, VEA, homologación | versión consolidada vigente, `Verified = 0` (E8) | K6a |
@@ -5593,7 +5828,7 @@ El catálogo, cerrado en código (`Domain/Common/NationalValues`), fija por cód
 estricto** (`Mayor` = un valor mayor es más estricto; `Menor` = uno menor lo es) y qué acota. El valor vive en
 `ADM_NationalValues` (`Code = LIMITE`, `Key` = el código), con vigencia y fuente, y se siembra «pendiente de validar».
 Un límite nuevo más estricto que lo configurado alerta `Cartera.LimiteLegalMasEstricto`. Los seis primeros los nombra la
-§2.21 de las transversales; los otros 17 **(fijado aquí)**, entre ellos los de cobranza (inicio de lunes a viernes, inicio y fin del sábado, contactos por día), los fija este documento (C71).
+§2.21 de las transversales; los otros 17 **(fijado aquí)** y los cinco de vivienda de K6b, entre ellos los de cobranza (inicio de lunes a viernes, inicio y fin del sábado, contactos por día), los fija este documento (C71).
 
 | Código | Unidad | Estricto | Valor semilla | Acota | Fuente |
 |---|---|---|---|---|---|
@@ -5618,6 +5853,16 @@ Un límite nuevo más estricto que lo configurado alerta `Cartera.LimiteLegalMas
 | `TITULAR_RECLAMO_DIAS` · `TITULAR_RECLAMO_PRORROGA_DIAS` | `Dias` (hábiles) | `Menor` | 15 · 8 | `PlazosDelTitular`, `LND_CreditReportClaims` | Ley 1581, Ley 1266 |
 | `TITULAR_LEYENDA_RECLAMO_DIAS` | `Dias` (hábiles) | `Menor` | 2 | marca «reclamo en trámite» | Ley 1266 |
 | `PERMANENCIA_NEGATIVO_VECES_MORA` · `PERMANENCIA_NEGATIVO_MESES_MAXIMOS` | `Veces` · `Meses` | `Menor` | 2 · 48 (PV) | `ProyeccionCentralDeRiesgo` (K5) | Ley 2157 |
+| `VIVIENDA_PLAZO_MINIMO_MESES` **(nuevo, K6b)** | `Meses` | `Mayor` | 60 (PV) | plazo mínimo de la versión de línea y de la solicitud de vivienda (`ReglasDeVivienda`) | Ley 546 de 1999, art. 17 |
+| `VIVIENDA_PLAZO_MAXIMO_MESES` **(nuevo, K6b)** | `Meses` | `Menor` | 360 (PV) | plazo máximo, ídem | Ley 546 de 1999, art. 17 |
+| `VIVIENDA_FINANCIABLE` **(nuevo, K6b)** | `Fraccion` | `Menor` | 0,70 (PV) | monto de la solicitud de vivienda frente al valor del inmueble (sus hipotecas) | Ley 546 de 1999, art. 17; Decreto 145 de 2000 (compilado en el Decreto 2555 de 2010) |
+| `VIVIENDA_FINANCIABLE_VIS` **(nuevo, K6b)** | `Fraccion` | `Menor` | 0,80 (PV) | ídem, vivienda de interés social (`IsSocialHousing`) | ídem |
+| `VIVIENDA_CUOTA_INGRESO` **(nuevo, K6b)** | `Fraccion` | `Menor` | 0,30 (PV) | primera cuota (llevada a un mes) frente a los ingresos familiares (solicitante y codeudores) | ídem |
+
+Los cinco de vivienda (K6b, T1051, 2026-10-17) se siembran como «valor semilla, pendiente de validar»: valores y fuentes los coteja
+el dueño. Sin uno vigente, la línea, la solicitud y el desembolso de vivienda responden `NationalValues.Missing`. El tope de tasa
+de vivienda **no** es un límite: es el valor nacional `TOPE_TASA_VIVIENDA` (`EA`, sin clave, §12.3), como la `UVR` (`Pesos`, un
+valor por día), y ninguno de los dos se siembra.
 
 `Veces` es la unidad que este documento agrega a la lista de §2.21 **(fijado aquí)**: un múltiplo (del SMMLV, de la
 mora) o un conteo.

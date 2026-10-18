@@ -51,13 +51,17 @@ public sealed class DestinoCartera(ISender sender, ILogger<DestinoCartera> logge
     }
 
     /// <summary>
-    /// El comando de la familia de la unidad: lo de Comercial (<c>INV</c>) a <see cref="ConsumeCommercialCreditMessageCommand"/>; lo de Tesorería, a
+    /// El comando de la familia de la unidad: lo de Comercial (<c>INV</c>) a <see cref="ConsumeCommercialCreditMessageCommand"/>; lo de Recaudo
+    /// (<c>REC</c>, K2) a <see cref="Payroll.Results.ConsumeReceiptsMessageCommand"/>, que reparte por tipo; lo de Tesorería, a
     /// <see cref="ConsumeTreasuryResultCommand"/>. El tipo exacto lo valida cada comando al leer.
     /// </summary>
-    private static IRequest<IngenIA365ERP.Application.Common.Models.Result<ResultadoDeConsumo>> ComandoDe(UnidadDeConsumo unidad) =>
-        unidad.OriginModule == ModulosDeOrigen.Inventario
-            ? new ConsumeCommercialCreditMessageCommand(unidad.MessagePublicIds)
-            : new ConsumeTreasuryResultCommand(unidad.MessagePublicIds);
+    private static IRequest<IngenIA365ERP.Application.Common.Models.Result<ResultadoDeConsumo>> ComandoDe(UnidadDeConsumo unidad) => unidad.OriginModule switch
+    {
+        ModulosDeOrigen.Inventario => new ConsumeCommercialCreditMessageCommand(unidad.MessagePublicIds),
+        // K2 (T0838): lo de Recaudo se reparte por tipo (envío confirmado o resultado de descuentos).
+        ModulosDeOrigen.Recaudo => new Payroll.Results.ConsumeReceiptsMessageCommand(unidad.MessagePublicIds),
+        _ => new ConsumeTreasuryResultCommand(unidad.MessagePublicIds),
+    };
 
     /// <summary>Una unidad por (módulo, origen, clave de evento): Cartera no resume.</summary>
     public IReadOnlyList<TrabajoDeConsumo> PlanearLote(IReadOnlyList<MensajeEntrante> entregas)

@@ -52,9 +52,12 @@ public sealed record VerifiedDocumentHolderDto(string FullName, string DocumentN
 /// <summary>La anulación como la muestra la verificación: cuándo y por qué. (nuevo)</summary>
 public sealed record VoidedDocumentDto(DateTime At, string Reason);
 
-/// <summary>La respuesta de la verificación (api.md §15, adaptadores-y-archivos.md §8.9). (nuevo)</summary>
+/// <summary>
+/// La respuesta de la verificación (api.md §15, adaptadores-y-archivos.md §8.9). <see cref="PdfMatches"/> (K5, T0972) sólo viene si se pidió comparar
+/// la huella de un PDF: <c>true</c> si es la del PDF guardado. (nuevo)
+/// </summary>
 public sealed record VerifiedDocumentDto(bool Authentic, string Status, string Kind, string Number, DateTime IssuedAt, VerifiedDocumentHolderDto Holder,
-    JsonElement EssentialData, VoidedDocumentDto? Voided);
+    JsonElement EssentialData, VoidedDocumentDto? Voided, bool? PdfMatches = null);
 
 /// <summary>
 /// Lo que comparten las consultas y los comandos sobre un documento emitido (feature 013, US13, T0785): la lectura con el alcance —un documento se ve
@@ -260,15 +263,24 @@ public sealed class GetIssuedLendingDocumentQueryHandler(IApplicationDbContext d
 /// titular enmascarado, lo que muestra la verificación y, si está anulado, cuándo y por qué. Sólo la usan personas de la cooperativa —no hay ruta
 /// anónima— y, como cada cooperativa tiene su base, un código de otra o inexistente responde <c>Lending.Document.NotFound</c> («el código no
 /// corresponde a un documento de esta cooperativa»). La verificación no mira el alcance de oficina: quien verifica sólo recibe los datos esenciales
-/// del documento, no el expediente. Se audita <c>Lending.Document.Verified</c>. (nuevo)
+/// del documento, no el expediente. Se audita <c>Lending.Document.Verified</c>.
+/// <para>K5 (T0972, R149): con <see cref="Sha256"/> —la huella de un PDF que el navegador calcula con <c>crypto.subtle</c>; el archivo nunca sube—
+/// responde además <c>pdfMatches</c>, si coincide con el <c>ContentSha256</c> guardado; la comparación queda en la misma lectura auditada. Una huella
+/// que no son 64 caracteres hexadecimales es <c>Validation.Invalid</c>.</para> (nuevo)
 /// </summary>
-public sealed record VerifyLendingDocumentQuery(string Code) : IRequest<Result<VerifiedDocumentDto>>;
+public sealed record VerifyLendingDocumentQuery(string Code, string? Sha256 = null) : IRequest<Result<VerifiedDocumentDto>>;
 
 public sealed class VerifyLendingDocumentQueryHandler(IApplicationDbContext db, LendingAuditEmitter auditoria, IDateTimeService reloj)
     : IRequestHandler<VerifyLendingDocumentQuery, Result<VerifiedDocumentDto>>
 {
+    /// <summary>¿Es una huella SHA-256 en hexadecimal (64 caracteres, mayúsculas o minúsculas)?</summary>
+    public static bool EsHuella(string? texto) => texto is { Length: 64 } && texto.All(Uri.IsHexDigit);
+
     public async Task<Result<VerifiedDocumentDto>> Handle(VerifyLendingDocumentQuery request, CancellationToken ct)
     {
+        var huella = string.IsNullOrWhiteSpace(request.Sha256) ? null : request.Sha256.Trim();
+        if (huella is not null && !EsHuella(huella))
+            return Result.Failure<VerifiedDocumentDto>("Validation.Invalid", "La huella del PDF no es válida: deben ser 64 caracteres hexadecimales (SHA-256).");
         var codigo = CodigoDeVerificacion.Normalizar(request.Code);
         if (codigo is null) return Result.Failure<VerifiedDocumentDto>(DocumentErrors.CodigoDesconocido());
         var documento = await db.IssuedLendingDocuments.AsNoTracking().FirstOrDefaultAsync(d => d.VerificationCode == codigo && !d.IsDeleted, ct);
@@ -276,10 +288,11 @@ public sealed class VerifyLendingDocumentQueryHandler(IApplicationDbContext db, 
 
         var anulacion = await DocumentosEmitidos.AnulacionAsync(db, documento.Id, ct);
         var estado = documento.EstadoA(anulacion is not null, reloj.HoyLocal);
-        await auditoria.EmitirDocumentoVerificadoAsync(documento.PublicId, anulacion is null, ct);
+        bool? coincide = huella is null ? null : string.Equals(huella, documento.ContentSha256, StringComparison.OrdinalIgnoreCase);
+        await auditoria.EmitirDocumentoVerificadoAsync(documento.PublicId, anulacion is null, ct, coincide);
         return Result.Success(new VerifiedDocumentDto(true, estado.ToString(), documento.Kind.ToString(), documento.Number, documento.IssuedAt,
             new VerifiedDocumentHolderDto(documento.HolderName, DocumentosEmitidos.Enmascarar(documento.HolderTaxId)),
             DocumentosEmitidos.DatosEsenciales(documento),
-            anulacion is null ? null : new VoidedDocumentDto(anulacion.OccurredAt, anulacion.Reason ?? string.Empty)));
+            anulacion is null ? null : new VoidedDocumentDto(anulacion.OccurredAt, anulacion.Reason ?? string.Empty), coincide));
     }
 }

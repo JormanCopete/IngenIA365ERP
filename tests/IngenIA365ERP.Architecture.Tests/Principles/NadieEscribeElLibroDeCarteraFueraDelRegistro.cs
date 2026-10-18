@@ -24,7 +24,31 @@ public class NadieEscribeElLibroDeCarteraFueraDelRegistro
         (new Regex(@"\b(LoanTransactions|LoanOperations|LoanDailyPositions|LoanTermsVersions|RepaymentScheduleVersions|RepaymentInstallments|LoanControls)\.(Add|AddRange|Update|UpdateRange|Attach)\(", RegexOptions.Compiled), "escribe el libro, sus versiones, sus proyecciones o la fila de control"),
         (new Regex(@"\.(LastAccruedDate|LastRegisteredAt|LastPositionDate)\s*(=(?!=)|\+=)", RegexOptions.Compiled), "mueve la marca de agua del crédito"),
         (new Regex(@"\bnew\s+(LoanTransaction|LoanOperation|LoanDailyPosition)\s*\(", RegexOptions.Compiled), "construye una fila del libro"),
+        // Fase 24 (T1062): también por el Set<> genérico del contexto concreto, que el DbSet con nombre no cubre.
+        (new Regex(@"\bSet<\s*(LoanTransaction|LoanOperation|LoanDailyPosition|LoanTermsVersion|RepaymentScheduleVersion|RepaymentInstallment|LoanControl)\s*>\(\)\s*\.\s*(Add|AddRange|Update|UpdateRange|Attach)\(", RegexOptions.Compiled),
+            "escribe el libro por Set<>"),
     ];
+
+    /// <summary>
+    /// Fase 24 (T1062): el patrón <c>new LoanTransaction(</c> de arriba no muerde, porque las filas se arman con inicializador
+    /// (<c>new LoanTransaction { … }</c>). Armar una fila fuera del registro se admite sólo para entregársela a
+    /// <c>registro.RegistrarTransacciones</c> (el desembolso, el nacimiento de la venta y de lo migrado, el saldo a favor de la corrección): un archivo
+    /// que arma una fila del libro o una posición y no se la entrega al registro la estaría escribiendo por su cuenta.
+    /// </summary>
+    private static readonly Regex ArmaUnaFila = new(@"\bnew\s+(LoanTransaction|LoanDailyPosition)\s*[({]", RegexOptions.Compiled);
+
+    [Fact]
+    public void Quien_arma_una_fila_del_libro_se_la_entrega_al_registro()
+    {
+        var root = RepoPath.FindRepoRoot();
+        var infracciones = ReglaSobreFuente.ArchivosEn(Carpetas)
+            .Where(a => !Exentos.Contains(ReglaSobreFuente.Relativo(root, a)))
+            .Select(a => (Archivo: a, Texto: FuenteSinComentarios.Leer(a)))
+            .Where(x => ArmaUnaFila.IsMatch(x.Texto) && !x.Texto.Contains("RegistrarTransacciones(", StringComparison.Ordinal))
+            .Select(x => $"{ReglaSobreFuente.Relativo(root, x.Archivo)}: arma una fila del libro y no se la entrega a RegistroDeCartera")
+            .ToList();
+        ReglaSobreFuente.SinInfracciones(infracciones, "Alguien arma una fila del libro de Cartera y la escribe fuera de RegistroDeCartera (FR-001)");
+    }
 
     [Fact]
     public void Solo_el_registro_escribe_el_libro()
@@ -85,5 +109,67 @@ public class NadieEscribeElLibroDeCarteraFueraDelRegistro
             if (!FuenteSinComentarios.Leer(archivo).Contains("RegistroDeCartera", StringComparison.Ordinal)) infracciones.Add($"{archivo}: no escribe por RegistroDeCartera");
         }
         ReglaSobreFuente.SinInfracciones(infracciones, "La activación no escribe los saldos iniciales por RegistroDeCartera (FR-001)");
+    }
+
+    /// <summary>
+    /// K3 (US11, bloque B; T0868): la aplicación de una novedad (<c>TermsChange</c>, sus versiones de condiciones y plan, y el nacimiento del enlazado) y
+    /// la de una condonación (<c>Waiver</c>) escriben la operación, el libro y el plan sólo por <c>RegistroDeCartera</c>.
+    /// </summary>
+    [Fact]
+    public void Las_novedades_y_las_condonaciones_escriben_el_libro_por_el_registro()
+    {
+        var recorridos = ReglaSobreFuente.ArchivosEn(Carpetas).ToList();
+        string[] escritores =
+        [
+            "Core/IngenIA365ERP.Application/Lending/Novelties/ApplyLoanNoveltyCommand.cs",
+            "Core/IngenIA365ERP.Application/Lending/Waivers/ApplyWaiverCommand.cs",
+        ];
+        var nombrados = ReglaSobreFuente.ArchivosNombrados(escritores).ToList();
+        Assert.Equal(escritores.Length, nombrados.Count);
+        var infracciones = new List<string>();
+        foreach (var archivo in nombrados)
+        {
+            if (!recorridos.Contains(archivo)) infracciones.Add($"{archivo}: fuera del recorrido de la regla");
+            if (!FuenteSinComentarios.Leer(archivo).Contains("RegistroDeCartera", StringComparison.Ordinal)) infracciones.Add($"{archivo}: no escribe por RegistroDeCartera");
+        }
+        ReglaSobreFuente.SinInfracciones(infracciones, "Las novedades o las condonaciones no escriben el libro por RegistroDeCartera (FR-001)");
+    }
+
+    /// <summary>
+    /// K3 (US14, bloque B; T0901): la aplicación del lote de castigo registra la operación <c>WriteOff</c> de cada crédito y el estado
+    /// <c>WrittenOff</c> sólo por <c>RegistroDeCartera</c>, dentro del recorrido de la regla; la operación no deja filas propias en el libro (el castigo no
+    /// cambia lo que se debe).
+    /// </summary>
+    [Fact]
+    public void El_castigo_escribe_la_operacion_WriteOff_por_el_registro()
+    {
+        var recorridos = ReglaSobreFuente.ArchivosEn(Carpetas).ToList();
+        var nombrados = ReglaSobreFuente.ArchivosNombrados(["Core/IngenIA365ERP.Application/Lending/WriteOffs/ApplyWriteOffBatchCommand.cs"]).ToList();
+        Assert.Single(nombrados);
+        var archivo = nombrados[0];
+        Assert.Contains(archivo, recorridos);
+        var fuente = FuenteSinComentarios.Leer(archivo);
+        Assert.Contains("registro.RegistrarOperacion(", fuente);
+        Assert.Contains("RegistroDeCartera.CambiarEstado(", fuente);
+        Assert.DoesNotContain("RegistrarTransacciones(", fuente);
+    }
+
+    /// <summary>
+    /// K4 (US12, bloque B; T0932, T0948): el gasto de cobranza causado escribe la operación <c>Charge</c> y sus filas <c>Charge</c> sólo por
+    /// <c>RegistroDeCartera</c>, dentro del recorrido de la regla, y emite su hecho por <c>EmisionDeCartera</c> (Cartera no escribe asientos).
+    /// </summary>
+    [Fact]
+    public void El_gasto_de_cobranza_escribe_la_operacion_Charge_por_el_registro()
+    {
+        var recorridos = ReglaSobreFuente.ArchivosEn(Carpetas).ToList();
+        var nombrados = ReglaSobreFuente.ArchivosNombrados(["Core/IngenIA365ERP.Application/Lending/Collections/Fees/CollectionFeeCommands.cs"]).ToList();
+        Assert.Single(nombrados);
+        var archivo = nombrados[0];
+        Assert.Contains(archivo, recorridos);
+        var fuente = FuenteSinComentarios.Leer(archivo);
+        Assert.Contains("LoanOperationKind.Charge", fuente);
+        Assert.Contains("registro.RegistrarOperacion(", fuente);
+        Assert.Contains("registro.RegistrarTransacciones(", fuente);
+        Assert.Contains("emision.GastoDeCobranzaAsync(", fuente);
     }
 }

@@ -137,8 +137,11 @@ public static class CarteraE2E
     /// <summary>Lo que deja <see cref="ActivarCarteraAsync"/>: la fecha de activación, la activación y la carga (vacía) activada.</summary>
     public sealed record CarteraActivadaE2E(DateOnly ActivationDate, Guid ActivationPublicId, Guid MigrationLoadPublicId, Guid SessionItemPublicId);
 
-    /// <summary>Opciones de <see cref="ActivarCarteraAsync"/>; por defecto registra los dobles <c>TST</c> y <c>TES</c>.</summary>
-    public sealed record OpcionesDeActivacion(bool RegistrarDobles = true, string Motivo = "Activación de Cartera para las e2e");
+    /// <summary>
+    /// Opciones de <see cref="ActivarCarteraAsync"/>; por defecto registra los dobles <c>TST</c> y <c>TES</c> y fija
+    /// <c>Contabilidad.FaltaDeRegla = Advertir</c> (<see cref="AdvertirSinReglaContableAsync"/>).
+    /// </summary>
+    public sealed record OpcionesDeActivacion(bool RegistrarDobles = true, string Motivo = "Activación de Cartera para las e2e", bool AdvertirSinRegla = true);
 
     private static readonly Dictionary<(CentralIdentityApiFixture, Guid), Task<CarteraActivadaE2E>> Activadas = [];
 
@@ -192,8 +195,9 @@ public static class CarteraE2E
         }
 
         if (opciones.RegistrarDobles) await RegistrarDoblesAsync(http, admin, corte);
+        if (opciones.AdvertirSinRegla) await AdvertirSinReglaContableAsync(http, admin, corte);
 
-        var alta = await ConClaveAsync(http, admin, HttpMethod.Post, "/api/lending/migration/loads", new { cutoffDate = corte, notes = "Sin cartera que migrar (e2e)" });
+        var alta =await ConClaveAsync(http, admin, HttpMethod.Post, "/api/lending/migration/loads", new { cutoffDate = corte, notes = "Sin cartera que migrar (e2e)" });
         alta.StatusCode.Should().Be(HttpStatusCode.Created, $"crear la carga: «{await alta.Content.ReadAsStringAsync()}»");
         var carga = (await LeerAsync(alta)).GetProperty("publicId").GetGuid();
 
@@ -231,6 +235,22 @@ public static class CarteraE2E
             adoptions = new[] { new { contract = "OrdenDeGiroEmitida", version = 1 }, new { contract = "AnulacionDeOrdenDeGiro", version = 1 } },
             validFrom = corte, reason = "Tesorería de prueba para las e2e de Cartera",
         });
+    }
+
+    /// <summary>
+    /// <c>Contabilidad.FaltaDeRegla = Advertir</c> desde <paramref name="desde"/>. El defecto es <c>Bloquear</c> (decisión del dueño del 2026-10-14) y
+    /// estas cooperativas inician la contabilidad sin cargar la matriz de Cartera: sin esto, todo desembolso respondería
+    /// <c>Lending.Prevalidation.NotPostable</c>. Las pruebas que recorren la matriz fijan <c>Bloquear</c> con su propia vigencia
+    /// (<c>ContabilizacionDeCarteraPorMensajesTests</c>). Si ya hay una vigencia desde esa fecha, no hace nada.
+    /// </summary>
+    public static async Task AdvertirSinReglaContableAsync(HttpClient http, string admin, DateOnly desde)
+    {
+        var resp = await ConClaveAsync(http, admin, HttpMethod.Post, "/api/lending/parameters/Contabilidad.FaltaDeRegla/versions", new
+        {
+            scopeKind = 0, value = "Advertir", validFrom = desde, reason = "Las e2e operan sin la matriz contable de Cartera completa",
+        });
+        if (resp.IsSuccessStatusCode) return;
+        (await CodigoDeErrorAsync(resp)).Should().Contain("Overlap", $"fijar Advertir: «{await resp.Content.ReadAsStringAsync()}»");
     }
 
     /// <summary>Registra un doble si no hay ya uno vigente con ese código (la cooperativa puede traerlo de una prueba anterior).</summary>

@@ -130,7 +130,7 @@ public static class DependencyInjection
         // Feature 013 (T0204): los documentos normativos de Cartera (Anexo 1 y regla de pérdida esperada); el Anexo 2 lo suma K6a.
         services.AddSingleton<Domain.Common.NationalValues.IValidadorDeDocumentoNormativo>(Lending.Risk.ValidadorDeDocumentoNormativoDeCartera.Anexo1);
         services.AddSingleton<Domain.Common.NationalValues.IValidadorDeDocumentoNormativo>(Lending.Risk.ValidadorDeDocumentoNormativoDeCartera.ReglaDePerdidaEsperada);
-        // US9 (T0691): el del Anexo 2 rechaza todo contenido hasta K6a.
+        // US9 (T0691): el del Anexo 2 rechaza todo contenido hasta K6a; desde K6a (T1025) lee el documento tipado.
         services.AddSingleton<Domain.Common.NationalValues.IValidadorDeDocumentoNormativo>(Lending.Risk.ValidadorDeDocumentoNormativoDeCartera.Anexo2);
         services.AddSingleton<Common.NationalValues.IEfectoDeReplicacion, Payroll.NationalValues.EfectoDeReplicacionEnNomina>();
         services.AddSingleton<Common.NationalValues.IEfectoDeReplicacion, Common.NationalValues.EfectoDeReplicacionLimitesLegales>();
@@ -244,6 +244,8 @@ public static class DependencyInjection
         // Feature 013, US1 (T0352–T0355): las reglas únicas de una versión de línea, su único escritor, el lector a (D, R) de la versión
         // vigente y el de las equivalencias de Comercial a la fecha de la venta.
         services.AddScoped<Lending.Configuration.ReglasDeLineaDeCredito>();
+        // K6b (T1051, T1055): los límites de vivienda y el tope de tasa de vivienda, para la línea, la solicitud y el desembolso.
+        services.AddScoped<Lending.Housing.LectorDeVivienda>();
         services.AddScoped<Lending.Configuration.AltaDeVersionDeLinea>();
         services.AddScoped<Lending.Configuration.VersionVigenteDeLinea>();
         services.AddScoped<Lending.Configuration.EquivalenciasDeComercio>();
@@ -528,6 +530,8 @@ public static class DependencyInjection
         services.AddScoped<Lending.Integration.FechaContable>();
         services.AddScoped<Lending.Integration.ModoDePasoDeCartera>();
         services.AddScoped<Lending.Integration.ValidacionPreviaContableDeCartera>();
+        // T0801 (A8 = «Bloquear todo», 2026-10-14): la validación previa de las tandas de los procesos.
+        services.AddScoped<Lending.Integration.ValidacionPreviaDeProceso>();
         // Feature 013, US7 (T0657, T0658): el puerto de las dimensiones de Cartera para Contabilidad (enmienda A1) y la conciliacion.
         services.AddScoped<Lending.Integration.SaldosContablesDeCartera>();
         services.AddScoped<Lending.Integration.ConciliacionContableDeCartera>();
@@ -566,6 +570,7 @@ public static class DependencyInjection
         services.AddScoped<Lending.Risk.PoliticaSarcVigente>();
         services.AddScoped<Lending.Risk.LectorDelContextoDeRiesgo>();
         services.AddScoped<Lending.Risk.CargadorDeRiesgo>();
+        services.AddScoped<Lending.Risk.CargadorDePerdidaEsperada>();
         services.AddScoped<Lending.Risk.CalificacionInformativa>();
         services.AddScoped<Lending.Risk.CalificacionDelCiclo>();
         services.AddScoped<Lending.Risk.RequisitosDelCierreMensual>();
@@ -575,6 +580,8 @@ public static class DependencyInjection
         services.AddScoped<Lending.Processes.IEjecutorDeCorridaDeCartera, Lending.Risk.EjecutorDelCierreMensual>();
         services.AddScoped<Lending.Processes.IEjecutorDeCorridaDeCartera, Lending.Risk.EjecutorDeLaReapertura>();
         services.AddScoped<Lending.Sessions.IAsuntoDeActa, Lending.Risk.AsuntoDeActaPoliticaSarc>();
+        // K6a (T1034): el cambio voluntario del modelo de deterioro como asunto del acta del consejo.
+        services.AddScoped<Lending.Sessions.IAsuntoDeActa, Lending.Risk.AsuntoDeActaCambioDelModelo>();
         services.AddScoped<Core.RegulatoryProfile.IEvaluadorDeObligacionDePerdidaEsperada, Lending.Risk.EvaluadorDeObligacionDePerdidaEsperada>();
         services.AddSingleton<Common.NationalValues.IEfectoDeReplicacion, Lending.Risk.EfectoDeReplicacionObligacionSobrevenida>();
         // Feature 013, US3 (bloque 7C, T0449) y US6 (T0586): Cartera como destino de la bandeja: ResultadoDelGiro v1 y la familia de Comercial
@@ -592,6 +599,29 @@ public static class DependencyInjection
         services.AddScoped<Lending.Disbursements.PromissoryNotes.DepositoDelPagare>();
         services.AddScoped<Lending.Disbursements.LoanDisbursementLines>();
         services.AddScoped<Lending.Disbursements.Files.PreparacionDeArchivoDeDesembolsos>();
+        // Feature 013, K2 (US10, bloque B): la libranza —convenios, el archivo de descuentos con el motor común y el seguimiento de los no aplicados—.
+        services.AddScoped<Lending.Payroll.ConveniosDeLibranza>();
+        services.AddScoped<Lending.Payroll.Agreements.AltaDeVersionDeConvenio>();
+        services.AddScoped<Lending.Payroll.Files.PayrollDeductionLines>();
+        services.AddScoped<Lending.Payroll.Files.PreparacionDeArchivoDeDescuentos>();
+        services.AddScoped<Lending.Payroll.Results.SeguimientoDeNoAplicados>();
+        // Feature 013, K3 (US11, bloque B): novedades (cálculo, enrutamiento, hechos, simulación, decisión individual y asunto de acta) y condonaciones.
+        services.AddScoped<Lending.Novelties.CalculoDeNovedad>();
+        services.AddScoped<Lending.Novelties.EnrutamientoDeNovedad>();
+        services.AddScoped<Lending.Novelties.HechosDeLaNovedad>();
+        services.AddScoped<Lending.Novelties.SimulacionDeNovedad>();
+        services.AddScoped<Lending.Novelties.DecisionSobreNovedad>();
+        services.AddScoped<Lending.Attributions.IDecisionIndividual>(sp => sp.GetRequiredService<Lending.Novelties.DecisionSobreNovedad>());
+        services.AddScoped<Lending.Sessions.IAsuntoDeActa, Lending.Novelties.AsuntoDeNovedad>();
+        services.AddScoped<Lending.Waivers.CondonacionesDeCartera>();
+        services.AddScoped<Lending.Waivers.DecisionSobreCondonacion>();
+        services.AddScoped<Lending.Attributions.IDecisionIndividual>(sp => sp.GetRequiredService<Lending.Waivers.DecisionSobreCondonacion>());
+        services.AddScoped<Lending.Sessions.IAsuntoDeActa, Lending.Waivers.AsuntoDeCondonacion>();
+        // Feature 013, K3 (US14, bloque B): el castigo (verificación, lote y su asunto de acta del consejo) y la evaluación de cartera (comité y consejo).
+        services.AddScoped<Lending.WriteOffs.CastigosDeCartera>();
+        services.AddScoped<Lending.Common.NormaPendienteDeCartera>();
+        services.AddScoped<Lending.Sessions.IAsuntoDeActa, Lending.WriteOffs.AsuntoDeLoteDeCastigo>();
+        services.AddScoped<Lending.Sessions.IAsuntoDeActa, Lending.Risk.Evaluations.AsuntoDeEvaluacionDeCartera>();
         services.AddScoped<Inventory.Sales.CreditoEnLaVenta>();
         services.AddScoped<Inventory.Sales.CreditosAprobadosEnCurso>();
         services.AddScoped<Inventory.Sales.AprobacionDeCredito>();
@@ -692,6 +722,17 @@ public static class DependencyInjection
         // Feature 013 (T0306, C108): la cola de mensajes al deudor, único escritor de LND_DebtorMessages y LND_DebtorMessageEvents. Nunca
         // guarda: encola en la unidad de trabajo de quien lo motiva. Sus tareas (cartera.mensajes, cartera.entregas) las registra Program.cs.
         services.AddScoped<Lending.Collections.ColaDeMensajesAlDeudor>();
+        // Feature 013, K4 (T0943, T0944): el paso (7) del ciclo diario —la cobranza— y el ejecutor de la corrida que registra la etapa migrada (C64).
+        services.AddScoped<Lending.Collections.CobranzaDelCicloDiario>();
+        services.AddScoped<Lending.Processes.IEjecutorDeCorridaDeCartera, Lending.Collections.Stages.EjecutorDeEtapasMigradas>();
+        // Feature 013, K5 (T0999): los layouts del SICSES y de las centrales se cargan y validan aquí, al componer: un JSON mal formado
+        // impide arrancar (adaptadores-y-archivos.md §7.2).
+        services.AddSingleton(Lending.Regulatory.CatalogoDeLayoutsDeCartera.Embebido);
+        // Feature 013, K5 (T1002–T1004): las proyecciones del SICSES y de las centrales, la preparación común y la generación.
+        services.AddScoped<Lending.Regulatory.ProyeccionSicsesCartera>();
+        services.AddScoped<Lending.Regulatory.ProyeccionCentralDeRiesgo>();
+        services.AddScoped<Lending.Regulatory.PreparacionDeArchivoRegulatorio>();
+        services.AddScoped<Lending.Regulatory.GeneracionDeArchivoRegulatorio>();
 
         // Feature 013 (T0087): la carga vigente de CARGA-PROPIA se lee de COR_RestrictiveListLoads/Entries.
         services.TryAddScoped<Common.Compliance.ICargaDeListasRestrictivas, Compliance.RestrictiveLists.CargaDeListasRestrictivasEnBase>();

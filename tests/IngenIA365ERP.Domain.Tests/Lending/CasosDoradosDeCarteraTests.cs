@@ -54,6 +54,78 @@ public class CasosDoradosDeCarteraTests
         ]);
     }
 
+    /// <summary>
+    /// K2, T0804 (T30, FR-114): los casos del pendiente de giro —dentro del umbral sellado la cuota descontada no cuenta para la altura ni
+    /// causa mora; superado, cuenta desde su vencimiento; girada con fecha valor del descuento, queda pagada en esa fecha sin mora ni ajuste—.
+    /// </summary>
+    [Fact]
+    public void Estan_los_casos_del_pendiente_de_giro_de_K2()
+    {
+        CasoDoradoDeCartera.Archivos().Select(Path.GetFileNameWithoutExtension).Should().Contain(
+            ["k2-pendiente-de-giro-umbral", "k2-pendiente-de-giro-girado"]);
+    }
+
+    /// <summary>
+    /// K2, T0804: dentro del umbral la cuota descontada no cambia la calificación diaria (la altura del día no la cuenta); al superarlo, la
+    /// altura es la de su vencimiento. Se mira con la reconstrucción del caso, sin la hoja: lo que el caso fija al centavo lo compara la teoría.
+    /// </summary>
+    [Fact]
+    public void Dentro_del_umbral_la_cuota_descontada_no_cuenta_y_fuera_cuenta_desde_su_vencimiento()
+    {
+        var caso = CasoDoradoDeCartera.Cargar(Path.Combine(CasoDoradoDeCartera.DirectorioDeCasos, "k2-pendiente-de-giro-umbral.json"));
+        EstadoDelCredito A(string dia) => MotorDeCartera.Reconstruir(
+            caso.Entrada(caso.Condiciones, caso.Operaciones, DateTime.Parse(dia + "T23:00:00Z").ToUniversalTime()), DateOnly.Parse(dia));
+        var sinElResultado = caso.Entrada(caso.Condiciones, caso.Operaciones, DateTime.Parse("2026-12-20T23:00:00Z").ToUniversalTime()) with
+        {
+            PendientesDeGiro = [],
+        };
+
+        A("2026-12-20").AlturaDeMora.Dias.Should().Be(0, "la pagaduría está dentro de la ventana: el deudor no tiene mora");
+        MotorDeCartera.Reconstruir(sinElResultado, DateOnly.Parse("2026-12-20")).AlturaDeMora.Dias.Should().Be(15, "sin el resultado, la cuota cuenta");
+        A("2027-01-07").AlturaDeMora.CuotaMasAntigua.Should().Be(2, "la cuota 1 sigue dentro del umbral el día 30 de mora de la pagaduría");
+        A("2027-01-08").AlturaDeMora.Should().Be(new Domain.Lending.Delinquency.ResultadoDeAlturaDeMora(34, 1, 2), "superado el umbral cuenta desde su vencimiento");
+    }
+
+    /// <summary>
+    /// K3, T0858 (T29, FR-090, FR-091): el plan de una novedad —prórroga con capitalización, cambio de fecha, cambio de tasa topado por la usura,
+    /// refinanciación que recoge dos créditos y novación— regenerado desde la fecha de la decisión con las reglas vigentes.
+    /// </summary>
+    /// <summary>
+    /// K3, T0874 (cierre del hueco): la prórroga con capitalización y la novación también se <b>reconstruyen</b> —el libro de la capitalización, del
+    /// traslado al enlazado y del enlazado que nace cuadra con sus saldos (lo comprueba cada consulta)—, no sólo se simula su plan.
+    /// </summary>
+    [Fact]
+    public void Las_novedades_de_K3_se_reconstruyen_y_su_libro_cuadra()
+    {
+        var prorroga = CasoDoradoDeCartera.Cargar(Path.Combine(CasoDoradoDeCartera.DirectorioDeCasos, "k3-prorroga-con-capitalizacion.json"));
+        prorroga.Consultas.Should().NotBeEmpty();
+        prorroga.Consultas[0].Esperado!.Libro!.Should().Contain(f => f.Clase == LoanTransactionKind.Capitalization && f.Concepto == LoanConcept.Principal);
+        var novacion = CasoDoradoDeCartera.Cargar(Path.Combine(CasoDoradoDeCartera.DirectorioDeCasos, "k3-novacion.json"));
+        novacion.Consultas[0].Esperado!.Libro!.Should().Contain(f => f.Clase == LoanTransactionKind.TransferToLinkedLoan);
+        novacion.Variantes.Should().ContainSingle(v => v.Nombre == "enlazado").Which.Consultas!.Single().Esperado!.Libro!
+            .Should().Contain(f => f.Clase == LoanTransactionKind.TransferFromLinkedLoan);
+    }
+
+    [Fact]
+    public void Estan_los_casos_de_novedades_de_K3()
+    {
+        CasoDoradoDeCartera.Archivos().Select(Path.GetFileNameWithoutExtension).Should().Contain(
+            ["k3-prorroga-con-capitalizacion", "k3-cambio-de-fecha", "k3-cambio-de-tasa-usura", "k3-refinanciacion-dos-creditos", "k3-novacion"]);
+    }
+
+    /// <summary>
+    /// K3 (US14, T0908): el castigo suspende la causación desde el día siguiente a su fecha —el día del castigo todavía causa normal y la transición
+    /// a suspenso es del día siguiente—.
+    /// </summary>
+    [Fact]
+    public void Esta_el_caso_del_castigo_de_K3_y_suspende_desde_el_dia_siguiente()
+    {
+        var caso = CasoDoradoDeCartera.Cargar(Path.Combine(CasoDoradoDeCartera.DirectorioDeCasos, "k3-castigo-suspende-al-dia-siguiente.json"));
+        caso.Consultas.Should().HaveCount(3);
+        caso.Consultas[0].Esperado!.Suspendida.Should().BeFalse("el día del castigo causa normal");
+        caso.Consultas[1].Esperado!.Suspendida.Should().BeTrue("desde el día siguiente, en suspenso");
+    }
+
     [Theory]
     [MemberData(nameof(Casos))]
     public void El_caso_coincide_con_la_hoja_de_calculo(string archivo)
@@ -89,6 +161,10 @@ public class CasosDoradosDeCarteraTests
                 plan.Explicacion.Lineas.Should().Contain(l => l.Contains("redondeada a 18 decimales"));
             }
         }
+
+        foreach (var novedad in caso.Novedades)
+            using (new AssertionScope($"{caso.Nombre} · novedad {novedad.Nombre}"))
+                CompararNovedad(caso, novedad);
 
         foreach (var (nombre, condiciones, operaciones, operacion) in caso.OperacionesConEsperado())
             using (new AssertionScope($"{nombre} · operación {operacion.Id}"))
@@ -139,14 +215,14 @@ public class CasosDoradosDeCarteraTests
         for (var d = marca.AddDays(1); d <= consulta.Fecha; d = d.AddDays(1))
         {
             var r = MotorDeCartera.Causar(entrada, d.AddDays(-1), d);
-            r.Causo.Should().BeTrue($"el {d:yyyy-MM-dd} tiene usura certificada");
+            r.Causo.Should().BeTrue($"el {d:yyyy-MM-dd} tiene usura certificada (y, en UVR, UVR publicada)");
             filas.AddRange(r.Filas);
         }
         Filas(filas).Should().Equal(Filas(e.Causacion ?? []), "causación día a día desde la marca");
 
         // Lo causado de a un día es lo que la reconstrucción pone en el libro esos días.
         var libro = MotorDeCartera.Reconstruir(entrada, consulta.Fecha, marca.AddDays(1)).Libro.Movimientos
-            .Where(m => m.Clase == LoanTransactionKind.Accrual);
+            .Where(m => m.Clase is LoanTransactionKind.Accrual or LoanTransactionKind.MonetaryCorrection);
         Filas(libro).Should().Equal(Filas(filas));
     }
 
@@ -200,6 +276,23 @@ public class CasosDoradosDeCarteraTests
             foreach (var p in e.Pagos) CompararDistribucion(estado.Pagos[p.Id], p, $"pago {p.Id}");
         }
 
+        // K6b (T1042): la valoración de un crédito en UVR —la UVR del día (y si es proyectada), los saldos y el valor para cancelar en UVR— y la versión
+        // de reglas de vivienda.
+        estado.RulesVersion.Should().Be(condiciones.RulesVersion, "el crédito se calcula con su versión de reglas sellada");
+        if (condiciones.Unidad == DenominationUnit.Uvr)
+        {
+            estado.Uvr.Should().NotBeNull("un crédito en UVR se valora en pesos con la UVR del día");
+            estado.Uvr!.Valor.Should().Be(e.UvrDelDia, "UVR del día");
+            estado.Uvr.Proyectada.Should().Be(e.UvrProyectada ?? false, "UVR proyectada sólo para mostrar");
+            estado.Uvr.Estado.SaldosPorConcepto.ToDictionary(s => s.Key.ToString(), s => s.Value).Should()
+                .BeEquivalentTo(e.SaldosEnUvr ?? [], "saldos en UVR por concepto");
+            estado.Uvr.Estado.ValorParaCancelar.Should().Be(e.ValorParaCancelarEnUvr, "valor para cancelar en UVR");
+        }
+        else
+        {
+            estado.Uvr.Should().BeNull("un crédito en pesos no lleva valoración en UVR");
+        }
+
         // Σ libro teórico desde el origen = saldos del estado por concepto y cuota (el capital sin cuota, por total).
         var completo = MotorDeCartera.Reconstruir(entrada, consulta.Fecha, estado.Origen);
         foreach (var grupo in completo.Libro.Movimientos.GroupBy(m => m.Concepto))
@@ -216,7 +309,7 @@ public class CasosDoradosDeCarteraTests
 
         // La huella se repite, y no depende del orden en que llegan las operaciones.
         completo.Huella.Should().Be(estado.Huella).And.MatchRegex("^[0-9a-f]{64}$");
-        completo.TextoCanonico.Should().StartWith(VersionesDeReglas.Vigente + "|");
+        completo.TextoCanonico.Should().StartWith(condiciones.RulesVersion + "|");
         var alReves = entrada with { Operaciones = entrada.Operaciones.Reverse().ToList() };
         MotorDeCartera.Reconstruir(alReves, consulta.Fecha).Huella.Should().Be(estado.Huella, "la huella no depende del orden de EF");
     }
@@ -289,6 +382,37 @@ public class CasosDoradosDeCarteraTests
         d.PlanNuevo.TotalInteres.Should().Be(e.PlanNuevo.Totales.Interes, $"{donde}: Σ interés del plan nuevo");
     }
 
+    /// <summary>
+    /// K3 (T0858): el plan de la novedad cuota a cuota con su numeración, Σ capital = saldo + recogido + capitalizado (los costos no entran),
+    /// la versión de reglas vigente y el veredicto de la usura vigente a la fecha de la decisión.
+    /// </summary>
+    private static void CompararNovedad(CasoDoradoDeCartera caso, CasoDoradoDeCartera.NovedadJson n)
+    {
+        var e = n.Esperado;
+        var entrada = n.Entrada(caso.Condiciones);
+        var (plan, usura) = MotorDeCartera.SimularNovedad(entrada, caso.UsuraA(caso.Condiciones.Modalidad, n.Fecha));
+
+        plan.RulesVersion.Should().Be(VersionesDeReglas.Vigente, "se regenera con las reglas vigentes");
+        plan.PrimeraCuotaRegenerada.Should().Be(e.PrimeraCuota, "primera cuota del plan nuevo");
+        plan.Entrada.FechaDesembolso.Should().Be(n.Fecha, "desde la fecha de la decisión");
+        plan.TasaDiaria.Should().Be(e.Tasas.Diaria, "tasa diaria");
+        plan.TasaNominalDelPeriodo.Should().Be(e.Tasas.NominalDelPeriodo, "nominal del período");
+        plan.CuotaNivelada.Should().Be(e.Tasas.CuotaNivelada, "cuota nivelada");
+        plan.ResiduoDeLaUltimaCuota.Should().Be(e.Plan.Residuo, "residuo");
+        CompararCuotas(plan.Cuotas, e.Plan.Cuotas);
+
+        var capital = n.SaldoDeCapital + n.SaldosRecogidos.Sum() + n.InteresCapitalizado;
+        e.Capital.Should().Be(capital, "la hoja suma saldo, recogido y capitalizado");
+        plan.TotalCapital.Should().Be(capital, "Σ capital del plan nuevo = saldo + recogido + capitalizado; los costos no entran");
+        if (n.Costos > 0m) plan.TotalCapital.Should().NotBe(capital + n.Costos, "los costos no se trasladan al deudor (FR-091)");
+        plan.TotalInteres.Should().Be(e.Plan.Totales.Interes, "total de interés");
+
+        decimal.Round(usura.EfectivaSinCargos, 6).Should().Be(e.Tasas.EfectivaSinCargos, "efectiva");
+        usura.Veredicto.Should().Be(e.Usura.Veredicto, "veredicto de la usura vigente a la decisión");
+        usura.Usura.Should().Be(e.Usura.Usura, "usura usada");
+        (usura.Holgura is { } h ? decimal.Round(h, 6) : (decimal?)null).Should().Be(e.Usura.Holgura, "holgura");
+    }
+
     private static void CompararCuotas(IReadOnlyList<Domain.Lending.Schedules.CuotaDelPlan> reales, IReadOnlyList<CasoDoradoDeCartera.CuotaJson> esperadas)
     {
         reales.Should().HaveCount(esperadas.Count, "número de cuotas");
@@ -305,9 +429,12 @@ public class CasosDoradosDeCarteraTests
         }
     }
 
-    private static List<(DateOnly, LoanConcept, int?, decimal)> Filas(IEnumerable<MovimientoDeLibro> filas) =>
-        filas.Select(f => (f.Dia, f.Concepto, f.Cuota, f.Monto)).OrderBy(f => f.Dia).ThenBy(f => (int)f.Concepto).ThenBy(f => f.Cuota ?? 0).ToList();
+    // K6b (T1042): con la clase, porque un crédito en UVR causa en el mismo día y clave su interés y su corrección monetaria.
+    private static List<(DateOnly, LoanTransactionKind, LoanConcept, int?, decimal)> Filas(IEnumerable<MovimientoDeLibro> filas) =>
+        filas.Select(f => (f.Dia, f.Clase, f.Concepto, f.Cuota, f.Monto))
+            .OrderBy(f => f.Dia).ThenBy(f => (int)f.Concepto).ThenBy(f => f.Cuota ?? 0).ThenBy(f => (int)f.Clase).ToList();
 
-    private static List<(DateOnly, LoanConcept, int?, decimal)> Filas(IEnumerable<CasoDoradoDeCartera.FilaDeLibroJson> filas) =>
-        filas.Select(f => (f.Dia, f.Concepto, f.Cuota, f.Valor)).OrderBy(f => f.Dia).ThenBy(f => (int)f.Concepto).ThenBy(f => f.Cuota ?? 0).ToList();
+    private static List<(DateOnly, LoanTransactionKind, LoanConcept, int?, decimal)> Filas(IEnumerable<CasoDoradoDeCartera.FilaDeLibroJson> filas) =>
+        filas.Select(f => (f.Dia, Clase: f.Clase ?? LoanTransactionKind.Accrual, f.Concepto, f.Cuota, f.Valor))
+            .OrderBy(f => f.Dia).ThenBy(f => (int)f.Concepto).ThenBy(f => f.Cuota ?? 0).ThenBy(f => (int)f.Clase).ToList();
 }

@@ -131,6 +131,7 @@ builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.CuposClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.DesembolsosClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.GarantiasClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.ArchivosDeDesembolsoClient>();
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.LibranzaClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.DoblesDePruebaClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.CreditosClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.CorridasDeCarteraClient>();
@@ -138,6 +139,9 @@ builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.CorridasDeCarte
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.MensajesRecibidosClient>();
 // Feature 013, US5 (T0561): pagos por pantalla (simular, reversar, preferencia del deudor).
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.PagosClient>();
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.NovedadesClient>();
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.CobranzaClient>();
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.CastigosClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.IImpresionDeDocumentos, IngenIA365ERP.Shared.Services.ImpresionEnElNavegador>();
 // Feature 009: cliente tipado de contabilidad (mismo molde que NominaClient).
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Contabilidad.ContabilidadClient>();
@@ -151,6 +155,8 @@ builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.CarteraClient>(
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.RiesgoClient>();
 // Feature 013, US15 (T0799): el centro de informes de Cartera.
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.InformesDeCarteraClient>();
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.TableroDeCarteraClient>();
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.RegulatorioDeCarteraClient>();
 // Feature 011: adjuntos (subida y descarga directas al almacén; el archivo no pasa por .NET).
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Adjuntos.AdjuntosClient>();
 // Feature 008 — permisos efectivos del usuario en la cooperativa activa (PermissionGate).

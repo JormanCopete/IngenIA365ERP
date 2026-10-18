@@ -20,7 +20,12 @@ public sealed class RecaudadorDePrueba : IDestinoDeMensajes
     /// <summary>La clave que propone la pantalla: <c>TST:{guid:N}</c> (C35).</summary>
     public static string Clave(Guid guid) => $"{ClavesDeRecaudador.Prueba}:{guid:N}";
 
-    private static readonly HashSet<(string Type, int Version)> Aceptados = [(PagoReversadoPorCarteraV1.Type, 1)];
+    private static readonly HashSet<(string Type, int Version)> Aceptados =
+    [
+        (PagoReversadoPorCarteraV1.Type, 1),
+        // K2 (T0847): el archivo de descuentos de una pagaduría; lo que se hace con él lo ordena quien prueba (confirmar el envío, cargar la respuesta).
+        (DescuentosPorPagaduriaV1.Type, 1),
+    ];
 
     public string Destino => IntegrationDestinations.Receipts;
 

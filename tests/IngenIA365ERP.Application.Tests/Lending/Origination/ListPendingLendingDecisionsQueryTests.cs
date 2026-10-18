@@ -34,7 +34,8 @@ public sealed class ListPendingLendingDecisionsQueryTests : IAsyncLifetime
 
     private async Task<IReadOnlyList<PendingLendingDecisionDto>> PendientesAsync(string? sujeto = null)
     {
-        var r = await new ListPendingLendingDecisionsQueryHandler(_o.Db, _o.Atribucion(), _o.G.Intervenciones(), _o.G.Alcance, _o.G.Actor, _o.G.Reloj)
+        var r = await new ListPendingLendingDecisionsQueryHandler(_o.Db, _o.Atribucion(), _o.G.Intervenciones(), _o.G.Alcance,
+                new Application.Lending.Waivers.CondonacionesDeCartera(_o.Db, new MatrizVigenteDeAtribuciones(_o.Db), _o.G.Reloj), _o.G.Actor, _o.G.Reloj)
             .Handle(new ListPendingLendingDecisionsQuery(sujeto), default);
         r.IsSuccess.Should().BeTrue(r.IsFailure ? r.Error.Message : string.Empty);
         return r.Value.Items;

@@ -50,6 +50,9 @@ public sealed record PedidoDeMensajeAlDeudor(
     public int? PriorNoticeId { get; init; }
     public int? IssuedDocumentId { get; init; }
     public int? InstallmentNonDeductionId { get; init; }
+
+    /// <summary>K4 (T0949): la campaña que lo programa (<c>LND_DebtorMessages.CampaignId</c>).</summary>
+    public int? CampaignId { get; init; }
 }
 
 /// <summary>El mensaje que quedó en la unidad de trabajo, con su evento vigente; <see cref="Repetido"/> si la clave ya existía. (nuevo)</summary>
@@ -66,6 +69,12 @@ public sealed record ConsultaDeVentana(int PersonId, int? LoanId, MessageChannel
     /// no es deudora: cuenta como obligada sólo para ese mensaje, que respeta igual la ventana, la autorización de canal y el tope diario.
     /// </summary>
     public bool PersonaSimulada { get; init; }
+
+    /// <summary>
+    /// K4 (T0945): se evalúa en el instante pedido y no en el de ahora —una gestión que ya ocurrió se juzga en su momento, aunque se registre
+    /// minutos después—.
+    /// </summary>
+    public bool EnElInstantePedido { get; init; }
 }
 
 /// <summary>
@@ -214,6 +223,7 @@ public sealed class ColaDeMensajesAlDeudor(
             PriorNoticeId = pedido.PriorNoticeId,
             IssuedDocumentId = pedido.IssuedDocumentId,
             InstallmentNonDeductionId = pedido.InstallmentNonDeductionId,
+            CampaignId = pedido.CampaignId,
             AuthorizationConsentPublicId = sinAutorizacionDeCanal ? null : ventana.AutorizacionPublicId,
             IsManualImmediate = pedido.Inmediato,
             ScheduledFor = pedido.ProgramadoPara is null ? null : pedidoUtc,
@@ -250,6 +260,53 @@ public sealed class ColaDeMensajesAlDeudor(
             await RegistrarAsync(mensaje, new EventoDeMensaje(DebtorMessageEventKind.Cancelled, reloj.UtcNow, actorKind, actorUserId)
             {
                 CodigoDeMotivo = MotivoCausaReversada,
+                TextoDelMotivo = Recortar(motivo.Trim(), LargoDelTexto),
+            }, ct);
+            canceladas++;
+        }
+        return canceladas;
+    }
+
+    /// <summary>¿Hay una reclamación al seguro en trámite por el deudor fallecido (o por el crédito)? (T0886)</summary>
+    private Task<bool> ReclamacionEnTramiteAsync(int deudorId, int? loanId, CancellationToken ct) =>
+        DebtorEvents.ReclamacionesEnTramite.HayAsync(db, deudorId, loanId, ct);
+
+    /// <summary>¿Alguna de las personas está en negociación de insolvencia a <paramref name="dia"/>? (T0886)</summary>
+    private Task<bool> InsolvenciaEnNegociacionAsync(int[] personas, DateOnly dia, CancellationToken ct) =>
+        db.InsolvencyProceedings.AsNoTracking().AnyAsync(p => !p.IsDeleted && personas.Contains(p.PersonId)
+                                                              && p.Status == InsolvencyProceedingStatus.Negotiating && p.StartDate <= dia, ct);
+
+    /// <summary>El motivo con que un evento del deudor (fallecimiento o insolvencia, K3) cancela sus mensajes de cobro.</summary>
+    public const string MotivoEventoDelDeudor = "DebtorEvent";
+
+    /// <summary>
+    /// Un evento del deudor que suspende el cobro (feature 013, K3, T0885; FR-097, FR-098): los mensajes de cobro, de aviso previo y de gasto de
+    /// cobranza que todavía no salieron (<c>Queued</c> o <c>Deferred</c>) de los créditos de <paramref name="loanIds"/> —a cualquier destinatario— o
+    /// dirigidos al deudor se cancelan en la unidad de trabajo del evento, sin guardar. Los informativos y la entrega de documentos siguen. Devuelve
+    /// cuántos canceló.
+    /// </summary>
+    public async Task<int> CancelarCobrosDelDeudorAsync(int deudorId, IReadOnlyCollection<int> loanIds, string motivo, ActorKind actorKind,
+        int? actorUserId, CancellationToken ct)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(motivo);
+        var creditos = loanIds.Distinct().ToArray();
+        DebtorMessagePurpose[] decobro = [DebtorMessagePurpose.Collection, DebtorMessagePurpose.PriorNotice, DebtorMessagePurpose.CollectionFeeNotice];
+        var guardados = await db.DebtorMessages
+            .Where(m => decobro.Contains(m.Purpose) && (m.PersonId == deudorId || (m.LoanId != null && creditos.Contains(m.LoanId.Value))))
+            .ToListAsync(ct);
+        var mensajes = guardados
+            .Concat(db.DebtorMessages.Local.Where(m => decobro.Contains(m.Purpose)
+                                                       && (m.PersonId == deudorId || (m.LoanId is { } l && creditos.Contains(l)))))
+            .Distinct()
+            .ToList();
+        var canceladas = 0;
+        foreach (var mensaje in mensajes)
+        {
+            var ultimo = await UltimoEventoAsync(mensaje, ct);
+            if (ultimo?.Kind is not (DebtorMessageEventKind.Queued or DebtorMessageEventKind.Deferred)) continue;
+            await RegistrarAsync(mensaje, new EventoDeMensaje(DebtorMessageEventKind.Cancelled, reloj.UtcNow, actorKind, actorUserId)
+            {
+                CodigoDeMotivo = MotivoEventoDelDeudor,
                 TextoDelMotivo = Recortar(motivo.Trim(), LargoDelTexto),
             }, ct);
             canceladas++;
@@ -296,12 +353,36 @@ public sealed class ColaDeMensajesAlDeudor(
     /// La decisión de la ventana legal para una consulta, sin escribir nada (la usan el encolado, el despacho y <c>contact-window</c>). Un
     /// límite legal sin replicar responde <c>NationalValues.Missing</c>: sin techo no se contacta (T40).
     /// </summary>
-    public async Task<Result<VentanaDeContacto>> EvaluarAsync(ConsultaDeVentana consulta, CancellationToken ct)
+    public Task<Result<VentanaDeContacto>> EvaluarAsync(ConsultaDeVentana consulta, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(consulta);
+        return EvaluarConAsync(consulta, (solicitud, reglas, historial, titular) => VentanaLegalDeContacto.Evaluar(solicitud, reglas, historial, titular), ct);
+    }
+
+    /// <summary>
+    /// K4 (T0945; §4.8; Ley 2300): la decisión de la ventana para una <b>gestión</b> que ya ocurrió en <paramref name="ocurrioUtc"/>, juzgada en ese
+    /// instante. Si la gestión fue por un canal de mensaje (correo, SMS, WhatsApp, carta), es la del mensaje de cobranza inmediato por ese canal; si
+    /// fue una llamada, una visita o una atención en persona, la de <see cref="VentanaLegalDeContacto.EvaluarGestion"/> (horario y, con contacto
+    /// directo, el tope del día y el canal de la semana). Sin escribir nada.
+    /// </summary>
+    public Task<Result<VentanaDeContacto>> EvaluarGestionAsync(int personId, int? loanId, CollectionActionChannel canal, bool contactoDirecto,
+        DateTime ocurrioUtc, CancellationToken ct)
+    {
+        if (CanalDeMensaje(canal) is { } mensaje)
+            return EvaluarAsync(new ConsultaDeVentana(personId, loanId, mensaje, DebtorMessagePurpose.Collection, ocurrioUtc, true) { EnElInstantePedido = true },
+                ct);
+        return EvaluarConAsync(new ConsultaDeVentana(personId, loanId, MessageChannel.Letter, DebtorMessagePurpose.Collection, ocurrioUtc, true)
+        {
+            EnElInstantePedido = true,
+        }, (solicitud, reglas, historial, titular) => VentanaLegalDeContacto.EvaluarGestion(solicitud.Pedido, canal, contactoDirecto, reglas, historial, titular), ct);
+    }
+
+    private async Task<Result<VentanaDeContacto>> EvaluarConAsync(ConsultaDeVentana consulta,
+        Func<SolicitudDeContacto, ReglasDeContacto, HistorialDeContactos, EstadoDelTitular, DecisionDeContacto> decidir, CancellationToken ct)
+    {
         var desfase = reloj.AhoraLocal.Offset;
-        var ahoraLocal = ALocal(reloj.UtcNow, desfase);
         var pedidoLocal = ALocal(DateTime.SpecifyKind(consulta.PedidoUtc, DateTimeKind.Utc), desfase);
+        var ahoraLocal = consulta.EnElInstantePedido ? pedidoLocal : ALocal(reloj.UtcNow, desfase);
         var dia = DateOnly.FromDateTime(pedidoLocal > ahoraLocal ? pedidoLocal : ahoraLocal);
         var lunes = InicioDeSemana(dia);
 
@@ -329,17 +410,16 @@ public sealed class ColaDeMensajesAlDeudor(
             AutorizacionGeneral = general is { Autoriza: true },
             AutorizacionGeneralConEvidencia = general is { Autoriza: true, HasEvidence: true },
             Destinos = Enum.GetValues<MessageChannel>().Where(c => DestinoDe(persona, c) is not null).ToList(),
-            // Hasta que existan las reclamaciones al seguro (T102), la marca de fallecido del deudor basta: ante la duda, lo más estricto.
-            DeudorFallecidoConReclamacion = deudor?.IsDeceased == true,
-            EnInsolvencia = persona.IsInsolvent,
+            // La marca de fallecido del deudor o una reclamación al seguro en trámite (migrada o registrada en K3, T0886): ante la duda, lo más estricto.
+            DeudorFallecidoConReclamacion = deudor?.IsDeceased == true || await ReclamacionEnTramiteAsync(deudor?.Id ?? persona.Id, consulta.LoanId, ct),
+            EnInsolvencia = persona.IsInsolvent || await InsolvenciaEnNegociacionAsync([persona.Id, deudor?.Id ?? persona.Id], dia, ct),
         };
 
         var reglas = await ReglasAsync(dia, ct);
         if (reglas.IsFailure) return Result.Failure<VentanaDeContacto>(reglas.Error);
         var historial = await HistorialAsync(consulta.PersonId, lunes, dia, desfase, consulta.SinElMensaje, ct);
 
-        var decision = VentanaLegalDeContacto.Evaluar(
-            new SolicitudDeContacto(pedidoLocal, consulta.Channel, consulta.Purpose, consulta.Inmediato) { Ahora = ahoraLocal },
+        var decision = decidir(new SolicitudDeContacto(pedidoLocal, consulta.Channel, consulta.Purpose, consulta.Inmediato) { Ahora = ahoraLocal },
             reglas.Value, historial, titular);
         var canalDeLaSemana = historial.Contactos
             .Where(c => c.FijaCanalSemanal && InicioDeSemana(DateOnly.FromDateTime(c.En)) == lunes)
@@ -556,7 +636,7 @@ public sealed class ColaDeMensajesAlDeudor(
     /// <summary>
     /// Los contactos del titular que cuentan para la ventana (§4.5): cada mensaje una vez, por el primer evento que dice que salió —<c>Sent</c>,
     /// <c>Delivered</c> y, fuera de producción, <c>Simulated</c>—, desde el lunes de la semana pedida hasta los días que el motor busca. K4
-    /// suma las gestiones con contacto directo.
+    /// suma las gestiones con contacto directo que nadie anuló (T0938, <c>HistorialDeContactos.Componer</c>).
     /// </summary>
     private async Task<HistorialDeContactos> HistorialAsync(int personId, DateOnly lunes, DateOnly dia, TimeSpan desfase, int? sinElMensaje,
         CancellationToken ct)
@@ -578,7 +658,62 @@ public sealed class ColaDeMensajesAlDeudor(
             .OrderBy(f => f.OccurredAt)
             .Select(f => ContactoRegistrado.DeMensaje(ALocal(DateTime.SpecifyKind(f.OccurredAt, DateTimeKind.Utc), desfase), f.Channel, f.Purpose))
             .ToList();
-        return new HistorialDeContactos(contactos);
+
+        // K4 (T0938, §4.8): las gestiones del titular en la ventana —las directas y las que anulan otra, para descontar las anuladas—.
+        var gestiones = await db.CollectionActions.AsNoTracking()
+            .Where(a => a.PersonId == personId && a.OccurredAt >= desdeUtc && a.OccurredAt < hastaUtc
+                        && (a.IsDirectContact || a.VoidsActionId != null))
+            .Select(a => new { a.Id, a.OccurredAt, a.Channel, a.IsDirectContact, a.VoidsActionId })
+            .ToListAsync(ct);
+        // Una corrección es posterior a lo que corrige y la ventana llega hasta 15 días adelante: las que anulan algo de la ventana están en ella.
+        var paraHistorial = gestiones
+            .Select(a => new GestionParaHistorial(a.Id, ALocal(DateTime.SpecifyKind(a.OccurredAt, DateTimeKind.Utc), desfase), a.Channel,
+                a.IsDirectContact, a.VoidsActionId))
+            .ToList();
+        return HistorialDeContactos.Componer(contactos, paraHistorial);
+    }
+
+    /// <summary>¿Hay plantilla vigente de ese código, canal y propósito? (K4: el envío de cobranza prueba canales.)</summary>
+    public async Task<bool> HayPlantillaAsync(string templateCode, MessageChannel canal, DebtorMessagePurpose proposito, CancellationToken ct) =>
+        await PlantillaVigenteAsync(templateCode, canal, reloj.HoyLocal, ct) is { } t && string.Equals(t.Purpose, proposito.ToString(), StringComparison.Ordinal);
+
+    /// <summary>El código del canal sellado en la carta de aviso previo registrada a mano con su guía (K4, T0950): no es simulado.</summary>
+    public const string CanalDeCartaManual = "CARTA-MANUAL";
+
+    /// <summary>
+    /// K4 (T0950; data-model §26.11; adaptadores-y-archivos.md §5.3): la carta de un aviso previo enviada por correo físico, registrada a mano con la
+    /// guía adjunta. Nace como mensaje <c>Letter</c> de propósito <c>PriorNotice</c>, sin plantilla, con el canal <see cref="CanalDeCartaManual"/>, y su
+    /// historia es <c>Queued</c> y <c>Sent</c> en el instante del envío, con la guía (<c>LendingPriorNoticeEvidence</c>) como artefacto y la
+    /// transportadora y el número de guía como referencia. La cola sigue siendo el único escritor; no guarda.
+    /// </summary>
+    public DebtorMessage RegistrarCartaDeAviso(PriorNotice aviso, ContactRole rol, int comunicacion, DateTime enviadaUtc, string transportadora, string guia,
+        Guid adjunto, int usuarioId, string direccion)
+    {
+        ArgumentNullException.ThrowIfNull(aviso);
+        var cuerpo = $"Carta de aviso previo al reporte negativo (comunicación {comunicacion}) enviada por {transportadora.Trim()}, guía {guia.Trim()}.";
+        var mensaje = DebtorMessage.Nacer(new BorradorDeMensajeAlDeudor(aviso.PersonId, rol, aviso.LoanId, DebtorMessagePurpose.PriorNotice,
+            MessageChannel.Letter, CanalDeCartaManual, cuerpo,
+            string.Create(CultureInfo.InvariantCulture, $"PriorNotice:{aviso.PublicId:N}:carta-{comunicacion}:{DebtorMessagePurpose.PriorNotice}"),
+            "PriorNotice", reloj.UtcNow, ActorKind.Person, usuarioId)
+        {
+            OriginPublicId = aviso.PublicId,
+            PriorNoticeId = aviso.Id,
+            AttachmentPublicId = adjunto,
+        });
+        var enviada = DateTime.SpecifyKind(enviadaUtc, DateTimeKind.Utc);
+        var encolado = DebtorMessageEvent.Registrar(mensaje, null,
+            new EventoDeMensaje(DebtorMessageEventKind.Queued, enviada, ActorKind.Person, usuarioId) { DueAt = enviada }, EnProduccion);
+        var salio = DebtorMessageEvent.Registrar(mensaje, encolado, new EventoDeMensaje(DebtorMessageEventKind.Sent, enviada, ActorKind.Person, usuarioId)
+        {
+            DestinationAddress = Recortar(direccion, 320),
+            AttemptNumber = 1,
+            ProviderReference = Recortar($"{transportadora.Trim()} {guia.Trim()}", 120),
+            ProviderArtifactAttachmentPublicId = adjunto,
+        }, EnProduccion);
+        db.DebtorMessages.Add(mensaje);
+        db.DebtorMessageEvents.Add(encolado);
+        db.DebtorMessageEvents.Add(salio);
+        return mensaje;
     }
 
     private async Task<NotificationTemplate?> PlantillaVigenteAsync(string templateCode, MessageChannel canal, DateOnly hoy, CancellationToken ct)
@@ -627,7 +762,8 @@ public sealed class ColaDeMensajesAlDeudor(
                ?? CodigosDeCanalExterno.Simulado;
     }
 
-    private static MessageChannel? CanalDeMensaje(CollectionActionChannel canal) => canal switch
+    /// <summary>El canal de mensaje de un canal de gestión, o nulo si la gestión no es un mensaje (llamada, visita, en persona).</summary>
+    public static MessageChannel? CanalDeMensaje(CollectionActionChannel canal) => canal switch
     {
         CollectionActionChannel.Email => MessageChannel.Email,
         CollectionActionChannel.Sms => MessageChannel.Sms,

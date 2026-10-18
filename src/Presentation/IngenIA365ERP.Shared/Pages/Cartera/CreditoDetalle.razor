@@ -28,6 +28,17 @@
             <PermissionGate Required="Lending.Documents.Read">
                 <SfButton CssClass="e-outline" OnClick="@(() => Navegacion.NavigateTo($"/cartera/documentos?credito={Id}&emitir=true"))">Documentos</SfButton>
             </PermissionGate>
+            @* K2 (T0852): trasladar la libranza a otra pagaduría o a la forma de pago alterna del convenio. *@
+            <PermissionGate Required="Lending.PayrollTransfers.Manage">
+                <SfButton CssClass="e-outline" OnClick="@(() => _mostrarTraslado = true)">Trasladar libranza</SfButton>
+            </PermissionGate>
+            @* K3 (T0892): pedir una novedad o una condonación con el crédito elegido. *@
+            <PermissionGate Required="Lending.Novelties.Request">
+                <SfButton CssClass="e-outline" OnClick="@(() => Navegacion.NavigateTo($"/cartera/novedades?credito={Id}"))">Novedad</SfButton>
+            </PermissionGate>
+            <PermissionGate Required="Lending.Condonations.Request">
+                <SfButton CssClass="e-outline" OnClick="@(() => Navegacion.NavigateTo($"/cartera/condonaciones?credito={Id}"))">Condonar</SfButton>
+            </PermissionGate>
             <SfButton CssClass="e-outline" OnClick="@(() => Navegacion.NavigateTo("/cartera/creditos"))">Volver</SfButton>
         </div>
     </div>
@@ -83,7 +94,13 @@
                     {
                         <p><strong>Tasa:</strong> @TextosDeCreditos.ClaseDeTasa(t.RateKind) @TextosDeCreditos.Porcentaje(t.EffectiveAnnual) EA
                             @if (t.IndexCode is { } indice) { <span>(@indice + @TextosDeCreditos.Porcentaje(t.Margin))</span> }
-                            · <strong>Reglas de cálculo:</strong> @t.RulesVersion · <strong>Versión de condiciones:</strong> @t.Version</p>
+                            · <strong>Reglas de cálculo:</strong> @t.RulesVersion · <strong>Versión de condiciones:</strong> @t.Version
+                            · <strong>Unidad:</strong> @TextosDeCreditos.UnidadDeCapital(t.DenominationUnit)</p>
+                        @if (t.EnUvr)
+                        {
+                            @* K6b (T1060; FR-024): el capital se debe en UVR; los pesos de cada pestaña son su valor a la UVR del día consultado. *@
+                            <p class="aviso aviso-info">Crédito en UVR: el saldo se lleva en UVR y se convierte a pesos con la UVR de cada día. La liquidación y el estado de cuenta muestran la UVR del día y los saldos en las dos unidades.</p>
+                        }
                     }
                     @if (c.ValidationFailure is { } falla)
                     {
@@ -135,6 +152,10 @@
                         <div class="kpi-card"><span class="kpi-label">Días de mora</span><span class="kpi-value">@l.DaysPastDue</span></div>
                         <div class="kpi-card"><span class="kpi-label">Vale hasta</span><span class="kpi-value">@(l.ValidUntil is { } v ? TextosDeCreditos.Fecha(v) : "—")</span></div>
                     </div>
+                    @if (l.Uvr is { } uvrL)
+                    {
+                        <EnUvrDelCredito Uvr="@uvrL" ToPayOff="@l.ToPayOff" />
+                    }
                     @if (l.Suspended) { <p class="aviso aviso-alerta">La causación de este crédito está suspendida: lo causado desde entonces va en suspenso.</p> }
                     @if (l.UsuryCapped) { <p class="aviso aviso-alerta">La tasa del día se topó en la usura.</p> }
                     @foreach (var w in l.Warnings) { <p class="aviso aviso-alerta">@w</p> }
@@ -207,6 +228,10 @@
                     <div class="kpi-card"><span class="kpi-label">Cuotas vencidas</span><span class="kpi-value">@e.InstallmentsPastDue</span></div>
                     <div class="kpi-card"><span class="kpi-label">Calificación</span><span class="kpi-value">@(e.OfficialRating ?? e.InformativeRating ?? "—")</span></div>
                 </div>
+                @if (e.Uvr is { } uvrE)
+                {
+                    <EnUvrDelCredito Uvr="@uvrE" ToPayOff="@e.ToPayOff" />
+                }
                 <div class="tabla-desplazable">
                     <table class="data-grid">
                         <thead><tr><th class="numero">Cuota</th><th>Vence</th><th>Exigible</th><th>Estado</th><th class="numero">Capital</th><th class="numero">Interés</th><th class="numero">Seguro</th><th class="numero">Cuota</th><th class="numero">Debe</th></tr></thead>
@@ -245,16 +270,21 @@
             @if (_plan is { } p)
             {
                 <p class="texto-apoyo">Versión @p.Version desde @TextosDeCreditos.Fecha(p.ValidFrom) (@TextosDeCreditos.CausaDelPlan(p.Reason)); capital base @TextosDeCreditos.Pesos(p.PrincipalBase); regenerada desde la cuota @p.FirstRegeneratedInstallment.</p>
+                @if (p.UvrValue is { } uvrPlan)
+                {
+                    <p class="aviso aviso-info">Plan en UVR: las cuotas se pactan en UVR; los pesos son su valor a la UVR de @TextosDeCreditos.ValorDeUvr(uvrPlan) con que se generó el plan, no lo que se paga en cada fecha.</p>
+                }
                 <div class="tabla-desplazable">
                     <table class="data-grid">
-                        <thead><tr><th class="numero">Cuota</th><th>Vence</th><th>Exigible</th><th class="numero">Saldo inicial</th><th class="numero">Capital</th><th class="numero">Interés</th><th class="numero">Seguro</th><th class="numero">Cuota</th><th class="numero">Saldo final</th></tr></thead>
+                        <thead><tr><th class="numero">Cuota</th><th>Vence</th><th>Exigible</th><th class="numero">Saldo inicial</th><th class="numero">Capital</th><th class="numero">Interés</th><th class="numero">Seguro</th><th class="numero">Cuota</th><th class="numero">Saldo final</th>@if (p.UvrValue is not null) { <th class="numero">Cuota (UVR)</th><th class="numero">Saldo final (UVR)</th> }</tr></thead>
                         <tbody>
                             @foreach (var q in p.Installments)
                             {
                                 <tr><td class="numero">@q.Number</td><td>@TextosDeCreditos.Fecha(q.DueDate)</td><td>@TextosDeCreditos.Fecha(q.ExigibleDate)</td>
                                     <td class="numero">@TextosDeCreditos.Pesos(q.OpeningPrincipal)</td><td class="numero">@TextosDeCreditos.Pesos(q.Principal)</td>
                                     <td class="numero">@TextosDeCreditos.Pesos(q.Interest)</td><td class="numero">@TextosDeCreditos.Pesos(q.Insurance)</td>
-                                    <td class="numero">@TextosDeCreditos.Pesos(q.Total)</td><td class="numero">@TextosDeCreditos.Pesos(q.ClosingPrincipal)</td></tr>
+                                    <td class="numero">@TextosDeCreditos.Pesos(q.Total)</td><td class="numero">@TextosDeCreditos.Pesos(q.ClosingPrincipal)</td>
+                                    @if (p.UvrValue is not null) { <td class="numero">@TextosDeCreditos.Uvr(q.Uvr?.Total)</td><td class="numero">@TextosDeCreditos.Uvr(q.Uvr?.ClosingPrincipal)</td> }</tr>
                             }
                         </tbody>
                     </table>
@@ -348,13 +378,15 @@
             <p class="texto-apoyo">El libro no se edita: una corrección es otra fila que reversa o ajusta la anterior.</p>
             <div class="tabla-desplazable">
                 <table class="data-grid">
-                    <thead><tr><th>Fecha valor</th><th>Fecha contable</th><th>Movimiento</th><th>Concepto</th><th class="numero">Cuota</th><th class="numero">Valor</th><th>Registrado</th></tr></thead>
+                    <thead><tr><th>Fecha valor</th><th>Fecha contable</th><th>Movimiento</th><th>Concepto</th><th class="numero">Cuota</th><th class="numero">Valor</th>@if (LibroEnUvr) { <th class="numero">Valor (UVR)</th><th class="numero">UVR</th> }<th>Registrado</th></tr></thead>
                     <tbody>
                         @foreach (var f in _libro)
                         {
                             <tr><td>@TextosDeCreditos.Fecha(f.ValueDate)</td><td>@TextosDeCreditos.Fecha(f.AccountingDate)</td><td>@TextosDeCreditos.ClaseDeMovimiento(f.Kind)@(f.ReversesTransaction is not null ? " (reverso)" : "")</td>
                                 <td>@TextosDeCreditos.Concepto(f.Concept)</td><td class="numero">@(f.Installment?.ToString() ?? "—")</td>
-                                <td class="numero">@TextosDeCreditos.Pesos(f.Amount)</td><td>@TextosDeCreditos.Instante(f.RegisteredAt)</td></tr>
+                                <td class="numero">@TextosDeCreditos.Pesos(f.Amount)</td>
+                                @if (LibroEnUvr) { <td class="numero">@TextosDeCreditos.Uvr(f.UvrAmount)</td><td class="numero">@TextosDeCreditos.ValorDeUvr(f.UvrValue)</td> }
+                                <td>@TextosDeCreditos.Instante(f.RegisteredAt)</td></tr>
                         }
                     </tbody>
                 </table>
@@ -411,6 +443,11 @@
             <CalificacionDelCredito CreditoId="@Id" />
         </PermissionGate>
     }
+    else if (_pestana == Pestana.Eventos)
+    {
+        @* K3 (T0892): eventos del deudor, insolvencia y reclamaciones al seguro del crédito. *@
+        <EventosDelDeudor CreditoId="@Id" PersonaId="@_c?.Debtor.PublicId" />
+    }
 </div>
 
 <SfDialog @bind-Visible="_mostrarConfirmacion" Header="Confirmar por excepción" Width="560px" IsModal="true" ShowCloseIcon="true">
@@ -431,10 +468,14 @@
         </Content>
     </DialogTemplates>
 </SfDialog>
+<TrasladoDeLibranza CreditoId="@Id" @bind-Visible="_mostrarTraslado" />
 </PermissionGate>
 
 @code {
     [Parameter] public Guid Id { get; set; }
+
+    // K2 (T0852): el traslado de la libranza.
+    private bool _mostrarTraslado;
 
     // US6 (T0603): la confirmación por excepción de una validación fallida.
     private readonly EstadoDeCarga _guardado = new();
@@ -463,18 +504,21 @@
             : "Validación confirmada por excepción: el bloqueo del deudor se levantó.");
     }
 
-    private enum Pestana { Resumen, Liquidacion, Estado, Plan, Operaciones, Simular, Preferencia, Libro, Garantias, Calificacion }
+    private enum Pestana { Resumen, Liquidacion, Estado, Plan, Operaciones, Simular, Preferencia, Libro, Garantias, Calificacion, Eventos }
 
     private static readonly (Pestana, string)[] Pestanas =
     [
         (Pestana.Resumen, "Resumen"), (Pestana.Liquidacion, "Liquidación"), (Pestana.Estado, "Estado de cuenta"), (Pestana.Plan, "Plan de pagos"),
         (Pestana.Operaciones, "Operaciones"), (Pestana.Simular, "Simular pago"), (Pestana.Preferencia, "Preferencia de abono"), (Pestana.Libro, "Libro"),
-        (Pestana.Garantias, "Garantías y giro"), (Pestana.Calificacion, "Calificación"),
+        (Pestana.Garantias, "Garantías y giro"), (Pestana.Calificacion, "Calificación"), (Pestana.Eventos, "Eventos y reclamaciones"),
     ];
 
     private readonly EstadoDeCarga _cargaResumen = new(), _cargaLiquidacion = new(), _cargaEstado = new(), _cargaPlan = new(), _cargaOperaciones = new(),
         _cargaComprobante = new(), _cargaLibro = new(), _cargaGarantias = new();
     private Pestana _pestana = Pestana.Resumen;
+
+    /// <summary>K6b: ¿alguna fila de la página del libro trae su valor en UVR?</summary>
+    private bool LibroEnUvr => _libro.Any(f => f.UvrAmount is not null);
     private CreditoDto? _c;
     private LiquidacionDto? _liquidacion;
     private EstadoDeCuentaDto? _estado;

@@ -190,8 +190,10 @@ public sealed class RequisitosDeActivacionTests : IAsyncLifetime
         De(e, RequisitosDeActivacion.Anexo1Vigente).Should().BeEquivalentTo(new { Met = true, Status = EstadosDeRequisito.Waived }, o => o.ExcludingMissingMembers());
         De(e, RequisitosDeActivacion.Anexo1Vigente).WhoFixes.Should().NotBeNull();
         De(e, RequisitosDeActivacion.RolesDeCarteraCreados).Status.Should().Be(EstadosDeRequisito.Waived);
-        De(e, RequisitosDeActivacion.ParametrosDePerdidaEsperada).Status.Should().Be(EstadosDeRequisito.NotApplicable);
-        De(e, RequisitosDeActivacion.HistorialDeMoraCompleto).Status.Should().Be(EstadosDeRequisito.NotApplicable);
+        // T1024 y T1037 (fase 22): con K6a desplegada los dos requisitos de la pérdida esperada aplican; sin regla de pérdida esperada vigente nadie está
+        // obligado y se cumplen (lo que exigen a una obligada lo cubre ActivacionConPerdidaEsperadaTests).
+        De(e, RequisitosDeActivacion.ParametrosDePerdidaEsperada).Status.Should().Be(EstadosDeRequisito.Met);
+        De(e, RequisitosDeActivacion.HistorialDeMoraCompleto).Status.Should().Be(EstadosDeRequisito.Met);
         e.Requisitos.Select(r => r.Code).Should().BeEquivalentTo(
         [
             RequisitosDeActivacion.CargaAplicada, RequisitosDeActivacion.DiferenciasAceptadas, RequisitosDeActivacion.VentasConciliadas,
@@ -299,10 +301,13 @@ public sealed class RequisitosDeActivacionTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Una_cooperativa_obligada_sin_la_perdida_esperada_desplegada_bloquea_en_produccion_y_fuera_activa_con_la_marca()
+    public async Task Una_cooperativa_obligada_con_la_perdida_esperada_desplegada_activa_sin_la_marca_en_los_dos_ambientes()
     {
         await ReglaDePerdidaEsperadaAsync();
         await PerfilAsync("COOP_AHORRO_CREDITO", new DateOnly(2026, 1, 1));
+        // T1037 (bloque 2): a la obligada se le exigen los parámetros de FR-106 vigentes al primer cierre (el Anexo 2 con la PI de su tipo); la carga
+        // de esta escena no trae créditos, así que el historial está completo.
+        await Risk.PerdidaEsperadaDePrueba.Anexo2Async(Db, _l.G.UtcNow, new DateOnly(2026, 1, 1));
         Recaudador(IntegrationParticipantClass.Test);
         Tesoreria(doble: true);
 
@@ -311,10 +316,12 @@ public sealed class RequisitosDeActivacionTests : IAsyncLifetime
         await TodoListoParaProduccionAsync();
         var dentro = await EvaluarAsync();
 
-        De(fuera, RequisitosDeActivacion.PerdidaEsperadaDisponible).Status.Should().Be(EstadosDeRequisito.Waived);
-        fuera.ObligatoryModelUnavailable.Should().BeTrue();
+        // Antes de K6a (T1024) la obligada se negaba en producción y fuera activaba con la marca «modelo obligatorio no disponible» (D28); con K6a
+        // desplegada la pérdida esperada está disponible y no hay marca. Lo que exige a la obligada (T1037, US8-10) lo cubre ActivacionConPerdidaEsperadaTests.
+        De(fuera, RequisitosDeActivacion.PerdidaEsperadaDisponible).Status.Should().Be(EstadosDeRequisito.Met);
+        fuera.ObligatoryModelUnavailable.Should().BeFalse();
         fuera.Faltantes.Should().BeEmpty();
-        dentro.Faltantes.Select(f => f.Code).Should().Equal(RequisitosDeActivacion.PerdidaEsperadaDisponible);
+        De(dentro, RequisitosDeActivacion.PerdidaEsperadaDisponible).Status.Should().Be(EstadosDeRequisito.Met);
         dentro.ObligatoryModelUnavailable.Should().BeFalse();
     }
 
@@ -329,8 +336,8 @@ public sealed class RequisitosDeActivacionTests : IAsyncLifetime
 
         var e = await EvaluarAsync();
 
-        De(e, RequisitosDeActivacion.PerdidaEsperadaDisponible).Should().BeEquivalentTo(new { Met = false }, o => o.ExcludingMissingMembers());
-        De(e, RequisitosDeActivacion.PerdidaEsperadaDisponible).Detail.Should().Contain(Hoy.AddMonths(3).ToString("yyyy-MM-dd"));
+        // Con K6a (T1024) la obligación futura por el perfil ya no bloquea: el modelo está desplegado.
+        De(e, RequisitosDeActivacion.PerdidaEsperadaDisponible).Should().BeEquivalentTo(new { Met = true }, o => o.ExcludingMissingMembers());
     }
 
     [Fact]
@@ -358,16 +365,34 @@ public sealed class RequisitosDeActivacionTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Fuera_del_plazo_o_con_el_mes_cerrado_faltan_la_fecha_y_el_mes()
+    public async Task Fuera_del_plazo_falta_la_fecha_y_el_mes_cerrado_solo_avisa()
     {
+        // Decisión del dueño (2026-10-14): el mes de C+1 cerrado no limita, sólo informa; el plazo de la carga sí limita.
         _contabilidad.EstadoDelPeriodoAsync(Arg.Any<DateOnly>(), Arg.Any<CancellationToken>())
-            .Returns(Task.FromResult(Result.Success(new EstadoDelPeriodoDto(true, EstadoDePeriodoContable.Closed, null))));
+            .Returns(Task.FromResult(Result.Success(new EstadoDelPeriodoDto(true, EstadoDePeriodoContable.Closed, Hoy.AddMonths(1)))));
 
         var e = await Requisitos().EvaluarConAvisosAsync(_carga, Hoy, Corte.AddDays(6), default);
 
         De(e, RequisitosDeActivacion.FechaEnPlazo).Met.Should().BeFalse();
+        De(e, RequisitosDeActivacion.MesContableAbierto).Should().BeEquivalentTo(new { Met = true, Status = EstadosDeRequisito.NotApplicable },
+            o => o.ExcludingMissingMembers());
+        e.Faltantes.Select(f => f.Code).Should().NotContain(RequisitosDeActivacion.MesContableAbierto);
+        var aviso = e.Avisos.Should().ContainSingle(a => a.Code == RequisitosDeActivacion.AvisoMesContableCerrado).Subject;
+        aviso.Detail.Should().Contain(Hoy.AddMonths(1).ToString("yyyy-MM"), "dice en qué mes queda lo que emite la activación");
+        aviso.WhoFixes!.Module.Should().Be("Contabilidad");
+    }
+
+    [Fact]
+    public async Task Sin_contabilidad_iniciada_falta_el_mes()
+    {
+        _contabilidad.EstadoDelPeriodoAsync(Arg.Any<DateOnly>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(Result.Success(new EstadoDelPeriodoDto(false, EstadoDePeriodoContable.NotFound, null))));
+
+        var e = await Requisitos().EvaluarConAvisosAsync(_carga, Hoy, Hoy, default);
+
         De(e, RequisitosDeActivacion.MesContableAbierto).Met.Should().BeFalse();
         De(e, RequisitosDeActivacion.MesContableAbierto).WhoFixes!.Module.Should().Be("Contabilidad");
+        e.Avisos.Should().NotContain(a => a.Code == RequisitosDeActivacion.AvisoMesContableCerrado);
     }
 
     [Fact]
@@ -404,5 +429,30 @@ public sealed class RequisitosDeActivacionTests : IAsyncLifetime
                 or RequisitosDeActivacion.RolesDeCarteraCreados or RequisitosDeActivacion.OficinasVinculadas or RequisitosDeActivacion.PuenteDeNominaResuelto
                 or RequisitosDeActivacion.PerdidaEsperadaDisponible)
             .Should().OnlyContain(r => r.Status == EstadosDeRequisito.NotApplicable);
+    }
+
+    [Fact]
+    public async Task Lo_de_la_norma_de_K3_que_sigue_pendiente_avisa_sin_bloquear()
+    {
+        // K3, bloque D (decisión del dueño del 2026-10-15): el plazo del reporte de castigos, la periodicidad de la evaluación y la altura mínima de
+        // mora del castigo quedan vacíos y pendientes de validar, pero la activación lo avisa.
+        Recaudador(IntegrationParticipantClass.Test);
+        Tesoreria(doble: true);
+        var perfil = new LectorDePerfilRegulatorio(Db);
+        var norma = new Application.Lending.Common.NormaPendienteDeCartera(
+            new Application.Lending.Common.ReglasDeParametrosDeCartera(_l.G.Valores, _l.G.Parametros()), perfil, _l.Normativa());
+
+        var e = await new RequisitosDeActivacion(_registro, _contabilidad, _ambiente, Db, _l.Normativa(), perfil, _l.Valores(), norma)
+            .EvaluarConAvisosAsync(_carga, Hoy, Hoy, default);
+
+        string[] pendientes =
+        [
+            Application.Lending.Common.NormaPendienteDeCartera.PlazoDelReporteDeCastigos,
+            Application.Lending.Common.NormaPendienteDeCartera.PeriodicidadDeLaEvaluacion,
+            Application.Lending.Common.NormaPendienteDeCartera.AlturaMinimaDelCastigo,
+        ];
+        e.Avisos.Select(a => a.Code).Should().Contain(pendientes);
+        e.Avisos.Where(a => pendientes.Contains(a.Code)).Should().OnlyContain(a => a.WhoFixes != null && a.Detail.Contains("pendiente de validar"));
+        e.Requisitos.Should().NotContain(r => pendientes.Contains(r.Code), "no bloquean");
     }
 }

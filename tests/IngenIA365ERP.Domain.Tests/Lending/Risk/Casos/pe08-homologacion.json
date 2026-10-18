@@ -1,0 +1,49 @@
+{
+  // pe08 (K6a, T1013, T1030; Anexo 2 num. 5; T48): la homologación de la pérdida esperada a A–E con el Anexo 2 sembrado (tablas en imagen,
+  // transcritas sin cotejar, E8), todo en consumo con libranza de una cooperativa de ahorro y crédito, un deudor por crédito. Repasado con
+  // Casos/riesgo-pe.py. PENDIENTE DE FIRMA DE LA CONTADORA.
+  //   801: 75 días en agosto, 20 hoy: MORA1260 = 1 → Z = −1,523 − 2,081 + 3,062 = −0,542; puntaje 0,36772… → 0,3677 → C (el corte de C es
+  //        0,3677: otra vez el redondeo a 4 decimales decide). La mora da A; la máxima es la del modelo: C con mora actual 20 (≤ 30) → B.
+  //   802: igual con 45 días hoy: la mora da B; máxima C (modelo); C con mora actual 45 (> 30) → C.
+  //   803: asociado inactivo con 90 días en 2024-02 y nada en los últimos 24 meses: MORA3660 = 1 → Z = −1,523 + 1,615 = 0,092; puntaje
+  //        0,52298… → 0,5230 → D (corte de D, inclusive). D → C con cualquier mora.
+  //   804: 200 días: incumplido (110 días en incumplimiento); PI 100 %, PDI sin garantía 100 % (desde 90 días); la mora da E (E1) y suspende;
+  //        el incumplido con 200 días se homologa a E.
+  //   805: modelo A (al día) con una calificación por ANÁLISIS en D: la máxima (D) no es la del modelo → no se homologa: contable D, y la PI es
+  //        la de D (4,48 %).
+  "nombre": "pe08-homologacion",
+  "perdidaEsperada": {
+    "anexo2": "sembrado",
+    "contexto": { "tipoDeOrganizacion": "COOP_AHORRO_CREDITO", "fondoDeEmpleados": false, "smmlv": 1750905, "voluntaria": false },
+    "creditos": [
+      { "id": 801, "deudor": 801, "segmento": "CONSUMO_LIBRANZA", "diasDeMora": 20, "asociadoActivo": true, "cuota": 100000, "plazoEnMeses": 24,
+        "moraMensual": { "hasta": "2026-10", "meses": 36, "dias": { "2026-08": 75, "2026-09": 40, "2026-10": 20 } }, "garantia": "SIN_GARANTIA",
+        "saldos": { "capital": 1000000, "interesCorriente": 0, "interesDeMora": 0, "otros": 0 } },
+      { "id": 802, "deudor": 802, "segmento": "CONSUMO_LIBRANZA", "diasDeMora": 45, "asociadoActivo": true, "cuota": 100000, "plazoEnMeses": 24,
+        "moraMensual": { "hasta": "2026-10", "meses": 36, "dias": { "2026-08": 75, "2026-09": 60, "2026-10": 45 } }, "garantia": "SIN_GARANTIA",
+        "saldos": { "capital": 1000000, "interesCorriente": 0, "interesDeMora": 0, "otros": 0 } },
+      { "id": 803, "deudor": 803, "segmento": "CONSUMO_LIBRANZA", "diasDeMora": 0, "asociadoActivo": false, "cuota": 100000, "plazoEnMeses": 48,
+        "moraMensual": { "hasta": "2026-10", "meses": 36, "dias": { "2024-02": 90 } }, "garantia": "SIN_GARANTIA",
+        "saldos": { "capital": 1000000, "interesCorriente": 0, "interesDeMora": 0, "otros": 0 } },
+      { "id": 804, "deudor": 804, "segmento": "CONSUMO_LIBRANZA", "diasDeMora": 200, "asociadoActivo": true, "cuota": 100000, "plazoEnMeses": 24,
+        "moraMensual": { "hasta": "2026-10", "meses": 36, "dias": { "2026-05": 50, "2026-06": 80, "2026-07": 110, "2026-08": 140, "2026-09": 170, "2026-10": 200 } },
+        "garantia": "SIN_GARANTIA", "saldos": { "capital": 1000000, "interesCorriente": 30000, "interesDeMora": 20000, "otros": 0 } },
+      { "id": 805, "deudor": 805, "segmento": "CONSUMO_LIBRANZA", "diasDeMora": 0, "asociadoActivo": true, "cuota": 100000, "plazoEnMeses": 24,
+        "moraMensual": { "hasta": "2026-10", "meses": 36 }, "analisis": { "categoria": "D" }, "garantia": "SIN_GARANTIA",
+        "saldos": { "capital": 1000000, "interesCorriente": 0, "interesDeMora": 0, "otros": 0 } }
+    ],
+    "esperado": [
+      { "id": 801, "incumplido": false, "z": -0.542, "puntaje": 0.3677, "calificacionDelModelo": "C", "calificacionFinal": "C", "causa": "Model",
+        "pi": 0.0441, "pdi": 0.45, "deterioroCapital": 19845.00, "total": 19845.00, "contable": "B", "homologada": true },
+      { "id": 802, "incumplido": false, "z": -0.542, "puntaje": 0.3677, "calificacionDelModelo": "C", "calificacionFinal": "C", "causa": "Model",
+        "pi": 0.0441, "pdi": 0.45, "deterioroCapital": 19845.00, "total": 19845.00, "contable": "C", "homologada": true },
+      { "id": 803, "incumplido": false, "z": 0.092, "puntaje": 0.5230, "calificacionDelModelo": "D", "calificacionFinal": "D", "causa": "Model",
+        "variables": [ "EA=0", "FE=0", "VALCUOTA=0", "FONDPLAZO=0", "MORA1230=0", "MORA1260=0", "SINMORA=0", "MORA2430N=0", "MORA3660=1" ],
+        "pi": 0.0448, "pdi": 0.45, "deterioroCapital": 20160.00, "total": 20160.00, "contable": "C", "homologada": true },
+      { "id": 804, "incumplido": true, "diasEnIncumplimiento": 110, "calificacionFinal": "E", "causa": "Arrears", "pi": 1, "pdi": 1, "suspendido": true,
+        "deterioroCapital": 1000000.00, "deterioroIntereses": 50000.00, "total": 1050000.00, "contable": "E", "homologada": true },
+      { "id": 805, "incumplido": false, "z": -4.179, "puntaje": 0.0151, "calificacionDelModelo": "A", "calificacionFinal": "D", "causa": "Analysis",
+        "pi": 0.0448, "pdi": 0.45, "deterioroCapital": 20160.00, "total": 20160.00, "contable": "D", "homologada": false }
+    ]
+  }
+}

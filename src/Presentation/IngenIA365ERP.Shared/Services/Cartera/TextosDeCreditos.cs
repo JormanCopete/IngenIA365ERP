@@ -19,6 +19,30 @@ public static class TextosDeCreditos
         ? DateTime.SpecifyKind(i, DateTimeKind.Utc).ToLocalTime().ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture)
         : "—";
 
+    /// <summary>K6b: un valor en UVR, a la diezmilésima («1.234,5678 UVR»).</summary>
+    public static string Uvr(decimal? valor) => valor is { } v ? v.ToString("N4", Colombia) + " UVR" : "—";
+
+    /// <summary>K6b: el valor en pesos de una UVR, con sus cuatro decimales («$ 405,1234»).</summary>
+    public static string ValorDeUvr(decimal? valor) => valor is { } v ? "$ " + v.ToString("N4", Colombia) : "—";
+
+    /// <summary>K6b: la unidad del capital de un crédito («Pesos» o «Uvr»).</summary>
+    public static string UnidadDeCapital(string? unidad) => unidad == "Uvr" ? "UVR" : "Pesos";
+
+    /// <summary>K6b: el nombre de un límite de vivienda de la Ley 546 (valor nacional <c>LIMITE</c>) y si su valor es una fracción o meses.</summary>
+    public static (string Nombre, bool EnMeses) LimiteDeVivienda(string codigo) => codigo switch
+    {
+        "VIVIENDA_PLAZO_MINIMO_MESES" => ("Plazo mínimo", true),
+        "VIVIENDA_PLAZO_MAXIMO_MESES" => ("Plazo máximo", true),
+        "VIVIENDA_FINANCIABLE" => ("Porcentaje financiable del inmueble", false),
+        "VIVIENDA_FINANCIABLE_VIS" => ("Porcentaje financiable de vivienda de interés social", false),
+        "VIVIENDA_CUOTA_INGRESO" => ("Primera cuota frente a los ingresos familiares", false),
+        _ => (codigo, false),
+    };
+
+    /// <summary>K6b: el valor de un límite de vivienda como se lee (meses o porcentaje).</summary>
+    public static string ValorDeLimiteDeVivienda(string codigo, decimal valor) =>
+        LimiteDeVivienda(codigo).EnMeses ? valor.ToString("0", Colombia) + " meses" : Porcentaje(valor);
+
     /// <summary>Una tasa como fracción (0,245) en porcentaje con dos decimales.</summary>
     public static string Porcentaje(decimal? fraccion) => fraccion is { } f ? (f * 100m).ToString("N2", Colombia) + " %" : "—";
 
@@ -97,6 +121,7 @@ public static class TextosDeCreditos
         "CommercialAdjustment" => "Ajuste comercial",
         "WriteOff" => "Castigo",
         "Recovery" => "Recuperación",
+        "MonetaryCorrection" => "Corrección monetaria UVR",
         _ => v ?? "—",
     };
 

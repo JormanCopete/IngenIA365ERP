@@ -33,6 +33,56 @@ public class LaCarteraNoTieneValoresLegalesFijos
     };
 
     [Fact]
+    public void La_libranza_esta_en_la_regla()
+    {
+        // K2 (T0818): los motores puros de la libranza (Domain/Lending/Payroll) y su Application están entre los archivos que se revisan.
+        var archivos = ReglaSobreFuente.ArchivosEn(Carpetas).Select(a => a.Replace('\\', '/')).ToList();
+        Assert.Contains(archivos, a => a.EndsWith("Domain/Lending/Payroll/CapacidadDeDescuento.cs", StringComparison.Ordinal));
+        Assert.Contains(archivos, a => a.EndsWith("Domain/Lending/Payroll/NovedadesDeLibranza.cs", StringComparison.Ordinal));
+        Assert.Contains(archivos, a => a.EndsWith("Application/Lending/Payroll/ConveniosDeLibranza.cs", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void La_vivienda_esta_en_las_dos_reglas()
+    {
+        // K6b (T1053, T1054): la vivienda (Domain/Lending/Housing) se revisa por literales decimales y por los días de la semana y de la década.
+        var archivos = ReglaSobreFuente.ArchivosEn(Carpetas).Select(a => a.Replace('\\', '/')).ToList();
+        var delMotor = ReglaSobreFuente.ArchivosEn(CarpetasDelMotor).Select(a => a.Replace('\\', '/')).ToList();
+        foreach (var pieza in new[] { "SerieUvr", "ConversionUvr", "ReconstruccionEnUvr", "ReglasDeVivienda" })
+        {
+            Assert.Contains(archivos, a => a.EndsWith($"Domain/Lending/Housing/{pieza}.cs", StringComparison.Ordinal));
+            Assert.Contains(delMotor, a => a.EndsWith($"Domain/Lending/Housing/{pieza}.cs", StringComparison.Ordinal));
+        }
+    }
+
+    [Fact]
+    public void La_cobranza_esta_en_la_regla()
+    {
+        // K4 (T0932, T0937): los motores puros de la cobranza (Domain/Lending/Collections) están entre los archivos que se revisan.
+        var archivos = ReglaSobreFuente.ArchivosEn(Carpetas).Select(a => a.Replace('\\', '/')).ToList();
+        foreach (var motor in new[] { "EtapasDeCobranza", "RepartoDeGestores", "EstadoDePromesa", "CumplimientoDeAcuerdo", "AvisoPrevioPorEpisodio",
+                     "VentanaLegalDeContacto", "GastoDeCobranza", "AccionesDeEtapa" })
+            Assert.Contains(archivos, a => a.EndsWith($"Domain/Lending/Collections/{motor}.cs", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// K5 (T0994; DT §2.25): los layouts del SICSES y de las centrales son JSON embebidos en <c>Application/Lending/Regulatory/Layouts/</c> —largos,
+    /// posiciones y códigos del instructivo, dato versionado con vigencia— y quedan fuera de la regla por ser <c>.json</c>, no por una exención; el
+    /// código que los carga y las proyecciones sí se revisan, y ninguna exención por archivo cae en esa carpeta.
+    /// </summary>
+    [Fact]
+    public void Los_layouts_regulatorios_son_dato_y_su_codigo_esta_en_la_regla()
+    {
+        var root = RepoPath.FindRepoRoot();
+        var archivos = ReglaSobreFuente.ArchivosEn(Carpetas).Select(a => ReglaSobreFuente.Relativo(root, a).Replace('\\', '/')).ToList();
+        Assert.Contains(archivos, a => a.EndsWith("Application/Lending/Regulatory/CatalogoDeLayoutsDeCartera.cs", StringComparison.Ordinal));
+        Assert.DoesNotContain(archivos, a => a.EndsWith(".json", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(Exentos, e => e.Contains("/Lending/Regulatory/", StringComparison.Ordinal));
+        var layouts = Path.Combine(root, "src", "Core", "IngenIA365ERP.Application", "Lending", "Regulatory", "Layouts");
+        Assert.True(Directory.GetFiles(layouts, "*.json").Length >= 3, "los layouts del SICSES y de las centrales viven como JSON embebidos");
+    }
+
+    [Fact]
     public void El_motor_de_Cartera_no_lleva_valores_legales_fijos()
     {
         var root = RepoPath.FindRepoRoot();
@@ -73,6 +123,9 @@ public class LaCarteraNoTieneValoresLegalesFijos
         // US9 (T0674): los motores de calificación y deterioro, la política efectiva, el selector y el historial de mora: rangos, porcentajes,
         // tramos de garantía y meses de historial llegan en el Anexo 1, la política y la regla de pérdida esperada, nunca como número.
         "Core/IngenIA365ERP.Domain/Lending/Risk",
+        // K6b (T1053, T1054): la vivienda —la UVR, sus conversiones, la reconstrucción en UVR y las reglas de la Ley 546—. Los límites de vivienda,
+        // el tope y la UVR llegan como valores nacionales; ninguno es un número del código.
+        "Core/IngenIA365ERP.Domain/Lending/Housing",
     ];
 
     private static readonly Regex SieteODiez = new(@"(?<![\w.])(7|10)(?:[mM])?(?![\w.])", RegexOptions.Compiled);
@@ -94,7 +147,12 @@ public class LaCarteraNoTieneValoresLegalesFijos
         var delMotor = ReglaSobreFuente.ArchivosEn(CarpetasDelMotor).Select(a => ReglaSobreFuente.Relativo(root, a)).ToList();
         foreach (var pieza in new[] { "MotorDeCalificacion.cs", "MotorDeDeterioroIndividual.cs", "MotorDeDeterioroGeneral.cs", "PoliticaSarcEfectiva.cs",
                      "SelectorDeModeloDeDeterioro.cs", "HistorialDeMora.cs", "MovimientosDelDeterioro.cs", "DeterioroPorConcepto.cs", "Normativa/Anexo1.cs",
-                     "Normativa/PoliticaSarc.cs", "Normativa/ReglaDePerdidaEsperada.cs" })
+                     "Normativa/PoliticaSarc.cs", "Normativa/ReglaDePerdidaEsperada.cs",
+                     // K3 (T0873, T0904): el clasificador de novedades, los requisitos del castigo y la insolvencia al corte.
+                     "ClasificadorDeNovedad.cs", "RequisitosDeCastigo.cs", "CalificacionDeInsolvencia.cs",
+                     // K6a (T1022): la pérdida esperada del Anexo 2. Ningún coeficiente, corte, PI ni PDI vive en el código: llegan en el documento
+                     // SarcAnexo2 (el JSON semilla queda fuera de la regla por ser .json, no por una exención).
+                     "FuncionLogistica.cs", "MotorDePerdidaEsperada.cs", "HomologacionDeCalificacion.cs", "Normativa/Anexo2.cs" })
         {
             Assert.Contains(decimales, a => a.EndsWith("Lending/Risk/" + pieza, StringComparison.Ordinal));
             Assert.Contains(delMotor, a => a.EndsWith("Lending/Risk/" + pieza, StringComparison.Ordinal));
