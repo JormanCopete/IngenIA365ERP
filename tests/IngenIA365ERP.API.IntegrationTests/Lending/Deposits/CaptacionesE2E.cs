@@ -171,6 +171,20 @@ public static class CaptacionesE2E
             "Aportes ordinarios (e2e)", "310505");
         await ReglaMinimaAsync(http, admin, desde, "CapitalDeCaptacion", "depositClass=Demand&accountFlag=Standard",
             new { depositClass = "Demand", accountFlag = "Standard" }, "21050597", "Depósitos de ahorro a la vista (e2e)", "210505");
+        // Feature 014, US8 (T145; research E108): la activación pregunta por todos los hechos que la naturaleza emite desde el primer día —en aportes el
+        // cruce y la devolución del retiro; en el ahorro a la vista el retiro por giro con su GMF, la causación, la liquidación y la retención—. La lista de
+        // reglas no filtra por las dimensiones de captaciones: se busca por la cuenta.
+        foreach (var (rol, dimensiones, cuenta, nombre, padre) in new (string, object, string, string, string)[]
+                 {
+                     ("RecaudoPorAplicar", new { collectorClass = "OwnLoanPayoff" }, "24101096", "Puente del retiro del asociado (e2e)", "241010"),
+                     ("DevolucionPorPagar", new { lineNature = "Contribution", reasonCode = "MembershipRefund" }, "24650597", "Aportes de exasociados (e2e)", "246505"),
+                     ("DevolucionPorPagar", new { lineNature = "Deposit", reasonCode = "DepositWithdrawal" }, "24651097", "Retiros por girar (e2e)", "246510"),
+                     ("GmfPorPagar", new { depositClass = "Demand" }, "24300597", "GMF sobre depósitos de ahorro (e2e)", "243005"),
+                     ("InteresPorPagar", new { depositClass = "Demand" }, "21059597", "Intereses por pagar del ahorro (e2e)", "210595"),
+                     ("GastoPorIntereses", new { depositClass = "Demand" }, "61500597", "Intereses del ahorro a la vista (e2e)", "615005"),
+                     ("RetencionPorPagar", new { depositClass = "Demand" }, "24353597", "Retención sobre rendimientos (e2e)", "243535"),
+                 })
+            await ReglaMinimaAsync(http, admin, desde, rol, $"account={cuenta}", dimensiones, cuenta, nombre, padre);
     }
 
     private static async Task ReglaMinimaAsync(HttpClient http, string admin, DateOnly desde, string rol, string filtro, object dimensiones, string cuenta,
