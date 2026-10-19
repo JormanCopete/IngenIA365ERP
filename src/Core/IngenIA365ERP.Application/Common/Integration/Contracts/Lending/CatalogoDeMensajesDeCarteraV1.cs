@@ -136,6 +136,10 @@ public static class CatalogoDeMensajesDeCarteraV1
             new HashSet<string>([IntegrationDestinations.Receipts, IntegrationDestinations.Treasury], StringComparer.Ordinal), N, C, false),
         Otro(typeof(CargoDeCaptacionCausadoV1), CargoDeCaptacionCausadoV1.Type, IntegrationDestinations.Inventory, C, proceso: true),
         Otro(typeof(CargoDeCaptacionReversadoV1), CargoDeCaptacionReversadoV1.Type, IntegrationDestinations.Inventory, P, proceso: false),
+        // Feature 014 (T091; decisión del dueño del 2026-10-18, D36; mensajes.md §5.4 de la 014): el archivo de un grupo del convenio, con créditos y cuotas
+        // de cuentas; lo origina la persona que genera.
+        new(typeof(DescuentosPorPagaduriaV2), DescuentosPorPagaduriaV2.Type, 2, ModulosDeOrigen.Cartera, TipoDeMensaje.Un(IntegrationDestinations.Receipts), N, C,
+            false),
     ];
 
     /// <summary>Los tipos de Cartera (81 desde la feature 014: 70 hechos a Contabilidad y 11 a otros destinos).</summary>

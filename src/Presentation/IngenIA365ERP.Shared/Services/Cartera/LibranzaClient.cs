@@ -116,6 +116,10 @@ public sealed class LibranzaClient(HttpClient http, CentralAuthClient auth)
     public Task<ResultadoDeInventario<EnlaceDeCarteraDto>> EnlaceAsync(Guid archivo, CancellationToken ct = default) =>
         Enviar<EnlaceDeCarteraDto>(HttpMethod.Post, $"{RutaDeArchivos}/{archivo}/download-link", null, null, ct);
 
+    /// <summary>Feature 014 (T091): las filas de la respuesta de la pagaduría que no se aplicaron (empleado o código sin equivalencia, lo que sobró).</summary>
+    public Task<ResultadoDeInventario<IReadOnlyList<FilaNoAplicadaDePagaduriaDto>>> FilasNoAplicadasAsync(Guid archivo, CancellationToken ct = default) =>
+        Enviar<IReadOnlyList<FilaNoAplicadaDePagaduriaDto>>(HttpMethod.Get, $"{RutaDeArchivos}/{archivo}/unmatched", null, null, ct);
+
     /// <summary>Anula un archivo que todavía no se envió.</summary>
     public Task<ResultadoDeInventario<EmptyResponse>> AnularAsync(Guid archivo, string motivo, ClaveDeOperacion clave, CancellationToken ct = default) =>
         Enviar<EmptyResponse>(HttpMethod.Post, $"{RutaDeArchivos}/{archivo}/void", new MotivoDeCarteraRequest(motivo), clave, ct);

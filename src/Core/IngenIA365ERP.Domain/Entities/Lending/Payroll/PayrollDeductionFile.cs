@@ -22,6 +22,15 @@ public class PayrollDeductionFile : AuditableEntity
     /// <summary>La versión del convenio vigente al período.</summary>
     public int PayrollAgreementVersionId { get; init; }
 
+    /// <summary>
+    /// Feature 014 (T091, decisión del dueño del 2026-10-18, D36): el grupo de archivo de la versión con que se generó; nulo en un convenio sin grupos.
+    /// Un archivo con grupo lleva créditos y cuotas de cuentas y viaja como <c>DescuentosPorPagaduria</c> v2.
+    /// </summary>
+    public int? FileGroupId { get; init; }
+
+    /// <summary>El código del grupo (vacío sin grupo): parte de la unicidad por convenio y período, porque cada grupo tiene su archivo.</summary>
+    public string FileGroupCode { get; init; } = string.Empty;
+
     public short PeriodYear { get; init; }
 
     public byte PeriodMonth { get; init; }

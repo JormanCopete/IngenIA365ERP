@@ -506,6 +506,9 @@ public interface IApplicationDbContext
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollDeductionFile> PayrollDeductionFiles { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollDeductionFileLine> PayrollDeductionFileLines { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollDeductionResult> PayrollDeductionResults { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollDeductionFileAccountLine> PayrollDeductionFileAccountLines { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollDeductionAccountResult> PayrollDeductionAccountResults { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollDeductionUnmatchedLine> PayrollDeductionUnmatchedLines { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.NonDeductionFollowUp> NonDeductionFollowUps { get; }
     // K3 (feature 013, CarteraNovedades): novedades, condonaciones, castigo y evaluación de cartera.
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Operations.LoanNovelty> LoanNovelties { get; }

@@ -131,7 +131,12 @@ public static class ErroresDeLibranza
     public const string CodigoLineaSinGrupo = "Lending.PayrollAgreement.LineWithoutGroup";
     public const string CodigoGrupoRepetido = "Lending.PayrollAgreement.FileGroupDuplicate";
     public const string CodigoEquivalenciaRepetida = "Lending.PayrollAgreement.EquivalenceDuplicate";
-    public const string CodigoGruposPendientes = "Lending.PayrollFile.FileGroupsPending";
+    public const string CodigoGrupoRequerido = "Lending.PayrollFile.FileGroupRequired";
+    public const string CodigoGrupoInexistente = "Lending.PayrollFile.FileGroupNotFound";
+    public const string CodigoRecaudoSinV2 = "Lending.PayrollAgreement.ReceiptsVersionNotAdopted";
+    public const string CodigoConceptoSinEquivalencia = "Lending.PayrollFile.ConceptWithoutEquivalence";
+    public const string CodigoEmpleadoSinEquivalencia = "Lending.PayrollFile.EmployeeWithoutEquivalence";
+    public const string CodigoDescuentoSobrante = "Lending.PayrollFile.DeductedExceedsSent";
 
     /// <summary>Una equivalencia sin grupo de archivo (o con uno que no existe) en una versión que usa grupos.</summary>
     public static Error LineaSinGrupo(string codigo, string? grupo) => new ErrorConDatos(CodigoLineaSinGrupo,
@@ -146,10 +151,32 @@ public static class ErroresDeLibranza
     public static Error EquivalenciaRepetida(string codigo) => new ErrorConDatos(CodigoEquivalenciaRepetida,
         $"El código {codigo} de la pagaduría aparece dos veces: cada código va una sola vez con todos sus ítems.", new { paymasterConceptCode = codigo });
 
-    /// <summary>La generación por grupo de archivo todavía no está disponible (T091 parcial): el convenio con grupos no genera aún.</summary>
-    public static Error GruposPendientes(string convenio) => new ErrorConDatos(CodigoGruposPendientes,
-        $"El convenio {convenio} genera un archivo por grupo, y esa generación todavía no está disponible: mientras tanto registre una versión sin grupos "
-        + "para generar el archivo de créditos.", new { agreement = convenio });
+    /// <summary>
+    /// Feature 014 (T091, decisión del dueño del 2026-10-18, D36): la versión del convenio genera un archivo por grupo y no se dijo cuál (o se pidió un
+    /// grupo a un convenio sin grupos).
+    /// </summary>
+    public static Error GrupoRequerido(string convenio, IReadOnlyList<string> grupos) => new ErrorConDatos(CodigoGrupoRequerido,
+        grupos.Count == 0
+            ? $"El convenio {convenio} no separa los archivos por grupo: genere el archivo sin grupo."
+            : $"El convenio {convenio} genera un archivo por grupo: elija cuál ({string.Join(", ", grupos)}).",
+        new { agreement = convenio, fileGroups = grupos });
+
+    /// <summary>El grupo pedido no es de la versión vigente del convenio.</summary>
+    public static Error GrupoInexistente(string convenio, string grupo, IReadOnlyList<string> grupos) => new ErrorConDatos(CodigoGrupoInexistente,
+        $"El convenio {convenio} no tiene el grupo de archivo {grupo} en la versión vigente al período: elija uno de {string.Join(", ", grupos)}.",
+        new { agreement = convenio, fileGroupCode = grupo, fileGroups = grupos });
+
+    /// <summary>
+    /// Recaudo no adoptó <c>DescuentosPorPagaduria</c> v2 (mensajes.md §5.4): un archivo con cuotas de cuentas no se genera, porque la v1 sólo lleva
+    /// créditos.
+    /// </summary>
+    public static Error RecaudoSinV2(string convenio) => new ErrorConDatos(CodigoRecaudoSinV2,
+        $"El archivo del convenio {convenio} lleva cuotas de cuentas y Recaudo no adoptó DescuentosPorPagaduria v2: regístrelo en el registro de integración "
+        + "con esa versión adoptada.", new { agreement = convenio, contract = "DescuentosPorPagaduria", version = 2 });
+
+    /// <summary>Una referencia de pagaduría que no es una línea del archivo pendiente de giro de esa cuenta.</summary>
+    public static Error ReferenciaDeCuentaInvalida(string cuenta) => new ErrorConDatos(CodigoReferenciaInvalida,
+        $"La referencia de la pagaduría no es una cuota de la cuenta {cuenta} descontada y pendiente de giro.", new { account = cuenta });
 
     /// <summary>El problema de las equivalencias que encontró la regla pura, como error de la API.</summary>
     public static Error DeEquivalencias(Domain.Lending.Payroll.ProblemaDeEquivalencias p) =>

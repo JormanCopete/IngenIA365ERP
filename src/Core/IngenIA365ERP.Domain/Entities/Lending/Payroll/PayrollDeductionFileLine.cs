@@ -49,4 +49,12 @@ public class PayrollDeductionFileLine : AuditableEntity, IHechoInmutable
 
     /// <summary>Fecha de la libranza (prelación cronológica, FR-111).</summary>
     public DateOnly LibranzaDate { get; init; }
+
+    /// <summary>
+    /// Feature 014 (T091, D36): el código de la pagaduría que agrupa la línea (su equivalencia), en un archivo con grupos; nulo sin grupos.
+    /// </summary>
+    public string? PaymasterConceptCode { get; init; }
+
+    /// <summary>Feature 014 (T091): la prioridad de la línea dentro de su código, sellada al generar (el reparto por <c>Priority</c> la usa).</summary>
+    public int? AllocationPriority { get; init; }
 }

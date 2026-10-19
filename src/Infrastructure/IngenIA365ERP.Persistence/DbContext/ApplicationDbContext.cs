@@ -573,6 +573,9 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollDeductionFile> PayrollDeductionFiles => Set<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollDeductionFile>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollDeductionFileLine> PayrollDeductionFileLines => Set<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollDeductionFileLine>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollDeductionResult> PayrollDeductionResults => Set<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollDeductionResult>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollDeductionFileAccountLine> PayrollDeductionFileAccountLines => Set<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollDeductionFileAccountLine>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollDeductionAccountResult> PayrollDeductionAccountResults => Set<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollDeductionAccountResult>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollDeductionUnmatchedLine> PayrollDeductionUnmatchedLines => Set<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollDeductionUnmatchedLine>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.NonDeductionFollowUp> NonDeductionFollowUps => Set<IngenIA365ERP.Domain.Entities.Lending.Payroll.NonDeductionFollowUp>();
     // K3 (feature 013, CarteraNovedades).
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Operations.LoanNovelty> LoanNovelties => Set<IngenIA365ERP.Domain.Entities.Lending.Operations.LoanNovelty>();

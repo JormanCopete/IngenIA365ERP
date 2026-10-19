@@ -27,7 +27,7 @@ namespace IngenIA365ERP.Application.Lending.Payroll.Files;
 public sealed class PreparacionDeArchivoDeDescuentos(IApplicationDbContext db, ConveniosDeLibranza convenios, PayrollDeductionLines lineas)
 {
     public async Task<Result<ArchivoDeDescuentosPreparado>> PrepararAsync(Guid convenioPublicId, int anio, int mes, int? subPeriodo, string lote,
-        CancellationToken ct)
+        CancellationToken ct, string? grupo = null)
     {
         var convenio = await db.PayrollAgreements.AsNoTracking().FirstOrDefaultAsync(a => a.PublicId == convenioPublicId && !a.IsDeleted, ct);
         if (convenio is null) return Falla(ErroresDeLibranza.ConvenioInexistente());
@@ -38,13 +38,25 @@ public sealed class PreparacionDeArchivoDeDescuentos(IApplicationDbContext db, C
         var inicio = new DateOnly(anio, mes, 1);
         var version = await convenios.VersionVigenteAsync(convenio.Id, inicio, ct);
         if (version is null) return Falla(ErroresDeLibranza.SinVersionVigente(convenio.Code, inicio));
-        // Feature 014 (T091, parcial): la versión con grupos de archivo no lleva formatos propios; su generación por grupo está pendiente (research
-        // §10, E61) y hasta entonces se responde el error en vez de fallar sin formato.
-        if (version.UsesFileGroups) return Falla(ErroresDeLibranza.GruposPendientes(convenio.Code));
+        // Feature 014 (T091; decisión del dueño del 2026-10-18, D36): la versión con grupos de archivo genera un archivo por grupo, con el formato del
+        // grupo; hay que decir cuál. Un convenio sin grupos no admite grupo.
+        var grupos = version.UsesFileGroups
+            ? await db.PayrollAgreementFileGroups.AsNoTracking().Where(g => g.PayrollAgreementVersionId == version.Id && !g.IsDeleted).OrderBy(g => g.Order)
+                .ToListAsync(ct)
+            : [];
+        var codigos = grupos.Select(g => g.Code).ToList();
+        PayrollAgreementFileGroup? delArchivo = null;
+        if (version.UsesFileGroups)
+        {
+            if (string.IsNullOrWhiteSpace(grupo)) return Falla(ErroresDeLibranza.GrupoRequerido(convenio.Code, codigos));
+            delArchivo = grupos.FirstOrDefault(g => string.Equals(g.Code, grupo.Trim(), StringComparison.OrdinalIgnoreCase));
+            if (delArchivo is null) return Falla(ErroresDeLibranza.GrupoInexistente(convenio.Code, grupo.Trim(), codigos));
+        }
+        else if (!string.IsNullOrWhiteSpace(grupo)) return Falla(ErroresDeLibranza.GrupoRequerido(convenio.Code, []));
         var periodo = PeriodoDeLibranza.De(version.Periodicity, anio, mes, subPeriodo);
         if (periodo is null) return Falla(ErroresDeLibranza.PeriodoInvalido(anio, mes, subPeriodo));
-        var preparado = await lineas.PrepararAsync(convenio, version, periodo, lote, ct);
-        return preparado.Lineas.Count == 0 ? Falla(ErroresDeLibranza.ArchivoVacio(convenio.Code, anio, mes)) : Result.Success(preparado);
+        var preparado = await lineas.PrepararAsync(convenio, version, periodo, lote, ct, delArchivo);
+        return preparado.Vacio ? Falla(ErroresDeLibranza.ArchivoVacio(convenio.Code, anio, mes)) : Result.Success(preparado);
     }
 
     private static Result<ArchivoDeDescuentosPreparado> Falla(Error e) => Result.Failure<ArchivoDeDescuentosPreparado>(e);
@@ -66,9 +78,14 @@ public sealed class PreparacionDeArchivoDeDescuentos(IApplicationDbContext db, C
 /// <item><c>DescuentosPorPagaduria</c> a Recaudo por <see cref="EmisionDeCartera"/> en la misma transacción; la fila y sus líneas; y el evento
 /// resumen del archivo (las líneas van con <c>[SinDiffDeAuditoria]</c>, C46).</item>
 /// </list>
+/// Feature 014 (T091; decisión del dueño del 2026-10-18, D36; contrato-de-cuentas §6.4): en un convenio con grupos de archivo se genera <b>un archivo por
+/// grupo</b> (<see cref="FileGroupCode"/>), con el formato del grupo, los créditos y las cuotas de cuentas que cubren sus códigos y, cada línea, el código
+/// de la pagaduría; viaja como <c>DescuentosPorPagaduria</c> v2 con los totales por código. Si lleva cuotas de cuentas, Recaudo tiene que haber adoptado la
+/// v2 (<c>Lending.PayrollAgreement.ReceiptsVersionNotAdopted</c>). La unicidad del período es por grupo.
 /// (nuevo)
 /// </summary>
-public sealed record GeneratePayrollDeductionFileCommand(Guid AgreementPublicId, int Year, int Month, int? SubPeriod = null, string? Reason = null)
+public sealed record GeneratePayrollDeductionFileCommand(Guid AgreementPublicId, int Year, int Month, int? SubPeriod = null, string? Reason = null,
+    string? FileGroupCode = null)
     : IRequest<Result<PayrollDeductionFileDto>>, IOperacionIdempotente
 {
     public Guid OperationKey { get; init; }
@@ -83,6 +100,7 @@ public sealed class GeneratePayrollDeductionFileCommandValidator : AbstractValid
         RuleFor(x => x.Month).InclusiveBetween(1, 12).WithMessage("El mes del período va de 1 a 12.");
         RuleFor(x => x.SubPeriod).InclusiveBetween(1, 5).When(x => x.SubPeriod is not null);
         RuleFor(x => x.Reason).MaximumLength(500);
+        RuleFor(x => x.FileGroupCode).MaximumLength(20);
     }
 }
 
@@ -95,7 +113,9 @@ public sealed class GeneratePayrollDeductionFileCommandHandler(
     ISender sender,
     LendingAuditEmitter auditoria,
     IActorActual actorActual,
-    IDateTimeService reloj) : IRequestHandler<GeneratePayrollDeductionFileCommand, Result<PayrollDeductionFileDto>>
+    IDateTimeService reloj,
+    IngenIA365ERP.Application.Common.Integration.IRegistroDeIntegracion? registro = null)
+    : IRequestHandler<GeneratePayrollDeductionFileCommand, Result<PayrollDeductionFileDto>>
 {
     /// <summary>El prefijo del numerador de archivos de descuento.</summary>
     public const string Prefijo = "ADP-";
@@ -108,17 +128,22 @@ public sealed class GeneratePayrollDeductionFileCommandHandler(
         return await TransaccionExplicita.EjecutarAsync(db, async () =>
         {
             var prep = await preparacion.PrepararAsync(request.AgreementPublicId, request.Year, request.Month, request.SubPeriod,
-                PayrollDeductionLines.LoteDeVistaPrevia, ct);
+                PayrollDeductionLines.LoteDeVistaPrevia, ct, request.FileGroupCode);
             if (prep.IsFailure) return Falla(prep.Error);
             var p = prep.Value;
             var periodo = p.Periodo;
+            var codigoDeGrupo = p.Grupo?.Code ?? string.Empty;
+            // Mensajes.md §5.4 de la 014: la v1 sólo lleva créditos; un archivo con cuotas de cuentas exige que Recaudo haya adoptado la v2.
+            if (p.Cuentas.Count > 0 && !await RecaudoAdoptoLaV2Async(ct)) return Falla(ErroresDeLibranza.RecaudoSinV2(p.Convenio.Code));
 
             await cerrojo.TomarSetupAsync(exclusivo: false, ct);
             await cerrojo.BloquearCreditosAsync(p.Lineas.Select(l => l.Credito.Id).Distinct().Order().ToList(), ModoDeEspera.Esperar, ct);
+            if (p.Cuentas.Count > 0)
+                await cerrojo.BloquearCuentasAsync(p.Cuentas.Select(c => c.Cuenta.Id).Distinct().Order().ToList(), ModoDeEspera.Esperar, ct);
 
             var delPeriodo = await db.PayrollDeductionFiles
                 .Where(f => f.PayrollAgreementId == p.Convenio.Id && f.PeriodYear == periodo.Anio && f.PeriodMonth == periodo.Mes
-                            && f.SubPeriodNumber == periodo.SubPeriodo && !f.IsDeleted)
+                            && f.SubPeriodNumber == periodo.SubPeriodo && f.FileGroupCode == codigoDeGrupo && !f.IsDeleted)
                 .ToListAsync(ct);
             if (delPeriodo.FirstOrDefault(f => f.Status == PayrollFileStatus.Sent) is { } enviado) return Falla(ErroresDeLibranza.ArchivoYaEnviado(enviado.Number));
             var anterior = delPeriodo.FirstOrDefault(f => f.Status == PayrollFileStatus.Generated);
@@ -130,12 +155,11 @@ public sealed class GeneratePayrollDeductionFileCommandHandler(
             BankFileOutput salida;
             try
             {
-                salida = FlatFileWriter.Escribir(p.Formato, contexto, p.Lineas.Select(l => l.Valores).ToList());
+                salida = FlatFileWriter.Escribir(p.Formato, contexto, p.Valores);
             }
             catch (BankFileWriteException ex)
             {
-                var credito = ex.LineNumber >= 1 && ex.LineNumber <= p.Lineas.Count ? p.Lineas[ex.LineNumber - 1].Credito.Number : "?";
-                return Falla(ErroresDeLibranza.NoCabe(ex.LineNumber, ex.Field, credito));
+                return Falla(ErroresDeLibranza.NoCabe(ex.LineNumber, ex.Field, p.Referencia(ex.LineNumber)));
             }
 
             // El adjunto de módulo, antes de la fila: si el almacén falla no queda un archivo «generado» que nadie puede bajar.
@@ -154,19 +178,33 @@ public sealed class GeneratePayrollDeductionFileCommandHandler(
             }
 
             var publicosDeLinea = p.Lineas.Select(_ => Guid.NewGuid()).ToList();
-            var mensaje = await emision.DescuentosPorPagaduriaAsync(new ArchivoDeDescuentosAEmitir(publicId, numero, version, periodo.Anio, periodo.Mes,
+            var publicosDeCuenta = p.Cuentas.Select(_ => Guid.NewGuid()).ToList();
+            var aEmitir = new ArchivoDeDescuentosAEmitir(publicId, numero, version, periodo.Anio, periodo.Mes,
                 periodo.SubPeriodo, subida.Value, salida.FileName, salida.Sha256, salida.Content.LongLength, p.Formato.Code,
                 p.Lineas.Select((l, i) => new LineaDeDescuentoAEmitir(publicosDeLinea[i], new() { LoanPublicId = l.Credito.PublicId, LoanNumber = l.Credito.Number },
                     l.Deudor.PublicId, l.Novedad.EmployeeIdAtPaymaster, l.Novedad.InstallmentNumber, l.Novedad.DueDate, l.Novedad.Novedad, l.Novedad.Total,
-                    l.Novedad.Vencido)).ToList(),
-                p.Convenio.Code, p.NumeroDeVersion, p.Pagaduria.PublicId, p.EnviarA, anterior, mensajeAnterior, reloj.HoyLocal), ct);
+                    l.Novedad.Vencido)
+                {
+                    PaymasterConceptCode = p.CodigosDeCredito?.GetValueOrDefault(l.Credito.Id)?.Codigo,
+                }).ToList(),
+                p.Convenio.Code, p.NumeroDeVersion, p.Pagaduria.PublicId, p.EnviarA, anterior, mensajeAnterior, reloj.HoyLocal)
+            {
+                Grupo = p.Grupo,
+                Cuentas = p.Cuentas.Select((c, i) => new CuotaDeCuentaAEmitir(publicosDeCuenta[i], c.Cuenta.PublicId, c.Cuenta.Number, c.Cuota.PublicId,
+                    c.Titular.PublicId, c.EmployeeIdAtPaymaster, c.Codigo.Codigo, c.Cuota.DueDate, c.Novedad, c.Total, c.Vencido)).ToList(),
+            };
+            var mensaje = p.Grupo is null
+                ? await emision.DescuentosPorPagaduriaAsync(aEmitir, ct)
+                : await emision.DescuentosPorPagaduriaV2Async(aEmitir, ct);
 
-            var t = p.Novedades.Totales;
+            var t = p.Totales;
             var archivo = new PayrollDeductionFile
             {
                 PublicId = publicId,
                 PayrollAgreementId = p.Convenio.Id,
                 PayrollAgreementVersionId = p.Version.Id,
+                FileGroupId = p.Grupo?.Id,
+                FileGroupCode = codigoDeGrupo,
                 PeriodYear = (short)periodo.Anio,
                 PeriodMonth = (byte)periodo.Mes,
                 SubPeriodNumber = (byte)periodo.SubPeriodo,
@@ -211,6 +249,30 @@ public sealed class GeneratePayrollDeductionFileCommandHandler(
                     NoveltyKind = n.Novedad,
                     PreviousAmount = n.Anterior,
                     LibranzaDate = n.LibranzaDate,
+                    PaymasterConceptCode = p.CodigosDeCredito?.GetValueOrDefault(n.LoanId)?.Codigo,
+                    AllocationPriority = p.CodigosDeCredito?.GetValueOrDefault(n.LoanId)?.Prioridad,
+                });
+            }
+            for (var i = 0; i < p.Cuentas.Count; i++)
+            {
+                var c = p.Cuentas[i];
+                db.PayrollDeductionFileAccountLines.Add(new PayrollDeductionFileAccountLine
+                {
+                    PublicId = publicosDeCuenta[i],
+                    PayrollDeductionFileId = archivo.Id,
+                    LineNumber = c.LineNumber,
+                    MemberAccountId = c.Cuenta.Id,
+                    AccountInstallmentId = c.Cuota.Id,
+                    PersonId = c.Titular.Id,
+                    EmployeeIdAtPaymaster = c.EmployeeIdAtPaymaster,
+                    PaymasterConceptCode = c.Codigo.Codigo,
+                    AllocationPriority = c.Codigo.Prioridad,
+                    DueDate = c.Cuota.DueDate,
+                    CurrentAmount = c.Corriente,
+                    PastDueAmount = c.Vencido,
+                    TotalAmount = c.Total,
+                    NoveltyKind = c.Novedad,
+                    PreviousAmount = c.Anterior,
                 });
             }
             anterior?.AnotarReemplazo(archivo.Id);
@@ -218,12 +280,22 @@ public sealed class GeneratePayrollDeductionFileCommandHandler(
 
             await auditoria.EmitirArchivoDeDescuentosGeneradoAsync(archivo.PublicId, new
             {
-                number = numero, agreement = p.Convenio.Code, period = periodo.Texto, version, lines = t.Lineas, total = t.Total,
+                number = numero, agreement = p.Convenio.Code, fileGroup = p.Grupo?.Code, period = periodo.Texto, version, lines = t.Lineas, total = t.Total,
+                accountLines = p.Cuentas.Count, withoutEquivalence = p.SinEquivalencia,
                 novelties = new { created = t.Nuevas, changed = t.Cambios, cancelled = t.Cancelaciones, unchanged = t.SinCambio },
                 sha256 = salida.Sha256, supersedes = anterior?.Number, reason = request.Reason,
             }, ct);
             return Result.Success((await ArchivosDeDescuentos.DtosAsync(db, [archivo], ct))[0]);
         }, ct);
+    }
+
+    /// <summary>¿El destino de Recaudo adoptó <c>DescuentosPorPagaduria</c> v2? Sin registro (pruebas unitarias del archivo de créditos), no se exige.</summary>
+    private async Task<bool> RecaudoAdoptoLaV2Async(CancellationToken ct)
+    {
+        if (registro is null) return true;
+        var recaudo = await registro.DestinoAsync(IngenIA365ERP.Domain.Enums.Integration.IntegrationDestinations.Receipts, reloj.HoyLocal, ct);
+        return recaudo is not null && recaudo.Adopciones.Any(a =>
+            a.Contrato == IngenIA365ERP.Application.Common.Integration.Contracts.Lending.DescuentosPorPagaduriaV2.Type && a.Version >= 2);
     }
 
     private static Result<PayrollDeductionFileDto> Falla(Error e) => Result.Failure<PayrollDeductionFileDto>(e);

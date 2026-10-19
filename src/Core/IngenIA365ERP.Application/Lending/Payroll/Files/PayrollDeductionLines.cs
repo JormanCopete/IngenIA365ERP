@@ -29,7 +29,44 @@ public sealed record ArchivoDeDescuentosPreparado(
     ArchivoDeNovedades Novedades,
     IReadOnlyList<LineaDeDescuento> Lineas,
     DateOnly EnviarA,
-    Person Pagaduria);
+    Person Pagaduria,
+    PayrollAgreementFileGroup? Grupo = null,
+    IReadOnlyList<LineaDeCuentaEnDescuento>? LineasDeCuentas = null,
+    IReadOnlyDictionary<int, CodigoDeLinea>? CodigosDeCredito = null,
+    int SinEquivalencia = 0)
+{
+    /// <summary>Las cuotas de cuentas del archivo (sólo en un grupo; feature 014, T091).</summary>
+    public IReadOnlyList<LineaDeCuentaEnDescuento> Cuentas => LineasDeCuentas ?? [];
+
+    /// <summary>¿El archivo no lleva ninguna línea?</summary>
+    public bool Vacio => Lineas.Count == 0 && Cuentas.Count == 0;
+
+    /// <summary>Los valores por origen de todas las líneas, en el orden del archivo: las de crédito y después las de cuentas.</summary>
+    public IReadOnlyList<BankFileLineValues> Valores => [.. Lineas.Select(l => l.Valores), .. Cuentas.Select(c => c.Valores)];
+
+    /// <summary>Los totales del archivo: los de las novedades de los créditos más los de las cuotas de cuentas.</summary>
+    public TotalesDeNovedades Totales
+    {
+        get
+        {
+            var t = Novedades.Totales;
+            return new TotalesDeNovedades(
+                t.Nuevas + Cuentas.Count(c => c.Novedad == PayrollNoveltyKind.New),
+                t.Cambios + Cuentas.Count(c => c.Novedad == PayrollNoveltyKind.Change),
+                t.Cancelaciones,
+                t.SinCambio + Cuentas.Count(c => c.Novedad == PayrollNoveltyKind.Unchanged),
+                t.MontoNuevas + Cuentas.Where(c => c.Novedad == PayrollNoveltyKind.New).Sum(c => c.Total),
+                t.MontoCambios + Cuentas.Where(c => c.Novedad == PayrollNoveltyKind.Change).Sum(c => c.Total),
+                t.MontoSinCambio + Cuentas.Where(c => c.Novedad == PayrollNoveltyKind.Unchanged).Sum(c => c.Total));
+        }
+    }
+
+    /// <summary>El número de crédito o de cuenta de la línea <paramref name="numero"/> del archivo (1 en adelante), para los errores del escritor.</summary>
+    public string Referencia(int numero) =>
+        numero >= 1 && numero <= Lineas.Count ? Lineas[numero - 1].Credito.Number
+        : numero > Lineas.Count && numero <= Lineas.Count + Cuentas.Count ? Cuentas[numero - Lineas.Count - 1].Cuenta.Number
+        : "?";
+}
 
 /// <summary>
 /// Arma las líneas del archivo de descuentos de un convenio y período (feature 013, K2, T0835; T78, FR-111, FR-113; adaptadores-y-archivos.md §6.3;
@@ -59,19 +96,24 @@ public sealed class PayrollDeductionLines(IApplicationDbContext db, CargadorDeRe
     public const string LoteDeVistaPrevia = "VISTA-PREVIA";
 
     /// <summary>
-    /// Prepara el archivo del <paramref name="periodo"/>. El formato es el de ida sellado en la versión vigente al inicio del período.
+    /// Prepara el archivo del <paramref name="periodo"/>. El formato es el de ida sellado en la versión vigente al inicio del período o, en una versión con
+    /// grupos (feature 014, T091; decisión del dueño del 2026-10-18, D36), el del <paramref name="grupo"/>: entonces van sólo los créditos cuyo código de la
+    /// pagaduría es del grupo, cada uno con su código, y después las cuotas de cuentas del grupo (<see cref="LineasDeGrupoDeDescuento"/>); las novedades se
+    /// calculan contra el último enviado del mismo grupo.
     /// </summary>
     public async Task<ArchivoDeDescuentosPreparado> PrepararAsync(PayrollAgreement convenio, PayrollAgreementVersion version, PeriodoDeLibranza periodo,
-        string lote, CancellationToken ct)
+        string lote, CancellationToken ct, PayrollAgreementFileGroup? grupo = null)
     {
         ArgumentNullException.ThrowIfNull(convenio);
         ArgumentNullException.ThrowIfNull(version);
-        var formato = await db.BankFileFormats.AsNoTracking().Include(f => f.Fields).FirstAsync(f => f.Id == version.OutboundFormatId, ct);
+        var idDelFormato = grupo?.OutboundFormatId ?? version.OutboundFormatId;
+        var formato = await db.BankFileFormats.AsNoTracking().Include(f => f.Fields).FirstAsync(f => f.Id == idDelFormato, ct);
         var versiones = await convenios.VersionesAsync(convenio.Id, ct);
         var numeroDeVersion = versiones.Select((v, i) => (v.Id, i)).First(x => x.Id == version.Id).i + 1;
         var pagaduria = await db.People.AsNoTracking().IgnoreQueryFilters().FirstAsync(p => p.Id == convenio.PaymasterPersonId, ct);
         var reglas = ReglasDelConvenio.Leer(version.NoveltyRulesJson);
-        var enviarA = periodo.Dia(reglas.SendDay ?? version.CutoffDay);
+        var enviarA = periodo.Dia(reglas.SendDay ?? grupo?.CutoffDay ?? version.CutoffDay);
+        var equivalencias = grupo is null ? [] : await LineasDeGrupoDeDescuento.EquivalenciasAsync(db, version.Id, ct);
 
         // Los vínculos vigentes al fin del período y sus créditos vivos.
         var vinculos = (await db.LoanPayrollLinks.AsNoTracking()
@@ -80,10 +122,27 @@ public sealed class PayrollDeductionLines(IApplicationDbContext db, CargadorDeRe
             .GroupBy(v => v.LoanId).ToDictionary(g => g.Key, g => g.OrderByDescending(v => v.ValidFrom).First());
         var ids = vinculos.Keys.ToList();
         var vivos = await db.Loans.AsNoTracking().Where(l => ids.Contains(l.Id) && !l.IsDeleted && l.Status == LoanStatus.Active).ToListAsync(ct);
+
+        // Con grupos, sólo los créditos cuyo código de la pagaduría va en este grupo (T091); los que ningún código cubre se cuentan.
+        var codigos = new Dictionary<int, CodigoDeLinea>();
+        var sinEquivalencia = 0;
+        if (grupo is not null)
+        {
+            var lineasIds = vivos.Select(l => l.CreditLineId).Distinct().ToList();
+            var codigosDeLinea = await db.CreditLines.AsNoTracking().IgnoreQueryFilters().Where(l => lineasIds.Contains(l.Id))
+                .ToDictionaryAsync(l => l.Id, l => l.Code, ct);
+            foreach (var credito in vivos)
+            {
+                var codigo = LineasDeGrupoDeDescuento.Resolver(equivalencias, LineNature.Placement, codigosDeLinea.GetValueOrDefault(credito.CreditLineId));
+                if (codigo is null) sinEquivalencia++;
+                else if (codigo.GrupoId == grupo.Id) codigos[credito.Id] = codigo;
+            }
+            vivos = vivos.Where(l => codigos.ContainsKey(l.Id)).ToList();
+        }
         var cargados = await cargador.CargarAsync(vivos.Select(l => l.Id).ToList(), null, periodo.Hasta, ct);
 
-        // El archivo base: el último enviado del convenio antes de este período.
-        var baseFile = await UltimoEnviadoAsync(convenio.Id, periodo, ct);
+        // El archivo base: el último enviado del convenio (y del grupo) antes de este período.
+        var baseFile = await UltimoEnviadoAsync(convenio.Id, periodo, ct, grupo?.Code ?? string.Empty);
         var lineasBase = baseFile is null
             ? []
             : await db.PayrollDeductionFileLines.AsNoTracking().Where(l => l.PayrollDeductionFileId == baseFile.Id).ToListAsync(ct);
@@ -161,10 +220,17 @@ public sealed class PayrollDeductionLines(IApplicationDbContext db, CargadorDeRe
             valores[BankFieldSource.PeriodYear] = periodo.Anio;
             valores[BankFieldSource.PeriodMonth] = periodo.Mes;
             valores[BankFieldSource.LibranzaDate] = n.LibranzaDate;
+            if (codigos.TryGetValue(n.LoanId, out var codigo)) valores[BankFieldSource.PaymasterConceptCode] = codigo.Codigo;
             return new LineaDeDescuento(n, credito, deudor, valores);
         }).ToList();
 
-        return new ArchivoDeDescuentosPreparado(convenio, version, numeroDeVersion, periodo, formato, contexto, baseFile, novedades, lineas, enviarA, pagaduria);
+        if (grupo is null)
+            return new ArchivoDeDescuentosPreparado(convenio, version, numeroDeVersion, periodo, formato, contexto, baseFile, novedades, lineas, enviarA, pagaduria);
+
+        var (cuentas, cuentasSinEquivalencia) = await LineasDeGrupoDeDescuento.CuentasAsync(db, pagaduria, convenio, equivalencias, grupo, periodo,
+            version.IncludesPastDue || LlevaLoVencido(version), baseFile, lineas.Count + 1, ct);
+        return new ArchivoDeDescuentosPreparado(convenio, version, numeroDeVersion, periodo, formato, contexto, baseFile, novedades, lineas, enviarA, pagaduria,
+            grupo, cuentas, codigos, sinEquivalencia + cuentasSinEquivalencia);
     }
 
     /// <summary>El contexto con el lote definitivo (el número del archivo).</summary>
@@ -174,10 +240,10 @@ public sealed class PayrollDeductionLines(IApplicationDbContext db, CargadorDeRe
         PaymentDate = c.PaymentDate, GeneratedAt = c.GeneratedAt, Sequence = c.Sequence, BatchReference = lote, Year = c.Year,
     };
 
-    /// <summary>El último archivo enviado del convenio anterior al período (por período y versión).</summary>
-    public async Task<PayrollDeductionFile?> UltimoEnviadoAsync(int convenioId, PeriodoDeLibranza periodo, CancellationToken ct) =>
+    /// <summary>El último archivo enviado del convenio (y del grupo: vacío sin grupo) anterior al período (por período y versión).</summary>
+    public async Task<PayrollDeductionFile?> UltimoEnviadoAsync(int convenioId, PeriodoDeLibranza periodo, CancellationToken ct, string grupo = "") =>
         (await db.PayrollDeductionFiles.AsNoTracking()
-            .Where(f => f.PayrollAgreementId == convenioId && f.Status == PayrollFileStatus.Sent && !f.IsDeleted)
+            .Where(f => f.PayrollAgreementId == convenioId && f.FileGroupCode == grupo && f.Status == PayrollFileStatus.Sent && !f.IsDeleted)
             .ToListAsync(ct))
         .Where(f => (f.PeriodYear, f.PeriodMonth, f.SubPeriodNumber).CompareTo(((short)periodo.Anio, (byte)periodo.Mes, (byte)periodo.SubPeriodo)) < 0)
         .OrderByDescending(f => f.PeriodYear).ThenByDescending(f => f.PeriodMonth).ThenByDescending(f => f.SubPeriodNumber).ThenByDescending(f => f.Version)

@@ -691,6 +691,13 @@ cuentas por concepto como `DESC_CARTERA` (sin cuentas, la primera nómina con es
    `IContratoDeObligaciones.AplicarAsync` y las cuotas de cuentas por `IContratoDeCuentas.ConsignarAsync`
    (`ExternalPaymasterDeduction`, `DeductionFileLinePublicId` de la línea, clave `REC:{giro:N}:{línea:N}`).
 
+**Construido (T091, decisión del dueño del 2026-10-18, D36).** El vínculo de una cuenta con la pagaduría es la
+**empresa empleadora de la ficha del asociado** titular (su NIT = el de la pagaduría del convenio); una cuenta no tiene
+vínculo de libranza. En `ConsignarAsync`, `DeductionFileLinePublicId` sólo se admite con `ExternalPaymasterDeduction`
+(`DeductionFileLinePublicId`) y debe ser una línea de cuenta del archivo, de esa cuenta, descontada y pendiente de giro
+(`Lending.Payment.PaymasterReferenceInvalid`); la operación la sella (`LND_MemberAccountOperations.PayrollDeductionAccountResultId`)
+y ese resultado deja de estar pendiente mientras la consignación no se reverse (`PendientesDeGiroDeCuentas`).
+
 ### 6.5 Débito automático, cruce al retiro e intereses del CDAT (operaciones internas)
 
 No usan el puerto: son comandos de la Cartera que escriben por `RegistroDeCuentas` y por `RegistroDeCartera` en una

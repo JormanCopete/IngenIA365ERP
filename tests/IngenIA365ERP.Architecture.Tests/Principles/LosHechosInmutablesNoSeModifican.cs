@@ -241,6 +241,9 @@ public class LosHechosInmutablesNoSeModifican
         // no aplicado no admiten ninguna escritura después de insertarse (un resultado posterior reemplaza al anterior con SupersedesResultId). El
         // archivo no es hecho: su contenido es de sólo init y sólo avanza el estado.
         ["PayrollDeductionFileLine"] = [], ["PayrollDeductionResult"] = [], ["NonDeductionFollowUp"] = [],
+        // Feature 014 (T091, D36): la cuota de cuenta del archivo de un grupo, su resultado y la fila de la respuesta que no se aplicó tampoco (un
+        // resultado posterior reemplaza al anterior con SupersedesResultId).
+        ["PayrollDeductionFileAccountLine"] = [], ["PayrollDeductionAccountResult"] = [], ["PayrollDeductionUnmatchedLine"] = [],
         // K4 (T0936, T0932; data-model §26.5–§26.10): la historia de etapas, la asignación, la gestión (una corrección es otra gestión), la
         // promesa y la cuota del acuerdo no admiten ninguna escritura; la actuación jurídica, sólo la operación Charge que la cobra al deudor,
         // que llega cuando el aviso del gasto salió (T77).

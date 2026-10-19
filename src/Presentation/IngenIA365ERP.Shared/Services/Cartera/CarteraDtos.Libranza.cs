@@ -122,7 +122,8 @@ public sealed record ArchivoDeDescuentosDto(
     DateTime? SentAt,
     string? PaymasterReference,
     string? VoidReason,
-    Guid? SupersededByPublicId);
+    Guid? SupersededByPublicId,
+    string? FileGroupCode = null);
 
 /// <summary>Una línea del archivo.</summary>
 public sealed record LineaDeDescuentoDto(
@@ -139,17 +140,52 @@ public sealed record LineaDeDescuentoDto(
     decimal Total,
     string Novelty,
     decimal? PreviousAmount,
-    DateOnly LibranzaDate);
+    DateOnly LibranzaDate,
+    string? PaymasterConceptCode = null);
 
-/// <summary>El archivo con una página de sus líneas.</summary>
-public sealed record ArchivoDeDescuentosDetalleDto(ArchivoDeDescuentosDto File, IReadOnlyList<LineaDeDescuentoDto> Lines, int TotalLines, int Page, int PageSize);
+/// <summary>Feature 014 (T091, D36): una cuota de cuenta en el archivo de un grupo.</summary>
+public sealed record LineaDeCuentaEnDescuentoDto(
+    Guid PublicId,
+    int LineNumber,
+    string? EmployeeId,
+    Guid AccountPublicId,
+    string AccountNumber,
+    string Holder,
+    Guid InstallmentPublicId,
+    DateOnly DueDate,
+    string PaymasterConceptCode,
+    decimal CurrentAmount,
+    decimal PastDueAmount,
+    decimal Total,
+    string Novelty,
+    decimal? PreviousAmount);
+
+/// <summary>Feature 014 (T091, D36): una fila de la respuesta de la pagaduría que no se aplicó.</summary>
+public sealed record FilaNoAplicadaDePagaduriaDto(
+    string PayerEmployeeId,
+    string PaymasterConceptCode,
+    decimal Expected,
+    decimal Deducted,
+    string ReasonCode,
+    string? PaymasterResultCode,
+    DateOnly? DeductionDate,
+    DateTime RecordedAt);
+
+/// <summary>El archivo con una página de sus líneas y, en el archivo de un grupo, sus cuotas de cuentas.</summary>
+public sealed record ArchivoDeDescuentosDetalleDto(ArchivoDeDescuentosDto File, IReadOnlyList<LineaDeDescuentoDto> Lines, int TotalLines, int Page, int PageSize,
+    IReadOnlyList<LineaDeCuentaEnDescuentoDto>? AccountLines = null);
 
 /// <summary>Lo que saldría: las líneas, el texto del archivo y los totales.</summary>
 public sealed record VistaPreviaDeDescuentosDto(string FileName, DateOnly SendBy, int Version, IReadOnlyList<LineaDeDescuentoDto> Lines, IReadOnlyList<string> Text,
-    decimal Total, int NewCount, int ChangeCount, int CancellationCount, int UnchangedCount);
+    decimal Total, int NewCount, int ChangeCount, int CancellationCount, int UnchangedCount, IReadOnlyList<LineaDeCuentaEnDescuentoDto>? AccountLines = null,
+    int WithoutEquivalence = 0);
 
-/// <summary>El pedido de vista previa o de generación: el convenio, el período y el motivo de regenerar.</summary>
-public sealed record ArchivoDeDescuentosRequest(Guid AgreementPublicId, int Year, int Month, int? SubPeriod = null, string? Reason = null);
+/// <summary>
+/// El pedido de vista previa o de generación: el convenio, el período, el motivo de regenerar y, en un convenio con grupos de archivo (feature 014, T091),
+/// el grupo.
+/// </summary>
+public sealed record ArchivoDeDescuentosRequest(Guid AgreementPublicId, int Year, int Month, int? SubPeriod = null, string? Reason = null,
+    string? FileGroupCode = null);
 
 // ------------------------------------------------------------------------------------- §13.3 no aplicados y traslado --
 

@@ -26,7 +26,9 @@ public class LosHechosDeCarteraNoLlevanCuentas
     private static bool EsDeCaptaciones(string relativo) =>
         relativo.Contains("/Contracts/Lending/Deposits/", StringComparison.Ordinal)
         // Feature 014 (T055): la v2 de la orden de giro nombra la cuenta del asociado de origen del dinero (MemberAccountRefV1, mensajes.md §5.3).
-        || relativo.EndsWith("/Contracts/Lending/OrdenDeGiroEmitidaV2.cs", StringComparison.Ordinal);
+        || relativo.EndsWith("/Contracts/Lending/OrdenDeGiroEmitidaV2.cs", StringComparison.Ordinal)
+        // Feature 014 (T091, D36): la v2 del archivo de descuentos nombra la cuenta del asociado de cada cuota (MemberAccountRefV1, mensajes.md §5.4).
+        || relativo.EndsWith("/Contracts/Lending/DescuentosPorPagaduriaV2.cs", StringComparison.Ordinal);
 
     /// <summary>Propiedades que empiezan por <c>Account</c> y no son cuentas contables (los campos de mensajes.md §10.1, §10.3, §10.16).</summary>
     private static readonly string[] SellosQueNoSonCuentas = ["AccountsReceivableRecordedBy", "AccountingReference"];

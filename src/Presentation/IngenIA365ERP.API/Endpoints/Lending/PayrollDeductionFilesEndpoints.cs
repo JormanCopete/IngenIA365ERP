@@ -35,19 +35,25 @@ public class PayrollDeductionFilesEndpoints : ICarterModule
             .RequirePermission(Leer);
 
         archivos.MapPost("/preview", async (ArchivoRequest body, ISender sender, CancellationToken ct) =>
-                await sender.Send(new PreviewPayrollDeductionFileQuery(body.AgreementPublicId, body.Year, body.Month, body.SubPeriod), ct))
+                await sender.Send(new PreviewPayrollDeductionFileQuery(body.AgreementPublicId, body.Year, body.Month, body.SubPeriod, body.FileGroupCode), ct))
             .WithName("Lending_PayrollDeductionFiles_Preview")
             .RequirePermission(Generar);
 
         archivos.MapPost("/", async (ArchivoRequest body, HttpContext http, ISender sender, CancellationToken ct) =>
                 LendingGroup.Creado(await sender.Send(new GeneratePayrollDeductionFileCommand(body.AgreementPublicId, body.Year, body.Month, body.SubPeriod,
-                    body.Reason)
+                    body.Reason, body.FileGroupCode)
                 {
                     OperationKey = http.ClaveDeOperacion(),
                 }, ct), a => $"/api/lending/payroll-deduction-files/{a.PublicId}"))
             .WithName("Lending_PayrollDeductionFiles_Generate")
             .ConClaveDeOperacion()
             .RequirePermission(Generar);
+
+        // Feature 014 (T091; decisión del dueño del 2026-10-18, D36): las filas de la respuesta de la pagaduría que no se aplicaron.
+        archivos.MapGet("/{id:guid}/unmatched", async (Guid id, ISender sender, CancellationToken ct) =>
+                await sender.Send(new ListPayrollDeductionUnmatchedLinesQuery(id), ct))
+            .WithName("Lending_PayrollDeductionFiles_Unmatched")
+            .RequirePermission(Leer);
 
         archivos.MapPost("/{id:guid}/download-link", async (Guid id, ISender sender, CancellationToken ct) =>
                 await sender.Send(new IssuePayrollDeductionFileDownloadLinkCommand(id), ct))
@@ -65,8 +71,11 @@ public class PayrollDeductionFilesEndpoints : ICarterModule
             .RequirePermission(Generar);
     }
 
-    /// <summary>El archivo (§13.2): el convenio, el período (año, mes y, en quincenal, sub-período) y el motivo de regenerar.</summary>
-    public sealed record ArchivoRequest(Guid AgreementPublicId, int Year, int Month, int? SubPeriod, string? Reason);
+    /// <summary>
+    /// El archivo (§13.2): el convenio, el período (año, mes y, en quincenal, sub-período), el motivo de regenerar y, en un convenio con grupos de archivo
+    /// (feature 014, T091), el grupo.
+    /// </summary>
+    public sealed record ArchivoRequest(Guid AgreementPublicId, int Year, int Month, int? SubPeriod, string? Reason, string? FileGroupCode = null);
 
     /// <summary>El motivo de la anulación.</summary>
     public sealed record AnulacionRequest(string? Reason);

@@ -627,6 +627,23 @@ y `Exogenous` **(nuevo en contracts)**).
 sin regla de reparto o una línea con cuota sin grupo responde `Lending.PayrollAgreement.EquivalenceWithoutSplit` o
 `.LineWithoutGroup` (FR-125).
 
+**Construido (T091, decisión del dueño del 2026-10-18, D36).** Con una versión que usa grupos, `fileGroupCode` es
+obligatorio (`Lending.PayrollFile.FileGroupRequired`, `data.fileGroups`) y debe ser de la versión vigente al período
+(`.FileGroupNotFound`); sin grupos no se admite. El archivo usa el formato de ida del grupo, lleva los créditos y las
+cuotas de cuentas cuyo código de la pagaduría es del grupo —cada línea con su código— y viaja como
+`DescuentosPorPagaduria` v2; si lleva cuotas de cuentas y Recaudo no adoptó la v2,
+`Lending.PayrollAgreement.ReceiptsVersionNotAdopted`. Una obligación o cuenta que ningún código cubre no va en ningún
+archivo y la vista previa la cuenta (`withoutEquivalence`). La unicidad del período es por grupo. Respuestas: el
+archivo suma `fileGroupCode`; su detalle, `accountLines[]`
+(`{ publicId, lineNumber, employeeId, accountPublicId, accountNumber, holder, installmentPublicId, dueDate,
+paymasterConceptCode, currentAmount, pastDueAmount, total, novelty, previousAmount }`); cada línea de crédito,
+`paymasterConceptCode`; la vista previa, `accountLines[]` y `withoutEquivalence`. Ruta nueva
+`GET /payroll-deduction-files/{id}/unmatched` (`Lending.PayrollDeductionFiles.Read`) →
+`[{ payerEmployeeId, paymasterConceptCode, expected, deducted, reasonCode, paymasterResultCode?, deductionDate?,
+recordedAt }]`: las filas de la respuesta que no se aplicaron. El doble de Recaudo
+(`POST /test-doubles/collector/payroll-deduction-results`) lee la respuesta de un archivo con grupo con el formato de
+vuelta del grupo (empleado, código, descontado, código de respuesta y fecha) y emite `ResultadoDeDescuentos` v2.
+
 ### 18.4 Dobles de prueba — `/api/lending/test-doubles/collector/accounts/*` (sólo fuera de producción)
 
 `Lending.TestDoubles.Operate`; código `TST`, clase `Test`, clave `TST:{guid:N}` que la pantalla propone y deja repetir.

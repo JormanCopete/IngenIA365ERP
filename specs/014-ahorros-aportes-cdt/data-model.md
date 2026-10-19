@@ -238,6 +238,28 @@ código asignado, o un código sin regla de reparto, impide generar el archivo y
 respuesta aplica créditos por `IContratoDeObligaciones` y cuotas de cuentas por `IContratoDeCuentas` en la misma unidad
 de trabajo (R17).
 
+**Enmienda (T091, decisión del dueño del 2026-10-18, D36; research §13).** Una línea sin código no impide generar: no va
+en ningún archivo y la vista previa la cuenta (`withoutEquivalence`), porque las equivalencias son las que dicen qué
+obligaciones viajan por esta pagaduría. `Lending.Payroll.UnmappedLine` no se construyó.
+
+#### 1.4.3 Archivo por grupo (T091, D36) — columnas y tablas nuevas
+
+- `LND_PayrollDeductionFiles`: `FileGroupId` int FK `LND_PayrollAgreementFileGroups` nulo y `FileGroupCode` nvarchar(20)
+  no nulo, por defecto `''`; los tres únicos del período (versión, `Generated` y `Sent` vivos) suman `FileGroupCode`.
+- `LND_PayrollDeductionFileLines`: `PaymasterConceptCode` nvarchar(20) nulo y `AllocationPriority` int nulo (sólo en el
+  archivo de un grupo).
+- `LND_PayrollDeductionFileAccountLines` — `PayrollDeductionFileAccountLine` (H, sin diff): `PayrollDeductionFileId`,
+  `LineNumber` (sigue a las de crédito; UK con el archivo), `MemberAccountId`, `AccountInstallmentId` bigint (UK con el
+  archivo), `PersonId`, `EmployeeIdAtPaymaster` nvarchar(30) nulo, `PaymasterConceptCode` nvarchar(20),
+  `AllocationPriority`, `DueDate`, `CurrentAmount`, `PastDueAmount`, `TotalAmount`, `NoveltyKind`, `PreviousAmount` nulo.
+- `LND_PayrollDeductionAccountResults` — `PayrollDeductionAccountResult` (H): la línea, el archivo, la cuenta, el recibo
+  (UK línea × recibo), `Outcome`, `DeductedAmount`, `NotDeductedAmount`, `DeductionDate`, `PaymasterResultCode`,
+  `NonDeductionReason`, `TransferDueDate` (ventana de giro sellada), `SupersedesResultId`.
+- `LND_PayrollDeductionUnmatchedLines` — `PayrollDeductionUnmatchedLine` (H): el archivo, el recibo, `PayerEmployeeId`,
+  `PaymasterConceptCode`, `ExpectedAmount`, `DeductedAmount`, `ReasonCode` nvarchar(80), `PaymasterResultCode`,
+  `DeductionDate`.
+- `LND_MemberAccountOperations.PayrollDeductionAccountResultId` int FK nulo: el resultado que la consignación gira.
+
 ### 1.5 `LND_IssuedDocuments`, `LND_IssuedDocumentEvents` y tabla nueva de enlace (K7–K9; FR-101 a FR-106, FR-068)
 
 **`IssuedDocumentKind`** (al final, research §0.3): `AccountStatement` 7 (K8), `AccountBalanceCertificate` 8 (K8),

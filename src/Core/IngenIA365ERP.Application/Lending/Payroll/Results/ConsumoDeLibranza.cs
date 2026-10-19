@@ -9,7 +9,9 @@ using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Common.Persistence;
 using IngenIA365ERP.Application.Lending.Common;
+using IngenIA365ERP.Application.Lending.Deposits.Ledger;
 using IngenIA365ERP.Application.Lending.Integration;
+using IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts;
 using IngenIA365ERP.Domain.Entities.Lending.Integration;
 using IngenIA365ERP.Domain.Entities.Lending.Operations;
 using IngenIA365ERP.Domain.Entities.Lending.Payroll;
@@ -182,7 +184,16 @@ public sealed class ConsumePayrollFileSentCommandHandler(IApplicationDbContext d
 /// <item>la versión <c>Generated</c> pasa a <c>Sent</c> (el resultado prueba el envío); un resultado posterior de la misma línea reemplaza al anterior
 /// (<c>SupersedesResultId</c>).</item>
 /// </list>
-/// Recibo único por mensaje. Sin ruta. (nuevo)
+/// Recibo único por mensaje. Sin ruta.
+/// <para>
+/// Feature 014 (T091; decisión del dueño del 2026-10-18, D36; mensajes.md §5.7 de la 014): también la v2, del archivo de un grupo. Sus
+/// <c>conceptLines</c> —lo descontado por empleado y por código de la pagaduría— se reparten entre las líneas del archivo con
+/// <see cref="RepartoDeRespuestaDePagaduria"/>: lo de los créditos sigue el camino de la v1 (resultado, no aplicado, seguimiento); lo de las cuotas de
+/// cuentas queda en <c>LND_PayrollDeductionAccountResults</c> —«descontado pendiente de giro» lo descontado; lo no descontado, no descontado de la cuota
+/// por <see cref="RegistroDeCuentas"/>, que sigue exigible—; y lo que no casa (empleado o código sin equivalencia, lo que sobra) queda en
+/// <c>LND_PayrollDeductionUnmatchedLines</c> sin bloquear lo demás. El giro lo aplica después Recaudo por los dos contratos (contrato-de-cuentas §6.4).
+/// </para>
+/// (nuevo)
 /// </summary>
 public sealed record ConsumePayrollDeductionResultCommand(IReadOnlyList<Guid> MessagePublicIds) : IRequest<Result<ResultadoDeConsumo>>, IReintentableAnteConcurrencia;
 
@@ -213,9 +224,12 @@ public sealed class ConsumePayrollDeductionResultCommandHandler(
         var leidos = await entrantes.LeerAsync(request.MessagePublicIds, IntegrationDestinations.Lending, ct);
         if (leidos.IsFailure) return Result.Failure<ResultadoDeConsumo>(leidos.Error);
         var mensaje = leidos.Value[0];
-        if (mensaje.Payload is not ResultadoDeDescuentosV1 resultado || !VersionesAceptadasDeCartera.Acepta(mensaje.Type, mensaje.Version))
+        var v1 = mensaje.Payload as ResultadoDeDescuentosV1;
+        var v2 = mensaje.Payload as ResultadoDeDescuentosV2;
+        if ((v1 is null && v2 is null) || !VersionesAceptadasDeCartera.Acepta(mensaje.Type, mensaje.Version))
             return Result.Success<ResultadoDeConsumo>(new ResultadoDeConsumo.Rejected("Integration.VersionNotAccepted",
                 $"Cartera no acepta {mensaje.Type} v{mensaje.Version}."));
+        var resultado = new ResultadoLeido(v1?.FilePublicId ?? v2!.FilePublicId, v1?.FileSha256 ?? v2!.FileSha256, v1?.Lines ?? v2!.Lines, v2);
 
         return await TransaccionExplicita.EjecutarAsync(db, async () =>
         {
@@ -262,6 +276,41 @@ public sealed class ConsumePayrollDeductionResultCommandHandler(
             }
             if (malas.Count > 0) return await RechazarAsync(recibo, mensaje, ErroresDeLibranza.LineasQueNoCasan(malas), ahora, ct);
 
+            // Feature 014 (T091): la v2 reparte lo informado por código entre las líneas del grupo; lo de los créditos entra como si fuera línea a línea.
+            RepartoDeRespuesta? reparto = null;
+            Dictionary<int, PayrollDeductionFileAccountLine> deCuenta = [];
+            if (resultado.V2 is { } porCodigo)
+            {
+                if (!string.Equals(porCodigo.FileGroupCode?.Trim() ?? string.Empty, archivo.FileGroupCode, StringComparison.OrdinalIgnoreCase))
+                    return await RechazarAsync(recibo, mensaje, ErroresDeLibranza.LineasQueNoCasan(
+                        [new { fileGroupCode = porCodigo.FileGroupCode, reason = "FileGroup", expected = archivo.FileGroupCode }]), ahora, ct);
+                deCuenta = await db.PayrollDeductionFileAccountLines.AsNoTracking().Where(l => l.PayrollDeductionFileId == archivo.Id).ToDictionaryAsync(l => l.Id, ct);
+                var reglas = (await db.PayrollAgreementConceptEquivalences.AsNoTracking()
+                        .Where(e => e.PayrollAgreementVersionId == archivo.PayrollAgreementVersionId && !e.IsDeleted).ToListAsync(ct))
+                    .GroupBy(e => e.PaymasterConceptCode.Trim().ToUpperInvariant()).ToDictionary(g => g.Key, g => g.First().AllocationRule);
+                var porRepartir = lineas.Values.Where(l => l.PaymasterConceptCode is not null)
+                    .Select(l => new LineaPorRepartir(l.Id, false, l.EmployeeIdAtPaymaster, l.PaymasterConceptCode, l.AllocationPriority ?? 0, l.TotalAmount))
+                    .Concat(deCuenta.Values.Select(l => new LineaPorRepartir(l.Id, true, l.EmployeeIdAtPaymaster, l.PaymasterConceptCode, l.AllocationPriority,
+                        l.TotalAmount)))
+                    .ToList();
+                reparto = RepartoDeRespuestaDePagaduria.Repartir(porCodigo.ConceptLines, porRepartir, reglas);
+                var yaLeidas = leidas.Select(l => l.Linea.Id).ToHashSet();
+                var porId = lineas.Values.ToDictionary(l => l.Id);
+                foreach (var a in reparto.Asignaciones.Where(a => !a.Linea.EsDeCuenta))
+                {
+                    var linea = porId[a.Linea.Id];
+                    if (!yaLeidas.Add(linea.Id))
+                    {
+                        malas.Add(new { deductionFileLinePublicId = linea.PublicId, reason = "Duplicated" });
+                        continue;
+                    }
+                    var problema = Leer(ComoLinea(a, linea), linea, out var leida);
+                    if (problema is not null) malas.Add(new { deductionFileLinePublicId = linea.PublicId, reason = problema });
+                    else leidas.Add(leida!);
+                }
+                if (malas.Count > 0) return await RechazarAsync(recibo, mensaje, ErroresDeLibranza.LineasQueNoCasan(malas), ahora, ct);
+            }
+
             var version = await db.PayrollAgreementVersions.AsNoTracking().FirstAsync(v => v.Id == archivo.PayrollAgreementVersionId, ct);
             var codigos = await db.PayrollAgreementResultCodes.AsNoTracking().Where(c => c.PayrollAgreementVersionId == version.Id && !c.IsDeleted)
                 .ToDictionaryAsync(c => c.PaymasterCode, StringComparer.OrdinalIgnoreCase, ct);
@@ -270,9 +319,12 @@ public sealed class ConsumePayrollDeductionResultCommandHandler(
 
             var creditos = leidas.Select(l => l.Linea.LoanId).Distinct().Order().ToList();
             var deCredito = await db.Loans.AsNoTracking().Where(l => creditos.Contains(l.Id)).ToDictionaryAsync(l => l.Id, ct);
+            var cuentasDelReparto = reparto is null ? [] : reparto.Asignaciones.Where(a => a.Linea.EsDeCuenta).Select(a => deCuenta[a.Linea.Id].MemberAccountId)
+                .Distinct().Order().ToList();
             await cerrojo.TomarSetupAsync(exclusivo: false, ct);
             await cerrojo.BloquearDeudoresAsync(deCredito.Values.Select(l => l.DebtorPersonId).Distinct().Order().ToList(), ModoDeEspera.Esperar, ct);
             await cerrojo.BloquearCreditosAsync(creditos, ModoDeEspera.Esperar, ct);
+            if (cuentasDelReparto.Count > 0) await cerrojo.BloquearCuentasAsync(cuentasDelReparto, ModoDeEspera.Esperar, ct);
 
             if (archivo.Status == PayrollFileStatus.Generated) archivo.MarcarEnviado(ahora, mensaje.MessageId, null);
             archivo.AnotarPrimerResultado(ahora);
@@ -339,8 +391,101 @@ public sealed class ConsumePayrollDeductionResultCommandHandler(
             foreach (var (fila, deudor) in noAplicados)
                 await seguimiento.AplicarReglaAsync(fila, deudor, version.NonDeductionAction, ct);
 
+            if (reparto is not null)
+            {
+                var noDescontadas = reparto.Asignaciones.Count(a => a.Linea.EsDeCuenta && a.Asignado < a.Linea.Total);
+                if (noDescontadas > 0) alerta ??= await AlertarAsync(archivo, noDescontadas, ct);
+                await CuotasDeCuentasAsync(archivo, recibo, mensaje, reparto, deCuenta, codigos, parametros.Value.VentanaDeGiroDias, ct);
+                foreach (var n in reparto.NoAplicadas)
+                    db.PayrollDeductionUnmatchedLines.Add(new PayrollDeductionUnmatchedLine
+                    {
+                        PayrollDeductionFileId = archivo.Id,
+                        InboundMessageId = recibo.Id,
+                        PayerEmployeeId = Recortar(n.Fila.PayerEmployeeId, 30) ?? string.Empty,
+                        PaymasterConceptCode = Recortar(n.Fila.PaymasterConceptCode, 20) ?? string.Empty,
+                        ExpectedAmount = n.Fila.Expected,
+                        DeductedAmount = n.Descontado,
+                        ReasonCode = n.Motivo,
+                        PaymasterResultCode = Recortar(n.Fila.PaymasterResultCode, 20),
+                        DeductionDate = n.Fila.DeductionDate,
+                    });
+                await db.SaveChangesAsync(ct);
+            }
+
             return Result.Success(await RecibosDeLibranza.CerrarAsync(db, recibo, mensaje, Chequeo, null, ahora, ct));
         }, ct);
+    }
+
+    /// <summary>Lo que importa del mensaje, sea v1 o v2: el archivo, su huella y las líneas línea a línea; con la v2, el mensaje entero.</summary>
+    private sealed record ResultadoLeido(Guid FilePublicId, string FileSha256, IReadOnlyList<DeductionResultLineV1> Lines, ResultadoDeDescuentosV2? V2);
+
+    /// <summary>La asignación del reparto a una línea de crédito, como una línea de la v1 (así sigue el mismo camino).</summary>
+    private static DeductionResultLineV1 ComoLinea(AsignacionDeLinea a, PayrollDeductionFileLine linea) => new()
+    {
+        DeductionFileLinePublicId = linea.PublicId,
+        InstallmentNumber = linea.InstallmentNumber,
+        ExpectedAmount = linea.TotalAmount,
+        DeductedAmount = a.Asignado,
+        DeductionDate = a.Asignado > 0m ? a.Fila.DeductionDate : null,
+        Outcome = a.Asignado >= linea.TotalAmount ? "Deducted" : a.Asignado <= 0m ? "NotApplied" : "PartiallyDeducted",
+        PaymasterResultCode = a.Fila.PaymasterResultCode,
+    };
+
+    /// <summary>
+    /// Feature 014 (T091): las cuotas de cuentas del reparto. Cada una deja su resultado (reemplaza al anterior de la misma línea); lo descontado queda
+    /// pendiente de giro con la ventana sellada y lo no descontado se registra como no descontado de la cuota, con el motivo traducido por los códigos del
+    /// convenio (sigue exigible).
+    /// </summary>
+    private async Task CuotasDeCuentasAsync(PayrollDeductionFile archivo, LendingInboundMessage recibo, MensajeEntrante mensaje, RepartoDeRespuesta reparto,
+        IReadOnlyDictionary<int, PayrollDeductionFileAccountLine> deCuenta, IReadOnlyDictionary<string, PayrollAgreementResultCode> codigos,
+        int ventanaDeGiro, CancellationToken ct)
+    {
+        var asignaciones = reparto.Asignaciones.Where(a => a.Linea.EsDeCuenta).ToList();
+        if (asignaciones.Count == 0) return;
+        var ids = asignaciones.Select(a => a.Linea.Id).ToList();
+        var anteriores = (await db.PayrollDeductionAccountResults.AsNoTracking()
+                .Where(r => ids.Contains(r.PayrollDeductionFileAccountLineId) && !r.IsDeleted
+                            && !db.PayrollDeductionAccountResults.Any(x => x.SupersedesResultId == r.Id && !x.IsDeleted))
+                .ToListAsync(ct))
+            .GroupBy(r => r.PayrollDeductionFileAccountLineId).ToDictionary(g => g.Key, g => g.OrderByDescending(r => r.Id).First().Id);
+        var registro = new RegistroDeCuentas(db);
+        foreach (var a in asignaciones)
+        {
+            var linea = deCuenta[a.Linea.Id];
+            var codigo = a.Fila.PaymasterResultCode?.Trim();
+            var noDescontado = linea.TotalAmount - a.Asignado;
+            var motivo = codigo is not null && codigos.TryGetValue(codigo, out var c) && c.NonDeductionReason is { } traducido ? traducido : NonDeductionReason.Other;
+            db.PayrollDeductionAccountResults.Add(new PayrollDeductionAccountResult
+            {
+                PayrollDeductionFileAccountLineId = linea.Id,
+                PayrollDeductionFileId = archivo.Id,
+                MemberAccountId = linea.MemberAccountId,
+                InboundMessageId = recibo.Id,
+                Outcome = a.Asignado >= linea.TotalAmount ? PayrollResultOutcome.Deducted
+                    : a.Asignado <= 0m ? PayrollResultOutcome.NotDeducted : PayrollResultOutcome.PartiallyDeducted,
+                DeductedAmount = a.Asignado,
+                NotDeductedAmount = noDescontado,
+                DeductionDate = a.Asignado > 0m ? a.Fila.DeductionDate : null,
+                PaymasterResultCode = Recortar(codigo, 20),
+                NonDeductionReason = noDescontado > 0m ? motivo : null,
+                TransferDueDate = a.Asignado > 0m ? PayrollDeductionResult.VencimientoDelGiro(a.Fila.DeductionDate, ventanaDeGiro) : null,
+                SupersedesResultId = anteriores.TryGetValue(linea.Id, out var previo) ? previo : null,
+            });
+            if (noDescontado > 0m)
+                registro.RegistrarNoDescontado(new AccountInstallmentNonDeduction
+                {
+                    InstallmentId = linea.AccountInstallmentId,
+                    Origin = NonDeductionOrigin.PaymasterResult,
+                    Reason = motivo,
+                    RequestedAmount = linea.TotalAmount,
+                    DeductedAmount = a.Asignado,
+                    CollectorCode = Recortar(mensaje.OriginModule, 20) ?? string.Empty,
+                    ReferenceKey = $"{mensaje.OriginModule}:{mensaje.MessageId:N}:{linea.PublicId:N}",
+                    OccurredOn = reloj.HoyLocal,
+                    Detail = Recortar(codigo is not null && codigos.TryGetValue(codigo, out var d) ? d.Description : null, 300),
+                });
+        }
+        await db.SaveChangesAsync(ct);
     }
 
     /// <summary>Lee el resultado de una línea; devuelve el motivo si no casa (resultado desconocido, valores fuera de rango, sin fecha de descuento).</summary>

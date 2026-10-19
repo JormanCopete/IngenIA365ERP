@@ -105,6 +105,9 @@ public class ModeloDeCarteraNucleoTests
         "LND_MembershipWithdrawals", "LND_MembershipWithdrawalLines",
         // Feature 014, US4 (T110, T114, T118; data-model §2.3, §3.6, §4.7–§4.9): el GMF del mes, los cargos y el débito automático
         "LND_GmfMonthlyUsage", "LND_DepositLineCharges", "LND_AccountCharges", "LND_AccountChargeExemptions", "LND_DirectDebitMandates",
+        // Feature 014, T091 (decisión del dueño del 2026-10-18, D36; data-model §1.4.3): las cuotas de cuentas del archivo de un grupo, su resultado y lo
+        // que la respuesta no pudo aplicar.
+        "LND_PayrollDeductionFileAccountLines", "LND_PayrollDeductionAccountResults", "LND_PayrollDeductionUnmatchedLines",
     ];
 
     /// <summary>Las 17 de preparación (data-model §29.3).</summary>
@@ -141,6 +144,8 @@ public class ModeloDeCarteraNucleoTests
         "MembershipWithdrawalLine",
         // Feature 014, US4 (T110, T114): el GMF del mes y el catálogo de cargos de la versión.
         "GmfMonthlyUsage", "DepositLineCharge",
+        // Feature 014, T091 (D36): la cuota de cuenta del archivo de un grupo, su resultado y la fila de la respuesta que no se aplicó.
+        "PayrollDeductionFileAccountLine", "PayrollDeductionAccountResult", "PayrollDeductionUnmatchedLine",
         .. Preparacion,
     ];
 
@@ -148,7 +153,7 @@ public class ModeloDeCarteraNucleoTests
     private static readonly string[] SinDiff =
         ["LoanDailyPosition", "LoanControl", "DebtorControl", "AccountingFactPart", "LendingProcessRunError", "MonthlyCloseLoan", "LoanArrearsHistoryEntry",
             "PayrollDeductionFileLine", "RegulatoryFileLine", "ArrearsHistoryLoad", "MemberAccountDailyPosition", "MemberAccountControl", "GmfMonthlyUsage",
-            .. Preparacion];
+            "PayrollDeductionFileAccountLine", .. Preparacion];
 
     /// <summary><c>bigint</c> (data-model §0.1, C43, §26.2, §29.3).</summary>
     private static readonly string[] Largas =
@@ -174,13 +179,14 @@ public class ModeloDeCarteraNucleoTests
         var tablas = DeCartera(Modelo(postgres)).Select(e => e.GetTableName()).ToList();
 
         tablas.Should().OnlyHaveUniqueItems().And.BeEquivalentTo(Tablas);
-        Tablas.Should().HaveCount(156,
+        Tablas.Should().HaveCount(159,
             "74 de negocio + 17 de preparación (data-model §14) + 2 del grupo conectado (C112) + 7 de CarteraRiesgo (US9) + 8 de CarteraLibranza (K2)"
             + " + 9 de CarteraNovedades (K3) + 11 de CarteraCobranza (K4) + 2 de CarteraInformes (K5) + 2 de CarteraPerdidaEsperada (K6a)"
             + " + 7 del libro de cuentas de la feature 014 (K7, CaptacionesAportes) + 3 de las versiones de líneas de captación y aportes (US1)"
             + " + 1 de la cuenta exenta del GMF (US2) + 4 de las cuotas exigibles, las solicitudes de aportes y las cuentas de un documento (US3)"
             + " + 2 de los grupos de archivo y las equivalencias de pagaduría (US3) + 2 del retiro del asociado y su liquidación (US10)"
-            + " + 5 del GMF del mes, los cargos, sus exoneraciones y el débito automático (US4)");
+            + " + 5 del GMF del mes, los cargos, sus exoneraciones y el débito automático (US4)"
+            + " + 3 del archivo de pagaduría por grupo: cuotas de cuentas, sus resultados y lo no aplicado de la respuesta (T091)");
     }
 
     [Theory]

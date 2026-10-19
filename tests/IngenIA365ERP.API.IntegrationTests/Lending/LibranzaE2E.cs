@@ -262,7 +262,7 @@ public static class LibranzaE2E
         return (await CarteraE2E.LeerAsync(resp)).GetGuid();
     }
 
-    private static async Task<Guid> FormatoAsync(HttpClient http, string token, string codigo, string ambito, DateOnly hoy,
+    public static async Task<Guid> FormatoAsync(HttpClient http, string token, string codigo, string ambito, DateOnly hoy,
         params (string Nombre, string Origen, bool Obligatorio)[] campos)
     {
         var definicion = new

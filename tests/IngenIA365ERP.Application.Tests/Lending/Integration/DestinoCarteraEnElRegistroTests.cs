@@ -56,7 +56,8 @@ public class DestinoCarteraEnElRegistroTests
         _destino.Acepta("AjusteDeVentaACredito", 1).Should().BeTrue();
         _destino.Acepta("EnvioDeDescuentosConfirmado", 1).Should().BeTrue("desde K2 (T0838)");
         _destino.Acepta("ResultadoDeDescuentos", 1).Should().BeTrue("desde K2 (T0838)");
-        _destino.Acepta("ResultadoDeDescuentos", 2).Should().BeFalse();
+        _destino.Acepta("ResultadoDeDescuentos", 2).Should().BeTrue("feature 014 (T091): la respuesta del archivo de un grupo");
+        _destino.Acepta("ResultadoDeDescuentos", 3).Should().BeFalse();
     }
 
     [Fact]

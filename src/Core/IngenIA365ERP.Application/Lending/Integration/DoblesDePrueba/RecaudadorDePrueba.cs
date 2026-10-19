@@ -39,6 +39,8 @@ public sealed class RecaudadorDePrueba : IDestinoDeMensajes
         (PagoReversadoPorCarteraV1.Type, 1),
         // K2 (T0847): el archivo de descuentos de una pagaduría; lo que se hace con él lo ordena quien prueba (confirmar el envío, cargar la respuesta).
         (DescuentosPorPagaduriaV1.Type, 1),
+        // Feature 014 (T091, D36): el archivo de un grupo, con créditos y cuotas de cuentas.
+        (DescuentosPorPagaduriaV2.Type, 2),
         // Feature 014, US4 (T113; FR-092): la consignación del recaudador que la Cartera reversó; el recaudador anularía su recibo.
         (IngenIA365ERP.Application.Common.Integration.Contracts.Lending.Deposits.ConsignacionReversadaPorCarteraV1.Type, 1),
     ];

@@ -193,7 +193,8 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     DbSet<PersonFinancial> IApplicationDbContext.PeopleFinancial => throw new NotImplementedException();
     DbSet<AssociateCategory> IApplicationDbContext.AssociateCategories => throw new NotImplementedException();
     DbSet<CommitteeMember> IApplicationDbContext.CommitteeMembers => throw new NotImplementedException();
-    DbSet<EmployerCompany> IApplicationDbContext.EmployerCompanies => throw new NotImplementedException();
+    // Feature 014 (T091): el archivo de un grupo busca las cuentas de los asociados por su empresa empleadora.
+    DbSet<EmployerCompany> IApplicationDbContext.EmployerCompanies => Set<EmployerCompany>();
     DbSet<Advisor> IApplicationDbContext.Advisors => throw new NotImplementedException();
     DbSet<PaymentMethod> IApplicationDbContext.PaymentMethods => throw new NotImplementedException();
     // Feature 009: el contabilizador lee configuración, plan, tipos y períodos, y escribe documentos y líneas.
@@ -448,6 +449,9 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollDeductionFile> PayrollDeductionFiles => Set<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollDeductionFile>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollDeductionFileLine> PayrollDeductionFileLines => Set<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollDeductionFileLine>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollDeductionResult> PayrollDeductionResults => Set<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollDeductionResult>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollDeductionFileAccountLine> PayrollDeductionFileAccountLines => Set<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollDeductionFileAccountLine>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollDeductionAccountResult> PayrollDeductionAccountResults => Set<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollDeductionAccountResult>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollDeductionUnmatchedLine> PayrollDeductionUnmatchedLines => Set<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollDeductionUnmatchedLine>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.NonDeductionFollowUp> NonDeductionFollowUps => Set<IngenIA365ERP.Domain.Entities.Lending.Payroll.NonDeductionFollowUp>();
     // K3 (feature 013, CarteraNovedades).
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Operations.LoanNovelty> LoanNovelties => Set<IngenIA365ERP.Domain.Entities.Lending.Operations.LoanNovelty>();

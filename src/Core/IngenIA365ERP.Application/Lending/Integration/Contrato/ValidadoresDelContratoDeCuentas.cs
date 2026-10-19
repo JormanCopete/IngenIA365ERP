@@ -50,6 +50,10 @@ public sealed class SolicitudDeConsignacionValidator : AbstractValidator<Solicit
             d.RuleFor(i => i.Receipt.Number).NotEmpty().MaximumLength(40).When(i => i.Receipt is not null).WithErrorCode("ReceiptNumber");
             d.RuleFor(i => i.InstallmentPublicIds).NotEmpty().When(i => i.Modality == ModalidadDeConsignacion.SpecificInstallments)
                 .WithErrorCode("InstallmentPublicIds").WithMessage("Nombre las cuotas que paga.");
+            // Feature 014 (T091): la línea del archivo sólo la nombra el giro de una pagaduría (contrato-de-cuentas §6.4).
+            d.RuleFor(i => i.DeductionFileLinePublicId).Null().When(i => i.MeansClass != ClaseDeMedioDeRecaudo.ExternalPaymasterDeduction)
+                .WithErrorCode("DeductionFileLinePublicId")
+                .WithMessage("La línea del archivo de descuentos sólo la nombra el giro de una pagaduría (ExternalPaymasterDeduction).");
         });
         RuleForEach(x => x.Deposits).Must((s, d) => GramaticaDeClaves.Cumple(s.Collector.Class, d.IdempotencyKey)).When(x => x.Collector is not null)
             .WithErrorCode("IdempotencyKey").WithMessage((s, _) => GramaticaDeClaves.Mensaje(s.Collector.Class));

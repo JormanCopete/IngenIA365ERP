@@ -27,3 +27,27 @@ public static class PendientesDeGiro
     public static bool SuperaElUmbral(DateOnly? vencimientoDelGiro, int? umbral, DateOnly fecha) =>
         umbral is { } u && DiasDeMora(vencimientoDelGiro, fecha) > u;
 }
+
+/// <summary>
+/// Lo «descontado pendiente de giro» de las cuotas de cuentas (feature 014, T091; decisión del dueño del 2026-10-18, D36; contrato-de-cuentas §6.4): un
+/// resultado de cuenta con algo descontado, que ningún resultado posterior reemplaza y que ninguna consignación vigente —no reversada— gira
+/// (<c>LND_MemberAccountOperations.PayrollDeductionAccountResultId</c>). Derivado, como el de los créditos. (nuevo)
+/// </summary>
+public static class PendientesDeGiroDeCuentas
+{
+    public static IQueryable<PayrollDeductionAccountResult> Consulta(IApplicationDbContext db) =>
+        db.PayrollDeductionAccountResults.Where(r => !r.IsDeleted
+            && (r.Outcome == PayrollResultOutcome.Deducted || r.Outcome == PayrollResultOutcome.PartiallyDeducted) && r.DeductedAmount > 0m
+            && !db.PayrollDeductionAccountResults.Any(x => x.SupersedesResultId == r.Id && !x.IsDeleted)
+            && !db.MemberAccountOperations.Any(o => o.PayrollDeductionAccountResultId == r.Id && o.ReversedByOperationId == null));
+
+    /// <summary>El pendiente de giro de la línea <paramref name="lineaPublicId"/> del archivo, si es de la cuenta <paramref name="cuentaId"/>.</summary>
+    public static async Task<PayrollDeductionAccountResult?> DeLineaAsync(IApplicationDbContext db, int cuentaId, Guid lineaPublicId, CancellationToken ct)
+    {
+        var linea = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.FirstOrDefaultAsync(
+            db.PayrollDeductionFileAccountLines.Where(l => l.PublicId == lineaPublicId && l.MemberAccountId == cuentaId).Select(l => (int?)l.Id), ct);
+        if (linea is null) return null;
+        return await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.FirstOrDefaultAsync(
+            Consulta(db).Where(r => r.PayrollDeductionFileAccountLineId == linea.Value).OrderByDescending(r => r.Id), ct);
+    }
+}

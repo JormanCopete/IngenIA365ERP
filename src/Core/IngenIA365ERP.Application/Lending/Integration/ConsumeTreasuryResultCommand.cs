@@ -247,6 +247,8 @@ public static class VersionesAceptadasDeCartera
         // K2 (T0838): lo que Recaudo devuelve del archivo de descuentos (la fila CAR del registro los adopta desde CarteraLibranza).
         (EnvioDeDescuentosConfirmadoV1.Type, 1),
         (ResultadoDeDescuentosV1.Type, 1),
+        // Feature 014 (T091, D36): la respuesta del archivo de un grupo, por código de la pagaduría.
+        (ResultadoDeDescuentosV2.Type, 2),
         // Feature 014, US4 (T117): Comercial informa la factura de un cargo de captación (ConsumeCommercialCreditMessageCommand la reparte).
         (IngenIA365ERP.Application.Common.Integration.Contracts.Lending.Deposits.FacturaDeCargoRegistradaV1.Type, 1),
     ];

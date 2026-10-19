@@ -12,8 +12,8 @@ namespace IngenIA365ERP.Application.Tests.Lending.Libranza;
 /// <summary>
 /// Feature 014, US3 (T090–T092; api.md §18.3; data-model §1.4.1, §1.4.2; FR-125, E-05): los grupos de archivo y las equivalencias de concepto de un
 /// convenio de pagaduría. Fijarlos registra una versión nueva que copia la vigente (la anterior rige hasta la víspera); los formatos son de los
-/// ámbitos de libranza; un ítem no va en dos códigos; con grupos, cada código va en uno. La generación por grupo sigue pendiente (T091 parcial) y
-/// responde su error en vez de fallar sin formato. (nuevo)
+/// ámbitos de libranza; un ítem no va en dos códigos; con grupos, cada código va en uno. Con grupos, generar exige decir cuál (T091, decisión del dueño
+/// del 2026-10-18, D36; el archivo por grupo lo prueba <see cref="ArchivoPorGrupoTests"/>). (nuevo)
 /// </summary>
 public sealed class PagaduriasConfigurablesTests
 {
@@ -115,7 +115,7 @@ public sealed class PagaduriasConfigurablesTests
     }
 
     [Fact]
-    public async Task Un_convenio_con_grupos_no_genera_todavia_y_lo_dice()
+    public async Task Un_convenio_con_grupos_genera_por_grupo_y_hay_que_decir_cual()
     {
         using var l = await LibranzaDePrueba.CrearAsync();
         (await Grupos(l).Handle(DosGrupos(l), default)).IsSuccess.Should().BeTrue();
@@ -123,6 +123,6 @@ public sealed class PagaduriasConfigurablesTests
 
         var r = await l.Preparacion().PrepararAsync(l.Convenio.PublicId, 2026, 12, null, PayrollDeductionLines.LoteDeVistaPrevia, default);
 
-        r.Error.Code.Should().Be(ErroresDeLibranza.CodigoGruposPendientes);
+        r.Error.Code.Should().Be(ErroresDeLibranza.CodigoGrupoRequerido);
     }
 }

@@ -39,7 +39,8 @@ public sealed record PayrollDeductionFileDto(
     DateTime? SentAt,
     string? PaymasterReference,
     string? VoidReason,
-    Guid? SupersededByPublicId);
+    Guid? SupersededByPublicId,
+    string? FileGroupCode = null);
 
 /// <summary>Una línea del archivo: empleado, crédito, cuota, valor y novedad (api.md §13.2). (nuevo)</summary>
 public sealed record PayrollDeductionFileLineDto(
@@ -56,11 +57,40 @@ public sealed record PayrollDeductionFileLineDto(
     decimal Total,
     string Novelty,
     decimal? PreviousAmount,
-    DateOnly LibranzaDate);
+    DateOnly LibranzaDate,
+    string? PaymasterConceptCode = null);
 
-/// <summary>El archivo con una página de sus líneas del alcance. (nuevo)</summary>
+/// <summary>Feature 014 (T091, D36): una cuota de cuenta en el archivo de un grupo. (nuevo)</summary>
+public sealed record PayrollDeductionFileAccountLineDto(
+    Guid PublicId,
+    int LineNumber,
+    string? EmployeeId,
+    Guid AccountPublicId,
+    string AccountNumber,
+    string Holder,
+    Guid InstallmentPublicId,
+    DateOnly DueDate,
+    string PaymasterConceptCode,
+    decimal CurrentAmount,
+    decimal PastDueAmount,
+    decimal Total,
+    string Novelty,
+    decimal? PreviousAmount);
+
+/// <summary>Feature 014 (T091, D36): una fila de la respuesta de la pagaduría que no se aplicó. (nuevo)</summary>
+public sealed record PayrollDeductionUnmatchedLineDto(
+    string PayerEmployeeId,
+    string PaymasterConceptCode,
+    decimal Expected,
+    decimal Deducted,
+    string ReasonCode,
+    string? PaymasterResultCode,
+    DateOnly? DeductionDate,
+    DateTime RecordedAt);
+
+/// <summary>El archivo con una página de sus líneas del alcance y, en el archivo de un grupo, sus cuotas de cuentas del alcance. (nuevo)</summary>
 public sealed record PayrollDeductionFileDetailDto(PayrollDeductionFileDto File, IReadOnlyList<PayrollDeductionFileLineDto> Lines, int TotalLines, int Page,
-    int PageSize);
+    int PageSize, IReadOnlyList<PayrollDeductionFileAccountLineDto>? AccountLines = null);
 
 /// <summary>Lo que saldría (api.md §13.2, <c>POST /preview</c>): las líneas con sus novedades, el texto del archivo y los totales. (nuevo)</summary>
 public sealed record PayrollDeductionFilePreviewDto(
@@ -73,7 +103,9 @@ public sealed record PayrollDeductionFilePreviewDto(
     int NewCount,
     int ChangeCount,
     int CancellationCount,
-    int UnchangedCount);
+    int UnchangedCount,
+    IReadOnlyList<PayrollDeductionFileAccountLineDto>? AccountLines = null,
+    int WithoutEquivalence = 0);
 
 /// <summary>Los archivos de descuentos dentro del alcance y sus DTO. (nuevo)</summary>
 public static class ArchivosDeDescuentos
@@ -87,6 +119,10 @@ public static class ArchivosDeDescuentos
         AlcanceDeCartera alcance = await alcanceDeLaPeticion.ObtenerAsync(ct);
         var creditos = db.Loans.AsNoTracking().PorOficinaYLinea(alcance, l => l.BranchId, l => l.CreditLineId).Select(l => l.Id);
         if (await db.PayrollDeductionFileLines.AsNoTracking().AnyAsync(l => l.PayrollDeductionFileId == archivo.Id && creditos.Contains(l.LoanId), ct))
+            return Result.Success(archivo);
+        // Feature 014 (T091): el archivo de un grupo también se ve por sus cuotas de cuentas del alcance.
+        var cuentas = db.MemberAccounts.AsNoTracking().PorOficinaYLinea(alcance, a => a.BranchId, a => a.CreditLineId).Select(a => a.Id);
+        if (await db.PayrollDeductionFileAccountLines.AsNoTracking().AnyAsync(l => l.PayrollDeductionFileId == archivo.Id && cuentas.Contains(l.MemberAccountId), ct))
             return Result.Success(archivo);
         await auditoria.EmitirFueraDeAlcanceAsync(nameof(PayrollDeductionFile), archivo.PublicId, ct);
         return Result.Failure<PayrollDeductionFile>(ErroresDeLibranza.ArchivoInexistente());
@@ -102,7 +138,21 @@ public static class ArchivosDeDescuentos
         return filas.Select(f => new PayrollDeductionFileDto(f.PublicId, f.Number, deConvenio[f.PayrollAgreementId].PublicId, deConvenio[f.PayrollAgreementId].Code,
             f.PeriodYear, f.PeriodMonth, f.SubPeriodNumber, f.Version, f.Status.ToString(), f.LineCount, f.TotalAmount, f.NewCount, f.ChangeCount,
             f.CancellationCount, f.UnchangedCount, f.FileSha256, f.FileName, f.GeneratedAt, f.SentAt, f.PaymasterReference, f.VoidReason,
-            f.SupersededByFileId is { } r ? deReemplazo.GetValueOrDefault(r) : null)).ToList();
+            f.SupersededByFileId is { } r ? deReemplazo.GetValueOrDefault(r) : null, string.IsNullOrEmpty(f.FileGroupCode) ? null : f.FileGroupCode)).ToList();
+    }
+
+    /// <summary>Feature 014 (T091): las cuotas de cuentas como las muestra la pantalla, con el número de la cuenta y el titular.</summary>
+    public static async Task<IReadOnlyList<PayrollDeductionFileAccountLineDto>> CuentasAsync(IApplicationDbContext db,
+        IReadOnlyList<PayrollDeductionFileAccountLine> lineas, CancellationToken ct)
+    {
+        var ids = lineas.Select(l => l.MemberAccountId).Distinct().ToList();
+        var deCuenta = await db.MemberAccounts.AsNoTracking().Where(a => ids.Contains(a.Id)).ToDictionaryAsync(a => a.Id, a => (a.PublicId, a.Number), ct);
+        var cuotas = lineas.Select(l => l.AccountInstallmentId).Distinct().ToList();
+        var deCuota = await db.AccountInstallments.AsNoTracking().Where(q => cuotas.Contains(q.Id)).ToDictionaryAsync(q => q.Id, q => q.PublicId, ct);
+        var personas = await ReferenciasDeGobierno.PersonasAsync(db, lineas.Select(l => l.PersonId), ct);
+        return lineas.Select(l => new PayrollDeductionFileAccountLineDto(l.PublicId, l.LineNumber, l.EmployeeIdAtPaymaster, deCuenta[l.MemberAccountId].PublicId,
+            deCuenta[l.MemberAccountId].Number, personas.GetValueOrDefault(l.PersonId)?.FullName ?? string.Empty, deCuota.GetValueOrDefault(l.AccountInstallmentId),
+            l.DueDate, l.PaymasterConceptCode, l.CurrentAmount, l.PastDueAmount, l.TotalAmount, l.NoveltyKind.ToString(), l.PreviousAmount)).ToList();
     }
 
     /// <summary>Las líneas como las muestra la pantalla, con el número del crédito y el nombre del deudor.</summary>
@@ -114,7 +164,7 @@ public static class ArchivosDeDescuentos
         var personas = await ReferenciasDeGobierno.PersonasAsync(db, lineas.Select(l => l.PersonId), ct);
         return lineas.Select(l => new PayrollDeductionFileLineDto(l.PublicId, l.LineNumber, l.EmployeeIdAtPaymaster, deCredito[l.LoanId].PublicId,
             deCredito[l.LoanId].Number, personas.GetValueOrDefault(l.PersonId)?.FullName ?? string.Empty, l.InstallmentNumber, l.DueDate, l.CurrentAmount,
-            l.PastDueAmount, l.TotalAmount, l.NoveltyKind.ToString(), l.PreviousAmount, l.LibranzaDate)).ToList();
+            l.PastDueAmount, l.TotalAmount, l.NoveltyKind.ToString(), l.PreviousAmount, l.LibranzaDate, l.PaymasterConceptCode)).ToList();
     }
 }
 
@@ -124,7 +174,7 @@ public static class ArchivosDeDescuentos
 /// La vista previa del archivo (api.md §13.2, <c>POST /preview</c>, <c>Lending.PayrollDeductionFiles.Generate</c>, sin clave: no escribe): las líneas y
 /// novedades que saldrían, el texto del archivo con el lote todavía sin número y los totales. (nuevo)
 /// </summary>
-public sealed record PreviewPayrollDeductionFileQuery(Guid AgreementPublicId, int Year, int Month, int? SubPeriod = null)
+public sealed record PreviewPayrollDeductionFileQuery(Guid AgreementPublicId, int Year, int Month, int? SubPeriod = null, string? FileGroupCode = null)
     : IRequest<Result<PayrollDeductionFilePreviewDto>>;
 
 public sealed class PreviewPayrollDeductionFileQueryValidator : AbstractValidator<PreviewPayrollDeductionFileQuery>
@@ -143,28 +193,32 @@ public sealed class PreviewPayrollDeductionFileQueryHandler(IApplicationDbContex
     public async Task<Result<PayrollDeductionFilePreviewDto>> Handle(PreviewPayrollDeductionFileQuery request, CancellationToken ct)
     {
         var prep = await preparacion.PrepararAsync(request.AgreementPublicId, request.Year, request.Month, request.SubPeriod,
-            PayrollDeductionLines.LoteDeVistaPrevia, ct);
+            PayrollDeductionLines.LoteDeVistaPrevia, ct, request.FileGroupCode);
         if (prep.IsFailure) return Result.Failure<PayrollDeductionFilePreviewDto>(prep.Error);
         var p = prep.Value;
+        var grupo = p.Grupo?.Code ?? string.Empty;
         var version = await db.PayrollDeductionFiles.AsNoTracking()
             .Where(f => f.PayrollAgreementId == p.Convenio.Id && f.PeriodYear == p.Periodo.Anio && f.PeriodMonth == p.Periodo.Mes
-                        && f.SubPeriodNumber == p.Periodo.SubPeriodo && !f.IsDeleted)
+                        && f.SubPeriodNumber == p.Periodo.SubPeriodo && f.FileGroupCode == grupo && !f.IsDeleted)
             .MaxAsync(f => (int?)f.Version, ct) ?? 0;
         try
         {
-            var salida = FlatFileWriter.Escribir(p.Formato, p.Contexto, p.Lineas.Select(l => l.Valores).ToList());
+            var salida = FlatFileWriter.Escribir(p.Formato, p.Contexto, p.Valores);
             var texto = salida.Text.Split(p.Formato.LineEnding == BankFileLineEnding.Lf ? "\n" : "\r\n", StringSplitOptions.RemoveEmptyEntries);
             var lineas = p.Lineas.Select(l => new PayrollDeductionFileLineDto(Guid.Empty, l.Novedad.LineNumber, l.Novedad.EmployeeIdAtPaymaster, l.Credito.PublicId,
                 l.Credito.Number, ReferenciasDeGobierno.Nombre(l.Deudor), l.Novedad.InstallmentNumber, l.Novedad.DueDate, l.Novedad.Corriente, l.Novedad.Vencido,
-                l.Novedad.Total, l.Novedad.Novedad.ToString(), l.Novedad.Anterior, l.Novedad.LibranzaDate)).ToList();
-            var t = p.Novedades.Totales;
+                l.Novedad.Total, l.Novedad.Novedad.ToString(), l.Novedad.Anterior, l.Novedad.LibranzaDate,
+                p.CodigosDeCredito?.GetValueOrDefault(l.Credito.Id)?.Codigo)).ToList();
+            var cuentas = p.Cuentas.Select(c => new PayrollDeductionFileAccountLineDto(Guid.Empty, c.LineNumber, c.EmployeeIdAtPaymaster, c.Cuenta.PublicId,
+                c.Cuenta.Number, ReferenciasDeGobierno.Nombre(c.Titular), c.Cuota.PublicId, c.Cuota.DueDate, c.Codigo.Codigo, c.Corriente, c.Vencido, c.Total,
+                c.Novedad.ToString(), c.Anterior)).ToList();
+            var t = p.Totales;
             return Result.Success(new PayrollDeductionFilePreviewDto(salida.FileName, p.EnviarA, version + 1, lineas, texto, t.Total, t.Nuevas, t.Cambios,
-                t.Cancelaciones, t.SinCambio));
+                t.Cancelaciones, t.SinCambio, p.Grupo is null ? null : cuentas, p.SinEquivalencia));
         }
         catch (BankFileWriteException ex)
         {
-            var credito = ex.LineNumber >= 1 && ex.LineNumber <= p.Lineas.Count ? p.Lineas[ex.LineNumber - 1].Credito.Number : "?";
-            return Result.Failure<PayrollDeductionFilePreviewDto>(ErroresDeLibranza.NoCabe(ex.LineNumber, ex.Field, credito));
+            return Result.Failure<PayrollDeductionFilePreviewDto>(ErroresDeLibranza.NoCabe(ex.LineNumber, ex.Field, p.Referencia(ex.LineNumber)));
         }
     }
 }
@@ -194,8 +248,10 @@ public sealed class ListPayrollDeductionFilesQueryHandler(IApplicationDbContext 
     {
         AlcanceDeCartera alcance = await alcanceDeLaPeticion.ObtenerAsync(ct);
         var creditos = db.Loans.AsNoTracking().PorOficinaYLinea(alcance, l => l.BranchId, l => l.CreditLineId).Select(l => l.Id);
+        var cuentas = db.MemberAccounts.AsNoTracking().PorOficinaYLinea(alcance, a => a.BranchId, a => a.CreditLineId).Select(a => a.Id);
         var consulta = db.PayrollDeductionFiles.AsNoTracking()
-            .Where(f => !f.IsDeleted && db.PayrollDeductionFileLines.Any(l => l.PayrollDeductionFileId == f.Id && creditos.Contains(l.LoanId)));
+            .Where(f => !f.IsDeleted && (db.PayrollDeductionFileLines.Any(l => l.PayrollDeductionFileId == f.Id && creditos.Contains(l.LoanId))
+                                         || db.PayrollDeductionFileAccountLines.Any(l => l.PayrollDeductionFileId == f.Id && cuentas.Contains(l.MemberAccountId))));
         if (request.AgreementPublicId is { } convenio)
             consulta = consulta.Where(f => db.PayrollAgreements.Any(a => a.Id == f.PayrollAgreementId && a.PublicId == convenio));
         if (request.Year is { } anio) consulta = consulta.Where(f => f.PeriodYear == anio);
@@ -239,7 +295,43 @@ public sealed class GetPayrollDeductionFileQueryHandler(IApplicationDbContext db
         var consulta = db.PayrollDeductionFileLines.AsNoTracking().Where(l => l.PayrollDeductionFileId == archivo.Id && creditos.Contains(l.LoanId));
         var total = await consulta.CountAsync(ct);
         var pagina = await consulta.OrderBy(l => l.LineNumber).Skip((request.Page - 1) * request.PageSize).Take(request.PageSize).ToListAsync(ct);
+        IReadOnlyList<PayrollDeductionFileAccountLineDto>? deCuentas = null;
+        if (archivo.FileGroupId is not null)
+        {
+            var cuentas = db.MemberAccounts.AsNoTracking().PorOficinaYLinea(alcance, a => a.BranchId, a => a.CreditLineId).Select(a => a.Id);
+            var lineasDeCuenta = await db.PayrollDeductionFileAccountLines.AsNoTracking()
+                .Where(l => l.PayrollDeductionFileId == archivo.Id && cuentas.Contains(l.MemberAccountId)).OrderBy(l => l.LineNumber).ToListAsync(ct);
+            deCuentas = await ArchivosDeDescuentos.CuentasAsync(db, lineasDeCuenta, ct);
+        }
         return Result.Success(new PayrollDeductionFileDetailDto((await ArchivosDeDescuentos.DtosAsync(db, [archivo], ct))[0],
-            await ArchivosDeDescuentos.LineasAsync(db, pagina, ct), total, request.Page, request.PageSize));
+            await ArchivosDeDescuentos.LineasAsync(db, pagina, ct), total, request.Page, request.PageSize, deCuentas));
+    }
+}
+
+// --------------------------------------------------------------------------------------------------------------------- no aplicados --
+
+/// <summary>
+/// Feature 014 (T091; decisión del dueño del 2026-10-18, D36; mensajes.md §5.7): las filas de la respuesta de la pagaduría que no se aplicaron —empleado o
+/// código sin equivalencia, o lo descontado que sobró— (<c>GET /{id}/unmatched</c>, <c>Lending.PayrollDeductionFiles.Read</c>), las más recientes primero.
+/// (nuevo)
+/// </summary>
+public sealed record ListPayrollDeductionUnmatchedLinesQuery(Guid FilePublicId) : IRequest<Result<IReadOnlyList<PayrollDeductionUnmatchedLineDto>>>;
+
+public sealed class ListPayrollDeductionUnmatchedLinesQueryValidator : AbstractValidator<ListPayrollDeductionUnmatchedLinesQuery>
+{
+    public ListPayrollDeductionUnmatchedLinesQueryValidator() => RuleFor(x => x.FilePublicId).NotEmpty();
+}
+
+public sealed class ListPayrollDeductionUnmatchedLinesQueryHandler(IApplicationDbContext db, IAlcanceDeCartera alcance, LendingAuditEmitter auditoria)
+    : IRequestHandler<ListPayrollDeductionUnmatchedLinesQuery, Result<IReadOnlyList<PayrollDeductionUnmatchedLineDto>>>
+{
+    public async Task<Result<IReadOnlyList<PayrollDeductionUnmatchedLineDto>>> Handle(ListPayrollDeductionUnmatchedLinesQuery request, CancellationToken ct)
+    {
+        var leido = await ArchivosDeDescuentos.LeerAsync(db, alcance, auditoria, request.FilePublicId, ct);
+        if (leido.IsFailure) return Result.Failure<IReadOnlyList<PayrollDeductionUnmatchedLineDto>>(leido.Error);
+        var filas = await db.PayrollDeductionUnmatchedLines.AsNoTracking().Where(u => u.PayrollDeductionFileId == leido.Value.Id && !u.IsDeleted)
+            .OrderByDescending(u => u.Id).ToListAsync(ct);
+        return Result.Success<IReadOnlyList<PayrollDeductionUnmatchedLineDto>>(filas.Select(u => new PayrollDeductionUnmatchedLineDto(u.PayerEmployeeId,
+            u.PaymasterConceptCode, u.ExpectedAmount, u.DeductedAmount, u.ReasonCode, u.PaymasterResultCode, u.DeductionDate, u.CreatedAt)).ToList());
     }
 }

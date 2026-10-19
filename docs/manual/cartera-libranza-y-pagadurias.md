@@ -129,6 +129,26 @@ Si el traslado cambia entre «con libranza» y «sin libranza» y las condicione
 - `payroll-deduction-reconciliation` (filtros `agreement`, `year`, `month`): el cuadre línea por línea —enviado,
   descontado, pendiente de giro, aplicado, no aplicado y motivo—. Trae datos del deudor.
 
+## 9a. Grupos de archivo, aportes y ahorros (feature 014, decisión del dueño del 2026-10-18)
+
+Una pagaduría que separa los archivos (créditos por un lado; aportes y ahorros por otro) se configura en el convenio:
+**grupos de archivo**, cada uno con su formato de ida y de vuelta, y **equivalencias**: cada código de la pagaduría dice
+qué líneas de Cartera agrupa (crédito, aportes o ahorro; una línea o todas) y cómo se reparte lo que la pagaduría informa
+descontado por ese código (por prioridad o a prorrata). Las dos cosas registran una versión nueva del convenio.
+
+- **Generar** se hace por grupo (campo «Grupo de archivo» en `/cartera/archivos-de-descuento`). Van los créditos vinculados
+  al convenio y las cuotas de aportes y de ahorro permanente o contractual de los asociados cuya **empresa empleadora en
+  su ficha** tiene el NIT de la pagaduría. Cada línea lleva el código de la pagaduría; una obligación o cuenta que ningún
+  código cubre no va en ningún archivo y la vista previa lo avisa. Si el archivo lleva cuotas de cuentas, Recaudo tiene
+  que haber adoptado `DescuentosPorPagaduria` v2 en el registro de integración.
+- **La respuesta** trae lo descontado por empleado y por código. Se reparte entre las líneas de ese empleado con ese
+  código según la regla del código; lo que no alcanza queda como no descontado (en créditos, un no aplicado con su
+  seguimiento; en cuentas, la cuota sigue exigible). Una fila de un empleado que el archivo no tiene, de un código que no
+  se le pidió o lo descontado que sobra quedan en «no aplicados» de la respuesta (`GET …/payroll-deduction-files/{id}/unmatched`)
+  sin detener lo demás.
+- **El giro** lo aplica Recaudo por los dos contratos: los créditos como siempre y las cuotas de cuentas por el contrato de
+  cuentas, nombrando la línea del archivo.
+
 ## 10. Lo que aporta el dueño
 
 - El valor del umbral de mora de la pagaduría, cotejado contra la CBCF (T0855). Las pruebas usan 30 días.

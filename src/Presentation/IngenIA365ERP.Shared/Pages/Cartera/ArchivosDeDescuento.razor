@@ -33,9 +33,10 @@
                 <label class="campo">Año <input class="e-input" type="number" min="2000" max="2999" @bind="_anio" /></label>
                 <label class="campo">Mes <input class="e-input" type="number" min="1" max="12" @bind="_mes" /></label>
                 <label class="campo">Quincena <input class="e-input" type="number" min="1" max="2" @bind="_quincena" placeholder="—" /></label>
+                <label class="campo">Grupo de archivo <input class="e-input" @bind="_grupo" maxlength="20" placeholder="sólo si el convenio separa archivos" /></label>
                 <label class="campo campo-ancho">Motivo (al regenerar) <input class="e-input" @bind="_motivo" maxlength="500" /></label>
                 <SfButton CssClass="e-outline" Disabled="@(_accion.Activa || _convenio is null)" OnClick="@VistaPreviaAsync">Vista previa</SfButton>
-                <SfButton CssClass="e-primary" Disabled="@(_accion.Activa || _previa is not { Lines.Count: > 0 })" OnClick="@GenerarAsync">Generar</SfButton>
+                <SfButton CssClass="e-primary" Disabled="@(_accion.Activa || _previa is null || (_previa.Lines.Count == 0 && (_previa.AccountLines?.Count ?? 0) == 0))" OnClick="@GenerarAsync">Generar</SfButton>
             </div>
             <IndicadorDeCarga Cargando="@_accion.Activa" Texto="Preparando el archivo…">
                 @if (_previa is { } p)
@@ -44,6 +45,26 @@
                         @TextosDeCreditos.Pesos(p.Total)</p>
                     <p class="texto-apoyo">Altas @p.NewCount · cambios @p.ChangeCount · retiros @p.CancellationCount · sin cambio @p.UnchangedCount</p>
                     <TablaDeLineasDeDescuento Lineas="@p.Lines" />
+                    @if (p.AccountLines is { Count: > 0 } cuotas)
+                    {
+                        <h5>Cuotas de cuentas</h5>
+                        <div class="tabla-desplazable">
+                            <table class="data-grid">
+                                <thead><tr><th>Línea</th><th>Empleado</th><th>Cuenta</th><th>Titular</th><th>Código</th><th>Vence</th><th class="numero">Valor</th><th>Novedad</th></tr></thead>
+                                <tbody>
+                                    @foreach (var c in cuotas)
+                                    {
+                                        <tr><td>@c.LineNumber</td><td>@c.EmployeeId</td><td>@c.AccountNumber</td><td>@c.Holder</td><td>@c.PaymasterConceptCode</td>
+                                            <td>@c.DueDate.ToString("dd/MM/yyyy")</td><td class="numero">@TextosDeCreditos.Pesos(c.Total)</td><td>@c.Novelty</td></tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                    @if (p.WithoutEquivalence > 0)
+                    {
+                        <p class="aviso">@p.WithoutEquivalence obligación(es) o cuenta(s) del asociado no tienen código de la pagaduría en el convenio: no van en ningún archivo.</p>
+                    }
                 }
             </IndicadorDeCarga>
         </div>
@@ -96,7 +117,7 @@
     private readonly EstadoDeCarga _carga = new(), _accion = new();
     private List<ConvenioResumenDto> _convenios = [];
     private List<ArchivoDeDescuentosDto> _archivos = [];
-    private string? _convenio, _motivo, _filtroConvenio, _filtroEstado;
+    private string? _convenio, _motivo, _filtroConvenio, _filtroEstado, _grupo;
     private int _anio = DateTime.Today.Year, _mes = DateTime.Today.Month;
     private int? _quincena;
     private VistaPreviaDeDescuentosDto? _previa;
@@ -125,7 +146,8 @@
     }
 
     private ArchivoDeDescuentosRequest Pedido() =>
-        new(Guid.Parse(_convenio!), _anio, _mes, _quincena, string.IsNullOrWhiteSpace(_motivo) ? null : _motivo.Trim());
+        new(Guid.Parse(_convenio!), _anio, _mes, _quincena, string.IsNullOrWhiteSpace(_motivo) ? null : _motivo.Trim(),
+            string.IsNullOrWhiteSpace(_grupo) ? null : _grupo.Trim().ToUpperInvariant());
 
     private async Task VistaPreviaAsync()
     {

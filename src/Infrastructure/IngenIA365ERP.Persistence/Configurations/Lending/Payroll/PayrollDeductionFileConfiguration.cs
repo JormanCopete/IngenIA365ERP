@@ -1,6 +1,7 @@
 using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Entities.Lending.Integration;
 using IngenIA365ERP.Domain.Entities.Lending.Collections;
+using IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts;
 using IngenIA365ERP.Domain.Entities.Lending.Loans;
 using IngenIA365ERP.Domain.Entities.Lending.Operations;
 using IngenIA365ERP.Domain.Entities.Lending.Payroll;
@@ -42,8 +43,11 @@ public class PayrollDeductionFileConfiguration : IEntityTypeConfiguration<Payrol
         builder.Property(e => e.DeliveryMessagePublicId).IsRequired();
         builder.Property(e => e.PaymasterReference).HasMaxLength(60);
         builder.Property(e => e.VoidReason).HasMaxLength(500);
+        // Feature 014 (T091, D36): el grupo de archivo; el código va en la unicidad del período (sin grupo, vacío: un solo archivo como en la 013).
+        builder.Property(e => e.FileGroupCode).HasMaxLength(20).IsRequired().HasDefaultValue(string.Empty);
 
         builder.HasOne<PayrollAgreement>().WithMany().HasForeignKey(e => e.PayrollAgreementId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<PayrollAgreementFileGroup>().WithMany().HasForeignKey(e => e.FileGroupId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<PayrollAgreementVersion>().WithMany().HasForeignKey(e => e.PayrollAgreementVersionId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<BankFileFormat>().WithMany().HasForeignKey(e => e.OutboundFormatId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<PayrollDeductionFile>().WithMany().HasForeignKey(e => e.BaseFileId).OnDelete(DeleteBehavior.Restrict);
@@ -52,11 +56,11 @@ public class PayrollDeductionFileConfiguration : IEntityTypeConfiguration<Payrol
         builder.HasOne<User>().WithMany().HasForeignKey(e => e.VoidedByUserId).OnDelete(DeleteBehavior.Restrict);
 
         builder.HasIndex(e => e.Number).IsUnique().HasDatabaseName("UK_LND_PayrollDeductionFiles_Number");
-        builder.HasIndex(e => new { e.PayrollAgreementId, e.PeriodYear, e.PeriodMonth, e.SubPeriodNumber, e.Version }).IsUnique()
+        builder.HasIndex(e => new { e.PayrollAgreementId, e.PeriodYear, e.PeriodMonth, e.SubPeriodNumber, e.FileGroupCode, e.Version }).IsUnique()
             .HasDatabaseName("UK_LND_PayrollDeductionFiles_Agreement_Period_Version");
-        builder.HasIndex(e => new { e.PayrollAgreementId, e.PeriodYear, e.PeriodMonth, e.SubPeriodNumber }).IsUnique()
+        builder.HasIndex(e => new { e.PayrollAgreementId, e.PeriodYear, e.PeriodMonth, e.SubPeriodNumber, e.FileGroupCode }).IsUnique()
             .HasDatabaseName("UK_LND_PayrollDeductionFiles_Agreement_Period_Generated").HasFilter("[Status] = 1 AND [IsDeleted] = 0");
-        builder.HasIndex(e => new { e.PayrollAgreementId, e.PeriodYear, e.PeriodMonth, e.SubPeriodNumber }).IsUnique()
+        builder.HasIndex(e => new { e.PayrollAgreementId, e.PeriodYear, e.PeriodMonth, e.SubPeriodNumber, e.FileGroupCode }).IsUnique()
             .HasDatabaseName("UK_LND_PayrollDeductionFiles_Agreement_Period_Sent").HasFilter("[Status] = 3 AND [IsDeleted] = 0");
     }
 }
@@ -81,6 +85,7 @@ public class PayrollDeductionFileLineConfiguration : IEntityTypeConfiguration<Pa
         builder.Property(e => e.NoveltyKind).HasConversion<int>().IsRequired();
         builder.Property(e => e.PreviousAmount).Monto();
         builder.Property(e => e.LibranzaDate).IsRequired();
+        builder.Property(e => e.PaymasterConceptCode).HasMaxLength(20);
 
         builder.HasOne<PayrollDeductionFile>().WithMany().HasForeignKey(e => e.PayrollDeductionFileId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<Loan>().WithMany().HasForeignKey(e => e.LoanId).OnDelete(DeleteBehavior.Restrict);
@@ -151,5 +156,95 @@ public class NonDeductionFollowUpConfiguration : IEntityTypeConfiguration<NonDed
         builder.HasOne<User>().WithMany().HasForeignKey(e => e.ActorUserId).OnDelete(DeleteBehavior.Restrict);
 
         builder.HasIndex(e => new { e.InstallmentNonDeductionId, e.OccurredAt }).HasDatabaseName("IX_LND_NonDeductionFollowUps_NonDeduction_At");
+    }
+}
+
+/// <summary>
+/// <c>LND_PayrollDeductionFileAccountLines</c> (feature 014, T091; D36; data-model §1.4.3): hecho hijo del archivo de un grupo; una cuota a lo sumo una vez
+/// por archivo. La cuota es <c>bigint</c> (C43). (nuevo)
+/// </summary>
+public class PayrollDeductionFileAccountLineConfiguration : IEntityTypeConfiguration<PayrollDeductionFileAccountLine>
+{
+    public const string Tabla = "LND_PayrollDeductionFileAccountLines";
+
+    public void Configure(EntityTypeBuilder<PayrollDeductionFileAccountLine> builder)
+    {
+        builder.ComoEntidadDeCartera(Tabla);
+
+        builder.Property(e => e.LineNumber).IsRequired();
+        builder.Property(e => e.EmployeeIdAtPaymaster).HasMaxLength(30);
+        builder.Property(e => e.PaymasterConceptCode).HasMaxLength(20).IsRequired();
+        builder.Property(e => e.DueDate).IsRequired();
+        builder.Property(e => e.CurrentAmount).Monto().IsRequired();
+        builder.Property(e => e.PastDueAmount).Monto().IsRequired();
+        builder.Property(e => e.TotalAmount).Monto().IsRequired();
+        builder.Property(e => e.NoveltyKind).HasConversion<int>().IsRequired();
+        builder.Property(e => e.PreviousAmount).Monto();
+
+        builder.HasOne<PayrollDeductionFile>().WithMany().HasForeignKey(e => e.PayrollDeductionFileId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<MemberAccount>().WithMany().HasForeignKey(e => e.MemberAccountId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<AccountInstallment>().WithMany().HasForeignKey(e => e.AccountInstallmentId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<Person>().WithMany().HasForeignKey(e => e.PersonId).OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasIndex(e => new { e.PayrollDeductionFileId, e.LineNumber }).IsUnique().HasDatabaseName("UK_LND_PayrollDeductionFileAccountLines_File_Line");
+        builder.HasIndex(e => new { e.PayrollDeductionFileId, e.AccountInstallmentId }).IsUnique()
+            .HasDatabaseName("UK_LND_PayrollDeductionFileAccountLines_File_Installment");
+        builder.HasIndex(e => e.MemberAccountId).HasDatabaseName("IX_LND_PayrollDeductionFileAccountLines_AccountId");
+    }
+}
+
+/// <summary>
+/// <c>LND_PayrollDeductionAccountResults</c> (feature 014, T091; D36): hecho; el mismo mensaje no informa dos veces la misma línea. Los pendientes de giro se
+/// consultan por cuenta. (nuevo)
+/// </summary>
+public class PayrollDeductionAccountResultConfiguration : IEntityTypeConfiguration<PayrollDeductionAccountResult>
+{
+    public const string Tabla = "LND_PayrollDeductionAccountResults";
+
+    public void Configure(EntityTypeBuilder<PayrollDeductionAccountResult> builder)
+    {
+        builder.ComoEntidadDeCartera(Tabla);
+
+        builder.Property(e => e.Outcome).HasConversion<int>().IsRequired();
+        builder.Property(e => e.DeductedAmount).Monto().IsRequired();
+        builder.Property(e => e.NotDeductedAmount).Monto().IsRequired();
+        builder.Property(e => e.PaymasterResultCode).HasMaxLength(20);
+        builder.Property(e => e.NonDeductionReason).HasConversion<int?>();
+
+        builder.HasOne<PayrollDeductionFileAccountLine>().WithMany().HasForeignKey(e => e.PayrollDeductionFileAccountLineId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<PayrollDeductionFile>().WithMany().HasForeignKey(e => e.PayrollDeductionFileId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<MemberAccount>().WithMany().HasForeignKey(e => e.MemberAccountId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<LendingInboundMessage>().WithMany().HasForeignKey(e => e.InboundMessageId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<PayrollDeductionAccountResult>().WithMany().HasForeignKey(e => e.SupersedesResultId).OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasIndex(e => new { e.PayrollDeductionFileAccountLineId, e.InboundMessageId }).IsUnique()
+            .HasDatabaseName("UK_LND_PayrollDeductionAccountResults_Line_Message");
+        builder.HasIndex(e => new { e.MemberAccountId, e.TransferDueDate }).HasDatabaseName("IX_LND_PayrollDeductionAccountResults_Account_TransferDue");
+        builder.HasIndex(e => e.PayrollDeductionFileId).HasDatabaseName("IX_LND_PayrollDeductionAccountResults_FileId");
+    }
+}
+
+/// <summary>
+/// <c>LND_PayrollDeductionUnmatchedLines</c> (feature 014, T091; D36): hecho; las filas de la respuesta que no se aplicaron, por archivo y mensaje. (nuevo)
+/// </summary>
+public class PayrollDeductionUnmatchedLineConfiguration : IEntityTypeConfiguration<PayrollDeductionUnmatchedLine>
+{
+    public const string Tabla = "LND_PayrollDeductionUnmatchedLines";
+
+    public void Configure(EntityTypeBuilder<PayrollDeductionUnmatchedLine> builder)
+    {
+        builder.ComoEntidadDeCartera(Tabla);
+
+        builder.Property(e => e.PayerEmployeeId).HasMaxLength(30).IsRequired();
+        builder.Property(e => e.PaymasterConceptCode).HasMaxLength(20).IsRequired();
+        builder.Property(e => e.ExpectedAmount).Monto().IsRequired();
+        builder.Property(e => e.DeductedAmount).Monto().IsRequired();
+        builder.Property(e => e.ReasonCode).HasMaxLength(80).IsRequired();
+        builder.Property(e => e.PaymasterResultCode).HasMaxLength(20);
+
+        builder.HasOne<PayrollDeductionFile>().WithMany().HasForeignKey(e => e.PayrollDeductionFileId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<LendingInboundMessage>().WithMany().HasForeignKey(e => e.InboundMessageId).OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasIndex(e => new { e.PayrollDeductionFileId, e.InboundMessageId }).HasDatabaseName("IX_LND_PayrollDeductionUnmatchedLines_File_Message");
     }
 }

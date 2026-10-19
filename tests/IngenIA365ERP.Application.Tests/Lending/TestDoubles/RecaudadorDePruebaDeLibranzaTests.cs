@@ -44,7 +44,8 @@ public sealed class RecaudadorDePruebaDeLibranzaTests : IAsyncLifetime
         var doble = new RecaudadorDePrueba();
         doble.Destino.Should().Be(IntegrationDestinations.Receipts);
         doble.Acepta(DescuentosPorPagaduriaV1.Type, 1).Should().BeTrue();
-        doble.Acepta(DescuentosPorPagaduriaV1.Type, 2).Should().BeFalse();
+        doble.Acepta(DescuentosPorPagaduriaV2.Type, 2).Should().BeTrue("feature 014 (T091): el archivo de un grupo");
+        doble.Acepta(DescuentosPorPagaduriaV1.Type, 3).Should().BeFalse();
     }
 
     [Fact]

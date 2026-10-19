@@ -62,12 +62,16 @@ public static class BankFileFormatValidator
             BankFieldSource.PayeeLastNames, BankFieldSource.PayerEmployeeId, BankFieldSource.LoanNumber, BankFieldSource.InstallmentNumber,
             BankFieldSource.DueDate, BankFieldSource.Amount, BankFieldSource.PastDueAmount, BankFieldSource.NoveltyKind, BankFieldSource.PeriodYear,
             BankFieldSource.PeriodMonth, BankFieldSource.LibranzaDate,
+            // Feature 014 (T014, T091; decisión del dueño del 2026-10-18, D36): las cuotas de cuentas y el código de la pagaduría del archivo de un grupo.
+            BankFieldSource.AccountNumber, BankFieldSource.AccountInstallmentPeriod, BankFieldSource.PaymasterConceptCode,
         ],
         [BankFileScope.PayrollDeductionResult] =
         [
             BankFieldSource.PayeeDocument, BankFieldSource.PayerEmployeeId, BankFieldSource.LoanNumber, BankFieldSource.InstallmentNumber,
             BankFieldSource.ResultCode, BankFieldSource.DeductedAmount, BankFieldSource.DeductionDate, BankFieldSource.PeriodYear,
             BankFieldSource.PeriodMonth,
+            // Feature 014 (T091): la respuesta por empleado y por código de la pagaduría.
+            BankFieldSource.AccountNumber, BankFieldSource.PaymasterConceptCode,
         ],
     };
 
@@ -81,6 +85,7 @@ public static class BankFileFormatValidator
         BankFieldSource.LoanNumber, BankFieldSource.PayerEmployeeId, BankFieldSource.InstallmentNumber, BankFieldSource.DueDate,
         BankFieldSource.NoveltyKind, BankFieldSource.PastDueAmount, BankFieldSource.PeriodYear, BankFieldSource.PeriodMonth,
         BankFieldSource.LibranzaDate, BankFieldSource.ResultCode, BankFieldSource.DeductedAmount, BankFieldSource.DeductionDate,
+        BankFieldSource.AccountNumber, BankFieldSource.AccountInstallmentPeriod, BankFieldSource.PaymasterConceptCode,
     ];
 
     /// <summary>Los orígenes que admite <paramref name="ambito"/>, o nulo si el ámbito no restringe (feature 013, §6.1).</summary>

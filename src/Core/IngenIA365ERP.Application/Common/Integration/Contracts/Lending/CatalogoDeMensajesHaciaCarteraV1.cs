@@ -20,6 +20,8 @@ public static class CatalogoDeMensajesHaciaCarteraV1
         // K2, declarados en K1.
         new(typeof(EnvioDeDescuentosConfirmadoV1), EnvioDeDescuentosConfirmadoV1.Type, 1, ModulosDeOrigen.Recaudo, TipoDeMensaje.Un(L), N, P, AdmiteProceso: false),
         new(typeof(ResultadoDeDescuentosV1), ResultadoDeDescuentosV1.Type, 1, ModulosDeOrigen.Recaudo, TipoDeMensaje.Un(L), N, P, AdmiteProceso: false),
+        // Feature 014 (T091, D36; mensajes.md §5.7 de la 014): la respuesta de la pagaduría por empleado y por código suyo, del archivo de un grupo.
+        new(typeof(ResultadoDeDescuentosV2), ResultadoDeDescuentosV2.Type, 2, ModulosDeOrigen.Recaudo, TipoDeMensaje.Un(L), N, P, AdmiteProceso: false),
         // Feature 014, US4 (T112; mensajes.md §1.3 #40 y §5.6 de la 014): el estado de la factura de un cargo de captación; la emite Comercial y la Cartera
         // sólo lo guarda (informativa).
         new(typeof(Deposits.FacturaDeCargoRegistradaV1), Deposits.FacturaDeCargoRegistradaV1.Type, 1, ModulosDeOrigen.Inventario, TipoDeMensaje.Un(L),

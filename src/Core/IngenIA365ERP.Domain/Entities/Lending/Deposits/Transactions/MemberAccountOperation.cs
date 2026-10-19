@@ -112,6 +112,12 @@ public class MemberAccountOperation : AuditableEntityLong, IHechoInmutable
     /// <summary>Resultado del giro, factura del cargo.</summary>
     public int? InboundMessageId { get; init; }
 
+    /// <summary>
+    /// Feature 014 (T091, D36): el resultado de pagaduría «descontado pendiente de giro» que esta consignación gira (<c>ExternalPaymasterDeduction</c> con
+    /// <c>DeductionFileLinePublicId</c>); mientras la consignación no se reverse, ese resultado ya no está pendiente.
+    /// </summary>
+    public int? PayrollDeductionAccountResultId { get; init; }
+
     /// <summary>Carga de migración (<c>OpeningBalance</c>).</summary>
     public int? MigrationLoadId { get; init; }
 

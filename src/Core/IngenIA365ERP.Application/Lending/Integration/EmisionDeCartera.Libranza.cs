@@ -18,6 +18,24 @@ public sealed record LineaDeDescuentoAEmitir(
     DateOnly? DueDate,
     PayrollNoveltyKind Novedad,
     decimal Total,
+    decimal Vencido)
+{
+    /// <summary>Feature 014 (T091): el código de la pagaduría que agrupa la línea, en el archivo de un grupo.</summary>
+    public string? PaymasterConceptCode { get; init; }
+}
+
+/// <summary>Una cuota de cuenta del archivo de un grupo tal como viaja a Recaudo (feature 014, T091; mensajes.md §5.4 de la 014). (nuevo)</summary>
+public sealed record CuotaDeCuentaAEmitir(
+    Guid LinePublicId,
+    Guid CuentaPublicId,
+    string NumeroDeCuenta,
+    Guid CuotaPublicId,
+    Guid TitularPublicId,
+    string? EmployeeIdAtPaymaster,
+    string CodigoDePagaduria,
+    DateOnly Vencimiento,
+    PayrollNoveltyKind Novedad,
+    decimal Total,
     decimal Vencido);
 
 /// <summary>El archivo de descuentos tal como se emite (mensajes.md §11.6): sus datos sellados, sus líneas y la versión que reemplaza. (nuevo)</summary>
@@ -40,7 +58,14 @@ public sealed record ArchivoDeDescuentosAEmitir(
     DateOnly EnviarA,
     PayrollDeductionFile? Reemplazado,
     Guid? MensajeDelReemplazado,
-    DateOnly Hoy);
+    DateOnly Hoy)
+{
+    /// <summary>Feature 014 (T091): el grupo del archivo; con él viaja la v2.</summary>
+    public PayrollAgreementFileGroup? Grupo { get; init; }
+
+    /// <summary>Feature 014 (T091): las cuotas de cuentas del grupo.</summary>
+    public IReadOnlyList<CuotaDeCuentaAEmitir> Cuentas { get; init; } = [];
+}
 
 public sealed partial class EmisionDeCartera
 {
@@ -84,6 +109,86 @@ public sealed partial class EmisionDeCartera
             },
             SendBy = a.EnviarA,
             Lines = lineas,
+            Totals = new DeductionFileTotalsV1
+            {
+                LineCount = lineas.Count,
+                Amount = lineas.Sum(l => l.Amount),
+                PastDueAmount = lineas.Sum(l => l.PastDueAmount),
+                ByNovelty = lineas.GroupBy(l => l.NoveltyKind).OrderBy(g => g.Key, StringComparer.Ordinal)
+                    .Select(g => new DeductionNoveltyTotalV1 { NoveltyKind = g.Key, Lines = g.Count(), Amount = g.Sum(l => l.Amount) }).ToList(),
+            },
+            SupersedesFile = a.Reemplazado is { } r
+                ? new SupersededDeductionFileV1 { FilePublicId = r.PublicId, FileVersion = r.Version, MessageId = a.MensajeDelReemplazado ?? Guid.Empty }
+                : null,
+            GeneratedBy = await UsuarioAsync(ct),
+        };
+        var sucursal = await SucursalPrincipalAsync(ct);
+        var mensajes = await emisor.EmitirAsync(new SolicitudDeEmision(
+            new OrigenDeEmision(MessageOriginKind.Document, a.FilePublicId, ClaseArchivoDeDescuentos, Prefijo(a.Number), a.Number, a.Hoy, sucursal,
+                PersonPublicId: a.PagaduriaPublicId),
+            ClavesDeEvento.Confirmacion, [contenido], new ModoDeEntrega.Sellado(DeliveryMode.Always),
+            Relacionado: a.Reemplazado is { } previo ? new DocumentoRelacionado(previo.PublicId, ClaseArchivoDeDescuentos, previo.Number) : null), ct);
+        return mensajes[0];
+    }
+
+    /// <summary>
+    /// <c>DescuentosPorPagaduria</c> v2 (feature 014, T091; decisión del dueño del 2026-10-18, D36; mensajes.md §5.4 de la 014): el archivo de un grupo, con
+    /// las líneas de créditos y de cuotas de cuentas, cada una con el código de la pagaduría, y los totales por código. Mismo origen, clave, destino y
+    /// modo que la v1. Sin guardar.
+    /// </summary>
+    public async Task<IntegrationMessage> DescuentosPorPagaduriaV2Async(ArchivoDeDescuentosAEmitir a, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(a);
+        if (a.Grupo is null) throw new InvalidOperationException("La v2 es el archivo de un grupo: sin grupo viaja la v1.");
+        var lineas = a.Lineas.Select(l => new DeductionFileLineV2
+            {
+                DeductionFileLinePublicId = l.LinePublicId,
+                Kind = "Loan",
+                Loan = l.Credito,
+                InstallmentNumber = l.InstallmentNumber,
+                PersonPublicId = l.DeudorPublicId,
+                PayerEmployeeId = l.EmployeeIdAtPaymaster ?? string.Empty,
+                PaymasterConceptCode = l.PaymasterConceptCode ?? string.Empty,
+                DueDate = l.DueDate ?? a.EnviarA,
+                NoveltyKind = l.Novedad.ToString(),
+                Amount = l.Total,
+                PastDueAmount = l.Vencido,
+            })
+            .Concat(a.Cuentas.Select(c => new DeductionFileLineV2
+            {
+                DeductionFileLinePublicId = c.LinePublicId,
+                Kind = "AccountInstallment",
+                Account = new IngenIA365ERP.Application.Common.Integration.Contracts.Lending.Deposits.MemberAccountRefV1
+                {
+                    AccountPublicId = c.CuentaPublicId, AccountNumber = c.NumeroDeCuenta,
+                },
+                InstallmentPublicId = c.CuotaPublicId,
+                PersonPublicId = c.TitularPublicId,
+                PayerEmployeeId = c.EmployeeIdAtPaymaster ?? string.Empty,
+                PaymasterConceptCode = c.CodigoDePagaduria,
+                DueDate = c.Vencimiento,
+                NoveltyKind = c.Novedad.ToString(),
+                Amount = c.Total,
+                PastDueAmount = c.Vencido,
+            }))
+            .ToList();
+        var contenido = new DescuentosPorPagaduriaV2
+        {
+            Agreement = new PayrollAgreementRefV1
+            {
+                PaymasterPersonPublicId = a.PagaduriaPublicId, AgreementCode = a.CodigoDelConvenio, AgreementVersion = a.VersionDelConvenio,
+            },
+            FileGroup = new DeductionFileGroupRefV2 { Code = a.Grupo.Code, Name = a.Grupo.Name, Version = a.VersionDelConvenio },
+            Period = new PayrollPeriodRefV1 { Year = a.Year, Month = a.Month, SubPeriod = a.SubPeriod > 1 ? a.SubPeriod : null },
+            FileVersion = a.FileVersion,
+            File = new DeductionFileRefV1
+            {
+                AttachmentPublicId = a.AttachmentPublicId, FileName = a.FileName, Sha256 = a.Sha256, SizeBytes = a.Bytes, FormatCode = a.CodigoDelFormato,
+            },
+            SendBy = a.EnviarA,
+            Lines = lineas,
+            ConceptTotals = lineas.GroupBy(l => l.PaymasterConceptCode).OrderBy(g => g.Key, StringComparer.Ordinal)
+                .Select(g => new DeductionConceptTotalV2 { PaymasterConceptCode = g.Key, Lines = g.Count(), Amount = g.Sum(l => l.Amount) }).ToList(),
             Totals = new DeductionFileTotalsV1
             {
                 LineCount = lineas.Count,

@@ -422,6 +422,14 @@ Recaudo adopta la v2 en el registro; mientras no la adopte, un convenio con cuot
 (`Lending.PayrollAgreement.ReceiptsVersionNotAdopted` **(nuevo en contracts)**) y los convenios sólo de créditos siguen
 en v1.
 
+**Construido (T091, decisión del dueño del 2026-10-18, D36).** El archivo de un grupo sale siempre en v2 (los
+convenios sin grupos, en v1); la adopción se exige sólo si lleva cuotas de cuentas. `lines[].kind` es `Loan` o
+`AccountInstallment`; `fileGroup.version` es el número de la versión del convenio. Qué cuentas van: las de aportes y
+de ahorro permanente o contractual, activas o inactivas, del asociado cuya **empresa empleadora en su ficha**
+(`COR_Associates.EmployerCompanyId` → `COR_EmployerCompanies.TaxId`) tiene el NIT de la pagaduría del convenio; una
+línea por cuenta con lo pendiente de la cuota del período (y lo vencido si el convenio lo lleva); `payerEmployeeId`
+es el del vínculo de libranza de la persona con el convenio o, sin él, su documento.
+
 ### 5.5 `CargoDeCaptacionCausado` v1 y `CargoDeCaptacionReversado` v1 (`CAR → Inventory`, FR-128, R14)
 
 La Cartera **no calcula IVA ni emite facturas**: avisa a Comercial, que factura electrónicamente el cargo y su IVA
@@ -473,6 +481,15 @@ de redondeo a la última); cada línea queda «descontado pendiente de giro» o 
 por las equivalencias de causas del convenio; un código o empleado sin equivalencia queda en **no aplicados** con
 `Lending.PayrollFile.ConceptWithoutEquivalence` o `.EmployeeWithoutEquivalence` **(nuevo en contracts)** y no bloquea
 lo demás. Después, Recaudo aplica el giro por los dos contratos (`contrato-de-cuentas.md` §6.4).
+
+**Construido (T091, D36).** `ConsumePayrollDeductionResultCommand` acepta v1 y v2 (`VersionesAceptadasDeCartera`). Las
+filas del mismo empleado y código se suman; la prioridad de cada línea se sella al generar
+(`LND_PayrollDeductionFileLines.AllocationPriority`, `LND_PayrollDeductionFileAccountLines.AllocationPriority`). Lo de
+los créditos sigue el camino de la v1 (resultado, no aplicado, seguimiento); lo de las cuotas de cuentas queda en
+`LND_PayrollDeductionAccountResults` —lo descontado, pendiente de giro; lo no descontado, no descontado de la cuota por
+`RegistroDeCuentas` (sigue exigible)—; lo que no casa queda en `LND_PayrollDeductionUnmatchedLines` con
+`.ConceptWithoutEquivalence`, `.EmployeeWithoutEquivalence` o, si lo descontado supera lo enviado, `.DeductedExceedsSent`
+**(nuevo)**. Un `fileGroupCode` que no es el del archivo rechaza el mensaje con `.LineMismatch`.
 
 ---
 

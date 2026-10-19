@@ -57,6 +57,10 @@ public class MemberAccountOperationConfiguration : IEntityTypeConfiguration<Memb
         builder.HasOne<LoanOperation>().WithMany().HasForeignKey(e => e.RelatedLoanOperationId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<LendingInboundMessage>().WithMany().HasForeignKey(e => e.InboundMessageId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<MigrationLoad>().WithMany().HasForeignKey(e => e.MigrationLoadId).OnDelete(DeleteBehavior.Restrict);
+        // Feature 014 (T091, D36): el resultado de pagaduría que la consignación gira.
+        builder.HasOne<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollDeductionAccountResult>().WithMany()
+            .HasForeignKey(e => e.PayrollDeductionAccountResultId).OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("FK_LND_MemberAccountOperations_PayrollDeductionAccountResult");
         // Nombres propios: los generados pasan de 63 caracteres y PostgreSQL los truncaría al mismo prefijo.
         builder.HasOne<MemberAccountOperation>().WithMany().HasForeignKey(e => e.ReversesOperationId).OnDelete(DeleteBehavior.Restrict)
             .HasConstraintName("FK_LND_MemberAccountOperations_Reverses");

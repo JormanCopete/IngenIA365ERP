@@ -136,6 +136,7 @@ public sealed class EmitTestPayrollDeductionResultCommandHandler(
         var archivo = await db.PayrollDeductionFiles.AsNoTracking().FirstOrDefaultAsync(f => f.PublicId == request.FilePublicId && !f.IsDeleted, ct);
         if (archivo is null) return Result.Failure<TestPayrollMessageDto>(ErroresDeLibranza.ArchivoInexistente());
         var version = await db.PayrollAgreementVersions.AsNoTracking().FirstAsync(v => v.Id == archivo.PayrollAgreementVersionId, ct);
+        if (archivo.FileGroupId is { } grupoId) return await PorCodigoAsync(request, archivo, version, grupoId, ct);
         var formato = await db.BankFileFormats.AsNoTracking().Include(f => f.Fields).FirstAsync(f => f.Id == version.ResultFormatId, ct);
         var leido = FlatFileReader.Leer(formato, request.Content);
         if (!leido.IsValid) return Invalido(leido.Errors.Select(e => new { line = e.LineNumber, field = e.Field, message = e.Message }).ToList());
@@ -211,6 +212,85 @@ public sealed class EmitTestPayrollDeductionResultCommandHandler(
         await db.SaveChangesAsync(ct);
         return Result.Success(new TestPayrollMessageDto(mensaje.PublicId, archivo.PublicId, ResultadoDeDescuentosV1.Type, resultado.Count));
     }
+
+    /// <summary>
+    /// Feature 014 (T091; D36; mensajes.md §5.7 de la 014): la respuesta del archivo de un grupo, leída con el formato de vuelta del grupo. Cada fila trae el
+    /// empleado (<c>PayerEmployeeId</c>), el código de la pagaduría (<c>PaymasterConceptCode</c>), lo descontado y, si quiere, el código de respuesta y la
+    /// fecha; lo esperado es la suma de lo que el archivo le pidió a ese empleado por ese código (cero si no le pidió nada: Cartera lo deja en no
+    /// aplicados). Emite <c>ResultadoDeDescuentos</c> v2 con las <c>conceptLines</c>.
+    /// </summary>
+    private async Task<Result<TestPayrollMessageDto>> PorCodigoAsync(EmitTestPayrollDeductionResultCommand request, PayrollDeductionFile archivo,
+        PayrollAgreementVersion version, int grupoId, CancellationToken ct)
+    {
+        var grupo = await db.PayrollAgreementFileGroups.AsNoTracking().FirstAsync(g => g.Id == grupoId, ct);
+        var formato = await db.BankFileFormats.AsNoTracking().Include(f => f.Fields).FirstAsync(f => f.Id == grupo.ResultFormatId, ct);
+        var leido = FlatFileReader.Leer(formato, request.Content);
+        if (!leido.IsValid) return Invalido(leido.Errors.Select(e => new { line = e.LineNumber, field = e.Field, message = e.Message }).ToList());
+
+        var pedido = (await db.PayrollDeductionFileLines.AsNoTracking().Where(l => l.PayrollDeductionFileId == archivo.Id)
+                .Select(l => new { l.EmployeeIdAtPaymaster, l.PaymasterConceptCode, l.TotalAmount }).ToListAsync(ct))
+            .Concat(await db.PayrollDeductionFileAccountLines.AsNoTracking().Where(l => l.PayrollDeductionFileId == archivo.Id)
+                .Select(l => new { l.EmployeeIdAtPaymaster, PaymasterConceptCode = (string?)l.PaymasterConceptCode, l.TotalAmount }).ToListAsync(ct))
+            .GroupBy(l => (Clave(l.EmployeeIdAtPaymaster), Clave(l.PaymasterConceptCode)))
+            .ToDictionary(g => g.Key, g => g.Sum(l => l.TotalAmount));
+
+        var errores = new List<object>();
+        var filas = new List<DeductionConceptLineV2>();
+        foreach (var fila in leido.Rows)
+        {
+            var empleado = fila.Texto(BankFieldSource.PayerEmployeeId)?.Trim();
+            var codigo = fila.Texto(BankFieldSource.PaymasterConceptCode)?.Trim();
+            if (string.IsNullOrEmpty(empleado) || string.IsNullOrEmpty(codigo))
+            {
+                errores.Add(new { line = fila.LineNumber, field = nameof(BankFieldSource.PaymasterConceptCode), message = "Cada fila trae el empleado y el código de la pagaduría." });
+                continue;
+            }
+            var descontado = fila.Monto(BankFieldSource.DeductedAmount);
+            if (descontado is null)
+            {
+                errores.Add(new { line = fila.LineNumber, field = nameof(BankFieldSource.DeductedAmount), message = "Sin valor descontado." });
+                continue;
+            }
+            filas.Add(new DeductionConceptLineV2
+            {
+                PayerEmployeeId = empleado,
+                PaymasterConceptCode = codigo,
+                Expected = pedido.GetValueOrDefault((Clave(empleado), Clave(codigo))),
+                Deducted = descontado.Value,
+                PaymasterResultCode = fila.Texto(BankFieldSource.ResultCode)?.Trim(),
+                DeductionDate = descontado.Value > 0m ? fila.Fecha(BankFieldSource.DeductionDate) ?? Pago(archivo, version) : null,
+            });
+        }
+        if (errores.Count > 0) return Invalido(errores);
+
+        var pagaduria = await ConfirmTestPayrollFileSentCommandHandler.PagaduriaAsync(db, archivo, ct);
+        var actor = await actorActual.ObtenerAsync(ct);
+        var contenido = new ResultadoDeDescuentosV2
+        {
+            FileMessageId = archivo.DeliveryMessagePublicId,
+            FilePublicId = archivo.PublicId,
+            FileVersion = archivo.Version,
+            FileSha256 = archivo.FileSha256,
+            FileGroupCode = archivo.FileGroupCode,
+            PaymasterPersonPublicId = pagaduria,
+            Period = new PayrollPeriodRefV1 { Year = archivo.PeriodYear, Month = archivo.PeriodMonth, SubPeriod = archivo.SubPeriodNumber > 1 ? archivo.SubPeriodNumber : null },
+            ConceptLines = filas,
+            Totals = new DeductionResultTotalsV1
+            {
+                LineCount = filas.Count,
+                Expected = filas.Sum(f => f.Expected),
+                Deducted = filas.Sum(f => f.Deducted),
+                NotApplied = filas.Sum(f => Math.Max(0m, f.Expected - f.Deducted)),
+            },
+            ProcessedBy = new UserRefV1 { CentralUserId = actor.CentralUserId, Name = actor.Name },
+        };
+        var mensaje = await ConfirmTestPayrollFileSentCommandHandler.EmitirAsync(emisor, emision, archivo, pagaduria, "PayrollDeductionResponse",
+            string.IsNullOrWhiteSpace(request.FileName) ? archivo.Number : request.FileName, contenido, reloj.HoyLocal, ct);
+        await db.SaveChangesAsync(ct);
+        return Result.Success(new TestPayrollMessageDto(mensaje.PublicId, archivo.PublicId, ResultadoDeDescuentosV2.Type, filas.Count));
+    }
+
+    private static string Clave(string? texto) => (texto ?? string.Empty).Trim().ToUpperInvariant();
 
     /// <summary>La fecha del descuento si la respuesta no la trae: el día de pago de la versión en el período del archivo.</summary>
     private static DateOnly Pago(PayrollDeductionFile archivo, PayrollAgreementVersion version) =>

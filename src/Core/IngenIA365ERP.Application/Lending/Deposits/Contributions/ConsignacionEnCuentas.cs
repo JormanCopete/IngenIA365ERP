@@ -113,6 +113,14 @@ public sealed class ConsignacionEnCuentas(
         if (cuenta.DepositClass is DepositClass.TermDeposit or DepositClass.Contractual)
             return Falla(ErroresDeAportes.EntregaNoDisponible("La consignación en un CDAT o en un ahorro contractual", nameof(EntregaDeCartera.K9)));
         if (ClaseDeMedio(c.Recaudador.Class, item.MeansClass) is { } medio) return Falla(medio);
+        // Feature 014 (T091, D36; contrato-de-cuentas §6.4): el giro de la pagaduría nombra la línea del archivo «descontado pendiente de giro» que paga.
+        int? giroDePagaduria = null;
+        if (item.DeductionFileLinePublicId is { } lineaDelArchivo)
+        {
+            var pendiente = await Lending.Payroll.PendientesDeGiroDeCuentas.DeLineaAsync(db, cuenta.Id, lineaDelArchivo, ct);
+            if (pendiente is null || pendiente.DeductionDate is null) return Falla(Lending.Payroll.ErroresDeLibranza.ReferenciaDeCuentaInvalida(cuenta.Number));
+            giroDePagaduria = pendiente.Id;
+        }
         if (await FechaValorAsync(c.Recaudador.Class, cuenta.Nature, item.ValueDate, ct) is { } fecha) return Falla(fecha);
         if (item.MeansClass == ClaseDeMedioDeRecaudo.Cash && item.SourceOfFundsAttachmentPublicId is null
             && await LectorDeCuentas.UmbralDeOrigenDeFondosAsync(parametros, item.ValueDate, ct) is { } umbral && item.Amount >= umbral)
@@ -174,6 +182,7 @@ public sealed class ConsignacionEnCuentas(
             ClearingUntil = canjeHasta,
             CashOriginDeclarationAttachmentPublicId = item.SourceOfFundsAttachmentPublicId,
             AuthorizedByUserId = atribucion.AprobadoPor,
+            PayrollDeductionAccountResultId = giroDePagaduria,
             Payload = JsonSerializer.Serialize(item, Json),
             InputsSha256 = entradas,
             RulesVersion = VersionesDeReglas.Vigente,
