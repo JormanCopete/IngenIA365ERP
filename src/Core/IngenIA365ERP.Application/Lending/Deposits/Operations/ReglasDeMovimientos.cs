@@ -52,7 +52,7 @@ public sealed record AtribucionEvaluada(int? AprobadoPor, Guid? AprobacionPublic
 /// Las reglas comunes de los movimientos de una cuenta (feature 014, US4, T111; contrato-de-cuentas §3.7–§3.10; FR-050 a FR-059): el disponible (el mismo
 /// para consultar, simular y retirar, SC-007), las firmas, los topes de la línea, la atribución con monto y su aprobador presente, el GMF por su motor, el
 /// canje por clase de medio y la regla de «sólo asociados». No escribe nada salvo, al pedir una aprobación, la solicitud de la plataforma (la guarda
-/// quien llama, en su transacción). Bloqueos y embargos llegan con US11 (K8): hasta entonces suman cero. (nuevo)
+/// quien llama, en su transacción). Los bloqueos y embargos los lee <c>LectorDeRestricciones</c> (US11). (nuevo)
 /// </summary>
 public sealed class ReglasDeMovimientos(
     IApplicationDbContext db,
@@ -88,7 +88,11 @@ public sealed class ReglasDeMovimientos(
         var saldos = (await LectorDeCuentas.SaldosAsync(db, [cuenta.Id], ct)).GetValueOrDefault(cuenta.Id) ?? [];
         var enCanje = (await EnCanjeAsync([cuenta.Id], fecha, ct)).GetValueOrDefault(cuenta.Id);
         var minimo = cuenta.Status == MemberAccountStatus.Opening ? 0m : version?.MinBalance ?? 0m;
-        var disponible = DisponibleDeCuenta.Calcular(cuenta.Nature, LectorDeCuentas.SaldoDelTitular(cuenta.Nature, saldos), 0m, 0m, enCanje, minimo);
+        var saldo = LectorDeCuentas.SaldoDelTitular(cuenta.Nature, saldos);
+        // US11 (T189): los bloqueos y embargos vigentes restan (FR-057).
+        var restricciones = (await Holds.LectorDeRestricciones.RestriccionesAsync(db, new Dictionary<int, decimal> { [cuenta.Id] = saldo }, fecha, ct))
+            .GetValueOrDefault(cuenta.Id) ?? Holds.RestriccionesDeCuenta.Ninguna;
+        var disponible = DisponibleDeCuenta.Calcular(cuenta.Nature, saldo, restricciones.Bloqueado, restricciones.Embargado, enCanje, minimo);
         var exenta = await db.GmfExemptAccounts.AsNoTracking()
             .AnyAsync(g => g.MemberAccountId == cuenta.Id && !g.IsDeleted && g.ValidFrom <= fecha && (g.ValidTo == null || g.ValidTo >= fecha), ct);
         var titular = await db.People.AsNoTracking().IgnoreQueryFilters().FirstAsync(p => p.Id == cuenta.HolderPersonId, ct);
@@ -122,14 +126,17 @@ public sealed class ReglasDeMovimientos(
         var ids = cuentas.Select(c => c.Id).ToList();
         var saldos = await LectorDeCuentas.SaldosAsync(db, ids, ct);
         var canje = await EnCanjeAsync(ids, fecha, ct);
+        var delTitular = cuentas.ToDictionary(c => c.Id, c => LectorDeCuentas.SaldoDelTitular(c.Nature, saldos.GetValueOrDefault(c.Id) ?? []));
+        var restricciones = await Holds.LectorDeRestricciones.RestriccionesAsync(db, delTitular, fecha, ct);
         var resultado = new Dictionary<int, DisponibleCalculado>();
         foreach (var cuenta in cuentas)
         {
             var minimo = 0m;
             if (cuenta.Nature == LineNature.Deposit && cuenta.Status != MemberAccountStatus.Opening)
                 minimo = (await LectorDeLineasDeCaptacion.VigenteDeCaptacionAsync(db, cuenta.CreditLineId, fecha, null, ct))?.MinBalance ?? 0m;
-            resultado[cuenta.Id] = DisponibleDeCuenta.Calcular(cuenta.Nature,
-                LectorDeCuentas.SaldoDelTitular(cuenta.Nature, saldos.GetValueOrDefault(cuenta.Id) ?? []), 0m, 0m, canje.GetValueOrDefault(cuenta.Id), minimo);
+            var r = restricciones.GetValueOrDefault(cuenta.Id) ?? Holds.RestriccionesDeCuenta.Ninguna;
+            resultado[cuenta.Id] = DisponibleDeCuenta.Calcular(cuenta.Nature, delTitular[cuenta.Id], r.Bloqueado, r.Embargado, canje.GetValueOrDefault(cuenta.Id),
+                minimo);
         }
         return resultado;
     }

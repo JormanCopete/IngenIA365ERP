@@ -147,6 +147,21 @@ public sealed class GetDepositMigrationPartDataQueryHandler(IApplicationDbContex
                     [C.ExentoUsadoDelMes] = f.MonthExemptUsed,
                 }).ToList();
             }
+            case P.HoldsAndGarnishments:
+            {
+                // US11 (T189): los bloqueos y embargos de la carga como se importaron.
+                var filas = await db.MigrationHoldRows.AsNoTracking().Where(r => tandas.Contains(r.MigrationLoadPartId)).OrderBy(r => r.Id).ToListAsync(ct);
+                var cat = await CatalogosAsync(filas.Where(f => f.CourtPersonId != null).Select(f => f.CourtPersonId!.Value), [], ct);
+                return filas.Select(f => new Dictionary<string, object?>
+                {
+                    [C.Cuenta] = f.SourceAccountNumber, [C.Tipo] = f.Kind, [C.Referencia] = f.Reference, [C.Motivo] = f.Reason?.ToString(), [C.Credito] = f.LoanNumber,
+                    [C.Valor] = f.Amount, [C.Total] = f.Kind == "Hold" ? (f.IsTotal ? "sí" : "no") : null, [C.Desde] = f.ValidFrom,
+                    [C.Juzgado] = f.CourtPersonId is { } j ? cat.Documentos.GetValueOrDefault(j) : null, [C.Autoridad] = f.Authority?.ToString(),
+                    [C.Proceso] = f.ProcessNumber, [C.Demandante] = f.ClaimantName, [C.ValorDeLaMedida] = f.MeasureAmount,
+                    [C.EsPorAlimentos] = f.Kind == "Garnishment" ? (f.IsChildSupport ? "sí" : "no") : null, [C.FechaDelOficio] = f.OrderDate,
+                    [C.Retenido] = f.RetainedAmount,
+                }).ToList();
+            }
             case P.TaxYearToDate:
             {
                 var filas = await db.MigrationTaxYearRows.AsNoTracking().Where(r => tandas.Contains(r.MigrationLoadPartId)).OrderBy(r => r.Id).ToListAsync(ct);

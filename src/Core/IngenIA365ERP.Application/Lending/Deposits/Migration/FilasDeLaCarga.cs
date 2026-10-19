@@ -52,6 +52,9 @@ public sealed class FilasDeLaCarga
     public required IReadOnlyList<FilaConTanda<MigrationGmfExemptionRow>> Exenciones { get; init; }
     public required IReadOnlyList<FilaConTanda<MigrationTaxYearRow>> Tributario { get; init; }
 
+    /// <summary>US11 (T189): los bloqueos y embargos vigentes al corte (parte <c>holds-and-garnishments</c>).</summary>
+    public IReadOnlyList<FilaConTanda<MigrationHoldRow>> Bloqueos { get; init; } = [];
+
     /// <summary>US6 (pendiente de la fase 10): los CDAT vigentes al corte (parte <c>term-deposits</c>).</summary>
     public IReadOnlyList<FilaConTanda<MigrationTermDepositRow>> Cdat { get; init; } = [];
 
@@ -82,6 +85,7 @@ public sealed class FilasDeLaCarga
         var ex = Ids(P.GmfExemptions);
         var tr = Ids(P.TaxYearToDate);
         var td = Ids(P.TermDeposits);
+        var hg = Ids(P.HoldsAndGarnishments);
         var cdat = Con(td.Count == 0 ? [] : await db.MigrationTermDepositRows.AsNoTracking().Where(r => td.Contains(r.MigrationLoadPartId))
             .OrderBy(r => r.MigrationLoadPartId).ThenBy(r => r.RowNumber).ToListAsync(ct), r => r.MigrationLoadPartId);
         var interesDeCdat = new Dictionary<string, decimal>(StringComparer.Ordinal);
@@ -112,6 +116,8 @@ public sealed class FilasDeLaCarga
                 .OrderBy(r => r.MigrationLoadPartId).ThenBy(r => r.RowNumber).ToListAsync(ct), r => r.MigrationLoadPartId),
             Cdat = cdat,
             InteresDeCdat = interesDeCdat,
+            Bloqueos = Con(hg.Count == 0 ? [] : await db.MigrationHoldRows.AsNoTracking().Where(r => hg.Contains(r.MigrationLoadPartId))
+                .OrderBy(r => r.MigrationLoadPartId).ThenBy(r => r.RowNumber).ToListAsync(ct), r => r.MigrationLoadPartId),
         };
     }
 

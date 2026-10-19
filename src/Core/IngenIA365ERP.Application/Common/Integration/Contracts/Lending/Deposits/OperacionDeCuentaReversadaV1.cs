@@ -55,6 +55,9 @@ public sealed record OperacionDeCuentaReversadaV1
 
     /// <summary>El motivo de la contrapartida del original: el <c>ChargeKind</c> de un cargo o de su condonación.</summary>
     public string? ReasonCode { get; init; }
+
+    /// <summary>US11 (T189; research E163): el tercero de la contrapartida del original (el juzgado de una consignación de embargo); opcional al final.</summary>
+    public Guid? CounterpartPersonPublicId { get; init; }
 }
 
 /// <summary>El espejo de un hecho de la unidad original (mensajes.md §4.1, <c>mirrors</c>).</summary>

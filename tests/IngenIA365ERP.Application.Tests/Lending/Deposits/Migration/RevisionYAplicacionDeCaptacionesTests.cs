@@ -65,7 +65,6 @@ public sealed class RevisionYAplicacionDeCaptacionesTests : IAsyncLifetime
         (await _m.ImportarAsync(aportes, P.MemberAccounts)).Error.Code.Should().Be(ErroresDeMigracionDeCaptaciones.CodigoParteDeOtraNaturaleza);
 
         var captaciones = await _m.CargaAsync(LineNature.Deposit);
-        (await _m.ImportarAsync(captaciones, P.HoldsAndGarnishments)).Error.Code.Should().Be(ErroresDeMigracionDeCaptaciones.CodigoParteNoDisponible);
 
         _m.Entrega = EntregaDeCartera.K7;
         (await _m.ImportarAsync(captaciones, P.MemberAccounts)).Error.Code.Should().Be(ErroresDeMigracionDeCaptaciones.CodigoParteNoDisponible,

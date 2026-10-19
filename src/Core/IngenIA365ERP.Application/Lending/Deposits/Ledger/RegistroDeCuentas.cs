@@ -340,7 +340,7 @@ public sealed class RegistroDeCuentas(IApplicationDbContext db)
             IsInactive = cuenta.Status == MemberAccountStatus.Inactive,
             IsGarnished = cuenta.IsGarnished,
             IsGmfExempt = exentaDeGmf,
-            IsAccrualSuspended = cuenta.AccrualSuspendedSince is { } desde && desde <= estado.Fecha,
+            IsAccrualSuspended = cuenta.SuspendidaEl(estado.Fecha),
             InputsSha256 = estado.Huella,
         };
     }

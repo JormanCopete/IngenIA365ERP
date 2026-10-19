@@ -291,6 +291,8 @@ internal sealed class LecturaDeParteDeCaptaciones(
                 .Select(r => (r.MigrationLoadPartId, Llave(r.PersonId, r.SourceAccountNumber, r.TaxYear, r.Concept))),
             P.TermDeposits => (await db.MigrationTermDepositRows.AsNoTracking().Where(r => ids.Contains(r.MigrationLoadPartId)).ToListAsync(ct))
                 .Select(r => (r.MigrationLoadPartId, Llave(r.SourceAccountNumber))),
+            P.HoldsAndGarnishments => (await db.MigrationHoldRows.AsNoTracking().Where(r => ids.Contains(r.MigrationLoadPartId)).ToListAsync(ct))
+                .Select(r => (r.MigrationLoadPartId, Llave(r.SourceAccountNumber, r.Kind, r.Reference.ToUpperInvariant()))),
             _ => [],
         };
         foreach (var (id, llave) in llaves) _llavesPrevias.TryAdd(llave, _tandaDe[id]);
@@ -455,6 +457,7 @@ internal sealed class LecturaDeParteDeCaptaciones(
             P.GmfExemptions => Exencion(ctx, fila),
             P.TaxYearToDate => Tributario(ctx, fila),
             P.TermDeposits => Cdat(ctx, fila),
+            P.HoldsAndGarnishments => BloqueoOEmbargo(ctx, fila),
             _ => null,
         };
         if (agregar is not null && !fila.TieneErrores) pendientes.Add(agregar);
@@ -770,6 +773,76 @@ internal sealed class LecturaDeParteDeCaptaciones(
         return Registrar(ctx, fila, Llave(persona.Id), id => db.MigrationGmfExemptionRows.Add(new MigrationGmfExemptionRow
         {
             MigrationLoadPartId = id, RowNumber = fila.Numero, PersonId = persona.Id, SourceAccountNumber = cuenta, MarkedSince = desde.Value, MonthExemptUsed = usado,
+        }));
+    }
+
+    /// <summary>
+    /// US11 (T189; §4.6, research E166): un bloqueo o un embargo vigente al corte. El bloqueo lleva su motivo (no los de proceso), valor o total; el de garantía,
+    /// el crédito. El embargo lleva el juzgado (persona viva), el proceso, el demandante, la fecha del oficio y lo retenido en la cuenta al corte. Que la cuenta
+    /// esté en la carga, que un embargo no recaiga sobre aportes, que el crédito viva y que lo retenido quepa en el saldo lo valida la aplicación.
+    /// </summary>
+    private Action<int>? BloqueoOEmbargo(ContextoDeImportacion ctx, FilaDeImportacion fila)
+    {
+        var cuenta = Referencia(fila, C.Cuenta);
+        var tipo = fila.Texto(C.Tipo, 20);
+        var esEmbargo = string.Equals(tipo, "Garnishment", StringComparison.OrdinalIgnoreCase);
+        if (tipo is not null && !esEmbargo && !string.Equals(tipo, "Hold", StringComparison.OrdinalIgnoreCase))
+        {
+            if (string.Equals(tipo, "Deceased", StringComparison.OrdinalIgnoreCase)) fila.TodaviaNoDisponible(C.Tipo, "K10");
+            else fila.Error(C.Tipo, ImportErrors.CellFormat, "El tipo es Hold (bloqueo) o Garnishment (embargo).");
+        }
+        var referencia = fila.Texto(C.Referencia, 40);
+        var desde = fila.Fecha(C.Desde);
+        HastaElCorte(fila, C.Desde, desde);
+        HoldReason? motivo = null;
+        decimal? valor = null;
+        var total = false;
+        string? credito = null;
+        PersonaLeida? juzgado = null;
+        GarnishmentAuthority? autoridad = null;
+        DateOnly? oficio = null;
+        decimal? retenido = null;
+        decimal? medida = null;
+        if (esEmbargo)
+        {
+            juzgado = Persona(fila, C.Juzgado);
+            if (fila.Crudo(C.Juzgado) is null) fila.Error(C.Juzgado, ImportErrors.CellRequired, "Un embargo lleva el juzgado o la entidad que lo ordenó.");
+            autoridad = fila.Crudo(C.Autoridad) is null ? GarnishmentAuthority.Court : Enumeracion<GarnishmentAuthority>(fila, C.Autoridad);
+            if (fila.Texto(C.Proceso, 40) is null) fila.Error(C.Proceso, ImportErrors.CellRequired, "Un embargo lleva el radicado del proceso.");
+            if (fila.Texto(C.Demandante, 200) is null) fila.Error(C.Demandante, ImportErrors.CellRequired, "Un embargo lleva el demandante.");
+            oficio = fila.Fecha(C.FechaDelOficio);
+            if (oficio is null && fila.Crudo(C.FechaDelOficio) is null) fila.Error(C.FechaDelOficio, ImportErrors.CellRequired, "Un embargo lleva la fecha del oficio.");
+            HastaElCorte(fila, C.FechaDelOficio, oficio);
+            retenido = NoNegativo(fila, C.Retenido, fila.Monto(C.Retenido));
+            medida = fila.Monto(C.ValorDeLaMedida);
+            if (medida is { } m) NoNegativo(fila, C.ValorDeLaMedida, m, positivo: true);
+            if (fila.Crudo(C.Motivo) is not null || fila.Crudo(C.Valor) is not null)
+                fila.Error(C.Motivo, ImportErrors.CellFormat, "El motivo y el valor son del bloqueo; el embargo lleva lo retenido.");
+        }
+        else
+        {
+            motivo = Enumeracion<HoldReason>(fila, C.Motivo);
+            if (motivo is null && fila.Crudo(C.Motivo) is null) fila.Error(C.Motivo, ImportErrors.CellRequired, "Un bloqueo lleva su motivo.");
+            if (motivo is { } r && !Holds.PlaceAccountHoldCommand.Manuales.Contains(r))
+                fila.Error(C.Motivo, ImportErrors.CellFormat, "El motivo es Internal, LoanCollateral, SignaturePending u Other (los demás los pone su proceso).");
+            total = fila.SiNo(C.Total);
+            valor = fila.Monto(C.Valor);
+            if (valor is { } v) NoNegativo(fila, C.Valor, v, positivo: true);
+            if (total == (valor is not null)) fila.Error(C.Valor, ImportErrors.CellFormat, "Un bloqueo es por valor o total, una de las dos.");
+            credito = fila.Texto(C.Credito, 30)?.ToUpperInvariant();
+            if (motivo == HoldReason.LoanCollateral && credito is null)
+                fila.Error(C.Credito, ImportErrors.CellRequired, "El bloqueo de garantía lleva el número del crédito que garantiza.");
+        }
+        if (cuenta is null || tipo is null || referencia is null || desde is null) return null;
+        var clase = esEmbargo ? "Garnishment" : "Hold";
+        var llave = Llave(cuenta, clase, referencia.ToUpperInvariant());
+        if (!LlaveNueva(ctx, fila, llave, C.Referencia)) return null;
+        return Registrar(ctx, fila, llave, id => db.MigrationHoldRows.Add(new MigrationHoldRow
+        {
+            MigrationLoadPartId = id, RowNumber = fila.Numero, SourceAccountNumber = cuenta, Kind = clase, Reference = referencia, Reason = motivo,
+            LoanNumber = credito, Amount = valor, IsTotal = total, ValidFrom = desde.Value, CourtPersonId = juzgado?.Id, Authority = autoridad,
+            ProcessNumber = fila.Texto(C.Proceso, 40), ClaimantName = fila.Texto(C.Demandante, 200), MeasureAmount = medida,
+            IsChildSupport = esEmbargo && fila.SiNo(C.EsPorAlimentos), OrderDate = oficio, RetainedAmount = retenido,
         }));
     }
 

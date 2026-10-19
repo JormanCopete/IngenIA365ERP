@@ -43,8 +43,8 @@ public sealed record ParteDeMigracionDeCaptaciones(
 /// <list type="bullet">
 /// <item><c>line-equivalences</c> (E115): la hoja <c>Equivalencias</c> de las plantillas de líneas es una parte de la carga —es sólo de la migración y se
 /// reemplaza con ella—: el código heredado de cada producto con la línea nueva.</item>
-/// <item><c>term-deposits</c> nace con el CDAT (K9, US6; se importa con la entrega K9 desplegada) y <c>holds-and-garnishments</c> llega con los bloqueos
-/// y embargos (US11), cuya tabla de destino todavía no existe (E116).</item>
+/// <item><c>term-deposits</c> nace con el CDAT (K9, US6; se importa con la entrega K9 desplegada) y <c>holds-and-garnishments</c> con los bloqueos y
+/// embargos (US11, K8; research E166).</item>
 /// </list>
 /// (nuevo)
 /// </summary>
@@ -124,6 +124,22 @@ public static class DefinicionesDeMigracionDeCaptaciones
         public const string Valor = "valor";
         public const string Pagado = "pagado";
         public const string MotivoNoDescontado = "motivoNoDescontado";
+
+        // US11 (T189; §4.6, research E166): bloqueos y embargos.
+        public const string Tipo = "tipo";
+        public const string Referencia = "referencia";
+        public const string Motivo = "motivo";
+        public const string Credito = "credito";
+        public const string Total = "total";
+        public const string Desde = "desde";
+        public const string Juzgado = "juzgado";
+        public const string Autoridad = "autoridad";
+        public const string Proceso = "proceso";
+        public const string Demandante = "demandante";
+        public const string ValorDeLaMedida = "valorDeLaMedida";
+        public const string EsPorAlimentos = "esPorAlimentos";
+        public const string FechaDelOficio = "fechaDelOficio";
+        public const string Retenido = "retenido";
 
         public const string CuentaExenta = "cuentaExenta";
         public const string ExentoUsadoDelMes = "exentoUsadoDelMes";
@@ -331,6 +347,35 @@ public static class DefinicionesDeMigracionDeCaptaciones
             Reglas: "si Nómina o la pagaduría no la descontó: DeductionCap, InsufficientNet, Termination, Leave, Disability, DeductionPriority u Other", Ejemplo: ""),
     ]);
 
+    // --------------------------------------------------------------------------------------- 4.6 holds-and-garnishments --
+
+    /// <summary>
+    /// US11 (T189; §4.6, research E166): los bloqueos y embargos vigentes al corte. Un embargo de varias cuentas va en una fila por cuenta con la misma
+    /// referencia (el oficio); lo retenido al corte se conserva. Los aportes sólo admiten el bloqueo de garantía (los aportes no se embargan).
+    /// </summary>
+    public static DefinicionDePlantilla BloqueosYEmbargos { get; } = Parte(Partes.HoldsAndGarnishments, "Migración de captaciones — bloqueos y embargos",
+    [
+        Cuenta(Columnas.Cuenta, true, "llave con el tipo y la referencia; una cuenta de la carga"),
+        new(Columnas.Tipo, TipoDeValor.Enumeracion, Obligatoria: true, Largo: 20, Reglas: "llave; Hold (bloqueo) o Garnishment (embargo); Deceased llega con K10",
+            Ejemplo: "Garnishment"),
+        new(Columnas.Referencia, TipoDeValor.Texto, Obligatoria: true, Largo: 40, Reglas: "llave; la orden interna o el número del oficio", Ejemplo: "OF-2026-118"),
+        new(Columnas.Motivo, TipoDeValor.Enumeracion, Largo: 30,
+            Reglas: "con Hold: Internal, LoanCollateral (garantía de un crédito), SignaturePending u Other", Ejemplo: ""),
+        new(Columnas.Credito, TipoDeValor.Texto, Largo: 30, Reglas: "con LoanCollateral: el número de un crédito vivo de la Cartera", Ejemplo: ""),
+        new(Columnas.Valor, TipoDeValor.Monto, Reglas: "con Hold por valor; vacío con total", Ejemplo: ""),
+        new(Columnas.Total, TipoDeValor.SiNo, Reglas: "con Hold: sí = bloqueo total", Ejemplo: "no"),
+        new(Columnas.Desde, TipoDeValor.Fecha, Obligatoria: true, Reglas: "anterior o igual al corte", Ejemplo: "2026-03-02"),
+        Persona(Columnas.Juzgado, false, "con Garnishment: el juzgado o la entidad como persona; " + PersonaViva),
+        new(Columnas.Autoridad, TipoDeValor.Enumeracion, Largo: 30, Reglas: "con Garnishment: Court (vacío), TaxAuthority u OtherPublicEntity", Ejemplo: "Court"),
+        new(Columnas.Proceso, TipoDeValor.Texto, Largo: 40, Reglas: "con Garnishment: el radicado", Ejemplo: "11001400300120260045600"),
+        new(Columnas.Demandante, TipoDeValor.Texto, Largo: 200, Reglas: "con Garnishment", Ejemplo: "Banco Ejemplo S.A."),
+        new(Columnas.ValorDeLaMedida, TipoDeValor.Monto, Reglas: "con Garnishment: el valor del oficio; vacío = sin límite", Ejemplo: "8000000,00"),
+        new(Columnas.EsPorAlimentos, TipoDeValor.SiNo, Reglas: "con Garnishment", Ejemplo: "no"),
+        new(Columnas.FechaDelOficio, TipoDeValor.Fecha, Reglas: "con Garnishment; anterior o igual al corte", Ejemplo: "2026-02-25"),
+        new(Columnas.Retenido, TipoDeValor.Monto, Reglas: "con Garnishment: lo retenido en esta cuenta al corte (se conserva, no se recalcula); no supera su saldo",
+            Ejemplo: "3500000,00"),
+    ]);
+
     // -------------------------------------------------------------------------------------------- 4.7 gmf-exemptions --
 
     public static DefinicionDePlantilla ExencionesDeGmf { get; } = Parte(Partes.GmfExemptions, "Migración de captaciones — cuentas exentas del GMF",
@@ -369,7 +414,7 @@ public static class DefinicionesDeMigracionDeCaptaciones
         new(Partes.TermDeposits, 7, Captaciones, EntregaDeCartera.K9, false, false, CdatVigentes, "CDAT"),
         new(Partes.ContributionAccounts, 8, Aportes, EntregaDeCartera.K7, true, false, CuentasDeAportes, "Cuentas de aportes"),
         new(Partes.AccountInstallments, 9, Ambas, EntregaDeCartera.K7, false, false, CuotasAtrasadas, "Cuotas atrasadas"),
-        new(Partes.HoldsAndGarnishments, 10, Ambas, EntregaDeCartera.K8, false, false, null, "Bloqueos y embargos", LlegaCon: "los bloqueos y embargos (K8)"),
+        new(Partes.HoldsAndGarnishments, 10, Ambas, EntregaDeCartera.K8, false, false, BloqueosYEmbargos, "Bloqueos y embargos"),
         new(Partes.GmfExemptions, 11, Captaciones, EntregaDeCartera.K8, false, false, ExencionesDeGmf, "Cuentas exentas del GMF"),
         new(Partes.TaxYearToDate, 12, Captaciones, EntregaDeCartera.K8, false, false, AcumuladoTributario, "Acumulado tributario del año"),
     ]);

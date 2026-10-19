@@ -304,6 +304,17 @@ public static class AdjuntosDeModulo
     /// </summary>
     public const string SoporteDeTitularidad = "LendingAccountPartySupport";
 
+    /// <summary>
+    /// Feature 014, US11 (T189, T192): los soportes de un embargo o de un bloqueo de cuenta —el oficio del juzgado, el del desembargo, las respuestas firmadas
+    /// y la orden interna—, con dueño la <b>persona embargada</b> (el embargo todavía no existe al subir el oficio). Se lee con <c>Lending.Accounts.Read</c>;
+    /// lo sube quien registra o levanta embargos o administra bloqueos; no se borra: es la orden de una autoridad.
+    /// </summary>
+    public const string SoporteDeEmbargo = "LendingGarnishmentSupport";
+
+    private const string RegistrarEmbargos = "Lending.Garnishments.Register";
+    private const string LevantarEmbargos = "Lending.Garnishments.Release";
+    private const string AdministrarBloqueos = "Lending.Holds.Manage";
+
     private const string LeerCuentas = "Lending.Accounts.Read";
     private const string AbrirCuentas = "Lending.Accounts.Open";
     private const string AdministrarPartesDeCuentas = "Lending.Accounts.Parties.Manage";
@@ -406,6 +417,7 @@ public static class AdjuntosDeModulo
             ComprobanteDeCargueRegulatorio => LeerArchivosRegulatorios,
             SoporteDeCambioDelModelo => LeerCalificaciones,
             SoporteDeTitularidad => LeerCuentas,
+            SoporteDeEmbargo => LeerCuentas,
             _ => De(ownerEntityType)?.PermisoDeLectura,
         };
         return permiso is null || await permisos.HasPermissionAsync(permiso, ct);
@@ -530,6 +542,15 @@ public static class AdjuntosDeModulo
                 return new Error("Generic.NotFound", "Persona no encontrada.");
             return null;
         }
+        if (ownerEntityType == SoporteDeEmbargo)
+        {
+            // Feature 014, US11: los soportes de un embargo o un bloqueo, de la persona embargada, de quien registra o levanta embargos o administra bloqueos.
+            var puede = await permisos.HasPermissionAsync(RegistrarEmbargos, ct) || await permisos.HasPermissionAsync(LevantarEmbargos, ct)
+                        || await permisos.HasPermissionAsync(AdministrarBloqueos, ct);
+            if (!puede || !await db.People.AnyAsync(p => p.PublicId == ownerEntityPublicId, ct))
+                return new Error("Generic.NotFound", "Persona no encontrada.");
+            return null;
+        }
         if (ownerEntityType == SoporteDeTitularidad)
         {
             // Feature 014, US2: los soportes de la titularidad de una cuenta, del titular, de quien abre cuentas o administra sus partes.
@@ -644,6 +665,11 @@ public static class AdjuntosDeModulo
         if (ownerEntityType == SoporteDeEventoDelDeudor)
             return new ErrorConDatos(AttachmentErrorCodes.OwnerLocked,
                 "Es el soporte de un evento del deudor (fallecimiento, retiro, embargo o insolvencia): se conserva y no se puede borrar.",
+                new { ownerEntityType });
+        // Feature 014, US11: el oficio de un embargo, su desembargo y las respuestas al juzgado son la orden de una autoridad.
+        if (ownerEntityType == SoporteDeEmbargo)
+            return new ErrorConDatos(AttachmentErrorCodes.OwnerLocked,
+                "Es el soporte de un embargo o un bloqueo (oficio, desembargo o respuesta al juzgado): se conserva y no se puede borrar.",
                 new { ownerEntityType });
         // Feature 014, US2: los soportes de la titularidad de una cuenta respaldan quién la maneja y a quién se entrega.
         if (ownerEntityType == SoporteDeTitularidad)

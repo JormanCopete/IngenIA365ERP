@@ -102,6 +102,14 @@ public static class HechosRepresentativosDeCaptaciones
         Amounts = [Valor(MemberAccountConcept.Principal, -1m, "DepositWithdrawal")],
     };
 
+    /// <summary>US11 (T189): la consignación de un embargo al juzgado (contra los embargos por consignar, con el juzgado de tercero).</summary>
+    public static EmbargoConsignadoV1 EmbargoConsignado(CuentaRepresentativa c, Guid juzgado) => new()
+    {
+        Account = c.Referencia, HolderPersonPublicId = c.Titular, Dimensions = c.D, Amounts = [Valor(MemberAccountConcept.Principal, -1m, "GarnishmentConsignment")],
+        Garnishment = new GarnishmentRefV1 { PublicId = Guid.NewGuid(), OfficeReference = NumeroDeValidacion, CourtPersonPublicId = juzgado },
+        OrderPublicId = Guid.NewGuid(),
+    };
+
     /// <summary>El GMF de una disposición, con la clase del producto que lo genera.</summary>
     public static GmfRetenidoV1 Gmf(CuentaRepresentativa c) => new()
     {

@@ -111,6 +111,9 @@ public sealed record ReversoDeCuentaAEmitir(
     /// <summary>US8 (T143): el <c>ChargeKind</c> del cargo del original (un cargo o su condonación).</summary>
     public string? MotivoDeLaContrapartida { get; init; }
 
+    /// <summary>US11 (T189): el tercero de la contrapartida del original (el juzgado de una consignación de embargo).</summary>
+    public Guid? TerceroDeLaContrapartida { get; init; }
+
     /// <summary>US8 (T143): los espejos de las otras cuentas del original (el destino de un traslado), cada una con sus dimensiones vigentes.</summary>
     public IReadOnlyList<(HechoDeCuenta Hecho, IReadOnlyList<DepositConceptAmountV1> Valores)> OtrasCuentas { get; init; } = [];
 }
@@ -386,6 +389,7 @@ public sealed partial class EmisionDeCartera
             CollectorClass = r.ClaseDeRecaudador,
             OrderKind = r.TipoDeOrden,
             ReasonCode = r.MotivoDeLaContrapartida,
+            CounterpartPersonPublicId = r.TerceroDeLaContrapartida,
         };
         var relacionado = new DocumentoRelacionado(r.Original.PublicId, r.ClaseDelOriginal, r.Original.Number);
         ModoDeEntrega modo = original is null

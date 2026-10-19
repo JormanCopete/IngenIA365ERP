@@ -189,6 +189,11 @@ public class LasConsultasDeCarteraRespetanElAlcance
         // US7 (T182): el contrato del ahorro contractual, sus condiciones selladas y su instrucción al vencimiento, por la cuenta en el alcance
         // (LectorDeCuentas.CuentaEnAlcanceAsync: fuera, el 404 de la cuenta).
         "Core/IngenIA365ERP.Application/Lending/Deposits/Contractual/ContractualCommands.cs",
+        // US11 (T189): los embargos exigen el alcance sobre todas las cuentas de la persona (AlcanceDeEmbargos.PersonaEnAlcanceAsync, falla cerrado); los
+        // bloqueos, la cuenta en el alcance; la vista garnishments deja fuera a las personas con una cuenta fuera del alcance.
+        "Core/IngenIA365ERP.Application/Lending/Deposits/Holds/GarnishmentCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/Deposits/Holds/AccountHoldCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/Deposits/Reports/GarnishmentsReportQuery.cs",
     ];
 
     /// <summary>

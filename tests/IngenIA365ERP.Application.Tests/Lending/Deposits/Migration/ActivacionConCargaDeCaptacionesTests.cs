@@ -182,6 +182,49 @@ public sealed class ActivacionConCargaDeCaptacionesTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task US11_los_bloqueos_y_embargos_migrados_nacen_con_lo_retenido_al_corte()
+    {
+        _m.SaldoContable = rol => rol == "CapitalDeCaptacion" ? 1_500_000m : 0m;
+        var juzgado = _m.G.Persona("Juzgado", "Segundo Civil", "899999002");
+        var carga = await _m.CargaAsync(LineNature.Deposit);
+        await _m.CargarAsync(carga, P.MemberAccounts, M.Ahorro("AH-600", capital: "1500000"));
+        await _m.CargarAsync(carga, P.HoldsAndGarnishments,
+            M.Fila((C.Cuenta, "AH-600"), (C.Tipo, "Garnishment"), (C.Referencia, "OF-9"), (C.Desde, "2026-10-02"), (C.Juzgado, juzgado.TaxId),
+                (C.Proceso, "11001400300220260001200"), (C.Demandante, "Almacén Ejemplo"), (C.ValorDeLaMedida, "800000"), (C.FechaDelOficio, "2026-09-30"),
+                (C.Retenido, "500000")),
+            M.Fila((C.Cuenta, "AH-600"), (C.Tipo, "Hold"), (C.Referencia, "ORD-1"), (C.Motivo, "Internal"), (C.Valor, "100000"), (C.Total, "no"),
+                (C.Desde, "2026-11-15")));
+        var aplicada = await _m.AplicarAsync(carga);
+        aplicada.IsSuccess.Should().BeTrue(aplicada.IsFailure ? $"{aplicada.Error.Code}: {aplicada.Error.Message}" : string.Empty);
+
+        var r = await _m.ActivarAsync(await _m.RecargarAsync(carga), _m.Acta(carga.PublicId));
+
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? $"{r.Error.Code}: {r.Error.Message}" : string.Empty);
+        var cuenta = await _m.Db.MemberAccounts.AsNoTracking().SingleAsync(a => a.Number == "AH-600");
+        cuenta.IsGarnished.Should().BeTrue();
+        var embargo = await _m.Db.Garnishments.AsNoTracking().SingleAsync();
+        (embargo.OrderNumber, embargo.Amount, embargo.Status, embargo.CourtPersonId).Should().Be(("OF-9", 800_000m, GarnishmentStatus.Active, juzgado.Id));
+        var bloqueos = await _m.Db.AccountHolds.AsNoTracking().Where(h => h.MemberAccountId == cuenta.Id).ToListAsync();
+        bloqueos.Select(h => (h.Reason, h.Amount)).Should().BeEquivalentTo(new[] { (HoldReason.Garnishment, (decimal?)500_000m), (HoldReason.Internal, (decimal?)100_000m) });
+    }
+
+    [Fact]
+    public async Task US11_un_embargo_migrado_no_retiene_mas_que_el_saldo_de_la_cuenta()
+    {
+        var juzgado = _m.G.Persona("Juzgado", "Tercero Civil", "899999003");
+        var carga = await _m.CargaAsync(LineNature.Deposit);
+        await _m.CargarAsync(carga, P.MemberAccounts, M.Ahorro("AH-601", capital: "100000"));
+        await _m.CargarAsync(carga, P.HoldsAndGarnishments,
+            M.Fila((C.Cuenta, "AH-601"), (C.Tipo, "Garnishment"), (C.Referencia, "OF-10"), (C.Desde, "2026-10-02"), (C.Juzgado, juzgado.TaxId),
+                (C.Proceso, "1"), (C.Demandante, "X"), (C.FechaDelOficio, "2026-09-30"), (C.Retenido, "200000")));
+
+        var aplicada = await _m.AplicarAsync(carga);
+
+        aplicada.IsFailure.Should().BeTrue();
+        aplicada.Error.Code.Should().Be("Lending.Migration.CrossPartErrors", "lo retenido supera el saldo de la cuenta");
+    }
+
+    [Fact]
     public async Task La_fecha_el_plazo_el_acta_y_la_naturaleza_se_exigen()
     {
         var carga = await AportesAplicadosAsync();

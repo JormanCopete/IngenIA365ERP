@@ -589,6 +589,8 @@ public sealed class ReverseMemberAccountOperationCommandHandler(
                 or MemberAccountOperationKind.ContributionRefund or MemberAccountOperationKind.Charge or MemberAccountOperationKind.ChargeWaiver
                 // US5 (T132, T135; research E98): la liquidación de intereses y la cancelación no se reversan desde la pantalla.
                 or MemberAccountOperationKind.InterestSettlement or MemberAccountOperationKind.Cancellation
+                // US11 (T189): la consignación de un embargo (la reversa Tesorería) y la reclasificación (sin filas) tampoco.
+                or MemberAccountOperationKind.GarnishmentConsignment or MemberAccountOperationKind.Reclassification
             || await db.AccountPayoutOrders.AsNoTracking().AnyAsync(o => o.OperationId == vista.Id, ct))
             return Falla(ErroresDeMovimientos.DelProceso(vista.Number));
 

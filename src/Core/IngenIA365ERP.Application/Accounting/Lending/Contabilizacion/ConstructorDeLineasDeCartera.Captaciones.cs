@@ -307,6 +307,9 @@ public static partial class ConstructorDeLineasDeCartera
                 CruceAlRetiroAplicadoV1.Type => Recaudo(d, x.Account, x.CollectorClass ?? ClaseDelPuenteInterno, x.HolderPersonPublicId),
                 PerdidaAplicadaAlRetiroV1.Type => Simple(R.PerdidaAbsorbida, d),
                 DevolucionOrdenadaV1.Type => Devolucion(d, x.Account, x.OrderKind, _sobre.PersonPublicId),
+                // US11 (T189): el giro rechazado de una consignación de embargo vuelve a los embargos por consignar, con el juzgado de tercero.
+                EmbargoConsignadoV1.Type => new Lado(R.EmbargosPorConsignar, Valores(d), null, null,
+                    Persona(x.CounterpartPersonPublicId ?? _sobre.PersonPublicId ?? Guid.Empty), null, Numero(x.Account)),
                 _ => null,
             };
             Contrapartida(contra, neto, $"el reverso de {original} sin su contrapartida");

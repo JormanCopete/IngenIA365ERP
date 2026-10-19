@@ -132,6 +132,11 @@ public sealed class ReversionDeCuentas(
             ClaseDelOrigen(original), valores, iniciadoPor, texto, usuario)
         {
             ClaseDeRecaudador = contrapartida.Clase, TipoDeOrden = contrapartida.Orden, MotivoDeLaContrapartida = contrapartida.Motivo, OtrasCuentas = otras,
+            // US11 (T189): el juzgado, tercero de los embargos por consignar de la consignación original.
+            TerceroDeLaContrapartida = original.GarnishmentId is { } embargo
+                ? await db.Garnishments.AsNoTracking().Where(g => g.Id == embargo)
+                    .Join(db.People.IgnoreQueryFilters(), g => g.CourtPersonId, p => p.Id, (g, p) => (Guid?)p.PublicId).FirstOrDefaultAsync(ct)
+                : null,
         }, ct);
         var espejos = registro.Reversar(filas, reverso, hecho.Value.FechaContable, unidad.Mensajes.FirstOrDefault()?.PublicId);
         if (espejos.IsFailure) return Result.Failure<ReversoDeCuentaAplicado>(espejos.Error);
@@ -233,6 +238,8 @@ public sealed class ReversionDeCuentas(
         MemberAccountOperationKind.ChargeWaiver => CargoDeCuentaCondonadoV1.Type,
         // US6 (T173): el pago de intereses y la salida de un CDAT (los reversa Tesorería cuando rechaza su giro).
         MemberAccountOperationKind.TermDepositInterestPayment => InteresesDeCdatPagadosV1.Type,
+        // US11 (T189): la consignación de un embargo (la reversa Tesorería cuando rechaza su giro).
+        MemberAccountOperationKind.GarnishmentConsignment => EmbargoConsignadoV1.Type,
         MemberAccountOperationKind.TermDepositRedemption => original.Payload.Contains("\"cause\":null", StringComparison.Ordinal)
             ? CdatRedimidoV1.Type
             : CdatCanceladoV1.Type,
@@ -251,6 +258,7 @@ public sealed class ReversionDeCuentas(
         MemberAccountOperationKind.Charge or MemberAccountOperationKind.ChargeWaiver => EmisionDeCartera.ClaseCargoDeCuenta,
         MemberAccountOperationKind.TermDepositInterestPayment => EmisionDeCartera.ClasePagoDeInteresesDeCdat,
         MemberAccountOperationKind.TermDepositRedemption => EmisionDeCartera.ClaseRedencionDeCdat,
+        MemberAccountOperationKind.GarnishmentConsignment => EmisionDeCartera.ClaseConsignacionDeEmbargo,
         _ => original.Kind.ToString(),
     };
 

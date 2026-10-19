@@ -529,6 +529,11 @@ public static class DependencyInjection
         // US4 (T116, T119): los subpasos de los cargos periódicos y del débito automático, después de las cuotas.
         services.AddScoped<Lending.Deposits.Accrual.ISubpasoDeCaptaciones, Lending.Deposits.Charges.CargosPeriodicos>();
         services.AddScoped<Lending.Deposits.Accrual.ISubpasoDeCaptaciones, Lending.Deposits.Operations.DebitoAutomatico>();
+        // Feature 014, US11 (T189): los bloqueos y embargos —la reclasificación por la marca, lo retenido y su recálculo diario, antes de la causación (que lee
+        // la suspensión por embargo total)—.
+        services.AddScoped<Lending.Deposits.Holds.ReclasificacionDeCuenta>();
+        services.AddScoped<Lending.Deposits.Holds.RetencionDeEmbargos>();
+        services.AddScoped<Lending.Deposits.Accrual.ISubpasoDeCaptaciones, Lending.Deposits.Holds.EmbargosDelCiclo>();
         // Feature 014, US5 (T131–T135): el interés de las cuentas de captación. La causación y la liquidación son los últimos subpasos del paso de
         // captaciones (después de las cuotas, los cargos y el débito automático, que mueven los saldos del día): se causa el día con su saldo de cierre
         // y se liquida lo que venció (research E95).

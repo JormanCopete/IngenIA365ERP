@@ -57,7 +57,8 @@ public sealed class MarkGmfExemptAccountCommandHandler(
     IAlcanceDeCartera alcance,
     LendingAuditEmitter auditoria,
     IActorActual actorActual,
-    IDateTimeService reloj) : IRequestHandler<MarkGmfExemptAccountCommand, Result<GmfExemptAccountDto>>
+    IDateTimeService reloj,
+    Holds.ReclasificacionDeCuenta? reclasificacion = null) : IRequestHandler<MarkGmfExemptAccountCommand, Result<GmfExemptAccountDto>>
 {
     public async Task<Result<GmfExemptAccountDto>> Handle(MarkGmfExemptAccountCommand request, CancellationToken ct)
     {
@@ -81,10 +82,22 @@ public sealed class MarkGmfExemptAccountCommandHandler(
             {
                 if (vigente.Marca.MemberAccountId == cuenta.Id || !request.ReplaceCurrent)
                     return Falla(ErroresDeCuentas.YaMarcada(vigente.AccountPublicId, vigente.AccountNumber, vigente.ValidFrom));
+                // US11 (T189; research E159): la marca que se cambia hoy reclasifica los saldos de la cuenta que deja de ser exenta.
+                if (desde == hoy && reclasificacion is not null
+                    && await db.MemberAccounts.AsNoTracking().FirstOrDefaultAsync(a => a.Id == vigente.Marca.MemberAccountId, ct) is { } vieja
+                    && await reclasificacion.ReclasificarAsync(vieja, hoy, Integration.EmisionDeCartera.CausaFinDeExencionDeGmf, () => { }, null, ct,
+                        exentaDespues: false) is { IsFailure: true } fallida)
+                    return Falla(fallida.Error);
                 vigente.Marca.Terminar(desde.AddDays(-1), $"Reemplazada por la cuenta {cuenta.Number}: {request.Reason.Trim()}", usuario);
                 await db.SaveChangesAsync(ct);
             }
 
+            // US11 (T189; research E159): la marca que rige desde hoy reclasifica los saldos de la cuenta a la marca «exenta» (si la contadora la lleva a
+            // otra cuenta contable). La que rige desde una fecha futura no reclasifica todavía (pendiente del paso diario, research E159).
+            if (desde == hoy && reclasificacion is not null
+                && await reclasificacion.ReclasificarAsync(cuenta, hoy, Integration.EmisionDeCartera.CausaExencionDeGmf, () => { }, null, ct, exentaDespues: true)
+                    is { IsFailure: true } noReclasificada)
+                return Falla(noReclasificada.Error);
             var marca = GmfExemptAccount.Marcar(cuenta, desde, request.Reason, usuario);
             db.GmfExemptAccounts.Add(marca);
             await db.SaveChangesAsync(ct);
@@ -116,7 +129,9 @@ public sealed class EndGmfExemptAccountCommandHandler(
     IAlcanceDeCartera alcance,
     LendingAuditEmitter auditoria,
     IActorActual actorActual,
-    IDateTimeService reloj) : IRequestHandler<EndGmfExemptAccountCommand, Result<GmfExemptAccountDto>>
+    IDateTimeService reloj,
+    ICerrojoDeCartera? cerrojo = null,
+    Holds.ReclasificacionDeCuenta? reclasificacion = null) : IRequestHandler<EndGmfExemptAccountCommand, Result<GmfExemptAccountDto>>
 {
     public async Task<Result<GmfExemptAccountDto>> Handle(EndGmfExemptAccountCommand request, CancellationToken ct)
     {
@@ -133,6 +148,19 @@ public sealed class EndGmfExemptAccountCommandHandler(
         if (hasta < marca.ValidFrom.AddDays(-1)) return Falla(ErroresDeCuentas.MarcaRetroactiva(hoy));
 
         var usuario = (await actorActual.ObtenerAsync(ct)).UserId;
+        // US11 (T189; research E159): la marca que termina ayer deja hoy la cuenta en la marca estándar: reclasifica sus saldos.
+        if (hasta < hoy && reclasificacion is not null && cerrojo is not null)
+            return await TransaccionExplicita.EjecutarAsync(db, async () =>
+            {
+                await cerrojo.TomarSetupAsync(exclusivo: false, ct);
+                await cerrojo.BloquearCuentasAsync([cuenta.Id], ModoDeEspera.Esperar, ct);
+                var r = await reclasificacion.ReclasificarAsync(cuenta, hoy, Integration.EmisionDeCartera.CausaFinDeExencionDeGmf, () => { }, null, ct,
+                    exentaDespues: false);
+                if (r.IsFailure) return Falla(r.Error);
+                marca.Terminar(hasta, request.Reason, usuario);
+                await db.SaveChangesAsync(ct);
+                return Result.Success((await ConsultasDeGmf.DtosAsync(db, [marca], ct))[0]);
+            }, ct);
         marca.Terminar(hasta, request.Reason, usuario);
         await db.SaveChangesAsync(ct);
         return Result.Success((await ConsultasDeGmf.DtosAsync(db, [marca], ct))[0]);

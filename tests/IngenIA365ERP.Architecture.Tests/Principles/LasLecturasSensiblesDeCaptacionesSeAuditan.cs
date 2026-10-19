@@ -35,6 +35,10 @@ public class LasLecturasSensiblesDeCaptacionesSeAuditan
         (Deposits + "Accrual/InterestSettlementCommands.cs", "ListInterestSettlementsQuery", nameof(LendingAuditEmitter.EmitirMovimientosDeCuentaVistosAsync)),
         (Deposits + "Accrual/InterestSettlementCommands.cs", "SimulateInterestSettlementQuery",
             nameof(LendingAuditEmitter.EmitirMovimientosDeCuentaVistosAsync)),
+        // US11 (T189): los embargos —la lista, el detalle con lo retenido y la explicación del límite, el borrador de la respuesta al juzgado—.
+        (Deposits + "Holds/GarnishmentCommands.cs", "ListGarnishmentsQuery", nameof(LendingAuditEmitter.EmitirEmbargoVistoAsync)),
+        (Deposits + "Holds/GarnishmentCommands.cs", "GetGarnishmentQuery", nameof(LendingAuditEmitter.EmitirEmbargoVistoAsync)),
+        (Deposits + "Holds/GarnishmentCommands.cs", "GetGarnishmentResponseDraftQuery", nameof(LendingAuditEmitter.EmitirEmbargoVistoAsync)),
     ];
 
     [Fact]
@@ -61,7 +65,7 @@ public class LasLecturasSensiblesDeCaptacionesSeAuditan
     public void Los_eventos_son_los_de_api_md_y_no_tocan_la_lista_cerrada_de_la_013()
     {
         Assert.Equal(
-            new[] { "Lending.Savings.BalanceViewed", "Lending.Savings.StatementViewed", "Lending.Savings.TransactionsViewed" },
+            new[] { "Lending.Garnishment.Viewed", "Lending.Savings.BalanceViewed", "Lending.Savings.StatementViewed", "Lending.Savings.TransactionsViewed" },
             LendingAuditEmitter.LecturasSensiblesDeCaptaciones.Order(StringComparer.Ordinal));
         Assert.Equal("Lending.Savings.BalanceViewed", AuditEventTypes.LendingSavingsBalanceViewed);
         Assert.Equal("Lending.Savings.StatementViewed", AuditEventTypes.LendingSavingsStatementViewed);

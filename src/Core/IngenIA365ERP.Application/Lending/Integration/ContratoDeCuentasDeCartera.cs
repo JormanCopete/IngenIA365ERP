@@ -139,6 +139,9 @@ public sealed class ContratoDeCuentasDeCartera(
             if (c.Cuenta.Status == MemberAccountStatus.Opening) bloqueos.Add("Apertura pendiente");
             var disponible = disponibles.GetValueOrDefault(c.Cuenta.Id) ?? Domain.Lending.Deposits.DisponibleCalculado.Cero;
             if (disponible.EnCanje > 0m) bloqueos.Add("Valores en canje");
+            // US11 (T189): lo bloqueado y lo embargado se dicen (el valor va en el disponible desglosado).
+            if (c.Cuenta.IsGarnished || disponible.Embargado > 0m) bloqueos.Add("Embargo");
+            if (disponible.Retenido > 0m) bloqueos.Add("Bloqueo");
             var retira = c.Cuenta.Nature == LineNature.Deposit && retirables.GetValueOrDefault(c.Cuenta.Id) && c.Cuenta.TechnicalNegativeSince is null
                          && (c.Cuenta.DepositClass == DepositClass.TermDeposit
                              ? c.Cuenta.Status == MemberAccountStatus.Matured

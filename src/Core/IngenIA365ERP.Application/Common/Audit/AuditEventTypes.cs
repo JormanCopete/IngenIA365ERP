@@ -305,6 +305,9 @@ public static class AuditEventTypes
     /// <summary>Feature 014, US16 (T164; api.md §4): el extracto en pantalla de una cuenta de un titular.</summary>
     public const string LendingSavingsStatementViewed = "Lending.Savings.StatementViewed";
 
+    /// <summary>Feature 014, US11 (T189; FR-003): un embargo o la lista de embargos —oficio, demandante y lo retenido de la persona— vistos en la pantalla.</summary>
+    public const string LendingGarnishmentViewed = "Lending.Garnishment.Viewed";
+
     // Feature 014, US3 (T086): la devolución de aportes sin retiro y la cesión entre asociados, pedidas y decididas por personas distintas.
     public const string LendingContributionRefundRequested = "Lending.ContributionRefund.Requested";
     public const string LendingContributionRefundApproved = "Lending.ContributionRefund.Approved";

@@ -102,7 +102,9 @@ public sealed class GetMemberAccountBalanceQueryHandler(
         var minimo = 0m;
         if (cuenta.Nature == LineNature.Deposit && cuenta.Status != MemberAccountStatus.Opening)
             minimo = (await LectorDeLineasDeCaptacion.VigenteDeCaptacionAsync(db, cuenta.CreditLineId, fecha, null, ct))?.MinBalance ?? 0m;
-        var disponible = DisponibleDeCuenta.Calcular(cuenta.Nature, delTitular, 0m, 0m, enCanje, minimo);
+        var restricciones = (await Holds.LectorDeRestricciones.RestriccionesAsync(db, new Dictionary<int, decimal> { [cuenta.Id] = delTitular }, fecha, ct))
+            .GetValueOrDefault(cuenta.Id) ?? Holds.RestriccionesDeCuenta.Ninguna;
+        var disponible = DisponibleDeCuenta.Calcular(cuenta.Nature, delTitular, restricciones.Bloqueado, restricciones.Embargado, enCanje, minimo);
 
         decimal? causado = null;
         IReadOnlyList<InterestExplanationDayDto> explicacion = [];

@@ -74,6 +74,7 @@ public sealed class ValidacionEntrePartesDeCaptaciones(IApplicationDbContext db,
             .Concat(filas.PartesDeCuenta.Select(p => p.Fila.PersonId))
             .Concat(filas.Exenciones.Select(e => e.Fila.PersonId))
             .Concat(filas.Tributario.Select(t => t.Fila.PersonId))
+            .Concat(filas.Bloqueos.Where(b => b.Fila.CourtPersonId != null).Select(b => b.Fila.CourtPersonId!.Value))
             .Distinct().ToList();
         var personas = await db.People.AsNoTracking().IgnoreQueryFilters().Where(p => idsDePersonas.Contains(p.Id)).ToDictionaryAsync(p => p.Id, ct);
         void PersonaViva(string parte, int tanda, int fila, string columna, int id)
@@ -224,6 +225,53 @@ public sealed class ValidacionEntrePartesDeCaptaciones(IApplicationDbContext db,
                 else if (c.TitularId != f.PersonId)
                     Error(P.GmfExemptions, e.Tanda, f.RowNumber, C.CuentaExenta, "Lending.Gmf.NotHolder",
                         $"La persona no es la titular de la cuenta {f.SourceAccountNumber}: la cuenta exenta es una del titular.");
+            }
+        }
+
+        // ----------------------------------------------------------------------------------------- bloqueos y embargos --
+        // US11 (T189; §4.6, research E166): la cuenta está en la carga; un embargo no recae sobre aportes y retiene a lo sumo su saldo; un embargo de varias
+        // cuentas es de una sola persona; la garantía nombra un crédito vivo de la Cartera.
+        if (filas.Bloqueos.Count > 0)
+        {
+            var creditos = filas.Bloqueos.Where(b => b.Fila.LoanNumber is not null).Select(b => b.Fila.LoanNumber!).Distinct().ToList();
+            var vivos = creditos.Count == 0
+                ? []
+                : (await db.Loans.AsNoTracking().Where(l => creditos.Contains(l.Number) && !l.IsDeleted
+                                                            && (l.Status == LoanStatus.Active || l.Status == LoanStatus.PendingDisbursement))
+                    .Select(l => l.Number).ToListAsync(ct)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var titularDelOficio = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            foreach (var b in filas.Bloqueos)
+            {
+                var f = b.Fila;
+                var c = Cuenta(P.HoldsAndGarnishments, b.Tanda, f.RowNumber, C.Cuenta, f.SourceAccountNumber);
+                if (c is null) continue;
+                if (f.Kind == "Garnishment")
+                {
+                    if (c.Naturaleza == LineNature.Contribution)
+                    {
+                        Error(P.HoldsAndGarnishments, b.Tanda, f.RowNumber, C.Tipo, Holds.ErroresDeEmbargos.CodigoAportesInembargables,
+                            $"La cuenta {f.SourceAccountNumber} es de aportes: los aportes no se embargan (Ley 79 de 1988, art. 49).");
+                        continue;
+                    }
+                    var saldo = LectorDeCuentas.SaldoDelTitular(c.Naturaleza, c.Saldos);
+                    if ((f.RetainedAmount ?? 0m) > saldo)
+                        Error(P.HoldsAndGarnishments, b.Tanda, f.RowNumber, C.Retenido, Holds.ErroresDeEmbargos.CodigoExcedeRetenido,
+                            $"Lo retenido ({Pesos(f.RetainedAmount ?? 0m)}) supera el saldo de la cuenta {f.SourceAccountNumber} ({Pesos(saldo)}).");
+                    if (f.CourtPersonId is { } juzgado) PersonaViva(P.HoldsAndGarnishments, b.Tanda, f.RowNumber, C.Juzgado, juzgado);
+                    if (titularDelOficio.TryGetValue(f.Reference, out var otro) && otro != c.TitularId)
+                        Error(P.HoldsAndGarnishments, b.Tanda, f.RowNumber, C.Referencia, "Lending.Migration.GarnishmentOfAnotherPerson",
+                            $"El oficio {f.Reference} ya viene sobre una cuenta de otra persona: un embargo es de una sola persona.");
+                    else titularDelOficio[f.Reference] = c.TitularId;
+                }
+                else
+                {
+                    if (c.Naturaleza == LineNature.Contribution && f.Reason != HoldReason.LoanCollateral)
+                        Error(P.HoldsAndGarnishments, b.Tanda, f.RowNumber, C.Motivo, Holds.ErroresDeEmbargos.CodigoBloqueoInvalido,
+                            "Sobre aportes sólo va el bloqueo de garantía de un crédito (LoanCollateral).");
+                    if (f.Reason == HoldReason.LoanCollateral && f.LoanNumber is { } n && !vivos.Contains(n))
+                        Error(P.HoldsAndGarnishments, b.Tanda, f.RowNumber, C.Credito, Holds.ErroresDeEmbargos.CodigoBloqueoInvalido,
+                            $"No hay un crédito vivo de la Cartera con el número {n}.");
+                }
             }
         }
 

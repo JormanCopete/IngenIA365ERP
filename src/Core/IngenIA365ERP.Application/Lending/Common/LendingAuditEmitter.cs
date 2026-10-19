@@ -191,7 +191,12 @@ public sealed class LendingAuditEmitter(IServiceProvider servicios, ILogger<Lend
         AuditEventTypes.LendingSavingsTransactionsViewed,
         AuditEventTypes.LendingSavingsBalanceViewed,
         AuditEventTypes.LendingSavingsStatementViewed,
+        AuditEventTypes.LendingGarnishmentViewed,
     ];
+
+    /// <summary>Feature 014, US11 (T189): un embargo visto (detalle, borrador de respuesta) o la lista de embargos, con lo que se pidió.</summary>
+    public Task<Guid?> EmitirEmbargoVistoAsync(Guid? garnishmentPublicId, string desde, object detalle, CancellationToken ct = default) =>
+        EmitAsync(AuditEventTypes.LendingGarnishmentViewed, "Garnishment", garnishmentPublicId, new { source = desde, detail = detalle }, ct);
 
     /// <summary>
     /// Feature 014, US16 (T164): el saldo de la cuenta de un titular visto en pantalla —el detalle, el saldo a (D, R) con su explicación o la vista previa de la

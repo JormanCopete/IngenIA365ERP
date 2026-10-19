@@ -317,7 +317,7 @@ public sealed class CausacionDeCaptaciones(
             if (linea is not null) MarcarSuspension(cuenta, linea, x, fallecido);
             var plan = planes[version.VersionNumber];
             var periodo = plan.PeriodoDe(x)!;
-            if (cuenta.AccrualSuspendedSince is { } desde && desde <= x)
+            if (cuenta.SuspendidaEl(x))
             {
                 dias.Add(new DiaDeCdat(x, 0m, 0m, version.Id, periodo.Numero));
                 continue;
@@ -333,16 +333,13 @@ public sealed class CausacionDeCaptaciones(
     /// <summary>FR-065: la suspensión que la ventana detecta se anota en la cuenta (desde el primer día en que rige), una vez.</summary>
     private static void MarcarSuspension(MemberAccount cuenta, Domain.Entities.Lending.Deposits.Configuration.DepositLineVersion version, DateOnly dia, bool fallecido)
     {
-        if (cuenta.AccrualSuspendedSince is not null) return;
+        // US11 (T189): la del embargo total la pone y la levanta RetencionDeEmbargos; aquí sólo la del titular fallecido.
+        if (cuenta.AccrualSuspendedSince is not null && cuenta.AccrualResumedOn is null) return;
         if (fallecido && version.SuspendsAccrualOnDeceased)
         {
             cuenta.AccrualSuspendedSince = dia;
+            cuenta.AccrualResumedOn = null;
             cuenta.AccrualSuspensionReason = "Deceased";
-        }
-        else if (cuenta.IsGarnished && version.SuspendsAccrualOnTotalGarnishment)
-        {
-            cuenta.AccrualSuspendedSince = dia;
-            cuenta.AccrualSuspensionReason = "TotalGarnishment";
         }
     }
 

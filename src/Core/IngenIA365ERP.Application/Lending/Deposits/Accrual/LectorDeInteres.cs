@@ -147,12 +147,11 @@ public sealed class LectorDeInteres(IApplicationDbContext db, IValoresNacionales
 
     /// <summary>
     /// ¿Está suspendida la causación ese día? (FR-065): con la marca de la cuenta (<c>AccrualSuspendedSince</c>), con el titular fallecido si la línea lo dice,
-    /// embargada si la línea lo dice (hasta US11, la marca de embargo de la cuenta), o inactiva si la línea no causa en la inactividad.
+    /// embargada totalmente si la línea lo dice (US11: la marca la pone <c>RetencionDeEmbargos</c> con su fecha de reanudación), o inactiva si la línea no causa en la inactividad.
     /// </summary>
     public static bool Suspendido(MemberAccount cuenta, DepositLineVersion version, DateOnly dia, bool titularFallecido) =>
-        (cuenta.AccrualSuspendedSince is { } desde && desde <= dia)
+        cuenta.SuspendidaEl(dia)
         || (titularFallecido && version.SuspendsAccrualOnDeceased)
-        || (cuenta.IsGarnished && version.SuspendsAccrualOnTotalGarnishment)
         || (!version.AccruesWhileInactive && cuenta.InactiveSince is { } inactiva && inactiva <= dia);
 
     /// <summary>US7 (T182): las versiones de condiciones selladas de un contractual (también las de esta unidad de trabajo sin guardar).</summary>

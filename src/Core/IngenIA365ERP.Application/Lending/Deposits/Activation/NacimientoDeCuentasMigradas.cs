@@ -115,6 +115,11 @@ public sealed class NacimientoDeCuentasMigradas(
                 .Select(a => new { a.Id, a.PersonId, a.DepositBankId, a.DepositBankAccountNumber, a.DepositBankAccountType }).ToListAsync(ct))
             .GroupBy(a => a.PersonId).ToDictionary(g => g.Key, g => g.MaxBy(a => a.Id)!);
         var nacidasPorNumero = new Dictionary<string, (int Id, Guid PublicId)>(StringComparer.Ordinal);
+        // US11 (T189; research E166): los embargos de la carga nacen antes que las cuentas (un embargo por persona y oficio); los bloqueos van con su cuenta.
+        var bloqueosPor = filas.Bloqueos.GroupBy(b => b.Fila.SourceAccountNumber, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.Select(x => x.Fila).ToList(), StringComparer.Ordinal);
+        var embargos = await EmbargosMigradosAsync(filas, cuentas, actor.UserId, ct);
+        var creditosDeGarantia = await CreditosDeGarantiaAsync(filas, ct);
 
         // §0.4: el consecutivo de cada línea arranca por encima de los números migrados (también los de las cuentas de ahorro).
         foreach (var grupo in cuentas.Where(c => c.Numero is not null).GroupBy(c => c.LineaCodigo, StringComparer.OrdinalIgnoreCase))
@@ -321,6 +326,21 @@ public sealed class NacimientoDeCuentasMigradas(
                     });
 
                 if (c.Numero is not { } numero) continue;
+                if (bloqueosPor.TryGetValue(numero, out var bloqueos))
+                    foreach (var b in bloqueos)
+                    {
+                        if (b.Kind == "Garnishment")
+                        {
+                            if (b.RetainedAmount is not > 0m) continue;
+                            db.AccountHolds.Add(Domain.Entities.Lending.Deposits.Restrictions.AccountHold.Poner(cuenta.Id, HoldReason.Garnishment, b.RetainedAmount,
+                                b.ValidFrom, null, $"Migrado con la carga {carga.Number}", null, null, garnishmentId: embargos[(c.TitularId, b.Reference.ToUpperInvariant())].Id));
+                            cuenta.IsGarnished = true;
+                        }
+                        else
+                            db.AccountHolds.Add(Domain.Entities.Lending.Deposits.Restrictions.AccountHold.Poner(cuenta.Id, b.Reason!.Value, b.IsTotal ? null : b.Amount,
+                                b.ValidFrom, null, $"{b.Reference} (migrado con la carga {carga.Number})", null, null,
+                                loanId: b.LoanNumber is { } ln ? creditosDeGarantia.GetValueOrDefault(ln) : null));
+                    }
                 if (exencionPor.TryGetValue(numero, out var exencion))
                 {
                     db.GmfExemptAccounts.Add(GmfExemptAccount.Marcar(cuenta, exencion.MarkedSince, "Marca migrada con la carga de captaciones.", null));
@@ -340,6 +360,47 @@ public sealed class NacimientoDeCuentasMigradas(
             await db.SaveChangesAsync(ct);
         }
         return new CuentasNacidas(cuentas.Count, transacciones, partesNacidas, cuotasNacidas, exentas, acumulados, soportePendiente);
+    }
+
+    /// <summary>
+    /// US11 (T189; research E166): los embargos de la carga, uno por persona y oficio, activos desde su fecha y sin aprobación (el sistema anterior ya los
+    /// aplicaba): sin soporte adjunto (se sube después), sin respuesta registrada y con el valor de la medida que trae la fila. Guarda.
+    /// </summary>
+    private async Task<Dictionary<(int Persona, string Oficio), Domain.Entities.Lending.Deposits.Restrictions.Garnishment>> EmbargosMigradosAsync(FilasDeLaCarga filas,
+        IReadOnlyList<CuentaDeLaCarga> cuentas, int? usuario, CancellationToken ct)
+    {
+        var titularDe = cuentas.Where(c => c.Numero is not null).ToDictionary(c => c.Numero!, c => c.TitularId, StringComparer.Ordinal);
+        var r = new Dictionary<(int, string), Domain.Entities.Lending.Deposits.Restrictions.Garnishment>();
+        var juzgados = filas.Bloqueos.Where(b => b.Fila.CourtPersonId != null).Select(b => b.Fila.CourtPersonId!.Value).Distinct().ToList();
+        var nombres = await db.People.AsNoTracking().IgnoreQueryFilters().Where(p => juzgados.Contains(p.Id)).ToDictionaryAsync(p => p.Id, ct);
+        var ahora = reloj.UtcNow;
+        foreach (var b in filas.Bloqueos.Select(x => x.Fila).Where(f => f.Kind == "Garnishment" && titularDe.ContainsKey(f.SourceAccountNumber)))
+        {
+            var clave = (titularDe[b.SourceAccountNumber], b.Reference.ToUpperInvariant());
+            if (r.ContainsKey(clave)) continue;
+            r[clave] = new Domain.Entities.Lending.Deposits.Restrictions.Garnishment
+            {
+                PersonId = clave.Item1, Authority = b.Authority ?? GarnishmentAuthority.Court, CourtPersonId = b.CourtPersonId!.Value,
+                CourtName = ReferenciasDeGobierno.Nombre(nombres[b.CourtPersonId!.Value]), ProcessNumber = b.ProcessNumber ?? string.Empty,
+                OrderNumber = b.Reference, OrderDate = b.OrderDate ?? b.ValidFrom, ReceivedOn = b.ValidFrom, ClaimantName = b.ClaimantName ?? string.Empty,
+                Amount = b.MeasureAmount, IsChildSupport = b.IsChildSupport, AccountsScope = GarnishmentAccountsScope.AllSavings,
+                OrderAttachmentPublicId = Guid.Empty, Status = GarnishmentStatus.Active, RegisteredByUserId = usuario, RegisteredAt = ahora,
+                Notes = "Migrado con la carga de captaciones: el oficio se adjunta después.",
+            };
+        }
+        if (r.Count == 0) return r;
+        db.Garnishments.AddRange(r.Values);
+        await db.SaveChangesAsync(ct);
+        return r;
+    }
+
+    /// <summary>US11 (T189): los créditos vivos que garantizan las cuentas de la carga (bloqueos <c>LoanCollateral</c>), por número.</summary>
+    private async Task<Dictionary<string, int?>> CreditosDeGarantiaAsync(FilasDeLaCarga filas, CancellationToken ct)
+    {
+        var numeros = filas.Bloqueos.Where(b => b.Fila.LoanNumber is not null).Select(b => b.Fila.LoanNumber!).Distinct().ToList();
+        if (numeros.Count == 0) return new Dictionary<string, int?>(StringComparer.OrdinalIgnoreCase);
+        return (await db.Loans.AsNoTracking().Where(l => numeros.Contains(l.Number) && !l.IsDeleted).Select(l => new { l.Number, l.Id }).ToListAsync(ct))
+            .ToDictionary(l => l.Number, l => (int?)l.Id, StringComparer.OrdinalIgnoreCase);
     }
 
     /// <summary>

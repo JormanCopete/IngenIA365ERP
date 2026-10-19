@@ -206,6 +206,9 @@ public sealed class OrdenesDeGiroDeCuentas(
             var reverso = await reversion.ReversarAsync(origen, texto, ReintegroPorTesoreria, ct);
             if (reverso.IsFailure) return Result.Failure(reverso.Error);
             orden.RegistrarResultado(hacia, ahora);
+            // US11 (T189; FR-091): el giro rechazado de una consignación al juzgado devuelve el saldo y lo deja retenido para el mismo embargo.
+            if (orden.Purpose == PayoutPurpose.GarnishmentConsignment && origen.GarnishmentId is { } embargo)
+                Holds.RetencionDeEmbargos.Reintegrar(db, embargo, orden.MemberAccountId, orden.Amount, reloj.HoyLocal, texto);
             // US5 (T135; data-model §3.1): la orden de una cancelación rechazada devuelve la cuenta a activa con su saldo.
             if (orden.Purpose == PayoutPurpose.Cancellation
                 && await db.MemberAccounts.FirstOrDefaultAsync(a => a.Id == orden.MemberAccountId && a.Status == MemberAccountStatus.Closing, ct) is { } enCierre)
