@@ -215,6 +215,12 @@ public enum IssuedDocumentStatus
     Valid = 1,
     SubjectToFinality = 2,
     Voided = 3,
+
+    /// <summary>Feature 014 (T194; documentos.md §1.2): sólo títulos de CDAT, reemplazado por el de la prórroga o la renovación.</summary>
+    Superseded = 4,
+
+    /// <summary>Feature 014 (T194; documentos.md §1.2): sólo títulos de CDAT, el CDAT se redimió o se canceló.</summary>
+    Settled = 5,
 }
 
 /// <summary>Evento de un documento emitido. <c>Voided = 3</c> es el filtro de la única anulación.</summary>
@@ -223,6 +229,12 @@ public enum IssuedDocumentEventKind
     Issued = 1,
     Delivered = 2,
     Voided = 3,
+
+    /// <summary>Feature 014 (T194; documentos.md §1.1): un título de CDAT reemplazado por el de la prórroga o la renovación.</summary>
+    Superseded = 4,
+
+    /// <summary>Feature 014 (T194; documentos.md §1.1): el CDAT del título se redimió o se canceló.</summary>
+    Settled = 5,
 }
 
 /// <summary>Cómo se entregó un documento emitido.</summary>

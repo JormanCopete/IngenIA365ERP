@@ -32346,6 +32346,9 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("rowversion");
 
+                    b.Property<int?>("TermsVersionId")
+                        .HasColumnType("int");
+
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
 
@@ -32367,6 +32370,9 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.HasIndex("PublicId")
                         .IsUnique()
                         .HasDatabaseName("UK_LND_IssuedDocumentAccounts_PublicId");
+
+                    b.HasIndex("TermsVersionId")
+                        .HasDatabaseName("IX_LND_IssuedDocumentAccounts_TermsVersionId");
 
                     b.HasIndex("IssuedDocumentId", "MemberAccountId")
                         .IsUnique()
@@ -32630,7 +32636,7 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.Property<DateTime>("IssuedAt")
                         .HasColumnType("datetime2");
 
-                    b.Property<int>("IssuedByUserId")
+                    b.Property<int?>("IssuedByUserId")
                         .HasColumnType("int");
 
                     b.Property<int>("Kind")
@@ -59537,6 +59543,12 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasForeignKey("PreviousIssuedDocumentId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .HasConstraintName("FK_LND_IssuedDocumentAccounts_PreviousDocument");
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.MemberAccountTermsVersion", null)
+                        .WithMany()
+                        .HasForeignKey("TermsVersionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("FK_LND_IssuedDocumentAccounts_TermsVersion");
                 });
 
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Lending.Documents.IssuedDocumentEvent", b =>
@@ -59603,8 +59615,7 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.HasOne("IngenIA365ERP.Domain.Entities.Security.User", null)
                         .WithMany()
                         .HasForeignKey("IssuedByUserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("IngenIA365ERP.Domain.Entities.Core.Person", null)
                         .WithMany()

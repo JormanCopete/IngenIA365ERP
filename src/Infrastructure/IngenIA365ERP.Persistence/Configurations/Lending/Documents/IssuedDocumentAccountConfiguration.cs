@@ -28,6 +28,10 @@ public class IssuedDocumentAccountConfiguration : IEntityTypeConfiguration<Issue
             .HasConstraintName("FK_LND_IssuedDocumentAccounts_LastTransaction");
         builder.HasOne<IssuedLendingDocument>().WithMany().HasForeignKey(e => e.PreviousIssuedDocumentId).OnDelete(DeleteBehavior.Restrict)
             .HasConstraintName("FK_LND_IssuedDocumentAccounts_PreviousDocument");
+        // Feature 014, US13 (T194; data-model §1.5.1): el título de CDAT nombra la versión de condiciones que titula.
+        builder.HasOne<MemberAccountTermsVersion>().WithMany().HasForeignKey(e => e.TermsVersionId).OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("FK_LND_IssuedDocumentAccounts_TermsVersion");
+        builder.HasIndex(e => e.TermsVersionId).HasDatabaseName("IX_LND_IssuedDocumentAccounts_TermsVersionId");
 
         builder.HasIndex(e => new { e.IssuedDocumentId, e.MemberAccountId }).IsUnique()
             .HasDatabaseName("UK_LND_IssuedDocumentAccounts_Document_Account");

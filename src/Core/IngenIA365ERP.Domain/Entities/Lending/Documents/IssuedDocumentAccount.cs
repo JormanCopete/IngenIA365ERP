@@ -20,6 +20,9 @@ public class IssuedDocumentAccount : AuditableEntity, IHechoInmutable
 
     public decimal? BalanceAtCutoff { get; init; }
 
+    /// <summary>Feature 014, US13 (T194; data-model §1.5.1): título de CDAT: la versión de condiciones que titula.</summary>
+    public int? TermsVersionId { get; init; }
+
     /// <summary>Título: el título anterior al que reemplaza una prórroga o renovación (FR-068, K9).</summary>
     public int? PreviousIssuedDocumentId { get; init; }
 }

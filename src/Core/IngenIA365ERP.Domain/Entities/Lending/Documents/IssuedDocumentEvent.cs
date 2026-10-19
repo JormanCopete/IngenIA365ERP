@@ -87,6 +87,30 @@ public class IssuedDocumentEvent : AuditableEntity, IHechoInmutable
         };
     }
 
+    /// <summary>
+    /// Feature 014 (T194; documentos.md §1.1, §2.5): el título de CDAT queda reemplazado por el de la prórroga o la renovación que selló la operación
+    /// <paramref name="operacionDeCuenta"/>. Sólo títulos; sin motivo libre (lo dice el título nuevo).
+    /// </summary>
+    public static IssuedDocumentEvent Reemplazado(int documentoId, string motivo, DateTime en, ActorKind actorKind, int? actorUserId, long? operacionDeCuenta) =>
+        DeTitulo(documentoId, IssuedDocumentEventKind.Superseded, motivo, en, actorKind, actorUserId, operacionDeCuenta);
+
+    /// <summary>Feature 014 (T194; documentos.md §1.1, §2.5): el CDAT del título se redimió o se canceló con <paramref name="operacionDeCuenta"/>.</summary>
+    public static IssuedDocumentEvent Liquidado(int documentoId, string motivo, DateTime en, ActorKind actorKind, int? actorUserId, long? operacionDeCuenta) =>
+        DeTitulo(documentoId, IssuedDocumentEventKind.Settled, motivo, en, actorKind, actorUserId, operacionDeCuenta);
+
+    private static IssuedDocumentEvent DeTitulo(int documentoId, IssuedDocumentEventKind clase, string motivo, DateTime en, ActorKind actorKind,
+        int? actorUserId, long? operacionDeCuenta)
+    {
+        if (string.IsNullOrWhiteSpace(motivo)) throw new ArgumentException("El evento del título dice qué pasó.", nameof(motivo));
+        var evento = Nuevo(documentoId, clase, en, actorKind, actorUserId);
+        var texto = motivo.Trim();
+        return new IssuedDocumentEvent
+        {
+            IssuedDocumentId = evento.IssuedDocumentId, Kind = clase, OccurredAt = en, ActorKind = actorKind, ActorUserId = actorUserId,
+            Reason = texto.Length <= LargoDelMotivo ? texto : texto[..LargoDelMotivo], CausingAccountOperationId = operacionDeCuenta,
+        };
+    }
+
     private static IssuedDocumentEvent Nuevo(int documentoId, IssuedDocumentEventKind clase, DateTime en, ActorKind actorKind, int? actorUserId)
     {
         if ((actorKind == ActorKind.Person) != actorUserId.HasValue)

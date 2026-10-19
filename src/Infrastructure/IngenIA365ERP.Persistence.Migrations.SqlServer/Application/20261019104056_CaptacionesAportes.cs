@@ -5516,11 +5516,71 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                 principalTable: "LND_Garnishments",
                 principalColumn: "Id",
                 onDelete: ReferentialAction.Restrict);
+
+            // US13 (T194): quien emite el documento puede ser el proceso; el título nombra su versión de condiciones.
+            migrationBuilder.AlterColumn<int>(
+                name: "IssuedByUserId",
+                schema: "dbo",
+                table: "LND_IssuedDocuments",
+                type: "int",
+                nullable: true,
+                oldClrType: typeof(int),
+                oldType: "int");
+
+            migrationBuilder.AddColumn<int>(
+                name: "TermsVersionId",
+                schema: "dbo",
+                table: "LND_IssuedDocumentAccounts",
+                type: "int",
+                nullable: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_IssuedDocumentAccounts_TermsVersionId",
+                schema: "dbo",
+                table: "LND_IssuedDocumentAccounts",
+                column: "TermsVersionId");
+
+            migrationBuilder.AddForeignKey(
+                name: "FK_LND_IssuedDocumentAccounts_TermsVersion",
+                schema: "dbo",
+                table: "LND_IssuedDocumentAccounts",
+                column: "TermsVersionId",
+                principalSchema: "dbo",
+                principalTable: "LND_MemberAccountTermsVersions",
+                principalColumn: "Id",
+                onDelete: ReferentialAction.Restrict);
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            // US13 (T194): lo de los documentos al titular primero.
+            migrationBuilder.DropForeignKey(
+                name: "FK_LND_IssuedDocumentAccounts_TermsVersion",
+                schema: "dbo",
+                table: "LND_IssuedDocumentAccounts");
+
+            migrationBuilder.DropIndex(
+                name: "IX_LND_IssuedDocumentAccounts_TermsVersionId",
+                schema: "dbo",
+                table: "LND_IssuedDocumentAccounts");
+
+            migrationBuilder.DropColumn(
+                name: "TermsVersionId",
+                schema: "dbo",
+                table: "LND_IssuedDocumentAccounts");
+
+            migrationBuilder.AlterColumn<int>(
+                name: "IssuedByUserId",
+                schema: "dbo",
+                table: "LND_IssuedDocuments",
+                type: "int",
+                nullable: false,
+                defaultValue: 0,
+                oldClrType: typeof(int),
+                oldType: "int",
+                oldNullable: true);
+
             // US11 (T187): lo de bloqueos y embargos primero.
             migrationBuilder.DropForeignKey(
                 name: "FK_LND_MemberAccountOperations_Garnishment",

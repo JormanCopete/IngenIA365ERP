@@ -202,8 +202,9 @@ public class EnumeracionesDeCarteraTests
             ("AccountStatement", 7), ("AccountBalanceCertificate", 8), ("DepositTaxCertificate", 9), ("WithholdingCertificate", 10),
             ("TermDepositTitle", 11), ("ContributionCertificate", 12), ("ContributionClearance", 13), ("MembershipWithdrawalSettlement", 14),
             ("GarnishmentResponse", 15)],
-        [typeof(IssuedDocumentStatus)] = [("Valid", 1), ("SubjectToFinality", 2), ("Voided", 3)],
-        [typeof(IssuedDocumentEventKind)] = [("Issued", 1), ("Delivered", 2), ("Voided", 3)],
+        // Feature 014, US13 (T194): los títulos del CDAT reemplazados y liquidados.
+        [typeof(IssuedDocumentStatus)] = [("Valid", 1), ("SubjectToFinality", 2), ("Voided", 3), ("Superseded", 4), ("Settled", 5)],
+        [typeof(IssuedDocumentEventKind)] = [("Issued", 1), ("Delivered", 2), ("Voided", 3), ("Superseded", 4), ("Settled", 5)],
         [typeof(DocumentDeliveryMode)] = [("Download", 1), ("Email", 2)],
         [typeof(RegulatoryFileKind)] = [("Sicses", 1), ("CreditBureau", 2)],
         [typeof(RegulatoryFileStatus)] = [("Validated", 1), ("Generated", 2), ("Superseded", 3), ("Uploaded", 4)],

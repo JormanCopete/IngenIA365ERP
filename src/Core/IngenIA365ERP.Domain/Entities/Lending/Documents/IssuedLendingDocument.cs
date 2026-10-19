@@ -87,7 +87,11 @@ public class IssuedLendingDocument : AuditableEntity, IHechoInmutable
     /// <summary>Lleva «AMBIENTE DE PRUEBAS – SIN VALIDEZ» (T73).</summary>
     public bool IsTestEnvironment { get; init; }
 
-    public int IssuedByUserId { get; init; }
+    /// <summary>
+    /// Quien lo emitió. Feature 014, US13 (T194; research E168): nulo sólo en lo que emite el proceso diario sin persona —el título de la prórroga
+    /// automática de un CDAT—; el evento <c>Issued</c> lo dice con <c>ActorKind = Process</c>.
+    /// </summary>
+    public int? IssuedByUserId { get; init; }
 
     public DateTime IssuedAt { get; init; }
 
@@ -96,4 +100,7 @@ public class IssuedLendingDocument : AuditableEntity, IHechoInmutable
     /// <summary>El estado calculado a <paramref name="hoy"/> (data-model §27.1): anulado si <paramref name="anulado"/>, sujeto a firmeza mientras
     /// hoy &lt; <see cref="FinalityUntil"/>, vigente en otro caso.</summary>
     public IssuedDocumentStatus EstadoA(bool anulado, DateOnly hoy) => EstadoDeDocumentoEmitido.Calcular(anulado, FinalityUntil, hoy);
+
+    /// <summary>Feature 014 (T194; documentos.md §1.2): el estado con los eventos de título (reemplazado, liquidado).</summary>
+    public IssuedDocumentStatus EstadoA(EventosDeEstado eventos, DateOnly hoy) => EstadoDeDocumentoEmitido.Calcular(eventos, FinalityUntil, hoy);
 }
