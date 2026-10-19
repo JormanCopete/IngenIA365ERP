@@ -1,0 +1,54 @@
+// Un segundo embargo de la misma persona: el limite es de la persona y lo que retiene el primero no se vuelve a retener; no queda nada embargable.
+{
+  "nombre": "embargo-05-segundo-embargo",
+  "descripcion": "Un segundo embargo de la misma persona: el limite es de la persona y lo que retiene el primero no se vuelve a retener; no queda nada embargable.",
+  "entrada": {
+    "tope": 10000000,
+    "porAlimentos": false,
+    "limite": 50000000,
+    "aplicacion": "AllProtectedAccounts",
+    "ordenDeClases": [],
+    "cuentas": [
+      {
+        "id": 1,
+        "clase": "Demand",
+        "abiertaEl": "2020-01-10",
+        "saldo": 40000000,
+        "retenidoPorOtros": 20000000,
+        "protegida": true,
+        "embargable": true
+      },
+      {
+        "id": 2,
+        "clase": "Permanent",
+        "abiertaEl": "2021-05-01",
+        "saldo": 30000000,
+        "retenidoPorOtros": 0,
+        "protegida": true,
+        "embargable": true
+      }
+    ]
+  },
+  "esperado": {
+    "limiteAplicado": 50000000,
+    "protegido": 50000000,
+    "totalEmbargable": 0,
+    "retenido": 0,
+    "cuentas": [
+      {
+        "id": 1,
+        "orden": 1,
+        "protegido": 20000000,
+        "embargable": 0,
+        "retenido": 0
+      },
+      {
+        "id": 2,
+        "orden": 2,
+        "protegido": 30000000,
+        "embargable": 0,
+        "retenido": 0
+      }
+    ]
+  }
+}

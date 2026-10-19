@@ -1,0 +1,54 @@
+// Persona juridica: sin limite inembargable (Embargos.LimiteSoloPersonasNaturales); se retiene hasta el tope en el orden.
+{
+  "nombre": "embargo-07-persona-juridica",
+  "descripcion": "Persona juridica: sin limite inembargable (Embargos.LimiteSoloPersonasNaturales); se retiene hasta el tope en el orden.",
+  "entrada": {
+    "tope": 25000000,
+    "porAlimentos": false,
+    "limite": null,
+    "aplicacion": "AllProtectedAccounts",
+    "ordenDeClases": [],
+    "cuentas": [
+      {
+        "id": 1,
+        "clase": "Demand",
+        "abiertaEl": "2020-01-10",
+        "saldo": 18000000,
+        "retenidoPorOtros": 0,
+        "protegida": true,
+        "embargable": true
+      },
+      {
+        "id": 2,
+        "clase": "Demand",
+        "abiertaEl": "2022-02-01",
+        "saldo": 15000000,
+        "retenidoPorOtros": 0,
+        "protegida": true,
+        "embargable": true
+      }
+    ]
+  },
+  "esperado": {
+    "limiteAplicado": 0,
+    "protegido": 0,
+    "totalEmbargable": 33000000,
+    "retenido": 25000000,
+    "cuentas": [
+      {
+        "id": 1,
+        "orden": 1,
+        "protegido": 0,
+        "embargable": 18000000,
+        "retenido": 18000000
+      },
+      {
+        "id": 2,
+        "orden": 2,
+        "protegido": 0,
+        "embargable": 15000000,
+        "retenido": 7000000
+      }
+    ]
+  }
+}

@@ -29,6 +29,10 @@ Lo que calcula hoy (fase fundacional y US4 de captaciones; las historias siguien
   A x ((1 + r_d)^N - 1) al corte (saldo diario con equivalencia compuesta: capitalizar no cambia el valor final), bonificacion (bonificada - base),
   reliquidacion a la tasa de castigo (base - castigo), cumplimiento con tolerancia y dias de gracia, plazo de emision. Casos contractual-*.json
   (bloque "entrada").
+- Limite inembargable (US11, T188; FR-055, D20; CGP art. 594 num. 2, ET art. 837-1): las cuentas embargables en el orden (clases del parametro, luego
+  antiguedad, luego id); lo protegido sobre la suma de las protegidas (asignado de la ultima a la primera en el orden) o sobre la mas antigua; nada
+  protegido por alimentos o sin limite; lo que retienen otros embargos no se repite; se retiene en el orden hasta el tope. Casos embargo-*.json
+  (bloque "entrada").
 - Cargos de cuenta (US4, T115; FR-128): gratuitos del periodo, exoneraciones (la primera que aplica), valor fijo o porcentaje al peso
   acotado por minimo y maximo, cobrado si el saldo lo deja sin bajar del minimo; si no, pendiente o condonado segun la linea. Casos
   cargo-*.json (bloque "entrada").
@@ -681,6 +685,52 @@ def esperado_contractual(caso):
     return salida
 
 
+# --------------------------------------------------------------------------------------------- limite inembargable (US11)
+# T188 (FR-055, D20; research E155): el limite es de la persona. Protegido: con "AllProtectedAccounts", L se reparte entre las cuentas protegidas
+# embargables recorriendolas de la ultima a la primera del orden del embargo; con "OldestAccount", solo la protegida mas antigua guarda hasta L.
+# Embargable de una cuenta = saldo - protegido - lo que ya retienen otros embargos (nunca negativo). Se retiene en el orden hasta el tope.
+def esperado_embargo(caso):
+    e = caso["entrada"]
+    orden_clases = e.get("ordenDeClases") or []
+    def pos(c):
+        if c.get("clase") is None:
+            return 10**9
+        return orden_clases.index(c["clase"]) if c["clase"] in orden_clases else len(orden_clases)
+    cuentas = sorted(e["cuentas"], key=lambda c: (pos(c), c["abiertaEl"], c["id"]))
+    limite = D(0) if e.get("porAlimentos") or e.get("limite") is None else D(str(e["limite"]))
+    protegido = {c["id"]: D(0) for c in cuentas if c["embargable"]}
+    saldo = lambda c: max(D(0), D(str(c["saldo"])))
+    if limite > 0:
+        prot = [c for c in cuentas if c["embargable"] and c["protegida"]]
+        if e.get("aplicacion", "AllProtectedAccounts") == "OldestAccount":
+            if prot:
+                mas = sorted(prot, key=lambda c: (c["abiertaEl"], c["id"]))[0]
+                protegido[mas["id"]] = min(limite, saldo(mas))
+        else:
+            resto = limite
+            for c in reversed(prot):
+                if resto <= 0:
+                    break
+                p = min(resto, saldo(c))
+                protegido[c["id"]] = p
+                resto -= p
+    tope = None if e.get("tope") is None else D(str(e["tope"]))
+    salida, total_emb, retenido_total = [], D(0), D(0)
+    for i, c in enumerate(cuentas, start=1):
+        if not c["embargable"]:
+            salida.append({"id": c["id"], "orden": i, "protegido": D(0), "embargable": D(0), "retenido": D(0)})
+            continue
+        emb = max(D(0), saldo(c) - protegido[c["id"]] - max(D(0), D(str(c.get("retenidoPorOtros", 0)))))
+        total_emb += emb
+        ret = emb if tope is None else min(emb, tope)
+        if tope is not None:
+            tope -= ret
+        retenido_total += ret
+        salida.append({"id": c["id"], "orden": i, "protegido": protegido[c["id"]], "embargable": emb, "retenido": ret})
+    return {"limiteAplicado": limite, "protegido": sum(protegido.values(), D(0)), "totalEmbargable": total_emb, "retenido": retenido_total,
+            "cuentas": salida}
+
+
 def esperado_de_entrada(caso):
     nombre = caso["nombre"]
     if nombre.startswith("gmf-"): return esperado_gmf(caso)
@@ -689,6 +739,7 @@ def esperado_de_entrada(caso):
     if nombre.startswith("cdat-"): return esperado_cdat(caso)
     if nombre.startswith("tasa-negociada-"): return esperado_tasa_negociada(caso)
     if nombre.startswith("contractual-"): return esperado_contractual(caso)
+    if nombre.startswith("embargo-"): return esperado_embargo(caso)
     raise ValueError(f"no se sabe calcular {nombre}")
 
 

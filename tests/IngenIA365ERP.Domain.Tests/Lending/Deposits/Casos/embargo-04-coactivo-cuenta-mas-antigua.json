@@ -1,0 +1,54 @@
+// Cobro coactivo (ET art. 837-1): 25 SMMLV de prueba (35.587.500) protegen solo la cuenta de ahorros mas antigua; la otra se embarga entera.
+{
+  "nombre": "embargo-04-coactivo-cuenta-mas-antigua",
+  "descripcion": "Cobro coactivo (ET art. 837-1): 25 SMMLV de prueba (35.587.500) protegen solo la cuenta de ahorros mas antigua; la otra se embarga entera.",
+  "entrada": {
+    "tope": null,
+    "porAlimentos": false,
+    "limite": 35587500,
+    "aplicacion": "OldestAccount",
+    "ordenDeClases": [],
+    "cuentas": [
+      {
+        "id": 1,
+        "clase": "Demand",
+        "abiertaEl": "2020-01-10",
+        "saldo": 40000000,
+        "retenidoPorOtros": 0,
+        "protegida": true,
+        "embargable": true
+      },
+      {
+        "id": 2,
+        "clase": "Permanent",
+        "abiertaEl": "2021-05-01",
+        "saldo": 30000000,
+        "retenidoPorOtros": 0,
+        "protegida": true,
+        "embargable": true
+      }
+    ]
+  },
+  "esperado": {
+    "limiteAplicado": 35587500,
+    "protegido": 35587500,
+    "totalEmbargable": 34412500,
+    "retenido": 34412500,
+    "cuentas": [
+      {
+        "id": 1,
+        "orden": 1,
+        "protegido": 35587500,
+        "embargable": 4412500,
+        "retenido": 4412500
+      },
+      {
+        "id": 2,
+        "orden": 2,
+        "protegido": 0,
+        "embargable": 30000000,
+        "retenido": 30000000
+      }
+    ]
+  }
+}
