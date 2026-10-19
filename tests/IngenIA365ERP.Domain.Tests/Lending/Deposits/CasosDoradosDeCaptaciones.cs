@@ -185,6 +185,43 @@ public class CasosDoradosDeCaptacionesTests
         }
     }
 
+    /// <summary>
+    /// T233 (SC-002): al menos 40 casos dorados de captaciones, y entre ellos cada uno de los que lista FR-026 con la cifra que la
+    /// investigación calculó a mano. Que coincidan al centavo lo prueba la suite de cada motor; ésta prueba que no falte ninguno.
+    /// </summary>
+    [Fact]
+    public void Hay_al_menos_40_casos_y_cubren_lo_que_lista_FR_026()
+    {
+        var archivos = CasoDoradoDeCaptaciones.Archivos().ToList();
+        archivos.Should().HaveCountGreaterThanOrEqualTo(40, "SC-002 pide al menos 40 casos dorados de captaciones");
+
+        var nombres = archivos.Select(a => Path.GetFileNameWithoutExtension(a)!).ToList();
+        string Texto(string nombre) => File.ReadAllText(archivos.Single(a => Path.GetFileNameWithoutExtension(a) == nombre));
+
+        // Las cifras de FR-026, cada una en el caso que la fija.
+        var cifras = new (string Caso, string Cifra)[]
+        {
+            ("cdat-01-vencimiento-base-365", "481244"), ("cdat-02-vencimiento-base-360", "488088"),
+            ("cdat-03-mensual-vencido", "79741"), ("cdat-03-mensual-vencido", "478446"), ("cdat-04-mensual-anticipado", "79111"),
+            ("interes-01-saldo-diario", "6884"), ("interes-02-saldo-minimo", "3649"),
+            ("gmf-01-tope-cruzado", "6676"), ("gmf-02-redencion-cdat-abonada", "41952"),
+            ("contractual-01-cumplido-tasa-base", "2465306"), ("contractual-02-bonificacion-por-cumplimiento", "2486777"),
+            ("contractual-02-bonificacion-por-cumplimiento", "21471"),
+        };
+        foreach (var (caso, cifra) in cifras)
+        {
+            nombres.Should().Contain(caso, $"FR-026 lista el caso {caso}");
+            Texto(caso).Should().MatchRegex($@"\b{cifra}\b", $"{caso} fija la cifra {cifra} de FR-026");
+        }
+
+        // Los demás temas de FR-026, por el caso que los cubre.
+        nombres.Should().Contain(["retencion-01-umbral-no-alcanzado", "retencion-02-umbral-alcanzado-sin-componente",
+            "retencion-03-umbral-alcanzado-con-componente", "retencion-07-persona-exenta", "gmf-04-reverso",
+            "cdat-05-prorroga-con-capitalizacion", "cdat-06-redencion-anticipada-reliquidacion", "interes-04-tramos-escalonados",
+            "interes-05-tramos-por-saldo-total", "interes-06-cambio-de-tasa-a-mitad-de-mes", "interes-07-bisiesto",
+            "asamblea-01-revalorizacion-limitada-por-ipc-y-prorrateada", "liquidez-02-plena-por-madurez-residual"]);
+    }
+
     [Fact]
     public void La_hoja_que_los_recalcula_vive_junto_a_los_casos()
     {
