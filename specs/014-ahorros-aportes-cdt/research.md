@@ -1421,3 +1421,53 @@ esquema: `CaptacionesAportes` sigue como la dejó la fase 8 (E104).
 - Si la cuenta exenta del GMF o la embargada van a otra cuenta que la estándar (entonces hace falta la reclasificación al marcar o desmarcar).
 - El residuo de centavos entre la causación diaria al centavo y el bruto liquidado (E109): ajustarlo en la liquidación o dejarlo en el interés por pagar.
 - La conciliación de la retención y el GMF por pagar con la declaración (fuera de la Cartera).
+
+## 16. Enmienda de la migración de saldos (2026-10-19, T151–T161, US9)
+
+Construida la historia 9. **Manda el código**; estas notas reemplazan lo dicho en `data-model.md`, `contracts/` y `tasks.md` donde choquen. Cambio de
+esquema: `CaptacionesAportes` **regenerada** en los dos motores (PostgreSQL `20261019051709`, SQL Server `20261019051623`) con siete tablas de preparación
+y la columna `LND_MigrationLoads.ReferenceFiguresJson`; el SQL escrito a mano (T044, `NOM`, `ASO`) se reinsertó sin cambios y la paridad pasa. Las
+migraciones congeladas de la 013 y `RetiroDeCaptacionesHeredadas` no se tocaron.
+
+- **E115 · Las equivalencias de productos son una parte de la carga.** `line-equivalences` (código heredado → línea nueva, con la clase en captaciones) se
+  carga primero y vive sólo en la migración: una cuenta trae `linea` o `codigoHeredado`, y el código sin equivalencia responde
+  `Lending.Migration.LineEquivalenceMissing`. No hay hoja de equivalencias en plantillas de líneas: **las plantillas de importación de líneas
+  (`lending.deposit-lines`, `lending.contribution-lines`) no se construyeron**; las líneas se crean por pantalla (T152 parcial).
+- **E116 · Partes que llegan después.** `term-deposits` llega con el CDAT (K9) y `holds-and-garnishments` con los bloqueos y embargos (US11): figuran
+  en el catálogo de partes con «llega con …» y sin plantilla, y la tabla `…HoldRows` no se creó. Las columnas del ahorro contractual y de la tasa
+  negociada existen en la plantilla de cuentas y, si traen valor, la fila se rechaza como «todavía no disponible» (K9) hasta su entrega.
+- **E117 · Una carga, dos mundos.** `MigrationLoad.Nature` separa colocación de captaciones y aportes: las consultas y comandos de la 013 filtran
+  `Nature == Placement`; la aceptación de diferencias (`AcceptMigrationDifferencesCommand`, con `DeCaptaciones`) y el punto del acta
+  (`PuntoDeActaCerrado`) sirven a las dos. Una carga aplicada reemplaza a la anterior **de su naturaleza** (`Replaced`, nunca se borra).
+- **E118 · El GMF del año queda en la carga.** Del acumulado tributario, rendimientos, componente inflacionario y retención pasan al acumulado de la cuenta
+  (`Origin = Migration`); el GMF del año se lee de la fila de preparación para el certificado (no hay acumulado de GMF por cuenta).
+- **E119 · Titularidad y estado migrados.** La parte de cotitulares lleva la columna `fundamento` (Parent, Guardian, CourtOrder,
+  LegalEntityRepresentative) para el representante legal; su soporte se sube después: la parte nace con **soporte diferido** y la cuenta con
+  `RequiresDataUpdate`. Una cuenta `Inactive` nace inactiva **desde el corte** (no desde su último movimiento, que queda como dato de la fila). El número
+  migrado se conserva (`NumeradorDeCartera.ConservarNumeroDeCuenta`) y el consecutivo de la línea se lleva por encima; una cuenta de aportes sin número
+  toma el consecutivo.
+- **E120 · Informativos en aportes.** `minimoNoReducible` individual, `ingresoRegistrado` y `cuotaPactada` se guardan en la fila y sólo avisan: la cuenta
+  todavía no tiene dónde guardar un mínimo individual y la cuota sale de la línea.
+- **E121 · El interés migrado no se vuelve a causar.** La ventana de causación de una cuenta migrada arranca en el corte (`LectorDeInteres.CorteDeMigracion`
+  = víspera de la activación); el saldo inicial `InterestPayable` cuenta como causado para la primera liquidación, que lo liquida sin causarlo otra vez.
+  Para el umbral de retención se reparte por igual entre los días que cubre (desde `ultimaLiquidacionHasta` hasta el corte) — pendiente de validar.
+- **Errores nuevos.** `Lending.Migration.PartNotForNature`, `.PartNotAvailable`, `.AccountNumberDuplicate`, `.LineEquivalenceMissing`,
+  `.MinorWithoutRepresentative`, `.AccountNotInLoad`.
+- **Activación con carga.** Fecha = corte + 1, acta obligatoria, cuadre recalculado (la versión nueva se guarda fuera de la transacción, como en la
+  013), plazo de fecha valor = corte + `Captaciones.DiasMaximosFechaValor`, cuentas en tandas de 500 dentro de una sola transacción; saldo inicial por
+  concepto con su operación `SIN-` y la de compensación aparte, cuotas atrasadas con lo pagado y su motivo, marca y uso del GMF del mes. El único hecho es
+  el informativo `CaptacionesActivadas`.
+
+### 16.1 Para el dueño
+
+- **Plantillas de importación de líneas (E115).** A: dejarlas fuera (las líneas son pocas y se crean por pantalla; lo construido); B: construirlas para
+  cooperativas con muchos productos. Recomendado: A.
+- **Mínimo no reducible individual (E120).** A: informativo (lo construido); B: una columna en la cuenta de aportes que el retiro respete. Recomendado: B si
+  algún estatuto lo fija por asociado; si no, A.
+- **Fecha de inactividad de las cuentas migradas (E119).** A: inactiva desde el corte (lo construido: el plazo para los no reclamados corre desde la
+  activación); B: desde su último movimiento real (el plazo puede vencer al día siguiente de activar). Recomendado: A.
+
+### 16.2 Para la contadora (pendiente de validar)
+
+- El reparto por igual del interés migrado entre los días que cubre para medir el umbral diario de retención (E121).
+- Las cifras de referencia por línea y concepto que entregará la cooperativa al corte, y las diferencias de cuadre que se aceptan con acta.
