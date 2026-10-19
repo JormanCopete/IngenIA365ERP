@@ -1742,3 +1742,134 @@ Supersolidaria como en el CDAT (E128), por meses.
 - La provisión de la bonificación (P26) en el interés por pagar y su reversión al incumplir.
 - El plazo de emisión del contractual por meses (menos de 6; 6 a 12; 12 a 18; 18 o más) para las cuentas 2110 del CUIF.
 - La diferencia de la convención 30/360 entre el libro y la cifra del reglamento (E150).
+
+## 20. Enmienda de los bloqueos, los embargos y la inembargabilidad (2026-10-19, T187–T193, US11, K8)
+
+Construida la historia 11 y los pendientes de embargos de las fases 9 a 12. **Manda el código**; estas notas reemplazan lo dicho en `data-model.md`,
+`contracts/` y `tasks.md` donde choquen. Cambio de esquema: `CaptacionesAportes` **regenerada** en los dos motores (mismos sellos: PostgreSQL
+`20261019104128`, SQL Server `20261019104056`; las operaciones nuevas al final de `Up` y al principio de `Down`) con `LND_AccountHolds`, `LND_Garnishments`,
+`LND_GarnishmentResponses`, `LND_MigrationHoldRows`, `LND_MemberAccounts.AccrualResumedOn` y `LND_MemberAccountOperations.GarnishmentId`; el SQL escrito a
+mano (T044, `NOM`, `ASO`) quedó intacto —el antes y el después del `.cs` sólo difieren en líneas agregadas— y la paridad pasa. Las migraciones congeladas de la
+013 y `RetiroDeCaptacionesHeredadas` no se tocaron. `EntregaVigente` sigue en K6b (E127): las claves `Embargos.*` se leen con sus defectos y
+`LIMITE_INEMBARGABLE` se admite en la central desde K8.
+
+**Norma aplicada** (todo «pendiente de validar por el abogado»; los valores van como valores nacionales con vigencia, nunca en el código):
+
+- **Depósitos de ahorro, embargo judicial.** Son inembargables hasta el monto que fija la autoridad competente, salvo para el pago de créditos alimentarios
+  (CGP, Ley 1564 de 2012, art. 594 num. 2). El monto lo publica cada año la Superintendencia Financiera por carta circular (para el período del 1 de octubre de
+  2025 al 30 de septiembre de 2026, $55.099.308 según la Circular 058 de 2025, valor que confirma el maestro al registrarlo; el anterior, $52.385.727 por la
+  Circular 061 de 2024). Se registra como `LIMITE_INEMBARGABLE` (pesos, sin semilla: cada publicación con su fuente). Si aplica a los depósitos de una
+  cooperativa vigilada por la Supersolidaria lo discute la doctrina (P5 sigue abierta); rige D20: se aplica a las personas naturales mientras el abogado no diga
+  otra cosa.
+- **Cobro coactivo (DIAN y entidades públicas).** El límite es de 25 SMMLV depositados en la **cuenta de ahorros más antigua** de la persona natural; la persona
+  jurídica no tiene límite (Estatuto Tributario art. 837-1, modificado por la Ley 1066 de 2006 art. 9; la Ley 1066 art. 5 da la jurisdicción coactiva a las
+  entidades públicas). Va como `LIMITE` `EMBARGO_COACTIVO_SMMLV` = 25 veces (sembrado, pendiente de validar) por el `SMMLV` vigente.
+- **Aportes sociales.** Inembargables, afectados desde su origen como garantía de las obligaciones con la cooperativa (Ley 79 de 1988, art. 49); en los fondos
+  de empleados también el ahorro permanente (Decreto Ley 1481 de 1989, art. 16, en la redacción de la Ley 2496 de 2025): por eso la clase inembargable es un
+  parámetro de cada entidad.
+- **Perfeccionamiento y consignación.** El embargo de sumas depositadas se entiende consumado con la recepción del oficio, la entidad constituye el depósito
+  y lo pone a disposición del juzgado dentro de los tres días siguientes, y el valor de la medida lo fija el juez con el crédito y las costas más un 50 %
+  (CGP art. 593 num. 10). De ahí que el embargo **rija al registrarse** (sin aprobación) y que el plazo de respuesta sea un parámetro informativo.
+- **Alimentos.** La excepción del CGP art. 594 num. 2; la prelación de los descuentos judiciales por alimentos sobre los de la cooperativa (Ley 79 de 1988, art.
+  144) no se toca aquí.
+- Fuentes consultadas: Gerencie, «Embargo de cuentas de ahorros por cooperativas» <https://www.gerencie.com/embargo-de-cuentas-de-ahorros-por-cooperativas.html>;
+  Oficio DIAN 1763 de 2026 <https://normograma.dian.gov.co/dian/compilacion/docs/oficio_dian_1763_2026.htm>; Ley 2496 de 2025
+  <https://normativa.colpensiones.gov.co/compilacion/docs/ley_2496_2025.htm>; los montos de la Superfinanciera por las circulares citadas (fuente secundaria:
+  <https://www.jfk.com.co/uploads/mng/INEMBARGABILIDAD%202024-2025.pdf>). El texto oficial lo coteja el abogado.
+
+- **E155 · El motor (T188, `LimiteInembargable`).** Puro y sin valores legales: recibe las cuentas de la persona (saldo del titular, lo que ya retienen otros
+  embargos, si su clase la protege el límite y si es embargable), el tope pendiente del embargo (valor de la medida menos lo consignado), si es por alimentos, el
+  límite en pesos (nulo = ninguno) y su aplicación. Orden: las clases de `Embargos.OrdenDeCuentas` (las que no nombra, después), luego la apertura, luego el Id.
+  Con el límite **sobre la suma**, lo protegido se asigna a las cuentas protegidas **de la última a la primera** del orden (así se retiene primero de las que el
+  orden pone delante y lo protegido queda en cuentas protegidas); **sobre la más antigua**, sólo esa cuenta guarda hasta el límite. El límite es de la
+  **persona**: lo que retiene un embargo anterior no se repite (concurrencia por orden de recibo). Siete casos dorados `embargo-01` a `-07` por `calcular.py`
+  (55 casos verificados en total): 15.000.000 del exceso de 70.000.000 sobre 50.000.000; alimentos; orden de clases; coactivo sobre la más antigua; segundo
+  embargo sin nada embargable; CDAT no protegido con el permanente inembargable; persona jurídica.
+- **E156 · Parámetros por entidad (K8, todos pendientes de validar).** `Embargos.ClasesProtegidas` (defecto `[Demand, Contractual, Permanent]`: el CDAT no es
+  depósito de ahorro), `Embargos.ClasesInembargables` (`[]`; un fondo de empleados pone `[Permanent]`), `Embargos.AplicacionDelLimite` (judicial sobre la suma,
+  coactivos sobre la más antigua), `Embargos.LimiteSoloPersonasNaturales` (true), `Embargos.DiasHabilesParaResponder` (3, informativo) y
+  `Embargos.PlantillasDeRespuesta` (`{}`: rigen los textos estándar). El orden ya existía (`Embargos.OrdenDeCuentas`, vacío = antigüedad).
+- **E157 · Rige al registrarse; quien registra no levanta.** `data-model.md` §5.2 tenía `Registered → Active` por aprobación de otra persona; la norma (CGP 593
+  num. 10) consuma el embargo con el oficio, así que nace `Active` y retiene en el mismo guardado. La segregación de FR-005 queda en el par del catálogo
+  (`SegregacionDeCaptaciones.Embargo`): registrar es `Radicar`, levantar es `Decidir` (`Lending.Segregation.Conflict`). `Registered` no se usa; `Rejected` es el
+  oficio que sólo nombra aportes. El plazo de respuesta (`ResponseDueOn`, días hábiles sin sábados, domingos ni festivos) es **informativo**: el detalle y la lista
+  avisan `Lending.Garnishment.ResponseOverdue` y no bloquean nada. Registrar también pone el bloqueo de deudor `Garnishment` de la 013
+  (`garnishment:{embargo}`), que la originación ya mira, y levantarlo lo quita.
+- **E158 · Respuestas al juzgado.** `LND_GarnishmentResponses` guarda la clase, la fecha de envío, el texto enviado (la plantilla de la entidad o la estándar, llena
+  con `{Oficio}`, `{Proceso}`, `{Embargado}`, `{Retenido}`, `{Cuentas}`…), el soporte firmado y lo retenido y consignado a la fecha. `IssuedDocumentId` nace **nulo**:
+  el documento emitido de la Cartera con código de verificación es de US13 (T195), que lo llenará. Ruta nueva `GET /garnishments/{id}/responses/draft?kind=` (el
+  borrador, lectura auditada). El aviso «aportes inembargables» se registra solo al recibir un oficio que los nombra.
+- **E159 · La reclasificación por la marca (pendiente de la fase 9).** `ReclasificacionDeCuenta` (`Application/Lending/Deposits/Holds`) es el único que emite
+  `CaptacionReclasificada` por un cambio de condición: una operación `Reclassification` (prefijo `RCL-`, valor 0, sin filas en el libro, con `GarnishmentId`) y el
+  hecho con los saldos de capital e interés por pagar de las dimensiones anteriores a las nuevas (causas `Garnishment`/`GarnishmentRelease`,
+  `GmfExemption`/`GmfExemptionEnd`; `Inactivity`/`Reactivation` quedan declaradas para US14, que sólo tiene que llamar a `ReclasificarAsync` al inactivar o
+  reactivar). Sin saldo no nace nada. La marca de la exención del GMF que rige **hoy** (marcar desde hoy, terminar ayer, reemplazar la vigente) reclasifica en el
+  mismo comando; la que rige desde una fecha futura no (pendiente: un subpaso diario de marcas, junto con la inactividad de US14). No pasa por la validación
+  previa: la orden del juez no se detiene por la matriz (con «Bloquear» y una regla faltante, el hecho queda en la bandeja y alerta al consumirse).
+- **E160 · Embargo total y causación (FR-065).** `IsGarnished` es ahora «retiene algo»; el embargo **total** es lo embargado ≥ el saldo del titular.
+  `RetencionDeEmbargos` suspende la causación desde el día en que la cuenta queda totalmente embargada (si la línea lo dice) y la reanuda desde el día en que
+  deja de estarlo (`AccrualResumedOn`: los días suspendidos siguen suspendidos en la ventana). `LectorDeInteres.Suspendido` y la causación leen la marca
+  (`MemberAccount.SuspendidaEl`), no `IsGarnished` (E101 queda reemplazada). El CDAT no se suspende: sigue su plan y, si está embargado al vencer, queda vencido a
+  disposición (E134, revisado: la marca la pone el bloqueo del embargo sobre el CDAT).
+- **E161 · Contrato de las rutas (api.md §8).** Los nombres del contrato (`officeReference`, `isAlimony`, `retained[]`, `unembargableLimit`, `responses[]`) más
+  `authority` (`Court`, `TaxAuthority`, `OtherPublicEntity`), `processNumber`, `officeDate`, `receivedOn`, `claimantName`, `includesContributions`,
+  `destinationBankPublicId/AccountNumber`, `responseDueOn`/`responseOverdue`, `explanation[]` y `warnings[]`. **`ContributionsNotGarnishable` y
+  `NothingGarnishable` son avisos en `warnings` de un 201**, no errores (un 422 habría revertido la respuesta registrada, que la spec exige guardar). Estados en el
+  JSON por número (`GarnishmentStatus`: 2 activo, 3 levantado, 4 rechazado). El desembargo con `amount` menor que la medida la reduce (sigue activo); sin
+  `amount`, la levanta toda. Bloqueos: `GET/POST /api/lending/accounts/{id}/holds` y `POST …/holds/{holdId}/release` (`Lending.Holds.Manage`); por esa vía sólo los
+  motivos `Internal`, `LoanCollateral`, `SignaturePending`, `Other` (`Lending.Holds.OwnedByProcess` para los demás); el de garantía exige un crédito vivo y no se
+  levanta mientras el crédito viva (`Lending.Holds.LoanStillActive`); uno por valor no supera el disponible (`Lending.Holds.InsufficientAvailable`); uno total deja el
+  disponible en cero.
+- **E162 · Lo retenido y el disponible.** `RetencionDeEmbargos` es el único escritor de los bloqueos `Garnishment` (si el valor cambia, levanta el anterior y pone
+  otro: queda la historia) y lo llaman el registro, el levantamiento, la consignación y el subpaso diario **«Embargos»** (antes de la causación), que recalcula a
+  las personas con embargos activos —lo consignado después del registro, los depósitos posteriores, un CDAT que venció— una vez por día bajo el cerrojo de la
+  persona (`LND_DebtorControls`) y de sus cuentas, saltando las ocupadas. `LectorDeRestricciones` es el único lector: el disponible de `ReglasDeMovimientos` (y por
+  él el del contrato de cuentas, el retiro, el traslado, la cancelación), el saldo a (D, R) y la consulta del contrato (que nombra «Embargo» y «Bloqueo») restan
+  lo bloqueado y lo embargado. Un depósito posterior al registro **no** se retiene en línea: el retiro del mismo día puede tomarlo hasta el recálculo de la noche
+  (pregunta al dueño).
+- **E163 · La consignación (FR-091).** `POST /{id}/consign` recalcula, consigna en el orden del embargo (un CDAT sólo si venció), una operación
+  `GarnishmentConsignment` por cuenta (prefijo `EMB-`, filas `GarnishmentConsigned` de capital y, si no alcanza, de interés por pagar), su orden de giro
+  (`AccountPayoutOrder` `GarnishmentConsignment`, beneficiario el juzgado, la cuenta de depósitos judiciales del pedido o del embargo) y `EmbargoConsignado` +
+  `OrdenDeGiroEmitida` v2; no supera lo retenido (`Lending.Garnishment.ExceedsRetained`). Pasa por la validación previa de pantalla (D23). Lo consignado no se
+  guarda: es la suma de esas operaciones no reversadas. Si Tesorería rechaza el giro, el reverso de la operación devuelve el saldo y lo deja retenido para el mismo
+  embargo; el reverso lleva, opcional al final, `CounterpartPersonPublicId` (el juzgado, tercero de los embargos por consignar) y el constructor lo asienta contra
+  `EmbargosPorConsignar`. La consignación y la reclasificación no se reversan desde la pantalla. **El GMF de la consignación no se cobra**: no es hecho generador
+  del parámetro y el motor de GMF no está cableado en ella (pregunta para la contadora).
+- **E164 · Alcance, segregación y lecturas (fase 11).** Un embargo exige el alcance sobre **todas** las cuentas de la persona (falla cerrado, como el resumen de
+  aportes: revela lo retenido de cada una); los bloqueos, la cuenta en el alcance; la vista `garnishments` deja fuera a la persona con una cuenta fuera del
+  alcance. Evento nuevo **`Lending.Garnishment.Viewed`** (la lista, el detalle y el borrador), en `LecturasSensiblesDeCaptaciones`. El soporte (oficio, desembargo,
+  respuesta) es el adjunto nuevo `LendingGarnishmentSupport` con dueño la persona embargada: se lee con `Lending.Accounts.Read`, lo sube quien registra o levanta
+  embargos o administra bloqueos y no se borra.
+- **E165 · Vista `garnishments` (K8, con datos del titular).** Los embargos recibidos en un rango con autoridad, oficio, medida, alimentos, estado, retenido,
+  consignado, plazo de respuesta y respuestas; filtro `status`.
+- **E166 · Migración (pendiente de la fase 10).** La parte `holds-and-garnishments` (§4.6) se importa con K8: `cuenta`, `tipo` (`Hold` o `Garnishment`; `Deceased`
+  llega con K10), `referencia` (llave con la cuenta y el tipo), `motivo`, `credito`, `valor`/`total` del bloqueo y, del embargo, `juzgado` (persona viva),
+  `autoridad`, `proceso`, `demandante`, `valorDeLaMedida`, `esPorAlimentos`, `fechaDelOficio` y `retenido`. La aplicación valida que la cuenta esté en la carga,
+  que un embargo no recaiga sobre aportes ni retenga más que el saldo, que un oficio sea de una sola persona y que la garantía nombre un crédito vivo. Al activar
+  nacen los embargos (uno por persona y oficio, activos, sin soporte —se adjunta después—) y los bloqueos con lo retenido **al corte** (no se recalcula al
+  activar; el recálculo del día siguiente aplica los parámetros de la entidad), y la cuenta queda marcada (sin hecho: la migración no emite). La marca de embargo de
+  la fila del CDAT (E139) sigue como marca. El bloqueo de deudor de la 013 no se pone en la migración de captaciones (la de créditos tiene su parte de bloqueos).
+- **E167 · Lo que queda.** El documento emitido de la respuesta al juzgado (US13); la reclasificación de la marca exenta que rige desde una fecha futura y la de la
+  inactividad (US14); el GMF de la consignación si la contadora lo decide; la e2e (`EmbargosTests`) **escrita y compilada; e2e en la corrida final**.
+
+### 20.1 Preguntas para el dueño
+
+- **Depósitos posteriores al registro del embargo (E162).** A: se retienen en el recálculo de la noche (lo construido; el titular puede retirar el mismo día lo
+  que consigne después del oficio); B: el retiro y el traslado recalculan en línea al leer el disponible de una persona con embargos con tope pendiente (más lento
+  en esas cuentas); C: un bloqueo total automático de la cuenta mientras el embargo tenga tope pendiente. Recomendado: B.
+- **Embargo y aprobación (E157).** A: rige al registrarse y otra persona sólo levanta (lo construido, por el CGP 593 num. 10); B: queda «registrado» hasta que
+  otra persona lo apruebe (data-model original). Recomendado: A.
+- **Concurrencia de embargos (E155).** A: por orden de recibo, el primero toma lo embargable y los siguientes lo que sobre (lo construido); B: a prorrata entre los
+  embargos activos; C: alimentos primero, luego por orden de recibo. Recomendado: C (la prelación legal de alimentos), a validar por el abogado.
+- **Bloqueo de deudor en la Cartera (E157).** A: registrar un embargo de depósitos pone el bloqueo de deudor `Garnishment` que la originación mira (lo
+  construido); B: son independientes. Recomendado: A.
+
+### 20.2 Para la contadora y el abogado (pendiente de validar)
+
+- El valor de `LIMITE_INEMBARGABLE` de cada período (Superintendencia Financiera) y si aplica a los depósitos de la cooperativa (P5); los 25 SMMLV del coactivo.
+- Qué clases son depósitos de ahorro protegidos (el contractual y el permanente) y cuáles son inembargables por estatuto (el permanente en fondos de empleados).
+- Que el límite proteja sólo a personas naturales también en el embargo judicial; la aplicación sobre la suma o la cuenta más antigua por autoridad.
+- Los textos estándar de las cinco respuestas al juzgado y los tres días hábiles de respuesta.
+- La cuenta de los embargos por consignar (`EmbargosPorConsignar`) y si la cuenta embargada va a otra cuenta contable que la estándar (entonces la reclasificación
+  mueve saldos entre cuentas; con la misma cuenta no deja líneas).
+- El GMF de la consignación al juzgado (E163).
