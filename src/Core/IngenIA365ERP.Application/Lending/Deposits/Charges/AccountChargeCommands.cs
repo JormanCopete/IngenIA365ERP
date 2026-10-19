@@ -116,8 +116,14 @@ public sealed class RegisterAccountChargeCommandHandler(
     RegistroDeIntervenciones intervenciones,
     IDateTimeService reloj) : IRequestHandler<RegisterAccountChargeCommand, Result<AccountChargeDto>>
 {
-    /// <summary>El expediente de la segregación de un cargo: quien lo radica no lo condona.</summary>
-    public const string Expediente = nameof(AccountCharge);
+    /// <summary>
+    /// El expediente de la segregación de los cargos de una cuenta: quien radica un cargo no lo condona ni exonera los de la cuenta. US16 (T163): su raíz es
+    /// <b>derivada</b> de la cuenta (<see cref="SegregacionDeCaptaciones.Raiz"/>); hasta entonces era la cuenta misma y quien la abrió no podía condonar.
+    /// </summary>
+    public const string Expediente = SegregacionDeCaptaciones.CargosDeCuenta;
+
+    /// <summary>La raíz del expediente de los cargos de la cuenta.</summary>
+    public static ExpedienteDeCartera ExpedienteDe(Guid cuenta) => new(Expediente, SegregacionDeCaptaciones.Raiz(Expediente, cuenta));
 
     private static readonly ChargeTrigger[] DePantalla = [ChargeTrigger.Manual, ChargeTrigger.ExtraDocument, ChargeTrigger.MediumReplacement];
 
@@ -140,7 +146,7 @@ public sealed class RegisterAccountChargeCommandHandler(
             var contexto = await cargos.ContextoAsync(c, def, 0m, hoy, hoy, 1, c.Disponible.Disponible, ct);
             var calculo = CargosDeCuenta.Calcular(def.Definicion(), contexto);
             if (!calculo.SeCausa) return Falla(ErroresDeMovimientos.CargoExonerado(codigo, calculo.Exoneracion, calculo.Explicacion));
-            var radicada = await intervenciones.VerificarAsync(new ExpedienteDeCartera(Expediente, cuenta.PublicId), AccionesDeSegregacion.Radicar, hoy, ct);
+            var radicada = await intervenciones.VerificarAsync(ExpedienteDe(cuenta.PublicId), AccionesDeSegregacion.Radicar, hoy, ct);
             if (radicada.IsFailure) return Falla(radicada.Error);
             var motivo = string.IsNullOrWhiteSpace(request.EventReference) ? request.Reason.Trim() : $"{request.Reason.Trim()} ({request.EventReference.Trim()})";
             var causado = await cargos.CausarAsync(c, new CargoPropuesto(def, calculo), hoy, null, def.Trigger.ToString(), motivo, ct);
@@ -190,7 +196,7 @@ public sealed class WaiveAccountChargeCommandHandler(
         var cuenta = leida.Value;
         var existe = await db.AccountCharges.AsNoTracking().AnyAsync(c => c.PublicId == request.ChargePublicId && c.MemberAccountId == cuenta.Id && !c.IsDeleted, ct);
         if (!existe) return Falla(ErroresDeMovimientos.CargoInexistente());
-        var decidida = await intervenciones.VerificarAsync(new ExpedienteDeCartera(RegisterAccountChargeCommandHandler.Expediente, cuenta.PublicId),
+        var decidida = await intervenciones.VerificarAsync(RegisterAccountChargeCommandHandler.ExpedienteDe(cuenta.PublicId),
             AccionesDeSegregacion.Decidir, hoy, ct);
         if (decidida.IsFailure) return Falla(decidida.Error);
 
@@ -302,7 +308,7 @@ public sealed class SetAccountChargeExemptionCommandHandler(
         var catalogo = (await cargos.CatalogoAsync(c.Version, Enum.GetValues<ChargeTrigger>(), ct)).Select(d => d.Code).ToHashSet();
         var codigos = request.ChargeCodes.Select(x => x.Trim().ToUpperInvariant()).Distinct().ToList();
         if (codigos.FirstOrDefault(x => !catalogo.Contains(x)) is { } ajeno) return Falla(ErroresDeMovimientos.CargoNoEnLaLinea(ajeno));
-        var decidida = await intervenciones.VerificarAsync(new ExpedienteDeCartera(RegisterAccountChargeCommandHandler.Expediente, cuenta.PublicId),
+        var decidida = await intervenciones.VerificarAsync(RegisterAccountChargeCommandHandler.ExpedienteDe(cuenta.PublicId),
             AccionesDeSegregacion.Decidir, hoy, ct);
         if (decidida.IsFailure) return Falla(decidida.Error);
         var actor = await actorActual.ObtenerAsync(ct);

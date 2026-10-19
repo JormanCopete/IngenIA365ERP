@@ -46,7 +46,8 @@ public sealed class ApproveMemberAccountOpeningCommandHandler(
         var cuenta = leida.Value;
         if (cuenta.Status != MemberAccountStatus.Opening) return Falla(ErroresDeCuentas.NoEnApertura(cuenta.Status));
 
-        var verificada = await intervenciones.VerificarAsync(new ExpedienteDeCartera(OpenMemberAccountCommandHandler.Expediente, cuenta.PublicId),
+        var verificada = await intervenciones.VerificarAsync(new ExpedienteDeCartera(OpenMemberAccountCommandHandler.Expediente,
+            SegregacionDeCaptaciones.Raiz(OpenMemberAccountCommandHandler.Expediente, cuenta.PublicId)),
             AccionesDeSegregacion.Decidir, hoy, ct);
         if (verificada.IsFailure) return Falla(verificada.Error);
 

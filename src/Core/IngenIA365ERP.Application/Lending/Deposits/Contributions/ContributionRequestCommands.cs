@@ -106,7 +106,7 @@ public sealed class RequestContributionAssignmentCommandValidator : ValidadorCon
 public sealed class SolicitudesDeAportes(IApplicationDbContext db, IAlcanceDeCartera alcance, LendingAuditEmitter auditoria, ReglasDeAportes reglas)
 {
     /// <summary>El tipo de expediente de la segregación (radicar × decidir).</summary>
-    public const string Expediente = nameof(ContributionRequest);
+    public const string Expediente = SegregacionDeCaptaciones.SolicitudDeAportes;
 
     /// <summary>La cuenta de aportes en alcance, activa o inactiva, con aportes activados.</summary>
     public async Task<Result<MemberAccount>> CuentaAsync(Guid publicId, bool seguir, CancellationToken ct)
@@ -122,6 +122,13 @@ public sealed class SolicitudesDeAportes(IApplicationDbContext db, IAlcanceDeCar
             return Result.Failure<MemberAccount>(ErroresDeAportes.NoOperable(cuenta.Number, cuenta.Status));
         return Result.Success(cuenta);
     }
+
+    /// <summary>
+    /// US16 (T162): la cuenta de aportes que <b>recibe</b> una cesión también tiene que estar en el alcance de quien pide o aprueba (la operación escribe en
+    /// ella). Fuera responde lo mismo que si el asociado no tuviera cuenta de aportes, con <c>Lending.Access.OutOfScope</c>.
+    /// </summary>
+    public Task<Result> DestinoEnAlcanceAsync(MemberAccount destino, CancellationToken ct) =>
+        alcance.AsegurarAsync(destino.BranchId, destino.CreditLineId, ErroresDeAportes.SinCuentaDeAportes(), auditoria, nameof(MemberAccount), destino.PublicId, ct);
 
     /// <summary>
     /// Las reglas del débito de aportes a <paramref name="fecha"/>: sin créditos vivos del titular (FR-044) y sin perforar el mínimo no reducible (FR-042).
@@ -234,9 +241,10 @@ public sealed class RequestContributionAssignmentCommandHandler(
         if (destino is null || destino.Id == cuenta.HolderPersonId)
             return Falla(new ErrorConDatos(ErroresDeAportes.CodigoSinCuentaDeAportes, "Elija otro asociado: los aportes se ceden a una persona distinta del titular.",
                 new { personPublicId = request.ToPersonPublicId }));
-        var tieneCuenta = await db.MemberAccounts.AsNoTracking().AnyAsync(a => a.HolderPersonId == destino.Id && a.Nature == LineNature.Contribution
-            && (a.Status == MemberAccountStatus.Active || a.Status == MemberAccountStatus.Inactive) && !a.IsDeleted, ct);
-        if (!tieneCuenta) return Falla(ErroresDeAportes.SinCuentaDeAportes());
+        var cuentaDestino = await db.MemberAccounts.AsNoTracking().Where(a => a.HolderPersonId == destino.Id && a.Nature == LineNature.Contribution
+            && (a.Status == MemberAccountStatus.Active || a.Status == MemberAccountStatus.Inactive) && !a.IsDeleted).OrderByDescending(a => a.Id).FirstOrDefaultAsync(ct);
+        if (cuentaDestino is null) return Falla(ErroresDeAportes.SinCuentaDeAportes());
+        if (await solicitudes.DestinoEnAlcanceAsync(cuentaDestino, ct) is { IsFailure: true } fuera) return Falla(fuera.Error);
         var debito = await solicitudes.DebitoAsync(cuenta, request.Amount, hoy, ct);
         if (debito.IsFailure) return Falla(debito.Error);
 
@@ -476,6 +484,7 @@ public sealed class ApproveContributionAssignmentCommandHandler(
                 && (a.Status == MemberAccountStatus.Active || a.Status == MemberAccountStatus.Inactive) && !a.IsDeleted)
             .OrderByDescending(a => a.Id).FirstOrDefaultAsync(ct);
         if (destino is null) return Falla(ErroresDeAportes.SinCuentaDeAportes());
+        if (await solicitudes.DestinoEnAlcanceAsync(destino, ct) is { IsFailure: true } fuera) return Falla(fuera.Error);
         var debito = await solicitudes.DebitoAsync(origen, solicitud.Amount, hoy, ct);
         if (debito.IsFailure) return Falla(debito.Error);
         var versionDestino = await reglas.VersionAsync(destino, hoy, ct);

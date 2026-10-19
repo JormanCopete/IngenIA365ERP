@@ -102,8 +102,8 @@ public sealed class OpenMemberAccountCommandHandler(
     LendingAuditEmitter auditoria,
     IDateTimeService reloj) : IRequestHandler<OpenMemberAccountCommand, Result<MemberAccountDto>>
 {
-    /// <summary>El tipo del expediente de segregación de una cuenta.</summary>
-    public const string Expediente = nameof(MemberAccount);
+    /// <summary>El tipo del expediente de segregación de una cuenta (US16, T163: del catálogo de la segregación de captaciones).</summary>
+    public const string Expediente = SegregacionDeCaptaciones.AperturaDeCuenta;
 
     public async Task<Result<MemberAccountDto>> Handle(OpenMemberAccountCommand request, CancellationToken ct)
     {
@@ -186,7 +186,7 @@ public sealed class OpenMemberAccountCommandHandler(
         }
 
         var publicId = Guid.NewGuid();
-        var verificada = await intervenciones.VerificarAsync(new ExpedienteDeCartera(Expediente, publicId), AccionesDeSegregacion.Radicar, hoy, ct);
+        var verificada = await intervenciones.VerificarAsync(new ExpedienteDeCartera(Expediente, SegregacionDeCaptaciones.Raiz(Expediente, publicId)), AccionesDeSegregacion.Radicar, hoy, ct);
         if (verificada.IsFailure) return Falla(verificada.Error);
 
         return await TransaccionExplicita.EjecutarAsync(db, async () =>

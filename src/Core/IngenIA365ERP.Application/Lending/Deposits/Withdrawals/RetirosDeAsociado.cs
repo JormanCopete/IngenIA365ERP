@@ -1,6 +1,4 @@
 using System.Globalization;
-using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Security;
@@ -10,6 +8,7 @@ using IngenIA365ERP.Application.Lending.Deposits.Accounts;
 using IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts;
 using IngenIA365ERP.Domain.Entities.Lending.Deposits.Processes;
 using IngenIA365ERP.Domain.Enums.Lending;
+using IngenIA365ERP.Domain.Lending.Segregation;
 using Microsoft.EntityFrameworkCore;
 
 namespace IngenIA365ERP.Application.Lending.Deposits.Withdrawals;
@@ -155,10 +154,10 @@ public sealed record MembershipWithdrawalDto(
 public sealed class RetirosDeAsociado(IApplicationDbContext db, LendingAuditEmitter auditoria)
 {
     /// <summary>El tipo de expediente de la segregación del trámite (radicar × decidir).</summary>
-    public const string Expediente = nameof(MembershipWithdrawal);
+    public const string Expediente = SegregacionDeCaptaciones.RetiroDeAsociado;
 
     /// <summary>El tipo de expediente de la devolución (quien liquida no aprueba la devolución retenida).</summary>
-    public const string ExpedienteDeDevolucion = "MembershipWithdrawalRefund";
+    public const string ExpedienteDeDevolucion = SegregacionDeCaptaciones.DevolucionDelRetiro;
 
     /// <summary>El prefijo del radicado (<c>LendingNumberKind.MembershipWithdrawal</c>).</summary>
     public const string Prefijo = "RTA-";
@@ -169,11 +168,7 @@ public sealed class RetirosDeAsociado(IApplicationDbContext db, LendingAuditEmit
     /// La raíz del expediente de la devolución: un <c>Guid</c> fijo derivado del trámite (la segregación compara por raíz; la del trámite ya tiene a quien
     /// aprobó el retiro, que sí puede liquidarlo).
     /// </summary>
-    public static Guid RaizDeLaDevolucion(Guid retiro)
-    {
-        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes($"{ExpedienteDeDevolucion}:{retiro:N}"));
-        return new Guid(bytes.AsSpan(0, 16));
-    }
+    public static Guid RaizDeLaDevolucion(Guid retiro) => SegregacionDeCaptaciones.Raiz(ExpedienteDeDevolucion, retiro);
 
     /// <summary>
     /// El trámite en el alcance de quien pregunta (sin seguimiento salvo que se pida): la oficina y la línea de su cuenta de aportes; fuera o inexistente,
