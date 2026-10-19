@@ -1471,3 +1471,61 @@ migraciones congeladas de la 013 y `RetiroDeCaptacionesHeredadas` no se tocaron.
 
 - El reparto por igual del interés migrado entre los días que cubre para medir el umbral diario de retención (E121).
 - Las cifras de referencia por línea y concepto que entregará la cooperativa al corte, y las diferencias de cuadre que se aceptan con acta.
+
+## 17. Enmienda de la seguridad, las atribuciones y la auditoría (2026-10-19, T162–T165, US16)
+
+Construida la historia 16. **Manda el código**; estas notas reemplazan lo dicho en `data-model.md`, `contracts/` y `tasks.md` donde choquen. Sin cambio de
+esquema: `CaptacionesAportes` sigue como la dejó la fase 10 (§16).
+
+- **E122 · Un catálogo de segregación (T163).** `Domain/Lending/Segregation/SegregacionDeCaptaciones` declara los nueve expedientes de FR-005 y api.md §1.7
+  —apertura de la cuenta, solicitudes de aportes (devolución y cesión), retiro del asociado, su devolución, cargos de la cuenta, embargo (K8), tasa negociada
+  (K9), entrega por fallecimiento y decisión de asamblea (K10)— con su par: registrar es `Radicar` y aprobar o levantar es `Decidir`, es decir, la **regla
+  fija** de la 013, que la cooperativa no apaga con `Segregacion.Incompatibilidades` (puede sumar pares, no quitar éstos). La comparación es por usuario y
+  por persona (`ReglasDeSegregacion`; `RegistroDeIntervenciones` exige que el usuario tenga persona). La segregación compara por la **raíz** del expediente,
+  no por su tipo: los cargos usaban la cuenta como raíz, la misma de la apertura, así que **quien abrió una cuenta no podía condonar ni exonerar ninguno de
+  sus cargos**. Ahora los expedientes que cuelgan de un recurso ajeno (cargos de una cuenta, devolución del retiro) tienen raíz derivada
+  (`SegregacionDeCaptaciones.Raiz`, SHA-256 de «tipo:recurso», la misma fórmula que ya usaba la devolución desde US10, así que esas intervenciones no
+  cambian). Las intervenciones de cargos registradas antes en DEV quedan en la raíz vieja (no hay datos en producción). Los expedientes de K8–K10 quedan
+  declarados para que sus historias los usen; `LaSegregacionDeCaptacionesUsaSuCatalogo` exige que todo expediente de `Application/Lending/Deposits` salga del
+  catálogo, que los derivados usen su raíz y que nadie escriba `LND_CaseParticipations` fuera de `RegistroDeIntervenciones`.
+- **E123 · El alcance también en la otra cuenta (T162).** La regla de arquitectura de T038 miraba el archivo: con que una consulta lo aplicara, pasaban
+  todas. Revisado handler por handler, la **otra** cuenta de una operación se leía directo: el destino de un traslado, de su simulación y de la entrega de una
+  cancelación (un usuario de la oficina norte trasladaba a una cuenta de la oficina sur y la simulación le confirmaba que existía), la cuenta de aportes
+  que recibe una cesión (en la solicitud y en la aprobación), el crédito que paga un débito automático y las cuentas que suma el resumen de aportes de una
+  persona. Todos pasan por `LectorDeCuentas.CuentaEnAlcanceAsync` o `AsegurarAsync`: fuera, la misma respuesta que lo inexistente (404 de la cuenta, del
+  crédito o de la persona; en la cesión, «la persona no tiene cuenta de aportes») con `Lending.Access.OutOfScope`. El resumen de aportes exige el alcance
+  sobre **todas** las cuentas de la persona (falla cerrado: un total que incluye una cuenta ajena la revela). `LasCaptacionesExigenPermisoYAlcance` suma dos
+  reglas: cada handler nombra `IAlcanceDeCartera` (o `SolicitudesDeAportes`, que lo aplica por dentro) y ninguna cuenta se lee por el `PublicId` del pedido
+  fuera del lector. Crear una línea de captación o de aportes queda exceptuado con motivo (no toca una línea existente ni una oficina; entra al alcance por
+  asignación, como las de crédito). Siguen sin alcance, a propósito: los puertos para otros módulos (contrato de cuentas, consulta de aportes; FR-004: se
+  autorizan con el permiso del módulo que llama), el ciclo diario y el cierre (proceso, alcance total) y la liquidación del retiro del asociado, que cruza los
+  créditos y liquida las cuentas de la persona en cualquier oficina (el trámite está en el alcance de su cuenta de aportes; es un procedimiento de la entidad).
+- **E124 · Lecturas sensibles (T164).** Nacen las rutas de api.md §4 que faltaban: `GET /api/lending/accounts/{id}/balance?date=&recordedAsOf=`
+  (`GetMemberAccountBalanceQuery`: los diez conceptos de la reconstrucción del libro a (D, R) con su huella, el saldo del titular, el disponible con lo en canje
+  y el mínimo de la versión a D y, en las cuentas que ganan interés, lo causado sin liquidar a D con la explicación día por día) y `GET /{id}/statement?from=&to=`
+  (`GetMemberAccountStatementQuery`: saldo inicial, una línea por operación por fecha valor —lo causado sin operación va en una línea por mes—, retención,
+  GMF, intereses abonados, saldo final y el disponible de hoy; a lo sumo 366 días, para más el documento). Decisiones: sin `recordedAsOf` el saldo toma
+  **todo lo registrado** (el sello del libro es monótono y puede ir unos instantes delante del reloj); sin versión de la línea a (D, R) el saldo sale sin lo
+  causado; sólo `NationalValues.Missing` impide responder. Eventos nuevos `Lending.Savings.BalanceViewed` (el saldo, el detalle de la cuenta, la lista de
+  cuentas de una persona, la vista previa de la cancelación y el resumen de aportes, éstos dos con la persona como entidad) y `Lending.Savings.StatementViewed`;
+  `Lending.Savings.TransactionsViewed` suma el uso del GMF de una persona. Van en una lista propia, `LendingAuditEmitter.LecturasSensiblesDeCaptaciones`, sin tocar
+  la lista cerrada de la 013. Las exportaciones de las vistas de captaciones las audita ya el centro de informes (`Lending.Report.Exported`) y los documentos al
+  titular, la emisión y la reimpresión de la 013 (`Lending.Document.*`). `LasLecturasSensiblesDeCaptacionesSeAuditan` fija cada lectura con su método. La lista
+  general de cuentas sin titular no se audita (no es la consulta de los saldos de un tercero). Las dos rutas nuevas **no tienen pantalla** todavía: la ficha
+  sigue mostrando el detalle (auditado) y el libro (auditado).
+- **E125 · La e2e (T165).** `SeguridadDeCaptacionesTests` (colección «Captaciones e2e», cooperativa aislada «seguridad»): a los asesores de O1 y O2 se les
+  suma la plantilla `cartera.asesor-captaciones` (sin alcance total) y la línea a su alcance; cinco escenarios —retiro sin permiso igual a inexistente con
+  `Lending.Access.Denied`; el asesor de O2 sobre el detalle, el saldo, el extracto y como destino de un traslado de una cuenta de O1, con
+  `Lending.Access.OutOfScope`; las lecturas auditadas del asesor de O1 con (D, R); el cargo registrado por uno y condonado por quien abrió la cuenta; la cadena
+  íntegra y luego un evento de lectura alterado y otro borrado—. **e2e en la corrida final.**
+- **E126 · Lo que la segregación no cubre.** La aprobación de un retiro o una consignación en efectivo sobre la atribución (D53) es de la plataforma de
+  aprobaciones: excluye al solicitante por `SEC_Users.Id` (no por persona) y **no** mira si el aprobador presente tiene en su alcance de Cartera la oficina de
+  la cuenta (pregunta para el dueño).
+
+### 17.1 Preguntas para el dueño
+
+- **Traslados y cesiones a cuentas de otra oficina (E123).** A: el destino también tiene que estar en el alcance de quien opera (lo construido; falla
+  cerrado); B: el destino puede ser de cualquier oficina, aunque el asesor no pueda ver esa cuenta; C: un parámetro por cooperativa que diga si se admite el
+  destino fuera del alcance. Recomendado: A, y C sólo si alguna cooperativa opera traslados entre oficinas desde la ventanilla.
+- **El aprobador presente fuera de la oficina de la cuenta (E126).** A: basta el permiso y el monto (lo construido); B: el aprobador también tiene que tener la
+  oficina y la línea de la cuenta en su alcance de Cartera. Recomendado: B.
