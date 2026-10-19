@@ -430,6 +430,9 @@ public enum PayoutPurpose
     TermDepositRedemption = 5,
     GarnishmentConsignment = 6,
     Cancellation = 7,
+
+    /// <summary>US12 (T203; research §22): el pago de los excedentes que la asamblea distribuye en dinero (retornos decretados).</summary>
+    SurplusPayment = 8,
 }
 
 /// <summary>Estado de un embargo.</summary>
@@ -505,6 +508,9 @@ public enum AssemblyDistributionStatus
     Approved = 2,
     Applied = 3,
     Voided = 4,
+
+    /// <summary>US12 (T203; research §22): aplicada y reversada entera; para corregir se registra otra que la corrige.</summary>
+    Reversed = 5,
 }
 
 /// <summary>Por dónde se entrega lo de un titular fallecido.</summary>

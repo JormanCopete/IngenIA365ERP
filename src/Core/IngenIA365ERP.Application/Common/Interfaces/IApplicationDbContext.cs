@@ -549,6 +549,8 @@ public interface IApplicationDbContext
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.ContributionRequest> ContributionRequests { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Processes.MembershipWithdrawal> MembershipWithdrawals { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Processes.MembershipWithdrawalLine> MembershipWithdrawalLines { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Processes.AssemblyDistribution> AssemblyDistributions { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Processes.AssemblyDistributionLine> AssemblyDistributionLines { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Core.AssociateInboundMessage> AssociateInboundMessages { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Documents.IssuedDocumentAccount> IssuedDocumentAccounts { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.AccountPayoutOrder> AccountPayoutOrders { get; }

@@ -5550,11 +5550,339 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 principalTable: "LND_MemberAccountTermsVersions",
                 principalColumn: "Id",
                 onDelete: ReferentialAction.Restrict);
+
+            // US12 (T202; research §22): la decisión de asamblea —LND_AssemblyDistributions, sus líneas y la operación que la nombra—.
+            migrationBuilder.AddColumn<int>(
+                name: "AssemblyDistributionId",
+                schema: "dbo",
+                table: "LND_MemberAccountOperations",
+                type: "integer",
+                nullable: true);
+
+            migrationBuilder.CreateTable(
+                name: "LND_AssemblyDistributions",
+                schema: "dbo",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    Number = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
+                    Kind = table.Column<int>(type: "integer", nullable: false),
+                    FiscalYear = table.Column<short>(type: "smallint", nullable: false),
+                    DecisionSessionItemId = table.Column<int>(type: "integer", nullable: true),
+                    CorrectsDistributionId = table.Column<int>(type: "integer", nullable: true),
+                    BaseMethod = table.Column<int>(type: "integer", nullable: false),
+                    DecidedFraction = table.Column<decimal>(type: "numeric(9,6)", precision: 9, scale: 6, nullable: true),
+                    DecidedValue = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: true),
+                    LegalLimitFraction = table.Column<decimal>(type: "numeric(9,6)", precision: 9, scale: 6, nullable: true),
+                    LegalLimitSource = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    FundAmount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    CalculatedTotal = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    ProrationFactor = table.Column<decimal>(type: "numeric(9,6)", precision: 9, scale: 6, nullable: true),
+                    AppliedTotal = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    SurplusDestination = table.Column<int>(type: "integer", nullable: true),
+                    DestinationLineId = table.Column<int>(type: "integer", nullable: true),
+                    RoundingUnit = table.Column<decimal>(type: "numeric(9,2)", precision: 9, scale: 2, nullable: false),
+                    Status = table.Column<int>(type: "integer", nullable: false),
+                    SimulationVersion = table.Column<int>(type: "integer", nullable: false),
+                    Reason = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false),
+                    RegisteredByUserId = table.Column<int>(type: "integer", nullable: false),
+                    RegisteredAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    ApprovedByUserId = table.Column<int>(type: "integer", nullable: true),
+                    ApprovedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    AppliedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    AppliedOn = table.Column<DateOnly>(type: "date", nullable: true),
+                    SupportAttachmentPublicIdsJson = table.Column<string>(type: "text", nullable: false),
+                    AppliedMessagePublicId = table.Column<Guid>(type: "uuid", nullable: true),
+                    ReversedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    ReversedByUserId = table.Column<int>(type: "integer", nullable: true),
+                    ReversalReason = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
+                    VoidedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    VoidReason = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
+                    InputsSha256 = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
+                    xmin = table.Column<uint>(type: "xid", rowVersion: true, nullable: false),
+                    PublicId = table.Column<Guid>(type: "uuid", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    DeletedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_LND_AssemblyDistributions", x => x.Id);
+                    table.CheckConstraint("CK_LND_AssemblyDistributions_Decision", "(\"DecidedFraction\" IS NULL AND \"DecidedValue\" IS NOT NULL) OR (\"DecidedFraction\" IS NOT NULL AND \"DecidedValue\" IS NULL)");
+                    table.CheckConstraint("CK_LND_AssemblyDistributions_Fund", "\"FundAmount\" >= 0");
+                    table.ForeignKey(
+                        name: "FK_LND_AssemblyDistributions_ApprovedBy",
+                        column: x => x.ApprovedByUserId,
+                        principalSchema: "dbo",
+                        principalTable: "SEC_Users",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_LND_AssemblyDistributions_Corrects",
+                        column: x => x.CorrectsDistributionId,
+                        principalSchema: "dbo",
+                        principalTable: "LND_AssemblyDistributions",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_LND_AssemblyDistributions_DestinationLine",
+                        column: x => x.DestinationLineId,
+                        principalSchema: "dbo",
+                        principalTable: "LND_CreditLines",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_LND_AssemblyDistributions_RegisteredBy",
+                        column: x => x.RegisteredByUserId,
+                        principalSchema: "dbo",
+                        principalTable: "SEC_Users",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_LND_AssemblyDistributions_ReversedBy",
+                        column: x => x.ReversedByUserId,
+                        principalSchema: "dbo",
+                        principalTable: "SEC_Users",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_LND_AssemblyDistributions_SessionItem",
+                        column: x => x.DecisionSessionItemId,
+                        principalSchema: "dbo",
+                        principalTable: "LND_SessionItems",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "LND_AssemblyDistributionLines",
+                schema: "dbo",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    AssemblyDistributionId = table.Column<int>(type: "integer", nullable: false),
+                    SimulationVersion = table.Column<int>(type: "integer", nullable: false),
+                    PersonId = table.Column<int>(type: "integer", nullable: false),
+                    ContributionAccountId = table.Column<int>(type: "integer", nullable: false),
+                    DestinationAccountId = table.Column<int>(type: "integer", nullable: true),
+                    BaseAmount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    CalculatedAmount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    ProratedAmount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    LimitedByMinimum = table.Column<bool>(type: "boolean", nullable: false),
+                    OperationId = table.Column<long>(type: "bigint", nullable: true),
+                    PayoutOrderId = table.Column<int>(type: "integer", nullable: true),
+                    xmin = table.Column<uint>(type: "xid", rowVersion: true, nullable: false),
+                    PublicId = table.Column<Guid>(type: "uuid", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    DeletedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_LND_AssemblyDistributionLines", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_LND_AssemblyDistributionLines_ContributionAccount",
+                        column: x => x.ContributionAccountId,
+                        principalSchema: "dbo",
+                        principalTable: "LND_MemberAccounts",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_LND_AssemblyDistributionLines_DestinationAccount",
+                        column: x => x.DestinationAccountId,
+                        principalSchema: "dbo",
+                        principalTable: "LND_MemberAccounts",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_LND_AssemblyDistributionLines_Distribution",
+                        column: x => x.AssemblyDistributionId,
+                        principalSchema: "dbo",
+                        principalTable: "LND_AssemblyDistributions",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_LND_AssemblyDistributionLines_Operation",
+                        column: x => x.OperationId,
+                        principalSchema: "dbo",
+                        principalTable: "LND_MemberAccountOperations",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_LND_AssemblyDistributionLines_PayoutOrder",
+                        column: x => x.PayoutOrderId,
+                        principalSchema: "dbo",
+                        principalTable: "LND_AccountPayoutOrders",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_LND_AssemblyDistributionLines_Person",
+                        column: x => x.PersonId,
+                        principalSchema: "dbo",
+                        principalTable: "COR_People",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_MemberAccountOperations_AssemblyDistribution",
+                schema: "dbo",
+                table: "LND_MemberAccountOperations",
+                column: "AssemblyDistributionId",
+                filter: "\"AssemblyDistributionId\" IS NOT NULL");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_AssemblyDistributionLines_ContributionAccount",
+                schema: "dbo",
+                table: "LND_AssemblyDistributionLines",
+                column: "ContributionAccountId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_AssemblyDistributionLines_DestinationAccountId",
+                schema: "dbo",
+                table: "LND_AssemblyDistributionLines",
+                column: "DestinationAccountId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_AssemblyDistributionLines_PayoutOrderId",
+                schema: "dbo",
+                table: "LND_AssemblyDistributionLines",
+                column: "PayoutOrderId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_AssemblyDistributionLines_PersonId",
+                schema: "dbo",
+                table: "LND_AssemblyDistributionLines",
+                column: "PersonId");
+
+            migrationBuilder.CreateIndex(
+                name: "UK_LND_AssemblyDistributionLines_Operation",
+                schema: "dbo",
+                table: "LND_AssemblyDistributionLines",
+                column: "OperationId",
+                unique: true,
+                filter: "\"OperationId\" IS NOT NULL");
+
+            migrationBuilder.CreateIndex(
+                name: "UK_LND_AssemblyDistributionLines_PublicId",
+                schema: "dbo",
+                table: "LND_AssemblyDistributionLines",
+                column: "PublicId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "UK_LND_AssemblyDistributionLines_Version_Person",
+                schema: "dbo",
+                table: "LND_AssemblyDistributionLines",
+                columns: new[] { "AssemblyDistributionId", "SimulationVersion", "PersonId" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_AssemblyDistributions_ApprovedByUserId",
+                schema: "dbo",
+                table: "LND_AssemblyDistributions",
+                column: "ApprovedByUserId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_AssemblyDistributions_CorrectsDistributionId",
+                schema: "dbo",
+                table: "LND_AssemblyDistributions",
+                column: "CorrectsDistributionId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_AssemblyDistributions_DestinationLineId",
+                schema: "dbo",
+                table: "LND_AssemblyDistributions",
+                column: "DestinationLineId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_AssemblyDistributions_RegisteredByUserId",
+                schema: "dbo",
+                table: "LND_AssemblyDistributions",
+                column: "RegisteredByUserId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_AssemblyDistributions_ReversedByUserId",
+                schema: "dbo",
+                table: "LND_AssemblyDistributions",
+                column: "ReversedByUserId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_AssemblyDistributions_Year_Status",
+                schema: "dbo",
+                table: "LND_AssemblyDistributions",
+                columns: new[] { "FiscalYear", "Status" });
+
+            migrationBuilder.CreateIndex(
+                name: "UK_LND_AssemblyDistributions_Number",
+                schema: "dbo",
+                table: "LND_AssemblyDistributions",
+                column: "Number",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "UK_LND_AssemblyDistributions_PublicId",
+                schema: "dbo",
+                table: "LND_AssemblyDistributions",
+                column: "PublicId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "UK_LND_AssemblyDistributions_Session",
+                schema: "dbo",
+                table: "LND_AssemblyDistributions",
+                columns: new[] { "DecisionSessionItemId", "Kind" },
+                unique: true,
+                filter: "\"Status\" = 3 AND \"IsDeleted\" = FALSE");
+
+            migrationBuilder.AddForeignKey(
+                name: "FK_LND_MemberAccountOperations_AssemblyDistribution",
+                schema: "dbo",
+                table: "LND_MemberAccountOperations",
+                column: "AssemblyDistributionId",
+                principalSchema: "dbo",
+                principalTable: "LND_AssemblyDistributions",
+                principalColumn: "Id",
+                onDelete: ReferentialAction.Restrict);
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            // US12 (T202): lo de la asamblea, antes que lo demás.
+            migrationBuilder.DropForeignKey(
+                name: "FK_LND_MemberAccountOperations_AssemblyDistribution",
+                schema: "dbo",
+                table: "LND_MemberAccountOperations");
+
+            migrationBuilder.DropTable(
+                name: "LND_AssemblyDistributionLines",
+                schema: "dbo");
+
+            migrationBuilder.DropTable(
+                name: "LND_AssemblyDistributions",
+                schema: "dbo");
+
+            migrationBuilder.DropIndex(
+                name: "IX_LND_MemberAccountOperations_AssemblyDistribution",
+                schema: "dbo",
+                table: "LND_MemberAccountOperations");
+
+            migrationBuilder.DropColumn(
+                name: "AssemblyDistributionId",
+                schema: "dbo",
+                table: "LND_MemberAccountOperations");
+
             // US13 (T194): lo de los documentos al titular primero.
             migrationBuilder.DropForeignKey(
                 name: "FK_LND_IssuedDocumentAccounts_TermsVersion",

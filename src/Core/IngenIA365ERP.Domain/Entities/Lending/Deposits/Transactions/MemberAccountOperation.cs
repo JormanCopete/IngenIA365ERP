@@ -112,6 +112,9 @@ public class MemberAccountOperation : AuditableEntityLong, IHechoInmutable
     /// <summary>K8 (US11, T189): el embargo que consigna (<c>GarnishmentConsignment</c>) o cuya marca reclasifica (<c>Reclassification</c>).</summary>
     public int? GarnishmentId { get; init; }
 
+    /// <summary>K10 (US12, T202): la decisión de asamblea que la originó (revalorización, excedentes o amortización).</summary>
+    public int? AssemblyDistributionId { get; init; }
+
     /// <summary>Resultado del giro, factura del cargo.</summary>
     public int? InboundMessageId { get; init; }
 

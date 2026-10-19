@@ -500,6 +500,8 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.ContributionRequest> ContributionRequests => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.ContributionRequest>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Processes.MembershipWithdrawal> MembershipWithdrawals => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Processes.MembershipWithdrawal>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Processes.MembershipWithdrawalLine> MembershipWithdrawalLines => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Processes.MembershipWithdrawalLine>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Processes.AssemblyDistribution> AssemblyDistributions => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Processes.AssemblyDistribution>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Processes.AssemblyDistributionLine> AssemblyDistributionLines => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Processes.AssemblyDistributionLine>();
     public DbSet<IngenIA365ERP.Domain.Entities.Core.AssociateInboundMessage> AssociateInboundMessages => Set<IngenIA365ERP.Domain.Entities.Core.AssociateInboundMessage>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Documents.IssuedDocumentAccount> IssuedDocumentAccounts => Set<IngenIA365ERP.Domain.Entities.Lending.Documents.IssuedDocumentAccount>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.AccountPayoutOrder> AccountPayoutOrders => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.AccountPayoutOrder>();

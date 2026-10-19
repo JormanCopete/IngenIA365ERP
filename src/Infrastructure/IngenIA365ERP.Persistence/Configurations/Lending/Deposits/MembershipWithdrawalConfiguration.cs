@@ -98,3 +98,97 @@ public class MembershipWithdrawalLineConfiguration : IEntityTypeConfiguration<Me
         builder.HasIndex(e => e.LoanId).HasDatabaseName("IX_LND_MembershipWithdrawalLines_Loan").HasFilter("[LoanId] IS NOT NULL");
     }
 }
+
+/// <summary>
+/// <c>LND_AssemblyDistributions</c> (feature 014, US12, T202; data-model §6.3; research §22): número único, una aplicada por acta y clase (único filtrado a
+/// <c>Applied</c>: la reversada no estorba a su corrección) y el índice por estado. Migración <c>CaptacionesAportes</c>.
+/// </summary>
+public class AssemblyDistributionConfiguration : IEntityTypeConfiguration<AssemblyDistribution>
+{
+    public const string Tabla = "LND_AssemblyDistributions";
+
+    public void Configure(EntityTypeBuilder<AssemblyDistribution> builder)
+    {
+        builder.ComoEntidadDeCartera(Tabla);
+        builder.ToTable(t =>
+        {
+            t.HasCheckConstraint("CK_LND_AssemblyDistributions_Fund", "[FundAmount] >= 0");
+            t.HasCheckConstraint("CK_LND_AssemblyDistributions_Decision",
+                "([DecidedFraction] IS NULL AND [DecidedValue] IS NOT NULL) OR ([DecidedFraction] IS NOT NULL AND [DecidedValue] IS NULL)");
+        });
+
+        builder.Property(e => e.Number).HasMaxLength(AssemblyDistribution.LargoDelNumero).IsRequired();
+        builder.Property(e => e.Kind).HasConversion<int>().IsRequired();
+        builder.Property(e => e.BaseMethod).HasConversion<int>().IsRequired();
+        builder.Property(e => e.DecidedFraction).Fraccion();
+        builder.Property(e => e.DecidedValue).Monto();
+        builder.Property(e => e.LegalLimitFraction).Fraccion();
+        builder.Property(e => e.LegalLimitSource).HasMaxLength(AssemblyDistribution.LargoDeLaFuente);
+        builder.Property(e => e.FundAmount).Monto().IsRequired();
+        builder.Property(e => e.CalculatedTotal).Monto().IsRequired();
+        builder.Property(e => e.ProrationFactor).Fraccion();
+        builder.Property(e => e.AppliedTotal).Monto().IsRequired();
+        builder.Property(e => e.SurplusDestination).HasConversion<int?>();
+        builder.Property(e => e.RoundingUnit).HasPrecision(9, 2).IsRequired();
+        builder.Property(e => e.Status).HasConversion<int>().IsRequired();
+        builder.Property(e => e.Reason).HasMaxLength(AssemblyDistribution.LargoDelMotivo).IsRequired();
+        builder.Property(e => e.ReversalReason).HasMaxLength(AssemblyDistribution.LargoDelMotivo);
+        builder.Property(e => e.VoidReason).HasMaxLength(AssemblyDistribution.LargoDelMotivo);
+        builder.Property(e => e.SupportAttachmentPublicIdsJson).IsRequired();
+        builder.Property(e => e.InputsSha256).HasMaxLength(64).IsRequired();
+
+        builder.HasOne<SessionItem>().WithMany().HasForeignKey(e => e.DecisionSessionItemId).OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("FK_LND_AssemblyDistributions_SessionItem");
+        builder.HasOne<AssemblyDistribution>().WithMany().HasForeignKey(e => e.CorrectsDistributionId).OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("FK_LND_AssemblyDistributions_Corrects");
+        builder.HasOne<Domain.Entities.Lending.Configuration.CreditLine>().WithMany().HasForeignKey(e => e.DestinationLineId).OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("FK_LND_AssemblyDistributions_DestinationLine");
+        builder.HasOne<User>().WithMany().HasForeignKey(e => e.RegisteredByUserId).OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("FK_LND_AssemblyDistributions_RegisteredBy");
+        builder.HasOne<User>().WithMany().HasForeignKey(e => e.ApprovedByUserId).OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("FK_LND_AssemblyDistributions_ApprovedBy");
+        builder.HasOne<User>().WithMany().HasForeignKey(e => e.ReversedByUserId).OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("FK_LND_AssemblyDistributions_ReversedBy");
+
+        builder.HasIndex(e => e.Number).IsUnique().HasDatabaseName("UK_LND_AssemblyDistributions_Number");
+        builder.HasIndex(e => new { e.DecisionSessionItemId, e.Kind }, "UK_LND_AssemblyDistributions_Session").IsUnique()
+            .HasFilter("[Status] = 3 AND [IsDeleted] = 0");
+        builder.HasIndex(e => new { e.FiscalYear, e.Status }).HasDatabaseName("IX_LND_AssemblyDistributions_Year_Status");
+    }
+}
+
+/// <summary>
+/// <c>LND_AssemblyDistributionLines</c> (feature 014, US12, T202; data-model §6.4): hecho, único por distribución, versión y persona (sin filtro de baja,
+/// research E18); una línea por operación.
+/// </summary>
+public class AssemblyDistributionLineConfiguration : IEntityTypeConfiguration<AssemblyDistributionLine>
+{
+    public const string Tabla = "LND_AssemblyDistributionLines";
+
+    public void Configure(EntityTypeBuilder<AssemblyDistributionLine> builder)
+    {
+        builder.ComoEntidadDeCartera(Tabla);
+
+        builder.Property(e => e.BaseAmount).Monto().IsRequired();
+        builder.Property(e => e.CalculatedAmount).Monto().IsRequired();
+        builder.Property(e => e.ProratedAmount).Monto().IsRequired();
+
+        builder.HasOne<AssemblyDistribution>().WithMany().HasForeignKey(e => e.AssemblyDistributionId).OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("FK_LND_AssemblyDistributionLines_Distribution");
+        builder.HasOne<Person>().WithMany().HasForeignKey(e => e.PersonId).OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("FK_LND_AssemblyDistributionLines_Person");
+        builder.HasOne<MemberAccount>().WithMany().HasForeignKey(e => e.ContributionAccountId).OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("FK_LND_AssemblyDistributionLines_ContributionAccount");
+        builder.HasOne<MemberAccount>().WithMany().HasForeignKey(e => e.DestinationAccountId).OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("FK_LND_AssemblyDistributionLines_DestinationAccount");
+        builder.HasOne<MemberAccountOperation>().WithMany().HasForeignKey(e => e.OperationId).OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("FK_LND_AssemblyDistributionLines_Operation");
+        builder.HasOne<AccountPayoutOrder>().WithMany().HasForeignKey(e => e.PayoutOrderId).OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("FK_LND_AssemblyDistributionLines_PayoutOrder");
+
+        builder.HasIndex(e => new { e.AssemblyDistributionId, e.SimulationVersion, e.PersonId }).IsUnique()
+            .HasDatabaseName("UK_LND_AssemblyDistributionLines_Version_Person");
+        builder.HasIndex(e => e.OperationId).IsUnique().HasDatabaseName("UK_LND_AssemblyDistributionLines_Operation").HasFilter("[OperationId] IS NOT NULL");
+        builder.HasIndex(e => e.ContributionAccountId).HasDatabaseName("IX_LND_AssemblyDistributionLines_ContributionAccount");
+    }
+}

@@ -90,6 +90,11 @@ public class MemberAccountOperationConfiguration : IEntityTypeConfiguration<Memb
             .OnDelete(DeleteBehavior.Restrict).HasConstraintName("FK_LND_MemberAccountOperations_Garnishment");
         builder.HasIndex(e => e.GarnishmentId).HasDatabaseName("IX_LND_MemberAccountOperations_Garnishment")
             .HasFilter("[GarnishmentId] IS NOT NULL");
+        // US12 (T202): la decisión de asamblea que la originó.
+        builder.HasOne<Domain.Entities.Lending.Deposits.Processes.AssemblyDistribution>().WithMany().HasForeignKey(e => e.AssemblyDistributionId)
+            .OnDelete(DeleteBehavior.Restrict).HasConstraintName("FK_LND_MemberAccountOperations_AssemblyDistribution");
+        builder.HasIndex(e => e.AssemblyDistributionId).HasDatabaseName("IX_LND_MemberAccountOperations_AssemblyDistribution")
+            .HasFilter("[AssemblyDistributionId] IS NOT NULL");
     }
 }
 
