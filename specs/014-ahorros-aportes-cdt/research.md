@@ -1529,3 +1529,97 @@ esquema: `CaptacionesAportes` sigue como la dejó la fase 10 (§16).
   destino fuera del alcance. Recomendado: A, y C sólo si alguna cooperativa opera traslados entre oficinas desde la ventanilla.
 - **El aprobador presente fuera de la oficina de la cuenta (E126).** A: basta el permiso y el monto (lo construido); B: el aprobador también tiene que tener la
   oficina y la línea de la cuenta en su alcance de Cartera. Recomendado: B.
+
+## 18. Enmienda del CDAT (2026-10-19, T166–T180, US6, K9)
+
+Construida la historia 6 y los pendientes de CDAT de las fases 9 y 10. **Manda el código**; estas notas reemplazan lo dicho en `data-model.md`, `contracts/` y
+`tasks.md` donde choquen. Cambio de esquema: `CaptacionesAportes` **regenerada** dos veces en los dos motores (última PostgreSQL `20261019073218`, SQL Server
+`20261019073145`) con cinco tablas (`LND_MemberAccountTermsVersions`, `LND_TermDepositSchedules`, `LND_NegotiatedRateRules`, `LND_NegotiatedRateRequests`,
+`LND_MigrationTermDepositRows`) y las columnas `LND_MemberAccountTransactions.TermsVersionId`, `LND_MemberAccounts.PendingTermsJson` y
+`.MaturityInstructionJson`; el SQL escrito a mano (T044, `NOM`, `ASO`) se reinsertó sin cambios y la paridad pasa. Las migraciones congeladas de la 013 y
+`RetiroDeCaptacionesHeredadas` no se tocaron.
+
+**Norma aplicada** (investigación financiera §3.1, §3.2, §3.6 a §3.9, con sus fuentes): el CDAT es título de legitimación, no título valor (C. de Co. art. 645);
+plazo, redención, prórroga y su tasa son del reglamento de cada entidad, por eso todo es condición de la línea con vigencia y defecto «pendiente de validar»;
+retención del 4 % sobre rendimientos de CDAT (Decreto 572 de 2025, art. 1; DUR 1625 de 2016 art. 1.2.4.2.83), umbral diario del art. 1.2.4.2.6 fuera del CDAT
+por defecto (`Retencion.AlcanceDelUmbral = ExceptTermDeposit`, D10, P2 abierta), retención antes de capitalizar (FR-063); GMF de la redención abonada en
+cuenta sobre capital más intereses (Oficio DIAN 2787 de 2019; ET arts. 871 y 879) y del traslado entre ahorro y CDAT (concepto DIAN 082568 de 2011);
+plazo de emisión de las cuentas 211005 a 211020 del CUIF de la Supersolidaria. El seguro de depósitos (Fogacoop) es de K11 (US15) y la inembargabilidad de
+US11: no se tocan aquí.
+
+- **E127 · K9 sin subir la entrega.** `EntregaVigente` sigue en K6b, como quedó con K7 y K8: el CDAT y la tasa negociada exigen la entrega K9 desplegada
+  (`Lending.Savings.DeliveryNotAvailable`, `availableFrom = K9`); las pruebas la fijan. Subirla es del despliegue (Polish), con las demás.
+- **E128 · El plan del CDAT (T166, `PlanDeCdat`).** El plazo se cuenta en días calendario desde el inicio y se parte en períodos de los días de la periodicidad
+  (mensual 30, trimestral 90…; el último absorbe lo que sobre; al vencimiento, uno). Interés de n días `C × ((1 + r_d)^n − 1)` con `r_d` la tasa diaria
+  compuesta de la base de la convención (= `(1+EA)^(n/B) − 1`); anticipado `C × i_v / (1 + i_v)`; cada período a la unidad sellada. Pago vencido el fin del
+  período, anticipado el inicio; en día no hábil (sábado, domingo o `FESTIVO`) el siguiente hábil sin interés adicional (D19). Gracia en días hábiles desde el
+  vencimiento. Plazo de emisión por días con meses de 30 (menos de 180; 180 a 360; más de 360 y menos de 540; 540 o más) — pendiente de validar por la
+  contadora. Casos dorados (T167): `cdat-01` a `cdat-10` (481.244; 488.088; 6 × 79.741; 79.111; prórroga 10.468.564; reliquidación; descuento; festivo;
+  plazo irregular) y `tasa-negociada-01/02`, todos por `calcular.py --verificar` (41 casos).
+- **E129 · La causación cuadra con el plan.** Lo causado a k días del período es `Seis(C × ((1 + r_d)^k − 1) × f)` (f = 1 vencido, `1/(1+i_v)`
+  anticipado) y el último día absorbe el redondeo contra el plan (R11); en el anticipado el interés por pagar queda negativo durante el período y la
+  causación lo lleva a cero (contabilidad.md §6). El CDAT causa por su plan dentro de `CausacionDeCaptaciones`; la liquidación periódica de US5 ya no lo toca
+  (clases que liquidan ≠ clases que causan). Pagar un período no mueve `LastSettledThrough`.
+- **E130 · Condiciones selladas al fondear (T169, T170).** El CDAT nace en apertura con su propuesta en `PendingTermsJson` (no es hecho); la versión 1 y el
+  plan se sellan en la operación de constitución, con inicio el día del fondeo, por `RegistroDeCuentas.SellarCondiciones`. Ruta nueva
+  `POST /term-deposits/{id}/fund` (fondeo por traslado de lo que quedó esperando; permiso de constituir). Fondeo por recaudador: la consignación del contrato
+  de cuentas en un CDAT en apertura, por el monto exacto (`FundingAmountMismatch`); un CDAT constituido no recibe consignaciones (`NoAdditionalDeposits`).
+  Aprobar la apertura (listas) no activa un CDAT. La apertura común pasó a `AperturaDeCuentas` sin cambiar la de las demás cuentas.
+- **E131 · Destinos.** Intereses y vencimiento: una cuenta a la vista viva del mismo titular (en el alcance) o un giro a un beneficiario
+  (`AccountPayoutOrder` `TermDepositInterest`/`TermDepositRedemption` y `OrdenDeGiroEmitida` v2). Origen del fondeo: una cuenta de ahorro viva del titular.
+- **E132 · La contrapartida de la fase 9 (resuelve `CounterpartUnknown`).** `TermDepositFundingV1` y `TermDepositDestinationV1` suman, opcionales al final, la
+  otra cuenta con su titular, sus dimensiones y sus importes; el constructor la usa como contrapartida (las dos puntas cuadran, como el traslado); con giro,
+  `DevolucionPorPagar`; con recaudador, el puente. `HechoDeCuenta` lleva el plazo de emisión de la última versión de condiciones (`IssueTermBand`). La
+  activación (`LinesWithMatrix`) pregunta por los hechos del CDAT en cada plazo de emisión que admite el rango de la línea.
+- **E133 · Tasa negociada (T168, T171).** Tabla nueva `LND_NegotiatedRateRequests` (la solicitud con su estado; data-model no la tenía). Reglas versionadas
+  por código, terminar = versión inactiva. El criterio «puntos adicionales» de la matriz (`AttributionRule.MaxNegotiatedSpread`) casa cuando el margen pedido
+  lo **supera**; cabe en la atribución si quien pide puede decidir el nivel efectivo (sin matriz, si tiene `Lending.NegotiatedRates.Approve`). La decide una
+  persona con el nivel en su propia sesión (que ya exige segundo factor) o un órgano con punto de acta cerrado (asunto `NegotiatedRate`); segregación por
+  persona. Con tasa variable el CDAT sella la tasa del día.
+- **E134 · Ciclo (T172).** Subpaso `CicloDelCdat` después de la liquidación: paga cada período neto de retención (a cuenta con GMF o por giro); al cierre del
+  último día de gracia aplica la instrucción efectiva (`MaturityInstructionJson` o la sellada): cancelar y pagar, o prorrogar si la línea lo hace y no se agotó
+  el máximo y hay tasa; si no, el tratamiento (`StopAccruing` → vencido; `MoveToDemand` → a la cuenta a la vista del titular en la línea destino o vencido si no
+  la tiene). Prórroga: inicio al vencer si la gracia causa, si no al terminar la gracia; tasa por la regla de la línea (`Agreed` cae a la tabla vigente);
+  margen sólo si se conserva; capitaliza neto de retención; `CaptacionReclasificada` si cambia el plazo de emisión (sólo el hecho). CDAT embargado o de
+  titular fallecido al vencer: vencido, a disposición, sin pago ni prórroga. Los períodos de un CDAT migrado con fecha de pago hasta el corte cuentan como pagados.
+- **E135 · GMF de los intereses abonados en cuenta** con el hecho `RedencionDeCdatAbonada` (disposición del CDAT abonada en cuenta, Oficio 2787 de 2019),
+  sobre la cuenta destino — pendiente de validar por la contadora.
+- **E136 · Instrucción, renovación y redención (T173).** La instrucción se cambia hasta el fin de la gracia en `MaturityInstructionJson` (la sellada es hecho).
+  Renovar sólo entre el vencimiento y el fin de la gracia; paga antes lo pendiente; margen sólo dentro de la atribución (`NegotiationRequiresApproval`).
+  Redención anticipada sólo si la línea la admite, con penalidad por reliquidación (descuenta lo ya pagado en la versión; lo pagado de más sale del capital)
+  o por descuento, y atribución con monto `Lending.TermDeposits.Redeem` (limitable; 202 `PendingApproval`); en la gracia es cancelación sin penalidad. Con
+  giro la cuenta queda `Closing`; una orden rechazada devuelve el saldo. La cancelación de cuentas remite el CDAT a su ruta.
+- **E137 · Retiro del asociado (T175).** Los CDAT vivos van como líneas informativas `TermDepositBalance`, no suman a la devolución ni impiden `Paid`; siguen
+  hasta su vencimiento (la línea no tiene una condición que diga otra cosa).
+- **E138 · Vistas (T176).** `term-deposit-maturities` y `negotiated-rates` (K9) y `depositor-concentration` (K8), con datos del titular y alcance.
+- **E139 · Migración de CDAT (pendiente de la fase 10).** Parte `term-deposits` (plantilla §4.3, K9): al aplicar se regenera el plan; el vencimiento, los
+  períodos pagados (los de fecha de pago hasta el corte) y el interés causado (más de un peso de diferencia: `Lending.TermDeposit.ScheduleMismatch`) se
+  cotejan; la cuenta destino es a la vista del mismo titular, de la carga o viva. Al activar nace el CDAT con su versión 1 `Migration`, el plan, el saldo inicial
+  de capital e interés (seis decimales; en el anticipado puede ser negativo) ligado a su versión y período, después de las demás cuentas; sin hechos. El
+  plazo de emisión entra al cuadre y a la conciliación del capital del CDAT. El embargo de la fila es sólo una marca hasta US11 (`GarnishmentPending`).
+- **E140 · Lo que queda.** El título «CDAT, no negociable» (documento `TermDepositTitle`) lo emite US13 (T195/T196): `GET /{id}/titles` responde vacío hasta
+  entonces. El aviso al titular de la prórroga y del vencimiento no se encola todavía. Las e2e de US6 (`CdatTests`) y de la migración de un CDAT están
+  **escritas y compiladas; e2e en la corrida final**.
+
+### 18.1 Preguntas para el dueño
+
+- **CDAT embargado o de titular fallecido al vencer (E134).** A: queda vencido a disposición (lo construido); B: se prorroga capitalizando; C: pasa a la vista.
+  Recomendado: A hasta que US11 traiga la orden del juzgado.
+- **Máximo de prórrogas cero.** A: el validador de la línea lo rechaza (lo construido: sin prórroga se apaga `AutoRollover`); B: admitir 0 como «nunca
+  prorrogar». Recomendado: A.
+- **Regla `Agreed` en la prórroga automática.** A: cae a la tasa vigente de la tabla (lo construido); B: conserva la tasa pactada. Recomendado: B si el
+  reglamento de la cooperativa lo pacta así.
+- **Cuenta de los intereses (E131).** A: sólo a la vista del mismo titular (lo construido); B: también de un cotitular u otro titular, con el GMF del traslado.
+  Recomendado: A.
+- **Giro de un CDAT migrado.** A: a la cuenta bancaria registrada del titular (lo construido); B: columnas de banco en la plantilla. Recomendado: B si la
+  cooperativa paga intereses a terceros.
+- **Orden de redención rechazada después de ajustes y penalidad.** A: se reversa la operación entera; B: se devuelve sólo el capital. Recomendado: A.
+
+### 18.2 Para la contadora (pendiente de validar)
+
+- Plazo de emisión por días (meses de 30) y la frontera de 12 meses (CUIF 211010 incluye 12 meses).
+- GMF de los intereses abonados en cuenta (E135) y su clase generadora (CDAT).
+- La penalidad por reliquidación como ajuste a la baja de la causación (devuelve gasto) y lo pagado de más descontado del capital (hoy contra el ingreso por
+  penalidad).
+- El interés anticipado con el interés por pagar en débito durante el período (o un diferido, P1).
+- Los defectos de D17/D18 (prórroga automática sin capitalizar, 3 días hábiles de gracia sin causación, redención anticipada no admitida).
