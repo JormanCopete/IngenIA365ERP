@@ -73,6 +73,31 @@ public class LinesEndpoints : ICarterModule
             .ConClaveDeOperacion()
             .RequirePermission(AdministrarCaptacion);
 
+        // ------------------------------------------------------------------------- reglas de tasa negociada (US6, T178; api.md §3) --
+        lineas.MapGet("/{id:guid}/negotiated-rate-rules", async (Guid id, DateOnly? date, ISender sender, CancellationToken ct) =>
+                await sender.Send(new IngenIA365ERP.Application.Lending.Deposits.TermDeposits.NegotiatedRates.ListNegotiatedRateRulesQuery(id, date), ct))
+            .WithName("Lending_Lines_NegotiatedRateRules")
+            .RequirePermission(VerCaptacion);
+
+        lineas.MapPost("/{id:guid}/negotiated-rate-rules", async (Guid id,
+                    IngenIA365ERP.Application.Lending.Deposits.TermDeposits.NegotiatedRates.NegotiatedRateRuleInput body, HttpContext http, ISender sender,
+                    CancellationToken ct) =>
+                LendingGroup.Creado(await sender.Send(new IngenIA365ERP.Application.Lending.Deposits.TermDeposits.NegotiatedRates.AddNegotiatedRateRuleCommand(id, body)
+                {
+                    OperationKey = http.ClaveDeOperacion(),
+                }, ct), r => $"/api/lending/lines/{id}/negotiated-rate-rules/{r.PublicId}"))
+            .WithName("Lending_Lines_AddNegotiatedRateRule")
+            .ConClaveDeOperacion()
+            .RequirePermission(AdministrarCaptacion);
+
+        lineas.MapPost("/{id:guid}/negotiated-rate-rules/{ruleId:guid}/end", async (Guid id, Guid ruleId, TerminarReglaRequest body, HttpContext http,
+                    ISender sender, CancellationToken ct) =>
+                await sender.Send(new IngenIA365ERP.Application.Lending.Deposits.TermDeposits.NegotiatedRates.EndNegotiatedRateRuleCommand(id, ruleId, body.ValidTo,
+                    body.Reason ?? string.Empty) { OperationKey = http.ClaveDeOperacion() }, ct))
+            .WithName("Lending_Lines_EndNegotiatedRateRule")
+            .ConClaveDeOperacion()
+            .RequirePermission(AdministrarCaptacion);
+
         // --------------------------------------------------------------------------------------------------------- aportes --
         lineas.MapPost("/contribution", async (CrearLineaDeAportesRequest body, HttpContext http, ISender sender, CancellationToken ct) =>
                 LendingGroup.Creado(await sender.Send(new CreateContributionLineCommand(body.Code ?? string.Empty, body.Name ?? string.Empty, body.Active,
@@ -121,6 +146,9 @@ public class LinesEndpoints : ICarterModule
 
     /// <summary>El cuerpo de <c>POST /deposit</c>: <c>{ code, name, depositClass, active, firstVersion }</c>.</summary>
     public sealed record CrearLineaDeCaptacionRequest(string? Code, string? Name, DepositClass DepositClass, bool Active, DepositLineVersionInput? FirstVersion);
+
+    /// <summary>El cuerpo de terminar una regla de tasa negociada: desde qué día deja de regir y el motivo (api.md §3).</summary>
+    public sealed record TerminarReglaRequest(DateOnly ValidTo, string? Reason);
 
     /// <summary>El cuerpo de cerrar y reabrir: el motivo.</summary>
     public sealed record MotivoRequest(string? Reason);
