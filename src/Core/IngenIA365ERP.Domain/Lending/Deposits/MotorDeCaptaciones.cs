@@ -50,4 +50,17 @@ public static class MotorDeCaptaciones
     /// <summary>US6 (T168): la regla de tasa negociada más específica y si el margen cabe en ella y en la atribución de quien lo pide (FR-127).</summary>
     public static EvaluacionDeTasaNegociada TasaNegociada(IEnumerable<ReglaDeTasaNegociada> reglas, PedidoDeTasaNegociada pedido, decimal? atribucion) =>
         Deposits.TasaNegociada.Evaluar(reglas, pedido, atribucion);
+
+    /// <summary>US7 (T181): el plan de un ahorro contractual con lo proyectado a la tasa base y a la bonificada (FR-024, FR-074).</summary>
+    public static PlanDeContractualCalculado PlanDeContractual(CondicionesDeContractual condiciones) => AhorroContractual.Plan(condiciones);
+
+    /// <summary>US7 (T181): la bonificación por cumplimiento sobre los aportes del contrato (FR-075).</summary>
+    public static DiferenciaDeTasasDelContractual BonificacionDeContractual(IReadOnlyList<AporteDeContractual> aportes, decimal tasaBase, decimal tasaBonificada,
+        DayCountConvention convencion, DateOnly corte, RedondeoDeCartera redondeo) =>
+        AhorroContractual.Bonificacion(aportes, tasaBase, tasaBonificada, convencion, corte, redondeo);
+
+    /// <summary>US7 (T181): la reliquidación del incumplimiento a la tasa de castigo (FR-074).</summary>
+    public static DiferenciaDeTasasDelContractual ReliquidacionDeContractual(IReadOnlyList<AporteDeContractual> aportes, decimal tasaBase, decimal tasaCastigo,
+        DayCountConvention convencion, DateOnly corte, RedondeoDeCartera redondeo) =>
+        AhorroContractual.Reliquidar(aportes, tasaBase, tasaCastigo, convencion, corte, redondeo);
 }

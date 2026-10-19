@@ -25,6 +25,10 @@ Lo que calcula hoy (fase fundacional y US4 de captaciones; las historias siguien
 - CDAT (US6, T166, T167; FR-023): plan vencido o anticipado, causacion cuadrada al plan, gracia en dias habiles, prorroga con o sin
   capitalizacion, redencion con penalidad y plazo de emision. Casos cdat-*.json (bloque "entrada").
 - Tasa negociada (US6, T168; FR-127): la regla mas especifica y el margen. Casos tasa-negociada-*.json (bloque "entrada").
+- Ahorro contractual (US7, T181; FR-024, FR-074): plan de cuotas por periodicidad desde el inicio, interes de los aportes
+  A x ((1 + r_d)^N - 1) al corte (saldo diario con equivalencia compuesta: capitalizar no cambia el valor final), bonificacion (bonificada - base),
+  reliquidacion a la tasa de castigo (base - castigo), cumplimiento con tolerancia y dias de gracia, plazo de emision. Casos contractual-*.json
+  (bloque "entrada").
 - Cargos de cuenta (US4, T115; FR-128): gratuitos del periodo, exoneraciones (la primera que aplica), valor fijo o porcentaje al peso
   acotado por minimo y maximo, cobrado si el saldo lo deja sin bajar del minimo; si no, pendiente o condonado segun la linea. Casos
   cargo-*.json (bloque "entrada").
@@ -588,6 +592,95 @@ def esperado_tasa_negociada(caso):
     return {"evaluaciones": salida}
 
 
+# ------------------------------------------------------------------------------------------- ahorro contractual (US7)
+# T181 (FR-024, FR-074; investigacion 3.4): las cuotas vencen cada periodo desde el inicio (meses calendario en las de meses enteros, dias en las
+# menores) hasta el vencimiento = inicio + plazo en meses. El interes de un aporte A del dia f al corte es A x ((1 + r_d)^N - 1), N dias de la
+# convencion; cada interes se redondea con la unidad de la linea y la diferencia nunca es negativa. Una cuota esta atrasada si vencio hace mas de
+# los dias de gracia y le queda saldo; mas atrasadas que la tolerancia, incumplido.
+def sumar_meses(f, n):
+    y, m = f.year + (f.month - 1 + n) // 12, (f.month - 1 + n) % 12 + 1
+    import calendar
+    return dt.date(y, m, min(f.day, calendar.monthrange(y, m)[1]))
+
+
+def cuotas_contractual(inicio, periodicidad, venc):
+    dias_ = PERIODICIDADES[periodicidad]
+    meses = dias_ // 30 if dias_ >= 30 else 0
+    lista, k = [], 1
+    while True:
+        v = sumar_meses(inicio, k * meses) if meses else inicio + dt.timedelta(days=k * dias_)
+        if v > venc:
+            break
+        lista.append({"numero": k, "vencimiento": v})
+        k += 1
+    return lista
+
+
+def interes_aportes(aportes, ea, conv, corte):
+    r = tasa_diaria(ea, conv)
+    total = D(0)
+    for f, m in aportes:
+        if m == 0 or f >= corte:
+            continue
+        total += m * ((1 + r) ** dias(conv, f, corte) - 1)
+    return total
+
+
+def esperado_contractual(caso):
+    e = caso["entrada"]
+    c = e["condiciones"]
+    cuota, conv, inicio = D(c["cuota"]), c["convencion"], fecha(c["inicio"])
+    unidad, modo = D(c.get("unidadDeRedondeo", 1)), c.get("modoDeRedondeo", "AwayFromZero")
+    venc = sumar_meses(inicio, int(c["plazoMeses"]))
+    cuotas = cuotas_contractual(inicio, c["periodicidad"], venc)
+    plan_aportes = [(q["vencimiento"], cuota) for q in cuotas]
+    base_ = D(c["tasaBase"])
+    ib = redondear(interes_aportes(plan_aportes, base_, conv, venc), unidad, modo)
+    salida = {
+        "vencimiento": venc.isoformat(),
+        "plazoDeEmision": plazo_de_emision(int(c["plazoMeses"]) * 30),
+        "cuotas": len(cuotas),
+        "primeraCuota": cuotas[0]["vencimiento"].isoformat(),
+        "ultimaCuota": cuotas[-1]["vencimiento"].isoformat(),
+        "totalPactado": cuota * len(cuotas),
+        "interesProyectadoBase": ib,
+        "valorFinalBase": cuota * len(cuotas) + ib,
+    }
+    if c.get("tasaBonificada") is not None:
+        ibo = redondear(interes_aportes(plan_aportes, D(c["tasaBonificada"]), conv, venc), unidad, modo)
+        salida["interesProyectadoBonificado"] = ibo
+        salida["bonificacionProyectada"] = max(D(0), ibo - ib)
+        salida["valorFinalCumpliendo"] = cuota * len(cuotas) + ibo
+    aportes = [(fecha(a["fecha"]), D(a["monto"])) for a in e["aportes"]] if e.get("aportes") is not None else plan_aportes
+    corte = fecha(e["corte"]) if e.get("corte") else venc
+    total = sum((m for f, m in aportes if f <= corte), D(0))
+    def diferencia(otra, bonifica):
+        i0 = redondear(interes_aportes(aportes, base_, conv, corte), unidad, modo)
+        i1 = redondear(interes_aportes(aportes, D(otra), conv, corte), unidad, modo)
+        dif = max(D(0), (i1 - i0) if bonifica else (i0 - i1))
+        return {"aportes": total, "interesBase": i0, "interesOtraTasa": i1, "diferencia": dif, "valorFinalOtraTasa": total + i1}
+    if e.get("bonificacion") and c.get("tasaBonificada") is not None:
+        salida["bonificacion"] = diferencia(c["tasaBonificada"], True)
+    if e.get("reliquidacion") and c.get("tasaCastigo") is not None:
+        salida["reliquidacion"] = diferencia(c["tasaCastigo"], False)
+    if e.get("cumplimiento") is not None:
+        cu = e["cumplimiento"]
+        dia, tol, gracia = fecha(cu["dia"]), int(cu.get("tolerancia", 0)), int(cu.get("diasDeGracia", 0))
+        por_numero = {q["numero"]: q for q in cuotas}
+        filas = []
+        for x in cu["cuotas"]:
+            n = int(x["numero"])
+            valor = D(x.get("valor", cuota))
+            pend = D(0) if x.get("anulada") else max(D(0), valor - D(x.get("pagado", 0)))
+            filas.append((n, por_numero[n]["vencimiento"], pend))
+        atras = [n for n, v, p in filas if p > 0 and v + dt.timedelta(days=gracia) < dia]
+        pagadas = sum(1 for n, v, p in filas if p == 0)
+        salida["cumplimiento"] = {"generadas": len(filas), "pagadas": pagadas, "atrasadas": len(atras), "numerosAtrasados": atras,
+                                  "superaLaTolerancia": len(atras) > tol,
+                                  "completo": pagadas >= len(cuotas) and all(p == 0 for n, v, p in filas)}
+    return salida
+
+
 def esperado_de_entrada(caso):
     nombre = caso["nombre"]
     if nombre.startswith("gmf-"): return esperado_gmf(caso)
@@ -595,6 +688,7 @@ def esperado_de_entrada(caso):
     if nombre.startswith("retencion-"): return esperado_retencion(caso)
     if nombre.startswith("cdat-"): return esperado_cdat(caso)
     if nombre.startswith("tasa-negociada-"): return esperado_tasa_negociada(caso)
+    if nombre.startswith("contractual-"): return esperado_contractual(caso)
     raise ValueError(f"no se sabe calcular {nombre}")
 
 

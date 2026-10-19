@@ -211,6 +211,29 @@ public class MemberAccount : AuditableEntity
         MaturedOn = dia;
     }
 
+    /// <summary>
+    /// US7 (T182; FR-074): el contractual incumple —más cuotas atrasadas que las toleradas, el vencimiento con cuotas sin pagar o la cancelación anticipada—;
+    /// una vez. Sólo un contractual vigente incumple.
+    /// </summary>
+    public void Incumplir()
+    {
+        if (DepositClass != Enums.Lending.DepositClass.Contractual)
+            throw new InvalidOperationException($"La cuenta {Number} no es un ahorro contractual: no incumple.");
+        if (ContractualStatus != Enums.Lending.ContractualStatus.Current)
+            throw new InvalidOperationException($"El contractual {Number} está «{ContractualStatus}»: sólo un contrato vigente incumple.");
+        ContractualStatus = Enums.Lending.ContractualStatus.Breached;
+    }
+
+    /// <summary>US7 (T182; FR-075): el contractual vigente que llega al vencimiento con todas sus cuotas pagadas se cumple; una vez.</summary>
+    public void Cumplir()
+    {
+        if (DepositClass != Enums.Lending.DepositClass.Contractual)
+            throw new InvalidOperationException($"La cuenta {Number} no es un ahorro contractual: no se cumple.");
+        if (ContractualStatus != Enums.Lending.ContractualStatus.Current)
+            throw new InvalidOperationException($"El contractual {Number} está «{ContractualStatus}»: sólo un contrato vigente se cumple.");
+        ContractualStatus = Enums.Lending.ContractualStatus.Fulfilled;
+    }
+
     /// <summary><c>* → Closing</c>: hay una orden de giro en curso para el saldo (§3.9).</summary>
     public void PedirCierre(DateTime instante)
     {

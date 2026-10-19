@@ -1,0 +1,148 @@
+// US7 (Independent Test): pagando solo 10 de las 12 cuotas, con 1 cuota tolerada, el dia siguiente al vencimiento hay 2 atrasadas: incumplido; la reliquidacion a la tasa de castigo (3 % EA) quita lo que la base le dio de mas a los 10 aportes, y no hay bonificacion.
+{
+  "nombre": "contractual-03-incumplido-pagando-10",
+  "descripcion": "US7 (Independent Test): pagando solo 10 de las 12 cuotas, con 1 cuota tolerada, el dia siguiente al vencimiento hay 2 atrasadas: incumplido; la reliquidacion a la tasa de castigo (3 % EA) quita lo que la base le dio de mas a los 10 aportes, y no hay bonificacion.",
+  "entrada": {
+    "condiciones": {
+      "cuota": 200000,
+      "periodicidad": "Monthly",
+      "plazoMeses": 12,
+      "inicio": "2027-01-15",
+      "tasaBase": 0.06,
+      "convencion": "Thirty360",
+      "unidadDeRedondeo": 1,
+      "modoDeRedondeo": "AwayFromZero",
+      "tasaBonificada": 0.08,
+      "tasaCastigo": 0.03
+    },
+    "aportes": [
+      {
+        "fecha": "2027-02-15",
+        "monto": 200000
+      },
+      {
+        "fecha": "2027-03-15",
+        "monto": 200000
+      },
+      {
+        "fecha": "2027-04-15",
+        "monto": 200000
+      },
+      {
+        "fecha": "2027-05-15",
+        "monto": 200000
+      },
+      {
+        "fecha": "2027-06-15",
+        "monto": 200000
+      },
+      {
+        "fecha": "2027-07-15",
+        "monto": 200000
+      },
+      {
+        "fecha": "2027-08-15",
+        "monto": 200000
+      },
+      {
+        "fecha": "2027-09-15",
+        "monto": 200000
+      },
+      {
+        "fecha": "2027-10-15",
+        "monto": 200000
+      },
+      {
+        "fecha": "2027-11-15",
+        "monto": 200000
+      }
+    ],
+    "reliquidacion": true,
+    "cumplimiento": {
+      "dia": "2028-01-16",
+      "tolerancia": 1,
+      "diasDeGracia": 0,
+      "cuotas": [
+        {
+          "numero": 1,
+          "pagado": 200000
+        },
+        {
+          "numero": 2,
+          "pagado": 200000
+        },
+        {
+          "numero": 3,
+          "pagado": 200000
+        },
+        {
+          "numero": 4,
+          "pagado": 200000
+        },
+        {
+          "numero": 5,
+          "pagado": 200000
+        },
+        {
+          "numero": 6,
+          "pagado": 200000
+        },
+        {
+          "numero": 7,
+          "pagado": 200000
+        },
+        {
+          "numero": 8,
+          "pagado": 200000
+        },
+        {
+          "numero": 9,
+          "pagado": 200000
+        },
+        {
+          "numero": 10,
+          "pagado": 200000
+        },
+        {
+          "numero": 11,
+          "pagado": 0
+        },
+        {
+          "numero": 12,
+          "pagado": 0
+        }
+      ]
+    }
+  },
+  "esperado": {
+    "vencimiento": "2028-01-15",
+    "plazoDeEmision": "SixToTwelve",
+    "cuotas": 12,
+    "primeraCuota": "2027-02-15",
+    "ultimaCuota": "2028-01-15",
+    "totalPactado": 2400000,
+    "interesProyectadoBase": 65306,
+    "valorFinalBase": 2465306,
+    "interesProyectadoBonificado": 86777,
+    "bonificacionProyectada": 21471,
+    "valorFinalCumpliendo": 2486777,
+    "reliquidacion": {
+      "aportes": 2000000,
+      "interesBase": 64332,
+      "interesOtraTasa": 32331,
+      "diferencia": 32001,
+      "valorFinalOtraTasa": 2032331
+    },
+    "cumplimiento": {
+      "generadas": 12,
+      "pagadas": 10,
+      "atrasadas": 2,
+      "numerosAtrasados": [
+        11,
+        12
+      ],
+      "superaLaTolerancia": true,
+      "completo": false
+    }
+  }
+}

@@ -1,0 +1,27 @@
+// Cuota trimestral de 600.000 a 6 meses: 2 cuotas, plazo de emision de 6 a 12 meses, al 5 % EA real/365.
+{
+  "nombre": "contractual-07-trimestral-6-meses",
+  "descripcion": "Cuota trimestral de 600.000 a 6 meses: 2 cuotas, plazo de emision de 6 a 12 meses, al 5 % EA real/365.",
+  "entrada": {
+    "condiciones": {
+      "cuota": 600000,
+      "periodicidad": "Quarterly",
+      "plazoMeses": 6,
+      "inicio": "2027-05-31",
+      "tasaBase": 0.05,
+      "convencion": "Actual365",
+      "unidadDeRedondeo": 1,
+      "modoDeRedondeo": "AwayFromZero"
+    }
+  },
+  "esperado": {
+    "vencimiento": "2027-11-30",
+    "plazoDeEmision": "SixToTwelve",
+    "cuotas": 2,
+    "primeraCuota": "2027-08-31",
+    "ultimaCuota": "2027-11-30",
+    "totalPactado": 1200000,
+    "interesProyectadoBase": 7343,
+    "valorFinalBase": 1207343
+  }
+}
