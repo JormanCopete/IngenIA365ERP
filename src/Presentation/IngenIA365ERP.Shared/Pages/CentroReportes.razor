@@ -115,7 +115,54 @@
         </div>
     </div>
 
-    <!-- Feature 014 (T008): las tarjetas de ahorros y CDT heredados se retiraron; las de captaciones llegan con sus informes. -->
+    <!-- Feature 014, US17 (T222): captaciones y aportes; cada tarjeta abre su vista del centro de informes de Cartera o la pantalla de reportes regulatorios. -->
+    <div class="report-section">
+        <h4 class="report-section-title">
+            <span class="e-icons e-money"></span>Captaciones y aportes
+        </h4>
+        <div class="report-cards">
+            <div class="report-card">
+                <div class="report-card-icon"><span class="e-icons e-table"></span></div>
+                <div class="report-card-body">
+                    <h5>Saldos de captaciones</h5>
+                    <p>El saldo de las cuentas de captacion al corte por linea, oficina o clase, sin datos de titulares.</p>
+                    <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/cartera/informes?vista=deposit-balances")'>Generar</SfButton>
+                </div>
+            </div>
+            <div class="report-card">
+                <div class="report-card-icon"><span class="e-icons e-list-unordered"></span></div>
+                <div class="report-card-body">
+                    <h5>Cuentas por estado</h5>
+                    <p>Las cuentas de captacion y de aportes con su estado, su saldo y sus marcas (embargo, exencion de GMF).</p>
+                    <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/cartera/informes?vista=deposit-accounts-by-status")'>Generar</SfButton>
+                </div>
+            </div>
+            <div class="report-card">
+                <div class="report-card-icon"><span class="e-icons e-people"></span></div>
+                <div class="report-card-body">
+                    <h5>Aportes por asociado</h5>
+                    <p>El saldo de aportes de cada asociado por clase, con sus cuotas en mora.</p>
+                    <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/cartera/informes?vista=contributions-by-member")'>Generar</SfButton>
+                </div>
+            </div>
+            <div class="report-card">
+                <div class="report-card-icon"><span class="e-icons e-chart"></span></div>
+                <div class="report-card-body">
+                    <h5>Intereses y retencion</h5>
+                    <p>Las liquidaciones de intereses del periodo con su componente inflacionario, su base y la retencion practicada.</p>
+                    <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/cartera/informes?vista=interest-and-withholding")'>Generar</SfButton>
+                </div>
+            </div>
+            <div class="report-card">
+                <div class="report-card-icon"><span class="e-icons e-description"></span></div>
+                <div class="report-card-body">
+                    <h5>Reportes regulatorios</h5>
+                    <p>Los formatos del SICSES de captaciones, aportes, saldos diarios y fondo de liquidez, y la exogena 1019 y 1020: validar, generar y marcar cargado.</p>
+                    <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/cartera/captaciones/reportes-regulatorios")'>Abrir</SfButton>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- Nomina -->
     <div class="report-section">

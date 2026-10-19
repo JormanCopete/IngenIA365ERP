@@ -23,6 +23,9 @@ public sealed class RegulatorioDeCarteraClient(HttpClient http, CentralAuthClien
     /// <summary>Clase del archivo (<c>RegulatoryFileKind</c>): el SICSES o una central.</summary>
     public const int ClaseSicses = 1, ClaseCentral = 2;
 
+    /// <summary>Feature 014, US17 (T222): los formatos de captaciones del SICSES (3) y de la exógena (4), con su código de formato.</summary>
+    public const int ClaseSicsesDeCaptaciones = 3, ClaseExogena = 4;
+
     /// <summary>El dueño de adjunto del comprobante del cargue en el portal (decisión del dueño del 2026-10-16).</summary>
     public const string DuenoDeComprobantesDeCargue = "LendingRegulatoryFileReceipt";
 
@@ -49,10 +52,21 @@ public sealed class RegulatorioDeCarteraClient(HttpClient http, CentralAuthClien
         Enviar<ArchivoRegulatorioDetalleDto>(HttpMethod.Post, $"{Ruta}/bureaus/{Uri.EscapeDataString(central)}/{anio}/{mes}/generate",
             new GenerarArchivoRegulatorioRequest(reconocerAdvertencias), clave, ct);
 
+    /// <summary>Feature 014, US17 (T222): valida un formato de captaciones del período sin guardar nada (consulta por POST, sin clave).</summary>
+    public Task<ResultadoDeInventario<ValidacionRegulatoriaDto>> ValidarCaptacionesAsync(string formato, int anio, int? mes, CancellationToken ct = default) =>
+        Enviar<ValidacionRegulatoriaDto>(HttpMethod.Post, $"{Ruta}/deposit-formats/{Uri.EscapeDataString(formato)}/validate",
+            new PeriodoRegulatorioRequest(anio, mes), null, ct);
+
+    /// <summary>Feature 014, US17 (T222): genera un formato de captaciones; la versión anterior del período queda reemplazada.</summary>
+    public Task<ResultadoDeInventario<ArchivoRegulatorioDetalleDto>> GenerarCaptacionesAsync(string formato, int anio, int? mes, bool reconocerAdvertencias,
+        ClaveDeOperacion clave, CancellationToken ct = default) =>
+        Enviar<ArchivoRegulatorioDetalleDto>(HttpMethod.Post, $"{Ruta}/deposit-formats/{Uri.EscapeDataString(formato)}/generate",
+            new GenerarFormatoDeCaptacionesRequest(anio, mes, reconocerAdvertencias), clave, ct);
+
     public Task<ResultadoDeInventario<PaginaDeInventarioDto<ArchivoRegulatorioDto>>> ArchivosAsync(int? clase = null, string? central = null, int? anio = null,
-        int? mes = null, int pagina = 1, CancellationToken ct = default) =>
+        int? mes = null, int pagina = 1, CancellationToken ct = default, string? formato = null) =>
         Enviar<PaginaDeInventarioDto<ArchivoRegulatorioDto>>(HttpMethod.Get, ConQuery(Ruta + "/files", Query(("kind", Texto(clase)), ("bureau", central),
-            ("year", Texto(anio)), ("month", Texto(mes)), ("page", Texto(pagina)))), null, null, ct);
+            ("format", formato), ("year", Texto(anio)), ("month", Texto(mes)), ("page", Texto(pagina)))), null, null, ct);
 
     public Task<ResultadoDeInventario<ArchivoRegulatorioDetalleDto>> ArchivoAsync(Guid archivo, CancellationToken ct = default) =>
         Enviar<ArchivoRegulatorioDetalleDto>(HttpMethod.Get, $"{Ruta}/files/{archivo}", null, null, ct);
@@ -91,7 +105,8 @@ public sealed record LayoutRegulatorioDto(
     string? VerifiedBy,
     DateOnly? VerifiedOn,
     string? VerifiedAgainst,
-    IReadOnlyList<string> Notes);
+    IReadOnlyList<string> Notes,
+    string? FormatCode = null);
 
 /// <summary>Una inconsistencia: severidad (<c>Blocking</c> o <c>Warning</c>), código, registro, campo, crédito, ruta, fila y mensaje.</summary>
 public sealed record IncidenciaRegulatoriaDto(
@@ -138,7 +153,8 @@ public sealed record ArchivoRegulatorioDto(
     bool DownloadAvailable,
     string GeneratedBy,
     DateTime GeneratedAt,
-    CargueRegulatorioDto? Uploaded);
+    CargueRegulatorioDto? Uploaded,
+    string? FormatCode = null);
 
 public sealed record ArchivoRegulatorioDetalleDto(
     ArchivoRegulatorioDto File,
@@ -147,6 +163,26 @@ public sealed record ArchivoRegulatorioDetalleDto(
     JsonElement Totals);
 
 public sealed record GenerarArchivoRegulatorioRequest(bool AcknowledgeWarnings);
+
+/// <summary>Feature 014, US17: el período de un formato de captaciones (el mes es nulo en la exógena).</summary>
+public sealed record PeriodoRegulatorioRequest(int Year, int? Month);
+
+public sealed record GenerarFormatoDeCaptacionesRequest(int Year, int? Month, bool AcknowledgeWarnings);
+
+/// <summary>Feature 014, US17 (T222): los formatos regulatorios de captaciones que ofrece la pantalla, con si son anuales.</summary>
+public static class FormatosRegulatoriosDeCaptaciones
+{
+    public static IReadOnlyList<(string Codigo, string Nombre, bool Anual)> Todos { get; } =
+    [
+        ("sicses-captaciones", "SICSES · Captaciones (9026)", false),
+        ("sicses-cotitulares", "SICSES · Cotitulares de depósitos (9068)", false),
+        ("sicses-aportes", "SICSES · Aportes por asociado (9013)", false),
+        ("sicses-saldos-diarios", "SICSES · Saldos diarios del ahorro ordinario (169)", false),
+        ("sicses-fondo-liquidez", "SICSES · Fondo de liquidez (9067)", false),
+        ("exogena-1019", "Exógena · Formato 1019 (cuentas de ahorro)", true),
+        ("exogena-1020", "Exógena · Formato 1020 (CDAT)", true),
+    ];
+}
 
 public sealed record MarcarCargadoRequest(string FilingNumber, DateTime UploadedAt, DateOnly? FilingDate, Guid? ReceiptAttachmentPublicId);
 

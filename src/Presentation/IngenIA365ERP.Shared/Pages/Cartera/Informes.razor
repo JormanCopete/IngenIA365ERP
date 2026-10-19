@@ -176,6 +176,15 @@
                         </select>
                     </label>
                 }
+                @* Feature 014, US17 (T222): el período de las vistas del GMF y de los formatos regulatorios de captaciones (la exógena, sólo el año). *@
+                @if (UsaPropio("year"))
+                {
+                    <label class="campo">Año <input type="number" min="2000" max="2999" class="e-input" value="@Otro("year")" placeholder="@AnioPorDefecto" @onchange="@(e => PonerOtro("year", e.Value?.ToString()))" /></label>
+                }
+                @if (UsaPropio("month"))
+                {
+                    <label class="campo">Mes <input type="number" min="1" max="12" class="e-input" value="@Otro("month")" placeholder="el anterior" @onchange="@(e => PonerOtro("month", e.Value?.ToString()))" /></label>
+                }
                 @if (UsaPropio("top"))
                 {
                     <label class="campo">Mayores <input type="number" min="1" max="500" class="e-input" value="@Otro("top")" placeholder="20" @onchange="@(e => PonerOtro("top", e.Value?.ToString()))" /></label>
@@ -216,7 +225,7 @@
     private static readonly HashSet<string> ConControl = new(StringComparer.Ordinal)
     {
         "branch", "line", "modality", "collector", "groupBy", "dateKind", "ranges", "points", "purpose", "channel", "status", "load",
-        "by", "top", "warnAt",
+        "by", "top", "warnAt", "year", "month",
     };
 
     private readonly EstadoDeCarga _cargaVistas = new(), _carga = new();
@@ -276,7 +285,7 @@
         _vista = _vistas.FirstOrDefault(v => v.Key == clave);
         _tabla = null;
         // Los filtros propios de una vista no significan lo mismo en otra (groupBy de colocación no es el de recaudo).
-        foreach (var propio in new[] { "groupBy", "dateKind", "ranges", "points", "purpose", "channel", "status", "load", "kind", "loan", "by", "top", "warnAt" })
+        foreach (var propio in new[] { "groupBy", "dateKind", "ranges", "points", "purpose", "channel", "status", "load", "kind", "loan", "by", "top", "warnAt", "year", "month" })
             _filtros.Otros.Remove(propio);
         await EvaluarExportacionAsync();
     }
@@ -321,18 +330,28 @@
         "promises" => [("Pending", "Pendiente"), ("Kept", "Cumplida"), ("Broken", "Incumplida")],
         "payment-agreements" => [("Proposed", "Propuesto"), ("Approved", "Aprobado"), ("Rejected", "Rechazado"), ("Cancelled", "Anulado")],
         "prior-notices" => [("Pending", "Pendiente"), ("InProgress", "En curso"), ("Valid", "Vigente"), ("Closed", "Cerrado")],
+        // Feature 014, US17 (T222): los estados de una cuenta de captación o de aportes.
+        "deposit-accounts-by-status" => [("Active", "Activa"), ("Inactive", "Inactiva"), ("Matured", "Vencida"), ("Closing", "En cancelación"),
+            ("Closed", "Cancelada")],
         _ => [("Queued", "En cola"), ("Deferred", "Diferido"), ("Excluded", "Excluido"), ("Sent", "Enviado"), ("Delivered", "Entregado"),
             ("Failed", "Fallido"), ("Simulated", "Simulado"), ("Cancelled", "Cancelado")],
     };
 
     /// <summary>La tabla trae con qué profundizar: el crédito, la operación o el mensaje.</summary>
-    private bool Profundiza => _tabla is not null && _tabla.Columnas.Any(c => c.Clave is "_credito" or "_mensaje" or "_documento");
+    private bool Profundiza => _tabla is not null && _tabla.Columnas.Any(c => c.Clave is "_credito" or "_mensaje" or "_documento" or "_cuenta");
+
+    /// <summary>El año que propone el filtro: el del mes anterior, o el anterior en la exógena (anual).</summary>
+    private string AnioPorDefecto => (_vista?.Key?.StartsWith("exogena-", StringComparison.Ordinal) == true
+        ? DateTime.Today.Year - 1
+        : DateTime.Today.AddMonths(-1).Year).ToString(System.Globalization.CultureInfo.InvariantCulture);
 
     /// <summary>A dónde lleva la fila: el crédito (también desde su operación) o, sin crédito, el mensaje en la bandeja.</summary>
     private string? Destino(FilaReporteDto fila)
     {
         if (_tabla is null) return null;
         if (TablaDeReporte.Oculto(_tabla, fila, "_credito") is { } credito && Guid.TryParse(credito, out var c)) return $"/cartera/creditos/{c}";
+        // Feature 014, US17 (T222): una fila con cuenta de captación o de aportes abre su ficha.
+        if (TablaDeReporte.Oculto(_tabla, fila, "_cuenta") is { } cuenta && Guid.TryParse(cuenta, out var a)) return $"/cartera/ahorros/{a}";
         if (_vista?.Key == "transactions" && TablaDeReporte.Oculto(_tabla, fila, "_mensaje") is { } m && Guid.TryParse(m, out var mensaje))
             return $"/cartera/bandeja-de-mensajes?mensaje={mensaje}";
         if (_vista?.Key == "debtor-messages" && TablaDeReporte.Oculto(_tabla, fila, "_mensaje") is not null) return "/cartera/mensajes";

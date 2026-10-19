@@ -133,6 +133,10 @@
                 <PermissionGate Required="Lending.LiquidityFund.View">
                     <NavLink href="/cartera/fondo-de-liquidez" class="nav-subitem">Fondo de liquidez</NavLink>
                 </PermissionGate>
+                @* US17 (T222): los formatos del SICSES de captaciones y de la exógena —validar, generar, descargar y marcar cargado—. *@
+                <PermissionGate Required="Lending.RegulatoryFiles.Read">
+                    <NavLink href="/cartera/captaciones/reportes-regulatorios" class="nav-subitem">Reportes regulatorios</NavLink>
+                </PermissionGate>
                 @* Decisión del dueño del 2026-10-18 (D53): los niveles de aprobación de los movimientos que superan la atribución, por cooperativa. *@
                 <PermissionGate Required="Lending.Attributions.View">
                     <NavLink href="/cartera/captaciones/aprobaciones" class="nav-subitem">Aprobación de movimientos</NavLink>

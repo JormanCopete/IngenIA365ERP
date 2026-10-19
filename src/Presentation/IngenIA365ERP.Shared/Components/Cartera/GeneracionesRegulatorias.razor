@@ -19,7 +19,7 @@
                 {
                     var archivo = a;
                     <tr>
-                        <td>@TextosRegulatorios.Periodo(archivo.Year, archivo.Month)</td>
+                        <td>@(archivo.Kind == RegulatorioDeCarteraClient.ClaseExogena ? archivo.Year.ToString() : TextosRegulatorios.Periodo(archivo.Year, archivo.Month))</td>
                         @if (Clase == RegulatorioDeCarteraClient.ClaseCentral) { <td>@archivo.BureauCode</td> }
                         <td>@archivo.Version</td>
                         <td>@TextosRegulatorios.Estado(archivo.Status)</td>
@@ -112,6 +112,9 @@
     /// <summary>La central (en centrales); nula, todas.</summary>
     [Parameter] public string? Central { get; set; }
 
+    /// <summary>Feature 014, US17 (T222): el formato de captaciones (en las clases 3 y 4); nulo, todos los de la clase.</summary>
+    [Parameter] public string? Formato { get; set; }
+
     private readonly EstadoDeCarga _carga = new(), _detalleCarga = new(), _accion = new();
     private List<ArchivoRegulatorioDto> _archivos = [];
     private int _pagina = 1;
@@ -123,12 +126,16 @@
     private List<AdjuntoDto> _comprobantes = [];
     private DateOnly? _fechaRadicado;
     private ClaveDeOperacion _clave = new();
-    private string? _centralCargada;
+    private string? _centralCargada, _formatoCargado;
+    private int? _claseCargada;
 
     protected override async Task OnParametersSetAsync()
     {
-        if (_archivos.Count > 0 && _centralCargada == Central) return;
+        if (_archivos.Count > 0 && _centralCargada == Central && _formatoCargado == Formato && _claseCargada == Clase) return;
         _centralCargada = Central;
+        _formatoCargado = Formato;
+        _claseCargada = Clase;
+        _detalle = null;
         _pagina = 1;
         await RecargarAsync();
     }
@@ -138,7 +145,8 @@
     {
         using (var carga = _carga.Iniciar())
         {
-            var r = await Regulatorio.ArchivosAsync(Clase, string.IsNullOrWhiteSpace(Central) ? null : Central, pagina: _pagina);
+            var r = await Regulatorio.ArchivosAsync(Clase, string.IsNullOrWhiteSpace(Central) ? null : Central, pagina: _pagina,
+                formato: string.IsNullOrWhiteSpace(Formato) ? null : Formato);
             if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer las generaciones."); return; }
             _archivos = [.. r.Value?.Items ?? []];
             _total = r.Value?.TotalCount ?? 0;
