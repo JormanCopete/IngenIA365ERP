@@ -407,7 +407,7 @@ public sealed class RequisitosDeActivacion(
         {
             new(AvisoParametrosComerciales,
                 "Ajuste en Comercial la fecha de habilitación de Cartera (igual a la de activación), la política «sin respuesta» y quién registra la cuenta por cobrar.",
-                new QuienCorrigeDto("Comercial", "/ventas/parametros", "Inventory.Parameters.Manage")),
+                new QuienCorrigeDto("Comercial", "/inventario/parametros", "Inventory.Parameters.Manage")),
             new(AvisoCuentasDeNomina,
                 "Revise que el concepto de nómina del descuento de Cartera tenga sus cuentas contables antes de la primera nómina.",
                 new QuienCorrigeDto("Nómina", "/nomina/conceptos", "Payroll.Concepts.Manage")),

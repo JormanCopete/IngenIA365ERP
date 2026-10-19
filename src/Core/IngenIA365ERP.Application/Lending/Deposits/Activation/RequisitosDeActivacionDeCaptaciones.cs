@@ -205,7 +205,7 @@ public sealed class RequisitosDeActivacionDeCaptaciones(
             ? Cumple(PerfilAutorizaClases, "El perfil regulatorio vigente autoriza captar ahorro.")
             : Falta(PerfilAutorizaClases, perfil is null
                     ? "un perfil regulatorio vigente que autorice captar ahorro"
-                    : "que el perfil regulatorio vigente autorice captar ahorro", "Core", "/maestros/perfil-regulatorio", "Core.RegulatoryProfile.Manage");
+                    : "que el perfil regulatorio vigente autorice captar ahorro", "Core", "/admin/perfil-regulatorio", "Core.RegulatoryProfile.Manage");
     }
 
     // ------------------------------------------------------------------------------------------------------ matriz --
