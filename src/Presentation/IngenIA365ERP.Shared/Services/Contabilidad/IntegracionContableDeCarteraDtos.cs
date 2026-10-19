@@ -23,7 +23,12 @@ public sealed record DimensionesDeReglaDeCarteraDto(
     string? CollectorClass,
     string? ReasonCode,
     ReferenciaDeReglaDeCarteraDto? Branch,
-    ReferenciaDeReglaDeCarteraDto? CostCenter);
+    ReferenciaDeReglaDeCarteraDto? CostCenter,
+    string? LineNature = null,
+    string? DepositClass = null,
+    string? IssueTermBand = null,
+    string? ContributionClass = null,
+    string? AccountFlag = null);
 
 /// <summary>La cuenta de una regla y si hoy sigue siendo elegible para Cartera.</summary>
 public sealed record CuentaDeReglaDeCarteraDto(Guid PublicId, string Code, string Name, bool IsEligible);
@@ -69,7 +74,8 @@ public sealed record RolDelCatalogoDeCarteraDto(
     IReadOnlyList<string>? Reasons,
     bool AllowsOperation);
 
-public sealed record LineaDelCatalogoDeCarteraDto(string Code, string Name, string ModalityCode, string? SubsegmentCode, bool Active);
+public sealed record LineaDelCatalogoDeCarteraDto(string Code, string Name, string ModalityCode, string? SubsegmentCode, bool Active,
+    string LineNature = "Placement", string? DepositClass = null);
 
 public sealed record ModalidadDelCatalogoDeCarteraDto(string Code, string Name, IReadOnlyList<string> SubsegmentCodes);
 
@@ -79,7 +85,12 @@ public sealed record DimensionesDelCatalogoDeCarteraDto(
     IReadOnlyList<string> Concepts,
     IReadOnlyList<string> CollectorClasses,
     IReadOnlyList<string> RiskCategories,
-    IReadOnlyList<string> Reasons);
+    IReadOnlyList<string> Reasons,
+    IReadOnlyList<string>? LineNatures = null,
+    IReadOnlyList<string>? DepositClasses = null,
+    IReadOnlyList<string>? IssueTermBands = null,
+    IReadOnlyList<string>? ContributionClasses = null,
+    IReadOnlyList<string>? AccountFlags = null);
 
 /// <summary><c>GET /rules/catalog</c>: hechos y roles fijos y los valores de cada dimensión.</summary>
 public sealed record CatalogoDeReglasDeCarteraDto(
@@ -106,7 +117,12 @@ public sealed record DimensionesDeReglaDeCarteraRequest(
     string? CollectorClass = null,
     string? ReasonCode = null,
     Guid? BranchPublicId = null,
-    Guid? CostCenterPublicId = null);
+    Guid? CostCenterPublicId = null,
+    string? LineNature = null,
+    string? DepositClass = null,
+    string? IssueTermBand = null,
+    string? ContributionClass = null,
+    string? AccountFlag = null);
 
 /// <summary>Una regla nueva; <paramref name="Operation"/> nulo o «*» salvo en los roles de resultado.</summary>
 public sealed record CrearReglaDeCarteraRequest(
@@ -186,7 +202,12 @@ public sealed record ReglaFaltanteDeCarteraDto(
     string Role,
     DimensionesDeReglaDeCarteraRequest Dimensions,
     IReadOnlyList<string> CreditLines,
-    DateOnly? LastUsedAt);
+    DateOnly? LastUsedAt,
+    string? Nature = null)
+{
+    /// <summary>Feature 014 (T144, T149): la cuenta CUIF sugerida de una combinación de captaciones (informativa, pendiente de la contadora).</summary>
+    public string? SuggestedAccount { get; init; }
+}
 
 public sealed record RecaudadorSinPuenteDto(string CollectorClass, IReadOnlyList<string> Collectors);
 

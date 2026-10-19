@@ -19,6 +19,12 @@
         <h3>Completitud de la matriz contable de Cartera</h3>
         <div class="toolbar">
             <label class="campo">A la fecha <input type="date" class="e-input" value="@(_fecha.ToString("yyyy-MM-dd"))" @onchange="@(e => _fecha = LeerFecha(e.Value) ?? _fecha)" /></label>
+            @* Feature 014 (T149): la naturaleza filtra las combinaciones sin regla y las reglas no elegibles. *@
+            <label class="campo">Naturaleza
+                <select class="e-input" @bind="_naturaleza">
+                    @foreach (var n in TextosDeContabilidadDeCartera.FiltrosDeNaturaleza) { <option value="@n.Clave">@n.Nombre</option> }
+                </select>
+            </label>
             <SfButton CssClass="e-primary" IconCss="e-icons e-search" Disabled="@_carga.Activa" OnClick="@ConsultarAsync">Consultar</SfButton>
             <a class="e-btn e-outline" href="/contabilidad/cartera/matriz">Matriz</a>
             <a class="e-btn e-outline" href="/contabilidad/cartera/tipos-de-comprobante">Tipos de comprobante</a>
@@ -40,21 +46,24 @@
                 <p class="aviso aviso-ok">La matriz está completa al @c.Date.ToString("dd/MM/yyyy"): todo lo que Cartera usa tiene su regla y su tipo de comprobante.</p>
             }
 
-            @if (c.MissingRules.Count > 0)
+            @if (Faltantes(c).Count > 0)
             {
                 <h4>Combinaciones en uso sin regla</h4>
+                <p class="texto-tenue">En captaciones y aportes la cuenta sugerida es la del CUIF: una sugerencia pendiente de la contadora, no una regla.</p>
                 <div class="tabla-desplazable">
                     <table class="data-grid">
-                        <thead><tr><th>Hecho</th><th>Rol</th><th>Dimensiones</th><th>Líneas que la usan</th><th>Último uso</th><th>Quién corrige</th></tr></thead>
+                        <thead><tr><th>Hecho</th><th>Rol</th><th>Naturaleza</th><th>Dimensiones</th><th>Líneas que la usan</th><th>Último uso</th><th>Cuenta sugerida</th><th>Quién corrige</th></tr></thead>
                         <tbody>
-                            @foreach (var f in c.MissingRules)
+                            @foreach (var f in Faltantes(c))
                             {
                                 <tr>
                                     <td>@Hecho(f.Operation)</td>
                                     <td>@TextosDeContabilidadDeCartera.Rol(f.Role)</td>
+                                    <td>@TextosDeContabilidadDeCartera.NaturalezaDeLinea(f.Nature ?? "Placement")</td>
                                     <td>@Dimensiones(f.Dimensions)</td>
                                     <td>@(f.CreditLines.Count == 0 ? "—" : string.Join(", ", f.CreditLines))</td>
                                     <td>@(f.LastUsedAt?.ToString("dd/MM/yyyy") ?? "—")</td>
+                                    <td>@(f.SuggestedAccount ?? "—")</td>
                                     <td>@Corrige(Matriz, $"/contabilidad/cartera/matriz?rol={Uri.EscapeDataString(f.Role)}&operacion={Uri.EscapeDataString(f.Operation)}", "Crear la regla")</td>
                                 </tr>
                             }
@@ -83,14 +92,14 @@
                 </div>
             }
 
-            @if (c.IneligibleRules.Count > 0)
+            @if (c.IneligibleRules.Any(r => TextosDeContabilidadDeCartera.RolDeLaNaturaleza(r.Role, _naturaleza)))
             {
                 <h4>Reglas con una cuenta que ya no es elegible</h4>
                 <div class="tabla-desplazable">
                     <table class="data-grid">
                         <thead><tr><th>Hecho</th><th>Rol</th><th>Cuenta</th><th>Por qué</th><th>Quién corrige</th></tr></thead>
                         <tbody>
-                            @foreach (var r in c.IneligibleRules)
+                            @foreach (var r in c.IneligibleRules.Where(r => TextosDeContabilidadDeCartera.RolDeLaNaturaleza(r.Role, _naturaleza)))
                             {
                                 <tr>
                                     <td>@Hecho(r.Operation)</td><td>@TextosDeContabilidadDeCartera.Rol(r.Role)</td><td>@r.AccountCode</td><td>@r.Reason</td>
@@ -167,6 +176,14 @@
     private CompletitudDeCarteraDto? _c;
     private string? _error;
 
+    /// <summary>Feature 014 (T149): el filtro de naturaleza (vacío = todas).</summary>
+    private string _naturaleza = "";
+
+    /// <summary>Las combinaciones sin regla de la naturaleza elegida (sin naturaleza en la fila = de créditos).</summary>
+    private IReadOnlyList<ReglaFaltanteDeCarteraDto> Faltantes(CompletitudDeCarteraDto c) => c.MissingRules
+        .Where(f => string.IsNullOrEmpty(_naturaleza) || (_naturaleza == "Deposit") == (f.Nature is "Deposit" or "Contribution"))
+        .ToList();
+
     protected override Task OnParametersSetAsync()
     {
         if (FechaInicial is { } f) _fecha = f;
@@ -216,6 +233,11 @@
             d.Restructured is { } r ? $"reestructurado {SiNo(r)}" : null,
             d.CollectorClass is { } q ? $"recaudo {TextosDePagos.ClaseDeRecaudador(q).ToLowerInvariant()}" : null,
             d.ReasonCode is { } mo ? $"motivo {TextosDeContabilidadDeCartera.Motivo(mo).ToLowerInvariant()}" : null,
+            d.LineNature is { } n ? $"naturaleza {TextosDeContabilidadDeCartera.ValorDeCaptacion(n).ToLowerInvariant()}" : null,
+            d.DepositClass is { } dc ? $"clase {TextosDeContabilidadDeCartera.ValorDeCaptacion(dc).ToLowerInvariant()}" : null,
+            d.IssueTermBand is { } pz ? $"plazo {TextosDeContabilidadDeCartera.ValorDeCaptacion(pz).ToLowerInvariant()}" : null,
+            d.ContributionClass is { } ca ? $"aportes {TextosDeContabilidadDeCartera.ValorDeCaptacion(ca).ToLowerInvariant()}" : null,
+            d.AccountFlag is { } mk ? $"marca {TextosDeContabilidadDeCartera.ValorDeCaptacion(mk).ToLowerInvariant()}" : null,
         }.Where(x => x is not null).ToList();
         return partes.Count == 0 ? "Todas" : string.Join(" · ", partes);
     }

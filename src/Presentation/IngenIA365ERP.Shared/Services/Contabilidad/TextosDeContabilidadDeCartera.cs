@@ -23,6 +23,9 @@ public static class TextosDeContabilidadDeCartera
         ("Resultado", "Resultados"),
         ("Diferido", "Ingresos diferidos"),
         ("Contingente", "Contingentes"),
+        // Feature 014 (T149): las familias de captaciones y aportes.
+        ("Captacion", "Captaciones"),
+        ("Patrimonio", "Aportes y fondos"),
     ];
 
     public static string Familia(string? clave) => Familias.FirstOrDefault(f => f.Clave == clave).Nombre ?? clave ?? "—";
@@ -59,7 +62,83 @@ public static class TextosDeContabilidadDeCartera
         "IngresoDiferido" => "Ingreso diferido",
         "ContingenteAcreedora" => "Contingente acreedora",
         "ContraContingenteAcreedora" => "Contrapartida contingente acreedora",
+        // Feature 014 (T149): los 17 roles de captaciones y aportes.
+        "CapitalDeCaptacion" => "Capital de captación",
+        "CapitalDeCaptacionInactiva" => "Capital de captación inactiva",
+        "InteresPorPagar" => "Interés por pagar",
+        "GastoPorIntereses" => "Gasto por intereses",
+        "RetencionPorPagar" => "Retención por pagar",
+        "GmfPorPagar" => "GMF por pagar",
+        "GastoPorBonificacion" => "Gasto por bonificación",
+        "IngresoPorCargos" => "Ingreso por cargos",
+        "CargoDeCuentaPorCobrar" => "Cargo de cuenta por cobrar",
+        "AportesSociales" => "Aportes sociales",
+        "FondoDeRevalorizacion" => "Fondo de revalorización",
+        "FondoDeExcedentes" => "Fondo de excedentes",
+        "DevolucionPorPagar" => "Devolución por pagar",
+        "NoReclamadosPorPagar" => "No reclamados por pagar",
+        "EmbargosPorConsignar" => "Embargos por consignar",
+        "IngresoPorPenalidad" => "Ingreso por penalidad",
+        "PerdidaAbsorbida" => "Pérdida absorbida",
         _ => rol,
+    };
+
+    // -------------------------------------------------------------------------------- naturaleza (feature 014) --
+
+    /// <summary>Los roles de captaciones y aportes (feature 014): los que filtra la naturaleza «Captaciones y aportes» de la matriz y la completitud.</summary>
+    public static IReadOnlySet<string> RolesDeCaptaciones { get; } = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "CapitalDeCaptacion", "CapitalDeCaptacionInactiva", "InteresPorPagar", "GastoPorIntereses", "RetencionPorPagar", "GmfPorPagar",
+        "GastoPorBonificacion", "IngresoPorCargos", "CargoDeCuentaPorCobrar", "AportesSociales", "FondoDeRevalorizacion", "FondoDeExcedentes",
+        "DevolucionPorPagar", "NoReclamadosPorPagar", "EmbargosPorConsignar", "IngresoPorPenalidad", "PerdidaAbsorbida",
+    };
+
+    /// <summary>El filtro de naturaleza de la matriz y la completitud: créditos, captaciones y aportes, o todas.</summary>
+    public static IReadOnlyList<(string Clave, string Nombre)> FiltrosDeNaturaleza { get; } =
+    [
+        ("", "Todas"),
+        ("Placement", "Créditos"),
+        ("Deposit", "Captaciones y aportes"),
+    ];
+
+    /// <summary>
+    /// ¿El rol es de la naturaleza del filtro? El puente del recaudo es de las dos (recauda créditos y cuentas); sin filtro, todos.
+    /// </summary>
+    public static bool RolDeLaNaturaleza(string? rol, string? filtro) => string.IsNullOrEmpty(filtro) || rol == "RecaudoPorAplicar"
+        || (filtro == "Deposit") == (rol is not null && RolesDeCaptaciones.Contains(rol));
+
+    /// <summary>El nombre de una naturaleza de línea.</summary>
+    public static string NaturalezaDeLinea(string? naturaleza) => naturaleza switch
+    {
+        "Placement" => "Créditos",
+        "Deposit" => "Captaciones",
+        "Contribution" => "Aportes",
+        null or "" => "—",
+        _ => naturaleza,
+    };
+
+    /// <summary>Un valor de una dimensión de captaciones (clase, plazo de emisión, clase de aporte o marca) en pantalla.</summary>
+    public static string ValorDeCaptacion(string? valor) => valor switch
+    {
+        "Demand" => "A la vista",
+        "Contractual" => "Contractual",
+        "Permanent" => "Permanente",
+        "TermDeposit" => "CDAT",
+        "UnderSixMonths" => "Menos de 6 meses",
+        "SixToTwelve" => "De 6 a 12 meses",
+        "TwelveToEighteen" => "De 12 a 18 meses",
+        "EighteenOrMore" => "18 meses o más",
+        "Minimum" => "Mínimos no reducibles",
+        "Ordinary" => "Ordinarios",
+        "Extraordinary" => "Extraordinarios",
+        "Revalued" => "Revalorizados",
+        "Standard" => "Estándar",
+        "GmfExempt" => "Exenta del GMF",
+        "Garnished" => "Embargada",
+        "Deposit" => "Captaciones",
+        "Contribution" => "Aportes",
+        null or "" => "—",
+        _ => valor,
     };
 
     public static string Naturaleza(string? naturaleza) => naturaleza switch
@@ -88,6 +167,11 @@ public static class TextosDeContabilidadDeCartera
         "reasonCode" => "Motivo",
         "branch" => "Sucursal",
         "costCenter" => "Centro de costo",
+        "lineNature" => "Naturaleza",
+        "depositClass" => "Clase de captación",
+        "issueTermBand" => "Plazo de emisión",
+        "contributionClass" => "Clase de aporte",
+        "accountFlag" => "Marca de la cuenta",
         _ => dimension,
     };
 

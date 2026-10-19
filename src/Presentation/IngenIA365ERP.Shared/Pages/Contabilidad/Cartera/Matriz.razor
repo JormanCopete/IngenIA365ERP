@@ -38,7 +38,7 @@
     {
         <div class="info-card">
             <h4>Plantilla de la matriz contable de Cartera</h4>
-            <p class="texto-tenue">Encabezados en la fila 1: operacion, rol, linea, modalidad, subsegmento, categoria, concepto, empleado, gracia, porCuentaDelAsociado, reestructurado, claseDeRecaudador, motivo, sucursal, centroDeCosto, cuenta, vigenteDesde, vigenteHasta y notas. La descarga con datos trae las reglas vigentes y futuras y las combinaciones sugeridas sin cuenta, marcadas «pendiente de validar»: las que vuelvan sin cuenta se ignoran. Una clave que ya existe con una fecha posterior es una versión nueva. Con un error no se guarda nada.</p>
+            <p class="texto-tenue">Encabezados en la fila 1: operacion, rol, linea, modalidad, subsegmento, categoria, concepto, empleado, gracia, porCuentaDelAsociado, reestructurado, claseDeRecaudador, motivo, naturaleza, claseDeCaptacion, plazoDeEmision, claseDeAporte, marcaDeCuenta, sucursal, centroDeCosto, cuenta, cuentaSugerida, vigenteDesde, vigenteHasta y notas (un archivo de la versión anterior, sin las columnas de captaciones, se sigue leyendo). La descarga con datos trae las reglas vigentes y futuras y las combinaciones sugeridas sin cuenta, marcadas «pendiente de validar»; en las de captaciones y aportes, la cuenta CUIF sugerida va en cuentaSugerida como sugerencia pendiente de la contadora y no se aplica: las que vuelvan sin cuenta se ignoran. Una clave que ya existe con una fecha posterior es una versión nueva. Con un error no se guarda nada.</p>
             <ImportarPlantilla RutaBase="@IntegracionContableDeCarteraClient.RutaDeReglas" PermisoDeDescarga="Accounting.LendingRules.View"
                                PermisoDeDescargaConDatos="Accounting.LendingRules.View" PermisoDeImportacion="Accounting.LendingRules.Manage"
                                Aplicado="@(_ => CargarAsync())" />
@@ -46,6 +46,12 @@
     }
 
     <div class="toolbar">
+        @* Feature 014 (T149): la naturaleza filtra las pestañas y los roles: créditos, captaciones y aportes, o todas. *@
+        <label class="campo">Naturaleza
+            <select class="e-input" value="@_naturaleza" @onchange="@(e => CambiarNaturalezaAsync(e.Value?.ToString() ?? ""))">
+                @foreach (var n in TextosDeContabilidadDeCartera.FiltrosDeNaturaleza) { <option value="@n.Clave">@n.Nombre</option> }
+            </select>
+        </label>
         @foreach (var f in FamiliasDelCatalogo)
         {
             var familia = f;
@@ -299,6 +305,14 @@
         public bool? Reestructurado { get; set; }
         public string? ClaseDeRecaudador { get; set; }
         public string? CodigoDeMotivo { get; set; }
+
+        // Feature 014 (T149): las cinco dimensiones de captaciones.
+        public string? Naturaleza { get; set; }
+        public string? ClaseDeCaptacion { get; set; }
+        public string? Plazo { get; set; }
+        public string? ClaseDeAporte { get; set; }
+        public string? Marca { get; set; }
+
         public Guid? Sucursal { get; set; }
         public Guid? Centro { get; set; }
         public DateOnly? Desde { get; set; }
@@ -322,6 +336,9 @@
     private List<ItemCrudo> _sucursales = [], _centros = [];
     private string _familia = TextosDeContabilidadDeCartera.Familias[0].Clave;
     private string? _filtroRol, _filtroCuenta, _error;
+
+    /// <summary>Feature 014 (T149): el filtro de naturaleza (vacío = todas; «Placement» = créditos; «Deposit» = captaciones y aportes).</summary>
+    private string _naturaleza = "";
     private DateOnly? _filtroFecha;
     private bool _soloVigentes = true, _mostrarPlantilla, _mostrarAlta, _mostrarVersion, _mostrarDesactivar, _mostrarResolver;
     private Formulario _f = new();
@@ -336,14 +353,22 @@
     {
         get
         {
-            var presentes = (_catalogo?.Roles ?? []).Select(r => r.Family).Distinct().ToList();
+            var presentes = (_catalogo?.Roles ?? []).Where(r => TextosDeContabilidadDeCartera.RolDeLaNaturaleza(r.Code, _naturaleza))
+                .Select(r => r.Family).Distinct().ToList();
             if (presentes.Count == 0) return TextosDeContabilidadDeCartera.Familias.Select(f => f.Clave);
             return TextosDeContabilidadDeCartera.Familias.Select(f => f.Clave).Where(presentes.Contains)
                 .Concat(presentes.Where(p => TextosDeContabilidadDeCartera.Familias.All(f => f.Clave != p)));
         }
     }
 
-    private IEnumerable<RolDelCatalogoDeCarteraDto> RolesDeLaFamilia => (_catalogo?.Roles ?? []).Where(r => r.Family == _familia);
+    private IEnumerable<RolDelCatalogoDeCarteraDto> RolesDeLaFamilia => (_catalogo?.Roles ?? [])
+        .Where(r => r.Family == _familia && TextosDeContabilidadDeCartera.RolDeLaNaturaleza(r.Code, _naturaleza));
+
+    /// <summary>
+    /// Feature 014 (T149; contabilidad.md §1.2): el capital de captación exige además el plazo de emisión en CDAT y contractual —una exigencia condicional
+    /// que el catálogo no lista entre las dimensiones del rol—.
+    /// </summary>
+    private bool PideElPlazo => _f.Rol is "CapitalDeCaptacion" or "CapitalDeCaptacionInactiva" && _f.ClaseDeCaptacion is "TermDeposit" or "Contractual";
 
     /// <summary>Los roles del hecho elegido en «¿a qué cuenta va?» (débito y crédito).</summary>
     private IEnumerable<string> RolesDelHecho => (_catalogo?.Operations ?? []).FirstOrDefault(o => o.Code == _f.Operacion) is { } op
@@ -390,6 +415,14 @@
             if (RolElegido(RolInicial)?.AllowsOperation == true && !string.IsNullOrWhiteSpace(OperacionInicial) && OperacionInicial != "*")
                 _f.Operacion = OperacionInicial;
         }
+    }
+
+    private async Task CambiarNaturalezaAsync(string naturaleza)
+    {
+        _naturaleza = naturaleza;
+        _filtroRol = null;
+        if (!FamiliasDelCatalogo.Contains(_familia)) _familia = FamiliasDelCatalogo.FirstOrDefault() ?? _familia;
+        await CargarAsync();
     }
 
     private async Task CambiarFamiliaAsync(string familia)
@@ -506,7 +539,9 @@
             Si("creditLineCode", _f.Linea), Si("modalityCode", _f.Modalidad), Si("subsegmentCode", _f.Subsegmento), Si("riskCategory", _f.Categoria),
             Si("conceptCode", _f.Concepto), SiB("isEmployee", _f.Empleado), SiB("inGracePeriod", _f.Gracia),
             SiB("onBehalfOfAssociate", _f.PorCuentaDelAsociado), SiB("restructured", _f.Reestructurado), Si("collectorClass", _f.ClaseDeRecaudador),
-            Si("reasonCode", _f.CodigoDeMotivo), permitidas.Contains("branch") ? _f.Sucursal : null, _f.Centro);
+            Si("reasonCode", _f.CodigoDeMotivo), permitidas.Contains("branch") ? _f.Sucursal : null, _f.Centro,
+            Si("lineNature", _f.Naturaleza), Si("depositClass", _f.ClaseDeCaptacion),
+            permitidas.Contains("issueTermBand") || PideElPlazo ? Vacio(_f.Plazo) : null, Si("contributionClass", _f.ClaseDeAporte), Si("accountFlag", _f.Marca));
     }
 
     private async Task CrearAsync()
@@ -663,9 +698,40 @@
                             @foreach (var s in _sucursales) { <option value="@s.PublicId">@s.Name</option> }
                         </select>
                         break;
+                    // Feature 014 (T149): las dimensiones de captaciones, con los valores del catálogo.
+                    case "lineNature":
+                        @CampoDeValores(_f.Naturaleza, v => _f.Naturaleza = v, (_catalogo.Dimensions.LineNatures ?? []).Where(n => n != "Placement"), vacia)
+                        break;
+                    case "depositClass":
+                        @CampoDeValores(_f.ClaseDeCaptacion, v => { _f.ClaseDeCaptacion = v; if (!PideElPlazo) _f.Plazo = null; }, _catalogo.Dimensions.DepositClasses ?? [], vacia)
+                        break;
+                    case "issueTermBand":
+                        @CampoDeValores(_f.Plazo, v => _f.Plazo = v, _catalogo.Dimensions.IssueTermBands ?? [], vacia)
+                        break;
+                    case "contributionClass":
+                        @CampoDeValores(_f.ClaseDeAporte, v => _f.ClaseDeAporte = v, _catalogo.Dimensions.ContributionClasses ?? [], vacia)
+                        break;
+                    case "accountFlag":
+                        @CampoDeValores(_f.Marca, v => _f.Marca = v, _catalogo.Dimensions.AccountFlags ?? [], vacia)
+                        break;
                 }
             </label>
         }
+        if (PideElPlazo && !rol.AllowedDimensions.Contains("issueTermBand"))
+        {
+            <label class="campo">@TextosDeContabilidadDeCartera.Dimension("issueTermBand") *
+                @CampoDeValores(_f.Plazo, v => _f.Plazo = v, _catalogo.Dimensions.IssueTermBands ?? [], "Elija…")
+            </label>
+        }
+    };
+
+    /// <summary>Feature 014 (T149): una lista de valores de una dimensión de captaciones (vacía = la opción <paramref name="vacia"/>).</summary>
+    private RenderFragment CampoDeValores(string? valor, Action<string?> cambiar, IEnumerable<string> valores, string vacia) => __builder =>
+    {
+        <select class="e-input" value="@(valor ?? "")" @onchange="@(e => cambiar(Vacio(e.Value?.ToString())))">
+            <option value="">@vacia</option>
+            @foreach (var v in valores) { <option value="@v">@TextosDeContabilidadDeCartera.ValorDeCaptacion(v)</option> }
+        </select>
     };
 
     /// <summary>Una dimensión sí/no: vacía es «cualquiera».</summary>
@@ -704,6 +770,11 @@
             d.Restructured is { } r ? $"reestructurado {SiNo(r)}" : null,
             d.CollectorClass is { } q ? $"recaudo {TextosDePagos.ClaseDeRecaudador(q).ToLowerInvariant()}" : null,
             d.ReasonCode is { } mo ? $"motivo {TextosDeContabilidadDeCartera.Motivo(mo).ToLowerInvariant()}" : null,
+            d.LineNature is { } n ? $"naturaleza {TextosDeContabilidadDeCartera.ValorDeCaptacion(n).ToLowerInvariant()}" : null,
+            d.DepositClass is { } dc ? $"clase {TextosDeContabilidadDeCartera.ValorDeCaptacion(dc).ToLowerInvariant()}" : null,
+            d.IssueTermBand is { } pz ? $"plazo {TextosDeContabilidadDeCartera.ValorDeCaptacion(pz).ToLowerInvariant()}" : null,
+            d.ContributionClass is { } ca ? $"aportes {TextosDeContabilidadDeCartera.ValorDeCaptacion(ca).ToLowerInvariant()}" : null,
+            d.AccountFlag is { } mk ? $"marca {TextosDeContabilidadDeCartera.ValorDeCaptacion(mk).ToLowerInvariant()}" : null,
             d.Branch is { } b ? $"sucursal {b.Code}" : null,
             d.CostCenter is { } cc ? $"centro {cc.Code}" : null,
         }.Where(x => x is not null).ToList();
