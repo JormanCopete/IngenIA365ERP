@@ -183,7 +183,7 @@ public sealed class LectorDeCdat(IApplicationDbContext db, ICalendarioHabil cale
     public static MemberAccountTermsVersion NuevaVersion(MemberAccount cuenta, int numero, Domain.Entities.Lending.Deposits.Transactions.MemberAccountOperation operacion,
         AccountTermsCause causa, DepositLineVersion linea, PlanDeCdatCalculado plan, decimal tasaDeTabla, NegociacionDeCdat? negociacion,
         DestinoDeCdat destino, int? destinoCuentaId, int? destinoPersonaId, int? destinoBancoId, MaturityInstruction instruccion, int prorrogas,
-        int? anterior, DateTime ahora, string huella) => new()
+        int? anterior, DateTime ahora, string huella, decimal? margenSinRegla = null) => new()
     {
         MemberAccountId = cuenta.Id,
         VersionNumber = numero,
@@ -202,8 +202,9 @@ public sealed class LectorDeCdat(IApplicationDbContext db, ICalendarioHabil cale
         PaymentDate = plan.FechaDePagoAlVencimiento,
         IssueTermBand = plan.PlazoDeEmision,
         TableAnnualRate = tasaDeTabla,
-        NegotiatedSpread = negociacion?.Margen,
-        AppliedAnnualRate = tasaDeTabla + (negociacion?.Margen ?? 0m),
+        // US6 (migración, research E148): un margen migrado no nombra regla (la negoció el sistema anterior).
+        NegotiatedSpread = negociacion?.Margen ?? margenSinRegla,
+        AppliedAnnualRate = tasaDeTabla + (negociacion?.Margen ?? margenSinRegla ?? 0m),
         NegotiatedRateRuleId = negociacion?.ReglaId,
         NegotiatedRateRequestId = negociacion?.SolicitudId,
         NegotiationApprovedByUserId = negociacion?.AprobadaPor,

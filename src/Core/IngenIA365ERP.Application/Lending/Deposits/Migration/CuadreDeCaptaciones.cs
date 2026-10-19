@@ -35,7 +35,7 @@ public sealed class CuadreDeCaptaciones(IApplicationDbContext db, IContabilidadP
             foreach (var (concepto, monto) in c.Saldos)
             {
                 if (monto == 0m) continue;
-                var clave = SaldosContablesDeCaptaciones.Clave(concepto, c.Inactiva, c.LineaCodigo, c.Naturaleza, c.Clase, marca, c.OficinaPublicId);
+                var clave = SaldosContablesDeCaptaciones.Clave(concepto, c.Inactiva, c.LineaCodigo, c.Naturaleza, c.Clase, marca, c.OficinaPublicId, c.PlazoDeEmision);
                 if (clave is null) continue;
                 resultado[clave] = resultado.GetValueOrDefault(clave) + monto;
             }

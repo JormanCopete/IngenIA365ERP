@@ -58,14 +58,16 @@ public sealed class SaldosContablesDeCaptaciones(IApplicationDbContext db)
     /// y el cuadre de la migración (US9, T154), así los dos preguntan a Contabilidad por la misma combinación.
     /// </summary>
     public static ClaveDeSaldoDeCartera? Clave(MemberAccountConcept concepto, bool inactiva, string linea, LineNature naturaleza, DepositClass? clase,
-        AccountFlag marca, Guid sucursal)
+        AccountFlag marca, Guid sucursal, IssueTermBand? plazo = null)
     {
         var rol = RolDelConcepto(concepto, inactiva);
         if (rol is null) return null;
         var marcaDelRol = rol == Capital ? marca.ToString() : null;
         var claseDeAporte = rol == Aportes ? EmisionDeCartera.ClaseDeAporte(concepto)?.ToString() : null;
+        // US6 (research E147): el plazo de emisión sólo en el capital del CDAT y del contractual (contabilidad.md §1.2: exigencia condicional).
+        var plazoDelRol = rol is Capital or CapitalInactiva && clase is DepositClass.TermDeposit or DepositClass.Contractual ? plazo?.ToString() : null;
         return new ClaveDeSaldoDeCartera(rol, linea, null, null, null, null, null, null, null, null, null, sucursal,
-            naturaleza.ToString(), rol == Aportes ? null : clase?.ToString(), null, claseDeAporte, marcaDelRol);
+            naturaleza.ToString(), rol == Aportes ? null : clase?.ToString(), plazoDelRol, claseDeAporte, marcaDelRol);
     }
 
     /// <summary>Los movimientos del libro de cuentas hasta el corte con su combinación (por fecha contable), dentro del alcance si viene.</summary>
@@ -92,6 +94,14 @@ public sealed class SaldosContablesDeCaptaciones(IApplicationDbContext db)
                 .Select(g => g.MemberAccountId).ToListAsync(ct))
             .ToHashSet();
         var porId = cuentas.ToDictionary(c => c.Id);
+        // US6 (research E147): el plazo de emisión del CDAT es el de la versión de condiciones vigente al corte (la de mayor número que ya regía).
+        var deCdat = cuentas.Where(c => c.DepositClass == DepositClass.TermDeposit).Select(c => c.Id).ToArray();
+        var plazos = deCdat.Length == 0
+            ? new Dictionary<int, IssueTermBand?>()
+            : (await db.MemberAccountTermsVersions.AsNoTracking()
+                    .Where(v => deCdat.Contains(v.MemberAccountId) && !v.IsDeleted && v.EffectiveValueDate <= corte)
+                    .Select(v => new { v.MemberAccountId, v.VersionNumber, v.IssueTermBand }).ToListAsync(ct))
+                .GroupBy(v => v.MemberAccountId).ToDictionary(g => g.Key, g => g.MaxBy(v => v.VersionNumber)!.IssueTermBand);
 
         var resultado = new List<MovimientoDeCombinacionDeCartera>(filas.Count);
         foreach (var f in filas)
@@ -100,7 +110,8 @@ public sealed class SaldosContablesDeCaptaciones(IApplicationDbContext db)
             var rol = RolDelConcepto(f.Concept, c.Status == MemberAccountStatus.Inactive);
             if (rol is null) continue;
             var marca = c.IsGarnished ? AccountFlag.Garnished : exentas.Contains(c.Id) ? AccountFlag.GmfExempt : AccountFlag.Standard;
-            var clave = Clave(f.Concept, c.Status == MemberAccountStatus.Inactive, c.Linea, c.Nature, c.DepositClass, marca, c.Sucursal)!;
+            var clave = Clave(f.Concept, c.Status == MemberAccountStatus.Inactive, c.Linea, c.Nature, c.DepositClass, marca, c.Sucursal,
+                plazos.GetValueOrDefault(c.Id))!;
             resultado.Add(new MovimientoDeCombinacionDeCartera(clave, c.Id, f.Amount, f.AccountingDate, f.MessagePublicId, f.Operacion));
         }
         return resultado;

@@ -26,7 +26,8 @@ public sealed record CuentaDeLaCarga(
     DepositClass? Clase,
     Guid OficinaPublicId,
     bool Inactiva,
-    IReadOnlyDictionary<MemberAccountConcept, decimal> Saldos)
+    IReadOnlyDictionary<MemberAccountConcept, decimal> Saldos,
+    IssueTermBand? PlazoDeEmision = null)
 {
     /// <summary>La llave de la cuenta en la carga: su número o, en una de aportes sin número, el titular.</summary>
     public string Llave => Numero ?? $"ASO:{TitularId}";
@@ -51,6 +52,12 @@ public sealed class FilasDeLaCarga
     public required IReadOnlyList<FilaConTanda<MigrationGmfExemptionRow>> Exenciones { get; init; }
     public required IReadOnlyList<FilaConTanda<MigrationTaxYearRow>> Tributario { get; init; }
 
+    /// <summary>US6 (pendiente de la fase 10): los CDAT vigentes al corte (parte <c>term-deposits</c>).</summary>
+    public IReadOnlyList<FilaConTanda<MigrationTermDepositRow>> Cdat { get; init; } = [];
+
+    /// <summary>US6: el saldo del interés por pagar con que nace cada CDAT, por número (ver <see cref="CdatMigrado.SaldoDeInteres"/>).</summary>
+    public IReadOnlyDictionary<string, decimal> InteresDeCdat { get; init; } = new Dictionary<string, decimal>(StringComparer.Ordinal);
+
     /// <summary>Las cuentas de las dos partes, en el orden de la carga.</summary>
     public IReadOnlyList<CuentaDeLaCarga> Cuentas => _cuentas ??= ArmarCuentas();
 
@@ -74,6 +81,17 @@ public sealed class FilasDeLaCarga
         var cu = Ids(P.AccountInstallments);
         var ex = Ids(P.GmfExemptions);
         var tr = Ids(P.TaxYearToDate);
+        var td = Ids(P.TermDeposits);
+        var cdat = Con(td.Count == 0 ? [] : await db.MigrationTermDepositRows.AsNoTracking().Where(r => td.Contains(r.MigrationLoadPartId))
+            .OrderBy(r => r.MigrationLoadPartId).ThenBy(r => r.RowNumber).ToListAsync(ct), r => r.MigrationLoadPartId);
+        var interesDeCdat = new Dictionary<string, decimal>(StringComparer.Ordinal);
+        if (cdat.Count > 0)
+        {
+            var lineas = await LineasDeLaCarga.LeerAsync(db, LineNature.Deposit, carga.CutoffDate, cdat.Select(c => c.Fila.CreditLineCode).Distinct().ToList(), ct);
+            foreach (var c in cdat)
+                interesDeCdat[c.Fila.SourceAccountNumber] = CdatMigrado.SaldoDeInteres(c.Fila, lineas.GetValueOrDefault(c.Fila.CreditLineCode)?.DeCaptacion,
+                    carga.CutoffDate);
+        }
         return new FilasDeLaCarga
         {
             Carga = carga,
@@ -92,6 +110,8 @@ public sealed class FilasDeLaCarga
                 .OrderBy(r => r.MigrationLoadPartId).ThenBy(r => r.RowNumber).ToListAsync(ct), r => r.MigrationLoadPartId),
             Tributario = Con(tr.Count == 0 ? [] : await db.MigrationTaxYearRows.AsNoTracking().Where(r => tr.Contains(r.MigrationLoadPartId))
                 .OrderBy(r => r.MigrationLoadPartId).ThenBy(r => r.RowNumber).ToListAsync(ct), r => r.MigrationLoadPartId),
+            Cdat = cdat,
+            InteresDeCdat = interesDeCdat,
         };
     }
 
@@ -117,6 +137,15 @@ public sealed class FilasDeLaCarga
                     [MemberAccountConcept.ContributionExtraordinary] = f.ExtraordinaryBalance,
                     [MemberAccountConcept.ContributionRevaluation] = f.RevaluedBalance,
                 })));
+        // US6: los CDAT van al final (nacen después de las cuentas a la vista a las que abonan), con su plazo de emisión.
+        foreach (var (f, tanda) in Cdat.Select(x => (x.Fila, x.Tanda)))
+            lista.Add(new CuentaDeLaCarga(P.TermDeposits, tanda, f.RowNumber, f.SourceAccountNumber, f.PersonId, f.CreditLineId, f.CreditLineCode,
+                LineNature.Deposit, DepositClass.TermDeposit, f.OfficePublicId, false,
+                Sin0(new Dictionary<MemberAccountConcept, decimal>
+                {
+                    [MemberAccountConcept.Principal] = f.PrincipalAmount,
+                    [MemberAccountConcept.InterestPayable] = InteresDeCdat.GetValueOrDefault(f.SourceAccountNumber, f.InterestPayable),
+                }), f.IssueTermBand));
         return lista;
     }
 

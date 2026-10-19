@@ -31,11 +31,16 @@ public sealed record ValidacionDeCaptaciones(IReadOnlyList<ErrorEntrePartes> Err
 /// <item>la exención del GMF con la política «una cuenta marcada» (<c>Lending.Gmf.PolicyWithoutMark</c>), sobre una cuenta de ahorro de la que la persona
 /// es titular y sin otra marca vigente en la Cartera (<c>Lending.Gmf.AlreadyMarked</c>);</item>
 /// <item>el acumulado tributario de un titular o cotitular de la cuenta;</item>
-/// <item>las personas de la carga siguen vivas, y la de aportes no tiene ya una cuenta de aportes viva.</item>
+/// <item>las personas de la carga siguen vivas, y la de aportes no tiene ya una cuenta de aportes viva;</item>
+/// <item>US6 (pendiente de la fase 10): cada CDAT regenera su plan con <see cref="PlanDeCdat"/> —el vencimiento es el del plan (o su día hábil), los períodos
+/// pagados son los de fecha de pago hasta el corte y el interés causado no difiere en más de un peso del que espera el plan
+/// (<c>Lending.TermDeposit.ScheduleMismatch</c> con los dos valores)— y su cuenta destino es una cuenta a la vista del mismo titular, de la carga o viva
+/// (<c>Lending.TermDeposit.DestinationInvalid</c>).</item>
 /// </list>
 /// Sólo lee. (nuevo)
 /// </summary>
-public sealed class ValidacionEntrePartesDeCaptaciones(IApplicationDbContext db, ReglasDeParametrosDeCartera parametros)
+public sealed class ValidacionEntrePartesDeCaptaciones(IApplicationDbContext db, ReglasDeParametrosDeCartera parametros,
+    IngenIA365ERP.Application.Common.Calendar.ICalendarioHabil? calendario = null)
 {
     public async Task<ValidacionDeCaptaciones> ValidarAsync(FilasDeLaCarga filas, CancellationToken ct)
     {
@@ -235,6 +240,52 @@ public sealed class ValidacionEntrePartesDeCaptaciones(IApplicationDbContext db,
                 else if (!titularesDe[f.SourceAccountNumber].Contains(f.PersonId))
                     Error(P.TaxYearToDate, t.Tanda, f.RowNumber, C.Titular, "Lending.Migration.TaxYearNotHolder",
                         $"La persona no es titular ni cotitular de la cuenta {f.SourceAccountNumber}.");
+            }
+        }
+
+        // ------------------------------------------------------------------------------------------------------ CDAT --
+        if (filas.Cdat.Count > 0)
+        {
+            var cal = calendario is null
+                ? CdatMigrado.SinFestivos
+                : await calendario.ObtenerAsync(filas.Cdat.Min(c => c.Fila.StartDate), filas.Cdat.Max(c => c.Fila.MaturityDate).AddDays((int)RepaymentPeriodicity.Monthly),
+                    IngenIA365ERP.Application.Common.Calendar.DiasDeDescanso.SabadoYDomingo, null, ct);
+            var destinos = filas.Cdat.Select(c => c.Fila.DestinationAccountNumber).OfType<string>().Where(n => !porNumero.ContainsKey(n)).Distinct().ToList();
+            var vivas = destinos.Count == 0 ? [] : await db.MemberAccounts.AsNoTracking()
+                .Where(a => destinos.Contains(a.Number) && a.Status != MemberAccountStatus.Closed && !a.IsDeleted)
+                .Select(a => new { a.Number, a.HolderPersonId, a.DepositClass }).ToListAsync(ct);
+            foreach (var x in filas.Cdat)
+            {
+                var f = x.Fila;
+                if (lineas.GetValueOrDefault(f.CreditLineCode)?.DeCaptacion is not { DepositClass: DepositClass.TermDeposit } version)
+                {
+                    Error(P.TermDeposits, x.Tanda, f.RowNumber, C.Linea, IngenIA365ERP.Application.Common.Imports.ImportErrors.CellNotFound,
+                        $"La línea {f.CreditLineCode} no tiene versión de CDAT vigente al corte.");
+                    continue;
+                }
+                var plan = PlanDeCdat.Generar(CdatMigrado.Condiciones(f, version), cal);
+                if (f.MaturityDate != plan.Vencimiento && f.MaturityDate != plan.FechaDePagoAlVencimiento)
+                    Error(P.TermDeposits, x.Tanda, f.RowNumber, C.FechaDeVencimiento, CdatMigrado.CodigoPlanDistinto,
+                        string.Create(CultureInfo.InvariantCulture,
+                            $"El CDAT {f.SourceAccountNumber} vence el {f.MaturityDate:yyyy-MM-dd} y su inicio más el plazo da el {plan.Vencimiento:yyyy-MM-dd}."));
+                var pagados = CdatMigrado.Pagados(plan, corte).Count;
+                if (pagados != f.PaidPeriods)
+                    Error(P.TermDeposits, x.Tanda, f.RowNumber, C.PeriodosPagados, CdatMigrado.CodigoPlanDistinto,
+                        string.Create(CultureInfo.InvariantCulture,
+                            $"El CDAT {f.SourceAccountNumber} trae {f.PaidPeriods} período(s) pagado(s) y su plan tiene {pagados} con fecha de pago hasta el corte."));
+                var esperado = CdatMigrado.EsperadoAlCorte(plan, corte);
+                if (Math.Abs(esperado - f.InterestPayable) > CdatMigrado.Tolerancia)
+                    Error(P.TermDeposits, x.Tanda, f.RowNumber, C.InteresCausadoNoPagado, CdatMigrado.CodigoPlanDistinto,
+                        $"El CDAT {f.SourceAccountNumber} trae {Pesos(f.InterestPayable)} de interés causado y su plan regenerado da {Pesos(esperado)} al corte.");
+                if (f.DestinationAccountNumber is { } destino)
+                {
+                    var valida = porNumero.TryGetValue(destino, out var deLaCarga)
+                        ? deLaCarga.Clase == DepositClass.Demand && deLaCarga.TitularId == f.PersonId
+                        : vivas.Any(v => v.Number == destino && v.DepositClass == DepositClass.Demand && v.HolderPersonId == f.PersonId);
+                    if (!valida)
+                        Error(P.TermDeposits, x.Tanda, f.RowNumber, C.CuentaDestino, "Lending.TermDeposit.DestinationInvalid",
+                            $"La cuenta destino {destino} del CDAT {f.SourceAccountNumber} no es una cuenta a la vista del mismo titular, ni en la carga ni viva en la Cartera.");
+                }
             }
         }
 

@@ -157,6 +157,27 @@ public sealed class GetDepositMigrationPartDataQueryHandler(IApplicationDbContex
                     [C.Concepto] = f.Concept.ToString(), [C.Valor] = f.Amount, [C.BaseDeRetencion] = f.WithholdingBase,
                 }).ToList();
             }
+            case P.TermDeposits:
+            {
+                // US6 (pendiente de la fase 10): los CDAT de la carga como se importaron (las tasas en puntos).
+                var filas = await db.MigrationTermDepositRows.AsNoTracking().Where(r => tandas.Contains(r.MigrationLoadPartId)).OrderBy(r => r.Id).ToListAsync(ct);
+                var cat = await CatalogosAsync(filas.Select(f => f.PersonId), filas.Select(f => f.OfficePublicId), ct);
+                return filas.Where(f => alcance.IncluyeLinea(f.CreditLineId) && cat.Oficinas.TryGetValue(f.OfficePublicId, out var o) && alcance.IncluyeOficina(o.Id))
+                    .Select(f => new Dictionary<string, object?>
+                    {
+                        [C.Numero] = f.SourceAccountNumber, [C.Titular] = cat.Documentos.GetValueOrDefault(f.PersonId), [C.Oficina] = cat.Oficinas[f.OfficePublicId].Codigo,
+                        [C.Linea] = f.SourceProductCode is null ? f.CreditLineCode : null, [C.CodigoHeredado] = f.SourceProductCode,
+                        [C.NumeroDeTitulo] = f.SourceTitleNumber, [C.Capital] = f.PrincipalAmount, [C.FechaDeConstitucion] = f.ConstitutedOn,
+                        [C.FechaDeInicioVigente] = f.StartDate, [C.PlazoDias] = f.TermDays, [C.FechaDeVencimiento] = f.MaturityDate,
+                        [C.TasaPactadaEA] = Puntos(f.AppliedAnnualRate), [C.TasaDeTablaEA] = Puntos(f.TableAnnualRate), [C.MargenNegociadoEA] = Puntos(f.NegotiatedSpread),
+                        [C.PeriodicidadDeIntereses] = f.InterestPeriodicity.ToString(), [C.Modalidad] = f.InterestTiming.ToString(), [C.PeriodosPagados] = f.PaidPeriods,
+                        [C.InteresCausadoNoPagado] = f.InterestPayable,
+                        [C.DestinoDeIntereses] = f.InterestDestination == InterestDestination.ToAccount ? "Account" : "DisbursementOrder",
+                        [C.CuentaDestino] = f.DestinationAccountNumber, [C.InstruccionAlVencimiento] = f.MaturityInstruction.ToString(),
+                        [C.ProrrogasHechas] = f.RolloverCount == 0 ? null : f.RolloverCount, [C.PlazoDeEmision] = f.IssueTermBand.ToString(),
+                        [C.Embargado] = f.IsGarnished ? "Sí" : null, [C.TitularFallecido] = f.HolderDeceased ? "Sí" : null,
+                    }).ToList();
+            }
             default:
                 return [];
         }

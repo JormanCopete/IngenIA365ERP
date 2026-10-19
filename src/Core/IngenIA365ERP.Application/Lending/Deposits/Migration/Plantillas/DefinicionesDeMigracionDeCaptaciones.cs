@@ -43,8 +43,8 @@ public sealed record ParteDeMigracionDeCaptaciones(
 /// <list type="bullet">
 /// <item><c>line-equivalences</c> (E115): la hoja <c>Equivalencias</c> de las plantillas de líneas es una parte de la carga —es sólo de la migración y se
 /// reemplaza con ella—: el código heredado de cada producto con la línea nueva.</item>
-/// <item><c>term-deposits</c> llega con el CDAT (K9, US6) y <c>holds-and-garnishments</c> con los bloqueos y embargos (US11): sus tablas de destino
-/// todavía no existen (E116).</item>
+/// <item><c>term-deposits</c> nace con el CDAT (K9, US6; se importa con la entrega K9 desplegada) y <c>holds-and-garnishments</c> llega con los bloqueos
+/// y embargos (US11), cuya tabla de destino todavía no existe (E116).</item>
 /// </list>
 /// (nuevo)
 /// </summary>
@@ -129,6 +129,26 @@ public static class DefinicionesDeMigracionDeCaptaciones
         public const string Anio = "anio";
         public const string Concepto = "concepto";
         public const string BaseDeRetencion = "baseDeRetencion";
+
+        // US6 (T169; §4.3): el CDAT.
+        public const string NumeroDeTitulo = "numeroDeTitulo";
+        public const string Capital = "capital";
+        public const string FechaDeConstitucion = "fechaDeConstitucion";
+        public const string FechaDeInicioVigente = "fechaDeInicioVigente";
+        public const string PlazoDias = "plazoDias";
+        public const string TasaDeTablaEA = "tasaDeTablaEA";
+        public const string MargenNegociadoEA = "margenNegociadoEA";
+        public const string PeriodicidadDeIntereses = "periodicidadDeIntereses";
+        public const string Modalidad = "modalidad";
+        public const string PeriodosPagados = "periodosPagados";
+        public const string InteresCausadoNoPagado = "interesCausadoNoPagado";
+        public const string DestinoDeIntereses = "destinoDeIntereses";
+        public const string CuentaDestino = "cuentaDestino";
+        public const string InstruccionAlVencimiento = "instruccionAlVencimiento";
+        public const string ProrrogasHechas = "prorrogasHechas";
+        public const string PlazoDeEmision = "plazoDeEmision";
+        public const string Embargado = "embargado";
+        public const string TitularFallecido = "titularFallecido";
     }
 
     private const string NumeroDeCuenta = "número de cuenta: letras, dígitos y guion (^[A-Za-z0-9-]+$), hasta 20; se guarda en mayúsculas";
@@ -220,6 +240,51 @@ public static class DefinicionesDeMigracionDeCaptaciones
             Ejemplo: ""),
     ]);
 
+    // ------------------------------------------------------------------------------------------------ 4.3 term-deposits --
+
+    /// <summary>
+    /// US6 (pendiente de la fase 10; §4.3): los CDAT vigentes al corte con su versión de condiciones vigente (tras sus prórrogas). Al activar nacen con el plan
+    /// que regenera <c>PlanDeCdat</c> desde su inicio vigente; el interés causado se compara con el del plan (<c>Lending.TermDeposit.ScheduleMismatch</c>).
+    /// </summary>
+    public static DefinicionDePlantilla CdatVigentes { get; } = Parte(Partes.TermDeposits, "Migración de captaciones — CDAT",
+    [
+        Cuenta(Columnas.Numero, true, "llave; único en la carga y frente a las cuentas de la Cartera; es el número que conserva el CDAT"),
+        Persona(Columnas.Titular, true, "el titular; si la línea exige asociado, asociado vigente al corte; " + PersonaViva),
+        Oficina(),
+        LineaDeLaCuenta(),
+        CodigoHeredadoDeLaCuenta(),
+        new(Columnas.NumeroDeTitulo, TipoDeValor.Texto, Obligatoria: true, Largo: 20, Reglas: "el título vigente; las prórrogas siguientes llevan sufijo de versión",
+            Ejemplo: "CDT-000123"),
+        new(Columnas.Capital, TipoDeValor.Monto, Obligatoria: true, Reglas: "el capital de la versión vigente, mayor que cero", Ejemplo: "10000000,00"),
+        new(Columnas.FechaDeConstitucion, TipoDeValor.Fecha, Obligatoria: true, Reglas: "la del título original; anterior o igual al corte", Ejemplo: "2025-07-15"),
+        new(Columnas.FechaDeInicioVigente, TipoDeValor.Fecha, Obligatoria: true,
+            Reglas: "el inicio de la versión vigente (tras las prórrogas); entre la constitución y el corte", Ejemplo: "2026-07-15"),
+        new(Columnas.PlazoDias, TipoDeValor.Entero, Obligatoria: true, Reglas: "el plazo pactado en días (aviso si sale del rango de la línea: lo pactado no se reescribe)",
+            Ejemplo: "180"),
+        new(Columnas.FechaDeVencimiento, TipoDeValor.Fecha, Obligatoria: true,
+            Reglas: "posterior al corte; inicio + plazo o el hábil siguiente si cae en no hábil", Ejemplo: "2027-01-11"),
+        new(Columnas.TasaPactadaEA, TipoDeValor.Porcentaje, Obligatoria: true, Reglas: "la tasa efectiva anual sellada, en puntos; no se revisa contra la tabla", Ejemplo: "10"),
+        new(Columnas.TasaDeTablaEA, TipoDeValor.Porcentaje, Reglas: "si se negoció: la de la tabla; tabla + margen = pactada", Ejemplo: ""),
+        new(Columnas.MargenNegociadoEA, TipoDeValor.Porcentaje, Reglas: "si se negoció: el margen sobre la tabla", Ejemplo: ""),
+        new(Columnas.PeriodicidadDeIntereses, TipoDeValor.Enumeracion, Obligatoria: true, Largo: 20,
+            Reglas: "Monthly, Bimonthly, Quarterly, SemiAnnual, Annual o SinglePayment (al vencimiento)", Ejemplo: "Monthly"),
+        new(Columnas.Modalidad, TipoDeValor.Enumeracion, Obligatoria: true, Largo: 20, Reglas: "Arrears (vencido) o Advance (anticipado)", Ejemplo: "Arrears"),
+        new(Columnas.PeriodosPagados, TipoDeValor.Entero, Obligatoria: true, Reglas: "los períodos del plan vigente ya pagados al corte", Ejemplo: "3"),
+        new(Columnas.InteresCausadoNoPagado, TipoDeValor.Costo, Obligatoria: true,
+            Reglas: "lo causado y no pagado (anticipado: lo causado del período en curso) al corte, hasta 6 decimales; se compara con el plan (tolerancia de un peso)",
+            Ejemplo: "26475,80"),
+        new(Columnas.DestinoDeIntereses, TipoDeValor.Enumeracion, Obligatoria: true, Largo: 30,
+            Reglas: "Account (abono en una cuenta a la vista del titular) o DisbursementOrder (giro a la cuenta bancaria registrada del titular)", Ejemplo: "Account"),
+        Cuenta(Columnas.CuentaDestino, false, "con Account: una cuenta a la vista del titular, de la carga o viva en la Cartera"),
+        new(Columnas.InstruccionAlVencimiento, TipoDeValor.Enumeracion, Obligatoria: true, Largo: 30,
+            Reglas: "Rollover (prorrogar), RenewWithNewTerms (renovar con condiciones) o CancelAndPay (cancelar y pagar)", Ejemplo: "Rollover"),
+        new(Columnas.ProrrogasHechas, TipoDeValor.Entero, Reglas: "las prórrogas ya hechas; vacío = 0", Ejemplo: ""),
+        new(Columnas.PlazoDeEmision, TipoDeValor.Enumeracion, Largo: 30,
+            Reglas: "UnderSixMonths, SixToTwelve, TwelveToEighteen o EighteenOrMore; se calcula del plazo y, si se informa distinto, es error", Ejemplo: ""),
+        new(Columnas.Embargado, TipoDeValor.SiNo, Reglas: "informativo hasta la entrega de bloqueos y embargos", Ejemplo: ""),
+        new(Columnas.TitularFallecido, TipoDeValor.SiNo, Reglas: "se cruza con el maestro de personas (aviso)", Ejemplo: ""),
+    ]);
+
     // ------------------------------------------------------------------------------------------- 4.4 contribution-accounts --
 
     public static DefinicionDePlantilla CuentasDeAportes { get; } = Parte(Partes.ContributionAccounts, "Migración de aportes — cuentas de aportes",
@@ -288,7 +353,7 @@ public static class DefinicionesDeMigracionDeCaptaciones
         new(Partes.LineEquivalences, 0, Ambas, EntregaDeCartera.K7, false, false, Equivalencias, "Equivalencias de productos"),
         new(Partes.MemberAccounts, 5, Captaciones, EntregaDeCartera.K8, false, true, CuentasDeCaptacion, "Cuentas de ahorro"),
         new(Partes.MemberAccountParties, 6, Ambas, EntregaDeCartera.K7, false, false, PartesDeCuenta, "Cotitulares, firmantes, representantes y beneficiarios"),
-        new(Partes.TermDeposits, 7, Captaciones, EntregaDeCartera.K9, false, false, null, "CDAT", LlegaCon: "el CDAT (K9)"),
+        new(Partes.TermDeposits, 7, Captaciones, EntregaDeCartera.K9, false, false, CdatVigentes, "CDAT"),
         new(Partes.ContributionAccounts, 8, Aportes, EntregaDeCartera.K7, true, false, CuentasDeAportes, "Cuentas de aportes"),
         new(Partes.AccountInstallments, 9, Ambas, EntregaDeCartera.K7, false, false, CuotasAtrasadas, "Cuotas atrasadas"),
         new(Partes.HoldsAndGarnishments, 10, Ambas, EntregaDeCartera.K8, false, false, null, "Bloqueos y embargos", LlegaCon: "los bloqueos y embargos (K8)"),

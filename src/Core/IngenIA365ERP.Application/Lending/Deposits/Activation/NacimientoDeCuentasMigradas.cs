@@ -8,6 +8,7 @@ using IngenIA365ERP.Application.Lending.Deposits.Accounts;
 using IngenIA365ERP.Application.Lending.Deposits.Ledger;
 using IngenIA365ERP.Application.Lending.Deposits.Migration;
 using IngenIA365ERP.Application.Lending.Deposits.Operations;
+using IngenIA365ERP.Application.Lending.Deposits.TermDeposits;
 using IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts;
 using IngenIA365ERP.Domain.Entities.Lending.Deposits.Migration;
 using IngenIA365ERP.Domain.Entities.Lending.Deposits.Projections;
@@ -44,7 +45,12 @@ public sealed record CuentasNacidas(int Cuentas, int TransaccionesIniciales, int
 /// <item>las cuotas atrasadas nacen exigibles (generadas por la operación de saldo inicial) y lo pagado de cada una es la parte del saldo inicial de su
 /// concepto que la nombra; el no descontado por Nómina o la pagaduría queda con su motivo;</item>
 /// <item>la marca de exención del GMF y lo exento ya usado en el mes del corte, y el acumulado tributario del año (rendimientos, componente
-/// inflacionario, retención), con <c>Origin = Migration</c>. El GMF del año queda en la carga para el certificado (research E118).</item>
+/// inflacionario, retención), con <c>Origin = Migration</c>. El GMF del año queda en la carga para el certificado (research E118);</item>
+/// <item>US6 (pendiente de la fase 10, research E148): cada CDAT nace activo con su apertura en la constitución del título, su versión 1 de condiciones
+/// (<c>Cause = Migration</c>) sellada en su operación de saldo inicial con el plan que regenera <see cref="PlanDeCdat"/> desde su inicio vigente (las
+/// condiciones de vencimiento las copia de la versión de la línea al corte), el destino de los intereses (la cuenta a la vista de la carga o viva, o el giro a
+/// la cuenta bancaria registrada del titular) y el saldo inicial de capital e interés por pagar con su versión y el período en curso. Los CDAT nacen al final
+/// (la cuenta destino ya existe).</item>
 /// </list>
 /// Todo lo del libro lo escribe <see cref="RegistroDeCuentas"/>; los números, <see cref="NumeradorDeCartera"/>. No emite hechos. (nuevo)
 /// </summary>
@@ -55,7 +61,8 @@ public sealed class NacimientoDeCuentasMigradas(
     ReglasDeMovimientos movimientos,
     ReglasDeParametrosDeCartera parametros,
     IActorActual actorActual,
-    IDateTimeService reloj)
+    IDateTimeService reloj,
+    IngenIA365ERP.Application.Common.Calendar.ICalendarioHabil? calendario = null)
 {
     public const string PrefijoSaldoInicial = "SIN-";
 
@@ -93,6 +100,20 @@ public sealed class NacimientoDeCuentasMigradas(
         var exencionPor = filas.Exenciones.ToDictionary(e => e.Fila.SourceAccountNumber, e => e.Fila, StringComparer.Ordinal);
         var tributarioPor = filas.Tributario.GroupBy(t => t.Fila.SourceAccountNumber, StringComparer.Ordinal)
             .ToDictionary(g => g.Key, g => g.Select(x => x.Fila).ToList(), StringComparer.Ordinal);
+        // US6: los CDAT, el calendario hábil de sus planes, sus cuentas destino vivas y la cuenta bancaria registrada de los que reciben por giro.
+        var cdatPor = filas.Cdat.ToDictionary(c => c.Fila.SourceAccountNumber, c => c.Fila, StringComparer.Ordinal);
+        var calendarioDeCdat = filas.Cdat.Count == 0 ? CdatMigrado.SinFestivos : calendario is null ? CdatMigrado.SinFestivos
+            : await calendario.ObtenerAsync(filas.Cdat.Min(c => c.Fila.StartDate), filas.Cdat.Max(c => c.Fila.MaturityDate).AddDays((int)RepaymentPeriodicity.Monthly),
+                IngenIA365ERP.Application.Common.Calendar.DiasDeDescanso.SabadoYDomingo, null, ct);
+        var destinosVivos = filas.Cdat.Select(c => c.Fila.DestinationAccountNumber).OfType<string>().Distinct().ToList();
+        var cuentasVivas = destinosVivos.Count == 0 ? new Dictionary<string, (int Id, Guid PublicId)>(StringComparer.Ordinal)
+            : (await db.MemberAccounts.AsNoTracking().Where(a => destinosVivos.Contains(a.Number) && a.Status != MemberAccountStatus.Closed && !a.IsDeleted)
+                .Select(a => new { a.Number, a.Id, a.PublicId }).ToListAsync(ct)).ToDictionary(a => a.Number, a => (a.Id, a.PublicId), StringComparer.Ordinal);
+        var porGiro = filas.Cdat.Where(c => c.Fila.InterestDestination == InterestDestination.PaymentOrder).Select(c => c.Fila.PersonId).Distinct().ToList();
+        var bancarias = porGiro.Count == 0 ? [] : (await db.Associates.AsNoTracking().Where(a => porGiro.Contains(a.PersonId) && !a.IsDeleted)
+                .Select(a => new { a.Id, a.PersonId, a.DepositBankId, a.DepositBankAccountNumber, a.DepositBankAccountType }).ToListAsync(ct))
+            .GroupBy(a => a.PersonId).ToDictionary(g => g.Key, g => g.MaxBy(a => a.Id)!);
+        var nacidasPorNumero = new Dictionary<string, (int Id, Guid PublicId)>(StringComparer.Ordinal);
 
         // §0.4: el consecutivo de cada línea arranca por encima de los números migrados (también los de las cuentas de ahorro).
         foreach (var grupo in cuentas.Where(c => c.Numero is not null).GroupBy(c => c.LineaCodigo, StringComparer.OrdinalIgnoreCase))
@@ -112,9 +133,10 @@ public sealed class NacimientoDeCuentasMigradas(
             foreach (var c in tanda)
             {
                 var linea = lineas[c.LineaCodigo];
-                var ahorro = c.Numero is { } n && c.Naturaleza == LineNature.Deposit ? ahorroPorNumero[n] : null;
+                var cdat = c.Parte == Migration.Plantillas.DefinicionesDeMigracionDeCaptaciones.Partes.TermDeposits ? cdatPor[c.Numero!] : null;
+                var ahorro = cdat is null && c.Numero is { } n && c.Naturaleza == LineNature.Deposit ? ahorroPorNumero[n] : null;
                 var aportes = c.Naturaleza == LineNature.Contribution ? aportesPorTitular[c.TitularId] : null;
-                var apertura = ahorro?.OpenedOn ?? aportes!.OpenedOn;
+                var apertura = cdat?.ConstitutedOn ?? ahorro?.OpenedOn ?? aportes!.OpenedOn;
                 var cuenta = MemberAccount.Abrir(linea.Id, c.Naturaleza, c.Clase, c.TitularId, sucursales[c.OficinaPublicId],
                     ahorro?.HandlingMode ?? HandlingMode.Indistinct, apertura, null, ahora, MemberAccountOrigin.Migration, carga.Id, c.Numero);
                 cuenta.PublicId = Guid.NewGuid();
@@ -122,6 +144,8 @@ public sealed class NacimientoDeCuentasMigradas(
                 else await numerador.NumerarCuentaAsync(cuenta, linea.Code, linea.Prefijo, ct);
                 cuenta.Activar(activacion, ahora);
                 if (c.Inactiva) cuenta.Inactivar(corte, ahora);
+                // US6: el embargo de un CDAT migrado es la marca hasta que la entrega de embargos registre la orden (research E148).
+                if (cdat is { IsGarnished: true }) cuenta.IsGarnished = true;
                 db.MemberAccounts.Add(cuenta);
 
                 var propias = c.Numero is { } num && partesPor.TryGetValue(num, out var lista) ? lista : [];
@@ -140,12 +164,13 @@ public sealed class NacimientoDeCuentasMigradas(
                 nacidas.Add((c, cuenta, control));
             }
             await db.SaveChangesAsync(ct);
+            foreach (var (_, cuenta, _) in nacidas) nacidasPorNumero[cuenta.Number] = (cuenta.Id, cuenta.PublicId);
 
             // 2) La operación de saldo inicial (y la del canje).
             var operaciones = new Dictionary<int, (MemberAccountOperation Saldo, MemberAccountOperation? Canje)>(nacidas.Count);
             foreach (var (c, cuenta, control) in nacidas)
             {
-                var ahorro = c.Numero is { } n && c.Naturaleza == LineNature.Deposit ? ahorroPorNumero[n] : null;
+                var ahorro = c.Numero is { } n && c.Naturaleza == LineNature.Deposit && ahorroPorNumero.TryGetValue(n, out var r) ? r : null;
                 var enCanje = ahorro?.ClearingAmount ?? 0m;
                 var huella = Huella(c);
                 var saldo = Operacion(cuenta, control, ahora, numerosDeOperacion[siguienteNumero++], corte,
@@ -157,6 +182,40 @@ public sealed class NacimientoDeCuentasMigradas(
                 operaciones[cuenta.Id] = (saldo, deCanje);
             }
             await db.SaveChangesAsync(ct);
+
+            // 2b) US6: la versión 1 de condiciones de cada CDAT (causa Migration) con su plan, en su operación de saldo inicial.
+            var condicionesDe = new Dictionary<int, (MemberAccountTermsVersion Version, PlanDeCdatCalculado Plan)>();
+            foreach (var (c, cuenta, control) in nacidas.Where(x => x.Origen.Parte == Migration.Plantillas.DefinicionesDeMigracionDeCaptaciones.Partes.TermDeposits))
+            {
+                var f = cdatPor[c.Numero!];
+                var linea = lineas[c.LineaCodigo].DeCaptacion!;
+                var plan = PlanDeCdat.Generar(CdatMigrado.Condiciones(f, linea), calendarioDeCdat);
+                int? destinoCuenta = null, destinoPersona = null, destinoBanco = null;
+                Guid? destinoPublico = null;
+                byte? tipo = null;
+                string? numeroBancario = null;
+                if (f.InterestDestination == InterestDestination.ToAccount && f.DestinationAccountNumber is { } numeroDestino)
+                {
+                    var destino = nacidasPorNumero.TryGetValue(numeroDestino, out var nacida) ? nacida : cuentasVivas[numeroDestino];
+                    (destinoCuenta, destinoPublico) = (destino.Id, destino.PublicId);
+                }
+                else
+                {
+                    destinoPersona = c.TitularId;
+                    if (bancarias.TryGetValue(c.TitularId, out var b) && b.DepositBankId is { } banco && !string.IsNullOrWhiteSpace(b.DepositBankAccountNumber)
+                        && byte.TryParse(b.DepositBankAccountType, NumberStyles.Integer, CultureInfo.InvariantCulture, out var t))
+                        (destinoBanco, tipo, numeroBancario) = (banco, t, b.DepositBankAccountNumber);
+                }
+                var destinoDto = new DestinoDeCdat(f.InterestDestination == InterestDestination.ToAccount ? TermDepositDestinationKind.Account : TermDepositDestinationKind.PaymentOrder,
+                    destinoPublico, null, null, tipo, numeroBancario);
+                var saldo = operaciones[cuenta.Id].Saldo;
+                var tabla = f.TableAnnualRate ?? f.AppliedAnnualRate;
+                var version = LectorDeCdat.NuevaVersion(cuenta, 1, saldo, AccountTermsCause.Migration, linea, plan, tabla, null, destinoDto, destinoCuenta, destinoPersona,
+                    destinoBanco, f.MaturityInstruction, f.RolloverCount, null, ahora, saldo.InputsSha256, f.NegotiatedSpread);
+                registro.SellarCondiciones(control, version, LectorDeCdat.FilasDelPlan(version, plan), 0);
+                condicionesDe[cuenta.Id] = (version, plan);
+            }
+            if (condicionesDe.Count > 0) await db.SaveChangesAsync(ct);
 
             // 3) Las cuotas atrasadas (generadas por la operación de saldo inicial).
             var cuotasDe = new Dictionary<int, List<(AccountInstallment Cuota, MigrationAccountInstallmentRow Fila)>>();
@@ -198,6 +257,18 @@ public sealed class NacimientoDeCuentasMigradas(
                         restante -= deCanje.Amount;
                     }
                     if (restante != 0m) filasDelLibro.Add(Fila(cuenta, saldo, concepto, restante, corte, null));
+                }
+                // US6: el saldo inicial del CDAT nombra su versión; el interés por pagar, además, el período en curso al corte.
+                if (condicionesDe.TryGetValue(cuenta.Id, out var deCdat))
+                {
+                    var enCurso = deCdat.Plan.PeriodoDe(corte)?.Numero ?? deCdat.Plan.Periodos.LastOrDefault(p => p.Desde < corte)?.Numero;
+                    filasDelLibro = filasDelLibro.Select(x => new MemberAccountTransaction
+                    {
+                        MemberAccount = x.MemberAccount, MemberAccountId = x.MemberAccountId, Operation = x.Operation, OperationId = x.OperationId, Kind = x.Kind,
+                        Concept = x.Concept, Amount = x.Amount, ValueDate = x.ValueDate, AccountingDate = x.AccountingDate, RegisteredAt = x.RegisteredAt,
+                        TermsVersionId = deCdat.Version.Id,
+                        SchedulePeriodNumber = x.Concept == MemberAccountConcept.InterestPayable ? enCurso : null,
+                    }).ToList();
                 }
                 registro.RegistrarTransacciones(filasDelLibro);
                 transacciones += filasDelLibro.Count;

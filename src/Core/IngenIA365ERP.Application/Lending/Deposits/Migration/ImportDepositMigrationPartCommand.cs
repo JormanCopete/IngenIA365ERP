@@ -232,15 +232,25 @@ internal sealed class LecturaDeParteDeCaptaciones(
 
         var cuentas = ConsultasDeCargasDeCaptaciones.PartesVivas(db, carga.Id, P.MemberAccounts);
         var aportes = ConsultasDeCargasDeCaptaciones.PartesVivas(db, carga.Id, P.ContributionAccounts);
+        var cdat = ConsultasDeCargasDeCaptaciones.PartesVivas(db, carga.Id, P.TermDeposits);
         var deAhorro = await db.MigrationAccountRows.AsNoTracking().Where(r => cuentas.Contains(r.MigrationLoadPartId)).Select(r => r.SourceAccountNumber)
+            .ToListAsync(ct);
+        // US6 (pendiente de la fase 10): los CDAT de la carga también tienen número (los citan las partes de la cuenta).
+        var deCdat = await db.MigrationTermDepositRows.AsNoTracking().Where(r => cdat.Contains(r.MigrationLoadPartId)).Select(r => r.SourceAccountNumber)
             .ToListAsync(ct);
         var deAportes = await db.MigrationContributionAccountRows.AsNoTracking()
             .Where(r => aportes.Contains(r.MigrationLoadPartId) && r.SourceAccountNumber != null).Select(r => r.SourceAccountNumber!).ToListAsync(ct);
-        _numerosDeLaCarga = deAhorro.Concat(deAportes).ToHashSet(StringComparer.Ordinal);
-        // Un número no se repite entre las dos partes de cuentas; dentro de la misma parte lo cuida la llave (y con «reemplazar» no cuentan sus tandas).
-        _numerosDeOtraParte = (parte.Parte == P.MemberAccounts ? deAportes : parte.Parte == P.ContributionAccounts ? deAhorro : [])
+        _numerosDeLaCarga = deAhorro.Concat(deAportes).Concat(deCdat).ToHashSet(StringComparer.Ordinal);
+        // Un número no se repite entre las partes de cuentas; dentro de la misma parte lo cuida la llave (y con «reemplazar» no cuentan sus tandas).
+        _numerosDeOtraParte = (parte.Parte switch
+            {
+                P.MemberAccounts => deAportes.Concat(deCdat),
+                P.ContributionAccounts => deAhorro.Concat(deCdat),
+                P.TermDeposits => deAhorro.Concat(deAportes),
+                _ => [],
+            })
             .ToHashSet(StringComparer.Ordinal);
-        if (parte.Parte is P.MemberAccounts or P.ContributionAccounts)
+        if (parte.Parte is P.MemberAccounts or P.ContributionAccounts or P.TermDeposits)
         {
             var numeros = ctx.Datos.Filas.Select(f => f.Crudo(C.Numero)?.ToUpperInvariant()).OfType<string>().Distinct().ToList();
             _numerosEnCartera = (await db.MemberAccounts.AsNoTracking().IgnoreQueryFilters().Where(a => numeros.Contains(a.Number)).Select(a => a.Number)
@@ -279,6 +289,8 @@ internal sealed class LecturaDeParteDeCaptaciones(
                 .Select(r => (r.MigrationLoadPartId, Llave(r.PersonId))),
             P.TaxYearToDate => (await db.MigrationTaxYearRows.AsNoTracking().Where(r => ids.Contains(r.MigrationLoadPartId)).ToListAsync(ct))
                 .Select(r => (r.MigrationLoadPartId, Llave(r.PersonId, r.SourceAccountNumber, r.TaxYear, r.Concept))),
+            P.TermDeposits => (await db.MigrationTermDepositRows.AsNoTracking().Where(r => ids.Contains(r.MigrationLoadPartId)).ToListAsync(ct))
+                .Select(r => (r.MigrationLoadPartId, Llave(r.SourceAccountNumber))),
             _ => [],
         };
         foreach (var (id, llave) in llaves) _llavesPrevias.TryAdd(llave, _tandaDe[id]);
@@ -426,9 +438,7 @@ internal sealed class LecturaDeParteDeCaptaciones(
             fila.Error(C.Numero, ErroresDeMigracionDeCaptaciones.CodigoNumeroDuplicado, $"Ya hay una cuenta de la Cartera con el número {numero}.");
         else if (_numerosDeOtraParte.Contains(numero))
             fila.Error(C.Numero, ErroresDeMigracionDeCaptaciones.CodigoNumeroDuplicado,
-                parte.Parte == P.ContributionAccounts
-                    ? $"El número {numero} ya lo tiene otra cuenta de la carga (en la parte de cuentas de ahorro)."
-                    : $"El número {numero} ya lo tiene otra cuenta de la carga (en la parte de cuentas de aportes).");
+                $"El número {numero} ya lo tiene otra cuenta de la carga (en otra parte de cuentas: ahorro, aportes o CDAT).");
     }
 
     // ---------------------------------------------------------------------------------------------------- filas --
@@ -444,6 +454,7 @@ internal sealed class LecturaDeParteDeCaptaciones(
             P.AccountInstallments => Cuota(ctx, fila),
             P.GmfExemptions => Exencion(ctx, fila),
             P.TaxYearToDate => Tributario(ctx, fila),
+            P.TermDeposits => Cdat(ctx, fila),
             _ => null,
         };
         if (agregar is not null && !fila.TieneErrores) pendientes.Add(agregar);
@@ -720,6 +731,106 @@ internal sealed class LecturaDeParteDeCaptaciones(
             MigrationLoadPartId = id, RowNumber = fila.Numero, PersonId = persona.Id, SourceAccountNumber = cuenta, TaxYear = (short)anio.Value,
             Concept = concepto.Value, Amount = valor, WithholdingBase = baseDeRetencion,
         }));
+    }
+
+    /// <summary>
+    /// US6 (pendiente de la fase 10; plantillas-y-archivos.md §4.3): un CDAT vigente al corte. La línea debe ser de clase CDAT; el inicio vigente entre la
+    /// constitución y el corte; el vencimiento después del corte; la tasa pactada es la tabla más el margen si se informan; el plazo de emisión se calcula del
+    /// plazo y, si se informa distinto, es error; el plazo fuera del rango de la línea sólo avisa (lo pactado no se reescribe). Lo que cruza partes —el plan
+    /// regenerado contra el interés causado, la cuenta destino— lo valida la aplicación de la carga.
+    /// </summary>
+    private Action<int>? Cdat(ContextoDeImportacion ctx, FilaDeImportacion fila)
+    {
+        var numero = NumeroDeCuenta(fila, C.Numero);
+        var titular = Persona(fila, C.Titular);
+        var oficina = Sucursal(fila, C.Oficina);
+        var linea = LineaDeLaCuenta(fila);
+        if (linea is { } l0 && l0.Linea.Clase != DepositClass.TermDeposit)
+            fila.Error(l0.Heredado is null ? C.Linea : C.CodigoHeredado, ImportErrors.CellFormat,
+                $"La línea {l0.Linea.Code} es de la clase {l0.Linea.Clase}: un CDAT va en una línea de CDAT.");
+        var titulo = fila.Texto(C.NumeroDeTitulo, 20);
+        var capital = NoNegativo(fila, C.Capital, fila.Monto(C.Capital), positivo: true);
+        var constitucion = fila.Fecha(C.FechaDeConstitucion);
+        HastaElCorte(fila, C.FechaDeConstitucion, constitucion);
+        var inicio = fila.Fecha(C.FechaDeInicioVigente);
+        HastaElCorte(fila, C.FechaDeInicioVigente, inicio);
+        if (inicio is { } i0 && constitucion is { } c0 && i0 < c0)
+            fila.Error(C.FechaDeInicioVigente, ImportErrors.CellFormat, "El inicio vigente no puede ser anterior a la constitución del título.");
+        var plazo = fila.Entero(C.PlazoDias);
+        if (plazo is { } pl && pl < 1) fila.Error(C.PlazoDias, ImportErrors.CellFormat, "El plazo es de al menos un día.");
+        if (plazo is { } p1 && p1 >= 1 && linea is { Linea.DeCaptacion: { } v } && PlanDeCdat.ValidarPlazo(p1, v.MinTermDays, v.MaxTermDays) is { } fuera)
+            fila.Aviso(C.PlazoDias, fuera.Codigo, $"{fuera.Mensaje} Lo pactado se conserva.");
+        var vencimiento = fila.Fecha(C.FechaDeVencimiento);
+        if (vencimiento is { } ve && ve <= Corte)
+            fila.Error(C.FechaDeVencimiento, ImportErrors.CellFormat,
+                string.Create(CultureInfo.InvariantCulture, $"Un CDAT vencido al corte ({Corte:yyyy-MM-dd}) no se migra como vigente: migre su versión prorrogada o cancélelo antes."));
+        var tasa = fila.Porcentaje(C.TasaPactadaEA);
+        var tabla = fila.Porcentaje(C.TasaDeTablaEA);
+        var margen = fila.Porcentaje(C.MargenNegociadoEA);
+        if (tasa is { } t0 && t0 <= 0m) fila.Error(C.TasaPactadaEA, ImportErrors.CellFormat, "La tasa pactada es mayor que cero.");
+        if ((tabla is null) != (margen is null))
+            fila.Error(tabla is null ? C.TasaDeTablaEA : C.MargenNegociadoEA, ImportErrors.CellFormat, "Con tasa negociada van la tasa de la tabla y el margen.");
+        else if (tabla is { } tb && margen is { } mg && tasa is { } tp && tb + mg != tp)
+            fila.Error(C.TasaPactadaEA, ImportErrors.CellFormat, "La tasa pactada es la de la tabla más el margen negociado.");
+        var periodicidad = Enumeracion<RepaymentPeriodicity>(fila, C.PeriodicidadDeIntereses);
+        var modalidad = Enumeracion<InterestTiming>(fila, C.Modalidad);
+        if (periodicidad is { } pe && modalidad is { } mo && plazo is { } p2 && p2 >= 1
+            && PlanDeCdat.ValidarPeriodicidad(pe, mo, p2, [], []) is { } periodicidadInvalida)
+            fila.Error(C.PeriodicidadDeIntereses, periodicidadInvalida.Codigo, periodicidadInvalida.Mensaje);
+        var pagados = fila.Entero(C.PeriodosPagados);
+        if (pagados is { } pg && pg < 0) fila.Error(C.PeriodosPagados, ImportErrors.CellFormat, "No puede ser negativo.");
+        var causado = NoNegativo(fila, C.InteresCausadoNoPagado, fila.Costo(C.InteresCausadoNoPagado));
+        var destino = Enumeracion<CdatMigradoDestino>(fila, C.DestinoDeIntereses);
+        var cuentaDestino = fila.Crudo(C.CuentaDestino) is null ? null : NumeroDeCuenta(fila, C.CuentaDestino);
+        if (destino == CdatMigradoDestino.Account && cuentaDestino is null) fila.Requerido(C.CuentaDestino);
+        if (destino == CdatMigradoDestino.DisbursementOrder && cuentaDestino is not null)
+            fila.Error(C.CuentaDestino, ImportErrors.CellFormat,
+                "Con giro (DisbursementOrder) no va cuenta destino: el giro va a la cuenta bancaria registrada del titular.");
+        var instruccion = Enumeracion(fila, C.InstruccionAlVencimiento,
+            new Dictionary<string, MaturityInstruction>(StringComparer.OrdinalIgnoreCase) { ["RenewWithConditions"] = MaturityInstruction.RenewWithNewTerms });
+        var prorrogas = fila.Entero(C.ProrrogasHechas) ?? 0;
+        if (prorrogas < 0) fila.Error(C.ProrrogasHechas, ImportErrors.CellFormat, "No puede ser negativo.");
+        var plazoDeEmision = Enumeracion<IssueTermBand>(fila, C.PlazoDeEmision);
+        IssueTermBand? calculado = plazo is { } p3 && p3 >= 1 ? PlanDeCdat.PlazoDeEmision(p3) : null;
+        if (plazoDeEmision is not null && calculado is not null && plazoDeEmision != calculado)
+            fila.Error(C.PlazoDeEmision, ImportErrors.CellFormat, $"El plazo de {plazo} días es del plazo de emisión {calculado}, no {plazoDeEmision}.");
+        var embargado = fila.SiNo(C.Embargado);
+        if (embargado)
+            fila.Aviso(C.Embargado, "Lending.Migration.GarnishmentPending",
+                "El embargo llega con los bloqueos y embargos: el CDAT nace marcado embargado y no se paga al vencer hasta registrar la orden.");
+        var fallecido = fila.SiNo(C.TitularFallecido);
+        if (titular is not null && fila.Crudo(C.TitularFallecido) is not null && fallecido != titular.Fallecida)
+            fila.Aviso(C.TitularFallecido, "Lending.Savings.HolderDeceased", "El fallecimiento informado no coincide con el maestro de personas: rige el maestro.");
+        if (titular is not null && linea is { } l1 && l1.Linea.DeCaptacion is { RequiresAssociate: true } && !titular.AsociadaAlCorte)
+            fila.Error(C.Titular, "Lending.Savings.MembersOnly", $"La línea {l1.Linea.Code} exige asociado y el titular no estaba afiliado al corte.");
+
+        if (numero is null) return null;
+        NumeroNuevo(fila, numero);
+        if (!LlaveNueva(ctx, fila, Llave(numero), C.Numero)) return null;
+        _numerosDelArchivo.Add(numero);
+        if (titular is null || oficina is null || linea is null || titulo is null || constitucion is null || inicio is null || plazo is null
+            || vencimiento is null || tasa is null || periodicidad is null || modalidad is null || pagados is null || destino is null || instruccion is null
+            || calculado is null)
+            return null;
+        var (lineaDelCdat, heredado) = linea.Value;
+        return Registrar(ctx, fila, numero, id => db.MigrationTermDepositRows.Add(new MigrationTermDepositRow
+        {
+            MigrationLoadPartId = id, RowNumber = fila.Numero, SourceAccountNumber = numero, PersonId = titular.Id, SourceProductCode = heredado,
+            CreditLineCode = lineaDelCdat.Code, CreditLineId = lineaDelCdat.Id, OfficePublicId = oficina.Value, SourceTitleNumber = titulo, PrincipalAmount = capital,
+            ConstitutedOn = constitucion.Value, StartDate = inicio.Value, TermDays = plazo.Value, MaturityDate = vencimiento.Value, AppliedAnnualRate = tasa.Value,
+            TableAnnualRate = tabla, NegotiatedSpread = margen, InterestPeriodicity = periodicidad.Value, InterestTiming = modalidad.Value,
+            PaidPeriods = pagados.Value, InterestPayable = causado,
+            InterestDestination = destino == CdatMigradoDestino.Account ? InterestDestination.ToAccount : InterestDestination.PaymentOrder,
+            DestinationAccountNumber = cuentaDestino, MaturityInstruction = instruccion.Value, RolloverCount = prorrogas, IssueTermBand = calculado.Value,
+            IsGarnished = embargado, HolderDeceased = titular.Fallecida,
+        }));
+    }
+
+    /// <summary>El destino de los intereses de un CDAT migrado como lo escribe la plantilla (§4.3).</summary>
+    private enum CdatMigradoDestino
+    {
+        Account = 1,
+        DisbursementOrder = 2,
     }
 
     /// <summary>Las referencias a cuentas que la carga todavía no trae: aviso (al aplicar, error entre partes).</summary>

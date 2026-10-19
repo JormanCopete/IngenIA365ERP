@@ -638,7 +638,9 @@ public sealed class RegistroDeCuentas(IApplicationDbContext db)
         var deOperacion = fila.OperationId is not null || fila.Operation is not null;
         if (deOperacion == (fila.ProcessRunId is not null))
             throw new InvalidOperationException("Una fila del libro tiene exactamente un origen: la operación o la corrida (CK_LND_MemberAccountTransactions_Origin).");
+        // US9/US6 (research E148): el saldo inicial del interés por pagar migrado es interés causado (hasta seis decimales, plantilla §4.1 y §4.3).
         var permitidos = MemberAccountTransaction.ClasesDeCausacion.Contains(fila.Kind)
+                         || (fila.Kind == MemberAccountTransactionKind.OpeningBalance && fila.Concept == MemberAccountConcept.InterestPayable)
             ? MemberAccountTransaction.DecimalesDeCausacion
             : MemberAccountTransaction.DecimalesDeOperacion;
         if (Decimales(fila.Amount) > permitidos)
