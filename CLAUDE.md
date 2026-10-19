@@ -739,6 +739,44 @@ Rutas `/api/accounting/lending/*`, `/api/accounting/regulatory-indicators`,
   Recetas: `docs/manual/contabilidad-contrato-de-contabilizacion.md` §9 y `docs/manual/cartera-integracion-contable.md`
   (para la contadora, con lo pendiente de validar); las de fases anteriores, `docs/manual/cartera-*.md`.
 
+- **Captaciones y aportes (feature 014, rama `014-ahorros-aportes-cdt`, K7 a K11 y Polish, 2026-10-19; rama local, sin
+  merge ni despliegue)**: ahorro a la vista, permanente, contractual, CDAT y aportes sociales **dentro de la Cartera de la
+  013**, en reemplazo de las captaciones heredadas, retiradas con `RetiroDeCaptacionesHeredadas` (destructiva con guarda;
+  el dueño autorizó y es el segundo revisor, D15) junto con `/api/savings` y sus pantallas. **La línea es común**
+  (`LND_CreditLines.Nature`: colocación, captación, aportes) con versión de condiciones propia por naturaleza, y la cuenta
+  es una sola entidad, `MemberAccount`. Reglas que no se negocian: **un solo escritor del libro de cuentas**,
+  `RegistroDeCuentas`, y **una sola fuente de saldos**, `ReconstruccionDeCuenta` (a la fecha D con lo conocido hasta R);
+  **los movimientos de caja entran sólo por el contrato de cuentas** (`IContratoDeCuentas` v1: consignar, retirar,
+  trasladar, reversar), como los pagos por el contrato de obligaciones —la cancelación en efectivo por el contrato sigue
+  rechazada hasta que exista Recaudo—; **Captaciones no conoce cuentas**: emite hechos por la misma matriz
+  `ACC_LendingPostingRules` y `DestinoContabilidad` (17 roles, 5 dimensiones nuevas que no pesan, comprobantes `MA`, `CC`,
+  `TD`, `AO`, `RA`) con la validación previa de `Contabilidad.FaltaDeRegla`; el ciclo diario corre por
+  `PasoDeCaptaciones`/`ISubpasoDeCaptaciones` y `CicloDelCdat`; lo que sale de la transacción (el correo de una reversión
+  tardía) va por `TareasTrasElCommit`; **sin valores legales en el código** (componente inflacionario, inembargable, tope
+  del seguro de depósitos y tope de entrega sin sucesión son valores nacionales; lo demás, parámetros con vigencia);
+  motores puros con **67 casos dorados** (`Domain.Tests/Lending/Deposits/Casos`, recalculados con `calcular.py`);
+  requisitos de activación en **todos** los ambientes (D14), activación por naturaleza y roles sugeridos `DeCaptaciones`
+  (D18). Entregas: **K7** aportes, cuota, recaudo por Nómina y pagadurías, retiro del asociado con cruce de deuda; **K8**
+  ahorro a la vista, intereses, retención con componente inflacionario, GMF, cargos, débito automático, bloqueos,
+  embargos con límite inembargable, documentos al titular; **K9** CDAT (título no negociable, tasa negociada) y ahorro
+  contractual; **K10** revalorización, excedentes y amortización de asamblea, inactividad, no reclamados y fallecimiento;
+  **K11** fondo de liquidez (Decreto 976 de 2026), IRL y brecha, depósitos asegurados, SICSES 9026, 9068, 9013, 169 y
+  9067 y exógena 1019 y 1020, **sin cotejar** (`verified = false`; plazos informativos, como en la 013).
+  **`EntregaVigente = K11`**: las cinco salen juntas y ninguna va a producción sin Recaudo y Tesorería reales.
+  **Migraciones**: una sola par, `CaptacionesAportes` (53 tablas `LND_`, SQL a mano para T044, `NOM` y `ASO`),
+  **congelada desde el 2026-10-19 (T225)** con `RetiroDeCaptacionesHeredadas` y las de la 013:
+  `LasMigracionesCongeladasNoSeRegeneran` guarda la huella de cada `.cs` y `.Designer.cs` (comentarios incluidos: anotar
+  respaldo y revisor en la cabecera exige actualizar la huella en el mismo commit); todo cambio de esquema es una
+  migración nueva. 180 rutas nuevas bajo `/api/lending/...` (`Endpoints/Lending/Deposits/`), permisos `Lending.*` (163,
+  los siembra la API); pantallas `/cartera/captaciones/*`, `/cartera/fondo-de-liquidez`,
+  `/cartera/captaciones/reportes-regulatorios`; la ficha de la persona muestra sólo lo del titular y las cuentas como
+  cotitular salen aparte (`GET /api/core/people/{id}/co-held-accounts`). Recetas: `docs/manual/cartera-captaciones.md`
+  (índice y ocho temáticos), `contabilidad-contrato-de-contabilizacion.md` §10, runbooks
+  `docs/operaciones/captaciones-puesta-en-marcha.md`, `captaciones-despliegue.md` y `captaciones-retiro-heredado.md`.
+  Pendiente del dueño: medir el piloto (T234), validar con la contadora la matriz y sus cuentas CUIF, los casos dorados y
+  los siete layouts (T235), promover (T236), MAUI a mano y cargar los valores nacionales sin semilla; preguntas abiertas
+  en `specs/014-ahorros-aportes-cdt/research.md`.
+
 ## Arquitectura
 Clean Architecture en 4 capas:
 - `src/Core/` — Domain, Application
@@ -747,17 +785,17 @@ Clean Architecture en 4 capas:
 
 ## Totales
 
-Instantánea del 2026-10-17 (cierre local de la feature 013, K1 a K6b y Polish, en su rama `013-cartera-financiera`), remedida. **Son cifras que
+Instantánea del 2026-10-19 (cierre local de la feature 014, K7 a K11 y Polish, en su rama `014-ahorros-aportes-cdt`), remedida. **Son cifras que
 envejecen**: las de antes llevaban meses desfasadas —decían 113 endpoints cuando había
 ~619, y 398 pruebas cuando eran 616— y nadie lo notaba porque nada las contrasta. Si
 dudás, medí en vez de creerles; el comando está al lado.
 
 | | | cómo medirlo |
 |---|---|---|
-| Rutas REST | 1.322 (2026-10-17, feature 013: +466 sobre las 856 de I1 —Cartera K1 a K6b, su integración contable, valores nacionales y regulatorios—). Antes: 856 (2026-09-26, I1 de la feature 012: +84 sobre las 772 del cierre de la 011 —catálogo, bodegas, documentos, compras, conteos, traslados, períodos, puesta en marcha, aprobaciones, parámetros, alertas, alcances, informes de inventario, impuestos—, ya descontadas las del inventario heredado que se retiraron) | `grep -rhE "^\s*[a-zA-Z]+\.Map(Get\|Post\|Put\|Delete\|Patch)\(" --include=*.cs src/Presentation/IngenIA365ERP.API/Endpoints/ \| wc -l` |
-| Páginas Blazor | 283 con `@page` (2026-10-17, feature 013: +82, `/cartera/*` y las de Contabilidad para Cartera). Antes: 201 (2026-09-26; I1 de la 012 retiró las 21 pantallas del inventario heredado y sumó las suyas: `/inventario/*`, `/compras/*`, `/ventas/canales`, `/ventas/vendedores`, `/maestros/impuestos`) | `grep -rl "@page" --include=*.razor src/Presentation/IngenIA365ERP.Shared/Pages/ \| wc -l` |
-| Reportes PDF | 18 clases `*Report` (2026-10-17, feature 013: +6, documentos al deudor y de Cartera). Antes: 12 (2026-09-26; el retiro del inventario heredado se llevó `InventoryValuationReport`: los informes de inventario nuevos salen del centro de informes como `TablaExportable`) | `grep -rhoE "static class [A-Za-z]+Report\b" src/Presentation/IngenIA365ERP.API/Reports/*.cs \| wc -l` |
-| Pruebas sin contenedores | 9.109 el 2026-10-17, cierre local de la 013 (2.298 Domain, 5.706 Application, 638 Architecture, 467 Shared), todas pasan. Antes: 3.215 el 2026-09-26 (516 Domain, 2.324 Application, 209 Architecture, 164 Shared, 2 Load) | `dotnet test tests/IngenIA365ERP.<X>.Tests` |
+| Rutas REST | 1.403 (2026-10-19, feature 014: +180 de Captaciones y aportes, −74 del ahorro heredado y otras retiradas). Antes: 1.322 (2026-10-17, feature 013: +466 sobre las 856 de I1 —Cartera K1 a K6b, su integración contable, valores nacionales y regulatorios—). Antes: 856 (2026-09-26, I1 de la feature 012: +84 sobre las 772 del cierre de la 011 —catálogo, bodegas, documentos, compras, conteos, traslados, períodos, puesta en marcha, aprobaciones, parámetros, alertas, alcances, informes de inventario, impuestos—, ya descontadas las del inventario heredado que se retiraron) | `grep -rhE "^\s*[a-zA-Z]+\.Map(Get\|Post\|Put\|Delete\|Patch)\(" --include=*.cs src/Presentation/IngenIA365ERP.API/Endpoints/ \| wc -l` |
+| Páginas Blazor | 281 con `@page` (2026-10-19, feature 014: retiró las pantallas heredadas de ahorro y sumó `/cartera/captaciones/*` y `/cartera/fondo-de-liquidez`). Antes: 283 (2026-10-17, feature 013: +82, `/cartera/*` y las de Contabilidad para Cartera). Antes: 201 (2026-09-26; I1 de la 012 retiró las 21 pantallas del inventario heredado y sumó las suyas: `/inventario/*`, `/compras/*`, `/ventas/canales`, `/ventas/vendedores`, `/maestros/impuestos`) | `grep -rl "@page" --include=*.razor src/Presentation/IngenIA365ERP.Shared/Pages/ \| wc -l` |
+| Reportes PDF | 16 clases `*Report` (2026-10-19, feature 014: se retiraron `PersonPortfolioReport`, `CdtCertificateReport` y `SavingsStatementReport` y se sumó `DocumentosDeCaptacionesReport`, en la subcarpeta `Reports/Captaciones/`: por eso el comando ahora es recursivo). Antes: 18 (2026-10-17, feature 013: +6, documentos al deudor y de Cartera) | `grep -rhoE "static class [A-Za-z]+Report\b" --include=*.cs src/Presentation/IngenIA365ERP.API/Reports/ \| wc -l` |
+| Pruebas sin contenedores | 10.078 el 2026-10-19, cierre local de la 014 (2.630 Domain, 6.193 Application, 757 Architecture, 498 Shared), todas pasan. Antes: 9.109 el 2026-10-17, cierre local de la 013 (2.298 Domain, 5.706 Application, 638 Architecture, 467 Shared), todas pasan. Antes: 3.215 el 2026-09-26 (516 Domain, 2.324 Application, 209 Architecture, 164 Shared, 2 Load) | `dotnet test tests/IngenIA365ERP.<X>.Tests` |
 | Pruebas de integración | 601 el 2026-10-17 en PostgreSQL **y** SQL Server: 585 pasan y 16 omitidas con su motivo en cada motor (Lending 108 y 7, las de rendimiento que piden `RUN_PERF_TESTS=1`); filtro por módulo `--filter "FullyQualifiedName~IntegrationTests.Lending"`, motor por `DB_PROVIDER`. Antes: 404 el 2026-09-26 con Docker en PostgreSQL: 398 pasan y 6 omitidas con su motivo (la de hashes, `[Fact(Skip)]`, y cinco de la 012: tres de volumen que sólo corren con `RUN_PERF_TESTS=1`, una que espera los tipos fiscales de I3/I4 y una que por HTTP no puede fechar la foto de un conteo en un mes ya terminado); una cayó por un contenedor de Mongo que no arrancó (código 48) y pasó al repetirla. Las colecciones «Nomina e2e», «Contabilidad e2e» e «Inventario e2e» corren en paralelo sobre contenedores distintos; las de adjuntos suman MinIO de `quay.io` y el host «Adjuntos sobre S3» (`ApiConAlmacenS3Fixture`) | `dotnet test tests/IngenIA365ERP.API.IntegrationTests` |
 | Errores de compilación | 0 | `dotnet build IngenIA365ERP.slnx` |
 
