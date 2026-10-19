@@ -1,0 +1,285 @@
+@page "/cartera/cdat/nuevo"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Globalization
+@using IngenIA365ERP.Shared.Services.Adjuntos
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Inventario
+@inject CaptacionesClient Cliente
+@inject InventarioClient Inventario
+@inject AdjuntosClient Adjuntos
+@inject INotificationService Notification
+@inject NavigationManager Navegacion
+
+<PageTitle>Constituir CDAT - IngenIA365ERP</PageTitle>
+
+@* Feature 014, US6 (T179; FR-067, FR-127; contracts/api.md §5): la constitución de un CDAT en dos pasos. 1) Simular: línea, monto, plazo, periodicidad y
+   modalidad de intereses y, si la línea la admite, el margen negociado en puntos (viaja como fracción): la tasa de la tabla, el plan con su retención
+   estimada, el vencimiento hábil, el plazo de emisión, si el margen cabe en la regla y en la atribución de quien pide, y la huella. 2) Constituir con el
+   titular, la oficina, la titularidad, el destino de los intereses, la instrucción al vencimiento y el fondeo; la huella de la simulación viaja para que
+   el servidor rechace si algo cambió. El CDAT nace activo si se fondea por traslado; si no, en apertura esperando el recaudador o la decisión de su tasa. *@
+<PermissionGate Required="Lending.TermDeposits.Constitute" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Constituir CDAT</h3>
+        <div class="toolbar">
+            <SfButton CssClass="e-outline" OnClick="@(() => Navegacion.NavigateTo("/cartera/cdat"))">Volver a CDAT</SfButton>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@(_cargaInicial.Activa || _simulacion.Activa)" Texto="@(_simulacion.Activa ? "Simulando…" : "Leyendo líneas y oficinas…")">
+        <div class="info-card">
+            <h4>1. Las condiciones</h4>
+            <div class="form-grid">
+                <div class="campo campo-ancho">Titular *
+                    <PersonSearchPicker Selected="@_titular" SelectedChanged="@CambiarTitularAsync" ShowHelpText="false" Compacto="true" />
+                </div>
+                <label class="campo">Línea de CDAT *
+                    <select class="e-input" value="@(_linea?.ToString() ?? "")" @onchange="@(e => CambiarLinea(e.Value))">
+                        <option value="">Elija la línea…</option>
+                        @foreach (var l in _lineas) { <option value="@l.PublicId">@l.Code · @l.Name</option> }
+                    </select>
+                </label>
+                <label class="campo">Oficina *
+                    <select class="e-input" @bind="_oficina">
+                        <option value="">Elija la oficina…</option>
+                        @foreach (var o in _oficinas) { <option value="@o.PublicId">@o.Name</option> }
+                    </select>
+                </label>
+                <label class="campo">Monto *<input type="number" class="e-input" min="0" step="1000" @bind="_pedido.Amount" /></label>
+                <label class="campo">Plazo en días *<input type="number" class="e-input" min="1" @bind="_pedido.TermDays" /></label>
+                <label class="campo">Intereses
+                    <select class="e-input" @bind="_pedido.InterestPeriodicity">
+                        @foreach (var p in TextosDeCdat.Periodicidades) { <option value="@p.Valor">@p.Texto</option> }
+                    </select>
+                </label>
+                <label class="campo">Modalidad
+                    <select class="e-input" @bind="_pedido.Timing">
+                        @foreach (var m in TextosDeCdat.Modalidades) { <option value="@m.Valor">@m.Texto</option> }
+                    </select>
+                </label>
+                <label class="campo">Margen negociado (puntos EA)<input type="number" class="e-input" min="0" step="0.01" @bind="_margenEnPuntos" /></label>
+                <label class="campo">Canal<input class="e-input" maxlength="20" @bind="_pedido.Channel" placeholder="Oficina" /></label>
+                @if (_margenEnPuntos is > 0m)
+                {
+                    <label class="campo campo-ancho">Por qué se negocia *<input class="e-input" maxlength="500" @bind="_motivoDeNegociacion" /></label>
+                }
+            </div>
+            <div class="toolbar">
+                <SfButton CssClass="e-outline" IconCss="e-icons e-search" Disabled="@(_linea is null || _pedido.Amount <= 0m || _simulacion.Activa)" OnClick="@SimularAsync">Simular</SfButton>
+            </div>
+            @foreach (var e in _erroresDeSimulacion) { <p class="aviso aviso-error" role="alert">@e</p> }
+        </div>
+
+        @if (_simulado is { } s)
+        {
+            <div class="info-card">
+                <h4>Simulación</h4>
+                <dl class="form-grid">
+                    <div><dt>Tasa de la tabla</dt><dd>@TextosDeCdat.Puntos(s.TableRate) EA</dd></div>
+                    <div><dt>Tasa aplicada</dt><dd>@TextosDeCdat.Puntos(s.Rate) EA</dd></div>
+                    <div><dt>Desde · vence</dt><dd>@s.StartDate.ToString("dd/MM/yyyy") · @s.MaturityDate.ToString("dd/MM/yyyy") (se paga el @s.PaymentDate.ToString("dd/MM/yyyy"))</dd></div>
+                    <div><dt>Plazo de emisión</dt><dd>@TextosDeCdat.PlazoDeEmision(s.IssueTermBand)</dd></div>
+                    <div><dt>Interés total</dt><dd>@Pesos(s.TotalInterest)</dd></div>
+                    <div><dt>Retención estimada</dt><dd>@Pesos(s.WithholdingEstimate.Amount)@(s.WithholdingEstimate.AppliesThreshold ? " (con el umbral diario)" : "")</dd></div>
+                </dl>
+                @if (s.Negotiation is { } n)
+                {
+                    <p class="@(n.Allowed && n.Code is null ? "texto-apoyo" : "aviso aviso-error")">
+                        @n.Explanation
+                        @if (n.Allowed && n.Code is null && !n.WithinUserAttribution) { <span> El CDAT quedará esperando la decisión de quien tenga el nivel @(n.LevelCode ?? "requerido").</span> }
+                    </p>
+                }
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th class="numero">Período</th><th>Desde</th><th>Hasta</th><th>Pago</th><th class="numero">Días</th><th class="numero">Interés</th><th class="numero">Retención</th><th class="numero">Neto</th></tr></thead>
+                        <tbody>
+                            @foreach (var l in s.Schedule)
+                            {
+                                <tr><td class="numero">@l.Number</td><td>@l.From.ToString("dd/MM/yyyy")</td><td>@l.To.ToString("dd/MM/yyyy")</td><td>@l.PaymentDate.ToString("dd/MM/yyyy")</td><td class="numero">@l.Days</td><td class="numero">@Pesos(l.Interest)</td><td class="numero">@Pesos(l.WithholdingEstimate)</td><td class="numero">@Pesos(l.Net)</td></tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+    </IndicadorDeCarga>
+
+    @if (_simulado is not null && _titular is not null)
+    {
+        <IndicadorDeCarga Cargando="@(_cargaCuentas.Activa || _guardado.Activa)" Texto="@(_guardado.Activa ? "Constituyendo el CDAT…" : "Leyendo las cuentas del titular…")">
+            <div class="info-card">
+                <h4>2. Titularidad, destino, instrucción y fondeo</h4>
+                <SubirSoporte OwnerEntityType="@CaptacionesClient.DuenoDeSoportesDeTitularidad" OwnerEntityPublicId="@_titular.PublicId"
+                              Rotulo="Subir un soporte del titular" Ayuda="Registro civil, decisión judicial o constancia de beneficiarios"
+                              OnSubido="@CargarSoportesAsync" />
+                <EditorDeTitularidad Partes="@_pedido.Parties" Beneficiarios="@_pedido.Beneficiaries" Soportes="@_soportes"
+                                     @bind-Manejo="_manejo" Titular="@_titular.PublicId" />
+                <div class="form-grid">
+                    @if (_pedido.Beneficiaries.Count > 0)
+                    {
+                        <label class="campo">Constancia de beneficiarios *
+                            <select class="e-input" @bind="_pedido.BeneficiaryRecordAttachmentPublicId">
+                                <option value="">Elija la constancia firmada por el titular</option>
+                                @foreach (var a in _soportes) { <option value="@a.PublicId">@a.FileName</option> }
+                            </select>
+                        </label>
+                    }
+                    <label class="campo">Intereses y vencimiento a
+                        <select class="e-input" @bind="_pedido.PaymentDestination.Kind">
+                            @foreach (var d in TextosDeCdat.Destinos) { <option value="@d.Valor">@d.Texto</option> }
+                        </select>
+                    </label>
+                    @if (_pedido.PaymentDestination.Kind == TextosDeCdat.DestinoCuenta)
+                    {
+                        <label class="campo">Cuenta a la vista del titular *
+                            <select class="e-input" @bind="_pedido.PaymentDestination.AccountPublicId">
+                                <option value="">Elija la cuenta…</option>
+                                @foreach (var c in _cuentasALaVista) { <option value="@c.PublicId">@c.Number · @c.Line.Name</option> }
+                            </select>
+                        </label>
+                    }
+                    else
+                    {
+                        <p class="texto-tenue campo-ancho">El giro va a la cuenta bancaria registrada del titular.</p>
+                    }
+                    <label class="campo">Al vencer
+                        <select class="e-input" @bind="_pedido.MaturityInstruction">
+                            @foreach (var i in TextosDeCdat.Instrucciones) { <option value="@i.Valor">@i.Texto</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Fondeo
+                        <select class="e-input" @bind="_pedido.Funding.Kind">
+                            <option value="@TextosDeCdat.FondeoRecaudador">Consignación por caja o recaudador (monto exacto)</option>
+                            <option value="@TextosDeCdat.FondeoTraslado">Traslado desde una cuenta de ahorro del titular</option>
+                        </select>
+                    </label>
+                    @if (_pedido.Funding.Kind == TextosDeCdat.FondeoTraslado)
+                    {
+                        <label class="campo">Cuenta de origen *
+                            <select class="e-input" @bind="_pedido.Funding.SourceAccountPublicId">
+                                <option value="">Elija la cuenta…</option>
+                                @foreach (var c in _cuentasDeOrigen) { <option value="@c.PublicId">@c.Number · @c.Line.Name · @Pesos(c.Available)</option> }
+                            </select>
+                        </label>
+                    }
+                </div>
+                @foreach (var e in _errores) { <p class="aviso aviso-error" role="alert">@e</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || _oficina is null)" OnClick="@ConstituirAsync">Constituir</SfButton>
+                </div>
+            </div>
+        </IndicadorDeCarga>
+    }
+</div>
+</PermissionGate>
+
+@code {
+    private static readonly CultureInfo Es = CultureInfo.GetCultureInfo("es-CO");
+
+    private readonly EstadoDeCarga _cargaInicial = new(), _simulacion = new(), _cargaCuentas = new(), _guardado = new();
+    private IReadOnlyList<LineaDelCatalogoDto> _lineas = [];
+    private IReadOnlyList<SucursalContableDto> _oficinas = [];
+    private IReadOnlyList<AdjuntoDto> _soportes = [];
+    private IReadOnlyList<CuentaEnListaDto> _cuentasALaVista = [], _cuentasDeOrigen = [];
+    private PersonSearchPicker.PersonSearchItem? _titular;
+    private Guid? _linea, _oficina;
+    private decimal? _margenEnPuntos;
+    private string? _motivoDeNegociacion;
+    private int _manejo = TextosDeCaptaciones.Indistinto;
+    private ConstituirCdatRequest _pedido = new();
+    private SimulacionDeCdatDto? _simulado;
+    private List<string> _errores = [], _erroresDeSimulacion = [];
+    private ClaveDeOperacion _clave = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var carga = _cargaInicial.Iniciar();
+        var lineas = await Cliente.LineasAsync(TextosDeCaptaciones.Captacion);
+        _lineas = [.. (lineas.Value ?? []).Where(l => l.DepositClass == TextosDeCaptaciones.Cdat && l.Status == 2)];
+        _oficinas = (await Inventario.ListarSucursalesAsync()).Value ?? [];
+        if (_oficinas.Count == 1) _oficina = _oficinas[0].PublicId;
+        if (_lineas.Count == 1) _linea = _lineas[0].PublicId;
+    }
+
+    private void CambiarLinea(object? valor)
+    {
+        _linea = Guid.TryParse(valor?.ToString(), out var g) ? g : null;
+        _simulado = null;
+    }
+
+    private async Task CambiarTitularAsync(PersonSearchPicker.PersonSearchItem? persona)
+    {
+        _titular = persona;
+        _simulado = null;
+        _pedido.Parties.RemoveAll(p => p.PersonPublicId == persona?.PublicId);
+        _pedido.Beneficiaries.RemoveAll(b => b.PersonPublicId == persona?.PublicId);
+        await CargarSoportesAsync();
+        await CargarCuentasAsync();
+    }
+
+    private async Task CargarSoportesAsync()
+    {
+        if (_titular is null) { _soportes = []; return; }
+        var r = await Adjuntos.ListarAsync(CaptacionesClient.DuenoDeSoportesDeTitularidad, _titular.PublicId);
+        _soportes = (r.Value ?? []).Where(a => a.Disponible).ToList();
+    }
+
+    private async Task CargarCuentasAsync()
+    {
+        if (_titular is null) { _cuentasALaVista = _cuentasDeOrigen = []; return; }
+        using var carga = _cargaCuentas.Iniciar();
+        var r = await Cliente.CuentasAsync(naturaleza: TextosDeCaptaciones.Captacion, titular: _titular.PublicId, tamano: 100);
+        var vivas = (r.Value?.Items ?? []).Where(c => c.Status == TextosDeCaptaciones.Activa).ToList();
+        _cuentasALaVista = vivas.Where(c => c.DepositClass == TextosDeCaptaciones.ALaVista).ToList();
+        _cuentasDeOrigen = vivas.Where(c => c.DepositClass is TextosDeCaptaciones.ALaVista or TextosDeCaptaciones.Permanente).ToList();
+    }
+
+    private decimal? Margen => _margenEnPuntos is > 0m ? decimal.Round(_margenEnPuntos.Value / 100m, 6) : null;
+
+    private async Task SimularAsync()
+    {
+        if (_linea is null) return;
+        using var carga = _simulacion.Iniciar();
+        _erroresDeSimulacion = [];
+        var r = await Cliente.SimularCdatAsync(new SimularCdatRequest(_linea.Value, _pedido.Amount, _pedido.TermDays, _pedido.InterestPeriodicity, _pedido.Timing,
+            null, Margen, _titular?.PublicId, _oficina, string.IsNullOrWhiteSpace(_pedido.Channel) ? null : _pedido.Channel.Trim()));
+        if (!r.IsSuccess || r.Value is null) { _simulado = null; _erroresDeSimulacion = [.. LineasDeCreditoClient.Explicar(r)]; return; }
+        _simulado = r.Value;
+        _clave = new ClaveDeOperacion();
+    }
+
+    private async Task ConstituirAsync()
+    {
+        if (_titular is null || _linea is null || _oficina is null || _simulado is null) return;
+        using var carga = _guardado.Iniciar();
+        _errores = [];
+        _pedido.LinePublicId = _linea.Value;
+        _pedido.HolderPersonPublicId = _titular.PublicId;
+        _pedido.OfficePublicId = _oficina.Value;
+        _pedido.HandlingMode = _manejo;
+        _pedido.ExpectedPreviewSha256 = _simulado.Fingerprint;
+        _pedido.Negotiation = Margen is { } m ? new NegociacionDeCdatRequest(m, _motivoDeNegociacion?.Trim() ?? string.Empty) : null;
+        if (_pedido.PaymentDestination.Kind == TextosDeCdat.DestinoGiro)
+        {
+            _pedido.PaymentDestination.AccountPublicId = null;
+            _pedido.PaymentDestination.PayeePersonPublicId = _titular.PublicId;
+        }
+        if (_pedido.Funding.Kind == TextosDeCdat.FondeoRecaudador) _pedido.Funding.SourceAccountPublicId = null;
+        var r = await Cliente.ConstituirCdatAsync(_pedido, _clave);
+        if (!r.IsSuccess || r.Value is null)
+        {
+            _errores = [.. LineasDeCreditoClient.Explicar(r)];
+            if (r.ErrorCode == "Lending.Savings.PreviewChanged") _errores.Add("Las condiciones cambiaron desde la simulación: vuelva a simular y revise el plan.");
+            return;
+        }
+        var cdat = r.Value;
+        var estado = cdat.PendingNegotiation is not null
+            ? "en apertura, esperando la decisión de su tasa negociada"
+            : cdat.Status == TextosDeCaptaciones.Activa ? "constituido y fondeado" : "en apertura, esperando el fondeo";
+        await Notification.SuccessAsync($"CDAT {cdat.Account.Number} {estado}.");
+        Navegacion.NavigateTo($"/cartera/cdat/{cdat.Account.PublicId}");
+    }
+
+    private static string Pesos(decimal valor) => "$ " + valor.ToString("N0", Es);
+}

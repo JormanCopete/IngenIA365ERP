@@ -104,6 +104,11 @@
                 <PermissionGate Required="Lending.Accounts.Read">
                     <NavLink href="/cartera/aportes" class="nav-subitem">Aportes sociales</NavLink>
                 </PermissionGate>
+                @* US6 (T179): los CDAT —lista, calendario de vencimientos y tasas negociadas por decidir—; la constitución (/cartera/cdat/nuevo) y la ficha
+                   (/cartera/cdat/{id}) se abren desde allí. *@
+                <PermissionGate Required="Lending.Accounts.Read">
+                    <NavLink href="/cartera/cdat" class="nav-subitem">CDAT</NavLink>
+                </PermissionGate>
                 @* US10 (T106): el retiro del asociado —radicar, decidir con acta, liquidar con el cruce y devolver—; la ficha
                    (/cartera/retiros-asociado/{id}) se abre desde la lista. *@
                 <PermissionGate Required="Lending.MembershipWithdrawals.File" AnyOf="@(new[] { "Lending.MembershipWithdrawals.Approve", "Lending.MembershipWithdrawals.Settle" })">

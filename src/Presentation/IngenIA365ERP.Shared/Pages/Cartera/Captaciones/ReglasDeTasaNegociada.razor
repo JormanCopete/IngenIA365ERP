@@ -1,0 +1,130 @@
+@using System.Globalization
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Http
+@inject CaptacionesClient Cliente
+@inject INotificationService Notification
+
+@* Feature 014, US6 (T179; FR-127, D34; api.md §3): las reglas de tasa negociada de una línea de CDAT que la admite, dentro del detalle de la línea. Cada
+   regla fija criterios combinables (vacío = no restringe) y el margen máximo sobre la tabla; se digita en puntos y viaja como fracción. Registrar con el
+   mismo código crea una versión nueva; terminarla rige desde la fecha que se elija. Sin ruta propia. *@
+<div class="info-card">
+    <h4>Reglas de tasa negociada</h4>
+    <IndicadorDeCarga Cargando="@(_carga.Activa || _guardado.Activa)">
+        @if (_reglas.Count == 0)
+        {
+            <p class="texto-tenue">La línea no tiene reglas vigentes: sin regla que case no se negocia.</p>
+        }
+        else
+        {
+            <table class="data-grid">
+                <thead><tr><th>Código</th><th class="numero">Prioridad</th><th>Criterios</th><th class="numero">Margen máximo</th><th>Desde</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var r in _reglas)
+                    {
+                        var regla = r;
+                        <tr>
+                            <td>@regla.Code (v@(regla.Version))</td>
+                            <td class="numero">@regla.Priority</td>
+                            <td>@Criterios(regla.Criteria)</td>
+                            <td class="numero">@TextosDeCdat.Puntos(regla.MaxMarginEa)</td>
+                            <td>@regla.ValidFrom.ToString("dd/MM/yyyy")</td>
+                            <td>
+                                <PermissionGate Required="Lending.DepositLines.Manage">
+                                    <SfButton CssClass="e-flat e-small" Disabled="@string.IsNullOrWhiteSpace(_motivo)" OnClick="@(() => TerminarAsync(regla))">Terminar</SfButton>
+                                </PermissionGate>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+
+        <PermissionGate Required="Lending.DepositLines.Manage">
+            <div class="form-grid">
+                <label class="campo">Código *<input class="e-input" maxlength="10" @bind="_pedido.Code" /></label>
+                <label class="campo">Prioridad<input type="number" class="e-input" min="1" @bind="_pedido.Priority" /></label>
+                <label class="campo">Margen máximo (puntos EA) *<input type="number" class="e-input" min="0" step="0.01" @bind="_margenEnPuntos" /></label>
+                <label class="campo">Antigüedad mínima (meses)<input type="number" class="e-input" min="0" @bind="_pedido.Criteria.MinSeniorityMonths" /></label>
+                <label class="campo">Monto desde<input type="number" class="e-input" min="0" @bind="_pedido.Criteria.AmountFrom" /></label>
+                <label class="campo">Monto hasta<input type="number" class="e-input" min="0" @bind="_pedido.Criteria.AmountTo" /></label>
+                <label class="campo">Plazo desde (días)<input type="number" class="e-input" min="1" @bind="_pedido.Criteria.TermDaysFrom" /></label>
+                <label class="campo">Plazo hasta (días)<input type="number" class="e-input" min="1" @bind="_pedido.Criteria.TermDaysTo" /></label>
+                <label class="campo">Saldo del titular desde<input type="number" class="e-input" min="0" @bind="_pedido.Criteria.HolderBalanceFrom" /></label>
+                <label class="campo">Canal<input class="e-input" maxlength="20" @bind="_pedido.Criteria.Channel" /></label>
+                <label class="campo">Rige desde *<input type="date" class="e-input" @bind="_pedido.ValidFrom" /></label>
+                <label class="campo campo-ancho">Motivo *<input class="e-input" maxlength="300" @bind="_motivo" /></label>
+            </div>
+            @foreach (var e in _errores) { <p class="aviso aviso-error" role="alert">@e</p> }
+            <div class="toolbar">
+                <SfButton CssClass="e-primary" Disabled="@(string.IsNullOrWhiteSpace(_motivo) || string.IsNullOrWhiteSpace(_pedido.Code) || _margenEnPuntos is not > 0m)"
+                          OnClick="@RegistrarAsync">Registrar regla</SfButton>
+            </div>
+        </PermissionGate>
+    </IndicadorDeCarga>
+</div>
+
+@code {
+    private static readonly CultureInfo Es = CultureInfo.GetCultureInfo("es-CO");
+
+    [Parameter, EditorRequired] public Guid Linea { get; set; }
+
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+    private IReadOnlyList<ReglaDeTasaNegociadaDto> _reglas = [];
+    private ReglaDeTasaNegociadaRequest _pedido = new();
+    private decimal? _margenEnPuntos;
+    private string? _motivo;
+    private List<string> _errores = [];
+    private ClaveDeOperacion _clave = new();
+
+    protected override async Task OnParametersSetAsync() => await CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Cliente.ReglasDeTasaAsync(Linea);
+        _reglas = r.Value ?? [];
+    }
+
+    private async Task RegistrarAsync()
+    {
+        using var carga = _guardado.Iniciar();
+        _errores = [];
+        _pedido.MaxMarginEa = decimal.Round((_margenEnPuntos ?? 0m) / 100m, 6);
+        _pedido.Reason = _motivo!.Trim();
+        _pedido.Code = _pedido.Code.Trim().ToUpperInvariant();
+        var r = await Cliente.RegistrarReglaDeTasaAsync(Linea, _pedido, _clave);
+        if (!r.IsSuccess) { _errores = [.. LineasDeCreditoClient.Explicar(r)]; return; }
+        await Notification.SuccessAsync($"Regla {_pedido.Code} registrada.");
+        _pedido = new ReglaDeTasaNegociadaRequest();
+        _margenEnPuntos = null;
+        _motivo = null;
+        _clave = new ClaveDeOperacion();
+        await CargarAsync();
+    }
+
+    private async Task TerminarAsync(ReglaDeTasaNegociadaDto regla)
+    {
+        using var carga = _guardado.Iniciar();
+        var r = await Cliente.TerminarReglaDeTasaAsync(Linea, regla.PublicId, new TerminarReglaDeTasaRequest(DateOnly.FromDateTime(DateTime.Today), _motivo!.Trim()),
+            new ClaveDeOperacion());
+        if (!r.IsSuccess) { await Notification.ErrorAsync(string.Join(" ", LineasDeCreditoClient.Explicar(r))); return; }
+        await Notification.SuccessAsync($"Regla {regla.Code} terminada.");
+        await CargarAsync();
+    }
+
+    private static string Criterios(CriteriosDeTasaNegociadaDto c)
+    {
+        var partes = new List<string>();
+        if (c.MinSeniorityMonths is { } a) partes.Add($"antigüedad ≥ {a} meses");
+        if (c.AmountFrom is not null || c.AmountTo is not null) partes.Add($"monto {Rango(c.AmountFrom, c.AmountTo)}");
+        if (c.TermDaysFrom is not null || c.TermDaysTo is not null) partes.Add($"plazo {c.TermDaysFrom?.ToString() ?? "…"} a {c.TermDaysTo?.ToString() ?? "…"} días");
+        if (c.BaseRateFrom is not null || c.BaseRateTo is not null) partes.Add($"tabla {TextosDeCdat.Puntos(c.BaseRateFrom)} a {TextosDeCdat.Puntos(c.BaseRateTo)}");
+        if (c.HolderBalanceFrom is not null || c.HolderBalanceTo is not null) partes.Add($"saldo del titular {Rango(c.HolderBalanceFrom, c.HolderBalanceTo)}");
+        if (c.OfficePublicId is not null) partes.Add("una oficina");
+        if (!string.IsNullOrWhiteSpace(c.Channel)) partes.Add($"canal {c.Channel}");
+        return partes.Count == 0 ? "Todo CDAT de la línea" : string.Join(" · ", partes);
+    }
+
+    private static string Rango(decimal? desde, decimal? hasta) =>
+        $"{(desde is { } d ? "$ " + d.ToString("N0", Es) : "…")} a {(hasta is { } h ? "$ " + h.ToString("N0", Es) : "…")}";
+}

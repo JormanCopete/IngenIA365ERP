@@ -1,0 +1,468 @@
+@page "/cartera/cdat/{Id:guid}"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Globalization
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Http
+@inject CaptacionesClient Cliente
+@inject INotificationService Notification
+@inject NavigationManager Navegacion
+
+<PageTitle>CDAT - IngenIA365ERP</PageTitle>
+
+@* Feature 014, US6 (T179; FR-067 a FR-073, FR-127; contracts/api.md §5 y §6): la ficha del CDAT. Las condiciones vigentes (versión, título, tasa con su
+   margen negociado, plazo, plazo de emisión, gracia e instrucción efectiva), la propuesta mientras espera el fondeo, la solicitud de tasa negociada que espera
+   (aprobar o negar quien tiene el nivel; retirarla quien la pidió), el plan de cada versión con lo pagado, el historial de versiones y títulos, y las acciones:
+   fondear por traslado, cambiar la instrucción al vencimiento, renovar (en la ventana del vencimiento a la gracia) y redimir con su vista previa, cuya huella
+   viaja con la redención. Una redención sobre la atribución queda esperando un aprobador. *@
+<PermissionGate Required="Lending.Accounts.Read" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>@(_cdat is { } t ? $"CDAT {t.Account.Number}" : "CDAT")</h3>
+        <div class="toolbar">
+            <SfButton CssClass="e-outline" OnClick="@(() => Navegacion.NavigateTo("/cartera/cdat"))">Volver a CDAT</SfButton>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+        @if (_cdat is { } c)
+        {
+            <div class="info-card">
+                <h4>@c.Account.Holder.FullName · @c.Account.Line.Code · @TextosDeCaptaciones.EstadoDeCuenta(c.Status)</h4>
+                @if (c.CurrentTerms is { } v)
+                {
+                    <dl class="form-grid">
+                        <div><dt>Título</dt><dd>@v.TitleNumber (versión @v.Version, @TextosDeCdat.Causa(v.Cause).ToLowerInvariant())</dd></div>
+                        <div><dt>Capital</dt><dd>@Pesos(v.Amount)</dd></div>
+                        <div><dt>Plazo</dt><dd>@v.TermDays días, del @v.StartDate.ToString("dd/MM/yyyy") al @v.MaturityDate.ToString("dd/MM/yyyy") (pago el @v.PaymentDate.ToString("dd/MM/yyyy"))</dd></div>
+                        <div><dt>Tasa EA</dt><dd>@TextosDeCdat.Puntos(v.EffectiveAnnual) (tabla @TextosDeCdat.Puntos(v.TableRate)@(v.Negotiated is { } n ? $", margen {TextosDeCdat.Puntos(n.MarginEa)} aprobado por {n.ApprovedBy ?? "—"}" : ""))</dd></div>
+                        <div><dt>Intereses</dt><dd>@TextosDeCdat.Periodicidad(v.InterestPeriodicity) · @TextosDeCdat.Modalidad(v.Timing).ToLowerInvariant() · @(v.PaymentDestination == TextosDeCdat.DestinoGiro ? "por giro" : "a la cuenta")</dd></div>
+                        <div><dt>Plazo de emisión</dt><dd>@TextosDeCdat.PlazoDeEmision(v.IssueTermBand)</dd></div>
+                        <div><dt>Al vencer</dt><dd>@TextosDeCdat.Instruccion(c.EffectiveInstruction ?? v.MaturityInstruction)@(v.GraceUntil is { } g ? $" · gracia hasta el {g:dd/MM/yyyy}" : "")@(v.RolloverCount > 0 ? $" · {v.RolloverCount} prórroga(s)" : "")</dd></div>
+                    </dl>
+                }
+                @if (c.Proposal is { } p)
+                {
+                    <p class="texto-apoyo">
+                        Espera el fondeo: @Pesos(p.Amount) a @p.TermDays días, @TextosDeCdat.Puntos(p.Rate) EA@(p.MarginEa is { } m ? $" (tabla {TextosDeCdat.Puntos(p.TableRate)} + {TextosDeCdat.Puntos(m)})" : ""),
+                        @(p.Funding == TextosDeCdat.FondeoTraslado ? "por traslado" : "por consignación del monto exacto").
+                    </p>
+                }
+                <div class="toolbar">
+                    @if (c.Status == TextosDeCaptaciones.EnApertura && c.PendingNegotiation is null)
+                    {
+                        <PermissionGate Required="Lending.TermDeposits.Constitute">
+                            <SfButton CssClass="e-primary" OnClick="@(() => _mostrarFondeo = true)">Fondear por traslado</SfButton>
+                        </PermissionGate>
+                    }
+                    @if (c.CurrentTerms is not null && c.Status is TextosDeCaptaciones.Activa or 4)
+                    {
+                        <PermissionGate Required="Lending.TermDeposits.Renew">
+                            <SfButton CssClass="e-outline" OnClick="@AbrirInstruccion">Instrucción al vencimiento</SfButton>
+                            <SfButton CssClass="e-outline" OnClick="@AbrirRenovacion">Renovar</SfButton>
+                        </PermissionGate>
+                        <PermissionGate Required="Lending.TermDeposits.Redeem">
+                            <SfButton CssClass="e-outline" OnClick="@AbrirRedencionAsync">Redimir</SfButton>
+                        </PermissionGate>
+                    }
+                </div>
+            </div>
+
+            @if (c.PendingNegotiation is { } s)
+            {
+                <div class="info-card">
+                    <h4>Tasa negociada en espera</h4>
+                    <p>
+                        @s.RequestedBy pidió @TextosDeCdat.Puntos(s.RequestedMarginEa) sobre la tabla (@TextosDeCdat.Puntos(s.TableRate)); la regla @s.Rule admite hasta
+                        @TextosDeCdat.Puntos(s.MaxMarginEa). Costo frente a la tabla: @Pesos(s.CostVsTable) al año. Motivo: @s.Reason
+                        @if (s.LevelCode is { } nivel) { <span> Decide el nivel @nivel@(s.RoutingKind is { } k ? $" ({k})" : "").</span> }
+                    </p>
+                    <IndicadorDeCarga Cargando="@_decision.Activa">
+                        <div class="form-grid">
+                            <label class="campo campo-ancho">Motivo *<input class="e-input" maxlength="500" @bind="_motivoDecision" /></label>
+                            <label class="campo">Punto de acta (si decide un órgano)<input class="e-input" @bind="_puntoDeActa" placeholder="Identificador del punto" /></label>
+                        </div>
+                        <div class="toolbar">
+                            <PermissionGate Required="Lending.NegotiatedRates.Approve">
+                                <SfButton CssClass="e-primary" Disabled="@string.IsNullOrWhiteSpace(_motivoDecision)" OnClick="@(() => DecidirAsync(true))">Aprobar</SfButton>
+                                <SfButton CssClass="e-outline" Disabled="@string.IsNullOrWhiteSpace(_motivoDecision)" OnClick="@(() => DecidirAsync(false))">Negar</SfButton>
+                            </PermissionGate>
+                            <PermissionGate Required="Lending.NegotiatedRates.Request">
+                                <SfButton CssClass="e-flat" Disabled="@string.IsNullOrWhiteSpace(_motivoDecision)" OnClick="@RetirarAsync">Retirar la solicitud</SfButton>
+                            </PermissionGate>
+                        </div>
+                    </IndicadorDeCarga>
+                </div>
+            }
+
+            @if (c.TermsHistory.Count > 0)
+            {
+                <div class="info-card">
+                    <h4>Plan de intereses</h4>
+                    <div class="toolbar">
+                        <label class="campo">Versión
+                            <select class="e-input" value="@(_versionDelPlan?.ToString() ?? "")" @onchange="@(e => CambiarVersionAsync(e.Value))">
+                                @foreach (var h in c.TermsHistory.OrderByDescending(x => x.Version)) { <option value="@h.Version">@h.TitleNumber</option> }
+                            </select>
+                        </label>
+                    </div>
+                    <IndicadorDeCarga Cargando="@_cargaPlan.Activa">
+                        <div class="tabla-desplazable">
+                            <table class="data-grid">
+                                <thead><tr><th class="numero">Período</th><th>Desde</th><th>Hasta</th><th>Pago</th><th class="numero">Días</th><th class="numero">Interés</th><th class="numero">Retención</th><th class="numero">Neto</th><th>Pagado</th></tr></thead>
+                                <tbody>
+                                    @foreach (var l in _plan)
+                                    {
+                                        <tr><td class="numero">@l.Number</td><td>@l.From.ToString("dd/MM/yyyy")</td><td>@l.To.ToString("dd/MM/yyyy")</td><td>@l.PaymentDate.ToString("dd/MM/yyyy")</td><td class="numero">@l.Days</td><td class="numero">@Pesos(l.Interest)</td><td class="numero">@Pesos(l.WithholdingEstimate)</td><td class="numero">@Pesos(l.Net)</td><td>@(l.PaidOn?.ToString("dd/MM/yyyy") ?? "—")</td></tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </IndicadorDeCarga>
+                </div>
+
+                <div class="info-card">
+                    <h4>Versiones y títulos</h4>
+                    <table class="data-grid">
+                        <thead><tr><th>Título</th><th>Causa</th><th class="numero">Capital</th><th>Inicio</th><th>Vence</th><th class="numero">Tasa EA</th><th>Plazo de emisión</th></tr></thead>
+                        <tbody>
+                            @foreach (var h in c.TermsHistory.OrderByDescending(x => x.Version))
+                            {
+                                <tr><td>@h.TitleNumber</td><td>@TextosDeCdat.Causa(h.Cause)</td><td class="numero">@Pesos(h.Amount)</td><td>@h.StartDate.ToString("dd/MM/yyyy")</td><td>@h.MaturityDate.ToString("dd/MM/yyyy")</td><td class="numero">@TextosDeCdat.Puntos(h.EffectiveAnnual)</td><td>@TextosDeCdat.PlazoDeEmision(h.IssueTermBand)</td></tr>
+                            }
+                        </tbody>
+                    </table>
+                    @if (c.Titles.Count == 0)
+                    {
+                        <p class="texto-tenue">Los títulos «CDAT, no negociable» se emiten con los documentos al titular.</p>
+                    }
+                    else
+                    {
+                        <ul>@foreach (var t in c.Titles) { <li>@t.Number · @t.Status · @t.IssuedAt.ToLocalTime().ToString("dd/MM/yyyy")</li> }</ul>
+                    }
+                </div>
+            }
+        }
+    </IndicadorDeCarga>
+</div>
+
+<SfDialog @bind-Visible="_mostrarFondeo" Header="Fondear por traslado" Width="640px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@(_cargaCuentas.Activa || _guardado.Activa)">
+                <div class="form-grid">
+                    <label class="campo campo-ancho">Cuenta de origen *
+                        <select class="e-input" @bind="_origen">
+                            <option value="">Elija la cuenta…</option>
+                            @foreach (var a in _cuentasDeOrigen) { <option value="@a.PublicId">@a.Number · @a.Line.Name · @Pesos(a.Available)</option> }
+                        </select>
+                    </label>
+                    <label class="campo campo-ancho">Motivo<input class="e-input" maxlength="500" @bind="_motivo" /></label>
+                </div>
+                @foreach (var e in _errores) { <p class="aviso aviso-error" role="alert">@e</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_origen is null || _guardado.Activa)" OnClick="@FondearAsync">Fondear</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarInstruccion" Header="Instrucción al vencimiento" Width="640px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa">
+                <div class="form-grid">
+                    <label class="campo">Al vencer
+                        <select class="e-input" @bind="_instruccion">
+                            @foreach (var i in TextosDeCdat.Instrucciones) { <option value="@i.Valor">@i.Texto</option> }
+                        </select>
+                    </label>
+                    <label class="campo campo-ancho">Motivo *<input class="e-input" maxlength="500" @bind="_motivo" /></label>
+                </div>
+                @foreach (var e in _errores) { <p class="aviso aviso-error" role="alert">@e</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(string.IsNullOrWhiteSpace(_motivo) || _guardado.Activa)" OnClick="@CambiarInstruccionAsync">Guardar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarRenovacion" Header="Renovar con condiciones nuevas" Width="760px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa">
+                <p class="texto-tenue">Se renueva entre el vencimiento y el fin de la gracia; lo pendiente del plan se paga antes y nace un título nuevo enlazado al anterior.</p>
+                <div class="form-grid">
+                    <label class="campo">Plazo en días *<input type="number" class="e-input" min="1" @bind="_renovacionPlazo" /></label>
+                    <label class="campo">Intereses
+                        <select class="e-input" @bind="_renovacionPeriodicidad">
+                            @foreach (var p in TextosDeCdat.Periodicidades) { <option value="@p.Valor">@p.Texto</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Modalidad
+                        <select class="e-input" @bind="_renovacionModalidad">
+                            @foreach (var m in TextosDeCdat.Modalidades) { <option value="@m.Valor">@m.Texto</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Margen (puntos EA)<input type="number" class="e-input" min="0" step="0.01" @bind="_renovacionMargen" /></label>
+                    <label class="campo">Cambio de monto
+                        <select class="e-input" @bind="_renovacionCambio">
+                            <option value="">Sin cambio</option>
+                            <option value="@TextosDeCdat.Aumento">Aumentar desde una cuenta</option>
+                            <option value="@TextosDeCdat.Disminucion">Disminuir a una cuenta</option>
+                        </select>
+                    </label>
+                    @if (!string.IsNullOrEmpty(_renovacionCambio))
+                    {
+                        <label class="campo">Valor *<input type="number" class="e-input" min="0" step="1000" @bind="_renovacionValor" /></label>
+                        <label class="campo">Cuenta *
+                            <select class="e-input" @bind="_origen">
+                                <option value="">Elija la cuenta…</option>
+                                @foreach (var a in _cuentasDeOrigen) { <option value="@a.PublicId">@a.Number · @a.Line.Name</option> }
+                            </select>
+                        </label>
+                    }
+                    <label class="campo campo-ancho">Motivo *<input class="e-input" maxlength="500" @bind="_motivo" /></label>
+                </div>
+                @foreach (var e in _errores) { <p class="aviso aviso-error" role="alert">@e</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(string.IsNullOrWhiteSpace(_motivo) || _guardado.Activa)" OnClick="@RenovarAsync">Renovar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarRedencion" Header="Redimir" Width="760px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@(_cargaCuentas.Activa || _cargaVistaPrevia.Activa || _guardado.Activa)">
+                @if (_vistaPrevia is { } vp)
+                {
+                    <dl class="form-grid">
+                        <div><dt>Fecha</dt><dd>@vp.Date.ToString("dd/MM/yyyy")@(vp.IsEarly ? " (anticipada)" : " (al vencimiento o en la gracia)")</dd></div>
+                        <div><dt>Capital</dt><dd>@Pesos(vp.Principal)</dd></div>
+                        <div><dt>Interés causado</dt><dd>@Pesos(vp.AccruedInterest)</dd></div>
+                        <div><dt>Penalidad</dt><dd>@Pesos(vp.Penalty.Amount)@(vp.Penalty.RepricedRate is { } rp ? $" (reliquidado a {TextosDeCdat.Puntos(rp)})" : "")</dd></div>
+                        <div><dt>Interés a pagar</dt><dd>@Pesos(vp.Interest)</dd></div>
+                        <div><dt>Retención</dt><dd>@Pesos(vp.Withholding)</dd></div>
+                        <div><dt>GMF si se abona en cuenta</dt><dd>@Pesos(vp.GmfIfCreditedToAccount)</dd></div>
+                        <div><dt>Neto</dt><dd>@Pesos(vp.Net)</dd></div>
+                    </dl>
+                    @foreach (var x in vp.Explanation) { <p class="texto-tenue">@x</p> }
+                    <div class="form-grid">
+                        <label class="campo">Entregar a
+                            <select class="e-input" @bind="_destinoDeRedencion">
+                                @foreach (var d in TextosDeCdat.Destinos) { <option value="@d.Valor">@d.Texto</option> }
+                            </select>
+                        </label>
+                        @if (_destinoDeRedencion == TextosDeCdat.DestinoCuenta)
+                        {
+                            <label class="campo">Cuenta a la vista *
+                                <select class="e-input" @bind="_origen">
+                                    <option value="">Elija la cuenta…</option>
+                                    @foreach (var a in _cuentasALaVista) { <option value="@a.PublicId">@a.Number · @a.Line.Name</option> }
+                                </select>
+                            </label>
+                        }
+                        <label class="campo campo-ancho">Motivo *<input class="e-input" maxlength="500" @bind="_motivo" /></label>
+                    </div>
+                }
+                @foreach (var e in _errores) { <p class="aviso aviso-error" role="alert">@e</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_vistaPrevia is null || string.IsNullOrWhiteSpace(_motivo) || _guardado.Activa || (_destinoDeRedencion == TextosDeCdat.DestinoCuenta && _origen is null))" OnClick="@RedimirAsync">Redimir</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private static readonly CultureInfo Es = CultureInfo.GetCultureInfo("es-CO");
+
+    [Parameter] public Guid Id { get; set; }
+
+    private readonly EstadoDeCarga _carga = new(), _cargaPlan = new(), _cargaCuentas = new(), _cargaVistaPrevia = new(), _guardado = new(), _decision = new();
+    private CdatDto? _cdat;
+    private IReadOnlyList<LineaDelPlanDeCdatDto> _plan = [];
+    private IReadOnlyList<CuentaEnListaDto> _cuentasALaVista = [], _cuentasDeOrigen = [];
+    private VistaPreviaDeRedencionDto? _vistaPrevia;
+    private int? _versionDelPlan;
+    private string? _error, _motivo, _motivoDecision, _puntoDeActa, _renovacionCambio;
+    private Guid? _origen;
+    private int _instruccion = TextosDeCdat.Prorrogar, _destinoDeRedencion = TextosDeCdat.DestinoCuenta;
+    private int _renovacionPlazo, _renovacionPeriodicidad, _renovacionModalidad = TextosDeCdat.Vencidos;
+    private decimal? _renovacionMargen;
+    private decimal _renovacionValor;
+    private List<string> _errores = [];
+    private ClaveDeOperacion _clave = new();
+    private bool _mostrarFondeo, _mostrarInstruccion, _mostrarRenovacion, _mostrarRedencion;
+
+    protected override async Task OnParametersSetAsync() => await CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        _error = null;
+        var r = await Cliente.CdatAsync(Id);
+        if (!r.IsSuccess || r.Value is null) { _cdat = null; _error = r.ErrorMessage ?? "No se pudo leer el CDAT."; return; }
+        _cdat = r.Value;
+        _versionDelPlan = _cdat.CurrentTerms?.Version;
+        await CargarPlanAsync();
+        await CargarCuentasAsync();
+    }
+
+    private async Task CargarPlanAsync()
+    {
+        if (_cdat?.CurrentTerms is null) { _plan = []; return; }
+        using var carga = _cargaPlan.Iniciar();
+        var r = await Cliente.PlanDeCdatAsync(Id, _versionDelPlan);
+        _plan = r.Value ?? [];
+    }
+
+    private async Task CambiarVersionAsync(object? valor)
+    {
+        _versionDelPlan = int.TryParse(valor?.ToString(), out var v) ? v : null;
+        await CargarPlanAsync();
+    }
+
+    private async Task CargarCuentasAsync()
+    {
+        if (_cdat is null) return;
+        using var carga = _cargaCuentas.Iniciar();
+        var r = await Cliente.CuentasAsync(naturaleza: TextosDeCaptaciones.Captacion, titular: _cdat.Account.Holder.PersonPublicId, tamano: 100);
+        var vivas = (r.Value?.Items ?? []).Where(c => c.Status == TextosDeCaptaciones.Activa && c.PublicId != Id).ToList();
+        _cuentasALaVista = vivas.Where(c => c.DepositClass == TextosDeCaptaciones.ALaVista).ToList();
+        _cuentasDeOrigen = vivas.Where(c => c.DepositClass is TextosDeCaptaciones.ALaVista or TextosDeCaptaciones.Permanente).ToList();
+    }
+
+    private void Preparar()
+    {
+        _errores = [];
+        _motivo = null;
+        _origen = null;
+        _clave = new ClaveDeOperacion();
+    }
+
+    private void AbrirInstruccion()
+    {
+        Preparar();
+        _instruccion = _cdat?.EffectiveInstruction ?? _cdat?.CurrentTerms?.MaturityInstruction ?? TextosDeCdat.Prorrogar;
+        _mostrarInstruccion = true;
+    }
+
+    private void AbrirRenovacion()
+    {
+        Preparar();
+        var v = _cdat?.CurrentTerms;
+        _renovacionPlazo = v?.TermDays ?? 180;
+        _renovacionPeriodicidad = v?.InterestPeriodicity ?? TextosDeCdat.AlVencimiento;
+        _renovacionModalidad = v?.Timing ?? TextosDeCdat.Vencidos;
+        _renovacionMargen = null;
+        _renovacionCambio = null;
+        _renovacionValor = 0m;
+        _mostrarRenovacion = true;
+    }
+
+    private async Task AbrirRedencionAsync()
+    {
+        Preparar();
+        _vistaPrevia = null;
+        _mostrarRedencion = true;
+        using var carga = _cargaVistaPrevia.Iniciar();
+        var r = await Cliente.SimularRedencionAsync(Id, DateOnly.FromDateTime(DateTime.Today));
+        if (!r.IsSuccess || r.Value is null) { _errores = [.. LineasDeCreditoClient.Explicar(r)]; return; }
+        _vistaPrevia = r.Value;
+    }
+
+    private async Task FondearAsync()
+    {
+        if (_origen is null) return;
+        using var carga = _guardado.Iniciar();
+        var r = await Cliente.FondearCdatAsync(Id, new FondearCdatRequest(_origen.Value, [], null, _motivo), _clave);
+        if (!r.IsSuccess) { _errores = [.. LineasDeCreditoClient.Explicar(r)]; return; }
+        _mostrarFondeo = false;
+        await Notification.SuccessAsync("CDAT fondeado: quedó constituido con su plan.");
+        await CargarAsync();
+    }
+
+    private async Task CambiarInstruccionAsync()
+    {
+        using var carga = _guardado.Iniciar();
+        var r = await Cliente.CambiarInstruccionDeCdatAsync(Id, new InstruccionDeCdatRequest(_instruccion, null, _motivo!.Trim()), _clave);
+        if (!r.IsSuccess) { _errores = [.. LineasDeCreditoClient.Explicar(r)]; return; }
+        _mostrarInstruccion = false;
+        await Notification.SuccessAsync("Instrucción al vencimiento guardada.");
+        await CargarAsync();
+    }
+
+    private async Task RenovarAsync()
+    {
+        using var carga = _guardado.Iniciar();
+        CambioDeMontoDeCdatRequest? cambio = null;
+        if (!string.IsNullOrEmpty(_renovacionCambio) && _origen is { } cuenta)
+            cambio = _renovacionCambio == TextosDeCdat.Aumento
+                ? new CambioDeMontoDeCdatRequest(TextosDeCdat.Aumento, _renovacionValor, cuenta)
+                : new CambioDeMontoDeCdatRequest(TextosDeCdat.Disminucion, _renovacionValor,
+                    Destination: new DestinoDeCdatRequest { Kind = TextosDeCdat.DestinoCuenta, AccountPublicId = cuenta });
+        var margen = _renovacionMargen is > 0m ? decimal.Round(_renovacionMargen.Value / 100m, 6) : (decimal?)null;
+        var r = await Cliente.RenovarCdatAsync(Id, new RenovarCdatRequest(_renovacionPlazo, _renovacionPeriodicidad, _renovacionModalidad, _motivo!.Trim(), cambio,
+            margen), _clave);
+        if (!r.IsSuccess) { _errores = [.. LineasDeCreditoClient.Explicar(r)]; return; }
+        _mostrarRenovacion = false;
+        await Notification.SuccessAsync("CDAT renovado: nació una versión nueva con su título.");
+        await CargarAsync();
+    }
+
+    private async Task RedimirAsync()
+    {
+        if (_vistaPrevia is null) return;
+        using var carga = _guardado.Iniciar();
+        var destino = _destinoDeRedencion == TextosDeCdat.DestinoCuenta
+            ? new DestinoDeRedencionRequest(TextosDeCdat.DestinoCuenta, _origen)
+            : new DestinoDeRedencionRequest(TextosDeCdat.DestinoGiro, PayeePersonPublicId: _cdat?.Account.Holder.PersonPublicId);
+        var r = await Cliente.RedimirCdatAsync(Id, new RedimirCdatRequest(destino, _vistaPrevia.Fingerprint, _motivo!.Trim()), _clave);
+        if (!r.IsSuccess || r.Value is null)
+        {
+            _errores = [.. LineasDeCreditoClient.Explicar(r)];
+            if (r.ErrorCode == "Lending.Savings.PreviewChanged") _errores.Add("La vista previa cambió: ciérrela y vuelva a abrirla.");
+            return;
+        }
+        _mostrarRedencion = false;
+        if (r.Value.EsperaAprobacion)
+            await Notification.WarningAsync("La redención supera su atribución: quedó esperando un aprobador con segundo factor. Repítala cuando esté aprobada.");
+        else
+            await Notification.SuccessAsync($"CDAT redimido: se entregaron {Pesos(r.Value.Delivered)}.");
+        await CargarAsync();
+    }
+
+    private async Task DecidirAsync(bool aprobar)
+    {
+        if (_cdat?.PendingNegotiation is not { } s) return;
+        using var carga = _decision.Iniciar();
+        Guid? punto = Guid.TryParse(_puntoDeActa, out var g) ? g : null;
+        var pedido = new DecidirTasaNegociadaRequest(_motivoDecision!.Trim(), null, punto);
+        var clave = new ClaveDeOperacion();
+        var r = aprobar ? await Cliente.AprobarTasaAsync(s.PublicId, pedido, clave) : await Cliente.NegarTasaAsync(s.PublicId, pedido, clave);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(string.Join(" ", LineasDeCreditoClient.Explicar(r))); return; }
+        _motivoDecision = null;
+        await Notification.SuccessAsync(aprobar ? "Tasa negociada aprobada: el CDAT espera el fondeo." : "Tasa negociada negada: rige la tasa de la tabla.");
+        await CargarAsync();
+    }
+
+    private async Task RetirarAsync()
+    {
+        if (_cdat?.PendingNegotiation is not { } s) return;
+        using var carga = _decision.Iniciar();
+        var r = await Cliente.RetirarTasaAsync(s.PublicId, _motivoDecision!.Trim(), new ClaveDeOperacion());
+        if (!r.IsSuccess) { await Notification.ErrorAsync(string.Join(" ", LineasDeCreditoClient.Explicar(r))); return; }
+        _motivoDecision = null;
+        await Notification.SuccessAsync("Solicitud retirada.");
+        await CargarAsync();
+    }
+
+    private static string Pesos(decimal valor) => "$ " + valor.ToString("N0", Es);
+}

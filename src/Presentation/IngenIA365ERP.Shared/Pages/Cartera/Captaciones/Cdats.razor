@@ -1,0 +1,208 @@
+@page "/cartera/cdat"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Globalization
+@using IngenIA365ERP.Shared.Services.Cartera
+@inject CaptacionesClient Cliente
+@inject PermisosDelUsuario Permisos
+@inject INotificationService Notification
+@inject NavigationManager Navegacion
+
+<PageTitle>CDAT - IngenIA365ERP</PageTitle>
+
+@* Feature 014, US6 (T179; FR-067 a FR-073, FR-127; contracts/api.md §5 y §6): los CDAT del alcance con sus filtros, lo que vence en los próximos días por
+   plazo de emisión (sin titulares) y, para quien decide tasas negociadas, las solicitudes que esperan. La constitución es /cartera/cdat/nuevo y la ficha
+   /cartera/cdat/{id}. *@
+<PermissionGate Required="Lending.Accounts.Read" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>CDAT</h3>
+        <div class="toolbar">
+            <PermissionGate Required="Lending.TermDeposits.Constitute">
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@(() => Navegacion.NavigateTo("/cartera/cdat/nuevo"))">Constituir CDAT</SfButton>
+            </PermissionGate>
+        </div>
+    </div>
+
+    @if (_decide)
+    {
+        <div class="info-card">
+            <h4>Tasas negociadas por decidir</h4>
+            <IndicadorDeCarga Cargando="@_cargaSolicitudes.Activa">
+                @if (_solicitudes.Count == 0)
+                {
+                    <p class="texto-tenue">No hay solicitudes en espera.</p>
+                }
+                else
+                {
+                    <div class="tabla-desplazable">
+                        <table class="data-grid">
+                            <thead><tr><th>CDAT</th><th>Titular</th><th class="numero">Monto</th><th class="numero">Tabla</th><th class="numero">Margen pedido</th><th class="numero">Máximo</th><th>Pidió</th><th></th></tr></thead>
+                            <tbody>
+                                @foreach (var s in _solicitudes)
+                                {
+                                    var solicitud = s;
+                                    <tr>
+                                        <td>@solicitud.AccountNumber</td>
+                                        <td>@solicitud.Holder.FullName</td>
+                                        <td class="numero">@Pesos(solicitud.Amount)</td>
+                                        <td class="numero">@TextosDeCdat.Puntos(solicitud.TableRate)</td>
+                                        <td class="numero">@TextosDeCdat.Puntos(solicitud.RequestedMarginEa)</td>
+                                        <td class="numero">@TextosDeCdat.Puntos(solicitud.MaxMarginEa)</td>
+                                        <td>@solicitud.RequestedBy</td>
+                                        <td><SfButton CssClass="e-flat e-small" OnClick="@(() => Navegacion.NavigateTo($"/cartera/cdat/{solicitud.AccountPublicId}"))">Decidir</SfButton></td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </IndicadorDeCarga>
+        </div>
+    }
+
+    <div class="toolbar">
+        <select class="e-input" value="@(_estado?.ToString() ?? "")" @onchange="@(e => CambiarEstadoAsync(e.Value))">
+            <option value="">Todos los estados</option>
+            @foreach (var e in TextosDeCaptaciones.EstadosDeCuenta) { <option value="@e.Valor">@e.Texto</option> }
+        </select>
+        <select class="e-input" value="@(_plazo?.ToString() ?? "")" @onchange="@(e => CambiarPlazoAsync(e.Value))">
+            <option value="">Todo plazo de emisión</option>
+            @foreach (var p in TextosDeCdat.PlazosDeEmision) { <option value="@p.Valor">@p.Texto</option> }
+        </select>
+        <label class="campo">Vence desde <input type="date" class="e-input" @bind="_venceDesde" /></label>
+        <label class="campo">hasta <input type="date" class="e-input" @bind="_venceHasta" /></label>
+        <label class="campo-check"><input type="checkbox" @bind="_soloNegociados" /> Sólo con tasa negociada</label>
+        <SfButton CssClass="e-outline" IconCss="e-icons e-search" Disabled="@_carga.Activa" OnClick="@(() => CargarAsync(1))">Buscar</SfButton>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        <div class="tabla-desplazable">
+            <table class="data-grid">
+                <thead>
+                    <tr><th>Número</th><th>Título</th><th>Titular</th><th>Línea</th><th class="numero">Capital</th><th class="numero">Plazo</th><th class="numero">Tasa EA</th><th>Plazo de emisión</th><th>Vence</th><th>Estado</th><th>Instrucción</th><th></th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var c in _cdats)
+                    {
+                        var cdat = c;
+                        <tr>
+                            <td>@cdat.Number</td>
+                            <td>@(cdat.TitleNumber ?? "—")</td>
+                            <td>@cdat.Holder.FullName<br /><span class="texto-tenue">@cdat.Holder.DocumentNumber</span></td>
+                            <td>@cdat.Line.Code</td>
+                            <td class="numero">@Pesos(cdat.Amount)</td>
+                            <td class="numero">@(cdat.TermDays is { } d ? $"{d} días" : "—")</td>
+                            <td class="numero">@TextosDeCdat.Puntos(cdat.EffectiveAnnual)@(cdat.NegotiatedMargin is { } m ? $" (+{TextosDeCdat.Puntos(m)})" : "")</td>
+                            <td>@TextosDeCdat.PlazoDeEmision(cdat.IssueTermBand)</td>
+                            <td>@(cdat.MaturityDate?.ToString("dd/MM/yyyy") ?? "—")</td>
+                            <td>@TextosDeCaptaciones.EstadoDeCuenta(cdat.Status)</td>
+                            <td>@TextosDeCdat.Instruccion(cdat.Instruction)@(cdat.RolloverCount > 0 ? $" · {cdat.RolloverCount} prórroga(s)" : "")</td>
+                            <td><SfButton CssClass="e-flat e-small" OnClick="@(() => Navegacion.NavigateTo($"/cartera/cdat/{cdat.PublicId}"))">Ver</SfButton></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (_cdats.Count == 0)
+        {
+            <p class="texto-tenue">No hay CDAT que coincidan en su alcance.</p>
+        }
+        else
+        {
+            <div class="toolbar">
+                <SfButton CssClass="e-flat" Disabled="@(_pagina <= 1)" OnClick="@(() => CargarAsync(_pagina - 1))">Anterior</SfButton>
+                <span class="texto-tenue">Página @_pagina de @Math.Max(1, (int)Math.Ceiling(_total / (double)TamanoDePagina)) · @_total CDAT</span>
+                <SfButton CssClass="e-flat" Disabled="@(_pagina * TamanoDePagina >= _total)" OnClick="@(() => CargarAsync(_pagina + 1))">Siguiente</SfButton>
+            </div>
+        }
+    </IndicadorDeCarga>
+
+    <PermissionGate Required="Lending.Accounts.View">
+        <div class="info-card">
+            <h4>Vencimientos de los próximos @DiasDelCalendario días</h4>
+            <IndicadorDeCarga Cargando="@_cargaCalendario.Activa">
+                @if (_calendario.Count == 0)
+                {
+                    <p class="texto-tenue">No vence ningún CDAT en esos días.</p>
+                }
+                else
+                {
+                    <table class="data-grid">
+                        <thead><tr><th>Día</th><th>Plazo de emisión</th><th class="numero">CDAT</th><th class="numero">Capital</th></tr></thead>
+                        <tbody>
+                            @foreach (var v in _calendario)
+                            {
+                                <tr><td>@v.Date.ToString("dd/MM/yyyy")</td><td>@TextosDeCdat.PlazoDeEmision(v.IssueTermBand)</td><td class="numero">@v.Count</td><td class="numero">@Pesos(v.Principal)</td></tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </IndicadorDeCarga>
+        </div>
+    </PermissionGate>
+</div>
+</PermissionGate>
+
+@code {
+    private const int TamanoDePagina = 20;
+    private const int DiasDelCalendario = 30;
+    private static readonly CultureInfo Es = CultureInfo.GetCultureInfo("es-CO");
+
+    private readonly EstadoDeCarga _carga = new(), _cargaCalendario = new(), _cargaSolicitudes = new();
+    private List<CdatEnListaDto> _cdats = [];
+    private IReadOnlyList<VencimientoDelDiaDto> _calendario = [];
+    private IReadOnlyList<SolicitudDeTasaNegociadaDto> _solicitudes = [];
+    private long _total;
+    private int _pagina = 1;
+    private int? _estado, _plazo;
+    private DateOnly? _venceDesde, _venceHasta;
+    private bool _soloNegociados, _decide;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _decide = await Permisos.TieneAsync("Lending.NegotiatedRates.Approve");
+        await CargarAsync(1);
+        await CargarCalendarioAsync();
+        if (_decide) await CargarSolicitudesAsync();
+    }
+
+    private async Task CargarAsync(int pagina)
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Cliente.CdatsAsync(_estado, null, _venceDesde, _venceHasta, _plazo, null, _soloNegociados ? true : null, pagina, TamanoDePagina);
+        if (!r.IsSuccess || r.Value is null) { _cdats = []; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer los CDAT."); return; }
+        _cdats = [.. r.Value.Items];
+        _total = r.Value.TotalCount;
+        _pagina = pagina;
+    }
+
+    private async Task CargarCalendarioAsync()
+    {
+        if (!await Permisos.TieneAsync("Lending.Accounts.View")) return;
+        using var carga = _cargaCalendario.Iniciar();
+        var hoy = DateOnly.FromDateTime(DateTime.Today);
+        var r = await Cliente.CalendarioDeVencimientosAsync(hoy, hoy.AddDays(DiasDelCalendario));
+        _calendario = r.Value ?? [];
+    }
+
+    private async Task CargarSolicitudesAsync()
+    {
+        using var carga = _cargaSolicitudes.Iniciar();
+        var r = await Cliente.SolicitudesDeTasaAsync(TextosDeCdat.SolicitudEnEspera);
+        _solicitudes = r.Value?.Items ?? [];
+    }
+
+    private async Task CambiarEstadoAsync(object? valor)
+    {
+        _estado = int.TryParse(valor?.ToString(), out var n) ? n : null;
+        await CargarAsync(1);
+    }
+
+    private async Task CambiarPlazoAsync(object? valor)
+    {
+        _plazo = int.TryParse(valor?.ToString(), out var n) ? n : null;
+        await CargarAsync(1);
+    }
+
+    private static string Pesos(decimal valor) => "$ " + valor.ToString("N0", Es);
+}

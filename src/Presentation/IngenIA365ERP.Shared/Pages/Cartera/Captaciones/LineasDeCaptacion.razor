@@ -139,6 +139,12 @@
                         }
                     </div>
 
+                    @* US6 (T179; FR-127): las reglas de tasa negociada de una línea de CDAT que la admite. *@
+                    @if (d.DepositClass == TextosDeCaptaciones.Cdat && d.DepositVersion is { NegotiatedRateAllowed: true })
+                    {
+                        <ReglasDeTasaNegociada Linea="@d.PublicId" />
+                    }
+
                     <h5>Historial de versiones</h5>
                     <div class="tabla-desplazable">
                         <table class="data-grid">
