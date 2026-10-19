@@ -219,7 +219,7 @@ public sealed class PayrollCalculationEngine
         var autorizadas = novedades
             .Where(x => x.Def.Nature == ConceptNature.Deduction && x.Def.CalculationKind != CalculationKind.CompositeOfConcepts)
             .Select((x, i) => (x.Nov, x.Def, Posicion: i))
-            .OrderBy(x => PrelacionDeCartera(x.Nov)).ThenBy(x => x.Posicion)
+            .OrderBy(x => PrelacionDeCartera(x.Nov, input.Policies.CarteraDeductionOrder)).ThenBy(x => x.Posicion)
             .ToList();
         foreach (var (nov, def, _) in autorizadas)
         {
@@ -232,7 +232,7 @@ public sealed class PayrollCalculationEngine
                 var cabe = Math.Min(disponible, netoDisponible);
                 line.Explanation.Note("Origen", nov.Origin == NoveltyOrigin.LoanDeduction
                     ? "Cuota de Cartera del período: va primera entre las deducciones autorizadas, después de las de ley, y Cartera la recibe al aprobar la nómina."
-                    : "Cuota de aportes o de ahorro del período: entra con las de Cartera (aportes, créditos y ahorros, en ese orden) y la Cartera la recibe al aprobar la nómina.");
+                    : "Cuota de aportes o de ahorro del período: entra con las de Cartera, en el orden de la política PrelacionDescuentosDeCartera (por defecto aportes, créditos y ahorros), y la Cartera la recibe al aprobar la nómina.");
                 if (esperado > cabe)
                 {
                     var motivo = netoDisponible <= disponible ? LoanNonDeductionReasons.InsufficientNet : LoanNonDeductionReasons.DeductionCap;
@@ -502,14 +502,27 @@ public sealed class PayrollCalculationEngine
 
     /// <summary>
     /// Feature 014 (E-02; contrato-de-cuentas §6.1): la prelación entre los descuentos de la Cartera dentro de las deducciones autorizadas —aportes
-    /// (<c>DESC_APORTES</c>), créditos (<c>DESC_CARTERA</c>) y ahorros (<c>DESC_AHORROS</c>), en ese orden— y después las demás. Sin cuotas de cuentas, el
-    /// orden de la 013 no cambia: Cartera primero.
+    /// (<c>DESC_APORTES</c>), créditos (<c>DESC_CARTERA</c>) y ahorros (<c>DESC_AHORROS</c>)— y después las demás. Desde la decisión del dueño del
+    /// 2026-10-18 (D37) el orden entre las tres lo fija la política <c>PrelacionDescuentosDeCartera</c> de la cooperativa (<paramref name="orden"/>; por
+    /// defecto aportes → créditos → ahorros). Sin cuotas de cuentas, el orden de la 013 no cambia: Cartera primero.
     /// </summary>
-    public static int PrelacionDeCartera(NoveltyInput n) => n.Origin switch
+    public static int PrelacionDeCartera(NoveltyInput n, IReadOnlyList<CarteraDeductionKind>? orden)
     {
-        NoveltyOrigin.AccountDeduction when string.Equals(n.ConceptCode, WellKnownConceptCodes.ContributionDeduction, StringComparison.OrdinalIgnoreCase) => 0,
-        NoveltyOrigin.LoanDeduction => 1,
-        NoveltyOrigin.AccountDeduction => 2,
-        _ => 3,
-    };
+        ArgumentNullException.ThrowIfNull(n);
+        CarteraDeductionKind? clase = n.Origin switch
+        {
+            NoveltyOrigin.AccountDeduction when string.Equals(n.ConceptCode, WellKnownConceptCodes.ContributionDeduction, StringComparison.OrdinalIgnoreCase)
+                => CarteraDeductionKind.Contributions,
+            NoveltyOrigin.LoanDeduction => CarteraDeductionKind.Loans,
+            NoveltyOrigin.AccountDeduction => CarteraDeductionKind.Savings,
+            _ => null,
+        };
+        if (clase is not { } c) return 3;
+        var lista = orden is { Count: 3 } ? orden : CarteraDeductionKinds.Defecto;
+        var posicion = lista.ToList().IndexOf(c);
+        return posicion < 0 ? CarteraDeductionKinds.Defecto.ToList().IndexOf(c) : posicion;
+    }
+
+    /// <summary>La prelación con el orden por defecto (aportes → créditos → ahorros).</summary>
+    public static int PrelacionDeCartera(NoveltyInput n) => PrelacionDeCartera(n, CarteraDeductionKinds.Defecto);
 }

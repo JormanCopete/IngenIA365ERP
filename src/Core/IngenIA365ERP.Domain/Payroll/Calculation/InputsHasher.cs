@@ -20,6 +20,9 @@ public static class InputsHasher
         sb.Append("v1|");
         Add(sb, "period", input.Period.StartDate, input.Period.EndDate, (int)input.Period.Periodicity);
         Add(sb, "policy", (int)input.Policies.Rounding, input.Policies.ApplyEmployerExemption);
+        // Feature 014 (D37): la prelación de la Cartera entra a la huella sólo si no es la de defecto (las huellas anteriores no cambian).
+        if (!input.Policies.CarteraDeductionOrder.SequenceEqual(CarteraDeductionKinds.Defecto))
+            Add(sb, "carteraOrder", string.Join(",", input.Policies.CarteraDeductionOrder.Select(k => (int)k)));
 
         var e = input.Employee;
         Add(sb, "emp", e.PublicId, (int)e.Class, e.JoinDate, e.TerminationDate, e.WithholdingProcedure, e.WithholdingRatePercent,

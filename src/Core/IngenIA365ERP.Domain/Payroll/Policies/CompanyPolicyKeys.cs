@@ -30,6 +30,9 @@ public static class CompanyPolicyKeys
     public const string ArranqueNominaFecha = "ArranqueNominaFecha";
     public const string AllowSameUserApproval = "AllowSameUserApproval";
 
+    /// <summary>Feature 014 (decisión del dueño del 2026-10-18, D37): el orden de los descuentos de aportes, créditos y ahorros de la Cartera.</summary>
+    public const string PrelacionDescuentosDeCartera = "PrelacionDescuentosDeCartera";
+
     public const string Verdadero = "true";
     public const string Falso = "false";
 
@@ -57,6 +60,20 @@ public static class CompanyPolicyKeys
     {
         public const string Calendario = "Calendario";
         public const string Habiles = "Habiles";
+    }
+
+    /// <summary>Las seis permutaciones de aportes, créditos y ahorros (D37); el defecto es la primera.</summary>
+    public static class PrelacionDescuentosDeCarteraValores
+    {
+        public const string AportesCreditosAhorros = "Aportes,Creditos,Ahorros";
+        public const string AportesAhorrosCreditos = "Aportes,Ahorros,Creditos";
+        public const string CreditosAportesAhorros = "Creditos,Aportes,Ahorros";
+        public const string CreditosAhorrosAportes = "Creditos,Ahorros,Aportes";
+        public const string AhorrosAportesCreditos = "Ahorros,Aportes,Creditos";
+        public const string AhorrosCreditosAportes = "Ahorros,Creditos,Aportes";
+
+        public static IReadOnlyList<string> Todos { get; } =
+            [AportesCreditosAhorros, AportesAhorrosCreditos, CreditosAportesAhorros, CreditosAhorrosAportes, AhorrosAportesCreditos, AhorrosCreditosAportes];
     }
 
     public static class DeduccionAlRetiroModoValores
@@ -111,6 +128,8 @@ public static class CompanyPolicyKeys
             Formato: FormatoFecha),
         new(AllowSameUserApproval, Booleanos, Falso,
             "Permitir que quien calculó apruebe la misma liquidación, con confirmación expresa"),
+        new(PrelacionDescuentosDeCartera, PrelacionDescuentosDeCarteraValores.Todos, PrelacionDescuentosDeCarteraValores.AportesCreditosAhorros,
+            "Orden en que la nómina descuenta las cuotas de la Cartera entre las deducciones autorizadas: aportes, créditos y ahorros (la liquidación definitiva sigue recaudando sólo créditos)"),
     ];
 
     public static bool Existe(string clave) =>

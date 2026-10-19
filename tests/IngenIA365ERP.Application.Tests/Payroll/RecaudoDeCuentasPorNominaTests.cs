@@ -11,6 +11,7 @@ using IngenIA365ERP.Application.Tests.Common.Integration.Lending;
 using IngenIA365ERP.Application.Tests.Payroll.Common;
 using IngenIA365ERP.Domain.Enums.Payroll;
 using IngenIA365ERP.Domain.Payroll.Calculation;
+using IngenIA365ERP.Domain.Payroll.Policies;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -118,6 +119,28 @@ public class RecaudoDeCuentasPorNominaTests
             N(WellKnownConceptCodes.ContributionDeduction, NoveltyOrigin.AccountDeduction),
         }.OrderBy(PayrollCalculationEngine.PrelacionDeCartera).Select(n => n.ConceptCode);
         orden.Should().Equal(WellKnownConceptCodes.ContributionDeduction, WellKnownConceptCodes.LoanDeduction, WellKnownConceptCodes.SavingsDeduction);
+    }
+
+    [Fact]
+    public void La_prelacion_la_fija_la_politica_de_la_cooperativa()
+    {
+        // Decisión del dueño del 2026-10-18 (D37): PrelacionDescuentosDeCartera con vigencia; el defecto es aportes → créditos → ahorros.
+        static NoveltyInput N(string code, NoveltyOrigin origen) => new() { PublicId = Guid.NewGuid(), ConceptCode = code, Origin = origen, Amount = 1m };
+        var novedades = new[]
+        {
+            N(WellKnownConceptCodes.SavingsDeduction, NoveltyOrigin.AccountDeduction),
+            N(WellKnownConceptCodes.LoanDeduction, NoveltyOrigin.LoanDeduction),
+            N(WellKnownConceptCodes.ContributionDeduction, NoveltyOrigin.AccountDeduction),
+            N("OTRA", NoveltyOrigin.Manual),
+        };
+        var politica = CarteraDeductionKinds.Leer(CompanyPolicyKeys.PrelacionDescuentosDeCarteraValores.CreditosAhorrosAportes)!;
+
+        novedades.OrderBy(n => PayrollCalculationEngine.PrelacionDeCartera(n, politica)).Select(n => n.ConceptCode).Should().Equal(
+            WellKnownConceptCodes.LoanDeduction, WellKnownConceptCodes.SavingsDeduction, WellKnownConceptCodes.ContributionDeduction, "OTRA");
+        CompanyPolicyKeys.Buscar(CompanyPolicyKeys.PrelacionDescuentosDeCartera)!.Defecto.Should().Be("Aportes,Creditos,Ahorros");
+        CarteraDeductionKinds.Leer("Aportes,Aportes,Ahorros").Should().BeNull();
+        CarteraDeductionKinds.Leer("Aportes,Creditos").Should().BeNull();
+        CompanyPolicyKeys.PrelacionDescuentosDeCarteraValores.Todos.Select(CarteraDeductionKinds.Leer).Should().OnlyContain(l => l != null && l.Count == 3);
     }
 
     [Fact]
