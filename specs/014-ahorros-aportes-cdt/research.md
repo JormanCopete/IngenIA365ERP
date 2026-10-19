@@ -2429,3 +2429,110 @@ fuente, y lo demás parámetros de la entidad):
 - Los pisos `FONDO_LIQUIDEZ_*` e `IRL_MINIMO`, y el tope `TOPE_SEGURO_DEPOSITOS` (número de la resolución de Fogacoop).
 - El colchón (`FondoDeLiquidez.MargenDeAlerta`, 5 %) y la periodicidad de la foto (semanal).
 - Las bandas del IRL y de la brecha, el índice de mora, las fracciones de retiro y los descuentos por clase de inversión.
+
+## 25. Enmienda de los informes y los reportes regulatorios de captaciones (2026-10-19, T219–T224, US17, K11)
+
+Construida la historia 17. **Manda el código**; estas notas reemplazan lo dicho en `data-model.md`, `contracts/` y `tasks.md` donde choquen. Cambio de esquema:
+`CaptacionesAportes` **regenerada** en los dos motores (mismos sellos: PostgreSQL `20261019104128`, SQL Server `20261019104056`; las operaciones nuevas al final de
+`Up` y al principio de `Down`, por una migración temporal fusionada) con la columna `LND_RegulatoryFiles.FormatCode`, su índice único y el CHECK de clase ampliado; el
+SQL escrito a mano (T044, `NOM`, `ASO`) quedó intacto —el antes y el después del `.cs` sólo difieren en líneas agregadas— y la paridad pasa (52 migraciones en par). Las
+migraciones congeladas de la 013 y `RetiroDeCaptacionesHeredadas` no se tocaron. `EntregaVigente` sigue en K6b: las vistas nuevas se registran con `AvailableFrom = K11`.
+
+**Formatos investigados** (todos «pendiente de validar por la contadora»; los campos nacen con `verified = false`):
+
+- **Instructivo SICSES D-GEIN-010 v04** (Supersolidaria, vigente desde el 23-may-2017,
+  <https://www.supersolidaria.gov.co/sites/default/files/public/sicses/d-gein-010_instructivo_reporte_formulario_oficialrendicion_cuentas_-_sicses_v4.pdf>):
+  **F21 informe individual de aportes o contribuciones, código 9013** (§6.4: tipo y número de identificación —en éste la tarjeta de identidad es «I»—, saldo de
+  aportes a la fecha, aporte mensual, ordinarios, extraordinarios, revalorización, monto promedio día/año del ejercicio y última fecha de pago); **F27 fondo de
+  liquidez, código 9067** (§6.7: generalidades con el saldo de depósitos —cuentas CUIF 210505, 210510, 211005–211020, 212505–212520, 213005, 213010— por clase y la
+  devolución del ahorro permanente 1 al desvincularse / 2 retiro parcial; detalle por título: NIT, entidad, tipo 1 CDT, 2 CDAT, 3 bonos, 4 cuentas de ahorro,
+  5 patrimonio autónomo, 6 fondos de valores; número, capital, intereses, plazo, vencimiento y si capitaliza); **informe de cotitulares de depósitos, código 9068**
+  (§6.11: columnas 01 a 06 —titular, cotitular, tipo de depósito 1 cuenta de ahorro, 2 CDAT, 3 contractual, 4 permanente, 5 programado de vivienda, número—); el
+  mismo §6.11 nombra el **(9026) informe individual de las captaciones** y fija dos de sus columnas: la 5 «tipo de ahorro» y la 16 «número de cuenta del producto»;
+  **F29 evaluación del riesgo de liquidez, código 159** (§7.4: formato matricial por unidades de captura de todo el balance en bandas de tiempo).
+- **Formato 169, saldos diarios del ahorro ordinario** (Circular Externa 05 de 2019 de la Supersolidaria, según los resúmenes publicados; el texto oficial no se
+  pudo descargar): campos FECHA y VALOR, positivo, el del último día igual al saldo de la cuenta 210500; lo reportan las cooperativas de ahorro y crédito, las
+  multiactivas e integrales con sección, los fondos de empleados de categoría plena y las mutuales con ahorro ordinario.
+- **Exógena** — Resolución DIAN 000162 de 2023 (compilada en la Resolución 227 de 2025), año gravable 2024 y siguientes,
+  <https://normograma.dian.gov.co/dian/compilacion/docs/resolucion_dian_0162_2023.htm>: **art. 3, formato 1019 versión 9** (cuentas corrientes y de ahorro;
+  se informa quien tuvo movimientos crédito mensuales acumulados de más de 24 UVT o un saldo del período igual o superior a 24 UVT, «aunque por cuenta los valores
+  sean menores»; titulares secundarios y firmas también; campos: identificación, nombres o razón social, dirección, departamento, municipio, país, tipo y número de
+  cuenta, código de exención del GMF, saldo final, promedio, mediana, máximo y mínimo del saldo, total, número, promedio y mediana de los créditos, total, número y
+  promedio de los débitos); **art. 4, formato 1020 versión 8** (certificados y títulos, **por período mensual sin importar la cuantía**: número, tipo de título,
+  tipo de movimiento, saldo inicial, valor de la inversión, intereses causados, intereses pagados, retención y saldo final); **art. 19**: los aportes y derechos de los
+  asociados van en el **formato 1010**, que no es de la Cartera.
+
+- **E216 · Siete formatos, no cinco.** Además de los cinco de api.md §18.2 (`sicses-captaciones` = 9026, `sicses-saldos-diarios` = 169, `sicses-fondo-liquidez` =
+  9067, `exogena-1019`, `exogena-1020`) se construyen `sicses-cotitulares` (9068, acompaña al 9026 cuando una cuenta tiene cotitulares) y `sicses-aportes` (9013, el
+  «aportes por asociado» que pidió el dueño). El **F29 (159) no se construye**: es el balance completo por bandas (efectivo, inversiones, cartera, obligaciones,
+  patrimonio) y la Cartera sólo conoce sus renglones de depósitos y aportes; queda como pregunta (§25.1). Las e2e y la pantalla los ofrecen todos.
+- **E217 · Esquema.** `RegulatoryFileKind` suma `DepositsSicses` (3) y `Exogenous` (4) —nunca se renumera—; `LND_RegulatoryFiles.FormatCode` (`nvarchar(40)`,
+  obligatorio en 3 y 4, nulo en 1 y 2: CHECK `CK_LND_RegulatoryFiles_BureauCode` ampliado) con `UK_LND_RegulatoryFiles_Format_Period_Version` filtrado a
+  `FormatCode IS NOT NULL` (el traductor de filtros de PostgreSQL no entiende `IN`). La exógena se guarda con **`PeriodMonth = 12`** (contracts decía nulo: la columna
+  sigue `NOT NULL` y el mes 12 es el del cierre que la habilita). `RegulatoryFile.Nueva` recibe el formato; `RegulatoryFileDto`, `RegulatoryLayoutDto` y la lista
+  `/files` (filtro `format`) lo exponen.
+- **E218 · Catálogo y layouts.** Los JSON viven junto a los de la 013 (`Application/Lending/Regulatory/Layouts/`, C21) y llevan `formatCode` (minúsculas, prefijo
+  `sicses-` o `exogena-`, archivo `{formatCode}-{versión}-{aaaa-mm-dd}.json`, sin `bureauCode`); el catálogo se niega a cargar uno mal nombrado y busca el vigente con
+  `VigenteDelFormato`. Vigencias: los del SICSES desde **2026-01-01** (la fecha de la norma va en `source`), la exógena desde **2024-01-01** (año gravable 2024). El
+  SICSES va delimitado por `|`, UTF-8, montos con punto y dos decimales y fechas `dd/MM/yyyy` (como el 9027 de la 013); la exógena por `;` en **pesos enteros** como
+  entrada del prevalidador de la DIAN (que arma el XML). Generar deja `Lending.Regulatory.LayoutSinCotejar` («formato sin cotejar») hasta que la contadora publique la
+  versión cotejada; nunca va dentro del archivo.
+- **E219 · La proyección (`ProyeccionDeCaptaciones`).** Lee el **libro** (la autoridad) con fecha valor hasta el corte. **Exige el cierre mensual vigente de la Cartera**
+  del mes (SICSES) o de diciembre (exógena): sin él, `Lending.Regulatory.PeriodNotClosed`. 9026: una fila por cuenta de captación viva al último día del mes, con la
+  tasa de las condiciones selladas (CDAT, contractual) o de la línea (la del tramo del saldo), el plazo, el vencimiento, la periodicidad de intereses, la última cuota
+  pactada, el último movimiento del titular, el estado (1 activa, 2 inactiva, 3 vencida, 4 en cancelación), la exención de GMF, los cotitulares, el tipo de cuenta
+  (1 individual, 2 conjunta, 3 alterna) y el embargo; el **código contable va vacío** (la Cartera no conoce cuentas). 9068: titular y cotitular vigentes al corte.
+  9013: por asociado, las cuatro clases (los mínimos se suman a los ordinarios: el formato no tiene renglón propio), la cuota del mes, el promedio de los saldos diarios
+  desde el 1 de enero o la apertura y el último pago. 169: el capital del ahorro a la vista al cierre de cada día del mes. 9067: los saldos de depósitos por clase
+  de `FondoDeLiquidezDeCartera.DepositosAsync` (capital más causado) y las inversiones vigentes ese día; la inversión registrada no guarda intereses ni capitalización
+  (van 0 y NO) y el CDT de un banco no se distingue del CDAT de un organismo de grado superior (va 1); una inversión «otra» no tiene tipo y bloquea, con la advertencia
+  `Lending.Regulatory.InversionSinTipo`. 1019: por persona (titular principal y cotitulares como secundarios, cada uno con las cifras de la cuenta completa) y cuenta de
+  ahorro a la vista, contractual o permanente (2, 3, 4) del año; estadísticas de `EstadisticasDeSaldos` sobre los saldos diarios del año y los movimientos agrupados
+  por operación (sin el saldo inicial migrado ni las reclasificaciones); umbral = UVT del año × LIMITE `EXOGENA_1019_UMBRAL_UVT` (24, sembrado con su fuente; sin
+  UVT o sin límite, todos y la advertencia `Lending.Regulatory.UmbralSinValor`). 1020: por persona, CDAT y mes vigente del año; saldos, inversión e intereses causados
+  repartidos por la proporción del certificado tributario (`ProporcionesDeTitularidad`), intereses pagados y retención de los acumulados tributarios ya repartidos;
+  movimiento 1 emisión (no la migrada), 3 cancelación, 2 renovación o prórroga, 4 vigente. Tipos de documento: SICSES por el instructivo (C, N, P, E, T, R, U, O; I en
+  el 9013) y DIAN por su tabla (13, 31, 22, 41, 12, 11, 21, 42, 47, 48); un tipo sin equivalente en la DIAN bloquea. País 169.
+- **E220 · Validar y generar.** `PreparacionDeArchivoRegulatorio.CaptacionesAsync` y `GeneracionDeArchivoRegulatorio.GenerarAsync(..., formato)`: la misma mecánica de
+  la 013 (validar no guarda; con bloqueantes, versión `Validated` sin archivo y 422 `BlockingIssues`; con advertencias, reconocerlas; regenerar deja `Superseded`; lo
+  cargado no se regenera), con las versiones **por formato** (dos formatos del mismo mes no compiten). Nombre del archivo
+  `{número}_{FORMATO}_{aaaa-mm|aaaa}_v{n}.txt`. El plazo es **informativo** (decisión del dueño): el del SICSES de cartera (perfil, documento `TiposDeOrganizacion` o
+  `Sicses.MesesDeCorte`/`DiasDePlazo`) sólo produce la advertencia del mes fuera de la periodicidad; la exógena no calcula plazo. Validar, generar y la vista previa
+  exigen **alcance total** (`Lending.Regulatory.ScopeNotTotal`): el formato es de toda la cooperativa.
+- **E221 · Vistas.** `deposit-accounts-by-status` (con datos del titular; captación y aportes abiertas al corte, con `status`, saldo del titular del libro y marcas
+  —embargada, exenta de GMF, causación suspendida, datos por actualizar—; el estado es el de hoy: el ERP no guarda el de cada día) y una **vista previa por formato**
+  (`year`, `month`; la exógena sólo `year`; por defecto el mes o el año anterior): una columna por campo del detalle con el texto que iría en el archivo, el encabezado
+  del 9067, las advertencias y las inconsistencias en las notas. Con datos del titular las de 9026, 9068, 9013, 1019 y 1020; sin ellos 169 y 9067.
+- **E222 · Rutas.** `POST /api/lending/regulatory/deposit-formats/{formatCode}/validate` con `{ year, month? }` en el **cuerpo** (api.md lo ponía igual) y
+  `/generate` con `{ year, month?, acknowledgeWarnings }` e `Idempotency-Key`, ambas con `Lending.RegulatoryReports.Generate`; `GET /files?format=`. Errores nuevos:
+  `Lending.Regulatory.FormatUnknown`, `.PeriodNotClosed`, `.PeriodInvalid` (SICSES sin mes), `.ScopeNotTotal`.
+- **E223 · Pantallas.** `/cartera/captaciones/reportes-regulatorios` (`Lending.RegulatoryFiles.Read`; validar y generar con `Lending.RegulatoryReports.Generate`): el
+  formato, el período, el estado de cotejo del layout, las inconsistencias, reconocer «formato sin cotejar», las versiones con descarga y «marcar cargado» (el
+  componente `GeneracionesRegulatorias` de la 013 con el parámetro `Formato`). El centro de reportes suma «Captaciones y aportes» (saldos, cuentas por estado, aportes
+  por asociado, intereses y retención, reportes regulatorios); `/cartera/informes` ofrece año, mes, los estados de cuenta y abre la ficha de la cuenta (`_cuenta`).
+  Ninguna pantalla nombra al sistema anterior.
+- **E224 · Pruebas.** Domain: `EstadisticasDeSaldosTests` (5). Application: `FormatosDeCaptacionesTests` (catálogo, reglas de carga, traducciones y **siete archivos
+  dorados** `Casos/*.esperado.txt`, regenerables sólo con `CARTERA_ESCRIBIR_ESPERADO=1`) e `InformesDeCaptacionesTests` (8 sobre el libro real: la prueba independiente
+  —el 9026 de un mes cuadra con `deposit-balances` y sale con «formato sin cotejar»—, regenerar y cargado, sin cierre y alcance parcial, saldos diarios, umbral de la
+  1019, el CDAT en la 1020 y el fondo, cuentas por estado y el registro de vistas). Ajustadas las pruebas fijadas de la 013 (catálogo de layouts, `RegulatoryFileKind`,
+  los 40 límites) y el alcance de las consultas nuevas. e2e `InformesDeCaptacionesTests` **escrita y compilada; e2e en la corrida final**.
+- **E225 · Lo que queda.** El código contable del 9026 (lo resolvería la matriz de Contabilidad, como el 9027 de la 013); los intereses y la capitalización de las
+  inversiones del fondo (la inversión registrada no los guarda); el F29; el 1010 de aportes (no es de la Cartera); cotejar los siete layouts (T235).
+
+### 25.1 Preguntas para el dueño
+
+- **F29 (159), evaluación del riesgo de liquidez.** A: no generarlo desde la Cartera (lo construido; la entidad lo diligencia con su balance); B: generar sólo los
+  renglones de depósitos y aportes por banda (unidades de captura 2 y 3) como insumo para quien arma el formato; C: armarlo completo leyendo de Contabilidad las demás
+  partidas por cuentas CUIF que fije la entidad (la misma decisión de §24.1 sobre los activos líquidos). Recomendado: B ahora y C con la respuesta de §24.1.
+- **Código contable en el 9026.** A: vacío (lo construido); B: resolverlo por la matriz contable de captaciones, como el 9027 de cartera lo resuelve para el capital.
+  Recomendado: B, si el instructivo lo pide obligatorio al cotejar.
+- **Inversiones del fondo (9067).** A: CDT/CDAT, intereses en 0 y «no capitaliza» (lo construido); B: que el tesorero registre en cada inversión si es CDT o CDAT, los
+  intereses causados y si capitaliza. Recomendado: B, porque el instructivo los pide por título.
+
+### 25.2 Para la contadora (pendiente de validar)
+
+- Cotejar los siete layouts contra el instructivo vigente y un archivo aceptado por el validador (T235): orden, largo y formato de cada campo, separador, formato de
+  fecha y los códigos (tipos de identificación, tipo de ahorro, estado, tipo de cuenta, tipo de título, tipo de movimiento de la 1020, exención de GMF de la 1019).
+- Si los mínimos se reportan dentro de los ordinarios en el 9013 y si el saldo de depósitos del 9067 lleva los intereses causados.
+- El umbral de la 1019 (24 UVT) y su lectura «por persona sumando sus cuentas»; si el ahorro contractual y el permanente van en la 1019 (lo construido) o en otro
+  formato.

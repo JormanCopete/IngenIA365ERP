@@ -496,12 +496,16 @@ desde el corte) y 14 (la reclasificación por la inactividad y por la exención 
 **Independent Test**: formato de captaciones de un mes cuadra con la conciliación y sale con la alerta
 «formato sin cotejar».
 
-- [ ] T219 [US17] Vistas que faltan de `contracts/api.md` §18.1 (`deposit-accounts-by-status`, `liquidity-fund`, `insured-deposits` y las regulatorias) — parcial: `liquidity-fund` e `insured-deposits` se hicieron con T216/T217 (research E213) en `A/Lending/Reports/VistaDeInformeDeCartera.cs` y sus consultas en `A/Lending/Deposits/Reports/`
-- [ ] T220 [US17] Layouts versionados como dato con `verified = false` (SICSES captaciones, saldos diarios, fondo de liquidez; exógena 1019 y 1020) en `A/Lending/Regulatory/Layouts/` con el catálogo `CatalogoDeLayoutsDeCartera` sobre `Domain/Common/Layouts` (research C21) y su generador
-- [ ] T221 [US17] Rutas de `contracts/api.md` §18.2 en `API/Endpoints/Lending/Deposits/RegulatoryEndpoints.cs`
-- [ ] T222 [US17] Tarjetas del Centro de Reportes y vista en `SH/Pages/Cartera/Informes.razor` (los `NavigateTo` llevan a páginas existentes)
-- [ ] T223 [P] [US17] Pruebas de vistas y layouts en `TA/Lending/Deposits/Reports/`
-- [ ] T224 [US17] e2e de US17 en `TI/Lending/Deposits/InformesDeCaptacionesTests.cs`
+- [x] T219 [US17] Vistas que faltan de `contracts/api.md` §18.1 (`deposit-accounts-by-status`, `liquidity-fund`, `insured-deposits` y las regulatorias) — hecho el 2026-10-19: `liquidity-fund` e `insured-deposits` venían de T216/T217 (E213); las demás de §18.1 ya existían de fases anteriores (saldos, movimientos, GMF, cargos, intereses y retención, conciliación, vencimientos de CDAT, tasas negociadas, concentración, embargos, no reclamados, aportes por asociado, cuotas en mora). Se suman `deposit-accounts-by-status` y la vista previa de **siete** formatos (las cinco de §18.1 más `sicses-cotitulares` y `sicses-aportes`) en `A/Lending/Deposits/Reports/RegulatoryReportQueries.cs` (research E216, E221)
+- [x] T220 [US17] Layouts versionados como dato con `verified = false` (SICSES captaciones, saldos diarios, fondo de liquidez; exógena 1019 y 1020) en `A/Lending/Regulatory/Layouts/` con el catálogo `CatalogoDeLayoutsDeCartera` sobre `Domain/Common/Layouts` (research C21) y su generador — hecho: siete layouts (SICSES 9026, 9068, 9013, 169 y 9067; exógena 1019 v9 y 1020 v8) con su fuente citada, `RegulatoryFileKind` 3 y 4 con `FormatCode` (`CaptacionesAportes` regenerada en los dos motores), `ProyeccionDeCaptaciones` y la generación de la 013 extendida; LIMITE `EXOGENA_1019_UMBRAL_UVT` y el motor puro `EstadisticasDeSaldos` (research E216–E220)
+- [x] T221 [US17] Rutas de `contracts/api.md` §18.2 en `API/Endpoints/Lending/Deposits/RegulatoryEndpoints.cs` — hecho: `validate` y `generate` por `{formatCode}` con el período en el cuerpo y `/files?format=` (research E222)
+- [x] T222 [US17] Tarjetas del Centro de Reportes y vista en `SH/Pages/Cartera/Informes.razor` (los `NavigateTo` llevan a páginas existentes) — hecho: sección «Captaciones y aportes» del centro de reportes, año, mes y estados de cuenta en `/cartera/informes`, y la pantalla nueva `/cartera/captaciones/reportes-regulatorios` con su enlace en el menú (research E223)
+- [x] T223 [P] [US17] Pruebas de vistas y layouts en `TA/Lending/Deposits/Reports/` — hecho: `FormatosDeCaptacionesTests` (catálogo y siete archivos dorados `Casos/*.esperado.txt`) e `InformesDeCaptacionesTests` (8, sobre el libro real), más `TD/Lending/Deposits/EstadisticasDeSaldosTests` (5)
+- [x] T224 [US17] e2e de US17 en `TI/Lending/Deposits/InformesDeCaptacionesTests.cs` — escrita y compilada; **e2e en la corrida final**
+
+**Checkpoint**: los formatos del SICSES de captaciones (9026, 9068, 9013, 169, 9067) y de la exógena (1019, 1020) como dato sin cotejar, validados, generados,
+regenerados y marcados cargados con la mecánica de la 013; la vista previa de cada uno en el centro de informes y las cuentas por estado. Construida la fase 19
+el 2026-10-19 (research §25).
 
 ---
 
