@@ -66,6 +66,9 @@ public sealed record MembershipWithdrawalSettlementPreviewDto(
     public string FundsOrder { get; init; } = nameof(OrdenDeFondosAlRetiro.AportesPrimero);
 }
 
+/// <summary>US6 (T175): un CDAT vivo del asociado en la liquidación de su retiro (línea informativa): su saldo, su vencimiento y la nota. (nuevo)</summary>
+public sealed record CdatEnElRetiro(int CuentaId, Guid PublicId, string Numero, decimal Saldo, DateOnly? Vencimiento, string Nota);
+
 /// <summary>Lo que se liquida y con qué: el cálculo, las cuentas y los créditos, el mínimo de la entidad y la huella. (nuevo)</summary>
 public sealed record PlanDeLiquidacionDeRetiro(
     LiquidacionDeRetiroCalculada Calculo,
@@ -81,12 +84,20 @@ public sealed record PlanDeLiquidacionDeRetiro(
     /// <summary>D41: el orden de los fondos con que se calculó.</summary>
     public OrdenDeFondosAlRetiro OrdenDeFondos { get; init; } = OrdenDeFondosAlRetiro.AportesPrimero;
 
+    /// <summary>
+    /// US6 (T175; FR-076): los CDAT vivos del asociado, como líneas <b>informativas</b> <c>TermDepositBalance</c>: siguen hasta su vencimiento (la línea no
+    /// dice otra cosa: no hay condición de línea para liquidarlos al retiro, research E145) y no suman a la devolución.
+    /// </summary>
+    public IReadOnlyList<CdatEnElRetiro> CdatVigentes { get; init; } = [];
+
     public MembershipWithdrawalSettlementPreviewDto Dto(DateOnly fecha)
     {
         var lineas = Calculo.Lineas.Select((l, i) => new MembershipWithdrawalLineDto(0, i + 1, l.Clase,
             l.CuentaId is { } c ? Cuentas[c].PublicId : null, l.CuentaId is { } c2 ? Cuentas[c2].Number : null,
             l.CreditoId is { } k ? Creditos[k].PublicId : null, l.CreditoId is { } k2 ? Creditos[k2].Number : null,
             l.Concepto, l.Monto, null, null, l.Nota)).ToList();
+        lineas.AddRange(CdatVigentes.Select((x, i) => new MembershipWithdrawalLineDto(0, lineas.Count + i + 1, MembershipWithdrawalLineKind.TermDepositBalance,
+            x.PublicId, x.Numero, null, null, nameof(MemberAccountConcept.Principal), x.Saldo, null, null, x.Nota)));
         var cruces = Calculo.Cruces.Select(c => new MembershipWithdrawalOffsetDto(Creditos[c.Credito.CreditoId].PublicId, c.Credito.Numero, c.Prelacion,
             c.Credito.DiasDeMora, c.Credito.TasaAnual, c.Credito.ParaCancelar, c.Monto, c.Total)).ToList();
         var perdida = Perdida is { } p && Calculo.Perdidas > 0m ? new LossDeductionDto(p.Year, p.Proportion, Calculo.Perdidas, p.SessionItemPublicId) : null;
@@ -125,8 +136,27 @@ public sealed class PlanesDeLiquidacionDeRetiro(
         var ahorros = await db.MemberAccounts.AsNoTracking()
             .Where(a => a.HolderPersonId == retiro.PersonId && a.Nature == LineNature.Deposit && !a.IsDeleted && a.Status != MemberAccountStatus.Closed)
             .OrderBy(a => a.Id).ToListAsync(ct);
-        if (ahorros.Any(a => a.DepositClass == DepositClass.TermDeposit))
-            avisos.Add("Los CDAT vigentes siguen hasta su vencimiento: no entran a esta liquidación (FR-076).");
+        // US6 (T175): los CDAT vivos van como líneas informativas con su saldo y su vencimiento; siguen hasta vencer y pagan a su destino.
+        var cdatVigentes = new List<CdatEnElRetiro>();
+        var deCdat = ahorros.Where(a => a.DepositClass == DepositClass.TermDeposit).ToList();
+        if (deCdat.Count > 0)
+        {
+            var saldosDeCdat = await LectorDeCuentas.SaldosAsync(db, deCdat.Select(c => c.Id).ToList(), ct);
+            var idsDeCdat = deCdat.Select(c => c.Id).ToList();
+            var vencimientos = await db.MemberAccountTermsVersions.AsNoTracking().Where(t => idsDeCdat.Contains(t.MemberAccountId) && !t.IsDeleted)
+                .GroupBy(t => t.MemberAccountId).Select(g => new { Cuenta = g.Key, Vence = g.OrderByDescending(t => t.VersionNumber).Select(t => t.MaturityDate).First() })
+                .ToListAsync(ct);
+            foreach (var c in deCdat)
+            {
+                var s = saldosDeCdat.GetValueOrDefault(c.Id) ?? [];
+                var saldo = s.GetValueOrDefault(MemberAccountConcept.Principal) + s.GetValueOrDefault(MemberAccountConcept.InterestPayable);
+                var vence = vencimientos.FirstOrDefault(v => v.Cuenta == c.Id)?.Vence;
+                cdatVigentes.Add(new CdatEnElRetiro(c.Id, c.PublicId, c.Number, saldo, vence,
+                    vence is { } fv ? $"Sigue hasta su vencimiento el {fv:yyyy-MM-dd}; no entra a la devolución." : "Espera su fondeo; no entra a la devolución."));
+            }
+            avisos.Add($"Los CDAT vigentes ({string.Join(", ", deCdat.Select(c => c.Number))}) siguen hasta su vencimiento: van como líneas informativas y no "
+                       + "entran a esta liquidación (FR-076).");
+        }
         var cuentas = new List<MemberAccount> { aportes };
         cuentas.AddRange(ahorros.Where(a => a.DepositClass != DepositClass.TermDeposit));
         var saldos = await LectorDeCuentas.SaldosAsync(db, cuentas.Select(c => c.Id).ToList(), ct);
@@ -212,7 +242,7 @@ public sealed class PlanesDeLiquidacionDeRetiro(
             .Calcular();
         return Result.Success(new PlanDeLiquidacionDeRetiro(calculo, cuentas.ToDictionary(c => c.Id),
             vivos.ToDictionary(l => l.Id, l => (l.PublicId, l.Number)), codeudores, new EntityMinimumDto(capital, minimo, despues, perfora), devolverHasta,
-            deLaPerdida is null ? null : perdida, huella, avisos) { OrdenDeFondos = ordenDeFondos });
+            deLaPerdida is null ? null : perdida, huella, avisos) { OrdenDeFondos = ordenDeFondos, CdatVigentes = cdatVigentes });
     }
 
     /// <summary>El punto de un acta cerrada que aprueba (cualquier asunto: el descuento por pérdidas lo dispone la asamblea o el consejo).</summary>
@@ -488,6 +518,19 @@ public sealed class SettleMembershipWithdrawalCommandHandler(
                         : l.Nota,
                 });
             }
+            // US6 (T175): los CDAT vigentes, informativos (no suman a la devolución).
+            foreach (var x in plan.CdatVigentes)
+                db.MembershipWithdrawalLines.Add(new MembershipWithdrawalLine
+                {
+                    MembershipWithdrawalId = retiro.Id,
+                    SettlementVersion = retiro.SettlementVersion,
+                    LineNumber = ++numero,
+                    Kind = MembershipWithdrawalLineKind.TermDepositBalance,
+                    MemberAccountId = x.CuentaId,
+                    Concept = nameof(MemberAccountConcept.Principal),
+                    Amount = x.Saldo,
+                    Notes = x.Nota,
+                });
             await db.SaveChangesAsync(ct);
 
             if (calculo.ADevolver == 0m)
