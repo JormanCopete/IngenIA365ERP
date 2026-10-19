@@ -186,6 +186,9 @@ public class TextosDeCarteraTests
         "Presentation/IngenIA365ERP.Shared/Services/Cartera",
         "Core/IngenIA365ERP.Application/Lending",
         "Core/IngenIA365ERP.Domain/Lending",
+        // Feature 014 (T232): las rutas de Cartera (sus mensajes llegan a la pantalla) y los documentos de captaciones.
+        "Presentation/IngenIA365ERP.API/Endpoints/Lending",
+        "Presentation/IngenIA365ERP.API/Reports/Captaciones",
     ];
 
     private static readonly string[] ArchivosVisibles =
