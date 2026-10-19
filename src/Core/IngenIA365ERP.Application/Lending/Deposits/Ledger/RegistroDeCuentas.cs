@@ -572,6 +572,34 @@ public sealed class RegistroDeCuentas(IApplicationDbContext db)
     }
 
     /// <summary>
+    /// US6 (T172, T173; data-model §4.5): el pago de un período del plan de un CDAT (o el interés que paga su salida o se capitaliza en su prórroga) con sus
+    /// acumulados de retención. Las mismas reglas de cuadre que <see cref="RegistrarLiquidacion"/>, pero <b>sin mover la marca del último período
+    /// liquidado</b>: el CDAT no liquida por períodos de liquidación (paga por su plan, y el anticipado paga antes de causar) y su marca no la lee nadie. No
+    /// guarda.
+    /// </summary>
+    public void RegistrarPagoDeCdat(MemberAccountControl control, InterestSettlement pago, IReadOnlyList<WithholdingAccumulation> acumulados)
+    {
+        ArgumentNullException.ThrowIfNull(control);
+        ArgumentNullException.ThrowIfNull(pago);
+        ArgumentNullException.ThrowIfNull(acumulados);
+        if (pago.SchedulePeriodNumber is null)
+            throw new InvalidOperationException("El pago de un CDAT nombra el período de su plan.");
+        if (Decimales(pago.AccruedInterest) > MemberAccountTransaction.DecimalesDeCausacion
+            || Decimales(pago.GrossInterest) > MemberAccountTransaction.DecimalesDeOperacion
+            || Decimales(pago.WithholdingAmount) > MemberAccountTransaction.DecimalesDeOperacion)
+            throw new InvalidOperationException("Un pago lleva lo causado a seis decimales y el bruto y la retención al centavo.");
+        if (pago.RoundingDifference != pago.GrossInterest - pago.AccruedInterest || pago.NetInterest != pago.GrossInterest - pago.WithholdingAmount
+            || pago.WithholdingAmount < 0m || pago.WithholdingAmount > pago.GrossInterest)
+            throw new InvalidOperationException("El pago no cuadra: redondeo = bruto − causado y neto = bruto − retención, con la retención entre cero y el bruto.");
+        if (acumulados.Count > 0 && (acumulados.Sum(a => a.GrossInterest) != pago.GrossInterest || acumulados.Sum(a => a.WithholdingAmount) != pago.WithholdingAmount))
+            throw new InvalidOperationException("Los acumulados de retención de los titulares suman lo del pago.");
+        if (pago.MemberAccountId != control.MemberAccountId)
+            throw new InvalidOperationException("El pago es de otra cuenta que la del control.");
+        db.InterestSettlements.Add(pago);
+        if (acumulados.Count > 0) db.WithholdingAccumulations.AddRange(acumulados);
+    }
+
+    /// <summary>
     /// US6 (T169, T170; data-model §3.3, §3.4; research R11): sella una versión de condiciones de un CDAT con su plan de intereses, en la misma operación que
     /// la produce (la constitución, la prórroga, la renovación o el saldo inicial migrado). Hace cumplir lo que el plan promete: la versión es de la cuenta del
     /// control y sigue a la última (el número es la última + 1), el capital es mayor que cero, la tasa aplicada es la de la tabla más el margen, los períodos se

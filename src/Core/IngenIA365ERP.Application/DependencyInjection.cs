@@ -542,6 +542,12 @@ public static class DependencyInjection
         services.AddScoped<Lending.Deposits.Accrual.CausacionDeCaptaciones>();
         services.AddScoped<Lending.Deposits.Accrual.ISubpasoDeCaptaciones>(sp => sp.GetRequiredService<Lending.Deposits.Accrual.CausacionDeCaptaciones>());
         services.AddScoped<Lending.Deposits.Accrual.ISubpasoDeCaptaciones, Lending.Deposits.Accrual.LiquidacionPeriodicaDeIntereses>();
+        // Feature 014, US6 (T172, T173): el pago de intereses, la prórroga y la salida del CDAT, y su subpaso del ciclo diario, después de la causación y de la
+        // liquidación (el día ya causado se paga y vence).
+        services.AddScoped<Lending.Deposits.TermDeposits.PagoDeInteresesDeCdat>();
+        services.AddScoped<Lending.Deposits.TermDeposits.ProrrogaDeCdat>();
+        services.AddScoped<Lending.Deposits.TermDeposits.SalidaDeCdat>();
+        services.AddScoped<Lending.Deposits.Accrual.ISubpasoDeCaptaciones, Lending.Deposits.TermDeposits.CicloDelCdat>();
         // US4 (T111): la aprobación de un retiro o una consignación en efectivo sobre la atribución (aprobador presente, mecánica de la plataforma).
         services.AddScoped<Common.Approvals.IFuenteDeAprobacion, Lending.Deposits.Operations.FuenteDeAprobacionDeCuenta>();
         // US3 (T086): lo común de la devolución de aportes sin retiro y la cesión entre asociados.

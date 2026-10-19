@@ -47,14 +47,21 @@ public sealed class CausacionDeCaptaciones(
     IDateTimeService reloj,
     IAlertas? alertas = null,
     ILogger<CausacionDeCaptaciones>? logger = null,
-    ValidacionPreviaDeCaptaciones? validacionPrevia = null) : ISubpasoDeCaptaciones
+    ValidacionPreviaDeCaptaciones? validacionPrevia = null,
+    TermDeposits.LectorDeCdat? lectorDeCdat = null) : ISubpasoDeCaptaciones
 {
     private readonly ILogger _log = logger ?? (ILogger)NullLogger.Instance;
 
     public string Nombre => "Causacion";
 
-    /// <summary>Las clases que causan en K8 (el CDAT y el contractual causan por su plan desde K9).</summary>
-    public static IReadOnlyList<DepositClass> ClasesQueCausan { get; } = [DepositClass.Demand, DepositClass.Permanent];
+    /// <summary>
+    /// Las clases que causan: la vista y el permanente por su método de saldo (K8) y, desde K9 (US6, T172), el CDAT por su plan (<see cref="PlanDeCdat"/>). El
+    /// contractual causa con US7.
+    /// </summary>
+    public static IReadOnlyList<DepositClass> ClasesQueCausan { get; } = [DepositClass.Demand, DepositClass.Permanent, DepositClass.TermDeposit];
+
+    /// <summary>Las clases que liquidan sus intereses por períodos de liquidación (US5): la vista y el permanente. El CDAT los paga por su plan.</summary>
+    public static IReadOnlyList<DepositClass> ClasesQueLiquidan { get; } = [DepositClass.Demand, DepositClass.Permanent];
 
     /// <summary>Los estados que causan: activa e inactiva (si la línea causa en la inactividad, lo decide la ventana).</summary>
     public static IReadOnlyList<MemberAccountStatus> EstadosQueCausan { get; } = [MemberAccountStatus.Active, MemberAccountStatus.Inactive];
@@ -146,6 +153,16 @@ public sealed class CausacionDeCaptaciones(
             if (!controles.TryGetValue(cuenta.Id, out var control) || control.LastAccruedDate >= d) continue;
             try
             {
+                if (cuenta.DepositClass == DepositClass.TermDeposit)
+                {
+                    if (lectorDeCdat is null) continue;
+                    var delCdat = await CausarCdatAsync(cuenta, control, d, fallecidos.Contains(cuenta.HolderPersonId), ct);
+                    filasPorCuenta[cuenta.Id] = delCdat.Select(x => (x.Dia, x.Causado, x.Ajuste)).ToList();
+                    foreach (var x in delCdat) _delCdat[(cuenta.Id, x.Dia)] = (x.Version, x.Periodo);
+                    resultado.Add(new CausacionDeCuenta(cuenta.Id, delCdat.Count, delCdat.Sum(p => p.Causado), delCdat.Sum(p => p.Ajuste),
+                        delCdat.Count > 1 && origen.Fuente == AccountingFactPartSource.DailyCycleBatch));
+                    continue;
+                }
                 var versiones = await lector.VersionesAsync(cuenta.CreditLineId, ct);
                 var fallecido = fallecidos.Contains(cuenta.HolderPersonId);
                 var propias = new List<(DateOnly Dia, decimal Causado, decimal Ajuste)>();
@@ -235,11 +252,17 @@ public sealed class CausacionDeCaptaciones(
                 if (v.Dia != dia) continue;
                 var hecho = hechosPorDia[dia][id];
                 var contable = hecho.Hecho.FechaContable;
+                var cdat = _delCdat.TryGetValue((id, dia), out var delPlan) ? delPlan : default;
                 if (v.Ajuste != 0m)
-                    ajustes.Add(Fila(id, origen, MemberAccountTransactionKind.AccrualAdjustment, v.Ajuste, dia, contable, ahora, deAjuste.Mensaje(id, dia)));
+                    ajustes.Add(Fila(id, origen, MemberAccountTransactionKind.AccrualAdjustment, v.Ajuste, dia, contable, ahora, deAjuste.Mensaje(id, dia), cdat.Version,
+                        cdat.Periodo));
                 var filas = v.Causado == 0m
                     ? []
-                    : new List<MemberAccountTransaction> { Fila(id, origen, MemberAccountTransactionKind.InterestAccrued, v.Causado, dia, contable, ahora, emitidas.Value.Mensaje(id, dia)) };
+                    : new List<MemberAccountTransaction>
+                    {
+                        Fila(id, origen, MemberAccountTransactionKind.InterestAccrued, v.Causado, dia, contable, ahora, emitidas.Value.Mensaje(id, dia), cdat.Version,
+                            cdat.Periodo),
+                    };
                 causaciones.Add(new CausacionDeCuentaAEscribir(controles[id], dia, filas));
             }
         }
@@ -252,6 +275,55 @@ public sealed class CausacionDeCaptaciones(
             await db.SaveChangesAsync(ct);
         }
         return resultado.Where(r => filasPorCuenta.ContainsKey(r.CuentaId) && !sinSucursal.Contains(r.CuentaId)).ToList();
+    }
+
+    /// <summary>La versión de condiciones y el período del plan de cada día causado de un CDAT (las filas los nombran, research E16).</summary>
+    private readonly Dictionary<(int Cuenta, DateOnly Dia), (int? Version, int? Periodo)> _delCdat = [];
+
+    /// <summary>Un día causado de un CDAT: lo del día, el ajuste previo y la versión y el período del plan a los que pertenece.</summary>
+    private sealed record DiaDeCdat(DateOnly Dia, decimal Causado, decimal Ajuste, int? Version, int? Periodo);
+
+    /// <summary>
+    /// US6 (T172; research R11): la causación de un CDAT por su plan. Cada día de (marca, d] cae en la versión de condiciones cuyo plazo (inicio, vencimiento]
+    /// lo contiene y en su período: lo causado es <see cref="PlanDeCdat.CausadoDelDia"/> (el último día del período absorbe el redondeo contra el plan) y, si
+    /// lo del libro del período hasta la víspera no es lo que el plan dice (una prórroga que empieza en el vencimiento con la gracia que causa), primero el
+    /// ajuste. Fuera de toda versión (la gracia que no causa, el vencido, antes del fondeo) o con la causación suspendida (FR-065), cero.
+    /// </summary>
+    private async Task<IReadOnlyList<DiaDeCdat>> CausarCdatAsync(MemberAccount cuenta, MemberAccountControl control, DateOnly d, bool fallecido, CancellationToken ct)
+    {
+        var leido = await lectorDeCdat!.LeerAsync(cuenta, ct);
+        var planes = new Dictionary<int, PlanDeCdatCalculado>();
+        foreach (var v in leido.Versiones) planes[v.VersionNumber] = await lectorDeCdat.PlanAsync(v, ct);
+        var lineas = await lector.VersionesAsync(cuenta.CreditLineId, ct);
+        var clases = LectorDeInteres.ClasesDeLoCausado.ToArray();
+        var enElLibro = await db.MemberAccountTransactions.AsNoTracking()
+            .Where(t => t.MemberAccountId == cuenta.Id && t.Concept == MemberAccountConcept.InterestPayable && clases.Contains(t.Kind) && !t.IsDeleted)
+            .Select(t => new { t.ValueDate, t.Amount }).ToListAsync(ct);
+        var dias = new List<DiaDeCdat>();
+        for (var x = control.LastAccruedDate.AddDays(1); x <= d; x = x.AddDays(1))
+        {
+            var dia = x;
+            var version = leido.Versiones.Where(v => v.StartDate is { } i && v.MaturityDate is { } m && dia > i && dia <= m).MaxBy(v => v.VersionNumber);
+            if (version is null)
+            {
+                dias.Add(new DiaDeCdat(x, 0m, 0m, null, null));
+                continue;
+            }
+            var linea = lineas.FirstOrDefault(l => l.Version.Id == version.DepositLineVersionId)?.Version;
+            if (linea is not null) MarcarSuspension(cuenta, linea, x, fallecido);
+            var plan = planes[version.VersionNumber];
+            var periodo = plan.PeriodoDe(x)!;
+            if (cuenta.AccrualSuspendedSince is { } desde && desde <= x)
+            {
+                dias.Add(new DiaDeCdat(x, 0m, 0m, version.Id, periodo.Numero));
+                continue;
+            }
+            var esperado = x.AddDays(-1) > periodo.Desde ? PlanDeCdat.CausadoAcumulado(plan, x.AddDays(-1)) : 0m;
+            var libro = enElLibro.Where(f => f.ValueDate > periodo.Desde && f.ValueDate < dia).Sum(f => f.Amount)
+                        + dias.Where(f => f.Dia > periodo.Desde && f.Dia < dia).Sum(f => f.Causado + f.Ajuste);
+            dias.Add(new DiaDeCdat(x, PlanDeCdat.CausadoDelDia(plan, x), esperado - libro, version.Id, periodo.Numero));
+        }
+        return dias;
     }
 
     /// <summary>FR-065: la suspensión que la ventana detecta se anota en la cuenta (desde el primer día en que rige), una vez.</summary>
@@ -281,8 +353,10 @@ public sealed class CausacionDeCaptaciones(
     }
 
     private static MemberAccountTransaction Fila(int cuenta, OrigenDePartesDeCuentas origen, MemberAccountTransactionKind clase, decimal monto, DateOnly dia,
-        DateOnly contable, DateTime ahora, Guid? mensaje) => new()
+        DateOnly contable, DateTime ahora, Guid? mensaje, int? terminos = null, int? periodo = null) => new()
     {
+        TermsVersionId = terminos,
+        SchedulePeriodNumber = periodo,
         MemberAccountId = cuenta,
         ProcessRunId = origen.Fuente == AccountingFactPartSource.DailyCycleBatch ? origen.Corrida?.Id : null,
         Operation = origen.Fuente == AccountingFactPartSource.AccountCatchUp ? origen.Disparadora : null,

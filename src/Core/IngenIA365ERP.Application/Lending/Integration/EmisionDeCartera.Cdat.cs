@@ -82,6 +82,15 @@ public sealed record HechoDeCdatAEmitir(
     public TermDepositAmountChangeV1? CambioDeMonto { get; init; }
 
     public Guid? Tercero { get; init; }
+
+    /// <summary>
+    /// US6 (T173): el ajuste de la causación en el interés por pagar que la operación escribe —la reliquidación de una redención anticipada y el redondeo
+    /// del interés que se paga— (acompañante <c>AjusteDeCausacionDeCaptacion</c>, contra el gasto por intereses; contabilidad.md §6).
+    /// </summary>
+    public decimal AjusteDeCausacion { get; init; }
+
+    /// <summary>La causa del ajuste (<c>EarlyRedemption</c> en la redención anticipada; <c>RateCorrection</c> el redondeo).</summary>
+    public string? CausaDelAjuste { get; init; }
 }
 
 public sealed partial class EmisionDeCartera
@@ -98,6 +107,9 @@ public sealed partial class EmisionDeCartera
     public const string CancelacionALaVista = "MovedToDemand";
     public const string CancelacionSinTasa = "NoRolloverRate";
     public const string CancelacionPorMaximoDeProrrogas = "MaxRolloversReached";
+
+    /// <summary>La causa del ajuste de la causación de una redención anticipada (contabilidad.md §6: la reliquidación devuelve gasto).</summary>
+    public const string CausaRedencionAnticipada = "EarlyRedemption";
 
     /// <summary>US6 (T170): <c>CdatConstituido</c> (+ <c>GmfRetenido</c> sobre la cuenta origen); clase <c>TermDepositConstitution</c>. Sin guardar.</summary>
     public Task<Result<UnidadEmitida>> CdatConstituidoAsync(HechoDeCdatAEmitir e, CancellationToken ct)
@@ -249,6 +261,20 @@ public sealed partial class EmisionDeCartera
                 Dimensions = h.Dimensiones(), Amounts = p.Valores, OperationNumber = op.Number, RulesVersion = op.RulesVersion,
                 Kind = "TermDepositEarlyRedemption", Basis = p.Base,
             });
+        if (e.AjusteDeCausacion != 0m)
+        {
+            var lineaDelAjuste = new DepositFactLineV1
+            {
+                Account = h.Referencia, HolderPersonPublicId = h.TitularPublicId, Dimensions = h.Dimensiones(), ValueDate = op.ValueDate,
+                Amounts = [new DepositConceptAmountV1 { Concept = nameof(MemberAccountConcept.InterestPayable), Amount = e.AjusteDeCausacion }],
+            };
+            contenidos.Add(new AjusteDeCausacionDeCaptacionV1
+            {
+                RunKind = e.PorElProceso ? nameof(LendingProcessKind.DailyCycle) : null, FactDate = op.ValueDate, BatchNumber = 1, PartNumber = 1,
+                Totals = [new DepositFactTotalV1 { Dimensions = h.Dimensiones(), Amounts = lineaDelAjuste.Amounts, AccountCount = 1 }], Lines = [lineaDelAjuste],
+                LineCount = 1, ControlTotal = e.AjusteDeCausacion, Cause = e.CausaDelAjuste ?? CausaRedencionAnticipada,
+            });
+        }
         if (e.Gmf is { } g && g.Gmf.Calculo.Valor > 0m) contenidos.Add(GmfRetenido(g.Cuenta, op, g.Gmf));
         if (e.Reclasificacion is { } rc && rc.Saldos.Count > 0)
             contenidos.Add(new CaptacionReclasificadaV1

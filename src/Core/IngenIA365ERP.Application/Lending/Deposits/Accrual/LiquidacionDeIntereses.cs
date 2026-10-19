@@ -86,7 +86,7 @@ public sealed class LiquidacionDeIntereses(
 
     /// <summary>¿Gana interés la cuenta en K8? Cuentas de captación a la vista y permanentes (el CDAT y el contractual, con K9).</summary>
     public static bool GanaInteres(MemberAccount cuenta) =>
-        cuenta.Nature == LineNature.Deposit && cuenta.DepositClass is { } c && CausacionDeCaptaciones.ClasesQueCausan.Contains(c);
+        cuenta.Nature == LineNature.Deposit && cuenta.DepositClass is { } c && CausacionDeCaptaciones.ClasesQueLiquidan.Contains(c);
 
     /// <summary>El inicio (excluido) de la próxima liquidación: la última liquidada o la apertura.</summary>
     public static DateOnly InicioDeLiquidacion(MemberAccount cuenta, MemberAccountControl control) =>
@@ -289,7 +289,7 @@ public sealed class LiquidacionDeIntereses(
                 hecho.Value.FechaContable, deLaRetencion));
         }
         registro.RegistrarTransacciones(filas);
-        registro.RegistrarLiquidacion(control, liquidacion, await AcumuladosAsync(cuenta, operacion, liquidacion, ct));
+        registro.RegistrarLiquidacion(control, liquidacion, await AcumuladosAsync(db, cuenta, operacion, liquidacion, ct));
         await db.SaveChangesAsync(ct);
         return Result.Success(new LiquidacionAplicada(liquidacion, operacion, false, c));
     }
@@ -345,7 +345,7 @@ public sealed class LiquidacionDeIntereses(
     /// El reparto de la liquidación entre el titular y los cotitulares vigentes al fin del período por su proporción (data-model §4.6): al centavo, y el
     /// titular absorbe el residuo. Sin cotitulares, todo al titular.
     /// </summary>
-    private async Task<IReadOnlyList<WithholdingAccumulation>> AcumuladosAsync(MemberAccount cuenta, MemberAccountOperation operacion, InterestSettlement l,
+    internal static async Task<IReadOnlyList<WithholdingAccumulation>> AcumuladosAsync(IApplicationDbContext db, MemberAccount cuenta, MemberAccountOperation operacion, InterestSettlement l,
         CancellationToken ct)
     {
         var hasta = l.PeriodTo;
@@ -439,7 +439,7 @@ public sealed class LiquidacionPeriodicaDeIntereses(
         ArgumentNullException.ThrowIfNull(corrida);
         if (cuentas.Count == 0) return [];
         var ids = cuentas.ToArray();
-        var clases = CausacionDeCaptaciones.ClasesQueCausan.ToArray();
+        var clases = CausacionDeCaptaciones.ClasesQueLiquidan.ToArray();
         var estados = CausacionDeCaptaciones.EstadosQueCausan.ToArray();
         var candidatas = await db.MemberAccounts.AsNoTracking()
             .Where(a => ids.Contains(a.Id) && a.Nature == LineNature.Deposit && a.DepositClass != null && clases.Contains(a.DepositClass.Value)

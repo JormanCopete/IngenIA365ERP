@@ -145,6 +145,9 @@ public sealed class ReversionDeCuentas(
                     return Result.Failure<ReversoDeCuentaAplicado>(ajusteFallido.Error);
         }
         RegistroDeCuentas.MarcarReversada(original, reverso);
+        // US6 (T173): el pago de un CDAT reversado (su giro rechazado) deja de contar como pagado: el ciclo lo vuelve a pagar.
+        foreach (var pagoReversado in await db.InterestSettlements.Where(s => s.OperationId == original.Id && s.ReversedByOperationId == null).ToListAsync(ct))
+            pagoReversado.ReversedByOperationId = reverso.Id;
 
         // FR-002: los dependientes. El uso del tope exento del GMF del mes vuelve (fila espejo).
         var usos = await db.GmfMonthlyUsages.AsNoTracking().Where(u => u.OperationId == original.Id && u.ReversesUsageId == null && !u.IsDeleted).ToListAsync(ct);
@@ -228,6 +231,11 @@ public sealed class ReversionDeCuentas(
         // US4 (T116): el cargo y su condonación.
         MemberAccountOperationKind.Charge => CargoDeCuentaCausadoV1.Type,
         MemberAccountOperationKind.ChargeWaiver => CargoDeCuentaCondonadoV1.Type,
+        // US6 (T173): el pago de intereses y la salida de un CDAT (los reversa Tesorería cuando rechaza su giro).
+        MemberAccountOperationKind.TermDepositInterestPayment => InteresesDeCdatPagadosV1.Type,
+        MemberAccountOperationKind.TermDepositRedemption => original.Payload.Contains("\"cause\":null", StringComparison.Ordinal)
+            ? CdatRedimidoV1.Type
+            : CdatCanceladoV1.Type,
         _ => original.Kind.ToString(),
     };
 
@@ -241,6 +249,8 @@ public sealed class ReversionDeCuentas(
         MemberAccountOperationKind.ContributionRefund => EmisionDeCartera.ClaseDevolucionDeAportes,
         MemberAccountOperationKind.Withdrawal or MemberAccountOperationKind.DirectDebit => EmisionDeCartera.ClaseRetiroDeCuenta,
         MemberAccountOperationKind.Charge or MemberAccountOperationKind.ChargeWaiver => EmisionDeCartera.ClaseCargoDeCuenta,
+        MemberAccountOperationKind.TermDepositInterestPayment => EmisionDeCartera.ClasePagoDeInteresesDeCdat,
+        MemberAccountOperationKind.TermDepositRedemption => EmisionDeCartera.ClaseRedencionDeCdat,
         _ => original.Kind.ToString(),
     };
 

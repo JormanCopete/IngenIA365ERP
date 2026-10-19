@@ -210,6 +210,10 @@ public sealed class OrdenesDeGiroDeCuentas(
             if (orden.Purpose == PayoutPurpose.Cancellation
                 && await db.MemberAccounts.FirstOrDefaultAsync(a => a.Id == orden.MemberAccountId && a.Status == MemberAccountStatus.Closing, ct) is { } enCierre)
                 enCierre.RevertirCierre(MemberAccountStatus.Active, ahora);
+            // US6 (T173): el giro rechazado de la salida de un CDAT lo devuelve a su estado (vencido si ya había vencido) con su saldo reintegrado.
+            if (orden.Purpose == PayoutPurpose.TermDepositRedemption
+                && await db.MemberAccounts.FirstOrDefaultAsync(a => a.Id == orden.MemberAccountId && a.Status == MemberAccountStatus.Closing, ct) is { } cdatEnCierre)
+                cdatEnCierre.RevertirCierre(cdatEnCierre.MaturedOn is null ? MemberAccountStatus.Active : MemberAccountStatus.Matured, ahora);
             return Result.Success();
         }
 
@@ -222,7 +226,7 @@ public sealed class OrdenesDeGiroDeCuentas(
         await emision.DevolucionGiradaAsync(orden, EmisionDeCartera.TipoDeOrden(orden), referencia, ocurrida, sucursal.Value, beneficiario, ct);
 
         // US5 (T135; FR-039): girada la entrega de una cancelación, la cuenta sin saldo queda cancelada.
-        if (orden.Purpose == PayoutPurpose.Cancellation)
+        if (orden.Purpose is PayoutPurpose.Cancellation or PayoutPurpose.TermDepositRedemption)
         {
             var enCierre = await db.MemberAccounts.FirstAsync(a => a.Id == orden.MemberAccountId, ct);
             var saldos = (await LectorDeCuentas.SaldosAsync(db, [enCierre.Id], ct)).GetValueOrDefault(enCierre.Id) ?? [];
@@ -259,7 +263,9 @@ public sealed class OrdenesDeGiroDeCuentas(
     {
         // Los Id primero: un AsNoTracking en una subconsulta vuelve sin seguimiento la consulta entera y el cierre no se guardaría.
         var nombradas = await db.MembershipWithdrawalLines.AsNoTracking()
-            .Where(l => l.MembershipWithdrawalId == retiro.Id && l.SettlementVersion == retiro.SettlementVersion && l.MemberAccountId != null)
+            .Where(l => l.MembershipWithdrawalId == retiro.Id && l.SettlementVersion == retiro.SettlementVersion && l.MemberAccountId != null
+                        // US6 (T175): los CDAT vigentes van informativos y siguen hasta su vencimiento: no son cuentas del retiro.
+                        && l.Kind != MembershipWithdrawalLineKind.TermDepositBalance)
             .Select(l => l.MemberAccountId!.Value).Distinct().ToListAsync(ct);
         nombradas.Add(retiro.ContributionAccountId);
         return await db.MemberAccounts.Where(a => nombradas.Contains(a.Id)).OrderBy(a => a.Id).ToListAsync(ct);
