@@ -63,9 +63,9 @@ public class RegulatoryEndpoints : ICarterModule
             .ConClaveDeOperacion()
             .RequirePermission(GenerarCentral);
 
-        regulatorios.MapGet("/files", async (RegulatoryFileKind? kind, string? bureau, int? year, int? month, RegulatoryFileStatus? status, int? page,
+        regulatorios.MapGet("/files", async (RegulatoryFileKind? kind, string? bureau, string? format, int? year, int? month, RegulatoryFileStatus? status, int? page,
                 int? pageSize, ISender sender, CancellationToken ct) =>
-                await sender.Send(new ListRegulatoryFilesQuery(kind, bureau, year, month, status, page ?? 1, pageSize ?? 20), ct))
+                await sender.Send(new ListRegulatoryFilesQuery(kind, bureau, year, month, status, page ?? 1, pageSize ?? 20, format), ct))
             .WithName("Lending_Regulatory_Files_List")
             .RequirePermission(Leer);
 

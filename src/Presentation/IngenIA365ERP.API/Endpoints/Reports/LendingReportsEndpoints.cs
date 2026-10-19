@@ -144,6 +144,13 @@ public class LendingReportsEndpoints : ICarterModule
             (f, _) => new Application.Lending.Deposits.Liquidity.LiquidityFundReportQuery(f));
         group.MapVistaDeCartera(Application.Lending.Deposits.Liquidity.InsuredDepositsReportQueryHandler.Vista,
             (f, _) => new Application.Lending.Deposits.Liquidity.InsuredDepositsReportQuery(f));
+        // Feature 014, US17 (T219): las cuentas por estado (asOf, status, con datos del titular) y la vista previa de cada formato regulatorio de
+        // captaciones (year, month; la exógena sólo year), con alcance total.
+        group.MapVistaDeCartera(Application.Lending.Deposits.Reports.DepositAccountsByStatusReportQueryHandler.Vista,
+            (f, q) => new Application.Lending.Deposits.Reports.DepositAccountsByStatusReportQuery(f, Texto(q, "status")));
+        foreach (var vista in Application.Lending.Deposits.Reports.DepositRegulatoryPreviewReportQueryHandler.Todas)
+            group.MapVistaDeCartera(vista,
+                (f, q) => new Application.Lending.Deposits.Reports.DepositRegulatoryPreviewReportQuery(f, vista.Key, Entero(q, "year"), Entero(q, "month")));
     }
 
     private static int? Entero(IQueryCollection q, string clave) =>
