@@ -1,0 +1,389 @@
+@page "/cartera/fallecimientos"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Globalization
+@using IngenIA365ERP.Shared.Services.Adjuntos
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Http
+@inject CaptacionesClient Cliente
+@inject AdjuntosClient Adjuntos
+@inject INotificationService Notification
+
+<PageTitle>Fallecimientos - IngenIA365ERP</PageTitle>
+
+@* Feature 014, US14 (T212; FR-034, FR-065, FR-072, FR-082, FR-083; contracts/api.md §13; research §23): el fallecimiento de un titular de cuentas de
+   captación. Registrarlo con el registro civil bloquea todas sus cuentas; la entrega va a los beneficiarios vigentes en la fecha de la defunción, sin juicio
+   de sucesión hasta el tope vigente o por la sucesión, con sus soportes; la aprueba otra persona y sale por orden de giro o traslado. Los aportes se
+   devuelven por el retiro del asociado. *@
+<PermissionGate Required="Lending.DeceasedCases.Register" AnyOf="@Permisos" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Fallecimiento del titular</h3>
+        <div class="toolbar">
+            <select class="e-input" value="@_estado" @onchange="@(e => CambiarEstadoAsync(e.Value?.ToString()))">
+                <option value="">Todos los estados</option>
+                @foreach (var e in new[] { 1, 5, 2, 3, 4 }) { <option value="@e">@TextosDeCicloDeVida.EstadoDelCaso(e)</option> }
+            </select>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+            <PermissionGate Required="Lending.DeceasedCases.Register">
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@AbrirRegistro">Registrar fallecimiento</SfButton>
+            </PermissionGate>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        <div class="tabla-desplazable">
+            <table class="data-grid">
+                <thead><tr><th>Número</th><th>Titular</th><th>Defunción</th><th>Ruta</th><th class="numero">Entregado</th><th>Estado</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var c in _casos)
+                    {
+                        var caso = c;
+                        <tr>
+                            <td>@caso.Number</td>
+                            <td>@caso.Person.FullName<br /><span class="texto-tenue">@caso.Person.DocumentNumber</span></td>
+                            <td>@caso.DeathDate.ToString("dd/MM/yyyy")</td>
+                            <td>@TextosDeCicloDeVida.Ruta(caso.Route)</td>
+                            <td class="numero">@(caso.Status is 2 or 3 ? Pesos(caso.TotalAmount) : "—")</td>
+                            <td>@TextosDeCicloDeVida.EstadoDelCaso(caso.Status)</td>
+                            <td><SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirAsync(caso.PublicId))">Ver</SfButton></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (_casos.Count == 0) { <p class="texto-tenue">No hay casos con ese estado.</p> }
+    </IndicadorDeCarga>
+
+    @if (_actual is { } a)
+    {
+        <div class="info-card">
+            <IndicadorDeCarga Cargando="@_detalle.Activa">
+                <h4>@a.Number · @a.Person.FullName · @TextosDeCicloDeVida.EstadoDelCaso(a.Status)</h4>
+                <p>Defunción el @a.DeathDate.ToString("dd/MM/yyyy") · conocida el @a.ReportedOn.ToString("dd/MM/yyyy") · @TextosDeCicloDeVida.Ruta(a.Route)</p>
+                @foreach (var w in a.Warnings) { <p class="aviso">@w</p> }
+
+                <h5>Cuentas</h5>
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th>Cuenta</th><th class="numero">Saldo</th><th>Se entrega</th></tr></thead>
+                        <tbody>
+                            @foreach (var c in a.Accounts)
+                            {
+                                <tr><td>@c.Number</td><td class="numero">@Pesos(c.Balance)</td><td>@(c.Deliverable ? "Sí" : c.Note)</td></tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                @if (a.Beneficiaries.Count > 0)
+                {
+                    <h5>Beneficiarios vigentes en la fecha de la defunción</h5>
+                    <ul>
+                        @foreach (var b in a.Beneficiaries) { <li>@b.AccountNumber: @b.Person.FullName (@Porcentaje(b.Percent))</li> }
+                    </ul>
+                }
+
+                @if (a.Status is 1 or 5)
+                {
+                    <PermissionGate Required="Lending.DeceasedCases.Register">
+                        <div class="info-card">
+                            <h4>Entrega</h4>
+                            <label class="campo">Ruta
+                                <select class="e-input" @bind="_ruta">
+                                    <option value="1">A los beneficiarios</option>
+                                    <option value="2">Sin juicio de sucesión</option>
+                                    <option value="3">Por sucesión</option>
+                                </select>
+                            </label>
+                            @if (_ruta != 1)
+                            {
+                                <p class="texto-tenue">Quiénes reciben y su porcentaje, según el soporte (suman 100 %). Sin cuenta de destino, se gira a su cuenta de depósito registrada.</p>
+                                @foreach (var d in _destinatarios)
+                                {
+                                    var dest = d;
+                                    <div class="toolbar">
+                                        <PersonSearchPicker Selected="@dest.Persona" SelectedChanged="@(p => { dest.Persona = p; })" ShowHelpText="false" Compacto="true" />
+                                        <input class="e-input" type="number" min="0" max="100" step="0.0001" placeholder="%" @bind="dest.Puntos" />
+                                        <SfButton CssClass="e-flat e-small" OnClick="@(() => _destinatarios.Remove(dest))">Quitar</SfButton>
+                                    </div>
+                                }
+                                <SfButton CssClass="e-flat" OnClick="@(() => _destinatarios.Add(new Destinatario()))">Agregar destinatario</SfButton>
+                                <SubirSoporte OwnerEntityType="@TextosDeCicloDeVida.DuenoDeSoportes" OwnerEntityPublicId="@a.Person.PersonPublicId" Rotulo="Subir un soporte"
+                                              OnSubido="@CargarSoportesAsync" />
+                                @foreach (var sop in _soportes.Where(x => x.Disponible && x.PublicId != a.DeathCertificateAttachmentPublicId))
+                                {
+                                    <label class="campo-check"><input type="checkbox" checked="@_elegidos.Contains(sop.PublicId)"
+                                                                      @onchange="@(e => Elegir(sop.PublicId, e.Value is true))" /> @sop.FileName</label>
+                                }
+                            }
+                            <div class="toolbar">
+                                <SfButton CssClass="e-outline" Disabled="@_detalle.Activa" OnClick="@VistaPreviaAsync">Ver la vista previa</SfButton>
+                            </div>
+                            @if (_previa is { } v)
+                            {
+                                <p>Total @Pesos(v.Total) @(v.CapWithoutSuccession is { } t ? $"· tope sin sucesión {Pesos(t.Amount ?? 0m)} ({t.Source})" : "")</p>
+                                @foreach (var s in v.SupportsRequired) { <p class="texto-tenue">Soporte requerido: @s</p> }
+                                @foreach (var w in v.Warnings) { <p class="aviso">@w</p> }
+                                <div class="tabla-desplazable">
+                                    <table class="data-grid">
+                                        <thead><tr><th>Cuenta</th><th>Recibe</th><th class="numero">%</th><th class="numero">Valor</th></tr></thead>
+                                        <tbody>
+                                            @foreach (var p in v.Portions)
+                                            {
+                                                <tr><td>@p.AccountNumber</td><td>@p.Person.FullName</td><td class="numero">@Porcentaje(p.Percent)</td><td class="numero">@Pesos(p.Amount)</td></tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <label class="campo campo-ancho">Motivo <textarea class="e-input" rows="2" maxlength="500" @bind="_motivoEntrega"></textarea></label>
+                                <SfButton CssClass="e-primary" Disabled="@(_detalle.Activa || string.IsNullOrWhiteSpace(_motivoEntrega))" OnClick="@RegistrarEntregaAsync">
+                                    Registrar la entrega
+                                </SfButton>
+                            }
+                        </div>
+                    </PermissionGate>
+                }
+
+                @if (a.Status == 5)
+                {
+                    <PermissionGate Required="Lending.DeceasedCases.Approve">
+                        <div class="info-card">
+                            <h4>Aprobar la entrega (otra persona que quien la registró)</h4>
+                            <ul>@foreach (var r in a.PlannedRecipients) { <li>@r.Person.FullName @(r.Percent is { } p ? $"({Porcentaje(p)})" : "")</li> }</ul>
+                            <label class="campo campo-ancho">Motivo <textarea class="e-input" rows="2" maxlength="500" @bind="_motivoAprobar"></textarea></label>
+                            <SfButton CssClass="e-primary" Disabled="@(_detalle.Activa || string.IsNullOrWhiteSpace(_motivoAprobar))" OnClick="@AprobarAsync">Aprobar y entregar</SfButton>
+                        </div>
+                    </PermissionGate>
+                }
+
+                @if (a.Status is 1 or 5)
+                {
+                    <PermissionGate Required="Lending.DeceasedCases.Approve">
+                        <SfButton CssClass="e-flat" Disabled="@_detalle.Activa" OnClick="@(() => _motivoAnular = "")">Anular un registro errado…</SfButton>
+                    </PermissionGate>
+                    @if (_motivoAnular is not null)
+                    {
+                        <label class="campo campo-ancho">Motivo de la anulación <textarea class="e-input" rows="2" maxlength="500" @bind="_motivoAnular"></textarea></label>
+                        <SfButton CssClass="e-primary" Disabled="@(_detalle.Activa || string.IsNullOrWhiteSpace(_motivoAnular))" OnClick="@AnularAsync">Confirmar</SfButton>
+                    }
+                }
+
+                @if (a.Deliveries.Count > 0)
+                {
+                    <h5>Entregas</h5>
+                    <div class="tabla-desplazable">
+                        <table class="data-grid">
+                            <thead><tr><th>Operación</th><th>Cuenta</th><th>Recibe</th><th class="numero">Valor</th><th>Medio</th><th>Orden</th><th>Estado del giro</th></tr></thead>
+                            <tbody>
+                                @foreach (var d in a.Deliveries)
+                                {
+                                    <tr>
+                                        <td>@d.OperationNumber@(d.Reversed ? " (reversada)" : "")</td><td>@d.AccountNumber</td><td>@d.Recipient.FullName</td>
+                                        <td class="numero">@Pesos(d.Amount)</td><td>@(d.Form == "TransferToAccount" ? "Traslado" : "Orden de giro")</td>
+                                        <td>@(d.OrderNumber ?? "—")</td><td>@(d.OrderStatus ?? "—")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+            </IndicadorDeCarga>
+        </div>
+    }
+</div>
+
+<SfDialog @bind-Visible="_mostrarRegistro" Header="Registrar el fallecimiento de un titular" Width="640px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_detalle.Activa" Texto="Registrando…">
+                <label class="campo campo-ancho">Titular fallecido *
+                    <PersonSearchPicker Selected="@_titular" SelectedChanged="@CambiarTitularAsync" ShowHelpText="false" Compacto="true" />
+                </label>
+                <label class="campo">Fecha de la defunción * <input class="e-input" type="date" @bind="_defuncion" /></label>
+                @if (_titular is { } t)
+                {
+                    <SubirSoporte OwnerEntityType="@TextosDeCicloDeVida.DuenoDeSoportes" OwnerEntityPublicId="@t.PublicId" Rotulo="Subir el registro civil de defunción"
+                                  OnSubido="@CargarSoportesDelTitularAsync" />
+                    <label class="campo">Registro civil *
+                        <select class="e-input" @bind="_registroCivil">
+                            <option value="">Elija el soporte</option>
+                            @foreach (var s in _soportesDelTitular.Where(x => x.Disponible)) { <option value="@s.PublicId">@s.FileName</option> }
+                        </select>
+                    </label>
+                }
+                <label class="campo campo-ancho">Motivo * <textarea class="e-input" rows="2" maxlength="500" @bind="_motivo"></textarea></label>
+                <p class="texto-tenue">Registrar el fallecimiento bloquea todas las cuentas del titular y anula los retiros que esperaban aprobación.</p>
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_detalle.Activa || _titular is null || _defuncion is null || !Guid.TryParse(_registroCivil, out _) || string.IsNullOrWhiteSpace(_motivo))"
+                              OnClick="@RegistrarAsync">Registrar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarRegistro = false)">Volver</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private static readonly CultureInfo Es = CultureInfo.GetCultureInfo("es-CO");
+    private static readonly string[] Permisos = ["Lending.DeceasedCases.Approve"];
+
+    private sealed class Destinatario
+    {
+        public PersonSearchPicker.PersonSearchItem? Persona { get; set; }
+        public decimal? Puntos { get; set; }
+    }
+
+    private readonly EstadoDeCarga _carga = new(), _detalle = new();
+    private List<CasoDeFallecimientoDto> _casos = [];
+    private CasoDeFallecimientoDto? _actual;
+    private VistaPreviaDeEntregaDto? _previa;
+    private List<AdjuntoDto> _soportes = [], _soportesDelTitular = [];
+    private readonly HashSet<Guid> _elegidos = [];
+    private readonly List<Destinatario> _destinatarios = [];
+    private PersonSearchPicker.PersonSearchItem? _titular;
+    private DateOnly? _defuncion;
+    private string _estado = string.Empty;
+    private string? _error, _motivo, _motivoEntrega, _motivoAprobar, _motivoAnular, _registroCivil;
+    private bool _mostrarRegistro;
+    private int _ruta = 1;
+    private ClaveDeOperacion _clave = new();
+
+    protected override Task OnInitializedAsync() => CargarAsync();
+
+    private async Task CambiarEstadoAsync(string? estado)
+    {
+        _estado = estado ?? string.Empty;
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Cliente.CasosDeFallecimientoAsync(int.TryParse(_estado, NumberStyles.Integer, CultureInfo.InvariantCulture, out var e) ? e : null);
+        if (!r.IsSuccess || r.Value is null) { _casos = []; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer los casos."); return; }
+        _casos = [.. r.Value.Items];
+    }
+
+    private async Task AbrirAsync(Guid caso)
+    {
+        using var carga = _detalle.Iniciar();
+        _previa = null;
+        _error = null;
+        _motivoAnular = null;
+        _elegidos.Clear();
+        _destinatarios.Clear();
+        var r = await Cliente.CasoDeFallecimientoAsync(caso);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo leer el caso."); return; }
+        _actual = r.Value;
+        await CargarSoportesAsync();
+    }
+
+    private async Task CargarSoportesAsync()
+    {
+        if (_actual is null) { _soportes = []; return; }
+        var r = await Adjuntos.ListarAsync(TextosDeCicloDeVida.DuenoDeSoportes, _actual.Person.PersonPublicId);
+        _soportes = r.Value ?? [];
+    }
+
+    private async Task CambiarTitularAsync(PersonSearchPicker.PersonSearchItem? p)
+    {
+        _titular = p;
+        _registroCivil = null;
+        await CargarSoportesDelTitularAsync();
+    }
+
+    private async Task CargarSoportesDelTitularAsync()
+    {
+        if (_titular is null) { _soportesDelTitular = []; return; }
+        var r = await Adjuntos.ListarAsync(TextosDeCicloDeVida.DuenoDeSoportes, _titular.PublicId);
+        _soportesDelTitular = r.Value ?? [];
+    }
+
+    private void Elegir(Guid soporte, bool elegido)
+    {
+        if (elegido) _elegidos.Add(soporte); else _elegidos.Remove(soporte);
+    }
+
+    private IReadOnlyList<DestinatarioDeEntregaRequest>? Destinatarios() => _ruta == 1
+        ? null
+        : _destinatarios.Where(d => d.Persona is not null)
+            .Select(d => new DestinatarioDeEntregaRequest(d.Persona!.PublicId, d.Puntos is { } p ? decimal.Round(p / 100m, 6) : null, 1, null, null, null, null))
+            .ToList();
+
+    private async Task VistaPreviaAsync()
+    {
+        if (_actual is null) return;
+        using var carga = _detalle.Iniciar();
+        _error = null;
+        var r = await Cliente.VistaPreviaDeEntregaAsync(_actual.PublicId, new VistaPreviaDeEntregaRequest(_ruta, Destinatarios()));
+        if (!r.IsSuccess || r.Value is null) { _previa = null; _error = string.Join(" ", LineasDeCreditoClient.Explicar(r)); return; }
+        _previa = r.Value;
+        _clave = new ClaveDeOperacion();
+    }
+
+    private async Task RegistrarEntregaAsync()
+    {
+        if (_actual is null || _previa is null) return;
+        using var carga = _detalle.Iniciar();
+        _error = null;
+        var r = await Cliente.RegistrarEntregaAsync(_actual.PublicId, new RegistrarEntregaRequest(_ruta, Destinatarios(), [.. _elegidos], _previa.Sha256,
+            _motivoEntrega ?? string.Empty), _clave);
+        if (!r.IsSuccess || r.Value is null) { _error = string.Join(" ", LineasDeCreditoClient.Explicar(r)); return; }
+        await Notification.SuccessAsync($"Entrega del caso {r.Value.Number} registrada: espera que otra persona la apruebe.");
+        _actual = r.Value;
+        _previa = null;
+        await CargarAsync();
+    }
+
+    private async Task AprobarAsync()
+    {
+        if (_actual is null) return;
+        using var carga = _detalle.Iniciar();
+        _error = null;
+        var r = await Cliente.AprobarEntregaAsync(_actual.PublicId, _motivoAprobar ?? string.Empty, new ClaveDeOperacion());
+        if (!r.IsSuccess || r.Value is null) { _error = string.Join(" ", LineasDeCreditoClient.Explicar(r)); return; }
+        await Notification.SuccessAsync($"Entrega del caso {r.Value.Number} aprobada: {Pesos(r.Value.TotalAmount)}.");
+        _actual = r.Value;
+        await CargarAsync();
+    }
+
+    private async Task AnularAsync()
+    {
+        if (_actual is null) return;
+        using var carga = _detalle.Iniciar();
+        var r = await Cliente.AnularCasoDeFallecimientoAsync(_actual.PublicId, _motivoAnular ?? string.Empty, new ClaveDeOperacion());
+        if (!r.IsSuccess || r.Value is null) { _error = string.Join(" ", LineasDeCreditoClient.Explicar(r)); return; }
+        _actual = r.Value;
+        _motivoAnular = null;
+        await CargarAsync();
+    }
+
+    private void AbrirRegistro()
+    {
+        _titular = null;
+        _defuncion = null;
+        _registroCivil = _motivo = _error = null;
+        _soportesDelTitular = [];
+        _clave = new ClaveDeOperacion();
+        _mostrarRegistro = true;
+    }
+
+    private async Task RegistrarAsync()
+    {
+        if (_titular is null || _defuncion is null || !Guid.TryParse(_registroCivil, out var registro)) return;
+        using var carga = _detalle.Iniciar();
+        _error = null;
+        var r = await Cliente.RegistrarFallecimientoAsync(new RegistrarFallecimientoRequest(_titular.PublicId, _defuncion.Value, registro, _motivo ?? string.Empty), _clave);
+        if (!r.IsSuccess || r.Value is null) { _error = string.Join(" ", LineasDeCreditoClient.Explicar(r)); return; }
+        _mostrarRegistro = false;
+        await Notification.SuccessAsync($"Fallecimiento registrado en el caso {r.Value.Number}: las cuentas del titular quedaron bloqueadas.");
+        await CargarAsync();
+        await AbrirAsync(r.Value.PublicId);
+    }
+
+    private static string Pesos(decimal valor) => "$ " + valor.ToString("N2", Es);
+
+    private static string Porcentaje(decimal fraccion) => (fraccion * 100m).ToString("0.####", Es) + " %";
+}

@@ -1,0 +1,177 @@
+@page "/cartera/no-reclamados"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Globalization
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Http
+@inject CaptacionesClient Cliente
+@inject INotificationService Notification
+
+<PageTitle>No reclamados - IngenIA365ERP</PageTitle>
+
+@* Feature 014, US14 (T212; FR-081, FR-084; contracts/api.md §14; research §23): los saldos no reclamados —lo devuelto y no cobrado y el saldo de las cuentas
+   inactivas cuando el reglamento lo ordena—, su traslado a mano y su pago al titular que aparece, por orden de giro o traslado a una cuenta suya. El ciclo
+   diario traslada solo lo que cumple el plazo de la entidad. *@
+<PermissionGate Required="Lending.Accounts.Read" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Saldos no reclamados</h3>
+        <div class="toolbar">
+            <PersonSearchPicker Selected="@_persona" SelectedChanged="@CambiarPersonaAsync" ShowHelpText="false" Compacto="true" />
+            <select class="e-input" value="@_estado" @onchange="@(e => CambiarEstadoAsync(e.Value?.ToString()))">
+                <option value="">Todos</option>
+                <option value="1">Retenidos</option>
+                <option value="2">Pagados</option>
+            </select>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+            <PermissionGate Required="Lending.Unclaimed.Manage">
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@(() => { _mostrarTraslado = true; _error = null; _clave = new ClaveDeOperacion(); })">
+                    Trasladar a no reclamados
+                </SfButton>
+            </PermissionGate>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        <div class="tabla-desplazable">
+            <table class="data-grid">
+                <thead><tr><th>Titular</th><th>Origen</th><th>Cuenta</th><th class="numero">Valor</th><th>Desde</th><th>Estado</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var s in _saldos)
+                    {
+                        var saldo = s;
+                        <tr>
+                            <td>@saldo.Person.FullName<br /><span class="texto-tenue">@saldo.Person.DocumentNumber</span></td>
+                            <td>@TextosDeCicloDeVida.Origen(saldo.Source)@(saldo.SourceReference is { } o ? $" ({o})" : "")</td>
+                            <td>@saldo.AccountNumber</td>
+                            <td class="numero">@Pesos(saldo.Amount)</td>
+                            <td>@saldo.TransferredOn.ToString("dd/MM/yyyy")</td>
+                            <td>@TextosDeCicloDeVida.EstadoNoReclamado(saldo.Status)@(saldo.ClaimOrderNumber is { } n ? $" · orden {n}" : "")</td>
+                            <td>
+                                @if (saldo.Status == 1)
+                                {
+                                    <PermissionGate Required="Lending.Unclaimed.Manage">
+                                        <SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirPago(saldo))">Pagar…</SfButton>
+                                    </PermissionGate>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (_saldos.Count == 0) { <p class="texto-tenue">No hay saldos no reclamados con esos filtros.</p> }
+    </IndicadorDeCarga>
+
+    @if (_pagando is { } p)
+    {
+        <div class="info-card">
+            <IndicadorDeCarga Cargando="@_detalle.Activa">
+                <h4>Pagar @Pesos(p.Amount) a @p.Person.FullName</h4>
+                <label class="campo">Medio
+                    <select class="e-input" @bind="_forma">
+                        <option value="2">Orden de giro a su cuenta de depósito registrada</option>
+                        <option value="1">Traslado a una cuenta de ahorro suya</option>
+                    </select>
+                </label>
+                @if (_forma == 1) { <label class="campo">Número de la cuenta de ahorro (su identificador) <input class="e-input" maxlength="36" @bind="_destino" /></label> }
+                <label class="campo campo-ancho">Motivo <textarea class="e-input" rows="2" maxlength="500" @bind="_motivoPago"></textarea></label>
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_detalle.Activa || string.IsNullOrWhiteSpace(_motivoPago))" OnClick="@PagarAsync">Pagar</SfButton>
+                    <SfButton CssClass="e-flat" OnClick="@(() => _pagando = null)">Volver</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </div>
+    }
+</div>
+
+<SfDialog @bind-Visible="_mostrarTraslado" Header="Trasladar a no reclamados" Width="640px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_detalle.Activa" Texto="Trasladando…">
+                <p class="texto-tenue">Las cuentas inactivas sólo pasan si el reglamento lo ordena (CuentasAbandonadas.TrasladoHabilitado); lo devuelto y no cobrado, por la
+                    orden de giro que volvió. Un identificador por línea.</p>
+                <label class="campo campo-ancho">Cuentas inactivas (identificadores) <textarea class="e-input" rows="3" @bind="_cuentas"></textarea></label>
+                <label class="campo campo-ancho">Órdenes de giro devueltas (identificadores) <textarea class="e-input" rows="3" @bind="_ordenes"></textarea></label>
+                <label class="campo campo-ancho">Motivo * <textarea class="e-input" rows="2" maxlength="500" @bind="_motivo"></textarea></label>
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_detalle.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@TrasladarAsync">Trasladar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarTraslado = false)">Volver</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private static readonly CultureInfo Es = CultureInfo.GetCultureInfo("es-CO");
+
+    private readonly EstadoDeCarga _carga = new(), _detalle = new();
+    private List<SaldoNoReclamadoDto> _saldos = [];
+    private SaldoNoReclamadoDto? _pagando;
+    private PersonSearchPicker.PersonSearchItem? _persona;
+    private string _estado = string.Empty;
+    private string? _error, _motivo, _motivoPago, _cuentas, _ordenes, _destino;
+    private bool _mostrarTraslado;
+    private int _forma = 2;
+    private ClaveDeOperacion _clave = new();
+
+    protected override Task OnInitializedAsync() => CargarAsync();
+
+    private async Task CambiarPersonaAsync(PersonSearchPicker.PersonSearchItem? p) { _persona = p; await CargarAsync(); }
+
+    private async Task CambiarEstadoAsync(string? estado) { _estado = estado ?? string.Empty; await CargarAsync(); }
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Cliente.NoReclamadosAsync(_persona?.PublicId, int.TryParse(_estado, NumberStyles.Integer, CultureInfo.InvariantCulture, out var e) ? e : null);
+        if (!r.IsSuccess || r.Value is null) { _saldos = []; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer los saldos."); return; }
+        _saldos = [.. r.Value.Items];
+    }
+
+    private void AbrirPago(SaldoNoReclamadoDto saldo)
+    {
+        _pagando = saldo;
+        _forma = 2;
+        _destino = _motivoPago = _error = null;
+        _clave = new ClaveDeOperacion();
+    }
+
+    private async Task PagarAsync()
+    {
+        if (_pagando is null) return;
+        Guid? destino = null;
+        if (_forma == 1)
+        {
+            if (!Guid.TryParse(_destino?.Trim(), out var d)) { _error = "Digite el identificador de la cuenta de ahorro del titular."; return; }
+            destino = d;
+        }
+        using var carga = _detalle.Iniciar();
+        _error = null;
+        var r = await Cliente.PagarNoReclamadoAsync(_pagando.PublicId, new PagarNoReclamadoRequest(_forma, destino, null, _motivoPago ?? string.Empty), _clave);
+        if (!r.IsSuccess || r.Value is null) { _error = string.Join(" ", LineasDeCreditoClient.Explicar(r)); return; }
+        await Notification.SuccessAsync($"Saldo pagado a {r.Value.Person.FullName}.");
+        _pagando = null;
+        await CargarAsync();
+    }
+
+    private static IReadOnlyList<Guid> Ids(string? texto) =>
+        (texto ?? string.Empty).Split(['\n', ',', ';', ' '], StringSplitOptions.RemoveEmptyEntries).Select(x => Guid.TryParse(x.Trim(), out var g) ? g : Guid.Empty)
+            .Where(g => g != Guid.Empty).Distinct().ToList();
+
+    private async Task TrasladarAsync()
+    {
+        using var carga = _detalle.Iniciar();
+        _error = null;
+        var r = await Cliente.TrasladarANoReclamadosAsync(new TrasladarANoReclamadosRequest(Ids(_cuentas), Ids(_ordenes), _motivo ?? string.Empty), _clave);
+        if (!r.IsSuccess || r.Value is null) { _error = string.Join(" ", LineasDeCreditoClient.Explicar(r)); return; }
+        _mostrarTraslado = false;
+        await Notification.SuccessAsync($"{r.Value.Count} saldo(s) trasladado(s) a no reclamados.");
+        await CargarAsync();
+    }
+
+    private static string Pesos(decimal valor) => "$ " + valor.ToString("N2", Es);
+}

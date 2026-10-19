@@ -135,6 +135,9 @@ public class LendingReportsEndpoints : ICarterModule
         // Feature 014, US11 (T189): los embargos recibidos (from, to, status), con datos del titular.
         group.MapVistaDeCartera(Application.Lending.Deposits.Reports.GarnishmentsReportQueryHandler.Vista,
             (f, q) => new Application.Lending.Deposits.Reports.GarnishmentsReportQuery(f, Texto(q, "status")));
+        // Feature 014, US14 (T209): los saldos no reclamados a una fecha (asOf), con datos del titular.
+        group.MapVistaDeCartera(Application.Lending.Deposits.Unclaimed.UnclaimedReportQueryHandler.Vista,
+            (f, _) => new Application.Lending.Deposits.Unclaimed.UnclaimedReportQuery(f));
     }
 
     private static int? Entero(IQueryCollection q, string clave) =>

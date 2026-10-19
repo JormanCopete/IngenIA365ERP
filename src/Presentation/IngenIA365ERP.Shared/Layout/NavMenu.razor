@@ -122,6 +122,13 @@
                 <PermissionGate Required="Lending.Assembly.Register" AnyOf="@(new[] { "Lending.Assembly.Approve" })">
                     <NavLink href="/cartera/asamblea" class="nav-subitem">Asamblea</NavLink>
                 </PermissionGate>
+                @* US14 (T212): el fallecimiento del titular con la entrega a sus beneficiarios, y los saldos no reclamados. *@
+                <PermissionGate Required="Lending.DeceasedCases.Register" AnyOf="@(new[] { "Lending.DeceasedCases.Approve" })">
+                    <NavLink href="/cartera/fallecimientos" class="nav-subitem">Fallecimientos</NavLink>
+                </PermissionGate>
+                <PermissionGate Required="Lending.Accounts.Read">
+                    <NavLink href="/cartera/no-reclamados" class="nav-subitem">No reclamados</NavLink>
+                </PermissionGate>
                 @* Decisión del dueño del 2026-10-18 (D53): los niveles de aprobación de los movimientos que superan la atribución, por cooperativa. *@
                 <PermissionGate Required="Lending.Attributions.View">
                     <NavLink href="/cartera/captaciones/aprobaciones" class="nav-subitem">Aprobación de movimientos</NavLink>
