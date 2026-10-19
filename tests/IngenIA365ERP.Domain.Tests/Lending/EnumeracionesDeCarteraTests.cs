@@ -206,7 +206,7 @@ public class EnumeracionesDeCarteraTests
         [typeof(IssuedDocumentStatus)] = [("Valid", 1), ("SubjectToFinality", 2), ("Voided", 3), ("Superseded", 4), ("Settled", 5)],
         [typeof(IssuedDocumentEventKind)] = [("Issued", 1), ("Delivered", 2), ("Voided", 3), ("Superseded", 4), ("Settled", 5)],
         [typeof(DocumentDeliveryMode)] = [("Download", 1), ("Email", 2)],
-        [typeof(RegulatoryFileKind)] = [("Sicses", 1), ("CreditBureau", 2)],
+        [typeof(RegulatoryFileKind)] = [("Sicses", 1), ("CreditBureau", 2), ("DepositsSicses", 3), ("Exogenous", 4)],
         [typeof(RegulatoryFileStatus)] = [("Validated", 1), ("Generated", 2), ("Superseded", 3), ("Uploaded", 4)],
 
         // ------------------------------------------------------------------- feature 014: captaciones y aportes (T015) --

@@ -517,7 +517,7 @@ public sealed class GeneracionDeArchivoRegulatorio(
                 // El número al final (T34): encabeza el nombre del archivo.
                 var numero = await numerador.AsignarAsync(LendingNumberKind.RegulatoryFile, string.Empty, ArchivosRegulatorios.Prefijo, ct);
                 var periodoDelNombre = definicion is { Anual: true }
-                    ? anio.ToString("0000", CultureInfo.InvariantCulture)
+                    ? string.Create(CultureInfo.InvariantCulture, $"{anio:0000}")
                     : string.Create(CultureInfo.InvariantCulture, $"{anio:0000}-{mes:00}");
                 var clave = deCaptaciones ? formato!.ToUpperInvariant() : clase == RegulatoryFileKind.Sicses ? "SICSES" : central;
                 nombre = string.Create(CultureInfo.InvariantCulture, $"{numero}_{clave}_{periodoDelNombre}_v{version}.txt");

@@ -57,14 +57,15 @@ public class CatalogoDeLimitesLegalesTests
         { "FONDO_LIQUIDEZ_PLENA_BANDA_MEDIA", UnidadDeValorNacional.Fraccion, DireccionDeLoEstricto.Mayor, "" },
         { "FONDO_LIQUIDEZ_PLENA_PERMANENTE_SOLO_RETIRO", UnidadDeValorNacional.Fraccion, DireccionDeLoEstricto.Mayor, "" },
         { "IRL_MINIMO", UnidadDeValorNacional.Veces, DireccionDeLoEstricto.Mayor, "RiesgoDeLiquidez.UmbralIrl" },
+        { "EXOGENA_1019_UMBRAL_UVT", UnidadDeValorNacional.Veces, DireccionDeLoEstricto.Menor, "" },
     };
 
     [Fact]
     public void Son_los_treinta_y_nueve_codigos_fijados_sin_repetir()
     {
         // K6b (T1051) suma los cinco de vivienda a los veinticuatro de K1–K6a; la feature 014 (T017), los cuatro de aportes; US11 (T188), el del embargo
-        // coactivo; US15 (T216), los cuatro pisos del fondo de liquidez y el IRL mínimo.
-        CatalogoDeLimitesLegales.Todos.Should().HaveCount(39);
+        // coactivo; US15 (T216), los cuatro pisos del fondo de liquidez y el IRL mínimo; US17 (T220), el umbral de la exógena 1019.
+        CatalogoDeLimitesLegales.Todos.Should().HaveCount(40);
         CatalogoDeLimitesLegales.Todos.Select(l => l.Codigo).Should().OnlyHaveUniqueItems();
         CatalogoDeLimitesLegales.Todos.Select(l => l.Codigo).Should().BeEquivalentTo(Fijados.Select(f => (string)f[0]));
     }

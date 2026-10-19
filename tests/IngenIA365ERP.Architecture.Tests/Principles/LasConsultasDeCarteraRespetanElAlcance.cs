@@ -206,6 +206,10 @@ public class LasConsultasDeCarteraRespetanElAlcance
         // por las cuentas del ahorrador en el alcance.
         "Core/IngenIA365ERP.Application/Lending/Deposits/Liquidity/LiquidityFundCommands.cs",
         "Core/IngenIA365ERP.Application/Lending/Deposits/Liquidity/LiquidityReportQueries.cs",
+        // US17 (T219, T221): las cuentas por estado filtran por oficina y línea (VistasDeCaptaciones.CuentasAsync); la vista previa de los formatos
+        // regulatorios y validar o generar un formato exigen alcance total (AlcanceDeFormatosDeCaptaciones): el formato es de toda la cooperativa.
+        "Core/IngenIA365ERP.Application/Lending/Deposits/Reports/RegulatoryReportQueries.cs",
+        "Core/IngenIA365ERP.Application/Lending/Regulatory/Captaciones/DepositRegulatoryFileCommands.cs",
     ];
 
     /// <summary>
