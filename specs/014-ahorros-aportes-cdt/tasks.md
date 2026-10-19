@@ -423,13 +423,15 @@ la gracia; tasa negociada en espera del aprobador (quickstart US6).
 
 **Independent Test**: certificado tributario anual; reversar una retención de diciembre lo anula.
 
-- [ ] T194 [P] [US13] Eventos de documento nuevos y anulación por reverso de operaciones de cuenta (`IssuedDocumentAccount` ya existe desde US3) en `D/Entities/Lending/Documents/`
-- [ ] T195 [US13] Generadores QuestPDF de extracto, certificado de saldo, certificado tributario anual (cuadra con liquidaciones, retenciones y GMF del año, SC-016), certificado de retención, título CDAT «no negociable» y respuesta al juzgado (`GarnishmentResponse`) (`contracts/documentos.md`) en `API/Reports/Captaciones/`
-- [ ] T196 [US13] Emisión, copia guardada, anulación automática por reverso y lotes de envío en `A/Lending/Deposits/Documents/`
-- [ ] T197 [P] [US13] Pruebas de emisión y anulación en `TA/Lending/Deposits/Documents/`
-- [ ] T198 [US13] Rutas de `contracts/api.md` §17 en `API/Endpoints/Lending/Deposits/DepositDocumentsEndpoints.cs`
-- [ ] T199 [US13] Emisión desde la ficha de cuenta y de aportes en `SH/Pages/Cartera/Captaciones/DocumentosDeCuenta.razor`
-- [ ] T200 [US13] e2e de US13 (escenarios 1 y 2) en `TI/Lending/Deposits/DocumentosDeCaptacionesTests.cs`
+- [x] T194 [P] [US13] Eventos de documento nuevos y anulación por reverso de operaciones de cuenta (`IssuedDocumentAccount` ya existe desde US3) en `D/Entities/Lending/Documents/` — hecho el 2026-10-19: eventos y estados `Superseded` 4 y `Settled` 5, `IssuedDocumentAccount.TermsVersionId`, `IssuedByUserId` nulo para el proceso; motores puros `VigenciaDeDocumentosDeCuentas`, `ProporcionesDeTitularidad`, `CertificadoTributarioDeCaptaciones` y `CertificadoDeRetencionDeCaptaciones`; `CaptacionesAportes` regenerada en los dos motores con el SQL a mano intacto (research E168, E179)
+- [x] T195 [US13] Generadores QuestPDF de extracto, certificado de saldo, certificado tributario anual (cuadra con liquidaciones, retenciones y GMF del año, SC-016), certificado de retención, título CDAT «no negociable» y respuesta al juzgado (`GarnishmentResponse`) (`contracts/documentos.md`) en `API/Reports/Captaciones/` — hecho: `DocumentosDeCaptacionesReport` pinta los seis cuerpos dentro de la plantilla común (membrete, firma, código y QR) y la leyenda «CDAT — NO NEGOCIABLE» va destacada; ET art. 381 y DUR 1.6.1.13.2.40/1.6.1.12.12 aplicados (research §21, E174, E176)
+- [x] T196 [US13] Emisión, copia guardada, anulación automática por reverso y lotes de envío en `A/Lending/Deposits/Documents/` — hecho: `EmisionDeDocumentosDeCartera` (la emisión en la unidad de trabajo de quien la pide), `DocumentosDeCaptaciones`, la misma copia del extracto, `TitulosDeCdat` (título automático al constituir, prorrogar y renovar; reemplazado y liquidado), `RespuestasAlJuzgado`, la anulación por clase y el lote síncrono (tributario, retención y extractos por la periodicidad de la entidad); cuatro parámetros `Documentos.*` (research E169–E177)
+- [x] T197 [P] [US13] Pruebas de emisión y anulación en `TA/Lending/Deposits/Documents/` — hecho: 12 pruebas de Application y 11 de dominio (`DocumentosAlTitularTests`), con SC-016 al 60/40 (research E181)
+- [x] T198 [US13] Rutas de `contracts/api.md` §17 en `API/Endpoints/Lending/Deposits/DepositDocumentsEndpoints.cs` — hecho: `POST /documents/batches` (200 con el resumen, E177) y `POST /term-deposits/{id}/titles`; la emisión de la 013 lee `accountPublicId`, `includeRestrictions` e `includePermanentSavings` y la lista filtra por `accountPublicId`
+- [x] T199 [US13] Emisión desde la ficha de cuenta y de aportes en `SH/Pages/Cartera/Captaciones/DocumentosDeCuenta.razor` — hecho: en la ficha de la cuenta, del CDAT y de aportes, con el saldo a una fecha y el extracto en pantalla (pendiente de la fase 11); el lote sin pantalla todavía (research E178)
+- [x] T200 [US13] e2e de US13 (escenarios 1 y 2) en `TI/Lending/Deposits/DocumentosDeCaptacionesTests.cs` — escrita y compilada (US13-1, US13-2 y los rechazos); **e2e en la corrida final**, con `EntregaVigente` ≥ K8
+
+**Checkpoint**: documentos al titular de captaciones con verificación, anulación por reverso, título del CDAT automático y respuesta al juzgado como documento. Construida la fase 15 el 2026-10-19 (research §21); también los pendientes de documentos de las fases 11 (pantalla del saldo y del extracto), 12 (el título), 13 (bonificación en el certificado y extracto del contrato) y 14 (el documento de la respuesta al juzgado).
 
 ---
 

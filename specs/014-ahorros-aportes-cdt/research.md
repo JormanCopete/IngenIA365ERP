@@ -1873,3 +1873,130 @@ mano (T044, `NOM`, `ASO`) quedó intacto —el antes y el después del `.cs` só
 - La cuenta de los embargos por consignar (`EmbargosPorConsignar`) y si la cuenta embargada va a otra cuenta contable que la estándar (entonces la reclasificación
   mueve saldos entre cuentas; con la misma cuenta no deja líneas).
 - El GMF de la consignación al juzgado (E163).
+
+## 21. Enmienda de los documentos al titular (2026-10-19, T194–T200, US13, K8/K9)
+
+Construida la historia 13 y los pendientes de documentos de las fases 11 (pantalla del saldo y del extracto), 12 (el título «CDAT, no negociable»), 13
+(el certificado de la bonificación y el extracto del contrato) y 14 (el documento de la respuesta al juzgado). **Manda el código**; estas notas reemplazan
+lo dicho en `data-model.md`, `contracts/` y `tasks.md` donde choquen. Cambio de esquema: `CaptacionesAportes` **regenerada** en los dos motores (mismos
+sellos: PostgreSQL `20261019104128`, SQL Server `20261019104056`; las operaciones nuevas al final de `Up` y al principio de `Down`) con
+`LND_IssuedDocumentAccounts.TermsVersionId` (FK a la versión de condiciones, con índice) y `LND_IssuedDocuments.IssuedByUserId` nulo; el SQL escrito a mano
+(T044, `NOM`, `ASO`) quedó intacto —el antes y el después del `.cs` sólo difieren en líneas agregadas— y la paridad pasa. Las migraciones congeladas de la
+013 y `RetiroDeCaptacionesHeredadas` no se tocaron. `EntregaVigente` sigue en K6b (E127): las clases de K8 y K9 exigen su entrega desplegada
+(`Lending.Document.KindNotAvailable`, ahora con su propia `availableFrom`) y las claves `Documentos.*` nuevas se leen con sus defectos.
+
+**Norma aplicada** (todo «pendiente de validar por la contadora»; ningún valor legal en el código):
+
+- **Certificado de retención por conceptos distintos de los laborales.** Estatuto Tributario art. 381: año gravable y ciudad, nombre y NIT del agente
+  retenedor y su dirección, nombre y NIT del retenido, monto total y concepto del pago sujeto a retención, cuantía de la retención; DUR 1625 de 2016 art.
+  1.6.1.13.2.40: se expiden a más tardar el último día hábil de marzo del año siguiente (también los del GMF) —**informativo**, nada se bloquea por la
+  fecha—; art. 1.6.1.12.12: las personas jurídicas pueden entregarlos impresos por computador **sin firma autógrafa**. Por eso la leyenda es el parámetro
+  `Documentos.LeyendaCertificadoRetencion` con ese texto estándar.
+- **Componente inflacionario** (ET arts. 38 a 41, DUR art. 1.2.1.12.6): el certificado tributario lo informa como no constitutivo de renta ni ganancia
+  ocasional, con lo que cada liquidación descontó (E94).
+- **CDAT**: título de legitimación, no título valor (C. de Co. art. 645), como en §18.
+- Fuentes: Gerencie, «Plazos para expedir certificados de retención en la fuente» <https://www.gerencie.com/plazos-para-expedir-certificados-de-retencion-en-la-fuente.html>;
+  Actualícese, «Modelo de certificado de retención en la fuente por conceptos diferentes a rentas laborales»
+  <https://actualicese.com/modelo-de-certificado-de-retencion-en-la-fuente-por-conceptos-diferentes-a-rentas-laborales/> y «Plazo para expedir certificados
+  de retención en 2025» <https://actualicese.com/plazo-para-expedir-certificados-de-retencion-en-2025/>; Siigo, «Certificados de retenciones»
+  <https://www.siigo.com/blog/obligaciones-fiscales/certificados-retenciones/>. Las fuentes no coinciden en el decreto que modificó por última vez el art.
+  1.6.1.13.2.40 (Decretos 2345 de 2019, 2487 de 2022 y 2229 de 2023): la contadora coteja el texto vigente en el compilado oficial.
+
+- **E168 · Quién emite y los eventos de título (T194).** `IssuedLendingDocument.IssuedByUserId` pasa a **nulo** sólo para lo que emite el proceso diario
+  sin persona —el título de la prórroga automática—; el evento `Issued` lo dice con `ActorKind = Process` y la lista muestra «Proceso diario de Cartera».
+  `IssuedDocumentEventKind` suma `Superseded` 4 y `Settled` 5 e `IssuedDocumentStatus` los mismos valores; el estado sale de
+  `EstadoDeDocumentoEmitido` con `EventosDeEstado` (anulado manda, luego reemplazado, luego liquidado, luego firmeza). Los dos eventos nuevos nombran la
+  operación de cuenta en `CausingAccountOperationId` (la prórroga, la renovación o la redención). La lista filtra por los dos estados nuevos y por
+  `accountPublicId`, y el DTO del documento suma `accounts[]`.
+- **E169 · La emisión en la unidad de trabajo de quien la pide.** La parte transaccional de `IssueLendingDocumentCommandHandler` pasó a
+  `EmisionDeDocumentosDeCartera` (sin cambio de firma del manejador): cerrojo —setup compartido, créditos, **cuentas** en orden de Id—, R = el último
+  registro de lo que cubre (también `MemberAccountControls.LastRegisteredAt`), armado, código, número al final, PDF subido antes de guardar, documento,
+  créditos, cuentas (con `TermsVersionId` y el título anterior), evento y correo. La usan el manejador (dentro de `TransaccionExplicita`) y los documentos
+  que nacen solos dentro de la transacción de su operación.
+- **E170 · Documentos de cuenta y de la persona.** El extracto y el certificado de saldo llevan `accountPublicId`: la cuenta en el alcance (fuera, el 404 de
+  la cuenta), su naturaleza activada y la persona **titular o cotitular** de ella en cualquier vigencia (código nuevo `Lending.Document.NotAccountHolder`).
+  El certificado tributario y el de retención exigen captaciones activadas y el alcance sobre **todas** las cuentas de la persona (falla cerrado, como
+  E164). La ruta lee también `includeRestrictions` e `includePermanentSavings` (la constancia de aportes no lo recibía por HTTP).
+- **E171 · Códigos.** El contrato decía `Lending.Document.YearNotClosed`: se usa el de la 013, `Lending.Document.TaxYearNotClosed` (un código por
+  significado). `Lending.Document.FutureDateNotAllowed` para el certificado de saldo a una fecha futura. El título del CDAT y la respuesta al juzgado por
+  `POST /documents` responden `IssuedAutomatically`. Un título reemplazado o liquidado **se descarga** (consulta) pero **no se envía** por correo:
+  `Lending.Document.VoidedCannotReissue` con su propio mensaje (documentos.md §2.5).
+- **E172 · La misma copia del extracto (US13-1).** Mismo extracto = misma clase, misma cuenta, misma persona, mismo período, sin anulación y sin filas del
+  libro de esa cuenta registradas después del `InformationCutoff` del emitido con fecha valor hasta el fin del período. Se devuelve con
+  `alreadyIssued = true`, sin consumir número, y la entrega se audita como reimpresión.
+- **E173 · El título del CDAT (FR-068, R11; T195, T196).** `TitulosDeCdat` lo emite **solo** en la transacción de la operación que sella una versión: la
+  constitución al fondearse (por traslado o por el recaudador), la prórroga del proceso diario (sin persona) y la renovación. Número `TIT-{consecutivo}-{versión}`:
+  la primera versión toma el consecutivo de la clase y las siguientes conservan la base del título anterior. El título vigente anterior recibe
+  `Superseded` y la redención o cancelación (también al vencer, por `SalidaDeCdat`) le da `Settled` al vigente. El reverso de la operación que lo selló
+  (la fila de cuenta guarda su `LastOperationId` y la versión) lo anula. Sin firmante o con el almacén caído **la operación sigue** y queda
+  `[Cartera.TituloDeCdatSinEmitir]`; el título pendiente se emite después con la ruta nueva `POST /api/lending/term-deposits/{id}/titles`
+  (`Lending.Documents.Issue`, con clave; devuelve el vigente si ya existe). `GET /term-deposits/{id}/titles` responde la versión que titula y el estado
+  calculado. Los CDAT **migrados** no reciben título al activar: se emite con esa ruta (pregunta al dueño).
+- **E174 · El certificado tributario de captaciones (SC-016; T195, T196).** Motor puro `CertificadoTributarioDeCaptaciones` (`Domain/Lending/Deposits/DocumentosAlTitular.cs`):
+  por cuenta en que la persona es titular o fue cotitular, abierta en el año, el saldo del titular al 31 de diciembre y el GMF del año **por su proporción**
+  vigente al 31 de diciembre (o al cierre de la cuenta) —`ProporcionesDeTitularidad`: la misma regla del reparto de los acumulados, el titular absorbe el
+  residuo, así la suma de los certificados de todos los titulares es exactamente lo de la cuenta—, y los rendimientos, el componente, la base y la retención
+  que le tocaron en cada liquidación (`LND_WithholdingAccumulations`, ya repartidos; también la bonificación del contractual, origen `Bonus`, lo que cierra
+  el pendiente del certificado de la bonificación de §19, y lo migrado del año). El GMF migrado del año sale de la fila `tax-year-to-date` de la carga de la
+  cuenta (E118). Los aportes (saldo al 31 de diciembre y revalorización del año) sólo con `Documentos.CertificadoTributarioIncluyeAportes`. El certificado de
+  retención agrupa por clase de captación y tarifa (`CertificadoDeRetencionDeCaptaciones`) sobre los acumulados con fecha valor en el período; la ciudad es la
+  de la cooperativa —la de la consignación la informará Contabilidad—.
+- **E175 · Parámetros por entidad (K8, criterio del dueño).** `Documentos.CertificadoTributarioIncluyeAportes` (`false`, P10), `Documentos.LeyendaCertificadoRetencion`
+  (el texto estándar con la norma), `Documentos.TextosDeCaptaciones` (JSON `{ clase: texto }`: el texto propio de la entidad que se suma como leyenda a
+  cada clase) y `Documentos.PeriodicidadDeExtractos` (`Mensual`, `Trimestral`, `Semestral` o `Anual`; informativa: rige el período del lote). Logotipo,
+  imagen de firma y firmante ya eran de la entidad (013); la plantilla del correo que lleva el documento es `ENVIODOC`, editable (D35). Todas pendientes de
+  validar.
+- **E176 · La respuesta al juzgado como documento (T195, T196).** Contra lo que decía documentos.md §7, la respuesta **sí** es un documento emitido de la clase
+  `GarnishmentResponse` 15 (data-model §1.5, research R23 «cada respuesta al juzgado se emite como documento»), prefijo `RJZ-`, a nombre de la persona
+  embargada, con el texto enviado, la autoridad, el oficio, el proceso y lo retenido y consignado a la fecha. Nace en la transacción de la respuesta —la que
+  registra la persona (`RegisterGarnishmentResponseCommand`, ahora en transacción) y la de «aportes inembargables» que nace con el oficio— y su Id queda en
+  `LND_GarnishmentResponses.IssuedDocumentId`. No cubre cuentas: el reverso de una operación **no** la anula (es lo que se le dijo al juzgado ese día). Sin
+  firmante, la respuesta se registra sin documento y el DTO trae el aviso `Lending.Garnishment.ResponseDocumentNotIssued`; el DTO suma
+  `issuedDocumentPublicId` y `issuedDocumentNumber`.
+- **E177 · El lote (T196, T198).** `POST /api/lending/documents/batches` (`Lending.Documents.Issue`, con clave) admite `DepositTaxCertificate` y
+  `WithholdingCertificate` del año (o del período pedido) —uno por persona con productos vivos en el período— y, por el criterio del dueño,
+  `AccountStatement` del último período terminado según `Documentos.PeriodicidadDeExtractos` —uno por cuenta viva, a nombre de su titular—, sólo dentro del
+  alcance de quien lo corre. Cada documento sale por `IssueLendingDocumentCommand` en su propia transacción (su número, su código, su auditoría, la misma
+  copia del extracto); uno que no sale queda en el detalle y el lote sigue. **Corre dentro de la petición y responde 200 con el resumen**, no 202 con una
+  corrida: una corrida de la Cartera es «una corriendo por cooperativa» e impediría el ciclo diario mientras dura (pregunta al dueño para volúmenes grandes).
+- **E178 · Pantalla (T199).** Componente `DocumentosDeCuenta` (sin ruta propia) en la ficha de la cuenta (`/cartera/ahorros/{id}`), en la del CDAT
+  (`/cartera/cdat/{id}`, con «Emitir el título pendiente» y los títulos con versión y estado) y en la ficha de aportes (`/cartera/aportes/{persona}`, con la
+  constancia y el paz y salvo): el **saldo a una fecha** y el **extracto en pantalla** (las rutas de la fase 11, lecturas auditadas, que no tenían pantalla),
+  la emisión en un paso para descargar o enviar por correo y los documentos de la cuenta o de la persona con su estado, el PDF guardado y su código. La
+  pantalla de documentos de la Cartera nombra las clases de captaciones y los estados nuevos. El lote no tiene pantalla todavía (se corre por API).
+- **E179 · La anulación por reverso (T194, T196).** `VigenciaDeDocumentosDeCuentas` (puro) decide por clase entre los documentos que cubren alguna cuenta de la
+  operación y la vieron: el extracto si la fecha valor llega hasta el **fin** del período (documentos.md §4 decía «del período»: una operación anterior
+  cambia el saldo inicial que el extracto certificó); el certificado de saldo, la constancia y la liquidación del retiro con fecha valor hasta su corte; el
+  certificado tributario con fecha valor hasta el 31 de diciembre de su año (cambia el saldo certificado o lo tributario); el de retención sólo por una
+  operación tributaria (abono o pago de intereses, retención, GMF, bonificación) con fecha valor en el período; el título por la operación que lo selló;
+  el paz y salvo de aportes si la operación pagó cuotas; la respuesta al juzgado nunca. Lo llama `ReversionDeCuentas` como antes (US3).
+- **E180 · Lo que el extracto todavía no dice.** De documentos.md §2.1 faltan la exención del GMF **restante** del mes (se informa la usada), el estado de
+  la factura de un cargo gravado y la tasa sellada del CDAT o del contractual (el extracto toma la de la versión de la línea; el título y el contrato traen
+  la sellada). En aportes y en el ahorro permanente y contractual el extracto lista las cuotas del período con su estado (esto cierra el pendiente del
+  extracto del contrato de §19).
+- **E181 · Pruebas (T197, T200).** Domain: `DocumentosAlTitularTests` (proporciones, SC-016 con dos cotitulares al 60/40, retención agrupada, anulación por
+  clase, estados de título). Application: `DocumentosDeCaptacionesTests` (extracto, certificado de saldo, tributario 60/40 que cuadra con la cuenta, la
+  anulación por el reverso de una consignación según la clase, el título que nace al constituir con el sufijo `-1`, la versión siguiente con `-2` que
+  reemplaza al primero y la redención que lo liquida, el CDAT que se constituye sin título si falta el firmante, el período del lote). La e2e
+  `DocumentosDeCaptacionesTests` (US13-1 la misma copia, US13-2 la verificación vigente y anulada tras el reverso, y los rechazos) está **escrita y
+  compilada; e2e en la corrida final**, que exige `EntregaVigente` ≥ K8.
+
+### 21.1 Preguntas para el dueño
+
+- **El lote de documentos (E177).** A: corre dentro de la petición y responde el resumen (lo construido; sirve hasta unos pocos miles de titulares); B: una
+  tarea de fondo por cooperativa que no bloquea el ciclo diario y avisa al terminar; C: B, además programada cada año (certificados en marzo) y cada período
+  de extractos. Recomendado: B ahora y C cuando el correo masivo esté probado.
+- **El título de los CDAT migrados (E173).** A: no se emite al activar; se emite a pedido desde la ficha (lo construido); B: se emiten todos al activar la
+  carga, a nombre de cada titular. Recomendado: B, para que cada ahorrador reciba su título del sistema nuevo desde el primer día.
+- **El GMF en el certificado de los cotitulares (E174).** A: el GMF de la cuenta se reparte por la proporción de cada titular (lo construido); B: todo el GMF
+  va al titular que lo pagó (la cuenta debitada es de él ante la DIAN). Recomendado: A si la contadora lo valida; B si la DIAN pide el GMF por quien figura
+  como titular del producto.
+
+### 21.2 Para la contadora (pendiente de validar)
+
+- El contenido del certificado tributario de captaciones (renglones, saldos al 31 de diciembre por proporción, componente inflacionario como no gravado) y
+  si los aportes van en él (P10, `Documentos.CertificadoTributarioIncluyeAportes`).
+- La leyenda del certificado de retención (`Documentos.LeyendaCertificadoRetencion`), la ciudad que se imprime (la de la cooperativa mientras Contabilidad no
+  informe la de la consignación) y el texto vigente del art. 1.6.1.13.2.40 del DUR.
+- El reparto del GMF entre cotitulares (pregunta de §21.1).
+- La periodicidad de los extractos de la cooperativa (`Documentos.PeriodicidadDeExtractos`) y sus textos propios por clase (`Documentos.TextosDeCaptaciones`).
