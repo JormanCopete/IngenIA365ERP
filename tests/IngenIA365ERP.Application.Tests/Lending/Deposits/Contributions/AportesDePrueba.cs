@@ -113,13 +113,19 @@ internal sealed class AportesDePrueba : IDisposable
     public ReglasDeMovimientos Movimientos() => new(Db, C.Parametros(), G.Valores, Calendario, G.Actor, G.Reloj, Aprobaciones);
     public CargosDeCuentas Cargos() => new(Db, RegistroDeCuentas(), Numerador(), Emision(), G.Actor, G.Reloj);
     public ConsignacionEnCuentas Consignacion() =>
-        new(Db, RegistroDeCuentas(), Numerador(), Emision(), Reglas(), C.Parametros(), G.Actor, G.Reloj, Movimientos(), Cargos(), Ajuste(), Cdat?.Invoke());
+        new(Db, RegistroDeCuentas(), Numerador(), Emision(), Reglas(), C.Parametros(), G.Actor, G.Reloj, Movimientos(), Cargos(), Ajuste(), Cdat?.Invoke(),
+            Reactivacion());
+
+    /// <summary>US14 (T208): la reactivación de una cuenta inactiva por un movimiento del titular, con su reclasificación.</summary>
+    public Application.Lending.Deposits.Accrual.ReactivacionDeCuenta Reactivacion() =>
+        new(new Application.Lending.Deposits.Holds.ReclasificacionDeCuenta(Db, RegistroDeCuentas(), Numerador(), Emision(), G.Actor, G.Reloj), G.Reloj);
 
     /// <summary>US6 (T170): el fondeo del CDAT por el recaudador; nulo, el contrato no fondea CDAT (las pruebas de K7 y K8).</summary>
     public Func<Application.Lending.Deposits.TermDeposits.ConstitucionDeCdat>? Cdat { get; set; }
     public ReversionDeCuentas Reversion() => new(Db, RegistroDeCuentas(), Numerador(), Emision(), G.Actor, G.Reloj, alertas: Alertas, ajusteDeCausacion: Ajuste());
-    public RetiroDeCuenta Retiro() => new(Db, RegistroDeCuentas(), Numerador(), Emision(), Movimientos(), Cargos(), G.Actor, G.Reloj, Ajuste());
-    public TrasladoDeCuenta Traslado() => new(Db, RegistroDeCuentas(), Numerador(), Emision(), Movimientos(), Retiro(), Consignacion(), G.Actor, G.Reloj, Ajuste());
+    public RetiroDeCuenta Retiro() => new(Db, RegistroDeCuentas(), Numerador(), Emision(), Movimientos(), Cargos(), G.Actor, G.Reloj, Ajuste(), Reactivacion());
+    public TrasladoDeCuenta Traslado() => new(Db, RegistroDeCuentas(), Numerador(), Emision(), Movimientos(), Retiro(), Consignacion(), G.Actor, G.Reloj, Ajuste(),
+        Reactivacion());
 
     // US5 (T131–T136): el interés de las cuentas de captación.
     public Application.Lending.Deposits.Accrual.LectorDeInteres LectorDeInteres() => new(Db, G.Valores);
