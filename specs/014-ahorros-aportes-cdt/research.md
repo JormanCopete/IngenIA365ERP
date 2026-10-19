@@ -1601,6 +1601,12 @@ US11: no se tocan aquí.
   entonces. El aviso al titular de la prórroga y del vencimiento no se encola todavía. Las e2e de US6 (`CdatTests`) y de la migración de un CDAT están
   **escritas y compiladas; e2e en la corrida final**.
 
+- **E141 · Pantallas (T179).** `/cartera/cdat`, `/cartera/cdat/nuevo` y `/cartera/cdat/{id}`, y el editor de reglas de tasa negociada dentro del detalle de
+  una línea de CDAT que la admite (sin ruta propia); la apertura de cuentas sigue sin ofrecer líneas de CDAT. Tasas y márgenes en puntos, viajan como
+  fracción. Quedan fuera por ahora: el giro desde la pantalla va siempre al titular con su cuenta bancaria registrada (sin selector de beneficiario), la
+  renovación y la instrucción no cambian el destino, los firmantes del fondeo no se piden en pantalla, la redención es a la fecha de hoy, el editor de reglas
+  no ofrece oficina ni tasa base como criterio y la ficha del CDAT no muestra el saldo ni el extracto (las rutas de §4 existen).
+
 ### 18.1 Preguntas para el dueño
 
 - **CDAT embargado o de titular fallecido al vencer (E134).** A: queda vencido a disposición (lo construido); B: se prorroga capitalizando; C: pasa a la vista.

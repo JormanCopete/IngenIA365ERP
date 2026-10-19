@@ -370,7 +370,7 @@ la gracia; tasa negociada en espera del aprobador (quickstart US6).
 - [x] T176 [P] [US6] Vistas `term-deposit-maturities`, `negotiated-rates` y `depositor-concentration` del centro de informes en `A/Lending/Deposits/Reports/` — hecho (E138)
 - [x] T177 [P] [US6] Pruebas de handlers de CDAT y tasa negociada en `TA/Lending/Deposits/TermDeposits/` — hecho: constitución, fondeo, negociación, ciclo, prórroga, renovación, redención, vistas, constructor, migración y retiro
 - [x] T178 [US6] Rutas de `contracts/api.md` §5 y §6 en `API/Endpoints/Lending/Deposits/TermDepositsEndpoints.cs` y `NegotiatedRatesEndpoints.cs` — hecho: §5 y §6 más las reglas bajo `/lines/{id}/negotiated-rate-rules` y `POST /{id}/fund`
-- [ ] T179 [US6] Pantallas `/cartera/cdat`, `/cartera/cdat/nuevo`, `/cartera/cdat/{id}` y el editor de reglas de tasa negociada en `SH/Pages/Cartera/Captaciones/Cdat*.razor`
+- [x] T179 [US6] Pantallas `/cartera/cdat`, `/cartera/cdat/nuevo`, `/cartera/cdat/{id}` y el editor de reglas de tasa negociada en `SH/Pages/Cartera/Captaciones/Cdat*.razor` — hecho: `Cdats.razor` (lista, calendario y solicitudes por decidir), `CdatNuevo.razor` (simular y constituir), `CdatDetalle.razor` (condiciones, plan, fondear, instrucción, renovar, redimir, decidir la tasa) y `ReglasDeTasaNegociada.razor` dentro del detalle de la línea; enlace «CDAT» en el menú (research E141)
 - [x] T180 [US6] e2e de US6 (escenarios 1 a 6) en `TI/Lending/Deposits/CdatTests.cs` — escrita y compilada (seis escenarios de US6 y la migración de un CDAT en `MigracionDeCaptacionesTests`); **e2e en la corrida final**
 
 
