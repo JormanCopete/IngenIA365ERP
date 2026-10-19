@@ -38,7 +38,7 @@ public sealed record ConjuntoConciliadoDto(
 
 public sealed record CombinacionConciliadaDto(
     string Role, string? CreditLine, string? Modality, string? Subsegment, string? Category, string? Concept, string? CollectorClass, string? Reason,
-    Guid Branch, decimal LendingBalance);
+    Guid Branch, decimal LendingBalance, string? Nature = null, string? DepositClass = null, string? ContributionClass = null, string? AccountFlag = null);
 
 public sealed record CuentaConciliadaDto(string Code, string Name);
 
@@ -67,7 +67,8 @@ public sealed class ConciliacionContableDeCartera(
     IApplicationDbContext db,
     SaldosContablesDeCartera saldos,
     IContabilidadParaCartera contabilidad,
-    IAlertas? alertas = null)
+    IAlertas? alertas = null,
+    SaldosContablesDeCaptaciones? captaciones = null)
 {
     public const string CodigoSinContabilidad = "Lending.Accounting.NotStarted";
 
@@ -86,7 +87,9 @@ public sealed class ConciliacionContableDeCartera(
         if (estado.IsFailure) return Result.Failure<ConciliacionContableDto>(estado.Error);
         if (!estado.Value.AccountingInitialized) return Result.Failure<ConciliacionContableDto>(SinContabilidad());
 
-        var movimientos = await saldos.MovimientosAsync(corte, alcance, ct);
+        var movimientos = (await saldos.MovimientosAsync(corte, alcance, ct)).ToList();
+        // Feature 014, US8 (T146; contabilidad.md §8.1): los saldos de captaciones y aportes por línea, concepto (rol y clase) y oficina.
+        if (captaciones is not null) movimientos.AddRange(await captaciones.MovimientosAsync(corte, alcance, ct));
         var deCartera = SaldosContablesDeCartera.Agrupar(movimientos).ToList();
         deCartera.AddRange(await saldos.OrdenesAbiertasAsync(corte, alcance, ct));
         deCartera.AddRange(await saldos.PuentesEnCeroAsync(corte, ct));
@@ -129,7 +132,8 @@ public sealed class ConciliacionContableDeCartera(
 
             conjuntos.Add(new ConjuntoConciliadoDto(set.RoleFamily,
                 combinaciones.Select(c => new CombinacionConciliadaDto(c.Clave.Rol, c.Clave.Linea, c.Clave.Modalidad, c.Clave.Subsegmento, c.Clave.Categoria,
-                    c.Clave.Concepto, c.Clave.ClaseDeRecaudador, c.Clave.Motivo, c.Clave.Sucursal, c.Saldo)).ToList(),
+                    c.Clave.Concepto, c.Clave.ClaseDeRecaudador, c.Clave.Motivo, c.Clave.Sucursal, c.Saldo, c.Clave.Naturaleza, c.Clave.ClaseDeCaptacion,
+                    c.Clave.ClaseDeAporte, c.Clave.Marca)).ToList(),
                 set.Accounts.Select(a => new CuentaConciliadaDto(a.AccountCode, a.AccountName)).ToList(),
                 deLaCartera, contable, diferencia, porEstado, hechos, sinExplicar, esPuente && sinExplicar != 0m));
 

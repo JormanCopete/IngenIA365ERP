@@ -65,7 +65,8 @@ public sealed class GetLendingAccountBalancesQueryHandler(IApplicationDbContext 
         {
             var c = request.Combinaciones[i];
             var valores = new ValoresDeCartera(c.CreditLineCode, c.ModalityCode, c.SubsegmentCode, c.RiskCategory, c.ConceptCode, c.IsEmployee,
-                c.InGracePeriod, c.OnBehalfOfAssociate, c.Restructured, c.CollectorClass, c.ReasonCode, c.BranchPublicId);
+                c.InGracePeriod, c.OnBehalfOfAssociate, c.Restructured, c.CollectorClass, c.ReasonCode, c.BranchPublicId, c.LineNature, c.DepositClass,
+                c.IssueTermBand, c.ContributionClass, c.AccountFlag);
             var r = matriz.Resolver(new PeticionDeReglaDeCartera(LendingPostingRule.Cualquiera, c.Role, valores, corte, 1m, []));
             if (r.IsFailure || r.Value is null) sinResolver.Add(i);
             else aristas.Add((i, R.Buscar(c.Role)!.Familia.ToString(), c.Role, r.Value.Regla.AccountId));
@@ -89,7 +90,7 @@ public sealed class GetLendingAccountBalancesQueryHandler(IApplicationDbContext 
         // La combinación es el rol con sus dimensiones, sin la sucursal: la misma combinación con reglas por sucursal junta sus cuentas.
         var claves = request.Combinaciones.Select(c => string.Join('|', c.Role, c.CreditLineCode, c.ModalityCode, c.SubsegmentCode,
             LendingPostingRule.Categoria(c.RiskCategory), c.ConceptCode, c.IsEmployee, c.InGracePeriod, c.OnBehalfOfAssociate, c.Restructured,
-            c.CollectorClass, c.ReasonCode)).ToList();
+            c.CollectorClass, c.ReasonCode, c.LineNature, c.DepositClass, c.IssueTermBand, c.ContributionClass, c.AccountFlag)).ToList();
         var conjuntos = ConjuntosDeCuentas.Componentes(aristas, a => claves[a.Indice], a => a.AccountId, a => a.Familia)
             .Select(componente =>
             {

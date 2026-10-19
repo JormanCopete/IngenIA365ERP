@@ -25,11 +25,19 @@ public sealed record ClaveDeSaldoDeCartera(
     bool? Reestructurado,
     string? ClaseDeRecaudador,
     string? Motivo,
-    Guid Sucursal)
+    Guid Sucursal,
+    string? Naturaleza = null,
+    string? ClaseDeCaptacion = null,
+    string? Plazo = null,
+    string? ClaseDeAporte = null,
+    string? Marca = null)
 {
-    /// <summary>La <see cref="CombinacionDeSaldo"/> del puerto (§16.1): el hecho es siempre <c>*</c>.</summary>
+    /// <summary>
+    /// La <see cref="CombinacionDeSaldo"/> del puerto (§16.1): el hecho es siempre <c>*</c>. Feature 014 (T146): con las dimensiones de captaciones (las
+    /// de un crédito van nulas).
+    /// </summary>
     public CombinacionDeSaldo ComoCombinacion() => new(Rol, Linea, Modalidad, Subsegmento, Categoria, Concepto, Empleado, Gracia, null, Reestructurado,
-        ClaseDeRecaudador, Motivo, Sucursal);
+        ClaseDeRecaudador, Motivo, Sucursal, Naturaleza, ClaseDeCaptacion, Plazo, ClaseDeAporte, Marca);
 }
 
 /// <summary>El saldo de Cartera de una combinación a un corte, en el sentido de Cartera (positivo = lo que Cartera tiene), con sus créditos. (nuevo)</summary>
@@ -79,7 +87,7 @@ public sealed class SaldosContablesDeCartera(IApplicationDbContext db, IContabil
     };
 
     /// <summary>+1 en los roles de naturaleza débito, −1 en los de crédito: el saldo contable (débito − crédito) por éste es el de Cartera.</summary>
-    public static int Signo(string rol) => NaturalezaCredito.Contains(rol) ? -1 : 1;
+    public static int Signo(string rol) => NaturalezaCredito.Contains(rol) || SaldosContablesDeCaptaciones.NaturalezaCredito.Contains(rol) ? -1 : 1;
 
     /// <summary>
     /// El rol de saldo de un concepto del libro (§2.2, «de concepto a rol»). En un crédito <paramref name="castigado"/> al corte, todo lo del activo

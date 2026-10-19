@@ -63,7 +63,8 @@ public static class CarteraEnElCierre
             {
                 var ultimo = cierres.FirstOrDefault();
                 bloqueo = AccountingErrors.PeriodLendingNotClosed(inicio.ToString("yyyy-MM", CultureInfo.InvariantCulture), activaciones[0].OperationDate,
-                    ultimo is null ? null : new { month = ultimo.OperationDate.ToString("yyyy-MM", CultureInfo.InvariantCulture), date = ultimo.OperationDate });
+                    ultimo is null ? null : new { month = ultimo.OperationDate.ToString("yyyy-MM", CultureInfo.InvariantCulture), date = ultimo.OperationDate },
+                    await CausacionDeCaptacionesPendienteDesdeAsync(db, activaciones.Any(a => a.MessageType == CaptacionesActivadasV1.Type), fin, ct));
             }
         }
 
@@ -86,5 +87,19 @@ public static class CarteraEnElCierre
         }
 
         return new Evaluacion(bloqueo, pendientes, vence);
+    }
+
+    /// <summary>
+    /// Feature 014, US8 (T146; contabilidad.md §8.3 de la 014, US8-3): el día de causación de captaciones pendiente en el mes, leído de los recibos de
+    /// <c>InteresDeCaptacionCausado</c>: el siguiente al último recibido si no llega al fin del mes. Nulo sin captaciones activadas o si ninguna cuenta ha
+    /// causado nunca (sólo aportes, que no causan).
+    /// </summary>
+    private static async Task<DateOnly?> CausacionDeCaptacionesPendienteDesdeAsync(IApplicationDbContext db, bool conCaptaciones, DateOnly fin, CancellationToken ct)
+    {
+        if (!conCaptaciones) return null;
+        var ultima = await db.LendingPostings.AsNoTracking()
+            .Where(p => !p.IsDeleted && p.MessageType == InteresDeCaptacionCausadoV1.Type && p.OperationDate <= fin)
+            .MaxAsync(p => (DateOnly?)p.OperationDate, ct);
+        return ultima is { } dia && dia < fin ? dia.AddDays(1) : null;
     }
 }

@@ -459,11 +459,22 @@ public static class AccountingErrors
             ? n == 1 ? " Es un comprobante resumido y reúne 1 crédito." : $" Es un comprobante resumido y reúne {n} créditos."
             : string.Empty);
 
+    /// <summary>
+    /// Feature 014, US8 (T147; contabilidad.md §8.4 de la 014, US8-4): el mensaje de <c>ModuleOwned</c> para un comprobante de captaciones o aportes; en un
+    /// resumido, cuántas cuentas reúne.
+    /// </summary>
+    public static string MensajeDeComprobanteDeCaptaciones(int? cuentasDelResumido) =>
+        "Este comprobante lo generó la Cartera desde captaciones y aportes: se corrige en la Cartera con el reverso de la operación de la cuenta y llega como comprobante nuevo, con su propia fecha."
+        + (cuentasDelResumido is { } n
+            ? n == 1 ? " Es un comprobante resumido y reúne 1 cuenta." : $" Es un comprobante resumido y reúne {n} cuentas."
+            : string.Empty);
+
     /// <summary>Cierre contable de un mes que Cartera, activada, no cerró (§12, a): bloqueo sin reconocimiento.</summary>
-    public static Error PeriodLendingNotClosed(string month, DateOnly activationDate, object? lastLendingClose) =>
+    public static Error PeriodLendingNotClosed(string month, DateOnly activationDate, object? lastLendingClose, DateOnly? depositAccrualPendingFrom = null) =>
         new ErrorConDatos("Accounting.Period.LendingNotClosed",
-            $"Cartera está activa desde el {activationDate:yyyy-MM-dd} y todavía no cerró {month}: ciérrelo primero en Cartera › Cierres y vuelva a intentarlo.",
-            new { month, activationDate, lastLendingClose });
+            $"Cartera está activa desde el {activationDate:yyyy-MM-dd} y todavía no cerró {month}: ciérrelo primero en Cartera › Cierres y vuelva a intentarlo."
+            + (depositAccrualPendingFrom is { } dia ? $" La causación de captaciones está pendiente desde el {dia:yyyy-MM-dd}." : string.Empty),
+            new { month, activationDate, lastLendingClose, depositAccrualPendingFrom });
 
     /// <summary>Cierre del mes con hechos de Cartera sin procesar y sin reconocerlos (§12, b): es un aviso, no un bloqueo.</summary>
     public static Error PeriodLendingPending(int pending, int inBatch, int rejected, DateOnly? oldestOperationDate, IReadOnlyList<string> types) =>

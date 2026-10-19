@@ -168,6 +168,8 @@ public class LasConsultasDeCarteraRespetanElAlcance
         "Core/IngenIA365ERP.Application/Lending/Deposits/Accrual/InterestSettlementCommands.cs",
         "Core/IngenIA365ERP.Application/Lending/Deposits/Accounts/CloseMemberAccountCommand.cs",
         "Core/IngenIA365ERP.Application/Lending/Deposits/Reports/InterestReportQueries.cs",
+        // Feature 014, US8 (T146): la conciliación de captaciones toma el alcance de quien pregunta (y una sucursal fuera de él es el 404).
+        "Core/IngenIA365ERP.Application/Lending/Deposits/Reports/DepositsReconciliationReportQuery.cs",
     ];
 
     /// <summary>

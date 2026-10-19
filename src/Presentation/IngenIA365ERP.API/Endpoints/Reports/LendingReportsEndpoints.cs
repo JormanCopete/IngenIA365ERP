@@ -121,6 +121,9 @@ public class LendingReportsEndpoints : ICarterModule
         // Feature 014, US5 (T137): las liquidaciones de intereses con su retención (from, to, class), con datos del titular.
         group.MapVistaDeCartera(Application.Lending.Deposits.Reports.InterestAndWithholdingReportQueryHandler.Vista,
             (f, q) => new Application.Lending.Deposits.Reports.InterestAndWithholdingReportQuery(f, Texto(q, "class")));
+        // Feature 014, US8 (T146): la conciliación contable de captaciones y aportes (asOf, branch), sin datos de titulares.
+        group.MapVistaDeCartera(Application.Lending.Deposits.Reports.DepositsReconciliationReportQueryHandler.Vista,
+            (f, _) => new Application.Lending.Deposits.Reports.DepositsReconciliationReportQuery(f));
     }
 
     private static int? Entero(IQueryCollection q, string clave) =>

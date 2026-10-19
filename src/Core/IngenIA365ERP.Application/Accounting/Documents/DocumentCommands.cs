@@ -331,10 +331,20 @@ public sealed class ReverseDocumentCommandHandler(IApplicationDbContext db, IDat
                 // Feature 013 (T0651, contracts/contabilidad.md §9): lo de Cartera se corrige en Cartera (reverso del pago, del desembolso o
                 // reapertura del cierre) y llega como comprobante nuevo; un resumido dice cuántos créditos reúne (ACC_LendingPostings).
                 int? reune = null;
+                var recibos = await db.LendingPostings.AsNoTracking().Where(p => p.AccountingDocumentId == original.Id && !p.IsDeleted)
+                    .Select(p => new { p.LoanNumber, p.MessagePublicId, p.MessageType }).ToListAsync(ct);
+                // Feature 014, US8 (T147; contabilidad.md §8.4 de la 014): lo de captaciones y aportes se corrige con el reverso de la operación de la
+                // cuenta desde la Cartera; un resumido dice cuántas cuentas reúne.
+                if (recibos.Any(r => Lending.Contabilizacion.ConstructorDeLineasDeCartera.EsDeCaptaciones(r.MessageType)))
+                {
+                    if (original.SourceType == Lending.Reglas.OrigenesDeCartera.LoteResumido)
+                        reune = await CuentasDeLasPartesAsync(recibos.Select(r => r.MessagePublicId).ToList(), ct);
+                    mensaje = AccountingErrors.MensajeDeComprobanteDeCaptaciones(reune);
+                    return Result.Failure<ReversadoDto>(new ErrorConDatos(error.Code, mensaje,
+                        new { origin = new { module = original.OriginModule, moduleName = ModuloContable.Nombre(original.OriginModule), sourceType = original.SourceType, sourcePublicId = original.SourcePublicId } }));
+                }
                 if (original.SourceType == Lending.Reglas.OrigenesDeCartera.LoteResumido)
                 {
-                    var recibos = await db.LendingPostings.AsNoTracking().Where(p => p.AccountingDocumentId == original.Id && !p.IsDeleted)
-                        .Select(p => new { p.LoanNumber, p.MessagePublicId }).ToListAsync(ct);
                     var conCredito = recibos.Where(r => r.LoanNumber != null).Select(r => r.LoanNumber!).Distinct().Count();
                     reune = conCredito > 0 ? conCredito : await CreditosDeLasPartesAsync(recibos.Select(r => r.MessagePublicId).ToList(), ct);
                 }
@@ -358,6 +368,30 @@ public sealed class ReverseDocumentCommandHandler(IApplicationDbContext db, IDat
 
         await db.SaveChangesAsync(ct);
         return Result.Success(new ReversadoDto(reverso.Value.PublicId, reverso.Value.Number!.Value));
+    }
+
+    /// <summary>Feature 014 (T147): las cuentas distintas de la lista por cuenta de las partes de un resumido de captaciones.</summary>
+    private async Task<int> CuentasDeLasPartesAsync(IReadOnlyList<Guid> mensajes, CancellationToken ct)
+    {
+        var contenidos = await db.IntegrationMessages.AsNoTracking().Where(m => mensajes.Contains(m.PublicId)).Select(m => m.PayloadJson).ToListAsync(ct);
+        var cuentas = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var json in contenidos)
+        {
+            try
+            {
+                using var documento = System.Text.Json.JsonDocument.Parse(json);
+                if (!documento.RootElement.TryGetProperty("lines", out var lineas) || lineas.ValueKind != System.Text.Json.JsonValueKind.Array) continue;
+                foreach (var linea in lineas.EnumerateArray())
+                    if (linea.TryGetProperty("account", out var cuenta) && cuenta.TryGetProperty("accountNumber", out var numero) && numero.GetString() is { Length: > 0 } n)
+                        cuentas.Add(n);
+            }
+            catch (System.Text.Json.JsonException)
+            {
+                // Un contenido ilegible no cuenta cuentas: el mensaje sigue siendo el de captaciones.
+                continue;
+            }
+        }
+        return cuentas.Count;
     }
 
     /// <summary>Los créditos distintos de la lista por crédito de las partes de un resumido de Cartera (sus recibos no llevan crédito).</summary>

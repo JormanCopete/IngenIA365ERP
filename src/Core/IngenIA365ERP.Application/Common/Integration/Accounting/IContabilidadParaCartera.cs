@@ -58,7 +58,12 @@ public sealed record CombinacionDeSaldo(
     bool? Restructured,
     string? CollectorClass,
     string? ReasonCode,
-    Guid BranchPublicId);
+    Guid BranchPublicId,
+    string? LineNature = null,
+    string? DepositClass = null,
+    string? IssueTermBand = null,
+    string? ContributionClass = null,
+    string? AccountFlag = null);
 
 /// <summary>Los saldos por conjunto de cuentas de las combinaciones pedidas y las que no resolvieron regla (índices de la entrada). (nuevo)</summary>
 public sealed record SaldosMapeadosDeCarteraDto(
