@@ -1061,9 +1061,9 @@ public static class ParametrosDeCartera
             PendienteDeValidar = "Sin valor (pregunta P6): lo fija el reglamento (EOSF art. 127, alcance a validar).",
         },
         SiNo(Modulo, CuentasAbandonadasTrasladoHabilitado,
-            "Los saldos de cuentas abandonadas se trasladan según la norma. En «false» no se trasladan.", false, K10, General) with
+            "Con «true», el saldo de una cuenta inactiva pasa a saldos no reclamados al cumplir los días sin movimiento (regla interna de la cooperativa). En «false» no se traslada.", false, K10, General) with
         {
-            PendienteDeValidar = "Defecto P7 de la spec (Ley 1777 de 2016 a validar): la contadora confirma si aplica a la cooperativa.",
+            PendienteDeValidar = "Defecto P7 de la spec (Ley 1777 de 2016 a validar): la contadora y el abogado confirman si aplica a la cooperativa; hoy es un traslado interno, sin ICETEX.",
         },
         // US14 (T208, T209; research §23): el aviso previo de la inactividad y el plazo de las cuentas abandonadas, por entidad.
         Entero(Modulo, CaptacionesDiasDeAvisoPrevioDeInactividad,
