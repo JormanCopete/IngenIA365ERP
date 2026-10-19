@@ -632,6 +632,13 @@ sin regla de reparto o una línea con cuota sin grupo responde `Lending.PayrollA
 | `POST /collector/accounts/withdrawals` | `RetirarAsync` | K8 |
 | `POST /collector/accounts/transfers` | `TrasladarAsync` | K7 |
 | `POST /collector/accounts/operations/{key}/reverse` | `ReversarAsync` | K7 |
+| `POST /collector/treasury/accounts/deposits` | `ConsignarAsync` como el doble de Tesorería (`TES`, clase `Treasury`, clave `TES:{documento:N}:{cuenta:N}`, medios `Transfer`/`BankDeposit`) **(decisión del dueño del 2026-10-18, D52)** | K7 |
+| `POST /collector/treasury/accounts/operations/{key}/reverse` | `ReversarAsync` como el doble de Tesorería (D52) | K7 |
+
+El doble de Tesorería cuenta si quien prueba registra el participante `TES` con rol `ObligationsCollector`, clase
+`Treasury`, `isTestDouble = true` y `ProveedorDeCuentas` adoptado (el mismo código que la tesorería de prueba como destino,
+con otro rol). La tesorería de prueba, como destino, acepta además `ConsignacionReversadaPorCartera` y
+`PagoReversadoPorCartera` (D19, D52).
 
 `TesoreriaDePrueba` responde también las órdenes v2 (rutas existentes `/treasury/orders`).
 
@@ -729,7 +736,7 @@ Total retirado: **74 rutas** (70 de FR-120 más 4 de informes). Las pantallas he
 | §18.1 Vistas de informes | 21 |
 | §18.2 Regulatorios | 2 |
 | §18.3 Libranza | 4 |
-| §18.4 Dobles de prueba | 7 |
+| §18.4 Dobles de prueba | 9 (2026-10-18: +2 del doble de Tesorería, D52) |
 | **Total `/api/lending` y `/api/reports/lending`** | **168** |
 | Nueva en Nómina (§18.5) | 1 |
 

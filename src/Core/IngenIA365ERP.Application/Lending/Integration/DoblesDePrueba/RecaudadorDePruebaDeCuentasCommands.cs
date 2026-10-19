@@ -33,7 +33,9 @@ public sealed class ListTestCollectorAccountInstallmentsQueryHandler(IContratoDe
 /// <c>POST /api/lending/test-doubles/collector/accounts/deposits</c> (con clave de pantalla): un lote de consignaciones y de no descontados por
 /// <c>ConsignarAsync</c>, no interactivo; las claves de negocio <c>TST:{guid:N}</c> las propone quien prueba y puede repetirlas. (nuevo)
 /// </summary>
-public sealed record ApplyTestCollectorAccountDepositsCommand(IReadOnlyList<ConsignacionAAplicar> Deposits, IReadOnlyList<NoDescontadoDeCuenta>? NotDeducted = null)
+/// <remarks>Con <paramref name="AsTreasury"/> (D52, 2026-10-18) consigna como el doble de Tesorería (<c>TES</c>, <c>Treasury</c>): transferencias recibidas.</remarks>
+public sealed record ApplyTestCollectorAccountDepositsCommand(IReadOnlyList<ConsignacionAAplicar> Deposits, IReadOnlyList<NoDescontadoDeCuenta>? NotDeducted = null,
+    bool AsTreasury = false)
     : IRequest<Result<RespuestaDeConsignacionDto>>, IOperacionIdempotente
 {
     public Guid OperationKey { get; init; }
@@ -51,13 +53,14 @@ public sealed class ApplyTestCollectorAccountDepositsCommandHandler(IApplication
     public async Task<Result<RespuestaDeConsignacionDto>> Handle(ApplyTestCollectorAccountDepositsCommand request, CancellationToken ct)
     {
         if (!RecaudadorDePruebaRegistrado.Esta(destinos)) return Result.Failure<RespuestaDeConsignacionDto>(RecaudadorDePruebaRegistrado.NoExiste());
+        var recaudador = request.AsTreasury ? RecaudadorDePrueba.Tesoreria : RecaudadorDePrueba.Recaudador;
         return await TransaccionExplicita.EjecutarAsync(db, async () => Result.Success(await contrato.ConsignarAsync(
-            new SolicitudDeConsignacion(RecaudadorDePrueba.Recaudador, FormaDeAplicacion.NonInteractive, request.Deposits ?? [], request.NotDeducted ?? []), ct)), ct);
+            new SolicitudDeConsignacion(recaudador, FormaDeAplicacion.NonInteractive, request.Deposits ?? [], request.NotDeducted ?? []), ct)), ct);
     }
 }
 
 /// <summary><c>POST /api/lending/test-doubles/collector/accounts/operations/{key}/reverse</c> (con clave de pantalla): <c>ReversarAsync</c> por la clave. (nuevo)</summary>
-public sealed record ReverseTestCollectorAccountOperationCommand(string IdempotencyKey, string Reason)
+public sealed record ReverseTestCollectorAccountOperationCommand(string IdempotencyKey, string Reason, bool AsTreasury = false)
     : IRequest<Result<RespuestaDelContratoDto<ComprobanteDeReversoDeCuentaDto>>>, IOperacionIdempotente
 {
     public Guid OperationKey { get; init; }
@@ -80,8 +83,9 @@ public sealed class ReverseTestCollectorAccountOperationCommandHandler(IApplicat
     {
         if (!RecaudadorDePruebaRegistrado.Esta(destinos))
             return Result.Failure<RespuestaDelContratoDto<ComprobanteDeReversoDeCuentaDto>>(RecaudadorDePruebaRegistrado.NoExiste());
+        var recaudador = request.AsTreasury ? RecaudadorDePrueba.Tesoreria : RecaudadorDePrueba.Recaudador;
         return await TransaccionExplicita.EjecutarAsync(db, async () => Result.Success(await contrato.ReversarAsync(
-            new SolicitudDeReversoDeCuenta(RecaudadorDePrueba.Recaudador, request.IdempotencyKey, request.Reason.Trim()), ct)), ct);
+            new SolicitudDeReversoDeCuenta(recaudador, request.IdempotencyKey, request.Reason.Trim()), ct)), ct);
     }
 }
 

@@ -25,6 +25,9 @@ public sealed class TesoreriaDePrueba : IDestinoDeMensajes
         (AnulacionDeOrdenDeGiroV1.Type, 1),
         // Feature 014 (T055): la orden de giro v2 de captaciones, para que la tesorería de prueba la adopte (TreasuryDestinationRegistered).
         (OrdenDeGiroEmitidaV2.Type, 2),
+        // Decisiones del dueño del 2026-10-18 (D19, D52): Tesorería como recaudador recibe el aviso de lo que la Cartera le reversó.
+        (IngenIA365ERP.Application.Common.Integration.Contracts.Lending.Deposits.ConsignacionReversadaPorCarteraV1.Type, 1),
+        (PagoReversadoPorCarteraV1.Type, 1),
     ];
 
     public string Destino => IntegrationDestinations.Treasury;

@@ -20,6 +20,20 @@ public sealed class RecaudadorDePrueba : IDestinoDeMensajes
     /// <summary>La clave que propone la pantalla: <c>TST:{guid:N}</c> (C35).</summary>
     public static string Clave(Guid guid) => $"{ClavesDeRecaudador.Prueba}:{guid:N}";
 
+    /// <summary>
+    /// Feature 014 (decisión del dueño del 2026-10-18, D52; cierra T113): el doble de Tesorería como recaudador de cuentas —código <c>TES</c>, clase
+    /// <c>Treasury</c>—, con el que las rutas <c>/collector/treasury/accounts/*</c> consignan transferencias recibidas y las reversan como lo haría
+    /// Tesorería. Para que cuente, quien prueba registra el participante <c>TES</c> con rol <c>ObligationsCollector</c>, clase <c>Treasury</c>,
+    /// <c>IsTestDouble</c> y <c>ProveedorDeCuentas</c> adoptado (sólo fuera de producción).
+    /// </summary>
+    public static Recaudador Tesoreria { get; } = new(CodigoDeTesoreria, ClaseDeRecaudador.Treasury);
+
+    /// <summary>El código del doble de Tesorería como recaudador (el mismo de la tesorería de prueba como destino, otro rol).</summary>
+    public const string CodigoDeTesoreria = "TES";
+
+    /// <summary>La clave de Tesorería: <c>TES:{documento:N}:{cuenta:N}</c> (contrato-de-cuentas §3.12).</summary>
+    public static string ClaveDeTesoreria(Guid documento, Guid cuenta) => $"{CodigoDeTesoreria}:{documento:N}:{cuenta:N}";
+
     private static readonly HashSet<(string Type, int Version)> Aceptados =
     [
         (PagoReversadoPorCarteraV1.Type, 1),

@@ -117,6 +117,27 @@ public class TestDoublesEndpoints : ICarterModule
             .ConClaveDeOperacion()
             .RequirePermission(Operar);
 
+        // Feature 014 (decisión del dueño del 2026-10-18, D52; cierra T113): el doble de Tesorería como recaudador de cuentas (TES, Treasury):
+        // transferencias recibidas y su reverso, como lo haría Tesorería.
+        dobles.MapPost("/collector/treasury/accounts/deposits", async (ConsignacionesRequest body, HttpContext http, ISender sender, CancellationToken ct) =>
+                await sender.Send(new ApplyTestCollectorAccountDepositsCommand(body.Deposits ?? [], body.NotDeducted, AsTreasury: true)
+                {
+                    OperationKey = http.ClaveDeOperacion(),
+                }, ct))
+            .WithName("Lending_TestDoubles_TreasuryAccountDeposits")
+            .ConClaveDeOperacion()
+            .RequirePermission(Operar);
+
+        dobles.MapPost("/collector/treasury/accounts/operations/{key}/reverse", async (string key, ReversoRequest body, HttpContext http, ISender sender,
+                    CancellationToken ct) =>
+                await sender.Send(new ReverseTestCollectorAccountOperationCommand(Uri.UnescapeDataString(key), body.Reason ?? string.Empty, AsTreasury: true)
+                {
+                    OperationKey = http.ClaveDeOperacion(),
+                }, ct))
+            .WithName("Lending_TestDoubles_TreasuryAccountReverse")
+            .ConClaveDeOperacion()
+            .RequirePermission(Operar);
+
         // Feature 014, US4 (T113; api.md §18.4): consultar las cuentas de una persona, simular, retirar y trasladar como lo haría Recaudo.
         dobles.MapGet("/collector/accounts", async (Guid personPublicId, DateOnly? date, bool? includeAsSignatory, ISender sender, CancellationToken ct) =>
                 await sender.Send(new ListTestCollectorAccountsQuery(personPublicId, date, includeAsSignatory ?? false), ct))
