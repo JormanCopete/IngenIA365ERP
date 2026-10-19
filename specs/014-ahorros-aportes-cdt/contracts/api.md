@@ -87,6 +87,14 @@ belowMinimum, valueDateAdjustment? }]`.
   TOTP, la mecánica de aprobaciones de la plataforma 012) y **no mueve saldo** hasta aprobarse (US4-5). La respuesta
   es 202 con `{ status: PendingApproval, approvalPublicId, required: { permissionCode, amount, maxAmount } }`; el
   reintento con el mismo `Idempotency-Key` y `approvalPublicId` aprobado aplica.
+- **Niveles configurables por cooperativa** (decisión del dueño del 2026-10-18, D53): la aprobación de `AccountWithdrawal` y
+  `AccountCashDeposit` sigue la **política** que la cooperativa registre en la plataforma de aprobaciones —niveles en orden,
+  cada uno con su umbral y el permiso de quien lo aprueba— por `GET`/`POST /api/lending/approval-policies`
+  (`Lending.Attributions.View`/`.Manage`, sólo esos dos sujetos: otro responde `Lending.ApprovalPolicy.SubjectNotAllowed`) y la
+  pantalla `/cartera/captaciones/aprobaciones`; sin política rige la regla fija de un nivel (el mismo permiso con un monto que
+  alcance). Si la política no exige aprobación para el monto, el movimiento procede. `Lending.Accounts.Withdraw` y
+  `.Deposit` entran a los limitables de Cartera (`/api/lending/amount-limits`, `/cartera/atribuciones`);
+  `TermDeposits.Redeem` y `MembershipWithdrawals.Settle` entran con su historia.
 - **Matriz de atribuciones de la Cartera** con sujetos nuevos de `LendingDecisionSubjects` (textos, no hay enum;
   research C06): `DepositWithdrawal`, `NegotiatedRate`, `MembershipWithdrawal`, `DeceasedDelivery`, `ChargeWaiver`,
   `TermDepositRedemption`, `ContributionRefund`, `AssemblyDistribution`, `GarnishmentRegistration`. Las rutas de

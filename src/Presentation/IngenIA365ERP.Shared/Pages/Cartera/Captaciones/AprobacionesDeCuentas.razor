@@ -1,0 +1,145 @@
+@page "/cartera/captaciones/aprobaciones"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Inventario
+@inject GobiernoDeCarteraClient Gobierno
+@inject INotificationService Notification
+
+<PageTitle>Aprobación de movimientos de cuentas - IngenIA365ERP</PageTitle>
+
+@* Feature 014 (decisión del dueño del 2026-10-18, D53): la aprobación de los retiros y de las consignaciones en efectivo que superan la atribución de
+   quien los registra la configura cada cooperativa —niveles en orden, cada uno con su umbral y el permiso de quien lo aprueba— sobre la plataforma de
+   aprobaciones. Sin política rige la regla fija de un nivel (el mismo permiso con un monto que alcance). Los montos de la atribución de cada rol
+   (Lending.Accounts.Withdraw y .Deposit) se fijan en Atribuciones. Nada se edita en su sitio: una política nueva es otra versión desde una fecha. *@
+<PermissionGate Required="Lending.Attributions.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Aprobación de movimientos de cuentas</h3>
+        <div class="toolbar">
+            <label><input type="checkbox" checked="@_conHistoria" @onchange="@(async e => { _conHistoria = e.Value is true; await CargarAsync(); })" /> Incluir versiones anteriores</label>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+            <PermissionGate Required="Lending.Attributions.Manage">
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@Abrir">Nueva versión</SfButton>
+            </PermissionGate>
+        </div>
+    </div>
+    <p class="texto-apoyo">Los montos de la atribución de cada rol se fijan en <a href="/cartera/atribuciones">Atribuciones</a>. Sin política, un movimiento que supera la atribución lo aprueba otra persona con el mismo permiso y un monto que alcance.</p>
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        <div class="tabla-desplazable">
+            <table class="data-grid">
+                <thead><tr><th>Movimiento</th><th>Versión</th><th>Vigencia</th><th>Niveles</th><th>Motivo</th><th>Autor</th></tr></thead>
+                <tbody>
+                    @foreach (var p in _politicas)
+                    {
+                        <tr>
+                            <td>@Nombre(p.Subject)</td>
+                            <td>@p.Version</td>
+                            <td>@p.ValidFrom.ToString("dd/MM/yyyy") – @(p.ValidTo?.ToString("dd/MM/yyyy") ?? "vigente")</td>
+                            <td>@foreach (var n in p.Levels.OrderBy(n => n.Order)) { <div>@n.Order: desde @n.Threshold.ToString("N2") · @n.PermissionCode</div> }</td>
+                            <td>@p.Reason</td>
+                            <td>@p.CreatedBy</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (_politicas.Count == 0) { <p class="texto-tenue">Sin políticas: rige la regla fija de un nivel.</p> }
+    </IndicadorDeCarga>
+</div>
+
+<SfDialog @bind-Visible="_mostrar" Header="Nueva versión de política" Width="680px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <label class="campo">Movimiento *
+                    <select class="e-input" @bind="_sujeto">
+                        @foreach (var (codigo, texto) in GobiernoDeCarteraClient.SujetosDeCuentas) { <option value="@codigo">@texto</option> }
+                    </select>
+                </label>
+                <label class="campo">Desde * <input type="date" class="e-input" value="@_desde.ToString("yyyy-MM-dd")" @onchange="@(e => _desde = LeerFecha(e.Value) ?? _desde)" /></label>
+                <table class="data-grid">
+                    <thead><tr><th>Nivel</th><th class="numero">Umbral</th><th>Permiso de quien aprueba</th><th></th></tr></thead>
+                    <tbody>
+                        @for (var i = 0; i < _niveles.Count; i++)
+                        {
+                            var indice = i;
+                            <tr>
+                                <td>@(indice + 1)</td>
+                                <td><input type="number" min="0" step="0.01" class="e-input" value="@_niveles[indice].Umbral" @onchange="@(e => _niveles[indice].Umbral = decimal.TryParse(e.Value?.ToString(), System.Globalization.CultureInfo.InvariantCulture, out var u) ? u : 0)" /></td>
+                                <td><input class="e-input" @bind="_niveles[indice].Permiso" placeholder="Lending.Accounts.Withdraw" /></td>
+                                <td><SfButton CssClass="e-flat e-small" OnClick="@(() => _niveles.RemoveAt(indice))">Quitar</SfButton></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                <SfButton CssClass="e-flat" IconCss="e-icons e-plus" OnClick="@(() => _niveles.Add(new NivelEditable { Permiso = PermisoPorDefecto(_sujeto) }))">Agregar nivel</SfButton>
+                <p class="texto-tenue">Los niveles van en orden y sus umbrales no bajan. Sin niveles, la versión deja de exigir aprobación desde la fecha.</p>
+                <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" maxlength="300" /></label>
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@GuardarAsync">Guardar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrar = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private sealed class NivelEditable
+    {
+        public decimal Umbral { get; set; }
+        public string? Permiso { get; set; }
+    }
+
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+    private ClaveDeOperacion _clave = new();
+    private bool _conHistoria, _mostrar;
+    private List<PoliticaDeAprobacionDto> _politicas = [];
+    private List<NivelEditable> _niveles = [];
+    private string _sujeto = "AccountWithdrawal";
+    private string? _motivo, _error;
+    private DateOnly _desde = DateOnly.FromDateTime(DateTime.Today);
+
+    protected override Task OnInitializedAsync() => CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Gobierno.PoliticasDeCuentasAsync(_conHistoria);
+        if (!r.IsSuccess) { _politicas = []; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer las políticas."); return; }
+        _politicas = [.. (r.Value ?? []).OrderBy(p => p.Subject).ThenByDescending(p => p.ValidFrom)];
+    }
+
+    private void Abrir()
+    {
+        _sujeto = "AccountWithdrawal";
+        _motivo = _error = null;
+        _niveles = [new NivelEditable { Umbral = 0, Permiso = PermisoPorDefecto(_sujeto) }];
+        _desde = DateOnly.FromDateTime(DateTime.Today);
+        _clave = new ClaveDeOperacion();
+        _mostrar = true;
+    }
+
+    private async Task GuardarAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_motivo)) return;
+        using var carga = _guardado.Iniciar();
+        _error = null;
+        var niveles = _niveles.Select((n, i) => new NivelDeAprobacionDto(i + 1, n.Umbral, n.Permiso?.Trim() ?? string.Empty)).ToList();
+        var r = await Gobierno.GuardarPoliticaDeCuentasAsync(new GuardarPoliticaDeAprobacionRequest(_sujeto, null, _desde, _motivo.Trim(), niveles), _clave);
+        if (!r.IsSuccess) { _error = r.ErrorMessage ?? "No se pudo guardar la política."; return; }
+        _mostrar = false;
+        await Notification.SuccessAsync($"Política guardada (versión {r.Value!.Version}).");
+        await CargarAsync();
+    }
+
+    private static string PermisoPorDefecto(string sujeto) => sujeto == "AccountCashDeposit" ? "Lending.Accounts.Deposit" : "Lending.Accounts.Withdraw";
+
+    private static string Nombre(string codigo) => GobiernoDeCarteraClient.SujetosDeCuentas.FirstOrDefault(s => s.Codigo == codigo).Texto ?? codigo;
+
+    private static DateOnly? LeerFecha(object? valor) =>
+        DateOnly.TryParse(valor?.ToString(), System.Globalization.CultureInfo.InvariantCulture, out var f) ? f : null;
+}

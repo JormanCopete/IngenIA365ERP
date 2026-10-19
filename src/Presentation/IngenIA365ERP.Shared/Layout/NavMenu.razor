@@ -109,6 +109,10 @@
                 <PermissionGate Required="Lending.MembershipWithdrawals.File" AnyOf="@(new[] { "Lending.MembershipWithdrawals.Approve", "Lending.MembershipWithdrawals.Settle" })">
                     <NavLink href="/cartera/retiros-asociado" class="nav-subitem">Retiros de asociado</NavLink>
                 </PermissionGate>
+                @* Decisión del dueño del 2026-10-18 (D53): los niveles de aprobación de los movimientos que superan la atribución, por cooperativa. *@
+                <PermissionGate Required="Lending.Attributions.View">
+                    <NavLink href="/cartera/captaciones/aprobaciones" class="nav-subitem">Aprobación de movimientos</NavLink>
+                </PermissionGate>
             </NavMenuGroup>
         }
 

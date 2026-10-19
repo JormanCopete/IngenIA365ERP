@@ -137,6 +137,10 @@ public static class PermisosLimitables
             "Lending.CreditLimits.Assign",
             "Lending.ValidationFailures.Confirm",
             "Lending.Payments.BackdateBeforeClose",
+            // Feature 014 (decisión del dueño del 2026-10-18, D53): la atribución del retiro y de la consignación en efectivo de captaciones. Por
+            // encima de su monto, el movimiento pide aprobación con la política de la cooperativa (o la regla fija de un nivel si no la tiene).
+            "Lending.Accounts.Withdraw",
+            "Lending.Accounts.Deposit",
         ],
     };
 

@@ -346,7 +346,9 @@ public sealed class ReglasDeMovimientos(
         var solicitud = await aprobaciones.SolicitarAsync(new SolicitudDeAprobacion(sujeto, ApprovalSourceTypes.MemberAccountOperation, cuenta.PublicId,
             rotulo.Length <= 200 ? rotulo : rotulo[..200], null, null, null, monto, fecha, usuario, [], huella, permiso), ct);
         if (solicitud.IsFailure) return Result.Failure<AtribucionEvaluada>(solicitud.Error);
-        return Result.Failure<AtribucionEvaluada>(ErroresDeMovimientos.PendienteDeAprobacion(solicitud.Value?.PublicId ?? Guid.Empty, permiso, monto, tope));
+        // D53 (2026-10-18): la política de la cooperativa puede no exigir aprobación para este monto (sus umbrales no lo alcanzan): procede.
+        if (solicitud.Value is null) return Result.Success(AtribucionEvaluada.SinAprobacion);
+        return Result.Failure<AtribucionEvaluada>(ErroresDeMovimientos.PendienteDeAprobacion(solicitud.Value.PublicId, permiso, monto, tope));
     }
 
     /// <summary>

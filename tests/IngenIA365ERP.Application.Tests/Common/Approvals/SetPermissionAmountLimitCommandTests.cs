@@ -68,7 +68,11 @@ public class SetPermissionAmountLimitCommandTests
 
     // Feature 013 (T0220, T0253; data-model parte 3 §6; contracts/api.md §2.4, §3.5.2): las cuatro atribuciones operativas de Cartera.
     private static readonly string[] LosDeCartera =
-        ["Lending.Disbursements.Execute", "Lending.CreditLimits.Assign", "Lending.ValidationFailures.Confirm", "Lending.Payments.BackdateBeforeClose"];
+    [
+        "Lending.Disbursements.Execute", "Lending.CreditLimits.Assign", "Lending.ValidationFailures.Confirm", "Lending.Payments.BackdateBeforeClose",
+        // Feature 014 (decisión del dueño del 2026-10-18, D53).
+        "Lending.Accounts.Withdraw", "Lending.Accounts.Deposit",
+    ];
 
     private static IEnumerable<string?> Limitables(Error error) =>
         Datos(error).GetProperty("limitable").EnumerateArray().Select(e => e.GetString());

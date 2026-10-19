@@ -14,7 +14,9 @@ namespace IngenIA365ERP.Application.Lending.Deposits.Operations;
 /// <c>SourceType = MemberAccountOperation</c>). Aprobar <b>no mueve saldo</b>: la operación la repite el recaudador (o la pantalla) con la misma clave y el
 /// <c>approvalPublicId</c> aprobado, y el contrato compara la huella. Quien aprueba —un presente con segundo factor, por la mecánica de la plataforma— tiene
 /// que tener el mismo permiso con un monto que alcance (<c>SEC_PermissionAmountLimits</c>). El rechazo o el retiro no dejan nada que devolver: la operación
-/// nunca se escribió. La cuenta es la fuente (<c>SourcePublicId</c>): la mayoría de edad del titular anula las pendientes del representante (FR-033). (nuevo)
+/// nunca se escribió. La cuenta es la fuente (<c>SourcePublicId</c>): la mayoría de edad del titular anula las pendientes del representante (FR-033).
+/// Decisión del dueño del 2026-10-18 (D53): cada cooperativa configura los niveles y montos de estos sujetos (<c>AccountWithdrawal</c>,
+/// <c>AccountCashDeposit</c>) con la plataforma de aprobaciones (<c>/api/lending/approval-policies</c>); sin política rige la regla fija de un nivel. (nuevo)
 /// </summary>
 public sealed class FuenteDeAprobacionDeCuenta(IApplicationDbContext db) : IFuenteDeAprobacion, IFuenteConAprobador
 {
@@ -22,6 +24,9 @@ public sealed class FuenteDeAprobacionDeCuenta(IApplicationDbContext db) : IFuen
 
     public async Task<Result> AlAprobarElNivelAsync(ApprovalRequest solicitud, int aprobadorUserId, ApprovalMethod metodo, bool esElUltimo, CancellationToken ct)
     {
+        // Decisión del dueño del 2026-10-18 (D53): con una política de la cooperativa (niveles con su umbral y su permiso) mandan sus niveles; el monto
+        // de quien aprueba sólo se exige con la regla fija de un nivel (sin política).
+        if (solicitud.PolicyId is not null) return Result.Success();
         var permiso = solicitud.Subject == ApprovalSubjects.AccountWithdrawal ? ReglasDeMovimientos.PermisoDeRetiro : ReglasDeMovimientos.PermisoDeConsignacion;
         if (await LimitesDePermisoPorUsuario.DeAsync(db, aprobadorUserId, permiso, solicitud.OperationDate, ct) is { } maximo && maximo < solicitud.Amount)
             return Result.Failure(new ErrorConDatos("Lending.Savings.ApproverLimitTooLow",

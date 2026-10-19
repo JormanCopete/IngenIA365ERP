@@ -38,7 +38,11 @@ public sealed class GobiernoDeCarteraClient(HttpClient http, CentralAuthClient a
 
     /// <summary>Los códigos de atribución operativa que admiten monto (api.md §1.4, T63).</summary>
     public static IReadOnlyList<string> PermisosLimitables { get; } =
-        ["Lending.Disbursements.Execute", "Lending.CreditLimits.Assign", "Lending.ValidationFailures.Confirm", "Lending.Payments.BackdateBeforeClose"];
+    [
+        "Lending.Disbursements.Execute", "Lending.CreditLimits.Assign", "Lending.ValidationFailures.Confirm", "Lending.Payments.BackdateBeforeClose",
+        // Feature 014 (D53, 2026-10-18): el retiro y la consignación en efectivo de captaciones.
+        "Lending.Accounts.Withdraw", "Lending.Accounts.Deposit",
+    ];
 
     /// <summary>Los permisos que faltan de un 422 <see cref="PermisoRequerido"/> (<c>data.permissionCodes</c>); vacío en cualquier otro error.</summary>
     public static IReadOnlyList<string> PermisosQueFaltan<T>(ResultadoDeInventario<T> resultado) =>
@@ -73,6 +77,24 @@ public sealed class GobiernoDeCarteraClient(HttpClient http, CentralAuthClient a
     /// <summary>Fija el monto de una atribución operativa; <c>MaxAmount</c> nulo = sin límite.</summary>
     public Task<ResultadoDeInventario<MontoMaximoDto>> FijarMontoAsync(FijarMontoMaximoRequest request, ClaveDeOperacion clave, CancellationToken ct = default) =>
         Enviar<MontoMaximoDto>(HttpMethod.Post, RutaDeMontos, request, clave, ct);
+
+    // -------------------------------------------------------- políticas de aprobación de captaciones (D53, 2026-10-18) --
+
+    public const string RutaDePoliticasDeCuentas = Base + "/approval-policies";
+
+    /// <summary>Los sujetos de aprobación de las cuentas de captación: el retiro y la consignación en efectivo sobre la atribución.</summary>
+    public static IReadOnlyList<(string Codigo, string Texto)> SujetosDeCuentas { get; } =
+        [("AccountWithdrawal", "Retiro sobre la atribución"), ("AccountCashDeposit", "Consignación en efectivo sobre la atribución")];
+
+    /// <summary>Las políticas (niveles con umbral y permiso) de los dos sujetos de cuentas, vigentes o, con <paramref name="conHistoria"/>, todas.</summary>
+    public Task<ResultadoDeInventario<IReadOnlyList<PoliticaDeAprobacionDto>>> PoliticasDeCuentasAsync(bool conHistoria = false, CancellationToken ct = default) =>
+        Enviar<IReadOnlyList<PoliticaDeAprobacionDto>>(HttpMethod.Get, ConQuery(RutaDePoliticasDeCuentas, Query(("includeHistory", conHistoria ? "true" : null))),
+            null, null, ct);
+
+    /// <summary>Registra una versión nueva de la política de un sujeto de cuentas desde una fecha.</summary>
+    public Task<ResultadoDeInventario<PoliticaDeAprobacionDto>> GuardarPoliticaDeCuentasAsync(GuardarPoliticaDeAprobacionRequest request, ClaveDeOperacion clave,
+        CancellationToken ct = default) =>
+        Enviar<PoliticaDeAprobacionDto>(HttpMethod.Post, RutaDePoliticasDeCuentas, request, clave, ct);
 
     /// <summary>Los roles de la cooperativa (<c>GET /api/admin/roles</c>, exige <c>Security.Roles.View</c>).</summary>
     public Task<ResultadoDeInventario<PaginaDeInventarioDto<RolDeCooperativaDto>>> RolesAsync(CancellationToken ct = default) =>

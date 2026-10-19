@@ -128,6 +128,9 @@ public class PermisosDeCarteraTests
         PermisosLimitables.Admite("Lending.ValidationFailures.Confirm").Should().BeTrue();
         PermisosLimitables.Admite("Lending.Payments.BackdateBeforeClose").Should().BeTrue();
         PermisosLimitables.Admite("Lending.Loans.Read").Should().BeFalse();
-        PermisosLimitables.Todos.Where(DeCartera).Should().HaveCount(4, "sólo esos cuatro (api.md §2.4)");
+        // Feature 014 (decisión del dueño del 2026-10-18, D53): y el retiro y la consignación en efectivo de captaciones.
+        PermisosLimitables.Admite("Lending.Accounts.Withdraw").Should().BeTrue();
+        PermisosLimitables.Admite("Lending.Accounts.Deposit").Should().BeTrue();
+        PermisosLimitables.Todos.Where(DeCartera).Should().HaveCount(6, "los cuatro de la 013 (api.md §2.4) y los dos de captaciones");
     }
 }
