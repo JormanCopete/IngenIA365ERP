@@ -1,0 +1,83 @@
+// Revalorizacion del 3 % sobre el saldo al 31 de diciembre con un IPC del 5,2 %: no la limita; cabe en el fondo y el resto queda en el fondo. Los movimientos de 2027 no cuentan.
+{
+  "nombre": "asamblea-02-revalorizacion-saldo-al-cierre-sin-limite",
+  "descripcion": "Revalorizacion del 3 % sobre el saldo al 31 de diciembre con un IPC del 5,2 %: no la limita; cabe en el fondo y el resto queda en el fondo. Los movimientos de 2027 no cuentan.",
+  "entrada": {
+    "clase": "Revaluation",
+    "ejercicio": 2026,
+    "base": "YearEndBalance",
+    "porcentaje": 0.03,
+    "valor": null,
+    "fondo": 1000000,
+    "limiteLegal": 0.052,
+    "unidad": 1,
+    "asociados": [
+      {
+        "persona": 1,
+        "cuenta": 11,
+        "movimientos": [
+          {
+            "fecha": "2024-02-01",
+            "monto": 1234567
+          },
+          {
+            "fecha": "2027-01-15",
+            "monto": 900000
+          }
+        ]
+      },
+      {
+        "persona": 2,
+        "cuenta": 12,
+        "movimientos": [
+          {
+            "fecha": "2026-11-30",
+            "monto": 3333333
+          }
+        ]
+      },
+      {
+        "persona": 4,
+        "cuenta": 14,
+        "movimientos": [
+          {
+            "fecha": "2026-05-05",
+            "monto": 100000
+          },
+          {
+            "fecha": "2026-05-06",
+            "monto": -100000
+          }
+        ]
+      }
+    ]
+  },
+  "esperado": {
+    "baseTotal": 4567900,
+    "tasaAplicada": 0.03,
+    "limitadaPorElLimiteLegal": false,
+    "totalCalculado": 137037,
+    "prorrateada": false,
+    "factor": null,
+    "totalAplicado": 137037,
+    "remanente": 862963,
+    "lineas": [
+      {
+        "persona": 1,
+        "cuenta": 11,
+        "base": 1234567,
+        "calculado": 37037,
+        "aplicado": 37037,
+        "limitadaPorMinimo": false
+      },
+      {
+        "persona": 2,
+        "cuenta": 12,
+        "base": 3333333,
+        "calculado": 100000,
+        "aplicado": 100000,
+        "limitadaPorMinimo": false
+      }
+    ]
+  }
+}

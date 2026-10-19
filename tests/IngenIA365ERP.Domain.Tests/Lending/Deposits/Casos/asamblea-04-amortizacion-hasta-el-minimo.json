@@ -1,0 +1,86 @@
+// Amortizacion del 10 % de los aportes al cierre: a quien tiene poco sobre su minimo no reducible se le devuelve solo lo amortizable; el fondo alcanza.
+{
+  "nombre": "asamblea-04-amortizacion-hasta-el-minimo",
+  "descripcion": "Amortizacion del 10 % de los aportes al cierre: a quien tiene poco sobre su minimo no reducible se le devuelve solo lo amortizable; el fondo alcanza.",
+  "entrada": {
+    "clase": "Amortization",
+    "ejercicio": 2026,
+    "base": "YearEndBalance",
+    "porcentaje": 0.1,
+    "valor": null,
+    "fondo": 5000000,
+    "limiteLegal": null,
+    "unidad": 1,
+    "asociados": [
+      {
+        "persona": 1,
+        "cuenta": 11,
+        "movimientos": [
+          {
+            "fecha": "2025-01-01",
+            "monto": 4000000
+          }
+        ],
+        "maximoAmortizable": 3500000
+      },
+      {
+        "persona": 2,
+        "cuenta": 12,
+        "movimientos": [
+          {
+            "fecha": "2025-01-01",
+            "monto": 600000
+          }
+        ],
+        "maximoAmortizable": 40000.6
+      },
+      {
+        "persona": 3,
+        "cuenta": 13,
+        "movimientos": [
+          {
+            "fecha": "2025-01-01",
+            "monto": 500000
+          }
+        ],
+        "maximoAmortizable": 0
+      }
+    ]
+  },
+  "esperado": {
+    "baseTotal": 5100000,
+    "tasaAplicada": 0.1,
+    "limitadaPorElLimiteLegal": false,
+    "totalCalculado": 440000,
+    "prorrateada": false,
+    "factor": null,
+    "totalAplicado": 440000,
+    "remanente": 4560000,
+    "lineas": [
+      {
+        "persona": 1,
+        "cuenta": 11,
+        "base": 4000000,
+        "calculado": 400000,
+        "aplicado": 400000,
+        "limitadaPorMinimo": false
+      },
+      {
+        "persona": 2,
+        "cuenta": 12,
+        "base": 600000,
+        "calculado": 40000,
+        "aplicado": 40000,
+        "limitadaPorMinimo": true
+      },
+      {
+        "persona": 3,
+        "cuenta": 13,
+        "base": 500000,
+        "calculado": 0,
+        "aplicado": 0,
+        "limitadaPorMinimo": true
+      }
+    ]
+  }
+}

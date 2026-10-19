@@ -33,6 +33,9 @@ Lo que calcula hoy (fase fundacional y US4 de captaciones; las historias siguien
   antiguedad, luego id); lo protegido sobre la suma de las protegidas (asignado de la ultima a la primera en el orden) o sobre la mas antigua; nada
   protegido por alimentos o sin limite; lo que retienen otros embargos no se repite; se retiene en el orden hasta el tope. Casos embargo-*.json
   (bloque "entrada").
+- Asamblea (US12, T201; FR-045 a FR-047, D13): base por saldo promedio diario del ejercicio o al cierre, tasa decidida o valor sobre la base,
+  limite legal (IPC) en la revalorizacion, redondeo a la unidad de la entidad, reparto del valor y prorrateo al fondo por el mayor residuo, tope de lo
+  amortizable. Casos asamblea-*.json (bloque "entrada").
 - Cargos de cuenta (US4, T115; FR-128): gratuitos del periodo, exoneraciones (la primera que aplica), valor fijo o porcentaje al peso
   acotado por minimo y maximo, cobrado si el saldo lo deja sin bajar del minimo; si no, pendiente o condonado segun la linea. Casos
   cargo-*.json (bloque "entrada").
@@ -731,8 +734,80 @@ def esperado_embargo(caso):
             "cuentas": salida}
 
 
+# --------------------------------------------------------------------------------------------- asamblea (US12)
+# T201 (FR-045 a FR-047, D13; research §22): base = saldo promedio diario del ejercicio (saldo de cada dia del 1-ene al 31-dic por fecha valor, recorrido
+# dia por dia, / dias del anio, a 2 decimales al par) o saldo al 31-dic. Tasa = porcentaje, o valor / base total; en la revalorizacion, nunca mas que el
+# limite legal (IPC). Calculado = base x tasa a la unidad (mitad hacia arriba), o el valor (a la unidad, hacia abajo) repartido por la base con el mayor
+# residuo si se decidio un valor y el limite no lo corto. Amortizacion: nunca mas que lo amortizable (hacia abajo a la unidad). Si lo calculado supera el
+# fondo (hacia abajo a la unidad), el fondo se reparte por lo calculado con el mayor residuo (desempate: el primero en orden de persona y cuenta).
+def mayor_resto(total, pesos, unidad):
+    suma = sum(pesos, D(0))
+    if not pesos or suma <= 0 or total <= 0:
+        return [D(0) for _ in pesos]
+    exactas = [total * p / suma for p in pesos]
+    partes = [(x / unidad).to_integral_value(rounding="ROUND_FLOOR") * unidad for x in exactas]
+    faltan = int(((total - sum(partes, D(0))) / unidad).to_integral_value())
+    orden = sorted(range(len(pesos)), key=lambda i: (-(exactas[i] - partes[i]), i))
+    for i in orden[:max(0, faltan)]:
+        partes[i] += unidad
+    return partes
+
+
+def esperado_asamblea(caso):
+    e = caso["entrada"]
+    anio = int(e["ejercicio"])
+    unidad = D(str(e.get("unidad", 1)))
+    abajo = lambda x: (x / unidad).to_integral_value(rounding="ROUND_FLOOR") * unidad
+    arriba_mitad = lambda x: (x / unidad).quantize(D(1), rounding=ROUND_HALF_UP) * unidad
+    inicio, cierre = dt.date(anio, 1, 1), dt.date(anio, 12, 31)
+    lineas = []
+    for a in sorted(e["asociados"], key=lambda a: (a["persona"], a["cuenta"])):
+        movs = [(fecha(m["fecha"]), D(str(m["monto"]))) for m in a.get("movimientos", [])]
+        if e["base"] == "YearEndBalance":
+            b = sum((m for f, m in movs if f <= cierre), D(0))
+        else:
+            total, d = D(0), inicio
+            while d <= cierre:
+                total += sum((m for f, m in movs if f <= d), D(0))
+                d += dt.timedelta(days=1)
+            b = q(total / D((cierre - inicio).days + 1), 2)
+        if b > 0:
+            lineas.append({"persona": a["persona"], "cuenta": a["cuenta"], "base": b,
+                           "maximo": None if a.get("maximoAmortizable") is None else D(str(a["maximoAmortizable"]))})
+    base_total = sum((l["base"] for l in lineas), D(0))
+    fondo_decidido = D(str(e["fondo"]))
+    porcentaje = None if e.get("porcentaje") is None else D(str(e["porcentaje"]))
+    valor = None if e.get("valor") is None else D(str(e["valor"]))
+    limite = None if e.get("limiteLegal") is None else D(str(e["limiteLegal"]))
+    decidida = porcentaje if porcentaje is not None else valor / base_total
+    limitada = e["clase"] == "Revaluation" and limite is not None and decidida > limite
+    tasa = limite if limitada else decidida
+    if valor is not None and not limitada:
+        calc = mayor_resto(abajo(valor), [l["base"] for l in lineas], unidad)
+    else:
+        calc = [arriba_mitad(l["base"] * tasa) for l in lineas]
+    acotada = [False] * len(lineas)
+    if e["clase"] == "Amortization":
+        for i, l in enumerate(lineas):
+            if l["maximo"] is not None and calc[i] > max(D(0), abajo(l["maximo"])):
+                calc[i] = max(D(0), abajo(l["maximo"]))
+                acotada[i] = True
+    total_calc = sum(calc, D(0))
+    fondo = abajo(fondo_decidido)
+    prorrateada = total_calc > fondo
+    aplicado = mayor_resto(fondo, calc, unidad) if prorrateada else calc
+    factor = q(fondo / total_calc, 6) if prorrateada else None
+    salida = [{"persona": l["persona"], "cuenta": l["cuenta"], "base": l["base"], "calculado": calc[i], "aplicado": aplicado[i],
+               "limitadaPorMinimo": acotada[i]} for i, l in enumerate(lineas) if calc[i] != 0 or aplicado[i] != 0 or acotada[i]]
+    total_aplicado = sum(aplicado, D(0))
+    return {"baseTotal": base_total, "tasaAplicada": q(tasa, 10), "limitadaPorElLimiteLegal": limitada, "totalCalculado": total_calc,
+            "prorrateada": prorrateada, "factor": factor, "totalAplicado": total_aplicado, "remanente": fondo_decidido - total_aplicado,
+            "lineas": salida}
+
+
 def esperado_de_entrada(caso):
     nombre = caso["nombre"]
+    if nombre.startswith("asamblea-"): return esperado_asamblea(caso)
     if nombre.startswith("gmf-"): return esperado_gmf(caso)
     if nombre.startswith("cargo-"): return esperado_cargo(caso)
     if nombre.startswith("retencion-"): return esperado_retencion(caso)

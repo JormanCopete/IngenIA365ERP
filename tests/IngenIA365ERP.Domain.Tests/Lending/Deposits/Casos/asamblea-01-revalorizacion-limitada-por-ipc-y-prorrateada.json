@@ -1,0 +1,91 @@
+// US12 prueba independiente y US12-1: revalorizacion del 5 % sobre el saldo promedio de 2026 con un IPC del 4 % (valor de prueba): se limita al IPC y, como lo calculado supera el fondo aprobado de 100.000, se prorratea al fondo; la suma de los abonos es el fondo.
+{
+  "nombre": "asamblea-01-revalorizacion-limitada-por-ipc-y-prorrateada",
+  "descripcion": "US12 prueba independiente y US12-1: revalorizacion del 5 % sobre el saldo promedio de 2026 con un IPC del 4 % (valor de prueba): se limita al IPC y, como lo calculado supera el fondo aprobado de 100.000, se prorratea al fondo; la suma de los abonos es el fondo.",
+  "entrada": {
+    "clase": "Revaluation",
+    "ejercicio": 2026,
+    "base": "AverageBalance",
+    "porcentaje": 0.05,
+    "valor": null,
+    "fondo": 100000,
+    "limiteLegal": 0.04,
+    "unidad": 1,
+    "asociados": [
+      {
+        "persona": 1,
+        "cuenta": 11,
+        "movimientos": [
+          {
+            "fecha": "2025-12-15",
+            "monto": 1000000
+          },
+          {
+            "fecha": "2026-07-01",
+            "monto": 500000
+          }
+        ]
+      },
+      {
+        "persona": 2,
+        "cuenta": 12,
+        "movimientos": [
+          {
+            "fecha": "2026-03-10",
+            "monto": 2000000
+          }
+        ]
+      },
+      {
+        "persona": 3,
+        "cuenta": 13,
+        "movimientos": [
+          {
+            "fecha": "2025-06-01",
+            "monto": 750000
+          },
+          {
+            "fecha": "2026-10-01",
+            "monto": -250000
+          }
+        ]
+      }
+    ]
+  },
+  "esperado": {
+    "baseTotal": 3566438.35,
+    "tasaAplicada": 0.04,
+    "limitadaPorElLimiteLegal": true,
+    "totalCalculado": 142657,
+    "prorrateada": true,
+    "factor": 0.700982,
+    "totalAplicado": 100000,
+    "remanente": 0,
+    "lineas": [
+      {
+        "persona": 1,
+        "cuenta": 11,
+        "base": 1252054.79,
+        "calculado": 50082,
+        "aplicado": 35107,
+        "limitadaPorMinimo": false
+      },
+      {
+        "persona": 2,
+        "cuenta": 12,
+        "base": 1627397.26,
+        "calculado": 65096,
+        "aplicado": 45631,
+        "limitadaPorMinimo": false
+      },
+      {
+        "persona": 3,
+        "cuenta": 13,
+        "base": 686986.3,
+        "calculado": 27479,
+        "aplicado": 19262,
+        "limitadaPorMinimo": false
+      }
+    ]
+  }
+}
