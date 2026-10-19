@@ -653,7 +653,9 @@ public static class ParametrosDeCartera
             AdmiteVacio = true, PendienteDeValidar = "Sin valor: lo fijan los estatutos de cada cooperativa (FR-080).",
         },
         SiNo(Modulo, RiesgoDescuentoAportesDeterioro,
-            "Los aportes del deudor descuentan de la base del deterioro cuando la norma lo permite. Forzado en «false» mientras rija D19.", false, K7, General),
+            "Los aportes del deudor descuentan de la base del deterioro individual y del valor expuesto del activo de la pérdida esperada cuando la norma "
+            + "lo permite (Anexo 1, num. 5.1; Anexo 2, num. 4.2): la entidad sin pérdidas acumuladas y con solvencia. Forzado en «false» mientras rija D19.",
+            false, K7, General),
 
         // Cuentas: titulares, fecha valor, canje, efectivo, embargos (R22, R23, C14, D11, FR-059).
         Entero(Modulo, CaptacionesMayoriaDeEdadAnios,

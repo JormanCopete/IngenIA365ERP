@@ -58,7 +58,10 @@ public sealed record PuntajeDelModelo(
 /// Lo que el cálculo de la pérdida esperada necesita además del puntaje: la calificación <b>final</b> (la máxima de
 /// <see cref="MotorDeCalificacion"/>, con el arrastre que alinea consumo con y sin libranza), si queda incumplido por arrastre, la mora actual
 /// del deudor en sus créditos alineados (para la homologación), los saldos, la suspensión, el tipo de garantía de la tabla de PDI y los aportes
-/// (que no se descuentan mientras rija D19).
+/// del deudor a prorrata. Feature 014 (decisión del dueño del 2026-10-18, D39): los aportes se restan del <b>valor expuesto del activo</b> como manda
+/// el Anexo 2, num. 4.2 («descontando el valor de los aportes … de acuerdo con lo establecido en el numeral 5.1 del Anexo 1»), con las condiciones del
+/// numeral 5.1 del Anexo 1 —las mismas del deterioro individual: el parámetro <c>Riesgo.DescuentoAportesDeterioro</c>, la norma que los admite
+/// (<see cref="NormaAdmiteAportes"/>) y la entidad sin pérdidas y con solvencia—; no entran a la PDI (num. 4.3).
 /// </summary>
 public sealed record CreditoParaPerdidaEsperada(PuntajeDelModelo Puntaje, RatingCategory CalificacionFinal, SaldosParaDeterioro Saldos, bool Suspendido,
     string TipoDeGarantia)
@@ -70,6 +73,9 @@ public sealed record CreditoParaPerdidaEsperada(PuntajeDelModelo Puntaje, Rating
     public int? MoraActualDelDeudor { get; init; }
 
     public decimal AportesAProrrata { get; init; }
+
+    /// <summary>¿El Anexo 1 vigente admite descontar los aportes (num. 5.1)? Lo dice quien llama, que tiene la norma efectiva.</summary>
+    public bool NormaAdmiteAportes { get; init; }
 }
 
 /// <summary>
@@ -97,8 +103,14 @@ public sealed record PerdidaEsperadaDeCredito(
     bool Homologada,
     ExplicacionDeCartera Explicacion)
 {
-    /// <summary>VEA: el saldo con intereses y otros conceptos, sin aportes mientras rija D19 (<c>ExposureAtDefault</c>).</summary>
+    /// <summary>
+    /// VEA: el saldo con intereses y otros conceptos <b>menos los aportes descontados</b> (Anexo 2, num. 4.2; <c>ExposureAtDefault</c>). Sin descuento,
+    /// el saldo entero.
+    /// </summary>
     public decimal Exposicion => ExposicionCapital + ExposicionIntereses + ExposicionOtros;
+
+    /// <summary>Los aportes a prorrata restados del VEA (D39): primero del capital, después de los intereses y al final de los otros conceptos.</summary>
+    public decimal AportesDescontados { get; init; }
 
     public decimal Total => DeterioroCapital + DeterioroIntereses + DeterioroOtros;
 
@@ -304,27 +316,42 @@ public static class MotorDePerdidaEsperada
             explicacion.Linea($"PDI = {N(pdi)}: {garantia.Nombre} sin incumplimiento (primer tramo).");
         }
 
+        // Feature 014 (D39): el VEA descuenta los aportes a prorrata (Anexo 2, num. 4.2; Anexo 1, num. 5.1) cuando la cooperativa lo habilitó, la norma
+        // los admite y la entidad tiene indicadores (sin pérdidas, con solvencia). Se restan del capital, luego de los intereses y luego de los otros
+        // conceptos (orden pendiente de validar por la contadora); si cubren todo el VEA, el deterioro es cero (guía de la Supersolidaria, §3.2 n).
         var intereses = c.Saldos.InteresCorriente + c.Saldos.InteresDeMora;
-        explicacion.Linea($"VEA = capital {N(c.Saldos.Capital)} + intereses {N(intereses)} + otros {N(c.Saldos.Otros)} = "
-            + $"{N(c.Saldos.Capital + intereses + c.Saldos.Otros)}; aportes no descontados ("
-            + (!aportes.DescuentoEnDeterioro ? "rige D19: el parámetro Riesgo.DescuentoAportesDeterioro no está habilitado"
-                : c.AportesAProrrata > 0m ? "el Anexo 2 no descuenta los aportes de la exposición" : "no hay aportes a prorrata") + ").");
+        var bruto = c.Saldos.Capital + intereses + c.Saldos.Otros;
+        var admitidos = aportes.DescuentoEnDeterioro && aportes.IndicadoresDisponibles && c.NormaAdmiteAportes;
+        var aporte = admitidos ? Math.Min(Math.Max(0m, c.AportesAProrrata), bruto) : 0m;
+        var aCapital = Math.Min(aporte, c.Saldos.Capital);
+        var aIntereses = Math.Min(aporte - aCapital, intereses);
+        var aOtros = aporte - aCapital - aIntereses;
+        var vCapital = c.Saldos.Capital - aCapital;
+        var vIntereses = intereses - aIntereses;
+        var vOtros = c.Saldos.Otros - aOtros;
+        explicacion.Linea($"VEA = capital {N(c.Saldos.Capital)} + intereses {N(intereses)} + otros {N(c.Saldos.Otros)} − aportes {N(aporte)} = "
+            + $"{N(vCapital + vIntereses + vOtros)} ("
+            + (aporte > 0m ? $"aportes a prorrata descontados del VEA, Anexo 2 num. 4.2 y Anexo 1 num. 5.1: {N(aCapital)} del capital, {N(aIntereses)} de los intereses y {N(aOtros)} de los otros"
+                : !aportes.DescuentoEnDeterioro ? "aportes no descontados: el parámetro Riesgo.DescuentoAportesDeterioro no está habilitado"
+                : !aportes.IndicadoresDisponibles ? "aportes no descontados: la entidad no tiene indicadores vigentes (pérdidas, solvencia)"
+                : !c.NormaAdmiteAportes ? "aportes no descontados: la norma vigente no los admite"
+                : "no hay aportes a prorrata") + ").");
 
         var factor = pi * pdi;
-        var capital = MotorDeDeterioroIndividual.Redondear(c.Saldos.Capital * factor, redondeo);
-        explicacion.Linea($"Capital: {N(c.Saldos.Capital)} × {N(pi)} × {N(pdi)} = {N(capital)}.");
+        var capital = MotorDeDeterioroIndividual.Redondear(vCapital * factor, redondeo);
+        explicacion.Linea($"Capital: {N(vCapital)} × {N(pi)} × {N(pdi)} = {N(capital)}.");
         decimal deterioroIntereses, otros;
         if (c.Suspendido && anexo.SuspendidosAlCien)
         {
-            deterioroIntereses = MotorDeDeterioroIndividual.Redondear(intereses, redondeo);
-            otros = MotorDeDeterioroIndividual.Redondear(c.Saldos.Otros, redondeo);
+            deterioroIntereses = MotorDeDeterioroIndividual.Redondear(vIntereses, redondeo);
+            otros = MotorDeDeterioroIndividual.Redondear(vOtros, redondeo);
             explicacion.Linea($"Causación suspendida: intereses {N(deterioroIntereses)} y otros conceptos {N(otros)} al 100 %.");
         }
         else
         {
-            deterioroIntereses = MotorDeDeterioroIndividual.Redondear(intereses * factor, redondeo);
-            otros = MotorDeDeterioroIndividual.Redondear(c.Saldos.Otros * factor, redondeo);
-            explicacion.Linea($"Intereses: {N(intereses)} × {N(pi)} × {N(pdi)} = {N(deterioroIntereses)}; otros: {N(c.Saldos.Otros)} × {N(pi)} × {N(pdi)} = {N(otros)}.");
+            deterioroIntereses = MotorDeDeterioroIndividual.Redondear(vIntereses * factor, redondeo);
+            otros = MotorDeDeterioroIndividual.Redondear(vOtros * factor, redondeo);
+            explicacion.Linea($"Intereses: {N(vIntereses)} × {N(pi)} × {N(pdi)} = {N(deterioroIntereses)}; otros: {N(vOtros)} × {N(pi)} × {N(pdi)} = {N(otros)}.");
         }
         explicacion.Linea($"Pérdida esperada = {N(capital + deterioroIntereses + otros)} (redondeo al {redondeo.ToString().ToLowerInvariant()}).");
 
@@ -333,7 +360,10 @@ public static class MotorDePerdidaEsperada
         explicacion.Linea(homologacion.Detalle);
 
         return new(p.LoanId, segmento.Codigo, incumplido, diasEnIncumplimiento, c.CalificacionFinal, clave, pi, garantia.TipoDeGarantia, pdi,
-            c.Saldos.Capital, intereses, c.Saldos.Otros, capital, deterioroIntereses, otros, homologacion.Contable, homologacion.Homologada, explicacion);
+            vCapital, vIntereses, vOtros, capital, deterioroIntereses, otros, homologacion.Contable, homologacion.Homologada, explicacion)
+        {
+            AportesDescontados = aporte,
+        };
     }
 
     private static string N(decimal valor) => ExplicacionDeCartera.Numero(valor);

@@ -113,7 +113,7 @@ public static class CalculoDeRiesgo
                 if (puntajes.TryGetValue(id, out var x) && contexto.PerdidaEsperada is { } ctx)
                 {
                     var perdida = CalcularPerdida(ctx, modelo, credito, calificacion, x.Puntaje, perdidaEsperada![id], porArrastre.Contains(id), moraActual[id],
-                        contexto.Aportes, contexto.Redondeo);
+                        contexto.Aportes, contexto.Redondeo, Prorrata(credito), contexto.Norma.Aportes.Deducibles);
                     calculados.Add(new RiesgoDeCredito(credito, calificacion, ComoDeterioro(perdida, credito), modelo)
                     {
                         Puntaje = x.Puntaje, Historial = x.Historial, PerdidaEsperada = perdida,
@@ -155,7 +155,7 @@ public static class CalculoDeRiesgo
     /// </summary>
     private static PerdidaEsperadaDeCredito CalcularPerdida(ContextoDePerdidaEsperada pe, ModeloDelSegmento modelo, CreditoDeRiesgo c,
         CalificacionDeCredito calificacion, PuntajeDelModelo puntaje, DatosDePerdidaEsperada d, bool porArrastre, int moraActual, ContextoDeAportes aportes,
-        RedondeoDeDeterioro redondeo)
+        RedondeoDeDeterioro redondeo, decimal aportesAProrrata, bool normaAdmiteAportes)
     {
         var incumplido = puntaje.Incumplido || porArrastre;
         var garantia = TipoDeGarantiaDePdi.ElMasConservador(pe.Efectivo, modelo.Segmento, d.TiposDeGarantia, incumplido,
@@ -167,13 +167,15 @@ public static class CalculoDeRiesgo
         {
             IncumplidoPorArrastre = porArrastre,
             MoraActualDelDeudor = moraActual,
-            AportesAProrrata = 0m,
+            // Feature 014 (D39): los aportes a prorrata se restan del VEA con las condiciones del Anexo 1, num. 5.1 (las del deterioro individual).
+            AportesAProrrata = aportesAProrrata,
+            NormaAdmiteAportes = normaAdmiteAportes,
         }, pe.Modelo(modelo.Fundamento == ModelBasis.Voluntary), aportes, redondeo);
     }
 
     /// <summary>La pérdida esperada en la forma del deterioro individual: base = exposición, porcentaje = PI × PDI, deterioro por concepto.</summary>
     private static DeterioroIndividual ComoDeterioro(PerdidaEsperadaDeCredito p, CreditoDeRiesgo c) =>
-        new(p.LoanId, c.DiasDeMora / 30, c.Garantias.Sum(g => g.Valor), 0m, BaseDeDeterioro.TotalBalance, p.Exposicion,
+        new(p.LoanId, c.DiasDeMora / 30, c.Garantias.Sum(g => g.Valor), p.AportesDescontados, BaseDeDeterioro.TotalBalance, p.Exposicion,
             decimal.Round(p.ProbabilidadDeIncumplimiento * p.PerdidaDadoElIncumplimiento, 6, MidpointRounding.AwayFromZero),
             p.DeterioroCapital, p.DeterioroIntereses, p.DeterioroOtros, p.Explicacion);
 

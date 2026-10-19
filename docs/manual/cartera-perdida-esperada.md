@@ -25,9 +25,13 @@
    si está en incumplimiento.
 5. **PDI**: sin incumplimiento, la del segmento (45 % / 50 %); en incumplimiento, la del tipo de garantía según los días en incumplimiento. Mapeo de
    garantías (**pendiente de validar**): prenda, hipoteca y fondo de garantías **perfeccionados** a prendaria, hipotecaria y fondo de garantías;
-   sin perfeccionar, codeudor, avalista y aportes a «no idónea»; pagaré y sin garantías a «sin garantía». Con **varias garantías**, la PDI más
+   sin perfeccionar, codeudor y avalista a «no idónea»; los aportes no son garantía para la PDI (Anexo 2, num. 4.3) y van a «sin garantía»; pagaré y sin garantías a «sin garantía». Con **varias garantías**, la PDI más
    conservadora (la mayor) — decisión del equipo a falta de norma explícita.
-6. **Exposición** (VEA): capital, intereses y otros conceptos, por concepto.
+6. **Exposición** (VEA): capital, intereses y otros conceptos, por concepto, **menos los aportes del deudor a prorrata** (Anexo 2, num. 4.2;
+   decisión del dueño del 2026-10-18 tras revisar la norma, feature 014 D39): se descuentan con las mismas condiciones del deterioro individual
+   (Anexo 1, num. 5.1) —el parámetro `Riesgo.DescuentoAportesDeterioro`, la norma que los admite y la entidad sin pérdidas acumuladas y con
+   solvencia—, primero del capital, después de los intereses y al final de los otros conceptos (orden **pendiente de validar**). Si cubren todo el
+   VEA, el deterioro es cero. El ahorro permanente, que el num. 5.1 también permite descontar, **todavía no** se descuenta (pendiente).
 7. **Deterioro** = PI × PDI × exposición, por concepto, redondeado con `Riesgo.RedondeoDeterioro`. Lo causado de un crédito en suspenso se
    deteriora al 100 % si el documento lo dice (**pendiente de validar** si también en pérdida esperada). La suspensión de la causación sigue la
    altura de mora del Anexo 1: una calificación C del modelo con el crédito al día no suspende (**pendiente de validar**).

@@ -10,9 +10,11 @@ public sealed record GarantiaParaPdi(CollateralKind Clase, bool Perfeccionada);
 /// El tipo de garantía de la tabla de PDI del Anexo 2 de un crédito (feature 013, K6a, bloque 2; T1029, T1036; FR-106):
 /// <list type="bullet">
 /// <item><b>Clase → tipo</b>: prenda → <see cref="Prendaria"/>; hipoteca → <see cref="Hipotecaria"/>; fondo de garantías → <see cref="FondosDeGarantias"/>,
-/// cada una sólo si está perfeccionada al cierre (si no, no es idónea: <see cref="NoIdonea"/>); codeudor, avalista (un codeudor del crédito) y
-/// aportes → <see cref="NoIdonea"/> («avalistas, codeudores y garantías que no cumplen las características de idoneidad»; los aportes no se
-/// descuentan mientras rija D19); pagaré → <see cref="SinGarantia"/> (firma personal). Sin garantías ni codeudores, <see cref="SinGarantia"/>.</item>
+/// cada una sólo si está perfeccionada al cierre (si no, no es idónea: <see cref="NoIdonea"/>); codeudor y avalista (un codeudor del crédito) →
+/// <see cref="NoIdonea"/> («avalistas, codeudores y garantías que no cumplen las características de idoneidad»); pagaré → <see cref="SinGarantia"/>
+/// (firma personal). Los <b>aportes</b> no son garantía para la PDI (Anexo 2, num. 4.3: «no se tienen en cuenta para el cálculo de la PDI, dado que
+/// se consideran para el cálculo del valor expuesto del activo»; feature 014, decisión del dueño del 2026-10-18, D39): → <see cref="SinGarantia"/>,
+/// y se restan del VEA en <see cref="MotorDePerdidaEsperada.Calcular"/>. Sin garantías ni codeudores, <see cref="SinGarantia"/>.</item>
 /// <item><b>Varias garantías</b>: a falta de una regla explícita de la norma, la <b>PDI más conservadora</b> —la mayor en el estado del crédito
 /// (sin incumplimiento, la del segmento o el primer tramo; en incumplimiento, el tramo de sus días)—; en empate, la primera de la lista.
 /// <b>Pendiente de validar por la contadora</b> (lectura del equipo del 2026-10-16).</item>
@@ -36,8 +38,8 @@ public static class TipoDeGarantiaDePdi
             CollateralKind.Pledge => garantia.Perfeccionada ? Prendaria : NoIdonea,
             CollateralKind.Mortgage => garantia.Perfeccionada ? Hipotecaria : NoIdonea,
             CollateralKind.GuaranteeFund => garantia.Perfeccionada ? FondosDeGarantias : NoIdonea,
-            CollateralKind.CoDebtor or CollateralKind.Contributions => NoIdonea,
-            CollateralKind.PromissoryNote => SinGarantia,
+            CollateralKind.CoDebtor => NoIdonea,
+            CollateralKind.PromissoryNote or CollateralKind.Contributions => SinGarantia,
             _ => throw new ArgumentOutOfRangeException(nameof(garantia), garantia.Clase, "Clase de garantía desconocida."),
         };
     }

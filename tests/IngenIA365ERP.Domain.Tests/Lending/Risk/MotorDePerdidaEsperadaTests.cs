@@ -47,7 +47,7 @@ public class MotorDePerdidaEsperadaTests
     }
 
     [Fact]
-    public void Sin_la_PDI_del_tipo_de_garantia_el_motor_se_niega_y_con_aportes_explica_que_no_los_descuenta()
+    public void Sin_la_PDI_del_tipo_de_garantia_el_motor_se_niega()
     {
         var contexto = Contexto("COOP_AHORRO_CREDITO");
         var p = MotorDePerdidaEsperada.Puntuar(Sembrado, AlDia("CONSUMO_LIBRANZA"), contexto);
@@ -55,12 +55,41 @@ public class MotorDePerdidaEsperadaTests
         var sinPdi = () => MotorDePerdidaEsperada.Calcular(Sembrado, new CreditoParaPerdidaEsperada(p, RatingCategory.A, Saldos, false, "AVAL"),
             contexto, ContextoDeAportes.SinAportes, RedondeoDeDeterioro.Centavo);
         sinPdi.Should().Throw<InvalidOperationException>().WithMessage("*AVAL*");
+    }
 
-        // Feature 014 (T084): sin D19 el motor ya no se niega; el Anexo 2 no descuenta los aportes de la exposición y la explicación lo dice.
-        var conAportes = MotorDePerdidaEsperada.Calcular(Sembrado,
-            new CreditoParaPerdidaEsperada(p, RatingCategory.A, Saldos, false, "SIN_GARANTIA") { AportesAProrrata = 100m },
-            contexto, new ContextoDeAportes(true, true, true), RedondeoDeDeterioro.Centavo);
-        conAportes.Explicacion.Texto.Should().Contain("el Anexo 2 no descuenta los aportes");
+    [Fact]
+    public void Los_aportes_a_prorrata_se_restan_del_VEA_con_las_condiciones_del_numeral_5_1()
+    {
+        // Decisión del dueño del 2026-10-18 (feature 014, D39): Anexo 2 num. 4.2 —el VEA descuenta los aportes según el num. 5.1 del Anexo 1— y 4.3 —los
+        // aportes no entran a la PDI—. Hasta esa fecha el motor no los descontaba (E62).
+        var contexto = Contexto("COOP_AHORRO_CREDITO");
+        var p = MotorDePerdidaEsperada.Puntuar(Sembrado, AlDia("CONSUMO_LIBRANZA"), contexto);
+        var conSaldos = new SaldosParaDeterioro(1_000_000m, 50_000m, 0m, 0m);
+        PerdidaEsperadaDeCredito Calcular(ContextoDeAportes aportes, decimal aProrrata, bool normaAdmite = true) =>
+            MotorDePerdidaEsperada.Calcular(Sembrado,
+                new CreditoParaPerdidaEsperada(p, RatingCategory.A, conSaldos, false, "SIN_GARANTIA") { AportesAProrrata = aProrrata, NormaAdmiteAportes = normaAdmite },
+                contexto, aportes, RedondeoDeDeterioro.Centavo);
+
+        var sin = Calcular(ContextoDeAportes.SinAportes, 391_000m);
+        var con = Calcular(new ContextoDeAportes(true, true, true), 391_000m);
+
+        sin.Exposicion.Should().Be(1_050_000m);
+        sin.AportesDescontados.Should().Be(0m);
+        sin.Explicacion.Texto.Should().Contain("Riesgo.DescuentoAportesDeterioro no está habilitado");
+        con.AportesDescontados.Should().Be(391_000m);
+        con.ExposicionCapital.Should().Be(609_000m, "los aportes se restan primero del capital");
+        con.ExposicionIntereses.Should().Be(50_000m);
+        con.Exposicion.Should().Be(659_000m);
+        con.PerdidaDadoElIncumplimiento.Should().Be(sin.PerdidaDadoElIncumplimiento, "los aportes no entran a la PDI (num. 4.3)");
+        con.Total.Should().BeLessThan(sin.Total);
+        con.Explicacion.Texto.Should().Contain("Anexo 2 num. 4.2");
+
+        var cubierto = Calcular(new ContextoDeAportes(true, true, true), 2_000_000m);
+        cubierto.Exposicion.Should().Be(0m);
+        cubierto.Total.Should().Be(0m, "aportes que cubren todo el VEA dejan el deterioro en cero (guía de la Supersolidaria, §3.2 n)");
+
+        Calcular(new ContextoDeAportes(true, true, false), 391_000m).AportesDescontados.Should().Be(0m, "sin indicadores de la entidad no se descuentan");
+        Calcular(new ContextoDeAportes(true, true, true), 391_000m, normaAdmite: false).AportesDescontados.Should().Be(0m);
     }
 
     [Fact]

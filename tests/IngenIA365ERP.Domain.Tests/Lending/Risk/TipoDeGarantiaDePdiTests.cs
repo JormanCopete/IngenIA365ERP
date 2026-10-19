@@ -21,7 +21,8 @@ public class TipoDeGarantiaDePdiTests
     [InlineData(CollateralKind.Mortgage, true, "HIPOTECARIA")]
     [InlineData(CollateralKind.GuaranteeFund, true, "FONDOS_GARANTIAS")]
     [InlineData(CollateralKind.CoDebtor, true, "NO_IDONEA")]
-    [InlineData(CollateralKind.Contributions, true, "NO_IDONEA")]
+    // Feature 014 (D39): los aportes no entran a la PDI (Anexo 2, num. 4.3); se restan del VEA.
+    [InlineData(CollateralKind.Contributions, true, "SIN_GARANTIA")]
     [InlineData(CollateralKind.PromissoryNote, true, "SIN_GARANTIA")]
     public void Cada_clase_va_a_su_tipo(CollateralKind clase, bool perfeccionada, string tipo) =>
         TipoDeGarantiaDePdi.De(new GarantiaParaPdi(clase, perfeccionada)).Should().Be(tipo);
