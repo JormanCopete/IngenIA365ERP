@@ -64,7 +64,8 @@ public sealed class TrasladoDeCuenta(
     ConsignacionEnCuentas consignacion,
     IActorActual actorActual,
     IDateTimeService reloj,
-    Accrual.AjusteDeCausacionDeCuenta? ajusteDeCausacion = null)
+    Accrual.AjusteDeCausacionDeCuenta? ajusteDeCausacion = null,
+    Accrual.ReactivacionDeCuenta? reactivacion = null)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
@@ -231,8 +232,11 @@ public sealed class TrasladoDeCuenta(
                 gmf.Valor, gmf.Politica, gmf.Tarifa);
         RegistroDeCuentas.MarcarActividadDelTitular(control, p.FechaValor);
         RegistroDeCuentas.MarcarActividadDelTitular(controlDestino, p.FechaValor);
-        if (origen.Status == MemberAccountStatus.Inactive) origen.Reactivar(ahora);
-        if (destino.Status == MemberAccountStatus.Inactive) destino.Reactivar(ahora);
+        await db.SaveChangesAsync(ct);
+        // US14 (T208; FR-084): el traslado se contabilizó con las cuentas como estaban; la que estaba inactiva se reactiva y reclasifica su saldo.
+        foreach (var tocada in new[] { origen, destino })
+            if (await Accrual.ReactivacionDeCuenta.ReactivarAsync(reactivacion, tocada, p.FechaValor, ahora, ct) is { IsFailure: true } noReactivada)
+                return Result.Failure<(ComprobanteDeCuentaDto Comprobante, MemberAccountOperation Operacion, bool YaAplicado)>(noReactivada.Error);
         await db.SaveChangesAsync(ct);
         // US5 (T133; FR-062): el traslado fechado atrás ajusta la causación de las dos cuentas, enlazado a esta operación.
         if (ajusteDeCausacion is not null)

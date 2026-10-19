@@ -234,7 +234,9 @@ public static class TextosDeCartera
             3 => ["ValorAplicado", "ModalidadAplicada", "NuevaCuota", "NuevoPlazo", "MotivoDeNoDescuento", "FormaDePagoNueva",
                 "NumeroDeCuenta", "NombreDeLaLinea", "TasaAnterior", "TasaNueva", "FechaDelCambio", "FechaDeMayoriaDeEdad",
                 // US7 (T182): el aviso del incumplimiento del ahorro contractual (CONTRATINC).
-                "CuotasAtrasadasDelContrato", "FechaDeIncumplimiento", "EfectoDelIncumplimiento"],
+                "CuotasAtrasadasDelContrato", "FechaDeIncumplimiento", "EfectoDelIncumplimiento",
+                // US14 (T208, T209): los avisos de la inactividad (PREINACTIV, INACTIVA) y del traslado a no reclamados (NORECLAMA).
+                "FechaDeInactividad", "DiasDeInactividad", "ValorNoReclamado", "FechaDelTraslado"],
             4 => ["ClaseDeDocumento", "NumeroDelDocumento", "CodigoDeVerificacion"],
             5 => ["ValorDelGasto", "Etapa", "FechaDeCausacion"],
             _ => [],

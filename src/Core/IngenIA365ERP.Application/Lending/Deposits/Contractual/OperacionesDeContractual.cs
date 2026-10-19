@@ -438,7 +438,8 @@ public sealed class CierreDeContractual(
     TrasladoDeCuenta traslados,
     OrdenesDeGiroDeCuentas ordenes,
     IActorActual actorActual,
-    IDateTimeService reloj)
+    IDateTimeService reloj,
+    Accrual.ReactivacionDeCuenta? reactivacion = null)
 {
     public const string ResultadoTrasladado = "Transferred";
     public const string ResultadoGirado = "PayoutOrdered";
@@ -504,7 +505,9 @@ public sealed class CierreDeContractual(
         var actor = await actorActual.ObtenerAsync(ct);
         if (entrega is null)
         {
-            if (cuenta.Status == MemberAccountStatus.Inactive) cuenta.Reactivar(ahora);
+            // US14 (T208): la inactiva vence como activa, con su saldo reclasificado al capital activo.
+            if (await Accrual.ReactivacionDeCuenta.ReactivarAsync(reactivacion, cuenta, fecha, ahora, ct) is { IsFailure: true } noReactivada)
+                return Falla(noReactivada.Error);
             if (cuenta.Status == MemberAccountStatus.Active) cuenta.Vencer(fecha, ahora);
             await db.SaveChangesAsync(ct);
             return Result.Success(new CierreDeContractualAplicado(0m, null, cuenta.Status, ResultadoADisposicion));

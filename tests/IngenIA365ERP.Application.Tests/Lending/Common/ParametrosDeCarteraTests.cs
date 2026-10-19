@@ -142,6 +142,9 @@ public class ParametrosDeCarteraTests
         { "Captaciones.DiasParaNoReclamados", "", [N], EntregaDeCartera.K10 },
         { "Fallecimiento.SoportesDeEntregaSinSucesion", "", [N], EntregaDeCartera.K10 },
         { "CuentasAbandonadas.TrasladoHabilitado", "false", [N], EntregaDeCartera.K10 },
+        // US14 (T208, T209; research §23): el aviso previo de la inactividad y el plazo de las cuentas abandonadas.
+        { "Captaciones.DiasDeAvisoPrevioDeInactividad", "30", [N], EntregaDeCartera.K10 },
+        { "CuentasAbandonadas.DiasSinMovimiento", "1095", [N], EntregaDeCartera.K10 },
     };
 
     [Fact]
@@ -176,8 +179,9 @@ public class ParametrosDeCarteraTests
 
         // Feature 014 (T017): las claves de captaciones y aportes existen desde ya con su entrega (K7 a K11) y no se ofrecen hasta que salga.
         // Fase 8 de la 014 (US5, research E94): 33 con Retencion.Redondeo; fase 13 (US7, T182): 34 con la gracia de la cuota del contractual;
-        // fase 14 (US11, T188, T189): 40 con las seis de embargos; fase 15 (US13, T196): 44 con las cuatro de documentos; fase 16 (US12, T203): 50 con las seis de la asamblea.
-        posteriores.Should().HaveCount(50).And.OnlyContain(d => d.DisponibleDesde >= (EntregaDeModulo)EntregaDeCartera.K7
+        // fase 14 (US11, T188, T189): 40 con las seis de embargos; fase 15 (US13, T196): 44 con las cuatro de documentos; fase 16 (US12, T203): 50 con las seis de la asamblea;
+        // fase 17 (US14, T208, T209): 52 con el aviso previo de la inactividad y el plazo de las cuentas abandonadas.
+        posteriores.Should().HaveCount(52).And.OnlyContain(d => d.DisponibleDesde >= (EntregaDeModulo)EntregaDeCartera.K7
             && d.DisponibleDesde <= (EntregaDeModulo)EntregaDeCartera.K11);
         ParametrosDeCartera.Definiciones.Where(d => d.DisponibleDesde == (EntregaDeModulo)EntregaDeCartera.K6b).Should().BeEmpty("la vivienda no trae claves");
         ParametrosDeCartera.Definiciones.Where(d => d.DisponibleDesde == (EntregaDeModulo)EntregaDeCartera.K6a).Select(d => d.Clave).Should()

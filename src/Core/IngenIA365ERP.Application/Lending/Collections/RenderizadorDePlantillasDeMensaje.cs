@@ -62,7 +62,9 @@ public static partial class RenderizadorDePlantillasDeMensaje
                     // US2 (T076): el aviso de la mayoría de edad del titular.
                     "FechaDeMayoriaDeEdad",
                     // US7 (T182): el aviso del incumplimiento del ahorro contractual.
-                    "CuotasAtrasadasDelContrato", "FechaDeIncumplimiento", "EfectoDelIncumplimiento"],
+                    "CuotasAtrasadasDelContrato", "FechaDeIncumplimiento", "EfectoDelIncumplimiento",
+                    // US14 (T208, T209): los avisos de la inactividad y del traslado a no reclamados.
+                    "FechaDeInactividad", "DiasDeInactividad", "ValorNoReclamado", "FechaDelTraslado"],
             [DebtorMessagePurpose.DocumentDelivery] = ["ClaseDeDocumento", "NumeroDelDocumento", "CodigoDeVerificacion"],
         };
 

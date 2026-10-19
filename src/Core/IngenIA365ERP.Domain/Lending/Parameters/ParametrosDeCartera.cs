@@ -313,6 +313,18 @@ public static class ParametrosDeCartera
     public const string CaptacionesDiasParaNoReclamados = "Captaciones.DiasParaNoReclamados";
 
     /// <summary>
+    /// Feature 014, US14 (T208; FR-084; research §23): cuántos días antes de que una cuenta pase a inactiva se avisa al titular (plantilla <c>PREINACTIV</c>).
+    /// Vacío o cero: sin aviso previo.
+    /// </summary>
+    public const string CaptacionesDiasDeAvisoPrevioDeInactividad = "Captaciones.DiasDeAvisoPrevioDeInactividad";
+
+    /// <summary>
+    /// Feature 014, US14 (T209; FR-084; Ley 1777 de 2016 art. 2 como referencia): los días sin movimiento del titular desde los que el saldo de una cuenta
+    /// inactiva pasa a no reclamados, sólo con <see cref="CuentasAbandonadasTrasladoHabilitado"/>.
+    /// </summary>
+    public const string CuentasAbandonadasDiasSinMovimiento = "CuentasAbandonadas.DiasSinMovimiento";
+
+    /// <summary>
     /// Feature 014, US7 (T182; FR-074; research §19): los días calendario que una cuota del ahorro contractual puede llegar después de su vencimiento sin
     /// contar como atrasada para la tolerancia de la línea (el descuento de Nómina o de la pagaduría se aplica unos días después del fin del período).
     /// </summary>
@@ -939,6 +951,19 @@ public static class ParametrosDeCartera
             "Los saldos de cuentas abandonadas se trasladan según la norma. En «false» no se trasladan.", false, K10, General) with
         {
             PendienteDeValidar = "Defecto P7 de la spec (Ley 1777 de 2016 a validar): la contadora confirma si aplica a la cooperativa.",
+        },
+        // US14 (T208, T209; research §23): el aviso previo de la inactividad y el plazo de las cuentas abandonadas, por entidad.
+        Entero(Modulo, CaptacionesDiasDeAvisoPrevioDeInactividad,
+            "Días antes de que una cuenta pase a inactiva en que se avisa al titular. Cero: sin aviso previo.", "30", K10, General) with
+        {
+            Minimo = 0m, PendienteDeValidar = "Defecto de 30 días (research §23): cada cooperativa lo fija en su reglamento de ahorro.",
+        },
+        Entero(Modulo, CuentasAbandonadasDiasSinMovimiento,
+            "Días sin movimiento del titular desde los que el saldo de una cuenta inactiva pasa a no reclamados (sólo si el traslado está habilitado).",
+            "1095", K10, General) with
+        {
+            Minimo = 1m, PendienteDeValidar = "Defecto de 3 años, el plazo de la Ley 1777 de 2016 art. 2 para los establecimientos de crédito (research §23): "
+                + "la Ley no rige a las cooperativas; lo fija el reglamento.",
         },
     ];
 

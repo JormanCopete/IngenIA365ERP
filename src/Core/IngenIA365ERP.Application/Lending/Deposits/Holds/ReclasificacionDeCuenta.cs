@@ -36,22 +36,30 @@ public sealed class ReclasificacionDeCuenta(
     public static readonly MemberAccountConcept[] Conceptos = [MemberAccountConcept.Principal, MemberAccountConcept.InterestPayable];
 
     /// <param name="exentaDespues">En la exención del GMF, si la cuenta queda marcada exenta (la marca no vive en la cuenta, vive en su vigencia).</param>
+    /// <param name="exentaAntes">
+    /// US14 (T208): en la exención que rige desde una fecha futura, la marca de antes (la vigencia ya guardada hace que la lectura de la fecha diga la de
+    /// después).
+    /// </param>
+    /// <param name="saldos">
+    /// US14 (T208): los saldos que se trasladan, si no son todos los de la cuenta: el ciclo diario mueve los que tenían fecha contable antes del día en que
+    /// cambió la marca (lo de ese día ya se contabilizó con la marca nueva).
+    /// </param>
     public async Task<Result<MemberAccountOperation?>> ReclasificarAsync(MemberAccount cuenta, DateOnly fecha, string causa, Action cambiar, int? embargoId,
-        CancellationToken ct, bool? exentaDespues = null)
+        CancellationToken ct, bool? exentaDespues = null, bool? exentaAntes = null, IReadOnlyDictionary<MemberAccountConcept, decimal>? saldos = null)
     {
         ArgumentNullException.ThrowIfNull(cuenta);
         ArgumentNullException.ThrowIfNull(cambiar);
         var hecho = await emision.HechoDeCuentaAsync(cuenta, fecha, ct);
         if (hecho.IsFailure) return Result.Failure<MemberAccountOperation?>(hecho.Error);
-        var anteriores = hecho.Value.Dimensiones();
+        var anteriores = exentaAntes is { } antes ? hecho.Value.Dimensiones(antes) : hecho.Value.Dimensiones();
         cambiar();
         var despues = exentaDespues is { } e ? hecho.Value with { ExentaDeGmf = e } : hecho.Value;
         var nuevas = despues.Dimensiones();
         if (anteriores == nuevas || (anteriores.AccountFlag == nuevas.AccountFlag && anteriores.Inactive == nuevas.Inactive))
             return Result.Success<MemberAccountOperation?>(null);
 
-        var saldos = (await LectorDeCuentas.SaldosAsync(db, [cuenta.Id], ct)).GetValueOrDefault(cuenta.Id) ?? [];
-        var valores = Conceptos.Select(c => new DepositConceptAmountV1 { Concept = c.ToString(), Amount = saldos.GetValueOrDefault(c) })
+        var trasladables = saldos ?? (await LectorDeCuentas.SaldosAsync(db, [cuenta.Id], ct)).GetValueOrDefault(cuenta.Id) ?? [];
+        var valores = Conceptos.Select(c => new DepositConceptAmountV1 { Concept = c.ToString(), Amount = trasladables.GetValueOrDefault(c) })
             .Where(v => v.Amount != 0m).ToList();
         if (valores.Count == 0) return Result.Success<MemberAccountOperation?>(null);
 
@@ -74,7 +82,9 @@ public sealed class ReclasificacionDeCuenta(
             OriginUserCentralId = actor.CentralUserId,
             GarnishmentId = embargoId,
             Reason = $"Reclasificación por {causa}",
-            Payload = $"{{\"cause\":\"{causa}\",\"from\":\"{anteriores.AccountFlag}\",\"to\":\"{nuevas.AccountFlag}\"}}",
+            Payload = anteriores.Inactive == nuevas.Inactive
+                ? $"{{\"cause\":\"{causa}\",\"from\":\"{anteriores.AccountFlag}\",\"to\":\"{nuevas.AccountFlag}\"}}"
+                : $"{{\"cause\":\"{causa}\",\"from\":\"{anteriores.AccountFlag}\",\"to\":\"{nuevas.AccountFlag}\",\"inactive\":{(nuevas.Inactive ? "true" : "false")}}}",
             InputsSha256 = new HuellaDeCartera().Identificador("account", cuenta.PublicId).Texto("cause", causa).Texto("from", anteriores.AccountFlag)
                 .Texto("to", nuevas.AccountFlag).Calcular(),
             RulesVersion = VersionesDeReglas.Vigente,

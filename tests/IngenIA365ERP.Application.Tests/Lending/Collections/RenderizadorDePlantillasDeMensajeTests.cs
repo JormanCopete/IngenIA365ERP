@@ -300,11 +300,12 @@ public sealed class RenderizadorDePlantillasDeMensajeTests
         var plantillas = LendingMessageTemplatesSeeder.Leer();
 
         Assert.Equal(
-            ["ABONOCAP", "AVISOPREV", "CAMBIOTASA", "CONTRATINC", "ENVIODOC", "GASTOCOBR", "MAYOREDAD", "MORAADMIN", "NOAPLICPAG", "PASOACAJA", "PREJURID", "RECORDPREV", "SIMULACION"],
+            ["ABONOCAP", "AVISOPREV", "CAMBIOTASA", "CONTRATINC", "ENVIODOC", "GASTOCOBR", "INACTIVA", "MAYOREDAD", "MORAADMIN", "NOAPLICPAG", "NORECLAMA", "PASOACAJA",
+                "PREINACTIV", "PREJURID", "RECORDPREV", "SIMULACION"],
             plantillas.Select(p => p.Code).Distinct().Order(StringComparer.Ordinal));
-        // Doce por correo, SMS y WhatsApp (la feature 014 suma CAMBIOTASA, T067, MAYOREDAD, T076, y CONTRATINC, T182), más SIMULACION sólo por correo
-        // (US2, T0390).
-        Assert.Equal(37, plantillas.Count);
+        // Doce por correo, SMS y WhatsApp (la feature 014 suma CAMBIOTASA, T067, MAYOREDAD, T076, y CONTRATINC, T182; US14 suma PREINACTIV, INACTIVA y
+        // NORECLAMA, T208, T209), más SIMULACION sólo por correo (US2, T0390).
+        Assert.Equal(46, plantillas.Count);
         Assert.All(plantillas, p => Assert.True(p.Code.Length <= 10));
         Assert.All(plantillas.Where(p => p.Channel == MessageChannel.Email), p => Assert.False(string.IsNullOrWhiteSpace(p.Subject)));
         Assert.All(plantillas.Where(p => p.Channel == MessageChannel.Sms),
@@ -318,7 +319,7 @@ public sealed class RenderizadorDePlantillasDeMensajeTests
         var primera = await LendingMessageTemplatesSeeder.AplicarAsync(_db, default);
         var segunda = await LendingMessageTemplatesSeeder.AplicarAsync(_db, default);
 
-        Assert.Equal(37, primera);
+        Assert.Equal(46, primera);
         Assert.Equal(0, segunda);
         var filas = await _db.NotificationTemplates.ToListAsync();
         Assert.All(filas, f =>

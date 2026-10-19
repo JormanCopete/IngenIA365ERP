@@ -14,6 +14,7 @@ namespace IngenIA365ERP.Persistence.Seeding.Parametric;
 /// SMS y WhatsApp), más <c>SIMULACION</c> sólo por correo (US2, T0390: el envío de una simulación) y <c>CAMBIOTASA</c> por los tres canales
 /// (feature 014, US1, T067: el aviso de cambio de tasa de una línea a la vista) y <c>MAYOREDAD</c> por los tres canales (US2, T076: el aviso de
 /// la mayoría de edad del titular de una cuenta) y <c>CONTRATINC</c> por los tres canales (US7, T182: el aviso del incumplimiento de un ahorro contractual),
+/// <c>PREINACTIV</c>, <c>INACTIVA</c> y <c>NORECLAMA</c> por los tres canales (US14, T208, T209: los avisos de la inactividad y del traslado a no reclamados),
 /// con <c>Module = Lending</c>, <c>Version = 1</c>, <c>IsSeeded</c> y <c>ReviewPending</c>. El texto vive en
 /// <c>Data/lending-message-templates.json</c>. Idempotente por (<c>Code</c>, <c>Channel</c>, <c>Version</c>) <b>incluidas las de baja</b>:
 /// una plantilla que la cooperativa cambió (versión 2) o dio de baja no vuelve. Las columnas llegan con la migración

@@ -112,7 +112,8 @@ public sealed class RetiroDeCuenta(
     CargosDeCuentas cargos,
     IActorActual actorActual,
     IDateTimeService reloj,
-    Accrual.AjusteDeCausacionDeCuenta? ajusteDeCausacion = null)
+    Accrual.AjusteDeCausacionDeCuenta? ajusteDeCausacion = null,
+    Accrual.ReactivacionDeCuenta? reactivacion = null)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
@@ -324,13 +325,12 @@ public sealed class RetiroDeCuenta(
         {
             // FR-058: un retiro del titular es movimiento del titular (reactiva una inactiva); el débito automático lo hace el proceso.
             RegistroDeCuentas.MarcarActividadDelTitular(control, p.FechaValor);
-            if (cuenta.Status == MemberAccountStatus.Inactive)
-            {
-                cuenta.Reactivar(ahora);
-                reactivada = true;
-            }
+            reactivada = cuenta.Status == MemberAccountStatus.Inactive;
         }
         await db.SaveChangesAsync(ct);
+        // US14 (T208; FR-084): el retiro se contabilizó con la cuenta inactiva; la reactivación reclasifica todo el saldo al capital activo.
+        if (reactivada && await Accrual.ReactivacionDeCuenta.ReactivarAsync(reactivacion, cuenta, p.FechaValor, ahora, ct) is { IsFailure: true } noReactivada)
+            return Result.Failure<RetiroAplicado>(noReactivada.Error);
         // US5 (T133; FR-062): con fecha valor en días ya causados, el ajuste de la causación va enlazado a esta operación.
         if (ajusteDeCausacion is not null
             && await ajusteDeCausacion.AjustarAsync(cuenta, operacion, EmisionDeCartera.ClaseRetiroDeCuenta, ct) is { IsFailure: true } ajusteFallido)

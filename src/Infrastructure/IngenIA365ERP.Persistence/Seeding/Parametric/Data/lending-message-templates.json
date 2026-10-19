@@ -9,7 +9,9 @@
 // su tasa cambia desde una fecha. US2 (T076; FR-033, R22) suma MAYOREDAD, informativo por los tres canales: el aviso al titular que cumplió la
 // mayoría de edad y a quien era su representante de que desde ese día el titular maneja la cuenta y debe actualizar sus datos. US7 (T182; FR-074) suma
 // CONTRATINC, informativo por los tres canales: el aviso al titular de que su ahorro contractual quedó incumplido (más cuotas atrasadas que las toleradas,
-// el vencimiento con cuotas sin pagar o la cancelación antes del vencimiento) y del efecto que tiene según su línea.
+// el vencimiento con cuotas sin pagar o la cancelación antes del vencimiento) y del efecto que tiene según su línea. US14 (T208, T209; FR-084, FR-081)
+// suma PREINACTIV, INACTIVA y NORECLAMA, informativos por los tres canales: el aviso previo a la inactividad, el aviso de que la cuenta quedó inactiva y
+// el aviso de que su saldo pasó a no reclamados.
 [
   {
     "code": "AVISOPREV",
@@ -198,6 +200,63 @@
       {
         "channel": "WhatsApp",
         "body": "{{NombreDeLaCooperativa}} le informa que su ahorro contractual {{NumeroDeCuenta}} ({{NombreDeLaLinea}}) quedó incumplido el {{FechaDeIncumplimiento}} con {{CuotasAtrasadasDelContrato}} cuota(s) atrasada(s). {{EfectoDelIncumplimiento}}"
+      }
+    ]
+  },
+  {
+    "code": "PREINACTIV",
+    "purpose": "Informative",
+    "templates": [
+      {
+        "channel": "Email",
+        "subject": "Su cuenta {{NumeroDeCuenta}} pasará a inactiva",
+        "body": "<p>Señor(a) {{NombreDelTitular}}:</p><p>{{NombreDeLaCooperativa}} le informa que su cuenta {{NumeroDeCuenta}} ({{NombreDeLaLinea}}) no registra movimientos suyos y pasará a inactiva el {{FechaDeInactividad}} ({{DiasDeInactividad}} días sin movimiento). Cualquier consignación, retiro o traslado que usted haga la mantiene activa; el abono de intereses no cuenta como movimiento.</p><p>Si tiene dudas, comuníquese con nosotros al {{TelefonoDeLaCooperativa}}.</p>"
+      },
+      {
+        "channel": "Sms",
+        "body": "{{NombreDeLaCooperativa}}: su cuenta {{NumeroDeCuenta}} pasara a inactiva el {{FechaDeInactividad}} si no registra movimientos. Tel {{TelefonoDeLaCooperativa}}"
+      },
+      {
+        "channel": "WhatsApp",
+        "body": "{{NombreDeLaCooperativa}} le informa que su cuenta {{NumeroDeCuenta}} ({{NombreDeLaLinea}}) pasará a inactiva el {{FechaDeInactividad}} si no registra movimientos suyos."
+      }
+    ]
+  },
+  {
+    "code": "INACTIVA",
+    "purpose": "Informative",
+    "templates": [
+      {
+        "channel": "Email",
+        "subject": "Su cuenta {{NumeroDeCuenta}} quedó inactiva",
+        "body": "<p>Señor(a) {{NombreDelTitular}}:</p><p>{{NombreDeLaCooperativa}} le informa que desde el {{FechaDeInactividad}} su cuenta {{NumeroDeCuenta}} ({{NombreDeLaLinea}}) quedó inactiva por {{DiasDeInactividad}} días sin movimientos suyos. Su saldo sigue a su disposición: con cualquier consignación, retiro o traslado la cuenta vuelve a quedar activa.</p><p>Si tiene dudas, comuníquese con nosotros al {{TelefonoDeLaCooperativa}}.</p>"
+      },
+      {
+        "channel": "Sms",
+        "body": "{{NombreDeLaCooperativa}}: su cuenta {{NumeroDeCuenta}} quedo inactiva el {{FechaDeInactividad}}. Un movimiento suyo la reactiva. Tel {{TelefonoDeLaCooperativa}}"
+      },
+      {
+        "channel": "WhatsApp",
+        "body": "{{NombreDeLaCooperativa}} le informa que su cuenta {{NumeroDeCuenta}} ({{NombreDeLaLinea}}) quedó inactiva el {{FechaDeInactividad}}. Con cualquier movimiento suyo vuelve a quedar activa."
+      }
+    ]
+  },
+  {
+    "code": "NORECLAMA",
+    "purpose": "Informative",
+    "templates": [
+      {
+        "channel": "Email",
+        "subject": "El saldo de su cuenta {{NumeroDeCuenta}} pasó a no reclamados",
+        "body": "<p>Señor(a) {{NombreDelTitular}}:</p><p>{{NombreDeLaCooperativa}} le informa que el {{FechaDelTraslado}} el saldo de {{ValorNoReclamado}} de su cuenta {{NumeroDeCuenta}} ({{NombreDeLaLinea}}) pasó a «saldos no reclamados» según nuestro reglamento, y la cuenta quedó cancelada. El dinero sigue siendo suyo: puede reclamarlo en cualquiera de nuestras oficinas.</p><p>Si tiene dudas, comuníquese con nosotros al {{TelefonoDeLaCooperativa}}.</p>"
+      },
+      {
+        "channel": "Sms",
+        "body": "{{NombreDeLaCooperativa}}: el saldo de su cuenta {{NumeroDeCuenta}} ({{ValorNoReclamado}}) paso a no reclamados el {{FechaDelTraslado}}. Puede reclamarlo. Tel {{TelefonoDeLaCooperativa}}"
+      },
+      {
+        "channel": "WhatsApp",
+        "body": "{{NombreDeLaCooperativa}} le informa que el saldo de {{ValorNoReclamado}} de su cuenta {{NumeroDeCuenta}} pasó a no reclamados el {{FechaDelTraslado}}. El dinero sigue siendo suyo: puede reclamarlo en nuestras oficinas."
       }
     ]
   },
