@@ -60,7 +60,9 @@ public static partial class RenderizadorDePlantillasDeMensaje
                     // Feature 014, US1 (T067): el aviso de cambio de tasa de una línea a la vista.
                     "NumeroDeCuenta", "NombreDeLaLinea", "TasaAnterior", "TasaNueva", "FechaDelCambio",
                     // US2 (T076): el aviso de la mayoría de edad del titular.
-                    "FechaDeMayoriaDeEdad"],
+                    "FechaDeMayoriaDeEdad",
+                    // US7 (T182): el aviso del incumplimiento del ahorro contractual.
+                    "CuotasAtrasadasDelContrato", "FechaDeIncumplimiento", "EfectoDelIncumplimiento"],
             [DebtorMessagePurpose.DocumentDelivery] = ["ClaseDeDocumento", "NumeroDelDocumento", "CodigoDeVerificacion"],
         };
 

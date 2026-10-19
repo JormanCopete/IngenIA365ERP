@@ -275,6 +275,12 @@ public enum MemberAccountOperationKind
     ToUnclaimed = 21,
     DeceasedDelivery = 22,
     GarnishmentConsignment = 23,
+
+    // US7 (T182; research §19, E142): el ahorro contractual —la operación que sella sus condiciones al abrir, la del incumplimiento (penalidad y condiciones
+    // de castigo) y la de la bonificación provisionada—. Al final: un valor nunca se renumera.
+    ContractualSetup = 24,
+    ContractualBreach = 25,
+    ContractualBonus = 26,
 }
 
 /// <summary>De dónde nació una cuenta (data-model §3.1).</summary>

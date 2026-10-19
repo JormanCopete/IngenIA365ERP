@@ -186,6 +186,9 @@ public class LasConsultasDeCarteraRespetanElAlcance
         // Feature 014, US16 (T164): el saldo a (D, R) y el extracto en pantalla de una cuenta fuera del alcance responden su 404
         // (LectorDeCuentas.CuentaEnAlcanceAsync).
         "Core/IngenIA365ERP.Application/Lending/Deposits/Accounts/MemberAccountStatementQueries.cs",
+        // US7 (T182): el contrato del ahorro contractual, sus condiciones selladas y su instrucción al vencimiento, por la cuenta en el alcance
+        // (LectorDeCuentas.CuentaEnAlcanceAsync: fuera, el 404 de la cuenta).
+        "Core/IngenIA365ERP.Application/Lending/Deposits/Contractual/ContractualCommands.cs",
     ];
 
     /// <summary>

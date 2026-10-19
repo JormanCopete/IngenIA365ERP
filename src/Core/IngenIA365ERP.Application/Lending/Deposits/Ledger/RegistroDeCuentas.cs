@@ -630,6 +630,30 @@ public sealed class RegistroDeCuentas(IApplicationDbContext db)
         if (plan.Count > 0) db.TermDepositScheduleItems.AddRange(plan);
     }
 
+    // ------------------------------------------------------------------------------------------- ahorro contractual (US7) --
+
+    /// <summary>
+    /// US7 (T182; data-model §3.5): anula las cuotas exigibles que quedaron pendientes cuando el contrato vence, se cancela o se incumple con cancelación —ya
+    /// no se exigen—, con el motivo y la operación que lo decidió. Una cuota anulada no se vuelve a anular. No guarda.
+    /// </summary>
+    public static void AnularCuotas(IEnumerable<AccountInstallment> cuotas, DateTime ahoraUtc, string motivo, long? operacion)
+    {
+        ArgumentNullException.ThrowIfNull(cuotas);
+        foreach (var c in cuotas.Where(c => !c.Anulada)) c.Anular(Utc(ahoraUtc), motivo, operacion);
+    }
+
+    /// <summary>
+    /// US7 (T183; data-model §4.6): los acumulados de retención de la bonificación del contractual abonada al cumplirse —por titular y cotitulares, sin
+    /// liquidación de período—, en la misma operación que la abona. No guarda.
+    /// </summary>
+    public void RegistrarAcumuladosDeBonificacion(IReadOnlyList<WithholdingAccumulation> acumulados)
+    {
+        ArgumentNullException.ThrowIfNull(acumulados);
+        if (acumulados.Any(a => a.InterestSettlement is not null || a.InterestSettlementId is not null || a.Origin != WithholdingAccumulation.OrigenBonificacion))
+            throw new InvalidOperationException("Los acumulados de la bonificación no nombran una liquidación de período y llevan su origen (Bonus).");
+        if (acumulados.Count > 0) db.WithholdingAccumulations.AddRange(acumulados);
+    }
+
     /// <summary>Lo que el registro exige de cada fila: importe, un origen y la precisión de su clase.</summary>
     private static void Validar(MemberAccountTransaction fila)
     {

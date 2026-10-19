@@ -295,15 +295,16 @@ public sealed class RenderizadorDePlantillasDeMensajeTests
     // ---------------------------------------------------------------------------------------------------------------- semilla --
 
     [Fact]
-    public void La_semilla_trae_las_once_plantillas_por_correo_SMS_y_WhatsApp_la_simulacion_por_correo_y_todas_son_validas()
+    public void La_semilla_trae_las_doce_plantillas_por_correo_SMS_y_WhatsApp_la_simulacion_por_correo_y_todas_son_validas()
     {
         var plantillas = LendingMessageTemplatesSeeder.Leer();
 
         Assert.Equal(
-            ["ABONOCAP", "AVISOPREV", "CAMBIOTASA", "ENVIODOC", "GASTOCOBR", "MAYOREDAD", "MORAADMIN", "NOAPLICPAG", "PASOACAJA", "PREJURID", "RECORDPREV", "SIMULACION"],
+            ["ABONOCAP", "AVISOPREV", "CAMBIOTASA", "CONTRATINC", "ENVIODOC", "GASTOCOBR", "MAYOREDAD", "MORAADMIN", "NOAPLICPAG", "PASOACAJA", "PREJURID", "RECORDPREV", "SIMULACION"],
             plantillas.Select(p => p.Code).Distinct().Order(StringComparer.Ordinal));
-        // Once por correo, SMS y WhatsApp (la feature 014 suma CAMBIOTASA, T067, y MAYOREDAD, T076), más SIMULACION sólo por correo (US2, T0390).
-        Assert.Equal(34, plantillas.Count);
+        // Doce por correo, SMS y WhatsApp (la feature 014 suma CAMBIOTASA, T067, MAYOREDAD, T076, y CONTRATINC, T182), más SIMULACION sólo por correo
+        // (US2, T0390).
+        Assert.Equal(37, plantillas.Count);
         Assert.All(plantillas, p => Assert.True(p.Code.Length <= 10));
         Assert.All(plantillas.Where(p => p.Channel == MessageChannel.Email), p => Assert.False(string.IsNullOrWhiteSpace(p.Subject)));
         Assert.All(plantillas.Where(p => p.Channel == MessageChannel.Sms),
@@ -317,7 +318,7 @@ public sealed class RenderizadorDePlantillasDeMensajeTests
         var primera = await LendingMessageTemplatesSeeder.AplicarAsync(_db, default);
         var segunda = await LendingMessageTemplatesSeeder.AplicarAsync(_db, default);
 
-        Assert.Equal(34, primera);
+        Assert.Equal(37, primera);
         Assert.Equal(0, segunda);
         var filas = await _db.NotificationTemplates.ToListAsync();
         Assert.All(filas, f =>

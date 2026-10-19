@@ -5,8 +5,8 @@ using IngenIA365ERP.Domain.Enums.Lending;
 namespace IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts;
 
 /// <summary>
-/// <c>LND_MemberAccountTermsVersions</c> (feature 014, K9, US6, T169; data-model §3.3; FR-007, FR-023, FR-067, FR-070, FR-127; research R11): las condiciones
-/// <b>selladas</b> de un CDAT —y, con K9, del contractual o de una cuenta con tasa pactada o negociada—, en el patrón de <c>LoanTermsVersion</c>. Nace con la
+/// <c>LND_MemberAccountTermsVersions</c> (feature 014, K9, US6, T169; US7, T182; data-model §3.3; FR-007, FR-023, FR-067, FR-070, FR-074, FR-127; research R11,
+/// §19): las condiciones <b>selladas</b> de un CDAT y de un contractual (con K9, también de una cuenta con tasa pactada o negociada), en el patrón de <c>LoanTermsVersion</c>. Nace con la
 /// constitución (al fondearse), cada prórroga, cada renovación y la migración; nunca se edita (hecho de sólo inserción): una prórroga o una renovación es una
 /// versión nueva enlazada a la anterior por <see cref="PreviousVersionId"/>, y el número del título es el de la cuenta con el sufijo de la versión
 /// (<c>{Number}-{VersionNumber}</c>, data-model §0.4). La escribe sólo <c>RegistroDeCuentas</c>. (nuevo)
@@ -40,7 +40,7 @@ public class MemberAccountTermsVersion : AuditableEntity, IHechoInmutable
 
     // ------------------------------------------------------------------------------------------- monto, plazo y fechas --
 
-    /// <summary>Capital al iniciar (con lo capitalizado en una prórroga).</summary>
+    /// <summary>CDAT: el capital al iniciar (con lo capitalizado en una prórroga). Contractual: lo pactado, la cuota por el número de cuotas del plan.</summary>
     public decimal PrincipalAmount { get; init; }
 
     /// <summary>CDAT: el plazo en días.</summary>
@@ -165,6 +165,12 @@ public class MemberAccountTermsVersion : AuditableEntity, IHechoInmutable
     public BonusRecognition? BonusRecognition { get; init; }
 
     public decimal? ProjectedFinalAmount { get; init; }
+
+    /// <summary>
+    /// US7 (T182; research §19): en un contractual migrado, las cuotas que iban pagadas al corte. Sus aportes cuentan para la bonificación y la reliquidación
+    /// fechados en su vencimiento del plan (el sistema anterior no trae sus fechas); nulo fuera de la migración.
+    /// </summary>
+    public int? MigratedPaidInstallments { get; init; }
 
     /// <summary>La versión anterior (cadena de prórrogas y renovaciones; el título anterior).</summary>
     public int? PreviousVersionId { get; init; }

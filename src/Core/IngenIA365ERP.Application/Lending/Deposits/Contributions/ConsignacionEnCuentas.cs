@@ -55,8 +55,9 @@ public sealed record ConsignacionAplicada(ComprobanteDeCuentaDto Comprobante, bo
 /// asociados (FR-030), la clase de medio del recaudador, la fecha valor (después de la activación de la naturaleza, no futura y, salvo Nómina, no más atrás
 /// que <c>Captaciones.DiasMaximosFechaValor</c>), el efectivo —origen de fondos sobre <c>Efectivo.UmbralDeclaracion</c>, máximo de la línea y la atribución
 /// con monto <c>Lending.Accounts.Deposit</c> del usuario que actúa—;</item>
-/// <item>el <b>reparto</b> (<see cref="RepartirAsync"/>): en aportes y en las cuotas del ahorro permanente, las cuotas en orden de vencimiento (o las
-/// nombradas) y el excedente como extraordinario si la línea lo admite; en una cuenta de captación, <c>Free</c> va al saldo;</item>
+/// <item>el <b>reparto</b> (<see cref="RepartirAsync"/>): en aportes y en las cuotas del ahorro permanente y del contractual (US7, T182), las cuotas en orden
+/// de vencimiento (o las nombradas) y el excedente como extraordinario si la línea lo admite; en una cuenta de captación, <c>Free</c> va al saldo (salvo el
+/// contractual, que sólo recibe cuotas);</item>
 /// <item>el <b>canje</b> del medio (C14: <c>ClearingUntil</c> por los días hábiles de <c>Captaciones.DiasDeCanjePorClaseDeMedio</c>), el cobro de los
 /// <b>cargos pendientes</b> en la misma operación (acompañante <c>CargoPendienteCobrado</c>) y el depósito inicial que activa una cuenta en apertura;</item>
 /// <item>la operación y sus filas por <see cref="RegistroDeCuentas"/>, el número por <see cref="NumeradorDeCartera"/> y el hecho —<c>AporteRecibido</c> en
@@ -115,8 +116,8 @@ public sealed class ConsignacionEnCuentas(
         if (cuenta.DepositClass == DepositClass.TermDeposit && constitucionDeCdat is not null)
             return await FondearCdatAsync(c, cuenta, huella, ct);
         if (await OperableAsync(cuenta, ct) is { } noOperable) return Falla(noOperable);
-        if (cuenta.DepositClass is DepositClass.TermDeposit or DepositClass.Contractual)
-            return Falla(ErroresDeAportes.EntregaNoDisponible("La consignación en un CDAT o en un ahorro contractual", nameof(EntregaDeCartera.K9)));
+        if (cuenta.DepositClass is DepositClass.TermDeposit)
+            return Falla(ErroresDeAportes.EntregaNoDisponible("La consignación en un CDAT", nameof(EntregaDeCartera.K9)));
         if (ClaseDeMedio(c.Recaudador.Class, item.MeansClass) is { } medio) return Falla(medio);
         // Feature 014 (T091, D36; contrato-de-cuentas §6.4): el giro de la pagaduría nombra la línea del archivo «descontado pendiente de giro» que paga.
         int? giroDePagaduria = null;
@@ -326,6 +327,9 @@ public sealed class ConsignacionEnCuentas(
     {
         ArgumentNullException.ThrowIfNull(cuenta);
         if (modalidad == ModalidadDeConsignacion.TermDepositFunding) return FallaReparto(ErroresDeAportes.ModalidadNoAdmitida(modalidad));
+        // US7 (T182; FR-074): el ahorro contractual recibe sus cuotas (las pendientes en orden de vencimiento o las nombradas); lo que excede no se admite.
+        if (cuenta.DepositClass == DepositClass.Contractual && modalidad == ModalidadDeConsignacion.Free)
+            return FallaReparto(Contractual.ErroresDeContractual.ConsignacionLibre(cuenta.Number));
         if (cuenta.Nature == LineNature.Deposit && modalidad == ModalidadDeConsignacion.Free)
             return Result.Success(new RepartoDeConsignacion([new PorcionDeConsignacion(null, MemberAccountConcept.Principal, monto)], 0m, null));
 

@@ -254,6 +254,12 @@ public static class ParametrosDeCartera
     public const string CaptacionesDiasParaNoReclamados = "Captaciones.DiasParaNoReclamados";
 
     /// <summary>
+    /// Feature 014, US7 (T182; FR-074; research §19): los días calendario que una cuota del ahorro contractual puede llegar después de su vencimiento sin
+    /// contar como atrasada para la tolerancia de la línea (el descuento de Nómina o de la pagaduría se aplica unos días después del fin del período).
+    /// </summary>
+    public const string CaptacionesDiasDeGraciaDeCuotaContractual = "Captaciones.DiasDeGraciaDeCuotaContractual";
+
+    /// <summary>
     /// Feature 014 (decisión del dueño del 2026-10-18, D41): de qué fondos sale primero el cruce al retiro del asociado —<c>AportesPrimero</c> (defecto) o
     /// <c>AhorrosPrimero</c>—, según los estatutos.
     /// </summary>
@@ -757,6 +763,13 @@ public static class ParametrosDeCartera
             string.Empty, K7, admiteVacio: true) with
         {
             PendienteDeValidar = "Sin valor: cada cooperativa pone los suyos (D44, 2026-10-18).",
+        },
+        // US7 (T182; FR-074): la gracia de una cuota del contractual antes de contar como atrasada, por cooperativa o por línea.
+        Entero(Modulo, CaptacionesDiasDeGraciaDeCuotaContractual,
+            "Días calendario que una cuota del ahorro contractual puede pagarse después de su vencimiento sin contar como atrasada para la tolerancia de la "
+            + "línea (el descuento por nómina o por pagaduría llega unos días después del fin del período).", "5", K9, General, Linea) with
+        {
+            Minimo = 0m, PendienteDeValidar = "Defecto de 5 días (research §19): cada cooperativa lo ajusta a su reglamento de ahorro contractual.",
         },
         Entero(Modulo, CaptacionesDiasParaNoReclamados,
             "Días sin cobrar desde los que lo devuelto pasa a no reclamados. Vacío: no se traslada solo.", "", K10, General) with

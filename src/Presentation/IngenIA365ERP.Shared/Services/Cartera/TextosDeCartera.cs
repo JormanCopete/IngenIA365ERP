@@ -230,9 +230,11 @@ public static class TextosDeCartera
         {
             1 => ["ValorVencido", "DiasDeMora", "CuotasVencidas", "ValorParaPonerseAlDia"],
             2 => ["ValorDeLaObligacion", "ValorVencido", "FechaMasTempranaDeReporte", "Centrales"],
-            // Feature 014 (D35, 2026-10-18): los avisos de captaciones (CAMBIOTASA, MAYOREDAD) son plantillas estándar que cada entidad edita aquí.
+            // Feature 014 (D35, 2026-10-18): los avisos de captaciones (CAMBIOTASA, MAYOREDAD, CONTRATINC) son plantillas estándar que cada entidad edita aquí.
             3 => ["ValorAplicado", "ModalidadAplicada", "NuevaCuota", "NuevoPlazo", "MotivoDeNoDescuento", "FormaDePagoNueva",
-                "NumeroDeCuenta", "NombreDeLaLinea", "TasaAnterior", "TasaNueva", "FechaDelCambio", "FechaDeMayoriaDeEdad"],
+                "NumeroDeCuenta", "NombreDeLaLinea", "TasaAnterior", "TasaNueva", "FechaDelCambio", "FechaDeMayoriaDeEdad",
+                // US7 (T182): el aviso del incumplimiento del ahorro contractual (CONTRATINC).
+                "CuotasAtrasadasDelContrato", "FechaDeIncumplimiento", "EfectoDelIncumplimiento"],
             4 => ["ClaseDeDocumento", "NumeroDelDocumento", "CodigoDeVerificacion"],
             5 => ["ValorDelGasto", "Etapa", "FechaDeCausacion"],
             _ => [],

@@ -256,8 +256,10 @@ public static class OperacionesDeCartera
             EntregaDelHecho.K9, Ninguno),
         new(CaptacionReclasificadaV1.Type, "RCC", false, ReclasificablesDeCaptacion, ReclasificablesDeCaptacion, EnLinea, FinDeCausacion, "CN",
             EntregaDelHecho.K8, Ninguno),
-        new(BonificacionReconocidaV1.Type, "BON", false, [R.GastoPorBonificacion], [R.InteresPorPagar], EnLinea, null, "CC", EntregaDelHecho.K9,
-            [PenalidadAplicadaV1.Type]),
+        // US7 (T183; research §19): la bonificación provisionada va al interés por pagar (concepto Bonus) y la que se abona, al capital del contractual; su
+        // retención sale del capital (acompañante), y la reversión de la provisión acompaña a la penalidad del incumplimiento.
+        new(BonificacionReconocidaV1.Type, "BON", false, [R.GastoPorBonificacion], [R.InteresPorPagar, R.CapitalDeCaptacion, R.CapitalDeCaptacionInactiva],
+            EnLinea, null, "CC", EntregaDelHecho.K9, [PenalidadAplicadaV1.Type, RetencionPracticadaV1.Type]),
         new(CargoDeCuentaCausadoV1.Type, "CGA", false, [R.CapitalDeCaptacion, R.CapitalDeCaptacionInactiva, R.CargoDeCuentaPorCobrar], [R.IngresoPorCargos], EnLinea, null, "MA",
             EntregaDelHecho.K8, Ninguno),
         new(CargoPendienteCobradoV1.Type, "CGP", false, [R.CapitalDeCaptacion, R.CapitalDeCaptacionInactiva], [R.CargoDeCuentaPorCobrar], EnLinea, null, "MA", EntregaDelHecho.K8, Ninguno),

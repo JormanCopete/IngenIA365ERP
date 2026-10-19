@@ -18,6 +18,9 @@ public class WithholdingAccumulation : AuditableEntityLong, IHechoInmutable
     /// <summary>Origen del año en curso que trae la migración (FR-113).</summary>
     public const string OrigenMigracion = "Migration";
 
+    /// <summary>US7 (T183): la bonificación del ahorro contractual abonada al cumplirse (sin liquidación de período: no lleva <see cref="InterestSettlementId"/>).</summary>
+    public const string OrigenBonificacion = "Bonus";
+
     /// <summary>El titular o cotitular.</summary>
     public int PersonId { get; init; }
 
@@ -51,6 +54,6 @@ public class WithholdingAccumulation : AuditableEntityLong, IHechoInmutable
 
     public long? ReversesAccumulationId { get; init; }
 
-    /// <summary><see cref="OrigenLiquidacion"/> o <see cref="OrigenMigracion"/>.</summary>
+    /// <summary><see cref="OrigenLiquidacion"/>, <see cref="OrigenMigracion"/> o <see cref="OrigenBonificacion"/>.</summary>
     public string Origin { get; init; } = OrigenLiquidacion;
 }

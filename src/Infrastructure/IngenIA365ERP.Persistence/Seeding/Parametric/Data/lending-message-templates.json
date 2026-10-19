@@ -7,7 +7,9 @@
 // US2 (T0390, C87) suma SIMULACION, sólo por correo: el envío de una simulación a la persona simulada, con el PDF adjunto.
 // Feature 014, US1 (T067; FR-038) suma CAMBIOTASA, informativo por los tres canales: el aviso a los titulares de una línea a la vista de que
 // su tasa cambia desde una fecha. US2 (T076; FR-033, R22) suma MAYOREDAD, informativo por los tres canales: el aviso al titular que cumplió la
-// mayoría de edad y a quien era su representante de que desde ese día el titular maneja la cuenta y debe actualizar sus datos.
+// mayoría de edad y a quien era su representante de que desde ese día el titular maneja la cuenta y debe actualizar sus datos. US7 (T182; FR-074) suma
+// CONTRATINC, informativo por los tres canales: el aviso al titular de que su ahorro contractual quedó incumplido (más cuotas atrasadas que las toleradas,
+// el vencimiento con cuotas sin pagar o la cancelación antes del vencimiento) y del efecto que tiene según su línea.
 [
   {
     "code": "AVISOPREV",
@@ -177,6 +179,25 @@
       {
         "channel": "WhatsApp",
         "body": "{{NombreDeLaCooperativa}} le informa que desde el {{FechaDeMayoriaDeEdad}} la cuenta {{NumeroDeCuenta}} ({{NombreDeLaLinea}}) la maneja su titular, que cumplió la mayoría de edad. El titular debe actualizar sus datos."
+      }
+    ]
+  },
+  {
+    "code": "CONTRATINC",
+    "purpose": "Informative",
+    "templates": [
+      {
+        "channel": "Email",
+        "subject": "Su ahorro contractual {{NumeroDeCuenta}} quedó incumplido",
+        "body": "<p>Señor(a) {{NombreDelTitular}}:</p><p>{{NombreDeLaCooperativa}} le informa que el {{FechaDeIncumplimiento}} su ahorro contractual {{NumeroDeCuenta}} ({{NombreDeLaLinea}}) quedó incumplido con {{CuotasAtrasadasDelContrato}} cuota(s) atrasada(s). {{EfectoDelIncumplimiento}}</p><p>Si tiene dudas, comuníquese con nosotros al {{TelefonoDeLaCooperativa}}.</p>"
+      },
+      {
+        "channel": "Sms",
+        "body": "{{NombreDeLaCooperativa}}: su ahorro contractual {{NumeroDeCuenta}} quedo incumplido el {{FechaDeIncumplimiento}} ({{CuotasAtrasadasDelContrato}} cuotas atrasadas). Tel {{TelefonoDeLaCooperativa}}"
+      },
+      {
+        "channel": "WhatsApp",
+        "body": "{{NombreDeLaCooperativa}} le informa que su ahorro contractual {{NumeroDeCuenta}} ({{NombreDeLaLinea}}) quedó incumplido el {{FechaDeIncumplimiento}} con {{CuotasAtrasadasDelContrato}} cuota(s) atrasada(s). {{EfectoDelIncumplimiento}}"
       }
     ]
   },

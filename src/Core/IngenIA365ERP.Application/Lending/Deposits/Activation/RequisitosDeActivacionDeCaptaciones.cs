@@ -225,6 +225,9 @@ public sealed class RequisitosDeActivacionDeCaptaciones(
                 // US6 (T174): el rango de plazos de la última versión, para preguntar por los plazos de emisión que la línea de CDAT puede emitir.
                 Minimo = db.DepositLineVersions.Where(v => v.CreditLineId == l.Id).OrderByDescending(v => v.VersionNumber).Select(v => v.MinTermDays).FirstOrDefault(),
                 Maximo = db.DepositLineVersions.Where(v => v.CreditLineId == l.Id).OrderByDescending(v => v.VersionNumber).Select(v => v.MaxTermDays).FirstOrDefault(),
+                // US7 (T183): el rango en meses del contractual, para preguntar por los plazos de emisión de sus contratos.
+                MinimoMeses = db.DepositLineVersions.Where(v => v.CreditLineId == l.Id).OrderByDescending(v => v.VersionNumber).Select(v => v.MinTermMonths).FirstOrDefault(),
+                MaximoMeses = db.DepositLineVersions.Where(v => v.CreditLineId == l.Id).OrderByDescending(v => v.VersionNumber).Select(v => v.MaxTermMonths).FirstOrDefault(),
             }).ToListAsync(ct);
         var sucursal = await db.Branches.AsNoTracking().Where(b => !b.IsDeleted).OrderBy(b => b.Id).Select(b => (Guid?)b.PublicId).FirstOrDefaultAsync(ct);
         if (lineas.Count == 0 || sucursal is null) return Cumple(LineasConMatriz, "No hay líneas activas de la naturaleza que contabilizar.");
@@ -232,9 +235,14 @@ public sealed class RequisitosDeActivacionDeCaptaciones(
         // US8 (T145; contabilidad.md §4.3): la completitud de los hechos de la naturaleza, no sólo del principal, con la clase de cada línea.
         // Un titular cualquiera: la regla no depende de él, pero la cuenta contable que exige tercero lo pide.
         var titular = await db.People.AsNoTracking().Where(p => !p.IsDeleted).OrderBy(p => p.Id).Select(p => p.PublicId).FirstOrDefaultAsync(ct);
-        var hechos = lineas.SelectMany(l => l.Clase == DepositClass.TermDeposit
-            ? HechosRepresentativosDeCdat(l.Code, PlazosDeEmision(l.Minimo, l.Maximo), sucursal.Value, titular, fecha)
-            : HechosRepresentativos(naturaleza, l.Code, l.Clase, sucursal.Value, titular, fecha)).ToList();
+        var hechos = lineas.SelectMany(l => l.Clase switch
+        {
+            DepositClass.TermDeposit => HechosRepresentativosDeCdat(l.Code, PlazosDeEmision(l.Minimo, l.Maximo), sucursal.Value, titular, fecha),
+            DepositClass.Contractual => HechosRepresentativosDeContractual(l.Code,
+                PlazosDeEmision(l.MinimoMeses is { } mn ? mn * (int)RepaymentPeriodicity.Monthly : null, l.MaximoMeses is { } mx ? mx * (int)RepaymentPeriodicity.Monthly : null),
+                sucursal.Value, titular, fecha),
+            _ => HechosRepresentativos(naturaleza, l.Code, l.Clase, sucursal.Value, titular, fecha),
+        }).ToList();
         var evaluado = await contabilidad.EvaluarAsync(hechos, ct);
         return evaluado.IsSuccess && evaluado.Value.Errors.Count == 0
             ? Cumple(LineasConMatriz, "La matriz contable resuelve el hecho principal de cada línea activa.")
@@ -302,6 +310,31 @@ public sealed class RequisitosDeActivacionDeCaptaciones(
             foreach (var m in HechosRepresentativosDeCaptaciones.Unidad(fecha, d, HechosRepresentativosDeCaptaciones.PagoDeIntereses(d, null),
                          HechosRepresentativosDeCaptaciones.RetencionDeCdat(d))) yield return m;
             foreach (var m in HechosRepresentativosDeCaptaciones.Unidad(fecha, d, HechosRepresentativosDeCaptaciones.Cancelacion(d, null))) yield return m;
+        }
+    }
+
+    /// <summary>
+    /// US7 (T183): los hechos que una línea de ahorro contractual emite desde el primer día, por cada plazo de emisión que pueden tener sus contratos: la cuota
+    /// que paga un recaudador, la causación, la liquidación con su retención, la bonificación abonada con su retención, la penalidad del incumplimiento y la
+    /// entrega por giro con su GMF.
+    /// </summary>
+    private static IEnumerable<MensajeContableDto> HechosRepresentativosDeContractual(string linea, IReadOnlyList<IssueTermBand> plazos, Guid sucursal, Guid titular,
+        DateOnly fecha)
+    {
+        var cobro = nameof(ClaseDeRecaudador.Receipts);
+        foreach (var plazo in plazos)
+        {
+            var d = HechosRepresentativosDeCaptaciones.Cuenta(HechosRepresentativosDeCaptaciones.Dimensiones(linea, LineNature.Deposit, DepositClass.Contractual,
+                sucursal, plazo: plazo), titular);
+            foreach (var m in HechosRepresentativosDeCaptaciones.Unidad(fecha, d, HechosRepresentativosDeCaptaciones.Consignacion(d, cobro))) yield return m;
+            foreach (var m in HechosRepresentativosDeCaptaciones.Unidad(fecha, d, HechosRepresentativosDeCaptaciones.Causacion(d))) yield return m;
+            foreach (var m in HechosRepresentativosDeCaptaciones.Unidad(fecha, d, HechosRepresentativosDeCaptaciones.Liquidacion(d),
+                         HechosRepresentativosDeCaptaciones.Retencion(d))) yield return m;
+            foreach (var m in HechosRepresentativosDeCaptaciones.Unidad(fecha, d, HechosRepresentativosDeCaptaciones.Bonificacion(d),
+                         HechosRepresentativosDeCaptaciones.RetencionDeBonificacion(d))) yield return m;
+            foreach (var m in HechosRepresentativosDeCaptaciones.Unidad(fecha, d, HechosRepresentativosDeCaptaciones.PenalidadDeContractual(d))) yield return m;
+            foreach (var m in HechosRepresentativosDeCaptaciones.Unidad(fecha, d, HechosRepresentativosDeCaptaciones.Retiro(d, null),
+                         HechosRepresentativosDeCaptaciones.Gmf(d))) yield return m;
         }
     }
 

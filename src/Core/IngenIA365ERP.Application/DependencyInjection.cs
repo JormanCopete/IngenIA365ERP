@@ -548,6 +548,15 @@ public static class DependencyInjection
         services.AddScoped<Lending.Deposits.TermDeposits.ProrrogaDeCdat>();
         services.AddScoped<Lending.Deposits.TermDeposits.SalidaDeCdat>();
         services.AddScoped<Lending.Deposits.Accrual.ISubpasoDeCaptaciones, Lending.Deposits.TermDeposits.CicloDelCdat>();
+        // Feature 014, US7 (T182, T183): el ahorro contractual —su lectura, la constitución del contrato al abrir, sus cuotas, el incumplimiento, la bonificación y
+        // el fin del contrato— y su subpaso del ciclo diario, el último (después del CDAT: el día ya causado y liquidado vence o incumple).
+        services.AddScoped<Lending.Deposits.Contractual.LectorDeContractual>();
+        services.AddScoped<Lending.Deposits.Contractual.AperturaDeContractual>();
+        services.AddScoped<Lending.Deposits.Contractual.GeneradorDeCuotasDeContractual>();
+        services.AddScoped<Lending.Deposits.Contractual.IncumplimientoDeContractual>();
+        services.AddScoped<Lending.Deposits.Contractual.BonificacionDeContractual>();
+        services.AddScoped<Lending.Deposits.Contractual.CierreDeContractual>();
+        services.AddScoped<Lending.Deposits.Accrual.ISubpasoDeCaptaciones, Lending.Deposits.Contractual.CicloDelContractual>();
         // US4 (T111): la aprobación de un retiro o una consignación en efectivo sobre la atribución (aprobador presente, mecánica de la plataforma).
         services.AddScoped<Common.Approvals.IFuenteDeAprobacion, Lending.Deposits.Operations.FuenteDeAprobacionDeCuenta>();
         // US3 (T086): lo común de la devolución de aportes sin retiro y la cesión entre asociados.

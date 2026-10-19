@@ -100,10 +100,15 @@ public class DebtorMessage : AuditableEntity, IHechoInmutable
     /// </summary>
     public const string OrigenMayoriaDeEdad = "MemberAccountMajority";
 
+    /// <summary>
+    /// Feature 014, US7 (T182; FR-074): el aviso al titular de que su ahorro contractual quedó incumplido y lo que eso le cambia; informativo y sin crédito.
+    /// </summary>
+    public const string OrigenAhorroContractual = "ContractualSavings";
+
     /// <summary>Los orígenes admitidos en <see cref="OriginKind"/> (data-model §26.1; US2 suma <see cref="OrigenSimulacion"/>, C87).</summary>
     public static IReadOnlyList<string> Origenes { get; } =
         ["Manual", "Campaign", "CollectionStage", "PriorNotice", "NonDeduction", "PaymentApplied", "PaymentFormChange", "Document", "CollectionFee",
-            OrigenSimulacion, OrigenCambioDeTasa, OrigenMayoriaDeEdad];
+            OrigenSimulacion, OrigenCambioDeTasa, OrigenMayoriaDeEdad, OrigenAhorroContractual];
 
     /// <summary>El largo de <see cref="IdempotencyKey"/> (nvarchar(200)).</summary>
     public const int LargoDeLaClave = 200;
@@ -123,9 +128,9 @@ public class DebtorMessage : AuditableEntity, IHechoInmutable
             throw new ArgumentException("Propósito o canal de mensaje desconocido.", nameof(m));
         if (m.LoanId is null && m.Purpose != DebtorMessagePurpose.DocumentDelivery
             && !(m.Purpose == DebtorMessagePurpose.Informative && (m.OriginKind == OrigenSimulacion || m.OriginKind == OrigenCambioDeTasa
-                                                                || m.OriginKind == OrigenMayoriaDeEdad)))
+                                                                || m.OriginKind == OrigenMayoriaDeEdad || m.OriginKind == OrigenAhorroContractual)))
             throw new ArgumentException(
-                "Sólo la entrega de un documento general, el envío de una simulación y los avisos de una cuenta (cambio de tasa, mayoría de edad) van sin crédito.",
+                "Sólo la entrega de un documento general, el envío de una simulación y los avisos de una cuenta (cambio de tasa, mayoría de edad, ahorro contractual) van sin crédito.",
                 nameof(m));
         if (string.IsNullOrWhiteSpace(m.RenderedBody)) throw new ArgumentException("El cuerpo renderizado no puede estar vacío.", nameof(m));
         if (string.IsNullOrWhiteSpace(m.ChannelCode)) throw new ArgumentException("El canal se sella con el código de su adaptador.", nameof(m));

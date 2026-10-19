@@ -67,11 +67,14 @@ public sealed class LectorDeInteres(IApplicationDbContext db, IValoresNacionales
         return lista;
     }
 
-    /// <summary>La versión que rige el día para la cuenta: la sellada al abrir si declara tasa pactada; si no, la vigente ese día con lo sabido hasta R.</summary>
+    /// <summary>
+    /// La versión que rige el día para la cuenta: la sellada al abrir si declara tasa pactada —y siempre en el ahorro contractual, que sella sus condiciones al
+    /// constituirse (FR-007; US7, T182)—; si no, la vigente ese día con lo sabido hasta R.
+    /// </summary>
     public static VersionConTramos? VersionDelDia(IReadOnlyList<VersionConTramos> versiones, MemberAccount cuenta, DateOnly dia, DateTime informacionHasta)
     {
         var deApertura = VigenciaBitemporal.VigenteDeCartera(versiones.Select(v => v.Version), cuenta.OpenedOn, informacionHasta);
-        var elegida = deApertura is { DeclaresAgreedRate: true }
+        var elegida = deApertura is { DeclaresAgreedRate: true } || (deApertura is not null && cuenta.DepositClass == DepositClass.Contractual)
             ? deApertura
             : VigenciaBitemporal.VigenteDeCartera(versiones.Select(v => v.Version), dia, informacionHasta) ?? deApertura;
         return elegida is null ? null : versiones.First(v => v.Version.Id == elegida.Id);
@@ -107,15 +110,31 @@ public sealed class LectorDeInteres(IApplicationDbContext db, IValoresNacionales
             : ReconstruccionDeCuenta.SaldosDiarios(libro, inicioExcluido, hasta, informacionHasta);
         var dias = new List<DiaDeCaptacion>(saldos.Count);
         VersionConTramos? ultima = VersionDelDia(versiones, cuenta, hasta, informacionHasta);
+        // US7 (T182): el contractual causa a la tasa de sus condiciones selladas (la base y, desde el incumplimiento, la de castigo) y no causa después de
+        // su vencimiento (FR-074, FR-075).
+        var sellado = cuenta.DepositClass == DepositClass.Contractual ? await CondicionesSelladasAsync(cuenta.Id, ct) : null;
         foreach (var s in saldos)
         {
             var v = VersionDelDia(versiones, cuenta, s.Dia, informacionHasta);
             if (v is null)
                 return Result.Failure<VentanaDeInteres>(new ErrorConDatos("Lending.Savings.LineWithoutVersion",
                     $"La línea de la cuenta {cuenta.Number} no tiene versión vigente el {s.Dia:yyyy-MM-dd}: no se puede causar.", new { date = s.Dia }));
-            var tasa = await TasaAsync(v, s.Dia, ct);
+            Result<TasaDeCaptacionDelDia> tasa;
+            var vencido = false;
+            if (sellado is { Count: > 0 })
+            {
+                var t = sellado.Where(x => x.EffectiveValueDate < s.Dia).MaxBy(x => x.VersionNumber) ?? sellado.MinBy(x => x.VersionNumber)!;
+                tasa = Result.Success(new TasaDeCaptacionDelDia(t.AppliedAnnualRate, [], RateTierMode.WholeBalance, v.Version.MinBalanceForInterest, t.DayCount,
+                    t.RateEquivalence, v.Version.SettlementPeriodicity));
+                vencido = t.MaturityDate is { } vence && s.Dia > vence;
+            }
+            else
+            {
+                tasa = await TasaAsync(v, s.Dia, ct);
+            }
             if (tasa.IsFailure) return Result.Failure<VentanaDeInteres>(tasa.Error);
-            dias.Add(new DiaDeCaptacion(s.Dia, s.Saldo(MemberAccountConcept.Principal), tasa.Value, Suspendido(cuenta, v.Version, s.Dia, titularFallecido)));
+            dias.Add(new DiaDeCaptacion(s.Dia, s.Saldo(MemberAccountConcept.Principal), tasa.Value,
+                vencido || Suspendido(cuenta, v.Version, s.Dia, titularFallecido)));
             ultima = v;
         }
         if (ultima is null)
@@ -135,6 +154,15 @@ public sealed class LectorDeInteres(IApplicationDbContext db, IValoresNacionales
         || (titularFallecido && version.SuspendsAccrualOnDeceased)
         || (cuenta.IsGarnished && version.SuspendsAccrualOnTotalGarnishment)
         || (!version.AccruesWhileInactive && cuenta.InactiveSince is { } inactiva && inactiva <= dia);
+
+    /// <summary>US7 (T182): las versiones de condiciones selladas de un contractual (también las de esta unidad de trabajo sin guardar).</summary>
+    public async Task<IReadOnlyList<MemberAccountTermsVersion>> CondicionesSelladasAsync(int cuentaId, CancellationToken ct)
+    {
+        var guardadas = cuentaId == 0
+            ? []
+            : await db.MemberAccountTermsVersions.AsNoTracking().Where(v => v.MemberAccountId == cuentaId && !v.IsDeleted).ToListAsync(ct);
+        return guardadas.Concat(db.MemberAccountTermsVersions.Local.Where(v => v.Id == 0 && v.MemberAccountId == cuentaId)).ToList();
+    }
 
     /// <summary>Lo ya causado en el libro en la ventana (<paramref name="inicioExcluido"/>, <paramref name="hasta"/>]: la causación y sus ajustes.</summary>
     public async Task<decimal> CausadoEnElLibroAsync(int cuentaId, DateOnly inicioExcluido, DateOnly hasta, CancellationToken ct)

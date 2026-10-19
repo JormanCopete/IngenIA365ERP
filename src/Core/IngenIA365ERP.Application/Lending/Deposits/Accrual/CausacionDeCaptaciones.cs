@@ -26,7 +26,7 @@ public sealed record CausacionDeCuenta(int CuentaId, int Dias, decimal Causado, 
 
 /// <summary>
 /// El subpaso «causación» del paso de captaciones (feature 014, US5, T131; research R04, R05, R10; FR-060, FR-062, FR-065; US5-5): causa cada día el interés
-/// de cada cuenta de captación que gana interés —a la vista y permanente; el CDAT y el contractual llegan con K9— por <b>diferencia de acumulados</b> sobre
+/// de cada cuenta de captación que gana interés —a la vista, permanente y contractual; el CDAT por su plan— por <b>diferencia de acumulados</b> sobre
 /// la ventana del período de liquidación (<see cref="LectorDeInteres"/>): lo causado el día d es <c>Seis(A(d)) − Seis(A(d − 1))</c>, así el libro nunca
 /// deriva. Si lo que ya está en el libro de la ventana no coincide con lo que el motor recalcula hasta la víspera (una fecha valor que nadie ajustó, una
 /// versión registrada tarde), escribe primero el ajuste del proceso (<c>AccrualAdjustment</c>, hecho <c>AjusteDeCausacionDeCaptacion</c>, causa
@@ -55,13 +55,17 @@ public sealed class CausacionDeCaptaciones(
     public string Nombre => "Causacion";
 
     /// <summary>
-    /// Las clases que causan: la vista y el permanente por su método de saldo (K8) y, desde K9 (US6, T172), el CDAT por su plan (<see cref="PlanDeCdat"/>). El
-    /// contractual causa con US7.
+    /// Las clases que causan: la vista y el permanente por su método de saldo (K8); desde K9, el CDAT por su plan (<see cref="PlanDeCdat"/>; US6, T172) y el
+    /// contractual por su método de saldo a la tasa de sus condiciones selladas, sin causar después de su vencimiento (US7, T182).
     /// </summary>
-    public static IReadOnlyList<DepositClass> ClasesQueCausan { get; } = [DepositClass.Demand, DepositClass.Permanent, DepositClass.TermDeposit];
+    public static IReadOnlyList<DepositClass> ClasesQueCausan { get; } =
+        [DepositClass.Demand, DepositClass.Permanent, DepositClass.TermDeposit, DepositClass.Contractual];
 
-    /// <summary>Las clases que liquidan sus intereses por períodos de liquidación (US5): la vista y el permanente. El CDAT los paga por su plan.</summary>
-    public static IReadOnlyList<DepositClass> ClasesQueLiquidan { get; } = [DepositClass.Demand, DepositClass.Permanent];
+    /// <summary>
+    /// Las clases que liquidan sus intereses por períodos de liquidación (US5): la vista, el permanente y el contractual (US7, T182: se abonan al capital cada
+    /// período; capitalizar a la misma tasa compuesta no cambia el valor final). El CDAT los paga por su plan.
+    /// </summary>
+    public static IReadOnlyList<DepositClass> ClasesQueLiquidan { get; } = [DepositClass.Demand, DepositClass.Permanent, DepositClass.Contractual];
 
     /// <summary>Los estados que causan: activa e inactiva (si la línea causa en la inactividad, lo decide la ventana).</summary>
     public static IReadOnlyList<MemberAccountStatus> EstadosQueCausan { get; } = [MemberAccountStatus.Active, MemberAccountStatus.Inactive];

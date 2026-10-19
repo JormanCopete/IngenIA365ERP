@@ -37,7 +37,9 @@ public sealed record MemberAccountClosingPreviewDto(
     decimal Gmf,
     decimal PendingCharges,
     decimal ToDeliver,
-    IReadOnlyList<CloseBlockerDto> Blockers)
+    IReadOnlyList<CloseBlockerDto> Blockers,
+    decimal? ContractualPenalty = null,
+    string? ContractualExplanation = null)
 {
     public bool CanClose => Blockers.Count == 0;
 }
@@ -62,11 +64,15 @@ public sealed record MemberAccountClosingResultDto(
 
 /// <summary>
 /// La cancelación de una cuenta (feature 014, US5, T135; FR-039): lo que la impide, lo que se liquidaría a la fecha y lo que se entregaría. Compartida por la
-/// vista previa y el comando. Sólo el ahorro a la vista se cancela por aquí: los aportes y el ahorro permanente se cancelan con el retiro del asociado
-/// (<c>Lending.Contributions.ClosureOnlyByWithdrawal</c>) y el CDAT y el contractual llegan con K9. (nuevo)
+/// vista previa y el comando. El ahorro a la vista y, desde US7 (T182), el contractual se cancelan por aquí: los aportes y el ahorro permanente se cancelan con
+/// el retiro del asociado (<c>Lending.Contributions.ClosureOnlyByWithdrawal</c>) y el CDAT por su ruta. El contractual vigente que se cancela antes de su
+/// vencimiento se reliquida a la tasa de castigo (<c>Contractual.IncumplimientoDeContractual</c>); el vencido, a disposición, sólo se entrega. (nuevo)
 /// </summary>
-public sealed class CancelacionDeCuenta(IApplicationDbContext db, ReglasDeMovimientos movimientos, LiquidacionDeIntereses liquidacion, IDateTimeService reloj)
+public sealed class CancelacionDeCuenta(IApplicationDbContext db, ReglasDeMovimientos movimientos, LiquidacionDeIntereses liquidacion, IDateTimeService reloj,
+    Contractual.LectorDeContractual? contractual = null)
 {
+    /// <summary>US7 (T182): un contractual vigente que ya llegó a su vencimiento lo liquida el proceso diario (con la bonificación si se cumplió).</summary>
+    public const string CodigoVencimientoPendiente = "Lending.Contractual.MaturityPending";
     public const string CodigoSoloPorRetiro = "Lending.Contributions.ClosureOnlyByWithdrawal";
     public const string CodigoFechaDeCancelacion = "Lending.Savings.CloseDateInvalid";
 
@@ -80,8 +86,6 @@ public sealed class CancelacionDeCuenta(IApplicationDbContext db, ReglasDeMovimi
         if (cuenta.DepositClass == DepositClass.TermDeposit)
             return new ErrorConDatos(ErroresDeCuentas.CodigoUsarRutaDeCdat, $"El CDAT {cuenta.Number} se cancela o se redime en «CDAT», con su plan y su destino.",
                 new { route = "/api/lending/term-deposits/{id}/redeem" });
-        if (cuenta.DepositClass == DepositClass.Contractual)
-            return ErroresDeAportes.EntregaNoDisponible("La cancelación de un ahorro contractual", nameof(EntregaDeCartera.K9));
         if (cuenta.Status is not (MemberAccountStatus.Active or MemberAccountStatus.Inactive or MemberAccountStatus.Matured))
             return ErroresDeAportes.NoOperable(cuenta.Number, cuenta.Status);
         return null;
@@ -105,13 +109,16 @@ public sealed class CancelacionDeCuenta(IApplicationDbContext db, ReglasDeMovimi
     /// Lo que se entrega de <paramref name="saldo"/> con el GMF de la cancelación: el mayor valor cuya suma con su GMF no pasa del saldo (el GMF se redondea,
     /// así que se busca hacia abajo unos pocos pesos). Devuelve la entrega y el GMF.
     /// </summary>
-    public async Task<(decimal Entrega, decimal Gmf)> EntregaAsync(CuentaParaMovimiento leida, decimal saldo, DateOnly fecha, CancellationToken ct)
+    public async Task<(decimal Entrega, decimal Gmf)> EntregaAsync(CuentaParaMovimiento leida, decimal saldo, DateOnly fecha, CancellationToken ct,
+        string? hechoGenerador = null)
     {
         if (saldo <= 0m) return (0m, 0m);
         var monto = saldo;
         for (var intento = 0; intento < 6; intento++)
         {
-            var gmf = await movimientos.GmfAsync(leida, HechosGeneradoresDeGmf.Cancelacion, monto, fecha, ct);
+            // US7 (T182, research §19): la entrega por traslado se mide con el hecho generador del traslado (entre ahorros del mismo titular está exento): con el
+            // de la cancelación quedaba en la cuenta el GMF que el traslado no cobra y la cuenta no se cancelaba.
+            var gmf = await movimientos.GmfAsync(leida, hechoGenerador ?? HechosGeneradoresDeGmf.Cancelacion, monto, fecha, ct);
             var valor = gmf.IsSuccess ? gmf.Value?.Valor ?? 0m : 0m;
             if (monto + valor <= saldo) return (monto, valor);
             monto -= Math.Max(RedondeoDeCartera.Centavo, monto + valor - saldo);
@@ -142,9 +149,42 @@ public sealed class CancelacionDeCuenta(IApplicationDbContext db, ReglasDeMovimi
         // Lo causado sin liquidar ya está en el saldo del titular (interés por pagar): después de liquidar, el saldo es el capital más el neto.
         var capital = leida.Saldos.GetValueOrDefault(MemberAccountConcept.Principal);
         var despues = capital + neto - leida.Saldos.GetValueOrDefault(MemberAccountConcept.ChargeReceivable);
+        // US7 (T182): el contractual vigente que se cancela antes de vencer pierde lo que la base le dio de más a sus aportes (la tasa de castigo).
+        decimal? penalidad = null;
+        string? explicacion = null;
+        if (cuenta.DepositClass == DepositClass.Contractual && contractual is not null)
+        {
+            var anticipada = await PenalidadDeContractualAsync(cuenta, fecha, ct);
+            if (anticipada.IsFailure) return Result.Failure<MemberAccountClosingPreviewDto>(anticipada.Error);
+            (penalidad, explicacion) = anticipada.Value;
+            despues -= penalidad ?? 0m;
+        }
         var (entrega, gmf) = await EntregaAsync(leida, despues, fecha, ct);
         return Result.Success(new MemberAccountClosingPreviewDto(fecha, simulada, despues, gmf, leida.Saldos.GetValueOrDefault(MemberAccountConcept.ChargeReceivable),
-            entrega, bloqueos));
+            entrega, bloqueos, penalidad, explicacion));
+    }
+
+    /// <summary>
+    /// US7 (T182): lo que cuesta cancelar el contractual a <paramref name="fecha"/>: si el contrato está vigente y no ha vencido, la reliquidación de sus aportes
+    /// a la tasa de castigo (cero sin tasa de castigo); incumplido o vencido, nada. Un contrato vencido que el proceso todavía no liquidó no se cancela por aquí.
+    /// </summary>
+    public async Task<Result<(decimal? Penalidad, string? Explicacion)>> PenalidadDeContractualAsync(MemberAccount cuenta, DateOnly fecha, CancellationToken ct)
+    {
+        if (contractual is null || cuenta.DepositClass != DepositClass.Contractual || cuenta.Status == MemberAccountStatus.Matured
+            || cuenta.ContractualStatus != ContractualStatus.Current)
+            return Result.Success<(decimal?, string?)>((null, null));
+        var leido = await contractual.LeerAsync(cuenta, ct);
+        if (leido.Inicial is not { } inicial) return Result.Success<(decimal?, string?)>((null, null));
+        var plan = Contractual.LectorDeContractual.Plan(inicial);
+        if (fecha >= plan.Vencimiento)
+            return Result.Failure<(decimal?, string?)>(new ErrorConDatos(CodigoVencimientoPendiente,
+                $"El contrato de la cuenta {cuenta.Number} venció el {ErroresDeCuentas.Fecha(plan.Vencimiento)}: el proceso diario lo liquida (con su bonificación si se "
+                + "cumplió) y lo entrega; sin instrucción queda a disposición y entonces se cancela.", new { maturityDate = plan.Vencimiento }));
+        if (inicial.BreachAnnualRate is not { } castigo || castigo >= inicial.AppliedAnnualRate)
+            return Result.Success<(decimal?, string?)>((0m, "La línea no tiene tasa de castigo menor que la base: cancelar antes no cuesta interés."));
+        var c = Contractual.LectorDeContractual.Condiciones(inicial);
+        var r = AhorroContractual.Reliquidar(await contractual.AportesAsync(leido, fecha, ct), c.TasaBase, castigo, c.Convencion, fecha, c.Redondeo);
+        return Result.Success<(decimal?, string?)>((r.Diferencia, r.Explicacion));
     }
 }
 
@@ -222,7 +262,10 @@ public sealed class CloseMemberAccountCommandHandler(
     EmisionDeCartera emision,
     IActorActual actorActual,
     IDateTimeService reloj,
-    ValidacionPreviaDeCaptaciones? validacionPrevia = null) : IRequestHandler<CloseMemberAccountCommand, Result<MemberAccountClosingResultDto>>
+    ValidacionPreviaDeCaptaciones? validacionPrevia = null,
+    Contractual.LectorDeContractual? lectorDeContractual = null,
+    Contractual.IncumplimientoDeContractual? incumplimiento = null,
+    Contractual.CierreDeContractual? cierreDeContractual = null) : IRequestHandler<CloseMemberAccountCommand, Result<MemberAccountClosingResultDto>>
 {
     /// <summary>El prefijo del comprobante de una cancelación.</summary>
     public const string PrefijoCancelacion = "CAN-";
@@ -281,6 +324,9 @@ public sealed class CloseMemberAccountCommandHandler(
                 ? HechosRepresentativosDeCaptaciones.Traslado(d, dDestino)
                 : HechosRepresentativosDeCaptaciones.Retiro(d, null);
             hechos.AddRange(HechosRepresentativosDeCaptaciones.Unidad(fecha, d, entrega, HechosRepresentativosDeCaptaciones.Gmf(d)));
+            // US7 (T183): el contractual vigente que se cancela antes de vencer, con la penalidad del incumplimiento.
+            if (vista.DepositClass == DepositClass.Contractual && vista.ContractualStatus == ContractualStatus.Current && vista.Status != MemberAccountStatus.Matured)
+                hechos.AddRange(HechosRepresentativosDeCaptaciones.Unidad(fecha, d, HechosRepresentativosDeCaptaciones.PenalidadDeContractual(d)));
             var decision = await validacionPrevia.EnPantallaAsync(hechos, $"la cancelación de la cuenta {vista.Number}", ct);
             if (decision.Bloqueo is { } bloqueo) return Falla(bloqueo);
         }
@@ -296,6 +342,9 @@ public sealed class CloseMemberAccountCommandHandler(
             var antes = await movimientos.LeerAsync(cuenta, fecha, ct);
             var bloqueos = CancelacionDeCuenta.Bloqueos(cuenta, antes);
             if (bloqueos.Count > 0) return Falla(ErroresDeMovimientos.CierreBloqueado(bloqueos.Cast<object>().ToList()));
+            // US7 (T182): el contractual se cancela con su contrato (la penalidad si es antes de vencer) y la entrega común del contractual.
+            if (cuenta.DepositClass == DepositClass.Contractual && lectorDeContractual is not null && incumplimiento is not null && cierreDeContractual is not null)
+                return await CancelarContractualAsync(cuenta, fecha, destino, personaDelGiro, banco, request, ct);
 
             // 1. La operación de la cancelación: en ella van la puesta al día de la causación y la liquidación a la fecha.
             var hecho = await emision.HechoDeCuentaAsync(cuenta, fecha, ct);
@@ -345,7 +394,8 @@ public sealed class CloseMemberAccountCommandHandler(
             // 2. La entrega de todo el saldo con el GMF de la cancelación.
             var despues = await movimientos.LeerAsync(cuenta, fecha, ct);
             var saldo = despues.Saldo - despues.Disponible.Retenido - despues.Disponible.Embargado - despues.Disponible.EnCanje;
-            var (entrega, _) = await cancelacion.EntregaAsync(despues, saldo, fecha, ct);
+            var (entrega, _) = await cancelacion.EntregaAsync(despues, saldo, fecha, ct,
+                destino is null ? null : HechosGeneradoresDeGmf.DeTraslado(cuenta.DepositClass, destino.DepositClass, cuenta.HolderPersonId == destino.HolderPersonId));
             MemberAccountOperationResultDto? resultado = null;
             if (entrega > 0m)
             {
@@ -379,6 +429,43 @@ public sealed class CloseMemberAccountCommandHandler(
             await db.SaveChangesAsync(ct);
             return Result.Success(new MemberAccountClosingResultDto(operacion.PublicId, operacion.Number, liquidada, resultado, entrega, cuenta.Status));
         }, ct);
+    }
+
+    /// <summary>
+    /// US7 (T182; FR-074): la cancelación de un ahorro contractual, dentro de la transacción y el cerrojo del comando. Vigente y antes de su vencimiento, queda
+    /// incumplido con la reliquidación a la tasa de castigo (<c>CancelacionAnticipada</c>); incumplido o vencido, sólo se entrega. Después liquida a la fecha,
+    /// anula las cuotas pendientes y entrega al destino pedido con las firmas del manejo.
+    /// </summary>
+    private async Task<Result<MemberAccountClosingResultDto>> CancelarContractualAsync(MemberAccount cuenta, DateOnly fecha, MemberAccount? destino,
+        int personaDelGiro, BeneficiarioDeOrden? banco, CloseMemberAccountCommand request, CancellationToken ct)
+    {
+        var motivo = request.Reason.Trim();
+        var control = await db.MemberAccountControls.FirstAsync(c => c.MemberAccountId == cuenta.Id, ct);
+        var leido = await lectorDeContractual!.LeerAsync(cuenta, ct);
+        if (leido.Inicial is null) return Falla(Contractual.ErroresDeContractual.SinCondiciones(cuenta.Number));
+        var costo = await cancelacion.PenalidadDeContractualAsync(cuenta, fecha, ct);
+        if (costo.IsFailure) return Falla(costo.Error);
+        Guid? operacion = null;
+        string? numero = null;
+        long? operacionId = null;
+        if (cuenta.ContractualStatus == ContractualStatus.Current && cuenta.Status != MemberAccountStatus.Matured)
+        {
+            var plan = Contractual.LectorDeContractual.Plan(leido.Inicial);
+            var cuotas = await lectorDeContractual.CuotasAsync(cuenta, plan, ct);
+            var cumplimiento = await lectorDeContractual.CumplimientoAsync(cuenta, leido.Inicial, plan, cuotas, fecha, ct);
+            var aplicado = await incumplimiento!.AplicarAsync(cuenta, control, leido, fecha, Contractual.CausasDeIncumplimiento.CancelacionAnticipada,
+                cumplimiento.Atrasadas, porElProceso: false, PrevalidationOutcome.NotApplicable, motivo, ct);
+            if (aplicado.IsFailure) return Falla(aplicado.Error);
+            (operacion, numero, operacionId) = (aplicado.Value.Operacion.PublicId, aplicado.Value.Operacion.Number, aplicado.Value.Operacion.Id);
+        }
+        var entrega = destino is not null
+            ? new Contractual.EntregaDeContractual(CloseDeliveryKind.TransferToAccount, destino, null, null)
+            : new Contractual.EntregaDeContractual(CloseDeliveryKind.DisbursementOrder, null, personaDelGiro, banco);
+        var terminado = await cierreDeContractual!.TerminarAsync(cuenta, fecha, entrega, motivo, request.Signatures, exigeFirmas: true, operacionId, ct);
+        if (terminado.IsFailure) return Falla(terminado.Error);
+        var entregada = terminado.Value.Entrega?.Operation;
+        return Result.Success(new MemberAccountClosingResultDto(operacion ?? entregada?.OperationPublicId ?? Guid.Empty, numero ?? entregada?.Number ?? string.Empty,
+            null, terminado.Value.Entrega, terminado.Value.Entregado, cuenta.Status));
     }
 
     private static Result<MemberAccountClosingResultDto> Falla(Error e) => Result.Failure<MemberAccountClosingResultDto>(e);

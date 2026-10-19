@@ -201,6 +201,31 @@ public static class HechosRepresentativosDeCaptaciones
         Destination = Destino(destino, 2m),
     };
 
+    /// <summary>US7 (T183): la bonificación del contractual que se abona al capital al cumplirse (contra el gasto por bonificación).</summary>
+    public static BonificacionReconocidaV1 Bonificacion(CuentaRepresentativa c) => new()
+    {
+        Account = c.Referencia, HolderPersonPublicId = c.Titular, Dimensions = c.D, Amounts = [Valor(MemberAccountConcept.Principal, 1m)],
+    };
+
+    /// <summary>US7 (T183): la provisión de la bonificación del contractual (al interés por pagar, contra el gasto por bonificación; P26).</summary>
+    public static BonificacionReconocidaV1 ProvisionDeBonificacion(CuentaRepresentativa c) => new()
+    {
+        Account = c.Referencia, HolderPersonPublicId = c.Titular, Dimensions = c.D, Amounts = [Valor(MemberAccountConcept.Bonus, 1m)],
+    };
+
+    /// <summary>US7 (T183): la penalidad del incumplimiento del contractual (del interés por pagar y del capital, contra el ingreso por penalidad).</summary>
+    public static PenalidadAplicadaV1 PenalidadDeContractual(CuentaRepresentativa c) => new()
+    {
+        Account = c.Referencia, HolderPersonPublicId = c.Titular, Dimensions = c.D, Kind = EmisionDeCartera.PenalidadPorIncumplimiento,
+        Amounts = [Valor(MemberAccountConcept.InterestPayable, -1m), Valor(MemberAccountConcept.Principal, -1m)],
+    };
+
+    /// <summary>US7 (T183): la retención de la bonificación abonada (sale del capital).</summary>
+    public static RetencionPracticadaV1 RetencionDeBonificacion(CuentaRepresentativa c) => new()
+    {
+        Lines = [Linea(c, Valor(MemberAccountConcept.Principal, -1m), Valor(MemberAccountConcept.Withholding, 1m))],
+    };
+
     private static TermDepositDestinationV1 Destino(CuentaRepresentativa? destino, decimal monto = 1m) => destino is null
         ? new TermDepositDestinationV1 { Kind = "DisbursementOrder", OrderPublicId = Guid.NewGuid() }
         : new TermDepositDestinationV1

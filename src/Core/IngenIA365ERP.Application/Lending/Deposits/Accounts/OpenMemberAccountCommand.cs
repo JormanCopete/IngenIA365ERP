@@ -29,8 +29,8 @@ namespace IngenIA365ERP.Application.Lending.Deposits.Accounts;
 /// Abre una cuenta de captación o de aportes (feature 014, US2, T073; api.md §4, <c>POST /api/lending/accounts</c>, <c>Lending.Accounts.Open</c>, con
 /// clave; data-model §3.1, §3.2; FR-006, FR-018, FR-019, FR-030 a FR-036):
 /// <list type="number">
-/// <item>la línea en alcance, de captación o de aportes, activa y con condiciones vigentes hoy; un CDAT se constituye por su ruta y el contractual llega
-/// con K9; la naturaleza activada en la Cartera (<c>Lending.Savings.NotActivated</c>, <c>Lending.Contributions.NotActivated</c>) y la entrega
+/// <item>la línea en alcance, de captación o de aportes, activa y con condiciones vigentes hoy; un CDAT se constituye por su ruta y el contractual (K9, US7)
+/// sella su contrato en la misma transacción (<c>Contractual.AperturaDeContractual</c>); la naturaleza activada en la Cartera (<c>Lending.Savings.NotActivated</c>, <c>Lending.Contributions.NotActivated</c>) y la entrega
 /// desplegada; la oficina en el alcance y entre las que ofrecen la línea;</item>
 /// <item>el titular del maestro, no fallecido, con los datos mínimos de conocimiento (<c>Lending.Savings.MemberDataIncomplete</c>), asociado vigente si
 /// la línea, el perfil o la naturaleza (aportes) lo exigen (<c>Lending.Savings.MembersOnly</c>, «vincular primero»); la clase autorizada por el perfil
@@ -100,7 +100,8 @@ public sealed class OpenMemberAccountCommandHandler(
     ICerrojoDeCartera cerrojo,
     IAlcanceDeCartera alcance,
     LendingAuditEmitter auditoria,
-    IDateTimeService reloj) : IRequestHandler<OpenMemberAccountCommand, Result<MemberAccountDto>>
+    IDateTimeService reloj,
+    Contractual.AperturaDeContractual? contractual = null) : IRequestHandler<OpenMemberAccountCommand, Result<MemberAccountDto>>
 {
     /// <summary>El tipo del expediente de segregación de una cuenta (US16, T163: del catálogo de la segregación de captaciones).</summary>
     public const string Expediente = SegregacionDeCaptaciones.AperturaDeCuenta;
@@ -113,10 +114,26 @@ public sealed class OpenMemberAccountCommandHandler(
 
     public async Task<Result<MemberAccountDto>> Handle(OpenMemberAccountCommand request, CancellationToken ct)
     {
-        var abierta = await _apertura.AbrirAsync(request.Input, paraCdat: false, null, ct);
+        // US7 (T182): un ahorro contractual revisa su contrato antes de abrir (no se abre si no cabe) y lo sella dentro de la transacción de la apertura; una
+        // cuenta que no es contractual no lo acepta.
+        Func<MemberAccount, Task<Result>>? dentro = null;
+        if (contractual is not null && (request.Input.Contractual is not null || await EsContractualAsync(request.Input.LinePublicId, ct)))
+        {
+            if (await contractual.RevisarAsync(request.Input, ct) is { } contrato) return Result.Failure<MemberAccountDto>(contrato);
+            dentro = contractual.DentroDeLaApertura(request.Input.Contractual);
+        }
+        var abierta = await _apertura.AbrirAsync(request.Input, paraCdat: false, dentro, ct);
         return abierta.IsFailure
             ? Result.Failure<MemberAccountDto>(abierta.Error)
             : Result.Success(await LectorDeCuentas.DtoAsync(db, abierta.Value.Cuenta, reloj.HoyLocal, ct, abierta.Value.Avisos));
+    }
+
+    /// <summary>¿Es contractual la versión vigente de la línea pedida? (sin alcance: la apertura lo revisa después).</summary>
+    private async Task<bool> EsContractualAsync(Guid linea, CancellationToken ct)
+    {
+        var id = await db.CreditLines.AsNoTracking().Where(l => l.PublicId == linea && !l.IsDeleted).Select(l => (int?)l.Id).FirstOrDefaultAsync(ct);
+        return id is { } lineaId
+               && (await LectorDeLineasDeCaptacion.VigenteDeCaptacionAsync(db, lineaId, reloj.HoyLocal, null, ct))?.DepositClass == DepositClass.Contractual;
     }
 }
 

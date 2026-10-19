@@ -39,6 +39,9 @@ public sealed record TrasladoPedido(
 {
     /// <summary>US5 (T135): la entrega del saldo de una cancelación (ver <see cref="RetiroPedido.EsCancelacion"/>).</summary>
     public bool EsCancelacion { get; init; }
+
+    /// <summary>US7 (T182): falso en la entrega que hace el proceso al vencer un contractual (la instrucción la dio el titular).</summary>
+    public bool ExigeFirmas { get; init; } = true;
 }
 
 /// <summary>Lo que revisó un traslado: el retiro del origen, la cuenta destino, el reparto en el destino y el hecho generador del GMF. (nuevo)</summary>
@@ -76,8 +79,8 @@ public sealed class TrasladoDeCuenta(
         if (origen.Id == destino.Id) return Result.Failure<TrasladoRevisado>(ErroresDeMovimientos.MismaCuenta());
         if (destino.Status is not (MemberAccountStatus.Active or MemberAccountStatus.Inactive))
             return Result.Failure<TrasladoRevisado>(ErroresDeMovimientos.DestinoNoOperable(destino.Number, destino.Status));
-        if (destino.DepositClass is DepositClass.TermDeposit or DepositClass.Contractual)
-            return Result.Failure<TrasladoRevisado>(ErroresDeAportes.EntregaNoDisponible("El traslado a un CDAT o a un ahorro contractual", nameof(EntregaDeCartera.K9)));
+        if (destino.DepositClass is DepositClass.TermDeposit)
+            return Result.Failure<TrasladoRevisado>(ErroresDeAportes.EntregaNoDisponible("El traslado a un CDAT", nameof(EntregaDeCartera.K9)));
         var leidaDestino = await movimientos.LeerAsync(destino, p.FechaValor, ct);
         if (leidaDestino.Titular.IsDeceased) return Result.Failure<TrasladoRevisado>(ErroresDeMovimientos.DestinoNoOperable(destino.Number, destino.Status));
         if (await movimientos.SoloAsociadosAsync(leidaDestino, p.FechaValor, ct) is { } soloAsociados) return Result.Failure<TrasladoRevisado>(soloAsociados);
@@ -87,7 +90,10 @@ public sealed class TrasladoDeCuenta(
         var retiro = await retiros.RevisarAsync(origen, Retiro(p) with { HechoGenerador = hecho }, pedirAprobacion, ct);
         if (retiro.IsFailure) return Result.Failure<TrasladoRevisado>(retiro.Error);
 
-        var modalidad = destino.Nature == LineNature.Contribution || destino.DepositClass == DepositClass.Permanent ? p.ModalidadDestino : ModalidadDeConsignacion.Free;
+        // US7 (T182): el contractual recibe por cuotas, como el permanente y los aportes.
+        var modalidad = destino.Nature == LineNature.Contribution || destino.DepositClass is DepositClass.Permanent or DepositClass.Contractual
+            ? p.ModalidadDestino
+            : ModalidadDeConsignacion.Free;
         var reparto = await consignacion.RepartirAsync(destino, modalidad, p.Monto, null, p.FechaValor, ct);
         if (reparto.IsFailure) return Result.Failure<TrasladoRevisado>(reparto.Error);
         return Result.Success(new TrasladoRevisado(retiro.Value, leidaDestino, reparto.Value, hecho));
@@ -100,6 +106,7 @@ public sealed class TrasladoDeCuenta(
         Clase = MemberAccountOperationKind.Transfer,
         EsCancelacion = p.EsCancelacion,
         ExigeAtribucion = !p.EsCancelacion,
+        ExigeFirmas = p.ExigeFirmas,
     };
 
     /// <summary>Aplica el traslado (ver la clase). Las dos cuentas ya están bloqueadas.</summary>

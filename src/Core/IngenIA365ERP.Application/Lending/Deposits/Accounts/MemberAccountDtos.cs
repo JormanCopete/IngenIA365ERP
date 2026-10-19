@@ -61,6 +61,9 @@ public sealed record OpenAccountInput
 
     /// <summary>Hoy, si viene: una cuenta no se abre con otra fecha.</summary>
     public DateOnly? OpeningDate { get; init; }
+
+    /// <summary>US7 (T182; api.md §4, <c>contractual</c>): el contrato de un ahorro contractual —cuota, plazo en meses e instrucción al vencimiento—.</summary>
+    public Contractual.ContractualTermsInput? Contractual { get; init; }
 }
 
 /// <summary>Una persona en una cuenta: su <c>PublicId</c>, su nombre y su documento. (nuevo)</summary>
@@ -123,7 +126,8 @@ public sealed record MemberAccountDto(
     DateOnly? LastAccruedDate,
     IReadOnlyList<string> OpeningBlockers,
     MemberAccountMarksDto Marks,
-    IReadOnlyList<MemberAccountWarningDto> Warnings);
+    IReadOnlyList<MemberAccountWarningDto> Warnings,
+    Contractual.ContractualSummaryDto? Contractual = null);
 
 /// <summary>Una cuenta en la lista (api.md §4, <c>MemberAccountListItemDto</c>). (nuevo)</summary>
 public sealed record MemberAccountListItemDto(

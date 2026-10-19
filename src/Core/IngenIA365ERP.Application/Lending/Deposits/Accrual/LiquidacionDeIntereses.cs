@@ -84,7 +84,7 @@ public sealed class LiquidacionDeIntereses(
     public const string CodigoPeriodoAbierto = "Lending.Savings.SettlementPeriodOpen";
     public const string CodigoNoCausa = "Lending.Savings.AccountDoesNotAccrue";
 
-    /// <summary>¿Gana interés la cuenta en K8? Cuentas de captación a la vista y permanentes (el CDAT y el contractual, con K9).</summary>
+    /// <summary>¿Liquida intereses por períodos? Cuentas de captación a la vista, permanentes y contractuales (el CDAT los paga por su plan).</summary>
     public static bool GanaInteres(MemberAccount cuenta) =>
         cuenta.Nature == LineNature.Deposit && cuenta.DepositClass is { } c && CausacionDeCaptaciones.ClasesQueLiquidan.Contains(c);
 
@@ -103,7 +103,7 @@ public sealed class LiquidacionDeIntereses(
         ArgumentNullException.ThrowIfNull(control);
         if (!GanaInteres(cuenta))
             return Result.Failure<LiquidacionCalculada>(new ErrorConDatos(CodigoNoCausa,
-                $"La cuenta {cuenta.Number} no causa intereses por este camino (aportes, CDAT o contractual).", new { nature = cuenta.Nature.ToString(), depositClass = cuenta.DepositClass?.ToString() }));
+                $"La cuenta {cuenta.Number} no liquida intereses por este camino (aportes o CDAT).", new { nature = cuenta.Nature.ToString(), depositClass = cuenta.DepositClass?.ToString() }));
         var versiones = await lector.VersionesAsync(cuenta.CreditLineId, ct);
         var version = LectorDeInteres.VersionDelDia(versiones, cuenta, hasta, informacionHasta ?? DateTime.MaxValue);
         if (version is null)
@@ -345,10 +345,18 @@ public sealed class LiquidacionDeIntereses(
     /// El reparto de la liquidación entre el titular y los cotitulares vigentes al fin del período por su proporción (data-model §4.6): al centavo, y el
     /// titular absorbe el residuo. Sin cotitulares, todo al titular.
     /// </summary>
-    internal static async Task<IReadOnlyList<WithholdingAccumulation>> AcumuladosAsync(IApplicationDbContext db, MemberAccount cuenta, MemberAccountOperation operacion, InterestSettlement l,
-        CancellationToken ct)
+    internal static Task<IReadOnlyList<WithholdingAccumulation>> AcumuladosAsync(IApplicationDbContext db, MemberAccount cuenta, MemberAccountOperation operacion, InterestSettlement l,
+        CancellationToken ct) =>
+        RepartoAsync(db, cuenta, operacion, l.PeriodTo, l.GrossInterest, l.InflationaryComponentAmount ?? 0m, l.WithholdingBase, l.WithholdingAmount, l,
+            WithholdingAccumulation.OrigenLiquidacion, ct);
+
+    /// <summary>
+    /// El reparto de un rendimiento abonado (una liquidación o, US7, la bonificación del contractual) entre el titular y los cotitulares vigentes a
+    /// <paramref name="hasta"/> por su proporción (data-model §4.6): al centavo, y el titular absorbe el residuo.
+    /// </summary>
+    internal static async Task<IReadOnlyList<WithholdingAccumulation>> RepartoAsync(IApplicationDbContext db, MemberAccount cuenta, MemberAccountOperation operacion,
+        DateOnly hasta, decimal bruto, decimal componente, decimal baseDeRetencion, decimal retencion, InterestSettlement? l, string origen, CancellationToken ct)
     {
-        var hasta = l.PeriodTo;
         var partes = await db.MemberAccountParties.AsNoTracking()
             .Where(p => p.MemberAccountId == cuenta.Id && !p.IsDeleted && p.Role == MemberAccountPartyRole.CoHolder && p.ValidFrom <= hasta
                         && (p.ValidTo == null || p.ValidTo >= hasta))
@@ -364,9 +372,8 @@ public sealed class LiquidacionDeIntereses(
         else proporciones.Add((cuenta.HolderPersonId, 1m));
 
         var anio = (short)hasta.Year;
-        var componente = l.InflationaryComponentAmount ?? 0m;
         var acumulados = new List<WithholdingAccumulation>();
-        decimal restoBruto = l.GrossInterest, restoComponente = componente, restoBase = l.WithholdingBase, restoRetencion = l.WithholdingAmount;
+        decimal restoBruto = bruto, restoComponente = componente, restoBase = baseDeRetencion, restoRetencion = retencion;
         for (var i = proporciones.Count - 1; i >= 0; i--)
         {
             var (persona, proporcion) = proporciones[i];
@@ -387,11 +394,11 @@ public sealed class LiquidacionDeIntereses(
                 Operation = operacion,
                 OperationId = operacion.Id,
                 Share = proporcion,
-                GrossInterest = Parte(l.GrossInterest, ref restoBruto),
+                GrossInterest = Parte(bruto, ref restoBruto),
                 InflationaryComponentAmount = Parte(componente, ref restoComponente),
-                WithholdingBase = Parte(l.WithholdingBase, ref restoBase),
-                WithholdingAmount = Parte(l.WithholdingAmount, ref restoRetencion),
-                Origin = WithholdingAccumulation.OrigenLiquidacion,
+                WithholdingBase = Parte(baseDeRetencion, ref restoBase),
+                WithholdingAmount = Parte(retencion, ref restoRetencion),
+                Origin = origen,
             });
         }
         acumulados.Reverse();

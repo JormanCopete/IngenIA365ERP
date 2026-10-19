@@ -177,6 +177,9 @@ public sealed class RetiroDeCuenta(
         var cuenta = c.Cuenta;
         if (cuenta.DepositClass == DepositClass.TermDeposit && cuenta.Status != MemberAccountStatus.Matured)
             return ErroresDeMovimientos.CdatVigente(cuenta.Number);
+        // US7 (T182; FR-074): el contractual vigente no admite retiros; se retira al cancelarlo (con la reliquidación del incumplimiento) o al vencer.
+        if (cuenta.DepositClass == DepositClass.Contractual && cuenta.Status != MemberAccountStatus.Matured && !p.EsCancelacion)
+            return Contractual.ErroresDeContractual.RetiroNoAdmitido(cuenta.Number);
         if (cuenta.Status is not (MemberAccountStatus.Active or MemberAccountStatus.Inactive or MemberAccountStatus.Matured))
             return ErroresDeAportes.NoOperable(cuenta.Number, cuenta.Status);
         if (c.Titular.IsDeceased)

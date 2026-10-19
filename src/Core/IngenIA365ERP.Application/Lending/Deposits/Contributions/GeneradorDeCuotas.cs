@@ -37,13 +37,15 @@ public sealed record CuotaGenerada(AccountInstallment Aportes, AccountInstallmen
 /// </list>
 /// Una cuenta por transacción, escrita por <see cref="RegistroDeCuentas"/>; idempotente por el único <c>(cuenta, período)</c> y la marca
 /// <c>LastInstallmentPeriod</c> del control. Lo que falla (sin ingreso, sin salario mínimo) queda en <c>LND_ProcessRunErrors</c> y las demás siguen.
-/// No emite hechos: una cuota exigible no mueve dinero. (nuevo)
+/// No emite hechos: una cuota exigible no mueve dinero. US7 (T182): también las cuotas del ahorro contractual, por su plan sellado
+/// (<see cref="Contractual.GeneradorDeCuotasDeContractual"/>), con captaciones activadas. (nuevo)
 /// </summary>
 public sealed class GeneradorDeCuotas(
     IApplicationDbContext db,
     RegistroDeCuentas registro,
     IValoresNacionales valores,
-    ILogger<GeneradorDeCuotas>? logger = null) : ISubpasoDeCaptaciones
+    ILogger<GeneradorDeCuotas>? logger = null,
+    Contractual.GeneradorDeCuotasDeContractual? contractual = null) : ISubpasoDeCaptaciones
 {
     private readonly ILogger _log = logger ?? (ILogger)NullLogger.Instance;
 
@@ -54,16 +56,20 @@ public sealed class GeneradorDeCuotas(
         ArgumentNullException.ThrowIfNull(corrida);
         ArgumentNullException.ThrowIfNull(cuentas);
         if (cuentas.Count == 0) return [];
-        var activacion = (await ActivacionesDeCaptacion.LeerAsync(db, ct)).Aportes;
-        if (activacion is not { } desdeActivacion || desdeActivacion > d) return [];
-
+        var fechas = await ActivacionesDeCaptacion.LeerAsync(db, ct);
+        var fallos = new List<FalloDeCuenta>();
         var ids = cuentas.ToArray();
+        // US7 (T182): las cuotas del ahorro contractual, con captaciones activadas (el contrato las fija; no dependen de la línea vigente).
+        if (contractual is not null && fechas.RigeEn(LineNature.Deposit, d))
+            fallos.AddRange(await ContractualesAsync(corrida, ids, d, ct));
+        var activacion = fechas.Aportes;
+        if (activacion is not { } desdeActivacion || desdeActivacion > d) return fallos;
+
         var deAportes = await db.MemberAccounts.AsNoTracking()
             .Where(a => ids.Contains(a.Id) && a.Nature == LineNature.Contribution && !a.IsDeleted
                         && (a.Status == MemberAccountStatus.Active || a.Status == MemberAccountStatus.Inactive))
             .OrderBy(a => a.Id).Select(a => a.Id).ToListAsync(ct);
 
-        var fallos = new List<FalloDeCuenta>();
         foreach (var id in deAportes)
         {
             try
@@ -80,6 +86,30 @@ public sealed class GeneradorDeCuotas(
                 db.DescartarCambiosSalvo(corrida);
                 _log.LogWarning(ex, "[Cartera.CuotasDeAportesFallidas] La cuenta {Cuenta} no generó sus cuotas.", id);
                 fallos.Add(new FalloDeCuenta(id, "Lending.Contributions.InstallmentsFailed", ex.Message));
+            }
+        }
+        return fallos;
+    }
+
+    /// <summary>US7 (T182): las cuotas del contractual de las cuentas de la tanda, cada cuenta en su transacción (lo que falla queda en el registro).</summary>
+    private async Task<IReadOnlyList<FalloDeCuenta>> ContractualesAsync(LendingProcessRun corrida, int[] ids, DateOnly d, CancellationToken ct)
+    {
+        var contractuales = await db.MemberAccounts.AsNoTracking()
+            .Where(a => ids.Contains(a.Id) && a.Nature == LineNature.Deposit && a.DepositClass == DepositClass.Contractual && !a.IsDeleted
+                        && (a.Status == MemberAccountStatus.Active || a.Status == MemberAccountStatus.Inactive))
+            .OrderBy(a => a.Id).Select(a => a.Id).ToListAsync(ct);
+        var fallos = new List<FalloDeCuenta>();
+        foreach (var id in contractuales)
+        {
+            try
+            {
+                await contractual!.GenerarAsync(corrida, id, d, ct);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                db.DescartarCambiosSalvo(corrida);
+                _log.LogWarning(ex, "[Cartera.CuotasDeContractualFallidas] El contractual {Cuenta} no generó sus cuotas.", id);
+                fallos.Add(new FalloDeCuenta(id, ex is ReglaDeCarteraException r ? r.Codigo : "Lending.Contractual.InstallmentsFailed", ex.Message));
             }
         }
         return fallos;

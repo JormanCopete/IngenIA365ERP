@@ -104,6 +104,8 @@ public class ParametrosDeCarteraTests
         { "Captaciones.OrdenDeFondosAlRetiro", "AportesPrimero", [N], EntregaDeCartera.K7 },
         { "Captaciones.MotivosDeRetiroDeAsociados", "{}", [N], EntregaDeCartera.K7 },
         { "Captaciones.DestinatariosReversoTardio", "", [N], EntregaDeCartera.K7 },
+        // Fase 13 de la 014 (US7, T182): la gracia de una cuota del contractual, por cooperativa o por línea.
+        { "Captaciones.DiasDeGraciaDeCuotaContractual", "5", [N, L], EntregaDeCartera.K9 },
         { "FondoDeLiquidez.PorcentajesPorCategoria", "", [N], EntregaDeCartera.K11 },
         { "Aportes.TopeCuotaFondoEmpleados", "0.10", [N], EntregaDeCartera.K7 },
         { "Aportes.FraccionMinima", "", [N], EntregaDeCartera.K7 },
@@ -154,8 +156,8 @@ public class ParametrosDeCarteraTests
         var posteriores = ParametrosDeCartera.Definiciones.Where(d => d.DisponibleDesde > (EntregaDeModulo)EntregaDeCartera.K6b).ToList();
 
         // Feature 014 (T017): las claves de captaciones y aportes existen desde ya con su entrega (K7 a K11) y no se ofrecen hasta que salga.
-        // Fase 8 de la 014 (US5, research E94): 33 con Retencion.Redondeo.
-        posteriores.Should().HaveCount(33).And.OnlyContain(d => d.DisponibleDesde >= (EntregaDeModulo)EntregaDeCartera.K7
+        // Fase 8 de la 014 (US5, research E94): 33 con Retencion.Redondeo; fase 13 (US7, T182): 34 con la gracia de la cuota del contractual.
+        posteriores.Should().HaveCount(34).And.OnlyContain(d => d.DisponibleDesde >= (EntregaDeModulo)EntregaDeCartera.K7
             && d.DisponibleDesde <= (EntregaDeModulo)EntregaDeCartera.K11);
         ParametrosDeCartera.Definiciones.Where(d => d.DisponibleDesde == (EntregaDeModulo)EntregaDeCartera.K6b).Should().BeEmpty("la vivienda no trae claves");
         ParametrosDeCartera.Definiciones.Where(d => d.DisponibleDesde == (EntregaDeModulo)EntregaDeCartera.K6a).Select(d => d.Clave).Should()

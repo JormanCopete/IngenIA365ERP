@@ -13,7 +13,8 @@ namespace IngenIA365ERP.Persistence.Seeding.Parametric;
 /// <c>PREJURID</c>, <c>NOAPLICPAG</c>, <c>PASOACAJA</c>, <c>ABONOCAP</c>, <c>GASTOCOBR</c> y <c>ENVIODOC</c>, una fila por canal (correo,
 /// SMS y WhatsApp), más <c>SIMULACION</c> sólo por correo (US2, T0390: el envío de una simulación) y <c>CAMBIOTASA</c> por los tres canales
 /// (feature 014, US1, T067: el aviso de cambio de tasa de una línea a la vista) y <c>MAYOREDAD</c> por los tres canales (US2, T076: el aviso de
-/// la mayoría de edad del titular de una cuenta), con <c>Module = Lending</c>, <c>Version = 1</c>, <c>IsSeeded</c> y <c>ReviewPending</c>. El texto vive en
+/// la mayoría de edad del titular de una cuenta) y <c>CONTRATINC</c> por los tres canales (US7, T182: el aviso del incumplimiento de un ahorro contractual),
+/// con <c>Module = Lending</c>, <c>Version = 1</c>, <c>IsSeeded</c> y <c>ReviewPending</c>. El texto vive en
 /// <c>Data/lending-message-templates.json</c>. Idempotente por (<c>Code</c>, <c>Channel</c>, <c>Version</c>) <b>incluidas las de baja</b>:
 /// una plantilla que la cooperativa cambió (versión 2) o dio de baja no vuelve. Las columnas llegan con la migración
 /// <c>PlataformaParaCartera</c>: hasta que esté aplicada en la base, la semilla no hace nada.
