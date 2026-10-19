@@ -12,7 +12,7 @@ namespace IngenIA365ERP.Shared.Services.Cartera;
 /// captaciones (§16, <c>Lending.Deposits.Activate</c>) y cada historia le suma sus rutas (líneas, cuentas, CDAT, aportes, retiro del asociado…). Sin
 /// <c>Authorization</c> a mano: la pone el handler; toda escritura con su <see cref="ClaveDeOperacion"/>. (nuevo)
 /// </summary>
-public sealed class CaptacionesClient(HttpClient http, CentralAuthClient auth)
+public sealed partial class CaptacionesClient(HttpClient http, CentralAuthClient auth)
 {
     public const string Base = GobiernoDeCarteraClient.Base;
     public const string RutaDeActivacion = Base + "/deposits/activation";
