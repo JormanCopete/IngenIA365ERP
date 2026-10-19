@@ -270,6 +270,8 @@ public class LosHechosInmutablesNoSeModifican
         // Feature 014, US4 (T110, T114; data-model §2.3, §4.6): el uso del GMF del mes (un reverso escribe su espejo) y el catálogo de cargos de una
         // versión de la línea (una versión nueva lo corrige).
         ["GmfMonthlyUsage"] = [], ["DepositLineCharge"] = [],
+        // US5 (T130): la liquidación de intereses (sólo su reverso, una vez) y la retención acumulada por titular.
+        ["InterestSettlement"] = ["ReversedByOperationId"], ["WithholdingAccumulation"] = [],
     };
 
     [Fact]

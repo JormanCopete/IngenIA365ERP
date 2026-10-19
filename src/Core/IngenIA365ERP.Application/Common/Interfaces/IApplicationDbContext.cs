@@ -558,6 +558,9 @@ public interface IApplicationDbContext
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Configuration.ContributionLineVersion> ContributionLineVersions { get; }
     // Feature 014, US4 (T110, T114, T118): el GMF del mes, los cargos, sus exoneraciones y el débito automático.
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Transactions.GmfMonthlyUsage> GmfMonthlyUsages { get; }
+    // Feature 014, US5 (T130): las liquidaciones de intereses y la retención acumulada por titular y año.
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Transactions.InterestSettlement> InterestSettlements { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Transactions.WithholdingAccumulation> WithholdingAccumulations { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Configuration.DepositLineCharge> DepositLineCharges { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.AccountCharge> AccountCharges { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.AccountChargeExemption> AccountChargeExemptions { get; }

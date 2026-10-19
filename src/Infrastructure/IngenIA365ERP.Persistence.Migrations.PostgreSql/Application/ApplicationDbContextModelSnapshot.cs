@@ -29348,6 +29348,151 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         });
                 });
 
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Lending.Deposits.Transactions.InterestSettlement", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("AccruedInterest")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("numeric(18,6)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int>("Destination")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("GrossInterest")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<decimal?>("InflationaryComponentAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<decimal?>("InflationaryComponentFraction")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("numeric(9,6)");
+
+                    b.Property<string>("InputsSha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<int>("MemberAccountId")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("NetInterest")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<long>("OperationId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateOnly>("PeriodFrom")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly>("PeriodTo")
+                        .HasColumnType("date");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long?>("ReversedByOperationId")
+                        .HasColumnType("bigint");
+
+                    b.Property<decimal>("RoundingDifference")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("numeric(18,6)");
+
+                    b.Property<int?>("SchedulePeriodNumber")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("TaxProfileSnapshotJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<decimal?>("ThresholdDailyAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<bool>("ThresholdReached")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<decimal>("WithholdingAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<decimal>("WithholdingBase")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<string>("WithholdingExemptionReason")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<decimal>("WithholdingRate")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("numeric(9,6)");
+
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OperationId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_LND_InterestSettlements_OperationId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_LND_InterestSettlements_PublicId");
+
+                    b.HasIndex("ReversedByOperationId")
+                        .HasDatabaseName("IX_LND_InterestSettlements_ReversedBy")
+                        .HasFilter("\"ReversedByOperationId\" IS NOT NULL");
+
+                    b.HasIndex("MemberAccountId", "PeriodTo")
+                        .IsUnique()
+                        .HasDatabaseName("UK_LND_InterestSettlements_Account_Period")
+                        .HasFilter("\"ReversedByOperationId\" IS NULL");
+
+                    b.ToTable("LND_InterestSettlements", "dbo", t =>
+                        {
+                            t.HasCheckConstraint("CK_LND_InterestSettlements_Period", "\"PeriodTo\" >= \"PeriodFrom\"");
+                        });
+                });
+
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Lending.Deposits.Transactions.MemberAccountOperation", b =>
                 {
                     b.Property<long>("Id")
@@ -29719,6 +29864,121 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
 
                             t.HasCheckConstraint("CK_LND_MemberAccountTransactions_Origin", "(\"OperationId\" IS NOT NULL AND \"ProcessRunId\" IS NULL) OR (\"OperationId\" IS NULL AND \"ProcessRunId\" IS NOT NULL)");
                         });
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Lending.Deposits.Transactions.WithholdingAccumulation", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int?>("DepositClass")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("GrossInterest")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<decimal>("InflationaryComponentAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<int?>("InterestSettlementId")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<int>("MemberAccountId")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("OperationId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Origin")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<int>("PersonId")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long?>("ReversesAccumulationId")
+                        .HasColumnType("bigint");
+
+                    b.Property<decimal>("Share")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("numeric(9,6)");
+
+                    b.Property<short>("TaxYear")
+                        .HasColumnType("smallint");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<decimal>("WithholdingAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<decimal>("WithholdingBase")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InterestSettlementId")
+                        .HasDatabaseName("IX_LND_WithholdingAccumulations_Settlement");
+
+                    b.HasIndex("OperationId")
+                        .HasDatabaseName("IX_LND_WithholdingAccumulations_OperationId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_LND_WithholdingAccumulations_PublicId");
+
+                    b.HasIndex("ReversesAccumulationId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_LND_WithholdingAccumulations_Reverses")
+                        .HasFilter("\"ReversesAccumulationId\" IS NOT NULL");
+
+                    b.HasIndex("MemberAccountId", "TaxYear")
+                        .HasDatabaseName("IX_LND_WithholdingAccumulations_Account_Year");
+
+                    b.HasIndex("PersonId", "TaxYear")
+                        .HasDatabaseName("IX_LND_WithholdingAccumulations_Person_Year");
+
+                    b.ToTable("LND_WithholdingAccumulations", "dbo");
                 });
 
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Lending.Documents.IssuedDocumentAccount", b =>
@@ -56199,6 +56459,29 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.Navigation("Operation");
                 });
 
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Lending.Deposits.Transactions.InterestSettlement", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.MemberAccount", null)
+                        .WithMany()
+                        .HasForeignKey("MemberAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Lending.Deposits.Transactions.MemberAccountOperation", "Operation")
+                        .WithMany()
+                        .HasForeignKey("OperationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Lending.Deposits.Transactions.MemberAccountOperation", null)
+                        .WithMany()
+                        .HasForeignKey("ReversedByOperationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("FK_LND_InterestSettlements_ReversedBy");
+
+                    b.Navigation("Operation");
+                });
+
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Lending.Deposits.Transactions.MemberAccountOperation", b =>
                 {
                     b.HasOne("IngenIA365ERP.Domain.Entities.Security.User", null)
@@ -56299,6 +56582,44 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("MemberAccount");
+
+                    b.Navigation("Operation");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Lending.Deposits.Transactions.WithholdingAccumulation", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Lending.Deposits.Transactions.InterestSettlement", "InterestSettlement")
+                        .WithMany()
+                        .HasForeignKey("InterestSettlementId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("FK_LND_WithholdingAccumulations_Settlement");
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.MemberAccount", null)
+                        .WithMany()
+                        .HasForeignKey("MemberAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Lending.Deposits.Transactions.MemberAccountOperation", "Operation")
+                        .WithMany()
+                        .HasForeignKey("OperationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("FK_LND_WithholdingAccumulations_Operation");
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Core.Person", null)
+                        .WithMany()
+                        .HasForeignKey("PersonId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Lending.Deposits.Transactions.WithholdingAccumulation", null)
+                        .WithMany()
+                        .HasForeignKey("ReversesAccumulationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("FK_LND_WithholdingAccumulations_Reverses");
+
+                    b.Navigation("InterestSettlement");
 
                     b.Navigation("Operation");
                 });

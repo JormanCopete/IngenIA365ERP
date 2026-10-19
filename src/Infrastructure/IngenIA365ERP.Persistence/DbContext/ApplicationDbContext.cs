@@ -624,6 +624,8 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Configuration.ContributionLineVersion> ContributionLineVersions => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Configuration.ContributionLineVersion>();
     // Feature 014, US4 (T110, T114, T118).
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Transactions.GmfMonthlyUsage> GmfMonthlyUsages => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Transactions.GmfMonthlyUsage>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Transactions.InterestSettlement> InterestSettlements => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Transactions.InterestSettlement>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Transactions.WithholdingAccumulation> WithholdingAccumulations => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Transactions.WithholdingAccumulation>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Configuration.DepositLineCharge> DepositLineCharges => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Configuration.DepositLineCharge>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.AccountCharge> AccountCharges => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.AccountCharge>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.AccountChargeExemption> AccountChargeExemptions => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.AccountChargeExemption>();
