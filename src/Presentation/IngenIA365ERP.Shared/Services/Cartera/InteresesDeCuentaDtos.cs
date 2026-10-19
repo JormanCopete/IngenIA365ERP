@@ -1,4 +1,4 @@
-namespace IngenIA365ERP.Shared.Services.Cartera;
+﻿namespace IngenIA365ERP.Shared.Services.Cartera;
 
 // Feature 014, US5 (T139; contracts/api.md §4 de la 014): lo que la ficha de una cuenta manda y recibe por /api/lending/accounts/{id}/settlements y
 // /close-preview y /close —las liquidaciones de intereses, la simulación a una fecha y la cancelación—. Los enums llegan como número. (nuevo)
@@ -49,7 +49,8 @@ public sealed record BloqueoDeCancelacionDto(string Kind, string Detail);
 
 /// <summary>La vista previa de la cancelación.</summary>
 public sealed record VistaPreviaDeCancelacionDto(DateOnly Date, SimulacionDeInteresesDto? Settlement, decimal BalanceAfterSettlement, decimal Gmf,
-    decimal PendingCharges, decimal ToDeliver, IReadOnlyList<BloqueoDeCancelacionDto> Blockers);
+    decimal PendingCharges, decimal ToDeliver, IReadOnlyList<BloqueoDeCancelacionDto> Blockers, decimal? ContractualPenalty = null,
+    string? ContractualExplanation = null);
 
 /// <summary>Cómo se entrega el saldo: 1 traslado a otra cuenta, 2 orden de giro.</summary>
 public sealed record EntregaDeCancelacionRequest(int Kind, Guid? TargetAccountPublicId, BeneficiarioDeGiroRequest? Payee);

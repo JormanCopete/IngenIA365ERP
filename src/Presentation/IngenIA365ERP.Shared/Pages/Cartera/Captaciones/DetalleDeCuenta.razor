@@ -16,7 +16,8 @@
    concepto, lo que la retiene en apertura (y aprobarla, otra persona que quien la abrió), sus partes y beneficiarios vigentes con su historia, el
    cambio de partes (EditorDeTitularidad, con la constancia de beneficiarios), la marca de exención del GMF (marcar, reemplazar la vigente del titular,
    terminar) y la actualización de datos que pide la mayoría de edad del titular. Desde US4 (T124), sus movimientos, cargos y débito automático
-   (MovimientosDeCuenta) y, en captación, los intereses y la cancelación (InteresesDeCuenta, US5). El extracto y las cuotas llegan con sus historias. *@
+   (MovimientosDeCuenta) y, en captación, los intereses y la cancelación (InteresesDeCuenta, US5). Desde US7 (T185), en un ahorro contractual, su
+   contrato (ContratoDeAhorro). El extracto y las cuotas llegan con sus historias. *@
 <PermissionGate Required="Lending.Accounts.Read" MostrarAviso="true">
 <div class="pagina">
     <div class="page-header">
@@ -90,6 +91,10 @@
 
             @if (c.Status != TextosDeCaptaciones.EnApertura)
             {
+                @if (c.DepositClass == TextosDeCaptaciones.Contractual)
+                {
+                    <ContratoDeAhorro Cuenta="@c" OnCambio="@CargarAsync" />
+                }
                 <MovimientosDeCuenta Cuenta="@c" OnCambio="@CargarAsync" />
                 @if (c.Nature == TextosDeCaptaciones.Captacion)
                 {

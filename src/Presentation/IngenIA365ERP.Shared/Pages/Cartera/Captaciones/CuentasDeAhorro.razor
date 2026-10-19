@@ -118,6 +118,21 @@
                     <EditorDeTitularidad Partes="@_pedido.Parties" Beneficiarios="@_pedido.Beneficiaries" Soportes="@_soportes" EsAportes="@EsAportes"
                                          @bind-Manejo="_pedido.HandlingMode" Titular="@_titular.PublicId" />
 
+                    @if (EsContractual && _pedido.Contractual is { } contrato)
+                    {
+                        @* US7 (T185; FR-074): el contrato del ahorro contractual. La periodicidad, las tasas, la tolerancia y el efecto del incumplimiento los
+                           pone la línea y quedan sellados al abrir; la primera cuota vence un período después. *@
+                        <p class="texto-apoyo">El contrato de ahorro — la cuota y el plazo deben caber en los de la línea; las tasas y la tolerancia las pone la línea.</p>
+                        <div class="form-grid">
+                            <label class="campo">Cuota *
+                                <SfNumericTextBox TValue="decimal" @bind-Value="contrato.Installment" Min="0" Format="N0" ShowSpinButton="false" />
+                            </label>
+                            <label class="campo">Plazo en meses *
+                                <SfNumericTextBox TValue="int" @bind-Value="contrato.TermMonths" Min="1" Max="600" Format="N0" />
+                            </label>
+                        </div>
+                    }
+
                     <p class="texto-apoyo">Paso 3 de 3 — exención y soportes.</p>
                     <div class="form-grid">
                         @if (!EsAportes)
@@ -145,7 +160,9 @@
 
                 @foreach (var e in _errores) { <p class="aviso aviso-error" role="alert">@e</p> }
                 <div class="toolbar">
-                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || _titular is null || _linea is null || _oficina is null)" OnClick="@AbrirCuentaAsync">Abrir cuenta</SfButton>
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || _titular is null || _linea is null || _oficina is null
+                                                                  || (EsContractual && _pedido.Contractual is not { Installment: > 0m, TermMonths: > 0 }))"
+                              OnClick="@AbrirCuentaAsync">Abrir cuenta</SfButton>
                     <SfButton CssClass="e-outline" OnClick="@(() => _mostrarApertura = false)">Cancelar</SfButton>
                 </div>
             </IndicadorDeCarga>
@@ -179,6 +196,8 @@
     private string? _documentoInicial;
 
     private bool EsAportes => _lineas.FirstOrDefault(l => l.PublicId == _linea)?.Nature == TextosDeCaptaciones.Aportes;
+
+    private bool EsContractual => _lineas.FirstOrDefault(l => l.PublicId == _linea)?.DepositClass == TextosDeCaptaciones.Contractual;
 
     protected override async Task OnInitializedAsync() => await CargarAsync(1);
 
@@ -241,6 +260,7 @@
     private void CambiarLinea(object? valor)
     {
         _linea = Guid.TryParse(valor?.ToString(), out var g) ? g : null;
+        _pedido.Contractual = EsContractual ? _pedido.Contractual ?? new ContratoDeAhorroRequest() : null;
         if (EsAportes)
         {
             _pedido.Parties.Clear();

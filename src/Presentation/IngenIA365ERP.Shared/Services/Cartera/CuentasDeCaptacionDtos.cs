@@ -1,4 +1,4 @@
-namespace IngenIA365ERP.Shared.Services.Cartera;
+﻿namespace IngenIA365ERP.Shared.Services.Cartera;
 
 // Feature 014, US2 (T079; contracts/api.md §4 y §10 de la 014): lo que las pantallas de cuentas mandan y reciben por /api/lending/accounts y
 // /api/lending/gmf-exemptions. Los pedidos son clases editables con los nombres del contrato; los enums viajan y llegan como número (los textos están
@@ -47,6 +47,9 @@ public sealed class AbrirCuentaRequest
     public Guid? BeneficiaryRecordAttachmentPublicId { get; set; }
     public bool MarkGmfExempt { get; set; }
     public OrigenDeFondosRequest? SourceOfFunds { get; set; }
+
+    /// <summary>US7 (T185): el contrato del ahorro contractual (sólo en una línea contractual).</summary>
+    public ContratoDeAhorroRequest? Contractual { get; set; }
 }
 
 /// <summary>El cuerpo de <c>PUT /api/lending/accounts/{id}/parties</c>: el conjunto completo.</summary>
@@ -117,7 +120,8 @@ public sealed record CuentaDto(
     DateOnly? LastAccruedDate,
     IReadOnlyList<string> OpeningBlockers,
     MarcasDeCuentaDto Marks,
-    IReadOnlyList<AvisoDeCuentaDto> Warnings);
+    IReadOnlyList<AvisoDeCuentaDto> Warnings,
+    ResumenDeContratoDto? Contractual = null);
 
 public sealed record CuentaEnListaDto(
     Guid PublicId,

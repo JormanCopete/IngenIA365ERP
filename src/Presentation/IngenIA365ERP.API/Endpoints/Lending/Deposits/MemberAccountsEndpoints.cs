@@ -1,9 +1,10 @@
-using Carter;
+﻿using Carter;
 using IngenIA365ERP.API.Endpoints.Common;
 using IngenIA365ERP.API.Filters;
 using IngenIA365ERP.Application.Lending.Deposits.Accounts;
 using IngenIA365ERP.Application.Lending.Deposits.Accounts.Parties;
 using IngenIA365ERP.Application.Lending.Deposits.Accrual;
+using IngenIA365ERP.Application.Lending.Deposits.Contractual;
 using IngenIA365ERP.Application.Lending.Deposits.Operations;
 using IngenIA365ERP.Domain.Enums.Lending;
 using MediatR;
@@ -16,7 +17,9 @@ namespace IngenIA365ERP.API.Endpoints.Lending.Deposits;
 /// tras la mayoría de edad—. Leer exige <c>Lending.Accounts.Read</c> (datos del titular) o <c>.View</c> (conteos); abrir y aprobar,
 /// <c>Lending.Accounts.Open</c>; las partes, <c>Lending.Accounts.Parties.Manage</c>; toda escritura con <c>Idempotency-Key</c>. US16 (T164) suma el saldo a
 /// (D, R) con su explicación y el extracto en pantalla, lecturas auditadas. Las operaciones, las cuotas, los bloqueos, los cargos, las liquidaciones y la cancelación llegan con sus historias (US3, US4,
-/// US5, US11). Cada ruta sólo reenvía al <see cref="ISender"/>. (nuevo)
+/// US5, US11). US7 (T182) suma el contrato del ahorro contractual (<c>GET /{id}/contractual</c>), las versiones de condiciones selladas
+/// (<c>GET /{id}/terms</c>) y la instrucción al vencimiento (<c>PUT /{id}/maturity-instruction</c>, con las partes). Cada ruta sólo reenvía al
+/// <see cref="ISender"/>. (nuevo)
 /// </summary>
 public class MemberAccountsEndpoints : ICarterModule
 {
@@ -95,6 +98,28 @@ public class MemberAccountsEndpoints : ICarterModule
             .ConClaveDeOperacion()
             .RequirePermission(AdministrarPartes);
 
+        // --------------------------------------------------------------------------------- ahorro contractual (US7, T182) --
+        cuentas.MapGet("/{id:guid}/contractual", async (Guid id, ISender sender, CancellationToken ct) =>
+                await sender.Send(new GetContractualQuery(id), ct))
+            .WithName("Lending_Accounts_Contractual")
+            .RequirePermission(Leer);
+
+        cuentas.MapGet("/{id:guid}/terms", async (Guid id, int? version, ISender sender, CancellationToken ct) =>
+                await sender.Send(new GetMemberAccountTermsQuery(id, version), ct))
+            .WithName("Lending_Accounts_Terms")
+            .RequirePermission(Leer);
+
+        cuentas.MapPut("/{id:guid}/maturity-instruction", async (Guid id, InstruccionDeContractualRequest body, HttpContext http, ISender sender,
+                CancellationToken ct) =>
+                await sender.Send(new SetContractualMaturityInstructionCommand(id,
+                    new ContractualMaturityInstructionInput(body.Kind, body.TargetAccountPublicId, body.Payee), body.Reason ?? string.Empty)
+                {
+                    OperationKey = http.ClaveDeOperacion(),
+                }, ct))
+            .WithName("Lending_Accounts_SetContractualMaturityInstruction")
+            .ConClaveDeOperacion()
+            .RequirePermission(AdministrarPartes);
+
         // ------------------------------------------------------------------------- intereses y cancelación (US5, T135, T139) --
         cuentas.MapGet("/{id:guid}/settlements", async (Guid id, int? page, int? pageSize, ISender sender, CancellationToken ct) =>
                 await sender.Send(new ListInterestSettlementsQuery(id, page ?? 1, pageSize ?? 50), ct))
@@ -140,6 +165,13 @@ public class MemberAccountsEndpoints : ICarterModule
 
     /// <summary>La cancelación: la fecha (hoy), cómo se entrega el saldo, quiénes firman y el motivo.</summary>
     public sealed record CancelarRequest(DateOnly? Date, CloseDeliveryInput? Delivery, IReadOnlyList<Guid>? Signatures, string? Reason);
+
+    /// <summary>
+    /// El cuerpo de <c>PUT /{id}/maturity-instruction</c> del contractual (api.md §4): trasladar a una cuenta a la vista del titular
+    /// (<c>targetAccountPublicId</c>) o girar (<c>payee</c>), y el motivo.
+    /// </summary>
+    public sealed record InstruccionDeContractualRequest(CloseDeliveryKind Kind, Guid? TargetAccountPublicId,
+        IngenIA365ERP.Application.Lending.Deposits.Operations.WithdrawalPayeeInput? Payee, string? Reason);
 
     /// <summary>El cuerpo de las rutas que sólo llevan motivo.</summary>
     public sealed record MotivoRequest(string? Reason);

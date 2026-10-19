@@ -105,7 +105,12 @@
                         <div><dt>Saldo después de liquidar</dt><dd>@Pesos(p.BalanceAfterSettlement)</dd></div>
                         <div><dt>GMF de la entrega</dt><dd>@Pesos(p.Gmf)</dd></div>
                         <div><dt>Se entrega</dt><dd>@Pesos(p.ToDeliver)</dd></div>
+                        @if (p.ContractualPenalty is { } penalidad)
+                        {
+                            <div><dt>Costo de cancelar el contrato</dt><dd>@Pesos(penalidad)</dd></div>
+                        }
                     </dl>
+                    @if (!string.IsNullOrWhiteSpace(p.ContractualExplanation)) { <p class="texto-tenue">@p.ContractualExplanation</p> }
                     @if (p.Blockers.Count > 0)
                     {
                         @foreach (var b in p.Blockers) { <p class="aviso aviso-error">@TextosDeIntereses.Bloqueo(b.Kind): @b.Detail</p> }

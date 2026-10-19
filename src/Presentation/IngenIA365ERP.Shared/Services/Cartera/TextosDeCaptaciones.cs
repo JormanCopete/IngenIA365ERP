@@ -160,6 +160,7 @@ public static class TextosDeCaptaciones
         (8, "Pago de intereses de CDAT"), (9, "Prórroga de CDAT"), (10, "Renovación de CDAT"), (11, "Redención de CDAT"), (12, "Cancelación"), (13, "Cargo"),
         (14, "Condonación de cargo"), (15, "Cruce interno"), (16, "Débito automático"), (17, "Devolución de aportes"), (18, "Abono por asamblea"),
         (19, "Reclasificación"), (20, "Vencimiento contractual"), (21, "A no reclamados"), (22, "Entrega por fallecimiento"), (23, "Consignación de embargo"),
+        (24, "Contrato de ahorro"), (25, "Incumplimiento del contrato"), (26, "Bonificación del contrato"),
     ];
 
     /// <summary>Las clases de fila del libro (<c>MemberAccountTransactionKind</c>).</summary>
@@ -168,6 +169,7 @@ public static class TextosDeCaptaciones
         (1, "Saldo inicial"), (2, "Consignación"), (3, "Retiro"), (4, "Traslado recibido"), (5, "Traslado enviado"), (6, "Interés causado"),
         (7, "Ajuste de causación"), (8, "Interés abonado"), (9, "Interés pagado"), (10, "Retención"), (11, "GMF"), (12, "Cargo"), (13, "Penalidad"),
         (14, "Capitalización"), (15, "Reclasificación"), (16, "Cruce interno"), (17, "Devolución"), (18, "A no reclamados"), (19, "Embargo consignado"),
+        (20, "Cargo condonado"), (21, "Bonificación"), (22, "Abono por asamblea"),
     ];
 
     /// <summary>Los conceptos del libro por número (<c>MemberAccountConcept</c>).</summary>
