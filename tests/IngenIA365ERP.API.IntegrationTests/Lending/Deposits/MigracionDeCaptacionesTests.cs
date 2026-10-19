@@ -218,4 +218,107 @@ public sealed class MigracionDeCaptacionesTests(CentralIdentityApiFixture fx)
         deSaldoInicial.Should().Be(transacciones);
         hechosDeSaldo.Should().Be(0, "Contabilidad ya tiene esos saldos (FR-114)");
     }
+
+    /// <summary>
+    /// US6 (pendiente de la fase 10; plantillas-y-archivos.md §4.3; research E148): un CDAT vigente al corte se carga en la parte <c>term-deposits</c> con el
+    /// interés causado que regenera su plan (con cinco pesos de más se rechaza al aplicar con <c>Lending.TermDeposit.ScheduleMismatch</c>) y, al activar las
+    /// captaciones con la carga, nace con su versión 1 sellada por la migración, su plan de seis períodos y su saldo inicial sin hechos.
+    /// </summary>
+    [Fact]
+    public async Task Un_CDAT_vigente_al_corte_se_migra_con_su_plan_regenerado_y_nace_con_su_version_sellada()
+    {
+        var coop = await CaptacionesE2E.CooperativaConCreditosAsync(fx, "migracion_cdat");
+        using var http = fx.CreateClient();
+        var admin = coop.TokenAdmin;
+        var hoy = CarteraE2E.Hoy(fx);
+        var corte = hoy.AddDays(-1);
+        await CarteraE2E.PersonaDelAdministradorAsync(http, coop.Cooperativa);
+        var usuarios = await UsuariosDeCartera.CrearAsync(fx, coop.Cooperativa);
+        var agencia = await MigracionE2E.OficinaAsync(http, admin, coop.TenantPublicId, "MIGCDT");
+        var inicio = corte.AddDays(-50);
+
+        using (CausacionE2E.RelojEn(fx, corte))
+        {
+            await MovimientosTests.LineaALaVistaAsync(http, admin, corte, "AHMIGC");
+            var cdat = await CarteraE2E.ConClaveAsync(http, admin, HttpMethod.Post, "/api/lending/lines/deposit", new
+            {
+                code = "CDMIG", name = "CDAT migrado", depositClass = "TermDeposit", active = true,
+                firstVersion = new
+                {
+                    validFrom = corte, reason = "Reglamento de CDAT (e2e)", allowsPartialWithdrawals = false, rate = new { kind = "Fixed", effectiveAnnual = 0.10m },
+                    balanceMethod = "DailyBalance", minimums = new { toOpen = 1_000_000m, toMaintain = 0m, toEarnInterest = 0m }, dayCount = "Actual360",
+                    rateEquivalence = "Compound", rounding = new { unit = 1m, mode = "AwayFromZero", moment = "PerTotal" }, settlementPeriodicity = "SinglePayment",
+                    tax = new { gmfApplies = false },
+                    termDeposit = new { minTermDays = 30, maxTermDays = 720, interestPeriodicities = new[] { "SinglePayment", "Monthly" }, timings = new[] { "Arrears" } },
+                },
+            });
+            cdat.StatusCode.Should().Be(HttpStatusCode.Created, $"la línea de CDAT: «{await cdat.Content.ReadAsStringAsync()}»");
+        }
+        await CaptacionesE2E.RegistrarDoblesDeCuentasAsync(http, admin, hoy);
+        await CaptacionesE2E.RequisitosDeCaptacionesAsync(http, admin, hoy);
+        var (documento, _) = await AsociadoAsync(http, admin, 900);
+
+        // El interés causado al corte que regenera el plan (mensual vencido, base 360), calculado con el mismo motor que valida la carga.
+        var plan = Domain.Lending.Deposits.PlanDeCdat.Generar(new Domain.Lending.Deposits.CondicionesDeCdat(10_000_000m, 0.10m, inicio, 180,
+                Domain.Enums.Lending.RepaymentPeriodicity.Monthly, Domain.Enums.Lending.InterestTiming.Arrears, Domain.Enums.Lending.DayCountConvention.Actual360,
+                new Domain.Lending.RedondeoDeCartera(1m, Domain.Enums.Lending.RoundingMode.AwayFromZero, Domain.Enums.Lending.RoundingMoment.PerTotal)),
+            new Domain.Common.Calendar.CalendarioHabil([], [DayOfWeek.Saturday, DayOfWeek.Sunday]));
+        var pagados = plan.Periodos.Count(p => p.FechaDePago <= corte);
+        var causado = Application.Lending.Deposits.Migration.CdatMigrado.EsperadoAlCorte(plan, corte);
+        Dictionary<string, string?> Cdat(decimal interes) => Fila((C.Numero, "CDM-1"), (C.Titular, documento), (C.Oficina, agencia), (C.Linea, "CDMIG"),
+            (C.NumeroDeTitulo, "T-CDM-1"), (C.Capital, "10000000"), (C.FechaDeConstitucion, Fecha(inicio)), (C.FechaDeInicioVigente, Fecha(inicio)),
+            (C.PlazoDias, "180"), (C.FechaDeVencimiento, Fecha(plan.Vencimiento)), (C.TasaPactadaEA, "10"), (C.PeriodicidadDeIntereses, "Monthly"),
+            (C.Modalidad, "Arrears"), (C.PeriodosPagados, pagados.ToString(CultureInfo.InvariantCulture)),
+            (C.InteresCausadoNoPagado, interes.ToString("0.######", CultureInfo.InvariantCulture).Replace(".", ",")), (C.DestinoDeIntereses, "Account"),
+            (C.CuentaDestino, "AHM-1"), (C.InstruccionAlVencimiento, "Rollover"));
+
+        var alta = await CarteraE2E.ConClaveAsync(http, admin, HttpMethod.Post, Cargas, new { nature = "Deposit", cutoffDate = corte, notes = "Saldos de captaciones con CDAT (e2e)" });
+        alta.StatusCode.Should().Be(HttpStatusCode.Created, await alta.Content.ReadAsStringAsync());
+        var carga = (await CarteraE2E.LeerAsync(alta)).GetProperty("publicId").GetGuid();
+        (await ImportarAsync(http, admin, carga, P.MemberAccounts, Csv(P.MemberAccounts, [Fila((C.Numero, "AHM-1"), (C.Titular, documento), (C.Oficina, agencia),
+            (C.Linea, "AHMIGC"), (C.Clase, "Demand"), (C.FechaDeApertura, "2020-05-14"), (C.Estado, "Active"), (C.SaldoCapital, "500000"))])))
+            .StatusCode.Should().Be(HttpStatusCode.OK);
+        (await ImportarAsync(http, admin, carga, P.TermDeposits, Csv(P.TermDeposits, [Cdat(causado + 5m)]))).StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var conError = await CarteraE2E.ConClaveAsync(http, admin, HttpMethod.Post, $"{Cargas}/{carga}/apply", new { reason = "Carga con el interés mal" });
+        conError.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
+        (await conError.Content.ReadAsStringAsync()).Should().Contain("Lending.TermDeposit.ScheduleMismatch");
+
+        (await ImportarAsync(http, admin, carga, P.TermDeposits, Csv(P.TermDeposits, [Cdat(causado)]), reemplazar: true)).StatusCode.Should().Be(HttpStatusCode.OK);
+        var aplicar = await CarteraE2E.ConClaveAsync(http, admin, HttpMethod.Post, $"{Cargas}/{carga}/apply", new { reason = "Saldos de captaciones aprobados (e2e)" });
+        aplicar.StatusCode.Should().Be(HttpStatusCode.OK, await aplicar.Content.ReadAsStringAsync());
+
+        var punto = await CarteraE2E.ActaDeActivacionAsync(http, coop.Cooperativa, carga, hoy);
+        var diferencias = (await CarteraE2E.GetAsync(http, admin, $"{Cargas}/{carga}/balance-check")).GetProperty("differences").EnumerateArray()
+            .Where(d => d.GetProperty("acceptedAt").ValueKind == JsonValueKind.Null).Select(d => d.GetProperty("publicId").GetGuid()).ToList();
+        if (diferencias.Count > 0)
+        {
+            var secretaria = await UsuariosDeCartera.IngresarAsync(http, usuarios.Secretaria);
+            (await CarteraE2E.ConClaveAsync(http, secretaria, HttpMethod.Post, $"{Cargas}/{carga}/differences/accept", new
+            {
+                differencePublicIds = diferencias, sessionItemPublicId = punto, reason = "Diferencias conciliadas con la contadora (e2e)",
+            })).StatusCode.Should().Be(HttpStatusCode.OK);
+        }
+        var activar = await CarteraE2E.ConClaveAsync(http, admin, HttpMethod.Post, Activacion, new
+        {
+            nature = "Deposit", migrationLoadPublicId = carga, activationDate = hoy, sessionItemPublicId = punto, acknowledgeWarnings = true,
+            reason = "Activación de captaciones con la carga aprobada (e2e)",
+        });
+        activar.StatusCode.Should().Be(HttpStatusCode.Created, await activar.Content.ReadAsStringAsync());
+
+        var (version, periodos, interesInicial, hechos) = await MigracionE2E.EnLaBaseAsync(fx, coop.TenantPublicId, async db =>
+        {
+            var cuenta = await db.MemberAccounts.AsNoTracking().SingleAsync(a => a.Number == "CDM-1");
+            var v = await db.MemberAccountTermsVersions.AsNoTracking().SingleAsync(x => x.MemberAccountId == cuenta.Id);
+            var p = await db.TermDepositScheduleItems.AsNoTracking().CountAsync(x => x.TermsVersionId == v.Id);
+            var i = await db.MemberAccountTransactions.AsNoTracking()
+                .Where(t => t.MemberAccountId == cuenta.Id && t.Concept == Domain.Enums.Lending.MemberAccountConcept.InterestPayable).SumAsync(t => t.Amount);
+            var h = await db.IntegrationMessages.AsNoTracking().CountAsync(m => m.Type == "CdatConstituido");
+            return (v, p, i, h);
+        });
+        (version.Cause, version.VersionNumber, version.MaturityDate).Should().Be((Domain.Enums.Lending.AccountTermsCause.Migration, 1, (DateOnly?)plan.Vencimiento));
+        periodos.Should().Be(6);
+        interesInicial.Should().Be(causado);
+        hechos.Should().Be(0, "el CDAT migrado nace sin hechos (FR-114)");
+    }
 }
