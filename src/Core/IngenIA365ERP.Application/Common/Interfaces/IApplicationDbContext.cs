@@ -553,6 +553,8 @@ public interface IApplicationDbContext
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Processes.AssemblyDistributionLine> AssemblyDistributionLines { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Processes.DeceasedHolderCase> DeceasedHolderCases { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Processes.UnclaimedBalance> UnclaimedBalances { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Liquidity.LiquidityFundSnapshot> LiquidityFundSnapshots { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Liquidity.LiquidityFundHolding> LiquidityFundHoldings { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Core.AssociateInboundMessage> AssociateInboundMessages { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Documents.IssuedDocumentAccount> IssuedDocumentAccounts { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.AccountPayoutOrder> AccountPayoutOrders { get; }

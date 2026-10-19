@@ -504,6 +504,8 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Processes.AssemblyDistributionLine> AssemblyDistributionLines => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Processes.AssemblyDistributionLine>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Processes.DeceasedHolderCase> DeceasedHolderCases => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Processes.DeceasedHolderCase>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Processes.UnclaimedBalance> UnclaimedBalances => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Processes.UnclaimedBalance>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Liquidity.LiquidityFundSnapshot> LiquidityFundSnapshots => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Liquidity.LiquidityFundSnapshot>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Liquidity.LiquidityFundHolding> LiquidityFundHoldings => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Liquidity.LiquidityFundHolding>();
     public DbSet<IngenIA365ERP.Domain.Entities.Core.AssociateInboundMessage> AssociateInboundMessages => Set<IngenIA365ERP.Domain.Entities.Core.AssociateInboundMessage>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Documents.IssuedDocumentAccount> IssuedDocumentAccounts => Set<IngenIA365ERP.Domain.Entities.Lending.Documents.IssuedDocumentAccount>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.AccountPayoutOrder> AccountPayoutOrders => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.AccountPayoutOrder>();

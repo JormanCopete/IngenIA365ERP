@@ -6211,11 +6211,191 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                 principalTable: "LND_DeceasedHolderCases",
                 principalColumn: "Id",
                 onDelete: ReferentialAction.Restrict);
+            // US15 (T215): la foto del fondo de liquidez y lo constituido (data-model §6.7, §6.8).
+            migrationBuilder.CreateTable(
+                name: "LND_LiquidityFundHoldings",
+                schema: "dbo",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    Kind = table.Column<int>(type: "int", nullable: false),
+                    InstitutionPersonId = table.Column<int>(type: "int", nullable: false),
+                    Reference = table.Column<string>(type: "nvarchar(60)", maxLength: 60, nullable: false),
+                    Amount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    ConstitutedOn = table.Column<DateOnly>(type: "date", nullable: false),
+                    MaturesOn = table.Column<DateOnly>(type: "date", nullable: true),
+                    WithdrawnOn = table.Column<DateOnly>(type: "date", nullable: true),
+                    SupportAttachmentPublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    Note = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: false),
+                    RegisteredByUserId = table.Column<int>(type: "int", nullable: false),
+                    EndReason = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
+                    EndedByUserId = table.Column<int>(type: "int", nullable: true),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_LND_LiquidityFundHoldings", x => x.Id);
+                    table.CheckConstraint("CK_LND_LiquidityFundHoldings_Amount", "[Amount] > 0");
+                    table.CheckConstraint("CK_LND_LiquidityFundHoldings_Dates", "[WithdrawnOn] IS NULL OR [WithdrawnOn] >= [ConstitutedOn]");
+                    table.ForeignKey(
+                        name: "FK_LND_LiquidityFundHoldings_EndedBy",
+                        column: x => x.EndedByUserId,
+                        principalSchema: "dbo",
+                        principalTable: "SEC_Users",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_LND_LiquidityFundHoldings_Institution",
+                        column: x => x.InstitutionPersonId,
+                        principalSchema: "dbo",
+                        principalTable: "COR_People",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_LND_LiquidityFundHoldings_RegisteredBy",
+                        column: x => x.RegisteredByUserId,
+                        principalSchema: "dbo",
+                        principalTable: "SEC_Users",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "LND_LiquidityFundSnapshots",
+                schema: "dbo",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    SnapshotDate = table.Column<DateOnly>(type: "date", nullable: false),
+                    Version = table.Column<int>(type: "int", nullable: false),
+                    RegisteredAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    Category = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
+                    RegimeStage = table.Column<string>(type: "nvarchar(30)", maxLength: 30, nullable: false),
+                    BaseByClassJson = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    RequiredAmount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    NewRegimeRequiredAmount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: true),
+                    ConstitutedAmount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    Shortfall = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    MinimumIrl = table.Column<decimal>(type: "decimal(18,4)", precision: 18, scale: 4, nullable: true),
+                    LiquidityRiskJson = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    ParametersSnapshotJson = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    ProcessRunId = table.Column<int>(type: "int", nullable: true),
+                    RequestedByUserId = table.Column<int>(type: "int", nullable: true),
+                    Reason = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
+                    AlertPublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    InputsSha256 = table.Column<string>(type: "nvarchar(64)", maxLength: 64, nullable: false),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_LND_LiquidityFundSnapshots", x => x.Id);
+                    table.CheckConstraint("CK_LND_LiquidityFundSnapshots_Amounts", "[RequiredAmount] >= 0 AND [ConstitutedAmount] >= 0 AND [Shortfall] >= 0");
+                    table.CheckConstraint("CK_LND_LiquidityFundSnapshots_Version", "[Version] >= 1");
+                    table.ForeignKey(
+                        name: "FK_LND_LiquidityFundSnapshots_ProcessRun",
+                        column: x => x.ProcessRunId,
+                        principalSchema: "dbo",
+                        principalTable: "LND_ProcessRuns",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_LND_LiquidityFundSnapshots_RequestedBy",
+                        column: x => x.RequestedByUserId,
+                        principalSchema: "dbo",
+                        principalTable: "SEC_Users",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_LiquidityFundHoldings_Dates",
+                schema: "dbo",
+                table: "LND_LiquidityFundHoldings",
+                columns: new[] { "ConstitutedOn", "WithdrawnOn" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_LiquidityFundHoldings_EndedByUserId",
+                schema: "dbo",
+                table: "LND_LiquidityFundHoldings",
+                column: "EndedByUserId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_LiquidityFundHoldings_Institution",
+                schema: "dbo",
+                table: "LND_LiquidityFundHoldings",
+                column: "InstitutionPersonId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_LiquidityFundHoldings_RegisteredByUserId",
+                schema: "dbo",
+                table: "LND_LiquidityFundHoldings",
+                column: "RegisteredByUserId");
+
+            migrationBuilder.CreateIndex(
+                name: "UK_LND_LiquidityFundHoldings_PublicId",
+                schema: "dbo",
+                table: "LND_LiquidityFundHoldings",
+                column: "PublicId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_LiquidityFundSnapshots_ProcessRun",
+                schema: "dbo",
+                table: "LND_LiquidityFundSnapshots",
+                column: "ProcessRunId",
+                filter: "[ProcessRunId] IS NOT NULL");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_LiquidityFundSnapshots_RequestedByUserId",
+                schema: "dbo",
+                table: "LND_LiquidityFundSnapshots",
+                column: "RequestedByUserId");
+
+            migrationBuilder.CreateIndex(
+                name: "UK_LND_LiquidityFundSnapshots_Date_Version",
+                schema: "dbo",
+                table: "LND_LiquidityFundSnapshots",
+                columns: new[] { "SnapshotDate", "Version" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "UK_LND_LiquidityFundSnapshots_PublicId",
+                schema: "dbo",
+                table: "LND_LiquidityFundSnapshots",
+                column: "PublicId",
+                unique: true);
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            // US15 (T215): la foto del fondo de liquidez y lo constituido, antes que lo demás.
+            migrationBuilder.DropTable(
+                name: "LND_LiquidityFundHoldings",
+                schema: "dbo");
+
+            migrationBuilder.DropTable(
+                name: "LND_LiquidityFundSnapshots",
+                schema: "dbo");
+
             // US14 (T207): el fallecimiento y los no reclamados, antes que lo demás.
             migrationBuilder.DropForeignKey(
                 name: "FK_LND_AccountHolds_DeceasedHolderCase",

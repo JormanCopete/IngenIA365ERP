@@ -561,12 +561,16 @@ public enum UnclaimedStatus
     Claimed = 2,
 }
 
-/// <summary>Clase de inversión del fondo de liquidez constituido.</summary>
+/// <summary>
+/// Clase de inversión del fondo de liquidez constituido (Decreto 1068 de 2015 art. 2.11.7.2.1.1 y 2.11.7.2.2.2, Decreto 976 de 2026): cuenta de ahorros o
+/// corriente, CDT o CDAT, fondo de inversión colectiva, TES clase B (US15, research §24, al final para no renumerar) u otra.
+/// </summary>
 public enum LiquidityHoldingKind
 {
     BankDeposit = 1,
     TermInvestment = 2,
     TrustFund = 3,
+    GovernmentBond = 4,
     Other = 99,
 }
 
