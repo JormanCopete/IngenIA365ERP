@@ -134,6 +134,8 @@ public static class LectorDeCuentas
     public static async Task<bool> DepositoInicialPendienteAsync(IApplicationDbContext db, MemberAccount cuenta, DateOnly fecha, CancellationToken ct)
     {
         if (cuenta.Nature != LineNature.Deposit) return false;
+        // US6 (T170): un CDAT en apertura espera su fondeo (por el recaudador o por traslado) mientras tenga su propuesta sin sellar.
+        if (cuenta.DepositClass == DepositClass.TermDeposit) return cuenta.PendingTermsJson is not null;
         var version = await LectorDeLineasDeCaptacion.VigenteDeCaptacionAsync(db, cuenta.CreditLineId, fecha, null, ct);
         if (version is not { MinOpeningAmount: > 0m }) return false;
         var capital = await db.MemberAccountTransactions.AsNoTracking()

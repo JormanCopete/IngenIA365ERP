@@ -147,6 +147,13 @@ public class LasConsultasDeCarteraRespetanElAlcance
         // Feature 014, US2 (T073, T075): las cuentas y las marcas del GMF por la oficina y la línea de la cuenta (las listas y los conteos con
         // PorOficinaYLinea; el detalle y las partes de una cuenta fuera del alcance responden el 404 de la cuenta, LectorDeCuentas.CuentaEnAlcanceAsync).
         "Core/IngenIA365ERP.Application/Lending/Deposits/Accounts/MemberAccountQueries.cs",
+        // Feature 014, US6 (T170, T171): los CDAT por oficina y línea (la lista y el calendario con PorOficinaYLinea; el detalle, el plan y los títulos con
+        // CdatEnAlcanceAsync, el 404 del CDAT); la simulación por la línea del alcance (LineaEnAlcanceAsync); las reglas de tasa negociada por la línea; las
+        // solicitudes por la oficina y la línea de su CDAT (la lista filtra; el detalle responde el 404 de la solicitud).
+        "Core/IngenIA365ERP.Application/Lending/Deposits/TermDeposits/TermDepositQueries.cs",
+        "Core/IngenIA365ERP.Application/Lending/Deposits/TermDeposits/ConstituteTermDepositCommand.cs",
+        "Core/IngenIA365ERP.Application/Lending/Deposits/TermDeposits/NegotiatedRates/NegotiatedRateRequestCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/Deposits/TermDeposits/NegotiatedRates/NegotiatedRateRuleCommands.cs",
         // Feature 014, US3 (T086, T088, T093): las vistas de aportes del centro de informes, las solicitudes de devolución y cesión y las cuotas exigibles
         // filtran por la oficina y la línea de la cuenta.
         "Core/IngenIA365ERP.Application/Lending/Deposits/Reports/ContributionReportQueries.cs",

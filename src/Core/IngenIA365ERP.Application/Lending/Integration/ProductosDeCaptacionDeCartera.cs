@@ -13,7 +13,7 @@ namespace IngenIA365ERP.Application.Lending.Integration;
 /// autoridad, R04): de captación, capital + interés por pagar + bonificación − cargo por cobrar; de aportes, las cuatro clases. El disponible es el de la
 /// última posición del día o anterior; sin posición, el saldo.
 ///
-/// <para>Lo que todavía no puede decir: el vencimiento (<c>MaturityDate</c>) nace con las condiciones del CDAT (K9) y la carga aplicada sin activar
+/// <para>El vencimiento (<c>MaturityDate</c>) es el de la última versión de condiciones del CDAT (US6, T170). La carga aplicada sin activar
 /// (<c>MigratedNotActivated</c>) la dice <see cref="Deposits.Migration.CargaVigenteDeCaptaciones"/> desde la migración (US9, T155). El estado de cada naturaleza sale de su
 /// fecha de activación en <c>LND_Setup</c> (T053; hasta entonces se deducía de <c>LND_Activations.Nature</c>, research E22).</para>
 /// </summary>
@@ -66,6 +66,11 @@ public static class ProductosDeCaptacionDeCartera
             .GroupBy(p => p.MemberAccountId)
             .ToDictionary(g => g.Key, g => g.OrderByDescending(p => p.PositionDate).ThenByDescending(p => p.Version).First().AvailableBalance);
 
+        // US6 (T170): el vencimiento del CDAT, de su última versión de condiciones.
+        var vencimientos = (await db.MemberAccountTermsVersions.AsNoTracking().Where(v => cuentaIds.Contains(v.MemberAccountId) && !v.IsDeleted)
+                .Select(v => new { v.MemberAccountId, v.VersionNumber, v.MaturityDate }).ToListAsync(ct))
+            .GroupBy(v => v.MemberAccountId).ToDictionary(g => g.Key, g => g.MaxBy(v => v.VersionNumber)!.MaturityDate);
+
         // US9 (T155): quien es titular en una carga aplicada de una naturaleza sin activar.
         var migradas = await Deposits.Migration.CargaVigenteDeCaptaciones.PersonasAsync(db, ids, ct);
         var resultado = new List<ProductosDePersonaDto>(publicos.Count);
@@ -86,7 +91,8 @@ public static class ProductosDeCaptacionDeCartera
                     var saldo = Saldo(x.Cuenta.Nature, porConcepto);
                     return new ProductoDeCaptacionDto(x.Cuenta.PublicId, x.Cuenta.Number, (NaturalezaDeCuenta)(int)x.Cuenta.Nature,
                         x.Cuenta.DepositClass is { } c ? (ClaseDeCaptacion)(int)c : null, x.Cuenta.LineCode, x.Cuenta.LineName, (RolEnLaCuenta)(int)x.Papel,
-                        (EstadoDeCuenta)(int)x.Cuenta.Status, saldo, disponibles.TryGetValue(x.Cuenta.Id, out var d) ? d : saldo, null, x.Cuenta.ClosedOn);
+                        (EstadoDeCuenta)(int)x.Cuenta.Status, saldo, disponibles.TryGetValue(x.Cuenta.Id, out var d) ? d : saldo, vencimientos.GetValueOrDefault(x.Cuenta.Id),
+                        x.Cuenta.ClosedOn);
                 })
                 .ToList();
             var vivas = productos.Any(p => p.Status != EstadoDeCuenta.Closed && p.Role is RolEnLaCuenta.Holder or RolEnLaCuenta.CoHolder);

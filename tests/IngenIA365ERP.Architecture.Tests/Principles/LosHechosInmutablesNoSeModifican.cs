@@ -272,6 +272,8 @@ public class LosHechosInmutablesNoSeModifican
         ["GmfMonthlyUsage"] = [], ["DepositLineCharge"] = [],
         // US5 (T130): la liquidación de intereses (sólo su reverso, una vez) y la retención acumulada por titular.
         ["InterestSettlement"] = ["ReversedByOperationId"], ["WithholdingAccumulation"] = [],
+        // US6 (T169): las condiciones selladas del CDAT, su plan y las reglas de tasa negociada (una versión nueva las corrige o las termina).
+        ["MemberAccountTermsVersion"] = [], ["TermDepositScheduleItem"] = [], ["NegotiatedRateRule"] = [],
     };
 
     [Fact]

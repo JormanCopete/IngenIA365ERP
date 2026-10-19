@@ -105,9 +105,49 @@ public sealed class OpenMemberAccountCommandHandler(
     /// <summary>El tipo del expediente de segregación de una cuenta (US16, T163: del catálogo de la segregación de captaciones).</summary>
     public const string Expediente = SegregacionDeCaptaciones.AperturaDeCuenta;
 
+    /// <inheritdoc cref="AperturaDeCuentas.PrefijoDe"/>
+    public static string PrefijoDe(CreditLine linea) => AperturaDeCuentas.PrefijoDe(linea);
+
+    private readonly AperturaDeCuentas _apertura = new(db, contexto, titularidad, parametros, listas, intervenciones, registro, numerador, cerrojo, alcance,
+        auditoria, reloj);
+
     public async Task<Result<MemberAccountDto>> Handle(OpenMemberAccountCommand request, CancellationToken ct)
     {
-        var e = request.Input;
+        var abierta = await _apertura.AbrirAsync(request.Input, paraCdat: false, null, ct);
+        return abierta.IsFailure
+            ? Result.Failure<MemberAccountDto>(abierta.Error)
+            : Result.Success(await LectorDeCuentas.DtoAsync(db, abierta.Value.Cuenta, reloj.HoyLocal, ct, abierta.Value.Avisos));
+    }
+}
+
+/// <summary>Una cuenta recién abierta y los avisos de la apertura (una coincidencia en listas que la retiene). (nuevo)</summary>
+public sealed record CuentaAbierta(MemberAccount Cuenta, IReadOnlyList<MemberAccountWarningDto> Avisos);
+
+/// <summary>
+/// La apertura de una cuenta de captación o de aportes (feature 014, US2, T073; refactor de US6, T170): todo lo que hacía el comando de apertura, como servicio
+/// para que el CDAT la reutilice. <c>paraCdat</c> admite la clase CDAT —que sólo se abre por su ruta—, no activa la cuenta (queda en apertura esperando el
+/// fondeo) y no aplica el depósito ni el origen de fondos de la apertura (los rige el fondeo); <c>dentroDeLaTransaccion</c> corre en la misma transacción,
+/// con la cuenta numerada y guardada (la propuesta del CDAT y su fondeo). (nuevo)
+/// </summary>
+public sealed class AperturaDeCuentas(
+    IApplicationDbContext db,
+    IContextoDeLineasDeCaptacion contexto,
+    TitularidadDeCuentas titularidad,
+    ReglasDeParametrosDeCartera parametros,
+    IConsultaDeListasDeCartera listas,
+    RegistroDeIntervenciones intervenciones,
+    RegistroDeCuentas registro,
+    NumeradorDeCartera numerador,
+    ICerrojoDeCartera cerrojo,
+    IAlcanceDeCartera alcance,
+    LendingAuditEmitter auditoria,
+    IDateTimeService reloj)
+{
+    private const string Expediente = SegregacionDeCaptaciones.AperturaDeCuenta;
+
+    public async Task<Result<CuentaAbierta>> AbrirAsync(OpenAccountInput e, bool paraCdat, Func<MemberAccount, Task<Result>>? dentroDeLaTransaccion,
+        CancellationToken ct)
+    {
         var hoy = reloj.HoyLocal;
         if (e.OpeningDate is { } fecha && fecha != hoy) return Falla(ErroresDeCuentas.FechaDeApertura(hoy));
 
@@ -128,7 +168,9 @@ public sealed class OpenMemberAccountCommandHandler(
             version = await LectorDeLineasDeCaptacion.VigenteDeCaptacionAsync(db, linea.Id, hoy, null, ct);
             if (version is null) return Falla(ErroresDeCuentas.LineaSinVersion(linea.Code, hoy));
             clase = version.DepositClass;
-            if (clase == DepositClass.TermDeposit) return Falla(ErroresDeCuentas.UsarRutaDeCdat());
+            if (clase == DepositClass.TermDeposit && !paraCdat) return Falla(ErroresDeCuentas.UsarRutaDeCdat());
+            if (clase != DepositClass.TermDeposit && paraCdat) return Falla(ErroresDeCuentas.De(ProblemaDeCartera.Con(Lending.Deposits.TermDeposits.ErroresDeCdat.CodigoNoEsCdat,
+                "La línea elegida no es de CDAT.", "linePublicId", e.LinePublicId)));
             // El contractual sella sus condiciones al constituirse (FR-007): llega con K9 (US7).
             if (clase == DepositClass.Contractual && contexto.Entrega < EntregaDeCartera.K9)
                 return Falla(new ErrorConDatos(RequisitosDeActivacionDeCaptaciones.CodigoEntregaNoDisponible,
@@ -172,7 +214,7 @@ public sealed class OpenMemberAccountCommandHandler(
                 new { field = "beneficiaryRecordAttachmentPublicId" }));
 
         // FR-032, FR-059: el depósito de apertura que alcanza el umbral de efectivo pide la declaración de origen de fondos.
-        if (version is { MinOpeningAmount: > 0m } && await LectorDeCuentas.UmbralDeOrigenDeFondosAsync(parametros, hoy, ct) is { } umbral
+        if (!paraCdat && version is { MinOpeningAmount: > 0m } && await LectorDeCuentas.UmbralDeOrigenDeFondosAsync(parametros, hoy, ct) is { } umbral
             && version.MinOpeningAmount >= umbral && e.SourceOfFunds?.DeclarationAttachmentPublicId is null)
             return Falla(ErroresDeCuentas.OrigenDeFondos(umbral, version.MinOpeningAmount));
 
@@ -189,7 +231,17 @@ public sealed class OpenMemberAccountCommandHandler(
         var verificada = await intervenciones.VerificarAsync(new ExpedienteDeCartera(Expediente, SegregacionDeCaptaciones.Raiz(Expediente, publicId)), AccionesDeSegregacion.Radicar, hoy, ct);
         if (verificada.IsFailure) return Falla(verificada.Error);
 
-        return await TransaccionExplicita.EjecutarAsync(db, async () =>
+        try
+        {
+            return await AbrirEnTransaccionAsync();
+        }
+        catch (AperturaRevertidaException revertida)
+        {
+            db.DescartarCambios();
+            return Falla(revertida.Error);
+        }
+
+        Task<Result<CuentaAbierta>> AbrirEnTransaccionAsync() => TransaccionExplicita.EjecutarAsync(db, async () =>
         {
             var ahora = reloj.UtcNow;
             var personas = resuelta.Value.Partes.Where(p => p.Papel is MemberAccountPartyRole.Holder or MemberAccountPartyRole.CoHolder)
@@ -220,7 +272,7 @@ public sealed class OpenMemberAccountCommandHandler(
 
             var cuenta = MemberAccount.Abrir(linea.Id, naturaleza, clase, titular.Id, oficina.Value, e.HandlingMode, hoy, verificada.Value.UsuarioId, ahora);
             cuenta.PublicId = publicId;
-            if (coincidencias.Count == 0 && version is not { MinOpeningAmount: > 0m }) cuenta.Activar(hoy, ahora);
+            if (!paraCdat && coincidencias.Count == 0 && version is not { MinOpeningAmount: > 0m }) cuenta.Activar(hoy, ahora);
             db.MemberAccounts.Add(cuenta);
             foreach (var fila in TitularidadDeCuentas.Filas(cuenta, resuelta.Value.Partes, hoy)) db.MemberAccountParties.Add(fila);
             foreach (var fila in TitularidadDeCuentas.FilasDeBeneficiarios(cuenta, resuelta.Value.Beneficiarios, 1, e.BeneficiaryRecordAttachmentPublicId, hoy))
@@ -236,7 +288,12 @@ public sealed class OpenMemberAccountCommandHandler(
                 db.GmfExemptAccounts.Add(GmfExemptAccount.Marcar(cuenta, hoy, "Marcada al abrir la cuenta, a solicitud del titular.", verificada.Value.UsuarioId));
                 await db.SaveChangesAsync(ct);
             }
-            return Result.Success(await LectorDeCuentas.DtoAsync(db, cuenta, hoy, ct, avisos));
+            if (dentroDeLaTransaccion is not null && await dentroDeLaTransaccion(cuenta) is { IsFailure: true } fallo)
+            {
+                // La excepción revierte la transacción explícita; el resultado la deja ver a quien llama.
+                throw new AperturaRevertidaException(fallo.Error);
+            }
+            return Result.Success(new CuentaAbierta(cuenta, avisos));
         }, ct);
     }
 
@@ -274,5 +331,11 @@ public sealed class OpenMemberAccountCommandHandler(
         ? ErroresDeCuentas.YaMarcada(vigente.AccountPublicId, vigente.AccountNumber, vigente.ValidFrom)
         : null;
 
-    private static Result<MemberAccountDto> Falla(Error e) => Result.Failure<MemberAccountDto>(e);
+    private static Result<CuentaAbierta> Falla(Error e) => Result.Failure<CuentaAbierta>(e);
+}
+
+/// <summary>Lo que hizo fallar el trabajo dentro de la transacción de la apertura: la revierte entera. (nuevo)</summary>
+public sealed class AperturaRevertidaException(Error error) : Exception(error.Message)
+{
+    public Error Error { get; } = error;
 }

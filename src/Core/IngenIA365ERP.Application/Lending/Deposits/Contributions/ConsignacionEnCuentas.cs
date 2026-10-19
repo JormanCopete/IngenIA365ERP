@@ -76,7 +76,8 @@ public sealed class ConsignacionEnCuentas(
     IDateTimeService reloj,
     ReglasDeMovimientos movimientos,
     CargosDeCuentas cargos,
-    Accrual.AjusteDeCausacionDeCuenta? ajusteDeCausacion = null)
+    Accrual.AjusteDeCausacionDeCuenta? ajusteDeCausacion = null,
+    TermDeposits.ConstitucionDeCdat? constitucionDeCdat = null)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
@@ -110,6 +111,9 @@ public sealed class ConsignacionEnCuentas(
 
         var cuenta = await db.MemberAccounts.FirstOrDefaultAsync(a => a.PublicId == item.AccountPublicId && !a.IsDeleted, ct);
         if (cuenta is null) return Falla(new Error(ErroresDePagos.CodigoNoEncontrado, "La cuenta no existe."));
+        // US6 (T170; research E135): el CDAT en apertura se fondea por el recaudador con su monto exacto; constituido, no recibe más consignaciones.
+        if (cuenta.DepositClass == DepositClass.TermDeposit && constitucionDeCdat is not null)
+            return await FondearCdatAsync(c, cuenta, huella, ct);
         if (await OperableAsync(cuenta, ct) is { } noOperable) return Falla(noOperable);
         if (cuenta.DepositClass is DepositClass.TermDeposit or DepositClass.Contractual)
             return Falla(ErroresDeAportes.EntregaNoDisponible("La consignación en un CDAT o en un ahorro contractual", nameof(EntregaDeCartera.K9)));
@@ -285,6 +289,28 @@ public sealed class ConsignacionEnCuentas(
             [.. cobrados.Select(x => new CargoCalculadoDto(x.Cargo.ChargeCode, x.Monto, x.Cargo.IsVatTaxed, nameof(AccountChargeStatus.Collected))), .. cargosCausados],
             r.PorCuota, ReglasDeMovimientos.Dto(final.Disponible), null, null, reactivada, entradas, operacion.RulesVersion, c.Avisos);
         return Result.Success(new ConsignacionAplicada(comprobante, false));
+    }
+
+    /// <summary>US6 (T170): el fondeo de un CDAT por el recaudador, con las reglas del contrato (clase de medio, fecha valor, efectivo).</summary>
+    private async Task<Result<ConsignacionAplicada>> FondearCdatAsync(ConsignacionEnCurso c, MemberAccount cuenta, string huella, CancellationToken ct)
+    {
+        var item = c.Item;
+        if (cuenta.Status != MemberAccountStatus.Opening) return Falla(TermDeposits.ErroresDeCdat.SinConsignaciones(cuenta.Number));
+        if (item.Modality is not (ModalidadDeConsignacion.TermDepositFunding or ModalidadDeConsignacion.Free))
+            return Falla(ErroresDeAportes.ModalidadNoAdmitida(item.Modality));
+        if (ClaseDeMedio(c.Recaudador.Class, item.MeansClass) is { } medio) return Falla(medio);
+        if (await FechaValorAsync(c.Recaudador.Class, cuenta.Nature, item.ValueDate, ct) is { } fecha) return Falla(fecha);
+        if (item.MeansClass == ClaseDeMedioDeRecaudo.Cash && item.SourceOfFundsAttachmentPublicId is null
+            && await LectorDeCuentas.UmbralDeOrigenDeFondosAsync(parametros, item.ValueDate, ct) is { } umbral && item.Amount >= umbral)
+            return Falla(ErroresDeAportes.OrigenDeFondos(umbral, item.Amount));
+        var fondeado = await constitucionDeCdat!.FondearAsync(cuenta, new TermDeposits.FondeoDeCdat(TermDeposits.TermDepositFundingKind.Collector, item.ValueDate,
+            c.Validacion, "Fondeo del CDAT por el recaudador")
+        {
+            Recaudador = c.Recaudador, Consignacion = item, Huella = huella,
+        }, ct);
+        return fondeado.IsFailure
+            ? Falla(fondeado.Error)
+            : Result.Success(new ConsignacionAplicada(fondeado.Value.Comprobante with { Warnings = c.Avisos }, false));
     }
 
     // --------------------------------------------------------------------------------------------------------- repartir --

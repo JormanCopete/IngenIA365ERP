@@ -558,6 +558,14 @@ public static class DependencyInjection
         services.AddScoped<Lending.Deposits.Documents.DocumentosDeRetiro>();
         services.AddScoped<Lending.Sessions.IAsuntoDeActa, Lending.Deposits.Withdrawals.AsuntoDeRetiroDeAsociado>();
         services.TryAddScoped<Lending.Payments.IArrastreDeReversoDePago, Lending.Deposits.Withdrawals.ArrastreDelCruceAlRetiro>();
+        // Feature 014, US6 (T170, T171): el CDAT —la apertura común (también de OpenMemberAccountCommand), la lectura y la cotización, el fondeo (por
+        // traslado y por el recaudador del contrato de cuentas)— y la tasa negociada con su asunto de acta.
+        services.AddScoped<Lending.Deposits.Accounts.AperturaDeCuentas>();
+        services.AddScoped<Lending.Deposits.TermDeposits.LectorDeCdat>();
+        services.AddScoped<Lending.Deposits.TermDeposits.CotizacionDeCdat>();
+        services.AddScoped<Lending.Deposits.TermDeposits.ConstitucionDeCdat>();
+        services.AddScoped<Lending.Deposits.TermDeposits.NegotiatedRates.NegociacionDeTasa>();
+        services.AddScoped<Lending.Sessions.IAsuntoDeActa, Lending.Deposits.TermDeposits.NegotiatedRates.AsuntoDeTasaNegociada>();
         services.AddScoped<Lending.Integration.ContratoDeCuentasDeCartera>();
         services.AddScoped<Common.Integration.Lending.IContratoDeCuentas>(sp => sp.GetRequiredService<Lending.Integration.ContratoDeCuentasDeCartera>());
         // US6 (T0582–T0594): la verificación de listas sin escribir de la consulta, y el consumidor de Comercial con sus piezas (los validadores de
