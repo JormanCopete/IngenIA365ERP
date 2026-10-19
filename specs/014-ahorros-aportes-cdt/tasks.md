@@ -384,12 +384,15 @@ la gracia; tasa negociada en espera del aprobador (quickstart US6).
 
 **Independent Test**: 12 × 200.000: 2.486.777 cumpliendo; tasa castigo pagando 10.
 
-- [ ] T181 [P] [US7] Motor puro `AhorroContractual` en `D/Lending/Deposits/AhorroContractual.cs` con casos dorados (2.465.306; 2.486.777; bonificación 21.471; incumplimiento) en `TD/Lending/Deposits/Casos/contractual-*.json`
-- [ ] T182 [US7] Cuotas del contractual en `GeneradorDeCuotas`, estado de cumplimiento, incumplimiento por tolerancia y vencimiento con traslado o giro en `A/Lending/Deposits/Contractual/`
-- [ ] T183 [US7] Hechos de bonificación (hecho `BonificacionReconocida` con la transacción `BonusRecognized`, gasto según la política `BonusRecognition`) en `A/Common/Integration/Contracts/Lending/Deposits/`
-- [ ] T184 [P] [US7] Pruebas de handlers del contractual en `TA/Lending/Deposits/Contractual/`
-- [ ] T185 [US7] Vista del contrato en la ficha de cuenta en `SH/Pages/Cartera/Captaciones/ContratoDeAhorro.razor`
-- [ ] T186 [US7] e2e de US7 (escenarios 1 y 2) en `TI/Lending/Deposits/AhorroContractualTests.cs`
+- [x] T181 [P] [US7] Motor puro `AhorroContractual` en `D/Lending/Deposits/AhorroContractual.cs` con casos dorados (2.465.306; 2.486.777; bonificación 21.471; incumplimiento) en `TD/Lending/Deposits/Casos/contractual-*.json` — hecho: valor final, bonificación y reliquidación sobre los aportes, cuotas por meses o por días, siete casos dorados `contractual-01` a `-07` (research E142)
+- [x] T182 [US7] Cuotas del contractual en `GeneradorDeCuotas`, estado de cumplimiento, incumplimiento por tolerancia y vencimiento con traslado o giro en `A/Lending/Deposits/Contractual/` — hecho: contrato sellado al abrir con la primera cuota, cuotas del paso diario, subpaso «Contractual» (cumplir, incumplir por atrasos o al vencer, efectos `BreachRate`/`MoveToDemand`/`Cancel`, entrega), días de gracia por parámetro, cancelación anticipada por la ruta de cierre, rutas `/contractual`, `/terms` y `/maturity-instruction`, la migración de saldos del contractual (fase 10) y `CaptacionesAportes` regenerada (research E143–E147, E149–E151, E153)
+- [x] T183 [US7] Hechos de bonificación (hecho `BonificacionReconocida` con la transacción `BonusRecognized`, gasto según la política `BonusRecognition`) en `A/Common/Integration/Contracts/Lending/Deposits/` — hecho: provisión (`Provisioned`) y abono al cumplir con su retención y acumulados, reversión al incumplir, `BON` con los roles de capital y el acompañante `RetencionPracticada`, hechos representativos para la validación previa y la activación (research E148)
+- [x] T184 [P] [US7] Pruebas de handlers del contractual en `TA/Lending/Deposits/Contractual/` — hecho: quince pruebas de punta a punta sobre el libro (apertura, cuotas, cumplimiento con 21.471, vencimiento con cuotas sin pagar a 32.001, los tres efectos, provisión, cancelación, instrucción, consulta)
+- [x] T185 [US7] Vista del contrato en la ficha de cuenta en `SH/Pages/Cartera/Captaciones/ContratoDeAhorro.razor` — hecho: `ContratoDeAhorro.razor` en la ficha, el bloque del contrato en la apertura y el costo de cancelar en la vista previa (research E152)
+- [x] T186 [US7] e2e de US7 (escenarios 1 y 2) en `TI/Lending/Deposits/AhorroContractualTests.cs` — escrita y compilada (escenarios 1 y 2); **e2e en la corrida final**
+
+
+**Checkpoint**: ahorro contractual con contrato sellado, cuotas, bonificación e incumplimiento. Construida la fase 13 el 2026-10-19 (research §19).
 
 ---
 

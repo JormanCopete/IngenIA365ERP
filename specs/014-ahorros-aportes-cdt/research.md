@@ -1629,3 +1629,116 @@ US11: no se tocan aquí.
   penalidad).
 - El interés anticipado con el interés por pagar en débito durante el período (o un diferido, P1).
 - Los defectos de D17/D18 (prórroga automática sin capitalizar, 3 días hábiles de gracia sin causación, redención anticipada no admitida).
+
+## 19. Enmienda del ahorro contractual (2026-10-19, T181–T186, US7, K9)
+
+Construida la historia 7 y los pendientes del contractual de las fases 9, 10 y 11. **Manda el código**; estas notas reemplazan lo dicho en `data-model.md`,
+`contracts/` y `tasks.md` donde choquen. Cambio de esquema: `CaptacionesAportes` **regenerada** en los dos motores (PostgreSQL `20261019104128`, SQL Server
+`20261019104056`) con `LND_MemberAccountTermsVersions.MigratedPaidInstallments` y siete columnas del contrato en `LND_MigrationAccountRows`
+(`ContractualInstallment`, `ContractualPaidInstallments`, `ContractualLateInstallments`, `ContractualMaturityDate`, `AgreedAnnualRate`,
+`ContractualBonusAnnualRate`, `ContractualStatus`); el SQL escrito a mano (T044, `NOM`, `ASO`) se reinsertó sin cambios —el antes y el después difieren sólo
+en esas ocho columnas— y la paridad pasa. Las migraciones congeladas de la 013 y `RetiroDeCaptacionesHeredadas` no se tocaron.
+
+**Norma aplicada** (investigación financiera §3.4): el ahorro contractual es un depósito a término con cuotas pactadas cuyo premio y castigo son del
+reglamento de cada entidad (no hay tasa ni tolerancia legal), por eso la cuota mínima, el rango de plazo, las tasas bonificada y de incumplimiento, la
+tolerancia, el efecto del incumplimiento y cuándo se reconoce la bonificación son condición de la línea con vigencia, y los días de gracia un parámetro con
+defecto «pendiente de validar». La bonificación es rendimiento financiero: lleva la retención del contractual (`Retencion.TarifaContractual`, DUR 1625 de 2016
+art. 1.2.4.2.83 y siguientes) como el interés, y entra al certificado y a los acumulados del año. El plazo de emisión sigue las cuentas 2110 del CUIF de la
+Supersolidaria como en el CDAT (E128), por meses.
+
+- **E142 · El motor (T181, `AhorroContractual`).** Valor final de una serie de aportes: `Σ A × ((1 + r_d)^N − 1)` con `r_d` la tasa diaria compuesta de la
+  base de la convención y N los días de la convención desde cada aporte hasta el corte (capitalizar cada mes no cambia el valor final: la capitalización
+  compuesta es la misma). **La bonificación y la penalidad se cuentan sobre los aportes, no sobre el saldo**: bonificación = interés a la tasa bonificada −
+  interés a la tasa base; penalidad = interés a la base − interés al castigo; las dos a la unidad sellada. Cuotas: con periodicidad de meses, cada k meses
+  desde el inicio (`AddMonths`, conserva el día; el 31 cae al último día del mes); con periodicidad de días (semanal, decadal, quincenal), cada k días.
+  Vencimiento = inicio + plazo en meses. Siete casos dorados `contractual-01` a `-07` (2.465.306; 2.486.777 y bonificación 21.471; diez aportes: 64.332 a la
+  base, 32.331 al castigo, penalidad 32.001; tolerancia y gracia; fechas reales en Actual/365, bonificación 21.463; quincenal de 18 meses, 36 cuotas,
+  `EighteenOrMore`; trimestral de 6 meses), verificados por `calcular.py --verificar` (48 casos).
+- **E143 · El contrato se sella al abrir.** `POST /accounts` con `contractual { installment, termMonths, maturityInstruction? }` en una línea contractual (sin el
+  bloque responde `Lending.Contractual.TermsRequired`; con el bloque en otra clase, `.TermsNotAllowed`). El contrato se **revisa antes** de abrir —cuota
+  mínima (`Lending.Contractual.InstallmentBelowMinimum`), rango de plazo (`.TermOutOfRange`), que quepa al menos una cuota (`.NoInstallments`), la tasa base
+  y el destino de la instrucción—, para no dejar una cuenta abierta sin contrato. Dentro de la transacción de la apertura: la operación `ContractualSetup`
+  (24, monto 0, prefijo `ACT-`), la versión 1 de condiciones con causa `ContractualSetup` y la **primera cuota** (vence un período después de abrir). En la
+  versión, `PrincipalAmount` = **lo pactado** (cuota × cuotas del plan; el `CHECK > 0` de la tabla lo exige), `ProjectedFinalAmount` = valor final cumpliendo,
+  la tasa base de la línea a lo pactado (fija, variable del día o el tramo por saldo) y las bonificada y de castigo de la línea, la tolerancia, el efecto y el
+  reconocimiento: el contrato no cambia aunque la línea cambie después.
+- **E144 · Cuotas y movimientos.** `GeneradorDeCuotas` delega al contractual en `GeneradorDeCuotasDeContractual`: genera la cuota siguiente el día que vence la
+  anterior, con la marca de período del control (año-mes del vencimiento y ordinal para las periodicidades de días). Se consigna **sólo por cuotas**
+  (`Installments`); la libre responde `Lending.Contractual.FreeDepositNotAllowed`; lo que excede la cuota pendiente no se admite. El traslado **a** un
+  contractual paga cuotas igual. **No admite retiros** antes de vencer (`Lending.Contractual.WithdrawalNotAllowed`), salvo la entrega del propio contrato. La
+  causación y la liquidación mensual son las de US5, con la tasa **sellada del día** (la base, o la de castigo desde el incumplimiento) y sin causar después
+  del vencimiento.
+- **E145 · El ciclo del contractual (subpaso «Contractual», después del CDAT).** Por cuenta, en su transacción con el cerrojo: (1) **vencimiento**: con todas
+  las cuotas pagadas, **cumple** —se abona la bonificación al capital con su retención (E148) y se entrega—; con cuotas sin
+  pagar espera los días de gracia de la última y luego queda **incumplido** (causa `MaturityWithPendingInstallments`), se reliquida al castigo y se entrega;
+  (2) **antes del vencimiento**, más cuotas atrasadas que las toleradas —atrasada = vencida hace más de los días de gracia— lo dejan **incumplido** (causa
+  `Arrears`) con el efecto de la línea: `BreachRate` sigue hasta el vencimiento a la tasa de castigo (versión de condiciones `ContractualBreach` desde ese
+  día), `MoveToDemand` liquida y traslada a una cuenta a la vista viva del titular, `Cancel` liquida y entrega según la instrucción; (3) con la línea en
+  `Provisioned`, el día del vencimiento de cada cuota se provisiona la bonificación a la fecha. **Entregar** = liquidar a la fecha, anular las cuotas sin
+  pagar (`CancelledAt`, con la operación que termina), y trasladar (`TransferToAccount`) o girar (`DisbursementOrder`); sin instrucción el contrato queda
+  **vencido, a disposición**, y se entrega por «Cancelación».
+- **E146 · Días de gracia de las cuotas.** Parámetro nuevo **`Captaciones.DiasDeGraciaDeCuotaContractual`** (K9, entero ≥ 0, ámbito general y línea, defecto
+  **5**, pendiente de validar): la nómina y la pagaduría descuentan unos días después del vencimiento; sin gracia, cada cuota descontada por nómina se
+  contaría atrasada.
+- **E147 · El incumplimiento.** Operación `ContractualBreach` (25, prefijo `ICT-`, monto = la penalidad): la reliquidación al castigo de los aportes hasta la
+  fecha (o el vencimiento, si ya venció). **La penalidad sale del capital** (transacción `PenaltyApplied`, concepto `Principal`), no del interés por pagar: la
+  liquidación siguiente abona entero lo causado (se cuenta sobre las filas de causación, no sobre el saldo del concepto), y descontarlo de ahí dejaba el
+  interés por pagar negativo y un residuo de capital que la entrega no vaciaba (lo destapó la prueba del efecto `Cancel`). Si había bonificación provisionada,
+  se reversa en la misma unidad. Hechos: `PenalidadAplicada` (clase `ContractualBreach`) y, si hay reversión, `BonificacionReconocida` en negativo. Aviso al
+  titular con la plantilla nueva **`CONTRATINC`** (correo, SMS y WhatsApp; variables `CuotasAtrasadasDelContrato`, `FechaDeIncumplimiento`,
+  `EfectoDelIncumplimiento`; origen `ContractualSavings`), encolado sin tumbar el incumplimiento si falla.
+- **E148 · La bonificación (T183).** Operación `ContractualBonus` (26) para la provisión (prefijo `BCT-`, concepto `Bonus`, transacción `BonusRecognized`) y la
+  reversión; el abono al cumplir va en la operación `ContractualMaturity` (20, prefijo `VCC-`) al **capital** con su retención (`WithholdingApplied`) y sus
+  acumulados del año (`WithholdingAccumulation.OrigenBonificacion = "Bonus"`). Con `Provisioned`, al cumplir se abona lo provisionado y la diferencia. El hecho
+  `BonificacionReconocida` (`BON`) ahora acredita `InteresPorPagar` (provisión), `CapitalDeCaptacion` o `CapitalDeCaptacionInactiva` (abono), con
+  acompañantes `PenalidadAplicada` y **`RetencionPracticada`**. La validación previa (A8) y la activación preguntan por los hechos representativos del
+  contractual por cada plazo de emisión que admite la línea (rango en meses → bandas).
+- **E149 · Cancelar antes de vencer.** Por la ruta de siempre (`POST /accounts/{id}/close`): un contrato vigente se **incumple** (causa
+  `EarlyTermination`) y se reliquida al castigo antes de liquidar y entregar; la vista previa trae `contractualPenalty` y `contractualExplanation`. Un contrato
+  vencido con el vencimiento todavía pendiente del proceso responde `Lending.Contractual.MaturityPending`. Arreglado de paso: el GMF de la entrega se calcula
+  con el **hecho generador del traslado** cuando se traslada (antes, con el de la cancelación: el traslado exento entre cuentas del mismo titular cobraba GMF
+  en la vista previa y la cuenta quedaba `Closing` con el GMF de diferencia); vale también para cancelar una cuenta a la vista.
+- **E150 · El libro y el motor no dan lo mismo en 30/360 (es correcto).** El libro causa día a día con la convención de la línea y liquida cada mes al peso; en
+  30/360, del 28 de febrero al 1 de marzo cuenta tres días. Con 12 × 200.000 al 6 % el libro abona ~65.549 de interés base y el motor 65.306: la diferencia
+  (~0,4 %) es de la convención, no un error. **La bonificación y la penalidad salen del motor** (21.471 exactos), y lo entregado al cumplir es lo que el libro
+  tiene más la bonificación (2.487.020 en la prueba). Con Actual/365 la diferencia es de redondeo.
+- **E151 · Rutas (T182, T185).** `GET /accounts/{id}/contractual` (`Accounts.Read`, **nueva**, no estaba en api.md: el contrato con su plan, cumplimiento,
+  proyección e instrucción), `GET /accounts/{id}/terms?version=` (`Accounts.Read`, las versiones selladas de un CDAT o un contractual) y
+  `PUT /accounts/{id}/maturity-instruction` (`Accounts.Parties.Manage`, con clave; cuerpo **plano** `{ kind, targetAccountPublicId?, payee?, reason }` como
+  dice api.md; sólo un contractual que no haya terminado: `Lending.Savings.NotContractual`, `Lending.Contractual.NotCurrent`,
+  `.DestinationInvalid`). La instrucción se guarda en `LND_MemberAccounts.MaturityInstructionJson`; la sellada al abrir es hecho. `MemberAccountDto.contractual`
+  trae el resumen (`installment`, `periodicity`, `installments`, `paidInstallments`, `arrearsInstallments`, `status`, `maturityDate`). Las tres consultas
+  respetan el alcance y la lectura queda auditada (fase 11).
+- **E152 · Pantalla (T185).** `ContratoDeAhorro` dentro de la ficha de la cuenta (`/cartera/ahorros/{id}`, sólo en un contractual): condiciones selladas,
+  cumplimiento con aviso si supera la tolerancia, lo que lleva y lo proyectado (a la base y cumpliendo), plan de cuotas, historia de condiciones e instrucción
+  al vencimiento. La apertura (`/cartera/ahorros`) pide cuota y plazo al elegir una línea contractual; la vista previa de la cancelación muestra el costo de
+  cancelar el contrato. Textos de las clases de operación 24–26 y de fila 20–22 en el cliente.
+- **E153 · Migración de saldos (fase 10).** La plantilla `member-accounts` admite la clase `Contractual` con su contrato: `cuotaContractual`, `cuotasPagadas` y
+  `fechaDeVencimientoContractual` obligatorias, `cuotasAtrasadas`, `tasaPactadaEA` (vacía = la de la línea al corte), `tasaBonificadaEA` (vacía = la de la
+  línea) y `estadoContractual` nuevo (`Current` o `Breached`; `Fulfilled` no: un contrato vencido se liquida en el sistema anterior antes de migrar, por eso el
+  vencimiento debe ser **posterior al corte**). El plazo son los meses enteros entre la apertura y el vencimiento; las cuotas se rehacen hacia atrás desde el
+  vencimiento con la periodicidad de la línea. Aviso (no error) si pagadas + atrasadas no suman las vencidas al corte (`Lending.Migration.ContractualInstallmentsDiffer`)
+  o si la cuota queda bajo la mínima actual de la línea; las cuotas atrasadas de `account-installments` deben caer en un vencimiento del plan
+  (`Lending.Migration.ContractualInstallmentNotInPlan`). Al nacer: versión 1 de condiciones con causa `Migration` y `MigratedPaidInstallments` (las pagadas
+  cuentan como aportes **fechados en su vencimiento del plan** para la bonificación), marca de la última cuota vencida al corte y, si venía incumplido, la
+  operación `ContractualBreach` sin penalidad y la versión de castigo desde el corte.
+- **E154 · Lo que queda.** El certificado tributario de la bonificación y el extracto del contrato salen con US13; el contractual en la liquidación del retiro
+  del asociado sigue la regla del CDAT (hasta su vencimiento, línea informativa) cuando US13 la extienda; la entrega por fallecimiento es de K10.
+
+### 19.1 Preguntas al dueño
+
+- **Bonificación cuando se cumple con cuotas pagadas tarde (dentro de la tolerancia).** A: se bonifica igual si al vencer todas están pagadas (lo construido);
+  B: cada cuota pagada tarde pierde su parte de la bonificación; C: se pierde toda. Recomendado: A, salvo que el reglamento diga otra cosa.
+- **Cancelación anticipada a pedido del titular.** A: se trata como incumplimiento con la reliquidación al castigo (lo construido); B: además, una penalidad
+  fija o porcentual de la línea. Recomendado: A (B se puede sumar como cargo de la línea).
+- **Efecto del incumplimiento sin instrucción y con efecto `Cancel`.** A: queda vencido, a disposición, hasta que se entregue por «Cancelación» (lo
+  construido); B: se traslada a la cuenta a la vista del titular si tiene una. Recomendado: B si la cooperativa quiere evitar saldos inmovilizados.
+
+### 19.2 Para la contadora (pendiente de validar)
+
+- Los defectos de la línea contractual y el parámetro de 5 días de gracia.
+- La bonificación abonada como gasto financiero (cuenta del rol «gasto por bonificación») y su retención en la misma tarifa del contractual.
+- La penalidad por incumplimiento: hoy descuenta el capital y va al ingreso por penalidad; alternativa, ajustar a la baja el gasto de intereses del año.
+- La provisión de la bonificación (P26) en el interés por pagar y su reversión al incumplir.
+- El plazo de emisión del contractual por meses (menos de 6; 6 a 12; 12 a 18; 18 o más) para las cuentas 2110 del CUIF.
+- La diferencia de la convención 30/360 entre el libro y la cifra del reglamento (E150).
