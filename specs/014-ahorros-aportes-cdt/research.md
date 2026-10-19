@@ -2144,3 +2144,153 @@ entrega K10 desplegada (`Lending.Savings.DeliveryNotAvailable`, `availableFrom =
 - La regla del IPC: el valor de la serie que rige el 31 de enero siguiente al ejercicio (la variación de diciembre).
 - El tratamiento tributario de la revalorización y los retornos para el asociado (§22.1) y si van al certificado tributario
   (`Documentos.CertificadoTributarioIncluyeAportes`).
+
+## 23. Enmienda de la inactividad, los no reclamados y el fallecimiento del titular (2026-10-19, T207–T213, US14, K10)
+
+Construida la historia 14 y los pendientes de las fases 10 (la inactividad de una cuenta migrada cuenta desde el corte), 14 (la reclasificación por la
+inactividad y la de la exención del GMF que rige desde una fecha futura) y 16 (el punto de enganche de los excedentes rechazados, anotado sin decidir).
+**Manda el código**; estas notas reemplazan lo dicho en `data-model.md`, `contracts/` y `tasks.md` donde choquen. Cambio de esquema: `CaptacionesAportes`
+**regenerada** en los dos motores (mismos sellos: PostgreSQL `20261019104128`, SQL Server `20261019104056`; las operaciones nuevas al final de `Up` y al
+principio de `Down`, por una migración temporal fusionada) con `LND_DeceasedHolderCases`, `LND_UnclaimedBalances` y `DeceasedHolderCaseId` en
+`LND_AccountHolds`, `LND_MemberAccountOperations` y `LND_AccountPayoutOrders`; el SQL escrito a mano (T044, `NOM`, `ASO`) quedó intacto —el antes y el
+después del `.cs` sólo difieren en líneas agregadas— y la paridad pasa. Las migraciones congeladas de la 013 y `RetiroDeCaptacionesHeredadas` no se
+tocaron. `EntregaVigente` sigue en K6b (E127): el registro del fallecimiento, el traslado a no reclamados y los subpasos de inactividad y no reclamados
+exigen la entrega K10 desplegada y las claves K10 se leen con sus defectos.
+
+**Norma aplicada** (todo «pendiente de validar por la contadora y el abogado»; ningún valor legal en el código):
+
+- **Cuentas abandonadas — Ley 1777 de 2016.** Art. 2: es abandonada la cuenta corriente o de ahorros sin depósito, retiro, transferencia ni débito o crédito
+  durante **tres años ininterrumpidos**; los abonos de intereses y los cargos de comisiones de la entidad **no** impiden considerarla abandonada (lo mismo que
+  FR-058 dice del movimiento del titular). Art. 3: los saldos que superen **322 UVR** se trasladan **a título de mutuo** a un fondo especial del ICETEX
+  (créditos educativos). La Corte Constitucional declaró exequible el art. 1 (Sentencia C-347 de 2017). Fuentes:
+  <https://www.dmsjuridica.com/buscador_20179478954/legislacion/leyes/?p=1834> y
+  <https://www.ambitojuridico.com/sites/default/files/BancoMedios/Archivos/comunicado-sentencia-c-347-17.pdf>.
+- **Decreto 953 de 2016** (adiciona el Título 17 del Libro 1 de la Parte 2 del Decreto 2555 de 2010): el traslado lo hacen «las entidades financieras que
+  están autorizadas para ofrecer cuentas de ahorro o cuentas corrientes» con listados trimestrales al ICETEX (art. 2.1.17.1.3); el **parágrafo** del mismo
+  artículo dice que la transferencia **no altera los saldos** de los balances y extractos de las cuentas ni restringe que el titular disponga de su dinero, y
+  el art. 2.1.17.1.4 fija **un día** como plazo máximo para entregar el saldo pedido por el titular, que reclama siempre ante su entidad, nunca ante el
+  ICETEX. Fuente: <https://www.cijuf.org.co/sites/cijuf.org.co/files/normatividad/2016/DeMINHACIENDA953_16.pdf>.
+- **Aplicabilidad a las cooperativas.** La Ley define la cuenta abandonada por referencia a las entidades vigiladas por la **Superintendencia Financiera**; el
+  ICETEX ha concluido que sólo los establecimientos de crédito bajo esa vigilancia trasladan saldos, y la Superintendencia de la Economía Solidaria emitió un
+  concepto unificado («Cuentas abandonadas», radicado 20161100263381 de 2016) sobre si las cooperativas con actividad financiera pueden aplicarla —su texto
+  completo no se pudo leer (fuente bloqueada), la conclusión queda **a validar por el abogado**:
+  <https://ambitojuridico.com/sites/default/files/BancoMedios/Archivos/cpto-20161100263381-16.pdf>—. El art. 36 de la Ley 454 de 1998 (funciones de la
+  Supersolidaria) no trae una regla propia de cuentas inactivas: la inactividad, su efecto y el traslado a no reclamados son **del reglamento de ahorro** de
+  cada cooperativa. Por eso: (a) la inactividad la fija cada línea (`InactivityDays`, D21: 360 por defecto); (b) el traslado de las inactivas a no reclamados
+  es una regla **interna** de la cooperativa, apagada por defecto (`CuentasAbandonadas.TrasladoHabilitado = false`, P7) y, si se enciende, con su propio plazo
+  (`CuentasAbandonadas.DiasSinMovimiento`, defecto 1.095 días = los tres años de la Ley 1777 como referencia); (c) **no se construyó el traslado al ICETEX**:
+  según el Decreto 953 sería un mutuo de la entidad que no toca el saldo del titular (un asunto de Tesorería, no un movimiento del libro de cuentas), y no
+  aplica a las cooperativas mientras el abogado no diga lo contrario (pregunta §23.1).
+- **Entrega de depósitos sin juicio de sucesión.** El Estatuto Orgánico del Sistema Financiero (Decreto 663 de 1993), art. 127, permite a los
+  establecimientos entregar los depósitos del fallecido al cónyuge, compañero permanente y herederos sin juicio de sucesión hasta un tope que se actualiza;
+  la cooperativa lo aplica por su reglamento (P6). El tope es el valor nacional `TOPE_ENTREGA_SIN_SUCESION` (pesos, sin semilla: lo registra el maestro
+  con su fuente) y los soportes, el parámetro `Fallecimiento.SoportesDeEntregaSinSucesion` (JSON, sin valor: lo fija el reglamento).
+- **Beneficiarios.** Cuenta el conjunto vigente en la **fecha de la defunción** (FR-034).
+- **Plazos informativos.** Ningún plazo de esta historia bloquea por fecha: los días de inactividad, el aviso previo y los plazos de no reclamados sólo
+  disparan el proceso o el aviso.
+
+- **E193 · Entidades (T207).** `DeceasedHolderCase` y `UnclaimedBalance` en `Domain/Entities/Lending/Deposits/Processes/DeceasedHolderCase.cs`. Cambios contra
+  data-model §6.5/§6.6: `Route` es **nula** hasta registrar la entrega (al registrar el fallecimiento no se sabe por dónde se entrega); estado nuevo
+  **`DeliveryPending` 5** (la entrega registrada que espera la aprobación; el contrato lo llamaba así) —`Approved` 2 es «aprobada, giros en curso» y
+  `Delivered` 3 «todas las cuentas canceladas»—; se agregan `PreviewSha256`, `Reason`, `RegisteredAt`, `DeliveryRegisteredByUserId/At` y
+  `CancelledAt/ByUserId/CancelReason`; **no** nace `DecisionId` (la aprobación es la segregación del catálogo, no una decisión de atribución). En
+  `UnclaimedBalance` se agregan `Reason`, `TransferredByUserId` (nulo = el proceso) y `ClaimOperationId`. Únicos: `UK_LND_DeceasedHolderCases_Person`
+  filtrado `[Status] <> 4` (un caso no anulado por titular) y `UK_LND_UnclaimedBalances_TransferOperation`. Enums al final: `MemberAccountConcept.Unclaimed`
+  **11**, `MemberAccountOperationKind.UnclaimedPayment` **27**, `PayoutPurpose.UnclaimedPayment` **9**, `DeceasedCaseStatus.DeliveryPending` **5**.
+- **E194 · Dónde vive lo no reclamado.** El dinero trasladado **sale** del capital (o de los aportes) por la fila `ToUnclaimed` y **entra** al concepto nuevo
+  `Unclaimed` del libro de la misma cuenta, que queda cancelada: no es saldo del titular (`SaldoDelTitular` no lo suma, no causa ni se retira) y su rol
+  contable es `NoReclamadosPorPagar` (`RolDelConceptoDeCuenta`). Así el hecho `SaldoTrasladadoANoReclamados` cuadra solo, el pago es una fila más
+  (`Refund` o `TransferOut` sobre `Unclaimed`) y el reverso de un giro rechazado lo devuelve a «no reclamados» con la maquinaria de siempre. La conciliación
+  no lo concilia todavía (la plantilla lo sugiere pero no lo exige, E111).
+- **E195 · Inactividad (T208).** Subpaso `Inactividad` después de las cuotas y antes de los cargos periódicos (el cargo `Inactivity` se causa sobre la cuenta ya
+  inactiva). Mide desde `LastHolderActivityDate` (sin él, la activación o la apertura); en una cuenta **migrada**, nunca antes del corte (la víspera de la
+  activación; E119 A). La cuenta pasa a `Inactive` desde el día en que el proceso lo detecta (como la suspensión, E101) y reclasifica sus saldos
+  (`CaptacionReclasificada` causa `Inactivity`, el capital al rol `CapitalDeCaptacionInactiva`); el CDAT no se mide (no tiene movimientos del titular).
+  Avisos: `PREINACTIV` `Captaciones.DiasDeAvisoPrevioDeInactividad` días antes (defecto 30, cero sin aviso) e `INACTIVA` al inactivar; plantillas estándar
+  editables por la entidad (D35), una vez por plazo (la clave del mensaje). Corre desde K10.
+- **E196 · Reactivación (T208).** `ReactivacionDeCuenta` reactiva **y reclasifica** (causa `Reactivation`) en la consignación, el retiro, el traslado (las
+  dos puntas), la entrega del contractual vencido, el pago de un no reclamado por traslado y la entrega por fallecimiento a una cuenta: **después** de guardar
+  las filas de la operación, porque el hecho de la operación se contabilizó con la cuenta todavía inactiva; así lo que se mueve es todo el saldo de ese
+  momento. Antes la consignación reactivaba antes de emitir su hecho y el capital de la cuenta quedaba partido entre los dos roles.
+- **E197 · La exención del GMF que rige desde una fecha futura (pendiente de la fase 14).** Subpaso `MarcasQueRigen` (antes de la inactividad): el día `d` en
+  que una marca empieza (`ValidFrom = d`) o deja de regir (`ValidTo = d − 1`) reclasifica de la marca de antes a la de ahora, **sólo lo contabilizado antes
+  de `d`** (lo de ese día ya llevó la marca nueva); no se repite si el comando ya reclasificó ese día. `ReclasificarAsync` suma `exentaAntes` y `saldos`.
+- **E198 · No reclamados (T209).** Fuentes: **lo devuelto y no cobrado** —la cuenta cuya última orden de giro de devolución de aportes o del retiro, de
+  cancelación o de salida del CDAT volvió (rechazada, anulada o cheque no cobrado), sin otra orden viva ni movimiento del titular después— y **el saldo de una
+  cuenta inactiva** sólo con `CuentasAbandonadas.TrasladoHabilitado`. El ciclo traslada solo cuando se cumplen `Captaciones.DiasParaNoReclamados` (vacío = no
+  traslada solo, como antes) o `CuentasAbandonadas.DiasSinMovimiento`; a mano (`POST /unclaimed/transfer`) el plazo rige si la cooperativa lo fijó; es todo o
+  nada (`NotEligible` con la lista) y `RuleNotEnabled` si pide una inactiva sin la regla. No pasan: cuentas con bloqueos o embargos vigentes, de un titular
+  con caso de fallecimiento vivo, con cargos por cobrar o sin saldo. Antes se liquidan los intereses a la fecha. La cuenta se cancela y se avisa
+  (`NORECLAMA`). Un retiro del asociado cuya devolución pasó entera a no reclamados queda `Paid` y sus cuentas canceladas. Origen del hecho: el nombre de
+  `UnclaimedSource` (`UncashedRefund`, `InactiveBalance`, `UncashedPayout`; el contrato decía `Refund|InactiveAccount|Delivery`).
+- **E199 · El pago de un no reclamado (T209).** Operación `UnclaimedPayment` (prefijo `PNR-`) **sobre la cuenta de origen aunque esté cancelada** (data-model
+  §6.6): por orden de giro (`PayoutPurpose.UnclaimedPayment`, `DevolucionOrdenada` y `OrdenDeGiroEmitida` v2 con `OrderKind` `UnclaimedPayment`) a la cuenta
+  bancaria pedida o a la de depósito registrada, o por traslado a una cuenta de ahorro a la vista o permanente viva **del titular** (`TrasladoEntreCuentasAplicado`).
+  El giro devuelto por Tesorería reversa la operación (vuelve a `Unclaimed`) y el saldo queda `Held` otra vez. El GMF del pago no se calcula (pregunta §23.1).
+  En el cuerpo de `POST /{id}/pay`, `payee` es `{ bankPublicId, accountType, accountNumber }` (el beneficiario es siempre el titular).
+- **E200 · Fallecimiento (T210).** Registrar (`Lending.DeceasedCases.Register`) exige el registro civil de defunción subido como soporte `LendingDeceasedSupport`
+  (dueño la persona fallecida; se lee y sube con los dos permisos de fallecimiento; no se borra), la fecha no futura y el alcance sobre **todas** las cuentas de
+  la persona (falla cerrado, como los embargos); bloquea **todas** sus cuentas vivas —captación y aportes— con `HoldReason.Deceased` total y el caso, y anula
+  los retiros en espera de aprobación. La Cartera **no escribe** el maestro de personas: `TitularesFallecidos` toma por fallecido al titular que el maestro
+  marca **o** que tiene un caso vivo, y con eso se suspende la causación en las líneas que lo dicen (FR-065) y el CDAT queda a disposición al vencer (FR-072);
+  el detalle avisa si el maestro todavía no lo marca. Un registro errado se anula (`POST /{id}/void`, `Approve`) antes de aprobar la entrega y levanta los
+  bloqueos.
+- **E201 · La entrega (T210).** Se entregan las cuentas de **captación** vivas con saldo (a la vista, permanente, contractual y el CDAT vencido); los aportes
+  van por el retiro del asociado con causa fallecimiento (aviso en la vista previa); el CDAT sin vencer, la cuenta embargada, con un giro en curso o con cargos
+  por cobrar quedan fuera con su nota. Rutas: `Beneficiaries` (cada cuenta a su conjunto vigente en la defunción; sin beneficiarios, `NoBeneficiaries`),
+  `WithoutProbate` (personas y porcentajes del soporte, iguales en todas las cuentas; el total no supera el tope, `CapExceeded`; tantos soportes como pida el
+  parámetro, al menos uno) y `Probate` (al menos el soporte de la sucesión). La vista previa (sin clave) devuelve el reparto y la huella; registrar la entrega la
+  compara (`Lending.Savings.PreviewChanged`) y la deja `DeliveryPending`; aprobar (`Approve`, **otra persona**: `Lending.Segregation.Conflict`) liquida los
+  intereses a la fecha y entrega **el saldo del día** por los mismos porcentajes, al centavo por el **mayor residuo** (la suma es exactamente el saldo), una
+  operación `DeceasedDelivery` (prefijo `FAL-`) por destinatario y cuenta, tomando del capital, luego del interés por pagar y luego de la bonificación. Por
+  giro (`PayoutPurpose.DeceasedDelivery`, la orden con el caso) la cuenta queda `Closing` y el caso `Approved`; cuando Tesorería informa girada la última orden
+  de la cuenta, la cuenta se cancela y suelta su bloqueo, y con todas canceladas el caso queda `Delivered`. Por traslado a una cuenta del destinatario la
+  cuenta se cancela en el acto. Un giro rechazado reintegra el saldo a la cuenta, que sigue en cierre (pregunta §23.1).
+- **E202 · Contabilidad.** No hay hechos nuevos: la entrega es `DevolucionOrdenada` (motivo `DeceasedDelivery`, ya en los motivos de `DevolucionPorPagar`) o
+  `TrasladoEntreCuentasAplicado`; el traslado a no reclamados, `SaldoTrasladadoANoReclamados` (MA); su pago, `DevolucionOrdenada` (motivo `UnclaimedPayment`)
+  desde `NoReclamadosPorPagar`. Los reversos los arman los mapeos nuevos de `ReversionDeCuentas` (`ToUnclaimed`, `UnclaimedPayment`, `DeceasedDelivery`) y
+  sus clases de origen (`UnclaimedTransfer`, `UnclaimedPayment`, `DeceasedDelivery`). La validación previa de pantalla (D23) **no** se pregunta todavía en la
+  aprobación de la entrega ni en el traslado y el pago de no reclamados (pendiente técnico: los hechos representativos de esas operaciones).
+- **E203 · Rutas, vista y pantallas (T212).** `/api/lending/deceased-cases`: lista, detalle, registrar, vista previa (sin clave), registrar la entrega, aprobar y
+  **anular** (nueva, no estaba en api.md §13); `/api/lending/unclaimed`: lista (`Accounts.Read`), traslado y pago (`Unclaimed.Manage`); la vista `unclaimed`
+  (K10, `asOf`, con datos del titular y alcance por la oficina y la línea de la cuenta de origen). Once rutas nuevas. Lecturas sensibles auditadas con
+  `Lending.Savings.BalanceViewed` (la lista de no reclamados, la lista y el detalle de los casos). Pantallas `/cartera/fallecimientos` (registro con el
+  registro civil, cuentas, beneficiarios a la fecha de la defunción, vista previa y registro de la entrega con sus destinatarios y soportes, aprobación,
+  anulación y entregas con sus giros) y `/cartera/no-reclamados` (lista por persona y estado, traslado a mano por identificadores y pago por giro o traslado),
+  con su enlace en el menú «Captaciones y aportes». La entrega desde la pantalla va siempre por orden de giro a la cuenta de depósito registrada de cada
+  destinatario (el traslado a una cuenta se pide por la API).
+- **E204 · Pruebas (T211, T213).** Application: `CicloDeVidaDeCuentasTests` (11: inactiva a los días de la línea con su reclasificación y sin repetir, lo que
+  no es movimiento del titular, la consignación que reactiva y reclasifica de vuelta, la migrada desde el corte, la exención a futuro que reclasifica el día que
+  rige y una sola vez, sin la regla no se traslada, la inactiva que pasa a no reclamados a los días sin movimiento con su pago por giro y el giro devuelto que la
+  retiene otra vez, US14-2 con dos órdenes de 500.000 y la cuenta cancelada al girarse ambas con la segregación, el registro una sola vez y sin beneficiarios, el
+  tope sin sucesión, el reparto al centavo). La e2e `CicloDeVidaDeCuentasTests` (US14-1 con el ciclo diario y la consignación; US14-2 con la entrega aprobada
+  por otra persona y las dos órdenes) está **escrita y compilada; e2e en la corrida final**, con `EntregaVigente` ≥ K10. No hay en las e2e un doble que informe
+  el resultado del giro de una orden de cuentas: lo que sigue al giro lo cubren las pruebas de aplicación.
+- **E205 · Lo que queda.** La migración de un bloqueo `Deceased` (`holds-and-garnishments`, E166) sigue «llega con K10» sin construir: los fallecimientos
+  migrados se registran con la ruta después de activar. El **punto de enganche** de los excedentes pagados en dinero cuyo giro rechaza Tesorería (fase 16,
+  E189) quedó **anotado, sin decidir**: hoy no salen de ninguna cuenta y no entran a no reclamados; si el dueño elige C de §22.1, la entrada natural es una
+  fuente nueva de `UnclaimedSource` con el saldo en los retornos por pagar (no en una cuenta del asociado).
+
+### 23.1 Preguntas para el dueño
+
+- **Traslado de cuentas abandonadas al ICETEX (Ley 1777, Decreto 953).** A: no aplica a la cooperativa y no se construye (lo construido; la cooperativa puede
+  pasar inactivas a no reclamados por su reglamento con `CuentasAbandonadas.TrasladoHabilitado`); B: si el abogado concluye que aplica, construir el listado
+  trimestral para el ICETEX como un informe de Tesorería, sin tocar el saldo del titular (el Decreto lo exige así); C: B y además el mutuo registrado en
+  Tesorería. Recomendado: A hasta el concepto del abogado; si aplica, B.
+- **Giro de una entrega por fallecimiento que Tesorería rechaza.** A: el saldo vuelve a la cuenta, que sigue en cierre, y queda pendiente (lo construido: un
+  caso aprobado no se vuelve a registrar); B: una ruta para volver a emitir la orden al mismo destinatario con otra cuenta bancaria; C: pasado
+  `Captaciones.DiasParaNoReclamados`, a no reclamados a nombre del fallecido. Recomendado: B, y C como respaldo.
+- **GMF de la entrega por fallecimiento y del pago de no reclamados.** A: no se cobra (lo construido); B: se cobra como retiro (hecho generador de
+  `Gmf.HechosGeneradores`). Recomendado: que lo decida la contadora.
+- **Inactividad del ahorro permanente y del contractual.** A: se miden como el ahorro a la vista si su línea trae días de inactividad (lo construido); B: sólo
+  el ahorro a la vista. Recomendado: A (el CUIF tiene subcuentas de inactivas del contractual).
+
+### 23.2 Para la contadora y el abogado (pendiente de validar)
+
+- Si la Ley 1777 y el Decreto 953 aplican a la cooperativa (concepto unificado de la Supersolidaria 20161100263381 de 2016) y el plazo de las cuentas
+  abandonadas que fije el reglamento (`CuentasAbandonadas.*`).
+- Los días de inactividad de cada línea (D21: 360), si siguen causando inactivas, el cargo por inactividad y los días del aviso previo (30).
+- `Captaciones.DiasParaNoReclamados` (sin valor: no traslada solo) y la cuenta de los no reclamados por pagar (CUIF sugerida 246595).
+- El tope de la entrega sin juicio de sucesión (`TOPE_ENTREGA_SIN_SUCESION`, EOSF art. 127) que rige y los soportes del reglamento
+  (`Fallecimiento.SoportesDeEntregaSinSucesion`).
+- Los textos de los avisos `PREINACTIV`, `INACTIVA` y `NORECLAMA`.

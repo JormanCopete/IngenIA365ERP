@@ -459,13 +459,17 @@ la gracia; tasa negociada en espera del aprobador (quickstart US6).
 **Independent Test**: inactiva a los días de la línea (el interés no la reactiva); fallecido con dos
 beneficiarios genera dos órdenes de giro.
 
-- [ ] T207 [P] [US14] Crear `DeceasedHolderCase` (§6.5) y `UnclaimedBalance` (§6.6) y sus configuraciones
-- [ ] T208 [US14] Inactividad y reactivación en `PasoDeCaptaciones` con reclasificación (`CaptacionReclasificada`) y cargo por inactividad si la línea lo tiene, en `A/Lending/Deposits/Accrual/Inactividad.cs`
-- [ ] T209 [US14] Traslado a no reclamados y pago al aparecer el titular en el plazo de `Captaciones.DiasParaNoReclamados` (hecho `SaldoTrasladadoANoReclamados`; vista `unclaimed`) en `A/Lending/Deposits/Unclaimed/`
-- [ ] T210 [US14] Fallecimiento: bloqueo, entrega a beneficiarios o sin juicio de sucesión hasta el tope (soportes del parámetro) o por sucesión, aprobación de segundo usuario, órdenes de giro, en `A/Lending/Deposits/Deceased/`
-- [ ] T211 [P] [US14] Pruebas de inactividad, no reclamados y fallecimiento en `TA/Lending/Deposits/`
-- [ ] T212 [US14] Rutas de `contracts/api.md` §13 y §14 y pantallas `/cartera/fallecimientos` y `/cartera/no-reclamados` en `API/Endpoints/Lending/Deposits/DeceasedCasesEndpoints.cs` y `UnclaimedEndpoints.cs`, y `SH/Pages/Cartera/Captaciones/`
-- [ ] T213 [US14] e2e de US14 (escenarios 1 y 2) en `TI/Lending/Deposits/CicloDeVidaDeCuentasTests.cs`
+- [x] T207 [P] [US14] Crear `DeceasedHolderCase` (§6.5) y `UnclaimedBalance` (§6.6) y sus configuraciones — hecho el 2026-10-19: las dos tablas, `DeceasedHolderCaseId` en el bloqueo, la operación y la orden, el concepto `Unclaimed` 11, la operación y el propósito `UnclaimedPayment` y el estado `DeliveryPending` 5; `CaptacionesAportes` regenerada en los dos motores con el SQL a mano intacto (research E193, E194)
+- [x] T208 [US14] Inactividad y reactivación en `PasoDeCaptaciones` con reclasificación (`CaptacionReclasificada`) y cargo por inactividad si la línea lo tiene, en `A/Lending/Deposits/Accrual/Inactividad.cs` — hecho: subpaso `Inactividad` (la migrada desde el corte), avisos `PREINACTIV`/`INACTIVA`, `ReactivacionDeCuenta` en la consignación, el retiro, el traslado y el contractual, y el subpaso `MarcasQueRigen` de la exención del GMF a futuro (pendiente de la fase 14); el cargo por inactividad lo causa el subpaso de cargos sobre la cuenta ya inactiva (research E195–E197)
+- [x] T209 [US14] Traslado a no reclamados y pago al aparecer el titular en el plazo de `Captaciones.DiasParaNoReclamados` (hecho `SaldoTrasladadoANoReclamados`; vista `unclaimed`) en `A/Lending/Deposits/Unclaimed/` — hecho: lo devuelto y no cobrado y las inactivas por reglamento (`CuentasAbandonadas.*`), subpaso del ciclo, traslado a mano todo o nada, pago por giro o traslado sobre la cuenta cancelada y el giro devuelto que la retiene otra vez; el traslado al ICETEX no se construyó (Ley 1777 y Decreto 953, pregunta) y el enganche de los excedentes rechazados quedó anotado sin decidir (research E198, E199, E205)
+- [x] T210 [US14] Fallecimiento: bloqueo, entrega a beneficiarios o sin juicio de sucesión hasta el tope (soportes del parámetro) o por sucesión, aprobación de segundo usuario, órdenes de giro, en `A/Lending/Deposits/Deceased/` — hecho: registro con el registro civil, bloqueo total y suspensión según la línea (`TitularesFallecidos`), vista previa, entrega registrada y aprobada por otra persona, reparto al centavo, giros o traslados y el caso entregado al girarse la última; anulación de un registro errado (research E200–E202)
+- [x] T211 [P] [US14] Pruebas de inactividad, no reclamados y fallecimiento en `TA/Lending/Deposits/` — hecho: `CicloDeVida/CicloDeVidaDeCuentasTests` (11) (research E204)
+- [x] T212 [US14] Rutas de `contracts/api.md` §13 y §14 y pantallas `/cartera/fallecimientos` y `/cartera/no-reclamados` en `API/Endpoints/Lending/Deposits/DeceasedCasesEndpoints.cs` y `UnclaimedEndpoints.cs`, y `SH/Pages/Cartera/Captaciones/` — hecho: once rutas (con `POST /deceased-cases/{id}/void` y la vista `unclaimed`) y las dos pantallas con su enlace en el menú (research E203)
+- [x] T213 [US14] e2e de US14 (escenarios 1 y 2) en `TI/Lending/Deposits/CicloDeVidaDeCuentasTests.cs` — escrita y compilada; **e2e en la corrida final**, con `EntregaVigente` ≥ K10
+
+**Checkpoint**: inactividad por los días de la línea con su reclasificación y reactivación, saldos no reclamados con su pago, y fallecimiento del titular con la
+entrega aprobada por otra persona. Construida la fase 17 el 2026-10-19 (research §23); también los pendientes de las fases 10 (la inactividad de la migrada
+desde el corte) y 14 (la reclasificación por la inactividad y por la exención a futuro); el de la fase 16 (excedentes rechazados) quedó anotado sin decidir.
 
 ---
 
