@@ -1,3 +1,4 @@
+using System.Text.Json;
 using IngenIA365ERP.Application.Accounting.Lending.Reglas;
 using IngenIA365ERP.Application.Common.Integration.Lending;
 using IngenIA365ERP.Domain.Entities.Accounting.Lending;
@@ -9,7 +10,8 @@ namespace IngenIA365ERP.Application.Accounting.Lending.Plantilla;
 /// <summary>
 /// Una fila sugerida de la matriz para captaciones o aportes (feature 014, US8, T144; contabilidad.md §4.2 de la 014): el rol con los valores que exige, la
 /// cuenta CUIF sugerida —texto <b>informativo</b>, «sugerencia, pendiente de la contadora»: nadie la aplica— y si la completitud la exige
-/// (<see cref="Exigida"/>: lo que las entregas K7 y K8 emiten desde el primer día; lo de la asamblea, los no reclamados y los embargos sólo se sugiere). (nuevo)
+/// (<see cref="Exigida"/>: lo que las entregas K7 y K8 emiten desde el primer día; lo de la asamblea, los no reclamados, los embargos y el puente de Tesorería
+/// sólo se sugiere). (nuevo)
 /// </summary>
 public sealed record FilaSugeridaDeCaptacion(
     string Rol,
@@ -40,33 +42,35 @@ public sealed record FilaSugeridaDeCaptacion(
 
 /// <summary>
 /// Las filas sugeridas sin cuenta de captaciones y aportes (feature 014, US8, T144; contabilidad.md §2 y §4.2 de la 014; investigación §3.9): una por cada
-/// combinación hecho × rol × valores exigidos de las naturalezas y clases que tienen líneas, con la cuenta del CUIF como <b>sugerencia</b>. Ninguna regla se
-/// crea sola (P1, C70): la plantilla las pone sin cuenta y la importación las ignora mientras sigan sin ella; la completitud dice cuáles exigidas faltan.
-/// El gasto por intereses se sugiere con el hecho en <c>*</c> (no fijado en la causación) porque el ajuste de la causación usa el mismo rol. (nuevo)
+/// combinación hecho × rol × valores exigidos de las naturalezas y clases que tienen líneas, con la cuenta del CUIF como <b>sugerencia</b>. Las cuentas
+/// sugeridas son dato embebido (<c>sugerencias-cuif-captaciones.json</c>), no código: la Contabilidad no tiene cuentas en código
+/// (<c>LaContabilidadNoTieneCuentasEnCodigo</c>). Ninguna regla se crea sola (P1, C70): la plantilla las pone sin cuenta y la importación las ignora mientras
+/// sigan sin ella; la completitud dice cuáles exigidas faltan. El gasto por intereses se sugiere con el hecho en <c>*</c> porque el ajuste de la causación usa
+/// el mismo rol. (nuevo)
 /// </summary>
 public static class SugerenciasDeCaptaciones
 {
     private const string Deposito = nameof(LineNature.Deposit);
     private const string Aportes = nameof(LineNature.Contribution);
 
-    private static readonly IReadOnlyDictionary<string, (string Interes, string Gasto, string Gmf)> PorClase =
-        new Dictionary<string, (string, string, string)>(StringComparer.Ordinal)
-        {
-            [nameof(DepositClass.Demand)] = ("210595", "615005", "243005"),
-            [nameof(DepositClass.TermDeposit)] = ("211095", "615010", "243010"),
-            [nameof(DepositClass.Contractual)] = ("212595", "615015", "243015"),
-            [nameof(DepositClass.Permanent)] = ("213095", "615020", "243020"),
-        };
+    private sealed record Sugerencia(string Rol, string? Clase, string? Plazo, string? ClaseDeAporte, string? Naturaleza, string? Motivo, string Cuenta);
 
-    private static readonly IReadOnlyDictionary<string, string> CdatPorPlazo = new Dictionary<string, string>(StringComparer.Ordinal)
+    private sealed record Archivo(IReadOnlyList<Sugerencia> Sugerencias);
+
+    private static readonly Lazy<IReadOnlyList<Sugerencia>> Cuif = new(() =>
     {
-        [nameof(IssueTermBand.UnderSixMonths)] = "211005",
-        [nameof(IssueTermBand.SixToTwelve)] = "211010",
-        [nameof(IssueTermBand.TwelveToEighteen)] = "211015",
-        [nameof(IssueTermBand.EighteenOrMore)] = "211020",
-    };
+        var ensamblado = typeof(SugerenciasDeCaptaciones).Assembly;
+        var nombre = ensamblado.GetManifestResourceNames().Single(n => n.EndsWith("sugerencias-cuif-captaciones.json", StringComparison.Ordinal));
+        using var flujo = ensamblado.GetManifestResourceStream(nombre)!;
+        return JsonSerializer.Deserialize<Archivo>(flujo, new JsonSerializerOptions(JsonSerializerDefaults.Web))!.Sugerencias;
+    });
 
-    private static bool Corto(string plazo) => plazo is nameof(IssueTermBand.UnderSixMonths) or nameof(IssueTermBand.SixToTwelve);
+    /// <summary>La cuenta CUIF sugerida de una fila (la primera del archivo que casa; un campo vacío casa con cualquiera); nula si no hay sugerencia.</summary>
+    public static string? CuentaSugerida(FilaSugeridaDeCaptacion f) => Cuif.Value.FirstOrDefault(s => s.Rol == f.Rol
+        && Casa(s.Clase, f.Clase) && Casa(s.Plazo, f.Plazo) && Casa(s.ClaseDeAporte, f.ClaseDeAporte) && Casa(s.Naturaleza, f.Naturaleza ?? f.NaturalezaDeLaFila)
+        && Casa(s.Motivo, f.Motivo))?.Cuenta;
+
+    private static bool Casa(string? deLaSugerencia, string? deLaFila) => deLaSugerencia is null || string.Equals(deLaSugerencia, deLaFila, StringComparison.Ordinal);
 
     /// <summary>
     /// Las sugerencias de las naturalezas y clases de las líneas (activas o no) del catálogo de Cartera: sin líneas de captación ni de aportes, ninguna. Una
@@ -87,33 +91,32 @@ public static class SugerenciasDeCaptaciones
         var filas = new List<FilaSugeridaDeCaptacion>();
         foreach (var clase in clasesDeCaptacion)
         {
-            var (interes, gasto, gmf) = PorClase[clase];
             switch (clase)
             {
                 case nameof(DepositClass.Demand):
-                    foreach (var marca in R.MarcasDeCuenta) filas.Add(new(R.CapitalDeCaptacion, Clase: clase, Marca: marca, CuentaSugerida: "210505"));
-                    filas.Add(new(R.CapitalDeCaptacionInactiva, Clase: clase, CuentaSugerida: "210510"));
+                    foreach (var marca in R.MarcasDeCuenta) filas.Add(new(R.CapitalDeCaptacion, Clase: clase, Marca: marca));
+                    filas.Add(new(R.CapitalDeCaptacionInactiva, Clase: clase));
                     break;
                 case nameof(DepositClass.TermDeposit):
-                    foreach (var (plazo, cuenta) in CdatPorPlazo)
-                        filas.Add(new(R.CapitalDeCaptacion, Clase: clase, Plazo: plazo, Marca: nameof(AccountFlag.Standard), CuentaSugerida: cuenta));
+                    foreach (var plazo in R.PlazosDeEmision)
+                        filas.Add(new(R.CapitalDeCaptacion, Clase: clase, Plazo: plazo, Marca: nameof(AccountFlag.Standard)));
                     break;
                 case nameof(DepositClass.Contractual):
                     foreach (var plazo in R.PlazosDeEmision)
                     {
-                        filas.Add(new(R.CapitalDeCaptacion, Clase: clase, Plazo: plazo, Marca: nameof(AccountFlag.Standard), CuentaSugerida: Corto(plazo) ? "212505" : "212515"));
-                        filas.Add(new(R.CapitalDeCaptacionInactiva, Clase: clase, Plazo: plazo, CuentaSugerida: Corto(plazo) ? "212510" : "212520"));
+                        filas.Add(new(R.CapitalDeCaptacion, Clase: clase, Plazo: plazo, Marca: nameof(AccountFlag.Standard)));
+                        filas.Add(new(R.CapitalDeCaptacionInactiva, Clase: clase, Plazo: plazo));
                     }
-                    filas.Add(new(R.GastoPorBonificacion, Clase: clase, CuentaSugerida: "615015"));
+                    filas.Add(new(R.GastoPorBonificacion, Clase: clase));
                     break;
                 case nameof(DepositClass.Permanent):
-                    filas.Add(new(R.CapitalDeCaptacion, Clase: clase, Marca: nameof(AccountFlag.Standard), CuentaSugerida: "213005 o 213010"));
+                    filas.Add(new(R.CapitalDeCaptacion, Clase: clase, Marca: nameof(AccountFlag.Standard)));
                     break;
             }
-            filas.Add(new(R.InteresPorPagar, Clase: clase, CuentaSugerida: interes));
-            filas.Add(new(R.GastoPorIntereses, Clase: clase, CuentaSugerida: gasto));
-            filas.Add(new(R.RetencionPorPagar, Clase: clase, CuentaSugerida: "243535"));
-            filas.Add(new(R.GmfPorPagar, Clase: clase, CuentaSugerida: gmf));
+            filas.Add(new(R.InteresPorPagar, Clase: clase));
+            filas.Add(new(R.GastoPorIntereses, Clase: clase));
+            filas.Add(new(R.RetencionPorPagar, Clase: clase));
+            filas.Add(new(R.GmfPorPagar, Clase: clase));
             if (clase is nameof(DepositClass.TermDeposit) or nameof(DepositClass.Contractual))
                 filas.Add(new(R.IngresoPorPenalidad, Clase: clase));
         }
@@ -121,7 +124,7 @@ public static class SugerenciasDeCaptaciones
         if (clasesDeCaptacion.Count > 0)
         {
             filas.Add(new(R.DevolucionPorPagar, Naturaleza: Deposito, Motivo: "DepositWithdrawal"));
-            filas.Add(new(R.DevolucionPorPagar, Naturaleza: Deposito, Motivo: "MembershipRefund", CuentaSugerida: "246510"));
+            filas.Add(new(R.DevolucionPorPagar, Naturaleza: Deposito, Motivo: "MembershipRefund"));
             if (clasesDeCaptacion.Contains(nameof(DepositClass.TermDeposit)))
             {
                 filas.Add(new(R.DevolucionPorPagar, Naturaleza: Deposito, Motivo: "TermDepositInterest"));
@@ -129,25 +132,23 @@ public static class SugerenciasDeCaptaciones
             }
             foreach (var cargo in R.MotivosDelCargo) filas.Add(new(R.IngresoPorCargos, Motivo: cargo));
             filas.Add(new(R.CargoDeCuentaPorCobrar));
-            filas.Add(new(R.NoReclamadosPorPagar, Naturaleza: Deposito, CuentaSugerida: "246595", Exigida: false));
+            filas.Add(new(R.NoReclamadosPorPagar, Naturaleza: Deposito, Exigida: false));
             filas.Add(new(R.EmbargosPorConsignar, Exigida: false));
             filas.Add(new(R.RecaudoPorAplicar, ClaseDeRecaudador: nameof(ClaseDeRecaudador.Treasury), Exigida: false));
         }
 
         if (conAportes)
         {
-            filas.Add(new(R.AportesSociales, ClaseDeAporte: nameof(ContributionClass.Ordinary), CuentaSugerida: "310505"));
-            filas.Add(new(R.AportesSociales, ClaseDeAporte: nameof(ContributionClass.Extraordinary), CuentaSugerida: "310510"));
-            filas.Add(new(R.AportesSociales, ClaseDeAporte: nameof(ContributionClass.Minimum), CuentaSugerida: "3110"));
-            filas.Add(new(R.AportesSociales, ClaseDeAporte: nameof(ContributionClass.Revalued), CuentaSugerida: "310505"));
-            filas.Add(new(R.DevolucionPorPagar, Naturaleza: Aportes, Motivo: "MembershipRefund", CuentaSugerida: "246505"));
-            filas.Add(new(R.DevolucionPorPagar, Naturaleza: Aportes, Motivo: "ContributionRefund", CuentaSugerida: "246505"));
-            filas.Add(new(R.PerdidaAbsorbida, CuentaSugerida: "3510"));
-            filas.Add(new(R.FondoDeRevalorizacion, CuentaSugerida: "3310", Exigida: false));
-            filas.Add(new(R.FondoDeExcedentes, CuentaSugerida: "3505", Exigida: false));
-            filas.Add(new(R.NoReclamadosPorPagar, Naturaleza: Aportes, CuentaSugerida: "246595", Exigida: false));
+            foreach (var claseDeAporte in new[] { ContributionClass.Ordinary, ContributionClass.Extraordinary, ContributionClass.Minimum, ContributionClass.Revalued })
+                filas.Add(new(R.AportesSociales, ClaseDeAporte: claseDeAporte.ToString()));
+            filas.Add(new(R.DevolucionPorPagar, Naturaleza: Aportes, Motivo: "MembershipRefund"));
+            filas.Add(new(R.DevolucionPorPagar, Naturaleza: Aportes, Motivo: "ContributionRefund"));
+            filas.Add(new(R.PerdidaAbsorbida));
+            filas.Add(new(R.FondoDeRevalorizacion, Exigida: false));
+            filas.Add(new(R.FondoDeExcedentes, Exigida: false));
+            filas.Add(new(R.NoReclamadosPorPagar, Naturaleza: Aportes, Exigida: false));
             if (clasesDeCaptacion.Count == 0) filas.Add(new(R.RecaudoPorAplicar, ClaseDeRecaudador: nameof(ClaseDeRecaudador.Treasury), Exigida: false));
         }
-        return filas;
+        return filas.Select(f => f with { CuentaSugerida = CuentaSugerida(f) }).ToList();
     }
 }
