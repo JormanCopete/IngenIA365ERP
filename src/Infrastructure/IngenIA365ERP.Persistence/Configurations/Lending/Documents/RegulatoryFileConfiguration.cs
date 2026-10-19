@@ -21,11 +21,14 @@ public class RegulatoryFileConfiguration : IEntityTypeConfiguration<RegulatoryFi
     public void Configure(EntityTypeBuilder<RegulatoryFile> builder)
     {
         builder.ComoEntidadDeCartera(Tabla);
+        // Feature 014, US17 (T220): los formatos de captaciones (3 SICSES de captaciones, 4 exógena) llevan su código de formato y no central.
         builder.ToTable(t => t.HasCheckConstraint("CK_LND_RegulatoryFiles_BureauCode",
-            "([Kind] = 1 AND [BureauCode] IS NULL) OR ([Kind] = 2 AND [BureauCode] IS NOT NULL)"));
+            "([Kind] = 1 AND [BureauCode] IS NULL AND [FormatCode] IS NULL) OR ([Kind] = 2 AND [BureauCode] IS NOT NULL AND [FormatCode] IS NULL) "
+            + "OR (([Kind] = 3 OR [Kind] = 4) AND [BureauCode] IS NULL AND [FormatCode] IS NOT NULL)"));
 
         builder.Property(e => e.Kind).HasConversion<int>().IsRequired();
         builder.Property(e => e.BureauCode).HasMaxLength(RegulatoryFile.LargoDeLaCentral);
+        builder.Property(e => e.FormatCode).HasMaxLength(RegulatoryFile.LargoDelFormato);
         builder.Property(e => e.PeriodYear).IsRequired();
         builder.Property(e => e.PeriodMonth).IsRequired();
         builder.Property(e => e.Version).IsRequired();
@@ -53,6 +56,8 @@ public class RegulatoryFileConfiguration : IEntityTypeConfiguration<RegulatoryFi
             .HasDatabaseName("UK_LND_RegulatoryFiles_Sicses_Period_Version").HasFilter("[Kind] = 1 AND [IsDeleted] = 0");
         builder.HasIndex(e => new { e.BureauCode, e.PeriodYear, e.PeriodMonth, e.Version }).IsUnique()
             .HasDatabaseName("UK_LND_RegulatoryFiles_Bureau_Period_Version").HasFilter("[Kind] = 2 AND [IsDeleted] = 0");
+        builder.HasIndex(e => new { e.FormatCode, e.PeriodYear, e.PeriodMonth, e.Version }).IsUnique()
+            .HasDatabaseName("UK_LND_RegulatoryFiles_Format_Period_Version").HasFilter("[FormatCode] IS NOT NULL AND [IsDeleted] = 0");
     }
 }
 

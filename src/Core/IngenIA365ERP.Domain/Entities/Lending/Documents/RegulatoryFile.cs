@@ -35,6 +35,15 @@ public class RegulatoryFile : AuditableEntity
     /// <summary>La central (<c>DATACREDITO</c>, <c>TRANSUNION</c>…); obligatoria en <c>CreditBureau</c>, nula en <c>Sicses</c>.</summary>
     public string? BureauCode { get; init; }
 
+    /// <summary>Largo del código del formato (<c>nvarchar(40)</c>).</summary>
+    public const int LargoDelFormato = 40;
+
+    /// <summary>
+    /// Feature 014, US17 (T220): el formato de captaciones (<c>sicses-captaciones</c>, <c>sicses-saldos-diarios</c>, <c>exogena-1019</c>…); obligatorio en
+    /// <c>DepositsSicses</c> y <c>Exogenous</c>, nulo en el SICSES de cartera y en las centrales. En la exógena (anual) <see cref="PeriodMonth"/> es 12.
+    /// </summary>
+    public string? FormatCode { get; init; }
+
     public short PeriodYear { get; init; }
 
     public byte PeriodMonth { get; init; }
@@ -145,8 +154,14 @@ public class RegulatoryFile : AuditableEntity
     /// </summary>
     public static RegulatoryFile Nueva(RegulatoryFileKind clase, string? central, short anio, byte mes, int version, string layout, bool layoutSinCotejar,
         int? cierreMensualId, bool modeloObligatorioNoDisponible, string inconsistenciasJson, int bloqueantes, int advertencias, string? excluidosJson,
-        int excluidos, int lineas, string totalesJson, string? nombreDeArchivo, string? huella, Guid? adjunto, int usuarioId, DateTime instante)
+        int excluidos, int lineas, string totalesJson, string? nombreDeArchivo, string? huella, Guid? adjunto, int usuarioId, DateTime instante,
+        string? formato = null)
     {
+        var deCaptaciones = clase is RegulatoryFileKind.DepositsSicses or RegulatoryFileKind.Exogenous;
+        if (deCaptaciones && (string.IsNullOrWhiteSpace(formato) || central is not null))
+            throw new ArgumentException("Un formato de captaciones lleva su código de formato y no lleva central.", nameof(formato));
+        if (!deCaptaciones && formato is not null)
+            throw new ArgumentException("Sólo los formatos de captaciones llevan código de formato.", nameof(formato));
         if (clase == RegulatoryFileKind.CreditBureau && string.IsNullOrWhiteSpace(central))
             throw new ArgumentException("Un archivo de central necesita la central.", nameof(central));
         if (clase == RegulatoryFileKind.Sicses && central is not null)
@@ -160,6 +175,7 @@ public class RegulatoryFile : AuditableEntity
         {
             Kind = clase,
             BureauCode = central,
+            FormatCode = formato,
             PeriodYear = anio,
             PeriodMonth = mes,
             Version = version,

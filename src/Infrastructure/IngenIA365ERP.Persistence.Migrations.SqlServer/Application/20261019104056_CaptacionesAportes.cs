@@ -6382,11 +6382,59 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                 table: "LND_LiquidityFundSnapshots",
                 column: "PublicId",
                 unique: true);
+
+            migrationBuilder.DropCheckConstraint(
+                name: "CK_LND_RegulatoryFiles_BureauCode",
+                schema: "dbo",
+                table: "LND_RegulatoryFiles");
+
+            migrationBuilder.AddColumn<string>(
+                name: "FormatCode",
+                schema: "dbo",
+                table: "LND_RegulatoryFiles",
+                type: "nvarchar(40)",
+                maxLength: 40,
+                nullable: true);
+
+            migrationBuilder.CreateIndex(
+                name: "UK_LND_RegulatoryFiles_Format_Period_Version",
+                schema: "dbo",
+                table: "LND_RegulatoryFiles",
+                columns: new[] { "FormatCode", "PeriodYear", "PeriodMonth", "Version" },
+                unique: true,
+                filter: "[FormatCode] IS NOT NULL AND [IsDeleted] = 0");
+
+            migrationBuilder.AddCheckConstraint(
+                name: "CK_LND_RegulatoryFiles_BureauCode",
+                schema: "dbo",
+                table: "LND_RegulatoryFiles",
+                sql: "([Kind] = 1 AND [BureauCode] IS NULL AND [FormatCode] IS NULL) OR ([Kind] = 2 AND [BureauCode] IS NOT NULL AND [FormatCode] IS NULL) OR (([Kind] = 3 OR [Kind] = 4) AND [BureauCode] IS NULL AND [FormatCode] IS NOT NULL)");
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.DropIndex(
+                name: "UK_LND_RegulatoryFiles_Format_Period_Version",
+                schema: "dbo",
+                table: "LND_RegulatoryFiles");
+
+            migrationBuilder.DropCheckConstraint(
+                name: "CK_LND_RegulatoryFiles_BureauCode",
+                schema: "dbo",
+                table: "LND_RegulatoryFiles");
+
+            migrationBuilder.DropColumn(
+                name: "FormatCode",
+                schema: "dbo",
+                table: "LND_RegulatoryFiles");
+
+            migrationBuilder.AddCheckConstraint(
+                name: "CK_LND_RegulatoryFiles_BureauCode",
+                schema: "dbo",
+                table: "LND_RegulatoryFiles",
+                sql: "([Kind] = 1 AND [BureauCode] IS NULL) OR ([Kind] = 2 AND [BureauCode] IS NOT NULL)");
+
             // US15 (T215): la foto del fondo de liquidez y lo constituido, antes que lo demás.
             migrationBuilder.DropTable(
                 name: "LND_LiquidityFundHoldings",

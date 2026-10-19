@@ -33377,6 +33377,10 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasMaxLength(60)
                         .HasColumnType("character varying(60)");
 
+                    b.Property<string>("FormatCode")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
                     b.Property<DateTime>("GeneratedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -33481,9 +33485,14 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasDatabaseName("UK_LND_RegulatoryFiles_Bureau_Period_Version")
                         .HasFilter("\"Kind\" = 2 AND \"IsDeleted\" = FALSE");
 
+                    b.HasIndex("FormatCode", "PeriodYear", "PeriodMonth", "Version")
+                        .IsUnique()
+                        .HasDatabaseName("UK_LND_RegulatoryFiles_Format_Period_Version")
+                        .HasFilter("\"FormatCode\" IS NOT NULL AND \"IsDeleted\" = FALSE");
+
                     b.ToTable("LND_RegulatoryFiles", "dbo", t =>
                         {
-                            t.HasCheckConstraint("CK_LND_RegulatoryFiles_BureauCode", "(\"Kind\" = 1 AND \"BureauCode\" IS NULL) OR (\"Kind\" = 2 AND \"BureauCode\" IS NOT NULL)");
+                            t.HasCheckConstraint("CK_LND_RegulatoryFiles_BureauCode", "(\"Kind\" = 1 AND \"BureauCode\" IS NULL AND \"FormatCode\" IS NULL) OR (\"Kind\" = 2 AND \"BureauCode\" IS NOT NULL AND \"FormatCode\" IS NULL) OR ((\"Kind\" = 3 OR \"Kind\" = 4) AND \"BureauCode\" IS NULL AND \"FormatCode\" IS NOT NULL)");
                         });
                 });
 

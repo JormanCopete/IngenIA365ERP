@@ -119,6 +119,12 @@ public static class CatalogoDeLimitesLegales
     /// <summary>IRL acumulado mínimo (veces) de la Circular Básica Contable y Financiera, Título IV, Capítulo III, Anexo 1.</summary>
     public const string IrlMinimo = "IRL_MINIMO";
 
+    /// <summary>
+    /// Feature 014, US17 (T220): veces la UVT del año desde las que una persona entra al formato 1019 de la exógena (movimientos crédito mensuales o saldo del
+    /// período), Resolución DIAN 000162 de 2023, art. 3. La entidad puede reportar desde menos, nunca desde más.
+    /// </summary>
+    public const string Exogena1019UmbralUvt = "EXOGENA_1019_UMBRAL_UVT";
+
     private static readonly IReadOnlyList<LimiteLegal> Lista =
     [
         new(AvisoPrevioDias, UnidadDeValorNacional.Dias, DireccionDeLoEstricto.Mayor, "AvisoPrevio.DiasMinimos", "AvisoPrevio.DiasMinimos", "Ley 1266 de 2008; Ley 2157 de 2021"),
@@ -169,6 +175,9 @@ public static class CatalogoDeLimitesLegales
             "FondoDeLiquidez.PorcentajesPorCategoria (permanente sólo al retiro, categoría plena)", null, "Decreto 1068 de 2015 art. 2.11.7.2.2.3 (Decreto 976 de 2026)"),
         new(IrlMinimo, UnidadDeValorNacional.Veces, DireccionDeLoEstricto.Mayor, "RiesgoDeLiquidez.UmbralIrl", "RiesgoDeLiquidez.UmbralIrl",
             "Circular Básica Contable y Financiera, Título IV, Capítulo III, Anexo 1"),
+        // Feature 014, US17 (T220): el umbral de la exógena 1019 (lo lee ProyeccionDeCaptaciones; sin parámetro de la cooperativa).
+        new(Exogena1019UmbralUvt, UnidadDeValorNacional.Veces, DireccionDeLoEstricto.Menor, "Umbral de la exógena 1019 (ProyeccionDeCaptaciones)", null,
+            "Resolución DIAN 000162 de 2023, art. 3 (Resolución 227 de 2025, art. 1.3.3.1.1)"),
     ];
 
     private static readonly Dictionary<string, LimiteLegal> PorCodigo = Lista.ToDictionary(l => l.Codigo, StringComparer.Ordinal);

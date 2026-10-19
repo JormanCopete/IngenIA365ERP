@@ -249,6 +249,12 @@ public enum RegulatoryFileKind
 {
     Sicses = 1,
     CreditBureau = 2,
+
+    /// <summary>Feature 014, US17 (T220): un formato del SICSES de captaciones y aportes; cuál, lo dice <c>FormatCode</c>.</summary>
+    DepositsSicses = 3,
+
+    /// <summary>Feature 014, US17 (T220): un formato de información exógena de la DIAN (1019, 1020), anual; cuál, lo dice <c>FormatCode</c>.</summary>
+    Exogenous = 4,
 }
 
 /// <summary>Estado de un archivo regulatorio (K5, F-12).</summary>

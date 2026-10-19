@@ -33643,6 +33643,10 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasMaxLength(60)
                         .HasColumnType("nvarchar(60)");
 
+                    b.Property<string>("FormatCode")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
                     b.Property<DateTime>("GeneratedAt")
                         .HasColumnType("datetime2");
 
@@ -33747,9 +33751,14 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasDatabaseName("UK_LND_RegulatoryFiles_Bureau_Period_Version")
                         .HasFilter("[Kind] = 2 AND [IsDeleted] = 0");
 
+                    b.HasIndex("FormatCode", "PeriodYear", "PeriodMonth", "Version")
+                        .IsUnique()
+                        .HasDatabaseName("UK_LND_RegulatoryFiles_Format_Period_Version")
+                        .HasFilter("[FormatCode] IS NOT NULL AND [IsDeleted] = 0");
+
                     b.ToTable("LND_RegulatoryFiles", "dbo", t =>
                         {
-                            t.HasCheckConstraint("CK_LND_RegulatoryFiles_BureauCode", "([Kind] = 1 AND [BureauCode] IS NULL) OR ([Kind] = 2 AND [BureauCode] IS NOT NULL)");
+                            t.HasCheckConstraint("CK_LND_RegulatoryFiles_BureauCode", "([Kind] = 1 AND [BureauCode] IS NULL AND [FormatCode] IS NULL) OR ([Kind] = 2 AND [BureauCode] IS NOT NULL AND [FormatCode] IS NULL) OR (([Kind] = 3 OR [Kind] = 4) AND [BureauCode] IS NULL AND [FormatCode] IS NOT NULL)");
                         });
                 });
 
