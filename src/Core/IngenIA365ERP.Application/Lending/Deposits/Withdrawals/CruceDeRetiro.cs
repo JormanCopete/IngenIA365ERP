@@ -248,7 +248,8 @@ public sealed class ArrastreDelCruceAlRetiro(
     ReglasDeParametrosDeCartera? parametros = null,
     IEmailSender? correo = null,
     IAlertas? alertas = null,
-    ILogger<ArrastreDelCruceAlRetiro>? logger = null) : IArrastreDeReversoDePago
+    ILogger<ArrastreDelCruceAlRetiro>? logger = null,
+    IngenIA365ERP.Application.Common.Persistence.TareasTrasElCommit? trasElCommit = null) : IArrastreDeReversoDePago
 {
     /// <summary>Quién inicia el reverso de la cuenta arrastrado por el del pago.</summary>
     public const string IniciadoPorElReversoDelPago = "LoanPaymentReversal";
@@ -324,8 +325,11 @@ public sealed class ArrastreDelCruceAlRetiro(
     }
 
     /// <summary>
-    /// D44: la alerta (transaccional, por permiso) y el correo a la gerencia, la revisoría fiscal y los destinatarios del parámetro. El correo sale en el
-    /// momento: si falla, queda en el log y el reverso sigue (la alerta ya lo registra).
+    /// D44: la alerta (transaccional, por permiso) y el correo a la gerencia, la revisoría fiscal y los destinatarios del parámetro. Los destinatarios se
+    /// leen dentro de la transacción, pero el correo sale <b>sólo después de confirmarla</b> (<see cref="Common.Persistence.TareasTrasElCommit"/>, el
+    /// mismo mecanismo de la emisión electrónica de la 012): si el reverso se revierte, no sale ningún aviso de algo que no pasó. Sin quien ejecute
+    /// tras el commit (un proceso fuera del mediador) no se envía: queda en el log y la alerta ya lo registra. Si un envío falla, queda en el log y
+    /// el reverso sigue confirmado. (Hasta la fase 8 de la 014 salía antes del commit, research §13.4.)
     /// </summary>
     private async Task AvisarAsync(MembershipWithdrawal retiro, LoanOperation pago, LoanOperation reverso, IReadOnlyList<MemberAccount> reabiertas,
         CancellationToken ct)
@@ -351,17 +355,30 @@ public sealed class ArrastreDelCruceAlRetiro(
                 is { IsSuccess: true } leido
                 ? Correos(leido.Value.Texto)
                 : [];
-        foreach (var destinatario in porRol.Concat(adicionales).Distinct(StringComparer.OrdinalIgnoreCase))
+        var destinatarios = porRol.Concat(adicionales).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        if (destinatarios.Count == 0) return;
+        if (trasElCommit is null)
         {
-            try
-            {
-                await correo.SendAsync(new EmailMessage(destinatario, asunto, $"<p>{System.Net.WebUtility.HtmlEncode(cuerpo)}</p>", cuerpo), ct);
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                logger?.LogWarning(ex, "No salió el correo del reverso tardío del retiro {Retiro} a {Destinatario}.", retiro.Number, destinatario);
-            }
+            logger?.LogWarning("[Cartera.ReversoTardioSinCorreo] El reverso tardío del retiro {Retiro} no tiene quien envíe el correo tras confirmar: "
+                               + "queda la alerta.", retiro.Number);
+            return;
         }
+        var html = $"<p>{System.Net.WebUtility.HtmlEncode(cuerpo)}</p>";
+        var enviador = correo;
+        trasElCommit.Agregar(async token =>
+        {
+            foreach (var destinatario in destinatarios)
+            {
+                try
+                {
+                    await enviador.SendAsync(new EmailMessage(destinatario, asunto, html, cuerpo), token);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    logger?.LogWarning(ex, "No salió el correo del reverso tardío del retiro {Retiro} a {Destinatario}.", retiro.Number, destinatario);
+                }
+            }
+        });
     }
 
     /// <summary>Los correos de <c>Captaciones.DestinatariosReversoTardio</c>, separados por coma o punto y coma.</summary>
