@@ -38,7 +38,7 @@ namespace IngenIA365ERP.Application.Tests.Lending.Deposits.CicloDeVida;
 /// (sólo con la regla habilitada) y su pago por giro devuelto por Tesorería, y el fallecimiento con dos beneficiarios al 50 % que genera dos órdenes de giro
 /// y cancela la cuenta al pagarse ambas, aprobado por otra persona—. El escenario de <see cref="AportesDePrueba"/> (hoy 2026-12-01) con la entrega K10. (nuevo)
 /// </summary>
-public sealed class CicloDeVidaDeCuentasTests : IDisposable
+public sealed partial class CicloDeVidaDeCuentasTests : IDisposable
 {
     private const int DiasDeInactividad = 30;
 

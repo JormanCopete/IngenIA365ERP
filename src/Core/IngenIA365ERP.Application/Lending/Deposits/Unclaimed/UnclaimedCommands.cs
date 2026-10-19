@@ -14,6 +14,7 @@ using IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts;
 using IngenIA365ERP.Domain.Entities.Lending.Deposits.Processes;
 using IngenIA365ERP.Domain.Enums.Lending;
 using IngenIA365ERP.Domain.Lending;
+using IngenIA365ERP.Application.Lending.Integration;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -134,7 +135,8 @@ public sealed class TransferToUnclaimedCommandHandler(
     LendingAuditEmitter auditoria,
     ICerrojoDeCartera cerrojo,
     Lines.IContextoDeLineasDeCaptacion contexto,
-    IDateTimeService reloj) : IRequestHandler<TransferToUnclaimedCommand, Result<IReadOnlyList<UnclaimedBalanceDto>>>
+    IDateTimeService reloj,
+    ValidacionPreviaDeCaptaciones? validacionPrevia = null) : IRequestHandler<TransferToUnclaimedCommand, Result<IReadOnlyList<UnclaimedBalanceDto>>>
 {
     public async Task<Result<IReadOnlyList<UnclaimedBalanceDto>>> Handle(TransferToUnclaimedCommand request, CancellationToken ct)
     {
@@ -182,6 +184,10 @@ public sealed class TransferToUnclaimedCommandHandler(
                 candidatas.Add((cuenta, candidata));
             }
             if (noElegibles.Count > 0) return Falla(ErroresDeNoReclamados.NoElegibles(noElegibles));
+            // D23 (pendiente de la fase 17, research E206): no se traslada nada si el traslado de alguna no se contabilizaría (todo o nada).
+            if (validacionPrevia is not null && await ValidacionPreviaDelCicloDeVida.TrasladoANoReclamadosAsync(validacionPrevia, db,
+                    candidatas.Select(c => (c.Cuenta.Id, c.Candidata.Fuente.ToString())).ToList(), hoy, ct) is { } bloqueo)
+                return Falla(bloqueo);
             var hechos = new List<UnclaimedBalance>();
             foreach (var (cuenta, candidata) in candidatas)
             {
@@ -233,7 +239,9 @@ public sealed class PayUnclaimedBalanceCommandHandler(
     NoReclamados noReclamados,
     IAlcanceDeCartera alcance,
     LendingAuditEmitter auditoria,
-    ICerrojoDeCartera cerrojo) : IRequestHandler<PayUnclaimedBalanceCommand, Result<UnclaimedBalanceDto>>
+    ICerrojoDeCartera cerrojo,
+    IDateTimeService? reloj = null,
+    ValidacionPreviaDeCaptaciones? validacionPrevia = null) : IRequestHandler<PayUnclaimedBalanceCommand, Result<UnclaimedBalanceDto>>
 {
     public async Task<Result<UnclaimedBalanceDto>> Handle(PayUnclaimedBalanceCommand request, CancellationToken ct) =>
         await TransaccionExplicita.EjecutarAsync(db, async () =>
@@ -253,6 +261,14 @@ public sealed class PayUnclaimedBalanceCommandHandler(
                     || destino.Status is not (MemberAccountStatus.Active or MemberAccountStatus.Inactive))
                     return Falla(ErroresDeNoReclamados.Invalido("targetAccountPublicId",
                         $"La cuenta {destino.Number} no es una cuenta de ahorro a la vista o permanente viva del titular."));
+            }
+            // D23 (pendiente de la fase 17, research E206): la pantalla no paga si el pago no se contabilizaría.
+            if (validacionPrevia is not null && reloj is not null)
+            {
+                var numero = await db.MemberAccounts.AsNoTracking().Where(a => a.Id == saldo.SourceMemberAccountId).Select(a => a.Number).FirstAsync(ct);
+                if (await ValidacionPreviaDelCicloDeVida.PagoDeNoReclamadoAsync(validacionPrevia, saldo.SourceMemberAccountId, destino, reloj.HoyLocal, numero, ct)
+                    is { } bloqueo)
+                    return Falla(bloqueo);
             }
             await cerrojo.TomarSetupAsync(exclusivo: false, ct);
             await cerrojo.BloquearCuentasAsync(new[] { saldo.SourceMemberAccountId, destino?.Id ?? saldo.SourceMemberAccountId }.Distinct().Order().ToList(),

@@ -170,6 +170,37 @@ public static class HechosRepresentativosDeCaptaciones
         Amounts = [Valor(ConceptoDeCapital(c.D), -1m, tipoDeOrden)],
     };
 
+    // ------------------------------------------------------------------------- no reclamados y fallecimiento (US14) --
+
+    /// <summary>
+    /// US14 (research E202, E206): el traslado del saldo a no reclamados —sale del capital (o de los aportes) y entra al concepto <c>Unclaimed</c>, cuyo rol es
+    /// <c>NoReclamadosPorPagar</c>—, con el origen dado (<c>UncashedRefund</c>, <c>InactiveBalance</c>, <c>UncashedPayout</c>).
+    /// </summary>
+    public static SaldoTrasladadoANoReclamadosV1 TrasladoANoReclamados(CuentaRepresentativa c, string origen) => new()
+    {
+        Account = c.Referencia, HolderPersonPublicId = c.Titular, Dimensions = c.D, Origin = origen, UnclaimedPublicId = Guid.NewGuid(),
+        Amounts =
+        [
+            Valor(ConceptoDeCapital(c.D), -1m, "UnclaimedTransfer"),
+            Valor(MemberAccountConcept.Unclaimed, 1m, "UnclaimedTransfer"),
+        ],
+    };
+
+    /// <summary>US14 (research E206): el pago de un saldo no reclamado por orden de giro (sale de <c>Unclaimed</c> a la devolución por pagar).</summary>
+    public static DevolucionOrdenadaV1 PagoDeNoReclamadoPorGiro(CuentaRepresentativa c) => new()
+    {
+        Account = c.Referencia, HolderPersonPublicId = c.Titular, Dimensions = c.D, OrderKind = nameof(PayoutPurpose.UnclaimedPayment),
+        PayeePersonPublicId = c.Titular, Amounts = [Valor(MemberAccountConcept.Unclaimed, -1m, nameof(PayoutPurpose.UnclaimedPayment))],
+    };
+
+    /// <summary>US14 (research E206): el pago de un saldo no reclamado por traslado a una cuenta de ahorro del titular.</summary>
+    public static TrasladoEntreCuentasAplicadoV1 PagoDeNoReclamadoPorTraslado(CuentaRepresentativa origen, CuentaRepresentativa destino) => new()
+    {
+        Account = origen.Referencia, HolderPersonPublicId = origen.Titular, Dimensions = origen.D, Amounts = [Valor(MemberAccountConcept.Unclaimed, -1m)],
+        Target = destino.Referencia, TargetHolderPersonPublicId = destino.Titular, TargetDimensions = destino.D,
+        TargetAmounts = [Valor(MemberAccountConcept.Principal, 1m)],
+    };
+
     // ------------------------------------------------------------------------------------------------------------ CDAT --
 
     /// <summary>

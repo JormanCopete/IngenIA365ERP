@@ -11,6 +11,7 @@ using IngenIA365ERP.Application.Lending.Common;
 using IngenIA365ERP.Application.Lending.Deposits.Accounts;
 using IngenIA365ERP.Application.Lending.Deposits.Holds;
 using IngenIA365ERP.Application.Lending.Deposits.Lines;
+using IngenIA365ERP.Application.Lending.Integration;
 using IngenIA365ERP.Application.Lending.Segregation;
 using IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts;
 using IngenIA365ERP.Domain.Entities.Lending.Deposits.Processes;
@@ -434,7 +435,8 @@ public sealed class ApproveDeceasedDeliveryCommandHandler(
     Fallecimientos fallecimientos,
     RegistroDeIntervenciones intervenciones,
     ICerrojoDeCartera cerrojo,
-    IDateTimeService reloj) : IRequestHandler<ApproveDeceasedDeliveryCommand, Result<DeceasedHolderCaseDto>>
+    IDateTimeService reloj,
+    ValidacionPreviaDeCaptaciones? validacionPrevia = null) : IRequestHandler<ApproveDeceasedDeliveryCommand, Result<DeceasedHolderCaseDto>>
 {
     public async Task<Result<DeceasedHolderCaseDto>> Handle(ApproveDeceasedDeliveryCommand request, CancellationToken ct)
     {
@@ -446,6 +448,20 @@ public sealed class ApproveDeceasedDeliveryCommandHandler(
         var verificada = await intervenciones.VerificarAsync(new ExpedienteDeCartera(SegregacionDeCaptaciones.EntregaPorFallecimiento, leido.Value.PublicId),
             AccionesDeSegregacion.Decidir, hoy, ct);
         if (verificada.IsFailure) return Falla(verificada.Error);
+
+        // D23 (pendiente de la fase 17, research E206): la pantalla no aprueba si la liquidación y la entrega de las cuentas no se contabilizarían.
+        if (validacionPrevia is not null)
+        {
+            var planPrevio = Fallecimientos.Leer(leido.Value.DeliveryPlanJson)!;
+            var entregables = (await fallecimientos.CuentasAsync(leido.Value.PersonId, hoy, seguir: false, ct)).Where(c => c.Entregable)
+                .Select(c => c.Cuenta.Id).ToList();
+            var destinosPrevios = planPrevio.Destinatarios.Where(d => d.Forma == FormaDeEntrega.TransferToAccount && d.CuentaDestinoId is not null)
+                .Select(d => d.CuentaDestinoId!.Value).Distinct().ToList();
+            var hayGiros = planPrevio.Ruta == DeliveryRoute.Beneficiaries || planPrevio.Destinatarios.Any(d => d.Forma == FormaDeEntrega.DisbursementOrder);
+            if (await ValidacionPreviaDelCicloDeVida.EntregaPorFallecimientoAsync(validacionPrevia, db, entregables, destinosPrevios, hayGiros, hoy,
+                    leido.Value.Number, ct) is { } bloqueo)
+                return Falla(bloqueo);
+        }
 
         return await TransaccionExplicita.EjecutarAsync(db, async () =>
         {
