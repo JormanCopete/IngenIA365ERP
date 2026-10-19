@@ -275,7 +275,7 @@ public class EnumeracionesDeCarteraTests
         [typeof(MigratedTaxConcept)] = [("Interest", 1), ("Withholding", 2), ("Gmf", 3), ("InflationaryComponent", 4)],
         [typeof(DirectDebitScope)] = [("SingleLoan", 1), ("AllLoansOfHolder", 2)],
         [typeof(PayoutPurpose)] = [("Withdrawal", 1), ("ContributionRefund", 2), ("DeceasedDelivery", 3), ("TermDepositInterest", 4),
-            ("TermDepositRedemption", 5), ("GarnishmentConsignment", 6), ("Cancellation", 7)],
+            ("TermDepositRedemption", 5), ("GarnishmentConsignment", 6), ("Cancellation", 7), ("SurplusPayment", 8)],
         [typeof(GarnishmentStatus)] = [("Registered", 1), ("Active", 2), ("Released", 3), ("Rejected", 4)],
         // US11 (T187; research E161): la autoridad que embarga y sobre qué cuentas recae.
         [typeof(GarnishmentAuthority)] = [("Court", 1), ("TaxAuthority", 2), ("OtherPublicEntity", 3)],
@@ -286,7 +286,7 @@ public class EnumeracionesDeCarteraTests
             ("InterestToDate", 4), ("Withholding", 5), ("Gmf", 6), ("LoanOffset", 7), ("LossDeduction", 8), ("Refund", 9)],
         [typeof(RevaluationBase)] = [("AverageBalance", 1), ("YearEndBalance", 2)],
         [typeof(SurplusDestination)] = [("Contributions", 1), ("Savings", 2), ("Payment", 3)],
-        [typeof(AssemblyDistributionStatus)] = [("Simulated", 1), ("Approved", 2), ("Applied", 3), ("Voided", 4)],
+        [typeof(AssemblyDistributionStatus)] = [("Simulated", 1), ("Approved", 2), ("Applied", 3), ("Voided", 4), ("Reversed", 5)],
         [typeof(DeliveryRoute)] = [("Beneficiaries", 1), ("WithoutProbate", 2), ("Probate", 3)],
         [typeof(DeceasedCaseStatus)] = [("Registered", 1), ("Approved", 2), ("Delivered", 3), ("Cancelled", 4)],
         [typeof(UnclaimedSource)] = [("UncashedRefund", 1), ("InactiveBalance", 2), ("UncashedPayout", 3)],
