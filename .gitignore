@@ -289,3 +289,7 @@ appsettings.*.local.json
 
 # Feature 012, I4 (T749): credenciales locales de facturacion electronica en desarrollo (ElectronicInvoicing:CredentialsPath).
 secrets-locales/
+
+# Caché de Python
+__pycache__/
+*.pyc
