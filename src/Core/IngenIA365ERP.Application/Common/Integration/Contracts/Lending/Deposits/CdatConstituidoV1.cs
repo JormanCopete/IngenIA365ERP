@@ -52,6 +52,18 @@ public sealed record TermDepositFundingV1
     public CollectorRefV1? Collector { get; init; }
 
     public MemberAccountRefV1? SourceAccount { get; init; }
+
+    /// <summary>
+    /// US6 (T174; research E106, E107): el titular de la cuenta origen de un fondeo por traslado; con <see cref="SourceDimensions"/> y
+    /// <see cref="SourceAmounts"/> es la contrapartida del hecho (sin ellos el constructor responde <c>CounterpartUnknown</c>).
+    /// </summary>
+    public Guid? SourceHolderPersonPublicId { get; init; }
+
+    /// <summary>Las dimensiones vigentes de la cuenta origen.</summary>
+    public DepositFactDimensionsV1? SourceDimensions { get; init; }
+
+    /// <summary>El cambio de saldo por concepto de la cuenta origen (−capital).</summary>
+    public IReadOnlyList<DepositConceptAmountV1> SourceAmounts { get; init; } = [];
 }
 
 /// <summary>La regla de tasa negociada y quién la aprobó (mensajes.md §4.1, <c>negotiated</c>).</summary>
@@ -73,4 +85,13 @@ public sealed record TermDepositDestinationV1
 
     /// <summary>La orden de giro, si se gira.</summary>
     public Guid? OrderPublicId { get; init; }
+
+    /// <summary>US6 (T174; research E107): el titular de la cuenta destino de un abono en cuenta; con dimensiones e importes es la contrapartida.</summary>
+    public Guid? TargetHolderPersonPublicId { get; init; }
+
+    /// <summary>Las dimensiones vigentes de la cuenta destino.</summary>
+    public DepositFactDimensionsV1? TargetDimensions { get; init; }
+
+    /// <summary>El cambio de saldo por concepto de la cuenta destino (+capital).</summary>
+    public IReadOnlyList<DepositConceptAmountV1> TargetAmounts { get; init; } = [];
 }

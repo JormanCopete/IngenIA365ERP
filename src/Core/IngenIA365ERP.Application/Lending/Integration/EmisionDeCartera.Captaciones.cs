@@ -30,6 +30,12 @@ public sealed record HechoDeCuenta(MemberAccount Cuenta, string CodigoDeLinea, G
     public bool ExentaDeGmf { get; init; }
 
     /// <summary>
+    /// US6 (T174; FR-073, mensajes.md §3): el plazo de emisión de la versión de condiciones vigente del CDAT (o del contractual); nulo en las demás clases. Va
+    /// en <c>IssueTermBand</c> de las dimensiones: el rol del capital de CDAT y contractual lo exige.
+    /// </summary>
+    public IssueTermBand? PlazoDeEmision { get; init; }
+
+    /// <summary>
     /// Las dimensiones vigentes de la cuenta (mensajes.md §3; research C20): la marca con precedencia embargada &gt; exenta del GMF &gt; estándar; los
     /// aportes nunca se embargan ni se marcan exentos. Sin <paramref name="exentaDeGmf"/>, la de <see cref="ExentaDeGmf"/>.
     /// </summary>
@@ -38,6 +44,7 @@ public sealed record HechoDeCuenta(MemberAccount Cuenta, string CodigoDeLinea, G
         CreditLineCode = CodigoDeLinea,
         LineNature = Cuenta.Nature.ToString(),
         DepositClass = Cuenta.DepositClass?.ToString(),
+        IssueTermBand = PlazoDeEmision?.ToString(),
         AccountFlag = (Cuenta.IsGarnished ? AccountFlag.Garnished : exentaDeGmf ?? ExentaDeGmf ? AccountFlag.GmfExempt : AccountFlag.Standard).ToString(),
         Inactive = Cuenta.Status == MemberAccountStatus.Inactive,
         IsEmployee = TitularEsEmpleado,
@@ -167,7 +174,30 @@ public sealed partial class EmisionDeCartera
         var contable = fecha.Value;
         var exenta = cuenta.Nature != LineNature.Contribution && await db.GmfExemptAccounts.AsNoTracking()
             .AnyAsync(g => g.MemberAccountId == cuenta.Id && !g.IsDeleted && g.ValidFrom <= contable && (g.ValidTo == null || g.ValidTo >= contable), ct);
-        return Result.Success(new HechoDeCuenta(cuenta, linea, titular.PublicId, titular.IsEmployee, sucursal.Value, contable) { ExentaDeGmf = exenta });
+        var plazo = await PlazoDeEmisionAsync(db, [cuenta], ct);
+        return Result.Success(new HechoDeCuenta(cuenta, linea, titular.PublicId, titular.IsEmployee, sucursal.Value, contable)
+        {
+            ExentaDeGmf = exenta, PlazoDeEmision = plazo.GetValueOrDefault(cuenta.Id),
+        });
+    }
+
+    /// <summary>
+    /// US6 (T174): el plazo de emisión de la última versión de condiciones de cada CDAT o contractual de la lista (también de las agregadas a la unidad de trabajo
+    /// sin guardar: la constitución o la prórroga que se está escribiendo).
+    /// </summary>
+    public static async Task<IReadOnlyDictionary<int, IssueTermBand?>> PlazoDeEmisionAsync(IngenIA365ERP.Application.Common.Interfaces.IApplicationDbContext db,
+        IReadOnlyList<MemberAccount> cuentas, CancellationToken ct)
+    {
+        var ids = cuentas.Where(c => c.DepositClass is DepositClass.TermDeposit or DepositClass.Contractual).Select(c => c.Id).ToList();
+        var r = new Dictionary<int, IssueTermBand?>();
+        if (ids.Count == 0) return r;
+        var guardadas = await db.MemberAccountTermsVersions.AsNoTracking().Where(v => ids.Contains(v.MemberAccountId) && !v.IsDeleted)
+            .Select(v => new { v.MemberAccountId, v.VersionNumber, v.IssueTermBand }).ToListAsync(ct);
+        var locales = db.MemberAccountTermsVersions.Local.Where(v => ids.Contains(v.MemberAccountId))
+            .Select(v => new { v.MemberAccountId, v.VersionNumber, v.IssueTermBand });
+        foreach (var g in guardadas.Concat(locales).GroupBy(v => v.MemberAccountId))
+            r[g.Key] = g.MaxBy(v => v.VersionNumber)!.IssueTermBand;
+        return r;
     }
 
     /// <summary>Los valores de unas filas del libro por concepto, con su clase de aporte (mensajes.md §3), sin los que se anulan.</summary>

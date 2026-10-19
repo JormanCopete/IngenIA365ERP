@@ -232,6 +232,75 @@ public class ConstructorDeCaptacionesTests
         otroPlazo.Fallos.Should().ContainSingle(f => f.Error.Code == "Accounting.LendingRule.Missing" && f.Combination!["issueTermBand"] == "EighteenOrMore");
     }
 
+    [Fact]
+    public async Task US6_un_CDAT_fondeado_desde_una_cuenta_de_ahorro_cuadra_contra_esa_cuenta()
+    {
+        // Pendiente de la fase 9 (research E107): el hecho trae la cuenta origen con sus dimensiones y su cambio de saldo; ya no es CounterpartUnknown.
+        var unidad = S.Unidad("TermDepositConstitution", "CDC-000001", new CdatConstituidoV1
+        {
+            Account = Cuenta("CDAT-000003"), HolderPersonPublicId = S.Titular, Dimensions = S.Cdat(), Amounts = [Valor("Principal", 10_000_000m)],
+            Funding = new TermDepositFundingV1
+            {
+                Kind = "TransferFromAccount", SourceAccount = Cuenta("AHVISTA-000031"), SourceHolderPersonPublicId = S.Titular, SourceDimensions = S.AlaVista(),
+                SourceAmounts = [Valor("Principal", -10_000_000m)],
+            },
+        });
+
+        var c = await S.ConstruirAsync(unidad);
+
+        SinFallos(c);
+        c.Request!.Lines.Should().Contain(l => l.AccountCode == S.Cdat612.Code && l.Credit == 10_000_000m);
+        c.Request.Lines.Should().Contain(l => l.AccountCode == S.Ahorro.Code && l.Debit == 10_000_000m);
+        c.Request.Lines.Sum(l => l.Debit).Should().Be(c.Request.Lines.Sum(l => l.Credit));
+    }
+
+    [Fact]
+    public async Task US6_un_CDAT_fondeado_desde_otra_cuenta_sin_sus_dimensiones_sigue_sin_contrapartida()
+    {
+        var c = await S.ConstruirAsync(S.Unidad("TermDepositConstitution", "CDC-000002", new CdatConstituidoV1
+        {
+            Account = Cuenta("CDAT-000004"), HolderPersonPublicId = S.Titular, Dimensions = S.Cdat(), Amounts = [Valor("Principal", 5m)],
+            Funding = new TermDepositFundingV1 { Kind = "TransferFromAccount", SourceAccount = Cuenta("AHVISTA-000032") },
+        }));
+
+        c.Fallos.Should().ContainSingle(f => f.Error.Code == "Accounting.LendingFact.CounterpartUnknown");
+    }
+
+    [Fact]
+    public async Task US6_la_cancelacion_abonada_en_cuenta_cuadra_contra_la_cuenta_destino()
+    {
+        var c = await S.ConstruirAsync(S.Unidad("TermDepositRedemption", "RDC-000001", new CdatCanceladoV1
+        {
+            Account = Cuenta("CDAT-000005"), HolderPersonPublicId = S.Titular, Dimensions = S.Cdat(), Amounts = [Valor("Principal", -10_000_000m)],
+            Cause = "Instruction",
+            Destination = new TermDepositDestinationV1
+            {
+                Kind = "Account", TargetAccount = Cuenta("AHVISTA-000033"), TargetHolderPersonPublicId = S.Titular, TargetDimensions = S.AlaVista(),
+                TargetAmounts = [Valor("Principal", 10_000_000m)],
+            },
+        }));
+
+        SinFallos(c);
+        c.Request!.Lines.Should().Contain(l => l.AccountCode == S.Cdat612.Code && l.Debit == 10_000_000m);
+        c.Request.Lines.Should().Contain(l => l.AccountCode == S.Ahorro.Code && l.Credit == 10_000_000m);
+    }
+
+    [Fact]
+    public async Task US6_una_contrapartida_que_no_cuadra_con_la_otra_cuenta_se_rechaza()
+    {
+        var c = await S.ConstruirAsync(S.Unidad("TermDepositRedemption", "RDC-000002", new CdatCanceladoV1
+        {
+            Account = Cuenta("CDAT-000006"), HolderPersonPublicId = S.Titular, Dimensions = S.Cdat(), Amounts = [Valor("Principal", -100m)],
+            Cause = "Instruction",
+            Destination = new TermDepositDestinationV1
+            {
+                Kind = "Account", TargetAccount = Cuenta("AHVISTA-000034"), TargetDimensions = S.AlaVista(), TargetAmounts = [Valor("Principal", 90m)],
+            },
+        }));
+
+        c.Fallos.Should().ContainSingle(f => f.Error.Code == "Accounting.LendingFact.CounterpartUnknown");
+    }
+
     // ----------------------------------------------------------------------------------------- retiro del asociado --
 
     [Fact]

@@ -161,4 +161,51 @@ public static class HechosRepresentativosDeCaptaciones
         Account = c.Referencia, HolderPersonPublicId = c.Titular, Dimensions = c.D, OrderKind = tipoDeOrden, PayeePersonPublicId = c.Titular,
         Amounts = [Valor(ConceptoDeCapital(c.D), -1m, tipoDeOrden)],
     };
+
+    // ------------------------------------------------------------------------------------------------------------ CDAT --
+
+    /// <summary>
+    /// US6 (T174): la constitución de un CDAT fondeada por un recaudador (con su clase) o desde otra cuenta del asociado (con sus dimensiones: la
+    /// contrapartida es esa cuenta, research E107).
+    /// </summary>
+    public static CdatConstituidoV1 Constitucion(CuentaRepresentativa cdat, string? claseDeRecaudador, CuentaRepresentativa? origen = null) => new()
+    {
+        Account = cdat.Referencia, HolderPersonPublicId = cdat.Titular, Dimensions = cdat.D, Amounts = [Valor(MemberAccountConcept.Principal, 1m)],
+        Funding = origen is null
+            ? new TermDepositFundingV1 { Kind = "Collector", Collector = new CollectorRefV1 { CollectorClass = claseDeRecaudador ?? string.Empty, PayerPersonPublicId = cdat.Titular } }
+            : new TermDepositFundingV1
+            {
+                Kind = "TransferFromAccount", SourceAccount = origen.Referencia, SourceHolderPersonPublicId = origen.Titular, SourceDimensions = origen.D,
+                SourceAmounts = [Valor(MemberAccountConcept.Principal, -1m)],
+            },
+    };
+
+    /// <summary>US6 (T174): el pago de un período del plan a otra cuenta del asociado o por giro (destino nulo).</summary>
+    public static InteresesDeCdatPagadosV1 PagoDeIntereses(CuentaRepresentativa cdat, CuentaRepresentativa? destino) => new()
+    {
+        Account = cdat.Referencia, HolderPersonPublicId = cdat.Titular, Dimensions = cdat.D, Amounts = [Valor(MemberAccountConcept.InterestPayable, -1m)],
+        Destination = Destino(destino),
+    };
+
+    /// <summary>US6 (T174): la retención de un pago de CDAT (sale del interés por pagar).</summary>
+    public static RetencionPracticadaV1 RetencionDeCdat(CuentaRepresentativa c) => new()
+    {
+        Lines = [Linea(c, Valor(MemberAccountConcept.InterestPayable, -1m), Valor(MemberAccountConcept.Withholding, 1m))],
+    };
+
+    /// <summary>US6 (T174): la cancelación al vencimiento (capital e interés) a otra cuenta del asociado o por giro (destino nulo).</summary>
+    public static CdatCanceladoV1 Cancelacion(CuentaRepresentativa cdat, CuentaRepresentativa? destino) => new()
+    {
+        Account = cdat.Referencia, HolderPersonPublicId = cdat.Titular, Dimensions = cdat.D, Cause = EmisionDeCartera.CancelacionPorInstruccion,
+        Amounts = [Valor(MemberAccountConcept.Principal, -1m), Valor(MemberAccountConcept.InterestPayable, -1m)],
+        Destination = Destino(destino, 2m),
+    };
+
+    private static TermDepositDestinationV1 Destino(CuentaRepresentativa? destino, decimal monto = 1m) => destino is null
+        ? new TermDepositDestinationV1 { Kind = "DisbursementOrder", OrderPublicId = Guid.NewGuid() }
+        : new TermDepositDestinationV1
+        {
+            Kind = "Account", TargetAccount = destino.Referencia, TargetHolderPersonPublicId = destino.Titular, TargetDimensions = destino.D,
+            TargetAmounts = [Valor(MemberAccountConcept.Principal, monto)],
+        };
 }

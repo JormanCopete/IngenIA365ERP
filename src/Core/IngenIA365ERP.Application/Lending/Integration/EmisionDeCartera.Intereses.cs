@@ -84,6 +84,7 @@ public sealed partial class EmisionDeCartera
                 .Where(g => ids.Contains(g.MemberAccountId) && !g.IsDeleted && g.ValidFrom <= fechaContable && (g.ValidTo == null || g.ValidTo >= fechaContable))
                 .Select(g => g.MemberAccountId).ToListAsync(ct))
             .ToHashSet();
+        var plazos = await PlazoDeEmisionAsync(db, cuentas, ct);
         var hechos = new Dictionary<int, HechoDeCuentaMarcada>();
         foreach (var c in cuentas)
         {
@@ -92,6 +93,7 @@ public sealed partial class EmisionDeCartera
                 new HechoDeCuenta(c, codigos.GetValueOrDefault(c.CreditLineId) ?? string.Empty, titular.PublicId, titular.IsEmployee, sucursal, fechaContable)
                 {
                     ExentaDeGmf = exentas.Contains(c.Id),
+                    PlazoDeEmision = plazos.GetValueOrDefault(c.Id),
                 },
                 exentas.Contains(c.Id));
         }

@@ -175,9 +175,15 @@ public static partial class ConstructorDeLineasDeCartera
                         Resultado(R.GastoPorBonificacion, x.Dimensions, x.Account, x.HolderPersonPublicId), "sin gasto");
                     break;
                 case CdatConstituidoV1 x:
-                    Operacion(x.Account, x.HolderPersonPublicId, x.Dimensions, x.Amounts,
-                        x.Funding.Collector is { } cobro ? Recaudo(x.Dimensions, x.Account, cobro.CollectorClass, cobro.PayerPersonPublicId) : null,
-                        "un CDAT fondeado desde otra cuenta sin sus dimensiones");
+                    // US6 (T174): fondeado desde otra cuenta del asociado, las dos puntas cuadran entre sí (como el traslado); por el recaudador, su puente.
+                    if (x.Funding.SourceAccount is { } origen && x.Funding.SourceDimensions is { } dOrigen && x.Funding.SourceAmounts.Count > 0)
+                        Operacion(x.Account, x.HolderPersonPublicId, x.Dimensions, x.Amounts,
+                            OtraCuenta(origen, x.Funding.SourceHolderPersonPublicId ?? x.HolderPersonPublicId, dOrigen, x.Funding.SourceAmounts),
+                            "un CDAT fondeado desde otra cuenta que no cuadra con ella");
+                    else
+                        Operacion(x.Account, x.HolderPersonPublicId, x.Dimensions, x.Amounts,
+                            x.Funding.Collector is { } cobro ? Recaudo(x.Dimensions, x.Account, cobro.CollectorClass, cobro.PayerPersonPublicId) : null,
+                            "un CDAT fondeado desde otra cuenta sin sus dimensiones");
                     break;
                 case InteresesDeCdatPagadosV1 x:
                     Operacion(x.Account, x.HolderPersonPublicId, x.Dimensions, x.Amounts, DestinoDelCdat(x.Dimensions, x.Account, x.Destination, "TermDepositInterest"),
@@ -224,14 +230,36 @@ public static partial class ConstructorDeLineasDeCartera
             return Recaudo(x.Dimensions, x.Account, clase, x.Collector?.PayerPersonPublicId ?? _sobre.PersonPublicId);
         }
 
-        private Lado? DestinoDelCdat(DepositFactDimensionsV1 d, MemberAccountRefV1 cuenta, TermDepositDestinationV1 destino, string motivo) =>
-            destino.OrderPublicId is not null || destino.Kind.Contains("Order", StringComparison.OrdinalIgnoreCase)
-                ? Devolucion(d, cuenta, motivo, _sobre.PersonPublicId)
+        private Lado? DestinoDelCdat(DepositFactDimensionsV1 d, MemberAccountRefV1 cuenta, TermDepositDestinationV1 destino, string motivo)
+        {
+            if (destino.OrderPublicId is not null || destino.Kind.Contains("Order", StringComparison.OrdinalIgnoreCase))
+                return Devolucion(d, cuenta, motivo, _sobre.PersonPublicId);
+            // US6 (T174; research E107): el abono en otra cuenta del asociado es su contrapartida, con sus dimensiones y su cambio de saldo.
+            return destino.TargetAccount is { } destinoCuenta && destino.TargetDimensions is { } dDestino && destino.TargetAmounts.Count > 0
+                ? OtraCuenta(destinoCuenta, destino.TargetHolderPersonPublicId ?? _sobre.PersonPublicId ?? Guid.Empty, dDestino, destino.TargetAmounts)
                 : null;
+        }
+
+        /// <summary>
+        /// US6 (T174): la otra cuenta del asociado como contrapartida: escribe sus saldos y devuelve un lado vacío que no recibe nada si las dos puntas
+        /// cuadran; si no cuadran, nulo (el hecho no dice a dónde va lo que sobra).
+        /// </summary>
+        private Lado? OtraCuenta(MemberAccountRefV1 cuenta, Guid titular, DepositFactDimensionsV1 d, IReadOnlyList<DepositConceptAmountV1> importes)
+        {
+            _netoDeLaOtra = Saldos(cuenta, titular, d, importes);
+            return CuentaQueCuadra;
+        }
+
+        /// <summary>El lado que representa «la otra cuenta ya escrita»: la contrapartida sólo la acepta si cuadra con ella.</summary>
+        private static readonly Lado CuentaQueCuadra = new("·otra-cuenta·", new ValoresDeCartera(), null, null, null);
+
+        private decimal _netoDeLaOtra;
 
         private Lado? DestinoDeLaRenovacion(CdatRenovadoV1 x)
         {
             if (x.AmountChange?.Funding?.Collector is { } cobro) return Recaudo(x.Dimensions, x.Account, cobro.CollectorClass, cobro.PayerPersonPublicId);
+            if (x.AmountChange?.Funding is { SourceAccount: { } origen, SourceDimensions: { } dOrigen } f && f.SourceAmounts.Count > 0)
+                return OtraCuenta(origen, f.SourceHolderPersonPublicId ?? x.HolderPersonPublicId, dOrigen, f.SourceAmounts);
             return x.AmountChange?.Destination is { } destino ? DestinoDelCdat(x.Dimensions, x.Account, destino, "TermDepositRedemption") : null;
         }
 
@@ -327,6 +355,15 @@ public static partial class ConstructorDeLineasDeCartera
 
         private void Contrapartida(Lado? contra, decimal neto, string faltante)
         {
+            if (ReferenceEquals(contra, CuentaQueCuadra))
+            {
+                // La otra cuenta ya se escribió: lo que queda es la suma de las dos puntas; si no es cero, el hecho no cuadra.
+                var resto = neto + _netoDeLaOtra;
+                _netoDeLaOtra = 0m;
+                if (resto != 0m)
+                    fallos.Add(new FalloDeCartera(AccountingErrors.LendingFactCounterpartUnknown(hecho.Tipo, faltante), hecho.Tipo, null, null, null, []));
+                return;
+            }
             if (neto == 0m) return;
             if (contra is null)
             {

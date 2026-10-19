@@ -1,3 +1,4 @@
+using IngenIA365ERP.Domain.Lending.Deposits;
 using System.Globalization;
 using IngenIA365ERP.Application.Common.Integration;
 using IngenIA365ERP.Application.Common.Integration.Accounting;
@@ -221,6 +222,9 @@ public sealed class RequisitosDeActivacionDeCaptaciones(
             {
                 l.Code,
                 Clase = db.DepositLineVersions.Where(v => v.CreditLineId == l.Id).OrderBy(v => v.ValidFrom).Select(v => (DepositClass?)v.DepositClass).FirstOrDefault(),
+                // US6 (T174): el rango de plazos de la última versión, para preguntar por los plazos de emisión que la línea de CDAT puede emitir.
+                Minimo = db.DepositLineVersions.Where(v => v.CreditLineId == l.Id).OrderByDescending(v => v.VersionNumber).Select(v => v.MinTermDays).FirstOrDefault(),
+                Maximo = db.DepositLineVersions.Where(v => v.CreditLineId == l.Id).OrderByDescending(v => v.VersionNumber).Select(v => v.MaxTermDays).FirstOrDefault(),
             }).ToListAsync(ct);
         var sucursal = await db.Branches.AsNoTracking().Where(b => !b.IsDeleted).OrderBy(b => b.Id).Select(b => (Guid?)b.PublicId).FirstOrDefaultAsync(ct);
         if (lineas.Count == 0 || sucursal is null) return Cumple(LineasConMatriz, "No hay líneas activas de la naturaleza que contabilizar.");
@@ -228,7 +232,9 @@ public sealed class RequisitosDeActivacionDeCaptaciones(
         // US8 (T145; contabilidad.md §4.3): la completitud de los hechos de la naturaleza, no sólo del principal, con la clase de cada línea.
         // Un titular cualquiera: la regla no depende de él, pero la cuenta contable que exige tercero lo pide.
         var titular = await db.People.AsNoTracking().Where(p => !p.IsDeleted).OrderBy(p => p.Id).Select(p => p.PublicId).FirstOrDefaultAsync(ct);
-        var hechos = lineas.SelectMany(l => HechosRepresentativos(naturaleza, l.Code, l.Clase, sucursal.Value, titular, fecha)).ToList();
+        var hechos = lineas.SelectMany(l => l.Clase == DepositClass.TermDeposit
+            ? HechosRepresentativosDeCdat(l.Code, PlazosDeEmision(l.Minimo, l.Maximo), sucursal.Value, titular, fecha)
+            : HechosRepresentativos(naturaleza, l.Code, l.Clase, sucursal.Value, titular, fecha)).ToList();
         var evaluado = await contabilidad.EvaluarAsync(hechos, ct);
         return evaluado.IsSuccess && evaluado.Value.Errors.Count == 0
             ? Cumple(LineasConMatriz, "La matriz contable resuelve el hecho principal de cada línea activa.")
@@ -266,6 +272,37 @@ public sealed class RequisitosDeActivacionDeCaptaciones(
                 HechosRepresentativosDeCaptaciones.Retencion(d)));
         }
         return hechos;
+    }
+
+    /// <summary>
+    /// US6 (T174; research E127): los plazos de emisión que puede tener un CDAT de la línea, por su rango de plazos (los extremos y los cortes del CUIF); sin
+    /// rango, los cuatro.
+    /// </summary>
+    public static IReadOnlyList<IssueTermBand> PlazosDeEmision(int? minimo, int? maximo)
+    {
+        var desde = minimo is { } m && m >= 1 ? PlanDeCdat.PlazoDeEmision(m) : IssueTermBand.UnderSixMonths;
+        var hasta = maximo is { } x && x >= 1 ? PlanDeCdat.PlazoDeEmision(x) : IssueTermBand.EighteenOrMore;
+        return Enum.GetValues<IssueTermBand>().Where(b => b >= desde && b <= hasta).ToList();
+    }
+
+    /// <summary>
+    /// US6 (T174): los hechos que una línea de CDAT emite desde el primer día, por cada plazo de emisión que puede tener: la constitución por el recaudador y
+    /// desde una cuenta de ahorro (con su GMF), la causación, el pago de intereses por giro con su retención y la cancelación por giro.
+    /// </summary>
+    private static IEnumerable<MensajeContableDto> HechosRepresentativosDeCdat(string linea, IReadOnlyList<IssueTermBand> plazos, Guid sucursal, Guid titular,
+        DateOnly fecha)
+    {
+        var cobro = nameof(ClaseDeRecaudador.Receipts);
+        foreach (var plazo in plazos)
+        {
+            var d = HechosRepresentativosDeCaptaciones.Cuenta(HechosRepresentativosDeCaptaciones.Dimensiones(linea, LineNature.Deposit, DepositClass.TermDeposit,
+                sucursal, plazo: plazo), titular);
+            foreach (var m in HechosRepresentativosDeCaptaciones.Unidad(fecha, d, HechosRepresentativosDeCaptaciones.Constitucion(d, cobro))) yield return m;
+            foreach (var m in HechosRepresentativosDeCaptaciones.Unidad(fecha, d, HechosRepresentativosDeCaptaciones.Causacion(d))) yield return m;
+            foreach (var m in HechosRepresentativosDeCaptaciones.Unidad(fecha, d, HechosRepresentativosDeCaptaciones.PagoDeIntereses(d, null),
+                         HechosRepresentativosDeCaptaciones.RetencionDeCdat(d))) yield return m;
+            foreach (var m in HechosRepresentativosDeCaptaciones.Unidad(fecha, d, HechosRepresentativosDeCaptaciones.Cancelacion(d, null))) yield return m;
+        }
     }
 
     // -------------------------------------------------------------------------------------------------------- roles --
