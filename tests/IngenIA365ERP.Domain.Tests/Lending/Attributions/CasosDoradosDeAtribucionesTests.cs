@@ -127,4 +127,30 @@ public class CasosDoradosDeAtribucionesTests
         Nivel(new SujetoAEnrutar(LendingDecisionSubjects.Condonation, 1m) { Concepto = LoanConcept.DefaultInterest, DiasDeMora = 30 }).Should().Be("ANALISTA");
         Nivel(new SujetoAEnrutar(LendingDecisionSubjects.Condonation, 1m) { Concepto = LoanConcept.CurrentInterest, DiasDeMora = 120 }).Should().Be("ANALISTA");
     }
+
+    [Fact]
+    public void La_tasa_negociada_sube_de_nivel_cuando_el_margen_supera_el_de_la_regla()
+    {
+        // Feature 014, US6 (T171): «más de X puntos sobre la tabla exige al menos el nivel N» (AttributionRule.MaxNegotiatedSpread).
+        var matriz = new MatrizDeAtribuciones(
+        [
+            new NivelDeAtribucion("ASESOR", "Asesor", 10, AttributionLevelKind.Individual, 500_000_000m, false, false, "Lending.NegotiatedRates.Approve", null),
+            new NivelDeAtribucion("GERENCIA", "Gerencia", 20, AttributionLevelKind.Individual, 1_000_000_000m, true, false, "Lending.Decisions.Management", null),
+            new NivelDeAtribucion("CONSEJO", "Consejo", 30, AttributionLevelKind.Collegiate, null, false, true, null, "CONSEJO"),
+        ],
+        [
+            new ReglaDeAtribucion(1, LendingDecisionSubjects.NegotiatedRate, "GERENCIA") { MargenNegociadoMaximo = 0.005m },
+            new ReglaDeAtribucion(2, LendingDecisionSubjects.NegotiatedRate, "CONSEJO") { MargenNegociadoMaximo = 0.015m },
+        ]);
+
+        string Nivel(decimal margen) =>
+            EnrutadorDeAtribuciones.Enrutar(new SujetoAEnrutar(LendingDecisionSubjects.NegotiatedRate, 200_000_000m) { MargenNegociado = margen }, matriz)
+                .NivelEfectivo.Codigo;
+
+        Nivel(0.005m).Should().Be("ASESOR");
+        Nivel(0.012m).Should().Be("GERENCIA");
+        Nivel(0.02m).Should().Be("CONSEJO");
+        // Sin margen en el sujeto, la regla de margen no casa.
+        EnrutadorDeAtribuciones.Enrutar(new SujetoAEnrutar(LendingDecisionSubjects.NegotiatedRate, 1m), matriz).NivelEfectivo.Codigo.Should().Be("ASESOR");
+    }
 }

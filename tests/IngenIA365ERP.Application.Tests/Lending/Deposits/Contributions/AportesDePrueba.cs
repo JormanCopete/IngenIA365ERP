@@ -113,7 +113,10 @@ internal sealed class AportesDePrueba : IDisposable
     public ReglasDeMovimientos Movimientos() => new(Db, C.Parametros(), G.Valores, Calendario, G.Actor, G.Reloj, Aprobaciones);
     public CargosDeCuentas Cargos() => new(Db, RegistroDeCuentas(), Numerador(), Emision(), G.Actor, G.Reloj);
     public ConsignacionEnCuentas Consignacion() =>
-        new(Db, RegistroDeCuentas(), Numerador(), Emision(), Reglas(), C.Parametros(), G.Actor, G.Reloj, Movimientos(), Cargos(), Ajuste());
+        new(Db, RegistroDeCuentas(), Numerador(), Emision(), Reglas(), C.Parametros(), G.Actor, G.Reloj, Movimientos(), Cargos(), Ajuste(), Cdat?.Invoke());
+
+    /// <summary>US6 (T170): el fondeo del CDAT por el recaudador; nulo, el contrato no fondea CDAT (las pruebas de K7 y K8).</summary>
+    public Func<Application.Lending.Deposits.TermDeposits.ConstitucionDeCdat>? Cdat { get; set; }
     public ReversionDeCuentas Reversion() => new(Db, RegistroDeCuentas(), Numerador(), Emision(), G.Actor, G.Reloj, alertas: Alertas, ajusteDeCausacion: Ajuste());
     public RetiroDeCuenta Retiro() => new(Db, RegistroDeCuentas(), Numerador(), Emision(), Movimientos(), Cargos(), G.Actor, G.Reloj, Ajuste());
     public TrasladoDeCuenta Traslado() => new(Db, RegistroDeCuentas(), Numerador(), Emision(), Movimientos(), Retiro(), Consignacion(), G.Actor, G.Reloj, Ajuste());
