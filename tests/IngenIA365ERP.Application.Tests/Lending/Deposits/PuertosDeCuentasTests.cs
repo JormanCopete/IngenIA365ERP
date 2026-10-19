@@ -119,6 +119,26 @@ public class PuertosDeCuentasTests
         ClasesDeMedioDeRecaudo.Admite(ClaseDeRecaudador.Treasury, ClaseDeMedioDeRecaudo.CustomerCredit).Should().BeFalse();
     }
 
+    [Fact]
+    public void Tesoreria_tambien_paga_creditos_por_el_contrato_de_obligaciones()
+    {
+        // Decisión del dueño del 2026-10-18 (research §13 D19): si adopta ProveedorDeObligaciones, Tesorería paga créditos con su clave y sus medios,
+        // y el aviso de un reverso hecho desde la Cartera vuelve a su destino.
+        var pago = new PagoAAplicar($"TES:{Guid.NewGuid():N}:{Guid.NewGuid():N}", Guid.NewGuid(), ModalidadDePago.CycleInstallment, 150_000m,
+            new DateOnly(2026, 12, 1), ClaseDeMedioDeRecaudo.Transfer, Guid.NewGuid(), new ReferenciaDeRecibo("TR-1", new DateOnly(2026, 12, 1), null, "123", null));
+        var lote = new SolicitudDeAplicacion(new Recaudador("TES", ClaseDeRecaudador.Treasury), FormaDeAplicacion.NonInteractive, [pago], []);
+
+        new SolicitudDeAplicacionValidator().Validate(lote).IsValid.Should().BeTrue();
+        new SolicitudDeAplicacionValidator().Validate(lote with { Payments = [pago with { IdempotencyKey = "REC:1" }] }).Errors
+            .Should().Contain(e => e.ErrorCode == "IdempotencyKey");
+        ClasesDeMedioDeRecaudo.Validar(ClaseDeRecaudador.Treasury, ClaseDeMedioDeRecaudo.Transfer).Should().BeNull();
+        ClasesDeMedioDeRecaudo.Validar(ClaseDeRecaudador.Treasury, ClaseDeMedioDeRecaudo.Cash).Should().NotBeNull();
+        IngenIA365ERP.Application.Common.Integration.Contracts.Lending.CatalogoDeMensajesDeCarteraV1.Todos
+            .Single(t => t.Type == IngenIA365ERP.Application.Common.Integration.Contracts.Lending.PagoReversadoPorCarteraV1.Type).Destinos
+            .Should().BeEquivalentTo([IngenIA365ERP.Domain.Enums.Integration.IntegrationDestinations.Receipts,
+                IngenIA365ERP.Domain.Enums.Integration.IntegrationDestinations.Treasury]);
+    }
+
     // ------------------------------------------------------------------------------ T043: productos de captación --
 
     [Fact]

@@ -259,7 +259,15 @@ public sealed partial class EmisionDeCartera
         emitidos.AddRange(await emisor.EmitirAsync(new SolicitudDeEmision(origen, ClavesDeEvento.Confirmacion, contenidos, modo, Relacionado: relacionado,
             UsuarioDeOrigen: r.ReversadoPor), ct));
 
-        if (r.IniciadoPor == IniciadoPorCartera && r.Recaudador.CollectorClass is nameof(ClaseDeRecaudador.Receipts) or nameof(ClaseDeRecaudador.Test))
+        // Feature 014 (decisión del dueño del 2026-10-18, D19): Tesorería también paga créditos si adopta ProveedorDeObligaciones; el aviso del
+        // reverso hecho desde la Cartera va al destino de su recaudador (Recaudo y el doble de prueba → Receipts; Tesorería → Treasury).
+        var destinoDelAviso = r.Recaudador.CollectorClass switch
+        {
+            nameof(ClaseDeRecaudador.Treasury) => IntegrationDestinations.Treasury,
+            nameof(ClaseDeRecaudador.Receipts) or nameof(ClaseDeRecaudador.Test) => IntegrationDestinations.Receipts,
+            _ => null,
+        };
+        if (r.IniciadoPor == IniciadoPorCartera && destinoDelAviso is not null)
         {
             var aviso = new PagoReversadoPorCarteraV1
             {
@@ -276,7 +284,7 @@ public sealed partial class EmisionDeCartera
                 Reopened = r.Reabierto,
             };
             emitidos.AddRange(await emisor.EmitirAsync(new SolicitudDeEmision(origen, ClavesDeEvento.Confirmacion, [aviso],
-                new ModoDeEntrega.Sellado(DeliveryMode.Always), Relacionado: relacionado, Destino: IntegrationDestinations.Receipts,
+                new ModoDeEntrega.Sellado(DeliveryMode.Always), Relacionado: relacionado, Destino: destinoDelAviso,
                 UsuarioDeOrigen: r.ReversadoPor), ct));
         }
         return new UnidadEmitida(emitidos);

@@ -373,7 +373,7 @@ public sealed class ReversionDePago(
         }).ToList();
         return new VistaDelReverso(huella, porConcepto, redistribuidos, afectados,
             c.Credito.Status == LoanStatus.PaidOff && c.Efecto.Despues.ValorParaCancelar > 0m,
-            pago.CollectorClass is nameof(ClaseDeRecaudador.Receipts) or nameof(ClaseDeRecaudador.Test),
+            pago.CollectorClass is nameof(ClaseDeRecaudador.Receipts) or nameof(ClaseDeRecaudador.Test) or nameof(ClaseDeRecaudador.Treasury),
             ajustes, ComprobantesDePago.Saldos(c.Efecto.Despues), ComprobantesDePago.Plan(c.Efecto.Despues.Plan, c.Efecto.Hasta));
     }
 

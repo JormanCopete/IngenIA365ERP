@@ -102,9 +102,12 @@ public class EmisorDeMensajesConVariosModulosTests
         ajeno.Should().Throw<ArgumentException>().WithMessage("*no admite el destino Treasury*");
         EmisorDeMensajes.ResolverDestino(conVarios, "Contributions").Should().Be("Contributions");
 
-        var deUno = CatalogoDeMensajes.Buscar(typeof(PagoReversadoPorCarteraV1))!;
+        // Feature 014 (D19): PagoReversadoPorCartera admite Recaudo y Tesorería; el tipo de un solo destino es DescuentosPorPagaduria.
+        var deUno = CatalogoDeMensajes.Buscar(typeof(DescuentosPorPagaduriaV1))!;
         EmisorDeMensajes.ResolverDestino(deUno, null).Should().Be(IntegrationDestinations.Receipts);
         EmisorDeMensajes.ResolverDestino(deUno, IntegrationDestinations.Receipts).Should().Be(IntegrationDestinations.Receipts);
+        var deDos = CatalogoDeMensajes.Buscar(typeof(PagoReversadoPorCarteraV1))!;
+        EmisorDeMensajes.ResolverDestino(deDos, IntegrationDestinations.Treasury).Should().Be(IntegrationDestinations.Treasury);
     }
 
     [Fact]
@@ -113,7 +116,7 @@ public class EmisorDeMensajesConVariosModulosTests
         var reverso = Documento(Guid.NewGuid(), "PaymentReversal", "REV", "REV-2026-000063");
 
         var mal = () => Emisor().EmitirAsync(new SolicitudDeEmision(reverso, ClavesDeEvento.Confirmacion, [new PagoReversadoPorCarteraV1()],
-            EnLinea, Destino: IntegrationDestinations.Treasury));
+            EnLinea, Destino: IntegrationDestinations.Inventory));
         await mal.Should().ThrowAsync<ArgumentException>();
         _db.IntegrationMessages.Local.Should().BeEmpty();
 

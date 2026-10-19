@@ -120,7 +120,9 @@ public static class CatalogoDeMensajesDeCarteraV1
         Otro(typeof(OrdenDeGiroEmitidaV1), OrdenDeGiroEmitidaV1.Type, IntegrationDestinations.Treasury, C, proceso: false),
         Otro(typeof(AnulacionDeOrdenDeGiroV1), AnulacionDeOrdenDeGiroV1.Type, IntegrationDestinations.Treasury, P, proceso: false),
         // Pensado para varios destinos (el del recaudador del pago); en V1 el conjunto admitido es sólo Recaudo (§11.5).
-        Otro(typeof(PagoReversadoPorCarteraV1), PagoReversadoPorCarteraV1.Type, IntegrationDestinations.Receipts, C, proceso: false),
+        // Feature 014 (decisión del dueño del 2026-10-18, D19): también a Tesorería, que paga créditos si adopta ProveedorDeObligaciones.
+        new(typeof(PagoReversadoPorCarteraV1), PagoReversadoPorCarteraV1.Type, 1, ModulosDeOrigen.Cartera,
+            new HashSet<string>([IntegrationDestinations.Receipts, IntegrationDestinations.Treasury], StringComparer.Ordinal), N, C, false),
         // K2, declarado en K1.
         Otro(typeof(DescuentosPorPagaduriaV1), DescuentosPorPagaduriaV1.Type, IntegrationDestinations.Receipts, C, proceso: false),
         // Feature 014 (T055; mensajes.md §1.2 y §5.3 de la 014): la orden de giro v2 de captaciones, declarada para que Tesorería pueda adoptarla; la emite

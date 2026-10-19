@@ -665,6 +665,12 @@ cuentas por concepto como `DESC_CARTERA` (sin cuentas, la primera nómina con es
 
 - **Transferencias recibidas** a una cuenta: `ConsignarAsync` con `Treasury`, `Transfer` o `BankDeposit`, clave
   `TES:…`.
+- **Pagos de créditos** (decisión del dueño del 2026-10-18, research §13 D19): si Tesorería adopta también
+  `ProveedorDeObligaciones` en el registro de participantes (rol `ObligationsCollector`, clase `Treasury`), paga créditos por
+  `IContratoDeObligaciones` con la misma clase de recaudador, los mismos medios (`Transfer`, `BankDeposit`) y la misma clave
+  (`TES:{documentoPublicId:N}:{obligationPublicId:N}`): lo validan `GramaticaDeClaves`, `ClasesDeMedioDeRecaudo` y el registro
+  (`RecaudadorAsync` exige la adopción vigente). Un pago suyo reversado desde la Cartera le avisa con `PagoReversadoPorCartera`
+  al destino `Treasury` (el catálogo admite `Receipts` y `Treasury`), igual que `ConsignacionReversadaPorCartera`.
 - **Giros**: no usa el puerto. Recibe `OrdenDeGiroEmitida` v2 de los retiros por transferencia, devoluciones,
   entregas a beneficiarios, intereses de CDAT a terceros y consignaciones a juzgados, y responde `ResultadoDelGiro`
   v1; una orden rechazada **reintegra el saldo** desde su origen (FR-091, `mensajes.md` §4).

@@ -382,8 +382,13 @@ public sealed class ContratoDeObligacionesDeCartera(
             return r.Code == ClavesDeRecaudador.Cartera ? null : ErroresDePagos.RecaudadorNoRegistrado(r.Code);
         var hoy = reloj.HoyLocal;
         var vigente = await registroDeIntegracion.RecaudadorAsync(r.Code, hoy, ct);
+        // Feature 014 (decisión del dueño del 2026-10-18, D19): desde que un recaudador puede adoptar sólo el contrato de cuentas (Tesorería), pagar
+        // créditos exige la adopción de ProveedorDeObligaciones; la de ProveedorDeCuentas no habilita obligaciones (y al revés, contrato-de-cuentas §3.3).
         if (vigente is not null)
-            return string.Equals(vigente.Class.ToString(), r.Class.ToString(), StringComparison.Ordinal) ? null : ErroresDePagos.RecaudadorNoRegistrado(r.Code);
+            return string.Equals(vigente.Class.ToString(), r.Class.ToString(), StringComparison.Ordinal)
+                   && vigente.Adopciones.Any(a => a.Contrato == ContratosDeIntegracion.ProveedorDeObligaciones)
+                ? null
+                : ErroresDePagos.RecaudadorNoRegistrado(r.Code);
 
         var adopciones = await (from p in db.IntegrationParticipants.AsNoTracking()
                                 join a in db.IntegrationParticipantAdoptions.AsNoTracking() on p.Id equals a.ParticipantId
