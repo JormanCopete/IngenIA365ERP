@@ -28,9 +28,12 @@ public class DocumentsEndpoints : ICarterModule
     {
         var documentos = LendingGroup.Grupo(app, "/documents", "Cartera Documentos");
 
-        documentos.MapGet("/", async (IssuedDocumentKind? kind, Guid? personPublicId, Guid? loanPublicId, IssuedDocumentStatus? status, DateOnly? from,
-                    DateOnly? to, int? page, int? pageSize, ISender sender, CancellationToken ct) =>
-                await sender.Send(new ListIssuedLendingDocumentsQuery(kind, personPublicId, loanPublicId, status, from, to, page ?? 1, pageSize ?? 20), ct))
+        documentos.MapGet("/", async (IssuedDocumentKind? kind, Guid? personPublicId, Guid? loanPublicId, Guid? accountPublicId, IssuedDocumentStatus? status,
+                    DateOnly? from, DateOnly? to, int? page, int? pageSize, ISender sender, CancellationToken ct) =>
+                await sender.Send(new ListIssuedLendingDocumentsQuery(kind, personPublicId, loanPublicId, status, from, to, page ?? 1, pageSize ?? 20)
+                {
+                    AccountPublicId = accountPublicId,
+                }, ct))
             .WithName("Lending_Documents_List")
             .RequirePermission(Leer);
 
@@ -52,9 +55,12 @@ public class DocumentsEndpoints : ICarterModule
 
         documentos.MapPost("/", async (EmisionRequest body, HttpContext http, ISender sender, CancellationToken ct) =>
                 LendingGroup.Creado(await sender.Send(new IssueLendingDocumentCommand(body.Kind, body.PersonPublicId, body.LoanPublicId, body.CutoffDate,
-                    body.Period is { } p ? new PeriodoDeDocumento(p.From, p.To) : null, body.Year, body.Delivery)
+                    body.Period is { } p ? new PeriodoDeDocumento(p.From, p.To) : null, body.Year, body.Delivery, body.IncludePermanentSavings ?? false)
                 {
                     OperationKey = http.ClaveDeOperacion(),
+                    // Feature 014, US13 (T198; documentos.md §3): la cuenta del extracto o del certificado de saldo y sus opciones.
+                    AccountPublicId = body.AccountPublicId,
+                    IncludeRestrictions = body.IncludeRestrictions ?? false,
                 }, ct), d => $"/api/lending/documents/{d.DocumentPublicId}"))
             .WithName("Lending_Documents_Issue")
             .ConClaveDeOperacion()
@@ -85,7 +91,11 @@ public class DocumentsEndpoints : ICarterModule
             .RequirePermission(Anular);
     }
 
-    /// <summary>El pedido de emisión (§15): clase, titular, crédito, fecha de corte del certificado de saldo, período o año (K5) y la entrega.</summary>
+    /// <summary>
+    /// El pedido de emisión (§15): clase, titular, crédito, fecha de corte del certificado de saldo, período o año (K5) y la entrega. Feature 014 (T198;
+    /// documentos.md §3): la cuenta (extracto y certificado de saldo de una cuenta), los bloqueos y embargos del certificado y el ahorro permanente de la
+    /// constancia de aportes.
+    /// </summary>
     public sealed record EmisionRequest(
         IssuedDocumentKind Kind,
         Guid PersonPublicId,
@@ -93,7 +103,10 @@ public class DocumentsEndpoints : ICarterModule
         DateOnly? CutoffDate,
         PeriodoRequest? Period,
         short? Year,
-        DocumentDeliveryMode Delivery);
+        DocumentDeliveryMode Delivery,
+        Guid? AccountPublicId = null,
+        bool? IncludeRestrictions = null,
+        bool? IncludePermanentSavings = null);
 
     /// <summary>El período de un extracto (K5).</summary>
     public sealed record PeriodoRequest(DateOnly From, DateOnly To);
