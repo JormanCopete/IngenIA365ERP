@@ -47,6 +47,20 @@ public static class PlantillaDeMatrizDeCartera
     public const string Reestructurado = "reestructurado";
     public const string ClaseDeRecaudador = "claseDeRecaudador";
     public const string Motivo = "motivo";
+
+    // Feature 014, US8 (T144; contabilidad.md §4.2, plantillas-y-archivos.md §6): la versión 2 de la plantilla. Un archivo de la versión 1 se sigue
+    // leyendo: las columnas nuevas faltan y valen «*».
+    public const string Naturaleza = "naturaleza";
+    public const string ClaseDeCaptacion = "claseDeCaptacion";
+    public const string PlazoDeEmision = "plazoDeEmision";
+    public const string ClaseDeAporte = "claseDeAporte";
+    public const string MarcaDeCuenta = "marcaDeCuenta";
+
+    /// <summary>La cuenta CUIF sugerida de una fila sugerida: texto informativo que el lector no aplica.</summary>
+    public const string CuentaSugerida = "cuentaSugerida";
+
+    /// <summary>La versión de la plantilla (2 desde la feature 014).</summary>
+    public const int Version = 2;
     public const string Sucursal = "sucursal";
     public const string CentroDeCosto = "centroDeCosto";
     public const string Cuenta = "cuenta";
@@ -58,7 +72,8 @@ public static class PlantillaDeMatrizDeCartera
     public static IReadOnlyList<string> Columnas { get; } =
     [
         Operacion, Rol, Linea, Modalidad, Subsegmento, Categoria, Concepto, Empleado, Gracia, PorCuentaDelAsociado, Reestructurado,
-        ClaseDeRecaudador, Motivo, Sucursal, CentroDeCosto, Cuenta, VigenteDesde, VigenteHasta, Notas,
+        ClaseDeRecaudador, Motivo, Naturaleza, ClaseDeCaptacion, PlazoDeEmision, ClaseDeAporte, MarcaDeCuenta, Sucursal, CentroDeCosto, Cuenta,
+        CuentaSugerida, VigenteDesde, VigenteHasta, Notas,
     ];
 
     public static DefinicionDePlantilla Definicion { get; } = new(Clave, "Matriz de reglas contables de Cartera", ModuloDeAuditoria.Accounting,
@@ -86,12 +101,26 @@ public static class PlantillaDeMatrizDeCartera
             new(Motivo, TipoDeValor.Texto, Largo: 40,
                 Reglas: string.Join("; ", R.Todos.Where(r => r.Motivos is not null).Select(r => $"{r.Codigo}: {string.Join(", ", r.Motivos!)}")),
                 Ejemplo: null),
+            new(Naturaleza, TipoDeValor.Texto, Largo: 15,
+                Reglas: Dimension(DimensionDeCartera.LineNature) + "; Deposit (captaciones) o Contribution (aportes); los roles de captaciones no admiten Placement",
+                Ejemplo: null),
+            new(ClaseDeCaptacion, TipoDeValor.Texto, Largo: 15,
+                Reglas: Dimension(DimensionDeCartera.DepositClass) + "; uno de: " + string.Join(", ", R.ClasesDeCaptacion), Ejemplo: "Demand"),
+            new(PlazoDeEmision, TipoDeValor.Texto, Largo: 20,
+                Reglas: Dimension(DimensionDeCartera.IssueTermBand) + "; obligatorio en el capital de CDAT y contractual; uno de: " + string.Join(", ", R.PlazosDeEmision),
+                Ejemplo: null),
+            new(ClaseDeAporte, TipoDeValor.Texto, Largo: 15,
+                Reglas: Dimension(DimensionDeCartera.ContributionClass) + "; uno de: " + string.Join(", ", R.ClasesDeAporte), Ejemplo: null),
+            new(MarcaDeCuenta, TipoDeValor.Texto, Largo: 15,
+                Reglas: Dimension(DimensionDeCartera.AccountFlag) + "; uno de: " + string.Join(", ", R.MarcasDeCuenta) + " (la inactividad es otro rol)", Ejemplo: "Standard"),
             new(Sucursal, TipoDeValor.Sucursal, Reglas: Dimension(DimensionDeCartera.Branch) + "; código o nombre; vacío o * = cualquiera", Ejemplo: "*"),
             new(CentroDeCosto, TipoDeValor.CentroDeCosto,
                 Reglas: "opcional en todos: se asigna a la línea si la cuenta maneja centro y no se compara; código o nombre", Ejemplo: "*"),
             new(Cuenta, TipoDeValor.CuentaContable, Obligatoria: true,
                 Reglas: "auxiliar de movimiento, activa y habilitada para Cartera; una fila sugerida que vuelve sin cuenta se ignora",
                 Ejemplo: "el código completo de la auxiliar"),
+            new(CuentaSugerida, TipoDeValor.Texto, Largo: 60,
+                Reglas: "informativa: la cuenta CUIF que se sugiere para la fila (sugerencia, pendiente de la contadora); no se aplica al importar", Ejemplo: null),
             new(VigenteDesde, TipoDeValor.Fecha, Obligatoria: true,
                 Reglas: "la misma llave con una fecha posterior es una versión nueva y cierra la anterior la víspera; no puede empezar en o antes de lo ya contabilizado",
                 Ejemplo: "AAAA-MM-01"),
@@ -205,6 +234,12 @@ public sealed class ImportLendingPostingRulesCommandHandler(
         var reestructurado = Booleano(fila, P.Reestructurado);
         var clase = Comodin(fila.Texto(P.ClaseDeRecaudador, 20));
         var motivo = Comodin(fila.Texto(P.Motivo, 40));
+        // Feature 014 (T144): las cinco dimensiones de captaciones (faltan en un archivo de la versión 1: valen «*»).
+        var naturaleza = Comodin(fila.Texto(P.Naturaleza, 15));
+        var claseDeCaptacion = Comodin(fila.Texto(P.ClaseDeCaptacion, 15));
+        var plazo = Comodin(fila.Texto(P.PlazoDeEmision, 20));
+        var claseDeAporte = Comodin(fila.Texto(P.ClaseDeAporte, 15));
+        var marca = Comodin(fila.Texto(P.MarcaDeCuenta, 15));
         int? sucursal = Comodin(fila.Crudo(P.Sucursal)) is null ? null : fila.Referencia(P.Sucursal, sucursales, "una sucursal", "en Maestros → Agencias");
         int? centro = Comodin(fila.Crudo(P.CentroDeCosto)) is null ? null : fila.Referencia(P.CentroDeCosto, centros, "un centro de costo", "en Maestros → Centros de costo");
         int? cuenta = fila.Referencia(P.Cuenta, cuentas, "una cuenta", "en Contabilidad → Plan de cuentas");
@@ -214,9 +249,9 @@ public sealed class ImportLendingPostingRulesCommandHandler(
         if (fila.TieneErrores || rol is null || cuenta is not { } idCuenta || desde is not { } validFrom) return;
 
         var propuesta = new ReglaPropuestaDeCartera(operacion, rol, idCuenta, validFrom, hasta, linea, modalidad, subsegmento, categoria, concepto,
-            empleado, gracia, porCuenta, reestructurado, clase, motivo, sucursal, centro);
+            empleado, gracia, porCuenta, reestructurado, clase, motivo, sucursal, centro, naturaleza, claseDeCaptacion, plazo, claseDeAporte, marca);
 
-        var forma = ReglasDeLaMatrizDeCartera.Forma(propuesta.Operation, propuesta.Role, propuesta.ReasonCode, propuesta.Presentes);
+        var forma = ReglasDeLaMatrizDeCartera.Forma(propuesta.Operation, propuesta.Role, propuesta.ReasonCode, propuesta.Presentes, propuesta.DepositClass);
         if (forma.Count > 0)
         {
             foreach (var error in forma) fila.Error(ColumnaDe(error), error.Code, error.Message);
@@ -328,11 +363,17 @@ public sealed class ImportLendingPostingRulesCommandHandler(
             "branch" => P.Sucursal,
             "costCenter" => P.CentroDeCosto,
             "operation" => P.Operacion,
+            "lineNature" => P.Naturaleza,
+            "depositClass" => P.ClaseDeCaptacion,
+            "issueTermBand" => P.PlazoDeEmision,
+            "contributionClass" => P.ClaseDeAporte,
+            "accountFlag" => P.MarcaDeCuenta,
             _ => error.Code switch
             {
                 "Accounting.LendingRule.OperationUnknown" => P.Operacion,
                 "Accounting.LendingRule.RoleNotInOperation" => P.Rol,
                 "Accounting.LendingRule.ValidToInvalid" => P.VigenteHasta,
+                "Accounting.LendingRule.LineNatureMismatch" => P.Naturaleza,
                 "Accounting.LendingRule.Overlaps" or "Accounting.LendingRule.RetroactiveOverPosted" => P.VigenteDesde,
                 _ when error.Code.StartsWith("Accounting.Account.", StringComparison.Ordinal) || error.Code == "Accounting.NotInitialized" => P.Cuenta,
                 _ => P.Operacion,

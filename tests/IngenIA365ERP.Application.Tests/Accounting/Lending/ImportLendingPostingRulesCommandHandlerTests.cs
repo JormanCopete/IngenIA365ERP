@@ -37,7 +37,8 @@ public class ImportLendingPostingRulesCommandHandlerTests
 
         public void Archivo(params string?[][] filas)
         {
-            var tabla = new TablaLeida(P.Columnas.ToArray(), filas.Select((f, i) => new FilaLeida(i + 2, f)).ToList(), "xlsx");
+            // Un archivo de la versión 1 de la plantilla (feature 014, T144): las columnas de captaciones faltan y valen «*».
+            var tabla = new TablaLeida(ColumnasV1, filas.Select((f, i) => new FilaLeida(i + 2, f)).ToList(), "xlsx");
             Lector.LeerHojaAsync(Arg.Any<byte[]>(), Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
                 .Returns(Task.FromResult(Result.Success(tabla)));
         }
@@ -54,6 +55,13 @@ public class ImportLendingPostingRulesCommandHandlerTests
         }
     }
 
+    /// <summary>Las columnas de la versión 1 de la plantilla (la de la 013), en el orden de §3.7.</summary>
+    private static readonly string[] ColumnasV1 =
+    [
+        "operacion", "rol", "linea", "modalidad", "subsegmento", "categoria", "concepto", "empleado", "gracia", "porCuentaDelAsociado",
+        "reestructurado", "claseDeRecaudador", "motivo", "sucursal", "centroDeCosto", "cuenta", "vigenteDesde", "vigenteHasta", "notas",
+    ];
+
     /// <summary>Una fila en el orden de §3.7.</summary>
     private static string?[] Fila(string rol, string? cuenta, string desde = "2026-01-01", string? operacion = null, string? linea = null,
         string? modalidad = null, string? subsegmento = null, string? categoria = null, string? concepto = null, string? empleado = null,
@@ -67,9 +75,11 @@ public class ImportLendingPostingRulesCommandHandlerTests
     {
         P.Definicion.Clave.Should().Be("accounting.lending-rules");
         P.Definicion.EsDeUnaHoja.Should().BeTrue();
+        // Versión 2 (feature 014, T144): las cinco dimensiones de captaciones y la cuenta sugerida (informativa).
         P.Definicion.Hojas[0].Columnas.Select(c => c.Nombre).Should().Equal(
             "operacion", "rol", "linea", "modalidad", "subsegmento", "categoria", "concepto", "empleado", "gracia", "porCuentaDelAsociado",
-            "reestructurado", "claseDeRecaudador", "motivo", "sucursal", "centroDeCosto", "cuenta", "vigenteDesde", "vigenteHasta", "notas");
+            "reestructurado", "claseDeRecaudador", "motivo", "naturaleza", "claseDeCaptacion", "plazoDeEmision", "claseDeAporte", "marcaDeCuenta",
+            "sucursal", "centroDeCosto", "cuenta", "cuentaSugerida", "vigenteDesde", "vigenteHasta", "notas");
         P.Definicion.Hojas[0].Columnas.Where(c => c.Obligatoria).Select(c => c.Nombre).Should().Equal("rol", "cuenta", "vigenteDesde");
         P.Definicion.Hoja("Datos")!.Columna("categoria")!.Reglas.Should().Contain("obligatoria en Capital, InteresPorCobrar");
         P.Definicion.Hoja("Datos")!.Columna("motivo")!.Reglas.Should().Contain("DesembolsoPorGirar: Transfer, Check, ThirdPartyPayment");

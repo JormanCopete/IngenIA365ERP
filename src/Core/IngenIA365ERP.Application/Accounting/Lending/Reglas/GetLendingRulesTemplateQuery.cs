@@ -42,9 +42,10 @@ public sealed class GetLendingRulesTemplateQueryHandler(IApplicationDbContext db
         [
             r.Operation, r.Role, r.CreditLineCode, r.ModalityCode, r.SubsegmentCode, r.RiskCategory, r.ConceptCode,
             SiNo(r.IsEmployee), SiNo(r.InGracePeriod), SiNo(r.OnBehalfOfAssociate), SiNo(r.Restructured), r.CollectorClass, r.ReasonCode,
+            r.LineNature, r.DepositClass, r.IssueTermBand, r.ContributionClass, r.AccountFlag,
             r.BranchId is { } b ? sucursales.GetValueOrDefault(b) : null,
             r.CostCenterId is { } c ? centros.GetValueOrDefault(c) : null,
-            cuentas.GetValueOrDefault(r.AccountId), r.ValidFrom, r.ValidTo, r.Notes,
+            cuentas.GetValueOrDefault(r.AccountId), null, r.ValidFrom, r.ValidTo, r.Notes,
         ]).ToList();
 
         var catalogo = await dimensiones.CatalogoAsync(ct);
@@ -55,7 +56,17 @@ public sealed class GetLendingRulesTemplateQueryHandler(IApplicationDbContext db
             filas.Add(
             [
                 LendingPostingRule.Cualquiera, s.Rol, null, s.Modalidad, null, s.Categoria, s.Concepto, null, null, null, null, s.Clase, s.Motivo,
-                null, null, null, desde, null, P.PendienteDeValidar,
+                null, null, null, null, null, null, null, null, null, desde, null, P.PendienteDeValidar,
+            ]);
+        }
+
+        // Feature 014, US8 (T144; contabilidad.md §4.2): las de captaciones y aportes, con la cuenta CUIF sugerida en su columna informativa.
+        foreach (var s in Plantilla.SugerenciasDeCaptaciones.De(catalogo.CreditLines).Where(s => !claves.Contains(s.Clave)))
+        {
+            filas.Add(
+            [
+                LendingPostingRule.Cualquiera, s.Rol, null, null, null, null, null, null, null, null, null, s.ClaseDeRecaudador, s.Motivo,
+                s.Naturaleza, s.Clase, s.Plazo, s.ClaseDeAporte, s.Marca, null, null, null, s.CuentaSugerida, desde, null, P.PendienteDeValidar,
             ]);
         }
 
@@ -80,7 +91,9 @@ public sealed class GetLendingRulesTemplateQueryHandler(IApplicationDbContext db
     public static IReadOnlyList<FilaSugerida> Sugeridas(CatalogoDeDimensionesDeCarteraDto catalogo)
     {
         var filas = new List<FilaSugerida>();
-        var modalidades = catalogo.CreditLines.Where(l => l.Active).Select(l => l.ModalityCode.Trim().ToUpperInvariant())
+        // Feature 014 (T144): las líneas de captación y de aportes no tienen modalidad: sus sugerencias son las de SugerenciasDeCaptaciones.
+        var modalidades = catalogo.CreditLines.Where(l => l.Active && l.LineNature == nameof(Domain.Enums.Lending.LineNature.Placement))
+            .Select(l => l.ModalityCode.Trim().ToUpperInvariant())
             .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList();
         foreach (var m in modalidades)
         {

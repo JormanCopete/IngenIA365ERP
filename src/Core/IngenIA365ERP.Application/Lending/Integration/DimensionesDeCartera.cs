@@ -35,11 +35,14 @@ public sealed class DimensionesDeCartera(IApplicationDbContext db, INormativaVig
                 l.Nature,
                 Version = db.CreditLineVersions.Where(v => v.CreditLineId == l.Id).OrderByDescending(v => v.VersionNumber)
                     .Select(v => new { v.ModalityCode, v.SubsegmentCode }).FirstOrDefault(),
+                // US8 (T144): la clase de captación vive en la versión (research E37) y no cambia.
+                Clase = db.DepositLineVersions.Where(v => v.CreditLineId == l.Id).OrderBy(v => v.VersionNumber).Select(v => (DepositClass?)v.DepositClass)
+                    .FirstOrDefault(),
             })
             .OrderBy(l => l.Code)
             .ToListAsync(ct);
         var deLineas = lineas.Select(l => new LineaDeCarteraDto(l.Code, l.Name, l.Version?.ModalityCode ?? string.Empty, l.Version?.SubsegmentCode,
-            l.Status == CreditLineStatus.Active, l.Nature.ToString())).ToList();
+            l.Status == CreditLineStatus.Active, l.Nature.ToString(), l.Clase?.ToString())).ToList();
 
         var catalogo = await normativa.CatalogoDeModalidadesAsync(reloj.HoyLocal, null, ct);
         var modalidades = catalogo.IsSuccess

@@ -22,7 +22,12 @@ public sealed record ReglaDeCarteraFaltanteDto(
     string Role,
     DimensionesDeReglaDeCarteraDto Dimensions,
     IReadOnlyList<string> CreditLines,
-    DateOnly? LastUsedAt);
+    DateOnly? LastUsedAt,
+    string? Nature = null)
+{
+    /// <summary>Feature 014 (T144): la cuenta CUIF sugerida de una combinación exigida de captaciones (informativa, pendiente de la contadora).</summary>
+    public string? SuggestedAccount { get; init; }
+}
 
 /// <summary>Una clase de recaudador registrada sin regla <c>RecaudoPorAplicar</c> vigente (§3.7; <c>OwnLoanPayoff</c> siempre, T91). (nuevo)</summary>
 public sealed record RecaudadorSinPuenteDto(string CollectorClass, IReadOnlyList<string> Collectors);
@@ -78,6 +83,21 @@ public sealed class GetLendingRulesCompletenessQueryHandler(
     public const string AvisoPuenteConCruce = "Accounting.LendingRule.BridgeRequiresCrossDocument";
     public const string AvisoCausacionPorCredito = "Accounting.LendingRule.SummarizedAccrualPerLoan";
 
+    /// <summary>Feature 014 (T144): la causación resumida de captaciones llevará una línea por cuenta en una cuenta que exige tercero o cruce.</summary>
+    public const string AvisoCausacionPorCuenta = "Accounting.LendingRule.SummarizedAccrualPerAccount";
+
+    /// <summary>Feature 014 (T144; contabilidad.md §4.3): la marca de la cuenta (exenta o embargada) va a otra cuenta que la estándar (informativo).</summary>
+    public const string AvisoMarcaEnOtraCuenta = "Accounting.LendingRule.FlagInOtherAccount";
+
+    /// <summary>Feature 014 (T144): el puente de Tesorería (recaudador <c>Treasury</c>) sin regla, con captaciones o aportes.</summary>
+    public const string AvisoSinPuenteDeTesoreria = "Accounting.LendingRule.TreasuryBridgeMissing";
+
+    /// <summary>Los roles de la causación de captaciones (sale resumida por día, D24).</summary>
+    private static readonly HashSet<string> RolesDeLaCausacionDeCaptaciones = new(
+        new[] { Common.Integration.Contracts.Lending.Deposits.InteresDeCaptacionCausadoV1.Type, Common.Integration.Contracts.Lending.Deposits.AjusteDeCausacionDeCaptacionV1.Type }
+            .SelectMany(t => OperacionesDeCartera.Buscar(t)!.Roles),
+        StringComparer.Ordinal);
+
     /// <summary>Los roles que mueve la causación diaria, que sale resumida (C5).</summary>
     private static readonly HashSet<string> RolesDeLaCausacion = new(
         new[] { InteresCausado, MoraCausada, SeguroCausado, AjusteDeCausacion, CorreccionMonetaria, RepartoCorregido }
@@ -108,6 +128,9 @@ public sealed class GetLendingRulesCompletenessQueryHandler(
         var combinaciones = await dimensiones.CombinacionesEnUsoAsync(fecha, ct);
 
         var faltantes = Faltantes(combinaciones, vigentes, sucursales);
+        // Feature 014, US8 (T144; contabilidad.md §4.3): por cada naturaleza de captaciones con líneas, las combinaciones exigidas sin regla.
+        var catalogo = await dimensiones.CatalogoAsync(ct);
+        faltantes.AddRange(FaltantesDeCaptaciones(catalogo.CreditLines, vigentes));
         var recaudadores = await RecaudadoresSinPuenteAsync(vigentes, fecha, ct);
         var noElegibles = reglas
             .Select(r => (Regla: r, Reparo: AccountEligibility.Reparo(cuentas.GetValueOrDefault(r.AccountId), ModuloContable.Cartera)))
@@ -116,7 +139,7 @@ public sealed class GetLendingRulesCompletenessQueryHandler(
                 cuentas.GetValueOrDefault(x.Regla.AccountId)?.Code ?? string.Empty, x.Reparo!))
             .ToList();
         var sinMapeo = await SinMapeoAsync(ct);
-        var avisos = Avisos(reglas, cuentas).ToList();
+        var avisos = Avisos(reglas, cuentas).Concat(AvisosDeCaptaciones(catalogo.CreditLines, vigentes, cuentas)).ToList();
 
         var porTipo = new Dictionary<string, int>(StringComparer.Ordinal)
         {
@@ -161,6 +184,67 @@ public sealed class GetLendingRulesCompletenessQueryHandler(
                 faltantes[clave] = f = (f.Dto with { LastUsedAt = c.LastUsedAt }, f.Lineas);
         }
         return faltantes.Values.Select(f => f.Dto with { CreditLines = f.Lineas.ToList() }).ToList();
+    }
+
+    /// <summary>
+    /// Las combinaciones exigidas de captaciones y aportes sin regla vigente que case (feature 014, T144): las filas sugeridas exigidas
+    /// (<see cref="Plantilla.SugerenciasDeCaptaciones"/>) de las naturalezas y clases con líneas, buscadas con el código de cada línea (una regla por línea
+    /// también la cubre); la combinación sale una vez con las líneas que la tienen sin regla.
+    /// </summary>
+    public static IReadOnlyList<ReglaDeCarteraFaltanteDto> FaltantesDeCaptaciones(IReadOnlyList<LineaDeCarteraDto> lineas, IReadOnlyList<LendingPostingRule> vigentes)
+    {
+        var resultado = new List<ReglaDeCarteraFaltanteDto>();
+        foreach (var s in Plantilla.SugerenciasDeCaptaciones.De(lineas).Where(s => s.Exigida))
+        {
+            var naturaleza = s.NaturalezaDeLaFila;
+            var deLaFila = lineas.Where(l => l.LineNature == naturaleza
+                    && (s.Clase is null || string.Equals(l.DepositClass ?? nameof(Domain.Enums.Lending.DepositClass.Demand), s.Clase, StringComparison.Ordinal)))
+                .Select(l => l.Code).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList();
+            var sinRegla = deLaFila
+                .Where(codigo => !vigentes.Any(r => r.Role == s.Rol && MatrizVigenteDeCartera.Coincide(r, s.Valores with { CreditLineCode = codigo }, null)))
+                .ToList();
+            if (sinRegla.Count == 0) continue;
+            resultado.Add(new ReglaDeCarteraFaltanteDto(LendingPostingRule.Cualquiera, s.Rol,
+                new DimensionesDeReglaDeCarteraDto(CollectorClass: s.ClaseDeRecaudador, ReasonCode: s.Motivo, LineNature: s.Naturaleza, DepositClass: s.Clase,
+                    IssueTermBand: s.Plazo, ContributionClass: s.ClaseDeAporte, AccountFlag: s.Marca),
+                sinRegla, null, naturaleza) { SuggestedAccount = s.CuentaSugerida });
+        }
+        return resultado;
+    }
+
+    /// <summary>
+    /// Los avisos de captaciones (contabilidad.md §4.3): la devolución o el embargo por pagar que exigen documento cruce (el pago de Tesorería no saldará
+    /// contra el número de la cuenta), la causación resumida que irá una línea por cuenta, la marca exenta o embargada en otra cuenta que la estándar
+    /// (informativo) y el puente de Tesorería sin regla.
+    /// </summary>
+    private static IEnumerable<AvisoDeCompletitudDeCarteraDto> AvisosDeCaptaciones(IReadOnlyList<LineaDeCarteraDto> lineas, IReadOnlyList<LendingPostingRule> vigentes,
+        IReadOnlyDictionary<int, ChartOfAccount> cuentas)
+    {
+        var conCaptaciones = lineas.Any(l => l.LineNature is nameof(Domain.Enums.Lending.LineNature.Deposit) or nameof(Domain.Enums.Lending.LineNature.Contribution));
+        foreach (var r in vigentes)
+        {
+            if (!cuentas.TryGetValue(r.AccountId, out var cuenta) || R.Buscar(r.Role) is not { } rol || !R.EsDeCaptaciones(rol.Codigo)) continue;
+            if (rol.Codigo is R.DevolucionPorPagar or R.EmbargosPorConsignar && cuenta.RequiresCrossDocument)
+                yield return new AvisoDeCompletitudDeCarteraDto(AvisoPuenteConCruce,
+                    $"La cuenta {cuenta.Code} del puente {rol.Codigo} exige documento cruce: Tesorería paga con su propio documento y no saldará contra el número de la cuenta.",
+                    cuenta.Code, r.PublicId);
+            if (RolesDeLaCausacionDeCaptaciones.Contains(rol.Codigo) && (cuenta.RequiresThirdParty || cuenta.RequiresCrossDocument))
+                yield return new AvisoDeCompletitudDeCarteraDto(AvisoCausacionPorCuenta,
+                    $"La cuenta {cuenta.Code} ({rol.Codigo}) exige tercero o documento cruce: la causación resumida de captaciones llevará una línea por cuenta y por día en ella.",
+                    cuenta.Code, r.PublicId);
+            if (rol.Codigo == R.CapitalDeCaptacion && r.AccountFlag is { } marca && marca != nameof(Domain.Enums.Lending.AccountFlag.Standard)
+                && vigentes.FirstOrDefault(e => e.Role == R.CapitalDeCaptacion && e.AccountFlag == nameof(Domain.Enums.Lending.AccountFlag.Standard)
+                                                && e.DepositClass == r.DepositClass && e.IssueTermBand == r.IssueTermBand && e.CreditLineCode == r.CreditLineCode
+                                                && e.BranchId == r.BranchId) is { } estandar
+                && estandar.AccountId != r.AccountId)
+                yield return new AvisoDeCompletitudDeCarteraDto(AvisoMarcaEnOtraCuenta,
+                    $"El capital con la marca {marca} va a {cuenta.Code}, otra cuenta que el estándar: al marcar o desmarcar una cuenta su saldo se reclasifica entre las dos.",
+                    cuenta.Code, r.PublicId);
+        }
+        if (conCaptaciones && !vigentes.Any(r => r.Role == R.RecaudoPorAplicar && r.CollectorClass == nameof(ClaseDeRecaudador.Treasury)))
+            yield return new AvisoDeCompletitudDeCarteraDto(AvisoSinPuenteDeTesoreria,
+                "No hay regla para el puente de Tesorería (RecaudoPorAplicar con la clase Treasury): las transferencias que Tesorería consigne en cuentas no se contabilizarán.",
+                null, null);
     }
 
     private async Task<List<RecaudadorSinPuenteDto>> RecaudadoresSinPuenteAsync(IReadOnlyList<LendingPostingRule> vigentes, DateOnly fecha, CancellationToken ct)

@@ -31,9 +31,11 @@ public sealed record CatalogoDeDimensionesDeCarteraDto(
 /// <summary>Una línea de crédito por su código, con su modalidad y su sub-segmento. (nuevo)</summary>
 /// <remarks>
 /// Desde la feature 014 (T049; contabilidad.md §1.3) lleva la naturaleza de la línea (<c>LineNature</c> como texto): el catálogo devuelve las de
-/// las tres naturalezas. La clase de captación llega con las versiones de línea de captación (K8).
+/// las tres naturalezas. La clase de captación (<c>DepositClass</c>, la de su primera versión) desde US8 (T144): la plantilla y la completitud de la
+/// matriz sugieren y exigen por clase.
 /// </remarks>
-public sealed record LineaDeCarteraDto(string Code, string Name, string ModalityCode, string? SubsegmentCode, bool Active, string LineNature = "Placement");
+public sealed record LineaDeCarteraDto(string Code, string Name, string ModalityCode, string? SubsegmentCode, bool Active, string LineNature = "Placement",
+    string? DepositClass = null);
 
 /// <summary>Una modalidad del <c>CatalogoDeModalidades</c> vigente con sus sub-segmentos. (nuevo)</summary>
 public sealed record ModalidadDeCarteraDto(string Code, string Name, IReadOnlyList<string> SubsegmentCodes);
