@@ -84,6 +84,11 @@ public class MigrationAccountRowConfiguration : IEntityTypeConfiguration<Migrati
         builder.Property(e => e.ChargeReceivable).Monto().IsRequired();
         builder.Property(e => e.ClearingAmount).Monto().IsRequired();
         builder.Property(e => e.SourceOfFundsReference).HasMaxLength(200);
+        // US7 (T182; research §19): las condiciones del ahorro contractual de la fila (sólo con DepositClass = Contractual).
+        builder.Property(e => e.ContractualInstallment).Monto();
+        builder.Property(e => e.AgreedAnnualRate).TasaAnual();
+        builder.Property(e => e.ContractualBonusAnnualRate).TasaAnual();
+        builder.Property(e => e.ContractualStatus).HasConversion<int?>();
 
         builder.HasOne<MigrationLoadPart>().WithMany().HasForeignKey(e => e.MigrationLoadPartId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<Person>().WithMany().HasForeignKey(e => e.PersonId).OnDelete(DeleteBehavior.Restrict);

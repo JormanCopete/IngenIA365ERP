@@ -77,7 +77,7 @@ public sealed class RevisionYAplicacionDeCaptacionesTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task La_linea_se_resuelve_por_el_codigo_heredado_con_su_equivalencia_y_el_contractual_espera_su_entrega()
+    public async Task La_linea_se_resuelve_por_el_codigo_heredado_con_su_equivalencia_y_el_contractual_exige_su_contrato()
     {
         var carga = await _m.CargaAsync(LineNature.Deposit);
         _m.Archivo(P.MemberAccounts, MigracionDeCaptacionesDePrueba.Ahorro("AH-1", heredado: "AH01"));
@@ -90,9 +90,12 @@ public sealed class RevisionYAplicacionDeCaptacionesTests : IAsyncLifetime
         fila.CreditLineCode.Should().Be("AHVISTA");
         fila.SourceProductCode.Should().Be("AH01");
 
+        // US7 (T182): el contractual ya se migra, pero con su contrato (la cuota, las cuotas pagadas y el vencimiento son obligatorios).
         _m.Archivo(P.MemberAccounts, MigracionDeCaptacionesDePrueba.Ahorro("AH-2", clase: "Contractual"));
-        MigracionDeCaptacionesDePrueba.Errores(await _m.ImportarAsync(carga, P.MemberAccounts)).Should()
-            .Contain(e => e.Column == C.Clase && e.Code == ImportErrors.CellNotYetAvailable);
+        var errores = MigracionDeCaptacionesDePrueba.Errores(await _m.ImportarAsync(carga, P.MemberAccounts));
+        errores.Should().NotContain(e => e.Column == C.Clase && e.Code == ImportErrors.CellNotYetAvailable);
+        errores.Should().Contain(e => e.Column == C.CuotaContractual).And.Contain(e => e.Column == C.CuotasPagadas)
+            .And.Contain(e => e.Column == C.FechaDeVencimientoContractual);
     }
 
     [Fact]

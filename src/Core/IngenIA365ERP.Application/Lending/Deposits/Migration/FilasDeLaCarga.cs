@@ -126,7 +126,7 @@ public sealed class FilasDeLaCarga
                     [MemberAccountConcept.Principal] = f.Principal,
                     [MemberAccountConcept.InterestPayable] = f.InterestPayable,
                     [MemberAccountConcept.ChargeReceivable] = f.ChargeReceivable,
-                })));
+                }), ContractualMigrado.PlazoDeEmision(f)));
         foreach (var (f, tanda) in CuentasDeAportes.Select(x => (x.Fila, x.Tanda)))
             lista.Add(new CuentaDeLaCarga(P.ContributionAccounts, tanda, f.RowNumber, f.SourceAccountNumber, f.PersonId, f.CreditLineId, f.CreditLineCode,
                 LineNature.Contribution, null, f.OfficePublicId, false,

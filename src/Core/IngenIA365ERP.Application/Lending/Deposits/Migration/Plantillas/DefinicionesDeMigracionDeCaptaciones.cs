@@ -92,6 +92,8 @@ public static class DefinicionesDeMigracionDeCaptaciones
         public const string CuotasAtrasadas = "cuotasAtrasadas";
         public const string FechaDeVencimientoContractual = "fechaDeVencimientoContractual";
         public const string TasaPactadaEA = "tasaPactadaEA";
+        public const string TasaBonificadaEA = "tasaBonificadaEA";
+        public const string EstadoContractual = "estadoContractual";
         public const string TasaNegociadaMargenEA = "tasaNegociadaMargenEA";
         public const string CanjePendiente = "canjePendiente";
         public const string SoporteDeOrigenDeFondos = "soporteDeOrigenDeFondos";
@@ -195,7 +197,7 @@ public static class DefinicionesDeMigracionDeCaptaciones
         LineaDeLaCuenta(),
         CodigoHeredadoDeLaCuenta(),
         new(Columnas.Clase, TipoDeValor.Enumeracion, Obligatoria: true, Largo: 20,
-            Reglas: "Demand (a la vista) o Permanent; debe coincidir con la de la línea. El CDAT va en term-deposits y el contractual llega con una entrega posterior",
+            Reglas: "Demand (a la vista), Permanent o Contractual; debe coincidir con la de la línea. El CDAT va en term-deposits",
             Ejemplo: "Demand"),
         new(Columnas.FechaDeApertura, TipoDeValor.Fecha, Obligatoria: true, Reglas: "anterior o igual al corte", Ejemplo: "2020-05-14"),
         new(Columnas.Estado, TipoDeValor.Enumeracion, Obligatoria: true, Largo: 20, Reglas: "Active o Inactive; Inactive con fechaUltimoMovimientoDelTitular",
@@ -208,11 +210,22 @@ public static class DefinicionesDeMigracionDeCaptaciones
             Reglas: "causado y no liquidado al corte, hasta 6 decimales; se liquida en la primera liquidación sin volver a causarse; vacío = 0", Ejemplo: ""),
         new(Columnas.UltimaLiquidacionHasta, TipoDeValor.Fecha, Reglas: "obligatoria si hay interés causado; anterior o igual al corte", Ejemplo: "2026-09-30"),
         new(Columnas.CargosPendientes, TipoDeValor.Monto, Reglas: "cargos por cobrar al titular al corte; vacío = 0", Ejemplo: ""),
-        new(Columnas.CuotaContractual, TipoDeValor.Monto, Reglas: "ahorro contractual: llega con una entrega posterior", Ejemplo: ""),
-        new(Columnas.CuotasPagadas, TipoDeValor.Entero, Reglas: "ahorro contractual: llega con una entrega posterior", Ejemplo: ""),
-        new(Columnas.CuotasAtrasadas, TipoDeValor.Entero, Reglas: "ahorro contractual: llega con una entrega posterior", Ejemplo: ""),
-        new(Columnas.FechaDeVencimientoContractual, TipoDeValor.Fecha, Reglas: "ahorro contractual: llega con una entrega posterior", Ejemplo: ""),
-        new(Columnas.TasaPactadaEA, TipoDeValor.Porcentaje, Reglas: "condiciones selladas: llega con una entrega posterior", Ejemplo: ""),
+        new(Columnas.CuotaContractual, TipoDeValor.Monto, Reglas: "obligatoria en el ahorro contractual: la cuota pactada; vacía en las demás clases",
+            Ejemplo: ""),
+        new(Columnas.CuotasPagadas, TipoDeValor.Entero,
+            Reglas: "obligatoria en el ahorro contractual: las cuotas pagadas al corte (cuentan para la bonificación fechadas en su vencimiento del plan)",
+            Ejemplo: ""),
+        new(Columnas.CuotasAtrasadas, TipoDeValor.Entero,
+            Reglas: "ahorro contractual: las vencidas y sin pagar al corte (informativo; las que siguen exigibles van en account-installments)", Ejemplo: ""),
+        new(Columnas.FechaDeVencimientoContractual, TipoDeValor.Fecha,
+            Reglas: "obligatoria en el ahorro contractual, posterior al corte; el plazo son los meses enteros desde la apertura", Ejemplo: ""),
+        new(Columnas.TasaPactadaEA, TipoDeValor.Porcentaje,
+            Reglas: "ahorro contractual: la tasa base pactada en puntos EA (vacía = la de la línea al corte); en las demás clases llega con una entrega posterior",
+            Ejemplo: ""),
+        new(Columnas.TasaBonificadaEA, TipoDeValor.Porcentaje,
+            Reglas: "ahorro contractual: la tasa bonificada pactada en puntos EA (vacía = la de la línea)", Ejemplo: ""),
+        new(Columnas.EstadoContractual, TipoDeValor.Enumeracion, Largo: 20,
+            Reglas: "ahorro contractual: Current (vigente, el defecto) o Breached (ya incumplido: causa a la tasa de castigo desde el corte)", Ejemplo: ""),
         new(Columnas.TasaNegociadaMargenEA, TipoDeValor.Porcentaje, Reglas: "tasa negociada: llega con una entrega posterior", Ejemplo: ""),
         new(Columnas.CanjePendiente, TipoDeValor.Monto, Reglas: "de saldoCapital, lo que sigue en canje al corte; se libera con los días hábiles del cheque; vacío = 0",
             Ejemplo: ""),

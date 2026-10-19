@@ -62,7 +62,8 @@ public sealed class NacimientoDeCuentasMigradas(
     ReglasDeParametrosDeCartera parametros,
     IActorActual actorActual,
     IDateTimeService reloj,
-    IngenIA365ERP.Application.Common.Calendar.ICalendarioHabil? calendario = null)
+    IngenIA365ERP.Application.Common.Calendar.ICalendarioHabil? calendario = null,
+    Contractual.LectorDeContractual? contractual = null)
 {
     public const string PrefijoSaldoInicial = "SIN-";
 
@@ -216,6 +217,44 @@ public sealed class NacimientoDeCuentasMigradas(
                 condicionesDe[cuenta.Id] = (version, plan);
             }
             if (condicionesDe.Count > 0) await db.SaveChangesAsync(ct);
+
+            // 2c) US7 (T182): la versión 1 de condiciones de cada contractual (causa Migration) en su operación de saldo inicial —el plan desde el inicio que
+            // da su vencimiento, la tasa base y la bonificada pactadas o las de la línea, y las cuotas pagadas al corte (sus aportes para la bonificación)—, la
+            // marca de la última cuota del plan vencida al corte (el paso diario genera las siguientes) y, si ya estaba incumplido, la versión de castigo.
+            var contratos = 0;
+            foreach (var (c, cuenta, control) in nacidas.Where(x => x.Origen.Parte == Migration.Plantillas.DefinicionesDeMigracionDeCaptaciones.Partes.MemberAccounts
+                                                                     && x.Origen.Clase == DepositClass.Contractual))
+            {
+                var f = ahorroPorNumero[c.Numero!];
+                var linea = lineas[c.LineaCodigo].DeCaptacion!;
+                var plan = await ContractualMigrado.PlanAsync(f, linea, contractual, corte, ct);
+                var saldo = operaciones[cuenta.Id].Saldo;
+                var version = Contractual.LectorDeContractual.NuevaVersion(cuenta, 1, saldo, AccountTermsCause.Migration, linea, plan, plan.Condiciones.TasaBase, null,
+                    null, null, ahora, saldo.InputsSha256, f.ContractualPaidInstallments);
+                registro.SellarCondiciones(control, version, [], 0);
+                if (plan.Cuotas.LastOrDefault(q => q.Vencimiento <= corte) is { } ultima)
+                    RegistroDeCuentas.MarcarCuotaGenerada(control, Contractual.GeneradorDeCuotasDeContractual.Clave(plan, ultima));
+                if (f.ContractualStatus == ContractualStatus.Breached)
+                {
+                    cuenta.Incumplir();
+                    var numeroDeCastigo = await numerador.NumeroDeOperacionDeCuentaAsync(MemberAccountOperationKind.ContractualBreach,
+                        Contractual.IncumplimientoDeContractual.PrefijoIncumplimiento, ct);
+                    var castigo = registro.RegistrarOperacion(control, ahora, sello => new MemberAccountOperation
+                    {
+                        MemberAccount = cuenta, MemberAccountId = cuenta.Id, Kind = MemberAccountOperationKind.ContractualBreach, Number = numeroDeCastigo,
+                        Sequence = sello.Sequence, ValueDate = corte, AccountingDate = corte, RegisteredAt = sello.RegisteredAt, Amount = 0m, ActorKind = actor.Kind,
+                        ActorUserId = actor.UserId, OriginUserCentralId = actor.CentralUserId, MigrationLoadId = carga.Id,
+                        Reason = "Contrato incumplido en el sistema anterior: causa a la tasa de castigo desde el corte.",
+                        Payload = JsonSerializer.Serialize(new { load = carga.PublicId, migrated = true, breached = true }, Json), InputsSha256 = saldo.InputsSha256,
+                        RulesVersion = VersionesDeReglas.Vigente,
+                    });
+                    await db.SaveChangesAsync(ct);
+                    registro.SellarCondiciones(control, Contractual.LectorDeContractual.VersionDeCastigo(cuenta, version, version, castigo, ahora, saldo.InputsSha256), [],
+                        version.VersionNumber);
+                }
+                contratos++;
+            }
+            if (contratos > 0) await db.SaveChangesAsync(ct);
 
             // 3) Las cuotas atrasadas (generadas por la operación de saldo inicial).
             var cuotasDe = new Dictionary<int, List<(AccountInstallment Cuota, MigrationAccountInstallmentRow Fila)>>();

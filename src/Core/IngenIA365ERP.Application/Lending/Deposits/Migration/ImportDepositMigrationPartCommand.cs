@@ -511,8 +511,6 @@ internal sealed class LecturaDeParteDeCaptaciones(
         var clase = Enumeracion<DepositClass>(fila, C.Clase);
         if (clase == DepositClass.TermDeposit)
             fila.Error(C.Clase, ImportErrors.CellNotYetAvailable, "Un CDAT se migra en la parte term-deposits, que llega con el CDAT (K9).");
-        else if (clase == DepositClass.Contractual)
-            fila.TodaviaNoDisponible(C.Clase, nameof(Domain.Lending.EntregaDeCartera.K9));
         else if (clase is not null && linea is { } l0 && l0.Linea.Clase != clase)
             fila.Error(C.Clase, ImportErrors.CellFormat, $"La línea {l0.Linea.Code} es de la clase {l0.Linea.Clase}, no {clase}.");
         var apertura = fila.Fecha(C.FechaDeApertura);
@@ -532,8 +530,18 @@ internal sealed class LecturaDeParteDeCaptaciones(
         if (liquidadoHasta is { } lq && apertura is { } ap && lq < ap)
             fila.Error(C.UltimaLiquidacionHasta, ImportErrors.CellFormat, "La última liquidación no puede ser anterior a la apertura de la cuenta.");
         var cargos = NoNegativo(fila, C.CargosPendientes, fila.Monto(C.CargosPendientes));
-        NoTodavia(fila, nameof(Domain.Lending.EntregaDeCartera.K9), C.CuotaContractual, C.CuotasPagadas, C.CuotasAtrasadas, C.FechaDeVencimientoContractual,
-            C.TasaPactadaEA, C.TasaNegociadaMargenEA);
+        // US7 (T182; research §19): el contrato del ahorro contractual; las demás clases no llevan sus columnas. La tasa negociada y la pactada de la vista
+        // siguen sin entrega.
+        var contrato = clase == DepositClass.Contractual ? ContratoMigrado(fila, linea?.Linea, apertura) : null;
+        if (clase != DepositClass.Contractual)
+        {
+            foreach (var columna in new[] { C.CuotaContractual, C.CuotasPagadas, C.CuotasAtrasadas, C.FechaDeVencimientoContractual, C.TasaBonificadaEA,
+                         C.EstadoContractual })
+                if (fila.Crudo(columna) is not null)
+                    fila.Error(columna, ImportErrors.CellFormat, "Las condiciones del ahorro contractual sólo van en una cuenta de clase Contractual.");
+            NoTodavia(fila, nameof(Domain.Lending.EntregaDeCartera.K9), C.TasaPactadaEA);
+        }
+        NoTodavia(fila, nameof(Domain.Lending.EntregaDeCartera.K9), C.TasaNegociadaMargenEA);
         var canje = NoNegativo(fila, C.CanjePendiente, fila.Monto(C.CanjePendiente));
         if (canje > capital) fila.Error(C.CanjePendiente, ImportErrors.CellFormat, "Lo que está en canje es parte del saldo de capital: no puede superarlo.");
         var soporte = fila.Texto(C.SoporteDeOrigenDeFondos, 200);
@@ -556,7 +564,62 @@ internal sealed class LecturaDeParteDeCaptaciones(
             CreditLineCode = lineaDeLaCuenta.Code, CreditLineId = lineaDeLaCuenta.Id, OfficePublicId = oficina.Value, DepositClass = clase.Value,
             OpenedOn = apertura.Value, Status = estado.Value, LastHolderActivityDate = ultimoMovimiento, HandlingMode = manejo, Principal = capital,
             InterestPayable = interes, LastSettledThrough = liquidadoHasta, ChargeReceivable = cargos, ClearingAmount = canje, SourceOfFundsReference = soporte,
+            ContractualInstallment = contrato?.Cuota, ContractualPaidInstallments = contrato?.Pagadas, ContractualLateInstallments = contrato?.Atrasadas,
+            ContractualMaturityDate = contrato?.Vencimiento, AgreedAnnualRate = contrato?.TasaBase, ContractualBonusAnnualRate = contrato?.TasaBonificada,
+            ContractualStatus = contrato?.Estado,
         }));
+    }
+
+    /// <summary>El contrato de un ahorro contractual migrado como lo trae la fila (research §19). (nuevo)</summary>
+    private sealed record ContratoDeLaFila(decimal Cuota, int Pagadas, int? Atrasadas, DateOnly Vencimiento, decimal? TasaBase, decimal? TasaBonificada,
+        ContractualStatus Estado);
+
+    /// <summary>
+    /// US7 (T182): las columnas del contrato de un ahorro contractual —la cuota, las cuotas pagadas y atrasadas al corte, el vencimiento (posterior al corte:
+    /// el vencido se liquida antes de migrar), la tasa base y la bonificada pactadas (vacías = las de la línea) y si ya estaba incumplido—, y el aviso si las
+    /// pagadas y las atrasadas no suman las cuotas del plan vencidas al corte (el plan se arma con la periodicidad de la línea desde el vencimiento hacia
+    /// atrás, por meses enteros desde la apertura).
+    /// </summary>
+    private ContratoDeLaFila? ContratoMigrado(FilaDeImportacion fila, LineaAlCorte? linea, DateOnly? apertura)
+    {
+        fila.Requerido(C.CuotaContractual);
+        fila.Requerido(C.CuotasPagadas);
+        fila.Requerido(C.FechaDeVencimientoContractual);
+        var cuota = NoNegativo(fila, C.CuotaContractual, fila.Monto(C.CuotaContractual), positivo: true);
+        var pagadas = fila.Entero(C.CuotasPagadas);
+        if (pagadas is < 0) fila.Error(C.CuotasPagadas, ImportErrors.CellFormat, "Las cuotas pagadas no son negativas.");
+        var atrasadas = fila.Entero(C.CuotasAtrasadas);
+        if (atrasadas is < 0) fila.Error(C.CuotasAtrasadas, ImportErrors.CellFormat, "Las cuotas atrasadas no son negativas.");
+        var vence = fila.Fecha(C.FechaDeVencimientoContractual);
+        if (vence is { } v && v <= Corte)
+            fila.Error(C.FechaDeVencimientoContractual, ImportErrors.CellFormat,
+                "Un contrato vencido al corte se liquida y se entrega en el sistema anterior antes de migrar: el vencimiento es posterior al corte.");
+        var tasa = fila.Porcentaje(C.TasaPactadaEA);
+        var bonificada = fila.Porcentaje(C.TasaBonificadaEA);
+        var estado = Enumeracion<ContractualStatus>(fila, C.EstadoContractual) ?? ContractualStatus.Current;
+        if (estado == ContractualStatus.Fulfilled)
+            fila.Error(C.EstadoContractual, ImportErrors.CellFormat, "Un contrato cumplido ya venció: el estado es Current o Breached.");
+        if (fila.TieneErrores || vence is null || pagadas is null || apertura is null) return null;
+        if (linea?.DeCaptacion is { DepositClass: DepositClass.Contractual } version)
+        {
+            var meses = Math.Max(1, (vence.Value.Year - apertura.Value.Year) * 12 + vence.Value.Month - apertura.Value.Month);
+            var inicio = vence.Value.AddMonths(-meses);
+            var periodicidad = version.InstallmentPeriodicity ?? RepaymentPeriodicity.Monthly;
+            var cuotas = AhorroContractual.Cuotas(inicio, periodicidad, vence.Value);
+            var alCorte = cuotas.Count(q => q.Vencimiento <= Corte);
+            if (pagadas > cuotas.Count)
+                fila.Error(C.CuotasPagadas, ImportErrors.CellFormat,
+                    $"El contrato tiene {cuotas.Count} cuotas {periodicidad} entre {inicio:yyyy-MM-dd} y {vence:yyyy-MM-dd}: no pudo pagar {pagadas}.");
+            else if (pagadas + (atrasadas ?? 0) != alCorte)
+                fila.Aviso(C.CuotasPagadas, "Lending.Migration.ContractualInstallmentsDiffer",
+                    $"Al corte vencieron {alCorte} cuotas del plan ({inicio:yyyy-MM-dd} a {vence:yyyy-MM-dd}, {periodicidad}); la fila trae {pagadas} pagadas y "
+                    + $"{atrasadas ?? 0} atrasadas. Las atrasadas que sigan exigibles se cargan en account-installments.");
+            if (version.MinInstallmentAmount is { } minima && cuota < minima)
+                fila.Aviso(C.CuotaContractual, AhorroContractual.CodigoCuotaBajoElMinimo,
+                    $"La cuota de {cuota:N0} está bajo la mínima de la línea ({minima:N0}): se conserva la pactada en el sistema anterior.");
+        }
+        if (fila.TieneErrores) return null;
+        return new ContratoDeLaFila(cuota, pagadas.Value, atrasadas, vence.Value, tasa, bonificada, estado);
     }
 
     private Action<int>? CuentaDeAportes(ContextoDeImportacion ctx, FilaDeImportacion fila)

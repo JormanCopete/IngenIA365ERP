@@ -175,13 +175,20 @@ public sealed class ValidacionEntrePartesDeCaptaciones(IApplicationDbContext db,
             var primera = grupo.First();
             var c = Cuenta(P.AccountInstallments, primera.Tanda, primera.Fila.RowNumber, C.Cuenta, grupo.Key);
             if (c is null) continue;
-            if (c.Naturaleza == LineNature.Deposit && c.Clase != DepositClass.Permanent)
+            // US7 (T182): el contractual también tiene cuotas exigibles (las atrasadas al corte, en su vencimiento del plan).
+            if (c.Naturaleza == LineNature.Deposit && c.Clase is not (DepositClass.Permanent or DepositClass.Contractual))
             {
                 foreach (var q in grupo)
                     Error(P.AccountInstallments, q.Tanda, q.Fila.RowNumber, C.Cuenta, "Lending.Migration.InstallmentsNotAllowed",
-                        $"La cuenta {grupo.Key} es de ahorro a la vista: no tiene cuotas exigibles (sólo aportes y ahorro permanente).");
+                        $"La cuenta {grupo.Key} es de ahorro a la vista: no tiene cuotas exigibles (sólo aportes, ahorro permanente y contractual).");
                 continue;
             }
+            if (c.Clase == DepositClass.Contractual && lineas.GetValueOrDefault(c.LineaCodigo)?.DeCaptacion is { } lineaDelContrato
+                && ContractualMigrado.Plan(filas, grupo.Key, lineaDelContrato.InstallmentPeriodicity ?? RepaymentPeriodicity.Monthly) is { } plan)
+                foreach (var q in grupo.Where(q => plan.Cuotas.All(p => p.Vencimiento != q.Fila.DueDate)))
+                    Error(P.AccountInstallments, q.Tanda, q.Fila.RowNumber, C.FechaDeVencimiento, "Lending.Migration.ContractualInstallmentNotInPlan",
+                        $"La cuota del {q.Fila.DueDate:yyyy-MM-dd} no es una cuota del plan del contractual {grupo.Key} (vencen el {plan.Cuotas[0].Vencimiento:dd} de "
+                        + "cada período desde el inicio del contrato).");
             var pagado = grupo.Sum(q => q.Fila.PaidAmount);
             var saldo = c.Saldos.GetValueOrDefault(c.ConceptoDeCuotas);
             if (pagado > saldo)

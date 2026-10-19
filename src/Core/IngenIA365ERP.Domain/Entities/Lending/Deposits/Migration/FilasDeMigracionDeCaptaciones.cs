@@ -136,6 +136,29 @@ public class MigrationAccountRow : AuditableEntity, IHechoInmutable
     public decimal ClearingAmount { get; init; }
 
     public string? SourceOfFundsReference { get; init; }
+
+    // ------------------------------------------------------------------------------------- contractual (US7, T182) --
+
+    /// <summary>La cuota pactada del contractual.</summary>
+    public decimal? ContractualInstallment { get; init; }
+
+    /// <summary>Las cuotas pagadas al corte (sus aportes cuentan para la bonificación fechados en su vencimiento del plan).</summary>
+    public int? ContractualPaidInstallments { get; init; }
+
+    /// <summary>Las cuotas vencidas y sin pagar al corte (informativo; las que siguen exigibles se cargan en <c>account-installments</c>).</summary>
+    public int? ContractualLateInstallments { get; init; }
+
+    /// <summary>El vencimiento del contrato; el inicio es el vencimiento menos el plazo en meses enteros desde la apertura.</summary>
+    public DateOnly? ContractualMaturityDate { get; init; }
+
+    /// <summary>La tasa base pactada (EA, fracción); vacía = la de la línea al corte.</summary>
+    public decimal? AgreedAnnualRate { get; init; }
+
+    /// <summary>La tasa bonificada pactada (EA, fracción); vacía = la de la línea.</summary>
+    public decimal? ContractualBonusAnnualRate { get; init; }
+
+    /// <summary><c>Current</c> o <c>Breached</c> (ya incumplido en el sistema anterior); vacío = vigente.</summary>
+    public ContractualStatus? ContractualStatus { get; init; }
 }
 
 /// <summary>
