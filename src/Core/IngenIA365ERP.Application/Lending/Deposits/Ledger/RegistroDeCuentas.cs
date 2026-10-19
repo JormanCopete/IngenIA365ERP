@@ -471,6 +471,75 @@ public sealed class RegistroDeCuentas(IApplicationDbContext db)
         }
     }
 
+    // ------------------------------------------------------------------------------------------------- migración (US9) --
+
+    /// <summary>
+    /// US9 (T155; data-model §7.1): lo exento del GMF ya usado en el mes del corte por una persona migrada, en la operación de saldo inicial de su cuenta
+    /// exenta, con <c>Origin = Migration</c>: el tope del mes de la activación arranca con lo que la persona ya usó. Sin valor no hay fila. No guarda.
+    /// </summary>
+    public GmfMonthlyUsage? RegistrarUsoDeGmfMigrado(int persona, MemberAccountOperation saldoInicial, MemberAccount cuenta, DateOnly corte, decimal exentoUsado,
+        GmfExemptionPolicy politica)
+    {
+        ArgumentNullException.ThrowIfNull(saldoInicial);
+        ArgumentNullException.ThrowIfNull(cuenta);
+        if (exentoUsado == 0m) return null;
+        if (exentoUsado < 0m) throw new InvalidOperationException("Lo exento usado del mes no es negativo.");
+        if (saldoInicial.Kind != MemberAccountOperationKind.OpeningBalance)
+            throw new InvalidOperationException("El uso del GMF migrado va en la operación de saldo inicial de la cuenta.");
+        var uso = new GmfMonthlyUsage
+        {
+            PersonId = persona,
+            Year = (short)corte.Year,
+            Month = (byte)corte.Month,
+            MemberAccountId = cuenta.Id,
+            Operation = saldoInicial,
+            OperationId = saldoInicial.Id,
+            TaxableEventCode = "Migration",
+            DisposedAmount = exentoUsado,
+            ExemptAmount = exentoUsado,
+            TaxableBase = 0m,
+            GmfAmount = 0m,
+            Policy = politica,
+            Rate = 0m,
+            Origin = GmfMonthlyUsage.OrigenMigracion,
+        };
+        db.GmfMonthlyUsages.Add(uso);
+        return uso;
+    }
+
+    /// <summary>
+    /// US9 (T155; data-model §7.1): los rendimientos, el componente inflacionario y la retención del año del corte anteriores al corte, por titular y cuenta,
+    /// para el certificado tributario, en la operación de saldo inicial de la cuenta y con <c>Origin = Migration</c>. Se cargan como información, sin hechos.
+    /// No guarda.
+    /// </summary>
+    public WithholdingAccumulation RegistrarAcumuladoMigrado(int persona, MemberAccountOperation saldoInicial, MemberAccount cuenta, short anio, decimal rendimientos,
+        decimal componenteInflacionario, decimal baseDeRetencion, decimal retencion)
+    {
+        ArgumentNullException.ThrowIfNull(saldoInicial);
+        ArgumentNullException.ThrowIfNull(cuenta);
+        if (rendimientos < 0m || componenteInflacionario < 0m || baseDeRetencion < 0m || retencion < 0m)
+            throw new InvalidOperationException("El acumulado tributario migrado no es negativo.");
+        if (saldoInicial.Kind != MemberAccountOperationKind.OpeningBalance)
+            throw new InvalidOperationException("El acumulado tributario migrado va en la operación de saldo inicial de la cuenta.");
+        var acumulado = new WithholdingAccumulation
+        {
+            PersonId = persona,
+            TaxYear = anio,
+            MemberAccountId = cuenta.Id,
+            DepositClass = cuenta.DepositClass,
+            Operation = saldoInicial,
+            OperationId = saldoInicial.Id,
+            Share = 1m,
+            GrossInterest = rendimientos,
+            InflationaryComponentAmount = componenteInflacionario,
+            WithholdingBase = baseDeRetencion,
+            WithholdingAmount = retencion,
+            Origin = WithholdingAccumulation.OrigenMigracion,
+        };
+        db.WithholdingAccumulations.Add(acumulado);
+        return acumulado;
+    }
+
     // ---------------------------------------------------------------------------------------- liquidación de intereses (US5) --
 
     /// <summary>

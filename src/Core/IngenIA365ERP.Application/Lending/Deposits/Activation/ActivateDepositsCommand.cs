@@ -31,9 +31,9 @@ public sealed record DepositsActivationDto(
 
 /// <summary>
 /// <c>POST /api/lending/deposits/activation</c> con <c>nature = Deposit</c> (feature 014, T055; FR-116, FR-117, R21; api.md §16): activa las
-/// captaciones. En la fase fundacional sólo en su modo <b>sin carga</b> (cooperativa sin historia): <see cref="MigrationLoadPublicId"/> nulo. La
-/// activación con carga se completa con la migración (US9). <see cref="SessionItemPublicId"/> es el acta de las diferencias de una carga: sin carga no
-/// hay diferencias y no se pide. (nuevo)
+/// captaciones: <b>sin carga</b> (cooperativa sin historia, <see cref="MigrationLoadPublicId"/> nulo; T055) o <b>con carga</b> (US9, T155,
+/// <see cref="ActivacionDeCaptacionesConCarga"/>). <see cref="SessionItemPublicId"/> es el acta de la activación con carga: sin carga no hay diferencias y no
+/// se pide. (nuevo)
 /// </summary>
 public sealed record ActivateDepositsCommand(
     DateOnly ActivationDate,
@@ -68,19 +68,25 @@ public sealed class ActivateContributionsCommandValidator : ValidadorConMotivo<A
         RuleFor(x => x.ActivationDate).NotEqual(default(DateOnly)).WithMessage("Indique la fecha de activación.");
 }
 
-public sealed class ActivateDepositsCommandHandler(ActivacionDeCaptacionesSinCarga activacion)
+/// <summary>US9 (T155): sin carga, la activación de la cooperativa sin historia; con carga, la que hace nacer las cuentas migradas.</summary>
+public sealed class ActivateDepositsCommandHandler(ActivacionDeCaptacionesSinCarga activacion, ActivacionDeCaptacionesConCarga conCarga)
     : IRequestHandler<ActivateDepositsCommand, Result<DepositsActivationDto>>
 {
     public Task<Result<DepositsActivationDto>> Handle(ActivateDepositsCommand request, CancellationToken ct) =>
-        activacion.ActivarAsync(LineNature.Deposit, request.MigrationLoadPublicId, request.ActivationDate, request.AcknowledgeWarnings, request.Reason, ct);
+        request.MigrationLoadPublicId is { } carga
+            ? conCarga.ActivarAsync(LineNature.Deposit, carga, request.ActivationDate, request.SessionItemPublicId, request.AcknowledgeWarnings, request.Reason, ct)
+            : activacion.ActivarAsync(LineNature.Deposit, null, request.ActivationDate, request.AcknowledgeWarnings, request.Reason, ct);
 }
 
-public sealed class ActivateContributionsCommandHandler(ActivacionDeCaptacionesSinCarga activacion)
+/// <summary>US9 (T155): ídem para los aportes.</summary>
+public sealed class ActivateContributionsCommandHandler(ActivacionDeCaptacionesSinCarga activacion, ActivacionDeCaptacionesConCarga conCarga)
     : IRequestHandler<ActivateContributionsCommand, Result<DepositsActivationDto>>
 {
     public Task<Result<DepositsActivationDto>> Handle(ActivateContributionsCommand request, CancellationToken ct) =>
-        activacion.ActivarAsync(LineNature.Contribution, request.MigrationLoadPublicId, request.ActivationDate, request.AcknowledgeWarnings,
-            request.Reason, ct);
+        request.MigrationLoadPublicId is { } carga
+            ? conCarga.ActivarAsync(LineNature.Contribution, carga, request.ActivationDate, request.SessionItemPublicId, request.AcknowledgeWarnings,
+                request.Reason, ct)
+            : activacion.ActivarAsync(LineNature.Contribution, null, request.ActivationDate, request.AcknowledgeWarnings, request.Reason, ct);
 }
 
 /// <summary>Los errores de la activación de aportes y captaciones que no tiene la de créditos (feature 014, T055). (nuevo)</summary>
@@ -109,7 +115,7 @@ public static class ErroresDeActivacionDeCaptaciones
 
     public static Error ConCargaNoDisponible(LineNature naturaleza) =>
         new ErrorConDatos(CodigoConCargaNoDisponible,
-            $"La activación de {Nombre(naturaleza).ToLowerInvariant()} con una carga de migración llega con la migración de captaciones. Hoy sólo se activa sin carga (cooperativa sin historia).",
+            $"La activación de {Nombre(naturaleza).ToLowerInvariant()} sin carga no lleva carga de migración: la activación con carga es otra (con su acta y su cuadre).",
             new { nature = naturaleza.ToString() });
 
     private static string Nombre(LineNature naturaleza) => naturaleza == LineNature.Contribution ? "Los aportes" : "Las captaciones";

@@ -238,6 +238,11 @@ public static class DependencyInjection
         services.AddScoped<Lending.Deposits.Accrual.SeccionDeCaptacionesDelCierre>();
         services.AddScoped<Lending.Deposits.Activation.RequisitosDeActivacionDeCaptaciones>();
         services.AddScoped<Lending.Deposits.Activation.ActivacionDeCaptacionesSinCarga>();
+        // US9 (T153–T156): la migración de aportes y captaciones, su cuadre y la activación con carga.
+        services.AddScoped<Lending.Deposits.Migration.ValidacionEntrePartesDeCaptaciones>();
+        services.AddScoped<Lending.Deposits.Migration.CuadreDeCaptaciones>();
+        services.AddScoped<Lending.Deposits.Activation.NacimientoDeCuentasMigradas>();
+        services.AddScoped<Lending.Deposits.Activation.ActivacionDeCaptacionesConCarga>();
         // Feature 014, US1 (T064–T067): el único que registra una versión de una línea de captación o de aportes, lo que esas líneas leen fuera de sí
         // (perfil regulatorio, topes de aportes, anticipación del aviso, entrega) y el aviso de cambio de tasa a los titulares.
         services.AddScoped<Lending.Deposits.Lines.AltaDeVersionDeCaptacion>();

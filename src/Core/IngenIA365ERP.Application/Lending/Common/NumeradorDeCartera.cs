@@ -306,6 +306,21 @@ public sealed class NumeradorDeCartera(IApplicationDbContext db, ICerrojoDeCarte
     /// <b>numérico</b> migrado de esa línea (sin el prefijo de la fila, si lo trae). Un número con letras no cuenta (el numerador igual lo salta si
     /// existe). No baja nunca el consecutivo.
     /// </summary>
+    /// <summary>
+    /// Feature 014 (US9, T155; data-model §0.4): una cuenta migrada conserva su número de origen (en mayúsculas, hasta 20). No consume consecutivo: la
+    /// activación lleva antes el consecutivo de la línea por encima de los números migrados (<see cref="LlevarCuentasPorEncimaDeAsync"/>).
+    /// </summary>
+    public static void ConservarNumeroDeCuenta(Domain.Entities.Lending.Deposits.Accounts.MemberAccount cuenta, string numero)
+    {
+        ArgumentNullException.ThrowIfNull(cuenta);
+        ArgumentException.ThrowIfNullOrWhiteSpace(numero);
+        if (!string.IsNullOrEmpty(cuenta.Number)) throw new InvalidOperationException($"La cuenta {cuenta.PublicId} ya tiene número.");
+        var normalizado = numero.Trim().ToUpperInvariant();
+        if (normalizado.Length > Domain.Entities.Lending.Deposits.Accounts.MemberAccount.LargoDelNumero)
+            throw new ArgumentException($"El número {normalizado} pasa de {Domain.Entities.Lending.Deposits.Accounts.MemberAccount.LargoDelNumero} caracteres.", nameof(numero));
+        cuenta.Number = normalizado;
+    }
+
     public async Task LlevarCuentasPorEncimaDeAsync(string codigoDeLinea, IEnumerable<string> numerosMigrados, string prefijo, CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(codigoDeLinea);

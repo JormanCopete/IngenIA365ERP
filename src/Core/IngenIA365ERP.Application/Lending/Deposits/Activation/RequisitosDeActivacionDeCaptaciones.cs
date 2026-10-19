@@ -94,7 +94,16 @@ public sealed class RequisitosDeActivacionDeCaptaciones(
     }
 
     /// <summary>Los requisitos para activar sin carga <paramref name="naturaleza"/> el <paramref name="fecha"/>, mirado <paramref name="hoy"/>.</summary>
-    public async Task<EvaluacionDeActivacion> EvaluarAsync(LineNature naturaleza, DateOnly fecha, DateOnly hoy, CancellationToken ct)
+    public Task<EvaluacionDeActivacion> EvaluarAsync(LineNature naturaleza, DateOnly fecha, DateOnly hoy, CancellationToken ct) =>
+        EvaluarAsync(naturaleza, fecha, hoy, null, ct);
+
+    /// <summary>
+    /// Los requisitos para activar <paramref name="naturaleza"/> el <paramref name="fecha"/>, mirado <paramref name="hoy"/>, con la carga
+    /// <paramref name="carga"/> (US9, T155) o sin ella (FR-117): con carga, <c>LoadApplied</c> (aplicada y de la naturaleza), <c>DifferencesAccepted</c>
+    /// (cuadre sin diferencias o todas aceptadas) y <c>DateInTerm</c> (corte + 1, sin pasar el plazo de la carga) se miran de verdad.
+    /// </summary>
+    public async Task<EvaluacionDeActivacion> EvaluarAsync(LineNature naturaleza, DateOnly fecha, DateOnly hoy, Domain.Entities.Lending.Migration.MigrationLoad? carga,
+        CancellationToken ct)
     {
         var fechas = await ActivacionesDeCaptacion.LeerAsync(db, ct);
         var requisitos = new List<RequisitoDeActivacionDto>(12)
@@ -104,12 +113,32 @@ public sealed class RequisitosDeActivacionDeCaptaciones(
                 : Falta(CreditosActivados, fechas.Creditos is { } despues
                     ? string.Create(CultureInfo.InvariantCulture, $"una fecha igual o posterior a la activación de los créditos ({despues:yyyy-MM-dd})")
                     : "activar primero los créditos de la Cartera", "Cartera", "/cartera/activacion", "Lending.Activation.Activate"),
-            NoAplica(CargaAplicada, "Cooperativa sin historia: se activa sin carga (FR-117)."),
-            NoAplica(DiferenciasAceptadas, "Sin carga no hay cuadre que aceptar."),
-            fecha <= hoy
-                ? Cumple(FechaEnPlazo, string.Create(CultureInfo.InvariantCulture, $"La activación rige desde el {fecha:yyyy-MM-dd}."))
-                : Falta(FechaEnPlazo, "una fecha de activación que no sea futura", "Cartera", "/cartera/captaciones/activacion", "Lending.Deposits.Activate"),
         };
+        if (carga is null)
+        {
+            requisitos.Add(NoAplica(CargaAplicada, "Cooperativa sin historia: se activa sin carga (FR-117)."));
+            requisitos.Add(NoAplica(DiferenciasAceptadas, "Sin carga no hay cuadre que aceptar."));
+            requisitos.Add(fecha <= hoy
+                ? Cumple(FechaEnPlazo, string.Create(CultureInfo.InvariantCulture, $"La activación rige desde el {fecha:yyyy-MM-dd}."))
+                : Falta(FechaEnPlazo, "una fecha de activación que no sea futura", "Cartera", "/cartera/captaciones/activacion", "Lending.Deposits.Activate"));
+        }
+        else
+        {
+            requisitos.Add(carga.Status == Domain.Enums.Lending.MigrationLoadStatus.Applied && carga.Nature == naturaleza
+                ? Cumple(CargaAplicada, string.Create(CultureInfo.InvariantCulture, $"La carga {carga.Number} con corte al {carga.CutoffDate:yyyy-MM-dd} está aplicada."))
+                : Falta(CargaAplicada, "aplicar la carga de migración de la naturaleza", "Cartera", "/cartera/captaciones/migracion", "Lending.Deposits.Migration"));
+            requisitos.Add(carga.IsBalanced
+                ? Cumple(DiferenciasAceptadas, "El cuadre contra Contabilidad no tiene diferencias o todas están aceptadas con acta.")
+                : Falta(DiferenciasAceptadas, "aceptar con motivo y acta las diferencias del cuadre, o corregir la carga", "Cartera", "/cartera/captaciones/migracion",
+                    "Lending.Migration.AcceptDifferences"));
+            var esperada = carga.CutoffDate.AddDays(1);
+            requisitos.Add(fecha == esperada && fecha <= hoy && (carga.ActivationDeadline is not { } plazo || hoy <= plazo)
+                ? Cumple(FechaEnPlazo, string.Create(CultureInfo.InvariantCulture,
+                    $"La activación rige desde el {fecha:yyyy-MM-dd}, el día siguiente al corte, dentro del plazo ({carga.ActivationDeadline:yyyy-MM-dd})."))
+                : Falta(FechaEnPlazo, string.Create(CultureInfo.InvariantCulture,
+                        $"activar el {esperada:yyyy-MM-dd} (el día siguiente al corte), ya llegado y a más tardar el {carga.ActivationDeadline:yyyy-MM-dd}"),
+                    "Cartera", "/cartera/captaciones/activacion", "Lending.Deposits.Activate"));
+        }
 
         var avisos = new List<AvisoDeActivacionDto>();
         var periodo = await contabilidad.EstadoDelPeriodoAsync(fecha, ct);

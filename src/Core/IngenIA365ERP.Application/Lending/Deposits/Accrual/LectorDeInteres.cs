@@ -40,9 +40,20 @@ public sealed class LectorDeInteres(IApplicationDbContext db, IValoresNacionales
     private readonly Dictionary<int, IReadOnlyList<VersionConTramos>> _versiones = [];
     private readonly Dictionary<(string Codigo, string Clave, DateOnly Fecha), Result<ValorNacionalVigente>> _indices = [];
 
-    /// <summary>Las clases de fila que forman lo causado de una ventana: la causación y sus ajustes, en el interés por pagar.</summary>
+    /// <summary>
+    /// Las clases de fila que forman lo causado de una ventana: la causación y sus ajustes, en el interés por pagar. US9 (T154, research E121): también el
+    /// saldo inicial del interés causado no liquidado de una cuenta migrada, fechado al corte —la primera liquidación lo abona sin volver a causarlo—; la
+    /// ventana de causación de una cuenta migrada empieza en el corte (<see cref="CorteDeMigracion"/>), así que el motor nunca lo recalcula.
+    /// </summary>
     public static IReadOnlyList<MemberAccountTransactionKind> ClasesDeLoCausado { get; } =
-        [MemberAccountTransactionKind.InterestAccrued, MemberAccountTransactionKind.AccrualAdjustment];
+        [MemberAccountTransactionKind.InterestAccrued, MemberAccountTransactionKind.AccrualAdjustment, MemberAccountTransactionKind.OpeningBalance];
+
+    /// <summary>
+    /// US9 (T154, research E121): el corte de una cuenta migrada —la víspera del día en que se activó—; nulo en una cuenta abierta en la Cartera. Antes del
+    /// corte la Cartera no conoce los saldos diarios (la cuenta nace con su saldo al corte), así que ni la causación ni su ajuste recalculan días anteriores.
+    /// </summary>
+    public static DateOnly? CorteDeMigracion(MemberAccount cuenta) =>
+        cuenta.Origin == MemberAccountOrigin.Migration && cuenta.ActivatedOn is { } activada ? activada.AddDays(-1) : null;
 
     /// <summary>Las versiones de la línea con sus tramos (una lectura por línea y por lector).</summary>
     public async Task<IReadOnlyList<VersionConTramos>> VersionesAsync(int lineaId, CancellationToken ct)
@@ -67,8 +78,8 @@ public sealed class LectorDeInteres(IApplicationDbContext db, IValoresNacionales
     }
 
     /// <summary>
-    /// El inicio (excluido) de la ventana del día <paramref name="dia"/>: el fin del período de liquidación anterior, la última liquidación o la apertura, lo
-    /// que sea más tarde. Con pago único (sin períodos), la última liquidación o la apertura.
+    /// El inicio (excluido) de la ventana del día <paramref name="dia"/>: el fin del período de liquidación anterior, la última liquidación, la apertura o, en
+    /// una cuenta migrada, el corte, lo que sea más tarde. Con pago único (sin períodos), la última liquidación, la apertura o el corte.
     /// </summary>
     public static DateOnly InicioDeLaVentana(MemberAccount cuenta, MemberAccountControl control, DepositLineVersion version, DateOnly dia)
     {
@@ -76,6 +87,7 @@ public sealed class LectorDeInteres(IApplicationDbContext db, IValoresNacionales
         var inicio = cuenta.OpenedOn;
         if (control.LastSettledThrough is { } liquidada && liquidada > inicio) inicio = liquidada;
         if (periodo is { } p && p.Desde.AddDays(-1) > inicio) inicio = p.Desde.AddDays(-1);
+        if (CorteDeMigracion(cuenta) is { } corte && corte > inicio) inicio = corte;
         return inicio;
     }
 

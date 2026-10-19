@@ -121,6 +121,16 @@ public sealed class LiquidacionDeIntereses(
             // La simulación respeta las ventanas: cada período de liquidación vencido y no liquidado causa por su método, y el último hasta la fecha.
             var tramos = new List<InteresDelDia>();
             var desde = inicio;
+            // US9 (research E121): en una cuenta migrada lo de antes del corte es el interés causado no liquidado que trajo la carga (el motor no conoce los
+            // saldos diarios anteriores): se suma tal cual y el motor arranca en el corte.
+            var migrado = 0m;
+            IReadOnlyList<InteresDiarioDeRetencion> diariosMigrados = [];
+            if (LectorDeInteres.CorteDeMigracion(cuenta) is { } corte && corte > desde)
+            {
+                migrado = await InteresMigradoAsync(cuenta.Id, desde, corte, ct);
+                diariosMigrados = RepartirInteresMigrado(migrado, desde, corte < hasta ? corte : hasta);
+                desde = corte < hasta ? corte : hasta;
+            }
             while (desde < hasta)
             {
                 var periodo = InteresDeCaptacion.PeriodoDeLiquidacion(version.Version.SettlementPeriodicity, version.Version.SettlementDay, desde.AddDays(1));
@@ -131,8 +141,8 @@ public sealed class LiquidacionDeIntereses(
                 desde = fin;
             }
             explicacion = new InteresDelPeriodo(version.Version.BalanceMethod, tramos);
-            causado = explicacion.Causado;
-            diarios = tramos.Select(t => new InteresDiarioDeRetencion(t.Dia, t.Causado)).ToList();
+            causado = explicacion.Causado + migrado;
+            diarios = diariosMigrados.Concat(tramos.Select(t => new InteresDiarioDeRetencion(t.Dia, t.Causado))).ToList();
         }
         else
         {
@@ -140,9 +150,16 @@ public sealed class LiquidacionDeIntereses(
             var filas = await db.MemberAccountTransactions.AsNoTracking()
                 .Where(t => t.MemberAccountId == cuenta.Id && t.Concept == MemberAccountConcept.InterestPayable && clases.Contains(t.Kind)
                             && t.ValueDate > inicio && t.ValueDate <= hasta && !t.IsDeleted)
-                .Select(t => new { t.ValueDate, t.Amount }).ToListAsync(ct);
+                .Select(t => new { t.ValueDate, t.Amount, t.Kind }).ToListAsync(ct);
             causado = filas.Sum(f => f.Amount);
-            diarios = filas.GroupBy(f => f.ValueDate).OrderBy(g => g.Key).Select(g => new InteresDiarioDeRetencion(g.Key, g.Sum(f => f.Amount))).ToList();
+            // US9 (research E121): el saldo inicial del interés de una cuenta migrada se reparte por igual entre los días que cubre para medir el umbral
+            // diario de la retención (no es un día de causación).
+            var migrado = filas.Where(f => f.Kind == MemberAccountTransactionKind.OpeningBalance).Sum(f => f.Amount);
+            var corteMigrado = LectorDeInteres.CorteDeMigracion(cuenta);
+            var repartidos = migrado != 0m && corteMigrado is { } c0 && c0 > inicio ? RepartirInteresMigrado(migrado, inicio, c0) : [];
+            diarios = repartidos.Concat(filas.Where(f => f.Kind != MemberAccountTransactionKind.OpeningBalance || repartidos.Count == 0)
+                    .GroupBy(f => f.ValueDate).OrderBy(g => g.Key).Select(g => new InteresDiarioDeRetencion(g.Key, g.Sum(f => f.Amount))))
+                .GroupBy(d => d.Dia).OrderBy(g => g.Key).Select(g => new InteresDiarioDeRetencion(g.Key, g.Sum(d => d.Interes))).ToList();
         }
 
         var bruto = InteresDeCaptacion.Liquidable(causado, version.Version.Redondeo());
@@ -275,6 +292,28 @@ public sealed class LiquidacionDeIntereses(
         registro.RegistrarLiquidacion(control, liquidacion, await AcumuladosAsync(cuenta, operacion, liquidacion, ct));
         await db.SaveChangesAsync(ct);
         return Result.Success(new LiquidacionAplicada(liquidacion, operacion, false, c));
+    }
+
+    /// <summary>El saldo inicial del interés causado no liquidado de una cuenta migrada en (<paramref name="desde"/>, <paramref name="corte"/>] (research E121).</summary>
+    private async Task<decimal> InteresMigradoAsync(int cuentaId, DateOnly desde, DateOnly corte, CancellationToken ct) =>
+        await db.MemberAccountTransactions.AsNoTracking()
+            .Where(t => t.MemberAccountId == cuentaId && t.Concept == MemberAccountConcept.InterestPayable && t.Kind == MemberAccountTransactionKind.OpeningBalance
+                        && t.ValueDate > desde && t.ValueDate <= corte && !t.IsDeleted)
+            .SumAsync(t => (decimal?)t.Amount, ct) ?? 0m;
+
+    /// <summary>
+    /// US9 (research E121, pendiente de validar por la contadora): el interés migrado repartido por igual entre los días (<paramref name="desde"/>,
+    /// <paramref name="hasta"/>] a seis decimales, con el residuo en el último; así el umbral diario de la retención se mide por día y no sobre el total.
+    /// </summary>
+    public static IReadOnlyList<InteresDiarioDeRetencion> RepartirInteresMigrado(decimal monto, DateOnly desde, DateOnly hasta)
+    {
+        var dias = hasta.DayNumber - desde.DayNumber;
+        if (monto == 0m || dias <= 0) return [];
+        var porDia = Math.Round(monto / dias, MemberAccountTransaction.DecimalesDeCausacion, MidpointRounding.ToZero);
+        var lista = new List<InteresDiarioDeRetencion>(dias);
+        for (var i = 1; i <= dias; i++)
+            lista.Add(new InteresDiarioDeRetencion(desde.AddDays(i), i == dias ? monto - porDia * (dias - 1) : porDia));
+        return lista;
     }
 
     /// <summary>
