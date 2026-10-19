@@ -47,9 +47,15 @@ public static class PerfilesSugeridos
 
     /// <summary>
     /// El módulo de las plantillas de Cartera (feature 013, T0221; DT §2.14; contracts/api.md §2.5): las trece del crédito y, desde la feature 014
-    /// (T018; api.md §2; research E07), las cuatro de captaciones y aportes. La activación las exige todas (<c>LendingRolesCreated</c>).
+    /// (T018; api.md §2; research E07), las cuatro de captaciones y aportes. Desde la decisión del dueño del 2026-10-18 (research §13 D18) los perfiles
+    /// van **separados por módulo**: la activación de créditos exige sólo los trece del crédito (<see cref="DeCreditos"/>, <c>LendingRolesCreated</c>) y
+    /// la de aportes o captaciones sólo sus cuatro (<see cref="DeCaptaciones"/>, <c>DepositRolesCreated</c>).
     /// </summary>
     public const string ModuloCartera = "Lending";
+
+    /// <summary>Las claves de las cuatro plantillas de captaciones y aportes (feature 014, T018; decisión del dueño del 2026-10-18, D18).</summary>
+    public static IReadOnlyList<string> ClavesDeCaptaciones { get; } =
+        ["cartera.jefe-captaciones", "cartera.asesor-captaciones", "cartera.analista-aportes", "cartera.tesorero-liquidez"];
 
     public static IReadOnlyList<PerfilSugerido> Todos { get; } =
     [
@@ -329,6 +335,14 @@ public static class PerfilesSugeridos
         string.IsNullOrWhiteSpace(modulo)
             ? Todos
             : Todos.Where(p => string.Equals(p.Module, modulo.Trim(), StringComparison.OrdinalIgnoreCase)).ToList();
+
+    /// <summary>Las plantillas de Cartera del crédito (las trece de la feature 013): las que exige la activación de créditos (D18).</summary>
+    public static IReadOnlyList<PerfilSugerido> DeCreditos() =>
+        DelModulo(ModuloCartera).Where(p => !ClavesDeCaptaciones.Contains(p.Key, StringComparer.OrdinalIgnoreCase)).ToList();
+
+    /// <summary>Las cuatro plantillas de captaciones y aportes: las que exige la activación de aportes o captaciones (D18).</summary>
+    public static IReadOnlyList<PerfilSugerido> DeCaptaciones() =>
+        DelModulo(ModuloCartera).Where(p => ClavesDeCaptaciones.Contains(p.Key, StringComparer.OrdinalIgnoreCase)).ToList();
 
     /// <summary>
     /// Expande la plantilla contra el catálogo de códigos <c>Resource.Action</c> de la cooperativa. Un código exacto

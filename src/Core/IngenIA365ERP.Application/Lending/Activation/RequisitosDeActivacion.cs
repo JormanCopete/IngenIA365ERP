@@ -41,8 +41,8 @@ namespace IngenIA365ERP.Application.Lending.Activation;
 /// <item><b>en todos los ambientes</b> (data-model §30.1; decisión del dueño del 2026-10-18: hasta esa fecha sólo bloqueaban en producción y fuera de
 /// ella quedaban <c>Waived</c>): <c>Annex1Current</c> (el Anexo 1 vigente a la fecha de activación), <c>UsuryForActiveLines</c> (la
 /// usura certificada de la modalidad de cada línea activa a esa fecha, <see cref="IValoresNacionales.LeerSerieAsync"/>, sin alertar),
-/// <c>LendingRolesCreated</c> (el rol de cada plantilla <c>cartera.*</c> de <see cref="PerfilesSugeridos"/>, por su código; notas de coordinación,
-/// contradicción 13), <c>OfficesLinkedToAccountingBranches</c> (toda oficina con créditos en la carga vinculada a una sucursal contable) y
+/// <c>LendingRolesCreated</c> (el rol de cada plantilla <c>cartera.*</c> <b>del crédito</b> de <see cref="PerfilesSugeridos"/>, por su código; notas de
+/// coordinación, contradicción 13; desde la decisión del dueño del 2026-10-18 las cuatro de captaciones las exige sólo su propia activación), <c>OfficesLinkedToAccountingBranches</c> (toda oficina con créditos en la carga vinculada a una sucursal contable) y
 /// <c>PayrollBridgeRuleResolved</c> (la regla <c>RecaudoPorAplicar</c> de la clase <c>Payroll</c>, preguntada a
 /// <see cref="IContabilidadParaCartera.EvaluarAsync"/> con un <c>PagoAplicado</c> de nómina). Lo que falte bloquea en cualquier ambiente.</item>
 /// </list>
@@ -336,8 +336,8 @@ public sealed class RequisitosDeActivacion(
     private async Task<RequisitoDeActivacionDto> RolesAsync(CancellationToken ct)
     {
         if (db is null) return NoAplica(RolesDeCarteraCreados, "No se evaluaron los roles.");
-        var esperados = PerfilesSugeridos.DelModulo(PerfilesSugeridos.ModuloCartera)
-            .Select(p => CreateSuggestedLendingRolesCommand.CodigoDeRol(p.Key)).ToList();
+        // Decisión del dueño del 2026-10-18 (feature 014, D18): los perfiles van por módulo; los créditos exigen sólo los trece del crédito.
+        var esperados = PerfilesSugeridos.DeCreditos().Select(p => CreateSuggestedLendingRolesCommand.CodigoDeRol(p.Key)).ToList();
         var existentes = await db.Roles.AsNoTracking().Where(r => esperados.Contains(r.Code) && !r.IsDeleted).Select(r => r.Code).ToListAsync(ct);
         var faltan = esperados.Except(existentes, StringComparer.OrdinalIgnoreCase).ToList();
         return faltan.Count == 0

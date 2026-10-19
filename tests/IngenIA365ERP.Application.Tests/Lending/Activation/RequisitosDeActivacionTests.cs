@@ -138,7 +138,8 @@ public sealed class RequisitosDeActivacionTests : IAsyncLifetime
 
     private async Task RolesAsync(int faltantes = 0)
     {
-        foreach (var plantilla in PerfilesSugeridos.DelModulo(PerfilesSugeridos.ModuloCartera).Skip(faltantes))
+        // Decisión del dueño del 2026-10-18 (feature 014, D18): la activación de créditos exige sólo los trece del crédito.
+        foreach (var plantilla in PerfilesSugeridos.DeCreditos().Skip(faltantes))
             Db.Roles.Add(new Role { Code = CreateSuggestedLendingRolesCommand.CodigoDeRol(plantilla.Key), Name = plantilla.Actor, CreatedBy = "test" });
         await Db.SaveChangesAsync();
         Db.ChangeTracker.Clear();

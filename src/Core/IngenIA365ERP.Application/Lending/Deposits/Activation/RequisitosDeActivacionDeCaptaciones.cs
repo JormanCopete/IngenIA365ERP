@@ -9,6 +9,7 @@ using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Common.NationalValues;
 using IngenIA365ERP.Application.Lending.Activation;
+using IngenIA365ERP.Application.Security.Roles.Plantillas;
 using IngenIA365ERP.Domain.Enums.Integration;
 using IngenIA365ERP.Domain.Enums.Lending;
 using IngenIA365ERP.Domain.Lending;
@@ -29,13 +30,17 @@ namespace IngenIA365ERP.Application.Lending.Deposits.Activation;
 /// <item><c>AccountingMonthOpen</c>: como en la activación de créditos (decisión del dueño del 2026-10-14) un mes cerrado no limita y sale como aviso; sin
 /// contabilidad iniciada falta;</item>
 /// <item><c>AccountsCollectorRegistered</c>: un recaudador con <c>ProveedorDeCuentas</c> adoptado; en producción, que no sea un doble de prueba;</item>
-/// <item><c>TreasuryDestinationRegistered</c>: un destino <c>Treasury</c>; en producción, real y con <c>OrdenDeGiroEmitida</c> v2 adoptada (las órdenes de
-/// captaciones salen sólo en v2, mensajes.md §5.3);</item>
+/// <item><c>TreasuryDestinationRegistered</c>: un destino <c>Treasury</c> con <c>OrdenDeGiroEmitida</c> v2 adoptada en todos los ambientes (las órdenes
+/// de captaciones salen sólo en v2, mensajes.md §5.3; D14); en producción, real;</item>
 /// <item><c>PayrollConceptsReady</c>: no se puede saber desde aquí (la Cartera no lee <c>PAY_</c>): no aplica y sale el aviso de revisar
 /// <c>DESC_APORTES</c>/<c>DESC_AHORROS</c>;</item>
-/// <item><b>en producción</b>: <c>DeliveriesComplete</c> (K7 a K11 desplegadas, Q1), <c>ProfileAllowsClasses</c> (captaciones: el perfil regulatorio
-/// vigente autoriza captar, FR-018) y <c>LinesWithMatrix</c> (cada línea activa de la naturaleza contabiliza su hecho principal, preguntado a
-/// <see cref="IContabilidadParaCartera.EvaluarAsync"/>). Fuera de producción se evalúan igual y lo que falta queda <c>Waived</c>.</item>
+/// <item><b>en todos los ambientes</b> (decisión del dueño del 2026-10-18, research §13 D14: hasta esa fecha sólo bloqueaban en producción y fuera de
+/// ella quedaban <c>Waived</c>, research E32): <c>DeliveriesComplete</c> (K7 a K11 desplegadas, Q1), <c>ProfileAllowsClasses</c> (captaciones: el
+/// perfil regulatorio vigente autoriza captar, FR-018) y <c>LinesWithMatrix</c> (cada línea activa de la naturaleza contabiliza su hecho principal,
+/// preguntado a <see cref="IContabilidadParaCartera.EvaluarAsync"/>). Fuera de producción sólo cambia que el recaudador y la tesorería pueden ser los
+/// dobles de prueba;</item>
+/// <item><c>DepositRolesCreated</c> (decisión del dueño del 2026-10-18, D18): el rol de cada una de las cuatro plantillas de captaciones y aportes de
+/// <see cref="PerfilesSugeridos.DeCaptaciones"/>; los trece del crédito los exige sólo la activación de créditos.</item>
 /// </list>
 /// Aparte, <see cref="EntregaNoDisponible"/> es el bloqueo por entrega (<c>Lending.Savings.DeliveryNotAvailable</c>, api.md §1.3): sin K7 no hay aportes
 /// y sin K8 no hay captaciones, en cualquier ambiente. Sólo lee. (nuevo)
@@ -59,6 +64,7 @@ public sealed class RequisitosDeActivacionDeCaptaciones(
     public const string EntregasCompletas = "DeliveriesComplete";
     public const string PerfilAutorizaClases = "ProfileAllowsClasses";
     public const string LineasConMatriz = "LinesWithMatrix";
+    public const string RolesDeCaptacionesCreados = "DepositRolesCreated";
 
     /// <summary>El bloqueo por entrega (api.md §1.3).</summary>
     public const string CodigoEntregaNoDisponible = "Lending.Savings.DeliveryNotAvailable";
@@ -134,8 +140,8 @@ public sealed class RequisitosDeActivacionDeCaptaciones(
 
         var tesoreria = await registro.DestinoAsync(IntegrationDestinations.Treasury, fecha, ct);
         requisitos.Add(tesoreria is not null
-                       && (!ambiente.EsProduccion || (!tesoreria.IsTestDouble
-                                                      && tesoreria.Adopciones.Any(a => a.Contrato == OrdenDeGiroEmitidaV1.Type && a.Version >= VersionDeLaOrdenDeCaptaciones)))
+                       && (!ambiente.EsProduccion || !tesoreria.IsTestDouble)
+                       && tesoreria.Adopciones.Any(a => a.Contrato == OrdenDeGiroEmitidaV1.Type && a.Version >= VersionDeLaOrdenDeCaptaciones)
             ? Cumple(TesoreriaRegistrada, "Hay un destino de Tesorería en el registro.")
             : Falta(TesoreriaRegistrada, "registrar el destino de Tesorería con la orden de giro v2 adoptada", "Core",
                 "/admin/participantes-de-integracion", "Core.IntegrationParticipants.Manage"));
@@ -149,9 +155,10 @@ public sealed class RequisitosDeActivacionDeCaptaciones(
 
         requisitos.Add(Entrega >= EntregaDeCartera.K11
             ? Cumple(EntregasCompletas, "El despliegue trae las entregas K7 a K11 de captaciones.")
-            : DeProduccion(EntregasCompletas, $"desplegar las entregas K7 a K11 de captaciones (la desplegada es {Entrega})", "Plataforma", null, null));
+            : Falta(EntregasCompletas, $"desplegar las entregas K7 a K11 de captaciones (la desplegada es {Entrega})", "Plataforma", null, null));
         requisitos.Add(await PerfilAsync(naturaleza, fecha, ct));
         requisitos.Add(await LineasConMatrizAsync(naturaleza, fecha, ct));
+        requisitos.Add(await RolesAsync(ct));
 
         return new EvaluacionDeActivacion(requisitos, avisos, false);
     }
@@ -165,7 +172,7 @@ public sealed class RequisitosDeActivacionDeCaptaciones(
         var perfil = await perfiles.VigenteAsync(fecha, null, ct);
         return perfil is { MayTakeDeposits: true }
             ? Cumple(PerfilAutorizaClases, "El perfil regulatorio vigente autoriza captar ahorro.")
-            : DeProduccion(PerfilAutorizaClases, perfil is null
+            : Falta(PerfilAutorizaClases, perfil is null
                     ? "un perfil regulatorio vigente que autorice captar ahorro"
                     : "que el perfil regulatorio vigente autorice captar ahorro", "Core", "/maestros/perfil-regulatorio", "Core.RegulatoryProfile.Manage");
     }
@@ -188,7 +195,7 @@ public sealed class RequisitosDeActivacionDeCaptaciones(
         var evaluado = await contabilidad.EvaluarAsync(hechos, ct);
         return evaluado.IsSuccess && evaluado.Value.Errors.Count == 0
             ? Cumple(LineasConMatriz, "La matriz contable resuelve el hecho principal de cada línea activa.")
-            : DeProduccion(LineasConMatriz, "las reglas de la matriz contable de Cartera para los hechos de la naturaleza", "Contabilidad",
+            : Falta(LineasConMatriz, "las reglas de la matriz contable de Cartera para los hechos de la naturaleza", "Contabilidad",
                 "/contabilidad/cartera/matriz", "Accounting.LendingRules.Manage");
     }
 
@@ -224,6 +231,20 @@ public sealed class RequisitosDeActivacionDeCaptaciones(
             contenido);
     }
 
+    // -------------------------------------------------------------------------------------------------------- roles --
+
+    /// <summary>Los cuatro roles de captaciones y aportes, por su código (D18): sin ellos la operación de la naturaleza no tiene a quién repartir.</summary>
+    private async Task<RequisitoDeActivacionDto> RolesAsync(CancellationToken ct)
+    {
+        var esperados = PerfilesSugeridos.DeCaptaciones().Select(p => CreateSuggestedLendingRolesCommand.CodigoDeRol(p.Key)).ToList();
+        var existentes = await db.Roles.AsNoTracking().Where(r => esperados.Contains(r.Code) && !r.IsDeleted).Select(r => r.Code).ToListAsync(ct);
+        var faltan = esperados.Except(existentes, StringComparer.OrdinalIgnoreCase).ToList();
+        return faltan.Count == 0
+            ? Cumple(RolesDeCaptacionesCreados, "Están creados los roles de captaciones y aportes de las plantillas.")
+            : Falta(RolesDeCaptacionesCreados, $"crear los roles de captaciones y aportes desde sus plantillas (faltan {faltan.Count})", "Seguridad",
+                "/cartera/captaciones/activacion", "Security.Roles.Create");
+    }
+
     // ------------------------------------------------------------------------------------------------------- armado --
 
     private static RequisitoDeActivacionDto Cumple(string codigo, string detalle) => new(codigo, true, detalle, null, EstadosDeRequisito.Met);
@@ -232,11 +253,4 @@ public sealed class RequisitosDeActivacionDeCaptaciones(
 
     private static RequisitoDeActivacionDto Falta(string codigo, string detalle, string modulo, string? pagina, string? permiso) =>
         new(codigo, false, detalle, new QuienCorrigeDto(modulo, pagina, permiso), EstadosDeRequisito.Missing);
-
-    /// <summary>Un requisito de producción que falta: en producción bloquea; fuera de ella queda dispensado con lo que falta.</summary>
-    private RequisitoDeActivacionDto DeProduccion(string codigo, string detalle, string modulo, string? pagina, string? permiso) =>
-        ambiente.EsProduccion
-            ? Falta(codigo, detalle, modulo, pagina, permiso)
-            : new RequisitoDeActivacionDto(codigo, true, $"Falta {detalle} (fuera de producción no bloquea).", new QuienCorrigeDto(modulo, pagina, permiso),
-                EstadosDeRequisito.Waived);
 }

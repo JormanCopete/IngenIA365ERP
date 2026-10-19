@@ -165,7 +165,9 @@ Se **reutilizan** de la 013: `Lending.Migration.AcceptDifferences` (aceptar dife
 **Plantillas de rol** (la 013 §2.5) que se suman **(nuevo en contracts)**: `cartera.jefe-captaciones`,
 `cartera.asesor-captaciones`, `cartera.analista-aportes`, `cartera.tesorero-liquidez`. `cartera.contador`,
 `cartera.auditor` y `cartera.revisor-fiscal` reciben los `Read`/`View` nuevos por su glob; `cartera.administrador`
-excluye `NegotiatedRates.Approve` (administrar no es aprobar tasa).
+excluye `NegotiatedRates.Approve` (administrar no es aprobar tasa) y, por **decisión del dueño del 2026-10-18** (research §13 D17),
+también el rol integrado `CompanyAdmin` (`LendingPermissionCatalogSeeder.ExcluidosDelAdministrador`). Las cuatro plantillas de
+captaciones las exige sólo la activación de aportes o captaciones (`DepositRolesCreated`, D18); la de créditos, sólo las trece suyas.
 
 **Cómo leer las tablas**: `Ruta` relativa al prefijo de la sección · `Permiso` sin `Lending.` · `Comando / consulta`
 · `Cuerpo → respuesta` resumidos · `Errores` propios · `E` entrega.
@@ -530,9 +532,14 @@ Requisitos (`requirements[].code`): `LoansActivated`, `LoadApplied` (salvo coope
 `DifferencesAccepted`, `DateInTerm`, `AccountingMonthOpen`, `AccountsCollectorRegistered` (algún recaudador con
 `ProveedorDeCuentas` adoptado; en producción, real), `TreasuryDestinationRegistered` (con `OrdenDeGiroEmitida` v2
 adoptada), `PayrollConceptsReady` (aviso si `DESC_APORTES`/`DESC_AHORROS` no tienen cuentas), `DeliveriesComplete`
-(producción: K7 a K11 desplegadas, Q1), `ProfileAllowsClasses` (captaciones), `LinesWithMatrix` (completitud de la
-matriz para los hechos de la naturaleza). Lo fijan **(nuevo en contracts)** los códigos `AccountsCollectorRegistered`,
-`PayrollConceptsReady`, `DeliveriesComplete`, `ProfileAllowsClasses`, `LinesWithMatrix`, `LoansActivated`.
+(K7 a K11 desplegadas, Q1), `ProfileAllowsClasses` (captaciones), `LinesWithMatrix` (completitud de la
+matriz para los hechos de la naturaleza) y `DepositRolesCreated` (los roles de las cuatro plantillas de captaciones y aportes).
+**Decisión del dueño del 2026-10-18** (research §13 D14, D18): todos se exigen **en todos los ambientes** —hasta esa fecha
+`DeliveriesComplete`, `ProfileAllowsClasses` y `LinesWithMatrix` quedaban `Waived` fuera de producción (E32)—; fuera de producción
+sólo cambia que el recaudador y la tesorería pueden ser los dobles `TST` y `TES`. Los perfiles van por módulo: la activación
+de créditos (`LendingRolesCreated`, la 013 §19.3) exige sólo las trece plantillas del crédito y ésta sólo las cuatro suyas.
+Lo fijan **(nuevo en contracts)** los códigos `AccountsCollectorRegistered`,
+`PayrollConceptsReady`, `DeliveriesComplete`, `ProfileAllowsClasses`, `LinesWithMatrix`, `LoansActivated`, `DepositRolesCreated`.
 
 ---
 
@@ -788,7 +795,7 @@ Lo que research §0 no nombra y este contrato necesitó, con las reglas de la 01
   `Lending.PayrollAgreement.{EquivalenceWithoutSplit, LineWithoutGroup}`; `Lending.Document.YearNotClosed`;
   `Payroll.AccountDeductionNotApplied`; `Person.HasLiveDepositProducts`; `Associate.WithdrawalOwnedByLending`.
 - **Requisitos de activación**: `LoansActivated`, `AccountsCollectorRegistered`, `PayrollConceptsReady`,
-  `DeliveriesComplete`, `ProfileAllowsClasses`, `LinesWithMatrix`.
+  `DeliveriesComplete`, `ProfileAllowsClasses`, `LinesWithMatrix`, `DepositRolesCreated` (D18, 2026-10-18).
 - **Enums y valores de texto**: `RegulatoryFileKind.DepositsSicses`, `.Exogenous`; estados
   `AccountInstallment.status` (`Pending`, `PartiallyPaid`, `Paid`, `NotDeducted`), `AccountCharge.status`
   (`Collected`, `Pending`, `Waived`, `Reversed`), estados de solicitud de tasa negociada (`PendingDecision`,

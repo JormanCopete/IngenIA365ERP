@@ -13,6 +13,7 @@ using IngenIA365ERP.Application.Lending.Deposits.Accrual;
 using IngenIA365ERP.Application.Lending.Deposits.Activation;
 using IngenIA365ERP.Application.Lending.Integration;
 using IngenIA365ERP.Application.Lending.Integration.DoblesDePrueba;
+using IngenIA365ERP.Application.Security.Roles.Plantillas;
 using IngenIA365ERP.Application.Tests.Common;
 using IngenIA365ERP.Domain.Entities.Accounting;
 using IngenIA365ERP.Domain.Entities.Core;
@@ -20,6 +21,7 @@ using IngenIA365ERP.Domain.Entities.Integration;
 using IngenIA365ERP.Domain.Entities.Lending.Configuration;
 using IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts;
 using IngenIA365ERP.Domain.Entities.Lending.Integration;
+using IngenIA365ERP.Domain.Entities.Security;
 using IngenIA365ERP.Domain.Enums.Accounting;
 using IngenIA365ERP.Domain.Enums.Integration;
 using IngenIA365ERP.Domain.Enums.Lending;
@@ -32,7 +34,8 @@ namespace IngenIA365ERP.Application.Tests.Lending.Deposits;
 /// <summary>
 /// Feature 014, T051–T055 (R10, R21; FR-093, FR-116, FR-117; api.md §16): la activación <b>sin carga</b> de aportes y captaciones, sus requisitos y el
 /// bloqueo por entrega, las fechas en <c>LND_Setup</c> y lo que leen de ellas el paso de captaciones del ciclo diario y la sección de captaciones del
-/// cierre. InMemory con reloj fijo (hoy = 2026-12-01), créditos activados ese día, fuera de producción.
+/// cierre. InMemory con reloj fijo (hoy = 2026-12-01), créditos activados ese día, fuera de producción. Desde la decisión del dueño del 2026-10-18
+/// (D14, D18) los requisitos se exigen igual en todos los ambientes y la activación pide los cuatro roles de captaciones.
 /// </summary>
 public class ActivacionDeCaptacionesSinCargaTests
 {
@@ -95,6 +98,15 @@ public class ActivacionDeCaptacionesSinCargaTests
         Participante("TST", IntegrationParticipantClass.Test, IntegrationParticipantRole.ObligationsCollector, string.Empty, adopciones);
         Participante("TES", IntegrationParticipantClass.Test, IntegrationParticipantRole.MessageDestination, IntegrationDestinations.Treasury,
             (OrdenDeGiroEmitidaV1.Type, 1), (OrdenDeGiroEmitidaV2.Type, 2));
+    }
+
+    /// <summary>Los cuatro roles de captaciones y aportes (D18); con <paramref name="faltantes"/> se omiten los primeros.</summary>
+    private void RolesDeCaptaciones(int faltantes = 0)
+    {
+        foreach (var plantilla in PerfilesSugeridos.DeCaptaciones().Skip(faltantes))
+            _db.Roles.Add(new Role { Code = CreateSuggestedLendingRolesCommand.CodigoDeRol(plantilla.Key), Name = plantilla.Actor, CreatedBy = "test" });
+        _db.SaveChanges();
+        _db.ChangeTracker.Clear();
     }
 
     private ContabilidadParaCarteraProvisional Contabilidad() => new(_db);
@@ -166,6 +178,7 @@ public class ActivacionDeCaptacionesSinCargaTests
     public async Task Activa_aportes_sin_carga_una_vez_con_su_fila_su_fecha_y_su_informativo()
     {
         RegistrarDobles();
+        RolesDeCaptaciones();
 
         var r = await Activacion().ActivarAsync(LineNature.Contribution, null, Hoy, true, "Cooperativa sin historia de aportes", default);
 
@@ -175,6 +188,8 @@ public class ActivacionDeCaptacionesSinCargaTests
         r.Value.Messages.Should().ContainSingle(m => m.Type == CaptacionesActivadasV1.Type);
         r.Value.Requirements.Should().Contain(q => q.Code == RequisitosDeActivacionDeCaptaciones.CargaAplicada && q.Status == EstadosDeRequisito.NotApplicable);
         r.Value.Requirements.Should().Contain(q => q.Code == RequisitosDeActivacionDeCaptaciones.EntregasCompletas && q.Status == EstadosDeRequisito.Met);
+        r.Value.Requirements.Should().Contain(q => q.Code == RequisitosDeActivacionDeCaptaciones.RolesDeCaptacionesCreados && q.Status == EstadosDeRequisito.Met,
+            "los cuatro de captaciones; los trece del crédito no se piden aquí (D18)");
         r.Value.Warnings.Should().Contain(a => a.Code == RequisitosDeActivacionDeCaptaciones.ConceptosDeNominaListos);
 
         var setup = await _db.LendingSetups.AsNoTracking().SingleAsync();
@@ -211,6 +226,23 @@ public class ActivacionDeCaptacionesSinCargaTests
             "sin perfil regulatorio que lo evalúe no se puede afirmar nada (lo inyecta la DI)");
         (await Requisitos(EntregaDeCartera.K9).EvaluarAsync(LineNature.Contribution, Hoy, Hoy, default)).Faltantes.Select(f => f.Code)
             .Should().Contain(RequisitosDeActivacionDeCaptaciones.EntregasCompletas, "en producción, K7 a K11 completas (Q1)");
+    }
+
+    [Fact]
+    public async Task Fuera_de_produccion_lo_que_falta_bloquea_igual_y_solo_cuentan_los_dobles()
+    {
+        // Decisión del dueño del 2026-10-18 (research §13 D14): ningún requisito se dispensa fuera de producción (antes quedaban Waived, E32).
+        RegistrarDobles();
+        RolesDeCaptaciones(faltantes: 1);
+
+        var evaluacion = await Requisitos(EntregaDeCartera.K9).EvaluarAsync(LineNature.Contribution, Hoy, Hoy, default);
+
+        evaluacion.Requisitos.Should().NotContain(q => q.Status == EstadosDeRequisito.Waived);
+        evaluacion.Faltantes.Select(f => f.Code).Should().BeEquivalentTo(
+            [RequisitosDeActivacionDeCaptaciones.EntregasCompletas, RequisitosDeActivacionDeCaptaciones.RolesDeCaptacionesCreados],
+            "sin K11 desplegada y con un rol de captaciones sin crear no se activa en ningún ambiente; los dobles sí cuentan fuera de producción");
+        (await Activacion(EntregaDeCartera.K9).ActivarAsync(LineNature.Contribution, null, Hoy, true, "ensayo", default)).Error.Code
+            .Should().Be("Lending.Activation.RequirementsMissing");
     }
 
     // ------------------------------------------------------------------------------------ ciclo diario y cierre --

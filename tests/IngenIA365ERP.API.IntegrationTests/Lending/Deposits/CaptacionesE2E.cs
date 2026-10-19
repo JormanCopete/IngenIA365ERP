@@ -31,8 +31,9 @@ public sealed class CaptacionesCollection : ICollectionFixture<CentralIdentityAp
 /// Hasta T055 la cooperativa queda con la Cartera activada y las dos naturalezas de captación sin activar: el contrato de cuentas
 /// responde «no habilitado» (FR-093), que es lo que prueban las e2e de la fase fundacional. Desde T055,
 /// <see cref="CooperativaConCaptacionesAsync"/> registra el recaudador de cuentas (<c>ProveedorDeCuentas</c>) y la tesorería con
-/// <c>OrdenDeGiroEmitida</c> v2 adoptada y activa aportes y captaciones sin carga por <c>POST /api/lending/deposits/activation</c> (la matriz
-/// mínima no hace falta fuera de producción: <c>LinesWithMatrix</c> queda dispensado, research E32).
+/// <c>OrdenDeGiroEmitida</c> v2 adoptada y activa aportes y captaciones sin carga por <c>POST /api/lending/deposits/activation</c>. Desde la
+/// decisión del dueño del 2026-10-18 (research §13 D14, D18) los requisitos se cumplen como en una cooperativa real, porque ya no se dispensan
+/// fuera de producción (<see cref="RequisitosDeCaptacionesAsync"/>).
 /// </para>
 /// </summary>
 public static class CaptacionesE2E
@@ -63,10 +64,11 @@ public static class CaptacionesE2E
     /// La cooperativa con créditos activados y aportes y captaciones activados <b>sin carga</b> (T055; FR-117) por
     /// <c>POST /api/lending/deposits/activation</c>, con fecha = hoy (la de los créditos). Antes registra de nuevo, desde hoy, el recaudador de prueba
     /// <c>TST</c> con <c>ProveedorDeCuentas</c> adoptado (<c>AccountsCollectorRegistered</c>) y la tesorería de prueba <c>TES</c> con
-    /// <c>OrdenDeGiroEmitida</c> v2 (<c>TreasuryDestinationRegistered</c>). La matriz contable de los hechos de la naturaleza (<c>LinesWithMatrix</c>) no
-    /// se siembra: fuera de producción ese requisito queda dispensado y la cooperativa opera con <c>Contabilidad.FaltaDeRegla = Advertir</c>
-    /// (<see cref="CarteraE2E.ActivarCarteraAsync"/>); las e2e de US8 siembran la suya. La segunda llamada con el mismo nombre devuelve la misma.
-    /// Exige un despliegue con K8 (sin él responde <c>Lending.Savings.DeliveryNotAvailable</c>): las e2e corren al final de todas las fases.
+    /// <c>OrdenDeGiroEmitida</c> v2 (<c>TreasuryDestinationRegistered</c>) y deja cumplidos los demás requisitos (<see cref="RequisitosDeCaptacionesAsync"/>:
+    /// los cuatro roles, el perfil que autoriza captar y la matriz mínima si ya hay líneas activas). La cooperativa opera con
+    /// <c>Contabilidad.FaltaDeRegla = Advertir</c> (<see cref="CarteraE2E.ActivarCarteraAsync"/>); las e2e de US8 siembran su matriz. La segunda llamada
+    /// con el mismo nombre devuelve la misma. Exige un despliegue con <b>K11</b>: sin K8 responde <c>Lending.Savings.DeliveryNotAvailable</c> y, desde la
+    /// decisión del dueño del 2026-10-18 (D14), sin K11 falta <c>DeliveriesComplete</c> en cualquier ambiente. Las e2e corren al final de todas las fases.
     /// </summary>
     public static Task<CooperativaDeCaptaciones> CooperativaConCaptacionesAsync(CentralIdentityApiFixture fx, string nombre)
     {
@@ -106,6 +108,7 @@ public static class CaptacionesE2E
             },
             validFrom = hoy, reason = "Tesorería de prueba con la orden de giro v2 (e2e de captaciones)",
         }, "OrdenDeGiroEmitida", version: 2);
+        await RequisitosDeCaptacionesAsync(http, admin, hoy);
 
         foreach (var naturaleza in new[] { "Contribution", "Deposit" })
         {
@@ -118,6 +121,71 @@ public static class CaptacionesE2E
                 $"activar {naturaleza} sin carga: «{await resp.Content.ReadAsStringAsync()}»");
         }
         return coop;
+    }
+
+    /// <summary>
+    /// Decisión del dueño del 2026-10-18 (research §13 D14, D18): la activación de aportes y captaciones exige en todos los ambientes lo que antes sólo
+    /// exigía producción. Deja a la cooperativa cumpliéndolo por las rutas, idempotente:
+    /// <list type="bullet">
+    /// <item>los roles de las cuatro plantillas de captaciones (<c>DepositRolesCreated</c>; <c>POST /api/lending/activation/suggested-roles</c> con sus
+    /// claves);</item>
+    /// <item>el perfil regulatorio que autoriza captar ahorro (<c>ProfileAllowsClasses</c>): corrige el vigente desde su misma fecha si no lo autoriza;</item>
+    /// <item>la matriz mínima (<c>LinesWithMatrix</c>): si ya hay líneas activas de aportes o de captación, las reglas del hecho principal con el que la
+    /// activación pregunta —<c>RecaudoPorAplicar</c> de Recaudo, <c>AportesSociales</c> ordinarios y <c>CapitalDeCaptacion</c> a la vista estándar—
+    /// vigentes desde el primer día del mes. Sin líneas activas no se exige (así una cooperativa que se activa antes de crear líneas no estrena reglas).</item>
+    /// </list>
+    /// <c>DeliveriesComplete</c> no lo puede cumplir una prueba: lo trae el despliegue (K11).
+    /// </summary>
+    public static async Task RequisitosDeCaptacionesAsync(HttpClient http, string admin, DateOnly hoy)
+    {
+        var roles = await CarteraE2E.ConClaveAsync(http, admin, HttpMethod.Post, "/api/lending/activation/suggested-roles", new
+        {
+            templateKeys = new[] { "cartera.jefe-captaciones", "cartera.asesor-captaciones", "cartera.analista-aportes", "cartera.tesorero-liquidez" },
+        });
+        roles.IsSuccessStatusCode.Should().BeTrue($"crear los roles de captaciones: «{await roles.Content.ReadAsStringAsync()}»");
+
+        const string Perfil = "/api/core/regulatory-profile";
+        var vigente = (await CarteraE2E.GetAsync(http, admin, Perfil)).GetProperty("current");
+        if (!vigente.TryGetProperty("mayTakeDeposits", out var capta) || capta.ValueKind != JsonValueKind.True)
+        {
+            var perfil = await CarteraE2E.ConClaveAsync(http, admin, HttpMethod.Post, $"{Perfil}/versions", new
+            {
+                organizationType = vigente.GetProperty("organizationTypeCode").GetString(), financialActivity = true, supervisionLevel = 2,
+                validFrom = DateOnly.Parse(vigente.GetProperty("validFrom").GetString()!, System.Globalization.CultureInfo.InvariantCulture),
+                source = "Certificado de la Supersolidaria (e2e)", reason = "La cooperativa capta ahorro: requisito de la activación (e2e)",
+                supersedesPublicId = vigente.GetProperty("versionPublicId").GetGuid(), mayTakeDeposits = true,
+            });
+            perfil.StatusCode.Should().Be(HttpStatusCode.Created, $"el perfil que autoriza captar: «{await perfil.Content.ReadAsStringAsync()}»");
+        }
+
+        var hayLineasActivas = false;
+        foreach (var naturaleza in new[] { "Contribution", "Deposit" })
+            hayLineasActivas |= (await CarteraE2E.GetAsync(http, admin, $"/api/lending/lines?nature={naturaleza}")).EnumerateArray()
+                .Any(l => l.GetProperty("status") is var s && (s.ValueKind == JsonValueKind.String ? s.GetString() == "Active" : s.GetInt32() == 1));
+        if (!hayLineasActivas) return;
+
+        var desde = new DateOnly(hoy.Year, hoy.Month, 1);
+        await ReglaMinimaAsync(http, admin, desde, "RecaudoPorAplicar", "collectorClass=Receipts", new { collectorClass = "Receipts" }, "24101097",
+            "Recaudo por aplicar de captaciones (e2e)", "241010");
+        await ReglaMinimaAsync(http, admin, desde, "AportesSociales", "contributionClass=Ordinary", new { contributionClass = "Ordinary" }, "31050597",
+            "Aportes ordinarios (e2e)", "310505");
+        await ReglaMinimaAsync(http, admin, desde, "CapitalDeCaptacion", "depositClass=Demand&accountFlag=Standard",
+            new { depositClass = "Demand", accountFlag = "Standard" }, "21050597", "Depósitos de ahorro a la vista (e2e)", "210505");
+    }
+
+    private static async Task ReglaMinimaAsync(HttpClient http, string admin, DateOnly desde, string rol, string filtro, object dimensiones, string cuenta,
+        string nombre, string padre)
+    {
+        const string Reglas = "/api/accounting/lending/rules";
+        if ((await CarteraE2E.GetAsync(http, admin, $"{Reglas}?role={rol}&{filtro}&pageSize=1")).GetProperty("totalCount").GetInt32() > 0) return;
+        await Accounting.ContabilidadE2E.CrearCuentaAsync(http, admin, cuenta, nombre, padre, ["CNT", "CAR"]);
+        var regla = await CarteraE2E.ConClaveAsync(http, admin, HttpMethod.Post, Reglas, new
+        {
+            operation = "*", role = rol, dimensions = dimensiones, accountPublicId = await Accounting.ContabilidadE2E.CuentaAsync(http, admin, cuenta),
+            validFrom = desde, notes = "Requisito de la activación de captaciones (e2e)",
+            reason = "La activación exige la matriz del hecho principal en todos los ambientes",
+        });
+        regla.StatusCode.Should().Be(HttpStatusCode.Created, $"la regla mínima {rol}: «{await regla.Content.ReadAsStringAsync()}»");
     }
 
     /// <summary>Registra de nuevo un doble desde hoy con la adopción que falta, si el vigente no la tiene.</summary>
