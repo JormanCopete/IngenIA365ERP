@@ -1,4 +1,5 @@
 using System.Globalization;
+using IngenIA365ERP.API.Reports.Captaciones;
 using IngenIA365ERP.Application.Lending.Documents;
 using IngenIA365ERP.Domain.Enums.Lending;
 using QRCoder;
@@ -69,6 +70,8 @@ public static class DocumentosDeCarteraReport
             CuerpoDeConstanciaDeAportes constancia => TextosDeLaConstancia(constancia),
             CuerpoDePazYSalvoDeAportes paz => TextosDelPazYSalvoDeAportes(paz),
             CuerpoDeLiquidacionDeRetiro retiro => TextosDeLaLiquidacionDeRetiro(retiro),
+            // Feature 014, US13 (T195): los cuerpos de captaciones los pinta DocumentosDeCaptacionesReport.
+            var otro when DocumentosDeCaptacionesReport.EsDeCaptaciones(otro) => DocumentosDeCaptacionesReport.Textos(otro),
             _ => [],
         });
         textos.Add(e.Firmante);
@@ -114,6 +117,8 @@ public static class DocumentosDeCarteraReport
                 {
                     var texto = col.Item().PaddingTop(3).Text(leyenda).SemiBold();
                     if (leyenda == EncabezadoDeDocumentoDeCartera.MarcaDePruebas) texto.FontColor(Colors.Red.Darken2).Bold();
+                    // Feature 014 (T195; documentos.md §2.5): la leyenda del título va destacada.
+                    if (leyenda == CuerpoDeTituloDeCdat.LeyendaNoNegociable) texto.FontSize(14).Bold().FontColor(Colors.Red.Darken3);
                 }
                 col.Item().PaddingTop(4).PaddingBottom(4).LineHorizontal(1);
             });
@@ -130,6 +135,7 @@ public static class DocumentosDeCarteraReport
                     case CuerpoDeConstanciaDeAportes constancia: Constancia(col, constancia); break;
                     case CuerpoDePazYSalvoDeAportes paz: PazYSalvoDeAportes(col, paz); break;
                     case CuerpoDeLiquidacionDeRetiro retiro: LiquidacionDeRetiro(col, retiro); break;
+                    case var otro when DocumentosDeCaptacionesReport.EsDeCaptaciones(otro): DocumentosDeCaptacionesReport.Pintar(col, otro); break;
                 }
 
                 col.Item().PaddingTop(24).Row(row =>
