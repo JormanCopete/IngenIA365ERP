@@ -104,6 +104,13 @@ public enum MemberAccountConcept
     ContributionRevaluation = 8,
     ChargeReceivable = 9,
     Bonus = 10,
+
+    /// <summary>
+    /// US14 (T209; FR-081; research §23): lo trasladado a «no reclamados». Sale del capital (o de los aportes) por la fila <c>ToUnclaimed</c> y queda en la
+    /// cuenta —ya cancelada— como lo que la Cartera le debe al titular hasta que lo reclame; no es saldo del titular de la cuenta (no se retira ni causa) y su
+    /// rol contable es <c>NoReclamadosPorPagar</c>. Se paga por orden de giro o traslado (operación <c>UnclaimedPayment</c>).
+    /// </summary>
+    Unclaimed = 11,
 }
 
 /// <summary>Clase de una fila del libro de cuentas (<c>LND_MemberAccountTransactions</c>, data-model §4.2).</summary>
@@ -281,6 +288,9 @@ public enum MemberAccountOperationKind
     ContractualSetup = 24,
     ContractualBreach = 25,
     ContractualBonus = 26,
+
+    // US14 (T209; FR-081): el pago de un saldo no reclamado al titular que aparece, sobre la cuenta de origen aunque esté cancelada (data-model §6.6).
+    UnclaimedPayment = 27,
 }
 
 /// <summary>De dónde nació una cuenta (data-model §3.1).</summary>
@@ -433,6 +443,9 @@ public enum PayoutPurpose
 
     /// <summary>US12 (T203; research §22): el pago de los excedentes que la asamblea distribuye en dinero (retornos decretados).</summary>
     SurplusPayment = 8,
+
+    /// <summary>US14 (T209; FR-081): el pago de un saldo no reclamado al titular que aparece.</summary>
+    UnclaimedPayment = 9,
 }
 
 /// <summary>Estado de un embargo.</summary>
@@ -528,6 +541,9 @@ public enum DeceasedCaseStatus
     Approved = 2,
     Delivered = 3,
     Cancelled = 4,
+
+    /// <summary>US14 (T210; research §23): la entrega quedó registrada y espera que otra persona la apruebe (data-model §6.5 no la tenía).</summary>
+    DeliveryPending = 5,
 }
 
 /// <summary>De dónde viene un saldo no reclamado.</summary>

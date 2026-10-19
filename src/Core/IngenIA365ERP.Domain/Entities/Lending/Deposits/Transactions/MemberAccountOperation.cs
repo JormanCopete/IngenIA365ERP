@@ -115,6 +115,9 @@ public class MemberAccountOperation : AuditableEntityLong, IHechoInmutable
     /// <summary>K10 (US12, T202): la decisión de asamblea que la originó (revalorización, excedentes o amortización).</summary>
     public int? AssemblyDistributionId { get; init; }
 
+    /// <summary>K10 (US14, T207): el caso de fallecimiento cuya entrega la originó (<c>DeceasedDelivery</c>).</summary>
+    public int? DeceasedHolderCaseId { get; init; }
+
     /// <summary>Resultado del giro, factura del cargo.</summary>
     public int? InboundMessageId { get; init; }
 

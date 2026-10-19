@@ -44,6 +44,9 @@ public enum ConceptoDeCuenta
     ContributionRevaluation = 8,
     ChargeReceivable = 9,
     Bonus = 10,
+
+    /// <summary>US14 (T209): lo trasladado a no reclamados.</summary>
+    Unclaimed = 11,
 }
 
 /// <summary>El papel de la persona en la cuenta (equivale a <c>MemberAccountPartyRole</c>). (nuevo)</summary>

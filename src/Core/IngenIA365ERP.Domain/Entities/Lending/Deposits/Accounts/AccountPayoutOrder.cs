@@ -62,6 +62,9 @@ public class AccountPayoutOrder : AuditableEntity
     /// <summary>K7 (US10, T096): el retiro del asociado que la originó; la FK nace con su tabla.</summary>
     public int? MembershipWithdrawalId { get; set; }
 
+    /// <summary>K10 (US14, T207): el caso de fallecimiento cuya entrega paga (propósito <c>DeceasedDelivery</c>).</summary>
+    public int? DeceasedHolderCaseId { get; set; }
+
     // ------------------------------------------------------------------------------------------------ comportamiento --
 
     /// <summary>Una orden emitida (§3.9): valor positivo y beneficiario sellado. El número lo pone el numerador después.</summary>

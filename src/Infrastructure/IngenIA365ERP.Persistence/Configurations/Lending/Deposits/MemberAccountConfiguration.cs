@@ -139,6 +139,11 @@ public class AccountPayoutOrderConfiguration : IEntityTypeConfiguration<AccountP
             .OnDelete(DeleteBehavior.Restrict).HasConstraintName("FK_LND_AccountPayoutOrders_MembershipWithdrawal");
         builder.HasIndex(e => e.MembershipWithdrawalId).HasDatabaseName("IX_LND_AccountPayoutOrders_MembershipWithdrawalId")
             .HasFilter("[MembershipWithdrawalId] IS NOT NULL");
+        // US14 (T207): el caso de fallecimiento cuya entrega paga.
+        builder.HasOne<Domain.Entities.Lending.Deposits.Processes.DeceasedHolderCase>().WithMany().HasForeignKey(e => e.DeceasedHolderCaseId)
+            .OnDelete(DeleteBehavior.Restrict).HasConstraintName("FK_LND_AccountPayoutOrders_DeceasedHolderCase");
+        builder.HasIndex(e => e.DeceasedHolderCaseId).HasDatabaseName("IX_LND_AccountPayoutOrders_DeceasedHolderCase")
+            .HasFilter("[DeceasedHolderCaseId] IS NOT NULL");
     }
 }
 

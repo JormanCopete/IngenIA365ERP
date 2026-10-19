@@ -95,6 +95,11 @@ public class MemberAccountOperationConfiguration : IEntityTypeConfiguration<Memb
             .OnDelete(DeleteBehavior.Restrict).HasConstraintName("FK_LND_MemberAccountOperations_AssemblyDistribution");
         builder.HasIndex(e => e.AssemblyDistributionId).HasDatabaseName("IX_LND_MemberAccountOperations_AssemblyDistribution")
             .HasFilter("[AssemblyDistributionId] IS NOT NULL");
+        // US14 (T207): el caso de fallecimiento cuya entrega la originó.
+        builder.HasOne<Domain.Entities.Lending.Deposits.Processes.DeceasedHolderCase>().WithMany().HasForeignKey(e => e.DeceasedHolderCaseId)
+            .OnDelete(DeleteBehavior.Restrict).HasConstraintName("FK_LND_MemberAccountOperations_DeceasedHolderCase");
+        builder.HasIndex(e => e.DeceasedHolderCaseId).HasDatabaseName("IX_LND_MemberAccountOperations_DeceasedHolderCase")
+            .HasFilter("[DeceasedHolderCaseId] IS NOT NULL");
     }
 }
 

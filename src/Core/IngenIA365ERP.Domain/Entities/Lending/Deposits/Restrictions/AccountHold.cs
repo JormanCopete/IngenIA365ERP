@@ -31,6 +31,9 @@ public class AccountHold : AuditableEntity
     /// <summary>Obligatorio con <c>Garnishment</c>.</summary>
     public int? GarnishmentId { get; set; }
 
+    /// <summary>K10 (US14, T207): obligatorio con <c>Deceased</c>; el caso de fallecimiento que bloqueó la cuenta (data-model §5.1).</summary>
+    public int? DeceasedHolderCaseId { get; set; }
+
     public DateOnly ValidFrom { get; set; }
 
     public DateOnly? ValidTo { get; set; }

@@ -192,3 +192,89 @@ public class AssemblyDistributionLineConfiguration : IEntityTypeConfiguration<As
         builder.HasIndex(e => e.ContributionAccountId).HasDatabaseName("IX_LND_AssemblyDistributionLines_ContributionAccount");
     }
 }
+
+/// <summary>
+/// <c>LND_DeceasedHolderCases</c> (feature 014, US14, T207; data-model §6.5; research §23): número único, un caso no anulado por titular (único filtrado) y el
+/// índice por estado. Migración <c>CaptacionesAportes</c>.
+/// </summary>
+public class DeceasedHolderCaseConfiguration : IEntityTypeConfiguration<DeceasedHolderCase>
+{
+    public const string Tabla = "LND_DeceasedHolderCases";
+
+    public void Configure(EntityTypeBuilder<DeceasedHolderCase> builder)
+    {
+        builder.ComoEntidadDeCartera(Tabla);
+        builder.ToTable(t =>
+        {
+            t.HasCheckConstraint("CK_LND_DeceasedHolderCases_Total", "[TotalAmount] >= 0");
+            t.HasCheckConstraint("CK_LND_DeceasedHolderCases_Dates", "[DeathDate] <= [ReportedOn]");
+        });
+
+        builder.Property(e => e.Number).HasMaxLength(DeceasedHolderCase.LargoDelNumero).IsRequired();
+        builder.Property(e => e.Route).HasConversion<int?>();
+        builder.Property(e => e.TotalAmount).Monto().IsRequired();
+        builder.Property(e => e.WithoutProbateCap).Monto();
+        builder.Property(e => e.SupportAttachmentPublicIdsJson).IsRequired();
+        builder.Property(e => e.PreviewSha256).HasMaxLength(64);
+        builder.Property(e => e.Status).HasConversion<int>().IsRequired();
+        builder.Property(e => e.Reason).HasMaxLength(DeceasedHolderCase.LargoDelMotivo).IsRequired();
+        builder.Property(e => e.CancelReason).HasMaxLength(DeceasedHolderCase.LargoDelMotivo);
+
+        builder.HasOne<Person>().WithMany().HasForeignKey(e => e.PersonId).OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("FK_LND_DeceasedHolderCases_Person");
+        builder.HasOne<User>().WithMany().HasForeignKey(e => e.RegisteredByUserId).OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("FK_LND_DeceasedHolderCases_RegisteredBy");
+        builder.HasOne<User>().WithMany().HasForeignKey(e => e.DeliveryRegisteredByUserId).OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("FK_LND_DeceasedHolderCases_DeliveryRegisteredBy");
+        builder.HasOne<User>().WithMany().HasForeignKey(e => e.ApprovedByUserId).OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("FK_LND_DeceasedHolderCases_ApprovedBy");
+        builder.HasOne<User>().WithMany().HasForeignKey(e => e.CancelledByUserId).OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("FK_LND_DeceasedHolderCases_CancelledBy");
+
+        builder.HasIndex(e => e.Number).IsUnique().HasDatabaseName("UK_LND_DeceasedHolderCases_Number");
+        builder.HasIndex(e => e.PersonId, "UK_LND_DeceasedHolderCases_Person").IsUnique().HasFilter("[Status] <> 4 AND [IsDeleted] = 0");
+        builder.HasIndex(e => e.Status).HasDatabaseName("IX_LND_DeceasedHolderCases_Status");
+    }
+}
+
+/// <summary>
+/// <c>LND_UnclaimedBalances</c> (feature 014, US14, T207; data-model §6.6; research §23): un traslado por operación, el índice por persona y estado y el de la
+/// cuenta de origen. Migración <c>CaptacionesAportes</c>.
+/// </summary>
+public class UnclaimedBalanceConfiguration : IEntityTypeConfiguration<UnclaimedBalance>
+{
+    public const string Tabla = "LND_UnclaimedBalances";
+
+    public void Configure(EntityTypeBuilder<UnclaimedBalance> builder)
+    {
+        builder.ComoEntidadDeCartera(Tabla);
+        builder.ToTable(t => t.HasCheckConstraint("CK_LND_UnclaimedBalances_Amount", "[Amount] > 0"));
+
+        builder.Property(e => e.Source).HasConversion<int>().IsRequired();
+        builder.Property(e => e.Amount).Monto().IsRequired();
+        builder.Property(e => e.Status).HasConversion<int>().IsRequired();
+        builder.Property(e => e.Reason).HasMaxLength(UnclaimedBalance.LargoDelMotivo).IsRequired();
+
+        builder.HasOne<Person>().WithMany().HasForeignKey(e => e.PersonId).OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("FK_LND_UnclaimedBalances_Person");
+        builder.HasOne<MemberAccount>().WithMany().HasForeignKey(e => e.SourceMemberAccountId).OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("FK_LND_UnclaimedBalances_SourceAccount");
+        builder.HasOne<AccountPayoutOrder>().WithMany().HasForeignKey(e => e.SourcePayoutOrderId).OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("FK_LND_UnclaimedBalances_SourcePayoutOrder");
+        builder.HasOne<MemberAccountOperation>().WithMany().HasForeignKey(e => e.TransferOperationId).OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("FK_LND_UnclaimedBalances_TransferOperation");
+        builder.HasOne<MemberAccountOperation>().WithMany().HasForeignKey(e => e.ClaimOperationId).OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("FK_LND_UnclaimedBalances_ClaimOperation");
+        builder.HasOne<AccountPayoutOrder>().WithMany().HasForeignKey(e => e.ClaimPayoutOrderId).OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("FK_LND_UnclaimedBalances_ClaimPayoutOrder");
+        builder.HasOne<User>().WithMany().HasForeignKey(e => e.TransferredByUserId).OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("FK_LND_UnclaimedBalances_TransferredBy");
+        builder.HasOne<User>().WithMany().HasForeignKey(e => e.ClaimedByUserId).OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("FK_LND_UnclaimedBalances_ClaimedBy");
+
+        builder.HasIndex(e => e.TransferOperationId).IsUnique().HasDatabaseName("UK_LND_UnclaimedBalances_TransferOperation");
+        builder.HasIndex(e => new { e.PersonId, e.Status }).HasDatabaseName("IX_LND_UnclaimedBalances_Person_Status");
+        builder.HasIndex(e => e.SourceMemberAccountId).HasDatabaseName("IX_LND_UnclaimedBalances_SourceAccount");
+        builder.HasIndex(e => e.ClaimPayoutOrderId).HasDatabaseName("IX_LND_UnclaimedBalances_ClaimPayoutOrder").HasFilter("[ClaimPayoutOrderId] IS NOT NULL");
+    }
+}

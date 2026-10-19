@@ -5854,11 +5854,423 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 principalTable: "LND_AssemblyDistributions",
                 principalColumn: "Id",
                 onDelete: ReferentialAction.Restrict);
+
+            // US14 (T207; research §23): el fallecimiento y los no reclamados —LND_DeceasedHolderCases, LND_UnclaimedBalances y el caso en el bloqueo, la operación y la orden—.
+            migrationBuilder.AddColumn<int>(
+                name: "DeceasedHolderCaseId",
+                schema: "dbo",
+                table: "LND_MemberAccountOperations",
+                type: "integer",
+                nullable: true);
+
+            migrationBuilder.AddColumn<int>(
+                name: "DeceasedHolderCaseId",
+                schema: "dbo",
+                table: "LND_AccountPayoutOrders",
+                type: "integer",
+                nullable: true);
+
+            migrationBuilder.AddColumn<int>(
+                name: "DeceasedHolderCaseId",
+                schema: "dbo",
+                table: "LND_AccountHolds",
+                type: "integer",
+                nullable: true);
+
+            migrationBuilder.CreateTable(
+                name: "LND_DeceasedHolderCases",
+                schema: "dbo",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    Number = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
+                    PersonId = table.Column<int>(type: "integer", nullable: false),
+                    DeathDate = table.Column<DateOnly>(type: "date", nullable: false),
+                    ReportedOn = table.Column<DateOnly>(type: "date", nullable: false),
+                    DeathCertificateAttachmentPublicId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Route = table.Column<int>(type: "integer", nullable: true),
+                    BeneficiarySnapshotJson = table.Column<string>(type: "text", nullable: true),
+                    TotalAmount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    WithoutProbateCap = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: true),
+                    SupportAttachmentPublicIdsJson = table.Column<string>(type: "text", nullable: false),
+                    DeliveryPlanJson = table.Column<string>(type: "text", nullable: true),
+                    PreviewSha256 = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true),
+                    Status = table.Column<int>(type: "integer", nullable: false),
+                    Reason = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false),
+                    RegisteredByUserId = table.Column<int>(type: "integer", nullable: false),
+                    RegisteredAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    DeliveryRegisteredByUserId = table.Column<int>(type: "integer", nullable: true),
+                    DeliveryRegisteredAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    ApprovedByUserId = table.Column<int>(type: "integer", nullable: true),
+                    ApprovedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    DeliveredAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    CancelledAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    CancelledByUserId = table.Column<int>(type: "integer", nullable: true),
+                    CancelReason = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
+                    xmin = table.Column<uint>(type: "xid", rowVersion: true, nullable: false),
+                    PublicId = table.Column<Guid>(type: "uuid", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    DeletedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_LND_DeceasedHolderCases", x => x.Id);
+                    table.CheckConstraint("CK_LND_DeceasedHolderCases_Dates", "\"DeathDate\" <= \"ReportedOn\"");
+                    table.CheckConstraint("CK_LND_DeceasedHolderCases_Total", "\"TotalAmount\" >= 0");
+                    table.ForeignKey(
+                        name: "FK_LND_DeceasedHolderCases_ApprovedBy",
+                        column: x => x.ApprovedByUserId,
+                        principalSchema: "dbo",
+                        principalTable: "SEC_Users",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_LND_DeceasedHolderCases_CancelledBy",
+                        column: x => x.CancelledByUserId,
+                        principalSchema: "dbo",
+                        principalTable: "SEC_Users",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_LND_DeceasedHolderCases_DeliveryRegisteredBy",
+                        column: x => x.DeliveryRegisteredByUserId,
+                        principalSchema: "dbo",
+                        principalTable: "SEC_Users",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_LND_DeceasedHolderCases_Person",
+                        column: x => x.PersonId,
+                        principalSchema: "dbo",
+                        principalTable: "COR_People",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_LND_DeceasedHolderCases_RegisteredBy",
+                        column: x => x.RegisteredByUserId,
+                        principalSchema: "dbo",
+                        principalTable: "SEC_Users",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "LND_UnclaimedBalances",
+                schema: "dbo",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    PersonId = table.Column<int>(type: "integer", nullable: false),
+                    SourceMemberAccountId = table.Column<int>(type: "integer", nullable: false),
+                    Source = table.Column<int>(type: "integer", nullable: false),
+                    SourcePayoutOrderId = table.Column<int>(type: "integer", nullable: true),
+                    Amount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    TransferredOn = table.Column<DateOnly>(type: "date", nullable: false),
+                    TransferOperationId = table.Column<long>(type: "bigint", nullable: false),
+                    Status = table.Column<int>(type: "integer", nullable: false),
+                    Reason = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false),
+                    TransferredByUserId = table.Column<int>(type: "integer", nullable: true),
+                    ClaimedOn = table.Column<DateOnly>(type: "date", nullable: true),
+                    ClaimOperationId = table.Column<long>(type: "bigint", nullable: true),
+                    ClaimPayoutOrderId = table.Column<int>(type: "integer", nullable: true),
+                    ClaimedByUserId = table.Column<int>(type: "integer", nullable: true),
+                    xmin = table.Column<uint>(type: "xid", rowVersion: true, nullable: false),
+                    PublicId = table.Column<Guid>(type: "uuid", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    DeletedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_LND_UnclaimedBalances", x => x.Id);
+                    table.CheckConstraint("CK_LND_UnclaimedBalances_Amount", "\"Amount\" > 0");
+                    table.ForeignKey(
+                        name: "FK_LND_UnclaimedBalances_ClaimOperation",
+                        column: x => x.ClaimOperationId,
+                        principalSchema: "dbo",
+                        principalTable: "LND_MemberAccountOperations",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_LND_UnclaimedBalances_ClaimPayoutOrder",
+                        column: x => x.ClaimPayoutOrderId,
+                        principalSchema: "dbo",
+                        principalTable: "LND_AccountPayoutOrders",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_LND_UnclaimedBalances_ClaimedBy",
+                        column: x => x.ClaimedByUserId,
+                        principalSchema: "dbo",
+                        principalTable: "SEC_Users",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_LND_UnclaimedBalances_Person",
+                        column: x => x.PersonId,
+                        principalSchema: "dbo",
+                        principalTable: "COR_People",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_LND_UnclaimedBalances_SourceAccount",
+                        column: x => x.SourceMemberAccountId,
+                        principalSchema: "dbo",
+                        principalTable: "LND_MemberAccounts",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_LND_UnclaimedBalances_SourcePayoutOrder",
+                        column: x => x.SourcePayoutOrderId,
+                        principalSchema: "dbo",
+                        principalTable: "LND_AccountPayoutOrders",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_LND_UnclaimedBalances_TransferOperation",
+                        column: x => x.TransferOperationId,
+                        principalSchema: "dbo",
+                        principalTable: "LND_MemberAccountOperations",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_LND_UnclaimedBalances_TransferredBy",
+                        column: x => x.TransferredByUserId,
+                        principalSchema: "dbo",
+                        principalTable: "SEC_Users",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_MemberAccountOperations_DeceasedHolderCase",
+                schema: "dbo",
+                table: "LND_MemberAccountOperations",
+                column: "DeceasedHolderCaseId",
+                filter: "\"DeceasedHolderCaseId\" IS NOT NULL");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_AccountPayoutOrders_DeceasedHolderCase",
+                schema: "dbo",
+                table: "LND_AccountPayoutOrders",
+                column: "DeceasedHolderCaseId",
+                filter: "\"DeceasedHolderCaseId\" IS NOT NULL");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_AccountHolds_DeceasedHolderCase",
+                schema: "dbo",
+                table: "LND_AccountHolds",
+                column: "DeceasedHolderCaseId",
+                filter: "\"DeceasedHolderCaseId\" IS NOT NULL");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_DeceasedHolderCases_ApprovedByUserId",
+                schema: "dbo",
+                table: "LND_DeceasedHolderCases",
+                column: "ApprovedByUserId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_DeceasedHolderCases_CancelledByUserId",
+                schema: "dbo",
+                table: "LND_DeceasedHolderCases",
+                column: "CancelledByUserId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_DeceasedHolderCases_DeliveryRegisteredByUserId",
+                schema: "dbo",
+                table: "LND_DeceasedHolderCases",
+                column: "DeliveryRegisteredByUserId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_DeceasedHolderCases_RegisteredByUserId",
+                schema: "dbo",
+                table: "LND_DeceasedHolderCases",
+                column: "RegisteredByUserId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_DeceasedHolderCases_Status",
+                schema: "dbo",
+                table: "LND_DeceasedHolderCases",
+                column: "Status");
+
+            migrationBuilder.CreateIndex(
+                name: "UK_LND_DeceasedHolderCases_Number",
+                schema: "dbo",
+                table: "LND_DeceasedHolderCases",
+                column: "Number",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "UK_LND_DeceasedHolderCases_Person",
+                schema: "dbo",
+                table: "LND_DeceasedHolderCases",
+                column: "PersonId",
+                unique: true,
+                filter: "\"Status\" <> 4 AND \"IsDeleted\" = FALSE");
+
+            migrationBuilder.CreateIndex(
+                name: "UK_LND_DeceasedHolderCases_PublicId",
+                schema: "dbo",
+                table: "LND_DeceasedHolderCases",
+                column: "PublicId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_UnclaimedBalances_ClaimedByUserId",
+                schema: "dbo",
+                table: "LND_UnclaimedBalances",
+                column: "ClaimedByUserId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_UnclaimedBalances_ClaimOperationId",
+                schema: "dbo",
+                table: "LND_UnclaimedBalances",
+                column: "ClaimOperationId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_UnclaimedBalances_ClaimPayoutOrder",
+                schema: "dbo",
+                table: "LND_UnclaimedBalances",
+                column: "ClaimPayoutOrderId",
+                filter: "\"ClaimPayoutOrderId\" IS NOT NULL");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_UnclaimedBalances_Person_Status",
+                schema: "dbo",
+                table: "LND_UnclaimedBalances",
+                columns: new[] { "PersonId", "Status" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_UnclaimedBalances_SourceAccount",
+                schema: "dbo",
+                table: "LND_UnclaimedBalances",
+                column: "SourceMemberAccountId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_UnclaimedBalances_SourcePayoutOrderId",
+                schema: "dbo",
+                table: "LND_UnclaimedBalances",
+                column: "SourcePayoutOrderId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_UnclaimedBalances_TransferredByUserId",
+                schema: "dbo",
+                table: "LND_UnclaimedBalances",
+                column: "TransferredByUserId");
+
+            migrationBuilder.CreateIndex(
+                name: "UK_LND_UnclaimedBalances_PublicId",
+                schema: "dbo",
+                table: "LND_UnclaimedBalances",
+                column: "PublicId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "UK_LND_UnclaimedBalances_TransferOperation",
+                schema: "dbo",
+                table: "LND_UnclaimedBalances",
+                column: "TransferOperationId",
+                unique: true);
+
+            migrationBuilder.AddForeignKey(
+                name: "FK_LND_AccountHolds_DeceasedHolderCase",
+                schema: "dbo",
+                table: "LND_AccountHolds",
+                column: "DeceasedHolderCaseId",
+                principalSchema: "dbo",
+                principalTable: "LND_DeceasedHolderCases",
+                principalColumn: "Id",
+                onDelete: ReferentialAction.Restrict);
+
+            migrationBuilder.AddForeignKey(
+                name: "FK_LND_AccountPayoutOrders_DeceasedHolderCase",
+                schema: "dbo",
+                table: "LND_AccountPayoutOrders",
+                column: "DeceasedHolderCaseId",
+                principalSchema: "dbo",
+                principalTable: "LND_DeceasedHolderCases",
+                principalColumn: "Id",
+                onDelete: ReferentialAction.Restrict);
+
+            migrationBuilder.AddForeignKey(
+                name: "FK_LND_MemberAccountOperations_DeceasedHolderCase",
+                schema: "dbo",
+                table: "LND_MemberAccountOperations",
+                column: "DeceasedHolderCaseId",
+                principalSchema: "dbo",
+                principalTable: "LND_DeceasedHolderCases",
+                principalColumn: "Id",
+                onDelete: ReferentialAction.Restrict);
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            // US14 (T207): el fallecimiento y los no reclamados, antes que lo demás.
+            migrationBuilder.DropForeignKey(
+                name: "FK_LND_AccountHolds_DeceasedHolderCase",
+                schema: "dbo",
+                table: "LND_AccountHolds");
+
+            migrationBuilder.DropForeignKey(
+                name: "FK_LND_AccountPayoutOrders_DeceasedHolderCase",
+                schema: "dbo",
+                table: "LND_AccountPayoutOrders");
+
+            migrationBuilder.DropForeignKey(
+                name: "FK_LND_MemberAccountOperations_DeceasedHolderCase",
+                schema: "dbo",
+                table: "LND_MemberAccountOperations");
+
+            migrationBuilder.DropTable(
+                name: "LND_DeceasedHolderCases",
+                schema: "dbo");
+
+            migrationBuilder.DropTable(
+                name: "LND_UnclaimedBalances",
+                schema: "dbo");
+
+            migrationBuilder.DropIndex(
+                name: "IX_LND_MemberAccountOperations_DeceasedHolderCase",
+                schema: "dbo",
+                table: "LND_MemberAccountOperations");
+
+            migrationBuilder.DropIndex(
+                name: "IX_LND_AccountPayoutOrders_DeceasedHolderCase",
+                schema: "dbo",
+                table: "LND_AccountPayoutOrders");
+
+            migrationBuilder.DropIndex(
+                name: "IX_LND_AccountHolds_DeceasedHolderCase",
+                schema: "dbo",
+                table: "LND_AccountHolds");
+
+            migrationBuilder.DropColumn(
+                name: "DeceasedHolderCaseId",
+                schema: "dbo",
+                table: "LND_MemberAccountOperations");
+
+            migrationBuilder.DropColumn(
+                name: "DeceasedHolderCaseId",
+                schema: "dbo",
+                table: "LND_AccountPayoutOrders");
+
+            migrationBuilder.DropColumn(
+                name: "DeceasedHolderCaseId",
+                schema: "dbo",
+                table: "LND_AccountHolds");
+
             // US12 (T202): lo de la asamblea, antes que lo demás.
             migrationBuilder.DropForeignKey(
                 name: "FK_LND_MemberAccountOperations_AssemblyDistribution",

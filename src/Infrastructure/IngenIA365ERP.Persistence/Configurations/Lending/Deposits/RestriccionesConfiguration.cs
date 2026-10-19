@@ -39,6 +39,10 @@ public class AccountHoldConfiguration : IEntityTypeConfiguration<AccountHold>
         builder.HasIndex(e => e.MemberAccountId).HasDatabaseName("IX_LND_AccountHolds_Live").HasFilter("[ReleasedAt] IS NULL");
         builder.HasIndex(e => e.GarnishmentId).HasDatabaseName("IX_LND_AccountHolds_Garnishment").HasFilter("[GarnishmentId] IS NOT NULL");
         builder.HasIndex(e => e.LoanId).HasDatabaseName("IX_LND_AccountHolds_Loan").HasFilter("[LoanId] IS NOT NULL");
+        // US14 (T207): el caso de fallecimiento que bloqueó la cuenta.
+        builder.HasOne<Domain.Entities.Lending.Deposits.Processes.DeceasedHolderCase>().WithMany().HasForeignKey(e => e.DeceasedHolderCaseId)
+            .OnDelete(DeleteBehavior.Restrict).HasConstraintName("FK_LND_AccountHolds_DeceasedHolderCase");
+        builder.HasIndex(e => e.DeceasedHolderCaseId).HasDatabaseName("IX_LND_AccountHolds_DeceasedHolderCase").HasFilter("[DeceasedHolderCaseId] IS NOT NULL");
     }
 }
 

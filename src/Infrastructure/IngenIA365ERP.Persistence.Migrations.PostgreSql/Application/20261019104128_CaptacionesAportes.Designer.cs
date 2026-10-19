@@ -27247,6 +27247,9 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<int?>("DeceasedHolderCaseId")
+                        .HasColumnType("integer");
+
                     b.Property<DateTime?>("DeletedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -27320,6 +27323,10 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.HasKey("Id");
 
                     b.HasIndex("BeneficiaryPersonId");
+
+                    b.HasIndex("DeceasedHolderCaseId")
+                        .HasDatabaseName("IX_LND_AccountPayoutOrders_DeceasedHolderCase")
+                        .HasFilter("\"DeceasedHolderCaseId\" IS NOT NULL");
 
                     b.HasIndex("DestinationBankId");
 
@@ -30617,6 +30624,163 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.ToTable("LND_AssemblyDistributionLines", "dbo");
                 });
 
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Lending.Deposits.Processes.DeceasedHolderCase", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime?>("ApprovedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("ApprovedByUserId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("BeneficiarySnapshotJson")
+                        .HasColumnType("text");
+
+                    b.Property<string>("CancelReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTime?>("CancelledAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("CancelledByUserId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<Guid>("DeathCertificateAttachmentPublicId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly>("DeathDate")
+                        .HasColumnType("date");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime?>("DeliveredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DeliveryPlanJson")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("DeliveryRegisteredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("DeliveryRegisteredByUserId")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("Number")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<int>("PersonId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("PreviewSha256")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTime>("RegisteredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("RegisteredByUserId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateOnly>("ReportedOn")
+                        .HasColumnType("date");
+
+                    b.Property<int?>("Route")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("SupportAttachmentPublicIdsJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<decimal>("TotalAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<decimal?>("WithoutProbateCap")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ApprovedByUserId");
+
+                    b.HasIndex("CancelledByUserId");
+
+                    b.HasIndex("DeliveryRegisteredByUserId");
+
+                    b.HasIndex("Number")
+                        .IsUnique()
+                        .HasDatabaseName("UK_LND_DeceasedHolderCases_Number");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_LND_DeceasedHolderCases_PublicId");
+
+                    b.HasIndex("RegisteredByUserId");
+
+                    b.HasIndex("Status")
+                        .HasDatabaseName("IX_LND_DeceasedHolderCases_Status");
+
+                    b.HasIndex(new[] { "PersonId" }, "UK_LND_DeceasedHolderCases_Person")
+                        .IsUnique()
+                        .HasFilter("\"Status\" <> 4 AND \"IsDeleted\" = FALSE");
+
+                    b.ToTable("LND_DeceasedHolderCases", "dbo", t =>
+                        {
+                            t.HasCheckConstraint("CK_LND_DeceasedHolderCases_Dates", "\"DeathDate\" <= \"ReportedOn\"");
+
+                            t.HasCheckConstraint("CK_LND_DeceasedHolderCases_Total", "\"TotalAmount\" >= 0");
+                        });
+                });
+
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Lending.Deposits.Processes.MembershipWithdrawal", b =>
                 {
                     b.Property<int>("Id")
@@ -30918,6 +31082,128 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.ToTable("LND_MembershipWithdrawalLines", "dbo");
                 });
 
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Lending.Deposits.Processes.UnclaimedBalance", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<long?>("ClaimOperationId")
+                        .HasColumnType("bigint");
+
+                    b.Property<int?>("ClaimPayoutOrderId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("ClaimedByUserId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateOnly?>("ClaimedOn")
+                        .HasColumnType("date");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<int>("PersonId")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<int>("Source")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("SourceMemberAccountId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("SourcePayoutOrderId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("TransferOperationId")
+                        .HasColumnType("bigint");
+
+                    b.Property<int?>("TransferredByUserId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateOnly>("TransferredOn")
+                        .HasColumnType("date");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ClaimOperationId");
+
+                    b.HasIndex("ClaimPayoutOrderId")
+                        .HasDatabaseName("IX_LND_UnclaimedBalances_ClaimPayoutOrder")
+                        .HasFilter("\"ClaimPayoutOrderId\" IS NOT NULL");
+
+                    b.HasIndex("ClaimedByUserId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_LND_UnclaimedBalances_PublicId");
+
+                    b.HasIndex("SourceMemberAccountId")
+                        .HasDatabaseName("IX_LND_UnclaimedBalances_SourceAccount");
+
+                    b.HasIndex("SourcePayoutOrderId");
+
+                    b.HasIndex("TransferOperationId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_LND_UnclaimedBalances_TransferOperation");
+
+                    b.HasIndex("TransferredByUserId");
+
+                    b.HasIndex("PersonId", "Status")
+                        .HasDatabaseName("IX_LND_UnclaimedBalances_Person_Status");
+
+                    b.ToTable("LND_UnclaimedBalances", "dbo", t =>
+                        {
+                            t.HasCheckConstraint("CK_LND_UnclaimedBalances_Amount", "\"Amount\" > 0");
+                        });
+                });
+
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Lending.Deposits.Projections.MemberAccountControl", b =>
                 {
                     b.Property<int>("Id")
@@ -31208,6 +31494,9 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<int?>("DeceasedHolderCaseId")
+                        .HasColumnType("integer");
+
                     b.Property<DateTime?>("DeletedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -31277,6 +31566,10 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.HasKey("Id");
 
                     b.HasIndex("CollateralId");
+
+                    b.HasIndex("DeceasedHolderCaseId")
+                        .HasDatabaseName("IX_LND_AccountHolds_DeceasedHolderCase")
+                        .HasFilter("\"DeceasedHolderCaseId\" IS NOT NULL");
 
                     b.HasIndex("GarnishmentId")
                         .HasDatabaseName("IX_LND_AccountHolds_Garnishment")
@@ -31897,6 +32190,9 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<int?>("DeceasedHolderCaseId")
+                        .HasColumnType("integer");
+
                     b.Property<DateTime?>("DeletedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -32043,6 +32339,10 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.HasIndex("CounterpartMemberAccountId")
                         .HasDatabaseName("IX_LND_MemberAccountOperations_Counterpart")
                         .HasFilter("\"CounterpartMemberAccountId\" IS NOT NULL");
+
+                    b.HasIndex("DeceasedHolderCaseId")
+                        .HasDatabaseName("IX_LND_MemberAccountOperations_DeceasedHolderCase")
+                        .HasFilter("\"DeceasedHolderCaseId\" IS NOT NULL");
 
                     b.HasIndex("GarnishmentId")
                         .HasDatabaseName("IX_LND_MemberAccountOperations_Garnishment")
@@ -58455,6 +58755,12 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Lending.Deposits.Processes.DeceasedHolderCase", null)
+                        .WithMany()
+                        .HasForeignKey("DeceasedHolderCaseId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("FK_LND_AccountPayoutOrders_DeceasedHolderCase");
+
                     b.HasOne("IngenIA365ERP.Domain.Entities.Core.Bank", null)
                         .WithMany()
                         .HasForeignKey("DestinationBankId")
@@ -59031,6 +59337,41 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasConstraintName("FK_LND_AssemblyDistributionLines_Person");
                 });
 
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Lending.Deposits.Processes.DeceasedHolderCase", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Security.User", null)
+                        .WithMany()
+                        .HasForeignKey("ApprovedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("FK_LND_DeceasedHolderCases_ApprovedBy");
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Security.User", null)
+                        .WithMany()
+                        .HasForeignKey("CancelledByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("FK_LND_DeceasedHolderCases_CancelledBy");
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Security.User", null)
+                        .WithMany()
+                        .HasForeignKey("DeliveryRegisteredByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("FK_LND_DeceasedHolderCases_DeliveryRegisteredBy");
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Core.Person", null)
+                        .WithMany()
+                        .HasForeignKey("PersonId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("FK_LND_DeceasedHolderCases_Person");
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Security.User", null)
+                        .WithMany()
+                        .HasForeignKey("RegisteredByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("FK_LND_DeceasedHolderCases_RegisteredBy");
+                });
+
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Lending.Deposits.Processes.MembershipWithdrawal", b =>
                 {
                     b.HasOne("IngenIA365ERP.Domain.Entities.Lending.Governance.SessionItem", null)
@@ -59120,6 +59461,60 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasConstraintName("FK_LND_MembershipWithdrawalLines_Withdrawal");
                 });
 
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Lending.Deposits.Processes.UnclaimedBalance", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Lending.Deposits.Transactions.MemberAccountOperation", null)
+                        .WithMany()
+                        .HasForeignKey("ClaimOperationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("FK_LND_UnclaimedBalances_ClaimOperation");
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.AccountPayoutOrder", null)
+                        .WithMany()
+                        .HasForeignKey("ClaimPayoutOrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("FK_LND_UnclaimedBalances_ClaimPayoutOrder");
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Security.User", null)
+                        .WithMany()
+                        .HasForeignKey("ClaimedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("FK_LND_UnclaimedBalances_ClaimedBy");
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Core.Person", null)
+                        .WithMany()
+                        .HasForeignKey("PersonId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("FK_LND_UnclaimedBalances_Person");
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.MemberAccount", null)
+                        .WithMany()
+                        .HasForeignKey("SourceMemberAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("FK_LND_UnclaimedBalances_SourceAccount");
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.AccountPayoutOrder", null)
+                        .WithMany()
+                        .HasForeignKey("SourcePayoutOrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("FK_LND_UnclaimedBalances_SourcePayoutOrder");
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Lending.Deposits.Transactions.MemberAccountOperation", null)
+                        .WithMany()
+                        .HasForeignKey("TransferOperationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("FK_LND_UnclaimedBalances_TransferOperation");
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Security.User", null)
+                        .WithMany()
+                        .HasForeignKey("TransferredByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("FK_LND_UnclaimedBalances_TransferredBy");
+                });
+
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Lending.Deposits.Projections.MemberAccountControl", b =>
                 {
                     b.HasOne("IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.MemberAccount", "MemberAccount")
@@ -59160,6 +59555,12 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .WithMany()
                         .HasForeignKey("CollateralId")
                         .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Lending.Deposits.Processes.DeceasedHolderCase", null)
+                        .WithMany()
+                        .HasForeignKey("DeceasedHolderCaseId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("FK_LND_AccountHolds_DeceasedHolderCase");
 
                     b.HasOne("IngenIA365ERP.Domain.Entities.Lending.Deposits.Restrictions.Garnishment", null)
                         .WithMany()
@@ -59322,6 +59723,12 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .WithMany()
                         .HasForeignKey("CounterpartMemberAccountId")
                         .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Lending.Deposits.Processes.DeceasedHolderCase", null)
+                        .WithMany()
+                        .HasForeignKey("DeceasedHolderCaseId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("FK_LND_MemberAccountOperations_DeceasedHolderCase");
 
                     b.HasOne("IngenIA365ERP.Domain.Entities.Lending.Deposits.Restrictions.Garnishment", null)
                         .WithMany()
