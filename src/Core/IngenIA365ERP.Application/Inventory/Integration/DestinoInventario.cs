@@ -1,7 +1,9 @@
 using IngenIA365ERP.Application.Common.Integration;
 using IngenIA365ERP.Application.Common.Integration.Contracts.Lending;
+using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Domain.Enums.Integration;
 using MediatR;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
 namespace IngenIA365ERP.Application.Inventory.Integration;
@@ -19,14 +21,23 @@ namespace IngenIA365ERP.Application.Inventory.Integration;
 /// los dos contratos; hasta este consumidor el destino se saltaba sin intentos y las respuestas esperaban en <c>Pending</c>. (nuevo)
 /// </para>
 /// </summary>
-public sealed class DestinoInventario(ISender sender, ILogger<DestinoInventario> logger) : IDestinoDeMensajes
+public sealed class DestinoInventario(ISender sender, ILogger<DestinoInventario> logger, IApplicationDbContext? db = null) : IDestinoDeMensajes
 {
     public string Destino => IntegrationDestinations.Inventory;
 
-    /// <summary><c>ObligacionCreada</c> v1 y <c>ObligacionRechazada</c> v1 (mensajes.md §13.1).</summary>
+    /// <summary>
+    /// <c>ObligacionCreada</c> v1 y <c>ObligacionRechazada</c> v1 (mensajes.md §13.1) y, desde la decisión del dueño del 2026-10-18 (feature 014, D51),
+    /// los cargos gravados de captaciones <c>CargoDeCaptacionCausado</c> v1 y <c>CargoDeCaptacionReversado</c> v1, que se facturan
+    /// (<see cref="ConsumeDepositChargeMessageCommand"/>).
+    /// </summary>
     public bool Acepta(string type, int version) =>
         version == 1 && (string.Equals(type, ObligacionCreadaV1.Type, StringComparison.Ordinal)
-            || string.Equals(type, ObligacionRechazadaV1.Type, StringComparison.Ordinal));
+            || string.Equals(type, ObligacionRechazadaV1.Type, StringComparison.Ordinal)
+            || EsDeCargo(type));
+
+    private static bool EsDeCargo(string type) =>
+        string.Equals(type, IngenIA365ERP.Application.Common.Integration.Contracts.Lending.Deposits.CargoDeCaptacionCausadoV1.Type, StringComparison.Ordinal)
+        || string.Equals(type, IngenIA365ERP.Application.Common.Integration.Contracts.Lending.Deposits.CargoDeCaptacionReversadoV1.Type, StringComparison.Ordinal);
 
     public async Task<IReadOnlyList<ResultadoDeUnidad>> ConsumirAsync(TrabajoDeConsumo trabajo, CancellationToken ct)
     {
@@ -36,7 +47,13 @@ public sealed class DestinoInventario(ISender sender, ILogger<DestinoInventario>
         {
             try
             {
-                var r = await sender.Send(new ConsumeLendingObligationResponseCommand(unidad.MessagePublicIds), ct);
+                var deCargo = db is not null && await db.IntegrationMessages.AsNoTracking()
+                    .AnyAsync(m => unidad.MessagePublicIds.Contains(m.PublicId)
+                                   && (m.Type == IngenIA365ERP.Application.Common.Integration.Contracts.Lending.Deposits.CargoDeCaptacionCausadoV1.Type
+                                       || m.Type == IngenIA365ERP.Application.Common.Integration.Contracts.Lending.Deposits.CargoDeCaptacionReversadoV1.Type), ct);
+                var r = deCargo
+                    ? await sender.Send(new ConsumeDepositChargeMessageCommand(unidad.MessagePublicIds), ct)
+                    : await sender.Send(new ConsumeLendingObligationResponseCommand(unidad.MessagePublicIds), ct);
                 resultados.Add(new ResultadoDeUnidad(unidad, r.IsSuccess ? r.Value : new ResultadoDeConsumo.Rejected(r.Error.Code, r.Error.Message)));
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)

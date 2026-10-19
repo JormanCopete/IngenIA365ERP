@@ -428,6 +428,17 @@ La Cartera **no calcula IVA ni emite facturas**: avisa a Comercial, que factura 
 (D20 de la 013). Origen `AccountCharge`. Clave `Confirmation`. Tercero: el titular. Lo origina la persona o el proceso
 (cargos periódicos).
 
+**Consumo en Comercial** (decisión del dueño del 2026-10-18, D51; cierra T117): `DestinoInventario` los reparte a
+`ConsumeDepositChargeMessageCommand`, que usa el flujo de ventas existente. El causado deja **lista** la factura de venta
+del servicio —borrador `SalesInvoice` con el ítem `charge.commercialItemCode` (`INV_Products.Code`), cantidad 1, precio
+`amountBeforeTax` (el IVA lo calcula la precificación de ventas), el titular como adquirente y la referencia externa
+`CGO:{chargePublicId:N}` (la llave: repetir no crea otra)— con el tipo y la bodega de `Ventas.TipoDeFacturaDeCargosDeCartera`
+y `Ventas.BodegaDeCargosDeCartera` (vacíos, el primer tipo y la primera bodega activos). El reversado descarta el
+borrador o, si la factura ya se confirmó, deja lista la nota crédito total. Sin el ítem, el tipo o la bodega responde
+`Rejected` (`Inventory.ChargeInvoice.ItemNotFound` · `.DocumentTypeMissing` · `.WarehouseMissing`) y espera el
+reproceso. Confirmar y emitir electrónicamente es del flujo de ventas (I3/I4); `FacturaDeCargoRegistrada` la emitirá esa
+emisión.
+
 | Campo | Tipo | Oblig. | Qué es |
 |---|---|---|---|
 | `charge` | objeto | sí | `{ chargePublicId, kind (ChargeKind), code, name, event?, periodFrom?, periodTo? }` |

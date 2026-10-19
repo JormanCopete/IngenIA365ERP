@@ -52,6 +52,12 @@ public static class ParametrosDeInventario
     public const string VentasLoteVencido = "Ventas.LoteVencido";
     public const string VentasReservaDiasVencimiento = "Ventas.ReservaDiasVencimiento";
     public const string VentasRemisionDiasMaximosSinFacturar = "Ventas.RemisionDiasMaximosSinFacturar";
+
+    /// <summary>Feature 014 (decisión del dueño del 2026-10-18, D51): el código del tipo de factura de venta de los cargos gravados de captaciones.</summary>
+    public const string VentasTipoDeFacturaDeCargosDeCartera = "Ventas.TipoDeFacturaDeCargosDeCartera";
+
+    /// <summary>Feature 014 (D51): el código de la bodega con que se facturan los cargos gravados de captaciones.</summary>
+    public const string VentasBodegaDeCargosDeCartera = "Ventas.BodegaDeCargosDeCartera";
     public const string CajaBaseModo = "Caja.BaseModo";
     public const string CajaTratamientoFaltante = "Caja.TratamientoFaltante";
     public const string CajaArqueoCiego = "Caja.ArqueoCiego";
@@ -140,6 +146,19 @@ public static class ParametrosDeInventario
         Eleccion(Modulo, VentasLoteVencido, "Venta de un lote vencido.", ["Bloquear", "Advertir"], "Bloquear", I6),
         Entero(Modulo, VentasReservaDiasVencimiento, "Días de vigencia de una reserva.", "15", I6),
         Entero(Modulo, VentasRemisionDiasMaximosSinFacturar, "Días máximos de una remisión sin facturar.", "30", I6),
+        // Feature 014 (decisión del dueño del 2026-10-18, D51): con qué tipo y bodega factura Comercial los cargos gravados de las cuentas de captación.
+        new DefinicionDeParametro
+        {
+            Modulo = Modulo, Clave = VentasTipoDeFacturaDeCargosDeCartera,
+            Descripcion = "Código del tipo de factura de venta con que se facturan los cargos gravados de captaciones (vacío = el primero activo).",
+            Tipo = TipoDeParametro.Text, DefectoSeguro = string.Empty, AdmiteVacio = true, DisponibleDesde = I3,
+        },
+        new DefinicionDeParametro
+        {
+            Modulo = Modulo, Clave = VentasBodegaDeCargosDeCartera,
+            Descripcion = "Código de la bodega con que se facturan los cargos gravados de captaciones (vacío = la primera activa).",
+            Tipo = TipoDeParametro.Text, DefectoSeguro = string.Empty, AdmiteVacio = true, DisponibleDesde = I3,
+        },
 
         // ------------------------------------------------------------------------------------- caja --
         Eleccion(Modulo, CajaBaseModo, "Base de la caja: fondo fijo o base del día.", ["FondoFijo", "BaseDelDia"], "FondoFijo", I3, General, Caja),
