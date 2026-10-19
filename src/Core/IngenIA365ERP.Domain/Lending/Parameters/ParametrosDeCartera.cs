@@ -137,6 +137,21 @@ public static class ParametrosDeCartera
     /// </summary>
     public const string DocumentosCertificadoTributarioSaldoIncluye = "Documentos.CertificadoTributario.SaldoIncluye";
 
+    /// <summary>Feature 014, US13 (T196; documentos.md §2.3, P10): el certificado tributario de captaciones incluye el saldo y la revalorización de aportes.</summary>
+    public const string DocumentosCertificadoTributarioIncluyeAportes = "Documentos.CertificadoTributarioIncluyeAportes";
+
+    /// <summary>Feature 014, US13 (T196; documentos.md §2.4): la leyenda del certificado de retención (expedición sin firma autógrafa).</summary>
+    public const string DocumentosLeyendaCertificadoRetencion = "Documentos.LeyendaCertificadoRetencion";
+
+    /// <summary>
+    /// Feature 014, US13 (T196; research E175): el texto propio de la entidad que se suma a cada clase de documento de captaciones, en JSON
+    /// <c>{ clase: texto }</c> (criterio del dueño: textos parametrizables por entidad).
+    /// </summary>
+    public const string DocumentosTextosDeCaptaciones = "Documentos.TextosDeCaptaciones";
+
+    /// <summary>Feature 014, US13 (T196; research E175): la periodicidad de los extractos de cuenta del lote (Mensual, Trimestral, Semestral, Anual).</summary>
+    public const string DocumentosPeriodicidadDeExtractos = "Documentos.PeriodicidadDeExtractos";
+
     /// <summary>
     /// K5 (US16, T1003; adaptadores-y-archivos.md §7.4): el código de suscriptor (fuente) de la cooperativa en cada central de riesgo, como
     /// <c>CENTRAL=código</c> separados por punto y coma (<c>DATACREDITO=123456;TRANSUNION=ABC123</c>). Va en el archivo de la central
@@ -563,6 +578,30 @@ public static class ParametrosDeCartera
             "Conceptos que suma el saldo al 31 de diciembre del certificado tributario, separados por coma: Capital, InteresCorriente, InteresDeMora, "
             + "OtrosCargos (seguros, gastos de cobranza y otros cargos) y MenosAnticipo (resta el anticipo). El defecto los lleva todos.",
             SaldoDelCertificadoTributario.Defecto, K5, patron: SaldoDelCertificadoTributario.Patron),
+        // Feature 014, US13 (T196; documentos.md §2.3, §2.4; research E175): los documentos al titular de captaciones.
+        SiNo(Modulo, DocumentosCertificadoTributarioIncluyeAportes,
+            "El certificado tributario de captaciones incluye el saldo de aportes al 31 de diciembre y la revalorización abonada en el año.", false, K8, General) with
+        {
+            PendienteDeValidar = "P10: la contadora decide si los aportes van en el certificado tributario de captaciones.",
+        },
+        Texto(DocumentosLeyendaCertificadoRetencion,
+            "Leyenda del certificado de retención en la fuente sobre rendimientos financieros.",
+            "Certificado expedido por computador, sin firma autógrafa, según el artículo 1.6.1.12.12 del Decreto 1625 de 2016 (DUR tributario). "
+            + "Se expide conforme al artículo 381 del Estatuto Tributario.", K8) with
+        {
+            PendienteDeValidar = "Texto estándar con la norma citada (research §21): la contadora lo ajusta.",
+        },
+        Texto(DocumentosTextosDeCaptaciones,
+            "Texto propio de la cooperativa que se suma, como leyenda, a cada clase de documento de captaciones y aportes, en JSON { clase: texto } con "
+            + "las clases AccountStatement, AccountBalanceCertificate, DepositTaxCertificate, WithholdingCertificate, TermDepositTitle, "
+            + "ContributionCertificate, ContributionClearance, MembershipWithdrawalSettlement y GarnishmentResponse.",
+            "{}", K8, patron: @"(?s)^\s*\{.*\}\s*$"),
+        Texto(DocumentosPeriodicidadDeExtractos,
+            "Periodicidad de los extractos de cuenta que emite el lote: Mensual, Trimestral, Semestral o Anual. Informativa: el lote se corre a pedido.",
+            "Mensual", K8, patron: "^(Mensual|Trimestral|Semestral|Anual)$") with
+        {
+            PendienteDeValidar = "Defecto mensual: cada cooperativa la fija según su reglamento de ahorro.",
+        },
         Texto(CentralesCodigosDeSuscriptor,
             "Código de suscriptor de la cooperativa en cada central de riesgo, como CENTRAL=código separados por punto y coma "
             + "(DATACREDITO=123456;TRANSUNION=ABC123). Sin el de una central, su archivo no se genera.",

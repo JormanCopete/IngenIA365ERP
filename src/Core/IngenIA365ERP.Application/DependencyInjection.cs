@@ -576,6 +576,12 @@ public static class DependencyInjection
         services.AddScoped<Lending.Deposits.Withdrawals.CruceDeRetiro>();
         services.AddScoped<Lending.Deposits.Operations.OrdenesDeGiroDeCuentas>();
         services.AddScoped<Lending.Deposits.Documents.DocumentosDeRetiro>();
+        // Feature 014, US13 (T196): los documentos al titular de captaciones, la emisión en la unidad de trabajo de quien la pide, los títulos del CDAT
+        // y la respuesta al juzgado como documento.
+        services.AddScoped<Lending.Deposits.Documents.DocumentosDeCaptaciones>();
+        services.AddScoped<Lending.Documents.EmisionDeDocumentosDeCartera>();
+        services.AddScoped<Lending.Deposits.Documents.TitulosDeCdat>();
+        services.AddScoped<Lending.Deposits.Documents.RespuestasAlJuzgado>();
         services.AddScoped<Lending.Sessions.IAsuntoDeActa, Lending.Deposits.Withdrawals.AsuntoDeRetiroDeAsociado>();
         services.TryAddScoped<Lending.Payments.IArrastreDeReversoDePago, Lending.Deposits.Withdrawals.ArrastreDelCruceAlRetiro>();
         // Feature 014, US6 (T170, T171): el CDAT —la apertura común (también de OpenMemberAccountCommand), la lectura y la cotización, el fondeo (por

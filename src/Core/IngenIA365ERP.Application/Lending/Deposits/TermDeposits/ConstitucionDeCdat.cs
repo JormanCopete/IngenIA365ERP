@@ -65,7 +65,8 @@ public sealed class ConstitucionDeCdat(
     LectorDeCdat lector,
     ICerrojoDeCartera cerrojo,
     IActorActual actorActual,
-    IDateTimeService reloj)
+    IDateTimeService reloj,
+    Documents.TitulosDeCdat? titulos = null)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
@@ -246,6 +247,8 @@ public sealed class ConstitucionDeCdat(
             cdat.PendingTermsJson = null;
         }
         await db.SaveChangesAsync(ct);
+        // US13 (T196; documentos.md §2.5): el título «no negociable» de la versión 1 nace en la misma transacción.
+        if (titulos is not null) await titulos.EmitirAsync(seguida, terminos, operacion, actor.UserId, ct);
 
         var comprobante = new ComprobanteDeCuentaDto(operacion.PublicId, operacion.Number, cdat.PublicId, cdat.Number, c?.IdempotencyKey ?? string.Empty,
             nameof(MemberAccountOperationKind.TermDepositConstitution), operacion.ValueDate, operacion.AccountingDate, operacion.RegisteredAt, monto,

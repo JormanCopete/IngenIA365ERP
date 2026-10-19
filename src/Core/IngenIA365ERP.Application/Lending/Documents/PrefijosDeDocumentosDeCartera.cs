@@ -74,6 +74,8 @@ public static class PrefijosDeDocumentosDeCartera
         IssuedDocumentKind.ContributionCertificate => "CNA-",
         IssuedDocumentKind.ContributionClearance => "PSA-",
         IssuedDocumentKind.MembershipWithdrawalSettlement => "LRA-",
+        // US13 (T196; research E176): la respuesta al juzgado, que la 014 emite como documento con su código.
+        IssuedDocumentKind.GarnishmentResponse => "RJZ-",
         _ => throw new ArgumentOutOfRangeException(nameof(clase), clase, "Clase de documento desconocida."),
     };
 

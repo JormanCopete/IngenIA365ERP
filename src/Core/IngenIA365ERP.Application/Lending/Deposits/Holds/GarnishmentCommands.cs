@@ -137,7 +137,8 @@ public sealed class RegisterGarnishmentCommandHandler(
     RegistroDeIntervenciones intervenciones,
     ICalendarioHabil calendario,
     IActorActual actorActual,
-    IDateTimeService reloj) : IRequestHandler<RegisterGarnishmentCommand, Result<GarnishmentDto>>
+    IDateTimeService reloj,
+    Documents.RespuestasAlJuzgado? respuestas = null) : IRequestHandler<RegisterGarnishmentCommand, Result<GarnishmentDto>>
 {
     public async Task<Result<GarnishmentDto>> Handle(RegisterGarnishmentCommand request, CancellationToken ct)
     {
@@ -229,10 +230,19 @@ public sealed class RegisterGarnishmentCommandHandler(
                 var texto = VistaDeEmbargos.Llenar(cfg.Plantillas.GetValueOrDefault(GarnishmentResponseKind.ContributionsNotGarnishable)
                         ?? VistaDeEmbargos.Estandar[GarnishmentResponseKind.ContributionsNotGarnishable],
                     await VistaDeEmbargos.VariablesAsync(db, g, 0m, 0m, hoy, [], ct));
+                // US13 (T196; research E176): la respuesta nace con su documento emitido (código de verificación), en la misma transacción.
+                int? documento = null;
+                if (respuestas is not null)
+                {
+                    var (id, aviso) = await respuestas.EmitirAsync(g, GarnishmentResponseKind.ContributionsNotGarnishable, hoy, Recortar(texto), null, null,
+                        radicada.Value.UsuarioId, ct);
+                    documento = id;
+                    if (aviso is not null) avisos.Add(aviso);
+                }
                 db.GarnishmentResponses.Add(new GarnishmentResponse
                 {
                     GarnishmentId = g.Id, Kind = GarnishmentResponseKind.ContributionsNotGarnishable, SentOn = hoy, Text = Recortar(texto),
-                    RespondedAt = ahora, RespondedByUserId = radicada.Value.UsuarioId,
+                    RespondedAt = ahora, RespondedByUserId = radicada.Value.UsuarioId, IssuedDocumentId = documento,
                 });
                 avisos.Add($"{ErroresDeEmbargos.CodigoAportesInembargables}: los aportes sociales no se embargan (Ley 79 de 1988, art. 49); "
                            + "quedó registrada la respuesta al juzgado.");
@@ -375,7 +385,7 @@ public sealed class RegisterGarnishmentResponseCommandValidator : AbstractValida
 }
 
 public sealed class RegisterGarnishmentResponseCommandHandler(IApplicationDbContext db, IAlcanceDeCartera alcance, LendingAuditEmitter auditoria,
-    RetencionDeEmbargos retencion, IActorActual actorActual, IDateTimeService reloj)
+    RetencionDeEmbargos retencion, IActorActual actorActual, IDateTimeService reloj, Documents.RespuestasAlJuzgado? respuestas = null)
     : IRequestHandler<RegisterGarnishmentResponseCommand, Result<GarnishmentResponseDto>>
 {
     public async Task<Result<GarnishmentResponseDto>> Handle(RegisterGarnishmentResponseCommand request, CancellationToken ct)
@@ -397,16 +407,31 @@ public sealed class RegisterGarnishmentResponseCommandHandler(IApplicationDbCont
                 await VistaDeEmbargos.VariablesAsync(db, g, dto.RetainedTotal, consignado, request.SentOn, dto.Retained, ct));
         }
         var actor = await actorActual.ObtenerAsync(ct);
-        var respuesta = new GarnishmentResponse
+        var textoFinal = RegisterGarnishmentCommandHandler.Recortar(texto.Trim());
+        // US13 (T196; research E176): la respuesta y su documento emitido (número, código de verificación y PDF) en una transacción.
+        return await IngenIA365ERP.Application.Common.Persistence.TransaccionExplicita.EjecutarAsync(db, async () =>
         {
-            GarnishmentId = g.Id, Kind = request.Kind, AttachmentPublicId = request.AttachmentPublicId, SentOn = request.SentOn,
-            RetainedAmount = dto.RetainedTotal, ConsignedAmount = consignado, Text = RegisterGarnishmentCommandHandler.Recortar(texto.Trim()),
-            RespondedAt = reloj.UtcNow, RespondedByUserId = actor.UserId ?? 0,
-        };
-        db.GarnishmentResponses.Add(respuesta);
-        await db.SaveChangesAsync(ct);
-        return Result.Success(new GarnishmentResponseDto(respuesta.PublicId, respuesta.Kind, respuesta.SentOn, respuesta.RetainedAmount, respuesta.ConsignedAmount,
-            respuesta.Text, respuesta.AttachmentPublicId, respuesta.RespondedAt));
+            int? documento = null;
+            string? aviso = null;
+            if (respuestas is not null)
+                (documento, aviso) = await respuestas.EmitirAsync(g, request.Kind, request.SentOn, textoFinal, dto.RetainedTotal, consignado, actor.UserId, ct);
+            var respuesta = new GarnishmentResponse
+            {
+                GarnishmentId = g.Id, Kind = request.Kind, AttachmentPublicId = request.AttachmentPublicId, SentOn = request.SentOn,
+                RetainedAmount = dto.RetainedTotal, ConsignedAmount = consignado, Text = textoFinal,
+                RespondedAt = reloj.UtcNow, RespondedByUserId = actor.UserId ?? 0, IssuedDocumentId = documento,
+            };
+            db.GarnishmentResponses.Add(respuesta);
+            await db.SaveChangesAsync(ct);
+            var emitido = documento is { } id
+                ? await db.IssuedLendingDocuments.AsNoTracking().Where(d => d.Id == id).Select(d => new { d.PublicId, d.Number }).FirstOrDefaultAsync(ct)
+                : null;
+            return Result.Success(new GarnishmentResponseDto(respuesta.PublicId, respuesta.Kind, respuesta.SentOn, respuesta.RetainedAmount,
+                respuesta.ConsignedAmount, respuesta.Text, respuesta.AttachmentPublicId, respuesta.RespondedAt)
+            {
+                IssuedDocumentPublicId = emitido?.PublicId, IssuedDocumentNumber = emitido?.Number, Warning = aviso,
+            });
+        }, ct);
     }
 }
 

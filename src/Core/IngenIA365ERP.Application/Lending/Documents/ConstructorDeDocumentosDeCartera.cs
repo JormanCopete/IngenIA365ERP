@@ -35,10 +35,28 @@ public sealed record PedidoDeDocumentoDeCartera(IssuedDocumentKind Clase, Person
 
     /// <summary>Feature 014 (T103): el retiro del asociado cuya liquidación se emite.</summary>
     public Guid? RetiroPublicId { get; init; }
+
+    /// <summary>Feature 014, US13 (T196): la cuenta del documento, ya leída en el alcance de quien emite.</summary>
+    public Domain.Entities.Lending.Deposits.Accounts.MemberAccount? Cuenta { get; init; }
+
+    /// <summary>Feature 014, US13 (T196; documentos.md §2.2): el certificado de saldo incluye los bloqueos y embargos vigentes.</summary>
+    public bool IncluyeRestricciones { get; init; }
+
+    /// <summary>Feature 014, US13 (T196; documentos.md §2.5): la versión de condiciones que titula el título del CDAT.</summary>
+    public int? VersionDeCondicionesId { get; init; }
+
+    /// <summary>Feature 014, US13 (T196; research E176): la respuesta al juzgado que se emite como documento.</summary>
+    public Deposits.Documents.RespuestaParaDocumento? Respuesta { get; init; }
 }
 
 /// <summary>Feature 014 (T087): una cuenta que cubre el documento (<c>LND_IssuedDocumentAccounts</c>). (nuevo)</summary>
-public sealed record CuentaDeDocumentoDeCartera(int MemberAccountId, long? LastOperationId, long? LastTransactionId, decimal? BalanceAtCutoff);
+public sealed record CuentaDeDocumentoDeCartera(int MemberAccountId, long? LastOperationId, long? LastTransactionId, decimal? BalanceAtCutoff)
+{
+    /// <summary>Feature 014, US13 (T194): el título nombra su versión de condiciones y el título anterior que reemplaza.</summary>
+    public int? TermsVersionId { get; init; }
+
+    public int? PreviousIssuedDocumentId { get; init; }
+}
 
 /// <summary>Un crédito que cubre el documento (<c>LND_IssuedDocumentLoans</c>). (nuevo)</summary>
 public sealed record LineaDeDocumentoDeCartera(int LoanId, long? LastOperationId, long? LastTransactionId, decimal? BalanceAtCutoff, long? PayoffOperationId);
@@ -64,6 +82,14 @@ public sealed record DocumentoArmado(
 {
     /// <summary>Feature 014 (T087): las cuentas de captación o de aportes que cubre.</summary>
     public IReadOnlyList<CuentaDeDocumentoDeCartera> Cuentas { get; init; } = [];
+
+    /// <summary>
+    /// Feature 014, US13 (T196; documentos.md §2.5, R11): el título del CDAT lleva el sufijo de su versión (<c>TIT-000123-2</c>); la primera versión toma
+    /// un consecutivo nuevo y las siguientes conservan <see cref="BaseDelNumero"/>, el del título anterior sin su sufijo.
+    /// </summary>
+    public int? SufijoDeVersion { get; init; }
+
+    public string? BaseDelNumero { get; init; }
 }
 
 /// <summary>
@@ -97,7 +123,8 @@ public sealed class ConstructorDeDocumentosDeCartera(
     IDateTimeService reloj,
     INormativaVigente? normativa = null,
     Deposits.Documents.DocumentosDeAportes? aportes = null,
-    Deposits.Documents.DocumentosDeRetiro? retiros = null)
+    Deposits.Documents.DocumentosDeRetiro? retiros = null,
+    Deposits.Documents.DocumentosDeCaptaciones? captaciones = null)
 {
     private static readonly CultureInfo Co = CultureInfo.GetCultureInfo("es-CO");
 
@@ -133,6 +160,10 @@ public sealed class ConstructorDeDocumentosDeCartera(
             IssuedDocumentKind.MembershipWithdrawalSettlement => retiros is null
                 ? throw new InvalidOperationException("La liquidación del retiro necesita DocumentosDeRetiro.")
                 : retiros.ArmarAsync(p, ct),
+            IssuedDocumentKind.AccountStatement or IssuedDocumentKind.AccountBalanceCertificate or IssuedDocumentKind.DepositTaxCertificate
+                or IssuedDocumentKind.WithholdingCertificate or IssuedDocumentKind.TermDepositTitle or IssuedDocumentKind.GarnishmentResponse => captaciones is null
+                ? throw new InvalidOperationException("Los documentos de captaciones necesitan DocumentosDeCaptaciones.")
+                : captaciones.ArmarAsync(p, ct),
             _ => throw new ArgumentOutOfRangeException(nameof(p), p.Clase, "Clase de documento desconocida."),
         };
     }

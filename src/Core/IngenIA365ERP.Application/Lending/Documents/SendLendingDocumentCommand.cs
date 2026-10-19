@@ -140,6 +140,10 @@ public sealed class SendLendingDocumentCommandHandler(
         if (leido.IsFailure) return Falla(leido.Error);
         var documento = leido.Value;
         if (await DocumentosEmitidos.AnulacionAsync(db, documento.Id, ct) is not null) return Falla(DocumentErrors.AnuladoNoSeReemite(documento.Number));
+        // Feature 014, US13 (T196; documentos.md §2.5): un título reemplazado o liquidado se descarga para consulta, pero no se entrega.
+        if (documento.Kind == IssuedDocumentKind.TermDepositTitle
+            && (await DocumentosEmitidos.EventosDeEstadoAsync(db, documento.Id, ct)) is { Reemplazado: true } or { Liquidado: true })
+            return Falla(DocumentErrors.TituloNoVigente(documento.Number));
 
         var creditos = await db.IssuedDocumentLoans.AsNoTracking().Where(x => x.IssuedDocumentId == documento.Id).Select(x => x.LoanId).ToListAsync(ct);
         int? loanId = documento.Kind == IssuedDocumentKind.GeneralClearance || creditos.Count != 1 ? null : creditos[0];

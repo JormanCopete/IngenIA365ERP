@@ -386,7 +386,8 @@ public sealed class RenewTermDepositCommandHandler(
     IAlcanceDeCartera alcance,
     LendingAuditEmitter auditoria,
     IActorActual actorActual,
-    IDateTimeService reloj) : IRequestHandler<RenewTermDepositCommand, Result<TermDepositDto>>
+    IDateTimeService reloj,
+    Documents.TitulosDeCdat? titulos = null) : IRequestHandler<RenewTermDepositCommand, Result<TermDepositDto>>
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
@@ -658,6 +659,8 @@ public sealed class RenewTermDepositCommandHandler(
             RegistroDeCuentas.MarcarActividadDelTitular(control, hoy);
             cdat.MaturityInstructionJson = null;
             await db.SaveChangesAsync(ct);
+            // US13 (T196; documentos.md §2.5): el título de la renovación reemplaza al anterior.
+            if (titulos is not null) await titulos.EmitirAsync(cdat, terminos, operacion, actor.UserId, ct);
             _ = hechoOtra;
             return Result.Success(await RespuestasDeCdat.DtoAsync(db, lector, cdat, hoy, ct));
         }, ct);

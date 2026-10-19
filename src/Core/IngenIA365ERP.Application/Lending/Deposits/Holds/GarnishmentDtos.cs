@@ -15,7 +15,16 @@ public sealed record GarnishmentRetentionDto(Guid AccountPublicId, string Number
 
 /// <summary>Una respuesta al juzgado (data-model §5.2.1). (nuevo)</summary>
 public sealed record GarnishmentResponseDto(Guid PublicId, GarnishmentResponseKind Kind, DateOnly SentOn, decimal? RetainedAmount, decimal? ConsignedAmount,
-    string? Text, Guid? AttachmentPublicId, DateTime RespondedAt);
+    string? Text, Guid? AttachmentPublicId, DateTime RespondedAt)
+{
+    /// <summary>US13 (T196; research E176): el documento emitido de la respuesta (número y código de verificación); nulo si no se pudo emitir.</summary>
+    public Guid? IssuedDocumentPublicId { get; init; }
+
+    public string? IssuedDocumentNumber { get; init; }
+
+    /// <summary>US13 (T196): el aviso si la respuesta quedó sin su documento.</summary>
+    public string? Warning { get; init; }
+}
 
 /// <summary>
 /// Un embargo (api.md §8, con lo de research E161): la persona, la autoridad, el juzgado como persona, el oficio, el valor, si es por alimentos, el estado,
@@ -105,6 +114,9 @@ public static partial class VistaDeEmbargos
             : vivos.GroupBy(h => h.MemberAccountId).Select((grupo, i) => new GarnishmentRetentionDto(cuentas[grupo.Key].PublicId, cuentas[grupo.Key].Number,
                 cuentas[grupo.Key].DepositClass?.ToString(), i + 1, 0m, 0m, 0m, grupo.Sum(h => h.Amount ?? 0m))).ToList();
         var respuestas = await db.GarnishmentResponses.AsNoTracking().Where(r => r.GarnishmentId == g.Id && !r.IsDeleted).OrderBy(r => r.Id).ToListAsync(ct);
+        var documentos = respuestas.Where(r => r.IssuedDocumentId is not null).Select(r => r.IssuedDocumentId!.Value).ToList();
+        var emitidos = await db.IssuedLendingDocuments.AsNoTracking().Where(d => documentos.Contains(d.Id))
+            .ToDictionaryAsync(d => d.Id, d => new { d.PublicId, d.Number }, ct);
         var vencida = g.Status == GarnishmentStatus.Active && g.ResponseDueOn is { } plazo && plazo < hoy && respuestas.Count == 0;
         IReadOnlyList<string> conAviso = vencida
             ? [.. avisos, $"{ErroresDeEmbargos.CodigoRespuestaVencida}: el plazo informativo de respuesta venció el {g.ResponseDueOn:yyyy-MM-dd} y no hay respuesta registrada."]
@@ -113,7 +125,11 @@ public static partial class VistaDeEmbargos
             g.OrderDate, g.ReceivedOn, g.ClaimantName, g.Amount, g.IsChildSupport, g.AccountsScope, g.IncludesContributions, g.Status,
             vivos.Sum(h => h.Amount ?? 0m), consignado, calculo?.LimiteAplicado, g.ResponseDueOn, vencida, retenidas,
             respuestas.Select(r => new GarnishmentResponseDto(r.PublicId, r.Kind, r.SentOn, r.RetainedAmount, r.ConsignedAmount, r.Text, r.AttachmentPublicId,
-                r.RespondedAt)).ToList(),
+                r.RespondedAt)
+            {
+                IssuedDocumentPublicId = r.IssuedDocumentId is { } d && emitidos.TryGetValue(d, out var e1) ? e1.PublicId : null,
+                IssuedDocumentNumber = r.IssuedDocumentId is { } d2 && emitidos.TryGetValue(d2, out var e2) ? e2.Number : null,
+            }).ToList(),
             calculo?.Explicacion ?? [], conAviso, g.ReleasedAt, g.ReleaseOrderNumber);
     }
 

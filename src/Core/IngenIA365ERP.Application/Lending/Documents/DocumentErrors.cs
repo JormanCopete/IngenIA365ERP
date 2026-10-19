@@ -31,6 +31,12 @@ public static class DocumentErrors
     /// <summary>Feature 014 (T103; documentos.md §3): la clase nace sola (la liquidación del retiro); por la ruta sólo se descarga.</summary>
     public const string CodigoEmitidoAutomaticamente = "Lending.Document.IssuedAutomatically";
 
+    /// <summary>Feature 014, US13 (T196; documentos.md §2.2, §6): el certificado de saldo de una cuenta a una fecha futura.</summary>
+    public const string CodigoFechaFutura = "Lending.Document.FutureDateNotAllowed";
+
+    /// <summary>Feature 014, US13 (T196; research E170): la persona no es titular ni cotitular de la cuenta del documento.</summary>
+    public const string CodigoNoEsTitular = "Lending.Document.NotAccountHolder";
+
     /// <summary>El período más largo de un extracto (T0971): cinco años.</summary>
     public const int AñosMaximosDelExtracto = 5;
 
@@ -64,11 +70,27 @@ public static class DocumentErrors
     public static Error AnuladoNoSeReemite(string numero) => new ErrorConDatos(CodigoAnuladoNoSeReemite,
         $"El documento {numero} fue anulado: emita uno nuevo.", new { number = numero });
 
+    /// <summary>Feature 014, US13 (T196; documentos.md §2.5): un título reemplazado o liquidado no se entrega (mismo código que el anulado).</summary>
+    public static Error TituloNoVigente(string numero) => new ErrorConDatos(CodigoAnuladoNoSeReemite,
+        $"El título {numero} ya fue reemplazado por la prórroga o la renovación, o el CDAT se liquidó: se descarga para consulta, pero no se entrega.",
+        new { number = numero });
+
     public static Error ClaseNoDisponible(IssuedDocumentKind clase) => new ErrorConDatos(CodigoClaseNoDisponible,
-        "Este documento estará disponible en una entrega posterior de Cartera.", new { kind = clase.ToString(), availableFrom = EntregaDeK5 });
+        "Este documento estará disponible en una entrega posterior de Cartera.", new
+        {
+            kind = clase.ToString(),
+            // Feature 014 (T196): las clases de captaciones dicen su propia entrega.
+            availableFrom = PrefijosDeDocumentosDeCartera.DeCaptaciones.TryGetValue(clase, out var entrega) ? entrega.ToString() : EntregaDeK5,
+        });
 
     public static Error SinFirmante() => new(CodigoSinFirmante,
         "Falta configurar el firmante de los documentos (nombre y cargo) en los parámetros de Cartera.");
+
+    public static Error FechaFutura(DateOnly fecha) => new ErrorConDatos(CodigoFechaFutura,
+        $"El certificado de saldo es a hoy o a una fecha que ya pasó: el {fecha:dd/MM/yyyy} todavía no llega.", new { cutoffDate = fecha });
+
+    public static Error NoEsTitular(string persona, string cuenta) => new ErrorConDatos(CodigoNoEsTitular,
+        $"{persona} no es titular ni cotitular de la cuenta {cuenta}: el documento se emite a nombre de uno de sus titulares.", new { accountNumber = cuenta });
 
     public static Error Inexistente() => new(CodigoInexistente, "El documento no existe.");
 
@@ -109,6 +131,15 @@ public static class DocumentErrors
         IssuedDocumentKind.BalanceCertificate => "certificado de saldo",
         IssuedDocumentKind.Statement => "extracto",
         IssuedDocumentKind.TaxCertificate => "certificado tributario",
+        IssuedDocumentKind.AccountStatement => "extracto de cuenta",
+        IssuedDocumentKind.AccountBalanceCertificate => "certificado de saldo de cuenta",
+        IssuedDocumentKind.DepositTaxCertificate => "certificado tributario de captaciones",
+        IssuedDocumentKind.WithholdingCertificate => "certificado de retención",
+        IssuedDocumentKind.TermDepositTitle => "título del CDAT",
+        IssuedDocumentKind.ContributionCertificate => "constancia de aportes",
+        IssuedDocumentKind.ContributionClearance => "paz y salvo de aportes",
+        IssuedDocumentKind.MembershipWithdrawalSettlement => "liquidación del retiro",
+        IssuedDocumentKind.GarnishmentResponse => "respuesta al juzgado",
         _ => clase.ToString(),
     };
 

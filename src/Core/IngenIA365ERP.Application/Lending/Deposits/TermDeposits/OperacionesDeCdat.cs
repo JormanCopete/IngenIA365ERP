@@ -220,7 +220,8 @@ public sealed class SalidaDeCdat(
     ReglasDeRetencion retencion,
     LectorDeCdat lector,
     IActorActual actorActual,
-    IDateTimeService reloj)
+    IDateTimeService reloj,
+    Documents.TitulosDeCdat? titulos = null)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
@@ -417,6 +418,8 @@ public sealed class SalidaDeCdat(
         if (orden is not null) seguida.PedirCierre(ahora);
         else seguida.Cerrar(fecha, actor.UserId, texto.Length > 0 ? texto : "Cancelación del CDAT", ahora);
         seguida.MaturityInstructionJson = null;
+        // US13 (T196; documentos.md §2.5): el título vigente queda liquidado.
+        if (titulos is not null) await titulos.LiquidarAsync(cdat, operacion, actor.UserId, operacion.RegisteredAt, ct);
         await db.SaveChangesAsync(ct);
         return Result.Success(new SalidaDeCdatAplicada(operacion, orden, c, entregado, r.Valor, gmf));
     }
@@ -438,7 +441,8 @@ public sealed class ProrrogaDeCdat(
     ReglasDeRetencion retencion,
     LectorDeCdat lector,
     IActorActual actorActual,
-    IDateTimeService reloj)
+    IDateTimeService reloj,
+    Documents.TitulosDeCdat? titulos = null)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
@@ -577,6 +581,8 @@ public sealed class ProrrogaDeCdat(
         var seguida = db.MemberAccounts.Local.FirstOrDefault(a => a.Id == cdat.Id) ?? cdat;
         seguida.MaturityInstructionJson = null;
         await db.SaveChangesAsync(ct);
+        // US13 (T196; documentos.md §2.5): el título de la versión nueva reemplaza al anterior (el del proceso, sin persona).
+        if (titulos is not null) await titulos.EmitirAsync(seguida, terminos, operacion, actor.UserId, ct);
         return Result.Success(terminos);
     }
 

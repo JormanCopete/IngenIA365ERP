@@ -274,6 +274,12 @@ public static class ModelosDeDocumentoDeCartera
         IssuedDocumentKind.ContributionCertificate => "Constancia de aportes",
         IssuedDocumentKind.ContributionClearance => "Paz y salvo de aportes",
         IssuedDocumentKind.MembershipWithdrawalSettlement => "Liquidación del retiro del asociado",
+        IssuedDocumentKind.AccountStatement => "Extracto de cuenta",
+        IssuedDocumentKind.AccountBalanceCertificate => "Certificado de saldo de cuenta",
+        IssuedDocumentKind.DepositTaxCertificate => "Certificado tributario de captaciones",
+        IssuedDocumentKind.WithholdingCertificate => "Certificado de retención en la fuente",
+        IssuedDocumentKind.TermDepositTitle => "CDAT — No negociable",
+        IssuedDocumentKind.GarnishmentResponse => "Respuesta al juzgado",
         _ => clase.ToString(),
     };
 

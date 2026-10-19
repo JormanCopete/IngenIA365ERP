@@ -56,13 +56,28 @@ public static class RespuestasDeCdat
             v.InterestTiming ?? InterestTiming.Arrears, v.InterestDestination, v.MaturityInstruction, gracia, v.IssueTermBand, v.RolloverCount, v.RulesVersion);
     }
 
-    /// <summary>Los títulos del CDAT: los documentos <c>TermDepositTitle</c> que lo nombran (los emite US13; vacío hasta entonces).</summary>
-    public static async Task<IReadOnlyList<TermDepositTitleDto>> TitulosAsync(IApplicationDbContext db, int cuentaId, CancellationToken ct) =>
-        await (from a in db.IssuedDocumentAccounts.AsNoTracking()
-               join d in db.IssuedLendingDocuments.AsNoTracking() on a.IssuedDocumentId equals d.Id
-               where a.MemberAccountId == cuentaId && d.Kind == IssuedDocumentKind.TermDepositTitle && !d.IsDeleted
-               orderby d.Id
-               select new TermDepositTitleDto(d.PublicId, d.Number, null, "Issued", d.InformationCutoff)).ToListAsync(ct);
+    /// <summary>
+    /// Los títulos del CDAT (US13, T196; documentos.md §2.5): los documentos <c>TermDepositTitle</c> que lo nombran, con la versión de condiciones que titulan
+    /// y su estado calculado (vigente, reemplazado, liquidado o anulado).
+    /// </summary>
+    public static async Task<IReadOnlyList<TermDepositTitleDto>> TitulosAsync(IApplicationDbContext db, int cuentaId, CancellationToken ct)
+    {
+        var titulos = await (from a in db.IssuedDocumentAccounts.AsNoTracking()
+                             join d in db.IssuedLendingDocuments.AsNoTracking() on a.IssuedDocumentId equals d.Id
+                             join v in db.MemberAccountTermsVersions.AsNoTracking() on a.TermsVersionId equals (int?)v.Id into vs
+                             from v in vs.DefaultIfEmpty()
+                             where a.MemberAccountId == cuentaId && d.Kind == IssuedDocumentKind.TermDepositTitle && !d.IsDeleted
+                             orderby d.Id
+                             select new { d.Id, d.PublicId, d.Number, Version = v == null ? (int?)null : v.VersionNumber, d.IssuedAt, d.FinalityUntil })
+            .ToListAsync(ct);
+        if (titulos.Count == 0) return [];
+        var ids = titulos.Select(t => t.Id).ToList();
+        var eventos = (await db.IssuedDocumentEvents.AsNoTracking().Where(e => ids.Contains(e.IssuedDocumentId)).Select(e => new { e.IssuedDocumentId, e.Kind })
+            .ToListAsync(ct)).ToLookup(e => e.IssuedDocumentId, e => e.Kind);
+        return titulos.Select(t => new TermDepositTitleDto(t.PublicId, t.Number, t.Version,
+            Domain.Lending.Documents.EstadoDeDocumentoEmitido.Calcular(Domain.Lending.Documents.EventosDeEstado.De(eventos[t.Id]), t.FinalityUntil,
+                DateOnly.MaxValue).ToString(), t.IssuedAt)).ToList();
+    }
 
     /// <summary>El CDAT por su PublicId dentro del alcance (404 <c>Lending.TermDeposit.NotFound</c> si no existe, está fuera o no es un CDAT).</summary>
     public static async Task<Result<MemberAccount>> CdatEnAlcanceAsync(IApplicationDbContext db, IAlcanceDeCartera alcance, LendingAuditEmitter auditoria,

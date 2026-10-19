@@ -19,6 +19,9 @@ public sealed record IssuedDocumentHolderDto(Guid PersonPublicId, string FullNam
 /// <summary>Un crédito que cubre el documento y el saldo que mostró. (nuevo)</summary>
 public sealed record IssuedDocumentLoanDto(Guid LoanPublicId, string Number, decimal? Balance);
 
+/// <summary>Feature 014, US13 (T196): una cuenta de captación o de aportes que cubre el documento y el saldo que mostró. (nuevo)</summary>
+public sealed record IssuedDocumentAccountDto(Guid AccountPublicId, string Number, decimal? Balance);
+
 /// <summary><c>IssuedDocumentDto</c> (api.md §15): el documento con su estado calculado. (nuevo)</summary>
 public sealed record IssuedDocumentDto(
     Guid PublicId,
@@ -37,7 +40,8 @@ public sealed record IssuedDocumentDto(
     bool? CoversCoDebts,
     string VerificationCode,
     string DeliveryMode,
-    bool IsTestEnvironment);
+    bool IsTestEnvironment,
+    IReadOnlyList<IssuedDocumentAccountDto>? Accounts = null);
 
 /// <summary>Un evento del documento (emisión, entrega, anulación) con quién, el motivo y la operación causa. (nuevo)</summary>
 public sealed record IssuedDocumentEventDto(string Kind, DateTime At, string? By, string? Reason, string? CauseOperation, Guid? DebtorMessagePublicId);
@@ -70,8 +74,11 @@ public static class DocumentosEmitidos
     public static IQueryable<IssuedLendingDocument> Visibles(IApplicationDbContext db, AlcanceDeCartera alcance)
     {
         var creditos = db.Loans.AsNoTracking().PorOficinaYLinea(alcance, l => l.BranchId, l => l.CreditLineId).Select(l => l.Id);
+        // Feature 014, US13 (T196): y si ninguna de las cuentas de captación o de aportes que cubre está fuera del alcance.
+        var cuentas = db.MemberAccounts.AsNoTracking().PorOficinaYLinea(alcance, a => a.BranchId, a => a.CreditLineId).Select(a => a.Id);
         return db.IssuedLendingDocuments.AsNoTracking()
-            .Where(d => !d.IsDeleted && !db.IssuedDocumentLoans.Any(x => x.IssuedDocumentId == d.Id && !creditos.Contains(x.LoanId)));
+            .Where(d => !d.IsDeleted && !db.IssuedDocumentLoans.Any(x => x.IssuedDocumentId == d.Id && !creditos.Contains(x.LoanId))
+                        && !db.IssuedDocumentAccounts.Any(x => x.IssuedDocumentId == d.Id && !cuentas.Contains(x.MemberAccountId)));
     }
 
     /// <summary>Un documento por su <c>PublicId</c>, en el alcance; si no, <c>Lending.Document.NotFound</c>.</summary>
@@ -92,9 +99,16 @@ public static class DocumentosEmitidos
         ?? await db.IssuedDocumentEvents.AsNoTracking()
             .FirstOrDefaultAsync(e => e.IssuedDocumentId == documentoId && e.Kind == IssuedDocumentEventKind.Voided, ct);
 
-    /// <summary>El estado de <paramref name="documento"/> a <paramref name="hoy"/>.</summary>
+    /// <summary>El estado de <paramref name="documento"/> a <paramref name="hoy"/> (feature 014: con los eventos de título).</summary>
     public static async Task<IssuedDocumentStatus> EstadoAsync(IApplicationDbContext db, IssuedLendingDocument documento, DateOnly hoy, CancellationToken ct) =>
-        documento.EstadoA(await AnulacionAsync(db, documento.Id, ct) is not null, hoy);
+        documento.EstadoA(await EventosDeEstadoAsync(db, documento.Id, ct), hoy);
+
+    /// <summary>Feature 014, US13 (T194): los eventos que deciden el estado (anulado, reemplazado, liquidado), guardados o de esta unidad de trabajo.</summary>
+    public static async Task<EventosDeEstado> EventosDeEstadoAsync(IApplicationDbContext db, int documentoId, CancellationToken ct)
+    {
+        var guardados = await db.IssuedDocumentEvents.AsNoTracking().Where(e => e.IssuedDocumentId == documentoId).Select(e => e.Kind).ToListAsync(ct);
+        return EventosDeEstado.De(guardados.Concat(db.IssuedDocumentEvents.Local.Where(e => e.IssuedDocumentId == documentoId).Select(e => e.Kind)));
+    }
 
     /// <summary>Los DTO de <paramref name="documentos"/> con su estado a <paramref name="hoy"/>, en el mismo orden.</summary>
     public static async Task<IReadOnlyList<IssuedDocumentDto>> DtosAsync(IApplicationDbContext db, IReadOnlyList<IssuedLendingDocument> documentos,
@@ -102,9 +116,16 @@ public static class DocumentosEmitidos
     {
         if (documentos.Count == 0) return [];
         var ids = documentos.Select(d => d.Id).ToList();
-        var anulados = (await db.IssuedDocumentEvents.AsNoTracking()
-            .Where(e => ids.Contains(e.IssuedDocumentId) && e.Kind == IssuedDocumentEventKind.Voided).Select(e => e.IssuedDocumentId).ToListAsync(ct))
-            .ToHashSet();
+        var eventos = (await db.IssuedDocumentEvents.AsNoTracking()
+                .Where(e => ids.Contains(e.IssuedDocumentId) && (e.Kind == IssuedDocumentEventKind.Voided || e.Kind == IssuedDocumentEventKind.Superseded
+                                                                 || e.Kind == IssuedDocumentEventKind.Settled))
+                .Select(e => new { e.IssuedDocumentId, e.Kind }).ToListAsync(ct))
+            .ToLookup(e => e.IssuedDocumentId, e => e.Kind);
+        var cuentas = await (from x in db.IssuedDocumentAccounts.AsNoTracking()
+                             join a in db.MemberAccounts.AsNoTracking() on x.MemberAccountId equals a.Id
+                             where ids.Contains(x.IssuedDocumentId)
+                             orderby x.Id
+                             select new { x.IssuedDocumentId, a.PublicId, a.Number, x.BalanceAtCutoff }).ToListAsync(ct);
         var lineas = await (from x in db.IssuedDocumentLoans.AsNoTracking()
                             join l in db.Loans.AsNoTracking() on x.LoanId equals l.Id
                             where ids.Contains(x.IssuedDocumentId)
@@ -113,17 +134,22 @@ public static class DocumentosEmitidos
         var personas = documentos.Select(d => d.PersonId).Distinct().ToList();
         var publicas = await db.People.AsNoTracking().IgnoreQueryFilters().Where(p => personas.Contains(p.Id))
             .Select(p => new { p.Id, p.PublicId }).ToDictionaryAsync(p => p.Id, p => p.PublicId, ct);
-        var usuarios = documentos.Select(d => d.IssuedByUserId).Distinct().ToList();
+        var usuarios = documentos.Where(d => d.IssuedByUserId is not null).Select(d => d.IssuedByUserId!.Value).Distinct().ToList();
         var nombres = await NombresDeUsuariosAsync(db, usuarios, ct);
 
         return documentos.Select(d => new IssuedDocumentDto(
             d.PublicId, d.Kind.ToString(), d.Number,
             new IssuedDocumentHolderDto(publicas.GetValueOrDefault(d.PersonId), d.HolderName, d.HolderTaxIdType, d.HolderTaxId),
             lineas.Where(x => x.IssuedDocumentId == d.Id).Select(x => new IssuedDocumentLoanDto(x.PublicId, x.Number, x.BalanceAtCutoff)).ToList(),
-            d.AsOfDate, d.PeriodFrom, d.PeriodTo, d.TaxYear, d.IssuedAt, nombres.GetValueOrDefault(d.IssuedByUserId) ?? string.Empty,
-            d.EstadoA(anulados.Contains(d.Id), hoy).ToString(), d.FinalityUntil, d.CoversCoDebts, CodigoDeVerificacion.Formatear(d.VerificationCode),
-            d.DeliveryMode.ToString(), d.IsTestEnvironment)).ToList();
+            d.AsOfDate, d.PeriodFrom, d.PeriodTo, d.TaxYear, d.IssuedAt,
+            d.IssuedByUserId is { } u ? nombres.GetValueOrDefault(u) ?? string.Empty : ProcesoQueEmite,
+            d.EstadoA(EventosDeEstado.De(eventos[d.Id]), hoy).ToString(), d.FinalityUntil, d.CoversCoDebts, CodigoDeVerificacion.Formatear(d.VerificationCode),
+            d.DeliveryMode.ToString(), d.IsTestEnvironment,
+            cuentas.Where(x => x.IssuedDocumentId == d.Id).Select(x => new IssuedDocumentAccountDto(x.PublicId, x.Number, x.BalanceAtCutoff)).ToList())).ToList();
     }
+
+    /// <summary>Feature 014 (T194): quién emitió lo que emite el proceso diario (el título de la prórroga automática).</summary>
+    public const string ProcesoQueEmite = "Proceso diario de Cartera";
 
     /// <summary>Lo que muestra la verificación, como JSON.</summary>
     public static JsonElement DatosEsenciales(IssuedLendingDocument documento)
@@ -164,7 +190,11 @@ public sealed record ListIssuedLendingDocumentsQuery(
     DateOnly? From = null,
     DateOnly? To = null,
     int Page = 1,
-    int PageSize = 20) : IRequest<Result<PagedResult<IssuedDocumentDto>>>;
+    int PageSize = 20) : IRequest<Result<PagedResult<IssuedDocumentDto>>>
+{
+    /// <summary>Feature 014, US13 (T198): los documentos que cubren una cuenta de captación o de aportes.</summary>
+    public Guid? AccountPublicId { get; init; }
+}
 
 public sealed class ListIssuedLendingDocumentsQueryValidator : AbstractValidator<ListIssuedLendingDocumentsQuery>
 {
@@ -196,6 +226,11 @@ public sealed class ListIssuedLendingDocumentsQueryHandler(IApplicationDbContext
             var id = db.Loans.AsNoTracking().Where(l => l.PublicId == credito).Select(l => l.Id);
             consulta = consulta.Where(d => db.IssuedDocumentLoans.Any(x => x.IssuedDocumentId == d.Id && id.Contains(x.LoanId)));
         }
+        if (request.AccountPublicId is { } cuenta)
+        {
+            var id = db.MemberAccounts.AsNoTracking().Where(a => a.PublicId == cuenta).Select(a => a.Id);
+            consulta = consulta.Where(d => db.IssuedDocumentAccounts.Any(x => x.IssuedDocumentId == d.Id && id.Contains(x.MemberAccountId)));
+        }
         if (request.From is { } desde)
         {
             var desdeUtc = DateTime.SpecifyKind(desde.ToDateTime(TimeOnly.MinValue) - desfase, DateTimeKind.Utc);
@@ -207,11 +242,18 @@ public sealed class ListIssuedLendingDocumentsQueryHandler(IApplicationDbContext
             consulta = consulta.Where(d => d.IssuedAt < hastaUtc);
         }
         var anulados = db.IssuedDocumentEvents.AsNoTracking().Where(e => e.Kind == IssuedDocumentEventKind.Voided).Select(e => e.IssuedDocumentId);
+        // Feature 014 (T194): los títulos reemplazados y liquidados.
+        var reemplazados = db.IssuedDocumentEvents.AsNoTracking().Where(e => e.Kind == IssuedDocumentEventKind.Superseded).Select(e => e.IssuedDocumentId);
+        var liquidados = db.IssuedDocumentEvents.AsNoTracking().Where(e => e.Kind == IssuedDocumentEventKind.Settled).Select(e => e.IssuedDocumentId);
         consulta = request.Status switch
         {
             IssuedDocumentStatus.Voided => consulta.Where(d => anulados.Contains(d.Id)),
-            IssuedDocumentStatus.SubjectToFinality => consulta.Where(d => !anulados.Contains(d.Id) && d.FinalityUntil != null && d.FinalityUntil > hoy),
-            IssuedDocumentStatus.Valid => consulta.Where(d => !anulados.Contains(d.Id) && (d.FinalityUntil == null || d.FinalityUntil <= hoy)),
+            IssuedDocumentStatus.Superseded => consulta.Where(d => !anulados.Contains(d.Id) && reemplazados.Contains(d.Id)),
+            IssuedDocumentStatus.Settled => consulta.Where(d => !anulados.Contains(d.Id) && !reemplazados.Contains(d.Id) && liquidados.Contains(d.Id)),
+            IssuedDocumentStatus.SubjectToFinality => consulta.Where(d => !anulados.Contains(d.Id) && !reemplazados.Contains(d.Id) && !liquidados.Contains(d.Id)
+                                                                          && d.FinalityUntil != null && d.FinalityUntil > hoy),
+            IssuedDocumentStatus.Valid => consulta.Where(d => !anulados.Contains(d.Id) && !reemplazados.Contains(d.Id) && !liquidados.Contains(d.Id)
+                                                              && (d.FinalityUntil == null || d.FinalityUntil <= hoy)),
             _ => consulta,
         };
 
@@ -246,12 +288,16 @@ public sealed class GetIssuedLendingDocumentQueryHandler(IApplicationDbContext d
         var nombres = await DocumentosEmitidos.NombresDeUsuariosAsync(db, usuarios, ct);
         var operaciones = eventos.Where(e => e.CausingOperationId is not null).Select(e => e.CausingOperationId!.Value).Distinct().ToList();
         var numeros = await db.LoanOperations.AsNoTracking().Where(o => operaciones.Contains(o.Id)).ToDictionaryAsync(o => o.Id, o => o.Number, ct);
+        // Feature 014 (T194): la operación de cuenta que anuló, reemplazó o liquidó el documento.
+        var deCuenta = eventos.Where(e => e.CausingAccountOperationId is not null).Select(e => e.CausingAccountOperationId!.Value).Distinct().ToList();
+        var numerosDeCuenta = await db.MemberAccountOperations.AsNoTracking().Where(o => deCuenta.Contains(o.Id)).ToDictionaryAsync(o => o.Id, o => o.Number, ct);
         var mensajes = eventos.Where(e => e.DebtorMessageId is not null).Select(e => e.DebtorMessageId!.Value).Distinct().ToList();
         var publicos = await db.DebtorMessages.AsNoTracking().Where(m => mensajes.Contains(m.Id)).ToDictionaryAsync(m => m.Id, m => m.PublicId, ct);
         return Result.Success(new IssuedDocumentDetailDto(dto, DocumentosEmitidos.DatosEsenciales(documento),
             eventos.Select(e => new IssuedDocumentEventDto(e.Kind.ToString(), e.OccurredAt,
                 e.ActorUserId is { } u ? nombres.GetValueOrDefault(u) : null, e.Reason,
-                e.CausingOperationId is { } o ? numeros.GetValueOrDefault(o) : null,
+                e.CausingOperationId is { } o ? numeros.GetValueOrDefault(o)
+                : e.CausingAccountOperationId is { } oc ? numerosDeCuenta.GetValueOrDefault(oc) : null,
                 e.DebtorMessageId is { } m && publicos.TryGetValue(m, out var publico) ? publico : null)).ToList(),
             documento.OutsideLendingNote));
     }
@@ -287,7 +333,8 @@ public sealed class VerifyLendingDocumentQueryHandler(IApplicationDbContext db, 
         if (documento is null) return Result.Failure<VerifiedDocumentDto>(DocumentErrors.CodigoDesconocido());
 
         var anulacion = await DocumentosEmitidos.AnulacionAsync(db, documento.Id, ct);
-        var estado = documento.EstadoA(anulacion is not null, reloj.HoyLocal);
+        // Feature 014 (US13-2): la verificación dice también si un título quedó reemplazado o liquidado.
+        var estado = documento.EstadoA(await DocumentosEmitidos.EventosDeEstadoAsync(db, documento.Id, ct), reloj.HoyLocal);
         bool? coincide = huella is null ? null : string.Equals(huella, documento.ContentSha256, StringComparison.OrdinalIgnoreCase);
         await auditoria.EmitirDocumentoVerificadoAsync(documento.PublicId, anulacion is null, ct, coincide);
         return Result.Success(new VerifiedDocumentDto(true, estado.ToString(), documento.Kind.ToString(), documento.Number, documento.IssuedAt,

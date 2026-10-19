@@ -125,6 +125,11 @@ public class ParametrosDeCarteraTests
         { "Embargos.LimiteSoloPersonasNaturales", "true", [N], EntregaDeCartera.K8 },
         { "Embargos.DiasHabilesParaResponder", "3", [N], EntregaDeCartera.K8 },
         { "Embargos.PlantillasDeRespuesta", "{}", [N], EntregaDeCartera.K8 },
+        // US13 (T196; research E175): los documentos al titular de captaciones.
+        { "Documentos.CertificadoTributarioIncluyeAportes", "false", [N], EntregaDeCartera.K8 },
+        { "Documentos.LeyendaCertificadoRetencion", "Certificado expedido por computador, sin firma autógrafa, según el artículo 1.6.1.12.12 del Decreto 1625 de 2016 (DUR tributario). Se expide conforme al artículo 381 del Estatuto Tributario.", [N], EntregaDeCartera.K8 },
+        { "Documentos.TextosDeCaptaciones", "{}", [N], EntregaDeCartera.K8 },
+        { "Documentos.PeriodicidadDeExtractos", "Mensual", [N], EntregaDeCartera.K8 },
         { "Captaciones.AnticipacionAvisoCambioDeTasaDias", "", [N], EntregaDeCartera.K8 },
         { "Captaciones.DiasPlazoDevolucionAportes", "", [N], EntregaDeCartera.K7 },
         { "Captaciones.DiasParaNoReclamados", "", [N], EntregaDeCartera.K10 },
@@ -164,8 +169,8 @@ public class ParametrosDeCarteraTests
 
         // Feature 014 (T017): las claves de captaciones y aportes existen desde ya con su entrega (K7 a K11) y no se ofrecen hasta que salga.
         // Fase 8 de la 014 (US5, research E94): 33 con Retencion.Redondeo; fase 13 (US7, T182): 34 con la gracia de la cuota del contractual;
-        // fase 14 (US11, T188, T189): 40 con las seis de embargos.
-        posteriores.Should().HaveCount(40).And.OnlyContain(d => d.DisponibleDesde >= (EntregaDeModulo)EntregaDeCartera.K7
+        // fase 14 (US11, T188, T189): 40 con las seis de embargos; fase 15 (US13, T196): 44 con las cuatro de documentos.
+        posteriores.Should().HaveCount(44).And.OnlyContain(d => d.DisponibleDesde >= (EntregaDeModulo)EntregaDeCartera.K7
             && d.DisponibleDesde <= (EntregaDeModulo)EntregaDeCartera.K11);
         ParametrosDeCartera.Definiciones.Where(d => d.DisponibleDesde == (EntregaDeModulo)EntregaDeCartera.K6b).Should().BeEmpty("la vivienda no trae claves");
         ParametrosDeCartera.Definiciones.Where(d => d.DisponibleDesde == (EntregaDeModulo)EntregaDeCartera.K6a).Select(d => d.Clave).Should()

@@ -1,8 +1,5 @@
-using System.Security.Cryptography;
-using System.Text.Json;
 using FluentValidation;
 using IngenIA365ERP.Application.Attachments.Common;
-using IngenIA365ERP.Application.Attachments.UploadAttachment;
 using IngenIA365ERP.Application.Common.Behaviors;
 using IngenIA365ERP.Application.Common.Configuration;
 using IngenIA365ERP.Application.Common.Interfaces;
@@ -14,11 +11,10 @@ using IngenIA365ERP.Application.Lending.Collections;
 using IngenIA365ERP.Application.Lending.Common;
 using IngenIA365ERP.Application.Lending.Settlement;
 using IngenIA365ERP.Domain.Entities.Core;
-using IngenIA365ERP.Domain.Enums.Core;
 using IngenIA365ERP.Domain.Entities.Lending.Configuration;
+using IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts;
 using IngenIA365ERP.Domain.Entities.Lending.Documents;
 using IngenIA365ERP.Domain.Entities.Lending.Loans;
-using IngenIA365ERP.Domain.Enums.Integration;
 using IngenIA365ERP.Domain.Enums.Lending;
 using IngenIA365ERP.Domain.Lending;
 using IngenIA365ERP.Domain.Lending.Documents;
@@ -33,7 +29,8 @@ public sealed record PeriodoDeDocumento(DateOnly From, DateOnly To);
 
 /// <summary>
 /// Lo que responde la emisión (api.md §15, 201): el documento, su número, el código en cuatro grupos, el estado calculado, el fin de la firmeza, el
-/// enlace de 60 s del PDF si se pidió descarga y el mensaje al deudor si se pidió correo. (nuevo)
+/// enlace de 60 s del PDF si se pidió descarga y el mensaje al deudor si se pidió correo. Feature 014, US13 (T196; documentos.md §2.1, US13-1):
+/// <see cref="AlreadyIssued"/> dice que se devolvió la copia ya emitida del mismo extracto (no consumió número). (nuevo)
 /// </summary>
 public sealed record IssuedLendingDocumentDto(
     Guid DocumentPublicId,
@@ -42,27 +39,31 @@ public sealed record IssuedLendingDocumentDto(
     string Status,
     DateOnly? FinalityUntil,
     EnlaceDeDescargaDto? Download,
-    Guid? DebtorMessagePublicId);
+    Guid? DebtorMessagePublicId,
+    bool AlreadyIssued = false);
 
 /// <summary>
 /// <c>POST /api/lending/documents</c> (feature 013, US13, T0784; api.md §15, adaptadores-y-archivos.md §8.1–§8.7, <c>Lending.Documents.Issue</c>, con
 /// clave; T80, FR-013, FR-131): emite un documento <b>en un paso</b> —un diálogo con una confirmación—:
 /// <list type="number">
-/// <item>Cartera activada (si no, <c>Lending.NotActivated</c>); antes de K5 el extracto y el certificado tributario responden
-/// <c>Lending.Document.KindNotAvailable</c> (<c>data.availableFrom = "K5"</c>, C88; T0969 subió la entrega a K5); el extracto exige un período de
-/// hasta cinco años que no termine después de hoy (<c>Lending.Document.PeriodInvalid</c>) y el certificado tributario un año terminado
-/// (<c>Lending.Document.TaxYearNotClosed</c>; sin año, el anterior); sin <c>Documentos.Firmante.Nombre</c>/<c>.Cargo</c>,
+/// <item>Cartera activada (si no, <c>Lending.NotActivated</c>); antes de su entrega cada clase responde <c>Lending.Document.KindNotAvailable</c> con
+/// <c>data.availableFrom</c>; el extracto exige un período de hasta cinco años que no termine después de hoy (<c>Lending.Document.PeriodInvalid</c>) y el
+/// certificado tributario un año terminado (<c>Lending.Document.TaxYearNotClosed</c>; sin año, el anterior); sin <c>Documentos.Firmante.Nombre</c>/<c>.Cargo</c>,
 /// <c>Lending.Document.SignerMissing</c>;</item>
 /// <item>el titular existe; el crédito, si la clase lo lleva, está en el alcance de oficina y línea (fuera, el 404 genérico) y el titular es su
 /// deudor o un codeudor vigente; con <c>Email</c>, el correo y la autorización de tratamiento general antes de pintar nada
 /// (<see cref="EntregaDeDocumentosDeCartera.PrevalidarAsync"/>);</item>
-/// <item>en una transacción y bajo el cerrojo de los créditos que cubre (T34): <see cref="ConstructorDeDocumentosDeCartera"/> valida y arma; el
-/// código por <see cref="CodigoDeVerificacion"/> (una colisión se regenera antes de guardar); el número con el prefijo de la clase por
-/// <see cref="NumeradorDeCartera"/>, al final; el PDF por <see cref="IDocumentoDeCarteraRenderer"/>, subido <b>antes</b> de guardar como adjunto de
-/// módulo <c>LendingIssuedDocument</c>; el documento con la copia de la identificación del titular, su SHA-256, el firmante y la marca de ambiente
-/// sellados; sus créditos; el evento <c>Issued</c> y, con <c>Email</c>, el mensaje <c>DocumentDelivery</c> (plantilla <c>ENVIODOC</c>);</item>
+/// <item>en una transacción, <see cref="EmisionDeDocumentosDeCartera"/> (bajo el cerrojo, el armado, el código, el número al final, el PDF subido antes
+/// de guardar, el documento, lo que cubre, el evento y el mensaje);</item>
 /// <item>la emisión se audita (<c>Lending.Document.Issued</c>) además del comando: muestra datos del titular y cuenta como lectura sensible.</item>
 /// </list>
+/// Feature 014, US13 (T196; contracts/documentos.md §2.1 a §2.4, §3): las clases de captaciones. El extracto y el certificado de saldo llevan
+/// <see cref="AccountPublicId"/> —la cuenta en el alcance (fuera, el 404 de la cuenta), su naturaleza activada y la persona su titular o cotitular
+/// (<c>Lending.Document.NotAccountHolder</c>)—; el certificado de saldo, una fecha que no sea futura (<c>Lending.Document.FutureDateNotAllowed</c>) y, si
+/// se pide, los bloqueos y embargos (<see cref="IncludeRestrictions"/>); el certificado tributario de captaciones, un año terminado; el de retención, un
+/// período. Las dos clases de la persona exigen el alcance sobre <b>todas</b> sus cuentas (falla cerrado, como el resumen de aportes). Pedir el mismo
+/// extracto sin operaciones registradas después de su corte de información devuelve la misma copia (US13-1). El título del CDAT y la respuesta al juzgado
+/// nacen con su operación: por aquí responden <c>Lending.Document.IssuedAutomatically</c>.
 /// La misma <c>Idempotency-Key</c> devuelve el mismo documento (<c>IdempotencyBehavior</c>). (nuevo)
 /// </summary>
 public sealed record IssueLendingDocumentCommand(
@@ -80,7 +81,28 @@ public sealed record IssueLendingDocumentCommand(
         clase is IssuedDocumentKind.ContributionCertificate or IssuedDocumentKind.ContributionClearance
             or IssuedDocumentKind.MembershipWithdrawalSettlement;
 
+    /// <summary>Feature 014, US13 (T196): las clases que se emiten sobre una cuenta de captación o de aportes.</summary>
+    public static bool LlevaCuenta(IssuedDocumentKind clase) =>
+        clase is IssuedDocumentKind.AccountStatement or IssuedDocumentKind.AccountBalanceCertificate;
+
+    /// <summary>Feature 014, US13 (T196): las clases que nacen solas con su operación (por la ruta sólo se descargan).</summary>
+    public static bool NaceSola(IssuedDocumentKind clase) =>
+        clase is IssuedDocumentKind.TermDepositTitle or IssuedDocumentKind.GarnishmentResponse or IssuedDocumentKind.MembershipWithdrawalSettlement;
+
+    /// <summary>¿La clase lleva período? (el extracto de un crédito o de una cuenta y el certificado de retención).</summary>
+    public static bool LlevaPeriodo(IssuedDocumentKind clase) =>
+        clase is IssuedDocumentKind.Statement or IssuedDocumentKind.AccountStatement or IssuedDocumentKind.WithholdingCertificate;
+
+    /// <summary>¿La clase lleva año? (los dos certificados tributarios).</summary>
+    public static bool LlevaAño(IssuedDocumentKind clase) => clase is IssuedDocumentKind.TaxCertificate or IssuedDocumentKind.DepositTaxCertificate;
+
     public Guid OperationKey { get; init; }
+
+    /// <summary>Feature 014, US13 (T196; documentos.md §3): la cuenta del extracto o del certificado de saldo.</summary>
+    public Guid? AccountPublicId { get; init; }
+
+    /// <summary>Feature 014, US13 (T196; documentos.md §2.2): el certificado de saldo incluye los bloqueos y embargos vigentes.</summary>
+    public bool IncludeRestrictions { get; init; }
 
     /// <summary>
     /// Feature 014 (T103; documentos.md §2.8, §3): el retiro cuya liquidación se emite. Sólo lo pone la liquidación del retiro (la ruta no lo lee): sin él,
@@ -102,13 +124,20 @@ public sealed class IssueLendingDocumentCommandValidator : AbstractValidator<Iss
         RuleFor(x => x.PersonPublicId).NotEmpty().WithMessage("Elija a nombre de quién se emite el documento.");
         RuleFor(x => x.LoanPublicId).NotEmpty().When(x => IssueLendingDocumentCommand.LlevaCredito(x.Kind))
             .WithMessage("Elija el crédito del documento.");
-        RuleFor(x => x.CutoffDate).Null().When(x => x.Kind is not (IssuedDocumentKind.BalanceCertificate or IssuedDocumentKind.ContributionCertificate))
-            .WithMessage("Sólo el certificado de saldo y la constancia de aportes llevan fecha de corte.");
+        RuleFor(x => x.AccountPublicId).NotEmpty().When(x => IssueLendingDocumentCommand.LlevaCuenta(x.Kind))
+            .WithMessage("Elija la cuenta del documento.");
+        RuleFor(x => x.CutoffDate).Null()
+            .When(x => x.Kind is not (IssuedDocumentKind.BalanceCertificate or IssuedDocumentKind.ContributionCertificate
+                or IssuedDocumentKind.AccountBalanceCertificate))
+            .WithMessage("Sólo los certificados de saldo y la constancia de aportes llevan fecha de corte.");
         RuleFor(x => x.IncludePermanentSavings).Equal(false).When(x => x.Kind != IssuedDocumentKind.ContributionCertificate)
             .WithMessage("Sólo la constancia de aportes incluye el ahorro permanente.");
+        RuleFor(x => x.IncludeRestrictions).Equal(false).When(x => x.Kind != IssuedDocumentKind.AccountBalanceCertificate)
+            .WithMessage("Sólo el certificado de saldo de una cuenta incluye los bloqueos y embargos.");
         RuleFor(x => x.Period).Must(p => p is null || p.From <= p.To).WithMessage("La fecha inicial del período no puede ser posterior a la final.");
-        RuleFor(x => x.Period).Null().When(x => x.Kind != IssuedDocumentKind.Statement).WithMessage("Sólo el extracto lleva período.");
-        RuleFor(x => x.Year).Null().When(x => x.Kind != IssuedDocumentKind.TaxCertificate).WithMessage("Sólo el certificado tributario lleva año.");
+        RuleFor(x => x.Period).Null().When(x => !IssueLendingDocumentCommand.LlevaPeriodo(x.Kind))
+            .WithMessage("Sólo el extracto y el certificado de retención llevan período.");
+        RuleFor(x => x.Year).Null().When(x => !IssueLendingDocumentCommand.LlevaAño(x.Kind)).WithMessage("Sólo el certificado tributario lleva año.");
         RuleFor(x => x.Year).InclusiveBetween((short)2000, (short)2100).When(x => x.Year is not null).WithMessage("El año del certificado no es válido.");
     }
 }
@@ -134,9 +163,10 @@ public sealed class IssueLendingDocumentCommandHandler(
     EntregaDeCartera? entregaVigente = null) : IRequestHandler<IssueLendingDocumentCommand, Result<IssuedLendingDocumentDto>>
 {
     /// <summary>Cuántas veces se genera otro código ante una colisión antes de rendirse (80 bits: no debería pasar nunca).</summary>
-    public const int IntentosDeCodigo = 5;
+    public const int IntentosDeCodigo = EmisionDeDocumentosDeCartera.IntentosDeCodigo;
 
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+    private EmisionDeDocumentosDeCartera Emision() =>
+        new(db, constructor, entrega, codigos, numerador, cerrojo, renderizador, sender, store, reloj, aplicacion, ambiente, cifrado);
 
     public async Task<Result<IssuedLendingDocumentDto>> Handle(IssueLendingDocumentCommand request, CancellationToken ct)
     {
@@ -146,19 +176,26 @@ public sealed class IssueLendingDocumentCommandHandler(
             return Falla(ErroresDeMensajesAlDeudor.CarteraSinActivar());
         if (!PrefijosDeDocumentosDeCartera.Disponible(request.Kind, entregaVigente ?? CatalogoDeCartera.EntregaVigente))
             return Falla(DocumentErrors.ClaseNoDisponible(request.Kind));
-        if (IssueLendingDocumentCommand.EsDeAportes(request.Kind) && (await Deposits.Activation.ActivacionesDeCaptacion.LeerAsync(db, ct)).Aportes is null)
-            return Falla(Deposits.Accounts.ErroresDeCuentas.SinActivar(LineNature.Contribution));
-        if (request.Kind == IssuedDocumentKind.MembershipWithdrawalSettlement && request.MembershipWithdrawalPublicId is null)
+        // El título del CDAT, la respuesta al juzgado y la liquidación del retiro nacen con su operación (documentos.md §3).
+        if (request.Kind is IssuedDocumentKind.TermDepositTitle or IssuedDocumentKind.GarnishmentResponse
+            || (request.Kind == IssuedDocumentKind.MembershipWithdrawalSettlement && request.MembershipWithdrawalPublicId is null))
             return Falla(DocumentErrors.EmitidoAutomaticamente(request.Kind));
+        var activaciones = await Deposits.Activation.ActivacionesDeCaptacion.LeerAsync(db, ct);
+        if (IssueLendingDocumentCommand.EsDeAportes(request.Kind) && activaciones.Aportes is null)
+            return Falla(Deposits.Accounts.ErroresDeCuentas.SinActivar(LineNature.Contribution));
+        if (EmisionDeDocumentosDeCartera.CubreCuentasDeLaPersona(request.Kind) && activaciones.Captaciones is null)
+            return Falla(Deposits.Accounts.ErroresDeCuentas.SinActivar(LineNature.Deposit));
 
         var hoy = reloj.HoyLocal;
         short? año = null;
-        if (request.Kind == IssuedDocumentKind.Statement && PeriodoInvalido(request.Period, hoy) is { } malPeriodo) return Falla(malPeriodo);
-        if (request.Kind == IssuedDocumentKind.TaxCertificate)
+        if (IssueLendingDocumentCommand.LlevaPeriodo(request.Kind) && PeriodoInvalido(request.Period, hoy) is { } malPeriodo) return Falla(malPeriodo);
+        if (IssueLendingDocumentCommand.LlevaAño(request.Kind))
         {
             año = request.Year ?? (short)(hoy.Year - 1);
             if (año >= hoy.Year) return Falla(DocumentErrors.AñoNoTerminado(año.Value));
         }
+        if (request.Kind == IssuedDocumentKind.AccountBalanceCertificate && request.CutoffDate is { } corte && corte > hoy)
+            return Falla(DocumentErrors.FechaFutura(corte));
         var firmante = await constructor.FirmanteAsync(hoy, ct);
         if (firmante.IsFailure) return Falla(firmante.Error);
 
@@ -177,197 +214,96 @@ public sealed class IssueLendingDocumentCommandHandler(
                 return Falla(DocumentErrors.TitularNoObligado(ReferenciasDeGobierno.Nombre(titular), credito.Number));
         }
 
+        MemberAccount? cuenta = null;
+        if (IssueLendingDocumentCommand.LlevaCuenta(request.Kind))
+        {
+            var leida = await Deposits.Accounts.LectorDeCuentas.CuentaEnAlcanceAsync(db, alcance, auditoria, request.AccountPublicId!.Value, seguir: false, ct);
+            if (leida.IsFailure) return Falla(leida.Error);
+            cuenta = leida.Value;
+            if (!activaciones.Activada(cuenta.Nature)) return Falla(Deposits.Accounts.ErroresDeCuentas.SinActivar(cuenta.Nature));
+            if (!await EsTitularAsync(titular.Id, cuenta, ct)) return Falla(DocumentErrors.NoEsTitular(ReferenciasDeGobierno.Nombre(titular), cuenta.Number));
+            if (request.Kind == IssuedDocumentKind.AccountStatement && await MismaCopiaAsync(titular.Id, cuenta.Id, request.Period!, hoy, ct) is { } copia)
+                return Result.Success(copia);
+        }
+        else if (EmisionDeDocumentosDeCartera.CubreCuentasDeLaPersona(request.Kind))
+        {
+            // Falla cerrado (E164): un certificado que suma una cuenta de otra oficina revela su saldo.
+            var cuentas = await CuentasDeLaPersonaAsync(titular.Id, ct);
+            foreach (var c in cuentas)
+            {
+                var dentro = await alcance.AsegurarAsync(c.BranchId, c.CreditLineId, ErroresDeGobierno.PersonaInexistente(), auditoria, nameof(MemberAccount),
+                    c.PublicId, ct);
+                if (dentro.IsFailure) return Falla(dentro.Error);
+            }
+        }
+
         // Primero el correo y la autorización (sin pintar ni subir nada): un envío que no puede salir no deja un PDF huérfano.
         if (request.Delivery == DocumentDeliveryMode.Email && await entrega.PrevalidarAsync(titular, credito?.Id, ct) is { } rechazo) return Falla(rechazo);
 
-        var emitido = await TransaccionExplicita.EjecutarAsync(db, () => EmitirAsync(request, titular, credito, firmante.Value, usuario, hoy, año, ct), ct);
+        var solicitud = new SolicitudDeEmision(request.Kind, titular, firmante.Value, usuario, request.Delivery, hoy)
+        {
+            Credito = credito, Cuenta = cuenta, Corte = request.CutoffDate, Periodo = request.Period, Año = año,
+            IncluyeAhorroPermanente = request.IncludePermanentSavings, IncluyeRestricciones = request.IncludeRestrictions,
+            RetiroPublicId = request.MembershipWithdrawalPublicId,
+        };
+        var emitido = await TransaccionExplicita.EjecutarAsync(db, () => Emision().EmitirAsync(solicitud, ct), ct);
         if (emitido.IsFailure) return Falla(emitido.Error);
 
         var (documento, mensaje) = emitido.Value;
         await auditoria.EmitirDocumentoEmitidoAsync(documento.PublicId, documento.Kind.ToString(), documento.Number, documento.DeliveryMode.ToString(),
             documento.ContentSha256, ct);
-
-        EnlaceDeDescargaDto? descarga = null;
-        if (request.Delivery == DocumentDeliveryMode.Download)
-        {
-            var adjunto = await db.Attachments.AsNoTracking().FirstOrDefaultAsync(a => a.PublicId == documento.PdfAttachmentPublicId, ct);
-            if (adjunto is not null) descarga = await AdjuntosDirectos.FirmarDescargaAsync(store, adjunto, reloj, limites.Value, ct);
-        }
+        var descarga = request.Delivery == DocumentDeliveryMode.Download ? await DescargaAsync(documento, ct) : null;
         return Result.Success(new IssuedLendingDocumentDto(documento.PublicId, documento.Number, CodigoDeVerificacion.Formatear(documento.VerificationCode),
             documento.EstadoA(false, hoy).ToString(), documento.FinalityUntil, descarga, mensaje));
     }
 
-    private async Task<Result<(IssuedLendingDocument Documento, Guid? Mensaje)>> EmitirAsync(IssueLendingDocumentCommand request, Person titular, Loan? credito,
-        FirmanteDeDocumentos firmante, int usuario, DateOnly hoy, short? año, CancellationToken ct)
+    private async Task<EnlaceDeDescargaDto?> DescargaAsync(IssuedLendingDocument documento, CancellationToken ct)
     {
-        // El cerrojo (T34): setup compartido y los créditos que el documento puede cubrir, en orden de Id; la numeración, al final.
-        await cerrojo.TomarSetupAsync(exclusivo: false, ct);
-        IReadOnlyCollection<int> aBloquear = credito is not null ? [credito.Id] : await CreditosDeLaPersonaAsync(titular.Id, ct);
-        if (aBloquear.Count > 0) await cerrojo.BloquearCreditosAsync(aBloquear, ModoDeEspera.Esperar, ct);
-        // Feature 014 (T087): las cuentas de aportes de la persona, después de los créditos (orden fijo del cerrojo, R08).
-        if (IssueLendingDocumentCommand.EsDeAportes(request.Kind))
-        {
-            var cuentas = await db.MemberAccounts.AsNoTracking().Where(a => a.HolderPersonId == titular.Id && a.Nature == LineNature.Contribution)
-                .Select(a => a.Id).OrderBy(id => id).ToListAsync(ct);
-            if (cuentas.Count > 0) await cerrojo.BloquearCuentasAsync(cuentas, ModoDeEspera.Esperar, ct);
-        }
-
-        // R = el instante de emisión, nunca anterior al último registro de los créditos que cubre (el sello del registro puede ir unos ticks por
-        // delante del reloj): así el documento ve todo lo registrado antes que él y el reverso de cualquiera de esas operaciones lo anula.
-        var ultimoRegistro = aBloquear.Count == 0
-            ? null
-            : await db.LoanControls.AsNoTracking().Where(c => aBloquear.Contains(c.LoanId)).MaxAsync(c => (DateTime?)c.LastRegisteredAt, ct);
-        var ahora = reloj.UtcNow;
-        var emision = ultimoRegistro is { } u && u > ahora ? DateTime.SpecifyKind(u, DateTimeKind.Utc) : ahora;
-        var armado = await constructor.ArmarAsync(new PedidoDeDocumentoDeCartera(request.Kind, titular, credito, request.CutoffDate, emision, hoy, request.Period, año)
-        {
-            IncluyeAhorroPermanente = request.IncludePermanentSavings,
-            RetiroPublicId = request.MembershipWithdrawalPublicId,
-        }, ct);
-        if (armado.IsFailure) return Result.Failure<(IssuedLendingDocument, Guid?)>(armado.Error);
-        var a = armado.Value;
-
-        var codigo = await CodigoNuevoAsync(ct);
-        if (codigo is null) throw new InvalidOperationException("No se pudo generar un código de verificación que no exista.");
-        var numero = await numerador.NumeroDeDocumentoAsync(request.Kind, ct);
-
-        var publicId = Guid.NewGuid();
-        var pruebas = ambiente?.EsProduccion != true;
-        var encabezado = await EncabezadoAsync(request.Kind, numero, emision, titular, firmante, codigo, pruebas, a.Leyendas, ct);
-        var pdf = renderizador.Render(new DocumentoDeCarteraParaImprimir(encabezado, a.Cuerpo));
-        var sha256 = Convert.ToHexString(SHA256.HashData(pdf)).ToLowerInvariant();
-
-        // El adjunto de módulo, antes de la fila del documento: si el almacén falla no queda un documento que nadie puede bajar.
-        var subida = await sender.Send(new UploadAttachmentCommand(AdjuntosDeModulo.DocumentoEmitidoDeCartera, publicId,
-            ModelosDeDocumentoDeCartera.NombreDelArchivo(numero), "application/pdf", pdf), ct);
-        if (subida.IsFailure) return Result.Failure<(IssuedLendingDocument, Guid?)>(subida.Error);
-
-        var documento = new IssuedLendingDocument
-        {
-            PublicId = publicId,
-            Kind = request.Kind,
-            Number = numero,
-            PersonId = titular.Id,
-            HolderTaxIdType = Recortar(titular.IdType, IssuedLendingDocument.LargoDelTipoDeDocumento),
-            HolderTaxId = Recortar(titular.TaxId, IssuedLendingDocument.LargoDelDocumento),
-            HolderName = Recortar(ReferenciasDeGobierno.Nombre(titular), IssuedLendingDocument.LargoDelNombre),
-            AsOfDate = a.AsOfDate,
-            PeriodFrom = request.Period?.From,
-            PeriodTo = request.Period?.To,
-            TaxYear = año,
-            InformationCutoff = emision,
-            VerificationCode = codigo,
-            ContentSha256 = sha256,
-            PdfAttachmentPublicId = subida.Value,
-            EssentialDataJson = JsonSerializer.Serialize(a.DatosEsenciales, Json),
-            SettlementSha256 = a.SettlementSha256,
-            RulesVersion = a.RulesVersion,
-            FinalityUntil = a.FinalityUntil,
-            CoversCoDebts = a.CoversCoDebts,
-            OutsideLendingNote = a.OutsideLendingNote,
-            SignerName = Recortar(firmante.Nombre, IssuedLendingDocument.LargoDelFirmante),
-            SignerTitle = Recortar(firmante.Cargo, IssuedLendingDocument.LargoDelFirmante),
-            IsTestEnvironment = pruebas,
-            IssuedByUserId = usuario,
-            IssuedAt = emision,
-            DeliveryMode = request.Delivery,
-        };
-        db.IssuedLendingDocuments.Add(documento);
-        await db.SaveChangesAsync(ct);
-
-        foreach (var linea in a.Lineas)
-            db.IssuedDocumentLoans.Add(new IssuedDocumentLoan
-            {
-                IssuedDocumentId = documento.Id,
-                LoanId = linea.LoanId,
-                LastOperationId = linea.LastOperationId,
-                LastTransactionId = linea.LastTransactionId,
-                BalanceAtCutoff = linea.BalanceAtCutoff,
-                PayoffOperationId = linea.PayoffOperationId,
-            });
-        foreach (var cuenta in a.Cuentas)
-            db.IssuedDocumentAccounts.Add(new IssuedDocumentAccount
-            {
-                IssuedDocumentId = documento.Id,
-                MemberAccountId = cuenta.MemberAccountId,
-                LastOperationId = cuenta.LastOperationId,
-                LastTransactionId = cuenta.LastTransactionId,
-                BalanceAtCutoff = cuenta.BalanceAtCutoff,
-            });
-        db.IssuedDocumentEvents.Add(IssuedDocumentEvent.Emitido(documento, emision, ActorKind.Person, usuario));
-        // Feature 014 (T103): la liquidación emitida queda en el retiro (la de su versión vigente).
-        if (request.MembershipWithdrawalPublicId is { } retiroPublicId
-            && await db.MembershipWithdrawals.FirstOrDefaultAsync(w => w.PublicId == retiroPublicId, ct) is { } retiro)
-            retiro.SettlementIssuedDocumentId = documento.Id;
-
-        Guid? mensaje = null;
-        if (request.Delivery == DocumentDeliveryMode.Email)
-        {
-            var encolado = await entrega.EncolarAsync(documento, titular, credito?.Id, usuario, ct);
-            if (encolado.IsFailure) return Result.Failure<(IssuedLendingDocument, Guid?)>(encolado.Error);
-            mensaje = encolado.Value.Mensaje.PublicId;
-        }
-        await db.SaveChangesAsync(ct);
-        return Result.Success<(IssuedLendingDocument, Guid?)>((documento, mensaje));
-    }
-
-    /// <summary>Un código que no tenga ningún documento (guardado o de esta unidad de trabajo); nulo si se agotan los intentos.</summary>
-    private async Task<string?> CodigoNuevoAsync(CancellationToken ct)
-    {
-        for (var intento = 0; intento < IntentosDeCodigo; intento++)
-        {
-            var codigo = codigos.Generar();
-            var existe = db.IssuedLendingDocuments.Local.Any(d => d.VerificationCode == codigo)
-                         || await db.IssuedLendingDocuments.AsNoTracking().IgnoreQueryFilters().AnyAsync(d => d.VerificationCode == codigo, ct);
-            if (!existe) return codigo;
-        }
-        return null;
-    }
-
-    private async Task<EncabezadoDeDocumentoDeCartera> EncabezadoAsync(IssuedDocumentKind clase, string numero, DateTime emision, Person titular,
-        FirmanteDeDocumentos firmante, string codigo, bool pruebas, IReadOnlyList<string> leyendas, CancellationToken ct)
-    {
-        var cooperativa = await db.Companies.AsNoTracking().Where(c => !c.IsDeleted).OrderBy(c => c.Id)
-            .Select(c => new { c.Name, c.TaxId, c.TaxIdCheckDigit }).FirstOrDefaultAsync(ct);
-        var nit = cooperativa is null || string.IsNullOrWhiteSpace(cooperativa.TaxId)
-            ? null
-            : string.IsNullOrWhiteSpace(cooperativa.TaxIdCheckDigit) ? cooperativa.TaxId : $"{cooperativa.TaxId}-{cooperativa.TaxIdCheckDigit}";
-        var formateado = CodigoDeVerificacion.Formatear(codigo);
-        var todas = new List<string>();
-        if (pruebas) todas.Add(EncabezadoDeDocumentoDeCartera.MarcaDePruebas);
-        todas.AddRange(leyendas);
-        var desfase = reloj.AhoraLocal.Offset;
-        var (logotipo, logotipoId) = await ImagenVigenteAsync(AdjuntosDeModulo.LogotipoDeCartera, ct);
-        var (firma, firmaId) = await ImagenVigenteAsync(AdjuntosDeModulo.ImagenDeFirmaDeCartera, ct);
-        return new EncabezadoDeDocumentoDeCartera(clase, ModelosDeDocumentoDeCartera.Titulo(clase), numero,
-            new DateTimeOffset(DateTime.SpecifyKind(emision, DateTimeKind.Utc)).ToOffset(desfase), cooperativa?.Name ?? "Cooperativa", nit,
-            ReferenciasDeGobierno.Nombre(titular), titular.IdType, titular.TaxId, firmante.Nombre, firmante.Cargo, formateado,
-            ModelosDeDocumentoDeCartera.UrlDeVerificacion(aplicacion?.Value.BaseUrl ?? string.Empty, formateado), pruebas, todas)
-        {
-            Logotipo = logotipo,
-            LogotipoPublicId = logotipoId,
-            ImagenDeFirma = firma,
-            ImagenDeFirmaPublicId = firmaId,
-        };
+        var adjunto = await db.Attachments.AsNoTracking().FirstOrDefaultAsync(a => a.PublicId == documento.PdfAttachmentPublicId, ct);
+        return adjunto is null ? null : await AdjuntosDirectos.FirmarDescargaAsync(store, adjunto, reloj, limites.Value, ct);
     }
 
     /// <summary>
-    /// El logotipo o la imagen de la firma vigentes (T0781, I6): el último adjunto disponible de ese dueño —subir otro lo reemplaza—, leído y comprobado
-    /// contra su SHA-256. Sin imagen, o si no se puede leer, el PDF va sin ella (sólo nombre, cargo, código y QR): una imagen que falta no impide emitir.
+    /// US13-1 (documentos.md §2.1): el mismo extracto de la misma cuenta, a nombre de la misma persona, vigente y sin operaciones de la cuenta registradas
+    /// después de su corte de información con fecha valor hasta el fin del período; nulo si hay que emitir otro. La copia no consume número y se audita
+    /// como reimpresión.
     /// </summary>
-    private async Task<(byte[]? Bytes, Guid? PublicId)> ImagenVigenteAsync(string tipo, CancellationToken ct)
+    private async Task<IssuedLendingDocumentDto?> MismaCopiaAsync(int persona, int cuentaId, PeriodoDeDocumento periodo, DateOnly hoy, CancellationToken ct)
     {
-        var vigente = await db.Attachments.AsNoTracking()
-            .Where(a => a.OwnerEntityType == tipo && a.Status == EstadoDeAdjunto.Available && !a.IsDeleted)
-            .OrderByDescending(a => a.Id).Select(a => (Guid?)a.PublicId).FirstOrDefaultAsync(ct);
-        if (vigente is not { } id) return (null, null);
-        var leido = await ContenidoDeAdjunto.LeerAsync(db, store, cifrado, id, ct);
-        return leido is null ? (null, null) : (leido.Bytes, id);
+        var cubren = db.IssuedDocumentAccounts.AsNoTracking().Where(x => x.MemberAccountId == cuentaId).Select(x => x.IssuedDocumentId);
+        var anulados = db.IssuedDocumentEvents.AsNoTracking().Where(e => e.Kind == IssuedDocumentEventKind.Voided).Select(e => e.IssuedDocumentId);
+        var previo = await db.IssuedLendingDocuments.AsNoTracking()
+            .Where(d => d.Kind == IssuedDocumentKind.AccountStatement && d.PersonId == persona && cubren.Contains(d.Id) && !anulados.Contains(d.Id)
+                        && d.PeriodFrom == periodo.From && d.PeriodTo == periodo.To && !d.IsDeleted)
+            .OrderByDescending(d => d.Id).FirstOrDefaultAsync(ct);
+        if (previo is null) return null;
+        var cambio = await db.MemberAccountTransactions.AsNoTracking()
+            .AnyAsync(t => t.MemberAccountId == cuentaId && t.RegisteredAt > previo.InformationCutoff && t.ValueDate <= periodo.To, ct);
+        if (cambio) return null;
+        await auditoria.EmitirDocumentoReimpresoAsync(previo.PublicId, previo.Kind.ToString(), "pdf", ct);
+        var descarga = await DescargaAsync(previo, ct);
+        return new IssuedLendingDocumentDto(previo.PublicId, previo.Number, CodigoDeVerificacion.Formatear(previo.VerificationCode),
+            previo.EstadoA(false, hoy).ToString(), previo.FinalityUntil, descarga, null, AlreadyIssued: true);
+    }
+
+    /// <summary>¿La persona es titular o cotitular de la cuenta? (el cotitular, en cualquier vigencia: el documento puede ser de un período pasado).</summary>
+    private async Task<bool> EsTitularAsync(int persona, MemberAccount cuenta, CancellationToken ct) =>
+        cuenta.HolderPersonId == persona
+        || await db.MemberAccountParties.AsNoTracking().AnyAsync(p => p.MemberAccountId == cuenta.Id && p.PersonId == persona
+            && p.Role == MemberAccountPartyRole.CoHolder && !p.IsDeleted, ct);
+
+    private async Task<List<MemberAccount>> CuentasDeLaPersonaAsync(int persona, CancellationToken ct)
+    {
+        var comoCotitular = db.MemberAccountParties.AsNoTracking()
+            .Where(x => x.PersonId == persona && x.Role == MemberAccountPartyRole.CoHolder && !x.IsDeleted).Select(x => x.MemberAccountId);
+        return await db.MemberAccounts.AsNoTracking().Where(a => !a.IsDeleted && (a.HolderPersonId == persona || comoCotitular.Contains(a.Id)))
+            .OrderBy(a => a.Id).ToListAsync(ct);
     }
 
     /// <summary>
     /// K5 (T0971): el período del extracto —obligatorio, la fecha inicial no posterior a la final, que no termine después de hoy y de hasta
-    /// <see cref="DocumentErrors.AñosMaximosDelExtracto"/> años—; nulo si sirve.
+    /// <see cref="DocumentErrors.AñosMaximosDelExtracto"/> años—; nulo si sirve. Feature 014: vale también para el extracto de cuenta y el certificado de
+    /// retención.
     /// </summary>
     public static Error? PeriodoInvalido(PeriodoDeDocumento? periodo, DateOnly hoy)
     {
@@ -387,21 +323,6 @@ public sealed class IssueLendingDocumentCommandHandler(
         var partes = await db.LoanParties.AsNoTracking()
             .Where(p => p.LoanId == credito.Id && p.PersonId == personId && p.Role == CreditPartyRole.CoDebtor).ToListAsync(ct);
         return partes.Any(p => p.VigenteA(hoy));
-    }
-
-    /// <summary>Los créditos en que la persona es deudora o codeudora (el paz y salvo general puede cubrir cualquiera de ellos).</summary>
-    private async Task<IReadOnlyCollection<int>> CreditosDeLaPersonaAsync(int personId, CancellationToken ct)
-    {
-        var propios = await db.Loans.AsNoTracking().Where(l => l.DebtorPersonId == personId).Select(l => l.Id).ToListAsync(ct);
-        var codeudas = await db.LoanParties.AsNoTracking().Where(p => p.PersonId == personId && p.Role == CreditPartyRole.CoDebtor)
-            .Select(p => p.LoanId).ToListAsync(ct);
-        return propios.Concat(codeudas).Distinct().Order().ToList();
-    }
-
-    private static string Recortar(string? texto, int largo)
-    {
-        var t = (texto ?? string.Empty).Trim();
-        return t.Length <= largo ? t : t[..largo];
     }
 
     private static Result<IssuedLendingDocumentDto> Falla(Error e) => Result.Failure<IssuedLendingDocumentDto>(e);
