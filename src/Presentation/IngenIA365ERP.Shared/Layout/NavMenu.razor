@@ -118,6 +118,10 @@
                 <PermissionGate Required="Lending.MembershipWithdrawals.File" AnyOf="@(new[] { "Lending.MembershipWithdrawals.Approve", "Lending.MembershipWithdrawals.Settle" })">
                     <NavLink href="/cartera/retiros-asociado" class="nav-subitem">Retiros de asociado</NavLink>
                 </PermissionGate>
+                @* US12 (T205): la asamblea —revalorización de aportes, distribución de excedentes y amortización—, simulada y aplicada con el acta. *@
+                <PermissionGate Required="Lending.Assembly.Register" AnyOf="@(new[] { "Lending.Assembly.Approve" })">
+                    <NavLink href="/cartera/asamblea" class="nav-subitem">Asamblea</NavLink>
+                </PermissionGate>
                 @* Decisión del dueño del 2026-10-18 (D53): los niveles de aprobación de los movimientos que superan la atribución, por cooperativa. *@
                 <PermissionGate Required="Lending.Attributions.View">
                     <NavLink href="/cartera/captaciones/aprobaciones" class="nav-subitem">Aprobación de movimientos</NavLink>
