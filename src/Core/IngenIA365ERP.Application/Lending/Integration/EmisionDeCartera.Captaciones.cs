@@ -23,15 +23,22 @@ public sealed record HechoDeCuenta(MemberAccount Cuenta, string CodigoDeLinea, G
     public MemberAccountRefV1 Referencia => new() { AccountPublicId = Cuenta.PublicId, AccountNumber = Cuenta.Number };
 
     /// <summary>
-    /// Las dimensiones vigentes de la cuenta (mensajes.md §3; research C20): la marca con precedencia embargada &gt; exenta del GMF &gt; estándar; los
-    /// aportes nunca se embargan ni se marcan exentos.
+    /// US8 (T143; research E107): si la cuenta es la marcada exenta del GMF a la fecha contable del hecho. La lee <c>HechoDeCuentaAsync</c> para que todos
+    /// los hechos de la cuenta lleven la misma marca (la consignación, el retiro, el GMF, el cargo): con la marca en «Standard» en unos y «GmfExempt» en
+    /// otros, una contadora que separe las cuentas por marca vería el saldo partido en dos.
     /// </summary>
-    public DepositFactDimensionsV1 Dimensiones(bool exentaDeGmf = false) => new()
+    public bool ExentaDeGmf { get; init; }
+
+    /// <summary>
+    /// Las dimensiones vigentes de la cuenta (mensajes.md §3; research C20): la marca con precedencia embargada &gt; exenta del GMF &gt; estándar; los
+    /// aportes nunca se embargan ni se marcan exentos. Sin <paramref name="exentaDeGmf"/>, la de <see cref="ExentaDeGmf"/>.
+    /// </summary>
+    public DepositFactDimensionsV1 Dimensiones(bool? exentaDeGmf = null) => new()
     {
         CreditLineCode = CodigoDeLinea,
         LineNature = Cuenta.Nature.ToString(),
         DepositClass = Cuenta.DepositClass?.ToString(),
-        AccountFlag = (Cuenta.IsGarnished ? AccountFlag.Garnished : exentaDeGmf ? AccountFlag.GmfExempt : AccountFlag.Standard).ToString(),
+        AccountFlag = (Cuenta.IsGarnished ? AccountFlag.Garnished : exentaDeGmf ?? ExentaDeGmf ? AccountFlag.GmfExempt : AccountFlag.Standard).ToString(),
         Inactive = Cuenta.Status == MemberAccountStatus.Inactive,
         IsEmployee = TitularEsEmpleado,
         BranchPublicId = SucursalPublicId,
@@ -86,7 +93,20 @@ public sealed record ReversoDeCuentaAEmitir(
     IReadOnlyList<DepositConceptAmountV1> Valores,
     string IniciadoPor,
     string Motivo,
-    UserRefV1? ReversadoPor);
+    UserRefV1? ReversadoPor)
+{
+    /// <summary>US8 (T143; research E106): la clase del recaudador del original (la del puente que la contrapartida restituye).</summary>
+    public string? ClaseDeRecaudador { get; init; }
+
+    /// <summary>US8 (T143): el <c>OrderKind</c> de la orden de giro del original, si salió por giro.</summary>
+    public string? TipoDeOrden { get; init; }
+
+    /// <summary>US8 (T143): el <c>ChargeKind</c> del cargo del original (un cargo o su condonación).</summary>
+    public string? MotivoDeLaContrapartida { get; init; }
+
+    /// <summary>US8 (T143): los espejos de las otras cuentas del original (el destino de un traslado), cada una con sus dimensiones vigentes.</summary>
+    public IReadOnlyList<(HechoDeCuenta Hecho, IReadOnlyList<DepositConceptAmountV1> Valores)> OtrasCuentas { get; init; } = [];
+}
 
 /// <summary>Un traslado entre dos cuentas tal como se emite (mensajes.md §4.1, <c>TrasladoEntreCuentasAplicado</c>; la cesión de aportes). (nuevo)</summary>
 public sealed record TrasladoAEmitir(
@@ -144,7 +164,10 @@ public sealed partial class EmisionDeCartera
             .FirstAsync(ct);
         var titular = await db.People.AsNoTracking().IgnoreQueryFilters().Where(p => p.Id == cuenta.HolderPersonId)
             .Select(p => new { p.PublicId, p.IsEmployee }).FirstAsync(ct);
-        return Result.Success(new HechoDeCuenta(cuenta, linea, titular.PublicId, titular.IsEmployee, sucursal.Value, fecha.Value));
+        var contable = fecha.Value;
+        var exenta = cuenta.Nature != LineNature.Contribution && await db.GmfExemptAccounts.AsNoTracking()
+            .AnyAsync(g => g.MemberAccountId == cuenta.Id && !g.IsDeleted && g.ValidFrom <= contable && (g.ValidTo == null || g.ValidTo >= contable), ct);
+        return Result.Success(new HechoDeCuenta(cuenta, linea, titular.PublicId, titular.IsEmployee, sucursal.Value, contable) { ExentaDeGmf = exenta });
     }
 
     /// <summary>Los valores de unas filas del libro por concepto, con su clase de aporte (mensajes.md §3), sin los que se anulan.</summary>
@@ -321,7 +344,18 @@ public sealed partial class EmisionDeCartera
             RulesVersion = r.Reverso.RulesVersion,
             Reason = r.Motivo,
             InitiatedBy = r.IniciadoPor,
-            Mirrors = [new DepositFactMirrorV1 { Type = r.TipoDelOriginal, Amounts = r.Valores }],
+            Mirrors =
+            [
+                new DepositFactMirrorV1 { Type = r.TipoDelOriginal, Amounts = r.Valores },
+                .. r.OtrasCuentas.Select(o => new DepositFactMirrorV1
+                {
+                    Type = r.TipoDelOriginal, Amounts = o.Valores, Account = o.Hecho.Referencia, HolderPersonPublicId = o.Hecho.TitularPublicId,
+                    Dimensions = o.Hecho.Dimensiones(),
+                }),
+            ],
+            CollectorClass = r.ClaseDeRecaudador,
+            OrderKind = r.TipoDeOrden,
+            ReasonCode = r.MotivoDeLaContrapartida,
         };
         var relacionado = new DocumentoRelacionado(r.Original.PublicId, r.ClaseDelOriginal, r.Original.Number);
         ModoDeEntrega modo = original is null

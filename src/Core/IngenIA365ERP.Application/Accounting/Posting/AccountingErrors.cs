@@ -421,6 +421,15 @@ public static class AccountingErrors
             $"El hecho de Cartera no cuadra o trae importes con más de dos decimales (diferencia {difference:N2}): es un defecto de quien lo emitió, no de la matriz. Repórtelo a soporte.",
             new { difference });
 
+    /// <summary>
+    /// Feature 014 (T143): un hecho de captaciones o de aportes mueve el saldo de una cuenta y no dice a dónde va la contrapartida —un retiro sin recaudador
+    /// ni orden de giro, un CDAT que se abona en otra cuenta sin sus dimensiones—: defecto de quien lo emitió, no de la matriz.
+    /// </summary>
+    public static Error LendingFactCounterpartUnknown(string factType, string detail) =>
+        new ErrorConDatos("Accounting.LendingFact.CounterpartUnknown",
+            $"El hecho {factType} no dice a dónde va la contrapartida ({detail}): es un defecto de quien lo emitió, no de la matriz. Repórtelo a soporte.",
+            new { factType, detail });
+
     public static Error LendingFactCurrencyNotSupported(string currency, decimal exchangeRate) =>
         new ErrorConDatos("Accounting.LendingFact.CurrencyNotSupported",
             $"Contabilidad sólo recibe de Cartera pesos colombianos con tasa 1; el hecho viene en {currency} con tasa {exchangeRate:0.######}.",

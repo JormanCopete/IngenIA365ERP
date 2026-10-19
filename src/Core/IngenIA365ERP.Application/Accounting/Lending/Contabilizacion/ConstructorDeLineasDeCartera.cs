@@ -42,7 +42,15 @@ public sealed record LineaDeCartera(
     IReadOnlyList<string> Creditos,
     string AccountCode,
     string AccountName,
-    bool ConservaDetalle);
+    bool ConservaDetalle,
+    IReadOnlyList<string>? Cuentas = null)
+{
+    /// <summary>
+    /// Feature 014 (T143): las cuentas de captación o de aportes (su número) que suman en la línea; vacío en las líneas de crédito. En un resumido las
+    /// líneas que conservan detalle van una por cuenta, como en los créditos una por crédito (§10.4).
+    /// </summary>
+    public IReadOnlyList<string> CuentasDeCaptacion => Cuentas ?? [];
+}
 
 /// <summary>
 /// Un error al armar el comprobante de una unidad (matriz, tipo de comprobante o contenido): el error y de dónde salió —hecho, rol,
@@ -135,7 +143,7 @@ public sealed class CatalogosDeCartera(MatrizVigenteDeCartera matriz, MapeosDeCa
 /// </para>
 /// (nuevo)
 /// </summary>
-public static class ConstructorDeLineasDeCartera
+public static partial class ConstructorDeLineasDeCartera
 {
     /// <summary>El tipo de documento cruce de la factura de Comercial (§5, regla 2; C79): los roles de Comercial cruzan contra ella.</summary>
     public const string CruceDeFactura = "FV";
@@ -158,7 +166,8 @@ public static class ConstructorDeLineasDeCartera
         Guid? Tercero,
         Guid? TerceroDelSobre,
         string? Factura,
-        int? Par);
+        int? Par,
+        string? Cuenta = null);
 
     /// <summary>El resultado del primer paso: las partidas, los fallos del contenido y el hecho principal.</summary>
     public sealed record Desglose(IReadOnlyList<Partida> Partidas, IReadOnlyList<FalloDeCartera> Fallos, HechoDeCartera? Principal);
@@ -213,7 +222,7 @@ public static class ConstructorDeLineasDeCartera
                 PagoAplicadoV1 p => p.Collector.CollectorClass,
                 PagoReversadoV1 p => p.Collector.CollectorClass,
                 SaldoAFavorResueltoV1 p => p.Collector.CollectorClass,
-                _ => null,
+                _ => ClaseDeRecaudadorDeCaptacion(h.Contenido),
             };
             if (!string.IsNullOrWhiteSpace(clase)) return clase;
         }
@@ -346,7 +355,8 @@ public static class ConstructorDeLineasDeCartera
     private sealed record ContextoDeUnidad(string? ClaseDeRecaudador, Guid? Pagador, CreditoAjustadoDesdeComercialV1? AjusteDeComercial);
 
     /// <summary>Un lado de un asiento: el rol, los valores que busca, el concepto del importe, el crédito, el tercero natural y la factura.</summary>
-    private sealed record Lado(string Rol, ValoresDeCartera Valores, string? Concepto, string? Credito, Guid? Tercero, string? Factura = null);
+    private sealed record Lado(string Rol, ValoresDeCartera Valores, string? Concepto, string? Credito, Guid? Tercero, string? Factura = null,
+        string? Cuenta = null);
 
     private sealed class Desglosador(HechoDeCartera hecho, ContextoDeUnidad u, List<Partida> destino, List<FalloDeCartera> fallos, Func<int> nuevoPar)
     {
@@ -401,7 +411,9 @@ public static class ConstructorDeLineasDeCartera
                 case CupoRotativoOtorgadoV1 x: Contingente(x.Dimensions, x.CreditLineCode, x.Amounts, x.Loan, x.DebtorPersonPublicId); break;
                 case GarantiaConstituidaV1 x: Contingente(x.Dimensions, x.CreditLineCode, x.Amounts, x.Loan, x.DebtorPersonPublicId); break;
                 default:
-                    fallos.Add(new FalloDeCartera(ErroresDeIntegracion.VersionNoAceptada(hecho.Tipo, _sobre.Version), hecho.Tipo, null, null, null, []));
+                    // Feature 014 (T143): los hechos de captaciones y aportes, en su propio archivo.
+                    if (!new DesglosadorDeCaptaciones(hecho, destino, fallos, nuevoPar).Desglosar())
+                        fallos.Add(new FalloDeCartera(ErroresDeIntegracion.VersionNoAceptada(hecho.Tipo, _sobre.Version), hecho.Tipo, null, null, null, []));
                     break;
             }
         }
@@ -911,7 +923,7 @@ public static class ConstructorDeLineasDeCartera
 
         private void Agregar(Lado lado, bool debitoSiPositivo, decimal importe, int? par) =>
             destino.Add(new Partida(hecho.Tipo, lado.Rol, _invertirTodo ? !debitoSiPositivo : debitoSiPositivo, importe, lado.Valores,
-                _sobre.Origin.OperationDate, ConceptoDelMapa(lado), lado.Credito, lado.Tercero, _sobre.PersonPublicId, lado.Factura, par));
+                _sobre.Origin.OperationDate, ConceptoDelMapa(lado), lado.Credito, lado.Tercero, _sobre.PersonPublicId, lado.Factura, par, lado.Cuenta));
 
         /// <summary>
         /// El concepto que la línea muestra en su mapa: el de la regla si el rol lo usa; en un anticipo o un saldo a favor, el suyo; en el puente
@@ -949,7 +961,8 @@ public static class ConstructorDeLineasDeCartera
 
         // El tipo de la unidad lo da el hecho principal (C01), con la clase del recaudador (§4.2).
         TipoDeLaUnidadDeCartera? tipo = null;
-        var resuelto = c.Mapeos.Resolver(principal.Tipo, ClaseDeRecaudador(unidad));
+        var claseDeRecaudador = ClaseDeRecaudador(unidad);
+        var resuelto = TipoDeLaUnidad(principal, claseDeRecaudador, c.Mapeos);
         if (resuelto.IsFailure) fallos.Add(new FalloDeCartera(resuelto.Error, principal.Tipo, null, null, null, []));
         else tipo = resuelto.Value;
 
@@ -984,9 +997,12 @@ public static class ConstructorDeLineasDeCartera
                     tipoDeCruce = CruceDeFactura;
                     numeroDeCruce = factura;
                 }
-                else if (p.Credito is { } numero)
+                else if ((p.Credito ?? p.Cuenta) is { } numero)
                 {
-                    tipoDeCruce = tipo?.CrossDocumentTypeCode;
+                    // Feature 014 (T143; contabilidad.md §5): una cuenta de captación o de aportes cruza con el número de la cuenta (CTA del mapeo);
+                    // en una unidad que junta hechos de las dos naturalezas (el cruce al retiro y el pago del crédito, D45) cada línea toma el cruce del
+                    // mapeo de su propio hecho.
+                    tipoDeCruce = TipoDeCruce(p, principal, tipo, claseDeRecaudador, c.Mapeos);
                     numeroDeCruce = numero;
                 }
             }
@@ -998,7 +1014,8 @@ public static class ConstructorDeLineasDeCartera
                 AccountCode = regla.Cuenta.Code,
                 Debit = debito ? valor : 0m,
                 Credit = debito ? 0m : valor,
-                Detail = p.Credito is { } n ? $"{principal.Sobre.Origin.Number} · crédito {n}" : principal.Sobre.Origin.Number,
+                Detail = p.Credito is { } n ? $"{principal.Sobre.Origin.Number} · crédito {n}"
+                    : p.Cuenta is { } cta ? $"{principal.Sobre.Origin.Number} · cuenta {cta}" : principal.Sobre.Origin.Number,
                 PersonId = persona,
                 BranchId = regla.BranchId,
                 CostCenterId = cuenta.RequiresCostCenter ? regla.CostCenterId : null,
@@ -1052,7 +1069,7 @@ public static class ConstructorDeLineasDeCartera
         foreach (var (linea, partida, nombre, conserva) in lineas)
         {
             var clave = string.Join('|', linea.AccountCode, linea.Debit > 0m ? "D" : "C", linea.BranchId, linea.CostCenterId, linea.PersonId,
-                linea.CrossDocumentType, linea.CrossDocumentNumber, conserva ? partida.Credito : null);
+                linea.CrossDocumentType, linea.CrossDocumentNumber, conserva ? partida.Credito ?? (partida.Cuenta is { } cta ? "cta:" + cta : null) : null);
             if (indice.TryGetValue(clave, out var i))
             {
                 var previa = resultado[i];
@@ -1072,7 +1089,8 @@ public static class ConstructorDeLineasDeCartera
                 r.Partidas[0].Rol,
                 conceptos.Count == 1 ? conceptos[0] : null,
                 r.Partidas.Select(p => p.Credito).Where(x => x is not null).Select(x => x!).Distinct(StringComparer.Ordinal).ToList(),
-                r.Linea.AccountCode, r.AccountName, r.ConservaDetalle);
+                r.Linea.AccountCode, r.AccountName, r.ConservaDetalle,
+                r.Partidas.Select(p => p.Cuenta).Where(x => x is not null).Select(x => x!).Distinct(StringComparer.Ordinal).ToList());
             return (r.Linea, mapa);
         }).ToList();
     }
@@ -1116,7 +1134,8 @@ public static class ConstructorDeLineasDeCartera
         var sobre = principal.Sobre;
         var clase = NombreDeLaClase(principal.ClaseDeOrigen);
         var texto = $"{clase} {sobre.Origin.Number}".Trim();
-        return Credito(principal.Contenido) is { LoanNumber.Length: > 0 } credito ? $"{texto} · crédito {credito.LoanNumber}" : texto;
+        if (Credito(principal.Contenido) is { LoanNumber.Length: > 0 } credito) return $"{texto} · crédito {credito.LoanNumber}";
+        return CuentaDeCaptacion(principal.Contenido) is { AccountNumber.Length: > 0 } cuenta ? $"{texto} · cuenta {cuenta.AccountNumber}" : texto;
     }
 
     /// <summary>El nombre de la clase del documento de Cartera para la descripción del comprobante.</summary>
@@ -1139,6 +1158,17 @@ public static class ConstructorDeLineasDeCartera
         "Collateral" => "Garantía",
         "LendingActivation" => "Activación de Cartera",
         "MonthlyClose" => "Cierre de Cartera",
+        // Feature 014 (T143): las clases de origen de captaciones y aportes (mensajes.md §2).
+        "AccountDeposit" => "Consignación",
+        "AccountWithdrawal" => "Retiro de cuenta",
+        "AccountTransfer" => "Traslado entre cuentas",
+        "AccountReversal" => "Reverso de operación de cuenta",
+        "AccountCharge" => "Cargo de cuenta",
+        "ContributionRefund" => "Devolución de aportes",
+        "InterestSettlement" => "Liquidación de intereses",
+        "AccountClosing" => "Cancelación de cuenta",
+        "MembershipWithdrawalSettlement" => "Liquidación del retiro del asociado",
+        "AccountPayoutOrder" => "Orden de giro de cuenta",
         null or "" => "Hecho de Cartera",
         _ => clase,
     };

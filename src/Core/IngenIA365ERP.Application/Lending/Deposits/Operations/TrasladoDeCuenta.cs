@@ -180,7 +180,9 @@ public sealed class TrasladoDeCuenta(
         }).OrderBy(v => v.Concept, StringComparer.Ordinal).ToList();
         var exenta = rv.Origen.Cuenta.ExentaDeGmf ? origen.PublicId : (Guid?)null;
         var unidad = await emision.TrasladoConGmfAsync(new TrasladoAEmitir(hechoOrigen.Value, hechoDestino.Value, operacion, valoresOrigen, valoresDestino),
-            gmf is null ? null : new GmfAEmitir(gmf, exenta, destino.DepositClass?.ToString() ?? destino.Nature.ToString()), p.Validacion, ct);
+            // US8 (T143; contabilidad.md §2 y §9): el GMF va a la cuenta por pagar de la clase del producto que genera el hecho —la cuenta que se debita—, no
+            // la del destino (hasta el 2026-10-18 tomaba la del destino y, con aportes, «Contribution», que no es una clase de captación).
+            gmf is null ? null : new GmfAEmitir(gmf, exenta, origen.DepositClass?.ToString()), p.Validacion, ct);
         if (unidad.IsFailure) return Result.Failure<(ComprobanteDeCuentaDto, MemberAccountOperation, bool)>(unidad.Error);
         var mensaje = unidad.Value.De(TrasladoEntreCuentasAplicadoV1.Type);
 

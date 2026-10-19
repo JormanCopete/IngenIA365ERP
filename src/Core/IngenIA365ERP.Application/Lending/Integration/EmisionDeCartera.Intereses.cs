@@ -89,7 +89,10 @@ public sealed partial class EmisionDeCartera
         {
             if (!sucursales.TryGetValue(c.BranchId, out var sucursal) || !titulares.TryGetValue(c.HolderPersonId, out var titular)) continue;
             hechos[c.Id] = new HechoDeCuentaMarcada(
-                new HechoDeCuenta(c, codigos.GetValueOrDefault(c.CreditLineId) ?? string.Empty, titular.PublicId, titular.IsEmployee, sucursal, fechaContable),
+                new HechoDeCuenta(c, codigos.GetValueOrDefault(c.CreditLineId) ?? string.Empty, titular.PublicId, titular.IsEmployee, sucursal, fechaContable)
+                {
+                    ExentaDeGmf = exentas.Contains(c.Id),
+                },
                 exentas.Contains(c.Id));
         }
         return hechos;

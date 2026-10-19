@@ -186,6 +186,7 @@ public sealed class PostLendingSummaryGroupCommandHandler(
         var lineas = new List<PostingLine>();
         var indice = new Dictionary<string, int>(StringComparer.Ordinal);
         var creditos = new HashSet<string>(StringComparer.Ordinal);
+        var cuentas = new HashSet<string>(StringComparer.Ordinal);
         foreach (var c in construcciones)
         {
             for (var i = 0; i < c.Request!.Lines.Count; i++)
@@ -193,13 +194,16 @@ public sealed class PostLendingSummaryGroupCommandHandler(
                 var linea = c.Request.Lines[i];
                 var mapa = c.Mapa[i];
                 creditos.UnionWith(mapa.Creditos);
+                cuentas.UnionWith(mapa.CuentasDeCaptacion);
                 var lado = linea.Debit > 0m ? "D" : "C";
                 // Una línea por crédito en las cuentas que exigen tercero, cruce o base (§10.4): el crédito va en la clave aunque la cuenta no
                 // pida cruce. Hasta el 2026-10-13 dos créditos del mismo deudor se juntaban en una línea si la cuenta sólo exigía tercero (lo
                 // destapó la medición de T0633).
                 var clave = mapa.ConservaDetalle
                     ? string.Join('|', "detalle", linea.AccountCode, lado, linea.BranchId, linea.CostCenterId, linea.PersonId, linea.CrossDocumentType,
-                        linea.CrossDocumentNumber, string.Join(',', mapa.Creditos.Order(StringComparer.Ordinal)))
+                        linea.CrossDocumentNumber, string.Join(',', mapa.Creditos.Order(StringComparer.Ordinal)),
+                        // Feature 014 (T143): en captaciones, una línea por cuenta (como una por crédito).
+                        string.Join(',', mapa.CuentasDeCaptacion.Order(StringComparer.Ordinal)))
                     : string.Join('|', linea.AccountCode, lado, linea.BranchId, linea.CostCenterId);
                 if (indice.TryGetValue(clave, out var j))
                 {
@@ -215,7 +219,9 @@ public sealed class PostLendingSummaryGroupCommandHandler(
         var primero = construcciones[0];
         var tipo = primero.Tipo!.VoucherTypeCode;
         var fecha = primero.Fecha;
-        var descripcion = $"Lote {numeroDeLote} · {tipo} · {fecha:yyyy-MM-dd} · {creditos.Count} {(creditos.Count == 1 ? "crédito" : "créditos")}";
+        var descripcion = creditos.Count == 0 && cuentas.Count > 0
+            ? $"Lote {numeroDeLote} · {tipo} · {fecha:yyyy-MM-dd} · {cuentas.Count} {(cuentas.Count == 1 ? "cuenta" : "cuentas")}"
+            : $"Lote {numeroDeLote} · {tipo} · {fecha:yyyy-MM-dd} · {creditos.Count} {(creditos.Count == 1 ? "crédito" : "créditos")}";
         return new PostingRequest(tipo, fecha, descripcion, new AccountingOrigin(ModuloContable.Cartera, OrigenesDeCartera.LoteResumido, lote), lineas,
             Domain.Enums.Accounting.DocumentKind.Regular);
     }

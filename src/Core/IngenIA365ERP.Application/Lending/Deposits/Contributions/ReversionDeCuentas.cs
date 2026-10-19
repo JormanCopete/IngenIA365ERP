@@ -119,8 +119,20 @@ public sealed class ReversionDeCuentas(
         var tipo = TipoDelHecho(original, cuenta.Nature);
         var valores = EmisionDeCartera.ValoresDeCuenta(filas.Where(f => f.MemberAccountId == cuenta.Id), f => -f.Amount);
         var usuario = actor.UserId is null ? null : new UserRefV1 { CentralUserId = actor.CentralUserId, Name = actor.Name };
+        var contrapartida = await ContrapartidaDelOriginalAsync(original, delCargo, ct);
+        var otras = new List<(HechoDeCuenta, IReadOnlyList<IngenIA365ERP.Application.Common.Integration.Contracts.Lending.Deposits.DepositConceptAmountV1>)>();
+        foreach (var otraId in filas.Select(f => f.MemberAccountId).Where(id => id != cuenta.Id).Distinct())
+        {
+            var otra = await db.MemberAccounts.AsNoTracking().FirstAsync(a => a.Id == otraId, ct);
+            var hechoDeLaOtra = await emision.HechoDeCuentaAsync(otra, reloj.HoyLocal, ct);
+            if (hechoDeLaOtra.IsFailure) return Result.Failure<ReversoDeCuentaAplicado>(hechoDeLaOtra.Error);
+            otras.Add((hechoDeLaOtra.Value, EmisionDeCartera.ValoresDeCuenta(filas.Where(f => f.MemberAccountId == otraId), f => -f.Amount)));
+        }
         var unidad = await emision.OperacionDeCuentaReversadaAsync(new ReversoDeCuentaAEmitir(hecho.Value, reverso, original, tipo,
-            ClaseDelOrigen(original), valores, iniciadoPor, texto, usuario), ct);
+            ClaseDelOrigen(original), valores, iniciadoPor, texto, usuario)
+        {
+            ClaseDeRecaudador = contrapartida.Clase, TipoDeOrden = contrapartida.Orden, MotivoDeLaContrapartida = contrapartida.Motivo, OtrasCuentas = otras,
+        }, ct);
         var espejos = registro.Reversar(filas, reverso, hecho.Value.FechaContable, unidad.Mensajes.FirstOrDefault()?.PublicId);
         if (espejos.IsFailure) return Result.Failure<ReversoDeCuentaAplicado>(espejos.Error);
         await db.SaveChangesAsync(ct);
@@ -177,6 +189,27 @@ public sealed class ReversionDeCuentas(
                 nameof(MemberAccount), cuenta.PublicId, DedupKey: $"{TiposDeAlerta.SobregiroTecnico}:{cuenta.PublicId:N}",
                 RecipientPermissions: ["Lending.Accounts.Reverse"], ModuloDeOrigen: "Lending"), ct);
         return Result.Success(new ReversoDeCuentaAplicado(await ComprobanteAsync(reverso, original, negativo, anulados, ct), false) { Reverso = reverso });
+    }
+
+    /// <summary>
+    /// US8 (T143; research E106): a dónde fue la contrapartida del original, para que Contabilidad arme el espejo sin leer la Cartera: la clase del recaudador
+    /// (<c>OwnLoanPayoff</c> en el débito automático y el cruce), el tipo de la orden de giro y la clase del cargo.
+    /// </summary>
+    private async Task<(string? Clase, string? Orden, string? Motivo)> ContrapartidaDelOriginalAsync(MemberAccountOperation original, AccountCharge? delCargo,
+        CancellationToken ct)
+    {
+        var clase = original.CollectorClass
+                    ?? (original.Kind is MemberAccountOperationKind.DirectDebit or MemberAccountOperationKind.InternalOffset
+                        ? nameof(ClaseDeRecaudador.OwnLoanPayoff)
+                        : null);
+        var orden = await db.AccountPayoutOrders.AsNoTracking().FirstOrDefaultAsync(o => o.OperationId == original.Id, ct);
+        string? motivo = delCargo?.Kind.ToString();
+        // La condonación nombra su cargo en la carga útil ({"chargePublicId":"…N…"}, CargosDeCuentas).
+        if (motivo is null && original.Kind == MemberAccountOperationKind.ChargeWaiver && original.Payload is { } carga
+            && System.Text.RegularExpressions.Regex.Match(carga, "\"chargePublicId\":\"([0-9a-fA-F-]{32,36})\"") is { Success: true } m
+            && Guid.TryParse(m.Groups[1].Value, out var cargoId))
+            motivo = (await db.AccountCharges.AsNoTracking().Where(c => c.PublicId == cargoId).Select(c => (ChargeKind?)c.Kind).FirstOrDefaultAsync(ct))?.ToString();
+        return (clase, orden is null ? null : EmisionDeCartera.TipoDeOrden(orden), motivo);
     }
 
     /// <summary>El tipo del hecho principal de la operación original (el que el reverso espeja).</summary>

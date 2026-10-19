@@ -179,7 +179,7 @@ public sealed class ConsumoDeCartera(
         var linea = e.LineNumber >= 1 && e.LineNumber <= mapa.Count ? mapa[e.LineNumber - 1] : null;
         return new
         {
-            voucherLine = e.LineNumber, factTypes = linea?.Hechos ?? [], role = linea?.Rol, concept = linea?.Concepto, loans = linea?.Creditos ?? [],
+            voucherLine = e.LineNumber, factTypes = linea?.Hechos ?? [], role = linea?.Rol, concept = linea?.Concepto, loans = linea?.Creditos ?? [], accounts = linea?.CuentasDeCaptacion ?? [],
             accountCode = e.AccountCode ?? linea?.AccountCode, field = e.Field, rule = e.Code, message = e.Message,
         };
     }
