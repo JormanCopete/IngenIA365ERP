@@ -76,8 +76,12 @@ public sealed class CancelacionDeCuenta(IApplicationDbContext db, ReglasDeMovimi
         if (cuenta.Nature == LineNature.Contribution || cuenta.DepositClass == DepositClass.Permanent)
             return new ErrorConDatos(CodigoSoloPorRetiro,
                 $"La cuenta {cuenta.Number} se cancela sólo con el retiro del asociado (aportes y ahorro permanente).", new { nature = cuenta.Nature.ToString() });
-        if (cuenta.DepositClass is DepositClass.TermDeposit or DepositClass.Contractual)
-            return ErroresDeAportes.EntregaNoDisponible("La cancelación de un CDAT o de un ahorro contractual", nameof(EntregaDeCartera.K9));
+        // US6 (T173): un CDAT se cancela o se redime por su ruta (con su plan, su penalidad y su destino).
+        if (cuenta.DepositClass == DepositClass.TermDeposit)
+            return new ErrorConDatos(ErroresDeCuentas.CodigoUsarRutaDeCdat, $"El CDAT {cuenta.Number} se cancela o se redime en «CDAT», con su plan y su destino.",
+                new { route = "/api/lending/term-deposits/{id}/redeem" });
+        if (cuenta.DepositClass == DepositClass.Contractual)
+            return ErroresDeAportes.EntregaNoDisponible("La cancelación de un ahorro contractual", nameof(EntregaDeCartera.K9));
         if (cuenta.Status is not (MemberAccountStatus.Active or MemberAccountStatus.Inactive or MemberAccountStatus.Matured))
             return ErroresDeAportes.NoOperable(cuenta.Number, cuenta.Status);
         return null;

@@ -69,6 +69,9 @@ public sealed class ReglasDeMovimientos(
     /// <summary>La atribución con monto de la consignación en efectivo (api.md §1.6; FR-059).</summary>
     public const string PermisoDeConsignacion = "Lending.Accounts.Deposit";
 
+    /// <summary>US6 (T173; api.md §1.6): la atribución con monto de la redención anticipada de un CDAT (el capital redimido antes del vencimiento).</summary>
+    public const string PermisoDeRedencion = "Lending.TermDeposits.Redeem";
+
     /// <summary>El JSON de canje que rige si el parámetro no responde (el defecto del catálogo, C14).</summary>
     private static string CanjePorDefecto =>
         ParametrosDeCartera.Definiciones.First(d => d.Clave == ParametrosDeCartera.CaptacionesDiasDeCanjePorClaseDeMedio).DefectoSeguro;
@@ -320,7 +323,8 @@ public sealed class ReglasDeMovimientos(
         var maximo = await LimitesDePermisoPorUsuario.DeAsync(db, usuario, permiso, fecha, ct);
         if (maximo is not { } tope || monto <= tope) return Result.Success(AtribucionEvaluada.SinAprobacion);
 
-        var sujeto = permiso == PermisoDeRetiro ? ApprovalSubjects.AccountWithdrawal : ApprovalSubjects.AccountCashDeposit;
+        // US6 (T173; api.md §1.6): la redención anticipada de un CDAT sobre su atribución se aprueba como un retiro (el mismo sujeto, con su permiso).
+        var sujeto = permiso is PermisoDeRetiro or PermisoDeRedencion ? ApprovalSubjects.AccountWithdrawal : ApprovalSubjects.AccountCashDeposit;
         if (aprobacionPublicId is { } pedida)
         {
             var aprobada = await db.ApprovalRequests.AsNoTracking().Include(r => r.Decisions)

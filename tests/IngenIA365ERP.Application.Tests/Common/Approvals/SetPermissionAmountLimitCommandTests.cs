@@ -72,6 +72,8 @@ public class SetPermissionAmountLimitCommandTests
         "Lending.Disbursements.Execute", "Lending.CreditLimits.Assign", "Lending.ValidationFailures.Confirm", "Lending.Payments.BackdateBeforeClose",
         // Feature 014 (decisión del dueño del 2026-10-18, D53).
         "Lending.Accounts.Withdraw", "Lending.Accounts.Deposit",
+        // Feature 014, US6 (T173): la redención anticipada del CDAT.
+        "Lending.TermDeposits.Redeem",
     ];
 
     private static IEnumerable<string?> Limitables(Error error) =>

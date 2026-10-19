@@ -131,6 +131,8 @@ public class PermisosDeCarteraTests
         // Feature 014 (decisión del dueño del 2026-10-18, D53): y el retiro y la consignación en efectivo de captaciones.
         PermisosLimitables.Admite("Lending.Accounts.Withdraw").Should().BeTrue();
         PermisosLimitables.Admite("Lending.Accounts.Deposit").Should().BeTrue();
-        PermisosLimitables.Todos.Where(DeCartera).Should().HaveCount(6, "los cuatro de la 013 (api.md §2.4) y los dos de captaciones");
+        // Feature 014, US6 (T173): y la redención anticipada del CDAT.
+        PermisosLimitables.Admite("Lending.TermDeposits.Redeem").Should().BeTrue();
+        PermisosLimitables.Todos.Where(DeCartera).Should().HaveCount(7, "los cuatro de la 013 (api.md §2.4) y los tres de captaciones");
     }
 }

@@ -141,6 +141,8 @@ public static class PermisosLimitables
             // encima de su monto, el movimiento pide aprobación con la política de la cooperativa (o la regla fija de un nivel si no la tiene).
             "Lending.Accounts.Withdraw",
             "Lending.Accounts.Deposit",
+            // Feature 014, US6 (T173; api.md §1.6): el capital redimido antes del vencimiento de un CDAT.
+            "Lending.TermDeposits.Redeem",
         ],
     };
 
