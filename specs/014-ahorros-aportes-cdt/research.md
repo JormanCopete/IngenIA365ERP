@@ -1231,5 +1231,96 @@ parametriza por entidad (parámetro con vigencia o catálogo editable) y los pla
 - D39: el descuento del ahorro permanente en la pérdida esperada y la validación de los indicadores del numeral 5.1 del Anexo 1.
 - D45: el reverso del cruce en un solo comprobante y las líneas puente dentro del mismo comprobante esperan el constructor de captaciones (T143); la devolución
   sigue en su propia unidad (orden de giro).
-- D44: el correo del reverso tardío sale antes de confirmar la transacción (mejor esfuerzo).
+- D44: ~~el correo del reverso tardío sale antes de confirmar la transacción (mejor esfuerzo)~~ — resuelto en la fase 8 (E92).
 - D36: las cuotas de cuentas en una pagaduría por HTTP de punta a punta (falta un escenario e2e con asociados, aportes y empresa empleadora).
+
+## 14. Enmienda de los intereses y la retención (2026-10-18, T127–T141, US5)
+
+Construida la historia 5 y el arreglo pendiente de D44. **Manda el código**; estas notas reemplazan lo dicho en `data-model.md`, `contracts/` y `tasks.md`
+donde choquen. `EntregaVigente` sigue en K6b: los parámetros de K8 (`Retencion.*`) se leen con los defectos del catálogo hasta que suba la entrega.
+
+- **E92 · D44: el correo del reverso tardío sale después del commit.** `ArrastreDelCruceAlRetiro` lee los destinatarios (roles de gerencia y revisoría y
+  `Captaciones.DestinatariosReversoTardio`) dentro de la transacción y anota el envío en `TareasTrasElCommit` (el mecanismo post-commit de la 012, que corre
+  `TrasElCommitBehavior` cuando la petición más externa terminó bien y no queda transacción abierta). Si el reverso se revierte, no sale ningún aviso; sin
+  quien ejecute tras el commit (un proceso fuera del mediador) no se envía y queda la alerta `Cartera.ReversoTardioDeCruce`. Cierra §13.4 (D44).
+- **E93 · El motor del interés (T127).** `InteresDeCaptacion` causa por **diferencia de acumulados** sobre la ventana del período de liquidación (lo causado el
+  día d es `Seis(A(d)) − Seis(A(d − 1))`, seis decimales al par, como la hoja `calcular.py`): saldo diario `A(d) = Σ interés(saldo_k, tasa_k, n_k)`; saldo
+  promedio `A(d) = promedio_d · Σ r_k · n_k` (interés simple sobre el promedio de lo corrido: sin tramos da lo mismo que el diario, investigación §3.3);
+  saldo mínimo `A(d) = mínimo_d · (Π (1 + r_k)^{n_k} − 1)`. Con el promedio y el mínimo lo causado de un día puede ser **negativo** (el día en que baja el
+  mínimo): es correcto, el acumulado no deriva. `r_k(B)` es la tasa diaria efectiva de la base ese día (la del tramo o la ponderada si es escalonado), así la
+  tasa puede cambiar cualquier día. La tasa diaria lineal es `NA_m / B` con m de la periodicidad de liquidación (`EquivalenciaDeTasas`; la hoja se corrigió:
+  decía `EA / B`). La base es el **capital** (el interés por pagar no capitaliza hasta abonarse; lo que está en canje sí gana interés —pendiente de validar
+  por la contadora—). El día de la apertura no causa (la ventana empieza en la apertura, excluida). El período de liquidación es el calendario de la
+  periodicidad (el de los cargos) o, con `SettlementDay` y una periodicidad de meses, el que termina ese día del mes (o el último si es más corto); con pago
+  único no hay períodos (se liquida al cancelar).
+- **E94 · La retención (T128).** `RetencionSobreRendimientos`: perfil, umbral diario, componente inflacionario y tarifa, con la norma de la investigación §3.6
+  —DUR 1625 de 2016 art. 1.2.4.2.6 (umbral diario de 0,055 UVT del sector solidario: si un día lo alcanza, se retiene sobre el total), art. 1.2.4.2.83 con
+  el Decreto 572 de 2025 (CDAT 4 %), tarifa residual 7 %; ET arts. 38 a 41 y DUR art. 1.2.1.12.6 (componente inflacionario; 55,43 % para el año gravable
+  2025, Decreto 898 de 2026)—. Decisiones de aplicación: el umbral se mide **por cuenta y por día** con lo causado ese día; el perfil sale de `COR_People`
+  (012): `WithholdingExempt` es no contribuyente, `IsSelfWithholder` autorretenedor, sin `PersonType` «sin perfil» y se retiene; el componente se descuenta a
+  toda **persona natural** (no hay en el perfil una marca de «obligada a llevar contabilidad»: pregunta al dueño); el componente que rige es el último
+  publicado (el del año anterior y, si no está, el de dos años antes; sin ninguno no se descuenta); la tarifa es el parámetro que nombra la versión, con
+  ámbito de línea (el permanente y el contractual vacíos caen a la del ahorro). Parámetro nuevo **`Retencion.Redondeo`** (K8, `Peso` o `Centavo`, defecto
+  al peso, mitad hacia arriba, pendiente de validar por la contadora), como `Gmf.Redondeo` (D54): la retención y el componente se redondean así.
+- **E95 · Causación en el ciclo (T131, T134).** Causación y liquidación son los **últimos** subpasos del paso de captaciones (después de las cuotas, los cargos
+  periódicos y el débito automático, que mueven los saldos del día): el día se causa con su saldo de cierre y después se liquida lo vencido. Una tanda va en
+  una transacción con el cerrojo del proceso (salta las cuentas ocupadas); cada día causado es una tanda de la corrida (`BatchCount + 1`) con una parte `CCA-`
+  por sucursal; si lo que está en el libro de la ventana no coincide con lo que el motor recalcula hasta la víspera (una fecha valor que nadie ajustó, una
+  versión registrada tarde), el proceso escribe antes la corrección (`AccrualAdjustment`, `AjusteDeCausacionDeCaptacion` causa `RateCorrection`, parte
+  `AJC-`). La puesta al día de varios días avisa `Cartera.CausacionDeCaptacionesAtrasada` (tipo de alerta nuevo, K8, a `Lending.Interest.Settle` y
+  `Lending.Processes.Run`). En la puesta al día de una operación (la cancelación, el retiro del asociado) las filas van en la operación y la parte es
+  `ALD-{operación}-{n}` (`AccountCatchUp`). La **validación previa contable** no se aplica todavía en el proceso de captaciones: queda para US8 (T142).
+- **E96 · El ajuste por fecha valor va enlazado y aparte (T133).** Una consignación, un retiro, un traslado o un reverso con fecha valor en días ya causados
+  recalculan la ventana hasta el último día causado y escriben la diferencia en la **misma operación** (`AccrualAdjustment` fechado el último día causado).
+  Su hecho `AjusteDeCausacionDeCaptacion` (causa `ValueDatedOperation`, los días que cambiaron y el hecho principal en `causeFact`) sale **aparte**, con el
+  mismo origen y su propio comprobante, en lugar de acompañante de la unidad (mensajes.md §2.1): así no hubo que tocar la emisión de cada operación. Lo
+  activa el servicio `AjusteDeCausacionDeCuenta`, inyectado en las cuatro operaciones.
+- **E97 · Fecha valor en un período ya liquidado.** Si la fecha valor cae antes de la última liquidación, el período liquidado no se reliquida y esos días no se
+  ajustan (la ventana empieza en la última liquidación). Con la fecha valor de 5 días hacia atrás (D11) pasa al cruzar un fin de mes. **Pregunta al dueño.**
+- **E98 · La liquidación (T132).** Operación `InterestSettlement` (`LQI-`) con el ajuste de redondeo, el abono (`InterestCredited`: −interés por pagar,
+  +capital) y la retención en pareja (−capital, +retención), el registro `LND_InterestSettlements` y los acumulados por titular y cotitulares (por su
+  proporción vigente al fin del período; el titular absorbe el residuo). Sin interés no nace operación: sólo avanza la marca del período. Emite
+  `InteresDeCaptacionLiquidado` (+ `RetencionPracticada`) como **una unidad por operación** (una línea), por lotes resumido si la emite el proceso
+  (mensajes.md §2.2 decía partes `LQC-`: la operación ya es el origen natural y Contabilidad agrupa igual). La liquidación y la cancelación **no se reversan
+  desde la pantalla** (`Lending.Savings.ReversalOwnedByProcess`). Errores nuevos: `Lending.Savings.AccrualBehind`, `.SettlementPeriodOpen` (también «ya
+  liquidado hasta…»), `.AccountDoesNotAccrue`, `.AccrualFailed`, `.SettlementFailed`.
+- **E99 · La cancelación (T135).** Sólo el ahorro a la vista (aportes y permanente se cancelan con el retiro del asociado,
+  `Lending.Contributions.ClosureOnlyByWithdrawal`; CDAT y contractual, K9), con la fecha de hoy (`Lending.Savings.CloseDateInvalid`). Bloquean
+  (`Lending.Savings.CloseBlocked` con la lista): embargo, bloqueo, canje, sobregiro técnico, titular fallecido y **cargos por cobrar** (pregunta al dueño).
+  Nace la operación `Cancellation` (`CAN-`, valor 0) que lleva la puesta al día de la causación y la liquidación a la fecha (origen `AccountClosing`); los
+  períodos vencidos sin liquidar se liquidan antes por separado. La entrega es su **propia** operación: retiro por orden de giro (propósito `Cancellation`,
+  hecho generador del GMF `Cancellation`) o traslado a otra cuenta, del valor que con su GMF agota el saldo. Con giro, la cuenta queda `Closing` y se cancela
+  cuando Tesorería informa el giro; si lo rechaza, vuelve a activa con su saldo. La cancelación en efectivo por el contrato (`closeAccount`) sigue sin entrega
+  hasta que exista Recaudo.
+- **E100 · Retiro del asociado con intereses (T136).** La vista previa suma a cada ahorro que gana interés el neto liquidado a la fecha (bruto menos retención)
+  y la liquidación del retiro, bajo el cerrojo y antes de cruzar, liquida esos ahorros a la fecha (`LiquidacionALaFecha`: períodos vencidos, la operación
+  `InterestSettlement`, la puesta al día en ella y la liquidación). Si hubiera períodos vencidos sin liquidar, el redondeo por período puede mover un peso y la
+  huella responde `VistaPreviaCambio`: se vuelve a pedir la vista previa.
+- **E101 · Suspensión (FR-065).** El titular fallecido con `SuspendsAccrualOnDeceased` y la cuenta embargada con `SuspendsAccrualOnTotalGarnishment` dejan
+  la marca `AccrualSuspendedSince` desde el primer día que la detecta el proceso; hasta US11 (embargos) la marca `IsGarnished` se toma como embargo total.
+  Una cuenta inactiva cuya línea no causa en la inactividad no causa. La marca de agua avanza aunque no cause.
+- **E102 · Lo que lee el interés.** `LectorDeInteres`: la versión que rige cada día (la sellada al abrir si la versión declara tasa pactada, FR-007), la tasa
+  variable con el último índice publicado a la fecha de su reajuste (`ResetPeriodicity`, mensual si no lo dice) a seis decimales, como el reajuste de la 013, y
+  los saldos de capital de la reconstrucción de la cuenta a (D, R), también con lo agregado en la unidad de trabajo sin guardar.
+- **E103 · Rutas, vista y pantalla (T137, T139).** Cinco rutas en `MemberAccountsEndpoints.cs`: `GET /{id}/settlements`, `POST /{id}/settlements/simulate`,
+  `POST /{id}/settlements` (201 la nueva; 200 con `alreadyExisted` la existente, SC-003), `GET /{id}/close-preview` y `POST /{id}/close`
+  (`Lending.Accounts.Close`). La vista `interest-and-withholding` (K8, con datos del titular). `InteresesDeCuenta.razor` es un componente de la ficha de la
+  cuenta de captación, sin ruta propia (como `MovimientosDeCuenta`).
+- **E104 · `CaptacionesAportes` regenerada (T130).** Con `LND_InterestSettlements` (único `(MemberAccountId, PeriodTo)` sobre las no reversadas, único por
+  operación) y `LND_WithholdingAccumulations` (bigint); ahora `20261019030947` PostgreSQL / `20261019030916` SQL Server (paridad OK, 201 líneas nuevas y
+  ninguna quitada en cada motor). Conserva el SQL de T044, T089 y `ASO`.
+- **E105 · Casos dorados (T129).** 9 `interes-*` y 8 `retencion-*` (29 JSON de captaciones con los de GMF y cargos), todos recalculados por `calcular.py`
+  (`--verificar`): 6.884 por saldo diario y por promedio y 3.649 por saldo mínimo (investigación §3.3); tramos escalonados y por total; cambio de tasa a
+  mitad de mes; febrero de 2028 en real/365; mínimo para interés; consignación fechada atrás (lo sabido antes y después); umbral no alcanzado (el mes del
+  6.884) y alcanzado (400.000.000) con y sin componente; el CDAT de 488.088 (8.702 con el componente de 2025, 19.524 sin él, cero si el umbral alcanza
+  también al CDAT); persona exenta y autorretenedor.
+
+### 14.1 Preguntas para el dueño
+
+- **Persona natural «obligada a llevar contabilidad».** El componente inflacionario sólo se descuenta a la persona natural **no** obligada; el perfil
+  tributario de la 012 no tiene esa marca. A: se descuenta a toda persona natural (lo construido); B: una marca nueva en el perfil de la persona (Personas);
+  C: un parámetro por cooperativa que diga si sus asociados naturales se tratan como no obligados. Recomendado: B.
+- **Fecha valor en un período ya liquidado (E97).** A: no se reliquida (lo construido); B: el ajuste entra en el período abierto y se abona con la próxima
+  liquidación; C: se rechaza una fecha valor anterior a la última liquidación. Recomendado: B.
+- **Cancelar con cargos por cobrar (E99).** A: se bloquea hasta cobrarlos o condonarlos (lo construido); B: la cancelación los cobra del saldo antes de
+  entregar. Recomendado: B (FR-039 dice «cobra GMF y cargos»).
