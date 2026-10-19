@@ -84,7 +84,14 @@ public sealed record VistaPreviaDeRetiroDto(
     DateOnly RefundDueOn,
     MinimoDeLaEntidadDto EntityMinimum,
     string Sha256,
-    IReadOnlyList<string> Warnings);
+    IReadOnlyList<string> Warnings)
+{
+    /// <summary>D45 (2026-10-18): lo que los créditos siguen debiendo después del cruce.</summary>
+    public decimal PendingLoanBalance { get; init; }
+
+    /// <summary>D41 (2026-10-18): de qué fondos salió primero el cruce (<c>AportesPrimero</c> o <c>AhorrosPrimero</c>).</summary>
+    public string FundsOrder { get; init; } = "AportesPrimero";
+}
 
 /// <summary>El cuerpo de radicar un retiro.</summary>
 public sealed record RadicarRetiroRequest(Guid PersonPublicId, int Cause, string? CauseDetail, DateOnly? RequestedOn, IReadOnlyList<Guid>? SupportAttachmentPublicIds,
@@ -105,9 +112,12 @@ public sealed record BeneficiarioBancarioRequest(Guid BankPublicId, byte Account
 /// <summary>La forma de la devolución: <c>DisbursementOrder</c> (en K7) o <c>TransferToAccount</c> (K8).</summary>
 public sealed record FormaDeDevolucionRequest(string Form, Guid? TargetAccountPublicId = null, BeneficiarioBancarioRequest? Payee = null);
 
-/// <summary>El cuerpo de liquidar.</summary>
+/// <summary>
+/// El cuerpo de liquidar. <paramref name="PendingLoanBalance"/> (D45, 2026-10-18): con deuda pendiente después del cruce, <c>MoveToCashier</c> (los
+/// créditos pasan a caja) o <c>KeepRepaymentChannel</c> (conservan su forma de pago).
+/// </summary>
 public sealed record LiquidarRetiroRequest(DateOnly? Date, string ExpectedPreviewSha256, DescuentoPorPerdidasRequest? LossDeduction, FormaDeDevolucionRequest Refund,
-    string Reason);
+    string Reason, string? PendingLoanBalance = null);
 
 /// <summary>El cuerpo de aprobar la devolución pendiente.</summary>
 public sealed record AprobarDevolucionDeRetiroRequest(Guid? ApprovalPublicId, BeneficiarioBancarioRequest? Payee, string Reason);

@@ -4,6 +4,13 @@ namespace IngenIA365ERP.Application.Common.Integration.Contracts.Lending.Deposit
 /// <c>CruceAlRetiroAplicado</c> v1 (contracts/mensajes.md §1.1 y §4.1 de la 014; <c>CRR</c>; entrega K7): liquidación del retiro del asociado: el débito de aportes y ahorros que paga los créditos (FR-077); <c>RA</c>. No admite proceso: lo origina una persona.
 /// Declarado en la fase fundacional (T048) con su contenido de §4.1 para que el catálogo, <c>LND_FactTypes</c> y la tabla hecho × rol lo
 /// nombren; lo emite la historia de su entrega.
+///
+/// <para>
+/// Decisión del dueño del 2026-10-18 (D45): el cruce y el pago del crédito van en el <b>mismo comprobante</b>. Hay <b>un</b> mensaje por crédito pagado,
+/// con origen la operación de pago del crédito y la clave del <c>PagoAplicado</c> —así viajan en su misma unidad y la cruzada lo tiene por
+/// acompañante—; <see cref="Parts"/> trae el débito de cada cuenta (aportes y ahorros) que lo pagó. <see cref="Account"/>, <see cref="Dimensions"/>,
+/// <see cref="Amounts"/> y <see cref="OperationNumber"/> repiten la primera parte.
+/// </para>
 /// </summary>
 public sealed record CruceAlRetiroAplicadoV1
 {
@@ -40,6 +47,25 @@ public sealed record CruceAlRetiroAplicadoV1
 
     /// <summary>Un cruce por crédito pagado.</summary>
     public IReadOnlyList<WithdrawalOffsetV1> Offsets { get; init; } = [];
+
+    /// <summary>D45: el débito de cada cuenta que pagó el crédito, con sus dimensiones vigentes y su operación de cuenta.</summary>
+    public IReadOnlyList<WithdrawalAccountPartV1> Parts { get; init; } = [];
+}
+
+/// <summary>El débito de una cuenta del asociado en el cruce al retiro contra un crédito (D45, 2026-10-18).</summary>
+public sealed record WithdrawalAccountPartV1
+{
+    /// <summary>La cuenta y su número (el documento cruce <c>CTA</c>).</summary>
+    public MemberAccountRefV1 Account { get; init; } = new();
+
+    /// <summary>Dimensiones <b>vigentes</b> de la cuenta a la fecha contable.</summary>
+    public DepositFactDimensionsV1 Dimensions { get; init; } = new();
+
+    /// <summary>Valores por concepto, con signo (− = sale de la cuenta).</summary>
+    public IReadOnlyList<DepositConceptAmountV1> Amounts { get; init; } = [];
+
+    /// <summary>Número visible de la operación de cuenta.</summary>
+    public string OperationNumber { get; init; } = string.Empty;
 }
 
 /// <summary>El retiro del asociado que se liquida (mensajes.md §4.1, <c>withdrawal</c>).</summary>

@@ -229,6 +229,25 @@ public class MemberAccount : AuditableEntity
         CloseReason = texto.Length <= 300 ? texto : texto[..300];
     }
 
+    /// <summary>
+    /// Decisión del dueño del 2026-10-18 (D44): la única salida de <c>Closed</c>. El reverso tardío de un pago del cruce al retiro, con la cuenta ya
+    /// cancelada, la reabre <b>en cierre</b> (<c>Closed → Closing</c>): el débito del cruce vuelve como saldo a favor del exasociado y espera su orden de
+    /// giro. Guarda en el motivo de cierre que se reabrió.
+    /// </summary>
+    public void ReabrirPorReversoTardio(DateTime instante, string motivo)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(motivo);
+        if (Status != MemberAccountStatus.Closed)
+            throw new InvalidOperationException($"La cuenta {Number} está en «{Status}»: sólo se reabre una cancelada.");
+        Status = MemberAccountStatus.Closing;
+        StatusChangedAt = instante;
+        ClosingRequestedAt = instante;
+        ClosedOn = null;
+        ClosedByUserId = null;
+        var texto = $"Reabierta: {motivo.Trim()}";
+        CloseReason = texto.Length <= 300 ? texto : texto[..300];
+    }
+
     private void Pasar(MemberAccountStatus hacia, DateTime instante)
     {
         if (!PuedePasar(Status, hacia))

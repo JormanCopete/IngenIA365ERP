@@ -23,7 +23,7 @@ namespace IngenIA365ERP.Identity.Seed;
 ///
 /// <para>
 /// Feature 014 (T018; contracts/api.md §2; research §0.7): suma los <b>39</b> de captaciones y aportes, enteros desde K7 también los de K8 a
-/// K11 —162 en total—. Misma convención: <c>Lending.Accounts.Read</c> trae datos del titular; <c>Lending.Accounts.View</c>, sólo conteos y
+/// K11 —162 en total; 163 desde la decisión del dueño del 2026-10-18 (D44), con <c>Lending.MembershipWithdrawals.ReverseAfterPayment</c>—. Misma convención: <c>Lending.Accounts.Read</c> trae datos del titular; <c>Lending.Accounts.View</c>, sólo conteos y
 /// saldos agregados.
 /// </para>
 /// </summary>
@@ -207,6 +207,8 @@ public static class LendingPermissionCatalogSeeder
         ("Lending.MembershipWithdrawals", "File",              "Radicar y desistir el retiro del asociado"),
         ("Lending.MembershipWithdrawals", "Approve",           "Aprobar o negar el retiro del asociado con acta y aprobar la devolución"),
         ("Lending.MembershipWithdrawals", "Settle",            "Liquidar el retiro del asociado hasta el monto atribuido"),
+        // Decisión del dueño del 2026-10-18 (D44): el nivel superior que reversa un pago del cruce con el retiro ya pagado y las cuentas canceladas.
+        ("Lending.MembershipWithdrawals", "ReverseAfterPayment", "Reversar un pago del cruce al retiro con el retiro ya pagado: reabre la cuenta"),
         ("Lending.Assembly",            "Register",            "Registrar y simular revalorización, excedentes y amortización"),
         ("Lending.Assembly",            "Approve",             "Aprobar, aplicar y reversar una distribución de la asamblea"),
         ("Lending.DeceasedCases",       "Register",            "Registrar el fallecimiento de un titular y la entrega"),

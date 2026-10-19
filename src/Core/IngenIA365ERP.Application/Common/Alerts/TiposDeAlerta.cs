@@ -111,6 +111,13 @@ public static class TiposDeAlerta
     /// sobregiro técnico: se bloquea para retiros y se avisa a quien reversa operaciones de cuentas. (nuevo)
     /// </summary>
     public const string SobregiroTecnico = "Cartera.SobregiroTecnico";
+
+    /// <summary>
+    /// Feature 014 (decisión del dueño del 2026-10-18, D44): se reversó un pago del cruce al retiro con el retiro ya pagado y sus cuentas canceladas: la
+    /// cuenta se reabrió con el saldo a favor del exasociado. Además del aviso por permiso, va por correo a la gerencia, la revisoría fiscal y los
+    /// destinatarios de <c>Captaciones.DestinatariosReversoTardio</c>. (nuevo)
+    /// </summary>
+    public const string ReversoTardioDeCruce = "Cartera.ReversoTardioDeCruce";
     public const string PeriodoInexistente = "Contabilidad.PeriodoInexistente";
     public const string GrupoNiifDistinto = "Contabilidad.GrupoNiifDistinto";
     public const string ValorNacionalDistinto = "Nomina.ValorNacionalDistinto";
@@ -254,6 +261,8 @@ public static class TiposDeAlerta
             ["Lending.MembershipWithdrawals.Approve"], AppYCorreo, AlertSeverity.Critical, "K7"),
         new(SobregiroTecnico, Cartera, "El reverso de una consignación ya usada dejó una cuenta con sobregiro técnico: quedó bloqueada para retiros.",
             ["Lending.Accounts.Reverse"], AppYCorreo, AlertSeverity.Critical, "K8"),
+        new(ReversoTardioDeCruce, Cartera, "Se reversó un pago del cruce al retiro con el retiro ya pagado: la cuenta se reabrió con saldo a favor del exasociado.",
+            ["Lending.MembershipWithdrawals.ReverseAfterPayment", "Lending.MembershipWithdrawals.Approve"], AppYCorreo, AlertSeverity.Critical, "K7"),
         new(PeriodoInexistente, "Accounting", "Llegó un hecho con fecha contable en un período que no existe.",
             ["Accounting.Periods.CloseYear"], AppYCorreo, AlertSeverity.Critical, "K1"),
         new(GrupoNiifDistinto, "Accounting", "El perfil regulatorio y el grupo NIIF de la configuración contable difieren.",

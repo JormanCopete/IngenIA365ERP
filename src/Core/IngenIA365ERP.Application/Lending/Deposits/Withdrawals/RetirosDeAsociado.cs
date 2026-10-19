@@ -32,6 +32,7 @@ public static class ErroresDeRetiro
     public const string CodigoCruceRechazado = "Lending.MembershipWithdrawal.OffsetRejected";
     public const string CodigoNadaQueDevolver = "Lending.MembershipWithdrawal.NothingToRefund";
     public const string CodigoCuentasCerradas = "Lending.MembershipWithdrawal.AccountsClosed";
+    public const string CodigoReaperturaConCuentaViva = "Lending.MembershipWithdrawal.ReopenConflict";
     public const string CodigoVistaPreviaCambio = "Lending.Savings.PreviewChanged";
     public const string CodigoPuntoNoCorresponde = ErroresDeGobierno.CodigoPuntoNoCorresponde;
 
@@ -71,8 +72,13 @@ public static class ErroresDeRetiro
     public static Error NadaQueDevolver() => new(CodigoNadaQueDevolver, "El retiro no tiene una devolución pendiente que aprobar.");
 
     public static Error CuentasCerradas(IReadOnlyList<string> cuentas) => new ErrorConDatos(CodigoCuentasCerradas,
-        $"El pago es del cruce de un retiro ya pagado y sus cuentas ({string.Join(", ", cuentas)}) están canceladas: el débito no se puede devolver.",
-        new { accounts = cuentas });
+        $"El pago es del cruce de un retiro ya pagado y sus cuentas ({string.Join(", ", cuentas)}) están canceladas: reversarlo reabre las cuentas con el "
+        + "saldo a favor del exasociado y exige el permiso Lending.MembershipWithdrawals.ReverseAfterPayment (D44).",
+        new { accounts = cuentas, requiredPermission = "Lending.MembershipWithdrawals.ReverseAfterPayment" });
+
+    public static Error ReaperturaConCuentaViva(string cuenta) => new ErrorConDatos(CodigoReaperturaConCuentaViva,
+        $"La cuenta de aportes {cuenta} no se puede reabrir: el exasociado ya tiene otra cuenta de aportes viva (reingresó). Resuelva la devolución con soporte.",
+        new { account = cuenta });
 
     public static Error VistaPreviaCambio(string esperada, string actual) => new ErrorConDatos(CodigoVistaPreviaCambio,
         "La liquidación cambió desde la vista previa (un pago, una consignación o un saldo nuevo): vuelva a verla antes de liquidar.",

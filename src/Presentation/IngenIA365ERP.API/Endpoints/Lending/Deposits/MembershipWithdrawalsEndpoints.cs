@@ -70,7 +70,8 @@ public class MembershipWithdrawalsEndpoints : ICarterModule
 
         retiros.MapPost("/{id:guid}/settle", async (Guid id, LiquidacionRequest body, HttpContext http, ISender sender, CancellationToken ct) =>
                 await sender.Send(new SettleMembershipWithdrawalCommand(id, body.Date, body.ExpectedPreviewSha256 ?? string.Empty, body.LossDeduction,
-                    body.Refund ?? new MembershipRefundInput(FormaDeDevolucionDeAportes.DisbursementOrder), body.Reason ?? string.Empty)
+                    body.Refund ?? new MembershipRefundInput(FormaDeDevolucionDeAportes.DisbursementOrder), body.Reason ?? string.Empty,
+                    body.PendingLoanBalance)
                 {
                     OperationKey = http.ClaveDeOperacion(),
                 }, ct))
@@ -100,7 +101,7 @@ public class MembershipWithdrawalsEndpoints : ICarterModule
 
     /// <summary>El cuerpo de <c>/settle</c>: la fecha, la huella de la vista previa, el descuento por pérdidas, la forma de la devolución y el motivo.</summary>
     public sealed record LiquidacionRequest(DateOnly? Date, string? ExpectedPreviewSha256, LossDeductionInput? LossDeduction, MembershipRefundInput? Refund,
-        string? Reason);
+        string? Reason, PendingLoanBalanceHandling? PendingLoanBalance = null);
 
     /// <summary>El cuerpo de <c>/refund/approve</c>: la aprobación con monto (US4), el beneficiario bancario y el motivo.</summary>
     public sealed record AprobarDevolucionRequest(Guid? ApprovalPublicId, PayeeBankInput? Payee, string? Reason);

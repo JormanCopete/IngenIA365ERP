@@ -128,7 +128,7 @@ El origen de un mensaje es la operación o el documento de la Cartera que produc
 | `ContractualMaturity` | `BonificacionReconocida` o `PenalidadAplicada` (incumplido) + `TrasladoEntreCuentasAplicado` o `DevolucionOrdenada` según la instrucción |
 | `AccountCharge` | `CargoDeCuentaCausado` (+ `CargoDeCaptacionCausado` a Comercial si está gravado); condonarlo: `CargoDeCuentaCondonado`; reversarlo: `OperacionDeCuentaReversada` + `CargoDeCaptacionReversado` |
 | `MembershipWithdrawal` | al aprobar, `RetiroDeAsociadoAprobado` |
-| `MembershipWithdrawalSettlement` | `CruceAlRetiroAplicado` (+ `PerdidaAplicadaAlRetiro`) + un `PagoAplicado` por crédito cruzado (su operación, `OwnLoanPayoff`) + `DevolucionOrdenada` + la orden |
+| `MembershipWithdrawalSettlement` | por crédito cruzado, **una** unidad con origen la operación de pago (`OwnLoanPayoff`): su `PagoAplicado` (lo emite el contrato de obligaciones) y un `CruceAlRetiroAplicado` con la parte de cada cuenta (`parts`), el principal —decisión del dueño del 2026-10-18, D45: mismo comprobante—; aparte, `PerdidaAplicadaAlRetiro` (su operación), `DevolucionOrdenada` + la orden |
 | `ContributionRefund` · `DeceasedDelivery` · `UnclaimedPayment` | `DevolucionOrdenada` + la orden |
 | `AssemblyDistribution` | `RevalorizacionDeAportesAplicada`, `ExcedentesDistribuidos` o `AportesAmortizados` (+ órdenes si el excedente se paga) |
 | `UnclaimedTransfer` | `SaldoTrasladadoANoReclamados` |
@@ -151,7 +151,7 @@ El origen de un mensaje es la operación o el documento de la Cartera que produc
 | `CdatConstituido` | `GmfRetenido` |
 | `CdatProrrogado` · `CdatRenovado` | `RetencionPracticada`, `GmfRetenido`, `CaptacionReclasificada` |
 | `CdatRedimido` · `CdatCancelado` | `RetencionPracticada`, `PenalidadAplicada`, `GmfRetenido`, `AjusteDeCausacionDeCaptacion` |
-| `CruceAlRetiroAplicado` | `PerdidaAplicadaAlRetiro` |
+| `CruceAlRetiroAplicado` | `PerdidaAplicadaAlRetiro`; desde D45 (2026-10-18) también el `PagoAplicado` de su crédito y los acompañantes de éste (`AnticipoRecibido`, `CobroDeInteresEnSuspenso`, `RecuperacionDeCastigada`, `SaldoAFavorReconocido`, `AjusteDeCausacionPorFechaValor`) |
 | `BonificacionReconocida` | `PenalidadAplicada` (no aplica junto: uno u otro según cumplimiento) |
 | `OperacionDeCuentaReversada` | `AjusteDeCausacionDeCaptacion` |
 
@@ -272,7 +272,7 @@ fecha contable (la 013 §5, T36); `related` = el original en reversos y la orden
 | `CargoPendienteCobrado` | `charges: [{ chargePublicId, amount }]` | `[{ ChargeReceivable, -2000 }, { Principal, -2000 }]` |
 | `CargoDeCuentaCondonado` | `charge`, `previousStatus`, `exemptionPublicId?` | `[{ ChargeReceivable, -2000 }]` |
 | `RevalorizacionDeAportesAplicada` · `ExcedentesDistribuidos` · `AportesAmortizados` | forma masiva: `distribution: { publicId, kind, year, sessionItemPublicId, fund, percent?, value?, base }`, `totals[]`, `lines[]`, `destination?` | líneas `[{ ContributionRevaluation, 15000, contributionClass: Revalued }]` |
-| `CruceAlRetiroAplicado` | `withdrawal: { publicId, number, cause }`, `offsets: [{ loan: LoanRefV1, paymentOperationPublicId, amount }]` | `[{ ContributionOrdinary, -2500000 }]` |
+| `CruceAlRetiroAplicado` | `withdrawal: { publicId, number, cause }`, `offsets: [{ loan: LoanRefV1, paymentOperationPublicId, amount }]` (uno: el crédito de la unidad), `parts: [{ account, dimensions, amounts, operationNumber }]` (D45: una por cuenta que pagó el crédito; `account`, `dimensions`, `amounts` y `operationNumber` de arriba repiten la primera) | `[{ ContributionOrdinary, -2500000 }]` |
 | `PerdidaAplicadaAlRetiro` | `loss: { year, proportion, sessionItemPublicId }` | `[{ ContributionOrdinary, -120000 }]` |
 | `DevolucionOrdenada` | `orderKind` (`OrderKind`), `orderPublicId?`, `targetAccount?`, `payeePersonPublicId`, `source: MembershipWithdrawal\|ContributionRefund\|DeceasedDelivery\|UnclaimedPayment` | `[{ ContributionOrdinary, -1500000, reasonCode: "MembershipRefund" }]` |
 | `DevolucionGirada` | `orderPublicId`, `orderKind`, `outcome`, `treasuryReference`, `occurredOn` | sin importes (informativo) |
@@ -309,6 +309,10 @@ fecha contable (la 013 §5, T36); `related` = el original en reversos y la orden
 ## 5. Mensajes a otros destinos
 
 ### 5.1 `RetiroDeAsociadoAprobado` v1 (`CAR → Associates`, FR-076, FR-124, E-04)
+
+Decisión del dueño del 2026-10-18 (D46): suma `withdrawalReasonCode` (opcional), el código del motivo de retiro de Asociados
+(`COR_WithdrawalReasons.LegacyCode`) que la cooperativa le asigna a la causa en `Captaciones.MotivosDeRetiroDeAsociados`;
+Asociados llena con él `COR_Associates.WithdrawalReasonId` (un código que no tiene deja el motivo vacío y no impide el retiro).
 
 Origen `MembershipWithdrawal`. Clave `Confirmation`. Tercero: el asociado. Lo origina la persona que aprueba el
 retiro (no admite proceso), en el mismo guardado que la aprobación.

@@ -32,7 +32,10 @@ public sealed class ConsumeMembershipWithdrawalApprovedCommandValidator : Abstra
 /// <c>AlreadyProcessed</c> sin un segundo efecto, también ante la colisión del índice por concurrencia;</item>
 /// <item>ya retirado con la misma fecha: deja el recibo sin cambiar nada; con otra fecha, <c>Rejected</c> con
 /// <c>Associate.WithdrawalDateMismatch</c> para revisión en la bandeja;</item>
-/// <item>sin asociado para la persona: <c>Rejected</c> con <c>Associate.NotFound</c>.</item>
+/// <item>sin asociado para la persona: <c>Rejected</c> con <c>Associate.NotFound</c>;</item>
+/// <item>decisión del dueño del 2026-10-18 (D46): con <c>WithdrawalReasonCode</c>, el motivo del catálogo de Asociados con ese código
+/// (<c>COR_WithdrawalReasons.LegacyCode</c>) llena <c>WithdrawalReasonId</c>; un código que el catálogo no tiene deja el motivo vacío y no impide el
+/// retiro.</item>
 /// </list>
 /// Asociados ya no retira por su cuenta (<c>Associate.WithdrawalOwnedByLending</c>): este consumo es la única vía. (nuevo)
 /// </summary>
@@ -86,6 +89,13 @@ public sealed class ConsumeMembershipWithdrawalApprovedCommandHandler(
             {
                 asociado.Status = EstadoRetirado;
                 asociado.WithdrawalDate = retiro.EffectiveDate;
+                if (!string.IsNullOrWhiteSpace(retiro.WithdrawalReasonCode))
+                {
+                    var codigo = retiro.WithdrawalReasonCode.Trim().ToUpperInvariant();
+                    var motivo = await db.WithdrawalReasons.AsNoTracking().Where(w => w.LegacyCode != null && w.LegacyCode.ToUpper() == codigo && !w.IsDeleted)
+                        .Select(w => (int?)w.Id).FirstOrDefaultAsync(ct);
+                    if (motivo is not null) asociado.WithdrawalReasonId = motivo;
+                }
                 asociado.UpdatedAt = reloj.UtcNow;
                 asociado.UpdatedBy = Actor;
             }

@@ -141,7 +141,8 @@
                     <p class="texto-apoyo">
                         Capital social @Pesos(v.EntityMinimum.Capital) → @Pesos(v.EntityMinimum.CapitalAfter)
                         @(v.EntityMinimum.Minimum is { } m ? $"· mínimo irreducible {Pesos(m)}" : "· sin mínimo irreducible fijado")
-                        @(v.EntityMinimum.WouldBreach ? "· la devolución quedaría pendiente" : "")
+                        @(v.EntityMinimum.WouldBreach ? "· la devolución de los aportes quedaría pendiente (los ahorros se devuelven)" : "")
+                        · el cruce toma primero @(v.FundsOrder == "AhorrosPrimero" ? "los ahorros" : "los aportes")
                     </p>
                     @if (v.Offsets.Count > 0)
                     {
@@ -161,6 +162,16 @@
                         </div>
                     }
                     <TablaDeLineasDeRetiro Lineas="@v.Lines" />
+                    @if (v.PendingLoanBalance > 0)
+                    {
+                        @* Decisión del dueño del 2026-10-18 (D45): quien liquida elige qué pasa con lo que los créditos siguen debiendo. *@
+                        <label class="campo campo-ancho">Los créditos siguen debiendo @Pesos(v.PendingLoanBalance): ¿qué pasa con ese saldo?
+                            <select class="e-input" @bind="_saldoPendiente">
+                                <option value="MoveToCashier">Pasan a recibir los pagos por caja</option>
+                                <option value="KeepRepaymentChannel">Conservan su forma de pago (libranza o nómina)</option>
+                            </select>
+                        </label>
+                    }
                     <div class="toolbar">
                         <label class="campo campo-ancho">Motivo * <input class="e-input" maxlength="500" @bind="_motivoLiquidacion" /></label>
                         <SfButton CssClass="e-primary" Disabled="@(_accion.Activa || string.IsNullOrWhiteSpace(_motivoLiquidacion))" OnClick="@LiquidarAsync">
@@ -216,6 +227,7 @@
     private DateTime? _fechaLiquidacion = DateTime.Today, _fechaEfectiva = DateTime.Today;
     private bool _conPerdidas, _mostrarDialogo;
     private string? _puntoPerdidas, _punto, _motivo, _motivoLiquidacion, _error, _errorLiquidacion;
+    private string _saldoPendiente = "MoveToCashier";
     private int _anioPerdidas = DateTime.Today.Year - 1;
     private decimal _proporcionPerdidas;
     private Dialogo _dialogo;
@@ -295,7 +307,7 @@
         using var carga = _accion.Iniciar();
         _errorLiquidacion = null;
         var r = await Cliente.LiquidarRetiroAsync(Id, new LiquidarRetiroRequest(Fecha(_fechaLiquidacion), _vista.Sha256, Perdidas(),
-            new FormaDeDevolucionRequest("DisbursementOrder"), _motivoLiquidacion.Trim()), _claveLiquidacion);
+            new FormaDeDevolucionRequest("DisbursementOrder"), _motivoLiquidacion.Trim(), _vista.PendingLoanBalance > 0 ? _saldoPendiente : null), _claveLiquidacion);
         if (!r.IsSuccess || r.Value is null) { _errorLiquidacion = string.Join(" ", LineasDeCreditoClient.Explicar(r)); return; }
         _retiro = r.Value;
         _vista = null;

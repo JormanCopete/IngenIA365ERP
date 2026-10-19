@@ -185,6 +185,19 @@ public enum MembershipWithdrawalCause
     Other = 99,
 }
 
+/// <summary>
+/// Qué pasa con el saldo de los créditos que el cruce al retiro no alcanza a cubrir (feature 014, decisión del dueño del 2026-10-18, D45): lo elige
+/// quien liquida. Las obligaciones siguen con su saldo pendiente; la diferencia es por dónde reciben los pagos. (nuevo)
+/// </summary>
+public enum PendingLoanBalanceHandling
+{
+    /// <summary>Pasan a recibir los pagos por caja: las libranzas y la nómina pasan a la forma de pago alterna del convenio (caja por defecto).</summary>
+    MoveToCashier = 1,
+
+    /// <summary>Conservan su forma de pago (la libranza o el descuento de nómina siguen si el deudor sigue empleado).</summary>
+    KeepRepaymentChannel = 2,
+}
+
 /// <summary>Estado del trámite de retiro del asociado (R15).</summary>
 public enum MembershipWithdrawalStatus
 {

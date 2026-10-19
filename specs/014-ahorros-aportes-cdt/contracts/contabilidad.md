@@ -171,7 +171,7 @@ cuadran solos (`Accounting.LendingFact.Unbalanced` es defecto del emisor). `Entr
 | 22 | `RevalorizacionDeAportesAplicada` | RVA | B | `RevaluationFund` | `ContributionCapital` (`Revalued`) | EnLinea | AO | K10 |
 | 23 | `ExcedentesDistribuidos` | EXD | B | `SurplusFund` | `ContributionCapital`, `DepositPrincipal` o `RefundPayable` (Mot `SurplusPayment`) según el destino | EnLinea | AO | K10 |
 | 24 | `AportesAmortizados` | AMZ | B | `ContributionCapital` | `RefundPayable` (Mot `ContributionRefund`) | EnLinea | AO | K10 |
-| 25 | `CruceAlRetiroAplicado` | CRR | B | `ContributionCapital`, `DepositPrincipal`, `DepositInactivePrincipal` | `RecaudoPorAplicar` (Cla `OwnLoanPayoff`): lo salda el `PagoAplicado` de cada crédito, que debita el mismo puente | EnLinea | RA | K7 |
+| 25 | `CruceAlRetiroAplicado` | CRR | B | `ContributionCapital`, `DepositPrincipal`, `DepositInactivePrincipal` | `RecaudoPorAplicar` (Cla `OwnLoanPayoff`): lo salda el `PagoAplicado` de su crédito, que debita el mismo puente **en el mismo comprobante** (D45, 2026-10-18) | EnLinea | RA | K7 |
 | 26 | `PerdidaAplicadaAlRetiro` | PDR | B | `ContributionCapital` | `AbsorbedLoss` | el del principal | RA | K7 |
 | 27 | `DevolucionOrdenada` | DVO | B | `ContributionCapital`, `DepositPrincipal`, `DepositInactivePrincipal` o `UnclaimedPayable` | `RefundPayable` (Mot `OrderKind`) o `DepositPrincipal` de otra cuenta (traslado) | EnLinea | RA | K7 |
 | 28 | `DevolucionGirada` | DVG | I | — | — | Always | — | K7 |
@@ -185,10 +185,17 @@ Reglas que valen para todos (además de las de la 013 §2.1):
 
 - **Unidad**: una operación y su modo; los acompañantes (`mensajes.md` §2.1) sellan el modo del principal y salen en
   **un** comprobante, con el tipo del principal.
-- **El débito automático y el cruce al retiro netean el puente**: `RetiroDeCuentaAplicado` o `CruceAlRetiroAplicado`
-  acreditan `RecaudoPorAplicar` con `OwnLoanPayoff`, y el `PagoAplicado` del crédito (la 013) lo debita en la misma
-  transacción, con su propio comprobante (`RC`). La conciliación del puente `OwnLoanPayoff` debe dar cero al cierre de
-  cada día (§8).
+- **El débito automático netea el puente**: `RetiroDeCuentaAplicado` acredita `RecaudoPorAplicar` con `OwnLoanPayoff`, y el
+  `PagoAplicado` del crédito (la 013) lo debita en la misma transacción, con su propio comprobante (`RC`). La conciliación
+  del puente `OwnLoanPayoff` debe dar cero al cierre de cada día (§8).
+- **El cruce al retiro y el pago del crédito van en el mismo comprobante** (decisión del dueño del 2026-10-18, D45; hasta
+  esa fecha iban en dos, unidos por el puente): el `CruceAlRetiroAplicado` de cada crédito viaja en la unidad de su
+  `PagoAplicado` (origen la operación de pago y su clave) y es el **principal**, así que el comprobante es del tipo del
+  cruce (`RA`, editable en el mapeo hecho → tipo de cada cooperativa). El constructor de US8 (T143) arma en él el débito de
+  aportes y ahorros por parte (`parts`) y el crédito de la cartera; el crédito y el débito del puente `OwnLoanPayoff` quedan
+  en el mismo comprobante (se anulan entre sí). El **excedente** a devolver va por `DevolucionOrdenada` a
+  `DevolucionPorPagar` (motivo `MembershipRefund`): la cuenta puente de Tesorería para pagarlo. Lo que el asociado sigue
+  debiendo se queda en sus créditos (sin asiento) y quien liquida elige si pasan a caja.
 - **Interés anticipado** (CDAT con `timing = Advance`): `InteresesDeCdatPagados` debita `InterestPayable` antes de
   causarlo; la cuenta queda con saldo débito durante el período y la causación la lleva a cero. Si la contadora quiere
   un diferido de gasto pagado por anticipado, es un rol nuevo en una versión posterior (pendiente, P1).

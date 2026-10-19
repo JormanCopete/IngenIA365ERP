@@ -345,6 +345,11 @@ public sealed class EmisorDeMensajes(IApplicationDbContext db, IActorActual acto
                 Agregar(await UltimoDeRaizAsync(raiz, destino, ct));
         }
 
+        // Feature 014 (decisión del dueño del 2026-10-18, D45): una solicitud con el mismo origen y la misma clave que mensajes ya emitidos se suma a
+        // su unidad (el despachador agrupa por origen + clave + destino). No depende de su propia unidad: si dependiera, la elegibilidad la partiría y
+        // la mitad que depende saldría en otro comprobante.
+        objetivos.RemoveAll(o => o.OriginPublicId == solicitud.Origen.PublicId
+                                 && string.Equals(o.OriginEventKey, solicitud.OriginEventKey, StringComparison.Ordinal));
         return objetivos;
 
         void Agregar(IntegrationMessage? mensaje)

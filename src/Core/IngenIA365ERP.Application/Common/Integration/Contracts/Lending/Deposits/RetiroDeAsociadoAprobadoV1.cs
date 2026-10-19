@@ -24,6 +24,12 @@ public sealed record RetiroDeAsociadoAprobadoV1
     /// <summary>La causa configurada cuando es <c>Other</c>.</summary>
     public string? CauseDetail { get; init; }
 
+    /// <summary>
+    /// Decisión del dueño del 2026-10-18 (D46): el código del motivo de retiro de Asociados (<c>COR_WithdrawalReasons.LegacyCode</c>) que la cooperativa
+    /// le asigna a la causa en <c>Captaciones.MotivosDeRetiroDeAsociados</c>; nulo sin mapeo.
+    /// </summary>
+    public string? WithdrawalReasonCode { get; init; }
+
     /// <summary>La fecha del retiro que Asociados registra.</summary>
     public DateOnly EffectiveDate { get; init; }
 

@@ -98,6 +98,10 @@ public class ParametrosDeCarteraTests
         { "Gmf.HechosGeneradores", "{\"gravados\": [\"Withdrawal\", \"TransferToOtherHolder\", \"TransferBetweenDemandAndTermDeposit\", \"TermDepositRedemptionToAccount\", \"Cancellation\", \"DirectDebit\"], \"exentos\": [\"TransferBetweenSameHolderSavings\"]}", [N], EntregaDeCartera.K8 },
         // Decisión del dueño del 2026-10-18 (D54): el redondeo del GMF es parámetro.
         { "Gmf.Redondeo", "Peso", [N], EntregaDeCartera.K8 },
+        // Decisiones del dueño del 2026-10-18 (D41, D44, D46): el retiro del asociado.
+        { "Captaciones.OrdenDeFondosAlRetiro", "AportesPrimero", [N], EntregaDeCartera.K7 },
+        { "Captaciones.MotivosDeRetiroDeAsociados", "{}", [N], EntregaDeCartera.K7 },
+        { "Captaciones.DestinatariosReversoTardio", "", [N], EntregaDeCartera.K7 },
         { "FondoDeLiquidez.PorcentajesPorCategoria", "", [N], EntregaDeCartera.K11 },
         { "Aportes.TopeCuotaFondoEmpleados", "0.10", [N], EntregaDeCartera.K7 },
         { "Aportes.FraccionMinima", "", [N], EntregaDeCartera.K7 },
@@ -148,7 +152,7 @@ public class ParametrosDeCarteraTests
         var posteriores = ParametrosDeCartera.Definiciones.Where(d => d.DisponibleDesde > (EntregaDeModulo)EntregaDeCartera.K6b).ToList();
 
         // Feature 014 (T017): las claves de captaciones y aportes existen desde ya con su entrega (K7 a K11) y no se ofrecen hasta que salga.
-        posteriores.Should().HaveCount(29).And.OnlyContain(d => d.DisponibleDesde >= (EntregaDeModulo)EntregaDeCartera.K7
+        posteriores.Should().HaveCount(32).And.OnlyContain(d => d.DisponibleDesde >= (EntregaDeModulo)EntregaDeCartera.K7
             && d.DisponibleDesde <= (EntregaDeModulo)EntregaDeCartera.K11);
         ParametrosDeCartera.Definiciones.Where(d => d.DisponibleDesde == (EntregaDeModulo)EntregaDeCartera.K6b).Should().BeEmpty("la vivienda no trae claves");
         ParametrosDeCartera.Definiciones.Where(d => d.DisponibleDesde == (EntregaDeModulo)EntregaDeCartera.K6a).Select(d => d.Clave).Should()

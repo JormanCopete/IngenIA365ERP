@@ -149,6 +149,7 @@ también los de K8 a K11. Se suman a los 123 de la 013: **39 códigos nuevos**, 
 | `Lending.Charges.Manage` · `.Waive` | registrar y reversar cargos · condonarlos y exonerar una cuenta | K8 |
 | `Lending.Interest.Settle` | liquidar a mano un período de intereses | K8 |
 | `Lending.MembershipWithdrawals.File` · `.Approve` · `.Settle` | radicar y desistir · aprobar o negar con acta, aprobar la devolución · liquidar el retiro (atribución con monto) | K7 |
+| `Lending.MembershipWithdrawals.ReverseAfterPayment` | **(decisión del dueño del 2026-10-18, D44)** reversar un pago del cruce al retiro con el retiro ya pagado: reabre la cuenta con el saldo a favor del exasociado | K7 |
 | `Lending.Assembly.Register` · `.Approve` | registrar y simular revalorización, excedentes y amortización · aprobarla y aplicarla, reversarla | K10 |
 | `Lending.DeceasedCases.Register` · `.Approve` | registrar el fallecimiento y la entrega · aprobar la entrega | K10 |
 | `Lending.Unclaimed.Manage` | trasladar a no reclamados y pagarlos | K10 |
@@ -446,12 +447,21 @@ Estados `MembershipWithdrawalStatus`: `Filed → Approved → Settled → Paid`,
 | `POST /{id}/approve` | MembershipWithdrawals.Approve | `DecideMembershipWithdrawalCommand` | `{ decision: Approve, sessionItemPublicId, effectiveDate, reason }` → `Approved`; emite **`RetiroDeAsociadoAprobado`** a Asociados en el mismo guardado | `Lending.Segregation.Conflict`, `Lending.Session.ItemMismatch` | K7 |
 | `POST /{id}/reject` | MembershipWithdrawals.Approve | `DecideMembershipWithdrawalCommand` | `{ decision: Reject, sessionItemPublicId, reason }` → `Rejected` | ídem | K7 |
 | `POST /{id}/settlement/preview` (sin clave) | MembershipWithdrawals.Settle | `PreviewMembershipWithdrawalSettlementQuery` | `{ date, applyLossDeduction }` → `{ lines[], offsets: [{ loanPublicId, number, modality, distribution[] }] (prelación de los estatutos, D14), lossDeduction?, refund, entityMinimum { capital, minimum, wouldBreach }, sha256, warnings[] }` | `Lending.MembershipWithdrawal.NotApproved` | K7 |
-| `POST /{id}/settle` | MembershipWithdrawals.Settle | `SettleMembershipWithdrawalCommand` | `{ date, expectedPreviewSha256, lossDeduction?: { sessionItemPublicId }, refund: { form: TransferToAccount\|DisbursementOrder, targetAccountPublicId?, payee? }, reason }` → `Settled` con la operación del cruce (aportes y ahorros contra los créditos, `InternalOffset`, **todo o nada**, FR-077) y la orden de devolución; devolución sobre la atribución: 202 `PendingApproval`; con el mínimo irreducible de la entidad perforado, la devolución queda `Pending` y se avisa al gerente (FR-080) | `Lending.Savings.PreviewChanged`, `Lending.MembershipWithdrawal.NotApproved`, `Lending.Contributions.EntityMinimumBreached` (aviso) | K7 |
+| `POST /{id}/settle` | MembershipWithdrawals.Settle | `SettleMembershipWithdrawalCommand` | `{ date, expectedPreviewSha256, lossDeduction?: { sessionItemPublicId }, refund: { form: TransferToAccount\|DisbursementOrder, targetAccountPublicId?, payee? }, reason, pendingLoanBalance?: MoveToCashier\|KeepRepaymentChannel }` (decisión del dueño del 2026-10-18, D45: con deuda pendiente después del cruce, quien liquida elige si los créditos pasan a caja —defecto— o conservan su forma de pago; la vista previa trae `pendingLoanBalance` y `fundsOrder`, D41) → `Settled` con la operación del cruce (aportes y ahorros contra los créditos, `InternalOffset`, **todo o nada**, FR-077) y la orden de devolución; devolución sobre la atribución: 202 `PendingApproval`; con el mínimo irreducible de la entidad perforado, sólo la devolución de los **aportes** queda `Pending` (los ahorros se devuelven, D43) y se avisa al gerente (FR-080) | `Lending.Savings.PreviewChanged`, `Lending.MembershipWithdrawal.NotApproved`, `Lending.Contributions.EntityMinimumBreached` (aviso) | K7 |
 | `POST /{id}/refund/approve` | MembershipWithdrawals.Approve | `ApproveMembershipRefundCommand` | `{ approvalPublicId?, reason }` → la orden de devolución emitida | `Lending.Segregation.Conflict` | K7 |
 
 Un reverso del pago del cruce en el crédito arrastra el débito de aportes y ahorros en la misma operación y deja el
 retiro en `ToRedo` (US10-4); `settle` vuelve a liquidar sobre el mismo trámite. `Paid` lo marca el consumo de
 `ResultadoDelGiro` de la orden de devolución.
+**Decisiones del dueño del 2026-10-18** (research §13): el cruce y el pago de cada crédito van en el mismo comprobante (D45: un
+`CruceAlRetiroAplicado` por crédito en la unidad de su `PagoAplicado`); el orden de los fondos lo fijan los estatutos
+(`Captaciones.OrdenDeFondosAlRetiro`, D41); el motivo del retiro llena el de Asociados por el mapeo
+`Captaciones.MotivosDeRetiroDeAsociados` (D46); el reverso tardío de un pago del cruce con el retiro pagado y las cuentas
+canceladas ya no se rechaza: con `Lending.MembershipWithdrawals.ReverseAfterPayment` reabre las cuentas en cierre con el
+saldo a favor del exasociado, devuelve el retiro a `Settled` y avisa (alerta `Cartera.ReversoTardioDeCruce` y correo a
+gerencia, revisoría fiscal y `Captaciones.DestinatariosReversoTardio`); sin el permiso responde
+`Lending.MembershipWithdrawal.AccountsClosed` (`data.requiredPermission`) y, si el exasociado ya reingresó con otra cuenta
+de aportes viva, `Lending.MembershipWithdrawal.ReopenConflict` (D44).
 
 ---
 

@@ -1214,7 +1214,8 @@ El trámite del retiro del asociado, de la solicitud a la devolución. Documento
 | `RefundDecisionId` | int FK `LND_CreditDecisions` | sí | devolución sobre la atribución (`ContributionRefund`) |
 | `PaidAt` | datetime | sí | |
 | `SettlementIssuedDocumentId` | int FK `LND_IssuedDocuments` | sí | `MembershipWithdrawalSettlement` |
-| `ToRedoReason` | nvarchar(500) | sí | reverso de un pago cruzado (R15) |
+| `ToRedoReason` | nvarchar(500) | sí | reverso de un pago cruzado (R15); también el motivo de la reapertura por un reverso tardío (D44) |
+| `PendingLoanBalanceHandling` | int (`PendingLoanBalanceHandling`: `MoveToCashier` 1, `KeepRepaymentChannel` 2) **(nuevo, decisión del dueño del 2026-10-18, D45)** | sí | qué eligió quien liquidó para lo que los créditos siguen debiendo después del cruce; nulo sin deuda pendiente |
 
 **Una solicitud viva por persona** (`Lending.Contributions.WithdrawalAlreadyFiled` **(nuevo en data-model)**): como
 los filtros no admiten `IN` ni `OR` (013 §0.13), van dos UK `UK_LND_MembershipWithdrawals_Filed (PersonId)` filtrado

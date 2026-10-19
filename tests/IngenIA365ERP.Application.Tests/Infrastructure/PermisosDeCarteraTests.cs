@@ -58,6 +58,8 @@ public class PermisosDeCarteraTests
         "DirectDebits.Manage", "GmfExemptions.Manage", "Charges.Manage", "Charges.Waive", "Interest.Settle", "MembershipWithdrawals.File",
         "MembershipWithdrawals.Approve", "MembershipWithdrawals.Settle", "Assembly.Register", "Assembly.Approve", "DeceasedCases.Register",
         "DeceasedCases.Approve", "Unclaimed.Manage", "LiquidityFund.View", "LiquidityFund.Manage", "Deposits.Migration", "Deposits.Activate",
+        // Decisión del dueño del 2026-10-18 (D44): el reverso tardío de un pago del cruce al retiro.
+        "MembershipWithdrawals.ReverseAfterPayment",
     ];
 
     private static bool DeCartera(string c) => c.StartsWith("Lending.", StringComparison.Ordinal);
@@ -65,7 +67,7 @@ public class PermisosDeCarteraTests
     [Fact]
     public void El_catalogo_de_Cartera_es_exactamente_el_de_DT_2_14_mas_la_preferencia_de_abono()
     {
-        Cartera.Should().HaveCount(162).And.OnlyHaveUniqueItems();
+        Cartera.Should().HaveCount(163).And.OnlyHaveUniqueItems();
         LendingPermissionCatalogSeeder.Catalog.Select(p => $"{p.Resource}.{p.Action}")
             .Should().BeEquivalentTo(Cartera.Select(c => "Lending." + c));
         LendingPermissionCatalogSeeder.Catalog.Should().OnlyContain(p => !string.IsNullOrWhiteSpace(p.Description));
@@ -102,7 +104,7 @@ public class PermisosDeCarteraTests
         concedidos.Should().NotContain(c => c.StartsWith("Lending.Decisions.", StringComparison.Ordinal), "administrar no es aprobar crédito (T61)");
         concedidos.Should().NotContain("Lending.Sessions.Vote");
         concedidos.Should().NotContain("Lending.NegotiatedRates.Approve", "administrar no es aprobar tasa (decisión del dueño del 2026-10-18, feature 014 D17)");
-        concedidos.Should().HaveCount(162 - 4 - 1 - 1);
+        concedidos.Should().HaveCount(163 - 4 - 1 - 1);
         concedidos.Should().Contain(["Lending.Sessions.Close", "Lending.Disbursements.Execute", "Lending.Activation.Execute"]);
     }
 

@@ -79,7 +79,11 @@ public class ResolutorDeReglasDeCarteraTests
         O.Principal([SaldoAFavorReconocidoV1.Type, CreditoAjustadoDesdeComercialV1.Type]).Should().Be(CreditoAjustadoDesdeComercialV1.Type);
         O.Principal([InteresCausadoV1.Type]).Should().Be(InteresCausadoV1.Type);
         O.EsAcompanante(AnticipoRecibidoV1.Type).Should().BeTrue();
-        O.EsAcompanante(PagoAplicadoV1.Type).Should().BeFalse();
+        // Feature 014 (decisión del dueño del 2026-10-18, D45): el pago del cruce al retiro viaja en la unidad del cruce, que es su principal.
+        O.EsAcompanante(PagoAplicadoV1.Type).Should().BeTrue();
+        O.Principal([PagoAplicadoV1.Type, AnticipoRecibidoV1.Type, IngenIA365ERP.Application.Common.Integration.Contracts.Lending.Deposits.CruceAlRetiroAplicadoV1.Type])
+            .Should().Be(IngenIA365ERP.Application.Common.Integration.Contracts.Lending.Deposits.CruceAlRetiroAplicadoV1.Type,
+                "el cruce y su pago van en el mismo comprobante, del tipo del cruce (RA)");
     }
 
     [Fact]

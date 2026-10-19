@@ -8,6 +8,7 @@ using IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts;
 using IngenIA365ERP.Domain.Entities.Lending.Deposits.Configuration;
 using IngenIA365ERP.Domain.Entities.Lending.Deposits.Transactions;
 using IngenIA365ERP.Domain.Enums.Lending;
+using IngenIA365ERP.Domain.Lending.Deposits;
 using IngenIA365ERP.Domain.Lending.Parameters;
 using Microsoft.EntityFrameworkCore;
 
@@ -96,6 +97,18 @@ public sealed class ReglasDeAportes(IApplicationDbContext db, ReglasDeParametros
 
     /// <summary>El mínimo irreducible de la entidad (FR-080, <c>Aportes.MinimoIrreducibleEntidad</c>); nulo sin fijar.</summary>
     public Task<decimal?> MinimoDeLaEntidadAsync(DateOnly fecha, CancellationToken ct) => DecimalAsync(ParametrosDeCartera.AportesMinimoIrreducibleEntidad, fecha, ct);
+
+    /// <summary>
+    /// Decisión del dueño del 2026-10-18 (D41): de qué fondos sale primero el cruce al retiro (<c>Captaciones.OrdenDeFondosAlRetiro</c>, según los
+    /// estatutos); sin valor legible, aportes primero.
+    /// </summary>
+    public async Task<OrdenDeFondosAlRetiro> OrdenDeFondosAlRetiroAsync(DateOnly fecha, CancellationToken ct)
+    {
+        var leido = await parametros.LeerAsync(ParametrosDeCartera.CaptacionesOrdenDeFondosAlRetiro, fecha, ct: ct);
+        return leido.IsSuccess && string.Equals(leido.Value.Texto, nameof(OrdenDeFondosAlRetiro.AhorrosPrimero), StringComparison.Ordinal)
+            ? OrdenDeFondosAlRetiro.AhorrosPrimero
+            : OrdenDeFondosAlRetiro.AportesPrimero;
+    }
 
     /// <summary>Los créditos vivos de la persona como deudora (FR-044): los aportes los respaldan.</summary>
     public async Task<IReadOnlyList<string>> CreditosVivosAsync(int personaId, CancellationToken ct) =>

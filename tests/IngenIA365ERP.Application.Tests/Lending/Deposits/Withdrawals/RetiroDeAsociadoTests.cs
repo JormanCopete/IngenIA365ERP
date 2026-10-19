@@ -404,6 +404,91 @@ public sealed class RetiroDeAsociadoTests : IDisposable
     }
 
     [Fact]
+    public async Task El_cruce_viaja_en_la_unidad_de_su_pago_y_lo_que_queda_debiendo_pasa_a_caja_por_defecto()
+    {
+        // Decisión del dueño del 2026-10-18 (D45): el cruce y el pago del crédito van en el mismo comprobante (misma unidad: origen el pago y su clave),
+        // y quien liquida elige qué pasa con lo que los créditos siguen debiendo (por defecto, pasan a caja).
+        await AnaConAportesAsync();
+        var (_, pago) = await CreditoAsync(1_500_000m);
+        var retiro = await AprobadoAsync();
+
+        var previa = await PreviaAsync(retiro.PublicId);
+        previa.PendingLoanBalance.Should().Be(500_000m);
+        previa.FundsOrder.Should().Be(nameof(Domain.Lending.Deposits.OrdenDeFondosAlRetiro.AportesPrimero));
+        previa.Warnings.Should().Contain(w => w.Contains("D45", StringComparison.Ordinal));
+        Ok(await LiquidarAsync(retiro.PublicId, previa.Sha256));
+
+        var mensaje = await _a.Db.IntegrationMessages.AsNoTracking().SingleAsync(m => m.Type == CruceAlRetiroAplicadoV1.Type);
+        mensaje.OriginPublicId.Should().Be(pago.PublicId, "en la unidad del PagoAplicado del crédito");
+        mensaje.OriginEventKey.Should().Be(IngenIA365ERP.Application.Common.Integration.ClavesDeEvento.Confirmacion);
+        mensaje.PayloadJson.Should().Contain("\"parts\"");
+        (await _a.Db.MemberAccountTransactions.AsNoTracking().Where(t => t.Kind == MemberAccountTransactionKind.InternalOffset).Select(t => t.MessagePublicId)
+            .Distinct().ToListAsync()).Should().Equal(mensaje.PublicId);
+        (await _a.Db.MembershipWithdrawals.AsNoTracking().SingleAsync()).PendingLoanBalanceHandling.Should().Be(PendingLoanBalanceHandling.MoveToCashier);
+    }
+
+    [Fact]
+    public async Task El_reverso_tardio_con_el_retiro_pagado_reabre_la_cuenta_con_el_permiso_superior_y_avisa()
+    {
+        // Decisión del dueño del 2026-10-18 (D44): hasta esa fecha se rechazaba con AccountsClosed (research E69).
+        await AnaConAportesAsync();
+        var (credito, pago) = await CreditoAsync(600_000m);
+        var retiro = await AprobadoAsync();
+        Ok(await LiquidarAsync(retiro.PublicId, (await PreviaAsync(retiro.PublicId)).Sha256));
+        var orden = await _a.Db.AccountPayoutOrders.SingleAsync();
+        Ok(Resultado(await Ordenes().AplicarResultadoAsync(orden, DisbursementOrderStatus.Disbursed, "TES-1", _a.G.HoyLocal, null, default)));
+        await _a.Db.SaveChangesAsync();
+        _a.Db.ChangeTracker.Clear();
+        (await _a.Db.MembershipWithdrawals.AsNoTracking().SingleAsync()).Status.Should().Be(MembershipWithdrawalStatus.Paid);
+        Parametro(ParametrosDeCartera.CaptacionesDestinatariosReversoTardio, "revisoria@coop.test; gerencia@coop.test");
+
+        var reverso = new LoanOperation
+        {
+            LoanId = credito.Id, Kind = LoanOperationKind.PaymentReversal, Number = "REV-000002", ValueDate = _a.G.HoyLocal, AccountingDate = _a.G.HoyLocal,
+            RegisteredAt = _a.G.UtcNow, Amount = 600_000m, ReversesOperationId = pago.Id, Reason = "Pago aplicado por error",
+        };
+        _a.Db.LoanOperations.Add(reverso);
+        await _a.Db.SaveChangesAsync();
+
+        var sinPermiso = Substitute.For<IngenIA365ERP.Application.Common.Interfaces.Security.ICurrentUserPermissions>();
+        sinPermiso.ListAsync(Arg.Any<CancellationToken>()).Returns(["Lending.Payments.Reverse"]);
+        (await new ArrastreDelCruceAlRetiro(_a.Db, _a.Reversion(), _a.C.Cerrojo, _a.G.Reloj, sinPermiso).ValidarAsync(pago, default))!.Code
+            .Should().Be(ErroresDeRetiro.CodigoCuentasCerradas, "sin el permiso de nivel superior no procede");
+
+        var conPermiso = Substitute.For<IngenIA365ERP.Application.Common.Interfaces.Security.ICurrentUserPermissions>();
+        conPermiso.ListAsync(Arg.Any<CancellationToken>()).Returns([ArrastreDelCruceAlRetiro.PermisoDeReversoTardio]);
+        var correo = Substitute.For<IngenIA365ERP.Application.Common.Interfaces.Notifications.IEmailSender>();
+        var arrastre = new ArrastreDelCruceAlRetiro(_a.Db, _a.Reversion(), _a.C.Cerrojo, _a.G.Reloj, conPermiso, _a.C.Parametros(), correo, _alertas);
+        (await arrastre.ValidarAsync(pago, default)).Should().BeNull();
+        var r = await arrastre.AlReversarAsync(pago, reverso, default);
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? r.Error.Message : string.Empty);
+        await _a.Db.SaveChangesAsync();
+        _a.Db.ChangeTracker.Clear();
+
+        var cuenta = await _a.Db.MemberAccounts.AsNoTracking().SingleAsync(a => a.Nature == LineNature.Contribution);
+        cuenta.Status.Should().Be(MemberAccountStatus.Closing, "la cuenta se reabre en cierre con el saldo a favor del exasociado");
+        LectorDeCuentas.SaldoDelTitular(LineNature.Contribution, (await LectorDeCuentas.SaldosAsync(_a.Db, [cuenta.Id], default))[cuenta.Id])
+            .Should().Be(600_000m);
+        (await _a.Db.MembershipWithdrawals.AsNoTracking().SingleAsync()).Status.Should().Be(MembershipWithdrawalStatus.Settled,
+            "vuelve a liquidado para ordenar la devolución");
+        await _alertas.Received().LevantarAsync(Arg.Is<AlertaALevantar>(x => x.TypeCode == TiposDeAlerta.ReversoTardioDeCruce), Arg.Any<CancellationToken>());
+        await correo.Received(2).SendAsync(Arg.Any<IngenIA365ERP.Application.Common.Interfaces.Notifications.EmailMessage>(), Arg.Any<CancellationToken>());
+        ArrastreDelCruceAlRetiro.Correos("a@b.co, sin-arroba ; c@d.co").Should().Equal("a@b.co", "c@d.co");
+    }
+
+    [Fact]
+    public void El_motivo_de_Asociados_sale_del_mapeo_de_la_cooperativa()
+    {
+        // Decisión del dueño del 2026-10-18 (D46).
+        const string Mapeo = "{\"Voluntary\": \"VOL\", \"Death\": \" FAL \"}";
+        DecideMembershipWithdrawalCommandHandler.CodigoDeMotivo(Mapeo, MembershipWithdrawalCause.Voluntary).Should().Be("VOL");
+        DecideMembershipWithdrawalCommandHandler.CodigoDeMotivo(Mapeo, MembershipWithdrawalCause.Death).Should().Be("FAL");
+        DecideMembershipWithdrawalCommandHandler.CodigoDeMotivo(Mapeo, MembershipWithdrawalCause.Exclusion).Should().BeNull();
+        DecideMembershipWithdrawalCommandHandler.CodigoDeMotivo("no es json", MembershipWithdrawalCause.Voluntary).Should().BeNull();
+        DecideMembershipWithdrawalCommandHandler.CodigoDeMotivo("{}", MembershipWithdrawalCause.Voluntary).Should().BeNull();
+    }
+
+    [Fact]
     public async Task Si_el_pago_del_cruce_no_se_aplica_no_se_aplica_nada()
     {
         await AnaConAportesAsync();
@@ -432,7 +517,7 @@ public sealed class RetiroDeAsociadoTests : IDisposable
         };
         _a.Db.LoanOperations.Add(reverso);
         await _a.Db.SaveChangesAsync();
-        var arrastre = new ArrastreDelCruceAlRetiro(_a.Db, _a.Reversion(), _a.C.Cerrojo);
+        var arrastre = new ArrastreDelCruceAlRetiro(_a.Db, _a.Reversion(), _a.C.Cerrojo, _a.G.Reloj);
         (await arrastre.ValidarAsync(pago, default)).Should().BeNull();
         var r = await arrastre.AlReversarAsync(pago, reverso, default);
         r.IsSuccess.Should().BeTrue(r.IsFailure ? r.Error.Message : string.Empty);
@@ -459,6 +544,7 @@ public sealed class RetiroDeAsociadoTests : IDisposable
 
         var r = Ok(await consumir.Handle(new ConsumeMembershipWithdrawalApprovedCommand([mensaje.PublicId]), default));
         r.Should().BeOfType<ResultadoDeConsumo.Processed>();
+        mensaje.PayloadJson.Should().NotContain("\"withdrawalReasonCode\":\"", "sin mapeo de motivos (D46) no viaja código");
         _a.Db.ChangeTracker.Clear();
         var asociado = await _a.Db.Associates.AsNoTracking().SingleAsync(a => a.PersonId == _a.C.Ana.Id);
         asociado.Status.Should().Be(ConsumeMembershipWithdrawalApprovedCommandHandler.EstadoRetirado);

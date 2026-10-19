@@ -56,7 +56,14 @@ public sealed record MembershipWithdrawalSettlementPreviewDto(
     DateOnly RefundDueOn,
     EntityMinimumDto EntityMinimum,
     string Sha256,
-    IReadOnlyList<string> Warnings);
+    IReadOnlyList<string> Warnings)
+{
+    /// <summary>D45 (2026-10-18): lo que los créditos siguen debiendo después del cruce; mayor que cero, quien liquida elige qué pasa con ese saldo.</summary>
+    public decimal PendingLoanBalance { get; init; }
+
+    /// <summary>D41 (2026-10-18): de qué fondos salió primero el cruce (<c>AportesPrimero</c> o <c>AhorrosPrimero</c>, según los estatutos).</summary>
+    public string FundsOrder { get; init; } = nameof(OrdenDeFondosAlRetiro.AportesPrimero);
+}
 
 /// <summary>Lo que se liquida y con qué: el cálculo, las cuentas y los créditos, el mínimo de la entidad y la huella. (nuevo)</summary>
 public sealed record PlanDeLiquidacionDeRetiro(
@@ -70,6 +77,9 @@ public sealed record PlanDeLiquidacionDeRetiro(
     string Huella,
     IReadOnlyList<string> Avisos)
 {
+    /// <summary>D41: el orden de los fondos con que se calculó.</summary>
+    public OrdenDeFondosAlRetiro OrdenDeFondos { get; init; } = OrdenDeFondosAlRetiro.AportesPrimero;
+
     public MembershipWithdrawalSettlementPreviewDto Dto(DateOnly fecha)
     {
         var lineas = Calculo.Lineas.Select((l, i) => new MembershipWithdrawalLineDto(0, i + 1, l.Clase,
@@ -80,7 +90,11 @@ public sealed record PlanDeLiquidacionDeRetiro(
             c.Credito.DiasDeMora, c.Credito.TasaAnual, c.Credito.ParaCancelar, c.Monto, c.Total)).ToList();
         var perdida = Perdida is { } p && Calculo.Perdidas > 0m ? new LossDeductionDto(p.Year, p.Proportion, Calculo.Perdidas, p.SessionItemPublicId) : null;
         return new MembershipWithdrawalSettlementPreviewDto(fecha, lineas, cruces, perdida, Calculo.Aportes, Calculo.Ahorros, Calculo.Cruzado,
-            Calculo.ADevolver, DevolverHasta, MinimoDeLaEntidad, Huella, Avisos);
+            Calculo.ADevolver, DevolverHasta, MinimoDeLaEntidad, Huella, Avisos)
+        {
+            PendingLoanBalance = Calculo.SaldoPendienteDeCreditos,
+            FundsOrder = OrdenDeFondos.ToString(),
+        };
     }
 }
 
@@ -90,8 +104,10 @@ public sealed record PlanDeLiquidacionDeRetiro(
 /// los suma US5 y el CDAT, US6). Los créditos vivos son los de la persona como deudora, liquidados a la fecha por la reconstrucción del crédito
 /// (<see cref="IMotorDeCreditoEnDesembolso.LiquidarAsync"/>), con la tasa de su última versión de condiciones. El descuento por pérdidas exige la línea
 /// que lo admita (<c>LossDeductionEnabled</c>, D15) y un punto de acta cerrado que apruebe. El mínimo irreducible de la entidad
-/// (<c>Aportes.MinimoIrreducibleEntidad</c>) se compara con el capital social después de todo lo que sale de aportes. La huella cubre todo lo que decide la
-/// liquidación: cambia con un pago, una consignación o un saldo nuevo. (nuevo)
+/// (<c>Aportes.MinimoIrreducibleEntidad</c>) se compara con el capital social después de todo lo que sale de aportes; si lo perfora, sólo se retiene la
+/// devolución de los <b>aportes</b> (los ahorros se devuelven; decisión del dueño del 2026-10-18, D43). De qué fondos sale primero el cruce lo dicen los
+/// estatutos (<c>Captaciones.OrdenDeFondosAlRetiro</c>, D41). La huella cubre todo lo que decide la liquidación: cambia con un pago, una consignación o un
+/// saldo nuevo. (nuevo)
 /// </summary>
 public sealed class PlanesDeLiquidacionDeRetiro(
     IApplicationDbContext db,
@@ -140,18 +156,24 @@ public sealed class PlanesDeLiquidacionDeRetiro(
             deLaPerdida = new PerdidaEnElRetiro(perdida.Year, perdida.Proportion);
         }
 
-        var calculo = LiquidacionDeRetiro.Calcular(enElRetiro, creditos, deLaPerdida);
+        var ordenDeFondos = await reglas.OrdenDeFondosAlRetiroAsync(fecha, ct);
+        var calculo = LiquidacionDeRetiro.Calcular(enElRetiro, creditos, deLaPerdida, ordenDeFondos);
         var capital = await reglas.CapitalSocialAsync(ct);
         var minimo = await reglas.MinimoDeLaEntidadAsync(fecha, ct);
+        var devolucionDeAportes = calculo.DevolucionDeAportes([aportes.Id]);
         var salenDeAportes = calculo.Lineas
             .Where(l => l.Clase is MembershipWithdrawalLineKind.LossDeduction or MembershipWithdrawalLineKind.LoanOffset && l.CuentaId == aportes.Id)
-            .Sum(l => -l.Monto) + calculo.DevolucionDeAportes([aportes.Id]);
+            .Sum(l => -l.Monto) + devolucionDeAportes;
         var despues = capital - salenDeAportes;
-        var perfora = minimo is > 0m && calculo.ADevolver > 0m && despues < minimo;
+        // D43 (2026-10-18): el mínimo irreducible retiene sólo la parte de aportes de la devolución; los ahorros se devuelven.
+        var perfora = minimo is > 0m && devolucionDeAportes > 0m && despues < minimo;
         if (perfora)
-            avisos.Add($"{ErroresDeAportes.CodigoMinimoDeLaEntidad}: la devolución dejaría el capital social ({despues:N2}) por debajo del mínimo irreducible "
-                       + $"de la entidad ({minimo:N2}); queda pendiente y se avisa al gerente (FR-080).");
+            avisos.Add($"{ErroresDeAportes.CodigoMinimoDeLaEntidad}: la devolución de los aportes dejaría el capital social ({despues:N2}) por debajo del mínimo "
+                       + $"irreducible de la entidad ({minimo:N2}); los aportes quedan pendientes y se avisa al gerente (FR-080). Los ahorros se devuelven.");
         if (calculo.Cruces.Any(c => !c.Total)) avisos.Add("Los aportes y ahorros no alcanzan para todos los créditos: el que queda conserva su saldo y sus garantías.");
+        if (calculo.SaldoPendienteDeCreditos > 0m)
+            avisos.Add($"Los créditos siguen debiendo {calculo.SaldoPendienteDeCreditos:N2} después del cruce: al liquidar elija si pasan a recibir los pagos por "
+                       + "caja o conservan su forma de pago (D45).");
         var devolverHasta = await ordenes.PlazoDeDevolucionAsync(retiro.EffectiveDate ?? fecha, version?.RefundTermDays, ct);
 
         var huella = new HuellaDeCartera()
@@ -166,10 +188,11 @@ public sealed class PlanesDeLiquidacionDeRetiro(
                 .Decimal("lossProportion", perdida.Proportion, 6))
             .Decimal("capital", capital, 2)
             .Decimal("entityMinimum", minimo, 2)
+            .Texto("fundsOrder", ordenDeFondos.ToString())
             .Calcular();
         return Result.Success(new PlanDeLiquidacionDeRetiro(calculo, cuentas.ToDictionary(c => c.Id),
             vivos.ToDictionary(l => l.Id, l => (l.PublicId, l.Number)), codeudores, new EntityMinimumDto(capital, minimo, despues, perfora), devolverHasta,
-            deLaPerdida is null ? null : perdida, huella, avisos));
+            deLaPerdida is null ? null : perdida, huella, avisos) { OrdenDeFondos = ordenDeFondos });
     }
 
     /// <summary>El punto de un acta cerrada que aprueba (cualquier asunto: el descuento por pérdidas lo dispone la asamblea o el consejo).</summary>
@@ -201,8 +224,14 @@ public sealed record PreviewMembershipWithdrawalSettlementQuery(Guid WithdrawalP
 /// mínimo irreducible de la entidad (FR-080: el retiro se liquida, la devolución queda pendiente y se avisa al gerente)—; las líneas de la versión nueva y,
 /// después, la liquidación emitida (<c>MembershipWithdrawalSettlement</c>). Sin nada que devolver, el retiro queda pagado y sus cuentas canceladas. (nuevo)
 /// </summary>
+/// <remarks>
+/// Decisión del dueño del 2026-10-18 (D45): si los créditos siguen debiendo después del cruce, <paramref name="PendingLoanBalance"/> dice qué pasa con ese
+/// saldo —pasan a caja (<c>MoveToCashier</c>, el defecto: las libranzas y la nómina pasan a la forma de pago alterna) o conservan su forma de pago—; se
+/// guarda en el retiro. Sin deuda pendiente, no se usa.
+/// </remarks>
 public sealed record SettleMembershipWithdrawalCommand(Guid WithdrawalPublicId, DateOnly? Date, string ExpectedPreviewSha256,
-    LossDeductionInput? LossDeduction, MembershipRefundInput Refund, string Reason) : IRequest<Result<MembershipWithdrawalDto>>, IOperacionIdempotente, IConMotivo
+    LossDeductionInput? LossDeduction, MembershipRefundInput Refund, string Reason, PendingLoanBalanceHandling? PendingLoanBalance = null)
+    : IRequest<Result<MembershipWithdrawalDto>>, IOperacionIdempotente, IConMotivo
 {
     public Guid OperationKey { get; init; }
 }
@@ -247,6 +276,7 @@ public sealed class SettleMembershipWithdrawalCommandValidator : ValidadorConMot
         RuleFor(x => x.Refund.Form).IsInEnum().When(x => x.Refund is not null);
         RuleFor(x => x.Refund.Payee!.AccountNumber).NotEmpty().MaximumLength(25).When(x => x.Refund?.Payee is not null);
         RuleFor(x => x.LossDeduction!).SetValidator(new LossDeductionInputValidator()).When(x => x.LossDeduction is not null);
+        RuleFor(x => x.PendingLoanBalance).IsInEnum().When(x => x.PendingLoanBalance is not null);
     }
 }
 
@@ -360,17 +390,23 @@ public sealed class SettleMembershipWithdrawalCommandHandler(
             var cruces = await cruce.AplicarAsync(retiro, liquidacion, calculo.Cruces, fecha, deudor, ct);
             if (cruces.IsFailure) return Result.Failure<MembershipWithdrawal>(cruces.Error);
 
+            // D43 (2026-10-18): si el mínimo irreducible se perforaría, se retiene sólo la devolución de los aportes; los ahorros se devuelven ya.
             var retenida = plan.MinimoDeLaEntidad.WouldBreach;
+            var aDevolverAhora = retenida ? calculo.Devolucion.Where(d => d.CuentaId != retiro.ContributionAccountId).ToList() : calculo.Devolucion;
             IReadOnlyList<DevolucionDeCuentaOrdenada> devoluciones = [];
-            if (!retenida && calculo.ADevolver > 0m)
+            if (aDevolverAhora.Sum(d => d.Monto) > 0m)
             {
-                var devueltas = await ordenes.DevolverRetiroAsync(retiro, calculo.Devolucion, beneficiario.Value, hoy, plan.DevolverHasta, ct);
+                var devueltas = await ordenes.DevolverRetiroAsync(retiro, aDevolverAhora, beneficiario.Value, hoy, plan.DevolverHasta, ct);
                 if (devueltas.IsFailure) return Result.Failure<MembershipWithdrawal>(devueltas.Error);
                 devoluciones = devueltas.Value;
             }
 
             retiro.Liquidar(usuario, reloj.UtcNow, calculo.Aportes, calculo.Ahorros, calculo.Cruzado, calculo.Perdidas, calculo.ADevolver, plan.DevolverHasta,
                 retenida, cruces.Value.FirstOrDefault()?.Operacion.Id);
+            // D45 (2026-10-18): qué pasa con lo que los créditos siguen debiendo; por defecto, pasan a caja.
+            retiro.PendingLoanBalanceHandling = calculo.SaldoPendienteDeCreditos > 0m
+                ? request.PendingLoanBalance ?? PendingLoanBalanceHandling.MoveToCashier
+                : null;
             var numero = 0;
             foreach (var l in calculo.Lineas)
             {
@@ -396,7 +432,9 @@ public sealed class SettleMembershipWithdrawalCommandHandler(
                     Amount = l.Monto,
                     AccountOperationId = deCuenta,
                     LoanOperationId = deCredito,
-                    Notes = l.Clase == MembershipWithdrawalLineKind.Refund && retenida ? "Pendiente: perforaría el mínimo irreducible de la entidad" : l.Nota,
+                    Notes = l.Clase == MembershipWithdrawalLineKind.Refund && retenida && l.CuentaId == retiro.ContributionAccountId
+                        ? "Pendiente: perforaría el mínimo irreducible de la entidad"
+                        : l.Nota,
                 });
             }
             await db.SaveChangesAsync(ct);
@@ -406,23 +444,28 @@ public sealed class SettleMembershipWithdrawalCommandHandler(
                 retiro.Pagar(reloj.UtcNow);
                 await ordenes.CerrarCuentasAsync(retiro, hoy, ct);
             }
-            else if (!retenida)
+            else if (devoluciones.Count > 0)
             {
-                await PedirCierreAsync(devoluciones.Select(d => d.CuentaId).ToList(), ct);
+                await PedirCierreAsync(devoluciones.Select(d => d.CuentaId).Distinct().ToList(), ct);
             }
             intervenciones.Registrar(verificada.Value, RetirosDeAsociado.ExpedienteDeDevolucion, retiro.PublicId);
             await db.SaveChangesAsync(ct);
             if (retenida && alertas is not null)
                 await alertas.LevantarAsync(new AlertaALevantar(TiposDeAlerta.DevolucionRetenidaPorMinimo,
                     $"Devolución del retiro {retiro.Number} retenida",
-                    $"La devolución de {calculo.ADevolver:N2} del retiro {retiro.Number} dejaría el capital social en {plan.MinimoDeLaEntidad.CapitalAfter:N2}, por "
-                    + $"debajo del mínimo irreducible de la entidad ({plan.MinimoDeLaEntidad.Minimum:N2}). El retiro quedó liquidado; la devolución se ordena con "
-                    + "«Aprobar devolución» cuando el capital lo permita.",
+                    $"La devolución de los aportes del retiro {retiro.Number} ({calculo.DevolucionDeAportes([retiro.ContributionAccountId]):N2}) dejaría el capital "
+                    + $"social en {plan.MinimoDeLaEntidad.CapitalAfter:N2}, por debajo del mínimo irreducible de la entidad ({plan.MinimoDeLaEntidad.Minimum:N2}). "
+                    + "El retiro quedó liquidado y los ahorros se devolvieron; la devolución de los aportes se ordena con «Aprobar devolución» cuando el capital "
+                    + "lo permita.",
                     nameof(MembershipWithdrawal), retiro.PublicId, DedupKey: $"{TiposDeAlerta.DevolucionRetenidaPorMinimo}:{retiro.PublicId:N}",
                     RecipientPermissions: ["Lending.MembershipWithdrawals.Approve"], ModuloDeOrigen: "Lending"), ct);
             return Result.Success(retiro);
         }, ct);
         if (hecho.IsFailure) return Falla(hecho.Error);
+
+        // D45 (2026-10-18): los créditos que siguen debiendo pasan a caja si así se eligió: las libranzas y la nómina pasan a la forma de pago alterna.
+        if (hecho.Value.PendingLoanBalanceHandling == PendingLoanBalanceHandling.MoveToCashier)
+            await PasarACajaAsync(hecho.Value, ct);
 
         // La liquidación emitida (documentos.md §2.8): nace al liquidar, después de confirmar. Si no se puede emitir (sin firmante), el retiro queda
         // liquidado igual y se emite después desde Documentos.
@@ -445,6 +488,38 @@ public sealed class SettleMembershipWithdrawalCommandHandler(
         db.DescartarCambios();
         var final = await db.MembershipWithdrawals.AsNoTracking().FirstAsync(w => w.Id == hecho.Value.Id, ct);
         return Result.Success(await retiros.DtoAsync(final, conLineas: true, ct));
+    }
+
+    /// <summary>
+    /// D45: los créditos vivos del exasociado con una libranza o un descuento de nómina vigente pasan a recibir pagos por caja, por el traslado de la
+    /// libranza sin pagaduría nueva de la 013 (la forma alterna del convenio). Después de confirmar la liquidación: si un traslado no se puede, el
+    /// retiro queda liquidado y se registra en el log.
+    /// </summary>
+    private async Task PasarACajaAsync(MembershipWithdrawal retiro, CancellationToken ct)
+    {
+        var creditos = await db.Loans.AsNoTracking()
+            .Where(l => l.DebtorPersonId == retiro.PersonId && !l.IsDeleted && l.Status == LoanStatus.Active)
+            .Select(l => new { l.Id, l.PublicId, l.Number }).ToListAsync(ct);
+        var ids = creditos.Select(c => c.Id).ToList();
+        var conDescuento = await db.LoanPayrollLinks.AsNoTracking()
+            .Where(v => ids.Contains(v.LoanId) && v.ValidTo == null && !v.IsDeleted
+                        && (v.RepaymentChannel == RepaymentChannel.OwnPayroll || v.RepaymentChannel == RepaymentChannel.PaymasterDeduction))
+            .Select(v => v.LoanId).Distinct().ToListAsync(ct);
+        foreach (var credito in creditos.Where(c => conDescuento.Contains(c.Id)))
+        {
+            try
+            {
+                var r = await sender.Send(new Payroll.Transfers.TransferLoanPayrollCommand(credito.PublicId,
+                    $"Retiro del asociado {retiro.Number}: el saldo pendiente pasa a caja (D45)") { OperationKey = Guid.NewGuid() }, ct);
+                if (r.IsFailure)
+                    logger.LogWarning("El crédito {Credito} del retiro {Retiro} no pasó a caja: {Codigo} {Mensaje}", credito.Number, retiro.Number, r.Error.Code,
+                        r.Error.Message);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                logger.LogWarning(ex, "El crédito {Credito} del retiro {Retiro} no pasó a caja.", credito.Number, retiro.Number);
+            }
+        }
     }
 
     /// <summary>Las cuentas que se devuelven quedan en cierre hasta que la orden se gire (FR-076).</summary>

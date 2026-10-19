@@ -59,6 +59,27 @@ public class LiquidacionDeRetiroTests
     }
 
     [Fact]
+    public void Los_estatutos_pueden_cruzar_primero_los_ahorros_y_queda_el_saldo_pendiente_de_los_creditos()
+    {
+        // Decisiones del dueño del 2026-10-18: D41 (el orden de los fondos es de los estatutos) y D45 (lo que se sigue debiendo).
+        var l = LiquidacionDeRetiro.Calcular([Aportes(1_000_000m, 2_000_000m), Ahorro(1_000_000m)],
+            [new CreditoEnElRetiro(10, "CR-0001", 2_500_000m, 0, 0.18m)], null, OrdenDeFondosAlRetiro.AhorrosPrimero);
+
+        l.Cruzado.Should().Be(2_500_000m);
+        l.Cruces[0].Debitos.Should().BeEquivalentTo(new[]
+        {
+            new DebitoDeCuentaEnElRetiro(2, MemberAccountConcept.Principal, 1_000_000m),
+            new DebitoDeCuentaEnElRetiro(1, MemberAccountConcept.ContributionOrdinary, 1_500_000m),
+        });
+        l.Devolucion.Should().OnlyContain(d => d.CuentaId == 1, "con los ahorros primero, lo que sobra es de aportes");
+        l.SaldoPendienteDeCreditos.Should().Be(0m);
+        SumaLaDevolucion(l);
+
+        var corta = LiquidacionDeRetiro.Calcular([Aportes(500_000m, 500_000m)], [new CreditoEnElRetiro(10, "CR-0001", 1_500_000m, 0, 0.18m)], null);
+        corta.SaldoPendienteDeCreditos.Should().Be(500_000m);
+    }
+
+    [Fact]
     public void Con_obligaciones_mayores_se_cruza_todo_y_la_devolucion_es_cero()
     {
         var l = LiquidacionDeRetiro.Calcular([Aportes(500_000m, 500_000m), Ahorro(200_000m)],

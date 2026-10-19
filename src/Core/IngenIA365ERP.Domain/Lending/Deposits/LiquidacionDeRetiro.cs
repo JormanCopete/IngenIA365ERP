@@ -37,6 +37,25 @@ public sealed record LiquidacionDeRetiroCalculada(
     /// <summary>Lo que se devuelve de aportes (lo que baja el capital social por la devolución, FR-080).</summary>
     public decimal DevolucionDeAportes(IReadOnlyCollection<int> cuentasDeAportes) =>
         Devolucion.Where(d => cuentasDeAportes.Contains(d.CuentaId)).Sum(d => d.Monto);
+
+    /// <summary>
+    /// Decisión del dueño del 2026-10-18 (D45): lo que los créditos vivos siguen debiendo después del cruce (lo que vale cancelarlos menos lo cruzado).
+    /// Mayor que cero, quien liquida elige qué pasa con ese saldo.
+    /// </summary>
+    public decimal SaldoPendienteDeCreditos { get; init; }
+}
+
+/// <summary>
+/// El orden en que el cruce y la devolución toman los fondos (feature 014, decisión del dueño del 2026-10-18, D41: lo fijan los estatutos de cada
+/// cooperativa, parámetro <c>Captaciones.OrdenDeFondosAlRetiro</c>). (nuevo)
+/// </summary>
+public enum OrdenDeFondosAlRetiro
+{
+    /// <summary>Primero los aportes y después los ahorros (el defecto).</summary>
+    AportesPrimero = 1,
+
+    /// <summary>Primero los ahorros y después los aportes.</summary>
+    AhorrosPrimero = 2,
 }
 
 /// <summary>
@@ -44,8 +63,9 @@ public sealed record LiquidacionDeRetiroCalculada(
 /// concepto de las cuentas que se liquidan, los créditos vivos y, si el acta lo dispuso, la proporción de pérdidas; devuelve las líneas y lo que sale de
 /// cada cuenta. Reglas:
 /// <list type="number">
-/// <item>Los fondos son los saldos del titular: primero los aportes (en el orden de <see cref="DebitoDeAportes.Orden"/>) y después los ahorros, cuenta
-/// por cuenta en el orden dado; la memoria (retención, GMF) no es del titular y no entra.</item>
+/// <item>Los fondos son los saldos del titular: por defecto primero los aportes (en el orden de <see cref="DebitoDeAportes.Orden"/>) y después los
+/// ahorros, cuenta por cuenta en el orden dado; los estatutos pueden invertirlo (<see cref="OrdenDeFondosAlRetiro"/>, D41); la memoria (retención,
+/// GMF) no es del titular y no entra.</item>
 /// <item>El descuento por pérdidas (FR-078) es la proporción sobre el total de aportes, al centavo, y sale de los aportes antes de cruzar.</item>
 /// <item>El cruce sigue la prelación D14: primero los créditos en mora (más días primero), luego los vigentes de mayor tasa; a cada uno, lo que vale
 /// cancelarlo o lo que quede.</item>
@@ -64,22 +84,24 @@ public static class LiquidacionDeRetiro
             .ToList();
 
     public static LiquidacionDeRetiroCalculada Calcular(IReadOnlyList<CuentaEnElRetiro> cuentas, IReadOnlyList<CreditoEnElRetiro> creditos,
-        PerdidaEnElRetiro? perdida)
+        PerdidaEnElRetiro? perdida, OrdenDeFondosAlRetiro ordenDeFondos = OrdenDeFondosAlRetiro.AportesPrimero)
     {
         ArgumentNullException.ThrowIfNull(cuentas);
         ArgumentNullException.ThrowIfNull(creditos);
         if (perdida is { } p && (p.Proporcion < 0m || p.Proporcion > 1m))
             throw new ArgumentOutOfRangeException(nameof(perdida), p.Proporcion, "La proporción de pérdidas va entre 0 y 1.");
 
-        // Los fondos, en orden: aportes por clase y después ahorros por concepto del titular.
-        var fondos = new List<(int Cuenta, MemberAccountConcept Concepto, decimal Disponible)>();
+        // Los fondos, en orden: aportes por clase y ahorros por concepto del titular; cuál va primero lo dicen los estatutos (D41).
+        var deAportes = new List<(int Cuenta, MemberAccountConcept Concepto, decimal Disponible)>();
         foreach (var cuenta in cuentas.Where(c => c.Naturaleza == LineNature.Contribution))
             foreach (var concepto in DebitoDeAportes.Orden)
-                if (cuenta.Saldos.GetValueOrDefault(concepto) is var v and > 0m) fondos.Add((cuenta.CuentaId, concepto, v));
+                if (cuenta.Saldos.GetValueOrDefault(concepto) is var v and > 0m) deAportes.Add((cuenta.CuentaId, concepto, v));
+        var deAhorros = new List<(int Cuenta, MemberAccountConcept Concepto, decimal Disponible)>();
         foreach (var cuenta in cuentas.Where(c => c.Naturaleza != LineNature.Contribution))
             foreach (var (concepto, v) in cuenta.Saldos.Where(s => MemberAccountTransaction.ConceptosDelTitular.Contains(s.Key) && s.Value > 0m)
                          .OrderBy(s => (int)s.Key))
-                fondos.Add((cuenta.CuentaId, concepto, v));
+                deAhorros.Add((cuenta.CuentaId, concepto, v));
+        var fondos = ordenDeFondos == OrdenDeFondosAlRetiro.AhorrosPrimero ? [.. deAhorros, .. deAportes] : deAportes.Concat(deAhorros).ToList();
 
         var lineas = new List<LineaDeLiquidacionDeRetiro>();
         foreach (var f in fondos)
@@ -127,7 +149,10 @@ public static class LiquidacionDeRetiro
 
         var cruzado = cruces.Sum(c => c.Monto);
         var perdidas = deLaPerdida.Sum(d => d.Monto);
-        return new LiquidacionDeRetiroCalculada(lineas, cruces, deLaPerdida, devolucion, aportes, ahorros, cruzado, perdidas, devolucion.Sum(d => d.Monto));
+        return new LiquidacionDeRetiroCalculada(lineas, cruces, deLaPerdida, devolucion, aportes, ahorros, cruzado, perdidas, devolucion.Sum(d => d.Monto))
+        {
+            SaldoPendienteDeCreditos = Math.Max(0m, creditos.Where(c => c.ParaCancelar > 0m).Sum(c => c.ParaCancelar) - cruzado),
+        };
     }
 
     /// <summary>Toma <paramref name="monto"/> de los fondos en su orden (sólo aportes si se pide) y descuenta lo tomado de <paramref name="restante"/>.</summary>

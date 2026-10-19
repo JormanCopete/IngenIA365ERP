@@ -101,6 +101,11 @@ public class MembershipWithdrawal : AuditableEntity
     /// <summary>El reverso de un pago cruzado que dejó la liquidación por rehacer (R15).</summary>
     public string? ToRedoReason { get; set; }
 
+    /// <summary>
+    /// Decisión del dueño del 2026-10-18 (D45): qué eligió quien liquidó para el saldo de los créditos que el cruce no cubrió; nulo si no quedó deuda.
+    /// </summary>
+    public PendingLoanBalanceHandling? PendingLoanBalanceHandling { get; set; }
+
     // ------------------------------------------------------------------------------------------------ comportamiento --
 
     /// <summary>Los estados de un trámite vivo: uno por persona.</summary>
@@ -202,6 +207,18 @@ public class MembershipWithdrawal : AuditableEntity
             throw new ReglaDeCarteraException(new ProblemaDeCartera(CodigoTransicionInvalida,
                 $"El retiro {Number} está en «{Status}»: sólo un retiro liquidado queda por rehacer."));
         Status = MembershipWithdrawalStatus.ToRedo;
+        ToRedoReason = Recortar(motivo, LargoDelDetalle);
+    }
+
+    /// <summary>
+    /// Decisión del dueño del 2026-10-18 (D44): el reverso tardío de un pago del cruce, con el retiro ya pagado y sus cuentas canceladas, reabre el retiro
+    /// (<c>Paid → Settled</c>): el saldo devuelto a la cuenta reabierta queda a favor del exasociado y se ordena con «Aprobar devolución».
+    /// </summary>
+    public void ReabrirPorReversoTardio(string motivo)
+    {
+        Exigir(MembershipWithdrawalStatus.Paid, MembershipWithdrawalStatus.Settled);
+        Status = MembershipWithdrawalStatus.Settled;
+        PaidAt = null;
         ToRedoReason = Recortar(motivo, LargoDelDetalle);
     }
 

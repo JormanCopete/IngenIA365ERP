@@ -17,15 +17,22 @@ public sealed record RetiroAprobadoAEmitir(
     Guid SucursalPublicId,
     MembershipWithdrawalApprovalV1 Aprobacion,
     UserRefV1 AprobadoPor,
-    DateOnly Fecha);
+    DateOnly Fecha,
+    string? CodigoDeMotivo = null);
 
-/// <summary>El débito de una cuenta que paga un crédito en el cruce al retiro, tal como se emite (mensajes.md §4.1, <c>CruceAlRetiroAplicado</c>). (nuevo)</summary>
+/// <summary>El débito de una cuenta en el cruce contra un crédito: su hecho, su operación y lo que sale por concepto (D45). (nuevo)</summary>
+public sealed record ParteDelCruceAEmitir(HechoDeCuenta Hecho, MemberAccountOperation Operacion, IReadOnlyList<DepositConceptAmountV1> Valores);
+
+/// <summary>
+/// El cruce al retiro contra <b>un</b> crédito, tal como se emite (mensajes.md §4.1, <c>CruceAlRetiroAplicado</c>; decisión del dueño del 2026-10-18,
+/// D45): la operación de pago del crédito (el origen de la unidad del <c>PagoAplicado</c>), el retiro, el cruce y la parte de cada cuenta. (nuevo)
+/// </summary>
 public sealed record CruceAlRetiroAEmitir(
-    HechoDeCuenta Hecho,
-    MemberAccountOperation Operacion,
+    Guid PagoPublicId,
+    string PagoNumero,
     MembershipWithdrawal Retiro,
-    IReadOnlyList<DepositConceptAmountV1> Valores,
-    IReadOnlyList<WithdrawalOffsetV1> Cruces);
+    IReadOnlyList<ParteDelCruceAEmitir> Partes,
+    WithdrawalOffsetV1 Cruce);
 
 /// <summary>El descuento por pérdidas al retiro, tal como se emite (mensajes.md §4.1, <c>PerdidaAplicadaAlRetiro</c>). (nuevo)</summary>
 public sealed record PerdidaAlRetiroAEmitir(
@@ -59,6 +66,7 @@ public sealed partial class EmisionDeCartera
             PersonPublicId = r.PersonaPublicId,
             Cause = r.Retiro.Cause.ToString(),
             CauseDetail = r.Retiro.CauseDetail,
+            WithdrawalReasonCode = r.CodigoDeMotivo,
             EffectiveDate = r.Retiro.EffectiveDate ?? r.Fecha,
             Approval = r.Aprobacion,
             ApprovedBy = r.AprobadoPor,
@@ -71,29 +79,42 @@ public sealed partial class EmisionDeCartera
     }
 
     /// <summary>
-    /// <c>CruceAlRetiroAplicado</c> (US10, T100; mensajes.md §4.1): el débito de una cuenta que paga un crédito, con el trámite y el crédito cruzado.
-    /// Origen la operación de cuenta (<c>MembershipWithdrawalSettlement</c>), tercero el titular; el <c>PagoAplicado</c> del crédito sale aparte con su
-    /// propia operación (<c>OwnLoanPayoff</c>). Sin guardar.
+    /// <c>CruceAlRetiroAplicado</c> (US10, T100; mensajes.md §4.1): el débito de las cuentas que pagan <b>un</b> crédito, con el trámite y el crédito cruzado.
+    /// Decisión del dueño del 2026-10-18 (D45): el cruce y el pago van en el mismo comprobante, así que el origen es la <b>operación de pago del crédito</b>
+    /// (la del <c>PagoAplicado</c> que el contrato de obligaciones ya emitió, <c>OwnLoanPayoff</c>) con su misma clave <c>Confirmation</c> y el modo que
+    /// rige al pago a esa fecha: los dos hechos forman una sola unidad (el emisor no hace depender un mensaje de su propia unidad) y el cruce es el
+    /// principal. Tercero el titular. Sin guardar.
     /// </summary>
     public async Task<Result<UnidadEmitida>> CruceAlRetiroAsync(CruceAlRetiroAEmitir c, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(c);
-        var h = c.Hecho;
+        if (c.Partes.Count == 0) throw new ArgumentException("El cruce trae al menos una cuenta.", nameof(c));
+        var primera = c.Partes[0];
+        var h = primera.Hecho;
         var contenido = new CruceAlRetiroAplicadoV1
         {
             Account = h.Referencia,
             HolderPersonPublicId = h.TitularPublicId,
-            ValueDate = c.Operacion.ValueDate,
-            RegisteredAt = Instante(c.Operacion.RegisteredAt),
+            ValueDate = primera.Operacion.ValueDate,
+            RegisteredAt = Instante(primera.Operacion.RegisteredAt),
             Dimensions = h.Dimensiones(),
-            Amounts = c.Valores,
-            OperationNumber = c.Operacion.Number,
-            RulesVersion = c.Operacion.RulesVersion,
+            Amounts = primera.Valores,
+            OperationNumber = primera.Operacion.Number,
+            RulesVersion = primera.Operacion.RulesVersion,
             Withdrawal = new MembershipWithdrawalRefV1 { PublicId = c.Retiro.PublicId, Number = c.Retiro.Number, Cause = c.Retiro.Cause.ToString() },
-            Offsets = c.Cruces,
+            Offsets = [c.Cruce],
+            Parts = c.Partes.Select(p => new WithdrawalAccountPartV1
+            {
+                Account = p.Hecho.Referencia, Dimensions = p.Hecho.Dimensiones(), Amounts = p.Valores, OperationNumber = p.Operacion.Number,
+            }).ToList(),
         };
-        return await EmitirDeCuentaAsync(contenido, CruceAlRetiroAplicadoV1.Type, h, c.Operacion, ClaseLiquidacionDeRetiro, h.TitularPublicId,
-            PrevalidationOutcome.NotApplicable, ct);
+        var modo = await modoDePaso.ResolverAsync(IngenIA365ERP.Application.Common.Integration.Contracts.Lending.PagoAplicadoV1.Type, h.FechaContable, ct);
+        if (modo.IsFailure) return Result.Failure<UnidadEmitida>(modo.Error);
+        var mensajes = await emisor.EmitirAsync(new SolicitudDeEmision(
+            new OrigenDeEmision(MessageOriginKind.Document, c.PagoPublicId, ClasePago, Prefijo(c.PagoNumero), c.PagoNumero, h.FechaContable,
+                h.SucursalPublicId, PersonPublicId: h.TitularPublicId),
+            ClavesDeEvento.Confirmacion, [contenido], modo.Value, ValidacionPrevia: PrevalidationOutcome.NotApplicable), ct);
+        return Result.Success(new UnidadEmitida(mensajes));
     }
 
     /// <summary>

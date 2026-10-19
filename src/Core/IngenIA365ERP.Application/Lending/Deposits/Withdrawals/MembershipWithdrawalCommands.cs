@@ -18,6 +18,7 @@ using IngenIA365ERP.Domain.Entities.Lending.Deposits.Processes;
 using IngenIA365ERP.Domain.Enums.Lending;
 using IngenIA365ERP.Domain.Lending;
 using IngenIA365ERP.Domain.Lending.Attributions;
+using IngenIA365ERP.Domain.Lending.Parameters;
 using IngenIA365ERP.Domain.Lending.Segregation;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -180,8 +181,27 @@ public sealed class DecideMembershipWithdrawalCommandHandler(
     EmisionDeCartera emision,
     ICerrojoDeCartera cerrojo,
     IActorActual actorActual,
-    IDateTimeService reloj) : IRequestHandler<DecideMembershipWithdrawalCommand, Result<MembershipWithdrawalDto>>
+    IDateTimeService reloj,
+    ReglasDeParametrosDeCartera? parametros = null) : IRequestHandler<DecideMembershipWithdrawalCommand, Result<MembershipWithdrawalDto>>
 {
+    /// <summary>
+    /// D46 (2026-10-18): el código del motivo de retiro de Asociados que la cooperativa le asigna a la causa (<c>Captaciones.MotivosDeRetiroDeAsociados</c>);
+    /// nulo si no hay mapeo o el JSON no se puede leer.
+    /// </summary>
+    public static string? CodigoDeMotivo(string? json, MembershipWithdrawalCause causa)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return null;
+        try
+        {
+            var mapa = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string?>>(json);
+            return mapa is not null && mapa.TryGetValue(causa.ToString(), out var codigo) && !string.IsNullOrWhiteSpace(codigo) ? codigo.Trim() : null;
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return null;
+        }
+    }
+
     public async Task<Result<MembershipWithdrawalDto>> Handle(DecideMembershipWithdrawalCommand request, CancellationToken ct)
     {
         var hoy = reloj.HoyLocal;
@@ -228,12 +248,14 @@ public sealed class DecideMembershipWithdrawalCommandHandler(
                                     select new { s.Number, s.HeldOn, Organo = b.Name }).FirstAsync(ct);
                 var efectiva = request.EffectiveDate ?? hoy;
                 retiro.EffectiveDate = efectiva;
+                var mapeo = parametros is null ? null : await parametros.LeerAsync(ParametrosDeCartera.CaptacionesMotivosDeRetiroDeAsociados, hoy, ct: ct);
                 var mensaje = await emision.RetiroAprobadoAsync(new RetiroAprobadoAEmitir(retiro, persona, sucursal.Value,
                     new MembershipWithdrawalApprovalV1
                     {
                         SessionItemPublicId = request.SessionItemPublicId, SessionNumber = sesion.Number, GoverningBody = sesion.Organo, DecidedOn = sesion.HeldOn,
                     },
-                    new UserRefV1 { CentralUserId = actor.CentralUserId, Name = actor.Name }, hoy), ct);
+                    new UserRefV1 { CentralUserId = actor.CentralUserId, Name = actor.Name }, hoy,
+                    mapeo is { IsSuccess: true } ? CodigoDeMotivo(mapeo.Value.Texto, retiro.Cause) : null), ct);
                 retiro.Aprobar(punto.Value.ItemId, efectiva, usuario, request.Reason, ahora, mensaje);
             }
             intervenciones.Registrar(verificada.Value, RetirosDeAsociado.Expediente, retiro.PublicId);

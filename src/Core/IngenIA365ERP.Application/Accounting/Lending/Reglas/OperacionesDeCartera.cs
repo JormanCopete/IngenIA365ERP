@@ -266,9 +266,12 @@ public static class OperacionesDeCartera
         new(ExcedentesDistribuidosV1.Type, "EXD", false, [R.FondoDeExcedentes], [R.AportesSociales, R.CapitalDeCaptacion, R.DevolucionPorPagar], EnLinea,
             null, "AO", EntregaDelHecho.K10, Ninguno),
         new(AportesAmortizadosV1.Type, "AMZ", false, [R.AportesSociales], [R.DevolucionPorPagar], EnLinea, null, "AO", EntregaDelHecho.K10, Ninguno),
-        // El cruce acredita el puente con OwnLoanPayoff y el PagoAplicado de cada crédito lo debita en la misma transacción (§3).
+        // Decisión del dueño del 2026-10-18 (D45): el cruce y el pago del crédito van en el mismo comprobante. El CruceAlRetiroAplicado de cada crédito
+        // viaja en la unidad de su PagoAplicado (mismo origen y clave) y es el principal: el pago y sus acompañantes son los suyos, y el comprobante
+        // toma el tipo del cruce (RA). El puente OwnLoanPayoff que el cruce acredita y el pago debita queda dentro del mismo comprobante.
         new(CruceAlRetiroAplicadoV1.Type, "CRR", false, SaldosDeCuenta, [R.RecaudoPorAplicar], EnLinea, null, "RA", EntregaDelHecho.K7,
-            [PerdidaAplicadaAlRetiroV1.Type]),
+            [PerdidaAplicadaAlRetiroV1.Type, PagoAplicadoV1.Type, AnticipoRecibidoV1.Type, CobroDeInteresEnSuspensoV1.Type, RecuperacionDeCastigadaV1.Type,
+                SaldoAFavorReconocidoV1.Type, AjusteDeCausacionPorFechaValorV1.Type]),
         new(PerdidaAplicadaAlRetiroV1.Type, "PDR", false, [R.AportesSociales], [R.PerdidaAbsorbida], EnLinea, null, "RA", EntregaDelHecho.K7, Ninguno),
         new(DevolucionOrdenadaV1.Type, "DVO", false, [.. SaldosDeCuenta, R.NoReclamadosPorPagar], [R.DevolucionPorPagar, R.CapitalDeCaptacion], EnLinea,
             null, "RA", EntregaDelHecho.K7, Ninguno),

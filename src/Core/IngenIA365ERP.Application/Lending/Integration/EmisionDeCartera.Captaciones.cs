@@ -306,7 +306,8 @@ public sealed partial class EmisionDeCartera
     {
         ArgumentNullException.ThrowIfNull(r);
         var h = r.Hecho;
-        var original = await HechoOriginalAsync(r.Original.PublicId, r.TipoDelOriginal, r.Original.Number, ct);
+        var original = await HechoOriginalAsync(r.Original.PublicId, r.TipoDelOriginal, r.Original.Number, ct)
+                       ?? await HechoDeLaUnidadAsync(r.Original, r.TipoDelOriginal, ct);
         var contenido = new OperacionDeCuentaReversadaV1
         {
             Account = h.Referencia,
@@ -325,12 +326,29 @@ public sealed partial class EmisionDeCartera
         var relacionado = new DocumentoRelacionado(r.Original.PublicId, r.ClaseDelOriginal, r.Original.Number);
         ModoDeEntrega modo = original is null
             ? (await modoDePaso.ResolverAsync(OperacionDeCuentaReversadaV1.Type, h.FechaContable, ct)).Value ?? new ModoDeEntrega.Sellado(DeliveryMode.NotPosted)
-            : new ModoDeEntrega.Heredado(r.Original.PublicId);
+            : new ModoDeEntrega.Heredado(original.OriginPublicId);
         var mensajes = await emisor.EmitirAsync(new SolicitudDeEmision(
             new OrigenDeEmision(MessageOriginKind.Document, r.Reverso.PublicId, ClaseReversoDeCuenta, Prefijo(r.Reverso.Number), r.Reverso.Number,
                 h.FechaContable, h.SucursalPublicId, PersonPublicId: h.TitularPublicId),
             ClavesDeEvento.Confirmacion, [contenido], modo, Relacionado: relacionado, UsuarioDeOrigen: r.ReversadoPor), ct);
         return new UnidadEmitida(mensajes);
+    }
+
+    /// <summary>
+    /// Feature 014 (decisión del dueño del 2026-10-18, D45): el hecho original de una operación de cuenta que viajó en la unidad de <b>otro</b> origen —el
+    /// cruce al retiro va en la unidad del pago del crédito—, por el mensaje que sellan sus filas del libro. Nulo si no lo hay.
+    /// </summary>
+    private async Task<OriginalFactRefV1?> HechoDeLaUnidadAsync(MemberAccountOperation operacion, string tipo, CancellationToken ct)
+    {
+        var mensaje = await db.MemberAccountTransactions.AsNoTracking()
+            .Where(t => t.OperationId == operacion.Id && t.MessagePublicId != null).Select(t => t.MessagePublicId).FirstOrDefaultAsync(ct);
+        if (mensaje is not { } id) return null;
+        var leido = db.IntegrationMessages.Local.Where(m => m.PublicId == id).Select(m => new { m.OriginPublicId, m.OriginNumber, m.Type }).FirstOrDefault()
+                    ?? await db.IntegrationMessages.AsNoTracking().Where(m => m.PublicId == id)
+                        .Select(m => new { m.OriginPublicId, m.OriginNumber, m.Type }).FirstOrDefaultAsync(ct);
+        return leido is null || leido.Type != tipo
+            ? null
+            : new OriginalFactRefV1 { MessageId = id, Type = tipo, OriginPublicId = leido.OriginPublicId, Number = leido.OriginNumber ?? operacion.Number };
     }
 
     private async Task<Result<UnidadEmitida>> EmitirDeCuentaAsync(object contenido, string tipo, HechoDeCuenta h, MemberAccountOperation op, string clase,

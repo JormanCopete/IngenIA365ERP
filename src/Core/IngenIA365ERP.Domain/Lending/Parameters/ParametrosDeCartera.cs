@@ -251,6 +251,24 @@ public static class ParametrosDeCartera
     public const string CaptacionesDiasParaNoReclamados = "Captaciones.DiasParaNoReclamados";
 
     /// <summary>
+    /// Feature 014 (decisión del dueño del 2026-10-18, D41): de qué fondos sale primero el cruce al retiro del asociado —<c>AportesPrimero</c> (defecto) o
+    /// <c>AhorrosPrimero</c>—, según los estatutos.
+    /// </summary>
+    public const string CaptacionesOrdenDeFondosAlRetiro = "Captaciones.OrdenDeFondosAlRetiro";
+
+    /// <summary>
+    /// Feature 014 (D46): la causa del retiro de la Cartera → el código del catálogo de motivos de retiro de Asociados (<c>COR_WithdrawalReasons.LegacyCode</c>),
+    /// en JSON <c>{ "Voluntary": "VOL", "Exclusion": "EXC", "Death": "FAL", "Other": "OTR" }</c>. Lo que no se mapea deja el motivo vacío en Asociados.
+    /// </summary>
+    public const string CaptacionesMotivosDeRetiroDeAsociados = "Captaciones.MotivosDeRetiroDeAsociados";
+
+    /// <summary>
+    /// Feature 014 (D44): los correos adicionales que reciben el aviso del reverso tardío de un pago del cruce al retiro (separados por coma o punto y coma),
+    /// además de la gerencia y la revisoría fiscal.
+    /// </summary>
+    public const string CaptacionesDestinatariosReversoTardio = "Captaciones.DestinatariosReversoTardio";
+
+    /// <summary>
     /// Decisión del dueño del 2026-10-18: la periodicidad del formato de cartera del SICSES es <b>informativa</b> y la decide la entidad según su
     /// calendario. Los meses de corte en que la cooperativa reporta, separados por coma (<c>3,6,9,12</c> si reporta trimestral); vacío, los del
     /// documento <c>TiposDeOrganizacion</c> para su tipo y nivel. Sólo alimenta el aviso del plazo y la advertencia de mes fuera de la periodicidad:
@@ -709,6 +727,27 @@ public static class ParametrosDeCartera
             "Días del plazo estatutario para devolver los aportes del asociado retirado. Vacío: sin plazo de alerta.", "", K7, General) with
         {
             AdmiteVacio = true, PendienteDeValidar = "Sin valor: lo fijan los estatutos (FR-079).",
+        },
+        // Decisiones del dueño del 2026-10-18 (D41, D44, D46): lo de estatutos y de cada entidad del retiro del asociado.
+        Eleccion(Modulo, CaptacionesOrdenDeFondosAlRetiro,
+            "De qué fondos sale primero el cruce al retiro del asociado contra sus créditos: los aportes o los ahorros (lo fijan los estatutos).",
+            ["AportesPrimero", "AhorrosPrimero"], "AportesPrimero", K7, General) with
+        {
+            PendienteDeValidar = "Defecto aportes → ahorros (D41, 2026-10-18): cada cooperativa lo ajusta a sus estatutos.",
+        },
+        Texto(CaptacionesMotivosDeRetiroDeAsociados,
+            "La causa del retiro (Voluntary, Exclusion, Death, Other) y el código del motivo de retiro de Asociados que le corresponde, en JSON "
+            + "{ \"Voluntary\": \"código\", … }. Sin código, Asociados registra el retiro sin motivo.",
+            "{}", K7, patron: @"(?s)^\s*\{.*\}\s*$") with
+        {
+            PendienteDeValidar = "Sin mapeo: cada cooperativa lo arma con su catálogo de motivos de retiro (D46, 2026-10-18).",
+        },
+        Texto(CaptacionesDestinatariosReversoTardio,
+            "Correos adicionales, separados por coma o punto y coma, que reciben el aviso del reverso tardío de un pago del cruce al retiro (además de "
+            + "la gerencia y la revisoría fiscal).",
+            string.Empty, K7, admiteVacio: true) with
+        {
+            PendienteDeValidar = "Sin valor: cada cooperativa pone los suyos (D44, 2026-10-18).",
         },
         Entero(Modulo, CaptacionesDiasParaNoReclamados,
             "Días sin cobrar desde los que lo devuelto pasa a no reclamados. Vacío: no se traslada solo.", "", K10, General) with

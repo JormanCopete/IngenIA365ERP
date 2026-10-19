@@ -33,6 +33,8 @@ public class MembershipWithdrawalConfiguration : IEntityTypeConfiguration<Member
         builder.Property(e => e.DecisionReason).HasMaxLength(MembershipWithdrawal.LargoDelDetalle);
         builder.Property(e => e.DesistReason).HasMaxLength(MembershipWithdrawal.LargoDelMotivoDeDesistimiento);
         builder.Property(e => e.ToRedoReason).HasMaxLength(MembershipWithdrawal.LargoDelDetalle);
+        // Decisión del dueño del 2026-10-18 (D45): qué pasa con lo que los créditos siguen debiendo después del cruce.
+        builder.Property(e => e.PendingLoanBalanceHandling).HasConversion<int?>();
         builder.Property(e => e.ContributionsTotal).Monto();
         builder.Property(e => e.SavingsTotal).Monto();
         builder.Property(e => e.LoansOffsetTotal).Monto();

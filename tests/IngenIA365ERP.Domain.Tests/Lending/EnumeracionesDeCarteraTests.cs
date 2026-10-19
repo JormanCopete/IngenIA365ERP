@@ -234,6 +234,8 @@ public class EnumeracionesDeCarteraTests
         [typeof(ChargeKind)] = [("MaintenanceFee", 1), ("ExtraOperation", 2), ("ExtraDocument", 3), ("MediumReplacement", 4),
             ("Inactivity", 5), ("Other", 99)],
         [typeof(MembershipWithdrawalCause)] = [("Voluntary", 1), ("Exclusion", 2), ("Death", 3), ("Other", 99)],
+        // Decisión del dueño del 2026-10-18 (D45).
+        [typeof(PendingLoanBalanceHandling)] = [("MoveToCashier", 1), ("KeepRepaymentChannel", 2)],
         [typeof(MembershipWithdrawalStatus)] = [("Filed", 1), ("Approved", 2), ("Settled", 3), ("Paid", 4), ("Desisted", 5),
             ("Rejected", 6), ("ToRedo", 7)],
         [typeof(AssemblyDistributionKind)] = [("Revaluation", 1), ("SurplusDistribution", 2), ("Amortization", 3)],
