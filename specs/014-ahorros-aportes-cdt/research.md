@@ -1230,7 +1230,8 @@ parametriza por entidad (parámetro con vigencia o catálogo editable) y los pla
 - D29: si la entidad puede superar el `LIMITE` nacional del tope de la cuota de fondos de empleados.
 - D39: el descuento del ahorro permanente en la pérdida esperada y la validación de los indicadores del numeral 5.1 del Anexo 1.
 - D45: el reverso del cruce en un solo comprobante y las líneas puente dentro del mismo comprobante esperan el constructor de captaciones (T143); la devolución
-  sigue en su propia unidad (orden de giro).
+  sigue en su propia unidad (orden de giro). — El constructor ya lo admite y la ida va en un `RA` con el puente anulado (fase 9, E110); el reverso sigue
+  separado hasta que el dueño decida (§15.1).
 - D44: ~~el correo del reverso tardío sale antes de confirmar la transacción (mejor esfuerzo)~~ — resuelto en la fase 8 (E92).
 - D36: las cuotas de cuentas en una pagaduría por HTTP de punta a punta (falta un escenario e2e con asociados, aportes y empresa empleadora).
 
@@ -1324,3 +1325,99 @@ donde choquen. `EntregaVigente` sigue en K6b: los parámetros de K8 (`Retencion.
   liquidación; C: se rechaza una fecha valor anterior a la última liquidación. Recomendado: B.
 - **Cancelar con cargos por cobrar (E99).** A: se bloquea hasta cobrarlos o condonarlos (lo construido); B: la cancelación los cobra del saldo antes de
   entregar. Recomendado: B (FR-039 dice «cobra GMF y cargos»).
+
+## 15. Enmienda de la integración contable de captaciones (2026-10-18, T142–T150, US8)
+
+Construida la historia 8. **Manda el código**; estas notas reemplazan lo dicho en `data-model.md`, `contracts/` y `tasks.md` donde choquen. No hubo cambio de
+esquema: `CaptacionesAportes` sigue como la dejó la fase 8 (E104).
+
+- **E106 · El reverso nombra la contrapartida de su original.** `OperacionDeCuentaReversadaV1` suma, opcionales al final, `CollectorClass` (la clase del
+  recaudador del original; `OwnLoanPayoff` en el débito automático y el cruce), `OrderKind` (el de la orden de giro del original) y `ReasonCode` (el
+  `ChargeKind` de un cargo o de su condonación), y `DepositFactMirrorV1` suma `Account`, `HolderPersonPublicId` y `Dimensions` para el espejo de **otra**
+  cuenta del original (el destino de un traslado). Hasta aquí el reverso sólo traía las filas de la cuenta de la operación y no decía a dónde iba la
+  contrapartida: el reverso de un traslado no cuadraba y el de una consignación no sabía a qué puente volver. `ReversionDeCuentas` los llena (la orden se lee
+  por su operación; el cargo de una condonación, por su carga útil). Ningún hecho se había emitido en producción (E26): cambiar el contenido no rompe a nadie.
+  El reverso toma el **tipo de comprobante de su original** (contabilidad.md §5) y, si el original no tiene mapeo, el suyo.
+- **E107 · El constructor de captaciones (T143).** `ConstructorDeLineasDeCartera.Captaciones.cs`: los importes de un hecho de cuenta son el cambio del
+  saldo de cada concepto (+ = la Cartera le debe más al titular); cada concepto va a su rol (`RolDelConceptoDeCuenta`) por su lado natural y lo que no cuadra
+  va a la **contrapartida del hecho** (el puente del recaudador en una consignación, un aporte o un retiro por el contrato; la devolución por pagar en un
+  retiro por giro o una devolución; el gasto por intereses en la causación y su ajuste; el ingreso por cargos; el puente `OwnLoanPayoff` en el cruce y el débito
+  automático; la pérdida absorbida; los embargos por consignar; los no reclamados; la penalidad; la bonificación; los fondos de la asamblea). La liquidación, la
+  retención, el traslado, el cargo pendiente que cobra una consignación y la prórroga del CDAT cuadran solos. Cada línea lleva el número de la cuenta: es su
+  cruce `CTA` (del mapeo de su hecho) si la cuenta contable exige documento, y en las cuentas que exigen tercero, cruce o base va **una línea por cuenta**,
+  también en el resumido. En una unidad que junta hechos de las dos naturalezas (el cruce al retiro con el pago del crédito, D45) cada línea toma el cruce del
+  mapeo de su propio hecho: el pagaré en las del crédito, la cuenta en las de captaciones. Un hecho que mueve el saldo y no dice a dónde va la contrapartida
+  (un retiro sin recaudador ni orden; un CDAT fondeado desde otra cuenta o abonado a otra cuenta sin sus dimensiones) responde el error nuevo
+  `Accounting.LendingFact.CounterpartUnknown`, defecto del emisor: **K9 tiene que emitir la cuenta de origen o de destino del CDAT como parte del hecho, con sus
+  dimensiones**. Dos arreglos del emisor: (1) la marca de la cuenta (C20) la lee una vez `HechoDeCuentaAsync` (la exención vigente a la fecha contable) y la
+  llevan todos los hechos de la cuenta —antes la consignación y el cargo salían «Standard» aunque la cuenta fuera la exenta, y el retiro sin GMF también—;
+  (2) el GMF de un traslado va a la cuenta por pagar de la clase del producto que se debita (la de origen; antes la del destino, y con aportes
+  «Contribution», que no es una clase de captación). El constructor no hace IO y es el mismo de la validación previa, el consumo, la vista previa del lote y la
+  conciliación.
+- **E108 · Validación previa (T142, T145).** Rige D23 «igual que los créditos», es decir, A8 de la 013 = «Bloquear todo»: con `Contabilidad.FaltaDeRegla =
+  Bloquear` bloquean la pantalla (422), el contrato (rechazo con su código) y el proceso (la tanda no avanza, sus cuentas quedan en `LND_ProcessRunErrors` con
+  `Lending.Prevalidation.NotPostable` y sale `Cartera.HechoNoContabilizable`); con `Advertir` se aplica, se sella y se alerta. La spec (US8-2) y
+  contabilidad.md §7 decían que el contrato y los procesos sólo sellan y alertan: es el texto de A8 antes de la decisión del dueño del 2026-10-14 (pregunta en
+  §15.1). La pregunta se hace con **hechos representativos** (`HechosRepresentativosDeCaptaciones`) con las dimensiones vigentes de la cuenta, su titular, su
+  número, la fecha de la operación y un origen propio: hasta aquí iban sin fecha (el 1 de enero del año 1, donde ninguna regla rige), sin origen (todas las
+  preguntas de un lote eran una sola unidad), sin titular ni número (la cuenta que exige tercero respondía «falta el tercero») y el traslado sin destino.
+  `EvaluateLendingPostingQuery` además evalúa con la fecha de hoy un hecho sin fecha y como su propia unidad uno sin origen. Pantalla
+  (`ValidacionPreviaDeCaptaciones.EnPantallaAsync`): retiro por giro y traslado (con su GMF), cancelación (liquidación y retención si la cuenta causó alguna vez,
+  y la entrega con su GMF) y liquidación del retiro del asociado (cruce, pérdida, devolución por naturaleza y liquidación de los ahorros). Proceso: la causación
+  pregunta por la tanda; la liquidación periódica, los cargos periódicos (por su clase, cobrado y por cobrar) y el débito automático preguntan **sólo por las
+  cuentas que operan ese día**, una vez por combinación (`PreguntaDeTanda`). Activación (`LinesWithMatrix`): todos los hechos que la naturaleza emite desde el
+  primer día, por clase de línea —en aportes, el aporte, el cruce y la devolución del retiro; en el ahorro a la vista y el permanente, la consignación, el
+  retiro por giro con su GMF, la causación, la liquidación y la retención—; la fixture e2e `CaptacionesE2E` siembra esas reglas cuando ya hay líneas activas.
+- **E109 · La conciliación (T146).** `SaldosContablesDeCaptaciones` suma el libro de cuentas por fecha contable por rol (capital, capital inactivo, interés por
+  pagar, aportes por clase, cargo por cobrar), línea, naturaleza, clase, marca y oficina; la conciliación de la Cartera los agrega a los de créditos y la
+  vista `deposits-reconciliation` (`Lending.Reconciliation.View`, sin datos de titulares) muestra los conjuntos de captaciones con lo que explica cada
+  diferencia. El puerto `CombinacionDeSaldo` y `GetLendingAccountBalancesQuery` llevan las cinco dimensiones. Decisiones: la **retención y el GMF por pagar no se
+  concilian** contra el libro de la cuenta (en el libro sólo crecen; la cuenta contable baja cuando la cooperativa paga a la DIAN): se concilian con la
+  declaración. La marca y la inactividad son las de la cuenta hoy (la exención, la vigente al corte): si cambian sin un `CaptacionReclasificada` —que todavía
+  nadie emite: la inactividad, el embargo y la exención lo emitirán con US11 y el proceso de inactividad— la diferencia aparece entre la marca vieja y la nueva
+  **sólo si la contadora las lleva a cuentas distintas** (la plantilla sugiere la misma). El plazo de emisión del CDAT y del contractual llega con K9 (la cuenta
+  no lo guarda todavía). La causación va al centavo por cuenta y día y la liquidación abona el bruto redondeado: el residuo de centavos por cuenta queda en el
+  interés por pagar contable; lo ve la conciliación y lo decide la contadora (§15.2).
+- **E110 · D45 en el reverso.** El constructor ya arma en **un** comprobante el reverso del cruce al retiro con el reverso del pago del crédito —el puente
+  `OwnLoanPayoff` se anula dentro, como en la ida— y el reverso toma el tipo `RA` de su original; `PagoReversado` es acompañante de `OperacionDeCuentaReversada`
+  para que la unidad tenga principal. **El emisor no cambió**: `ArrastreDelCruceAlRetiro` sigue sacando el reverso del pago y los de las cuentas en unidades
+  separadas (cada una cuadra por el puente) hasta que el dueño decida (§15.1).
+- **E111 · La plantilla v2 y la completitud (T144).** `PlantillaDeMatrizDeCartera` suma `naturaleza`, `claseDeCaptacion`, `plazoDeEmision`, `claseDeAporte`,
+  `marcaDeCuenta` y `cuentaSugerida` (informativa: la importación no la aplica) y sigue leyendo un archivo de la versión 1. Las filas sugeridas sin cuenta
+  (`SugerenciasDeCaptaciones`) salen de las naturalezas y clases de las líneas del catálogo de Cartera, que ahora trae la clase de captación
+  (`LineaDeCarteraDto.DepositClass`); las cuentas CUIF sugeridas son **dato embebido** (`Accounting/Lending/Plantilla/sugerencias-cuif-captaciones.json`), no
+  literales en código (`LaContabilidadNoTieneCuentasEnCodigo`). El gasto por intereses se sugiere con el hecho en `*` (no fijado a la causación), porque el
+  ajuste de la causación usa el mismo rol. La completitud exige, por línea, las combinaciones de K7 y K8 (`FaltantesDeCaptaciones`, con la naturaleza y la
+  cuenta sugerida en cada fila) y avisa: devolución o embargo por pagar en una cuenta que exige cruce, causación que irá una línea por cuenta, marca exenta o
+  embargada en otra cuenta que la estándar y el puente de Tesorería sin regla. Lo de la asamblea, los no reclamados, los embargos y Tesorería se sugiere pero no
+  se exige. Las líneas de captación ya no generan filas de crédito con modalidad vacía. La lista de reglas de la API no filtra por las dimensiones de
+  captaciones (se filtra por rol o por cuenta).
+- **E112 · Comprobantes y cierre (T146, T147).** El comprobante de captaciones responde `Accounting.Document.ModuleOwned` con su propio mensaje («se corrige en
+  la Cartera con el reverso de la operación de la cuenta») y, si es un resumido, cuántas cuentas reúne. `Accounting.Period.LendingNotClosed` dice, con captaciones
+  activadas, desde qué día está pendiente la causación de captaciones (`data.depositAccrualPendingFrom`, el día siguiente al último `InteresDeCaptacionCausado`
+  recibido en el mes; nada si ninguna cuenta ha causado, como en una cooperativa sólo de aportes).
+- **E113 · La tabla hecho × rol (T142).** Admiten además el capital de la cuenta inactiva: el GMF, la liquidación, la retención, el cargo causado, el pendiente
+  cobrado, la condonación y el embargo (la inactividad cambia el rol, C20). Una muestra por cada uno de los 30 hechos de negocio se desglosa sin fallos y en
+  roles de la tabla, y sobre las operaciones reales de la Cartera (consignar, retirar con GMF, trasladar, reversar por el recaudador) el capital y el GMF que el
+  constructor lleva a cada cuenta son exactamente los del libro.
+- **E114 · Pantallas (T149).** `/contabilidad/cartera/matriz` filtra pestañas y roles por naturaleza (créditos, captaciones y aportes, todas; el puente del
+  recaudo es de las dos), pide en el alta las cinco dimensiones —el plazo de emisión también cuando el capital de CDAT o contractual lo exige, aunque el
+  catálogo no lo liste— y las muestra; `/contabilidad/cartera/completitud` filtra por naturaleza y muestra la cuenta sugerida. Las familias «Captaciones» y
+  «Aportes y fondos» y los 17 roles tienen nombre en pantalla.
+
+### 15.1 Preguntas para el dueño
+
+- **El reverso del cruce al retiro en un solo comprobante (D45, E110).** A: seguir con comprobantes separados para el reverso (lo construido; cada uno cuadra
+  por el puente); B: que el reverso del pago y los de las cuentas que lo pagaron salgan en una unidad, un comprobante `RA`, como la ida (el constructor ya lo
+  arma; falta que el emisor los junte). Recomendado: B, por simetría con la ida.
+- **La validación previa del contrato de cuentas (E108).** A: igual que los créditos (A8, «Bloquear todo»: con `Bloquear` el contrato rechaza la consignación
+  o el retiro que no se contabilizaría; lo construido); B: lo que el contrato de cuentas recibe de Recaudo, Nómina y Tesorería nunca se bloquea: se aplica, se
+  sella y se alerta (el texto original de US8-2). Recomendado: A, por coherencia con la decisión de A8 y porque el defecto de la plataforma es «Bloquear».
+
+### 15.2 Para la contadora (pendiente de validar)
+
+- Las cuentas CUIF sugeridas (`sugerencias-cuif-captaciones.json`), en especial el ahorro permanente (213005 o 213010), la bonificación (615015) y los
+  revalorizados (310505).
+- Si la cuenta exenta del GMF o la embargada van a otra cuenta que la estándar (entonces hace falta la reclasificación al marcar o desmarcar).
+- El residuo de centavos entre la causación diaria al centavo y el bruto liquidado (E109): ajustarlo en la liquidación o dejarlo en el interés por pagar.
+- La conciliación de la retención y el GMF por pagar con la declaración (fuera de la Cartera).
