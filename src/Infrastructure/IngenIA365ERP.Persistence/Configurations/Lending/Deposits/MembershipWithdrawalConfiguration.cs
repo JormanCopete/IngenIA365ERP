@@ -129,7 +129,7 @@ public class AssemblyDistributionConfiguration : IEntityTypeConfiguration<Assemb
         builder.Property(e => e.ProrationFactor).Fraccion();
         builder.Property(e => e.AppliedTotal).Monto().IsRequired();
         builder.Property(e => e.SurplusDestination).HasConversion<int?>();
-        builder.Property(e => e.RoundingUnit).HasPrecision(9, 2).IsRequired();
+        builder.Property(e => e.RoundingUnit).Monto().IsRequired();
         builder.Property(e => e.Status).HasConversion<int>().IsRequired();
         builder.Property(e => e.Reason).HasMaxLength(AssemblyDistribution.LargoDelMotivo).IsRequired();
         builder.Property(e => e.ReversalReason).HasMaxLength(AssemblyDistribution.LargoDelMotivo);

@@ -5582,7 +5582,7 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     AppliedTotal = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
                     SurplusDestination = table.Column<int>(type: "integer", nullable: true),
                     DestinationLineId = table.Column<int>(type: "integer", nullable: true),
-                    RoundingUnit = table.Column<decimal>(type: "numeric(9,2)", precision: 9, scale: 2, nullable: false),
+                    RoundingUnit = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
                     Status = table.Column<int>(type: "integer", nullable: false),
                     SimulationVersion = table.Column<int>(type: "integer", nullable: false),
                     Reason = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false),

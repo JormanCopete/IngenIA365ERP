@@ -30440,8 +30440,8 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasColumnType("integer");
 
                     b.Property<decimal>("RoundingUnit")
-                        .HasPrecision(9, 2)
-                        .HasColumnType("numeric(9,2)");
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
 
                     b.Property<int>("SimulationVersion")
                         .HasColumnType("integer");
