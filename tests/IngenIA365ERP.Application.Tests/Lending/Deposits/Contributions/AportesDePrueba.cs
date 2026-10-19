@@ -87,6 +87,9 @@ internal sealed class AportesDePrueba : IDisposable
     public ICalendarioHabil Calendario { get; } = Substitute.For<ICalendarioHabil>();
     public List<DateOnly> Festivos { get; } = [];
 
+    /// <summary>US5 (T133): con <c>true</c>, las operaciones ajustan la causación por fecha valor (nulo por defecto: las pruebas de K7 y US4 no causan).</summary>
+    public bool ConAjusteDeCausacion { get; set; }
+
     /// <summary>El motor de aprobaciones (US4): nulo, la atribución excedida responde «pendiente» sin solicitud.</summary>
     public IMotorDeAprobaciones? Aprobaciones { get; set; }
 
@@ -110,10 +113,21 @@ internal sealed class AportesDePrueba : IDisposable
     public ReglasDeMovimientos Movimientos() => new(Db, C.Parametros(), G.Valores, Calendario, G.Actor, G.Reloj, Aprobaciones);
     public CargosDeCuentas Cargos() => new(Db, RegistroDeCuentas(), Numerador(), Emision(), G.Actor, G.Reloj);
     public ConsignacionEnCuentas Consignacion() =>
-        new(Db, RegistroDeCuentas(), Numerador(), Emision(), Reglas(), C.Parametros(), G.Actor, G.Reloj, Movimientos(), Cargos());
-    public ReversionDeCuentas Reversion() => new(Db, RegistroDeCuentas(), Numerador(), Emision(), G.Actor, G.Reloj, alertas: Alertas);
-    public RetiroDeCuenta Retiro() => new(Db, RegistroDeCuentas(), Numerador(), Emision(), Movimientos(), Cargos(), G.Actor, G.Reloj);
-    public TrasladoDeCuenta Traslado() => new(Db, RegistroDeCuentas(), Numerador(), Emision(), Movimientos(), Retiro(), Consignacion(), G.Actor, G.Reloj);
+        new(Db, RegistroDeCuentas(), Numerador(), Emision(), Reglas(), C.Parametros(), G.Actor, G.Reloj, Movimientos(), Cargos(), Ajuste());
+    public ReversionDeCuentas Reversion() => new(Db, RegistroDeCuentas(), Numerador(), Emision(), G.Actor, G.Reloj, alertas: Alertas, ajusteDeCausacion: Ajuste());
+    public RetiroDeCuenta Retiro() => new(Db, RegistroDeCuentas(), Numerador(), Emision(), Movimientos(), Cargos(), G.Actor, G.Reloj, Ajuste());
+    public TrasladoDeCuenta Traslado() => new(Db, RegistroDeCuentas(), Numerador(), Emision(), Movimientos(), Retiro(), Consignacion(), G.Actor, G.Reloj, Ajuste());
+
+    // US5 (T131–T136): el interés de las cuentas de captación.
+    public Application.Lending.Deposits.Accrual.LectorDeInteres LectorDeInteres() => new(Db, G.Valores);
+    public Application.Lending.Deposits.Accrual.AjusteDeCausacionDeCuenta? Ajuste() =>
+        ConAjusteDeCausacion ? new(Db, LectorDeInteres(), Emision(), RegistroDeCuentas()) : null;
+    public Application.Lending.Deposits.Accrual.CausacionDeCaptaciones Causacion() => new(Db, RegistroDeCuentas(), LectorDeInteres(),
+        new Application.Lending.Deposits.Accrual.PartesDeHechosDeCaptaciones(Db, Emision()), Emision(), FechaContable(), C.Cerrojo, G.Reloj, Alertas);
+    public Application.Lending.Deposits.Accrual.LiquidacionDeIntereses Liquidacion() => new(Db, RegistroDeCuentas(), LectorDeInteres(),
+        new Application.Lending.Deposits.Accrual.ReglasDeRetencion(C.Parametros(), G.Valores), Numerador(), Emision(), G.Actor, G.Reloj);
+    public Application.Lending.Deposits.Accrual.LiquidacionALaFecha LiquidacionALaFecha() =>
+        new(Db, Liquidacion(), Causacion(), RegistroDeCuentas(), Numerador(), Emision(), G.Actor, G.Reloj);
     public AuditoriaDeEscriturasDeCartera Auditoria() => new(Servicios, Db);
     public ValidacionPreviaContableDeCartera ValidacionPrevia() => new(Contabilidad, G.Parametros(), G.Reloj);
 

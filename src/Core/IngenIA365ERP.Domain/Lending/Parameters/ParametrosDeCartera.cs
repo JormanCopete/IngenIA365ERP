@@ -184,6 +184,9 @@ public static class ParametrosDeCartera
     /// <summary>Si se descuenta el componente inflacionario al retener a la persona natural no obligada a llevar contabilidad (P27).</summary>
     public const string RetencionComponenteInflacionarioAplica = "Retencion.ComponenteInflacionarioAplica";
 
+    /// <summary>Feature 014, US5 (T128; research E94): el redondeo de la retención y del componente inflacionario: al peso (defecto) o al centavo.</summary>
+    public const string RetencionRedondeo = "Retencion.Redondeo";
+
     /// <summary>Tarifa del GMF (fracción; admite cero desde su eliminación).</summary>
     public const string GmfTarifa = "Gmf.Tarifa";
 
@@ -603,6 +606,12 @@ public static class ParametrosDeCartera
             "Al retener a una persona natural no obligada a llevar contabilidad se descuenta el componente inflacionario vigente.", true, K8, General) with
         {
             PendienteDeValidar = "Defecto P27 de la spec (Estatuto Tributario; Decreto 898 de 2026), pendiente de validar por la contadora.",
+        },
+        // Fase 8 de la feature 014 (US5, research E94): el redondeo de la retención es un defecto configurable por cooperativa, como el del GMF (D54).
+        Eleccion(Modulo, RetencionRedondeo, "Redondeo de la retención en la fuente sobre rendimientos y del componente inflacionario: al peso o al centavo.",
+            ["Peso", "Centavo"], "Peso", K8, General) with
+        {
+            PendienteDeValidar = "Defecto al peso, mitad hacia arriba (investigación §3.6: 8.702 sobre 488.088), pendiente de validar por la contadora.",
         },
 
         // Gravamen a los movimientos financieros (R07).

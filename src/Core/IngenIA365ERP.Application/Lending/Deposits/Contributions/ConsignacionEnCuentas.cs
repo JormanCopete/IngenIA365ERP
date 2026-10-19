@@ -75,7 +75,8 @@ public sealed class ConsignacionEnCuentas(
     IActorActual actorActual,
     IDateTimeService reloj,
     ReglasDeMovimientos movimientos,
-    CargosDeCuentas cargos)
+    CargosDeCuentas cargos,
+    Accrual.AjusteDeCausacionDeCuenta? ajusteDeCausacion = null)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
@@ -257,6 +258,10 @@ public sealed class ConsignacionEnCuentas(
         registro.RegistrarTransacciones(filas);
         foreach (var (cargo, _) in cobrados) cargo.Cobrar(operacion.Id);
         await db.SaveChangesAsync(ct);
+        // US5 (T133; FR-062): con fecha valor en días ya causados, el ajuste de la causación va enlazado a esta operación.
+        if (ajusteDeCausacion is not null
+            && await ajusteDeCausacion.AjustarAsync(cuenta, operacion, EmisionDeCartera.ClaseConsignacionDeCuenta, ct) is { IsFailure: true } ajusteFallido)
+            return Result.Failure<ConsignacionAplicada>(ajusteFallido.Error);
 
         // FR-128: el cargo por consignación sobre los gratuitos del período, en su propia operación (no se cobra de lo que sigue en canje).
         var cargosCausados = new List<CargoCalculadoDto>();

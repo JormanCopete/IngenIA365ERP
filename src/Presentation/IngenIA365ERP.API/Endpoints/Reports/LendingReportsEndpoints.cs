@@ -118,6 +118,9 @@ public class LendingReportsEndpoints : ICarterModule
             (f, q) => new Application.Lending.Deposits.Reports.GmfReportQuery(f, Entero(q, "year"), Entero(q, "month")));
         group.MapVistaDeCartera(Application.Lending.Deposits.Reports.ChargesReportQueryHandler.Vista,
             (f, q) => new Application.Lending.Deposits.Reports.ChargesReportQuery(f, Texto(q, "status")));
+        // Feature 014, US5 (T137): las liquidaciones de intereses con su retención (from, to, class), con datos del titular.
+        group.MapVistaDeCartera(Application.Lending.Deposits.Reports.InterestAndWithholdingReportQueryHandler.Vista,
+            (f, q) => new Application.Lending.Deposits.Reports.InterestAndWithholdingReportQuery(f, Texto(q, "class")));
     }
 
     private static int? Entero(IQueryCollection q, string clave) =>

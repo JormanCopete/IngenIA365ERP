@@ -3,6 +3,8 @@ using IngenIA365ERP.API.Endpoints.Common;
 using IngenIA365ERP.API.Filters;
 using IngenIA365ERP.Application.Lending.Deposits.Accounts;
 using IngenIA365ERP.Application.Lending.Deposits.Accounts.Parties;
+using IngenIA365ERP.Application.Lending.Deposits.Accrual;
+using IngenIA365ERP.Application.Lending.Deposits.Operations;
 using IngenIA365ERP.Domain.Enums.Lending;
 using MediatR;
 
@@ -22,6 +24,12 @@ public class MemberAccountsEndpoints : ICarterModule
     public const string Leer = "Lending.Accounts.Read";
     public const string Abrir = "Lending.Accounts.Open";
     public const string AdministrarPartes = "Lending.Accounts.Parties.Manage";
+
+    /// <summary>US5 (T139): liquidar a mano un período de intereses.</summary>
+    public const string Liquidar = "Lending.Interest.Settle";
+
+    /// <summary>US5 (T135): cancelar una cuenta.</summary>
+    public const string Cancelar = "Lending.Accounts.Close";
 
     public void AddRoutes(IEndpointRouteBuilder app)
     {
@@ -75,7 +83,52 @@ public class MemberAccountsEndpoints : ICarterModule
             .WithName("Lending_Accounts_ConfirmDataUpdate")
             .ConClaveDeOperacion()
             .RequirePermission(AdministrarPartes);
+
+        // ------------------------------------------------------------------------- intereses y cancelación (US5, T135, T139) --
+        cuentas.MapGet("/{id:guid}/settlements", async (Guid id, int? page, int? pageSize, ISender sender, CancellationToken ct) =>
+                await sender.Send(new ListInterestSettlementsQuery(id, page ?? 1, pageSize ?? 50), ct))
+            .WithName("Lending_Accounts_Settlements")
+            .RequirePermission(Leer);
+
+        cuentas.MapPost("/{id:guid}/settlements/simulate", async (Guid id, SimularLiquidacionRequest body, ISender sender, CancellationToken ct) =>
+                await sender.Send(new SimulateInterestSettlementQuery(id, body.Date, body.RecordedAsOf), ct))
+            .WithName("Lending_Accounts_SimulateSettlement")
+            .RequirePermission(Leer);
+
+        // Idempotente por cuenta y período (SC-003): 201 la nueva; 200 la existente.
+        cuentas.MapPost("/{id:guid}/settlements", async (Guid id, LiquidarRequest body, HttpContext http, ISender sender, CancellationToken ct) =>
+                Liquidada(await sender.Send(new SettleAccountInterestCommand(id, body.PeriodTo, body.Reason ?? string.Empty) { OperationKey = http.ClaveDeOperacion() },
+                    ct), id))
+            .WithName("Lending_Accounts_Settle")
+            .ConClaveDeOperacion()
+            .RequirePermission(Liquidar);
+
+        cuentas.MapGet("/{id:guid}/close-preview", async (Guid id, DateOnly? date, ISender sender, CancellationToken ct) =>
+                await sender.Send(new PreviewMemberAccountClosingQuery(id, date), ct))
+            .WithName("Lending_Accounts_ClosePreview")
+            .RequirePermission(Leer);
+
+        cuentas.MapPost("/{id:guid}/close", async (Guid id, CancelarRequest body, HttpContext http, ISender sender, CancellationToken ct) =>
+                LendingGroup.Creado(await sender.Send(new CloseMemberAccountCommand(id, body.Date, body.Delivery ?? new CloseDeliveryInput(CloseDeliveryKind.DisbursementOrder,
+                    null, null), body.Signatures ?? [], body.Reason ?? string.Empty) { OperationKey = http.ClaveDeOperacion() }, ct),
+                    c => $"/api/lending/accounts/{id}/operations/{c.OperationPublicId}"))
+            .WithName("Lending_Accounts_Close")
+            .ConClaveDeOperacion()
+            .RequirePermission(Cancelar);
     }
+
+    /// <summary>201 con la liquidación nueva; 200 con la existente (SC-003).</summary>
+    private static object Liquidada(IngenIA365ERP.Application.Common.Models.Result<InterestSettlementDto> r, Guid cuenta) =>
+        r.IsFailure || r.Value.AlreadyExisted ? r : Results.Created($"/api/lending/accounts/{cuenta}/settlements/{r.Value.PublicId}", r.Value);
+
+    /// <summary>La simulación de la liquidación: la fecha D y, si se quiere, el instante R hasta el que se toma lo registrado.</summary>
+    public sealed record SimularLiquidacionRequest(DateOnly Date, DateTime? RecordedAsOf);
+
+    /// <summary>La liquidación manual: el fin del período y el motivo.</summary>
+    public sealed record LiquidarRequest(DateOnly PeriodTo, string? Reason);
+
+    /// <summary>La cancelación: la fecha (hoy), cómo se entrega el saldo, quiénes firman y el motivo.</summary>
+    public sealed record CancelarRequest(DateOnly? Date, CloseDeliveryInput? Delivery, IReadOnlyList<Guid>? Signatures, string? Reason);
 
     /// <summary>El cuerpo de las rutas que sólo llevan motivo.</summary>
     public sealed record MotivoRequest(string? Reason);

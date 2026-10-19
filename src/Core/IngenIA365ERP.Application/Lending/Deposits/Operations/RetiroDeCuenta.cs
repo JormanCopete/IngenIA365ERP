@@ -66,6 +66,12 @@ public sealed record RetiroPedido(
 
     /// <summary>El hecho generador del GMF (<c>HechosGeneradoresDeGmf</c>): el retiro, o el del traslado que lo revisa.</summary>
     public string HechoGenerador { get; init; } = HechosGeneradoresDeGmf.Retiro;
+
+    /// <summary>
+    /// US5 (T135; FR-039): la entrega del saldo de una cancelación: se lleva todo —el mínimo de la línea no se respeta, aunque la línea no admita retiros
+    /// parciales— y no aplican los topes por operación y por día ni el cargo por retiro sobre los gratuitos.
+    /// </summary>
+    public bool EsCancelacion { get; init; }
 }
 
 /// <summary>Lo que revisó un retiro antes de escribir: la cuenta, su GMF, sus cargos, las firmas, la atribución y el disponible que deja. (nuevo)</summary>
@@ -105,7 +111,8 @@ public sealed class RetiroDeCuenta(
     ReglasDeMovimientos movimientos,
     CargosDeCuentas cargos,
     IActorActual actorActual,
-    IDateTimeService reloj)
+    IDateTimeService reloj,
+    Accrual.AjusteDeCausacionDeCuenta? ajusteDeCausacion = null)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
@@ -140,8 +147,11 @@ public sealed class RetiroDeCuenta(
         var gmf = await movimientos.GmfAsync(c, p.HechoGenerador, p.Monto, p.FechaValor, ct);
         if (gmf.IsFailure) return Falla(gmf.Error);
         var total = p.Monto + (gmf.Value?.Valor ?? 0m);
-        if (!DisponibleDeCuenta.Alcanza(c.Disponible, total)) return Falla(ErroresDeMovimientos.DisponibleInsuficiente(c.Disponible, total));
-        if (await movimientos.TopesAsync(c, p.Monto, p.Medio, esRetiro: true, p.FechaValor, ct) is { } tope) return Falla(tope);
+        var alcanza = p.EsCancelacion
+            ? c.Disponible.Saldo - c.Disponible.Retenido - c.Disponible.Embargado - c.Disponible.EnCanje >= total
+            : DisponibleDeCuenta.Alcanza(c.Disponible, total);
+        if (!alcanza) return Falla(ErroresDeMovimientos.DisponibleInsuficiente(c.Disponible, total));
+        if (!p.EsCancelacion && await movimientos.TopesAsync(c, p.Monto, p.Medio, esRetiro: true, p.FechaValor, ct) is { } tope) return Falla(tope);
 
         var atribucion = AtribucionEvaluada.SinAprobacion;
         if (p.ExigeAtribucion && pedirAprobacion)
@@ -155,7 +165,7 @@ public sealed class RetiroDeCuenta(
 
         var despues = DisponibleDeCuenta.Calcular(cuenta.Nature, c.Disponible.Saldo - total, c.Disponible.Retenido, c.Disponible.Embargado,
             c.Disponible.EnCanje, c.Disponible.Minimo);
-        IReadOnlyList<CargoPropuesto> propuestos = p.Clase == MemberAccountOperationKind.Withdrawal
+        IReadOnlyList<CargoPropuesto> propuestos = p.Clase == MemberAccountOperationKind.Withdrawal && !p.EsCancelacion
             ? await cargos.PorEventoAsync(c, ChargeTrigger.WithdrawalOverFree, p.Monto, p.FechaValor, despues.Disponible, ct)
             : [];
         return Result.Success(new RetiroRevisado(c, gmf.Value, propuestos, firmas, personas, atribucion, despues));
@@ -175,7 +185,8 @@ public sealed class RetiroDeCuenta(
             return new ErrorConDatos(ErroresDeAportes.CodigoNoOperable,
                 $"La cuenta {cuenta.Number} tiene un sobregiro técnico desde el {ErroresDeCuentas.Fecha(cuenta.TechnicalNegativeSince.Value)}: no admite retiros hasta cubrirlo.",
                 new { status = cuenta.Status.ToString(), holds = new[] { "TechnicalOverdraft" } });
-        if (p.Clase is MemberAccountOperationKind.Withdrawal or MemberAccountOperationKind.Transfer && c.Version is { AllowsPartialWithdrawals: false })
+        if (p.Clase is MemberAccountOperationKind.Withdrawal or MemberAccountOperationKind.Transfer && c.Version is { AllowsPartialWithdrawals: false }
+            && !p.EsCancelacion)
             return ErroresDeMovimientos.RetiroNoAdmitido(cuenta.Number);
         return null;
     }
@@ -257,7 +268,7 @@ public sealed class RetiroDeCuenta(
         if (p.Orden is { } pedida)
         {
             var persona = await db.People.AsNoTracking().IgnoreQueryFilters().FirstAsync(x => x.Id == pedida.PersonaId, ct);
-            orden = AccountPayoutOrder.Emitir(cuenta.Id, operacion.Id, PayoutPurpose.Withdrawal, persona.Id, persona.IdType ?? string.Empty, persona.TaxId ?? string.Empty,
+            orden = AccountPayoutOrder.Emitir(cuenta.Id, operacion.Id, p.EsCancelacion ? PayoutPurpose.Cancellation : PayoutPurpose.Withdrawal, persona.Id, persona.IdType ?? string.Empty, persona.TaxId ?? string.Empty,
                 ReferenciasDeGobierno.Nombre(persona), pedida.Banco.BancoId, pedida.Banco.TipoDeCuenta, pedida.Banco.NumeroDeCuenta, p.Monto,
                 hecho.Value.FechaContable.AddDays(1), ahora, actor.UserId);
             await numerador.NumerarOrdenDeCuentaAsync(orden, Disbursements.TramoDeDesembolso.PrefijoDeOrden, ct);
@@ -317,6 +328,10 @@ public sealed class RetiroDeCuenta(
             }
         }
         await db.SaveChangesAsync(ct);
+        // US5 (T133; FR-062): con fecha valor en días ya causados, el ajuste de la causación va enlazado a esta operación.
+        if (ajusteDeCausacion is not null
+            && await ajusteDeCausacion.AjustarAsync(cuenta, operacion, EmisionDeCartera.ClaseRetiroDeCuenta, ct) is { IsFailure: true } ajusteFallido)
+            return Result.Failure<RetiroAplicado>(ajusteFallido.Error);
 
         // FR-128: el cargo por retiro sobre los gratuitos, en su propia operación.
         var causados = new List<CargoCalculadoDto>();

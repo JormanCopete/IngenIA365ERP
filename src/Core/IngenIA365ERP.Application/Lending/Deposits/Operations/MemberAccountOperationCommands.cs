@@ -581,6 +581,8 @@ public sealed class ReverseMemberAccountOperationCommandHandler(
             return Falla(ErroresDeAportes.ReversoDeOtro());
         if (vista.MembershipWithdrawalId is not null || vista.Kind is MemberAccountOperationKind.DirectDebit or MemberAccountOperationKind.InternalOffset
                 or MemberAccountOperationKind.ContributionRefund or MemberAccountOperationKind.Charge or MemberAccountOperationKind.ChargeWaiver
+                // US5 (T132, T135; research E98): la liquidación de intereses y la cancelación no se reversan desde la pantalla.
+                or MemberAccountOperationKind.InterestSettlement or MemberAccountOperationKind.Cancellation
             || await db.AccountPayoutOrders.AsNoTracking().AnyAsync(o => o.OperationId == vista.Id, ct))
             return Falla(ErroresDeMovimientos.DelProceso(vista.Number));
 

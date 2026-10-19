@@ -113,7 +113,8 @@ public sealed class PlanesDeLiquidacionDeRetiro(
     IApplicationDbContext db,
     ReglasDeAportes reglas,
     IMotorDeCreditoEnDesembolso motor,
-    OrdenesDeGiroDeCuentas ordenes)
+    OrdenesDeGiroDeCuentas ordenes,
+    Accrual.LiquidacionDeIntereses? intereses = null)
 {
     public async Task<Result<PlanDeLiquidacionDeRetiro>> ArmarAsync(MembershipWithdrawal retiro, DateOnly fecha, LossDeductionInput? perdida, CancellationToken ct)
     {
@@ -128,6 +129,24 @@ public sealed class PlanesDeLiquidacionDeRetiro(
         var cuentas = new List<MemberAccount> { aportes };
         cuentas.AddRange(ahorros.Where(a => a.DepositClass != DepositClass.TermDeposit));
         var saldos = await LectorDeCuentas.SaldosAsync(db, cuentas.Select(c => c.Id).ToList(), ct);
+        // US5 (T136; FR-076): los ahorros que ganan interés entran con sus intereses liquidados a la fecha —el bruto abonado al capital, menos la retención,
+        // y el interés por pagar en cero—, que es lo que la liquidación del retiro deja en el libro antes de cruzar y devolver.
+        if (intereses is not null)
+            foreach (var c in cuentas.Where(c => Accrual.LiquidacionDeIntereses.GanaInteres(c)
+                                                 && c.Status is MemberAccountStatus.Active or MemberAccountStatus.Inactive))
+            {
+                var control = await db.MemberAccountControls.AsNoTracking().FirstAsync(x => x.MemberAccountId == c.Id, ct);
+                var simulada = await intereses.CalcularAsync(c, control, fecha, DateTime.MaxValue, desdeElMotor: true, ct);
+                if (simulada.IsFailure) return Result.Failure<PlanDeLiquidacionDeRetiro>(simulada.Error);
+                var s = simulada.Value;
+                if (s.Causado == 0m && s.Bruto == 0m) continue;
+                var propios = saldos.TryGetValue(c.Id, out var leidos) ? leidos : saldos[c.Id] = [];
+                propios[MemberAccountConcept.Principal] = propios.GetValueOrDefault(MemberAccountConcept.Principal) + s.Neto;
+                propios[MemberAccountConcept.InterestPayable] = 0m;
+                if (s.Retencion.SeRetiene)
+                    propios[MemberAccountConcept.Withholding] = propios.GetValueOrDefault(MemberAccountConcept.Withholding) + s.Retencion.Valor;
+                avisos.Add($"La cuenta {c.Number} entra con {s.Bruto:N2} de intereses liquidados a la fecha (retención {s.Retencion.Valor:N2}).");
+            }
         var enElRetiro = cuentas.Select(c => new CuentaEnElRetiro(c.Id, c.Number, c.Nature, c.DepositClass,
             (IReadOnlyDictionary<MemberAccountConcept, decimal>?)saldos.GetValueOrDefault(c.Id) ?? new Dictionary<MemberAccountConcept, decimal>())).ToList();
 
@@ -333,7 +352,8 @@ public sealed class SettleMembershipWithdrawalCommandHandler(
     IActorActual actorActual,
     IDateTimeService reloj,
     ILogger<SettleMembershipWithdrawalCommandHandler> logger,
-    IAlertas? alertas = null) : IRequestHandler<SettleMembershipWithdrawalCommand, Result<MembershipWithdrawalDto>>
+    IAlertas? alertas = null,
+    Accrual.LiquidacionALaFecha? interesesALaFecha = null) : IRequestHandler<SettleMembershipWithdrawalCommand, Result<MembershipWithdrawalDto>>
 {
     public async Task<Result<MembershipWithdrawalDto>> Handle(SettleMembershipWithdrawalCommand request, CancellationToken ct)
     {
@@ -369,6 +389,15 @@ public sealed class SettleMembershipWithdrawalCommandHandler(
             await cerrojo.BloquearDeudoresAsync(previo.Codeudores.Append(retiro.PersonId).Distinct().Order().ToList(), ModoDeEspera.Esperar, ct);
             if (previo.Creditos.Count > 0) await cerrojo.BloquearCreditosAsync(previo.Creditos.Keys.Order().ToList(), ModoDeEspera.Esperar, ct);
             await cerrojo.BloquearCuentasAsync(previo.Cuentas.Keys.Order().ToList(), ModoDeEspera.Esperar, ct);
+
+            // US5 (T136; FR-076): los ahorros que ganan interés se liquidan a la fecha antes de cruzar y devolver (la vista previa ya los sumó).
+            var idsDeAhorro = previo.Cuentas.Keys.Where(k => k != retiro.ContributionAccountId).ToList();
+            if (interesesALaFecha is not null)
+                foreach (var ahorro in await db.MemberAccounts.Where(a => idsDeAhorro.Contains(a.Id)).OrderBy(a => a.Id).ToListAsync(ct))
+                {
+                    var alDia = await interesesALaFecha.LiquidarAsync(ahorro, fecha, $"Liquidación de intereses del retiro {retiro.Number}", ct);
+                    if (alDia.IsFailure) return Result.Failure<MembershipWithdrawal>(alDia.Error);
+                }
 
             // Bajo el cerrojo, lo mismo que se vio: si algo cambió entre la vista previa y el cerrojo, nada se aplica.
             var armado = await planes.ArmarAsync(retiro, fecha, request.LossDeduction, ct);

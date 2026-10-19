@@ -206,6 +206,10 @@ public sealed class OrdenesDeGiroDeCuentas(
             var reverso = await reversion.ReversarAsync(origen, texto, ReintegroPorTesoreria, ct);
             if (reverso.IsFailure) return Result.Failure(reverso.Error);
             orden.RegistrarResultado(hacia, ahora);
+            // US5 (T135; data-model §3.1): la orden de una cancelación rechazada devuelve la cuenta a activa con su saldo.
+            if (orden.Purpose == PayoutPurpose.Cancellation
+                && await db.MemberAccounts.FirstOrDefaultAsync(a => a.Id == orden.MemberAccountId && a.Status == MemberAccountStatus.Closing, ct) is { } enCierre)
+                enCierre.RevertirCierre(MemberAccountStatus.Active, ahora);
             return Result.Success();
         }
 
@@ -216,6 +220,15 @@ public sealed class OrdenesDeGiroDeCuentas(
         if (sucursal.IsFailure) return Result.Failure(sucursal.Error);
         var beneficiario = await db.People.AsNoTracking().IgnoreQueryFilters().Where(p => p.Id == orden.BeneficiaryPersonId).Select(p => p.PublicId).FirstAsync(ct);
         await emision.DevolucionGiradaAsync(orden, EmisionDeCartera.TipoDeOrden(orden), referencia, ocurrida, sucursal.Value, beneficiario, ct);
+
+        // US5 (T135; FR-039): girada la entrega de una cancelación, la cuenta sin saldo queda cancelada.
+        if (orden.Purpose == PayoutPurpose.Cancellation)
+        {
+            var enCierre = await db.MemberAccounts.FirstAsync(a => a.Id == orden.MemberAccountId, ct);
+            var saldos = (await LectorDeCuentas.SaldosAsync(db, [enCierre.Id], ct)).GetValueOrDefault(enCierre.Id) ?? [];
+            if (enCierre.Status == MemberAccountStatus.Closing && LectorDeCuentas.SaldoDelTitular(enCierre.Nature, saldos) == 0m)
+                enCierre.Cerrar(reloj.HoyLocal, (await actorActual.ObtenerAsync(ct)).UserId, $"Cancelación girada por la orden {orden.Number}", ahora);
+        }
 
         if (orden.MembershipWithdrawalId is { } retiroId)
         {

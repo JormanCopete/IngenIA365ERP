@@ -164,6 +164,10 @@ public class LasConsultasDeCarteraRespetanElAlcance
         "Core/IngenIA365ERP.Application/Lending/Deposits/Operations/DirectDebitMandateCommands.cs",
         "Core/IngenIA365ERP.Application/Lending/Deposits/Charges/AccountChargeCommands.cs",
         "Core/IngenIA365ERP.Application/Lending/Deposits/Reports/DepositReportQueries.cs",
+        // Feature 014, US5 (T133, T135, T137, T139): las liquidaciones, la simulación, la vista previa de la cancelación y la vista de intereses y retención.
+        "Core/IngenIA365ERP.Application/Lending/Deposits/Accrual/InterestSettlementCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/Deposits/Accounts/CloseMemberAccountCommand.cs",
+        "Core/IngenIA365ERP.Application/Lending/Deposits/Reports/InterestReportQueries.cs",
     ];
 
     /// <summary>

@@ -42,7 +42,8 @@ public sealed class ReversionDeCuentas(
     IActorActual actorActual,
     IDateTimeService reloj,
     Documents.AnulacionDeDocumentosDeCuentas? documentos = null,
-    IAlertas? alertas = null)
+    IAlertas? alertas = null,
+    Accrual.AjusteDeCausacionDeCuenta? ajusteDeCausacion = null)
 {
     /// <summary>El prefijo del comprobante del reverso de una operación de cuenta.</summary>
     public const string PrefijoReverso = "RVC-";
@@ -123,6 +124,14 @@ public sealed class ReversionDeCuentas(
         var espejos = registro.Reversar(filas, reverso, hecho.Value.FechaContable, unidad.Mensajes.FirstOrDefault()?.PublicId);
         if (espejos.IsFailure) return Result.Failure<ReversoDeCuentaAplicado>(espejos.Error);
         await db.SaveChangesAsync(ct);
+        // US5 (T133; FR-062): el reverso lleva la fecha valor de su original; si cae en días ya causados, ajusta la causación de cada cuenta tocada.
+        if (ajusteDeCausacion is not null)
+        {
+            var idsTocadas = filas.Select(f => f.MemberAccountId).Distinct().ToList();
+            foreach (var tocada in await db.MemberAccounts.Where(a => idsTocadas.Contains(a.Id)).ToListAsync(ct))
+                if (await ajusteDeCausacion.AjustarAsync(tocada, reverso, EmisionDeCartera.ClaseReversoDeCuenta, ct) is { IsFailure: true } ajusteFallido)
+                    return Result.Failure<ReversoDeCuentaAplicado>(ajusteFallido.Error);
+        }
         RegistroDeCuentas.MarcarReversada(original, reverso);
 
         // FR-002: los dependientes. El uso del tope exento del GMF del mes vuelve (fila espejo).

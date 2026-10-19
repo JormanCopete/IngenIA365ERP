@@ -118,6 +118,12 @@ public static class TiposDeAlerta
     /// destinatarios de <c>Captaciones.DestinatariosReversoTardio</c>. (nuevo)
     /// </summary>
     public const string ReversoTardioDeCruce = "Cartera.ReversoTardioDeCruce";
+
+    /// <summary>
+    /// Feature 014, US5 (T131; US5-5): el paso de captaciones tuvo que poner al día la causación de cuentas atrasadas más de un día (el proceso falló o no
+    /// corrió): se causaron en orden desde el último día causado y se avisa al jefe de captaciones. (nuevo)
+    /// </summary>
+    public const string CausacionDeCaptacionesAtrasada = "Cartera.CausacionDeCaptacionesAtrasada";
     public const string PeriodoInexistente = "Contabilidad.PeriodoInexistente";
     public const string GrupoNiifDistinto = "Contabilidad.GrupoNiifDistinto";
     public const string ValorNacionalDistinto = "Nomina.ValorNacionalDistinto";
@@ -263,6 +269,8 @@ public static class TiposDeAlerta
             ["Lending.Accounts.Reverse"], AppYCorreo, AlertSeverity.Critical, "K8"),
         new(ReversoTardioDeCruce, Cartera, "Se reversó un pago del cruce al retiro con el retiro ya pagado: la cuenta se reabrió con saldo a favor del exasociado.",
             ["Lending.MembershipWithdrawals.ReverseAfterPayment", "Lending.MembershipWithdrawals.Approve"], AppYCorreo, AlertSeverity.Critical, "K7"),
+        new(CausacionDeCaptacionesAtrasada, Cartera, "La causación de intereses de cuentas de captación estaba atrasada: se puso al día desde el último día causado.",
+            ["Lending.Interest.Settle", "Lending.Processes.Run"], AppYCorreo, AlertSeverity.Warning, "K8"),
         new(PeriodoInexistente, "Accounting", "Llegó un hecho con fecha contable en un período que no existe.",
             ["Accounting.Periods.CloseYear"], AppYCorreo, AlertSeverity.Critical, "K1"),
         new(GrupoNiifDistinto, "Accounting", "El perfil regulatorio y el grupo NIIF de la configuración contable difieren.",

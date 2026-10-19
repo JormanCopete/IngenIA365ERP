@@ -35,7 +35,11 @@ public sealed record TrasladoPedido(
     Guid? AprobacionPublicId,
     PrevalidationOutcome Validacion,
     IReadOnlyList<string> Avisos,
-    string? Motivo);
+    string? Motivo)
+{
+    /// <summary>US5 (T135): la entrega del saldo de una cancelación (ver <see cref="RetiroPedido.EsCancelacion"/>).</summary>
+    public bool EsCancelacion { get; init; }
+}
 
 /// <summary>Lo que revisó un traslado: el retiro del origen, la cuenta destino, el reparto en el destino y el hecho generador del GMF. (nuevo)</summary>
 public sealed record TrasladoRevisado(RetiroRevisado Origen, CuentaParaMovimiento Destino, RepartoDeConsignacion Reparto, string HechoGenerador);
@@ -56,7 +60,8 @@ public sealed class TrasladoDeCuenta(
     RetiroDeCuenta retiros,
     ConsignacionEnCuentas consignacion,
     IActorActual actorActual,
-    IDateTimeService reloj)
+    IDateTimeService reloj,
+    Accrual.AjusteDeCausacionDeCuenta? ajusteDeCausacion = null)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
@@ -93,6 +98,8 @@ public sealed class TrasladoDeCuenta(
         ClaseDeMedioDeRecaudo.Transfer, p.Firmantes, null, p.Recibo, p.AprobacionPublicId, p.Validacion, p.Avisos, p.Motivo)
     {
         Clase = MemberAccountOperationKind.Transfer,
+        EsCancelacion = p.EsCancelacion,
+        ExigeAtribucion = !p.EsCancelacion,
     };
 
     /// <summary>Aplica el traslado (ver la clase). Las dos cuentas ya están bloqueadas.</summary>
@@ -218,6 +225,11 @@ public sealed class TrasladoDeCuenta(
         if (origen.Status == MemberAccountStatus.Inactive) origen.Reactivar(ahora);
         if (destino.Status == MemberAccountStatus.Inactive) destino.Reactivar(ahora);
         await db.SaveChangesAsync(ct);
+        // US5 (T133; FR-062): el traslado fechado atrás ajusta la causación de las dos cuentas, enlazado a esta operación.
+        if (ajusteDeCausacion is not null)
+            foreach (var afectada in new[] { origen, destino })
+                if (await ajusteDeCausacion.AjustarAsync(afectada, operacion, EmisionDeCartera.ClaseTrasladoDeCuenta, ct) is { IsFailure: true } ajusteFallido)
+                    return Result.Failure<(ComprobanteDeCuentaDto Comprobante, MemberAccountOperation Operacion, bool YaAplicado)>(ajusteFallido.Error);
 
         var final = await movimientos.LeerAsync(origen, p.FechaValor, ct);
         var comprobante = new ComprobanteDeCuentaDto(operacion.PublicId, operacion.Number, origen.PublicId, origen.Number, p.Clave ?? string.Empty,

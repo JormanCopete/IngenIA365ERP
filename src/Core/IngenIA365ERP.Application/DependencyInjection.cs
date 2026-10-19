@@ -524,6 +524,19 @@ public static class DependencyInjection
         // US4 (T116, T119): los subpasos de los cargos periódicos y del débito automático, después de las cuotas.
         services.AddScoped<Lending.Deposits.Accrual.ISubpasoDeCaptaciones, Lending.Deposits.Charges.CargosPeriodicos>();
         services.AddScoped<Lending.Deposits.Accrual.ISubpasoDeCaptaciones, Lending.Deposits.Operations.DebitoAutomatico>();
+        // Feature 014, US5 (T131–T135): el interés de las cuentas de captación. La causación y la liquidación son los últimos subpasos del paso de
+        // captaciones (después de las cuotas, los cargos y el débito automático, que mueven los saldos del día): se causa el día con su saldo de cierre
+        // y se liquida lo que venció (research E95).
+        services.AddScoped<Lending.Deposits.Accrual.LectorDeInteres>();
+        services.AddScoped<Lending.Deposits.Accrual.ReglasDeRetencion>();
+        services.AddScoped<Lending.Deposits.Accrual.PartesDeHechosDeCaptaciones>();
+        services.AddScoped<Lending.Deposits.Accrual.AjusteDeCausacionDeCuenta>();
+        services.AddScoped<Lending.Deposits.Accrual.LiquidacionDeIntereses>();
+        services.AddScoped<Lending.Deposits.Accrual.LiquidacionALaFecha>();
+        services.AddScoped<Lending.Deposits.Accounts.CancelacionDeCuenta>();
+        services.AddScoped<Lending.Deposits.Accrual.CausacionDeCaptaciones>();
+        services.AddScoped<Lending.Deposits.Accrual.ISubpasoDeCaptaciones>(sp => sp.GetRequiredService<Lending.Deposits.Accrual.CausacionDeCaptaciones>());
+        services.AddScoped<Lending.Deposits.Accrual.ISubpasoDeCaptaciones, Lending.Deposits.Accrual.LiquidacionPeriodicaDeIntereses>();
         // US4 (T111): la aprobación de un retiro o una consignación en efectivo sobre la atribución (aprobador presente, mecánica de la plataforma).
         services.AddScoped<Common.Approvals.IFuenteDeAprobacion, Lending.Deposits.Operations.FuenteDeAprobacionDeCuenta>();
         // US3 (T086): lo común de la devolución de aportes sin retiro y la cesión entre asociados.

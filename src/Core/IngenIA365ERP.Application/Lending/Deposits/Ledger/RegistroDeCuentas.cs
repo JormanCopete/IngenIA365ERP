@@ -471,6 +471,37 @@ public sealed class RegistroDeCuentas(IApplicationDbContext db)
         }
     }
 
+    // ---------------------------------------------------------------------------------------- liquidación de intereses (US5) --
+
+    /// <summary>
+    /// US5 (T130, T132; data-model §4.5, §4.6; FR-061, FR-063): la liquidación de un período con sus acumulados de retención por titular, en la misma
+    /// operación que sus filas, y la marca del último período liquidado. Hace cumplir lo que el hecho promete: lo causado a seis decimales, el bruto, la
+    /// retención y el neto al centavo, la diferencia de redondeo = bruto − causado, el neto = bruto − retención y los acumulados que suman lo de la
+    /// liquidación. Lo calculan los motores (<c>InteresDeCaptacion</c>, <c>RetencionSobreRendimientos</c>); aquí sólo se escribe. No guarda.
+    /// </summary>
+    public void RegistrarLiquidacion(MemberAccountControl control, InterestSettlement liquidacion, IReadOnlyList<WithholdingAccumulation> acumulados)
+    {
+        ArgumentNullException.ThrowIfNull(control);
+        ArgumentNullException.ThrowIfNull(liquidacion);
+        ArgumentNullException.ThrowIfNull(acumulados);
+        if (Decimales(liquidacion.AccruedInterest) > MemberAccountTransaction.DecimalesDeCausacion
+            || Decimales(liquidacion.GrossInterest) > MemberAccountTransaction.DecimalesDeOperacion
+            || Decimales(liquidacion.WithholdingAmount) > MemberAccountTransaction.DecimalesDeOperacion)
+            throw new InvalidOperationException("Una liquidación lleva lo causado a seis decimales y el bruto y la retención al centavo.");
+        if (liquidacion.RoundingDifference != liquidacion.GrossInterest - liquidacion.AccruedInterest
+            || liquidacion.NetInterest != liquidacion.GrossInterest - liquidacion.WithholdingAmount
+            || liquidacion.WithholdingAmount < 0m || liquidacion.WithholdingAmount > liquidacion.GrossInterest)
+            throw new InvalidOperationException("La liquidación no cuadra: redondeo = bruto − causado y neto = bruto − retención, con la retención entre cero y el bruto.");
+        if (acumulados.Count > 0 && (acumulados.Sum(a => a.GrossInterest) != liquidacion.GrossInterest
+                                     || acumulados.Sum(a => a.WithholdingAmount) != liquidacion.WithholdingAmount))
+            throw new InvalidOperationException("Los acumulados de retención de los titulares suman lo de la liquidación.");
+        if (liquidacion.MemberAccountId != control.MemberAccountId)
+            throw new InvalidOperationException("La liquidación es de otra cuenta que la del control.");
+        MarcarLiquidacion(control, liquidacion.PeriodTo);
+        db.InterestSettlements.Add(liquidacion);
+        if (acumulados.Count > 0) db.WithholdingAccumulations.AddRange(acumulados);
+    }
+
     /// <summary>Lo que el registro exige de cada fila: importe, un origen y la precisión de su clase.</summary>
     private static void Validar(MemberAccountTransaction fila)
     {

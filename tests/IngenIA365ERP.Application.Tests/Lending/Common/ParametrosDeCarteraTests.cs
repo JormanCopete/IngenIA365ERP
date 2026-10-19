@@ -92,6 +92,8 @@ public class ParametrosDeCarteraTests
         { "Retencion.UmbralDiarioUvt", "0.055", [N], EntregaDeCartera.K8 },
         { "Retencion.AlcanceDelUmbral", "ExceptTermDeposit", [N], EntregaDeCartera.K8 },
         { "Retencion.ComponenteInflacionarioAplica", "true", [N], EntregaDeCartera.K8 },
+        // Fase 8 de la 014 (US5, research E94): el redondeo de la retención es parámetro.
+        { "Retencion.Redondeo", "Peso", [N], EntregaDeCartera.K8 },
         { "Gmf.Tarifa", "0.004", [N], EntregaDeCartera.K8 },
         { "Gmf.TopeExencionUvt", "350", [N], EntregaDeCartera.K8 },
         { "Gmf.PoliticaDeExencion", "SingleMarkedAccount", [N], EntregaDeCartera.K8 },
@@ -152,7 +154,8 @@ public class ParametrosDeCarteraTests
         var posteriores = ParametrosDeCartera.Definiciones.Where(d => d.DisponibleDesde > (EntregaDeModulo)EntregaDeCartera.K6b).ToList();
 
         // Feature 014 (T017): las claves de captaciones y aportes existen desde ya con su entrega (K7 a K11) y no se ofrecen hasta que salga.
-        posteriores.Should().HaveCount(32).And.OnlyContain(d => d.DisponibleDesde >= (EntregaDeModulo)EntregaDeCartera.K7
+        // Fase 8 de la 014 (US5, research E94): 33 con Retencion.Redondeo.
+        posteriores.Should().HaveCount(33).And.OnlyContain(d => d.DisponibleDesde >= (EntregaDeModulo)EntregaDeCartera.K7
             && d.DisponibleDesde <= (EntregaDeModulo)EntregaDeCartera.K11);
         ParametrosDeCartera.Definiciones.Where(d => d.DisponibleDesde == (EntregaDeModulo)EntregaDeCartera.K6b).Should().BeEmpty("la vivienda no trae claves");
         ParametrosDeCartera.Definiciones.Where(d => d.DisponibleDesde == (EntregaDeModulo)EntregaDeCartera.K6a).Select(d => d.Clave).Should()

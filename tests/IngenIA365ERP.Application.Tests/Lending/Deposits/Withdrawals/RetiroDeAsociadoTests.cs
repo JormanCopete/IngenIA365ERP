@@ -65,7 +65,9 @@ public sealed class RetiroDeAsociadoTests : IDisposable
     private OrdenesDeGiroDeCuentas Ordenes() => new(_a.Db, _a.RegistroDeCuentas(), _a.Numerador(), _a.Emision(), _a.Reversion(), _a.C.Parametros(), _a.G.Actor,
         _a.G.Reloj);
 
-    private PlanesDeLiquidacionDeRetiro Planes() => new(_a.Db, _a.Reglas(), _motor, Ordenes());
+    private bool _conIntereses;
+
+    private PlanesDeLiquidacionDeRetiro Planes() => new(_a.Db, _a.Reglas(), _motor, Ordenes(), _conIntereses ? _a.Liquidacion() : null);
 
     private CruceDeRetiro Cruce() => new(_a.Db, _obligaciones, _a.RegistroDeCuentas(), _a.Numerador(), _a.Emision(), _a.G.Actor, _a.G.Reloj);
 
@@ -78,7 +80,8 @@ public sealed class RetiroDeAsociadoTests : IDisposable
     private PreviewMembershipWithdrawalSettlementQueryHandler Previa() => new(Retiros(), _a.G.Alcance, Planes(), _a.G.Reloj);
 
     private SettleMembershipWithdrawalCommandHandler Liquidar() => new(_a.Db, Retiros(), _a.G.Alcance, Planes(), Cruce(), Ordenes(), _a.G.Intervenciones(),
-        _a.C.Cerrojo, _sender, _a.G.Actor, _a.G.Reloj, NullLogger<SettleMembershipWithdrawalCommandHandler>.Instance, _alertas);
+        _a.C.Cerrojo, _sender, _a.G.Actor, _a.G.Reloj, NullLogger<SettleMembershipWithdrawalCommandHandler>.Instance, _alertas,
+        _conIntereses ? _a.LiquidacionALaFecha() : null);
 
     private ApproveMembershipRefundCommandHandler AprobarDevolucion() => new(_a.Db, Retiros(), _a.G.Alcance, _a.Reglas(), Ordenes(), _a.G.Intervenciones(),
         _a.C.Cerrojo, _a.G.Reloj);
@@ -285,6 +288,40 @@ public sealed class RetiroDeAsociadoTests : IDisposable
     }
 
     [Fact]
+    public async Task T136_los_ahorros_que_ganan_interes_entran_con_sus_intereses_liquidados_a_la_fecha()
+    {
+        _conIntereses = true;
+        _a.G.Valores.LeerAsync(IngenIA365ERP.Domain.Common.NationalValues.CodigosDeValorNacional.Uvt, Arg.Any<string>(), Arg.Any<DateOnly>(),
+                Arg.Any<DateTime?>(), Arg.Any<CancellationToken>())
+            .Returns(Result.Success(new IngenIA365ERP.Application.Common.NationalValues.ValorNacionalVigente(Guid.NewGuid(), Guid.NewGuid(), "UVT", string.Empty,
+                52_374m, null, null, new DateOnly(2026, 1, 1), null, null, "Prueba", 1, _a.G.UtcNow.AddYears(-1),
+                IngenIA365ERP.Application.Common.NationalValues.EstadoDeRevision.Validada)));
+        await AnaConAportesAsync();
+        var linea = await _a.C.LineaDeCaptacionAsync("AHTRES", Accounts.CuentasDePrueba.ALaVista() with
+        {
+            Rate = new Application.Lending.Deposits.Lines.DepositRateInput { Kind = RateKind.Fixed, EffectiveAnnual = 0.03m },
+        });
+        var ahorro = await _a.C.AbiertaAsync(_a.C.Apertura(linea, _a.C.Ana));
+        await _a.ConsignadaAsync(_a.Consignacion(ahorro, 10_000_000m, ModalidadDeConsignacion.Free));
+        _a.G.HoyLocal = _a.G.HoyLocal.AddDays(14);
+        _a.G.UtcNow = _a.G.UtcNow.AddDays(14);
+
+        var retiro = await AprobadoAsync();
+        var previa = await PreviaAsync(retiro.PublicId);
+        var tasa = IngenIA365ERP.Domain.Lending.Rates.EquivalenciaDeTasas.TasaDiaria(0.03m, DayCountConvention.Actual365, RateEquivalence.Compound,
+            RepaymentPeriodicity.Monthly);
+        var interes = Math.Round(IngenIA365ERP.Domain.Lending.Deposits.InteresDeCaptacion.Seis(tasa * 10_000_000m * 14), 0, MidpointRounding.AwayFromZero);
+        previa.Savings.Should().Be(10_000_000m + interes, "catorce días al 3 % EA, sin retención (bajo el umbral)");
+        previa.Warnings.Should().Contain(w => w.Contains("intereses liquidados a la fecha"));
+
+        var liquidado = Ok(await LiquidarAsync(retiro.PublicId, previa.Sha256));
+        liquidado.Status.Should().Be(MembershipWithdrawalStatus.Settled);
+        var liquidacion = await _a.Db.InterestSettlements.AsNoTracking().SingleAsync();
+        (liquidacion.PeriodTo, liquidacion.GrossInterest).Should().Be((_a.G.HoyLocal, interes));
+        liquidado.Settlement!.Refund.Should().Be(1_000_000m + 10_000_000m + interes);
+    }
+
+    [Fact]
     public async Task La_orden_girada_paga_el_retiro_y_cancela_la_cuenta_y_la_rechazada_reintegra()
     {
         await AnaConAportesAsync();
@@ -458,7 +495,9 @@ public sealed class RetiroDeAsociadoTests : IDisposable
         var conPermiso = Substitute.For<IngenIA365ERP.Application.Common.Interfaces.Security.ICurrentUserPermissions>();
         conPermiso.ListAsync(Arg.Any<CancellationToken>()).Returns([ArrastreDelCruceAlRetiro.PermisoDeReversoTardio]);
         var correo = Substitute.For<IngenIA365ERP.Application.Common.Interfaces.Notifications.IEmailSender>();
-        var arrastre = new ArrastreDelCruceAlRetiro(_a.Db, _a.Reversion(), _a.C.Cerrojo, _a.G.Reloj, conPermiso, _a.C.Parametros(), correo, _alertas);
+        var trasElCommit = new IngenIA365ERP.Application.Common.Persistence.TareasTrasElCommit();
+        var arrastre = new ArrastreDelCruceAlRetiro(_a.Db, _a.Reversion(), _a.C.Cerrojo, _a.G.Reloj, conPermiso, _a.C.Parametros(), correo, _alertas,
+            trasElCommit: trasElCommit);
         (await arrastre.ValidarAsync(pago, default)).Should().BeNull();
         var r = await arrastre.AlReversarAsync(pago, reverso, default);
         r.IsSuccess.Should().BeTrue(r.IsFailure ? r.Error.Message : string.Empty);
@@ -472,6 +511,10 @@ public sealed class RetiroDeAsociadoTests : IDisposable
         (await _a.Db.MembershipWithdrawals.AsNoTracking().SingleAsync()).Status.Should().Be(MembershipWithdrawalStatus.Settled,
             "vuelve a liquidado para ordenar la devolución");
         await _alertas.Received().LevantarAsync(Arg.Is<AlertaALevantar>(x => x.TypeCode == TiposDeAlerta.ReversoTardioDeCruce), Arg.Any<CancellationToken>());
+        // Fase 8 de la 014 (research E92): el correo no sale dentro de la transacción del reverso; sale cuando se confirma.
+        await correo.DidNotReceive().SendAsync(Arg.Any<IngenIA365ERP.Application.Common.Interfaces.Notifications.EmailMessage>(), Arg.Any<CancellationToken>());
+        trasElCommit.HayPendientes.Should().BeTrue("el correo queda anotado para después del commit");
+        await trasElCommit.EjecutarAsync(null, default);
         await correo.Received(2).SendAsync(Arg.Any<IngenIA365ERP.Application.Common.Interfaces.Notifications.EmailMessage>(), Arg.Any<CancellationToken>());
         ArrastreDelCruceAlRetiro.Correos("a@b.co, sin-arroba ; c@d.co").Should().Equal("a@b.co", "c@d.co");
     }
