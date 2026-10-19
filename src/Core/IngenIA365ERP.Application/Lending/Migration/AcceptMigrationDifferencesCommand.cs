@@ -22,7 +22,8 @@ public sealed record AcceptMigrationDifferencesCommand(
     Guid MigrationLoadPublicId,
     IReadOnlyList<Guid> DifferencePublicIds,
     Guid SessionItemPublicId,
-    string Reason) : IRequest<Result<IReadOnlyList<MigrationDifferenceDto>>>, IOperacionIdempotente, IConMotivo
+    string Reason,
+    bool DeCaptaciones = false) : IRequest<Result<IReadOnlyList<MigrationDifferenceDto>>>, IOperacionIdempotente, IConMotivo
 {
     public Guid OperationKey { get; init; }
 }
@@ -61,7 +62,10 @@ public sealed class AcceptMigrationDifferencesCommandHandler(
     {
         var actor = await actorActual.ObtenerAsync(ct);
         if (actor.UserId is not { } usuario) return Result.Failure<IReadOnlyList<MigrationDifferenceDto>>(ErroresDeActivacion.SinUsuario());
-        var carga = await db.MigrationLoads.FirstOrDefaultAsync(l => l.PublicId == request.MigrationLoadPublicId && !l.IsDeleted, ct);
+        // Feature 014 (US9, T155): la misma aceptación sirve a las cargas de aportes y captaciones (DeCaptaciones, su ruta) y a las de créditos (la suya);
+        // ninguna ruta ve las cargas de la otra.
+        var carga = await db.MigrationLoads.FirstOrDefaultAsync(l => l.PublicId == request.MigrationLoadPublicId && !l.IsDeleted
+            && (request.DeCaptaciones ? l.Nature != LineNature.Placement : l.Nature == LineNature.Placement), ct);
         if (carga is null) return Result.Failure<IReadOnlyList<MigrationDifferenceDto>>(ErroresDeActivacion.CargaNoEncontrada(request.MigrationLoadPublicId));
 
         var punto = await puntoDeActa.ValidarAsync(request.SessionItemPublicId, LendingDecisionSubjects.ActivationDifferences, carga.PublicId, ct);

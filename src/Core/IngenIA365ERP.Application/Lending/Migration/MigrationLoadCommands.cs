@@ -79,7 +79,7 @@ public sealed class CreateMigrationLoadCommandHandler(
 
             var ahora = reloj.UtcNow;
             // Hay a lo sumo un borrador (índice único filtrado): el anterior queda reemplazado y se guarda antes del nuevo.
-            var anterior = await db.MigrationLoads.FirstOrDefaultAsync(l => l.Status == MigrationLoadStatus.Draft && !l.IsDeleted, ct);
+            var anterior = await db.MigrationLoads.FirstOrDefaultAsync(l => l.Status == MigrationLoadStatus.Draft && !l.IsDeleted && l.Nature == LineNature.Placement, ct);
             if (anterior is not null)
             {
                 anterior.Status = MigrationLoadStatus.Replaced;
@@ -118,7 +118,7 @@ public sealed class ListMigrationLoadsQueryHandler(IApplicationDbContext db) : I
 {
     public async Task<Result<IReadOnlyList<MigrationLoadDto>>> Handle(ListMigrationLoadsQuery request, CancellationToken ct)
     {
-        var cargas = await db.MigrationLoads.AsNoTracking().Where(l => !l.IsDeleted).OrderByDescending(l => l.Number).ToListAsync(ct);
+        var cargas = await db.MigrationLoads.AsNoTracking().Where(l => !l.IsDeleted && l.Nature == LineNature.Placement).OrderByDescending(l => l.Number).ToListAsync(ct);
         var lista = new List<MigrationLoadDto>(cargas.Count);
         foreach (var carga in cargas) lista.Add(await ConsultasDeCargas.DtoAsync(db, carga, ct));
         return Result.Success<IReadOnlyList<MigrationLoadDto>>(lista);
@@ -137,7 +137,7 @@ public sealed class GetMigrationLoadQueryHandler(IApplicationDbContext db) : IRe
 {
     public async Task<Result<MigrationLoadDto>> Handle(GetMigrationLoadQuery request, CancellationToken ct)
     {
-        var carga = await db.MigrationLoads.AsNoTracking().FirstOrDefaultAsync(l => l.PublicId == request.MigrationLoadPublicId && !l.IsDeleted, ct);
+        var carga = await db.MigrationLoads.AsNoTracking().FirstOrDefaultAsync(l => l.PublicId == request.MigrationLoadPublicId && !l.IsDeleted && l.Nature == LineNature.Placement, ct);
         return carga is null
             ? Result.Failure<MigrationLoadDto>(ErroresDeActivacion.CargaNoEncontrada(request.MigrationLoadPublicId))
             : Result.Success(await ConsultasDeCargas.DtoAsync(db, carga, ct));

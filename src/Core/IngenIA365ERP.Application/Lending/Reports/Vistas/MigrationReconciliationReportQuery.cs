@@ -68,7 +68,7 @@ public sealed class MigrationReconciliationReportQueryHandler(IApplicationDbCont
             return Result.Failure<TablaExportable>(FiltrosDeInformeDeCartera.FiltroObligatorio("load", "la carga de migración (su PublicId)."));
 
         var alcance = await alcanceDeLaPeticion.ObtenerAsync(ct);
-        var carga = await db.MigrationLoads.AsNoTracking().FirstOrDefaultAsync(l => l.PublicId == cargaPublicId && !l.IsDeleted, ct);
+        var carga = await db.MigrationLoads.AsNoTracking().FirstOrDefaultAsync(l => l.PublicId == cargaPublicId && !l.IsDeleted && l.Nature == LineNature.Placement, ct);
         if (carga is null) return Result.Failure<TablaExportable>(ErroresDeActivacion.CargaNoEncontrada(cargaPublicId));
         var subtitulo = $"Carga {carga.Number} con corte al {carga.CutoffDate:yyyy-MM-dd} · versión {carga.CurrentCheckVersion} del cuadre";
         if (!(alcance.TodasLasOficinas && alcance.TodasLasLineas))

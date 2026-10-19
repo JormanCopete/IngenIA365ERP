@@ -297,7 +297,7 @@ public sealed class ActivateLendingCommandHandler(
         var setup = await db.LendingSetups.AsNoTracking().FirstOrDefaultAsync(s => s.Id == LendingSetup.IdDeLaFilaUnica, ct);
         if (setup?.ActivationDate is { } activada) return Result.Failure<Validacion>(ErroresDeActivacion.YaActivada(activada));
 
-        var carga = await db.MigrationLoads.FirstOrDefaultAsync(l => l.PublicId == request.MigrationLoadPublicId && !l.IsDeleted, ct);
+        var carga = await db.MigrationLoads.FirstOrDefaultAsync(l => l.PublicId == request.MigrationLoadPublicId && !l.IsDeleted && l.Nature == LineNature.Placement, ct);
         if (carga is null) return Result.Failure<Validacion>(ErroresDeActivacion.CargaNoEncontrada(request.MigrationLoadPublicId));
 
         if (request.ActivationDate != carga.CutoffDate.AddDays(1)) return Result.Failure<Validacion>(ErroresDeActivacion.CorteInvalido(carga.CutoffDate));

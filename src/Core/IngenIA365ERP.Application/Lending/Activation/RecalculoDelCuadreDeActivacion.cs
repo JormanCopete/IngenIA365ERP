@@ -33,7 +33,7 @@ public sealed class RecalculoDelCuadreDeActivacion(
         try
         {
             var contexto = propio?.Db ?? db;
-            var carga = await contexto.MigrationLoads.FirstOrDefaultAsync(l => l.PublicId == cargaPublicId && !l.IsDeleted, ct);
+            var carga = await contexto.MigrationLoads.FirstOrDefaultAsync(l => l.PublicId == cargaPublicId && !l.IsDeleted && l.Nature == LineNature.Placement, ct);
             if (carga is null) return Result.Failure<RecalculoDeActivacion>(ErroresDeActivacion.CargaNoEncontrada(cargaPublicId));
             if (carga.Status != MigrationLoadStatus.Applied
                 || !await contexto.MigrationLoadParts.AsNoTracking().AnyAsync(p => p.MigrationLoadId == carga.Id && p.Status == MigrationPartStatus.Imported

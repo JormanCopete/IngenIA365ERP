@@ -63,8 +63,8 @@ public sealed class GetLendingActivationStatusQueryHandler(
                 requisitos.EsProduccion, []));
         }
 
-        var carga = await db.MigrationLoads.AsNoTracking().Where(l => l.Status == MigrationLoadStatus.Applied && !l.IsDeleted).FirstOrDefaultAsync(ct)
-            ?? await db.MigrationLoads.AsNoTracking().Where(l => l.Status == MigrationLoadStatus.Draft && !l.IsDeleted).FirstOrDefaultAsync(ct);
+        var carga = await db.MigrationLoads.AsNoTracking().Where(l => l.Status == MigrationLoadStatus.Applied && !l.IsDeleted && l.Nature == LineNature.Placement).FirstOrDefaultAsync(ct)
+            ?? await db.MigrationLoads.AsNoTracking().Where(l => l.Status == MigrationLoadStatus.Draft && !l.IsDeleted && l.Nature == LineNature.Placement).FirstOrDefaultAsync(ct);
         var esperada = carga?.CutoffDate.AddDays(1);
         var evaluacion = await requisitos.EvaluarConAvisosAsync(carga, esperada ?? hoy, hoy, ct);
         return Result.Success(new ActivationReadinessDto(SinActivar, null, null, null,

@@ -27,7 +27,7 @@ public sealed class CargaVigenteDeCartera(IApplicationDbContext db)
     public async Task<MigrationLoad?> AplicadaAsync(CancellationToken ct)
     {
         if (await db.LendingSetups.AsNoTracking().AnyAsync(s => s.Id == LendingSetup.IdDeLaFilaUnica && s.ActivationDate != null, ct)) return null;
-        return await db.MigrationLoads.AsNoTracking().Where(m => m.Status == MigrationLoadStatus.Applied && !m.IsDeleted)
+        return await db.MigrationLoads.AsNoTracking().Where(m => m.Status == MigrationLoadStatus.Applied && !m.IsDeleted && m.Nature == LineNature.Placement)
             .OrderByDescending(m => m.AppliedAt).FirstOrDefaultAsync(ct);
     }
 

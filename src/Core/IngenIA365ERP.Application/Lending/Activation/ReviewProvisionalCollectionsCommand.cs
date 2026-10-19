@@ -56,7 +56,7 @@ public sealed class ReviewProvisionalCollectionsCommandHandler(
     {
         var setup = await db.LendingSetups.AsNoTracking().FirstOrDefaultAsync(s => s.Id == LendingSetup.IdDeLaFilaUnica, ct);
         if (setup?.ActivationDate is { } activada) return Result.Failure<ProvisionalCollectionsReviewDto>(ErroresDeActivacion.YaActivada(activada));
-        var carga = await db.MigrationLoads.AsNoTracking().Where(l => l.Status == MigrationLoadStatus.Applied && !l.IsDeleted).FirstOrDefaultAsync(ct);
+        var carga = await db.MigrationLoads.AsNoTracking().Where(l => l.Status == MigrationLoadStatus.Applied && !l.IsDeleted && l.Nature == LineNature.Placement).FirstOrDefaultAsync(ct);
         if (carga is null)
             return Result.Failure<ProvisionalCollectionsReviewDto>(ErroresDeActivacion.FaltanRequisitos(
             [

@@ -117,7 +117,7 @@ public sealed class ApplyMigrationLoadCommandHandler(
             var setup = await db.LendingSetups.AsNoTracking().FirstOrDefaultAsync(s => s.Id == LendingSetup.IdDeLaFilaUnica, ct);
             if (setup?.ActivationDate is { } activada) return Result.Failure<AppliedMigrationLoadDto>(ErroresDeActivacion.YaActivada(activada));
 
-            var carga = await db.MigrationLoads.FirstOrDefaultAsync(l => l.PublicId == request.MigrationLoadPublicId && !l.IsDeleted, ct);
+            var carga = await db.MigrationLoads.FirstOrDefaultAsync(l => l.PublicId == request.MigrationLoadPublicId && !l.IsDeleted && l.Nature == LineNature.Placement, ct);
             if (carga is null) return Result.Failure<AppliedMigrationLoadDto>(ErroresDeActivacion.CargaNoEncontrada(request.MigrationLoadPublicId));
             if (!carga.EsBorrador) return Result.Failure<AppliedMigrationLoadDto>(ErroresDeActivacion.CargaNoBorrador());
 
@@ -150,7 +150,7 @@ public sealed class ApplyMigrationLoadCommandHandler(
             var ahora = reloj.UtcNow;
 
             // Hay a lo sumo una aplicada (índice único filtrado): la anterior queda reemplazada (sirve de ensayo) y se guarda antes.
-            var anterior = await db.MigrationLoads.FirstOrDefaultAsync(l => l.Status == MigrationLoadStatus.Applied && !l.IsDeleted, ct);
+            var anterior = await db.MigrationLoads.FirstOrDefaultAsync(l => l.Status == MigrationLoadStatus.Applied && !l.IsDeleted && l.Nature == LineNature.Placement, ct);
             if (anterior is not null)
             {
                 anterior.Reemplazar(carga.Id, ahora);

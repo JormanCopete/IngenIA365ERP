@@ -103,7 +103,7 @@ public sealed partial class ImportArrearsHistoryCommandHandler(
     {
         var activada = await db.LendingSetups.AsNoTracking().AnyAsync(s => s.Id == LendingSetup.IdDeLaFilaUnica && s.ActivationDate != null, ct);
         var estado = activada ? MigrationLoadStatus.Activated : MigrationLoadStatus.Applied;
-        var carga = await db.MigrationLoads.AsNoTracking().Where(l => l.Status == estado && !l.IsDeleted).OrderByDescending(l => l.Id).FirstOrDefaultAsync(ct);
+        var carga = await db.MigrationLoads.AsNoTracking().Where(l => l.Status == estado && !l.IsDeleted && l.Nature == LineNature.Placement).OrderByDescending(l => l.Id).FirstOrDefaultAsync(ct);
         if (carga is null) return Result.Failure<ImportResultDto>(ErroresDeRiesgo.HistorialSinCarga());
 
         // El primer cierre en pérdida esperada (vigente) cierra la carga complementaria.

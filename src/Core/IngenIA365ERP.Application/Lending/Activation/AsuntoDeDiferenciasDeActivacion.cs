@@ -43,6 +43,22 @@ public sealed class AsuntoDeDiferenciasDeActivacion(IApplicationDbContext db) : 
         var delCuadre = vigentes.Where(d => d.Kind == MigrationDifferenceKind.BalanceCheck).ToList();
         var fuera = vigentes.Count(d => d.Kind == MigrationDifferenceKind.SaleOutsideLending);
         var sinMigrar = vigentes.Count(d => d.Kind == MigrationDifferenceKind.SaleNotMigrated);
+        if (carga.Nature != LineNature.Placement)
+        {
+            // Feature 014 (US9, T155): la carga de aportes o de captaciones no tiene ventas; el acta aprueba las diferencias del cuadre y que cada cuenta
+            // nace con su saldo inicial por concepto al corte, sin hechos contables.
+            var que = carga.Nature == LineNature.Contribution ? "aportes" : "captaciones";
+            var deCaptaciones = string.Create(CultureInfo.InvariantCulture,
+                $"Cuadre: {delCuadre.Count} diferencias por {delCuadre.Sum(d => d.Difference):N2}. {carga.AccountCount} cuentas de {que} al corte. El acta declara que cada cuenta nace con su saldo inicial por concepto fechado al corte, sin hechos contables.");
+            return Result.Success(new AsuntoDeActa(
+                string.Create(CultureInfo.InvariantCulture,
+                    $"Diferencias y activación de la carga de migración de {que} {carga.Number} (corte {carga.CutoffDate:yyyy-MM-dd})"),
+                string.IsNullOrWhiteSpace(carga.Description) ? deCaptaciones : $"{carga.Description}. {deCaptaciones}",
+                carga.Status == MigrationLoadStatus.Applied,
+                carga.Status.ToString(),
+                new ExpedienteDeCartera(ClaseDeExpediente, carga.PublicId),
+                huella));
+        }
         var resumen = string.Create(CultureInfo.InvariantCulture,
             $"Cuadre: {delCuadre.Count} diferencias por {delCuadre.Sum(d => d.Difference):N2}. Ventas no migradas con saldo: {sinMigrar}; fuera de Cartera: {fuera}. {carga.LoanCount} créditos y {carga.ChargedOffCount} castigados al corte.")
             + (Housing.LectorDeVivienda.Disponible()

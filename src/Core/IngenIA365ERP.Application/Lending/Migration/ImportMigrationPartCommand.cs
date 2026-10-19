@@ -93,7 +93,7 @@ public sealed class ImportMigrationPartCommandHandler(
 
         var setup = await db.LendingSetups.AsNoTracking().FirstOrDefaultAsync(s => s.Id == LendingSetup.IdDeLaFilaUnica, ct);
         if (setup?.ActivationDate is { } activada) return Result.Failure<ImportResultDto>(ErroresDeActivacion.YaActivada(activada));
-        var carga = await db.MigrationLoads.AsNoTracking().FirstOrDefaultAsync(l => l.PublicId == request.MigrationLoadPublicId && !l.IsDeleted, ct);
+        var carga = await db.MigrationLoads.AsNoTracking().FirstOrDefaultAsync(l => l.PublicId == request.MigrationLoadPublicId && !l.IsDeleted && l.Nature == LineNature.Placement, ct);
         if (carga is null) return Result.Failure<ImportResultDto>(ErroresDeActivacion.CargaNoEncontrada(request.MigrationLoadPublicId));
         if (!carga.EsBorrador) return Result.Failure<ImportResultDto>(ErroresDeActivacion.CargaNoBorrador());
 

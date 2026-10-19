@@ -163,7 +163,7 @@ public sealed class GetMigrationSalesReconciliationQueryHandler(IApplicationDbCo
 {
     public async Task<Result<PagedResult<MigrationSaleDto>>> Handle(GetMigrationSalesReconciliationQuery request, CancellationToken ct)
     {
-        var carga = await db.MigrationLoads.AsNoTracking().FirstOrDefaultAsync(l => l.PublicId == request.MigrationLoadPublicId && !l.IsDeleted, ct);
+        var carga = await db.MigrationLoads.AsNoTracking().FirstOrDefaultAsync(l => l.PublicId == request.MigrationLoadPublicId && !l.IsDeleted && l.Nature == LineNature.Placement, ct);
         if (carga is null) return Result.Failure<PagedResult<MigrationSaleDto>>(ErroresDeActivacion.CargaNoEncontrada(request.MigrationLoadPublicId));
 
         var consulta = ConciliacionDeVentasDeMigracion.Lectura(db, carga, request.Classification);
@@ -206,7 +206,7 @@ public sealed class MarkMigrationSaleCommandHandler(IApplicationDbContext db, IA
     {
         var actor = await actorActual.ObtenerAsync(ct);
         if (actor.UserId is not { } usuario) return Result.Failure<MigrationSaleDto>(ErroresDeActivacion.SinUsuario());
-        var carga = await db.MigrationLoads.FirstOrDefaultAsync(l => l.PublicId == request.MigrationLoadPublicId && !l.IsDeleted, ct);
+        var carga = await db.MigrationLoads.FirstOrDefaultAsync(l => l.PublicId == request.MigrationLoadPublicId && !l.IsDeleted && l.Nature == LineNature.Placement, ct);
         if (carga is null) return Result.Failure<MigrationSaleDto>(ErroresDeActivacion.CargaNoEncontrada(request.MigrationLoadPublicId));
 
         var fila = carga.Status != MigrationLoadStatus.Applied ? null
