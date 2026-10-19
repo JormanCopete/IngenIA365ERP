@@ -75,6 +75,12 @@ public class MigrationLoad : AuditableEntity
     /// <summary>Feature 014: cuentas de la carga (captaciones o aportes); 0 en una de créditos.</summary>
     public int AccountCount { get; set; }
 
+    /// <summary>
+    /// Feature 014 (US9, T156; FR-118; api.md §16): las <b>cifras de referencia</b> que entrega la cooperativa para cotejar los totales cargados, como
+    /// JSON <c>[{ lineCode, concept, amount, source }]</c>; las reemplaza entero <c>PUT …/reference-figures</c>. Nula en una carga de créditos.
+    /// </summary>
+    public string? ReferenceFiguresJson { get; set; }
+
     // ------------------------------------------------------------------------------------------------- comportamiento (US8) --
 
     /// <summary>Sólo un borrador recibe partes y se aplica (<c>Lending.Migration.LoadNotDraft</c>).</summary>

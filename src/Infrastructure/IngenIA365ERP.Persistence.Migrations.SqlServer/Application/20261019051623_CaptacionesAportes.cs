@@ -195,6 +195,13 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                 nullable: false,
                 defaultValue: 1);
 
+            migrationBuilder.AddColumn<string>(
+                name: "ReferenceFiguresJson",
+                schema: "dbo",
+                table: "LND_MigrationLoads",
+                type: "nvarchar(max)",
+                nullable: true);
+
             migrationBuilder.AddColumn<long>(
                 name: "CausingAccountOperationId",
                 schema: "dbo",
@@ -640,6 +647,343 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         column: x => x.OpenedByUserId,
                         principalSchema: "dbo",
                         principalTable: "SEC_Users",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "LND_MigrationAccountInstallmentRows",
+                schema: "dbo",
+                columns: table => new
+                {
+                    Id = table.Column<long>(type: "bigint", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    MigrationLoadPartId = table.Column<int>(type: "int", nullable: false),
+                    RowNumber = table.Column<int>(type: "int", nullable: false),
+                    SourceAccountNumber = table.Column<string>(type: "nvarchar(30)", maxLength: 30, nullable: false),
+                    PeriodYear = table.Column<short>(type: "smallint", nullable: false),
+                    PeriodMonth = table.Column<byte>(type: "tinyint", nullable: false),
+                    SubPeriodNumber = table.Column<byte>(type: "tinyint", nullable: false),
+                    DueDate = table.Column<DateOnly>(type: "date", nullable: false),
+                    Amount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    PaidAmount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    NonDeductionReason = table.Column<int>(type: "int", nullable: true),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_LND_MigrationAccountInstallmentRows", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_LND_MigrationAccountInstallmentRows_LND_MigrationLoadParts_MigrationLoadPartId",
+                        column: x => x.MigrationLoadPartId,
+                        principalSchema: "dbo",
+                        principalTable: "LND_MigrationLoadParts",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "LND_MigrationAccountPartyRows",
+                schema: "dbo",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    MigrationLoadPartId = table.Column<int>(type: "int", nullable: false),
+                    RowNumber = table.Column<int>(type: "int", nullable: false),
+                    SourceAccountNumber = table.Column<string>(type: "nvarchar(30)", maxLength: 30, nullable: false),
+                    PersonId = table.Column<int>(type: "int", nullable: false),
+                    Role = table.Column<int>(type: "int", nullable: false),
+                    Share = table.Column<decimal>(type: "decimal(9,6)", precision: 9, scale: 6, nullable: true),
+                    SignatureLimit = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: true),
+                    RepresentationBasis = table.Column<string>(type: "nvarchar(40)", maxLength: 40, nullable: true),
+                    ValidFrom = table.Column<DateOnly>(type: "date", nullable: false),
+                    ValidTo = table.Column<DateOnly>(type: "date", nullable: true),
+                    SupportReference = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: true),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_LND_MigrationAccountPartyRows", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_LND_MigrationAccountPartyRows_COR_People_PersonId",
+                        column: x => x.PersonId,
+                        principalSchema: "dbo",
+                        principalTable: "COR_People",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_LND_MigrationAccountPartyRows_LND_MigrationLoadParts_MigrationLoadPartId",
+                        column: x => x.MigrationLoadPartId,
+                        principalSchema: "dbo",
+                        principalTable: "LND_MigrationLoadParts",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "LND_MigrationAccountRows",
+                schema: "dbo",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    MigrationLoadPartId = table.Column<int>(type: "int", nullable: false),
+                    RowNumber = table.Column<int>(type: "int", nullable: false),
+                    SourceAccountNumber = table.Column<string>(type: "nvarchar(30)", maxLength: 30, nullable: false),
+                    PersonId = table.Column<int>(type: "int", nullable: false),
+                    SourceProductCode = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: true),
+                    CreditLineCode = table.Column<string>(type: "nvarchar(10)", maxLength: 10, nullable: false),
+                    CreditLineId = table.Column<int>(type: "int", nullable: false),
+                    OfficePublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    DepositClass = table.Column<int>(type: "int", nullable: false),
+                    OpenedOn = table.Column<DateOnly>(type: "date", nullable: false),
+                    Status = table.Column<int>(type: "int", nullable: false),
+                    LastHolderActivityDate = table.Column<DateOnly>(type: "date", nullable: true),
+                    HandlingMode = table.Column<int>(type: "int", nullable: false),
+                    Principal = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    InterestPayable = table.Column<decimal>(type: "decimal(18,6)", precision: 18, scale: 6, nullable: false),
+                    LastSettledThrough = table.Column<DateOnly>(type: "date", nullable: true),
+                    ChargeReceivable = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    ClearingAmount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    SourceOfFundsReference = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: true),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_LND_MigrationAccountRows", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_LND_MigrationAccountRows_COR_People_PersonId",
+                        column: x => x.PersonId,
+                        principalSchema: "dbo",
+                        principalTable: "COR_People",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_LND_MigrationAccountRows_LND_CreditLines_CreditLineId",
+                        column: x => x.CreditLineId,
+                        principalSchema: "dbo",
+                        principalTable: "LND_CreditLines",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_LND_MigrationAccountRows_LND_MigrationLoadParts_MigrationLoadPartId",
+                        column: x => x.MigrationLoadPartId,
+                        principalSchema: "dbo",
+                        principalTable: "LND_MigrationLoadParts",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "LND_MigrationContributionAccountRows",
+                schema: "dbo",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    MigrationLoadPartId = table.Column<int>(type: "int", nullable: false),
+                    RowNumber = table.Column<int>(type: "int", nullable: false),
+                    PersonId = table.Column<int>(type: "int", nullable: false),
+                    SourceAccountNumber = table.Column<string>(type: "nvarchar(30)", maxLength: 30, nullable: true),
+                    SourceProductCode = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: true),
+                    CreditLineCode = table.Column<string>(type: "nvarchar(10)", maxLength: 10, nullable: false),
+                    CreditLineId = table.Column<int>(type: "int", nullable: false),
+                    OfficePublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    OpenedOn = table.Column<DateOnly>(type: "date", nullable: false),
+                    MinimumBalance = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    OrdinaryBalance = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    ExtraordinaryBalance = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    RevaluedBalance = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    MinimumNonReducible = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: true),
+                    RegisteredIncome = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: true),
+                    InstallmentAmount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: true),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_LND_MigrationContributionAccountRows", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_LND_MigrationContributionAccountRows_COR_People_PersonId",
+                        column: x => x.PersonId,
+                        principalSchema: "dbo",
+                        principalTable: "COR_People",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_LND_MigrationContributionAccountRows_LND_CreditLines_CreditLineId",
+                        column: x => x.CreditLineId,
+                        principalSchema: "dbo",
+                        principalTable: "LND_CreditLines",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_LND_MigrationContributionAccountRows_LND_MigrationLoadParts_MigrationLoadPartId",
+                        column: x => x.MigrationLoadPartId,
+                        principalSchema: "dbo",
+                        principalTable: "LND_MigrationLoadParts",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "LND_MigrationGmfExemptionRows",
+                schema: "dbo",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    MigrationLoadPartId = table.Column<int>(type: "int", nullable: false),
+                    RowNumber = table.Column<int>(type: "int", nullable: false),
+                    PersonId = table.Column<int>(type: "int", nullable: false),
+                    SourceAccountNumber = table.Column<string>(type: "nvarchar(30)", maxLength: 30, nullable: false),
+                    MarkedSince = table.Column<DateOnly>(type: "date", nullable: false),
+                    MonthExemptUsed = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_LND_MigrationGmfExemptionRows", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_LND_MigrationGmfExemptionRows_COR_People_PersonId",
+                        column: x => x.PersonId,
+                        principalSchema: "dbo",
+                        principalTable: "COR_People",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_LND_MigrationGmfExemptionRows_LND_MigrationLoadParts_MigrationLoadPartId",
+                        column: x => x.MigrationLoadPartId,
+                        principalSchema: "dbo",
+                        principalTable: "LND_MigrationLoadParts",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "LND_MigrationLineEquivalenceRows",
+                schema: "dbo",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    MigrationLoadPartId = table.Column<int>(type: "int", nullable: false),
+                    RowNumber = table.Column<int>(type: "int", nullable: false),
+                    SourceProductCode = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
+                    SourceDescription = table.Column<string>(type: "nvarchar(120)", maxLength: 120, nullable: true),
+                    CreditLineCode = table.Column<string>(type: "nvarchar(10)", maxLength: 10, nullable: false),
+                    CreditLineId = table.Column<int>(type: "int", nullable: false),
+                    Nature = table.Column<int>(type: "int", nullable: false),
+                    DepositClass = table.Column<int>(type: "int", nullable: true),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_LND_MigrationLineEquivalenceRows", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_LND_MigrationLineEquivalenceRows_LND_CreditLines_CreditLineId",
+                        column: x => x.CreditLineId,
+                        principalSchema: "dbo",
+                        principalTable: "LND_CreditLines",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_LND_MigrationLineEquivalenceRows_LND_MigrationLoadParts_MigrationLoadPartId",
+                        column: x => x.MigrationLoadPartId,
+                        principalSchema: "dbo",
+                        principalTable: "LND_MigrationLoadParts",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "LND_MigrationTaxYearRows",
+                schema: "dbo",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    MigrationLoadPartId = table.Column<int>(type: "int", nullable: false),
+                    RowNumber = table.Column<int>(type: "int", nullable: false),
+                    PersonId = table.Column<int>(type: "int", nullable: false),
+                    SourceAccountNumber = table.Column<string>(type: "nvarchar(30)", maxLength: 30, nullable: false),
+                    TaxYear = table.Column<short>(type: "smallint", nullable: false),
+                    Concept = table.Column<int>(type: "int", nullable: false),
+                    Amount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    WithholdingBase = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: true),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_LND_MigrationTaxYearRows", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_LND_MigrationTaxYearRows_COR_People_PersonId",
+                        column: x => x.PersonId,
+                        principalSchema: "dbo",
+                        principalTable: "COR_People",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_LND_MigrationTaxYearRows_LND_MigrationLoadParts_MigrationLoadPartId",
+                        column: x => x.MigrationLoadPartId,
+                        principalSchema: "dbo",
+                        principalTable: "LND_MigrationLoadParts",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
                 });
@@ -3506,6 +3850,152 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                 unique: true);
 
             migrationBuilder.CreateIndex(
+                name: "UK_LND_MigrationAccountInstallmentRows_Part_Row",
+                schema: "dbo",
+                table: "LND_MigrationAccountInstallmentRows",
+                columns: new[] { "MigrationLoadPartId", "RowNumber" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "UK_LND_MigrationAccountInstallmentRows_PublicId",
+                schema: "dbo",
+                table: "LND_MigrationAccountInstallmentRows",
+                column: "PublicId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_MigrationAccountPartyRows_PersonId",
+                schema: "dbo",
+                table: "LND_MigrationAccountPartyRows",
+                column: "PersonId");
+
+            migrationBuilder.CreateIndex(
+                name: "UK_LND_MigrationAccountPartyRows_Part_Row",
+                schema: "dbo",
+                table: "LND_MigrationAccountPartyRows",
+                columns: new[] { "MigrationLoadPartId", "RowNumber" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "UK_LND_MigrationAccountPartyRows_PublicId",
+                schema: "dbo",
+                table: "LND_MigrationAccountPartyRows",
+                column: "PublicId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_MigrationAccountRows_CreditLineId",
+                schema: "dbo",
+                table: "LND_MigrationAccountRows",
+                column: "CreditLineId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_MigrationAccountRows_PersonId",
+                schema: "dbo",
+                table: "LND_MigrationAccountRows",
+                column: "PersonId");
+
+            migrationBuilder.CreateIndex(
+                name: "UK_LND_MigrationAccountRows_Part_Row",
+                schema: "dbo",
+                table: "LND_MigrationAccountRows",
+                columns: new[] { "MigrationLoadPartId", "RowNumber" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "UK_LND_MigrationAccountRows_PublicId",
+                schema: "dbo",
+                table: "LND_MigrationAccountRows",
+                column: "PublicId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_MigrationContributionAccountRows_CreditLineId",
+                schema: "dbo",
+                table: "LND_MigrationContributionAccountRows",
+                column: "CreditLineId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_MigrationContributionAccountRows_PersonId",
+                schema: "dbo",
+                table: "LND_MigrationContributionAccountRows",
+                column: "PersonId");
+
+            migrationBuilder.CreateIndex(
+                name: "UK_LND_MigrationContributionAccountRows_Part_Row",
+                schema: "dbo",
+                table: "LND_MigrationContributionAccountRows",
+                columns: new[] { "MigrationLoadPartId", "RowNumber" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "UK_LND_MigrationContributionAccountRows_PublicId",
+                schema: "dbo",
+                table: "LND_MigrationContributionAccountRows",
+                column: "PublicId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_MigrationGmfExemptionRows_PersonId",
+                schema: "dbo",
+                table: "LND_MigrationGmfExemptionRows",
+                column: "PersonId");
+
+            migrationBuilder.CreateIndex(
+                name: "UK_LND_MigrationGmfExemptionRows_Part_Row",
+                schema: "dbo",
+                table: "LND_MigrationGmfExemptionRows",
+                columns: new[] { "MigrationLoadPartId", "RowNumber" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "UK_LND_MigrationGmfExemptionRows_PublicId",
+                schema: "dbo",
+                table: "LND_MigrationGmfExemptionRows",
+                column: "PublicId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_MigrationLineEquivalenceRows_CreditLineId",
+                schema: "dbo",
+                table: "LND_MigrationLineEquivalenceRows",
+                column: "CreditLineId");
+
+            migrationBuilder.CreateIndex(
+                name: "UK_LND_MigrationLineEquivalenceRows_Part_Row",
+                schema: "dbo",
+                table: "LND_MigrationLineEquivalenceRows",
+                columns: new[] { "MigrationLoadPartId", "RowNumber" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "UK_LND_MigrationLineEquivalenceRows_PublicId",
+                schema: "dbo",
+                table: "LND_MigrationLineEquivalenceRows",
+                column: "PublicId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_MigrationTaxYearRows_PersonId",
+                schema: "dbo",
+                table: "LND_MigrationTaxYearRows",
+                column: "PersonId");
+
+            migrationBuilder.CreateIndex(
+                name: "UK_LND_MigrationTaxYearRows_Part_Row",
+                schema: "dbo",
+                table: "LND_MigrationTaxYearRows",
+                columns: new[] { "MigrationLoadPartId", "RowNumber" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "UK_LND_MigrationTaxYearRows_PublicId",
+                schema: "dbo",
+                table: "LND_MigrationTaxYearRows",
+                column: "PublicId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
                 name: "IX_LND_PayrollAgreementConceptEquivalences_FileGroupId",
                 schema: "dbo",
                 table: "LND_PayrollAgreementConceptEquivalences",
@@ -4139,6 +4629,34 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                 schema: "dbo");
 
             migrationBuilder.DropTable(
+                name: "LND_MigrationAccountInstallmentRows",
+                schema: "dbo");
+
+            migrationBuilder.DropTable(
+                name: "LND_MigrationAccountPartyRows",
+                schema: "dbo");
+
+            migrationBuilder.DropTable(
+                name: "LND_MigrationAccountRows",
+                schema: "dbo");
+
+            migrationBuilder.DropTable(
+                name: "LND_MigrationContributionAccountRows",
+                schema: "dbo");
+
+            migrationBuilder.DropTable(
+                name: "LND_MigrationGmfExemptionRows",
+                schema: "dbo");
+
+            migrationBuilder.DropTable(
+                name: "LND_MigrationLineEquivalenceRows",
+                schema: "dbo");
+
+            migrationBuilder.DropTable(
+                name: "LND_MigrationTaxYearRows",
+                schema: "dbo");
+
+            migrationBuilder.DropTable(
                 name: "LND_PayrollAgreementConceptEquivalences",
                 schema: "dbo");
 
@@ -4389,6 +4907,11 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
 
             migrationBuilder.DropColumn(
                 name: "Nature",
+                schema: "dbo",
+                table: "LND_MigrationLoads");
+
+            migrationBuilder.DropColumn(
+                name: "ReferenceFiguresJson",
                 schema: "dbo",
                 table: "LND_MigrationLoads");
 

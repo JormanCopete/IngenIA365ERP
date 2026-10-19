@@ -545,3 +545,15 @@ public enum ContributionRefundCause
     ParticipationExcess = 1,
     Other = 99,
 }
+
+/// <summary>
+/// Qué trae una fila de la parte <c>tax-year-to-date</c> de la migración de captaciones (feature 014, US9, T151; contracts/plantillas-y-archivos.md
+/// §4.8): los rendimientos, la retención, el GMF y el componente inflacionario del año del corte anteriores al corte, para el certificado tributario.
+/// </summary>
+public enum MigratedTaxConcept
+{
+    Interest = 1,
+    Withholding = 2,
+    Gmf = 3,
+    InflationaryComponent = 4,
+}

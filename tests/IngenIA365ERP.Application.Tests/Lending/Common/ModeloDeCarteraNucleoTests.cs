@@ -110,15 +110,21 @@ public class ModeloDeCarteraNucleoTests
         "LND_PayrollDeductionFileAccountLines", "LND_PayrollDeductionAccountResults", "LND_PayrollDeductionUnmatchedLines",
         // Feature 014, US5 (T130; data-model §4.5, §4.6): la liquidación de intereses y la retención acumulada por titular y año
         "LND_InterestSettlements", "LND_WithholdingAccumulations",
+        // Feature 014, US9 (T151; data-model §7.1): las filas de preparación de la migración de aportes y captaciones
+        "LND_MigrationLineEquivalenceRows", "LND_MigrationContributionAccountRows", "LND_MigrationAccountRows", "LND_MigrationAccountPartyRows",
+        "LND_MigrationAccountInstallmentRows", "LND_MigrationGmfExemptionRows", "LND_MigrationTaxYearRows",
     ];
 
-    /// <summary>Las 17 de preparación (data-model §29.3).</summary>
+    /// <summary>Las 17 de preparación (data-model §29.3) y las 7 de la migración de captaciones (014, data-model §7.1).</summary>
     private static readonly string[] Preparacion =
     [
         "MigrationLoanRow", "MigrationInstallmentRow", "MigrationBalanceRow", "MigrationRiskDataRow", "MigrationRestructuringRow",
         "MigrationCollateralRow", "MigrationCoDebtorRow", "MigrationCreditLimitRow", "MigrationBlockRow", "MigrationAuthorizationRow",
         "MigrationPriorNoticeRow", "MigrationBureauReportRow", "MigrationClaimRow", "MigrationRelatedPartyRow", "MigrationChargedOffRow",
         "MigrationSaleRow", "MigrationArrearsHistoryRow",
+        // Feature 014, US9 (T151): las siete de la migración de aportes y captaciones.
+        "MigrationLineEquivalenceRow", "MigrationContributionAccountRow", "MigrationAccountRow", "MigrationAccountPartyRow",
+        "MigrationAccountInstallmentRow", "MigrationGmfExemptionRow", "MigrationTaxYearRow",
     ];
 
     /// <summary>Hechos (H): DT §2.3, C42, C44, C112 y data-model partes 1 y 2.</summary>
@@ -165,7 +171,7 @@ public class ModeloDeCarteraNucleoTests
         "LoanOperation", "LoanTransaction", "LoanDailyPosition", "RepaymentInstallment", "DebtorMessageEvent", "RegulatoryFileLine",
         "MigrationInstallmentRow", "MigrationBalanceRow", "MigrationArrearsHistoryRow",
         "MemberAccountOperation", "MemberAccountTransaction", "MemberAccountDailyPosition", "AccountInstallment", "GmfMonthlyUsage",
-        "WithholdingAccumulation",
+        "WithholdingAccumulation", "MigrationAccountInstallmentRow",
     ];
 
     /// <summary>Controles y documentos con estado cuyos únicos tampoco filtran por borrado lógico (data-model §0.1).</summary>
@@ -184,14 +190,15 @@ public class ModeloDeCarteraNucleoTests
         var tablas = DeCartera(Modelo(postgres)).Select(e => e.GetTableName()).ToList();
 
         tablas.Should().OnlyHaveUniqueItems().And.BeEquivalentTo(Tablas);
-        Tablas.Should().HaveCount(161,
+        Tablas.Should().HaveCount(168,
             "74 de negocio + 17 de preparación (data-model §14) + 2 del grupo conectado (C112) + 7 de CarteraRiesgo (US9) + 8 de CarteraLibranza (K2)"
             + " + 9 de CarteraNovedades (K3) + 11 de CarteraCobranza (K4) + 2 de CarteraInformes (K5) + 2 de CarteraPerdidaEsperada (K6a)"
             + " + 7 del libro de cuentas de la feature 014 (K7, CaptacionesAportes) + 3 de las versiones de líneas de captación y aportes (US1)"
             + " + 1 de la cuenta exenta del GMF (US2) + 4 de las cuotas exigibles, las solicitudes de aportes y las cuentas de un documento (US3)"
             + " + 2 de los grupos de archivo y las equivalencias de pagaduría (US3) + 2 del retiro del asociado y su liquidación (US10)"
             + " + 5 del GMF del mes, los cargos, sus exoneraciones y el débito automático (US4)"
-            + " + 3 del archivo de pagaduría por grupo: cuotas de cuentas, sus resultados y lo no aplicado de la respuesta (T091) + 2 de la liquidación de intereses y la retención acumulada (US5)");
+            + " + 3 del archivo de pagaduría por grupo: cuotas de cuentas, sus resultados y lo no aplicado de la respuesta (T091) + 2 de la liquidación de intereses y la retención acumulada (US5)"
+            + " + 7 de preparación de la migración de aportes y captaciones (US9)");
     }
 
     [Theory]

@@ -561,6 +561,14 @@ public interface IApplicationDbContext
     // Feature 014, US5 (T130): las liquidaciones de intereses y la retención acumulada por titular y año.
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Transactions.InterestSettlement> InterestSettlements { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Transactions.WithholdingAccumulation> WithholdingAccumulations { get; }
+    // Feature 014, US9 (T151): filas de preparación de la migración de aportes y captaciones.
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Migration.MigrationLineEquivalenceRow> MigrationLineEquivalenceRows { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Migration.MigrationContributionAccountRow> MigrationContributionAccountRows { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Migration.MigrationAccountRow> MigrationAccountRows { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Migration.MigrationAccountPartyRow> MigrationAccountPartyRows { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Migration.MigrationAccountInstallmentRow> MigrationAccountInstallmentRows { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Migration.MigrationGmfExemptionRow> MigrationGmfExemptionRows { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Migration.MigrationTaxYearRow> MigrationTaxYearRows { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Configuration.DepositLineCharge> DepositLineCharges { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.AccountCharge> AccountCharges { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.AccountChargeExemption> AccountChargeExemptions { get; }

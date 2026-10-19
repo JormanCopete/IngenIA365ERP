@@ -31,6 +31,8 @@ public class MigrationLoadConfiguration : IEntityTypeConfiguration<MigrationLoad
         // Feature 014 (T028; data-model §1.8): la naturaleza de la carga y sus cuentas.
         builder.Property(e => e.Nature).HasConversion<int>().IsRequired().HasDefaultValue(Domain.Enums.Lending.LineNature.Placement);
         builder.Property(e => e.AccountCount).IsRequired().HasDefaultValue(0);
+        // Feature 014 (US9, T156; FR-118): las cifras de referencia de la cooperativa.
+        builder.Property(e => e.ReferenceFiguresJson);
 
         builder.HasOne<User>().WithMany().HasForeignKey(e => e.CreatedByUserId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<User>().WithMany().HasForeignKey(e => e.AppliedByUserId).OnDelete(DeleteBehavior.Restrict);
