@@ -19,6 +19,14 @@ public class PeopleDetailEndpoints : ICarterModule
             return result.IsSuccess ? Results.Ok(result.Value) : Results.NotFound(result.Error);
         }).WithName("GetPersonDetail").RequirePermission("Core.People.View");
 
+        // Feature 014 (decisión del dueño del 2026-10-18, D20): la ficha muestra sólo las cuentas donde la persona es titular; las de cotitular se
+        // abren aparte con este botón.
+        group.MapGet("/{id:guid}/co-held-accounts", async (Guid id, ISender sender) =>
+        {
+            var result = await sender.Send(new GetPersonCoHeldAccountsQuery(id));
+            return result.IsSuccess ? Results.Ok(result.Value) : Results.NotFound(result.Error);
+        }).WithName("GetPersonCoHeldAccounts").RequirePermission("Core.People.View");
+
         // Feature 008: `rol` filtra por bandera (associate, employee, salesperson, customer,
         // supplier, advisor, thirdparty) y la fila trae las ocho banderas.
         group.MapGet("/search", async (string? q, string? rol, ISender sender) =>

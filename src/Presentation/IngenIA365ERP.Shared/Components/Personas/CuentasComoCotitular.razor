@@ -1,0 +1,81 @@
+@* Feature 014 (decisión del dueño del 2026-10-18, D20): la ficha de la persona muestra sólo las cuentas donde es titular; las cuentas donde es
+   cotitular se ven en esta ventana aparte, que se abre con su propio botón. Lee GET /api/core/people/{id}/co-held-accounts. *@
+@inject HttpClient Http
+@inject INotificationService Notification
+
+<SfDialog Width="760px" IsModal="true" @bind-Visible="Visible" ShowCloseIcon="true" Header="@($"Cuentas como cotitular — {Nombre}")"
+          OnClose="@CerrarAsync">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_carga.Activa">
+                @if (!_disponible)
+                {
+                    <p class="texto-apoyo">Cartera no respondió: no se pueden mostrar las cuentas en este momento.</p>
+                }
+                else if (_cuentas.Count == 0)
+                {
+                    <p class="texto-apoyo">La persona no es cotitular de ninguna cuenta viva.</p>
+                }
+                else
+                {
+                    <SfGrid TValue="CuentaComoCotitular" DataSource="@_cuentas" AllowSorting="true">
+                        <GridColumns>
+                            <GridColumn Field="@nameof(CuentaComoCotitular.Number)" HeaderText="Cuenta" Width="150" />
+                            <GridColumn Field="@nameof(CuentaComoCotitular.LineName)" HeaderText="Línea" Width="200" />
+                            <GridColumn Field="@nameof(CuentaComoCotitular.Status)" HeaderText="Estado" Width="110" />
+                            <GridColumn Field="@nameof(CuentaComoCotitular.Balance)" HeaderText="Saldo" Format="N2" TextAlign="TextAlign.Right" Width="130" />
+                            <GridColumn Field="@nameof(CuentaComoCotitular.Available)" HeaderText="Disponible" Format="N2" TextAlign="TextAlign.Right" Width="130" />
+                        </GridColumns>
+                    </SfGrid>
+                }
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cerrar" CssClass="e-flat" OnClick="@CerrarAsync" />
+    </DialogButtons>
+</SfDialog>
+
+@code {
+    private readonly EstadoDeCarga _carga = new();
+    private List<CuentaComoCotitular> _cuentas = [];
+    private bool _disponible = true;
+    private Guid? _cargada;
+
+    [Parameter] public bool Visible { get; set; }
+    [Parameter] public EventCallback<bool> VisibleChanged { get; set; }
+    [Parameter] public Guid? PersonaPublicId { get; set; }
+    [Parameter] public string? Nombre { get; set; }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!Visible || PersonaPublicId is not { } persona || _cargada == persona) return;
+        _cargada = persona;
+        using var carga = _carga.Iniciar();
+        try
+        {
+            var respuesta = await Http.GetFromJsonAsync<RespuestaDeCuentas>($"/api/core/people/{persona}/co-held-accounts");
+            _disponible = respuesta?.Available ?? false;
+            _cuentas = respuesta?.Accounts ?? [];
+        }
+        catch (Exception ex)
+        {
+            _disponible = false;
+            _cuentas = [];
+            await Notification.ErrorAsync($"No se pudieron cargar las cuentas como cotitular: {ex.Message}");
+        }
+    }
+
+    private async Task CerrarAsync()
+    {
+        Visible = false;
+        _cargada = null;
+        await VisibleChanged.InvokeAsync(false);
+    }
+
+    private sealed record RespuestaDeCuentas(bool Available, List<CuentaComoCotitular> Accounts);
+
+    /// <summary>Coincide con <c>CoHeldAccountDto</c>.</summary>
+    private sealed record CuentaComoCotitular(Guid AccountPublicId, string Number, string Nature, string? DepositClass, string LineCode, string LineName,
+        string Status, decimal Balance, decimal Available);
+}

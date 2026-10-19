@@ -39,8 +39,9 @@ public record FinancialDataDto(
 /// <summary>
 /// El resumen de cartera y ahorros de la persona. Feature 013 (T0169, T94, interfaces.md §7): los créditos salen de
 /// <see cref="IConsultaDeObligaciones"/> (como deudor) y <see cref="LendingStatus"/> dice el estado de Cartera. Feature 014 (T043; contrato-de-cuentas
-/// §5): las cuentas de ahorro y CDAT y los aportes salen de <see cref="IConsultasDeCartera.ProductosDeCaptacionAsync"/> (como titular o cotitular,
-/// vivas); si Cartera no responde, en cero.
+/// §5): las cuentas de ahorro y CDAT y los aportes salen de <see cref="IConsultasDeCartera.ProductosDeCaptacionAsync"/>, vivas y <b>sólo como
+/// titular</b> (decisión del dueño del 2026-10-18, D20); las de cotitular se cuentan aparte en <see cref="CoHeldAccounts"/> y se ven en su propia
+/// ventana (<see cref="GetPersonCoHeldAccountsQuery"/>). Si Cartera no responde, en cero.
 /// </summary>
 public record PortfolioSummaryDto(
     int ActiveLoans,
@@ -55,6 +56,9 @@ public record PortfolioSummaryDto(
     /// <see cref="PortfolioLendingStatus.MigratedNotActivated"/> o <see cref="PortfolioLendingStatus.Unavailable"/> (Cartera no respondió).
     /// </summary>
     public string LendingStatus { get; init; } = PortfolioLendingStatus.NotActivated;
+
+    /// <summary>Feature 014 (D20): las cuentas vivas donde la persona es cotitular; no suman a los saldos de arriba. Se listan con su botón aparte.</summary>
+    public int CoHeldAccounts { get; init; }
 }
 
 /// <summary>Valores de <see cref="PortfolioSummaryDto.LendingStatus"/> (feature 013, T0169). (nuevo)</summary>
@@ -187,6 +191,7 @@ public class GetPersonDetailQueryHandler(IApplicationDbContext context, IConsult
             totalOverdue)
         {
             LendingStatus = deCartera.LendingStatus,
+            CoHeldAccounts = captacion.ComoCotitular,
         };
 
         var dto = new PersonDetailDto(
@@ -221,12 +226,13 @@ public class GetPersonDetailQueryHandler(IApplicationDbContext context, IConsult
 
 /// <summary>
 /// La parte de captaciones del resumen de la persona (feature 014, T043; contrato-de-cuentas §5): las cuentas de ahorro y CDAT y los aportes vivos
-/// donde es titular o cotitular. (nuevo)
+/// donde es <b>titular</b> y, aparte, cuántas cuentas vivas tiene como cotitular (decisión del dueño del 2026-10-18, D20: la ficha muestra sólo las
+/// suyas; las de cotitular, en una ventana aparte). (nuevo)
 /// </summary>
 public static class ResumenDeCaptacionesDePersona
 {
-    /// <summary>Cuentas de captación vivas como titular o cotitular, su saldo y el de aportes.</summary>
-    public sealed record Resumen(int Cuentas, decimal Ahorros, decimal Aportes)
+    /// <summary>Cuentas de captación vivas como titular, su saldo y el de aportes, y las cuentas vivas como cotitular.</summary>
+    public sealed record Resumen(int Cuentas, decimal Ahorros, decimal Aportes, int ComoCotitular = 0)
     {
         public static Resumen Vacio { get; } = new(0, 0m, 0m);
     }
@@ -240,11 +246,12 @@ public static class ResumenDeCaptacionesDePersona
         try
         {
             var respuesta = await consultas.ProductosDeCaptacionAsync(new ConsultaDeProductosDeCaptacion([persona], hoy, IncludeClosed: false, IncludeAsParty: true), ct);
-            var vivos = respuesta.People.Where(p => p.PersonPublicId == persona).SelectMany(p => p.Products)
-                .Where(p => p.Status != EstadoDeCuenta.Closed && p.Role is RolEnLaCuenta.Holder or RolEnLaCuenta.CoHolder)
-                .ToList();
+            var productos = respuesta.People.Where(p => p.PersonPublicId == persona).SelectMany(p => p.Products)
+                .Where(p => p.Status != EstadoDeCuenta.Closed).ToList();
+            var vivos = productos.Where(p => p.Role == RolEnLaCuenta.Holder).ToList();
             var ahorros = vivos.Where(p => p.Nature == NaturalezaDeCuenta.Deposit).ToList();
-            return new Resumen(ahorros.Count, ahorros.Sum(p => p.Balance), vivos.Where(p => p.Nature == NaturalezaDeCuenta.Contribution).Sum(p => p.Balance));
+            return new Resumen(ahorros.Count, ahorros.Sum(p => p.Balance), vivos.Where(p => p.Nature == NaturalezaDeCuenta.Contribution).Sum(p => p.Balance),
+                productos.Count(p => p.Role == RolEnLaCuenta.CoHolder));
         }
         catch (Exception e) when (e is not OperationCanceledException)
         {
@@ -277,6 +284,46 @@ public static class ResumenDeCarteraDePersona
         catch (Exception e) when (!ct.IsCancellationRequested && e is not OutOfMemoryException)
         {
             return new Resumen(0, 0m, 0m, PortfolioLendingStatus.Unavailable);
+        }
+    }
+}
+
+/// <summary>
+/// Feature 014 (decisión del dueño del 2026-10-18, D20): las cuentas vivas donde la persona es <b>cotitular</b>, para la ventana que la ficha abre con su
+/// botón aparte (la ficha muestra sólo las cuentas donde es titular). Sale de <see cref="IConsultasDeCartera.ProductosDeCaptacionAsync"/>; si Cartera no
+/// responde, la lista va vacía con <see cref="CoHeldAccountsDto.Available"/> en falso. (nuevo)
+/// </summary>
+public record GetPersonCoHeldAccountsQuery(Guid PublicId) : IRequest<Result<CoHeldAccountsDto>>;
+
+/// <summary>Las cuentas como cotitular: número, naturaleza, clase, línea, estado, saldo y disponible (D20). (nuevo)</summary>
+public sealed record CoHeldAccountsDto(bool Available, IReadOnlyList<CoHeldAccountDto> Accounts);
+
+/// <summary>Una cuenta como cotitular (D20). (nuevo)</summary>
+public sealed record CoHeldAccountDto(Guid AccountPublicId, string Number, string Nature, string? DepositClass, string LineCode, string LineName,
+    string Status, decimal Balance, decimal Available);
+
+public sealed class GetPersonCoHeldAccountsQueryHandler(IApplicationDbContext context, IConsultasDeCartera consultas, IDateTimeService reloj)
+    : IRequestHandler<GetPersonCoHeldAccountsQuery, Result<CoHeldAccountsDto>>
+{
+    public async Task<Result<CoHeldAccountsDto>> Handle(GetPersonCoHeldAccountsQuery request, CancellationToken ct)
+    {
+        if (!await context.People.AsNoTracking().AnyAsync(p => p.PublicId == request.PublicId && !p.IsDeleted, ct))
+            return Result.Failure<CoHeldAccountsDto>(new Error("Person.NotFound", "Persona no encontrada."));
+        try
+        {
+            var respuesta = await consultas.ProductosDeCaptacionAsync(
+                new ConsultaDeProductosDeCaptacion([request.PublicId], reloj.HoyLocal, IncludeClosed: false, IncludeAsParty: true), ct);
+            var cuentas = respuesta.People.Where(p => p.PersonPublicId == request.PublicId).SelectMany(p => p.Products)
+                .Where(p => p.Role == RolEnLaCuenta.CoHolder && p.Status != EstadoDeCuenta.Closed)
+                .OrderBy(p => p.Number, StringComparer.Ordinal)
+                .Select(p => new CoHeldAccountDto(p.AccountPublicId, p.Number, p.Nature.ToString(), p.DepositClass?.ToString(), p.LineCode, p.LineName,
+                    p.Status.ToString(), p.Balance, p.Available))
+                .ToList();
+            return Result.Success(new CoHeldAccountsDto(true, cuentas));
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            return Result.Success(new CoHeldAccountsDto(false, []));
         }
     }
 }

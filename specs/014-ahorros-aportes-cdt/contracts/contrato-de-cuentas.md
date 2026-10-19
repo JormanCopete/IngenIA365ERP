@@ -629,7 +629,8 @@ Cartera; lee en bloque.
 | Consumidor | Llamada | Regla |
 |---|---|---|
 | `DeletePersonCommand` (Personas) | `ProductosDeCaptacionAsync([persona], hoy)` | bloquea con `Person.HasLiveDepositProducts` si `HasLiveProducts` o `MigratedNotActivated` (E-04) |
-| `GetPersonDetailQuery` | ídem | el resumen de la persona muestra los productos (reemplaza lo que hoy sale de `SavingsAccounts`) |
+| `GetPersonDetailQuery` | ídem | el resumen de la persona muestra los productos (reemplaza lo que hoy sale de `SavingsAccounts`); **sólo las cuentas donde es titular** (decisión del dueño del 2026-10-18, D20) y `coHeldAccounts` con cuántas tiene como cotitular |
+| `GetPersonCoHeldAccountsQuery` (`GET /api/core/people/{id}/co-held-accounts`, `Core.People.View`) | ídem | **(nuevo, D20)** las cuentas vivas donde la persona es cotitular, para la ventana que la pantalla de Personas abre con su botón aparte (`CuentasComoCotitular`) |
 | Asociados (detalle y consumo de `RetiroDeAsociadoAprobado`) | ídem | muestra lo que queda por entregar al retirado |
 | Nómina (pantalla de la ficha y liquidación definitiva) | ídem | informa cuentas vivas del empleado que se retira; el cobro sigue por exigibles |
 
