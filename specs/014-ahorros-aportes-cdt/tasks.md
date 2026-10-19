@@ -511,15 +511,15 @@ el 2026-10-19 (research §25).
 
 ## Phase 20: Polish & Cross-Cutting Concerns
 
-- [ ] T225 Congelar las migraciones pares (`CaptacionesAportes`, `CaptacionesAhorro`, `CaptacionesCdat`, `CaptacionesAsamblea`, `CaptacionesLiquidez`): regenerarlas una última vez en orden y verificar que aplican sobre una base de la 013 en los dos motores
-- [ ] T226 [P] Manual para la contadora y el jefe de captaciones (productos, intereses, retención, GMF, CDAT, aportes, pendientes de validar) en `docs/manual/cartera-captaciones.md`
-- [ ] T227 [P] Ampliar `docs/manual/contabilidad-contrato-de-contabilizacion.md` con la matriz de captaciones y las cuentas CUIF sugeridas
-- [ ] T228 [P] Runbook de puesta en marcha de captaciones (diagnóstico, retiro heredado, carga, cuadre, activación por naturaleza) en `docs/operaciones/captaciones-puesta-en-marcha.md`
-- [ ] T229 Actualizar `CLAUDE.md` (sección de la feature 014 y totales remedidos con los comandos de la tabla «Totales»)
-- [ ] T230 Correr todas las pruebas sin contenedores y las e2e completas («Captaciones e2e» y las de la 013) en PostgreSQL y SQL Server, y registrar las cifras
-- [ ] T231 Recorrer `specs/014-ahorros-aportes-cdt/quickstart.md` de punta a punta y corregir lo que no cuadre
-- [ ] T232 Verificar que ninguna pantalla, informe, plantilla ni documento nombra al sistema anterior (búsqueda en `src/` y `docs/`)
-- [ ] T233 Prueba que cuenta los casos dorados de captaciones (mínimo 40, SC-002) en `TD/Lending/Deposits/CasosDoradosDeCaptaciones.cs`
+- [x] T225 Congelar las migraciones pares (`CaptacionesAportes`, `CaptacionesAhorro`, `CaptacionesCdat`, `CaptacionesAsamblea`, `CaptacionesLiquidez`): regenerarlas una última vez en orden y verificar que aplican sobre una base de la 013 en los dos motores — hecho el 2026-10-19: sólo existe `CaptacionesAportes` (E35) y no hizo falta regenerarla (modelo sin cambios y paridad OK en los dos motores); congelada por huella con `LasMigracionesCongeladasNoSeRegeneran` junto con `RetiroDeCaptacionesHeredadas` y las de la 013; `EntregaVigente` sube a K11; que aplican sobre la 013 lo prueba la corrida e2e final (research E227, E228)
+- [x] T226 [P] Manual para la contadora y el jefe de captaciones (productos, intereses, retención, GMF, CDAT, aportes, pendientes de validar) en `docs/manual/cartera-captaciones.md` — hecho: índice y ocho manuales `cartera-captaciones-*.md`, y `cartera.md` al día (research E235)
+- [x] T227 [P] Ampliar `docs/manual/contabilidad-contrato-de-contabilizacion.md` con la matriz de captaciones y las cuentas CUIF sugeridas — hecho: §10 (research E235, E236)
+- [x] T228 [P] Runbook de puesta en marcha de captaciones (diagnóstico, retiro heredado, carga, cuadre, activación por naturaleza) en `docs/operaciones/captaciones-puesta-en-marcha.md` — hecho, más `captaciones-despliegue.md` y la P20 de `estado-y-pendientes.md` (research E235)
+- [ ] T229 Actualizar `CLAUDE.md` (sección de la feature 014 y totales remedidos con los comandos de la tabla «Totales») — totales medidos el 2026-10-19; el texto lo escribe el dueño
+- [ ] T230 Correr todas las pruebas sin contenedores y las e2e completas («Captaciones e2e» y las de la 013) en PostgreSQL y SQL Server, y registrar las cifras — las cuatro suites sin contenedores verdes el 2026-10-19; **e2e en la corrida final** (la lanza el dueño)
+- [x] T231 Recorrer `specs/014-ahorros-aportes-cdt/quickstart.md` de punta a punta y corregir lo que no cuadre — hecho en papel (research E235)
+- [x] T232 Verificar que ninguna pantalla, informe, plantilla ni documento nombra al sistema anterior (búsqueda en `src/` y `docs/`) — hecho; `TextosDeCarteraTests` ampliada (research E230)
+- [x] T233 Prueba que cuenta los casos dorados de captaciones (mínimo 40, SC-002) en `TD/Lending/Deposits/CasosDoradosDeCaptaciones.cs` — hecho: 67 casos (research E229)
 - [ ] T234 **Dueño**: medir con usuarios de la cooperativa piloto los tiempos de apertura y caja (SC-004) y el éxito al primer intento (SC-018), y registrar el resultado en `docs/operaciones/captaciones-puesta-en-marcha.md`
 - [ ] T235 **Dueño y contadora**: validar parámetros «pendiente de validar» (P2, P3, P8–P12, P26), la matriz y los casos dorados; cotejar los layouts SICSES y exógena
 - [ ] T236 **Dueño**: segundo revisor y respaldos por base antes de aplicar `RetiroDeCaptacionesHeredadas` fuera de local; promoción a DEV y QA

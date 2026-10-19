@@ -2536,3 +2536,82 @@ migraciones congeladas de la 013 y `RetiroDeCaptacionesHeredadas` no se tocaron.
 - Si los mínimos se reportan dentro de los ordinarios en el 9013 y si el saldo de depósitos del 9067 lleva los intereses causados.
 - El umbral de la 1019 (24 UVT) y su lectura «por persona sumando sus cuentas»; si el ahorro contractual y el permanente van en la 1019 (lo construido) o en otro
   formato.
+
+## 26. Enmienda del cierre: congelamiento, entregas, documentación y revisión transversal (2026-10-19, T225–T233, Polish)
+
+Fase 20 sin las e2e (T230: la corrida final de las e2e de captaciones y las de la 013 en los dos motores la lanza el dueño aparte) ni `CLAUDE.md` (T229, lo
+escribe el dueño). **Manda el código**; estas notas reemplazan lo dicho en `data-model.md`, `contracts/` y `tasks.md` donde choquen.
+
+- **E226 · Lo heredado que quedó vivo.** `GET /api/reports/cdt/certificate/{id}/pdf` (`CDTReportsEndpoints`, sin permiso, respondía siempre 404 «not yet
+  implemented») y las clases `CdtCertificateReport` y `SavingsStatementReport` (sin llamador) se retiraron: quedaron fuera de T005–T010. El título del CDAT y
+  el extracto salen de `DocumentosDeCaptacionesReport` (US13).
+- **E227 · Congelamiento (T225).** `CaptacionesAportes` **no se regeneró**: `dotnet ef migrations has-pending-model-changes` limpio en PostgreSQL y SQL Server
+  (cadena ficticia por variable de entorno; el worktree no tiene `appsettings.Development.json`) y `check-migration-parity.ps1` con 52 migraciones de
+  aplicación en par. Quedan los sellos PostgreSQL `20261019104128` y SQL Server `20261019104056`, 53 `CreateTable`, y el SQL escrito a mano intacto (la regla
+  de T044 `|*|*|*|*|*`, `ProveedorDeCuentas` para `NOM` y el participante `ASO`). Las `CaptacionesAhorro`, `CaptacionesCdat`, `CaptacionesAsamblea` y
+  `CaptacionesLiquidez` de T225 no existen (E35). Como en la 013 (T0802), el congelamiento queda **fijado por una prueba**:
+  `LasMigracionesCongeladasNoSeRegeneran` guarda la huella SHA-256 (sin BOM, saltos normalizados a LF, sin blancos finales) del `.cs` y del `.Designer.cs`
+  de cada migración de la 013 y la 014 —desde `PlataformaParaCartera` hasta `CaptacionesAportes`, 17 por motor, 68 huellas— y que los dos motores congelan
+  las mismas. Regenerar, aunque se conserve el sello, o tocar el SQL a mano la rompe. **Desde aquí todo cambio de esquema es una migración nueva.** Ojo: la
+  huella incluye los comentarios; anotar respaldo y segundo revisor en la cabecera de `RetiroDeCaptacionesHeredadas` (Principio XII) exige actualizar la
+  huella en el mismo commit (lo dice `docs/operaciones/captaciones-despliegue.md` §2.3). «Que aplican sobre una base de la 013 en los dos motores» lo prueba
+  la corrida e2e final (la fixture aplica toda la cadena), no esta fase.
+- **E228 · `EntregaVigente = K11`.** `CatalogoDeCartera.EntregaVigente` sube de K6b a **K11** de una vez (Q1: ninguna entrega de captaciones sale sola).
+  Abre: las 62 claves de captaciones del catálogo de parámetros (antes se leían con su defecto), el componente inflacionario en la semilla central
+  (`COMPONENTE_INFLACIONARIO` 2025), las clases de documento 7 a 15, las plantillas de migración de captaciones, los valores nacionales de K8 a K11, las
+  vistas con `AvailableFrom` K8 a K11, las tareas diarias de captaciones en la vigilancia y el corte del fondo de liquidez del ciclo diario.
+  Pruebas que fijaban K6b y pasan a K11: `EnumeracionesDeCarteraTests`, `CatalogoDeLimitesLegalesTests` (ahora valida contra K6b explícito),
+  `EntregaDeModuloTests` (la de claves ofrecidas pasa a «K1 a K11»), `ParametrosDeCarteraTests`, `DocumentosDeK5Tests`,
+  `RegistroCentralDeValoresNacionalesTests` (la semilla inserta el componente inflacionario) y `CadaParametroRespetaLaEntregaDeSuModulo`.
+  **e2e que dependen de esto** (se escribieron para K11 y nunca corrieron con K6b): toda la carpeta `Lending/Deposits` (la fixture `CaptacionesE2E` exige
+  K11; `AsambleaTests` y `CicloDeVidaDeCuentasTests` piden al menos K10; `DocumentosDeCaptacionesTests` al menos K8; `CdatTests`, `AhorroContractualTests`,
+  `FondoDeLiquidezTests` e `InformesDeCaptacionesTests` por sus rutas), además de `ViviendaConUvrTests` (al menos K6b, sigue cumpliendo) y las de valores
+  nacionales que cuentan lo sembrado.
+- **E229 · Casos dorados (T233).** `CasosDoradosDeCaptacionesTests.Hay_al_menos_40_casos_y_cubren_lo_que_lista_FR_026`: hay 67 JSON (5 asamblea, 6 cargo,
+  10 CDAT, 7 contractual, 7 embargo, 6 GMF, 9 interés, 7 liquidez, 8 retención, 2 tasa negociada) y cada cifra de FR-026 (481.244, 488.088, 79.741, 478.446,
+  79.111, 6.884, 3.649, 6.676, 41.952, 2.465.306, 2.486.777, 21.471) está en el caso que la fija; los demás temas de FR-026, por su caso.
+- **E230 · Sistema anterior (T232).** Búsqueda en `src/` (pantallas, plantillas, informes, semillas) y en los manuales: ningún texto visible lo nombra.
+  `TextosDeCarteraTests` suma las rutas de Cartera (`API/Endpoints/Lending`, cuyos mensajes llegan a la pantalla) y `API/Reports/Captaciones`; ya leía
+  `Application/Lending`, `Domain/Lending`, las pantallas de Cartera y `docs/manual/cartera*.md` (donde caen los manuales nuevos).
+- **E231 · Revisión transversal.** Verdes y sin cambio: todas las reglas de arquitectura que nombran plan y tasks (las cuatro migraciones de E35 son los únicos
+  nombres sin prueba), los permisos `Lending.*` sembrados por la API (163 entradas; E12 decía 162 antes de D44), `LasPantallasDicenQueEstanCargando` con
+  «Cartera/Captaciones», `TodoEnlaceDelMenuTieneSuPagina` y `LaCarteraNoTieneValoresLegalesFijos`.
+- **E232 · Enlaces a páginas que no existen.** El requisito `ProfileAllowsClasses` de captaciones mandaba a `/maestros/perfil-regulatorio` (la pantalla es
+  `/admin/perfil-regulatorio`) y el aviso de parámetros comerciales de la activación de créditos (013) a `/ventas/parametros` (es `/inventario/parametros`).
+  Corregidos; `LosEnlacesDeCarteraLlevanASuPagina` exige que toda ruta de pantalla literal de `Application/Lending` tenga su `@page`.
+- **E233 · Texto de `CuentasAbandonadas.TrasladoHabilitado`.** Prometía un traslado «según la norma»; es la regla interna a no reclamados de E198, sin
+  ICETEX, y su validación es de la contadora **y el abogado** (§23.2). El texto lo dice.
+- **E234 · Cancelación por el contrato.** `closeAccount` en `RetirarAsync` sigue rechazado hasta que exista Recaudo (E99), con el mismo código
+  `Lending.Savings.DeliveryNotAvailable`, pero ya no nombra una entrega «US5» (no lo es): dice que la cuenta se cancela desde Cartera y lleva
+  `availableFrom = null`.
+- **E235 · Documentación (T226 a T228, T231).** Manuales `docs/manual/cartera-captaciones.md` (índice con todo lo «pendiente de validar») y ocho temáticos
+  `cartera-captaciones-*.md`; `docs/manual/cartera.md` con K7 a K11 y el menú nuevo (la sección del grupo heredado «Ahorros y aportes» se reemplazó);
+  `contabilidad-contrato-de-contabilizacion.md` §10 (hechos, roles, dimensiones, tipos de comprobante y cuentas CUIF sugeridas); runbooks
+  `docs/operaciones/captaciones-puesta-en-marcha.md` (con la sección vacía de T234) y `captaciones-despliegue.md`; P20 de `estado-y-pendientes.md`.
+  `contracts/` cotejados con el código: 180 rutas REST nuevas de la 014 (171 sin los dobles de prueba), 74 heredadas retiradas, neto +106 (el contrato
+  decía 168 y +95). El quickstart se corrigió (filtro e2e `FullyQualifiedName~IntegrationTests.Lending.Deposits`, porque «Collection=…» no es un filtro
+  válido; `PagaduriasTests` corre en «Cartera e2e»; US9 con 40 cuentas, las 500 son de rendimiento; US2 Menor sin e2e, la cubre `PartesYExencionTests`).
+- **E236 · Lo que la documentación encontró y queda anotado sin cambio de código:**
+  - Las versiones de línea no admiten `ValidFrom` anterior a hoy y no hay plantilla de líneas (E115), pero la carga exige versión vigente al corte: las líneas
+    se crean a más tardar el día del corte (runbook §9). La e2e fija el reloj en el corte.
+  - `sugerencias-cuif-captaciones.json` no sugiere cuenta para los retornos de excedentes (`SurplusPayment`, 246515 en §22.2), ni para `IngresoPorCargos`,
+    `CargoDeCuentaPorCobrar`, `EmbargosPorConsignar` e `IngresoPorPenalidad`; gasto de intereses y de bonificación del contractual sugieren la misma 615015.
+    El código tiene cuatro motivos de devolución más que el contrato (`DeceasedDelivery`, `ContractualMaturity`, `UnclaimedPayment`,
+    `GarnishmentConsignment`).
+  - `Retencion.ComponenteInflacionarioAplica` describe la norma (persona natural no obligada a llevar contabilidad) y el código lo descuenta a toda persona
+    natural: sigue la pregunta de §14.1.
+  - `recordedAsOf` no llega a `/close-preview`, `/term-deposits/{id}/redeem/simulate` ni `/contributions/summary` (api.md §1.4 lo pedía): queda documentado
+    como estado actual.
+  - Las cuatro plantillas de rol de captaciones (D18) no traen `Lending.Deposits.Activate` ni `Lending.Migration.AcceptDifferences`: se asignan aparte.
+
+### 26.1 Preguntas para el dueño
+
+- **Plantillas de rol.** ¿El jefe de captaciones trae `Lending.Deposits.Activate` y `Lending.Migration.AcceptDifferences`? Propuesta: no (son actos de
+  puesta en marcha; se asignan a quien la dirige).
+- **Líneas con fecha del corte.** ¿Se admite crear una versión de línea de captación o de aportes con vigencia anterior a hoy **sólo** antes de activar,
+  para cargar saldos con un corte pasado? Propuesta: sí, restringido a antes de la activación.
+
+### 26.2 Para la contadora (pendiente de validar)
+
+- Las cuentas CUIF sugeridas de §10.7 del contrato de contabilización y las que faltan (E236).
+- Todo lo de `docs/manual/cartera-captaciones.md` «Pendiente de validar» (P2, P3, P8 a P12, P26), la matriz, los 67 casos dorados y los siete layouts (T235).
