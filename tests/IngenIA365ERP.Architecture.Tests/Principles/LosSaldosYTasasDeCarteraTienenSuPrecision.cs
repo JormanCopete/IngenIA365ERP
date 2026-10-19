@@ -19,7 +19,8 @@ public class LosSaldosYTasasDeCarteraTienenSuPrecision
     /// <summary>Archivos exentos (rutas relativas a la raíz, con barras normales).</summary>
     private static readonly string[] Exentos = ["src/Infrastructure/IngenIA365ERP.Persistence/Configurations/Lending/PrecisionDeCartera.cs"];
 
-    private static readonly string[] Alias = ["Monto", "MontoCausado", "TasaAnual", "TasaEquivalente", "Fraccion", "Puntaje", "ValorUvr"];
+    // Feature 014, US15 (T215): Indicador (18,4), el IRL de la foto del fondo de liquidez.
+    private static readonly string[] Alias = ["Monto", "MontoCausado", "TasaAnual", "TasaEquivalente", "Fraccion", "Puntaje", "ValorUvr", "Indicador"];
 
     [Fact]
     public void Toda_propiedad_decimal_de_Cartera_declara_su_alias()

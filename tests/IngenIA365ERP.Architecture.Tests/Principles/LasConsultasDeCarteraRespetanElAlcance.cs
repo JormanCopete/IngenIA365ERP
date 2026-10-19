@@ -202,6 +202,10 @@ public class LasConsultasDeCarteraRespetanElAlcance
         // unclaimed filtran; el pago fuera del alcance responde el 404 del saldo).
         "Core/IngenIA365ERP.Application/Lending/Deposits/Deceased/DeceasedCaseCommands.cs",
         "Core/IngenIA365ERP.Application/Lending/Deposits/Unclaimed/UnclaimedCommands.cs",
+        // US15 (T216): el fondo de liquidez, el riesgo y lo constituido exigen alcance total (AlcanceDelFondoDeLiquidez); los depósitos asegurados filtran
+        // por las cuentas del ahorrador en el alcance.
+        "Core/IngenIA365ERP.Application/Lending/Deposits/Liquidity/LiquidityFundCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/Deposits/Liquidity/LiquidityReportQueries.cs",
     ];
 
     /// <summary>

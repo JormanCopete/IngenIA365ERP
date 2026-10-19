@@ -31,7 +31,7 @@ public class LiquidityFundSnapshotConfiguration : IEntityTypeConfiguration<Liqui
         builder.Property(e => e.NewRegimeRequiredAmount).Monto();
         builder.Property(e => e.ConstitutedAmount).Monto().IsRequired();
         builder.Property(e => e.Shortfall).Monto().IsRequired();
-        builder.Property(e => e.MinimumIrl).HasPrecision(18, 4);
+        builder.Property(e => e.MinimumIrl).Indicador();
         builder.Property(e => e.ParametersSnapshotJson).IsRequired();
         builder.Property(e => e.Reason).HasMaxLength(LiquidityFundSnapshot.LargoDelMotivo);
         builder.Property(e => e.InputsSha256).HasMaxLength(64).IsRequired();

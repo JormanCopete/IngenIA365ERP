@@ -64,4 +64,10 @@ public static class PrecisionDeCartera
 
     /// <inheritdoc cref="ValorUvr(PropertyBuilder{decimal})"/>
     public static PropertyBuilder<decimal?> ValorUvr(this PropertyBuilder<decimal?> propiedad) => propiedad.HasPrecision(18, 4);
+
+    /// <summary>(18,4): un indicador en veces —feature 014, US15 (T215): el IRL acumulado más bajo de la foto del fondo de liquidez—.</summary>
+    public static PropertyBuilder<decimal> Indicador(this PropertyBuilder<decimal> propiedad) => propiedad.HasPrecision(18, 4);
+
+    /// <inheritdoc cref="Indicador(PropertyBuilder{decimal})"/>
+    public static PropertyBuilder<decimal?> Indicador(this PropertyBuilder<decimal?> propiedad) => propiedad.HasPrecision(18, 4);
 }

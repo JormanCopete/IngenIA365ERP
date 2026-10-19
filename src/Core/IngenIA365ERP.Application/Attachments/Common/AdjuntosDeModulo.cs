@@ -326,6 +326,17 @@ public static class AdjuntosDeModulo
     /// </summary>
     public const string SoporteDeFallecimiento = "LendingDeceasedSupport";
 
+    /// <summary>
+    /// Feature 014, US15 (T216; FR-109; research §24): el soporte de lo constituido del fondo de liquidez —el extracto de la cuenta, el título del CDT o la
+    /// certificación de la participación o de los TES—. Se sube <b>antes</b> de registrar la inversión (<c>RegisterLiquidityFundHoldingCommand</c> lo cita), así
+    /// que el dueño es el <c>PublicId</c> que la pantalla reserva para el registro, como el soporte de un indicador regulatorio. Se lee con
+    /// <c>Lending.LiquidityFund.View</c>; se sube y se borra con <c>.Manage</c> mientras ninguna inversión registrada lo lleve; registrada, se conserva con ella.
+    /// </summary>
+    public const string SoporteDelFondoDeLiquidez = "LendingLiquidityFundSupport";
+
+    private const string VerFondoDeLiquidez = "Lending.LiquidityFund.View";
+    private const string AdministrarFondoDeLiquidez = "Lending.LiquidityFund.Manage";
+
     private const string RegistrarFallecimientos = "Lending.DeceasedCases.Register";
     private const string AprobarFallecimientos = "Lending.DeceasedCases.Approve";
 
@@ -437,6 +448,7 @@ public static class AdjuntosDeModulo
             ConsentimientoDeNovedad => LeerNovedades,
             SoporteDeEventoDelDeudor or SoporteDeCastigo or ReporteDeCastigos => LeerCreditos,
             SoporteDeIndicadorRegulatorio => VerIndicadores,
+            SoporteDelFondoDeLiquidez => VerFondoDeLiquidez,
             LogotipoDeCartera or ImagenDeFirmaDeCartera => LeerDocumentosDeCartera,
             DocumentoDeProcesoJuridico => LeerCobranza,
             ConstanciaDeAvisoPrevio => LeerAvisosPrevios,
@@ -553,6 +565,12 @@ public static class AdjuntosDeModulo
         {
             if (!await permisos.HasPermissionAsync(AdministrarIndicadores, ct)) return new Error("Generic.NotFound", "Indicador no encontrado.");
             return await IndicadorRegistradoAsync(db, ownerEntityPublicId, ct) ? IndicadorBloqueado() : null;
+        }
+        if (ownerEntityType == SoporteDelFondoDeLiquidez)
+        {
+            // Feature 014, US15: el soporte de una inversión del fondo de liquidez, mientras no esté registrada.
+            if (!await permisos.HasPermissionAsync(AdministrarFondoDeLiquidez, ct)) return new Error("Generic.NotFound", "Inversión no encontrada.");
+            return await InversionRegistradaAsync(db, ownerEntityPublicId, ct) ? InversionBloqueada() : null;
         }
         if (ownerEntityType == ConsentimientoDeNovedad)
         {
@@ -806,6 +824,13 @@ public static class AdjuntosDeModulo
                 return new Error("Generic.NotFound", "Adjunto no encontrado.");
             return await EleccionRegistradaAsync(db, ownerEntityPublicId, ct) ? CambioDelModeloBloqueado() : null;
         }
+        // Feature 014, US15: el soporte de una inversión del fondo de liquidez se borra sólo antes de registrarla.
+        if (ownerEntityType == SoporteDelFondoDeLiquidez)
+        {
+            if (permisos is not null && !await permisos.HasPermissionAsync(AdministrarFondoDeLiquidez, ct))
+                return new Error("Generic.NotFound", "Adjunto no encontrado.");
+            return await InversionRegistradaAsync(db, ownerEntityPublicId, ct) ? InversionBloqueada() : null;
+        }
         // Feature 013 (T0638): el soporte de un indicador regulatorio se borra sólo antes de registrar el indicador que lo cita.
         if (ownerEntityType == SoporteDeIndicadorRegulatorio)
         {
@@ -914,6 +939,24 @@ public static class AdjuntosDeModulo
         return adjuntos.Count > 0
             && await db.RegulatoryIndicators.AsNoTracking().AnyAsync(i => i.SupportAttachmentPublicId != null && adjuntos.Contains(i.SupportAttachmentPublicId.Value), ct);
     }
+
+    /// <summary>
+    /// Feature 014, US15 (T216): ¿ya hay una inversión del fondo de liquidez registrada con ese dueño —la que lleva ese <c>PublicId</c> o la que cita como soporte
+    /// un adjunto de ese dueño—? Registrada, el soporte se conserva con ella.
+    /// </summary>
+    private static async Task<bool> InversionRegistradaAsync(IApplicationDbContext db, Guid dueno, CancellationToken ct)
+    {
+        if (await db.LiquidityFundHoldings.AsNoTracking().IgnoreQueryFilters().AnyAsync(h => h.PublicId == dueno, ct)) return true;
+        var adjuntos = await db.Attachments.AsNoTracking()
+            .Where(a => a.OwnerEntityType == SoporteDelFondoDeLiquidez && a.OwnerEntityPublicId == dueno)
+            .Select(a => a.PublicId).ToListAsync(ct);
+        return adjuntos.Count > 0 && await db.LiquidityFundHoldings.AsNoTracking().IgnoreQueryFilters().AnyAsync(h => adjuntos.Contains(h.SupportAttachmentPublicId), ct);
+    }
+
+    /// <summary>El soporte de una inversión del fondo de liquidez ya registrada no se cambia ni se borra (US15).</summary>
+    public static Error InversionBloqueada() => new ErrorConDatos(AttachmentErrorCodes.OwnerLocked,
+        "Es el soporte de una inversión del fondo de liquidez ya registrada: se conserva con ella y no se puede cambiar.",
+        new { ownerEntityType = SoporteDelFondoDeLiquidez });
 
     /// <summary>Feature 013, K6a (T1039): ¿ya hay una elección del modelo registrada con ese <c>PublicId</c>?</summary>
     private static Task<bool> EleccionRegistradaAsync(IApplicationDbContext db, Guid dueno, CancellationToken ct) =>

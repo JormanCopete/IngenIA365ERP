@@ -537,6 +537,10 @@ public static class DependencyInjection
         // US14 (T210): el fallecimiento del titular —las cuentas, los beneficiarios, el reparto y la entrega— y su lectura.
         services.AddScoped<Lending.Deposits.Deceased.Fallecimientos>();
         services.AddScoped<Lending.Deposits.Deceased.VistaDeFallecimientos>();
+        // US15 (T216): el fondo de liquidez, el riesgo de liquidez y los depósitos asegurados, sus fotos y el cierre del día del paso de captaciones.
+        services.AddScoped<Lending.Deposits.Liquidity.FondoDeLiquidezDeCartera>();
+        services.AddScoped<Lending.Deposits.Liquidity.FotosDelFondoDeLiquidez>();
+        services.AddScoped<Lending.Deposits.Accrual.ICierreDelDiaDeCaptaciones, Lending.Deposits.Liquidity.FondoDeLiquidezDelCiclo>();
         // US4 (T116, T119): los subpasos de los cargos periódicos y del débito automático, después de las cuotas.
         services.AddScoped<Lending.Deposits.Accrual.ISubpasoDeCaptaciones, Lending.Deposits.Charges.CargosPeriodicos>();
         services.AddScoped<Lending.Deposits.Accrual.ISubpasoDeCaptaciones, Lending.Deposits.Operations.DebitoAutomatico>();

@@ -25,6 +25,18 @@ public interface ISubpasoDeCaptaciones
     Task<IReadOnlyList<FalloDeCuenta>> ProcesarAsync(LendingProcessRun corrida, DateOnly d, IReadOnlyList<int> cuentas, CancellationToken ct);
 }
 
+/// <summary>
+/// Lo que corre una vez al terminar el paso de captaciones de un día, no por cuenta (feature 014, US15, T216): la foto del fondo de liquidez y la medición del
+/// riesgo de liquidez en los días de corte. Un fallo se registra y no detiene la corrida. (nuevo)
+/// </summary>
+public interface ICierreDelDiaDeCaptaciones
+{
+    /// <summary>El nombre, para el registro.</summary>
+    string Nombre { get; }
+
+    Task EjecutarAsync(LendingProcessRun corrida, DateOnly d, CancellationToken ct);
+}
+
 /// <summary>Lo que hizo el paso de captaciones en una corrida: si corrió, cuántas cuentas, tandas y fallidas. (nuevo)</summary>
 public sealed record ResultadoDelPasoDeCaptaciones(bool Corrio, int Cuentas, int Tandas, int Fallidas)
 {
@@ -43,7 +55,8 @@ public sealed class PasoDeCaptaciones(
     IApplicationDbContext db,
     ParametrosDeLaTandaDeCartera tanda,
     IEnumerable<ISubpasoDeCaptaciones> subpasos,
-    ILogger<PasoDeCaptaciones>? logger = null)
+    ILogger<PasoDeCaptaciones>? logger = null,
+    IEnumerable<ICierreDelDiaDeCaptaciones>? cierres = null)
 {
     private const int LargoDelMensaje = 1000;
 
@@ -100,6 +113,19 @@ public sealed class PasoDeCaptaciones(
             }
             if (fallos.Count > 0) await db.SaveChangesAsync(ct);
             cursor = ids[^1];
+        }
+
+        // US15 (T216): lo que corre una vez por día al terminar las tandas (la foto del fondo de liquidez en los días de corte). No detiene la corrida.
+        foreach (var cierre in cierres ?? [])
+        {
+            try
+            {
+                await cierre.EjecutarAsync(corrida, d, ct);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogWarning(ex, "[Cartera.CaptacionesCierreDelDiaFallido] {Cierre} falló el {Fecha}.", cierre.Nombre, d);
+            }
         }
         return new ResultadoDelPasoDeCaptaciones(true, cuentas, tandas, fallidas);
     }

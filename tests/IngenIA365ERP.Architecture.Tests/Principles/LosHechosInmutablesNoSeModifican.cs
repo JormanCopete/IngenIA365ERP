@@ -278,6 +278,8 @@ public class LosHechosInmutablesNoSeModifican
         ["InterestSettlement"] = ["ReversedByOperationId"], ["WithholdingAccumulation"] = [],
         // US6 (T169): las condiciones selladas del CDAT, su plan y las reglas de tasa negociada (una versión nueva las corrige o las termina).
         ["MemberAccountTermsVersion"] = [], ["TermDepositScheduleItem"] = [], ["NegotiatedRateRule"] = [],
+        // US15 (T215; data-model §6.7): la foto del fondo de liquidez de una fecha no cambia (pedirla otra vez devuelve la misma).
+        ["LiquidityFundSnapshot"] = [],
     };
 
     [Fact]
