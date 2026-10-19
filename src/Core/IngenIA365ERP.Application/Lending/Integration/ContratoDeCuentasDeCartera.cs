@@ -484,8 +484,8 @@ public sealed class ContratoDeCuentasDeCartera(
             ? ConsignacionEnCuentas.ClaseDeMedio(solicitud.Collector.Class, solicitud.MeansClass)
             : ErroresDeAportes.ClaseDeMedio(solicitud.MeansClass, solicitud.Collector.Class);
         if (cuenta.Nature == LineNature.Contribution) previo ??= ErroresDeAportes.NoRetirable();
-        // La cancelación con entrega liquida los intereses a la fecha: llega con la liquidación de captaciones (US5, T135).
-        if (solicitud.CloseAccount) previo ??= ErroresDeAportes.EntregaNoDisponible("La cancelación de la cuenta por el contrato", "US5");
+        // La cancelación en efectivo por el contrato sigue sin entrega hasta que exista Recaudo (E99): se cancela desde la Cartera (E234).
+        if (solicitud.CloseAccount) previo ??= ErroresDeAportes.CancelacionPorElContratoNoDisponible();
         if (previo is not null) return await RechazoAuditadoAsync<ComprobanteDeCuentaDto>(previo, solicitud.IdempotencyKey, solicitud.Collector, ct);
 
         var previa = (await ValidacionPreviaAsync(solicitud.Collector, [cuenta], ct, RetiroDeCuentaAplicadoV1.Type)).GetValueOrDefault(cuenta.Id);

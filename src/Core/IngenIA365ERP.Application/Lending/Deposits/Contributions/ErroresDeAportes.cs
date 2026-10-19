@@ -58,6 +58,15 @@ public static class ErroresDeAportes
     public static Error EntregaNoDisponible(string que, string desde) => new ErrorConDatos(CodigoEntregaNoDisponible,
         $"{que} llega con la entrega {desde} de captaciones: todavía no está disponible.", new { nature = nameof(LineNature.Deposit), availableFrom = desde });
 
+    /// <summary>
+    /// La cancelación en efectivo por el contrato (<c>closeAccount</c>) no tiene entrega hasta que exista Recaudo (research E99, E234): la cuenta se
+    /// cancela desde la Cartera, con su entrega por orden de giro o traslado. Mismo código que una entrega no desplegada; sin <c>availableFrom</c>
+    /// porque no depende de una entrega de captaciones (antes decía «US5», que no es una entrega).
+    /// </summary>
+    public static Error CancelacionPorElContratoNoDisponible() => new ErrorConDatos(CodigoEntregaNoDisponible,
+        "La cancelación de la cuenta por el contrato todavía no está disponible: la cuenta se cancela desde Cartera, con entrega por orden de giro o traslado.",
+        new { nature = nameof(LineNature.Deposit), availableFrom = (string?)null });
+
     public static Error CuotaAjena(Guid cuota) => new ErrorConDatos(CodigoCuotaAjena,
         "La cuota nombrada no es de esta cuenta.", new { installmentPublicId = cuota });
 
