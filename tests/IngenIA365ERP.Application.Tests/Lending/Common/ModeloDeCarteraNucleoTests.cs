@@ -120,6 +120,8 @@ public class ModeloDeCarteraNucleoTests
         "LND_MigrationTermDepositRows",
         // Feature 014, US11 (T187; data-model §5.1, §5.2, §5.2.1, §7.1): bloqueos, embargos, respuestas al juzgado y su fila de migración
         "LND_AccountHolds", "LND_Garnishments", "LND_GarnishmentResponses", "LND_MigrationHoldRows",
+        // Feature 014, US14 (T207; data-model §6.5, §6.6): el fallecimiento del titular y los saldos no reclamados
+        "LND_DeceasedHolderCases", "LND_UnclaimedBalances",
     ];
 
     /// <summary>Las 17 de preparación (data-model §29.3) y las 7 de la migración de captaciones (014, data-model §7.1).</summary>
@@ -207,7 +209,7 @@ public class ModeloDeCarteraNucleoTests
         var tablas = DeCartera(Modelo(postgres)).Select(e => e.GetTableName()).ToList();
 
         tablas.Should().OnlyHaveUniqueItems().And.BeEquivalentTo(Tablas);
-        Tablas.Should().HaveCount(179,
+        Tablas.Should().HaveCount(181,
             "74 de negocio + 17 de preparación (data-model §14) + 2 del grupo conectado (C112) + 7 de CarteraRiesgo (US9) + 8 de CarteraLibranza (K2)"
             + " + 9 de CarteraNovedades (K3) + 11 de CarteraCobranza (K4) + 2 de CarteraInformes (K5) + 2 de CarteraPerdidaEsperada (K6a)"
             + " + 7 del libro de cuentas de la feature 014 (K7, CaptacionesAportes) + 3 de las versiones de líneas de captación y aportes (US1)"
@@ -216,7 +218,7 @@ public class ModeloDeCarteraNucleoTests
             + " + 5 del GMF del mes, los cargos, sus exoneraciones y el débito automático (US4)"
             + " + 3 del archivo de pagaduría por grupo: cuotas de cuentas, sus resultados y lo no aplicado de la respuesta (T091) + 2 de la liquidación de intereses y la retención acumulada (US5)"
             + " + 7 de preparación de la migración de aportes y captaciones (US9) + 5 del CDAT: condiciones selladas, plan, reglas y solicitudes de tasa negociada y su fila de migración (US6)"
-            + " + 4 de bloqueos, embargos, respuestas al juzgado y su fila de migración (US11) + 2 de la decisión de asamblea y sus líneas (US12)");
+            + " + 4 de bloqueos, embargos, respuestas al juzgado y su fila de migración (US11) + 2 de la decisión de asamblea y sus líneas (US12) + 2 del fallecimiento y los no reclamados (US14)");
     }
 
     [Theory]

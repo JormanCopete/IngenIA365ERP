@@ -78,7 +78,8 @@ public sealed class ConsignacionEnCuentas(
     ReglasDeMovimientos movimientos,
     CargosDeCuentas cargos,
     Accrual.AjusteDeCausacionDeCuenta? ajusteDeCausacion = null,
-    TermDeposits.ConstitucionDeCdat? constitucionDeCdat = null)
+    TermDeposits.ConstitucionDeCdat? constitucionDeCdat = null,
+    Accrual.ReactivacionDeCuenta? reactivacion = null)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
@@ -196,12 +197,8 @@ public sealed class ConsignacionEnCuentas(
         });
         await db.SaveChangesAsync(ct);
 
-        var reactivada = false;
-        if (cuenta.Status == MemberAccountStatus.Inactive)
-        {
-            cuenta.Reactivar(ahora);
-            reactivada = true;
-        }
+        // US14 (T208; FR-084): la consignación se contabiliza con la cuenta como está y, ya guardadas sus filas, la reactivación reclasifica todo el saldo.
+        var reactivada = cuenta.Status == MemberAccountStatus.Inactive;
         RegistroDeCuentas.MarcarActividadDelTitular(control, item.ValueDate);
 
         // FR-128: los cargos pendientes se cobran con esta consignación, enteros y sin dejar el capital bajo el mínimo (en la misma operación).
@@ -263,6 +260,8 @@ public sealed class ConsignacionEnCuentas(
         registro.RegistrarTransacciones(filas);
         foreach (var (cargo, _) in cobrados) cargo.Cobrar(operacion.Id);
         await db.SaveChangesAsync(ct);
+        if (reactivada && await Accrual.ReactivacionDeCuenta.ReactivarAsync(reactivacion, cuenta, item.ValueDate, ahora, ct) is { IsFailure: true } noReactivada)
+            return Result.Failure<ConsignacionAplicada>(noReactivada.Error);
         // US5 (T133; FR-062): con fecha valor en días ya causados, el ajuste de la causación va enlazado a esta operación.
         if (ajusteDeCausacion is not null
             && await ajusteDeCausacion.AjustarAsync(cuenta, operacion, EmisionDeCartera.ClaseConsignacionDeCuenta, ct) is { IsFailure: true } ajusteFallido)
@@ -433,8 +432,7 @@ public sealed class ConsignacionEnCuentas(
         {
             return ErroresDeAportes.NoOperable(cuenta.Number, cuenta.Status);
         }
-        var fallecido = await db.People.AsNoTracking().IgnoreQueryFilters().Where(p => p.Id == cuenta.HolderPersonId).Select(p => p.IsDeceased)
-            .FirstOrDefaultAsync(ct);
+        var fallecido = await Deceased.TitularesFallecidos.EsAsync(db, cuenta.HolderPersonId, ct);
         return fallecido
             ? ErroresDeAportes.NoOperable(cuenta.Number, cuenta.Status, $"El titular de la cuenta {cuenta.Number} figura como fallecido: la cuenta no recibe operaciones.")
             : null;

@@ -213,6 +213,8 @@ public sealed class OrdenesDeGiroDeCuentas(
             var reverso = await reversion.ReversarAsync(origen, texto, ReintegroPorTesoreria, ct);
             if (reverso.IsFailure) return Result.Failure(reverso.Error);
             orden.RegistrarResultado(hacia, ahora);
+            // US14 (T209): el giro del pago de un saldo no reclamado que volvió: el reverso lo devolvió a «no reclamados» y el saldo vuelve a retenido.
+            await Unclaimed.NoReclamados.RetenerPorGiroDevueltoAsync(db, orden, ct);
             // US11 (T189; FR-091): el giro rechazado de una consignación al juzgado devuelve el saldo y lo deja retenido para el mismo embargo.
             if (orden.Purpose == PayoutPurpose.GarnishmentConsignment && origen.GarnishmentId is { } embargo)
                 Holds.RetencionDeEmbargos.Reintegrar(db, embargo, orden.MemberAccountId, orden.Amount, reloj.HoyLocal, texto);
@@ -235,6 +237,8 @@ public sealed class OrdenesDeGiroDeCuentas(
         var beneficiario = await db.People.AsNoTracking().IgnoreQueryFilters().Where(p => p.Id == orden.BeneficiaryPersonId).Select(p => p.PublicId).FirstAsync(ct);
         await emision.DevolucionGiradaAsync(orden, EmisionDeCartera.TipoDeOrden(orden), referencia, ocurrida, sucursal.Value, beneficiario, ct);
 
+        // US14 (T210): girada una entrega por fallecimiento, la cuenta sin saldo se cancela y, con todas canceladas, el caso queda entregado.
+        await Deceased.Fallecimientos.AlGirarAsync(db, orden, reloj.HoyLocal, ahora, (await actorActual.ObtenerAsync(ct)).UserId, ct);
         // US5 (T135; FR-039): girada la entrega de una cancelación, la cuenta sin saldo queda cancelada.
         if (orden.Purpose is PayoutPurpose.Cancellation or PayoutPurpose.TermDepositRedemption)
         {

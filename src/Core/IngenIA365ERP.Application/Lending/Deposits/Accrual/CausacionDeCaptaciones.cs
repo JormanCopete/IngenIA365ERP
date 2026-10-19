@@ -144,8 +144,7 @@ public sealed class CausacionDeCaptaciones(
         var cuentas = await db.MemberAccounts.Where(a => ids.Contains(a.Id)).OrderBy(a => a.Id).ToListAsync(ct);
         var controles = await db.MemberAccountControls.Where(c => ids.Contains(c.MemberAccountId)).ToDictionaryAsync(c => c.MemberAccountId, ct);
         var personas = cuentas.Select(c => c.HolderPersonId).Distinct().ToList();
-        var fallecidos = (await db.People.AsNoTracking().IgnoreQueryFilters().Where(p => personas.Contains(p.Id) && p.IsDeceased).Select(p => p.Id).ToListAsync(ct))
-            .ToHashSet();
+        var fallecidos = await Deceased.TitularesFallecidos.DeAsync(db, personas, ct);
         var ahora = reloj.UtcNow;
         var porDia = new SortedDictionary<DateOnly, (List<LineaDeCausacionDeCuenta> Causado, List<LineaDeCausacionDeCuenta> Ajustes)>();
         var filasPorCuenta = new Dictionary<int, List<(DateOnly Dia, decimal Causado, decimal Ajuste)>>();

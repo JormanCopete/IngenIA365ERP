@@ -161,8 +161,7 @@ public static class LectorDeCuentas
             .Select(g => new GmfExemptMarkDto(g.PublicId, g.ValidFrom)).FirstOrDefaultAsync(ct);
         var control = await db.MemberAccountControls.AsNoTracking().Where(c => c.MemberAccountId == cuenta.Id)
             .Select(c => (DateOnly?)c.LastAccruedDate).FirstOrDefaultAsync(ct);
-        var titularFallecido = await db.People.AsNoTracking().IgnoreQueryFilters().Where(p => p.Id == cuenta.HolderPersonId).Select(p => p.IsDeceased)
-            .FirstOrDefaultAsync(ct);
+        var titularFallecido = await Deceased.TitularesFallecidos.EsAsync(db, cuenta.HolderPersonId, ct);
 
         return new MemberAccountDto(cuenta.PublicId, cuenta.Number, cuenta.Nature, cuenta.DepositClass, cuenta.Status, linea, oficina,
             personas[cuenta.HolderPersonId], cuenta.HandlingMode,

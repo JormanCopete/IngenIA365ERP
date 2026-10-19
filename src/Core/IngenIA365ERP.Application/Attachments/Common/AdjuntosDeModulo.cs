@@ -318,6 +318,17 @@ public static class AdjuntosDeModulo
     /// </summary>
     public const string SoporteDeAsamblea = "LendingAssemblySupport";
 
+    /// <summary>
+    /// Feature 014, US14 (T210; FR-082, FR-083; research §23): los soportes del fallecimiento de un titular —el registro civil de defunción, los que pide la
+    /// entrega sin juicio de sucesión (<c>Fallecimiento.SoportesDeEntregaSinSucesion</c>) o la sentencia o escritura de la sucesión—, con dueño la
+    /// <b>persona fallecida</b> (el caso todavía no existe al subir el registro civil). Se lee y se sube con <c>Lending.DeceasedCases.Register</c> o
+    /// <c>.Approve</c>; no se borra: respalda a quién se entregó.
+    /// </summary>
+    public const string SoporteDeFallecimiento = "LendingDeceasedSupport";
+
+    private const string RegistrarFallecimientos = "Lending.DeceasedCases.Register";
+    private const string AprobarFallecimientos = "Lending.DeceasedCases.Approve";
+
     private const string RegistrarAsamblea = "Lending.Assembly.Register";
     private const string AprobarAsamblea = "Lending.Assembly.Approve";
 
@@ -409,6 +420,9 @@ public static class AdjuntosDeModulo
         // Feature 014, US12: el soporte de la asamblea lo leen quien registra y quien aplica.
         if (ownerEntityType == SoporteDeAsamblea)
             return await permisos.HasPermissionAsync(RegistrarAsamblea, ct) || await permisos.HasPermissionAsync(AprobarAsamblea, ct);
+        // Feature 014, US14: los soportes del fallecimiento los leen quien registra y quien aprueba la entrega.
+        if (ownerEntityType == SoporteDeFallecimiento)
+            return await permisos.HasPermissionAsync(RegistrarFallecimientos, ct) || await permisos.HasPermissionAsync(AprobarFallecimientos, ct);
         var permiso = ownerEntityType switch
         {
             Comprobante => LeerComprobantes,
@@ -555,6 +569,14 @@ public static class AdjuntosDeModulo
                 return new Error("Generic.NotFound", "Persona no encontrada.");
             return null;
         }
+        if (ownerEntityType == SoporteDeFallecimiento)
+        {
+            // Feature 014, US14: los soportes del fallecimiento, de la persona fallecida, de quien registra o aprueba la entrega.
+            var puede = await permisos.HasPermissionAsync(RegistrarFallecimientos, ct) || await permisos.HasPermissionAsync(AprobarFallecimientos, ct);
+            if (!puede || !await db.People.AnyAsync(p => p.PublicId == ownerEntityPublicId, ct))
+                return new Error("Generic.NotFound", "Persona no encontrada.");
+            return null;
+        }
         if (ownerEntityType == SoporteDeEmbargo)
         {
             // Feature 014, US11: los soportes de un embargo o un bloqueo, de la persona embargada, de quien registra o levanta embargos o administra bloqueos.
@@ -690,6 +712,11 @@ public static class AdjuntosDeModulo
         if (ownerEntityType == SoporteDeEventoDelDeudor)
             return new ErrorConDatos(AttachmentErrorCodes.OwnerLocked,
                 "Es el soporte de un evento del deudor (fallecimiento, retiro, embargo o insolvencia): se conserva y no se puede borrar.",
+                new { ownerEntityType });
+        // Feature 014, US14: el registro civil de defunción y los soportes de la entrega respaldan a quién se entregó.
+        if (ownerEntityType == SoporteDeFallecimiento)
+            return new ErrorConDatos(AttachmentErrorCodes.OwnerLocked,
+                "Es un soporte del fallecimiento de un titular (registro civil, entrega sin sucesión o sucesión): se conserva y no se puede borrar.",
                 new { ownerEntityType });
         // Feature 014, US11: el oficio de un embargo, su desembargo y las respuestas al juzgado son la orden de una autoridad.
         if (ownerEntityType == SoporteDeEmbargo)

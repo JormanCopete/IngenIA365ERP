@@ -63,7 +63,7 @@ public static class ErroresDeVencimientoDeCdat
     public static async Task<Error?> ADisposicionAsync(IApplicationDbContext db, MemberAccount cuenta, CancellationToken ct)
     {
         if (cuenta.IsGarnished) return Embargado(cuenta.Number);
-        return await db.People.AsNoTracking().IgnoreQueryFilters().AnyAsync(p => p.Id == cuenta.HolderPersonId && p.IsDeceased, ct) ? Fallecido(cuenta.Number) : null;
+        return await Deceased.TitularesFallecidos.EsAsync(db, cuenta.HolderPersonId, ct) ? Fallecido(cuenta.Number) : null;
     }
 }
 

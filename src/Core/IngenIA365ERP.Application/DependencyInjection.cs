@@ -526,6 +526,17 @@ public static class DependencyInjection
         services.AddScoped<Lending.Deposits.Operations.TrasladoDeCuenta>();
         services.AddScoped<Lending.Deposits.Charges.CargosDeCuentas>();
         services.AddScoped<Lending.Deposits.Charges.FacturasDeCargos>();
+        // Feature 014, US14 (T208): la reactivación con su reclasificación y los subpasos de la inactividad y de las marcas del GMF que rigen desde hoy,
+        // antes de los cargos periódicos (el cargo por inactividad se causa sobre la cuenta ya inactiva).
+        services.AddScoped<Lending.Deposits.Accrual.ReactivacionDeCuenta>();
+        services.AddScoped<Lending.Deposits.Accrual.ISubpasoDeCaptaciones, Lending.Deposits.Accrual.MarcasQueRigen>();
+        services.AddScoped<Lending.Deposits.Accrual.ISubpasoDeCaptaciones, Lending.Deposits.Accrual.Inactividad>();
+        // US14 (T209): los saldos no reclamados y su subpaso, después de la inactividad.
+        services.AddScoped<Lending.Deposits.Unclaimed.NoReclamados>();
+        services.AddScoped<Lending.Deposits.Accrual.ISubpasoDeCaptaciones, Lending.Deposits.Unclaimed.NoReclamadosDelCiclo>();
+        // US14 (T210): el fallecimiento del titular —las cuentas, los beneficiarios, el reparto y la entrega— y su lectura.
+        services.AddScoped<Lending.Deposits.Deceased.Fallecimientos>();
+        services.AddScoped<Lending.Deposits.Deceased.VistaDeFallecimientos>();
         // US4 (T116, T119): los subpasos de los cargos periódicos y del débito automático, después de las cuotas.
         services.AddScoped<Lending.Deposits.Accrual.ISubpasoDeCaptaciones, Lending.Deposits.Charges.CargosPeriodicos>();
         services.AddScoped<Lending.Deposits.Accrual.ISubpasoDeCaptaciones, Lending.Deposits.Operations.DebitoAutomatico>();

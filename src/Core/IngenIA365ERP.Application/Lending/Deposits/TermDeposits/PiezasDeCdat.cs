@@ -200,5 +200,5 @@ public static class PiezasDeCdat
 
     /// <summary>¿Está el CDAT a disposición (embargado o con el titular fallecido)? No se paga ni se prorroga (FR-072).</summary>
     public static async Task<bool> ADisposicionAsync(IApplicationDbContext db, MemberAccount cuenta, CancellationToken ct) =>
-        cuenta.IsGarnished || await db.People.AsNoTracking().IgnoreQueryFilters().AnyAsync(p => p.Id == cuenta.HolderPersonId && p.IsDeceased, ct);
+        cuenta.IsGarnished || await Deceased.TitularesFallecidos.EsAsync(db, cuenta.HolderPersonId, ct);
 }

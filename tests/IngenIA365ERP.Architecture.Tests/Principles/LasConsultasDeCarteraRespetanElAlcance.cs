@@ -197,6 +197,11 @@ public class LasConsultasDeCarteraRespetanElAlcance
         // US12 (T203): una decisión de asamblea es de toda la cooperativa: la lista, el detalle y la simulación exigen alcance total
         // (DistribucionesDeAsamblea.AlcanceTotalAsync; fuera, la lista vacía y el 404 de la decisión).
         "Core/IngenIA365ERP.Application/Lending/Deposits/Assembly/AssemblyDistributionQueries.cs",
+        // US14 (T209, T210): los casos de fallecimiento exigen el alcance sobre todas las cuentas de la persona (VistaDeFallecimientos.LeerAsync con
+        // AlcanceDeEmbargos.PersonaEnAlcanceAsync, falla cerrado); los saldos no reclamados, por la oficina y la línea de su cuenta de origen (la lista y la vista
+        // unclaimed filtran; el pago fuera del alcance responde el 404 del saldo).
+        "Core/IngenIA365ERP.Application/Lending/Deposits/Deceased/DeceasedCaseCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/Deposits/Unclaimed/UnclaimedCommands.cs",
     ];
 
     /// <summary>

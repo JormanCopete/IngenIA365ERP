@@ -88,7 +88,8 @@ public class LasCaptacionesExigenPermisoYAlcance
     /// <c>IAlcanceDeCartera</c> (la solicitud de aportes lee su cuenta y la del destino de una cesión con <c>SolicitudesDeAportes</c>).
     /// </summary>
     // US12 (T203): DistribucionesDeAsamblea exige alcance total (una decisión de asamblea es de toda la cooperativa) y responde el 404 de lo inexistente.
-    private static readonly string[] AyudantesConAlcance = ["SolicitudesDeAportes", "DistribucionesDeAsamblea"];
+    // US14 (T210): VistaDeFallecimientos exige el alcance sobre todas las cuentas del titular fallecido (y sobre la cuenta de destino de un traslado).
+    private static readonly string[] AyudantesConAlcance = ["SolicitudesDeAportes", "DistribucionesDeAsamblea", "VistaDeFallecimientos"];
 
     private static readonly Regex ConsultaOComando = new(@"public\s+sealed\s+record\s+(\w+(Query|Command))\b", RegexOptions.Compiled);
 

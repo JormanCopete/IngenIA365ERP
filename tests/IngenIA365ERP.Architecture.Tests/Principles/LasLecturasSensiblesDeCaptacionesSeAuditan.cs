@@ -39,6 +39,10 @@ public class LasLecturasSensiblesDeCaptacionesSeAuditan
         (Deposits + "Holds/GarnishmentCommands.cs", "ListGarnishmentsQuery", nameof(LendingAuditEmitter.EmitirEmbargoVistoAsync)),
         (Deposits + "Holds/GarnishmentCommands.cs", "GetGarnishmentQuery", nameof(LendingAuditEmitter.EmitirEmbargoVistoAsync)),
         (Deposits + "Holds/GarnishmentCommands.cs", "GetGarnishmentResponseDraftQuery", nameof(LendingAuditEmitter.EmitirEmbargoVistoAsync)),
+        // US14 (T209, T210): los saldos no reclamados de cada persona de la lista, y los casos de fallecimiento (lista y detalle, con las cuentas y sus saldos).
+        (Deposits + "Unclaimed/UnclaimedCommands.cs", "ListUnclaimedBalancesQuery", nameof(LendingAuditEmitter.EmitirSaldosDePersonaVistosAsync)),
+        (Deposits + "Deceased/DeceasedCaseCommands.cs", "ListDeceasedHolderCasesQuery", nameof(LendingAuditEmitter.EmitirSaldosDePersonaVistosAsync)),
+        (Deposits + "Deceased/DeceasedCaseCommands.cs", "GetDeceasedHolderCaseQuery", nameof(LendingAuditEmitter.EmitirSaldosDePersonaVistosAsync)),
     ];
 
     [Fact]

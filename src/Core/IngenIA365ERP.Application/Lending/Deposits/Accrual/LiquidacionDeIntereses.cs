@@ -117,7 +117,7 @@ public sealed class LiquidacionDeIntereses(
         InteresDelPeriodo? explicacion = null;
         if (desdeElMotor)
         {
-            var titularFallecido = await db.People.AsNoTracking().IgnoreQueryFilters().Where(p => p.Id == cuenta.HolderPersonId).Select(p => p.IsDeceased).FirstOrDefaultAsync(ct);
+            var titularFallecido = await Deceased.TitularesFallecidos.EsAsync(db, cuenta.HolderPersonId, ct);
             // La simulación respeta las ventanas: cada período de liquidación vencido y no liquidado causa por su método, y el último hasta la fecha.
             var tramos = new List<InteresDelDia>();
             var desde = inicio;

@@ -38,7 +38,7 @@ public sealed class AjusteDeCausacionDeCuenta(IApplicationDbContext db, LectorDe
         var inicio = LectorDeInteres.InicioDeLaVentana(cuenta, control, version.Version, ultimo);
         if (ultimo <= inicio || operacion.ValueDate > ultimo) return Result.Success(0m);
 
-        var fallecido = await db.People.AsNoTracking().IgnoreQueryFilters().Where(p => p.Id == cuenta.HolderPersonId).Select(p => p.IsDeceased).FirstOrDefaultAsync(ct);
+        var fallecido = await Deceased.TitularesFallecidos.EsAsync(db, cuenta.HolderPersonId, ct);
         var ventana = await lector.VentanaAsync(cuenta, inicio, ultimo, DateTime.MaxValue, fallecido, ct);
         if (ventana.IsFailure) return Result.Failure<decimal>(ventana.Error);
         var enElLibro = await lector.CausadoEnElLibroAsync(cuenta.Id, inicio, ultimo, ct);
