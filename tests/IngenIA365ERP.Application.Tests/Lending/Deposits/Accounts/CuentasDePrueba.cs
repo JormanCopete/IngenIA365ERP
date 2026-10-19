@@ -209,6 +209,8 @@ internal sealed class CuentasDePrueba : IDisposable
         HandlingMode = manejo,
         Parties = partes ?? [],
         Beneficiaries = beneficiarios ?? [],
+        // D34 (2026-10-18): con beneficiarios, la constancia se exige también al abrir.
+        BeneficiaryRecordAttachmentPublicId = beneficiarios is { Count: > 0 } ? Guid.NewGuid() : null,
         MarkGmfExempt = exenta,
     };
 

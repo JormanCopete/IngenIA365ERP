@@ -149,6 +149,22 @@ public sealed class AperturaDeCuentasTests : IDisposable
     }
 
     [Fact]
+    public async Task Los_beneficiarios_se_registran_al_abrir_con_su_constancia()
+    {
+        // Decisión del dueño del 2026-10-18 (research §13 D34): la constancia se exige también al abrir, no sólo al cambiarlos.
+        var linea = await _c.LineaDeCaptacionAsync();
+        var sinConstancia = _c.Apertura(linea, _c.Ana, beneficiarios: [Beneficiario(_c.Carla, 100m)]) with { BeneficiaryRecordAttachmentPublicId = null };
+
+        var r = await _c.AbrirAsync(sinConstancia);
+
+        r.Error.Code.Should().Be("Lending.Savings.BeneficiaryRecordRequired");
+        GobiernoDePrueba.Datos(r.Error).GetProperty("field").GetString().Should().Be("beneficiaryRecordAttachmentPublicId");
+        (await _c.G.Db.MemberAccounts.CountAsync()).Should().Be(0);
+        (await _c.AbrirAsync(sinConstancia with { BeneficiaryRecordAttachmentPublicId = Guid.NewGuid() })).IsSuccess.Should().BeTrue();
+        (await _c.AbrirAsync(_c.Apertura(linea, _c.Beto))).IsSuccess.Should().BeTrue("sin beneficiarios no hay constancia que pedir");
+    }
+
+    [Fact]
     public async Task US2_5_dos_aperturas_de_la_misma_linea_reciben_numeros_consecutivos_y_cada_linea_lleva_el_suyo()
     {
         var vista = await _c.LineaDeCaptacionAsync();

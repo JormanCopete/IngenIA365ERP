@@ -164,6 +164,12 @@ public sealed class OpenMemberAccountCommandHandler(
         // ------------------------------------------------------------------------------------------------ titularidad --
         var resuelta = await titularidad.ResolverAsync(titular, naturaleza, version, e.HandlingMode, e.Parties, e.Beneficiaries, hoy, ct);
         if (resuelta.IsFailure) return Falla(resuelta.Error);
+        // Decisión del dueño del 2026-10-18 (research §13 D34): la constancia de beneficiarios firmada por el titular se exige también al abrir (hasta esa
+        // fecha era opcional al abrir y obligatoria sólo al cambiarlos, E47).
+        if (resuelta.Value.Beneficiarios.Count > 0 && e.BeneficiaryRecordAttachmentPublicId is null)
+            return Falla(new ErrorConDatos(Parties.SetMemberAccountPartiesCommandHandler.CodigoConstanciaRequerida,
+                "Los beneficiarios se registran con la constancia firmada por el titular: adjúntela y vuelva a abrir la cuenta.",
+                new { field = "beneficiaryRecordAttachmentPublicId" }));
 
         // FR-032, FR-059: el depósito de apertura que alcanza el umbral de efectivo pide la declaración de origen de fondos.
         if (version is { MinOpeningAmount: > 0m } && await LectorDeCuentas.UmbralDeOrigenDeFondosAsync(parametros, hoy, ct) is { } umbral

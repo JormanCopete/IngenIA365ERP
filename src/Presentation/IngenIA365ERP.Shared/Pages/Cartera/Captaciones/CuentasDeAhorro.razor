@@ -126,9 +126,10 @@
                         }
                         @if (_pedido.Beneficiaries.Count > 0)
                         {
-                            <label class="campo">Constancia de beneficiarios
+                            @* Decisión del dueño del 2026-10-18 (D34): la constancia se exige también al abrir. *@
+                            <label class="campo">Constancia de beneficiarios (obligatoria)
                                 <select class="e-input" @bind="_pedido.BeneficiaryRecordAttachmentPublicId">
-                                    <option value="">Sin constancia</option>
+                                    <option value="">Elija la constancia firmada por el titular</option>
                                     @foreach (var a in _soportes) { <option value="@a.PublicId">@a.FileName</option> }
                                 </select>
                             </label>
