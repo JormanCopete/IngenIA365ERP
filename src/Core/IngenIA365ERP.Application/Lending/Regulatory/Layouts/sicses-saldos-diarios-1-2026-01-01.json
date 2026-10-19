@@ -1,0 +1,52 @@
+{
+  "code": "SICSES-SALDOS-DIARIOS-v1",
+  "kind": "DepositsSicses",
+  "formatCode": "sicses-saldos-diarios",
+  "bureauCode": null,
+  "version": "1",
+  "source": "Formato 169 del SICSES, saldos diarios de los depósitos de ahorro ordinario (cuenta 2105 del catálogo de información financiera), creado por la Circular Externa 05 de 2019 de la Superintendencia de la Economía Solidaria; campos FECHA y VALOR (positivo; el del último día igual al saldo de la cuenta 210500) (por cotejar)",
+  "validFrom": "2026-01-01",
+  "validTo": null,
+  "fileKind": "Delimited",
+  "delimiter": "|",
+  "encoding": "utf-8",
+  "lineEnding": "CRLF",
+  "normalizeText": true,
+  "records": [
+    {
+      "code": "Detail",
+      "repeat": "PorDia",
+      "fields": [
+        {
+          "number": 1,
+          "name": "Fecha",
+          "order": 1,
+          "length": 10,
+          "kind": "A",
+          "format": "Date",
+          "required": true,
+          "path": "Dia.Fecha",
+          "pattern": "dd/MM/yyyy",
+          "verified": false
+        },
+        {
+          "number": 2,
+          "name": "Valor",
+          "order": 2,
+          "length": 20,
+          "kind": "N",
+          "format": "AmountPoint2",
+          "required": true,
+          "path": "Dia.Saldo",
+          "verified": false
+        }
+      ]
+    }
+  ],
+  "notes": [
+    "Campos reconstruidos de la fuente pública citada en «source»; cada uno lleva verified=false hasta que la contadora lo coteje con el instructivo vigente y un archivo aceptado por el validador (P8, P9). Cotejar es publicar una versión nueva con verified=true, verifiedBy, verifiedOn y verifiedAgainst.",
+    "Las rutas (path) son el vocabulario que entrega la proyección de captaciones de Application; cambiar una ruta es cambiar la proyección y el layout a la vez.",
+    "La periodicidad y el plazo son informativos (decisión del dueño): la entidad decide cuándo reporta; el SICSES de captaciones usa el mismo plazo informativo del perfil regulatorio o de Sicses.MesesDeCorte y Sicses.DiasDePlazo que el formato de cartera.",
+    "Una fila por día calendario del mes: la suma del capital de las cuentas de ahorro a la vista (activas e inactivas) al cierre del día, del libro con fecha valor hasta ese día. La validación del supervisor exige que el último día cuadre con la cuenta 210500 del balance: la vista deposits-reconciliation lo compara con Contabilidad."
+  ]
+}

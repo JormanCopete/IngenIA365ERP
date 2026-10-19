@@ -864,6 +864,8 @@ public static class DependencyInjection
         services.AddSingleton(Lending.Regulatory.CatalogoDeLayoutsDeCartera.Embebido);
         // Feature 013, K5 (T1002–T1004): las proyecciones del SICSES y de las centrales, la preparación común y la generación.
         services.AddScoped<Lending.Regulatory.ProyeccionSicsesCartera>();
+        // Feature 014, US17 (T220): los formatos regulatorios de captaciones (SICSES de captaciones y exógena).
+        services.AddScoped<Lending.Regulatory.Captaciones.ProyeccionDeCaptaciones>();
         services.AddScoped<Lending.Regulatory.ProyeccionCentralDeRiesgo>();
         services.AddScoped<Lending.Regulatory.PreparacionDeArchivoRegulatorio>();
         services.AddScoped<Lending.Regulatory.GeneracionDeArchivoRegulatorio>();

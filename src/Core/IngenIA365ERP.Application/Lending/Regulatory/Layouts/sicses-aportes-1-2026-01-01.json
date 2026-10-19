@@ -1,0 +1,138 @@
+{
+  "code": "SICSES-APORTES-v1",
+  "kind": "DepositsSicses",
+  "formatCode": "sicses-aportes",
+  "bureauCode": null,
+  "version": "1",
+  "source": "Formato F21 del SICSES (código 9013), informe individual de aportes o contribuciones, campos 1 a 9 del instructivo D-GEIN-010 v04 §6.4, Superintendencia de la Economía Solidaria (por cotejar)",
+  "validFrom": "2026-01-01",
+  "validTo": null,
+  "fileKind": "Delimited",
+  "delimiter": "|",
+  "encoding": "utf-8",
+  "lineEnding": "CRLF",
+  "normalizeText": true,
+  "records": [
+    {
+      "code": "Detail",
+      "repeat": "PorAsociado",
+      "fields": [
+        {
+          "number": 1,
+          "name": "Tipo de identificación",
+          "order": 1,
+          "length": 1,
+          "kind": "A",
+          "format": "Text",
+          "required": true,
+          "path": "Asociado.TipoDeIdentificacion",
+          "allowedValues": [
+            "C",
+            "N",
+            "U",
+            "P",
+            "E",
+            "R",
+            "I"
+          ],
+          "verified": false
+        },
+        {
+          "number": 2,
+          "name": "Número de identificación",
+          "order": 2,
+          "length": 15,
+          "kind": "A",
+          "format": "Text",
+          "required": true,
+          "path": "Asociado.NumeroDeIdentificacion",
+          "verified": false
+        },
+        {
+          "number": 3,
+          "name": "Saldo de aportes a la fecha",
+          "order": 3,
+          "length": 20,
+          "kind": "N",
+          "format": "AmountPoint2",
+          "required": true,
+          "path": "Aportes.Saldo",
+          "verified": false
+        },
+        {
+          "number": 4,
+          "name": "Valor del aporte mensual",
+          "order": 4,
+          "length": 20,
+          "kind": "N",
+          "format": "AmountPoint2",
+          "required": true,
+          "path": "Aportes.CuotaMensual",
+          "verified": false
+        },
+        {
+          "number": 5,
+          "name": "Saldo de aportes ordinarios",
+          "order": 5,
+          "length": 20,
+          "kind": "N",
+          "format": "AmountPoint2",
+          "required": true,
+          "path": "Aportes.Ordinarios",
+          "verified": false
+        },
+        {
+          "number": 6,
+          "name": "Saldo de aportes extraordinarios",
+          "order": 6,
+          "length": 20,
+          "kind": "N",
+          "format": "AmountPoint2",
+          "required": true,
+          "path": "Aportes.Extraordinarios",
+          "verified": false
+        },
+        {
+          "number": 7,
+          "name": "Valor de la revalorización",
+          "order": 7,
+          "length": 20,
+          "kind": "N",
+          "format": "AmountPoint2",
+          "required": true,
+          "path": "Aportes.Revalorizacion",
+          "verified": false
+        },
+        {
+          "number": 8,
+          "name": "Monto promedio de aportes (día/año) del ejercicio",
+          "order": 8,
+          "length": 20,
+          "kind": "N",
+          "format": "AmountPoint2",
+          "required": true,
+          "path": "Aportes.PromedioDelEjercicio",
+          "verified": false
+        },
+        {
+          "number": 9,
+          "name": "Última fecha de pago de aportes",
+          "order": 9,
+          "length": 10,
+          "kind": "A",
+          "format": "Date",
+          "required": false,
+          "path": "Aportes.UltimaFechaDePago",
+          "pattern": "dd/MM/yyyy",
+          "verified": false
+        }
+      ]
+    }
+  ],
+  "notes": [
+    "Campos reconstruidos de la fuente pública citada en «source»; cada uno lleva verified=false hasta que la contadora lo coteje con el instructivo vigente y un archivo aceptado por el validador (P8, P9). Cotejar es publicar una versión nueva con verified=true, verifiedBy, verifiedOn y verifiedAgainst.",
+    "Las rutas (path) son el vocabulario que entrega la proyección de captaciones de Application; cambiar una ruta es cambiar la proyección y el layout a la vez.",
+    "La periodicidad y el plazo son informativos (decisión del dueño): la entidad decide cuándo reporta; el SICSES de captaciones usa el mismo plazo informativo del perfil regulatorio o de Sicses.MesesDeCorte y Sicses.DiasDePlazo que el formato de cartera.",
+    "Una fila por asociado con cuenta de aportes viva al último día del mes. El saldo es la suma de las cuatro clases (mínimos, ordinarios, extraordinarios y revalorizados); el promedio día/año es el promedio de los saldos al cierre de cada día desde el 1 de enero (o la apertura) hasta el corte, al centavo; el aporte mensual son las cuotas del mes de corte."
+  ]
+}

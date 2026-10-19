@@ -1,0 +1,355 @@
+{
+  "code": "EXOGENA-1019-v1",
+  "kind": "Exogenous",
+  "formatCode": "exogena-1019",
+  "bureauCode": null,
+  "version": "1",
+  "source": "Formato 1019 versión 9 de información exógena, cuentas corrientes y de ahorro, Resolución DIAN 000162 de 2023 art. 3 (compilada en la Resolución 227 de 2025, art. 1.3.3.1.1), año gravable 2024 y siguientes (por cotejar)",
+  "validFrom": "2024-01-01",
+  "validTo": null,
+  "fileKind": "Delimited",
+  "delimiter": ";",
+  "encoding": "utf-8",
+  "lineEnding": "CRLF",
+  "normalizeText": true,
+  "records": [
+    {
+      "code": "Detail",
+      "repeat": "PorTitularYCuenta",
+      "fields": [
+        {
+          "number": 1,
+          "name": "Tipo de documento",
+          "order": 1,
+          "length": 2,
+          "kind": "N",
+          "format": "Integer",
+          "required": true,
+          "path": "Persona.TipoDeDocumento",
+          "allowedValues": [
+            "11",
+            "12",
+            "13",
+            "21",
+            "22",
+            "31",
+            "41",
+            "42",
+            "47",
+            "48",
+            "50"
+          ],
+          "verified": false
+        },
+        {
+          "number": 2,
+          "name": "Número de identificación",
+          "order": 2,
+          "length": 20,
+          "kind": "A",
+          "format": "Text",
+          "required": true,
+          "path": "Persona.NumeroDeIdentificacion",
+          "verified": false
+        },
+        {
+          "number": 3,
+          "name": "Primer apellido",
+          "order": 3,
+          "length": 60,
+          "kind": "A",
+          "format": "Text",
+          "required": false,
+          "path": "Persona.PrimerApellido",
+          "verified": false
+        },
+        {
+          "number": 4,
+          "name": "Segundo apellido",
+          "order": 4,
+          "length": 60,
+          "kind": "A",
+          "format": "Text",
+          "required": false,
+          "path": "Persona.SegundoApellido",
+          "verified": false
+        },
+        {
+          "number": 5,
+          "name": "Primer nombre",
+          "order": 5,
+          "length": 60,
+          "kind": "A",
+          "format": "Text",
+          "required": false,
+          "path": "Persona.PrimerNombre",
+          "verified": false
+        },
+        {
+          "number": 6,
+          "name": "Otros nombres",
+          "order": 6,
+          "length": 60,
+          "kind": "A",
+          "format": "Text",
+          "required": false,
+          "path": "Persona.OtrosNombres",
+          "verified": false
+        },
+        {
+          "number": 7,
+          "name": "Razón social",
+          "order": 7,
+          "length": 450,
+          "kind": "A",
+          "format": "Text",
+          "required": false,
+          "path": "Persona.RazonSocial",
+          "verified": false
+        },
+        {
+          "number": 8,
+          "name": "Dirección",
+          "order": 8,
+          "length": 200,
+          "kind": "A",
+          "format": "Text",
+          "required": false,
+          "path": "Persona.Direccion",
+          "verified": false
+        },
+        {
+          "number": 9,
+          "name": "Código del departamento",
+          "order": 9,
+          "length": 2,
+          "kind": "A",
+          "format": "Text",
+          "required": false,
+          "path": "Persona.CodigoDeDepartamento",
+          "verified": false
+        },
+        {
+          "number": 10,
+          "name": "Código del municipio",
+          "order": 10,
+          "length": 3,
+          "kind": "A",
+          "format": "Text",
+          "required": false,
+          "path": "Persona.CodigoDeMunicipio",
+          "verified": false
+        },
+        {
+          "number": 11,
+          "name": "País",
+          "order": 11,
+          "length": 4,
+          "kind": "A",
+          "format": "Text",
+          "required": true,
+          "path": "Persona.Pais",
+          "verified": false
+        },
+        {
+          "number": 12,
+          "name": "Tipo de cuenta",
+          "order": 12,
+          "length": 1,
+          "kind": "N",
+          "format": "Integer",
+          "required": true,
+          "path": "Cuenta.TipoDeCuenta",
+          "allowedValues": [
+            "1",
+            "2",
+            "3",
+            "4"
+          ],
+          "verified": false
+        },
+        {
+          "number": 13,
+          "name": "Número de la cuenta",
+          "order": 13,
+          "length": 30,
+          "kind": "A",
+          "format": "Text",
+          "required": true,
+          "path": "Cuenta.Numero",
+          "verified": false
+        },
+        {
+          "number": 14,
+          "name": "Calidad del titular (1 principal, 2 secundario)",
+          "order": 14,
+          "length": 1,
+          "kind": "N",
+          "format": "Integer",
+          "required": true,
+          "path": "Cuenta.CalidadDelTitular",
+          "allowedValues": [
+            "1",
+            "2"
+          ],
+          "verified": false
+        },
+        {
+          "number": 15,
+          "name": "Código de exención del GMF",
+          "order": 15,
+          "length": 1,
+          "kind": "N",
+          "format": "Integer",
+          "required": true,
+          "path": "Cuenta.ExencionGmf",
+          "allowedValues": [
+            "1",
+            "2"
+          ],
+          "verified": false
+        },
+        {
+          "number": 16,
+          "name": "Saldo final",
+          "order": 16,
+          "length": 20,
+          "kind": "N",
+          "format": "Integer",
+          "required": true,
+          "path": "Saldo.Final",
+          "verified": false
+        },
+        {
+          "number": 17,
+          "name": "Promedio del saldo",
+          "order": 17,
+          "length": 20,
+          "kind": "N",
+          "format": "Integer",
+          "required": true,
+          "path": "Saldo.Promedio",
+          "verified": false
+        },
+        {
+          "number": 18,
+          "name": "Mediana del saldo",
+          "order": 18,
+          "length": 20,
+          "kind": "N",
+          "format": "Integer",
+          "required": true,
+          "path": "Saldo.Mediana",
+          "verified": false
+        },
+        {
+          "number": 19,
+          "name": "Saldo máximo",
+          "order": 19,
+          "length": 20,
+          "kind": "N",
+          "format": "Integer",
+          "required": true,
+          "path": "Saldo.Maximo",
+          "verified": false
+        },
+        {
+          "number": 20,
+          "name": "Saldo mínimo",
+          "order": 20,
+          "length": 20,
+          "kind": "N",
+          "format": "Integer",
+          "required": true,
+          "path": "Saldo.Minimo",
+          "verified": false
+        },
+        {
+          "number": 21,
+          "name": "Total de movimientos crédito",
+          "order": 21,
+          "length": 20,
+          "kind": "N",
+          "format": "Integer",
+          "required": true,
+          "path": "Creditos.Total",
+          "verified": false
+        },
+        {
+          "number": 22,
+          "name": "Número de movimientos crédito",
+          "order": 22,
+          "length": 20,
+          "kind": "N",
+          "format": "Integer",
+          "required": true,
+          "path": "Creditos.Numero",
+          "verified": false
+        },
+        {
+          "number": 23,
+          "name": "Promedio de movimientos crédito",
+          "order": 23,
+          "length": 20,
+          "kind": "N",
+          "format": "Integer",
+          "required": true,
+          "path": "Creditos.Promedio",
+          "verified": false
+        },
+        {
+          "number": 24,
+          "name": "Mediana de movimientos crédito",
+          "order": 24,
+          "length": 20,
+          "kind": "N",
+          "format": "Integer",
+          "required": true,
+          "path": "Creditos.Mediana",
+          "verified": false
+        },
+        {
+          "number": 25,
+          "name": "Total de movimientos débito",
+          "order": 25,
+          "length": 20,
+          "kind": "N",
+          "format": "Integer",
+          "required": true,
+          "path": "Debitos.Total",
+          "verified": false
+        },
+        {
+          "number": 26,
+          "name": "Número de movimientos débito",
+          "order": 26,
+          "length": 20,
+          "kind": "N",
+          "format": "Integer",
+          "required": true,
+          "path": "Debitos.Numero",
+          "verified": false
+        },
+        {
+          "number": 27,
+          "name": "Promedio de movimientos débito",
+          "order": 27,
+          "length": 20,
+          "kind": "N",
+          "format": "Integer",
+          "required": true,
+          "path": "Debitos.Promedio",
+          "verified": false
+        }
+      ]
+    }
+  ],
+  "notes": [
+    "Campos reconstruidos de la fuente pública citada en «source»; cada uno lleva verified=false hasta que la contadora lo coteje con el instructivo vigente y un archivo aceptado por el validador (P8, P9). Cotejar es publicar una versión nueva con verified=true, verifiedBy, verifiedOn y verifiedAgainst.",
+    "Las rutas (path) son el vocabulario que entrega la proyección de captaciones de Application; cambiar una ruta es cambiar la proyección y el layout a la vez.",
+    "El archivo es la entrada del prevalidador de la DIAN (que arma el XML): valores en pesos enteros, separados por punto y coma; los códigos de tipo de documento son los de la tabla de la DIAN.",
+    "Una fila por persona y cuenta de ahorro a la vista, contractual o permanente que tuvo saldo o movimiento en el año (el CDAT va en el 1020): el titular como principal y cada cotitular como secundario, con las cifras de la cuenta completa. La persona entra si su saldo de fin de año sumado en todas sus cuentas llega al umbral o si en algún mes sus movimientos crédito sumados lo pasan (EXOGENA_1019_UMBRAL_UVT por la UVT del año: «aunque por cuenta los valores sean menores»).",
+    "Saldo final al 31 de diciembre; promedio, mediana, máximo y mínimo de los saldos al cierre de cada día del año en que la cuenta existió; movimientos crédito (consignaciones, traslados recibidos, intereses abonados) y débito (retiros, traslados, retención, GMF, cargos) del libro. Tipo de cuenta: 2 ahorro, 3 ahorro contractual, 4 ahorro permanente (1 corriente no aplica); exención GMF: 1 exenta, 2 no exenta (por cotejar).",
+    "Los aportes sociales se informan en el formato 1010 (Resolución 162 de 2023, art. 19), que no es de la Cartera."
+  ]
+}

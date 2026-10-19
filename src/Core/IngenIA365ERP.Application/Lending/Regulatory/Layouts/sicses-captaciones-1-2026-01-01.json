@@ -1,0 +1,305 @@
+{
+  "code": "SICSES-CAPTACIONES-v1",
+  "kind": "DepositsSicses",
+  "formatCode": "sicses-captaciones",
+  "bureauCode": null,
+  "version": "1",
+  "source": "Formato 9026 del SICSES, informe individual de las captaciones, Superintendencia de la Economía Solidaria; el instructivo D-GEIN-010 v04 (§6.11, cotitulares 9068) fija la columna 5 «tipo de ahorro» (1 a 5) y la 16 «número de cuenta del producto»; el resto reconstruido (por cotejar)",
+  "validFrom": "2026-01-01",
+  "validTo": null,
+  "fileKind": "Delimited",
+  "delimiter": "|",
+  "encoding": "utf-8",
+  "lineEnding": "CRLF",
+  "normalizeText": true,
+  "records": [
+    {
+      "code": "Detail",
+      "repeat": "PorCuenta",
+      "fields": [
+        {
+          "number": 1,
+          "name": "Tipo de identificación",
+          "order": 1,
+          "length": 1,
+          "kind": "A",
+          "format": "Text",
+          "required": true,
+          "path": "Titular.TipoDeIdentificacion",
+          "allowedValues": [
+            "C",
+            "N",
+            "P",
+            "E",
+            "T",
+            "R",
+            "U",
+            "O"
+          ],
+          "verified": false
+        },
+        {
+          "number": 2,
+          "name": "Número de identificación",
+          "order": 2,
+          "length": 15,
+          "kind": "A",
+          "format": "Text",
+          "required": true,
+          "path": "Titular.NumeroDeIdentificacion",
+          "verified": false
+        },
+        {
+          "number": 3,
+          "name": "Código contable",
+          "order": 3,
+          "length": 10,
+          "kind": "A",
+          "format": "Text",
+          "required": false,
+          "path": "Cuenta.CodigoContable",
+          "verified": false
+        },
+        {
+          "number": 4,
+          "name": "Nombre del depósito",
+          "order": 4,
+          "length": 60,
+          "kind": "A",
+          "format": "Text",
+          "required": true,
+          "path": "Cuenta.Linea",
+          "verified": false
+        },
+        {
+          "number": 5,
+          "name": "Tipo de ahorro",
+          "order": 5,
+          "length": 1,
+          "kind": "N",
+          "format": "Integer",
+          "required": true,
+          "path": "Cuenta.TipoDeAhorro",
+          "allowedValues": [
+            "1",
+            "2",
+            "3",
+            "4",
+            "5"
+          ],
+          "verified": false
+        },
+        {
+          "number": 6,
+          "name": "Periodicidad de pago de intereses (días)",
+          "order": 6,
+          "length": 4,
+          "kind": "N",
+          "format": "Integer",
+          "required": false,
+          "path": "Cuenta.PeriodicidadDeInteresesEnDias",
+          "verified": false
+        },
+        {
+          "number": 7,
+          "name": "Fecha de apertura",
+          "order": 7,
+          "length": 10,
+          "kind": "A",
+          "format": "Date",
+          "required": true,
+          "path": "Cuenta.FechaDeApertura",
+          "pattern": "dd/MM/yyyy",
+          "verified": false
+        },
+        {
+          "number": 8,
+          "name": "Plazo (días)",
+          "order": 8,
+          "length": 5,
+          "kind": "N",
+          "format": "Integer",
+          "required": false,
+          "path": "Cuenta.PlazoEnDias",
+          "verified": false
+        },
+        {
+          "number": 9,
+          "name": "Fecha de vencimiento",
+          "order": 9,
+          "length": 10,
+          "kind": "A",
+          "format": "Date",
+          "required": false,
+          "path": "Cuenta.FechaDeVencimiento",
+          "pattern": "dd/MM/yyyy",
+          "verified": false
+        },
+        {
+          "number": 10,
+          "name": "Tasa de interés efectiva anual",
+          "order": 10,
+          "length": 9,
+          "kind": "N",
+          "format": "Rate",
+          "required": false,
+          "path": "Cuenta.TasaEfectivaAnual",
+          "decimals": 6,
+          "verified": false
+        },
+        {
+          "number": 11,
+          "name": "Saldo de capital",
+          "order": 11,
+          "length": 20,
+          "kind": "N",
+          "format": "AmountPoint2",
+          "required": true,
+          "path": "Saldos.Capital",
+          "verified": false
+        },
+        {
+          "number": 12,
+          "name": "Intereses causados por pagar",
+          "order": 12,
+          "length": 20,
+          "kind": "N",
+          "format": "AmountPoint2",
+          "required": true,
+          "path": "Saldos.InteresPorPagar",
+          "verified": false
+        },
+        {
+          "number": 13,
+          "name": "Valor de la cuota pactada",
+          "order": 13,
+          "length": 20,
+          "kind": "N",
+          "format": "AmountPoint2",
+          "required": false,
+          "path": "Cuenta.ValorDeLaCuota",
+          "verified": false
+        },
+        {
+          "number": 14,
+          "name": "Fecha del último movimiento",
+          "order": 14,
+          "length": 10,
+          "kind": "A",
+          "format": "Date",
+          "required": false,
+          "path": "Cuenta.FechaDelUltimoMovimiento",
+          "pattern": "dd/MM/yyyy",
+          "verified": false
+        },
+        {
+          "number": 15,
+          "name": "Estado de la cuenta",
+          "order": 15,
+          "length": 1,
+          "kind": "N",
+          "format": "Integer",
+          "required": true,
+          "path": "Cuenta.Estado",
+          "allowedValues": [
+            "1",
+            "2",
+            "3",
+            "4"
+          ],
+          "verified": false
+        },
+        {
+          "number": 16,
+          "name": "Número de cuenta del producto",
+          "order": 16,
+          "length": 30,
+          "kind": "A",
+          "format": "Text",
+          "required": true,
+          "path": "Cuenta.Numero",
+          "verified": false
+        },
+        {
+          "number": 17,
+          "name": "Exenta de GMF",
+          "order": 17,
+          "length": 1,
+          "kind": "A",
+          "format": "Text",
+          "required": true,
+          "path": "Cuenta.ExentaDeGmf",
+          "allowedValues": [
+            "S",
+            "N"
+          ],
+          "verified": false
+        },
+        {
+          "number": 18,
+          "name": "El depósito tiene cotitulares",
+          "order": 18,
+          "length": 1,
+          "kind": "A",
+          "format": "Text",
+          "required": true,
+          "path": "Cuenta.TieneCotitulares",
+          "allowedValues": [
+            "S",
+            "N"
+          ],
+          "verified": false
+        },
+        {
+          "number": 19,
+          "name": "Tipo de cuenta (individual, conjunta, alterna)",
+          "order": 19,
+          "length": 1,
+          "kind": "N",
+          "format": "Integer",
+          "required": true,
+          "path": "Cuenta.TipoDeCuenta",
+          "allowedValues": [
+            "1",
+            "2",
+            "3"
+          ],
+          "verified": false
+        },
+        {
+          "number": 20,
+          "name": "Embargada",
+          "order": 20,
+          "length": 1,
+          "kind": "A",
+          "format": "Text",
+          "required": true,
+          "path": "Cuenta.Embargada",
+          "allowedValues": [
+            "S",
+            "N"
+          ],
+          "verified": false
+        },
+        {
+          "number": 21,
+          "name": "Oficina",
+          "order": 21,
+          "length": 10,
+          "kind": "A",
+          "format": "Text",
+          "required": true,
+          "path": "Cuenta.Oficina",
+          "verified": false
+        }
+      ]
+    }
+  ],
+  "notes": [
+    "Campos reconstruidos de la fuente pública citada en «source»; cada uno lleva verified=false hasta que la contadora lo coteje con el instructivo vigente y un archivo aceptado por el validador (P8, P9). Cotejar es publicar una versión nueva con verified=true, verifiedBy, verifiedOn y verifiedAgainst.",
+    "Las rutas (path) son el vocabulario que entrega la proyección de captaciones de Application; cambiar una ruta es cambiar la proyección y el layout a la vez.",
+    "La periodicidad y el plazo son informativos (decisión del dueño): la entidad decide cuándo reporta; el SICSES de captaciones usa el mismo plazo informativo del perfil regulatorio o de Sicses.MesesDeCorte y Sicses.DiasDePlazo que el formato de cartera.",
+    "Una fila por cuenta de captación viva al último día del mes (ahorro a la vista, CDAT, contractual y permanente), con su titular a esa fecha y los saldos del libro con fecha valor hasta el corte. Tipo de ahorro: 1 cuenta de ahorro, 2 CDAT, 3 contractual, 4 permanente, 5 programado de vivienda (la Cartera no lo distingue todavía: va como 3). Estado: 1 activa, 2 inactiva, 3 vencida, 4 en cancelación. Tipo de cuenta: 1 individual, 2 conjunta, 3 alterna (indistinta).",
+    "El código contable sale vacío: la Cartera no conoce cuentas (lo resolverá la matriz de Contabilidad cuando se coteje el formato)."
+  ]
+}

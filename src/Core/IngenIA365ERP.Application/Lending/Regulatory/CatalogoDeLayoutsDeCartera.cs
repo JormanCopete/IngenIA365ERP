@@ -24,6 +24,12 @@ public sealed record LayoutDeCartera(
     IReadOnlyList<string> Notes)
 {
     public string Code => Layout.Code;
+
+    /// <summary>
+    /// Feature 014, US17 (T220): el formato de captaciones (<c>sicses-captaciones</c>, <c>exogena-1019</c>…) en <c>DepositsSicses</c> y <c>Exogenous</c>; nulo
+    /// en el SICSES de cartera y en las centrales.
+    /// </summary>
+    public string? FormatCode { get; init; }
 }
 
 /// <summary>Una fila de <c>GET /api/lending/regulatory/layouts</c>: el layout con su estado de cotejo (campos cotejados sobre el total).</summary>
@@ -42,7 +48,8 @@ public sealed record RegulatoryLayoutDto(
     string? VerifiedBy,
     DateOnly? VerifiedOn,
     string? VerifiedAgainst,
-    IReadOnlyList<string> Notes);
+    IReadOnlyList<string> Notes,
+    string? FormatCode = null);
 
 /// <summary>
 /// Los layouts del SICSES y de las centrales de riesgo embebidos en el ensamblado (<c>Lending/Regulatory/Layouts/*.json</c>; feature 013, K5,
@@ -74,6 +81,18 @@ public sealed class CatalogoDeLayoutsDeCartera
         Todos.Where(l => l.Kind == clase && MismaCentral(l.BureauCode, central) && l.Layout.IsValidAt(finDelPeriodo))
             .OrderByDescending(l => l.Layout.ValidFrom).FirstOrDefault();
 
+    /// <summary>
+    /// Feature 014, US17 (T220): el layout vigente del formato de captaciones a la fecha de fin del período (el último día del mes en el SICSES, el 31 de
+    /// diciembre en la exógena), o nulo si ninguno lo cubre.
+    /// </summary>
+    public LayoutDeCartera? VigenteDelFormato(string formato, DateOnly finDelPeriodo) =>
+        Todos.Where(l => string.Equals(l.FormatCode, formato, StringComparison.OrdinalIgnoreCase) && l.Layout.IsValidAt(finDelPeriodo))
+            .OrderByDescending(l => l.Layout.ValidFrom).FirstOrDefault();
+
+    /// <summary>Los formatos de captaciones con algún layout, en orden.</summary>
+    public IReadOnlyList<string> Formatos =>
+        Todos.Where(l => l.FormatCode is not null).Select(l => l.FormatCode!).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList();
+
     public LayoutDeCartera? PorCodigo(string codigo) =>
         Todos.FirstOrDefault(l => string.Equals(l.Code, codigo, StringComparison.OrdinalIgnoreCase));
 
@@ -99,7 +118,7 @@ public sealed class CatalogoDeLayoutsDeCartera
         foreach (var repetido in lista.GroupBy(l => l.Code, StringComparer.OrdinalIgnoreCase).Where(g => g.Count() > 1))
             errores.Add($"El código de layout {repetido.Key} está en {string.Join(" y ", repetido.Select(l => l.Resource))}.");
 
-        foreach (var grupo in lista.GroupBy(l => (l.Kind, Central: l.BureauCode?.ToUpperInvariant())))
+        foreach (var grupo in lista.GroupBy(l => (l.Kind, Central: l.BureauCode?.ToUpperInvariant(), Formato: l.FormatCode?.ToLowerInvariant())))
         {
             var ordenados = grupo.OrderBy(l => l.Layout.ValidFrom).ToList();
             for (var i = 1; i < ordenados.Count; i++)
@@ -107,7 +126,8 @@ public sealed class CatalogoDeLayoutsDeCartera
                 var anterior = ordenados[i - 1];
                 var siguiente = ordenados[i];
                 if (anterior.Layout.ValidTo is null || anterior.Layout.ValidTo >= siguiente.Layout.ValidFrom)
-                    errores.Add($"Los layouts {anterior.Code} y {siguiente.Code} ({grupo.Key.Kind}{(grupo.Key.Central is null ? "" : " " + grupo.Key.Central)}) " +
+                    errores.Add($"Los layouts {anterior.Code} y {siguiente.Code} ({grupo.Key.Kind}{(grupo.Key.Central is null ? "" : " " + grupo.Key.Central)}" +
+                                $"{(grupo.Key.Formato is null ? "" : " " + grupo.Key.Formato)}) " +
                                 "se cruzan en vigencia: cierre el anterior la víspera del siguiente.");
             }
         }
@@ -124,10 +144,26 @@ public sealed class CatalogoDeLayoutsDeCartera
         catch (JsonException e) { throw new FormatException($"El layout {nombre} no es un JSON válido: {e.Message}", e); }
 
         if (extra.Kind is not { } clase || !Enum.IsDefined(clase))
-            throw new FormatException($"El layout {nombre} no dice su «kind» (Sicses o CreditBureau).");
+            throw new FormatException($"El layout {nombre} no dice su «kind» (Sicses, CreditBureau, DepositsSicses o Exogenous).");
         if (layout.Code.Length > 80) throw new FormatException($"El layout {nombre}: el código {layout.Code} pasa de 80 caracteres.");
 
         var archivo = NombreDeArchivo(nombre);
+        if (clase is RegulatoryFileKind.DepositsSicses or RegulatoryFileKind.Exogenous)
+        {
+            // Feature 014, US17 (T220): un formato de captaciones dice su código, en minúsculas, con el prefijo de su clase; el archivo empieza por él.
+            var prefijo = clase == RegulatoryFileKind.DepositsSicses ? "sicses-" : "exogena-";
+            if (extra.BureauCode is not null) throw new FormatException($"El layout {nombre} es de captaciones y no lleva «bureauCode».");
+            if (extra.FormatCode is not { Length: > 0 } formato || formato != formato.ToLowerInvariant() || !formato.StartsWith(prefijo, StringComparison.Ordinal)
+                || formato.Length > 40 || formato == "sicses-cartera")
+                throw new FormatException($"El layout {nombre} necesita «formatCode» en minúsculas que empiece por «{prefijo}» (de hasta 40 caracteres).");
+            if (!archivo.StartsWith(formato + "-", StringComparison.OrdinalIgnoreCase))
+                throw new FormatException($"El layout {nombre} es del formato {formato} y su archivo debe llamarse {formato}-{{versión}}-{{aaaa-mm-dd}}.json.");
+            return new LayoutDeCartera(nombre, clase, null, layout, extra.VerifiedBy, extra.VerifiedOn, extra.VerifiedAgainst, extra.Notes ?? [])
+            {
+                FormatCode = formato,
+            };
+        }
+        if (extra.FormatCode is not null) throw new FormatException($"El layout {nombre} no es de captaciones y no lleva «formatCode».");
         if (clase == RegulatoryFileKind.Sicses)
         {
             if (extra.BureauCode is not null) throw new FormatException($"El layout {nombre} es del SICSES y no lleva «bureauCode».");
@@ -178,6 +214,7 @@ public sealed class CatalogoDeLayoutsDeCartera
     {
         public RegulatoryFileKind? Kind { get; set; }
         public string? BureauCode { get; set; }
+        public string? FormatCode { get; set; }
         public string? VerifiedBy { get; set; }
         public DateOnly? VerifiedOn { get; set; }
         public string? VerifiedAgainst { get; set; }
@@ -198,7 +235,7 @@ public sealed class ListRegulatoryLayoutsQueryHandler(CatalogoDeLayoutsDeCartera
     {
         IReadOnlyList<RegulatoryLayoutDto> filas = catalogo.Todos.Select(l => new RegulatoryLayoutDto(l.Code, l.Kind, l.BureauCode, l.Layout.Version,
             l.Layout.Source, l.Layout.ValidFrom, l.Layout.ValidTo, l.Layout.FileKind.ToString(), l.Layout.TotalFields, l.Layout.VerifiedFields,
-            l.Layout.UnverifiedFields, l.VerifiedBy, l.VerifiedOn, l.VerifiedAgainst, l.Notes)).ToList();
+            l.Layout.UnverifiedFields, l.VerifiedBy, l.VerifiedOn, l.VerifiedAgainst, l.Notes, l.FormatCode)).ToList();
         return Task.FromResult(Result.Success(filas));
     }
 }

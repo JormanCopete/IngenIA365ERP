@@ -17,9 +17,11 @@ public class CatalogoDeLayoutsDeCarteraTests
     public void Los_layouts_embebidos_cargan_y_cumplen_el_esquema()
     {
         var catalogo = CatalogoDeLayoutsDeCartera.Embebido;
-        catalogo.Todos.Select(l => l.Code).Should().BeEquivalentTo("SICSES-CARTERA-v1", "CENTRAL-DATACREDITO-v1", "CENTRAL-TRANSUNION-v1");
+        // Feature 014, US17 (T220): el catálogo suma los formatos de captaciones; éstos los revisa FormatosDeCaptacionesTests.
+        var deCartera = catalogo.Todos.Where(l => l.Kind is RegulatoryFileKind.Sicses or RegulatoryFileKind.CreditBureau).ToList();
+        deCartera.Select(l => l.Code).Should().BeEquivalentTo("SICSES-CARTERA-v1", "CENTRAL-DATACREDITO-v1", "CENTRAL-TRANSUNION-v1");
         catalogo.Centrales.Should().Equal("DATACREDITO", "TRANSUNION");
-        foreach (var l in catalogo.Todos)
+        foreach (var l in deCartera)
         {
             l.Layout.Source.Should().Contain("por cotejar", $"{l.Code}: la fuente dice que falta cotejar (pregunta I7)");
             l.Notes.Should().NotBeEmpty($"{l.Code} lleva sus notas");
@@ -133,7 +135,8 @@ public class CatalogoDeLayoutsDeCarteraTests
         var handler = new ListRegulatoryLayoutsQueryHandler(CatalogoDeLayoutsDeCartera.Embebido);
         var r = await handler.Handle(new ListRegulatoryLayoutsQuery(), CancellationToken.None);
         r.IsSuccess.Should().BeTrue();
-        r.Value.Should().HaveCount(3);
+        r.Value.Count(x => x.Kind is RegulatoryFileKind.Sicses or RegulatoryFileKind.CreditBureau).Should().Be(3);
+        r.Value.Where(x => x.FormatCode is not null).Should().HaveCount(7, "los siete formatos de captaciones (feature 014, US17)");
         var sicses = r.Value.Single(x => x.Kind == RegulatoryFileKind.Sicses);
         sicses.BureauCode.Should().BeNull();
         sicses.FileKind.Should().Be("Delimited");

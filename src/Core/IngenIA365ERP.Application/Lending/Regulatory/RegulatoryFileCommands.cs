@@ -12,6 +12,7 @@ using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Common.Paging;
 using IngenIA365ERP.Application.Common.Persistence;
 using IngenIA365ERP.Application.Lending.Common;
+using IngenIA365ERP.Application.Lending.Regulatory.Captaciones;
 using IngenIA365ERP.Domain.Common.Layouts;
 using IngenIA365ERP.Domain.Entities.Lending.Documents;
 using IngenIA365ERP.Domain.Entities.Lending.Risk;
@@ -80,7 +81,8 @@ public sealed record RegulatoryFileDto(
     bool DownloadAvailable,
     string GeneratedBy,
     DateTime GeneratedAt,
-    RegulatoryFileUploadDto? Uploaded);
+    RegulatoryFileUploadDto? Uploaded,
+    string? FormatCode = null);
 
 /// <summary>Una generación con sus inconsistencias, sus excluidos y sus totales (<c>GET /files/{id}</c>, y lo que responde generar). (nuevo)</summary>
 public sealed record RegulatoryFileDetailDto(
@@ -166,7 +168,8 @@ public sealed record ArchivoRegulatorioPreparado(
     ResultadoDeEscritura Escritura,
     IReadOnlyList<AdvertenciaRegulatoria> Advertencias,
     ProyeccionDelSicses? Sicses,
-    ProyeccionDeCentral? DeCentral)
+    ProyeccionDeCentral? DeCentral,
+    ProyeccionRegulatoriaDeCaptaciones? DeCaptaciones = null)
 {
     public int Bloqueantes => Escritura.Bloqueantes;
 
@@ -185,14 +188,16 @@ public sealed record ArchivoRegulatorioPreparado(
             .Concat(Escritura.Inconsistencias.Where(i => i.Severidad == SeveridadDeInconsistencia.Warning).Select(i => new RegulatoryWarningDto(i.Codigo, i.Mensaje)))
             .ToList();
 
-    public int Lineas => DeCentral is null ? Filas.Count : Filas.Count(f => f.Registro == FilasDeCentral.Detalle);
+    public int Lineas => DeCentral is not null ? Filas.Count(f => f.Registro == FilasDeCentral.Detalle)
+        : DeCaptaciones is not null ? Filas.Count(f => f.Registro == FilasDeCaptaciones.Detalle)
+        : Filas.Count;
 
     public IReadOnlyList<RegulatoryExcludedDto> Excluidos => DeCentral is null
         ? []
         : DeCentral.Excluidos.Select(x => new RegulatoryExcludedDto(x.NumeroDeObligacion, x.LoanPublicId, x.PersonPublicId, x.EsDeudor, x.MotivoDeExclusion!,
             ArchivosRegulatorios.GestionSugerida(x.MotivoDeExclusion!))).ToList();
 
-    public DateOnly? Plazo => Sicses?.Plazo?.Limite;
+    public DateOnly? Plazo => Sicses?.Plazo?.Limite ?? DeCaptaciones?.Plazo?.Limite;
 }
 
 /// <summary>
@@ -203,7 +208,8 @@ public sealed record ArchivoRegulatorioPreparado(
 public sealed class PreparacionDeArchivoRegulatorio(
     CatalogoDeLayoutsDeCartera catalogo,
     ProyeccionSicsesCartera sicses,
-    ProyeccionCentralDeRiesgo centrales)
+    ProyeccionCentralDeRiesgo centrales,
+    ProyeccionDeCaptaciones? captaciones = null)
 {
     public async Task<Result<ArchivoRegulatorioPreparado>> SicsesAsync(int anio, int mes, CancellationToken ct)
     {
@@ -228,14 +234,33 @@ public sealed class PreparacionDeArchivoRegulatorio(
         return Result.Success(Armar(RegulatoryFileKind.CreditBureau, central, anio, mes, layout, filas, [], null, p.Value));
     }
 
+    /// <summary>
+    /// Feature 014, US17 (T220): un formato de captaciones del período (<c>mes</c> nulo en la exógena): el layout vigente del formato al fin del período, la
+    /// proyección de captaciones (exige el cierre mensual vigente) y lo que escribiría el motor. Sólo lee.
+    /// </summary>
+    public async Task<Result<ArchivoRegulatorioPreparado>> CaptacionesAsync(string codigo, int anio, int? mes, CancellationToken ct)
+    {
+        var formato = FormatosDeCaptaciones.Buscar(codigo);
+        if (formato is null) return Falla(ErroresDeFormatosDeCaptaciones.FormatoDesconocido(codigo));
+        if (!formato.Anual && mes is not (>= 1 and <= 12)) return Falla(ErroresDeFormatosDeCaptaciones.MesRequerido(formato));
+        var fin = formato.FinDelPeriodo(anio, mes);
+        var layout = catalogo.VigenteDelFormato(formato.Codigo, fin);
+        if (layout is null) return Falla(ErroresDeFormatosDeCaptaciones.SinLayout(formato, fin));
+        if (captaciones is null) throw new InvalidOperationException("La preparación de archivos regulatorios no tiene la proyección de captaciones.");
+        var p = await captaciones.ProyectarAsync(formato.Codigo, anio, mes, ct);
+        if (p.IsFailure) return Falla(p.Error);
+        return Result.Success(Armar(formato.Clase, null, anio, p.Value.Mes, layout, p.Value.Filas, p.Value.Advertencias, null, null, p.Value));
+    }
+
     private static ArchivoRegulatorioPreparado Armar(RegulatoryFileKind clase, string? central, int anio, int mes, LayoutDeCartera layout,
-        IReadOnlyList<FilaDeLayout> filas, IReadOnlyList<AdvertenciaRegulatoria> deLaProyeccion, ProyeccionDelSicses? s, ProyeccionDeCentral? c)
+        IReadOnlyList<FilaDeLayout> filas, IReadOnlyList<AdvertenciaRegulatoria> deLaProyeccion, ProyeccionDelSicses? s, ProyeccionDeCentral? c,
+        ProyeccionRegulatoriaDeCaptaciones? d = null)
     {
         var advertencias = new List<AdvertenciaRegulatoria>();
         if (layout.Layout.HasUnverifiedFields)
             advertencias.Add(AdvertenciasRegulatorias.SinCotejar(layout.Code, layout.Layout.UnverifiedFields, layout.Layout.TotalFields));
         advertencias.AddRange(deLaProyeccion);
-        return new ArchivoRegulatorioPreparado(clase, central, anio, mes, layout, filas, EscritorPorLayout.Escribir(layout.Layout, filas), advertencias, s, c);
+        return new ArchivoRegulatorioPreparado(clase, central, anio, mes, layout, filas, EscritorPorLayout.Escribir(layout.Layout, filas), advertencias, s, c, d);
     }
 
     private static Result<ArchivoRegulatorioPreparado> Falla(Error e) => Result.Failure<ArchivoRegulatorioPreparado>(e);
@@ -290,7 +315,7 @@ public static class ArchivosRegulatorios
             Advertencias(a), new RegulatoryFileCountsDto(a.LineCount, a.BlockingIssueCount, a.WarningCount, a.ExcludedCount), a.FileName, a.FileSha256,
             a.TieneArchivo, Nombre(a.GeneratedByUserId), a.GeneratedAt,
             a.FilingNumber is null ? null : new RegulatoryFileUploadDto(a.FilingNumber, a.FilingDate, a.UploadedAt,
-                a.UploadedByUserId is { } u ? Nombre(u) : null, a.ReceiptAttachmentPublicId))).ToList();
+                a.UploadedByUserId is { } u ? Nombre(u) : null, a.ReceiptAttachmentPublicId), a.FormatCode)).ToList();
     }
 
     public static async Task<RegulatoryFileDetailDto> DetalleAsync(IApplicationDbContext db, RegulatoryFile f, CancellationToken ct)
@@ -445,24 +470,38 @@ public sealed class GeneracionDeArchivoRegulatorio(
     IDateTimeService reloj)
 {
     public async Task<Result<RegulatoryFileDetailDto>> GenerarAsync(RegulatoryFileKind clase, string? central, int anio, int mes, bool reconocerAdvertencias,
-        CancellationToken ct)
+        CancellationToken ct, string? formato = null)
     {
+        // Feature 014, US17 (T220): un formato de captaciones se guarda con su código y el mes de su período (12 en la exógena, que es anual).
+        var deCaptaciones = clase is RegulatoryFileKind.DepositsSicses or RegulatoryFileKind.Exogenous;
+        FormatoDeCaptaciones? definicion = null;
+        if (deCaptaciones)
+        {
+            definicion = FormatosDeCaptaciones.Buscar(formato);
+            if (definicion is null || definicion.Clase != clase) return Falla(ErroresDeFormatosDeCaptaciones.FormatoDesconocido(formato ?? string.Empty));
+            formato = definicion.Codigo;
+            if (definicion.Anual) mes = 12;
+        }
+        else formato = null;
         var actor = await actorActual.ObtenerAsync(ct);
         if (actor.UserId is not { } usuario) return Falla(ErroresDeGobierno.SinUsuario());
 
         return await TransaccionExplicita.EjecutarAsync(db, async () =>
         {
             var periodo = anio * 12 + mes;
-            var deLaClase = db.RegulatoryFiles.Where(f => !f.IsDeleted && f.Kind == clase && f.BureauCode == central);
+            var deLaClase = db.RegulatoryFiles.Where(f => !f.IsDeleted && f.Kind == clase && f.BureauCode == central && f.FormatCode == formato);
             var cargado = await deLaClase.Where(f => f.Status == RegulatoryFileStatus.Uploaded
                                                      && (f.PeriodYear * 12 + f.PeriodMonth == periodo
                                                          || (clase == RegulatoryFileKind.CreditBureau && f.PeriodYear * 12 + f.PeriodMonth > periodo)))
                 .OrderByDescending(f => f.PeriodYear).ThenByDescending(f => f.PeriodMonth).FirstOrDefaultAsync(ct);
             if (cargado is not null) return Falla(ErroresDeArchivosRegulatorios.YaCargado(cargado));
 
-            var prep = clase == RegulatoryFileKind.Sicses
-                ? await preparacion.SicsesAsync(anio, mes, ct)
-                : await preparacion.CentralAsync(central!, anio, mes, ct);
+            var prep = clase switch
+            {
+                RegulatoryFileKind.Sicses => await preparacion.SicsesAsync(anio, mes, ct),
+                RegulatoryFileKind.CreditBureau => await preparacion.CentralAsync(central!, anio, mes, ct),
+                _ => await preparacion.CaptacionesAsync(formato!, anio, definicion!.Anual ? null : mes, ct),
+            };
             if (prep.IsFailure) return Falla(prep.Error);
             var p = prep.Value;
             var aReconocer = p.AReconocer;
@@ -477,8 +516,11 @@ public sealed class GeneracionDeArchivoRegulatorio(
             {
                 // El número al final (T34): encabeza el nombre del archivo.
                 var numero = await numerador.AsignarAsync(LendingNumberKind.RegulatoryFile, string.Empty, ArchivosRegulatorios.Prefijo, ct);
-                nombre = string.Create(CultureInfo.InvariantCulture,
-                    $"{numero}_{(clase == RegulatoryFileKind.Sicses ? "SICSES" : central)}_{anio:0000}-{mes:00}_v{version}.txt");
+                var periodoDelNombre = definicion is { Anual: true }
+                    ? anio.ToString("0000", CultureInfo.InvariantCulture)
+                    : string.Create(CultureInfo.InvariantCulture, $"{anio:0000}-{mes:00}");
+                var clave = deCaptaciones ? formato!.ToUpperInvariant() : clase == RegulatoryFileKind.Sicses ? "SICSES" : central;
+                nombre = string.Create(CultureInfo.InvariantCulture, $"{numero}_{clave}_{periodoDelNombre}_v{version}.txt");
                 // El adjunto de módulo, antes de la fila: si el almacén falla no queda un archivo «generado» que nadie puede bajar.
                 var subida = await sender.Send(new UploadAttachmentCommand(AdjuntosDeModulo.ArchivoRegulatorio, publicId, nombre, "text/plain",
                     p.Escritura.Contenido!), ct);
@@ -493,11 +535,11 @@ public sealed class GeneracionDeArchivoRegulatorio(
             var inconsistencias = p.Inconsistencias;
             var excluidos = p.Excluidos;
             var archivo = RegulatoryFile.Nueva(clase, central, (short)anio, (byte)mes, version, p.Layout.Code, p.Layout.Layout.HasUnverifiedFields,
-                p.Sicses?.Cierre.Id, p.Sicses?.Cierre.ObligatoryModelUnavailable ?? false,
+                p.Sicses?.Cierre.Id ?? p.DeCaptaciones?.CierreMensualId, p.Sicses?.Cierre.ObligatoryModelUnavailable ?? false,
                 JsonSerializer.Serialize(inconsistencias, ArchivosRegulatorios.Json), p.Bloqueantes,
                 inconsistencias.Count(i => i.Severity == nameof(SeveridadDeInconsistencia.Warning)),
                 clase == RegulatoryFileKind.CreditBureau ? JsonSerializer.Serialize(excluidos, ArchivosRegulatorios.Json) : null, excluidos.Count, p.Lineas,
-                JsonSerializer.Serialize(Totales(p), ArchivosRegulatorios.Json), nombre, p.Escritura.Sha256, adjunto, usuario, ahora);
+                JsonSerializer.Serialize(Totales(p), ArchivosRegulatorios.Json), nombre, p.Escritura.Sha256, adjunto, usuario, ahora, formato);
             archivo.PublicId = publicId;
             db.RegulatoryFiles.Add(archivo);
             await db.SaveChangesAsync(ct);
@@ -531,7 +573,7 @@ public sealed class GeneracionDeArchivoRegulatorio(
 
             await auditoria.EmitirArchivoRegulatorioGeneradoAsync(archivo.PublicId, new
             {
-                kind = clase.ToString(), bureau = central, period = string.Create(CultureInfo.InvariantCulture, $"{anio:0000}-{mes:00}"), version,
+                kind = clase.ToString(), bureau = central, formatCode = formato, period = string.Create(CultureInfo.InvariantCulture, $"{anio:0000}-{mes:00}"), version,
                 status = archivo.Status.ToString(), layout = p.Layout.Code, monthlyClose = p.Sicses?.Cierre.PublicId, rows = p.Lineas,
                 blocking = p.Bloqueantes, warnings = aReconocer.Select(a => a.Code).Distinct().ToList(), acknowledged = reconocerAdvertencias,
                 excluded = excluidos.Count, fileName = nombre, sha256 = archivo.FileSha256,
@@ -544,6 +586,7 @@ public sealed class GeneracionDeArchivoRegulatorio(
     private static Dictionary<string, object?> Totales(ArchivoRegulatorioPreparado p)
     {
         if (p.Sicses is { } s) return new Dictionary<string, object?>(s.Totales, StringComparer.Ordinal) { ["Plazo.Limite"] = s.Plazo?.Limite };
+        if (p.DeCaptaciones is { } d) return new Dictionary<string, object?>(d.Totales, StringComparer.Ordinal) { ["Plazo.Limite"] = d.Plazo?.Limite };
         var c = p.DeCentral!;
         var incluidos = c.Titulares.Where(t => t.Incluido).ToList();
         return new Dictionary<string, object?>(StringComparer.Ordinal)
@@ -642,7 +685,8 @@ public sealed record ListRegulatoryFilesQuery(
     int? Month = null,
     RegulatoryFileStatus? Status = null,
     int Page = 1,
-    int PageSize = 20) : IRequest<Result<PagedResult<RegulatoryFileDto>>>;
+    int PageSize = 20,
+    string? Format = null) : IRequest<Result<PagedResult<RegulatoryFileDto>>>;
 
 public sealed class ListRegulatoryFilesQueryValidator : AbstractValidator<ListRegulatoryFilesQuery>
 {
@@ -663,6 +707,11 @@ public sealed class ListRegulatoryFilesQueryHandler(IApplicationDbContext db) : 
         {
             var central = request.Bureau.Trim().ToUpperInvariant();
             consulta = consulta.Where(f => f.BureauCode == central);
+        }
+        if (!string.IsNullOrWhiteSpace(request.Format))
+        {
+            var formato = request.Format.Trim().ToLowerInvariant();
+            consulta = consulta.Where(f => f.FormatCode == formato);
         }
         if (request.Year is { } y) consulta = consulta.Where(f => f.PeriodYear == y);
         if (request.Month is { } m) consulta = consulta.Where(f => f.PeriodMonth == m);

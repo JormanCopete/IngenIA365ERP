@@ -1,0 +1,284 @@
+{
+  "code": "EXOGENA-1020-v1",
+  "kind": "Exogenous",
+  "formatCode": "exogena-1020",
+  "bureauCode": null,
+  "version": "1",
+  "source": "Formato 1020 versión 8 de información exógena, inversiones en certificados de depósito y títulos, Resolución DIAN 000162 de 2023 art. 4 (compilada en la Resolución 227 de 2025, art. 1.3.3.1.2), año gravable 2024 y siguientes (por cotejar)",
+  "validFrom": "2024-01-01",
+  "validTo": null,
+  "fileKind": "Delimited",
+  "delimiter": ";",
+  "encoding": "utf-8",
+  "lineEnding": "CRLF",
+  "normalizeText": true,
+  "records": [
+    {
+      "code": "Detail",
+      "repeat": "PorTitularTituloYMes",
+      "fields": [
+        {
+          "number": 1,
+          "name": "Tipo de documento",
+          "order": 1,
+          "length": 2,
+          "kind": "N",
+          "format": "Integer",
+          "required": true,
+          "path": "Persona.TipoDeDocumento",
+          "allowedValues": [
+            "11",
+            "12",
+            "13",
+            "21",
+            "22",
+            "31",
+            "41",
+            "42",
+            "47",
+            "48",
+            "50"
+          ],
+          "verified": false
+        },
+        {
+          "number": 2,
+          "name": "Número de identificación",
+          "order": 2,
+          "length": 20,
+          "kind": "A",
+          "format": "Text",
+          "required": true,
+          "path": "Persona.NumeroDeIdentificacion",
+          "verified": false
+        },
+        {
+          "number": 3,
+          "name": "Primer apellido",
+          "order": 3,
+          "length": 60,
+          "kind": "A",
+          "format": "Text",
+          "required": false,
+          "path": "Persona.PrimerApellido",
+          "verified": false
+        },
+        {
+          "number": 4,
+          "name": "Segundo apellido",
+          "order": 4,
+          "length": 60,
+          "kind": "A",
+          "format": "Text",
+          "required": false,
+          "path": "Persona.SegundoApellido",
+          "verified": false
+        },
+        {
+          "number": 5,
+          "name": "Primer nombre",
+          "order": 5,
+          "length": 60,
+          "kind": "A",
+          "format": "Text",
+          "required": false,
+          "path": "Persona.PrimerNombre",
+          "verified": false
+        },
+        {
+          "number": 6,
+          "name": "Otros nombres",
+          "order": 6,
+          "length": 60,
+          "kind": "A",
+          "format": "Text",
+          "required": false,
+          "path": "Persona.OtrosNombres",
+          "verified": false
+        },
+        {
+          "number": 7,
+          "name": "Razón social",
+          "order": 7,
+          "length": 450,
+          "kind": "A",
+          "format": "Text",
+          "required": false,
+          "path": "Persona.RazonSocial",
+          "verified": false
+        },
+        {
+          "number": 8,
+          "name": "Dirección",
+          "order": 8,
+          "length": 200,
+          "kind": "A",
+          "format": "Text",
+          "required": false,
+          "path": "Persona.Direccion",
+          "verified": false
+        },
+        {
+          "number": 9,
+          "name": "Código del departamento",
+          "order": 9,
+          "length": 2,
+          "kind": "A",
+          "format": "Text",
+          "required": false,
+          "path": "Persona.CodigoDeDepartamento",
+          "verified": false
+        },
+        {
+          "number": 10,
+          "name": "Código del municipio",
+          "order": 10,
+          "length": 3,
+          "kind": "A",
+          "format": "Text",
+          "required": false,
+          "path": "Persona.CodigoDeMunicipio",
+          "verified": false
+        },
+        {
+          "number": 11,
+          "name": "País",
+          "order": 11,
+          "length": 4,
+          "kind": "A",
+          "format": "Text",
+          "required": true,
+          "path": "Persona.Pais",
+          "verified": false
+        },
+        {
+          "number": 12,
+          "name": "Número del certificado o título",
+          "order": 12,
+          "length": 30,
+          "kind": "A",
+          "format": "Text",
+          "required": true,
+          "path": "Titulo.Numero",
+          "verified": false
+        },
+        {
+          "number": 13,
+          "name": "Tipo de título",
+          "order": 13,
+          "length": 2,
+          "kind": "N",
+          "format": "Integer",
+          "required": true,
+          "path": "Titulo.Tipo",
+          "allowedValues": [
+            "1",
+            "2"
+          ],
+          "verified": false
+        },
+        {
+          "number": 14,
+          "name": "Tipo de movimiento",
+          "order": 14,
+          "length": 1,
+          "kind": "N",
+          "format": "Integer",
+          "required": true,
+          "path": "Titulo.TipoDeMovimiento",
+          "allowedValues": [
+            "1",
+            "2",
+            "3",
+            "4"
+          ],
+          "verified": false
+        },
+        {
+          "number": 15,
+          "name": "Mes",
+          "order": 15,
+          "length": 2,
+          "kind": "N",
+          "format": "Integer",
+          "required": true,
+          "path": "Titulo.Mes",
+          "verified": false
+        },
+        {
+          "number": 16,
+          "name": "Saldo inicial",
+          "order": 16,
+          "length": 20,
+          "kind": "N",
+          "format": "Integer",
+          "required": true,
+          "path": "Titulo.SaldoInicial",
+          "verified": false
+        },
+        {
+          "number": 17,
+          "name": "Valor de la inversión",
+          "order": 17,
+          "length": 20,
+          "kind": "N",
+          "format": "Integer",
+          "required": true,
+          "path": "Titulo.ValorDeLaInversion",
+          "verified": false
+        },
+        {
+          "number": 18,
+          "name": "Intereses causados",
+          "order": 18,
+          "length": 20,
+          "kind": "N",
+          "format": "Integer",
+          "required": true,
+          "path": "Titulo.InteresesCausados",
+          "verified": false
+        },
+        {
+          "number": 19,
+          "name": "Intereses pagados",
+          "order": 19,
+          "length": 20,
+          "kind": "N",
+          "format": "Integer",
+          "required": true,
+          "path": "Titulo.InteresesPagados",
+          "verified": false
+        },
+        {
+          "number": 20,
+          "name": "Retención en la fuente practicada",
+          "order": 20,
+          "length": 20,
+          "kind": "N",
+          "format": "Integer",
+          "required": true,
+          "path": "Titulo.Retencion",
+          "verified": false
+        },
+        {
+          "number": 21,
+          "name": "Saldo final",
+          "order": 21,
+          "length": 20,
+          "kind": "N",
+          "format": "Integer",
+          "required": true,
+          "path": "Titulo.SaldoFinal",
+          "verified": false
+        }
+      ]
+    }
+  ],
+  "notes": [
+    "Campos reconstruidos de la fuente pública citada en «source»; cada uno lleva verified=false hasta que la contadora lo coteje con el instructivo vigente y un archivo aceptado por el validador (P8, P9). Cotejar es publicar una versión nueva con verified=true, verifiedBy, verifiedOn y verifiedAgainst.",
+    "Las rutas (path) son el vocabulario que entrega la proyección de captaciones de Application; cambiar una ruta es cambiar la proyección y el layout a la vez.",
+    "El archivo es la entrada del prevalidador de la DIAN (que arma el XML): valores en pesos enteros, separados por punto y coma; los códigos de tipo de documento son los de la tabla de la DIAN.",
+    "Se informa por período mensual sin importar la cuantía: una fila por persona, CDAT y mes del año en que estuvo vigente o se emitió, renovó o canceló. Con cotitulares, cada uno con su proporción (la del certificado tributario); los intereses pagados y la retención, los acumulados tributarios ya repartidos.",
+    "Tipo de título: 2 CDAT (1 CDT no aplica). Tipo de movimiento: 1 emisión, 2 renovación o prórroga, 3 cancelación o redención, 4 vigente sin movimiento (por cotejar)."
+  ]
+}
