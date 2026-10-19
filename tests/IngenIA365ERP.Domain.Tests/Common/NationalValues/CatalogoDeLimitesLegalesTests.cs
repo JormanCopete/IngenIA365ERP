@@ -145,9 +145,10 @@ public class CatalogoDeLimitesLegalesTests
     [Fact]
     public void Los_valores_nacionales_de_captaciones_llegan_con_su_entrega()
     {
-        // Feature 014 (T016; research E06): con la vigente (K6b) se rechazan; con su entrega se admiten, con su forma.
-        CodigosDeValorNacional.Validar("COMPONENTE_INFLACIONARIO", "2025", UnidadDeValorNacional.Fraccion, 0.5543m)
+        // Feature 014 (T016; research E06): antes de su entrega se rechazan; con su entrega (y con la vigente, K11 desde el cierre de la 014) se admiten.
+        CodigosDeValorNacional.Validar("COMPONENTE_INFLACIONARIO", "2025", UnidadDeValorNacional.Fraccion, 0.5543m, IngenIA365ERP.Domain.Lending.EntregaDeCartera.K6b)
             .Should().ContainSingle(r => r.Motivo == MotivoDeRechazoDeValorNacional.CodigoNoDisponible);
+        CodigosDeValorNacional.Validar("COMPONENTE_INFLACIONARIO", "2025", UnidadDeValorNacional.Fraccion, 0.5543m).Should().BeEmpty();
         CodigosDeValorNacional.Validar("COMPONENTE_INFLACIONARIO", "2025", UnidadDeValorNacional.Fraccion, 0.5543m, IngenIA365ERP.Domain.Lending.EntregaDeCartera.K8)
             .Should().BeEmpty();
         CodigosDeValorNacional.Validar("COMPONENTE_INFLACIONARIO", "AG-25", UnidadDeValorNacional.Fraccion, 0.5543m, IngenIA365ERP.Domain.Lending.EntregaDeCartera.K8)

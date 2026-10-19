@@ -51,13 +51,14 @@ public class CadaParametroRespetaLaEntregaDeSuModulo
     }
 
     [Fact]
-    public void Con_K6b_vigente_se_ofrecen_las_claves_hasta_K6b_y_ninguna_posterior()
+    public void Con_K11_vigente_se_ofrecen_las_claves_hasta_K11_y_ninguna_posterior()
     {
         // T0849: K2 habilita las claves Libranza.*; T0889 sube a K3 y T0910 le suma las Castigo.*; T0955 sube a K4 (US12): AvisoPrevio.* y
         // Cobranza.ToleranciaDePromesa se ofrecen; T0969 sube a K5 (fase 19, sin claves nuevas). Hoy ninguna clave es de K6a en adelante: si una llega
         // antes de su entrega, esta prueba la frena. T1024 (fase 22) sube a K6a: Riesgo.MesesFaltantesDiasFijos (T1027) se ofrece. T1058 (fase 23) sube
         // a K6b, la última entrega: la vivienda no trae claves nuevas (sus límites son valores nacionales LIMITE, T1051).
-        Assert.Equal(EntregaDeCartera.K6b, CatalogoDeCartera.EntregaVigente);
+        // La 014 (T225) sube de una vez a K11, la última entrega: las claves de captaciones (K7 a K11) se ofrecen.
+        Assert.Equal(EntregaDeCartera.K11, CatalogoDeCartera.EntregaVigente);
         Assert.Empty(ParametrosDeCartera.Definiciones.Where(d => d.DisponibleDesde == (EntregaDeModulo)EntregaDeCartera.K6b));
         var vigente = CatalogoDeParametros.EntregaVigenteDe(EntregaDeModulo.LineaDeCartera);
 
@@ -65,7 +66,7 @@ public class CadaParametroRespetaLaEntregaDeSuModulo
         Assert.All(ofrecidas, d => Assert.True(d.DisponibleDesde <= vigente, $"{d.Clave} se ofrece antes de su entrega ({d.DisponibleDesde})."));
 
         var posteriores = ParametrosDeCartera.Definiciones.Where(d => d.DisponibleDesde > vigente).ToList();
-        Assert.All(posteriores, d => Assert.False(d.DisponibleEnLaEntrega(), $"{d.Clave} es de {d.DisponibleDesde} y se ofrece con K6b."));
+        Assert.All(posteriores, d => Assert.False(d.DisponibleEnLaEntrega(), $"{d.Clave} es de {d.DisponibleDesde} y se ofrece antes de su entrega."));
         var deK6a = ParametrosDeCartera.Definiciones.Where(d => d.DisponibleDesde == (EntregaDeModulo)EntregaDeCartera.K6a).ToList();
         Assert.Equal([ParametrosDeCartera.RiesgoMesesFaltantesDiasFijos], deK6a.Select(d => d.Clave));
         Assert.All(deK6a, d => Assert.True(d.DisponibleEnLaEntrega() && d.PendienteDeValidar is not null, $"{d.Clave} es de K6a, se ofrece y está pendiente de validar."));

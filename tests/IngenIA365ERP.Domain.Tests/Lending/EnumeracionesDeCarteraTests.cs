@@ -328,9 +328,9 @@ public class EnumeracionesDeCarteraTests
     {
         Enum.GetValues<EntregaDeCartera>().Select(e => (e.ToString(), (int)e)).Should().Equal(
             ("K1", 1), ("K2", 2), ("K3", 3), ("K4", 4), ("K5", 5), ("K6a", 6), ("K6b", 7),
-            // Feature 014 (T014; research E06): las de captaciones, al final; la vigente no cambia hasta que salga K7.
+            // Feature 014 (T014; research E06): las de captaciones, al final; salen juntas al cierre de la 014.
             ("K7", 8), ("K8", 9), ("K9", 10), ("K10", 11), ("K11", 12));
-        CatalogoDeCartera.EntregaVigente.Should().Be(EntregaDeCartera.K6b, "T0969 la subió a K5, T1024 (fase 22) a K6a y T1058 (fase 23) a K6b");
+        CatalogoDeCartera.EntregaVigente.Should().Be(EntregaDeCartera.K11, "T0969 la subió a K5, T1024 (fase 22) a K6a, T1058 (fase 23) a K6b y la 014 (T225) a K11");
     }
 
     [Fact]

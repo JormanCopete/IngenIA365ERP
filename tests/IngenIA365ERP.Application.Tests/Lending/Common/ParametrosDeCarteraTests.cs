@@ -181,12 +181,13 @@ public class ParametrosDeCarteraTests
     }
 
     [Fact]
-    public void Con_K6b_vigente_se_ofrecen_todas_las_claves_hasta_K6b()
+    public void Con_K11_vigente_se_ofrecen_todas_las_claves_hasta_K11()
     {
         // T0849: K2 habilita las claves Libranza.*; T0889 sube a K3 y T0910 le suma las Castigo.*; T0955 sube a K4 y T0969 a K5 (fase 19: el
         // extracto y el certificado tributario no traen claves nuevas); T1024 (fase 22) sube a K6a, con Riesgo.MesesFaltantesDiasFijos (T1027); T1058
         // (fase 23) sube a K6b, la última entrega, sin claves nuevas (los límites de vivienda son valores nacionales LIMITE, T1051).
-        CatalogoDeCartera.EntregaVigente.Should().Be(EntregaDeCartera.K6b);
+        // La 014 (T225) sube de una vez a K11: las claves de captaciones se ofrecen todas.
+        CatalogoDeCartera.EntregaVigente.Should().Be(EntregaDeCartera.K11);
         var posteriores = ParametrosDeCartera.Definiciones.Where(d => d.DisponibleDesde > (EntregaDeModulo)EntregaDeCartera.K6b).ToList();
 
         // Feature 014 (T017): las claves de captaciones y aportes existen desde ya con su entrega (K7 a K11) y no se ofrecen hasta que salga.
@@ -195,7 +196,7 @@ public class ParametrosDeCarteraTests
         // fase 17 (US14, T208, T209): 52 con el aviso previo de la inactividad y el plazo de las cuentas abandonadas; fase 18 (US15, T216): 62 con el
         // margen y la periodicidad del fondo de liquidez y las ocho del riesgo de liquidez.
         posteriores.Should().HaveCount(62).And.OnlyContain(d => d.DisponibleDesde >= (EntregaDeModulo)EntregaDeCartera.K7
-            && d.DisponibleDesde <= (EntregaDeModulo)EntregaDeCartera.K11);
+            && d.DisponibleDesde <= (EntregaDeModulo)EntregaDeCartera.K11).And.OnlyContain(d => d.DisponibleEnLaEntrega());
         ParametrosDeCartera.Definiciones.Where(d => d.DisponibleDesde == (EntregaDeModulo)EntregaDeCartera.K6b).Should().BeEmpty("la vivienda no trae claves");
         ParametrosDeCartera.Definiciones.Where(d => d.DisponibleDesde == (EntregaDeModulo)EntregaDeCartera.K6a).Select(d => d.Clave).Should()
             .Equal(ParametrosDeCartera.RiesgoMesesFaltantesDiasFijos);
@@ -213,8 +214,7 @@ public class ParametrosDeCarteraTests
         ParametrosDeCartera.Definiciones.Where(d => d.Clave.StartsWith("Libranza.", StringComparison.Ordinal)).Should().OnlyContain(d => d.DisponibleEnLaEntrega());
         ParametrosDeCartera.Definiciones.Where(d => d.Clave.StartsWith("Castigo.", StringComparison.Ordinal)).Should().HaveCount(3)
             .And.OnlyContain(d => d.DisponibleEnLaEntrega() && d.DisponibleDesde == (EntregaDeModulo)EntregaDeCartera.K3 && d.PendienteDeValidar != null);
-        posteriores.Should().OnlyContain(d => !d.DisponibleEnLaEntrega());
-        ParametrosDeCartera.Definiciones.Except(posteriores).Should().OnlyContain(d => d.DisponibleEnLaEntrega());
+        ParametrosDeCartera.Definiciones.Should().OnlyContain(d => d.DisponibleEnLaEntrega(), "K11 es la última entrega: no queda clave por ofrecer");
     }
 
     [Fact]
