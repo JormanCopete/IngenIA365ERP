@@ -138,6 +138,12 @@ public class LendingReportsEndpoints : ICarterModule
         // Feature 014, US14 (T209): los saldos no reclamados a una fecha (asOf), con datos del titular.
         group.MapVistaDeCartera(Application.Lending.Deposits.Unclaimed.UnclaimedReportQueryHandler.Vista,
             (f, _) => new Application.Lending.Deposits.Unclaimed.UnclaimedReportQuery(f));
+        // Feature 014, US15 (T216; adelanta de T219): el fondo de liquidez por clase y banda (asOf, sin titulares; alcance total) y los depósitos
+        // asegurados por ahorrador (asOf, con datos del titular).
+        group.MapVistaDeCartera(Application.Lending.Deposits.Liquidity.LiquidityFundReportQueryHandler.Vista,
+            (f, _) => new Application.Lending.Deposits.Liquidity.LiquidityFundReportQuery(f));
+        group.MapVistaDeCartera(Application.Lending.Deposits.Liquidity.InsuredDepositsReportQueryHandler.Vista,
+            (f, _) => new Application.Lending.Deposits.Liquidity.InsuredDepositsReportQuery(f));
     }
 
     private static int? Entero(IQueryCollection q, string clave) =>

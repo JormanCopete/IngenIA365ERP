@@ -129,6 +129,10 @@
                 <PermissionGate Required="Lending.Accounts.Read">
                     <NavLink href="/cartera/no-reclamados" class="nav-subitem">No reclamados</NavLink>
                 </PermissionGate>
+                @* US15 (T217): el fondo de liquidez, el riesgo de liquidez y lo constituido. *@
+                <PermissionGate Required="Lending.LiquidityFund.View">
+                    <NavLink href="/cartera/fondo-de-liquidez" class="nav-subitem">Fondo de liquidez</NavLink>
+                </PermissionGate>
                 @* Decisión del dueño del 2026-10-18 (D53): los niveles de aprobación de los movimientos que superan la atribución, por cooperativa. *@
                 <PermissionGate Required="Lending.Attributions.View">
                     <NavLink href="/cartera/captaciones/aprobaciones" class="nav-subitem">Aprobación de movimientos</NavLink>
