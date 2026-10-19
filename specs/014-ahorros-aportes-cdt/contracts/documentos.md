@@ -27,6 +27,7 @@ clases nuevas**, su contenido mínimo y qué reverso anula cada una.
 | 12 | `ContributionCertificate` | Constancia de aportes (FR-106) | a pedido | `CNA` | K7 |
 | 13 | `ContributionClearance` | Paz y salvo de aportes (FR-106) | a pedido | `PSA` | K7 |
 | 14 | `MembershipWithdrawalSettlement` | Liquidación del retiro del asociado (FR-076–FR-080) | **automático** al liquidar el retiro | `LRA` | K7 |
+| 15 | `GarnishmentResponse` | Respuesta al juzgado de un embargo, a nombre de la persona embargada (R23; **enmienda E176**) | **automático** en la transacción de la respuesta (la que registra la persona y la de «aportes inembargables» que nace con el oficio) | `RJZ` | K8 |
 
 Las clases de la 013 (`PaymentPlan` 1 … `TaxCertificate` 6) siguen siendo de créditos; el «extracto» y el «certificado
 tributario» de captaciones son clases **propias** (7 y 9), con su contenido y su prefijo.
@@ -88,7 +89,7 @@ la leyenda «certifica el saldo registrado al {D} con la información disponible
 
 ### 2.3 Certificado tributario anual (`DepositTaxCertificate`, FR-104, SC-016)
 
-Por **titular** y **año** terminado (`Lending.Document.YearNotClosed` si no):
+Por **titular** y **año** terminado (`Lending.Document.TaxYearNotClosed` si no, el de la 013; enmienda E171):
 
 | Bloque | Contenido |
 |---|---|
@@ -125,6 +126,11 @@ Leyenda destacada **«CDAT — NO NEGOCIABLE»** y «título de legitimación; n
 - El reverso de la constitución (fondeo reversado) **anula** el título (`Voided`).
 - Un título no se «reimprime para entregar» si está `Superseded`, `Settled` o `Voided`
   (`Lending.Document.VoidedCannotReissue`); sí se descarga para consulta.
+- **Enmienda E173**: sin firmante o con el almacén caído la operación sigue sin título
+  (`[Cartera.TituloDeCdatSinEmitir]`) y el pendiente se emite con `POST /api/lending/term-deposits/{id}/titles`
+  (`Lending.Documents.Issue`, con clave; devuelve el vigente si ya existe). Los CDAT **migrados** no reciben título al
+  activar: se emite por esa ruta. La prórroga del proceso diario emite el título sin persona (`IssuedByUserId` nulo,
+  evento con `ActorKind = Process`; E168).
 
 ### 2.6 Constancia de aportes (`ContributionCertificate`, FR-106)
 
@@ -164,9 +170,9 @@ clase:
 
 | Clase | Campos | Errores propios |
 |---|---|---|
-| `AccountStatement` | `accountPublicId`, `period: { from, to }` | `Lending.Document.PeriodInvalid` |
+| `AccountStatement` | `accountPublicId`, `period: { from, to }` | `Lending.Document.PeriodInvalid`, `Lending.Document.NotAccountHolder` (la persona no es titular ni cotitular de la cuenta; enmienda E170) |
 | `AccountBalanceCertificate` | `accountPublicId`, `cutoffDate`, `includeRestrictions?` | `Lending.Document.FutureDateNotAllowed` |
-| `DepositTaxCertificate` | `personPublicId`, `year` | `Lending.Document.YearNotClosed` |
+| `DepositTaxCertificate` | `personPublicId`, `year` | `Lending.Document.TaxYearNotClosed` (enmienda E171) |
 | `WithholdingCertificate` | `personPublicId`, `period` | `Lending.Document.PeriodInvalid` |
 | `TermDepositTitle` | `accountPublicId` (sólo descarga del vigente; la emisión es automática) | `Lending.Document.IssuedAutomatically` **(nuevo en contracts)** |
 | `ContributionCertificate` | `personPublicId`, `cutoffDate`, `includePermanentSavings?` | |
@@ -192,7 +198,7 @@ Anula, con el evento `Voided` y la operación causa:
 
 | Clase | Se anula si el reverso… |
 |---|---|
-| `AccountStatement` | toca una operación del período del extracto cuyo registro es anterior o igual a su `InformationCutoff` |
+| `AccountStatement` | toca una operación con fecha valor hasta el **fin** del período del extracto (una anterior cambia el saldo inicial que certificó; enmienda E179) cuyo registro es anterior o igual a su `InformationCutoff` |
 | `AccountBalanceCertificate` | toca una operación con fecha valor ≤ su fecha de corte y registro ≤ su `InformationCutoff` |
 | `DepositTaxCertificate` · `WithholdingCertificate` | toca una liquidación, una retención o un GMF del año (o del período) del certificado — US13: reversar una retención de diciembre anula el certificado tributario del año y el nuevo cambia |
 | `TermDepositTitle` | reversa la constitución, la prórroga o la renovación que lo emitió |
@@ -201,8 +207,9 @@ Anula, con el evento `Voided` y la operación causa:
 | `MembershipWithdrawalSettlement` | reversa el pago del cruce o la devolución (el retiro queda `ToRedo`, US10-4); la nueva liquidación emite otro |
 
 La anulación **manual** sigue la 013 (`POST /api/lending/documents/{id}/void`, `Lending.Documents.Void`, con motivo).
-Las **respuestas al juzgado** de un embargo no son documentos emitidos: son adjuntos del embargo con su registro
-(`api.md` §8).
+Las **respuestas al juzgado** de un embargo **sí** son documentos emitidos (clase `GarnishmentResponse` 15, enmienda E176),
+pero no cubren cuentas: el reverso de una operación **no** las anula (es lo que se le dijo al juzgado ese día). Sin
+firmante, la respuesta se registra sin documento con el aviso `Lending.Garnishment.ResponseDocumentNotIssued`.
 
 ---
 
@@ -233,4 +240,4 @@ paz y salvo de aportes negado con cuotas pendientes y sujeto a firmeza; e2e «Ca
 |---|---|
 | research §0.3 nombra las clases 7–14 sin prefijos | Prefijos de tres letras que no chocan con los de la 013 |
 | Título «nuevo» en cada prórroga (FR-068) frente a «misma cuenta, nueva versión» (R11) | Un documento `TermDepositTitle` por versión de condiciones; el número del título lleva el sufijo de la versión y el anterior queda `Superseded` |
-| Respuesta al juzgado «como documento» (R23) | Se registra como respuesta del embargo con su adjunto; no es una clase de `IssuedDocumentKind` (research no la incluye entre 7 y 14) |
+| Respuesta al juzgado «como documento» (R23) | **Enmienda E176**: sí es un documento emitido, clase `GarnishmentResponse` 15 (prefijo `RJZ`), y su Id queda en `LND_GarnishmentResponses.IssuedDocumentId` |

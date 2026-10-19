@@ -48,7 +48,7 @@ métodos de §3.1 y `VersionDelContrato`.
 | Regla | Detalle |
 |---|---|
 | Espacio de nombres | `IngenIA365ERP.Application.Common.Integration.Lending` para `IContratoDeCuentas`, sus DTO y sus enums (`ContratoDeCuentasDtos.cs`, `EnumsDelContratoDeCuentas.cs`). `IConsultaDeAportes` **se muda** aquí desde `…Integration.Savings` (R20); la carpeta `Savings` desaparece con el retiro de lo heredado. |
-| Implementaciones | `ContratoDeCuentasSinActivar` (espacio del puerto, registrada hasta que nace el código de K7) y `Application/Lending/Integration/ContratoDeCuentasDeCartera` (la real). Responden por cooperativa según `LND_Setup.ContributionsActivationDate` y `.DepositsActivationDate`. |
+| Implementaciones | `ContratoDeCuentasSinActivar` (en `Application/Lending/Integration`, no en el espacio del puerto: lee la naturaleza de la cuenta por su `PublicId` para responder con el código de esa naturaleza; enmienda E22) y `Application/Lending/Integration/ContratoDeCuentasDeCartera` (la real). Responden por cooperativa según `LND_Setup.ContributionsActivationDate` y `.DepositsActivationDate`. |
 | Idioma | Tipo de puerto, DTO y enum en español; propiedades y valores en inglés, idénticos a los del dominio (`ConceptoDeCuenta.Principal` ↔ `MemberAccountConcept.Principal`). Salida con `Dto`, entrada sin sufijo. |
 | Identificadores | Sólo `PublicId` y números visibles. Ningún Id interno sale. |
 | Sin alcance de Cartera | El puerto no aplica oficina ni línea: lo autoriza el permiso del módulo que llama (FR-004). **Sí** comprueba sobre el usuario que actúa las atribuciones con monto de `api.md` §1.6 (`Lending.Accounts.Withdraw`, `.Deposit`) por `IPermissionChecker`, como la 013 hace con `Payments.BackdateBeforeClose`. |
@@ -149,8 +149,10 @@ Pasos de `ConsignarAsync` (los demás que escriben siguen el mismo orden):
 4. **Activación de la naturaleza** de cada cuenta: sin ella, `Lending.Savings.NotActivated` o
    `Lending.Contributions.NotActivated` (§3.13).
 5. **Registro** del participante (§3.3).
-6. **Validación previa contable**, fuera del cerrojo (`IContabilidadParaCartera.EvaluarAsync`): en el contrato
-   **nunca bloquea**; sella `PrevalidationOutcome` y alerta `Cartera.HechoNoContabilizable` (enmienda A8, D23).
+6. **Validación previa contable**, fuera del cerrojo (`IContabilidadParaCartera.EvaluarAsync`): rige A8 de la 013
+   «igual que los créditos» (enmienda E108, D23): con `Contabilidad.FaltaDeRegla = Bloquear` el contrato **rechaza** con
+   `Lending.Prevalidation.NotPostable`; con `Advertir` aplica, sella `PrevalidationOutcome` y alerta
+   `Cartera.HechoNoContabilizable`.
 7. **Cerrojo** (`CerrojoDeCartera`, R08) en una sola pasada por todo el lote, orden fijo **setup → persona → crédito
    → cuenta**, por `Id`; las operaciones esperan (`FOR UPDATE` / `UPDLOCK, ROWLOCK, HOLDLOCK`).
 8. **Idempotencia** bajo el cerrojo: único `(CollectorCode, IdempotencyKey)` en `LND_MemberAccountOperations` con
@@ -417,6 +419,8 @@ Si Recaudo no confirma, el débito tampoco queda. Validaciones, en este orden (c
 
 `CloseAccount = true` liquida a la fecha (interés, retención), cobra GMF y cargos, retira **todo** el disponible y
 deja la cuenta `Closed`; se niega con bloqueos, embargos o canje pendiente (`Lending.Savings.CloseBlocked`).
+**Enmienda E78/E99**: no está construido; por el contrato responde `Lending.Savings.DeliveryNotAvailable` y la cancelación
+se hace por la ruta de la Cartera (`POST /api/lending/accounts/{id}/close`) hasta que exista Recaudo.
 
 ### 3.10 Trasladar — `TrasladarAsync`
 
@@ -521,7 +525,11 @@ hasta el corte ya debe estar en la carga (`Lending.Savings.BeforeCutoff`).
 | `Lending.Savings.ReversalOfReversal` · `.ReversalOwnedByCollector` | reversar | — |
 | `Lending.Contributions.ParticipationLimitExceeded` · `.NotWithdrawable` | consignar, retirar | — |
 | `Lending.TermDeposit.FundingAmountMismatch` · `.NotMatured` | consignar, retirar | — |
-| Avisos (no rechazan): `Lending.Prevalidation.NotPostable`, `.NoResponse`, `Lending.Savings.Overdrawn` | escrituras | informar |
+| `Lending.Prevalidation.NotPostable` | escrituras, con `Contabilidad.FaltaDeRegla = Bloquear` (enmienda E108) | completar la matriz |
+| `Lending.TermDeposit.NoAdditionalDeposits` | consignar en un CDAT ya constituido (enmienda E130) | — |
+| `Lending.Contractual.FreeDepositNotAllowed` · `.WithdrawalNotAllowed` | consignar libre o retirar de un contractual (enmienda E144) | consignar por cuotas |
+| `Lending.Savings.MembershipWithdrawalInProgress` | consignar con un retiro del asociado aprobado, liquidado o por rehacer (enmienda E86) | — |
+| Avisos (no rechazan): `Lending.Prevalidation.NotPostable` y `.NoResponse` con `Advertir`, `Lending.Savings.Overdrawn` | escrituras | informar |
 
 ### 3.15 Auditoría
 

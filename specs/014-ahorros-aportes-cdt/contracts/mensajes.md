@@ -42,7 +42,7 @@ contabilidad no esté iniciada**); **Comp.** = tipo de comprobante por defecto d
 | 4 | `TrasladoEntreCuentasAplicado` | TRC | Business | no | `Confirmation` | Traslado entre cuentas (contrato o pantalla) | EnLinea | MA | K7 |
 | 5 | `GmfRetenido` | GMF | Business | sí | `Confirmation` (acompañante) | Acompaña a la disposición que lo genera (FR-053, FR-066) | el del principal | el del principal | K8 |
 | 6 | `InteresDeCaptacionCausado` | ICC | Business | sí | `Confirmation:{parte:N}` | Parte de la tanda del paso de captaciones del ciclo diario, o de la puesta al día de una operación | PorLotes resumido, `FinDeCausacion` | CC | K8 |
-| 7 | `AjusteDeCausacionDeCaptacion` | AJC | Business | sí | `Confirmation` (acompañante) · `Confirmation:{parte:N}` | Acompaña a la operación fechada atrás (FR-062) o a la redención/reliquidación; o parte de una corrección del proceso | el del principal; en la corrida, PorLotes resumido | CC | K8 |
+| 7 | `AjusteDeCausacionDeCaptacion` | AJC | Business | sí | `Confirmation` · `Confirmation:{parte:N}` | Sale **aparte** de la operación fechada atrás (FR-062), con el mismo origen y su propio comprobante, causa `ValueDatedOperation` y el hecho principal en `causeFact` (enmienda E96); o parte de una corrección del proceso | el de la operación; en la corrida, PorLotes resumido | CC | K8 |
 | 8 | `InteresDeCaptacionLiquidado` | ILQ | Business | sí | `Confirmation:{parte:N}` · `Confirmation` | Parte de la liquidación periódica del ciclo diario; o la liquidación manual (`SettleAccountInterestCommand`) | PorLotes resumido si la emite el proceso; EnLinea si la emite una operación | CC | K8 |
 | 9 | `RetencionPracticada` | RTF | Business | sí | `Confirmation` (acompañante) · `Confirmation:{parte:N}` | Acompaña al pago o abono de intereses (CDAT, cancelación, prórroga, redención) o va en la parte de la liquidación (FR-063) | el del principal | el del principal | K8 |
 | 10 | `CdatConstituido` | CDC | Business | no | `Confirmation` | Fondeo del CDAT (consignación exacta o traslado) | EnLinea | TD | K9 |
@@ -61,7 +61,7 @@ contabilidad no esté iniciada**); **Comp.** = tipo de comprobante por defecto d
 | 23 | `ExcedentesDistribuidos` | EXD | Business | no | `Confirmation` | Ídem (FR-046) | EnLinea | AO | K10 |
 | 24 | `AportesAmortizados` | AMZ | Business | no | `Confirmation` | Amortización o readquisición (FR-047) | EnLinea | AO | K10 |
 | 25 | `CruceAlRetiroAplicado` | CRR | Business | no | `Confirmation` | Liquidación del retiro del asociado: el débito de aportes y ahorros que paga los créditos (FR-077) | EnLinea | RA | K7 |
-| 26 | `PerdidaAplicadaAlRetiro` | PDR | Business | no | `Confirmation` (acompañante) | Acompaña al cruce cuando se descuentan pérdidas (FR-078) | el del principal | RA | K7 |
+| 26 | `PerdidaAplicadaAlRetiro` | PDR | Business | no | `Confirmation` | Va **solo**, en su propia operación `InternalOffset` sin crédito, antes del cruce (puede haber pérdida sin cruce; enmienda E68) | EnLinea | RA | K7 |
 | 27 | `DevolucionOrdenada` | DVO | Business | sí | `Confirmation` | Devolución del retiro, devolución sin retiro, entrega a beneficiarios, pago de no reclamados (FR-079, FR-083) | EnLinea | RA | K7 |
 | 28 | `DevolucionGirada` | DVG | Informational | no | `Confirmation:{orden:N}` | Consumo de `ResultadoDelGiro` `Disbursed` de una orden de captaciones | Always, con recibo | — | K7 |
 | 29 | `SaldoTrasladadoANoReclamados` | SNR | Business | sí | `Confirmation` | Traslado a no reclamados (FR-081) | EnLinea | MA | K10 |
@@ -133,7 +133,7 @@ El origen de un mensaje es la operación o el documento de la Cartera que produc
 | `AssemblyDistribution` | `RevalorizacionDeAportesAplicada`, `ExcedentesDistribuidos` o `AportesAmortizados` (+ órdenes si el excedente se paga) |
 | `UnclaimedTransfer` | `SaldoTrasladadoANoReclamados` |
 | `GarnishmentConsignment` | `EmbargoConsignado` + la orden (`GarnishmentConsignment`) |
-| `AccountingFactPart` del paso de captaciones | por parte: `InteresDeCaptacionCausado`, `InteresDeCaptacionLiquidado` y `RetencionPracticada` (liquidación periódica), `AjusteDeCausacionDeCaptacion` (corrección); por cuenta (`Confirmation:{cuenta:N}`): `CaptacionReclasificada` (inactividad, plazo) |
+| `AccountingFactPart` del paso de captaciones | por parte: `InteresDeCaptacionCausado`, `AjusteDeCausacionDeCaptacion` (corrección); por cuenta (`Confirmation:{cuenta:N}`): `CaptacionReclasificada` (inactividad, plazo). La liquidación periódica **no** va por partes: cada liquidación es su operación `InterestSettlement` (`LQI-`) y emite `InteresDeCaptacionLiquidado` (+ `RetencionPracticada`) como una unidad, por lotes resumido si la emite el proceso (enmienda E98) |
 | `DisbursementOrder` (captaciones) | `OrdenDeGiroEmitida` v2; `AnulacionDeOrdenDeGiro` v1 |
 | `DepositsActivation` · `DepositsMigrationLoad` | `CaptacionesActivadas` · `CargaDeCaptacionesAplicada` |
 | `PayrollDeductionFile` (grupo con cuentas) | `DescuentosPorPagaduria` v2 |
@@ -151,9 +151,13 @@ El origen de un mensaje es la operación o el documento de la Cartera que produc
 | `CdatConstituido` | `GmfRetenido` |
 | `CdatProrrogado` · `CdatRenovado` | `RetencionPracticada`, `GmfRetenido`, `CaptacionReclasificada` |
 | `CdatRedimido` · `CdatCancelado` | `RetencionPracticada`, `PenalidadAplicada`, `GmfRetenido`, `AjusteDeCausacionDeCaptacion` |
-| `CruceAlRetiroAplicado` | `PerdidaAplicadaAlRetiro`; desde D45 (2026-10-18) también el `PagoAplicado` de su crédito y los acompañantes de éste (`AnticipoRecibido`, `CobroDeInteresEnSuspenso`, `RecuperacionDeCastigada`, `SaldoAFavorReconocido`, `AjusteDeCausacionPorFechaValor`) |
-| `BonificacionReconocida` | `PenalidadAplicada` (no aplica junto: uno u otro según cumplimiento) |
-| `OperacionDeCuentaReversada` | `AjusteDeCausacionDeCaptacion` |
+| `CruceAlRetiroAplicado` | desde D45 (2026-10-18) el `PagoAplicado` de su crédito y los acompañantes de éste; `PerdidaAplicadaAlRetiro` ya no es acompañante (va en su propia operación, enmienda E68). Antes de D45: también el `PagoAplicado` de su crédito y los acompañantes de éste (`AnticipoRecibido`, `CobroDeInteresEnSuspenso`, `RecuperacionDeCastigada`, `SaldoAFavorReconocido`, `AjusteDeCausacionPorFechaValor`) |
+| `BonificacionReconocida` | `PenalidadAplicada` y `RetencionPracticada` (enmienda E148) |
+| `OperacionDeCuentaReversada` | `AjusteDeCausacionDeCaptacion`; `PagoReversado` en el reverso del cruce al retiro (enmienda E110) |
+
+**Enmienda E96**: el `AjusteDeCausacionDeCaptacion` de una operación fechada en días ya causados (consignación, retiro,
+traslado, reverso) **no** viaja como acompañante: sale aparte, con el mismo origen y su propio comprobante. Las filas de
+esta tabla que lo nombran como acompañante quedan como referencia del diseño original.
 
 Los acompañantes sellan el modo de su principal y salen en **un** comprobante; el tipo lo da el principal. Lo que va
 **aparte** (`Confirmation:{tipoDeHecho:N}`): `CaptacionReclasificada` cuando la emite una operación ajena al CDAT
@@ -163,8 +167,8 @@ Los acompañantes sellan el modo de su principal y salen en **un** comprobante; 
 
 `LND_AccountingFactParts` se reutiliza: una parte = fecha × sucursal contable × tipo × tanda del paso de
 captaciones, con totales por combinación de dimensiones **y** la lista por cuenta. Rótulos **(nuevo en contracts)**:
-`CCA-{aaaammdd}-{nnnn}` (causación), `LQC-{aaaammdd}-{nnnn}` (liquidación y retención), `AJC-{aaaammdd}-{nnnn}`
-(corrección); la puesta al día de una operación, `ALD-{número de la operación}-{n}` (el de la 013). Con tandas de
+`CCA-{aaaammdd}-{nnnn}` (causación) y `AJC-{aaaammdd}-{nnnn}` (corrección); la liquidación y su retención no usan
+partes `LQC-`: la operación `InterestSettlement` (`LQI-`) ya es su origen (enmienda E98); la puesta al día de una operación, `ALD-{número de la operación}-{n}` (el de la 013). Con tandas de
 `Lending:Process:BatchSize` una parte no pasa de unos 150 KB.
 
 ---
@@ -276,10 +280,10 @@ fecha contable (la 013 §5, T36); `related` = el original en reversos y la orden
 | `PerdidaAplicadaAlRetiro` | `loss: { year, proportion, sessionItemPublicId }` | `[{ ContributionOrdinary, -120000 }]` |
 | `DevolucionOrdenada` | `orderKind` (`OrderKind`), `orderPublicId?`, `targetAccount?`, `payeePersonPublicId`, `source: MembershipWithdrawal\|ContributionRefund\|DeceasedDelivery\|UnclaimedPayment` | `[{ ContributionOrdinary, -1500000, reasonCode: "MembershipRefund" }]` |
 | `DevolucionGirada` | `orderPublicId`, `orderKind`, `outcome`, `treasuryReference`, `occurredOn` | sin importes (informativo) |
-| `SaldoTrasladadoANoReclamados` | `origin: Refund\|InactiveAccount\|Delivery`, `unclaimedPublicId` | `[{ Principal, -350000 }]` |
+| `SaldoTrasladadoANoReclamados` | `origin: UncashedRefund\|InactiveBalance\|UncashedPayout` (el nombre de `UnclaimedSource`, enmienda E198), `unclaimedPublicId` | `[{ Principal, -350000 }]` |
 | `EmbargoConsignado` | `garnishment: { publicId, officeReference, courtPersonPublicId, isAlimony }`, `orderPublicId` | `[{ Principal, -800000 }]` |
 | `OperacionDeCuentaReversada` | `original: OriginalFactRefV1` (obligatorio), `reason`, `initiatedBy: Collector\|Lending\|TreasuryResult\|LoanPaymentReversal`, `mirrors: [{ type, amounts[] }]` (un bloque por cada hecho de la unidad original) | espejo exacto con las dimensiones **vigentes** a la fecha contable (la 013 §9) |
-| `CaptacionesActivadas` | `nature`, `activationDate`, `loadPublicId?`, `accounts`, `openingTransactions` | — |
+| `CaptacionesActivadas` | `nature`, `activationDate`, `loadPublicId?`, `accountCount` (enmienda E26), `openingTransactions` | — |
 | `CargaDeCaptacionesAplicada` | `nature`, `loadPublicId`, `cutoffDate`, `parts[]`, `totalsByLineAndConcept[]` | — |
 
 **Signos**: positivo = la Cartera le debe más al titular (R03). Un hecho cuadra solo en Contabilidad
@@ -561,7 +565,7 @@ Los dobles de prueba (`TesoreriaDePrueba`, `RecaudadorDePrueba`) consumen las ve
 - **Valores cerrados**: `OrderKind` (§5.3); causas de `CaptacionReclasificada`, `AjusteDeCausacionDeCaptacion`,
   `CdatCancelado`, `OperacionDeCuentaReversada.initiatedBy`; `accountFlag` (`Standard`, `GmfExempt`, `Garnished`);
   `holderTaxProfile`; `FacturaDeCargoRegistrada.status`.
-- **Rótulos de parte**: `CCA-…`, `LQC-…`, `AJC-…`.
+- **Rótulos de parte**: `CCA-…`, `AJC-…` (`LQC-…` no nació, enmienda E98).
 - **Errores**: `Associate.WithdrawalDateMismatch`, `Lending.PayrollAgreement.ReceiptsVersionNotAdopted`,
   `Lending.PayrollFile.ConceptWithoutEquivalence`, `Lending.PayrollFile.EmployeeWithoutEquivalence`.
 

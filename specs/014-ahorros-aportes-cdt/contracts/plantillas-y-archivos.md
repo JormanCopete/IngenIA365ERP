@@ -48,10 +48,16 @@ Tipos de valor que suma este contrato **(nuevo en contracts)**:
 | 11 | `lending.gmf-exemptions` | `Datos` | parte | ídem | Deposit | K8 |
 | 12 | `lending.tax-year-to-date` | `Datos` | parte | ídem | Deposit | K8 |
 
+**Enmienda E115**: las plantillas 1 y 2 (`lending.contribution-lines`, `lending.deposit-lines`) **no se construyeron**: las
+líneas se crean por pantalla (`/cartera/lineas`) o por `POST /api/lending/lines/deposit` · `/contribution` (decisión
+pendiente del dueño, research §16.1). Las equivalencias de productos son una **parte** de la carga, `line-equivalences`
+(código heredado → línea nueva, con la clase en captaciones), que se carga primero; una cuenta trae `linea` o
+`codigoHeredado` y el código sin equivalencia responde `Lending.Migration.LineEquivalenceMissing`.
+
 Las partes 5 a 12 se importan en una **carga de migración por naturaleza** (`api.md` §16) con la ruta
 `/api/lending/deposits/migration/loads/{id}/parts/{part}`, donde `{part}` es la clave sin `lending.`
-(`member-accounts`, `member-account-parties`, `term-deposits`, `contribution-accounts`, `account-installments`,
-`holds-and-garnishments`, `gmf-exemptions`, `tax-year-to-date`). Importar a una carga una parte que no es de su
+(`line-equivalences` —enmienda E115—, `member-accounts`, `member-account-parties`, `term-deposits`, `contribution-accounts`,
+`account-installments`, `holds-and-garnishments`, `gmf-exemptions`, `tax-year-to-date`). Importar a una carga una parte que no es de su
 naturaleza responde `Lending.Migration.PartNotForNature`. Cada parte escribe su **tabla de preparación**
 `LND_Migration*Row` (research §0.2) y admite **varios archivos** (`replace=true` reemplaza la parte, como en la 013
 §5.1). Aplicar **sólo guarda la carga**: las cuentas nacen al activar, con una transacción de saldo inicial **por
@@ -64,7 +70,7 @@ concepto** fechada al corte y **sin hechos contables** (FR-114).
 | `term-deposits` | `LND_MigrationTermDepositRows` | si hay CDAT |
 | `contribution-accounts` | `LND_MigrationContributionAccountRows` | sí (aportes) |
 | `account-installments` | `LND_MigrationAccountInstallmentRows` | no |
-| `holds-and-garnishments` | `LND_MigrationAccountHoldRows` | no |
+| `holds-and-garnishments` | `LND_MigrationHoldRows` (research §20) | no |
 | `gmf-exemptions` | `LND_MigrationGmfExemptionRows` | no |
 | `tax-year-to-date` | `LND_MigrationTaxYearToDateRows` | no |
 
@@ -94,6 +100,8 @@ con el buscador común), los **soportes** de representación y de embargos como 
 ---
 
 ## 2. Líneas de captación (`lending.deposit-lines`, FR-028, FR-127, FR-128)
+
+> **No construida (enmienda E115).** Lo que sigue es el diseño, por si el dueño decide construirla (research §16.1, B).
 
 Escribe `LND_CreditLines` (`Nature = Deposit`), `LND_DepositLineVersions`, `LND_DepositLineRateTiers`,
 `LND_DepositLineCharges` y `LND_NegotiatedRateRules` con **las mismas reglas que el alta y la versión unitarias**
@@ -175,6 +183,8 @@ existente), `clase`. Una cuenta heredada sin equivalencia es error en la carga (
 cargar»). Escribe `LND_DepositLineLegacyEquivalences` **(nuevo en contracts)**.
 
 ## 3. Línea de aportes (`lending.contribution-lines`, FR-029)
+
+> **No construida (enmienda E115).** Lo que sigue es el diseño, por si el dueño decide construirla.
 
 Escribe `LND_CreditLines` (`Nature = Contribution`) y `LND_ContributionLineVersions`. Llave `codigo` + `vigenteDesde`.
 
@@ -284,7 +294,7 @@ Cuotas atrasadas al corte de aportes, permanente y contractual. Columnas: `cuent
 | Columna | Tipo | Oblig. | Reglas |
 |---|---|---|---|
 | `cuenta` | número de cuenta | sí | |
-| `tipo` | `Hold`, `Garnishment`, `Deceased` | sí | Sobre aportes sólo `Hold` con motivo `LoanCollateral` (los aportes no se embargan, FR-055) |
+| `tipo` | `Hold`, `Garnishment` (`Deceased` no se construyó: los fallecimientos migrados se registran por la ruta después de activar; enmiendas E166, E205) | sí | Sobre aportes sólo `Hold` con motivo `LoanCollateral` (los aportes no se embargan, FR-055) |
 | `motivo` | `HoldReason` | con `Hold` | `LoanCollateral` exige `credito` (número de un crédito vivo de la Cartera) |
 | `valor` · `total` | monto · sí/no | sí | |
 | `referencia` | texto 40 | sí | Oficio, orden interna o certificado de defunción |
@@ -453,10 +463,19 @@ sin cambios. Archivos JSON embebidos en `Application/Lending/Regulatory/Layouts/
 | `formatCode` (`api.md` §18.2) | Archivo | `kind` | Periodicidad | Proyección |
 |---|---|---|---|---|
 | `sicses-captaciones` | `sicses-captaciones-{v}-{aaaa-mm-dd}.json` | `DepositsSicses` | mensual | `ProyeccionSicsesCaptaciones`: una fila por cuenta viva al cierre del mes (titular a la fecha de corte, línea, clase, saldo por concepto, tasa, fechas, plazo de emisión, marcas), del cierre mensual de la Cartera |
-| `sicses-saldos-diarios` | `sicses-saldos-diarios-{v}-{aaaa-mm-dd}.json` | `DepositsSicses` | mensual con detalle diario | `ProyeccionSaldosDiarios`: por día del mes, saldos agregados por clase desde `LND_MemberAccountDailyPositions` (D6) |
+| `sicses-cotitulares` (9068; **enmienda E216**) | `sicses-cotitulares-{v}-{aaaa-mm-dd}.json` | `DepositsSicses` | mensual | titular y cotitular vigentes al corte (acompaña al 9026) |
+| `sicses-aportes` (9013; **enmienda E216**) | `sicses-aportes-{v}-{aaaa-mm-dd}.json` | `DepositsSicses` | mensual | por asociado, las cuatro clases (los mínimos dentro de los ordinarios), la cuota del mes, el promedio de los saldos diarios y el último pago |
+| `sicses-saldos-diarios` | `sicses-saldos-diarios-{v}-{aaaa-mm-dd}.json` | `DepositsSicses` | mensual con detalle diario | `ProyeccionSaldosDiarios`: el capital del ahorro a la vista al cierre de cada día del mes, leído del **libro** (enmienda E219; no de las posiciones diarias) |
 | `sicses-fondo-liquidez` | `sicses-fondo-liquidez-{v}-{aaaa-mm-dd}.json` | `DepositsSicses` | mensual | `ProyeccionFondoDeLiquidez`: la instantánea `LND_LiquidityFundSnapshots` del último día del mes y el constituido |
-| `exogena-1019` | `exogena-1019-{v}-{aaaa-mm-dd}.json` | `Exogenous` | anual | `ProyeccionExogena1019`: por titular y cuenta de ahorro, saldo al 31 de diciembre, rendimientos, retención (por la proporción de cada cotitular) |
-| `exogena-1020` | `exogena-1020-{v}-{aaaa-mm-dd}.json` | `Exogenous` | anual | `ProyeccionExogena1020`: por titular y CDAT (y lo que la contadora defina para aportes y permanente, P9), saldo al 31 de diciembre, rendimientos, retención |
+| `exogena-1019` | `exogena-1019-{v}-{aaaa-mm-dd}.json` | `Exogenous` | anual | `ProyeccionExogena1019`: por persona (titular principal y cotitulares como secundarios, **cada uno con las cifras de la cuenta completa**) y cuenta a la vista, contractual o permanente del año; saldo final y estadísticas de saldos diarios y de movimientos; umbral = UVT del año × `EXOGENA_1019_UMBRAL_UVT` (enmienda E219) |
+| `exogena-1020` | `exogena-1020-{v}-{aaaa-mm-dd}.json` | `Exogenous` | anual | `ProyeccionExogena1020`: por persona, CDAT y mes vigente del año (por período mensual sin importar la cuantía): saldos, inversión, intereses causados y pagados, retención, movimiento; los aportes van en el formato 1010, que no es de la Cartera (enmienda E219) |
+
+**Enmienda E216–E219**: son **siete** formatos (el F29, código 159, no se construye). Todos leen el **libro** con fecha valor
+hasta el corte y exigen el cierre mensual vigente de la Cartera del mes (SICSES) o de diciembre (exógena). Los JSON viven
+en `Application/Lending/Regulatory/Layouts/` con nombre `{formatCode}-{versión}-{aaaa-mm-dd}.json` (sin `bureauCode`); los del
+SICSES rigen desde **2026-01-01** (delimitados por `|`, montos con punto y dos decimales, fechas `dd/MM/yyyy`) y la exógena
+desde **2024-01-01** (por `;`, en pesos enteros, como entrada del prevalidador de la DIAN). El código contable del 9026 va
+vacío (la Cartera no conoce cuentas).
 
 ### 8.2 Cotejo
 
@@ -502,11 +521,12 @@ Forma (campos **ilustrativos**; la estructura real la aporta el dueño con el in
 ### 8.3 Validar, generar y marcar la carga
 
 Mecánica de la 013 §7.5 sobre `LND_RegulatoryFiles` con `Kind` `DepositsSicses` o `Exogenous` **(nuevos en
-contracts)** y `PeriodMonth` nulo en la exógena: validar no guarda; generar con bloqueantes deja una generación
+contracts)** y `FormatCode` (enmienda E217); la exógena se guarda con `PeriodMonth = 12` (enmienda E217: la columna sigue
+`NOT NULL`), y las versiones van **por formato**: validar no guarda; generar con bloqueantes deja una generación
 `Validated` sin archivo; regenerar crea la versión siguiente y deja la anterior `Superseded`; marcar cargado anota el
 radicado y el período ya no se regenera. La exógena exige el año cerrado (`Lending.Regulatory.PeriodNotClosed`); el
 SICSES mensual exige el cierre mensual de la Cartera del mes. Pruebas: archivos dorados
-`Application.Tests/Lending/Regulatory/Casos/*.esperado.txt` comparados byte a byte, regenerables sólo con
+`Application.Tests/Lending/Deposits/Reports/Casos/*.esperado.txt` (siete, enmienda E224) comparados byte a byte, regenerables sólo con
 `CARTERA_ESCRIBIR_ESPERADO=1`.
 
 ---

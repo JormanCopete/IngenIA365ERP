@@ -142,8 +142,8 @@ Precisiones:
 
 Datos fijos en `OperacionesDeCartera.Todas`, agregados al final (35 → **68**). Clase B = de negocio con comprobante;
 I = informativo con recibo y sin comprobante. El lado es el del importe positivo; un negativo lo invierte. Todos
-cuadran solos (`Accounting.LendingFact.Unbalanced` es defecto del emisor). `EntregaDelHecho` suma `K7 = 7`, `K8 = 8`,
-`K9 = 9`, `K10 = 10`, `K11 = 11` **(nuevo en contracts)**.
+cuadran solos (`Accounting.LendingFact.Unbalanced` es defecto del emisor). `EntregaDelHecho` suma `K7 = 8`, `K8 = 9`,
+`K9 = 10`, `K10 = 11`, `K11 = 12` **(enmienda E25)**: numera como `EntregaDeCartera`, donde el 7 ya es `K6b`.
 
 | # | Hecho | Corto | Clase | Débito | Crédito | Modo por defecto | Comp. | E |
 |---|---|---|---|---|---|---|---|---|
@@ -153,7 +153,7 @@ cuadran solos (`Accounting.LendingFact.Unbalanced` es defecto del emisor). `Entr
 | 4 | `TrasladoEntreCuentasAplicado` | TRC | B | rol de saldo de la cuenta origen (`DepositPrincipal`, `DepositInactivePrincipal` o `ContributionCapital`) | rol de saldo de la cuenta destino | EnLinea | MA | K7 |
 | 5 | `GmfRetenido` | GMF | B | `DepositPrincipal` | `GmfPayable` | el del principal | el del principal | K8 |
 | 6 | `InteresDeCaptacionCausado` | ICC | B | `InterestExpense` | `InterestPayable` | PorLotes resumido, `FinDeCausacion` | CC | K8 |
-| 7 | `AjusteDeCausacionDeCaptacion` | AJC | B | `InterestExpense` | `InterestPayable` (con signo: la reliquidación a la baja invierte) | el del principal; en la corrida, PorLotes resumido | CC | K8 |
+| 7 | `AjusteDeCausacionDeCaptacion` | AJC | B | `InterestExpense` | `InterestPayable` (con signo: la reliquidación a la baja invierte) | el de la operación que lo causa, pero **aparte**, con el mismo origen y su propio comprobante (enmienda E96); en la corrida, PorLotes resumido | CC | K8 |
 | 8 | `InteresDeCaptacionLiquidado` | ILQ | B | `InterestPayable` | `DepositPrincipal` (abono o capitalización en la misma cuenta) | PorLotes resumido si es del proceso; EnLinea si es manual | CC | K8 |
 | 9 | `RetencionPracticada` | RTF | B | `DepositPrincipal` (si el interés ya se abonó) o `InterestPayable` (si se paga desde el interés: CDAT, prórroga, redención) | `WithholdingPayable` | el del principal | el del principal | K8 |
 | 10 | `CdatConstituido` | CDC | B | `RecaudoPorAplicar` (Cla) o `DepositPrincipal` de la cuenta de ahorro origen | `DepositPrincipal` (`TermDeposit`, Plz) | EnLinea | TD | K9 |
@@ -164,7 +164,7 @@ cuadran solos (`Accounting.LendingFact.Unbalanced` es defecto del emisor). `Entr
 | 15 | `CdatCancelado` | CDX | B | ídem | ídem; pasa a la vista: `DepositPrincipal` (`Demand`) | EnLinea | TD | K9 |
 | 16 | `PenalidadAplicada` | PEN | B | `InterestPayable` o `DepositPrincipal` (descuento fijo sobre el capital) | `PenaltyIncome` | el del principal | el del principal | K9 |
 | 17 | `CaptacionReclasificada` | RCC | B | cada rol de saldo (`DepositPrincipal`, `DepositInactivePrincipal`, `InterestPayable`) con la combinación anterior | el mismo rol con la nueva (al ser de naturaleza crédito, el sentido se invierte respecto de la 013) | EnLinea si la emite una operación; PorLotes `FinDeCausacion` si la emite el proceso | CN | K8 |
-| 18 | `BonificacionReconocida` | BON | B | `BonusExpense` | `InterestPayable` (se abona con la liquidación al vencimiento) | EnLinea | CC | K9 |
+| 18 | `BonificacionReconocida` | BON | B | `BonusExpense` | `InterestPayable` (provisión) o `DepositPrincipal` / `DepositInactivePrincipal` (abono al cumplir), con acompañantes `PenalidadAplicada` y `RetencionPracticada` (enmienda E148) | EnLinea | CC | K9 |
 | 19 | `CargoDeCuentaCausado` | CGA | B | `DepositPrincipal` (cobrado) o `ChargeReceivable` (pendiente) | `ChargeIncome` (Mot `ChargeKind`) | EnLinea | MA | K8 |
 | 20 | `CargoPendienteCobrado` | CGP | B | `DepositPrincipal` | `ChargeReceivable` | el del principal | el del principal | K8 |
 | 21 | `CargoDeCuentaCondonado` | CGN | B | `ChargeIncome` | `ChargeReceivable` (pendiente) o `DepositPrincipal` (reintegro de uno cobrado) | EnLinea | MA | K8 |
@@ -172,7 +172,7 @@ cuadran solos (`Accounting.LendingFact.Unbalanced` es defecto del emisor). `Entr
 | 23 | `ExcedentesDistribuidos` | EXD | B | `SurplusFund` | `ContributionCapital`, `DepositPrincipal` o `RefundPayable` (Mot `SurplusPayment`) según el destino | EnLinea | AO | K10 |
 | 24 | `AportesAmortizados` | AMZ | B | `ContributionCapital` | `RefundPayable` (Mot `ContributionRefund`) | EnLinea | AO | K10 |
 | 25 | `CruceAlRetiroAplicado` | CRR | B | `ContributionCapital`, `DepositPrincipal`, `DepositInactivePrincipal` | `RecaudoPorAplicar` (Cla `OwnLoanPayoff`): lo salda el `PagoAplicado` de su crédito, que debita el mismo puente **en el mismo comprobante** (D45, 2026-10-18) | EnLinea | RA | K7 |
-| 26 | `PerdidaAplicadaAlRetiro` | PDR | B | `ContributionCapital` | `AbsorbedLoss` | el del principal | RA | K7 |
+| 26 | `PerdidaAplicadaAlRetiro` | PDR | B | `ContributionCapital` | `AbsorbedLoss` | EnLinea: va solo, en su propia operación `InternalOffset` sin crédito (puede haber pérdida sin cruce; enmienda E68) | RA | K7 |
 | 27 | `DevolucionOrdenada` | DVO | B | `ContributionCapital`, `DepositPrincipal`, `DepositInactivePrincipal` o `UnclaimedPayable` | `RefundPayable` (Mot `OrderKind`) o `DepositPrincipal` de otra cuenta (traslado) | EnLinea | RA | K7 |
 | 28 | `DevolucionGirada` | DVG | I | — | — | Always | — | K7 |
 | 29 | `SaldoTrasladadoANoReclamados` | SNR | B | `RefundPayable` (devolución no cobrada) o `DepositPrincipal`, `DepositInactivePrincipal` | `UnclaimedPayable` | EnLinea | MA | K10 |
@@ -219,9 +219,10 @@ Reglas que valen para todos (además de las de la 013 §2.1):
 La regla de la 013 §3.1 más las cinco columnas de §1.1. `ResolutorDeReglasDeCartera` y `MatrizVigenteDeCartera` no
 cambian de algoritmo: las dimensiones nuevas se comparan por igualdad cuando el rol las exige (o la condición las
 exige) y se ignoran cuando no. `ReglasDeLaMatrizDeCartera` suma: una dimensión exigida en `*` responde
-`Accounting.LendingRule.RequiredDimension` (el de la 013) con el nombre de la dimensión nueva; un valor fuera de su
-enum, `Accounting.LendingRule.InvalidDimensionValue` (el de la 013); una regla de rol de captación con
-`lineNature = Placement`, `Accounting.LendingRule.NatureMismatch` **(nuevo en contracts)**.
+`Accounting.LendingRule.DimensionRequired` (el de la 013) con el nombre de la dimensión nueva; un valor fuera de su
+enum, `Accounting.LendingRule.DimensionCodeUnknown` (el de la 013); una regla de rol de captación con
+`lineNature = Placement`, `Accounting.LendingRule.LineNatureMismatch` (422) **(enmienda E24**: `NatureMismatch` ya es, desde
+la 013, el **aviso** «la naturaleza de la cuenta no es la del rol»).
 
 ### 4.2 Plantilla con filas sugeridas (P1)
 
@@ -309,10 +310,15 @@ Cinco tipos nuevos en la semilla de `voucher-types.json` (`Usage = Module`, `Mod
 
 ## 7. Validación previa (D23, enmienda A8 de la 013)
 
-`IContabilidadParaCartera.EvaluarAsync` sin cambio de firma. **Bloquea sólo en las pantallas de la Cartera**
-(`Lending.Prevalidation.NotPostable` / `.NoResponse`: apertura con depósito por traslado, retiro por giro, traslado,
-cancelación, constitución y redención del CDAT, retiro del asociado, asamblea, entrega, embargo consignado); en el
-contrato de cuentas y en los procesos **aplica, sella y alerta** (`Cartera.HechoNoContabilizable`). US8-2.
+`IContabilidadParaCartera.EvaluarAsync` sin cambio de firma. **Rige A8 de la 013, «igual que los créditos»** (enmienda
+E108; D23): con `Contabilidad.FaltaDeRegla = Bloquear` bloquean la pantalla (422 `Lending.Prevalidation.NotPostable` /
+`.NoResponse`: retiro por giro, traslado, cancelación, constitución y redención del CDAT, retiro del asociado, asamblea,
+consignación al juzgado, entrega por fallecimiento, traslado y pago de no reclamados —E206—), el contrato de cuentas
+(rechazo con su código) y el proceso (la tanda no avanza, sus cuentas quedan en `LND_ProcessRunErrors` y sale
+`Cartera.HechoNoContabilizable`); con `Advertir` todo se aplica, se sella y se alerta. La pregunta se hace con **hechos
+representativos** (`HechosRepresentativosDeCaptaciones`) con las dimensiones vigentes de la cuenta, su titular, su número
+y la fecha de la operación. El texto original de US8-2 («el contrato y los procesos sólo sellan y alertan») quedó
+reemplazado (pregunta abierta en research §15.1).
 
 ## 8. Conciliación, cierre y correcciones (FR-100)
 
@@ -320,7 +326,8 @@ contrato de cuentas y en los procesos **aplica, sella y alerta** (`Cartera.Hecho
 
 `ConciliacionContableDeCartera` suma las familias `Captacion` y `Patrimonio` y los pasivos y puentes nuevos. Por
 **fecha contable**, la Cartera agrupa su saldo por combinación `(rol, línea, clase, plazo de emisión, clase de aporte,
-marca, oficina)` desde `LND_MemberAccountDailyPositions`; Contabilidad devuelve los saldos de las cuentas que la matriz
+marca, oficina)` sumando el **libro de cuentas** (`SaldosContablesDeCaptaciones`, enmienda E109; no las posiciones
+diarias), sin conciliar la retención ni el GMF por pagar (se concilian con la declaración, fuera de la Cartera); Contabilidad devuelve los saldos de las cuentas que la matriz
 vigente asigna a esas combinaciones (`SaldosDeCuentasMapeadasAsync`) y las une en **conjuntos** (unión-búsqueda
 combinación ↔ cuenta, la 013 §14). Cada diferencia se explica hecho por hecho: pendientes, en lote, rechazados, no
 pasados. `ReconciliationDto.sets[].family` admite `Captacion` y `Patrimonio`; `combinations[]` suma las dimensiones
@@ -339,7 +346,8 @@ de cuentas** con `SaldosDeCuentasMapeadasAsync` al corte. Las diferencias sólo 
   mes, sin SARC (R10). Emite el mismo `CierreDeCarteraRealizado`.
 - `Accounting.Period.LendingNotClosed` (sin reconocimiento) **cubre las captaciones**: Contabilidad no cierra un mes en
   que la Cartera, con aportes o captaciones activados con fecha ≤ fin de mes, no cerró (US8-3); el mensaje dice el día
-  de causación pendiente.
+  de causación pendiente (`data.depositAccrualPendingFrom`, enmienda E112: el día siguiente al último
+  `InteresDeCaptacionCausado` recibido en el mes; nada si ninguna cuenta ha causado).
 - Avisos reconocibles `Accounting.Period.LendingPending` (hechos de captaciones pendientes, en lote o rechazados) y
   `.LendingLoadWillExpire` (carga de captaciones por vencer), leyendo sólo `ACC_LendingPostings` y las entregas.
 
@@ -402,8 +410,8 @@ puente y acredita la cartera); `DevolucionOrdenada` 310505 · 500.000 y 210505 �
 `LosHechosDeCarteraNoLlevanCuentas` sobre `Contracts/Lending/Deposits`; casos de Application del constructor: cada
 hecho cuadra solo, el resumido de un día con 100.000 cuentas en un comprobante por sucursal, la condición de
 `IssueTermBand`, el débito automático que netea el puente; e2e «Captaciones e2e» (US8): matriz completa, consignar,
-causar un mes, liquidar, conciliación en cero; borrar una regla y ver el bloqueo en la pantalla y el sello en el
-contrato; cierre contable impedido sin el cierre de la Cartera; reverso desde Comprobantes rechazado.
+causar un mes, liquidar, conciliación en cero; borrar una regla y ver el bloqueo en la pantalla y en el contrato con
+`Bloquear` (enmienda E108); cierre contable impedido sin el cierre de la Cartera; reverso desde Comprobantes rechazado.
 
 ---
 
@@ -418,7 +426,7 @@ contrato; cierre contable impedido sin el cierre de la Cartera; reverso desde Co
 - Miembros `RolesDeCuentaDeCartera.ConceptosDeCaptacion`, `.RolDelConceptoDeCuenta`.
 - Tipos de comprobante: nombres de `MA`, `CC`, `TD`, `AO`, `RA` (los códigos los fija R19); tipo de documento cruce
   `CTA`.
-- Error `Accounting.LendingRule.NatureMismatch`; columna de plantilla `cuentaSugerida` y las cinco de dimensión.
+- Error `Accounting.LendingRule.LineNatureMismatch` (enmienda E24); columna de plantilla `cuentaSugerida` y las cinco de dimensión.
 - Motivos (`ReasonCode`) de `RefundPayable`: los `OrderKind` de `mensajes.md` §5.3; de `ChargeIncome`: los
   `ChargeKind`.
 

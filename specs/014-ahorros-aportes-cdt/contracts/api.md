@@ -6,6 +6,39 @@ y contractual) · K10 (asamblea, inactividad, fallecimiento) · K11 (liquidez e 
 `specs/013-cartera-financiera/contracts/api.md` (en adelante, **«la 013»**) | **Hermanos**: `contrato-de-cuentas.md`
 (puertos en proceso), `mensajes.md` (bandeja), `contabilidad.md` (matriz), `plantillas-y-archivos.md`, `documentos.md`
 
+## Estado al cierre (2026-10-19, T225–T233)
+
+Este contrato se **cotejó con el código** de la rama `014-ahorros-aportes-cdt` al cierre local de la feature. Manda el
+código; después `research.md` §5–§25 (enmiendas E01–E225 y las decisiones del dueño de §13); después este texto. Con
+`CatalogoDeCartera.EntregaVigente = K11` todas las rutas de K7 a K11 están disponibles (la columna E dice desde qué
+entrega existe cada una). La 014 suma **180 rutas REST**:
+
+| Dónde | Rutas |
+|---|---|
+| `/api/lending` en `Endpoints/Lending/Deposits/` (17 archivos; incluye las dos de plantilla e importación de las partes de la migración, `MapPlantillaPorRuta`) | 139 |
+| `/api/reports/lending/{vista}` (`MapVistaDeCartera`): 16 vistas y 7 vistas previas de formatos regulatorios (§18.1) | 23 |
+| `/api/lending/approval-policies` (§1.6, D53) | 2 |
+| `/api/lending/payroll-agreements/{id}/file-groups` · `/concept-equivalences` (GET y POST) y `/payroll-deduction-files/{id}/unmatched` (§18.3) | 5 |
+| `/api/lending/test-doubles/collector/accounts/*` y `/collector/treasury/accounts/*`, sólo fuera de producción (§18.4) | 9 |
+| `GET /api/payroll/runs/{runId}/account-deductions` (§18.5) | 1 |
+| `GET /api/core/people/{id}/co-held-accounts` (§18.5, D20) | 1 |
+
+Cómo se contaron: las líneas `.Map(Get|Post|Put|Delete|Patch)(` que la rama agrega sobre `09ca91f6` (el cierre de la 013)
+en `src/Presentation/IngenIA365ERP.API/Endpoints/` son 157, de las cuales dos son rutas de la 013 a las que sólo se les sumó
+un filtro (`GET /api/lending/documents` con `accountPublicId`, `GET /api/lending/regulatory/files` con `format`); a las 155
+restantes se suman las dos rutas de `MapPlantillaPorRuta` y las 23 de `MapVistaDeCartera`, que ese conteo no ve. Sin los
+dobles de prueba son **171**. Se retiraron las **74** rutas heredadas de §19: la variación neta es **+106**.
+
+Secciones que cambiaron en el cotejo (cada cambio cita su enmienda): §1 (moneda, 202 de la atribución), §2 (40 permisos
+nuevos, 163 en total), §3 (sin `rate-quote` ni plantillas de líneas; cuerpos de versión), §4 (sin `installments` ni
+`negotiated-rate` por cuenta; nacen `GET /{id}/contractual` y el detalle de bloqueos; cuerpos y códigos), §5 (nacen
+`POST /{id}/fund` y `POST /{id}/titles`; la redención es a la fecha de hoy), §6 (cuerpo de la decisión), §7 (nacen
+`GET /assignments` y los dos `reject`), §8 (nace `GET /{id}/responses/draft`; los avisos van en un 201), §11 (cuerpos),
+§12 (nace `POST /{id}/void`; estados y cuerpo de `apply`), §13 (nace `POST /{id}/void`; rutas de entrega), §14 (estados,
+orígenes y beneficiario), §15 (nace `GET /risk`; soporte obligatorio y alcance total), §16 (activación sin carga), §17 (el
+lote responde 200 y admite extractos), §18.1 (dos vistas previas más), §18.2 (siete formatos), §18.3 (equivalencias),
+§18.5 (rutas nuevas fuera de la Cartera), §21 (conteo) y §22 (códigos).
+
 Este contrato cubre **sólo HTTP**: lo que llama una pantalla de la Cartera para captaciones y aportes. El contrato
 de cuentas (`IContratoDeCuentas`), la consulta de aportes y los consumidores de mensajes **no tienen ruta** (§20).
 Las captaciones **son** la Cartera: todo lo de la 013 §1 (convenciones) y §2 (permisos) rige sin repetirse; aquí se
@@ -36,8 +69,10 @@ Un archivo por área en `src/Presentation/IngenIA365ERP.API/Endpoints/Lending/De
 `MemberAccountsEndpoints.cs`, `TermDepositsEndpoints.cs`, `NegotiatedRatesEndpoints.cs`, `ContributionsEndpoints.cs`,
 `GarnishmentsEndpoints.cs`, `DirectDebitsEndpoints.cs`, `GmfExemptionsEndpoints.cs`, `MembershipWithdrawalsEndpoints.cs`,
 `AssemblyDistributionsEndpoints.cs`, `DeceasedCasesEndpoints.cs`, `UnclaimedEndpoints.cs`, `LiquidityFundEndpoints.cs`,
-`DepositsMigrationEndpoints.cs`, `DepositDocumentsEndpoints.cs`, `RegulatoryEndpoints.cs` y `TestDoublesEndpoints.cs`
-(sólo fuera de producción). Los endpoints **sólo reenvían** al `ISender`.
+`DepositsMigrationEndpoints.cs`, `DepositDocumentsEndpoints.cs` y `RegulatoryEndpoints.cs` (17 archivos). Los dobles de
+prueba de captaciones viven en el `Endpoints/Lending/TestDoublesEndpoints.cs` de la 013 (sólo fuera de producción) y la
+política de aprobación de movimientos en `Endpoints/Lending/AttributionsEndpoints.cs`. Los bloqueos de cuentas
+(`/accounts/{id}/holds`) se declaran en `GarnishmentsEndpoints.cs`. Los endpoints **sólo reenvían** al `ISender`.
 
 ### 1.2 Alcance
 
@@ -56,9 +91,11 @@ listas filtran en silencio. `LND_UserCreditLineScopes` sirve igual: la línea es
 - **Captación exige créditos activados** (R21): activar aportes o captaciones antes que los créditos responde
   `Lending.Activation.LoansFirst`.
 - **Sin K8 no hay captación** (spec, entregas): una línea de captación se crea pero no se activa hasta que el
-  despliegue tenga K8; hasta entonces 422 `Lending.Savings.DeliveryNotAvailable` (`data: { availableFrom: "K8" }`).
-- **Por entrega**: la columna E de cada tabla es la entrega en que la ruta nace; antes, 404 genérico. El catálogo
-  de permisos nace **entero en K7** (§2).
+  despliegue tenga K8; hasta entonces 422 `Lending.Savings.DeliveryNotAvailable` (`data: { nature, availableFrom }`;
+  enmiendas E31, E38).
+- **Por entrega**: la columna E de cada tabla es la entrega en que la ruta nace. **Enmienda E31/E127**: las rutas existen
+  desde que se despliegan y lo que pide una entrega no desplegada responde 422 `Lending.Savings.DeliveryNotAvailable` con
+  su `availableFrom` (no un 404); al cierre `EntregaVigente = K11`. El catálogo de permisos nace **entero en K7** (§2).
 
 ### 1.4 Las dos fechas de una liquidación
 
@@ -68,11 +105,16 @@ Como en la 013 §1.8: en `/accounts/{id}/balance`, `/settlements/simulate`, `/cl
 (`fingerprint`) y la **explicación día por día** (FR-011): `[{ date, balance, rateTier, dailyRate, interest,
 belowMinimum, valueDateAdjustment? }]`.
 
+**Cotejo con el código (2026-10-19)**: reciben `recordedAsOf` sólo `GET /accounts/{id}/balance`,
+`POST /accounts/{id}/settlements/simulate` y `GET /lines/{id}`; `/close-preview` y `/term-deposits/{id}/redeem/simulate`
+reciben sólo `date`, y `/contributions/summary` sólo `date` (sin `recordedAsOf`, toma todo lo registrado, como el saldo
+sin `recordedAsOf`, E124).
+
 ### 1.5 Decimales y enums
 
 - Montos `Monto` (18,2); tasas como **fracción** (`TasaAnual` 9,6: `0.100000` es 10 % EA); tasas diarias y
   equivalentes en la explicación con hasta 18 decimales; la causación diaria guarda 6 decimales (R05) y sale así en
-  la explicación. Moneda sólo `COP` (`Lending.Currency.NotSupported`).
+  la explicación. Moneda sólo `COP`: ningún cuerpo lleva moneda (el código `Lending.Currency.NotSupported` no nació).
 - Enums de research §0.3 por nombre o número (`EnumPorNombreONumero`), salida como número; estados derivados por
   nombre.
 
@@ -85,8 +127,11 @@ belowMinimum, valueDateAdjustment? }]`.
   efectivo es el mayor de los roles activos del usuario.
 - **Superarla no es error**: la operación queda **en espera de un aprobador presente** con segundo factor (passkey o
   TOTP, la mecánica de aprobaciones de la plataforma 012) y **no mueve saldo** hasta aprobarse (US4-5). La respuesta
-  es 202 con `{ status: PendingApproval, approvalPublicId, required: { permissionCode, amount, maxAmount } }`; el
-  reintento con el mismo `Idempotency-Key` y `approvalPublicId` aprobado aplica.
+  es 202 con `{ status: PendingApproval, approvalPublicId, required: { permissionCode, amount, maxAmount } }` y
+  `Location: /api/inventory/approvals/{approvalPublicId}` (la plataforma de aprobaciones); el reintento con el mismo
+  `Idempotency-Key` y `approvalPublicId` aprobado aplica (los cuerpos de retiro, traslado, fondeo y redención llevan
+  `approvalPublicId?`). Por el contrato de cuentas la misma situación es un rechazo `Lending.Savings.PendingApproval`
+  (enmienda E80).
 - **Niveles configurables por cooperativa** (decisión del dueño del 2026-10-18, D53): la aprobación de `AccountWithdrawal` y
   `AccountCashDeposit` sigue la **política** que la cooperativa registre en la plataforma de aprobaciones —niveles en orden,
   cada uno con su umbral y el permiso de quien lo aprueba— por `GET`/`POST /api/lending/approval-policies`
@@ -133,7 +178,8 @@ de asamblea no la **aprueba**; quien **pide** una tasa negociada no la **aprueba
 ## 2. Permisos (catálogo `Lending.*`, research §0.7)
 
 Los siembra la API al arrancar (`LendingPermissionCatalogSeeder`, nunca el DbMigrator), **enteros desde K7**,
-también los de K8 a K11. Se suman a los 123 de la 013: **39 códigos nuevos**, total **162**.
+también los de K8 a K11. Se suman a los 123 de la 013: **40 códigos nuevos**, total **163** (E12; el 40.º es
+`Lending.MembershipWithdrawals.ReverseAfterPayment`, D44; lo fija `PermisosDeCarteraTests`).
 
 | Código | Qué habilita | E |
 |---|---|---|
@@ -194,60 +240,70 @@ La identidad común es `LND_CreditLines` con `Nature` (`LineNature`: `Placement`
 | Ruta | Permiso | Comando / consulta | Cuerpo → respuesta | Errores | E |
 |---|---|---|---|---|---|
 | `GET /?nature=&status=&depositClass=&includeClosed=` | `AlgunPermiso(CreditLines.View, DepositLines.View, ContributionLines.View)` | `ListLendingLinesQuery` **(nuevo en contracts)** | → arreglo `LendingLineListItemDto { publicId, code, name, nature, depositClass?, status, closedReason?, currentVersion { publicId, validFrom, summary } }`, sólo las naturalezas cuyo `View` tiene quien pregunta y del alcance | `Lending.Report.FilterInvalid` | K7 |
-| `GET /{id}?date=` | ídem | `GetLendingLineQuery` | → identidad + versión vigente en `date` según la naturaleza + historial de versiones | `Lending.Line.NotFound` | K7 |
-| `POST /deposit` | DepositLines.Manage | `CreateDepositLineCommand` | `{ code, name, depositClass, active, firstVersion: DepositLineVersionInput }` → 201 | `Catalogo.CodigoDuplicado`, `Lending.Savings.LineNotAllowedByProfile`, `Lending.Savings.DeliveryNotAvailable`, `Lending.DepositLine.Invalid` (`data.errors[]`), `Lending.Parameter.BelowLegalFloor` | K8 |
-| `POST /contribution` | ContributionLines.Manage | `CreateContributionLineCommand` | `{ code, name, active, firstVersion: ContributionLineVersionInput }` → 201; una cooperativa tiene a lo sumo una línea de aportes activa por tipo de asociado | `Catalogo.CodigoDuplicado`, `Lending.Contributions.LineAlreadyActive`, `Lending.Contributions.InstallmentCapExceeded` (US1-3: `data: { capPercent, contributionsShareMin, source }`) | K7 |
-| `GET /{id}/deposit-versions` | DepositLines.View | `ListDepositLineVersionsQuery` | → arreglo `{ publicId, validFrom, validTo?, registeredAt, registeredBy, reason }` | | K8 |
+| `GET /{id}?date=&recordedAsOf=` | ídem | `GetLendingLineQuery` | → identidad + versión vigente en (`date`, `recordedAsOf`) según la naturaleza + historial de versiones (bitemporal, enmienda E42) | `Lending.Line.NotFound` | K7 |
+| `POST /deposit` | DepositLines.Manage | `CreateDepositLineCommand` | `{ code, name, depositClass, active, firstVersion: DepositLineVersionInput }` → 201; sin `active` la línea queda en borrador (`Draft`, enmienda E38) | `Catalogo.CodigoDuplicado`, `Lending.Savings.LineNotAllowedByProfile`, `Lending.Savings.DeliveryNotAvailable` (`data: { nature, availableFrom }`), `Lending.DepositLine.Invalid` (`data.errors[{ field, code, message }]`), `Lending.Savings.RateTiersOverlap`, `Lending.TermDeposit.LineIncomplete`, `Lending.DepositLine.ReferencedLineInvalid`, `Lending.Savings.RateChangeNoticeTooShort`, `Lending.Parameter.BelowLegalFloor` (enmienda E36) | K8 |
+| `POST /contribution` | ContributionLines.Manage | `CreateContributionLineCommand` | `{ code, name, active, firstVersion: ContributionLineVersionInput }` → 201; una cooperativa tiene a lo sumo una línea de aportes activa | `Catalogo.CodigoDuplicado`, `Lending.Contributions.LineAlreadyActive`, `Lending.ContributionLine.Invalid`, `Lending.Contributions.FractionBelowLegal`, `Lending.Contributions.InstallmentCapExceeded` (US1-3: `data: { capPercent, contributionsShareMin, source }`) (enmienda E36) | K7 |
+| `GET /{id}/deposit-versions` | DepositLines.View | `ListLendingLineVersionsQuery` (con `nature = Deposit`) | → arreglo `{ publicId, validFrom, validTo?, registeredAt, registeredBy, reason }` | | K8 |
 | `GET /{id}/deposit-versions/{versionId}` | DepositLines.View | `GetDepositLineVersionQuery` | → `DepositLineVersionDto` (= el input + `publicId`, `registeredAt`) | `Lending.DepositLine.VersionNotFound` | K8 |
 | `POST /{id}/deposit-versions` | DepositLines.Manage | `AddDepositLineVersionCommand` | `DepositLineVersionInput` con `validFrom` ≥ hoy y `reason` → 201; cierra la anterior la víspera; un cambio de tasa de una línea a la vista **programa el aviso** a los titulares con la anticipación del reglamento (FR-038) | `Lending.DepositLine.VersionOverlaps`, `.Retroactive` (`validFrom` < hoy), `.ClassImmutable` (la clase no cambia), los del alta | K8 |
-| `GET /{id}/contribution-versions` · `GET /{id}/contribution-versions/{versionId}` · `POST /{id}/contribution-versions` | ContributionLines.View · .View · .Manage | `ListContributionLineVersionsQuery` · `GetContributionLineVersionQuery` · `AddContributionLineVersionCommand` | como las de captación, con `ContributionLineVersionInput` | `Lending.ContributionLine.VersionOverlaps`, `.Retroactive`, `Lending.Contributions.InstallmentCapExceeded` | K7 |
-| `POST /{id}/close` · `POST /{id}/reopen` | `AlgunPermiso(DepositLines.Manage, ContributionLines.Manage)` + el `Manage` de su naturaleza (si falta, 422 `Lending.Permission.Required`) | `CloseLendingLineCommand` · `ReopenLendingLineCommand` | `{ reason }` → la línea; cerrar no afecta las cuentas vivas; reabrir revalida el perfil | `Lending.Line.UseCreditLinesRoute` (colocación), `Lending.Savings.LineNotAllowedByProfile` | K7 |
+| `GET /{id}/contribution-versions` · `GET /{id}/contribution-versions/{versionId}` · `POST /{id}/contribution-versions` | ContributionLines.View · .View · .Manage | `ListLendingLineVersionsQuery` (con `nature = Contribution`) · `GetContributionLineVersionQuery` · `AddContributionLineVersionCommand` | como las de captación, con `ContributionLineVersionInput` | `Lending.ContributionLine.VersionNotFound`, `.VersionOverlaps`, `.Retroactive`, `Lending.Contributions.InstallmentCapExceeded` | K7 |
+| `POST /{id}/close` · `POST /{id}/reopen` | `AlgunPermiso(DepositLines.Manage, ContributionLines.Manage)` + el `Manage` de su naturaleza (si falta, 422 `Lending.Permission.Required`) | `CloseLendingLineCommand` · `ReopenLendingLineCommand` | `{ reason }` → la línea; cerrar no afecta las cuentas vivas; reabrir revalida el perfil y **también activa una línea en borrador** con las mismas validaciones del alta activa (enmienda E38) | `Lending.Line.UseCreditLinesRoute` (colocación), `Lending.Savings.LineNotAllowedByProfile`, `Lending.Savings.DeliveryNotAvailable`, `Lending.Contributions.LineAlreadyActive` | K7 |
 | `GET /{id}/negotiated-rate-rules?date=` | DepositLines.View | `ListNegotiatedRateRulesQuery` | → arreglo `NegotiatedRateRuleDto { publicId, criteria { minSeniorityMonths?, amountFrom?, amountTo?, termDaysFrom?, termDaysTo?, baseRateFrom?, baseRateTo?, holderBalanceFrom?, officePublicIds?[], channels?[] }, maxMarginEa, keepsMarginOnRollover, validFrom, validTo? }` | | K9 |
-| `POST /{id}/negotiated-rate-rules` | DepositLines.Manage | `AddNegotiatedRateRuleCommand` | `{ criteria, maxMarginEa, keepsMarginOnRollover, validFrom, reason }` → 201 | `Lending.NegotiatedRate.RuleOverlaps`, `Lending.NegotiatedRate.LineDoesNotAllow` | K9 |
-| `POST /{id}/negotiated-rate-rules/{ruleId}/end` | DepositLines.Manage | `EndNegotiatedRateRuleCommand` | `{ validTo, reason }` → la regla | | K9 |
-| `GET /{id}/charges?date=` | DepositLines.View | `ListDepositLineChargesQuery` | → los cargos de la versión vigente en `date` (`ChargeKind`, valor, gratuitos, exoneraciones, gravado) | | K8 |
-| `POST /{id}/rate-quote` (sin clave) | `AlgunPermiso(DepositLines.View, TermDeposits.Constitute, Accounts.Open)` | `QuoteDepositRateQuery` **(nuevo en contracts)** | `{ date, amount, termDays?, holderPersonPublicId?, officePublicId?, channel? }` → `{ tableRate, tierPublicId, applicableRule?: { rulePublicId, maxMarginEa }, explanation }` | `Lending.TermDeposit.NoRateForTerm` | K8 |
-| `GET /deposit/template.xlsx` · `POST /deposit/import?mode=` | DepositLines.View · DepositLines.Manage | `ImportDepositLinesCommand` | plantilla `lending.deposit-lines` (`plantillas-y-archivos.md` §2) → `ImportResultDto` | `Import.Invalid` y los del alta | K8 |
-| `GET /contribution/template.xlsx` · `POST /contribution/import?mode=` | ContributionLines.View · .Manage | `ImportContributionLinesCommand` | plantilla `lending.contribution-lines` | ídem | K7 |
+| `POST /{id}/negotiated-rate-rules` | DepositLines.Manage | `AddNegotiatedRateRuleCommand` | `{ criteria, maxMarginEa, keepsMarginOnRollover, validFrom, reason }` → 201; las reglas se versionan por código (enmienda E133) | `Lending.NegotiatedRate.RuleOverlaps`, `.LineDoesNotAllow`, `.Retroactive`, `.MarginInvalid` | K9 |
+| `POST /{id}/negotiated-rate-rules/{ruleId}/end` | DepositLines.Manage | `EndNegotiatedRateRuleCommand` | `{ validTo, reason }` → la regla (terminar = versión inactiva, enmienda E133) | `Lending.NegotiatedRate.RuleNotFound` | K9 |
+| `GET /{id}/charges?date=` | DepositLines.View | `ListDepositLineChargesQuery` | → los cargos de la versión vigente en `date` (`kind`, `trigger`, cálculo, valor, gratuitos, exoneraciones, gravado; enmienda E83) | | K8 |
 
-`DepositLineVersionInput` (sella cada versión; nombres de bloque de `data-model.md`):
+**No construidas** (enmiendas E42, E115): la cotización `POST /{id}/rate-quote` (la tasa de tabla la dan la simulación del
+CDAT, `POST /term-deposits/simulate`, y la apertura) y las plantillas `lending.deposit-lines` / `lending.contribution-lines`
+(`/lines/{deposit|contribution}/template.xlsx` · `/import`): las líneas se crean por pantalla (`/cartera/lineas`) o por
+`POST /deposit` · `/contribution` (pregunta abierta al dueño, research §16.1). Total de §3: **16 rutas**.
+
+`DepositLineVersionInput` (sella cada versión; nombres de bloque de `data-model.md`; **al día con el código, enmiendas E42,
+E83**: la tasa es `Fixed` o `Variable` y los tramos van dentro de `rate`; la retención la nombra
+`tax.withholdingRateParameterCode` —vacío = la tarifa de la clase—; los cargos llevan `trigger`, no `event`):
 
 ```json
 {
-  "validFrom": "2027-01-01", "reason": "Tasa aprobada por el consejo, acta 12",
+  "validFrom": "2027-01-01", "reason": "Tasa aprobada por el consejo, acta 12", "depositClass": "Demand",
   "officePublicIds": null, "requiresMembership": true, "allowsCoHolders": true, "allowsMinors": true,
-  "allowsPartialWithdrawals": true,
-  "rate": { "kind": "Tiered", "tierMode": "WholeBalance", "variable": null,
+  "allowsLegalEntities": false, "allowsPartialWithdrawals": true,
+  "rate": { "kind": "Fixed", "effectiveAnnual": null, "variable": null, "tierMode": "WholeBalance",
             "tiers": [{ "balanceFrom": 0, "balanceTo": 999999.99, "termDaysFrom": null, "termDaysTo": null, "amountFrom": null, "amountTo": null, "effectiveAnnual": 0.010000 },
                       { "balanceFrom": 1000000, "balanceTo": null, "effectiveAnnual": 0.030000 }] },
+  "declaresAgreedRate": false, "negotiatedRateAllowed": false, "keepsNegotiatedMarginOnRollover": false, "rateChangeNoticeDays": 30,
   "balanceMethod": "DailyBalance",
   "minimums": { "toOpen": 10000, "toMaintain": 10000, "toEarnInterest": 100000 },
   "dayCount": "Actual365", "rateEquivalence": "Compound",
-  "rounding": { "unit": 1, "mode": "AwayFromZero", "moment": "PerSettlement" },
-  "settlementPeriodicity": "Monthly",
-  "tax": { "withholdingClass": "Demand", "gmfApplies": true },
-  "limits": { "maxWithdrawalPerOperation": 20000000, "maxWithdrawalPerDay": 30000000, "maxCash": 10000000 },
-  "inactivity": { "days": 360, "keepsAccruing": true },
+  "rounding": { "unit": 1, "mode": "AwayFromZero", "moment": "PerTotal" },
+  "settlementPeriodicity": "Monthly", "settlementDay": null,
+  "tax": { "withholdingRateParameterCode": null, "gmfApplies": true },
+  "limits": { "maxWithdrawalPerOperation": 20000000, "maxWithdrawalPerDay": 30000000, "maxCashPerOperation": 10000000, "maxCashPerDay": null },
+  "inactivity": { "days": 360, "keepsAccruing": true, "suspendsOnTotalGarnishment": false, "suspendsOnDeceased": false },
   "termDeposit": null,
   "contractual": null,
-  "charges": [{ "kind": "ExtraOperation", "code": "RETADIC", "fixedAmount": 2000, "percent": null, "min": null, "max": null,
-                "event": "Withdrawal", "freePerPeriod": 4, "periodicity": "Monthly", "taxedWithVat": true, "uncollectedPolicy": "KeepPending",
-                "exemptions": [{ "kind": "AverageBalanceAtLeast", "value": 5000000 }, { "kind": "MinorHolder" }] }],
-  "negotiatedRateAllowed": false
+  "permanent": null,
+  "charges": [{ "code": "RETADIC", "name": "Retiro adicional", "kind": "ExtraOperation", "trigger": "WithdrawalOverFree", "enabled": true,
+                "calculation": "FixedAmount", "fixedAmount": 2000, "percent": null, "percentBase": null, "min": null, "max": null,
+                "freePerPeriod": 4, "freePeriod": "Monthly", "taxedWithVat": true, "commercialItemCode": null, "uncollectedPolicy": "KeepPending",
+                "exemptions": { "averageBalanceAtLeast": 5000000, "minors": true } }]
 }
 ```
 
 Bloque `termDeposit` (sólo `depositClass = TermDeposit`, FR-028): `{ minTermDays, maxTermDays, interestPeriodicities[],
 timings[]: Arrears|Advance, rolloverAutomatic, maxRollovers, rolloverRateRule: SameRate|CurrentTableRate|Agreed,
-graceBusinessDays, graceAccrues, afterMaturity: StopAccruing|MoveToDemand, demandLineCode?, earlyRedemption: {
-allowed, penaltyKind: RepricingRate|FixedDiscount, penaltyRateEa?, penaltyPercent? }, rolloverCapitalizes,
-negotiatedRateAllowed }`. Bloque `contractual` (FR-074): `{ installmentPeriodicity, minInstallment, termMonthsFrom,
-termMonthsTo, bonusRateEa, toleranceInstallments, breachEffect: LoseBonus|CancelAndRefund, penaltyRateEa }`.
+rolloverCapitalizes, graceBusinessDays, graceAccrues, afterMaturity: StopAccruing|MoveToDemand, demandLinePublicId?,
+earlyRedemption: { allowed, penaltyMode: PenaltyRate|Discount, penaltyRateEa?, penaltyDiscount?, minDaysBeforeRedemption? } }`
+(la tasa negociada se declara en la versión, no en el bloque). Bloque `contractual` (FR-074): `{ installmentPeriodicity,
+minInstallment, termMonthsFrom, termMonthsTo, bonusRateEa, breachRateEa, toleranceInstallments, breachEffect:
+BreachRate|MoveToDemand|Cancel, bonusRecognition: AtFulfillment|Provisioned }` (enmiendas E42, E142). Bloque `permanent`:
+`{ withdrawableOnlyOnMembershipWithdrawal }` (E211).
 
-`ContributionLineVersionInput` (FR-029): `{ validFrom, reason, minimumNonReducible, installment: { kind: FixedAmount |
-IncomePercent | MinimumWageFraction, value, rounding }, periodicity, permanentSavingsShare?: { depositLineCode, percent },
-allowsExtraordinary, overpaymentPolicy: Extraordinary|CreditBalance, individualLimitParameter, refundTermDays,
-amortizationAllowed, assignmentAllowed }`.
+`ContributionLineVersionInput` (FR-029; **enmienda E42**): `{ validFrom, reason, minimumNonReducible: { kind, amount?,
+fraction? }, installment: { kind: FixedAmount|IncomeFraction|MinimumWageFraction, amount?, fraction?, roundingUnit,
+roundingMode, periodicity, dueDay?, minimumFirst }, permanentSavingsShare?: { depositLinePublicId, fraction },
+allowsExtraordinary, maxParticipationFraction?, excessAction: Reject|RefundByDecision, allowsTransferBetweenMembers,
+refundTermDays, lossDeductionEnabled }`. Un sobrepago sin extraordinarios admitidos se rechaza
+(`Lending.Contributions.OverpaymentNotAllowed`, E56).
 
 - **Perfil regulatorio** (FR-018, US1-1): una línea de captación activa sólo si el perfil vigente autoriza su clase;
   la de aportes, siempre.
@@ -268,38 +324,43 @@ Una cuenta es `LND_MemberAccounts` (`MemberAccount`) de naturaleza `Deposit` (cl
 |---|---|---|---|---|---|
 | `GET /?search=&nature=&depositClass=&line=&office=&status=&personPublicId=&number=&page=` | Accounts.Read | `ListMemberAccountsQuery` | → lista `MemberAccountListItemDto { publicId, number, nature, depositClass?, line { publicId, code, name }, office, holder { personPublicId, fullName, documentNumber }, status, balance, available, marks[] }` (de la posición diaria vigente) | | K7 |
 | `GET /counts?nature=&line=&office=&status=` | Accounts.View | `GetMemberAccountCountsQuery` | → `{ byStatus: [{ status, accounts, balance }], byLine[] }` sin titulares | | K7 |
-| `GET /{id}` | Accounts.Read | `GetMemberAccountQuery` | → `MemberAccountDto` (abajo) | `Lending.Savings.NotFound` | K7 |
+| `GET /{id}` | Accounts.Read | `GetMemberAccountQuery` | → `MemberAccountDto` (abajo); lectura auditada `Lending.Savings.BalanceViewed` (E124) | `Lending.Savings.NotFound` | K7 |
 | `GET /{id}/balance?date=&recordedAsOf=` | Accounts.Read | `GetMemberAccountBalanceQuery` | → `{ date, recordedAsOf, fingerprint, byConcept {…}, available { balance, holds, garnishments, pendingClearance, minimumBalance, available }, accruedNotSettled, explanation[] }`; auditado `Lending.Savings.BalanceViewed` | `NationalValues.Missing` | K7 |
-| `POST /` | Accounts.Open | `OpenMemberAccountCommand` | `OpenAccountInput` (abajo) → 201 `MemberAccountDto` en `Active`, o `Opening` si exige aprobación o depósito inicial | `Lending.Savings.MembersOnly`, `Lending.Savings.LineNotAllowedByProfile`, `Lending.Savings.NotActivated`, `Lending.Contributions.NotActivated`, `Lending.Contributions.AccountAlreadyOpen` (una cuenta de aportes viva por persona), `Lending.Savings.BeneficiariesMustSum100` (`data: { sum }`), `Lending.Savings.BeneficiaryRecordRequired` (con beneficiarios, la constancia firmada por el titular también al abrir: decisión del dueño del 2026-10-18, D34), `Lending.Savings.CoHoldersNotAllowed`, `.MinorsNotAllowed`, `.RepresentativeRequired` (`data: { supportRequired }`), `Lending.Gmf.AlreadyMarked`, `Lending.Authorization.Missing` (habeas data del titular y cotitulares, FR-006), `Lending.Screening.Blocked` (aviso: queda `Opening` hasta que el oficial libere, US2-2) | K7 |
-| `POST /{id}/approve-opening` | Accounts.Open | `ApproveMemberAccountOpeningCommand` | `{ reason }` → `MemberAccountDto` en `Active` (o sigue `Opening` hasta el depósito inicial) | `Lending.Segregation.Conflict`, `Lending.Savings.NotOpening` | K7 |
-| `GET /{id}/close-preview?date=` | Accounts.Read | `PreviewMemberAccountClosingQuery` | → `{ settlement { interest, withholding, net }, gmf, charges, toDeliver, blockers: [{ kind: Hold\|Garnishment\|PendingClearance\|LiveLoanCollateral, detail }] }` (sin clave) | | K8 |
-| `POST /{id}/close` | Accounts.Close | `CloseMemberAccountCommand` | `{ date, delivery: { kind: TransferToAccount \| DisbursementOrder, targetAccountPublicId?, payee? }, signatures[], reason }` → la operación; liquida, retiene, cobra GMF y cargos, entrega y deja `Closed` (FR-039). El cierre en efectivo lo hace Recaudo por el contrato (`RetirarAsync` con `closeAccount`) | `Lending.Savings.CloseBlocked` (`data: { blockers[] }`), `Lending.Contributions.ClosureOnlyByWithdrawal` (aportes: sólo por retiro del asociado), `Lending.Savings.SignaturesMissing` | K8 |
+| `POST /` | Accounts.Open | `OpenMemberAccountCommand` | `OpenAccountInput` (abajo) → 201 `MemberAccountDto` en `Active`, o `Opening` si hay coincidencia en listas o la versión exige depósito de apertura (`openingBlockers`: `ScreeningMatch`, `InitialDeposit`; enmienda E45). Se abre con la fecha de hoy. Un CDAT no se abre por aquí (`Lending.Savings.UseTermDepositRoute`, E52); un contractual exige `contractual { installment, termMonths, maturityInstruction? }` (E143) | `Lending.Savings.MembersOnly`, `.MemberDataIncomplete` (`data.missing`, E44), `.LineNotAllowedByProfile`, `.LineNotOpen`, `.LineWithoutVersion`, `.OfficeNotAllowedByLine`, `.HolderDeceased`, `.PermanentAlreadyOpen`, `.OpeningDateInvalid`, `.UseTermDepositRoute`, `.SourceOfFundsRequired`, `Lending.Savings.NotActivated`, `Lending.Contributions.NotActivated`, `Lending.Contributions.AccountAlreadyOpen` (una cuenta de aportes viva por persona), `Lending.Contributions.OnlyHolderAndBeneficiaries`, `Lending.Savings.BeneficiariesMustSum100` (`data: { sum }`), `.BeneficiaryRecordRequired` (`data.field = beneficiaryRecordAttachmentPublicId`; con beneficiarios, la constancia también al abrir: D34), `.CoHoldersNotAllowed`, `.MinorsNotAllowed`, `.LegalEntitiesNotAllowed`, `.JointRequiresTwoSigners`, `.PartyRepeated`, `.PartyInvalid`, `.RepresentativeRequired` (`data: { supportRequired }`) (E47), `Lending.Contractual.TermsRequired`, `.TermsNotAllowed`, `.InstallmentBelowMinimum`, `.TermOutOfRange`, `.NoInstallments` (E143), `Lending.MembershipWithdrawal.AlreadyInProgress` (E75), `Lending.Gmf.AlreadyMarked`, `Lending.Authorization.Missing` (finalidad `GeneralTreatment` del titular y de cada cotitular, `data.personPublicId`, E44), `Lending.Security.UserWithoutPerson`, `Lending.Adapter.Unavailable` (canal de listas caído), `Lending.Screening.Blocked` (aviso: queda `Opening` hasta que el oficial libere, US2-2) | K7 |
+| `POST /{id}/approve-opening` | Accounts.Open | `ApproveMemberAccountOpeningCommand` | `{ reason }` → `MemberAccountDto` en `Active` (o sigue `Opening` hasta el depósito inicial; un CDAT no se activa por aquí, E130) | `Lending.Segregation.Conflict`, `Lending.Savings.NotOpening`, `Lending.Screening.Blocked` (quedan bloqueos de listas sin levantar, E45), `Lending.Security.UserWithoutPerson` | K7 |
+| `GET /{id}/close-preview?date=` | Accounts.Read | `PreviewMemberAccountClosingQuery` | → `{ settlement { interest, withholding, net }, gmf, charges, toDeliver, blockers: [{ kind, detail }], contractualPenalty?, contractualExplanation? }` (sin clave; en un contractual vigente, el costo de incumplirlo, E149); lectura auditada `Lending.Savings.BalanceViewed` (E124) | | K8 |
+| `POST /{id}/close` | Accounts.Close | `CloseMemberAccountCommand` | `{ date?, delivery: { kind: TransferToAccount \| DisbursementOrder, targetAccountPublicId?, payee? }, signatures?[], reason }` → la operación `Cancellation` (`CAN-`) con la puesta al día y la liquidación a la fecha, y la entrega en su **propia** operación; con giro la cuenta queda `Closing` hasta que Tesorería informa el giro (E99). Sólo ahorro a la vista y contractual (un contractual vigente se incumple y se reliquida al castigo, E149); aportes y permanente se cancelan con el retiro del asociado; el CDAT por su ruta. El cierre en efectivo por el contrato (`RetirarAsync` con `closeAccount`) **no está construido** (E78, E99) | `Lending.Savings.CloseBlocked` (`data: { blockers[] }`: embargo, bloqueo, canje, sobregiro técnico, titular fallecido y cargos por cobrar, E99), `.CloseDateInvalid` (sólo hoy), `Lending.Contributions.ClosureOnlyByWithdrawal`, `Lending.Contractual.MaturityPending`, `Lending.Savings.UseTermDepositRoute`, `Lending.Savings.SignaturesMissing`, `Lending.Prevalidation.NotPostable` | K8 |
 | `GET /{id}/operations?kind=&from=&to=&page=` | Accounts.Read | `ListMemberAccountOperationsQuery` | → lista `MemberAccountOperationDto { publicId, number, kind, valueDate, accountingDate, registeredAt, amount, collector? { code, class }, meansClass?, payer?, receiptReference?, reversedBy?, reverses?, actor, origin: Person\|Process }` | | K7 |
 | `GET /{id}/operations/{operationId}` | Accounts.Read | `GetMemberAccountOperationQuery` | → el comprobante: la operación + `transactions[]` (concepto, valor, tres fechas) + `messages: [{ type, messagePublicId, status }]` | `Lending.Savings.OperationNotFound` | K7 |
 | `GET /{id}/transactions?from=&to=&concept=&dateKind=value\|accounting\|registered&page=` | Accounts.Read | `ListMemberAccountTransactionsQuery` | → lista `{ kind (MemberAccountTransactionKind), concept, amount, valueDate, accountingDate, registeredAt, operationPublicId, reversesTransaction?, reversedBy?, countsAsHolderActivity, messagePublicId? }` (sólo lectura) | | K7 |
-| `POST /{id}/operations/simulate` (sin clave) | Accounts.Read | `SimulateMemberAccountOperationQuery` | `{ kind: Withdrawal\|Transfer\|Close, amount?, targetAccountPublicId?, meansClass?, signatures[] }` → `{ allowed, available {…}, gmf { base, exemptUsed, exemptRemaining, amount }, charges[], signatures { required[], missing[] }, attribution { requiresApproval, permissionCode?, maxAmount? }, warnings[] }` | | K7 |
-| `POST /{id}/operations/withdrawals` | Accounts.Withdraw | `WithdrawToDisbursementOrderCommand` | `{ amount, valueDate?, payee: { personPublicId, bankPublicId, accountType, accountNumber }, signatures[], reason? }` → 201 `{ operation, order { publicId, number, status } }` o 202 `PendingApproval` (§1.6). Emite `RetiroDeCuentaAplicado` + `GmfRetenido` + `OrdenDeGiroEmitida` v2 (`DepositWithdrawal`) | `Lending.Savings.InsufficientAvailable`, `.SignaturesMissing`, `.AccountNotOperable`, `Lending.Savings.WithdrawalLimitExceeded` (`data: { perOperation, perDay, usedToday }`), `Lending.Contributions.NotWithdrawable`, `Lending.Prevalidation.NotPostable` | K8 |
-| `POST /{id}/operations/transfers` | Accounts.Transfer | `TransferBetweenMemberAccountsCommand` | `{ targetAccountPublicId, amount, valueDate?, signatures[], reason? }` → 201 la operación (una sola, con las dos cuentas en orden de `Id`, R08) o 202 `PendingApproval`; ahorro ↔ CDAT sigue `GMF_HECHOS_GENERADORES` (FR-052) | los de `withdrawals`, `Lending.Savings.TargetNotOperable`, `Lending.Contributions.ParticipationLimitExceeded` (destino aportes) | K7 |
-| `POST /{id}/operations/{operationId}/reverse` | Accounts.Reverse | `ReverseMemberAccountOperationCommand` | `{ reason }` → la operación de reverso; arrastra GMF, retención, cargos y cruces enlazados (FR-002); una consignación de un recaudador emite `ConsignacionReversadaPorCartera` (FR-092) | `Lending.Savings.ReversalOfReversal`, `Lending.Savings.ReversalOwnedByCollector` (retiros y traslados de un recaudador, y todo lo de Nómina, se reversan por el contrato), `Lending.Savings.ReversalWouldOverdraw` (US4-6: `data: { blockingOperation { publicId, number } }`), `Lending.Savings.ReversalWindowClosed` | K7 |
+| `POST /{id}/operations/simulate` (sin clave) | Accounts.Read | `SimulateMemberAccountOperationQuery` | `{ kind: Withdrawal\|Transfer\|Close, amount, targetAccountPublicId?, meansClass?, signatures[] }` → `{ allowed, available {…}, gmf { base, exemptUsed, exemptRemaining, amount }, charges[], signatures { required[], missing[] }, attribution { requiresApproval, permissionCode?, maxAmount? }, warnings[] }`; el destino también en el alcance (E123) | | K7 |
+| `POST /{id}/operations/withdrawals` | Accounts.Withdraw | `WithdrawToDisbursementOrderCommand` | `{ amount, valueDate?, payee: { personPublicId, bankPublicId?, accountType?, accountNumber? }, signatures[], reason?, approvalPublicId? }` → 201 `{ operation, order { publicId, number, status } }` o 202 `PendingApproval` (§1.6). Emite `RetiroDeCuentaAplicado` + `GmfRetenido` + `OrdenDeGiroEmitida` v2 (`DepositWithdrawal`) | `Lending.Savings.InsufficientAvailable`, `.SignaturesMissing`, `.AccountNotOperable`, `Lending.Savings.WithdrawalLimitExceeded` (`data: { perOperation, perDay, usedToday }`), `.ValueDateOutOfRange`, `Lending.Contributions.NotWithdrawable`, `Lending.Contractual.WithdrawalNotAllowed` (E144), `Lending.Prevalidation.NotPostable` | K8 |
+| `POST /{id}/operations/transfers` | Accounts.Transfer | `TransferBetweenMemberAccountsCommand` | `{ targetAccountPublicId, amount, valueDate?, signatures[], reason?, targetModality?, approvalPublicId? }` → 201 la operación (una sola, con las dos cuentas en orden de `Id`, R08) o 202 `PendingApproval`; ahorro ↔ CDAT sigue `Gmf.HechosGeneradores` (FR-052); el destino tiene que estar en el alcance de quien opera (fuera, el 404 de la cuenta, E123); un traslado a un contractual paga cuotas (E144) | los de `withdrawals`, `Lending.Savings.TargetNotOperable`, `.SameAccount`, `Lending.Contributions.ParticipationLimitExceeded` (destino aportes) | K7 |
+| `POST /{id}/operations/{operationId}/reverse` | Accounts.Reverse | `ReverseMemberAccountOperationCommand` | `{ reason }` → la operación de reverso; arrastra GMF, retención, cargos y cruces enlazados (FR-002); una consignación de un recaudador emite `ConsignacionReversadaPorCartera` (FR-092). Desde la pantalla nunca queda sobregiro (E85) | `Lending.Savings.ReversalOfReversal`, `.ReversalOwnedByCollector` (retiros y traslados de un recaudador, y todo lo de Nómina, se reversan por el contrato), `.ReversalOwnedByProcess` (cruce del retiro, débito automático, devoluciones, cargos, liquidación, cancelación, asamblea, consignación al juzgado: se corrigen desde su origen; E85, E98, E163, E186), `.ReversalWouldOverdraw` (US4-6: `data: { blockingOperation { publicId, number } }`). **`ReversalWindowClosed` no se construyó** (no hay parámetro de ventana, E85) | K7 |
 | `GET /{id}/parties?date=` | Accounts.Read | `GetMemberAccountPartiesQuery` | → `{ handlingMode, parties: [{ publicId, person, role (MemberAccountPartyRole), share?, signatureLimit?, supportAttachmentPublicId?, validFrom, validTo? }], beneficiaries: [{ person, percent }], requiresDataUpdate }` | | K7 |
-| `PUT /{id}/parties` | Accounts.Parties.Manage | `SetMemberAccountPartiesCommand` | `{ handlingMode, parties[], beneficiaries[], evidenceAttachmentPublicId?, reason }` → versión nueva (la anterior se cierra, nunca se borra; FR-034) | `Lending.Savings.BeneficiariesMustSum100`, `.CoHoldersNotAllowed`, `.RepresentativeRequired`, `Lending.Authorization.Missing` | K7 |
-| `POST /{id}/data-update` | Accounts.Parties.Manage | `ConfirmMemberAccountDataUpdateCommand` | `{ reason }` → levanta la marca «actualizar datos» tras la mayoría de edad (FR-033), exige conocimiento del asociado y autorización del titular vigentes | `Lending.Savings.DataUpdateNotRequired`, `Lending.Authorization.Missing` | K8 |
-| `PUT /{id}/maturity-instruction` | Accounts.Parties.Manage | `SetContractualMaturityInstructionCommand` | `{ kind: TransferToAccount\|DisbursementOrder, targetAccountPublicId?, payee?, reason }` (sólo `Contractual`) | `Lending.Savings.NotContractual` | K9 |
-| `GET /{id}/installments?status=&page=` | Accounts.Read | `ListAccountInstallmentsQuery` | → cuotas `AccountInstallment { publicId, period, dueDate, amount, paid, pending, status: Pending\|PartiallyPaid\|Paid\|NotDeducted, notDeductedReason? }` | | K7 |
-| `GET /{id}/holds` | Accounts.Read | `ListAccountHoldsQuery` | → `{ publicId, reason (HoldReason), amount?, total, loanPublicId?, since, until?, releasedAt?, releasedBy?, support? }` | | K8 |
-| `POST /{id}/holds` | Holds.Manage | `RegisterAccountHoldCommand` | `{ reason, amount?, total, loanPublicId? (garantía, FR-054), until?, supportAttachmentPublicId?, note }` → 201 | `Lending.Savings.HoldExceedsBalance`, `Lending.Contributions.HoldNotAllowed` (salvo `LoanCollateral`) | K8 |
-| `POST /{id}/holds/{holdId}/release` | Holds.Manage | `ReleaseAccountHoldCommand` | `{ reason }` → 204 | `Lending.Savings.HoldAutomatic` (`Deceased`, `ScreeningMatch`, `LoanCollateral` con crédito vivo: dice cómo se levanta) | K8 |
+| `PUT /{id}/parties` | Accounts.Parties.Manage | `SetMemberAccountPartiesCommand` | `{ handlingMode, parties[], beneficiaries[], beneficiaryRecordAttachmentPublicId?, evidenceAttachmentPublicId?, reason }` → el conjunto completo: la parte igual sigue, lo demás se cierra la víspera y nace hoy; los beneficiarios cambian en conjunto (FR-034, E47) | `Lending.Savings.BeneficiariesMustSum100`, `.BeneficiaryRecordRequired`, `.CoHoldersNotAllowed`, `.RepresentativeRequired`, `.JointRequiresTwoSigners`, `.PartyRepeated`, `.PartyInvalid`, `Lending.Authorization.Missing` | K7 |
+| `POST /{id}/data-update` | Accounts.Parties.Manage | `ConfirmMemberAccountDataUpdateCommand` | `{ reason }` → levanta la marca «actualizar datos» tras la mayoría de edad (FR-033), exige conocimiento del asociado y autorización del titular vigentes | `Lending.Savings.DataUpdateNotRequired`, `Lending.Authorization.Missing` | K7 (enmienda E49: es la salida de la marca de la mayoría de edad) |
+| `PUT /{id}/maturity-instruction` | Accounts.Parties.Manage | `SetContractualMaturityInstructionCommand` | `{ kind: TransferToAccount\|DisbursementOrder, targetAccountPublicId?, payee?, reason }` (sólo un contractual que no haya terminado; se guarda en `MaturityInstructionJson`, la sellada al abrir es hecho; E151) | `Lending.Savings.NotContractual`, `Lending.Contractual.NotCurrent`, `.DestinationInvalid` | K9 |
+| `GET /{id}/contractual` | Accounts.Read | `GetContractualQuery` | → el contrato del ahorro contractual: condiciones selladas, plan de cuotas, cumplimiento, proyección e instrucción al vencimiento (**nueva**, enmienda E151); lectura auditada | `Lending.Savings.NotContractual` | K9 |
+| `GET /{id}/holds?includeReleased=` | Accounts.Read | `ListAccountHoldsQuery` | → `{ publicId, reason (HoldReason), amount?, total, loanPublicId?, since, until?, releasedAt?, releasedBy?, support? }` | | K8 |
+| `POST /{id}/holds` | Holds.Manage | `PlaceAccountHoldCommand` | `{ reason (HoldReason), amount?, validTo?, loanPublicId? (garantía, FR-054), supportAttachmentPublicId?, notes }` → 201; por esta vía sólo `Internal`, `LoanCollateral`, `SignaturePending` y `Other` (enmienda E161) | `Lending.Holds.OwnedByProcess` (los demás motivos), `Lending.Holds.InsufficientAvailable` (uno por valor no supera el disponible), `Lending.Holds.Invalid` (la garantía exige un crédito vivo) | K8 |
+| `POST /{id}/holds/{holdId}/release` | Holds.Manage | `ReleaseAccountHoldCommand` | `{ reason }` → 204 | `Lending.Holds.NotFound`, `Lending.Holds.OwnedByProcess` (`Deceased`, `ScreeningMatch`, `Garnishment`: se levantan desde su origen), `Lending.Holds.LoanStillActive` (garantía con crédito vivo) (enmienda E161) | K8 |
 | `GET /{id}/charges?status=&page=` | Accounts.Read | `ListAccountChargesQuery` | → `AccountCharge { publicId, kind, code, amount, vat?, status: Collected\|Pending\|Waived\|Reversed, causedAt, invoice?: { number, status } }` (el estado de la factura lo informa Comercial, FR-128) | | K8 |
 | `POST /{id}/charges` | Charges.Manage | `RegisterAccountChargeCommand` | `{ chargeCode, eventReference?, reason }` → 201 (cargos por evento de pantalla: reposición de medio, certificado adicional) | `Lending.Savings.ChargeNotInLine`, `.ChargeExempt` | K8 |
 | `POST /{id}/charges/{chargeId}/waive` | Charges.Waive | `WaiveAccountChargeCommand` | `{ reason }` → el cargo `Waived`; si estaba cobrado, reintegro | `Lending.Savings.ChargeNotWaivable`, `Lending.Segregation.Conflict` | K8 |
-| `POST /{id}/charges/{chargeId}/reverse` | Charges.Manage | `ReverseAccountChargeCommand` | `{ reason }` → el reverso; si estaba gravado emite `CargoDeCaptacionReversado` | `Lending.Savings.ReversalOfReversal` | K8 |
+| `POST /{id}/charges/{chargeId}/reverse` | Charges.Manage | `ReverseAccountChargeCommand` | `{ reason }` → el reverso de la operación del cargo; si estaba gravado emite `CargoDeCaptacionReversado` | `Lending.Savings.ReversalOfReversal`, `Lending.Savings.ChargeCollectedLater` (su deuda ya la cobró una consignación posterior: se condona, E83), `.ChargeNotFound` | K8 |
 | `POST /{id}/charges/exemption` | Charges.Waive | `SetAccountChargeExemptionCommand` | `{ chargeCodes[], validFrom, validTo?, reason }` → exoneración individual aprobada (FR-128) | `Lending.Segregation.Conflict` | K8 |
 | `GET /{id}/settlements?page=` | Accounts.Read | `ListInterestSettlementsQuery` | → `InterestSettlement { publicId, periodFrom, periodTo, accrued, settled, roundingAdjustment, withholding, net, settledAt, origin }` | | K8 |
 | `POST /{id}/settlements/simulate` (sin clave) | Accounts.Read | `SimulateInterestSettlementQuery` | `{ date, recordedAsOf? }` → `{ periodFrom, periodTo, interest, withholding { base, inflationaryComponent, rate, threshold, thresholdReachedOn[], amount }, net, explanation[] }` (FR-064) | | K8 |
-| `POST /{id}/settlements` | Interest.Settle | `SettleAccountInterestCommand` | `{ periodTo, reason }` → 201 la liquidación; **idempotente por cuenta y período**: repetirla responde 200 con la existente (SC-003) | `Lending.Savings.SettlementPeriodOpen` (período no vencido), `Lending.Savings.AccrualBehind` (`data: { lastAccruedDate }`) | K8 |
-| `GET /{id}/statement?from=&to=` | Accounts.Read | `GetMemberAccountStatementQuery` | → extracto en pantalla (no es documento, §17): saldo inicial, movimientos por fecha valor, intereses, retención, GMF, saldo final y disponible; auditado | | K7 |
+| `POST /{id}/settlements` | Interest.Settle | `SettleAccountInterestCommand` | `{ periodTo, reason }` → 201 la liquidación nueva; **idempotente por cuenta y período**: repetirla responde 200 con la existente y `alreadyExisted` (SC-003, E103) | `Lending.Savings.SettlementPeriodOpen` (período no vencido o ya liquidado), `.AccrualBehind` (`data: { lastAccruedDate }`), `.AccountDoesNotAccrue` (E98) | K8 |
+| `GET /{id}/statement?from=&to=` | Accounts.Read | `GetMemberAccountStatementQuery` | → extracto en pantalla (no es documento, §17): saldo inicial, una línea por operación por fecha valor (lo causado sin operación, una por mes), intereses abonados, retención, GMF, saldo final y el disponible de hoy; a lo sumo 366 días (E124); auditado `Lending.Savings.StatementViewed` | | K7 |
 | `GET /{id}/terms?version=` | Accounts.Read | `GetMemberAccountTermsQuery` | → `MemberAccountTermsVersion` sellada (CDAT, contractual, tasa negociada) y su historia | | K9 |
-| `POST /{id}/negotiated-rate` | NegotiatedRates.Request | `RequestNegotiatedRateCommand` | `{ requestedMarginEa, reason }` (cuentas `Demand` o `Contractual` cuya línea lo declare) → 201 la solicitud (§6) | `Lending.NegotiatedRate.LineDoesNotAllow`, `.NoApplicableRule`, `.MarginAboveRule` (`data: { maxMarginEa, rulePublicId }`) | K9 |
+
+**No construidas** (cotejo con el código): `GET /{id}/installments` —las cuotas se listan en `GET /contributions/installments`
+(§7) y el plan del contractual en `GET /{id}/contractual`— y `POST /{id}/negotiated-rate` —la tasa negociada se pide al
+constituir o renovar el CDAT (`negotiation` / `requestedMarginEa`, §5) y se decide en §6—. Las de bloqueos se declaran en
+`GarnishmentsEndpoints.cs`. Total de §4: **33 rutas** (18 en `MemberAccountsEndpoints.cs`, 12 en
+`MemberAccountOperationsEndpoints.cs` y 3 de bloqueos).
 
 `OpenAccountInput`:
 
@@ -309,6 +370,7 @@ Una cuenta es `LND_MemberAccounts` (`MemberAccount`) de naturaleza `Deposit` (cl
   "handlingMode": "Indistinct",
   "parties": [{ "personPublicId": "…", "role": "CoHolder", "share": 0.500000, "signatureLimit": null, "supportAttachmentPublicId": null, "validFrom": "2027-01-04" }],
   "beneficiaries": [{ "personPublicId": "…", "percent": 60.00 }, { "personPublicId": "…", "percent": 40.00 }],
+  "beneficiaryRecordAttachmentPublicId": "…",
   "markGmfExempt": true,
   "contractual": null,
   "sourceOfFunds": { "declarationAttachmentPublicId": null },
@@ -316,7 +378,8 @@ Una cuenta es `LND_MemberAccounts` (`MemberAccount`) de naturaleza `Deposit` (cl
 }
 ```
 
-`MemberAccountDto`: `{ publicId, number, nature, depositClass?, status, line { publicId, code, name }, office, holder,
+`MemberAccountDto` (suma `openingBlockers[]`, E45; `contractual` con `installment`, `periodicity`, `installments`,
+`paidInstallments`, `arrearsInstallments`, `status`, `maturityDate`, E151): `{ publicId, number, nature, depositClass?, status, line { publicId, code, name }, office, holder,
 parties[], beneficiaries[], handlingMode, gmfExempt { since? }, balances { byConcept: { Principal, InterestPayable,
 Withholding, Gmf, ContributionMinimum, ContributionOrdinary, ContributionExtraordinary, ContributionRevaluation,
 ChargeReceivable, Bonus }, available {…} }, lastAccruedDate, lastSettledThrough, terms?, contractual?: { installment,
@@ -324,10 +387,15 @@ paidInstallments, arrearsInstallments, status: OnTrack\|Breached\|Completed }, m
 garnished, deceasedHolder, overdrawnTechnical }, holds[], directDebits[] }`.
 
 - **Número** (FR-019, FR-035): consecutivo por línea (`LND_NumberSequences`, clase por línea, R08) asignado al final de
-  la transacción; dos aperturas concurrentes reciben números consecutivos sin hueco (US2-5).
+  la transacción, con el código de la línea y un guion como prefijo (`AHVISTA-000001`, E46); dos aperturas concurrentes
+  reciben números consecutivos sin hueco (US2-5).
 - **Menores** (FR-033): con titular menor, el representante con soporte es obligatorio y es el único firmante.
-- **Lecturas sensibles** auditadas por `LendingAuditEmitter`: saldo (`Lending.Savings.BalanceViewed`), extracto
-  (`Lending.Savings.StatementViewed`), transacciones de un tercero (`Lending.Savings.TransactionsViewed`).
+- **Lecturas sensibles** auditadas por `LendingAuditEmitter` (lista propia `LecturasSensiblesDeCaptaciones`, E124): saldo,
+  detalle, lista de cuentas de una persona, vista previa de la cancelación y resumen de aportes
+  (`Lending.Savings.BalanceViewed`), extracto (`Lending.Savings.StatementViewed`), libro y uso del GMF de una persona
+  (`Lending.Savings.TransactionsViewed`), embargos (`Lending.Garnishment.Viewed`, E164).
+- **Alcance** (E123): la **otra** cuenta de una operación (destino de un traslado, de su simulación o de la entrega de una
+  cancelación) también tiene que estar en el alcance; fuera, el mismo 404 con `Lending.Access.OutOfScope`.
 
 ---
 
@@ -344,12 +412,14 @@ nuevo** (número con sufijo de versión, R11).
 | `GET /{id}` | Accounts.Read | `GetTermDepositQuery` | → `TermDepositDto { account, currentTerms { version, amount, termDays, effectiveAnnual, tableRate, negotiated?: { marginEa, rulePublicId, approvedBy, reason }, interestPeriodicity, timing, paymentDestination, maturityInstruction, graceUntil?, issueTermBand, rulesVersion }, termsHistory[], titles[], status }` | `Lending.TermDeposit.NotFound` | K9 |
 | `GET /{id}/schedule?version=` | Accounts.Read | `GetTermDepositScheduleQuery` | → `[{ number, from, to, days, rate, interest, withholdingEstimate, net, paidOn?, operationPublicId? }]` | | K9 |
 | `POST /simulate` (sin clave) | TermDeposits.Constitute | `SimulateTermDepositQuery` | `{ linePublicId, amount, termDays, interestPeriodicity, timing, startDate, requestedMarginEa?, holderPersonPublicId? }` → `{ tableRate, rate, schedule[], totalInterest, withholdingEstimate { appliesThreshold, amount }, maturityDate (siguiente hábil, D19), issueTermBand, negotiation?: { allowed, maxMarginEa, withinUserAttribution } }` | `Lending.TermDeposit.TermOutOfRange` (`data: { minTermDays, maxTermDays }`), `.AmountOutOfRange`, `.NoRateForTerm`, `.PeriodicityNotAllowed` | K9 |
-| `POST /` | TermDeposits.Constitute | `ConstituteTermDepositCommand` | `ConstituteTermDepositInput` (abajo) → 201 `TermDepositDto` en `Opening` (espera el fondeo por el contrato) o `Active` (fondeado por traslado); con tasa negociada fuera de la atribución, `Opening` + solicitud `PendingDecision` (US6-6) | los de `simulate`, `Lending.Savings.MembersOnly`, `Lending.NegotiatedRate.MarginAboveRule`, `Lending.Savings.InsufficientAvailable` (fondeo por traslado), `Lending.Authorization.Missing` | K9 |
-| `PUT /{id}/maturity-instruction` | TermDeposits.Renew | `SetTermDepositMaturityInstructionCommand` | `{ instruction: Rollover\|RenewWithConditions\|CancelAndPay, paymentDestination?, reason }` → hasta el fin de la gracia | `Lending.TermDeposit.GraceExpired` | K9 |
-| `POST /{id}/renew` | TermDeposits.Renew | `RenewTermDepositCommand` | `{ amountChange?: { kind: Increase\|Decrease, amount, funding?\|destination? }, termDays, interestPeriodicity, timing, requestedMarginEa?, reason }` → versión nueva, plan nuevo, título nuevo enlazado; retención antes de capitalizar (FR-063) | `Lending.TermDeposit.NotInRenewalWindow` (antes del vencimiento o pasada la gracia), `.Garnished` (FR-072), los de `simulate` | K9 |
+| `POST /` | TermDeposits.Constitute | `ConstituteTermDepositCommand` | `ConstituteTermDepositInput` (abajo) → 201 `TermDepositDto` en `Opening` con su propuesta en `PendingTermsJson`: la versión 1 y el plan se **sellan al fondear** (E130), por el recaudador (consignación exacta) o por `POST /{id}/fund`; con tasa negociada fuera de la atribución, `Opening` + solicitud `PendingDecision` (US6-6) | los de `simulate`, `Lending.TermDeposit.StartDateInvalid`, `.FundingInvalid`, `Lending.Savings.MembersOnly`, `Lending.NegotiatedRate.MarginAboveRule`, `Lending.Savings.BeneficiaryRecordRequired`, `Lending.Authorization.Missing` | K9 |
+| `POST /{id}/fund` | TermDeposits.Constitute | `FundTermDepositCommand` | `{ sourceAccountPublicId, signers?[], approvalPublicId?, reason }` → 201 la operación de constitución por traslado desde una cuenta de ahorro viva del titular (con su GMF) o 202 `PendingApproval` (**nueva**, enmienda E130) | `Lending.TermDeposit.AlreadyFunded`, `.PendingNegotiation`, `.FundingInvalid`, `Lending.Savings.InsufficientAvailable`, `.SignaturesMissing` | K9 |
+| `PUT /{id}/maturity-instruction` | TermDeposits.Renew | `SetTermDepositMaturityInstructionCommand` | `{ instruction: Rollover\|RenewWithNewTerms\|CancelAndPay, paymentDestination?: { kind: Account\|PaymentOrder, accountPublicId?, payeePersonPublicId?, bankPublicId?, accountType?, accountNumber? }, reason }` → hasta el fin de la gracia, en `MaturityInstructionJson` (la sellada es hecho; E136) | `Lending.TermDeposit.GraceExpired`, `.DestinationInvalid` | K9 |
+| `POST /{id}/renew` | TermDeposits.Renew | `RenewTermDepositCommand` | `{ termDays, interestPeriodicity, timing, reason, amountChange?: { kind: Increase\|Decrease, amount, funding?\|destination? }, requestedMarginEa?, maturityInstruction?, paymentDestination? }` → versión nueva, plan nuevo, título nuevo enlazado; sólo entre el vencimiento y el fin de la gracia; paga antes lo pendiente; retención antes de capitalizar (FR-063) | `Lending.TermDeposit.NotInRenewalWindow`, `.Garnished` (FR-072), `.NegotiationRequiresApproval` (margen sólo dentro de la atribución, E136), `.NoRolloverRate`, los de `simulate` | K9 |
 | `POST /{id}/redeem/simulate` (sin clave) | TermDeposits.Redeem | `SimulateTermDepositRedemptionQuery` | `{ date }` → `{ principal, accruedInterest, penalty { kind, repricedRate?, amount }, withholding, gmf, net, explanation[] }` | `Lending.TermDeposit.EarlyRedemptionNotAllowed` (US6-4) | K9 |
-| `POST /{id}/redeem` | TermDeposits.Redeem | `RedeemTermDepositCommand` | `{ date, destination: { kind: TransferToAccount\|DisbursementOrder, targetAccountPublicId?, payee? }, expectedPreviewSha256, reason }` → la operación, o 202 `PendingApproval` (atribución con monto, FR-071) | `Lending.TermDeposit.EarlyRedemptionNotAllowed`, `.Garnished`, `.DeceasedHolder`, `Lending.Savings.PreviewChanged` (`data: { preview }`) | K9 |
-| `GET /{id}/titles` | Accounts.Read | `ListTermDepositTitlesQuery` | → los documentos `TermDepositTitle` de la cadena (`documentos.md`) con estado | | K9 |
+| `POST /{id}/redeem` | TermDeposits.Redeem | `RedeemTermDepositCommand` | `{ destination: { kind: Account\|PaymentOrder, targetAccountPublicId?, payeePersonPublicId?, bankPublicId?, accountType?, accountNumber? }, expectedPreviewSha256, reason, approvalPublicId? }` → **a la fecha de hoy** (sin `date`, E141): 201 la operación, o 202 `PendingApproval` (atribución con monto, FR-071); en la gracia es cancelación sin penalidad; con giro la cuenta queda `Closing` (E136) | `Lending.TermDeposit.EarlyRedemptionNotAllowed`, `.Garnished`, `.DeceasedHolder`, `.DestinationInvalid`, `Lending.Savings.PreviewChanged` (`data: { preview }`) | K9 |
+| `GET /{id}/titles` | Accounts.Read | `ListTermDepositTitlesQuery` | → los documentos `TermDepositTitle` de la cadena (`documentos.md`) con la versión que titula y el estado calculado (E173) | | K9 |
+| `POST /{id}/titles` | **Documents.Issue** | `ReissueTermDepositTitleCommand` | → 201 el título vigente; emite el título pendiente (sin firmante o con el almacén caído al sellar, o un CDAT migrado) y devuelve el vigente si ya existe (**nueva**, enmienda E173; declarada en `DepositDocumentsEndpoints.cs`) | `Lending.Document.SignerMissing` | K9 |
 
 `ConstituteTermDepositInput`:
 
@@ -360,15 +430,17 @@ nuevo** (número con sufijo de versión, R11).
   "amount": 10000000.00, "termDays": 180, "interestPeriodicity": "Monthly", "timing": "Arrears", "startDate": "2027-01-04",
   "paymentDestination": { "kind": "Account", "accountPublicId": "…" },
   "maturityInstruction": "Rollover",
-  "funding": { "kind": "Collector" },
+  "funding": { "kind": "Collector", "sourceAccountPublicId": null, "signers": [], "approvalPublicId": null },
+  "beneficiaryRecordAttachmentPublicId": "…", "channel": null,
   "negotiation": { "requestedMarginEa": 0.012000, "reason": "Asociado con cinco años y 200 millones en captaciones" },
   "expectedPreviewSha256": "a91c…"
 }
 ```
 
 `funding.kind`: `Collector` (Recaudo o Tesorería consignan **exactamente** `amount` por `ConsignarAsync` mientras está
-`Opening`; otro valor: `Lending.TermDeposit.FundingAmountMismatch`) o `TransferFromAccount` (`sourceAccountPublicId`,
-con GMF según `GMF_HECHOS_GENERADORES`). La prórroga automática, el pago de intereses en cada fecha del plan, la
+`Opening`; otro valor: `Lending.TermDeposit.FundingAmountMismatch`; un CDAT ya constituido no recibe consignaciones:
+`Lending.TermDeposit.NoAdditionalDeposits`, E130) o `TransferFromAccount` (`sourceAccountPublicId`, con GMF según
+`Gmf.HechosGeneradores`). `paymentDestination.kind` es `Account` o `PaymentOrder` (giro a un beneficiario, E131). La prórroga automática, el pago de intereses en cada fecha del plan, la
 reclasificación por plazo de emisión y el «vencido por pagar» los hace el ciclo diario (R10), sin ruta.
 
 ---
@@ -379,9 +451,12 @@ reclasificación por plazo de emisión y el «vencido por pagar» los hace el ci
 |---|---|---|---|---|---|
 | `GET /?status=&line=&page=` | `AlgunPermiso(NegotiatedRates.Request, NegotiatedRates.Approve)` | `ListNegotiatedRateRequestsQuery` | → lista `{ publicId, account { publicId, number, kind }, holder, amount, termDays?, tableRate, requestedMarginEa, maxMarginEa, rule, requestedBy, status: PendingDecision\|Approved\|Rejected\|Withdrawn\|Expired, routing { level, kind: Individual\|Session } }`; quien no tiene el nivel no ve las de otros | | K9 |
 | `GET /{id}` | ídem | `GetNegotiatedRateRequestQuery` | → la solicitud con criterios evaluados y costo frente a la tabla | `Lending.NegotiatedRate.NotFound` | K9 |
-| `POST /{id}/approve` | NegotiatedRates.Approve | `DecideNegotiatedRateCommand` | `{ decision: Approve, approvalPublicId? (aprobador presente con segundo factor), sessionItemPublicId?, reason }` → sella tabla, margen, regla, aprobador y motivo en `MemberAccountTermsVersion`; si el CDAT esperaba, pasa a esperar el fondeo | `Lending.NegotiatedRate.LevelRequired`, `.MarginAboveRule`, `Lending.Segregation.Conflict`, `Lending.Session.ItemMismatch` | K9 |
-| `POST /{id}/reject` | NegotiatedRates.Approve | `DecideNegotiatedRateCommand` | `{ decision: Reject, reason }` → el CDAT queda con la tasa de la tabla si el titular la acepta, o se desiste | ídem | K9 |
-| `POST /{id}/withdraw` | NegotiatedRates.Request | `WithdrawNegotiatedRateRequestCommand` | `{ reason }` | `Lending.NegotiatedRate.AlreadyDecided` | K9 |
+| `POST /{id}/approve` | NegotiatedRates.Approve | `DecideNegotiatedRateCommand` | `{ reason, approvalPublicId? (aprobador presente con segundo factor), sessionItemPublicId? (decisión de un órgano con punto de acta cerrado, asunto `NegotiatedRate`) }` (la ruta dice la decisión: no hay campo `decision`) → sella tabla, margen, regla, aprobador y motivo en `MemberAccountTermsVersion`; si el CDAT esperaba, pasa a esperar el fondeo (E133) | `Lending.NegotiatedRate.NotFound` (el mismo 404 a quien no tiene el nivel: `LevelRequired` no nació), `.MarginAboveRule`, `.AlreadyDecided`, `Lending.TermDeposit.AlreadyFunded`, `Lending.Segregation.Conflict`, `Lending.Session.ItemMismatch` | K9 |
+| `POST /{id}/reject` | NegotiatedRates.Approve | `DecideNegotiatedRateCommand` | `{ reason, approvalPublicId?, sessionItemPublicId? }` → el CDAT queda con la tasa de la tabla si el titular la acepta, o se desiste | ídem | K9 |
+| `POST /{id}/withdraw` | NegotiatedRates.Request | `WithdrawNegotiatedRateRequestCommand` | `{ reason }` | `Lending.NegotiatedRate.AlreadyDecided`, `.OnlyRequester` (sólo quien la pidió la retira) | K9 |
+
+La solicitud nace al constituir o renovar un CDAT con un margen fuera de la atribución de quien lo pide (§5); no hay ruta
+para pedirla sobre una cuenta a la vista o contractual (cotejo con el código).
 
 ---
 
@@ -392,13 +467,16 @@ La cuota la genera el ciclo diario (FR-040) y la pagan los recaudadores por el c
 
 | Ruta | Permiso | Comando / consulta | Cuerpo → respuesta | Errores | E |
 |---|---|---|---|---|---|
-| `GET /summary?personPublicId=&date=&recordedAsOf=` | Accounts.Read | `GetContributionsSummaryQuery` | → `{ person, date, byClass { Minimum, Ordinary, Extraordinary, Revalued }, minimumNonReducible, permanentSavings, installmentsInArrears: [{ period, dueDate, pending }], asCollateralOf: [{ loanPublicId, number }] }`; **mismo saldo** que `IConsultaDeAportes` v2 y que el extracto (SC-010) | | K7 |
-| `GET /installments?personPublicId=&status=&period=&line=&page=` | Accounts.Read | `ListAccountInstallmentsQuery` | → cuotas de aportes, permanente y contractual (como §4) | | K7 |
-| `GET /refunds?status=&page=` | Accounts.Read | `ListContributionRefundsQuery` | → devoluciones sin retiro (exceso de participación, FR-043) | | K7 |
-| `POST /refunds` | Contributions.Manage | `RequestContributionRefundCommand` | `{ accountPublicId, amount, cause: ParticipationExcess\|Other, sessionItemPublicId, reason }` → 201 `PendingApproval` | `Lending.Contributions.MinimumBreached`, `Lending.Contributions.HasLiveLoans` (FR-044: `data: { loans[] }`), `Lending.Contributions.EntityMinimumBreached` (FR-080: la devolución queda pendiente y avisa al gerente) | K7 |
-| `POST /refunds/{refundId}/approve` | Contributions.Manage | `ApproveContributionRefundCommand` | `{ form: TransferToAccount\|DisbursementOrder, payee?, targetAccountPublicId?, reason }` → la operación y la orden | `Lending.Segregation.Conflict`, los del registro | K7 |
-| `POST /assignments` | Contributions.Manage | `RequestContributionAssignmentCommand` | `{ fromAccountPublicId, toPersonPublicId, amount, sessionItemPublicId, reason }` → 201 `PendingApproval` (FR-048, sólo si los estatutos lo permiten: parámetro) | `Lending.Contributions.AssignmentNotAllowed`, `.MinimumBreached`, `.HasLiveLoans` | K7 |
+| `GET /summary?personPublicId=&date=` | Accounts.Read | `GetContributionsSummaryQuery` | → `{ person, date, byClass { Minimum, Ordinary, Extraordinary, Revalued }, minimumNonReducible, permanentSavings, installmentsInArrears: [{ period, dueDate, pending }], asCollateralOf: [{ loanPublicId, number }] }`; **mismo saldo** que `IConsultaDeAportes` v2 y que el extracto (SC-010); exige el alcance sobre **todas** las cuentas de la persona (E123) y se audita `Lending.Savings.BalanceViewed` (E124). No recibe `recordedAsOf` (cotejo) | | K7 |
+| `GET /installments?personPublicId=&status=&period=&line=&page=&pageSize=` | Accounts.Read | `ListAccountInstallmentsQuery` | → cuotas de aportes, permanente y contractual `{ publicId, period, dueDate, amount, paid, pending, status: Pending\|PartiallyPaid\|Paid\|NotDeducted, notDeductedReason? }` | | K7 |
+| `GET /refunds?status=&page=&pageSize=` | Accounts.Read | `ListContributionRequestsQuery` (clase `Refund`) | → devoluciones sin retiro (exceso de participación, FR-043), estado `PendingApproval\|Approved\|Rejected` (`LND_ContributionRequests`, E58) | | K7 |
+| `POST /refunds` | Contributions.Manage | `RequestContributionRefundCommand` | `{ accountPublicId, amount, cause: ParticipationExcess\|Other, sessionItemPublicId?, reason }` → 201 `PendingApproval` | `Lending.Contributions.MinimumBreached`, `.NoParticipationExcess` (E58), `.HasLiveLoans` (FR-044: `data: { loans[] }`), `.EntityMinimumBreached` (FR-080: la devolución queda pendiente y avisa al gerente) | K7 |
+| `POST /refunds/{refundId}/approve` | Contributions.Manage | `ApproveContributionRefundCommand` | `{ form: DisbursementOrder\|TransferToAccount, payee?, targetAccountPublicId?, reason }` → la operación y la orden | `Lending.Segregation.Conflict`, `Lending.Contributions.RequestAlreadyDecided`, los del registro | K7 |
+| `POST /refunds/{refundId}/reject` | Contributions.Manage | `RejectContributionRequestCommand` | `{ reason }` → la solicitud `Rejected` (**nueva**, enmienda E58) | `Lending.Contributions.RequestNotFound`, `.RequestAlreadyDecided`, `Lending.Segregation.Conflict` | K7 |
+| `GET /assignments?status=&page=&pageSize=` | Accounts.Read | `ListContributionRequestsQuery` (clase `Assignment`) | → cesiones (**nueva**, cotejo con el código) | | K7 |
+| `POST /assignments` | Contributions.Manage | `RequestContributionAssignmentCommand` | `{ fromAccountPublicId, toPersonPublicId, amount, sessionItemPublicId?, reason }` → 201 `PendingApproval` (FR-048, sólo si la versión de la línea lo admite: `allowsTransferBetweenMembers`); la cuenta que recibe también en el alcance (E123) | `Lending.Contributions.AssignmentNotAllowed`, `.MinimumBreached`, `.HasLiveLoans`, `.AccountNotFound` | K7 |
 | `POST /assignments/{assignmentId}/approve` | Contributions.Manage | `ApproveContributionAssignmentCommand` | `{ reason }` → la operación (traslado entre cuentas de aportes) | `Lending.Segregation.Conflict` | K7 |
+| `POST /assignments/{assignmentId}/reject` | Contributions.Manage | `RejectContributionRequestCommand` | `{ reason }` → la cesión `Rejected` (**nueva**, enmienda E58) | `Lending.Contributions.RequestAlreadyDecided`, `Lending.Segregation.Conflict` | K7 |
 
 `/api/lending/contribution-balances` (la 013 §7.4) queda **sólo** como insumo de la migración: desde la activación de
 aportes deja de leerse en la consulta (FR-094) y su importación responde `Lending.Contributions.UseMigration`.
@@ -409,12 +487,13 @@ aportes deja de leerse en la consulta (FR-094) y su importación responde `Lendi
 
 | Ruta | Permiso | Comando / consulta | Cuerpo → respuesta | Errores | E |
 |---|---|---|---|---|---|
-| `GET /?personPublicId=&status=&page=` | Accounts.Read | `ListGarnishmentsQuery` | → `Garnishment { publicId, person, courtPersonPublicId, claimantPersonPublicId, officeReference, amount, isAlimony, status: Active\|Consigned\|Released\|Answered, retained: [{ accountPublicId, number, amount }], unembargableLimit, responses[] }` | | K8 |
-| `GET /{id}` | Accounts.Read | `GetGarnishmentQuery` | → el embargo con la explicación del límite inembargable (`LimiteInembargable`) | `Lending.Garnishment.NotFound` | K8 |
-| `POST /` | Garnishments.Register | `RegisterGarnishmentCommand` | `{ personPublicId, courtPersonPublicId, claimantPersonPublicId?, officeReference, officeDate, amount, isAlimony, accountsScope: AllSavings\|Specific, accountPublicIds?, supportAttachmentPublicId }` → 201 con lo retenido por cuenta en el orden de `EMBARGO_ORDEN_CUENTAS` | `Lending.Garnishment.ContributionsNotGarnishable` (US11-2: la respuesta al juzgado queda registrada en el mismo guardado; `data: { responsePublicId }`), `Lending.Garnishment.NothingGarnishable` (aviso: todo bajo el límite) | K8 |
-| `POST /{id}/responses` | Garnishments.Register | `RegisterGarnishmentResponseCommand` | `{ kind: Acknowledgement\|Retention\|NotGarnishable\|Consignment\|Release, attachmentPublicId, sentOn }` → la respuesta | | K8 |
-| `POST /{id}/consign` | Garnishments.Register | `ConsignGarnishmentCommand` | `{ amount, payee: { personPublicId (juzgado), bankPublicId, accountNumber }, reason }` → la operación (`EmbargoConsignado`) y la orden `OrdenDeGiroEmitida` v2 (`GarnishmentConsignment`) | `Lending.Garnishment.ExceedsRetained` | K8 |
-| `POST /{id}/release` | Garnishments.Release | `ReleaseGarnishmentCommand` | `{ releaseOfficeReference, supportAttachmentPublicId, amount?, reason }` → libera lo retenido, conserva la historia (US11-3) | `Lending.Segregation.Conflict` (quien registró no levanta), `Lending.Garnishment.AlreadyReleased` | K8 |
+| `GET /?personPublicId=&status=&page=&pageSize=` | Accounts.Read | `ListGarnishmentsQuery` | → `Garnishment { publicId, person, authority (Court\|TaxAuthority\|OtherPublicEntity), courtPersonPublicId, processNumber, officeReference, officeDate, receivedOn, claimantName, amount, isAlimony, includesContributions, status: Active\|Released\|Rejected (por número: 2, 3, 4; `Registered` no se usa), retained: [{ accountPublicId, number, amount }], consigned, unembargableLimit, responseDueOn, responseOverdue, responses[] }` (enmiendas E157, E161); auditado `Lending.Garnishment.Viewed` (E164) | | K8 |
+| `GET /{id}` | Accounts.Read | `GetGarnishmentQuery` | → el embargo con `explanation[]` del límite inembargable (`LimiteInembargable`) y `warnings[]` (`Lending.Garnishment.ResponseOverdue`, informativo); exige el alcance sobre todas las cuentas de la persona (E164) | `Lending.Garnishment.NotFound` | K8 |
+| `GET /{id}/responses/draft?kind=` | Accounts.Read | `GetGarnishmentResponseDraftQuery` | → el texto de la respuesta (la plantilla de la entidad o la estándar, `Embargos.PlantillasDeRespuesta`, llena con `{Oficio}`, `{Proceso}`, `{Embargado}`, `{Retenido}`, `{Cuentas}`…); lectura auditada (**nueva**, enmienda E158) | | K8 |
+| `POST /` | Garnishments.Register | `RegisterGarnishmentCommand` | `{ personPublicId, authority, courtPersonPublicId, courtCode?, processNumber, officeReference, officeDate, receivedOn?, claimantName, claimantTaxId?, claimantPersonPublicId?, amount?, isAlimony, accountsScope: AllSavings\|Specific, accountPublicIds?, includesContributions, destinationBankPublicId?, destinationAccountNumber?, supportAttachmentPublicId, notes? }` → 201 **`Active`** (rige al registrarse, sin aprobación: CGP art. 593 num. 10, E157) con lo retenido por cuenta en el orden de `Embargos.OrdenDeCuentas`; pone el bloqueo de deudor `Garnishment` de la 013. **`ContributionsNotGarnishable` y `NothingGarnishable` son avisos en `warnings` del 201**, no errores (la respuesta al juzgado queda registrada en el mismo guardado; E161) | `Lending.Garnishment.Invalid`, `.AccountNotOfPerson` | K8 |
+| `POST /{id}/responses` | Garnishments.Register | `RegisterGarnishmentResponseCommand` | `{ kind: Acknowledgement\|BalanceReport\|ContributionsNotGarnishable\|ConsignmentNotice\|ReleaseAcknowledgement, attachmentPublicId?, sentOn, text? }` → la respuesta, emitida como documento `GarnishmentResponse` (`issuedDocumentPublicId`, `issuedDocumentNumber`; sin firmante, el aviso `Lending.Garnishment.ResponseDocumentNotIssued`; E176) | | K8 |
+| `POST /{id}/consign` | Garnishments.Register | `ConsignGarnishmentCommand` | `{ amount, payee?: { bankPublicId, accountNumber, accountType } (la cuenta de depósitos judiciales; si no viene, la del embargo), reason }` → una operación `GarnishmentConsignment` (`EMB-`) por cuenta, con `EmbargoConsignado` y su orden `OrdenDeGiroEmitida` v2 (`GarnishmentConsignment`, beneficiario el juzgado); sin GMF (E163) | `Lending.Garnishment.ExceedsRetained`, `.DestinationMissing`, `.NotActive`, `Lending.Prevalidation.NotPostable` | K8 |
+| `POST /{id}/release` | Garnishments.Release | `ReleaseGarnishmentCommand` | `{ releaseOfficeReference, releaseOfficeDate?, supportAttachmentPublicId, amount?, reason }` → con `amount` menor que la medida la reduce (sigue activo); sin `amount`, la levanta toda y quita el bloqueo de deudor; conserva la historia (US11-3, E161) | `Lending.Segregation.Conflict` (quien registró no levanta), `Lending.Garnishment.AlreadyReleased`, `.NotActive`, `.PartialReleaseInvalid` | K8 |
 
 ---
 
@@ -423,8 +502,8 @@ aportes deja de leerse en la consulta (FR-094) y su importación responde `Lendi
 | Ruta | Permiso | Comando / consulta | Cuerpo → respuesta | Errores | E |
 |---|---|---|---|---|---|
 | `GET /?personPublicId=&accountPublicId=&loanPublicId=&status=` | Accounts.Read | `ListDirectDebitMandatesQuery` | → `DirectDebitMandate { publicId, account, scope: Loan\|AllHolderLoans, loan?, allowsPartial, validFrom, validTo?, status, lastDebits[] }` | | K8 |
-| `POST /` | DirectDebits.Manage | `RegisterDirectDebitMandateCommand` | `{ accountPublicId, scope, loanPublicId?, allowsPartial, validFrom, validTo?, authorizationAttachmentPublicId }` → 201 | `Lending.DirectDebit.NotHolder` (el titular de la cuenta no es deudor del crédito), `.AccountNotDemand`, `.Overlaps` | K8 |
-| `POST /{id}/revoke` | DirectDebits.Manage | `RevokeDirectDebitMandateCommand` | `{ validTo, reason, evidenceAttachmentPublicId? }` | | K8 |
+| `POST /` | DirectDebits.Manage | `RegisterDirectDebitMandateCommand` | `{ accountPublicId, scope, loanPublicId?, allowsPartial, validFrom?, validTo?, authorizationAttachmentPublicId, authorizedByPersonPublicId? }` → 201 | `Lending.DirectDebit.NotHolder` (el titular de la cuenta no es deudor del crédito), `.AccountNotDemand`, `.Overlaps`, `.Retroactive` | K8 |
+| `POST /{id}/revoke` | DirectDebits.Manage | `RevokeDirectDebitMandateCommand` | `{ validTo?, reason, evidenceAttachmentPublicId? }` | `Lending.DirectDebit.NotFound`, `.AlreadyRevoked` | K8 |
 
 El débito lo hace el ciclo diario en la fecha exigible (sin ruta): retiro interno de la cuenta + pago al crédito con
 `InternalOffset` en **una operación**, clave `CAR:debito-automatico:{loanPublicId:N}:{fecha}` (R16).
@@ -435,10 +514,10 @@ El débito lo hace el ciclo diario en la fecha exigible (sin ruta): retiro inter
 
 | Ruta | Permiso | Comando / consulta | Cuerpo → respuesta | Errores | E |
 |---|---|---|---|---|---|
-| `GET /?personPublicId=&active=` | Accounts.Read | `ListGmfExemptAccountsQuery` | → `{ publicId, person, account, validFrom, validTo?, markedBy, reason }` | | K8 |
+| `GET /?personPublicId=&active=` | Accounts.Read | `ListGmfExemptAccountsQuery` | → `{ publicId, person, account, validFrom, validTo?, markedBy, reason }` | | K7 (E51) |
 | `GET /usage?personPublicId=&year=&month=` | Accounts.Read | `GetGmfMonthlyUsageQuery` | → `{ policy (GmfExemptionPolicy), capUvt, capAmount, usedExempt, remaining, taxed, gmfCharged }` (`LND_GmfMonthlyUsage`) | | K8 |
-| `POST /` | GmfExemptions.Manage | `MarkGmfExemptAccountCommand` | `{ accountPublicId, validFrom, reason }` → 201; con política `PerHolderLimit` o `NotApplicable` no hay marca (`Lending.Gmf.PolicyWithoutMark`) | `Lending.Gmf.AlreadyMarked`, `Lending.Gmf.AccountNotSavings`, `Lending.Gmf.PolicyWithoutMark` | K8 |
-| `POST /{id}/end` | GmfExemptions.Manage | `EndGmfExemptAccountCommand` | `{ validTo, reason }`; la cuenta nueva parte del acumulado del mes de la persona | | K8 |
+| `POST /` | GmfExemptions.Manage | `MarkGmfExemptAccountCommand` | `{ accountPublicId, validFrom?, reason, replaceCurrent }` → 201; `replaceCurrent` cambia la marca vigente en el mismo comando (E48); la marca que rige hoy reclasifica en el mismo comando (E159); con política `PerHolderLimit` o `NotApplicable` no hay marca | `Lending.Gmf.AlreadyMarked`, `.AccountNotSavings`, `.PolicyWithoutMark`, `.NotHolder`, `.Retroactive` (no se marca hacia atrás) | K7 (E48, E51) |
+| `POST /{id}/end` | GmfExemptions.Manage | `EndGmfExemptAccountCommand` | `{ validTo?, reason }`; la cuenta nueva parte del acumulado del mes de la persona | `Lending.Gmf.NotFound`, `.AlreadyEnded`, `.Retroactive` | K7 (E48, E51) |
 
 ---
 
@@ -449,14 +528,14 @@ Estados `MembershipWithdrawalStatus`: `Filed → Approved → Settled → Paid`,
 | Ruta | Permiso | Comando / consulta | Cuerpo → respuesta | Errores | E |
 |---|---|---|---|---|---|
 | `GET /?status=&cause=&personPublicId=&page=` | `AlgunPermiso(MembershipWithdrawals.File, .Approve, .Settle)` | `ListMembershipWithdrawalsQuery` | → lista `{ publicId, number, person, cause, filedOn, status, approval?: { sessionItemPublicId, on }, settlement?: { refund, crossed }, refundOrder? }` | | K7 |
-| `GET /{id}` | ídem | `GetMembershipWithdrawalQuery` | → el trámite con `lines: [MembershipWithdrawalLine { kind: Contributions\|Savings\|TermDeposit\|LoanOffset\|LossDeduction\|Refund, account?, loan?, concept?, amount, explanation }]` | `Lending.MembershipWithdrawal.NotFound` | K7 |
-| `POST /` | MembershipWithdrawals.File | `FileMembershipWithdrawalCommand` | `{ personPublicId, cause (MembershipWithdrawalCause), requestedOn, supportAttachmentPublicIds[], note }` → 201 `Filed` | `Lending.MembershipWithdrawal.AlreadyInProgress`, `Lending.MembershipWithdrawal.NotAssociate` | K7 |
+| `GET /{id}` | ídem | `GetMembershipWithdrawalQuery` | → el trámite con `lines: [MembershipWithdrawalLine { kind: ContributionBalance\|SavingsBalance\|TermDepositBalance\|LossDeduction\|LoanOffset\|Refund, account?, loan?, concept?, amount, explanation }]` por versión de la liquidación (`Refund` es informativa; los CDAT vivos van como `TermDepositBalance` informativa; enmiendas E65, E137) | `Lending.MembershipWithdrawal.NotFound` | K7 |
+| `POST /` | MembershipWithdrawals.File | `FileMembershipWithdrawalCommand` | `{ personPublicId, cause (MembershipWithdrawalCause), causeDetail?, requestedOn?, supportAttachmentPublicIds?, note }` → 201 `Filed` | `Lending.MembershipWithdrawal.AlreadyInProgress`, `Lending.MembershipWithdrawal.NotAssociate` | K7 |
 | `POST /{id}/desist` | MembershipWithdrawals.File | `DesistMembershipWithdrawalCommand` | `{ reason }` → `Desisted` (sólo antes de aprobar) | `Lending.MembershipWithdrawal.NotFiled` | K7 |
-| `POST /{id}/approve` | MembershipWithdrawals.Approve | `DecideMembershipWithdrawalCommand` | `{ decision: Approve, sessionItemPublicId, effectiveDate, reason }` → `Approved`; emite **`RetiroDeAsociadoAprobado`** a Asociados en el mismo guardado | `Lending.Segregation.Conflict`, `Lending.Session.ItemMismatch` | K7 |
-| `POST /{id}/reject` | MembershipWithdrawals.Approve | `DecideMembershipWithdrawalCommand` | `{ decision: Reject, sessionItemPublicId, reason }` → `Rejected` | ídem | K7 |
-| `POST /{id}/settlement/preview` (sin clave) | MembershipWithdrawals.Settle | `PreviewMembershipWithdrawalSettlementQuery` | `{ date, applyLossDeduction }` → `{ lines[], offsets: [{ loanPublicId, number, modality, distribution[] }] (prelación de los estatutos, D14), lossDeduction?, refund, entityMinimum { capital, minimum, wouldBreach }, sha256, warnings[] }` | `Lending.MembershipWithdrawal.NotApproved` | K7 |
-| `POST /{id}/settle` | MembershipWithdrawals.Settle | `SettleMembershipWithdrawalCommand` | `{ date, expectedPreviewSha256, lossDeduction?: { sessionItemPublicId }, refund: { form: TransferToAccount\|DisbursementOrder, targetAccountPublicId?, payee? }, reason, pendingLoanBalance?: MoveToCashier\|KeepRepaymentChannel }` (decisión del dueño del 2026-10-18, D45: con deuda pendiente después del cruce, quien liquida elige si los créditos pasan a caja —defecto— o conservan su forma de pago; la vista previa trae `pendingLoanBalance` y `fundsOrder`, D41) → `Settled` con la operación del cruce (aportes y ahorros contra los créditos, `InternalOffset`, **todo o nada**, FR-077) y la orden de devolución; devolución sobre la atribución: 202 `PendingApproval`; con el mínimo irreducible de la entidad perforado, sólo la devolución de los **aportes** queda `Pending` (los ahorros se devuelven, D43) y se avisa al gerente (FR-080) | `Lending.Savings.PreviewChanged`, `Lending.MembershipWithdrawal.NotApproved`, `Lending.Contributions.EntityMinimumBreached` (aviso) | K7 |
-| `POST /{id}/refund/approve` | MembershipWithdrawals.Approve | `ApproveMembershipRefundCommand` | `{ approvalPublicId?, reason }` → la orden de devolución emitida | `Lending.Segregation.Conflict` | K7 |
+| `POST /{id}/approve` | MembershipWithdrawals.Approve | `DecideMembershipWithdrawalCommand` | `{ sessionItemPublicId, effectiveDate?, reason }` (la ruta dice la decisión; punto de una sesión **cerrada** cuyo asunto es el trámite, E70) → `Approved`; emite **`RetiroDeAsociadoAprobado`** a Asociados en el mismo guardado | `Lending.Segregation.Conflict`, `Lending.Session.ItemMismatch`, `Lending.MembershipWithdrawal.EffectiveDateInvalid`, `.InvalidTransition` | K7 |
+| `POST /{id}/reject` | MembershipWithdrawals.Approve | `DecideMembershipWithdrawalCommand` | `{ sessionItemPublicId, reason }` (resultado `Deny` o `Return` del punto) → `Rejected` | ídem | K7 |
+| `POST /{id}/settlement/preview` (sin clave) | MembershipWithdrawals.Settle | `PreviewMembershipWithdrawalSettlementQuery` | `{ date?, lossDeduction?: { sessionItemPublicId, year, proportion } }` (la proporción la da el acta, enmienda E68) → `{ lines[], offsets: [{ loanPublicId, number, modality, distribution[] }] (prelación D14), lossDeduction?, refund, entityMinimum { capital, minimum, wouldBreach }, pendingLoanBalance, fundsOrder, sha256, warnings[] }` | `Lending.MembershipWithdrawal.NotApproved`, `.LossDeductionNotEnabled`, `.SettlementDateInvalid` | K7 |
+| `POST /{id}/settle` | MembershipWithdrawals.Settle | `SettleMembershipWithdrawalCommand` | `{ date?, expectedPreviewSha256, lossDeduction?: { sessionItemPublicId, year, proportion }, refund?: { form: TransferToAccount\|DisbursementOrder, targetAccountPublicId?, payee? }, reason, pendingLoanBalance?: MoveToCashier\|KeepRepaymentChannel }` (decisión del dueño del 2026-10-18, D45: con deuda pendiente después del cruce, quien liquida elige si los créditos pasan a caja —defecto— o conservan su forma de pago; D41 fija el orden de los fondos) → `Settled` con la operación del cruce por crédito y cuenta (`InternalOffset`, **todo o nada**, FR-077; E67), la pérdida en su propia operación (E68) y la orden de devolución por cuenta (E71); devolución sobre la atribución: 202 `PendingApproval`; con el mínimo irreducible de la entidad perforado, sólo la devolución de los **aportes** queda pendiente (los ahorros se devuelven, D43) y se avisa (`Cartera.DevolucionRetenidaPorMinimo`). Sin nada que devolver queda `Paid` (E72) | `Lending.Savings.PreviewChanged`, `Lending.MembershipWithdrawal.NotApproved`, `.OffsetRejected`, `.SettlementDateInvalid`, `.LossDeductionNotEnabled`, `Lending.Contributions.EntityMinimumBreached` (aviso), `Lending.Prevalidation.NotPostable` | K7 |
+| `POST /{id}/refund/approve` | MembershipWithdrawals.Approve | `ApproveMembershipRefundCommand` | `{ approvalPublicId?, payee?, reason }` → ordena lo que quedó por devolver (la retenida por el mínimo, comparando otra vez, o la reintegrada por un giro rechazado; reemplaza al `reissue`); quien liquida radica la devolución y otra persona la aprueba (E71) | `Lending.Segregation.Conflict`, `Lending.MembershipWithdrawal.NotSettled`, `.NothingToRefund` | K7 |
 
 Un reverso del pago del cruce en el crédito arrastra el débito de aportes y ahorros en la misma operación y deja el
 retiro en `ToRedo` (US10-4); `settle` vuelve a liquidar sobre el mismo trámite. `Paid` lo marca el consumo de
@@ -477,12 +556,13 @@ de aportes viva, `Lending.MembershipWithdrawal.ReopenConflict` (D44).
 
 | Ruta | Permiso | Comando / consulta | Cuerpo → respuesta | Errores | E |
 |---|---|---|---|---|---|
-| `GET /?year=&kind=&status=` | `AlgunPermiso(Assembly.Register, Assembly.Approve)` | `ListAssemblyDistributionsQuery` | → arreglo `{ publicId, kind (AssemblyDistributionKind), year, sessionItem, fund, percentOrValue, base, status: Draft\|Applied\|Reversed, totals }` | | K10 |
+| `GET /?year=&kind=&status=` | `AlgunPermiso(Assembly.Register, Assembly.Approve)` | `ListAssemblyDistributionsQuery` | → arreglo `{ publicId, kind (AssemblyDistributionKind), year, sessionItem?, fund, percentOrValue, base, status: Simulated\|Applied\|Voided\|Reversed, totals }` (`Simulated` es el borrador; `Approved` no se usa; E183); sólo con **alcance total** (fuera, lista vacía; E184) | | K10 |
 | `GET /{id}?page=` | ídem | `GetAssemblyDistributionQuery` | → la decisión con sus líneas por asociado | `Lending.AssemblyDistribution.NotFound` | K10 |
-| `POST /` | Assembly.Register | `RegisterAssemblyDistributionCommand` | `{ kind, year, sessionItemPublicId, fundAmount, percent?, value?, base: AverageBalance\|ClosingBalance (D13), destination?: Contributions\|Savings\|Payment (excedentes), targetDepositLineCode?, reason }` → 201 `Draft` | `Lending.Session.ItemMismatch`, `Lending.AssemblyDistribution.DuplicateSession` (US12-2) | K10 |
-| `POST /{id}/simulate` (sin clave) | Assembly.Register | `SimulateAssemblyDistributionQuery` | → `{ lines[], limitedByIpc { applied, ipc, source }, proratedToFund { applied, factor }, totals, sha256 }` (US12-1) | `NationalValues.Missing` (IPC) | K10 |
-| `POST /{id}/apply` | Assembly.Approve | `ApplyAssemblyDistributionCommand` | `{ expectedPreviewSha256, reason }` → `Applied` en **una** operación por lote con sus hechos; segundo usuario | `Lending.Segregation.Conflict`, `Lending.Savings.PreviewChanged`, `Lending.AssemblyDistribution.AlreadyApplied` | K10 |
-| `POST /{id}/reverse` | Assembly.Approve | `ReverseAssemblyDistributionCommand` | `{ reason }` → `Reversed` entera; para corregir se registra otra | `Lending.AssemblyDistribution.NotApplied` | K10 |
+| `POST /` | Assembly.Register | `RegisterAssemblyDistributionCommand` | `{ kind, year, fundAmount, percent?, value?, base?: AverageBalance\|YearEndBalance (D13), destination?: Contributions\|Savings\|Payment (excedentes), targetDepositLineCode?, correctsPublicId? (corrige una reversada de la misma clase y ejercicio y hereda su acta), reason }` → 201 borrador `Simulated`; el punto del acta **no** va aquí: nombra a la decisión y se da al aplicar (E183, E191); el ejercicio tiene que estar cerrado | `Lending.AssemblyDistribution.Invalid`, `.CorrectionInvalid`, `.ContributionsNotActivated`, `Lending.Savings.DeliveryNotAvailable` | K10 |
+| `POST /{id}/simulate` (sin clave) | Assembly.Register | `SimulateAssemblyDistributionQuery` | → `{ lines[], limitedByIpc { applied, ipc, referenceDate, source }, proratedToFund { applied, factor }, warnings[], totals, sha256 }` (US12-1) | `NationalValues.Missing` (IPC), aviso `Lending.AssemblyDistribution.DestinationAccountMissing` | K10 |
+| `POST /{id}/void` | Assembly.Register | `VoidAssemblyDistributionCommand` | `{ reason }` → el borrador `Voided` (descartar; **nueva**, enmienda E191) | `Lending.AssemblyDistribution.NotDraft` | K10 |
+| `POST /{id}/apply` | Assembly.Approve | `ApplyAssemblyDistributionCommand` | `{ sessionItemPublicId? (nulo en una corrección), expectedPreviewSha256, supportAttachmentPublicIds[] (el acta firmada, `LendingAssemblySupport`), reason }` (E191) → `Applied`: una operación por asociado y **un** hecho masivo por decisión (E186, E187); **otra persona** que quien registró | `Lending.Segregation.Conflict`, `Lending.Savings.PreviewChanged`, `Lending.AssemblyDistribution.AlreadyApplied`, `.DuplicateSession`, `.SupportRequired`, `.DestinationAccountMissing`, `.NothingToApply`, `Lending.Contributions.EntityMinimumBreached`, `Lending.Session.ItemMismatch`, `Lending.Prevalidation.NotPostable` | K10 |
+| `POST /{id}/reverse` | Assembly.Approve | `ReverseAssemblyDistributionCommand` | `{ reason }` → `Reversed` entera; para corregir se registra otra con `correctsPublicId` | `Lending.AssemblyDistribution.NotApplied`, `.PaymentNotReversible` (excedentes pagados en dinero), `.PayoutsInProgress`, `.ReversalWouldOverdraw` (E188) | K10 |
 
 ---
 
@@ -490,12 +570,13 @@ de aportes viva, `Lending.MembershipWithdrawal.ReopenConflict` (D44).
 
 | Ruta | Permiso | Comando / consulta | Cuerpo → respuesta | Errores | E |
 |---|---|---|---|---|---|
-| `GET /?status=&page=` | `AlgunPermiso(DeceasedCases.Register, DeceasedCases.Approve)` | `ListDeceasedHolderCasesQuery` | → `{ publicId, person, dateOfDeath, status: Registered\|DeliveryPending\|Delivering\|Closed, accounts[], totals }` | | K10 |
+| `GET /?status=&page=` | `AlgunPermiso(DeceasedCases.Register, DeceasedCases.Approve)` | `ListDeceasedHolderCasesQuery` | → `{ publicId, person, dateOfDeath, route?, status: Registered\|DeliveryPending\|Approved\|Delivered\|Cancelled, accounts[], totals }` (`Approved` = giros en curso, `Delivered` = todas las cuentas canceladas; E193); lectura auditada | | K10 |
 | `GET /{id}` | ídem | `GetDeceasedHolderCaseQuery` | → el caso con beneficiarios vigentes al fallecimiento y entregas | `Lending.DeceasedCase.NotFound` | K10 |
-| `POST /` | DeceasedCases.Register | `RegisterDeceasedHolderCommand` | `{ personPublicId, dateOfDeath, deathCertificateAttachmentPublicId }` → 201; bloquea las cuentas (`HoldReason.Deceased`), suspende la causación según la línea (FR-065) y anula los retiros en espera | `Lending.DeceasedCase.AlreadyRegistered` | K10 |
-| `POST /{id}/delivery/preview` (sin clave) | DeceasedCases.Register | `PreviewDeceasedDeliveryQuery` | `{ date, mode: Beneficiaries\|WithoutSuccession\|Succession }` → `{ recipients: [{ person, percent, amount }], capWithoutSuccession { uvt?, amount, source }, supportsRequired[], sha256 }` | `Lending.DeceasedCase.NoBeneficiaries`, `.CapExceeded` | K10 |
-| `POST /{id}/delivery` | DeceasedCases.Register | `RegisterDeceasedDeliveryCommand` | `{ mode, recipients: [{ personPublicId, percent?, amount?, form: TransferToAccount\|DisbursementOrder, targetAccountPublicId?, payee? }], supportAttachmentPublicIds[], expectedPreviewSha256, reason }` → `DeliveryPending` | ídem | K10 |
-| `POST /{id}/delivery/approve` | DeceasedCases.Approve | `ApproveDeceasedDeliveryCommand` | `{ reason }` → las órdenes de giro (una por beneficiario, US14-2); la cuenta se cancela al pagarse todas | `Lending.Segregation.Conflict` | K10 |
+| `POST /` | DeceasedCases.Register | `RegisterDeceasedHolderCommand` | `{ personPublicId, dateOfDeath, deathCertificateAttachmentPublicId, reason? }` → 201; bloquea **todas** las cuentas vivas de captación y aportes (`HoldReason.Deceased`), suspende la causación según la línea (FR-065) y anula los retiros en espera; exige el alcance sobre todas las cuentas de la persona (E200) | `Lending.DeceasedCase.AlreadyRegistered`, `.Invalid` | K10 |
+| `POST /{id}/delivery/preview` (sin clave) | DeceasedCases.Register | `PreviewDeceasedDeliveryQuery` | `{ mode: Beneficiaries\|WithoutProbate\|Probate, recipients?: [{ personPublicId, percent?, … }] }` (sin fecha: el saldo del día; E201) → `{ recipients: [{ person, percent, amount }], capWithoutSuccession { uvt?, amount, source }, supportsRequired[], excluded[], sha256 }` | `Lending.DeceasedCase.NoBeneficiaries`, `.CapExceeded`, `.NothingToDeliver` | K10 |
+| `POST /{id}/delivery` | DeceasedCases.Register | `RegisterDeceasedDeliveryCommand` | `{ mode, recipients: [{ personPublicId, percent?, form: TransferToAccount\|DisbursementOrder, targetAccountPublicId?, payee? }], supportAttachmentPublicIds[], expectedPreviewSha256, reason }` → `DeliveryPending` | ídem, `.SupportsRequired`, `Lending.Savings.PreviewChanged` | K10 |
+| `POST /{id}/delivery/approve` | DeceasedCases.Approve | `ApproveDeceasedDeliveryCommand` | `{ reason }` → liquida a la fecha y entrega el saldo del día por los porcentajes (mayor residuo): una operación `DeceasedDelivery` (`FAL-`) por destinatario y cuenta y sus órdenes de giro (US14-2); la cuenta se cancela al pagarse todas (E201) | `Lending.Segregation.Conflict`, `Lending.DeceasedCase.InvalidTransition`, `Lending.Prevalidation.NotPostable` (E206) | K10 |
+| `POST /{id}/void` | DeceasedCases.Approve | `VoidDeceasedHolderCaseCommand` | `{ reason }` → anula un registro errado antes de aprobar la entrega y levanta los bloqueos (**nueva**, enmienda E200) | `Lending.DeceasedCase.InvalidTransition` | K10 |
 
 ---
 
@@ -503,9 +584,9 @@ de aportes viva, `Lending.MembershipWithdrawal.ReopenConflict` (D44).
 
 | Ruta | Permiso | Comando / consulta | Cuerpo → respuesta | Errores | E |
 |---|---|---|---|---|---|
-| `GET /?personPublicId=&status=&page=` | Accounts.Read | `ListUnclaimedBalancesQuery` | → `UnclaimedBalance { publicId, person, origin: Refund\|InactiveAccount\|Delivery, sourceReference, amount, since, status: Held\|Paid }` | | K10 |
-| `POST /transfer` | Unclaimed.Manage | `TransferToUnclaimedCommand` | `{ refundPublicIds?[], accountPublicIds?[], reason }` → lo trasladado (el ciclo diario lo hace solo cuando el reglamento lo ordena; P7) | `Lending.Unclaimed.NotEligible` (`data: { items[] }`), `Lending.Unclaimed.RuleNotEnabled` (traslado de inactivas sin confirmación de la contadora, FR-084) | K10 |
-| `POST /{id}/pay` | Unclaimed.Manage | `PayUnclaimedBalanceCommand` | `{ form: TransferToAccount\|DisbursementOrder, targetAccountPublicId?, payee?, reason }` → la orden | `Lending.Unclaimed.AlreadyPaid` | K10 |
+| `GET /?personPublicId=&status=&page=` | Accounts.Read | `ListUnclaimedBalancesQuery` | → `UnclaimedBalance { publicId, person, origin: UncashedRefund\|InactiveBalance\|UncashedPayout, sourceReference, amount, since, status: Held\|Claimed }` (enmienda E198; el estado del pagado es `Claimed`); lectura auditada | | K10 |
+| `POST /transfer` | Unclaimed.Manage | `TransferToUnclaimedCommand` | `{ accountPublicIds?[], refundPublicIds?[], reason }` → lo trasladado, todo o nada (el ciclo diario lo hace solo cuando `Captaciones.DiasParaNoReclamados` o `CuentasAbandonadas.DiasSinMovimiento` se cumplen; E198) | `Lending.Unclaimed.NotEligible` (`data: { items[] }`), `.RuleNotEnabled` (inactivas sin `CuentasAbandonadas.TrasladoHabilitado`, FR-084), `Lending.Prevalidation.NotPostable` (E206) | K10 |
+| `POST /{id}/pay` | Unclaimed.Manage | `PayUnclaimedBalanceCommand` | `{ form: TransferToAccount\|DisbursementOrder, targetAccountPublicId?, payee?: { bankPublicId, accountType, accountNumber }, reason }` (el beneficiario es siempre el titular; E199) → la operación `UnclaimedPayment` (`PNR-`) sobre la cuenta de origen y la orden, o el traslado a una cuenta viva del titular | `Lending.Unclaimed.AlreadyPaid`, `.NotFound`, `Lending.Prevalidation.NotPostable` (E206) | K10 |
 
 ---
 
@@ -513,15 +594,19 @@ de aportes viva, `Lending.MembershipWithdrawal.ReopenConflict` (D44).
 
 | Ruta | Permiso | Comando / consulta | Cuerpo → respuesta | Errores | E |
 |---|---|---|---|---|---|
-| `GET /?date=` | LiquidityFund.View | `GetLiquidityFundPositionQuery` | → `{ date, category, regime { source, transition? }, base: [{ depositClass, band?, balance, accruedAndToAccrue, percent, required }], required, constituted, difference, alert }` (sin titulares) | `Lending.LiquidityFund.ProfileCategoryMissing` | K11 |
+| `GET /?date=` | LiquidityFund.View | `GetLiquidityFundPositionQuery` | → `{ date, category, regime { stage: General\|PorMadurez\|Transicion, source, transition? }, base: [{ depositClass, band?, balance, accruedAndToAccrue, percent, required }], required, newRegimeRequired?, constituted, difference, alert }` (sin titulares; la base se lee del libro, E211) | `Lending.LiquidityFund.ProfileCategoryMissing`, `.RulesInvalid`, `.ScopeNotTotal` | K11 |
+| `GET /risk?date=&measure=Irl\|Brecha` | LiquidityFund.View | `GetLiquidityRiskQuery` | → el IRL por bandas (`RiesgoDeLiquidez.BandasIrl`) o la brecha de liquidez (`.BandasDeBrecha`), con activos líquidos, entradas y salidas por banda y el acumulado (**nueva**, enmiendas E210, E212) | `Lending.LiquidityFund.ScopeNotTotal` | K11 |
 | `GET /snapshots?from=&to=` | LiquidityFund.View | `ListLiquidityFundSnapshotsQuery` | → instantáneas (`LND_LiquidityFundSnapshots`, H) | | K11 |
-| `POST /snapshots` | LiquidityFund.Manage | `TakeLiquidityFundSnapshotCommand` | `{ date, reason? }` → 201; repetir la misma fecha responde la existente | | K11 |
+| `POST /snapshots` | LiquidityFund.Manage | `TakeLiquidityFundSnapshotCommand` | `{ date?, reason? }` → **200** con la foto; una fecha tiene una sola foto y pedirla otra vez devuelve la misma (E209, E210) | `Lending.LiquidityFund.ScopeNotTotal` | K11 |
 | `GET /holdings?date=` | LiquidityFund.View | `ListLiquidityFundHoldingsQuery` | → constituido (`LND_LiquidityFundHoldings`) | | K11 |
-| `POST /holdings` | LiquidityFund.Manage | `RegisterLiquidityFundHoldingCommand` | `{ instrument, entityPersonPublicId, amount, constitutedOn, maturityDate?, supportAttachmentPublicId?, note }` → 201 | | K11 |
-| `POST /holdings/{holdingId}/end` | LiquidityFund.Manage | `EndLiquidityFundHoldingCommand` | `{ endedOn, reason }` | | K11 |
+| `POST /holdings` | LiquidityFund.Manage | `RegisterLiquidityFundHoldingCommand` | `{ instrument (LiquidityHoldingKind: BankDeposit\|TermInvestment\|TrustFund\|GovernmentBond\|Other), entityPersonPublicId, reference, amount, constitutedOn, maturityDate?, supportAttachmentPublicId (**obligatorio**, dueño `LendingLiquidityFundSupport`), note?, publicId? }` → **200** (E210) | `Lending.LiquidityFund.Invalid`, `.SupportRequired`, `.ScopeNotTotal` | K11 |
+| `POST /holdings/{holdingId}/end` | LiquidityFund.Manage | `EndLiquidityFundHoldingCommand` | `{ endedOn, reason }` → 200; `endedOn` es el primer día en que ya no cuenta (E209) | `Lending.LiquidityFund.HoldingNotFound`, `.HoldingEnded` | K11 |
 
 Un constituido menor que el requerido alerta `Cartera.FondoDeLiquidezInsuficiente` **(nuevo en contracts)** al
-tesorero y al gerente (US15-1). Los depósitos asegurados son una vista (`insured-deposits`, §17).
+tesorero y al gerente (US15-1); además `Cartera.FondoDeLiquidezEnElMargen` y `Cartera.RiesgoDeLiquidezBajo`, a
+`Lending.LiquidityFund.Manage` y `Lending.Decisions.Management` (E213). Todo exige **alcance total** (E210). La foto la toma
+también el cierre del día del ciclo según `FondoDeLiquidez.Periodicidad`. Los depósitos asegurados son una vista
+(`insured-deposits`, §18.1).
 
 ---
 
@@ -537,14 +622,14 @@ hechos contables** (FR-114, US9-4). Partes y columnas: `plantillas-y-archivos.md
 | `GET /migration/loads?nature=` | Deposits.Migration | `ListDepositMigrationLoadsQuery` | → arreglo `{ publicId, nature, cutoffDate, status: Draft\|Applied\|Replaced\|Activated, parts[], differences { pending, accepted } }` | | K7 |
 | `GET /migration/loads/{id}` | Deposits.Migration | `GetDepositMigrationLoadQuery` | → la carga con resumen por parte | `Lending.MigrationLoad.NotFound` | K7 |
 | `POST /migration/loads` | Deposits.Migration | `CreateDepositMigrationLoadCommand` | `{ nature, cutoffDate, notes? }` → 201 `Draft` | `Lending.Activation.AlreadyActivated` (`data: { nature }`) | K7 |
-| `GET /migration/loads/{id}/parts/{part}/template.xlsx` | Deposits.Migration | `GetLendingTemplateQuery` | → la plantilla `lending.{part}` | `Lending.Template.NotFound`, `Lending.Migration.PartNotForNature` | K7 |
-| `POST /migration/loads/{id}/parts/{part}/import?mode=&replace=` | Deposits.Migration | `ImportDepositMigrationPartCommand` | multipart → `ImportResultDto`; varios archivos por parte | `Import.Invalid`, `Lending.Migration.LoadNotDraft` | K7 |
+| `GET /migration/loads/{id}/parts/{part}/template.xlsx?withData=` | Deposits.Migration | `MapPlantillaPorRuta` | → la plantilla `lending.{part}` (con `withData`, los datos de la parte; `source=contribution-balances` toma los saldos de aportes cargados; exportar datos personales pide `Lending.Reports.ExportPersonalData`) | `Lending.Template.NotFound`, `Lending.Migration.PartNotForNature`, `.PartNotAvailable` | K7 |
+| `POST /migration/loads/{id}/parts/{part}/import?mode=&replace=` | Deposits.Migration | `ImportDepositMigrationPartCommand` | multipart → `ImportResultDto`; varios archivos por parte; `{part}` incluye `line-equivalences`, que se carga primero (E115) | `Import.Invalid`, `Lending.Migration.LoadNotDraft`, `.LineEquivalenceMissing`, `.AccountNumberDuplicate`, `.MinorWithoutRepresentative` (E121) | K7 |
 | `POST /migration/loads/{id}/apply` | Deposits.Migration | `ApplyDepositMigrationLoadCommand` | `{ reason }` → `{ status: Applied, balanceCheck, replacedLoadPublicId? }`; todo o nada entre partes | `Lending.Migration.CrossPartErrors`, `.PartMissing`, `Lending.TermDeposit.ScheduleMismatch` | K7 |
 | `GET /migration/loads/{id}/balance-check` | Reconciliation.View | `GetDepositMigrationBalanceCheckQuery` | → cuadre por línea, concepto y conjunto de cuentas contra `IContabilidadParaCartera.SaldosDeCuentasMapeadasAsync` (FR-115) | `Lending.Accounting.NotStarted` | K7 |
 | `GET /migration/loads/{id}/reference-figures` · `PUT …` | Deposits.Migration | `GetDepositReferenceFiguresQuery` · `SetDepositReferenceFiguresCommand` | `{ figures: [{ lineCode, concept, amount, source }] }` → comparación de los totales cargados con las **cifras de referencia** (FR-118; ninguna pantalla nombra el sistema de origen) | | K7 |
-| `POST /migration/loads/{id}/differences/accept` | Migration.AcceptDifferences | `AcceptDepositMigrationDifferencesCommand` | `{ differencePublicIds[], sessionItemPublicId, reason }` | `Lending.Session.ItemMismatch`, `Lending.Segregation.Conflict` | K7 |
+| `POST /migration/loads/{id}/differences/accept` | Migration.AcceptDifferences | `AcceptMigrationDifferencesCommand` (el de la 013, con `DeCaptaciones`; E117) | `{ differencePublicIds[], sessionItemPublicId, reason }` | `Lending.Session.ItemMismatch`, `Lending.Segregation.Conflict` | K7 |
 | `GET /activation?nature=` | Deposits.Activate | `GetDepositsActivationStatusQuery` | → `{ nature, status, load?, expectedDate, deadline, requirements: [{ code, ok, detail, whoFixes }] }` | | K7 |
-| `POST /activation` | Deposits.Activate | `ActivateDepositsCommand` / `ActivateContributionsCommand` (por `nature`) | `{ nature, migrationLoadPublicId?, activationDate, sessionItemPublicId, acknowledgeWarnings, reason }` → 201 `{ activationPublicId, nature, activationDate, accounts, openingTransactions, messages: [CaptacionesActivadas] }` | `Lending.Activation.RequirementsMissing`, `.CutoffInvalid`, `.DeadlinePassed`, `.DifferencesNotAccepted`, `.AlreadyActivated`, `Lending.Activation.LoansFirst` | K7 |
+| `POST /activation` | Deposits.Activate | `ActivateDepositsCommand` / `ActivateContributionsCommand` (por `nature`) | `{ nature, migrationLoadPublicId?, activationDate, sessionItemPublicId?, acknowledgeWarnings, reason }` → 201 `{ activationPublicId, nature, activationDate, accounts, openingTransactions, messages: [CaptacionesActivadas] }`. **Sin carga** (FR-117) no hay acta: `sessionItemPublicId` va vacío y el corte es la víspera de la fecha (E31); con carga, fecha = corte + 1 y acta obligatoria (E121) | `Lending.Activation.RequirementsMissing`, `.CutoffInvalid`, `.DeadlinePassed`, `.DifferencesNotAccepted`, `.AlreadyActivated` (`data.nature`), `.LoansFirst`, `Lending.Savings.DeliveryNotAvailable` | K7 |
 
 Requisitos (`requirements[].code`): `LoansActivated`, `LoadApplied` (salvo cooperativa sin historia, FR-117),
 `DifferencesAccepted`, `DateInTerm`, `AccountingMonthOpen`, `AccountsCollectorRegistered` (algún recaudador con
@@ -563,12 +648,15 @@ Lo fijan **(nuevo en contracts)** los códigos `AccountsCollectorRegistered`,
 
 ## 17. Documentos — `/api/lending/documents` (FR-101–FR-106; `documentos.md`)
 
-Las rutas de la 013 §15 sirven sin cambio de forma para las clases 7 a 14 de `IssuedDocumentKind`. El cuerpo de
-`POST /` suma `accountPublicId?` y `year?`/`period?` según la clase. Una ruta nueva:
+Las rutas de la 013 §15 sirven sin cambio de forma para las clases 7 a 15 de `IssuedDocumentKind` (la 15,
+`GarnishmentResponse`, la emite sólo el embargo: por `POST /` responde `IssuedAutomatically`, E176). El cuerpo de `POST /`
+suma `accountPublicId?`, `year?`/`period?`, `includeRestrictions?` e `includePermanentSavings?` según la clase (E170);
+`GET /` suma el filtro `accountPublicId` y el DTO `accounts[]` (E168). Una ruta nueva aquí (el título del CDAT pendiente,
+`POST /term-deposits/{id}/titles`, está en §5):
 
 | Ruta | Permiso | Comando / consulta | Cuerpo → respuesta | Errores | E |
 |---|---|---|---|---|---|
-| `POST /batches` | Documents.Issue | `IssueLendingDocumentBatchCommand` **(nuevo en contracts)** | `{ kind: DepositTaxCertificate\|WithholdingCertificate, year, personPublicIds?[], delivery: Store\|Email }` → **202** `{ processRunPublicId }`: emisión masiva anual por titular (corre como corrida de la Cartera; cada documento, su número y código) | `Lending.Document.KindNotAvailable`, `Lending.Document.YearNotClosed` | K8 |
+| `POST /batches` | Documents.Issue | `IssueLendingDocumentBatchCommand` **(nuevo en contracts)** | `{ kind: DepositTaxCertificate\|WithholdingCertificate\|AccountStatement, year?, period?: { from, to }, personPublicIds?[], delivery?: Download\|Email }` → **200 con el resumen**: corre dentro de la petición, cada documento en su propia transacción y uno que no sale queda en el detalle (enmienda E177: no 202 con una corrida, que impediría el ciclo diario); `AccountStatement` es del último período terminado según `Documentos.PeriodicidadDeExtractos`, uno por cuenta viva | `Lending.Document.KindNotAvailable`, `Lending.Document.TaxYearNotClosed` (E171), `.PeriodInvalid` | K8 |
 
 ---
 
@@ -577,7 +665,10 @@ Las rutas de la 013 §15 sirven sin cambio de forma para las clases 7 a 14 de `I
 ### 18.1 Vistas nuevas de `/api/reports/lending/{vista}` (FR-107, FR-108, FR-110–FR-112; R24)
 
 Una ruta por vista con `MapVistaDeCartera`, `Lending.Reports.View` y `RequirePermissionWhenExporting(Reports.Export)`;
-las marcadas PD exigen además `Lending.Accounts.Read` para consultar y `Reports.ExportPersonalData` para exportar.
+las marcadas PD exigen además `Lending.Accounts.Read` para consultar y `Reports.ExportPersonalData` para exportar. Al
+cierre son **23**: 16 vistas y una vista previa por cada uno de los siete formatos regulatorios de §18.2
+(`year`, `month`; la exógena sólo `year`; alcance total; enmiendas E216, E221). La conciliación (`deposits-reconciliation`)
+pide `Lending.Reconciliation.View` y no trae titulares (E109).
 
 | Vista | E | Filtros propios | PD | Columnas (· ocultas) |
 |---|---|---|---|---|
@@ -598,6 +689,8 @@ las marcadas PD exigen además `Lending.Accounts.Read` para consultar y `Reports
 | `insured-deposits` | K11 | `asOf` | sí | Ahorrador, Depósitos, Asegurado hasta el tope, No asegurado (sólo si la cooperativa está inscrita; sin aportes) · `_persona` |
 | `deposits-reconciliation` | K7 | `asOf`, `branch?` | no | Línea, Concepto, Oficina, Saldo Cartera, Saldo contable, Diferencia, Explicada |
 | `sicses-captaciones` | K11 | `year`, `month` | sí | La proyección del formato (vista previa; el archivo, §18.2) |
+| `sicses-cotitulares` | K11 | `year`, `month` | sí | ídem (9068, enmienda E216) |
+| `sicses-aportes` | K11 | `year`, `month` | sí | ídem (9013, enmienda E216) |
 | `sicses-saldos-diarios` | K11 | `year`, `month` | sí | ídem |
 | `sicses-fondo-liquidez` | K11 | `year`, `month` | no | ídem |
 | `exogena-1019` | K11 | `year` | sí | ídem |
@@ -607,21 +700,23 @@ las marcadas PD exigen además `Lending.Accounts.Read` para consultar y `Reports
 
 | Ruta | Permiso | Comando / consulta | Cuerpo → respuesta | Errores | E |
 |---|---|---|---|---|---|
-| `POST /deposit-formats/{formatCode}/validate` (sin clave) | RegulatoryReports.Generate | `ValidateDepositRegulatoryFileQuery` **(nuevo en contracts)** | `{ year, month? }` → `{ layout, issues[], warnings: [LayoutSinCotejar?] }` | `Lending.Regulatory.FormatUnknown`, `Lending.Regulatory.PeriodNotClosed` | K11 |
-| `POST /deposit-formats/{formatCode}/generate` | RegulatoryReports.Generate | `GenerateDepositRegulatoryFileCommand` **(nuevo en contracts)** | `{ year, month?, acknowledgeWarnings }` → 201 `RegulatoryFileDto` | `Lending.Regulatory.BlockingIssues`, aviso `Lending.Regulatory.LayoutSinCotejar` | K11 |
+| `POST /deposit-formats/{formatCode}/validate` (sin clave) | RegulatoryReports.Generate | `ValidateDepositRegulatoryFileQuery` **(nuevo en contracts)** | `{ year, month? }` en el cuerpo → `{ layout, issues[], warnings: [LayoutSinCotejar?] }`; exige el cierre mensual vigente de la Cartera del mes (o de diciembre en la exógena) y **alcance total** (E219, E220) | `Lending.Regulatory.FormatUnknown`, `.PeriodNotClosed`, `.PeriodInvalid` (SICSES sin mes), `.ScopeNotTotal` (E222) | K11 |
+| `POST /deposit-formats/{formatCode}/generate` | RegulatoryReports.Generate | `GenerateDepositRegulatoryFileCommand` **(nuevo en contracts)** | `{ year, month?, acknowledgeWarnings }` con `Idempotency-Key` → 201 `RegulatoryFileDto` (con `formatCode`); versiones **por formato**, archivo `{número}_{FORMATO}_{aaaa-mm\|aaaa}_v{n}.txt` (E220) | `Lending.Regulatory.BlockingIssues` (422; queda una versión `Validated` sin archivo), los de `validate`, aviso `Lending.Regulatory.LayoutSinCotejar` | K11 |
 
-`{formatCode}`: `sicses-captaciones`, `sicses-saldos-diarios`, `sicses-fondo-liquidez`, `exogena-1019`, `exogena-1020`.
-Listar, descargar y marcar cargado son las rutas de la 013 §18 (`/files`, `RegulatoryFileKind` suma `DepositsSicses`
-y `Exogenous` **(nuevo en contracts)**).
+`{formatCode}` (**siete**, enmienda E216): `sicses-captaciones` (9026), `sicses-cotitulares` (9068), `sicses-aportes` (9013),
+`sicses-saldos-diarios` (169), `sicses-fondo-liquidez` (9067), `exogena-1019`, `exogena-1020`; el F29 (159) no se construye.
+Listar, descargar y marcar cargado son las rutas de la 013 §18 (`/files?format=`, `RegulatoryFileKind` suma `DepositsSicses`
+3 y `Exogenous` 4 **(nuevo en contracts)**; la exógena se guarda con `PeriodMonth = 12`, E217). El permiso es
+`Lending.RegulatoryReports.Generate` y la pantalla `/cartera/captaciones/reportes-regulatorios` (E223).
 
 ### 18.3 Rutas nuevas de libranza (FR-125, E-05) — `/api/lending/payroll-agreements`
 
 | Ruta | Permiso | Comando / consulta | Cuerpo → respuesta | Errores | E |
 |---|---|---|---|---|---|
 | `GET /{id}/file-groups?date=` | PayrollAgreements.View | `ListPayrollAgreementFileGroupsQuery` | → `PayrollAgreementFileGroup { publicId, code, name, outboundFormat, resultFormat, calendar { cutoffDay, sendDay, payDay }, validFrom, validTo? }` | | K7 |
-| `POST /{id}/file-groups` | PayrollAgreements.Manage | `SetPayrollAgreementFileGroupsCommand` | `{ validFrom, groups: [{ code, name, outboundFormatPublicId, resultFormatPublicId, calendar }], reason }` → versión nueva del conjunto | `Core.BankFileFormat.ScopeMismatch` (ámbitos 5 o 6 de K2), `Lending.PayrollAgreement.VersionOverlaps` | K7 |
+| `POST /{id}/file-groups` | PayrollAgreements.Manage | `SetPayrollAgreementFileGroupsCommand` | `{ validFrom, groups: [{ code, name, outboundFormatPublicId, resultFormatPublicId, calendar }], reason }` → versión nueva del convenio que copia la vigente (E61) | `Core.BankFileFormat.ScopeMismatch` (ámbitos 5 o 6 de K2), `Lending.PayrollAgreement.VersionOverlaps`, `.FileGroupDuplicate` | K7 |
 | `GET /{id}/concept-equivalences?date=` | PayrollAgreements.View | `ListPayrollAgreementConceptEquivalencesQuery` | → `PayrollAgreementConceptEquivalence { paymasterConceptCode, fileGroupCode, members: [{ lineCode, nature, concept?, priority }], split: Priority\|Proportional, order }` | | K7 |
-| `POST /{id}/concept-equivalences` | PayrollAgreements.Manage | `SetPayrollAgreementConceptEquivalencesCommand` | `{ validFrom, equivalences[], identityEquivalences[], causeEquivalences[], reason }` → versión nueva | `Lending.PayrollAgreement.EquivalenceWithoutSplit`, `.LineWithoutGroup` (`data: { lineCode }`) | K7 |
+| `POST /{id}/concept-equivalences` | PayrollAgreements.Manage | `SetPayrollAgreementConceptEquivalencesCommand` | `{ validFrom, equivalences[], reason }` → versión nueva (`identityEquivalences` y `causeEquivalences` **no se construyeron**, E61) | `Lending.PayrollAgreement.EquivalenceWithoutSplit`, `.LineWithoutGroup` (`data: { lineCode }`), `.ConceptMappedTwice`, `.EquivalenceWithoutItems`, `.EquivalencePriorityRepeated`, `.EquivalenceDuplicate` (E61) | K7 |
 
 `POST /payroll-deduction-files` y `/preview` (la 013 §13.2) suman `fileGroupCode` al cuerpo; generar con un concepto
 sin regla de reparto o una línea con cuota sin grupo responde `Lending.PayrollAgreement.EquivalenceWithoutSplit` o
@@ -650,7 +745,7 @@ vuelta del grupo (empleado, código, descontado, código de respuesta y fecha) y
 
 | Ruta | Llama | E |
 |---|---|---|
-| `GET /collector/accounts?personPublicId=` | `ConsultarAsync` | K7 |
+| `GET /collector/accounts?personPublicId=&date=&includeAsSignatory=` | `ConsultarAsync` | K7 |
 | `GET /collector/accounts/installments?personPublicId=&date=` | `ListarExigiblesAsync` | K7 |
 | `POST /collector/accounts/simulations` (sin clave) | `SimularAsync` | K7 |
 | `POST /collector/accounts/deposits` | `ConsignarAsync` | K7 |
@@ -684,7 +779,10 @@ con otro rol). La tesorería de prueba, como destino, acepta además `Consignaci
 | `PUT /api/core/associates/{id}` | Ya no cambia el estado a retirado a mano: `Associate.WithdrawalOwnedByLending` **(nuevo en contracts)**; el estado lo cambia el consumo de `RetiroDeAsociadoAprobado` | E-04, FR-124 | K7 |
 | `GET /api/core/bank-file-formats` · `POST` | `scope` `PayrollDeductionRequest` (5) y `PayrollDeductionResult` (6) de K2 admiten líneas de cuentas (C01) | FR-125 | K7 |
 | `/api/lending/contribution-balances` | Importar responde `Lending.Contributions.UseMigration` desde la activación de aportes | FR-094 | K7 |
-| `/api/lending/documents` | Clases 7–14 | FR-101 | K7–K9 |
+| `/api/lending/documents` | Clases 7–15 (la 15, la respuesta al juzgado, E176); `GET /` filtra por `accountPublicId` (E168) | FR-101 | K7–K9 |
+| `GET /api/lending/regulatory/files` | Filtro `format=` y `formatCode` en el DTO (E217) | FR-111 | K11 |
+| `GET /api/core/people/{id}/co-held-accounts` (nueva en Core) | `Core.People.View` · `GetPersonCoHeldAccountsQuery`: las cuentas vivas donde la persona es cotitular; la ficha cuenta sólo las de titular (decisión del dueño del 2026-10-18, D20) | D20 | K7 |
+| `GET` · `POST /api/lending/approval-policies` (nuevas en Atribuciones) | `Lending.Attributions.View` · `.Manage` · `ListApprovalPoliciesQuery` · `SaveApprovalPolicyCommand`: la política de niveles de `AccountWithdrawal` y `AccountCashDeposit` (§1.6, D53); `{ subject, validFrom, reason, levels[] }` | D53 | K8 |
 
 ---
 
@@ -741,31 +839,36 @@ Total retirado: **74 rutas** (70 de FR-120 más 4 de informes). Las pantallas he
 
 ## 21. Conteo de rutas nuevas
 
+Contado contra el código al cierre (2026-10-19; cómo, en «Estado al cierre»). Entre paréntesis, lo que decía el diseño.
+
 | Sección | Rutas |
 |---|---|
-| §3 Líneas | 21 |
-| §4 Cuentas | 34 |
-| §5 CDAT | 11 |
+| §1.6 Política de aprobación (`/approval-policies`, D53) | 2 (no estaba) |
+| §3 Líneas | 16 (21: sin `rate-quote` ni las cuatro de plantillas) |
+| §4 Cuentas | 33 (34: sin `installments` ni `negotiated-rate`; nace `contractual`) |
+| §5 CDAT | 13 (11: nacen `fund` y `POST titles`) |
 | §6 Tasa negociada | 5 |
-| §7 Aportes | 7 |
-| §8 Embargos | 6 |
+| §7 Aportes | 10 (7: nacen `GET /assignments` y los dos `reject`) |
+| §8 Embargos | 7 (6: nace `responses/draft`) |
 | §9 Débito automático | 3 |
 | §10 Exención de GMF | 4 |
 | §11 Retiro del asociado | 9 |
-| §12 Asamblea | 6 |
-| §13 Fallecimiento | 6 |
+| §12 Asamblea | 7 (6: nace `void`) |
+| §13 Fallecimiento | 7 (6: nace `void`) |
 | §14 No reclamados | 3 |
-| §15 Fondo de liquidez | 6 |
+| §15 Fondo de liquidez | 7 (6: nace `risk`) |
 | §16 Migración y activación | 12 |
 | §17 Documentos (lote) | 1 |
-| §18.1 Vistas de informes | 21 |
+| §18.1 Vistas de informes | 23 (21: nacen `sicses-cotitulares` y `sicses-aportes`) |
 | §18.2 Regulatorios | 2 |
-| §18.3 Libranza | 4 |
+| §18.3 Libranza | 5 (4: suma `payroll-deduction-files/{id}/unmatched`) |
 | §18.4 Dobles de prueba | 9 (2026-10-18: +2 del doble de Tesorería, D52) |
-| **Total `/api/lending` y `/api/reports/lending`** | **168** |
+| **Total `/api/lending` y `/api/reports/lending`** | **178** (168) |
 | Nueva en Nómina (§18.5) | 1 |
+| Nueva en Core (§18.5, D20) | 1 (no estaba) |
+| **Total de la 014** | **180** (171 sin los dobles de prueba) |
 
-Rutas que se retiran: **74**. Variación neta del total de rutas REST: **+95**.
+Rutas que se retiran: **74**. Variación neta del total de rutas REST: **+106** (el diseño decía +95).
 
 ---
 
@@ -775,21 +878,23 @@ Lo que research §0 no nombra y este contrato necesitó, con las reglas de la 01
 `Área.Recurso.Motivo`):
 
 - **Rutas auxiliares**: `/lines/deposit`, `/lines/contribution`, `/lines/{id}/close` · `/reopen`,
-  `/lines/{id}/negotiated-rate-rules/{ruleId}/end`, `/lines/{id}/rate-quote`, `/lines/{deposit|contribution}/template.xlsx`
-  · `/import`; `/accounts/counts`, `/accounts/{id}/balance`, `/approve-opening`, `/close-preview`, `/close`,
+  `/lines/{id}/negotiated-rate-rules/{ruleId}/end` (`/lines/{id}/rate-quote` y `/lines/{deposit|contribution}/template.xlsx`
+  · `/import` no nacieron); `/accounts/counts`, `/accounts/{id}/balance`, `/approve-opening`, `/close-preview`, `/close`,
   `/operations/simulate`, `/operations/withdrawals`, `/operations/transfers`, `/operations/{operationId}/reverse`,
-  `/data-update`, `/maturity-instruction`, `/installments`, `/charges/{chargeId}/waive` · `/reverse`,
-  `/charges/exemption`, `/settlements/simulate`, `/terms`, `/negotiated-rate`; `/term-deposits/maturity-calendar`,
-  `/simulate`, `/{id}/schedule`, `/{id}/renew`, `/{id}/redeem` · `/redeem/simulate`, `/{id}/titles`;
-  `/negotiated-rate-requests` (grupo); `/contributions/summary`, `/installments`, `/refunds`, `/assignments`;
-  `/garnishments/{id}/responses` · `/consign` · `/release`; `/direct-debits/{id}/revoke`; `/gmf-exemptions/usage`,
+  `/data-update`, `/maturity-instruction`, `/contractual`, `/holds/{holdId}/release`, `/charges/{chargeId}/waive` · `/reverse`,
+  `/charges/exemption`, `/settlements/simulate`, `/terms` (`/installments` y `/negotiated-rate` por cuenta no nacieron);
+  `/term-deposits/maturity-calendar`, `/simulate`, `/{id}/fund`, `/{id}/schedule`, `/{id}/renew`, `/{id}/redeem` ·
+  `/redeem/simulate`, `/{id}/titles` (GET y POST);
+  `/negotiated-rate-requests` (grupo); `/contributions/summary`, `/installments`, `/refunds` (con `/approve` · `/reject`),
+  `/assignments` (GET y POST, con `/approve` · `/reject`); `/garnishments/{id}/responses` · `/responses/draft` · `/consign` ·
+  `/release`; `/direct-debits/{id}/revoke`; `/gmf-exemptions/usage`,
   `/{id}/end`; `/membership-withdrawals/{id}/desist` · `/approve` · `/reject` · `/settlement/preview` · `/settle` ·
-  `/refund/approve`; `/assembly-distributions/{id}/simulate` · `/apply` · `/reverse`; `/deceased-cases/{id}/delivery`
-  · `/delivery/preview` · `/delivery/approve`; `/unclaimed/transfer`, `/{id}/pay`; `/liquidity-fund/snapshots`,
-  `/holdings`, `/holdings/{holdingId}/end`; `/deposits/migration/loads/{id}/reference-figures`;
+  `/refund/approve`; `/assembly-distributions/{id}/simulate` · `/void` · `/apply` · `/reverse`;
+  `/deceased-cases/{id}/delivery` · `/delivery/preview` · `/delivery/approve` · `/void`; `/unclaimed/transfer`, `/{id}/pay`;
+  `/liquidity-fund/risk`, `/snapshots`, `/holdings`, `/holdings/{holdingId}/end`; `/approval-policies`; `/deposits/migration/loads/{id}/reference-figures`;
   `/documents/batches`; `/regulatory/deposit-formats/{formatCode}/validate` · `/generate`;
   `/payroll-agreements/{id}/file-groups` · `/concept-equivalences`; `/test-doubles/collector/accounts/*`;
-  `/api/payroll/runs/{runId}/account-deductions`.
+  `/api/payroll/runs/{runId}/account-deductions`; `/api/core/people/{id}/co-held-accounts`.
 - **Atribuciones con monto**: `Lending.Accounts.Withdraw`, `.Deposit`, `Lending.TermDeposits.Redeem`,
   `Lending.MembershipWithdrawals.Settle` en `PermisosLimitables`.
 - **Plantillas de rol**: `cartera.jefe-captaciones`, `cartera.asesor-captaciones`, `cartera.analista-aportes`,
@@ -812,39 +917,80 @@ Lo que research §0 no nombra y este contrato necesitó, con las reglas de la 01
   `TakeLiquidityFundSnapshotCommand`, `RegisterLiquidityFundHoldingCommand`, `CreateDepositMigrationLoadCommand`,
   `ImportDepositMigrationPartCommand`, `ApplyDepositMigrationLoadCommand`, `IssueLendingDocumentBatchCommand`, y sus
   hermanos de lectura con el mismo radical.
+- **Cotejo con el código (2026-10-19)**: no nacieron `QuoteDepositRateQuery`, `RequestNegotiatedRateCommand`,
+  `ImportDepositLinesCommand` ni `ImportContributionLinesCommand`. Se llaman distinto o nacieron después:
+  `PlaceAccountHoldCommand` (no `RegisterAccountHoldCommand`), `ListLendingLineVersionsQuery` (una para las dos naturalezas),
+  `ListContributionRequestsQuery` y `RejectContributionRequestCommand` (devoluciones y cesiones, E58), `GetContractualQuery`
+  (E151), `FundTermDepositCommand` (E130), `ReissueTermDepositTitleCommand` (E173), `GetGarnishmentResponseDraftQuery` (E158),
+  `VoidAssemblyDistributionCommand` (E191), `VoidDeceasedHolderCaseCommand` (E200), `GetLiquidityRiskQuery` (E210),
+  `ListApprovalPoliciesQuery` · `SaveApprovalPolicyCommand` (D53) y `GetPersonCoHeldAccountsQuery` (D20).
 - **Códigos de error**: `Lending.Savings.{NotFound, NotActivated, LineNotAllowedByProfile, DeliveryNotAvailable,
   MembersOnly, InsufficientAvailable, SignaturesMissing, AccountNotOperable, CashLimitExceeded, SourceOfFundsRequired,
   Overdrawn, PendingApproval, BeneficiariesMustSum100, CoHoldersNotAllowed, MinorsNotAllowed, RepresentativeRequired,
   NotOpening, CloseBlocked, OperationNotFound, WithdrawalLimitExceeded, TargetNotOperable, ReversalOfReversal,
-  ReversalOwnedByCollector, ReversalWouldOverdraw, ReversalWindowClosed, DataUpdateNotRequired, NotContractual,
-  HoldExceedsBalance, HoldAutomatic, ChargeNotInLine, ChargeExempt, ChargeNotWaivable, SettlementPeriodOpen,
-  AccrualBehind, PreviewChanged, BalanceViewed, StatementViewed, TransactionsViewed}`;
+  ReversalOwnedByCollector, ReversalWouldOverdraw, DataUpdateNotRequired, NotContractual, ChargeNotInLine, ChargeExempt,
+  ChargeNotWaivable, SettlementPeriodOpen, AccrualBehind, PreviewChanged, BalanceViewed, StatementViewed,
+  TransactionsViewed}` (`ReversalWindowClosed`, `HoldExceedsBalance` y `HoldAutomatic` no nacieron: E85 y E161);
   `Lending.Contributions.{NotActivated, MinimumBreached, ParticipationLimitExceeded, LineAlreadyActive,
-  InstallmentCapExceeded, AccountAlreadyOpen, ClosureOnlyByWithdrawal, NotWithdrawable, HoldNotAllowed, HasLiveLoans,
-  EntityMinimumBreached, AssignmentNotAllowed, UseMigration}`; `Lending.TermDeposit.{NotFound, TermOutOfRange,
+  InstallmentCapExceeded, AccountAlreadyOpen, ClosureOnlyByWithdrawal, NotWithdrawable, HasLiveLoans,
+  EntityMinimumBreached, AssignmentNotAllowed, UseMigration}` (`HoldNotAllowed` no nació: E161); `Lending.TermDeposit.{NotFound, TermOutOfRange,
   AmountOutOfRange, NoRateForTerm, PeriodicityNotAllowed, FundingAmountMismatch, GraceExpired, NotInRenewalWindow,
   Garnished, DeceasedHolder, EarlyRedemptionNotAllowed, ScheduleMismatch}`; `Lending.Gmf.{AlreadyMarked,
   AccountNotSavings, PolicyWithoutMark}`; `Lending.Line.{NotFound, UseCreditLinesRoute}`;
   `Lending.DepositLine.{Invalid, VersionNotFound, VersionOverlaps, Retroactive, ClassImmutable}`;
   `Lending.ContributionLine.{VersionOverlaps, Retroactive}`; `Lending.NegotiatedRate.{NotFound, RuleOverlaps,
-  LineDoesNotAllow, NoApplicableRule, MarginAboveRule, LevelRequired, AlreadyDecided}`; `Lending.Garnishment.{NotFound,
+  LineDoesNotAllow, NoApplicableRule, MarginAboveRule, AlreadyDecided}` (`LevelRequired` no nació: sin el nivel, el 404
+  `NotFound`); `Lending.Garnishment.{NotFound,
   ContributionsNotGarnishable, NothingGarnishable, ExceedsRetained, AlreadyReleased}`; `Lending.DirectDebit.{NotHolder,
   AccountNotDemand, Overlaps}`; `Lending.MembershipWithdrawal.{NotFound, AlreadyInProgress, NotAssociate, NotFiled,
   NotApproved}`; `Lending.AssemblyDistribution.{NotFound, DuplicateSession, AlreadyApplied, NotApplied}`;
   `Lending.DeceasedCase.{NotFound, AlreadyRegistered, NoBeneficiaries, CapExceeded}`; `Lending.Unclaimed.{NotEligible,
   RuleNotEnabled, AlreadyPaid}`; `Lending.LiquidityFund.ProfileCategoryMissing`; `Lending.Activation.LoansFirst`;
   `Lending.Migration.PartNotForNature`; `Lending.Regulatory.{FormatUnknown, PeriodNotClosed}`;
-  `Lending.PayrollAgreement.{EquivalenceWithoutSplit, LineWithoutGroup}`; `Lending.Document.YearNotClosed`;
+  `Lending.PayrollAgreement.{EquivalenceWithoutSplit, LineWithoutGroup}`; `Lending.Document.TaxYearNotClosed` (el de la 013;
+  `YearNotClosed` no nació, E171);
   `Payroll.AccountDeductionNotApplied`; `Person.HasLiveDepositProducts`; `Associate.WithdrawalOwnedByLending`.
+- **Códigos que nacieron en el código** (además de los de arriba; cada uno en su enmienda): `Lending.Savings.{MemberDataIncomplete,
+  UseTermDepositRoute, OpeningDateInvalid, LineNotOpen, LineWithoutVersion, OfficeNotAllowedByLine, HolderDeceased,
+  PermanentAlreadyOpen, JointRequiresTwoSigners, PartyRepeated, PartyInvalid, LegalEntitiesNotAllowed, RateTiersOverlap,
+  RateChangeNoticeTooShort, LedgerInconsistent, AmountTooPrecise, ReversalOwnedByProcess, ChargeCollectedLater,
+  MembershipWithdrawalInProgress, CloseDateInvalid, AccountDoesNotAccrue, AccrualFailed, SettlementFailed, SameAccount,
+  ValueDateOutOfRange}` (E20, E36, E44, E47, E52, E83, E85, E86, E98, E99); `Lending.Contributions.{OnlyHolderAndBeneficiaries,
+  FractionBelowLegal, IncomeMissing, OverpaymentNotAllowed, NoParticipationExcess, RequestNotFound, RequestAlreadyDecided}`
+  (E36, E47, E54, E56, E58); `Lending.ContributionLine.{Invalid, VersionNotFound}`; `Lending.DepositLine.ReferencedLineInvalid`
+  (E36); `Lending.Contractual.{TermsRequired, TermsNotAllowed, InstallmentBelowMinimum, TermOutOfRange, NoInstallments,
+  FreeDepositNotAllowed, WithdrawalNotAllowed, NotCurrent, DestinationInvalid, MaturityPending}` (E143–E151);
+  `Lending.TermDeposit.{AlreadyFunded, PendingNegotiation, FundingInvalid, StartDateInvalid, NoAdditionalDeposits,
+  NegotiationRequiresApproval, NoRolloverRate, DestinationInvalid, LineIncomplete}` (E36, E130, E136);
+  `Lending.NegotiatedRate.{OnlyRequester, Retroactive, MarginInvalid, RuleNotFound}` (E133); `Lending.Gmf.{Retroactive,
+  AlreadyEnded, NotFound, NotHolder}` (E48); `Lending.DirectDebit.{NotFound, AlreadyRevoked, Retroactive}`;
+  `Lending.Holds.{NotFound, OwnedByProcess, LoanStillActive, InsufficientAvailable, Invalid}` y
+  `Lending.Garnishment.{Invalid, NotActive, PartialReleaseInvalid, AccountNotOfPerson, DestinationMissing, ResponseOverdue,
+  ResponseDocumentNotIssued}` (E157–E176); `Lending.MembershipWithdrawal.{NotSettled, EffectiveDateInvalid,
+  SettlementDateInvalid, LossDeductionNotEnabled, OffsetRejected, NothingToRefund, AccountsClosed, ReopenConflict,
+  InvalidTransition}` (E66, D44); `Lending.AssemblyDistribution.{Invalid, NotDraft, CorrectionInvalid, ContributionsNotActivated,
+  DestinationAccountMissing, NothingToApply, SupportRequired, PaymentNotReversible, PayoutsInProgress, ReversalWouldOverdraw}`
+  (E183–E188); `Lending.DeceasedCase.{Invalid, InvalidTransition, NothingToDeliver, PendingCharges, SupportsRequired}` (E200,
+  E201); `Lending.Unclaimed.{Invalid, NotFound, TransferFailed}`; `Lending.LiquidityFund.{RulesInvalid, Invalid, HoldingNotFound,
+  HoldingEnded, SupportRequired, ScopeNotTotal}` (E210); `Lending.Regulatory.{PeriodInvalid, ScopeNotTotal, InversionSinTipo,
+  UmbralSinValor}` (E219, E222); `Lending.Document.{NotAccountHolder, VoidedCannotReissue}` (E170, E171);
+  `Lending.Migration.{PartNotAvailable, AccountNumberDuplicate, LineEquivalenceMissing, MinorWithoutRepresentative,
+  AccountNotInLoad, ContractualInstallmentsDiffer, ContractualInstallmentNotInPlan}` (E115–E153);
+  `Lending.Activation.LoadNotAvailable` (E31); `Lending.ApprovalPolicy.SubjectNotAllowed` (D53);
+  `Payroll.AccountDeductionNotPostable`, `Payroll.AccountReversalRejected` (E59); `Accounting.LendingFact.CounterpartUnknown`
+  (E107); `Accounting.LendingRule.LineNatureMismatch` (E24).
 - **Requisitos de activación**: `LoansActivated`, `AccountsCollectorRegistered`, `PayrollConceptsReady`,
   `DeliveriesComplete`, `ProfileAllowsClasses`, `LinesWithMatrix`, `DepositRolesCreated` (D18, 2026-10-18).
 - **Enums y valores de texto**: `RegulatoryFileKind.DepositsSicses`, `.Exogenous`; estados
   `AccountInstallment.status` (`Pending`, `PartiallyPaid`, `Paid`, `NotDeducted`), `AccountCharge.status`
   (`Collected`, `Pending`, `Waived`, `Reversed`), estados de solicitud de tasa negociada (`PendingDecision`,
-  `Approved`, `Rejected`, `Withdrawn`, `Expired`), de embargo (`Active`, `Consigned`, `Released`, `Answered`), de caso
-  de fallecimiento (`Registered`, `DeliveryPending`, `Delivering`, `Closed`), de no reclamado (`Held`, `Paid`), de
-  distribución (`Draft`, `Applied`, `Reversed`); `LND_MigrationLoads.Nature`.
-- **Alertas**: `Cartera.FondoDeLiquidezInsuficiente`.
+  `Approved`, `Rejected`, `Withdrawn`, `Expired`), de embargo (`Registered` sin uso, `Active`, `Released`, `Rejected`; E157),
+  de caso de fallecimiento (`Registered`, `Approved`, `Delivered`, `Cancelled`, `DeliveryPending`; E193), de no reclamado
+  (`Held`, `Claimed`; E198), de distribución (`Simulated`, `Approved` sin uso, `Applied`, `Voided`, `Reversed`; E183);
+  `LND_MigrationLoads.Nature`.
+- **Alertas**: `Cartera.FondoDeLiquidezInsuficiente`; nacidas en el código: `Cartera.FondoDeLiquidezEnElMargen`,
+  `Cartera.RiesgoDeLiquidezBajo` (E213), `Cartera.SobregiroTecnico` (E85), `Cartera.CausacionDeCaptacionesAtrasada` (E95),
+  `Cartera.DevolucionRetenidaPorMinimo` (E71), `Cartera.ReversoTardioDeCruce` (D44).
 
 ## 23. Conciliación
 
