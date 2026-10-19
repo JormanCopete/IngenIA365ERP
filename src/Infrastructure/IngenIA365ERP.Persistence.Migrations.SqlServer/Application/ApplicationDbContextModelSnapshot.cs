@@ -28338,6 +28338,9 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.Property<int>("MemberAccountId")
                         .HasColumnType("int");
 
+                    b.Property<int?>("MigratedPaidInstallments")
+                        .HasColumnType("int");
+
                     b.Property<int?>("MinDaysBeforeRedemption")
                         .HasColumnType("int");
 
@@ -29749,6 +29752,10 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<decimal?>("AgreedAnnualRate")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("decimal(9,6)");
+
                     b.Property<decimal>("ChargeReceivable")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
@@ -29756,6 +29763,26 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.Property<decimal>("ClearingAmount")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("ContractualBonusAnnualRate")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("decimal(9,6)");
+
+                    b.Property<decimal?>("ContractualInstallment")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int?>("ContractualLateInstallments")
+                        .HasColumnType("int");
+
+                    b.Property<DateOnly?>("ContractualMaturityDate")
+                        .HasColumnType("date");
+
+                    b.Property<int?>("ContractualPaidInstallments")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("ContractualStatus")
+                        .HasColumnType("int");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");

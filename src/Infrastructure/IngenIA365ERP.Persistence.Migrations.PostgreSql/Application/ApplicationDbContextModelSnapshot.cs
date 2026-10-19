@@ -28108,6 +28108,9 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.Property<int>("MemberAccountId")
                         .HasColumnType("integer");
 
+                    b.Property<int?>("MigratedPaidInstallments")
+                        .HasColumnType("integer");
+
                     b.Property<int?>("MinDaysBeforeRedemption")
                         .HasColumnType("integer");
 
@@ -29509,6 +29512,10 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<decimal?>("AgreedAnnualRate")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("numeric(9,6)");
+
                     b.Property<decimal>("ChargeReceivable")
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)");
@@ -29516,6 +29523,26 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.Property<decimal>("ClearingAmount")
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)");
+
+                    b.Property<decimal?>("ContractualBonusAnnualRate")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("numeric(9,6)");
+
+                    b.Property<decimal?>("ContractualInstallment")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<int?>("ContractualLateInstallments")
+                        .HasColumnType("integer");
+
+                    b.Property<DateOnly?>("ContractualMaturityDate")
+                        .HasColumnType("date");
+
+                    b.Property<int?>("ContractualPaidInstallments")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("ContractualStatus")
+                        .HasColumnType("integer");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
