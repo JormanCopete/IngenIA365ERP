@@ -92,6 +92,22 @@ public class GravamenMovimientosFinancierosTests
     }
 
     [Fact]
+    public void El_redondeo_y_el_debito_automatico_son_de_la_cooperativa()
+    {
+        // Decisión del dueño del 2026-10-18 (D54): al peso y el débito automático gravado son defectos, no constantes.
+        var politica = new PoliticaDeGmf(0.004m, 0m, 52374m, GmfExemptionPolicy.SingleMarkedAccount,
+            [HechosGeneradoresDeGmf.Retiro, HechosGeneradoresDeGmf.DebitoAutomatico], []);
+        var retiro = new DisposicionDeGmf(HechosGeneradoresDeGmf.Retiro, 1_669_100m, true, false, 0m);
+
+        GravamenMovimientosFinancieros.Calcular(politica, retiro).Valor.Should().Be(6_676m, "al peso por defecto");
+        GravamenMovimientosFinancieros.Calcular(politica with { AlPeso = false }, retiro).Valor.Should().Be(6_676.40m, "al centavo si la cooperativa lo fija");
+        GravamenMovimientosFinancieros.Calcular(politica, retiro with { HechoGenerador = HechosGeneradoresDeGmf.DebitoAutomatico }).Valor.Should().Be(6_676m);
+        GravamenMovimientosFinancieros.Calcular(politica with { Exentos = [HechosGeneradoresDeGmf.DebitoAutomatico] },
+            retiro with { HechoGenerador = HechosGeneradoresDeGmf.DebitoAutomatico }).Valor.Should().Be(0m, "la cooperativa lo puede declarar exento");
+        HechosGeneradoresDeGmf.Existe(HechosGeneradoresDeGmf.DebitoAutomatico).Should().BeTrue();
+    }
+
+    [Fact]
     public void Una_cuenta_de_una_linea_no_sujeta_no_paga_GMF()
     {
         var politica = new PoliticaDeGmf(0.004m, 350m, 52374m, GmfExemptionPolicy.SingleMarkedAccount, [HechosGeneradoresDeGmf.Retiro], []);

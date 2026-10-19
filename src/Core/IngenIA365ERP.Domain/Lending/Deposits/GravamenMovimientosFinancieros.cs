@@ -11,8 +11,14 @@ namespace IngenIA365ERP.Domain.Lending.Deposits;
 /// </summary>
 public static class HechosGeneradoresDeGmf
 {
-    /// <summary>Retiro de una cuenta de ahorro (por el contrato, por giro o por débito automático).</summary>
+    /// <summary>Retiro de una cuenta de ahorro (por el contrato o por giro).</summary>
     public const string Retiro = "Withdrawal";
+
+    /// <summary>
+    /// El débito automático para pagar un crédito (decisión del dueño del 2026-10-18, D54): hecho propio para que cada cooperativa decida si grava; por
+    /// defecto gravado como un retiro (pendiente de validar por la contadora). Hasta esa fecha se calculaba siempre como <see cref="Retiro"/>.
+    /// </summary>
+    public const string DebitoAutomatico = "DirectDebit";
 
     /// <summary>Traslado a una cuenta de otro titular.</summary>
     public const string TrasladoAOtroTitular = "TransferToOtherHolder";
@@ -29,9 +35,9 @@ public static class HechosGeneradoresDeGmf
     /// <summary>Traslado entre cuentas de ahorro del mismo titular (ET art. 879 num. 14): exento por defecto.</summary>
     public const string TrasladoEntreAhorrosDelMismoTitular = "TransferBetweenSameHolderSavings";
 
-    /// <summary>Los seis, en el orden del defecto de D32.</summary>
+    /// <summary>Los seis del defecto de D32, en su orden, y el débito automático (D54).</summary>
     public static IReadOnlyList<string> Todos { get; } =
-        [Retiro, TrasladoAOtroTitular, TrasladoEntreAhorroYCdat, RedencionDeCdatAbonada, Cancelacion, TrasladoEntreAhorrosDelMismoTitular];
+        [Retiro, TrasladoAOtroTitular, TrasladoEntreAhorroYCdat, RedencionDeCdatAbonada, Cancelacion, TrasladoEntreAhorrosDelMismoTitular, DebitoAutomatico];
 
     public static bool Existe(string? hecho) => hecho is not null && Todos.Contains(hecho, StringComparer.Ordinal);
 
@@ -61,6 +67,12 @@ public sealed record PoliticaDeGmf(
 {
     /// <summary>El tope mensual exento en pesos: <c>TopeExencionUvt × UVT</c>, a dos decimales.</summary>
     public decimal TopeEnPesos => Math.Round(TopeExencionUvt * Uvt, 2, MidpointRounding.AwayFromZero);
+
+    /// <summary>
+    /// ¿Se redondea el GMF al peso? Por defecto sí (<c>Gmf.Redondeo = Peso</c>); con <c>Centavo</c>, a dos decimales. Decisión del dueño del 2026-10-18
+    /// (D54): defecto configurable por cooperativa, pendiente de validar por la contadora.
+    /// </summary>
+    public bool AlPeso { get; init; } = true;
 
     /// <summary>¿Se calcula el GMF? (con tarifa cero o política «no aplica» no, desde esa vigencia, FR-022).</summary>
     public bool Activo => Tarifa > 0m && Politica != GmfExemptionPolicy.NotApplicable;
@@ -149,7 +161,8 @@ public sealed record GmfCalculado(
 /// <item>Un hecho que no es generador (exento por el parámetro o que el parámetro no nombra) y una cuenta no sujeta no causan nada.</item>
 /// <item>La exención mensual (ET art. 879 num. 1): con <c>SingleMarkedAccount</c> sólo en la cuenta marcada; con <c>PerHolderLimit</c> en toda cuenta de
 /// ahorro de la persona, sumando sus disposiciones del mes. Aplica hasta el tope (<c>TopeExencionUvt × UVT</c>) menos lo ya usado.</item>
-/// <item>El valor es la base gravada por la tarifa, <b>al peso</b> (mitad hacia arriba): 1.669.100 × 0,004 = 6.676,4 → 6.676.</item>
+/// <item>El valor es la base gravada por la tarifa, <b>al peso</b> (mitad hacia arriba): 1.669.100 × 0,004 = 6.676,4 → 6.676; o al centavo si la
+/// cooperativa lo fija (<c>Gmf.Redondeo</c>, D54).</item>
 /// </list>
 /// El reverso no se calcula: espeja las filas y la disposición del mes (<see cref="UsoTrasReverso"/>). (nuevo)
 /// </summary>
@@ -194,13 +207,13 @@ public static class GravamenMovimientosFinancieros
         var disponible = conExencion ? Math.Max(0m, tope - d.ExentoUsadoEnElMes) : 0m;
         var exento = Math.Min(d.Monto, disponible);
         var gravada = d.Monto - exento;
-        var valor = Math.Round(gravada * politica.Tarifa, 0, MidpointRounding.AwayFromZero);
+        var valor = Math.Round(gravada * politica.Tarifa, politica.AlPeso ? 0 : 2, MidpointRounding.AwayFromZero);
 
         var texto = conExencion
             ? string.Create(CultureInfo.InvariantCulture,
-                $"Tope exento del mes {tope:N2} ({politica.TopeExencionUvt:0.####} UVT de {politica.Uvt:N2}); usado antes {d.ExentoUsadoEnElMes:N2}, exento ahora {exento:N2}; base gravada {gravada:N2} × {politica.Tarifa:0.######} = {valor:N0}.")
+                $"Tope exento del mes {tope:N2} ({politica.TopeExencionUvt:0.####} UVT de {politica.Uvt:N2}); usado antes {d.ExentoUsadoEnElMes:N2}, exento ahora {exento:N2}; base gravada {gravada:N2} × {politica.Tarifa:0.######} = {(politica.AlPeso ? valor.ToString("N0", CultureInfo.InvariantCulture) : valor.ToString("N2", CultureInfo.InvariantCulture))}.")
             : string.Create(CultureInfo.InvariantCulture,
-                $"Sin exención en esta cuenta ({politica.Politica}); base gravada {gravada:N2} × {politica.Tarifa:0.######} = {valor:N0}.");
+                $"Sin exención en esta cuenta ({politica.Politica}); base gravada {gravada:N2} × {politica.Tarifa:0.######} = {(politica.AlPeso ? valor.ToString("N0", CultureInfo.InvariantCulture) : valor.ToString("N2", CultureInfo.InvariantCulture))}.");
         return new GmfCalculado(d.Monto, d.ExentoUsadoEnElMes, exento, gravada, politica.Tarifa, valor, politica.Politica, d.HechoGenerador, tope, texto);
     }
 

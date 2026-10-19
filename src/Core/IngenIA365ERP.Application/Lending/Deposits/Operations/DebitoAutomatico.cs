@@ -162,7 +162,7 @@ public sealed class DebitoAutomatico(
         var monto = Math.Min(cuota, disponible);
         for (var intento = 0; intento < 3 && monto > 0m; intento++)
         {
-            var gmf = await movimientos.GmfAsync(leida, HechosGeneradoresDeGmf.Retiro, monto, d, ct);
+            var gmf = await movimientos.GmfAsync(leida, HechosGeneradoresDeGmf.DebitoAutomatico, monto, d, ct);
             var total = monto + (gmf.IsSuccess ? gmf.Value?.Valor ?? 0m : 0m);
             if (total <= disponible) break;
             monto = Math.Floor(monto - (total - disponible));

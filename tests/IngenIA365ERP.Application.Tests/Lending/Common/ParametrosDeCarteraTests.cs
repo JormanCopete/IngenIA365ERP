@@ -95,9 +95,11 @@ public class ParametrosDeCarteraTests
         { "Gmf.Tarifa", "0.004", [N], EntregaDeCartera.K8 },
         { "Gmf.TopeExencionUvt", "350", [N], EntregaDeCartera.K8 },
         { "Gmf.PoliticaDeExencion", "SingleMarkedAccount", [N], EntregaDeCartera.K8 },
-        { "Gmf.HechosGeneradores", "{\"gravados\": [\"Withdrawal\", \"TransferToOtherHolder\", \"TransferBetweenDemandAndTermDeposit\", \"TermDepositRedemptionToAccount\", \"Cancellation\"], \"exentos\": [\"TransferBetweenSameHolderSavings\"]}", [N], EntregaDeCartera.K8 },
+        { "Gmf.HechosGeneradores", "{\"gravados\": [\"Withdrawal\", \"TransferToOtherHolder\", \"TransferBetweenDemandAndTermDeposit\", \"TermDepositRedemptionToAccount\", \"Cancellation\", \"DirectDebit\"], \"exentos\": [\"TransferBetweenSameHolderSavings\"]}", [N], EntregaDeCartera.K8 },
+        // Decisión del dueño del 2026-10-18 (D54): el redondeo del GMF es parámetro.
+        { "Gmf.Redondeo", "Peso", [N], EntregaDeCartera.K8 },
         { "FondoDeLiquidez.PorcentajesPorCategoria", "", [N], EntregaDeCartera.K11 },
-        { "Aportes.TopeCuotaFondoEmpleados", "", [N], EntregaDeCartera.K7 },
+        { "Aportes.TopeCuotaFondoEmpleados", "0.10", [N], EntregaDeCartera.K7 },
         { "Aportes.FraccionMinima", "", [N], EntregaDeCartera.K7 },
         { "Aportes.LimiteParticipacionPersonaNatural", "", [N], EntregaDeCartera.K7 },
         { "Aportes.LimiteParticipacionPersonaJuridica", "", [N], EntregaDeCartera.K7 },
@@ -146,7 +148,7 @@ public class ParametrosDeCarteraTests
         var posteriores = ParametrosDeCartera.Definiciones.Where(d => d.DisponibleDesde > (EntregaDeModulo)EntregaDeCartera.K6b).ToList();
 
         // Feature 014 (T017): las claves de captaciones y aportes existen desde ya con su entrega (K7 a K11) y no se ofrecen hasta que salga.
-        posteriores.Should().HaveCount(28).And.OnlyContain(d => d.DisponibleDesde >= (EntregaDeModulo)EntregaDeCartera.K7
+        posteriores.Should().HaveCount(29).And.OnlyContain(d => d.DisponibleDesde >= (EntregaDeModulo)EntregaDeCartera.K7
             && d.DisponibleDesde <= (EntregaDeModulo)EntregaDeCartera.K11);
         ParametrosDeCartera.Definiciones.Where(d => d.DisponibleDesde == (EntregaDeModulo)EntregaDeCartera.K6b).Should().BeEmpty("la vivienda no trae claves");
         ParametrosDeCartera.Definiciones.Where(d => d.DisponibleDesde == (EntregaDeModulo)EntregaDeCartera.K6a).Select(d => d.Clave).Should()

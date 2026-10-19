@@ -220,14 +220,17 @@ public sealed class ReglasDeMovimientos(
         if (problema is not null) return Result.Failure<PoliticaDeGmf>(ErroresDeMovimientos.GmfSinParametros(problema));
         if (tarifa is not { } t || tope is not { } u)
             return Result.Failure<PoliticaDeGmf>(ErroresDeMovimientos.GmfSinParametros("la tarifa o el tope no se pudieron leer."));
+        // D54 (2026-10-18): el redondeo es parámetro de la cooperativa (defecto al peso).
+        var redondeo = await parametros.LeerAsync(ParametrosDeCartera.GmfRedondeo, fecha, ct: ct);
+        var alPeso = !(redondeo.IsSuccess && string.Equals(redondeo.Value.Texto, "Centavo", StringComparison.Ordinal));
         if (t == 0m || politica == GmfExemptionPolicy.NotApplicable)
-            return Result.Success(new PoliticaDeGmf(t, u, 0m, politica, gravados, exentos));
+            return Result.Success(new PoliticaDeGmf(t, u, 0m, politica, gravados, exentos) { AlPeso = alPeso });
         var uvt = await valoresNacionales.LeerAsync(CodigosDeValorNacional.Uvt, string.Empty, fecha, ct: ct);
         if (uvt.IsFailure) return Result.Failure<PoliticaDeGmf>(uvt.Error);
         if (uvt.Value.Valor is not { } valor)
             return Result.Failure<PoliticaDeGmf>(new ErrorConDatos("NationalValues.Missing", $"No hay UVT vigente el {ErroresDeCuentas.Fecha(fecha)}: el GMF no se calcula.",
                 new { code = CodigosDeValorNacional.Uvt, date = ErroresDeCuentas.Fecha(fecha) }));
-        return Result.Success(new PoliticaDeGmf(t, u, valor, politica, gravados, exentos));
+        return Result.Success(new PoliticaDeGmf(t, u, valor, politica, gravados, exentos) { AlPeso = alPeso });
     }
 
     /// <summary>

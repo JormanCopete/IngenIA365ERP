@@ -196,6 +196,9 @@ public static class ParametrosDeCartera
     /// <summary>Qué operaciones generan GMF (JSON; D32).</summary>
     public const string GmfHechosGeneradores = "Gmf.HechosGeneradores";
 
+    /// <summary>Redondeo del GMF: <c>Peso</c> (defecto) o <c>Centavo</c> (feature 014, decisión del dueño del 2026-10-18, D54).</summary>
+    public const string GmfRedondeo = "Gmf.Redondeo";
+
     /// <summary>Porcentajes del fondo de liquidez por categoría, con la tabla del Decreto 976 de 2026 y su transición (JSON).</summary>
     public const string FondoDeLiquidezPorcentajesPorCategoria = "FondoDeLiquidez.PorcentajesPorCategoria";
 
@@ -603,10 +606,16 @@ public static class ParametrosDeCartera
         },
         Texto(GmfHechosGeneradores,
             "Qué operaciones generan GMF, en JSON { \"gravados\": [...], \"exentos\": [...] } con las operaciones de la Cartera (D32).",
-            "{\"gravados\": [\"Withdrawal\", \"TransferToOtherHolder\", \"TransferBetweenDemandAndTermDeposit\", \"TermDepositRedemptionToAccount\", \"Cancellation\"], \"exentos\": [\"TransferBetweenSameHolderSavings\"]}",
+            "{\"gravados\": [\"Withdrawal\", \"TransferToOtherHolder\", \"TransferBetweenDemandAndTermDeposit\", \"TermDepositRedemptionToAccount\", \"Cancellation\", \"DirectDebit\"], \"exentos\": [\"TransferBetweenSameHolderSavings\"]}",
             K8, patron: @"(?s)^\s*\{.*\}\s*$") with
         {
-            PendienteDeValidar = "Defecto D32 de la spec (Estatuto Tributario arts. 871 y 879 num. 14; Oficio DIAN 2787 de 2019), pendiente de validar por la contadora.",
+            PendienteDeValidar = "Defecto D32 de la spec (Estatuto Tributario arts. 871 y 879 num. 14; Oficio DIAN 2787 de 2019) y el débito automático gravado "
+                + "como un retiro (D54, 2026-10-18), pendientes de validar por la contadora.",
+        },
+        // Decisión del dueño del 2026-10-18 (feature 014, D54): el redondeo al peso es un defecto configurable por cooperativa.
+        Eleccion(Modulo, GmfRedondeo, "Redondeo del GMF calculado: al peso o al centavo.", ["Peso", "Centavo"], "Peso", K8, General) with
+        {
+            PendienteDeValidar = "Defecto al peso (E81 de la feature 014), pendiente de validar por la contadora.",
         },
 
         // Fondo de liquidez (R25).
@@ -618,8 +627,11 @@ public static class ParametrosDeCartera
         },
 
         // Aportes (FR-040 a FR-049, FR-080, FR-094).
+        // Decisión del dueño del 2026-10-18 (feature 014, D29): 10 % por defecto, configurable por cada entidad con su vigencia; el LIMITE nacional
+        // APORTES_TOPE_CUOTA_FONDO_EMPLEADOS (Ley) lo acota y no lo edita la entidad: es de la central.
         NumeroDecimal(Modulo, AportesTopeCuotaFondoEmpleados,
-            "Techo de la cuota obligatoria de los fondos de empleados, como fracción del ingreso. Vacío: rige el límite legal.", "", K7, General) with
+            "Techo de la cuota obligatoria de los fondos de empleados, como fracción del ingreso. Por defecto 10 %; cada entidad lo ajusta con su "
+            + "vigencia sin pasar el límite legal. Vacío: rige el límite legal.", "0.10", K7, General) with
         {
             AdmiteVacio = true, Maximo = 1m,
             LimitesLegales = [CatalogoDeLimitesLegales.AportesTopeCuotaFondoEmpleados],
