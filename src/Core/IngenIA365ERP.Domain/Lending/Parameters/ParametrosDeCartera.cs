@@ -283,6 +283,32 @@ public static class ParametrosDeCartera
     /// <summary>Plazo estatutario, en días, para devolver los aportes del asociado retirado (FR-079).</summary>
     public const string CaptacionesDiasPlazoDevolucionAportes = "Captaciones.DiasPlazoDevolucionAportes";
 
+    /// <summary>
+    /// Feature 014, US12 (T203; D13; CBCF Título I Cap. V num. 5.1: «sobre el monto promedio día/año»): la base por defecto de una decisión de asamblea,
+    /// <c>AverageBalance</c> (defecto) o <c>YearEndBalance</c>; la decisión puede traer otra.
+    /// </summary>
+    public const string AsambleaBaseDeRevalorizacion = "Asamblea.BaseDeRevalorizacion";
+
+    /// <summary>Feature 014, US12: el redondeo de lo que la asamblea abona o devuelve a cada asociado, <c>Peso</c> (defecto) o <c>Centavo</c>.</summary>
+    public const string AsambleaRedondeo = "Asamblea.Redondeo";
+
+    /// <summary>
+    /// Feature 014, US12 (Decreto 3081 de 1990 art. 1): la serie del valor nacional <c>IPC</c> que limita la revalorización (defecto <c>ANUAL</c>: la variación
+    /// de enero a diciembre del ejercicio).
+    /// </summary>
+    public const string AsambleaSerieDelIpc = "Asamblea.SerieDelIpc";
+
+    /// <summary>Feature 014, US12: el destino por defecto de los excedentes distribuidos, <c>Contributions</c> (defecto), <c>Savings</c> o <c>Payment</c>.</summary>
+    public const string AsambleaDestinoDeExcedentes = "Asamblea.DestinoDeExcedentes";
+
+    /// <summary>Feature 014, US12: la clase de aporte en que se capitalizan los excedentes, <c>Ordinary</c> (defecto) o <c>Extraordinary</c>.</summary>
+    public const string AsambleaClaseDeAporteDeExcedentes = "Asamblea.ClaseDeAporteDeExcedentes";
+
+    /// <summary>
+    /// Feature 014, US12 (FR-044): si la amortización deja fuera a quien tiene créditos vivos (los aportes son su garantía), <c>true</c> por defecto.
+    /// </summary>
+    public const string AsambleaAmortizacionExcluyeDeudores = "Asamblea.AmortizacionExcluyeDeudores";
+
     /// <summary>Días sin cobrar desde los que lo devuelto pasa a no reclamados (FR-081).</summary>
     public const string CaptacionesDiasParaNoReclamados = "Captaciones.DiasParaNoReclamados";
 
@@ -866,6 +892,37 @@ public static class ParametrosDeCartera
             + "línea (el descuento por nómina o por pagaduría llega unos días después del fin del período).", "5", K9, General, Linea) with
         {
             Minimo = 0m, PendienteDeValidar = "Defecto de 5 días (research §19): cada cooperativa lo ajusta a su reglamento de ahorro contractual.",
+        },
+        // US12 (T203; research §22): la asamblea. La decisión (porcentaje o valor, fondo, destino) es del acta; lo que la entidad fija una vez, aquí.
+        Eleccion(Modulo, AsambleaBaseDeRevalorizacion, "Base por defecto de la revalorización y de los excedentes: el saldo promedio diario del ejercicio o "
+            + "el saldo al 31 de diciembre. La decisión de la asamblea puede traer otra.", ["AverageBalance", "YearEndBalance"], "AverageBalance", K10, General) with
+        {
+            PendienteDeValidar = "Defecto D13 de la spec y CBCF Título I Cap. V num. 5.1 (promedio día/año), pendiente de validar por la contadora.",
+        },
+        Eleccion(Modulo, AsambleaRedondeo, "Redondeo de lo que la asamblea abona o devuelve a cada asociado: al peso o al centavo (mitad hacia arriba).",
+            ["Peso", "Centavo"], "Peso", K10, General) with
+        {
+            PendienteDeValidar = "Defecto al peso (research §22), pendiente de validar por la contadora.",
+        },
+        Texto(AsambleaSerieDelIpc, "Serie del valor nacional IPC que limita la revalorización de aportes (la variación anual de diciembre del ejercicio).",
+            "ANUAL", K10, patron: @"^[A-Z0-9_\-]{1,60}$") with
+        {
+            PendienteDeValidar = "Defecto ANUAL (Decreto 3081 de 1990 art. 1: el IPC del año inmediatamente anterior), pendiente de validar por la contadora.",
+        },
+        Eleccion(Modulo, AsambleaDestinoDeExcedentes, "Destino por defecto de los excedentes que distribuye la asamblea: aportes, una cuenta de ahorro o pago.",
+            ["Contributions", "Savings", "Payment"], "Contributions", K10, General) with
+        {
+            PendienteDeValidar = "Defecto a aportes (research §22); cada cooperativa lo fija según sus estatutos.",
+        },
+        Eleccion(Modulo, AsambleaClaseDeAporteDeExcedentes, "Clase de aporte en que se capitalizan los excedentes distribuidos a aportes.",
+            ["Ordinary", "Extraordinary"], "Ordinary", K10, General) with
+        {
+            PendienteDeValidar = "Defecto aportes ordinarios (CUIF 310505), pendiente de validar por la contadora.",
+        },
+        SiNo(Modulo, AsambleaAmortizacionExcluyeDeudores,
+            "La amortización de aportes deja fuera a quien tiene créditos vivos: sus aportes respaldan sus obligaciones.", true, K10, General) with
+        {
+            PendienteDeValidar = "Defecto por FR-044 (los aportes son garantía, Ley 79 art. 49), pendiente de validar con los estatutos.",
         },
         Entero(Modulo, CaptacionesDiasParaNoReclamados,
             "Días sin cobrar desde los que lo devuelto pasa a no reclamados. Vacío: no se traslada solo.", "", K10, General) with

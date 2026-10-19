@@ -378,6 +378,8 @@ public sealed class NumeradorDeCartera(IApplicationDbContext db, ICerrojoDeCarte
         LendingNumberKind.MemberAccountOperation => db.MemberAccountOperations.IgnoreQueryFilters().AnyAsync(o => o.Number == numero, ct),
         // US10 (T096): el retiro del asociado.
         LendingNumberKind.MembershipWithdrawal => db.MembershipWithdrawals.IgnoreQueryFilters().AnyAsync(w => w.Number == numero, ct),
+        // US12 (T202): la decisión de asamblea.
+        LendingNumberKind.AssemblyDistribution => db.AssemblyDistributions.IgnoreQueryFilters().AnyAsync(d => d.Number == numero, ct),
         _ => Task.FromResult(false),
     };
 

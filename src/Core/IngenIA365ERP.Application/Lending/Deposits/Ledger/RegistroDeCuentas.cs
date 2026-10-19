@@ -276,6 +276,8 @@ public sealed class RegistroDeCuentas(IApplicationDbContext db)
     {
         MemberAccountTransactionKind.InterestAccrued, MemberAccountTransactionKind.AccrualAdjustment, MemberAccountTransactionKind.InterestCredited,
         MemberAccountTransactionKind.ChargeApplied, MemberAccountTransactionKind.Reclassification,
+        // US12 (T203): lo que abona la asamblea (revalorización o excedentes) no es un movimiento del titular: no reactiva una cuenta inactiva.
+        MemberAccountTransactionKind.AssemblyCredit,
     };
 
     /// <summary>¿Cuenta la fila como movimiento del titular? (FR-058).</summary>

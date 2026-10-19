@@ -583,6 +583,9 @@ public static class DependencyInjection
         services.AddScoped<Lending.Deposits.Documents.TitulosDeCdat>();
         services.AddScoped<Lending.Deposits.Documents.RespuestasAlJuzgado>();
         services.AddScoped<Lending.Sessions.IAsuntoDeActa, Lending.Deposits.Withdrawals.AsuntoDeRetiroDeAsociado>();
+        // Feature 014, US12 (T203): la asamblea —revalorización, excedentes y amortización— y su asunto de acta.
+        services.AddScoped<Lending.Deposits.Assembly.DistribucionesDeAsamblea>();
+        services.AddScoped<Lending.Sessions.IAsuntoDeActa, Lending.Deposits.Assembly.AsuntoDeDecisionDeAsamblea>();
         services.TryAddScoped<Lending.Payments.IArrastreDeReversoDePago, Lending.Deposits.Withdrawals.ArrastreDelCruceAlRetiro>();
         // Feature 014, US6 (T170, T171): el CDAT —la apertura común (también de OpenMemberAccountCommand), la lectura y la cotización, el fondeo (por
         // traslado y por el recaudador del contrato de cuentas)— y la tasa negociada con su asunto de acta.

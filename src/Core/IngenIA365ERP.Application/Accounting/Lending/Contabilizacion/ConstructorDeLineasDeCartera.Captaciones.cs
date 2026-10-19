@@ -208,6 +208,13 @@ public static partial class ConstructorDeLineasDeCartera
                     break;
                 case ExcedentesDistribuidosV1 x:
                     Lineas(x.Lines, x.Totals, (d, _, _) => Simple(R.FondoDeExcedentes, d));
+                    // US12 (T203): el pago en dinero no mueve cuentas del asociado: del fondo de excedentes a los retornos por pagar (motivo SurplusPayment).
+                    foreach (var pago in x.Payments.Where(p => p.Amount != 0m))
+                    {
+                        var par = nuevoPar();
+                        Agregar(Simple(R.FondoDeExcedentes, pago.Dimensions), debitoSiPositivo: true, pago.Amount, par);
+                        Agregar(Devolucion(pago.Dimensions, pago.Account, "SurplusPayment", pago.HolderPersonPublicId)!, debitoSiPositivo: false, pago.Amount, par);
+                    }
                     break;
                 case AportesAmortizadosV1 x:
                     Lineas(x.Lines, x.Totals, (d, cuenta, titular) => Devolucion(d, cuenta, "ContributionRefund", titular));
@@ -289,6 +296,19 @@ public static partial class ConstructorDeLineasDeCartera
         private void Reverso(OperacionDeCuentaReversadaV1 x)
         {
             var original = Texto(x.Original?.Type) ?? Texto(x.Mirrors.FirstOrDefault()?.Type) ?? string.Empty;
+            // US12 (T203): el reverso entero de una decisión de asamblea trae un espejo por cuenta; cada uno vuelve a su fondo (o a la devolución por
+            // pagar de la amortización) con las dimensiones de su cuenta: la sucursal del fondo es la de cada asociado, como en la ida.
+            if (original is RevalorizacionDeAportesAplicadaV1.Type or ExcedentesDistribuidosV1.Type or AportesAmortizadosV1.Type && x.Mirrors.Count > 0)
+            {
+                foreach (var m in x.Mirrors)
+                {
+                    var dm = m.Dimensions ?? x.Dimensions;
+                    var cuentaM = m.Account ?? x.Account;
+                    var titularM = m.HolderPersonPublicId ?? x.HolderPersonPublicId;
+                    Operacion(cuentaM, titularM, dm, m.Amounts, ContraDeAsamblea(original, dm, cuentaM, titularM, x.OrderKind), $"el reverso de {original} sin su fondo");
+                }
+                return;
+            }
             var neto = 0m;
             if (x.Mirrors.Count == 0) neto += Saldos(x.Account, x.HolderPersonPublicId, x.Dimensions, x.Amounts);
             foreach (var m in x.Mirrors)
@@ -307,6 +327,8 @@ public static partial class ConstructorDeLineasDeCartera
                 CruceAlRetiroAplicadoV1.Type => Recaudo(d, x.Account, x.CollectorClass ?? ClaseDelPuenteInterno, x.HolderPersonPublicId),
                 PerdidaAplicadaAlRetiroV1.Type => Simple(R.PerdidaAbsorbida, d),
                 DevolucionOrdenadaV1.Type => Devolucion(d, x.Account, x.OrderKind, _sobre.PersonPublicId),
+                // US12 (T203): la amortización cuyo giro rechazó Tesorería vuelve de la devolución por pagar a los aportes.
+                AportesAmortizadosV1.Type => Devolucion(d, x.Account, Texto(x.OrderKind) ?? "ContributionRefund", x.HolderPersonPublicId),
                 // US11 (T189): el giro rechazado de una consignación de embargo vuelve a los embargos por consignar, con el juzgado de tercero.
                 EmbargoConsignadoV1.Type => new Lado(R.EmbargosPorConsignar, Valores(d), null, null,
                     Persona(x.CounterpartPersonPublicId ?? _sobre.PersonPublicId ?? Guid.Empty), null, Numero(x.Account)),
@@ -314,6 +336,14 @@ public static partial class ConstructorDeLineasDeCartera
             };
             Contrapartida(contra, neto, $"el reverso de {original} sin su contrapartida");
         }
+
+        /// <summary>US12 (T203): la contrapartida de lo de la asamblea: el fondo de revalorización o de excedentes, o la devolución por pagar de la amortización.</summary>
+        private Lado? ContraDeAsamblea(string original, DepositFactDimensionsV1 d, MemberAccountRefV1 cuenta, Guid titular, string? orden) => original switch
+        {
+            RevalorizacionDeAportesAplicadaV1.Type => Simple(R.FondoDeRevalorizacion, d),
+            ExcedentesDistribuidosV1.Type => Simple(R.FondoDeExcedentes, d),
+            _ => Devolucion(d, cuenta, Texto(orden) ?? "ContributionRefund", titular),
+        };
 
         // ------------------------------------------------------------------------------------------------ comunes --
 

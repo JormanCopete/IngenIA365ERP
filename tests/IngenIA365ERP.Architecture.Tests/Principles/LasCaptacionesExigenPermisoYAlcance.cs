@@ -87,7 +87,8 @@ public class LasCaptacionesExigenPermisoYAlcance
     /// US16 (T162): los ayudantes de captaciones que aplican el alcance por dentro; un handler que los usa lo aplica aunque no nombre
     /// <c>IAlcanceDeCartera</c> (la solicitud de aportes lee su cuenta y la del destino de una cesión con <c>SolicitudesDeAportes</c>).
     /// </summary>
-    private static readonly string[] AyudantesConAlcance = ["SolicitudesDeAportes"];
+    // US12 (T203): DistribucionesDeAsamblea exige alcance total (una decisión de asamblea es de toda la cooperativa) y responde el 404 de lo inexistente.
+    private static readonly string[] AyudantesConAlcance = ["SolicitudesDeAportes", "DistribucionesDeAsamblea"];
 
     private static readonly Regex ConsultaOComando = new(@"public\s+sealed\s+record\s+(\w+(Query|Command))\b", RegexOptions.Compiled);
 
@@ -156,7 +157,7 @@ public class LasCaptacionesExigenPermisoYAlcance
                 var nombre = m.Groups[1].Value;
                 encontrados.Add(nombre);
                 if (Exceptuados.ContainsKey(nombre)) continue;
-                if (!AplicaElAlcance.IsMatch(fuente))
+                if (!AplicaElAlcance.IsMatch(fuente) && !AyudantesConAlcance.Any(a => fuente.Contains(a, StringComparison.Ordinal)))
                     infracciones.Add($"{Path.GetRelativePath(raiz, archivo)}: {nombre} no aplica IAlcanceDeCartera ni está exceptuado con motivo");
             }
         }

@@ -241,4 +241,32 @@ public static class HechosRepresentativosDeCaptaciones
             Kind = "Account", TargetAccount = destino.Referencia, TargetHolderPersonPublicId = destino.Titular, TargetDimensions = destino.D,
             TargetAmounts = [Valor(MemberAccountConcept.Principal, monto)],
         };
+
+    // ------------------------------------------------------------------------------------------------------- asamblea --
+
+    /// <summary>
+    /// US12 (T203): lo que la asamblea deja en una cuenta —la revalorización a los aportes revalorizados contra su fondo; los excedentes a aportes, al capital
+    /// de la cuenta de ahorro o pagados (del fondo a los retornos por pagar); la amortización de los aportes a la devolución por pagar—.
+    /// </summary>
+    public static object Asamblea(CuentaRepresentativa c, AssemblyDistributionKind clase, SurplusDestination? destino, MemberAccountConcept conceptoDeExcedentes)
+    {
+        ArgumentNullException.ThrowIfNull(c);
+        return clase switch
+        {
+            AssemblyDistributionKind.Revaluation => new RevalorizacionDeAportesAplicadaV1 { Lines = [Linea(c, Valor(MemberAccountConcept.ContributionRevaluation, 1m))] },
+            AssemblyDistributionKind.Amortization => new AportesAmortizadosV1
+            {
+                Lines = [Linea(c, Valor(MemberAccountConcept.ContributionOrdinary, -1m, nameof(PayoutPurpose.ContributionRefund)))],
+            },
+            _ => destino switch
+            {
+                SurplusDestination.Payment => new ExcedentesDistribuidosV1
+                {
+                    Payments = [new SurplusPaymentV1 { Account = c.Referencia, HolderPersonPublicId = c.Titular, Dimensions = c.D, Amount = 1m }],
+                },
+                SurplusDestination.Savings => new ExcedentesDistribuidosV1 { Lines = [Linea(c, Valor(MemberAccountConcept.Principal, 1m))] },
+                _ => new ExcedentesDistribuidosV1 { Lines = [Linea(c, Valor(conceptoDeExcedentes, 1m))] },
+            },
+        };
+    }
 }

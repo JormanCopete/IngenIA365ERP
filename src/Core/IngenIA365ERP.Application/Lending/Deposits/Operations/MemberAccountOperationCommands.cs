@@ -585,7 +585,8 @@ public sealed class ReverseMemberAccountOperationCommandHandler(
         if (vista.CollectorClass == nameof(ClaseDeRecaudador.Payroll)
             || (vista.CollectorCode is not null && vista.Kind != MemberAccountOperationKind.Deposit && vista.CollectorCode != Disbursements.RecogidaEnElDesembolso.Recaudador.Code))
             return Falla(ErroresDeAportes.ReversoDeOtro());
-        if (vista.MembershipWithdrawalId is not null || vista.Kind is MemberAccountOperationKind.DirectDebit or MemberAccountOperationKind.InternalOffset
+        // US12 (T203): lo de la asamblea se reversa entero, desde la decisión (POST /assembly-distributions/{id}/reverse).
+        if (vista.MembershipWithdrawalId is not null || vista.AssemblyDistributionId is not null || vista.Kind is MemberAccountOperationKind.AssemblyCredit or MemberAccountOperationKind.DirectDebit or MemberAccountOperationKind.InternalOffset
                 or MemberAccountOperationKind.ContributionRefund or MemberAccountOperationKind.Charge or MemberAccountOperationKind.ChargeWaiver
                 // US5 (T132, T135; research E98): la liquidación de intereses y la cancelación no se reversan desde la pantalla.
                 or MemberAccountOperationKind.InterestSettlement or MemberAccountOperationKind.Cancellation

@@ -311,6 +311,16 @@ public static class AdjuntosDeModulo
     /// </summary>
     public const string SoporteDeEmbargo = "LendingGarnishmentSupport";
 
+    /// <summary>
+    /// Feature 014, US12 (T203; FR-045 a FR-047; research §22): el soporte de una decisión de la asamblea —el acta firmada de la asamblea general y el
+    /// proyecto de distribución aprobado por el consejo—, con dueño la <b>distribución</b> (<c>LND_AssemblyDistributions.PublicId</c>). Se lee con
+    /// <c>Lending.Assembly.Register</c> o <c>.Approve</c>; lo sube quien registra o aplica la decisión mientras no esté aplicada; no se borra.
+    /// </summary>
+    public const string SoporteDeAsamblea = "LendingAssemblySupport";
+
+    private const string RegistrarAsamblea = "Lending.Assembly.Register";
+    private const string AprobarAsamblea = "Lending.Assembly.Approve";
+
     private const string RegistrarEmbargos = "Lending.Garnishments.Register";
     private const string LevantarEmbargos = "Lending.Garnishments.Release";
     private const string AdministrarBloqueos = "Lending.Holds.Manage";
@@ -396,6 +406,9 @@ public static class AdjuntosDeModulo
     /// </summary>
     public static async Task<bool> PuedeLeerAsync(IPermissionChecker permisos, string? ownerEntityType, CancellationToken ct)
     {
+        // Feature 014, US12: el soporte de la asamblea lo leen quien registra y quien aplica.
+        if (ownerEntityType == SoporteDeAsamblea)
+            return await permisos.HasPermissionAsync(RegistrarAsamblea, ct) || await permisos.HasPermissionAsync(AprobarAsamblea, ct);
         var permiso = ownerEntityType switch
         {
             Comprobante => LeerComprobantes,
@@ -551,6 +564,18 @@ public static class AdjuntosDeModulo
                 return new Error("Generic.NotFound", "Persona no encontrada.");
             return null;
         }
+        if (ownerEntityType == SoporteDeAsamblea)
+        {
+            // Feature 014, US12: el acta y el proyecto de distribución, mientras la decisión no esté aplicada (después respaldan lo aplicado).
+            var puede = await permisos.HasPermissionAsync(RegistrarAsamblea, ct) || await permisos.HasPermissionAsync(AprobarAsamblea, ct);
+            var estado = await db.AssemblyDistributions.AsNoTracking().Where(d => d.PublicId == ownerEntityPublicId && !d.IsDeleted)
+                .Select(d => (Domain.Enums.Lending.AssemblyDistributionStatus?)d.Status).FirstOrDefaultAsync(ct);
+            if (!puede || estado is null) return new Error("Generic.NotFound", "Decisión de asamblea no encontrada.");
+            return estado == Domain.Enums.Lending.AssemblyDistributionStatus.Simulated
+                ? null
+                : new ErrorConDatos(AttachmentErrorCodes.OwnerLocked, "La decisión de asamblea ya no está en borrador: sus soportes quedaron sellados.",
+                    new { ownerEntityType });
+        }
         if (ownerEntityType == SoporteDeTitularidad)
         {
             // Feature 014, US2: los soportes de la titularidad de una cuenta, del titular, de quien abre cuentas o administra sus partes.
@@ -670,6 +695,11 @@ public static class AdjuntosDeModulo
         if (ownerEntityType == SoporteDeEmbargo)
             return new ErrorConDatos(AttachmentErrorCodes.OwnerLocked,
                 "Es el soporte de un embargo o un bloqueo (oficio, desembargo o respuesta al juzgado): se conserva y no se puede borrar.",
+                new { ownerEntityType });
+        // Feature 014, US12: el acta de la asamblea y el proyecto de distribución respaldan lo que se abonó o devolvió a cada asociado.
+        if (ownerEntityType == SoporteDeAsamblea)
+            return new ErrorConDatos(AttachmentErrorCodes.OwnerLocked,
+                "Es un soporte de una decisión de asamblea (acta o proyecto de distribución): se conserva y no se puede borrar.",
                 new { ownerEntityType });
         // Feature 014, US2: los soportes de la titularidad de una cuenta respaldan quién la maneja y a quién se entrega.
         if (ownerEntityType == SoporteDeTitularidad)

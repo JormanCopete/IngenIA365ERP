@@ -75,7 +75,7 @@ public sealed record DistribucionCalculada(
 public static class RevalorizacionYExcedentes
 {
     /// <summary>Las unidades de redondeo que admite la entidad: al peso o al centavo.</summary>
-    public static IReadOnlyList<decimal> UnidadesAdmitidas { get; } = [1m, 0.01m];
+    public static IReadOnlyList<decimal> UnidadesAdmitidas { get; } = [1m, 1m / 100m];
 
     public static DistribucionCalculada Calcular(PedidoDeDistribucion pedido)
     {

@@ -223,6 +223,11 @@ public sealed class ReversionDeCuentas(
     /// <summary>El tipo del hecho principal de la operación original (el que el reverso espeja).</summary>
     public static string TipoDelHecho(MemberAccountOperation original, LineNature naturaleza) => original.Kind switch
     {
+        // US12 (T203): lo de la asamblea —la revalorización y los excedentes (abonos) y la amortización (la devolución con su orden)—.
+        MemberAccountOperationKind.AssemblyCredit => original.Payload.Contains($"\"kind\":\"{nameof(AssemblyDistributionKind.Revaluation)}\"", StringComparison.Ordinal)
+            ? RevalorizacionDeAportesAplicadaV1.Type
+            : ExcedentesDistribuidosV1.Type,
+        MemberAccountOperationKind.ContributionRefund when original.AssemblyDistributionId is not null => AportesAmortizadosV1.Type,
         // US10 (T100, T101): las operaciones del retiro del asociado —el cruce (con su pago), la pérdida y la devolución—.
         MemberAccountOperationKind.InternalOffset when original.MembershipWithdrawalId is not null => original.RelatedLoanOperationId is not null
             ? CruceAlRetiroAplicadoV1.Type
@@ -249,6 +254,8 @@ public sealed class ReversionDeCuentas(
     /// <summary>La clase del documento de origen de la operación original (el <c>related</c> del reverso).</summary>
     public static string ClaseDelOrigen(MemberAccountOperation original) => original.MembershipWithdrawalId is not null
         ? EmisionDeCartera.ClaseLiquidacionDeRetiro
+        : original.AssemblyDistributionId is not null
+        ? EmisionDeCartera.ClaseDecisionDeAsamblea
         : original.Kind switch
     {
         MemberAccountOperationKind.Deposit => EmisionDeCartera.ClaseConsignacionDeCuenta,

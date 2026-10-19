@@ -24,4 +24,24 @@ public sealed record ExcedentesDistribuidosV1
     public int LineCount { get; init; }
 
     public decimal ControlTotal { get; init; }
+
+    /// <summary>
+    /// US12 (T203; research §22): con el destino <c>Order</c> (pago), lo que se paga a cada asociado por orden de giro —no mueve ninguna cuenta del
+    /// asociado: va del fondo de excedentes a los retornos por pagar (<c>DevolucionPorPagar</c>, motivo <c>SurplusPayment</c>)—. Vacío en los otros destinos.
+    /// </summary>
+    public IReadOnlyList<SurplusPaymentV1> Payments { get; init; } = [];
+}
+
+/// <summary>El pago de los excedentes de un asociado (US12, T203): su cuenta de aportes (para la sucursal y la línea), el titular, el valor y la orden.</summary>
+public sealed record SurplusPaymentV1
+{
+    public MemberAccountRefV1 Account { get; init; } = new();
+
+    public Guid HolderPersonPublicId { get; init; }
+
+    public DepositFactDimensionsV1 Dimensions { get; init; } = new();
+
+    public decimal Amount { get; init; }
+
+    public Guid? OrderPublicId { get; init; }
 }

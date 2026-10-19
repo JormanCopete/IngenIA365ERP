@@ -194,6 +194,9 @@ public class LasConsultasDeCarteraRespetanElAlcance
         "Core/IngenIA365ERP.Application/Lending/Deposits/Holds/GarnishmentCommands.cs",
         "Core/IngenIA365ERP.Application/Lending/Deposits/Holds/AccountHoldCommands.cs",
         "Core/IngenIA365ERP.Application/Lending/Deposits/Reports/GarnishmentsReportQuery.cs",
+        // US12 (T203): una decisión de asamblea es de toda la cooperativa: la lista, el detalle y la simulación exigen alcance total
+        // (DistribucionesDeAsamblea.AlcanceTotalAsync; fuera, la lista vacía y el 404 de la decisión).
+        "Core/IngenIA365ERP.Application/Lending/Deposits/Assembly/AssemblyDistributionQueries.cs",
     ];
 
     /// <summary>

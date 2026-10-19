@@ -199,6 +199,13 @@ public sealed class OrdenesDeGiroDeCuentas(
     {
         ArgumentNullException.ThrowIfNull(orden);
         var ahora = reloj.UtcNow;
+        // US12 (T203; research §22): el pago de excedentes no salió de ninguna cuenta del asociado (va del fondo a los retornos por pagar): rechazado,
+        // no hay saldo que reintegrar; lo decretado sigue por pagar en Contabilidad y la orden queda con su resultado para volver a girarla.
+        if (orden.Purpose == PayoutPurpose.SurplusPayment && AccountPayoutOrder.Reintegra(hacia))
+        {
+            orden.RegistrarResultado(hacia, ahora);
+            return Result.Success();
+        }
         if (AccountPayoutOrder.Reintegra(hacia))
         {
             var origen = await db.MemberAccountOperations.FirstAsync(o => o.Id == orden.OperationId, ct);
