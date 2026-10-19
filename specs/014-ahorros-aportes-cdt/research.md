@@ -1130,3 +1130,106 @@ sigue en K6b: lo de K8 que ya existe se lee con los defectos del catálogo (como
 - **E91 · `CaptacionesAportes` regenerada (US4).** Con `LND_GmfMonthlyUsage`, `LND_DepositLineCharges`, `LND_AccountCharges`, `LND_AccountChargeExemptions` y
   `LND_DirectDebitMandates`; ahora `20261018232957` PostgreSQL / `20261018232925` SQL Server (paridad OK, el scaffold sin cambios ajenos). Conserva el SQL de T044,
   T089 y `ASO`.
+
+## 13. Decisiones del dueño del 2026-10-18
+
+El dueño respondió las preguntas abiertas de las fases 1–7 el **2026-10-18**. **Manda el código**; estas notas reemplazan lo dicho antes en
+`research.md`, `data-model.md`, `contracts/` y `tasks.md` donde choquen. Criterio general del dueño: el ERP es multiempresa, todo valor por defecto se
+parametriza por entidad (parámetro con vigencia o catálogo editable) y los plazos regulatorios se informan, no se imponen. Las tareas están en
+`tasks.md`, fase «Decisiones del dueño del 2026-10-18» (T237–T258).
+
+### 13.1 Lo que cambió el código
+
+- **D14 · Requisitos de activación en todos los ambientes (enmienda E32).** `RequisitosDeActivacionDeCaptaciones` ya no deja `Waived` fuera de producción:
+  `DeliveriesComplete`, `ProfileAllowsClasses` y `LinesWithMatrix` faltan igual en cualquier ambiente, y `TreasuryDestinationRegistered` exige la orden de
+  giro v2 adoptada siempre. Fuera de producción sólo cambia **qué cuenta**: los dobles de prueba valen como recaudador y como Tesorería. La fixture
+  `CaptacionesE2E` los cumple con `RequisitosDeCaptacionesAsync` (roles sugeridos, perfil con `mayTakeDeposits`, matriz mínima de reglas); escrita, sin correr.
+- **D15 · Retiro de lo heredado (cierra T005).** No hay clientes en producción: las tablas heredadas se pueden borrar ya. El dueño es el segundo revisor y
+  autoriza; el despliegue inserta en cada base la fila `COR_SystemSettings` `LND.CaptacionesHeredadas.RetiroAprobado`
+  (`docs/operaciones/captaciones-retiro-heredado.md` §9a). La guarda de `RetiroDeCaptacionesHeredadas` no se tocó.
+- **D17 · El administrador de la empresa no aprueba tasas negociadas.** `Lending.NegotiatedRates.Approve` sale de lo que recibe `CompanyAdmin`
+  (`LendingPermissionCatalogSeeder.ExcluidosDelAdministrador`), como las decisiones y el voto.
+- **D18 · Perfiles de rol por módulo (enmienda E07).** `PerfilesSugeridos.DeCreditos()` (los 13 de la 013) y `DeCaptaciones()` (los 4 de la 014):
+  `LendingRolesCreated` exige sólo los de créditos y el requisito nuevo `DepositRolesCreated` los de captaciones. Crear los roles sugeridos sin elegir
+  sigue creando los 17.
+- **D19 · Tesorería paga créditos.** El contrato de obligaciones admite a Tesorería si su participante adopta `ProveedorDeObligaciones`
+  (`ContratoDeObligacionesDeCartera.RecaudadorAsync`); `PagoReversadoPorCartera` va al destino del recaudador (Recaudo o Tesorería). contrato-de-cuentas §6.3.
+- **D20 · La ficha muestra sólo lo del titular.** `GetPersonDetailQuery` cuenta las cuentas donde la persona es **titular**; las de cotitular se ven en una
+  ventana aparte (botón en la ficha, `GET /api/core/people/{id}/co-held-accounts`, componente `CuentasComoCotitular`).
+- **D29 · Tope de la cuota de fondos de empleados.** `Aportes.TopeCuotaFondoEmpleados` arranca en **0,10** (pendiente de validar), editable por la entidad
+  como todo parámetro de Cartera. El `LIMITE` nacional sigue acotándolo y vive en la central (**pregunta abierta**: ¿debe la entidad poder superarlo?).
+- **D34 · Constancia de beneficiarios al abrir.** Abrir una cuenta con beneficiarios exige el adjunto de la constancia
+  (`Lending.Savings.BeneficiaryRecordRequired`, `data.field = beneficiaryRecordAttachmentPublicId`), no sólo al cambiarlos.
+- **D35 · Plantillas de mensaje.** Los textos de `MAYOREDAD`, `CAMBIOTASA` y los demás avisos de captaciones son estándar y editables por la entidad en
+  `/cartera/plantillas-de-mensaje` (ya existía); la pantalla ofrece ahora las variables informativas de la 014 (`TextosDeCartera.VariablesPermitidas`).
+- **D36 · Pagadurías (cierra T091).** Todo concepto que se paga por nómina se puede descontar por pagaduría: la cuenta va al archivo de la pagaduría que es
+  la **empresa empleadora de la ficha del asociado** (`COR_Associates.EmployerCompanyId` → NIT de la pagaduría). Construido: archivo por grupo con el
+  formato del grupo y el código de la pagaduría en cada línea (`LineasDeGrupoDeDescuento`), `DescuentosPorPagaduria` v2, `ResultadoDeDescuentos` v2
+  repartido por equivalencias (`RepartoDeRespuestaDePagaduria`; créditos por el camino de la v1, cuotas de cuentas a `LND_PayrollDeductionAccountResults`
+  con su no descontado por `RegistroDeCuentas`, filas sin equivalencia o descuento sobrante en `LND_PayrollDeductionUnmatchedLines`), el giro de cuentas
+  por `ConsignarAsync` con la línea del archivo (`PendientesDeGiroDeCuentas`, `LND_MemberAccountOperations.PayrollDeductionAccountResultId`) y el doble de
+  Recaudo para la v2. `Lending.PayrollFile.FileGroupsPending` se retiró. Enmienda a data-model §1.4.2: una línea sin código **no** impide generar (no va en
+  ningún archivo y la vista previa la cuenta); `Lending.Payroll.UnmappedLine` no se construyó. La e2e `PagaduriasTests` cubre los pasos 2–4 del quickstart §3
+  con créditos (el escenario de libranza no tiene asociados con aportes cuya empresa sea la pagaduría); las cuotas de cuentas las prueban las unitarias.
+  Cierra la falta de diseño de E61.
+- **D37 · Prelación de los descuentos de Cartera en Nómina.** Política de empresa `PrelacionDescuentosDeCartera` con vigencia (seis órdenes posibles,
+  defecto aportes → créditos → ahorros); el motor la recibe por `CalculationPolicies.CarteraDeductionOrder` y la huella sólo la incluye si no es la de defecto.
+- **D39 · Pérdida esperada y aportes (corrige E62).** La norma **sí** lo dice: el Anexo 2 del Capítulo II de la Circular Básica Contable y Financiera
+  (modificado por la Circular Externa 68 de 2024), numeral 4.2, define el valor expuesto del activo «descontando el valor de los aportes y del ahorro
+  permanente de acuerdo con lo establecido en el numeral 5.1 del Anexo 1», y el numeral 4.3 excluye los aportes como garantía para la PDI; el Anexo 1,
+  numeral 5.1, fija las condiciones (sin pérdidas acumuladas, solvencia y, en cooperativas de ahorro y crédito y fondos de empleados de categoría plena, el 80 %
+  del capital mínimo irreducible; reparto a prorrata del saldo de los créditos). Fuentes:
+  <https://www.supersolidaria.gov.co/sites/default/files/data/20240726_anexo_2.pdf>,
+  <https://www.supersolidaria.gov.co/sites/default/files/data/20250131_anexo_1_cap_2_tit_4.pdf> y la guía de deterioro de la Supersolidaria (junio de 2024,
+  §3.1b, §3.2 i/j/n, §6.19) <https://www.supersolidaria.gov.co/sites/default/files/data/20250211_guia_deterioro.pdf>. Aplicado: `MotorDePerdidaEsperada`
+  descuenta los aportes a prorrata del valor expuesto (capital, luego intereses, luego otros) cuando el parámetro de descuento está activo, los indicadores de la
+  entidad lo permiten y la norma del cierre lo admite; la garantía «aportes» cuenta como sin garantía para la PDI. **Pendiente**: el descuento del ahorro
+  permanente (la norma lo admite; falta el saldo por crédito) y que la contadora valide los indicadores del numeral 5.1.
+- **D41 · Orden de los fondos en el cruce del retiro.** Parámetro `Captaciones.OrdenDeFondosAlRetiro` (defecto aportes → ahorros, según estatutos).
+- **D43 · Mínimo irreducible.** Retiene **sólo** la parte de aportes de la devolución; los ahorros se devuelven.
+- **D44 · Reverso tardío (enmienda E69).** Si el pago de un crédito cruzado se reversa con el retiro ya pagado y las cuentas canceladas, ya no se rechaza con
+  `AccountsClosed`: la cuenta se **reabre** (`Closed → Closing`), el retiro vuelve a `Settled` y el saldo queda a favor del exasociado. Exige el permiso
+  `Lending.MembershipWithdrawals.ReverseAfterPayment`, levanta la alerta `Cartera.ReversoTardioDeCruce` y envía correo a revisoría fiscal y gerencia (roles
+  sugeridos) y a la lista del parámetro `Captaciones.DestinatariosReversoTardio`. Si la cuenta ya tiene otra viva del mismo producto,
+  `Lending.MembershipWithdrawal.ReopenConflict`.
+- **D45 · Un comprobante para el cruce y el pago.** El cruce al retiro y el pago del crédito van en la **misma** unidad contable: un `CruceAlRetiroAplicado` por
+  crédito, con sus partes por cuenta, emitido con el origen y la clave del pago (acompaña a `PagoAplicado`); el excedente a devolver va al puente de Tesorería.
+  Si el asociado queda debiendo, la persona elige al liquidar qué pasa con el saldo (`PendingLoanBalanceHandling`: pasar a caja —traslada la forma de pago de
+  los créditos con libranza— o seguir con su forma de pago). Los reversos siguen en comprobantes separados (el constructor de captaciones de T143 los unirá).
+- **D46 · Motivo del retiro en Asociados.** `RetiroDeAsociadoAprobado` lleva `withdrawalReasonCode` traducido por el parámetro
+  `Captaciones.MotivosDeRetiroDeAsociados` (causa → código del catálogo de motivos); Asociados llena `WithdrawalReasonId`.
+- **D51 · Comercial factura los cargos (cierra T117 y la pregunta de E84).** `DestinoInventario` reparte `CargoDeCaptacionCausado` y `…Reversado` a
+  `ConsumeDepositChargeMessageCommand`: deja lista la factura de venta del servicio por el flujo de ventas (borrador `SalesInvoice`, referencia
+  `CGO:{cargo:N}`; tipo y bodega en `Ventas.TipoDeFacturaDeCargosDeCartera` y `Ventas.BodegaDeCargosDeCartera`), o la descarta o deja lista la nota crédito
+  total al reversar. mensajes.md §5.5.
+- **D52 · Doble de Tesorería como recaudador (cierra T113 y E89).** `RecaudadorDePrueba.Tesoreria` (`TES`, clase `Treasury`) consigna transferencias por el
+  contrato de cuentas y las reversa (`/collector/treasury/accounts/*`); la tesorería de prueba acepta los avisos de reverso. api.md §18.4.
+- **D53 · Aprobación configurable de los movimientos de cuentas (cierra E80 para la cooperativa).** Retiros y consignaciones en efectivo sobre la atribución
+  usan la política de la plataforma de aprobaciones por cooperativa (niveles con umbral y permiso; pantalla `/cartera/captaciones/aprobaciones`,
+  `GET/POST /api/lending/approval-policies`) y los montos de `Lending.Accounts.Withdraw`/`.Deposit` son limitables por rol; sin política rige la regla fija.
+- **D54 · GMF y canje como defectos configurables.** Redondeo del GMF (`Gmf.Redondeo`, defecto al peso), el débito automático como hecho generador
+  «retiro» (`DirectDebit` en `Gmf.HechosGeneradores`) y el canje de cheques (`Captaciones.DiasDeCanjePorClaseDeMedio`, 3 días hábiles) son parámetros editables
+  por la cooperativa, pendientes de validar por la contadora.
+
+### 13.2 Verificado sin cambio de código
+
+- **D23 · Tipos de comprobante y modo.** El mapeo hecho → tipo de comprobante de los hechos de captaciones es editable por la cooperativa en
+  `/contabilidad/cartera/tipos-de-comprobante`, y el modo de paso por hecho en el parámetro `Contabilidad.ModoDePaso` (ámbito `LendingFactType`). Nada fijo
+  en código más allá de la propuesta sembrada.
+
+### 13.3 Sólo se anotan (sin cambio)
+
+- **D16 (enmienda E14).** La tarjeta débito sigue sin función (`DebitCard.SavingsAccountUnavailable`) hasta el módulo de tarjetas.
+- **D24.** Las clases de comprobante AH y CD de lo heredado quedan inactivas: sólo para los comprobantes de migración y saldos iniciales de ese proceso.
+- **D38.** La liquidación definitiva de Nómina sigue recaudando sólo créditos.
+- **D40.** La excepción de arrastre (capital ≤ aportes) es correcta como está.
+- **D21, D22, D25–D28, D30–D33 y D42.** Confirman lo construido: sin cambio.
+
+### 13.4 Lo que sigue abierto
+
+- D29: si la entidad puede superar el `LIMITE` nacional del tope de la cuota de fondos de empleados.
+- D39: el descuento del ahorro permanente en la pérdida esperada y la validación de los indicadores del numeral 5.1 del Anexo 1.
+- D45: el reverso del cruce en un solo comprobante y las líneas puente dentro del mismo comprobante esperan el constructor de captaciones (T143); la devolución
+  sigue en su propia unidad (orden de giro).
+- D44: el correo del reverso tardío sale antes de confirmar la transacción (mejor esfuerzo).
+- D36: las cuotas de cuentas en una pagaduría por HTTP de punta a punta (falta un escenario e2e con asociados, aportes y empresa empleadora).

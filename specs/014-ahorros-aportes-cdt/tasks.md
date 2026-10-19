@@ -46,7 +46,8 @@ ciclo diario y activación. **Ninguna historia empieza antes.**
 
 ### Retiro de lo heredado (R28, C19, FR-119, FR-120)
 
-- [x] T005 Ejecutar `specs/014-ahorros-aportes-cdt/diagnostico-captaciones-heredadas.sql` en local, DEV, QA y producción y guardar el resultado en `docs/operaciones/captaciones-retiro-heredado.md` (**dueño**: con filas en cualquier tabla, la guarda se niega y el dueño decide antes de seguir) — **parcial (2026-10-18)**: corrido sólo en local (PostgreSQL 5433, `ingenia365erp`: 0 filas en las 45; `ingenia365erp_admin` no las tiene); DEV, QA y producción quedan **del dueño** con la tabla de §9 de `docs/operaciones/captaciones-retiro-heredado.md`
+- [x] T005 Ejecutar `specs/014-ahorros-aportes-cdt/diagnostico-captaciones-heredadas.sql` en local, DEV, QA y producción y guardar el resultado en `docs/operaciones/captaciones-retiro-heredado.md` (**dueño**: con filas en cualquier tabla, la guarda se niega y el dueño decide antes de seguir) — **parcial (2026-10-18)**: corrido sólo en local (PostgreSQL 5433, `ingenia365erp`: 0 filas en las 45; `ingenia365erp_admin` no las tiene); DEV, QA y producción quedan **del dueño** con la tabla de §9 de `docs/operaciones/captaciones-retiro-heredado.md` — **resuelto el 2026-10-18 por decisión del dueño (D15, research §13)**: no hay clientes en producción; el dueño es el segundo revisor y
+  autoriza, y el despliegue inserta la fila `LND.CaptacionesHeredadas.RetiroAprobado` en cada base (§9a del runbook)
 - [x] T006 Escribir la migración par destructiva con guarda `RetiroDeCaptacionesHeredadas` (38 tablas conservadas y 7 `CDT_*`; se niega si alguna tiene filas sin la fila `COR_SystemSettings` `LND.CaptacionesHeredadas.RetiroAprobado`; cabecera `MIGRACION-DESTRUCTIVA-APROBADA` con respaldo y segundo revisor) en `src/Infrastructure/IngenIA365ERP.Persistence.Migrations.PostgreSql/` y `src/Infrastructure/IngenIA365ERP.Persistence.Migrations.SqlServer/` — hecho el 2026-10-18 (`20261018143710` PostgreSQL, `20261018143627` SQL Server; guarda `RAISE EXCEPTION` / `THROW 50014`; 45 `DropTable` y ningún otro cambio en el scaffold); su prueba `TI/Lending/Deposits/RetiroDeCaptacionesHeredadasTests.cs` es **e2e en la corrida final**; respaldo y segundo revisor, del dueño
 - [x] T007 Retirar el código conservado: `D/Entities/Savings/`, `D/Entities/CDT/`, `A/Savings/`, `A/CDT/`, `P/Configurations/Savings/`, `P/Configurations/CDT/`, `API/Endpoints/Savings/`, `API/Endpoints/CDT/`, `API/Endpoints/Reports/SavingsReportsEndpoints.cs`, `SH/Pages/AhorrosYAportes/`, sus `DbSet` en `P/DbContext/ApplicationDbContext.cs` e `A/Common/Interfaces/IApplicationDbContext.cs`, y la regla de auditoría `Savings` de `ModuloDeAuditoria` — hecho; también `Pages/CDT` (2 pantallas) y su grupo de menú «CDT», `API/Reports/PersonPortfolioReport.cs`, las ramas de ahorro y CDT de `AccountReferenceFinder`; la tarjeta débito responde `DebitCard.SavingsAccountUnavailable` y el detalle de la persona cuenta 0 ahorros hasta T043 (pregunta al dueño)
 - [x] T008 Retirar el grupo de menú «Ahorros y aportes» y sus 16 enlaces de `SH/Layout/NavMenu.razor` (el menú nuevo de captaciones llega con cada historia) y las referencias de clientes tipados heredados en `SH/Services/` — hecho; no había clientes tipados heredados en `SH/Services` (las pantallas llamaban `Http` directo); también salieron las dos tarjetas del centro de reportes y los temas del manual
@@ -241,11 +242,13 @@ retirar sobre la atribución (quickstart §2, US4); casos dorados de GMF.
 - [x] T110 [P] [US4] Crear `GmfMonthlyUsage` (§4.7) en `D/Entities/Lending/Deposits/Transactions/GmfMonthlyUsage.cs` y su configuración
 - [x] T111 [US4] Completar `ContratoDeCuentasDeCartera`: `ConsultarAsync`, `SimularAsync`, `RetirarAsync`, `TrasladarAsync`, `ReversarAsync` (firmas y manejo, disponible, mínimo, máximos, efectivo, atribución con monto, GMF enlazado, canje por días hábiles de la clase de medio, sobregiro técnico con bloqueo y alerta, marca de movimiento del titular por tipo de transacción FR-058, el disponible que muestra `ConsultarAsync` es el mismo que valida el retiro SC-007) en `A/Lending/Integration/ContratoDeCuentasDeCartera.cs` — `CloseAccount` responde `DeliveryNotAvailable` hasta T135; bloqueos y embargos en cero hasta US11 (E78–E80)
 - [x] T112 [US4] Mensaje `ConsignacionReversadaPorCartera` v1 y hechos de consignación, retiro, traslado, GMF y `OperacionDeCuentaReversada` en `A/Common/Integration/Contracts/Lending/Deposits/`
-- [ ] T113 [US4] Recaudador `Treasury` (transferencias recibidas) y dobles de prueba `/api/lending/test-doubles/collector/accounts/*` sólo fuera de producción en `A/Lending/Integration/` y `API/Endpoints/Lending/Deposits/TestDoublesEndpoints.cs` — **parcial**: dobles de cuentas hechos; el recaudador `Treasury` no tiene doble propio (E89)
+- [x] T113 [US4] Recaudador `Treasury` (transferencias recibidas) y dobles de prueba `/api/lending/test-doubles/collector/accounts/*` sólo fuera de producción en `A/Lending/Integration/` y `API/Endpoints/Lending/Deposits/TestDoublesEndpoints.cs` — **parcial**: dobles de cuentas hechos; el recaudador `Treasury` no tiene doble propio (E89). **Terminado el 2026-10-18** (decisión del dueño D52, research §13): doble `TES`
+  de clase `Treasury` con `/collector/treasury/accounts/*`
 - [x] T114 [P] [US4] Crear `DepositLineCharge` (§2.3), `AccountCharge` (§4.8) y `AccountChargeExemption` (§4.9) con configuraciones en `D/Entities/Lending/Deposits/`
 - [x] T115 [P] [US4] Motor puro `CargosDeCuenta` (gratuitos, exoneraciones, valor fijo o porcentaje con mínimo y máximo) en `D/Lending/Deposits/CargosDeCuenta.cs` con casos dorados en `TD/Lending/Deposits/Casos/cargo-*.json` — seis casos `cargo-*` (E83)
 - [x] T116 [US4] Causación de cargos (periódicos en `PasoDeCaptaciones`, por evento en el contrato), pendiente si no alcanza, condonación con aprobación, cobro del pendiente con la siguiente consignación (hecho `CargoPendienteCobrado`), y mensajes `CargoDeCaptacionCausado`/`Reversado` a Comercial (`CAR → Inventory`) con la respuesta `FacturaDeCargoRegistrada` en `A/Lending/Deposits/Charges/`
-- [ ] T117 [US4] Comercial: consumir `CargoDeCaptacionCausado` y `…Reversado` para facturar el cargo gravado y su nota crédito, en el módulo comercial de la 012 (`A/Inventory/Sales/` o donde viva la facturación) — **parcial**: los mensajes salen y esperan en la bandeja; no hay consumidor en Comercial (pregunta para el dueño, E84). `FacturaDeCargoRegistrada` sí se consume
+- [x] T117 [US4] Comercial: consumir `CargoDeCaptacionCausado` y `…Reversado` para facturar el cargo gravado y su nota crédito, en el módulo comercial de la 012 (`A/Inventory/Sales/` o donde viva la facturación) — **parcial**: los mensajes salen y esperan en la bandeja; no hay consumidor en Comercial (pregunta para el dueño, E84). `FacturaDeCargoRegistrada` sí se consume. **Terminado el 2026-10-18**
+  (decisión del dueño D51, research §13): `ConsumeDepositChargeMessageCommand` deja lista la factura de venta del servicio o su nota crédito
 - [x] T118 [P] [US4] Crear `DirectDebitMandate` (§3.6) en `D/Entities/Lending/Deposits/Accounts/DirectDebitMandate.cs` y su configuración
 - [x] T119 [US4] Débito automático en `PasoDeCaptaciones`: operación interna que debita la cuenta y aplica el pago del crédito (`InternalOffset`, `OwnLoanPayoff`, clave `CAR:debito-automatico:…`), y `PagoAplicado.AdmiteProceso = true` sólo para `OwnLoanPayoff` en `A/Lending/Deposits/Operations/DebitoAutomatico.cs`
 - [x] T120 [US4] Al cumplir el titular 18 años, anular los retiros del representante en espera de aprobación con aviso (FR-033) en `A/Lending/Deposits/Accrual/MayoriaDeEdad.cs` — anula la solicitud de retiro en espera; el aviso es el de la mayoría de edad (E88)
@@ -488,6 +491,40 @@ beneficiarios genera dos órdenes de giro.
 - [ ] T234 **Dueño**: medir con usuarios de la cooperativa piloto los tiempos de apertura y caja (SC-004) y el éxito al primer intento (SC-018), y registrar el resultado en `docs/operaciones/captaciones-puesta-en-marcha.md`
 - [ ] T235 **Dueño y contadora**: validar parámetros «pendiente de validar» (P2, P3, P8–P12, P26), la matriz y los casos dorados; cotejar los layouts SICSES y exógena
 - [ ] T236 **Dueño**: segundo revisor y respaldos por base antes de aplicar `RetiroDeCaptacionesHeredadas` fuera de local; promoción a DEV y QA
+  — el 2026-10-18 el dueño se nombró segundo revisor y autorizó (D15); queda la promoción
+
+---
+
+## Decisiones del dueño del 2026-10-18 (research §13)
+
+Construidas en la misma tanda (rama `014-ahorros-aportes-cdt`). Las e2e se escribieron y compilan; se corren una sola vez al final de todas las fases.
+
+- [x] T237 D14: requisitos de activación de captaciones y aportes en todos los ambientes (sin `Waived`; fuera de producción cuentan los dobles) y fixture
+  `CaptacionesE2E.RequisitosDeCaptacionesAsync` (enmienda E32)
+- [x] T238 D15: T005 resuelto por el dueño; §9a de `docs/operaciones/captaciones-retiro-heredado.md` (la guarda no se tocó)
+- [x] T239 D17: `CompanyAdmin` sin `Lending.NegotiatedRates.Approve`
+- [x] T240 D18: roles sugeridos por módulo (`DeCreditos`, 13; `DeCaptaciones`, 4) y requisito `DepositRolesCreated` (enmienda E07)
+- [x] T241 D19: Tesorería paga créditos con `ProveedorDeObligaciones` adoptado; `PagoReversadoPorCartera` también a Tesorería
+- [x] T242 D20: la ficha de la persona cuenta sólo lo del titular; cuentas como cotitular en ventana aparte (`GET /api/core/people/{id}/co-held-accounts`)
+- [x] T243 D23: verificado que el tipo de comprobante y el modo de paso de los hechos de captaciones son editables por la cooperativa (sin código)
+- [x] T244 D29: `Aportes.TopeCuotaFondoEmpleados` con defecto 0,10 (el `LIMITE` nacional sigue acotándolo: pregunta abierta)
+- [x] T245 D34: constancia de beneficiarios exigida al abrir la cuenta (`Lending.Savings.BeneficiaryRecordRequired`)
+- [x] T246 D35: plantillas de aviso editables por pantalla con las variables de la 014
+- [x] T247 D36: archivo de pagaduría por grupo con cuotas de cuentas, mensajes v2 y respuesta repartida por código (cierra T091)
+- [x] T248 D37: política de Nómina `PrelacionDescuentosDeCartera` con vigencia (defecto aportes → créditos → ahorros)
+- [x] T249 D39: pérdida esperada descuenta los aportes del valor expuesto según el Anexo 2, num. 4.2, y el Anexo 1, num. 5.1 (corrige E62)
+- [x] T250 D41: parámetro `Captaciones.OrdenDeFondosAlRetiro` (defecto aportes → ahorros)
+- [x] T251 D43: el mínimo irreducible retiene sólo los aportes
+- [x] T252 D44: reverso tardío reabre la cuenta con saldo a favor, permiso `Lending.MembershipWithdrawals.ReverseAfterPayment`, alerta y correo a revisoría,
+  gerencia y `Captaciones.DestinatariosReversoTardio` (enmienda E69)
+- [x] T253 D45: cruce y pago del crédito en la misma unidad contable; al liquidar se elige qué pasa con el saldo pendiente (`PendingLoanBalanceHandling`)
+- [x] T254 D46: `RetiroDeAsociadoAprobado.withdrawalReasonCode` por `Captaciones.MotivosDeRetiroDeAsociados`; Asociados llena `WithdrawalReasonId`
+- [x] T255 D51: Comercial factura los cargos gravados (cierra T117)
+- [x] T256 D52: doble de Tesorería como recaudador de cuentas (cierra T113)
+- [x] T257 D53: aprobación de retiros y consignaciones en efectivo configurable por cooperativa (`/cartera/captaciones/aprobaciones`)
+- [x] T258 D54: redondeo del GMF, débito automático como «retiro» y canje de cheques como parámetros editables (pendientes de validar)
+- Sin cambio, anotadas en research §13.3: D16 (tarjeta débito, enmienda E14), D21, D22, D24 (AH/CD sólo para migración y saldos iniciales), D25–D28,
+  D30–D33, D38 (la definitiva recauda sólo créditos), D40 (excepción de arrastre correcta) y D42.
 
 ---
 

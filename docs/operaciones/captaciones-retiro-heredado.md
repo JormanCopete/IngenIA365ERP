@@ -175,6 +175,21 @@ contracts/api.md); la tarjeta débito queda sin emitir ni mover hasta su propia 
 | pendiente | QA | cada base de cooperativa e `ingenia365erp` | | | dueño (T005) |
 | pendiente | PDN | cada base, con autorización expresa | | | dueño (T005) |
 
+## 9a. Decisión del dueño del 2026-10-18 (D15; cierra T005)
+
+**No hay clientes en producción** (la plataforma está en implantación): las tablas y los datos heredados de captaciones se pueden
+borrar ya, en todos los ambientes, aunque el diagnóstico de DEV, QA o PDN encuentre filas de prueba.
+
+- **Segundo revisor y aprobación**: el **dueño** es el segundo revisor y autoriza el retiro en todas las bases. Su nombre va en la
+  línea `Segundo revisor:` de la cabecera de la migración en el commit de la promoción (sólo comentarios).
+- **La fila de la guarda**: el despliegue inserta, **en cada base** antes de que el DbMigrator aplique
+  `RetiroDeCaptacionesHeredadas`, la fila `COR_SystemSettings` `LND.CaptacionesHeredadas.RetiroAprobado` con el texto de la §5
+  (`<fecha> dueño; respaldo <base>-AAAAMMDD-pre-f014.dump; segundo revisor el dueño; decisión D15 del 2026-10-18`). La regla de la §5
+  «nunca en una base sin filas» queda sin efecto para esta promoción: la decisión cubre todas las bases.
+- **El respaldo por base** sigue siendo obligatorio (§4, Principio XII): la decisión autoriza borrar, no omitir el respaldo.
+- **La guarda no cambia**: `RetiroDeCaptacionesHeredadas` es otra migración y no se regenera; sin la fila y con filas, se sigue negando
+  con el nombre de la tabla.
+
 ## 10. Síntomas
 
 | Síntoma | Causa | Qué hacer |
