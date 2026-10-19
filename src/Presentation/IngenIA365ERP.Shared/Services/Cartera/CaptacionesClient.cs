@@ -303,6 +303,32 @@ public sealed class CaptacionesClient(HttpClient http, CentralAuthClient auth)
         Enviar<UsoDeGmfDto>(HttpMethod.Get, ConQuery($"{RutaDeExenciones}/usage", Query(("personPublicId", Texto(persona)), ("year", Texto(anio)),
             ("month", Texto(mes)))), null, null, ct);
 
+    // ------------------------------------------------------------------------------- intereses y cancelación (US5, T139) --
+
+    /// <summary>Las liquidaciones de intereses de la cuenta (la más reciente primero).</summary>
+    public Task<ResultadoDeInventario<PaginaDeInventarioDto<LiquidacionDeInteresesDto>>> LiquidacionesAsync(Guid cuenta, int pagina = 1, int tamano = 24,
+        CancellationToken ct = default) =>
+        Enviar<PaginaDeInventarioDto<LiquidacionDeInteresesDto>>(HttpMethod.Get, ConQuery($"{RutaDeCuentas}/{cuenta}/settlements", Query(("page", Texto(pagina)),
+            ("pageSize", Texto(tamano)))), null, null, ct);
+
+    /// <summary>Simula la liquidación a una fecha, sin efectos, con la explicación día por día.</summary>
+    public Task<ResultadoDeInventario<SimulacionDeInteresesDto>> SimularInteresesAsync(Guid cuenta, SimularInteresesRequest request, CancellationToken ct = default) =>
+        Enviar<SimulacionDeInteresesDto>(HttpMethod.Post, $"{RutaDeCuentas}/{cuenta}/settlements/simulate", request, null, ct);
+
+    /// <summary>Liquida a mano un período vencido (idempotente: repetirla devuelve la existente).</summary>
+    public Task<ResultadoDeInventario<LiquidacionDeInteresesDto>> LiquidarInteresesAsync(Guid cuenta, LiquidarInteresesRequest request, ClaveDeOperacion clave,
+        CancellationToken ct = default) =>
+        Enviar<LiquidacionDeInteresesDto>(HttpMethod.Post, $"{RutaDeCuentas}/{cuenta}/settlements", request, clave, ct);
+
+    /// <summary>La vista previa de la cancelación: lo que se liquidaría, el GMF, lo que se entregaría y lo que la impide.</summary>
+    public Task<ResultadoDeInventario<VistaPreviaDeCancelacionDto>> VistaPreviaDeCancelacionAsync(Guid cuenta, CancellationToken ct = default) =>
+        Enviar<VistaPreviaDeCancelacionDto>(HttpMethod.Get, $"{RutaDeCuentas}/{cuenta}/close-preview", null, null, ct);
+
+    /// <summary>Cancela la cuenta: liquida a la fecha, retiene, cobra el GMF y entrega el saldo.</summary>
+    public Task<ResultadoDeInventario<CancelacionDeCuentaDto>> CancelarCuentaAsync(Guid cuenta, CancelarCuentaRequest request, ClaveDeOperacion clave,
+        CancellationToken ct = default) =>
+        Enviar<CancelacionDeCuentaDto>(HttpMethod.Post, $"{RutaDeCuentas}/{cuenta}/close", request, clave, ct);
+
     private static string Ruta(int clase) => clase == TextosDeAportes.Devolucion ? "refunds" : "assignments";
 
     private Task<ResultadoDeInventario<T>> Enviar<T>(HttpMethod metodo, string url, object? cuerpo, ClaveDeOperacion? clave, CancellationToken ct) =>
