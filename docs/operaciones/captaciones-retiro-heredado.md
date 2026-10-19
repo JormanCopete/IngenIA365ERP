@@ -181,7 +181,10 @@ contracts/api.md); la tarjeta débito queda sin emitir ni mover hasta su propia 
 borrar ya, en todos los ambientes, aunque el diagnóstico de DEV, QA o PDN encuentre filas de prueba.
 
 - **Segundo revisor y aprobación**: el **dueño** es el segundo revisor y autoriza el retiro en todas las bases. Su nombre va en la
-  línea `Segundo revisor:` de la cabecera de la migración en el commit de la promoción (sólo comentarios).
+  línea `Segundo revisor:` de la cabecera de la migración en el commit de la promoción (sólo comentarios). Desde el congelamiento (T225)
+  esos comentarios forman parte de la huella que fija `LasMigracionesCongeladasNoSeRegeneran`: el mismo commit actualiza la huella a
+  propósito ([captaciones-despliegue.md](captaciones-despliegue.md) §2.3). El despliegue completo de la feature está en ese runbook y la
+  puesta en marcha por cooperativa en [captaciones-puesta-en-marcha.md](captaciones-puesta-en-marcha.md).
 - **La fila de la guarda**: el despliegue inserta, **en cada base** antes de que el DbMigrator aplique
   `RetiroDeCaptacionesHeredadas`, la fila `COR_SystemSettings` `LND.CaptacionesHeredadas.RetiroAprobado` con el texto de la §5
   (`<fecha> dueño; respaldo <base>-AAAAMMDD-pre-f014.dump; segundo revisor el dueño; decisión D15 del 2026-10-18`). La regla de la §5

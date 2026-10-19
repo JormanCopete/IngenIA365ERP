@@ -845,6 +845,55 @@ Pendientes abiertos de la feature (dueño, contadora o ambiente):
    Server, de una vez, antes de promover; el guion `tools/scripts/carga-cartera-sintetica.ps1` sirve para medir con volumen en DEV y QA.
 7. **QA por rol, ensayo general de COOFLOPAL, validación de la contadora y promoción** (T1078–T1089): con autorización expresa del dueño.
 
+#### P20 — Feature 014 (ahorros, aportes y CDAT en la Cartera): K7 a K11 construidas en su rama, **sin desplegar**
+
+**Estado: rama local `014-ahorros-aportes-cdt`, sin merge a `develop` y sin desplegar en DEV, QA ni producción** (corte 2026-10-19). Las
+captaciones (ahorro a la vista, CDAT, contractual y permanente) y los aportes, dentro de la Cartera, en reemplazo de lo heredado. Las cinco
+entregas salen **juntas** (`CatalogoDeCartera.EntregaVigente = K11`, decisión Q1). Despliegue: [captaciones-despliegue.md](captaciones-despliegue.md);
+puesta en marcha por cooperativa: [captaciones-puesta-en-marcha.md](captaciones-puesta-en-marcha.md); retiro de lo heredado:
+[captaciones-retiro-heredado.md](captaciones-retiro-heredado.md); parte contable: [manual contable §10](../manual/contabilidad-contrato-de-contabilizacion.md).
+
+| Entregas | Migraciones | DEV | QA | Producción | Release | Respaldo antes de promover |
+|---|---|---|---|---|---|---|
+| K7 a K11 | `RetiroDeCaptacionesHeredadas` (destructiva con guarda; D15: el dueño autoriza y es segundo revisor) y `CaptacionesAportes` (aditiva), congeladas desde el 2026-10-19 (T225) | — | — | — | — | `<base>-AAAAMMDD-pre-f014.dump` por base |
+
+Lo que hay que saber antes de llevarla a un ambiente:
+
+- Va **detrás de la 013** (sus migraciones hasta `CarteraVivienda`), que tampoco está desplegada (P19).
+- **Nada de captaciones sale en vivo sin Recaudo y Tesorería reales** (Q1): se puede desplegar, pero en producción ninguna cooperativa activa
+  aportes ni captaciones mientras `AccountsCollectorRegistered` y `TreasuryDestinationRegistered` falten sin dobles de prueba. Los requisitos
+  de la activación se exigen en **todos** los ambientes (D14); fuera de producción sólo cuentan los dobles `TST`/`TES`.
+- La cabecera `MIGRACION-DESTRUCTIVA-APROBADA` del retiro dice hoy «pendiente» en respaldo y segundo revisor. Escribirlos **cambia la huella**
+  que fija `LasMigracionesCongeladasNoSeRegeneran`: ese commit actualiza la huella a propósito, antes de la primera promoción
+  ([captaciones-despliegue.md](captaciones-despliegue.md) §2.3).
+- Los permisos `Lending.*` (163) los siembra la API al arrancar, no el DbMigrator.
+
+Pendientes abiertos de la feature:
+
+1. **Medición con la cooperativa piloto** (T234, dueño): tiempos de apertura y caja (SC-004) y éxito al primer intento (SC-018); se registran en
+   [captaciones-puesta-en-marcha.md](captaciones-puesta-en-marcha.md) §10.
+2. **Validación de la contadora** (T235, dueño y contadora): los parámetros «pendiente de validar» —P2 (umbral diario de retención y el CDAT),
+   P3 (GMF en fondos de empleados), P8 (SICSES), P9 (exógena), P10 (certificado tributario y aportes), P11 (límite de revalorización), P12
+   (participación en aportes), P26 (bonificación del contractual)—, la matriz contable con las **cuentas CUIF sugeridas** (manual contable
+   §10.7) y los casos dorados de captaciones; además, lo listado «para la contadora» en research §15.2 a §25.2.
+3. **Cotejo de layouts** (T235): SICSES **9026, 9068, 9013, 169 y 9067** y exógena **1019 y 1020** van `verified = false`; cada generación
+   lleva la alerta de formato sin cotejar hasta que el dueño los coteje con el instructivo vigente y un archivo aceptado.
+4. **Promoción a DEV y QA** (T236, dueño): diagnóstico, respaldo por base, la fila `LND.CaptacionesHeredadas.RetiroAprobado` en cada base (D15)
+   y el nombre del segundo revisor en la cabecera antes de aplicar el retiro fuera de local.
+5. **Corrida final de pruebas** (T230): las e2e «Captaciones e2e» están escritas y compiladas, **sin correr** (decisión del dueño: se corren una
+   vez al final), en PostgreSQL **y** SQL Server, junto con las de la 013; las de volumen con `RUN_PERF_TESTS=1`.
+6. **MAUI a mano**: no hay pruebas de navegador ni de la app; las pantallas de captaciones (apertura, caja, CDAT, retiro del asociado,
+   documentos, activación) se prueban a mano en Windows y Android.
+7. **Valores nacionales sin semilla** (maestro, con su fuente): `LIMITE_INEMBARGABLE` (P5), `TOPE_ENTREGA_SIN_SUCESION` (P6), los límites de
+   participación en aportes (P12) y el `IPC` para la revalorización; los sembrados (`COMPONENTE_INFLACIONARIO` 2025, `TOPE_SEGURO_DEPOSITOS`, los
+   `LIMITE` de la 014) siguen «pendientes de validar».
+8. **Preguntas abiertas al dueño** (research §13.4 y §14.1 a §25.1): entre otras, si la entidad puede superar el tope legal de la cuota de
+   fondos de empleados (D29), el descuento del ahorro permanente en la pérdida esperada (D39), el reverso del cruce al retiro en un solo
+   comprobante (§15.1), si el contrato de cuentas se bloquea por la validación previa (E108, hoy sí), las plantillas de importación de líneas
+   (§16.1) y la base de los retornos de excedentes (§22.1).
+9. **Brechas conocidas** ([captaciones-puesta-en-marcha.md](captaciones-puesta-en-marcha.md) §9): las líneas de captación y de aportes no admiten
+   versión retroactiva y la carga exige versión vigente al corte (crearlas a más tardar el día del corte).
+
 ### 🟡 Prioridad media
 
 #### P4 — Sellado mensual regulatorio suspendido
@@ -889,7 +938,10 @@ found`), y la Web arrancaba mostrando una página en blanco.
 Se agregó una comprobación puntual en el `Dockerfile` de la Web, pero un paso de
 CI que ejecute cada imagen (`--help`, *health check*) cerraría la clase completa.
 
-#### P18 — Feature nueva de Ahorros: ahorros, aportes y CDT (después de K1 de la 013)
+#### P18 — Feature nueva de Ahorros: ahorros, aportes y CDT (después de K1 de la 013) — ✅ especificada y construida como la feature 014 (ver P20)
+
+> Superado: la feature 014 (ahorros, aportes y CDAT dentro de la Cartera) se especificó y construyó en su rama y retiró las 38 tablas
+> conservadas y las 7 `CDT_`. Lo que sigue abierto está en **P20**. El texto de abajo queda como historia.
 
 Respuesta del dueño a la pregunta A10 de la 013 (2026-10-14, `specs/013-cartera-financiera/decisiones-transversales.md` §5):
 ahorros, aportes y CDT se **renuevan en una feature propia de Ahorros**, que se especifica **después de K1** de Cartera.
