@@ -124,6 +124,26 @@ public static class TiposDeAlerta
     /// corrió): se causaron en orden desde el último día causado y se avisa al jefe de captaciones. (nuevo)
     /// </summary>
     public const string CausacionDeCaptacionesAtrasada = "Cartera.CausacionDeCaptacionesAtrasada";
+
+    /// <summary>
+    /// Feature 014, US15 (T216; US15-1; FR-109): el constituido del fondo de liquidez es menor que el requerido a la fecha de la foto: se avisa al tesorero y
+    /// a la gerencia con la diferencia. (nuevo en contracts)
+    /// </summary>
+    public const string FondoDeLiquidezInsuficiente = "Cartera.FondoDeLiquidezInsuficiente";
+
+    /// <summary>
+    /// Feature 014, US15 (T216): el constituido cubre el requerido pero no el colchón de <c>FondoDeLiquidez.MargenDeAlerta</c>: aviso previo. (nuevo)
+    /// </summary>
+    public const string FondoDeLiquidezEnElMargen = "Cartera.FondoDeLiquidezEnElMargen";
+
+    /// <summary>
+    /// Feature 014, US15 (T216; research §24): el IRL acumulado de alguna banda quedó por debajo de <c>RiesgoDeLiquidez.UmbralIrl</c> (exposición
+    /// significativa: la Circular pide un plan de ajuste). (nuevo)
+    /// </summary>
+    public const string RiesgoDeLiquidezBajo = "Cartera.RiesgoDeLiquidezBajo";
+
+    /// <summary>Quién recibe las alertas de liquidez (US15-1): el tesorero que administra el fondo y la gerencia.</summary>
+    public static IReadOnlyList<string> DestinatariosDeLiquidez { get; } = ["Lending.LiquidityFund.Manage", "Lending.Decisions.Management"];
     public const string PeriodoInexistente = "Contabilidad.PeriodoInexistente";
     public const string GrupoNiifDistinto = "Contabilidad.GrupoNiifDistinto";
     public const string ValorNacionalDistinto = "Nomina.ValorNacionalDistinto";
@@ -269,6 +289,13 @@ public static class TiposDeAlerta
             ["Lending.Accounts.Reverse"], AppYCorreo, AlertSeverity.Critical, "K8"),
         new(ReversoTardioDeCruce, Cartera, "Se reversó un pago del cruce al retiro con el retiro ya pagado: la cuenta se reabrió con saldo a favor del exasociado.",
             ["Lending.MembershipWithdrawals.ReverseAfterPayment", "Lending.MembershipWithdrawals.Approve"], AppYCorreo, AlertSeverity.Critical, "K7"),
+        // US15 (T216): al tesorero (quien administra el fondo) y a la gerencia (quien decide en su nivel; un destinatario nunca es un permiso de consulta).
+        new(FondoDeLiquidezInsuficiente, Cartera, "El constituido del fondo de liquidez es menor que el requerido.",
+            DestinatariosDeLiquidez, AppYCorreo, AlertSeverity.Critical, "K11"),
+        new(FondoDeLiquidezEnElMargen, Cartera, "El constituido del fondo de liquidez cubre el requerido pero no el margen de alerta de la entidad.",
+            DestinatariosDeLiquidez, SoloApp, AlertSeverity.Warning, "K11"),
+        new(RiesgoDeLiquidezBajo, Cartera, "El indicador de riesgo de liquidez (IRL) de alguna banda quedó por debajo del mínimo de la entidad.",
+            DestinatariosDeLiquidez, AppYCorreo, AlertSeverity.Critical, "K11"),
         new(CausacionDeCaptacionesAtrasada, Cartera, "La causación de intereses de cuentas de captación estaba atrasada: se puso al día desde el último día causado.",
             ["Lending.Interest.Settle", "Lending.Processes.Run"], AppYCorreo, AlertSeverity.Warning, "K8"),
         new(PeriodoInexistente, "Accounting", "Llegó un hecho con fecha contable en un período que no existe.",

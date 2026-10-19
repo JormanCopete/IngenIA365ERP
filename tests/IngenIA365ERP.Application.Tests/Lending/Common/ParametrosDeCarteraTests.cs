@@ -106,7 +106,19 @@ public class ParametrosDeCarteraTests
         { "Captaciones.DestinatariosReversoTardio", "", [N], EntregaDeCartera.K7 },
         // Fase 13 de la 014 (US7, T182): la gracia de una cuota del contractual, por cooperativa o por línea.
         { "Captaciones.DiasDeGraciaDeCuotaContractual", "5", [N, L], EntregaDeCartera.K9 },
-        { "FondoDeLiquidez.PorcentajesPorCategoria", "", [N], EntregaDeCartera.K11 },
+        // US15 (T216; research §24, E206): la tabla del fondo nace con los defectos del Decreto 976 de 2026, y el margen, la periodicidad y el riesgo de
+        // liquidez (IRL y brecha).
+        { "FondoDeLiquidez.PorcentajesPorCategoria", ParametrosDeCartera.DefectoDelFondoDeLiquidez, [N], EntregaDeCartera.K11 },
+        { "FondoDeLiquidez.MargenDeAlerta", "0.05", [N], EntregaDeCartera.K11 },
+        { "FondoDeLiquidez.Periodicidad", "Semanal", [N], EntregaDeCartera.K11 },
+        { "RiesgoDeLiquidez.BandasIrl", "[15, 30, 60, 90]", [N], EntregaDeCartera.K11 },
+        { "RiesgoDeLiquidez.BandasDeBrecha", "[30, 60, 90, 180, 270, 360, null]", [N], EntregaDeCartera.K11 },
+        { "RiesgoDeLiquidez.UmbralIrl", "1", [N], EntregaDeCartera.K11 },
+        { "RiesgoDeLiquidez.UmbralDePlanDeAjuste", "1.10", [N], EntregaDeCartera.K11 },
+        { "RiesgoDeLiquidez.FraccionDeRetiroALaVista", "0.10", [N], EntregaDeCartera.K11 },
+        { "RiesgoDeLiquidez.FraccionMensualDeRetiroDeAportes", "0.01", [N], EntregaDeCartera.K11 },
+        { "RiesgoDeLiquidez.IndiceDeMora", "", [N], EntregaDeCartera.K11 },
+        { "RiesgoDeLiquidez.DescuentosPorInstrumento", "{\"BankDeposit\": 0, \"TermInvestment\": 0.20, \"TrustFund\": 0.20, \"GovernmentBond\": 0.20, \"Other\": 0.20}", [N], EntregaDeCartera.K11 },
         { "Aportes.TopeCuotaFondoEmpleados", "0.10", [N], EntregaDeCartera.K7 },
         { "Aportes.FraccionMinima", "", [N], EntregaDeCartera.K7 },
         { "Aportes.LimiteParticipacionPersonaNatural", "", [N], EntregaDeCartera.K7 },
@@ -180,8 +192,9 @@ public class ParametrosDeCarteraTests
         // Feature 014 (T017): las claves de captaciones y aportes existen desde ya con su entrega (K7 a K11) y no se ofrecen hasta que salga.
         // Fase 8 de la 014 (US5, research E94): 33 con Retencion.Redondeo; fase 13 (US7, T182): 34 con la gracia de la cuota del contractual;
         // fase 14 (US11, T188, T189): 40 con las seis de embargos; fase 15 (US13, T196): 44 con las cuatro de documentos; fase 16 (US12, T203): 50 con las seis de la asamblea;
-        // fase 17 (US14, T208, T209): 52 con el aviso previo de la inactividad y el plazo de las cuentas abandonadas.
-        posteriores.Should().HaveCount(52).And.OnlyContain(d => d.DisponibleDesde >= (EntregaDeModulo)EntregaDeCartera.K7
+        // fase 17 (US14, T208, T209): 52 con el aviso previo de la inactividad y el plazo de las cuentas abandonadas; fase 18 (US15, T216): 62 con el
+        // margen y la periodicidad del fondo de liquidez y las ocho del riesgo de liquidez.
+        posteriores.Should().HaveCount(62).And.OnlyContain(d => d.DisponibleDesde >= (EntregaDeModulo)EntregaDeCartera.K7
             && d.DisponibleDesde <= (EntregaDeModulo)EntregaDeCartera.K11);
         ParametrosDeCartera.Definiciones.Where(d => d.DisponibleDesde == (EntregaDeModulo)EntregaDeCartera.K6b).Should().BeEmpty("la vivienda no trae claves");
         ParametrosDeCartera.Definiciones.Where(d => d.DisponibleDesde == (EntregaDeModulo)EntregaDeCartera.K6a).Select(d => d.Clave).Should()

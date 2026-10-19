@@ -220,6 +220,51 @@ public static class ParametrosDeCartera
     /// <summary>Porcentajes del fondo de liquidez por categoría, con la tabla del Decreto 976 de 2026 y su transición (JSON).</summary>
     public const string FondoDeLiquidezPorcentajesPorCategoria = "FondoDeLiquidez.PorcentajesPorCategoria";
 
+    // Feature 014, US15 (T216; research §24): el margen de alerta y la periodicidad del fondo de liquidez, y la medición del riesgo de liquidez (IRL y brecha),
+    // todos por entidad con su vigencia; los pisos legales son valores nacionales LIMITE.
+
+    /// <summary>Colchón sobre el requerido bajo el cual se avisa antes de faltar (fracción del requerido).</summary>
+    public const string FondoDeLiquidezMargenDeAlerta = "FondoDeLiquidez.MargenDeAlerta";
+
+    /// <summary>Cada cuánto toma el ciclo la foto del fondo y mide el riesgo: <c>Diaria</c>, <c>Semanal</c> o <c>Mensual</c>.</summary>
+    public const string FondoDeLiquidezPeriodicidad = "FondoDeLiquidez.Periodicidad";
+
+    /// <summary>Los topes en días de las bandas del IRL (JSON, p. ej. <c>[15, 30, 60, 90]</c>).</summary>
+    public const string RiesgoDeLiquidezBandasIrl = "RiesgoDeLiquidez.BandasIrl";
+
+    /// <summary>Los topes en días de las bandas de la brecha de liquidez; <c>null</c> al final es la banda abierta (JSON).</summary>
+    public const string RiesgoDeLiquidezBandasDeBrecha = "RiesgoDeLiquidez.BandasDeBrecha";
+
+    /// <summary>El IRL acumulado mínimo; por debajo, alerta (veces: 1 = 100 %).</summary>
+    public const string RiesgoDeLiquidezUmbralIrl = "RiesgoDeLiquidez.UmbralIrl";
+
+    /// <summary>El IRL al que debe volver el plan de ajuste (informativo; veces).</summary>
+    public const string RiesgoDeLiquidezUmbralDePlanDeAjuste = "RiesgoDeLiquidez.UmbralDePlanDeAjuste";
+
+    /// <summary>La fracción del ahorro a la vista que se espera retirar en la primera banda (salida no contractual).</summary>
+    public const string RiesgoDeLiquidezFraccionDeRetiroALaVista = "RiesgoDeLiquidez.FraccionDeRetiroALaVista";
+
+    /// <summary>La fracción del ahorro permanente y de los aportes que se espera retirar cada mes (salida no contractual).</summary>
+    public const string RiesgoDeLiquidezFraccionMensualDeRetiroDeAportes = "RiesgoDeLiquidez.FraccionMensualDeRetiroDeAportes";
+
+    /// <summary>El índice de mora que descuenta las entradas de cartera (fracción). Vacío: sin descuento.</summary>
+    public const string RiesgoDeLiquidezIndiceDeMora = "RiesgoDeLiquidez.IndiceDeMora";
+
+    /// <summary>El descuento de cada clase de inversión del fondo para los activos líquidos netos (JSON por <c>LiquidityHoldingKind</c>).</summary>
+    public const string RiesgoDeLiquidezDescuentosPorInstrumento = "RiesgoDeLiquidez.DescuentosPorInstrumento";
+
+    /// <summary>
+    /// US15 (T216; research E206): el defecto de <see cref="FondoDeLiquidezPorcentajesPorCategoria"/> —«*» el régimen general del Decreto 976 de 2026 (Sección 1)
+    /// y «Plena» la madurez residual (Sección 2) con su transición—, como texto (no hay valores legales en el código: los pisos son valores nacionales).
+    /// </summary>
+    public const string DefectoDelFondoDeLiquidez =
+        "{\"*\": {\"regimen\": \"General\", \"porcentajeDepositos\": 0.10, \"porcentajePermanenteSoloAlRetirarse\": 0.02, "
+        + "\"fuente\": \"Decreto 1068 de 2015 art. 2.11.7.2.1.1 (Decreto 976 de 2026)\"}, "
+        + "\"Plena\": {\"regimen\": \"PorMadurez\", \"porcentajeDepositos\": 0.10, \"porcentajePermanenteSoloAlRetirarse\": 0.05, "
+        + "\"bandas\": [{\"hastaDias\": 30, \"porcentaje\": 0.10}, {\"hastaDias\": 540, \"porcentaje\": 0.05}, {\"hastaDias\": null, \"porcentaje\": 0}], "
+        + "\"incluyeInteresesCausados\": true, \"incluyeInteresesPorCausar\": true, \"redencionAnticipadaEnLaPrimeraBanda\": true, "
+        + "\"finDeLaTransicion\": \"2030-02-06\", \"fuente\": \"Decreto 1068 de 2015 art. 2.11.7.2.2.1 (Decreto 976 de 2026)\"}}";
+
     /// <summary>Techo de la cuota obligatoria de los fondos de empleados (fracción del ingreso). Vacío: rige el límite legal.</summary>
     public const string AportesTopeCuotaFondoEmpleados = "Aportes.TopeCuotaFondoEmpleados";
 
@@ -747,11 +792,79 @@ public static class ParametrosDeCartera
         },
 
         // Fondo de liquidez (R25).
+        // US15 (T216; research §24, E206): la tabla nace con los defectos del Decreto 976 de 2026 (antes vacía): «*» = régimen general (Sección 1: básica,
+        // intermedia, fondos de empleados y mutuales) y «Plena» = madurez residual (Sección 2) con la transición de 42 meses. Cada entidad la ajusta con su
+        // vigencia; los pisos legales (LIMITE FONDO_LIQUIDEZ_*) la acotan.
         Texto(FondoDeLiquidezPorcentajesPorCategoria,
-            "Porcentajes del fondo de liquidez por categoría de la entidad y clase de depósito, con la transición, en JSON. Sin valor hasta cargar la tabla.",
-            string.Empty, K11, patron: @"(?s)^\s*\{.*\}\s*$", admiteVacio: true) with
+            "Reglas del fondo de liquidez por categoría de la entidad (la del perfil regulatorio; «*» para las demás), en JSON: régimen General o PorMadurez, "
+            + "porcentaje de los depósitos y del ahorro permanente sólo retirable al desvincularse, bandas de madurez residual, intereses en la base y fin de "
+            + "la transición.",
+            DefectoDelFondoDeLiquidez, K11, patron: @"(?s)^\s*\{.*\}\s*$") with
         {
-            PendienteDeValidar = "Sin valor: la contadora carga la tabla del Decreto 976 de 2026 y su transición.",
+            PendienteDeValidar = "Defectos del Decreto 1068 de 2015 con el Decreto 976 de 2026 (10 % y 2 % en el régimen general; 10 %, 5 % y 0 % por madurez "
+                + "en la categoría plena, permanente sólo al retiro al 5 %, fin de la transición el 2030-02-06), pendientes de validar por la contadora contra el "
+                + "Diario Oficial y las instrucciones de la Supersolidaria.",
+        },
+        NumeroDecimal(Modulo, FondoDeLiquidezMargenDeAlerta,
+            "Colchón sobre el requerido: si el constituido no lo supera, se avisa antes de faltar (fracción del requerido; cero sin aviso previo).", "0.05",
+            K11, General) with
+        {
+            Minimo = 0m, Maximo = 1m, PendienteDeValidar = "Defecto de 5 % (research §24): política interna de la entidad.",
+        },
+        Eleccion(Modulo, FondoDeLiquidezPeriodicidad,
+            "Cada cuánto toma el ciclo diario la foto del fondo de liquidez y mide el riesgo de liquidez (el último día de la semana o del mes).",
+            ["Diaria", "Semanal", "Mensual"], "Semanal", K11, General) with
+        {
+            PendienteDeValidar = "Defecto semanal: la Circular Básica Contable y Financiera (Título IV, Capítulo III, Anexo 1) pide calcular el IRL al menos "
+                + "cada semana y el fondo se verifica sobre el cierre del mes; la entidad decide cuándo reporta.",
+        },
+        Texto(RiesgoDeLiquidezBandasIrl, "Topes en días de las bandas del indicador de riesgo de liquidez (IRL), en JSON.", "[15, 30, 60, 90]", K11,
+            patron: @"^\s*\[[\d\s,]+\]\s*$") with
+        {
+            PendienteDeValidar = "Defecto de las cuatro bandas del Anexo 1 del Capítulo III del Título IV de la Circular Básica Contable y Financiera.",
+        },
+        Texto(RiesgoDeLiquidezBandasDeBrecha,
+            "Topes en días de las bandas de la brecha de liquidez, en JSON; un null al final es la banda abierta.", "[30, 60, 90, 180, 270, 360, null]", K11,
+            patron: @"^\s*\[[\d\s,nul]+\]\s*$") with
+        {
+            PendienteDeValidar = "Defecto de las siete bandas del Anexo 3 del Capítulo III del Título IV de la Circular Básica Contable y Financiera.",
+        },
+        NumeroDecimal(Modulo, RiesgoDeLiquidezUmbralIrl, "IRL acumulado mínimo (veces: 1 = 100 %); por debajo, alerta.", "1", K11, General) with
+        {
+            Minimo = 0m, LimitesLegales = [CatalogoDeLimitesLegales.IrlMinimo],
+            PendienteDeValidar = "Defecto del 100 % de la Circular Básica Contable y Financiera, Título IV, Capítulo III, Anexo 1.",
+        },
+        NumeroDecimal(Modulo, RiesgoDeLiquidezUmbralDePlanDeAjuste, "IRL al que vuelve el plan de ajuste de una exposición significativa (veces).", "1.10",
+            K11, General) with
+        {
+            Minimo = 0m, PendienteDeValidar = "Defecto del 110 % del Anexo 1 (plan de ajuste): informativo.",
+        },
+        NumeroDecimal(Modulo, RiesgoDeLiquidezFraccionDeRetiroALaVista,
+            "Fracción del ahorro a la vista que se espera retirar en la primera banda (salida no contractual); el resto va a la última banda de la brecha.",
+            "0.10", K11, General) with
+        {
+            Minimo = 0m, Maximo = 1m,
+            PendienteDeValidar = "Defecto de 10 %: la Circular pide estimarlo con el máximo retiro probable (VaR al 95 %); la contadora lo fija con la historia.",
+        },
+        NumeroDecimal(Modulo, RiesgoDeLiquidezFraccionMensualDeRetiroDeAportes,
+            "Fracción del ahorro permanente y de los aportes que se espera retirar cada mes (salida no contractual).", "0.01", K11, General) with
+        {
+            Minimo = 0m, Maximo = 1m,
+            PendienteDeValidar = "Defecto de 1 % al mes: la Circular pide el retiro promedio de los últimos meses; la contadora lo fija con la historia.",
+        },
+        NumeroDecimal(Modulo, RiesgoDeLiquidezIndiceDeMora,
+            "Índice de mora (fracción) que descuenta las cuotas de cartera por recibir. Vacío: sin descuento.", "", K11, General) with
+        {
+            AdmiteVacio = true, Minimo = 0m, Maximo = 1m,
+            PendienteDeValidar = "Sin valor: la Circular usa el índice de mora de más de 30 días (promedio de 12 meses); lo fija la contadora.",
+        },
+        Texto(RiesgoDeLiquidezDescuentosPorInstrumento,
+            "Descuento (fracción) de cada clase de inversión del fondo al medir los activos líquidos netos, en JSON por clase.",
+            "{\"BankDeposit\": 0, \"TermInvestment\": 0.20, \"TrustFund\": 0.20, \"GovernmentBond\": 0.20, \"Other\": 0.20}", K11,
+            patron: @"(?s)^\s*\{.*\}\s*$") with
+        {
+            PendienteDeValidar = "Defecto del 20 % de la Circular (Anexo 1) donde no hay referencia del Banco de la República, y 0 % en cuentas a la vista; "
+                + "el Decreto 976 de 2026 fija 20 % al CDT de la categoría plena y deja a la Supersolidaria el factor de los TES.",
         },
 
         // Aportes (FR-040 a FR-049, FR-080, FR-094).

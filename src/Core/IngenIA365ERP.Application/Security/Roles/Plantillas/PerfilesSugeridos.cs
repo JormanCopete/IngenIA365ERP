@@ -215,6 +215,8 @@ public static class PerfilesSugeridos
                 "Lending.Ratings.Read", "Lending.Reports.View", "Lending.Dashboard.View", "Lending.Scope.AllOffices", "Lending.Scope.AllLines",
                 // K3, bloque D (decisión del dueño del 2026-10-15): decide novedades (y la excepción de cobertura), y esas rutas exigen verlas.
                 "Lending.Novelties.Read",
+                // Feature 014, US15 (T216): la gerencia ve el fondo de liquidez y el riesgo de liquidez y recibe sus alertas (US15-1).
+                "Lending.LiquidityFund.View",
             ],
             "Todas las oficinas y líneas; límites operativos si la cooperativa los fija."),
 

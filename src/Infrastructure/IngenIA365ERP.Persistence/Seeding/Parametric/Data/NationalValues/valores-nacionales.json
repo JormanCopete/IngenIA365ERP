@@ -9,8 +9,10 @@
   // siembran: los registra el maestro con su fuente (Junta Directiva y publicación diaria del Banco de la República) por la plantilla
   // saas.national-values; ningún valor de ellos se inventa aquí.
   // Feature 014 (T016; data-model §9.2): el componente inflacionario del año gravable 2025 entra «pendiente de validar» con su fuente; la semilla
-  // lo deja en espera hasta K8 (CodigosDeValorNacional lo admite desde esa entrega). LIMITE_INEMBARGABLE, TOPE_ENTREGA_SIN_SUCESION y
-  // TOPE_SEGURO_DEPOSITOS NO se siembran: los registra el maestro con cada publicación y su fuente (preguntas P5 y P6 de la spec). De los límites
+  // lo deja en espera hasta K8 (CodigosDeValorNacional lo admite desde esa entrega). LIMITE_INEMBARGABLE y TOPE_ENTREGA_SIN_SUCESION
+  // NO se siembran: los registra el maestro con cada publicación y su fuente (preguntas P5 y P6 de la spec). US15 (research §24, E207):
+  // TOPE_SEGURO_DEPOSITOS sí, con el tope de Fogacoop vigente desde el 2024-08-19 (en espera hasta K11), y los pisos del fondo de liquidez y el
+  // IRL mínimo como LIMITE «pendientes de validar». De los límites
   // de aportes entran el tope de la cuota y la fracción mínima de los fondos de empleados; los de participación (PN y PJ) no, hasta la pregunta P12.
   "version": 1,
   "validFrom": "2026-01-01",
@@ -64,6 +66,7 @@
   "values": [
     { "code": "SMMLV", "key": "", "validFrom": "2026-01-01", "value": 1750905, "unit": "Pesos", "label": "Salario mínimo mensual legal vigente 2026", "source": "Decreto 1469 de 2025 (Decreto 159 de 2026, mismo valor)" },
     { "code": "UVT", "key": "", "validFrom": "2026-01-01", "value": 52374, "unit": "Pesos", "label": "Unidad de valor tributario 2026", "source": "Resolución DIAN 000238 del 15-12-2025" },
+    { "code": "TOPE_SEGURO_DEPOSITOS", "key": "", "validFrom": "2024-08-19", "value": 50000000, "unit": "Pesos", "label": "Tope del seguro de depósitos de Fogacoop por ahorrador", "source": "Fogacoop, Junta Directiva (rige desde el 2024-08-19; modifica la Resolución 025 de 2015): hasta 50.000.000 por persona en cada entidad inscrita; https://www.fogacoop.gov.co/seguro-para-su-ahorro/montos-cubiertos (feature 014, US15; valor semilla, pendiente de validar el número de la resolución)" },
     { "code": "COMPONENTE_INFLACIONARIO", "key": "2025", "validFrom": "2026-01-01", "value": 0.5543, "unit": "Fraccion", "label": "Componente inflacionario del año gravable 2025", "source": "Decreto 898 de 2026 (investigación financiera de la feature 014 §3; valor semilla, pendiente de validar)" },
 
     { "code": "LIMITE", "key": "AVISO_PREVIO_DIAS", "validFrom": "2026-01-01", "value": 20, "unit": "Dias", "source": "Ley 1266 de 2008; Ley 2157 de 2021 (valor semilla, pendiente de validar)" },
@@ -97,7 +100,12 @@
     { "code": "LIMITE", "key": "APORTES_TOPE_CUOTA_FONDO_EMPLEADOS", "validFrom": "2026-01-01", "value": 0.10, "unit": "Fraccion", "source": "Ley 2496 de 2025: la cuota obligatoria de los fondos de empleados no supera el 10 % del ingreso (feature 014; valor semilla, pendiente de validar)" },
     { "code": "LIMITE", "key": "APORTES_FRACCION_MINIMA", "validFrom": "2026-01-01", "value": 0.10, "unit": "Fraccion", "source": "Ley 2496 de 2025: al menos una décima parte de la cuota va a aportes (feature 014; valor semilla, pendiente de validar)" },
     { "code": "LIMITE", "key": "EMBARGO_COACTIVO_SMMLV", "validFrom": "2026-01-01", "value": 25, "unit": "Veces", "source": "Estatuto Tributario art. 837-1 (Ley 1066 de 2006, art. 9): en el cobro coactivo son inembargables 25 SMMLV de la cuenta de ahorros más antigua de la persona natural (feature 014, US11; valor semilla, pendiente de validar)" },
-    { "code": "LIMITE", "key": "VIVIENDA_CUOTA_INGRESO", "validFrom": "2026-01-01", "value": 0.30, "unit": "Fraccion", "source": "Decreto 145 de 2000 (compilado en el Decreto 2555 de 2010): la primera cuota no supera el 30 % de los ingresos familiares (valor semilla, pendiente de validar)" }
+    { "code": "LIMITE", "key": "VIVIENDA_CUOTA_INGRESO", "validFrom": "2026-01-01", "value": 0.30, "unit": "Fraccion", "source": "Decreto 145 de 2000 (compilado en el Decreto 2555 de 2010): la primera cuota no supera el 30 % de los ingresos familiares (valor semilla, pendiente de validar)" },
+    { "code": "LIMITE", "key": "FONDO_LIQUIDEZ_DEPOSITOS", "validFrom": "2018-06-05", "value": 0.10, "unit": "Fraccion", "source": "Decreto 1068 de 2015 art. 2.11.7.2.1 (Decreto 961 de 2018), hoy 2.11.7.2.1.1 y 2.11.7.2.2.3 (Decreto 976 de 2026): al menos el 10 % de los depósitos (feature 014, US15; valor semilla, pendiente de validar)" },
+    { "code": "LIMITE", "key": "FONDO_LIQUIDEZ_PERMANENTE_SOLO_RETIRO", "validFrom": "2018-06-05", "value": 0.02, "unit": "Fraccion", "source": "Decreto 1068 de 2015 art. 2.11.7.2.1, parágrafo 1 (Decreto 961 de 2018), hoy 2.11.7.2.1.1 (Decreto 976 de 2026): 2 % del ahorro permanente que sólo se retira al desvincularse (feature 014, US15; valor semilla, pendiente de validar)" },
+    { "code": "LIMITE", "key": "FONDO_LIQUIDEZ_PLENA_BANDA_MEDIA", "validFrom": "2026-08-06", "value": 0.05, "unit": "Fraccion", "source": "Decreto 976 de 2026 (Diario Oficial 53.578), art. 2.11.7.2.2.3: 5 % del CDAT y el contractual de 31 a 540 días en la categoría plena (feature 014, US15; valor semilla, pendiente de validar)" },
+    { "code": "LIMITE", "key": "FONDO_LIQUIDEZ_PLENA_PERMANENTE_SOLO_RETIRO", "validFrom": "2026-08-06", "value": 0.05, "unit": "Fraccion", "source": "Decreto 976 de 2026 (Diario Oficial 53.578), art. 2.11.7.2.2.3: 5 % del ahorro permanente que sólo se retira al desvincularse en la categoría plena (feature 014, US15; valor semilla, pendiente de validar)" },
+    { "code": "LIMITE", "key": "IRL_MINIMO", "validFrom": "2021-01-01", "value": 1, "unit": "Veces", "source": "Circular Básica Contable y Financiera (Circular Externa 22 de 2020), Título IV, Capítulo III, Anexo 1: IRL acumulado de al menos el 100 % (feature 014, US15; valor semilla, pendiente de validar)" }
   ],
   "holidays": {
     "years": [ 2026, 2027, 2028 ],

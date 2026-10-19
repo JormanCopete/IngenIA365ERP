@@ -102,6 +102,23 @@ public static class CatalogoDeLimitesLegales
     /// </summary>
     public const string EmbargoCoactivoSmmlv = "EMBARGO_COACTIVO_SMMLV";
 
+    // Feature 014, US15 (T216; research §24): los pisos del fondo de liquidez y el IRL mínimo. La cooperativa puede exigir más, nunca menos.
+
+    /// <summary>Porcentaje mínimo del fondo de liquidez sobre los depósitos (Decreto 1068 de 2015 art. 2.11.7.2.1.1; Decreto 976 de 2026).</summary>
+    public const string FondoLiquidezDepositos = "FONDO_LIQUIDEZ_DEPOSITOS";
+
+    /// <summary>Porcentaje mínimo sobre el ahorro permanente que sólo se retira al desvincularse (régimen general).</summary>
+    public const string FondoLiquidezPermanenteSoloAlRetiro = "FONDO_LIQUIDEZ_PERMANENTE_SOLO_RETIRO";
+
+    /// <summary>Porcentaje mínimo de la banda media (31 a 540 días) en la categoría plena (Decreto 976 de 2026, art. 2.11.7.2.2.3).</summary>
+    public const string FondoLiquidezPlenaBandaMedia = "FONDO_LIQUIDEZ_PLENA_BANDA_MEDIA";
+
+    /// <summary>Porcentaje mínimo sobre el ahorro permanente que sólo se retira al desvincularse en la categoría plena.</summary>
+    public const string FondoLiquidezPlenaPermanenteSoloAlRetiro = "FONDO_LIQUIDEZ_PLENA_PERMANENTE_SOLO_RETIRO";
+
+    /// <summary>IRL acumulado mínimo (veces) de la Circular Básica Contable y Financiera, Título IV, Capítulo III, Anexo 1.</summary>
+    public const string IrlMinimo = "IRL_MINIMO";
+
     private static readonly IReadOnlyList<LimiteLegal> Lista =
     [
         new(AvisoPrevioDias, UnidadDeValorNacional.Dias, DireccionDeLoEstricto.Mayor, "AvisoPrevio.DiasMinimos", "AvisoPrevio.DiasMinimos", "Ley 1266 de 2008; Ley 2157 de 2021"),
@@ -141,6 +158,17 @@ public static class CatalogoDeLimitesLegales
         new(EmbargoCoactivoSmmlv, UnidadDeValorNacional.Veces, DireccionDeLoEstricto.Mayor, "Límite inembargable del embargo coactivo (RetencionDeEmbargos)", null,
             "Estatuto Tributario art. 837-1 (Ley 1066 de 2006, art. 9)"),
         new(AportesLimiteParticipacionPersonaJuridica, UnidadDeValorNacional.Fraccion, DireccionDeLoEstricto.Menor, "Aportes.LimiteParticipacionPersonaJuridica", "Aportes.LimiteParticipacionPersonaJuridica", "Ley 79 de 1988 (a validar, pregunta P12)"),
+        // Feature 014, US15 (T216): los pisos del fondo de liquidez (los lee FondoDeLiquidezDeCartera sobre la tabla JSON del parámetro) y el IRL mínimo.
+        new(FondoLiquidezDepositos, UnidadDeValorNacional.Fraccion, DireccionDeLoEstricto.Mayor, "FondoDeLiquidez.PorcentajesPorCategoria (depósitos y primera banda)", null,
+            "Decreto 1068 de 2015 art. 2.11.7.2.1.1 y 2.11.7.2.2.3 (Decreto 976 de 2026)"),
+        new(FondoLiquidezPermanenteSoloAlRetiro, UnidadDeValorNacional.Fraccion, DireccionDeLoEstricto.Mayor,
+            "FondoDeLiquidez.PorcentajesPorCategoria (permanente sólo al retiro, régimen general)", null, "Decreto 1068 de 2015 art. 2.11.7.2.1.1, parágrafo (Decreto 976 de 2026)"),
+        new(FondoLiquidezPlenaBandaMedia, UnidadDeValorNacional.Fraccion, DireccionDeLoEstricto.Mayor, "FondoDeLiquidez.PorcentajesPorCategoria (banda media, categoría plena)",
+            null, "Decreto 1068 de 2015 art. 2.11.7.2.2.3 (Decreto 976 de 2026)"),
+        new(FondoLiquidezPlenaPermanenteSoloAlRetiro, UnidadDeValorNacional.Fraccion, DireccionDeLoEstricto.Mayor,
+            "FondoDeLiquidez.PorcentajesPorCategoria (permanente sólo al retiro, categoría plena)", null, "Decreto 1068 de 2015 art. 2.11.7.2.2.3 (Decreto 976 de 2026)"),
+        new(IrlMinimo, UnidadDeValorNacional.Veces, DireccionDeLoEstricto.Mayor, "RiesgoDeLiquidez.UmbralIrl", "RiesgoDeLiquidez.UmbralIrl",
+            "Circular Básica Contable y Financiera, Título IV, Capítulo III, Anexo 1"),
     ];
 
     private static readonly Dictionary<string, LimiteLegal> PorCodigo = Lista.ToDictionary(l => l.Codigo, StringComparer.Ordinal);

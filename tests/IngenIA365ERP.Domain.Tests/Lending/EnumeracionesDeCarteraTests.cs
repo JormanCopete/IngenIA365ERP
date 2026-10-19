@@ -291,7 +291,7 @@ public class EnumeracionesDeCarteraTests
         [typeof(DeceasedCaseStatus)] = [("Registered", 1), ("Approved", 2), ("Delivered", 3), ("Cancelled", 4), ("DeliveryPending", 5)],
         [typeof(UnclaimedSource)] = [("UncashedRefund", 1), ("InactiveBalance", 2), ("UncashedPayout", 3)],
         [typeof(UnclaimedStatus)] = [("Held", 1), ("Claimed", 2)],
-        [typeof(LiquidityHoldingKind)] = [("BankDeposit", 1), ("TermInvestment", 2), ("TrustFund", 3), ("Other", 99)],
+        [typeof(LiquidityHoldingKind)] = [("BankDeposit", 1), ("TermInvestment", 2), ("TrustFund", 3), ("GovernmentBond", 4), ("Other", 99)],
         // US6 (T171): el estado de una solicitud de tasa negociada.
         [typeof(NegotiatedRateRequestStatus)] = [("PendingDecision", 1), ("Approved", 2), ("Rejected", 3), ("Withdrawn", 4), ("Expired", 5)],
     };
