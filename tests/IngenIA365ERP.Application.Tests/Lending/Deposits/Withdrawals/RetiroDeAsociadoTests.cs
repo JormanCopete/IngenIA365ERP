@@ -632,4 +632,71 @@ public sealed class RetiroDeAsociadoTests : IDisposable
     }
 
     private static Result<bool> Resultado(Result r) => r.IsSuccess ? Result.Success(true) : Result.Failure<bool>(r.Error);
+
+    /// <summary>
+    /// US6 (T175; FR-076; research E145): un CDAT vivo del asociado va en la liquidación como línea informativa <c>TermDepositBalance</c> con su saldo y su
+    /// vencimiento; no suma a la devolución, no lo cancela el retiro (sigue hasta vencer y paga a su destino) y la vista previa lo avisa.
+    /// </summary>
+    [Fact]
+    public async Task T175_un_CDAT_vivo_va_como_linea_informativa_y_sigue_hasta_su_vencimiento()
+    {
+        await AnaConAportesAsync();
+        var vence = _a.G.HoyLocal.AddDays(90);
+        var cdat = await CdatVivoAsync(5_000_000m, vence);
+        var retiro = await AprobadoAsync();
+
+        var previa = await PreviaAsync(retiro.PublicId);
+        var linea = previa.Lines.Should().ContainSingle(l => l.Kind == MembershipWithdrawalLineKind.TermDepositBalance).Which;
+        (linea.AccountPublicId, linea.Amount).Should().Be((cdat.PublicId, 5_000_000m));
+        previa.Refund.Should().Be(1_000_000m, "el CDAT no entra a la devolución");
+        previa.Warnings.Should().Contain(w => w.Contains("CD-9") && w.Contains("vencimiento"));
+
+        var liquidado = Ok(await LiquidarAsync(retiro.PublicId, previa.Sha256));
+        liquidado.Status.Should().Be(MembershipWithdrawalStatus.Settled);
+        liquidado.Settlement!.Refund.Should().Be(1_000_000m);
+        liquidado.Lines.Where(l => l.Kind is not (MembershipWithdrawalLineKind.Refund or MembershipWithdrawalLineKind.TermDepositBalance)).Sum(l => l.Amount)
+            .Should().Be(1_000_000m, "las líneas que no son la devolución ni el CDAT suman lo que se devuelve");
+        var guardada = await _a.Db.MembershipWithdrawalLines.AsNoTracking().SingleAsync(l => l.Kind == MembershipWithdrawalLineKind.TermDepositBalance);
+        (guardada.MemberAccountId, guardada.Amount).Should().Be((cdat.Id, 5_000_000m));
+        guardada.Notes.Should().Contain(vence.ToString("yyyy-MM-dd"));
+        (await _a.Db.MemberAccounts.AsNoTracking().SingleAsync(a => a.Id == cdat.Id)).Status.Should().Be(MemberAccountStatus.Active, "sigue hasta su vencimiento");
+        (await Ordenes().CuentasDelRetiroAsync(await _a.Db.MembershipWithdrawals.AsNoTracking().SingleAsync(), default))
+            .Should().NotContain(a => a.Id == cdat.Id, "el retiro no espera el CDAT para quedar pagado");
+    }
+
+    /// <summary>Un CDAT activo de Ana con su capital y su versión de condiciones (sembrado directo: el retiro sólo lee su saldo y su vencimiento).</summary>
+    private async Task<Domain.Entities.Lending.Deposits.Accounts.MemberAccount> CdatVivoAsync(decimal capital, DateOnly vence)
+    {
+        var linea = await _a.C.LineaDeCaptacionAsync("CDATR", Accounts.CuentasDePrueba.ALaVista());
+        var lineaId = await _a.Db.CreditLines.AsNoTracking().Where(l => l.PublicId == linea.PublicId).Select(l => l.Id).SingleAsync();
+        var hoy = _a.G.HoyLocal;
+        var cuenta = Domain.Entities.Lending.Deposits.Accounts.MemberAccount.Abrir(lineaId, LineNature.Deposit, DepositClass.TermDeposit, _a.C.Ana.Id,
+            _a.C.Oficina.Id, HandlingMode.Indistinct, hoy, null, _a.G.UtcNow);
+        cuenta.Number = "CD-9";
+        cuenta.Activar(hoy, _a.G.UtcNow);
+        _a.Db.MemberAccounts.Add(cuenta);
+        await _a.Db.SaveChangesAsync();
+        var operacion = new Domain.Entities.Lending.Deposits.Transactions.MemberAccountOperation
+        {
+            MemberAccountId = cuenta.Id, Kind = MemberAccountOperationKind.TermDepositConstitution, Number = "CDC-9", Sequence = 1, ValueDate = hoy,
+            AccountingDate = hoy, RegisteredAt = _a.G.UtcNow, Amount = capital, Payload = "{}", InputsSha256 = "prueba", RulesVersion = "LND-2026.1",
+        };
+        _a.Db.MemberAccountOperations.Add(operacion);
+        await _a.Db.SaveChangesAsync();
+        _a.Db.MemberAccountTermsVersions.Add(new Domain.Entities.Lending.Deposits.Accounts.MemberAccountTermsVersion
+        {
+            MemberAccountId = cuenta.Id, VersionNumber = 1, OperationId = operacion.Id, EffectiveValueDate = hoy, RegisteredAt = _a.G.UtcNow,
+            Cause = AccountTermsCause.Constitution, RulesVersion = "LND-2026.1", InputsSha256 = "prueba", PrincipalAmount = capital, TermDays = 90, StartDate = hoy,
+            MaturityDate = vence, PaymentDate = vence, TableAnnualRate = 0.1m, AppliedAnnualRate = 0.1m, DayCount = DayCountConvention.Actual360,
+            RoundingUnit = 1m, RoundingMode = RoundingMode.AwayFromZero, RoundingMoment = RoundingMoment.PerTotal,
+        });
+        _a.Db.MemberAccountTransactions.Add(new Domain.Entities.Lending.Deposits.Transactions.MemberAccountTransaction
+        {
+            MemberAccountId = cuenta.Id, OperationId = operacion.Id, Kind = MemberAccountTransactionKind.TransferIn, Concept = MemberAccountConcept.Principal,
+            Amount = capital, ValueDate = hoy, AccountingDate = hoy, RegisteredAt = _a.G.UtcNow,
+        });
+        await _a.Db.SaveChangesAsync();
+        _a.Db.ChangeTracker.Clear();
+        return cuenta;
+    }
 }
