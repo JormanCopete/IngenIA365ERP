@@ -288,8 +288,10 @@ public sealed class SimulateMemberAccountOperationQueryHandler(
         Error? rechazo;
         if (request.Kind == "Transfer")
         {
-            var destino = await db.MemberAccounts.AsNoTracking().FirstOrDefaultAsync(a => a.PublicId == request.TargetAccountPublicId && !a.IsDeleted, ct);
-            if (destino is null) return Result.Failure<MemberAccountSimulationDto>(ErroresDeCuentas.CuentaInexistente());
+            // US16 (T162): el destino también en el alcance (fuera, el mismo 404 que si no existiera).
+            var otra = await LectorDeCuentas.CuentaEnAlcanceAsync(db, alcance, auditoria, request.TargetAccountPublicId ?? Guid.Empty, seguir: false, ct);
+            if (otra.IsFailure) return Result.Failure<MemberAccountSimulationDto>(otra.Error);
+            var destino = otra.Value;
             var r = await traslados.RevisarAsync(cuenta, destino, Pantalla.Traslado(cuenta.PublicId, destino.PublicId, request.Amount, hoy, request.Signatures, null, null),
                 pedirAprobacion: false, ct);
             revisado = r.IsSuccess ? r.Value.Origen : null;
@@ -494,8 +496,10 @@ public sealed class TransferBetweenMemberAccountsCommandHandler(
         var leida = await LectorDeCuentas.CuentaEnAlcanceAsync(db, alcance, auditoria, request.AccountPublicId, seguir: false, ct);
         if (leida.IsFailure) return Falla(leida.Error);
         var origen = leida.Value;
-        var destino = await db.MemberAccounts.AsNoTracking().FirstOrDefaultAsync(a => a.PublicId == request.TargetAccountPublicId && !a.IsDeleted, ct);
-        if (destino is null) return Falla(ErroresDeCuentas.CuentaInexistente());
+        // US16 (T162): el traslado escribe en las dos cuentas: el destino también tiene que estar en el alcance (fuera, el mismo 404 que si no existiera).
+        var otra = await LectorDeCuentas.CuentaEnAlcanceAsync(db, alcance, auditoria, request.TargetAccountPublicId, seguir: false, ct);
+        if (otra.IsFailure) return Falla(otra.Error);
+        var destino = otra.Value;
         if (origen.Nature == LineNature.Contribution) return Falla(ErroresDeAportes.NoRetirable());
         var fechas = await Activation.ActivacionesDeCaptacion.LeerAsync(db, ct);
         foreach (var n in new[] { origen.Nature, destino.Nature }.Distinct())
@@ -657,7 +661,7 @@ public sealed class ReverseMemberAccountOperationCommandHandler(
 public sealed record GetGmfMonthlyUsageQuery(Guid PersonPublicId, int? Year = null, int? Month = null) : IRequest<Result<GmfMonthlyUsageDto>>;
 
 public sealed class GetGmfMonthlyUsageQueryHandler(IApplicationDbContext db, ReglasDeMovimientos movimientos, IAlcanceDeCartera alcanceDeLaPeticion,
-    IDateTimeService reloj) : IRequestHandler<GetGmfMonthlyUsageQuery, Result<GmfMonthlyUsageDto>>
+    IDateTimeService reloj, LendingAuditEmitter auditoria) : IRequestHandler<GetGmfMonthlyUsageQuery, Result<GmfMonthlyUsageDto>>
 {
     public async Task<Result<GmfMonthlyUsageDto>> Handle(GetGmfMonthlyUsageQuery request, CancellationToken ct)
     {
@@ -678,6 +682,8 @@ public sealed class GetGmfMonthlyUsageQueryHandler(IApplicationDbContext db, Reg
                            orderby u.Id
                            select new GmfUsageLineDto(o.PublicId, o.Number, a.Number, u.TaxableEventCode, u.DisposedAmount, u.ExemptAmount, u.TaxableBase, u.GmfAmount,
                                u.ReversesUsageId != null)).ToListAsync(ct);
+        // US16 (T164): las disposiciones de una persona en el mes son sus movimientos: lectura sensible.
+        await auditoria.EmitirMovimientosDePersonaVistosAsync(request.PersonPublicId, new { gmfUsage = true, year = anio, month = mes }, filas.Count, ct);
         var usado = Math.Max(0m, filas.Sum(f => f.Exempt));
         var tope = politica.IsSuccess ? politica.Value.TopeEnPesos : 0m;
         return Result.Success(new GmfMonthlyUsageDto(politica.IsSuccess ? politica.Value.Politica : GmfExemptionPolicy.SingleMarkedAccount,

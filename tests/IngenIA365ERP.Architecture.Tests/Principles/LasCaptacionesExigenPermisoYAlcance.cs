@@ -77,11 +77,70 @@ public class LasCaptacionesExigenPermisoYAlcance
         ["SetDepositReferenceFiguresCommand"] = "las cifras de referencia son totales por línea y concepto de toda la cooperativa",
         ["GetDepositsActivationStatusQuery"] = "la activación es de toda la cooperativa (FR-116): requisitos y conteos",
         ["ConsumeChargeInvoiceRegisteredCommand"] = "consumo de la bandeja (Comercial informa la factura de un cargo): sin usuario, sin ruta ni alcance (I-2)",
+        // US16 (T162): crear una línea no toca una línea existente ni una oficina; la línea nueva entra al alcance de cada usuario por su asignación de
+        // líneas (LND_UserCreditLineScopes) o por Lending.Scope.AllLines, como las líneas de crédito de la 013.
+        ["CreateDepositLineCommand"] = "crear una línea no toca una línea existente ni una oficina; entra al alcance por asignación (como CreateCreditLineCommand)",
+        ["CreateContributionLineCommand"] = "crear una línea no toca una línea existente ni una oficina; entra al alcance por asignación (como CreateCreditLineCommand)",
     };
+
+    /// <summary>
+    /// US16 (T162): los ayudantes de captaciones que aplican el alcance por dentro; un handler que los usa lo aplica aunque no nombre
+    /// <c>IAlcanceDeCartera</c> (la solicitud de aportes lee su cuenta y la del destino de una cesión con <c>SolicitudesDeAportes</c>).
+    /// </summary>
+    private static readonly string[] AyudantesConAlcance = ["SolicitudesDeAportes"];
 
     private static readonly Regex ConsultaOComando = new(@"public\s+sealed\s+record\s+(\w+(Query|Command))\b", RegexOptions.Compiled);
 
     private static readonly Regex AplicaElAlcance = new(@"\b(IAlcanceDeCartera|AlcanceDeCarteraDelActor|FiltroDeAlcanceDeCartera)\b", RegexOptions.Compiled);
+
+    /// <summary>
+    /// US16 (T162; FR-004, SC-015): la regla anterior mira el archivo; ésta mira el <b>handler</b> de cada consulta y comando —que nombre
+    /// <c>IAlcanceDeCartera</c> o un ayudante que lo aplica por dentro—, porque un archivo con varias consultas pasaba con que una sola lo aplicara.
+    /// </summary>
+    [Fact]
+    public void Cada_handler_de_captaciones_aplica_el_alcance_o_su_consulta_esta_exceptuada()
+    {
+        var raiz = RepoPath.FindRepoRoot();
+        var archivos = ReglaSobreFuente.ArchivosEn(["Core/IngenIA365ERP.Application/Lending/Deposits"])
+            .Select(a => (Archivo: a, Fuente: FuenteSinComentarios.Leer(a))).ToList();
+        var todo = string.Join('\n', archivos.Select(a => a.Fuente));
+        var infracciones = new List<string>();
+        foreach (var (archivo, fuente) in archivos)
+        {
+            foreach (Match m in ConsultaOComando.Matches(fuente))
+            {
+                var nombre = m.Groups[1].Value;
+                if (Exceptuados.ContainsKey(nombre)) continue;
+                var inicio = todo.IndexOf($"class {nombre}Handler", StringComparison.Ordinal);
+                if (inicio < 0) { infracciones.Add($"{Path.GetRelativePath(raiz, archivo)}: {nombre} no tiene su {nombre}Handler en la carpeta"); continue; }
+                var siguiente = todo.IndexOf("\npublic ", inicio + 1, StringComparison.Ordinal);
+                var cuerpo = siguiente < 0 ? todo[inicio..] : todo[inicio..siguiente];
+                if (!AplicaElAlcance.IsMatch(cuerpo) && !AyudantesConAlcance.Any(a => cuerpo.Contains(a, StringComparison.Ordinal)))
+                    infracciones.Add($"{Path.GetRelativePath(raiz, archivo)}: {nombre}Handler no aplica IAlcanceDeCartera ni usa un ayudante que lo aplique");
+            }
+        }
+        ReglaSobreFuente.SinInfracciones(infracciones, "Handlers de captaciones sin alcance (FR-004, SC-015)");
+    }
+
+    /// <summary>
+    /// US16 (T162; api.md §1.2): ninguna consulta ni comando de captaciones lee una cuenta por el <c>PublicId</c> que trae el pedido sin pasar por
+    /// <c>LectorDeCuentas.CuentaEnAlcanceAsync</c> —tampoco la <b>otra</b> cuenta de una operación: el destino de un traslado o de una cancelación—. Hasta
+    /// esta fase el destino se leía directo y un usuario de la oficina norte trasladaba a una cuenta de la oficina sur.
+    /// </summary>
+    [Fact]
+    public void Ninguna_cuenta_se_lee_por_el_pedido_sin_pasar_por_el_alcance()
+    {
+        var raiz = RepoPath.FindRepoRoot();
+        var lecturaDirecta = new Regex(@"MemberAccounts[^;]*?\.PublicId\s*==\s*request\.", RegexOptions.Compiled | RegexOptions.Singleline);
+        var infracciones = new List<string>();
+        foreach (var archivo in ReglaSobreFuente.ArchivosEn(["Core/IngenIA365ERP.Application/Lending/Deposits"]))
+        {
+            var fuente = FuenteSinComentarios.Leer(archivo);
+            foreach (Match m in lecturaDirecta.Matches(fuente))
+                infracciones.Add($"{Path.GetRelativePath(raiz, archivo)}: {m.Value.Split('\n')[0].Trim()}");
+        }
+        ReglaSobreFuente.SinInfracciones(infracciones, "Una cuenta se lee por el pedido sin el alcance (api.md §1.2)");
+    }
 
     [Fact]
     public void Toda_consulta_y_todo_comando_de_captaciones_aplica_el_alcance_o_esta_exceptuado()

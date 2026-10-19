@@ -192,7 +192,7 @@ internal sealed class CuentasDePrueba : IDisposable
 
     public MayoriaDeEdad Mayoria() => new(G.Db, Parametros());
 
-    public ListMemberAccountsQueryHandler Listar() => new(G.Db, G.Alcance);
+    public ListMemberAccountsQueryHandler Listar() => new(G.Db, G.Alcance, G.Auditoria);
 
     public GetMemberAccountQueryHandler Leer() => new(G.Db, G.Alcance, G.Auditoria, G.Reloj);
 

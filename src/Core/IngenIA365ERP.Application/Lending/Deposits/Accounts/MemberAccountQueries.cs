@@ -46,7 +46,8 @@ public sealed class ListMemberAccountsQueryValidator : AbstractValidator<ListMem
     }
 }
 
-public sealed class ListMemberAccountsQueryHandler(IApplicationDbContext db, IAlcanceDeCartera alcanceDeLaPeticion)
+/// <remarks>US16 (T164): pedir las cuentas de <b>una persona</b> (<c>personPublicId</c>) es consultar sus saldos: se audita como lectura sensible.</remarks>
+public sealed class ListMemberAccountsQueryHandler(IApplicationDbContext db, IAlcanceDeCartera alcanceDeLaPeticion, LendingAuditEmitter auditoria)
     : IRequestHandler<ListMemberAccountsQuery, Result<PagedResult<MemberAccountListItemDto>>>
 {
     public async Task<Result<PagedResult<MemberAccountListItemDto>>> Handle(ListMemberAccountsQuery request, CancellationToken ct)
@@ -99,6 +100,8 @@ public sealed class ListMemberAccountsQueryHandler(IApplicationDbContext db, IAl
             return new MemberAccountListItemDto(a.PublicId, a.Number, a.Nature, a.DepositClass, lineas[a.CreditLineId], oficinas.GetValueOrDefault(a.BranchId),
                 personas[a.HolderPersonId], a.Status, saldo, saldo, marcas);
         }).ToList();
+        if (request.PersonPublicId is { } titular)
+            await auditoria.EmitirSaldosDePersonaVistosAsync(titular, "accounts-list", new { request.Nature, request.Status, page = pagina.SafePage, rows = items.Count }, ct);
         return Result.Success(new PagedResult<MemberAccountListItemDto>(items, pagina.SafePage, pagina.SafePageSize, total));
     }
 }
@@ -148,9 +151,11 @@ public sealed class GetMemberAccountQueryHandler(
     public async Task<Result<MemberAccountDto>> Handle(GetMemberAccountQuery request, CancellationToken ct)
     {
         var leida = await LectorDeCuentas.CuentaEnAlcanceAsync(db, alcance, auditoria, request.AccountPublicId, seguir: false, ct);
-        return leida.IsFailure
-            ? Result.Failure<MemberAccountDto>(leida.Error)
-            : Result.Success(await LectorDeCuentas.DtoAsync(db, leida.Value, reloj.HoyLocal, ct));
+        if (leida.IsFailure) return Result.Failure<MemberAccountDto>(leida.Error);
+        var dto = await LectorDeCuentas.DtoAsync(db, leida.Value, reloj.HoyLocal, ct);
+        // US16 (T164): el detalle muestra los saldos del titular: lectura sensible.
+        await auditoria.EmitirSaldoDeCuentaVistoAsync(leida.Value.PublicId, "detail", new { date = reloj.HoyLocal }, ct);
+        return Result.Success(dto);
     }
 }
 

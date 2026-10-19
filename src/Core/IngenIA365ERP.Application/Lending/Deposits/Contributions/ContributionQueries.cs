@@ -49,13 +49,21 @@ public sealed class GetContributionsSummaryQueryValidator : AbstractValidator<Ge
     public GetContributionsSummaryQueryValidator() => RuleFor(x => x.PersonPublicId).NotEmpty().WithMessage("Elija la persona.");
 }
 
-public sealed class GetContributionsSummaryQueryHandler(IApplicationDbContext db, IConsultaDeAportes consulta, IDateTimeService reloj)
+/// <remarks>
+/// US16 (T162, T164): el resumen es de la persona y suma todas sus cuentas de aportes, permanentes y contractuales, así que exige el alcance sobre
+/// <b>todas</b>: si alguna es de una oficina o una línea fuera del alcance de quien pregunta, responde lo mismo que una persona inexistente, con
+/// <c>Lending.Access.OutOfScope</c> (falla cerrado; mostrar un total que incluye una cuenta ajena sería revelarla). Verlo es una lectura sensible
+/// (<c>Lending.Savings.BalanceViewed</c> sobre la persona).
+/// </remarks>
+public sealed class GetContributionsSummaryQueryHandler(IApplicationDbContext db, IConsultaDeAportes consulta, IAlcanceDeCartera alcanceDeLaPeticion,
+    LendingAuditEmitter auditoria, IDateTimeService reloj)
     : IRequestHandler<GetContributionsSummaryQuery, Result<ContributionsSummaryDto>>
 {
     public async Task<Result<ContributionsSummaryDto>> Handle(GetContributionsSummaryQuery request, CancellationToken ct)
     {
+        var inexistente = new Error("Lending.Person.NotFound", "La persona no existe.");
         var persona = await db.People.AsNoTracking().FirstOrDefaultAsync(p => p.PublicId == request.PersonPublicId && !p.IsDeleted, ct);
-        if (persona is null) return Result.Failure<ContributionsSummaryDto>(new Error("Lending.Person.NotFound", "La persona no existe."));
+        if (persona is null) return Result.Failure<ContributionsSummaryDto>(inexistente);
         var fecha = request.Date ?? reloj.HoyLocal;
         var nombre = (await LectorDeCuentas.PersonasAsync(db, [persona.Id], ct))[persona.Id];
 
@@ -65,7 +73,13 @@ public sealed class GetContributionsSummaryQueryHandler(IApplicationDbContext db
             .Where(a => a.HolderPersonId == persona.Id && !a.IsDeleted
                         && (a.Nature == LineNature.Contribution || (a.Nature == LineNature.Deposit && (a.DepositClass == DepositClass.Permanent
                             || a.DepositClass == DepositClass.Contractual))))
-            .Select(a => new { a.Id, a.PublicId, a.Number, a.Nature }).ToListAsync(ct);
+            .Select(a => new { a.Id, a.PublicId, a.Number, a.Nature, a.BranchId, a.CreditLineId }).ToListAsync(ct);
+        var alcance = await alcanceDeLaPeticion.ObtenerAsync(ct);
+        if (cuentas.FirstOrDefault(c => !alcance.IncluyeOficina(c.BranchId) || !alcance.IncluyeLinea(c.CreditLineId)) is { } ajena)
+        {
+            await auditoria.EmitirFueraDeAlcanceAsync("MemberAccount", ajena.PublicId, ct);
+            return Result.Failure<ContributionsSummaryDto>(inexistente);
+        }
         var deAportes = cuentas.Where(c => c.Nature == LineNature.Contribution).Select(c => c.Id).ToList();
         var conceptos = MemberAccountTransaction.ConceptosDeAportes.ToArray();
         var porClase = await db.MemberAccountTransactions.AsNoTracking()
@@ -76,6 +90,7 @@ public sealed class GetContributionsSummaryQueryHandler(IApplicationDbContext db
             .OrderBy(q => q.Cuota.DueDate).ThenBy(q => numeros[q.Cuota.MemberAccountId], StringComparer.Ordinal)
             .Select(q => new ContributionInstallmentInArrearsDto(numeros[q.Cuota.MemberAccountId], q.Cuota.Periodo, q.Cuota.DueDate, q.Pendiente)).ToList();
 
+        await auditoria.EmitirSaldosDePersonaVistosAsync(persona.PublicId, "contributions-summary", new { date = fecha, accounts = cuentas.Count }, ct);
         return Result.Success(new ContributionsSummaryDto(nombre, fecha, saldos.Available,
             new ContributionsByClassDto(porClase.GetValueOrDefault(MemberAccountConcept.ContributionMinimum), porClase.GetValueOrDefault(MemberAccountConcept.ContributionOrdinary),
                 porClase.GetValueOrDefault(MemberAccountConcept.ContributionExtraordinary), porClase.GetValueOrDefault(MemberAccountConcept.ContributionRevaluation)),

@@ -160,7 +160,11 @@ public sealed class PreviewMemberAccountClosingQueryHandler(
     {
         var leida = await LectorDeCuentas.CuentaEnAlcanceAsync(db, alcance, auditoria, request.AccountPublicId, seguir: false, ct);
         if (leida.IsFailure) return Result.Failure<MemberAccountClosingPreviewDto>(leida.Error);
-        return await cancelacion.PrevisualizarAsync(leida.Value, request.Date ?? reloj.HoyLocal, ct);
+        var fecha = request.Date ?? reloj.HoyLocal;
+        var vista = await cancelacion.PrevisualizarAsync(leida.Value, fecha, ct);
+        // US16 (T164): la vista previa muestra el saldo, la liquidación y lo que se entregaría: lectura sensible.
+        if (vista.IsSuccess) await auditoria.EmitirSaldoDeCuentaVistoAsync(leida.Value.PublicId, "close-preview", new { date = fecha }, ct);
+        return vista;
     }
 }
 
@@ -238,8 +242,10 @@ public sealed class CloseMemberAccountCommandHandler(
         BeneficiarioDeOrden? banco = null;
         if (request.Delivery.Kind == CloseDeliveryKind.TransferToAccount)
         {
-            destino = await db.MemberAccounts.AsNoTracking().FirstOrDefaultAsync(a => a.PublicId == request.Delivery.TargetAccountPublicId && !a.IsDeleted, ct);
-            if (destino is null) return Falla(ErroresDeCuentas.CuentaInexistente());
+            // US16 (T162): la cuenta que recibe la entrega también tiene que estar en el alcance (fuera, el mismo 404 que si no existiera).
+            var otra = await LectorDeCuentas.CuentaEnAlcanceAsync(db, alcance, auditoria, request.Delivery.TargetAccountPublicId ?? Guid.Empty, seguir: false, ct);
+            if (otra.IsFailure) return Falla(otra.Error);
+            destino = otra.Value;
             if (destino.Id == vista.Id) return Falla(ErroresDeMovimientos.MismaCuenta());
         }
         else

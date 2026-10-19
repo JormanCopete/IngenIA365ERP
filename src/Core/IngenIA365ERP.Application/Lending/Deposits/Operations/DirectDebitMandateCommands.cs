@@ -91,8 +91,13 @@ public sealed class RegisterDirectDebitMandateCommandHandler(
         int? creditoId = null;
         if (request.LoanPublicId is { } publico)
         {
-            var credito = await db.Loans.AsNoTracking().Where(l => l.PublicId == publico).Select(l => new { l.Id, l.DebtorPersonId, l.Number }).FirstOrDefaultAsync(ct);
-            if (credito is null) return Falla(new Error("Lending.Loan.NotFound", "El crédito no existe."));
+            var credito = await db.Loans.AsNoTracking().Where(l => l.PublicId == publico)
+                .Select(l => new { l.Id, l.PublicId, l.DebtorPersonId, l.Number, l.BranchId, l.CreditLineId }).FirstOrDefaultAsync(ct);
+            var inexistente = new Error("Lending.Loan.NotFound", "El crédito no existe.");
+            if (credito is null) return Falla(inexistente);
+            // US16 (T162): el crédito que se paga también en el alcance de quien autoriza (fuera, el mismo 404 que si no existiera).
+            if (await alcance.AsegurarAsync(credito.BranchId, credito.CreditLineId, inexistente, auditoria, "Loan", credito.PublicId, ct) is { IsFailure: true } fuera)
+                return Falla(fuera.Error);
             if (credito.DebtorPersonId != cuenta.HolderPersonId)
                 return Falla(new ErrorConDatos(DirectDebitMandate.CodigoNoEsTitular,
                     $"El titular de la cuenta {cuenta.Number} no es el deudor del crédito {credito.Number}: no puede autorizar su débito.", new { loan = credito.Number }));

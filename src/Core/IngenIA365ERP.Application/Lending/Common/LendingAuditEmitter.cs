@@ -181,6 +181,38 @@ public sealed class LendingAuditEmitter(IServiceProvider servicios, ILogger<Lend
     public Task<Guid?> EmitirMovimientosDeCuentaVistosAsync(Guid accountPublicId, object filtros, int filas, CancellationToken ct = default) =>
         EmitAsync(AuditEventTypes.LendingSavingsTransactionsViewed, "MemberAccount", accountPublicId, new { filters = filtros, rows = filas }, ct);
 
+    /// <summary>
+    /// Feature 014, US16 (T164; FR-003; api.md §4): las lecturas sensibles de captaciones y aportes —el libro y las operaciones, el saldo y el extracto de la
+    /// cuenta de un titular, y los saldos o movimientos de una persona—. Lista propia, aparte de la cerrada de la 013 (<see cref="LecturasSensibles"/>); la fija
+    /// <c>LasLecturasSensiblesDeCaptacionesSeAuditan</c>.
+    /// </summary>
+    public static IReadOnlyList<string> LecturasSensiblesDeCaptaciones { get; } =
+    [
+        AuditEventTypes.LendingSavingsTransactionsViewed,
+        AuditEventTypes.LendingSavingsBalanceViewed,
+        AuditEventTypes.LendingSavingsStatementViewed,
+    ];
+
+    /// <summary>
+    /// Feature 014, US16 (T164): el saldo de la cuenta de un titular visto en pantalla —el detalle, el saldo a (D, R) con su explicación o la vista previa de la
+    /// cancelación—, con de dónde se vio y lo que se pidió.
+    /// </summary>
+    public Task<Guid?> EmitirSaldoDeCuentaVistoAsync(Guid accountPublicId, string desde, object detalle, CancellationToken ct = default) =>
+        EmitAsync(AuditEventTypes.LendingSavingsBalanceViewed, "MemberAccount", accountPublicId, new { source = desde, detail = detalle }, ct);
+
+    /// <summary>Feature 014, US16 (T164): los saldos de captaciones y aportes de una persona (el resumen de aportes, la lista de sus cuentas).</summary>
+    public Task<Guid?> EmitirSaldosDePersonaVistosAsync(Guid personPublicId, string desde, object detalle, CancellationToken ct = default) =>
+        EmitAsync(AuditEventTypes.LendingSavingsBalanceViewed, "Person", personPublicId, new { source = desde, detail = detalle }, ct);
+
+    /// <summary>Feature 014, US16 (T164): el extracto en pantalla de la cuenta de un titular, con su período y cuántas líneas.</summary>
+    public Task<Guid?> EmitirExtractoDeCuentaVistoAsync(Guid accountPublicId, DateOnly desde, DateOnly hasta, int lineas, CancellationToken ct = default) =>
+        EmitAsync(AuditEventTypes.LendingSavingsStatementViewed, "MemberAccount", accountPublicId,
+            new { from = desde.ToString("yyyy-MM-dd"), to = hasta.ToString("yyyy-MM-dd"), rows = lineas }, ct);
+
+    /// <summary>Feature 014, US16 (T164): los movimientos de una persona en sus cuentas (el uso del tope del GMF del mes).</summary>
+    public Task<Guid?> EmitirMovimientosDePersonaVistosAsync(Guid personPublicId, object filtros, int filas, CancellationToken ct = default) =>
+        EmitAsync(AuditEventTypes.LendingSavingsTransactionsViewed, "Person", personPublicId, new { filters = filtros, rows = filas }, ct);
+
     private async Task<Guid?> EmitAsync(string action, string entityType, Guid? entityPublicId, object? after, CancellationToken ct, bool aparte = false)
     {
         try

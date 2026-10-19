@@ -172,6 +172,9 @@ public class LasConsultasDeCarteraRespetanElAlcance
         "Core/IngenIA365ERP.Application/Lending/Deposits/Reports/DepositsReconciliationReportQuery.cs",
         // Feature 014, US9 (T152): la descarga con datos de una parte de la migración sale dentro del alcance de oficina y línea de quien descarga.
         "Core/IngenIA365ERP.Application/Lending/Deposits/Migration/GetDepositMigrationPartDataQuery.cs",
+        // Feature 014, US16 (T164): el saldo a (D, R) y el extracto en pantalla de una cuenta fuera del alcance responden su 404
+        // (LectorDeCuentas.CuentaEnAlcanceAsync).
+        "Core/IngenIA365ERP.Application/Lending/Deposits/Accounts/MemberAccountStatementQueries.cs",
     ];
 
     /// <summary>

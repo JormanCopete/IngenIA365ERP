@@ -299,6 +299,12 @@ public static class AuditEventTypes
     /// <summary>Feature 014, US4 (T123; api.md §4): el libro o las operaciones de la cuenta de un titular, vistos en la pantalla.</summary>
     public const string LendingSavingsTransactionsViewed = "Lending.Savings.TransactionsViewed";
 
+    /// <summary>Feature 014, US16 (T164; api.md §4): el saldo de una cuenta de un titular (o los saldos de una persona) visto en la pantalla.</summary>
+    public const string LendingSavingsBalanceViewed = "Lending.Savings.BalanceViewed";
+
+    /// <summary>Feature 014, US16 (T164; api.md §4): el extracto en pantalla de una cuenta de un titular.</summary>
+    public const string LendingSavingsStatementViewed = "Lending.Savings.StatementViewed";
+
     // Feature 014, US3 (T086): la devolución de aportes sin retiro y la cesión entre asociados, pedidas y decididas por personas distintas.
     public const string LendingContributionRefundRequested = "Lending.ContributionRefund.Requested";
     public const string LendingContributionRefundApproved = "Lending.ContributionRefund.Approved";

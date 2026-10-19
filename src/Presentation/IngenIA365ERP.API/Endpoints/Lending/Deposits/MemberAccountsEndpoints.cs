@@ -14,8 +14,8 @@ namespace IngenIA365ERP.API.Endpoints.Lending.Deposits;
 /// Las cuentas de captación y de aportes (feature 014, US2, T078; contracts/api.md §4 de la 014), sobre <see cref="LendingGroup"/>:
 /// <c>/api/lending/accounts</c> —lista, conteos sin titulares, detalle, apertura, aprobación de una apertura retenida, partes y actualización de datos
 /// tras la mayoría de edad—. Leer exige <c>Lending.Accounts.Read</c> (datos del titular) o <c>.View</c> (conteos); abrir y aprobar,
-/// <c>Lending.Accounts.Open</c>; las partes, <c>Lending.Accounts.Parties.Manage</c>; toda escritura con <c>Idempotency-Key</c>. Las operaciones, el
-/// saldo con su explicación, el extracto, las cuotas, los bloqueos, los cargos, las liquidaciones y la cancelación llegan con sus historias (US3, US4,
+/// <c>Lending.Accounts.Open</c>; las partes, <c>Lending.Accounts.Parties.Manage</c>; toda escritura con <c>Idempotency-Key</c>. US16 (T164) suma el saldo a
+/// (D, R) con su explicación y el extracto en pantalla, lecturas auditadas. Las operaciones, las cuotas, los bloqueos, los cargos, las liquidaciones y la cancelación llegan con sus historias (US3, US4,
 /// US5, US11). Cada ruta sólo reenvía al <see cref="ISender"/>. (nuevo)
 /// </summary>
 public class MemberAccountsEndpoints : ICarterModule
@@ -64,6 +64,17 @@ public class MemberAccountsEndpoints : ICarterModule
             .WithName("Lending_Accounts_ApproveOpening")
             .ConClaveDeOperacion()
             .RequirePermission(Abrir);
+
+        // ----------------------------------------------------------------------- saldo y extracto (US16, T164; lecturas auditadas) --
+        cuentas.MapGet("/{id:guid}/balance", async (Guid id, DateOnly? date, DateTime? recordedAsOf, ISender sender, CancellationToken ct) =>
+                await sender.Send(new GetMemberAccountBalanceQuery(id, date, recordedAsOf), ct))
+            .WithName("Lending_Accounts_Balance")
+            .RequirePermission(Leer);
+
+        cuentas.MapGet("/{id:guid}/statement", async (Guid id, DateOnly? from, DateOnly? to, ISender sender, CancellationToken ct) =>
+                await sender.Send(new GetMemberAccountStatementQuery(id, from, to), ct))
+            .WithName("Lending_Accounts_Statement")
+            .RequirePermission(Leer);
 
         // ------------------------------------------------------------------------------------------------------- partes --
         cuentas.MapGet("/{id:guid}/parties", async (Guid id, DateOnly? date, bool? includeHistory, ISender sender, CancellationToken ct) =>

@@ -23,7 +23,7 @@ public sealed class ConsultasDeAportesTests : IDisposable
         _a.G.HoyLocal = Enero10;
         await _a.ConsignadaAsync(_a.Consignacion(cuenta, 30_000m));
 
-        var r = await new GetContributionsSummaryQueryHandler(_a.Db, _a.Consulta(), _a.G.Reloj)
+        var r = await new GetContributionsSummaryQueryHandler(_a.Db, _a.Consulta(), _a.G.Alcance, _a.G.Auditoria, _a.G.Reloj)
             .Handle(new GetContributionsSummaryQuery(_a.C.Ana.PublicId, Enero10), default);
 
         r.IsSuccess.Should().BeTrue(r.IsFailure ? r.Error.Message : string.Empty);
