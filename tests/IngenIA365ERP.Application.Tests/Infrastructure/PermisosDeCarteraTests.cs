@@ -95,13 +95,14 @@ public class PermisosDeCarteraTests
     }
 
     [Fact]
-    public void CompanyAdmin_recibe_todo_Lending_salvo_decidir_y_votar()
+    public void CompanyAdmin_recibe_todo_Lending_salvo_decidir_votar_y_aprobar_tasa()
     {
         var concedidos = BuiltInRolesSeeder.CodigosParaRol("CompanyAdmin", Catalogo).Where(DeCartera).ToList();
 
         concedidos.Should().NotContain(c => c.StartsWith("Lending.Decisions.", StringComparison.Ordinal), "administrar no es aprobar crédito (T61)");
         concedidos.Should().NotContain("Lending.Sessions.Vote");
-        concedidos.Should().HaveCount(162 - 4 - 1);
+        concedidos.Should().NotContain("Lending.NegotiatedRates.Approve", "administrar no es aprobar tasa (decisión del dueño del 2026-10-18, feature 014 D17)");
+        concedidos.Should().HaveCount(162 - 4 - 1 - 1);
         concedidos.Should().Contain(["Lending.Sessions.Close", "Lending.Disbursements.Execute", "Lending.Activation.Execute"]);
     }
 

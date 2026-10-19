@@ -64,10 +64,11 @@ public sealed class SeguridadYHabeasDataDeCarteraTests(CentralIdentityApiFixture
         var mios = await CarteraE2E.GetAsync(http, admin, "/api/admin/permissions/mine");
         var deCartera = mios.GetProperty("permissions").EnumerateArray().Select(p => p.GetString()!)
             .Where(c => c.StartsWith("Lending.", StringComparison.Ordinal)).ToList();
-        var excluidos = catalogo.Where(c => c.StartsWith("Lending.Decisions.", StringComparison.Ordinal) || c == "Lending.Sessions.Vote").ToList();
-        excluidos.Should().HaveCount(5, "cuatro niveles de Lending.Decisions.* y el voto propio");
+        var excluidos = catalogo.Where(c => c.StartsWith("Lending.Decisions.", StringComparison.Ordinal) || c == "Lending.Sessions.Vote"
+                                            || c == "Lending.NegotiatedRates.Approve").ToList();
+        excluidos.Should().HaveCount(6, "cuatro niveles de Lending.Decisions.*, el voto propio y aprobar tasas negociadas (decisión del dueño del 2026-10-18)");
         deCartera.Should().BeEquivalentTo(catalogo.Except(excluidos),
-            "CompanyAdmin recibe todo Lending.* menos lo que administrar no incluye: decidir crédito y votar (C86)");
+            "CompanyAdmin recibe todo Lending.* menos lo que administrar no incluye: decidir crédito, votar y aprobar tasa (C86)");
         deCartera.Should().Contain(["Lending.Sessions.RecordVotes", "Lending.Sessions.Close", "Lending.Scope.AllOffices"]);
 
         var plantillas = (await CarteraE2E.GetAsync(http, admin, "/api/admin/roles/templates?module=Lending")).EnumerateArray()

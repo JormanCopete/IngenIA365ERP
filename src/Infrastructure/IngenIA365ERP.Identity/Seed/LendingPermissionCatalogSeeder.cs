@@ -17,7 +17,8 @@ namespace IngenIA365ERP.Identity.Seed;
 /// bandejas sin datos personales (los roles integrados Operator, ReadOnly y Auditor reciben todo <c>*.View</c> por su glob y nada
 /// más del módulo; <c>LosCodigosViewDeCarteraNoTienenDatosPersonales</c>). Crear, decidir, ejecutar y anular son acciones distintas
 /// (segregación). A <c>CompanyAdmin</c> se le excluyen <c>Lending.Decisions.*</c> y <c>Lending.Sessions.Vote</c>
-/// (<see cref="BuiltInRolesSeeder"/>, T61): administrar no es aprobar crédito.
+/// (<see cref="BuiltInRolesSeeder"/>, T61): administrar no es aprobar crédito; desde la feature 014 también
+/// <c>Lending.NegotiatedRates.Approve</c> (decisión del dueño del 2026-10-18).
 /// </para>
 ///
 /// <para>
@@ -217,8 +218,11 @@ public static class LendingPermissionCatalogSeeder
         ("Lending.Deposits",            "Activate",            "Ver la preparación y activar aportes o captaciones"),
     ];
 
-    /// <summary>Los que se excluyen del glob <c>*</c> de <c>CompanyAdmin</c> y de la plantilla <c>cartera.administrador</c> (T61, C86).</summary>
-    public static readonly string[] ExcluidosDelAdministrador = ["Lending.Decisions.*", "Lending.Sessions.Vote"];
+    /// <summary>
+    /// Los que se excluyen del glob <c>*</c> de <c>CompanyAdmin</c> y de la plantilla <c>cartera.administrador</c> (T61, C86). Feature 014 (decisión
+    /// del dueño del 2026-10-18, research §13 D17): tampoco aprueba tasas negociadas —administrar no es aprobar tasa—.
+    /// </summary>
+    public static readonly string[] ExcluidosDelAdministrador = ["Lending.Decisions.*", "Lending.Sessions.Vote", "Lending.NegotiatedRates.Approve"];
 
     public static async Task SeedAsync(IApplicationDbContext db, ILogger logger)
     {
