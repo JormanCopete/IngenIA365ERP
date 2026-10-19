@@ -17,6 +17,8 @@ using IngenIA365ERP.Domain.Lending.Deposits;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using IngenIA365ERP.Application.Lending.Integration;
+using IngenIA365ERP.Domain.Lending;
 
 namespace IngenIA365ERP.Application.Lending.Deposits.Operations;
 
@@ -44,7 +46,8 @@ public sealed class DebitoAutomatico(
     RetiroDeCuenta retiros,
     ReglasDeMovimientos movimientos,
     ICerrojoDeCartera cerrojo,
-    ILogger<DebitoAutomatico>? logger = null) : ISubpasoDeCaptaciones
+    ILogger<DebitoAutomatico>? logger = null,
+    ValidacionPreviaDeCaptaciones? validacionPrevia = null) : ISubpasoDeCaptaciones
 {
     /// <summary>El prefijo del comprobante del débito automático.</summary>
     public const string PrefijoDebito = "DBA-";
@@ -66,24 +69,28 @@ public sealed class DebitoAutomatico(
             .Where(m => ids.Contains(m.MemberAccountId) && !m.IsDeleted && m.RevokedAt == null && m.ValidFrom <= d && (m.ValidTo == null || m.ValidTo >= d))
             .OrderBy(m => m.MemberAccountId).ThenBy(m => m.Id).ToListAsync(ct);
         var fallos = new List<FalloDeCuenta>();
+        var pregunta = validacionPrevia is null || mandatos.Count == 0
+            ? null
+            : await validacionPrevia.TandaAsync(mandatos.Select(m => m.MemberAccountId).Distinct().ToList(), d, $"el débito automático del {d:yyyy-MM-dd}", ct);
         foreach (var mandato in mandatos)
         {
             try
             {
-                await DebitarAsync(mandato, d, ct);
+                await DebitarAsync(mandato, d, ct, pregunta);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 db.DescartarCambiosSalvo(corrida);
                 _log.LogWarning(ex, "[Cartera.DebitoAutomaticoFallido] La autorización {Mandato} no debitó el {Dia}.", mandato.PublicId, d);
-                fallos.Add(new FalloDeCuenta(mandato.MemberAccountId, "Lending.DirectDebit.Failed", ex.Message));
+                fallos.Add(new FalloDeCuenta(mandato.MemberAccountId, ex is ReglaDeCarteraException r ? r.Codigo : "Lending.DirectDebit.Failed", ex.Message));
             }
         }
         return fallos;
     }
 
     /// <summary>Los débitos de una autorización el día <paramref name="d"/>, cada crédito en su propia transacción.</summary>
-    public async Task<IReadOnlyList<DebitoAutomaticoHecho>> DebitarAsync(DirectDebitMandate mandato, DateOnly d, CancellationToken ct)
+    public async Task<IReadOnlyList<DebitoAutomaticoHecho>> DebitarAsync(DirectDebitMandate mandato, DateOnly d, CancellationToken ct,
+        PreguntaDeTanda? pregunta = null)
     {
         var cuenta = await db.MemberAccounts.AsNoTracking().FirstAsync(a => a.Id == mandato.MemberAccountId, ct);
         if (cuenta.Status is not (MemberAccountStatus.Active or MemberAccountStatus.Inactive)) return [];
@@ -94,6 +101,11 @@ public sealed class DebitoAutomatico(
             ? await db.Loans.AsNoTracking().Where(l => l.Id == unico).Select(l => new { l.Id, l.PublicId }).ToListAsync(ct)
             : await db.Loans.AsNoTracking().Where(l => l.DebtorPersonId == cuenta.HolderPersonId).Select(l => new { l.Id, l.PublicId }).ToListAsync(ct);
         var hechos = new List<DebitoAutomaticoHecho>();
+        // US8 (T142): el débito de la cuenta (con su GMF) contra el puente OwnLoanPayoff tiene que contabilizarse; el pago del crédito lo valida el contrato.
+        if (pregunta is not null && cuotas.Installments.Any(c => c.DueDate == d)
+            && await pregunta.CuentaAsync(cuenta.Id, x => [HechosRepresentativosDeCaptaciones.Retiro(x, RecogidaEnElDesembolso.Recaudador.Class.ToString()),
+                HechosRepresentativosDeCaptaciones.Gmf(x)], ct) is { } bloqueada)
+            throw new ReglaDeCarteraException(new ProblemaDeCartera(bloqueada.Codigo, bloqueada.Mensaje));
         foreach (var cuota in cuotas.Installments.Where(c => c.DueDate == d).OrderBy(c => c.Order))
         {
             var credito = creditos.FirstOrDefault(c => c.PublicId == cuota.ObligationPublicId);

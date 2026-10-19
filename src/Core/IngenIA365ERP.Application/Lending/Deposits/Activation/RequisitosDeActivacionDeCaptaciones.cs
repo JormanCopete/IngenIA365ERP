@@ -14,6 +14,7 @@ using IngenIA365ERP.Domain.Enums.Integration;
 using IngenIA365ERP.Domain.Enums.Lending;
 using IngenIA365ERP.Domain.Lending;
 using Microsoft.EntityFrameworkCore;
+using IngenIA365ERP.Application.Lending.Integration;
 
 namespace IngenIA365ERP.Application.Lending.Deposits.Activation;
 
@@ -187,11 +188,18 @@ public sealed class RequisitosDeActivacionDeCaptaciones(
     {
         var lineas = await db.CreditLines.AsNoTracking()
             .Where(l => l.Nature == naturaleza && l.Status == CreditLineStatus.Active && !l.IsDeleted).OrderBy(l => l.Code)
-            .Select(l => l.Code).ToListAsync(ct);
+            .Select(l => new
+            {
+                l.Code,
+                Clase = db.DepositLineVersions.Where(v => v.CreditLineId == l.Id).OrderBy(v => v.ValidFrom).Select(v => (DepositClass?)v.DepositClass).FirstOrDefault(),
+            }).ToListAsync(ct);
         var sucursal = await db.Branches.AsNoTracking().Where(b => !b.IsDeleted).OrderBy(b => b.Id).Select(b => (Guid?)b.PublicId).FirstOrDefaultAsync(ct);
         if (lineas.Count == 0 || sucursal is null) return Cumple(LineasConMatriz, "No hay líneas activas de la naturaleza que contabilizar.");
 
-        var hechos = lineas.Select(codigo => HechoRepresentativo(naturaleza, codigo, sucursal.Value)).ToList();
+        // US8 (T145; contabilidad.md §4.3): la completitud de los hechos de la naturaleza, no sólo del principal, con la clase de cada línea.
+        // Un titular cualquiera: la regla no depende de él, pero la cuenta contable que exige tercero lo pide.
+        var titular = await db.People.AsNoTracking().Where(p => !p.IsDeleted).OrderBy(p => p.Id).Select(p => p.PublicId).FirstOrDefaultAsync(ct);
+        var hechos = lineas.SelectMany(l => HechosRepresentativos(naturaleza, l.Code, l.Clase, sucursal.Value, titular, fecha)).ToList();
         var evaluado = await contabilidad.EvaluarAsync(hechos, ct);
         return evaluado.IsSuccess && evaluado.Value.Errors.Count == 0
             ? Cumple(LineasConMatriz, "La matriz contable resuelve el hecho principal de cada línea activa.")
@@ -199,36 +207,36 @@ public sealed class RequisitosDeActivacionDeCaptaciones(
                 "/contabilidad/cartera/matriz", "Accounting.LendingRules.Manage");
     }
 
-    private static MensajeContableDto HechoRepresentativo(LineNature naturaleza, string linea, Guid sucursal)
+    /// <summary>
+    /// Los hechos que una línea de la naturaleza va a emitir desde el primer día (US8, T145): en aportes, el aporte, el cruce y la devolución del retiro; en
+    /// captaciones, la consignación, el retiro por giro con su GMF y, en las clases que causan, la causación, la liquidación y la retención. Con fecha y
+    /// origen propios (research E108).
+    /// </summary>
+    private static IEnumerable<MensajeContableDto> HechosRepresentativos(LineNature naturaleza, string linea, DepositClass? clase, Guid sucursal, Guid titular,
+        DateOnly fecha)
     {
-        var dimensiones = new DepositFactDimensionsV1
+        var d = HechosRepresentativosDeCaptaciones.Cuenta(HechosRepresentativosDeCaptaciones.Dimensiones(linea, naturaleza,
+            naturaleza == LineNature.Deposit ? clase ?? DepositClass.Demand : null, sucursal), titular);
+        var cobro = nameof(ClaseDeRecaudador.Receipts);
+        if (naturaleza == LineNature.Contribution)
+            return
+            [
+                .. HechosRepresentativosDeCaptaciones.Unidad(fecha, d, HechosRepresentativosDeCaptaciones.Consignacion(d, cobro)),
+                .. HechosRepresentativosDeCaptaciones.Unidad(fecha, d, HechosRepresentativosDeCaptaciones.Cruce(d)),
+                .. HechosRepresentativosDeCaptaciones.Unidad(fecha, d, HechosRepresentativosDeCaptaciones.Devolucion(d, "MembershipRefund")),
+            ];
+        List<MensajeContableDto> hechos =
+        [
+            .. HechosRepresentativosDeCaptaciones.Unidad(fecha, d, HechosRepresentativosDeCaptaciones.Consignacion(d, cobro)),
+            .. HechosRepresentativosDeCaptaciones.Unidad(fecha, d, HechosRepresentativosDeCaptaciones.Retiro(d, null), HechosRepresentativosDeCaptaciones.Gmf(d)),
+        ];
+        if (d.D.DepositClass is nameof(DepositClass.Demand) or nameof(DepositClass.Permanent))
         {
-            CreditLineCode = linea, LineNature = naturaleza.ToString(), AccountFlag = nameof(AccountFlag.Standard), BranchPublicId = sucursal,
-            DepositClass = naturaleza == LineNature.Deposit ? nameof(DepositClass.Demand) : null,
-        };
-        var recaudador = new CollectorRefV1 { CollectorClass = nameof(ClaseDeRecaudador.Receipts), MeansClass = "Cash" };
-        object contenido = naturaleza == LineNature.Contribution
-            ? new AporteRecibidoV1
-            {
-                Dimensions = dimensiones, Collector = recaudador,
-                Amounts = [new DepositConceptAmountV1
-                {
-                    Concept = nameof(MemberAccountConcept.ContributionOrdinary), ContributionClass = nameof(ContributionClass.Ordinary), Amount = 1m,
-                }],
-            }
-            : new ConsignacionEnCuentaAplicadaV1
-            {
-                Dimensions = dimensiones, Collector = recaudador,
-                Amounts = [new DepositConceptAmountV1 { Concept = nameof(MemberAccountConcept.Principal), Amount = 1m }],
-            };
-        var tipo = naturaleza == LineNature.Contribution ? AporteRecibidoV1.Type : ConsignacionEnCuentaAplicadaV1.Type;
-        return new MensajeContableDto(
-            new IntegrationEnvelopeV1
-            {
-                MessageId = Guid.Empty, Type = tipo, Kind = IntegrationMessageKind.Business, OriginModule = ModulosDeOrigen.Cartera,
-                OriginEventKey = ClavesDeEvento.Confirmacion, BranchPublicId = sucursal,
-            },
-            contenido);
+            hechos.AddRange(HechosRepresentativosDeCaptaciones.Unidad(fecha, d, HechosRepresentativosDeCaptaciones.Causacion(d)));
+            hechos.AddRange(HechosRepresentativosDeCaptaciones.Unidad(fecha, d, HechosRepresentativosDeCaptaciones.Liquidacion(d),
+                HechosRepresentativosDeCaptaciones.Retencion(d)));
+        }
+        return hechos;
     }
 
     // -------------------------------------------------------------------------------------------------------- roles --

@@ -10,6 +10,8 @@ using IngenIA365ERP.Domain.Lending.Deposits;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using IngenIA365ERP.Application.Lending.Integration;
+using IngenIA365ERP.Domain.Lending;
 
 namespace IngenIA365ERP.Application.Lending.Deposits.Charges;
 
@@ -26,7 +28,8 @@ public sealed class CargosPeriodicos(
     ReglasDeMovimientos movimientos,
     CargosDeCuentas cargos,
     ICerrojoDeCartera cerrojo,
-    ILogger<CargosPeriodicos>? logger = null) : ISubpasoDeCaptaciones
+    ILogger<CargosPeriodicos>? logger = null,
+    ValidacionPreviaDeCaptaciones? validacionPrevia = null) : ISubpasoDeCaptaciones
 {
     private readonly ILogger _log = logger ?? (ILogger)NullLogger.Instance;
 
@@ -41,24 +44,27 @@ public sealed class CargosPeriodicos(
             .Where(a => ids.Contains(a.Id) && a.Nature == LineNature.Deposit && (a.Status == MemberAccountStatus.Active || a.Status == MemberAccountStatus.Inactive))
             .OrderBy(a => a.Id).ToListAsync(ct);
         var fallos = new List<FalloDeCuenta>();
+        var pregunta = validacionPrevia is null || candidatas.Count == 0
+            ? null
+            : await validacionPrevia.TandaAsync(candidatas.Select(c => c.Id).ToList(), d, $"los cargos periódicos del {d:yyyy-MM-dd}", ct);
         foreach (var cuenta in candidatas)
         {
             try
             {
-                await CausarAsync(cuenta, d, ct);
+                await CausarAsync(cuenta, d, ct, pregunta);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 db.DescartarCambiosSalvo(corrida);
                 _log.LogWarning(ex, "[Cartera.CargoPeriodicoFallido] La cuenta {Cuenta} no causó sus cargos del {Dia}.", cuenta.PublicId, d);
-                fallos.Add(new FalloDeCuenta(cuenta.Id, "Lending.Savings.PeriodicChargeFailed", ex.Message));
+                fallos.Add(new FalloDeCuenta(cuenta.Id, ex is ReglaDeCarteraException r ? r.Codigo : "Lending.Savings.PeriodicChargeFailed", ex.Message));
             }
         }
         return fallos;
     }
 
     /// <summary>Los cargos periódicos (y de inactividad) de una cuenta que cierran período el día <paramref name="d"/>; devuelve cuántos causó.</summary>
-    public async Task<int> CausarAsync(MemberAccount cuenta, DateOnly d, CancellationToken ct)
+    public async Task<int> CausarAsync(MemberAccount cuenta, DateOnly d, CancellationToken ct, PreguntaDeTanda? pregunta = null)
     {
         var leida = await movimientos.LeerAsync(cuenta, d, ct);
         var disparadores = cuenta.Status == MemberAccountStatus.Inactive
@@ -68,6 +74,13 @@ public sealed class CargosPeriodicos(
         var vencen = catalogo.Select(def => (Def: def, Periodo: CargosDeCuenta.PeriodoDe(def.Periodicity ?? RepaymentPeriodicity.Monthly, d)))
             .Where(x => x.Periodo.Hasta == d).ToList();
         if (vencen.Count == 0) return 0;
+        // US8 (T142): con la política en «Bloquear», un cargo que no se contabilizaría no se causa (cobrado o por cobrar, por su clase).
+        if (pregunta is not null
+            && await pregunta.CuentaAsync(cuenta.Id, x => vencen.SelectMany(v => new object[]
+                {
+                    HechosRepresentativosDeCaptaciones.Cargo(x, v.Def.Kind, cobrado: true), HechosRepresentativosDeCaptaciones.Cargo(x, v.Def.Kind, cobrado: false),
+                }).ToList(), ct) is { } bloqueada)
+            throw new ReglaDeCarteraException(new ProblemaDeCartera(bloqueada.Codigo, bloqueada.Mensaje));
 
         return await TransaccionExplicita.EjecutarAsync(db, async () =>
         {

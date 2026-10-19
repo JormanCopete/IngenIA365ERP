@@ -46,7 +46,8 @@ public sealed class CausacionDeCaptaciones(
     ICerrojoDeCartera cerrojo,
     IDateTimeService reloj,
     IAlertas? alertas = null,
-    ILogger<CausacionDeCaptaciones>? logger = null) : ISubpasoDeCaptaciones
+    ILogger<CausacionDeCaptaciones>? logger = null,
+    ValidacionPreviaDeCaptaciones? validacionPrevia = null) : ISubpasoDeCaptaciones
 {
     private readonly ILogger _log = logger ?? (ILogger)NullLogger.Instance;
 
@@ -72,6 +73,13 @@ public sealed class CausacionDeCaptaciones(
                                 orderby a.Id
                                 select a.Id).ToListAsync(ct);
         if (candidatas.Count == 0) return [];
+
+        // US8 (T142; A8 de la 013, D23): con Contabilidad.FaltaDeRegla = Bloquear la tanda no se causa si su causación no se contabilizaría; las cuentas
+        // quedan con el error y la alerta sale una vez por combinación. La pasada siguiente las pone al día desde su marca de agua.
+        if (validacionPrevia is not null
+            && await validacionPrevia.EnProcesoAsync(candidatas, d, x => [HechosRepresentativosDeCaptaciones.Causacion(x)],
+                $"la causación de captaciones del {d:yyyy-MM-dd}", ct) is { } bloqueadas)
+            return bloqueadas;
 
         var fallos = new List<FalloDeCuenta>();
         var atrasadas = 0;

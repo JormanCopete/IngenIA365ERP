@@ -213,7 +213,8 @@ public sealed class CloseMemberAccountCommandHandler(
     NumeradorDeCartera numerador,
     EmisionDeCartera emision,
     IActorActual actorActual,
-    IDateTimeService reloj) : IRequestHandler<CloseMemberAccountCommand, Result<MemberAccountClosingResultDto>>
+    IDateTimeService reloj,
+    ValidacionPreviaDeCaptaciones? validacionPrevia = null) : IRequestHandler<CloseMemberAccountCommand, Result<MemberAccountClosingResultDto>>
 {
     /// <summary>El prefijo del comprobante de una cancelación.</summary>
     public const string PrefijoCancelacion = "CAN-";
@@ -249,6 +250,29 @@ public sealed class CloseMemberAccountCommandHandler(
                 request.Delivery.Payee?.AccountNumber, ct);
             if (b.IsFailure) return Falla(b.Error);
             banco = b.Value;
+        }
+
+        // US8 (T145; D23): la pantalla no cancela si lo que la cancelación emite no se contabilizaría: la liquidación a la fecha con su retención (si la
+        // cuenta causó intereses alguna vez) y la entrega —giro o traslado— con su GMF.
+        if (validacionPrevia is not null)
+        {
+            var dimensiones = await validacionPrevia.DimensionesAsync(destino is null ? [vista.Id] : [vista.Id, destino.Id], fecha, ct);
+            if (!dimensiones.TryGetValue(vista.Id, out var d))
+            {
+                var sinSucursal = await emision.SucursalContableAsync(vista.BranchId, ct);
+                if (sinSucursal.IsFailure) return Falla(sinSucursal.Error);
+                d = (await validacionPrevia.DimensionesAsync([vista.Id], fecha, ct))[vista.Id];
+            }
+            var hechos = new List<IngenIA365ERP.Application.Common.Integration.Accounting.MensajeContableDto>();
+            if (await db.MemberAccountTransactions.AsNoTracking().AnyAsync(t => t.MemberAccountId == vista.Id && t.Concept == MemberAccountConcept.InterestPayable, ct))
+                hechos.AddRange(HechosRepresentativosDeCaptaciones.Unidad(fecha, d, HechosRepresentativosDeCaptaciones.Liquidacion(d),
+                    HechosRepresentativosDeCaptaciones.Retencion(d)));
+            object entrega = destino is not null && dimensiones.TryGetValue(destino.Id, out var dDestino)
+                ? HechosRepresentativosDeCaptaciones.Traslado(d, dDestino)
+                : HechosRepresentativosDeCaptaciones.Retiro(d, null);
+            hechos.AddRange(HechosRepresentativosDeCaptaciones.Unidad(fecha, d, entrega, HechosRepresentativosDeCaptaciones.Gmf(d)));
+            var decision = await validacionPrevia.EnPantallaAsync(hechos, $"la cancelación de la cuenta {vista.Number}", ct);
+            if (decision.Bloqueo is { } bloqueo) return Falla(bloqueo);
         }
 
         return await TransaccionExplicita.EjecutarAsync(db, async () =>

@@ -371,7 +371,7 @@ public sealed class WithdrawToDisbursementOrderCommandHandler(
     LendingAuditEmitter auditoria,
     RetiroDeCuenta retiros,
     OrdenesDeGiroDeCuentas ordenes,
-    ValidacionPreviaContableDeCartera validacionPrevia,
+    ValidacionPreviaDeCaptaciones validacionPrevia,
     EmisionDeCartera emision,
     IDateTimeService reloj) : IRequestHandler<WithdrawToDisbursementOrderCommand, Result<MemberAccountOperationResultDto>>
 {
@@ -393,12 +393,12 @@ public sealed class WithdrawToDisbursementOrderCommandHandler(
         var banco = await ordenes.BeneficiarioAsync(personaId, request.Payee?.BankPublicId, request.Payee?.AccountType, request.Payee?.AccountNumber, ct);
         if (banco.IsFailure) return Falla(banco.Error);
 
-        // D23: la pantalla bloquea si el hecho no se contabiliza.
+        // D23 (US8, T145): la pantalla bloquea si el retiro por giro y su GMF no se contabilizarían, con las dimensiones vigentes de la cuenta.
         var sucursal = await emision.SucursalContableAsync(cuenta.BranchId, ct);
         if (sucursal.IsFailure) return Falla(sucursal.Error);
-        var linea = await db.CreditLines.AsNoTracking().IgnoreQueryFilters().Where(l => l.Id == cuenta.CreditLineId).Select(l => l.Code).FirstAsync(ct);
-        var decision = await validacionPrevia.DecidirAsync([ContratoDeCuentasDeCartera.Representativo(RecogidaDeLaPantalla, linea, cuenta.Nature, cuenta.DepositClass,
-            sucursal.Value, IngenIA365ERP.Application.Common.Integration.Contracts.Lending.Deposits.RetiroDeCuentaAplicadoV1.Type)], OrigenDeValidacionPrevia.Pantalla, $"el retiro de la cuenta {cuenta.Number}", ct);
+        var d = (await validacionPrevia.DimensionesAsync([cuenta.Id], fecha, ct))[cuenta.Id];
+        var decision = await validacionPrevia.EnPantallaAsync(HechosRepresentativosDeCaptaciones.Unidad(fecha, d,
+            HechosRepresentativosDeCaptaciones.Retiro(d, null), HechosRepresentativosDeCaptaciones.Gmf(d)), $"el retiro de la cuenta {cuenta.Number}", ct);
         if (decision.Bloqueo is { } bloqueo) return Falla(bloqueo);
 
         return await TransaccionExplicita.EjecutarAsync(db, async () =>
@@ -483,7 +483,7 @@ public sealed class TransferBetweenMemberAccountsCommandHandler(
     IAlcanceDeCartera alcance,
     LendingAuditEmitter auditoria,
     TrasladoDeCuenta traslados,
-    ValidacionPreviaContableDeCartera validacionPrevia,
+    ValidacionPreviaDeCaptaciones validacionPrevia,
     EmisionDeCartera emision,
     IDateTimeService reloj) : IRequestHandler<TransferBetweenMemberAccountsCommand, Result<MemberAccountOperationResultDto>>
 {
@@ -502,12 +502,14 @@ public sealed class TransferBetweenMemberAccountsCommandHandler(
             if (!fechas.Activada(n)) return Falla(ErroresDeCuentas.SinActivar(n));
         if (fecha > hoy) return Falla(ErroresDeAportes.FechaValor(fecha, hoy, hoy));
 
-        var sucursal = await emision.SucursalContableAsync(origen.BranchId, ct);
-        if (sucursal.IsFailure) return Falla(sucursal.Error);
-        var linea = await db.CreditLines.AsNoTracking().IgnoreQueryFilters().Where(l => l.Id == origen.CreditLineId).Select(l => l.Code).FirstAsync(ct);
-        var decision = await validacionPrevia.DecidirAsync([ContratoDeCuentasDeCartera.Representativo(Disbursements.RecogidaEnElDesembolso.Recaudador, linea,
-            origen.Nature, origen.DepositClass, sucursal.Value, IngenIA365ERP.Application.Common.Integration.Contracts.Lending.Deposits.TrasladoEntreCuentasAplicadoV1.Type)],
-            OrigenDeValidacionPrevia.Pantalla, $"el traslado desde la cuenta {origen.Number}", ct);
+        // D23 (US8, T145): el traslado con las dimensiones de las dos cuentas (la de aportes, con su clase) y el GMF de la que se debita.
+        foreach (var oficina in new[] { origen.BranchId, destino.BranchId }.Distinct())
+            if (await emision.SucursalContableAsync(oficina, ct) is { IsFailure: true } sinSucursal) return Falla(sinSucursal.Error);
+        var dimensiones = await validacionPrevia.DimensionesAsync([origen.Id, destino.Id], fecha, ct);
+        var (dOrigen, dDestino) = (dimensiones[origen.Id], dimensiones[destino.Id]);
+        var decision = await validacionPrevia.EnPantallaAsync(HechosRepresentativosDeCaptaciones.Unidad(fecha, dOrigen,
+            HechosRepresentativosDeCaptaciones.Traslado(dOrigen, dDestino), HechosRepresentativosDeCaptaciones.Gmf(dOrigen)),
+            $"el traslado desde la cuenta {origen.Number}", ct);
         if (decision.Bloqueo is { } bloqueo) return Falla(bloqueo);
 
         return await TransaccionExplicita.EjecutarAsync(db, async () =>

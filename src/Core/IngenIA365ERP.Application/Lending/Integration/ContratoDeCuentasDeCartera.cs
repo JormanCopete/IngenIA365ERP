@@ -650,64 +650,40 @@ public sealed class ContratoDeCuentasDeCartera(
         var lineas = await LineasAsync(cuentas.Select(c => c.CreditLineId), ct);
         var oficinas = cuentas.Select(c => c.BranchId).Distinct().ToList();
         var sucursales = await db.Branches.AsNoTracking().IgnoreQueryFilters().Where(b => oficinas.Contains(b.Id)).ToDictionaryAsync(b => b.Id, b => b.PublicId, ct);
+        // US8 (T145): el titular y el número de una cuenta de cada combinación (la cuenta contable que exige tercero o cruce los pide).
+        var personas = cuentas.Select(c => c.HolderPersonId).Distinct().ToList();
+        var titulares = await db.People.AsNoTracking().IgnoreQueryFilters().Where(p => personas.Contains(p.Id)).ToDictionaryAsync(p => p.Id, p => p.PublicId, ct);
         var decisiones = new Dictionary<int, DecisionDeValidacionPrevia>();
-        foreach (var grupo in cuentas.GroupBy(c => (c.CreditLineId, c.Nature, c.DepositClass, c.BranchId)))
+        foreach (var grupo in cuentas.GroupBy(c => (c.CreditLineId, c.Nature, c.DepositClass, c.BranchId, c.IsGarnished)))
         {
             var k = grupo.Key;
-            var hecho = Representativo(recaudador, lineas.GetValueOrDefault(k.CreditLineId).Code ?? string.Empty, k.Nature, k.DepositClass,
-                sucursales.GetValueOrDefault(k.BranchId), tipoDeSalida);
-            var decision = await validacionPrevia.DecidirAsync([hecho], OrigenDeValidacionPrevia.Contrato, $"el lote de {recaudador.Class}", ct);
+            var hechos = Representativo(recaudador, lineas.GetValueOrDefault(k.CreditLineId).Code ?? string.Empty, k.Nature, k.DepositClass,
+                sucursales.GetValueOrDefault(k.BranchId), reloj.HoyLocal, tipoDeSalida, k.IsGarnished,
+                titulares.GetValueOrDefault(grupo.First().HolderPersonId), grupo.First().Number);
+            var decision = await validacionPrevia.DecidirAsync(hechos, OrigenDeValidacionPrevia.Contrato, $"el lote de {recaudador.Class}", ct);
             foreach (var cuenta in grupo) decisiones[cuenta.Id] = decision;
         }
         return decisiones;
     }
 
     /// <summary>
-    /// El hecho principal de una combinación, sin importes reales: la validación previa sólo mira hecho, sucursal y dimensiones. US4 (T123): también lo
-    /// usa la pantalla (retiro por giro y traslado), que bloquea (D23).
+    /// Los hechos de una combinación, sin importes reales: la validación previa sólo mira hecho, sucursal, dimensiones y conceptos. US8 (T145; research
+    /// E108): con los representativos de <see cref="HechosRepresentativosDeCaptaciones"/> —su propio origen y la fecha de hoy, el traslado con su destino y
+    /// el retiro con su GMF—; hasta el 2026-10-18 iban sin fecha ni origen (todos una unidad del año 1, donde ninguna regla rige) y el traslado sin destino.
     /// </summary>
-    public static MensajeContableDto Representativo(Recaudador recaudador, string linea, LineNature naturaleza, DepositClass? clase, Guid sucursal,
-        string? tipoDeSalida = null)
+    public static IReadOnlyList<MensajeContableDto> Representativo(Recaudador recaudador, string linea, LineNature naturaleza, DepositClass? clase, Guid sucursal,
+        DateOnly fecha, string? tipoDeSalida = null, bool embargada = false, Guid titular = default, string? numero = null)
     {
-        var dimensiones = new DepositFactDimensionsV1
-        {
-            CreditLineCode = linea, LineNature = naturaleza.ToString(), DepositClass = clase?.ToString(), AccountFlag = nameof(AccountFlag.Standard),
-            BranchPublicId = sucursal,
-        };
-        var cobro = new CollectorRefV1 { CollectorCode = recaudador.Code, CollectorClass = recaudador.Class.ToString() };
-        var principal = new[] { new DepositConceptAmountV1 { Concept = nameof(MemberAccountConcept.Principal), Amount = -1m } };
+        ArgumentNullException.ThrowIfNull(recaudador);
+        var d = HechosRepresentativosDeCaptaciones.Cuenta(HechosRepresentativosDeCaptaciones.Dimensiones(linea, naturaleza, clase, sucursal, embargada), titular,
+            numero);
+        var cobro = recaudador.Class.ToString();
         if (tipoDeSalida == RetiroDeCuentaAplicadoV1.Type)
-            return Sobre(new RetiroDeCuentaAplicadoV1 { Dimensions = dimensiones, Collector = cobro, Amounts = principal }, RetiroDeCuentaAplicadoV1.Type, sucursal);
+            return HechosRepresentativosDeCaptaciones.Unidad(fecha, d, HechosRepresentativosDeCaptaciones.Retiro(d, cobro), HechosRepresentativosDeCaptaciones.Gmf(d));
         if (tipoDeSalida == TrasladoEntreCuentasAplicadoV1.Type)
-            return Sobre(new TrasladoEntreCuentasAplicadoV1 { Dimensions = dimensiones, Amounts = principal, TargetDimensions = dimensiones },
-                TrasladoEntreCuentasAplicadoV1.Type, sucursal);
-        object contenido = naturaleza == LineNature.Contribution
-            ? new AporteRecibidoV1
-            {
-                Dimensions = dimensiones, Collector = cobro,
-                Amounts = [new DepositConceptAmountV1 { Concept = nameof(MemberAccountConcept.ContributionOrdinary), ContributionClass = nameof(ContributionClass.Ordinary), Amount = 1m }],
-            }
-            : new ConsignacionEnCuentaAplicadaV1
-            {
-                Dimensions = dimensiones, Collector = cobro,
-                Amounts = [new DepositConceptAmountV1 { Concept = nameof(MemberAccountConcept.Principal), Amount = 1m }],
-            };
-        return new MensajeContableDto(
-            new IntegrationEnvelopeV1
-            {
-                MessageId = Guid.Empty, Type = naturaleza == LineNature.Contribution ? AporteRecibidoV1.Type : ConsignacionEnCuentaAplicadaV1.Type,
-                Kind = IntegrationMessageKind.Business, OriginModule = ModulosDeOrigen.Cartera, OriginEventKey = ClavesDeEvento.Confirmacion, BranchPublicId = sucursal,
-            },
-            contenido);
+            return HechosRepresentativosDeCaptaciones.Unidad(fecha, d, HechosRepresentativosDeCaptaciones.Traslado(d, d), HechosRepresentativosDeCaptaciones.Gmf(d));
+        return HechosRepresentativosDeCaptaciones.Unidad(fecha, d, HechosRepresentativosDeCaptaciones.Consignacion(d, cobro));
     }
-
-    private static MensajeContableDto Sobre(object contenido, string tipo, Guid sucursal) => new(
-        new IntegrationEnvelopeV1
-        {
-            MessageId = Guid.Empty, Type = tipo, Kind = IntegrationMessageKind.Business, OriginModule = ModulosDeOrigen.Cartera,
-            OriginEventKey = ClavesDeEvento.Confirmacion, BranchPublicId = sucursal,
-        },
-        contenido);
 
     private async Task AuditarAsync(string evento, string clave, Recaudador? recaudador, object detalle, CancellationToken ct) =>
         await auditoria.HechoAsync(evento, Entidad, clave ?? string.Empty,

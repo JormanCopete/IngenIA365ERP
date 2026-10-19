@@ -388,7 +388,8 @@ public sealed class LiquidacionPeriodicaDeIntereses(
     IApplicationDbContext db,
     LiquidacionDeIntereses liquidacion,
     ICerrojoDeCartera cerrojo,
-    ILogger<LiquidacionPeriodicaDeIntereses>? logger = null) : ISubpasoDeCaptaciones
+    ILogger<LiquidacionPeriodicaDeIntereses>? logger = null,
+    ValidacionPreviaDeCaptaciones? validacionPrevia = null) : ISubpasoDeCaptaciones
 {
     private readonly ILogger _log = logger ?? (ILogger)NullLogger.Instance;
 
@@ -406,6 +407,10 @@ public sealed class LiquidacionPeriodicaDeIntereses(
                         && estados.Contains(a.Status))
             .OrderBy(a => a.Id).Select(a => a.Id).ToListAsync(ct);
         var fallos = new List<FalloDeCuenta>();
+        // US8 (T142): la validación previa, sólo para las cuentas que liquidan hoy y una vez por combinación.
+        var pregunta = validacionPrevia is null || candidatas.Count == 0
+            ? null
+            : await validacionPrevia.TandaAsync(candidatas, d, $"la liquidación de intereses del {d:yyyy-MM-dd}", ct);
         foreach (var id in candidatas)
         {
             try
@@ -417,7 +422,12 @@ public sealed class LiquidacionPeriodicaDeIntereses(
                     var cuenta = await db.MemberAccounts.FirstAsync(a => a.Id == id, ct);
                     var control = await db.MemberAccountControls.FirstAsync(c => c.MemberAccountId == id, ct);
                     var liquidadas = 0;
-                    foreach (var fin in await liquidacion.PeriodosVencidosAsync(cuenta, control, d, ct))
+                    var vencidos = await liquidacion.PeriodosVencidosAsync(cuenta, control, d, ct);
+                    if (vencidos.Count > 0 && pregunta is not null
+                        && await pregunta.CuentaAsync(id, x => [HechosRepresentativosDeCaptaciones.Liquidacion(x), HechosRepresentativosDeCaptaciones.Retencion(x)], ct)
+                            is { } bloqueada)
+                        throw new ReglaDeCarteraException(new ProblemaDeCartera(bloqueada.Codigo, bloqueada.Mensaje));
+                    foreach (var fin in vencidos)
                     {
                         var r = await liquidacion.LiquidarAsync(cuenta, control, fin, corrida, null, null, ct);
                         if (r.IsFailure) throw new ReglaDeCarteraException(new ProblemaDeCartera(r.Error.Code, r.Error.Message));

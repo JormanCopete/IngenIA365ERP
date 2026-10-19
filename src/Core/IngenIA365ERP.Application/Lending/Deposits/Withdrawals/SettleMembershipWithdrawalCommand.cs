@@ -24,6 +24,7 @@ using IngenIA365ERP.Domain.Lending.Segregation;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using IngenIA365ERP.Application.Lending.Integration;
 
 namespace IngenIA365ERP.Application.Lending.Deposits.Withdrawals;
 
@@ -353,7 +354,8 @@ public sealed class SettleMembershipWithdrawalCommandHandler(
     IDateTimeService reloj,
     ILogger<SettleMembershipWithdrawalCommandHandler> logger,
     IAlertas? alertas = null,
-    Accrual.LiquidacionALaFecha? interesesALaFecha = null) : IRequestHandler<SettleMembershipWithdrawalCommand, Result<MembershipWithdrawalDto>>
+    Accrual.LiquidacionALaFecha? interesesALaFecha = null,
+    ValidacionPreviaDeCaptaciones? validacionPrevia = null) : IRequestHandler<SettleMembershipWithdrawalCommand, Result<MembershipWithdrawalDto>>
 {
     public async Task<Result<MembershipWithdrawalDto>> Handle(SettleMembershipWithdrawalCommand request, CancellationToken ct)
     {
@@ -379,6 +381,26 @@ public sealed class SettleMembershipWithdrawalCommandHandler(
             RetirosDeAsociado.RaizDeLaDevolucion(request.WithdrawalPublicId)), AccionesDeSegregacion.Radicar, hoy, ct);
         if (verificada.IsFailure) return Falla(verificada.Error);
         var liquidacion = Guid.NewGuid();
+
+        // US8 (T145; D23): la pantalla no liquida si lo que el retiro emite no se contabilizaría: el cruce de cada cuenta contra el puente del retiro (el
+        // pago del crédito lo valida el contrato de obligaciones), la pérdida, la devolución por naturaleza y la liquidación de los ahorros que causan.
+        if (validacionPrevia is not null)
+        {
+            var dimensiones = await validacionPrevia.DimensionesAsync(visto.Value.Cuentas.Keys.ToList(), fecha, ct);
+            var hechos = new List<IngenIA365ERP.Application.Common.Integration.Accounting.MensajeContableDto>();
+            foreach (var (id, d) in dimensiones)
+            {
+                if (visto.Value.Creditos.Count > 0) hechos.AddRange(HechosRepresentativosDeCaptaciones.Unidad(fecha, d, HechosRepresentativosDeCaptaciones.Cruce(d)));
+                if (request.LossDeduction is not null && id == leido.Value.ContributionAccountId)
+                    hechos.AddRange(HechosRepresentativosDeCaptaciones.Unidad(fecha, d, HechosRepresentativosDeCaptaciones.Perdida(d)));
+                hechos.AddRange(HechosRepresentativosDeCaptaciones.Unidad(fecha, d, HechosRepresentativosDeCaptaciones.Devolucion(d, "MembershipRefund")));
+                if (id != leido.Value.ContributionAccountId && interesesALaFecha is not null)
+                    hechos.AddRange(HechosRepresentativosDeCaptaciones.Unidad(fecha, d, HechosRepresentativosDeCaptaciones.Liquidacion(d),
+                        HechosRepresentativosDeCaptaciones.Retencion(d)));
+            }
+            var decision = await validacionPrevia.EnPantallaAsync(hechos, $"la liquidación del retiro {leido.Value.Number}", ct);
+            if (decision.Bloqueo is { } bloqueo) return Falla(bloqueo);
+        }
 
         var hecho = await TransaccionExplicita.EjecutarAsync(db, async () =>
         {

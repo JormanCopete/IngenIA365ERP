@@ -44,12 +44,18 @@ public sealed class EvaluateLendingPostingQueryHandler(
 {
     public async Task<Result<ResultadoDeEvaluacionContableDto>> Handle(EvaluateLendingPostingQuery request, CancellationToken ct)
     {
+        // Feature 014, US8 (T145; research E108): un hecho sin fecha contable se evalúa con la de hoy (la matriz del año 1 no tiene reglas) y uno sin
+        // origen es su propia unidad (si no, todas las preguntas sin origen de un lote serían una sola unidad).
+        var hoy = reloj.TodayUtc;
         var unidades = request.Hechos
             .Where(m => m.Envelope.Kind == IntegrationMessageKind.Business && m.Envelope.OriginModule == ModulosDeOrigen.Cartera
                         && OperacionesDeCartera.Buscar(m.Envelope.Type) is { EsInformativo: false })
-            .Select(HechoDeCartera.De)
-            .GroupBy(h => (h.Sobre.Origin.PublicId, h.Sobre.OriginEventKey))
-            .Select(g => (IReadOnlyList<HechoDeCartera>)g.ToList())
+            .Select((m, i) => (Hecho: HechoDeCartera.De(m.Envelope.Origin.OperationDate == default
+                ? m with { Envelope = m.Envelope with { Origin = m.Envelope.Origin with { OperationDate = hoy } } }
+                : m), Indice: i))
+            .GroupBy(x => (Origen: x.Hecho.Sobre.Origin.PublicId == Guid.Empty ? $"#{x.Indice}" : x.Hecho.Sobre.Origin.PublicId.ToString("N"),
+                x.Hecho.Sobre.OriginEventKey))
+            .Select(g => (IReadOnlyList<HechoDeCartera>)g.Select(x => x.Hecho).ToList())
             .ToList();
         var errores = new List<HallazgoDeCarteraDto>();
         var avisos = new List<HallazgoDeCarteraDto>();
