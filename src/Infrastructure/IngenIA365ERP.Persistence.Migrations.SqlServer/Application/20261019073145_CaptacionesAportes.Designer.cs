@@ -13,7 +13,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20261019072458_CaptacionesAportes")]
+    [Migration("20261019073145_CaptacionesAportes")]
     partial class CaptacionesAportes
     {
         /// <inheritdoc />
@@ -27979,6 +27979,9 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
 
                     b.Property<DateOnly?>("MaturedOn")
                         .HasColumnType("date");
+
+                    b.Property<string>("MaturityInstructionJson")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<int?>("MigrationLoadId")
                         .HasColumnType("int");

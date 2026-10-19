@@ -102,6 +102,13 @@ public class MemberAccount : AuditableEntity
     /// </summary>
     public string? PendingTermsJson { get; set; }
 
+    /// <summary>
+    /// US6 (T173; api.md §5 <c>PUT /term-deposits/{id}/maturity-instruction</c>; research E136): la instrucción al vencimiento que el titular cambió hasta el fin
+    /// de la gracia —prorrogar, renovar con condiciones o cancelar y pagar— con su destino, en JSON. Manda sobre la sellada en la versión de condiciones
+    /// (que es hecho y no se edita) hasta que la versión siguiente la selle o el CDAT se cancele; nula = rige la sellada.
+    /// </summary>
+    public string? MaturityInstructionJson { get; set; }
+
     // ------------------------------------------------------------------------------------------------ comportamiento --
 
     /// <summary>

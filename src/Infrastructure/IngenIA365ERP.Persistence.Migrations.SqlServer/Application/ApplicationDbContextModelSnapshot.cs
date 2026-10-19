@@ -27977,6 +27977,9 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.Property<DateOnly?>("MaturedOn")
                         .HasColumnType("date");
 
+                    b.Property<string>("MaturityInstructionJson")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<int?>("MigrationLoadId")
                         .HasColumnType("int");
 

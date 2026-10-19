@@ -27749,6 +27749,9 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.Property<DateOnly?>("MaturedOn")
                         .HasColumnType("date");
 
+                    b.Property<string>("MaturityInstructionJson")
+                        .HasColumnType("text");
+
                     b.Property<int?>("MigrationLoadId")
                         .HasColumnType("integer");
 
