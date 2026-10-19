@@ -1,0 +1,39 @@
+// Febrero de 2028 (29 dias) en real/365: el 29 causa como cualquier dia sobre la base fija de 365 (D3 de la 013).
+{
+  "nombre": "interes-07-bisiesto",
+  "descripcion": "Febrero de 2028 (29 dias) en real/365: el 29 causa como cualquier dia sobre la base fija de 365 (D3 de la 013).",
+  "condiciones": {
+    "naturaleza": "Deposit",
+    "clase": "Demand",
+    "convencion": "Actual365",
+    "equivalencia": "Compound",
+    "metodoDeSaldo": "DailyBalance",
+    "tasaEA": 0.03,
+    "saldoMinimoParaInteres": 0,
+    "unidadDeRedondeo": 1,
+    "fechaDeApertura": "2028-01-31",
+    "periodicidadDeLiquidacion": "Monthly"
+  },
+  "operaciones": [
+    {
+      "id": "c1",
+      "tipo": "Deposit",
+      "fechaValor": "2028-01-31",
+      "registradoEn": "2028-01-31T15:00:00Z",
+      "monto": 10000000
+    }
+  ],
+  "consultas": [
+    {
+      "modo": "Liquidacion",
+      "desde": "2028-01-31",
+      "fecha": "2028-02-29",
+      "informacionHasta": "2028-03-01T05:00:00Z",
+      "esperado": {
+        "interesCausado": 23486.026725,
+        "interesLiquidado": 23486,
+        "diferenciaDeRedondeo": -0.026725
+      }
+    }
+  ]
+}

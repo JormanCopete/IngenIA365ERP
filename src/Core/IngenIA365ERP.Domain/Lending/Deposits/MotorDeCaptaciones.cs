@@ -35,4 +35,11 @@ public static class MotorDeCaptaciones
     /// <summary>Lo que una operación con fecha valor anterior cambió en la serie de saldos, día por día y por concepto (FR-062).</summary>
     public static IReadOnlyList<(DateOnly Dia, MemberAccountConcept Concepto, decimal Cambio)> CambiosPorFechaValor(IEnumerable<MovimientoDeCuenta> libro,
         DateOnly desde, DateOnly hasta, DateTime antes, DateTime despues) => ReconstruccionDeCuenta.CambiosPorFechaValor(libro, desde, hasta, antes, despues);
+
+    /// <summary>US5 (T127): el interés de una ventana día por día por el método de saldo de la versión (R05).</summary>
+    public static InteresDelPeriodo Interes(EntradaDeInteres entrada) => InteresDeCaptacion.Calcular(entrada);
+
+    /// <summary>US5 (T128): la retención en la fuente sobre los rendimientos de un abono o pago de intereses (R06).</summary>
+    public static RetencionCalculada Retencion(PoliticaDeRetencion politica, EntradaDeRetencion entrada) =>
+        RetencionSobreRendimientos.Calcular(politica, entrada);
 }

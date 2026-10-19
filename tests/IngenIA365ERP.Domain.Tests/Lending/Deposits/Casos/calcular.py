@@ -13,13 +13,15 @@ Lo que calcula hoy (fase fundacional y US4 de captaciones; las historias siguien
   EquivalenciaDeTasas.TasaDiaria. Lineal: EA/B a 18 decimales.
 - Saldos por concepto a (D, R) (ReconstruccionDeCuenta, R04): suma por signo de las operaciones con fecha valor <= D y registradas
   hasta R; un reverso resta su original.
-- Interes del dia por saldo diario (D31): saldo con fecha valor al cierre del dia x tasa diaria del tramo; tramos sobre el saldo
-  entero (WholeBalance) o escalonados (Stepped); un dia bajo el minimo para interes causa cero. El acumulado se guarda a 6 decimales
-  (MontoCausado) y la liquidacion redondea a la unidad de la version; la diferencia la absorbe la misma operacion.
+- Tasa diaria lineal: NA_m / B con NA_m = m x ((1+EA)^(1/m) - 1) y m los periodos del anio de la liquidacion (EquivalenciaDeTasas).
 - GMF (US4, T109; R07, D32): por disposicion, con la politica vigente a su fecha (tarifa, tope en UVT, UVT, politica de exencion y
   hechos gravados y exentos). Exencion mensual por persona: en la cuenta marcada (SingleMarkedAccount) o en todas (PerHolderLimit),
   hasta tope - usado en el mes; valor = base gravada x tarifa al peso (mitad hacia arriba). Un reverso devuelve al tope lo que la
   original uso y espeja su valor. Casos gmf-*.json (bloque "entrada").
+- Interes de captacion (US5, T127, T129; R05): saldo diario, promedio y minimo, tramos, cambio de tasa (bloque "cambiosDeTasa" de las
+  condiciones), minimo para interes y la convencion; ver la seccion "interes diario". Casos interes-*.json (consultas).
+- Retencion en la fuente sobre rendimientos (US5, T128; R06): perfil, umbral diario, componente inflacionario y tarifa. Casos
+  retencion-*.json (bloque "entrada").
 - Cargos de cuenta (US4, T115; FR-128): gratuitos del periodo, exoneraciones (la primera que aplica), valor fijo o porcentaje al peso
   acotado por minimo y maximo, cobrado si el saldo lo deja sin bajar del minimo; si no, pendiente o condonado segun la linea. Casos
   cargo-*.json (bloque "entrada").
@@ -111,11 +113,8 @@ def raiz(x, n):
     return q((x.ln() / D(n)).exp(), 24)
 
 
-def tasa_diaria(ea, conv, equivalencia="Compound"):
-    b = base(conv)
-    if equivalencia == "Linear":
-        return q(ea / b, 18)
-    return q(raiz(1 + ea, b) - 1, 18)
+def tasa_diaria(ea, conv):
+    return q(raiz(1 + ea, base(conv)) - 1, 18)
 
 
 # ------------------------------------------------------------------------------------------------------ saldos (R04)
@@ -133,45 +132,170 @@ def saldo_a(operaciones, d, r):
 
 
 # ---------------------------------------------------------------------------------------------- interes diario (R05)
-def tasa_del_saldo(c, saldo):
-    """La EA que rige un saldo: la de la version o la del tramo (WholeBalance); escalonado se resuelve en interes_del_dia."""
-    if not c.get("tramos"):
-        return D(c["tasaEA"])
-    for t in c["tramos"]:
-        if saldo >= D(t["desde"]) and (t.get("hasta") is None or saldo <= D(t["hasta"])):
-            return D(t["ea"])
-    return D(0)
+# US5 (T127, T129): el interes de la ventana por diferencia de acumulados. Cada dia lleva la tasa que rige (la de la condicion o la del
+# ultimo cambio de tasa con desde <= dia); n = dias de la convencion entre el dia anterior y el dia. Metodos:
+#   saldo diario:   A(d) = suma_k interes(saldo_k, tasa_k, n_k)  (compuesto (1+r)^n - 1 por porcion de tramo)
+#   saldo promedio: A(d) = promedio_d x suma_k r_k(promedio_d) x n_k  (interes simple)
+#   saldo minimo:   A(d) = minimo_d x (prod_k (1 + r_k(minimo_d))^n_k - 1)
+# con r_k(B) = interes(B, tasa_k, 1) / B. Una base bajo el minimo para interes (o <= 0) causa cero. Lo causado es Seis(A(fin)).
+def periodos_por_anio(periodicidad):
+    dias_ = {"Weekly": 7, "TenDay": 10, "Biweekly": 15, "Monthly": 30, "Bimonthly": 60, "Quarterly": 90, "SemiAnnual": 180,
+             "Annual": 360}.get(periodicidad or "Monthly", 30)
+    return 360 // dias_ if 360 % dias_ == 0 else 365 // dias_
 
 
-def interes_del_dia(c, saldo):
+def tasa_diaria_c(c, ea):
     conv, eq = c.get("convencion", "Actual365"), c.get("equivalencia", "Compound")
-    if saldo <= 0 or saldo < D(c.get("saldoMinimoParaInteres", 0)):
+    if eq == "Linear":
+        m = periodos_por_anio(c.get("periodicidadDeLiquidacion"))
+        return q(D(m) * (raiz(1 + ea, m) - 1) / base(conv), 18)
+    return tasa_diaria(ea, conv)
+
+
+def tasa_del_dia(c, d):
+    """La EA y los tramos que rigen el dia d: la condicion base o el ultimo cambio de tasa con desde <= d."""
+    vigente = {"tasaEA": c.get("tasaEA"), "tramos": c.get("tramos") or [], "modoDeTramos": c.get("modoDeTramos")}
+    for cambio in sorted(c.get("cambiosDeTasa") or [], key=lambda x: fecha(x["desde"])):
+        if fecha(cambio["desde"]) <= d:
+            vigente = {"tasaEA": cambio.get("tasaEA"),
+                       "tramos": cambio.get("tramos") if cambio.get("tramos") is not None else vigente["tramos"],
+                       "modoDeTramos": cambio.get("modoDeTramos") or vigente["modoDeTramos"]}
+    return vigente
+
+
+def factor(c, r, n):
+    if n <= 0:
         return D(0)
-    if c.get("tramos") and c.get("modoDeTramos") == "Stepped":
-        total = D(0)
-        for t in c["tramos"]:
-            desde, hasta = D(t["desde"]), (D(t["hasta"]) if t.get("hasta") is not None else None)
-            if saldo <= desde:
-                continue
-            porcion = (min(saldo, hasta) if hasta is not None else saldo) - desde
-            total += porcion * tasa_diaria(D(t["ea"]), conv, eq)
+    if c.get("equivalencia", "Compound") == "Linear":
+        return r * n
+    return (1 + r) ** n - 1
+
+
+def interes_base(c, t, b, n):
+    """El interes de la base b durante n dias con la tasa t (sin el minimo para interes)."""
+    if b <= 0 or n <= 0:
+        return D(0)
+    tramos = sorted(t["tramos"], key=lambda x: D(x["desde"]))
+    if not tramos:
+        return b * factor(c, tasa_diaria_c(c, D(t["tasaEA"])), n)
+    if t.get("modoDeTramos") == "Stepped":
+        total, abajo = D(0), None
+        for i, tr in enumerate(tramos):
+            desde = D(tr["desde"]) if i == 0 else abajo
+            if b <= desde:
+                break
+            hasta = D(tr["hasta"]) if tr.get("hasta") is not None else None
+            tope = hasta if hasta is not None and hasta < b else b
+            if tope - desde > 0:
+                total += (tope - desde) * factor(c, tasa_diaria_c(c, D(tr["ea"])), n)
+            if hasta is None:
+                break
+            abajo = hasta
         return total
-    return saldo * tasa_diaria(tasa_del_saldo(c, saldo), conv, eq)
+    elegido = None
+    for tr in tramos:
+        if b >= D(tr["desde"]) and (tr.get("hasta") is None or b <= D(tr["hasta"])):
+            elegido = tr
+    if elegido is None:
+        return D(0)
+    return b * factor(c, tasa_diaria_c(c, D(elegido["ea"])), n)
+
+
+def causado_por_dia(caso, desde, hasta, r):
+    """[(dia, causado a 6 decimales)] de desde (excluida) a hasta (incluida), por diferencia de acumulados."""
+    c, ops = caso["condiciones"], caso.get("operaciones", [])
+    metodo = c.get("metodoDeSaldo", "DailyBalance")
+    minimo_interes = D(c.get("saldoMinimoParaInteres", 0))
+    conv = c.get("convencion", "Actual365")
+    exacto, anterior_seis, salida = D(0), D(0), []
+    suma, dias_prom, minimo, corridos = D(0), 0, None, []
+    anterior, d = desde, desde
+    while d < hasta:
+        d = d + dt.timedelta(days=1)
+        n = dias(conv, anterior, d)
+        anterior = d
+        saldo = saldo_a(ops, d, r)
+        t = tasa_del_dia(c, d)
+        corridos.append((t, n))
+        if n > 0:
+            suma += saldo * n
+            dias_prom += n
+        minimo = saldo if minimo is None else min(minimo, saldo)
+        if metodo == "AverageBalance":
+            b = suma / dias_prom if dias_prom else saldo
+        elif metodo == "MinimumBalance":
+            b = minimo
+        else:
+            b = saldo
+        bajo = b <= 0 or b < minimo_interes
+        if metodo == "AverageBalance":
+            exacto = D(0) if bajo else b * sum(((interes_base(c, tk, b, 1) / b) * nk for tk, nk in corridos if nk > 0), D(0))
+        elif metodo == "MinimumBalance":
+            if bajo:
+                exacto = D(0)
+            elif c.get("equivalencia", "Compound") == "Linear":
+                exacto = b * sum(((interes_base(c, tk, b, 1) / b) * nk for tk, nk in corridos if nk > 0), D(0))
+            else:
+                prod = D(1)
+                for tk, nk in corridos:
+                    if nk > 0:
+                        prod *= (1 + interes_base(c, tk, b, 1) / b) ** nk
+                exacto = b * (prod - 1)
+        else:
+            exacto += D(0) if bajo else interes_base(c, t, b, n)
+        seis = q(exacto, 6)
+        salida.append((d, seis - anterior_seis))
+        anterior_seis = seis
+    return salida
 
 
 def causado(caso, desde, hasta, r):
-    """Interes causado dia por dia de desde (excluida) a hasta (incluida), acumulado a 6 decimales (MontoCausado)."""
-    c, ops = caso["condiciones"], caso.get("operaciones", [])
-    acumulado, d = D(0), desde
-    while d < hasta:
-        d = d + dt.timedelta(days=1)
-        acumulado += interes_del_dia(c, saldo_a(ops, d, r))
-    return q(acumulado, 6)
+    """Interes causado de desde (excluida) a hasta (incluida), a 6 decimales (MontoCausado)."""
+    return sum((x for _, x in causado_por_dia(caso, desde, hasta, r)), D(0))
 
 
 def liquidado(caso, total_causado):
     unidad = D(caso["condiciones"].get("unidadDeRedondeo", 1))
     return q(total_causado / unidad, 0, ROUND_HALF_UP) * unidad
+
+
+# ------------------------------------------------------------------------------------------------- retencion (R06)
+# US5 (T128, T129): perfil (no contribuyente o autorretenedor: cero); umbral diario = umbralDiarioUvt x UVT (a 2 decimales) si alcanza a
+# la clase (AllDepositClasses: todas; ExceptTermDeposit: menos el CDAT; None: ninguna): si ningun dia lo alcanza, cero; si alguno, la base
+# es el interes total. Componente inflacionario (si la politica lo dice y el titular es persona natural no obligada): bruto x fraccion
+# a la unidad (mitad hacia arriba); retencion = (bruto - componente) x tarifa a la unidad.
+def a_unidad(x, unidad):
+    return q(x / unidad, 0, ROUND_HALF_UP) * unidad
+
+
+def esperado_retencion(caso):
+    e = caso["entrada"]
+    p, t = e["politica"], e["titular"]
+    bruto = D(e["interesBruto"])
+    unidad = D(p.get("unidadDeRedondeo", 1))
+    alcance = p.get("alcance", "ExceptTermDeposit")
+    aplica = alcance == "AllDepositClasses" or (alcance == "ExceptTermDeposit" and e["clase"] != "TermDeposit")
+    umbral = q(D(p["umbralDiarioUvt"]) * D(p["uvt"]), 2, ROUND_HALF_UP)
+    alcanzan = [x["dia"] for x in e.get("interesesDiarios", []) if aplica and D(x["interes"]) >= umbral]
+
+    def cero(motivo):
+        return {"umbralAlcanzado": len(alcanzan) > 0, "componente": D(0), "baseGravable": D(0), "valor": D(0), "motivo": motivo}
+    if bruto <= 0:
+        return cero("NoInterest")
+    if t.get("perfil") == "NonTaxpayer":
+        return cero("NonTaxpayer")
+    if t.get("perfil") == "SelfWithholder":
+        return cero("SelfWithholder")
+    if aplica and not alcanzan:
+        return cero("BelowThreshold")
+    if D(p["tarifa"]) <= 0:
+        return cero("ZeroRate")
+    componente = D(0)
+    if p.get("componenteInflacionarioAplica") and t.get("personaNaturalNoObligada") and p.get("componenteInflacionario") is not None:
+        componente = min(bruto, a_unidad(bruto * D(p["componenteInflacionario"]), unidad))
+    gravable = bruto - componente
+    valor = min(bruto, a_unidad(gravable * D(p["tarifa"]), unidad))
+    return {"umbralAlcanzado": len(alcanzan) > 0, "componente": componente, "baseGravable": gravable, "valor": valor, "motivo": None}
 
 
 # -------------------------------------------------------------------------------------------------------- consultas
@@ -279,6 +403,7 @@ def esperado_de_entrada(caso):
     nombre = caso["nombre"]
     if nombre.startswith("gmf-"): return esperado_gmf(caso)
     if nombre.startswith("cargo-"): return esperado_cargo(caso)
+    if nombre.startswith("retencion-"): return esperado_retencion(caso)
     raise ValueError(f"no se sabe calcular {nombre}")
 
 

@@ -1,0 +1,53 @@
+// Investigacion 3.3: el mismo mes por saldo minimo del periodo (1.500.000 x (1,03^(30/365) - 1)): 3.649.
+{
+  "nombre": "interes-02-saldo-minimo",
+  "descripcion": "Investigacion 3.3: el mismo mes por saldo minimo del periodo (1.500.000 x (1,03^(30/365) - 1)): 3.649.",
+  "condiciones": {
+    "naturaleza": "Deposit",
+    "clase": "Demand",
+    "convencion": "Actual365",
+    "equivalencia": "Compound",
+    "metodoDeSaldo": "MinimumBalance",
+    "tasaEA": 0.03,
+    "saldoMinimoParaInteres": 0,
+    "unidadDeRedondeo": 1,
+    "fechaDeApertura": "2026-03-31",
+    "periodicidadDeLiquidacion": "Monthly"
+  },
+  "operaciones": [
+    {
+      "id": "c1",
+      "tipo": "Deposit",
+      "fechaValor": "2026-03-31",
+      "registradoEn": "2026-03-31T15:00:00Z",
+      "monto": 2000000
+    },
+    {
+      "id": "c2",
+      "tipo": "Deposit",
+      "fechaValor": "2026-04-11",
+      "registradoEn": "2026-04-11T15:00:00Z",
+      "monto": 3000000
+    },
+    {
+      "id": "r1",
+      "tipo": "Withdrawal",
+      "fechaValor": "2026-04-21",
+      "registradoEn": "2026-04-21T15:00:00Z",
+      "monto": 3500000
+    }
+  ],
+  "consultas": [
+    {
+      "modo": "Liquidacion",
+      "desde": "2026-03-31",
+      "fecha": "2026-04-30",
+      "informacionHasta": "2026-05-01T05:00:00Z",
+      "esperado": {
+        "interesCausado": 3648.666298,
+        "interesLiquidado": 3649,
+        "diferenciaDeRedondeo": 0.333702
+      }
+    }
+  ]
+}

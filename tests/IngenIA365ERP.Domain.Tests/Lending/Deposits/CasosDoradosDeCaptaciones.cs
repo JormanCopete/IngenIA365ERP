@@ -98,6 +98,21 @@ public sealed class CasoDoradoDeCaptaciones
         public string? PeriodicidadDeIntereses { get; set; }
         public string? MomentoDeIntereses { get; set; }
         public decimal? Monto { get; set; }
+
+        /// <summary>US5 (T129): la periodicidad de liquidación (nombre de <c>RepaymentPeriodicity</c>; la equivalencia lineal la usa para su nominal).</summary>
+        public string? PeriodicidadDeLiquidacion { get; set; }
+
+        /// <summary>US5 (T129): los cambios de tasa con su fecha (una versión nueva de la línea o un reajuste), en vigor desde ese día.</summary>
+        public List<CambioDeTasaJson> CambiosDeTasa { get; set; } = [];
+    }
+
+    /// <summary>Un cambio de tasa desde una fecha: la EA nueva y, si cambian, los tramos y su modo.</summary>
+    public sealed class CambioDeTasaJson
+    {
+        public DateOnly Desde { get; set; }
+        public decimal? TasaEA { get; set; }
+        public List<TramoJson>? Tramos { get; set; }
+        public string? ModoDeTramos { get; set; }
     }
 
     /// <summary>Un tramo de tasa por saldo (y, en CDAT, por plazo y monto).</summary>

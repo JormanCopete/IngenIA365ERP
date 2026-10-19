@@ -1,0 +1,43 @@
+// P2: si el umbral alcanza tambien al CDAT, el interes diario de 2.711,6 no llega: no se retiene.
+{
+  "nombre": "retencion-06-cdat-con-umbral-en-todas-las-clases",
+  "descripcion": "P2: si el umbral alcanza tambien al CDAT, el interes diario de 2.711,6 no llega: no se retiene.",
+  "entrada": {
+    "politica": {
+      "tarifa": 0.04,
+      "umbralDiarioUvt": 0.055,
+      "uvt": 52374,
+      "alcance": "AllDepositClasses",
+      "componenteInflacionarioAplica": true,
+      "componenteInflacionario": 0.5543,
+      "unidadDeRedondeo": 1
+    },
+    "titular": {
+      "perfil": "Standard",
+      "personaNaturalNoObligada": true
+    },
+    "clase": "TermDeposit",
+    "interesBruto": 488088,
+    "interesesDiarios": [
+      {
+        "dia": "2026-01-02",
+        "interes": 2711.6
+      },
+      {
+        "dia": "2026-01-03",
+        "interes": 2711.6
+      },
+      {
+        "dia": "2026-01-04",
+        "interes": 2711.6
+      }
+    ]
+  },
+  "esperado": {
+    "umbralAlcanzado": false,
+    "componente": 0,
+    "baseGravable": 0,
+    "valor": 0,
+    "motivo": "BelowThreshold"
+  }
+}
