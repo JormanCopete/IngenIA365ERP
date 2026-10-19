@@ -428,6 +428,8 @@ public static class RolesDeCuentaDeCartera
         nameof(MemberAccountConcept.ContributionMinimum) or nameof(MemberAccountConcept.ContributionOrdinary)
             or nameof(MemberAccountConcept.ContributionExtraordinary) or nameof(MemberAccountConcept.ContributionRevaluation) => AportesSociales,
         nameof(MemberAccountConcept.ChargeReceivable) => CargoDeCuentaPorCobrar,
+        // Feature 014, US14 (T209): lo trasladado a no reclamados.
+        nameof(MemberAccountConcept.Unclaimed) => NoReclamadosPorPagar,
         _ => null,
     };
 

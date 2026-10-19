@@ -248,6 +248,11 @@ public sealed class ReversionDeCuentas(
         MemberAccountOperationKind.TermDepositRedemption => original.Payload.Contains("\"cause\":null", StringComparison.Ordinal)
             ? CdatRedimidoV1.Type
             : CdatCanceladoV1.Type,
+        // US14 (T209, T210): el traslado a no reclamados, su pago y la entrega por fallecimiento (por giro, la devolución; a una cuenta, el traslado).
+        MemberAccountOperationKind.ToUnclaimed => SaldoTrasladadoANoReclamadosV1.Type,
+        MemberAccountOperationKind.UnclaimedPayment or MemberAccountOperationKind.DeceasedDelivery => original.CounterpartMemberAccountId is not null
+            ? TrasladoEntreCuentasAplicadoV1.Type
+            : DevolucionOrdenadaV1.Type,
         _ => original.Kind.ToString(),
     };
 
@@ -266,6 +271,9 @@ public sealed class ReversionDeCuentas(
         MemberAccountOperationKind.TermDepositInterestPayment => EmisionDeCartera.ClasePagoDeInteresesDeCdat,
         MemberAccountOperationKind.TermDepositRedemption => EmisionDeCartera.ClaseRedencionDeCdat,
         MemberAccountOperationKind.GarnishmentConsignment => EmisionDeCartera.ClaseConsignacionDeEmbargo,
+        MemberAccountOperationKind.ToUnclaimed => EmisionDeCartera.ClaseTrasladoANoReclamados,
+        MemberAccountOperationKind.UnclaimedPayment => EmisionDeCartera.ClasePagoDeNoReclamados,
+        MemberAccountOperationKind.DeceasedDelivery => EmisionDeCartera.ClaseEntregaPorFallecimiento,
         _ => original.Kind.ToString(),
     };
 
