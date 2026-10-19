@@ -170,6 +170,8 @@ public class LasConsultasDeCarteraRespetanElAlcance
         "Core/IngenIA365ERP.Application/Lending/Deposits/Reports/InterestReportQueries.cs",
         // Feature 014, US8 (T146): la conciliación de captaciones toma el alcance de quien pregunta (y una sucursal fuera de él es el 404).
         "Core/IngenIA365ERP.Application/Lending/Deposits/Reports/DepositsReconciliationReportQuery.cs",
+        // Feature 014, US9 (T152): la descarga con datos de una parte de la migración sale dentro del alcance de oficina y línea de quien descarga.
+        "Core/IngenIA365ERP.Application/Lending/Deposits/Migration/GetDepositMigrationPartDataQuery.cs",
     ];
 
     /// <summary>
@@ -297,6 +299,13 @@ public class LasConsultasDeCarteraRespetanElAlcance
         // sí filtra por el alcance (es del centro de informes).
         ["ValidateSicsesFileQuery"] = "el formato del SICSES lleva toda la cartera de la cooperativa: lo valida quien lo genera (RegulatoryReports.Generate)",
         ["ValidateCreditBureauFileQuery"] = "el archivo de una central lleva toda la cartera de la cooperativa: lo valida quien lo genera (CreditBureauFiles.Generate)",
+        // Feature 014, US9 (T153–T156): la carga de migración de aportes y captaciones es de toda la cooperativa (como la de créditos): lista, detalle,
+        // cuadre por conjunto de cuentas (sin titulares), cifras de referencia por línea y concepto y el estado de la activación, sin datos de titulares.
+        ["ListDepositMigrationLoadsQuery"] = "las cargas de migración son de toda la cooperativa: partes, conteos y totales, sin titulares (Deposits.Migration)",
+        ["GetDepositMigrationLoadQuery"] = "las cargas de migración son de toda la cooperativa: partes, conteos y totales, sin titulares (Deposits.Migration)",
+        ["GetDepositMigrationBalanceCheckQuery"] = "el cuadre de la carga es de toda la cooperativa, por conjunto de cuentas y sin titulares (Reconciliation.View)",
+        ["GetDepositReferenceFiguresQuery"] = "las cifras de referencia son totales por línea y concepto de toda la cooperativa, sin titulares (Deposits.Migration)",
+        ["GetDepositsActivationStatusQuery"] = "la activación de aportes o captaciones es de toda la cooperativa: requisitos y conteos (Deposits.Activate)",
         ["ListRegulatoryFilesQuery"] = "las generaciones regulatorias son de toda la cooperativa (SICSES y centrales): se leen con RegulatoryFiles.Read",
         ["GetRegulatoryFileQuery"] = "una generación regulatoria es de toda la cooperativa (SICSES y centrales): se lee con RegulatoryFiles.Read",
     };

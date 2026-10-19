@@ -52,6 +52,22 @@ public sealed class SaldosContablesDeCaptaciones(IApplicationDbContext db)
         _ => null,
     };
 
+    /// <summary>
+    /// La combinación de un concepto de una cuenta (contabilidad.md §8.1 de la 014): el rol del concepto, la línea, la naturaleza, la clase (salvo en aportes),
+    /// la clase de aporte, la marca (sólo en el capital) y la sucursal contable de la oficina; nula si el concepto no se concilia. La comparten la conciliación
+    /// y el cuadre de la migración (US9, T154), así los dos preguntan a Contabilidad por la misma combinación.
+    /// </summary>
+    public static ClaveDeSaldoDeCartera? Clave(MemberAccountConcept concepto, bool inactiva, string linea, LineNature naturaleza, DepositClass? clase,
+        AccountFlag marca, Guid sucursal)
+    {
+        var rol = RolDelConcepto(concepto, inactiva);
+        if (rol is null) return null;
+        var marcaDelRol = rol == Capital ? marca.ToString() : null;
+        var claseDeAporte = rol == Aportes ? EmisionDeCartera.ClaseDeAporte(concepto)?.ToString() : null;
+        return new ClaveDeSaldoDeCartera(rol, linea, null, null, null, null, null, null, null, null, null, sucursal,
+            naturaleza.ToString(), rol == Aportes ? null : clase?.ToString(), null, claseDeAporte, marcaDelRol);
+    }
+
     /// <summary>Los movimientos del libro de cuentas hasta el corte con su combinación (por fecha contable), dentro del alcance si viene.</summary>
     public async Task<IReadOnlyList<MovimientoDeCombinacionDeCartera>> MovimientosAsync(DateOnly corte, AlcanceDeCartera? alcance, CancellationToken ct)
     {
@@ -83,12 +99,8 @@ public sealed class SaldosContablesDeCaptaciones(IApplicationDbContext db)
             if (!porId.TryGetValue(f.MemberAccountId, out var c)) continue;
             var rol = RolDelConcepto(f.Concept, c.Status == MemberAccountStatus.Inactive);
             if (rol is null) continue;
-            var marca = rol == Capital
-                ? (c.IsGarnished ? AccountFlag.Garnished : exentas.Contains(c.Id) ? AccountFlag.GmfExempt : AccountFlag.Standard).ToString()
-                : null;
-            var claseDeAporte = rol == Aportes ? EmisionDeCartera.ClaseDeAporte(f.Concept)?.ToString() : null;
-            var clave = new ClaveDeSaldoDeCartera(rol, c.Linea, null, null, null, null, null, null, null, null, null, c.Sucursal,
-                c.Nature.ToString(), rol == Aportes ? null : c.DepositClass?.ToString(), null, claseDeAporte, marca);
+            var marca = c.IsGarnished ? AccountFlag.Garnished : exentas.Contains(c.Id) ? AccountFlag.GmfExempt : AccountFlag.Standard;
+            var clave = Clave(f.Concept, c.Status == MemberAccountStatus.Inactive, c.Linea, c.Nature, c.DepositClass, marca, c.Sucursal)!;
             resultado.Add(new MovimientoDeCombinacionDeCartera(clave, c.Id, f.Amount, f.AccountingDate, f.MessagePublicId, f.Operacion));
         }
         return resultado;

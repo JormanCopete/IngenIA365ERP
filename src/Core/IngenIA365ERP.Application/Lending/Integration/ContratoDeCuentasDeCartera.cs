@@ -171,7 +171,11 @@ public sealed class ContratoDeCuentasDeCartera(
         if (await RecaudadorAsync(solicitud.Collector, ct) is { } noCuenta) return Rechazo<ExigiblesDeCuentasDto>(noCuenta);
 
         var exigibles = await ExigiblesAsync(solicitud.PersonPublicIds, solicitud.Date, solicitud.PeriodEnd, fechas.DeCaptacionEn(DateOnly.MaxValue), ct);
-        var respuesta = new ExigiblesDeCuentasDto(captaciones, aportes, exigibles, []);
+        // US9 (T155): las personas de una carga aplicada sin activar (contrato-de-cuentas §3.7): su cuota existe pero todavía no se puede pagar aquí.
+        var personas = await db.People.AsNoTracking().IgnoreQueryFilters().Where(p => solicitud.PersonPublicIds.Contains(p.PublicId))
+            .Select(p => new { p.Id, p.PublicId }).ToListAsync(ct);
+        var migradas = await Deposits.Migration.CargaVigenteDeCaptaciones.PersonasAsync(db, personas.Select(p => p.Id).ToList(), ct);
+        var respuesta = new ExigiblesDeCuentasDto(captaciones, aportes, exigibles, personas.Where(p => migradas.Contains(p.Id)).Select(p => p.PublicId).ToList());
         await auditoria.LecturaAsync(AuditEventTypes.LendingAccountContractListed, "Person", solicitud.PersonPublicIds.Count == 1 ? solicitud.PersonPublicIds[0] : null,
             solicitud.Collector, new { date = solicitud.Date, people = solicitud.PersonPublicIds.Count, count = exigibles.Count,
                 sha256 = HuellaDeOperacion.Calcular("Listed", respuesta) }, ct);

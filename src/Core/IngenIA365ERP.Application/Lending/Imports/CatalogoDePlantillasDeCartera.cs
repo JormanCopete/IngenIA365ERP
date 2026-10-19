@@ -348,6 +348,11 @@ public static class CatalogoDePlantillasDeCartera
         new("lending.arrears-history", "Historial de mora complementario", "Los meses de mora que faltan para la pérdida esperada.",
             ["Datos"], "/api/lending/risk/arrears-history", "Lending.Templates.View", "Lending.ArrearsHistory.Import", EntregaDeCartera.K6a, PersonalData: true,
             Risk.PlantillaDeHistorialComplementario.Definicion),
+        // Feature 014 (US9, T152): las partes de la migración de aportes y captaciones (lending.{parte}), cada una por la ruta de su carga.
+        new(MigracionDeCaptacionesClave, "Migración de aportes y captaciones por partes",
+            "Las cuentas de aportes y de ahorro vigentes al corte, con sus titulares, beneficiarios, cuotas atrasadas, exención del GMF y acumulado tributario, para revisar, cuadrar y activar.",
+            ["Datos"], "/api/lending/deposits/migration/loads", Deposits.Migration.Plantillas.DefinicionesDeMigracionDeCaptaciones.Permiso,
+            Deposits.Migration.Plantillas.DefinicionesDeMigracionDeCaptaciones.Permiso, EntregaDeCartera.K7, PersonalData: true),
         new("lending.payroll-agreements", "Convenios de pagaduría", "Pagadurías, convenios, contactos y códigos de respuesta.",
             ["Convenios", "Contactos", "CodigosDeRespuesta"], "/api/lending/payroll-agreements", "Lending.PayrollAgreements.View",
             "Lending.PayrollAgreements.Manage", EntregaDeCartera.K2, PersonalData: false, PayrollAgreementsTemplate.Definicion),
@@ -355,6 +360,9 @@ public static class CatalogoDePlantillasDeCartera
 
     /// <summary>La fila del registro de las 17 partes de la migración: cada parte es <c>lending.migration.{parte}</c> (US8, T0737).</summary>
     public const string MigracionClave = "lending.migration";
+
+    /// <summary>La fila del registro de las partes de la migración de aportes y captaciones (feature 014, US9, T152): cada parte es <c>lending.{parte}</c>.</summary>
+    public const string MigracionDeCaptacionesClave = "lending.deposits.migration";
 
     /// <summary>
     /// La definición de cualquier clave de Cartera: las del registro y las 17 partes <c>lending.migration.{parte}</c>
@@ -366,7 +374,7 @@ public static class CatalogoDePlantillasDeCartera
             : Buscar(clave)?.Definicion;
 
     /// <summary>Si la plantilla ya se descarga: tiene definición, o es la de la migración (que se descarga parte por parte).</summary>
-    public static bool Construida(PlantillaDeCartera p) => p.Definicion is not null || p.Key == MigracionClave;
+    public static bool Construida(PlantillaDeCartera p) => p.Definicion is not null || p.Key is MigracionClave or MigracionDeCaptacionesClave;
 
     /// <summary>La plantilla por clave (sin distinguir mayúsculas), o nula.</summary>
     public static PlantillaDeCartera? Buscar(string? clave) =>

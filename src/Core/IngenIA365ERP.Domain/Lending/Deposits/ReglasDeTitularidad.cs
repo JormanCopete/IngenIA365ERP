@@ -27,7 +27,8 @@ public sealed record ContextoDeTitularidad(
     bool AdmiteMenores,
     bool AdmitePersonasJuridicas,
     bool TitularMenor,
-    bool TitularJuridico);
+    bool TitularJuridico,
+    bool SoporteDiferido = false);
 
 /// <summary>Una parte ya resuelta, lista para nacer como fila de <c>LND_MemberAccountParties</c> (la proporción como fracción). (nuevo)</summary>
 public sealed record ParteResuelta(
@@ -147,7 +148,8 @@ public static class ReglasDeTitularidad
         if (c.TitularMenor || c.TitularJuridico)
         {
             var quien = c.TitularMenor ? "El titular es menor de edad" : "El titular es una persona jurídica";
-            if (representantes.Count != 1 || representantes[0].Soporte is null || string.IsNullOrWhiteSpace(representantes[0].Fundamento))
+            // US9 (T153): en la migración el soporte del representante se sube después (SoporteDiferido); el fundamento se exige igual.
+            if (representantes.Count != 1 || (representantes[0].Soporte is null && !c.SoporteDiferido) || string.IsNullOrWhiteSpace(representantes[0].Fundamento))
                 return (Array.Empty<ParteResuelta>(), new ProblemaDeCartera(CodigoRepresentanteRequerido,
                     $"{quien}: la cuenta la maneja exactamente un representante legal, con el fundamento de la representación y su soporte "
                     + (c.TitularMenor ? "(registro civil o decisión judicial) " : "(certificado de existencia y representación) ") + "como adjunto.",

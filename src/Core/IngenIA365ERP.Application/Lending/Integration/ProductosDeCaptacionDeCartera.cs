@@ -14,7 +14,7 @@ namespace IngenIA365ERP.Application.Lending.Integration;
 /// última posición del día o anterior; sin posición, el saldo.
 ///
 /// <para>Lo que todavía no puede decir: el vencimiento (<c>MaturityDate</c>) nace con las condiciones del CDAT (K9) y la carga aplicada sin activar
-/// (<c>MigratedNotActivated</c>) con la migración de captaciones (US9); hasta entonces van nulo y falso. El estado de cada naturaleza sale de su
+/// (<c>MigratedNotActivated</c>) la dice <see cref="Deposits.Migration.CargaVigenteDeCaptaciones"/> desde la migración (US9, T155). El estado de cada naturaleza sale de su
 /// fecha de activación en <c>LND_Setup</c> (T053; hasta entonces se deducía de <c>LND_Activations.Nature</c>, research E22).</para>
 /// </summary>
 public static class ProductosDeCaptacionDeCartera
@@ -66,6 +66,8 @@ public static class ProductosDeCaptacionDeCartera
             .GroupBy(p => p.MemberAccountId)
             .ToDictionary(g => g.Key, g => g.OrderByDescending(p => p.PositionDate).ThenByDescending(p => p.Version).First().AvailableBalance);
 
+        // US9 (T155): quien es titular en una carga aplicada de una naturaleza sin activar.
+        var migradas = await Deposits.Migration.CargaVigenteDeCaptaciones.PersonasAsync(db, ids, ct);
         var resultado = new List<ProductosDePersonaDto>(publicos.Count);
         foreach (var publico in publicos)
         {
@@ -88,7 +90,7 @@ public static class ProductosDeCaptacionDeCartera
                 })
                 .ToList();
             var vivas = productos.Any(p => p.Status != EstadoDeCuenta.Closed && p.Role is RolEnLaCuenta.Holder or RolEnLaCuenta.CoHolder);
-            resultado.Add(new ProductosDePersonaDto(publico, vivas, false, productos));
+            resultado.Add(new ProductosDePersonaDto(publico, vivas, migradas.Contains(personaId), productos));
         }
         return new ProductosDeCaptacionDto(captaciones, aportes, resultado);
     }

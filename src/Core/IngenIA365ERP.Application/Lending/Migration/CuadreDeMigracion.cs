@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using FluentValidation;
 using IngenIA365ERP.Application.Common.Integration.Accounting;
 using IngenIA365ERP.Application.Common.Interfaces;
@@ -36,7 +37,12 @@ public sealed record FilaDeCuadreDto(
     decimal Lending,
     decimal Accounting,
     decimal Difference,
-    bool Unresolved);
+    bool Unresolved,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Line = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Nature = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? DepositClass = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ContributionClass = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? AccountFlag = null);
 
 /// <summary>Una diferencia del cuadre o de la conciliación con su aceptación (D17). (nuevo)</summary>
 public sealed record MigrationDifferenceDto(
@@ -102,14 +108,27 @@ public sealed class CuadreDeMigracion(IApplicationDbContext db, IContabilidadPar
     {
         ArgumentNullException.ThrowIfNull(carga);
         var combinaciones = await CombinacionesAsync(carga, ct);
+        return await CompararAsync(contabilidad, carga.CutoffDate, combinaciones, ct);
+    }
+
+    /// <summary>
+    /// Compara las combinaciones de una carga con su saldo de Cartera contra Contabilidad <b>por conjunto de cuentas</b> al <paramref name="corte"/>
+    /// (<see cref="IContabilidadParaCartera.SaldosDeCuentasMapeadasAsync"/>). Feature 014 (US9, T154): lo usa también el cuadre de la migración de aportes y
+    /// captaciones, con las combinaciones de sus cuentas. Sin combinaciones, el cuadre vacío.
+    /// </summary>
+    public static async Task<Result<CuadreCalculado>> CompararAsync(IContabilidadParaCartera contabilidad, DateOnly corte,
+        IReadOnlyDictionary<ClaveDeSaldoDeCartera, decimal> combinaciones, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(contabilidad);
+        ArgumentNullException.ThrowIfNull(combinaciones);
         if (combinaciones.Count == 0) return Result.Success(Vacio());
 
-        var estado = await contabilidad.EstadoDelPeriodoAsync(carga.CutoffDate, ct);
+        var estado = await contabilidad.EstadoDelPeriodoAsync(corte, ct);
         if (estado.IsFailure) return Result.Failure<CuadreCalculado>(estado.Error);
         if (!estado.Value.AccountingInitialized) return Result.Failure<CuadreCalculado>(ErroresDeMigracion.SinContabilidad());
 
         var claves = combinaciones.Keys.ToList();
-        var mapeados = await contabilidad.SaldosDeCuentasMapeadasAsync(carga.CutoffDate, claves.Select(c => c.ComoCombinacion()).ToList(), ct);
+        var mapeados = await contabilidad.SaldosDeCuentasMapeadasAsync(corte, claves.Select(c => c.ComoCombinacion()).ToList(), ct);
         if (mapeados.IsFailure)
             return mapeados.Error.Code == "Accounting.NotInitialized"
                 ? Result.Failure<CuadreCalculado>(ErroresDeMigracion.SinContabilidad())
@@ -124,15 +143,21 @@ public sealed class CuadreDeMigracion(IApplicationDbContext db, IContabilidadPar
             var cuentas = set.Accounts.Select(a => new CuentaDelCuadreDto(a.AccountCode, a.AccountName)).OrderBy(a => a.Code, StringComparer.Ordinal).ToList();
             var contable = set.Accounts.Sum(a => a.BalanceByBranch.Sum(b => b.Balance)) * SaldosContablesDeCartera.Signo(rol);
             var deCartera = deEste.Sum(c => combinaciones[c]);
+            var deCaptaciones = deEste.Any(c => c.Naturaleza is not null);
             filas.Add(new FilaDeCuadreDto(Llave(set.RoleFamily, cuentas.Select(c => c.Code)), set.RoleFamily, Comun(deEste, c => c.Concepto) ?? rol,
                 Comun(deEste, c => c.Modalidad), Comun(deEste, c => c.Subsegmento), Comun(deEste, c => c.Categoria), cuentas, deCartera, contable,
-                deCartera - contable, Unresolved: false));
+                deCartera - contable, Unresolved: false,
+                deCaptaciones ? Comun(deEste, c => c.Linea) : null, deCaptaciones ? Comun(deEste, c => c.Naturaleza) : null,
+                deCaptaciones ? Comun(deEste, c => c.ClaseDeCaptacion) : null, deCaptaciones ? Comun(deEste, c => c.ClaseDeAporte) : null,
+                deCaptaciones ? Comun(deEste, c => c.Marca) : null));
         }
         foreach (var i in mapeados.Value.UnresolvedCombinations)
         {
             var c = claves[i];
+            var deCaptaciones = c.Naturaleza is not null;
             filas.Add(new FilaDeCuadreDto(LlaveSinRegla(c), c.Rol, c.Concepto ?? c.Rol,
-                c.Modalidad, c.Subsegmento, c.Categoria, [], combinaciones[c], 0m, combinaciones[c], Unresolved: true));
+                c.Modalidad, c.Subsegmento, c.Categoria, [], combinaciones[c], 0m, combinaciones[c], Unresolved: true,
+                deCaptaciones ? c.Linea : null, c.Naturaleza, c.ClaseDeCaptacion, c.ClaseDeAporte, c.Marca));
         }
 
         var ordenadas = filas.OrderBy(f => f.DimensionKey, StringComparer.Ordinal).ToList();
@@ -178,6 +203,8 @@ public sealed class CuadreDeMigracion(IApplicationDbContext db, IContabilidadPar
         static string B(bool? v) => v is null ? string.Empty : v.Value ? "1" : "0";
         var llave = $"SinRegla|{c.Rol}|{c.Linea}|{c.Modalidad}|{c.Subsegmento}|{c.Categoria}|{c.Concepto}|{B(c.Empleado)}|{B(c.Gracia)}|{B(c.Reestructurado)}|"
                     + $"{c.ClaseDeRecaudador}|{c.Motivo}|{c.Sucursal:N}";
+        // Feature 014 (US9, T154): las dimensiones de captaciones, sólo si la combinación es de una cuenta (las de créditos conservan su llave).
+        if (c.Naturaleza is not null) llave += $"|{c.Naturaleza}|{c.ClaseDeCaptacion}|{c.Plazo}|{c.ClaseDeAporte}|{c.Marca}";
         return llave.Length <= 300 ? llave : llave[..236] + "#" + Huella(llave);
     }
 
@@ -280,7 +307,7 @@ public sealed class GetMigrationBalanceCheckQueryHandler(IApplicationDbContext d
 {
     public async Task<Result<MigrationBalanceCheckDto>> Handle(GetMigrationBalanceCheckQuery request, CancellationToken ct)
     {
-        var carga = await db.MigrationLoads.AsNoTracking().FirstOrDefaultAsync(l => l.PublicId == request.MigrationLoadPublicId && !l.IsDeleted, ct);
+        var carga = await db.MigrationLoads.AsNoTracking().FirstOrDefaultAsync(l => l.PublicId == request.MigrationLoadPublicId && !l.IsDeleted && l.Nature == LineNature.Placement, ct);
         if (carga is null) return Result.Failure<MigrationBalanceCheckDto>(ErroresDeActivacion.CargaNoEncontrada(request.MigrationLoadPublicId));
         var estado = await contabilidad.EstadoDelPeriodoAsync(carga.CutoffDate, ct);
         if (estado.IsFailure) return Result.Failure<MigrationBalanceCheckDto>(estado.Error);

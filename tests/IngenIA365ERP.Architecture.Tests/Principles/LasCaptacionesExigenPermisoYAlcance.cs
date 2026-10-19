@@ -66,6 +66,16 @@ public class LasCaptacionesExigenPermisoYAlcance
         ["ActivateDepositsCommand"] = "la activación de captaciones es de toda la cooperativa, sin oficina ni línea (FR-116)",
         ["ActivateContributionsCommand"] = "la activación de aportes es de toda la cooperativa, sin oficina ni línea (FR-116)",
         // US4 (T117): lo manda la bandeja con el actor «Proceso de integración», sin usuario ni alcance (I-2); sólo guarda el estado de la factura.
+        // US9 (T153–T156): la carga de migración es de toda la cooperativa (como la de créditos, la 013 §29); la importación de cada parte y su descarga
+        // con datos sí aplican el alcance de quien importa (sus archivos lo nombran).
+        ["CreateDepositMigrationLoadCommand"] = "la carga de migración es de toda la cooperativa, sin oficina ni línea (como CreateMigrationLoadCommand)",
+        ["ListDepositMigrationLoadsQuery"] = "las cargas de migración son de toda la cooperativa: partes, conteos y totales, sin titulares",
+        ["GetDepositMigrationLoadQuery"] = "las cargas de migración son de toda la cooperativa: partes, conteos y totales, sin titulares",
+        ["ApplyDepositMigrationLoadCommand"] = "aplicar la carga es de toda la cooperativa: sus filas ya pasaron por el alcance de quien las importó",
+        ["GetDepositMigrationBalanceCheckQuery"] = "el cuadre de la carga es por conjunto de cuentas de toda la cooperativa, sin titulares",
+        ["GetDepositReferenceFiguresQuery"] = "las cifras de referencia son totales por línea y concepto de toda la cooperativa",
+        ["SetDepositReferenceFiguresCommand"] = "las cifras de referencia son totales por línea y concepto de toda la cooperativa",
+        ["GetDepositsActivationStatusQuery"] = "la activación es de toda la cooperativa (FR-116): requisitos y conteos",
         ["ConsumeChargeInvoiceRegisteredCommand"] = "consumo de la bandeja (Comercial informa la factura de un cargo): sin usuario, sin ruta ni alcance (I-2)",
     };
 

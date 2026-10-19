@@ -101,6 +101,28 @@ public sealed partial class EmisionDeCartera(
     }
 
     /// <summary>
+    /// Feature 014 (US9, T153; mensajes.md §4.1 de la 014): <c>CargaDeCaptacionesAplicada</c>, informativo con recibo: origen la carga, número
+    /// <c>CORTE-{naturaleza}-{aaaammdd}-{n}</c>, fecha la de aplicación, las tandas vivas y los totales por línea y concepto. No lleva ninguna cuenta contable
+    /// ni hecho de saldo: la carga sólo se guarda (FR-114). Sin guardar.
+    /// </summary>
+    public async Task<Result<IntegrationMessage>> CargaDeCaptacionesAplicadaAsync(MigrationLoad carga, IReadOnlyList<Guid> partes,
+        IReadOnlyList<IngenIA365ERP.Application.Common.Integration.Contracts.Lending.Deposits.DepositLoadTotalV1> totales, DateOnly fechaDeAplicacion, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(carga);
+        var contenido = new IngenIA365ERP.Application.Common.Integration.Contracts.Lending.Deposits.CargaDeCaptacionesAplicadaV1
+        {
+            Nature = carga.Nature.ToString(),
+            LoadPublicId = carga.PublicId,
+            CutoffDate = carga.CutoffDate,
+            Parts = partes,
+            TotalsByLineAndConcept = totales,
+        };
+        var numero = string.Create(CultureInfo.InvariantCulture, $"CORTE-{carga.Nature}-{carga.CutoffDate:yyyyMMdd}-{carga.Number}");
+        return await EmitirAsync(contenido, IngenIA365ERP.Application.Common.Integration.Contracts.Lending.Deposits.CargaDeCaptacionesAplicadaV1.Type, carga.PublicId, numero,
+            fechaDeAplicacion, ct);
+    }
+
+    /// <summary>
     /// La sucursal del sobre de una operación sin sucursal propia (mensajes.md §10.23, «sucursal principal»). Cartera no lee la
     /// configuración contable (FR-126): la principal es la primera sucursal registrada de <c>COR_Branches</c>, como en Inventario.
     /// </summary>

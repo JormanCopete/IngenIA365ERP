@@ -71,7 +71,8 @@ public class MemberAccountParty : AuditableEntity
     /// titulares, cotitulares y beneficiarios, entre 0 y 1; el límite de firma sólo en firmantes.
     /// </summary>
     public static MemberAccountParty Nueva(MemberAccount cuenta, int personaId, MemberAccountPartyRole papel, DateOnly desde, decimal? proporcion = null,
-        decimal? limiteDeFirma = null, string? fundamento = null, Guid? soporte = null, int? conjunto = null, Guid? constancia = null)
+        decimal? limiteDeFirma = null, string? fundamento = null, Guid? soporte = null, int? conjunto = null, Guid? constancia = null,
+        bool soporteDiferido = false)
     {
         ArgumentNullException.ThrowIfNull(cuenta);
         ArgumentOutOfRangeException.ThrowIfLessThan(personaId, 1);
@@ -81,7 +82,8 @@ public class MemberAccountParty : AuditableEntity
             throw new ArgumentException("Sólo titulares, cotitulares y beneficiarios tienen proporción.", nameof(proporcion));
         if (limiteDeFirma is not null && papel != MemberAccountPartyRole.Signatory)
             throw new ArgumentException("Sólo los firmantes tienen límite de firma.", nameof(limiteDeFirma));
-        if (papel == MemberAccountPartyRole.LegalRepresentative && (string.IsNullOrWhiteSpace(fundamento) || soporte is null))
+        // US9 (T155; data-model §7.1): en la migración el soporte se sube después (la cuenta queda con RequiresDataUpdate), así que sólo se difiere.
+        if (papel == MemberAccountPartyRole.LegalRepresentative && (string.IsNullOrWhiteSpace(fundamento) || (soporte is null && !soporteDiferido)))
             throw new ArgumentException("El representante legal lleva su fundamento y su soporte (FR-033).", nameof(soporte));
         if (papel == MemberAccountPartyRole.Beneficiary && conjunto is null)
             throw new ArgumentException("Un beneficiario pertenece a un conjunto (FR-034).", nameof(conjunto));
