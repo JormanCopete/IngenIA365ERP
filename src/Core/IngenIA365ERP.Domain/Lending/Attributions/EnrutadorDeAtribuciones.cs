@@ -43,6 +43,12 @@ public sealed record ReglaDeAtribucion(int Orden, string Sujeto, string NivelMin
 
     /// <summary>Causa de la novedad (K3, T0879); nulo = no importa.</summary>
     public NoveltyCause? Causa { get; init; }
+
+    /// <summary>
+    /// Feature 014, US6 (T171; data-model §1.8, R13): el criterio «puntos adicionales» de una tasa negociada (<c>AttributionRule.MaxNegotiatedSpread</c>):
+    /// la regla casa si el margen pedido lo <b>supera</b> —«más de X puntos sobre la tabla exige al menos el nivel N»—; nulo = no importa.
+    /// </summary>
+    public decimal? MargenNegociadoMaximo { get; init; }
 }
 
 /// <summary>La matriz vigente como datos: niveles y reglas. (nuevo)</summary>
@@ -69,6 +75,9 @@ public sealed record SujetoAEnrutar(string Sujeto, decimal MontoConsolidado)
     public NoveltyMechanism? Mecanismo { get; init; }
     public NoveltyCause? Causa { get; init; }
     public bool HayVinculado { get; init; }
+
+    /// <summary>Feature 014, US6 (T171): el margen pedido sobre la tasa de la tabla (fracción EA) de una tasa negociada; nulo en los demás sujetos.</summary>
+    public decimal? MargenNegociado { get; init; }
     public IReadOnlyCollection<MotivoNoExceptuable> Hallazgos { get; init; } = [];
 }
 
@@ -242,6 +251,12 @@ public static class EnrutadorDeAtribuciones
         {
             if (s.Causa != causa) return false;
             partes.Add($"causa {causa}");
+        }
+
+        if (r.MargenNegociadoMaximo is { } margen)
+        {
+            if (s.MargenNegociado is not { } pedido || pedido <= margen) return false;
+            partes.Add($"margen negociado sobre {margen.ToString("P4", Inv)}");
         }
 
         condiciones = partes.Count == 0 ? $"todo {s.Sujeto}" : string.Join(", ", partes);

@@ -84,6 +84,7 @@ public sealed class MatrizVigenteDeAtribuciones(IApplicationDbContext db)
                 Concepto = r.Concept,
                 Mecanismo = r.NoveltyMechanism,
                 Causa = r.NoveltyCause,
+                MargenNegociadoMaximo = r.MaxNegotiatedSpread,
             }).ToList());
         return new MatrizVigente(matriz, niveles, reglas, motor);
     }
