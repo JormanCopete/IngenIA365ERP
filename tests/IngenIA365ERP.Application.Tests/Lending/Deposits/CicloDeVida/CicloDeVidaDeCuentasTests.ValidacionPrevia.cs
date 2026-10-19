@@ -130,6 +130,19 @@ public sealed partial class CicloDeVidaDeCuentasTests
     }
 
     [Fact]
+    public async Task E206_sin_la_regla_de_no_reclamados_el_ciclo_no_traslada_y_deja_la_cuenta_en_los_errores()
+    {
+        var (_, id) = await InactivaParaNoReclamadosAsync();
+        Matriz(SaldoTrasladadoANoReclamadosV1Type);
+        var ciclo = new NoReclamadosDelCiclo(_a.Db, NoReclamados(), _a.C.Cerrojo, _a.C.Contexto, validacionPrevia: ValidacionPreviaDeCaptaciones());
+
+        var fallos = await ciclo.ProcesarAsync(Corrida, _a.G.HoyLocal, [id], default);
+
+        fallos.Should().ContainSingle(f => f.MemberAccountId == id && f.Codigo == NoContabilizable);
+        (await _a.Db.UnclaimedBalances.AsNoTracking().AnyAsync()).Should().BeFalse();
+    }
+
+    [Fact]
     public void E206_los_representativos_del_ciclo_de_vida_se_desglosan_en_roles_de_su_hecho()
     {
         var d = HechosRepresentativosDeCaptaciones.Dimensiones("AHVISTA", LineNature.Deposit, DepositClass.Demand, Guid.NewGuid());

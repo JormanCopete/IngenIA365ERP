@@ -435,7 +435,8 @@ public sealed class NoReclamadosDelCiclo(
     NoReclamados noReclamados,
     ICerrojoDeCartera cerrojo,
     IContextoDeLineasDeCaptacion contexto,
-    ILogger<NoReclamadosDelCiclo>? logger = null) : ISubpasoDeCaptaciones
+    ILogger<NoReclamadosDelCiclo>? logger = null,
+    ValidacionPreviaDeCaptaciones? validacionPrevia = null) : ISubpasoDeCaptaciones
 {
     private readonly ILogger _log = logger ?? (ILogger)NullLogger.Instance;
 
@@ -457,8 +458,19 @@ public sealed class NoReclamadosDelCiclo(
                 .ToListAsync(ct)
             : [];
         var fallos = new List<FalloDeCuenta>();
-        foreach (var id in conOrdenDevuelta.Concat(inactivas).Distinct().Order())
+        var aTrasladar = conOrdenDevuelta.Concat(inactivas).Distinct().Order().ToList();
+        // Pendiente de la fase 17 (research E206): el proceso pregunta a Contabilidad por la tanda, una vez por combinación; con «Bloquear» y una regla
+        // faltante la cuenta no se traslada, queda en los errores de la corrida y sale Cartera.HechoNoContabilizable.
+        var pregunta = validacionPrevia is null || aTrasladar.Count == 0
+            ? null
+            : await validacionPrevia.TandaAsync(aTrasladar, d, $"el traslado a no reclamados del {d:yyyy-MM-dd}", ct);
+        foreach (var id in aTrasladar)
         {
+            if (pregunta is not null && await pregunta.CuentaAsync(id, c => [HechosRepresentativosDeCaptaciones.TrasladoANoReclamados(c, "Process")], ct) is { } bloqueo)
+            {
+                fallos.Add(bloqueo);
+                continue;
+            }
             try
             {
                 var r = await TransaccionExplicita.EjecutarAsync(db, async () =>
