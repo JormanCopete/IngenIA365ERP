@@ -49,13 +49,15 @@ public class CatalogoDeLimitesLegalesTests
         { "APORTES_FRACCION_MINIMA", UnidadDeValorNacional.Fraccion, DireccionDeLoEstricto.Mayor, "Aportes.FraccionMinima" },
         { "APORTES_LIMITE_PARTICIPACION_PN", UnidadDeValorNacional.Fraccion, DireccionDeLoEstricto.Menor, "Aportes.LimiteParticipacionPersonaNatural" },
         { "APORTES_LIMITE_PARTICIPACION_PJ", UnidadDeValorNacional.Fraccion, DireccionDeLoEstricto.Menor, "Aportes.LimiteParticipacionPersonaJuridica" },
+        // Feature 014, US11 (T188): el límite inembargable del cobro coactivo (ET art. 837-1).
+        { "EMBARGO_COACTIVO_SMMLV", UnidadDeValorNacional.Veces, DireccionDeLoEstricto.Mayor, "" },
     };
 
     [Fact]
-    public void Son_los_treinta_y_tres_codigos_fijados_sin_repetir()
+    public void Son_los_treinta_y_cuatro_codigos_fijados_sin_repetir()
     {
-        // K6b (T1051) suma los cinco de vivienda a los veinticuatro de K1–K6a; la feature 014 (T017), los cuatro de aportes.
-        CatalogoDeLimitesLegales.Todos.Should().HaveCount(33);
+        // K6b (T1051) suma los cinco de vivienda a los veinticuatro de K1–K6a; la feature 014 (T017), los cuatro de aportes; US11 (T188), el del embargo coactivo.
+        CatalogoDeLimitesLegales.Todos.Should().HaveCount(34);
         CatalogoDeLimitesLegales.Todos.Select(l => l.Codigo).Should().OnlyHaveUniqueItems();
         CatalogoDeLimitesLegales.Todos.Select(l => l.Codigo).Should().BeEquivalentTo(Fijados.Select(f => (string)f[0]));
     }

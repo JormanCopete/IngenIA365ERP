@@ -96,6 +96,12 @@ public static class CatalogoDeLimitesLegales
     /// <summary>Fracción máxima de los ingresos familiares que puede representar la primera cuota (relación cuota-ingreso).</summary>
     public const string ViviendaCuotaIngreso = "VIVIENDA_CUOTA_INGRESO";
 
+    /// <summary>
+    /// Feature 014, US11 (T188): veces el SMMLV que protege el límite inembargable en el cobro coactivo de la DIAN y demás entidades públicas, sobre la
+    /// cuenta de ahorros más antigua de la persona natural (ET art. 837-1, modificado por la Ley 1066 de 2006, art. 9).
+    /// </summary>
+    public const string EmbargoCoactivoSmmlv = "EMBARGO_COACTIVO_SMMLV";
+
     private static readonly IReadOnlyList<LimiteLegal> Lista =
     [
         new(AvisoPrevioDias, UnidadDeValorNacional.Dias, DireccionDeLoEstricto.Mayor, "AvisoPrevio.DiasMinimos", "AvisoPrevio.DiasMinimos", "Ley 1266 de 2008; Ley 2157 de 2021"),
@@ -131,6 +137,9 @@ public static class CatalogoDeLimitesLegales
         new(AportesTopeCuotaFondoEmpleados, UnidadDeValorNacional.Fraccion, DireccionDeLoEstricto.Menor, "Aportes.TopeCuotaFondoEmpleados", "Aportes.TopeCuotaFondoEmpleados", "Ley 2496 de 2025 (fondos de empleados; investigación financiera de la feature 014 §3.5)"),
         new(AportesFraccionMinima, UnidadDeValorNacional.Fraccion, DireccionDeLoEstricto.Mayor, "Aportes.FraccionMinima", "Aportes.FraccionMinima", "Ley 2496 de 2025 (fondos de empleados; investigación financiera de la feature 014 §3.5)"),
         new(AportesLimiteParticipacionPersonaNatural, UnidadDeValorNacional.Fraccion, DireccionDeLoEstricto.Menor, "Aportes.LimiteParticipacionPersonaNatural", "Aportes.LimiteParticipacionPersonaNatural", "Ley 79 de 1988 (a validar, pregunta P12)"),
+        // Feature 014, US11 (T188): el límite inembargable del cobro coactivo (lo usa LimiteInembargable; sin parámetro de la cooperativa).
+        new(EmbargoCoactivoSmmlv, UnidadDeValorNacional.Veces, DireccionDeLoEstricto.Mayor, "Límite inembargable del embargo coactivo (RetencionDeEmbargos)", null,
+            "Estatuto Tributario art. 837-1 (Ley 1066 de 2006, art. 9)"),
         new(AportesLimiteParticipacionPersonaJuridica, UnidadDeValorNacional.Fraccion, DireccionDeLoEstricto.Menor, "Aportes.LimiteParticipacionPersonaJuridica", "Aportes.LimiteParticipacionPersonaJuridica", "Ley 79 de 1988 (a validar, pregunta P12)"),
     ];
 

@@ -540,6 +540,10 @@ public interface IApplicationDbContext
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.MemberAccount> MemberAccounts { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.MemberAccountParty> MemberAccountParties { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.GmfExemptAccount> GmfExemptAccounts { get; }
+    // Feature 014, US11 (T187): bloqueos, embargos y respuestas al juzgado.
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Restrictions.AccountHold> AccountHolds { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Restrictions.Garnishment> Garnishments { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Restrictions.GarnishmentResponse> GarnishmentResponses { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.AccountInstallment> AccountInstallments { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.AccountInstallmentNonDeduction> AccountInstallmentNonDeductions { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.ContributionRequest> ContributionRequests { get; }
@@ -568,6 +572,7 @@ public interface IApplicationDbContext
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Migration.MigrationAccountPartyRow> MigrationAccountPartyRows { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Migration.MigrationAccountInstallmentRow> MigrationAccountInstallmentRows { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Migration.MigrationGmfExemptionRow> MigrationGmfExemptionRows { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Migration.MigrationHoldRow> MigrationHoldRows { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Migration.MigrationTaxYearRow> MigrationTaxYearRows { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Configuration.DepositLineCharge> DepositLineCharges { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.AccountCharge> AccountCharges { get; }

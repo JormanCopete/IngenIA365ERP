@@ -162,6 +162,35 @@ public class MigrationGmfExemptionRowConfiguration : IEntityTypeConfiguration<Mi
     }
 }
 
+/// <summary><c>LND_MigrationHoldRows</c> (parte <c>holds-and-garnishments</c>; US11, T187).</summary>
+public class MigrationHoldRowConfiguration : IEntityTypeConfiguration<MigrationHoldRow>
+{
+    public const string Tabla = "LND_MigrationHoldRows";
+
+    public void Configure(EntityTypeBuilder<MigrationHoldRow> builder)
+    {
+        builder.ComoEntidadDeCartera(Tabla);
+        builder.Property(e => e.RowNumber).IsRequired();
+        builder.Property(e => e.SourceAccountNumber).HasMaxLength(30).IsRequired();
+        builder.Property(e => e.Kind).HasMaxLength(20).IsRequired();
+        builder.Property(e => e.Reference).HasMaxLength(40).IsRequired();
+        builder.Property(e => e.Reason).HasConversion<int?>();
+        builder.Property(e => e.LoanNumber).HasMaxLength(30);
+        builder.Property(e => e.Amount).Monto();
+        builder.Property(e => e.ValidFrom).IsRequired();
+        builder.Property(e => e.Authority).HasConversion<int?>();
+        builder.Property(e => e.ProcessNumber).HasMaxLength(40);
+        builder.Property(e => e.ClaimantName).HasMaxLength(200);
+        builder.Property(e => e.MeasureAmount).Monto();
+        builder.Property(e => e.RetainedAmount).Monto();
+
+        builder.HasOne<MigrationLoadPart>().WithMany().HasForeignKey(e => e.MigrationLoadPartId).OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("FK_LND_MigrationHoldRows_Part");
+        builder.HasOne<Person>().WithMany().HasForeignKey(e => e.CourtPersonId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasIndex(e => new { e.MigrationLoadPartId, e.RowNumber }).IsUnique().HasDatabaseName("UK_LND_MigrationHoldRows_Part_Row");
+    }
+}
+
 /// <summary><c>LND_MigrationTaxYearRows</c> (parte <c>tax-year-to-date</c>).</summary>
 public class MigrationTaxYearRowConfiguration : IEntityTypeConfiguration<MigrationTaxYearRow>
 {

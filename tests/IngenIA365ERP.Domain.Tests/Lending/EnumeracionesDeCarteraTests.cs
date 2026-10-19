@@ -276,6 +276,9 @@ public class EnumeracionesDeCarteraTests
         [typeof(PayoutPurpose)] = [("Withdrawal", 1), ("ContributionRefund", 2), ("DeceasedDelivery", 3), ("TermDepositInterest", 4),
             ("TermDepositRedemption", 5), ("GarnishmentConsignment", 6), ("Cancellation", 7)],
         [typeof(GarnishmentStatus)] = [("Registered", 1), ("Active", 2), ("Released", 3), ("Rejected", 4)],
+        // US11 (T187; research E161): la autoridad que embarga y sobre qué cuentas recae.
+        [typeof(GarnishmentAuthority)] = [("Court", 1), ("TaxAuthority", 2), ("OtherPublicEntity", 3)],
+        [typeof(GarnishmentAccountsScope)] = [("AllSavings", 1), ("Specific", 2)],
         [typeof(GarnishmentResponseKind)] = [("Acknowledgement", 1), ("BalanceReport", 2), ("ContributionsNotGarnishable", 3),
             ("ConsignmentNotice", 4), ("ReleaseAcknowledgement", 5)],
         [typeof(MembershipWithdrawalLineKind)] = [("ContributionBalance", 1), ("SavingsBalance", 2), ("TermDepositBalance", 3),

@@ -96,6 +96,7 @@
     { "code": "LIMITE", "key": "VIVIENDA_FINANCIABLE_VIS", "validFrom": "2026-01-01", "value": 0.80, "unit": "Fraccion", "source": "Decreto 145 de 2000 (compilado en el Decreto 2555 de 2010): hasta el 80 % del valor de la vivienda de interés social (valor semilla, pendiente de validar)" },
     { "code": "LIMITE", "key": "APORTES_TOPE_CUOTA_FONDO_EMPLEADOS", "validFrom": "2026-01-01", "value": 0.10, "unit": "Fraccion", "source": "Ley 2496 de 2025: la cuota obligatoria de los fondos de empleados no supera el 10 % del ingreso (feature 014; valor semilla, pendiente de validar)" },
     { "code": "LIMITE", "key": "APORTES_FRACCION_MINIMA", "validFrom": "2026-01-01", "value": 0.10, "unit": "Fraccion", "source": "Ley 2496 de 2025: al menos una décima parte de la cuota va a aportes (feature 014; valor semilla, pendiente de validar)" },
+    { "code": "LIMITE", "key": "EMBARGO_COACTIVO_SMMLV", "validFrom": "2026-01-01", "value": 25, "unit": "Veces", "source": "Estatuto Tributario art. 837-1 (Ley 1066 de 2006, art. 9): en el cobro coactivo son inembargables 25 SMMLV de la cuenta de ahorros más antigua de la persona natural (feature 014, US11; valor semilla, pendiente de validar)" },
     { "code": "LIMITE", "key": "VIVIENDA_CUOTA_INGRESO", "validFrom": "2026-01-01", "value": 0.30, "unit": "Fraccion", "source": "Decreto 145 de 2000 (compilado en el Decreto 2555 de 2010): la primera cuota no supera el 30 % de los ingresos familiares (valor semilla, pendiente de validar)" }
   ],
   "holidays": {

@@ -226,6 +226,24 @@ public static class ParametrosDeCartera
     /// <summary>Orden en que se embargan las cuentas por clase (JSON; R23).</summary>
     public const string EmbargosOrdenDeCuentas = "Embargos.OrdenDeCuentas";
 
+    /// <summary>US11 (T188): las clases de captación que protege el límite inembargable (JSON; research E156).</summary>
+    public const string EmbargosClasesProtegidas = "Embargos.ClasesProtegidas";
+
+    /// <summary>US11 (T188): las clases de captación que no se embargan por estatuto o ley (JSON; research E156).</summary>
+    public const string EmbargosClasesInembargables = "Embargos.ClasesInembargables";
+
+    /// <summary>US11 (T188): cómo se aplica el límite por autoridad (JSON; research E156).</summary>
+    public const string EmbargosAplicacionDelLimite = "Embargos.AplicacionDelLimite";
+
+    /// <summary>US11 (T188): el límite sólo protege a las personas naturales (research E156).</summary>
+    public const string EmbargosLimiteSoloPersonasNaturales = "Embargos.LimiteSoloPersonasNaturales";
+
+    /// <summary>US11 (T189): días hábiles para responder el oficio (informativo; research E157).</summary>
+    public const string EmbargosDiasHabilesParaResponder = "Embargos.DiasHabilesParaResponder";
+
+    /// <summary>US11 (T189): las plantillas de las respuestas al juzgado (JSON por clase de respuesta; research E158).</summary>
+    public const string EmbargosPlantillasDeRespuesta = "Embargos.PlantillasDeRespuesta";
+
     /// <summary>Días hacia atrás que admite la fecha valor de una operación de cuenta (D11).</summary>
     public const string CaptacionesDiasMaximosFechaValor = "Captaciones.DiasMaximosFechaValor";
 
@@ -730,6 +748,45 @@ public static class ParametrosDeCartera
             string.Empty, K8, patron: @"(?s)^\s*\[.*\]\s*$", admiteVacio: true) with
         {
             PendienteDeValidar = "Sin valor (pregunta P5): lo fija la cooperativa.",
+        },
+        // US11 (T188, T189; research §20): el límite inembargable y la respuesta al juzgado, todo por entidad y «pendiente de validar» por el abogado.
+        Texto(EmbargosClasesProtegidas,
+            "Clases de captación que protege el límite inembargable de los depósitos de ahorro, en JSON [clase, …]. El CDAT no es depósito de ahorro.",
+            "[\"Demand\", \"Contractual\", \"Permanent\"]", K8, patron: @"(?s)^\s*\[.*\]\s*$") with
+        {
+            PendienteDeValidar = "CGP art. 594 num. 2 (depósitos de ahorro): el abogado confirma qué productos de la cooperativa son de ahorro.",
+        },
+        Texto(EmbargosClasesInembargables,
+            "Clases de captación que no se embargan nunca por estatuto o ley, en JSON [clase, …] (en un fondo de empleados, el ahorro permanente). "
+            + "Los aportes no se embargan siempre (Ley 79 de 1988, art. 49).",
+            "[]", K8, patron: @"(?s)^\s*\[.*\]\s*$") with
+        {
+            PendienteDeValidar = "Vacío: en un fondo de empleados el abogado debe poner [\"Permanent\"] (Decreto Ley 1481 de 1989, art. 16, modificado por la Ley 2496 de 2025).",
+        },
+        Texto(EmbargosAplicacionDelLimite,
+            "Cómo protege el límite cada autoridad, en JSON { autoridad: AllProtectedAccounts | OldestAccount } con Court, TaxAuthority y OtherPublicEntity.",
+            "{\"Court\": \"AllProtectedAccounts\", \"TaxAuthority\": \"OldestAccount\", \"OtherPublicEntity\": \"OldestAccount\"}", K8,
+            patron: @"(?s)^\s*\{.*\}\s*$") with
+        {
+            PendienteDeValidar = "Judicial sobre la suma de las cuentas (D20); coactivo sobre la cuenta más antigua (ET art. 837-1): a validar por el abogado.",
+        },
+        SiNo(Modulo, EmbargosLimiteSoloPersonasNaturales,
+            "El límite inembargable sólo protege a las personas naturales: una persona jurídica se embarga sin límite.", true, K8, General) with
+        {
+            PendienteDeValidar = "D20 de la spec y ET art. 837-1 (personas naturales): a validar por el abogado para el embargo judicial.",
+        },
+        Entero(Modulo, EmbargosDiasHabilesParaResponder,
+            "Días hábiles desde el recibo del oficio para responder y poner a disposición lo retenido. Informativo: avisa, no bloquea.", "3", K8, General) with
+        {
+            Minimo = 0m, PendienteDeValidar = "CGP art. 593 num. 10 (tres días): a validar por el abogado.",
+        },
+        Texto(EmbargosPlantillasDeRespuesta,
+            "Texto de cada respuesta al juzgado, en JSON { clase: texto } con las clases Acknowledgement, BalanceReport, ContributionsNotGarnishable, "
+            + "ConsignmentNotice y ReleaseAcknowledgement; variables {Oficio}, {Proceso}, {Autoridad}, {Embargado}, {Documento}, {Demandante}, {Valor}, "
+            + "{Retenido}, {Consignado}, {Fecha}, {Cuentas}. Sin texto para una clase rige el estándar.",
+            "{}", K8, patron: @"(?s)^\s*\{.*\}\s*$") with
+        {
+            PendienteDeValidar = "Vacío: rigen los textos estándar; el abogado de la cooperativa los ajusta.",
         },
 
         // Retiro, fallecimiento, no reclamados y abandonadas (FR-038, FR-079, FR-081, FR-082, FR-084; C26).

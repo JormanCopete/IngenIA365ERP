@@ -118,6 +118,13 @@ public class ParametrosDeCarteraTests
         { "Captaciones.DiasDeCanjePorClaseDeMedio", "{\"Check\": 3, \"*\": 0}", [N], EntregaDeCartera.K8 },
         { "Efectivo.UmbralDeclaracion", "", [N], EntregaDeCartera.K7 },
         { "Embargos.OrdenDeCuentas", "", [N], EntregaDeCartera.K8 },
+        // US11 (T188, T189; research E156): el límite inembargable y la respuesta al juzgado.
+        { "Embargos.ClasesProtegidas", "[\"Demand\", \"Contractual\", \"Permanent\"]", [N], EntregaDeCartera.K8 },
+        { "Embargos.ClasesInembargables", "[]", [N], EntregaDeCartera.K8 },
+        { "Embargos.AplicacionDelLimite", "{\"Court\": \"AllProtectedAccounts\", \"TaxAuthority\": \"OldestAccount\", \"OtherPublicEntity\": \"OldestAccount\"}", [N], EntregaDeCartera.K8 },
+        { "Embargos.LimiteSoloPersonasNaturales", "true", [N], EntregaDeCartera.K8 },
+        { "Embargos.DiasHabilesParaResponder", "3", [N], EntregaDeCartera.K8 },
+        { "Embargos.PlantillasDeRespuesta", "{}", [N], EntregaDeCartera.K8 },
         { "Captaciones.AnticipacionAvisoCambioDeTasaDias", "", [N], EntregaDeCartera.K8 },
         { "Captaciones.DiasPlazoDevolucionAportes", "", [N], EntregaDeCartera.K7 },
         { "Captaciones.DiasParaNoReclamados", "", [N], EntregaDeCartera.K10 },
@@ -156,8 +163,9 @@ public class ParametrosDeCarteraTests
         var posteriores = ParametrosDeCartera.Definiciones.Where(d => d.DisponibleDesde > (EntregaDeModulo)EntregaDeCartera.K6b).ToList();
 
         // Feature 014 (T017): las claves de captaciones y aportes existen desde ya con su entrega (K7 a K11) y no se ofrecen hasta que salga.
-        // Fase 8 de la 014 (US5, research E94): 33 con Retencion.Redondeo; fase 13 (US7, T182): 34 con la gracia de la cuota del contractual.
-        posteriores.Should().HaveCount(34).And.OnlyContain(d => d.DisponibleDesde >= (EntregaDeModulo)EntregaDeCartera.K7
+        // Fase 8 de la 014 (US5, research E94): 33 con Retencion.Redondeo; fase 13 (US7, T182): 34 con la gracia de la cuota del contractual;
+        // fase 14 (US11, T188, T189): 40 con las seis de embargos.
+        posteriores.Should().HaveCount(40).And.OnlyContain(d => d.DisponibleDesde >= (EntregaDeModulo)EntregaDeCartera.K7
             && d.DisponibleDesde <= (EntregaDeModulo)EntregaDeCartera.K11);
         ParametrosDeCartera.Definiciones.Where(d => d.DisponibleDesde == (EntregaDeModulo)EntregaDeCartera.K6b).Should().BeEmpty("la vivienda no trae claves");
         ParametrosDeCartera.Definiciones.Where(d => d.DisponibleDesde == (EntregaDeModulo)EntregaDeCartera.K6a).Select(d => d.Clave).Should()

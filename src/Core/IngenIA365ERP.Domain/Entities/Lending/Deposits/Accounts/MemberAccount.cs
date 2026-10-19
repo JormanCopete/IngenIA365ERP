@@ -91,6 +91,16 @@ public class MemberAccount : AuditableEntity
     /// <summary><c>TotalGarnishment</c> o <c>Deceased</c>.</summary>
     public string? AccrualSuspensionReason { get; set; }
 
+    /// <summary>
+    /// US11 (T189; FR-065; research E160): desde qué día vuelve a causar una cuenta cuya suspensión terminó (el desembargo o la consignación que deja de cubrir
+    /// todo el saldo). Los días entre <see cref="AccrualSuspendedSince"/> y éste siguen suspendidos, así la ventana de causación no los recalcula.
+    /// </summary>
+    public DateOnly? AccrualResumedOn { get; set; }
+
+    /// <summary>¿Está suspendida la causación el <paramref name="dia"/> por su marca? (FR-065).</summary>
+    public bool SuspendidaEl(DateOnly dia) =>
+        AccrualSuspendedSince is { } desde && desde <= dia && (AccrualResumedOn is not { } reanuda || dia < reanuda);
+
     /// <summary>Número de origen en la migración (búsqueda; no identifica).</summary>
     public string? SourceAccountNumber { get; set; }
 

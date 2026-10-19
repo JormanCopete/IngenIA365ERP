@@ -5069,11 +5069,496 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     SELECT 1 FROM dbo."COR_IntegrationParticipantAdoptions" a
                     WHERE a."ParticipantId" = p."Id" AND a."ContractName" = 'RetiroDeAsociadoAprobado' AND a."Version" = 1);
                 """);
+
+            // US11 (T187): bloqueos, embargos, respuestas al juzgado y la parte de bloqueos y embargos de la migración de saldos.
+            migrationBuilder.AddColumn<DateOnly>(
+                name: "AccrualResumedOn",
+                schema: "dbo",
+                table: "LND_MemberAccounts",
+                type: "date",
+                nullable: true);
+
+            migrationBuilder.AddColumn<int>(
+                name: "GarnishmentId",
+                schema: "dbo",
+                table: "LND_MemberAccountOperations",
+                type: "integer",
+                nullable: true);
+
+            migrationBuilder.CreateTable(
+                name: "LND_Garnishments",
+                schema: "dbo",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    PersonId = table.Column<int>(type: "integer", nullable: false),
+                    Authority = table.Column<int>(type: "integer", nullable: false),
+                    CourtPersonId = table.Column<int>(type: "integer", nullable: false),
+                    CourtName = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
+                    CourtCode = table.Column<string>(type: "character varying(30)", maxLength: 30, nullable: true),
+                    ProcessNumber = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
+                    OrderNumber = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
+                    OrderDate = table.Column<DateOnly>(type: "date", nullable: false),
+                    ReceivedOn = table.Column<DateOnly>(type: "date", nullable: false),
+                    ClaimantName = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
+                    ClaimantTaxId = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: true),
+                    ClaimantPersonId = table.Column<int>(type: "integer", nullable: true),
+                    Amount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: true),
+                    IsChildSupport = table.Column<bool>(type: "boolean", nullable: false),
+                    AccountsScope = table.Column<int>(type: "integer", nullable: false),
+                    SpecificAccountIdsJson = table.Column<string>(type: "text", nullable: true),
+                    IncludesContributions = table.Column<bool>(type: "boolean", nullable: false),
+                    DestinationBankId = table.Column<int>(type: "integer", nullable: true),
+                    DestinationBankAccountNumber = table.Column<string>(type: "character varying(25)", maxLength: 25, nullable: true),
+                    OrderAttachmentPublicId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Status = table.Column<int>(type: "integer", nullable: false),
+                    ResponseDueOn = table.Column<DateOnly>(type: "date", nullable: true),
+                    RegisteredByUserId = table.Column<int>(type: "integer", nullable: true),
+                    RegisteredAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    Notes = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
+                    ReleaseOrderNumber = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: true),
+                    ReleaseOrderDate = table.Column<DateOnly>(type: "date", nullable: true),
+                    ReleasedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    ReleasedByUserId = table.Column<int>(type: "integer", nullable: true),
+                    ReleaseAttachmentPublicId = table.Column<Guid>(type: "uuid", nullable: true),
+                    ReleaseReason = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
+                    xmin = table.Column<uint>(type: "xid", rowVersion: true, nullable: false),
+                    PublicId = table.Column<Guid>(type: "uuid", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    DeletedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_LND_Garnishments", x => x.Id);
+                    table.CheckConstraint("CK_LND_Garnishments_Amount", "\"Amount\" IS NULL OR \"Amount\" > 0");
+                    table.ForeignKey(
+                        name: "FK_LND_Garnishments_COR_Banks_DestinationBankId",
+                        column: x => x.DestinationBankId,
+                        principalSchema: "dbo",
+                        principalTable: "COR_Banks",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_LND_Garnishments_COR_People_ClaimantPersonId",
+                        column: x => x.ClaimantPersonId,
+                        principalSchema: "dbo",
+                        principalTable: "COR_People",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_LND_Garnishments_COR_People_CourtPersonId",
+                        column: x => x.CourtPersonId,
+                        principalSchema: "dbo",
+                        principalTable: "COR_People",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_LND_Garnishments_COR_People_PersonId",
+                        column: x => x.PersonId,
+                        principalSchema: "dbo",
+                        principalTable: "COR_People",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_LND_Garnishments_SEC_Users_RegisteredByUserId",
+                        column: x => x.RegisteredByUserId,
+                        principalSchema: "dbo",
+                        principalTable: "SEC_Users",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_LND_Garnishments_SEC_Users_ReleasedByUserId",
+                        column: x => x.ReleasedByUserId,
+                        principalSchema: "dbo",
+                        principalTable: "SEC_Users",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "LND_MigrationHoldRows",
+                schema: "dbo",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    MigrationLoadPartId = table.Column<int>(type: "integer", nullable: false),
+                    RowNumber = table.Column<int>(type: "integer", nullable: false),
+                    SourceAccountNumber = table.Column<string>(type: "character varying(30)", maxLength: 30, nullable: false),
+                    Kind = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
+                    Reference = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
+                    Reason = table.Column<int>(type: "integer", nullable: true),
+                    LoanNumber = table.Column<string>(type: "character varying(30)", maxLength: 30, nullable: true),
+                    Amount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: true),
+                    IsTotal = table.Column<bool>(type: "boolean", nullable: false),
+                    ValidFrom = table.Column<DateOnly>(type: "date", nullable: false),
+                    CourtPersonId = table.Column<int>(type: "integer", nullable: true),
+                    Authority = table.Column<int>(type: "integer", nullable: true),
+                    ProcessNumber = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: true),
+                    ClaimantName = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true),
+                    MeasureAmount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: true),
+                    IsChildSupport = table.Column<bool>(type: "boolean", nullable: false),
+                    OrderDate = table.Column<DateOnly>(type: "date", nullable: true),
+                    RetainedAmount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: true),
+                    xmin = table.Column<uint>(type: "xid", rowVersion: true, nullable: false),
+                    PublicId = table.Column<Guid>(type: "uuid", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    DeletedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_LND_MigrationHoldRows", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_LND_MigrationHoldRows_COR_People_CourtPersonId",
+                        column: x => x.CourtPersonId,
+                        principalSchema: "dbo",
+                        principalTable: "COR_People",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_LND_MigrationHoldRows_Part",
+                        column: x => x.MigrationLoadPartId,
+                        principalSchema: "dbo",
+                        principalTable: "LND_MigrationLoadParts",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "LND_AccountHolds",
+                schema: "dbo",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    MemberAccountId = table.Column<int>(type: "integer", nullable: false),
+                    Reason = table.Column<int>(type: "integer", nullable: false),
+                    Amount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: true),
+                    LoanId = table.Column<int>(type: "integer", nullable: true),
+                    CollateralId = table.Column<int>(type: "integer", nullable: true),
+                    GarnishmentId = table.Column<int>(type: "integer", nullable: true),
+                    ValidFrom = table.Column<DateOnly>(type: "date", nullable: false),
+                    ValidTo = table.Column<DateOnly>(type: "date", nullable: true),
+                    Notes = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
+                    SupportAttachmentPublicId = table.Column<Guid>(type: "uuid", nullable: true),
+                    PlacedByUserId = table.Column<int>(type: "integer", nullable: true),
+                    ReleasedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    ReleasedByUserId = table.Column<int>(type: "integer", nullable: true),
+                    ReleaseReason = table.Column<string>(type: "character varying(300)", maxLength: 300, nullable: true),
+                    xmin = table.Column<uint>(type: "xid", rowVersion: true, nullable: false),
+                    PublicId = table.Column<Guid>(type: "uuid", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    DeletedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_LND_AccountHolds", x => x.Id);
+                    table.CheckConstraint("CK_LND_AccountHolds_Amount", "\"Amount\" IS NULL OR \"Amount\" > 0");
+                    table.ForeignKey(
+                        name: "FK_LND_AccountHolds_LND_Collaterals_CollateralId",
+                        column: x => x.CollateralId,
+                        principalSchema: "dbo",
+                        principalTable: "LND_Collaterals",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_LND_AccountHolds_LND_Garnishments_GarnishmentId",
+                        column: x => x.GarnishmentId,
+                        principalSchema: "dbo",
+                        principalTable: "LND_Garnishments",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_LND_AccountHolds_LND_Loans_LoanId",
+                        column: x => x.LoanId,
+                        principalSchema: "dbo",
+                        principalTable: "LND_Loans",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_LND_AccountHolds_LND_MemberAccounts_MemberAccountId",
+                        column: x => x.MemberAccountId,
+                        principalSchema: "dbo",
+                        principalTable: "LND_MemberAccounts",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_LND_AccountHolds_SEC_Users_PlacedByUserId",
+                        column: x => x.PlacedByUserId,
+                        principalSchema: "dbo",
+                        principalTable: "SEC_Users",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_LND_AccountHolds_SEC_Users_ReleasedByUserId",
+                        column: x => x.ReleasedByUserId,
+                        principalSchema: "dbo",
+                        principalTable: "SEC_Users",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "LND_GarnishmentResponses",
+                schema: "dbo",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    GarnishmentId = table.Column<int>(type: "integer", nullable: false),
+                    Kind = table.Column<int>(type: "integer", nullable: false),
+                    IssuedDocumentId = table.Column<int>(type: "integer", nullable: true),
+                    AttachmentPublicId = table.Column<Guid>(type: "uuid", nullable: true),
+                    SentOn = table.Column<DateOnly>(type: "date", nullable: false),
+                    RetainedAmount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: true),
+                    ConsignedAmount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: true),
+                    Text = table.Column<string>(type: "character varying(4000)", maxLength: 4000, nullable: true),
+                    RespondedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    RespondedByUserId = table.Column<int>(type: "integer", nullable: false),
+                    xmin = table.Column<uint>(type: "xid", rowVersion: true, nullable: false),
+                    PublicId = table.Column<Guid>(type: "uuid", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    DeletedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_LND_GarnishmentResponses", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_LND_GarnishmentResponses_IssuedDocument",
+                        column: x => x.IssuedDocumentId,
+                        principalSchema: "dbo",
+                        principalTable: "LND_IssuedDocuments",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_LND_GarnishmentResponses_LND_Garnishments_GarnishmentId",
+                        column: x => x.GarnishmentId,
+                        principalSchema: "dbo",
+                        principalTable: "LND_Garnishments",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_LND_GarnishmentResponses_SEC_Users_RespondedByUserId",
+                        column: x => x.RespondedByUserId,
+                        principalSchema: "dbo",
+                        principalTable: "SEC_Users",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_MemberAccountOperations_Garnishment",
+                schema: "dbo",
+                table: "LND_MemberAccountOperations",
+                column: "GarnishmentId",
+                filter: "\"GarnishmentId\" IS NOT NULL");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_AccountHolds_CollateralId",
+                schema: "dbo",
+                table: "LND_AccountHolds",
+                column: "CollateralId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_AccountHolds_Garnishment",
+                schema: "dbo",
+                table: "LND_AccountHolds",
+                column: "GarnishmentId",
+                filter: "\"GarnishmentId\" IS NOT NULL");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_AccountHolds_Live",
+                schema: "dbo",
+                table: "LND_AccountHolds",
+                column: "MemberAccountId",
+                filter: "\"ReleasedAt\" IS NULL");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_AccountHolds_Loan",
+                schema: "dbo",
+                table: "LND_AccountHolds",
+                column: "LoanId",
+                filter: "\"LoanId\" IS NOT NULL");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_AccountHolds_PlacedByUserId",
+                schema: "dbo",
+                table: "LND_AccountHolds",
+                column: "PlacedByUserId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_AccountHolds_ReleasedByUserId",
+                schema: "dbo",
+                table: "LND_AccountHolds",
+                column: "ReleasedByUserId");
+
+            migrationBuilder.CreateIndex(
+                name: "UK_LND_AccountHolds_PublicId",
+                schema: "dbo",
+                table: "LND_AccountHolds",
+                column: "PublicId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_GarnishmentResponses_Garnishment",
+                schema: "dbo",
+                table: "LND_GarnishmentResponses",
+                column: "GarnishmentId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_GarnishmentResponses_IssuedDocumentId",
+                schema: "dbo",
+                table: "LND_GarnishmentResponses",
+                column: "IssuedDocumentId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_GarnishmentResponses_RespondedByUserId",
+                schema: "dbo",
+                table: "LND_GarnishmentResponses",
+                column: "RespondedByUserId");
+
+            migrationBuilder.CreateIndex(
+                name: "UK_LND_GarnishmentResponses_PublicId",
+                schema: "dbo",
+                table: "LND_GarnishmentResponses",
+                column: "PublicId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_Garnishments_ClaimantPersonId",
+                schema: "dbo",
+                table: "LND_Garnishments",
+                column: "ClaimantPersonId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_Garnishments_CourtPersonId",
+                schema: "dbo",
+                table: "LND_Garnishments",
+                column: "CourtPersonId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_Garnishments_DestinationBankId",
+                schema: "dbo",
+                table: "LND_Garnishments",
+                column: "DestinationBankId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_Garnishments_Person_Status",
+                schema: "dbo",
+                table: "LND_Garnishments",
+                columns: new[] { "PersonId", "Status" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_Garnishments_RegisteredByUserId",
+                schema: "dbo",
+                table: "LND_Garnishments",
+                column: "RegisteredByUserId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_Garnishments_ReleasedByUserId",
+                schema: "dbo",
+                table: "LND_Garnishments",
+                column: "ReleasedByUserId");
+
+            migrationBuilder.CreateIndex(
+                name: "UK_LND_Garnishments_PublicId",
+                schema: "dbo",
+                table: "LND_Garnishments",
+                column: "PublicId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_MigrationHoldRows_CourtPersonId",
+                schema: "dbo",
+                table: "LND_MigrationHoldRows",
+                column: "CourtPersonId");
+
+            migrationBuilder.CreateIndex(
+                name: "UK_LND_MigrationHoldRows_Part_Row",
+                schema: "dbo",
+                table: "LND_MigrationHoldRows",
+                columns: new[] { "MigrationLoadPartId", "RowNumber" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "UK_LND_MigrationHoldRows_PublicId",
+                schema: "dbo",
+                table: "LND_MigrationHoldRows",
+                column: "PublicId",
+                unique: true);
+
+            migrationBuilder.AddForeignKey(
+                name: "FK_LND_MemberAccountOperations_Garnishment",
+                schema: "dbo",
+                table: "LND_MemberAccountOperations",
+                column: "GarnishmentId",
+                principalSchema: "dbo",
+                principalTable: "LND_Garnishments",
+                principalColumn: "Id",
+                onDelete: ReferentialAction.Restrict);
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            // US11 (T187): lo de bloqueos y embargos primero.
+            migrationBuilder.DropForeignKey(
+                name: "FK_LND_MemberAccountOperations_Garnishment",
+                schema: "dbo",
+                table: "LND_MemberAccountOperations");
+
+            migrationBuilder.DropTable(
+                name: "LND_AccountHolds",
+                schema: "dbo");
+
+            migrationBuilder.DropTable(
+                name: "LND_GarnishmentResponses",
+                schema: "dbo");
+
+            migrationBuilder.DropTable(
+                name: "LND_MigrationHoldRows",
+                schema: "dbo");
+
+            migrationBuilder.DropTable(
+                name: "LND_Garnishments",
+                schema: "dbo");
+
+            migrationBuilder.DropIndex(
+                name: "IX_LND_MemberAccountOperations_Garnishment",
+                schema: "dbo",
+                table: "LND_MemberAccountOperations");
+
+            migrationBuilder.DropColumn(
+                name: "AccrualResumedOn",
+                schema: "dbo",
+                table: "LND_MemberAccounts");
+
+            migrationBuilder.DropColumn(
+                name: "GarnishmentId",
+                schema: "dbo",
+                table: "LND_MemberAccountOperations");
+
             // T098 (a mano): se retiran la adopción y el participante ASO que sembró esta migración.
             migrationBuilder.Sql(
                 """

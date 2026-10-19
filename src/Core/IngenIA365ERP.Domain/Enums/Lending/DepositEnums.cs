@@ -441,6 +441,24 @@ public enum GarnishmentStatus
     Rejected = 4,
 }
 
+/// <summary>
+/// Quién ordena el embargo (feature 014, US11, T187; research §20, E155): el juez (CGP arts. 593 y 594), la DIAN en su cobro coactivo (ET art. 837-1) u
+/// otra entidad pública con jurisdicción coactiva (Ley 1066 de 2006, art. 5). Decide el límite inembargable que rige y cómo se aplica. (nuevo)
+/// </summary>
+public enum GarnishmentAuthority
+{
+    Court = 1,
+    TaxAuthority = 2,
+    OtherPublicEntity = 3,
+}
+
+/// <summary>Sobre qué cuentas recae el embargo (api.md §8): todas las de ahorro de la persona o las que el oficio nombra. (nuevo)</summary>
+public enum GarnishmentAccountsScope
+{
+    AllSavings = 1,
+    Specific = 2,
+}
+
 /// <summary>Clase de respuesta al juzgado (data-model §5.2.1).</summary>
 public enum GarnishmentResponseKind
 {

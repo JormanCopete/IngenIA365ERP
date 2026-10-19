@@ -85,6 +85,11 @@ public class MemberAccountOperationConfiguration : IEntityTypeConfiguration<Memb
             .OnDelete(DeleteBehavior.Restrict).HasConstraintName("FK_LND_MemberAccountOperations_MembershipWithdrawal");
         builder.HasIndex(e => e.MembershipWithdrawalId).HasDatabaseName("IX_LND_MemberAccountOperations_MembershipWithdrawal")
             .HasFilter("[MembershipWithdrawalId] IS NOT NULL");
+        // US11 (T187): el embargo que consigna o reclasifica.
+        builder.HasOne<Domain.Entities.Lending.Deposits.Restrictions.Garnishment>().WithMany().HasForeignKey(e => e.GarnishmentId)
+            .OnDelete(DeleteBehavior.Restrict).HasConstraintName("FK_LND_MemberAccountOperations_Garnishment");
+        builder.HasIndex(e => e.GarnishmentId).HasDatabaseName("IX_LND_MemberAccountOperations_Garnishment")
+            .HasFilter("[GarnishmentId] IS NOT NULL");
     }
 }
 

@@ -109,6 +109,9 @@ public class MemberAccountOperation : AuditableEntityLong, IHechoInmutable
     /// <summary>K7 (US10, T096): el retiro del asociado que la originó; la FK nace con su tabla.</summary>
     public int? MembershipWithdrawalId { get; init; }
 
+    /// <summary>K8 (US11, T189): el embargo que consigna (<c>GarnishmentConsignment</c>) o cuya marca reclasifica (<c>Reclassification</c>).</summary>
+    public int? GarnishmentId { get; init; }
+
     /// <summary>Resultado del giro, factura del cargo.</summary>
     public int? InboundMessageId { get; init; }
 

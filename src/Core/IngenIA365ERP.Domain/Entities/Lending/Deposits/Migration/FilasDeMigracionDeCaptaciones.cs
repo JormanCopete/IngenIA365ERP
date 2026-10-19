@@ -244,6 +244,58 @@ public class MigrationGmfExemptionRow : AuditableEntity, IHechoInmutable
 }
 
 /// <summary>
+/// <c>LND_MigrationHoldRows</c> (parte <c>holds-and-garnishments</c>, K8; US11, T187; plantillas-y-archivos.md §4.6, research E166): un bloqueo o un embargo
+/// vigente al corte sobre una cuenta de la carga. Los embargos de la misma persona con la misma referencia (el oficio) son uno solo con un bloqueo por cuenta;
+/// lo retenido al corte se conserva tal cual (no se recalcula al activar). Llave: cuenta + tipo + referencia.
+/// </summary>
+[SinDiffDeAuditoria]
+public class MigrationHoldRow : AuditableEntity, IHechoInmutable
+{
+    public int MigrationLoadPartId { get; init; }
+
+    public int RowNumber { get; init; }
+
+    public string SourceAccountNumber { get; init; } = string.Empty;
+
+    /// <summary><c>Hold</c> o <c>Garnishment</c>.</summary>
+    public string Kind { get; init; } = string.Empty;
+
+    /// <summary>La orden interna o el número del oficio.</summary>
+    public string Reference { get; init; } = string.Empty;
+
+    /// <summary>Con <c>Hold</c>: el motivo.</summary>
+    public HoldReason? Reason { get; init; }
+
+    /// <summary>Con <c>LoanCollateral</c>: el número del crédito vivo de la Cartera.</summary>
+    public string? LoanNumber { get; init; }
+
+    /// <summary>El valor del bloqueo; nulo con <see cref="IsTotal"/>.</summary>
+    public decimal? Amount { get; init; }
+
+    public bool IsTotal { get; init; }
+
+    public DateOnly ValidFrom { get; init; }
+
+    // Con Garnishment.
+    public int? CourtPersonId { get; init; }
+
+    public GarnishmentAuthority? Authority { get; init; }
+
+    public string? ProcessNumber { get; init; }
+
+    public string? ClaimantName { get; init; }
+
+    public decimal? MeasureAmount { get; init; }
+
+    public bool IsChildSupport { get; init; }
+
+    public DateOnly? OrderDate { get; init; }
+
+    /// <summary>Lo retenido en la cuenta al corte (se conserva).</summary>
+    public decimal? RetainedAmount { get; init; }
+}
+
+/// <summary>
 /// <c>LND_MigrationTaxYearRows</c> (parte <c>tax-year-to-date</c>, K8): rendimientos, retención, GMF y componente inflacionario del año del corte
 /// anteriores al corte, por titular y cuenta, para el certificado tributario. Se cargan como información, sin hechos. Llave: titular + cuenta + año +
 /// concepto.

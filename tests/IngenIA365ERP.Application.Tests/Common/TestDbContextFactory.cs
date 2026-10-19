@@ -492,6 +492,9 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.MemberAccount> MemberAccounts => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.MemberAccount>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.MemberAccountParty> MemberAccountParties => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.MemberAccountParty>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.GmfExemptAccount> GmfExemptAccounts => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.GmfExemptAccount>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Restrictions.AccountHold> AccountHolds => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Restrictions.AccountHold>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Restrictions.Garnishment> Garnishments => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Restrictions.Garnishment>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Restrictions.GarnishmentResponse> GarnishmentResponses => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Restrictions.GarnishmentResponse>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.AccountInstallment> AccountInstallments => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.AccountInstallment>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.AccountInstallmentNonDeduction> AccountInstallmentNonDeductions => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.AccountInstallmentNonDeduction>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.ContributionRequest> ContributionRequests => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.ContributionRequest>();
@@ -516,6 +519,7 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Migration.MigrationAccountPartyRow> MigrationAccountPartyRows => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Migration.MigrationAccountPartyRow>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Migration.MigrationAccountInstallmentRow> MigrationAccountInstallmentRows => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Migration.MigrationAccountInstallmentRow>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Migration.MigrationGmfExemptionRow> MigrationGmfExemptionRows => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Migration.MigrationGmfExemptionRow>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Migration.MigrationHoldRow> MigrationHoldRows => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Migration.MigrationHoldRow>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Migration.MigrationTaxYearRow> MigrationTaxYearRows => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Migration.MigrationTaxYearRow>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Configuration.DepositLineCharge> DepositLineCharges => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Configuration.DepositLineCharge>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.AccountCharge> AccountCharges => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.AccountCharge>();
