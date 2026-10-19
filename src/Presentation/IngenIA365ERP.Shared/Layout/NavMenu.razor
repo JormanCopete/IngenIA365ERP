@@ -109,6 +109,10 @@
                 <PermissionGate Required="Lending.Accounts.Read">
                     <NavLink href="/cartera/cdat" class="nav-subitem">CDAT</NavLink>
                 </PermissionGate>
+                @* US11 (T192): los embargos —registrar el oficio, lo retenido con el límite inembargable, responder al juzgado, consignar y levantar—. *@
+                <PermissionGate Required="Lending.Accounts.Read">
+                    <NavLink href="/cartera/embargos" class="nav-subitem">Embargos</NavLink>
+                </PermissionGate>
                 @* US10 (T106): el retiro del asociado —radicar, decidir con acta, liquidar con el cruce y devolver—; la ficha
                    (/cartera/retiros-asociado/{id}) se abre desde la lista. *@
                 <PermissionGate Required="Lending.MembershipWithdrawals.File" AnyOf="@(new[] { "Lending.MembershipWithdrawals.Approve", "Lending.MembershipWithdrawals.Settle" })">

@@ -132,6 +132,9 @@ public class LendingReportsEndpoints : ICarterModule
             (f, _) => new Application.Lending.Deposits.Reports.NegotiatedRatesReportQuery(f));
         group.MapVistaDeCartera(Application.Lending.Deposits.Reports.DepositorConcentrationReportQueryHandler.Vista,
             (f, q) => new Application.Lending.Deposits.Reports.DepositorConcentrationReportQuery(f, Entero(q, "top")));
+        // Feature 014, US11 (T189): los embargos recibidos (from, to, status), con datos del titular.
+        group.MapVistaDeCartera(Application.Lending.Deposits.Reports.GarnishmentsReportQueryHandler.Vista,
+            (f, q) => new Application.Lending.Deposits.Reports.GarnishmentsReportQuery(f, Texto(q, "status")));
     }
 
     private static int? Entero(IQueryCollection q, string clave) =>
