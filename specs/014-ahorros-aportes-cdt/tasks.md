@@ -441,12 +441,14 @@ la gracia; tasa negociada en espera del aprobador (quickstart US6).
 
 **Independent Test**: 5 % con IPC 4 % y fondo menor: limitada y prorrateada.
 
-- [ ] T201 [P] [US12] Motor puro `RevalorizacionYExcedentes` en `D/Lending/Deposits/RevalorizacionYExcedentes.cs` con casos dorados en `TD/Lending/Deposits/Casos/asamblea-*.json`
-- [ ] T202 [P] [US12] Crear `AssemblyDistribution` y `AssemblyDistributionLine` (§6.3, §6.4) y sus configuraciones; generar la migración par `CaptacionesAsamblea`
-- [ ] T203 [US12] Registrar, simular, aprobar (segundo usuario) y aplicar revalorización, excedentes y amortización; reverso entero; hechos de asamblea, en `A/Lending/Deposits/Assembly/`
-- [ ] T204 [P] [US12] Pruebas de asamblea en `TA/Lending/Deposits/Assembly/`
-- [ ] T205 [US12] Rutas de `contracts/api.md` §12 y pantalla `/cartera/asamblea` en `API/Endpoints/Lending/Deposits/AssemblyDistributionsEndpoints.cs` y `SH/Pages/Cartera/Captaciones/Asamblea.razor`
-- [ ] T206 [US12] e2e de US12 (escenarios 1 y 2) en `TI/Lending/Deposits/AsambleaTests.cs`
+- [x] T201 [P] [US12] Motor puro `RevalorizacionYExcedentes` en `D/Lending/Deposits/RevalorizacionYExcedentes.cs` con casos dorados en `TD/Lending/Deposits/Casos/asamblea-*.json` — hecho el 2026-10-19: saldo promedio diario del ejercicio (CBCF «promedio día/año», D13) o al cierre, tope del IPC en la revalorización, valor repartido y prorrateo al fondo por el mayor residuo (la suma es el fondo), amortización hasta el mínimo; cinco dorados `asamblea-01` a `-05` por `calcular.py --verificar` (research E182)
+- [x] T202 [P] [US12] Crear `AssemblyDistribution` y `AssemblyDistributionLine` (§6.3, §6.4) y sus configuraciones; generar la migración par `CaptacionesAsamblea` — hecho: en `CaptacionesAportes` regenerada en los dos motores (no nace `CaptacionesAsamblea`, E35), con `LND_MemberAccountOperations.AssemblyDistributionId`, el estado `Reversed` 5 y `PayoutPurpose.SurplusPayment` 8; SQL a mano intacto y paridad OK (research E183)
+- [x] T203 [US12] Registrar, simular, aprobar (segundo usuario) y aplicar revalorización, excedentes y amortización; reverso entero; hechos de asamblea, en `A/Lending/Deposits/Assembly/` — hecho: borrador, simulación sin clave, aplicación por otra persona con el punto del acta cerrada (asunto nuevo `AssemblyDistribution`), el acta como soporte (`LendingAssemblySupport`) y la huella; excedentes a aportes, ahorro o pago; reverso entero con un solo hecho espejo y corrección que hereda el acta; seis parámetros `Asamblea.*`; alcance total. Sin retención sobre lo abonado ni ruta para volver a girar un pago rechazado (preguntas de research §22.1)
+- [x] T204 [P] [US12] Pruebas de asamblea en `TA/Lending/Deposits/Assembly/` — hecho: `AsambleaTests` (10) y `HechosDeAsambleaTests` (3, el constructor) (research E192)
+- [x] T205 [US12] Rutas de `contracts/api.md` §12 y pantalla `/cartera/asamblea` en `API/Endpoints/Lending/Deposits/AssemblyDistributionsEndpoints.cs` y `SH/Pages/Cartera/Captaciones/Asamblea.razor` — hecho: siete rutas (más `POST /{id}/void`) y la pantalla con su enlace en el menú (research E191)
+- [x] T206 [US12] e2e de US12 (escenarios 1 y 2) en `TI/Lending/Deposits/AsambleaTests.cs` — escrita y compilada; **e2e en la corrida final**, con `EntregaVigente` ≥ K10
+
+**Checkpoint**: revalorización de aportes, distribución de excedentes y amortización simuladas, aplicadas con el acta por otra persona y reversadas enteras. Construida la fase 16 el 2026-10-19 (research §22).
 
 ---
 

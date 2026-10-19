@@ -2000,3 +2000,147 @@ sellos: PostgreSQL `20261019104128`, SQL Server `20261019104056`; las operacione
   informe la de la consignación) y el texto vigente del art. 1.6.1.13.2.40 del DUR.
 - El reparto del GMF entre cotitulares (pregunta de §21.1).
 - La periodicidad de los extractos de la cooperativa (`Documentos.PeriodicidadDeExtractos`) y sus textos propios por clase (`Documentos.TextosDeCaptaciones`).
+
+## 22. Enmienda de la asamblea: revalorización, excedentes y amortización (2026-10-19, T201–T206, US12, K10)
+
+Construida la historia 12. **Manda el código**; estas notas reemplazan lo dicho en `data-model.md`, `contracts/` y `tasks.md` donde choquen. Cambio de
+esquema: `CaptacionesAportes` **regenerada** en los dos motores (mismos sellos: PostgreSQL `20261019104128`, SQL Server `20261019104056`; las operaciones
+nuevas al final de `Up` y al principio de `Down`) con `LND_AssemblyDistributions`, `LND_AssemblyDistributionLines` y
+`LND_MemberAccountOperations.AssemblyDistributionId`; la migración par `CaptacionesAsamblea` de tasks.md **no** nace (E35: todo va a `CaptacionesAportes`
+mientras sea regenerable). El SQL escrito a mano (T044, `NOM`, `ASO`) quedó intacto —el antes y el después del `.cs` sólo difieren en líneas agregadas— y
+la paridad pasa. Las migraciones congeladas de la 013 y `RetiroDeCaptacionesHeredadas` no se tocaron. `EntregaVigente` sigue en K6b (E127): registrar exige la
+entrega K10 desplegada (`Lending.Savings.DeliveryNotAvailable`, `availableFrom = K10`) y las claves `Asamblea.*` se leen con sus defectos.
+
+**Norma aplicada** (todo «pendiente de validar por la contadora»; ningún valor legal en el código):
+
+- **Aplicación del excedente.** Ley 79 de 1988, art. 54: del excedente, 20 % como mínimo a la reserva de protección de aportes, 20 % al fondo de educación y
+  10 % al de solidaridad; el remanente, según los estatutos o la asamblea, a (1) la **revalorización de aportes** «teniendo en cuenta las alteraciones en su
+  valor real», (2) servicios comunes y seguridad social, (3) **retorno** a los asociados en relación con el uso de los servicios o la participación en el
+  trabajo y (4) un **fondo para amortización de aportes**. Art. 55: el excedente se aplica primero a compensar pérdidas de ejercicios anteriores y a
+  restablecer la reserva. Art. 53: el ejercicio cierra el 31 de diciembre; art. 28: la asamblea ordinaria se reúne en los tres primeros meses del año.
+  Fuente: <https://www.alcaldiabogota.gov.co/sisjur/normas/Norma1.jsp?i=9211>.
+- **Tope de la revalorización.** Ley 79 art. 19 parágrafo (mantener el poder adquisitivo de los aportes «dentro de los límites que fije el reglamento») y el
+  **Decreto 3081 de 1990, art. 1**: hasta el **IPC certificado por el DANE para el año inmediatamente anterior**. La Circular Básica Contable y Financiera de
+  la Supersolidaria, **Título I, Capítulo V, numerales 5 y 5.1**, fija el procedimiento: la asamblea constituye el fondo con el remanente, aprueba revalorizar
+  hasta ese IPC con cargo al fondo (lo que sobra queda para revalorizaciones futuras), sin retroactividad, **sobre el monto promedio día/año** de los aportes
+  de cada asociado. Fuentes: <https://www.supersolidaria.gov.co/sites/default/files/circular_basica_contable_financiera/20250624_circ_contable_finan_completa.pdf>
+  y el concepto unificado de devolución de aportes
+  <https://www.supersolidaria.gov.co/sites/default/files/conceptos_juridicos_y_contables/concepto_unificado_devolucion_o_compensacion_de_aportes_sociales.pdf>.
+- **Fondos de empleados.** Decreto Ley 1481 de 1989, art. 19, en la redacción de la Ley 2496 de 2025 (art. 8): 20 % a la reserva de protección de aportes,
+  10 % al fondo de desarrollo empresarial solidario; el fondo para mantener el poder adquisitivo de los aportes no supera el **50 % del excedente**; la
+  amortización parcial en igualdad de condiciones llega hasta el **49 % de los aportes**; en los fondos de empleados **no hay retornos**. Fuente:
+  <https://normativa.colpensiones.gov.co/colpens/compilacion/docs/ley_2496_2025.htm>.
+- **Amortización.** Ley 79, art. 52: con un fondo especial alimentado del remanente, en **igualdad de condiciones** y sólo cuando la asamblea juzgue que la
+  situación económica lo permite. CBCF Título I Cap. V num. 2.3 y 4.3: la igualdad es la misma proporción para todos; si los aportes amortizados llegan al
+  50 % del capital social, el proyecto requiere autorización previa de la Supersolidaria; los aportes amortizados forman parte del mínimo no reducible (CUIF
+  311010).
+- **Proyecto de distribución.** CBCF Título II Cap. I num. 5.1.2 lit. f: el consejo aprueba el proyecto de distribución de excedentes que la asamblea decide;
+  después se reporta en el formato 162 (anual).
+- **Tributario.** La cooperativa del régimen tributario especial tributa al 20 % sobre el beneficio neto o excedente, tomado del fondo de educación y
+  solidaridad (ET art. 19-4; DUR 1625 de 2016 arts. 1.2.1.5.2.7 y 1.2.1.5.2.8; Concepto DIAN 387 de 2025
+  <https://normograma.dian.gov.co/dian/compilacion/docs/oficio_dian_0387_2025.htm>): eso es de Contabilidad, no de la Cartera. Para el **asociado**, la DIAN
+  ha tratado la revalorización como ingreso **gravado** sujeto a retención (Conceptos 029502 de 2002 y 068192 de 2004, fuente secundaria
+  <https://cijuf.org.co/codian04/octubre/c68192.htm>) y los pagos con cargo al remanente como ingreso gravado con retención por «otros ingresos» (Oficio
+  24051 de 2007 <https://normograma.dian.gov.co/dian/compilacion/docs/oficio_dian_24051_2007.htm>). No se encontró un concepto posterior a 2016 sobre retornos
+  ni revalorización: **no se construyó retención** sobre lo que abona la asamblea (pregunta al dueño y a la contadora, §22.1).
+
+- **E182 · El motor (T201, `RevalorizacionYExcedentes`).** Puro, sin reloj ni valores legales: la base de cada asociado es el **saldo promedio diario** del
+  ejercicio (Σ del saldo de cada día del 1 de enero al 31 de diciembre por fecha valor ÷ 365 o 366, a dos decimales al par; CBCF «promedio día/año», D13) o el
+  saldo al 31 de diciembre; la tasa es el porcentaje decidido o el valor sobre la base total; en la revalorización nunca supera el límite legal; lo calculado
+  es base × tasa a la unidad de la entidad (mitad hacia arriba) o, con un valor sin límite, el valor repartido por la base con el **mayor residuo**; en la
+  amortización nunca más que lo amortizable (saldo de hoy menos el mínimo no reducible, FR-042); si lo calculado supera el fondo, el fondo (hacia abajo a la
+  unidad) se reparte por lo calculado con el mayor residuo y la suma es **exactamente** el fondo (US12-1). Cinco casos dorados `asamblea-01` a `-05` por
+  `calcular.py --verificar` (60 casos en total): la prueba independiente (5 % con IPC 4 % y fondo de 100.000: 142.657 calculados, factor 0,700982), saldo al
+  cierre sin límite, excedentes por valor con el residuo, amortización hasta el mínimo y 2028 bisiesto al centavo.
+- **E183 · Entidades (T202).** `AssemblyDistribution` (documento con estado) y `AssemblyDistributionLine` (hecho de sólo inserción, escrito una vez al
+  aplicar con todo: no lleva columnas de escritura única). Cambios contra data-model §6.3/§6.4: `DecisionSessionItemId` es **nulo** hasta aplicar (el punto del
+  acta nombra a la decisión, así que la decisión nace antes); `CorrectsDistributionId` (la reversada que corrige, de la que hereda el acta); `DecidedValue`
+  junto a `DecidedFraction` (uno de los dos, `CK_LND_AssemblyDistributions_Decision`); `RoundingUnit`, `Reason`, `RegisteredAt`, `AppliedOn`,
+  `SupportAttachmentPublicIdsJson`, `AppliedMessagePublicId`, `ReversedAt/ByUserId/Reason` y `VoidedAt/VoidReason`; **no** nace `ApplyingProcessRunId` (se aplica
+  dentro de la petición, en una transacción). Estados: `Simulated` 1 (el borrador), `Applied` 3, `Voided` 4 (descartado) y el nuevo **`Reversed` 5**; `Approved`
+  2 no se usa (aprobar y aplicar son un solo acto de otra persona). Único `UK_LND_AssemblyDistributions_Session (DecisionSessionItemId, Kind)` filtrado a
+  `Applied`: la reversada no estorba a su corrección. En la línea: `LimitedByMinimum`, `PayoutOrderId` y la operación única. `SimulationVersion` queda en 1: la
+  simulación no se guarda (es una consulta sin clave) y la huella la ata a lo que se aplica.
+- **E184 · El acta y el flujo (T203).** Registrar (borrador) → simular → llevar al orden del día de la asamblea con el **asunto de acta** nuevo
+  `AssemblyDistribution` (`AsuntoDeDecisionDeAsamblea`: quien registró no vota; cerrar el acta no aplica nada) → **otra persona** aplica con el punto cerrado
+  que aprueba esta decisión (`PuntoDeActaCerrado`), el **soporte** (el acta firmada, adjunto nuevo `LendingAssemblySupport` con dueño la decisión: se lee con
+  `Register` o `Approve`, se sube mientras sea borrador y no se borra) y la huella de la simulación que vio (`Lending.Savings.PreviewChanged`). La asamblea
+  general se registra como un órgano de la cooperativa (clase `Other`) cuyos miembros en el sistema son sus dignatarios. US12-2: aplicar dos veces responde
+  `Lending.AssemblyDistribution.AlreadyApplied`; una corrección (`correctsPublicId`, misma clase y ejercicio que una **reversada**) hereda el acta y no pide otro
+  punto; dos aplicadas con la misma acta y clase responden `DuplicateSession`. Segregación del catálogo (`SegregacionDeCaptaciones.DecisionDeAsamblea`, ya
+  declarada en US16): registrar es `Radicar`; aplicar y reversar, `Decidir`. **Alcance total**: la decisión es de toda la cooperativa —abona en todas las
+  oficinas y líneas—, así que sólo la ve y la opera quien tiene alcance total (fuera, el 404 de la decisión con `Lending.Access.OutOfScope`; la lista vacía).
+- **E185 · Quiénes entran.** Los titulares de una cuenta de aportes activa o inactiva con base positiva. Fuera, con aviso en la simulación: quien tiene el
+  retiro aprobado, liquidado o por rehacer (su liquidación ya cuenta sus aportes) y, en la amortización con `Asamblea.AmortizacionExcluyeDeudores` (defecto
+  `true`, FR-044), quien tiene créditos vivos. La amortización no deja el capital social bajo `Aportes.MinimoIrreducibleEntidad` (`EntityMinimumBreached`).
+- **E186 · Lo que deja en cada cuenta.** Una operación por asociado con `AssemblyDistributionId`: **revalorización** `AssemblyCredit` (prefijo `RVA-`, fila
+  `AssemblyCredit` en aportes revalorizados); **excedentes a aportes** `AssemblyCredit` (`EXD-`) en la clase de `Asamblea.ClaseDeAporteDeExcedentes` (defecto
+  ordinarios); **a ahorro**, en la cuenta viva del titular en la línea de destino (a la vista o permanente; sin ella, `DestinationAccountMissing` con la lista,
+  y la simulación lo avisa); **pagados**, una operación `AssemblyCredit` **sin filas** en la cuenta de aportes con su orden de giro (`PayoutPurpose.SurplusPayment`
+  8, nuevo); **amortización** `ContributionRefund` (`AMZ-`) con filas `Refund` en el orden del débito de aportes y su orden (`ContributionRefund`, plazo de la
+  versión). La fila `AssemblyCredit` **no** es movimiento del titular (no reactiva una cuenta inactiva). Lo de la asamblea no se reversa desde la pantalla de la
+  cuenta (`ReversalOwnedByProcess`).
+- **E187 · Los hechos (T203; constructor de la fase 9).** **Un** hecho masivo por decisión —`RevalorizacionDeAportesAplicada`, `ExcedentesDistribuidos` o
+  `AportesAmortizados`— con origen la decisión (`AssemblyDistribution`), una línea por cuenta con sus dimensiones y totales por combinación; ningún hecho
+  lleva una cuenta contable. Las órdenes salen con `OrdenDeGiroEmitida` v2. `ExcedentesDistribuidosV1` suma, opcional al final, `Payments` (`SurplusPaymentV1`:
+  cuenta de aportes, titular, dimensiones, valor y orden): el pago en dinero no mueve cuentas del asociado y el constructor lo asienta del **fondo de
+  excedentes a los retornos por pagar** (`DevolucionPorPagar`, motivo `SurplusPayment`, tercero el asociado). La validación previa de pantalla (D23) pregunta
+  una vez por combinación de dimensiones (`HechosRepresentativosDeCaptaciones.Asamblea`).
+- **E188 · El reverso entero.** Una operación `Reversal` por cuenta (espejo de sus filas, fecha valor de la aplicación) y **un** `OperacionDeCuentaReversada`
+  con un espejo por cuenta (`Mirrors` con cuenta, titular y dimensiones vigentes), heredando el modo de la decisión; el constructor devuelve cada espejo a su
+  fondo —o a la devolución por pagar de la amortización— con la sucursal de su cuenta. No se reversa: con los excedentes pagados en dinero
+  (`PaymentNotReversible`), mientras una orden de la amortización siga viva o girada (`PayoutsInProgress`; una amortización rechazada por Tesorería ya volvió a
+  los aportes por el reintegro de siempre) ni si una cuenta quedaría en negativo (`ReversalWouldOverdraw`: un retiro posterior ya usó lo abonado). El reverso
+  anula los documentos que vieron esas operaciones.
+- **E189 · El giro rechazado del pago de excedentes.** Como no salió de ninguna cuenta, no hay reintegro: la orden queda con su resultado y lo decretado sigue
+  por pagar en Contabilidad (retornos por pagar). **Volver a girarla no tiene ruta todavía** (pendiente, §22.1).
+- **E190 · Parámetros por entidad (K10, criterio del dueño; todos pendientes de validar).** `Asamblea.BaseDeRevalorizacion` (`AverageBalance`, D13),
+  `Asamblea.Redondeo` (`Peso` o `Centavo`), `Asamblea.SerieDelIpc` (`ANUAL`: el valor nacional `IPC` de esa serie que rige el 31 de enero siguiente al
+  ejercicio, la variación de diciembre ya publicada; la simulación muestra su fecha de referencia y su fuente), `Asamblea.DestinoDeExcedentes`
+  (`Contributions`), `Asamblea.ClaseDeAporteDeExcedentes` (`Ordinary`) y `Asamblea.AmortizacionExcluyeDeudores` (`true`). El porcentaje o el valor, el fondo y el
+  destino de cada decisión son del acta. El IPC es un valor nacional con vigencia (sin semilla: lo registra el maestro con su fuente); sin él la revalorización
+  responde `NationalValues.Missing`. El ejercicio tiene que estar cerrado (`year < hoy`).
+- **E191 · Rutas y pantalla (T205).** Siete rutas en `AssemblyDistributionsEndpoints.cs` (lista, detalle, registrar, simular sin clave, descartar —nueva:
+  `POST /{id}/void`—, aplicar, reversar); `apply` recibe `sessionItemPublicId` (nulo en una corrección), `expectedPreviewSha256`, `supportAttachmentPublicIds` y
+  `reason` (api.md decía `{ expectedPreviewSha256, reason }`); `POST /` recibe además `correctsPublicId`. Pantalla `/cartera/asamblea` (menú «Captaciones y
+  aportes» → «Asamblea»): lista, registro, simulación con el límite del IPC, el prorrateo, los avisos y las líneas, subida del acta, aplicación con el punto
+  del acta (digitado por su identificador, como en el retiro) y reverso.
+- **E192 · Pruebas (T204, T206).** Domain: `RevalorizacionYExcedentesTests` (los cinco dorados y las reglas: suma exacta al fondo, sin límite en excedentes,
+  sin base, pedido mal formado, mayor residuo). Application: `AsambleaTests` (10: la prueba independiente con la segregación y el acta; aplicar dos veces,
+  reversar entera y corregir con la misma acta; la simulación que cambió; sin soporte o sin IPC; la entrega K10 y el ejercicio cerrado; excedentes por valor a
+  aportes; a ahorro sin y con cuenta de destino; pagados por orden sin tocar cuentas y no reversables; amortización hasta el mínimo sin deudores y con su
+  orden; sin alcance total) y `HechosDeAsambleaTests` (3: el constructor con la revalorización, el pago de excedentes y el reverso entero). La e2e
+  `AsambleaTests` (US12-1 y US12-2 por HTTP con el reloj de la suite en marzo del año siguiente) está **escrita y compilada; e2e en la corrida final**, con
+  `EntregaVigente` ≥ K10.
+
+### 22.1 Preguntas para el dueño
+
+- **Retención en la fuente sobre lo que abona la asamblea.** La DIAN trató la revalorización como ingreso gravado sujeto a retención (2002, 2004) y los
+  pagos con cargo al remanente con retención por «otros ingresos» (2007). A: no se retiene (lo construido; el certificado tributario informa la
+  revalorización si la entidad lo pide); B: retener sobre la revalorización y los retornos con una tarifa por parámetro de la entidad, como los rendimientos;
+  C: B sólo sobre los retornos pagados en dinero. Recomendado: B, si la contadora y el tributarista lo confirman.
+- **La base de los retornos (excedentes).** La ley reparte el retorno «en relación con el uso de los servicios»; lo construido lo reparte por los aportes
+  (saldo promedio o al cierre). A: sobre los aportes (lo construido); B: sobre los intereses pagados por cada asociado en el año a sus créditos; C: una
+  plantilla con la base de cada asociado que la cooperativa calcula. Recomendado: C (cada cooperativa mide el uso de servicios a su manera).
+- **Asociados retirados durante el ejercicio.** La CBCF dice que a quien se retira antes de diciembre se le aplica lo que apruebe la asamblea, prorrateado
+  hasta su retiro. A: no reciben (lo construido: sólo cuentas activas o inactivas); B: se calcula su línea y se le paga por orden de giro como exasociado.
+  Recomendado: B.
+- **Volver a girar un pago de excedentes rechazado (E189).** A: queda por pagar en Contabilidad y Tesorería lo paga por fuera (lo construido); B: una ruta para
+  volver a emitir la orden; C: pasado un plazo, a no reclamados (US14). Recomendado: B y C.
+- **Excedentes a ahorro sin cuenta de destino.** A: no se aplica hasta que todos tengan cuenta (lo construido); B: a quien no tiene cuenta se le capitaliza en
+  aportes; C: se le paga por orden de giro. Recomendado: B.
+- **La asamblea como órgano.** A: se registra como un órgano (clase «otro») con sus dignatarios y el punto del acta se vota en el sistema (lo construido); B:
+  sólo número, fecha del acta y el soporte, sin sesión. Recomendado: A si la cooperativa ya usa las actas de la Cartera; si no, B.
+- **Aplicación legal del excedente.** La Cartera no verifica los porcentajes mínimos de reservas y fondos (art. 54) ni el 50 % de los fondos de empleados: es
+  la contabilización del acta. A: dejarlo en Contabilidad (lo construido); B: un aviso en la simulación si el fondo supera el remanente que la entidad informe.
+  Recomendado: A.
+
+### 22.2 Para la contadora (pendiente de validar)
+
+- Las cuentas sugeridas: fondo para revalorización 3310, fondo de excedentes 3505 o la reserva del acta, aportes revalorizados (310505 o una auxiliar),
+  retornos decretados por pagar 246515, amortización contra 246505; y el traslado del fondo para amortización (3305) a aportes amortizados (311010), que no
+  emite la Cartera.
+- Los defectos `Asamblea.*` (saldo promedio, al peso, serie `ANUAL` del IPC, excedentes a aportes ordinarios, amortización sin deudores).
+- La regla del IPC: el valor de la serie que rige el 31 de enero siguiente al ejercicio (la variación de diciembre).
+- El tratamiento tributario de la revalorización y los retornos para el asociado (§22.1) y si van al certificado tributario
+  (`Documentos.CertificadoTributarioIncluyeAportes`).
