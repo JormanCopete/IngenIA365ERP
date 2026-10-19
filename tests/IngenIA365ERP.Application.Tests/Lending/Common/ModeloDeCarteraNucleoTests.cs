@@ -113,6 +113,9 @@ public class ModeloDeCarteraNucleoTests
         // Feature 014, US9 (T151; data-model §7.1): las filas de preparación de la migración de aportes y captaciones
         "LND_MigrationLineEquivalenceRows", "LND_MigrationContributionAccountRows", "LND_MigrationAccountRows", "LND_MigrationAccountPartyRows",
         "LND_MigrationAccountInstallmentRows", "LND_MigrationGmfExemptionRows", "LND_MigrationTaxYearRows",
+        // Feature 014, US6 (T169; data-model §2.4, §3.3, §3.4, §7.1; research E134): el CDAT, su plan, la tasa negociada y su migración
+        "LND_MemberAccountTermsVersions", "LND_TermDepositSchedules", "LND_NegotiatedRateRules", "LND_NegotiatedRateRequests",
+        "LND_MigrationTermDepositRows",
     ];
 
     /// <summary>Las 17 de preparación (data-model §29.3) y las 7 de la migración de captaciones (014, data-model §7.1).</summary>
@@ -125,6 +128,8 @@ public class ModeloDeCarteraNucleoTests
         // Feature 014, US9 (T151): las siete de la migración de aportes y captaciones.
         "MigrationLineEquivalenceRow", "MigrationContributionAccountRow", "MigrationAccountRow", "MigrationAccountPartyRow",
         "MigrationAccountInstallmentRow", "MigrationGmfExemptionRow", "MigrationTaxYearRow",
+        // US6 (T169): la del CDAT.
+        "MigrationTermDepositRow",
     ];
 
     /// <summary>Hechos (H): DT §2.3, C42, C44, C112 y data-model partes 1 y 2.</summary>
@@ -156,6 +161,8 @@ public class ModeloDeCarteraNucleoTests
         "PayrollDeductionFileAccountLine", "PayrollDeductionAccountResult", "PayrollDeductionUnmatchedLine",
         // Feature 014, US5 (T130): la liquidación de intereses y la retención acumulada.
         "InterestSettlement", "WithholdingAccumulation",
+        // Feature 014, US6 (T169): las condiciones selladas, el plan del CDAT y las reglas de tasa negociada.
+        "MemberAccountTermsVersion", "TermDepositScheduleItem", "NegotiatedRateRule",
         .. Preparacion,
     ];
 
@@ -190,7 +197,7 @@ public class ModeloDeCarteraNucleoTests
         var tablas = DeCartera(Modelo(postgres)).Select(e => e.GetTableName()).ToList();
 
         tablas.Should().OnlyHaveUniqueItems().And.BeEquivalentTo(Tablas);
-        Tablas.Should().HaveCount(168,
+        Tablas.Should().HaveCount(173,
             "74 de negocio + 17 de preparación (data-model §14) + 2 del grupo conectado (C112) + 7 de CarteraRiesgo (US9) + 8 de CarteraLibranza (K2)"
             + " + 9 de CarteraNovedades (K3) + 11 de CarteraCobranza (K4) + 2 de CarteraInformes (K5) + 2 de CarteraPerdidaEsperada (K6a)"
             + " + 7 del libro de cuentas de la feature 014 (K7, CaptacionesAportes) + 3 de las versiones de líneas de captación y aportes (US1)"
@@ -198,7 +205,7 @@ public class ModeloDeCarteraNucleoTests
             + " + 2 de los grupos de archivo y las equivalencias de pagaduría (US3) + 2 del retiro del asociado y su liquidación (US10)"
             + " + 5 del GMF del mes, los cargos, sus exoneraciones y el débito automático (US4)"
             + " + 3 del archivo de pagaduría por grupo: cuotas de cuentas, sus resultados y lo no aplicado de la respuesta (T091) + 2 de la liquidación de intereses y la retención acumulada (US5)"
-            + " + 7 de preparación de la migración de aportes y captaciones (US9)");
+            + " + 7 de preparación de la migración de aportes y captaciones (US9) + 5 del CDAT: condiciones selladas, plan, reglas y solicitudes de tasa negociada y su fila de migración (US6)");
     }
 
     [Theory]

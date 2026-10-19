@@ -573,6 +573,11 @@ public interface IApplicationDbContext
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.AccountCharge> AccountCharges { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.AccountChargeExemption> AccountChargeExemptions { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.DirectDebitMandate> DirectDebitMandates { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.MemberAccountTermsVersion> MemberAccountTermsVersions { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.TermDepositScheduleItem> TermDepositScheduleItems { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Configuration.NegotiatedRateRule> NegotiatedRateRules { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.NegotiatedRateRequest> NegotiatedRateRequests { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Migration.MigrationTermDepositRow> MigrationTermDepositRows { get; }
 
     // Admin
     // Tenants y TenantBranches se retiraron: son del plano de control del SaaS y

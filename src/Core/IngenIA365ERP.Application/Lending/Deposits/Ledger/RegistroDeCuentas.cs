@@ -571,6 +571,37 @@ public sealed class RegistroDeCuentas(IApplicationDbContext db)
         if (acumulados.Count > 0) db.WithholdingAccumulations.AddRange(acumulados);
     }
 
+    /// <summary>
+    /// US6 (T169, T170; data-model §3.3, §3.4; research R11): sella una versión de condiciones de un CDAT con su plan de intereses, en la misma operación que
+    /// la produce (la constitución, la prórroga, la renovación o el saldo inicial migrado). Hace cumplir lo que el plan promete: la versión es de la cuenta del
+    /// control y sigue a la última (el número es la última + 1), el capital es mayor que cero, la tasa aplicada es la de la tabla más el margen, los períodos se
+    /// numeran desde 1 sin huecos, cada uno es de la versión y sólo el último lo dice. Lo calcula <c>PlanDeCdat</c>; aquí sólo se escribe. No guarda.
+    /// </summary>
+    public void SellarCondiciones(MemberAccountControl control, MemberAccountTermsVersion version, IReadOnlyList<TermDepositScheduleItem> plan,
+        int ultimaVersion)
+    {
+        ArgumentNullException.ThrowIfNull(control);
+        ArgumentNullException.ThrowIfNull(version);
+        ArgumentNullException.ThrowIfNull(plan);
+        if (version.MemberAccountId != control.MemberAccountId)
+            throw new InvalidOperationException("La versión de condiciones es de otra cuenta que la del control.");
+        if (version.VersionNumber != ultimaVersion + 1)
+            throw new InvalidOperationException($"La versión de condiciones sigue a la última ({ultimaVersion}): se pidió la {version.VersionNumber}.");
+        if (version.PrincipalAmount <= 0m || Decimales(version.PrincipalAmount) > MemberAccountTransaction.DecimalesDeOperacion)
+            throw new InvalidOperationException("El capital de una versión de condiciones es mayor que cero y va al centavo.");
+        if (version.AppliedAnnualRate != version.TableAnnualRate + (version.NegotiatedSpread ?? 0m))
+            throw new InvalidOperationException("La tasa aplicada es la de la tabla más el margen negociado (FR-127).");
+        for (var i = 0; i < plan.Count; i++)
+        {
+            var p = plan[i];
+            if (p.PeriodNumber != i + 1 || p.IsLastPeriod != (i == plan.Count - 1) || (p.TermsVersion is not null && !ReferenceEquals(p.TermsVersion, version))
+                || Decimales(p.Interest) > MemberAccountTransaction.DecimalesDeOperacion || p.Interest < 0m)
+                throw new InvalidOperationException("El plan se numera desde 1 sin huecos, sólo el último período lo dice, es de la versión y va al centavo.");
+        }
+        db.MemberAccountTermsVersions.Add(version);
+        if (plan.Count > 0) db.TermDepositScheduleItems.AddRange(plan);
+    }
+
     /// <summary>Lo que el registro exige de cada fila: importe, un origen y la precisión de su clase.</summary>
     private static void Validar(MemberAccountTransaction fila)
     {

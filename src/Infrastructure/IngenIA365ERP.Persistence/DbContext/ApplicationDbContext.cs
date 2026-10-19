@@ -637,6 +637,11 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.AccountCharge> AccountCharges => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.AccountCharge>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.AccountChargeExemption> AccountChargeExemptions => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.AccountChargeExemption>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.DirectDebitMandate> DirectDebitMandates => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.DirectDebitMandate>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.MemberAccountTermsVersion> MemberAccountTermsVersions => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.MemberAccountTermsVersion>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.TermDepositScheduleItem> TermDepositScheduleItems => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.TermDepositScheduleItem>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Configuration.NegotiatedRateRule> NegotiatedRateRules => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Configuration.NegotiatedRateRule>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.NegotiatedRateRequest> NegotiatedRateRequests => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.NegotiatedRateRequest>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Migration.MigrationTermDepositRow> MigrationTermDepositRows => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Migration.MigrationTermDepositRow>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

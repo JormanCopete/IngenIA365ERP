@@ -244,3 +244,76 @@ public class MigrationTaxYearRow : AuditableEntity, IHechoInmutable
 
     public decimal? WithholdingBase { get; init; }
 }
+
+/// <summary>
+/// <c>LND_MigrationTermDepositRows</c> (parte <c>term-deposits</c>, K9, US6, T169; data-model §7.1; contracts/plantillas-y-archivos.md §4.3): un CDAT vigente al
+/// corte con su versión de condiciones vigente (tras sus prórrogas) y el interés causado y no pagado del período en curso. Al activar nace la cuenta
+/// <c>TermDeposit</c> (<c>Origin = Migration</c>), sus condiciones selladas (<c>Cause = Migration</c>), el plan que regenera <c>PlanDeCdat</c> y la operación
+/// <c>OpeningBalance</c> con el capital y el interés causado, sin hechos contables (FR-114). Llave: el número de la cuenta.
+/// </summary>
+[SinDiffDeAuditoria]
+public class MigrationTermDepositRow : AuditableEntity, IHechoInmutable
+{
+    public int MigrationLoadPartId { get; init; }
+
+    public int RowNumber { get; init; }
+
+    /// <summary>El número que conserva el CDAT (llave).</summary>
+    public string SourceAccountNumber { get; init; } = string.Empty;
+
+    public int PersonId { get; init; }
+
+    public string? SourceProductCode { get; init; }
+
+    public string CreditLineCode { get; init; } = string.Empty;
+
+    public int CreditLineId { get; init; }
+
+    public Guid OfficePublicId { get; init; }
+
+    /// <summary>El número del título vigente.</summary>
+    public string SourceTitleNumber { get; init; } = string.Empty;
+
+    public decimal PrincipalAmount { get; init; }
+
+    /// <summary>La constitución original (antigüedad del CDAT).</summary>
+    public DateOnly ConstitutedOn { get; init; }
+
+    /// <summary>El inicio de la versión vigente (tras las prórrogas).</summary>
+    public DateOnly StartDate { get; init; }
+
+    public int TermDays { get; init; }
+
+    public DateOnly MaturityDate { get; init; }
+
+    public decimal AppliedAnnualRate { get; init; }
+
+    public decimal? TableAnnualRate { get; init; }
+
+    public decimal? NegotiatedSpread { get; init; }
+
+    public RepaymentPeriodicity InterestPeriodicity { get; init; }
+
+    public InterestTiming InterestTiming { get; init; }
+
+    /// <summary>Los períodos del plan vigente ya pagados al corte.</summary>
+    public int PaidPeriods { get; init; }
+
+    /// <summary>Causado y no pagado del período en curso al corte (hasta 6 decimales).</summary>
+    public decimal InterestPayable { get; init; }
+
+    public InterestDestination InterestDestination { get; init; }
+
+    /// <summary>Con <c>ToAccount</c>: el número de la cuenta destino (de la carga o viva).</summary>
+    public string? DestinationAccountNumber { get; init; }
+
+    public MaturityInstruction MaturityInstruction { get; init; }
+
+    public int RolloverCount { get; init; }
+
+    public IssueTermBand IssueTermBand { get; init; }
+
+    public bool IsGarnished { get; init; }
+
+    public bool HolderDeceased { get; init; }
+}

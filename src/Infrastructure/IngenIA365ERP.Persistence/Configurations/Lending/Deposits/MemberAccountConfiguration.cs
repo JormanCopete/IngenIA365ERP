@@ -40,6 +40,8 @@ public class MemberAccountConfiguration : IEntityTypeConfiguration<MemberAccount
         builder.Property(e => e.ContractualStatus).HasConversion<int?>();
         builder.Property(e => e.AccrualSuspensionReason).HasMaxLength(40);
         builder.Property(e => e.SourceAccountNumber).HasMaxLength(30);
+        // US6 (T170, research E135): la propuesta del CDAT que espera el fondeo.
+        builder.Property(e => e.PendingTermsJson);
 
         builder.HasOne<CreditLine>().WithMany().HasForeignKey(e => e.CreditLineId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<Person>().WithMany().HasForeignKey(e => e.HolderPersonId).OnDelete(DeleteBehavior.Restrict);

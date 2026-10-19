@@ -96,6 +96,12 @@ public class MemberAccount : AuditableEntity
 
     public int? MigrationLoadId { get; set; }
 
+    /// <summary>
+    /// US6 (T170; research E135): las condiciones que se pidieron al constituir un CDAT mientras espera el fondeo (o la decisión de su tasa negociada), en
+    /// JSON. Se sellan en <c>LND_MemberAccountTermsVersions</c> al fondear y entonces se limpia: no es un hecho, es la propuesta de la apertura.
+    /// </summary>
+    public string? PendingTermsJson { get; set; }
+
     // ------------------------------------------------------------------------------------------------ comportamiento --
 
     /// <summary>

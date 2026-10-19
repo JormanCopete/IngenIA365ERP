@@ -47,6 +47,9 @@ public class MemberAccountTransaction : AuditableEntityLong, IHechoInmutable
     /// <summary>Período del plan del CDAT al que pertenece la causación o el pago (K9).</summary>
     public int? SchedulePeriodNumber { get; init; }
 
+    /// <summary>US6 (T169; research E16): la versión de condiciones del CDAT (o del contractual) a la que pertenece la causación o el pago.</summary>
+    public int? TermsVersionId { get; init; }
+
     /// <summary>Con signo y distinto de cero (<c>CK_LND_MemberAccountTransactions_Amount</c>).</summary>
     public decimal Amount { get; init; }
 

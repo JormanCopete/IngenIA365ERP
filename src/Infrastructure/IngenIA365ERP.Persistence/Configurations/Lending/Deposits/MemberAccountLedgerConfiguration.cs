@@ -121,6 +121,9 @@ public class MemberAccountTransactionConfiguration : IEntityTypeConfiguration<Me
         // US3 (T081, research E17): el pago de una cuota exigible nombra su cuota.
         builder.HasOne<AccountInstallment>().WithMany().HasForeignKey(e => e.InstallmentId).OnDelete(DeleteBehavior.Restrict)
             .HasConstraintName("FK_LND_MemberAccountTransactions_Installment");
+        // US6 (T169, research E16): la causación y el pago de un CDAT nombran su versión de condiciones.
+        builder.HasOne<MemberAccountTermsVersion>().WithMany().HasForeignKey(e => e.TermsVersionId).OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("FK_LND_MemberAccountTransactions_TermsVersion");
 
         // La causación de una cuenta, un concepto y un día ocurre una vez (InterestAccrued = 6), salvo sus espejos.
         builder.HasIndex(e => new { e.MemberAccountId, e.Concept, e.ValueDate }).IsUnique()
@@ -135,6 +138,8 @@ public class MemberAccountTransactionConfiguration : IEntityTypeConfiguration<Me
         builder.HasIndex(e => e.OperationId).HasDatabaseName("IX_LND_MemberAccountTransactions_OperationId").HasFilter("[OperationId] IS NOT NULL");
         builder.HasIndex(e => e.ProcessRunId).HasDatabaseName("IX_LND_MemberAccountTransactions_ProcessRunId").HasFilter("[ProcessRunId] IS NOT NULL");
         builder.HasIndex(e => e.InstallmentId).HasDatabaseName("IX_LND_MemberAccountTransactions_InstallmentId").HasFilter("[InstallmentId] IS NOT NULL");
+        builder.HasIndex(e => new { e.TermsVersionId, e.SchedulePeriodNumber }).HasDatabaseName("IX_LND_MemberAccountTransactions_TermsVersion_Period")
+            .HasFilter("[TermsVersionId] IS NOT NULL");
         builder.HasIndex(e => e.MessagePublicId).HasDatabaseName("IX_LND_MemberAccountTransactions_MessagePublicId")
             .HasFilter("[MessagePublicId] IS NOT NULL");
     }

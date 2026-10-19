@@ -177,3 +177,36 @@ public class MigrationTaxYearRowConfiguration : IEntityTypeConfiguration<Migrati
         builder.HasIndex(e => new { e.MigrationLoadPartId, e.RowNumber }).IsUnique().HasDatabaseName("UK_LND_MigrationTaxYearRows_Part_Row");
     }
 }
+
+/// <summary><c>LND_MigrationTermDepositRows</c> (parte <c>term-deposits</c>, K9, US6, T169).</summary>
+public class MigrationTermDepositRowConfiguration : IEntityTypeConfiguration<MigrationTermDepositRow>
+{
+    public const string Tabla = "LND_MigrationTermDepositRows";
+
+    public void Configure(EntityTypeBuilder<MigrationTermDepositRow> builder)
+    {
+        builder.ComoEntidadDeCartera(Tabla);
+        builder.Property(e => e.RowNumber).IsRequired();
+        builder.Property(e => e.SourceAccountNumber).HasMaxLength(30).IsRequired();
+        builder.Property(e => e.SourceProductCode).HasMaxLength(20);
+        builder.Property(e => e.CreditLineCode).HasMaxLength(10).IsRequired();
+        builder.Property(e => e.OfficePublicId).IsRequired();
+        builder.Property(e => e.SourceTitleNumber).HasMaxLength(20).IsRequired();
+        builder.Property(e => e.PrincipalAmount).Monto().IsRequired();
+        builder.Property(e => e.AppliedAnnualRate).TasaAnual().IsRequired();
+        builder.Property(e => e.TableAnnualRate).TasaAnual();
+        builder.Property(e => e.NegotiatedSpread).TasaAnual();
+        builder.Property(e => e.InterestPeriodicity).HasConversion<int>().IsRequired();
+        builder.Property(e => e.InterestTiming).HasConversion<int>().IsRequired();
+        builder.Property(e => e.InterestPayable).MontoCausado().IsRequired();
+        builder.Property(e => e.InterestDestination).HasConversion<int>().IsRequired();
+        builder.Property(e => e.DestinationAccountNumber).HasMaxLength(30);
+        builder.Property(e => e.MaturityInstruction).HasConversion<int>().IsRequired();
+        builder.Property(e => e.IssueTermBand).HasConversion<int>().IsRequired();
+
+        builder.HasOne<MigrationLoadPart>().WithMany().HasForeignKey(e => e.MigrationLoadPartId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<Person>().WithMany().HasForeignKey(e => e.PersonId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<CreditLine>().WithMany().HasForeignKey(e => e.CreditLineId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasIndex(e => new { e.MigrationLoadPartId, e.RowNumber }).IsUnique().HasDatabaseName("UK_LND_MigrationTermDepositRows_Part_Row");
+    }
+}
