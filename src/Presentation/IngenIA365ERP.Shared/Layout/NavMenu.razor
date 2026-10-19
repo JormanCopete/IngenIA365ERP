@@ -113,6 +113,14 @@
                 <PermissionGate Required="Lending.Attributions.View">
                     <NavLink href="/cartera/captaciones/aprobaciones" class="nav-subitem">Aprobación de movimientos</NavLink>
                 </PermissionGate>
+                @* US9 (T159): los saldos iniciales al corte y la activación de aportes y de captaciones, cada una aparte. *@
+                <span class="nav-subgroup-title">Puesta en marcha</span>
+                <PermissionGate Required="Lending.Deposits.Migration">
+                    <NavLink href="/cartera/captaciones/migracion" class="nav-subitem">Saldos iniciales</NavLink>
+                </PermissionGate>
+                <PermissionGate Required="Lending.Deposits.Activate">
+                    <NavLink href="/cartera/captaciones/activacion" class="nav-subitem">Activación</NavLink>
+                </PermissionGate>
             </NavMenuGroup>
         }
 

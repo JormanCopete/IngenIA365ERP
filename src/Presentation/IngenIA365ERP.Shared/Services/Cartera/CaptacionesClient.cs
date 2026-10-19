@@ -1,5 +1,6 @@
 using IngenIA365ERP.Shared.Services.Http;
 using IngenIA365ERP.Shared.Services.Inventario;
+using IngenIA365ERP.Shared.Services.Nomina;
 using IngenIA365ERP.Shared.Services.Security;
 using IngenIA365ERP.Shared.Services.Ventas;
 using static IngenIA365ERP.Shared.Services.Ventas.EnvioDeVentas;
@@ -328,6 +329,59 @@ public sealed class CaptacionesClient(HttpClient http, CentralAuthClient auth)
     public Task<ResultadoDeInventario<CancelacionDeCuentaDto>> CancelarCuentaAsync(Guid cuenta, CancelarCuentaRequest request, ClaveDeOperacion clave,
         CancellationToken ct = default) =>
         Enviar<CancelacionDeCuentaDto>(HttpMethod.Post, $"{RutaDeCuentas}/{cuenta}/close", request, clave, ct);
+
+    // ------------------------------------------------------------------------------- migración y activación (US9, T159) --
+
+    public const string RutaDeCargas = Base + "/deposits/migration/loads";
+
+    /// <summary>La ruta base de la plantilla de una parte de la carga: <c>/template.xlsx</c> e <c>/import</c> cuelgan de ella.</summary>
+    public static string RutaDeParte(Guid carga, string parte) => $"{RutaDeCargas}/{carga}/parts/{Uri.EscapeDataString(parte)}";
+
+    /// <summary>Las cargas de una naturaleza (o de las dos), de la más nueva a la más vieja.</summary>
+    public Task<ResultadoDeInventario<IReadOnlyList<CargaDeCaptacionesDto>>> CargasAsync(string? naturaleza = null, CancellationToken ct = default) =>
+        Enviar<IReadOnlyList<CargaDeCaptacionesDto>>(HttpMethod.Get, ConQuery(RutaDeCargas, Query(("nature", naturaleza))), null, null, ct);
+
+    public Task<ResultadoDeInventario<CargaDeCaptacionesDto>> CargaAsync(Guid carga, CancellationToken ct = default) =>
+        Enviar<CargaDeCaptacionesDto>(HttpMethod.Get, $"{RutaDeCargas}/{carga}", null, null, ct);
+
+    /// <summary>Un borrador nuevo de la naturaleza con su corte; el borrador anterior de la misma naturaleza queda reemplazado.</summary>
+    public Task<ResultadoDeInventario<CargaDeCaptacionesDto>> CrearCargaAsync(CrearCargaDeCaptacionesRequest request, ClaveDeOperacion clave,
+        CancellationToken ct = default) =>
+        Enviar<CargaDeCaptacionesDto>(HttpMethod.Post, RutaDeCargas, request, clave, ct);
+
+    /// <summary>Aplica la carga: valida entre partes todo o nada (<c>Lending.Migration.CrossPartErrors</c> con <c>data.errors[]</c>) y calcula el cuadre.</summary>
+    public Task<ResultadoDeInventario<CargaDeCaptacionesAplicadaDto>> AplicarCargaAsync(Guid carga, string motivo, ClaveDeOperacion clave,
+        CancellationToken ct = default) =>
+        Enviar<CargaDeCaptacionesAplicadaDto>(HttpMethod.Post, $"{RutaDeCargas}/{carga}/apply", new MotivoDeCarteraRequest(motivo), clave, ct);
+
+    /// <summary>El cuadre contra Contabilidad por conjunto de cuentas, sin titulares (<c>Lending.Reconciliation.View</c>).</summary>
+    public Task<ResultadoDeInventario<CuadreDeCaptacionesDto>> CuadreAsync(Guid carga, CancellationToken ct = default) =>
+        Enviar<CuadreDeCaptacionesDto>(HttpMethod.Get, $"{RutaDeCargas}/{carga}/balance-check", null, null, ct);
+
+    public Task<ResultadoDeInventario<CifrasDeReferenciaDto>> CifrasDeReferenciaAsync(Guid carga, CancellationToken ct = default) =>
+        Enviar<CifrasDeReferenciaDto>(HttpMethod.Get, $"{RutaDeCargas}/{carga}/reference-figures", null, null, ct);
+
+    /// <summary>Registra (reemplaza) las cifras de referencia de la carga.</summary>
+    public Task<ResultadoDeInventario<CifrasDeReferenciaDto>> RegistrarCifrasDeReferenciaAsync(Guid carga, CifrasDeReferenciaRequest request, ClaveDeOperacion clave,
+        CancellationToken ct = default) =>
+        Enviar<CifrasDeReferenciaDto>(HttpMethod.Put, $"{RutaDeCargas}/{carga}/reference-figures", request, clave, ct);
+
+    /// <summary>Acepta diferencias del cuadre con el punto de una sesión cerrada (<c>Lending.Migration.AcceptDifferences</c>).</summary>
+    public Task<ResultadoDeInventario<IReadOnlyList<DiferenciaDeMigracionDto>>> AceptarDiferenciasAsync(Guid carga, AceptarDiferenciasRequest request,
+        ClaveDeOperacion clave, CancellationToken ct = default) =>
+        Enviar<IReadOnlyList<DiferenciaDeMigracionDto>>(HttpMethod.Post, $"{RutaDeCargas}/{carga}/differences/accept", request, clave, ct);
+
+    /// <summary>
+    /// «Tomar de los saldos cargados»: la plantilla de cuentas de aportes llena con los saldos de aportes registrados con fecha = el corte, para revisarla y
+    /// subirla como cualquier parte.
+    /// </summary>
+    public Task<InvitationApiResult<ArchivoDescargado>> DescargarDesdeSaldosDeAportesAsync(Guid carga, CancellationToken ct = default) =>
+        EnvioDeVentas.DescargarAsync(http, auth, $"{RutaDeParte(carga, "contribution-accounts")}/template.xlsx?withData=true&source=contribution-balances",
+            "cuentas-de-aportes-desde-saldos.xlsx", ct);
+
+    /// <summary>El estado de la activación de una naturaleza: la carga, la fecha esperada, el plazo y los requisitos.</summary>
+    public Task<ResultadoDeInventario<EstadoDeActivacionDeCaptacionesDto>> EstadoDeActivacionAsync(string naturaleza, CancellationToken ct = default) =>
+        Enviar<EstadoDeActivacionDeCaptacionesDto>(HttpMethod.Get, ConQuery(RutaDeActivacion, Query(("nature", naturaleza))), null, null, ct);
 
     private static string Ruta(int clase) => clase == TextosDeAportes.Devolucion ? "refunds" : "assignments";
 
