@@ -24,6 +24,23 @@ public static class TextosDeDocumentos
     public static IReadOnlyList<(string Valor, string Texto)> Clases { get; } =
         [.. ClasesDeK1, ("Statement", "Extracto"), ("TaxCertificate", "Certificado tributario")];
 
+    /// <summary>
+    /// Feature 014, US13 (T199): las clases de captaciones y aportes. Se emiten desde la ficha de la cuenta o de los aportes (<c>DocumentosDeCuenta</c>) y
+    /// el título del CDAT, la liquidación del retiro y la respuesta al juzgado nacen con su operación; la pantalla de documentos los lista y los verifica.
+    /// </summary>
+    public static IReadOnlyList<(string Valor, string Texto)> ClasesDeCaptaciones { get; } =
+    [
+        ("AccountStatement", "Extracto de cuenta"),
+        ("AccountBalanceCertificate", "Certificado de saldo de cuenta"),
+        ("DepositTaxCertificate", "Certificado tributario de captaciones"),
+        ("WithholdingCertificate", "Certificado de retención en la fuente"),
+        ("TermDepositTitle", "Título del CDAT"),
+        ("ContributionCertificate", "Constancia de aportes"),
+        ("ContributionClearance", "Paz y salvo de aportes"),
+        ("MembershipWithdrawalSettlement", "Liquidación del retiro"),
+        ("GarnishmentResponse", "Respuesta al juzgado"),
+    ];
+
     /// <summary>Las clases que la pantalla ofrece para emitir.</summary>
     public static IReadOnlyList<(string Valor, string Texto)> ClasesQueSeEmiten => Clases;
 
@@ -39,9 +56,10 @@ public static class TextosDeDocumentos
     };
 
     public static IReadOnlyList<(string Valor, string Texto)> Estados { get; } =
-        [("Valid", "Vigente"), ("SubjectToFinality", "Sujeto a firmeza"), ("Voided", "Anulado")];
+        [("Valid", "Vigente"), ("SubjectToFinality", "Sujeto a firmeza"), ("Voided", "Anulado"), ("Superseded", "Reemplazado"), ("Settled", "Liquidado")];
 
-    public static string Clase(string? clase) => Clases.FirstOrDefault(c => c.Valor == clase).Texto ?? clase ?? "—";
+    public static string Clase(string? clase) =>
+        Clases.FirstOrDefault(c => c.Valor == clase).Texto ?? ClasesDeCaptaciones.FirstOrDefault(c => c.Valor == clase).Texto ?? clase ?? "—";
 
     public static string Estado(string? estado) => Estados.FirstOrDefault(e => e.Valor == estado).Texto ?? estado ?? "—";
 
@@ -49,7 +67,7 @@ public static class TextosDeDocumentos
     public static string AvisoDeEstado(string? estado) => estado switch
     {
         "Valid" => "aviso-ok",
-        "SubjectToFinality" => "aviso-alerta",
+        "SubjectToFinality" or "Superseded" or "Settled" => "aviso-alerta",
         _ => "aviso-error",
     };
 
@@ -58,6 +76,8 @@ public static class TextosDeDocumentos
         "Issued" => "Emitido",
         "Delivered" => "Entregado por correo",
         "Voided" => "Anulado",
+        "Superseded" => "Reemplazado por otro título",
+        "Settled" => "CDAT liquidado",
         _ => evento ?? "—",
     };
 

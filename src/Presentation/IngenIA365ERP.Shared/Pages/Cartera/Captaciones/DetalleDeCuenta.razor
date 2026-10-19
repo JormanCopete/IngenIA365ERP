@@ -100,6 +100,9 @@
                 {
                     <InteresesDeCuenta Cuenta="@c" OnCambio="@CargarAsync" />
                 }
+                @* US13 (T199): el saldo a una fecha, el extracto en pantalla y los documentos al titular de la cuenta. *@
+                <DocumentosDeCuenta PersonaPublicId="@c.Holder.PersonPublicId" CuentaPublicId="@c.PublicId" EsAportes="@(c.Nature == TextosDeCaptaciones.Aportes)"
+                                    EsCdat="@(c.DepositClass == TextosDeCaptaciones.Cdat)" />
             }
 
             <div class="info-card">

@@ -29,7 +29,11 @@ public sealed record DocumentoEmitidoDto(
     bool? CoversCoDebts,
     string VerificationCode,
     string DeliveryMode,
-    bool IsTestEnvironment);
+    bool IsTestEnvironment,
+    IReadOnlyList<CuentaDeDocumentoDto>? Accounts = null);
+
+/// <summary>Feature 014, US13 (T199): una cuenta de captación o de aportes que cubre el documento y el saldo que mostró.</summary>
+public sealed record CuentaDeDocumentoDto(Guid AccountPublicId, string Number, decimal? Balance);
 
 /// <summary>Un evento del documento (<c>Issued</c>, <c>Delivered</c>, <c>Voided</c>) con quién, el motivo y la operación causa.</summary>
 public sealed record EventoDeDocumentoDto(string Kind, DateTime At, string? By, string? Reason, string? CauseOperation, Guid? DebtorMessagePublicId);
@@ -52,7 +56,10 @@ public sealed record EmitirDocumentoRequest(
     DateOnly? CutoffDate,
     PeriodoDeDocumentoRequest? Period,
     short? Year,
-    string Delivery);
+    string Delivery,
+    Guid? AccountPublicId = null,
+    bool? IncludeRestrictions = null,
+    bool? IncludePermanentSavings = null);
 
 /// <summary>La respuesta de la emisión (201): el documento, su número, el código, el estado, el enlace del PDF o el mensaje al deudor.</summary>
 public sealed record DocumentoEmitidoRespuestaDto(
@@ -62,7 +69,19 @@ public sealed record DocumentoEmitidoRespuestaDto(
     string Status,
     DateOnly? FinalityUntil,
     EnlaceDeCarteraDto? Download,
-    Guid? DebtorMessagePublicId);
+    Guid? DebtorMessagePublicId,
+    bool AlreadyIssued = false);
+
+/// <summary>Feature 014, US13 (T199): el pedido del lote de documentos de captaciones.</summary>
+public sealed record LoteDeDocumentosRequest(string Kind, short? Year, PeriodoDeDocumentoRequest? Period, IReadOnlyList<Guid>? PersonPublicIds, string Delivery);
+
+/// <summary>Un documento del lote: a nombre de quién, de qué cuenta, el documento o por qué no salió.</summary>
+public sealed record DocumentoDelLoteDto(Guid PersonPublicId, string PersonName, string? AccountNumber, Guid? DocumentPublicId, string? Number,
+    bool AlreadyIssued, string? ErrorCode, string? Message);
+
+/// <summary>El resultado del lote.</summary>
+public sealed record LoteDeDocumentosDto(string Kind, DateOnly PeriodFrom, DateOnly PeriodTo, int Requested, int Issued, int AlreadyIssued, int NotIssued,
+    IReadOnlyList<DocumentoDelLoteDto> Items);
 
 /// <summary>El destinatario del envío posterior (nulo = el titular).</summary>
 public sealed record EnviarDocumentoRequest(Guid? RecipientPersonPublicId);

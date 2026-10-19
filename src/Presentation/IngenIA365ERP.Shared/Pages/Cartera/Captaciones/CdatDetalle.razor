@@ -134,13 +134,15 @@
                     </table>
                     @if (c.Titles.Count == 0)
                     {
-                        <p class="texto-tenue">Los títulos «CDAT, no negociable» se emiten con los documentos al titular.</p>
+                        <p class="texto-tenue">El título «CDAT, no negociable» todavía no está emitido (nace al constituir, prorrogar o renovar).</p>
                     }
                     else
                     {
-                        <ul>@foreach (var t in c.Titles) { <li>@t.Number · @t.Status · @t.IssuedAt.ToLocalTime().ToString("dd/MM/yyyy")</li> }</ul>
+                        <ul>@foreach (var t in c.Titles) { <li>@t.Number · versión @t.TermsVersion · @TextosDeDocumentos.Estado(t.Status) · @t.IssuedAt.ToLocalTime().ToString("dd/MM/yyyy")</li> }</ul>
                     }
                 </div>
+                @* US13 (T199): el saldo, el extracto, los certificados y el título pendiente del CDAT. *@
+                <DocumentosDeCuenta PersonaPublicId="@c.Account.Holder.PersonPublicId" CuentaPublicId="@c.Account.PublicId" EsCdat="true" OnCambio="@CargarAsync" />
             }
         }
     </IndicadorDeCarga>

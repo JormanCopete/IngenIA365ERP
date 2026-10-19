@@ -82,6 +82,9 @@
         </div>
         @if (_cuotas.Count == 0) { <p class="texto-tenue">No hay cuotas en ese estado.</p> }
     </IndicadorDeCarga>
+
+    @* US13 (T199): la constancia y el paz y salvo de aportes, el certificado tributario y el de retención del asociado, y sus documentos emitidos. *@
+    <DocumentosDeCuenta PersonaPublicId="@Id" EsAportes="true" />
 </div>
 
 <SfDialog @bind-Visible="_mostrarPedido" Header="@(_clase == TextosDeAportes.Devolucion ? "Pedir una devolución de aportes" : "Pedir una cesión de aportes")" Width="640px"
