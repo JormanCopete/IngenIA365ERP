@@ -36,6 +36,11 @@ Lo que calcula hoy (fase fundacional y US4 de captaciones; las historias siguien
 - Asamblea (US12, T201; FR-045 a FR-047, D13): base por saldo promedio diario del ejercicio o al cierre, tasa decidida o valor sobre la base,
   limite legal (IPC) en la revalorizacion, redondeo a la unidad de la entidad, reparto del valor y prorrateo al fondo por el mayor residuo, tope de lo
   amortizable. Casos asamblea-*.json (bloque "entrada").
+- Fondo de liquidez (US15, T214; FR-025, FR-109; Decreto 1068 de 2015 con el Decreto 976 de 2026): regimen general (porcentaje de los depositos y del
+  permanente solo retirable al desvincularse) o por madurez residual (categoria plena: capital + intereses causados y por causar, CDAT y contractual por
+  banda, vencidos o con redencion anticipada pactada en la primera), transicion (rige el general y el nuevo se informa), pisos legales (rige el mayor) y
+  el requerido de cada renglon al centavo (mitad hacia arriba). Riesgo de liquidez: brecha por banda y acumulada, IRL acumulado = (ALN + entradas
+  acumuladas) / salidas acumuladas a 4 decimales. Depositos asegurados: por ahorrador hasta el tope. Casos liquidez-*.json (bloque "entrada", "tipo").
 - Cargos de cuenta (US4, T115; FR-128): gratuitos del periodo, exoneraciones (la primera que aplica), valor fijo o porcentaje al peso
   acotado por minimo y maximo, cobrado si el saldo lo deja sin bajar del minimo; si no, pendiente o condonado segun la linea. Casos
   cargo-*.json (bloque "entrada").
@@ -805,9 +810,165 @@ def esperado_asamblea(caso):
             "lineas": salida}
 
 
+# ------------------------------------------------------------------------------------------------ fondo de liquidez (US15)
+
+def _c(x):
+    return q(D(str(x)), 2, ROUND_HALF_UP)
+
+
+def _regla(r):
+    regimen = r.get("regimen", "General")
+    plena = regimen == "PorMadurez"
+    p = D(str(r["porcentajeDepositos"]))
+    perm = D(str(r["porcentajePermanenteSoloAlRetirarse"])) if r.get("porcentajePermanenteSoloAlRetirarse") is not None else p
+    bandas = sorted([(b.get("hastaDias"), D(str(b["porcentaje"]))) for b in r.get("bandas", [])],
+                    key=lambda b: b[0] if b[0] is not None else 10 ** 9)
+    if not bandas or bandas[-1][0] is not None:
+        bandas.append((None, D(0)))
+    return {"regimen": regimen, "plena": plena, "p": p, "perm": perm, "bandas": bandas,
+            "causados": r.get("incluyeInteresesCausados", plena), "porCausar": r.get("incluyeInteresesPorCausar", plena),
+            "anticipada": r.get("redencionAnticipadaEnLaPrimeraBanda", True), "fin": r.get("finDeLaTransicion")}
+
+
+def _mayor(x, piso):
+    return x if piso is None else max(x, D(str(piso)))
+
+
+def _nombre_banda(bandas, i):
+    desde = 0 if i == 0 else (bandas[i - 1][0] or 0) + 1
+    return f"{desde} a {bandas[i][0]} días" if bandas[i][0] is not None else f"más de {desde - 1} días"
+
+
+def _indice(bandas, dias):
+    for i, (hasta, _) in enumerate(bandas):
+        if hasta is None or dias <= hasta:
+            return i
+    return len(bandas) - 1
+
+
+CLASES = ["ALaVista", "Cdat", "Contractual", "PermanenteConRetiroParcial", "PermanenteSoloAlRetirarse"]
+
+
+def _regimen(r, pisos, depositos):
+    plena = r["plena"]
+    pdep = _mayor(r["p"], pisos.get("depositos"))
+    if plena and pisos.get("permanenteSoloAlRetirarsePlena") is not None:
+        piso_perm = pisos.get("permanenteSoloAlRetirarsePlena")
+    else:
+        piso_perm = pisos.get("permanenteSoloAlRetirarse")
+    pperm = _mayor(r["perm"], piso_perm)
+    bandas = r["bandas"] if plena else []
+    grupos = {}
+    for d in depositos:
+        cap, cau = D(str(d["capital"])), D(str(d.get("interesCausado", 0)))
+        if cap == 0 and cau == 0:
+            continue
+        if plena and d["clase"] in ("Cdat", "Contractual"):
+            dias = 0 if d.get("redencionAnticipadaPactada") and r["anticipada"] else (d.get("diasAlVencimiento") or 0)
+            b = _indice(bandas, dias)
+        else:
+            b = -1
+        grupos.setdefault((CLASES.index(d["clase"]), b), []).append(d)
+    renglones = []
+    for (ci, b) in sorted(grupos):
+        lista = grupos[(ci, b)]
+        capital = sum((D(str(d["capital"])) for d in lista), D(0))
+        intereses = D(0)
+        if r["causados"]:
+            intereses += sum((D(str(d.get("interesCausado", 0))) for d in lista), D(0))
+        if plena and r["porCausar"]:
+            intereses += sum((D(str(d.get("interesPorCausar", 0))) for d in lista), D(0))
+        if b >= 0:
+            propio = bandas[b][1]
+            if b == 0:
+                pct = max(propio, pdep)
+            else:
+                pct = _mayor(propio, pisos.get("bandaMediaPlena")) if propio > 0 else propio
+        else:
+            pct = pperm if CLASES[ci] == "PermanenteSoloAlRetirarse" else pdep
+        base_ = capital + intereses
+        renglones.append({"clase": CLASES[ci], "banda": _nombre_banda(bandas, b) if b >= 0 else None, "cuentas": len(lista),
+                          "capital": capital, "intereses": intereses, "base": base_, "porcentaje": pct,
+                          "requerido": _c(max(D(0), base_) * pct)})
+    return {"regimen": r["regimen"], "requerido": sum((x["requerido"] for x in renglones), D(0)), "renglones": renglones}
+
+
+def esperado_fondo(e):
+    regla, general, pisos = _regla(e["regla"]), _regla(e["general"]), e.get("pisos", {})
+    fecha_ = fecha(e["fecha"])
+    if regla["plena"] and regla["fin"] is not None and fecha_ < fecha(regla["fin"]):
+        g = dict(general, regimen="General", plena=False)
+        vigente = _regimen(g, pisos, e["depositos"])
+        nuevo = _regimen(regla, pisos, e["depositos"])
+        vigente["nuevo"] = {"regimen": nuevo["regimen"], "requerido": nuevo["requerido"]}
+        vigente["finDeLaTransicion"] = regla["fin"]
+        return vigente
+    r = _regimen(regla, pisos, e["depositos"])
+    r["nuevo"] = None
+    r["finDeLaTransicion"] = None
+    return r
+
+
+def esperado_riesgo(e):
+    topes = sorted({b for b in e["bandas"] if b is not None})
+    if any(b is None for b in e["bandas"]):
+        topes.append(None)
+    aln = sum((_c(D(str(a["valor"])) * (1 - D(str(a["descuento"])))) for a in e["activos"]), D(0))
+    acc = [[D(0), D(0), D(0)] for _ in topes]
+    fuera = D(0)
+    for f in e["flujos"]:
+        m = D(str(f["monto"]))
+        i = next((k for k, h in enumerate(topes) if h is None or f["dias"] <= h), -1)
+        if i < 0:
+            fuera += m
+            continue
+        acc[i][["Entrada", "SalidaContractual", "SalidaNoContractual"].index(f["tipo"])] += m
+    bandas, acumulada, ent, sal = [], D(0), D(0), D(0)
+    for i, h in enumerate(topes):
+        en, c, n = (_c(x) for x in acc[i])
+        brecha = en - c - n
+        acumulada += brecha
+        ent += en
+        sal += c + n
+        irl = q((aln + ent) / sal, 4, ROUND_HALF_UP) if sal > 0 else None
+        desde = 1 if i == 0 else (topes[i - 1] or 0) + 1
+        nombre = f"{desde} a {h} días" if h is not None else f"más de {desde - 1} días"
+        bandas.append({"banda": nombre, "entradas": en, "salidasContractuales": c, "salidasNoContractuales": n, "brecha": brecha,
+                       "brechaAcumulada": acumulada, "irlAcumulado": irl})
+    con = [b for b in bandas if b["irlAcumulado"] is not None]
+    minimo = min(con, key=lambda b: b["irlAcumulado"]) if con else None
+    return {"activosLiquidosNetos": aln, "bandas": bandas, "irlMinimo": minimo["irlAcumulado"] if minimo else None,
+            "bandaDelIrlMinimo": minimo["banda"] if minimo else None, "fueraDelHorizonte": _c(fuera)}
+
+
+def esperado_asegurados(e):
+    tope = D(str(e["tope"]))
+    salida = []
+    for a in e["ahorradores"]:
+        dep = D(str(a["depositos"]))
+        if dep <= 0:
+            continue
+        aseg = min(dep, tope)
+        salida.append({"persona": a["persona"], "cuentas": a["cuentas"], "depositos": dep, "asegurado": aseg, "noAsegurado": dep - aseg})
+    return {"ahorradores": salida, "totalAsegurado": sum((x["asegurado"] for x in salida), D(0)),
+            "totalNoAsegurado": sum((x["noAsegurado"] for x in salida), D(0))}
+
+
+def esperado_liquidez(caso):
+    e = caso["entrada"]
+    tipo = e.get("tipo", "fondo")
+    if tipo == "fondo":
+        return esperado_fondo(e)
+    if tipo == "riesgo":
+        return esperado_riesgo(e)
+    if tipo == "asegurados":
+        return esperado_asegurados(e)
+    raise ValueError(f"tipo de liquidez desconocido: {tipo}")
+
 def esperado_de_entrada(caso):
     nombre = caso["nombre"]
     if nombre.startswith("asamblea-"): return esperado_asamblea(caso)
+    if nombre.startswith("liquidez-"): return esperado_liquidez(caso)
     if nombre.startswith("gmf-"): return esperado_gmf(caso)
     if nombre.startswith("cargo-"): return esperado_cargo(caso)
     if nombre.startswith("retencion-"): return esperado_retencion(caso)

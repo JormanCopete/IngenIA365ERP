@@ -1,0 +1,121 @@
+// Brecha de liquidez del Anexo 3 con banda abierta al final: lo que vence despues de 360 dias y la parte estable del ahorro a la vista caen en la ultima.
+{
+  "nombre": "liquidez-06-brecha-con-banda-abierta",
+  "descripcion": "Brecha de liquidez del Anexo 3 con banda abierta al final: lo que vence despues de 360 dias y la parte estable del ahorro a la vista caen en la ultima.",
+  "entrada": {
+    "tipo": "riesgo",
+    "bandas": [
+      30,
+      60,
+      90,
+      180,
+      270,
+      360,
+      null
+    ],
+    "activos": [
+      {
+        "concepto": "Fondo de liquidez",
+        "valor": 1000000,
+        "descuento": 0
+      }
+    ],
+    "flujos": [
+      {
+        "tipo": "Entrada",
+        "concepto": "Cuotas de cartera",
+        "dias": 400,
+        "monto": 9000000
+      },
+      {
+        "tipo": "SalidaContractual",
+        "concepto": "CDAT",
+        "dias": 200,
+        "monto": 2000000
+      },
+      {
+        "tipo": "SalidaNoContractual",
+        "concepto": "Ahorro a la vista volatil",
+        "dias": 1,
+        "monto": 500000
+      },
+      {
+        "tipo": "SalidaNoContractual",
+        "concepto": "Ahorro a la vista estable",
+        "dias": 99999,
+        "monto": 4500000
+      }
+    ]
+  },
+  "esperado": {
+    "activosLiquidosNetos": 1000000,
+    "bandas": [
+      {
+        "banda": "1 a 30 días",
+        "entradas": 0,
+        "salidasContractuales": 0,
+        "salidasNoContractuales": 500000,
+        "brecha": -500000,
+        "brechaAcumulada": -500000,
+        "irlAcumulado": 2
+      },
+      {
+        "banda": "31 a 60 días",
+        "entradas": 0,
+        "salidasContractuales": 0,
+        "salidasNoContractuales": 0,
+        "brecha": 0,
+        "brechaAcumulada": -500000,
+        "irlAcumulado": 2
+      },
+      {
+        "banda": "61 a 90 días",
+        "entradas": 0,
+        "salidasContractuales": 0,
+        "salidasNoContractuales": 0,
+        "brecha": 0,
+        "brechaAcumulada": -500000,
+        "irlAcumulado": 2
+      },
+      {
+        "banda": "91 a 180 días",
+        "entradas": 0,
+        "salidasContractuales": 0,
+        "salidasNoContractuales": 0,
+        "brecha": 0,
+        "brechaAcumulada": -500000,
+        "irlAcumulado": 2
+      },
+      {
+        "banda": "181 a 270 días",
+        "entradas": 0,
+        "salidasContractuales": 2000000,
+        "salidasNoContractuales": 0,
+        "brecha": -2000000,
+        "brechaAcumulada": -2500000,
+        "irlAcumulado": 0.4
+      },
+      {
+        "banda": "271 a 360 días",
+        "entradas": 0,
+        "salidasContractuales": 0,
+        "salidasNoContractuales": 0,
+        "brecha": 0,
+        "brechaAcumulada": -2500000,
+        "irlAcumulado": 0.4
+      },
+      {
+        "banda": "más de 360 días",
+        "entradas": 9000000,
+        "salidasContractuales": 0,
+        "salidasNoContractuales": 4500000,
+        "brecha": 4500000,
+        "brechaAcumulada": 2000000,
+        "irlAcumulado": 1.4286
+      }
+    ],
+    "irlMinimo": 0.4,
+    "bandaDelIrlMinimo": "181 a 270 días",
+    "fueraDelHorizonte": 0
+  }
+}

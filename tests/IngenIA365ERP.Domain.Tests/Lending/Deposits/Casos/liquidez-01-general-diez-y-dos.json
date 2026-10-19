@@ -1,0 +1,118 @@
+// Regimen general (Decreto 976 de 2026, Seccion 1): 10 % de los depositos a la vista, CDAT, contractual y permanente con retiro parcial; 2 % del permanente solo retirable al desvincularse. Sin intereses en la base. Prueba independiente de la historia: el requerido por clase igual al calculo manual.
+{
+  "nombre": "liquidez-01-general-diez-y-dos",
+  "descripcion": "Regimen general (Decreto 976 de 2026, Seccion 1): 10 % de los depositos a la vista, CDAT, contractual y permanente con retiro parcial; 2 % del permanente solo retirable al desvincularse. Sin intereses en la base. Prueba independiente de la historia: el requerido por clase igual al calculo manual.",
+  "entrada": {
+    "tipo": "fondo",
+    "fecha": "2026-10-31",
+    "regla": {
+      "regimen": "General",
+      "porcentajeDepositos": 0.1,
+      "porcentajePermanenteSoloAlRetirarse": 0.02,
+      "fuente": "Decreto 1068 de 2015 art. 2.11.7.2.1.1 (Decreto 976 de 2026, Seccion 1)"
+    },
+    "general": {
+      "regimen": "General",
+      "porcentajeDepositos": 0.1,
+      "porcentajePermanenteSoloAlRetirarse": 0.02,
+      "fuente": "Decreto 1068 de 2015 art. 2.11.7.2.1.1 (Decreto 976 de 2026, Seccion 1)"
+    },
+    "pisos": {
+      "depositos": 0.1,
+      "permanenteSoloAlRetirarse": 0.02,
+      "bandaMediaPlena": 0.05,
+      "permanenteSoloAlRetirarsePlena": 0.05
+    },
+    "depositos": [
+      {
+        "clase": "ALaVista",
+        "capital": 50000000,
+        "interesCausado": 120.55
+      },
+      {
+        "clase": "ALaVista",
+        "capital": 1234567.89,
+        "interesCausado": 10
+      },
+      {
+        "clase": "Cdat",
+        "capital": 30000000,
+        "interesCausado": 250000,
+        "interesPorCausar": 900000,
+        "diasAlVencimiento": 120
+      },
+      {
+        "clase": "Contractual",
+        "capital": 5000000,
+        "interesCausado": 20000,
+        "diasAlVencimiento": 300
+      },
+      {
+        "clase": "PermanenteSoloAlRetirarse",
+        "capital": 20000000
+      },
+      {
+        "clase": "PermanenteConRetiroParcial",
+        "capital": 4000000.05
+      }
+    ]
+  },
+  "esperado": {
+    "regimen": "General",
+    "requerido": 9423456.8,
+    "renglones": [
+      {
+        "clase": "ALaVista",
+        "banda": null,
+        "cuentas": 2,
+        "capital": 51234567.89,
+        "intereses": 0,
+        "base": 51234567.89,
+        "porcentaje": 0.1,
+        "requerido": 5123456.79
+      },
+      {
+        "clase": "Cdat",
+        "banda": null,
+        "cuentas": 1,
+        "capital": 30000000,
+        "intereses": 0,
+        "base": 30000000,
+        "porcentaje": 0.1,
+        "requerido": 3000000
+      },
+      {
+        "clase": "Contractual",
+        "banda": null,
+        "cuentas": 1,
+        "capital": 5000000,
+        "intereses": 0,
+        "base": 5000000,
+        "porcentaje": 0.1,
+        "requerido": 500000
+      },
+      {
+        "clase": "PermanenteConRetiroParcial",
+        "banda": null,
+        "cuentas": 1,
+        "capital": 4000000.05,
+        "intereses": 0,
+        "base": 4000000.05,
+        "porcentaje": 0.1,
+        "requerido": 400000.01
+      },
+      {
+        "clase": "PermanenteSoloAlRetirarse",
+        "banda": null,
+        "cuentas": 1,
+        "capital": 20000000,
+        "intereses": 0,
+        "base": 20000000,
+        "porcentaje": 0.02,
+        "requerido": 400000
+      }
+    ],
+    "nuevo": null,
+    "finDeLaTransicion": null
+  }
+}

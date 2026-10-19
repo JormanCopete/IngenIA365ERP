@@ -1,0 +1,58 @@
+// Seguro de depositos (Fogacoop): por ahorrador hasta el tope de 50.000.000 sumando todas sus cuentas de captacion; los aportes no entran; quien no tiene saldo no aparece.
+{
+  "nombre": "liquidez-07-depositos-asegurados",
+  "descripcion": "Seguro de depositos (Fogacoop): por ahorrador hasta el tope de 50.000.000 sumando todas sus cuentas de captacion; los aportes no entran; quien no tiene saldo no aparece.",
+  "entrada": {
+    "tipo": "asegurados",
+    "tope": 50000000,
+    "ahorradores": [
+      {
+        "persona": 1,
+        "cuentas": 2,
+        "depositos": 12000000.5
+      },
+      {
+        "persona": 2,
+        "cuentas": 3,
+        "depositos": 75000000
+      },
+      {
+        "persona": 3,
+        "cuentas": 1,
+        "depositos": 50000000
+      },
+      {
+        "persona": 4,
+        "cuentas": 1,
+        "depositos": 0
+      }
+    ]
+  },
+  "esperado": {
+    "ahorradores": [
+      {
+        "persona": 1,
+        "cuentas": 2,
+        "depositos": 12000000.5,
+        "asegurado": 12000000.5,
+        "noAsegurado": 0
+      },
+      {
+        "persona": 2,
+        "cuentas": 3,
+        "depositos": 75000000,
+        "asegurado": 50000000,
+        "noAsegurado": 25000000
+      },
+      {
+        "persona": 3,
+        "cuentas": 1,
+        "depositos": 50000000,
+        "asegurado": 50000000,
+        "noAsegurado": 0
+      }
+    ],
+    "totalAsegurado": 112000000.5,
+    "totalNoAsegurado": 25000000
+  }
+}
