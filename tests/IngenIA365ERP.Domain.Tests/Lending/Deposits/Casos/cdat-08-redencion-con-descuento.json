@@ -1,0 +1,91 @@
+// Redencion anticipada con descuento del 30 % de lo causado del periodo en curso (P17), con tres pagos mensuales ya hechos.
+{
+  "nombre": "cdat-08-redencion-con-descuento",
+  "descripcion": "Redencion anticipada con descuento del 30 % de lo causado del periodo en curso (P17), con tres pagos mensuales ya hechos.",
+  "entrada": {
+    "condiciones": {
+      "capital": 10000000,
+      "tasaEA": 0.1,
+      "inicio": "2027-01-13",
+      "plazoDias": 180,
+      "periodicidad": "Monthly",
+      "modalidad": "Arrears",
+      "convencion": "Actual360",
+      "unidadDeRedondeo": 1,
+      "modoDeRedondeo": "AwayFromZero"
+    },
+    "redencion": {
+      "fecha": "2027-04-28",
+      "interesPagado": 239223,
+      "penalidad": {
+        "modo": "Discount",
+        "fraccion": 0.3
+      }
+    }
+  },
+  "esperado": {
+    "vencimiento": "2027-07-12",
+    "fechaDePagoAlVencimiento": "2027-07-12",
+    "plazoDeEmision": "SixToTwelve",
+    "periodos": [
+      {
+        "numero": 1,
+        "desde": "2027-01-13",
+        "hasta": "2027-02-12",
+        "fechaDePago": "2027-02-12",
+        "dias": 30,
+        "interes": 79741
+      },
+      {
+        "numero": 2,
+        "desde": "2027-02-12",
+        "hasta": "2027-03-14",
+        "fechaDePago": "2027-03-15",
+        "dias": 30,
+        "interes": 79741
+      },
+      {
+        "numero": 3,
+        "desde": "2027-03-14",
+        "hasta": "2027-04-13",
+        "fechaDePago": "2027-04-13",
+        "dias": 30,
+        "interes": 79741
+      },
+      {
+        "numero": 4,
+        "desde": "2027-04-13",
+        "hasta": "2027-05-13",
+        "fechaDePago": "2027-05-13",
+        "dias": 30,
+        "interes": 79741
+      },
+      {
+        "numero": 5,
+        "desde": "2027-05-13",
+        "hasta": "2027-06-12",
+        "fechaDePago": "2027-06-14",
+        "dias": 30,
+        "interes": 79741
+      },
+      {
+        "numero": 6,
+        "desde": "2027-06-12",
+        "hasta": "2027-07-12",
+        "fechaDePago": "2027-07-12",
+        "dias": 30,
+        "interes": 79741
+      }
+    ],
+    "interesTotal": 478446,
+    "redencion": {
+      "diasCorridos": 105,
+      "interesCausado": 39791.533836,
+      "interesReliquidado": null,
+      "ajusteDeCausacion": 0,
+      "penalidadSobreInteres": 11937,
+      "penalidadSobreCapital": 0,
+      "interesAPagar": 27855
+    }
+  }
+}

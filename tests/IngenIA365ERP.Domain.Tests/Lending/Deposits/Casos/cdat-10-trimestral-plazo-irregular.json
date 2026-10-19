@@ -1,0 +1,50 @@
+// Plazo de 200 dias con pago trimestral en base 365: dos periodos de 90 y uno de 20 dias; plazo de emision de 6 a 12 meses.
+{
+  "nombre": "cdat-10-trimestral-plazo-irregular",
+  "descripcion": "Plazo de 200 dias con pago trimestral en base 365: dos periodos de 90 y uno de 20 dias; plazo de emision de 6 a 12 meses.",
+  "entrada": {
+    "condiciones": {
+      "capital": 10000000,
+      "tasaEA": 0.1,
+      "inicio": "2027-01-13",
+      "plazoDias": 200,
+      "periodicidad": "Quarterly",
+      "modalidad": "Arrears",
+      "convencion": "Actual365",
+      "unidadDeRedondeo": 1,
+      "modoDeRedondeo": "AwayFromZero"
+    }
+  },
+  "esperado": {
+    "vencimiento": "2027-08-01",
+    "fechaDePagoAlVencimiento": "2027-08-02",
+    "plazoDeEmision": "SixToTwelve",
+    "periodos": [
+      {
+        "numero": 1,
+        "desde": "2027-01-13",
+        "hasta": "2027-04-13",
+        "fechaDePago": "2027-04-13",
+        "dias": 90,
+        "interes": 237795
+      },
+      {
+        "numero": 2,
+        "desde": "2027-04-13",
+        "hasta": "2027-07-12",
+        "fechaDePago": "2027-07-12",
+        "dias": 90,
+        "interes": 237795
+      },
+      {
+        "numero": 3,
+        "desde": "2027-07-12",
+        "hasta": "2027-08-01",
+        "fechaDePago": "2027-08-02",
+        "dias": 20,
+        "interes": 52361
+      }
+    ],
+    "interesTotal": 527951
+  }
+}

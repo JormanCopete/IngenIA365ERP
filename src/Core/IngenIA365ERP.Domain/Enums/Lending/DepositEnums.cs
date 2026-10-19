@@ -557,3 +557,16 @@ public enum MigratedTaxConcept
     Gmf = 3,
     InflationaryComponent = 4,
 }
+
+/// <summary>
+/// Estado de una solicitud de tasa negociada (feature 014, US6, T171; api.md §6; FR-127): en espera de quien la decida, aprobada (se sella en el CDAT),
+/// negada (rige la tabla si el titular la acepta), retirada por quien la pidió o vencida (el CDAT se fondeó o se desistió sin decidirla).
+/// </summary>
+public enum NegotiatedRateRequestStatus
+{
+    PendingDecision = 1,
+    Approved = 2,
+    Rejected = 3,
+    Withdrawn = 4,
+    Expired = 5,
+}

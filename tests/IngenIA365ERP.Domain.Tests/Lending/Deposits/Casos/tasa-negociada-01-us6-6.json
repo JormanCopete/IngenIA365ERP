@@ -1,0 +1,97 @@
+// US6-6: asociado con cinco anos, 200.000.000 a 360 dias; la regla de antiguedad admite 1,5 puntos; pide 1,2 con atribucion de 0,5: espera aprobador; pide 2: se rechaza.
+{
+  "nombre": "tasa-negociada-01-us6-6",
+  "descripcion": "US6-6: asociado con cinco anos, 200.000.000 a 360 dias; la regla de antiguedad admite 1,5 puntos; pide 1,2 con atribucion de 0,5: espera aprobador; pide 2: se rechaza.",
+  "entrada": {
+    "reglas": [
+      {
+        "codigo": "ANT5",
+        "prioridad": 1,
+        "antiguedadMinimaMeses": 60,
+        "montoMinimo": 100000000,
+        "plazoMinimoDias": 360,
+        "plazoMaximoDias": 360,
+        "margenMaximo": 0.015
+      },
+      {
+        "codigo": "GENERAL",
+        "prioridad": 9,
+        "margenMaximo": 0.005
+      }
+    ],
+    "pedidos": [
+      {
+        "antiguedadMeses": 60,
+        "monto": 200000000,
+        "plazoDias": 360,
+        "tasaDeTabla": 0.09,
+        "saldoDelTitular": 250000000,
+        "oficina": 1,
+        "canal": null,
+        "margenPedido": 0.012,
+        "atribucion": 0.005
+      },
+      {
+        "antiguedadMeses": 60,
+        "monto": 200000000,
+        "plazoDias": 360,
+        "tasaDeTabla": 0.09,
+        "saldoDelTitular": 250000000,
+        "oficina": 1,
+        "canal": null,
+        "margenPedido": 0.02,
+        "atribucion": 0.005
+      },
+      {
+        "antiguedadMeses": 12,
+        "monto": 20000000,
+        "plazoDias": 180,
+        "tasaDeTabla": 0.09,
+        "saldoDelTitular": 20000000,
+        "oficina": 1,
+        "canal": null,
+        "margenPedido": 0.004,
+        "atribucion": 0.005
+      },
+      {
+        "antiguedadMeses": 60,
+        "monto": 200000000,
+        "plazoDias": 360,
+        "tasaDeTabla": 0.09,
+        "saldoDelTitular": 250000000,
+        "oficina": 1,
+        "canal": null,
+        "margenPedido": 0,
+        "atribucion": 0.005
+      }
+    ]
+  },
+  "esperado": {
+    "evaluaciones": [
+      {
+        "regla": "ANT5",
+        "codigo": null,
+        "seAplicaSola": false,
+        "esperaAprobador": true
+      },
+      {
+        "regla": "ANT5",
+        "codigo": "Lending.NegotiatedRate.MarginAboveRule",
+        "seAplicaSola": false,
+        "esperaAprobador": false
+      },
+      {
+        "regla": "GENERAL",
+        "codigo": null,
+        "seAplicaSola": true,
+        "esperaAprobador": false
+      },
+      {
+        "regla": null,
+        "codigo": "Lending.NegotiatedRate.MarginInvalid",
+        "seAplicaSola": false,
+        "esperaAprobador": false
+      }
+    ]
+  }
+}

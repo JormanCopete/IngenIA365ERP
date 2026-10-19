@@ -22,6 +22,9 @@ Lo que calcula hoy (fase fundacional y US4 de captaciones; las historias siguien
   condiciones), minimo para interes y la convencion; ver la seccion "interes diario". Casos interes-*.json (consultas).
 - Retencion en la fuente sobre rendimientos (US5, T128; R06): perfil, umbral diario, componente inflacionario y tarifa. Casos
   retencion-*.json (bloque "entrada").
+- CDAT (US6, T166, T167; FR-023): plan vencido o anticipado, causacion cuadrada al plan, gracia en dias habiles, prorroga con o sin
+  capitalizacion, redencion con penalidad y plazo de emision. Casos cdat-*.json (bloque "entrada").
+- Tasa negociada (US6, T168; FR-127): la regla mas especifica y el margen. Casos tasa-negociada-*.json (bloque "entrada").
 - Cargos de cuenta (US4, T115; FR-128): gratuitos del periodo, exoneraciones (la primera que aplica), valor fijo o porcentaje al peso
   acotado por minimo y maximo, cobrado si el saldo lo deja sin bajar del minimo; si no, pendiente o condonado segun la linea. Casos
   cargo-*.json (bloque "entrada").
@@ -399,11 +402,199 @@ def esperado_cargo(caso):
     return {"casos": [cargo_de(entrada["cargo"], c) for c in entrada["casos"]]}
 
 
+# ------------------------------------------------------------------------------------------------------------- CDAT (R11)
+# US6 (T166, T167; FR-023; investigacion 3.2): el plazo en dias calendario desde el inicio, partido en periodos de los dias de la
+# periodicidad (Monthly 30, Quarterly 90...; el ultimo absorbe lo que sobre; SinglePayment = un periodo). Interes de un periodo de n dias:
+# C x ((1 + r_d)^n - 1) con r_d = raiz B-esima de (1+EA) - 1 (tasa_diaria); anticipado: C x i_v / (1 + i_v). Redondeo con la unidad y el
+# modo de la condicion (AwayFromZero = mitad hacia arriba). Fecha de pago: vencido, el fin del periodo; anticipado, el inicio; si no es
+# habil (sabado, domingo o festivo), el siguiente habil. Causacion: Seis(C x ((1 + r_d)^k - 1) x f), el ultimo dia el interes del plan.
+# Plazo de emision (CUIF 2110, meses de 30): < 180 UnderSixMonths; <= 360 SixToTwelve; < 540 TwelveToEighteen; si no EighteenOrMore.
+PERIODICIDADES = {"SinglePayment": 0, "Weekly": 7, "TenDay": 10, "Biweekly": 15, "Monthly": 30, "Bimonthly": 60, "Quarterly": 90,
+                  "SemiAnnual": 180, "Annual": 360}
+
+
+def redondear(x, unidad, modo):
+    from decimal import ROUND_CEILING, ROUND_FLOOR
+    m = {"AwayFromZero": ROUND_HALF_UP, "ToEven": ROUND_HALF_EVEN, "Up": ROUND_CEILING, "Down": ROUND_FLOOR}.get(modo, ROUND_HALF_UP)
+    return q(x / unidad, 0, m) * unidad
+
+
+def es_habil(d, festivos):
+    return d.weekday() < 5 and d not in festivos
+
+
+def siguiente_habil(d, festivos):
+    while not es_habil(d, festivos):
+        d = d + dt.timedelta(days=1)
+    return d
+
+
+def sumar_habiles(d, n, festivos):
+    contados = 0
+    while contados < n:
+        d = d + dt.timedelta(days=1)
+        if es_habil(d, festivos):
+            contados += 1
+    return d
+
+
+def plazo_de_emision(dias_):
+    if dias_ < 180: return "UnderSixMonths"
+    if dias_ <= 360: return "SixToTwelve"
+    if dias_ < 540: return "TwelveToEighteen"
+    return "EighteenOrMore"
+
+
+def plan_cdat(c, festivos):
+    capital, ea, conv = D(c["capital"]), D(c["tasaEA"]), c["convencion"]
+    inicio, plazo = fecha(c["inicio"]), int(c["plazoDias"])
+    unidad, modo = D(c.get("unidadDeRedondeo", 1)), c.get("modoDeRedondeo", "AwayFromZero")
+    anticipado = c.get("modalidad", "Arrears") == "Advance"
+    venc = inicio + dt.timedelta(days=plazo)
+    r = tasa_diaria(ea, conv)
+    paso = plazo if c["periodicidad"] == "SinglePayment" else PERIODICIDADES[c["periodicidad"]]
+    periodos, desde, n = [], inicio, 0
+    while desde < venc:
+        n += 1
+        hasta = min(desde + dt.timedelta(days=paso), venc)
+        k = dias(conv, desde, hasta)
+        iv = (1 + r) ** k - 1
+        tasa = iv / (1 + iv) if anticipado else iv
+        interes = redondear(capital * tasa, unidad, modo)
+        pago = siguiente_habil(desde if anticipado else hasta, festivos)
+        periodos.append({"numero": n, "desde": desde, "hasta": hasta, "fechaDePago": pago, "dias": k, "interes": interes, "iv": iv})
+        desde = hasta
+    return {"r": r, "venc": venc, "periodos": periodos, "capital": capital, "conv": conv, "anticipado": anticipado, "unidad": unidad, "modo": modo}
+
+
+def acumulado_cdat(plan, d):
+    for p in plan["periodos"]:
+        if p["desde"] < d <= p["hasta"]:
+            if d == p["hasta"]:
+                return p["interes"]
+            k = dias(plan["conv"], p["desde"], d)
+            f = 1 / (1 + p["iv"]) if plan["anticipado"] else D(1)
+            a = q(plan["capital"] * ((1 + plan["r"]) ** k - 1) * f, 6)
+            return min(a, p["interes"])
+    return D(0)
+
+
+def esperado_cdat(caso):
+    e = caso["entrada"]
+    festivos = {fecha(x) for x in e.get("festivos", [])}
+    c = e["condiciones"]
+    plan = plan_cdat(c, festivos)
+    salida = {
+        "vencimiento": plan["venc"].isoformat(),
+        "fechaDePagoAlVencimiento": siguiente_habil(plan["venc"], festivos).isoformat(),
+        "plazoDeEmision": plazo_de_emision(int(c["plazoDias"])),
+        "periodos": [{"numero": p["numero"], "desde": p["desde"].isoformat(), "hasta": p["hasta"].isoformat(),
+                      "fechaDePago": p["fechaDePago"].isoformat(), "dias": p["dias"], "interes": p["interes"]} for p in plan["periodos"]],
+        "interesTotal": sum((p["interes"] for p in plan["periodos"]), D(0)),
+    }
+    if e.get("gracia") is not None:
+        g = int(e["gracia"])
+        salida["finDeLaGracia"] = (sumar_habiles(plan["venc"], g, festivos) if g > 0 else plan["venc"]).isoformat()
+    if e.get("causacionEn"):
+        salida["acumulados"] = [{"dia": x, "acumulado": acumulado_cdat(plan, fecha(x))} for x in e["causacionEn"]]
+    if e.get("redencion") is not None:
+        rd = e["redencion"]
+        f = fecha(rd["fecha"])
+        # Lo causado y no pagado: el acumulado del periodo en curso (los anteriores ya se pagaron, interesPagado).
+        causado = acumulado_cdat(plan, f)
+        pagado = D(rd.get("interesPagado", 0))
+        corridos = dias(plan["conv"], fecha(c["inicio"]), f)
+        pen = rd.get("penalidad")
+        reliq, ajuste, s_int, s_cap = None, D(0), D(0), D(0)
+        if pen is not None and pen["modo"] == "PenaltyRate":
+            rp = tasa_diaria(D(pen["tasa"]), plan["conv"])
+            reliq = redondear(plan["capital"] * ((1 + rp) ** corridos - 1), plan["unidad"], plan["modo"])
+            queda = reliq - pagado
+            if queda >= causado:
+                pass
+            elif queda >= 0:
+                ajuste = queda - causado
+            else:
+                ajuste, s_cap = -causado, -queda
+        elif pen is not None:
+            s_int = redondear(causado * D(pen["fraccion"]), plan["unidad"], plan["modo"])
+            if s_int > causado:
+                s_int = redondear(causado, plan["unidad"], plan["modo"])
+        neto = causado + ajuste - s_int
+        a_pagar = D(0) if neto <= 0 else redondear(neto, plan["unidad"], plan["modo"])
+        salida["redencion"] = {"diasCorridos": corridos, "interesCausado": causado, "interesReliquidado": reliq, "ajusteDeCausacion": ajuste,
+                               "penalidadSobreInteres": s_int, "penalidadSobreCapital": s_cap, "interesAPagar": a_pagar}
+    if e.get("prorroga") is not None:
+        pr = e["prorroga"]
+        bruto = salida["interesTotal"]
+        retencion = a_unidad(bruto * D(pr.get("tarifaDeRetencion", 0)), D(1))
+        capitalizado = bruto - retencion if pr.get("capitaliza") else D(0)
+        nuevas = dict(c)
+        nuevas["capital"] = D(c["capital"]) + capitalizado
+        nuevas["inicio"] = plan["venc"].isoformat()
+        nuevas["tasaEA"] = D(pr.get("tasaEA", c["tasaEA"]))
+        nuevo = plan_cdat(nuevas, festivos)
+        salida["prorroga"] = {"retencion": retencion, "capitalizado": capitalizado, "nuevoCapital": nuevas["capital"],
+                              "nuevoVencimiento": nuevo["venc"].isoformat(),
+                              "nuevoInteresTotal": sum((p["interes"] for p in nuevo["periodos"]), D(0))}
+    return salida
+
+
+# --------------------------------------------------------------------------------------------- tasa negociada (R13)
+# US6 (T168; FR-127): la regla mas especifica (todas sus condiciones no nulas casan; gana la que fija mas; a igual, la de menor prioridad y
+# despues el codigo); margen <= 0: MarginInvalid; sin regla: NoApplicableRule; sobre el maximo: MarginAboveRule; si no, cabe en la regla y
+# en la atribucion si la atribucion lo alcanza.
+CRITERIOS = ["antiguedadMinimaMeses", "montoMinimo", "montoMaximo", "plazoMinimoDias", "plazoMaximoDias", "tasaBaseMinima", "tasaBaseMaxima",
+             "saldoDelTitularMinimo", "saldoDelTitularMaximo", "oficina", "canal"]
+
+
+def casa(r, p):
+    def g(k):
+        return r.get(k)
+    if g("antiguedadMinimaMeses") is not None and D(p["antiguedadMeses"]) < D(g("antiguedadMinimaMeses")): return False
+    if g("montoMinimo") is not None and D(p["monto"]) < D(g("montoMinimo")): return False
+    if g("montoMaximo") is not None and D(p["monto"]) > D(g("montoMaximo")): return False
+    if g("plazoMinimoDias") is not None and (p.get("plazoDias") is None or D(p["plazoDias"]) < D(g("plazoMinimoDias"))): return False
+    if g("plazoMaximoDias") is not None and (p.get("plazoDias") is None or D(p["plazoDias"]) > D(g("plazoMaximoDias"))): return False
+    if g("tasaBaseMinima") is not None and D(p["tasaDeTabla"]) < D(g("tasaBaseMinima")): return False
+    if g("tasaBaseMaxima") is not None and D(p["tasaDeTabla"]) > D(g("tasaBaseMaxima")): return False
+    if g("saldoDelTitularMinimo") is not None and D(p["saldoDelTitular"]) < D(g("saldoDelTitularMinimo")): return False
+    if g("saldoDelTitularMaximo") is not None and D(p["saldoDelTitular"]) > D(g("saldoDelTitularMaximo")): return False
+    if g("oficina") is not None and D(p["oficina"]) != D(g("oficina")): return False
+    if g("canal") and str(g("canal")).lower() != str(p.get("canal") or "").lower(): return False
+    return True
+
+
+def esperado_tasa_negociada(caso):
+    e = caso["entrada"]
+    salida = []
+    for p in e["pedidos"]:
+        margen = D(p["margenPedido"])
+        if margen <= 0:
+            salida.append({"regla": None, "codigo": "Lending.NegotiatedRate.MarginInvalid", "seAplicaSola": False, "esperaAprobador": False})
+            continue
+        casan = [r for r in e["reglas"] if casa(r, p)]
+        casan.sort(key=lambda r: (-sum(1 for k in CRITERIOS if r.get(k) not in (None, "")), int(r["prioridad"]), r["codigo"]))
+        if not casan:
+            salida.append({"regla": None, "codigo": "Lending.NegotiatedRate.NoApplicableRule", "seAplicaSola": False, "esperaAprobador": False})
+            continue
+        r = casan[0]
+        if margen > D(r["margenMaximo"]):
+            salida.append({"regla": r["codigo"], "codigo": "Lending.NegotiatedRate.MarginAboveRule", "seAplicaSola": False, "esperaAprobador": False})
+            continue
+        atr = p.get("atribucion")
+        cabe = atr is not None and margen <= D(atr)
+        salida.append({"regla": r["codigo"], "codigo": None, "seAplicaSola": cabe, "esperaAprobador": not cabe})
+    return {"evaluaciones": salida}
+
+
 def esperado_de_entrada(caso):
     nombre = caso["nombre"]
     if nombre.startswith("gmf-"): return esperado_gmf(caso)
     if nombre.startswith("cargo-"): return esperado_cargo(caso)
     if nombre.startswith("retencion-"): return esperado_retencion(caso)
+    if nombre.startswith("cdat-"): return esperado_cdat(caso)
+    if nombre.startswith("tasa-negociada-"): return esperado_tasa_negociada(caso)
     raise ValueError(f"no se sabe calcular {nombre}")
 
 

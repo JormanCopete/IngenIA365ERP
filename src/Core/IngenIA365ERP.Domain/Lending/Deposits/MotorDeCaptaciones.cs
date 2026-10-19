@@ -42,4 +42,12 @@ public static class MotorDeCaptaciones
     /// <summary>US5 (T128): la retención en la fuente sobre los rendimientos de un abono o pago de intereses (R06).</summary>
     public static RetencionCalculada Retencion(PoliticaDeRetencion politica, EntradaDeRetencion entrada) =>
         RetencionSobreRendimientos.Calcular(politica, entrada);
+
+    /// <summary>US6 (T166): el plan de intereses de un CDAT con sus fechas de pago hábiles (FR-023).</summary>
+    public static PlanDeCdatCalculado PlanDeCdat(CondicionesDeCdat condiciones, Common.Calendar.CalendarioHabil calendario) =>
+        Deposits.PlanDeCdat.Generar(condiciones, calendario);
+
+    /// <summary>US6 (T168): la regla de tasa negociada más específica y si el margen cabe en ella y en la atribución de quien lo pide (FR-127).</summary>
+    public static EvaluacionDeTasaNegociada TasaNegociada(IEnumerable<ReglaDeTasaNegociada> reglas, PedidoDeTasaNegociada pedido, decimal? atribucion) =>
+        Deposits.TasaNegociada.Evaluar(reglas, pedido, atribucion);
 }

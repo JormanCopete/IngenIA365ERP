@@ -1,0 +1,45 @@
+// Prorroga capitalizando el interes neto de retencion (FR-063): 488.088 - 4 % (19.524) = 468.564; nuevo capital 10.468.564 por el mismo plazo y la misma tasa.
+{
+  "nombre": "cdat-05-prorroga-con-capitalizacion",
+  "descripcion": "Prorroga capitalizando el interes neto de retencion (FR-063): 488.088 - 4 % (19.524) = 468.564; nuevo capital 10.468.564 por el mismo plazo y la misma tasa.",
+  "entrada": {
+    "condiciones": {
+      "capital": 10000000,
+      "tasaEA": 0.1,
+      "inicio": "2027-01-13",
+      "plazoDias": 180,
+      "periodicidad": "SinglePayment",
+      "modalidad": "Arrears",
+      "convencion": "Actual360",
+      "unidadDeRedondeo": 1,
+      "modoDeRedondeo": "AwayFromZero"
+    },
+    "prorroga": {
+      "capitaliza": true,
+      "tarifaDeRetencion": 0.04
+    }
+  },
+  "esperado": {
+    "vencimiento": "2027-07-12",
+    "fechaDePagoAlVencimiento": "2027-07-12",
+    "plazoDeEmision": "SixToTwelve",
+    "periodos": [
+      {
+        "numero": 1,
+        "desde": "2027-01-13",
+        "hasta": "2027-07-12",
+        "fechaDePago": "2027-07-12",
+        "dias": 180,
+        "interes": 488088
+      }
+    ],
+    "interesTotal": 488088,
+    "prorroga": {
+      "retencion": 19524,
+      "capitalizado": 468564,
+      "nuevoCapital": 10468564,
+      "nuevoVencimiento": "2028-01-08",
+      "nuevoInteresTotal": 510959
+    }
+  }
+}

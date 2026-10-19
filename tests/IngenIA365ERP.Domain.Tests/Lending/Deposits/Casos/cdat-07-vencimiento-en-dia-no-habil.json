@@ -1,0 +1,39 @@
+// D19: vence el 20 de julio de 2027 (festivo): se paga el 21 sin interes adicional; tres dias habiles de gracia terminan el 23.
+{
+  "nombre": "cdat-07-vencimiento-en-dia-no-habil",
+  "descripcion": "D19: vence el 20 de julio de 2027 (festivo): se paga el 21 sin interes adicional; tres dias habiles de gracia terminan el 23.",
+  "entrada": {
+    "condiciones": {
+      "capital": 10000000,
+      "tasaEA": 0.1,
+      "inicio": "2027-01-21",
+      "plazoDias": 180,
+      "periodicidad": "SinglePayment",
+      "modalidad": "Arrears",
+      "convencion": "Actual360",
+      "unidadDeRedondeo": 1,
+      "modoDeRedondeo": "AwayFromZero"
+    },
+    "festivos": [
+      "2027-07-20"
+    ],
+    "gracia": 3
+  },
+  "esperado": {
+    "vencimiento": "2027-07-20",
+    "fechaDePagoAlVencimiento": "2027-07-21",
+    "plazoDeEmision": "SixToTwelve",
+    "periodos": [
+      {
+        "numero": 1,
+        "desde": "2027-01-21",
+        "hasta": "2027-07-20",
+        "fechaDePago": "2027-07-21",
+        "dias": 180,
+        "interes": 488088
+      }
+    ],
+    "interesTotal": 488088,
+    "finDeLaGracia": "2027-07-23"
+  }
+}

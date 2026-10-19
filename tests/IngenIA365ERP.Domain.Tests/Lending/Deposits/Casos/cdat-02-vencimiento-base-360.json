@@ -1,0 +1,60 @@
+// Investigacion 3.2: el mismo CDAT en base 360: 488.088 al vencimiento.
+{
+  "nombre": "cdat-02-vencimiento-base-360",
+  "descripcion": "Investigacion 3.2: el mismo CDAT en base 360: 488.088 al vencimiento.",
+  "entrada": {
+    "condiciones": {
+      "capital": 10000000,
+      "tasaEA": 0.1,
+      "inicio": "2027-01-13",
+      "plazoDias": 180,
+      "periodicidad": "SinglePayment",
+      "modalidad": "Arrears",
+      "convencion": "Actual360",
+      "unidadDeRedondeo": 1,
+      "modoDeRedondeo": "AwayFromZero"
+    },
+    "gracia": 3,
+    "causacionEn": [
+      "2027-01-14",
+      "2027-04-13",
+      "2027-07-11",
+      "2027-07-12"
+    ]
+  },
+  "esperado": {
+    "vencimiento": "2027-07-12",
+    "fechaDePagoAlVencimiento": "2027-07-12",
+    "plazoDeEmision": "SixToTwelve",
+    "periodos": [
+      {
+        "numero": 1,
+        "desde": "2027-01-13",
+        "hasta": "2027-07-12",
+        "fechaDePago": "2027-07-12",
+        "dias": 180,
+        "interes": 488088
+      }
+    ],
+    "interesTotal": 488088,
+    "finDeLaGracia": "2027-07-15",
+    "acumulados": [
+      {
+        "dia": "2027-01-14",
+        "acumulado": 2647.85549
+      },
+      {
+        "dia": "2027-04-13",
+        "acumulado": 241136.890844
+      },
+      {
+        "dia": "2027-07-11",
+        "acumulado": 485312.122575
+      },
+      {
+        "dia": "2027-07-12",
+        "acumulado": 488088
+      }
+    ]
+  }
+}
