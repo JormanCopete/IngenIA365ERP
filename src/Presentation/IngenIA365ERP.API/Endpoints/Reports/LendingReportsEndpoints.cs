@@ -124,6 +124,14 @@ public class LendingReportsEndpoints : ICarterModule
         // Feature 014, US8 (T146): la conciliación contable de captaciones y aportes (asOf, branch), sin datos de titulares.
         group.MapVistaDeCartera(Application.Lending.Deposits.Reports.DepositsReconciliationReportQueryHandler.Vista,
             (f, _) => new Application.Lending.Deposits.Reports.DepositsReconciliationReportQuery(f));
+        // Feature 014, US6 (T176): los vencimientos de CDAT (from, to, issueTermBand), las tasas negociadas (from, to) y la concentración de depositantes
+        // (asOf, top), con datos del titular.
+        group.MapVistaDeCartera(Application.Lending.Deposits.Reports.TermDepositMaturitiesReportQueryHandler.Vista,
+            (f, q) => new Application.Lending.Deposits.Reports.TermDepositMaturitiesReportQuery(f, Texto(q, "issueTermBand")));
+        group.MapVistaDeCartera(Application.Lending.Deposits.Reports.NegotiatedRatesReportQueryHandler.Vista,
+            (f, _) => new Application.Lending.Deposits.Reports.NegotiatedRatesReportQuery(f));
+        group.MapVistaDeCartera(Application.Lending.Deposits.Reports.DepositorConcentrationReportQueryHandler.Vista,
+            (f, q) => new Application.Lending.Deposits.Reports.DepositorConcentrationReportQuery(f, Entero(q, "top")));
     }
 
     private static int? Entero(IQueryCollection q, string clave) =>

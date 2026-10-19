@@ -154,6 +154,10 @@ public class LasConsultasDeCarteraRespetanElAlcance
         "Core/IngenIA365ERP.Application/Lending/Deposits/TermDeposits/ConstituteTermDepositCommand.cs",
         "Core/IngenIA365ERP.Application/Lending/Deposits/TermDeposits/NegotiatedRates/NegotiatedRateRequestCommands.cs",
         "Core/IngenIA365ERP.Application/Lending/Deposits/TermDeposits/NegotiatedRates/NegotiatedRateRuleCommands.cs",
+        // Feature 014, US6 (T173, T176): la instrucción, la renovación, la simulación y la redención de un CDAT fuera del alcance responden su 404
+        // (CdatEnAlcanceAsync); las vistas de vencimientos, tasas negociadas y concentración de depositantes, por VistasDeCaptaciones.CuentasAsync.
+        "Core/IngenIA365ERP.Application/Lending/Deposits/TermDeposits/TermDepositMaturityCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/Deposits/Reports/TermDepositReportQueries.cs",
         // Feature 014, US3 (T086, T088, T093): las vistas de aportes del centro de informes, las solicitudes de devolución y cesión y las cuotas exigibles
         // filtran por la oficina y la línea de la cuenta.
         "Core/IngenIA365ERP.Application/Lending/Deposits/Reports/ContributionReportQueries.cs",
