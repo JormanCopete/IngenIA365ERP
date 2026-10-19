@@ -92,6 +92,29 @@ public static class CaptacionesE2E
         var admin = coop.TokenAdmin;
         var hoy = CarteraE2E.Hoy(fx);
 
+        await RegistrarDoblesDeCuentasAsync(http, admin, hoy);
+        await RequisitosDeCaptacionesAsync(http, admin, hoy);
+
+        foreach (var naturaleza in new[] { "Contribution", "Deposit" })
+        {
+            var resp = await CarteraE2E.ConClaveAsync(http, admin, HttpMethod.Post, "/api/lending/deposits/activation", new
+            {
+                nature = naturaleza, activationDate = hoy, acknowledgeWarnings = true, reason = $"Activación sin carga de {naturaleza} (e2e)",
+            });
+            if (resp.StatusCode == HttpStatusCode.Created) continue;
+            (await CarteraE2E.CodigoDeErrorAsync(resp)).Should().Be("Lending.Activation.AlreadyActivated",
+                $"activar {naturaleza} sin carga: «{await resp.Content.ReadAsStringAsync()}»");
+        }
+        return coop;
+    }
+
+    /// <summary>
+    /// El recaudador de prueba <c>TST</c> con <c>ProveedorDeCuentas</c> adoptado (<c>AccountsCollectorRegistered</c>) y la tesorería de prueba <c>TES</c>
+    /// con <c>OrdenDeGiroEmitida</c> v2 (<c>TreasuryDestinationRegistered</c>), registrados de nuevo desde hoy si el vigente no los tiene. US9 (T160): lo
+    /// usa también la migración, que activa con carga.
+    /// </summary>
+    public static async Task RegistrarDoblesDeCuentasAsync(HttpClient http, string admin, DateOnly hoy)
+    {
         await RegistrarDobleDeCuentasAsync(http, admin, hoy, new
         {
             code = "TST", @class = "Test", role = "ObligationsCollector", destination = (string?)null, isEnabled = true, isTestDouble = true,
@@ -108,19 +131,6 @@ public static class CaptacionesE2E
             },
             validFrom = hoy, reason = "Tesorería de prueba con la orden de giro v2 (e2e de captaciones)",
         }, "OrdenDeGiroEmitida", version: 2);
-        await RequisitosDeCaptacionesAsync(http, admin, hoy);
-
-        foreach (var naturaleza in new[] { "Contribution", "Deposit" })
-        {
-            var resp = await CarteraE2E.ConClaveAsync(http, admin, HttpMethod.Post, "/api/lending/deposits/activation", new
-            {
-                nature = naturaleza, activationDate = hoy, acknowledgeWarnings = true, reason = $"Activación sin carga de {naturaleza} (e2e)",
-            });
-            if (resp.StatusCode == HttpStatusCode.Created) continue;
-            (await CarteraE2E.CodigoDeErrorAsync(resp)).Should().Be("Lending.Activation.AlreadyActivated",
-                $"activar {naturaleza} sin carga: «{await resp.Content.ReadAsStringAsync()}»");
-        }
-        return coop;
     }
 
     /// <summary>
