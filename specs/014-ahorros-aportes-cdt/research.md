@@ -2294,3 +2294,138 @@ exigen la entrega K10 desplegada y las claves K10 se leen con sus defectos.
 - El tope de la entrega sin juicio de sucesión (`TOPE_ENTREGA_SIN_SUCESION`, EOSF art. 127) que rige y los soportes del reglamento
   (`Fallecimiento.SoportesDeEntregaSinSucesion`).
 - Los textos de los avisos `PREINACTIV`, `INACTIVA` y `NORECLAMA`.
+
+## 24. Enmienda del fondo de liquidez, el riesgo de liquidez y los depósitos asegurados (2026-10-19, T214–T218, US15, K11)
+
+Construida la historia 15 y el pendiente de la fase 17 (la validación contable previa del fallecimiento y de los no reclamados, E202). **Manda el código**;
+estas notas reemplazan lo dicho en `data-model.md`, `contracts/` y `tasks.md` donde choquen. Cambio de esquema: `CaptacionesAportes` **regenerada** en los dos
+motores (mismos sellos: PostgreSQL `20261019104128`, SQL Server `20261019104056`; las operaciones nuevas al final de `Up` y al principio de `Down`, por una
+migración temporal fusionada) con `LND_LiquidityFundSnapshots` y `LND_LiquidityFundHoldings`; el SQL escrito a mano (T044, `NOM`, `ASO`) quedó intacto —el
+antes y el después del `.cs` sólo difieren en líneas agregadas— y la paridad pasa. Las migraciones congeladas de la 013 y `RetiroDeCaptacionesHeredadas` no se
+tocaron. `EntregaVigente` sigue en K6b: las claves K11 se leen con sus defectos y el corte del ciclo diario no corre hasta K11.
+
+**Norma aplicada** (todo «pendiente de validar por la contadora»; ningún valor legal en el código: los pisos son valores nacionales `LIMITE` con vigencia y
+fuente, y lo demás parámetros de la entidad):
+
+- **Fondo de liquidez — Decreto 1068 de 2015, Libro 2, Parte 11, Título 7.** El Decreto 961 del 5-jun-2018 incorporó el Título (Capítulo I, gestión del
+  riesgo de liquidez: vencimientos contractuales o esperados con horizonte mínimo de un año, art. 2.11.7.1.3; Capítulo II, fondo de liquidez) y el Decreto
+  704 de 2019 modificó los arts. 2.11.7.2.1 a 2.11.7.2.4: al menos el **10 % de los depósitos**, de forma permanente, sobre el saldo de los estados
+  financieros; el ahorro permanente al **2 %** si los estatutos sólo lo dejan retirar al desvincularse y al 10 % si admiten retiro parcial; instrumentos en
+  establecimientos de crédito vigilados por la Superintendencia Financiera (cuentas, CDT, CDAT, bonos) o fondos de inversión colectiva del mercado monetario
+  o abiertos sin pacto de permanencia; se usa sólo para atender retiros, con aviso previo a la Supersolidaria y plan de reconstitución; se reporta en el
+  formato y la periodicidad que fije la Supersolidaria. Fuente: <https://normograma.com/keralty/compilacion/docs/decreto_0961_2018.htm>. La Circular Básica
+  Contable y Financiera lo mide sobre el saldo de depósitos del mes de reporte (Título III, Capítulo I):
+  <https://normograma.info/findeter/docs/circular_supersolidaria_0022_2020.htm>.
+- **Decreto 976 del 4-ago-2026** (Diario Oficial 53.578; rige desde el 6-ago-2026): sustituye el Capítulo II. **Sección 1** (básica e intermedia, fondos de
+  empleados y mutuales): el régimen anterior (10 % y 2 %). **Sección 2** (categoría plena, art. 2.11.7.2.2.1 y siguientes): base = capital **más intereses
+  causados y por causar** hasta la maduración contractual; **10 %** del ahorro ordinario, del CDAT y el contractual hasta 30 días o con redención anticipada
+  pactada y del permanente con retiro parcial; **5 %** del CDAT y el contractual de 31 a 540 días y del permanente que sólo se retira al desvincularse; **0 %**
+  de más de 540 días; activos admisibles: cuentas en establecimientos de crédito, CDT con grado de inversión con descuento del 20 % y TES clase B (sin fondos
+  de inversión colectiva). Art. 4: **42 meses de transición** y 24 meses para que la Supersolidaria expida instrucciones. Fuentes:
+  <https://normograma.com/keralty/compilacion/docs/decreto_0976_2026.htm> y
+  <https://www.valoraanalitik.com/wp-content/uploads/2026/08/DECRETO-No.-0976-DEL-4-DE-AGOSTO-DE-2026.pdf> (cotejar con el Diario Oficial).
+- **Categorías**: cooperativas por activos en UVR (Decreto 1544 de 2024, art. 2.11.1.3: básica < 315 millones de UVR, intermedia hasta 1.400 millones,
+  plena por encima; las de segundo grado son plenas) <https://normograma.dian.gov.co/dian/compilacion/docs/decreto_1544_2024.htm>; fondos de empleados por
+  activos en pesos de 2017 ajustados por IPC (Decreto 344 de 2017, art. 2.11.5.1.3) <https://www.funcionpublica.gov.co/eva/gestornormativo/norma.php?i=79774>.
+  La categoría la registra la entidad en su perfil regulatorio (`LiquidityFundCategory`, FR-018).
+- **Riesgo de liquidez — Circular Básica Contable y Financiera (Circular Externa 22 de 2020), Título IV, Capítulo III (SARL).** Anexo 1 (cooperativas de ahorro y
+  crédito y multiactivas con sección): IRL a 90 días en cuatro bandas (1–15, 16–30, 31–60, 61–90), cálculo al menos **semanal**; activos líquidos netos
+  (efectivo, fondo de liquidez e inversiones negociables a valor de mercado, con descuento del Banco de la República o del 20 % donde no haya referencia);
+  entradas (cartera ajustada por el índice de mora de más de 30 días), salidas contractuales (CDAT y contractual con capital e intereses hasta el vencimiento,
+  obligaciones financieras, créditos aprobados no desembolsados, cuentas por pagar) y no contractuales (ahorro ordinario por VaR al 95 % escalado por √30,
+  aportes y permanente por el retiro promedio); **IRL = (ALN + entradas acumuladas) ÷ (salidas acumuladas)**, límite **≥ 100 %**, y una banda 1 o 2 por
+  debajo obliga a reportar cada semana y a un plan de ajuste hasta **más de 110 %**. Anexo 2 (fondos de empleados plenos o de primer nivel y mutuales):
+  <https://www.supersolidaria.gov.co/sites/default/files/data/20250131_anexo_2_cap_3_tit_4.pdf>. Anexo 3 (todas): **brecha de liquidez** a un año en siete
+  bandas (hasta 1 mes, 1–2, 2–3, 3–6, 6–9, 9–12 y más de 12 meses), mensual; la parte estable del ahorro a la vista y el permanente en la última banda.
+- **Formatos SICSES** (instructivo D-GEIN-010 v04,
+  <https://www.supersolidaria.gov.co/sites/default/files/public/sicses/d-gein-010_instructivo_reporte_formulario_oficialrendicion_cuentas_-_sicses_v4.pdf>):
+  F27 fondo de liquidez (código 9067), F29 evaluación del riesgo de liquidez (código 159). Son de la fase 19 (T220) y su periodicidad la decide la entidad.
+- **Seguro de depósitos — Fogacoop**: **50.000.000 por persona** en cada entidad inscrita, sumando sus productos, desde el 19-ago-2024 (antes 25 millones);
+  no cubre aportes; inscritas: cooperativas financieras, de ahorro y crédito y multiactivas o integrales con sección de ahorro y crédito.
+  <https://www.fogacoop.gov.co/seguro-para-su-ahorro/montos-cubiertos>,
+  <https://www.fogacoop.gov.co/publicaciones/boletin-financiero-y-juridico/Pdf%20Boletines/Boletin83.pdf>.
+- **Plazos y periodicidades informativos** (criterio del dueño): nada se bloquea por ellos. La entidad fija cada cuánto se toma la foto
+  (`FondoDeLiquidez.Periodicidad`) y cuándo reporta.
+
+- **E206 · La validación contable previa del ciclo de vida (pendiente de la fase 17).** La aprobación de la entrega por fallecimiento, el traslado a mano a no
+  reclamados y el pago de un saldo no reclamado preguntan a Contabilidad antes de mover nada, como las demás pantallas (D23, `Contabilidad.FaltaDeRegla`;
+  `ValidacionPreviaDelCicloDeVida` sobre `ValidacionPreviaDeCaptaciones.EnPantallaAsync`): con `Bloquear` y una regla faltante responden el 422
+  `Lending.Prevalidation.NotPostable` (el caso sigue `DeliveryPending`, el saldo `Held`, no nace ninguna orden); con `Advertir`, siguen y alertan. Los hechos
+  representativos son nuevos en `HechosRepresentativosDeCaptaciones` (`TrasladoANoReclamados`, `PagoDeNoReclamadoPorGiro`, `PagoDeNoReclamadoPorTraslado`)
+  o los de siempre (la liquidación y la retención si la cuenta causó alguna vez, la devolución con motivo `DeceasedDelivery`, el traslado). El traslado del
+  **ciclo diario** también pregunta por la tanda (`PreguntaDeTanda`): con `Bloquear` la cuenta queda en los errores de la corrida y sale
+  `Cartera.HechoNoContabilizable`. El resultado de la pregunta no se sella todavía en el mensaje del traslado y del pago (`PrevalidationOutcome.NotApplicable`
+  en `TrasladoANoReclamadosAEmitir` y `DevolucionAEmitir`, como antes). Pruebas: seis nuevas en `CicloDeVidaDeCuentasTests.ValidacionPrevia.cs`.
+- **E207 · Valores legales.** Cinco `LIMITE` nuevos con su fuente (`CatalogoDeLimitesLegales`): `FONDO_LIQUIDEZ_DEPOSITOS` (0,10 desde 2018-06-05),
+  `FONDO_LIQUIDEZ_PERMANENTE_SOLO_RETIRO` (0,02), `FONDO_LIQUIDEZ_PLENA_BANDA_MEDIA` (0,05 desde 2026-08-06), `FONDO_LIQUIDEZ_PLENA_PERMANENTE_SOLO_RETIRO`
+  (0,05) e `IRL_MINIMO` (1 vez, acota `RiesgoDeLiquidez.UmbralIrl`). `TOPE_SEGURO_DEPOSITOS` **sí se siembra** (data-model §9.2 decía que no): 50.000.000 desde
+  el 2024-08-19, en espera hasta K11, pendiente de validar el número de la resolución.
+- **E208 · El motor (T214).** `FondoDeLiquidez` (puro) recibe la regla de la categoría, la regla general (la que rige en la transición), los pisos y los
+  depósitos por clase (`ClaseDeDepositoParaLiquidez`: a la vista, CDAT, contractual, permanente con retiro parcial, permanente sólo al retirarse); cada
+  porcentaje es el mayor entre el de la entidad y su piso; el requerido de cada renglón va al centavo. En transición (fecha anterior a `finDeLaTransicion`)
+  rige la general y la de madurez se informa. La tabla vive en `FondoDeLiquidez.PorcentajesPorCategoria` (JSON por categoría, `*` para las demás) y **nace con
+  los defectos del Decreto 976** (`ParametrosDeCartera.DefectoDelFondoDeLiquidez`; data-model y E15 decían «vacío»): `*` general 10 % y 2 %; `Plena` por madurez
+  10/5/0 % con bandas de 30 y 540 días, permanente al 5 %, intereses causados y por causar, fin de la transición el 2030-02-06. Se suman `RiesgoDeLiquidez`
+  (brecha por banda, acumulada e IRL acumulado a cuatro decimales; lo que cae después de la última banda con tope queda «fuera del horizonte») y
+  `DepositosAsegurados` (por ahorrador hasta el tope). Siete casos dorados `liquidez-01` a `-07`, calculados por `calcular.py`.
+- **E209 · Entidades (T215).** Contra data-model §6.7/§6.8: la foto suma `NewRegimeRequiredAmount` (lo que requeriría el régimen nuevo en transición),
+  `MinimumIrl` (alias de precisión nuevo `Indicador`, 18,4), `LiquidityRiskJson` (la medición del IRL) y `Reason`; `RegimeStage` es `General`, `PorMadurez` o
+  `Transicion`; es `IHechoInmutable` y una fecha tiene **una sola foto** (`Version` 1; pedirla otra vez devuelve la misma). La inversión suma `Note`,
+  `EndReason` y `EndedByUserId`, y `WithdrawnOn` es el primer día en que ya no cuenta (vigente en `d` si `ConstitutedOn ≤ d < WithdrawnOn`).
+  `LiquidityHoldingKind.GovernmentBond` **4** (TES clase B, al final). No nace `CaptacionesLiquidez` (E35).
+- **E210 · Rutas (T217).** Las seis de api.md §15 y una nueva, `GET /api/lending/liquidity-fund/risk?date=&measure=Irl|Brecha`. El cuerpo de `POST /holdings`
+  suma `reference` (obligatoria) y `publicId` (el que la pantalla reservó como dueño del soporte, como el indicador regulatorio); `instrument` es
+  `LiquidityHoldingKind`; el **soporte es obligatorio** (data-model: no nulo; api.md lo ponía opcional) con el tipo de dueño nuevo
+  `LendingLiquidityFundSupport` (se lee con `.View`, se sube y se borra con `.Manage` mientras ninguna inversión lo lleve). Las escrituras responden 200 con
+  `Idempotency-Key`. Todo exige **alcance total** (`Lending.LiquidityFund.ScopeNotTotal`): el fondo es de toda la cooperativa. Errores:
+  `Lending.LiquidityFund.ProfileCategoryMissing`, `.RulesInvalid`, `.Invalid`, `.HoldingNotFound`, `.HoldingEnded`, `.SupportRequired`, `.ScopeNotTotal`.
+- **E211 · La base del fondo.** Se lee del **libro** (la autoridad), nunca de las posiciones: las cuentas de captación vivas a la fecha (aportes no), capital;
+  interés por pagar y bonificación como causados; lo no reclamado no es del titular; el permanente por `WithdrawableOnlyOnMembershipWithdrawal` de su línea
+  vigente; el vencimiento de la última versión de condiciones (CDAT y contractual); el interés por causar del CDAT es lo que falta pagar de su plan menos lo
+  causado (el contractual no tiene plan de intereses: cero); la redención anticipada pactada es `EarlyRedemptionAllowed` de la línea.
+- **E212 · El riesgo de liquidez (modelo de la entidad).** Activos líquidos netos: **sólo el fondo constituido** con el descuento de su clase
+  (`RiesgoDeLiquidez.DescuentosPorInstrumento`: 0 % en cuentas, 20 % en lo demás); entradas: las cuotas de cartera por vencer de los créditos activos (capital e
+  interés de la versión vigente de cada cuota, sin descontar abonos anticipados) por (1 − `RiesgoDeLiquidez.IndiceDeMora`); salidas contractuales: los
+  intereses del CDAT en sus fechas de pago y su capital al vencimiento, el contractual con lo causado al vencimiento, lo vencido en la primera banda; no
+  contractuales: `RiesgoDeLiquidez.FraccionDeRetiroALaVista` del ahorro a la vista en la primera banda y `.FraccionMensualDeRetiroDeAportes` del permanente
+  y de los aportes cada mes; en la brecha, lo que queda va a la banda abierta. Bandas por parámetro (`BandasIrl` [15, 30, 60, 90]; `BandasDeBrecha`
+  [30, 60, 90, 180, 270, 360, null]). **No están** el disponible y las inversiones de Tesorería, las obligaciones financieras, las cuentas por pagar, los
+  créditos aprobados sin desembolsar, el VaR del ahorro a la vista ni los fondos sociales (pregunta §24.1).
+- **E213 · Alertas, parámetros, ciclo y vistas (T216).** Tipos nuevos `Cartera.FondoDeLiquidezInsuficiente` (crítica, app y correo, con la diferencia),
+  `Cartera.FondoDeLiquidezEnElMargen` (aviso, constituido < requerido × (1 + `FondoDeLiquidez.MargenDeAlerta`)) y `Cartera.RiesgoDeLiquidezBajo` (crítica, IRL
+  bajo `RiesgoDeLiquidez.UmbralIrl`, con el umbral del plan de ajuste); destinatarios `Lending.LiquidityFund.Manage` (el tesorero) y
+  `Lending.Decisions.Management` (la gerencia): **un destinatario nunca es un permiso de consulta** (regla de la plataforma de alertas), así que «al gerente»
+  va por el permiso que sólo tiene la gerencia; el rol sugerido `cartera.gerente` suma `Lending.LiquidityFund.View` para ver la pantalla. Diez parámetros K11
+  nuevos (`FondoDeLiquidez.MargenDeAlerta` 0,05, `.Periodicidad` Semanal; `RiesgoDeLiquidez.BandasIrl`, `.BandasDeBrecha`, `.UmbralIrl` 1, `.UmbralDePlanDeAjuste`
+  1,10, `.FraccionDeRetiroALaVista` 0,10, `.FraccionMensualDeRetiroDeAportes` 0,01, `.IndiceDeMora` vacío, `.DescuentosPorInstrumento`), todos pendientes de
+  validar. El paso de captaciones gana un **cierre del día** (`ICierreDelDiaDeCaptaciones`, después de las tandas; un fallo no detiene la corrida):
+  `FondoDeLiquidezDelCiclo` toma la foto en los días de corte (`Diaria`; `Semanal` el domingo; `Mensual` el último día del mes), sólo con K11 y captaciones
+  activadas; sin categoría en el perfil deja el aviso en el registro. Las vistas `liquidity-fund` (sin titulares, alcance total) e `insured-deposits` (con datos
+  del titular, filtra por las cuentas del ahorrador en el alcance) se adelantaron de T219. Lo asegurado es por **titular** (capital e interés causado de todas
+  sus cuentas de captación; los cotitulares no se reparten, pregunta §24.1) y sólo con `DepositInsuranceEnrolled`.
+- **E214 · Pantalla y pruebas.** `/cartera/fondo-de-liquidez` (pestañas Posición, Riesgo de liquidez, Constituido —registrar con soporte y terminar— y Fotos,
+  con «Tomar la foto de la fecha»), enlace en el menú «Captaciones y aportes». Domain: `FondoDeLiquidezTests` (7 dorados y 5 reglas); Application:
+  `Liquidity/FondoDeLiquidezTests` (9: la prueba independiente por banda contra el cálculo manual, la transición, US15-1 con la alerta y una foto por fecha, el
+  colchón y la inversión que deja de contar, el soporte bloqueado, la categoría que falta, el IRL con su alerta, los asegurados, el corte del ciclo). La e2e
+  `FondoDeLiquidezTests` (US15-1 por HTTP con la foto, lo constituido, el IRL y la vista de asegurados) está **escrita y compilada; e2e en la corrida final**.
+- **E215 · Lo que queda.** Los archivos SICSES F27 y F29 y la vista `sicses-fondo-liquidez` (fase 19, T220); la lectura de los activos líquidos y de las
+  demás partidas del IRL desde Contabilidad (§24.1); la categoría del perfil es texto libre (`Basica`, `Intermedia`, `Plena` o la que la entidad use en la
+  tabla del parámetro), no se deriva de los activos en UVR.
+
+### 24.1 Preguntas para el dueño
+
+- **Activos líquidos del IRL.** A: sólo el fondo de liquidez constituido (lo construido; el IRL sale más bajo que el de la norma); B: leer de Contabilidad el
+  disponible y las inversiones negociables por cuentas CUIF que fije la entidad (11, 1203…), con el descuento de cada una; C: que el tesorero registre los demás
+  activos líquidos a mano como el constituido. Recomendado: B, porque la Circular los cuenta y Contabilidad ya es la fuente.
+- **Retiros esperados del ahorro a la vista.** A: una fracción fija por parámetro (lo construido, 10 % pendiente de validar); B: el VaR al 95 % escalado por
+  √30 calculado con la historia diaria del libro, como pide el Anexo 1 (con un año de historia; mientras tanto, A). Recomendado: B con A de respaldo.
+- **Depósitos asegurados de cuentas con cotitulares.** A: todo al titular (lo construido); B: repartir el saldo entre titular y cotitulares por partes iguales;
+  C: lo que diga Fogacoop para cuentas conjuntas, a validar. Recomendado: C, y B si Fogacoop no lo regula.
+
+### 24.2 Para la contadora (pendiente de validar)
+
+- La tabla `FondoDeLiquidez.PorcentajesPorCategoria` contra el Diario Oficial del Decreto 976 de 2026 (porcentajes, bandas de 30 y 540 días, intereses en la base,
+  fin de la transición) y la categoría de la entidad en su perfil.
+- Los pisos `FONDO_LIQUIDEZ_*` e `IRL_MINIMO`, y el tope `TOPE_SEGURO_DEPOSITOS` (número de la resolución de Fogacoop).
+- El colchón (`FondoDeLiquidez.MargenDeAlerta`, 5 %) y la periodicidad de la foto (semanal).
+- Las bandas del IRL y de la brecha, el índice de mora, las fracciones de retiro y los descuentos por clase de inversión.

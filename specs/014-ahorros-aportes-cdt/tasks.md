@@ -479,11 +479,13 @@ desde el corte) y 14 (la reclasificación por la inactividad y por la exención 
 
 **Independent Test**: requerido por banda igual al cálculo manual; alerta si el constituido es menor.
 
-- [ ] T214 [P] [US15] Motor puro `FondoDeLiquidez` (categoría, bandas, transición del Decreto 976 de 2026) en `D/Lending/Deposits/FondoDeLiquidez.cs` con casos dorados en `TD/Lending/Deposits/Casos/liquidez-*.json`
-- [ ] T215 [P] [US15] Crear `LiquidityFundSnapshot` y `LiquidityFundHolding` (§6.7, §6.8) y sus configuraciones; generar la migración par `CaptacionesLiquidez`
-- [ ] T216 [US15] Cálculo e instantánea, registro del constituido, alerta `Cartera.FondoDeLiquidezInsuficiente` y depósitos asegurados por ahorrador en `A/Lending/Deposits/Liquidity/`
-- [ ] T217 [US15] Rutas de `contracts/api.md` §15 y pantalla `/cartera/fondo-de-liquidez` en `API/Endpoints/Lending/Deposits/LiquidityFundEndpoints.cs` y `SH/Pages/Cartera/Captaciones/FondoDeLiquidez.razor`
-- [ ] T218 [US15] e2e de US15 en `TI/Lending/Deposits/FondoDeLiquidezTests.cs`
+- [x] T214 [P] [US15] Motor puro `FondoDeLiquidez` (categoría, bandas, transición del Decreto 976 de 2026) en `D/Lending/Deposits/FondoDeLiquidez.cs` con casos dorados en `TD/Lending/Deposits/Casos/liquidez-*.json` — hecho el 2026-10-19: régimen general (10 % y 2 %) y por madurez residual de la categoría plena (10 %, 5 %, 0 %; permanente sólo al retiro al 5 %) con la transición de 42 meses, pisos legales `LIMITE`; además los motores puros `RiesgoDeLiquidez` (IRL y brecha por bandas) y `DepositosAsegurados`; siete dorados `liquidez-01` a `-07` por `calcular.py --verificar` (research E207, E208)
+- [x] T215 [P] [US15] Crear `LiquidityFundSnapshot` y `LiquidityFundHolding` (§6.7, §6.8) y sus configuraciones; generar la migración par `CaptacionesLiquidez` — hecho: en `CaptacionesAportes` regenerada en los dos motores (no nace `CaptacionesLiquidez`, E35), con la medición del IRL en la foto, `LiquidityHoldingKind.GovernmentBond` 4 y el alias de precisión `Indicador`; SQL a mano intacto y paridad OK (research E209)
+- [x] T216 [US15] Cálculo e instantánea, registro del constituido, alerta `Cartera.FondoDeLiquidezInsuficiente` y depósitos asegurados por ahorrador en `A/Lending/Deposits/Liquidity/` — hecho: posición a una fecha sobre el libro, foto única por fecha con sus alertas (insuficiente, en el margen, IRL bajo) al tesorero y a la gerencia, IRL y brecha, inversiones con soporte (`LendingLiquidityFundSupport`), depósitos asegurados por ahorrador hasta `TOPE_SEGURO_DEPOSITOS` (sembrado), corte del ciclo diario por la periodicidad de la entidad, diez parámetros nuevos y cinco `LIMITE`, alcance total; pruebas `Liquidity/FondoDeLiquidezTests` (9) (research E210–E213)
+- [x] T217 [US15] Rutas de `contracts/api.md` §15 y pantalla `/cartera/fondo-de-liquidez` en `API/Endpoints/Lending/Deposits/LiquidityFundEndpoints.cs` y `SH/Pages/Cartera/Captaciones/FondoDeLiquidez.razor` — hecho: las seis rutas de §15 más `GET /risk`, las vistas `liquidity-fund` e `insured-deposits` (adelantadas de T219) y la pantalla con su enlace en el menú (research E210, E214)
+- [x] T218 [US15] e2e de US15 en `TI/Lending/Deposits/FondoDeLiquidezTests.cs` — escrita y compilada; **e2e en la corrida final**
+
+**Checkpoint**: fondo de liquidez a cualquier fecha (régimen general, por madurez y transición del Decreto 976 de 2026) contra lo constituido, con sus alertas; IRL y brecha de liquidez; depósitos asegurados por ahorrador. Construida la fase 18 el 2026-10-19 (research §24); también el pendiente de la fase 17 (la validación contable previa de la entrega por fallecimiento y del traslado y el pago de no reclamados, E206).
 
 ---
 
@@ -494,7 +496,7 @@ desde el corte) y 14 (la reclasificación por la inactividad y por la exención 
 **Independent Test**: formato de captaciones de un mes cuadra con la conciliación y sale con la alerta
 «formato sin cotejar».
 
-- [ ] T219 [US17] Vistas que faltan de `contracts/api.md` §18.1 (`deposit-accounts-by-status`, `liquidity-fund`, `insured-deposits` y las regulatorias) en `A/Lending/Reports/VistaDeInformeDeCartera.cs` y sus consultas en `A/Lending/Deposits/Reports/`
+- [ ] T219 [US17] Vistas que faltan de `contracts/api.md` §18.1 (`deposit-accounts-by-status`, `liquidity-fund`, `insured-deposits` y las regulatorias) — parcial: `liquidity-fund` e `insured-deposits` se hicieron con T216/T217 (research E213) en `A/Lending/Reports/VistaDeInformeDeCartera.cs` y sus consultas en `A/Lending/Deposits/Reports/`
 - [ ] T220 [US17] Layouts versionados como dato con `verified = false` (SICSES captaciones, saldos diarios, fondo de liquidez; exógena 1019 y 1020) en `A/Lending/Regulatory/Layouts/` con el catálogo `CatalogoDeLayoutsDeCartera` sobre `Domain/Common/Layouts` (research C21) y su generador
 - [ ] T221 [US17] Rutas de `contracts/api.md` §18.2 en `API/Endpoints/Lending/Deposits/RegulatoryEndpoints.cs`
 - [ ] T222 [US17] Tarjetas del Centro de Reportes y vista en `SH/Pages/Cartera/Informes.razor` (los `NavigateTo` llevan a páginas existentes)
