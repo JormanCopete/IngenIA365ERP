@@ -2716,8 +2716,7 @@ comportamiento (una de líneas de captación, el conteo de permisos) se **ajusta
 - **77 A**: confirmada, sin cambio (la orden rechazada se reversa entera).
 - **81 B · contractual incumplido con efecto «cancelar» sin instrucción va a la cuenta a la vista del asociado (E250).** `CicloDelContractual` trata `Cancel` como `MoveToDemand`
   al buscar destino cuando no hay instrucción.
-- **82 B · embargo: recalcular en el momento de cada consignación — PENDIENTE.** Es lectura en línea con escritura de bloqueos y cerrojo de la persona dentro del camino del
-  retiro; el orden fijo de cerrojos y la corrida e2e lo hacen riesgoso hoy. Sigue el recálculo nocturno (E162).
+- **82 B · embargo: recalcular en el momento de cada consignación (E254).** Hecha: ver §27.5.
 - **83 C · concurrencia de embargos: alimentos primero y luego por fecha de recepción (E250).** `RetencionDeEmbargos.RecalcularAsync` ordena por `IsChildSupport` descendente y
   después `ReceivedOn` e `Id`.
 - **86 · el lote de documentos nace programable (E250).** Parámetro `Documentos.LotesProgramados` (JSON `[{ "clase": "AccountStatement", "dia": 5 }, { "clase":
@@ -2751,7 +2750,7 @@ comportamiento (una de líneas de captación, el conteo de permisos) se **ajusta
 
 ### 27.2 Lo que queda para el dueño o para la corrida final
 
-Pendientes de código: 64, 65, 82, 89, 90, 91, 92, 93, 96 y 103 (la 97 quedó hecha en E253, §27.4); ambigua: 69. Las e2e de 59, 67, 71, 74, 76, 86, 87, 99–101 y 104 no están escritas (la corrida final de los dos
+Pendientes de código: 64, 65, 89, 90, 91, 92, 93, 96 y 103 (la 97 quedó hecha en E253, §27.4); ambigua: 69. Las e2e de 59, 67, 71, 74, 76, 86, 87, 99–101 y 104 no están escritas (la corrida final de los dos
 motores las cubre una por una); sí se ajustó la de líneas de captación y el conteo de permisos (164). Los defectos nuevos son parámetros «pendientes de validar» de la contadora:
 `Documentos.LotesProgramados`, `SeguroDeDepositos.RepartoDeCotitulares`, `RiesgoDeLiquidez.RetirosALaVistaMetodo`, `.DiasDeHistoriaDelRetiro`, `.ConfianzaDelRetiro` y
 `.ActivosLiquidosContables`.
@@ -2804,3 +2803,23 @@ GMF 2×2.000, dos usos, dos `GmfRetenido`, cuenta cancelada al girarse), la mism
 reverso que lo restituye) y sin él, y el reparto del GMF entre conceptos. e2e (`CicloDeVidaDeCuentasTests`): fallecimiento con GMF (498.000), sin GMF por la bandera (500.000) y no reclamados con y sin GMF por
 HTTP, verdes en PostgreSQL y SQL Server. **Pendiente de validar por la contadora**: que el GMF sea gravado en estas dos entregas y la regla de base (el valor entregado, retenido del pago); la
 vista previa de la entrega por fallecimiento todavía no muestra el GMF por porción.
+
+### 27.5 E254 · el embargo se recalcula en cada consignación (respuesta 82 B, 2026-10-21)
+
+Con un embargo vigente, **cada consignación posterior al oficio se recalcula en el momento** contra el límite embargable y retiene lo que corresponda (antes sólo
+retenía el saldo al recibir el oficio y el recálculo diario). Sin migración ni esquema nuevo.
+
+- **Dónde:** `ConsignacionEnCuentas.AplicarAsync`, después de registrar la operación, los cargos y el ajuste de causación y antes de leer el disponible del
+  comprobante: si la cuenta es de captación y su titular tiene un embargo activo (`RetencionDeEmbargos.TieneEmbargoVigenteAsync`), llama a
+  `RetencionDeEmbargos.RecalcularAsync` (alimentos primero y luego por fecha de recepción, la 83), así el comprobante ya muestra el disponible con lo retenido. Si
+  el recálculo falla (p. ej. falta el límite nacional) la consignación **no se pierde**: el comprobante lleva un aviso y lo retiene el recálculo diario.
+- **Orden de cerrojos (persona primero, luego sus cuentas por Id):** el contrato ya tomaba setup → titulares → cuentas. Como el recálculo reescribe los bloqueos de
+  **todas** las cuentas del titular, `ContratoDeCuentasDeCartera.ConsignarAsync` toma, en la misma pasada ordenada por Id, también las cuentas vivas de captación de
+  los titulares con embargo (`RetencionDeEmbargos.CuentasDeLasPersonasEmbargadasAsync`). **Variante respecto del encargo:** la consulta de «¿tiene embargo?» se hace
+  **después** de tomar la persona, no antes, porque los embargos se registran y levantan bajo ese cerrojo y entonces la lista es estable; así no hace falta
+  re-verificar ni tomar cerrojos fuera de orden. Nadie pide el cerrojo de una persona con una cuenta ya tomada. Documentado en `ICerrojoDeCartera` y fijado por
+  `ElOrdenDelCerrojoEsPersonaYLuegoSusCuentas` (ningún método del código de Application toma una persona después de una cuenta; y la consignación del contrato
+  consulta las cuentas embargadas entre la persona y las cuentas).
+- **Pruebas:** Application (`EmbargosTests`: consignación posterior retiene hasta el tope del oficio, varios embargos con alimentos primero, el desembargo libera lo
+  retenido, dos consignaciones seguidas en cuentas distintas de la misma persona suman sobre el límite) y la e2e `R82_…` (retención en el momento y dos
+  consignaciones simultáneas en cuentas distintas del mismo titular sin bloqueo mutuo), verdes en PostgreSQL y SQL Server.

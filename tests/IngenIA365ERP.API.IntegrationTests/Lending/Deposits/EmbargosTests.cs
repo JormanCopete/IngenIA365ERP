@@ -135,6 +135,33 @@ public class EmbargosTests(CentralIdentityApiFixture fx)
         RetenidoEn(embargo, e.Nueva).Should().Be(20_000_000m);
     }
 
+    private async Task<System.Text.Json.JsonElement> LeerEmbargoAsync(HttpClient http, Escenario e, Guid id)
+    {
+        var resp = await CarteraE2E.EnviarAsync(http, e.Coop.TokenAdmin, HttpMethod.Get, $"{Embargos}/{id}", null);
+        resp.StatusCode.Should().Be(HttpStatusCode.OK, await resp.Content.ReadAsStringAsync());
+        return await CarteraE2E.LeerAsync(resp);
+    }
+
+    [Fact]
+    public async Task R82_cada_consignacion_posterior_al_oficio_retiene_en_el_momento_y_dos_a_la_vez_no_se_bloquean()
+    {
+        var e = await ArmarAsync("r82");
+        using var http = fx.CreateClient();
+        var embargo = await RegistrarAsync(http, e, Oficio(e, null));
+        embargo.GetProperty("retainedTotal").GetDecimal().Should().Be(20_000_000m, "70.000.000 menos el límite de 50.000.000");
+        var id = embargo.GetProperty("publicId").GetGuid();
+
+        // Una consignación posterior retiene sin esperar al recálculo diario.
+        await MovimientosTests.ConsignarAsync(http, e.Coop.TokenAdmin, e.Nueva, e.Ana, 4_000_000m, e.Hoy);
+        (await LeerEmbargoAsync(http, e, id)).GetProperty("retainedTotal").GetDecimal().Should().Be(24_000_000m);
+
+        // Dos a la vez, en cuentas distintas de la misma persona: las dos terminan (persona primero, luego sus cuentas por Id) y suman lo que corresponde.
+        var a = MovimientosTests.ConsignarAsync(http, e.Coop.TokenAdmin, e.Vieja, e.Ana, 5_000_000m, e.Hoy);
+        var b = MovimientosTests.ConsignarAsync(http, e.Coop.TokenAdmin, e.Nueva, e.Ana, 3_000_000m, e.Hoy);
+        await Task.WhenAll(a, b);
+        (await LeerEmbargoAsync(http, e, id)).GetProperty("retainedTotal").GetDecimal().Should().Be(32_000_000m, "82.000.000 menos el límite");
+    }
+
     [Fact]
     public async Task US11_2_el_oficio_sobre_aportes_se_rechaza_con_su_respuesta_al_juzgado()
     {

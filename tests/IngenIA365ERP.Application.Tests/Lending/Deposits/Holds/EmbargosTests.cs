@@ -262,6 +262,78 @@ public sealed class EmbargosTests : IDisposable
         (await RetenidoAsync(cuenta)).Should().Be(3_000_000m, "53.000.000 menos el límite de 50.000.000");
     }
 
+    // --------------------------------------------------------------------------------- respuesta 82 B (E254) --
+
+    private async Task<decimal> RetenidoDelEmbargoAsync(GarnishmentDto embargo) =>
+        await _a.Db.AccountHolds.AsNoTracking()
+            .Where(h => h.ReleasedAt == null && h.Reason == HoldReason.Garnishment && _a.Db.Garnishments.Any(g => g.Id == h.GarnishmentId && g.PublicId == embargo.PublicId))
+            .SumAsync(h => h.Amount ?? 0m);
+
+    [Fact]
+    public async Task R82_la_consignacion_posterior_al_oficio_retiene_en_el_momento_sin_esperar_al_ciclo()
+    {
+        var cuenta = await AhorroConSaldoAsync("AHVISTA", 45_000_000m);
+        var embargo = await RegistradoAsync(Oficio(10_000_000m));
+        (await RetenidoAsync(cuenta)).Should().Be(0m);
+
+        await _a.ConsignadaAsync(_a.Consignacion(cuenta, 8_000_000m, ModalidadDeConsignacion.Free));
+        (await RetenidoAsync(cuenta)).Should().Be(3_000_000m, "53.000.000 menos el límite, en la misma consignación");
+        (await EmbargadaAsync(cuenta)).Should().BeTrue();
+
+        // Otra consignación sube lo retenido hasta el valor del oficio y no más.
+        await _a.ConsignadaAsync(_a.Consignacion(cuenta, 20_000_000m, ModalidadDeConsignacion.Free));
+        (await RetenidoAsync(cuenta)).Should().Be(10_000_000m, "el tope del oficio");
+        (await RetenidoDelEmbargoAsync(embargo)).Should().Be(10_000_000m);
+    }
+
+    [Fact]
+    public async Task R82_con_varios_embargos_la_consignacion_retiene_alimentos_primero()
+    {
+        var cuenta = await AhorroConSaldoAsync("AHVISTA", 40_000_000m);
+        var judicial = await RegistradoAsync(Oficio(null));
+        var alimentos = await RegistradoAsync(Oficio(5_000_000m, alimentos: true));
+        (await RetenidoDelEmbargoAsync(alimentos)).Should().Be(5_000_000m);
+        (await RetenidoDelEmbargoAsync(judicial)).Should().Be(0m);
+
+        await _a.ConsignadaAsync(_a.Consignacion(cuenta, 20_000_000m, ModalidadDeConsignacion.Free));
+
+        (await RetenidoDelEmbargoAsync(alimentos)).Should().Be(5_000_000m, "los alimentos toman primero, sin límite");
+        (await RetenidoDelEmbargoAsync(judicial)).Should().Be(5_000_000m, "60.000.000 menos los 5.000.000 de alimentos y menos el límite de 50.000.000");
+        (await RetenidoAsync(cuenta)).Should().Be(10_000_000m);
+    }
+
+    [Fact]
+    public async Task R82_el_desembargo_libera_lo_que_retuvo_la_consignacion()
+    {
+        var cuenta = await AhorroConSaldoAsync("AHVISTA", 45_000_000m);
+        var embargo = await RegistradoAsync(Oficio(null));
+        await _a.ConsignadaAsync(_a.Consignacion(cuenta, 8_000_000m, ModalidadDeConsignacion.Free));
+        (await RetenidoAsync(cuenta)).Should().Be(3_000_000m);
+
+        _a.G.ActuarComo(_a.C.Jefe);
+        var r = await Levantar().Handle(new ReleaseGarnishmentCommand(embargo.PublicId, "OF-300", null, null, null, "Desembargo del juzgado")
+            { OperationKey = Guid.NewGuid() }, default);
+        _a.Db.ChangeTracker.Clear();
+
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? $"{r.Error.Code}: {r.Error.Message}" : string.Empty);
+        (await RetenidoAsync(cuenta)).Should().Be(0m);
+        (await EmbargadaAsync(cuenta)).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task R82_dos_consignaciones_seguidas_en_cuentas_de_la_misma_persona_suman_sobre_el_limite()
+    {
+        var vieja = await AhorroConSaldoAsync("AHVISTA", 40_000_000m);
+        var nueva = await AhorroConSaldoAsync("AHVISTA2", 30_000_000m);
+        await RegistradoAsync(Oficio(null));
+        (await RetenidoAsync(vieja)).Should().Be(20_000_000m);
+
+        await _a.ConsignadaAsync(_a.Consignacion(nueva, 4_000_000m, ModalidadDeConsignacion.Free));
+        await _a.ConsignadaAsync(_a.Consignacion(vieja, 6_000_000m, ModalidadDeConsignacion.Free));
+
+        ((await RetenidoAsync(vieja)) + (await RetenidoAsync(nueva))).Should().Be(30_000_000m, "80.000.000 menos el límite");
+    }
+
     // ------------------------------------------------------------------------------------------------------ bloqueos --
 
     [Fact]

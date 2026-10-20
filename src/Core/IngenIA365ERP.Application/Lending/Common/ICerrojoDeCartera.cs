@@ -22,6 +22,10 @@ public enum ModoDeEspera
 /// sola sentencia —después del crédito: el cruce al retiro y el débito automático toman los dos en ese orden—;</item>
 /// <item>y la numeración al final (<see cref="BloquearNumeracionAsync"/>, que llama <c>NumeradorDeCartera</c>).</item>
 /// </list>
+/// <b>Persona primero, luego sus cuentas</b> (E254, respuesta 82 B): todo camino que toque a la vez a la persona y a sus cuentas toma el cerrojo
+/// de la persona antes de cualquiera de las cuentas y nunca al revés (<c>ElOrdenDelCerrojoEsPersonaYLuegoSusCuentas</c>). Como los embargos de una
+/// persona se registran y levantan bajo su cerrojo, ya con la persona tomada la lista de embargos es estable: la consignación del contrato la consulta
+/// ahí y toma, en la misma pasada por Id, las cuentas que reescribirá el recálculo del embargo (todas las del titular).
 /// <c>RowVersion</c> es la segunda defensa. Sólo dentro de <c>TransaccionExplicita</c>: sin transacción en curso lanza. Las
 /// validaciones previas (contabilizable, listas, centrales) corren fuera. No se usa <c>ICerrojoPorClave</c> (CH19). La
 /// implementación vive en <c>Persistence/Lending/CerrojoDeCartera</c> con el SQL de cada motor (<c>SqlDelCerrojoDeCartera</c>).

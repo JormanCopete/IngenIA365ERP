@@ -114,7 +114,11 @@ internal sealed class AportesDePrueba : IDisposable
     public CargosDeCuentas Cargos() => new(Db, RegistroDeCuentas(), Numerador(), Emision(), G.Actor, G.Reloj);
     public ConsignacionEnCuentas Consignacion() =>
         new(Db, RegistroDeCuentas(), Numerador(), Emision(), Reglas(), C.Parametros(), G.Actor, G.Reloj, Movimientos(), Cargos(), Ajuste(), Cdat?.Invoke(),
-            Reactivacion());
+            Reactivacion(), Embargos());
+
+    /// <summary>Respuesta 82 B (E254): el recálculo del embargo que cada consignación dispara.</summary>
+    public Application.Lending.Deposits.Holds.RetencionDeEmbargos Embargos() => new(Db, C.Parametros(), G.Valores,
+        new Application.Lending.Deposits.Holds.ReclasificacionDeCuenta(Db, RegistroDeCuentas(), Numerador(), Emision(), G.Actor, G.Reloj), G.Reloj);
 
     /// <summary>US14 (T208): la reactivación de una cuenta inactiva por un movimiento del titular, con su reclasificación.</summary>
     public Application.Lending.Deposits.Accrual.ReactivacionDeCuenta Reactivacion() =>

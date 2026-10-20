@@ -79,7 +79,8 @@ public sealed class ConsignacionEnCuentas(
     CargosDeCuentas cargos,
     Accrual.AjusteDeCausacionDeCuenta? ajusteDeCausacion = null,
     TermDeposits.ConstitucionDeCdat? constitucionDeCdat = null,
-    Accrual.ReactivacionDeCuenta? reactivacion = null)
+    Accrual.ReactivacionDeCuenta? reactivacion = null,
+    Holds.RetencionDeEmbargos? embargos = null)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
@@ -282,12 +283,24 @@ public sealed class ConsignacionEnCuentas(
             }
         }
 
+        // Respuesta 82 B del dueño (E254): con un embargo vigente, cada consignación se recalcula en el momento contra el límite embargable y retiene lo que
+        // corresponda (alimentos primero, luego por fecha de recepción: la 83). El contrato ya tomó la persona y todas sus cuentas, en ese orden. Si el
+        // recálculo no puede (p. ej. falta el límite nacional) la consignación no se pierde: queda el aviso y lo retiene el recálculo diario.
+        var avisos = c.Avisos;
+        if (embargos is not null && cuenta.Nature == LineNature.Deposit
+            && await Holds.RetencionDeEmbargos.TieneEmbargoVigenteAsync(db, cuenta.HolderPersonId, ct))
+        {
+            var recalculo = await embargos.RecalcularAsync(cuenta.HolderPersonId, reloj.HoyLocal, null, $"Consignación {operacion.Number} con embargo vigente", ct);
+            if (recalculo.IsFailure)
+                avisos = [.. avisos, $"El embargo vigente de la persona no se pudo recalcular con esta consignación ({recalculo.Error.Code}): lo retendrá el recálculo diario."];
+        }
+
         var final = await movimientos.LeerAsync(cuenta, item.ValueDate, ct);
         var comprobante = new ComprobanteDeCuentaDto(operacion.PublicId, operacion.Number, cuenta.PublicId, cuenta.Number, item.IdempotencyKey,
             nameof(MemberAccountOperationKind.Deposit), operacion.ValueDate, operacion.AccountingDate, operacion.RegisteredAt, item.Amount,
             filas.Select(f => new LineaDeCuentaDto((ConceptoDeCuenta)(int)f.Concept, f.Kind.ToString(), f.Amount)).ToList(), null,
             [.. cobrados.Select(x => new CargoCalculadoDto(x.Cargo.ChargeCode, x.Monto, x.Cargo.IsVatTaxed, nameof(AccountChargeStatus.Collected))), .. cargosCausados],
-            r.PorCuota, ReglasDeMovimientos.Dto(final.Disponible), null, null, reactivada, entradas, operacion.RulesVersion, c.Avisos);
+            r.PorCuota, ReglasDeMovimientos.Dto(final.Disponible), null, null, reactivada, entradas, operacion.RulesVersion, avisos);
         return Result.Success(new ConsignacionAplicada(comprobante, false));
     }
 

@@ -133,6 +133,26 @@ public sealed class RetencionDeEmbargos(
             .OrderBy(a => a.Id).ToListAsync(ct);
     }
 
+    /// <summary>Si la persona tiene un embargo activo (consulta barata, sin cerrojo; bajo el cerrojo de la persona el resultado es estable).</summary>
+    public static async Task<bool> TieneEmbargoVigenteAsync(IApplicationDbContext db, int persona, CancellationToken ct) =>
+        await db.Garnishments.AsNoTracking().AnyAsync(g => g.PersonId == persona && !g.IsDeleted && g.Status == GarnishmentStatus.Active, ct);
+
+    /// <summary>
+    /// Respuesta 82 B del dueño (E254): las cuentas de captación vivas de las personas con embargo activo, por Id. Quien consigna debe tomar su cerrojo
+    /// (después del de las personas, antes de cualquier otro paso) porque el recálculo del embargo reescribe los bloqueos de <b>todas</b> ellas.
+    /// </summary>
+    public static async Task<List<int>> CuentasDeLasPersonasEmbargadasAsync(IApplicationDbContext db, IReadOnlyCollection<int> personas, CancellationToken ct)
+    {
+        if (personas.Count == 0) return [];
+        var ids = personas.ToArray();
+        var embargadas = await db.Garnishments.AsNoTracking().Where(g => ids.Contains(g.PersonId) && !g.IsDeleted && g.Status == GarnishmentStatus.Active)
+            .Select(g => g.PersonId).Distinct().ToListAsync(ct);
+        if (embargadas.Count == 0) return [];
+        return await db.MemberAccounts.AsNoTracking()
+            .Where(a => embargadas.Contains(a.HolderPersonId) && a.Nature == LineNature.Deposit && a.Status != MemberAccountStatus.Closed && !a.IsDeleted)
+            .Select(a => a.Id).ToListAsync(ct);
+    }
+
     /// <summary>Lo consignado de cada embargo: Σ de sus consignaciones no reversadas.</summary>
     public async Task<Dictionary<int, decimal>> ConsignadoAsync(IReadOnlyCollection<int> embargos, CancellationToken ct)
     {

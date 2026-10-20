@@ -379,8 +379,14 @@ public sealed class ContratoDeCuentasDeCartera(
 
         // El cerrojo de todo el lote en una pasada (§3.4 paso 7): setup compartido, los titulares y las cuentas por Id.
         await cerrojo.TomarSetupAsync(exclusivo: false, ct);
-        await cerrojo.BloquearDeudoresAsync(cuentas.Values.Select(a => a.HolderPersonId).Distinct().Order().ToList(), ModoDeEspera.Esperar, ct);
-        await cerrojo.BloquearCuentasAsync(cuentas.Values.Select(a => a.Id).Distinct().Order().ToList(), ModoDeEspera.Esperar, ct);
+        var titulares = cuentas.Values.Select(a => a.HolderPersonId).Distinct().Order().ToList();
+        await cerrojo.BloquearDeudoresAsync(titulares, ModoDeEspera.Esperar, ct);
+        // Respuesta 82 B (E254): cada consignación recalcula los embargos del titular, que reescribe los bloqueos de TODAS sus cuentas. Con la persona ya
+        // bloqueada la lista de embargos es estable (se registran y levantan bajo ese cerrojo), así que se consulta aquí y las cuentas se toman en una
+        // sola pasada por Id: persona primero, nunca a la inversa.
+        var delLote = cuentas.Values.Select(a => a.Id).Concat(await Deposits.Holds.RetencionDeEmbargos.CuentasDeLasPersonasEmbargadasAsync(db, titulares, ct))
+            .Distinct().Order().ToList();
+        await cerrojo.BloquearCuentasAsync(delLote, ModoDeEspera.Esperar, ct);
 
         var respuestas = new List<RespuestaDelContratoDto<ComprobanteDeCuentaDto>>(consignaciones.Count);
         foreach (var item in consignaciones)
