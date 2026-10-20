@@ -93,7 +93,10 @@ public class InformesDeCaptacionesTests(CentralIdentityApiFixture fx)
             var diarios = await CarteraE2E.GetAsync(http, admin, $"{Vistas}/sicses-saldos-diarios?year={anio}&month={mes}");
             var filas = diarios.GetProperty("filas").EnumerateArray().ToList();
             filas.Should().HaveCount(DateTime.DaysInMonth(anio, mes));
-            filas[^1].GetProperty("valores")[1].GetString().Should().Be("6000000.00");
+            // El ciclo del último día liquida y abona el interés del mes con fecha valor del fin de mes: el capital al cierre es los 6.000.000 más lo abonado
+            // (6.001.799 con la tasa de la línea), el mismo capital que da la vista de saldos.
+            decimal.Parse(filas[^1].GetProperty("valores")[1].GetString()!, System.Globalization.CultureInfo.InvariantCulture).Should().Be(capital,
+                "el último día del mes el capital diario es el de los saldos al cierre");
             var estados = await CarteraE2E.GetAsync(http, admin, $"{Vistas}/deposit-accounts-by-status?asOf={fin:yyyy-MM-dd}");
             estados.GetProperty("filas").GetArrayLength().Should().BeGreaterThanOrEqualTo(1);
         }

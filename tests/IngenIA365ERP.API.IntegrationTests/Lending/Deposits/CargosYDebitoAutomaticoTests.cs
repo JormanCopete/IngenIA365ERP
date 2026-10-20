@@ -58,7 +58,7 @@ public class CargosYDebitoAutomaticoTests(CentralIdentityApiFixture fx)
         items.Should().ContainSingle(c => c.GetProperty("code").GetString() == "CUOTAMAN");
         var cuota = items.Single(c => c.GetProperty("code").GetString() == "CUOTAMAN");
         cuota.GetProperty("amount").GetDecimal().Should().Be(5_000m);
-        cuota.GetProperty("status").GetString().Should().Be("Collected");
+        cuota.GetProperty("status").GetInt32().Should().Be((int)IngenIA365ERP.Domain.Enums.Lending.AccountChargeStatus.Collected);
     }
 
     [Fact]
@@ -101,6 +101,7 @@ public class CargosYDebitoAutomaticoTests(CentralIdentityApiFixture fx)
         var (_, deudor, desembolso) = await DesembolsoE2E.CreditoDesembolsadoAsync(http, des, "Debito", 2_000_000m);
         var credito = desembolso.GetProperty("loanPublicId").GetGuid();
         await ConFechaDeNacimientoAsync(http, admin, deudor);
+        await OriginacionE2E.AutorizarAsync(http, admin, deudor, "GeneralTreatment"); // abrir la cuenta exige la autorización de tratamiento de datos
         var (_, vence, total) = await PagosE2E.CuotaAsync(http, admin, credito);
         var linea = await MovimientosTests.LineaALaVistaAsync(http, admin, des.Hoy, "AHDEBITO");
         var cuenta = await MovimientosTests.CuentaAsync(http, admin, des.Usuarios.O1.AgenciaPublicId, linea, deudor);

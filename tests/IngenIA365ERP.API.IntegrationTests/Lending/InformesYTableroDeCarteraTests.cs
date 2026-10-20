@@ -100,7 +100,9 @@ public sealed class InformesYTableroDeCarteraTests(CentralIdentityApiFixture fx)
         registro.Where(v => VistasDeK4.Contains(v.GetProperty("key").GetString())).Should().OnlyContain(v => v.GetProperty("availableFrom").GetInt32() == 4);
         registro.Where(v => VistasDeK5.Contains(v.GetProperty("key").GetString())).Should().OnlyContain(v => v.GetProperty("availableFrom").GetInt32() == 5);
         var delOficial = (await CarteraE2E.GetAsync(http, oficial, Informes)).EnumerateArray().Select(v => v.GetProperty("key").GetString()).ToList();
-        delOficial.Should().BeEquivalentTo(["placement", "receipts", "payroll-agreements", "quality", "vintages", "concentration"],
+        delOficial.Should().BeEquivalentTo(["placement", "receipts", "payroll-agreements", "quality", "vintages", "concentration",
+                // Las de la 014 sin datos del titular (agregadas): sólo piden Lending.Reports.View.
+                "deposits-reconciliation", "liquidity-fund", "deposit-balances", "sicses-fondo-liquidez", "sicses-saldos-diarios"],
             "sin Lending.Loans.Read no se ofrecen las vistas con datos del deudor; la concentración sí, porque por línea, sector y pagaduría es agregada");
         foreach (var vista in ConDatosDelDeudor)
             (await CarteraE2E.MandarGetAsync(http, oficial, $"{Informes}/{vista}")).StatusCode.Should().Be(HttpStatusCode.NotFound, $"{vista} sin Loans.Read");

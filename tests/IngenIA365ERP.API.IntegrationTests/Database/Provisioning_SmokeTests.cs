@@ -83,7 +83,7 @@ public class Provisioning_SmokeTests(CentralIdentityApiFixture fixture)
         (await appDb.AccountCatalogEntries.CountAsync()).Should().BeGreaterThan(2_000);
         (await appDb.FinancialStatementItems.CountAsync()).Should().BeGreaterThan(100);
         (await appDb.VoucherTypes.CountAsync(v => v.IsSeeded)).Should().Be(29, "los 18 de la 009, NV, CP, TR, AC y CJ de Inventario (feature 012, T484), CN de Cartera (feature 013, T0224) y MA, CC, TD, AO y RA de captaciones y aportes (feature 014)");
-        (await appDb.CrossDocumentTypes.CountAsync(t => t.IsSeeded)).Should().Be(8);
+        (await appDb.CrossDocumentTypes.CountAsync(t => t.IsSeeded)).Should().Be(9, "los 8 de la 009 y CTA, la cuenta de captación o aportes, de la 014");
 
         // RunTestSeed=false en la fixture ⇒ cero datos demo (FR-017/SC-005).
         (await appDb.People.CountAsync(p => p.CreatedBy == "system:seed-demo")).Should().Be(0);

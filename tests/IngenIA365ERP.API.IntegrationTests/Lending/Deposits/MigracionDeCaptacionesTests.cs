@@ -109,15 +109,15 @@ public sealed class MigracionDeCaptacionesTests(CentralIdentityApiFixture fx)
         var usuarios = await UsuariosDeCartera.CrearAsync(fx, coop.Cooperativa);
         var agencia = await MigracionE2E.OficinaAsync(http, admin, coop.TenantPublicId, "MIGAPO");
 
-        // La línea de aportes con versión vigente al corte (se registra con el reloj de la suite en el corte).
-        using (CausacionE2E.RelojEn(fx, corte))
+        // La línea de aportes con versión vigente desde antes del corte de la carga de ensayo (el día anterior al corte), con el reloj de la suite ese día.
+        using (CausacionE2E.RelojEn(fx, corte.AddDays(-1)))
         {
             var linea = await CarteraE2E.ConClaveAsync(http, admin, HttpMethod.Post, "/api/lending/lines/contribution", new
             {
                 code = "APOMIG", name = "Aportes migrados", active = true,
                 firstVersion = new
                 {
-                    validFrom = corte, reason = "Estatutos, art. 20 (e2e)", minimumNonReducible = new { kind = "FixedAmount", amount = 100_000m },
+                    validFrom = corte.AddDays(-1), reason = "Estatutos, art. 20 (e2e)", minimumNonReducible = new { kind = "FixedAmount", amount = 100_000m },
                     installment = new { kind = "FixedAmount", amount = 50_000m, periodicity = "Monthly", dueDay = 5 }, allowsExtraordinary = true,
                     refundTermDays = 60,
                 },
@@ -132,8 +132,8 @@ public sealed class MigracionDeCaptacionesTests(CentralIdentityApiFixture fx)
 
         // ------------------------------------------------------------------------------------- US9-3: una carga de ensayo --
         var ensayo = await CrearCargaAsync(http, admin, corte.AddDays(-1));
-        (await ImportarAsync(http, admin, ensayo, P.ContributionAccounts, Csv(P.ContributionAccounts, [Aporte(asociados[0].Documento, "APE-1", agencia)])))
-            .StatusCode.Should().Be(HttpStatusCode.OK);
+        var importadoEnsayo = await ImportarAsync(http, admin, ensayo, P.ContributionAccounts, Csv(P.ContributionAccounts, [Aporte(asociados[0].Documento, "APE-1", agencia)]));
+        importadoEnsayo.StatusCode.Should().Be(HttpStatusCode.OK, await importadoEnsayo.Content.ReadAsStringAsync());
         var aplicarEnsayo = await CarteraE2E.ConClaveAsync(http, admin, HttpMethod.Post, $"{Cargas}/{ensayo}/apply", new { reason = "Ensayo (e2e)" });
         aplicarEnsayo.StatusCode.Should().Be(HttpStatusCode.OK, await aplicarEnsayo.Content.ReadAsStringAsync());
 
@@ -179,9 +179,9 @@ public sealed class MigracionDeCaptacionesTests(CentralIdentityApiFixture fx)
         };
         var fueraDeFecha = await CarteraE2E.ConClaveAsync(http, admin, HttpMethod.Post, Activacion, new
         {
-            nature = "Contribution", migrationLoadPublicId = carga, activationDate = corte, sessionItemPublicId = punto, acknowledgeWarnings = true, reason = "x",
+            nature = "Contribution", migrationLoadPublicId = carga, activationDate = hoy.AddDays(1), sessionItemPublicId = punto, acknowledgeWarnings = true, reason = "x",
         });
-        (await CarteraE2E.CodigoDeErrorAsync(fueraDeFecha)).Should().Be("Lending.Activation.CutoffInvalid");
+        (await CarteraE2E.CodigoDeErrorAsync(fueraDeFecha)).Should().Be("Lending.Activation.CutoffInvalid", await fueraDeFecha.Content.ReadAsStringAsync());
         var sinAceptar = await CarteraE2E.ConClaveAsync(http, admin, HttpMethod.Post, Activacion, Orden());
         (await CarteraE2E.CodigoDeErrorAsync(sinAceptar)).Should().Be("Lending.Activation.DifferencesNotAccepted");
 
@@ -235,6 +235,8 @@ public sealed class MigracionDeCaptacionesTests(CentralIdentityApiFixture fx)
         await CarteraE2E.PersonaDelAdministradorAsync(http, coop.Cooperativa);
         var usuarios = await UsuariosDeCartera.CrearAsync(fx, coop.Cooperativa);
         var agencia = await MigracionE2E.OficinaAsync(http, admin, coop.TenantPublicId, "MIGCDT");
+        // La línea a la vista exige el perfil que autoriza captar: se deja antes de crearla (y otra vez, con la matriz, al activar).
+        await CaptacionesE2E.RequisitosDeCaptacionesAsync(http, admin, hoy);
         var inicio = corte.AddDays(-50);
 
         using (CausacionE2E.RelojEn(fx, corte))
@@ -256,6 +258,7 @@ public sealed class MigracionDeCaptacionesTests(CentralIdentityApiFixture fx)
         }
         await CaptacionesE2E.RegistrarDoblesDeCuentasAsync(http, admin, hoy);
         await CaptacionesE2E.RequisitosDeCaptacionesAsync(http, admin, hoy);
+        await CaptacionesE2E.MatrizDeCdatAsync(http, admin, hoy);
         var (documento, _) = await AsociadoAsync(http, admin, 900);
 
         // El interés causado al corte que regenera el plan (mensual vencido, base 360), calculado con el mismo motor que valida la carga.

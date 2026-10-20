@@ -229,7 +229,7 @@ public static class CaptacionesE2E
         var hayLineasActivas = false;
         foreach (var naturaleza in new[] { "Contribution", "Deposit" })
             hayLineasActivas |= (await CarteraE2E.GetAsync(http, admin, $"/api/lending/lines?nature={naturaleza}")).EnumerateArray()
-                .Any(l => l.GetProperty("status") is var s && (s.ValueKind == JsonValueKind.String ? s.GetString() == "Active" : s.GetInt32() == 1));
+                .Any(l => l.GetProperty("status") is var s && (s.ValueKind == JsonValueKind.String ? s.GetString() == "Active" : s.GetInt32() == (int)IngenIA365ERP.Domain.Enums.Lending.CreditLineStatus.Active));
         if (!hayLineasActivas) return;
 
         var desde = new DateOnly(hoy.Year, hoy.Month, 1);
@@ -253,6 +253,33 @@ public static class CaptacionesE2E
                      ("RetencionPorPagar", new { depositClass = "Demand" }, "24353597", "Retención sobre rendimientos (e2e)", "243535"),
                  })
             await ReglaMinimaAsync(http, admin, desde, rol, $"account={cuenta}", dimensiones, cuenta, nombre, padre);
+    }
+
+    /// <summary>
+    /// La matriz mínima de una línea de CDAT (la activación pregunta por sus hechos desde el primer día: constitución, causación, pago de intereses con su
+    /// retención y cancelación por giro). Una regla por rol con la clase <c>TermDeposit</c>: las dimensiones opcionales que no se nombran (el plazo de
+    /// emisión) no la excluyen.
+    /// </summary>
+    public static async Task MatrizDeCdatAsync(HttpClient http, string admin, DateOnly hoy)
+    {
+        var desde = new DateOnly(hoy.Year, hoy.Month, 1);
+        var cdat = new { depositClass = "TermDeposit" };
+        // El capital del CDAT exige el plazo de emisión: una regla por banda, con su subcuenta del CUIF.
+        foreach (var (banda, cuenta, padre) in new[]
+                 {
+                     ("UnderSixMonths", "21100598", "211005"), ("SixToTwelve", "21101098", "211010"), ("TwelveToEighteen", "21101598", "211015"),
+                     ("EighteenOrMore", "21102098", "211020"),
+                 })
+            await ReglaMinimaAsync(http, admin, desde, "CapitalDeCaptacion", $"account={cuenta}",
+                new { depositClass = "TermDeposit", accountFlag = "Standard", issueTermBand = banda }, cuenta, $"CDAT emitidos {banda} (e2e)", padre);
+        await ReglaMinimaAsync(http, admin, desde, "InteresPorPagar", "account=21109598", cdat, "21109598", "Intereses del CDAT (e2e)", "211095");
+        await ReglaMinimaAsync(http, admin, desde, "GastoPorIntereses", "account=61500599", cdat, "61500599", "Intereses del CDAT (e2e)", "615005");
+        await ReglaMinimaAsync(http, admin, desde, "RetencionPorPagar", "account=24353599", cdat, "24353599", "Retención sobre intereses del CDAT (e2e)", "243535");
+        await ReglaMinimaAsync(http, admin, desde, "GmfPorPagar", "account=24300599", cdat, "24300599", "GMF del CDAT (e2e)", "243005");
+        await ReglaMinimaAsync(http, admin, desde, "DevolucionPorPagar", "account=24651098", new { lineNature = "Deposit", reasonCode = "TermDepositInterest" },
+            "24651098", "Intereses del CDAT por girar (e2e)", "246510");
+        await ReglaMinimaAsync(http, admin, desde, "DevolucionPorPagar", "account=24651099", new { lineNature = "Deposit", reasonCode = "TermDepositRedemption" },
+            "24651099", "Redención de CDAT por girar (e2e)", "246510");
     }
 
     private static async Task ReglaMinimaAsync(HttpClient http, string admin, DateOnly desde, string rol, string filtro, object dimensiones, string cuenta,

@@ -147,9 +147,10 @@ public class RetiroDeLaCarteraHeredadaTests(CentralIdentityApiFixture fx)
         // /api/lending con su nombre heredado.
         string[] conservadas =
         [
-            "contributions", "savings-accounts", "savings-interest-liquidation", "savings-parameters", "sipla-parameters", "statements",
+            "savings-accounts", "savings-interest-liquidation", "savings-parameters", "sipla-parameters", "statements",
             "sub-zones", "transaction-codes", "withdrawal-statuses", "withdrawals", "zone-types", "zones",
         ];
+        // «contributions» ya no es una familia heredada: desde la 014 /api/lending/contributions son los aportes nuevos (los de la clase Contributions de captaciones).
         foreach (var familia in conservadas)
             rutas.Should().NotContain(r => r.StartsWith($"/api/lending/{familia}", StringComparison.OrdinalIgnoreCase), $"{familia} ya no está en /api/lending");
         rutas.Should().NotContain(r => r.StartsWith("/api/savings", StringComparison.OrdinalIgnoreCase), "lo conservado se retiró con la 014");

@@ -30,7 +30,7 @@ public class CdatTests(CentralIdentityApiFixture fx)
     private const string Lineas = "/api/lending/lines";
     private const string Doble = "/api/lending/test-doubles/collector/accounts";
 
-    private sealed record Escenario(CaptacionesE2E.CooperativaDeCaptaciones Coop, UsuariosDeCartera Usuarios, Guid Oficina, Guid Ahorro, Guid Titular);
+    private sealed record Escenario(CaptacionesE2E.CooperativaDeCaptaciones Coop, UsuariosDeCartera Usuarios, Guid Oficina, Guid Ahorro, Guid Titular, Guid LineaAhorro);
 
     private async Task<Escenario> ArmarAsync(string nombre)
     {
@@ -43,7 +43,7 @@ public class CdatTests(CentralIdentityApiFixture fx)
         var titular = await MovimientosTests.AsociadoAsync(http, coop.TokenAdmin, $"Cdat{nombre}");
         var cuenta = await MovimientosTests.CuentaAsync(http, coop.TokenAdmin, usuarios.O1.AgenciaPublicId, ahorro, titular);
         await MovimientosTests.ConsignarAsync(http, coop.TokenAdmin, cuenta, titular, 300_000_000m, hoy, medio: "Transfer");
-        return new Escenario(coop, usuarios, usuarios.O1.AgenciaPublicId, cuenta, titular);
+        return new Escenario(coop, usuarios, usuarios.O1.AgenciaPublicId, cuenta, titular, ahorro);
     }
 
     /// <summary>Una línea de CDAT al 10 % EA en base 360, de 30 a 720 días, al vencimiento o mensual, con la redención y la negociación que se pidan.</summary>
@@ -247,7 +247,8 @@ public class CdatTests(CentralIdentityApiFixture fx)
                 new { rolePublicId = e.Usuarios.RolesSugeridos[plantilla] });
             if (!rol.IsSuccessStatusCode)
                 (await CarteraE2E.CodigoDeErrorAsync(rol)).Should().Be("Security.Users.AlreadyAssignedRole", await rol.Content.ReadAsStringAsync());
-            await UsuariosDeCartera.FijarLineasAsync(http, admin, usuario, linea);
+            // También la línea de la cuenta que fondea: fuera del alcance de líneas la cuenta no existe para quien constituye (404).
+            await UsuariosDeCartera.FijarLineasAsync(http, admin, usuario, linea, e.LineaAhorro);
         }
         var tokenAsesor = await UsuariosDeCartera.IngresarAsync(http, asesor);
         var tokenJefe = await UsuariosDeCartera.IngresarAsync(http, jefe);
