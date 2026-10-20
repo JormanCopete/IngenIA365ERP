@@ -49,6 +49,14 @@ public sealed class LectorDeInteres(IApplicationDbContext db, IValoresNacionales
         [MemberAccountTransactionKind.InterestAccrued, MemberAccountTransactionKind.AccrualAdjustment, MemberAccountTransactionKind.OpeningBalance];
 
     /// <summary>
+    /// Lo que forma lo <b>liquidable</b> de un período: lo causado (<see cref="ClasesDeLoCausado"/>) más la diferencia de intereses de los movimientos fechados en un
+    /// período ya liquidado (<c>SettledPeriodAdjustment</c>, respuesta 64 B, E256), que se escribe en el período abierto y la próxima liquidación abona. No
+    /// forma parte de la ventana que la causación y el ajuste comparan con el motor: esos días ya están liquidados y no se recalculan.
+    /// </summary>
+    public static IReadOnlyList<MemberAccountTransactionKind> ClasesDeLoLiquidable { get; } =
+        [.. ClasesDeLoCausado, MemberAccountTransactionKind.SettledPeriodAdjustment];
+
+    /// <summary>
     /// US9 (T154, research E121): el corte de una cuenta migrada —la víspera del día en que se activó—; nulo en una cuenta abierta en la Cartera. Antes del
     /// corte la Cartera no conoce los saldos diarios (la cuenta nace con su saldo al corte), así que ni la causación ni su ajuste recalculan días anteriores.
     /// </summary>
@@ -100,11 +108,11 @@ public sealed class LectorDeInteres(IApplicationDbContext db, IValoresNacionales
     /// versión a una fecha.
     /// </summary>
     public async Task<Result<VentanaDeInteres>> VentanaAsync(MemberAccount cuenta, DateOnly inicioExcluido, DateOnly hasta, DateTime informacionHasta,
-        bool titularFallecido, CancellationToken ct)
+        bool titularFallecido, CancellationToken ct, long? sinLaOperacion = null)
     {
         ArgumentNullException.ThrowIfNull(cuenta);
         var versiones = await VersionesAsync(cuenta.CreditLineId, ct);
-        var libro = await LibroDeCapitalAsync(cuenta.Id, ct);
+        var libro = await LibroDeCapitalAsync(cuenta.Id, ct, sinLaOperacion);
         var saldos = hasta <= inicioExcluido
             ? []
             : ReconstruccionDeCuenta.SaldosDiarios(libro, inicioExcluido, hasta, informacionHasta);
@@ -180,10 +188,10 @@ public sealed class LectorDeInteres(IApplicationDbContext db, IValoresNacionales
     }
 
     /// <summary>Las filas de capital de la cuenta tal como las ve la reconstrucción (también las de esta unidad de trabajo sin guardar).</summary>
-    public async Task<IReadOnlyList<MovimientoDeCuenta>> LibroDeCapitalAsync(int cuentaId, CancellationToken ct)
+    public async Task<IReadOnlyList<MovimientoDeCuenta>> LibroDeCapitalAsync(int cuentaId, CancellationToken ct, long? sinLaOperacion = null)
     {
         var filas = await db.MemberAccountTransactions.AsNoTracking()
-            .Where(t => t.MemberAccountId == cuentaId && t.Concept == MemberAccountConcept.Principal && !t.IsDeleted)
+            .Where(t => t.MemberAccountId == cuentaId && t.Concept == MemberAccountConcept.Principal && !t.IsDeleted && (sinLaOperacion == null || t.OperationId != sinLaOperacion))
             .Select(t => new { t.Id, t.Kind, t.Concept, t.Amount, t.ValueDate, t.RegisteredAt, t.ReversesTransactionId })
             .ToListAsync(ct);
         var libro = filas.Select(f => new MovimientoDeCuenta(f.Id, f.Kind, f.Concept, f.Amount, f.ValueDate, f.RegisteredAt, f.ReversesTransactionId)).ToList();

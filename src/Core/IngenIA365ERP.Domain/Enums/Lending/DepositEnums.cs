@@ -140,6 +140,9 @@ public enum MemberAccountTransactionKind
     ChargeWaived = 20,
     BonusRecognized = 21,
     AssemblyCredit = 22,
+
+    // Respuesta 64 B del dueño (E256): la diferencia de intereses de un movimiento fechado en un período ya liquidado, que se ajusta en el período abierto.
+    SettledPeriodAdjustment = 23,
 }
 
 /// <summary>Política de exención del GMF (R07, P25).</summary>

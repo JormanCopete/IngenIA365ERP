@@ -80,7 +80,9 @@ public sealed class ReversionDeCuentas(
                 new { chargePublicId = delCargo.PublicId }));
 
         var cuenta = await db.MemberAccounts.FirstAsync(a => a.Id == original.MemberAccountId, ct);
-        var filas = await db.MemberAccountTransactions.AsNoTracking().Where(t => t.OperationId == original.Id && !t.IsDeleted).OrderBy(t => t.Id)
+        var filas = await db.MemberAccountTransactions.AsNoTracking().Where(t => t.OperationId == original.Id && !t.IsDeleted
+                // Respuesta 64 B (E256): la diferencia de un período liquidado no se espeja: el reverso calcula la suya (negativa) en el período abierto.
+                && t.Kind != MemberAccountTransactionKind.SettledPeriodAdjustment).OrderBy(t => t.Id)
             .ToListAsync(ct);
         var hecho = await emision.HechoDeCuentaAsync(cuenta, reloj.HoyLocal, ct);
         if (hecho.IsFailure) return Result.Failure<ReversoDeCuentaAplicado>(hecho.Error);

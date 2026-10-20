@@ -275,6 +275,85 @@ public sealed class InteresesDeCuentaTests : IDisposable
             .Should().Be(0, "el proceso no tuvo nada que corregir");
     }
 
+    // ------------------------------------------------------------------ fecha valor en un período ya liquidado (64 B) --
+
+    /// <summary>Diciembre causado y liquidado (el mes de la investigación) y enero causado hasta el 3: la cuenta queda liquidada hasta el 31/12.</summary>
+    private async Task<MemberAccountDto> DiciembreLiquidadoAsync()
+    {
+        _a.ConAjusteDeCausacion = true;
+        var cuenta = await MesDeLaInvestigacionAsync();
+        await CausarAsync(cuenta, FinDeMes);
+        await LiquidarPeriodosAsync(cuenta, FinDeMes);
+        await CausarAsync(cuenta, new DateOnly(2027, 1, 3));
+        return cuenta;
+    }
+
+    [Fact]
+    public async Task R64_una_consignacion_fechada_en_un_periodo_liquidado_entra_y_su_diferencia_se_ajusta_en_el_periodo_abierto()
+    {
+        var cuenta = await DiciembreLiquidadoAsync();
+        var liquidadoDeDiciembre = await _a.Db.InterestSettlements.AsNoTracking().SingleAsync();
+        Dia(new DateOnly(2027, 1, 3));
+
+        // Fechada el 29/12: días 29, 30 y 31 de un período que ya se liquidó.
+        var comprobante = await _a.ConsignadaAsync(Libre(cuenta, 1_000_000m, new DateOnly(2026, 12, 29)));
+        _a.Db.ChangeTracker.Clear();
+
+        comprobante.Amount.Should().Be(1_000_000m, "la consignación entra: no se rechaza por caer en un período liquidado");
+        var liquidadoSigue = await _a.Db.InterestSettlements.AsNoTracking().SingleAsync();
+        (liquidadoSigue.AccruedInterest, liquidadoSigue.GrossInterest).Should().Be((liquidadoDeDiciembre.AccruedInterest, liquidadoDeDiciembre.GrossInterest),
+            "lo liquidado no se reabre ni se reescribe");
+        var base_ = 2_000_000m * 10 + 5_000_000m * 10 + 1_500_000m * 11;
+        var esperadoLiquidado = InteresDeCaptacion.Seis(TasaDiaria * (base_ + 1_000_000m * 3)) - InteresDeCaptacion.Seis(TasaDiaria * base_);
+        var delPeriodoLiquidado = await _a.Db.MemberAccountTransactions.AsNoTracking().SingleAsync(t => t.Kind == MemberAccountTransactionKind.SettledPeriodAdjustment);
+        delPeriodoLiquidado.Amount.Should().Be(esperadoLiquidado, "los intereses de los 3 días liquidados sobre el millón");
+        delPeriodoLiquidado.ValueDate.Should().Be(new DateOnly(2027, 1, 1), "en el período abierto: el primer día después de la última liquidación");
+        delPeriodoLiquidado.OperationId.Should().Be((await _a.Db.MemberAccountOperations.AsNoTracking().SingleAsync(o => o.Kind == MemberAccountOperationKind.Deposit && o.Amount == 1_000_000m)).Id,
+            "va en la misma operación");
+        // Y el período abierto: los 3 días de enero (1, 2 y 3) sobre el millón (más el interés de diciembre capitalizado, que ya estaba en el libro).
+        var abierto = await _a.Db.MemberAccountTransactions.AsNoTracking().SingleAsync(t => t.Kind == MemberAccountTransactionKind.AccrualAdjustment && t.OperationId != null
+            && t.ValueDate == new DateOnly(2027, 1, 3));
+        abierto.Amount.Should().BeGreaterThan(0m);
+        (await _a.Db.IntegrationMessages.CountAsync(m => m.Type == AjusteDeCausacionDeCaptacionV1.Type)).Should().Be(1, "un solo hecho con el total de las dos partes");
+        (await _a.Db.MemberAccountTransactions.CountAsync(t => t.MessagePublicId == delPeriodoLiquidado.MessagePublicId)).Should().Be(2);
+
+        // El proceso no corrige lo que el ajuste ya escribió (la diferencia del período liquidado no es de la ventana abierta)…
+        await CausarAsync(cuenta, new DateOnly(2027, 1, 31));
+        (await _a.Db.MemberAccountTransactions.CountAsync(t => t.Kind == MemberAccountTransactionKind.AccrualAdjustment && t.ProcessRunId != null))
+            .Should().Be(0, "el proceso no tuvo nada que corregir: la diferencia liquidada no entra a la ventana que compara con el motor");
+        // …y la liquidación de enero la abona: no queda interés por pagar.
+        var causadoDeEnero = await _a.Db.MemberAccountTransactions.AsNoTracking()
+            .Where(t => t.Concept == MemberAccountConcept.InterestPayable && t.ValueDate > FinDeMes && t.ValueDate <= new DateOnly(2027, 1, 31)
+                        && (t.Kind == MemberAccountTransactionKind.InterestAccrued || t.Kind == MemberAccountTransactionKind.AccrualAdjustment
+                            || t.Kind == MemberAccountTransactionKind.SettledPeriodAdjustment))
+            .SumAsync(t => t.Amount);
+        await LiquidarPeriodosAsync(cuenta, new DateOnly(2027, 1, 31));
+        var enero = await _a.Db.InterestSettlements.AsNoTracking().SingleAsync(l => l.PeriodTo == new DateOnly(2027, 1, 31));
+        enero.AccruedInterest.Should().Be(causadoDeEnero, "la liquidación de enero incluye lo ajustado de diciembre");
+        enero.AccruedInterest.Should().BeGreaterThan(esperadoLiquidado);
+        (await SaldoAsync(cuenta, MemberAccountConcept.InterestPayable)).Should().Be(0m, "lo ajustado se abonó con la liquidación del período abierto");
+    }
+
+    [Fact]
+    public async Task R64_reversar_la_consignacion_fechada_en_un_periodo_liquidado_ajusta_a_la_inversa_en_el_periodo_abierto()
+    {
+        var cuenta = await DiciembreLiquidadoAsync();
+        Dia(new DateOnly(2027, 1, 3));
+        await _a.ConsignadaAsync(Libre(cuenta, 1_000_000m, new DateOnly(2026, 12, 29)));
+        _a.Db.ChangeTracker.Clear();
+        var original = await _a.Db.MemberAccountOperations.AsNoTracking().SingleAsync(o => o.Kind == MemberAccountOperationKind.Deposit && o.Amount == 1_000_000m);
+
+        var r = await _a.Reversion().ReversarAsync(await _a.Db.MemberAccountOperations.FirstAsync(o => o.Id == original.Id), "Error de digitación", "Recaudo", default);
+        _a.Db.ChangeTracker.Clear();
+
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? $"{r.Error.Code}: {r.Error.Message}" : string.Empty);
+        var delLiquidado = await _a.Db.MemberAccountTransactions.AsNoTracking().Where(t => t.Kind == MemberAccountTransactionKind.SettledPeriodAdjustment)
+            .OrderBy(t => t.Id).ToListAsync();
+        delLiquidado.Should().HaveCount(2);
+        delLiquidado.Sum(t => t.Amount).Should().Be(0m, "el reverso deshace la diferencia del período liquidado con la suya, en el período abierto");
+        delLiquidado.Should().OnlyContain(t => t.ValueDate == new DateOnly(2027, 1, 1));
+    }
+
     [Fact]
     public async Task Sin_ajuste_enlazado_el_proceso_corrige_la_diferencia_antes_de_causar()
     {
@@ -383,6 +462,29 @@ public sealed class InteresesDeCuentaTests : IDisposable
         (await _a.Db.MemberAccountOperations.CountAsync(o => o.Kind == MemberAccountOperationKind.Cancellation)).Should().Be(1);
         (await _a.Db.AccountingFactParts.CountAsync(p => p.SourceKind == AccountingFactPartSource.AccountCatchUp)).Should().Be(1,
             "la puesta al día de la cancelación va en una parte ALD-");
+    }
+
+    [Fact]
+    public async Task R64_la_cancelacion_con_el_ajuste_de_causacion_activo_no_ajusta_su_propia_entrega_del_mismo_dia()
+    {
+        _a.ConAjusteDeCausacion = true;
+        var destino = await CuentaAsync(deposito: 0m, codigo: "AHDEST", exenta: false);
+        var cuenta = await MesDeLaInvestigacionAsync();
+        await CausarAsync(cuenta, new DateOnly(2026, 12, 21));
+        Dia(new DateOnly(2026, 12, 26));
+
+        var r = await Cerrar().Handle(new CloseMemberAccountCommand(cuenta.PublicId, null,
+            new CloseDeliveryInput(CloseDeliveryKind.TransferToAccount, destino.PublicId, null), [cuenta.Holder.PersonPublicId], "Cancelación pedida")
+        {
+            OperationKey = Guid.NewGuid(),
+        }, default);
+        _a.Db.ChangeTracker.Clear();
+
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? $"{r.Error.Code}: {r.Error.Message}" : string.Empty);
+        r.Value.Status.Should().Be(MemberAccountStatus.Closed);
+        (await _a.Db.MemberAccountTransactions.CountAsync(t => t.Kind == MemberAccountTransactionKind.SettledPeriodAdjustment)).Should().Be(0,
+            "liquida y entrega el mismo día: la cuenta se cierra y no habría liquidación que abonara un ajuste");
+        (await SaldoAsync(cuenta, MemberAccountConcept.InterestPayable)).Should().Be(0m);
     }
 
     [Fact]

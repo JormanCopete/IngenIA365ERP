@@ -91,6 +91,6 @@ public class MemberAccountTransaction : AuditableEntityLong, IHechoInmutable
     /// <summary>Las clases de fila que admiten hasta 6 decimales: la causación y su ajuste (§0.3).</summary>
     public static IReadOnlySet<MemberAccountTransactionKind> ClasesDeCausacion { get; } = new HashSet<MemberAccountTransactionKind>
     {
-        MemberAccountTransactionKind.InterestAccrued, MemberAccountTransactionKind.AccrualAdjustment,
+        MemberAccountTransactionKind.InterestAccrued, MemberAccountTransactionKind.AccrualAdjustment, MemberAccountTransactionKind.SettledPeriodAdjustment,
     };
 }

@@ -146,7 +146,8 @@ public sealed class LiquidacionDeIntereses(
         }
         else
         {
-            var clases = LectorDeInteres.ClasesDeLoCausado.ToArray();
+            // Respuesta 64 B (E256): también lo que el período abierto trae de movimientos fechados en períodos ya liquidados.
+            var clases = LectorDeInteres.ClasesDeLoLiquidable.ToArray();
             var filas = await db.MemberAccountTransactions.AsNoTracking()
                 .Where(t => t.MemberAccountId == cuenta.Id && t.Concept == MemberAccountConcept.InterestPayable && clases.Contains(t.Kind)
                             && t.ValueDate > inicio && t.ValueDate <= hasta && !t.IsDeleted)

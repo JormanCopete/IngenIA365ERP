@@ -227,7 +227,7 @@ public class EnumeracionesDeCarteraTests
             ("TransferOut", 5), ("InterestAccrued", 6), ("AccrualAdjustment", 7), ("InterestCredited", 8), ("InterestPaid", 9),
             ("WithholdingApplied", 10), ("GmfCharged", 11), ("ChargeApplied", 12), ("PenaltyApplied", 13), ("Capitalization", 14),
             ("Reclassification", 15), ("InternalOffset", 16), ("Refund", 17), ("ToUnclaimed", 18), ("GarnishmentConsigned", 19),
-            ("ChargeWaived", 20), ("BonusRecognized", 21), ("AssemblyCredit", 22)],
+            ("ChargeWaived", 20), ("BonusRecognized", 21), ("AssemblyCredit", 22), ("SettledPeriodAdjustment", 23)],
         [typeof(GmfExemptionPolicy)] = [("SingleMarkedAccount", 1), ("PerHolderLimit", 2), ("NotApplicable", 3)],
         [typeof(WithholdingThresholdScope)] = [("AllDepositClasses", 1), ("ExceptTermDeposit", 2), ("None", 3)],
         [typeof(HoldReason)] = [("Internal", 1), ("LoanCollateral", 2), ("SignaturePending", 3), ("Deceased", 4), ("ScreeningMatch", 5),

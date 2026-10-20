@@ -65,6 +65,9 @@ public class InteresesTests(CentralIdentityApiFixture fx)
         return new DateOnly(hoy.Year, hoy.Month, 1).AddMonths(1);
     }
 
+    /// <summary>El titular de la última cuenta que armó <see cref="MesAsync"/>.</summary>
+    private Guid _ultimoTitular;
+
     private static DateOnly FinDeMes(DateOnly d) => new(d.Year, d.Month, DateTime.DaysInMonth(d.Year, d.Month));
 
     /// <summary>
@@ -81,7 +84,7 @@ public class InteresesTests(CentralIdentityApiFixture fx)
         using (CausacionE2E.RelojEn(fx, inicio))
         {
             var linea = await LineaAlTresAsync(http, admin, inicio, codigo, minimo);
-            titular = await MovimientosTests.AsociadoAsync(http, admin, $"Interes{codigo}");
+            titular = _ultimoTitular = await MovimientosTests.AsociadoAsync(http, admin, $"Interes{codigo}");
             cuenta = await MovimientosTests.CuentaAsync(http, admin, oficina, linea, titular, exenta: true);
             await MovimientosTests.ConsignarAsync(http, admin, cuenta, titular, inicial, inicio, medio: "Transfer");
         }
@@ -116,6 +119,58 @@ public class InteresesTests(CentralIdentityApiFixture fx)
         l.GetProperty("accrued").GetDecimal().Should().Be(esperado);
         l.GetProperty("settled").GetDecimal().Should().Be(Math.Round(esperado, 0, MidpointRounding.AwayFromZero));
         l.GetProperty("withholding").GetDecimal().Should().Be(0m, "ningún día alcanza el umbral diario");
+    }
+
+    /// <summary>
+    /// Respuesta 64 B del dueño (E256): una consignación fechada en un período cuyos intereses ya se liquidaron <b>entra</b>, lo liquidado no se toca y la diferencia
+    /// de intereses de esos días se ajusta en el período abierto (una fila <c>SettledPeriodAdjustment</c> fechada el primer día después de la última liquidación,
+    /// en la misma operación) y la próxima liquidación la abona: no queda interés por pagar.
+    /// </summary>
+    [Fact]
+    public async Task R64_una_consignacion_fechada_en_un_periodo_liquidado_entra_y_su_diferencia_se_ajusta_en_el_periodo_abierto()
+    {
+        var (coop, oficina) = await CooperativaAsync("p64");
+        using var http = fx.CreateClient();
+        var cuenta = await MesAsync(http, coop, oficina, "AHINT64");
+        var titular = _ultimoTitular;
+        var inicio = InicioDelMesSiguiente();
+        var fin = FinDeMes(inicio);
+        var antes = (await LiquidacionesAsync(http, coop.TokenAdmin, cuenta)).GetProperty("items")[0];
+        var causadoDeNoviembre = antes.GetProperty("accrued").GetDecimal();
+
+        // El día siguiente al cierre: el ciclo causa enero... el 1.º; y se consigna con fecha valor los dos últimos días del mes ya liquidado.
+        using (CausacionE2E.RelojEn(fx, fin.AddDays(1)))
+        {
+            await CausacionE2E.CicloDeHoyAsync(fx, http, coop.TokenAdmin, coop.TenantPublicId);
+            // La consignación entra aunque su fecha valor caiga en un período liquidado (ConsignarAsync exige el 200).
+            await MovimientosTests.ConsignarAsync(http, coop.TokenAdmin, cuenta, titular, 1_000_000m, fin.AddDays(-1), medio: "Transfer");
+        }
+
+        var liquidaciones = (await LiquidacionesAsync(http, coop.TokenAdmin, cuenta)).GetProperty("items");
+        liquidaciones.GetArrayLength().Should().Be(1);
+        liquidaciones[0].GetProperty("accrued").GetDecimal().Should().Be(causadoDeNoviembre, "lo liquidado no se reabre ni se reescribe");
+
+        var dias = fin.DayNumber - inicio.DayNumber;
+        var @base = 2_000_000m * 9 + 5_000_000m * 10 + 1_500_000m * (dias - 19);
+        var esperado = InteresDeCaptacion.Seis(TasaDiaria * (@base + 1_000_000m * 2)) - InteresDeCaptacion.Seis(TasaDiaria * @base);
+        var filas = await CausacionE2E.EnLaBaseAsync(fx, coop.TenantPublicId, db => (from t in db.MemberAccountTransactions.AsNoTracking()
+                                                                                     join a in db.MemberAccounts.AsNoTracking() on t.MemberAccountId equals a.Id
+                                                                                     where a.PublicId == cuenta && t.Kind == MemberAccountTransactionKind.SettledPeriodAdjustment
+                                                                                     select new { t.Amount, t.ValueDate, t.OperationId }).ToListAsync());
+        var ajuste = filas.Should().ContainSingle().Subject;
+        ajuste.Amount.Should().BeApproximately(esperado, 0.00001m, "los intereses de los 2 días liquidados sobre el millón (a seis decimales)");
+        ajuste.ValueDate.Should().Be(fin.AddDays(1), "en el período abierto: el primer día después de la última liquidación");
+        ajuste.OperationId.Should().NotBeNull("va en la misma operación de la consignación");
+
+        // La liquidación del mes siguiente lo abona: no queda interés por pagar.
+        using (CausacionE2E.RelojEn(fx, FinDeMes(fin.AddDays(1))))
+            await CausacionE2E.CicloDeHoyAsync(fx, http, coop.TokenAdmin, coop.TenantPublicId);
+        var porPagar = await CausacionE2E.EnLaBaseAsync(fx, coop.TenantPublicId, db => (from t in db.MemberAccountTransactions.AsNoTracking()
+                                                                                        join a in db.MemberAccounts.AsNoTracking() on t.MemberAccountId equals a.Id
+                                                                                        where a.PublicId == cuenta && t.Concept == MemberAccountConcept.InterestPayable
+                                                                                        select t.Amount).SumAsync());
+        porPagar.Should().Be(0m, "lo ajustado de noviembre se abonó con la liquidación de diciembre");
+        (await LiquidacionesAsync(http, coop.TokenAdmin, cuenta)).GetProperty("items").GetArrayLength().Should().Be(2);
     }
 
     [Fact]

@@ -105,7 +105,7 @@ public sealed class DocumentosDeCaptaciones(
         {
             var delPeriodo = libro.Where(x => x.Fila.ValueDate >= periodo.From && x.Fila.ValueDate <= periodo.To).Select(x => x.Fila).ToList();
             var causado = delPeriodo.Where(f => f.Concept == MemberAccountConcept.InterestPayable
-                                                && f.Kind is MemberAccountTransactionKind.InterestAccrued or MemberAccountTransactionKind.AccrualAdjustment)
+                                                && f.Kind is MemberAccountTransactionKind.InterestAccrued or MemberAccountTransactionKind.AccrualAdjustment or MemberAccountTransactionKind.SettledPeriodAdjustment)
                 .Sum(f => f.Amount);
             var liquidaciones = await LiquidacionesAsync(cuenta.Id, periodo.From, periodo.To, r, ct);
             var version = await LectorDeLineasDeCaptacion.VigenteDeCaptacionAsync(db, cuenta.CreditLineId, periodo.To, r, ct);

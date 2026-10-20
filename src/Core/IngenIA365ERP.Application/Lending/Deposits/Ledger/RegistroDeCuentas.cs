@@ -275,7 +275,7 @@ public sealed class RegistroDeCuentas(IApplicationDbContext db)
     public static IReadOnlySet<MemberAccountTransactionKind> NoSonDelTitular { get; } = new HashSet<MemberAccountTransactionKind>
     {
         MemberAccountTransactionKind.InterestAccrued, MemberAccountTransactionKind.AccrualAdjustment, MemberAccountTransactionKind.InterestCredited,
-        MemberAccountTransactionKind.ChargeApplied, MemberAccountTransactionKind.Reclassification,
+        MemberAccountTransactionKind.ChargeApplied, MemberAccountTransactionKind.Reclassification, MemberAccountTransactionKind.SettledPeriodAdjustment,
         // US12 (T203): lo que abona la asamblea (revalorización o excedentes) no es un movimiento del titular: no reactiva una cuenta inactiva.
         MemberAccountTransactionKind.AssemblyCredit,
     };

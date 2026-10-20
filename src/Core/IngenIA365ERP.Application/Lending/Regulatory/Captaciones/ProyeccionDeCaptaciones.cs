@@ -405,7 +405,7 @@ public sealed class ProyeccionDeCaptaciones(
                                 join o in db.MemberAccountOperations.AsNoTracking() on a.OperationId equals o.Id
                                 where ids.Contains(a.MemberAccountId) && a.TaxYear == anio
                                 select new { a.MemberAccountId, a.PersonId, o.ValueDate, a.GrossInterest, a.WithholdingAmount }).ToListAsync(ct);
-        var causacion = LectorDeInteres.ClasesDeLoCausado.Where(k => k != MemberAccountTransactionKind.OpeningBalance).ToHashSet();
+        var causacion = LectorDeInteres.ClasesDeLoLiquidable.Where(k => k != MemberAccountTransactionKind.OpeningBalance).ToHashSet();
 
         var filas = new List<(int Persona, TituloDeLaExogena1020 SinPersona)>();
         foreach (var c in cuentas)

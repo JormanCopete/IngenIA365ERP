@@ -2689,8 +2689,7 @@ comportamiento (una de líneas de captación, el conteo de permisos) se **ajusta
 - **63 B · obligado a llevar contabilidad = marca en el perfil tributario (E250).** `COR_People.IsObligatedToKeepBooks` (`PersonInput`, diálogo de persona «Obligado a llevar
   contabilidad»): a la persona natural **obligada** ya no se le descuenta el componente inflacionario de la retención sobre rendimientos (`ReglasDeRetencion.PerfilDe`).
   Las personas existentes quedan en «no obligada» (lo de antes).
-- **64 B · fecha valor en un período liquidado: ajuste en el período abierto — PENDIENTE.** Toca la ventana de causación y el hecho de ajuste (E96–E97); sin la corrida
-  e2e no se arriesga el cálculo de intereses. Hoy sigue lo construido (el período liquidado no se reliquida).
+- **64 B · fecha valor en un período liquidado: ajuste en el período abierto (E256).** Hecha: ver §27.7.
 - **65 B · cancelar con cargos por cobrar: cobrarlos del saldo (E255).** Hecha: ver §27.6.
 - **67 B · plantillas de importación de líneas de captación y de aportes (E251).** `lending.deposit-lines` (hojas `Lineas` y `Tramos`) y `lending.contribution-lines` (hoja
   `Lineas`), con revisión previa, todo-o-nada, las mismas reglas del alta unitaria (`ReglasDeLineaDeCaptacion`, topes de aportes, perfil, entrega), alcance de línea
@@ -2845,3 +2844,32 @@ Antes la cancelación se bloqueaba con `PendingCharges`. Sin migración ni esque
   cubre impide con `PendingCharges`. e2e (`CargosYDebitoAutomaticoTests.R65_…`, dos): cancelar con el cargo pendiente y con el cargo mayor que el saldo; verdes en PostgreSQL y SQL Server.
   Domain: el enum `MemberAccountOperationKind` con `ChargeCollection = 28`. **Pendiente de validar por la contadora:** que el cobro (CGP, comprobante `MA`) lleve la regla de matriz
   que ya existe para el cobro de cargos por consignación.
+
+### 27.7 E256 · fecha valor en un período ya liquidado: la diferencia se ajusta en el período abierto (respuesta 64 B, 2026-10-21)
+
+Un movimiento de ahorro (consignación, retiro, traslado o reverso) fechado en un período **cuyos intereses ya se liquidaron entra**, y la diferencia de intereses de
+esos días se **ajusta en el período abierto**, sin reabrir ni reescribir lo liquidado. Antes (E97) el movimiento entraba pero los días liquidados no se ajustaban nunca.
+Sin migración: la clase de fila nueva se guarda como número (`int`).
+
+- **Qué se calcula.** `AjusteDeCausacionDeCuenta` ahora tiene dos partes que suman en **un solo hecho** `AjusteDeCausacionDeCaptacion` (causa `ValueDatedOperation`, los
+  días que cambiaron —también los liquidados— y el hecho principal), porque un origen sólo admite un mensaje de ese tipo: (1) la **ventana abierta**, igual que antes
+  (`AccrualAdjustment` fechado el último día causado); (2) los **períodos liquidados** que la fecha valor alcanza, período de liquidación por período
+  (`DeLosPeriodosLiquidadosAsync`, desde la fecha valor hasta `LastSettledThrough`, con el calendario de períodos de la línea): lo que el motor da **con** la operación menos
+  lo que daría **sin** ella (`LectorDeInteres.VentanaAsync(..., sinLaOperacion)` lee el libro de capital sin las filas de esa operación). Las dos veces con las tasas y
+  los saldos de hoy: sólo cuenta el efecto de la operación, no una tasa registrada tarde ni lo que ya se corrigió.
+- **Dónde queda.** Una fila nueva `SettledPeriodAdjustment` (valor 23 de `MemberAccountTransactionKind`, interés por pagar, hasta 6 decimales) **en la misma operación**, fechada el
+  **primer día después de la última liquidación** (así la próxima liquidación, de cualquier período abierto, la incluye). **No** está en `ClasesDeLoCausado`: ni la
+  causación diaria ni el ajuste comparan esa fila con la ventana del motor (si lo hicieran la corregirían de vuelta al otro día; probado). Sí está en la nueva
+  `ClasesDeLoLiquidable`, que leen la liquidación (suma lo que abona), el extracto y la proyección regulatoria. No reactiva una cuenta inactiva (`NoSonDelTitular`).
+- **Reverso.** El espejo de una operación **no copia** la fila `SettledPeriodAdjustment` (`ReversionDeCuentas`): el reverso calcula la suya, negativa, en el período abierto
+  del momento del reverso (si se espejara con la fecha original y entre tanto hubo liquidación, esa fila quedaría fuera de toda liquidación). Probado: las dos filas suman cero.
+- **Excepción del día de la liquidación.** Una fecha valor **igual** al día de la última liquidación no se ajusta (sólo las **anteriores**): es la de la cancelación, la entrega por
+  fallecimiento, el pago de saldos no reclamados y el retiro del asociado, que liquidan a la fecha y entregan el mismo día; la cuenta se cierra y ninguna liquidación abonaría el
+  ajuste (probado: sin la excepción la cancelación dejaba la cuenta en cierre con interés por pagar). Una consignación del propio día de cierre del período queda como en E97.
+- **Lo que no cambia.** Lo liquidado (`InterestSettlements`, el abono y la retención ya practicada) no se toca; la retención de lo ajustado la calcula la liquidación en la que
+  entra (en la retención diaria el ajuste cuenta en el primer día del período abierto: **pendiente de validar por la contadora**). Contabilidad: el hecho de ajuste se contabiliza
+  en el período abierto con la fecha contable de la operación, como siempre; no se reabre un mes cerrado. Un total cero entre las dos partes no emite hecho (las filas quedan sin
+  mensaje). Cuenta migrada: no se ajustan días anteriores al corte.
+- **Pruebas.** Application (`InteresesDeCuentaTests`): la consignación fechada en diciembre liquidado entra, lo liquidado no cambia, la fila de 3 días liquidados vale lo esperado y va
+  fechada el 1.º de enero, un solo hecho con las dos filas, el proceso no corrige nada después, la liquidación de enero la abona y no queda interés por pagar; el reverso deja las
+  dos filas en cero; y la cancelación con el ajuste activo no ajusta su propia entrega del mismo día. e2e (`InteresesTests.R64_…`): el mismo caso por HTTP en la base real, con la liquidación del mes siguiente. Domain: el enum. Verdes en PostgreSQL y SQL Server.
