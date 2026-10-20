@@ -2756,3 +2756,22 @@ Pendientes de código: 64, 65, 82, 89, 90, 91, 92, 93, 96, 97 y 103; ambigua: 69
 motores las cubre una por una); sí se ajustó la de líneas de captación y el conteo de permisos (164). Los defectos nuevos son parámetros «pendientes de validar» de la contadora:
 `Documentos.LotesProgramados`, `SeguroDeDepositos.RepartoDeCotitulares`, `RiesgoDeLiquidez.RetirosALaVistaMetodo`, `.DiasDeHistoriaDelRetiro`, `.ConfianzaDelRetiro` y
 `.ActivosLiquidosContables`.
+
+### 27.3 Pendientes de §27.1: causa exacta y diseño propuesto (sin cambios de código)
+
+Se revisó el código de cada una antes de tocarlo; ninguna se dejó a medias en el árbol.
+
+- **97 · GMF en la entrega por fallecimiento y en no reclamados.** En `NoReclamados.PagarAsync` el dinero está en el concepto `Unclaimed`, no en el capital: el GMF
+  no sale de un retiro de capital como en `RetiroDeCuenta`, sino que se retiene **del pago** (neto = valor − GMF). Hace falta: `ReglasDeMovimientos.GmfAsync` con un hecho
+  generador nuevo (`UnclaimedPayment`, `DeceasedDelivery`) en `HechosGeneradoresDeGmf` y en el parámetro `Gmf.HechosGeneradores`; filas `GmfCharged` sobre `Unclaimed`/`Gmf`;
+  `GmfAEmitir` junto a `DevolucionOrdenada`/`TrasladoEntreCuentas` (y la orden de giro por el neto); el uso mensual (`RegistrarUsoDeGmf`); y la bandera por línea
+  (`IsGmfSubject` de la versión no distingue el hecho: columna nueva `GmfOnDeceasedAndUnclaimed`, defecto «cobra», en `LND_DepositLineVersions`). En `Fallecimientos.EntregarPorcionAsync`
+  se repite por porción. Toca además las reglas de la matriz contable (hechos y roles) de esos dos orígenes. Es una fase completa con e2e de contabilidad.
+- **82 · recálculo del embargo en cada consignación:** `RetencionDeEmbargos.RecalcularAsync` exige el cerrojo de la persona (`LND_DebtorControls`) **antes** de los de sus cuentas;
+  la consignación (`ConsignacionEnCuentas`) ya tiene la cuenta bloqueada, así que hay que reordenar el cerrojo en el contrato de cuentas (persona → cuentas) o recalcular
+  tras soltar y volver a tomar. Sin esa decisión de orden de cerrojos se arriesga un abrazo mortal.
+- **64 y 65:** requieren emitir hechos contables nuevos dentro de operaciones existentes (ajuste de causación en período abierto; `ChargeApplied` dentro de la cancelación) con su
+  regla de matriz y su prueba contable.
+- **89–93 y 96:** `AssemblyDistributionCommands` y `Fallecimientos` arman el hecho masivo y las órdenes por destinatario con un solo `s.Parametros.ConceptoDeExcedentes`/destino por
+  decisión; capitalizar en aportes a quien no tiene cuenta de ahorro (93), retener (89), base por plantilla (90), prorrata de retirados (91), y regirar un giro rechazado (92, 96)
+  exigen líneas con destino mixto, un hecho de retención nuevo y una fuente de «cuenta por pagar» respaldada; el cálculo de `RevalorizacionYExcedentes` también cambia.
