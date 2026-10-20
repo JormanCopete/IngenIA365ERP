@@ -101,6 +101,9 @@ public sealed class RegisterDirectDebitMandateCommandHandler(
             if (credito.DebtorPersonId != cuenta.HolderPersonId)
                 return Falla(new ErrorConDatos(DirectDebitMandate.CodigoNoEsTitular,
                     $"El titular de la cuenta {cuenta.Number} no es el deudor del crédito {credito.Number}: no puede autorizar su débito.", new { loan = credito.Number }));
+            // E249: se paga por libranza o nómina, o por débito automático; no por las dos.
+            if ((await Payroll.ExclusionDeLibranzaYDebitoAutomatico.ConLibranzaAsync(db, [credito.Id], ct)).Contains(credito.Id))
+                return Falla(Payroll.ExclusionDeLibranzaYDebitoAutomatico.CreditoConLibranza(credito.Number));
             creditoId = credito.Id;
         }
         var autoriza = cuenta.HolderPersonId;

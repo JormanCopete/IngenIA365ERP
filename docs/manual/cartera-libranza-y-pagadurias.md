@@ -55,7 +55,8 @@ dice:
 - si el archivo **lleva lo vencido** de períodos anteriores;
 - la **ventana de giro** (días que tiene la pagaduría para girar lo descontado; nunca más que la ley);
 - la **regla del no aplicado**: pasar a pago por caja, enviar a cobranza o incluir en el archivo siguiente;
-- la **forma de pago alterna** (caja o débito automático) para cuando el deudor deja la pagaduría;
+- la **forma de pago alterna** (caja o débito automático) para cuando el deudor deja la pagaduría (un crédito se paga por libranza **o** por débito
+  automático, nunca por las dos: ver el manual de movimientos de captaciones, §5);
 - los **códigos de respuesta** de la pagaduría y su traducción: descontado, descontado en parte o no descontado con su
   motivo (licencia, incapacidad, retiro, tope, neto insuficiente, prelación…).
 

@@ -1,6 +1,9 @@
 using System.Net;
 using FluentAssertions;
 using IngenIA365ERP.API.IntegrationTests.Identity;
+using IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts;
+using IngenIA365ERP.Domain.Enums.Lending;
+using Microsoft.EntityFrameworkCore;
 
 namespace IngenIA365ERP.API.IntegrationTests.Lending.Deposits;
 
@@ -124,6 +127,92 @@ public class CargosYDebitoAutomaticoTests(CentralIdentityApiFixture fx)
         debitos.GetProperty("items")[0].GetProperty("amount").GetDecimal().Should().Be(total);
         var lista = await CarteraE2E.GetAsync(http, admin, $"/api/lending/direct-debits?accountPublicId={cuenta}");
         lista.EnumerateArray().Single().GetProperty("lastDebits").GetArrayLength().Should().BeGreaterThan(0);
+    }
+
+    /// <summary>
+    /// E249 (decisión del dueño del 2026-10-21): un crédito se paga por libranza o nómina, o por débito automático, nunca por las dos.
+    /// (1) A un crédito por libranza no se le registra un débito automático (422 <c>Lending.DirectDebit.LoanOnPayroll</c>); la autorización «todos mis
+    /// créditos» sí se registra, pero el ciclo salta el crédito con libranza el día de su cuota: el débito automático con <c>TodosLosCanales</c> no duplica el
+    /// descuento. (2) Un crédito con un débito automático vigente no pasa a otra pagaduría (422 <c>Lending.Payroll.LoanHasDirectDebit</c>; el estado se arma
+    /// en la base porque por la puerta ya no se puede llegar a él), y revocado el débito el traslado sí se hace.
+    /// </summary>
+    [Fact]
+    public async Task Un_credito_se_paga_por_libranza_o_por_debito_automatico_no_por_las_dos()
+    {
+        // Primero las captaciones (su perfil regulatorio base) y después la libranza, que corrige ese perfil con la inscripción de operador de libranza.
+        var cap = await CaptacionesE2E.CooperativaConCaptacionesAsync(fx, "libdebito");
+        var esc = await LibranzaE2E.EscenarioAsync(fx, "cap_libdebito");
+        cap.TenantPublicId.Should().Be(esc.Coop.TenantPublicId, "es la misma cooperativa aislada (cap_libdebito)");
+        using var http = fx.CreateClient();
+        var accesos = await LibranzaE2E.AccesosAsync(http, esc);
+        var admin = accesos.Admin;
+        // La corrección del perfil de la libranza no trae la autorización de captar (y la de captaciones no trae la inscripción de operador): el perfil lleva las dos.
+        var actual = (await CarteraE2E.GetAsync(http, admin, "/api/core/regulatory-profile")).GetProperty("current");
+        var perfil = await CarteraE2E.ConClaveAsync(http, admin, HttpMethod.Post, "/api/core/regulatory-profile/versions", new
+        {
+            organizationType = actual.GetProperty("organizationTypeCode").GetString(), financialActivity = true, supervisionLevel = 2, mayTakeDeposits = true,
+            payrollOperatorRegistration = new { number = "OPL-E2E-001", date = esc.Hoy.AddDays(-30) },
+            validFrom = DateOnly.Parse(actual.GetProperty("validFrom").GetString()!, System.Globalization.CultureInfo.InvariantCulture),
+            source = "Certificado de la Supersolidaria (e2e)", reason = "Capta ahorro y opera libranzas (e2e)",
+            supersedesPublicId = actual.GetProperty("versionPublicId").GetGuid(),
+        });
+        perfil.StatusCode.Should().Be(HttpStatusCode.Created, await perfil.Content.ReadAsStringAsync());
+        await CarteraE2E.PersonaDelAdministradorAsync(http, esc.Coop);
+        var (credito, _, deudor, _) = await LibranzaE2E.CreditoPorLibranzaAsync(http, esc, accesos, "LibDeb", 1_000_000m);
+        await ConFechaDeNacimientoAsync(http, admin, deudor);
+        await OriginacionE2E.AutorizarAsync(http, admin, deudor, "GeneralTreatment");
+        var (_, vence, total) = await PagosE2E.CuotaAsync(http, admin, credito);
+        var linea = await MovimientosTests.LineaALaVistaAsync(http, admin, esc.Hoy, "AHLIBDEB");
+        var cuenta = await MovimientosTests.CuentaAsync(http, admin, esc.Usuarios.O1.AgenciaPublicId, linea, deudor);
+        await MovimientosTests.ConsignarAsync(http, admin, cuenta, deudor, total + 500_000m, esc.Hoy);
+
+        // (1) Primero la libranza: el débito automático de ese crédito se rechaza.
+        var mandatoDelCredito = await CarteraE2E.ConClaveAsync(http, admin, HttpMethod.Post, "/api/lending/direct-debits", new
+        {
+            accountPublicId = cuenta, scope = "SingleLoan", loanPublicId = credito, allowsPartial = false, validFrom = esc.Hoy,
+            authorizationAttachmentPublicId = Guid.NewGuid(),
+        });
+        mandatoDelCredito.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity, await mandatoDelCredito.Content.ReadAsStringAsync());
+        (await CarteraE2E.CodigoDeErrorAsync(mandatoDelCredito)).Should().Be("Lending.DirectDebit.LoanOnPayroll");
+
+        // «Todos mis créditos» se registra, pero el ciclo no debita el crédito que va por libranza.
+        var todos = await CarteraE2E.ConClaveAsync(http, admin, HttpMethod.Post, "/api/lending/direct-debits", new
+        {
+            accountPublicId = cuenta, scope = "AllLoansOfHolder", allowsPartial = false, validFrom = esc.Hoy, authorizationAttachmentPublicId = Guid.NewGuid(),
+        });
+        todos.StatusCode.Should().Be(HttpStatusCode.Created, await todos.Content.ReadAsStringAsync());
+        using (CausacionE2E.RelojEn(fx, vence)) await CausacionE2E.CicloDeHoyAsync(fx, http, admin, esc.Coop.TenantPublicId);
+        var debitos = await CarteraE2E.GetAsync(http, admin, $"{Cuentas}/{cuenta}/operations?kind=DirectDebit");
+        debitos.GetProperty("items").GetArrayLength().Should().Be(0, "la cuota de un crédito por libranza la descuenta la nómina: el débito automático no la paga también");
+
+        // (2) Con un débito automático vigente (estado heredado armado en la base) el crédito no pasa a otra pagaduría.
+        var mandatoHeredado = await CausacionE2E.EnLaBaseAsync(fx, esc.Coop.TenantPublicId, async db =>
+        {
+            var loanId = await db.Loans.Where(l => l.PublicId == credito).Select(l => l.Id).SingleAsync();
+            var cuentaId = await db.MemberAccounts.Where(a => a.PublicId == cuenta).Select(a => a.Id).SingleAsync();
+            var persona = await db.Loans.Where(l => l.Id == loanId).Select(l => l.DebtorPersonId).SingleAsync();
+            var m = new DirectDebitMandate
+            {
+                MemberAccountId = cuentaId, AuthorizedByPersonId = persona, Scope = DirectDebitScope.SingleLoan, LoanId = loanId, ValidFrom = esc.Hoy,
+                AuthorizationAttachmentPublicId = Guid.NewGuid(),
+            };
+            db.DirectDebitMandates.Add(m);
+            await db.SaveChangesAsync();
+            return m.PublicId;
+        });
+        object traslado() => new
+        {
+            newAgreementPublicId = esc.OtroConvenio, employeeId = "GOB-00099", certificationAttachmentPublicId = esc.Certificacion,
+            certificationDate = esc.Hoy.AddDays(-1), certifiedNetIncome = LibranzaE2E.IngresoCertificado, reason = "Traslado a la Gobernación (e2e)",
+        };
+        var negado = await CarteraE2E.ConClaveAsync(http, admin, HttpMethod.Post, $"/api/lending/loans/{credito}/payroll-transfer", traslado());
+        (await CarteraE2E.CodigoDeErrorAsync(negado)).Should().Be("Lending.Payroll.LoanHasDirectDebit");
+
+        var revocado = await CarteraE2E.ConClaveAsync(http, admin, HttpMethod.Post, $"/api/lending/direct-debits/{mandatoHeredado}/revoke",
+            new { reason = "El asociado prefiere la libranza (e2e)" });
+        revocado.StatusCode.Should().Be(HttpStatusCode.OK, await revocado.Content.ReadAsStringAsync());
+        var hecho = await CarteraE2E.ConClaveAsync(http, admin, HttpMethod.Post, $"/api/lending/loans/{credito}/payroll-transfer", traslado());
+        hecho.StatusCode.Should().Be(HttpStatusCode.OK, await hecho.Content.ReadAsStringAsync());
     }
 
     /// <summary>

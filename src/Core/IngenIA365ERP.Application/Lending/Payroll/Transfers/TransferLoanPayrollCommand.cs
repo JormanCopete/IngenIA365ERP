@@ -140,6 +140,9 @@ public sealed class TransferLoanPayrollCommandHandler(
                 var alterna = await FormaAlternaAsync(vigente, desde, ct);
                 nuevo = vigente.PasarALaFormaAlterna(alterna, desde, request.Reason);
             }
+            // E249: un crédito con débito automático vigente no pasa a libranza o nómina (la forma alterna no lo es).
+            if (nuevo.ConLibranza && await ExclusionDeLibranzaYDebitoAutomatico.CuentaConDebitoAutomaticoAsync(db, credito.Id, hoy, ct) is { } conDebito)
+                return Falla(ExclusionDeLibranzaYDebitoAutomatico.CreditoConDebitoAutomatico(credito.Number, conDebito));
             db.LoanPayrollLinks.Add(nuevo);
 
             // El sub-segmento contable que rige antes y después (sólo cambia si las condiciones distinguen con y sin libranza).

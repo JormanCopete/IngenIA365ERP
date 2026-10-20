@@ -73,6 +73,12 @@ cuota de crédito es exigible, debite la cuenta y aplique el pago por el contrat
 del débito. El débito automático **genera GMF como un retiro** (D54, pendiente de validar). Hecho: `RetiroDeCuentaAplicado` (`MA`) con el pago del
 crédito.
 
+**Libranza o débito automático, no las dos** (decisión del dueño del 2026-10-21): un crédito que se paga por libranza o nómina propia (vínculo de
+pagaduría vigente) **no admite** una autorización de débito automático de ese crédito (`Lending.DirectDebit.LoanOnPayroll`), y un crédito con
+autorización vigente de débito automático **no pasa** a libranza o nómina (`Lending.Payroll.LoanHasDirectDebit`): se revoca primero la autorización. La
+autorización «todos los créditos del titular» sí se registra, pero el ciclo **salta** los créditos que van por libranza, para no pagar la misma cuota
+dos veces.
+
 ## 6. Causación y liquidación de intereses
 
 - **Causación diaria siempre** (D6), por el paso de captaciones del ciclo diario, al final de los subpasos del día: lo causado el día d es la

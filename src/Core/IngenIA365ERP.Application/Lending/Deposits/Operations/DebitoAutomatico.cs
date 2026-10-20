@@ -100,6 +100,9 @@ public sealed class DebitoAutomatico(
         var creditos = mandato.Scope == DirectDebitScope.SingleLoan && mandato.LoanId is { } unico
             ? await db.Loans.AsNoTracking().Where(l => l.Id == unico).Select(l => new { l.Id, l.PublicId }).ToListAsync(ct)
             : await db.Loans.AsNoTracking().Where(l => l.DebtorPersonId == cuenta.HolderPersonId).Select(l => new { l.Id, l.PublicId }).ToListAsync(ct);
+        // E249: lo que se paga por libranza o nómina no se debita (un crédito se paga por una cosa o por la otra): evita pagar la misma cuota dos veces.
+        var conLibranza = await Payroll.ExclusionDeLibranzaYDebitoAutomatico.ConLibranzaAsync(db, creditos.Select(c => c.Id).ToList(), ct);
+        creditos = [.. creditos.Where(c => !conLibranza.Contains(c.Id))];
         var hechos = new List<DebitoAutomaticoHecho>();
         // US8 (T142): el débito de la cuenta (con su GMF) contra el puente OwnLoanPayoff tiene que contabilizarse; el pago del crédito lo valida el contrato.
         if (pregunta is not null && cuotas.Installments.Any(c => c.DueDate == d)
