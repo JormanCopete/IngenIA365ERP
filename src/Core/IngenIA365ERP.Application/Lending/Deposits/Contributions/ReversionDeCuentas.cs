@@ -241,6 +241,7 @@ public sealed class ReversionDeCuentas(
         // US4 (T116): el cargo y su condonación.
         MemberAccountOperationKind.Charge => CargoDeCuentaCausadoV1.Type,
         MemberAccountOperationKind.ChargeWaiver => CargoDeCuentaCondonadoV1.Type,
+        MemberAccountOperationKind.ChargeCollection => CargoPendienteCobradoV1.Type,
         // US6 (T173): el pago de intereses y la salida de un CDAT (los reversa Tesorería cuando rechaza su giro).
         MemberAccountOperationKind.TermDepositInterestPayment => InteresesDeCdatPagadosV1.Type,
         // US11 (T189): la consignación de un embargo (la reversa Tesorería cuando rechaza su giro).
@@ -267,7 +268,7 @@ public sealed class ReversionDeCuentas(
         MemberAccountOperationKind.Transfer => EmisionDeCartera.ClaseTrasladoDeCuenta,
         MemberAccountOperationKind.ContributionRefund => EmisionDeCartera.ClaseDevolucionDeAportes,
         MemberAccountOperationKind.Withdrawal or MemberAccountOperationKind.DirectDebit => EmisionDeCartera.ClaseRetiroDeCuenta,
-        MemberAccountOperationKind.Charge or MemberAccountOperationKind.ChargeWaiver => EmisionDeCartera.ClaseCargoDeCuenta,
+        MemberAccountOperationKind.Charge or MemberAccountOperationKind.ChargeWaiver or MemberAccountOperationKind.ChargeCollection => EmisionDeCartera.ClaseCargoDeCuenta,
         MemberAccountOperationKind.TermDepositInterestPayment => EmisionDeCartera.ClasePagoDeInteresesDeCdat,
         MemberAccountOperationKind.TermDepositRedemption => EmisionDeCartera.ClaseRedencionDeCdat,
         MemberAccountOperationKind.GarnishmentConsignment => EmisionDeCartera.ClaseConsignacionDeEmbargo,

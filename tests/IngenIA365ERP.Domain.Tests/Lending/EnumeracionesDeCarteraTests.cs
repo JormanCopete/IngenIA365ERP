@@ -248,7 +248,7 @@ public class EnumeracionesDeCarteraTests
             ("TermDepositRenewal", 10), ("TermDepositRedemption", 11), ("Cancellation", 12), ("Charge", 13), ("ChargeWaiver", 14),
             ("InternalOffset", 15), ("DirectDebit", 16), ("ContributionRefund", 17), ("AssemblyCredit", 18), ("Reclassification", 19),
             ("ContractualMaturity", 20), ("ToUnclaimed", 21), ("DeceasedDelivery", 22), ("GarnishmentConsignment", 23),
-            ("ContractualSetup", 24), ("ContractualBreach", 25), ("ContractualBonus", 26), ("UnclaimedPayment", 27)],
+            ("ContractualSetup", 24), ("ContractualBreach", 25), ("ContractualBonus", 26), ("UnclaimedPayment", 27), ("ChargeCollection", 28)],
         [typeof(MemberAccountOrigin)] = [("Opening", 1), ("Migration", 2)],
         [typeof(ContractualStatus)] = [("Current", 1), ("Breached", 2), ("Fulfilled", 3)],
         [typeof(AccountTermsCause)] = [("Constitution", 1), ("Rollover", 2), ("Renewal", 3), ("Migration", 4), ("ContractualSetup", 5),

@@ -192,6 +192,15 @@ public sealed partial class EmisionDeCartera
         };
 
     /// <summary>
+    /// Respuesta 65 B del dueño (E255): <c>CargoPendienteCobrado</c> como hecho principal de su propia operación <c>ChargeCollection</c> (clase
+    /// <c>AccountCharge</c>, clave <c>Confirmation</c>): los cargos por cobrar que la cancelación de la cuenta cobra del saldo antes de entregar. Sin guardar.
+    /// </summary>
+    public async Task<Result<UnidadEmitida>> CargosCobradosEnCancelacionAsync(HechoDeCuenta h, MemberAccountOperation op,
+        IReadOnlyList<(AccountCharge Cargo, decimal Monto)> cobrados, CancellationToken ct) =>
+        await EmitirUnidadDeCuentaAsync([CargoPendienteCobrado(h, op, cobrados)], CargoPendienteCobradoV1.Type, h, op, ClaseCargoDeCuenta, h.TitularPublicId,
+            PrevalidationOutcome.NotApplicable, ct);
+
+    /// <summary>
     /// US4 (T116): <c>CargoDeCuentaCausado</c> (a Contabilidad) y, si está gravado con IVA, <c>CargoDeCaptacionCausado</c> (a Comercial, que lo factura)
     /// con origen la operación del cargo (clase <c>AccountCharge</c>), clave <c>Confirmation</c>, tercero el titular. Admite proceso (cargos periódicos).
     /// Sin guardar.

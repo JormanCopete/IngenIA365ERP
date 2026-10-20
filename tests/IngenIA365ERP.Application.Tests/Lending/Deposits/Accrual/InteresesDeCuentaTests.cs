@@ -400,10 +400,92 @@ public sealed class InteresesDeCuentaTests : IDisposable
         Sessions.GobiernoDePrueba.Datos(r.Error).ToString().Should().Contain("Garnishment");
     }
 
-    private CancelacionDeCuenta Cancelacion() => new(_a.Db, _a.Movimientos(), _a.Liquidacion(), _a.G.Reloj);
+    // ------------------------------------------------------------------------------------ cargos por cobrar al cancelar (65 B) --
+
+    private async Task<MemberAccountDto> CuentaConCargoPendienteAsync(decimal cargo, decimal deposito)
+    {
+        var version = AlTres() with
+        {
+            Minimums = new DepositMinimumsInput(0m, 3_000m, 0m),
+            Charges =
+            [
+                new DepositChargeInput
+                {
+                    Code = "CUOTAMAN", Name = "Cuota de manejo", Kind = ChargeKind.MaintenanceFee, Trigger = ChargeTrigger.Periodic, Enabled = true,
+                    Calculation = ChargeCalculation.FixedAmount, FixedAmount = cargo, Periodicity = RepaymentPeriodicity.Monthly,
+                },
+            ],
+        };
+        var linea = await _a.C.LineaDeCaptacionAsync("AHCARGO", version);
+        var cuenta = await _a.C.AbiertaAsync(_a.C.Apertura(linea, _a.C.Ana, exenta: true));
+        await _a.ConsignadaAsync(Libre(cuenta, deposito));
+        var fin = new DateOnly(2026, 12, 31);
+        Dia(fin);
+        var id = await IdAsync(cuenta);
+        await new Application.Lending.Deposits.Charges.CargosPeriodicos(_a.Db, _a.Movimientos(), _a.Cargos(), _a.C.Cerrojo)
+            .ProcesarAsync(new LendingProcessRun { Id = 1 }, fin, [id], default);
+        _a.Db.ChangeTracker.Clear();
+        (await _a.Db.AccountCharges.AsNoTracking().SingleAsync()).Status.Should().Be(AccountChargeStatus.Pending, "el mínimo de la línea impide cobrarlo del capital");
+        return cuenta;
+    }
+
+    [Fact]
+    public async Task R65_la_cancelacion_cobra_los_cargos_pendientes_del_saldo_y_entrega_el_resto()
+    {
+        var destino = await CuentaAsync(deposito: 0m, codigo: "AHDEST", exenta: false);
+        var cuenta = await CuentaConCargoPendienteAsync(cargo: 2_000m, deposito: 4_000m);
+
+        var previa = await new PreviewMemberAccountClosingQueryHandler(_a.Db, _a.G.Alcance, _a.G.Auditoria, Cancelacion(), _a.G.Reloj)
+            .Handle(new PreviewMemberAccountClosingQuery(cuenta.PublicId), default);
+        previa.IsSuccess.Should().BeTrue(previa.IsFailure ? previa.Error.Message : string.Empty);
+        previa.Value.Blockers.Should().BeEmpty("el saldo cubre el cargo: ya no impide");
+        previa.Value.PendingCharges.Should().Be(2_000m);
+
+        var r = await Cerrar().Handle(new CloseMemberAccountCommand(cuenta.PublicId, null,
+            new CloseDeliveryInput(CloseDeliveryKind.TransferToAccount, destino.PublicId, null), [cuenta.Holder.PersonPublicId], "Cancelación pedida")
+        {
+            OperationKey = Guid.NewGuid(),
+        }, default);
+        _a.Db.ChangeTracker.Clear();
+
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? $"{r.Error.Code}: {r.Error.Message}" : string.Empty);
+        r.Value.Status.Should().Be(MemberAccountStatus.Closed);
+        r.Value.Delivered.Should().Be(4_000m - 2_000m + r.Value.Settlement!.Net, "se entrega lo que queda después de cobrar el cargo");
+        var cargoCobrado = await _a.Db.AccountCharges.AsNoTracking().SingleAsync();
+        cargoCobrado.Status.Should().Be(AccountChargeStatus.Collected);
+        var cobro = await _a.Db.MemberAccountOperations.AsNoTracking().SingleAsync(o => o.Kind == MemberAccountOperationKind.ChargeCollection);
+        cargoCobrado.CollectedOperationId.Should().Be(cobro.Id);
+        cobro.Number.Should().StartWith("CGC-");
+        (await SaldoAsync(cuenta, MemberAccountConcept.ChargeReceivable)).Should().Be(0m);
+        (await SaldoAsync(cuenta, MemberAccountConcept.Principal)).Should().Be(0m);
+        (await _a.HechosAsync()).Should().Contain(CargoPendienteCobradoV1.Type);
+    }
+
+    [Fact]
+    public async Task R65_el_cargo_que_el_saldo_no_alcanza_a_cubrir_sigue_impidiendo_la_cancelacion()
+    {
+        var destino = await CuentaAsync(deposito: 0m, codigo: "AHDEST", exenta: false);
+        var cuenta = await CuentaConCargoPendienteAsync(cargo: 5_000m, deposito: 4_000m);
+
+        var previa = await new PreviewMemberAccountClosingQueryHandler(_a.Db, _a.G.Alcance, _a.G.Auditoria, Cancelacion(), _a.G.Reloj)
+            .Handle(new PreviewMemberAccountClosingQuery(cuenta.PublicId), default);
+        previa.Value.Blockers.Should().ContainSingle(b => b.Kind == "PendingCharges");
+
+        var r = await Cerrar().Handle(new CloseMemberAccountCommand(cuenta.PublicId, null,
+            new CloseDeliveryInput(CloseDeliveryKind.TransferToAccount, destino.PublicId, null), [cuenta.Holder.PersonPublicId], "Cancelación pedida")
+        {
+            OperationKey = Guid.NewGuid(),
+        }, default);
+        r.IsFailure.Should().BeTrue();
+        r.Error.Code.Should().Be(ErroresDeMovimientos.CodigoCierreBloqueado);
+        Sessions.GobiernoDePrueba.Datos(r.Error).ToString().Should().Contain("PendingCharges");
+    }
+
+    private CancelacionDeCuenta Cancelacion() => new(_a.Db, _a.Movimientos(), _a.Liquidacion(), _a.G.Reloj, cargos: _a.Cargos());
 
     private CloseMemberAccountCommandHandler Cerrar() => new(_a.Db, _a.G.Alcance, _a.G.Auditoria, _a.C.Cerrojo, Cancelacion(), _a.Causacion(), _a.Liquidacion(),
-        _a.Movimientos(), _a.Retiro(), _a.Traslado(), Ordenes(), _a.RegistroDeCuentas(), _a.Numerador(), _a.Emision(), _a.G.Actor, _a.G.Reloj);
+        _a.Movimientos(), _a.Retiro(), _a.Traslado(), Ordenes(), _a.RegistroDeCuentas(), _a.Numerador(), _a.Emision(), _a.G.Actor, _a.G.Reloj,
+        cargosDeCuentas: _a.Cargos());
 
     private OrdenesDeGiroDeCuentas Ordenes() => new(_a.Db, _a.RegistroDeCuentas(), _a.Numerador(), _a.Emision(), _a.Reversion(), _a.C.Parametros(), _a.G.Actor,
         _a.G.Reloj);

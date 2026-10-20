@@ -63,7 +63,8 @@ public class MovimientosTests(CentralIdentityApiFixture fx)
         return new Escenario(coop, usuarios, usuarios.O1.AgenciaPublicId, linea, hoy);
     }
 
-    internal static async Task<Guid> LineaALaVistaAsync(HttpClient http, string admin, DateOnly hoy, string codigo, object[]? cargos = null)
+    internal static async Task<Guid> LineaALaVistaAsync(HttpClient http, string admin, DateOnly hoy, string codigo, object[]? cargos = null,
+        decimal minimoParaMantener = 0m)
     {
         var resp = await CarteraE2E.ConClaveAsync(http, admin, HttpMethod.Post, $"{Lineas}/deposit", new
         {
@@ -72,7 +73,7 @@ public class MovimientosTests(CentralIdentityApiFixture fx)
             {
                 validFrom = hoy, reason = "Tasa aprobada por el consejo (e2e)", allowsPartialWithdrawals = true, allowsCoHolders = true,
                 rate = new { kind = "Fixed", effectiveAnnual = 0.01m }, balanceMethod = "DailyBalance",
-                minimums = new { toOpen = 0m, toMaintain = 0m, toEarnInterest = 0m }, dayCount = "Actual365", rateEquivalence = "Compound",
+                minimums = new { toOpen = 0m, toMaintain = minimoParaMantener, toEarnInterest = 0m }, dayCount = "Actual365", rateEquivalence = "Compound",
                 rounding = new { unit = 1m, mode = "AwayFromZero", moment = "PerTotal" }, settlementPeriodicity = "Monthly", tax = new { gmfApplies = true },
                 charges = cargos ?? [],
             },

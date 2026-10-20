@@ -43,6 +43,7 @@ public sealed class CargosDeCuentas(
 {
     public const string PrefijoCargo = "CGO-";
     public const string PrefijoCondonacion = "CGN-";
+    public const string PrefijoCobroEnCancelacion = "CGC-";
 
     /// <summary>Los cargos habilitados del catálogo de la versión con ese disparador (la versión vigente a la fecha; vacío sin versión).</summary>
     public async Task<IReadOnlyList<DepositLineCharge>> CatalogoAsync(DepositLineVersion? version, IReadOnlyCollection<ChargeTrigger> disparadores, CancellationToken ct)
@@ -226,6 +227,64 @@ public sealed class CargosDeCuentas(
             resto -= p.Amount;
         }
         return cobrables;
+    }
+
+    /// <summary>
+    /// Respuesta 65 B del dueño (E255): los cargos pendientes que la <b>cancelación</b> de la cuenta cobra del capital (enteros, en orden de causación, mientras el
+    /// capital alcance; sin mínimo, porque la cuenta se cierra). Devuelve lo que no alcanzó a cubrir. No escribe.
+    /// </summary>
+    public async Task<(IReadOnlyList<(AccountCharge Cargo, decimal Monto)> Cobrables, decimal SinCubrir)> PendientesDeLaCancelacionAsync(MemberAccount cuenta,
+        decimal capital, CancellationToken ct)
+    {
+        var cobrables = await PendientesACobrarAsync(cuenta, capital, 0m, ct);
+        var pendientes = await db.AccountCharges.AsNoTracking()
+            .Where(c => c.MemberAccountId == cuenta.Id && c.Status == AccountChargeStatus.Pending && !c.IsDeleted).Select(c => c.Amount).ToListAsync(ct);
+        return (cobrables, pendientes.Sum() - cobrables.Sum(c => c.Monto));
+    }
+
+    /// <summary>
+    /// Respuesta 65 B del dueño (E255): cobra del saldo, dentro de la cancelación, los cargos pendientes: su propia operación <c>ChargeCollection</c> (<c>CGC-</c>)
+    /// con las filas <c>ChargeApplied</c> (−por cobrar, −capital) y el hecho <c>CargoPendienteCobrado</c> en la misma transacción. La cuenta ya está bloqueada.
+    /// Sin cargos cobrables no hace nada.
+    /// </summary>
+    public async Task<Result<MemberAccountOperation?>> CobrarEnCancelacionAsync(MemberAccount cuenta, IReadOnlyList<(AccountCharge Cargo, decimal Monto)> cobrados,
+        DateOnly fecha, string motivo, CancellationToken ct)
+    {
+        if (cobrados.Count == 0) return Result.Success<MemberAccountOperation?>(null);
+        var hecho = await emision.HechoDeCuentaAsync(cuenta, fecha, ct);
+        if (hecho.IsFailure) return Result.Failure<MemberAccountOperation?>(hecho.Error);
+        var control = await db.MemberAccountControls.FirstAsync(x => x.MemberAccountId == cuenta.Id, ct);
+        var actor = await actorActual.ObtenerAsync(ct);
+        var numero = await numerador.NumeroDeOperacionDeCuentaAsync(MemberAccountOperationKind.ChargeCollection, PrefijoCobroEnCancelacion, ct);
+        var total = cobrados.Sum(c => c.Monto);
+        var operacion = registro.RegistrarOperacion(control, reloj.UtcNow, sello => new MemberAccountOperation
+        {
+            MemberAccountId = cuenta.Id,
+            Kind = MemberAccountOperationKind.ChargeCollection,
+            Number = numero,
+            Sequence = sello.Sequence,
+            ValueDate = fecha,
+            AccountingDate = hecho.Value.FechaContable,
+            RegisteredAt = sello.RegisteredAt,
+            Amount = total,
+            ActorKind = actor.Kind,
+            ActorUserId = actor.UserId,
+            OriginUserCentralId = actor.CentralUserId,
+            CollectorCode = Accrual.LiquidacionDeIntereses.RecaudadorPropio,
+            Reason = Recortar($"Cobro de cargos pendientes al cancelar la cuenta. {motivo}"),
+            Payload = string.Create(CultureInfo.InvariantCulture,
+                $"{{\"charges\":[{string.Join(",", cobrados.Select(c => $"\"{c.Cargo.PublicId:N}\""))}],\"amount\":{total}}}"),
+            InputsSha256 = cobrados.Aggregate(new HuellaDeCartera().Identificador("account", cuenta.PublicId).Fecha("date", fecha),
+                (h, c) => h.Identificador("charge", c.Cargo.PublicId)).Calcular(),
+            RulesVersion = VersionesDeReglas.Vigente,
+        });
+        await db.SaveChangesAsync(ct);
+        var unidad = await emision.CargosCobradosEnCancelacionAsync(hecho.Value, operacion, cobrados, ct);
+        if (unidad.IsFailure) return Result.Failure<MemberAccountOperation?>(unidad.Error);
+        registro.RegistrarTransacciones(FilasDeCobro(cuenta, operacion, cobrados, fecha, hecho.Value.FechaContable, unidad.Value.De(CargoPendienteCobradoV1.Type)));
+        foreach (var (cargo, _) in cobrados) cargo.Cobrar(operacion.Id);
+        await db.SaveChangesAsync(ct);
+        return Result.Success<MemberAccountOperation?>(operacion);
     }
 
     /// <summary>Las filas del cobro de unos cargos pendientes dentro de la operación de una consignación (<c>ChargeApplied</c> −por cobrar y −capital).</summary>

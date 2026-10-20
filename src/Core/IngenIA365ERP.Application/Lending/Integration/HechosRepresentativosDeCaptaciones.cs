@@ -151,6 +151,13 @@ public static class HechosRepresentativosDeCaptaciones
         Amounts = [cobrado ? Valor(MemberAccountConcept.Principal, -1m, clase.ToString()) : Valor(MemberAccountConcept.ChargeReceivable, 1m, clase.ToString())],
     };
 
+    /// <summary>Respuesta 65 B (E255): los cargos por cobrar que la cancelación cobra del capital (sale capital y sale lo por cobrar).</summary>
+    public static CargoPendienteCobradoV1 CargoCobrado(CuentaRepresentativa c) => new()
+    {
+        Account = c.Referencia, HolderPersonPublicId = c.Titular, Dimensions = c.D,
+        Amounts = [Valor(MemberAccountConcept.ChargeReceivable, -1m), Valor(MemberAccountConcept.Principal, -1m)],
+    };
+
     // ----------------------------------------------------------------------------------------- retiro del asociado --
 
     /// <summary>El débito de una cuenta en el cruce al retiro, contra el puente <c>OwnLoanPayoff</c> (D45).</summary>

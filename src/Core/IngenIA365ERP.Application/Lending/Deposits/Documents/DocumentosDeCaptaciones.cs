@@ -629,6 +629,7 @@ public sealed class DocumentosDeCaptaciones(
         MemberAccountOperationKind.Cancellation => "Cancelación",
         MemberAccountOperationKind.Charge => "Cargo",
         MemberAccountOperationKind.ChargeWaiver => "Condonación de cargo",
+        MemberAccountOperationKind.ChargeCollection => "Cobro de cargos",
         MemberAccountOperationKind.InternalOffset => "Cruce",
         MemberAccountOperationKind.DirectDebit => "Débito automático",
         MemberAccountOperationKind.ContributionRefund => "Devolución",

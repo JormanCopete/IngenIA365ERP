@@ -64,6 +64,95 @@ public class CargosYDebitoAutomaticoTests(CentralIdentityApiFixture fx)
         cuota.GetProperty("status").GetInt32().Should().Be((int)IngenIA365ERP.Domain.Enums.Lending.AccountChargeStatus.Collected);
     }
 
+    private static object[] CuotaDe(decimal valor) =>
+    [
+        new
+        {
+            code = "CUOTAMAN", name = "Cuota de manejo", kind = "MaintenanceFee", trigger = "Periodic", enabled = true, calculation = "FixedAmount",
+            fixedAmount = valor, periodicity = "Monthly", uncollectedPolicy = "KeepPending",
+        },
+    ];
+
+    /// <summary>
+    /// Respuesta 65 B del dueño (E255): cancelar una cuenta con un cargo por cobrar lo cobra del saldo dentro de la misma cancelación y entrega lo restante;
+    /// si el saldo no alcanza a cubrirlo, la cancelación se rechaza diciendo cuál es el cargo (<c>PendingCharges</c>) y no queda nada a medias.
+    /// </summary>
+    [Fact]
+    public async Task R65_cancelar_con_un_cargo_por_cobrar_lo_cobra_del_saldo_y_entrega_el_resto()
+    {
+        var coop = await CaptacionesE2E.CooperativaConCaptacionesAsync(fx, "cargos65");
+        using var http = fx.CreateClient();
+        var admin = coop.TokenAdmin;
+        var hoy = CarteraE2E.Hoy(fx);
+        await CarteraE2E.PersonaDelAdministradorAsync(http, coop.Cooperativa);
+        var usuarios = await UsuariosDeCartera.CrearAsync(fx, coop.Cooperativa);
+        var lineaCargo = await MovimientosTests.LineaALaVistaAsync(http, admin, hoy, "AHC65", CuotaDe(2_000m), minimoParaMantener: 3_000m);
+        var lineaDestino = await MovimientosTests.LineaALaVistaAsync(http, admin, hoy, "AHD65");
+        var titular = await MovimientosTests.AsociadoAsync(http, admin, "Olga");
+        var cuenta = await MovimientosTests.CuentaAsync(http, admin, usuarios.O1.AgenciaPublicId, lineaCargo, titular, exenta: true);
+        var destino = await MovimientosTests.CuentaAsync(http, admin, usuarios.O1.AgenciaPublicId, lineaDestino, titular);
+        await MovimientosTests.ConsignarAsync(http, admin, cuenta, titular, 4_000m, hoy);
+        var fin = new DateOnly(hoy.Year, hoy.Month, DateTime.DaysInMonth(hoy.Year, hoy.Month));
+
+        using (CausacionE2E.RelojEn(fx, fin))
+        {
+            await CausacionE2E.CicloDeHoyAsync(fx, http, admin, coop.TenantPublicId);
+            var pendientes = (await CarteraE2E.GetAsync(http, admin, $"{Cuentas}/{cuenta}/charges")).GetProperty("items").EnumerateArray().ToList();
+            pendientes.Should().ContainSingle().Which.GetProperty("status").GetInt32().Should().Be((int)AccountChargeStatus.Pending,
+                "el mínimo de la línea impide cobrarlo del capital");
+
+            var previa = await CarteraE2E.GetAsync(http, admin, $"{Cuentas}/{cuenta}/close-preview");
+            previa.GetProperty("blockers").GetArrayLength().Should().Be(0, "el saldo cubre el cargo: ya no impide cancelar");
+            previa.GetProperty("pendingCharges").GetDecimal().Should().Be(2_000m);
+
+            var cierre = await CarteraE2E.ConClaveAsync(http, admin, HttpMethod.Post, $"{Cuentas}/{cuenta}/close", new
+            {
+                delivery = new { kind = "TransferToAccount", targetAccountPublicId = destino }, signatures = new[] { titular }, reason = "Retiro del servicio (e2e)",
+            });
+            cierre.StatusCode.Should().Be(HttpStatusCode.Created, await cierre.Content.ReadAsStringAsync());
+            var resultado = await CarteraE2E.LeerAsync(cierre);
+            resultado.GetProperty("status").GetInt32().Should().Be((int)MemberAccountStatus.Closed);
+            resultado.GetProperty("delivered").GetDecimal().Should().BeInRange(2_000m, 2_100m, "se entrega lo que queda después de cobrar los 2.000 del cargo");
+
+            var cargos = (await CarteraE2E.GetAsync(http, admin, $"{Cuentas}/{cuenta}/charges")).GetProperty("items").EnumerateArray().ToList();
+            cargos.Should().ContainSingle().Which.GetProperty("status").GetInt32().Should().Be((int)AccountChargeStatus.Collected);
+            var cobros = await CarteraE2E.GetAsync(http, admin, $"{Cuentas}/{cuenta}/operations?kind=ChargeCollection");
+            cobros.GetProperty("items").GetArrayLength().Should().Be(1, "el cobro va en su propia operación CGC-");
+        }
+    }
+
+    [Fact]
+    public async Task R65_el_cargo_que_el_saldo_no_cubre_impide_cancelar_y_no_deja_nada_a_medias()
+    {
+        var coop = await CaptacionesE2E.CooperativaConCaptacionesAsync(fx, "cargos65b");
+        using var http = fx.CreateClient();
+        var admin = coop.TokenAdmin;
+        var hoy = CarteraE2E.Hoy(fx);
+        await CarteraE2E.PersonaDelAdministradorAsync(http, coop.Cooperativa);
+        var usuarios = await UsuariosDeCartera.CrearAsync(fx, coop.Cooperativa);
+        var lineaCargo = await MovimientosTests.LineaALaVistaAsync(http, admin, hoy, "AHC65B", CuotaDe(5_000m));
+        var lineaDestino = await MovimientosTests.LineaALaVistaAsync(http, admin, hoy, "AHD65B");
+        var titular = await MovimientosTests.AsociadoAsync(http, admin, "Pablo");
+        var cuenta = await MovimientosTests.CuentaAsync(http, admin, usuarios.O1.AgenciaPublicId, lineaCargo, titular, exenta: true);
+        var destino = await MovimientosTests.CuentaAsync(http, admin, usuarios.O1.AgenciaPublicId, lineaDestino, titular);
+        await MovimientosTests.ConsignarAsync(http, admin, cuenta, titular, 4_000m, hoy);
+        var fin = new DateOnly(hoy.Year, hoy.Month, DateTime.DaysInMonth(hoy.Year, hoy.Month));
+
+        using (CausacionE2E.RelojEn(fx, fin))
+        {
+            await CausacionE2E.CicloDeHoyAsync(fx, http, admin, coop.TenantPublicId);
+            var cierre = await CarteraE2E.ConClaveAsync(http, admin, HttpMethod.Post, $"{Cuentas}/{cuenta}/close", new
+            {
+                delivery = new { kind = "TransferToAccount", targetAccountPublicId = destino }, signatures = new[] { titular }, reason = "Retiro del servicio (e2e)",
+            });
+            (await CarteraE2E.CodigoDeErrorAsync(cierre)).Should().Be("Lending.Savings.CloseBlocked");
+            (await cierre.Content.ReadAsStringAsync()).Should().Contain("PendingCharges");
+            var cargos = (await CarteraE2E.GetAsync(http, admin, $"{Cuentas}/{cuenta}/charges")).GetProperty("items").EnumerateArray().ToList();
+            cargos.Should().ContainSingle().Which.GetProperty("status").GetInt32().Should().Be((int)AccountChargeStatus.Pending, "la cancelación rechazada no cobró nada");
+            (await CarteraE2E.GetAsync(http, admin, $"{Cuentas}/{cuenta}/operations?kind=ChargeCollection")).GetProperty("items").GetArrayLength().Should().Be(0);
+        }
+    }
+
     [Fact]
     public async Task El_cargo_por_evento_de_pantalla_no_lo_condona_quien_lo_registro()
     {

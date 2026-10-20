@@ -587,7 +587,7 @@ public sealed class ReverseMemberAccountOperationCommandHandler(
             return Falla(ErroresDeAportes.ReversoDeOtro());
         // US12 (T203): lo de la asamblea se reversa entero, desde la decisión (POST /assembly-distributions/{id}/reverse).
         if (vista.MembershipWithdrawalId is not null || vista.AssemblyDistributionId is not null || vista.Kind is MemberAccountOperationKind.AssemblyCredit or MemberAccountOperationKind.DirectDebit or MemberAccountOperationKind.InternalOffset
-                or MemberAccountOperationKind.ContributionRefund or MemberAccountOperationKind.Charge or MemberAccountOperationKind.ChargeWaiver
+                or MemberAccountOperationKind.ContributionRefund or MemberAccountOperationKind.Charge or MemberAccountOperationKind.ChargeWaiver or MemberAccountOperationKind.ChargeCollection
                 // US5 (T132, T135; research E98): la liquidación de intereses y la cancelación no se reversan desde la pantalla.
                 or MemberAccountOperationKind.InterestSettlement or MemberAccountOperationKind.Cancellation
                 // US11 (T189): la consignación de un embargo (la reversa Tesorería) y la reclasificación (sin filas) tampoco.

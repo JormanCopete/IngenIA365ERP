@@ -291,6 +291,9 @@ public enum MemberAccountOperationKind
 
     // US14 (T209; FR-081): el pago de un saldo no reclamado al titular que aparece, sobre la cuenta de origen aunque esté cancelada (data-model §6.6).
     UnclaimedPayment = 27,
+
+    // Respuesta 65 B del dueño (E255): el cobro de los cargos pendientes dentro de la cancelación de la cuenta (su propio documento, con su hecho CGP).
+    ChargeCollection = 28,
 }
 
 /// <summary>De dónde nació una cuenta (data-model §3.1).</summary>

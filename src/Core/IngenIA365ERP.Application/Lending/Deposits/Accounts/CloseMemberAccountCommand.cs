@@ -8,6 +8,7 @@ using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Common.Persistence;
 using IngenIA365ERP.Application.Lending.Common;
 using IngenIA365ERP.Application.Lending.Deposits.Accrual;
+using IngenIA365ERP.Application.Lending.Deposits.Charges;
 using IngenIA365ERP.Application.Lending.Deposits.Contributions;
 using IngenIA365ERP.Application.Lending.Deposits.Ledger;
 using IngenIA365ERP.Application.Lending.Deposits.Operations;
@@ -69,7 +70,7 @@ public sealed record MemberAccountClosingResultDto(
 /// vencimiento se reliquida a la tasa de castigo (<c>Contractual.IncumplimientoDeContractual</c>); el vencido, a disposición, sólo se entrega. (nuevo)
 /// </summary>
 public sealed class CancelacionDeCuenta(IApplicationDbContext db, ReglasDeMovimientos movimientos, LiquidacionDeIntereses liquidacion, IDateTimeService reloj,
-    Contractual.LectorDeContractual? contractual = null)
+    Contractual.LectorDeContractual? contractual = null, CargosDeCuentas? cargos = null)
 {
     /// <summary>US7 (T182): un contractual vigente que ya llegó a su vencimiento lo liquida el proceso diario (con la bonificación si se cumplió).</summary>
     public const string CodigoVencimientoPendiente = "Lending.Contractual.MaturityPending";
@@ -100,9 +101,22 @@ public sealed class CancelacionDeCuenta(IApplicationDbContext db, ReglasDeMovimi
         if (leida.Disponible.EnCanje > 0m) bloqueos.Add(new("PendingClearance", $"Tiene {leida.Disponible.EnCanje:N2} en canje."));
         if (cuenta.TechnicalNegativeSince is not null) bloqueos.Add(new("TechnicalOverdraft", "La cuenta tiene un sobregiro técnico."));
         if (leida.Titular.IsDeceased) bloqueos.Add(new("Deceased", "El titular figura como fallecido: la entrega es por el trámite de fallecimiento (K10)."));
-        var porCobrar = leida.Saldos.GetValueOrDefault(MemberAccountConcept.ChargeReceivable);
-        if (porCobrar > 0m) bloqueos.Add(new("PendingCharges", $"Tiene {porCobrar:N2} en cargos por cobrar: cóbrelos o condónelos antes de cancelar."));
         return bloqueos;
+    }
+
+    /// <summary>
+    /// Respuesta 65 B del dueño (E255): los cargos por cobrar ya no impiden cancelar: se cobran del saldo dentro de la misma cancelación y lo restante se entrega.
+    /// Sólo impide la parte que el capital no alcanza a cubrir (los cargos se cobran enteros): ésa se condona antes.
+    /// </summary>
+    public static CloseBlockerDto? CargosSinCubrir(decimal sinCubrir) => sinCubrir <= 0m ? null
+        : new("PendingCharges", $"Tiene {sinCubrir:N2} en cargos por cobrar que el saldo no alcanza a cubrir: condónelos antes de cancelar.");
+
+    /// <summary>Los cargos pendientes que la cancelación cobra de <paramref name="capital"/> y lo que éste no alcanza a cubrir.</summary>
+    public async Task<(IReadOnlyList<(AccountCharge Cargo, decimal Monto)> Cobrables, decimal SinCubrir)> CargosDeLaCancelacionAsync(MemberAccount cuenta, decimal capital,
+        CancellationToken ct)
+    {
+        if (cargos is null) return ([], 0m);
+        return await cargos.PendientesDeLaCancelacionAsync(cuenta, capital, ct);
     }
 
     /// <summary>
@@ -131,7 +145,7 @@ public sealed class CancelacionDeCuenta(IApplicationDbContext db, ReglasDeMovimi
     {
         if (Admite(cuenta) is { } no) return Result.Failure<MemberAccountClosingPreviewDto>(no);
         var leida = await movimientos.LeerAsync(cuenta, fecha, ct);
-        var bloqueos = Bloqueos(cuenta, leida);
+        var bloqueos = Bloqueos(cuenta, leida).ToList();
         var control = await db.MemberAccountControls.AsNoTracking().FirstAsync(c => c.MemberAccountId == cuenta.Id, ct);
         InterestSimulationDto? simulada = null;
         var neto = 0m;
@@ -149,6 +163,10 @@ public sealed class CancelacionDeCuenta(IApplicationDbContext db, ReglasDeMovimi
         // Lo causado sin liquidar ya está en el saldo del titular (interés por pagar): después de liquidar, el saldo es el capital más el neto.
         var capital = leida.Saldos.GetValueOrDefault(MemberAccountConcept.Principal);
         var despues = capital + neto - leida.Saldos.GetValueOrDefault(MemberAccountConcept.ChargeReceivable);
+        // Respuesta 65 B (E255): los cargos por cobrar se cobran del saldo al cancelar; sólo la parte que no alcanza a cubrirse impide.
+        var (_, sinCubrir) = await CargosDeLaCancelacionAsync(cuenta, cuenta.DepositClass == DepositClass.Contractual ? capital : capital + neto, ct);
+        if (cargos is null) sinCubrir = leida.Saldos.GetValueOrDefault(MemberAccountConcept.ChargeReceivable);
+        if (CargosSinCubrir(sinCubrir) is { } sinCobertura) bloqueos.Add(sinCobertura);
         // US7 (T182): el contractual vigente que se cancela antes de vencer pierde lo que la base le dio de más a sus aportes (la tasa de castigo).
         decimal? penalidad = null;
         string? explicacion = null;
@@ -265,7 +283,8 @@ public sealed class CloseMemberAccountCommandHandler(
     ValidacionPreviaDeCaptaciones? validacionPrevia = null,
     Contractual.LectorDeContractual? lectorDeContractual = null,
     Contractual.IncumplimientoDeContractual? incumplimiento = null,
-    Contractual.CierreDeContractual? cierreDeContractual = null) : IRequestHandler<CloseMemberAccountCommand, Result<MemberAccountClosingResultDto>>
+    Contractual.CierreDeContractual? cierreDeContractual = null,
+    CargosDeCuentas? cargosDeCuentas = null) : IRequestHandler<CloseMemberAccountCommand, Result<MemberAccountClosingResultDto>>
 {
     /// <summary>El prefijo del comprobante de una cancelación.</summary>
     public const string PrefijoCancelacion = "CAN-";
@@ -324,6 +343,10 @@ public sealed class CloseMemberAccountCommandHandler(
                 ? HechosRepresentativosDeCaptaciones.Traslado(d, dDestino)
                 : HechosRepresentativosDeCaptaciones.Retiro(d, null);
             hechos.AddRange(HechosRepresentativosDeCaptaciones.Unidad(fecha, d, entrega, HechosRepresentativosDeCaptaciones.Gmf(d)));
+            // Respuesta 65 B (E255): los cargos por cobrar que la cancelación cobra del saldo.
+            if (cargosDeCuentas is not null && await db.AccountCharges.AsNoTracking()
+                    .AnyAsync(c => c.MemberAccountId == vista.Id && c.Status == AccountChargeStatus.Pending && !c.IsDeleted, ct))
+                hechos.AddRange(HechosRepresentativosDeCaptaciones.Unidad(fecha, d, HechosRepresentativosDeCaptaciones.CargoCobrado(d)));
             // US7 (T183): el contractual vigente que se cancela antes de vencer, con la penalidad del incumplimiento.
             if (vista.DepositClass == DepositClass.Contractual && vista.ContractualStatus == ContractualStatus.Current && vista.Status != MemberAccountStatus.Matured)
                 hechos.AddRange(HechosRepresentativosDeCaptaciones.Unidad(fecha, d, HechosRepresentativosDeCaptaciones.PenalidadDeContractual(d)));
@@ -342,6 +365,9 @@ public sealed class CloseMemberAccountCommandHandler(
             var antes = await movimientos.LeerAsync(cuenta, fecha, ct);
             var bloqueos = CancelacionDeCuenta.Bloqueos(cuenta, antes);
             if (bloqueos.Count > 0) return Falla(ErroresDeMovimientos.CierreBloqueado(bloqueos.Cast<object>().ToList()));
+            // Respuesta 65 B (E255): sin quien los cobre (construcción sin CargosDeCuentas), lo por cobrar sigue impidiendo.
+            if (cargosDeCuentas is null && antes.Saldos.GetValueOrDefault(MemberAccountConcept.ChargeReceivable) > 0m)
+                return Falla(ErroresDeMovimientos.CierreBloqueado([new CloseBlockerDto("PendingCharges", "Tiene cargos por cobrar: cóbrelos o condónelos antes de cancelar.")]));
             // US7 (T182): el contractual se cancela con su contrato (la penalidad si es antes de vencer) y la entrega común del contractual.
             if (cuenta.DepositClass == DepositClass.Contractual && lectorDeContractual is not null && incumplimiento is not null && cierreDeContractual is not null)
                 return await CancelarContractualAsync(cuenta, fecha, destino, personaDelGiro, banco, request, ct);
@@ -391,6 +417,10 @@ public sealed class CloseMemberAccountCommandHandler(
                 if (ultima.Value is { Liquidacion: { } l, Operacion: { } o }) liquidada = Liquidaciones.Dto(l, o, ultima.Value.YaExistia);
             }
 
+            // 1b. Respuesta 65 B (E255): los cargos por cobrar se cobran del capital (ya con los intereses liquidados) en su propia operación CGC-, antes de entregar.
+            var cobradosAlCancelar = await CobrarCargosAsync(cuenta, fecha, motivo, ct);
+            if (cobradosAlCancelar.IsFailure) return Falla(cobradosAlCancelar.Error);
+
             // 2. La entrega de todo el saldo con el GMF de la cancelación.
             var despues = await movimientos.LeerAsync(cuenta, fecha, ct);
             var saldo = despues.Saldo - despues.Disponible.Retenido - despues.Disponible.Embargado - despues.Disponible.EnCanje;
@@ -432,6 +462,21 @@ public sealed class CloseMemberAccountCommandHandler(
     }
 
     /// <summary>
+    /// Respuesta 65 B (E255): cobra del capital los cargos pendientes de la cuenta que se cancela (enteros, en orden de causación). Si el capital no alcanza a
+    /// cubrirlos todos, la cancelación no sigue (<c>CloseBlocked</c> con <c>PendingCharges</c>) y la transacción se deshace.
+    /// </summary>
+    private async Task<Result> CobrarCargosAsync(MemberAccount cuenta, DateOnly fecha, string motivo, CancellationToken ct)
+    {
+        if (cargosDeCuentas is null) return Result.Success();
+        var actual = await movimientos.LeerAsync(cuenta, fecha, ct);
+        var (cobrables, sinCubrir) = await cargosDeCuentas.PendientesDeLaCancelacionAsync(cuenta, actual.Saldos.GetValueOrDefault(MemberAccountConcept.Principal), ct);
+        if (CancelacionDeCuenta.CargosSinCubrir(sinCubrir) is { } sinCobertura)
+            return Result.Failure(ErroresDeMovimientos.CierreBloqueado([sinCobertura]));
+        var cobro = await cargosDeCuentas.CobrarEnCancelacionAsync(cuenta, cobrables, fecha, motivo, ct);
+        return cobro.IsFailure ? Result.Failure(cobro.Error) : Result.Success();
+    }
+
+    /// <summary>
     /// US7 (T182; FR-074): la cancelación de un ahorro contractual, dentro de la transacción y el cerrojo del comando. Vigente y antes de su vencimiento, queda
     /// incumplido con la reliquidación a la tasa de castigo (<c>CancelacionAnticipada</c>); incumplido o vencido, sólo se entrega. Después liquida a la fecha,
     /// anula las cuotas pendientes y entrega al destino pedido con las firmas del manejo.
@@ -458,6 +503,8 @@ public sealed class CloseMemberAccountCommandHandler(
             if (aplicado.IsFailure) return Falla(aplicado.Error);
             (operacion, numero, operacionId) = (aplicado.Value.Operacion.PublicId, aplicado.Value.Operacion.Number, aplicado.Value.Operacion.Id);
         }
+        var cobrados = await CobrarCargosAsync(cuenta, fecha, motivo, ct);
+        if (cobrados.IsFailure) return Falla(cobrados.Error);
         var entrega = destino is not null
             ? new Contractual.EntregaDeContractual(CloseDeliveryKind.TransferToAccount, destino, null, null)
             : new Contractual.EntregaDeContractual(CloseDeliveryKind.DisbursementOrder, null, personaDelGiro, banco);

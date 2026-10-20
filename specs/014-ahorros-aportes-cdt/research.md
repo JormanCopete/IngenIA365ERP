@@ -2691,8 +2691,7 @@ comportamiento (una de líneas de captación, el conteo de permisos) se **ajusta
   Las personas existentes quedan en «no obligada» (lo de antes).
 - **64 B · fecha valor en un período liquidado: ajuste en el período abierto — PENDIENTE.** Toca la ventana de causación y el hecho de ajuste (E96–E97); sin la corrida
   e2e no se arriesga el cálculo de intereses. Hoy sigue lo construido (el período liquidado no se reliquida).
-- **65 B · cancelar con cargos por cobrar: cobrarlos del saldo — PENDIENTE.** Exige emitir el cobro (`ChargeApplied` y su hecho contable) dentro de la entrega de la
-  cancelación; hoy sigue bloqueando con `PendingCharges`.
+- **65 B · cancelar con cargos por cobrar: cobrarlos del saldo (E255).** Hecha: ver §27.6.
 - **67 B · plantillas de importación de líneas de captación y de aportes (E251).** `lending.deposit-lines` (hojas `Lineas` y `Tramos`) y `lending.contribution-lines` (hoja
   `Lineas`), con revisión previa, todo-o-nada, las mismas reglas del alta unitaria (`ReglasDeLineaDeCaptacion`, topes de aportes, perfil, entrega), alcance de línea
   (fuera de alcance la línea «no existe»), y rutas `GET/POST /api/lending/lines/deposit|contribution/template.xlsx|import` (permisos `DepositLines.*` y `ContributionLines.*`).
@@ -2823,3 +2822,26 @@ retenía el saldo al recibir el oficio y el recálculo diario). Sin migración n
 - **Pruebas:** Application (`EmbargosTests`: consignación posterior retiene hasta el tope del oficio, varios embargos con alimentos primero, el desembargo libera lo
   retenido, dos consignaciones seguidas en cuentas distintas de la misma persona suman sobre el límite) y la e2e `R82_…` (retención en el momento y dos
   consignaciones simultáneas en cuentas distintas del mismo titular sin bloqueo mutuo), verdes en PostgreSQL y SQL Server.
+
+### 27.6 E255 · cancelar una cuenta con cargos por cobrar los cobra del saldo (respuesta 65 B, 2026-10-21)
+
+Al **cancelar una cuenta** con cargos pendientes (cuota de manejo, etc.), los cargos **se cobran del saldo dentro de la misma cancelación** y lo restante se entrega.
+Antes la cancelación se bloqueaba con `PendingCharges`. Sin migración ni esquema nuevo (el valor nuevo del enum de operaciones se guarda como número).
+
+- **Operación propia.** El cobro va en su propia operación `ChargeCollection` (valor 28, prefijo `CGC-`), no dentro de la `Cancellation`: así el hecho `CargoPendienteCobrado`
+  (CGP) es el principal de **su** unidad contable (origen la operación `CGC-`, clase `AccountCharge`, clave `Confirmation`) y no se mezcla con la unidad de la liquidación
+  (`ILQ`/`RTF`) ni con la del retiro o traslado de la entrega, cuyos acompañantes están fijados. Filas `ChargeApplied` (−por cobrar, −capital) con el mensaje del hecho; cada
+  cargo pasa a `Collected` con `CollectedOperationId` = la operación `CGC-`. Cartera sigue sin conocer cuentas; el hecho nace en la misma transacción.
+- **Orden.** (1) operación `CAN-`, (2) puesta al día de la causación y liquidación con su retención (el capital incluye ya el interés neto), (3) **cobro de los cargos**
+  (`CargosDeCuentas.PendientesDeLaCancelacionAsync` / `CobrarEnCancelacionAsync`: en orden de causación, **enteros**, sin mínimo porque la cuenta se cierra), (4) entrega del
+  resto con su GMF. El contractual cobra antes de `TerminarAsync` (con el capital de ese momento).
+- **Lo que sigue impidiendo.** Los cargos se cobran enteros: si el capital no alcanza a cubrirlos todos, la parte sin cubrir sigue siendo el bloqueo `PendingCharges` («el saldo
+  no alcanza a cubrirlos: condónelos»), en la vista previa y, con la transacción deshecha, en el comando (`Lending.Savings.CloseBlocked`). Un cargo ya cobrado no se vuelve a cobrar
+  (idempotencia por el estado del cargo y la `Idempotency-Key` del comando). Sin `CargosDeCuentas` inyectado (pruebas viejas) lo por cobrar sigue impidiendo como antes.
+- **Validación previa y reversos.** `HechosRepresentativosDeCaptaciones.CargoCobrado` suma el hecho a la pregunta de la pantalla si la cuenta tiene cargos pendientes. La operación
+  `CGC-` no se reversa desde la pantalla (como `Charge`/`ChargeWaiver`); si Tesorería rechaza el giro de la entrega, el reverso es el del retiro y el cargo cobrado queda cobrado (era deuda).
+  La ficha de operaciones la nombra «Cobro de cargos».
+- **Pruebas.** Application (`InteresesDeCuentaTests`): cobra el cargo y entrega el resto (operación `CGC-`, cargo `Collected`, hecho CGP, cuenta cancelada) y el cargo que el saldo no
+  cubre impide con `PendingCharges`. e2e (`CargosYDebitoAutomaticoTests.R65_…`, dos): cancelar con el cargo pendiente y con el cargo mayor que el saldo; verdes en PostgreSQL y SQL Server.
+  Domain: el enum `MemberAccountOperationKind` con `ChargeCollection = 28`. **Pendiente de validar por la contadora:** que el cobro (CGP, comprobante `MA`) lleve la regla de matriz
+  que ya existe para el cobro de cargos por consignación.
