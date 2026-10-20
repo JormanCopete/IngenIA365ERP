@@ -138,10 +138,10 @@ public class AperturaDeCuentasTests(CentralIdentityApiFixture fx)
     }
 
     private static object Apertura(Escenario esc, Guid linea, Guid titular, object[]? partes = null, object[]? beneficiarios = null,
-        string manejo = "Indistinct", bool exenta = false) => new
+        string manejo = "Indistinct", bool exenta = false, Guid? constancia = null) => new
     {
         linePublicId = linea, holderPersonPublicId = titular, officePublicId = esc.Oficina, handlingMode = manejo,
-        parties = partes ?? [], beneficiaries = beneficiarios ?? [], markGmfExempt = exenta,
+        parties = partes ?? [], beneficiaries = beneficiarios ?? [], markGmfExempt = exenta, beneficiaryRecordAttachmentPublicId = constancia,
     };
 
     private static Task<HttpResponseMessage> AbrirAsync(HttpClient http, string token, object cuerpo) =>
@@ -168,9 +168,12 @@ public class AperturaDeCuentasTests(CentralIdentityApiFixture fx)
         var (carla, _) = await PersonaAsync(http, esc.Admin, "Carla", new DateOnly(2010, 1, 5), asociada: false, autorizada: false);
         var (dario, _) = await PersonaAsync(http, esc.Admin, "Dario", new DateOnly(2012, 6, 9), asociada: false, autorizada: false);
 
+        // Desde la decisión del dueño del 2026-10-18 (D34) los beneficiarios se registran con la constancia firmada por el titular.
+        var constancia = await ActasE2E.SoporteAsync(http, esc.Admin, ana, Soportes, "constancia-beneficiarios.pdf");
         var cuenta = await AbiertaAsync(http, esc.Admin, Apertura(esc, esc.ALaVista, ana,
             [new { personPublicId = beto, role = "CoHolder" }],
-            [new { personPublicId = carla, percent = 60m }, new { personPublicId = dario, percent = 40m }], manejo: "Joint", exenta: true));
+            [new { personPublicId = carla, percent = 60m }, new { personPublicId = dario, percent = 40m }], manejo: "Joint", exenta: true,
+            constancia: constancia));
 
         cuenta.GetProperty("status").GetInt32().Should().Be(2, "activa");
         cuenta.GetProperty("number").GetString().Should().StartWith("AHVISTA-");
@@ -306,7 +309,7 @@ public class AperturaDeCuentasTests(CentralIdentityApiFixture fx)
         using (CausacionE2E.RelojEn(fx, cumple))
             await CausacionE2E.CicloDeHoyAsync(fx, http, esc.Admin, esc.Coop.TenantPublicId);
 
-        var partes = await CarteraE2E.GetAsync(http, esc.Admin, $"{Cuentas}/{id}/parties?includeHistory=true");
+        var partes = await CarteraE2E.GetAsync(http, esc.Admin, $"{Cuentas}/{id}/parties?date={cumple:yyyy-MM-dd}&includeHistory=true");
         partes.GetProperty("requiresDataUpdate").GetBoolean().Should().BeTrue();
         partes.GetProperty("parties").EnumerateArray().Should().NotContain(p => p.GetProperty("role").GetInt32() == 4, "el representante deja de firmar");
         var representante = partes.GetProperty("history").EnumerateArray().Single(p => p.GetProperty("role").GetInt32() == 4);

@@ -145,10 +145,15 @@ public class AportesTests(CentralIdentityApiFixture fx)
         return await CarteraE2E.LeerAsync(resp);
     }
 
-    /// <summary>Corre el ciclo diario el día 6 de este mes y del siguiente: dos cuotas vencidas.</summary>
+    /// <summary>
+    /// (Una cooperativa por prueba que corre el ciclo: la corrida de un día ya terminada responde <c>Lending.ProcessRun.AlreadyCompleted</c> y las cuentas
+    /// abiertas después no recibirían su cuota.)
+    /// Corre el ciclo diario el día 6 del mes siguiente: dos cuotas vencidas. La primera cuota es la del <b>período que contiene la apertura</b>
+    /// (<c>CuotasDeAportes.Periodos</c> desde la apertura) y la segunda la del mes siguiente; un ciclo más sumaría una tercera.
+    /// </summary>
     private async Task DosMesesDeCicloAsync(HttpClient http, Escenario esc)
     {
-        foreach (var meses in new[] { 1, 2 })
+        foreach (var meses in new[] { 1 })
         {
             var dia = new DateOnly(esc.Hoy.Year, esc.Hoy.Month, 6).AddMonths(meses);
             using var reloj = CausacionE2E.RelojEn(fx, dia);
@@ -171,12 +176,13 @@ public class AportesTests(CentralIdentityApiFixture fx)
     [Fact]
     public async Task US3_dos_cuotas_se_listan_se_paga_una_con_extraordinario_y_el_resumen_da_el_mismo_saldo()
     {
-        var esc = await EscenarioAsync("aportes");
+        var esc = await EscenarioAsync("aportes_ciclo_a");
         using var http = fx.CreateClient();
         var ana = await AsociadoAsync(http, esc.Admin, "Ana");
         var cuenta = (await CuentaAsync(http, esc, esc.LineaDeAportes, ana)).GetProperty("publicId").GetGuid();
         await DosMesesDeCicloAsync(http, esc);
-        var corte = new DateOnly(esc.Hoy.Year, esc.Hoy.Month, 6).AddMonths(2);
+        var corte = new DateOnly(esc.Hoy.Year, esc.Hoy.Month, 6).AddMonths(1);
+        using var reloj = CausacionE2E.RelojEn(fx, corte); // la fecha valor de una consignación no pasa de hoy
 
         var cuotas = await ExigiblesAsync(http, esc.Admin, ana, corte);
         cuotas.Where(c => c.GetProperty("accountPublicId").GetGuid() == cuenta).Select(c => c.GetProperty("pending").GetDecimal())
@@ -186,7 +192,7 @@ public class AportesTests(CentralIdentityApiFixture fx)
             new { deposits = new[] { Consignacion(cuenta, ana, 80_000m, corte) } });
         pago.StatusCode.Should().Be(HttpStatusCode.OK, await pago.Content.ReadAsStringAsync());
         var respuesta = (await CarteraE2E.LeerAsync(pago)).GetProperty("deposits")[0];
-        respuesta.GetProperty("result").GetInt32().Should().BeOneOf(1, 2);
+        respuesta.GetProperty("result").GetInt32().Should().BeOneOf([1, 2], respuesta.ToString());
 
         var resumen = await CarteraE2E.GetAsync(http, esc.Admin, $"{Aportes}/summary?personPublicId={ana}&date={corte:yyyy-MM-dd}");
         resumen.GetProperty("total").GetDecimal().Should().Be(80_000m);
@@ -199,12 +205,13 @@ public class AportesTests(CentralIdentityApiFixture fx)
     [Fact]
     public async Task US3_un_pago_que_no_alcanza_deja_la_cuota_abonada_y_el_resto_exigible_con_su_motivo()
     {
-        var esc = await EscenarioAsync("aportes");
+        var esc = await EscenarioAsync("aportes_ciclo_b");
         using var http = fx.CreateClient();
         var beto = await AsociadoAsync(http, esc.Admin, "Beto");
         var cuenta = (await CuentaAsync(http, esc, esc.LineaDeAportes, beto)).GetProperty("publicId").GetGuid();
         await DosMesesDeCicloAsync(http, esc);
-        var corte = new DateOnly(esc.Hoy.Year, esc.Hoy.Month, 6).AddMonths(2);
+        var corte = new DateOnly(esc.Hoy.Year, esc.Hoy.Month, 6).AddMonths(1);
+        using var reloj = CausacionE2E.RelojEn(fx, corte); // la fecha valor de una consignación no pasa de hoy
         var primera = (await ExigiblesAsync(http, esc.Admin, beto, corte)).First(c => c.GetProperty("accountPublicId").GetGuid() == cuenta);
 
         var pago = await CarteraE2E.ConClaveAsync(http, esc.Admin, HttpMethod.Post, $"{Doble}/deposits", new
@@ -264,9 +271,11 @@ public class AportesTests(CentralIdentityApiFixture fx)
         using (CausacionE2E.RelojEn(fx, dia)) await CausacionE2E.CicloDeHoyAsync(fx, http, esc.Admin, esc.Coop.TenantPublicId);
 
         var cuotas = await ExigiblesAsync(http, esc.Admin, dario, dia);
-        cuotas.Single(c => c.GetProperty("accountPublicId").GetGuid() == aportes).GetProperty("pending").GetDecimal().Should().Be(60_000m);
-        cuotas.Single(c => c.GetProperty("accountPublicId").GetGuid() == permanente).GetProperty("pending").GetDecimal().Should().Be(40_000m,
-            "el 40 % de la cuota va al ahorro permanente");
+        // Dos períodos: el de la apertura y el siguiente.
+        cuotas.Where(c => c.GetProperty("accountPublicId").GetGuid() == aportes).Select(c => c.GetProperty("pending").GetDecimal())
+            .Should().Equal(60_000m, 60_000m);
+        cuotas.Where(c => c.GetProperty("accountPublicId").GetGuid() == permanente).Select(c => c.GetProperty("pending").GetDecimal())
+            .Should().Equal([40_000m, 40_000m], "el 40 % de la cuota va al ahorro permanente");
     }
 
     [Fact]
@@ -289,6 +298,11 @@ public class AportesTests(CentralIdentityApiFixture fx)
             new { form = "DisbursementOrder", reason = "Me la apruebo (e2e)" });
         (await CarteraE2E.CodigoDeErrorAsync(propia)).Should().Be("Lending.Segregation.Conflict");
 
+        // Aprobar la devolución es Lending.Contributions.Manage, que trae la plantilla del jefe de captaciones y no la del jefe de cartera.
+        var rol = await CarteraE2E.EnviarAsync(http, esc.Admin, HttpMethod.Post, $"/api/admin/users/{esc.Usuarios.Jefe.PublicId}/roles",
+            new { rolePublicId = esc.Usuarios.RolesSugeridos["cartera.jefe-captaciones"] });
+        if (!rol.IsSuccessStatusCode)
+            (await CarteraE2E.CodigoDeErrorAsync(rol)).Should().Be("Security.Users.AlreadyAssignedRole", await rol.Content.ReadAsStringAsync());
         var jefe = await UsuariosDeCartera.IngresarAsync(http, esc.Usuarios.Jefe);
         var aprobada = await CarteraE2E.ConClaveAsync(http, jefe, HttpMethod.Post, $"{Aportes}/refunds/{solicitud}/approve",
             new { form = "DisbursementOrder", reason = "Aprobada (e2e)" });

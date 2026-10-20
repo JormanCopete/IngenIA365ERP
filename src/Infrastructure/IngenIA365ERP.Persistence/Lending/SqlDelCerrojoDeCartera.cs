@@ -100,6 +100,26 @@ public static class SqlDelCerrojoDeCartera
     public static SentenciaDelCerrojo Numeracion(DatabaseProvider motor, int numberSequenceId) =>
         new(TablaNumeracion, new Dialecto(motor).BloquearPor(TablaNumeracion, "Id", "Id", [numberSequenceId], ModoDeEspera.Esperar), []);
 
+    /// <summary>
+    /// Antes del paso 5: el INSERT de la fila de numeración que falta (<c>NextValue = 1</c>), sin error si otra operación la acaba de crear. Los
+    /// parámetros son, en orden, el instante UTC, el actor, la clase, el ámbito, el prefijo y los dígitos mínimos.
+    /// </summary>
+    public static SentenciaDelCerrojo NumeracionNueva(DatabaseProvider motor, Domain.Enums.Lending.LendingNumberKind clase, string ambito, string prefijo,
+        byte digitos, string actor, DateTime ahoraUtc)
+    {
+        if (ahoraUtc.Kind != DateTimeKind.Utc) throw new ArgumentException("El instante de creación va en UTC.", nameof(ahoraUtc));
+        ArgumentNullException.ThrowIfNull(ambito);
+        ArgumentNullException.ThrowIfNull(prefijo);
+        ArgumentNullException.ThrowIfNull(actor);
+        var q = new Dialecto(motor);
+        var columnas = string.Join(", ", new[] { "PublicId", "Kind", "ScopeKey", "Prefix", "NextValue", "MinDigits", "CreatedAt", "CreatedBy", "IsDeleted" }.Select(q.C));
+        var sql = q.Pg
+            ? $"INSERT INTO {q.T(TablaNumeracion)} ({columnas}) VALUES (gen_random_uuid(), {{2}}, {{3}}, {{4}}, 1, {{5}}, {{0}}, {{1}}, FALSE) ON CONFLICT DO NOTHING;"
+            : $"INSERT INTO {q.T(TablaNumeracion)} ({columnas}) SELECT NEWID(), {{2}}, {{3}}, {{4}}, 1, {{5}}, {{0}}, {{1}}, 0 "
+              + $"WHERE NOT EXISTS (SELECT 1 FROM {q.T(TablaNumeracion)} t WITH (UPDLOCK, HOLDLOCK) WHERE t.{q.C("Kind")} = {{2}} AND t.{q.C("ScopeKey")} = {{3}});";
+        return new(TablaNumeracion, sql, [ahoraUtc, actor, (int)clase, ambito, prefijo, (short)digitos]);
+    }
+
     private static List<int> Ordenados(IEnumerable<int> ids)
     {
         ArgumentNullException.ThrowIfNull(ids);

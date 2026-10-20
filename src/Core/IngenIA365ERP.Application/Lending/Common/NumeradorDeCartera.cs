@@ -117,10 +117,14 @@ public sealed class NumeradorDeCartera(IApplicationDbContext db, ICerrojoDeCarte
         var secuencia = db.LendingNumberSequences.Local.FirstOrDefault(s => s.Kind == clase && s.ScopeKey == ambito);
         if (secuencia is null)
         {
-            var id = await db.LendingNumberSequences.AsNoTracking()
-                .Where(s => s.Kind == clase && s.ScopeKey == ambito)
-                .Select(s => (int?)s.Id)
-                .FirstOrDefaultAsync(ct);
+            var id = await ExistenteAsync(clase, ambito, ct);
+            if (id is null)
+            {
+                // La primera vez en este ámbito: la fila la crea el cerrojo (si hay transacción) para que dos operaciones simultáneas no agreguen cada
+                // una la suya con NextValue = 1 y numeren lo mismo (E238); sin transacción, o sin cerrojo real, se agrega abajo como siempre.
+                await cerrojo.AsegurarNumeracionAsync(clase, ambito, prefijo, DigitosPorDefecto, ct);
+                id = await ExistenteAsync(clase, ambito, ct);
+            }
             if (id is null)
             {
                 secuencia = new LendingNumberSequence { Kind = clase, ScopeKey = ambito, Prefix = prefijo, NextValue = 1, MinDigits = DigitosPorDefecto };
@@ -135,6 +139,12 @@ public sealed class NumeradorDeCartera(IApplicationDbContext db, ICerrojoDeCarte
         }
         return secuencia;
     }
+
+    private Task<int?> ExistenteAsync(LendingNumberKind clase, string ambito, CancellationToken ct) =>
+        db.LendingNumberSequences.AsNoTracking()
+            .Where(s => s.Kind == clase && s.ScopeKey == ambito)
+            .Select(s => (int?)s.Id)
+            .FirstOrDefaultAsync(ct);
 
     /// <summary>El radicado de una solicitud que se envía a análisis (nunca un borrador, data-model §2.1).</summary>
     public async Task NumerarSolicitudAsync(CreditApplication solicitud, string prefijo, CancellationToken ct = default)

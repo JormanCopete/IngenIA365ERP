@@ -51,4 +51,12 @@ public interface ICerrojoDeCartera
 
     /// <summary>Paso 5: la fila de <c>LND_NumberSequences</c> que va a numerar, en exclusivo y al final.</summary>
     Task BloquearNumeracionAsync(int numberSequenceId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Antes del paso 5, la primera vez que se numera una clase en un ámbito: inserta la fila de <c>LND_NumberSequences</c> si falta
+    /// (<c>ON CONFLICT DO NOTHING</c> / <c>NOT EXISTS … UPDLOCK, HOLDLOCK</c>), como el paso 2 con el deudor. Dos operaciones que numeran por primera vez
+    /// a la vez ya no agregan cada una su fila con <c>NextValue = 1</c> (el mismo número dos veces): la segunda espera a la primera y después bloquea
+    /// la fila que quedó. Sin transacción en curso no hace nada (el numerador agrega la fila como siempre). (E238)
+    /// </summary>
+    Task AsegurarNumeracionAsync(Domain.Enums.Lending.LendingNumberKind clase, string ambito, string prefijo, byte digitos, CancellationToken ct = default);
 }

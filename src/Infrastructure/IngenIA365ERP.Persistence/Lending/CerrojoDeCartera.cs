@@ -56,6 +56,17 @@ public sealed class CerrojoDeCartera(ApplicationDbContext db, IActorActual actor
         await db.Database.ExecuteSqlRawAsync(sentencia.Sql, sentencia.Parametros, ct);
     }
 
+    public async Task AsegurarNumeracionAsync(Domain.Enums.Lending.LendingNumberKind clase, string ambito, string prefijo, byte digitos,
+        CancellationToken ct = default)
+    {
+        // Sin transacción el candado no protegería nada: el numerador agrega la fila como siempre.
+        if (db.Database.CurrentTransaction is null) return;
+        var actor = await actorActual.ObtenerAsync(ct);
+        var ahora = DateTime.SpecifyKind(reloj.UtcNow, DateTimeKind.Utc);
+        var sentencia = SqlDelCerrojoDeCartera.NumeracionNueva(Motor(), clase, ambito, prefijo, digitos, actor.Name, ahora);
+        await db.Database.ExecuteSqlRawAsync(sentencia.Sql, sentencia.Parametros, ct);
+    }
+
     private DatabaseProvider Motor() => db.Database.ProviderName == ProviderModelConventions.PostgreSqlProviderName
         ? DatabaseProvider.PostgreSql
         : DatabaseProvider.SqlServer;
