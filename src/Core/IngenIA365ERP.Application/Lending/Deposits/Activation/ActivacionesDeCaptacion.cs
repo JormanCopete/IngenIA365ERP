@@ -39,6 +39,13 @@ public sealed record FechasDeActivacion(DateOnly? Creditos, DateOnly? Captacione
 /// </summary>
 public static class ActivacionesDeCaptacion
 {
+    /// <summary>
+    /// La fecha más temprana desde la que puede regir una versión nueva de una línea de captación o de aportes (respuesta 106 A del dueño, E250):
+    /// hoy una vez activada la naturaleza; <b>antes de activarla</b> no hay límite, para dejar la historia de tarifas de la puesta en marcha.
+    /// </summary>
+    public static async Task<DateOnly> FechaMinimaDeVersionAsync(IApplicationDbContext db, LineNature naturaleza, DateOnly hoy, CancellationToken ct) =>
+        (await LeerAsync(db, ct)).Activada(naturaleza) ? hoy : DateOnly.MinValue;
+
     public static async Task<FechasDeActivacion> LeerAsync(IApplicationDbContext db, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(db);

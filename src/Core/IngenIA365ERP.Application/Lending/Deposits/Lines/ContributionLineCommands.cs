@@ -119,7 +119,8 @@ public sealed class CreateContributionLineCommandHandler(
         if (permanente.IsFailure) return Result.Failure<LendingLineDto>(permanente.Error);
         var hoy = reloj.HoyLocal;
         var borrador = request.FirstVersion.Borrador(permanente.Value);
-        if (ReglasDeLineaDeCaptacion.ValidarVersionDeAportes(borrador, hoy) is { } problema)
+        if (ReglasDeLineaDeCaptacion.ValidarVersionDeAportes(borrador,
+                await Activation.ActivacionesDeCaptacion.FechaMinimaDeVersionAsync(db, LineNature.Contribution, hoy, ct)) is { } problema)
             return Result.Failure<LendingLineDto>(ErroresDeLineasDeCaptacion.De(problema));
         var topes = await ReferenciasDeLineasDeAportes.TopesAsync(contexto, borrador, ct);
         if (topes.IsFailure) return Result.Failure<LendingLineDto>(topes.Error);
@@ -191,7 +192,8 @@ public sealed class AddContributionLineVersionCommandHandler(
         var permanente = await ReferenciasDeLineasDeAportes.LineaPermanenteAsync(db, request.Version, ct);
         if (permanente.IsFailure) return Result.Failure<ContributionLineVersionDto>(permanente.Error);
         var borrador = request.Version.Borrador(permanente.Value);
-        if (ReglasDeLineaDeCaptacion.ValidarVersionDeAportes(borrador, reloj.HoyLocal) is { } problema)
+        if (ReglasDeLineaDeCaptacion.ValidarVersionDeAportes(borrador,
+                await Activation.ActivacionesDeCaptacion.FechaMinimaDeVersionAsync(db, LineNature.Contribution, reloj.HoyLocal, ct)) is { } problema)
             return Result.Failure<ContributionLineVersionDto>(ErroresDeLineasDeCaptacion.De(problema));
         var contraLoRegistrado = await alta.ValidarContraLoRegistradoAsync(linea, borrador.ValidFrom, ct);
         if (contraLoRegistrado.IsFailure) return Result.Failure<ContributionLineVersionDto>(contraLoRegistrado.Error);

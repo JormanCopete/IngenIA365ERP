@@ -1,4 +1,4 @@
-using IngenIA365ERP.Domain.Common;
+﻿using IngenIA365ERP.Domain.Common;
 using IngenIA365ERP.Domain.Enums.Lending;
 
 namespace IngenIA365ERP.Domain.Entities.Lending.Deposits.Migration;
@@ -381,6 +381,15 @@ public class MigrationTermDepositRow : AuditableEntity, IHechoInmutable
 
     /// <summary>Con <c>ToAccount</c>: el número de la cuenta destino (de la carga o viva).</summary>
     public string? DestinationAccountNumber { get; init; }
+
+    /// <summary>Con giro (respuesta 76 B del dueño, E252): el código de transferencia (ACH) del banco al que se gira; nulo = la cuenta bancaria registrada del titular.</summary>
+    public string? DestinationBankTransferCode { get; init; }
+
+    /// <summary>Con giro: el tipo de la cuenta bancaria del giro.</summary>
+    public byte? DestinationBankAccountType { get; init; }
+
+    /// <summary>Con giro: el número de la cuenta bancaria del giro.</summary>
+    public string? DestinationBankAccountNumber { get; init; }
 
     public MaturityInstruction MaturityInstruction { get; init; }
 

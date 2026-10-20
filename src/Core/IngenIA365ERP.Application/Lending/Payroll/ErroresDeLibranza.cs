@@ -136,6 +136,7 @@ public static class ErroresDeLibranza
     public const string CodigoRecaudoSinV2 = "Lending.PayrollAgreement.ReceiptsVersionNotAdopted";
     public const string CodigoConceptoSinEquivalencia = "Lending.PayrollFile.ConceptWithoutEquivalence";
     public const string CodigoEmpleadoSinEquivalencia = "Lending.PayrollFile.EmployeeWithoutEquivalence";
+    public const string CodigoLineaDeCuentaSinCodigo = "Lending.PayrollFile.AccountLineWithoutPaymasterCode";
     public const string CodigoDescuentoSobrante = "Lending.PayrollFile.DeductedExceedsSent";
 
     /// <summary>Una equivalencia sin grupo de archivo (o con uno que no existe) en una versión que usa grupos.</summary>
@@ -170,6 +171,12 @@ public static class ErroresDeLibranza
     /// Recaudo no adoptó <c>DescuentosPorPagaduria</c> v2 (mensajes.md §5.4): un archivo con cuotas de cuentas no se genera, porque la v1 sólo lleva
     /// créditos.
     /// </summary>
+    /// <summary>Feature 014 (respuesta 59 B del dueño, E250): una línea de aportes o de ahorro con descuento por pagaduría sin código de concepto bloquea el archivo.</summary>
+    public static Error LineaDeCuentaSinCodigo(string convenio, IReadOnlyList<string> lineas) => new ErrorConDatos(CodigoLineaDeCuentaSinCodigo,
+        $"El archivo del convenio {convenio} no se genera: las líneas {string.Join(", ", lineas)} de aportes o ahorro se descuentan por pagaduría y no tienen "
+        + "código de concepto de la pagaduría. Asígnelo en el convenio, pestaña «Grupos y equivalencias» (cartera/pagadurias), y genere de nuevo.",
+        new { agreement = convenio, lines = lineas });
+
     public static Error RecaudoSinV2(string convenio) => new ErrorConDatos(CodigoRecaudoSinV2,
         $"El archivo del convenio {convenio} lleva cuotas de cuentas y Recaudo no adoptó DescuentosPorPagaduria v2: regístrelo en el registro de integración "
         + "con esa versión adoptada.", new { agreement = convenio, contract = "DescuentosPorPagaduria", version = 2 });

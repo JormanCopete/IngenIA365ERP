@@ -108,7 +108,8 @@ public sealed class CreateDepositLineCommandHandler(
         if (request.FirstVersion.DepositClass is { } dicha && dicha != request.DepositClass)
             return Result.Failure<LendingLineDto>(ErroresDeLineasDeCaptacion.De(ReglasDeLineaDeCaptacion.ValidarClaseInmutable(request.DepositClass, dicha)!));
         var borrador = request.FirstVersion.Borrador(request.DepositClass, destino.Value, perfil.SoloAsociados);
-        if (ReglasDeLineaDeCaptacion.ValidarVersion(borrador, hoy) is { } problema) return Result.Failure<LendingLineDto>(ErroresDeLineasDeCaptacion.De(problema));
+        if (ReglasDeLineaDeCaptacion.ValidarVersion(borrador,
+            await Activation.ActivacionesDeCaptacion.FechaMinimaDeVersionAsync(db, LineNature.Deposit, hoy, ct)) is { } problema) return Result.Failure<LendingLineDto>(ErroresDeLineasDeCaptacion.De(problema));
 
         if (request.Active)
         {
@@ -189,7 +190,8 @@ public sealed class AddDepositLineVersionCommandHandler(
         var hoy = reloj.HoyLocal;
         var perfil = await contexto.PerfilAsync(hoy, ct);
         var borrador = request.Version.Borrador(clase, destino.Value, perfil.SoloAsociados);
-        if (ReglasDeLineaDeCaptacion.ValidarVersion(borrador, hoy) is { } problema) return Result.Failure<DepositLineVersionDto>(ErroresDeLineasDeCaptacion.De(problema));
+        if (ReglasDeLineaDeCaptacion.ValidarVersion(borrador,
+            await Activation.ActivacionesDeCaptacion.FechaMinimaDeVersionAsync(db, LineNature.Deposit, hoy, ct)) is { } problema) return Result.Failure<DepositLineVersionDto>(ErroresDeLineasDeCaptacion.De(problema));
         var contraLoRegistrado = await alta.ValidarContraLoRegistradoAsync(linea, borrador.ValidFrom, ct);
         if (contraLoRegistrado.IsFailure) return Result.Failure<DepositLineVersionDto>(contraLoRegistrado.Error);
 

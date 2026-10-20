@@ -1,4 +1,4 @@
-using System.Text.RegularExpressions;
+﻿using System.Text.RegularExpressions;
 using IngenIA365ERP.Architecture.Tests.Helpers;
 
 namespace IngenIA365ERP.Architecture.Tests.Principles;
@@ -63,6 +63,7 @@ public class LasCaptacionesExigenPermisoYAlcance
     private static readonly Dictionary<string, string> Exceptuados = new(StringComparer.Ordinal)
     {
         // T055: la activación es de toda la cooperativa (como ActivateLendingCommand de la 013): no hay oficina ni línea que filtrar.
+        ["RunScheduledDocumentBatchesCommand"] = "la tarea programada corre como el proceso (alcance total); cada documento del lote sale por IssueLendingDocumentBatchCommand, que aplica el alcance",
         ["ActivateDepositsCommand"] = "la activación de captaciones es de toda la cooperativa, sin oficina ni línea (FR-116)",
         ["ActivateContributionsCommand"] = "la activación de aportes es de toda la cooperativa, sin oficina ni línea (FR-116)",
         // US4 (T117): lo manda la bandeja con el actor «Proceso de integración», sin usuario ni alcance (I-2); sólo guarda el estado de la factura.

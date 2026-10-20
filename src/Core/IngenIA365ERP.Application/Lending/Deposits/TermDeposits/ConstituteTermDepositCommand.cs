@@ -1,4 +1,4 @@
-using IngenIA365ERP.Domain.Enums.Integration;
+﻿using IngenIA365ERP.Domain.Enums.Integration;
 using IngenIA365ERP.Application.Common.Audit;
 using FluentValidation;
 using IngenIA365ERP.Application.Common.Behaviors;
@@ -138,7 +138,8 @@ public sealed class ConstituteTermDepositCommandHandler(
     ICerrojoDeCartera cerrojo,
     IAlcanceDeCartera alcance,
     LendingAuditEmitter auditoria,
-    IDateTimeService reloj) : IRequestHandler<ConstituteTermDepositCommand, Result<TermDepositDto>>
+    IDateTimeService reloj,
+    ICurrentUserPermissions? permisos = null) : IRequestHandler<ConstituteTermDepositCommand, Result<TermDepositDto>>
 {
     public async Task<Result<TermDepositDto>> Handle(ConstituteTermDepositCommand request, CancellationToken ct)
     {
@@ -229,10 +230,11 @@ public sealed class ConstituteTermDepositCommandHandler(
         {
             var cuenta = await LectorDeCuentas.CuentaEnAlcanceAsync(db, alcance, auditoria, d.AccountPublicId!.Value, seguir: false, ct);
             if (cuenta.IsFailure) return Result.Failure<DestinoDeCdat>(cuenta.Error);
-            if (cuenta.Value.Nature != LineNature.Deposit || cuenta.Value.DepositClass != DepositClass.Demand || !cuenta.Value.Viva
-                || cuenta.Value.HolderPersonId != titular.Id)
-                return Result.Failure<DestinoDeCdat>(ErroresDeCdat.DestinoInvalido("Los intereses del CDAT se abonan en una cuenta de ahorro a la vista viva del titular."));
-            return Result.Success(new DestinoDeCdat(TermDepositDestinationKind.Account, cuenta.Value.PublicId, null, null, null, null));
+            if (cuenta.Value.Nature != LineNature.Deposit || cuenta.Value.DepositClass != DepositClass.Demand || !cuenta.Value.Viva)
+                return Result.Failure<DestinoDeCdat>(ErroresDeCdat.DestinoInvalido("Los intereses del CDAT se abonan en una cuenta de ahorro a la vista viva."));
+            var constancia = await DestinosDeCdat.ValidarTerceroAsync(db, permisos, cuenta.Value.HolderPersonId, titular.Id, d.ThirdPartyAuthorizationAttachmentPublicId, ct);
+            if (constancia.IsFailure) return Result.Failure<DestinoDeCdat>(constancia.Error);
+            return Result.Success(new DestinoDeCdat(TermDepositDestinationKind.Account, cuenta.Value.PublicId, null, null, null, null, constancia.Value));
         }
         var persona = await db.People.AsNoTracking().AnyAsync(p => p.PublicId == d.PayeePersonPublicId && !p.IsDeleted, ct);
         if (!persona) return Result.Failure<DestinoDeCdat>(ErroresDeGobierno.PersonaInexistente());

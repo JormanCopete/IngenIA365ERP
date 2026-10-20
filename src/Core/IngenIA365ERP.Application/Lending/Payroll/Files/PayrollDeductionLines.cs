@@ -33,7 +33,8 @@ public sealed record ArchivoDeDescuentosPreparado(
     PayrollAgreementFileGroup? Grupo = null,
     IReadOnlyList<LineaDeCuentaEnDescuento>? LineasDeCuentas = null,
     IReadOnlyDictionary<int, CodigoDeLinea>? CodigosDeCredito = null,
-    int SinEquivalencia = 0)
+    int SinEquivalencia = 0,
+    IReadOnlyList<string>? LineasDeCuentasSinCodigo = null)
 {
     /// <summary>Las cuotas de cuentas del archivo (sólo en un grupo; feature 014, T091).</summary>
     public IReadOnlyList<LineaDeCuentaEnDescuento> Cuentas => LineasDeCuentas ?? [];
@@ -227,10 +228,10 @@ public sealed class PayrollDeductionLines(IApplicationDbContext db, CargadorDeRe
         if (grupo is null)
             return new ArchivoDeDescuentosPreparado(convenio, version, numeroDeVersion, periodo, formato, contexto, baseFile, novedades, lineas, enviarA, pagaduria);
 
-        var (cuentas, cuentasSinEquivalencia) = await LineasDeGrupoDeDescuento.CuentasAsync(db, pagaduria, convenio, equivalencias, grupo, periodo,
+        var (cuentas, cuentasSinEquivalencia, lineasSinCodigo) = await LineasDeGrupoDeDescuento.CuentasAsync(db, pagaduria, convenio, equivalencias, grupo, periodo,
             version.IncludesPastDue || LlevaLoVencido(version), baseFile, lineas.Count + 1, ct);
         return new ArchivoDeDescuentosPreparado(convenio, version, numeroDeVersion, periodo, formato, contexto, baseFile, novedades, lineas, enviarA, pagaduria,
-            grupo, cuentas, codigos, sinEquivalencia + cuentasSinEquivalencia);
+            grupo, cuentas, codigos, sinEquivalencia + cuentasSinEquivalencia, lineasSinCodigo);
     }
 
     /// <summary>El contexto con el lote definitivo (el número del archivo).</summary>

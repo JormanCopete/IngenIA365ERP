@@ -1,4 +1,4 @@
-using IngenIA365ERP.Application.Common.Interfaces;
+﻿using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Domain.Entities.Security;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -193,6 +193,7 @@ public static class LendingPermissionCatalogSeeder
         ("Lending.TermDeposits",        "Constitute",          "Simular y constituir CDAT"),
         ("Lending.TermDeposits",        "Renew",               "Renovar un CDAT o cambiar su instrucción al vencimiento"),
         ("Lending.TermDeposits",        "Redeem",              "Redimir un CDAT hasta el monto atribuido"),
+        ("Lending.TermDeposits",        "PayThirdParty",       "Pagar los intereses de un CDAT a la cuenta de otra persona, con la instrucción escrita del titular"),
         ("Lending.NegotiatedRates",     "Request",             "Pedir una tasa negociada"),
         ("Lending.NegotiatedRates",     "Approve",             "Decidir una tasa negociada según la matriz de atribuciones"),
         ("Lending.Contributions",       "Manage",              "Registrar devoluciones sin retiro y cesiones de aportes y aprobarlas"),

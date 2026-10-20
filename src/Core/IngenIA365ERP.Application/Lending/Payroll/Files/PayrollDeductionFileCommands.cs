@@ -133,6 +133,7 @@ public sealed class GeneratePayrollDeductionFileCommandHandler(
             var p = prep.Value;
             var periodo = p.Periodo;
             var codigoDeGrupo = p.Grupo?.Code ?? string.Empty;
+            if (p.LineasDeCuentasSinCodigo is { Count: > 0 } sinCodigo) return Falla(ErroresDeLibranza.LineaDeCuentaSinCodigo(p.Convenio.Code, sinCodigo));
             // Mensajes.md §5.4 de la 014: la v1 sólo lleva créditos; un archivo con cuotas de cuentas exige que Recaudo haya adoptado la v2.
             if (p.Cuentas.Count > 0 && !await RecaudoAdoptoLaV2Async(ct)) return Falla(ErroresDeLibranza.RecaudoSinV2(p.Convenio.Code));
 

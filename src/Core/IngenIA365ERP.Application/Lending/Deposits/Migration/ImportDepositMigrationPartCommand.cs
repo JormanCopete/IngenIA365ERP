@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using FluentValidation;
@@ -922,6 +922,18 @@ internal sealed class LecturaDeParteDeCaptaciones(
         if (destino == CdatMigradoDestino.DisbursementOrder && cuentaDestino is not null)
             fila.Error(C.CuentaDestino, ImportErrors.CellFormat,
                 "Con giro (DisbursementOrder) no va cuenta destino: el giro va a la cuenta bancaria registrada del titular.");
+        var bancoDelGiro = fila.Codigo(C.BancoDelGiro, 20);
+        var tipoDelGiro = fila.Entero(C.TipoDeCuentaDelGiro);
+        var numeroDelGiro = fila.Texto(C.NumeroDeCuentaDelGiro, 30);
+        if (destino == CdatMigradoDestino.Account && (bancoDelGiro is not null || tipoDelGiro is not null || numeroDelGiro is not null))
+            fila.Error(C.BancoDelGiro, ImportErrors.CellFormat, "Con abono en cuenta (Account) no van datos bancarios del giro.");
+        if (bancoDelGiro is not null || tipoDelGiro is not null || numeroDelGiro is not null)
+        {
+            if (bancoDelGiro is null) fila.Requerido(C.BancoDelGiro);
+            if (tipoDelGiro is null) fila.Requerido(C.TipoDeCuentaDelGiro);
+            else if (tipoDelGiro is < 0 or > 255) fila.Error(C.TipoDeCuentaDelGiro, ImportErrors.CellFormat, "El tipo de cuenta no es válido.");
+            if (numeroDelGiro is null) fila.Requerido(C.NumeroDeCuentaDelGiro);
+        }
         var instruccion = Enumeracion(fila, C.InstruccionAlVencimiento,
             new Dictionary<string, MaturityInstruction>(StringComparer.OrdinalIgnoreCase) { ["RenewWithConditions"] = MaturityInstruction.RenewWithNewTerms });
         var prorrogas = fila.Entero(C.ProrrogasHechas) ?? 0;
@@ -957,7 +969,8 @@ internal sealed class LecturaDeParteDeCaptaciones(
             TableAnnualRate = tabla, NegotiatedSpread = margen, InterestPeriodicity = periodicidad.Value, InterestTiming = modalidad.Value,
             PaidPeriods = pagados.Value, InterestPayable = causado,
             InterestDestination = destino == CdatMigradoDestino.Account ? InterestDestination.ToAccount : InterestDestination.PaymentOrder,
-            DestinationAccountNumber = cuentaDestino, MaturityInstruction = instruccion.Value, RolloverCount = prorrogas, IssueTermBand = calculado.Value,
+            DestinationAccountNumber = cuentaDestino, DestinationBankTransferCode = bancoDelGiro,
+            DestinationBankAccountType = tipoDelGiro is { } tg ? (byte)tg : null, DestinationBankAccountNumber = numeroDelGiro, MaturityInstruction = instruccion.Value, RolloverCount = prorrogas, IssueTermBand = calculado.Value,
             IsGarnished = embargado, HolderDeceased = titular.Fallecida,
         }));
     }

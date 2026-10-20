@@ -1,4 +1,4 @@
-using IngenIA365ERP.Application.Common.Alerts;
+﻿using IngenIA365ERP.Application.Common.Alerts;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Persistence;
 using IngenIA365ERP.Application.Lending.Common;
@@ -149,7 +149,8 @@ public sealed class CicloDelContractual(
             if (aplicado.IsFailure) throw Excepcion(aplicado.Error);
             if (efecto == ContractualBreachEffect.BreachRate) return new CicloDeUnContractual(cuenta.Id, Incumplido, aplicado.Value.Penalidad);
             var leidoDespues = await lector.LeerAsync(cuenta, ct);
-            var fin = await TerminarAsync(cuenta, leidoDespues.Vigente!, d, aLaVista: efecto == ContractualBreachEffect.MoveToDemand, aplicado.Value.Operacion.Id, ct);
+            var fin = await TerminarAsync(cuenta, leidoDespues.Vigente!, d, aLaVista: efecto is ContractualBreachEffect.MoveToDemand or ContractualBreachEffect.Cancel, aplicado.Value.Operacion.Id, ct);
+            // Respuesta 81 B del dueño (E250): cancelar sin instrucción de destino entrega en la cuenta a la vista del asociado, como pasar a la vista.
             return new CicloDeUnContractual(cuenta.Id, $"{Incumplido}:{fin}", aplicado.Value.Penalidad);
         }
 

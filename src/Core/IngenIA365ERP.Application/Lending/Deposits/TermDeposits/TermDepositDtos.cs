@@ -1,4 +1,4 @@
-using IngenIA365ERP.Application.Lending.Deposits.Accounts;
+﻿using IngenIA365ERP.Application.Lending.Deposits.Accounts;
 using IngenIA365ERP.Application.Lending.Deposits.Lines;
 using IngenIA365ERP.Domain.Enums.Lending;
 
@@ -13,7 +13,8 @@ public sealed record TermDepositDestinationInput(
     Guid? PayeePersonPublicId = null,
     Guid? BankPublicId = null,
     byte? AccountType = null,
-    string? AccountNumber = null);
+    string? AccountNumber = null,
+    Guid? ThirdPartyAuthorizationAttachmentPublicId = null);
 
 /// <summary>El fondeo: por recaudador (el contrato de cuentas consigna el monto exacto) o desde otra cuenta de ahorro (con sus firmantes). (nuevo)</summary>
 public sealed record TermDepositFundingInput(

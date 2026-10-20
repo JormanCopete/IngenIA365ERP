@@ -1,4 +1,4 @@
-using IngenIA365ERP.Application.Common.Audit;
+﻿using IngenIA365ERP.Application.Common.Audit;
 using IngenIA365ERP.Application.Common.Imports;
 using IngenIA365ERP.Domain.Enums.Lending;
 using IngenIA365ERP.Domain.Lending;
@@ -162,6 +162,9 @@ public static class DefinicionesDeMigracionDeCaptaciones
         public const string InteresCausadoNoPagado = "interesCausadoNoPagado";
         public const string DestinoDeIntereses = "destinoDeIntereses";
         public const string CuentaDestino = "cuentaDestino";
+        public const string BancoDelGiro = "bancoDelGiro";
+        public const string TipoDeCuentaDelGiro = "tipoDeCuentaDelGiro";
+        public const string NumeroDeCuentaDelGiro = "numeroDeCuentaDelGiro";
         public const string InstruccionAlVencimiento = "instruccionAlVencimiento";
         public const string ProrrogasHechas = "prorrogasHechas";
         public const string PlazoDeEmision = "plazoDeEmision";
@@ -305,6 +308,10 @@ public static class DefinicionesDeMigracionDeCaptaciones
         new(Columnas.DestinoDeIntereses, TipoDeValor.Enumeracion, Obligatoria: true, Largo: 30,
             Reglas: "Account (abono en una cuenta a la vista del titular) o DisbursementOrder (giro a la cuenta bancaria registrada del titular)", Ejemplo: "Account"),
         Cuenta(Columnas.CuentaDestino, false, "con Account: una cuenta a la vista del titular, de la carga o viva en la Cartera"),
+        new(Columnas.BancoDelGiro, TipoDeValor.Codigo, Largo: 20,
+            Reglas: "con DisbursementOrder: el código de transferencia (ACH) del banco al que se gira; vacío = la cuenta bancaria registrada del titular", Ejemplo: ""),
+        new(Columnas.TipoDeCuentaDelGiro, TipoDeValor.Entero, Reglas: "con banco del giro: el tipo de cuenta del catálogo (1 ahorros, 2 corriente)", Ejemplo: ""),
+        new(Columnas.NumeroDeCuentaDelGiro, TipoDeValor.Texto, Largo: 30, Reglas: "con banco del giro: el número de la cuenta bancaria", Ejemplo: ""),
         new(Columnas.InstruccionAlVencimiento, TipoDeValor.Enumeracion, Obligatoria: true, Largo: 30,
             Reglas: "Rollover (prorrogar), RenewWithNewTerms (renovar con condiciones) o CancelAndPay (cancelar y pagar)", Ejemplo: "Rollover"),
         new(Columnas.ProrrogasHechas, TipoDeValor.Entero, Reglas: "las prórrogas ya hechas; vacío = 0", Ejemplo: ""),

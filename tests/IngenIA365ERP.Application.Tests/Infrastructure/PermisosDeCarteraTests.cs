@@ -1,4 +1,4 @@
-using FluentAssertions;
+﻿using FluentAssertions;
 using IngenIA365ERP.Application.Common.Approvals;
 using IngenIA365ERP.Identity.Seed;
 
@@ -53,7 +53,7 @@ public class PermisosDeCarteraTests
         // Feature 014 (T018; contracts/api.md §2): los 39 de captaciones y aportes.
         "DepositLines.View", "DepositLines.Manage", "ContributionLines.View", "ContributionLines.Manage", "Accounts.View", "Accounts.Read",
         "Accounts.Open", "Accounts.Close", "Accounts.Deposit", "Accounts.Withdraw", "Accounts.Transfer", "Accounts.Reverse",
-        "Accounts.Parties.Manage", "TermDeposits.Constitute", "TermDeposits.Renew", "TermDeposits.Redeem", "NegotiatedRates.Request",
+        "Accounts.Parties.Manage", "TermDeposits.Constitute", "TermDeposits.Renew", "TermDeposits.Redeem", "TermDeposits.PayThirdParty", "NegotiatedRates.Request",
         "NegotiatedRates.Approve", "Contributions.Manage", "Holds.Manage", "Garnishments.Register", "Garnishments.Release",
         "DirectDebits.Manage", "GmfExemptions.Manage", "Charges.Manage", "Charges.Waive", "Interest.Settle", "MembershipWithdrawals.File",
         "MembershipWithdrawals.Approve", "MembershipWithdrawals.Settle", "Assembly.Register", "Assembly.Approve", "DeceasedCases.Register",
@@ -67,7 +67,7 @@ public class PermisosDeCarteraTests
     [Fact]
     public void El_catalogo_de_Cartera_es_exactamente_el_de_DT_2_14_mas_la_preferencia_de_abono()
     {
-        Cartera.Should().HaveCount(163).And.OnlyHaveUniqueItems();
+        Cartera.Should().HaveCount(164).And.OnlyHaveUniqueItems();
         LendingPermissionCatalogSeeder.Catalog.Select(p => $"{p.Resource}.{p.Action}")
             .Should().BeEquivalentTo(Cartera.Select(c => "Lending." + c));
         LendingPermissionCatalogSeeder.Catalog.Should().OnlyContain(p => !string.IsNullOrWhiteSpace(p.Description));
@@ -104,7 +104,7 @@ public class PermisosDeCarteraTests
         concedidos.Should().NotContain(c => c.StartsWith("Lending.Decisions.", StringComparison.Ordinal), "administrar no es aprobar crédito (T61)");
         concedidos.Should().NotContain("Lending.Sessions.Vote");
         concedidos.Should().NotContain("Lending.NegotiatedRates.Approve", "administrar no es aprobar tasa (decisión del dueño del 2026-10-18, feature 014 D17)");
-        concedidos.Should().HaveCount(163 - 4 - 1 - 1);
+        concedidos.Should().HaveCount(164 - 4 - 1 - 1);
         concedidos.Should().Contain(["Lending.Sessions.Close", "Lending.Disbursements.Execute", "Lending.Activation.Execute"]);
     }
 

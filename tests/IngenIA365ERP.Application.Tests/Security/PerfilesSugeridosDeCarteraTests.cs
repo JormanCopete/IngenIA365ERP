@@ -38,6 +38,15 @@ public class PerfilesSugeridosDeCarteraTests
     }
 
     [Fact]
+    public void El_jefe_de_captaciones_no_activa_ni_acepta_diferencias_de_la_migracion()
+    {
+        // Respuesta 105 A del dueño (E250): esos dos permisos se asignan a quien dirige la puesta en marcha, no a la plantilla.
+        var codigos = Codigos("cartera.jefe-captaciones");
+        codigos.Should().NotContain("Lending.Deposits.Activate");
+        codigos.Should().NotContain("Lending.Migration.AcceptDifferences");
+    }
+
+    [Fact]
     public void Ninguna_plantilla_de_Cartera_nombra_codigos_inexistentes()
     {
         foreach (var plantilla in PerfilesSugeridos.DelModulo("Lending"))

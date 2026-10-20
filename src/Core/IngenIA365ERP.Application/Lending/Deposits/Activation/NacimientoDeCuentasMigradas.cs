@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Text.Json;
 using IngenIA365ERP.Application.Common.Integration.Lending;
 using IngenIA365ERP.Application.Common.Interfaces;
@@ -114,6 +114,10 @@ public sealed class NacimientoDeCuentasMigradas(
         var bancarias = porGiro.Count == 0 ? [] : (await db.Associates.AsNoTracking().Where(a => porGiro.Contains(a.PersonId) && !a.IsDeleted)
                 .Select(a => new { a.Id, a.PersonId, a.DepositBankId, a.DepositBankAccountNumber, a.DepositBankAccountType }).ToListAsync(ct))
             .GroupBy(a => a.PersonId).ToDictionary(g => g.Key, g => g.MaxBy(a => a.Id)!);
+        var codigosDeBanco = filas.Cdat.Select(c => c.Fila.DestinationBankTransferCode).OfType<string>().Distinct().ToList();
+        var bancosDelGiro = codigosDeBanco.Count == 0 ? new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+            : (await db.Banks.AsNoTracking().Where(b => b.TransferCode != null && codigosDeBanco.Contains(b.TransferCode) && !b.IsDeleted)
+                .Select(b => new { b.TransferCode, b.Id }).ToListAsync(ct)).ToDictionary(b => b.TransferCode!, b => b.Id, StringComparer.OrdinalIgnoreCase);
         var nacidasPorNumero = new Dictionary<string, (int Id, Guid PublicId)>(StringComparer.Ordinal);
         // US11 (T189; research E166): los embargos de la carga nacen antes que las cuentas (un embargo por persona y oficio); los bloqueos van con su cuenta.
         var bloqueosPor = filas.Bloqueos.GroupBy(b => b.Fila.SourceAccountNumber, StringComparer.Ordinal)
@@ -208,7 +212,10 @@ public sealed class NacimientoDeCuentasMigradas(
                 else
                 {
                     destinoPersona = c.TitularId;
-                    if (bancarias.TryGetValue(c.TitularId, out var b) && b.DepositBankId is { } banco && !string.IsNullOrWhiteSpace(b.DepositBankAccountNumber)
+                    if (f.DestinationBankTransferCode is { } codigoDelBanco && f.DestinationBankAccountNumber is { } cuentaDelGiro && f.DestinationBankAccountType is { } tipoDelGiro
+                        && bancosDelGiro.TryGetValue(codigoDelBanco, out var bancoDelGiro))
+                        (destinoBanco, tipo, numeroBancario) = (bancoDelGiro, tipoDelGiro, cuentaDelGiro);
+                    else if (bancarias.TryGetValue(c.TitularId, out var b) && b.DepositBankId is { } banco && !string.IsNullOrWhiteSpace(b.DepositBankAccountNumber)
                         && byte.TryParse(b.DepositBankAccountType, NumberStyles.Integer, CultureInfo.InvariantCulture, out var t))
                         (destinoBanco, tipo, numeroBancario) = (banco, t, b.DepositBankAccountNumber);
                 }

@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using FluentValidation;
 using IngenIA365ERP.Application.Common.Behaviors;
 using IngenIA365ERP.Application.Common.Integration.Contracts.Lending.Deposits;
@@ -92,7 +92,7 @@ public sealed class SetTermDepositMaturityInstructionCommandValidator : Abstract
 }
 
 public sealed class SetTermDepositMaturityInstructionCommandHandler(IApplicationDbContext db, IContextoDeLineasDeCaptacion contexto, LectorDeCdat lector,
-    IAlcanceDeCartera alcance, LendingAuditEmitter auditoria, IActorActual actorActual, IDateTimeService reloj)
+    IAlcanceDeCartera alcance, LendingAuditEmitter auditoria, IActorActual actorActual, IDateTimeService reloj, ICurrentUserPermissions? permisos = null)
     : IRequestHandler<SetTermDepositMaturityInstructionCommand, Result<TermDepositDto>>
 {
     public async Task<Result<TermDepositDto>> Handle(SetTermDepositMaturityInstructionCommand request, CancellationToken ct)
@@ -112,7 +112,7 @@ public sealed class SetTermDepositMaturityInstructionCommandHandler(IApplication
         DestinoDeCdat? destino = null;
         if (request.PaymentDestination is { } d)
         {
-            var resuelto = await DestinosDeCdat.ValidarAsync(db, alcance, auditoria, d, cdat.HolderPersonId, ct);
+            var resuelto = await DestinosDeCdat.ValidarAsync(db, alcance, auditoria, d, cdat.HolderPersonId, ct, permisos);
             if (resuelto.IsFailure) return Falla(resuelto.Error);
             destino = resuelto.Value;
         }
@@ -129,18 +129,39 @@ public sealed class SetTermDepositMaturityInstructionCommandHandler(IApplication
 /// <summary>La validación de un destino pedido para un CDAT (como en la constitución, research E133): cuenta a la vista viva del titular en el alcance, o giro. (nuevo)</summary>
 public static class DestinosDeCdat
 {
+    /// <summary>Permiso propio de pagar los intereses a la cuenta de otra persona (respuesta 74 del dueño, E250).</summary>
+    public const string PermisoDePagoATercero = "Lending.TermDeposits.PayThirdParty";
+
+    /// <summary>
+    /// La cuenta destino es del titular: sin más. De otra persona: con el permiso propio y la instrucción escrita del titular subida como adjunto (la
+    /// constancia queda sellada con el destino). Devuelve el adjunto citado o nulo.
+    /// </summary>
+    public static async Task<Result<Guid?>> ValidarTerceroAsync(IApplicationDbContext db, ICurrentUserPermissions? permisos, int titularDeLaCuenta, int titularDelCdat,
+        Guid? constancia, CancellationToken ct)
+    {
+        if (titularDeLaCuenta == titularDelCdat) return Result.Success<Guid?>(null);
+        var tiene = permisos is not null && (permisos.EsMaestroGlobal || (await permisos.ListAsync(ct)).Contains(PermisoDePagoATercero, StringComparer.OrdinalIgnoreCase));
+        if (!tiene) return Result.Failure<Guid?>(ErroresDeCdat.TerceroSinPermiso());
+        if (constancia is not { } adjunto || !await db.Attachments.AsNoTracking().AnyAsync(a => a.PublicId == adjunto, ct))
+            return Result.Failure<Guid?>(ErroresDeCdat.TerceroSinInstruccion());
+        return Result.Success<Guid?>(adjunto);
+    }
+
     public static async Task<Result<DestinoDeCdat>> ValidarAsync(IApplicationDbContext db, IAlcanceDeCartera alcance, LendingAuditEmitter auditoria,
-        TermDepositDestinationInput d, int titularId, CancellationToken ct)
+        TermDepositDestinationInput d, int titularId, CancellationToken ct, ICurrentUserPermissions? permisos = null, bool soloTitular = false)
     {
         if (d.Kind == TermDepositDestinationKind.Account)
         {
             if (d.AccountPublicId is not { } id) return Result.Failure<DestinoDeCdat>(ErroresDeCdat.DestinoInvalido("Elija la cuenta de ahorro destino."));
             var cuenta = await LectorDeCuentas.CuentaEnAlcanceAsync(db, alcance, auditoria, id, seguir: false, ct);
             if (cuenta.IsFailure) return Result.Failure<DestinoDeCdat>(cuenta.Error);
-            if (cuenta.Value.Nature != LineNature.Deposit || cuenta.Value.DepositClass != DepositClass.Demand || !cuenta.Value.Viva
-                || cuenta.Value.HolderPersonId != titularId)
-                return Result.Failure<DestinoDeCdat>(ErroresDeCdat.DestinoInvalido("El CDAT se abona en una cuenta de ahorro a la vista viva del titular."));
-            return Result.Success(new DestinoDeCdat(TermDepositDestinationKind.Account, id, null, null, null, null));
+            if (cuenta.Value.Nature != LineNature.Deposit || cuenta.Value.DepositClass != DepositClass.Demand || !cuenta.Value.Viva)
+                return Result.Failure<DestinoDeCdat>(ErroresDeCdat.DestinoInvalido("El CDAT se abona en una cuenta de ahorro a la vista viva."));
+            if (soloTitular && cuenta.Value.HolderPersonId != titularId)
+                return Result.Failure<DestinoDeCdat>(ErroresDeCdat.DestinoInvalido("El capital del CDAT se abona en una cuenta de ahorro a la vista viva del titular."));
+            var constancia = await ValidarTerceroAsync(db, permisos, cuenta.Value.HolderPersonId, titularId, d.ThirdPartyAuthorizationAttachmentPublicId, ct);
+            if (constancia.IsFailure) return Result.Failure<DestinoDeCdat>(constancia.Error);
+            return Result.Success(new DestinoDeCdat(TermDepositDestinationKind.Account, id, null, null, null, null, constancia.Value));
         }
         if (d.PayeePersonPublicId is not { } persona || !await db.People.AsNoTracking().AnyAsync(p => p.PublicId == persona && !p.IsDeleted, ct))
             return Result.Failure<DestinoDeCdat>(ErroresDeCdat.DestinoInvalido("El beneficiario del giro no existe."));
@@ -239,7 +260,7 @@ public sealed class RedeemTermDepositCommandHandler(IApplicationDbContext db, IC
         var encontrada = await RespuestasDeCdat.CdatEnAlcanceAsync(db, alcance, auditoria, request.AccountPublicId, seguir: true, ct);
         if (encontrada.IsFailure) return Falla(encontrada.Error);
         var cdat = encontrada.Value;
-        var destino = await DestinosDeCdat.ValidarAsync(db, alcance, auditoria, request.Destination.ComoDestino(), cdat.HolderPersonId, ct);
+        var destino = await DestinosDeCdat.ValidarAsync(db, alcance, auditoria, request.Destination.ComoDestino(), cdat.HolderPersonId, ct, soloTitular: true);
         if (destino.IsFailure) return Falla(destino.Error);
         var hoy = reloj.HoyLocal;
         return await TransaccionExplicita.EjecutarAsync(db, async () =>
@@ -387,7 +408,8 @@ public sealed class RenewTermDepositCommandHandler(
     LendingAuditEmitter auditoria,
     IActorActual actorActual,
     IDateTimeService reloj,
-    Documents.TitulosDeCdat? titulos = null) : IRequestHandler<RenewTermDepositCommand, Result<TermDepositDto>>
+    Documents.TitulosDeCdat? titulos = null,
+    ICurrentUserPermissions? permisos = null) : IRequestHandler<RenewTermDepositCommand, Result<TermDepositDto>>
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
@@ -443,7 +465,7 @@ public sealed class RenewTermDepositCommandHandler(
         DestinoDeCdat? nuevoDestino = null;
         if (e.PaymentDestination is { } pd)
         {
-            var validado = await DestinosDeCdat.ValidarAsync(db, alcance, auditoria, pd, cdat.HolderPersonId, ct);
+            var validado = await DestinosDeCdat.ValidarAsync(db, alcance, auditoria, pd, cdat.HolderPersonId, ct, permisos);
             if (validado.IsFailure) return Falla(validado.Error);
             nuevoDestino = validado.Value;
         }
@@ -459,7 +481,7 @@ public sealed class RenewTermDepositCommandHandler(
         }
         else if (cambio is { Kind: TermDepositAmountChangeInput.Disminucion, Destination: { } dd })
         {
-            var validado = await DestinosDeCdat.ValidarAsync(db, alcance, auditoria, dd, cdat.HolderPersonId, ct);
+            var validado = await DestinosDeCdat.ValidarAsync(db, alcance, auditoria, dd, cdat.HolderPersonId, ct, soloTitular: true);
             if (validado.IsFailure) return Falla(validado.Error);
             destinoDeLaDisminucion = validado.Value;
         }

@@ -1,4 +1,4 @@
-using System.Reflection;
+﻿using System.Reflection;
 using FluentValidation;
 using IngenIA365ERP.Application.Common.Behaviors;
 using IngenIA365ERP.Application.Common.Interfaces.Security;
@@ -259,6 +259,7 @@ public static class DependencyInjection
         // lecturas sensibles de Cartera y el último rechazo de forma de la petición (para Lending.Request.Rejected).
         services.AddScoped<Common.Security.OficinasDelUsuario>();
         services.AddScoped<Lending.Common.AlcanceDeCarteraDelActor>();
+        services.AddScoped<Lending.Common.AlcanceDeCarteraDeUnUsuario>();
         services.TryAddScoped<Common.Interfaces.Security.IAlcanceDeCartera, Common.Interfaces.Security.AlcanceDeCarteraCerrado>();
         services.AddScoped<Lending.Segregation.RegistroDeIntervenciones>();
         services.AddScoped<Lending.Common.LendingAuditEmitter>();

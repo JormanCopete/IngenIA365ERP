@@ -287,7 +287,7 @@ public static class PerfilesSugeridos
             "Administra las líneas de captación y de aportes, abre y cancela cuentas, decide tasas negociadas, redime CDAT, lleva embargos, cargos, "
             + "retiros del asociado, fallecimientos y no reclamados, y carga la migración de captaciones.",
             [
-                "Lending.DepositLines.*", "Lending.ContributionLines.*", "Lending.Accounts.*", "Lending.TermDeposits.*", "Lending.NegotiatedRates.*",
+                "Lending.DepositLines.*", "Lending.ContributionLines.*", "Lending.Accounts.*", "Lending.TermDeposits.Constitute", "Lending.TermDeposits.Renew", "Lending.TermDeposits.Redeem", "Lending.NegotiatedRates.*",
                 "Lending.Contributions.Manage", "Lending.Holds.Manage", "Lending.Garnishments.*", "Lending.DirectDebits.Manage",
                 "Lending.GmfExemptions.Manage", "Lending.Charges.*", "Lending.Interest.Settle", "Lending.MembershipWithdrawals.*",
                 "Lending.DeceasedCases.*", "Lending.Unclaimed.Manage", "Lending.Deposits.Migration", "Lending.Documents.Read", "Lending.Documents.Issue",

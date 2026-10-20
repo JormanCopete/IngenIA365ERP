@@ -1,4 +1,4 @@
-using FluentAssertions;
+﻿using FluentAssertions;
 using IngenIA365ERP.Application.Common.Interfaces.Security;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Common.NationalValues;
@@ -90,6 +90,16 @@ public sealed class LineasDeCaptacionTests : IDisposable
     private static CreateDepositLineCommand AltaDeCaptacion(string codigo, bool activa = true, DepositLineVersionInput? version = null,
         DepositClass clase = DepositClass.Demand) =>
         new(codigo, $"Ahorro {codigo}", clase, activa, version ?? ALaVista()) { OperationKey = Guid.NewGuid() };
+
+    /// <summary>Deja las captaciones y los aportes activados (la fila única de la Cartera): desde ahí una versión no puede empezar antes de hoy.</summary>
+    private async Task ActivarCaptacionesAsync()
+    {
+        _g.Db.LendingSetups.Add(new LendingSetup
+        {
+            Id = LendingSetup.IdDeLaFilaUnica, ActivationDate = Hoy.AddMonths(-6), DepositsActivationDate = Hoy.AddMonths(-1), ContributionsActivationDate = Hoy.AddMonths(-1),
+        });
+        await _g.Db.SaveChangesAsync();
+    }
 
     private async Task<LendingLineDto> CaptacionAsync(string codigo = "AHVISTA", bool activa = true)
     {
@@ -211,6 +221,7 @@ public sealed class LineasDeCaptacionTests : IDisposable
         var incompleto = await CrearCaptacion().Handle(AltaDeCaptacion("A2", version: cdatIncompleto, clase: DepositClass.TermDeposit), default);
         incompleto.Error.Code.Should().Be("Lending.TermDeposit.LineIncomplete");
         GobiernoDePrueba.Datos(incompleto.Error).GetProperty("field").GetString().Should().Be("interestTimings");
+        await ActivarCaptacionesAsync();
         (await CrearCaptacion().Handle(AltaDeCaptacion("A3", version: ALaVista(Hoy.AddDays(-1))), default)).Error.Code
             .Should().Be("Lending.DepositLine.Retroactive");
         (await _g.Db.CreditLines.CountAsync()).Should().Be(0);
@@ -289,12 +300,28 @@ public sealed class LineasDeCaptacionTests : IDisposable
         var cruzada = await VersionarCaptacion().Handle(new AddDepositLineVersionCommand(linea.PublicId, ALaVista(Hoy.AddDays(10))), default);
         var otraClase = await VersionarCaptacion().Handle(new AddDepositLineVersionCommand(linea.PublicId,
             ALaVista(Hoy.AddDays(40)) with { DepositClass = DepositClass.Permanent }), default);
+        await ActivarCaptacionesAsync();
         var retroactiva = await VersionarCaptacion().Handle(new AddDepositLineVersionCommand(linea.PublicId, ALaVista(Hoy.AddDays(-1))), default);
 
         cruzada.Error.Code.Should().Be("Lending.DepositLine.VersionOverlaps");
         otraClase.Error.Code.Should().Be("Lending.DepositLine.ClassImmutable");
+        // Con las captaciones activadas la versión de hace un día es retroactiva; se evalúa primero lo retroactivo (regla de la versión), después el cruce.
         retroactiva.Error.Code.Should().Be("Lending.DepositLine.Retroactive");
         (await _g.Db.DepositLineVersions.CountAsync()).Should().Be(2);
+    }
+
+    [Fact]
+    public async Task Antes_de_activar_una_linea_admite_versiones_con_vigencia_pasada_y_despues_no()
+    {
+        // Respuesta 106 A del dueño (E250): la historia de tarifas de la puesta en marcha se carga con su fecha; activadas las captaciones, no.
+        var antes = await CrearCaptacion().Handle(AltaDeCaptacion("PAS1", version: ALaVista(Hoy.AddMonths(-8))), default);
+        antes.IsSuccess.Should().BeTrue(antes.IsFailure ? antes.Error.Message : string.Empty);
+        var aportes = await CrearAportes().Handle(new CreateContributionLineCommand("PAP1", "Aportes", false, TresPorCiento(Hoy.AddMonths(-8))) { OperationKey = Guid.NewGuid() }, default);
+        aportes.IsSuccess.Should().BeTrue(aportes.IsFailure ? aportes.Error.Message : string.Empty);
+
+        await ActivarCaptacionesAsync();
+        var despues = await CrearCaptacion().Handle(AltaDeCaptacion("PAS2", version: ALaVista(Hoy.AddMonths(-8))), default);
+        despues.Error.Code.Should().Be("Lending.DepositLine.Retroactive");
     }
 
     [Fact]

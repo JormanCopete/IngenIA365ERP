@@ -1,4 +1,4 @@
-using IngenIA365ERP.Domain.Common.NationalValues;
+﻿using IngenIA365ERP.Domain.Common.NationalValues;
 using IngenIA365ERP.Domain.Common.Parametros;
 using IngenIA365ERP.Domain.Enums.Parameters;
 using IngenIA365ERP.Domain.Lending.Documents;
@@ -151,6 +151,9 @@ public static class ParametrosDeCartera
 
     /// <summary>Feature 014, US13 (T196; research E175): la periodicidad de los extractos de cuenta del lote (Mensual, Trimestral, Semestral, Anual).</summary>
     public const string DocumentosPeriodicidadDeExtractos = "Documentos.PeriodicidadDeExtractos";
+
+    /// <summary>Los lotes de documentos al titular que la tarea programada emite sola (respuesta 86 del dueño, E250); JSON, vacío = ninguno.</summary>
+    public const string DocumentosLotesProgramados = "Documentos.LotesProgramados";
 
     /// <summary>
     /// K5 (US16, T1003; adaptadores-y-archivos.md §7.4): el código de suscriptor (fuente) de la cooperativa en cada central de riesgo, como
@@ -684,6 +687,14 @@ public static class ParametrosDeCartera
             "Mensual", K8, patron: "^(Mensual|Trimestral|Semestral|Anual)$") with
         {
             PendienteDeValidar = "Defecto mensual: cada cooperativa la fija según su reglamento de ahorro.",
+        },
+        Texto(DocumentosLotesProgramados,
+            "Los lotes de documentos al titular que se emiten solos cada año o cada mes, en JSON: [{ \"clase\": \"AccountStatement\", \"dia\": 5 }, "
+            + "{ \"clase\": \"DepositTaxCertificate\", \"mes\": 3, \"dia\": 1 }]. Sin «mes» corre el «dia» de cada mes; la clase es AccountStatement, "
+            + "DepositTaxCertificate o WithholdingCertificate. Vacío o [] = no se programa nada (el lote se sigue lanzando a mano). Un documento ya emitido no se repite.",
+            "[]", K8, patron: @"(?s)^\s*\[.*\]\s*$") with
+        {
+            PendienteDeValidar = "Sin lotes programados por defecto: cada cooperativa elige los días según su reglamento (respuesta 86 del dueño).",
         },
         Texto(CentralesCodigosDeSuscriptor,
             "Código de suscriptor de la cooperativa en cada central de riesgo, como CENTRAL=código separados por punto y coma "

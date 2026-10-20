@@ -71,41 +71,42 @@ public static class LineasDeGrupoDeDescuento
     /// pagaduría, lo pendiente de la cuota del período y —si el convenio lo lleva— lo pendiente de las anteriores; la novedad frente a la línea de la misma
     /// cuenta en el archivo base del grupo. Numeradas desde <paramref name="primerNumero"/>, por titular, vencimiento y cuenta.
     /// </summary>
-    public static async Task<(IReadOnlyList<LineaDeCuentaEnDescuento> Lineas, int SinEquivalencia)> CuentasAsync(IApplicationDbContext db, Person pagaduria,
+    public static async Task<(IReadOnlyList<LineaDeCuentaEnDescuento> Lineas, int SinEquivalencia, IReadOnlyList<string> LineasSinCodigo)> CuentasAsync(IApplicationDbContext db, Person pagaduria,
         PayrollAgreement convenio, IReadOnlyList<EquivalenciaConGrupo> equivalencias, PayrollAgreementFileGroup grupo, PeriodoDeLibranza periodo,
         bool llevaVencido, PayrollDeductionFile? baseFile, int primerNumero, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(pagaduria);
         ArgumentNullException.ThrowIfNull(convenio);
         ArgumentNullException.ThrowIfNull(grupo);
-        if (string.IsNullOrWhiteSpace(pagaduria.TaxId)) return ([], 0);
+        if (string.IsNullOrWhiteSpace(pagaduria.TaxId)) return ([], 0, []);
         var nit = pagaduria.TaxId.Trim();
         var empresas = await db.EmployerCompanies.AsNoTracking().Where(e => !e.IsDeleted && e.TaxId != null && e.TaxId.Trim() == nit).Select(e => e.Id)
             .ToListAsync(ct);
-        if (empresas.Count == 0) return ([], 0);
+        if (empresas.Count == 0) return ([], 0, []);
         var personas = await db.Associates.AsNoTracking().Where(a => !a.IsDeleted && a.EmployerCompanyId != null && empresas.Contains(a.EmployerCompanyId.Value))
             .Select(a => a.PersonId).Distinct().ToListAsync(ct);
-        if (personas.Count == 0) return ([], 0);
+        if (personas.Count == 0) return ([], 0, []);
 
         var cuentas = await db.MemberAccounts.AsNoTracking()
             .Where(a => personas.Contains(a.HolderPersonId) && !a.IsDeleted
                         && (a.Status == MemberAccountStatus.Active || a.Status == MemberAccountStatus.Inactive)
                         && (a.Nature == LineNature.Contribution || a.DepositClass == DepositClass.Permanent || a.DepositClass == DepositClass.Contractual))
             .ToListAsync(ct);
-        if (cuentas.Count == 0) return ([], 0);
+        if (cuentas.Count == 0) return ([], 0, []);
         var lineasIds = cuentas.Select(c => c.CreditLineId).Distinct().ToList();
         var codigosDeLinea = await db.CreditLines.AsNoTracking().IgnoreQueryFilters().Where(l => lineasIds.Contains(l.Id))
             .ToDictionaryAsync(l => l.Id, l => l.Code, ct);
 
         var sinEquivalencia = 0;
+        var sinCodigo = new SortedSet<string>(StringComparer.Ordinal);
         var delGrupo = new List<(MemberAccount Cuenta, CodigoDeLinea Codigo)>();
         foreach (var c in cuentas)
         {
             var codigo = Resolver(equivalencias, c.Nature, codigosDeLinea.GetValueOrDefault(c.CreditLineId));
-            if (codigo is null) sinEquivalencia++;
+            if (codigo is null) { sinEquivalencia++; sinCodigo.Add(codigosDeLinea.GetValueOrDefault(c.CreditLineId) ?? "?"); }
             else if (codigo.GrupoId == grupo.Id) delGrupo.Add((c, codigo));
         }
-        if (delGrupo.Count == 0) return ([], sinEquivalencia);
+        if (delGrupo.Count == 0) return ([], sinEquivalencia, [.. sinCodigo]);
 
         var cuotas = (await LectorDeCuotas.DeCuentasAsync(db, delGrupo.Select(x => x.Cuenta.Id).ToList(), ct))
             .Where(q => q.Pendiente > 0m && q.Cuota.DueDate <= periodo.Hasta).GroupBy(q => q.Cuota.MemberAccountId).ToDictionary(g => g.Key, g => g.ToList());
@@ -160,7 +161,7 @@ public static class LineasDeGrupoDeDescuento
                     anterior, valores);
             })
             .ToList();
-        return (lineas, sinEquivalencia);
+        return (lineas, sinEquivalencia, [.. sinCodigo]);
     }
 
     /// <summary>La identificación del titular ante la pagaduría: la de su vínculo de libranza vigente con el convenio, si tiene un crédito vinculado.</summary>

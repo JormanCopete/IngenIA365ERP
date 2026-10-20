@@ -1,4 +1,4 @@
-using FluentValidation;
+﻿using FluentValidation;
 using IngenIA365ERP.Application.Common.Audit;
 using IngenIA365ERP.Application.Common.Imports;
 using IngenIA365ERP.Application.Common.Interfaces.Security;
@@ -353,6 +353,15 @@ public static class CatalogoDePlantillasDeCartera
             "Las cuentas de aportes y de ahorro vigentes al corte, con sus titulares, beneficiarios, cuotas atrasadas, exención del GMF y acumulado tributario, para revisar, cuadrar y activar.",
             ["Datos"], "/api/lending/deposits/migration/loads", Deposits.Migration.Plantillas.DefinicionesDeMigracionDeCaptaciones.Permiso,
             Deposits.Migration.Plantillas.DefinicionesDeMigracionDeCaptaciones.Permiso, EntregaDeCartera.K7, PersonalData: true),
+        // Feature 014 (respuesta 67 B del dueño, E251): las plantillas de líneas de captación y de aportes, como la de líneas de crédito.
+        new(Deposits.Lines.PlantillasDeLineasDeCaptacion.CaptacionClave, "Líneas de captación",
+            "Líneas de ahorro a la vista, contractual, permanente y CDAT con sus tramos de tasa.",
+            ["Lineas", "Tramos"], "/api/lending/lines/deposit", "Lending.DepositLines.View", "Lending.DepositLines.Manage", EntregaDeCartera.K7,
+            PersonalData: false, Deposits.Lines.PlantillasDeLineasDeCaptacion.Captacion),
+        new(Deposits.Lines.PlantillasDeLineasDeCaptacion.AportesClave, "Línea de aportes",
+            "La línea de aportes con su cuota, su mínimo no reducible y su reparto al ahorro permanente.",
+            ["Lineas"], "/api/lending/lines/contribution", "Lending.ContributionLines.View", "Lending.ContributionLines.Manage", EntregaDeCartera.K7,
+            PersonalData: false, Deposits.Lines.PlantillasDeLineasDeCaptacion.Aportes),
         new("lending.payroll-agreements", "Convenios de pagaduría", "Pagadurías, convenios, contactos y códigos de respuesta.",
             ["Convenios", "Contactos", "CodigosDeRespuesta"], "/api/lending/payroll-agreements", "Lending.PayrollAgreements.View",
             "Lending.PayrollAgreements.Manage", EntregaDeCartera.K2, PersonalData: false, PayrollAgreementsTemplate.Definicion),

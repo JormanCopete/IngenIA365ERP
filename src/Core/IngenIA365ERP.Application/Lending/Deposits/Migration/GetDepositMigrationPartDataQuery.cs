@@ -1,4 +1,4 @@
-using FluentValidation;
+﻿using FluentValidation;
 using IngenIA365ERP.Application.Common.Imports;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Security;
@@ -188,7 +188,8 @@ public sealed class GetDepositMigrationPartDataQueryHandler(IApplicationDbContex
                         [C.PeriodicidadDeIntereses] = f.InterestPeriodicity.ToString(), [C.Modalidad] = f.InterestTiming.ToString(), [C.PeriodosPagados] = f.PaidPeriods,
                         [C.InteresCausadoNoPagado] = f.InterestPayable,
                         [C.DestinoDeIntereses] = f.InterestDestination == InterestDestination.ToAccount ? "Account" : "DisbursementOrder",
-                        [C.CuentaDestino] = f.DestinationAccountNumber, [C.InstruccionAlVencimiento] = f.MaturityInstruction.ToString(),
+                        [C.CuentaDestino] = f.DestinationAccountNumber, [C.BancoDelGiro] = f.DestinationBankTransferCode,
+                        [C.TipoDeCuentaDelGiro] = f.DestinationBankAccountType, [C.NumeroDeCuentaDelGiro] = f.DestinationBankAccountNumber, [C.InstruccionAlVencimiento] = f.MaturityInstruction.ToString(),
                         [C.ProrrogasHechas] = f.RolloverCount == 0 ? null : f.RolloverCount, [C.PlazoDeEmision] = f.IssueTermBand.ToString(),
                         [C.Embargado] = f.IsGarnished ? "Sí" : null, [C.TitularFallecido] = f.HolderDeceased ? "Sí" : null,
                     }).ToList();

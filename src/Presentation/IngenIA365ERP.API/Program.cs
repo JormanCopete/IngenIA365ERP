@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Diagnostics;
+﻿using Microsoft.AspNetCore.Diagnostics;
 using AspNetCoreRateLimit;
 using Carter;
 using IngenIA365ERP.API.Endpoints.Attachments;
@@ -269,6 +269,9 @@ try
         IngenIA365ERP.Application.Lending.Disbursements.Tareas.TareaDePagares>();
     builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada,
         IngenIA365ERP.Application.Lending.Disbursements.Tareas.TareaDeGarantiasPorVencer>();
+    // Feature 014 (respuesta 86 del dueño): los lotes de documentos al titular que cada cooperativa programa en Documentos.LotesProgramados.
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada,
+        IngenIA365ERP.Application.Lending.Deposits.Documents.TareaDeLotesDeDocumentos>();
     // Feature 013, US6 (T0585; DT §2.13): cartera.reservas-vencidas una vez al dia (vence las reservas de numero sin usar; sale si Cartera no
     // esta activada).
     builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada,

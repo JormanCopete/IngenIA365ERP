@@ -1,4 +1,4 @@
-using IngenIA365ERP.Application.Common.Approvals;
+﻿using IngenIA365ERP.Application.Common.Approvals;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Security;
 using IngenIA365ERP.Application.Common.Models;
@@ -18,7 +18,8 @@ namespace IngenIA365ERP.Application.Lending.Deposits.Operations;
 /// Decisión del dueño del 2026-10-18 (D53): cada cooperativa configura los niveles y montos de estos sujetos (<c>AccountWithdrawal</c>,
 /// <c>AccountCashDeposit</c>) con la plataforma de aprobaciones (<c>/api/lending/approval-policies</c>); sin política rige la regla fija de un nivel. (nuevo)
 /// </summary>
-public sealed class FuenteDeAprobacionDeCuenta(IApplicationDbContext db) : IFuenteDeAprobacion, IFuenteConAprobador
+public sealed class FuenteDeAprobacionDeCuenta(IApplicationDbContext db, Lending.Common.AlcanceDeCarteraDeUnUsuario? alcanceDelAprobador = null)
+    : IFuenteDeAprobacion, IFuenteConAprobador
 {
     public string SourceType => ApprovalSourceTypes.MemberAccountOperation;
 
@@ -26,6 +27,20 @@ public sealed class FuenteDeAprobacionDeCuenta(IApplicationDbContext db) : IFuen
     {
         // Decisión del dueño del 2026-10-18 (D53): con una política de la cooperativa (niveles con su umbral y su permiso) mandan sus niveles; el monto
         // de quien aprueba sólo se exige con la regla fija de un nivel (sin política).
+        // Respuesta 71 del dueño (E250): quien aprueba tiene la oficina y la línea de la cuenta en su alcance de Cartera (con o sin política de niveles).
+        if (alcanceDelAprobador is not null)
+        {
+            var cuenta = await db.MemberAccounts.AsNoTracking().Where(a => a.PublicId == solicitud.SourcePublicId && !a.IsDeleted)
+                .Select(a => new { a.BranchId, a.CreditLineId, a.Number }).FirstOrDefaultAsync(ct);
+            if (cuenta is not null)
+            {
+                var alcance = await alcanceDelAprobador.DeAsync(aprobadorUserId, ct);
+                if (!alcance.IncluyeOficina(cuenta.BranchId) || !alcance.IncluyeLinea(cuenta.CreditLineId))
+                    return Result.Failure(new ErrorConDatos("Lending.Savings.ApproverOutOfScope",
+                        $"Quien aprueba no tiene en su alcance la oficina o la línea de la cuenta {cuenta.Number}: debe aprobar alguien que las tenga asignadas.",
+                        new { accountNumber = cuenta.Number }));
+            }
+        }
         if (solicitud.PolicyId is not null) return Result.Success();
         var permiso = solicitud.Subject == ApprovalSubjects.AccountWithdrawal ? ReglasDeMovimientos.PermisoDeRetiro : ReglasDeMovimientos.PermisoDeConsignacion;
         if (await LimitesDePermisoPorUsuario.DeAsync(db, aprobadorUserId, permiso, solicitud.OperationDate, ct) is { } maximo && maximo < solicitud.Amount)

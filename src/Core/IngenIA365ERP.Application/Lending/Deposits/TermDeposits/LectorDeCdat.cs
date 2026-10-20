@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using System.Text.Json.Serialization;
 using IngenIA365ERP.Application.Common.Calendar;
 using IngenIA365ERP.Application.Common.Interfaces;
@@ -35,7 +35,8 @@ public sealed record DestinoDeCdat(
     Guid? PayeePersonPublicId,
     Guid? BankPublicId,
     byte? BankAccountType,
-    string? BankAccountNumber);
+    string? BankAccountNumber,
+    Guid? ThirdPartyAuthorizationAttachmentPublicId = null);
 
 /// <summary>La negociación sellada en la propuesta: el margen, la regla, quien la aprobó, el motivo y la solicitud si la hubo. (nuevo)</summary>
 public sealed record NegociacionDeCdat(decimal Margen, int ReglaId, Guid ReglaPublicId, int? AprobadaPor, string Motivo, int? SolicitudId);

@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Lending.Common;
 using IngenIA365ERP.Application.Lending.Deposits.Accounts;
@@ -309,9 +309,15 @@ public sealed class ValidacionEntrePartesDeCaptaciones(IApplicationDbContext db,
             var vivas = destinos.Count == 0 ? [] : await db.MemberAccounts.AsNoTracking()
                 .Where(a => destinos.Contains(a.Number) && a.Status != MemberAccountStatus.Closed && !a.IsDeleted)
                 .Select(a => new { a.Number, a.HolderPersonId, a.DepositClass }).ToListAsync(ct);
+            var bancos = filas.Cdat.Select(c => c.Fila.DestinationBankTransferCode).OfType<string>().Distinct().ToList();
+            var bancosVivos = bancos.Count == 0 ? [] : (await db.Banks.AsNoTracking().Where(b => b.TransferCode != null && bancos.Contains(b.TransferCode) && !b.IsDeleted)
+                .Select(b => b.TransferCode!).ToListAsync(ct)).ToHashSet(StringComparer.OrdinalIgnoreCase);
             foreach (var x in filas.Cdat)
             {
                 var f = x.Fila;
+                if (f.DestinationBankTransferCode is { } codigoBanco && !bancosVivos.Contains(codigoBanco))
+                    Error(P.TermDeposits, x.Tanda, f.RowNumber, C.BancoDelGiro, IngenIA365ERP.Application.Common.Imports.ImportErrors.CellNotFound,
+                        $"No hay un banco con el código de transferencia {codigoBanco}: créelo en Maestros › Bancos.");
                 if (lineas.GetValueOrDefault(f.CreditLineCode)?.DeCaptacion is not { DepositClass: DepositClass.TermDeposit } version)
                 {
                     Error(P.TermDeposits, x.Tanda, f.RowNumber, C.Linea, IngenIA365ERP.Application.Common.Imports.ImportErrors.CellNotFound,

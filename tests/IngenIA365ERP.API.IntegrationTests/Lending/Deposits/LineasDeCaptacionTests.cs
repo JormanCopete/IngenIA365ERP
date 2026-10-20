@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Net;
 using System.Text.Json;
 using FluentAssertions;
@@ -131,7 +131,9 @@ public class LineasDeCaptacionTests(CentralIdentityApiFixture fx)
         despues.GetProperty("versions").GetArrayLength().Should().Be(2);
 
         var retroactiva = await CarteraE2E.ConClaveAsync(http, admin, HttpMethod.Post, $"{Lineas}/{id}/deposit-versions", ALaVista(hoy.AddDays(-1), 0.04m));
-        (await CarteraE2E.CodigoDeErrorAsync(retroactiva)).Should().Be("Lending.DepositLine.Retroactive");
+        // Respuesta 106 A del dueño (E250): antes de activar las captaciones una versión puede tener vigencia pasada; aquí además empieza antes de la
+        // versión del día 15, así que se rechaza por cruzada. Con las captaciones activadas sería «Retroactive».
+        (await CarteraE2E.CodigoDeErrorAsync(retroactiva)).Should().BeOneOf("Lending.DepositLine.VersionOverlaps", "Lending.DepositLine.Retroactive");
         var lista = await CarteraE2E.GetAsync(http, admin, $"{Lineas}?nature=Deposit");
         lista.EnumerateArray().Should().Contain(l => l.GetProperty("code").GetString() == "AHTRAMOS");
     }

@@ -1,4 +1,4 @@
-using Carter;
+﻿using Carter;
 using IngenIA365ERP.API.Endpoints.Common;
 using IngenIA365ERP.API.Filters;
 using IngenIA365ERP.Application.Lending.Deposits.Lines;
@@ -36,6 +36,18 @@ public class LinesEndpoints : ICarterModule
                 await sender.Send(new GetLendingLineQuery(id, date, recordedAsOf), ct))
             .WithName("Lending_Lines_Get")
             .RequirePermission(new AlgunPermiso(VerCredito, VerCaptacion, VerAportes));
+
+        // Feature 014 (E251, respuesta 67 B): las plantillas de importación de líneas de captación y de aportes (GET /template.xlsx y POST /import).
+        lineas.MapGroup("/deposit").MapPlantilla(
+            () => IngenIA365ERP.Application.Lending.Deposits.Lines.PlantillasDeLineasDeCaptacion.Captacion,
+            "plantilla-cartera-lineas-de-captacion", VerCaptacion, AdministrarCaptacion, "Lending_Lines_Deposit",
+            "Lending.Reports.ExportPersonalData", IngenIA365ERP.Application.Common.Audit.AuditEventTypes.LendingReportExported,
+            importar: (modo, archivo, motivo, clave) => new ImportDepositLinesCommand(modo, archivo, motivo ?? string.Empty) { OperationKey = clave });
+        lineas.MapGroup("/contribution").MapPlantilla(
+            () => IngenIA365ERP.Application.Lending.Deposits.Lines.PlantillasDeLineasDeCaptacion.Aportes,
+            "plantilla-cartera-linea-de-aportes", VerAportes, AdministrarAportes, "Lending_Lines_Contribution",
+            "Lending.Reports.ExportPersonalData", IngenIA365ERP.Application.Common.Audit.AuditEventTypes.LendingReportExported,
+            importar: (modo, archivo, motivo, clave) => new ImportContributionLinesCommand(modo, archivo, motivo ?? string.Empty) { OperationKey = clave });
 
         // ------------------------------------------------------------------------------------------------------- captación --
         lineas.MapPost("/deposit", async (CrearLineaDeCaptacionRequest body, HttpContext http, ISender sender, CancellationToken ct) =>

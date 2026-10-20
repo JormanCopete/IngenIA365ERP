@@ -1,4 +1,4 @@
-using IngenIA365ERP.Domain.Entities.Core;
+﻿using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Entities.Lending.Configuration;
 using IngenIA365ERP.Domain.Entities.Lending.Deposits.Migration;
 using IngenIA365ERP.Domain.Entities.Lending.Migration;
@@ -235,6 +235,8 @@ public class MigrationTermDepositRowConfiguration : IEntityTypeConfiguration<Mig
         builder.Property(e => e.InterestPayable).MontoCausado().IsRequired();
         builder.Property(e => e.InterestDestination).HasConversion<int>().IsRequired();
         builder.Property(e => e.DestinationAccountNumber).HasMaxLength(30);
+        builder.Property(e => e.DestinationBankTransferCode).HasMaxLength(20);
+        builder.Property(e => e.DestinationBankAccountNumber).HasMaxLength(30);
         builder.Property(e => e.MaturityInstruction).HasConversion<int>().IsRequired();
         builder.Property(e => e.IssueTermBand).HasConversion<int>().IsRequired();
 

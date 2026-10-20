@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Common.NationalValues;
@@ -181,7 +181,8 @@ public sealed class RetencionDeEmbargos(
         var porConcepto = await LectorDeCuentas.SaldosAsync(db, ids, ct);
         var saldos = cuentas.ToDictionary(c => c.Id, c => LectorDeCuentas.SaldoDelTitular(c.Nature, porConcepto.GetValueOrDefault(c.Id) ?? []));
         var embargos = await db.Garnishments.Where(g => g.PersonId == personaId && !g.IsDeleted && g.Status == GarnishmentStatus.Active)
-            .OrderBy(g => g.ReceivedOn).ThenBy(g => g.Id).ToListAsync(ct);
+            // Respuesta 83 C del dueño (E250): los embargos por alimentos toman primero (prelación legal) y después, por fecha de recepción del oficio.
+            .OrderByDescending(g => g.IsChildSupport).ThenBy(g => g.ReceivedOn).ThenBy(g => g.Id).ToListAsync(ct);
         var consignado = await ConsignadoAsync(embargos.Select(e => e.Id).ToList(), ct);
 
         var acumulado = new Dictionary<int, decimal>();

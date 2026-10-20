@@ -34,7 +34,8 @@ public sealed class AltaDeVersionDeCaptacion(IApplicationDbContext db, IDateTime
     {
         ReglaDeCarteraException.SiHay(linea.ValidarNaturaleza(LineNature.Deposit));
         var ultimo = await db.DepositLineVersions.IgnoreQueryFilters().Where(v => v.CreditLineId == linea.Id).MaxAsync(v => (int?)v.VersionNumber, ct) ?? 0;
-        var version = DepositLineVersion.Registrar(linea.Id, b, ultimo + 1, reloj.HoyLocal, reloj.UtcNow);
+        var version = DepositLineVersion.Registrar(linea.Id, b, ultimo + 1,
+            await Activation.ActivacionesDeCaptacion.FechaMinimaDeVersionAsync(db, LineNature.Deposit, reloj.HoyLocal, ct), reloj.UtcNow);
         db.DepositLineVersions.Add(version);
         await db.SaveChangesAsync(ct);
         db.DepositLineRateTiers.AddRange(DepositLineVersion.Tramos(version.Id, b));
@@ -49,7 +50,8 @@ public sealed class AltaDeVersionDeCaptacion(IApplicationDbContext db, IDateTime
     {
         ReglaDeCarteraException.SiHay(linea.ValidarNaturaleza(LineNature.Contribution));
         var ultimo = await db.ContributionLineVersions.IgnoreQueryFilters().Where(v => v.CreditLineId == linea.Id).MaxAsync(v => (int?)v.VersionNumber, ct) ?? 0;
-        var version = ContributionLineVersion.Registrar(linea.Id, b, ultimo + 1, reloj.HoyLocal, reloj.UtcNow);
+        var version = ContributionLineVersion.Registrar(linea.Id, b, ultimo + 1,
+            await Activation.ActivacionesDeCaptacion.FechaMinimaDeVersionAsync(db, LineNature.Contribution, reloj.HoyLocal, ct), reloj.UtcNow);
         db.ContributionLineVersions.Add(version);
         await db.SaveChangesAsync(ct);
         return version;

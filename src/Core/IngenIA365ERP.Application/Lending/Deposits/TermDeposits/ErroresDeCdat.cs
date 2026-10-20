@@ -1,4 +1,4 @@
-using IngenIA365ERP.Application.Common.Models;
+﻿using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Lending.Deposits.Accounts;
 using IngenIA365ERP.Application.Lending.Deposits.Contributions;
 using IngenIA365ERP.Domain.Lending;
@@ -40,6 +40,17 @@ public static class ErroresDeCdat
 
     public static Error SinTasa(int plazo, decimal monto) => new ErrorConDatos(CodigoSinTasa,
         $"La línea no tiene tasa vigente para {plazo} días y {monto:N0}.", new { termDays = plazo, amount = monto });
+
+    public const string CodigoTerceroSinInstruccion = "Lending.TermDeposit.ThirdPartyAuthorizationRequired";
+    public const string CodigoTerceroSinPermiso = "Lending.TermDeposit.ThirdPartyPermissionRequired";
+
+    /// <summary>Respuesta 74 del dueño (E250): pagar a la cuenta de otra persona exige la instrucción escrita del titular (adjunto).</summary>
+    public static Error TerceroSinInstruccion() => new ErrorConDatos(CodigoTerceroSinInstruccion,
+        "La cuenta destino es de otra persona: suba la instrucción escrita del titular del CDAT y cítela en «ThirdPartyAuthorizationAttachmentPublicId».",
+        new { field = "paymentDestination.thirdPartyAuthorizationAttachmentPublicId" });
+
+    public static Error TerceroSinPermiso() => new ErrorConDatos(CodigoTerceroSinPermiso,
+        "Pagar los intereses a la cuenta de otra persona exige el permiso «Lending.TermDeposits.PayThirdParty».", new { field = "paymentDestination" });
 
     public static Error DestinoInvalido(string mensaje) => new ErrorConDatos(CodigoDestinoInvalido, mensaje, new { field = "paymentDestination" });
 
