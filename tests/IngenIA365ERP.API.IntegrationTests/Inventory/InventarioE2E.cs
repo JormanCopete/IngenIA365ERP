@@ -125,7 +125,7 @@ public static partial class InventarioE2E
         });
         alta.StatusCode.Should().Be(HttpStatusCode.OK, $"alta de la cooperativa {nombre}: «{await alta.Content.ReadAsStringAsync()}»");
         var tenantPublicId = (await LeerAsync(alta)).GetProperty("tenantPublicId").GetGuid();
-        var admin = await AceptarInvitacionAsync(fx, http, correoAdmin, $"Inv-{nombre}-2026!");
+        var admin = await AceptarInvitacionAsync(fx, http, correoAdmin, $"Inv-{nombre}-2026!", tokenMaestro, tenantPublicId);
 
         var sucursal = await EnviarAsync(http, admin, HttpMethod.Post, "/api/core/branches", new { name = "Principal", shortName = "PPAL" });
         sucursal.IsSuccessStatusCode.Should().BeTrue($"sucursal: «{await sucursal.Content.ReadAsStringAsync()}»");
@@ -147,7 +147,8 @@ public static partial class InventarioE2E
         };
     }
 
-    private static async Task<string> AceptarInvitacionAsync(CentralIdentityApiFixture fx, HttpClient http, string correo, string clave)
+    private static async Task<string> AceptarInvitacionAsync(
+        CentralIdentityApiFixture fx, HttpClient http, string correo, string clave, string? tokenMaestro = null, Guid? tenantPublicId = null)
     {
         var mensaje = fx.Emails.Sent.LastOrDefault(m => m.To == correo);
         mensaje.Should().NotBeNull($"la invitación de {correo} tiene que haber salido por correo");
@@ -155,6 +156,16 @@ public static partial class InventarioE2E
         token.Success.Should().BeTrue("el correo de invitación trae token=");
 
         var resp = await http.PostAsJsonAsync("/api/invitations/accept", new { token = token.Groups[1].Value, registration = new { password = clave } });
+        if (resp.StatusCode == HttpStatusCode.InternalServerError && tokenMaestro is not null && tenantPublicId is { } tenant)
+        {
+            // En la suite completa el contenedor de la base llegó a responder «57P03: the database system is not yet accepting
+            // connections» justo mientras se aprovisionaba la cooperativa: el alta responde 200 con la cooperativa registrada pero sin su
+            // base («Reparable con POST /api/saas/tenants/{publicId}/provision», dice el log del servidor). Se hace la reparación que
+            // documenta el producto y se reintenta una vez; un 500 que persista sigue fallando la prueba.
+            var reparacion = await EnviarAsync(http, tokenMaestro, HttpMethod.Post, $"/api/saas/tenants/{tenant}/provision", null);
+            reparacion.IsSuccessStatusCode.Should().BeTrue($"reparar el aprovisionamiento de {correo}: «{await reparacion.Content.ReadAsStringAsync()}»");
+            resp = await http.PostAsJsonAsync("/api/invitations/accept", new { token = token.Groups[1].Value, registration = new { password = clave } });
+        }
         resp.StatusCode.Should().Be(HttpStatusCode.OK, $"aceptar la invitación de {correo}: «{await resp.Content.ReadAsStringAsync()}»");
         var acceso = (await LeerAsync(resp)).GetProperty("accessToken").GetString();
         acceso.Should().NotBeNullOrWhiteSpace();
