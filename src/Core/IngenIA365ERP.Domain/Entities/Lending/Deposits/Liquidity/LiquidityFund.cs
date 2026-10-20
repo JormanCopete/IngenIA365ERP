@@ -1,4 +1,4 @@
-using IngenIA365ERP.Domain.Common;
+﻿using IngenIA365ERP.Domain.Common;
 using IngenIA365ERP.Domain.Enums.Lending;
 using IngenIA365ERP.Domain.Lending;
 
@@ -76,6 +76,7 @@ public class LiquidityFundHolding : AuditableEntity
     public const string CodigoTransicionInvalida = "Lending.LiquidityFund.InvalidTransition";
     public const int LargoDeLaReferencia = 60;
     public const int LargoDeLaNota = 500;
+    public const int LargoDelTipoDeTitulo = 10;
 
     public LiquidityHoldingKind Kind { get; set; }
 
@@ -95,6 +96,15 @@ public class LiquidityFundHolding : AuditableEntity
     public DateOnly? WithdrawnOn { get; set; }
 
     public Guid SupportAttachmentPublicId { get; set; }
+
+    /// <summary>Con un CDT o CDAT (<see cref="LiquidityHoldingKind.TermInvestment"/>): <c>CDT</c> o <c>CDAT</c> tal como lo registró el tesorero (respuesta 104 B del dueño, E250).</summary>
+    public string? TermTitleKind { get; set; }
+
+    /// <summary>Los intereses causados del título que el 9067 pide por título (respuesta 104 B del dueño, E250); cero si no se informan.</summary>
+    public decimal AccruedInterest { get; set; }
+
+    /// <summary>Si los intereses del título se capitalizan (respuesta 104 B del dueño, E250).</summary>
+    public bool CapitalizesInterest { get; set; }
 
     public string Note { get; set; } = string.Empty;
 

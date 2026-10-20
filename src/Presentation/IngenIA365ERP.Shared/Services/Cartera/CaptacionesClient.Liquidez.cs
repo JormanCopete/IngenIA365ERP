@@ -1,4 +1,4 @@
-using IngenIA365ERP.Shared.Services.Http;
+﻿using IngenIA365ERP.Shared.Services.Http;
 using IngenIA365ERP.Shared.Services.Inventario;
 using static IngenIA365ERP.Shared.Services.Ventas.EnvioDeVentas;
 
@@ -80,7 +80,8 @@ public sealed record InversionDelFondoDto(
 public sealed record TomarFotoRequest(DateOnly? Date, string? Reason);
 
 public sealed record RegistrarInversionRequest(int Instrument, Guid EntityPersonPublicId, string Reference, decimal Amount, DateOnly ConstitutedOn,
-    DateOnly? MaturityDate, Guid? SupportAttachmentPublicId, string? Note, Guid? PublicId);
+    DateOnly? MaturityDate, Guid? SupportAttachmentPublicId, string? Note, Guid? PublicId, string? TermTitleKind = null, decimal? AccruedInterest = null,
+    bool? CapitalizesInterest = null);
 
 public sealed record TerminarInversionRequest(DateOnly EndedOn, string Reason);
 

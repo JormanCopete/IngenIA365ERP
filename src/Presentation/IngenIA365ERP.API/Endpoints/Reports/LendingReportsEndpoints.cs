@@ -1,4 +1,4 @@
-using Carter;
+﻿using Carter;
 using IngenIA365ERP.API.Filters;
 using IngenIA365ERP.API.Reports;
 using IngenIA365ERP.Application.Common.Models;
@@ -142,6 +142,9 @@ public class LendingReportsEndpoints : ICarterModule
         // asegurados por ahorrador (asOf, con datos del titular).
         group.MapVistaDeCartera(Application.Lending.Deposits.Liquidity.LiquidityFundReportQueryHandler.Vista,
             (f, _) => new Application.Lending.Deposits.Liquidity.LiquidityFundReportQuery(f));
+        // Feature 014 (respuesta 102 B del dueño, E250): los depósitos y aportes por banda de liquidez, insumo de los renglones del F29.
+        group.MapVistaDeCartera(Application.Lending.Deposits.Liquidity.LiquidityDepositBandsReportQueryHandler.Vista,
+            (f, _) => new Application.Lending.Deposits.Liquidity.LiquidityDepositBandsReportQuery(f));
         group.MapVistaDeCartera(Application.Lending.Deposits.Liquidity.InsuredDepositsReportQueryHandler.Vista,
             (f, _) => new Application.Lending.Deposits.Liquidity.InsuredDepositsReportQuery(f));
         // Feature 014, US17 (T219): las cuentas por estado (asOf, status, con datos del titular) y la vista previa de cada formato regulatorio de

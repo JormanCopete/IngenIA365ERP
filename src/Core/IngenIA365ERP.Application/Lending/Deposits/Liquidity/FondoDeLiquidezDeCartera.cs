@@ -1,5 +1,6 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Text.Json;
+using IngenIA365ERP.Application.Common.Integration.Accounting;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Common.NationalValues;
@@ -119,7 +120,8 @@ public sealed class FondoDeLiquidezDeCartera(
     IApplicationDbContext db,
     IPerfilRegulatorio perfil,
     ReglasDeParametrosDeCartera parametros,
-    IValoresNacionales valores)
+    IValoresNacionales valores,
+    IActivosLiquidosParaCartera? contabilidad = null)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
@@ -159,6 +161,49 @@ public sealed class FondoDeLiquidezDeCartera(
             .Decimal("required", calculo.Requerido, 2).Decimal("constituted", constituido, 2).Entero("accounts", depositos.Count).Calcular();
         return Result.Success(new PosicionDelFondoDeLiquidez(fecha, categoria, regla, calculo, constituido, diferencia, Math.Max(0m, -diferencia), margen, nivel,
             parametrosJson, huella));
+    }
+
+    /// <summary>
+    /// Los activos líquidos que la entidad configuró leer de Contabilidad (respuesta 99 B del dueño, E250; parámetro <c>RiesgoDeLiquidez.ActivosLiquidosContables</c>):
+    /// el saldo positivo de cada prefijo de cuenta con el descuento de su clase. Sin parámetro o sin el puerto, ninguno. Un prefijo sin saldo no entra.
+    /// </summary>
+    public async Task<(List<ActivoLiquido> Activos, string Resumen)> ActivosDeContabilidadAsync(DateOnly fecha, CancellationToken ct)
+    {
+        if (contabilidad is null) return ([], string.Empty);
+        var reglas = LeerActivosContables(await TextoAsync(ParametrosDeCartera.RiesgoDeLiquidezActivosLiquidosContables, fecha, ct));
+        if (reglas.Count == 0) return ([], string.Empty);
+        var saldos = await contabilidad.SaldosPorPrefijosAsync(reglas.Select(r => r.Prefijo).ToList(), fecha, ct);
+        if (saldos.IsFailure) return ([], string.Empty);
+        var activos = new List<ActivoLiquido>();
+        for (var i = 0; i < reglas.Count; i++)
+            if (saldos.Value[i].Saldo > 0m)
+                activos.Add(new ActivoLiquido($"Contabilidad {reglas[i].Prefijo}", saldos.Value[i].Saldo, reglas[i].Descuento));
+        return (activos, string.Join(", ", reglas.Select(r => $"{r.Prefijo} (descuento {r.Descuento:P0})")));
+    }
+
+    /// <summary>Las reglas del parámetro (prefijo y descuento entre 0 y 1); lo que no se entiende se ignora.</summary>
+    public static IReadOnlyList<(string Prefijo, decimal Descuento)> LeerActivosContables(string? texto)
+    {
+        if (string.IsNullOrWhiteSpace(texto)) return [];
+        try
+        {
+            using var doc = JsonDocument.Parse(texto);
+            if (doc.RootElement.ValueKind != JsonValueKind.Array) return [];
+            var lista = new List<(string, decimal)>();
+            foreach (var e in doc.RootElement.EnumerateArray())
+            {
+                if (e.ValueKind != JsonValueKind.Object) continue;
+                var prefijo = e.TryGetProperty("prefijo", out var p) && p.ValueKind == JsonValueKind.String ? p.GetString()?.Trim() : null;
+                var descuento = e.TryGetProperty("descuento", out var d) && d.TryGetDecimal(out var valor) ? valor : 0m;
+                if (string.IsNullOrEmpty(prefijo) || !prefijo.All(char.IsLetterOrDigit) || descuento is < 0m or > 1m) continue;
+                lista.Add((prefijo, descuento));
+            }
+            return lista;
+        }
+        catch (JsonException)
+        {
+            return [];
+        }
     }
 
     /// <summary>El constituido del día: las inversiones registradas vigentes en esa fecha.</summary>
@@ -264,8 +309,12 @@ public sealed class FondoDeLiquidezDeCartera(
             .Select(h => new { h.Kind, h.Reference, h.Amount }).ToListAsync(ct);
         var activos = inversiones.Select(h => new ActivoLiquido($"{h.Kind} {h.Reference}", h.Amount, descuentos.GetValueOrDefault(h.Kind.ToString(),
             descuentos.GetValueOrDefault(nameof(LiquidityHoldingKind.Other))))).ToList();
-        supuestos.Add("Activos líquidos netos: el fondo de liquidez constituido con el descuento de cada clase de inversión; el disponible y las demás "
-                      + "inversiones de Tesorería todavía no se leen de Contabilidad.");
+        var delaContabilidad = await ActivosDeContabilidadAsync(fecha, ct);
+        activos.AddRange(delaContabilidad.Activos);
+        supuestos.Add(delaContabilidad.Activos.Count == 0
+            ? "Activos líquidos netos: el fondo de liquidez constituido con el descuento de cada clase de inversión; el disponible y las demás inversiones no se leen de "
+              + "Contabilidad (parámetro RiesgoDeLiquidez.ActivosLiquidosContables vacío)."
+            : "Activos líquidos netos: el fondo de liquidez constituido y, leídos de Contabilidad por los prefijos de la entidad, " + delaContabilidad.Resumen + ".");
 
         var flujos = new List<FlujoDeLiquidez>();
         var mora = await DecimalAsync(ParametrosDeCartera.RiesgoDeLiquidezIndiceDeMora, fecha, ct) ?? 0m;
@@ -274,8 +323,12 @@ public sealed class FondoDeLiquidezDeCartera(
         if (mora > 0m) supuestos.Add($"Entradas de cartera descontadas por el índice de mora de {mora:P2}.");
 
         var fraccionVista = await DecimalAsync(ParametrosDeCartera.RiesgoDeLiquidezFraccionDeRetiroALaVista, fecha, ct) ?? 0m;
+        var depositosDelDia = await DepositosAsync(fecha, ct);
+        var (fraccionDeVista, explicacionDelRetiro) = await FraccionDeRetiroALaVistaAsync(fecha, fraccionVista,
+            depositosDelDia.Where(x => x.Clase == ClaseDeDepositoParaLiquidez.ALaVista).Sum(x => x.Capital + x.InteresCausado), ct);
+        fraccionVista = fraccionDeVista;
         var fraccionAportes = await DecimalAsync(ParametrosDeCartera.RiesgoDeLiquidezFraccionMensualDeRetiroDeAportes, fecha, ct) ?? 0m;
-        var depositos = await DepositosAsync(fecha, ct);
+        var depositos = depositosDelDia;
         foreach (var d in depositos)
         {
             switch (d.Clase)
@@ -306,6 +359,7 @@ public sealed class FondoDeLiquidezDeCartera(
         }
         var aportes = await AportesAsync(fecha, ct);
         flujos.AddRange(Mensuales("Aportes sociales", aportes, fraccionAportes, fecha, horizonte, abierta));
+        supuestos.Add(explicacionDelRetiro);
         supuestos.Add($"Salidas no contractuales: {fraccionVista:P2} del ahorro a la vista en la primera banda y {fraccionAportes:P2} al mes del ahorro permanente "
                       + "y de los aportes (parámetros de la entidad, pendientes de validar).");
 
@@ -314,6 +368,42 @@ public sealed class FondoDeLiquidezDeCartera(
         var plan = await DecimalAsync(ParametrosDeCartera.RiesgoDeLiquidezUmbralDePlanDeAjuste, fecha, ct) ?? umbral;
         var bajo = medida == MedidaDeRiesgoDeLiquidez.Irl && medicion.IrlMinimo is { } minimo && minimo < umbral;
         return new MedicionDeLiquidezALaFecha(fecha, medida, medicion, activos, umbral, plan, bajo, supuestos);
+    }
+
+    /// <summary>
+    /// La fracción del ahorro a la vista que se espera retirar en la primera banda (respuesta 100 B del dueño, E250): con el método <c>Automatico</c> y la historia
+    /// mínima del libro, el máximo retiro probable al nivel de confianza escalado a 30 días sobre el saldo a la vista; si no, la fracción fija. Devuelve la fracción y
+    /// la frase del supuesto para el informe.
+    /// </summary>
+    public async Task<(decimal Fraccion, string Supuesto)> FraccionDeRetiroALaVistaAsync(DateOnly fecha, decimal fraccionFija, decimal saldoALaVista, CancellationToken ct)
+    {
+        var metodo = await TextoAsync(ParametrosDeCartera.RiesgoDeLiquidezRetirosALaVistaMetodo, fecha, ct);
+        if (!string.Equals(metodo, "Automatico", StringComparison.Ordinal))
+            return (fraccionFija, $"Retiro esperado del ahorro a la vista: fracción fija de {fraccionFija:P2} (método PorcentajeFijo).");
+        var diasDeHistoria = (int)(await DecimalAsync(ParametrosDeCartera.RiesgoDeLiquidezDiasDeHistoriaDelRetiro, fecha, ct) ?? 365m);
+        var confianza = await DecimalAsync(ParametrosDeCartera.RiesgoDeLiquidezConfianzaDelRetiro, fecha, ct) ?? 0m;
+        if (confianza is <= 0m or >= 1m)
+            return (fraccionFija, $"Retiro esperado del ahorro a la vista: fracción fija de {fraccionFija:P2}; el nivel de confianza del parámetro no es válido (va entre 0 y 1, sin incluirlos).");
+        var desde = fecha.AddDays(-diasDeHistoria);
+        var primero = await db.MemberAccountTransactions.AsNoTracking()
+            .Where(t => !t.IsDeleted && t.Concept == MemberAccountConcept.Principal && db.MemberAccounts.Any(a => a.Id == t.MemberAccountId && a.DepositClass == DepositClass.Demand))
+            .MinAsync(t => (DateOnly?)t.ValueDate, ct);
+        if (primero is not { } inicio || inicio > desde)
+            return (fraccionFija, $"Retiro esperado del ahorro a la vista: fracción fija de {fraccionFija:P2}; el libro aún no tiene {diasDeHistoria} días de historia para estimarlo con estadística.");
+
+        var movimientos = await db.MemberAccountTransactions.AsNoTracking()
+            .Where(t => !t.IsDeleted && t.Concept == MemberAccountConcept.Principal && t.ValueDate > desde && t.ValueDate <= fecha
+                        && (t.Kind == MemberAccountTransactionKind.Deposit || t.Kind == MemberAccountTransactionKind.Withdrawal
+                            || t.Kind == MemberAccountTransactionKind.TransferIn || t.Kind == MemberAccountTransactionKind.TransferOut
+                            || t.Kind == MemberAccountTransactionKind.Refund)
+                        && db.MemberAccounts.Any(a => a.Id == t.MemberAccountId && a.DepositClass == DepositClass.Demand))
+            .GroupBy(t => t.ValueDate).Select(g => new { Dia = g.Key, Neto = g.Sum(x => x.Amount) }).ToListAsync(ct);
+        var porDia = movimientos.ToDictionary(m => m.Dia, m => -m.Neto);
+        var salidas = Enumerable.Range(1, diasDeHistoria).Select(i => porDia.GetValueOrDefault(desde.AddDays(i))).ToList();
+        var esperado = RetiroEsperadoDeLaVista.Calcular(salidas, confianza, 30);
+        var fraccion = RetiroEsperadoDeLaVista.Fraccion(esperado, saldoALaVista);
+        return (fraccion, $"Retiro esperado del ahorro a la vista: {esperado:N0} (máximo retiro probable al {confianza:P0} de los últimos {diasDeHistoria} días, por la raíz de 30), "
+                          + $"o {fraccion:P2} del saldo a la vista.");
     }
 
     private static IEnumerable<FlujoDeLiquidez> Mensuales(string concepto, decimal saldo, decimal fraccion, DateOnly fecha, int horizonte, bool abierta)
@@ -369,11 +459,43 @@ public sealed class FondoDeLiquidezDeCartera(
         if (vigente is not { DepositInsuranceEnrolled: true }) return new AseguradosALaFecha(fecha, false, null, null, [], []);
         var tope = await valores.LeerAsync(CodigosDeValorNacional.TopeSeguroDepositos, string.Empty, fecha, null, ct);
         var depositos = await DepositosAsync(fecha, ct);
-        var porAhorrador = depositos.GroupBy(d => d.PersonaId)
-            .Select(g => new DepositosDeUnAhorrador(g.Key, g.Count(), g.Sum(d => d.Capital + d.InteresCausado))).OrderBy(a => a.PersonaId).ToList();
+        // Respuesta 101 C del dueño (E250): el saldo de una cuenta conjunta se reparte entre sus titulares (por defecto en partes iguales) antes de aplicar el tope.
+        var modo = await TextoAsync(ParametrosDeCartera.SeguroDeDepositosRepartoDeCotitulares, fecha, ct);
+        var porAhorrador = (await RepartirEntreTitularesAsync(depositos, modo, fecha, ct)).OrderBy(a => a.PersonaId).ToList();
         var valorDelTope = tope is { IsSuccess: true, Value.Valor: { } t } ? t : (decimal?)null;
         return new AseguradosALaFecha(fecha, true, valorDelTope, tope.IsSuccess ? tope.Value.Fuente : null,
             DepositosAsegurados.Calcular(valorDelTope ?? 0m, porAhorrador), depositos);
+    }
+
+    /// <summary>
+    /// El saldo de cada cuenta repartido entre su titular y sus cotitulares vigentes a <paramref name="fecha"/> según <paramref name="modo"/> (la suma de las partes
+    /// de una cuenta es exactamente su saldo, el titular absorbe el residuo) y sumado por persona; las cuentas de cada una son las suyas, propias o conjuntas.
+    /// </summary>
+    public async Task<IReadOnlyList<DepositosDeUnAhorrador>> RepartirEntreTitularesAsync(IReadOnlyList<DepositoALaFecha> depositos, string modo, DateOnly fecha,
+        CancellationToken ct)
+    {
+        var cuentas = depositos.Select(d => d.CuentaId).Distinct().ToList();
+        var cotitulares = modo == "AlTitular" || cuentas.Count == 0
+            ? new Dictionary<int, List<(int Persona, decimal? Share)>>()
+            : (await db.MemberAccountParties.AsNoTracking()
+                    .Where(x => cuentas.Contains(x.MemberAccountId) && !x.IsDeleted && x.Role == MemberAccountPartyRole.CoHolder && x.ValidFrom <= fecha
+                                && (x.ValidTo == null || x.ValidTo >= fecha))
+                    .OrderBy(x => x.Id).Select(x => new { x.MemberAccountId, x.PersonId, x.Share }).ToListAsync(ct))
+                .GroupBy(x => x.MemberAccountId).ToDictionary(g => g.Key, g => g.Select(x => (x.PersonId, modo == "ProporcionRegistrada" ? x.Share : null)).ToList());
+        var porPersona = new Dictionary<int, (HashSet<int> Cuentas, decimal Total)>();
+        foreach (var d in depositos)
+        {
+            var saldo = d.Capital + d.InteresCausado;
+            var partes = ProporcionesDeTitularidad.Repartir(saldo,
+                ProporcionesDeTitularidad.Calcular(d.PersonaId, cotitulares.GetValueOrDefault(d.CuentaId) ?? []));
+            foreach (var (persona, valor) in partes)
+            {
+                (HashSet<int> Cuentas, decimal Total) actual = porPersona.TryGetValue(persona, out var x) ? x : (new HashSet<int>(), 0m);
+                actual.Cuentas.Add(d.CuentaId);
+                porPersona[persona] = (actual.Cuentas, actual.Total + valor);
+            }
+        }
+        return porPersona.Select(p => new DepositosDeUnAhorrador(p.Key, p.Value.Cuentas.Count, p.Value.Total)).ToList();
     }
 
     // ------------------------------------------------------------------------------------------------- lectura --

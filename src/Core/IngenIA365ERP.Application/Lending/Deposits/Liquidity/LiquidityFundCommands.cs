@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using FluentValidation;
 using IngenIA365ERP.Application.Attachments.Common;
 using IngenIA365ERP.Application.Common.Alerts;
@@ -394,7 +394,10 @@ public sealed record RegisterLiquidityFundHoldingCommand(
     DateOnly? MaturityDate,
     Guid? SupportAttachmentPublicId,
     string? Note,
-    Guid? PublicId = null) : IRequest<Result<LiquidityFundHoldingDto>>, IOperacionIdempotente
+    Guid? PublicId = null,
+    string? TermTitleKind = null,
+    decimal AccruedInterest = 0m,
+    bool CapitalizesInterest = false) : IRequest<Result<LiquidityFundHoldingDto>>, IOperacionIdempotente
 {
     public Guid OperationKey { get; init; }
 }
@@ -411,6 +414,12 @@ public sealed class RegisterLiquidityFundHoldingCommandValidator : AbstractValid
         RuleFor(x => x.ConstitutedOn).NotEqual(default(DateOnly)).WithMessage("Indique desde cuándo está constituida.");
         RuleFor(x => x.MaturityDate).Must((x, v) => v is null || v >= x.ConstitutedOn).WithMessage("El vencimiento no es anterior a la constitución.");
         RuleFor(x => x.Note).MaximumLength(LiquidityFundHolding.LargoDeLaNota);
+        // Respuesta 104 B del dueño (E250): el CDT o CDAT lleva su tipo, los intereses causados y si capitaliza; las demás clases no.
+        RuleFor(x => x.TermTitleKind).Must(t => t is null || string.Equals(t, "CDT", StringComparison.OrdinalIgnoreCase) || string.Equals(t, "CDAT", StringComparison.OrdinalIgnoreCase))
+            .WithMessage("El tipo de título es CDT o CDAT.");
+        RuleFor(x => x.AccruedInterest).GreaterThanOrEqualTo(0m).Must(m => decimal.Round(m, 2) == m).WithMessage("Los intereses causados son cero o más, con a lo sumo dos decimales.");
+        RuleFor(x => x).Must(x => x.Instrument == LiquidityHoldingKind.TermInvestment || (x.TermTitleKind is null && x.AccruedInterest == 0m && !x.CapitalizesInterest))
+            .WithMessage("El tipo de título, los intereses causados y la capitalización sólo van en un CDT o CDAT.");
     }
 }
 
@@ -445,6 +454,9 @@ public sealed class RegisterLiquidityFundHoldingCommandHandler(IApplicationDbCon
             ConstitutedOn = request.ConstitutedOn,
             MaturesOn = request.MaturityDate,
             SupportAttachmentPublicId = soporte,
+            TermTitleKind = request.TermTitleKind?.Trim().ToUpperInvariant(),
+            AccruedInterest = request.AccruedInterest,
+            CapitalizesInterest = request.CapitalizesInterest,
             Note = request.Note?.Trim() ?? string.Empty,
             RegisteredByUserId = usuario,
         };

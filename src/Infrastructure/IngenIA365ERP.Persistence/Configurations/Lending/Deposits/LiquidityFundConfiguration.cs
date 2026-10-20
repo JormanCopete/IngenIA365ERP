@@ -1,4 +1,4 @@
-using IngenIA365ERP.Domain.Entities.Core;
+﻿using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Entities.Lending.Deposits.Liquidity;
 using IngenIA365ERP.Domain.Entities.Lending.Integration;
 using IngenIA365ERP.Domain.Entities.Security;
@@ -64,6 +64,9 @@ public class LiquidityFundHoldingConfiguration : IEntityTypeConfiguration<Liquid
         });
 
         builder.Property(e => e.Kind).HasConversion<int>().IsRequired();
+        builder.Property(e => e.TermTitleKind).HasMaxLength(LiquidityFundHolding.LargoDelTipoDeTitulo);
+        builder.Property(e => e.AccruedInterest).Monto().HasDefaultValue(0m);
+        builder.Property(e => e.CapitalizesInterest).HasDefaultValue(false);
         builder.Property(e => e.Reference).HasMaxLength(LiquidityFundHolding.LargoDeLaReferencia).IsRequired();
         builder.Property(e => e.Amount).Monto().IsRequired();
         builder.Property(e => e.Note).HasMaxLength(LiquidityFundHolding.LargoDeLaNota).IsRequired();

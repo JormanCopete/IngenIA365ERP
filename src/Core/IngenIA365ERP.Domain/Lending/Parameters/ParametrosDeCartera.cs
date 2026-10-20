@@ -232,6 +232,12 @@ public static class ParametrosDeCartera
     /// <summary>Cada cuánto toma el ciclo la foto del fondo y mide el riesgo: <c>Diaria</c>, <c>Semanal</c> o <c>Mensual</c>.</summary>
     public const string FondoDeLiquidezPeriodicidad = "FondoDeLiquidez.Periodicidad";
 
+    /// <summary>
+    /// Cómo se reparte entre sus titulares el saldo de una cuenta conjunta para el seguro de depósitos (respuesta 101 C del dueño, E250): <c>PartesIguales</c>
+    /// (lo que se aplica mientras Fogacoop no diga otra cosa), <c>ProporcionRegistrada</c> (la de cada cotitular en la cuenta) o <c>AlTitular</c> (todo al titular).
+    /// </summary>
+    public const string SeguroDeDepositosRepartoDeCotitulares = "SeguroDeDepositos.RepartoDeCotitulares";
+
     /// <summary>Los topes en días de las bandas del IRL (JSON, p. ej. <c>[15, 30, 60, 90]</c>).</summary>
     public const string RiesgoDeLiquidezBandasIrl = "RiesgoDeLiquidez.BandasIrl";
 
@@ -247,8 +253,26 @@ public static class ParametrosDeCartera
     /// <summary>La fracción del ahorro a la vista que se espera retirar en la primera banda (salida no contractual).</summary>
     public const string RiesgoDeLiquidezFraccionDeRetiroALaVista = "RiesgoDeLiquidez.FraccionDeRetiroALaVista";
 
+    /// <summary>
+    /// Cómo se estima el retiro esperado del ahorro a la vista (respuesta 100 B del dueño, E250): <c>Automatico</c> (estadístico con la historia del libro cuando
+    /// hay la mínima; antes, la fracción fija) o <c>PorcentajeFijo</c> (siempre la fracción fija).
+    /// </summary>
+    public const string RiesgoDeLiquidezRetirosALaVistaMetodo = "RiesgoDeLiquidez.RetirosALaVistaMetodo";
+
+    /// <summary>Los días de historia del libro que hacen falta para estimar el retiro esperado con estadística.</summary>
+    public const string RiesgoDeLiquidezDiasDeHistoriaDelRetiro = "RiesgoDeLiquidez.DiasDeHistoriaDelRetiro";
+
+    /// <summary>El nivel de confianza (fracción) del máximo retiro probable del ahorro a la vista.</summary>
+    public const string RiesgoDeLiquidezConfianzaDelRetiro = "RiesgoDeLiquidez.ConfianzaDelRetiro";
+
     /// <summary>La fracción del ahorro permanente y de los aportes que se espera retirar cada mes (salida no contractual).</summary>
     public const string RiesgoDeLiquidezFraccionMensualDeRetiroDeAportes = "RiesgoDeLiquidez.FraccionMensualDeRetiroDeAportes";
+
+    /// <summary>
+    /// Los activos líquidos que se leen de Contabilidad (respuesta 99 B del dueño, E250): JSON de <c>{ "prefijo": "11", "descuento": 0 }</c>, el prefijo del código
+    /// de cuenta (disponible, inversiones negociables) y el descuento de esa clase. Vacío o <c>[]</c>: sólo cuenta el fondo de liquidez constituido.
+    /// </summary>
+    public const string RiesgoDeLiquidezActivosLiquidosContables = "RiesgoDeLiquidez.ActivosLiquidosContables";
 
     /// <summary>El índice de mora que descuenta las entradas de cartera (fracción). Vacío: sin descuento.</summary>
     public const string RiesgoDeLiquidezIndiceDeMora = "RiesgoDeLiquidez.IndiceDeMora";
@@ -829,6 +853,12 @@ public static class ParametrosDeCartera
             PendienteDeValidar = "Defecto semanal: la Circular Básica Contable y Financiera (Título IV, Capítulo III, Anexo 1) pide calcular el IRL al menos "
                 + "cada semana y el fondo se verifica sobre el cierre del mes; la entidad decide cuándo reporta.",
         },
+        Eleccion(Modulo, SeguroDeDepositosRepartoDeCotitulares,
+            "Cómo se reparte entre sus titulares el saldo de una cuenta conjunta para medir lo asegurado: PartesIguales, ProporcionRegistrada o AlTitular.",
+            ["PartesIguales", "ProporcionRegistrada", "AlTitular"], "PartesIguales", K11, General) with
+        {
+            PendienteDeValidar = "Defecto de partes iguales mientras Fogacoop no regule las cuentas conjuntas (respuesta 101 C del dueño): se cambia con vigencia al saber su regla.",
+        },
         Texto(RiesgoDeLiquidezBandasIrl, "Topes en días de las bandas del indicador de riesgo de liquidez (IRL), en JSON.", "[15, 30, 60, 90]", K11,
             patron: @"^\s*\[[\d\s,]+\]\s*$") with
         {
@@ -857,11 +887,34 @@ public static class ParametrosDeCartera
             Minimo = 0m, Maximo = 1m,
             PendienteDeValidar = "Defecto de 10 %: la Circular pide estimarlo con el máximo retiro probable (VaR al 95 %); la contadora lo fija con la historia.",
         },
+        Eleccion(Modulo, RiesgoDeLiquidezRetirosALaVistaMetodo,
+            "Cómo se estima el retiro esperado del ahorro a la vista: Automatico (estadístico al nivel de confianza cuando hay la historia mínima; antes, la fracción fija) "
+            + "o PorcentajeFijo.", ["Automatico", "PorcentajeFijo"], "Automatico", K11, General) with
+        {
+            PendienteDeValidar = "Respuesta 100 B del dueño: estadístico al 95 % con un año de historia; mientras tanto rige la fracción fija. La contadora valida el método.",
+        },
+        NumeroDecimal(Modulo, RiesgoDeLiquidezDiasDeHistoriaDelRetiro,
+            "Días de historia del libro que hacen falta para estimar el retiro esperado con estadística (un año por defecto).", "365", K11, General) with
+        {
+            Minimo = 30m, PendienteDeValidar = "Un año de historia (respuesta 100 B del dueño).",
+        },
+        NumeroDecimal(Modulo, RiesgoDeLiquidezConfianzaDelRetiro,
+            "Nivel de confianza (fracción) del máximo retiro probable del ahorro a la vista.", "0.95", K11, General) with
+        {
+            Minimo = 0m, Maximo = 1m, PendienteDeValidar = "95 % de la Circular Básica Contable y Financiera, Anexo 1; va entre 0 y 1 sin incluirlos (si no, rige la fracción fija).",
+        },
         NumeroDecimal(Modulo, RiesgoDeLiquidezFraccionMensualDeRetiroDeAportes,
             "Fracción del ahorro permanente y de los aportes que se espera retirar cada mes (salida no contractual).", "0.01", K11, General) with
         {
             Minimo = 0m, Maximo = 1m,
             PendienteDeValidar = "Defecto de 1 % al mes: la Circular pide el retiro promedio de los últimos meses; la contadora lo fija con la historia.",
+        },
+        Texto(RiesgoDeLiquidezActivosLiquidosContables,
+            "Activos líquidos que se leen de Contabilidad, en JSON: [{ \"prefijo\": \"11\", \"descuento\": 0 }, { \"prefijo\": \"1203\", \"descuento\": 0.20 }]. "
+            + "El prefijo es el del código de cuenta (disponible, inversiones negociables) y el descuento el de esa clase. Vacío o []: sólo cuenta el fondo constituido. "
+            + "No repita aquí lo que ya registró como fondo constituido: se contaría dos veces.", "[]", K11, patron: @"(?s)^\s*\[.*\]\s*$") with
+        {
+            PendienteDeValidar = "Respuesta 99 B del dueño: la regla de qué cuentas son activos líquidos la fija la contadora (Circular Básica Contable y Financiera, Anexo 1).",
         },
         NumeroDecimal(Modulo, RiesgoDeLiquidezIndiceDeMora,
             "Índice de mora (fracción) que descuenta las cuotas de cartera por recibir. Vacío: sin descuento.", "", K11, General) with

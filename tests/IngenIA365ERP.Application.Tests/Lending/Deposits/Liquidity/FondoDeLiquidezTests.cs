@@ -1,4 +1,4 @@
-using FluentAssertions;
+﻿using FluentAssertions;
 using IngenIA365ERP.Application.Attachments.Common;
 using IngenIA365ERP.Application.Common.Alerts;
 using IngenIA365ERP.Application.Common.Integration.Lending;
@@ -380,6 +380,25 @@ public sealed class FondoDeLiquidezTests : IDisposable
         var sinSeguro = await new InsuredDepositsReportQueryHandler(_a.Db, Fondo(), G.Alcance, G.Reloj)
             .Handle(new InsuredDepositsReportQuery(new FiltrosDeInformeDeCartera()), default);
         sinSeguro.Value.Filas.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task El_saldo_de_una_cuenta_conjunta_se_reparte_entre_sus_titulares_para_el_seguro()
+    {
+        // Respuesta 101 C del dueño (E250): en partes iguales mientras Fogacoop no regule las cuentas conjuntas; el titular absorbe el residuo.
+        _a.Db.MemberAccountParties.Add(new IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.MemberAccountParty { MemberAccountId = 777, PersonId = 2, Role = MemberAccountPartyRole.CoHolder, ValidFrom = CuentasDePrueba.Hoy.AddYears(-1) });
+        _a.Db.MemberAccountParties.Add(new IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.MemberAccountParty { MemberAccountId = 777, PersonId = 3, Role = MemberAccountPartyRole.CoHolder, ValidFrom = CuentasDePrueba.Hoy.AddYears(-1) });
+        await _a.Db.SaveChangesAsync();
+        var conjunta = new DepositoALaFecha(777, 1, 1, 1, ClaseDeDepositoParaLiquidez.ALaVista, 1_000_000m, 0m, 0m, null, null, false, []);
+
+        var iguales = await Fondo().RepartirEntreTitularesAsync([conjunta], "PartesIguales", CuentasDePrueba.Hoy, default);
+        var alTitular = await Fondo().RepartirEntreTitularesAsync([conjunta], "AlTitular", CuentasDePrueba.Hoy, default);
+
+        iguales.Sum(x => x.Depositos).Should().Be(1_000_000m);
+        iguales.Select(x => x.PersonaId).Should().BeEquivalentTo([1, 2, 3]);
+        iguales.Single(x => x.PersonaId == 2).Depositos.Should().Be(333_333m);
+        iguales.Single(x => x.PersonaId == 1).Depositos.Should().Be(333_334m, "el titular absorbe el residuo del redondeo a seis decimales de la proporción");
+        alTitular.Should().ContainSingle().Which.Depositos.Should().Be(1_000_000m);
     }
 
     [Fact]

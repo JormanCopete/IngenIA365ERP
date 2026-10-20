@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Common.NationalValues;
 using IngenIA365ERP.Application.Lending.Common;
@@ -58,7 +58,8 @@ public sealed class ReglasDeRetencion(ReglasDeParametrosDeCartera parametros, IV
     public static (PerfilDeRetencion Perfil, bool PersonaNaturalNoObligada) PerfilDe(Person titular)
     {
         ArgumentNullException.ThrowIfNull(titular);
-        var natural = !LectorDeCuentas.EsJuridica(titular);
+        // Respuesta 63 B del dueño (E250): el componente inflacionario se descuenta a la persona natural NO obligada a llevar contabilidad (ET arts. 38 a 41).
+        var natural = !LectorDeCuentas.EsJuridica(titular) && !titular.IsObligatedToKeepBooks;
         if (titular.WithholdingExempt) return (PerfilDeRetencion.NonTaxpayer, natural);
         if (titular.IsSelfWithholder) return (PerfilDeRetencion.SelfWithholder, natural);
         return (string.IsNullOrWhiteSpace(titular.PersonType) ? PerfilDeRetencion.NoProfile : PerfilDeRetencion.Standard, natural);

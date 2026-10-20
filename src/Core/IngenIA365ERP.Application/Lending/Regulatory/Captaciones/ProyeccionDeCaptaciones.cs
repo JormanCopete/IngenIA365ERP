@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using IngenIA365ERP.Application.Common.Calendar;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
@@ -289,12 +289,12 @@ public sealed class ProyeccionDeCaptaciones(
         var inversiones = await (from h in db.LiquidityFundHoldings.AsNoTracking()
                                  join p in db.People.AsNoTracking().IgnoreQueryFilters() on h.InstitutionPersonId equals p.Id
                                  where !h.IsDeleted && h.ConstitutedOn <= corte && (h.WithdrawnOn == null || h.WithdrawnOn > corte)
-                                 select new { h.Kind, h.Reference, h.Amount, h.ConstitutedOn, h.MaturesOn, p.TaxId, p.TaxIdCheckDigit, p.BusinessName, p.FirstName,
+                                 select new { h.Kind, h.Reference, h.Amount, h.ConstitutedOn, h.MaturesOn, h.AccruedInterest, h.CapitalizesInterest, p.TaxId, p.TaxIdCheckDigit, p.BusinessName, p.FirstName,
                                      p.LastName }).ToListAsync(ct);
         var titulos = inversiones.Select(h => new TituloDelFondoDeLiquidez(
             string.IsNullOrWhiteSpace(h.TaxIdCheckDigit) ? h.TaxId.Trim() : $"{h.TaxId.Trim()}-{h.TaxIdCheckDigit.Trim()}",
-            string.IsNullOrWhiteSpace(h.BusinessName) ? $"{h.FirstName} {h.LastName}".Trim() : h.BusinessName.Trim(), h.Kind, h.Reference, h.Amount, 0m,
-            h.MaturesOn is { } v ? v.DayNumber - h.ConstitutedOn.DayNumber : null, h.MaturesOn, false)).ToList();
+            string.IsNullOrWhiteSpace(h.BusinessName) ? $"{h.FirstName} {h.LastName}".Trim() : h.BusinessName.Trim(), h.Kind, h.Reference, h.Amount, h.AccruedInterest,
+            h.MaturesOn is { } v ? v.DayNumber - h.ConstitutedOn.DayNumber : null, h.MaturesOn, h.CapitalizesInterest)).ToList();
         if (titulos.Any(t => TraduccionesDeCaptaciones.TituloDelFondo(t.Clase) is null))
             advertencias.Add(new AdvertenciaRegulatoria(AdvertenciasDeCaptaciones.FondoConInversionSinTipo,
                 "Hay inversiones del fondo registradas como «otra»: el formato no tiene tipo de título para ellas y el validador las bloquea."));

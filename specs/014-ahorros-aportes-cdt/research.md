@@ -2667,3 +2667,92 @@ escribe el dueño). **Manda el código**; estas notas reemplazan lo dicho en `da
   novación crean créditos nuevos, sin autorizaciones; el traslado exige que ya sea libranza), así que el lado «débito → libranza» es una guarda de defensa que
   la e2e arma con un estado heredado en la base. La migración de saldos no trae autorizaciones de débito automático, sólo los vínculos de pago de los créditos: no
   puede dejar un crédito con las dos cosas, y las autorizaciones se registran después por la puerta que ya valida. Sin migración.
+
+## 27. Respuestas del dueño a las preguntas abiertas 55–106 (2026-10-21)
+
+El dueño contestó las preguntas abiertas de las tandas 2 a la 20 (55–106; las de la 013 que quedaron abiertas y las de §14.1 a §26.1). Esta sección **compara cada
+respuesta con lo construido**: las que coinciden quedan «confirmada, sin cambio»; las que difieren se implementaron (E250–E252, con pruebas) o, si pedían
+más de lo que se podía cerrar sin la corrida e2e, quedan **pendientes** con su motivo. **Manda el código.** Un solo cambio de esquema, aditivo:
+`CaptacionesRespuestasDelDueno` (PostgreSQL `20261020175152`, SQL Server `20261020175119`): `COR_People.IsObligatedToKeepBooks`,
+`LND_MigrationTermDepositRows` (`DestinationBankTransferCode`, `DestinationBankAccountType`, `DestinationBankAccountNumber`) y `LND_LiquidityFundHoldings`
+(`TermTitleKind`, `AccruedInterest`, `CapitalizesInterest`); paridad y `has-pending-model-changes` limpios en los dos motores. Las e2e que cambian de
+comportamiento (una de líneas de captación, el conteo de permisos) se **ajustaron y compilan; no se corrieron** (el disco no admite Docker).
+
+### 27.1 Respuesta por respuesta
+
+- **55 A**, **56 A**, **57 A**, **60 A** (la e2e de libranza con asociados con aportes es trabajo de la corrida final), **61 A**, **62 A**, **66 A**, **68 A**, **70 A**,
+  **72 A**, **75 A**, **78 A**, **79 A**, **80 A**, **84 A**, **85 A**, **88 A**, **94 A**, **95 A**, **98 A**: confirmadas, sin cambio de código.
+- **59 B · una línea de aportes o ahorro con descuento por pagaduría sin código de concepto bloquea el archivo (E250).** Antes avisaba (`withoutEquivalence`) y la
+  línea no iba en ningún archivo. Ahora generar el archivo de un grupo responde `Lending.PayrollFile.AccountLineWithoutPaymasterCode` (422) con las líneas sin código y
+  dónde corregirlas (convenio › «Grupos y equivalencias»); la vista previa sigue contando. Se bloquea sólo por las **cuotas de cuentas** (los créditos sin código ya
+  tenían su propia regla).
+- **63 B · obligado a llevar contabilidad = marca en el perfil tributario (E250).** `COR_People.IsObligatedToKeepBooks` (`PersonInput`, diálogo de persona «Obligado a llevar
+  contabilidad»): a la persona natural **obligada** ya no se le descuenta el componente inflacionario de la retención sobre rendimientos (`ReglasDeRetencion.PerfilDe`).
+  Las personas existentes quedan en «no obligada» (lo de antes).
+- **64 B · fecha valor en un período liquidado: ajuste en el período abierto — PENDIENTE.** Toca la ventana de causación y el hecho de ajuste (E96–E97); sin la corrida
+  e2e no se arriesga el cálculo de intereses. Hoy sigue lo construido (el período liquidado no se reliquida).
+- **65 B · cancelar con cargos por cobrar: cobrarlos del saldo — PENDIENTE.** Exige emitir el cobro (`ChargeApplied` y su hecho contable) dentro de la entrega de la
+  cancelación; hoy sigue bloqueando con `PendingCharges`.
+- **67 B · plantillas de importación de líneas de captación y de aportes (E251).** `lending.deposit-lines` (hojas `Lineas` y `Tramos`) y `lending.contribution-lines` (hoja
+  `Lineas`), con revisión previa, todo-o-nada, las mismas reglas del alta unitaria (`ReglasDeLineaDeCaptacion`, topes de aportes, perfil, entrega), alcance de línea
+  (fuera de alcance la línea «no existe»), y rutas `GET/POST /api/lending/lines/deposit|contribution/template.xlsx|import` (permisos `DepositLines.*` y `ContributionLines.*`).
+  Cubren la tasa fija o por tramos y los datos de cada clase (CDAT, contractual, permanente); **los cargos y la tasa variable se siguen configurando en pantalla**.
+- **69 · inactividad de la cuenta migrada — AMBIGUA, sin cambio.** «Se inactiva por el usuario, como una cuenta que no viene de migración». Hoy una cuenta (migrada o no)
+  la inactiva el proceso diario a los días de su línea, y la migrada cuenta desde el corte. Quitar esa regla haría que, al activar, toda migrada con último movimiento
+  viejo se inactivara el primer día (con aviso al titular). Se pide confirmar si querían (a) que la migrada se mida como cualquier otra, con ese riesgo, o (b) que la
+  inactivación sea siempre una acción manual del usuario.
+- **71 · el aprobador debe tener la oficina y la línea del caso en su alcance (E250).** `FuenteDeAprobacionDeCuenta.AlAprobarElNivelAsync` valida el alcance de Cartera
+  **del aprobador** (`AlcanceDeCarteraDeUnUsuario`: oficinas y líneas de sus asignaciones y los permisos de alcance total de sus roles) contra la cuenta; si falta responde
+  `Lending.Savings.ApproverOutOfScope`. Aplica con o sin política de niveles.
+- **73 B · la prórroga conserva la tasa pactada (E250).** `RolloverRateRule.Agreed` conserva la tasa de la tabla sellada y el margen negociado; antes caía a la tabla vigente.
+- **74 · intereses del CDAT también a la cuenta de un tercero (E250).** `paymentDestination` admite la cuenta a la vista viva de **otra persona** (en el alcance) con el
+  permiso nuevo `Lending.TermDeposits.PayThirdParty` (ya no en la plantilla del jefe de captaciones, que enumera `Constitute/Renew/Redeem`) y la instrucción escrita del
+  titular subida como adjunto (`thirdPartyAuthorizationAttachmentPublicId`, que queda sellada con el destino en la propuesta o en la instrucción al vencimiento); sin
+  permiso o sin constancia, `Lending.TermDeposit.ThirdPartyPermissionRequired` / `.ThirdPartyAuthorizationRequired`. La retención es la de siempre sobre el interés del
+  CDAT; el GMF se calcula con el hecho `TransferToOtherHolder` (gravado) en vez de `TermDepositRedemptionToAccount`. El capital (redención, disminución) sigue sólo al titular.
+- **76 B · CDAT migrado: columnas de banco y cuenta para el giro (E252).** La parte `term-deposits` de la migración gana `bancoDelGiro` (código de transferencia del banco),
+  `tipoDeCuentaDelGiro` y `numeroDeCuentaDelGiro`: con `DisbursementOrder` el giro va a esa cuenta; vacías, a la cuenta bancaria registrada del titular (lo de antes). El
+  banco debe existir (`Import.Cell.NotFound` al aplicar la carga) y no van con `Account`.
+- **77 A**: confirmada, sin cambio (la orden rechazada se reversa entera).
+- **81 B · contractual incumplido con efecto «cancelar» sin instrucción va a la cuenta a la vista del asociado (E250).** `CicloDelContractual` trata `Cancel` como `MoveToDemand`
+  al buscar destino cuando no hay instrucción.
+- **82 B · embargo: recalcular en el momento de cada consignación — PENDIENTE.** Es lectura en línea con escritura de bloqueos y cerrojo de la persona dentro del camino del
+  retiro; el orden fijo de cerrojos y la corrida e2e lo hacen riesgoso hoy. Sigue el recálculo nocturno (E162).
+- **83 C · concurrencia de embargos: alimentos primero y luego por fecha de recepción (E250).** `RetencionDeEmbargos.RecalcularAsync` ordena por `IsChildSupport` descendente y
+  después `ReceivedOn` e `Id`.
+- **86 · el lote de documentos nace programable (E250).** Parámetro `Documentos.LotesProgramados` (JSON `[{ "clase": "AccountStatement", "dia": 5 }, { "clase":
+  "DepositTaxCertificate", "mes": 3, "dia": 1 }]`, vacío por defecto, pendiente de validar) y tarea `captaciones.lotes-de-documentos` (una vez al día desde las 6:00, por
+  `IEjecutorEnCooperativa`) que corre el mismo `IssueLendingDocumentBatchCommand` de la mano; un documento ya emitido no se repite. Lanzarlo a mano sigue igual.
+- **87 B · el título de un CDAT migrado se emite al activar (E250).** Al activar las captaciones, ya confirmada la transacción, cada CDAT de la carga recibe su título
+  (`TitulosDeCdat.ReemitirVigenteAsync`), uno por uno y sin tumbar la activación: el que no sale queda en el registro y se emite desde la ficha.
+- **89 B, 90 C, 91 B, 92 B+C, 93 B, 96 B+C — PENDIENTES.** Todas tocan la aplicación de la decisión de asamblea o la entrega por fallecimiento, donde un cambio mueve hechos
+  contables por destinatario y órdenes de giro (E186–E190, E203); sin la corrida e2e no se tocan. Quedan especificadas por las respuestas (retención sobre revalorización y
+  retornos con concepto configurable y «pendiente de validar con el tributarista»; base de retornos por plantilla; retirados del año con prorrata y giro; giro rechazado: regirar y
+  respaldo en cuenta por pagar; excedente a ahorro sin cuenta: capitalizar en aportes).
+- **97 · GMF en la entrega por fallecimiento y en saldos no reclamados — PENDIENTE.** La respuesta (GMF como cualquier retiro, parametrizable por línea con defecto «cobra»,
+  pendiente de validar por la contadora) exige cobrar el GMF dentro de cada porción de la entrega y del pago, con su hecho; hoy sigue sin GMF.
+- **99 B · activos líquidos del IRL leídos de Contabilidad (E250).** Puerto nuevo `IActivosLiquidosParaCartera` (en el espacio de la plataforma, junto a
+  `IContabilidadParaCartera`, que conserva sus cinco métodos) y parámetro `RiesgoDeLiquidez.ActivosLiquidosContables` (JSON de prefijo de cuenta y descuento; vacío por defecto):
+  el saldo positivo de cada prefijo entra como activo líquido con su descuento. La regla la fija la contadora (no repetir lo ya registrado como fondo constituido).
+- **100 B · retiros esperados con estadística (E250).** `RetiroEsperadoDeLaVista` (puro): percentil al 95 % de las salidas netas diarias del ahorro a la vista × raíz de 30; con
+  `RiesgoDeLiquidez.RetirosALaVistaMetodo = Automatico` (defecto) y 365 días de historia del libro (`DiasDeHistoriaDelRetiro`) se usa; antes, la fracción fija. El supuesto lo dice
+  el informe.
+- **101 C · seguro de depósitos con cotitulares (E250).** `SeguroDeDepositos.RepartoDeCotitulares` (`PartesIguales` por defecto, `ProporcionRegistrada`, `AlTitular`; pendiente de
+  validar con Fogacoop): el saldo de una cuenta conjunta se reparte entre sus titulares (el titular absorbe el residuo) y cada uno tiene su tope.
+- **102 B · F29 (159) con sólo los renglones de depósitos y aportes (E250).** Vista `liquidity-deposit-bands` (salidas contractuales y no contractuales de depósitos y aportes por
+  banda del IRL, sin titulares); no genera el archivo F29 completo.
+- **103 B · código contable del 9026 por la matriz — PENDIENTE** hasta cotejar el instructivo (T235): sólo si lo exige.
+- **104 B · inversiones del fondo para el 9067 (E250).** El tesorero registra en una inversión CDT/CDAT su tipo, los intereses causados y si capitaliza
+  (`TermTitleKind`, `AccruedInterest`, `CapitalizesInterest`; diálogo de «Registrar inversión»); el 9067 los toma (antes iban en 0 y «no capitaliza»).
+- **105 A (E250).** `cartera.jefe-captaciones` **no** trae `Lending.Deposits.Activate` ni `Lending.Migration.AcceptDifferences` (verificado; sólo `Deposits.Migration` para cargar):
+  se asignan a quien dirige la puesta en marcha. Prueba nueva que lo fija.
+- **106 A · versión de línea con vigencia pasada sólo antes de activar (E250).** `ActivacionesDeCaptacion.FechaMinimaDeVersionAsync`: antes de activar la naturaleza no hay fecha
+  mínima (se carga la historia de tarifas de la puesta en marcha; la versión sigue sin poder empezar antes de la última registrada); activada, «hoy» como antes
+  (`Lending.DepositLine.Retroactive`).
+
+### 27.2 Lo que queda para el dueño o para la corrida final
+
+Pendientes de código: 64, 65, 82, 89, 90, 91, 92, 93, 96, 97 y 103; ambigua: 69. Las e2e de 59, 67, 71, 74, 76, 86, 87, 99–101 y 104 no están escritas (la corrida final de los dos
+motores las cubre una por una); sí se ajustó la de líneas de captación y el conteo de permisos (164). Los defectos nuevos son parámetros «pendientes de validar» de la contadora:
+`Documentos.LotesProgramados`, `SeguroDeDepositos.RepartoDeCotitulares`, `RiesgoDeLiquidez.RetirosALaVistaMetodo`, `.DiasDeHistoriaDelRetiro`, `.ConfianzaDelRetiro` y
+`.ActivosLiquidosContables`.

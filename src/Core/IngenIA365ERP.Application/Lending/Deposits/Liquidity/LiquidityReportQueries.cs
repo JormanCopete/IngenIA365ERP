@@ -116,3 +116,46 @@ public sealed class InsuredDepositsReportQueryHandler(IApplicationDbContext db, 
         return Result.Success(new TablaExportable("Depósitos asegurados", $"Al {corte:yyyy-MM-dd}", Columnas, filas, totales, [nota]));
     }
 }
+
+/// <summary>
+/// La vista <c>liquidity-deposit-bands</c> (feature 014, respuesta 102 B del dueño, E250): los depósitos y los aportes por banda del indicador de riesgo de liquidez
+/// —las salidas contractuales (CDAT y contractual) y no contractuales (ahorro a la vista, permanente y aportes) de cada banda—, el insumo de los renglones de
+/// depósitos y aportes de la evaluación del riesgo de liquidez (F29, código 159) para quien arma el formato con lo demás de su balance. No genera el archivo
+/// F29 completo. Sin datos de titulares; alcance total. (nuevo)
+/// </summary>
+public sealed record LiquidityDepositBandsReportQuery(FiltrosDeInformeDeCartera Filtros) : IRequest<Result<TablaExportable>>;
+
+public sealed class LiquidityDepositBandsReportQueryHandler(FondoDeLiquidezDeCartera fondo, IAlcanceDeCartera alcance, IDateTimeService reloj)
+    : IRequestHandler<LiquidityDepositBandsReportQuery, Result<TablaExportable>>
+{
+    public static readonly VistaDeInformeDeCartera Vista = new("liquidity-deposit-bands", "Depósitos y aportes por banda de liquidez",
+        "Las salidas contractuales y no contractuales de los depósitos y los aportes por banda del indicador de riesgo de liquidez al corte, sin datos de titulares.",
+        "depositos-y-aportes-por-banda", ["asOf"], [], AvailableFrom: EntregaDeCartera.K11);
+
+    public static readonly IReadOnlyList<ColumnaExportable> Columnas =
+    [
+        new("Banda"),
+        new("Hasta (días)", TipoDeColumna.Entero),
+        new("Salidas contractuales", TipoDeColumna.Moneda),
+        new("Salidas no contractuales", TipoDeColumna.Moneda),
+        new("Total de salidas", TipoDeColumna.Moneda),
+    ];
+
+    public async Task<Result<TablaExportable>> Handle(LiquidityDepositBandsReportQuery request, CancellationToken ct)
+    {
+        if (await AlcanceDelFondoDeLiquidez.TotalAsync(alcance, ct) is { } fuera) return Result.Failure<TablaExportable>(fuera);
+        var corte = request.Filtros.ALaFecha(reloj.HoyLocal);
+        var medicion = await fondo.RiesgoAsync(corte, MedidaDeRiesgoDeLiquidez.Irl, ct);
+        var bandas = medicion.Medicion.Bandas;
+        var filas = bandas.Select(b => new FilaExportable([b.Banda, b.HastaDias, b.SalidasContractuales, b.SalidasNoContractuales,
+            b.SalidasContractuales + b.SalidasNoContractuales])).ToList();
+        var totales = new FilaExportable(["Total", null, bandas.Sum(b => b.SalidasContractuales), bandas.Sum(b => b.SalidasNoContractuales),
+            bandas.Sum(b => b.SalidasContractuales + b.SalidasNoContractuales)]);
+        var notas = new List<string>
+        {
+            "Insumo de los renglones de depósitos y aportes de la evaluación del riesgo de liquidez (F29, código 159): el archivo completo lo arma la entidad con lo demás de su balance.",
+        };
+        notas.AddRange(medicion.Supuestos);
+        return Result.Success(new TablaExportable("Depósitos y aportes por banda de liquidez", $"Al {corte:yyyy-MM-dd}", Columnas, filas, totales, notas));
+    }
+}

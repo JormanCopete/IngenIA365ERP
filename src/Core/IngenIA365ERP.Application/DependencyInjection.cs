@@ -260,6 +260,7 @@ public static class DependencyInjection
         services.AddScoped<Common.Security.OficinasDelUsuario>();
         services.AddScoped<Lending.Common.AlcanceDeCarteraDelActor>();
         services.AddScoped<Lending.Common.AlcanceDeCarteraDeUnUsuario>();
+        services.AddScoped<Common.Integration.Accounting.IActivosLiquidosParaCartera, Accounting.Lending.ActivosLiquidosParaCartera>();
         services.TryAddScoped<Common.Interfaces.Security.IAlcanceDeCartera, Common.Interfaces.Security.AlcanceDeCarteraCerrado>();
         services.AddScoped<Lending.Segregation.RegistroDeIntervenciones>();
         services.AddScoped<Lending.Common.LendingAuditEmitter>();

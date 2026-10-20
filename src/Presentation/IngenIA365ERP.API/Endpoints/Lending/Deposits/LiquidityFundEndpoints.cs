@@ -1,4 +1,4 @@
-using Carter;
+﻿using Carter;
 using IngenIA365ERP.API.Endpoints.Common;
 using IngenIA365ERP.API.Filters;
 using IngenIA365ERP.Application.Lending.Deposits.Liquidity;
@@ -51,7 +51,8 @@ public class LiquidityFundEndpoints : ICarterModule
 
         fondo.MapPost("/holdings", async (InversionRequest body, HttpContext http, ISender sender, CancellationToken ct) =>
                 await sender.Send(new RegisterLiquidityFundHoldingCommand(body.Instrument, body.EntityPersonPublicId, body.Reference ?? string.Empty, body.Amount,
-                    body.ConstitutedOn, body.MaturityDate, body.SupportAttachmentPublicId, body.Note, body.PublicId)
+                    body.ConstitutedOn, body.MaturityDate, body.SupportAttachmentPublicId, body.Note, body.PublicId, body.TermTitleKind, body.AccruedInterest ?? 0m,
+                    body.CapitalizesInterest ?? false)
                 {
                     OperationKey = http.ClaveDeOperacion(),
                 }, ct))
@@ -82,7 +83,10 @@ public class LiquidityFundEndpoints : ICarterModule
         DateOnly? MaturityDate,
         Guid? SupportAttachmentPublicId,
         string? Note,
-        Guid? PublicId);
+        Guid? PublicId,
+        string? TermTitleKind = null,
+        decimal? AccruedInterest = null,
+        bool? CapitalizesInterest = null);
 
     /// <summary>El cuerpo de <c>POST /holdings/{holdingId}/end</c>.</summary>
     public sealed record TerminarRequest(DateOnly EndedOn, string? Reason);

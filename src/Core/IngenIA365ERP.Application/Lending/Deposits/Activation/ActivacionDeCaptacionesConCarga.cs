@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Security;
 using IngenIA365ERP.Application.Common.Models;
@@ -46,7 +46,8 @@ public sealed class ActivacionDeCaptacionesConCarga(
     EmisionDeCartera emision,
     IActorActual actorActual,
     IDateTimeService reloj,
-    LendingAuditEmitter? auditoria = null)
+    LendingAuditEmitter? auditoria = null,
+    Documents.TitulosDeCdat? titulos = null)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
@@ -63,7 +64,7 @@ public sealed class ActivacionDeCaptacionesConCarga(
         var previa = await ValidarAsync(naturaleza, cargaPublicId, fecha, puntoPublicId, recalcular: true, ct);
         if (previa.IsFailure) return Result.Failure<DepositsActivationDto>(previa.Error);
 
-        return await TransaccionExplicita.EjecutarAsync(db, async () =>
+        var activada = await TransaccionExplicita.EjecutarAsync(db, async () =>
         {
             await cerrojo.TomarSetupAsync(exclusivo: true, ct);
             var setup = await db.LendingSetups.FirstOrDefaultAsync(s => s.Id == LendingSetup.IdDeLaFilaUnica, ct)
@@ -135,6 +136,33 @@ public sealed class ActivacionDeCaptacionesConCarga(
             return Result.Success(new DepositsActivationDto(activacion.PublicId, naturaleza.ToString(), fecha, nacidas.Cuentas, nacidas.TransaccionesIniciales,
                 [new MensajeEmitidoDto(mensaje.Value.Type, mensaje.Value.PublicId)], evaluacion.Requisitos, evaluacion.Avisos));
         }, ct);
+        // Respuesta 87 B del dueño (E250): el título de cada CDAT migrado se emite al activar las captaciones, a nombre de su titular. Después de confirmar la
+        // activación y uno por uno: un título que no sale (sin firmante, almacén caído) queda en el registro y se emite desde la ficha, como cualquier otro.
+        if (activada.IsSuccess && naturaleza == LineNature.Deposit && titulos is not null)
+            await EmitirTitulosDeLosCdatMigradosAsync(cargaPublicId, usuario, ct);
+        return activada;
+    }
+
+    /// <summary>Emite el título vigente de cada CDAT que nació con la carga (los que ya lo tienen no se repiten). Nunca falla la activación.</summary>
+    private async Task EmitirTitulosDeLosCdatMigradosAsync(Guid cargaPublicId, int usuario, CancellationToken ct)
+    {
+        var carga = await db.MigrationLoads.AsNoTracking().FirstOrDefaultAsync(c => c.PublicId == cargaPublicId, ct);
+        if (carga is null) return;
+        var tandas = await db.MigrationLoadParts.AsNoTracking().Where(p => p.MigrationLoadId == carga.Id && !p.IsDeleted).Select(p => p.Id).ToListAsync(ct);
+        var numeros = await db.MigrationTermDepositRows.AsNoTracking().Where(r => tandas.Contains(r.MigrationLoadPartId)).Select(r => r.SourceAccountNumber).ToListAsync(ct);
+        if (numeros.Count == 0) return;
+        var cuentas = await db.MemberAccounts.Where(a => numeros.Contains(a.Number) && a.DepositClass == DepositClass.TermDeposit && !a.IsDeleted).ToListAsync(ct);
+        foreach (var cuenta in cuentas)
+        {
+            try
+            {
+                await titulos!.ReemitirVigenteAsync(cuenta, usuario, ct);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // Se emite después desde la ficha del CDAT (POST /term-deposits/{id}/titles).
+            }
+        }
     }
 
     /// <summary>Entrega, activada, créditos primero, carga, fecha, plazo, acta, recálculo, diferencias y requisitos, en ese orden.</summary>

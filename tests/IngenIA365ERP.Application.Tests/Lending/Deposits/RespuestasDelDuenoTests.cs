@@ -1,4 +1,4 @@
-using FluentAssertions;
+﻿using FluentAssertions;
 using IngenIA365ERP.Application.Common.Imports;
 using IngenIA365ERP.Application.Lending.Deposits.Documents;
 using IngenIA365ERP.Application.Lending.Deposits.Lines;
@@ -137,6 +137,18 @@ public sealed class RespuestasDelDuenoTests : IDisposable
 
         e.Code.Should().Be("Lending.PayrollFile.AccountLineWithoutPaymasterCode");
         e.Message.Should().Contain("APORTES, AHORRO").And.Contain("Grupos y equivalencias").And.Contain("CONV1");
+    }
+
+    // ------------------------------------------------------------------------------------ 63 obligado a llevar contabilidad --
+
+    [Fact]
+    public void El_componente_inflacionario_se_descuenta_a_la_persona_natural_que_no_esta_obligada_a_llevar_contabilidad()
+    {
+        var natural = new IngenIA365ERP.Domain.Entities.Core.Person { PersonType = "N" };
+        var obligada = new IngenIA365ERP.Domain.Entities.Core.Person { PersonType = "N", IsObligatedToKeepBooks = true };
+
+        IngenIA365ERP.Application.Lending.Deposits.Accrual.ReglasDeRetencion.PerfilDe(natural).PersonaNaturalNoObligada.Should().BeTrue();
+        IngenIA365ERP.Application.Lending.Deposits.Accrual.ReglasDeRetencion.PerfilDe(obligada).PersonaNaturalNoObligada.Should().BeFalse();
     }
 
     // --------------------------------------------------------------------------------------- 106 fecha mínima de la versión --

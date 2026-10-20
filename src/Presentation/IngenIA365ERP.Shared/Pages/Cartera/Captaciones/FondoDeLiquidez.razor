@@ -1,4 +1,4 @@
-@page "/cartera/fondo-de-liquidez"
+﻿@page "/cartera/fondo-de-liquidez"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
 @using System.Globalization
 @using IngenIA365ERP.Shared.Services.Adjuntos
@@ -220,6 +220,20 @@
                         <input class="e-input numero" type="number" step="0.01" min="0" value="@(_valor?.ToString(CultureInfo.InvariantCulture))"
                                @onchange="@(e => _valor = decimal.TryParse(e.Value?.ToString(), NumberStyles.Number, CultureInfo.InvariantCulture, out var v) ? v : null)" />
                     </label>
+                    @if (_instrumento == 2)
+                    {
+                        <label class="campo">Tipo de título
+                            <select class="e-input" @bind="_tipoDeTitulo">
+                                <option value="CDT">CDT</option>
+                                <option value="CDAT">CDAT</option>
+                            </select>
+                        </label>
+                        <label class="campo">Intereses causados
+                            <input class="e-input numero" type="number" step="0.01" min="0" value="@(_intereses?.ToString(CultureInfo.InvariantCulture))"
+                                   @onchange="@(e => _intereses = decimal.TryParse(e.Value?.ToString(), NumberStyles.Number, CultureInfo.InvariantCulture, out var v) ? v : null)" />
+                        </label>
+                        <label class="campo"><input type="checkbox" @bind="_capitaliza" /> Los intereses se capitalizan</label>
+                    }
                     <label class="campo">Constituida desde * <input type="date" class="e-input" value="@_desde.ToString("yyyy-MM-dd")" @onchange="@(e => _desde = LeerFecha(e.Value) ?? _desde)" /></label>
                     <label class="campo">Vence <input type="date" class="e-input" value="@(_vence?.ToString("yyyy-MM-dd"))" @onchange="@(e => _vence = LeerFecha(e.Value))" /></label>
                     <label class="campo campo-ancho">Nota <input class="e-input" maxlength="500" @bind="_nota" /></label>
@@ -277,6 +291,9 @@
     // Registro de una inversión.
     private bool _mostrarRegistro, _mostrarTerminar;
     private int _instrumento = 1;
+    private string _tipoDeTitulo = "CDT";
+    private decimal? _intereses;
+    private bool _capitaliza;
     private PersonSearchPicker.PersonSearchItem? _entidad;
     private string? _referencia, _nota, _motivoFin;
     private decimal? _valor;
@@ -383,7 +400,8 @@
         using var carga = _guardado.Iniciar();
         _errorDialogo = null;
         var r = await Cliente.RegistrarInversionDelFondoAsync(new RegistrarInversionRequest(_instrumento, _entidad!.PublicId, _referencia!.Trim(), _valor!.Value, _desde,
-            _vence, _soporte, string.IsNullOrWhiteSpace(_nota) ? null : _nota.Trim(), _reservado), _clave);
+            _vence, _soporte, string.IsNullOrWhiteSpace(_nota) ? null : _nota.Trim(), _reservado, _instrumento == 2 ? _tipoDeTitulo : null,
+            _instrumento == 2 ? _intereses ?? 0m : null, _instrumento == 2 ? _capitaliza : null), _clave);
         if (!r.IsSuccess || r.Value is null) { _errorDialogo = string.Join(" ", LineasDeCreditoClient.Explicar(r)); return; }
         _mostrarRegistro = false;
         await Notification.SuccessAsync($"Inversión {r.Value.Reference} registrada.");

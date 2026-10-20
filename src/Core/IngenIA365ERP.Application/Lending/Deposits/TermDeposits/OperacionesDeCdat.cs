@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using IngenIA365ERP.Application.Common.Integration.Contracts.Lending.Deposits;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Security;
@@ -97,7 +97,9 @@ public sealed class PagoDeInteresesDeCdat(
             if (neto > 0m)
             {
                 var leida = await movimientos.LeerAsync(cdat, fecha, ct);
-                var g = await movimientos.GmfAsync(leida, HechosGeneradoresDeGmf.RedencionDeCdatAbonada, neto, fecha, ct);
+                // Respuesta 74 del dueño (E250): abonar a la cuenta de otra persona es un traslado a otro titular (gravado con su propio hecho); a la del titular, la redención abonada.
+                var g = await movimientos.GmfAsync(leida, cuentaDestino.HolderPersonId == cdat.HolderPersonId ? HechosGeneradoresDeGmf.RedencionDeCdatAbonada
+                    : HechosGeneradoresDeGmf.TrasladoAOtroTitular, neto, fecha, ct);
                 if (g.IsFailure) return Result.Failure<MemberAccountOperation>(g.Error);
                 gmf = g.Value;
             }
@@ -482,6 +484,11 @@ public sealed class ProrrogaDeCdat(
         {
             case RolloverRateRule.SameRate:
                 tabla = v.TableAnnualRate;
+                break;
+            case RolloverRateRule.Agreed:
+                // Respuesta 73 B del dueño (E250): la prórroga con «tasa pactada» conserva la pactada (la de la tabla sellada y su margen negociado), no la de la tabla de hoy.
+                tabla = v.TableAnnualRate;
+                margen = v.NegotiatedSpread;
                 break;
             default:
                 var leida = await lector.TasaDeLaTablaAsync(linea, v.TermDays ?? 0, capital, inicio, ct);

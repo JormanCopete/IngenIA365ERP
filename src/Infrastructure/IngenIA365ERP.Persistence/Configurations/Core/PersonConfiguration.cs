@@ -1,4 +1,4 @@
-using IngenIA365ERP.Domain.Entities.Core;
+﻿using IngenIA365ERP.Domain.Entities.Core;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -67,6 +67,7 @@ public class PersonConfiguration : IEntityTypeConfiguration<Person>
         builder.Property(e => e.IsSimpleTaxRegime).HasDefaultValue(false);
         builder.Property(e => e.IsIncomeTaxFiler).HasDefaultValue(false);
         builder.Property(e => e.IsObligatedToInvoice).HasDefaultValue(false);
+        builder.Property(e => e.IsObligatedToKeepBooks).HasDefaultValue(false);
         builder.Property(e => e.IcaRate).HasPrecision(10, 5);
         builder.Property(e => e.DataOrigin).HasMaxLength(6);
         builder.Property(e => e.PaymentDays).HasDefaultValue((short)0);
