@@ -195,4 +195,10 @@ public class AssemblyDistributionLine : AuditableEntity, IHechoInmutable
 
     /// <summary>La orden de giro de la amortización o del pago de excedentes.</summary>
     public int? PayoutOrderId { get; init; }
+
+    /// <summary>
+    /// Respuesta 91 B del dueño (E259): el asociado se retiró durante el ejercicio; participó a prorrata del tiempo que lo fue y lo que le tocó se le giró
+    /// (no se capitalizó ni se llevó a ahorro: ya no tiene vínculo).
+    /// </summary>
+    public bool WithdrawnDuringYear { get; init; }
 }

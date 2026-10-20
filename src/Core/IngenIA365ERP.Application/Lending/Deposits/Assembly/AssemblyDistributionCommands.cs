@@ -303,10 +303,15 @@ public sealed class ApplyAssemblyDistributionCommandHandler(
         // D23: la pantalla bloquea si lo de la asamblea no se contabilizaría (una pregunta por combinación de dimensiones).
         var validacion = PrevalidationOutcome.NotApplicable;
         var capitalizadas = s.PersonasSinDestino.ToHashSet();
-        var cuentasDeLaPregunta = aplicables.Where(l => !capitalizadas.Contains(l.PersonaId))
+        var retiradas = s.CuentasDeRetirados; // respuesta 91 B (E259): quien se retiró en el ejercicio recibe su parte por giro, nunca en una cuenta
+        var cuentasDeLaPregunta = aplicables.Where(l => !capitalizadas.Contains(l.PersonaId) && !retiradas.Contains(l.CuentaId))
             .Select(l => s.Destinos.TryGetValue(l.CuentaId, out var de) ? de.Id : l.CuentaId).Distinct().ToList();
         var preguntas = new List<(HechosRepresentativosDeCaptaciones.CuentaRepresentativa C, SurplusDestination? Destino)>();
         preguntas.AddRange((await validacionPrevia.DimensionesAsync(cuentasDeLaPregunta, hoy, ct)).Values.GroupBy(c => c.D).Select(g => (g.First(), d.SurplusDestination)));
+        var aPagarAlRetirado = aplicables.Where(l => retiradas.Contains(l.CuentaId)).Select(l => l.CuentaId).Distinct().ToList();
+        if (aPagarAlRetirado.Count > 0)
+            preguntas.AddRange((await validacionPrevia.DimensionesAsync(aPagarAlRetirado, hoy, ct)).Values.GroupBy(c => c.D)
+                .Select(g => (g.First(), (SurplusDestination?)SurplusDestination.Payment)));
         var aCapitalizar = aplicables.Where(l => capitalizadas.Contains(l.PersonaId)).Select(l => l.CuentaId).Distinct().ToList();
         if (aCapitalizar.Count > 0)
             preguntas.AddRange((await validacionPrevia.DimensionesAsync(aCapitalizar, hoy, ct)).Values.GroupBy(c => c.D)
@@ -351,6 +356,7 @@ public sealed class ApplyAssemblyDistributionCommandHandler(
                     AssemblyDistributionKind.Revaluation => [(MemberAccountConcept.ContributionRevaluation, l.Aplicado)],
                     AssemblyDistributionKind.Amortization => DebitoDeAportes.Repartir(saldos.GetValueOrDefault(aportes.Id) ?? [], l.Aplicado, 0m)
                                                              ?? throw new InvalidOperationException($"La cuenta {aportes.Number} no alcanza para amortizar {l.Aplicado}."),
+                    _ when retiradas.Contains(l.CuentaId) => [], // se gira: no entra a ninguna cuenta (E259)
                     _ => d.SurplusDestination switch
                     {
                         SurplusDestination.Savings when destino is null => [(s.Parametros.ConceptoDeExcedentes, l.Aplicado)],
@@ -393,10 +399,11 @@ public sealed class ApplyAssemblyDistributionCommandHandler(
 
             // 2. Las órdenes de giro: la amortización y el pago de los excedentes, al beneficiario registrado del asociado.
             var ordenesDeLinea = new Dictionary<long, (AccountPayoutOrder Orden, PayeeV1 Payee, Guid Persona)>();
-            var conOrden = d.Kind == AssemblyDistributionKind.Amortization || d.SurplusDestination == SurplusDestination.Payment;
+            var conOrden = d.Kind == AssemblyDistributionKind.Amortization || d.SurplusDestination == SurplusDestination.Payment || retiradas.Count > 0;
             if (conOrden)
             {
-                foreach (var h in hechas)
+                foreach (var h in hechas.Where(x => d.Kind == AssemblyDistributionKind.Amortization || d.SurplusDestination == SurplusDestination.Payment
+                                                    || retiradas.Contains(x.Linea.CuentaId)))
                 {
                     var titular = await db.People.AsNoTracking().IgnoreQueryFilters().FirstAsync(x => x.Id == h.Cuenta.HolderPersonId, ct);
                     var beneficiario = await ordenes.BeneficiarioAsync(titular.Id, null, null, null, ct);
@@ -428,8 +435,8 @@ public sealed class ApplyAssemblyDistributionCommandHandler(
                 Concept = x.Concepto.ToString(), ContributionClass = EmisionDeCartera.ClaseDeAporte(x.Concepto)?.ToString(),
                 Amount = d.Kind == AssemblyDistributionKind.Amortization ? -x.Monto : x.Monto, ReasonCode = motivo,
             }).ToList())).ToList();
-            var pagos = d.SurplusDestination == SurplusDestination.Payment && d.Kind == AssemblyDistributionKind.SurplusDistribution
-                ? hechas.Select(h => new OrdenDeAsambleaAEmitir(h.Hecho, h.Linea.Aplicado, ordenesDeLinea[h.Operacion.Id].Orden, ordenesDeLinea[h.Operacion.Id].Payee,
+            var pagos = d.Kind == AssemblyDistributionKind.SurplusDistribution
+                ? hechas.Where(h => d.SurplusDestination == SurplusDestination.Payment || retiradas.Contains(h.Linea.CuentaId)).Select(h => new OrdenDeAsambleaAEmitir(h.Hecho, h.Linea.Aplicado, ordenesDeLinea[h.Operacion.Id].Orden, ordenesDeLinea[h.Operacion.Id].Payee,
                     ordenesDeLinea[h.Operacion.Id].Persona)).ToList()
                 : [];
             var deAmortizacion = d.Kind == AssemblyDistributionKind.Amortization
@@ -471,6 +478,7 @@ public sealed class ApplyAssemblyDistributionCommandHandler(
                     ProratedAmount = l.Aplicado,
                     LimitedByMinimum = l.LimitadaPorMinimo,
                     OperationId = h.Operacion?.Id,
+                    WithdrawnDuringYear = retiradas.Contains(l.CuentaId),
                     PayoutOrderId = h.Operacion is { } op && ordenesDeLinea.TryGetValue(op.Id, out var o) ? o.Orden.Id : null,
                 });
             }
@@ -536,6 +544,8 @@ public sealed class ReverseAssemblyDistributionCommandHandler(
 
         var lineas = await db.AssemblyDistributionLines.AsNoTracking()
             .Where(l => l.AssemblyDistributionId == d.Id && l.SimulationVersion == d.SimulationVersion && l.OperationId != null).ToListAsync(ct);
+        // Respuesta 91 B (E259): lo que se giró a quien se retiró ya salió a Tesorería; la decisión no se reversa entera.
+        if (lineas.Any(l => l.WithdrawnDuringYear)) return Falla(ErroresDeAsamblea.PagoNoReversable());
         var idsOps = lineas.Select(l => l.OperationId!.Value).ToList();
         var vivas = await db.AccountPayoutOrders.AsNoTracking()
             .CountAsync(o => idsOps.Contains(o.OperationId) && !o.IsDeleted

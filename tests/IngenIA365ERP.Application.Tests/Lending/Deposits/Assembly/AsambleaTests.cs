@@ -18,6 +18,7 @@ using IngenIA365ERP.Application.Tests.Lending.Deposits.Contributions;
 using IngenIA365ERP.Domain.Common.NationalValues;
 using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Entities.Lending.Governance;
+using IngenIA365ERP.Domain.Entities.Lending.Deposits.Processes;
 using IngenIA365ERP.Domain.Entities.Lending.Loans;
 using IngenIA365ERP.Domain.Enums.Lending;
 using IngenIA365ERP.Domain.Lending;
@@ -369,6 +370,59 @@ public sealed class AsambleaTests : IDisposable
         var ajena = await new ReissueSurplusPayoutOrderCommandHandler(_a.Db, Distribuciones(), regiro)
             .Handle(new ReissueSurplusPayoutOrderCommand(Guid.NewGuid(), ordenes[0].PublicId, null, null, null, "Otra") { OperationKey = Guid.NewGuid() }, default);
         ajena.IsFailure.Should().BeTrue();
+    }
+
+    /// <summary>
+    /// Respuesta 91 B del dueño (E259): Ana dejó de ser asociada el 16 de diciembre (retiro liquidado, cuenta de aportes cerrada) y Beto sigue. Con los excedentes
+    /// a aportes y el saldo al cierre, Ana participa a prorrata del tiempo que fue asociada (15 de los 365 días) y se le GIRA lo que le toca —no se capitaliza
+    /// ni se le abre cuenta—; Beto capitaliza como siempre. La decisión mezcla dos destinos y no se reversa entera (lo girado ya salió).
+    /// </summary>
+    [Fact]
+    public async Task E259_el_asociado_retirado_en_el_ejercicio_participa_a_prorrata_y_se_le_gira_lo_que_le_toca()
+    {
+        await AportesAsync();
+        var cuentaDeAna = await _a.Db.MemberAccounts.SingleAsync(c => c.HolderPersonId == _a.C.Ana.Id && c.Nature == LineNature.Contribution);
+        _a.Db.MembershipWithdrawals.Add(new MembershipWithdrawal
+        {
+            Number = "RTA-000001", PersonId = _a.C.Ana.Id, ContributionAccountId = cuentaDeAna.Id, Cause = MembershipWithdrawalCause.Voluntary,
+            FiledOn = new DateOnly(2026, 12, 10), FiledByUserId = _a.C.Jefe.Id, Status = MembershipWithdrawalStatus.Settled, EffectiveDate = new DateOnly(2026, 12, 16),
+            SettlementVersion = 1,
+        });
+        cuentaDeAna.Status = MemberAccountStatus.Closed;
+        await _a.Db.SaveChangesAsync();
+        _a.Db.ChangeTracker.Clear();
+
+        var d = await RegistradaAsync(AssemblyDistributionKind.SurplusDistribution, 100_000m, valor: 100_000m, @base: RevaluationBase.YearEndBalance);
+        var s = await SimuladaAsync(d.PublicId);
+        s.Warnings.Should().Contain(w => w.Contains("se retiraron durante el ejercicio"));
+        s.Lines.Should().HaveCount(2);
+        var deAna = s.Lines.Single(l => l.Person.FullName.Contains("Ana"));
+        var deBeto = s.Lines.Single(l => l.Person.FullName.Contains("Beto"));
+        deAna.WithdrawnDuringYear.Should().BeTrue();
+        deBeto.WithdrawnDuringYear.Should().BeFalse();
+        deAna.BaseAmount.Should().Be(41_095.89m, "1.000.000 × 15/365: del 1 al 15 de diciembre fue asociada");
+        deBeto.BaseAmount.Should().Be(2_000_000m, "el saldo al cierre de quien sigue");
+        (deAna.AppliedAmount + deBeto.AppliedAmount).Should().Be(100_000m);
+        deAna.AppliedAmount.Should().BeInRange(2_013m, 2_014m);
+
+        _a.G.ActuarComo(_a.C.Jefe);
+        var aplicada = Ok(await AplicarAsync(d.PublicId, s.Sha256, Acta(d.PublicId), Soporte(d.PublicId)));
+        var lineaAna = aplicada.Lines.Single(l => l.Person.FullName.Contains("Ana"));
+        lineaAna.WithdrawnDuringYear.Should().BeTrue();
+        lineaAna.PayoutOrderNumber.Should().NotBeNull("lo de quien se retiró se gira");
+        lineaAna.DestinationAccountNumber.Should().BeNull();
+        aplicada.Lines.Single(l => l.Person.FullName.Contains("Beto")).PayoutOrderNumber.Should().BeNull("quien sigue capitaliza");
+
+        var orden = await _a.Db.AccountPayoutOrders.AsNoTracking().SingleAsync();
+        orden.Purpose.Should().Be(PayoutPurpose.SurplusPayment);
+        orden.Amount.Should().Be(deAna.AppliedAmount);
+        (await SaldoAsync(_a.C.Ana, MemberAccountConcept.ContributionOrdinary)).Should().Be(0m, "nada entró a los aportes ordinarios de quien se retiró");
+        (await SaldoAsync(_a.C.Beto, MemberAccountConcept.ContributionOrdinary)).Should().Be(deBeto.AppliedAmount, "lo de quien sigue sí se capitaliza");
+        var hecho = await _a.Db.IntegrationMessages.AsNoTracking().SingleAsync(m => m.Type == ExcedentesDistribuidosV1.Type);
+        hecho.PayloadJson.Should().Contain("payments", "lo de Ana va del fondo a los retornos por pagar");
+
+        (await Reversar().Handle(new ReverseAssemblyDistributionCommand(d.PublicId, "Error") { OperationKey = Guid.NewGuid() }, default))
+            .Error.Code.Should().Be(ErroresDeAsamblea.CodigoPagoNoReversable, "lo girado ya salió a Tesorería");
     }
 
     [Fact]

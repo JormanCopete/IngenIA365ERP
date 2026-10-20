@@ -18,7 +18,8 @@ public sealed record LineaDeAsambleaDto(
     Guid? DestinationAccountPublicId,
     string? DestinationAccountNumber,
     string? OperationNumber,
-    string? PayoutOrderNumber);
+    string? PayoutOrderNumber,
+    bool WithdrawnDuringYear = false);
 
 public sealed record LimiteLegalDeAsambleaDto(bool Applied, decimal? Ipc, string? Source, DateOnly? ReferenceDate);
 

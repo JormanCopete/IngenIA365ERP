@@ -29,6 +29,9 @@ public sealed record ParametrosDeAsamblea(
     MemberAccountConcept ConceptoDeExcedentes,
     bool AmortizacionExcluyeDeudores);
 
+/// <summary>Quien se retiró durante el ejercicio: su persona, su cuenta de aportes (la del retiro) y la fecha efectiva (respuesta 91 B, E259).</summary>
+internal sealed record RetiroEnElEjercicio(int PersonaId, int CuentaId, DateOnly RetiradoEl);
+
 /// <summary>
 /// La simulación calculada (T203): el resultado del motor, la cuenta de aportes de cada línea y su cuenta de destino (excedentes a ahorro), lo amortizable,
 /// el límite legal leído, los asociados sin cuenta de destino y el DTO con su huella. (nuevo)
@@ -39,6 +42,7 @@ public sealed record SimulacionDeAsamblea(
     IReadOnlyDictionary<int, MemberAccount> Cuentas,
     IReadOnlyDictionary<int, MemberAccount> Destinos,
     IReadOnlyList<int> PersonasSinDestino, // los que no tienen cuenta de destino: su excedente se capitaliza en aportes (E257)
+    IReadOnlySet<int> CuentasDeRetirados, // las cuentas de aportes de quienes se retiraron en el ejercicio: participan a prorrata y se les gira (E259)
     decimal? LimiteLegal,
     string? FuenteDelLimite,
     ParametrosDeAsamblea Parametros);
@@ -163,9 +167,26 @@ public sealed class DistribucionesDeAsamblea(
                         && (w.Status == MembershipWithdrawalStatus.Approved || w.Status == MembershipWithdrawalStatus.Settled
                             || w.Status == MembershipWithdrawalStatus.ToRedo))
             .Select(w => w.PersonId).Distinct().ToListAsync(ct);
+
+        // Respuesta 91 B (E259): en los excedentes, quien se retiró durante el ejercicio (retiro liquidado o pagado, con fecha efectiva dentro o después del
+        // 1 de enero) participa a prorrata del tiempo que fue asociado y se le gira lo que le toca. Los demás retiros en curso siguen fuera, con su aviso.
+        var retiradosDelEjercicio = new List<RetiroEnElEjercicio>();
+        if (d.Kind == AssemblyDistributionKind.SurplusDistribution)
+        {
+            var desde = new DateOnly(d.FiscalYear, 1, 1);
+            var retiros = await db.MembershipWithdrawals.AsNoTracking()
+                .Where(w => !w.IsDeleted && (w.Status == MembershipWithdrawalStatus.Settled || w.Status == MembershipWithdrawalStatus.Paid)
+                            && w.EffectiveDate != null && w.EffectiveDate >= desde)
+                .OrderBy(w => w.Id).ToListAsync(ct);
+            retiradosDelEjercicio = retiros.GroupBy(w => w.PersonId).Select(g => g.Last())
+                .Select(w => new RetiroEnElEjercicio(w.PersonId, w.ContributionAccountId, w.EffectiveDate!.Value)).ToList();
+            var retiradosIds = retiradosDelEjercicio.Select(r => r.PersonaId).ToHashSet();
+            enRetiro = enRetiro.Where(x => !retiradosIds.Contains(x)).ToList();
+        }
         if (enRetiro.Count > 0)
             avisos.Add($"{enRetiro.Count} asociado(s) con el retiro aprobado, liquidado o por rehacer quedan fuera: su liquidación ya cuenta sus aportes.");
         var fuera = enRetiro.ToHashSet();
+        fuera.UnionWith(retiradosDelEjercicio.Select(r => r.PersonaId));
         if (d.Kind == AssemblyDistributionKind.Amortization && p.AmortizacionExcluyeDeudores)
         {
             var deudores = await db.Loans.AsNoTracking()
@@ -178,6 +199,14 @@ public sealed class DistribucionesDeAsamblea(
             fuera.UnionWith(nuevos);
         }
         cuentas = cuentas.Where(c => !fuera.Contains(c.HolderPersonId)).OrderBy(c => c.HolderPersonId).ThenBy(c => c.Id).ToList();
+        var retiradosPorCuenta = retiradosDelEjercicio.ToDictionary(r => r.CuentaId, r => r.RetiradoEl);
+        if (retiradosPorCuenta.Count > 0)
+        {
+            var cuentasDeRetirados = await db.MemberAccounts.AsNoTracking()
+                .Where(a => retiradosPorCuenta.Keys.Contains(a.Id) && a.Nature == LineNature.Contribution && !a.IsDeleted).ToListAsync(ct);
+            cuentas = cuentas.Concat(cuentasDeRetirados).OrderBy(c => c.HolderPersonId).ThenBy(c => c.Id).ToList();
+            avisos.Add($"{cuentasDeRetirados.Count} asociado(s) se retiraron durante el ejercicio: participan a prorrata del tiempo que lo fueron y su parte se les gira (no se capitaliza).");
+        }
         var ids = cuentas.Select(c => c.Id).ToList();
 
         // La base: los movimientos de aportes por fecha valor hasta el cierre del ejercicio.
@@ -207,7 +236,9 @@ public sealed class DistribucionesDeAsamblea(
         var calculo = RevalorizacionYExcedentes.Calcular(new PedidoDeDistribucion(d.Kind, d.FiscalYear, d.BaseMethod, d.DecidedFraction, d.DecidedValue,
             d.FundAmount, limite, unidad,
             cuentas.Select(c => new AsociadoEnLaDistribucion(c.HolderPersonId, c.Id, movimientos.GetValueOrDefault(c.Id) ?? [],
-                d.Kind == AssemblyDistributionKind.Amortization ? amortizable.GetValueOrDefault(c.Id) : null)).ToList()));
+                d.Kind == AssemblyDistributionKind.Amortization ? amortizable.GetValueOrDefault(c.Id) : null,
+                retiradosPorCuenta.TryGetValue(c.Id, out var retiroEl) ? retiroEl : null)).ToList()));
+        var cuentasDeLosRetirados = retiradosPorCuenta.Keys.Where(porIdDeCuenta => cuentas.Any(c => c.Id == porIdDeCuenta)).ToHashSet();
         var porId = cuentas.ToDictionary(c => c.Id);
 
         // Los excedentes a ahorro: la cuenta viva del titular en la línea de destino (la más reciente).
@@ -215,12 +246,12 @@ public sealed class DistribucionesDeAsamblea(
         var sinDestino = new List<int>();
         if (d.Kind == AssemblyDistributionKind.SurplusDistribution && d.SurplusDestination == SurplusDestination.Savings && d.DestinationLineId is { } lineaDestino)
         {
-            var titulares = calculo.Lineas.Where(l => l.Aplicado > 0m).Select(l => l.PersonaId).ToList();
+            var titulares = calculo.Lineas.Where(l => l.Aplicado > 0m && !cuentasDeLosRetirados.Contains(l.CuentaId)).Select(l => l.PersonaId).ToList();
             var deAhorro = await db.MemberAccounts.AsNoTracking()
                 .Where(a => a.CreditLineId == lineaDestino && titulares.Contains(a.HolderPersonId) && !a.IsDeleted
                             && (a.Status == MemberAccountStatus.Active || a.Status == MemberAccountStatus.Inactive))
                 .ToListAsync(ct);
-            foreach (var l in calculo.Lineas.Where(l => l.Aplicado > 0m))
+            foreach (var l in calculo.Lineas.Where(l => l.Aplicado > 0m && !cuentasDeLosRetirados.Contains(l.CuentaId)))
             {
                 var cuenta = deAhorro.Where(a => a.HolderPersonId == l.PersonaId).OrderByDescending(a => a.Id).FirstOrDefault();
                 if (cuenta is null) sinDestino.Add(l.PersonaId);
@@ -233,19 +264,19 @@ public sealed class DistribucionesDeAsamblea(
         if (d.Kind == AssemblyDistributionKind.Revaluation && limite is null)
             avisos.Add("El IPC del ejercicio no trae valor: la revalorización no se limita.");
 
-        var huella = Huella(d, unidad, limite, calculo, destinos);
-        var lineas = await LineasDtoAsync(calculo.Lineas.Select(l => (l, porId[l.CuentaId], destinos.GetValueOrDefault(l.CuentaId), (string?)null, (string?)null))
-            .ToList(), ct);
+        var huella = Huella(d, unidad, limite, calculo, destinos, cuentasDeLosRetirados);
+        var lineas = await LineasDtoAsync(calculo.Lineas.Select(l => (l, porId[l.CuentaId], destinos.GetValueOrDefault(l.CuentaId), (string?)null, (string?)null,
+            cuentasDeLosRetirados.Contains(l.CuentaId))).ToList(), ct);
         var dto = new AssemblyDistributionSimulationDto(d.PublicId, hoy, calculo.TasaDecidida, calculo.TasaAplicada, lineas,
             new LimiteLegalDto(calculo.LimitadaPorElLimiteLegal, limite, fuente, referencia), new ProrrateoDto(calculo.Prorrateada, calculo.Factor),
             new TotalesDeAsambleaDto(calculo.BaseTotal, calculo.TotalCalculado, calculo.TotalAplicado, calculo.Remanente, calculo.Lineas.Count),
             calculo.Explicacion, avisos, huella);
-        return Result.Success(new SimulacionDeAsamblea(calculo, dto, porId, destinos, sinDestino, limite, fuente, p));
+        return Result.Success(new SimulacionDeAsamblea(calculo, dto, porId, destinos, sinDestino, cuentasDeLosRetirados, limite, fuente, p));
     }
 
     /// <summary>La huella de lo que se aplicaría: la decisión, la unidad, el límite y cada línea con su destino.</summary>
     private static string Huella(AssemblyDistribution d, decimal unidad, decimal? limite, DistribucionCalculada calculo,
-        IReadOnlyDictionary<int, MemberAccount> destinos) =>
+        IReadOnlyDictionary<int, MemberAccount> destinos, IReadOnlySet<int> retirados) =>
         new HuellaDeCartera()
             .Identificador("distribution", d.PublicId)
             .Enumeracion("kind", (AssemblyDistributionKind?)d.Kind)
@@ -264,17 +295,18 @@ public sealed class DistribucionesDeAsamblea(
                 .Decimal("base", l.Base, 2)
                 .Decimal("calculated", l.Calculado, 2)
                 .Decimal("applied", l.Aplicado, 2)
-                .Entero("destinationAccount", destinos.GetValueOrDefault(l.CuentaId)?.Id))
+                .Entero("destinationAccount", destinos.GetValueOrDefault(l.CuentaId)?.Id)
+                .Logico("withdrawn", retirados.Contains(l.CuentaId)))
             .Calcular();
 
     // ------------------------------------------------------------------------------------------------------------ DTO --
 
     private async Task<IReadOnlyList<AssemblyDistributionLineDto>> LineasDtoAsync(
-        IReadOnlyList<(LineaDeDistribucion Linea, MemberAccount Cuenta, MemberAccount? Destino, string? Operacion, string? Orden)> lineas, CancellationToken ct)
+        IReadOnlyList<(LineaDeDistribucion Linea, MemberAccount Cuenta, MemberAccount? Destino, string? Operacion, string? Orden, bool Retirado)> lineas, CancellationToken ct)
     {
         var personas = await LectorDeCuentas.PersonasAsync(db, lineas.Select(l => l.Linea.PersonaId).Distinct().ToList(), ct);
         return lineas.Select(l => new AssemblyDistributionLineDto(personas[l.Linea.PersonaId], l.Cuenta.PublicId, l.Cuenta.Number, l.Linea.Base, l.Linea.Calculado,
-            l.Linea.Aplicado, l.Linea.LimitadaPorMinimo, l.Destino?.PublicId, l.Destino?.Number, l.Operacion, l.Orden)).ToList();
+            l.Linea.Aplicado, l.Linea.LimitadaPorMinimo, l.Destino?.PublicId, l.Destino?.Number, l.Operacion, l.Orden, l.Retirado)).ToList();
     }
 
     /// <summary>La decisión con (o sin) sus líneas aplicadas.</summary>
@@ -309,7 +341,7 @@ public sealed class DistribucionesDeAsamblea(
                     f.ProratedAmount, f.LimitedByMinimum), cuentas[f.ContributionAccountId],
                 f.DestinationAccountId is { } dId ? cuentas[dId] : null,
                 f.OperationId is { } o ? ops.GetValueOrDefault(o) : null,
-                f.PayoutOrderId is { } po ? ordenes.GetValueOrDefault(po) : null)).ToList(), ct);
+                f.PayoutOrderId is { } po ? ordenes.GetValueOrDefault(po) : null, f.WithdrawnDuringYear)).ToList(), ct);
         }
         return new AssemblyDistributionDto(d.PublicId, d.Number, d.Kind, d.FiscalYear, d.Status, d.BaseMethod, d.DecidedFraction, d.DecidedValue, d.FundAmount,
             d.SurplusDestination, linea, d.RoundingUnit, punto?.PublicId, punto?.Number, corrige?.PublicId, corrige?.Number, d.LegalLimitFraction,

@@ -8,9 +8,11 @@ public sealed record MovimientoDeAportes(DateOnly FechaValor, decimal Monto);
 
 /// <summary>
 /// Un asociado ante la decisión de la asamblea (feature 014, US12, T201): su persona, su cuenta de aportes, los movimientos de sus aportes (para la base) y,
-/// en una amortización, lo que se le puede devolver sin perforar su mínimo no reducible (nulo = sin tope). (nuevo)
+/// en una amortización, lo que se le puede devolver sin perforar su mínimo no reducible (nulo = sin tope). <paramref name="RetiradoEl"/> (respuesta 91 B del
+/// dueño, E259): la fecha efectiva del retiro de quien dejó de ser asociado durante el ejercicio —participa a prorrata del tiempo que lo fue—. (nuevo)
 /// </summary>
-public sealed record AsociadoEnLaDistribucion(int PersonaId, int CuentaId, IReadOnlyList<MovimientoDeAportes> Movimientos, decimal? MaximoAmortizable = null);
+public sealed record AsociadoEnLaDistribucion(int PersonaId, int CuentaId, IReadOnlyList<MovimientoDeAportes> Movimientos, decimal? MaximoAmortizable = null,
+    DateOnly? RetiradoEl = null);
 
 /// <summary>
 /// Lo que la asamblea decidió, tal como lo recibe el motor (feature 014, US12, T201; FR-045 a FR-047; D13): la clase, el ejercicio cuyos excedentes se
@@ -93,14 +95,19 @@ public static class RevalorizacionYExcedentes
         var explicacion = new List<string>();
         var bases = pedido.Asociados
             .Select(a => (a.PersonaId, a.CuentaId, a.MaximoAmortizable,
-                Base: pedido.Base == RevaluationBase.YearEndBalance ? SaldoAlCierre(a.Movimientos, pedido.Ejercicio) : SaldoPromedio(a.Movimientos, pedido.Ejercicio)))
+                Base: a.RetiradoEl is { } retiro
+                    ? SaldoPromedio(HastaElRetiro(a.Movimientos, retiro), pedido.Ejercicio)
+                    : pedido.Base == RevaluationBase.YearEndBalance ? SaldoAlCierre(a.Movimientos, pedido.Ejercicio) : SaldoPromedio(a.Movimientos, pedido.Ejercicio)))
             .Where(a => a.Base > 0m)
             .OrderBy(a => a.PersonaId).ThenBy(a => a.CuentaId)
             .ToList();
         var baseTotal = bases.Sum(b => b.Base);
+        var retirados = pedido.Asociados.Count(a => a.RetiradoEl is not null && bases.Any(b => b.CuentaId == a.CuentaId));
         explicacion.Add(string.Create(CultureInfo.InvariantCulture,
             $"Base: {(pedido.Base == RevaluationBase.YearEndBalance ? "saldo de aportes al 31 de diciembre" : "saldo promedio diario de aportes")} de {pedido.Ejercicio}, "
             + $"{bases.Count} asociado(s), total {baseTotal:N2}."));
+        if (retirados > 0)
+            explicacion.Add($"{retirados} asociado(s) se retiraron durante el ejercicio: participan a prorrata del tiempo que lo fueron (saldo promedio diario hasta la víspera de su retiro).");
 
         if (bases.Count == 0 || baseTotal == 0m)
         {
@@ -185,6 +192,19 @@ public static class RevalorizacionYExcedentes
             suma += m.Monto * (cierre.DayNumber - desde.DayNumber + 1);
         }
         return decimal.Round(suma / dias, 2, MidpointRounding.ToEven);
+    }
+
+    /// <summary>
+    /// Los movimientos de quien se retiró (respuesta 91 B, E259): sólo los anteriores a la fecha efectiva del retiro, y en esa fecha el saldo se cancela. Así el
+    /// promedio diario cuenta los días que fue asociado (hasta la víspera del retiro) y lo que la liquidación devolvió después no lo reduce.
+    /// </summary>
+    public static IReadOnlyList<MovimientoDeAportes> HastaElRetiro(IReadOnlyList<MovimientoDeAportes> movimientos, DateOnly retiro)
+    {
+        ArgumentNullException.ThrowIfNull(movimientos);
+        var antes = movimientos.Where(m => m.FechaValor < retiro).ToList();
+        var saldo = antes.Sum(m => m.Monto);
+        if (saldo != 0m) antes.Add(new MovimientoDeAportes(retiro, -saldo));
+        return antes;
     }
 
     /// <summary>El saldo de los aportes al 31 de diciembre del ejercicio (por fecha valor).</summary>

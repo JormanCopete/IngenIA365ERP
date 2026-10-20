@@ -111,7 +111,7 @@
                                                 <td class="numero">@Pesos(l.BaseAmount)</td>
                                                 <td class="numero">@Pesos(l.CalculatedAmount)@(l.LimitedByMinimum ? " (hasta el mínimo)" : "")</td>
                                                 <td class="numero">@Pesos(l.AppliedAmount)</td>
-                                                <td>@(l.DestinationAccountNumber ?? "—")</td>
+                                                <td>@(l.WithdrawnDuringYear ? "Giro (se retiró en el ejercicio)" : l.DestinationAccountNumber ?? "—")</td>
                                             </tr>
                                         }
                                     </tbody>

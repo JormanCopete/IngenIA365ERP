@@ -236,6 +236,88 @@ public class AsambleaTests(CentralIdentityApiFixture fx)
         }
     }
 
+    /// <summary>
+    /// Respuesta 91 B del dueño (E259): Ana se retiró durante el ejercicio (retiro liquidado) y Beto sigue. Los excedentes a aportes la incluyen a prorrata del
+    /// tiempo que fue asociada y a ella se le GIRA su parte (orden de giro, nada entra a sus aportes); Beto capitaliza. Lo girado ya salió: no se reversa entera.
+    /// </summary>
+    [Fact]
+    public async Task E259_el_asociado_retirado_en_el_ejercicio_recibe_su_parte_por_giro()
+    {
+        var des = await DesembolsoE2E.EscenarioAsync(fx, "cap_asamblea_91");
+        var cap = await CaptacionesE2E.CooperativaConCaptacionesAsync(fx, "asamblea_91");
+        cap.TenantPublicId.Should().Be(des.Coop.TenantPublicId);
+        using var http = fx.CreateClient();
+        var admin = des.Coop.TokenAdmin;
+        await CarteraE2E.PersonaDelAdministradorAsync(http, des.Coop);
+        var linea = await LineaDeAportesAsync(http, admin, des.Hoy);
+        var ana = await AsociadoAsync(http, admin, "Ana");
+        await ConAportesAsync(http, admin, des, linea, ana, 1_000_000m);
+        await ConAportesAsync(http, admin, des, linea, await AsociadoAsync(http, admin, "Beto"), 2_000_000m);
+        var ejercicio = des.Hoy.Year;
+
+        // El retiro de Ana, liquidado, con fecha efectiva dentro del ejercicio.
+        var retiro = new DateOnly(ejercicio, 12, 31).AddDays(-1) > des.Hoy ? des.Hoy.AddDays(1) : des.Hoy;
+        await CausacionE2E.EnLaBaseAsync(fx, des.Coop.TenantPublicId, async db =>
+        {
+            var persona = await db.People.AsNoTracking().Where(p => p.PublicId == ana).Select(p => p.Id).SingleAsync();
+            var cuenta = await db.MemberAccounts.AsNoTracking().Where(a => a.HolderPersonId == persona && a.Nature == LineNature.Contribution).Select(a => a.Id).SingleAsync();
+            var usuario = await db.Users.AsNoTracking().OrderBy(u => u.Id).Select(u => u.Id).FirstAsync();
+            db.MembershipWithdrawals.Add(new IngenIA365ERP.Domain.Entities.Lending.Deposits.Processes.MembershipWithdrawal
+            {
+                Number = "RTA-E2E91", PersonId = persona, ContributionAccountId = cuenta, Cause = MembershipWithdrawalCause.Voluntary, FiledOn = des.Hoy,
+                FiledByUserId = usuario, Status = MembershipWithdrawalStatus.Settled, EffectiveDate = retiro, SettlementVersion = 1,
+            });
+            await db.SaveChangesAsync();
+            return 0;
+        });
+
+        var reloj = new ConductorDelDespachador(fx).Reloj;
+        var original = reloj.Desfase;
+        try
+        {
+            var asamblea = new DateOnly(ejercicio + 1, 3, 20);
+            reloj.Desfase += asamblea.ToDateTime(new TimeOnly(10, 0)) - reloj.AhoraLocal.DateTime;
+            var registro = await CarteraE2E.ConClaveAsync(http, admin, HttpMethod.Post, Asamblea, new
+            {
+                kind = "SurplusDistribution", year = ejercicio, fundAmount = 100_000m, value = 100_000m, @base = "YearEndBalance", destination = "Contributions",
+                reason = "Asamblea general ordinaria (e2e de la respuesta 91)",
+            });
+            registro.StatusCode.Should().Be(HttpStatusCode.Created, await registro.Content.ReadAsStringAsync());
+            var decision = (await CarteraE2E.LeerAsync(registro)).GetProperty("publicId").GetGuid();
+            var simulacion = await CarteraE2E.ExitoAsync(http, admin, HttpMethod.Post, $"{Asamblea}/{decision}/simulate");
+            simulacion.GetProperty("warnings").EnumerateArray().Select(w => w.GetString()).Should().Contain(w => w!.Contains("se retiraron durante el ejercicio"));
+            var lineasSimuladas = simulacion.GetProperty("lines").EnumerateArray().ToList();
+            lineasSimuladas.Should().HaveCount(2);
+            lineasSimuladas.Count(l => l.GetProperty("withdrawnDuringYear").GetBoolean()).Should().Be(1);
+            simulacion.GetProperty("totals").GetProperty("applied").GetDecimal().Should().Be(100_000m);
+
+            var punto = await ActasE2E.DecididoAsync(http, des, des.Originacion.Consejo, LendingDecisionSubjects.AssemblyDistribution, decision, asamblea, "Decision");
+            var soporte = await SoporteAsync(http, admin, decision);
+            var aplica = await UsuariosDeCartera.IngresarAsync(http, des.Usuarios.Todos["administrador"]);
+            var aplicada = await AplicarAsync(http, aplica, decision, punto, simulacion.GetProperty("sha256").GetString()!, soporte);
+            aplicada.StatusCode.Should().Be(HttpStatusCode.OK, await aplicada.Content.ReadAsStringAsync());
+            var lineas = (await CarteraE2E.LeerAsync(aplicada)).GetProperty("lines").EnumerateArray().ToList();
+            var deAna = lineas.Single(l => l.GetProperty("withdrawnDuringYear").GetBoolean());
+            deAna.GetProperty("payoutOrderNumber").ValueKind.Should().Be(JsonValueKind.String, "lo de quien se retiró se gira");
+            lineas.Single(l => !l.GetProperty("withdrawnDuringYear").GetBoolean()).GetProperty("payoutOrderNumber").ValueKind.Should().Be(JsonValueKind.Null);
+
+            var ordenes = await CausacionE2E.EnLaBaseAsync(fx, des.Coop.TenantPublicId, db => db.AccountPayoutOrders.AsNoTracking()
+                .Where(o => o.Purpose == PayoutPurpose.SurplusPayment).Select(o => o.Amount).ToListAsync());
+            ordenes.Should().ContainSingle().Which.Should().Be(deAna.GetProperty("appliedAmount").GetDecimal());
+            var enSusAportes = await CausacionE2E.EnLaBaseAsync(fx, des.Coop.TenantPublicId, db => db.MemberAccountTransactions.AsNoTracking()
+                .Where(t => t.Kind == MemberAccountTransactionKind.AssemblyCredit
+                            && db.MemberAccounts.Any(c => c.Id == t.MemberAccountId && db.People.Any(p => p.PublicId == ana && p.Id == c.HolderPersonId))).CountAsync());
+            enSusAportes.Should().Be(0, "nada entró a las cuentas de quien se retiró");
+
+            var reversa = await CarteraE2E.ConClaveAsync(http, aplica, HttpMethod.Post, $"{Asamblea}/{decision}/reverse", new { reason = "No debe poder (e2e)" });
+            (await CarteraE2E.CodigoDeErrorAsync(reversa)).Should().Be("Lending.AssemblyDistribution.PaymentNotReversible");
+        }
+        finally
+        {
+            reloj.Desfase = original;
+        }
+    }
+
     // ------------------------------------------------------------------------------------------------------------ apoyo --
 
     private static async Task<JsonElement> RegistrarAsync(HttpClient http, string token, int ejercicio, decimal porcentaje, decimal fondo, Guid? corrige)

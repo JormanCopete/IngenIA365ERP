@@ -19,7 +19,8 @@ public sealed record AssemblyDistributionLineDto(
     Guid? DestinationAccountPublicId,
     string? DestinationAccountNumber,
     string? OperationNumber,
-    string? PayoutOrderNumber);
+    string? PayoutOrderNumber,
+    bool WithdrawnDuringYear = false);
 
 /// <summary>El límite legal de la revalorización (el IPC del ejercicio): si cortó lo decidido, el valor y su fuente.</summary>
 public sealed record LimiteLegalDto(bool Applied, decimal? Ipc, string? Source, DateOnly? ReferenceDate);

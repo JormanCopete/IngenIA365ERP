@@ -100,6 +100,39 @@ public class RevalorizacionYExcedentesTests
         fondo.Should().Throw<ArgumentOutOfRangeException>();
     }
 
+    /// <summary>
+    /// Respuesta 91 B del dueño (E259): quien se retiró durante el ejercicio participa a prorrata del tiempo que fue asociado —el saldo promedio diario hasta
+    /// la víspera de su retiro—, aun con la base «saldo al cierre», y lo que la liquidación le devolvió después no le resta.
+    /// </summary>
+    [Fact]
+    public void Quien_se_retiro_en_el_ejercicio_participa_a_prorrata_del_tiempo_que_fue_asociado()
+    {
+        // 1.000.000 desde el 1 de enero; se retira el 1 de julio (181 días asociado: enero a junio) y la liquidación le devolvió todo el 15 de julio.
+        List<MovimientoDeAportes> movimientos =
+        [
+            new(new DateOnly(2026, 1, 1), 1_000_000m),
+            new(new DateOnly(2026, 7, 15), -1_000_000m),
+        ];
+        var retiro = new DateOnly(2026, 7, 1);
+        RevalorizacionYExcedentes.SaldoPromedio(RevalorizacionYExcedentes.HastaElRetiro(movimientos, retiro), 2026)
+            .Should().Be(decimal.Round(1_000_000m * 181 / 365, 2, MidpointRounding.ToEven));
+
+        var completo = new AsociadoEnLaDistribucion(2, 20, [new MovimientoDeAportes(new DateOnly(2026, 1, 1), 1_000_000m)]);
+        var retirado = new AsociadoEnLaDistribucion(1, 10, movimientos, RetiradoEl: retiro);
+        var r = RevalorizacionYExcedentes.Calcular(new PedidoDeDistribucion(AssemblyDistributionKind.SurplusDistribution, 2026, RevaluationBase.YearEndBalance,
+            null, 100_000m, 100_000m, null, 1m, [retirado, completo]));
+        var lineaDelRetirado = r.Lineas.Single(l => l.PersonaId == 1);
+        var lineaDelOtro = r.Lineas.Single(l => l.PersonaId == 2);
+        lineaDelRetirado.Base.Should().Be(495_890.41m, "el saldo al cierre no aplica a quien se retiró: cuenta el tiempo que lo fue");
+        lineaDelOtro.Base.Should().Be(1_000_000m, "quien sigue, con el saldo al cierre");
+        (lineaDelRetirado.Aplicado + lineaDelOtro.Aplicado).Should().Be(100_000m);
+        lineaDelRetirado.Aplicado.Should().Be(33_150m);
+        r.Explicacion.Should().Contain(e => e.Contains("se retiraron durante el ejercicio"));
+
+        // Retirado después del cierre: fue asociado todo el ejercicio.
+        RevalorizacionYExcedentes.SaldoPromedio(RevalorizacionYExcedentes.HastaElRetiro([movimientos[0]], new DateOnly(2027, 2, 1)), 2026).Should().Be(1_000_000m);
+    }
+
     [Fact]
     public void El_mayor_residuo_suma_exacto_y_desempata_por_el_primero()
     {

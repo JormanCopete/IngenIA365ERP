@@ -2922,3 +2922,28 @@ por el mismo valor, al mismo beneficiario y cuenta destino (o a los que indique)
 - **Pruebas.** Application: `AsambleaTests.E258_…` (excedente rechazado, no se regira lo que sigue emitido, regiro, una sola vez, decisión ajena) y
   `CicloDeVidaDeCuentasTests.E258_…` (entrega: sin reintegro ni GMF nuevo, cuenta en cierre y caso sin entregar hasta girar; un regiro anulado admite otro). e2e
   (`AsambleaTests.E258_…`, `CicloDeVidaDeCuentasTests.E258_…`): rechazo por la tesorería de prueba, regiro por HTTP y giro final. Verdes en PostgreSQL y SQL Server.
+
+### 27.10 E259 · el asociado retirado durante el ejercicio participa a prorrata y se le gira lo que le toca (respuesta 91 B, 2026-10-21)
+
+Quien dejó de ser asociado **durante el ejercicio** ya no queda fuera de los excedentes: participa **a prorrata del tiempo que lo fue** y se le **gira** lo que le toca (no se
+capitaliza en aportes ni se lleva a ahorro: ya no tiene vínculo). Migración aditiva `CaptacionesAsambleaRetirados` (PostgreSQL `20261020213628`, SQL Server `20261020213550`):
+`LND_AssemblyDistributionLines.WithdrawnDuringYear` (`bool`, defecto falso). Paridad y `has-pending-model-changes` limpios en los dos motores.
+
+- **Quién es «retirado del ejercicio».** En los **excedentes** (no en la revalorización ni en la amortización, que son de aportes vivos), quien tiene un retiro **liquidado o pagado**
+  (`Settled`/`Paid`) con fecha efectiva desde el 1 de enero del ejercicio en adelante. Los retiros aprobados o por rehacer siguen fuera, con su aviso de siempre. Se lee en
+  `DistribucionesDeAsamblea.SimularAsync`; la cuenta es la del retiro (`ContributionAccountId`), aunque ya esté cerrada.
+- **A prorrata del tiempo.** La base del retirado es **siempre el saldo promedio diario** (aunque la decisión use «saldo al cierre», que en su caso sería cero) con los movimientos
+  **anteriores a la fecha efectiva del retiro** y esa fecha cancela el saldo (`RevalorizacionYExcedentes.HastaElRetiro`): cuenta los días hasta la **víspera** del retiro, y lo que
+  la liquidación le devolvió después no le resta. Retirado después del cierre del ejercicio = fue asociado todo el año. Vive en el motor puro (`AsociadoEnLaDistribucion.RetiradoEl`);
+  la explicación lo dice. El resto del cálculo (tasa, mayor residuo, prorrateo al fondo) no cambia.
+- **Se le gira.** Al aplicar, la línea del retirado va **siempre por orden de giro** (`PayoutPurpose.SurplusPayment`, al beneficiario registrado de la persona), sea cual sea el
+  destino de la decisión: no entra a ninguna cuenta ni abre ninguna. Una misma decisión queda con **destino mixto**: los demás capitalizan o van a ahorro como siempre. En el hecho
+  `ExcedentesDistribuidos` el retirado viaja en `Payments` (del fondo de excedentes a la devolución por pagar, motivo `SurplusPayment`) y los demás en `Lines`; el constructor
+  contable ya asienta las dos cosas en un solo hecho, así que **no cambia la matriz**. La validación previa (D23) pregunta aparte por las dimensiones de las cuentas de los retirados
+  con destino «pago». Los giros rechazados se regiran como los demás excedentes pagados (E258).
+- **No se reversa entera.** Como el pago en dinero (`PaymentNotReversible`): lo girado ya salió a Tesorería; se corrige con otra decisión.
+- **Pantalla y DTO.** La línea trae `withdrawnDuringYear`; en la simulación la pantalla de asamblea la rotula «Giro (se retiró en el ejercicio)».
+- **Pruebas.** Domain (`RevalorizacionYExcedentesTests`: el promedio hasta la víspera, el retiro posterior al cierre y la mezcla con quien sigue). Application
+  (`AsambleaTests.E259_…`: Ana retirada el 16 de diciembre participa con 41.095,89 de base, se le gira, no entra nada a sus aportes, Beto capitaliza y la decisión no se reversa).
+  e2e (`AsambleaTests.E259_…`, por HTTP con el retiro liquidado en la base). Verdes en PostgreSQL y SQL Server. **Pendiente de validar por la contadora:** que el tiempo cuente hasta la
+  víspera del retiro y que la revalorización de quien se retiró no aplique.
