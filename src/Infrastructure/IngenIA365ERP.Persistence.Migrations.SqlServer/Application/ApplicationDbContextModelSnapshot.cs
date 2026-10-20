@@ -29214,6 +29214,9 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.Property<int?>("EarlyRedemptionPenaltyMode")
                         .HasColumnType("int");
 
+                    b.Property<bool>("GmfOnDeceasedAndUnclaimed")
+                        .HasColumnType("bit");
+
                     b.Property<bool?>("GraceAccrues")
                         .HasColumnType("bit");
 

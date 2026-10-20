@@ -253,8 +253,11 @@ public sealed class ReglasDeMovimientos(
         var politica = await PoliticaDeGmfAsync(fecha, ct);
         if (politica.IsFailure) return Result.Failure<GmfCalculado?>(politica.Error);
         var usado = await ExentoUsadoAsync(c.Cuenta.HolderPersonId, fecha, ct);
+        // Respuesta 97 (E253): la entrega por fallecimiento y el pago de no reclamados cobran como un retiro salvo que la línea lo apague.
+        var sujeta = (c.Version?.IsGmfSubject ?? true)
+                     && (!HechosGeneradoresDeGmf.EsEntregaDeLaRespuesta97(hecho) || (c.Version?.GmfOnDeceasedAndUnclaimed ?? true));
         return Result.Success<GmfCalculado?>(GravamenMovimientosFinancieros.Calcular(politica.Value,
-            new DisposicionDeGmf(hecho, monto, c.Version?.IsGmfSubject ?? true, c.ExentaDeGmf, usado)));
+            new DisposicionDeGmf(hecho, monto, sujeta, c.ExentaDeGmf, usado)));
     }
 
     /// <summary>Lo exento usado en el mes de <paramref name="fecha"/> por la persona (Σ de sus filas, con los reversos en negativo).</summary>

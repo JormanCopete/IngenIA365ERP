@@ -108,7 +108,7 @@
                                 <div><dt>Tasa</dt><dd>@TasaDeCaptacion(v)</dd></div>
                                 <div><dt>Mínimos</dt><dd>abrir @Pesos(v.MinOpeningAmount) · mantener @Pesos(v.MinBalance) · ganar interés @Pesos(v.MinBalanceForInterest)</dd></div>
                                 <div><dt>Cálculo</dt><dd>@TextosDeCaptaciones.MetodoDeSaldo(v.BalanceMethod) · @TextosDeCartera.Convencion(v.DayCount) · liquidación @TextosDeCartera.Periodicidad(v.SettlementPeriodicity).ToLowerInvariant()</dd></div>
-                                <div><dt>Retención y GMF</dt><dd>@(TextosDeCaptaciones.TarifasDeRetencion.FirstOrDefault(t => t.Valor == v.WithholdingRateParameterCode).Texto ?? "Tarifa de la clase") · @(v.GmfApplies ? "grava GMF" : "no grava GMF")</dd></div>
+                                <div><dt>Retención y GMF</dt><dd>@(TextosDeCaptaciones.TarifasDeRetencion.FirstOrDefault(t => t.Valor == v.WithholdingRateParameterCode).Texto ?? "Tarifa de la clase") · @(v.GmfApplies ? "grava GMF" : "no grava GMF")@(v.GmfApplies && !v.GmfOnDeceasedAndUnclaimed ? " · sin GMF en fallecimiento y no reclamados" : "")</dd></div>
                                 <div><dt>Titulares</dt><dd>@(v.RequiresMembership ? "Exige asociado" : "No exige asociado")@(v.AllowsCoHolders ? " · cotitulares" : "")@(v.AllowsMinors ? " · menores" : "")@(v.AllowsPartialWithdrawals ? " · retiros parciales" : "")</dd></div>
                                 @if (v.TermDeposit is { } c)
                                 {

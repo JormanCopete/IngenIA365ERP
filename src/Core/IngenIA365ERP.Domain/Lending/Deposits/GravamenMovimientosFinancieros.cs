@@ -35,9 +35,24 @@ public static class HechosGeneradoresDeGmf
     /// <summary>Traslado entre cuentas de ahorro del mismo titular (ET art. 879 num. 14): exento por defecto.</summary>
     public const string TrasladoEntreAhorrosDelMismoTitular = "TransferBetweenSameHolderSavings";
 
-    /// <summary>Los seis del defecto de D32, en su orden, y el débito automático (D54).</summary>
+    /// <summary>
+    /// La entrega de lo ahorrado a los beneficiarios por el fallecimiento del titular (respuesta 97 del dueño, 2026-10-21, E253): el GMF se cobra como en
+    /// cualquier retiro, por defecto, y cada línea puede apagarlo (<c>GmfOnDeceasedAndUnclaimed</c>). Pendiente de validar por la contadora.
+    /// </summary>
+    public const string EntregaPorFallecimiento = "DeceasedDelivery";
+
+    /// <summary>El pago de un saldo no reclamado al titular (respuesta 97, E253): como la entrega por fallecimiento.</summary>
+    public const string PagoDeNoReclamado = "UnclaimedPayment";
+
+    /// <summary>Los seis del defecto de D32, en su orden, el débito automático (D54) y las dos entregas de la respuesta 97 (E253).</summary>
     public static IReadOnlyList<string> Todos { get; } =
-        [Retiro, TrasladoAOtroTitular, TrasladoEntreAhorroYCdat, RedencionDeCdatAbonada, Cancelacion, TrasladoEntreAhorrosDelMismoTitular, DebitoAutomatico];
+    [
+        Retiro, TrasladoAOtroTitular, TrasladoEntreAhorroYCdat, RedencionDeCdatAbonada, Cancelacion, TrasladoEntreAhorrosDelMismoTitular, DebitoAutomatico,
+        EntregaPorFallecimiento, PagoDeNoReclamado,
+    ];
+
+    /// <summary>¿Es una de las dos entregas cuyo GMF cada línea puede apagar (<c>GmfOnDeceasedAndUnclaimed</c>)?</summary>
+    public static bool EsEntregaDeLaRespuesta97(string? hecho) => hecho is EntregaPorFallecimiento or PagoDeNoReclamado;
 
     public static bool Existe(string? hecho) => hecho is not null && Todos.Contains(hecho, StringComparer.Ordinal);
 

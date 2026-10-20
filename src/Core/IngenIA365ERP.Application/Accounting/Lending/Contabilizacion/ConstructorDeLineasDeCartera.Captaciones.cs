@@ -110,7 +110,11 @@ public static partial class ConstructorDeLineasDeCartera
                     break;
                 case GmfRetenidoV1 x:
                     // El GMF por pagar con la clase del producto que generó el hecho (§2), contra el capital de la cuenta debitada.
-                    Operacion(x.Account, x.HolderPersonPublicId, x.Dimensions, x.Amounts, Capital(x.Dimensions, x.Account, x.HolderPersonPublicId),
+                    // Respuesta 97 (E253): el GMF del pago de un saldo no reclamado sale de los no reclamados por pagar, no del capital.
+                    Operacion(x.Account, x.HolderPersonPublicId, x.Dimensions, x.Amounts,
+                        x.Gmf.GeneratingEvent == Domain.Lending.Deposits.HechosGeneradoresDeGmf.PagoDeNoReclamado
+                            ? NoReclamado(x.Dimensions, x.Account, x.HolderPersonPublicId)
+                            : Capital(x.Dimensions, x.Account, x.HolderPersonPublicId),
                         "sin cuenta", ClaseGeneradoraDelGmf(x));
                     break;
                 case InteresDeCaptacionCausadoV1 x:
@@ -425,6 +429,11 @@ public static partial class ConstructorDeLineasDeCartera
         private Lado Capital(DepositFactDimensionsV1 d, MemberAccountRefV1 cuenta, Guid titular) =>
             new(R.RolDelConceptoDeCuenta(nameof(Domain.Enums.Lending.MemberAccountConcept.Principal), d.Inactive)!, Valores(d),
                 nameof(Domain.Enums.Lending.MemberAccountConcept.Principal), null, Persona(titular), null, Numero(cuenta));
+
+        /// <summary>Los no reclamados por pagar de la cuenta (E253): de donde sale el GMF del pago de un saldo no reclamado.</summary>
+        private Lado NoReclamado(DepositFactDimensionsV1 d, MemberAccountRefV1 cuenta, Guid titular) =>
+            new(R.RolDelConceptoDeCuenta(nameof(Domain.Enums.Lending.MemberAccountConcept.Unclaimed), d.Inactive)!, Valores(d),
+                nameof(Domain.Enums.Lending.MemberAccountConcept.Unclaimed), null, Persona(titular), null, Numero(cuenta));
 
         /// <summary>El puente del recaudador (exige su clase); nulo sin clase: el hecho no dice a dónde fue el dinero.</summary>
         private Lado? Recaudo(DepositFactDimensionsV1 d, MemberAccountRefV1? cuenta, string? clase, Guid? pagador) =>

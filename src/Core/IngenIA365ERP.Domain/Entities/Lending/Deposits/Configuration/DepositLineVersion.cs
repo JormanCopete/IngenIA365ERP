@@ -112,6 +112,9 @@ public class DepositLineVersion : AuditableEntity, IHechoInmutable, IVersionDeCa
 
     public bool IsGmfSubject { get; init; }
 
+    /// <summary>Respuesta 97 (E253): ¿la entrega por fallecimiento y el pago de no reclamados cobran GMF? Defecto sí; sólo muerde con <see cref="IsGmfSubject"/>.</summary>
+    public bool GmfOnDeceasedAndUnclaimed { get; init; } = true;
+
     // ----------------------------------------------------------------------------------------------------- límites --
 
     public decimal? MaxWithdrawalPerOperation { get; init; }
@@ -267,6 +270,7 @@ public class DepositLineVersion : AuditableEntity, IHechoInmutable, IVersionDeCa
             SettlementDay = b.SettlementDay,
             WithholdingRateParameterCode = ReglasDeLineaDeCaptacion.TarifaDeRetencionDe(b),
             IsGmfSubject = b.IsGmfSubject,
+            GmfOnDeceasedAndUnclaimed = b.GmfOnDeceasedAndUnclaimed,
             MaxWithdrawalPerOperation = b.MaxWithdrawalPerOperation,
             MaxWithdrawalPerDay = b.MaxWithdrawalPerDay,
             MaxCashPerOperation = b.MaxCashPerOperation,
@@ -351,6 +355,7 @@ public class DepositLineVersion : AuditableEntity, IHechoInmutable, IVersionDeCa
             .Entero("settlementDay", b.SettlementDay)
             .Texto("withholdingRateParameterCode", ReglasDeLineaDeCaptacion.TarifaDeRetencionDe(b))
             .Logico("isGmfSubject", b.IsGmfSubject)
+            .Logico("gmfOnDeceasedAndUnclaimed", b.GmfOnDeceasedAndUnclaimed)
             .Decimal("maxWithdrawalPerOperation", b.MaxWithdrawalPerOperation, 2)
             .Decimal("maxWithdrawalPerDay", b.MaxWithdrawalPerDay, 2)
             .Decimal("maxCashPerOperation", b.MaxCashPerOperation, 2)

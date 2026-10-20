@@ -687,8 +687,11 @@ public sealed class RegistroDeCuentas(IApplicationDbContext db)
             foreach (var grupo in filas.Where(f => f.Kind == clase).GroupBy(Origen))
             {
                 var aMemoria = grupo.Where(f => f.Concept == memoria).Sum(f => f.Amount);
-                var delTitular = grupo.Where(f => f.Concept is MemberAccountConcept.Principal or MemberAccountConcept.InterestPayable).Sum(f => f.Amount);
-                var otros = grupo.Any(f => f.Concept is not (MemberAccountConcept.Principal or MemberAccountConcept.InterestPayable) && f.Concept != memoria);
+                // E253 (respuesta 97): el GMF del pago de un saldo no reclamado sale del concepto Unclaimed, donde está ese dinero.
+                var delTitular = grupo.Where(f => f.Concept is MemberAccountConcept.Principal or MemberAccountConcept.InterestPayable or MemberAccountConcept.Unclaimed)
+                    .Sum(f => f.Amount);
+                var otros = grupo.Any(f => f.Concept is not (MemberAccountConcept.Principal or MemberAccountConcept.InterestPayable or MemberAccountConcept.Unclaimed)
+                                           && f.Concept != memoria);
                 if (aMemoria == 0m || aMemoria + delTitular != 0m || otros)
                     throw new InvalidOperationException(
                         $"Las filas {clase} de una operación van en pareja: lo que entra a {memoria} sale del capital o del interés por pagar por el mismo valor (data-model §0.2).");

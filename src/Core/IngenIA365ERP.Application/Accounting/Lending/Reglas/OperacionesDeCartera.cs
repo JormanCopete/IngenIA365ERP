@@ -232,7 +232,9 @@ public static class OperacionesDeCartera
         new(TrasladoEntreCuentasAplicadoV1.Type, "TRC", false, SaldosDeCuenta, SaldosDeCuenta, EnLinea, null, "MA", EntregaDelHecho.K7, AcompananDisposicion),
         // US8 (T142): los hechos que debitan o abonan el capital admiten también el de la cuenta inactiva (la inactividad cambia el rol, C20): un cargo por
         // inactividad, el GMF de un débito o la liquidación de una cuenta inactiva que causa.
-        new(GmfRetenidoV1.Type, "GMF", false, [R.CapitalDeCaptacion, R.CapitalDeCaptacionInactiva], [R.GmfPorPagar], EnLinea, null, "MA", EntregaDelHecho.K8, Ninguno),
+        // E253 (respuesta 97): el GMF del pago de un saldo no reclamado se debita de los no reclamados por pagar.
+        new(GmfRetenidoV1.Type, "GMF", false, [R.CapitalDeCaptacion, R.CapitalDeCaptacionInactiva, R.NoReclamadosPorPagar], [R.GmfPorPagar], EnLinea, null, "MA",
+            EntregaDelHecho.K8, Ninguno),
         new(InteresDeCaptacionCausadoV1.Type, "ICC", false, [R.GastoPorIntereses], [R.InteresPorPagar], PorLotes, FinDeCausacion, "CC", EntregaDelHecho.K8,
             Ninguno, PorPartes: true),
         new(AjusteDeCausacionDeCaptacionV1.Type, "AJC", false, [R.GastoPorIntereses], [R.InteresPorPagar], PorLotes, FinDeCausacion, "CC",
@@ -278,7 +280,7 @@ public static class OperacionesDeCartera
                 SaldoAFavorReconocidoV1.Type, AjusteDeCausacionPorFechaValorV1.Type]),
         new(PerdidaAplicadaAlRetiroV1.Type, "PDR", false, [R.AportesSociales], [R.PerdidaAbsorbida], EnLinea, null, "RA", EntregaDelHecho.K7, Ninguno),
         new(DevolucionOrdenadaV1.Type, "DVO", false, [.. SaldosDeCuenta, R.NoReclamadosPorPagar], [R.DevolucionPorPagar, R.CapitalDeCaptacion], EnLinea,
-            null, "RA", EntregaDelHecho.K7, Ninguno),
+            null, "RA", EntregaDelHecho.K7, [GmfRetenidoV1.Type]),
         new(DevolucionGiradaV1.Type, "DVG", true, Ninguno, Ninguno, Siempre, null, null, EntregaDelHecho.K7, Ninguno),
         new(SaldoTrasladadoANoReclamadosV1.Type, "SNR", false, [R.DevolucionPorPagar, R.CapitalDeCaptacion, R.CapitalDeCaptacionInactiva],
             [R.NoReclamadosPorPagar], EnLinea, null, "MA", EntregaDelHecho.K10, Ninguno),

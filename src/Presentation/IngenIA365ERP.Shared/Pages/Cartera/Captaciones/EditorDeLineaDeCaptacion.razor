@@ -301,6 +301,7 @@
                     </select>
                 </label>
                 <label class="campo-check"><input type="checkbox" @bind="v.Tax.GmfApplies" /> Grava GMF</label>
+                <label class="campo-check"><input type="checkbox" @bind="v.Tax.GmfOnDeceasedAndUnclaimed" disabled="@(!v.Tax.GmfApplies)" /> Cobra GMF en la entrega por fallecimiento y en los saldos no reclamados <span class="texto-tenue">(pendiente de validar por la contadora)</span></label>
                 <label class="campo">Retiro máximo por operación ($) <input class="e-input numero" type="number" min="0" step="0.01" @bind="v.Limits.MaxWithdrawalPerOperation" /></label>
                 <label class="campo">Retiro máximo diario ($) <input class="e-input numero" type="number" min="0" step="0.01" @bind="v.Limits.MaxWithdrawalPerDay" /></label>
                 <label class="campo">Efectivo máximo por operación ($) <input class="e-input numero" type="number" min="0" step="0.01" @bind="v.Limits.MaxCashPerOperation" /></label>

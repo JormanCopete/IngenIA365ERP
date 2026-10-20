@@ -2729,8 +2729,7 @@ comportamiento (una de líneas de captación, el conteo de permisos) se **ajusta
   contables por destinatario y órdenes de giro (E186–E190, E203); sin la corrida e2e no se tocan. Quedan especificadas por las respuestas (retención sobre revalorización y
   retornos con concepto configurable y «pendiente de validar con el tributarista»; base de retornos por plantilla; retirados del año con prorrata y giro; giro rechazado: regirar y
   respaldo en cuenta por pagar; excedente a ahorro sin cuenta: capitalizar en aportes).
-- **97 · GMF en la entrega por fallecimiento y en saldos no reclamados — PENDIENTE.** La respuesta (GMF como cualquier retiro, parametrizable por línea con defecto «cobra»,
-  pendiente de validar por la contadora) exige cobrar el GMF dentro de cada porción de la entrega y del pago, con su hecho; hoy sigue sin GMF.
+- **97 · GMF en la entrega por fallecimiento y en saldos no reclamados (E253).** Implementada: ver §27.4.
 - **99 B · activos líquidos del IRL leídos de Contabilidad (E250).** Puerto nuevo `IActivosLiquidosParaCartera` (en el espacio de la plataforma, junto a
   `IContabilidadParaCartera`, que conserva sus cinco métodos) y parámetro `RiesgoDeLiquidez.ActivosLiquidosContables` (JSON de prefijo de cuenta y descuento; vacío por defecto):
   el saldo positivo de cada prefijo entra como activo líquido con su descuento. La regla la fija la contadora (no repetir lo ya registrado como fondo constituido).
@@ -2752,7 +2751,7 @@ comportamiento (una de líneas de captación, el conteo de permisos) se **ajusta
 
 ### 27.2 Lo que queda para el dueño o para la corrida final
 
-Pendientes de código: 64, 65, 82, 89, 90, 91, 92, 93, 96, 97 y 103; ambigua: 69. Las e2e de 59, 67, 71, 74, 76, 86, 87, 99–101 y 104 no están escritas (la corrida final de los dos
+Pendientes de código: 64, 65, 82, 89, 90, 91, 92, 93, 96 y 103 (la 97 quedó hecha en E253, §27.4); ambigua: 69. Las e2e de 59, 67, 71, 74, 76, 86, 87, 99–101 y 104 no están escritas (la corrida final de los dos
 motores las cubre una por una); sí se ajustó la de líneas de captación y el conteo de permisos (164). Los defectos nuevos son parámetros «pendientes de validar» de la contadora:
 `Documentos.LotesProgramados`, `SeguroDeDepositos.RepartoDeCotitulares`, `RiesgoDeLiquidez.RetirosALaVistaMetodo`, `.DiasDeHistoriaDelRetiro`, `.ConfianzaDelRetiro` y
 `.ActivosLiquidosContables`.
@@ -2775,3 +2774,33 @@ Se revisó el código de cada una antes de tocarlo; ninguna se dejó a medias en
 - **89–93 y 96:** `AssemblyDistributionCommands` y `Fallecimientos` arman el hecho masivo y las órdenes por destinatario con un solo `s.Parametros.ConceptoDeExcedentes`/destino por
   decisión; capitalizar en aportes a quien no tiene cuenta de ahorro (93), retener (89), base por plantilla (90), prorrata de retirados (91), y regirar un giro rechazado (92, 96)
   exigen líneas con destino mixto, un hecho de retención nuevo y una fuente de «cuenta por pagar» respaldada; el cálculo de `RevalorizacionYExcedentes` también cambia.
+
+### 27.4 E253 · el GMF en la entrega por fallecimiento y en los saldos no reclamados (respuesta 97, 2026-10-21)
+
+La respuesta 97 del dueño —«el GMF **sí** se cobra en la entrega por fallecimiento y en los saldos no reclamados, como cualquier retiro»; la contadora lo valida—
+quedó implementada con una migración aditiva nueva, `CaptacionesGmfEnEntregas` (PostgreSQL `20261020181323`, SQL Server `20261020181249`): `LND_DepositLineVersions.GmfOnDeceasedAndUnclaimed`
+(`bool`, **defecto verdadero** también para las filas existentes). Paridad y `has-pending-model-changes` limpios en los dos motores.
+
+- **Dos hechos generadores nuevos**, `DeceasedDelivery` (`HechosGeneradoresDeGmf.EntregaPorFallecimiento`) y `UnclaimedPayment` (`.PagoDeNoReclamado`), en `HechosGeneradoresDeGmf.Todos` y en
+  el defecto de `Gmf.HechosGeneradores` como **gravados** (pendiente de validar por la contadora; una cooperativa que ya guardó el parámetro sin ellos debe agregarlos o no los cobra, porque «un
+  hecho que el parámetro no nombra no genera»).
+- **Una bandera por línea**, `GmfOnDeceasedAndUnclaimed` en la versión de la línea (`DepositLineVersion`, borrador, huella canónica, `DepositTaxInput`/`ImpuestosDeCaptacionRequest`, casilla en el
+  editor de línea). **Defecto «cobra»**; sólo muerde si la línea ya está sujeta al GMF (`IsGmfSubject`). La decisión vive en un solo sitio, `ReglasDeMovimientos.GmfAsync`: para esos dos hechos la
+  cuenta es «sujeta» si la línea lo es **y** la bandera está encendida; el motor (`GravamenMovimientosFinancieros`) no cambia. Los aportes (cuenta de aportes) no cobran GMF, como siempre.
+- **El GMF se retiene del pago, no se suma**: la base es el valor entregado; el destinatario recibe el **neto** (valor − GMF) y el GMF queda en el concepto `Gmf` del libro. En `Fallecimientos.EntregarPorcionAsync`
+  (por porción: dos beneficiarios al 50 % = dos GMF) y en `NoReclamados.PagarAsync` la orden de giro o el traslado llevan el neto; el uso mensual del tope exento
+  (`RegistrarUsoDeGmf`, con el hecho generador) se escribe en la misma operación y la exención sigue siendo **una sola cuenta marcada por persona**. Sale del capital (y, si éste no alcanza, del
+  interés por pagar: `Fallecimientos.DescontarGmf`); en no reclamados sale del concepto `Unclaimed`, donde está el dinero, y por eso `RegistroDeCuentas.ValidarParejas` admite ese concepto.
+- **Hechos, en la misma transacción**: `DevolucionAEmitir.Gmf` agrega el acompañante `GmfRetenido` a la unidad de la `DevolucionOrdenada` (con su `OrdenDeGiroEmitida` por el neto); el traslado
+  usa `TrasladoConGmfAsync`. Cartera sigue sin conocer cuentas. **Matriz contable**: `DVO` admite `GmfRetenido` como acompañante y `GMF` admite `NoReclamadosPorPagar` como rol de débito; el
+  constructor de líneas debita ese rol (no el capital) cuando el generador es `UnclaimedPayment`. No se siembra ninguna regla ni cuenta: la contadora asigna las del `GmfPorPagar` por clase y los
+  `NoReclamadosPorPagar` que ya sugería la plantilla.
+- **Reverso**: el giro rechazado reversa la operación entera: devuelve el neto y el GMF a `Unclaimed` y el saldo vuelve a retenido (probado).
+- **Idempotencia**: las dos operaciones siguen detrás de su `Idempotency-Key`/`Held` (`Lending.Unclaimed.AlreadyPaid`); la huella del pago ahora incluye el GMF.
+- **Las clases se construyen sin `ReglasDeMovimientos` en las pruebas viejas** (parámetro opcional al final): sin él no hay GMF; en la API siempre se inyecta.
+
+**Pruebas.** Domain: los dos hechos gravan por defecto, la línea «no cobra» y el hecho exento no cobran. Application (`CicloDeVidaDeCuentasTests.GmfEnEntregas`): fallecido con dos beneficiarios al 50 % (órdenes de 498.000,
+GMF 2×2.000, dos usos, dos `GmfRetenido`, cuenta cancelada al girarse), la misma entrega con la línea en «no cobra» (500.000 enteros, sin GMF), no reclamados con GMF (neto, `Unclaimed` en cero,
+reverso que lo restituye) y sin él, y el reparto del GMF entre conceptos. e2e (`CicloDeVidaDeCuentasTests`): fallecimiento con GMF (498.000), sin GMF por la bandera (500.000) y no reclamados con y sin GMF por
+HTTP, verdes en PostgreSQL y SQL Server. **Pendiente de validar por la contadora**: que el GMF sea gravado en estas dos entregas y la regla de base (el valor entregado, retenido del pago); la
+vista previa de la entrega por fallecimiento todavía no muestra el GMF por porción.

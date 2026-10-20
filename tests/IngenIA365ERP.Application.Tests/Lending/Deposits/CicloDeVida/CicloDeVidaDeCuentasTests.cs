@@ -68,11 +68,14 @@ public sealed partial class CicloDeVidaDeCuentasTests : IDisposable
     private OrdenesDeGiroDeCuentas Ordenes() => new(_a.Db, _a.RegistroDeCuentas(), _a.Numerador(), _a.Emision(), _a.Reversion(), _a.C.Parametros(), _a.G.Actor,
         _a.G.Reloj);
 
+    /// <summary>Respuesta 97 (E253): las pruebas de GMF en las entregas lo encienden; las demás siguen midiendo las entregas sin GMF.</summary>
+    private bool _conGmf;
+
     private NoReclamados NoReclamados() => new(_a.Db, _a.RegistroDeCuentas(), _a.Numerador(), _a.Emision(), _a.LiquidacionALaFecha(), Ordenes(),
-        _a.C.Parametros(), _a.G.Actor, _a.G.Reloj, reactivacion: _a.Reactivacion());
+        _a.C.Parametros(), _a.G.Actor, _a.G.Reloj, reactivacion: _a.Reactivacion(), movimientos: _conGmf ? _a.Movimientos() : null);
 
     private Fallecimientos Fallecimientos() => new(_a.Db, _a.RegistroDeCuentas(), _a.Numerador(), _a.Emision(), _a.LiquidacionALaFecha(), Ordenes(),
-        _a.C.Parametros(), _a.G.Valores, _a.G.Actor, _a.G.Reloj, _a.Reactivacion());
+        _a.C.Parametros(), _a.G.Valores, _a.G.Actor, _a.G.Reloj, _a.Reactivacion(), _conGmf ? _a.Movimientos() : null);
 
     private VistaDeFallecimientos Vista() => new(_a.Db, _a.G.Alcance, _a.G.Auditoria, Fallecimientos(), _a.G.Reloj);
 
@@ -93,9 +96,12 @@ public sealed partial class CicloDeVidaDeCuentasTests : IDisposable
         _a.Db.ChangeTracker.Clear();
     }
 
-    private async Task<MemberAccountDto> AhorroAsync(decimal saldo, IReadOnlyList<MemberAccountBeneficiaryInput>? beneficiarios = null)
+    private async Task<MemberAccountDto> AhorroAsync(decimal saldo, IReadOnlyList<MemberAccountBeneficiaryInput>? beneficiarios = null, bool gmfEnEntregas = true)
     {
-        var version = CuentasDePrueba.ALaVista() with { Inactivity = new DepositInactivityInput(DiasDeInactividad) };
+        var version = CuentasDePrueba.ALaVista() with
+        {
+            Inactivity = new DepositInactivityInput(DiasDeInactividad), Tax = new DepositTaxInput(GmfOnDeceasedAndUnclaimed: gmfEnEntregas),
+        };
         var linea = await _a.C.LineaDeCaptacionAsync("AHVISTA", version);
         var cuenta = await _a.C.AbiertaAsync(_a.C.Apertura(linea, _a.C.Ana, beneficiarios: beneficiarios));
         await _a.ConsignadaAsync(_a.Consignacion(cuenta, saldo, ModalidadDeConsignacion.Free, medio: ClaseDeMedioDeRecaudo.Transfer));

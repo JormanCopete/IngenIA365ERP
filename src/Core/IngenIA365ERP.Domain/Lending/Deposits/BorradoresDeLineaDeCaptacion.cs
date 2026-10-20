@@ -126,6 +126,12 @@ public sealed record BorradorDeVersionDeCaptacion(DateOnly ValidFrom, string Rea
     public string? WithholdingRateParameterCode { get; init; }
     public bool IsGmfSubject { get; init; } = true;
 
+    /// <summary>
+    /// Respuesta 97 del dueño (2026-10-21, E253): ¿la entrega por fallecimiento y el pago de saldos no reclamados de esta línea cobran GMF como cualquier
+    /// retiro? Por defecto sí; sólo muerde si la línea está sujeta al GMF. Pendiente de validar por la contadora.
+    /// </summary>
+    public bool GmfOnDeceasedAndUnclaimed { get; init; } = true;
+
     // ----------------------------------------------------------------------------------------------------- límites --
     public decimal? MaxWithdrawalPerOperation { get; init; }
     public decimal? MaxWithdrawalPerDay { get; init; }
@@ -217,6 +223,7 @@ public sealed record BorradorDeVersionDeCaptacion(DateOnly ValidFrom, string Rea
             SettlementDay = v.SettlementDay,
             WithholdingRateParameterCode = v.WithholdingRateParameterCode,
             IsGmfSubject = v.IsGmfSubject,
+            GmfOnDeceasedAndUnclaimed = v.GmfOnDeceasedAndUnclaimed,
             MaxWithdrawalPerOperation = v.MaxWithdrawalPerOperation,
             MaxWithdrawalPerDay = v.MaxWithdrawalPerDay,
             MaxCashPerOperation = v.MaxCashPerOperation,

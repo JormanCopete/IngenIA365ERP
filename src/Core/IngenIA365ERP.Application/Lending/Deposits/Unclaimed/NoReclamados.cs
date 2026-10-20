@@ -21,6 +21,7 @@ using IngenIA365ERP.Domain.Entities.Lending.Integration;
 using IngenIA365ERP.Domain.Enums.Integration;
 using IngenIA365ERP.Domain.Enums.Lending;
 using IngenIA365ERP.Domain.Lending;
+using IngenIA365ERP.Domain.Lending.Deposits;
 using IngenIA365ERP.Domain.Lending.Parameters;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -78,7 +79,9 @@ public enum FormaDePagoDeNoReclamado
 /// por cobrar o sin saldo. Pagar: la operación <c>UnclaimedPayment</c> (prefijo <c>PNR-</c>) sobre la cuenta de origen aunque esté cancelada, por orden de
 /// giro (<c>DevolucionOrdenada</c> y <c>OrdenDeGiroEmitida</c> v2, motivo <c>UnclaimedPayment</c>) o por traslado a una cuenta de ahorro viva del titular
 /// (<c>TrasladoEntreCuentasAplicado</c>). Si Tesorería rechaza el giro, el reverso devuelve el saldo a <c>Unclaimed</c> y el saldo no reclamado vuelve a
-/// retenido. En la transacción y bajo el cerrojo de quien llama. (nuevo)
+/// retenido. Respuesta 97 del dueño (2026-10-21, E253): el pago cobra el GMF como cualquier retiro —<c>UnclaimedPayment</c> en
+/// <c>Gmf.HechosGeneradores</c>, con la bandera <c>GmfOnDeceasedAndUnclaimed</c> de la línea—: el GMF se retiene <b>del pago</b> (neto = saldo − GMF; la orden de
+/// giro o el traslado llevan el neto) y sale del concepto <c>Unclaimed</c>. En la transacción y bajo el cerrojo de quien llama. (nuevo)
 /// </summary>
 public sealed class NoReclamados(
     IApplicationDbContext db,
@@ -92,7 +95,8 @@ public sealed class NoReclamados(
     IDateTimeService reloj,
     ColaDeMensajesAlDeudor? cola = null,
     ReactivacionDeCuenta? reactivacion = null,
-    ILogger<NoReclamados>? logger = null)
+    ILogger<NoReclamados>? logger = null,
+    ReglasDeMovimientos? movimientos = null)
 {
     public const string PrefijoTraslado = "NRC-";
     public const string PrefijoPago = "PNR-";
@@ -296,6 +300,23 @@ public sealed class NoReclamados(
         var titular = await db.People.AsNoTracking().IgnoreQueryFilters().FirstAsync(p => p.Id == saldo.PersonId, ct);
         var hecho = await emision.HechoDeCuentaAsync(origen, hoy, ct);
         if (hecho.IsFailure) return Result.Failure<MemberAccountOperation>(hecho.Error);
+
+        // Respuesta 97 (E253): el GMF del pago, calculado por el motor, retenido del saldo no reclamado.
+        GmfCalculado? gmf = null;
+        var exenta = (Guid?)null;
+        if (movimientos is not null)
+        {
+            var leida = await movimientos.LeerAsync(origen, hoy, ct);
+            var calculado = await movimientos.GmfAsync(leida, HechosGeneradoresDeGmf.PagoDeNoReclamado, saldo.Amount, hoy, ct);
+            if (calculado.IsFailure) return Result.Failure<MemberAccountOperation>(calculado.Error);
+            gmf = calculado.Value;
+            exenta = leida.ExentaDeGmf ? origen.PublicId : null;
+        }
+        var valorGmf = GravamenMovimientosFinancieros.SeCobra(gmf) ? gmf.Valor : 0m;
+        var neto = saldo.Amount - valorGmf;
+        if (neto <= 0m) return Result.Failure<MemberAccountOperation>(ErroresDeNoReclamados.Invalido("unclaimed",
+            $"El GMF ({valorGmf:N2}) no deja nada por pagar del saldo no reclamado de {saldo.Amount:N2}."));
+        var gmfAEmitir = valorGmf > 0m ? new GmfAEmitir(gmf!, exenta, origen.DepositClass?.ToString()) : null;
         var control = await db.MemberAccountControls.FirstAsync(c => c.MemberAccountId == origen.Id, ct);
         var numero = await numerador.NumeroDeOperacionDeCuentaAsync(MemberAccountOperationKind.UnclaimedPayment, PrefijoPago, ct);
         var actor = await actorActual.ObtenerAsync(ct);
@@ -317,7 +338,7 @@ public sealed class NoReclamados(
             Reason = texto,
             Payload = $"{{\"unclaimedPublicId\":\"{saldo.PublicId:N}\",\"form\":\"{forma}\"}}",
             InputsSha256 = new HuellaDeCartera().Identificador("unclaimed", saldo.PublicId).Texto("form", forma.ToString()).Decimal("amount", saldo.Amount, 2)
-                .Calcular(),
+                .Decimal("gmf", valorGmf, 2).Calcular(),
             RulesVersion = VersionesDeReglas.Vigente,
         });
         await db.SaveChangesAsync(ct);
@@ -329,7 +350,7 @@ public sealed class NoReclamados(
             if (beneficiario.IsFailure) return Result.Failure<MemberAccountOperation>(beneficiario.Error);
             var b = beneficiario.Value;
             var orden = AccountPayoutOrder.Emitir(origen.Id, operacion.Id, PayoutPurpose.UnclaimedPayment, titular.Id, titular.IdType ?? string.Empty,
-                titular.TaxId ?? string.Empty, ReferenciasDeGobierno.Nombre(titular), b.BancoId, b.TipoDeCuenta, b.NumeroDeCuenta, saldo.Amount, hoy.AddDays(1),
+                titular.TaxId ?? string.Empty, ReferenciasDeGobierno.Nombre(titular), b.BancoId, b.TipoDeCuenta, b.NumeroDeCuenta, neto, hoy.AddDays(1),
                 ahora, actor.UserId);
             await numerador.NumerarOrdenDeCuentaAsync(orden, Disbursements.TramoDeDesembolso.PrefijoDeOrden, ct);
             db.AccountPayoutOrders.Add(orden);
@@ -343,16 +364,22 @@ public sealed class NoReclamados(
             };
             var valores = new List<DepositConceptAmountV1>
             {
-                new() { Concept = nameof(MemberAccountConcept.Unclaimed), Amount = -saldo.Amount, ReasonCode = nameof(PayoutPurpose.UnclaimedPayment) },
+                new() { Concept = nameof(MemberAccountConcept.Unclaimed), Amount = -neto, ReasonCode = nameof(PayoutPurpose.UnclaimedPayment) },
             };
             var unidad = await emision.DevolucionOrdenadaAsync(new DevolucionAEmitir(hecho.Value, operacion, valores, nameof(PayoutPurpose.UnclaimedPayment), orden,
                 payee, titular.PublicId, nameof(PayoutPurpose.UnclaimedPayment), $"Saldo no reclamado de la cuenta {origen.Number}")
             {
                 Clase = EmisionDeCartera.ClasePagoDeNoReclamados,
+                Gmf = gmfAEmitir,
             }, ct);
             if (unidad.IsFailure) return Result.Failure<MemberAccountOperation>(unidad.Error);
-            registro.RegistrarTransacciones([Fila(origen, operacion, MemberAccountTransactionKind.Refund, MemberAccountConcept.Unclaimed, -saldo.Amount, hoy,
-                hecho.Value.FechaContable, unidad.Value.De(DevolucionOrdenadaV1.Type))]);
+            var filasDelGiro = new List<MemberAccountTransaction>
+            {
+                Fila(origen, operacion, MemberAccountTransactionKind.Refund, MemberAccountConcept.Unclaimed, -neto, hoy, hecho.Value.FechaContable,
+                    unidad.Value.De(DevolucionOrdenadaV1.Type)),
+            };
+            filasDelGiro.AddRange(FilasDelGmf(origen, operacion, valorGmf, hoy, hecho.Value.FechaContable, unidad.Value.De(GmfRetenidoV1.Type)));
+            registro.RegistrarTransacciones(filasDelGiro);
         }
         else
         {
@@ -360,24 +387,40 @@ public sealed class NoReclamados(
                 "El traslado nombra la cuenta de ahorro del titular que recibe."));
             var hechoDestino = await emision.HechoDeCuentaAsync(destino, hoy, ct);
             if (hechoDestino.IsFailure) return Result.Failure<MemberAccountOperation>(hechoDestino.Error);
-            var deOrigen = new List<DepositConceptAmountV1> { new() { Concept = nameof(MemberAccountConcept.Unclaimed), Amount = -saldo.Amount } };
-            var aDestino = new List<DepositConceptAmountV1> { new() { Concept = nameof(MemberAccountConcept.Principal), Amount = saldo.Amount } };
-            var unidad = await emision.TrasladoEntreCuentasAsync(new TrasladoAEmitir(hecho.Value, hechoDestino.Value, operacion, deOrigen, aDestino), ct);
+            var deOrigen = new List<DepositConceptAmountV1> { new() { Concept = nameof(MemberAccountConcept.Unclaimed), Amount = -neto } };
+            var aDestino = new List<DepositConceptAmountV1> { new() { Concept = nameof(MemberAccountConcept.Principal), Amount = neto } };
+            var unidad = await emision.TrasladoConGmfAsync(new TrasladoAEmitir(hecho.Value, hechoDestino.Value, operacion, deOrigen, aDestino), gmfAEmitir,
+                PrevalidationOutcome.NotApplicable, ct);
             if (unidad.IsFailure) return Result.Failure<MemberAccountOperation>(unidad.Error);
             var mensaje = unidad.Value.De(TrasladoEntreCuentasAplicadoV1.Type);
-            registro.RegistrarTransacciones([
-                Fila(origen, operacion, MemberAccountTransactionKind.TransferOut, MemberAccountConcept.Unclaimed, -saldo.Amount, hoy, hecho.Value.FechaContable, mensaje),
-                Fila(destino, operacion, MemberAccountTransactionKind.TransferIn, MemberAccountConcept.Principal, saldo.Amount, hoy, hecho.Value.FechaContable, mensaje),
-            ]);
+            var filasDelTraslado = new List<MemberAccountTransaction>
+            {
+                Fila(origen, operacion, MemberAccountTransactionKind.TransferOut, MemberAccountConcept.Unclaimed, -neto, hoy, hecho.Value.FechaContable, mensaje),
+                Fila(destino, operacion, MemberAccountTransactionKind.TransferIn, MemberAccountConcept.Principal, neto, hoy, hecho.Value.FechaContable, mensaje),
+            };
+            filasDelTraslado.AddRange(FilasDelGmf(origen, operacion, valorGmf, hoy, hecho.Value.FechaContable, unidad.Value.De(GmfRetenidoV1.Type)));
+            registro.RegistrarTransacciones(filasDelTraslado);
             var controlDestino = await db.MemberAccountControls.FirstAsync(c => c.MemberAccountId == destino.Id, ct);
             RegistroDeCuentas.MarcarActividadDelTitular(controlDestino, hoy);
             await db.SaveChangesAsync(ct);
             if (await ReactivacionDeCuenta.ReactivarAsync(reactivacion, destino, hoy, ahora, ct) is { IsFailure: true } noReactivada)
                 return Result.Failure<MemberAccountOperation>(noReactivada.Error);
         }
+        if (gmf is not null)
+            registro.RegistrarUsoDeGmf(origen.HolderPersonId, operacion, origen.Id, hoy, gmf.HechoGenerador, gmf.Base, gmf.ExentoAplicado, gmf.BaseGravada, gmf.Valor,
+                gmf.Politica, gmf.Tarifa);
         saldo.Reclamar(hoy, operacion.Id, ordenId, actor.UserId);
         await db.SaveChangesAsync(ct);
         return Result.Success(operacion);
+    }
+
+    /// <summary>La pareja <c>GmfCharged</c> del pago (−no reclamados, +GMF): el GMF sale del concepto <c>Unclaimed</c>, donde está el dinero (E253). Sin GMF, nada.</summary>
+    private static IEnumerable<MemberAccountTransaction> FilasDelGmf(MemberAccount cuenta, MemberAccountOperation op, decimal gmf, DateOnly fecha, DateOnly contable,
+        Guid? mensaje)
+    {
+        if (gmf <= 0m) yield break;
+        yield return Fila(cuenta, op, MemberAccountTransactionKind.GmfCharged, MemberAccountConcept.Unclaimed, -gmf, fecha, contable, mensaje);
+        yield return Fila(cuenta, op, MemberAccountTransactionKind.GmfCharged, MemberAccountConcept.Gmf, gmf, fecha, contable, mensaje);
     }
 
     /// <summary>Tesorería rechazó o anuló el giro del pago (el reverso ya devolvió el saldo a <c>Unclaimed</c>): el saldo vuelve a retenido. No guarda.</summary>

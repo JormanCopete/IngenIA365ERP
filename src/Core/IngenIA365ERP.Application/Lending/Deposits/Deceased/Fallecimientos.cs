@@ -20,6 +20,7 @@ using IngenIA365ERP.Domain.Entities.Lending.Deposits.Restrictions;
 using IngenIA365ERP.Domain.Entities.Lending.Deposits.Transactions;
 using IngenIA365ERP.Domain.Enums.Lending;
 using IngenIA365ERP.Domain.Lending;
+using IngenIA365ERP.Domain.Lending.Deposits;
 using IngenIA365ERP.Domain.Lending.Parameters;
 using Microsoft.EntityFrameworkCore;
 
@@ -120,7 +121,9 @@ public sealed record VistaPreviaDeEntrega(
 /// (<c>TrasladoEntreCuentasAplicado</c>)—, después de liquidar los intereses a la fecha. Sin giros pendientes la cuenta se cancela en el acto; con giros queda en
 /// cierre y se cancela cuando Tesorería informa el último (<see cref="AlGirarAsync"/>), y el caso queda entregado con todas sus cuentas canceladas.</item>
 /// </list>
-/// El reparto es por el mayor residuo al centavo: la suma de las porciones es exactamente el saldo. (nuevo)
+/// El reparto es por el mayor residuo al centavo: la suma de las porciones es exactamente el saldo. Respuesta 97 del dueño (2026-10-21, E253): cada porción
+/// cobra el GMF como cualquier retiro (<c>DeceasedDelivery</c> en <c>Gmf.HechosGeneradores</c>; la bandera <c>GmfOnDeceasedAndUnclaimed</c> de la línea lo
+/// apaga): se retiene <b>de la porción</b> —el destinatario recibe el neto, valor − GMF— con su hecho <c>GmfRetenido</c> en la misma unidad. (nuevo)
 /// </summary>
 public sealed class Fallecimientos(
     IApplicationDbContext db,
@@ -133,7 +136,8 @@ public sealed class Fallecimientos(
     IValoresNacionales valoresNacionales,
     IActorActual actorActual,
     IDateTimeService reloj,
-    ReactivacionDeCuenta? reactivacion = null)
+    ReactivacionDeCuenta? reactivacion = null,
+    ReglasDeMovimientos? movimientos = null)
 {
     public const string Prefijo = "FAL-";
     public const string PrefijoEntrega = "FAL-";
@@ -406,13 +410,32 @@ public sealed class Fallecimientos(
         });
         await db.SaveChangesAsync(ct);
 
+        // Respuesta 97 (E253): el GMF de la porción, retenido de ella; el destinatario recibe el neto.
+        GmfCalculado? gmf = null;
+        Guid? exenta = null;
+        if (movimientos is not null)
+        {
+            var leida = await movimientos.LeerAsync(cuenta, hoy, ct);
+            var calculado = await movimientos.GmfAsync(leida, HechosGeneradoresDeGmf.EntregaPorFallecimiento, porcion.Valor, hoy, ct);
+            if (calculado.IsFailure) return Result.Failure<bool>(calculado.Error);
+            gmf = calculado.Value;
+            exenta = leida.ExentaDeGmf ? cuenta.PublicId : null;
+        }
+        var valorGmf = GravamenMovimientosFinancieros.SeCobra(gmf) ? gmf.Valor : 0m;
+        var repartido = DescontarGmf(valores, valorGmf);
+        if (repartido is null)
+            return Result.Failure<bool>(ErroresDeFallecimiento.Invalido("gmf", $"El GMF ({valorGmf:N2}) supera lo que se entrega a la persona en la cuenta {cuenta.Number}."));
+        var (netos, deGmf) = repartido.Value;
+        var neto = porcion.Valor - valorGmf;
+        var gmfAEmitir = valorGmf > 0m ? new GmfAEmitir(gmf!, exenta, cuenta.DepositClass?.ToString()) : null;
+
         if (destino is null)
         {
             var banco = await ordenes.BeneficiarioAsync(persona.Id, destinatario.BancoPublicId, destinatario.TipoDeCuenta, destinatario.NumeroDeCuenta, ct);
             if (banco.IsFailure) return Result.Failure<bool>(banco.Error);
             var b = banco.Value;
             var orden = AccountPayoutOrder.Emitir(cuenta.Id, operacion.Id, PayoutPurpose.DeceasedDelivery, persona.Id, persona.IdType ?? string.Empty,
-                persona.TaxId ?? string.Empty, ReferenciasDeGobierno.Nombre(persona), b.BancoId, b.TipoDeCuenta, b.NumeroDeCuenta, porcion.Valor, hoy.AddDays(1), ahora,
+                persona.TaxId ?? string.Empty, ReferenciasDeGobierno.Nombre(persona), b.BancoId, b.TipoDeCuenta, b.NumeroDeCuenta, neto, hoy.AddDays(1), ahora,
                 usuario);
             orden.DeceasedHolderCaseId = caso.Id;
             await numerador.NumerarOrdenDeCuentaAsync(orden, Disbursements.TramoDeDesembolso.PrefijoDeOrden, ct);
@@ -424,7 +447,7 @@ public sealed class Fallecimientos(
                 Name = ReferenciasDeGobierno.Nombre(persona), BankCode = b.CodigoDeTransferencia, BankAccountNumber = b.NumeroDeCuenta,
                 BankAccountType = b.TipoDeCuenta?.ToString(CultureInfo.InvariantCulture),
             };
-            var montos = valores.Select(v => new DepositConceptAmountV1
+            var montos = netos.Select(v => new DepositConceptAmountV1
             {
                 Concept = v.Concepto.ToString(), Amount = -v.Valor, ReasonCode = nameof(PayoutPurpose.DeceasedDelivery),
             }).ToList();
@@ -432,32 +455,81 @@ public sealed class Fallecimientos(
                 persona.PublicId, nameof(PayoutPurpose.DeceasedDelivery), $"Entrega por fallecimiento, caso {caso.Number}, cuenta {cuenta.Number}")
             {
                 Clase = EmisionDeCartera.ClaseEntregaPorFallecimiento,
+                Gmf = gmfAEmitir,
             }, ct);
             if (unidad.IsFailure) return Result.Failure<bool>(unidad.Error);
             var mensaje = unidad.Value.De(DevolucionOrdenadaV1.Type);
-            registro.RegistrarTransacciones(valores.Select(v => Fila(cuenta, operacion, MemberAccountTransactionKind.Refund, v.Concepto, -v.Valor, hoy,
-                hecho.FechaContable, mensaje)).ToList());
+            var filasDelGiro = netos.Select(v => Fila(cuenta, operacion, MemberAccountTransactionKind.Refund, v.Concepto, -v.Valor, hoy,
+                hecho.FechaContable, mensaje)).ToList();
+            filasDelGiro.AddRange(FilasDelGmf(cuenta, operacion, deGmf, hoy, hecho.FechaContable, unidad.Value.De(GmfRetenidoV1.Type)));
+            registro.RegistrarTransacciones(filasDelGiro);
+            RegistrarUsoDelGmf(cuenta, operacion, gmf, hoy);
             await db.SaveChangesAsync(ct);
             return Result.Success(true);
         }
 
         var hechoDestino = await emision.HechoDeCuentaAsync(destino, hoy, ct);
         if (hechoDestino.IsFailure) return Result.Failure<bool>(hechoDestino.Error);
-        var deOrigen = valores.Select(v => new DepositConceptAmountV1 { Concept = v.Concepto.ToString(), Amount = -v.Valor }).ToList();
-        var aDestino = new List<DepositConceptAmountV1> { new() { Concept = nameof(MemberAccountConcept.Principal), Amount = porcion.Valor } };
-        var traslado = await emision.TrasladoEntreCuentasAsync(new TrasladoAEmitir(hecho, hechoDestino.Value, operacion, deOrigen, aDestino), ct);
+        var deOrigen = netos.Select(v => new DepositConceptAmountV1 { Concept = v.Concepto.ToString(), Amount = -v.Valor }).ToList();
+        var aDestino = new List<DepositConceptAmountV1> { new() { Concept = nameof(MemberAccountConcept.Principal), Amount = neto } };
+        var traslado = await emision.TrasladoConGmfAsync(new TrasladoAEmitir(hecho, hechoDestino.Value, operacion, deOrigen, aDestino), gmfAEmitir,
+            Domain.Enums.Integration.PrevalidationOutcome.NotApplicable, ct);
         if (traslado.IsFailure) return Result.Failure<bool>(traslado.Error);
         var msg = traslado.Value.De(TrasladoEntreCuentasAplicadoV1.Type);
         registro.RegistrarTransacciones([
-            .. valores.Select(v => Fila(cuenta, operacion, MemberAccountTransactionKind.TransferOut, v.Concepto, -v.Valor, hoy, hecho.FechaContable, msg)),
-            Fila(destino, operacion, MemberAccountTransactionKind.TransferIn, MemberAccountConcept.Principal, porcion.Valor, hoy, hecho.FechaContable, msg),
+            .. netos.Select(v => Fila(cuenta, operacion, MemberAccountTransactionKind.TransferOut, v.Concepto, -v.Valor, hoy, hecho.FechaContable, msg)),
+            Fila(destino, operacion, MemberAccountTransactionKind.TransferIn, MemberAccountConcept.Principal, neto, hoy, hecho.FechaContable, msg),
+            .. FilasDelGmf(cuenta, operacion, deGmf, hoy, hecho.FechaContable, traslado.Value.De(GmfRetenidoV1.Type)),
         ]);
+        RegistrarUsoDelGmf(cuenta, operacion, gmf, hoy);
         var controlDestino = await db.MemberAccountControls.FirstAsync(x => x.MemberAccountId == destino.Id, ct);
         RegistroDeCuentas.MarcarActividadDelTitular(controlDestino, hoy);
         await db.SaveChangesAsync(ct);
         if (await ReactivacionDeCuenta.ReactivarAsync(reactivacion, destino, hoy, ahora, ct) is { IsFailure: true } noReactivada)
             return Result.Failure<bool>(noReactivada.Error);
         return Result.Success(false);
+    }
+
+    /// <summary>
+    /// Respuesta 97 (E253): lo que sale de cada concepto de la porción una vez retenido el GMF. El GMF sale del capital y, si éste no alcanza, del interés por
+    /// pagar (la pareja <c>GmfCharged</c> sólo admite esos dos); devuelve los conceptos con su valor neto (sin los que quedan en cero) y lo que salió como GMF
+    /// de cada uno; nulo si la porción no alcanza a cubrir el GMF.
+    /// </summary>
+    public static (IReadOnlyList<(MemberAccountConcept Concepto, decimal Valor)> Netos, IReadOnlyList<(MemberAccountConcept Concepto, decimal Valor)> DeGmf)? DescontarGmf(
+        IReadOnlyList<(MemberAccountConcept Concepto, decimal Valor)> valores, decimal gmf)
+    {
+        if (gmf <= 0m) return (valores, []);
+        var netos = valores.ToList();
+        var deGmf = new List<(MemberAccountConcept Concepto, decimal Valor)>();
+        var falta = gmf;
+        foreach (var concepto in new[] { MemberAccountConcept.Principal, MemberAccountConcept.InterestPayable })
+        {
+            var i = netos.FindIndex(v => v.Concepto == concepto);
+            if (i < 0 || falta <= 0m) continue;
+            var toma = Math.Min(falta, netos[i].Valor);
+            if (toma <= 0m) continue;
+            netos[i] = (concepto, netos[i].Valor - toma);
+            deGmf.Add((concepto, toma));
+            falta -= toma;
+        }
+        return falta > 0m ? null : (netos.Where(v => v.Valor > 0m).ToList(), deGmf);
+    }
+
+    /// <summary>La pareja <c>GmfCharged</c> de la porción (−capital o interés, +GMF). Sin GMF, nada.</summary>
+    private static IEnumerable<MemberAccountTransaction> FilasDelGmf(MemberAccount cuenta, MemberAccountOperation op, IReadOnlyList<(MemberAccountConcept Concepto, decimal Valor)> deGmf,
+        DateOnly fecha, DateOnly contable, Guid? mensaje)
+    {
+        foreach (var (concepto, valor) in deGmf)
+            yield return Fila(cuenta, op, MemberAccountTransactionKind.GmfCharged, concepto, -valor, fecha, contable, mensaje);
+        if (deGmf.Count > 0)
+            yield return Fila(cuenta, op, MemberAccountTransactionKind.GmfCharged, MemberAccountConcept.Gmf, deGmf.Sum(x => x.Valor), fecha, contable, mensaje);
+    }
+
+    private void RegistrarUsoDelGmf(MemberAccount cuenta, MemberAccountOperation op, GmfCalculado? gmf, DateOnly fecha)
+    {
+        if (gmf is not null)
+            registro.RegistrarUsoDeGmf(cuenta.HolderPersonId, op, cuenta.Id, fecha, gmf.HechoGenerador, gmf.Base, gmf.ExentoAplicado, gmf.BaseGravada, gmf.Valor,
+                gmf.Politica, gmf.Tarifa);
     }
 
     /// <summary>¿Le quedan al caso cuentas de captación vivas del titular por cancelar (en cierre o con saldo)?</summary>

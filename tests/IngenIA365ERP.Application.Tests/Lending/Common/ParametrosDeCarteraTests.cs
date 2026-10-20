@@ -97,7 +97,7 @@ public class ParametrosDeCarteraTests
         { "Gmf.Tarifa", "0.004", [N], EntregaDeCartera.K8 },
         { "Gmf.TopeExencionUvt", "350", [N], EntregaDeCartera.K8 },
         { "Gmf.PoliticaDeExencion", "SingleMarkedAccount", [N], EntregaDeCartera.K8 },
-        { "Gmf.HechosGeneradores", "{\"gravados\": [\"Withdrawal\", \"TransferToOtherHolder\", \"TransferBetweenDemandAndTermDeposit\", \"TermDepositRedemptionToAccount\", \"Cancellation\", \"DirectDebit\"], \"exentos\": [\"TransferBetweenSameHolderSavings\"]}", [N], EntregaDeCartera.K8 },
+        { "Gmf.HechosGeneradores", "{\"gravados\": [\"Withdrawal\", \"TransferToOtherHolder\", \"TransferBetweenDemandAndTermDeposit\", \"TermDepositRedemptionToAccount\", \"Cancellation\", \"DirectDebit\", \"DeceasedDelivery\", \"UnclaimedPayment\"], \"exentos\": [\"TransferBetweenSameHolderSavings\"]}", [N], EntregaDeCartera.K8 },
         // Decisión del dueño del 2026-10-18 (D54): el redondeo del GMF es parámetro.
         { "Gmf.Redondeo", "Peso", [N], EntregaDeCartera.K8 },
         // Decisiones del dueño del 2026-10-18 (D41, D44, D46): el retiro del asociado.

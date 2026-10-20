@@ -55,6 +55,9 @@ public sealed class ImpuestosDeCaptacionRequest
 {
     public string? WithholdingRateParameterCode { get; set; }
     public bool GmfApplies { get; set; } = true;
+
+    /// <summary>Respuesta 97 (E253): si la entrega por fallecimiento y el pago de no reclamados cobran GMF (defecto sí; pendiente de validar por la contadora).</summary>
+    public bool GmfOnDeceasedAndUnclaimed { get; set; } = true;
 }
 
 public sealed class LimitesDeCaptacionRequest
@@ -325,6 +328,9 @@ public sealed record VersionDeCaptacionDto(
     PermanenteDeLaLineaDto? Permanent,
     string ContentSha256)
 {
+    /// <summary>Respuesta 97 (E253): si la entrega por fallecimiento y el pago de no reclamados cobran GMF en esta versión.</summary>
+    public bool GmfOnDeceasedAndUnclaimed { get; init; } = true;
+
     /// <summary>El pedido de una versión nueva que parte de ésta (fecha hoy y motivo en blanco).</summary>
     public VersionDeCaptacionRequest ComoPedido() => new()
     {
@@ -364,7 +370,7 @@ public sealed record VersionDeCaptacionDto(
         Rounding = new RedondeoDeCaptacionRequest { Unit = RoundingUnit, Mode = RoundingMode, Moment = RoundingMoment },
         SettlementPeriodicity = SettlementPeriodicity,
         SettlementDay = SettlementDay,
-        Tax = new ImpuestosDeCaptacionRequest { WithholdingRateParameterCode = WithholdingRateParameterCode, GmfApplies = GmfApplies },
+        Tax = new ImpuestosDeCaptacionRequest { WithholdingRateParameterCode = WithholdingRateParameterCode, GmfApplies = GmfApplies, GmfOnDeceasedAndUnclaimed = GmfOnDeceasedAndUnclaimed },
         Limits = new LimitesDeCaptacionRequest
         {
             MaxWithdrawalPerOperation = MaxWithdrawalPerOperation, MaxWithdrawalPerDay = MaxWithdrawalPerDay, MaxCashPerOperation = MaxCashPerOperation,

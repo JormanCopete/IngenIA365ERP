@@ -814,11 +814,12 @@ public static class ParametrosDeCartera
         },
         Texto(GmfHechosGeneradores,
             "Qué operaciones generan GMF, en JSON { \"gravados\": [...], \"exentos\": [...] } con las operaciones de la Cartera (D32).",
-            "{\"gravados\": [\"Withdrawal\", \"TransferToOtherHolder\", \"TransferBetweenDemandAndTermDeposit\", \"TermDepositRedemptionToAccount\", \"Cancellation\", \"DirectDebit\"], \"exentos\": [\"TransferBetweenSameHolderSavings\"]}",
+            "{\"gravados\": [\"Withdrawal\", \"TransferToOtherHolder\", \"TransferBetweenDemandAndTermDeposit\", \"TermDepositRedemptionToAccount\", \"Cancellation\", \"DirectDebit\", \"DeceasedDelivery\", \"UnclaimedPayment\"], \"exentos\": [\"TransferBetweenSameHolderSavings\"]}",
             K8, patron: @"(?s)^\s*\{.*\}\s*$") with
         {
             PendienteDeValidar = "Defecto D32 de la spec (Estatuto Tributario arts. 871 y 879 num. 14; Oficio DIAN 2787 de 2019) y el débito automático gravado "
-                + "como un retiro (D54, 2026-10-18), pendientes de validar por la contadora.",
+                + "como un retiro (D54, 2026-10-18), y la entrega por fallecimiento y el pago de no reclamados gravados como un retiro (respuesta 97, "
+                + "2026-10-21), pendientes de validar por la contadora.",
         },
         // Decisión del dueño del 2026-10-18 (feature 014, D54): el redondeo al peso es un defecto configurable por cooperativa.
         Eleccion(Modulo, GmfRedondeo, "Redondeo del GMF calculado: al peso o al centavo.", ["Peso", "Centavo"], "Peso", K8, General) with

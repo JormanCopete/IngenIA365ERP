@@ -28978,6 +28978,9 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.Property<int?>("EarlyRedemptionPenaltyMode")
                         .HasColumnType("integer");
 
+                    b.Property<bool>("GmfOnDeceasedAndUnclaimed")
+                        .HasColumnType("boolean");
+
                     b.Property<bool?>("GraceAccrues")
                         .HasColumnType("boolean");
 

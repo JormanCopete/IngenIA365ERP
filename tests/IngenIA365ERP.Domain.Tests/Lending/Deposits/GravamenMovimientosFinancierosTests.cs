@@ -128,6 +128,37 @@ public class GravamenMovimientosFinancierosTests
     }
 
     [Theory]
+    [InlineData(HechosGeneradoresDeGmf.EntregaPorFallecimiento)]
+    [InlineData(HechosGeneradoresDeGmf.PagoDeNoReclamado)]
+    public void La_entrega_por_fallecimiento_y_el_pago_de_no_reclamados_cobran_GMF_como_un_retiro_por_defecto(string hecho)
+    {
+        // Respuesta 97 del dueño (E253): gravados por defecto, como cualquier retiro; los reconoce el parámetro Gmf.HechosGeneradores.
+        var politica = new PoliticaDeGmf(0.004m, 350m, 52374m, GmfExemptionPolicy.SingleMarkedAccount, [HechosGeneradoresDeGmf.Retiro, hecho], []);
+        HechosGeneradoresDeGmf.Existe(hecho).Should().BeTrue();
+        HechosGeneradoresDeGmf.EsEntregaDeLaRespuesta97(hecho).Should().BeTrue();
+        HechosGeneradoresDeGmf.EsEntregaDeLaRespuesta97(HechosGeneradoresDeGmf.Retiro).Should().BeFalse();
+        PoliticaDeGmf.LeerHechos($"{{\"gravados\": [\"{hecho}\"], \"exentos\": []}}").Problema.Should().BeNull();
+        var g = GravamenMovimientosFinancieros.Calcular(politica, new DisposicionDeGmf(hecho, 500_000m, true, false, 0m));
+        g.Valor.Should().Be(2_000m, "500.000 × 0,004 sin exención en una cuenta que no es la marcada");
+        GravamenMovimientosFinancieros.SeCobra(g).Should().BeTrue();
+    }
+
+    [Fact]
+    public void Una_linea_que_apaga_el_GMF_de_la_entrega_no_lo_cobra_y_un_hecho_exento_tampoco()
+    {
+        var politica = new PoliticaDeGmf(0.004m, 350m, 52374m, GmfExemptionPolicy.SingleMarkedAccount, [HechosGeneradoresDeGmf.EntregaPorFallecimiento], []);
+        // La línea «no cobra» llega al motor como cuenta no sujeta.
+        GravamenMovimientosFinancieros.Calcular(politica, new DisposicionDeGmf(HechosGeneradoresDeGmf.EntregaPorFallecimiento, 500_000m, false, false, 0m))
+            .Valor.Should().Be(0m);
+        // El parámetro también puede declararlo exento.
+        GravamenMovimientosFinancieros.Calcular(politica with { Exentos = [HechosGeneradoresDeGmf.EntregaPorFallecimiento] },
+            new DisposicionDeGmf(HechosGeneradoresDeGmf.EntregaPorFallecimiento, 500_000m, true, false, 0m)).Valor.Should().Be(0m);
+        // La cuenta marcada exenta usa el tope mensual como en cualquier retiro (350 UVT = 18.330.900).
+        GravamenMovimientosFinancieros.Calcular(politica, new DisposicionDeGmf(HechosGeneradoresDeGmf.EntregaPorFallecimiento, 500_000m, true, true, 0m))
+            .Valor.Should().Be(0m);
+    }
+
+    [Theory]
     [InlineData(DepositClass.Demand, DepositClass.Demand, true, HechosGeneradoresDeGmf.TrasladoEntreAhorrosDelMismoTitular)]
     [InlineData(DepositClass.Demand, DepositClass.Demand, false, HechosGeneradoresDeGmf.TrasladoAOtroTitular)]
     [InlineData(DepositClass.Demand, DepositClass.TermDeposit, true, HechosGeneradoresDeGmf.TrasladoEntreAhorroYCdat)]

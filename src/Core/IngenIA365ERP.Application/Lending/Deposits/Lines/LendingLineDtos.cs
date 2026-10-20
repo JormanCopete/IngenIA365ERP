@@ -109,8 +109,8 @@ public sealed record DepositMinimumsInput(decimal ToOpen = 0m, decimal ToMaintai
 /// <summary>El redondeo de la liquidación: por defecto al peso, al liquidar (D9).</summary>
 public sealed record DepositRoundingInput(decimal Unit = 1m, RoundingMode Mode = RoundingMode.AwayFromZero, RoundingMoment Moment = RoundingMoment.PerTotal);
 
-/// <summary>Retención (la clave de su tarifa; vacía, la de la clase) y GMF.</summary>
-public sealed record DepositTaxInput(string? WithholdingRateParameterCode = null, bool GmfApplies = true);
+/// <summary>Retención (la clave de su tarifa; vacía, la de la clase) y GMF; <c>GmfOnDeceasedAndUnclaimed</c> (respuesta 97, E253): si la entrega por fallecimiento y los no reclamados cobran GMF.</summary>
+public sealed record DepositTaxInput(string? WithholdingRateParameterCode = null, bool GmfApplies = true, bool GmfOnDeceasedAndUnclaimed = true);
 
 public sealed record DepositLimitsInput(
     decimal? MaxWithdrawalPerOperation = null,
@@ -252,6 +252,7 @@ public sealed record DepositLineVersionInput
             SettlementDay = SettlementDay,
             WithholdingRateParameterCode = string.IsNullOrWhiteSpace(Tax?.WithholdingRateParameterCode) ? null : Tax.WithholdingRateParameterCode.Trim(),
             IsGmfSubject = Tax?.GmfApplies ?? true,
+            GmfOnDeceasedAndUnclaimed = Tax?.GmfOnDeceasedAndUnclaimed ?? true,
             MaxWithdrawalPerOperation = Limits?.MaxWithdrawalPerOperation,
             MaxWithdrawalPerDay = Limits?.MaxWithdrawalPerDay,
             MaxCashPerOperation = Limits?.MaxCashPerOperation,
@@ -459,6 +460,9 @@ public sealed record DepositLineVersionDto(
     /// <summary>US4 (T114): el catálogo de cargos de la versión.</summary>
     public IReadOnlyList<DepositChargeInput> Charges { get; init; } = [];
 
+    /// <summary>Respuesta 97 (E253): si la entrega por fallecimiento y el pago de no reclamados cobran GMF en esta versión.</summary>
+    public bool GmfOnDeceasedAndUnclaimed { get; init; } = true;
+
     public static DepositLineVersionDto De(DepositLineVersion v, IEnumerable<DepositLineRateTier> tramos, DateOnly? vigenteHasta, LendingLineRefDto? destino,
         IEnumerable<DepositLineCharge>? cargos = null)
     {
@@ -510,6 +514,7 @@ public sealed record DepositLineVersionDto(
             v.ContentSha256)
         {
             Charges = (cargos ?? []).OrderBy(c => c.Code, StringComparer.Ordinal).Select(DepositChargeInput.De).ToList(),
+            GmfOnDeceasedAndUnclaimed = v.GmfOnDeceasedAndUnclaimed,
         };
     }
 }
