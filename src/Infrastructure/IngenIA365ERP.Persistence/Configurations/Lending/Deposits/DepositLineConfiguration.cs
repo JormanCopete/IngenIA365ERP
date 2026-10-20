@@ -69,6 +69,7 @@ public class DepositLineVersionConfiguration : IEntityTypeConfiguration<DepositL
         builder.Property(e => e.BreachAnnualRate).TasaAnual();
         builder.Property(e => e.BreachEffect).HasConversion<int?>();
         builder.Property(e => e.BonusRecognition).HasConversion<int?>();
+        builder.Property(e => e.MaturityDestinations).HasConversion<int?>();
 
         builder.Property(e => e.ContentSha256).HasMaxLength(EntidadDeCartera.Huella).IsRequired();
 

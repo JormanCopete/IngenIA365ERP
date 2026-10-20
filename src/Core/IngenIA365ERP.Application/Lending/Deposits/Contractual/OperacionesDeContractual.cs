@@ -452,10 +452,14 @@ public sealed class CierreDeContractual(
     public async Task<EntregaDeContractual?> DestinoAsync(MemberAccount cuenta, MemberAccountTermsVersion vigente, bool aLaVista, CancellationToken ct)
     {
         var pedida = InstruccionDeContractual.Leer(cuenta.MaturityInstructionJson);
+        // E248: sólo se ejecuta lo que el asociado decidió Y lo que la línea admite; si no, nada se mueve y queda a disposición.
+        var versionDeLinea = await db.DepositLineVersions.AsNoTracking().FirstOrDefaultAsync(v => v.Id == vigente.DepositLineVersionId, ct);
+        var admiteTraslado = AperturaDeContractual.Admite(versionDeLinea, CloseDeliveryKind.TransferToAccount);
+        var admiteGiro = AperturaDeContractual.Admite(versionDeLinea, CloseDeliveryKind.DisbursementOrder);
         MemberAccount? destino = null;
-        if (pedida is { Kind: CloseDeliveryKind.TransferToAccount, TargetAccountPublicId: { } id })
+        if (admiteTraslado && pedida is { Kind: CloseDeliveryKind.TransferToAccount, TargetAccountPublicId: { } id })
             destino = await db.MemberAccounts.FirstOrDefaultAsync(a => a.PublicId == id && !a.IsDeleted, ct);
-        else if (pedida is null && vigente.DestinationAccountId is { } sellada)
+        else if (pedida is null && admiteTraslado && vigente.DestinationAccountId is { } sellada)
             destino = await db.MemberAccounts.FirstOrDefaultAsync(a => a.Id == sellada, ct);
         if (destino is { Viva: true, Status: MemberAccountStatus.Active or MemberAccountStatus.Inactive })
             return new EntregaDeContractual(CloseDeliveryKind.TransferToAccount, destino, null, null);
@@ -467,7 +471,7 @@ public sealed class CierreDeContractual(
                 .OrderBy(a => a.Id).FirstOrDefaultAsync(ct);
             return vista is null ? null : new EntregaDeContractual(CloseDeliveryKind.TransferToAccount, vista, null, null);
         }
-        if (pedida is { Kind: CloseDeliveryKind.DisbursementOrder })
+        if (pedida is { Kind: CloseDeliveryKind.DisbursementOrder } && admiteGiro)
         {
             var persona = pedida.PayeePersonPublicId is { } p
                 ? await db.People.AsNoTracking().IgnoreQueryFilters().Where(x => x.PublicId == p).Select(x => (int?)x.Id).FirstOrDefaultAsync(ct) ?? cuenta.HolderPersonId
@@ -475,7 +479,7 @@ public sealed class CierreDeContractual(
             var banco = await ordenes.BeneficiarioAsync(persona, pedida.BankPublicId, pedida.AccountType, pedida.AccountNumber, ct);
             return banco.IsSuccess ? new EntregaDeContractual(CloseDeliveryKind.DisbursementOrder, null, persona, banco.Value) : null;
         }
-        if (pedida is null && vigente.MaturityInstruction == MaturityInstruction.CancelAndPay && vigente.DestinationPersonId is { } giro)
+        if (pedida is null && admiteGiro && vigente.MaturityInstruction == MaturityInstruction.CancelAndPay && vigente.DestinationPersonId is { } giro)
         {
             var banco = vigente.DestinationBankId is { } b
                 ? new BeneficiarioDeOrden(b, await db.Banks.AsNoTracking().Where(x => x.Id == b).Select(x => x.TransferCode).FirstOrDefaultAsync(ct),

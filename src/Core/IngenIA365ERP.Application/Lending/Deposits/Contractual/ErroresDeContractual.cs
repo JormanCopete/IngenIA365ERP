@@ -19,6 +19,7 @@ public static class ErroresDeContractual
     public const string CodigoConsignacionLibre = "Lending.Contractual.FreeDepositNotAllowed";
     public const string CodigoNoVigente = "Lending.Contractual.NotCurrent";
     public const string CodigoDestinoInvalido = "Lending.Contractual.DestinationInvalid";
+    public const string CodigoDestinoNoAdmitidoPorLaLinea = "Lending.Contractual.DestinationNotAllowedByLine";
     public const string CodigoSinCondiciones = "Lending.Contractual.TermsMissing";
 
     public static Error De(ProblemaDeCartera p) => ErroresDeCuentas.De(p);
@@ -47,6 +48,19 @@ public static class ErroresDeContractual
         new { accountNumber = numero, status = estado.ToString(), contractualStatus = contrato?.ToString() });
 
     public static Error DestinoInvalido(string mensaje) => new ErrorConDatos(CodigoDestinoInvalido, mensaje, new { field = "maturityInstruction" });
+
+    /// <summary>E248: la línea del contractual no admite el destino que el asociado pidió para el vencimiento.</summary>
+    public static Error DestinoNoAdmitidoPorLaLinea(CloseDeliveryKind kind, ContractualMaturityDestinations admite)
+    {
+        var que = kind == CloseDeliveryKind.TransferToAccount ? "el traslado a la cuenta de ahorro a la vista" : "el giro de lo ahorrado";
+        var lista = admite == ContractualMaturityDestinations.None
+            ? "ninguno: al vencer queda a disposición del titular"
+            : string.Join(" o ", new[] { admite.HasFlag(ContractualMaturityDestinations.TransferToDemand) ? "traslado a la cuenta a la vista" : null,
+                admite.HasFlag(ContractualMaturityDestinations.DisbursementOrder) ? "giro" : null }.Where(x => x is not null));
+        return new ErrorConDatos(CodigoDestinoNoAdmitidoPorLaLinea,
+            $"La línea de este ahorro contractual no admite {que} al vencer. Admite: {lista}.",
+            new { field = "maturityInstruction", kind = kind.ToString(), allowed = admite.ToString() });
+    }
 
     public static Error SinCondiciones(string numero) => new ErrorConDatos(CodigoSinCondiciones,
         $"El ahorro contractual {numero} no tiene condiciones selladas.", new { accountNumber = numero });

@@ -1,3 +1,4 @@
+using IngenIA365ERP.Application.Common.Alerts;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Persistence;
 using IngenIA365ERP.Application.Lending.Common;
@@ -46,7 +47,8 @@ public sealed class CicloDelContractual(
     CierreDeContractual cierre,
     ICerrojoDeCartera cerrojo,
     ILogger<CicloDelContractual>? logger = null,
-    ValidacionPreviaDeCaptaciones? validacionPrevia = null) : ISubpasoDeCaptaciones
+    ValidacionPreviaDeCaptaciones? validacionPrevia = null,
+    IAlertas? alertas = null) : ISubpasoDeCaptaciones
 {
     private readonly ILogger _log = logger ?? (ILogger)NullLogger.Instance;
 
@@ -170,6 +172,13 @@ public sealed class CicloDelContractual(
         if (entrega?.Cuenta is { } otra) await cerrojo.BloquearCuentasAsync(new[] { cuenta.Id, otra.Id }.Order().ToList(), ModoDeEspera.Esperar, ct);
         var r = await cierre.TerminarAsync(cuenta, d, entrega, $"Vencimiento del ahorro contractual {cuenta.Number}", [], exigeFirmas: false, operacion, ct);
         if (r.IsFailure) throw Excepcion(r.Error);
+        if (r.Value.Resultado == CierreDeContractual.ResultadoADisposicion && alertas is not null)
+            await alertas.LevantarAsync(new AlertaALevantar(TiposDeAlerta.ContractualADisposicion,
+                $"El ahorro contractual {cuenta.Number} venció a disposición",
+                $"El ahorro contractual {cuenta.Number} venció el {d:yyyy-MM-dd} y no tiene una instrucción válida de destino (o su línea ya no la admite): no se movió "
+                + "dinero y queda a disposición del titular.", nameof(MemberAccount), cuenta.PublicId,
+                DedupKey: $"{TiposDeAlerta.ContractualADisposicion}:{cuenta.PublicId:N}", RecipientPermissions: ["Lending.Accounts.Parties.Manage"],
+                ModuloDeOrigen: "Lending"), ct);
         return r.Value.Resultado;
     }
 

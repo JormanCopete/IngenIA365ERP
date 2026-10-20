@@ -437,6 +437,11 @@ public static class ReglasDeLineaDeCaptacion
             if (b.ToleratedLateInstallments is < 0) return Captacion("toleratedLateInstallments", "La tolerancia de atrasos no puede ser negativa.");
             if (b.BonusRecognition is { } reconocimiento && !Enum.IsDefined(reconocimiento))
                 return Captacion("bonusRecognition", "Reconocimiento de la bonificación desconocido.");
+            // E248: la línea dice a dónde puede ir lo ahorrado al vencer (traslado a la vista, giro, ambos o ninguno: a disposición).
+            if (b.MaturityDestinations is not { } destinos)
+                return Incompleta("maturityDestinations", "El ahorro contractual dice a dónde puede ir lo ahorrado al vencer.");
+            if ((destinos & ~ContractualMaturityDestinations.All) != 0)
+                return Captacion("maturityDestinations", "Destino al vencimiento desconocido.");
         }
         return null;
     }
@@ -451,7 +456,7 @@ public static class ReglasDeLineaDeCaptacion
     private static bool TieneAlgoDeContractual(BorradorDeVersionDeCaptacion b) =>
         b.InstallmentPeriodicity is not null || b.MinInstallmentAmount is not null || b.MinTermMonths is not null || b.MaxTermMonths is not null
         || b.BonusAnnualRate is not null || b.BreachAnnualRate is not null || b.ToleratedLateInstallments is not null || b.BreachEffect is not null
-        || b.BonusRecognition is not null;
+        || b.BonusRecognition is not null || b.MaturityDestinations is not null;
 
     private static ProblemaDeCartera? ValidarValor(ContributionAmountMode modo, decimal? monto, decimal? fraccion, string campo, string que, bool admiteCero)
     {

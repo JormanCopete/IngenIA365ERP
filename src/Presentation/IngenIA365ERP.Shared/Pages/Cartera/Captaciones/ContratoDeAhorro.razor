@@ -136,14 +136,18 @@
             {
                 <p class="texto-tenue">Sin instrucción: al vencer quedará a disposición del titular.</p>
             }
-            @if (c.Status != TextosDeContrato.Cumplido && c.MaturedOn is null && Cuenta.Status != TextosDeCaptaciones.Cancelada)
+            @if (c.Status != TextosDeContrato.Cumplido && c.MaturedOn is null && Cuenta.Status != TextosDeCaptaciones.Cancelada && _admitidos == 0)
+            {
+                <p class="texto-tenue">La línea de este ahorro no admite destinos al vencer: lo ahorrado queda a disposición del titular.</p>
+            }
+            else if (c.Status != TextosDeContrato.Cumplido && c.MaturedOn is null && Cuenta.Status != TextosDeCaptaciones.Cancelada)
             {
                 <PermissionGate Required="Lending.Accounts.Parties.Manage">
                     <div class="form-grid">
                         <label class="campo">Instrucción
                             <select class="e-input" @bind="_clase">
-                                <option value="@TextosDeContrato.PorTraslado">Trasladar a una cuenta a la vista del titular</option>
-                                <option value="@TextosDeContrato.PorGiro">Girar a la cuenta registrada del titular</option>
+                                @if (Admite(TextosDeCaptaciones.DestinoTraslado)) { <option value="@TextosDeContrato.PorTraslado">Trasladar a una cuenta a la vista del titular</option> }
+                                @if (Admite(TextosDeCaptaciones.DestinoGiro)) { <option value="@TextosDeContrato.PorGiro">Girar a la cuenta registrada del titular</option> }
                             </select>
                         </label>
                         @if (_clase == TextosDeContrato.PorTraslado)
@@ -177,6 +181,9 @@
     private List<string> _errores = [];
     private bool _verPlan, _verHistoria;
     private int _clase = TextosDeContrato.PorTraslado;
+    private int _admitidos = 3;
+
+    private bool Admite(int bit) => (_admitidos & bit) != 0;
     private Guid? _destino;
     private string? _motivo;
     private ClaveDeOperacion _clave = new();
@@ -198,6 +205,8 @@
         var r = await Cliente.ContratoDeAhorroAsync(Cuenta.PublicId);
         if (!r.IsSuccess) { _errores = [.. LineasDeCreditoClient.Explicar(r)]; return; }
         _contrato = r.Value;
+        _admitidos = _contrato?.AllowedMaturityDestinations ?? 3;
+        if (_clase == TextosDeContrato.PorTraslado && !Admite(TextosDeCaptaciones.DestinoTraslado)) _clase = TextosDeContrato.PorGiro;
         if (_contrato?.Instruction is { } i)
         {
             _clase = i.Kind;

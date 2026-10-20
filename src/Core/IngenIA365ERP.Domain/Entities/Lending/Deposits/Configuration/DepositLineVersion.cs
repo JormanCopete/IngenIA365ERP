@@ -191,6 +191,9 @@ public class DepositLineVersion : AuditableEntity, IHechoInmutable, IVersionDeCa
 
     public BonusRecognition? BonusRecognition { get; init; }
 
+    /// <summary>Los destinos que la línea admite al vencer el contrato (E248); nulo = ambos (líneas anteriores a la decisión del 2026-10-21).</summary>
+    public ContractualMaturityDestinations? MaturityDestinations { get; init; }
+
     // --------------------------------------------------------------------------------------------------- permanente --
 
     public bool? WithdrawableOnlyOnMembershipWithdrawal { get; init; }
@@ -298,6 +301,7 @@ public class DepositLineVersion : AuditableEntity, IHechoInmutable, IVersionDeCa
             ToleratedLateInstallments = b.ToleratedLateInstallments,
             BreachEffect = b.BreachEffect,
             BonusRecognition = b.BonusRecognition,
+            MaturityDestinations = b.MaturityDestinations,
             WithdrawableOnlyOnMembershipWithdrawal = b.WithdrawableOnlyOnMembershipWithdrawal,
             ContentSha256 = Huella(b),
         };
@@ -381,6 +385,7 @@ public class DepositLineVersion : AuditableEntity, IHechoInmutable, IVersionDeCa
             .Entero("toleratedLateInstallments", b.ToleratedLateInstallments)
             .Enumeracion("breachEffect", b.BreachEffect)
             .Enumeracion("bonusRecognition", b.BonusRecognition)
+            .Enumeracion("maturityDestinations", b.MaturityDestinations)
             .Logico("withdrawableOnlyOnMembershipWithdrawal", b.WithdrawableOnlyOnMembershipWithdrawal)
             .Lista("rateTiers", b.RateTiers.OrderBy(t => t.Order), (h, t) => h
                 .Entero("order", t.Order)

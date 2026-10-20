@@ -120,6 +120,12 @@ public static class TiposDeAlerta
     public const string ReversoTardioDeCruce = "Cartera.ReversoTardioDeCruce";
 
     /// <summary>
+    /// Feature 014 (decisión del dueño del 2026-10-21, E248): un ahorro contractual venció y no se movió plata porque el asociado no dejó instrucción válida
+    /// (o la línea ya no admite la que dejó): queda vencido, a disposición del titular, que decide cómo retirarlo. (nuevo)
+    /// </summary>
+    public const string ContractualADisposicion = "Cartera.ContractualADisposicion";
+
+    /// <summary>
     /// Feature 014, US5 (T131; US5-5): el paso de captaciones tuvo que poner al día la causación de cuentas atrasadas más de un día (el proceso falló o no
     /// corrió): se causaron en orden desde el último día causado y se avisa al jefe de captaciones. (nuevo)
     /// </summary>
@@ -289,6 +295,8 @@ public static class TiposDeAlerta
             ["Lending.Accounts.Reverse"], AppYCorreo, AlertSeverity.Critical, "K8"),
         new(ReversoTardioDeCruce, Cartera, "Se reversó un pago del cruce al retiro con el retiro ya pagado: la cuenta se reabrió con saldo a favor del exasociado.",
             ["Lending.MembershipWithdrawals.ReverseAfterPayment", "Lending.MembershipWithdrawals.Approve"], AppYCorreo, AlertSeverity.Critical, "K7"),
+        new(ContractualADisposicion, Cartera, "Un ahorro contractual venció sin una instrucción válida de destino: quedó a disposición del titular y no se movió dinero.",
+            ["Lending.Accounts.Parties.Manage"], SoloApp, AlertSeverity.Warning, "K9"),
         // US15 (T216): al tesorero (quien administra el fondo) y a la gerencia (quien decide en su nivel; un destinatario nunca es un permiso de consulta).
         new(FondoDeLiquidezInsuficiente, Cartera, "El constituido del fondo de liquidez es menor que el requerido.",
             DestinatariosDeLiquidez, AppYCorreo, AlertSeverity.Critical, "K11"),

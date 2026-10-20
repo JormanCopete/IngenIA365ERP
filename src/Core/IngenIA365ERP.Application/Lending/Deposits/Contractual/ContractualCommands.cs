@@ -190,7 +190,8 @@ public static class RespuestasDeContractual
             lineasDeCuotas,
             new ContractualComplianceDto(cumplimiento.Generadas, cumplimiento.Pagadas, cumplimiento.Atrasadas, cumplimiento.NumerosAtrasados, cumplimiento.ValorAtrasado,
                 cumplimiento.Tolerancia, gracia, cumplimiento.SuperaLaTolerancia, cumplimiento.Completo),
-            proyeccion, await InstruccionAsync(db, cuenta, vigente, ct), cuenta.MaturedOn));
+            proyeccion, await InstruccionAsync(db, cuenta, vigente, ct), cuenta.MaturedOn,
+            AperturaDeContractual.DestinosQueAdmite(await db.DepositLineVersions.AsNoTracking().FirstOrDefaultAsync(v => v.Id == inicial.DepositLineVersionId, ct))));
     }
 
     /// <summary>El resumen del contrato en la ficha de la cuenta (api.md §4, <c>contractual</c>): las vencidas sin pagar son las de vencimiento anterior a hoy.</summary>

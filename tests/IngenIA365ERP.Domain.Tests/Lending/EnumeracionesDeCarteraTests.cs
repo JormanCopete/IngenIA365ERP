@@ -258,6 +258,7 @@ public class EnumeracionesDeCarteraTests
         [typeof(EarlyRedemptionPenaltyMode)] = [("PenaltyRate", 1), ("Discount", 2)],
         [typeof(ContractualBreachEffect)] = [("BreachRate", 1), ("MoveToDemand", 2), ("Cancel", 3)],
         [typeof(BonusRecognition)] = [("AtFulfillment", 1), ("Provisioned", 2)],
+        [typeof(ContractualMaturityDestinations)] = [("None", 0), ("TransferToDemand", 1), ("DisbursementOrder", 2), ("All", 3)],
         [typeof(ChargeTrigger)] = [("Periodic", 1), ("WithdrawalOverFree", 2), ("DepositOverFree", 3), ("ExtraDocument", 4),
             ("MediumReplacement", 5), ("Inactivity", 6), ("Manual", 7)],
         [typeof(ChargeCalculation)] = [("FixedAmount", 1), ("Percentage", 2)],

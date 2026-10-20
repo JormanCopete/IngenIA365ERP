@@ -169,6 +169,7 @@ public sealed record BorradorDeVersionDeCaptacion(DateOnly ValidFrom, string Rea
     public int? ToleratedLateInstallments { get; init; }
     public ContractualBreachEffect? BreachEffect { get; init; }
     public BonusRecognition? BonusRecognition { get; init; }
+    public ContractualMaturityDestinations? MaturityDestinations { get; init; }
 
     // --------------------------------------------------------------------------------------------------- permanente --
     public bool? WithdrawableOnlyOnMembershipWithdrawal { get; init; }
@@ -250,6 +251,7 @@ public sealed record BorradorDeVersionDeCaptacion(DateOnly ValidFrom, string Rea
             ToleratedLateInstallments = v.ToleratedLateInstallments,
             BreachEffect = v.BreachEffect,
             BonusRecognition = v.BonusRecognition,
+            MaturityDestinations = v.MaturityDestinations,
             WithdrawableOnlyOnMembershipWithdrawal = v.WithdrawableOnlyOnMembershipWithdrawal,
             RateTiers = tramos.OrderBy(t => t.Order).Select(t => new BorradorDeTramoDeCaptacion(t.Order, t.MinBalance, t.MaxBalance, t.MinTermDays,
                 t.MaxTermDays, t.MinAmount, t.MaxAmount, t.AnnualRate, t.Margin)).ToList(),

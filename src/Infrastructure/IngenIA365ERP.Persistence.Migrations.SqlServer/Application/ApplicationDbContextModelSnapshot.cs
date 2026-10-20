@@ -29252,6 +29252,9 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasPrecision(9, 6)
                         .HasColumnType("decimal(9,6)");
 
+                    b.Property<int?>("MaturityDestinations")
+                        .HasColumnType("int");
+
                     b.Property<decimal?>("MaxCashPerDay")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");

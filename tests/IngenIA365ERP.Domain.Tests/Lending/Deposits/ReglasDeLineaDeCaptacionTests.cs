@@ -133,12 +133,33 @@ public class ReglasDeLineaDeCaptacionTests
         {
             AnnualRate = 0.05m, InstallmentPeriodicity = RepaymentPeriodicity.Monthly, MinInstallmentAmount = 50_000m, MinTermMonths = 6,
             MaxTermMonths = 36, BreachEffect = ContractualBreachEffect.MoveToDemand,
+            MaturityDestinations = ContractualMaturityDestinations.All,
         };
 
         ReglasDeLineaDeCaptacion.ValidarVersion(contractual, Hoy).Should().BeNull();
         ReglasDeLineaDeCaptacion.ValidarVersion(contractual with { BreachEffect = null }, Hoy)!.Codigo.Should().Be("Lending.TermDeposit.LineIncomplete");
         ReglasDeLineaDeCaptacion.ValidarVersion(contractual with { BreachEffect = ContractualBreachEffect.BreachRate }, Hoy)!.Datos!["field"]
             .Should().Be("breachAnnualRate");
+    }
+
+    [Fact]
+    public void El_contractual_dice_a_donde_puede_ir_lo_ahorrado_al_vencer()
+    {
+        var contractual = new BorradorDeVersionDeCaptacion(Hoy, "Alta", DepositClass.Contractual)
+        {
+            AnnualRate = 0.05m, InstallmentPeriodicity = RepaymentPeriodicity.Monthly, MinInstallmentAmount = 50_000m, MinTermMonths = 6,
+            MaxTermMonths = 36, BreachEffect = ContractualBreachEffect.MoveToDemand, MaturityDestinations = ContractualMaturityDestinations.TransferToDemand,
+        };
+
+        ReglasDeLineaDeCaptacion.ValidarVersion(contractual, Hoy).Should().BeNull();
+        // Ninguno es válido: todo contrato queda a disposición al vencer.
+        ReglasDeLineaDeCaptacion.ValidarVersion(contractual with { MaturityDestinations = ContractualMaturityDestinations.None }, Hoy).Should().BeNull();
+        ReglasDeLineaDeCaptacion.ValidarVersion(contractual with { MaturityDestinations = null }, Hoy)!.Datos!["field"].Should().Be("maturityDestinations");
+        ReglasDeLineaDeCaptacion.ValidarVersion(contractual with { MaturityDestinations = (ContractualMaturityDestinations)8 }, Hoy)!.Datos!["field"]
+            .Should().Be("maturityDestinations");
+        // Fuera del contractual no se declara.
+        ReglasDeLineaDeCaptacion.ValidarVersion(ALaVista() with { MaturityDestinations = ContractualMaturityDestinations.All }, Hoy)!.Datos!["field"]
+            .Should().Be("contractual");
     }
 
     [Fact]

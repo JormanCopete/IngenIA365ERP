@@ -39,6 +39,10 @@ public static class TextosDeCaptaciones
     public static IReadOnlyList<(int Valor, string Texto)> EfectosDelIncumplimiento { get; } =
         [(1, "Tasa castigo"), (2, "Pasa a la vista"), (3, "Se cancela")];
 
+    /// <summary>A dónde puede ir lo ahorrado al vencer el contractual (<c>ContractualMaturityDestinations</c>, bits).</summary>
+    public const int DestinoTraslado = 1;
+    public const int DestinoGiro = 2;
+
     public static IReadOnlyList<(int Valor, string Texto)> ReconocimientosDeBonificacion { get; } = [(1, "Al cumplir"), (2, "Provisionada")];
 
     public static IReadOnlyList<(int Valor, string Texto)> ModosDeValorDeAportes { get; } =

@@ -125,7 +125,7 @@ El origen de un mensaje es la operación o el documento de la Cartera que produc
 | `TermDepositRollover` | `CdatProrrogado` (+ `RetencionPracticada`, `CaptacionReclasificada` como acompañante si cambia el plazo de emisión) |
 | `TermDepositRenewal` | `CdatRenovado` (+ `RetencionPracticada`, `GmfRetenido`, `CaptacionReclasificada`) |
 | `TermDepositRedemption` | `CdatRedimido` o `CdatCancelado` (+ `RetencionPracticada`, `PenalidadAplicada`, `GmfRetenido`, `AjusteDeCausacionDeCaptacion`) + la orden si se gira |
-| `ContractualMaturity` | `BonificacionReconocida` o `PenalidadAplicada` (incumplido) + `TrasladoEntreCuentasAplicado` o `DevolucionOrdenada` según la instrucción |
+| `ContractualMaturity` | `BonificacionReconocida` o `PenalidadAplicada` (incumplido) + `TrasladoEntreCuentasAplicado` o `DevolucionOrdenada` según la instrucción que dejó el asociado y que la línea admite; sin instrucción válida no sale ninguno y el contrato queda a disposición (E248) |
 | `AccountCharge` | `CargoDeCuentaCausado` (+ `CargoDeCaptacionCausado` a Comercial si está gravado); condonarlo: `CargoDeCuentaCondonado`; reversarlo: `OperacionDeCuentaReversada` + `CargoDeCaptacionReversado` |
 | `MembershipWithdrawal` | al aprobar, `RetiroDeAsociadoAprobado` |
 | `MembershipWithdrawalSettlement` | por crédito cruzado, **una** unidad con origen la operación de pago (`OwnLoanPayoff`): su `PagoAplicado` (lo emite el contrato de obligaciones) y un `CruceAlRetiroAplicado` con la parte de cada cuenta (`parts`), el principal —decisión del dueño del 2026-10-18, D45: mismo comprobante—; aparte, `PerdidaAplicadaAlRetiro` (su operación), `DevolucionOrdenada` + la orden |

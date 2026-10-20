@@ -409,6 +409,14 @@
                             @foreach (var x in TextosDeCaptaciones.EfectosDelIncumplimiento) { <option value="@x.Valor">@x.Texto</option> }
                         </select>
                     </label>
+                    <fieldset class="campo campo-ancho">
+                        <legend>Al vencer el contrato, el asociado puede elegir</legend>
+                        <label class="campo-check"><input type="checkbox" checked="@contractual.AdmiteDestino(TextosDeCaptaciones.DestinoTraslado)"
+                                                          @onchange="@(e => contractual.FijarDestino(TextosDeCaptaciones.DestinoTraslado, e.Value is true))" /> Trasladar lo ahorrado a su cuenta de ahorro a la vista</label>
+                        <label class="campo-check"><input type="checkbox" checked="@contractual.AdmiteDestino(TextosDeCaptaciones.DestinoGiro)"
+                                                          @onchange="@(e => contractual.FijarDestino(TextosDeCaptaciones.DestinoGiro, e.Value is true))" /> Devolverlo con una orden de giro</label>
+                        <span class="texto-tenue">El asociado deja su decisión en el contrato; sin decisión (o sin ninguna de estas opciones) queda a disposición del titular y no se mueve dinero.</span>
+                    </fieldset>
                     @if (contractual.BreachEffect == 1)
                     {
                         <label class="campo">Tasa castigo (% EA) *

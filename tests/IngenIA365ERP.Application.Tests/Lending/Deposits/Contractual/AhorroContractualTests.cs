@@ -126,8 +126,9 @@ public sealed class AhorroContractualTests : IDisposable
     }
 
     private async Task<LendingLineDto> LineaAsync(ContractualBreachEffect efecto = ContractualBreachEffect.BreachRate,
-        BonusRecognition reconocimiento = BonusRecognition.AtFulfillment, int tolerancia = 1) =>
-        await _a.C.LineaDeCaptacionAsync("CONTRATO", new DepositLineVersionInput
+        BonusRecognition reconocimiento = BonusRecognition.AtFulfillment, int tolerancia = 1,
+        ContractualMaturityDestinations destinos = ContractualMaturityDestinations.All, string codigo = "CONTRATO") =>
+        await _a.C.LineaDeCaptacionAsync(codigo, new DepositLineVersionInput
         {
             ValidFrom = Hoy,
             Reason = "Reglamento del ahorro contractual, acta 31",
@@ -137,7 +138,7 @@ public sealed class AhorroContractualTests : IDisposable
             Contractual = new ContractualLineInput
             {
                 InstallmentPeriodicity = RepaymentPeriodicity.Monthly, MinInstallment = 100_000m, TermMonthsFrom = 6, TermMonthsTo = 36, BonusRateEa = 0.08m,
-                BreachRateEa = 0.03m, ToleranceInstallments = tolerancia, BreachEffect = efecto, BonusRecognition = reconocimiento,
+                BreachRateEa = 0.03m, ToleranceInstallments = tolerancia, BreachEffect = efecto, BonusRecognition = reconocimiento, MaturityDestinations = destinos,
             },
         }, DepositClass.Contractual);
 
@@ -495,6 +496,81 @@ public sealed class AhorroContractualTests : IDisposable
             G.Reloj).Handle(new SetContractualMaturityInstructionCommand(cuenta.PublicId, new ContractualMaturityInstructionInput(CloseDeliveryKind.TransferToAccount,
             deBeto.PublicId), "x") { OperationKey = Guid.NewGuid() }, default);
         r.Error.Code.Should().Be(ErroresDeContractual.CodigoDestinoInvalido);
+    }
+
+    // ------------------------------------------------------------ E248: lo que la línea admite y lo que decide el asociado --
+
+    private async Task<Result<ContractualDto>> InstruirAsync(Guid cuenta, ContractualMaturityInstructionInput instruccion) =>
+        await new SetContractualMaturityInstructionCommandHandler(_a.Db, _a.C.Contexto, AperturaDelContrato(), Lector(), G.Alcance, G.Auditoria, G.Actor, G.Reloj)
+            .Handle(new SetContractualMaturityInstructionCommand(cuenta, instruccion, "Lo decidió el asociado") { OperationKey = Guid.NewGuid() }, default);
+
+    [Fact]
+    public async Task La_linea_dice_que_destinos_admite_al_vencer_y_la_instruccion_se_valida_contra_ellos()
+    {
+        var vista = await ALaVistaAsync();
+        var soloGiro = await LineaAsync(destinos: ContractualMaturityDestinations.DisbursementOrder);
+
+        var alAbrir = await AbrirAsync(soloGiro, new ContractualTermsInput(Cuota, 12, new ContractualMaturityInstructionInput(CloseDeliveryKind.TransferToAccount, vista.PublicId)));
+        alAbrir.IsFailure.Should().BeTrue();
+        alAbrir.Error.Code.Should().Be(ErroresDeContractual.CodigoDestinoNoAdmitidoPorLaLinea);
+        alAbrir.Error.Message.Should().Contain("no admite el traslado").And.Contain("giro");
+
+        var cuenta = await ContratoAsync(soloGiro);
+        var traslado = await InstruirAsync(cuenta.PublicId, new ContractualMaturityInstructionInput(CloseDeliveryKind.TransferToAccount, vista.PublicId));
+        traslado.Error.Code.Should().Be(ErroresDeContractual.CodigoDestinoNoAdmitidoPorLaLinea);
+        var giro = await InstruirAsync(cuenta.PublicId, new ContractualMaturityInstructionInput(CloseDeliveryKind.DisbursementOrder));
+        giro.IsSuccess.Should().BeTrue(giro.IsFailure ? giro.Error.Message : string.Empty);
+        giro.Value.AllowedMaturityDestinations.Should().Be(ContractualMaturityDestinations.DisbursementOrder);
+
+        var ninguno = await LineaAsync(destinos: ContractualMaturityDestinations.None, codigo: "CONTRATO2");
+        var sinDestinos = await ContratoAsync(ninguno);
+        (await InstruirAsync(sinDestinos.PublicId, new ContractualMaturityInstructionInput(CloseDeliveryKind.DisbursementOrder))).Error.Code
+            .Should().Be(ErroresDeContractual.CodigoDestinoNoAdmitidoPorLaLinea);
+    }
+
+    [Fact]
+    public async Task Cumplido_sin_instruccion_queda_a_disposicion_y_no_se_mueve_dinero()
+    {
+        // E248: el traslado a la vista es lo que decide el asociado; quien no dejó nada no lo tiene.
+        var vista = await ALaVistaAsync();
+        var cuenta = await ContratoAsync(await LineaAsync());
+        var id = await IdAsync(cuenta.PublicId);
+        await NochesAsync(id, Hoy, Vencimiento, async d =>
+        {
+            if (d.Day == 1) await PagarAsync(cuenta, d);
+        });
+
+        var contrato = await CuentaAsync(cuenta.PublicId);
+        contrato.ContractualStatus.Should().Be(ContractualStatus.Fulfilled);
+        contrato.Status.Should().Be(MemberAccountStatus.Matured, "vencido, a disposición del titular");
+        (await SaldoAsync(cuenta.PublicId, MemberAccountConcept.Principal)).Should().BeGreaterThan(0m);
+        (await SaldoAsync(vista.PublicId, MemberAccountConcept.Principal)).Should().Be(0m);
+        (await _a.Db.IntegrationMessages.CountAsync(m => m.Type == TrasladoEntreCuentasAplicadoV1.Type)).Should().Be(0);
+        // Ya vencido, la instrucción no se cambia: no hay nada que ejecutar.
+        (await InstruirAsync(cuenta.PublicId, new ContractualMaturityInstructionInput(CloseDeliveryKind.TransferToAccount, vista.PublicId))).Error.Code
+            .Should().Be(ErroresDeContractual.CodigoNoVigente);
+    }
+
+    [Fact]
+    public async Task Cambiada_antes_de_vencer_el_proceso_ejecuta_la_ultima_y_solo_si_la_linea_la_admite()
+    {
+        var vista = await ALaVistaAsync();
+        var cuenta = await ContratoAsync(await LineaAsync());
+        (await InstruirAsync(cuenta.PublicId, new ContractualMaturityInstructionInput(CloseDeliveryKind.TransferToAccount, vista.PublicId))).IsSuccess.Should().BeTrue();
+        var id = await IdAsync(cuenta.PublicId);
+        // La línea deja de admitir el traslado antes del vencimiento (la versión con la que se selló el contrato): el proceso no mueve dinero.
+        var versionId = (await _a.Db.MemberAccountTermsVersions.AsNoTracking().FirstAsync(v => v.MemberAccountId == id)).DepositLineVersionId;
+        var version = await _a.Db.DepositLineVersions.SingleAsync(v => v.Id == versionId);
+        _a.Db.Entry(version).Property(v => v.MaturityDestinations).CurrentValue = ContractualMaturityDestinations.DisbursementOrder;
+        await _a.Db.SaveChangesAsync();
+        _a.Db.ChangeTracker.Clear();
+        await NochesAsync(id, Hoy, Vencimiento, async d =>
+        {
+            if (d.Day == 1) await PagarAsync(cuenta, d);
+        });
+
+        (await CuentaAsync(cuenta.PublicId)).Status.Should().Be(MemberAccountStatus.Matured);
+        (await SaldoAsync(vista.PublicId, MemberAccountConcept.Principal)).Should().Be(0m);
     }
 
     [Fact]

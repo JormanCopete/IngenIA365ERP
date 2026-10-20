@@ -2646,3 +2646,24 @@ escribe el dueño). **Manda el código**; estas notas reemplazan lo dicho en `da
   `57P03: the database system is not yet accepting connections` (el alta responde 200 y la cooperativa queda registrada sin su base,
   reparable con `POST /api/saas/tenants/{publicId}/provision`). Aisladas pasan; SQL Server pasó la suite completa. Es un tropiezo del
   contenedor de pruebas bajo carga, no del producto: el helper de cooperativas aisladas hace esa reparación una vez y reintenta.
+
+- **E248 · El destino del contractual al vencer lo declara la línea y lo decide el asociado (decisión del dueño del 2026-10-21; refina E243).** «El traslado
+  a la vista sí, pero debe quedar configurado en el concepto (la línea) cuando se cree, para que el asociado que quiera que se traslade se haga y el que no,
+  no; debe quedar en el contrato lo que el asociado decida.» La versión de la línea contractual lleva `MaturityDestinations` (máscara
+  `ContractualMaturityDestinations`: `TransferToDemand` 1, `DisbursementOrder` 2; 0 = ninguno; nulo en las versiones anteriores = ambos), parte de la huella
+  de la versión; el editor de líneas lo captura. La instrucción del asociado ya vivía en la cuenta (`MaturityInstructionJson`, sellada en la apertura o
+  cambiada con motivo): ahora se valida contra lo que admite la versión de la línea con la que se selló el contrato
+  (`Lending.Contractual.DestinationNotAllowedByLine`) al abrir y al cambiarla. `CierreDeContractual.DestinoAsync` ejecuta sólo lo que dice la instrucción
+  y la línea admite; sin eso el contrato queda vencido a disposición, sin mover dinero, y se levanta la alerta `Cartera.ContractualADisposicion`
+  (permiso `Lending.Accounts.Parties.Manage`). El efecto `MoveToDemand` del incumplimiento sigue siendo de la línea. El mensaje `TrasladoEntreCuentasAplicado` por
+  proceso sale, como en E243, sólo en este camino. Migración aditiva `ContractualDestinosAlVencer` (una columna nula en `LND_DepositLineVersions`). No hay
+  forma de «borrar» la instrucción una vez dada: se cambia por otro destino admitido (a confirmar por el dueño si debe poder retirarse).
+- **E249 · Libranza o débito automático, excluyentes (decisión del dueño del 2026-10-21; resuelve la duda de E245).** «No se pueden tener las dos cosas.»
+  `ExclusionDeLibranzaYDebitoAutomatico` (`Application/Lending/Payroll`) es el único sitio de la regla: registrar un débito automático de un crédito con
+  vínculo de libranza vigente (`ConLibranza`: nómina propia o pagaduría) responde `Lending.DirectDebit.LoanOnPayroll`; trasladar la libranza de un crédito que
+  tiene un débito automático vigente responde `Lending.Payroll.LoanHasDirectDebit`. La autorización «todos los créditos» no nombra un crédito y no se puede
+  rechazar al registrarla: el ciclo del débito automático **salta** los créditos con libranza, y por eso `TodosLosCanales` ya no puede duplicar un descuento de nómina
+  (probado en la e2e `CargosYDebitoAutomaticoTests`). Hoy ningún camino lleva un crédito ya existente de otra forma de pago a la libranza (el desembolso y la
+  novación crean créditos nuevos, sin autorizaciones; el traslado exige que ya sea libranza), así que el lado «débito → libranza» es una guarda de defensa que
+  la e2e arma con un estado heredado en la base. La migración de saldos no trae autorizaciones de débito automático, sólo los vínculos de pago de los créditos: no
+  puede dejar un crédito con las dos cosas, y las autorizaciones se registran después por la puerta que ya valida. Sin migración.

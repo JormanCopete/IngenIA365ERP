@@ -29016,6 +29016,9 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasPrecision(9, 6)
                         .HasColumnType("numeric(9,6)");
 
+                    b.Property<int?>("MaturityDestinations")
+                        .HasColumnType("integer");
+
                     b.Property<decimal?>("MaxCashPerDay")
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)");

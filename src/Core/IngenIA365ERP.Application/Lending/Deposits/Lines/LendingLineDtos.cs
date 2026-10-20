@@ -163,6 +163,9 @@ public sealed record ContractualLineInput
     public int? ToleranceInstallments { get; init; }
     public ContractualBreachEffect BreachEffect { get; init; } = ContractualBreachEffect.MoveToDemand;
     public BonusRecognition BonusRecognition { get; init; } = BonusRecognition.AtFulfillment;
+
+    /// <summary>A dónde puede ir lo ahorrado al vencer (E248): lo que la línea admite; el asociado elige entre ello en su contrato. Ninguno = queda a disposición.</summary>
+    public ContractualMaturityDestinations MaturityDestinations { get; init; } = ContractualMaturityDestinations.All;
 }
 
 /// <summary>El ahorro permanente: por defecto sólo se retira al retiro del asociado.</summary>
@@ -283,6 +286,7 @@ public sealed record DepositLineVersionInput
             ToleratedLateInstallments = contractual?.ToleranceInstallments,
             BreachEffect = contractual?.BreachEffect,
             BonusRecognition = contractual?.BonusRecognition,
+            MaturityDestinations = contractual?.MaturityDestinations,
             WithdrawableOnlyOnMembershipWithdrawal = Permanent?.WithdrawableOnlyOnMembershipWithdrawal,
             RateTiers = tasa.Tiers.Select((t, i) => new BorradorDeTramoDeCaptacion(i + 1, t.BalanceFrom, t.BalanceTo, t.TermDaysFrom, t.TermDaysTo,
                 t.AmountFrom, t.AmountTo, tasa.Kind == RateKind.Fixed ? t.EffectiveAnnual : null, tasa.Kind == RateKind.Variable ? t.Margin : null)).ToList(),
@@ -489,6 +493,7 @@ public sealed record DepositLineVersionDto(
                 ToleranceInstallments = v.ToleratedLateInstallments,
                 BreachEffect = v.BreachEffect ?? ContractualBreachEffect.MoveToDemand,
                 BonusRecognition = v.BonusRecognition ?? Domain.Enums.Lending.BonusRecognition.AtFulfillment,
+                MaturityDestinations = v.MaturityDestinations ?? ContractualMaturityDestinations.All,
             }
             : null;
         return new DepositLineVersionDto(v.PublicId, v.VersionNumber, v.ValidFrom, vigenteHasta, v.RegisteredAt, v.Reason, v.DepositClass, v.LeerOficinas(),

@@ -130,6 +130,25 @@
                             <label class="campo">Plazo en meses *
                                 <SfNumericTextBox TValue="int" @bind-Value="contrato.TermMonths" Min="1" Max="600" Format="N0" />
                             </label>
+                            @if (_admitidos != 0)
+                            {
+                                <label class="campo">Al vencer el contrato
+                                    <select class="e-input" value="@_alVencer" @onchange="@(e => CambiarAlVencerAsync(e.Value))">
+                                        <option value="0">Queda a disposición del titular</option>
+                                        @if ((_admitidos & TextosDeCaptaciones.DestinoTraslado) != 0) { <option value="@TextosDeContrato.PorTraslado">Trasladar a su cuenta de ahorro a la vista</option> }
+                                        @if ((_admitidos & TextosDeCaptaciones.DestinoGiro) != 0) { <option value="@TextosDeContrato.PorGiro">Devolverlo con una orden de giro a su cuenta registrada</option> }
+                                    </select>
+                                </label>
+                                @if (_alVencer == TextosDeContrato.PorTraslado)
+                                {
+                                    <label class="campo">Cuenta a la vista destino *
+                                        <select class="e-input" @bind="_cuentaDestino">
+                                            <option value="">Elija la cuenta</option>
+                                            @foreach (var d in _cuentasVista) { <option value="@d.PublicId">@d.Number · @d.Line.Name</option> }
+                                        </select>
+                                    </label>
+                                }
+                            }
                         </div>
                     }
 
@@ -190,6 +209,9 @@
     private PersonSearchPicker.PersonSearchItem? _titular;
     private Guid? _linea, _oficina, _origenDeFondos;
     private AbrirCuentaRequest _pedido = new();
+    private int _alVencer, _admitidos = 3;
+    private Guid? _cuentaDestino;
+    private IReadOnlyList<CuentaEnListaDto> _cuentasVista = [];
     private List<string> _errores = [];
     private ClaveDeOperacion _clave = new();
     private bool _mostrarApertura, _mostrarPersona, _puedeCrearPersona;
@@ -235,6 +257,8 @@
         _titular = null;
         _linea = _oficina = _origenDeFondos = null;
         _pedido = new AbrirCuentaRequest();
+        _alVencer = 0;
+        _cuentaDestino = null;
         _soportes = [];
         _errores = [];
         _clave = new ClaveDeOperacion();
@@ -257,10 +281,19 @@
         await CargarSoportesAsync();
     }
 
-    private void CambiarLinea(object? valor)
+    private async Task CambiarLinea(object? valor)
     {
         _linea = Guid.TryParse(valor?.ToString(), out var g) ? g : null;
         _pedido.Contractual = EsContractual ? _pedido.Contractual ?? new ContratoDeAhorroRequest() : null;
+        _alVencer = 0;
+        _cuentaDestino = null;
+        _admitidos = 3;
+        if (EsContractual && _linea is { } id)
+        {
+            // E248: lo que el asociado puede elegir al vencer es lo que la línea admite.
+            var linea = await Cliente.LineaAsync(id);
+            _admitidos = linea.Value?.DepositVersion?.Contractual?.MaturityDestinations ?? 3;
+        }
         if (EsAportes)
         {
             _pedido.Parties.Clear();
@@ -290,9 +323,27 @@
             await CambiarTitularAsync(new PersonSearchPicker.PersonSearchItem { PublicId = p.PublicId, IdentificationNumber = p.TaxId, FullName = p.NombreVisible });
     }
 
+    private async Task CambiarAlVencerAsync(object? valor)
+    {
+        _alVencer = int.TryParse(valor?.ToString(), out var n) ? n : 0;
+        _cuentaDestino = null;
+        if (_alVencer == TextosDeContrato.PorTraslado && _titular is not null)
+        {
+            var cuentas = await Cliente.CuentasAsync(titular: _titular.PublicId, tamano: 50);
+            _cuentasVista = [.. (cuentas.Value?.Items ?? []).Where(a => a.DepositClass == TextosDeCaptaciones.ALaVista && a.Status != TextosDeCaptaciones.Cancelada)];
+        }
+    }
+
     private async Task AbrirCuentaAsync()
     {
         if (_titular is null || _linea is null || _oficina is null) return;
+        if (_pedido.Contractual is { } contrato)
+            contrato.MaturityInstruction = _alVencer switch
+            {
+                TextosDeContrato.PorTraslado when _cuentaDestino is { } destino => new InstruccionDeContratoRequest(TextosDeContrato.PorTraslado, destino),
+                TextosDeContrato.PorGiro => new InstruccionDeContratoRequest(TextosDeContrato.PorGiro, null, new BeneficiarioDeGiroRequest(_titular.PublicId)),
+                _ => null,
+            };
         using var carga = _guardado.Iniciar();
         _errores = [];
         _pedido.HolderPersonPublicId = _titular.PublicId;

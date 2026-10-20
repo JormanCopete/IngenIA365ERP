@@ -130,7 +130,8 @@ public sealed record ContractualDto(
     ContractualComplianceDto Compliance,
     ContractualProjectionDto Projection,
     ContractualMaturityInstructionDto? Instruction,
-    DateOnly? MaturedOn);
+    DateOnly? MaturedOn,
+    ContractualMaturityDestinations AllowedMaturityDestinations);
 
 /// <summary>La instrucción al vencimiento que rige: trasladar a una cuenta o girar, con su destino legible. (nuevo)</summary>
 public sealed record ContractualMaturityInstructionDto(CloseDeliveryKind Kind, Guid? TargetAccountPublicId, string? TargetAccountNumber,

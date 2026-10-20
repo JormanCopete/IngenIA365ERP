@@ -94,6 +94,21 @@ mínima, el rango de plazo, que quepa al menos una cuota y la tasa. Se sella la 
 base de la línea, las tasas **bonificada** y **de castigo**, la tolerancia de cuotas atrasadas, el efecto del incumplimiento y cuándo se reconoce la
 bonificación. **El contrato no cambia aunque la línea cambie después.**
 
+**A dónde va lo ahorrado al vencer** (decisión del dueño del 2026-10-21): lo configura la **línea** y lo decide **cada asociado** en su contrato.
+
+- Al crear la línea contractual (editor de la línea, bloque «Al vencer el contrato, el asociado puede elegir») se marca qué destinos admite:
+  **trasladar a la cuenta de ahorro a la vista del titular**, **devolver con una orden de giro**, ambos o ninguno. Es parte de la versión de la línea
+  (con vigencia, como la tasa); sin ninguno marcado, todo contrato de esa línea queda a disposición al vencer.
+- Al abrir el contractual (`/cartera/ahorros`, «Al vencer el contrato») el asociado elige uno de los destinos que la línea admite, o ninguno
+  («Queda a disposición del titular»). Si elige el traslado nombra la cuenta a la vista. Lo puede cambiar mientras el contrato esté vigente, en la
+  pestaña del contrato («Instrucción», con motivo y auditoría). Una instrucción que la línea no admite se rechaza
+  (`Lending.Contractual.DestinationNotAllowedByLine`, «La línea de este ahorro contractual no admite…»). Lo que admite es la versión de la línea con la
+  que se selló el contrato: un cambio posterior de la línea no lo toca.
+- Al vencer el proceso nocturno ejecuta **sólo** lo que dice la instrucción **y** lo que la línea admite. Sin instrucción (o con una que la línea ya no
+  admite, o si la cuenta destino ya no está viva) **no se mueve dinero**: el contrato queda **vencido, a disposición del titular**, y se levanta la
+  alerta `Cartera.ContractualADisposicion` para quien administra las cuentas; el titular decide después con «Cancelación». El pasar a la vista por
+  **incumplimiento** (efecto `MoveToDemand` de la línea) es otra cosa: lo dice la línea y no la instrucción.
+
 ## 8. Cuotas y movimientos
 
 - Se consigna **sólo por cuotas** (lo libre se rechaza; lo que excede la cuota pendiente, también); el traslado a un contractual paga cuotas.

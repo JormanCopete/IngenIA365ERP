@@ -82,7 +82,7 @@ public sealed class AperturaDeContractual(
         {
             var titular = await db.People.AsNoTracking().Where(p => p.PublicId == e.HolderPersonPublicId && !p.IsDeleted).Select(p => (int?)p.Id)
                 .FirstOrDefaultAsync(ct);
-            if (titular is { } t && (await DestinoAsync(0, t, instruccion, ct)) is { IsFailure: true } malo) return malo.Error;
+            if (titular is { } t && (await DestinoAsync(0, t, instruccion, version, ct)) is { IsFailure: true } malo) return malo.Error;
         }
         return null;
     }
@@ -122,7 +122,7 @@ public sealed class AperturaDeContractual(
         DestinoDeContractual? destino = null;
         if (pedido.MaturityInstruction is { } instruccion)
         {
-            var resuelto = await DestinoAsync(cuenta.Id, cuenta.HolderPersonId, instruccion, ct);
+            var resuelto = await DestinoAsync(cuenta.Id, cuenta.HolderPersonId, instruccion, version, ct);
             if (resuelto.IsFailure) return Falla(resuelto.Error);
             destino = resuelto.Value;
         }
@@ -181,12 +181,34 @@ public sealed class AperturaDeContractual(
     /// El destino de la instrucción al vencimiento (research §19): una cuenta de ahorro a la vista viva del titular en el alcance de quien opera, o el giro al
     /// beneficiario (el titular, si no se nombra otro) con la cuenta bancaria pedida o la registrada del asociado.
     /// </summary>
-    public Task<Result<DestinoDeContractual>> DestinoAsync(MemberAccount cuenta, ContractualMaturityInstructionInput instruccion, CancellationToken ct) =>
-        DestinoAsync(cuenta.Id, cuenta.HolderPersonId, instruccion, ct);
-
-    /// <summary>El destino de la instrucción para la cuenta <paramref name="cuentaId"/> (cero antes de abrirla) de <paramref name="titularId"/>.</summary>
-    public async Task<Result<DestinoDeContractual>> DestinoAsync(int cuentaId, int titularId, ContractualMaturityInstructionInput instruccion, CancellationToken ct)
+    public async Task<Result<DestinoDeContractual>> DestinoAsync(MemberAccount cuenta, ContractualMaturityInstructionInput instruccion, CancellationToken ct)
     {
+        // E248: lo que admite es la versión de la línea con la que se selló el contrato (un cambio posterior de la línea no lo toca).
+        var leido = await lector.LeerAsync(cuenta, ct);
+        var versionId = leido.Inicial?.DepositLineVersionId;
+        var version = versionId is { } vid ? await db.DepositLineVersions.AsNoTracking().FirstOrDefaultAsync(v => v.Id == vid, ct) : null;
+        return await DestinoAsync(cuenta.Id, cuenta.HolderPersonId, instruccion, version, ct);
+    }
+
+    /// <summary>
+    /// ¿La línea admite este destino al vencer (E248)? Nulo = la versión no declara destinos (anterior a la decisión del 2026-10-21): admite ambos.
+    /// </summary>
+    public static ContractualMaturityDestinations DestinosQueAdmite(DepositLineVersion? version) =>
+        version?.MaturityDestinations ?? ContractualMaturityDestinations.All;
+
+    public static bool Admite(DepositLineVersion? version, CloseDeliveryKind kind) => kind switch
+    {
+        CloseDeliveryKind.TransferToAccount => DestinosQueAdmite(version).HasFlag(ContractualMaturityDestinations.TransferToDemand),
+        CloseDeliveryKind.DisbursementOrder => DestinosQueAdmite(version).HasFlag(ContractualMaturityDestinations.DisbursementOrder),
+        _ => false,
+    };
+
+    /// <summary>El destino de la instrucción para la cuenta <paramref name="cuentaId"/> (cero antes de abrirla) de <paramref name="titularId"/>, dentro de lo que admite la línea.</summary>
+    public async Task<Result<DestinoDeContractual>> DestinoAsync(int cuentaId, int titularId, ContractualMaturityInstructionInput instruccion,
+        DepositLineVersion? version, CancellationToken ct)
+    {
+        if (Enum.IsDefined(instruccion.Kind) && !Admite(version, instruccion.Kind))
+            return Result.Failure<DestinoDeContractual>(ErroresDeContractual.DestinoNoAdmitidoPorLaLinea(instruccion.Kind, DestinosQueAdmite(version)));
         if (instruccion.Kind == CloseDeliveryKind.TransferToAccount)
         {
             if (instruccion.TargetAccountPublicId is not { } id)

@@ -73,7 +73,8 @@ public sealed record ContratoDeAhorroDto(
     CumplimientoDelContratoDto Compliance,
     ProyeccionDelContratoDto Projection,
     InstruccionDelContratoDto? Instruction,
-    DateOnly? MaturedOn);
+    DateOnly? MaturedOn,
+    int AllowedMaturityDestinations = 3);
 
 /// <summary>Los textos del ahorro contractual.</summary>
 public static class TextosDeContrato

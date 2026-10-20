@@ -44,7 +44,7 @@ public class AhorroContractualTests(CentralIdentityApiFixture fx)
 
     /// <summary>La línea contractual del escenario: cuota mensual desde 100.000, de 6 a 36 meses, 6 % EA en 30/360, bonificada al 8 %, castigo al 3 %.</summary>
     private static async Task<Guid> LineaContractualAsync(HttpClient http, string admin, DateOnly hoy, string codigo, int tolerancia = 1,
-        string efecto = "BreachRate")
+        string efecto = "BreachRate", string destinos = "All")
     {
         var resp = await CarteraE2E.ConClaveAsync(http, admin, HttpMethod.Post, $"{Lineas}/deposit", new
         {
@@ -58,7 +58,7 @@ public class AhorroContractualTests(CentralIdentityApiFixture fx)
                 contractual = new
                 {
                     installmentPeriodicity = "Monthly", minInstallment = 100_000m, termMonthsFrom = 6, termMonthsTo = 36, bonusRateEa = 0.08m,
-                    breachRateEa = 0.03m, toleranceInstallments = tolerancia, breachEffect = efecto, bonusRecognition = "AtFulfillment",
+                    breachRateEa = 0.03m, toleranceInstallments = tolerancia, breachEffect = efecto, bonusRecognition = "AtFulfillment", maturityDestinations = destinos,
                 },
             },
         });
@@ -66,7 +66,7 @@ public class AhorroContractualTests(CentralIdentityApiFixture fx)
         return (await CarteraE2E.LeerAsync(resp)).GetProperty("publicId").GetGuid();
     }
 
-    private static async Task<Guid> ContratoAsync(HttpClient http, Escenario e, Guid linea)
+    private static async Task<Guid> ContratoAsync(HttpClient http, Escenario e, Guid linea, bool conInstruccion = true)
     {
         var resp = await CarteraE2E.ConClaveAsync(http, e.Coop.TokenAdmin, HttpMethod.Post, Cuentas, new
         {
@@ -74,7 +74,8 @@ public class AhorroContractualTests(CentralIdentityApiFixture fx)
             beneficiaries = Array.Empty<object>(),
             contractual = new
             {
-                installment = Cuota, termMonths = 12, maturityInstruction = new { kind = "TransferToAccount", targetAccountPublicId = e.Vista },
+                installment = Cuota, termMonths = 12,
+                maturityInstruction = conInstruccion ? new { kind = "TransferToAccount", targetAccountPublicId = (Guid?)e.Vista } : null,
             },
         });
         resp.StatusCode.Should().Be(HttpStatusCode.Created, $"abrir el contractual: «{await resp.Content.ReadAsStringAsync()}»");
@@ -170,5 +171,54 @@ public class AhorroContractualTests(CentralIdentityApiFixture fx)
         var hechos = await CausacionE2E.EnLaBaseAsync(fx, e.Coop.TenantPublicId, db => db.IntegrationMessages.AsNoTracking()
             .CountAsync(m => m.Type == IngenIA365ERP.Application.Common.Integration.Contracts.Lending.Deposits.PenalidadAplicadaV1.Type));
         hechos.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task E248_la_linea_admite_el_traslado_y_lo_decide_cada_asociado_en_su_contrato()
+    {
+        var e = await ArmarAsync("destino");
+        using var http = fx.CreateClient();
+        var admin = e.Coop.TokenAdmin;
+        var vence = e.Hoy.AddMonths(12);
+
+        // Una línea que sólo admite el giro no recibe una instrucción de traslado: se rechaza con su código, antes de abrir la cuenta.
+        var soloGiro = await LineaContractualAsync(http, admin, e.Hoy, "CONTRAT4", destinos: "DisbursementOrder");
+        var rechazado = await CarteraE2E.ConClaveAsync(http, admin, HttpMethod.Post, Cuentas, new
+        {
+            linePublicId = soloGiro, holderPersonPublicId = e.Titular, officePublicId = e.Oficina, handlingMode = "Indistinct", parties = Array.Empty<object>(),
+            beneficiaries = Array.Empty<object>(),
+            contractual = new { installment = Cuota, termMonths = 12, maturityInstruction = new { kind = "TransferToAccount", targetAccountPublicId = e.Vista } },
+        });
+        (await CarteraE2E.CodigoDeErrorAsync(rechazado)).Should().Be("Lending.Contractual.DestinationNotAllowedByLine");
+
+        // La misma línea (admite ambos): un asociado deja la instrucción de trasladar a su cuenta a la vista y el otro no deja ninguna.
+        var linea = await LineaContractualAsync(http, admin, e.Hoy, "CONTRAT3");
+        var consulta = await CarteraE2E.GetAsync(http, admin, $"{Lineas}/{linea}");
+        consulta.GetProperty("depositVersion").GetProperty("contractual").GetProperty("maturityDestinations").GetInt32().Should().Be(3);
+        var otro = e with { Titular = await MovimientosTests.AsociadoAsync(http, admin, "ContratoSinInstruccion") };
+        var conTraslado = await ContratoAsync(http, e, linea);
+        var sinInstruccion = await ContratoAsync(http, otro, linea, conInstruccion: false);
+        (await CarteraE2E.GetAsync(http, admin, $"{Cuentas}/{sinInstruccion}/contractual")).GetProperty("allowedMaturityDestinations").GetInt32().Should().Be(3);
+
+        // Los dos pagan sus doce cuotas, mes a mes, en la misma corrida del ciclo diario (el reloj no vuelve atrás).
+        for (var mes = 1; e.Hoy.AddMonths(mes) <= vence; mes++)
+        {
+            var dia = e.Hoy.AddMonths(mes);
+            using var reloj = CausacionE2E.RelojEn(fx, dia);
+            await PagarCuotaAsync(http, e, conTraslado, dia);
+            await PagarCuotaAsync(http, otro, sinInstruccion, dia);
+            await CausacionE2E.CicloDeHoyAsync(fx, http, admin, e.Coop.TenantPublicId);
+        }
+
+        var trasladado = await CarteraE2E.GetAsync(http, admin, $"{Cuentas}/{conTraslado}");
+        trasladado.GetProperty("status").GetInt32().Should().Be((int)MemberAccountStatus.Closed);
+        (await CarteraE2E.GetAsync(http, admin, $"{Cuentas}/{e.Vista}")).GetProperty("balances").GetProperty("balance").GetDecimal()
+            .Should().BeGreaterThan(2_400_000m, "el traslado a la vista de quien lo pidió");
+        var aDisposicion = await CarteraE2E.GetAsync(http, admin, $"{Cuentas}/{sinInstruccion}");
+        aDisposicion.GetProperty("status").GetInt32().Should().Be((int)MemberAccountStatus.Matured, "quien no lo pidió queda a disposición: no se movió dinero");
+        aDisposicion.GetProperty("balances").GetProperty("balance").GetDecimal().Should().BeGreaterThan(2_400_000m);
+        var traslados = await CausacionE2E.EnLaBaseAsync(fx, e.Coop.TenantPublicId, db => db.IntegrationMessages.AsNoTracking()
+            .CountAsync(m => m.Type == IngenIA365ERP.Application.Common.Integration.Contracts.Lending.Deposits.TrasladoEntreCuentasAplicadoV1.Type));
+        traslados.Should().Be(1, "sólo el contrato con instrucción generó el traslado");
     }
 }

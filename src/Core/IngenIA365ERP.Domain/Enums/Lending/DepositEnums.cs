@@ -352,6 +352,19 @@ public enum ContractualBreachEffect
     Cancel = 3,
 }
 
+/// <summary>
+/// A dónde puede ir lo ahorrado al vencer un ahorro contractual, según lo que la línea admite (decisión del dueño del 2026-10-21, E248). Es una máscara de
+/// bits: la línea declara cuáles admite y el asociado elige una en su instrucción; la que no admita la línea no se acepta.
+/// </summary>
+[Flags]
+public enum ContractualMaturityDestinations
+{
+    None = 0,
+    TransferToDemand = 1,
+    DisbursementOrder = 2,
+    All = TransferToDemand | DisbursementOrder,
+}
+
 /// <summary>Cuándo se reconoce la bonificación del contractual (P26, a validar).</summary>
 public enum BonusRecognition
 {

@@ -110,6 +110,13 @@ public sealed class ContractualDeLaLineaRequest
     public int? ToleranceInstallments { get; set; }
     public int BreachEffect { get; set; } = 2;
     public int BonusRecognition { get; set; } = 1;
+
+    /// <summary>A dónde puede ir lo ahorrado al vencer (máscara: 1 traslado a la cuenta a la vista, 2 giro; 0 = ninguno, queda a disposición).</summary>
+    public int MaturityDestinations { get; set; } = 3;
+
+    public bool AdmiteDestino(int bit) => (MaturityDestinations & bit) != 0;
+
+    public void FijarDestino(int bit, bool admite) => MaturityDestinations = admite ? MaturityDestinations | bit : MaturityDestinations & ~bit;
 }
 
 public sealed class PermanenteDeLaLineaRequest
@@ -258,7 +265,7 @@ public sealed record CdatDeLaLineaDto(int MinTermDays, int MaxTermDays, List<int
 public sealed record RedencionAnticipadaDto(bool Allowed, int? PenaltyMode, decimal? PenaltyRateEa, decimal? PenaltyDiscount, int? MinDaysBeforeRedemption);
 
 public sealed record ContractualDeLaLineaDto(int InstallmentPeriodicity, decimal MinInstallment, int TermMonthsFrom, int TermMonthsTo, decimal? BonusRateEa,
-    decimal? BreachRateEa, int? ToleranceInstallments, int BreachEffect, int BonusRecognition);
+    decimal? BreachRateEa, int? ToleranceInstallments, int BreachEffect, int BonusRecognition, int MaturityDestinations = 3);
 
 public sealed record PermanenteDeLaLineaDto(bool WithdrawableOnlyOnMembershipWithdrawal);
 
@@ -387,7 +394,7 @@ public sealed record VersionDeCaptacionDto(
             {
                 InstallmentPeriodicity = k.InstallmentPeriodicity, MinInstallment = k.MinInstallment, TermMonthsFrom = k.TermMonthsFrom,
                 TermMonthsTo = k.TermMonthsTo, BonusRateEa = k.BonusRateEa, BreachRateEa = k.BreachRateEa, ToleranceInstallments = k.ToleranceInstallments,
-                BreachEffect = k.BreachEffect, BonusRecognition = k.BonusRecognition,
+                BreachEffect = k.BreachEffect, BonusRecognition = k.BonusRecognition, MaturityDestinations = k.MaturityDestinations,
             }
             : null,
         Permanent = Permanent is { } p ? new PermanenteDeLaLineaRequest { WithdrawableOnlyOnMembershipWithdrawal = p.WithdrawableOnlyOnMembershipWithdrawal } : null,
