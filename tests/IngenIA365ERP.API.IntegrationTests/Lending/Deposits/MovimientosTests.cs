@@ -3,6 +3,7 @@ using System.Net;
 using System.Text.Json;
 using FluentAssertions;
 using IngenIA365ERP.API.IntegrationTests.Identity;
+using IngenIA365ERP.Domain.Enums.Lending;
 
 namespace IngenIA365ERP.API.IntegrationTests.Lending.Deposits;
 
@@ -206,7 +207,7 @@ public class MovimientosTests(CentralIdentityApiFixture fx)
         var operacion = (await CarteraE2E.LeerAsync(gravado)).GetProperty("value").GetProperty("operationPublicId").GetGuid();
         var comprobante = await CarteraE2E.GetAsync(http, esc.Admin, $"{Cuentas}/{noMarcada}/operations/{operacion}");
         comprobante.GetProperty("gmf").GetProperty("amount").GetDecimal().Should().Be(1_600m);
-        comprobante.GetProperty("transactions").EnumerateArray().Count(t => t.GetProperty("kind").GetString() == "GmfCharged").Should().Be(2);
+        comprobante.GetProperty("transactions").EnumerateArray().Count(t => t.GetProperty("kind").GetInt32() == (int)MemberAccountTransactionKind.GmfCharged).Should().Be(2);
         exento.StatusCode.Should().Be(HttpStatusCode.OK, await exento.Content.ReadAsStringAsync());
 
         var uso = await CarteraE2E.GetAsync(http, esc.Admin, $"/api/lending/gmf-exemptions/usage?personPublicId={elena}");
@@ -235,7 +236,7 @@ public class MovimientosTests(CentralIdentityApiFixture fx)
     [Fact]
     public async Task US4_5_el_retiro_por_giro_sobre_la_atribucion_queda_en_espera_sin_mover_saldo()
     {
-        var esc = await EscenarioAsync("movimientos-atribucion");
+        var esc = await EscenarioAsync("movimientos_atribucion");
         using var http = fx.CreateClient();
         await CarteraE2E.ExitoAsync(http, esc.Admin, HttpMethod.Post, "/api/lending/amount-limits", new
         {

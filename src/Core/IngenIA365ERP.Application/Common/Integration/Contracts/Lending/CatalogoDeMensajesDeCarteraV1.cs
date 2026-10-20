@@ -80,7 +80,10 @@ public static class CatalogoDeMensajesDeCarteraV1
         Hecho(typeof(ConsignacionEnCuentaAplicadaV1), ConsignacionEnCuentaAplicadaV1.Type, "CCN", N, C, proceso: false),
         Hecho(typeof(AporteRecibidoV1), AporteRecibidoV1.Type, "APR", N, C, proceso: false),
         Hecho(typeof(RetiroDeCuentaAplicadoV1), RetiroDeCuentaAplicadoV1.Type, "RCT", N, C, proceso: true),
-        Hecho(typeof(TrasladoEntreCuentasAplicadoV1), TrasladoEntreCuentasAplicadoV1.Type, "TRC", N, C, proceso: false),
+        // E243: el vencimiento del ahorro contractual lo corre el ciclo diario y entrega por traslado a la cuenta de ahorro (research §19; mensajes.md §2:
+        // ContractualMaturity = Bonificación o Penalidad + TrasladoEntreCuentasAplicado). Con proceso: false el emisor lanzaba (T11) y el contractual
+        // quedaba sin terminar. Las pantallas siguen firmando con la persona: el proceso sólo llega aquí por ese vencimiento.
+        Hecho(typeof(TrasladoEntreCuentasAplicadoV1), TrasladoEntreCuentasAplicadoV1.Type, "TRC", N, C, proceso: true),
         Hecho(typeof(GmfRetenidoV1), GmfRetenidoV1.Type, "GMF", N, C, proceso: true),
         Hecho(typeof(InteresDeCaptacionCausadoV1), InteresDeCaptacionCausadoV1.Type, "ICC", N, P, proceso: true),
         Hecho(typeof(AjusteDeCausacionDeCaptacionV1), AjusteDeCausacionDeCaptacionV1.Type, "AJC", N, CoP, proceso: true),

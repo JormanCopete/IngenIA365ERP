@@ -2633,3 +2633,7 @@ escribe el dueño). **Manda el código**; estas notas reemplazan lo dicho en `da
   lo leía `ReglasDeAportes.LimiteAsync`.
 - **E240 · Fixture de e2e de captaciones.** La cooperativa aislada no traía perfil regulatorio (`current: null`), política de datos `GeneralTreatment` ni alcance
   de Cartera para su administrador, y las pruebas usaban la oficina administrativa donde la cuenta pide la agencia contable (`AgenciaPublicId`).
+- **E241 · Reverso de una decisión de asamblea (500).** El tipo del origen del mensaje de reverso era `ASM-000001-R` (no termina en dígitos, `Prefijo` lo devolvía entero) y no cabía en `OriginDocumentTypeCode varchar(10)`. Ahora es el prefijo de la decisión (`ASM-`).
+- **E242 · Conciliación de captaciones al centavo.** El libro guarda la causación con seis decimales y Contabilidad recibe `amount` al centavo (`accruedAmount` lleva los seis); la conciliación compara cada movimiento redondeado al centavo.
+- **E243 · El vencimiento del contractual lo emite el proceso.** `TrasladoEntreCuentasAplicado` admite proceso: el ciclo diario entrega el ahorro contractual por traslado a la vista (`ContractualMaturity`), y con `proceso: false` el emisor lanzaba (T11) y el contrato quedaba sin terminar. A confirmar por el dueño.
+- **E244 · Reverso desde el crédito del cruce y del débito automático.** `PagoDeLaPantalla` rechazaba todo `OwnLoanPayoff`; ahora admite el que tiene operación de cuenta enlazada (cruce al retiro o débito), que arrastra el débito (`IArrastreDeReversoDePago`). La recogida de un desembolso sigue rechazada.

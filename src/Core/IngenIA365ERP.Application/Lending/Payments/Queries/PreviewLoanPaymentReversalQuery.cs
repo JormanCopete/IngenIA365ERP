@@ -6,6 +6,7 @@ using IngenIA365ERP.Application.Lending.Common;
 using IngenIA365ERP.Application.Lending.Loans;
 using IngenIA365ERP.Domain.Entities.Lending.Loans;
 using IngenIA365ERP.Domain.Entities.Lending.Operations;
+using IngenIA365ERP.Domain.Enums.Lending;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -86,7 +87,12 @@ public static class PagoDeLaPantalla
         var pago = await db.LoanOperations.AsNoTracking().FirstOrDefaultAsync(o => o.PublicId == operationPublicId && o.LoanId == leido.Value.Id, ct);
         if (pago is null) return Result.Failure<(Loan, LoanOperation)>(new Error(GetLoanOperationQueryHandler.CodigoInexistente, "La operación no existe en este crédito."));
         if (ReversionDePago.Reversable(pago) is { } error) return Result.Failure<(Loan, LoanOperation)>(error);
-        if (pago.CollectorClass is nameof(ClaseDeRecaudador.Payroll) or nameof(ClaseDeRecaudador.Contributions) or nameof(ClaseDeRecaudador.OwnLoanPayoff))
+        // E244 (US10-4, FR-077): el pago de un cruce al retiro o de un débito automático es de la clase OwnLoanPayoff y se reversa desde el crédito —el reverso
+        // arrastra el débito de la cuenta (IArrastreDeReversoDePago)—; la recogida de un desembolso, que es de la misma clase, no.
+        var deCuentas = pago.CollectorClass == nameof(ClaseDeRecaudador.OwnLoanPayoff)
+                        && await db.MemberAccountOperations.AsNoTracking().AnyAsync(o => o.RelatedLoanOperationId == pago.Id && o.ReversesOperationId == null
+                            && ((o.MembershipWithdrawalId != null && o.Kind == MemberAccountOperationKind.InternalOffset) || o.Kind == MemberAccountOperationKind.DirectDebit), ct);
+        if (!deCuentas && pago.CollectorClass is nameof(ClaseDeRecaudador.Payroll) or nameof(ClaseDeRecaudador.Contributions) or nameof(ClaseDeRecaudador.OwnLoanPayoff))
             return Result.Failure<(Loan, LoanOperation)>(ErroresDePagos.DelRecaudador(pago.CollectorClass));
         return Result.Success((leido.Value, pago));
     }

@@ -112,7 +112,9 @@ public sealed class SaldosContablesDeCaptaciones(IApplicationDbContext db)
             var marca = c.IsGarnished ? AccountFlag.Garnished : exentas.Contains(c.Id) ? AccountFlag.GmfExempt : AccountFlag.Standard;
             var clave = Clave(f.Concept, c.Status == MemberAccountStatus.Inactive, c.Linea, c.Nature, c.DepositClass, marca, c.Sucursal,
                 plazos.GetValueOrDefault(c.Id))!;
-            resultado.Add(new MovimientoDeCombinacionDeCartera(clave, c.Id, f.Amount, f.AccountingDate, f.MessagePublicId, f.Operacion));
+            // Lo que Contabilidad recibe es el valor de la cuenta al centavo (DepositConceptAmountV1.Amount; la causación guarda seis decimales en el libro y los
+            // lleva aparte en accruedAmount): comparar con los seis decimales dejaba una diferencia de fracciones de centavo que ningún hecho explica (E242).
+            resultado.Add(new MovimientoDeCombinacionDeCartera(clave, c.Id, decimal.Round(f.Amount, 2, MidpointRounding.AwayFromZero), f.AccountingDate, f.MessagePublicId, f.Operacion));
         }
         return resultado;
     }

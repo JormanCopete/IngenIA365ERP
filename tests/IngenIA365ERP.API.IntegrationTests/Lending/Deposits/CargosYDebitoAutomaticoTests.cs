@@ -50,8 +50,8 @@ public class CargosYDebitoAutomaticoTests(CentralIdentityApiFixture fx)
         var cuenta = await MovimientosTests.CuentaAsync(http, admin, usuarios.O1.AgenciaPublicId, linea, ivan);
         await MovimientosTests.ConsignarAsync(http, admin, cuenta, ivan, 100_000m, hoy);
         var fin = new DateOnly(hoy.Year, hoy.Month, DateTime.DaysInMonth(hoy.Year, hoy.Month));
-        foreach (var _ in new[] { 1, 2 })
-            using (CausacionE2E.RelojEn(fx, fin)) await CausacionE2E.CicloDeHoyAsync(fx, http, admin, coop.TenantPublicId);
+        // El ciclo de un día ya terminado se rechaza (Lending.ProcessRun.AlreadyCompleted): la repetición no existe, y el cargo sale una sola vez.
+        using (CausacionE2E.RelojEn(fx, fin)) await CausacionE2E.CicloDeHoyAsync(fx, http, admin, coop.TenantPublicId);
 
         var cargos = await CarteraE2E.GetAsync(http, admin, $"{Cuentas}/{cuenta}/charges");
         var items = cargos.GetProperty("items").EnumerateArray().ToList();
@@ -100,6 +100,7 @@ public class CargosYDebitoAutomaticoTests(CentralIdentityApiFixture fx)
         await CarteraE2E.PersonaDelAdministradorAsync(http, des.Coop);
         var (_, deudor, desembolso) = await DesembolsoE2E.CreditoDesembolsadoAsync(http, des, "Debito", 2_000_000m);
         var credito = desembolso.GetProperty("loanPublicId").GetGuid();
+        await ConFechaDeNacimientoAsync(http, admin, deudor);
         var (_, vence, total) = await PagosE2E.CuotaAsync(http, admin, credito);
         var linea = await MovimientosTests.LineaALaVistaAsync(http, admin, des.Hoy, "AHDEBITO");
         var cuenta = await MovimientosTests.CuentaAsync(http, admin, des.Usuarios.O1.AgenciaPublicId, linea, deudor);
@@ -112,13 +113,28 @@ public class CargosYDebitoAutomaticoTests(CentralIdentityApiFixture fx)
         });
         mandato.StatusCode.Should().Be(HttpStatusCode.Created, await mandato.Content.ReadAsStringAsync());
 
-        foreach (var _ in new[] { 1, 2 })
-            using (CausacionE2E.RelojEn(fx, vence)) await CausacionE2E.CicloDeHoyAsync(fx, http, admin, des.Coop.TenantPublicId);
+        using (CausacionE2E.RelojEn(fx, vence)) await CausacionE2E.CicloDeHoyAsync(fx, http, admin, des.Coop.TenantPublicId);
+        using (CausacionE2E.RelojEn(fx, vence))
+            (await CarteraE2E.ConClaveAsync(http, admin, HttpMethod.Post, CausacionE2E.Corridas, new { kind = "DailyCycle" }))
+                .StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity, "el ciclo del día ya terminó: no se corre otra vez");
 
         var debitos = await CarteraE2E.GetAsync(http, admin, $"{Cuentas}/{cuenta}/operations?kind=DirectDebit");
         debitos.GetProperty("items").GetArrayLength().Should().Be(1, "correr el ciclo otra vez no debita dos veces");
         debitos.GetProperty("items")[0].GetProperty("amount").GetDecimal().Should().Be(total);
         var lista = await CarteraE2E.GetAsync(http, admin, $"/api/lending/direct-debits?accountPublicId={cuenta}");
         lista.EnumerateArray().Single().GetProperty("lastDebits").GetArrayLength().Should().BeGreaterThan(0);
+    }
+
+    /// <summary>
+    /// La persona del crédito nace sin fecha de nacimiento y abrir una cuenta exige los datos de conocimiento
+    /// (<c>Lending.Savings.MemberDataIncomplete</c>): se completan por la misma edición de la persona.
+    /// </summary>
+    private static async Task ConFechaDeNacimientoAsync(HttpClient http, string admin, Guid persona)
+    {
+        var actual = await CarteraE2E.GetAsync(http, admin, $"/api/core/people/{persona}");
+        var cuerpo = actual.EnumerateObject().ToDictionary(p => p.Name, p => (object?)p.Value.Clone());
+        cuerpo["dateOfBirth"] = new DateOnly(1984, 5, 20);
+        var resp = await CarteraE2E.EnviarAsync(http, admin, HttpMethod.Put, $"/api/core/people/{persona}", cuerpo);
+        resp.IsSuccessStatusCode.Should().BeTrue($"completar la fecha de nacimiento: «{await resp.Content.ReadAsStringAsync()}»");
     }
 }

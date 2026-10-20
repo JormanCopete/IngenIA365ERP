@@ -165,6 +165,7 @@ public sealed partial class EmisionDeCartera
         ArgumentNullException.ThrowIfNull(r);
         var d = r.Distribucion;
         var primera = r.Espejos[0].Hecho;
+        // El tipo del origen es el prefijo de la decisión («ASM-»): «ASM-000001-R» no termina en dígitos y se guardaba entero en un varchar(10) (E241).
         var numero = $"{d.Number}-R";
         var contenido = new OperacionDeCuentaReversadaV1
         {
@@ -192,7 +193,7 @@ public sealed partial class EmisionDeCartera
             ? (await modoDePaso.ResolverAsync(OperacionDeCuentaReversadaV1.Type, primera.FechaContable, ct)).Value ?? new ModoDeEntrega.Sellado(DeliveryMode.NotPosted)
             : new ModoDeEntrega.Heredado(d.PublicId);
         var mensajes = await emisor.EmitirAsync(new SolicitudDeEmision(
-            new OrigenDeEmision(MessageOriginKind.Document, Guid.NewGuid(), ClaseReversoDeAsamblea, Prefijo(numero), numero, primera.FechaContable,
+            new OrigenDeEmision(MessageOriginKind.Document, Guid.NewGuid(), ClaseReversoDeAsamblea, Prefijo(d.Number), numero, primera.FechaContable,
                 primera.SucursalPublicId),
             ClavesDeEvento.Confirmacion, [contenido], modo, Relacionado: new DocumentoRelacionado(d.PublicId, ClaseDecisionDeAsamblea, d.Number),
             UsuarioDeOrigen: r.ReversadoPor), ct);

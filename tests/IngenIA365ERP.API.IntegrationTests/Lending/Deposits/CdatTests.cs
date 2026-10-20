@@ -132,7 +132,9 @@ public class CdatTests(CentralIdentityApiFixture fx)
 
         var plan = await CarteraE2E.GetAsync(http, e.Coop.TokenAdmin, $"{Cdat}/{Id(cdat)}/schedule");
         plan[0].GetProperty("paidOn").ValueKind.Should().NotBe(JsonValueKind.Null, "el ciclo pagó el primer período");
-        plan[0].GetProperty("net").GetDecimal().Should().Be(76_551m, "79.741 menos el 4 % de retención del CDAT (3.190)");
+        plan[0].GetProperty("net").GetDecimal().Should().Be(78_319m,
+            "79.741 menos la retención del CDAT: la persona de prueba es natural, así que se descuenta el componente inflacionario del 2025 sembrado en la central "
+            + "(55,43 % → 44.200; base 35.541) y el 4 % de esa base es 1.422");
         var pagos = await CausacionE2E.EnLaBaseAsync(fx, e.Coop.TenantPublicId, db => db.MemberAccountTransactions.AsNoTracking()
             .Where(t => t.Kind == MemberAccountTransactionKind.InterestPaid).CountAsync());
         pagos.Should().Be(1);

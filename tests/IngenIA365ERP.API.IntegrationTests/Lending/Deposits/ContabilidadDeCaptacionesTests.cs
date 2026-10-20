@@ -170,8 +170,11 @@ public class ContabilidadDeCaptacionesTests(CentralIdentityApiFixture fx)
         var rechazado = await CarteraE2E.LeerAsync(retiro);
         rechazado.ToString().Should().Contain("Lending.Prevalidation.NotPostable", "A8 = «Bloquear todo»: el contrato también rechaza");
 
-        await ParametroAsync(http, admin, "Contabilidad.FaltaDeRegla", "Advertir", hoy);
-        (await MovimientosTests.RetirarAsync(http, admin, origen, titular, 100_000m, hoy)).StatusCode.Should().Be(HttpStatusCode.OK);
+        // Una vigencia nueva del parámetro empieza otro día (Parameters.Overlaps): Advertir rige desde mañana y el retiro se hace con el reloj de mañana.
+        var manana = hoy.AddDays(1);
+        await ParametroAsync(http, admin, "Contabilidad.FaltaDeRegla", "Advertir", manana);
+        using var reloj = CausacionE2E.RelojEn(fx, manana);
+        (await MovimientosTests.RetirarAsync(http, admin, origen, titular, 100_000m, manana)).StatusCode.Should().Be(HttpStatusCode.OK);
         await despachador.PasadasAsync(coop.TenantPublicId, 3);
         var retiros = await HechosAsync(http, admin, "RetiroDeCuentaAplicado");
         retiros.Should().ContainSingle();
@@ -184,6 +187,8 @@ public class ContabilidadDeCaptacionesTests(CentralIdentityApiFixture fx)
     {
         var (coop, _, _, hoy) = await CooperativaAsync("contab3");
         using var http = fx.CreateClient();
+        // El bloqueo se lee de los recibos del informativo CaptacionesActivadas en Contabilidad: hay que dejar que el despachador lo entregue.
+        await new ConductorDelDespachador(fx).PasadasAsync(coop.TenantPublicId, 3);
         await CierreE2E.CerrarContabilidadAsync(http, coop.TokenAdmin, hoy.Year, hoy.Month, "Accounting.Period.LendingNotClosed");
     }
 }

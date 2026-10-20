@@ -31,9 +31,10 @@ public class InteresesTests(CentralIdentityApiFixture fx)
     private static readonly decimal TasaDiaria = EquivalenciaDeTasas.TasaDiaria(0.03m, DayCountConvention.Actual365, RateEquivalence.Compound,
         RepaymentPeriodicity.Monthly);
 
-    private async Task<(CaptacionesE2E.CooperativaDeCaptaciones Coop, Guid Oficina)> CooperativaAsync()
+    /// <summary>Una cooperativa por prueba: la corrida del ciclo de un día ya terminada responde <c>AlreadyCompleted</c> y las cuentas de la prueba siguiente no se causarían.</summary>
+    private async Task<(CaptacionesE2E.CooperativaDeCaptaciones Coop, Guid Oficina)> CooperativaAsync(string prueba)
     {
-        var coop = await CaptacionesE2E.CooperativaConCaptacionesAsync(fx, "intereses");
+        var coop = await CaptacionesE2E.CooperativaConCaptacionesAsync(fx, $"intereses_{prueba}");
         using var http = fx.CreateClient();
         await CarteraE2E.PersonaDelAdministradorAsync(http, coop.Cooperativa);
         var usuarios = await UsuariosDeCartera.CrearAsync(fx, coop.Cooperativa);
@@ -102,7 +103,7 @@ public class InteresesTests(CentralIdentityApiFixture fx)
     [Fact]
     public async Task US5_1_el_interes_liquidado_es_la_suma_de_los_intereses_de_cada_saldo_diario()
     {
-        var (coop, oficina) = await CooperativaAsync();
+        var (coop, oficina) = await CooperativaAsync("p1");
         using var http = fx.CreateClient();
         var cuenta = await MesAsync(http, coop, oficina, "AHINT1");
 
@@ -120,7 +121,7 @@ public class InteresesTests(CentralIdentityApiFixture fx)
     [Fact]
     public async Task US5_2_un_dia_bajo_el_minimo_para_interes_causa_cero_y_la_simulacion_lo_explica()
     {
-        var (coop, oficina) = await CooperativaAsync();
+        var (coop, oficina) = await CooperativaAsync("p2");
         using var http = fx.CreateClient();
         var inicio = InicioDelMesSiguiente();
         Guid cuenta;
@@ -141,7 +142,7 @@ public class InteresesTests(CentralIdentityApiFixture fx)
     [Fact]
     public async Task US5_3_liquidar_otra_vez_el_mismo_periodo_responde_la_existente()
     {
-        var (coop, oficina) = await CooperativaAsync();
+        var (coop, oficina) = await CooperativaAsync("p3");
         using var http = fx.CreateClient();
         var cuenta = await MesAsync(http, coop, oficina, "AHINT3");
         var fin = FinDeMes(InicioDelMesSiguiente());
@@ -159,22 +160,24 @@ public class InteresesTests(CentralIdentityApiFixture fx)
     [Fact]
     public async Task US5_4_sobre_el_umbral_diario_se_retiene_el_siete_por_ciento_del_total()
     {
-        var (coop, oficina) = await CooperativaAsync();
+        var (coop, oficina) = await CooperativaAsync("p4");
         using var http = fx.CreateClient();
         var cuenta = await MesAsync(http, coop, oficina, "AHINT4", inicial: 400_000_000m);
 
         var l = (await LiquidacionesAsync(http, coop.TokenAdmin, cuenta)).GetProperty("items")[0];
         var bruto = l.GetProperty("settled").GetDecimal();
         l.GetProperty("thresholdReached").GetBoolean().Should().BeTrue();
-        l.GetProperty("withholding").GetDecimal().Should().Be(Math.Round(bruto * 0.07m, 0, MidpointRounding.AwayFromZero),
-            "la persona de prueba no tiene componente inflacionario publicado en la central de la suite");
+        // La persona de prueba es natural: se descuenta el componente inflacionario del 2025 que siembra la central (55,43 %, ET arts. 38 a 41) antes del 7 %.
+        var componente = Math.Round(bruto * 0.5543m, 0, MidpointRounding.AwayFromZero);
+        l.GetProperty("withholding").GetDecimal().Should().Be(Math.Round((bruto - componente) * 0.07m, 0, MidpointRounding.AwayFromZero),
+            "7 % sobre el interés menos el componente inflacionario");
         l.GetProperty("net").GetDecimal().Should().Be(bruto - l.GetProperty("withholding").GetDecimal());
     }
 
     [Fact]
     public async Task US5_5_con_dias_sin_proceso_la_corrida_siguiente_pone_al_dia_la_causacion()
     {
-        var (coop, oficina) = await CooperativaAsync();
+        var (coop, oficina) = await CooperativaAsync("p5");
         using var http = fx.CreateClient();
         var inicio = InicioDelMesSiguiente();
         Guid cuenta;
