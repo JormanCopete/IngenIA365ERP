@@ -113,7 +113,9 @@ public class CerrojoDeCarteraSqlTests
     {
         typeof(ICerrojoDeCartera).GetMethods().Select(m => m.Name).Should().Equal(
             nameof(ICerrojoDeCartera.TomarSetupAsync), nameof(ICerrojoDeCartera.BloquearDeudoresAsync), nameof(ICerrojoDeCartera.BloquearCreditosAsync),
-            nameof(ICerrojoDeCartera.BloquearCuentasAsync), nameof(ICerrojoDeCartera.BloquearNumeracionAsync));
+            nameof(ICerrojoDeCartera.BloquearCuentasAsync), nameof(ICerrojoDeCartera.BloquearNumeracionAsync),
+            // E238: crea la fila de numeración que falta; se llama justo antes de bloquearla, no es un paso más del orden.
+            nameof(ICerrojoDeCartera.AsegurarNumeracionAsync));
     }
 
     [Theory]
