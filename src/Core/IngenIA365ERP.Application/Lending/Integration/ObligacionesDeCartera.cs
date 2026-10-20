@@ -104,7 +104,9 @@ public sealed class ObligacionesDeCartera(IApplicationDbContext db, CargadorDeRe
         var creditos = await db.Loans.AsNoTracking().Where(l => ids.Contains(l.DebtorPersonId) && !l.IsDeleted && l.Status == LoanStatus.Active)
             .ToListAsync(ct);
         var vinculos = await VinculosAsync(creditos.Select(l => l.Id).ToList(), fin, ct);
-        var deNomina = creditos.Where(l => vinculos.TryGetValue(l.Id, out var v) && v.RepaymentChannel == RepaymentChannel.OwnPayroll).ToList();
+        var deNomina = consulta.TodosLosCanales
+            ? creditos
+            : creditos.Where(l => vinculos.TryGetValue(l.Id, out var v) && v.RepaymentChannel == RepaymentChannel.OwnPayroll).ToList();
         var cargados = await cargador.CargarAsync(deNomina.Select(l => l.Id).ToList(), null, fin, ct);
         var lineas = await LineasAsync(deNomina, ct);
         // K2 (T0841; FR-112, FR-115, C32): el convenio de la nómina propia decide si lo no descontado del período anterior va en este.
@@ -115,7 +117,7 @@ public sealed class ObligacionesDeCartera(IApplicationDbContext db, CargadorDeRe
         {
             var orden = 0;
             foreach (var credito in deNomina.Where(l => l.DebtorPersonId == persona.Id)
-                         .OrderBy(l => vinculos[l.Id].LibranzaDate ?? l.OpenedOn).ThenBy(l => l.Number, StringComparer.Ordinal))
+                         .OrderBy(l => (vinculos.TryGetValue(l.Id, out var vinculo) ? vinculo.LibranzaDate : null) ?? l.OpenedOn).ThenBy(l => l.Number, StringComparer.Ordinal))
             {
                 if (!cargados.TryGetValue(credito.Id, out var cargado) || !cargado.Listo) continue;
                 var estado = MotorDeCartera.Reconstruir(cargado.Entrada!, fin);

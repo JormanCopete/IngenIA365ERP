@@ -95,7 +95,7 @@ public sealed class DebitoAutomatico(
         var cuenta = await db.MemberAccounts.AsNoTracking().FirstAsync(a => a.Id == mandato.MemberAccountId, ct);
         if (cuenta.Status is not (MemberAccountStatus.Active or MemberAccountStatus.Inactive)) return [];
         var titular = await db.People.AsNoTracking().IgnoreQueryFilters().Where(p => p.Id == cuenta.HolderPersonId).Select(p => p.PublicId).FirstAsync(ct);
-        var cuotas = await obligaciones.CuotasDeNominaAsync(new ConsultaDeCuotasDeNomina([titular], d, d), ct);
+        var cuotas = await obligaciones.CuotasDeNominaAsync(new ConsultaDeCuotasDeNomina([titular], d, d, TodosLosCanales: true), ct);
         if (cuotas.LendingStatus != EstadoDeCartera.Active) return [];
         var creditos = mandato.Scope == DirectDebitScope.SingleLoan && mandato.LoanId is { } unico
             ? await db.Loans.AsNoTracking().Where(l => l.Id == unico).Select(l => new { l.Id, l.PublicId }).ToListAsync(ct)

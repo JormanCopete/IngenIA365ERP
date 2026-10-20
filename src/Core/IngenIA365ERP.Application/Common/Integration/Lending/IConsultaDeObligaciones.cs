@@ -55,9 +55,12 @@ public sealed record ObligacionDto(
     int PendingInstallments,
     decimal InstallmentAmount);
 
-/// <summary>Pide las cuotas a descontar por nómina en un período. (nuevo)</summary>
+/// <summary>
+/// Pide las cuotas a descontar por nómina en un período. <paramref name="TodosLosCanales"/> (feature 014, US4; E245): las cuotas de todos los créditos vivos del
+/// deudor sea cual sea su canal de pago —lo que necesita el débito automático—; por defecto, sólo los de nómina propia. (nuevo)
+/// </summary>
 public sealed record ConsultaDeCuotasDeNomina(
-    IReadOnlyList<Guid> PersonPublicIds, DateOnly PeriodStart, DateOnly PeriodEnd);
+    IReadOnlyList<Guid> PersonPublicIds, DateOnly PeriodStart, DateOnly PeriodEnd, bool TodosLosCanales = false);
 
 /// <summary>Las cuotas del período y las personas «migradas, sin activar» (C26). (nuevo)</summary>
 public sealed record CuotasDeNominaDto(
