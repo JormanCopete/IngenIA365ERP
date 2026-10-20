@@ -47,6 +47,15 @@ public sealed class InformesYTableroDeCarteraTests(CentralIdentityApiFixture fx)
     /// </summary>
     private static readonly string[] VistasDeK5 = ["quality", "vintages", "concentration", "issued-documents", "bureau-exclusions"];
 
+    /// <summary>Las vistas de la 014 (T218 a T220): aportes, captaciones, fondo de liquidez, exógena y los siete formatos del SICSES.</summary>
+    private static readonly string[] VistasDeCaptaciones =
+    [
+        "contributions-by-member", "charges", "depositor-concentration", "deposits-reconciliation", "deposit-accounts-by-status", "installments-in-arrears",
+        "insured-deposits", "garnishments", "exogena-1019", "exogena-1020", "liquidity-fund", "gmf", "interest-and-withholding", "deposit-transactions",
+        "deposit-balances", "unclaimed", "sicses-aportes", "sicses-captaciones", "sicses-cotitulares", "sicses-fondo-liquidez", "sicses-saldos-diarios",
+        "negotiated-rates", "term-deposit-maturities",
+    ];
+
     [Fact]
     public async Task K1_registro_permisos_exportacion_auditada_alcance_y_columnas()
     {
@@ -75,7 +84,11 @@ public sealed class InformesYTableroDeCarteraTests(CentralIdentityApiFixture fx)
         var contadora = await UsuariosDeCartera.IngresarAsync(http, u.Contadora);
 
         // (1) El registro: las siete de K1 para quien lee créditos; sin las de datos del deudor para quien no.
-        var registro = (await CarteraE2E.GetAsync(http, contadora, Informes)).EnumerateArray().ToList();
+        // El centro de informes es uno solo: desde la 014 (K7 en adelante, availableFrom >= 8) también publica las vistas de captaciones y aportes, que
+        // prueban sus propias e2e (Lending.Deposits). Aquí se comprueban las de crédito (K1 a K5) y que las demás sean exactamente las de la 014.
+        var todas = (await CarteraE2E.GetAsync(http, contadora, Informes)).EnumerateArray().ToList();
+        todas.Where(v => v.GetProperty("availableFrom").GetInt32() >= 8).Select(v => v.GetProperty("key").GetString()).Should().BeEquivalentTo(VistasDeCaptaciones);
+        var registro = todas.Where(v => v.GetProperty("availableFrom").GetInt32() <= 5).ToList();
         registro.Select(v => v.GetProperty("key").GetString()).Should()
             .BeEquivalentTo(VistasDeK1.Concat(VistasDeK2).Concat(VistasDeK3).Concat(VistasDeK4).Concat(VistasDeK5));
         registro.Where(v => v.GetProperty("personalData").GetBoolean()).Select(v => v.GetProperty("key").GetString())

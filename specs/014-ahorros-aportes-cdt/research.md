@@ -2624,3 +2624,12 @@ escribe el dueño). **Manda el código**; estas notas reemplazan lo dicho en `da
   `PayrollAgreementConfiguration`) y se actualizaron a propósito las cuatro huellas de `LasMigracionesCongeladasNoSeRegeneran`.
   Una migración nueva no servía: la congelada falla antes de poder correr. Sin cambios de modelo pendientes y paridad en verde.
   Desde que una migración sale de local, esta excepción deja de ser posible.
+
+- **E238 · Primera numeración de un ámbito sin carrera (2026-10-20, corrida e2e final).** Dos aperturas simultáneas de la primera cuenta de una línea agregaban
+  cada una su fila de `LND_NumberSequences` con `NextValue = 1` y la segunda caía en `UK_LND_MemberAccounts_Number` (500). `ICerrojoDeCartera.AsegurarNumeracionAsync`
+  inserta la fila (`ON CONFLICT DO NOTHING` / `NOT EXISTS … UPDLOCK, HOLDLOCK`) antes de bloquearla; sin transacción no hace nada. Sin migración.
+- **E239 · Límite de participación sin registrar (P12).** `ContextoDeLineasDeCaptacion.TopesDeAportesAsync` respondía `NationalValues.Missing` por
+  `APORTES_LIMITE_PARTICIPACION_PN/PJ` (sin valor sembrado a propósito) y bloqueaba crear la línea de aportes; «sin registrar» es ahora «sin techo», como ya
+  lo leía `ReglasDeAportes.LimiteAsync`.
+- **E240 · Fixture de e2e de captaciones.** La cooperativa aislada no traía perfil regulatorio (`current: null`), política de datos `GeneralTreatment` ni alcance
+  de Cartera para su administrador, y las pruebas usaban la oficina administrativa donde la cuenta pide la agencia contable (`AgenciaPublicId`).

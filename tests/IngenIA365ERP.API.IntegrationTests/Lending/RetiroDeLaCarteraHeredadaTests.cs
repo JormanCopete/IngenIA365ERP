@@ -140,8 +140,8 @@ public class RetiroDeLaCarteraHeredadaTests(CentralIdentityApiFixture fx)
         rutas.Where(r => retiradas.Any(p => r.StartsWith(p, StringComparison.OrdinalIgnoreCase))).Should().BeEmpty("el crédito heredado se retira sin alias (api.md §25)");
         // Bajo /api/reports/lending sólo queda el centro de informes nuevo: el registro de vistas y una ruta de un segmento por vista.
         rutas.Where(r => r.StartsWith("/api/reports/lending", StringComparison.OrdinalIgnoreCase))
-            .Should().OnlyContain(r => System.Text.RegularExpressions.Regex.IsMatch(r, "^/api/reports/lending/?([a-z-]+)?$"),
-                "el centro de informes publica /api/reports/lending/{vista}, sin rutas con identificador ni /pdf como las heredadas");
+            .Should().OnlyContain(r => System.Text.RegularExpressions.Regex.IsMatch(r, "^/api/reports/lending/?([a-z0-9-]+)?$"),
+                "el centro de informes publica /api/reports/lending/{vista} (también exogena-1019 y exogena-1020 de la 014), sin rutas con identificador ni /pdf como las heredadas");
 
         // Las 12 familias que la 013 mudó a /api/savings se retiraron con la 014 (T007, R28), también sin alias; ninguna vuelve a
         // /api/lending con su nombre heredado.
