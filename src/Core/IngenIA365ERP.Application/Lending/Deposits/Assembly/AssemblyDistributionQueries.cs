@@ -110,7 +110,7 @@ public sealed class AsuntoDeDecisionDeAsamblea(IApplicationDbContext db) : IAsun
             : string.Create(CultureInfo.InvariantCulture, $"{d.DecidedValue:N2}");
         var titulo = string.Create(CultureInfo.InvariantCulture, $"{clase} del ejercicio {d.FiscalYear} ({d.Number})");
         var resumen = string.Create(CultureInfo.InvariantCulture,
-            $"{decidido} sobre el {(d.BaseMethod == RevaluationBase.YearEndBalance ? "saldo al 31 de diciembre" : "saldo promedio diario")}, con cargo a un fondo de {d.FundAmount:N2}.");
+            $"{decidido} sobre el {(d.BaseMethod switch { RevaluationBase.YearEndBalance => "saldo al 31 de diciembre", RevaluationBase.UploadedBase => "base que definió la asamblea (subida por plantilla)", _ => "saldo promedio diario" })}, con cargo a un fondo de {d.FundAmount:N2}.");
         var personas = new List<PersonaDelAsunto>();
         if (await db.Users.AsNoTracking().IgnoreQueryFilters().Where(u => u.Id == d.RegisteredByUserId).Select(u => u.PersonId).FirstOrDefaultAsync(ct) is { } radico)
             personas.Add(new PersonaDelAsunto(radico, MotivosDeExclusion.Radicador));

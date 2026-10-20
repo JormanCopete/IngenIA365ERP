@@ -28,6 +28,12 @@ public class AssemblyDistributionsEndpoints : ICarterModule
             .WithName("Lending_AssemblyDistributions_List")
             .RequirePermission(new AlgunPermiso(Registrar, Aprobar));
 
+        // Respuesta 90 C (E261): la base de los retornos que define la asamblea, por plantilla (GET /return-bases/template.xlsx y POST /return-bases/import).
+        asamblea.MapGroup("/return-bases").MapPlantilla(
+            () => PlantillaDeBaseDeRetornos.Definicion, "plantilla-cartera-base-de-retornos", Registrar, Registrar, "Lending_AssemblyDistributions_ReturnBases",
+            "Lending.Reports.ExportPersonalData", IngenIA365ERP.Application.Common.Audit.AuditEventTypes.LendingReportExported,
+            importar: (modo, archivo, motivo, clave) => new ImportAssemblyReturnBasesCommand(modo, archivo, motivo ?? string.Empty) { OperationKey = clave });
+
         asamblea.MapGet("/{id:guid}", async (Guid id, ISender sender, CancellationToken ct) =>
                 await sender.Send(new GetAssemblyDistributionQuery(id), ct))
             .WithName("Lending_AssemblyDistributions_Get")

@@ -133,6 +133,30 @@ public class RevalorizacionYExcedentesTests
         RevalorizacionYExcedentes.SaldoPromedio(RevalorizacionYExcedentes.HastaElRetiro([movimientos[0]], new DateOnly(2027, 2, 1)), 2026).Should().Be(1_000_000m);
     }
 
+    /// <summary>
+    /// Respuesta 90 C del dueño (E261): con la base «subida por plantilla» la base de cada asociado es la que la asamblea definió (uso de servicios, ahorros…), no
+    /// su saldo de aportes; quien no está en el archivo (o está en cero) no participa, aunque tenga aportes o se haya retirado.
+    /// </summary>
+    [Fact]
+    public void Con_la_base_subida_por_plantilla_los_retornos_se_reparten_por_esa_base_y_no_por_los_saldos()
+    {
+        List<MovimientoDeAportes> aportes = [new(new DateOnly(2026, 1, 1), 5_000_000m)];
+        var a = new AsociadoEnLaDistribucion(1, 10, aportes, BaseSubida: 3_000_000m);
+        var b = new AsociadoEnLaDistribucion(2, 20, aportes, BaseSubida: 1_000_000m);
+        var sinArchivo = new AsociadoEnLaDistribucion(3, 30, aportes);
+        var enCero = new AsociadoEnLaDistribucion(4, 40, aportes, BaseSubida: 0m);
+        var retirado = new AsociadoEnLaDistribucion(5, 50, aportes, RetiradoEl: new DateOnly(2026, 3, 1), BaseSubida: 1_000_000m);
+
+        var r = RevalorizacionYExcedentes.Calcular(new PedidoDeDistribucion(AssemblyDistributionKind.SurplusDistribution, 2026, RevaluationBase.UploadedBase, null, 100_000m,
+            100_000m, null, 1m, [a, b, sinArchivo, enCero, retirado]));
+
+        r.Lineas.Select(l => (l.PersonaId, l.Base, l.Aplicado)).Should().Equal((1, 3_000_000m, 60_000m), (2, 1_000_000m, 20_000m), (5, 1_000_000m, 20_000m));
+        r.BaseTotal.Should().Be(5_000_000m);
+        r.TotalAplicado.Should().Be(100_000m);
+        r.Explicacion.Should().Contain(e => e.Contains("subió la cooperativa por plantilla")).And.NotContain(e => e.Contains("se retiraron durante el ejercicio"),
+            "la base subida ya trae el tiempo y el uso de cada quien");
+    }
+
     [Fact]
     public void El_mayor_residuo_suma_exacto_y_desempata_por_el_primero()
     {

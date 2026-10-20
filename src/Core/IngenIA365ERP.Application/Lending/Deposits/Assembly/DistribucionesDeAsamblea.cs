@@ -230,6 +230,31 @@ public sealed class DistribucionesDeAsamblea(
         }
         var ids = cuentas.Select(c => c.Id).ToList();
 
+        // Respuesta 90 C (E261): en los retornos con la base «subida por plantilla», la base de cada asociado es la de la última carga de la decisión; quien no está en el
+        // archivo no participa. Si un asociado tiene varias cuentas de aportes, la base va a la primera.
+        Dictionary<int, decimal>? basesSubidas = null;
+        if (d.BaseMethod == RevaluationBase.UploadedBase && d.Kind == AssemblyDistributionKind.SurplusDistribution)
+        {
+            var cargaVigente = await db.AssemblyReturnBases.AsNoTracking().Where(b => b.AssemblyDistributionId == d.Id).MaxAsync(b => (int?)b.LoadVersion, ct);
+            var cargadas = cargaVigente is { } version
+                ? await db.AssemblyReturnBases.AsNoTracking().Where(b => b.AssemblyDistributionId == d.Id && b.LoadVersion == version).ToListAsync(ct)
+                : [];
+            basesSubidas = cargadas.ToDictionary(b => b.PersonId, b => b.BaseAmount);
+            var participantes = cuentas.Select(c => c.HolderPersonId).ToHashSet();
+            if (cargadas.Count == 0)
+                avisos.Add($"La base de los retornos se sube por la plantilla «{PlantillaDeBaseDeRetornos.Clave}» y todavía no hay un archivo aplicado: ningún asociado participa.");
+            else
+            {
+                avisos.Add(string.Create(CultureInfo.InvariantCulture,
+                    $"Base subida por plantilla (carga {cargaVigente}): {cargadas.Count(b => b.BaseAmount > 0m)} asociado(s) con base, total {cargadas.Sum(b => b.BaseAmount):N2}."));
+                var sinArchivo = participantes.Count(x => !basesSubidas.ContainsKey(x));
+                if (sinArchivo > 0) avisos.Add($"{sinArchivo} asociado(s) con aportes vivos no están en el archivo de la base: no participan.");
+                var sinCuenta = cargadas.Count(b => b.BaseAmount > 0m && !participantes.Contains(b.PersonId));
+                if (sinCuenta > 0) avisos.Add($"{sinCuenta} asociado(s) del archivo ya no tienen cuenta de aportes viva ni se retiraron en el ejercicio: no participan.");
+            }
+        }
+        var basesYaAsignadas = new HashSet<int>();
+
         // La base: los movimientos de aportes por fecha valor hasta el cierre del ejercicio.
         var cierre = new DateOnly(d.FiscalYear, 12, 31);
         var conceptos = MemberAccountTransaction.ConceptosDeAportes.ToArray();
@@ -258,7 +283,8 @@ public sealed class DistribucionesDeAsamblea(
             d.FundAmount, limite, unidad,
             cuentas.Select(c => new AsociadoEnLaDistribucion(c.HolderPersonId, c.Id, movimientos.GetValueOrDefault(c.Id) ?? [],
                 d.Kind == AssemblyDistributionKind.Amortization ? amortizable.GetValueOrDefault(c.Id) : null,
-                retiradosPorCuenta.TryGetValue(c.Id, out var retiroEl) ? retiroEl : null)).ToList()));
+                retiradosPorCuenta.TryGetValue(c.Id, out var retiroEl) ? retiroEl : null,
+                basesSubidas is null ? null : basesYaAsignadas.Add(c.HolderPersonId) ? basesSubidas.GetValueOrDefault(c.HolderPersonId) : 0m)).ToList()));
         var cuentasDeLosRetirados = retiradosPorCuenta.Keys.Where(porIdDeCuenta => cuentas.Any(c => c.Id == porIdDeCuenta)).ToHashSet();
         var porId = cuentas.ToDictionary(c => c.Id);
 

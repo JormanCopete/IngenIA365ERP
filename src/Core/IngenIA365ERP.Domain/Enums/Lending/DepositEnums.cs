@@ -518,11 +518,15 @@ public enum MembershipWithdrawalLineKind
     Refund = 9,
 }
 
-/// <summary>Base de la revalorización de aportes (D13).</summary>
+/// <summary>
+/// Base de la revalorización de aportes y de los excedentes (D13). Respuesta 90 C del dueño (E261): en los retornos cooperativos la asamblea puede definir
+/// <b>otra</b> base —el uso de servicios, los ahorros, lo que decida— y la cooperativa la sube por plantilla (<see cref="UploadedBase"/>).
+/// </summary>
 public enum RevaluationBase
 {
     AverageBalance = 1,
     YearEndBalance = 2,
+    UploadedBase = 3,
 }
 
 /// <summary>Destino de los excedentes distribuidos.</summary>

@@ -269,6 +269,7 @@ public class LosHechosInmutablesNoSeModifican
         ["MembershipWithdrawalLine"] = [],
         // Feature 014, US12 (T202; data-model §6.4): las líneas de una decisión de asamblea se escriben una vez, al aplicar, con todo.
         ["AssemblyDistributionLine"] = [],
+        ["AssemblyReturnBase"] = [],
         // Feature 014, US11 (T187; data-model §5.2.1): una respuesta enviada al juzgado no cambia; la siguiente es otra fila.
         ["GarnishmentResponse"] = [],
         // Feature 014, US4 (T110, T114; data-model §2.3, §4.6): el uso del GMF del mes (un reverso escribe su espejo) y el catálogo de cargos de una

@@ -9,10 +9,12 @@ public sealed record MovimientoDeAportes(DateOnly FechaValor, decimal Monto);
 /// <summary>
 /// Un asociado ante la decisión de la asamblea (feature 014, US12, T201): su persona, su cuenta de aportes, los movimientos de sus aportes (para la base) y,
 /// en una amortización, lo que se le puede devolver sin perforar su mínimo no reducible (nulo = sin tope). <paramref name="RetiradoEl"/> (respuesta 91 B del
-/// dueño, E259): la fecha efectiva del retiro de quien dejó de ser asociado durante el ejercicio —participa a prorrata del tiempo que lo fue—. (nuevo)
+/// dueño, E259): la fecha efectiva del retiro de quien dejó de ser asociado durante el ejercicio —participa a prorrata del tiempo que lo fue—.
+/// <paramref name="BaseSubida"/> (respuesta 90 C, E261): con la base <c>UploadedBase</c>, la que la asamblea definió para este asociado y la cooperativa subió por
+/// plantilla (nula = no está en el archivo: su base es cero). (nuevo)
 /// </summary>
 public sealed record AsociadoEnLaDistribucion(int PersonaId, int CuentaId, IReadOnlyList<MovimientoDeAportes> Movimientos, decimal? MaximoAmortizable = null,
-    DateOnly? RetiradoEl = null);
+    DateOnly? RetiradoEl = null, decimal? BaseSubida = null);
 
 /// <summary>
 /// Lo que la asamblea decidió, tal como lo recibe el motor (feature 014, US12, T201; FR-045 a FR-047; D13): la clase, el ejercicio cuyos excedentes se
@@ -95,17 +97,23 @@ public static class RevalorizacionYExcedentes
         var explicacion = new List<string>();
         var bases = pedido.Asociados
             .Select(a => (a.PersonaId, a.CuentaId, a.MaximoAmortizable,
-                Base: a.RetiradoEl is { } retiro
-                    ? SaldoPromedio(HastaElRetiro(a.Movimientos, retiro), pedido.Ejercicio)
-                    : pedido.Base == RevaluationBase.YearEndBalance ? SaldoAlCierre(a.Movimientos, pedido.Ejercicio) : SaldoPromedio(a.Movimientos, pedido.Ejercicio)))
+                Base: pedido.Base == RevaluationBase.UploadedBase
+                    ? a.BaseSubida ?? 0m
+                    : a.RetiradoEl is { } retiro
+                        ? SaldoPromedio(HastaElRetiro(a.Movimientos, retiro), pedido.Ejercicio)
+                        : pedido.Base == RevaluationBase.YearEndBalance ? SaldoAlCierre(a.Movimientos, pedido.Ejercicio) : SaldoPromedio(a.Movimientos, pedido.Ejercicio)))
             .Where(a => a.Base > 0m)
             .OrderBy(a => a.PersonaId).ThenBy(a => a.CuentaId)
             .ToList();
         var baseTotal = bases.Sum(b => b.Base);
-        var retirados = pedido.Asociados.Count(a => a.RetiradoEl is not null && bases.Any(b => b.CuentaId == a.CuentaId));
-        explicacion.Add(string.Create(CultureInfo.InvariantCulture,
-            $"Base: {(pedido.Base == RevaluationBase.YearEndBalance ? "saldo de aportes al 31 de diciembre" : "saldo promedio diario de aportes")} de {pedido.Ejercicio}, "
-            + $"{bases.Count} asociado(s), total {baseTotal:N2}."));
+        var retirados = pedido.Base == RevaluationBase.UploadedBase ? 0 : pedido.Asociados.Count(a => a.RetiradoEl is not null && bases.Any(b => b.CuentaId == a.CuentaId));
+        if (pedido.Base == RevaluationBase.UploadedBase)
+            explicacion.Add(string.Create(CultureInfo.InvariantCulture,
+                $"Base: la que definió la asamblea y subió la cooperativa por plantilla, {bases.Count} asociado(s), total {baseTotal:N2}."));
+        else
+            explicacion.Add(string.Create(CultureInfo.InvariantCulture,
+                $"Base: {(pedido.Base == RevaluationBase.YearEndBalance ? "saldo de aportes al 31 de diciembre" : "saldo promedio diario de aportes")} de {pedido.Ejercicio}, "
+                + $"{bases.Count} asociado(s), total {baseTotal:N2}."));
         if (retirados > 0)
             explicacion.Add($"{retirados} asociado(s) se retiraron durante el ejercicio: participan a prorrata del tiempo que lo fueron (saldo promedio diario hasta la víspera de su retiro).");
 

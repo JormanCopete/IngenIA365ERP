@@ -105,6 +105,8 @@ public class ModeloDeCarteraNucleoTests
         "LND_MembershipWithdrawals", "LND_MembershipWithdrawalLines",
         // Feature 014, US12 (T202; data-model §6.3, §6.4): la decisión de asamblea y sus líneas
         "LND_AssemblyDistributions", "LND_AssemblyDistributionLines",
+        // Feature 014, respuesta 90 C (E261): la base de los retornos que la cooperativa sube por plantilla
+        "LND_AssemblyReturnBases",
         // Feature 014, US4 (T110, T114, T118; data-model §2.3, §3.6, §4.7–§4.9): el GMF del mes, los cargos y el débito automático
         "LND_GmfMonthlyUsage", "LND_DepositLineCharges", "LND_AccountCharges", "LND_AccountChargeExemptions", "LND_DirectDebitMandates",
         // Feature 014, T091 (decisión del dueño del 2026-10-18, D36; data-model §1.4.3): las cuotas de cuentas del archivo de un grupo, su resultado y lo
@@ -167,6 +169,8 @@ public class ModeloDeCarteraNucleoTests
         "MembershipWithdrawalLine",
         // Feature 014, US12 (T202): las líneas de la decisión de asamblea.
         "AssemblyDistributionLine",
+        // Feature 014, respuesta 90 C (E261): la base de los retornos que sube la cooperativa.
+        "AssemblyReturnBase",
         // Feature 014, US4 (T110, T114): el GMF del mes y el catálogo de cargos de la versión.
         "GmfMonthlyUsage", "DepositLineCharge",
         // Feature 014, T091 (D36): la cuota de cuenta del archivo de un grupo, su resultado y la fila de la respuesta que no se aplicó.
@@ -213,7 +217,7 @@ public class ModeloDeCarteraNucleoTests
         var tablas = DeCartera(Modelo(postgres)).Select(e => e.GetTableName()).ToList();
 
         tablas.Should().OnlyHaveUniqueItems().And.BeEquivalentTo(Tablas);
-        Tablas.Should().HaveCount(183,
+        Tablas.Should().HaveCount(184,
             "74 de negocio + 17 de preparación (data-model §14) + 2 del grupo conectado (C112) + 7 de CarteraRiesgo (US9) + 8 de CarteraLibranza (K2)"
             + " + 9 de CarteraNovedades (K3) + 11 de CarteraCobranza (K4) + 2 de CarteraInformes (K5) + 2 de CarteraPerdidaEsperada (K6a)"
             + " + 7 del libro de cuentas de la feature 014 (K7, CaptacionesAportes) + 3 de las versiones de líneas de captación y aportes (US1)"
@@ -222,7 +226,7 @@ public class ModeloDeCarteraNucleoTests
             + " + 5 del GMF del mes, los cargos, sus exoneraciones y el débito automático (US4)"
             + " + 3 del archivo de pagaduría por grupo: cuotas de cuentas, sus resultados y lo no aplicado de la respuesta (T091) + 2 de la liquidación de intereses y la retención acumulada (US5)"
             + " + 7 de preparación de la migración de aportes y captaciones (US9) + 5 del CDAT: condiciones selladas, plan, reglas y solicitudes de tasa negociada y su fila de migración (US6)"
-            + " + 4 de bloqueos, embargos, respuestas al juzgado y su fila de migración (US11) + 2 de la decisión de asamblea y sus líneas (US12) + 2 del fallecimiento y los no reclamados (US14) + 2 de la foto del fondo de liquidez y lo constituido (US15)");
+            + " + 4 de bloqueos, embargos, respuestas al juzgado y su fila de migración (US11) + 3 de la decisión de asamblea, sus líneas y la base de los retornos por plantilla (US12, E261) + 2 del fallecimiento y los no reclamados (US14) + 2 de la foto del fondo de liquidez y lo constituido (US15)");
     }
 
     [Theory]

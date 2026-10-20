@@ -74,6 +74,8 @@ public sealed class RegisterAssemblyDistributionCommandValidator : ValidadorConM
         RuleFor(x => x.Value!.Value).GreaterThan(0m).WithName("value").Must(v => RegistroDeCuentas.Decimales(v) <= 2)
             .WithMessage("El valor lleva a lo sumo dos decimales.").When(x => x.Value.HasValue);
         RuleFor(x => x.Base).IsInEnum().When(x => x.Base.HasValue);
+        RuleFor(x => x.Base).Must(b => b != RevaluationBase.UploadedBase).When(x => x.Kind != AssemblyDistributionKind.SurplusDistribution)
+            .WithMessage("La base subida por plantilla sólo aplica a los retornos cooperativos (la distribución de excedentes).");
         RuleFor(x => x.Destination).IsInEnum().When(x => x.Destination.HasValue);
         RuleFor(x => x.Destination).Null().When(x => x.Kind != AssemblyDistributionKind.SurplusDistribution)
             .WithMessage("El destino sólo se elige al distribuir excedentes.");

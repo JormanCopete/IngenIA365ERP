@@ -285,7 +285,7 @@ public class EnumeracionesDeCarteraTests
             ("ConsignmentNotice", 4), ("ReleaseAcknowledgement", 5)],
         [typeof(MembershipWithdrawalLineKind)] = [("ContributionBalance", 1), ("SavingsBalance", 2), ("TermDepositBalance", 3),
             ("InterestToDate", 4), ("Withholding", 5), ("Gmf", 6), ("LoanOffset", 7), ("LossDeduction", 8), ("Refund", 9)],
-        [typeof(RevaluationBase)] = [("AverageBalance", 1), ("YearEndBalance", 2)],
+        [typeof(RevaluationBase)] = [("AverageBalance", 1), ("YearEndBalance", 2), ("UploadedBase", 3)],
         [typeof(SurplusDestination)] = [("Contributions", 1), ("Savings", 2), ("Payment", 3)],
         [typeof(AssemblyDistributionStatus)] = [("Simulated", 1), ("Approved", 2), ("Applied", 3), ("Voided", 4), ("Reversed", 5)],
         [typeof(DeliveryRoute)] = [("Beneficiaries", 1), ("WithoutProbate", 2), ("Probate", 3)],

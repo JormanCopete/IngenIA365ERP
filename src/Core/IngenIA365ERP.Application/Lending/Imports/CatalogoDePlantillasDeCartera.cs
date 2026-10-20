@@ -362,6 +362,11 @@ public static class CatalogoDePlantillasDeCartera
             "La línea de aportes con su cuota, su mínimo no reducible y su reparto al ahorro permanente.",
             ["Lineas"], "/api/lending/lines/contribution", "Lending.ContributionLines.View", "Lending.ContributionLines.Manage", EntregaDeCartera.K7,
             PersonalData: false, Deposits.Lines.PlantillasDeLineasDeCaptacion.Aportes),
+        // Feature 014 (respuesta 90 C del dueño, E261): la base de los retornos que define la asamblea, por plantilla.
+        new(Deposits.Assembly.PlantillaDeBaseDeRetornos.Clave, "Base de los retornos de la asamblea",
+            "Sobre qué se reparten los retornos cooperativos (uso de servicios, ahorros u otra base): una fila por asociado, para una decisión de excedentes en borrador.",
+            ["Datos"], "/api/lending/assembly-distributions/return-bases", "Lending.Assembly.Register", "Lending.Assembly.Register", EntregaDeCartera.K10,
+            PersonalData: true, Deposits.Assembly.PlantillaDeBaseDeRetornos.Definicion),
         new("lending.payroll-agreements", "Convenios de pagaduría", "Pagadurías, convenios, contactos y códigos de respuesta.",
             ["Convenios", "Contactos", "CodigosDeRespuesta"], "/api/lending/payroll-agreements", "Lending.PayrollAgreements.View",
             "Lending.PayrollAgreements.Manage", EntregaDeCartera.K2, PersonalData: false, PayrollAgreementsTemplate.Definicion),

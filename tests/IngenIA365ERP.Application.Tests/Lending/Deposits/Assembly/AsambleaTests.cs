@@ -1,5 +1,8 @@
 using FluentAssertions;
 using IngenIA365ERP.Application.Attachments.Common;
+using IngenIA365ERP.Application.Common.Imports;
+using IngenIA365ERP.Application.Common.Interfaces;
+using IngenIA365ERP.Application.Common.Interfaces.Files;
 using IngenIA365ERP.Application.Common.Integration.Contracts.Lending;
 using IngenIA365ERP.Application.Common.Integration.Lending;
 using IngenIA365ERP.Application.Common.Integration.Contracts.Lending.Deposits;
@@ -27,6 +30,7 @@ using IngenIA365ERP.Domain.Lending.Attributions;
 using IngenIA365ERP.Domain.Lending.Parameters;
 using IngenIA365ERP.Domain.Enums.Parameters;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
 
 namespace IngenIA365ERP.Application.Tests.Lending.Deposits.Assembly;
@@ -185,6 +189,28 @@ public sealed class AsambleaTests : IDisposable
         _a.G.Valores.LeerAsync(CodigosDeValorNacional.Uvt, string.Empty, Arg.Any<DateOnly>(), Arg.Any<DateTime?>(), Arg.Any<CancellationToken>())
             .Returns(Result.Success(new ValorNacionalVigente(Guid.NewGuid(), Guid.NewGuid(), CodigosDeValorNacional.Uvt, string.Empty, valor, "COP", null,
                 new DateOnly(2026, 1, 1), null, null, "DIAN (valor de prueba)", 1, DateTime.UtcNow.AddMonths(-2), EstadoDeRevision.Validada)));
+
+    private readonly ITabularFileReader _lector = Substitute.For<ITabularFileReader>();
+    private TablaLeida _tabla = new([], [], "xlsx");
+
+    /// <summary>Importa la plantilla de la base de los retornos (respuesta 90 C, E261) con las filas dadas: decisión, persona, base y concepto.</summary>
+    private async Task<Result<ImportResultDto>> ImportarBaseAsync(string?[][] filas, ModoDeImportacion modo = ModoDeImportacion.Apply)
+    {
+        _tabla = new TablaLeida([PlantillaDeBaseDeRetornos.C.Decision, PlantillaDeBaseDeRetornos.C.Persona, PlantillaDeBaseDeRetornos.C.Base, PlantillaDeBaseDeRetornos.C.Concepto],
+            filas.Select((f, i) => new FilaLeida(i + 2, f)).ToList(), "xlsx");
+        _lector.LeerHojaAsync(Arg.Any<byte[]>(), Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(_ => Task.FromResult(Result.Success(_tabla)));
+        _a.G.Permisos.EsMaestroGlobal.Returns(true);
+        var ejecutor = new EjecutorDeImportacion(_a.Db, _lector, _a.G.Permisos,
+            new ServiceCollection().AddSingleton(_a.G.Mongo).AddSingleton<IApplicationDbContext>(_a.Db).BuildServiceProvider());
+        var r = await new ImportAssemblyReturnBasesCommandHandler(_a.Db, ejecutor, Distribuciones())
+            .Handle(new ImportAssemblyReturnBasesCommand(modo, new ArchivoDeImportacion("base.xlsx", [1, 2, 3]), "Base de los retornos") { OperationKey = Guid.NewGuid() }, default);
+        _a.Db.ChangeTracker.Clear();
+        return r;
+    }
+
+    private static IReadOnlyList<ErrorDeFila> ErroresDeLaBase(Result<ImportResultDto> r) =>
+        r.Error.Should().BeOfType<ErrorConDatos>().Subject.Data.Should().BeOfType<ImportResultDto>().Subject.Errors;
 
     private async Task<decimal> SaldoAsync(Person persona, MemberAccountConcept concepto) =>
         await _a.Db.MemberAccountTransactions.AsNoTracking()
@@ -546,6 +572,95 @@ public sealed class AsambleaTests : IDisposable
         var s = await SimuladaAsync(d.PublicId);
         s.Lines.Single(l => l.Person.FullName.Contains("Ana")).WithheldAmount.Should().Be(0m, "30.000 < 40.000 (1 UVT)");
         s.Lines.Single(l => l.Person.FullName.Contains("Beto")).WithheldAmount.Should().Be(6_000m, "60.000 ≥ 40.000: 10 %");
+    }
+
+    /// <summary>
+    /// Respuesta 90 C del dueño (E261): la asamblea define la base de los retornos (aquí, el uso de servicios) y la cooperativa la sube por plantilla: Ana 3.000.000 y
+    /// Beto 1.000.000. Todo o nada con errores por fila y columna, revisión que no guarda, cargas que se corrigen (la plantilla no borra) y una decisión aplicada que
+    /// ya no admite otra carga.
+    /// </summary>
+    [Fact]
+    public async Task E261_la_base_de_los_retornos_se_sube_por_plantilla_con_revision_todo_o_nada_y_se_corrige_con_otra_carga()
+    {
+        await AportesAsync();
+        var d = await RegistradaAsync(AssemblyDistributionKind.SurplusDistribution, 100_000m, valor: 100_000m, @base: RevaluationBase.UploadedBase);
+        d.Base.Should().Be(RevaluationBase.UploadedBase);
+
+        // Sin archivo, nadie participa y la simulación lo dice.
+        var vacia = await SimuladaAsync(d.PublicId);
+        vacia.Lines.Should().BeEmpty();
+        vacia.Warnings.Should().Contain(w => w.Contains("todavía no hay un archivo"));
+
+        // Errores por fila y columna, y nada se guarda (todo o nada).
+        var malo = await ImportarBaseAsync(
+        [
+            [d.Number, _a.C.Ana.TaxId, "3000000", "Uso de servicios 2026"],
+            [d.Number, "999999", "100", null],
+            [d.Number, _a.C.Carla.TaxId, "100", null],
+            [d.Number, _a.C.Beto.TaxId, "-5", null],
+        ]);
+        malo.Error.Code.Should().Be(ImportErrors.InvalidCode);
+        var errores = ErroresDeLaBase(malo);
+        errores.Should().Contain(e => e.Row == 3 && e.Column == PlantillaDeBaseDeRetornos.C.Persona && e.Code == ImportErrors.CellNotFound);
+        errores.Should().Contain(e => e.Row == 4 && e.Column == PlantillaDeBaseDeRetornos.C.Persona && e.Message.Contains("cuenta de aportes"));
+        errores.Should().Contain(e => e.Row == 5 && e.Column == PlantillaDeBaseDeRetornos.C.Base);
+        (await _a.Db.AssemblyReturnBases.AnyAsync()).Should().BeFalse("con un solo error no se guarda nada");
+
+        // Una decisión inexistente, o dos decisiones en un archivo, tampoco se aceptan.
+        ErroresDeLaBase(await ImportarBaseAsync([["ASM-999999", _a.C.Ana.TaxId, "1", null]])).Should().OnlyContain(e => e.Column == PlantillaDeBaseDeRetornos.C.Decision);
+        ErroresDeLaBase(await ImportarBaseAsync([[d.Number, _a.C.Ana.TaxId, "1", null], ["ASM-000002", _a.C.Beto.TaxId, "1", null]]))
+            .Should().OnlyContain(e => e.Column == PlantillaDeBaseDeRetornos.C.Decision);
+
+        // Revisar no guarda; aplicar sí.
+        var buenas = new[] { new[] { d.Number, _a.C.Ana.TaxId, "3000000", "Uso de servicios 2026" }, [d.Number, _a.C.Beto.TaxId, "1000000", "Uso de servicios 2026"] };
+        (await ImportarBaseAsync(buenas, ModoDeImportacion.Review)).IsSuccess.Should().BeTrue();
+        (await _a.Db.AssemblyReturnBases.AnyAsync()).Should().BeFalse("revisar no guarda");
+        (await ImportarBaseAsync(buenas)).IsSuccess.Should().BeTrue();
+        (await _a.Db.AssemblyReturnBases.AsNoTracking().OrderBy(b => b.PersonId).Select(b => new { b.LoadVersion, b.BaseAmount }).ToListAsync())
+            .Should().Equal([new { LoadVersion = 1, BaseAmount = 3_000_000m }, new { LoadVersion = 1, BaseAmount = 1_000_000m }]);
+
+        // La simulación reparte 100.000 por la base subida: 75 % y 25 %.
+        var s = await SimuladaAsync(d.PublicId);
+        s.Explanation.Should().Contain(e => e.Contains("subió la cooperativa por plantilla"));
+        s.Lines.Select(l => (l.Person.FullName.Contains("Ana"), l.BaseAmount, l.AppliedAmount)).Should().BeEquivalentTo(
+            [(true, 3_000_000m, 75_000m), (false, 1_000_000m, 25_000m)]);
+
+        // Corregir a Ana: otra carga; la plantilla no borra, así que Beto sigue con su base. Repetir lo mismo no crea otra versión.
+        (await ImportarBaseAsync([[d.Number, _a.C.Ana.TaxId, "3000000", "Uso de servicios 2026"]])).IsSuccess.Should().BeTrue();
+        (await _a.Db.AssemblyReturnBases.AsNoTracking().MaxAsync(b => b.LoadVersion)).Should().Be(1, "sin cambios no hay otra versión");
+        (await ImportarBaseAsync([[d.Number, _a.C.Ana.TaxId, "2000000", "Uso de servicios 2026"]])).IsSuccess.Should().BeTrue();
+        (await _a.Db.AssemblyReturnBases.AsNoTracking().CountAsync(b => b.LoadVersion == 2)).Should().Be(2);
+        var corregida = await SimuladaAsync(d.PublicId);
+        corregida.Lines.Select(l => l.BaseAmount).Should().Equal(2_000_000m, 1_000_000m);
+        corregida.Sha256.Should().NotBe(s.Sha256, "otra carga cambia lo que se aplicaría");
+
+        // Quien sale con 0 no participa.
+        (await ImportarBaseAsync([[d.Number, _a.C.Beto.TaxId, "0", null]])).IsSuccess.Should().BeTrue();
+        (await SimuladaAsync(d.PublicId)).Lines.Should().ContainSingle().Which.AppliedAmount.Should().Be(100_000m);
+        (await ImportarBaseAsync([[d.Number, _a.C.Beto.TaxId, "1000000", null]])).IsSuccess.Should().BeTrue();
+
+        // Se aplica con lo subido, y una decisión aplicada ya no admite otra carga.
+        var aplicada = await AplicadaAsync(d);
+        aplicada.Lines.Select(l => l.BaseAmount).Should().Equal(2_000_000m, 1_000_000m);
+        aplicada.AppliedTotal.Should().Be(100_000m);
+        (await SaldoAsync(_a.C.Ana, MemberAccountConcept.ContributionOrdinary)).Should().Be(66_667m);
+        (await SaldoAsync(_a.C.Beto, MemberAccountConcept.ContributionOrdinary)).Should().Be(33_333m);
+        ErroresDeLaBase(await ImportarBaseAsync([[d.Number, _a.C.Ana.TaxId, "5", null]])).Should().ContainSingle(e => e.Message.Contains("Applied"));
+    }
+
+    [Fact]
+    public async Task E261_la_base_por_plantilla_solo_aplica_a_los_retornos_y_su_decision_debe_usarla()
+    {
+        await AportesAsync();
+        var validador = new RegisterAssemblyDistributionCommandValidator();
+        var revalorizacion = new RegisterAssemblyDistributionCommand(AssemblyDistributionKind.Revaluation, 2026, 1_000m, 0.03m, null, RevaluationBase.UploadedBase, null, null, null,
+            "Asamblea") { OperationKey = Guid.NewGuid() };
+        validador.Validate(revalorizacion).Errors.Should().Contain(e => e.ErrorMessage.Contains("sólo aplica a los retornos"));
+        validador.Validate(revalorizacion with { Kind = AssemblyDistributionKind.SurplusDistribution }).IsValid.Should().BeTrue();
+
+        // Una decisión con otra base no admite el archivo.
+        var conSaldos = await RegistradaAsync(AssemblyDistributionKind.SurplusDistribution, 100_000m, valor: 100_000m, @base: RevaluationBase.YearEndBalance);
+        ErroresDeLaBase(await ImportarBaseAsync([[conSaldos.Number, _a.C.Ana.TaxId, "1", null]])).Should().ContainSingle(e => e.Message.Contains("otra base"));
     }
 
     [Fact]

@@ -211,8 +211,16 @@
                         <option value="0">La de la entidad</option>
                         <option value="1">Saldo promedio diario</option>
                         <option value="2">Saldo al 31 de diciembre</option>
+                        @if (_clase == 2) { <option value="3">Base subida por plantilla (uso de servicios, ahorros…)</option> }
                     </select>
                 </label>
+                @if (_clase == 2 && _base == 3)
+                {
+                    <p class="texto-apoyo campo-ancho">
+                        La base de los retornos la define la asamblea: después de registrar la decisión, suba la base de cada asociado con la plantilla
+                        «Base de los retornos de la asamblea» (<a href="/cartera/plantillas">Plantillas de Cartera</a>) y vuelva a simular.
+                    </p>
+                }
                 @if (_clase == 2)
                 {
                     <label class="campo">Destino

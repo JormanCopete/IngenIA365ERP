@@ -30929,6 +30929,84 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.ToTable("LND_AssemblyDistributionLines", "dbo");
                 });
 
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Lending.Deposits.Processes.AssemblyReturnBase", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AssemblyDistributionId")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("BaseAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<string>("Concept")
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<int>("LoadVersion")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("PersonId")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PersonId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_LND_AssemblyReturnBases_PublicId");
+
+                    b.HasIndex("AssemblyDistributionId", "LoadVersion", "PersonId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_LND_AssemblyReturnBases_Version_Person");
+
+                    b.ToTable("LND_AssemblyReturnBases", "dbo", t =>
+                        {
+                            t.HasCheckConstraint("CK_LND_AssemblyReturnBases_Amount", "\"BaseAmount\" >= 0");
+                        });
+                });
+
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Lending.Deposits.Processes.DeceasedHolderCase", b =>
                 {
                     b.Property<int>("Id")
@@ -59693,6 +59771,23 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("FK_LND_AssemblyDistributionLines_Person");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Lending.Deposits.Processes.AssemblyReturnBase", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Lending.Deposits.Processes.AssemblyDistribution", null)
+                        .WithMany()
+                        .HasForeignKey("AssemblyDistributionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("FK_LND_AssemblyReturnBases_Distribution");
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Core.Person", null)
+                        .WithMany()
+                        .HasForeignKey("PersonId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("FK_LND_AssemblyReturnBases_Person");
                 });
 
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Lending.Deposits.Processes.DeceasedHolderCase", b =>

@@ -198,6 +198,32 @@ public class AssemblyDistributionLineConfiguration : IEntityTypeConfiguration<As
 }
 
 /// <summary>
+/// <c>LND_AssemblyReturnBases</c> (feature 014, respuesta 90 C, E261): la base de los retornos que la cooperativa sube por plantilla; hecho de sólo inserción,
+/// único por decisión, versión de la carga y persona.
+/// </summary>
+public class AssemblyReturnBaseConfiguration : IEntityTypeConfiguration<AssemblyReturnBase>
+{
+    public const string Tabla = "LND_AssemblyReturnBases";
+
+    public void Configure(EntityTypeBuilder<AssemblyReturnBase> builder)
+    {
+        builder.ComoEntidadDeCartera(Tabla);
+        builder.ToTable(t => t.HasCheckConstraint("CK_LND_AssemblyReturnBases_Amount", "[BaseAmount] >= 0"));
+
+        builder.Property(e => e.BaseAmount).Monto().IsRequired();
+        builder.Property(e => e.Concept).HasMaxLength(AssemblyReturnBase.LargoDelConcepto);
+
+        builder.HasOne<AssemblyDistribution>().WithMany().HasForeignKey(e => e.AssemblyDistributionId).OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("FK_LND_AssemblyReturnBases_Distribution");
+        builder.HasOne<Person>().WithMany().HasForeignKey(e => e.PersonId).OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("FK_LND_AssemblyReturnBases_Person");
+
+        builder.HasIndex(e => new { e.AssemblyDistributionId, e.LoadVersion, e.PersonId }).IsUnique()
+            .HasDatabaseName("UK_LND_AssemblyReturnBases_Version_Person");
+    }
+}
+
+/// <summary>
 /// <c>LND_DeceasedHolderCases</c> (feature 014, US14, T207; data-model §6.5; research §23): número único, un caso no anulado por titular (único filtrado) y el
 /// índice por estado. Migración <c>CaptacionesAportes</c>.
 /// </summary>

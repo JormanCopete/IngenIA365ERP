@@ -107,7 +107,7 @@ public static class TextosDeAsamblea
         _ => estado.ToString(System.Globalization.CultureInfo.InvariantCulture),
     };
 
-    public static string Base(int b) => b == 2 ? "Saldo al 31 de diciembre" : "Saldo promedio diario";
+    public static string Base(int b) => b switch { 2 => "Saldo al 31 de diciembre", 3 => "Base subida por plantilla", _ => "Saldo promedio diario" };
 
     public static string Destino(int? d) => d switch
     {

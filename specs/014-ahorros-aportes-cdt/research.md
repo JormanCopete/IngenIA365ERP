@@ -2977,3 +2977,29 @@ nueva). Migración aditiva `CaptacionesRetencionDeAsamblea` (PostgreSQL `2026102
 - **Pruebas.** Domain (`RetencionDeAsambleaTests`: tarifa, redondeo, perfiles, base mínima, política sin concepto). Application (`AsambleaTests.E260_…`: revalorización con autorretenedor,
   retorno pagado con el neto, sin concepto, base mínima con y sin UVT; `HechosDeAsambleaTests`: fondo, retención por pagar y reverso) y los contadores de roles (44) y de parámetros (72).
   e2e (`AsambleaTests.E260_…`: excedentes a aportes con retención y reverso, y excedentes pagados con el neto). Verdes en PostgreSQL y SQL Server.
+
+### 27.12 E261 · la base de los retornos la define la asamblea y la cooperativa la sube por plantilla (respuesta 90 C, 2026-10-21)
+
+Los **retornos cooperativos** pueden repartirse sobre una base que la asamblea define —el uso de servicios, los ahorros, lo que decida— y no sobre el saldo de aportes. La cooperativa
+la **sube por plantilla** de importación. Migración aditiva `CaptacionesBaseDeRetornosPorPlantilla` (PostgreSQL `20261020223529`, SQL Server `20261020223449`): la tabla
+`LND_AssemblyReturnBases` (hecho de sólo inserción, único por decisión, versión de la carga y persona; `BaseAmount >= 0`; concepto de hasta 120 caracteres). Paridad y
+`has-pending-model-changes` limpios en los dos motores.
+
+- **La decisión.** `RevaluationBase.UploadedBase` (3), sólo en la distribución de excedentes (el validador lo rechaza en la revalorización y la amortización). La decisión se
+  registra como siempre, con porcentaje o valor y fondo; la base la trae el archivo.
+- **La plantilla** `lending.assembly-return-bases` (hoja `Datos`: `decision`, `persona`, `base`, `concepto`), en el registro de plantillas de Cartera (`/cartera/plantillas`, K10, datos
+  personales) y en `GET/POST /api/lending/assembly-distributions/return-bases/template.xlsx|import?mode=review|apply` con `Lending.Assembly.Register`. Mismas reglas del
+  patrón de las plantillas: **todo o nada**, **revisión previa** que no guarda, **error por fila y columna**, `Idempotency-Key`. Reglas propias: todo el archivo es de **una** decisión
+  que exista, sea de excedentes, esté en borrador y use la base subida; cada persona debe existir (la plantilla no crea personas) y ser asociada con aportes vivos o haberse retirado
+  en el ejercicio (E259); un retiro en trámite la deja fuera; la base no es negativa. La plantilla **no borra**: una carga nueva es una **versión** (`LoadVersion` + 1) que repite lo
+  anterior y cambia lo que trae el archivo, y un `0` saca al asociado; un archivo sin cambios no crea versión. Aplicada la decisión, no admite más cargas.
+- **El reparto.** `SimularAsync` toma la **última** carga: la base de cada asociado es la subida (`AsociadoEnLaDistribucion.BaseSubida`; quien no está en el archivo o está en cero no
+  participa, aunque tenga aportes; con varias cuentas de aportes, la base va a la primera). El resto del motor no cambia: tasa o valor sobre la base total, redondeo, mayor residuo y
+  prorrateo al fondo; el destino (aportes, ahorro o pago), la retención (E260) y el giro del retirado (E259) siguen como están. Sin archivo, la simulación avisa y nadie participa; avisa
+  también de quien tiene aportes y no está en el archivo y de quien está y ya no participa. La huella ya incluía la base de cada línea: otra carga cambia lo que se aplicaría y hay que
+  volver a simular. Lo aplicado queda en las líneas de la decisión (`BaseAmount`).
+- **Pantalla.** La base «Base subida por plantilla» aparece al registrar excedentes, con el aviso de dónde se sube el archivo.
+- **No hecho.** Una pantalla propia para la carga (se usa la de plantillas de Cartera) y mostrar el concepto de cada fila en la simulación (queda guardado).
+- **Pruebas.** Domain (`RevalorizacionYExcedentesTests`: la base subida manda sobre los saldos, el que no está o está en cero no participa). Application (`AsambleaTests.E261_…`: errores por
+  fila y columna, todo o nada, revisar no guarda, carga, corrección y versión, el cero, aplicar y no admitir más cargas; el validador y la decisión con otra base) y los contadores del
+  modelo (184 tablas y la base entre los hechos de sólo inserción). e2e (`AsambleaTests.E261_…`: plantilla, revisión con error, aplicación y reparto por HTTP). Verdes en PostgreSQL y SQL Server.

@@ -420,6 +420,123 @@ public class AsambleaTests(CentralIdentityApiFixture fx)
         }
     }
 
+    /// <summary>
+    /// Respuesta 90 C del dueño (E261): la asamblea define la base de los retornos (uso de servicios) y la cooperativa la sube por la plantilla
+    /// <c>lending.assembly-return-bases</c>: se descarga, se revisa (un documento inexistente es error de fila y columna y no se guarda nada), se aplica, y la
+    /// simulación y la aplicación reparten por esa base y no por los saldos.
+    /// </summary>
+    [Fact]
+    public async Task E261_la_base_de_los_retornos_sube_por_plantilla_por_HTTP_y_reparte_por_ella()
+    {
+        var des = await DesembolsoE2E.EscenarioAsync(fx, "cap_asamblea_90");
+        var cap = await CaptacionesE2E.CooperativaConCaptacionesAsync(fx, "asamblea_90");
+        cap.TenantPublicId.Should().Be(des.Coop.TenantPublicId);
+        using var http = fx.CreateClient();
+        var admin = des.Coop.TokenAdmin;
+        await CarteraE2E.PersonaDelAdministradorAsync(http, des.Coop);
+        var linea = await LineaDeAportesAsync(http, admin, des.Hoy);
+        var ana = await AsociadoAsync(http, admin, "Ana");
+        var beto = await AsociadoAsync(http, admin, "Beto");
+        await ConAportesAsync(http, admin, des, linea, ana, 1_000_000m);
+        await ConAportesAsync(http, admin, des, linea, beto, 2_000_000m);
+        var documentos = await CausacionE2E.EnLaBaseAsync(fx, des.Coop.TenantPublicId, db => db.People.AsNoTracking()
+            .Where(p => p.PublicId == ana || p.PublicId == beto).ToDictionaryAsync(p => p.PublicId, p => p.TaxId!));
+        var ejercicio = des.Hoy.Year;
+        var ruta = $"{Asamblea}/return-bases";
+
+        var reloj = new ConductorDelDespachador(fx).Reloj;
+        var original = reloj.Desfase;
+        try
+        {
+            var asamblea = new DateOnly(ejercicio + 1, 3, 20);
+            reloj.Desfase += asamblea.ToDateTime(new TimeOnly(10, 0)) - reloj.AhoraLocal.DateTime;
+            var registro = await CarteraE2E.ConClaveAsync(http, admin, HttpMethod.Post, Asamblea, new
+            {
+                kind = "SurplusDistribution", year = ejercicio, fundAmount = 100_000m, value = 100_000m, @base = "UploadedBase", destination = "Contributions",
+                reason = "Asamblea general ordinaria (e2e de la respuesta 90)",
+            });
+            registro.StatusCode.Should().Be(HttpStatusCode.Created, await registro.Content.ReadAsStringAsync());
+            var dto = await CarteraE2E.LeerAsync(registro);
+            var decision = dto.GetProperty("publicId").GetGuid();
+            var numero = dto.GetProperty("number").GetString()!;
+
+            // La plantilla se descarga vacía y sin archivo nadie participa.
+            using var plantilla = await http.SendAsync(Con(admin, new HttpRequestMessage(HttpMethod.Get, $"{ruta}/template.xlsx")));
+            plantilla.StatusCode.Should().Be(HttpStatusCode.OK);
+            var vacia = await CarteraE2E.ExitoAsync(http, admin, HttpMethod.Post, $"{Asamblea}/{decision}/simulate");
+            vacia.GetProperty("lines").GetArrayLength().Should().Be(0);
+
+            // Un documento inexistente: error de fila y columna, revisar responde 200 y aplicar, 422; no se guarda nada.
+            var malo = Libro((numero, documentos[ana], "3000000", "Uso de servicios 2026"), (numero, "999999", "100", null));
+            using var revision = await ImportarAsync(http, admin, ruta, "review", malo);
+            revision.StatusCode.Should().Be(HttpStatusCode.OK, await revision.Content.ReadAsStringAsync());
+            var cuerpo = await CarteraE2E.LeerAsync(revision);
+            cuerpo.GetProperty("valid").GetBoolean().Should().BeFalse();
+            cuerpo.GetProperty("errors").EnumerateArray().Should().Contain(e => e.GetProperty("row").GetInt32() == 3 && e.GetProperty("column").GetString() == "persona");
+            using var rechazado = await ImportarAsync(http, admin, ruta, "apply", malo);
+            rechazado.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
+            (await CausacionE2E.EnLaBaseAsync(fx, des.Coop.TenantPublicId, db => db.AssemblyReturnBases.AsNoTracking().CountAsync())).Should().Be(0);
+
+            // Bien: se aplica y la simulación reparte por la base subida (75 % y 25 %), no por los saldos (33 % y 67 %).
+            var bueno = Libro((numero, documentos[ana], "3000000", "Uso de servicios 2026"), (numero, documentos[beto], "1000000", "Uso de servicios 2026"));
+            using var revisado = await ImportarAsync(http, admin, ruta, "review", bueno);
+            (await CarteraE2E.LeerAsync(revisado)).GetProperty("valid").GetBoolean().Should().BeTrue();
+            using var aplicadoLibro = await ImportarAsync(http, admin, ruta, "apply", bueno);
+            aplicadoLibro.StatusCode.Should().Be(HttpStatusCode.OK, await aplicadoLibro.Content.ReadAsStringAsync());
+            var simulacion = await CarteraE2E.ExitoAsync(http, admin, HttpMethod.Post, $"{Asamblea}/{decision}/simulate");
+            simulacion.GetProperty("lines").EnumerateArray().Select(l => l.GetProperty("appliedAmount").GetDecimal()).Order().Should().Equal(25_000m, 75_000m);
+            simulacion.GetProperty("lines").EnumerateArray().Select(l => l.GetProperty("baseAmount").GetDecimal()).Order().Should().Equal(1_000_000m, 3_000_000m);
+
+            var punto = await ActasE2E.DecididoAsync(http, des, des.Originacion.Consejo, LendingDecisionSubjects.AssemblyDistribution, decision, asamblea, "Decision");
+            var aplica = await UsuariosDeCartera.IngresarAsync(http, des.Usuarios.Todos["administrador"]);
+            var aplicada = await AplicarAsync(http, aplica, decision, punto, simulacion.GetProperty("sha256").GetString()!, await SoporteAsync(http, admin, decision));
+            aplicada.StatusCode.Should().Be(HttpStatusCode.OK, await aplicada.Content.ReadAsStringAsync());
+
+            // Aplicada, ya no admite otra carga.
+            using var tarde = await ImportarAsync(http, admin, ruta, "apply", bueno);
+            tarde.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
+        }
+        finally
+        {
+            reloj.Desfase = original;
+        }
+    }
+
+    private static HttpRequestMessage Con(string token, HttpRequestMessage peticion)
+    {
+        peticion.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+        return peticion;
+    }
+
+    /// <summary>El libro de la plantilla de la base de los retornos: decisión, persona, base y concepto.</summary>
+    private static byte[] Libro(params (string Decision, string Persona, string Base, string? Concepto)[] filas)
+    {
+        using var libro = new ClosedXML.Excel.XLWorkbook();
+        var hoja = libro.Worksheets.Add("Datos");
+        string[] encabezados = ["decision", "persona", "base", "concepto"];
+        for (var c = 0; c < encabezados.Length; c++) hoja.Cell(1, c + 1).Value = encabezados[c];
+        for (var f = 0; f < filas.Length; f++)
+        {
+            hoja.Cell(f + 2, 1).SetValue(filas[f].Decision);
+            hoja.Cell(f + 2, 2).SetValue(filas[f].Persona);
+            hoja.Cell(f + 2, 3).SetValue(filas[f].Base);
+            if (filas[f].Concepto is { } concepto) hoja.Cell(f + 2, 4).SetValue(concepto);
+        }
+        using var ms = new MemoryStream();
+        libro.SaveAs(ms);
+        return ms.ToArray();
+    }
+
+    private static Task<HttpResponseMessage> ImportarAsync(HttpClient http, string token, string ruta, string modo, byte[] contenido)
+    {
+        var formulario = new MultipartFormDataContent();
+        var archivo = new ByteArrayContent(contenido);
+        archivo.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        formulario.Add(archivo, "file", "base-de-retornos.xlsx");
+        formulario.Add(new StringContent("Base de los retornos subida por plantilla (e2e)"), "reason");
+        return http.SendAsync(CarteraE2E.ConClave(Con(token, new HttpRequestMessage(HttpMethod.Post, $"{ruta}/import?mode={modo}") { Content = formulario })));
+    }
+
     // ------------------------------------------------------------------------------------------------------------ apoyo --
 
     /// <summary>Registra una distribución de excedentes del 1 % sobre el saldo al cierre con el destino dado y devuelve su identificador.</summary>

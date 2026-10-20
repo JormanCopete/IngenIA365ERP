@@ -47,6 +47,7 @@ Tipos de valor que suma este contrato **(nuevo en contracts)**:
 | 10 | `lending.holds-and-garnishments` | `Datos` | parte | ídem | ambas (aportes: sólo garantía) | K8 |
 | 11 | `lending.gmf-exemptions` | `Datos` | parte | ídem | Deposit | K8 |
 | 12 | `lending.tax-year-to-date` | `Datos` | parte | ídem | Deposit | K8 |
+| 13 | `lending.assembly-return-bases` (respuesta 90 C, E261) | `Datos` (`decision`, `persona`, `base`, `concepto`) | `/api/lending/assembly-distributions/return-bases` | `ImportAssemblyReturnBasesCommand` | Contribution | K10 |
 
 **Enmienda E115**: las plantillas 1 y 2 (`lending.contribution-lines`, `lending.deposit-lines`) **no se construyeron**: las
 líneas se crean por pantalla (`/cartera/lineas`) o por `POST /api/lending/lines/deposit` · `/contribution` (decisión

@@ -551,6 +551,7 @@ public interface IApplicationDbContext
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Processes.MembershipWithdrawalLine> MembershipWithdrawalLines { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Processes.AssemblyDistribution> AssemblyDistributions { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Processes.AssemblyDistributionLine> AssemblyDistributionLines { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Processes.AssemblyReturnBase> AssemblyReturnBases { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Processes.DeceasedHolderCase> DeceasedHolderCases { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Processes.UnclaimedBalance> UnclaimedBalances { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Liquidity.LiquidityFundSnapshot> LiquidityFundSnapshots { get; }

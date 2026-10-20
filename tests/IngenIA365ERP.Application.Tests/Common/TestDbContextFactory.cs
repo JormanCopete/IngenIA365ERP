@@ -502,6 +502,7 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Processes.MembershipWithdrawalLine> MembershipWithdrawalLines => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Processes.MembershipWithdrawalLine>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Processes.AssemblyDistribution> AssemblyDistributions => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Processes.AssemblyDistribution>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Processes.AssemblyDistributionLine> AssemblyDistributionLines => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Processes.AssemblyDistributionLine>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Processes.AssemblyReturnBase> AssemblyReturnBases => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Processes.AssemblyReturnBase>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Processes.DeceasedHolderCase> DeceasedHolderCases => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Processes.DeceasedHolderCase>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Processes.UnclaimedBalance> UnclaimedBalances => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Processes.UnclaimedBalance>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Liquidity.LiquidityFundSnapshot> LiquidityFundSnapshots => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Liquidity.LiquidityFundSnapshot>();
