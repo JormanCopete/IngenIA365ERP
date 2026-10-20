@@ -57,7 +57,7 @@ public class PayrollAgreementVersionConfiguration : IEntityTypeConfiguration<Pay
         // Feature 014 (T028; data-model §1.4): grupos de archivo, identificación del empleado y cuotas de cuentas; sin grupos, los dos formatos de la
         // versión; con grupos, ninguno (cada grupo lleva los suyos).
         builder.Property(e => e.UsesFileGroups).IsRequired().HasDefaultValue(false);
-        builder.Property(e => e.EmployeeIdentification).HasMaxLength(20).IsRequired()
+        builder.Property(e => e.EmployeeIdentification).HasMaxLength(30).IsRequired()
             .HasDefaultValue(PayrollAgreementVersion.IdentificacionPorCodigoDeEmpleado);
         builder.Property(e => e.IncludesAccountInstallments).IsRequired().HasDefaultValue(false);
         builder.ToTable(t => t.HasCheckConstraint("CK_LND_PayrollAgreementVersions_Formats",

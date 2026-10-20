@@ -43039,8 +43039,8 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.Property<string>("EmployeeIdentification")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
                         .HasDefaultValue("EmployeeIdAtPaymaster");
 
                     b.Property<bool>("IncludesAccountInstallments")

@@ -1,4 +1,4 @@
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using System.Text;
 using IngenIA365ERP.Architecture.Tests.Helpers;
 
@@ -51,8 +51,8 @@ public class LasMigracionesCongeladasNoSeRegeneran
         ["PostgreSql/20261017062235_CarteraVivienda"] = "7a2e99f591365210234f4655742257648b12c026824ff39771ab1da8e00cc66b",
         ["PostgreSql/20261018143710_RetiroDeCaptacionesHeredadas.Designer"] = "4399221379f05bbe094739499f27d211f4c5a35ae7e7d73f00545077d70827be",
         ["PostgreSql/20261018143710_RetiroDeCaptacionesHeredadas"] = "0fa94fc7ac01e0e43b0fe6caf72acaf2cb97bfe59e0271ee40c52eb9fd978020",
-        ["PostgreSql/20261019104128_CaptacionesAportes.Designer"] = "0be47b6a32ab74c4d7d3632211997068734b2f070a79f6d264382c09c35b3a2e",
-        ["PostgreSql/20261019104128_CaptacionesAportes"] = "b4b4eb1bded16eb871edb13ed99bbb64372e91591c9f1ab33e0b8e945187435f",
+        ["PostgreSql/20261019104128_CaptacionesAportes.Designer"] = "b7676d41086904edd4c45a909aff0229c012106ce7f2d0f7d9611b0994a20bec",
+        ["PostgreSql/20261019104128_CaptacionesAportes"] = "80a274ef0686b3ba6967b562479f4cff00a40e40e554e0273ebf72f9f35df82f",
         ["SqlServer/20261006075000_PlataformaParaCartera.Designer"] = "0cfe95a4e02441835428ea12d6bd53306f50a311f557229eba8491beb877e981",
         ["SqlServer/20261006075000_PlataformaParaCartera"] = "36ffc1c7fdc4a2214dde30518acb66dd69d73c59ca98c27b91d0874d665564d0",
         ["SqlServer/20261007010209_NominaRecaudaPorElContrato.Designer"] = "0610dbc147db8c029752ee182fb4327f2a93bc524decd92e05568133f03acb7a",
@@ -85,8 +85,8 @@ public class LasMigracionesCongeladasNoSeRegeneran
         ["SqlServer/20261017062205_CarteraVivienda"] = "405a8c5d6277717e836dcb7ea7757911f3e9330c5fbfb85f7dea3a5eb972b38e",
         ["SqlServer/20261018143627_RetiroDeCaptacionesHeredadas.Designer"] = "70ed57013c34444af64b1a365396fe0ff05037d6c9cd6de0209893df48cfe9d5",
         ["SqlServer/20261018143627_RetiroDeCaptacionesHeredadas"] = "ea88fbf1420fcb1433b64558417d2e23ae88ea56acaebe9abb4be1a259b31f71",
-        ["SqlServer/20261019104056_CaptacionesAportes.Designer"] = "750e42dc403194c0d493d440dd3347f7748bd89a55871f16dc00fad9510744cc",
-        ["SqlServer/20261019104056_CaptacionesAportes"] = "cec10eebd1bf3cc932e955370afe10e1d1bfcb8e603e0a6dc20bf6e7e8c96844",
+        ["SqlServer/20261019104056_CaptacionesAportes.Designer"] = "29398a282b24e01580bcee588e4163fe38cf5a04d68f3b1a7b79c1b9fccc96dd",
+        ["SqlServer/20261019104056_CaptacionesAportes"] = "84d54dc21769e5539ca17aefab3b608f7927cf6705b1d4e803b90acc4500c847",
     };
 
     public static TheoryData<string> Congeladas()

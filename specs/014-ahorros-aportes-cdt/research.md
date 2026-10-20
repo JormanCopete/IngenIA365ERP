@@ -2615,3 +2615,12 @@ escribe el dueño). **Manda el código**; estas notas reemplazan lo dicho en `da
 
 - Las cuentas CUIF sugeridas de §10.7 del contrato de contabilización y las que faltan (E236).
 - Todo lo de `docs/manual/cartera-captaciones.md` «Pendiente de validar» (P2, P3, P8 a P12, P26), la matriz, los 67 casos dorados y los siete layouts (T235).
+
+- **E237 · Excepción puntual al congelamiento de `CaptacionesAportes` (2026-10-19, respuesta del dueño a la pregunta 107, opción A).**
+  La corrida e2e final destapó que `LND_PayrollAgreementVersions.EmployeeIdentification` se creaba `varchar(20)` con el valor por
+  defecto `EmployeeIdAtPaymaster` (21 caracteres): en PostgreSQL la migración fallaba con `22001` y el host de pruebas no arrancaba
+  (es el único default más largo que su columna en todas las migraciones). Como la migración nunca se aplicó en ningún ambiente,
+  se corrigió **dentro** de `CaptacionesAportes` de los dos motores (columna a 30; migración, Designer, snapshot y
+  `PayrollAgreementConfiguration`) y se actualizaron a propósito las cuatro huellas de `LasMigracionesCongeladasNoSeRegeneran`.
+  Una migración nueva no servía: la congelada falla antes de poder correr. Sin cambios de modelo pendientes y paridad en verde.
+  Desde que una migración sale de local, esta excepción deja de ser posible.

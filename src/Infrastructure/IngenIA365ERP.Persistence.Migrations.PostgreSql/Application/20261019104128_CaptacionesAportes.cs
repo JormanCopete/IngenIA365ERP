@@ -159,8 +159,8 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 name: "EmployeeIdentification",
                 schema: "dbo",
                 table: "LND_PayrollAgreementVersions",
-                type: "character varying(20)",
-                maxLength: 20,
+                type: "character varying(30)",
+                maxLength: 30,
                 nullable: false,
                 defaultValue: "EmployeeIdAtPaymaster");
 

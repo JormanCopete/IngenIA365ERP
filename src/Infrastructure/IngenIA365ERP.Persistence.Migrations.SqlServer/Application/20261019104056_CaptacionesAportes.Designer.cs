@@ -43394,8 +43394,8 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.Property<string>("EmployeeIdentification")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)")
                         .HasDefaultValue("EmployeeIdAtPaymaster");
 
                     b.Property<bool>("IncludesAccountInstallments")

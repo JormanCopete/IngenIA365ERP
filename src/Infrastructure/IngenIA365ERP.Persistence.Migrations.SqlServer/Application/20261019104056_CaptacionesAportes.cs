@@ -158,8 +158,8 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                 name: "EmployeeIdentification",
                 schema: "dbo",
                 table: "LND_PayrollAgreementVersions",
-                type: "nvarchar(20)",
-                maxLength: 20,
+                type: "nvarchar(30)",
+                maxLength: 30,
                 nullable: false,
                 defaultValue: "EmployeeIdAtPaymaster");
 
