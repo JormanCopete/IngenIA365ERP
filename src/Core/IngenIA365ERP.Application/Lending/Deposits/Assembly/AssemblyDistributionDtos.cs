@@ -98,7 +98,6 @@ public static class ErroresDeAsamblea
     public const string CodigoCorreccionInvalida = "Lending.AssemblyDistribution.CorrectionInvalid";
     public const string CodigoSinSoporte = "Lending.AssemblyDistribution.SupportRequired";
     public const string CodigoSinAsociados = "Lending.AssemblyDistribution.NothingToApply";
-    public const string CodigoCuentasDeDestino = "Lending.AssemblyDistribution.DestinationAccountMissing";
     public const string CodigoGirosEnCurso = "Lending.AssemblyDistribution.PayoutsInProgress";
     public const string CodigoPagoNoReversable = "Lending.AssemblyDistribution.PaymentNotReversible";
     public const string CodigoSinActivar = "Lending.AssemblyDistribution.ContributionsNotActivated";
@@ -127,10 +126,6 @@ public static class ErroresDeAsamblea
         new { field = "supportAttachmentPublicIds" });
 
     public static Error SinAsociados() => new(CodigoSinAsociados, "Ningún asociado recibe nada con esta decisión: no hay nada que aplicar.");
-
-    public static Error CuentasDeDestino(IReadOnlyList<string> personas) => new ErrorConDatos(CodigoCuentasDeDestino,
-        $"{personas.Count} asociado(s) no tienen una cuenta viva en la línea de ahorro de destino: ábrala o cambie el destino y vuelva a simular.",
-        new { persons = personas });
 
     public static Error GirosEnCurso(int vivos) => new ErrorConDatos(CodigoGirosEnCurso,
         $"{vivos} orden(es) de giro de la decisión siguen vivas o ya se giraron: no se reversa entera mientras Tesorería no las rechace o anule.",

@@ -295,7 +295,7 @@ public sealed class AsambleaTests : IDisposable
     }
 
     [Fact]
-    public async Task Los_excedentes_a_ahorro_exigen_la_cuenta_de_destino_de_cada_asociado()
+    public async Task Los_excedentes_a_ahorro_sin_cuenta_de_destino_se_capitalizan_en_los_aportes_del_asociado()
     {
         await AportesAsync();
         _a.G.HoyLocal = CuentasDePrueba.Hoy;
@@ -305,24 +305,19 @@ public sealed class AsambleaTests : IDisposable
         var d = await RegistradaAsync(AssemblyDistributionKind.SurplusDistribution, 30_000m, porcentaje: 0.01m, @base: RevaluationBase.YearEndBalance,
             destino: SurplusDestination.Savings, linea: "AHVISTA");
         var s = await SimuladaAsync(d.PublicId);
-        s.Warnings.Should().Contain(w => w.Contains("cuenta viva en la línea de ahorro de destino"));
+        s.Warnings.Should().Contain(w => w.Contains("se capitaliza en sus aportes"));
+        var antesBeto = await SaldoAsync(_a.C.Beto, MemberAccountConcept.ContributionOrdinary);
         _a.G.ActuarComo(_a.C.Jefe);
-        (await AplicarAsync(d.PublicId, s.Sha256, Acta(d.PublicId), Soporte(d.PublicId))).Error.Code.Should().Be(ErroresDeAsamblea.CodigoCuentasDeDestino,
-            "Beto no tiene cuenta de ahorro");
-
-        _a.G.HoyLocal = CuentasDePrueba.Hoy;
-        _a.G.ActuarComo(_a.C.Asesora);
-        await _a.C.AbiertaAsync(_a.C.Apertura(lineaDeAhorro, _a.C.Beto));
-        _a.G.HoyLocal = DiaDeLaAsamblea;
-        var otra = await SimuladaAsync(d.PublicId);
-        _a.G.ActuarComo(_a.C.Jefe);
-        var aplicada = Ok(await AplicarAsync(d.PublicId, otra.Sha256, (await _a.Db.SessionItems.AsNoTracking().FirstAsync()).PublicId,
-            (await _a.Db.Attachments.AsNoTracking().FirstAsync()).PublicId));
-        aplicada.Lines.Should().OnlyContain(l => l.DestinationAccountNumber != null);
+        var aplicada = Ok(await AplicarAsync(d.PublicId, s.Sha256, Acta(d.PublicId), Soporte(d.PublicId)));
+        aplicada.Lines.Should().Contain(l => l.DestinationAccountNumber != null, "Ana tiene cuenta de ahorro");
+        aplicada.Lines.Should().Contain(l => l.DestinationAccountNumber == null, "Beto no tiene cuenta: capitaliza");
         var principalDeAna = await _a.Db.MemberAccountTransactions.AsNoTracking()
             .Where(t => t.Concept == MemberAccountConcept.Principal && t.Kind == MemberAccountTransactionKind.AssemblyCredit
                         && _a.Db.MemberAccounts.Any(c => c.Id == t.MemberAccountId && c.PublicId == deAna.PublicId)).SumAsync(t => t.Amount);
         principalDeAna.Should().Be(10_000m);
+        (await SaldoAsync(_a.C.Beto, MemberAccountConcept.ContributionOrdinary)).Should().BeGreaterThan(antesBeto, "su excedente entró a sus aportes");
+        (await _a.Db.MemberAccounts.AsNoTracking().CountAsync(c => c.HolderPersonId == _a.C.Beto.Id && c.Nature == LineNature.Deposit))
+            .Should().Be(0, "no se le abrió ninguna cuenta");
     }
 
     [Fact]

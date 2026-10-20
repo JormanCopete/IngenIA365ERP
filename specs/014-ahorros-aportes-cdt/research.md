@@ -2873,3 +2873,21 @@ Sin migración: la clase de fila nueva se guarda como número (`int`).
 - **Pruebas.** Application (`InteresesDeCuentaTests`): la consignación fechada en diciembre liquidado entra, lo liquidado no cambia, la fila de 3 días liquidados vale lo esperado y va
   fechada el 1.º de enero, un solo hecho con las dos filas, el proceso no corrige nada después, la liquidación de enero la abona y no queda interés por pagar; el reverso deja las
   dos filas en cero; y la cancelación con el ajuste activo no ajusta su propia entrega del mismo día. e2e (`InteresesTests.R64_…`): el mismo caso por HTTP en la base real, con la liquidación del mes siguiente. Domain: el enum. Verdes en PostgreSQL y SQL Server.
+
+### 27.8 E257 · excedentes a ahorro de quien no tiene cuenta: se capitalizan en sus aportes (respuesta 93 B, 2026-10-21)
+
+Cuando la asamblea decide llevar el excedente a ahorro y un asociado **no tiene cuenta viva** en la línea de ahorro de destino, la decisión **ya no se bloquea**
+(`Lending.AssemblyDistribution.DestinationAccountMissing` se retiró): su porción se **capitaliza en sus aportes**, sin abrirle ninguna cuenta. Sin migración.
+
+- **Dónde.** `DistribucionesDeAsamblea.SimularAsync` sigue separando a los que no tienen cuenta de destino (`PersonasSinDestino`), pero ahora el aviso dice que su
+  excedente se capitaliza en sus aportes. `ApplyAssemblyDistributionCommandHandler`: para esos asociados la operación `EXD-` queda en **su cuenta de aportes** con el
+  concepto `Asamblea.ClaseDeAporteDeExcedentes` (ordinario por defecto), igual que el destino «a aportes»; a los demás se les abona en su ahorro (`Principal`). Una
+  misma decisión queda con **destino mixto**: cada línea dice a dónde fue (`destinationAccountNumber` nulo = capitalizó).
+- **Contabilidad.** El hecho masivo `ExcedentesDistribuidosV1` sigue siendo uno solo; el constructor asienta por concepto de cada línea (`Principal` al ahorro,
+  el concepto de aportes a los aportes), así que la mezcla no cambia la matriz. La validación previa de pantalla (D23) pregunta ahora **por separado** por las
+  combinaciones de dimensiones del ahorro (destino «a ahorro») y por las de las cuentas de aportes que capitalizan (destino «a aportes»).
+- **Huella y reverso.** La huella ya incluía la cuenta de destino de cada línea (nula para quien capitaliza). El reverso entero espeja las filas de cada operación
+  y sigue igual.
+- **Pruebas.** Application (`AsambleaTests.Los_excedentes_a_ahorro_sin_cuenta_de_destino_se_capitalizan_en_los_aportes_del_asociado`: Ana recibe 10.000 en su ahorro,
+  Beto aumenta su aporte ordinario y no se le abre cuenta) y e2e (`AsambleaTests.E257_…`, por HTTP). La e2e anterior que esperaba el bloqueo se reemplazó.
+  **Pendiente de validar por la contadora:** que lo capitalizado use la clase de aporte de excedentes del parámetro y no una distinta.

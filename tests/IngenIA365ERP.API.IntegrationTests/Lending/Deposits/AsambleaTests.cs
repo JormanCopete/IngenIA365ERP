@@ -8,6 +8,7 @@ using IngenIA365ERP.API.IntegrationTests.Integration;
 using IngenIA365ERP.API.IntegrationTests.NationalValues;
 using IngenIA365ERP.Domain.Enums.Lending;
 using IngenIA365ERP.Domain.Lending.Attributions;
+using Microsoft.EntityFrameworkCore;
 
 namespace IngenIA365ERP.API.IntegrationTests.Lending.Deposits;
 
@@ -106,6 +107,61 @@ public class AsambleaTests(CentralIdentityApiFixture fx)
             var corregida = await AplicarAsync(http, aplica, corrige, null, otra.GetProperty("sha256").GetString()!, await SoporteAsync(http, admin, corrige));
             corregida.StatusCode.Should().Be(HttpStatusCode.OK, await corregida.Content.ReadAsStringAsync());
             (await CarteraE2E.LeerAsync(corregida)).GetProperty("correctsPublicId").GetGuid().Should().Be(decision);
+        }
+        finally
+        {
+            reloj.Desfase = original;
+        }
+    }
+
+    /// <summary>
+    /// Respuesta 93 del dueño (E257): los excedentes van a ahorro y Beto no tiene cuenta de ahorro: la decisión no se bloquea, a Ana se le abona en su ahorro y
+    /// el de Beto se capitaliza en sus aportes, sin abrirle ninguna cuenta.
+    /// </summary>
+    [Fact]
+    public async Task E257_los_excedentes_a_ahorro_de_quien_no_tiene_cuenta_se_capitalizan_en_sus_aportes()
+    {
+        var des = await DesembolsoE2E.EscenarioAsync(fx, "cap_asamblea_93");
+        var cap = await CaptacionesE2E.CooperativaConCaptacionesAsync(fx, "asamblea_93");
+        cap.TenantPublicId.Should().Be(des.Coop.TenantPublicId);
+        using var http = fx.CreateClient();
+        var admin = des.Coop.TokenAdmin;
+        await CarteraE2E.PersonaDelAdministradorAsync(http, des.Coop);
+        var linea = await LineaDeAportesAsync(http, admin, des.Hoy);
+        var ana = await AsociadoAsync(http, admin, "Ana");
+        var beto = await AsociadoAsync(http, admin, "Beto");
+        await ConAportesAsync(http, admin, des, linea, ana, 1_000_000m);
+        await ConAportesAsync(http, admin, des, linea, beto, 2_000_000m);
+        var ahorro = await MovimientosTests.LineaALaVistaAsync(http, admin, des.Hoy, "AHEXCED");
+        await MovimientosTests.CuentaAsync(http, admin, des.Usuarios.O1.AgenciaPublicId, ahorro, ana);
+        var ejercicio = des.Hoy.Year;
+
+        var reloj = new ConductorDelDespachador(fx).Reloj;
+        var original = reloj.Desfase;
+        try
+        {
+            var asamblea = new DateOnly(ejercicio + 1, 3, 20);
+            reloj.Desfase += asamblea.ToDateTime(new TimeOnly(10, 0)) - reloj.AhoraLocal.DateTime;
+            var registro = await CarteraE2E.ConClaveAsync(http, admin, HttpMethod.Post, Asamblea, new
+            {
+                kind = "SurplusDistribution", year = ejercicio, fundAmount = 30_000m, percent = 0.01m, @base = "YearEndBalance", destination = "Savings",
+                targetDepositLineCode = "AHEXCED", reason = "Asamblea general ordinaria (e2e de la respuesta 93)",
+            });
+            registro.StatusCode.Should().Be(HttpStatusCode.Created, await registro.Content.ReadAsStringAsync());
+            var decision = (await CarteraE2E.LeerAsync(registro)).GetProperty("publicId").GetGuid();
+            var simulacion = await CarteraE2E.ExitoAsync(http, admin, HttpMethod.Post, $"{Asamblea}/{decision}/simulate");
+            simulacion.GetProperty("warnings").EnumerateArray().Select(w => w.GetString()).Should().Contain(w => w!.Contains("se capitaliza en sus aportes"));
+            var punto = await ActasE2E.DecididoAsync(http, des, des.Originacion.Consejo, LendingDecisionSubjects.AssemblyDistribution, decision, asamblea, "Decision");
+            var soporte = await SoporteAsync(http, admin, decision);
+            var aplica = await UsuariosDeCartera.IngresarAsync(http, des.Usuarios.Todos["administrador"]);
+            var aplicada = await AplicarAsync(http, aplica, decision, punto, simulacion.GetProperty("sha256").GetString()!, soporte);
+            aplicada.StatusCode.Should().Be(HttpStatusCode.OK, await aplicada.Content.ReadAsStringAsync());
+            var lineas = (await CarteraE2E.LeerAsync(aplicada)).GetProperty("lines").EnumerateArray().ToList();
+            lineas.Should().HaveCount(2);
+            lineas.Count(l => l.GetProperty("destinationAccountNumber").ValueKind == JsonValueKind.Null).Should().Be(1, "Beto no tiene ahorro: capitaliza");
+            var cuentasDeBeto = await CausacionE2E.EnLaBaseAsync(fx, des.Coop.TenantPublicId, db => db.MemberAccounts.AsNoTracking()
+                .CountAsync(a => a.Nature == LineNature.Deposit && db.People.Any(p => p.PublicId == beto && p.Id == a.HolderPersonId)));
+            cuentasDeBeto.Should().Be(0, "no se le abrió ninguna cuenta");
         }
         finally
         {

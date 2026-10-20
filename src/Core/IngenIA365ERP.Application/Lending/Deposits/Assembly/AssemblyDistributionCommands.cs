@@ -293,11 +293,7 @@ public sealed class ApplyAssemblyDistributionCommandHandler(
             return Falla(ErroresDeAsamblea.VistaPreviaCambio(s.Dto));
         var aplicables = s.Calculo.Lineas.Where(l => l.Aplicado > 0m).ToList();
         if (aplicables.Count == 0) return Falla(ErroresDeAsamblea.SinAsociados());
-        if (s.PersonasSinDestino.Count > 0)
-        {
-            var nombres = await LectorDeCuentas.PersonasAsync(db, s.PersonasSinDestino, ct);
-            return Falla(ErroresDeAsamblea.CuentasDeDestino(s.PersonasSinDestino.Select(x => nombres[x].FullName).ToList()));
-        }
+        // Respuesta 93 B: quien no tiene cuenta de ahorro de destino no bloquea la decisión: su excedente se capitaliza en sus aportes (E257).
         if (d.Kind == AssemblyDistributionKind.Amortization && await reglas.MinimoDeLaEntidadAsync(hoy, ct) is { } minimo and > 0m)
         {
             var capital = await reglas.CapitalSocialAsync(ct);
@@ -306,12 +302,19 @@ public sealed class ApplyAssemblyDistributionCommandHandler(
 
         // D23: la pantalla bloquea si lo de la asamblea no se contabilizaría (una pregunta por combinación de dimensiones).
         var validacion = PrevalidationOutcome.NotApplicable;
-        var cuentasDeLaPregunta = aplicables.Select(l => s.Destinos.TryGetValue(l.CuentaId, out var de) ? de.Id : l.CuentaId).Distinct().ToList();
-        var representativas = (await validacionPrevia.DimensionesAsync(cuentasDeLaPregunta, hoy, ct)).Values.GroupBy(c => c.D).Select(g => g.First()).ToList();
-        foreach (var c in representativas)
+        var capitalizadas = s.PersonasSinDestino.ToHashSet();
+        var cuentasDeLaPregunta = aplicables.Where(l => !capitalizadas.Contains(l.PersonaId))
+            .Select(l => s.Destinos.TryGetValue(l.CuentaId, out var de) ? de.Id : l.CuentaId).Distinct().ToList();
+        var preguntas = new List<(HechosRepresentativosDeCaptaciones.CuentaRepresentativa C, SurplusDestination? Destino)>();
+        preguntas.AddRange((await validacionPrevia.DimensionesAsync(cuentasDeLaPregunta, hoy, ct)).Values.GroupBy(c => c.D).Select(g => (g.First(), d.SurplusDestination)));
+        var aCapitalizar = aplicables.Where(l => capitalizadas.Contains(l.PersonaId)).Select(l => l.CuentaId).Distinct().ToList();
+        if (aCapitalizar.Count > 0)
+            preguntas.AddRange((await validacionPrevia.DimensionesAsync(aCapitalizar, hoy, ct)).Values.GroupBy(c => c.D)
+                .Select(g => (g.First(), (SurplusDestination?)SurplusDestination.Contributions)));
+        foreach (var (c, destinoDeLaPregunta) in preguntas)
         {
             var decision = await validacionPrevia.EnPantallaAsync(HechosRepresentativosDeCaptaciones.Unidad(hoy, c,
-                HechosRepresentativosDeCaptaciones.Asamblea(c, d.Kind, d.SurplusDestination, s.Parametros.ConceptoDeExcedentes)), $"la decisión de asamblea {d.Number}", ct);
+                HechosRepresentativosDeCaptaciones.Asamblea(c, d.Kind, destinoDeLaPregunta, s.Parametros.ConceptoDeExcedentes)), $"la decisión de asamblea {d.Number}", ct);
             if (decision.Bloqueo is { } bloqueo) return Falla(bloqueo);
             validacion = decision.Outcome;
         }
@@ -350,6 +353,7 @@ public sealed class ApplyAssemblyDistributionCommandHandler(
                                                              ?? throw new InvalidOperationException($"La cuenta {aportes.Number} no alcanza para amortizar {l.Aplicado}."),
                     _ => d.SurplusDestination switch
                     {
+                        SurplusDestination.Savings when destino is null => [(s.Parametros.ConceptoDeExcedentes, l.Aplicado)],
                         SurplusDestination.Savings => [(MemberAccountConcept.Principal, l.Aplicado)],
                         SurplusDestination.Payment => [],
                         _ => [(s.Parametros.ConceptoDeExcedentes, l.Aplicado)],

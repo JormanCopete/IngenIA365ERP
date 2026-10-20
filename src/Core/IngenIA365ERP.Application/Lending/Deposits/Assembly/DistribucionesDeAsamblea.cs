@@ -38,7 +38,7 @@ public sealed record SimulacionDeAsamblea(
     AssemblyDistributionSimulationDto Dto,
     IReadOnlyDictionary<int, MemberAccount> Cuentas,
     IReadOnlyDictionary<int, MemberAccount> Destinos,
-    IReadOnlyList<int> PersonasSinDestino,
+    IReadOnlyList<int> PersonasSinDestino, // los que no tienen cuenta de destino: su excedente se capitaliza en aportes (E257)
     decimal? LimiteLegal,
     string? FuenteDelLimite,
     ParametrosDeAsamblea Parametros);
@@ -227,7 +227,7 @@ public sealed class DistribucionesDeAsamblea(
                 else destinos[l.CuentaId] = cuenta;
             }
             if (sinDestino.Count > 0)
-                avisos.Add($"{sinDestino.Count} asociado(s) no tienen cuenta viva en la línea de ahorro de destino: la decisión no se aplica hasta que la tengan.");
+                avisos.Add($"{sinDestino.Count} asociado(s) no tienen cuenta viva en la línea de ahorro de destino: su excedente se capitaliza en sus aportes, sin abrirles cuenta.");
         }
         if (calculo.Lineas.Count(l => l.Aplicado > 0m) == 0) avisos.Add("Con esta decisión ningún asociado recibe nada.");
         if (d.Kind == AssemblyDistributionKind.Revaluation && limite is null)
