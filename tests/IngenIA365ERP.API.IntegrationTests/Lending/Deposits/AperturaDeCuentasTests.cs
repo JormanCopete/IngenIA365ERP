@@ -88,7 +88,7 @@ public class AperturaDeCuentasTests(CentralIdentityApiFixture fx)
             },
         });
         aportes.StatusCode.Should().Be(HttpStatusCode.Created, $"la línea de aportes: «{await aportes.Content.ReadAsStringAsync()}»");
-        return new Escenario(coop, usuarios, usuarios.O1.OficinaPublicId, (await CarteraE2E.LeerAsync(vista)).GetProperty("publicId").GetGuid(),
+        return new Escenario(coop, usuarios, usuarios.O1.AgenciaPublicId, (await CarteraE2E.LeerAsync(vista)).GetProperty("publicId").GetGuid(),
             (await CarteraE2E.LeerAsync(aportes)).GetProperty("publicId").GetGuid(), hoy);
     }
 

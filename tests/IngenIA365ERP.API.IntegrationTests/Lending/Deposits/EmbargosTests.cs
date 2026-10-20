@@ -46,8 +46,8 @@ public class EmbargosTests(CentralIdentityApiFixture fx)
         var linea1 = await MovimientosTests.LineaALaVistaAsync(http, admin, hoy, $"AHE1{nombre[..Math.Min(3, nombre.Length)].ToUpperInvariant()}");
         var linea2 = await MovimientosTests.LineaALaVistaAsync(http, admin, hoy, $"AHE2{nombre[..Math.Min(3, nombre.Length)].ToUpperInvariant()}");
         var ana = await MovimientosTests.AsociadoAsync(http, admin, $"Embargada{nombre}");
-        var vieja = await MovimientosTests.CuentaAsync(http, admin, usuarios.O1.OficinaPublicId, linea1, ana);
-        var nueva = await MovimientosTests.CuentaAsync(http, admin, usuarios.O1.OficinaPublicId, linea2, ana);
+        var vieja = await MovimientosTests.CuentaAsync(http, admin, usuarios.O1.AgenciaPublicId, linea1, ana);
+        var nueva = await MovimientosTests.CuentaAsync(http, admin, usuarios.O1.AgenciaPublicId, linea2, ana);
         await MovimientosTests.ConsignarAsync(http, admin, vieja, ana, 40_000_000m, hoy);
         await MovimientosTests.ConsignarAsync(http, admin, nueva, ana, 30_000_000m, hoy);
 
@@ -62,7 +62,7 @@ public class EmbargosTests(CentralIdentityApiFixture fx)
         });
         resp.StatusCode.Should().Be(HttpStatusCode.Created, await resp.Content.ReadAsStringAsync());
         var lineaDeAportes = (await CarteraE2E.LeerAsync(resp)).GetProperty("publicId").GetGuid();
-        var aportes = await MovimientosTests.CuentaAsync(http, admin, usuarios.O1.OficinaPublicId, lineaDeAportes, ana);
+        var aportes = await MovimientosTests.CuentaAsync(http, admin, usuarios.O1.AgenciaPublicId, lineaDeAportes, ana);
 
         var juzgado = await CarteraE2E.PersonaAsync(http, admin, "Juzgado", $"Civil{nombre}");
         return new Escenario(coop, usuarios, hoy, ana, vieja, nueva, aportes, juzgado);

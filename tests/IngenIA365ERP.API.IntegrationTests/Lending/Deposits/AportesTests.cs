@@ -45,14 +45,18 @@ public class AportesTests(CentralIdentityApiFixture fx)
         {
             if (!Escenarios.TryGetValue((fx, nombre), out var tarea))
             {
-                tarea = ArmarAsync(nombre);
+                tarea = ArmarAsync(nombre, nombre.EndsWith("_reparto", StringComparison.Ordinal));
                 Escenarios[(fx, nombre)] = tarea;
             }
             return tarea;
         }
     }
 
-    private async Task<Escenario> ArmarAsync(string nombre)
+    /// <summary>
+    /// <paramref name="reparto"/>: la cooperativa tiene UNA línea de aportes activa (<c>Lending.Contributions.LineAlreadyActive</c>), así que la que reparte
+    /// parte de la cuota al ahorro permanente vive en su propia cooperativa y no junto a la de cuota simple.
+    /// </summary>
+    private async Task<Escenario> ArmarAsync(string nombre, bool reparto = false)
     {
         var coop = await CaptacionesE2E.CooperativaConCaptacionesAsync(fx, nombre);
         using var http = fx.CreateClient();
@@ -61,16 +65,7 @@ public class AportesTests(CentralIdentityApiFixture fx)
         await CarteraE2E.PersonaDelAdministradorAsync(http, coop.Cooperativa);
         var usuarios = await UsuariosDeCartera.CrearAsync(fx, coop.Cooperativa);
 
-        var aportes = await LineaAsync(http, admin, $"{Lineas}/contribution", new
-        {
-            code = "APORTES", name = "Aportes sociales", active = true,
-            firstVersion = new
-            {
-                validFrom = hoy, reason = "Estatutos, art. 20 (e2e)", minimumNonReducible = new { kind = "FixedAmount", amount = 100_000m },
-                installment = new { kind = "FixedAmount", amount = 50_000m, periodicity = "Monthly", dueDay = 5 }, allowsExtraordinary = true,
-                refundTermDays = 60,
-            },
-        });
+        // El ahorro permanente va primero: la línea con reparto lo nombra.
         var permanente = await LineaAsync(http, admin, $"{Lineas}/deposit", new
         {
             code = "AHPERM", name = "Ahorro permanente", depositClass = "Permanent", active = true,
@@ -82,17 +77,35 @@ public class AportesTests(CentralIdentityApiFixture fx)
                 rounding = new { unit = 1m, mode = "AwayFromZero", moment = "PerTotal" }, settlementPeriodicity = "Monthly", tax = new { gmfApplies = true },
             },
         });
-        var conReparto = await LineaAsync(http, admin, $"{Lineas}/contribution", new
+        Guid aportes, conReparto;
+        if (reparto)
         {
-            code = "APFONDO", name = "Aportes del fondo de empleados", active = true,
-            firstVersion = new
+            aportes = conReparto = await LineaAsync(http, admin, $"{Lineas}/contribution", new
             {
-                validFrom = hoy, reason = "Estatutos del fondo (e2e)", minimumNonReducible = new { kind = "FixedAmount", amount = 0m },
-                installment = new { kind = "FixedAmount", amount = 100_000m, periodicity = "Monthly", dueDay = 5 },
-                permanentSavingsShare = new { depositLinePublicId = permanente, fraction = 0.4m }, refundTermDays = 60,
-            },
-        });
-        return new Escenario(coop, usuarios, usuarios.O1.OficinaPublicId, aportes, permanente, conReparto, hoy);
+                code = "APFONDO", name = "Aportes del fondo de empleados", active = true,
+                firstVersion = new
+                {
+                    validFrom = hoy, reason = "Estatutos del fondo (e2e)", minimumNonReducible = new { kind = "FixedAmount", amount = 0m },
+                    installment = new { kind = "FixedAmount", amount = 100_000m, periodicity = "Monthly", dueDay = 5 },
+                    permanentSavingsShare = new { depositLinePublicId = permanente, fraction = 0.4m }, refundTermDays = 60,
+                },
+            });
+        }
+        else
+        {
+            aportes = await LineaAsync(http, admin, $"{Lineas}/contribution", new
+            {
+                code = "APORTES", name = "Aportes sociales", active = true,
+                firstVersion = new
+                {
+                    validFrom = hoy, reason = "Estatutos, art. 20 (e2e)", minimumNonReducible = new { kind = "FixedAmount", amount = 100_000m },
+                    installment = new { kind = "FixedAmount", amount = 50_000m, periodicity = "Monthly", dueDay = 5 }, allowsExtraordinary = true,
+                    refundTermDays = 60,
+                },
+            });
+            conReparto = Guid.Empty;
+        }
+        return new Escenario(coop, usuarios, usuarios.O1.AgenciaPublicId, aportes, permanente, conReparto, hoy);
     }
 
     private static async Task<Guid> LineaAsync(HttpClient http, string admin, string ruta, object cuerpo)
@@ -242,7 +255,7 @@ public class AportesTests(CentralIdentityApiFixture fx)
     [Fact]
     public async Task US3_con_reparto_la_cuota_se_divide_entre_aportes_y_ahorro_permanente()
     {
-        var esc = await EscenarioAsync("aportes");
+        var esc = await EscenarioAsync("aportes_reparto");
         using var http = fx.CreateClient();
         var dario = await AsociadoAsync(http, esc.Admin, "Dario");
         var aportes = (await CuentaAsync(http, esc, esc.LineaConReparto, dario)).GetProperty("publicId").GetGuid();

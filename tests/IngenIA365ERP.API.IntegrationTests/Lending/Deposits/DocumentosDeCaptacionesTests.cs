@@ -37,7 +37,7 @@ public class DocumentosDeCaptacionesTests(CentralIdentityApiFixture fx)
         var admin = coop.TokenAdmin;
         var linea = await MovimientosTests.LineaALaVistaAsync(http, admin, hoy, $"AHD{nombre[..Math.Min(3, nombre.Length)].ToUpperInvariant()}");
         var ana = await MovimientosTests.AsociadoAsync(http, admin, $"Titular{nombre}");
-        var cuenta = await MovimientosTests.CuentaAsync(http, admin, usuarios.O1.OficinaPublicId, linea, ana);
+        var cuenta = await MovimientosTests.CuentaAsync(http, admin, usuarios.O1.AgenciaPublicId, linea, ana);
         var primera = await MovimientosTests.ConsignarAsync(http, admin, cuenta, ana, 800_000m, hoy);
         await MovimientosTests.ConsignarAsync(http, admin, cuenta, ana, 200_000m, hoy);
         return new Escenario(coop, hoy, ana, cuenta, primera.GetProperty("value").GetProperty("operationPublicId").GetGuid());

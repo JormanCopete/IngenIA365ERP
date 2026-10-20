@@ -59,7 +59,7 @@ public class MovimientosTests(CentralIdentityApiFixture fx)
         await CarteraE2E.PersonaDelAdministradorAsync(http, coop.Cooperativa);
         var usuarios = await UsuariosDeCartera.CrearAsync(fx, coop.Cooperativa);
         var linea = await LineaALaVistaAsync(http, coop.TokenAdmin, hoy, "AHVISTA");
-        return new Escenario(coop, usuarios, usuarios.O1.OficinaPublicId, linea, hoy);
+        return new Escenario(coop, usuarios, usuarios.O1.AgenciaPublicId, linea, hoy);
     }
 
     internal static async Task<Guid> LineaALaVistaAsync(HttpClient http, string admin, DateOnly hoy, string codigo, object[]? cargos = null)

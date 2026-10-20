@@ -112,7 +112,7 @@ public class RetiroDeAsociadoTests(CentralIdentityApiFixture fx)
     {
         var resp = await CarteraE2E.ConClaveAsync(http, esc.Admin, HttpMethod.Post, Cuentas, new
         {
-            linePublicId = esc.LineaDeAportes, holderPersonPublicId = persona, officePublicId = esc.Usuarios.O1.OficinaPublicId, handlingMode = "Indistinct",
+            linePublicId = esc.LineaDeAportes, holderPersonPublicId = persona, officePublicId = esc.Usuarios.O1.AgenciaPublicId, handlingMode = "Indistinct",
             parties = Array.Empty<object>(), beneficiaries = Array.Empty<object>(), markGmfExempt = false,
         });
         resp.StatusCode.Should().Be(HttpStatusCode.Created, $"abrir la cuenta de aportes: «{await resp.Content.ReadAsStringAsync()}»");

@@ -104,8 +104,8 @@ public class SeguridadDeCaptacionesTests(CentralIdentityApiFixture fx)
 
         var ana = await MovimientosTests.AsociadoAsync(http, admin, "AnaSeg");
         var beto = await MovimientosTests.AsociadoAsync(http, admin, "BetoSeg");
-        var deO1 = await MovimientosTests.CuentaAsync(http, admin, usuarios.O1.OficinaPublicId, linea, ana);
-        var deO2 = await MovimientosTests.CuentaAsync(http, admin, usuarios.O2.OficinaPublicId, linea, beto);
+        var deO1 = await MovimientosTests.CuentaAsync(http, admin, usuarios.O1.AgenciaPublicId, linea, ana);
+        var deO2 = await MovimientosTests.CuentaAsync(http, admin, usuarios.O2.AgenciaPublicId, linea, beto);
         await MovimientosTests.ConsignarAsync(http, admin, deO1, ana, 500_000m, hoy);
         await MovimientosTests.ConsignarAsync(http, admin, deO2, beto, 300_000m, hoy);
 

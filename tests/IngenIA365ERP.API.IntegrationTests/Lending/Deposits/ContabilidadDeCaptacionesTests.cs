@@ -78,7 +78,7 @@ public class ContabilidadDeCaptacionesTests(CentralIdentityApiFixture fx)
         var hoy = CarteraE2E.Hoy(fx);
         await MatrizAsync(http, coop.TokenAdmin, new DateOnly(hoy.Year, hoy.Month, 1), conGmf);
         var linea = await MovimientosTests.LineaALaVistaAsync(http, coop.TokenAdmin, hoy, $"AHC{nombre[..Math.Min(4, nombre.Length)].ToUpperInvariant()}");
-        return (coop, usuarios.O1.OficinaPublicId, linea, hoy);
+        return (coop, usuarios.O1.AgenciaPublicId, linea, hoy);
     }
 
     private static async Task<IReadOnlyList<JsonElement>> HechosAsync(HttpClient http, string token, string tipo) =>

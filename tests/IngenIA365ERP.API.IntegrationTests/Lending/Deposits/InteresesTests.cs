@@ -37,7 +37,7 @@ public class InteresesTests(CentralIdentityApiFixture fx)
         using var http = fx.CreateClient();
         await CarteraE2E.PersonaDelAdministradorAsync(http, coop.Cooperativa);
         var usuarios = await UsuariosDeCartera.CrearAsync(fx, coop.Cooperativa);
-        return (coop, usuarios.O1.OficinaPublicId);
+        return (coop, usuarios.O1.AgenciaPublicId);
     }
 
     private static async Task<Guid> LineaAlTresAsync(HttpClient http, string admin, DateOnly desde, string codigo, decimal minimoParaInteres = 0m)

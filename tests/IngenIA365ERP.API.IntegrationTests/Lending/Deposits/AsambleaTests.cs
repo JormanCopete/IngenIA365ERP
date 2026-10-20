@@ -170,7 +170,7 @@ public class AsambleaTests(CentralIdentityApiFixture fx)
     {
         var resp = await CarteraE2E.ConClaveAsync(http, admin, HttpMethod.Post, Cuentas, new
         {
-            linePublicId = linea, holderPersonPublicId = persona, officePublicId = des.Usuarios.O1.OficinaPublicId, handlingMode = "Indistinct",
+            linePublicId = linea, holderPersonPublicId = persona, officePublicId = des.Usuarios.O1.AgenciaPublicId, handlingMode = "Indistinct",
             parties = Array.Empty<object>(), beneficiaries = Array.Empty<object>(), markGmfExempt = false,
         });
         resp.StatusCode.Should().Be(HttpStatusCode.Created, $"abrir la cuenta de aportes: «{await resp.Content.ReadAsStringAsync()}»");

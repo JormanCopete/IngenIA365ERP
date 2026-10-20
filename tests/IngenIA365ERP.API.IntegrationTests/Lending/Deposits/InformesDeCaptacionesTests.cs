@@ -41,7 +41,7 @@ public class InformesDeCaptacionesTests(CentralIdentityApiFixture fx)
 
         var linea = await MovimientosTests.LineaALaVistaAsync(http, admin, hoy, "AHREG");
         var titular = await MovimientosTests.AsociadoAsync(http, admin, "Regulatorios");
-        var cuenta = await MovimientosTests.CuentaAsync(http, admin, usuarios.O1.OficinaPublicId, linea, titular);
+        var cuenta = await MovimientosTests.CuentaAsync(http, admin, usuarios.O1.AgenciaPublicId, linea, titular);
         await MovimientosTests.ConsignarAsync(http, admin, cuenta, titular, 6_000_000m, hoy, medio: "Transfer");
 
         // 1. Sin cierre del mes no hay formato.

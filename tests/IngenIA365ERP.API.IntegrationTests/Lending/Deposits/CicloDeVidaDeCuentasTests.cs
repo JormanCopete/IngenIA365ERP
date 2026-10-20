@@ -37,7 +37,7 @@ public class CicloDeVidaDeCuentasTests(CentralIdentityApiFixture fx)
         var hoy = CarteraE2E.Hoy(fx);
         var linea = await LineaConInactividadAsync(http, coop.TokenAdmin, hoy, "AHINACT");
         var titular = await MovimientosTests.AsociadoAsync(http, coop.TokenAdmin, "Inactiva");
-        var cuenta = await MovimientosTests.CuentaAsync(http, coop.TokenAdmin, usuarios.O1.OficinaPublicId, linea, titular);
+        var cuenta = await MovimientosTests.CuentaAsync(http, coop.TokenAdmin, usuarios.O1.AgenciaPublicId, linea, titular);
         await MovimientosTests.ConsignarAsync(http, coop.TokenAdmin, cuenta, titular, 2_000_000m, hoy, medio: "Transfer");
 
         var dia30 = hoy.AddDays(30);
@@ -81,7 +81,7 @@ public class CicloDeVidaDeCuentasTests(CentralIdentityApiFixture fx)
         var constancia = await SoporteAsync(http, admin, titular, "LendingAccountPartySupport", "constancia-beneficiarios.pdf");
         var abierta = await CarteraE2E.ConClaveAsync(http, admin, HttpMethod.Post, Cuentas, new
         {
-            linePublicId = linea, holderPersonPublicId = titular, officePublicId = des.Usuarios.O1.OficinaPublicId, handlingMode = "Indistinct",
+            linePublicId = linea, holderPersonPublicId = titular, officePublicId = des.Usuarios.O1.AgenciaPublicId, handlingMode = "Indistinct",
             parties = Array.Empty<object>(), beneficiaries = new[] { new { personPublicId = hija, percent = 50m }, new { personPublicId = hijo, percent = 50m } },
             beneficiaryRecordAttachmentPublicId = constancia, markGmfExempt = false,
         });

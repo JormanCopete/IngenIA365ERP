@@ -36,7 +36,7 @@ public class FondoDeLiquidezTests(CentralIdentityApiFixture fx)
 
         var linea = await MovimientosTests.LineaALaVistaAsync(http, admin, hoy, "AHLIQ");
         var titular = await MovimientosTests.AsociadoAsync(http, admin, "Liquidez");
-        var cuenta = await MovimientosTests.CuentaAsync(http, admin, usuarios.O1.OficinaPublicId, linea, titular);
+        var cuenta = await MovimientosTests.CuentaAsync(http, admin, usuarios.O1.AgenciaPublicId, linea, titular);
         await MovimientosTests.ConsignarAsync(http, admin, cuenta, titular, 10_000_000m, hoy, medio: "Transfer");
 
         // 1. El régimen general: 10 % del ahorro a la vista; sin constituido, faltante.

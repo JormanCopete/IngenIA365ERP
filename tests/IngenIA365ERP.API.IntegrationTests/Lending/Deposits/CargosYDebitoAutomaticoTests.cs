@@ -47,7 +47,7 @@ public class CargosYDebitoAutomaticoTests(CentralIdentityApiFixture fx)
         catalogo.GetArrayLength().Should().Be(2);
 
         var ivan = await MovimientosTests.AsociadoAsync(http, admin, "Ivan");
-        var cuenta = await MovimientosTests.CuentaAsync(http, admin, usuarios.O1.OficinaPublicId, linea, ivan);
+        var cuenta = await MovimientosTests.CuentaAsync(http, admin, usuarios.O1.AgenciaPublicId, linea, ivan);
         await MovimientosTests.ConsignarAsync(http, admin, cuenta, ivan, 100_000m, hoy);
         var fin = new DateOnly(hoy.Year, hoy.Month, DateTime.DaysInMonth(hoy.Year, hoy.Month));
         foreach (var _ in new[] { 1, 2 })
@@ -72,7 +72,7 @@ public class CargosYDebitoAutomaticoTests(CentralIdentityApiFixture fx)
         var usuarios = await UsuariosDeCartera.CrearAsync(fx, coop.Cooperativa);
         var linea = await MovimientosTests.LineaALaVistaAsync(http, admin, hoy, "AHEVENTO", CatalogoDeCargos);
         var juana = await MovimientosTests.AsociadoAsync(http, admin, "Juana");
-        var cuenta = await MovimientosTests.CuentaAsync(http, admin, usuarios.O1.OficinaPublicId, linea, juana);
+        var cuenta = await MovimientosTests.CuentaAsync(http, admin, usuarios.O1.AgenciaPublicId, linea, juana);
         await MovimientosTests.ConsignarAsync(http, admin, cuenta, juana, 50_000m, hoy);
 
         var alta = await CarteraE2E.ConClaveAsync(http, admin, HttpMethod.Post, $"{Cuentas}/{cuenta}/charges",
@@ -102,7 +102,7 @@ public class CargosYDebitoAutomaticoTests(CentralIdentityApiFixture fx)
         var credito = desembolso.GetProperty("loanPublicId").GetGuid();
         var (_, vence, total) = await PagosE2E.CuotaAsync(http, admin, credito);
         var linea = await MovimientosTests.LineaALaVistaAsync(http, admin, des.Hoy, "AHDEBITO");
-        var cuenta = await MovimientosTests.CuentaAsync(http, admin, des.Usuarios.O1.OficinaPublicId, linea, deudor);
+        var cuenta = await MovimientosTests.CuentaAsync(http, admin, des.Usuarios.O1.AgenciaPublicId, linea, deudor);
         await MovimientosTests.ConsignarAsync(http, admin, cuenta, deudor, total + 500_000m, des.Hoy);
 
         var mandato = await CarteraE2E.ConClaveAsync(http, admin, HttpMethod.Post, "/api/lending/direct-debits", new

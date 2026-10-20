@@ -53,7 +53,65 @@ public static class CaptacionesE2E
     {
         var coop = await CarteraE2E.CooperativaAisladaAsync(fx, $"cap_{nombre}");
         var creditos = await CarteraE2E.ActivarCarteraAsync(fx, coop);
+        await PerfilRegulatorioBaseAsync(fx, coop);
+        await AlcanceTotalDelAdministradorAsync(fx, coop);
         return new CooperativaDeCaptaciones(coop, creditos);
+    }
+
+    /// <summary>
+    /// Una cooperativa real tiene su perfil regulatorio y su política de datos (la activación de créditos no lo exige): si la aislada no trae ninguno —el GET devuelve
+    /// <c>current: null</c>—, se registra el de una cooperativa de ahorro y crédito con actividad financiera, <b>sin</b> autorizar captar, desde la
+    /// víspera. Las pruebas que necesitan captar lo corrigen desde su misma fecha (<see cref="RequisitosDeCaptacionesAsync"/>).
+    /// </summary>
+    private static async Task PerfilRegulatorioBaseAsync(CentralIdentityApiFixture fx, CarteraE2E.CooperativaAislada coop)
+    {
+        using var http = fx.CreateClient();
+        var actual = (await CarteraE2E.GetAsync(http, coop.TokenAdmin, "/api/core/regulatory-profile")).GetProperty("current");
+        if (actual.ValueKind == JsonValueKind.Object) return;
+        await CarteraE2E.ExitoAsync(http, coop.TokenAdmin, HttpMethod.Post, "/api/core/regulatory-profile/versions", new
+        {
+            organizationType = "COOP_AHORRO_CREDITO", financialActivity = true, supervisionLevel = 2, validFrom = CarteraE2E.Hoy(fx).AddDays(-1),
+            source = "Certificado de la Supersolidaria (e2e)", reason = "Perfil de la cooperativa de ahorro y crédito para las e2e de captaciones",
+        });
+        // El asociado se registra con su autorización de tratamiento de datos, y ésta exige una política vigente de esa finalidad.
+        await CarteraE2E.ExitoAsync(http, coop.TokenAdmin, HttpMethod.Post, "/api/compliance/habeas-data/policies/", new
+        {
+            title = "Política de datos: GeneralTreatment", contentMarkdown = "Texto de la política para las e2e de captaciones.",
+            effectiveFrom = DateTime.UtcNow, purpose = "GeneralTreatment",
+        });
+    }
+
+    /// <summary>
+    /// El administrador de la cooperativa no trae alcance de Cartera (FR-004: sin filas de asignación no ve ninguna oficina ni línea; un 404 como si no
+    /// existieran). Las e2e de captaciones operan con su token, así que se le da un rol propio con <c>Lending.Scope.AllOffices</c> y
+    /// <c>Lending.Scope.AllLines</c>, como lo trae la plantilla <c>cartera.administrador</c>. Idempotente.
+    /// </summary>
+    private static async Task AlcanceTotalDelAdministradorAsync(CentralIdentityApiFixture fx, CarteraE2E.CooperativaAislada coop)
+    {
+        using var http = fx.CreateClient();
+        var admin = coop.TokenAdmin;
+        const string Codigo = "ENS-CAP-ALCANCE";
+        var existente = (await CarteraE2E.GetAsync(http, admin, $"/api/admin/roles?search={Codigo}&includeBuiltIn=false&pageSize=50"))
+            .GetProperty("items").EnumerateArray().Where(r => r.GetProperty("code").GetString() == Codigo).ToList();
+        Guid rol;
+        if (existente.Count > 0) rol = existente[0].GetProperty("publicId").GetGuid();
+        else
+        {
+            var catalogo = (await CarteraE2E.GetAsync(http, admin, "/api/admin/permissions")).EnumerateArray()
+                .ToDictionary(p => p.GetProperty("code").GetString()!, p => p.GetProperty("publicId").GetGuid(), StringComparer.OrdinalIgnoreCase);
+            var alta = await CarteraE2E.EnviarAsync(http, admin, HttpMethod.Post, "/api/admin/roles", new
+            {
+                code = Codigo, name = "Ensayo alcance total", description = "Alcance de Cartera del administrador de las e2e de captaciones",
+                permissionPublicIds = new[] { catalogo["Lending.Scope.AllOffices"], catalogo["Lending.Scope.AllLines"] },
+            });
+            alta.IsSuccessStatusCode.Should().BeTrue($"rol {Codigo}: «{await alta.Content.ReadAsStringAsync()}»");
+            rol = (await CarteraE2E.GetAsync(http, admin, $"/api/admin/roles?search={Codigo}&includeBuiltIn=false&pageSize=50"))
+                .GetProperty("items").EnumerateArray().Single(r => r.GetProperty("code").GetString() == Codigo).GetProperty("publicId").GetGuid();
+        }
+        var usuario = await CarteraE2E.UsuarioPorCorreoAsync(http, admin, coop.CorreoAdmin!);
+        var asignacion = await CarteraE2E.EnviarAsync(http, admin, HttpMethod.Post, $"/api/admin/users/{usuario}/roles", new { rolePublicId = rol });
+        if (!asignacion.IsSuccessStatusCode)
+            (await CarteraE2E.CodigoDeErrorAsync(asignacion)).Should().Be("Security.Users.AlreadyAssignedRole", await asignacion.Content.ReadAsStringAsync());
     }
 
     private static readonly object Cerrojo = new();

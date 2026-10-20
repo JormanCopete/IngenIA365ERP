@@ -38,8 +38,8 @@ public class AhorroContractualTests(CentralIdentityApiFixture fx)
         var hoy = CarteraE2E.Hoy(fx);
         var ahorro = await MovimientosTests.LineaALaVistaAsync(http, coop.TokenAdmin, hoy, $"AHK{nombre[..Math.Min(4, nombre.Length)].ToUpperInvariant()}");
         var titular = await MovimientosTests.AsociadoAsync(http, coop.TokenAdmin, $"Contrato{nombre}");
-        var vista = await MovimientosTests.CuentaAsync(http, coop.TokenAdmin, usuarios.O1.OficinaPublicId, ahorro, titular);
-        return new Escenario(coop, usuarios.O1.OficinaPublicId, vista, titular, hoy);
+        var vista = await MovimientosTests.CuentaAsync(http, coop.TokenAdmin, usuarios.O1.AgenciaPublicId, ahorro, titular);
+        return new Escenario(coop, usuarios.O1.AgenciaPublicId, vista, titular, hoy);
     }
 
     /// <summary>La línea contractual del escenario: cuota mensual desde 100.000, de 6 a 36 meses, 6 % EA en 30/360, bonificada al 8 %, castigo al 3 %.</summary>

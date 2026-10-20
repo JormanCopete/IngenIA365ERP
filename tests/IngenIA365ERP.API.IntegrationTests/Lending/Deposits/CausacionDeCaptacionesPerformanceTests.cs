@@ -39,7 +39,7 @@ public sealed class CausacionDeCaptacionesPerformanceTests(CentralIdentityApiFix
         var usuarios = await UsuariosDeCartera.CrearAsync(fx, coop.Cooperativa);
         var linea = await MovimientosTests.LineaALaVistaAsync(http, admin, hoy, "AHVOLUMEN");
         var titular = await MovimientosTests.AsociadoAsync(http, admin, "Volumen");
-        var modelo = await MovimientosTests.CuentaAsync(http, admin, usuarios.O1.OficinaPublicId, linea, titular);
+        var modelo = await MovimientosTests.CuentaAsync(http, admin, usuarios.O1.AgenciaPublicId, linea, titular);
         await MovimientosTests.ConsignarAsync(http, admin, modelo, titular, 1_000_000m, hoy, medio: "Transfer");
 
         // Las cuentas en bloque, copiando la línea, la oficina y el titular de la cuenta modelo.

@@ -38,7 +38,7 @@ public sealed class ContratoDeCuentasCargaTests(CentralIdentityApiFixture fx, IT
         for (var i = 0; i < Cuentas; i++)
         {
             var titular = await MovimientosTests.AsociadoAsync(http, admin, $"Carga{i}");
-            var cuenta = await MovimientosTests.CuentaAsync(http, admin, usuarios.O1.OficinaPublicId, linea, titular, exenta: true);
+            var cuenta = await MovimientosTests.CuentaAsync(http, admin, usuarios.O1.AgenciaPublicId, linea, titular, exenta: true);
             await MovimientosTests.ConsignarAsync(http, admin, cuenta, titular, 10_000_000m, hoy);
             cuentas.Add((cuenta, titular));
         }

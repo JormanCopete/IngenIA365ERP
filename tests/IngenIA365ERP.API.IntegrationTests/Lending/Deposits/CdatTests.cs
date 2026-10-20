@@ -41,9 +41,9 @@ public class CdatTests(CentralIdentityApiFixture fx)
         var hoy = CarteraE2E.Hoy(fx);
         var ahorro = await MovimientosTests.LineaALaVistaAsync(http, coop.TokenAdmin, hoy, $"AHC{nombre[..Math.Min(4, nombre.Length)].ToUpperInvariant()}");
         var titular = await MovimientosTests.AsociadoAsync(http, coop.TokenAdmin, $"Cdat{nombre}");
-        var cuenta = await MovimientosTests.CuentaAsync(http, coop.TokenAdmin, usuarios.O1.OficinaPublicId, ahorro, titular);
+        var cuenta = await MovimientosTests.CuentaAsync(http, coop.TokenAdmin, usuarios.O1.AgenciaPublicId, ahorro, titular);
         await MovimientosTests.ConsignarAsync(http, coop.TokenAdmin, cuenta, titular, 300_000_000m, hoy, medio: "Transfer");
-        return new Escenario(coop, usuarios, usuarios.O1.OficinaPublicId, cuenta, titular);
+        return new Escenario(coop, usuarios, usuarios.O1.AgenciaPublicId, cuenta, titular);
     }
 
     /// <summary>Una línea de CDAT al 10 % EA en base 360, de 30 a 720 días, al vencimiento o mensual, con la redención y la negociación que se pidan.</summary>
