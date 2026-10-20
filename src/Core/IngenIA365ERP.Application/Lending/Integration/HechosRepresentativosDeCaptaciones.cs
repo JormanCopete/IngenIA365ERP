@@ -286,12 +286,20 @@ public static class HechosRepresentativosDeCaptaciones
     /// US12 (T203): lo que la asamblea deja en una cuenta —la revalorización a los aportes revalorizados contra su fondo; los excedentes a aportes, al capital
     /// de la cuenta de ahorro o pagados (del fondo a los retornos por pagar); la amortización de los aportes a la devolución por pagar—.
     /// </summary>
-    public static object Asamblea(CuentaRepresentativa c, AssemblyDistributionKind clase, SurplusDestination? destino, MemberAccountConcept conceptoDeExcedentes)
+    public static object Asamblea(CuentaRepresentativa c, AssemblyDistributionKind clase, SurplusDestination? destino, MemberAccountConcept conceptoDeExcedentes,
+        bool conRetencion = false)
     {
         ArgumentNullException.ThrowIfNull(c);
+        // Respuesta 89 B (E260): si la decisión retiene, la pregunta incluye la retención de la asamblea (su rol necesita regla).
+        IReadOnlyList<AssemblyWithholdingV1> retenciones = conRetencion && clase != AssemblyDistributionKind.Amortization
+            ? [new AssemblyWithholdingV1 { Account = c.Referencia, HolderPersonPublicId = c.Titular, Dimensions = c.D, Amount = 1m }]
+            : [];
         return clase switch
         {
-            AssemblyDistributionKind.Revaluation => new RevalorizacionDeAportesAplicadaV1 { Lines = [Linea(c, Valor(MemberAccountConcept.ContributionRevaluation, 1m))] },
+            AssemblyDistributionKind.Revaluation => new RevalorizacionDeAportesAplicadaV1
+            {
+                Lines = [Linea(c, Valor(MemberAccountConcept.ContributionRevaluation, 1m))], Withholdings = retenciones,
+            },
             AssemblyDistributionKind.Amortization => new AportesAmortizadosV1
             {
                 Lines = [Linea(c, Valor(MemberAccountConcept.ContributionOrdinary, -1m, nameof(PayoutPurpose.ContributionRefund)))],
@@ -301,9 +309,10 @@ public static class HechosRepresentativosDeCaptaciones
                 SurplusDestination.Payment => new ExcedentesDistribuidosV1
                 {
                     Payments = [new SurplusPaymentV1 { Account = c.Referencia, HolderPersonPublicId = c.Titular, Dimensions = c.D, Amount = 1m }],
+                    Withholdings = retenciones,
                 },
-                SurplusDestination.Savings => new ExcedentesDistribuidosV1 { Lines = [Linea(c, Valor(MemberAccountConcept.Principal, 1m))] },
-                _ => new ExcedentesDistribuidosV1 { Lines = [Linea(c, Valor(conceptoDeExcedentes, 1m))] },
+                SurplusDestination.Savings => new ExcedentesDistribuidosV1 { Lines = [Linea(c, Valor(MemberAccountConcept.Principal, 1m))], Withholdings = retenciones },
+                _ => new ExcedentesDistribuidosV1 { Lines = [Linea(c, Valor(conceptoDeExcedentes, 1m))], Withholdings = retenciones },
             },
         };
     }

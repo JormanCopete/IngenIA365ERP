@@ -24,6 +24,9 @@ public sealed record RevalorizacionDeAportesAplicadaV1
     public int LineCount { get; init; }
 
     public decimal ControlTotal { get; init; }
+
+    /// <summary>Respuesta 89 B del dueño (E260): la retención practicada a cada asociado; las líneas llevan lo neto. Vacío: no se retuvo.</summary>
+    public IReadOnlyList<AssemblyWithholdingV1> Withholdings { get; init; } = [];
 }
 
 /// <summary>La decisión de la asamblea que aplica una forma masiva de aportes (mensajes.md §4.1, <c>distribution</c>).</summary>

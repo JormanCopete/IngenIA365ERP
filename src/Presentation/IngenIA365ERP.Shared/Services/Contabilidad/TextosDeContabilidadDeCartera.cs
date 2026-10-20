@@ -80,6 +80,7 @@ public static class TextosDeContabilidadDeCartera
         "EmbargosPorConsignar" => "Embargos por consignar",
         "IngresoPorPenalidad" => "Ingreso por penalidad",
         "PerdidaAbsorbida" => "Pérdida absorbida",
+        "RetencionDeAsambleaPorPagar" => "Retención de la asamblea por pagar",
         _ => rol,
     };
 
@@ -90,7 +91,7 @@ public static class TextosDeContabilidadDeCartera
     {
         "CapitalDeCaptacion", "CapitalDeCaptacionInactiva", "InteresPorPagar", "GastoPorIntereses", "RetencionPorPagar", "GmfPorPagar",
         "GastoPorBonificacion", "IngresoPorCargos", "CargoDeCuentaPorCobrar", "AportesSociales", "FondoDeRevalorizacion", "FondoDeExcedentes",
-        "DevolucionPorPagar", "NoReclamadosPorPagar", "EmbargosPorConsignar", "IngresoPorPenalidad", "PerdidaAbsorbida",
+        "DevolucionPorPagar", "NoReclamadosPorPagar", "EmbargosPorConsignar", "IngresoPorPenalidad", "PerdidaAbsorbida", "RetencionDeAsambleaPorPagar",
     };
 
     /// <summary>El filtro de naturaleza de la matriz y la completitud: créditos, captaciones y aportes, o todas.</summary>

@@ -209,6 +209,7 @@ public static partial class ConstructorDeLineasDeCartera
                     break;
                 case RevalorizacionDeAportesAplicadaV1 x:
                     Lineas(x.Lines, x.Totals, (d, _, _) => Simple(R.FondoDeRevalorizacion, d));
+                    RetencionesDeAsamblea(x.Withholdings, R.FondoDeRevalorizacion, retenido: true);
                     break;
                 case ExcedentesDistribuidosV1 x:
                     Lineas(x.Lines, x.Totals, (d, _, _) => Simple(R.FondoDeExcedentes, d));
@@ -219,6 +220,7 @@ public static partial class ConstructorDeLineasDeCartera
                         Agregar(Simple(R.FondoDeExcedentes, pago.Dimensions), debitoSiPositivo: true, pago.Amount, par);
                         Agregar(Devolucion(pago.Dimensions, pago.Account, "SurplusPayment", pago.HolderPersonPublicId)!, debitoSiPositivo: false, pago.Amount, par);
                     }
+                    RetencionesDeAsamblea(x.Withholdings, R.FondoDeExcedentes, retenido: true);
                     break;
                 case AportesAmortizadosV1 x:
                     Lineas(x.Lines, x.Totals, (d, cuenta, titular) => Devolucion(d, cuenta, "ContributionRefund", titular));
@@ -311,6 +313,9 @@ public static partial class ConstructorDeLineasDeCartera
                     var titularM = m.HolderPersonPublicId ?? x.HolderPersonPublicId;
                     Operacion(cuentaM, titularM, dm, m.Amounts, ContraDeAsamblea(original, dm, cuentaM, titularM, x.OrderKind), $"el reverso de {original} sin su fondo");
                 }
+                // E260 (respuesta 89 B): lo que la decisión retuvo vuelve de la retención por pagar al fondo.
+                if (x.Withholdings.Count > 0)
+                    RetencionesDeAsamblea(x.Withholdings, original == RevalorizacionDeAportesAplicadaV1.Type ? R.FondoDeRevalorizacion : R.FondoDeExcedentes, retenido: false);
                 return;
             }
             var neto = 0m;
@@ -339,6 +344,21 @@ public static partial class ConstructorDeLineasDeCartera
                 _ => null,
             };
             Contrapartida(contra, neto, $"el reverso de {original} sin su contrapartida");
+        }
+
+        /// <summary>
+        /// E260 (respuesta 89 B): la retención en la fuente de cada asociado sobre lo que reparte la asamblea. Las líneas y los pagos del hecho llevan lo neto, así que
+        /// el fondo debe además el valor retenido, que queda por pagar a la administración tributaria: del fondo a la retención de la asamblea (la ida) o a la
+        /// inversa (el reverso entero de la decisión).
+        /// </summary>
+        private void RetencionesDeAsamblea(IReadOnlyList<AssemblyWithholdingV1> retenciones, string fondo, bool retenido)
+        {
+            foreach (var r in retenciones.Where(r => r.Amount != 0m))
+            {
+                var par = nuevoPar();
+                Agregar(Simple(fondo, r.Dimensions), debitoSiPositivo: retenido, r.Amount, par);
+                Agregar(Simple(R.RetencionDeAsambleaPorPagar, r.Dimensions), debitoSiPositivo: !retenido, r.Amount, par);
+            }
         }
 
         /// <summary>US12 (T203): la contrapartida de lo de la asamblea: el fondo de revalorización o de excedentes, o la devolución por pagar de la amortización.</summary>

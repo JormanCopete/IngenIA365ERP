@@ -31,7 +31,7 @@ public sealed record FilaSugeridaDeCaptacion(
 
     /// <summary>La naturaleza de línea a la que pertenece la fila (para el filtro por naturaleza).</summary>
     public string NaturalezaDeLaFila => ClaseDeAporte is not null || Naturaleza == nameof(LineNature.Contribution)
-        || Rol is R.FondoDeRevalorizacion or R.FondoDeExcedentes or R.PerdidaAbsorbida
+        || Rol is R.FondoDeRevalorizacion or R.FondoDeExcedentes or R.PerdidaAbsorbida or R.RetencionDeAsambleaPorPagar
         ? nameof(LineNature.Contribution)
         : nameof(LineNature.Deposit);
 
@@ -146,6 +146,7 @@ public static class SugerenciasDeCaptaciones
             filas.Add(new(R.PerdidaAbsorbida));
             filas.Add(new(R.FondoDeRevalorizacion, Exigida: false));
             filas.Add(new(R.FondoDeExcedentes, Exigida: false));
+            filas.Add(new(R.RetencionDeAsambleaPorPagar, Exigida: false));
             filas.Add(new(R.NoReclamadosPorPagar, Naturaleza: Aportes, Exigida: false));
             if (clasesDeCaptacion.Count == 0) filas.Add(new(R.RecaudoPorAplicar, ClaseDeRecaudador: nameof(ClaseDeRecaudador.Treasury), Exigida: false));
         }

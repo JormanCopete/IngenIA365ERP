@@ -19,13 +19,14 @@ public sealed record LineaDeAsambleaDto(
     string? DestinationAccountNumber,
     string? OperationNumber,
     string? PayoutOrderNumber,
-    bool WithdrawnDuringYear = false);
+    bool WithdrawnDuringYear = false,
+    decimal WithheldAmount = 0m);
 
 public sealed record LimiteLegalDeAsambleaDto(bool Applied, decimal? Ipc, string? Source, DateOnly? ReferenceDate);
 
 public sealed record ProrrateoDeAsambleaDto(bool Applied, decimal? Factor);
 
-public sealed record TotalesDeAsambleaDto(decimal Base, decimal Calculated, decimal Applied, decimal FundRemainder, int Lines);
+public sealed record TotalesDeAsambleaDto(decimal Base, decimal Calculated, decimal Applied, decimal FundRemainder, int Lines, decimal Withheld = 0m);
 
 /// <summary>La simulación de una decisión de asamblea, con la huella que la aplicación compara. (nuevo)</summary>
 public sealed record SimulacionDeAsambleaDto(

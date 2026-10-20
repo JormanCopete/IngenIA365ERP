@@ -179,7 +179,7 @@ public class ResolutorConDimensionesDeCaptacionTests
         R.ClaseDeAporteDelConcepto("ContributionRevaluation").Should().Be("Revalued");
         R.RolDelConceptoDeCuenta("CurrentInterest").Should().BeNull("los conceptos de crédito no son del libro de cuentas");
         R.MarcasDeCuenta.Should().Equal("Standard", "GmfExempt", "Garnished");
-        R.DeCaptaciones.Should().HaveCount(17);
+        R.DeCaptaciones.Should().HaveCount(18);
         R.DeCaptaciones.Where(r => r.AdmiteHecho).Select(r => r.Codigo).Should().BeEquivalentTo(
             [R.GastoPorIntereses, R.GastoPorBonificacion, R.IngresoPorCargos, R.IngresoPorPenalidad], "el hecho sólo pesa en los roles de resultado");
         R.Buscar(R.CapitalDeCaptacion)!.Cruce.Should().Be(CruceDeRol.Cuenta);

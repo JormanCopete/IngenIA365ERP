@@ -381,6 +381,24 @@ public static class ParametrosDeCartera
     /// </summary>
     public const string AsambleaAmortizacionExcluyeDeudores = "Asamblea.AmortizacionExcluyeDeudores";
 
+    /// <summary>
+    /// Respuesta 89 B del dueño (E260): el concepto de retención en la fuente que se practica sobre la revalorización de aportes y los retornos cooperativos
+    /// (su nombre o código, el que la cooperativa y el tributarista definan). Vacío (el defecto): no se retiene nada.
+    /// </summary>
+    public const string AsambleaRetencionConcepto = "Asamblea.Retencion.Concepto";
+
+    /// <summary>Respuesta 89 B (E260): la tarifa de la retención sobre la revalorización de aportes, como fracción. Vacío: no se retiene.</summary>
+    public const string AsambleaRetencionTarifaRevalorizacion = "Asamblea.Retencion.TarifaRevalorizacion";
+
+    /// <summary>Respuesta 89 B (E260): la tarifa de la retención sobre los retornos cooperativos (los excedentes), como fracción. Vacío: no se retiene.</summary>
+    public const string AsambleaRetencionTarifaExcedentes = "Asamblea.Retencion.TarifaExcedentes";
+
+    /// <summary>
+    /// Respuesta 89 B (E260): la base mínima, en UVT, desde la que se retiene lo que recibe un asociado (con la UVT que rige el día de la aplicación). Vacío o
+    /// cero: sin base mínima.
+    /// </summary>
+    public const string AsambleaRetencionBaseMinimaUvt = "Asamblea.Retencion.BaseMinimaUvt";
+
     /// <summary>Días sin cobrar desde los que lo devuelto pasa a no reclamados (FR-081).</summary>
     public const string CaptacionesDiasParaNoReclamados = "Captaciones.DiasParaNoReclamados";
 
@@ -1113,6 +1131,28 @@ public static class ParametrosDeCartera
             "La amortización de aportes deja fuera a quien tiene créditos vivos: sus aportes respaldan sus obligaciones.", true, K10, General) with
         {
             PendienteDeValidar = "Defecto por FR-044 (los aportes son garantía, Ley 79 art. 49), pendiente de validar con los estatutos.",
+        },
+        // Respuesta 89 B (E260): la retención en la fuente sobre lo que reparte la asamblea. Nada de esto trae valores legales: sin concepto y sin tarifa no se retiene.
+        Texto(AsambleaRetencionConcepto,
+            "Concepto de retención en la fuente que se practica sobre la revalorización de aportes y los retornos cooperativos (nombre o código). Vacío: no se retiene.",
+            string.Empty, K10, patron: @"^[A-Za-z0-9_\- .]{1,60}$", admiteVacio: true) with
+        {
+            PendienteDeValidar = "Sin valor (respuesta 89 B del dueño): el concepto, la tarifa y la base los define el tributarista de cada cooperativa.",
+        },
+        NumeroDecimal(Modulo, AsambleaRetencionTarifaRevalorizacion,
+            "Tarifa de la retención sobre la revalorización de aportes, como fracción (0,035 = 3,5 %). Vacío: no se retiene.", "", K10, General) with
+        {
+            AdmiteVacio = true, Maximo = 1m, PendienteDeValidar = "Sin valor (respuesta 89 B del dueño): lo fija el tributarista de cada cooperativa.",
+        },
+        NumeroDecimal(Modulo, AsambleaRetencionTarifaExcedentes,
+            "Tarifa de la retención sobre los retornos cooperativos (excedentes), como fracción. Vacío: no se retiene.", "", K10, General) with
+        {
+            AdmiteVacio = true, Maximo = 1m, PendienteDeValidar = "Sin valor (respuesta 89 B del dueño): lo fija el tributarista de cada cooperativa.",
+        },
+        NumeroDecimal(Modulo, AsambleaRetencionBaseMinimaUvt,
+            "Base mínima, en UVT, desde la que se retiene lo que recibe cada asociado de la asamblea. Vacío o cero: sin base mínima.", "", K10, General) with
+        {
+            AdmiteVacio = true, Minimo = 0m, PendienteDeValidar = "Sin valor (respuesta 89 B del dueño): lo fija el tributarista de cada cooperativa.",
         },
         Entero(Modulo, CaptacionesDiasParaNoReclamados,
             "Días sin cobrar desde los que lo devuelto pasa a no reclamados. Vacío: no se traslada solo.", "", K10, General) with

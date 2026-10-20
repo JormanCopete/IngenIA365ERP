@@ -20,7 +20,8 @@ public sealed record AssemblyDistributionLineDto(
     string? DestinationAccountNumber,
     string? OperationNumber,
     string? PayoutOrderNumber,
-    bool WithdrawnDuringYear = false);
+    bool WithdrawnDuringYear = false,
+    decimal WithheldAmount = 0m);
 
 /// <summary>El límite legal de la revalorización (el IPC del ejercicio): si cortó lo decidido, el valor y su fuente.</summary>
 public sealed record LimiteLegalDto(bool Applied, decimal? Ipc, string? Source, DateOnly? ReferenceDate);
@@ -29,7 +30,7 @@ public sealed record LimiteLegalDto(bool Applied, decimal? Ipc, string? Source, 
 public sealed record ProrrateoDto(bool Applied, decimal? Factor);
 
 /// <summary>Los totales: base, calculado, aplicado, lo que queda en el fondo y las líneas.</summary>
-public sealed record TotalesDeAsambleaDto(decimal Base, decimal Calculated, decimal Applied, decimal FundRemainder, int Lines);
+public sealed record TotalesDeAsambleaDto(decimal Base, decimal Calculated, decimal Applied, decimal FundRemainder, int Lines, decimal Withheld = 0m);
 
 /// <summary>
 /// La simulación (<c>POST /{id}/simulate</c>, sin clave): las líneas, el límite del IPC, el prorrateo, los totales, la tasa aplicada, los avisos y la huella

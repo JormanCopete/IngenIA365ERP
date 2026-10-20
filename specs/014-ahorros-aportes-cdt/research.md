@@ -2947,3 +2947,33 @@ capitaliza en aportes ni se lleva a ahorro: ya no tiene vínculo). Migración ad
   (`AsambleaTests.E259_…`: Ana retirada el 16 de diciembre participa con 41.095,89 de base, se le gira, no entra nada a sus aportes, Beto capitaliza y la decisión no se reversa).
   e2e (`AsambleaTests.E259_…`, por HTTP con el retiro liquidado en la base). Verdes en PostgreSQL y SQL Server. **Pendiente de validar por la contadora:** que el tiempo cuente hasta la
   víspera del retiro y que la revalorización de quien se retiró no aplique.
+
+### 27.11 E260 · retención en la fuente sobre la revalorización de aportes y los retornos cooperativos (respuesta 89 B, 2026-10-21)
+
+Se practica **retención en la fuente** sobre lo que la asamblea reparte (la revalorización de aportes y los retornos o excedentes), con un **concepto de retención configurable
+por cooperativa**. Todo **pendiente de validar por el tributarista**: el código no trae ningún valor legal; sin concepto o sin tarifa **no se retiene** (el defecto de una cooperativa
+nueva). Migración aditiva `CaptacionesRetencionDeAsamblea` (PostgreSQL `20261020220510`, SQL Server `20261020220430`): `LND_AssemblyDistributionLines.WithheldAmount`
+(`decimal(18,2)`, defecto 0), `WithholdingRate` (`decimal(9,6)`, nula) y `WithholdingConcept` (`nvarchar(60)`, nulo). Paridad y `has-pending-model-changes` limpios en los dos motores.
+
+- **Parámetros** (`Asamblea.Retencion.*`, K10, general, «pendiente de validar por el tributarista»): `Concepto` (texto; vacío = no se retiene), `TarifaRevalorizacion` y `TarifaExcedentes`
+  (fracciones; vacías = no se retiene esa clase) y `BaseMinimaUvt` (vacía o cero = sin base mínima). Cada cooperativa los fija por `POST /api/lending/parameters/{clave}/versions`
+  con vigencia, y la decisión lee los del día en que se simula y se aplica. La amortización de aportes no retiene (es devolver lo que el asociado puso, no una renta).
+- **Cálculo** (puro, `Domain/Lending/Deposits/RetencionDeAsamblea`): sobre lo **aplicado** a cada asociado después del prorrateo al fondo: al no contribuyente (art. 23 ET) y al autorretenedor no se
+  les retiene; con base mínima, sólo desde `BaseMinimaUvt × UVT` (la UVT vigente del valor nacional, la misma fuente de la retención de intereses; sin ella, `NationalValues.Missing`); si no,
+  aplicado × tarifa al peso o al centavo según `Asamblea.Redondeo`, sin pasar de lo aplicado. El perfil sale de `ReglasDeRetencion.PerfilDe` (el mismo de los rendimientos).
+- **Qué recibe el asociado.** Lo **aplicado menos la retención** (neto): la operación de la cuenta, las filas del libro, la orden de giro del pago y el giro al retirado llevan el neto;
+  la línea de la decisión guarda el bruto (`ProratedAmount`), la retención, la tarifa y el concepto. La simulación y la huella incluyen la retención (si el parámetro o la UVT cambian, la
+  huella cambia y hay que volver a simular).
+- **Hecho y contabilidad.** Sin hecho nuevo en el catálogo: la retención viaja como `withholdings[]` **dentro** de `RevalorizacionDeAportesAplicada` y `ExcedentesDistribuidos` —en
+  la misma transacción, como `RetencionPracticada` es acompañante de su principal— con el `WithholdingDetailV1` del hecho de rendimientos (base, tarifa, UVT, perfil, año y
+  `conceptCode`). Las líneas y los pagos son netos; el constructor debita el **mismo fondo** por el valor retenido y acredita el rol nuevo **`RetencionDeAsambleaPorPagar`** (rol 18 de
+  captaciones y aportes, 44 en total: pasivo sin clase de captación, sucursal opcional; la cuenta la elige la contadora y la plantilla lo sugiere como fila opcional). La validación
+  previa de pantalla pregunta también por ese rol cuando la decisión retiene (sin regla, «Bloquear» como siempre). Se prefirió un rol propio y no `RetencionPorPagar` porque éste exige la clase de captación.
+- **Reverso entero.** La decisión con retención se reversa entera como antes: el `OperacionDeCuentaReversada` trae `withholdings[]` con lo que cada operación retuvo y el constructor lo
+  devuelve del pasivo al fondo (probado). Los excedentes pagados siguen sin reversarse.
+- **Pantalla.** La simulación y lo aplicado muestran la retención por asociado y el total.
+- **No hecho.** El **certificado de retención** al asociado por este concepto (los certificados de captaciones siguen siendo los de rendimientos) y la declaración/exógena quedan para
+  cuando el tributarista valide el concepto; tampoco se retiene en el retiro del asociado (su devolución de aportes no es renta).
+- **Pruebas.** Domain (`RetencionDeAsambleaTests`: tarifa, redondeo, perfiles, base mínima, política sin concepto). Application (`AsambleaTests.E260_…`: revalorización con autorretenedor,
+  retorno pagado con el neto, sin concepto, base mínima con y sin UVT; `HechosDeAsambleaTests`: fondo, retención por pagar y reverso) y los contadores de roles (44) y de parámetros (72).
+  e2e (`AsambleaTests.E260_…`: excedentes a aportes con retención y reverso, y excedentes pagados con el neto). Verdes en PostgreSQL y SQL Server.

@@ -168,8 +168,8 @@ cuadran solos (`Accounting.LendingFact.Unbalanced` es defecto del emisor). `Entr
 | 19 | `CargoDeCuentaCausado` | CGA | B | `DepositPrincipal` (cobrado) o `ChargeReceivable` (pendiente) | `ChargeIncome` (Mot `ChargeKind`) | EnLinea | MA | K8 |
 | 20 | `CargoPendienteCobrado` | CGP | B | `DepositPrincipal` | `ChargeReceivable` | el del principal | el del principal | K8 |
 | 21 | `CargoDeCuentaCondonado` | CGN | B | `ChargeIncome` | `ChargeReceivable` (pendiente) o `DepositPrincipal` (reintegro de uno cobrado) | EnLinea | MA | K8 |
-| 22 | `RevalorizacionDeAportesAplicada` | RVA | B | `RevaluationFund` | `ContributionCapital` (`Revalued`) | EnLinea | AO | K10 |
-| 23 | `ExcedentesDistribuidos` | EXD | B | `SurplusFund` | `ContributionCapital`, `DepositPrincipal` o `RefundPayable` (Mot `SurplusPayment`) según el destino | EnLinea | AO | K10 |
+| 22 | `RevalorizacionDeAportesAplicada` | RVA | B | `RevaluationFund` | `ContributionCapital` (`Revalued`) y, si la cooperativa retiene (E260), `RetencionDeAsambleaPorPagar` (rol 18 de captaciones y aportes: sin clase de captación; la cuenta la elige la contadora) | EnLinea | AO | K10 |
+| 23 | `ExcedentesDistribuidos` | EXD | B | `SurplusFund` | `ContributionCapital`, `DepositPrincipal` o `RefundPayable` (Mot `SurplusPayment`) según el destino —el asociado retirado en el ejercicio va siempre por `Payments` (E259)— y, si se retiene (E260), `RetencionDeAsambleaPorPagar` | EnLinea | AO | K10 |
 | 24 | `AportesAmortizados` | AMZ | B | `ContributionCapital` | `RefundPayable` (Mot `ContributionRefund`) | EnLinea | AO | K10 |
 | 25 | `CruceAlRetiroAplicado` | CRR | B | `ContributionCapital`, `DepositPrincipal`, `DepositInactivePrincipal` | `RecaudoPorAplicar` (Cla `OwnLoanPayoff`): lo salda el `PagoAplicado` de su crédito, que debita el mismo puente **en el mismo comprobante** (D45, 2026-10-18) | EnLinea | RA | K7 |
 | 26 | `PerdidaAplicadaAlRetiro` | PDR | B | `ContributionCapital` | `AbsorbedLoss` | EnLinea: va solo, en su propia operación `InternalOffset` sin crédito (puede haber pérdida sin cruce; enmienda E68) | RA | K7 |

@@ -19,10 +19,13 @@ using IngenIA365ERP.Domain.Common.NationalValues;
 using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Entities.Lending.Governance;
 using IngenIA365ERP.Domain.Entities.Lending.Deposits.Processes;
+using IngenIA365ERP.Domain.Entities.Parameters;
 using IngenIA365ERP.Domain.Entities.Lending.Loans;
 using IngenIA365ERP.Domain.Enums.Lending;
 using IngenIA365ERP.Domain.Lending;
 using IngenIA365ERP.Domain.Lending.Attributions;
+using IngenIA365ERP.Domain.Lending.Parameters;
+using IngenIA365ERP.Domain.Enums.Parameters;
 using Microsoft.EntityFrameworkCore;
 using NSubstitute;
 
@@ -156,6 +159,32 @@ public sealed class AsambleaTests : IDisposable
         _a.G.ActuarComo(_a.C.Jefe);
         return Ok(await AplicarAsync(d.PublicId, s.Sha256, d.SessionItemPublicId is null ? Acta(d.PublicId) : null, Soporte(d.PublicId)));
     }
+
+    /// <summary>Un parámetro de la cooperativa con vigencia desde antes del ejercicio (la retención de la asamblea, K10).</summary>
+    private void Parametro(string clave, string valor)
+    {
+        _a.C.EntregaDeParametros = EntregaDeCartera.K10;
+        _a.Db.ParameterVersions.Add(new ParameterVersion
+        {
+            Module = ParametrosDeCartera.Modulo, Key = clave, ScopeKind = ParameterScopeKind.None, Value = valor, ValidFrom = new DateOnly(2020, 1, 1),
+            Reason = "prueba", CreatedAt = DateTime.UtcNow.AddDays(-10),
+        });
+        _a.Db.SaveChanges();
+        _a.Db.ChangeTracker.Clear();
+    }
+
+    private void RetencionConfigurada(string tarifaRevalorizacion = "0.10", string tarifaExcedentes = "0.20", string? baseMinimaUvt = null)
+    {
+        Parametro(ParametrosDeCartera.AsambleaRetencionConcepto, "RETEFTE-ASAMBLEA");
+        Parametro(ParametrosDeCartera.AsambleaRetencionTarifaRevalorizacion, tarifaRevalorizacion);
+        Parametro(ParametrosDeCartera.AsambleaRetencionTarifaExcedentes, tarifaExcedentes);
+        if (baseMinimaUvt is not null) Parametro(ParametrosDeCartera.AsambleaRetencionBaseMinimaUvt, baseMinimaUvt);
+    }
+
+    private void Uvt(decimal valor) =>
+        _a.G.Valores.LeerAsync(CodigosDeValorNacional.Uvt, string.Empty, Arg.Any<DateOnly>(), Arg.Any<DateTime?>(), Arg.Any<CancellationToken>())
+            .Returns(Result.Success(new ValorNacionalVigente(Guid.NewGuid(), Guid.NewGuid(), CodigosDeValorNacional.Uvt, string.Empty, valor, "COP", null,
+                new DateOnly(2026, 1, 1), null, null, "DIAN (valor de prueba)", 1, DateTime.UtcNow.AddMonths(-2), EstadoDeRevision.Validada)));
 
     private async Task<decimal> SaldoAsync(Person persona, MemberAccountConcept concepto) =>
         await _a.Db.MemberAccountTransactions.AsNoTracking()
@@ -423,6 +452,100 @@ public sealed class AsambleaTests : IDisposable
 
         (await Reversar().Handle(new ReverseAssemblyDistributionCommand(d.PublicId, "Error") { OperationKey = Guid.NewGuid() }, default))
             .Error.Code.Should().Be(ErroresDeAsamblea.CodigoPagoNoReversable, "lo girado ya salió a Tesorería");
+    }
+
+    /// <summary>
+    /// Respuesta 89 B del dueño (E260): la revalorización de Ana (3 % de 1.000.000 al cierre = 30.000) lleva la retención del concepto de la cooperativa al 10 %: se le
+    /// abonan 27.000 y 3.000 quedan por pagar; Beto es autorretenedor y recibe sus 60.000 enteros. El reverso entero devuelve los dos.
+    /// </summary>
+    [Fact]
+    public async Task E260_la_revalorizacion_lleva_la_retencion_del_concepto_configurado_y_el_reverso_la_devuelve()
+    {
+        await AportesAsync();
+        Ipc(0.05m);
+        var beto = await _a.Db.People.SingleAsync(p => p.Id == _a.C.Beto.Id);
+        beto.IsSelfWithholder = true;
+        await _a.Db.SaveChangesAsync();
+        _a.Db.ChangeTracker.Clear();
+        RetencionConfigurada();
+
+        var d = await RegistradaAsync(AssemblyDistributionKind.Revaluation, 1_000_000m, porcentaje: 0.03m, @base: RevaluationBase.YearEndBalance);
+        var s = await SimuladaAsync(d.PublicId);
+        s.Warnings.Should().Contain(w => w.Contains("RETEFTE-ASAMBLEA") && w.Contains("1 asociado"));
+        s.Totals.Withheld.Should().Be(3_000m);
+        s.Lines.Single(l => l.Person.FullName.Contains("Ana")).WithheldAmount.Should().Be(3_000m);
+        s.Lines.Single(l => l.Person.FullName.Contains("Beto")).WithheldAmount.Should().Be(0m, "el autorretenedor no se retiene");
+        s.Totals.Applied.Should().Be(90_000m, "lo aplicado es el bruto: la retención se resta al pagar");
+
+        _a.G.ActuarComo(_a.C.Jefe);
+        var aplicada = Ok(await AplicarAsync(d.PublicId, s.Sha256, Acta(d.PublicId), Soporte(d.PublicId)));
+        aplicada.AppliedTotal.Should().Be(90_000m);
+        aplicada.Lines.Single(l => l.Person.FullName.Contains("Ana")).WithheldAmount.Should().Be(3_000m);
+        (await SaldoAsync(_a.C.Ana, MemberAccountConcept.ContributionRevaluation)).Should().Be(27_000m, "lo neto de la retención");
+        (await SaldoAsync(_a.C.Beto, MemberAccountConcept.ContributionRevaluation)).Should().Be(60_000m);
+        var linea = await _a.Db.AssemblyDistributionLines.AsNoTracking().SingleAsync(l => l.WithheldAmount > 0m);
+        linea.WithholdingRate.Should().Be(0.10m);
+        linea.WithholdingConcept.Should().Be("RETEFTE-ASAMBLEA");
+        linea.ProratedAmount.Should().Be(30_000m);
+        var hecho = await _a.Db.IntegrationMessages.AsNoTracking().SingleAsync(m => m.Type == RevalorizacionDeAportesAplicadaV1.Type);
+        hecho.PayloadJson.Should().Contain("withholdings").And.Contain("RETEFTE-ASAMBLEA");
+
+        var reversada = Ok(await Reversar().Handle(new ReverseAssemblyDistributionCommand(d.PublicId, "El fondo del acta era otro") { OperationKey = Guid.NewGuid() }, default));
+        reversada.Status.Should().Be(AssemblyDistributionStatus.Reversed);
+        _a.Db.ChangeTracker.Clear();
+        (await SaldoAsync(_a.C.Ana, MemberAccountConcept.ContributionRevaluation)).Should().Be(0m);
+        var reverso = await _a.Db.IntegrationMessages.AsNoTracking().SingleAsync(m => m.Type == OperacionDeCuentaReversadaV1.Type);
+        reverso.PayloadJson.Should().Contain("withholdings", "el reverso devuelve también lo retenido");
+    }
+
+    /// <summary>E260: los retornos (excedentes) usan su propia tarifa; lo que se paga en dinero por orden de giro es el neto y la retención queda aparte.</summary>
+    [Fact]
+    public async Task E260_los_excedentes_pagados_giran_el_neto_con_la_tarifa_de_los_retornos()
+    {
+        await AportesAsync();
+        RetencionConfigurada(tarifaRevalorizacion: "0.01", tarifaExcedentes: "0.20");
+        var d = await RegistradaAsync(AssemblyDistributionKind.SurplusDistribution, 30_000m, porcentaje: 0.01m, @base: RevaluationBase.YearEndBalance,
+            destino: SurplusDestination.Payment);
+        var s = await SimuladaAsync(d.PublicId);
+        s.Totals.Withheld.Should().Be(6_000m, "20 % de 10.000 y de 20.000: la tarifa de los retornos, no la de la revalorización");
+
+        _a.G.ActuarComo(_a.C.Jefe);
+        var aplicada = Ok(await AplicarAsync(d.PublicId, s.Sha256, Acta(d.PublicId), Soporte(d.PublicId)));
+        aplicada.AppliedTotal.Should().Be(30_000m);
+        var ordenes = await _a.Db.AccountPayoutOrders.AsNoTracking().OrderBy(o => o.Id).Select(o => o.Amount).ToListAsync();
+        ordenes.Should().Equal(8_000m, 16_000m);
+        var hecho = await _a.Db.IntegrationMessages.AsNoTracking().SingleAsync(m => m.Type == ExcedentesDistribuidosV1.Type);
+        hecho.PayloadJson.Should().Contain("withholdings");
+    }
+
+    /// <summary>E260: sin concepto no se retiene aunque haya tarifa (la configuración es del tributarista y arranca vacía).</summary>
+    [Fact]
+    public async Task E260_sin_concepto_configurado_no_se_retiene_nada()
+    {
+        await AportesAsync();
+        Ipc(0.05m);
+        Parametro(ParametrosDeCartera.AsambleaRetencionTarifaRevalorizacion, "0.10");
+        var d = await RegistradaAsync(AssemblyDistributionKind.Revaluation, 1_000_000m, porcentaje: 0.03m, @base: RevaluationBase.YearEndBalance);
+        var s = await SimuladaAsync(d.PublicId);
+        s.Totals.Withheld.Should().Be(0m);
+        s.Lines.Should().OnlyContain(l => l.WithheldAmount == 0m);
+        s.Warnings.Should().NotContain(w => w.Contains("retención"));
+    }
+
+    /// <summary>E260: la base mínima en UVT se mide con la UVT vigente; bajo ella no se retiene, y sin UVT la simulación lo dice.</summary>
+    [Fact]
+    public async Task E260_la_base_minima_en_UVT_deja_sin_retencion_a_quien_recibe_menos_y_exige_la_UVT()
+    {
+        await AportesAsync();
+        Ipc(0.05m);
+        RetencionConfigurada(baseMinimaUvt: "1");
+        var d = await RegistradaAsync(AssemblyDistributionKind.Revaluation, 1_000_000m, porcentaje: 0.03m, @base: RevaluationBase.YearEndBalance);
+        (await Simular().Handle(new SimulateAssemblyDistributionQuery(d.PublicId), default)).Error.Code.Should().Be("NationalValues.Missing", "sin UVT no se mide la base");
+
+        Uvt(40_000m);
+        var s = await SimuladaAsync(d.PublicId);
+        s.Lines.Single(l => l.Person.FullName.Contains("Ana")).WithheldAmount.Should().Be(0m, "30.000 < 40.000 (1 UVT)");
+        s.Lines.Single(l => l.Person.FullName.Contains("Beto")).WithheldAmount.Should().Be(6_000m, "60.000 ≥ 40.000: 10 %");
     }
 
     [Fact]

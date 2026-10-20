@@ -89,8 +89,8 @@ public class ResolutorDeReglasDeCarteraTests
     [Fact]
     public void Los_roles_son_los_26_de_la_tabla_de_2_2_y_los_17_de_captaciones()
     {
-        // Feature 014 (T045): los 17 de captaciones y aportes al final, en español (research C10).
-        R.Todos.Should().HaveCount(43);
+        // Feature 014 (T045): los 17 de captaciones y aportes al final, en español (research C10); el 18.º, la retención de la asamblea (E260).
+        R.Todos.Should().HaveCount(44);
         R.Todos.Take(26).Select(r => r.Codigo).Should().NotContain(R.DeCaptaciones.Select(r => r.Codigo));
         R.Buscar(R.Capital)!.Exigidas.Should().Equal(DimensionDeCartera.Modality, DimensionDeCartera.RiskCategory);
         R.Buscar(R.Capital)!.Opcionales.Should().Equal(DimensionDeCartera.CreditLine, DimensionDeCartera.IsEmployee, DimensionDeCartera.Subsegment,

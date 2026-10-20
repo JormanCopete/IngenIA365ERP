@@ -318,7 +318,121 @@ public class AsambleaTests(CentralIdentityApiFixture fx)
         }
     }
 
+    /// <summary>
+    /// Respuesta 89 B del dueño (E260): la cooperativa configura el concepto de retención y la tarifa de los retornos (20 %); los excedentes a aportes de Ana y Beto
+    /// se abonan netos (la retención queda por pagar), la decisión muestra lo retenido y el reverso entero devuelve todo. Y los excedentes pagados giran el neto.
+    /// </summary>
+    [Fact]
+    public async Task E260_la_retencion_sobre_los_retornos_se_practica_con_el_concepto_configurado_y_se_reversa()
+    {
+        var des = await DesembolsoE2E.EscenarioAsync(fx, "cap_asamblea_89");
+        var cap = await CaptacionesE2E.CooperativaConCaptacionesAsync(fx, "asamblea_89");
+        cap.TenantPublicId.Should().Be(des.Coop.TenantPublicId);
+        using var http = fx.CreateClient();
+        var admin = des.Coop.TokenAdmin;
+        await CarteraE2E.PersonaDelAdministradorAsync(http, des.Coop);
+        var linea = await LineaDeAportesAsync(http, admin, des.Hoy);
+        var ana = await AsociadoAsync(http, admin, "Ana");
+        var beto = await AsociadoAsync(http, admin, "Beto");
+        await ConAportesAsync(http, admin, des, linea, ana, 1_000_000m);
+        await ConAportesAsync(http, admin, des, linea, beto, 2_000_000m);
+        var ejercicio = des.Hoy.Year;
+
+        foreach (var (clave, valor) in new[] { ("Asamblea.Retencion.Concepto", "RETEFTE-RETORNOS"), ("Asamblea.Retencion.TarifaExcedentes", "0.2") })
+            await CarteraE2E.ExitoAsync(http, admin, HttpMethod.Post, $"/api/lending/parameters/{clave}/versions",
+                new { scopeKind = 0, value = valor, validFrom = des.Hoy, reason = "Retención sobre los retornos (e2e de la respuesta 89)" });
+
+        var reloj = new ConductorDelDespachador(fx).Reloj;
+        var original = reloj.Desfase;
+        try
+        {
+            var asamblea = new DateOnly(ejercicio + 1, 3, 20);
+            reloj.Desfase += asamblea.ToDateTime(new TimeOnly(10, 0)) - reloj.AhoraLocal.DateTime;
+            var aplica = await UsuariosDeCartera.IngresarAsync(http, des.Usuarios.Todos["administrador"]);
+
+            // 1. A aportes: se abonan 8.000 y 16.000 netos; la retención de 6.000 queda por pagar; el reverso entero devuelve todo.
+            var aAportes = await DecisionAsync(http, admin, ejercicio, "Contributions");
+            var simulacion = await CarteraE2E.ExitoAsync(http, admin, HttpMethod.Post, $"{Asamblea}/{aAportes}/simulate");
+            simulacion.GetProperty("totals").GetProperty("withheld").GetDecimal().Should().Be(6_000m);
+            simulacion.GetProperty("warnings").EnumerateArray().Select(w => w.GetString()).Should().Contain(w => w!.Contains("RETEFTE-RETORNOS"));
+            var punto = await ActasE2E.DecididoAsync(http, des, des.Originacion.Consejo, LendingDecisionSubjects.AssemblyDistribution, aAportes, asamblea, "Decision");
+            var aplicada = await AplicarAsync(http, aplica, aAportes, punto, simulacion.GetProperty("sha256").GetString()!, await SoporteAsync(http, admin, aAportes));
+            aplicada.StatusCode.Should().Be(HttpStatusCode.OK, await aplicada.Content.ReadAsStringAsync());
+            var dto = await CarteraE2E.LeerAsync(aplicada);
+            dto.GetProperty("appliedTotal").GetDecimal().Should().Be(30_000m);
+            dto.GetProperty("lines").EnumerateArray().Select(l => l.GetProperty("withheldAmount").GetDecimal()).Order().Should().Equal(2_000m, 4_000m);
+            var abonado = await CausacionE2E.EnLaBaseAsync(fx, des.Coop.TenantPublicId, db => db.MemberAccountTransactions.AsNoTracking()
+                .Where(t => t.Kind == MemberAccountTransactionKind.AssemblyCredit).SumAsync(t => t.Amount));
+            abonado.Should().Be(24_000m, "30.000 aplicados menos 6.000 de retención");
+            var retenidas = await CausacionE2E.EnLaBaseAsync(fx, des.Coop.TenantPublicId, db => db.AssemblyDistributionLines.AsNoTracking()
+                .Where(l => l.WithheldAmount > 0m).Select(l => l.WithholdingConcept).Distinct().ToListAsync());
+            retenidas.Should().Equal("RETEFTE-RETORNOS");
+
+            var reversada = await CarteraE2E.ConClaveAsync(http, aplica, HttpMethod.Post, $"{Asamblea}/{aAportes}/reverse", new { reason = "El fondo era otro (e2e)" });
+            reversada.StatusCode.Should().Be(HttpStatusCode.OK, await reversada.Content.ReadAsStringAsync());
+            var saldoTrasReverso = await CausacionE2E.EnLaBaseAsync(fx, des.Coop.TenantPublicId, db => db.MemberAccountTransactions.AsNoTracking()
+                .Where(t => t.Concept == MemberAccountConcept.ContributionOrdinary).SumAsync(t => t.Amount));
+            saldoTrasReverso.Should().Be(0m, "el reverso devuelve lo abonado");
+            (await PagosE2E.MensajesAsync(fx, des, aAportes)).Should().Contain("ExcedentesDistribuidos");
+        }
+        finally
+        {
+            reloj.Desfase = original;
+        }
+    }
+
+    [Fact]
+    public async Task E260_los_excedentes_pagados_giran_el_neto_de_la_retencion_por_HTTP()
+    {
+        var des = await DesembolsoE2E.EscenarioAsync(fx, "cap_asamblea_89b");
+        var cap = await CaptacionesE2E.CooperativaConCaptacionesAsync(fx, "asamblea_89b");
+        cap.TenantPublicId.Should().Be(des.Coop.TenantPublicId);
+        using var http = fx.CreateClient();
+        var admin = des.Coop.TokenAdmin;
+        await CarteraE2E.PersonaDelAdministradorAsync(http, des.Coop);
+        var linea = await LineaDeAportesAsync(http, admin, des.Hoy);
+        await ConAportesAsync(http, admin, des, linea, await AsociadoAsync(http, admin, "Ana"), 1_000_000m);
+        await ConAportesAsync(http, admin, des, linea, await AsociadoAsync(http, admin, "Beto"), 2_000_000m);
+        var ejercicio = des.Hoy.Year;
+        foreach (var (clave, valor) in new[] { ("Asamblea.Retencion.Concepto", "RETEFTE-RETORNOS"), ("Asamblea.Retencion.TarifaExcedentes", "0.2") })
+            await CarteraE2E.ExitoAsync(http, admin, HttpMethod.Post, $"/api/lending/parameters/{clave}/versions",
+                new { scopeKind = 0, value = valor, validFrom = des.Hoy, reason = "Retención sobre los retornos (e2e de la respuesta 89)" });
+
+        var reloj = new ConductorDelDespachador(fx).Reloj;
+        var original = reloj.Desfase;
+        try
+        {
+            var asamblea = new DateOnly(ejercicio + 1, 3, 20);
+            reloj.Desfase += asamblea.ToDateTime(new TimeOnly(10, 0)) - reloj.AhoraLocal.DateTime;
+            var decision = await DecisionAsync(http, admin, ejercicio, "Payment");
+            var simulacion = await CarteraE2E.ExitoAsync(http, admin, HttpMethod.Post, $"{Asamblea}/{decision}/simulate");
+            var punto = await ActasE2E.DecididoAsync(http, des, des.Originacion.Consejo, LendingDecisionSubjects.AssemblyDistribution, decision, asamblea, "Decision");
+            var aplica = await UsuariosDeCartera.IngresarAsync(http, des.Usuarios.Todos["administrador"]);
+            var aplicada = await AplicarAsync(http, aplica, decision, punto, simulacion.GetProperty("sha256").GetString()!, await SoporteAsync(http, admin, decision));
+            aplicada.StatusCode.Should().Be(HttpStatusCode.OK, await aplicada.Content.ReadAsStringAsync());
+            var ordenes = await CausacionE2E.EnLaBaseAsync(fx, des.Coop.TenantPublicId, db => db.AccountPayoutOrders.AsNoTracking()
+                .Where(o => o.Purpose == PayoutPurpose.SurplusPayment).OrderBy(o => o.Id).Select(o => o.Amount).ToListAsync());
+            ordenes.Should().Equal(8_000m, 16_000m);
+        }
+        finally
+        {
+            reloj.Desfase = original;
+        }
+    }
+
     // ------------------------------------------------------------------------------------------------------------ apoyo --
+
+    /// <summary>Registra una distribución de excedentes del 1 % sobre el saldo al cierre con el destino dado y devuelve su identificador.</summary>
+    private static async Task<Guid> DecisionAsync(HttpClient http, string token, int ejercicio, string destino)
+    {
+        var registro = await CarteraE2E.ConClaveAsync(http, token, HttpMethod.Post, Asamblea, new
+        {
+            kind = "SurplusDistribution", year = ejercicio, fundAmount = 30_000m, percent = 0.01m, @base = "YearEndBalance", destination = destino,
+            reason = "Asamblea general ordinaria (e2e de la respuesta 89)",
+        });
+        registro.StatusCode.Should().Be(HttpStatusCode.Created, await registro.Content.ReadAsStringAsync());
+        return (await CarteraE2E.LeerAsync(registro)).GetProperty("publicId").GetGuid();
+    }
 
     private static async Task<JsonElement> RegistrarAsync(HttpClient http, string token, int ejercicio, decimal porcentaje, decimal fondo, Guid? corrige)
     {

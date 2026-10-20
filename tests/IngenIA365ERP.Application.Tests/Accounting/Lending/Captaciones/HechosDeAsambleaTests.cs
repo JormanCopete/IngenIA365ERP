@@ -57,6 +57,70 @@ public class HechosDeAsambleaTests
         porPagar.Tercero.Should().Be(S.Titular);
     }
 
+    /// <summary>
+    /// Respuesta 89 B (E260): las líneas llevan lo neto y la retención sale del mismo fondo hacia la retención de la asamblea por pagar: el fondo suma el bruto, los
+    /// aportes el neto y lo retenido va al crédito de su propio rol, sin mover ninguna cuenta del asociado.
+    /// </summary>
+    [Fact]
+    public void La_retencion_de_la_asamblea_sale_del_fondo_a_su_propia_retencion_por_pagar()
+    {
+        var a = S.Aportes();
+        var hecho = new RevalorizacionDeAportesAplicadaV1
+        {
+            Lines = [Linea(a, "APORTES-1", Valor("ContributionRevaluation", 27_000m, claseDeAporte: "Revalued"))],
+            Withholdings = [new AssemblyWithholdingV1 { Account = Cuenta("APORTES-1"), HolderPersonPublicId = S.Titular, Dimensions = a, Amount = 3_000m }],
+        };
+
+        var d = ConstructorDeLineasDeCartera.Desglosar(S.Unidad("AssemblyDistribution", "ASM-000003", hecho));
+
+        d.Fallos.Should().BeEmpty();
+        d.Partidas.Where(p => p.Rol == R.FondoDeRevalorizacion && p.DebitoSiPositivo).Sum(p => p.Importe).Should().Be(30_000m, "27.000 a los aportes y 3.000 a la retención");
+        d.Partidas.Where(p => p.Rol == R.AportesSociales).Sum(p => p.Importe).Should().Be(27_000m);
+        var retencion = d.Partidas.Single(p => p.Rol == R.RetencionDeAsambleaPorPagar);
+        retencion.Importe.Should().Be(3_000m);
+        retencion.DebitoSiPositivo.Should().BeFalse("la retención por pagar es un pasivo: va al crédito");
+    }
+
+    [Fact]
+    public void La_retencion_de_los_excedentes_pagados_sale_tambien_del_fondo_de_excedentes()
+    {
+        var a = S.Aportes();
+        var hecho = new ExcedentesDistribuidosV1
+        {
+            Payments = [new SurplusPaymentV1 { Account = Cuenta("APORTES-1"), HolderPersonPublicId = S.Titular, Dimensions = a, Amount = 9_000m }],
+            Withholdings = [new AssemblyWithholdingV1 { Account = Cuenta("APORTES-1"), HolderPersonPublicId = S.Titular, Dimensions = a, Amount = 1_000m }],
+        };
+
+        var d = ConstructorDeLineasDeCartera.Desglosar(S.Unidad("AssemblyDistribution", "ASM-000004", hecho));
+
+        d.Fallos.Should().BeEmpty();
+        d.Partidas.Where(p => p.Rol == R.FondoDeExcedentes).Sum(p => p.Importe).Should().Be(10_000m, "9.000 que se pagan y 1.000 que se retienen");
+        d.Partidas.Single(p => p.Rol == R.DevolucionPorPagar).Importe.Should().Be(9_000m);
+        d.Partidas.Single(p => p.Rol == R.RetencionDeAsambleaPorPagar).Importe.Should().Be(1_000m);
+    }
+
+    [Fact]
+    public void El_reverso_entero_de_una_decision_con_retencion_devuelve_tambien_lo_retenido()
+    {
+        var a = S.Aportes();
+        var reverso = new OperacionDeCuentaReversadaV1
+        {
+            Account = Cuenta("APORTES-1"), HolderPersonPublicId = S.Titular, Dimensions = a, Amounts = [Valor("ContributionRevaluation", -27_000m)],
+            Original = new OriginalFactRefV1 { Type = RevalorizacionDeAportesAplicadaV1.Type },
+            Mirrors = [new DepositFactMirrorV1 { Type = RevalorizacionDeAportesAplicadaV1.Type, Account = Cuenta("APORTES-1"), HolderPersonPublicId = S.Titular,
+                Dimensions = a, Amounts = [Valor("ContributionRevaluation", -27_000m, claseDeAporte: "Revalued")] }],
+            Withholdings = [new AssemblyWithholdingV1 { Account = Cuenta("APORTES-1"), HolderPersonPublicId = S.Titular, Dimensions = a, Amount = 3_000m }],
+        };
+
+        var d = ConstructorDeLineasDeCartera.Desglosar(S.Unidad("AssemblyDistributionReversal", "ASM-000003-R", reverso));
+
+        d.Fallos.Should().BeEmpty();
+        var retencion = d.Partidas.Single(p => p.Rol == R.RetencionDeAsambleaPorPagar);
+        retencion.Importe.Should().Be(3_000m);
+        retencion.DebitoSiPositivo.Should().BeTrue("el reverso baja la retención por pagar: va al débito");
+        d.Partidas.Where(p => p.Rol == R.FondoDeRevalorizacion && !p.DebitoSiPositivo).Sum(p => p.Importe).Should().Be(3_000m, "la retención vuelve al fondo");
+    }
+
     [Fact]
     public void El_reverso_entero_devuelve_cada_cuenta_a_su_fondo()
     {

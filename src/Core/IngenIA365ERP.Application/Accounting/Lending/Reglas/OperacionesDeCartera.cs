@@ -122,6 +122,7 @@ public static class OperacionesDeCartera
         R.CapitalDeCaptacion, R.CapitalDeCaptacionInactiva, R.InteresPorPagar, R.GastoPorIntereses, R.RetencionPorPagar, R.GmfPorPagar,
         R.GastoPorBonificacion, R.IngresoPorCargos, R.CargoDeCuentaPorCobrar, R.AportesSociales, R.FondoDeRevalorizacion, R.FondoDeExcedentes,
         R.DevolucionPorPagar, R.NoReclamadosPorPagar, R.EmbargosPorConsignar, R.IngresoPorPenalidad, R.PerdidaAbsorbida, R.RecaudoPorAplicar,
+        R.RetencionDeAsambleaPorPagar,
     ];
 
     private static readonly string[] AcompananDeposito = [CargoPendienteCobradoV1.Type, AjusteDeCausacionDeCaptacionV1.Type];
@@ -267,9 +268,10 @@ public static class OperacionesDeCartera
         new(CargoPendienteCobradoV1.Type, "CGP", false, [R.CapitalDeCaptacion, R.CapitalDeCaptacionInactiva], [R.CargoDeCuentaPorCobrar], EnLinea, null, "MA", EntregaDelHecho.K8, Ninguno),
         new(CargoDeCuentaCondonadoV1.Type, "CGN", false, [R.IngresoPorCargos], [R.CargoDeCuentaPorCobrar, R.CapitalDeCaptacion, R.CapitalDeCaptacionInactiva], EnLinea, null, "MA",
             EntregaDelHecho.K8, Ninguno),
-        new(RevalorizacionDeAportesAplicadaV1.Type, "RVA", false, [R.FondoDeRevalorizacion], [R.AportesSociales], EnLinea, null, "AO", EntregaDelHecho.K10,
-            Ninguno),
-        new(ExcedentesDistribuidosV1.Type, "EXD", false, [R.FondoDeExcedentes], [R.AportesSociales, R.CapitalDeCaptacion, R.DevolucionPorPagar], EnLinea,
+        new(RevalorizacionDeAportesAplicadaV1.Type, "RVA", false, [R.FondoDeRevalorizacion], [R.AportesSociales, R.RetencionDeAsambleaPorPagar], EnLinea, null, "AO",
+            EntregaDelHecho.K10, Ninguno),
+        new(ExcedentesDistribuidosV1.Type, "EXD", false, [R.FondoDeExcedentes],
+            [R.AportesSociales, R.CapitalDeCaptacion, R.DevolucionPorPagar, R.RetencionDeAsambleaPorPagar], EnLinea,
             null, "AO", EntregaDelHecho.K10, Ninguno),
         new(AportesAmortizadosV1.Type, "AMZ", false, [R.AportesSociales], [R.DevolucionPorPagar], EnLinea, null, "AO", EntregaDelHecho.K10, Ninguno),
         // Decisión del dueño del 2026-10-18 (D45): el cruce y el pago del crédito van en el mismo comprobante. El CruceAlRetiroAplicado de cada crédito

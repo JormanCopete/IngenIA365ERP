@@ -157,6 +157,11 @@ public class ParametrosDeCarteraTests
         { "Asamblea.DestinoDeExcedentes", "Contributions", [N], EntregaDeCartera.K10 },
         { "Asamblea.ClaseDeAporteDeExcedentes", "Ordinary", [N], EntregaDeCartera.K10 },
         { "Asamblea.AmortizacionExcluyeDeudores", "true", [N], EntregaDeCartera.K10 },
+        // Respuesta 89 B del dueño (E260): la retención en la fuente sobre lo que reparte la asamblea; arranca vacía (sin concepto no se retiene).
+        { "Asamblea.Retencion.Concepto", "", [N], EntregaDeCartera.K10 },
+        { "Asamblea.Retencion.TarifaRevalorizacion", "", [N], EntregaDeCartera.K10 },
+        { "Asamblea.Retencion.TarifaExcedentes", "", [N], EntregaDeCartera.K10 },
+        { "Asamblea.Retencion.BaseMinimaUvt", "", [N], EntregaDeCartera.K10 },
         { "Captaciones.DiasParaNoReclamados", "", [N], EntregaDeCartera.K10 },
         { "Fallecimiento.SoportesDeEntregaSinSucesion", "", [N], EntregaDeCartera.K10 },
         { "CuentasAbandonadas.TrasladoHabilitado", "false", [N], EntregaDeCartera.K10 },
@@ -201,7 +206,8 @@ public class ParametrosDeCarteraTests
         // fase 14 (US11, T188, T189): 40 con las seis de embargos; fase 15 (US13, T196): 44 con las cuatro de documentos; fase 16 (US12, T203): 50 con las seis de la asamblea;
         // fase 17 (US14, T208, T209): 52 con el aviso previo de la inactividad y el plazo de las cuentas abandonadas; fase 18 (US15, T216): 62 con el
         // margen y la periodicidad del fondo de liquidez y las ocho del riesgo de liquidez.
-        posteriores.Should().HaveCount(68).And.OnlyContain(d => d.DisponibleDesde >= (EntregaDeModulo)EntregaDeCartera.K7
+        // Respuesta 89 B (E260): 72 con las cuatro de la retención de la asamblea.
+        posteriores.Should().HaveCount(72).And.OnlyContain(d => d.DisponibleDesde >= (EntregaDeModulo)EntregaDeCartera.K7
             && d.DisponibleDesde <= (EntregaDeModulo)EntregaDeCartera.K11).And.OnlyContain(d => d.DisponibleEnLaEntrega());
         ParametrosDeCartera.Definiciones.Where(d => d.DisponibleDesde == (EntregaDeModulo)EntregaDeCartera.K6b).Should().BeEmpty("la vivienda no trae claves");
         ParametrosDeCartera.Definiciones.Where(d => d.DisponibleDesde == (EntregaDeModulo)EntregaDeCartera.K6a).Select(d => d.Clave).Should()

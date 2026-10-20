@@ -319,7 +319,8 @@ public sealed class ApplyAssemblyDistributionCommandHandler(
         foreach (var (c, destinoDeLaPregunta) in preguntas)
         {
             var decision = await validacionPrevia.EnPantallaAsync(HechosRepresentativosDeCaptaciones.Unidad(hoy, c,
-                HechosRepresentativosDeCaptaciones.Asamblea(c, d.Kind, destinoDeLaPregunta, s.Parametros.ConceptoDeExcedentes)), $"la decisión de asamblea {d.Number}", ct);
+                HechosRepresentativosDeCaptaciones.Asamblea(c, d.Kind, destinoDeLaPregunta, s.Parametros.ConceptoDeExcedentes, conRetencion: s.Retenciones.Count > 0)),
+                $"la decisión de asamblea {d.Number}", ct);
             if (decision.Bloqueo is { } bloqueo) return Falla(bloqueo);
             validacion = decision.Outcome;
         }
@@ -343,7 +344,7 @@ public sealed class ApplyAssemblyDistributionCommandHandler(
 
             // 1. Una operación por asociado (en su cuenta de aportes, o en su cuenta de ahorro si los excedentes van a ahorro).
             var hechas = new List<(LineaDeDistribucion Linea, MemberAccount Cuenta, MemberAccount? Destino, MemberAccountOperation Operacion, HechoDeCuenta Hecho,
-                IReadOnlyList<(MemberAccountConcept Concepto, decimal Monto)> Porciones)>();
+                IReadOnlyList<(MemberAccountConcept Concepto, decimal Monto)> Porciones, decimal Neto, RetencionDeLinea? Retencion)>();
             foreach (var l in aplicables)
             {
                 var aportes = cuentas[l.CuentaId];
@@ -351,20 +352,24 @@ public sealed class ApplyAssemblyDistributionCommandHandler(
                 var cuenta = destino ?? aportes;
                 var hecho = await emision.HechoDeCuentaAsync(cuenta, hoy, ct);
                 if (hecho.IsFailure) return Falla(hecho.Error);
+                // Respuesta 89 B (E260): al asociado se le abona o gira lo aplicado menos la retención en la fuente; el fondo debe el total.
+                var retencion = s.Retenciones.GetValueOrDefault(l.CuentaId);
+                var neto = l.Aplicado - (retencion?.Valor ?? 0m);
                 IReadOnlyList<(MemberAccountConcept, decimal)> porciones = d.Kind switch
                 {
-                    AssemblyDistributionKind.Revaluation => [(MemberAccountConcept.ContributionRevaluation, l.Aplicado)],
+                    AssemblyDistributionKind.Revaluation => [(MemberAccountConcept.ContributionRevaluation, neto)],
                     AssemblyDistributionKind.Amortization => DebitoDeAportes.Repartir(saldos.GetValueOrDefault(aportes.Id) ?? [], l.Aplicado, 0m)
                                                              ?? throw new InvalidOperationException($"La cuenta {aportes.Number} no alcanza para amortizar {l.Aplicado}."),
                     _ when retiradas.Contains(l.CuentaId) => [], // se gira: no entra a ninguna cuenta (E259)
                     _ => d.SurplusDestination switch
                     {
-                        SurplusDestination.Savings when destino is null => [(s.Parametros.ConceptoDeExcedentes, l.Aplicado)],
-                        SurplusDestination.Savings => [(MemberAccountConcept.Principal, l.Aplicado)],
+                        SurplusDestination.Savings when destino is null => [(s.Parametros.ConceptoDeExcedentes, neto)],
+                        SurplusDestination.Savings => [(MemberAccountConcept.Principal, neto)],
                         SurplusDestination.Payment => [],
-                        _ => [(s.Parametros.ConceptoDeExcedentes, l.Aplicado)],
+                        _ => [(s.Parametros.ConceptoDeExcedentes, neto)],
                     },
                 };
+                porciones = porciones.Where(x => x.Item2 != 0m).ToList();
                 var clase = d.Kind == AssemblyDistributionKind.Amortization ? MemberAccountOperationKind.ContributionRefund : MemberAccountOperationKind.AssemblyCredit;
                 var prefijo = d.Kind switch
                 {
@@ -382,7 +387,7 @@ public sealed class ApplyAssemblyDistributionCommandHandler(
                     ValueDate = hoy,
                     AccountingDate = hecho.Value.FechaContable,
                     RegisteredAt = sello.RegisteredAt,
-                    Amount = l.Aplicado,
+                    Amount = neto,
                     ActorKind = actor.Kind,
                     ActorUserId = actor.UserId,
                     OriginUserCentralId = actor.CentralUserId,
@@ -393,7 +398,7 @@ public sealed class ApplyAssemblyDistributionCommandHandler(
                     RulesVersion = VersionesDeReglas.Vigente,
                     PrevalidationOutcome = validacion.ToString(),
                 });
-                hechas.Add((l, aportes, destino, operacion, hecho.Value, porciones));
+                hechas.Add((l, aportes, destino, operacion, hecho.Value, porciones, neto, retencion));
             }
             await db.SaveChangesAsync(ct);
 
@@ -402,8 +407,8 @@ public sealed class ApplyAssemblyDistributionCommandHandler(
             var conOrden = d.Kind == AssemblyDistributionKind.Amortization || d.SurplusDestination == SurplusDestination.Payment || retiradas.Count > 0;
             if (conOrden)
             {
-                foreach (var h in hechas.Where(x => d.Kind == AssemblyDistributionKind.Amortization || d.SurplusDestination == SurplusDestination.Payment
-                                                    || retiradas.Contains(x.Linea.CuentaId)))
+                foreach (var h in hechas.Where(x => x.Neto > 0m && (d.Kind == AssemblyDistributionKind.Amortization || d.SurplusDestination == SurplusDestination.Payment
+                                                                    || retiradas.Contains(x.Linea.CuentaId))))
                 {
                     var titular = await db.People.AsNoTracking().IgnoreQueryFilters().FirstAsync(x => x.Id == h.Cuenta.HolderPersonId, ct);
                     var beneficiario = await ordenes.BeneficiarioAsync(titular.Id, null, null, null, ct);
@@ -415,7 +420,7 @@ public sealed class ApplyAssemblyDistributionCommandHandler(
                     var orden = AccountPayoutOrder.Emitir(h.Cuenta.Id, h.Operacion.Id,
                         d.Kind == AssemblyDistributionKind.Amortization ? PayoutPurpose.ContributionRefund : PayoutPurpose.SurplusPayment, titular.Id,
                         titular.IdType ?? string.Empty, titular.TaxId ?? string.Empty, ReferenciasDeGobierno.Nombre(titular), b.BancoId, b.TipoDeCuenta,
-                        b.NumeroDeCuenta, h.Linea.Aplicado, plazo < hoy.AddDays(1) ? hoy.AddDays(1) : plazo, ahora, actor.UserId);
+                        b.NumeroDeCuenta, h.Neto, plazo < hoy.AddDays(1) ? hoy.AddDays(1) : plazo, ahora, actor.UserId);
                     await numerador.NumerarOrdenDeCuentaAsync(orden, Disbursements.TramoDeDesembolso.PrefijoDeOrden, ct);
                     db.AccountPayoutOrders.Add(orden);
                     ordenesDeLinea[h.Operacion.Id] = (orden, new PayeeV1
@@ -436,15 +441,26 @@ public sealed class ApplyAssemblyDistributionCommandHandler(
                 Amount = d.Kind == AssemblyDistributionKind.Amortization ? -x.Monto : x.Monto, ReasonCode = motivo,
             }).ToList())).ToList();
             var pagos = d.Kind == AssemblyDistributionKind.SurplusDistribution
-                ? hechas.Where(h => d.SurplusDestination == SurplusDestination.Payment || retiradas.Contains(h.Linea.CuentaId)).Select(h => new OrdenDeAsambleaAEmitir(h.Hecho, h.Linea.Aplicado, ordenesDeLinea[h.Operacion.Id].Orden, ordenesDeLinea[h.Operacion.Id].Payee,
+                ? hechas.Where(h => ordenesDeLinea.ContainsKey(h.Operacion.Id) && (d.SurplusDestination == SurplusDestination.Payment || retiradas.Contains(h.Linea.CuentaId)))
+                    .Select(h => new OrdenDeAsambleaAEmitir(h.Hecho, h.Neto, ordenesDeLinea[h.Operacion.Id].Orden, ordenesDeLinea[h.Operacion.Id].Payee,
                     ordenesDeLinea[h.Operacion.Id].Persona)).ToList()
                 : [];
             var deAmortizacion = d.Kind == AssemblyDistributionKind.Amortization
                 ? hechas.Select(h => new OrdenDeAsambleaAEmitir(h.Hecho, h.Linea.Aplicado, ordenesDeLinea[h.Operacion.Id].Orden, ordenesDeLinea[h.Operacion.Id].Payee,
                     ordenesDeLinea[h.Operacion.Id].Persona)).ToList()
                 : [];
+            var retencionesAEmitir = hechas.Where(h => h.Retencion is not null).Select(h => new AssemblyWithholdingV1
+            {
+                Account = h.Hecho.Referencia, HolderPersonPublicId = h.Hecho.TitularPublicId, Dimensions = h.Hecho.Dimensiones(), Amount = h.Retencion!.Valor,
+                Detail = new WithholdingDetailV1
+                {
+                    Base = h.Retencion.Base, TaxableBase = h.Retencion.Base, Rate = h.Retencion.Tarifa, Uvt = h.Retencion.Uvt ?? 0m,
+                    ThresholdReached = h.Retencion.BaseMinimaUvt is > 0m, HolderTaxProfile = h.Retencion.Perfil.ToString(), Year = d.FiscalYear,
+                    ConceptCode = h.Retencion.Concepto,
+                },
+            }).ToList();
             d.AppliedTotal = s.Calculo.TotalAplicado;
-            var unidad = await emision.DistribucionAplicadaAsync(new DistribucionAEmitir(d, puntoPublico, hoy, lineas, pagos, deAmortizacion, validacion), ct);
+            var unidad = await emision.DistribucionAplicadaAsync(new DistribucionAEmitir(d, puntoPublico, hoy, lineas, pagos, deAmortizacion, validacion, retencionesAEmitir), ct);
             if (unidad.IsFailure) throw new InvalidOperationException($"{unidad.Error.Code}: {unidad.Error.Message}");
             var mensaje = unidad.Value.De(EmisionDeCartera.TipoDeAsamblea(d.Kind));
             var claseDeFila = d.Kind == AssemblyDistributionKind.Amortization ? MemberAccountTransactionKind.Refund : MemberAccountTransactionKind.AssemblyCredit;
@@ -479,6 +495,9 @@ public sealed class ApplyAssemblyDistributionCommandHandler(
                     LimitedByMinimum = l.LimitadaPorMinimo,
                     OperationId = h.Operacion?.Id,
                     WithdrawnDuringYear = retiradas.Contains(l.CuentaId),
+                    WithheldAmount = s.Retenciones.GetValueOrDefault(l.CuentaId)?.Valor ?? 0m,
+                    WithholdingRate = s.Retenciones.GetValueOrDefault(l.CuentaId)?.Tarifa,
+                    WithholdingConcept = s.Retenciones.GetValueOrDefault(l.CuentaId)?.Concepto,
                     PayoutOrderId = h.Operacion is { } op && ordenesDeLinea.TryGetValue(op.Id, out var o) ? o.Orden.Id : null,
                 });
             }
@@ -588,6 +607,7 @@ public sealed class ReverseAssemblyDistributionCommandHandler(
                         new { accounts = negativas }));
 
                 var espejos = new List<LineaDeAsambleaAEmitir>();
+                var retencionesDelReverso = new List<AssemblyWithholdingV1>();
                 var reversos = new List<(MemberAccountOperation Original, MemberAccountOperation Reverso, DateOnly Contable)>();
                 foreach (var original in originales)
                 {
@@ -621,6 +641,15 @@ public sealed class ReverseAssemblyDistributionCommandHandler(
                     reversos.Add((original, reverso, hecho.Value.FechaContable));
                     var valores = EmisionDeCartera.ValoresDeCuenta(filas.Where(f => f.OperationId == original.Id), f => -f.Amount);
                     if (valores.Count > 0) espejos.Add(new LineaDeAsambleaAEmitir(hecho.Value, valores));
+                    // E260 (respuesta 89 B): lo que esa operación retuvo vuelve también al fondo.
+                    if (lineas.FirstOrDefault(x => x.OperationId == original.Id) is { WithheldAmount: > 0m } conRetencion)
+                        retencionesDelReverso.Add(new AssemblyWithholdingV1
+                        {
+                            Account = hecho.Value.Referencia, HolderPersonPublicId = hecho.Value.TitularPublicId, Dimensions = hecho.Value.Dimensiones(),
+                            Amount = conRetencion.WithheldAmount,
+                            Detail = new WithholdingDetailV1 { Base = conRetencion.ProratedAmount, TaxableBase = conRetencion.ProratedAmount, Rate = conRetencion.WithholdingRate ?? 0m,
+                                Year = d.FiscalYear, ConceptCode = conRetencion.WithholdingConcept ?? string.Empty },
+                        });
                 }
 
                 Guid? mensaje = null;
@@ -628,7 +657,7 @@ public sealed class ReverseAssemblyDistributionCommandHandler(
                 {
                     var usuario = actor.UserId is null ? null : new UserRefV1 { CentralUserId = actor.CentralUserId, Name = actor.Name };
                     var unidad = await emision.DistribucionReversadaAsync(new ReversoDeDistribucionAEmitir(d, EmisionDeCartera.TipoDeAsamblea(d.Kind), hoy, espejos,
-                        motivo, usuario, ahora), ct);
+                        motivo, usuario, ahora, retencionesDelReverso), ct);
                     mensaje = unidad.Mensajes.FirstOrDefault()?.PublicId;
                 }
                 foreach (var (original, reverso, contable) in reversos)

@@ -194,6 +194,9 @@ public static class RolesDeCuentaDeCartera
     public const string IngresoPorPenalidad = "IngresoPorPenalidad";
     public const string PerdidaAbsorbida = "PerdidaAbsorbida";
 
+    /// <summary>Respuesta 89 B del dueño (E260): la retención en la fuente practicada sobre la revalorización y los retornos que reparte la asamblea.</summary>
+    public const string RetencionDeAsambleaPorPagar = "RetencionDeAsambleaPorPagar";
+
     // ------------------------------------------------------------------------------------------------ valores fijos --
 
     /// <summary>Las categorías contables (§3.2): las subcategorías van a su letra.</summary>
@@ -354,6 +357,8 @@ public static class RolesDeCuentaDeCartera
         new(EmbargosPorConsignar, C, FamiliaDeRol.Puente, [], [Suc], null, null, TerceroNaturalDeCartera.Beneficiario, CruceDeRol.Ninguno),
         new(IngresoPorPenalidad, C, FamiliaDeRol.Resultado, [Cls], [Op, Lin, Suc], null, null, TerceroNaturalDeCartera.Titular, CruceDeRol.Ninguno),
         new(PerdidaAbsorbida, C, FamiliaDeRol.Patrimonio, [], [Suc], null, null, TerceroNaturalDeCartera.Ninguno, CruceDeRol.Ninguno),
+        // E260 (respuesta 89 B): no lleva clase de captación, como la retención sobre rendimientos: lo retenido a un asociado sobre lo que reparte la asamblea.
+        new(RetencionDeAsambleaPorPagar, C, FamiliaDeRol.Pasivo, [], [Suc], null, null, TerceroNaturalDeCartera.Ninguno, CruceDeRol.Ninguno),
     ];
 
     /// <summary>Cuántos roles de crédito hay antes de los de captaciones (la 013).</summary>

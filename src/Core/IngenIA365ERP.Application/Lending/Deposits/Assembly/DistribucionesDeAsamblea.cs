@@ -6,6 +6,7 @@ using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Common.NationalValues;
 using IngenIA365ERP.Application.Lending.Common;
 using IngenIA365ERP.Application.Lending.Deposits.Accounts;
+using IngenIA365ERP.Application.Lending.Deposits.Accrual;
 using IngenIA365ERP.Application.Lending.Deposits.Contributions;
 using IngenIA365ERP.Domain.Common.NationalValues;
 using IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts;
@@ -27,7 +28,14 @@ public sealed record ParametrosDeAsamblea(
     string SerieDelIpc,
     SurplusDestination Destino,
     MemberAccountConcept ConceptoDeExcedentes,
-    bool AmortizacionExcluyeDeudores);
+    bool AmortizacionExcluyeDeudores,
+    PoliticaDeRetencionDeAsamblea Retencion);
+
+/// <summary>
+/// La retención en la fuente practicada a un asociado sobre lo que le toca de la asamblea (respuesta 89 B, E260): el valor, la base (lo aplicado), la tarifa, el
+/// concepto, su perfil tributario y la UVT y la base mínima con que se midió. (nuevo)
+/// </summary>
+public sealed record RetencionDeLinea(decimal Valor, decimal Base, decimal Tarifa, string Concepto, PerfilDeRetencion Perfil, decimal? Uvt, decimal? BaseMinimaUvt);
 
 /// <summary>Quien se retiró durante el ejercicio: su persona, su cuenta de aportes (la del retiro) y la fecha efectiva (respuesta 91 B, E259).</summary>
 internal sealed record RetiroEnElEjercicio(int PersonaId, int CuentaId, DateOnly RetiradoEl);
@@ -43,6 +51,7 @@ public sealed record SimulacionDeAsamblea(
     IReadOnlyDictionary<int, MemberAccount> Destinos,
     IReadOnlyList<int> PersonasSinDestino, // los que no tienen cuenta de destino: su excedente se capitaliza en aportes (E257)
     IReadOnlySet<int> CuentasDeRetirados, // las cuentas de aportes de quienes se retiraron en el ejercicio: participan a prorrata y se les gira (E259)
+    IReadOnlyDictionary<int, RetencionDeLinea> Retenciones, // por cuenta de aportes: la retención en la fuente practicada (E260); vacío = no se retiene
     decimal? LimiteLegal,
     string? FuenteDelLimite,
     ParametrosDeAsamblea Parametros);
@@ -115,7 +124,19 @@ public sealed class DistribucionesDeAsamblea(
             string.Equals(clase, nameof(ContributionClass.Extraordinary), StringComparison.Ordinal)
                 ? MemberAccountConcept.ContributionExtraordinary
                 : MemberAccountConcept.ContributionOrdinary,
-            !string.Equals(excluye, "false", StringComparison.OrdinalIgnoreCase));
+            !string.Equals(excluye, "false", StringComparison.OrdinalIgnoreCase),
+            new PoliticaDeRetencionDeAsamblea((await TextoAsync(ParametrosDeCartera.AsambleaRetencionConcepto, fecha, ct)).Trim(),
+                await DecimalAsync(ParametrosDeCartera.AsambleaRetencionTarifaRevalorizacion, fecha, ct),
+                await DecimalAsync(ParametrosDeCartera.AsambleaRetencionTarifaExcedentes, fecha, ct),
+                await DecimalAsync(ParametrosDeCartera.AsambleaRetencionBaseMinimaUvt, fecha, ct)));
+    }
+
+    private async Task<decimal?> DecimalAsync(string clave, DateOnly fecha, CancellationToken ct)
+    {
+        var leido = await parametros.LeerAsync(clave, fecha, ct: ct);
+        if (leido.IsSuccess && leido.Value.Valor is decimal d) return d;
+        var texto = leido.IsSuccess ? leido.Value.Texto : ParametrosDeCartera.Definiciones.FirstOrDefault(x => x.Clave == clave)?.DefectoSeguro;
+        return decimal.TryParse(texto, NumberStyles.Number, CultureInfo.InvariantCulture, out var n) ? n : null;
     }
 
     private async Task<string> TextoAsync(string clave, DateOnly fecha, CancellationToken ct)
@@ -261,22 +282,53 @@ public sealed class DistribucionesDeAsamblea(
                 avisos.Add($"{sinDestino.Count} asociado(s) no tienen cuenta viva en la línea de ahorro de destino: su excedente se capitaliza en sus aportes, sin abrirles cuenta.");
         }
         if (calculo.Lineas.Count(l => l.Aplicado > 0m) == 0) avisos.Add("Con esta decisión ningún asociado recibe nada.");
+
+        // Respuesta 89 B (E260): la retención en la fuente sobre la revalorización y los retornos, con el concepto y la tarifa que fijó la cooperativa. Sin concepto o
+        // sin tarifa no se retiene; con base mínima, la UVT vigente es obligatoria.
+        var retenciones = new Dictionary<int, RetencionDeLinea>();
+        if (p.Retencion.TarifaDe(d.Kind) is { } tarifa and > 0m)
+        {
+            decimal? uvt = null;
+            decimal? umbral = null;
+            if (p.Retencion.BaseMinimaUvt is > 0m)
+            {
+                var leida = await valores.LeerAsync(CodigosDeValorNacional.Uvt, string.Empty, hoy, ct: ct);
+                if (leida.IsFailure || leida.Value.Valor is not { } valorUvt)
+                    return Result.Failure<SimulacionDeAsamblea>(new ErrorConDatos("NationalValues.Missing",
+                        $"No hay UVT vigente el {hoy:yyyy-MM-dd}: la retención de la asamblea no se puede calcular.", new { code = CodigosDeValorNacional.Uvt, date = hoy }));
+                uvt = valorUvt;
+                umbral = decimal.Round(p.Retencion.BaseMinimaUvt.Value * valorUvt, 2, MidpointRounding.AwayFromZero);
+            }
+            var idsDePersonas = calculo.Lineas.Select(l => l.PersonaId).Distinct().ToList();
+            var gente = await db.People.AsNoTracking().IgnoreQueryFilters().Where(x => idsDePersonas.Contains(x.Id)).ToDictionaryAsync(x => x.Id, ct);
+            foreach (var l in calculo.Lineas.Where(l => l.Aplicado > 0m))
+            {
+                var perfil = gente.TryGetValue(l.PersonaId, out var persona) ? ReglasDeRetencion.PerfilDe(persona).Perfil : PerfilDeRetencion.NoProfile;
+                var calculada = RetencionDeAsamblea.Calcular(l.Aplicado, tarifa, umbral, perfil, unidad);
+                if (calculada.SeRetiene)
+                    retenciones[l.CuentaId] = new RetencionDeLinea(calculada.Valor, l.Aplicado, tarifa, p.Retencion.Concepto, perfil, uvt, p.Retencion.BaseMinimaUvt);
+            }
+            if (retenciones.Count > 0)
+                avisos.Add(string.Create(CultureInfo.InvariantCulture,
+                    $"Se practica la retención «{p.Retencion.Concepto}» a {retenciones.Count} asociado(s) por {retenciones.Values.Sum(r => r.Valor):N2}: reciben lo aplicado menos la retención."));
+        }
         if (d.Kind == AssemblyDistributionKind.Revaluation && limite is null)
             avisos.Add("El IPC del ejercicio no trae valor: la revalorización no se limita.");
 
-        var huella = Huella(d, unidad, limite, calculo, destinos, cuentasDeLosRetirados);
+        var huella = Huella(d, unidad, limite, calculo, destinos, cuentasDeLosRetirados, retenciones);
         var lineas = await LineasDtoAsync(calculo.Lineas.Select(l => (l, porId[l.CuentaId], destinos.GetValueOrDefault(l.CuentaId), (string?)null, (string?)null,
-            cuentasDeLosRetirados.Contains(l.CuentaId))).ToList(), ct);
+            cuentasDeLosRetirados.Contains(l.CuentaId), retenciones.GetValueOrDefault(l.CuentaId)?.Valor ?? 0m)).ToList(), ct);
         var dto = new AssemblyDistributionSimulationDto(d.PublicId, hoy, calculo.TasaDecidida, calculo.TasaAplicada, lineas,
             new LimiteLegalDto(calculo.LimitadaPorElLimiteLegal, limite, fuente, referencia), new ProrrateoDto(calculo.Prorrateada, calculo.Factor),
-            new TotalesDeAsambleaDto(calculo.BaseTotal, calculo.TotalCalculado, calculo.TotalAplicado, calculo.Remanente, calculo.Lineas.Count),
+            new TotalesDeAsambleaDto(calculo.BaseTotal, calculo.TotalCalculado, calculo.TotalAplicado, calculo.Remanente, calculo.Lineas.Count,
+                retenciones.Values.Sum(r => r.Valor)),
             calculo.Explicacion, avisos, huella);
-        return Result.Success(new SimulacionDeAsamblea(calculo, dto, porId, destinos, sinDestino, cuentasDeLosRetirados, limite, fuente, p));
+        return Result.Success(new SimulacionDeAsamblea(calculo, dto, porId, destinos, sinDestino, cuentasDeLosRetirados, retenciones, limite, fuente, p));
     }
 
     /// <summary>La huella de lo que se aplicaría: la decisión, la unidad, el límite y cada línea con su destino.</summary>
     private static string Huella(AssemblyDistribution d, decimal unidad, decimal? limite, DistribucionCalculada calculo,
-        IReadOnlyDictionary<int, MemberAccount> destinos, IReadOnlySet<int> retirados) =>
+        IReadOnlyDictionary<int, MemberAccount> destinos, IReadOnlySet<int> retirados, IReadOnlyDictionary<int, RetencionDeLinea> retenciones) =>
         new HuellaDeCartera()
             .Identificador("distribution", d.PublicId)
             .Enumeracion("kind", (AssemblyDistributionKind?)d.Kind)
@@ -296,17 +348,20 @@ public sealed class DistribucionesDeAsamblea(
                 .Decimal("calculated", l.Calculado, 2)
                 .Decimal("applied", l.Aplicado, 2)
                 .Entero("destinationAccount", destinos.GetValueOrDefault(l.CuentaId)?.Id)
-                .Logico("withdrawn", retirados.Contains(l.CuentaId)))
+                .Logico("withdrawn", retirados.Contains(l.CuentaId))
+                .Decimal("withheld", retenciones.GetValueOrDefault(l.CuentaId)?.Valor, 2)
+                .Decimal("withholdingRate", retenciones.GetValueOrDefault(l.CuentaId)?.Tarifa, 6))
             .Calcular();
 
     // ------------------------------------------------------------------------------------------------------------ DTO --
 
     private async Task<IReadOnlyList<AssemblyDistributionLineDto>> LineasDtoAsync(
-        IReadOnlyList<(LineaDeDistribucion Linea, MemberAccount Cuenta, MemberAccount? Destino, string? Operacion, string? Orden, bool Retirado)> lineas, CancellationToken ct)
+        IReadOnlyList<(LineaDeDistribucion Linea, MemberAccount Cuenta, MemberAccount? Destino, string? Operacion, string? Orden, bool Retirado, decimal Retenido)> lineas,
+        CancellationToken ct)
     {
         var personas = await LectorDeCuentas.PersonasAsync(db, lineas.Select(l => l.Linea.PersonaId).Distinct().ToList(), ct);
         return lineas.Select(l => new AssemblyDistributionLineDto(personas[l.Linea.PersonaId], l.Cuenta.PublicId, l.Cuenta.Number, l.Linea.Base, l.Linea.Calculado,
-            l.Linea.Aplicado, l.Linea.LimitadaPorMinimo, l.Destino?.PublicId, l.Destino?.Number, l.Operacion, l.Orden, l.Retirado)).ToList();
+            l.Linea.Aplicado, l.Linea.LimitadaPorMinimo, l.Destino?.PublicId, l.Destino?.Number, l.Operacion, l.Orden, l.Retirado, l.Retenido)).ToList();
     }
 
     /// <summary>La decisión con (o sin) sus líneas aplicadas.</summary>
@@ -341,7 +396,7 @@ public sealed class DistribucionesDeAsamblea(
                     f.ProratedAmount, f.LimitedByMinimum), cuentas[f.ContributionAccountId],
                 f.DestinationAccountId is { } dId ? cuentas[dId] : null,
                 f.OperationId is { } o ? ops.GetValueOrDefault(o) : null,
-                f.PayoutOrderId is { } po ? ordenes.GetValueOrDefault(po) : null, f.WithdrawnDuringYear)).ToList(), ct);
+                f.PayoutOrderId is { } po ? ordenes.GetValueOrDefault(po) : null, f.WithdrawnDuringYear, f.WithheldAmount)).ToList(), ct);
         }
         return new AssemblyDistributionDto(d.PublicId, d.Number, d.Kind, d.FiscalYear, d.Status, d.BaseMethod, d.DecidedFraction, d.DecidedValue, d.FundAmount,
             d.SurplusDestination, linea, d.RoundingUnit, punto?.PublicId, punto?.Number, corrige?.PublicId, corrige?.Number, d.LegalLimitFraction,

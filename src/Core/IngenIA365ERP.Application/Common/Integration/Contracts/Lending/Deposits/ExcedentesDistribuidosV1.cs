@@ -30,6 +30,29 @@ public sealed record ExcedentesDistribuidosV1
     /// asociado: va del fondo de excedentes a los retornos por pagar (<c>DevolucionPorPagar</c>, motivo <c>SurplusPayment</c>)—. Vacío en los otros destinos.
     /// </summary>
     public IReadOnlyList<SurplusPaymentV1> Payments { get; init; } = [];
+
+    /// <summary>
+    /// Respuesta 89 B del dueño (E260): la retención en la fuente practicada a cada asociado sobre lo que se le reparte. Las líneas y los pagos llevan lo <b>neto</b>
+    /// (lo bruto menos la retención); la retención sale del mismo fondo y va a la retención por pagar de la asamblea. Vacío: no se retuvo.
+    /// </summary>
+    public IReadOnlyList<AssemblyWithholdingV1> Withholdings { get; init; } = [];
+}
+
+/// <summary>
+/// La retención en la fuente de un asociado sobre lo que reparte la asamblea (E260): su cuenta de aportes (para la sucursal y la línea), el titular, el valor
+/// retenido y el detalle (base, tarifa, UVT, perfil tributario y el concepto de retención).
+/// </summary>
+public sealed record AssemblyWithholdingV1
+{
+    public MemberAccountRefV1 Account { get; init; } = new();
+
+    public Guid HolderPersonPublicId { get; init; }
+
+    public DepositFactDimensionsV1 Dimensions { get; init; } = new();
+
+    public decimal Amount { get; init; }
+
+    public WithholdingDetailV1 Detail { get; init; } = new();
 }
 
 /// <summary>El pago de los excedentes de un asociado (US12, T203): su cuenta de aportes (para la sucursal y la línea), el titular, el valor y la orden.</summary>

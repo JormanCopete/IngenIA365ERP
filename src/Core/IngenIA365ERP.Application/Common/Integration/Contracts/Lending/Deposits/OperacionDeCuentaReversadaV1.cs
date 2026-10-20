@@ -58,6 +58,12 @@ public sealed record OperacionDeCuentaReversadaV1
 
     /// <summary>US11 (T189; research E163): el tercero de la contrapartida del original (el juzgado de una consignación de embargo); opcional al final.</summary>
     public Guid? CounterpartPersonPublicId { get; init; }
+
+    /// <summary>
+    /// Respuesta 89 B (E260): el reverso entero de una decisión de asamblea con retención devuelve también lo retenido (valores positivos, los que el original
+    /// retuvo) del retención por pagar al fondo. Vacío en los demás reversos.
+    /// </summary>
+    public IReadOnlyList<AssemblyWithholdingV1> Withholdings { get; init; } = [];
 }
 
 /// <summary>El espejo de un hecho de la unidad original (mensajes.md §4.1, <c>mirrors</c>).</summary>

@@ -201,4 +201,16 @@ public class AssemblyDistributionLine : AuditableEntity, IHechoInmutable
     /// (no se capitalizó ni se llevó a ahorro: ya no tiene vínculo).
     /// </summary>
     public bool WithdrawnDuringYear { get; init; }
+
+    /// <summary>
+    /// Respuesta 89 B del dueño (E260): la retención en la fuente practicada sobre lo aplicado a este asociado (0 si no se retuvo). Lo que se le abona o se le gira
+    /// es <see cref="ProratedAmount"/> menos esto.
+    /// </summary>
+    public decimal WithheldAmount { get; init; }
+
+    /// <summary>La tarifa con que se retuvo (fracción); nula si no se retuvo.</summary>
+    public decimal? WithholdingRate { get; init; }
+
+    /// <summary>El concepto de retención vigente al aplicar (<c>Asamblea.Retencion.Concepto</c>); nulo si no se retuvo.</summary>
+    public string? WithholdingConcept { get; init; }
 }

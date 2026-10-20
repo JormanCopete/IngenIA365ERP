@@ -28,7 +28,8 @@ public sealed record DistribucionAEmitir(
     IReadOnlyList<LineaDeAsambleaAEmitir> Lineas,
     IReadOnlyList<OrdenDeAsambleaAEmitir> Pagos,
     IReadOnlyList<OrdenDeAsambleaAEmitir> Ordenes,
-    PrevalidationOutcome ValidacionPrevia);
+    PrevalidationOutcome ValidacionPrevia,
+    IReadOnlyList<AssemblyWithholdingV1>? Retenciones = null);
 
 /// <summary>El reverso entero de una decisión de asamblea: por cuenta, su hecho vigente y el espejo de lo que la decisión le dejó. (nuevo)</summary>
 public sealed record ReversoDeDistribucionAEmitir(
@@ -38,7 +39,8 @@ public sealed record ReversoDeDistribucionAEmitir(
     IReadOnlyList<LineaDeAsambleaAEmitir> Espejos,
     string Motivo,
     UserRefV1? ReversadoPor,
-    DateTime Instante);
+    DateTime Instante,
+    IReadOnlyList<AssemblyWithholdingV1>? Retenciones = null);
 
 public sealed partial class EmisionDeCartera
 {
@@ -100,17 +102,20 @@ public sealed partial class EmisionDeCartera
                         Concept = v.Key.Concept, ContributionClass = v.Key.ContributionClass, ReasonCode = v.Key.ReasonCode, Amount = v.Sum(x => x.Amount),
                     }).ToList(),
             }).ToList();
-        var control = lineas.Sum(l => l.Amounts.Sum(v => Math.Abs(v.Amount))) + a.Pagos.Sum(p => p.Monto);
+        var retenciones = a.Retenciones ?? [];
+        var control = lineas.Sum(l => l.Amounts.Sum(v => Math.Abs(v.Amount))) + a.Pagos.Sum(p => p.Monto) + retenciones.Sum(r => r.Amount);
         object contenido = d.Kind switch
         {
             AssemblyDistributionKind.Revaluation => new RevalorizacionDeAportesAplicadaV1
             {
                 Distribution = referencia, Totals = totales, Lines = lineas, Destination = DestinoDelHecho(d), LineCount = lineas.Count, ControlTotal = control,
+                Withholdings = retenciones,
             },
             AssemblyDistributionKind.SurplusDistribution => new ExcedentesDistribuidosV1
             {
                 Distribution = referencia, Totals = totales, Lines = lineas, Destination = DestinoDelHecho(d), LineCount = lineas.Count + a.Pagos.Count,
                 ControlTotal = control,
+                Withholdings = retenciones,
                 Payments = a.Pagos.Select(p => new SurplusPaymentV1
                 {
                     Account = p.Hecho.Referencia, HolderPersonPublicId = p.Hecho.TitularPublicId, Dimensions = p.Hecho.Dimensiones(), Amount = p.Monto,
@@ -218,6 +223,7 @@ public sealed partial class EmisionDeCartera
                 Dimensions = e.Hecho.Dimensiones(),
             }).ToList(),
             OrderKind = d.Kind == AssemblyDistributionKind.Amortization ? nameof(PayoutPurpose.ContributionRefund) : null,
+            Withholdings = r.Retenciones ?? [],
         };
         ModoDeEntrega modo = d.AppliedMessagePublicId is null
             ? (await modoDePaso.ResolverAsync(OperacionDeCuentaReversadaV1.Type, primera.FechaContable, ct)).Value ?? new ModoDeEntrega.Sellado(DeliveryMode.NotPosted)

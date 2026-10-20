@@ -173,6 +173,9 @@ public class AssemblyDistributionLineConfiguration : IEntityTypeConfiguration<As
         builder.Property(e => e.CalculatedAmount).Monto().IsRequired();
         builder.Property(e => e.ProratedAmount).Monto().IsRequired();
         builder.Property(e => e.WithdrawnDuringYear).HasDefaultValue(false);
+        builder.Property(e => e.WithheldAmount).Monto().HasDefaultValue(0m);
+        builder.Property(e => e.WithholdingRate).Fraccion();
+        builder.Property(e => e.WithholdingConcept).HasMaxLength(60);
 
         builder.HasOne<AssemblyDistribution>().WithMany().HasForeignKey(e => e.AssemblyDistributionId).OnDelete(DeleteBehavior.Restrict)
             .HasConstraintName("FK_LND_AssemblyDistributionLines_Distribution");

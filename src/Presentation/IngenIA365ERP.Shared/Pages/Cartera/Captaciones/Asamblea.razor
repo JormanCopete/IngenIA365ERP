@@ -95,12 +95,12 @@
                                 @if (s.ProratedToFund.Applied) { <strong> · prorrateada al fondo (factor @(s.ProratedToFund.Factor?.ToString("0.######", Es)))</strong> }
                             </p>
                             <p>Base @Pesos(s.Totals.Base) · calculado @Pesos(s.Totals.Calculated) · aplicado @Pesos(s.Totals.Applied) · queda en el fondo
-                                @Pesos(s.Totals.FundRemainder) · @s.Totals.Lines asociado(s)</p>
+                                @Pesos(s.Totals.FundRemainder) · @s.Totals.Lines asociado(s)@(s.Totals.Withheld > 0m ? $" · retención {Pesos(s.Totals.Withheld)}" : "")</p>
                             @foreach (var x in s.Explanation) { <p class="texto-tenue">@x</p> }
                             @foreach (var w in s.Warnings) { <p class="aviso">@w</p> }
                             <div class="tabla-desplazable">
                                 <table class="data-grid">
-                                    <thead><tr><th>Asociado</th><th>Cuenta</th><th class="numero">Base</th><th class="numero">Calculado</th><th class="numero">Aplicado</th>
+                                    <thead><tr><th>Asociado</th><th>Cuenta</th><th class="numero">Base</th><th class="numero">Calculado</th><th class="numero">Aplicado</th><th class="numero">Retención</th>
                                         <th>Destino</th></tr></thead>
                                     <tbody>
                                         @foreach (var l in s.Lines.Take(500))
@@ -111,6 +111,7 @@
                                                 <td class="numero">@Pesos(l.BaseAmount)</td>
                                                 <td class="numero">@Pesos(l.CalculatedAmount)@(l.LimitedByMinimum ? " (hasta el mínimo)" : "")</td>
                                                 <td class="numero">@Pesos(l.AppliedAmount)</td>
+                                                <td class="numero">@(l.WithheldAmount > 0m ? Pesos(l.WithheldAmount) : "—")</td>
                                                 <td>@(l.WithdrawnDuringYear ? "Giro (se retiró en el ejercicio)" : l.DestinationAccountNumber ?? "—")</td>
                                             </tr>
                                         }
@@ -168,7 +169,7 @@
                 {
                     <div class="tabla-desplazable">
                         <table class="data-grid">
-                            <thead><tr><th>Asociado</th><th>Cuenta</th><th class="numero">Base</th><th class="numero">Aplicado</th><th>Operación</th><th>Orden de giro</th></tr></thead>
+                            <thead><tr><th>Asociado</th><th>Cuenta</th><th class="numero">Base</th><th class="numero">Aplicado</th><th class="numero">Retención</th><th>Operación</th><th>Orden de giro</th></tr></thead>
                             <tbody>
                                 @foreach (var l in a.Lines.Take(500))
                                 {
@@ -177,6 +178,7 @@
                                         <td>@(l.DestinationAccountNumber ?? l.ContributionAccountNumber)</td>
                                         <td class="numero">@Pesos(l.BaseAmount)</td>
                                         <td class="numero">@Pesos(l.AppliedAmount)</td>
+                                        <td class="numero">@(l.WithheldAmount > 0m ? Pesos(l.WithheldAmount) : "—")</td>
                                         <td>@(l.OperationNumber ?? "—")</td>
                                         <td>@(l.PayoutOrderNumber ?? "—")</td>
                                     </tr>
