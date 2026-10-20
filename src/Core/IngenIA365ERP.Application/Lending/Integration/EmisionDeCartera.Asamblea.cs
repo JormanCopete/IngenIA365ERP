@@ -156,6 +156,36 @@ public sealed partial class EmisionDeCartera
     }
 
     /// <summary>
+    /// El regiro de una orden de cuentas que Tesorería no pagó (respuestas 92 y 96, E258): una <c>OrdenDeGiroEmitida</c> v2 nueva, con origen la orden nueva,
+    /// por el mismo valor y sobre el mismo documento de origen. No mueve cuentas ni contabilidad: el valor sigue en la cuenta por pagar del destinatario. Sin
+    /// guardar.
+    /// </summary>
+    public async Task OrdenReemitidaAsync(AccountPayoutOrder orden, HechoDeCuenta hecho, PayeeV1 beneficiario, Guid beneficiarioPublicId, Guid fuente,
+        string concepto, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(orden);
+        ArgumentNullException.ThrowIfNull(hecho);
+        var contenido = new OrdenDeGiroEmitidaV2
+        {
+            OrderPublicId = orden.PublicId,
+            OrderNumber = orden.Number,
+            OrderKind = TipoDeOrden(orden),
+            Account = hecho.Referencia,
+            SourceDocumentPublicId = fuente,
+            Form = "Transfer",
+            Payee = beneficiario,
+            GrossAmount = orden.Amount,
+            NetAmount = orden.Amount,
+            PayDate = hecho.FechaContable,
+            Concept = concepto,
+        };
+        await emisor.EmitirAsync(new SolicitudDeEmision(
+            new OrigenDeEmision(MessageOriginKind.Document, orden.PublicId, ClaseOrdenDeGiro, Prefijo(orden.Number), orden.Number, hecho.FechaContable,
+                hecho.SucursalPublicId, PersonPublicId: beneficiarioPublicId),
+            ClavesDeEvento.Confirmacion, [contenido], new ModoDeEntrega.Sellado(DeliveryMode.Always)), ct);
+    }
+
+    /// <summary>
     /// El reverso entero de una decisión de asamblea (US12, T203): <b>un</b> <c>OperacionDeCuentaReversada</c> con un espejo por cuenta —las dimensiones
     /// vigentes de cada una— que el constructor devuelve a su fondo (o a la devolución por pagar); origen el reverso de la decisión, <c>related</c> = la
     /// decisión y <b>hereda el modo</b> del hecho original. Sin guardar.

@@ -554,8 +554,10 @@ public sealed class Fallecimientos(
     {
         if (orden.Purpose != PayoutPurpose.DeceasedDelivery || orden.DeceasedHolderCaseId is not { } casoId) return;
         var cuenta = await db.MemberAccounts.FirstAsync(a => a.Id == orden.MemberAccountId, ct);
+        // Respuesta 96 (E258): una orden rechazada que espera su regiro sigue pendiente: la cuenta no se cancela ni el caso se entrega hasta girarla.
         var otras = await db.AccountPayoutOrders.AsNoTracking().AnyAsync(o => o.MemberAccountId == cuenta.Id && o.Id != orden.Id && !o.IsDeleted
-                                                                              && o.Status == DisbursementOrderStatus.Issued, ct);
+                                                                              && o.Status == DisbursementOrderStatus.Issued, ct)
+                    || await OrdenesDeGiroDeCuentas.PendientesDeRegiro(db).AsNoTracking().AnyAsync(o => o.MemberAccountId == cuenta.Id && o.Id != orden.Id, ct);
         var saldos = (await LectorDeCuentas.SaldosAsync(db, [cuenta.Id], ct)).GetValueOrDefault(cuenta.Id) ?? [];
         var caso = await db.DeceasedHolderCases.FirstAsync(c => c.Id == casoId, ct);
         if (!otras && cuenta.Status == MemberAccountStatus.Closing && LectorDeCuentas.SaldoDelTitular(cuenta.Nature, saldos) == 0m)
@@ -566,7 +568,8 @@ public sealed class Fallecimientos(
                 h.Levantar(ahora, usuario, $"Cuenta entregada (caso {caso.Number})");
         }
         var vivas = await db.AccountPayoutOrders.AsNoTracking().AnyAsync(o => o.DeceasedHolderCaseId == casoId && o.Id != orden.Id && !o.IsDeleted
-                                                                              && o.Status == DisbursementOrderStatus.Issued, ct);
+                                                                              && o.Status == DisbursementOrderStatus.Issued, ct)
+                    || await OrdenesDeGiroDeCuentas.PendientesDeRegiro(db).AsNoTracking().AnyAsync(o => o.DeceasedHolderCaseId == casoId && o.Id != orden.Id, ct);
         if (vivas || caso.Status != DeceasedCaseStatus.Approved) return;
         var abiertas = await db.MemberAccounts.Where(a => a.HolderPersonId == caso.PersonId && a.Nature == LineNature.Deposit && a.Status == MemberAccountStatus.Closing
                                                          && !a.IsDeleted && a.Id != cuenta.Id).AnyAsync(ct);

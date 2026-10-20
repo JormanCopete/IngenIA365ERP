@@ -212,7 +212,7 @@ public sealed class ReversionDeCuentas(
                     ?? (original.Kind is MemberAccountOperationKind.DirectDebit or MemberAccountOperationKind.InternalOffset
                         ? nameof(ClaseDeRecaudador.OwnLoanPayoff)
                         : null);
-        var orden = await db.AccountPayoutOrders.AsNoTracking().FirstOrDefaultAsync(o => o.OperationId == original.Id, ct);
+        var orden = await db.AccountPayoutOrders.AsNoTracking().FirstOrDefaultAsync(o => o.OperationId == original.Id && o.ReissuesOrderId == null, ct);
         string? motivo = delCargo?.Kind.ToString();
         // La condonación nombra su cargo en la carga útil ({"chargePublicId":"…N…"}, CargosDeCuentas).
         if (motivo is null && original.Kind == MemberAccountOperationKind.ChargeWaiver && original.Payload is { } carga

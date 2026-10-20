@@ -1,4 +1,5 @@
 using System.Globalization;
+using IngenIA365ERP.Application.Common.Integration.Contracts.Inventory;
 using IngenIA365ERP.Application.Common.Integration.Contracts.Lending;
 using IngenIA365ERP.Application.Common.Integration.Contracts.Lending.Deposits;
 using IngenIA365ERP.Application.Common.Interfaces;
@@ -195,13 +196,15 @@ public sealed class OrdenesDeGiroDeCuentas(
     /// ya están bloqueadas. No guarda el estado de la orden: lo guarda quien llama.
     /// </summary>
     public async Task<Result> AplicarResultadoAsync(AccountPayoutOrder orden, DisbursementOrderStatus hacia, string referencia, DateOnly ocurrida, string? motivo,
-        CancellationToken ct)
+        CancellationToken ct, UserRefV1? usuarioDeOrigen = null)
     {
         ArgumentNullException.ThrowIfNull(orden);
         var ahora = reloj.UtcNow;
-        // US12 (T203; research §22): el pago de excedentes no salió de ninguna cuenta del asociado (va del fondo a los retornos por pagar): rechazado,
-        // no hay saldo que reintegrar; lo decretado sigue por pagar en Contabilidad y la orden queda con su resultado para volver a girarla.
-        if (orden.Purpose == PayoutPurpose.SurplusPayment && AccountPayoutOrder.Reintegra(hacia))
+        // US12 (T203; research §22) y respuestas 92 y 96 del dueño (E258): el pago de excedentes no salió de ninguna cuenta del asociado (va del fondo a los
+        // retornos por pagar) y la entrega por fallecimiento tampoco vuelve a la cuenta del fallecido: lo decretado sigue respaldado en la cuenta por pagar a
+        // favor del destinatario (la «devolución por pagar» de su tercero) y la orden queda con su resultado, pendiente de regirar (RegirarAsync). El GMF ya
+        // retenido de una entrega no se devuelve ni se vuelve a cobrar al regirar: el hecho generador fue el retiro, y ocurrió.
+        if (orden.SeRegira && AccountPayoutOrder.Reintegra(hacia))
         {
             orden.RegistrarResultado(hacia, ahora);
             return Result.Success();
@@ -235,7 +238,7 @@ public sealed class OrdenesDeGiroDeCuentas(
         var sucursal = await emision.SucursalContableAsync(cuenta.BranchId, ct);
         if (sucursal.IsFailure) return Result.Failure(sucursal.Error);
         var beneficiario = await db.People.AsNoTracking().IgnoreQueryFilters().Where(p => p.Id == orden.BeneficiaryPersonId).Select(p => p.PublicId).FirstAsync(ct);
-        await emision.DevolucionGiradaAsync(orden, EmisionDeCartera.TipoDeOrden(orden), referencia, ocurrida, sucursal.Value, beneficiario, ct);
+        await emision.DevolucionGiradaAsync(orden, EmisionDeCartera.TipoDeOrden(orden), referencia, ocurrida, sucursal.Value, beneficiario, ct, usuarioDeOrigen);
 
         // US14 (T210): girada una entrega por fallecimiento, la cuenta sin saldo se cancela y, con todas canceladas, el caso queda entregado.
         await Deceased.Fallecimientos.AlGirarAsync(db, orden, reloj.HoyLocal, ahora, (await actorActual.ObtenerAsync(ct)).UserId, ct);
@@ -262,6 +265,60 @@ public sealed class OrdenesDeGiroDeCuentas(
             }
         }
         return Result.Success();
+    }
+
+    /// <summary>Lo que responde cuando una orden no espera un regiro.</summary>
+    public const string CodigoNoSeRegira = "Lending.PayoutOrder.NotReissuable";
+
+    /// <summary>
+    /// Las órdenes que esperan volver a girarse (E258): de un propósito que se regira, con el resultado de Tesorería que no las pagó y sin otra orden que las
+    /// reemplace. Mientras estén así, lo que deben sigue respaldado en la cuenta por pagar a favor de su destinatario.
+    /// </summary>
+    public static IQueryable<AccountPayoutOrder> PendientesDeRegiro(IApplicationDbContext db) =>
+        db.AccountPayoutOrders.Where(o => !o.IsDeleted
+            && (o.Purpose == PayoutPurpose.SurplusPayment || o.Purpose == PayoutPurpose.DeceasedDelivery)
+            && (o.Status == DisbursementOrderStatus.Rejected || o.Status == DisbursementOrderStatus.Voided || o.Status == DisbursementOrderStatus.CheckNotCashed)
+            && !db.AccountPayoutOrders.Any(r => r.ReissuesOrderId == o.Id && !r.IsDeleted));
+
+    /// <summary>
+    /// Vuelve a girar una orden pendiente de regiro (respuestas 92 y 96, E258): una orden nueva por el mismo valor y la misma operación —el dinero no volvió a
+    /// ninguna cuenta: sigue por pagar a favor del destinatario—, al mismo beneficiario y cuenta destino, o a los que se indiquen, con su
+    /// <c>OrdenDeGiroEmitida</c> v2 a Tesorería. Las cuentas y la persona ya están bloqueadas; no guarda. <paramref name="fuente"/> es el documento que la
+    /// origina (la decisión de asamblea o la operación de la entrega) y <paramref name="concepto"/> el texto de la orden.
+    /// </summary>
+    public async Task<Result<AccountPayoutOrder>> RegirarAsync(AccountPayoutOrder original, BeneficiarioDeOrden? nuevoDestino, Guid fuente, string concepto,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(original);
+        if (!original.SeRegira || !AccountPayoutOrder.Reintegra(original.Status)
+            || await db.AccountPayoutOrders.AsNoTracking().AnyAsync(r => r.ReissuesOrderId == original.Id && !r.IsDeleted, ct))
+            return Result.Failure<AccountPayoutOrder>(new ErrorConDatos(CodigoNoSeRegira,
+                $"La orden {original.Number} no espera un regiro: sólo se vuelve a girar, y una sola vez, la orden de excedentes o de una entrega por fallecimiento que Tesorería rechazó, anuló o no se cobró.",
+                new { order = original.Number, status = original.Status.ToString() }));
+        var hoy = reloj.HoyLocal;
+        var ahora = reloj.UtcNow;
+        var cuenta = await db.MemberAccounts.AsNoTracking().FirstAsync(a => a.Id == original.MemberAccountId, ct);
+        var hecho = await emision.HechoDeCuentaAsync(cuenta, hoy, ct);
+        if (hecho.IsFailure) return Result.Failure<AccountPayoutOrder>(hecho.Error);
+        var titular = await db.People.AsNoTracking().IgnoreQueryFilters().FirstAsync(p => p.Id == original.BeneficiaryPersonId, ct);
+        var destino = nuevoDestino ?? new BeneficiarioDeOrden(original.DestinationBankId,
+            original.DestinationBankId is { } banco ? await db.Banks.AsNoTracking().Where(b => b.Id == banco).Select(b => b.TransferCode).FirstOrDefaultAsync(ct) : null,
+            original.DestinationAccountType, original.DestinationAccountNumber);
+        var actor = await actorActual.ObtenerAsync(ct);
+        var nueva = AccountPayoutOrder.Emitir(original.MemberAccountId, original.OperationId, original.Purpose, original.BeneficiaryPersonId,
+            original.BeneficiaryTaxIdType, original.BeneficiaryTaxId, original.BeneficiaryName, destino.BancoId, destino.TipoDeCuenta, destino.NumeroDeCuenta,
+            original.Amount, hoy.AddDays(1), ahora, actor.UserId);
+        nueva.DeceasedHolderCaseId = original.DeceasedHolderCaseId;
+        nueva.ReissuesOrderId = original.Id;
+        await numerador.NumerarOrdenDeCuentaAsync(nueva, Disbursements.TramoDeDesembolso.PrefijoDeOrden, ct);
+        db.AccountPayoutOrders.Add(nueva);
+        var payee = new PayeeV1
+        {
+            PersonPublicId = titular.PublicId, TaxIdType = original.BeneficiaryTaxIdType, TaxId = original.BeneficiaryTaxId, Name = original.BeneficiaryName,
+            BankCode = destino.CodigoDeTransferencia, BankAccountNumber = destino.NumeroDeCuenta, BankAccountType = destino.TipoDeCuenta?.ToString(CultureInfo.InvariantCulture),
+        };
+        await emision.OrdenReemitidaAsync(nueva, hecho.Value, payee, titular.PublicId, fuente, concepto, ct);
+        return Result.Success(nueva);
     }
 
     /// <summary>¿Alguna cuenta del retiro conserva saldo del titular? (una orden reintegrada que todavía no se volvió a ordenar).</summary>

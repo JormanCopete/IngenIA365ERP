@@ -196,8 +196,10 @@ public sealed class VistaDeFallecimientos(IApplicationDbContext db, IAlcanceDeCa
                          select new { o.Id, o.PublicId, o.Number, o.Amount, o.Payload, o.CounterpartMemberAccountId, o.ReversedByOperationId, Cuenta = a.PublicId, CuentaNumero = a.Number })
             .ToListAsync(ct);
         var ids = ops.Select(o => o.Id).ToList();
-        var ordenes = await db.AccountPayoutOrders.AsNoTracking().Where(o => ids.Contains(o.OperationId))
-            .ToDictionaryAsync(o => o.OperationId, o => new { o.Number, o.Status, o.BeneficiaryPersonId }, ct);
+        // Un regiro (E258) comparte la operación de la orden que vuelve a girar: de cada operación se muestra la última orden.
+        var ordenes = (await db.AccountPayoutOrders.AsNoTracking().Where(o => ids.Contains(o.OperationId)).OrderBy(o => o.Id)
+                .Select(o => new { o.OperationId, o.Number, o.Status, o.BeneficiaryPersonId }).ToListAsync(ct))
+            .GroupBy(o => o.OperationId).ToDictionary(g => g.Key, g => g.Last());
         var destinos = ops.Where(o => o.CounterpartMemberAccountId is not null).Select(o => o.CounterpartMemberAccountId!.Value).ToList();
         var titulares = await db.MemberAccounts.AsNoTracking().Where(a => destinos.Contains(a.Id)).ToDictionaryAsync(a => a.Id, a => a.HolderPersonId, ct);
         var personasIds = ordenes.Values.Select(o => o.BeneficiaryPersonId).Concat(titulares.Values).Distinct().ToList();

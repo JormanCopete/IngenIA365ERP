@@ -592,6 +592,7 @@ public static class DependencyInjection
         services.AddScoped<Lending.Deposits.Withdrawals.PlanesDeLiquidacionDeRetiro>();
         services.AddScoped<Lending.Deposits.Withdrawals.CruceDeRetiro>();
         services.AddScoped<Lending.Deposits.Operations.OrdenesDeGiroDeCuentas>();
+        services.AddScoped<Lending.Deposits.Operations.RegiroDeOrdenesDeCuentas>();
         services.AddScoped<Lending.Deposits.Documents.DocumentosDeRetiro>();
         // Feature 014, US13 (T196): los documentos al titular de captaciones, la emisión en la unidad de trabajo de quien la pide, los títulos del CDAT
         // y la respuesta al juzgado como documento.

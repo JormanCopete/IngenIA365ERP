@@ -2,6 +2,7 @@ using Carter;
 using IngenIA365ERP.API.Endpoints.Common;
 using IngenIA365ERP.API.Filters;
 using IngenIA365ERP.Application.Lending.Deposits.Assembly;
+using IngenIA365ERP.Application.Lending.Deposits.Operations;
 using IngenIA365ERP.Domain.Enums.Lending;
 using MediatR;
 
@@ -68,6 +69,18 @@ public class AssemblyDistributionsEndpoints : ICarterModule
             .WithName("Lending_AssemblyDistributions_Reverse")
             .ConClaveDeOperacion()
             .RequirePermission(Aprobar);
+
+        // Respuesta 92 (E258): el giro rechazado de un excedente se regira; mientras tanto el valor sigue por pagar a favor del asociado.
+        asamblea.MapPost("/{id:guid}/orders/{orderId:guid}/reissue", async (Guid id, Guid orderId, RegiroRequest body, HttpContext http, ISender sender,
+                CancellationToken ct) =>
+                await sender.Send(new ReissueSurplusPayoutOrderCommand(id, orderId, body.BankPublicId, body.AccountType, body.AccountNumber,
+                    body.Reason ?? string.Empty)
+                {
+                    OperationKey = http.ClaveDeOperacion(),
+                }, ct))
+            .WithName("Lending_AssemblyDistributions_ReissueOrder")
+            .ConClaveDeOperacion()
+            .RequirePermission(Aprobar);
     }
 
     /// <summary>
@@ -83,4 +96,7 @@ public class AssemblyDistributionsEndpoints : ICarterModule
 
     /// <summary>El motivo de un descarte o de un reverso.</summary>
     public sealed record MotivoRequest(string? Reason);
+
+    /// <summary>El cuerpo de <c>/orders/{orderId}/reissue</c>: la cuenta de destino nueva (opcional: sin ella, la misma de la orden) y el motivo.</summary>
+    public sealed record RegiroRequest(Guid? BankPublicId, byte? AccountType, string? AccountNumber, string? Reason);
 }

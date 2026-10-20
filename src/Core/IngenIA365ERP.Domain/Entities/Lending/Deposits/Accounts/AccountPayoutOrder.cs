@@ -65,6 +65,13 @@ public class AccountPayoutOrder : AuditableEntity
     /// <summary>K10 (US14, T207): el caso de fallecimiento cuya entrega paga (propósito <c>DeceasedDelivery</c>).</summary>
     public int? DeceasedHolderCaseId { get; set; }
 
+    /// <summary>
+    /// Respuestas 92 y 96 del dueño (E258): la orden rechazada, anulada o de cheque no cobrado que ésta vuelve a girar. Las dos comparten la operación (el valor
+    /// no volvió a ninguna cuenta: sigue respaldado en la cuenta por pagar a favor del destinatario), así que la unicidad por operación sólo rige para las
+    /// órdenes que no son un regiro.
+    /// </summary>
+    public int? ReissuesOrderId { get; set; }
+
     // ------------------------------------------------------------------------------------------------ comportamiento --
 
     /// <summary>Una orden emitida (§3.9): valor positivo y beneficiario sellado. El número lo pone el numerador después.</summary>
@@ -109,6 +116,15 @@ public class AccountPayoutOrder : AuditableEntity
     /// <summary>Los resultados que reintegran el saldo a la cuenta (FR-091).</summary>
     public static bool Reintegra(DisbursementOrderStatus resultado) =>
         resultado is DisbursementOrderStatus.Rejected or DisbursementOrderStatus.CheckNotCashed or DisbursementOrderStatus.Voided;
+
+    /// <summary>
+    /// Los propósitos cuyo giro rechazado <b>no reintegra</b> el saldo a la cuenta sino que lo deja por pagar a favor del destinatario hasta volver a girarlo
+    /// (E258): el pago de excedentes de la asamblea (92) y la entrega por fallecimiento (96).
+    /// </summary>
+    public static readonly PayoutPurpose[] PropositosQueSeRegiran = [PayoutPurpose.SurplusPayment, PayoutPurpose.DeceasedDelivery];
+
+    /// <summary>¿Es de un propósito que se regira (no se reintegra) cuando Tesorería no lo paga?</summary>
+    public bool SeRegira => Array.IndexOf(PropositosQueSeRegiran, Purpose) >= 0;
 
     /// <summary>Mueve el estado por un resultado admitido.</summary>
     public void RegistrarResultado(DisbursementOrderStatus hacia, DateTime instante)

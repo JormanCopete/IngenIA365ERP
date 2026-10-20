@@ -130,7 +130,12 @@ public class AccountPayoutOrderConfiguration : IEntityTypeConfiguration<AccountP
         builder.HasOne<Bank>().WithMany().HasForeignKey(e => e.DestinationBankId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<User>().WithMany().HasForeignKey(e => e.IssuedByUserId).OnDelete(DeleteBehavior.Restrict);
 
-        builder.HasIndex(e => e.OperationId).IsUnique().HasDatabaseName("UK_LND_AccountPayoutOrders_Operation");
+        // E258 (respuestas 92 y 96): un regiro comparte la operación de la orden que vuelve a girar; la unicidad rige para las órdenes originales.
+        builder.HasIndex(e => e.OperationId).IsUnique().HasDatabaseName("UK_LND_AccountPayoutOrders_Operation")
+            .HasFilter("[ReissuesOrderId] IS NULL");
+        builder.HasOne<AccountPayoutOrder>().WithMany().HasForeignKey(e => e.ReissuesOrderId).OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("FK_LND_AccountPayoutOrders_ReissuesOrder");
+        builder.HasIndex(e => e.ReissuesOrderId).HasDatabaseName("IX_LND_AccountPayoutOrders_ReissuesOrderId").HasFilter("[ReissuesOrderId] IS NOT NULL");
         builder.HasIndex(e => e.Number).IsUnique().HasDatabaseName("UK_LND_AccountPayoutOrders_Number");
         builder.HasIndex(e => new { e.MemberAccountId, e.Status }).HasDatabaseName("IX_LND_AccountPayoutOrders_Account_Status");
         builder.HasIndex(e => new { e.Status, e.ResultDueOn }).HasDatabaseName("IX_LND_AccountPayoutOrders_Status_ResultDueOn");

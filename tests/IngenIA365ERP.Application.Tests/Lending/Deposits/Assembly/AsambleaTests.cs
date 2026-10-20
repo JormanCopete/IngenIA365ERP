@@ -320,6 +320,57 @@ public sealed class AsambleaTests : IDisposable
             .Should().Be(0, "no se le abrió ninguna cuenta");
     }
 
+    /// <summary>
+    /// Respuesta 92 del dueño (E258): Tesorería rechaza el giro del excedente de un asociado: el valor no vuelve a ninguna cuenta (sigue por pagar a su favor), la
+    /// orden queda pendiente de regiro y se vuelve a girar —una sola vez por orden, sólo la rechazada, sólo desde su decisión—.
+    /// </summary>
+    [Fact]
+    public async Task E258_el_giro_rechazado_de_un_excedente_se_regira_y_mientras_tanto_sigue_por_pagar_al_asociado()
+    {
+        await AportesAsync();
+        var d = await RegistradaAsync(AssemblyDistributionKind.SurplusDistribution, 30_000m, porcentaje: 0.01m, @base: RevaluationBase.YearEndBalance,
+            destino: SurplusDestination.Payment);
+        await AplicadaAsync(d);
+        var ordenes = await _a.Db.AccountPayoutOrders.AsNoTracking().OrderBy(o => o.Id).ToListAsync();
+        ordenes.Should().HaveCount(2);
+
+        // Una orden que sigue emitida no se regira.
+        var regiro = new RegiroDeOrdenesDeCuentas(_a.Db, Ordenes(), _a.C.Cerrojo);
+        var Reemitir = () => new ReissueSurplusPayoutOrderCommandHandler(_a.Db, Distribuciones(), regiro)
+            .Handle(new ReissueSurplusPayoutOrderCommand(d.PublicId, ordenes[0].PublicId, null, null, null, "Cuenta bancaria corregida") { OperationKey = Guid.NewGuid() }, default);
+        (await Reemitir()).Error.Code.Should().Be(OrdenesDeGiroDeCuentas.CodigoNoSeRegira);
+        _a.Db.ChangeTracker.Clear();
+
+        var rechazada = await _a.Db.AccountPayoutOrders.SingleAsync(o => o.Id == ordenes[0].Id);
+        (await Ordenes().AplicarResultadoAsync(rechazada, DisbursementOrderStatus.Rejected, "R-1", DiaDeLaAsamblea, "Cuenta cerrada", default)).IsSuccess.Should().BeTrue();
+        await _a.Db.SaveChangesAsync();
+        _a.Db.ChangeTracker.Clear();
+        (await _a.Db.MemberAccountTransactions.AsNoTracking().CountAsync(t => t.Kind == MemberAccountTransactionKind.AssemblyCredit)).Should().Be(0,
+            "el excedente pagado nunca tocó una cuenta y el rechazo tampoco la toca");
+        (await OrdenesDeGiroDeCuentas.PendientesDeRegiro(_a.Db).AsNoTracking().Select(o => o.Id).ToListAsync()).Should().BeEquivalentTo([ordenes[0].Id]);
+
+        var nueva = Ok(await Reemitir());
+        _a.Db.ChangeTracker.Clear();
+        nueva.ReissuesOrderNumber.Should().Be(ordenes[0].Number);
+        nueva.Amount.Should().Be(ordenes[0].Amount);
+        nueva.Status.Should().Be(DisbursementOrderStatus.Issued);
+        var guardada = await _a.Db.AccountPayoutOrders.AsNoTracking().SingleAsync(o => o.PublicId == nueva.OrderPublicId);
+        guardada.OperationId.Should().Be(ordenes[0].OperationId, "el regiro comparte la operación: el valor no volvió a ninguna cuenta");
+        guardada.ReissuesOrderId.Should().Be(ordenes[0].Id);
+        guardada.Purpose.Should().Be(PayoutPurpose.SurplusPayment);
+        (await OrdenesDeGiroDeCuentas.PendientesDeRegiro(_a.Db).AsNoTracking().AnyAsync()).Should().BeFalse("ya tiene su regiro");
+        (await _a.Db.IntegrationMessages.AsNoTracking().CountAsync(m => m.Type == OrdenDeGiroEmitidaV2.Type)).Should().Be(3, "las dos órdenes y el regiro; el rechazo no emite nada");
+
+        // Una sola vez por orden.
+        (await Reemitir()).Error.Code.Should().Be(OrdenesDeGiroDeCuentas.CodigoNoSeRegira);
+        _a.Db.ChangeTracker.Clear();
+
+        // Otra decisión no puede regirar una orden que no es suya.
+        var ajena = await new ReissueSurplusPayoutOrderCommandHandler(_a.Db, Distribuciones(), regiro)
+            .Handle(new ReissueSurplusPayoutOrderCommand(Guid.NewGuid(), ordenes[0].PublicId, null, null, null, "Otra") { OperationKey = Guid.NewGuid() }, default);
+        ajena.IsFailure.Should().BeTrue();
+    }
+
     [Fact]
     public async Task Los_excedentes_pagados_salen_por_orden_de_giro_sin_tocar_las_cuentas_y_no_se_reversan()
     {

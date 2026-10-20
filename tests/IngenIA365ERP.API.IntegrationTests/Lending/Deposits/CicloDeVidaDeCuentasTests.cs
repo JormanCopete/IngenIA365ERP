@@ -88,10 +88,20 @@ public class CicloDeVidaDeCuentasTests(CentralIdentityApiFixture fx)
 
     private async Task<List<decimal>> FallecidoConDosBeneficiariosAsync(string sufijo, bool gmfAplica, bool gmfEnEntregas)
     {
+        var e = await FallecidoAprobadoAsync(sufijo, gmfAplica, gmfEnEntregas);
+        e.Http.Dispose();
+        return e.Montos;
+    }
+
+    /// <summary>El fallecido con dos beneficiarios, la entrega aprobada y sus dos órdenes emitidas. Quien llama libera el cliente HTTP.</summary>
+    private sealed record FallecidoAprobado(HttpClient Http, DesembolsoE2E.Escenario Des, string Admin, Guid Caso, Guid Cuenta, List<decimal> Montos);
+
+    private async Task<FallecidoAprobado> FallecidoAprobadoAsync(string sufijo, bool gmfAplica, bool gmfEnEntregas)
+    {
         var des = await DesembolsoE2E.EscenarioAsync(fx, $"cap_ciclo_{sufijo}");
         var coop = await CaptacionesE2E.CooperativaConCaptacionesAsync(fx, $"ciclo_{sufijo}");
         coop.TenantPublicId.Should().Be(des.Coop.TenantPublicId);
-        using var http = fx.CreateClient();
+        var http = fx.CreateClient();
         var admin = des.Coop.TokenAdmin;
         await CarteraE2E.PersonaDelAdministradorAsync(http, des.Coop);
         var hoy = CarteraE2E.Hoy(fx);
@@ -151,7 +161,49 @@ public class CicloDeVidaDeCuentasTests(CentralIdentityApiFixture fx)
             .Where(t => t.MemberAccountId == db.MemberAccounts.Where(a => a.PublicId == cuenta).Select(a => a.Id).First() && t.Concept == MemberAccountConcept.Gmf)
             .SumAsync(t => t.Amount));
         gmfCobrado.Should().Be(gmfAplica && gmfEnEntregas ? 4_000m : 0m);
-        return ordenes;
+        return new FallecidoAprobado(http, des, admin, casoId, cuenta, ordenes);
+    }
+
+    /// <summary>
+    /// Respuesta 96 del dueño (E258): Tesorería rechaza el giro de uno de los beneficiarios: el valor no vuelve a la cuenta del fallecido, la cuenta sigue en cierre
+    /// y el caso aprobado; se regira (otra orden, mismo valor) y, girada, la cuenta se cancela y el caso queda entregado. Todo por HTTP.
+    /// </summary>
+    [Fact]
+    public async Task E258_el_giro_rechazado_de_la_entrega_por_fallecimiento_se_regira_y_la_cuenta_se_cancela_al_pagarse()
+    {
+        var e = await FallecidoAprobadoAsync("regiro", gmfAplica: true, gmfEnEntregas: true);
+        using var http = e.Http;
+        var ordenes = await CausacionE2E.EnLaBaseAsync(fx, e.Des.Coop.TenantPublicId, db => db.AccountPayoutOrders.AsNoTracking()
+            .Where(o => o.Purpose == PayoutPurpose.DeceasedDelivery).OrderBy(o => o.Id).Select(o => new { o.PublicId, o.Amount }).ToListAsync());
+        ordenes.Should().HaveCount(2);
+
+        // Tesorería rechaza la primera y gira la segunda: la cuenta sigue en cierre, con nada que reintegrar.
+        var rechazo = await DesembolsoE2E.ResultadoDelGiroAsync(http, e.Des, ordenes[0].PublicId, "Rejected", ordenes[0].Amount);
+        await DesembolsoE2E.ConsumirAsync(fx, e.Des, rechazo);
+        var giro = await DesembolsoE2E.ResultadoDelGiroAsync(http, e.Des, ordenes[1].PublicId, "Disbursed", ordenes[1].Amount);
+        await DesembolsoE2E.ConsumirAsync(fx, e.Des, giro);
+        (await EstadoAsync(http, e.Admin, e.Cuenta)).Should().Be((int)MemberAccountStatus.Closing);
+        var caso = await CarteraE2E.GetAsync(http, e.Admin, $"{Fallecimientos}/{e.Caso}");
+        caso.GetProperty("status").GetInt32().Should().Be((int)DeceasedCaseStatus.Approved);
+
+        // Se regira la rechazada (una sola vez); la pagada no se regira.
+        var regiro = await CarteraE2E.ConClaveAsync(http, e.Admin, HttpMethod.Post, $"{Fallecimientos}/{e.Caso}/orders/{ordenes[0].PublicId}/reissue",
+            new { reason = "Cuenta bancaria corregida (e2e)" });
+        regiro.StatusCode.Should().Be(HttpStatusCode.OK, await regiro.Content.ReadAsStringAsync());
+        var nueva = await CarteraE2E.LeerAsync(regiro);
+        nueva.GetProperty("amount").GetDecimal().Should().Be(ordenes[0].Amount);
+        var otra = await CarteraE2E.ConClaveAsync(http, e.Admin, HttpMethod.Post, $"{Fallecimientos}/{e.Caso}/orders/{ordenes[0].PublicId}/reissue",
+            new { reason = "Otra vez (e2e)" });
+        (await CarteraE2E.CodigoDeErrorAsync(otra)).Should().Be("Lending.PayoutOrder.NotReissuable");
+        var pagada = await CarteraE2E.ConClaveAsync(http, e.Admin, HttpMethod.Post, $"{Fallecimientos}/{e.Caso}/orders/{ordenes[1].PublicId}/reissue",
+            new { reason = "No aplica (e2e)" });
+        (await CarteraE2E.CodigoDeErrorAsync(pagada)).Should().Be("Lending.PayoutOrder.NotReissuable");
+
+        // Girado el regiro, la cuenta se cancela y el caso queda entregado.
+        var segundoGiro = await DesembolsoE2E.ResultadoDelGiroAsync(http, e.Des, nueva.GetProperty("orderPublicId").GetGuid(), "Disbursed", ordenes[0].Amount);
+        await DesembolsoE2E.ConsumirAsync(fx, e.Des, segundoGiro);
+        (await EstadoAsync(http, e.Admin, e.Cuenta)).Should().Be((int)MemberAccountStatus.Closed);
+        (await CarteraE2E.GetAsync(http, e.Admin, $"{Fallecimientos}/{e.Caso}")).GetProperty("status").GetInt32().Should().Be((int)DeceasedCaseStatus.Delivered);
     }
 
     /// <summary>

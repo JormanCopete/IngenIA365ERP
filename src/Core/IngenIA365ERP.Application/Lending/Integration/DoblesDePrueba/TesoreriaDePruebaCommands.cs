@@ -99,21 +99,31 @@ public sealed class EmitTestDisbursementResultCommandHandler(
     {
         if (!TesoreriaDePruebaRegistrada.Esta(destinos)) return Result.Failure<TestDisbursementResultDto>(TesoreriaDePruebaRegistrada.NoExiste());
         var orden = await db.DisbursementOrders.AsNoTracking().FirstOrDefaultAsync(o => o.PublicId == request.OrderPublicId && !o.IsDeleted, ct);
-        if (orden is null) return Result.Failure<TestDisbursementResultDto>(ErroresDeDesembolso.OrdenInexistente());
+        // Respuestas 92 y 96 (E258): el doble también informa el resultado de una orden de cuentas (excedentes, entrega por fallecimiento, devoluciones).
+        var deCuenta = orden is null
+            ? await db.AccountPayoutOrders.AsNoTracking().FirstOrDefaultAsync(o => o.PublicId == request.OrderPublicId && !o.IsDeleted, ct)
+            : null;
+        if (orden is null && deCuenta is null) return Result.Failure<TestDisbursementResultDto>(ErroresDeDesembolso.OrdenInexistente());
+        var publicId = orden?.PublicId ?? deCuenta!.PublicId;
+        var numero = orden?.Number ?? deCuenta!.Number;
+        var tipoDelMensaje = orden is not null ? OrdenDeGiroEmitidaV1.Type : OrdenDeGiroEmitidaV2.Type;
         var mensajeDeLaOrden = await db.IntegrationMessages.AsNoTracking()
-            .Where(m => m.OriginPublicId == orden.PublicId && m.Type == OrdenDeGiroEmitidaV1.Type).Select(m => (Guid?)m.PublicId).FirstOrDefaultAsync(ct);
-        var credito = await db.Loans.AsNoTracking().Where(l => l.Id == orden.LoanId).Select(l => new { l.BranchId }).FirstAsync(ct);
-        var sucursal = await emision.SucursalContableAsync(credito.BranchId, ct);
+            .Where(m => m.OriginPublicId == publicId && m.Type == tipoDelMensaje).Select(m => (Guid?)m.PublicId).FirstOrDefaultAsync(ct);
+        var sucursalId = orden is not null
+            ? (await db.Loans.AsNoTracking().Where(l => l.Id == orden.LoanId).Select(l => l.BranchId).FirstAsync(ct))
+            : (await db.MemberAccounts.AsNoTracking().Where(a => a.Id == deCuenta!.MemberAccountId).Select(a => a.BranchId).FirstAsync(ct));
+        var sucursal = await emision.SucursalContableAsync(sucursalId, ct);
         if (sucursal.IsFailure) return Result.Failure<TestDisbursementResultDto>(sucursal.Error);
-        var beneficiario = await db.People.AsNoTracking().IgnoreQueryFilters().Where(p => p.Id == orden.BeneficiaryPersonId).Select(p => p.PublicId).FirstAsync(ct);
+        var beneficiarioId = orden?.BeneficiaryPersonId ?? deCuenta!.BeneficiaryPersonId;
+        var beneficiario = await db.People.AsNoTracking().IgnoreQueryFilters().Where(p => p.Id == beneficiarioId).Select(p => p.PublicId).FirstAsync(ct);
 
         var contenido = new ResultadoDelGiroV1
         {
-            OrderPublicId = orden.PublicId,
+            OrderPublicId = publicId,
             OrderMessagePublicId = mensajeDeLaOrden ?? Guid.Empty,
             Outcome = request.Outcome,
             OccurredOn = request.Date,
-            Amount = request.Amount ?? orden.NetAmount,
+            Amount = request.Amount ?? orden?.NetAmount ?? deCuenta!.Amount,
             TreasuryReference = request.Reference.Trim(),
             CheckNumber = request.CheckNumber,
             Reason = request.Reason,
@@ -122,10 +132,10 @@ public sealed class EmitTestDisbursementResultCommandHandler(
         var mensajes = await emisor.EmitirAsync(new SolicitudDeEmision(
             new OrigenDeEmision(MessageOriginKind.Document, documento, "TreasuryResult", "TST", request.Reference.Trim(), request.Date, sucursal.Value,
                 PersonPublicId: beneficiario),
-            ClavesDeEvento.ConfirmacionPor(orden.PublicId), [contenido], new ModoDeEntrega.Sellado(DeliveryMode.Always),
-            Relacionado: new DocumentoRelacionado(orden.PublicId, EmisionDeCartera.ClaseOrdenDeGiro, orden.Number)), ct);
+            ClavesDeEvento.ConfirmacionPor(publicId), [contenido], new ModoDeEntrega.Sellado(DeliveryMode.Always),
+            Relacionado: new DocumentoRelacionado(publicId, EmisionDeCartera.ClaseOrdenDeGiro, numero)), ct);
         await db.SaveChangesAsync(ct);
-        return Result.Success(new TestDisbursementResultDto(mensajes[0].PublicId, orden.PublicId, request.Outcome));
+        return Result.Success(new TestDisbursementResultDto(mensajes[0].PublicId, publicId, request.Outcome));
     }
 }
 

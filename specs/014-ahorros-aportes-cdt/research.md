@@ -2891,3 +2891,34 @@ Cuando la asamblea decide llevar el excedente a ahorro y un asociado **no tiene 
 - **Pruebas.** Application (`AsambleaTests.Los_excedentes_a_ahorro_sin_cuenta_de_destino_se_capitalizan_en_los_aportes_del_asociado`: Ana recibe 10.000 en su ahorro,
   Beto aumenta su aporte ordinario y no se le abre cuenta) y e2e (`AsambleaTests.E257_…`, por HTTP). La e2e anterior que esperaba el bloqueo se reemplazó.
   **Pendiente de validar por la contadora:** que lo capitalizado use la clase de aporte de excedentes del parámetro y no una distinta.
+
+### 27.9 E258 · el giro rechazado se regira y mientras tanto el valor sigue por pagar al destinatario (respuestas 92 y 96, 2026-10-21)
+
+Si Tesorería **rechaza, anula o no cobra** el giro de un **excedente de la asamblea** (92) o de la **entrega por fallecimiento** a un beneficiario (96), el valor **no vuelve a
+ninguna cuenta**: queda respaldado en la cuenta por pagar a favor de quien lo recibe, y la orden queda **pendiente de regiro**. Una persona la **regira**: una orden nueva
+por el mismo valor, al mismo beneficiario y cuenta destino (o a los que indique), con su `OrdenDeGiroEmitida` v2. Migración aditiva `CaptacionesRegiroDeOrdenes`
+(PostgreSQL `20261020204151`, SQL Server `20261020204112`): `LND_AccountPayoutOrders.ReissuesOrderId` (FK a sí misma) y el índice único por operación pasa a filtrado
+(`ReissuesOrderId IS NULL`): un regiro comparte la operación de la orden que vuelve a girar. Paridad y `has-pending-model-changes` limpios en los dos motores.
+
+- **El respaldo.** En los excedentes pagados no hay cambio contable: el hecho `ExcedentesDistribuidos` ya llevaba el valor del fondo a los retornos por pagar con el
+  asociado de tercero, y el rechazo no lo toca (era lo construido, E189). En la **entrega por fallecimiento sí cambia el rechazo**: antes un giro rechazado reversaba la operación y
+  devolvía el valor a la cuenta del fallecido; ahora **no reversa nada** (no se emite `OperacionDeCuentaReversada`): la «devolución por pagar» que la entrega ya había
+  causado a favor del beneficiario sigue siendo su respaldo, y la cuenta sigue en cierre sin saldo. Se decide por el propósito de la orden: `AccountPayoutOrder.PropositosQueSeRegiran`
+  (`SurplusPayment`, `DeceasedDelivery`). Los demás propósitos (devolución de aportes, cancelación, CDAT, embargo, **no reclamados**) siguen reintegrando como siempre.
+- **Pendiente de regiro** (`OrdenesDeGiroDeCuentas.PendientesDeRegiro`): una orden de esos propósitos en `Rejected`, `Voided` o `CheckNotCashed` sin otra orden que la reemplace.
+  Mientras haya una, **la cuenta del fallecido no se cancela y el caso no pasa a entregado** (`Fallecimientos.AlGirarAsync`).
+- **Regirar.** `POST /api/lending/assembly-distributions/{id}/orders/{orderId}/reissue` (`Lending.Assembly.Approve`) y `POST /api/lending/deceased-cases/{id}/orders/{orderId}/reissue`
+  (`Lending.DeceasedCases.Approve`): bajo el cerrojo persona → cuenta; la orden debe ser del trámite (misma operación / mismo caso); una sola vez por orden, pero un regiro que
+  Tesorería vuelve a rechazar admite otro (`Lending.PayoutOrder.NotReissuable` si no espera regiro). La orden nueva sale a Tesorería y, cuando se gira, la cuenta se cancela y el
+  caso se entrega como si se hubiera girado a la primera.
+- **GMF (reconcilia con E253).** El GMF retenido en la entrega **se queda retenido** y **no se vuelve a cobrar** al regirar: el hecho generador fue el retiro y ocurrió; el regiro
+  gira el mismo neto (valor − GMF). El rechazo del pago de un **saldo no reclamado** no cambia: sigue reversando neto y GMF a no reclamados.
+- **Consumo del resultado.** Al corregir se halló un defecto previo: consumir como proceso el `Disbursed` de una orden de cuentas fallaba (`DevolucionGirada` exige una persona de origen,
+  T11). Ahora `ConsumeTreasuryResult` pasa el usuario de origen del mensaje de Tesorería a `AplicarResultadoAsync` → `DevolucionGiradaAsync`. La tesorería de prueba
+  (`EmitTestDisbursementResultCommand`) también informa resultados de órdenes de cuentas.
+- **No hecho.** La parte C de las respuestas del informe original (pasado un plazo, el pendiente pasa a no reclamados) y la pantalla de regiro no se construyeron; la lista de
+  pendientes de regiro por consulta tampoco. **Pendiente de validar por la contadora:** que la devolución por pagar de la entrega siga siendo el respaldo mientras la orden esté
+  rechazada, sin reclasificarla a otra cuenta.
+- **Pruebas.** Application: `AsambleaTests.E258_…` (excedente rechazado, no se regira lo que sigue emitido, regiro, una sola vez, decisión ajena) y
+  `CicloDeVidaDeCuentasTests.E258_…` (entrega: sin reintegro ni GMF nuevo, cuenta en cierre y caso sin entregar hasta girar; un regiro anulado admite otro). e2e
+  (`AsambleaTests.E258_…`, `CicloDeVidaDeCuentasTests.E258_…`): rechazo por la tesorería de prueba, regiro por HTTP y giro final. Verdes en PostgreSQL y SQL Server.

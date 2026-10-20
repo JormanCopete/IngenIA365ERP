@@ -2,6 +2,7 @@ using Carter;
 using IngenIA365ERP.API.Endpoints.Common;
 using IngenIA365ERP.API.Filters;
 using IngenIA365ERP.Application.Lending.Deposits.Deceased;
+using IngenIA365ERP.Application.Lending.Deposits.Operations;
 using IngenIA365ERP.Domain.Enums.Lending;
 using MediatR;
 
@@ -68,6 +69,18 @@ public class DeceasedCasesEndpoints : ICarterModule
             .WithName("Lending_DeceasedCases_Void")
             .ConClaveDeOperacion()
             .RequirePermission(Aprobar);
+
+        // Respuesta 96 (E258): el giro rechazado de la entrega se regira; mientras tanto el valor sigue por pagar a favor del beneficiario.
+        casos.MapPost("/{id:guid}/orders/{orderId:guid}/reissue", async (Guid id, Guid orderId, RegiroRequest body, HttpContext http, ISender sender,
+                CancellationToken ct) =>
+                await sender.Send(new ReissueDeceasedPayoutOrderCommand(id, orderId, body.BankPublicId, body.AccountType, body.AccountNumber,
+                    body.Reason ?? string.Empty)
+                {
+                    OperationKey = http.ClaveDeOperacion(),
+                }, ct))
+            .WithName("Lending_DeceasedCases_ReissueOrder")
+            .ConClaveDeOperacion()
+            .RequirePermission(Aprobar);
     }
 
     /// <summary>El cuerpo de <c>POST /</c>: la persona, la fecha de la defunción, el registro civil (adjunto) y el motivo.</summary>
@@ -82,4 +95,7 @@ public class DeceasedCasesEndpoints : ICarterModule
 
     /// <summary>El motivo de una aprobación o una anulación.</summary>
     public sealed record MotivoRequest(string? Reason);
+
+    /// <summary>El cuerpo de <c>/orders/{orderId}/reissue</c>: la cuenta de destino nueva (opcional: sin ella, la misma de la orden) y el motivo.</summary>
+    public sealed record RegiroRequest(Guid? BankPublicId, byte? AccountType, string? AccountNumber, string? Reason);
 }

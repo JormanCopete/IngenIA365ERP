@@ -146,7 +146,7 @@ public sealed partial class EmisionDeCartera
     /// informativo, sin importes. Origen la orden, clave <c>Confirmation:{orden:N}</c>, siempre (<c>Always</c>). Sin guardar.
     /// </summary>
     public async Task<Guid> DevolucionGiradaAsync(AccountPayoutOrder orden, string tipoDeOrden, string referenciaDeTesoreria, DateOnly ocurrida,
-        Guid sucursalPublicId, Guid beneficiarioPublicId, CancellationToken ct)
+        Guid sucursalPublicId, Guid beneficiarioPublicId, CancellationToken ct, UserRefV1? usuarioDeOrigen = null)
     {
         ArgumentNullException.ThrowIfNull(orden);
         var contenido = new DevolucionGiradaV1
@@ -160,7 +160,7 @@ public sealed partial class EmisionDeCartera
         var mensajes = await emisor.EmitirAsync(new SolicitudDeEmision(
             new OrigenDeEmision(MessageOriginKind.Document, orden.PublicId, ClaseOrdenDeGiroDeCuenta, Prefijo(orden.Number), orden.Number, ocurrida,
                 sucursalPublicId, PersonPublicId: beneficiarioPublicId),
-            ClavesDeEvento.ConfirmacionPor(orden.PublicId), [contenido], new ModoDeEntrega.Sellado(DeliveryMode.Always)), ct);
+            ClavesDeEvento.ConfirmacionPor(orden.PublicId), [contenido], new ModoDeEntrega.Sellado(DeliveryMode.Always), UsuarioDeOrigen: usuarioDeOrigen), ct);
         return mensajes[0].PublicId;
     }
 

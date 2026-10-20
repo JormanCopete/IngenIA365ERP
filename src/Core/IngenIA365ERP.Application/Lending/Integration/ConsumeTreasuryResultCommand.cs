@@ -167,7 +167,8 @@ public sealed class ConsumeTreasuryResultCommandHandler(
         recibo.EvaluationCount += 1;
         await db.SaveChangesAsync(ct);
 
-        var efecto = await ordenesDeCuentas!.AplicarResultadoAsync(orden, hacia, resultado.TreasuryReference, resultado.OccurredOn, resultado.Reason, ct);
+        var efecto = await ordenesDeCuentas!.AplicarResultadoAsync(orden, hacia, resultado.TreasuryReference, resultado.OccurredOn, resultado.Reason, ct,
+            mensaje.Envelope.OriginUser);
         if (efecto.IsFailure) return Result.Failure<ResultadoDeConsumo>(efecto.Error);
         var evaluacion = Evaluacion(recibo, mensaje, InboundEvaluationOutcome.Accepted, null, null, false, ahora);
         db.LendingInboundMessageEvaluations.Add(evaluacion);

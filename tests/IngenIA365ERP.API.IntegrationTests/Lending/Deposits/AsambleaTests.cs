@@ -169,6 +169,73 @@ public class AsambleaTests(CentralIdentityApiFixture fx)
         }
     }
 
+    /// <summary>
+    /// Respuesta 92 del dueño (E258): los excedentes se pagan por orden de giro y Tesorería rechaza la de Ana: no hay saldo que reintegrar (sigue por pagar a su favor),
+    /// la orden se regira por HTTP —una sola vez— y el regiro se gira.
+    /// </summary>
+    [Fact]
+    public async Task E258_el_giro_rechazado_de_un_excedente_se_regira_por_HTTP()
+    {
+        var des = await DesembolsoE2E.EscenarioAsync(fx, "cap_asamblea_92");
+        var cap = await CaptacionesE2E.CooperativaConCaptacionesAsync(fx, "asamblea_92");
+        cap.TenantPublicId.Should().Be(des.Coop.TenantPublicId);
+        using var http = fx.CreateClient();
+        var admin = des.Coop.TokenAdmin;
+        await CarteraE2E.PersonaDelAdministradorAsync(http, des.Coop);
+        var linea = await LineaDeAportesAsync(http, admin, des.Hoy);
+        await ConAportesAsync(http, admin, des, linea, await AsociadoAsync(http, admin, "Ana"), 1_000_000m);
+        await ConAportesAsync(http, admin, des, linea, await AsociadoAsync(http, admin, "Beto"), 2_000_000m);
+        var ejercicio = des.Hoy.Year;
+
+        var reloj = new ConductorDelDespachador(fx).Reloj;
+        var original = reloj.Desfase;
+        try
+        {
+            var asamblea = new DateOnly(ejercicio + 1, 3, 20);
+            reloj.Desfase += asamblea.ToDateTime(new TimeOnly(10, 0)) - reloj.AhoraLocal.DateTime;
+            var registro = await CarteraE2E.ConClaveAsync(http, admin, HttpMethod.Post, Asamblea, new
+            {
+                kind = "SurplusDistribution", year = ejercicio, fundAmount = 30_000m, percent = 0.01m, @base = "YearEndBalance", destination = "Payment",
+                reason = "Asamblea general ordinaria (e2e de la respuesta 92)",
+            });
+            registro.StatusCode.Should().Be(HttpStatusCode.Created, await registro.Content.ReadAsStringAsync());
+            var decision = (await CarteraE2E.LeerAsync(registro)).GetProperty("publicId").GetGuid();
+            var simulacion = await CarteraE2E.ExitoAsync(http, admin, HttpMethod.Post, $"{Asamblea}/{decision}/simulate");
+            var punto = await ActasE2E.DecididoAsync(http, des, des.Originacion.Consejo, LendingDecisionSubjects.AssemblyDistribution, decision, asamblea, "Decision");
+            var soporte = await SoporteAsync(http, admin, decision);
+            var aplica = await UsuariosDeCartera.IngresarAsync(http, des.Usuarios.Todos["administrador"]);
+            var aplicada = await AplicarAsync(http, aplica, decision, punto, simulacion.GetProperty("sha256").GetString()!, soporte);
+            aplicada.StatusCode.Should().Be(HttpStatusCode.OK, await aplicada.Content.ReadAsStringAsync());
+
+            var ordenes = await CausacionE2E.EnLaBaseAsync(fx, des.Coop.TenantPublicId, db => db.AccountPayoutOrders.AsNoTracking()
+                .Where(o => o.Purpose == PayoutPurpose.SurplusPayment).OrderBy(o => o.Id).Select(o => new { o.PublicId, o.Amount }).ToListAsync());
+            ordenes.Should().HaveCount(2);
+            var rechazo = await DesembolsoE2E.ResultadoDelGiroAsync(http, des, ordenes[0].PublicId, "Rejected", ordenes[0].Amount);
+            await DesembolsoE2E.ConsumirAsync(fx, des, rechazo);
+
+            var ruta = $"{Asamblea}/{decision}/orders/{ordenes[0].PublicId}/reissue";
+            var regiro = await CarteraE2E.ConClaveAsync(http, aplica, HttpMethod.Post, ruta, new { reason = "Cuenta bancaria corregida (e2e)" });
+            regiro.StatusCode.Should().Be(HttpStatusCode.OK, await regiro.Content.ReadAsStringAsync());
+            var nueva = await CarteraE2E.LeerAsync(regiro);
+            nueva.GetProperty("amount").GetDecimal().Should().Be(ordenes[0].Amount);
+            (await CarteraE2E.CodigoDeErrorAsync(await CarteraE2E.ConClaveAsync(http, aplica, HttpMethod.Post, ruta, new { reason = "Otra vez (e2e)" })))
+                .Should().Be("Lending.PayoutOrder.NotReissuable");
+            var sinRechazo = await CarteraE2E.ConClaveAsync(http, aplica, HttpMethod.Post, $"{Asamblea}/{decision}/orders/{ordenes[1].PublicId}/reissue",
+                new { reason = "No aplica (e2e)" });
+            (await CarteraE2E.CodigoDeErrorAsync(sinRechazo)).Should().Be("Lending.PayoutOrder.NotReissuable");
+
+            var giro = await DesembolsoE2E.ResultadoDelGiroAsync(http, des, nueva.GetProperty("orderPublicId").GetGuid(), "Disbursed", ordenes[0].Amount);
+            await DesembolsoE2E.ConsumirAsync(fx, des, giro);
+            var estado = await CausacionE2E.EnLaBaseAsync(fx, des.Coop.TenantPublicId, db => db.AccountPayoutOrders.AsNoTracking()
+                .Where(o => o.PublicId == nueva.GetProperty("orderPublicId").GetGuid()).Select(o => o.Status).SingleAsync());
+            estado.Should().Be(DisbursementOrderStatus.Disbursed);
+        }
+        finally
+        {
+            reloj.Desfase = original;
+        }
+    }
+
     // ------------------------------------------------------------------------------------------------------------ apoyo --
 
     private static async Task<JsonElement> RegistrarAsync(HttpClient http, string token, int ejercicio, decimal porcentaje, decimal fondo, Guid? corrige)

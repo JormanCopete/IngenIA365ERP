@@ -27524,6 +27524,9 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.Property<int>("Purpose")
                         .HasColumnType("int");
 
+                    b.Property<int?>("ReissuesOrderId")
+                        .HasColumnType("int");
+
                     b.Property<DateOnly>("ResultDueOn")
                         .HasColumnType("date");
 
@@ -27568,11 +27571,16 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
 
                     b.HasIndex("OperationId")
                         .IsUnique()
-                        .HasDatabaseName("UK_LND_AccountPayoutOrders_Operation");
+                        .HasDatabaseName("UK_LND_AccountPayoutOrders_Operation")
+                        .HasFilter("[ReissuesOrderId] IS NULL");
 
                     b.HasIndex("PublicId")
                         .IsUnique()
                         .HasDatabaseName("UK_LND_AccountPayoutOrders_PublicId");
+
+                    b.HasIndex("ReissuesOrderId")
+                        .HasDatabaseName("IX_LND_AccountPayoutOrders_ReissuesOrderId")
+                        .HasFilter("[ReissuesOrderId] IS NOT NULL");
 
                     b.HasIndex("MemberAccountId", "Status")
                         .HasDatabaseName("IX_LND_AccountPayoutOrders_Account_Status");
@@ -59540,6 +59548,12 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasForeignKey("OperationId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.AccountPayoutOrder", null)
+                        .WithMany()
+                        .HasForeignKey("ReissuesOrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("FK_LND_AccountPayoutOrders_ReissuesOrder");
                 });
 
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.ContributionRequest", b =>
