@@ -86,6 +86,9 @@ public sealed class ContextoDeLineasDeCaptacion(IPerfilRegulatorio perfiles, Reg
         foreach (var claveDeLimite in new[] { ParametrosDeCartera.AportesLimiteParticipacionPersonaNatural, ParametrosDeCartera.AportesLimiteParticipacionPersonaJuridica })
         {
             var leido = await LeerAsync(claveDeLimite, fecha, ct);
+            // El límite individual de participación no tiene valor legal sembrado (P12, pendiente de validar): «sin registrar» es «sin techo», como
+            // lo lee ReglasDeAportes.LimiteAsync al aportar; sólo otro fallo (una clave que no se interpreta) detiene la línea (E238).
+            if (leido.IsFailure && leido.Error.Code == Saas.NationalValues.ErroresDeValoresNacionales.MissingCode) continue;
             if (leido.IsFailure) return Result.Failure<TopesDeAportes>(leido.Error);
             if (leido.Value.Valor is { } valor && (limite is null || valor < limite))
                 (limite, clave, fuenteDelLimite) = (valor, claveDeLimite, leido.Value.Fuente);
