@@ -29,6 +29,8 @@ public class EmisionesDeProcesoPermitidas
         "RetiroDeCuentaAplicado", "GmfRetenido", "InteresDeCaptacionCausado", "AjusteDeCausacionDeCaptacion", "InteresDeCaptacionLiquidado",
         "RetencionPracticada", "InteresesDeCdatPagados", "CdatProrrogado", "CdatCancelado", "PenalidadAplicada", "CaptacionReclasificada",
         "BonificacionReconocida", "CargoDeCuentaCausado", "DevolucionOrdenada", "SaldoTrasladadoANoReclamados",
+        // E243: el vencimiento del ahorro contractual cumplido traslada a la cuenta a la vista por el proceso nocturno.
+        "TrasladoEntreCuentasAplicado",
         // US4 (T116): el cargo periódico gravado lo causa el ciclo diario y pide la factura a Comercial en la misma unidad.
         "CargoDeCaptacionCausado",
         // Feature 014 (T055): la orden de giro v2 de captaciones (la v1 de los desembolsos sigue sin proceso).

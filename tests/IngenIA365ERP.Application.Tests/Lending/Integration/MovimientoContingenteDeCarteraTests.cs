@@ -237,7 +237,9 @@ public class MovimientoContingenteDeCarteraTests : IAsyncLifetime
             // Feature 014 (T048; mensajes.md §1.1 de la 014, columna «Proceso»): los de captaciones que emite el ciclo diario o el proceso.
             "RetiroDeCuentaAplicado", "GmfRetenido", "InteresDeCaptacionCausado", "AjusteDeCausacionDeCaptacion", "InteresDeCaptacionLiquidado",
             "RetencionPracticada", "InteresesDeCdatPagados", "CdatProrrogado", "CdatCancelado", "PenalidadAplicada", "CaptacionReclasificada",
-            "BonificacionReconocida", "CargoDeCuentaCausado", "DevolucionOrdenada", "SaldoTrasladadoANoReclamados");
+            "BonificacionReconocida", "CargoDeCuentaCausado", "DevolucionOrdenada", "SaldoTrasladadoANoReclamados",
+            // E243: el vencimiento del ahorro contractual cumplido traslada a la cuenta a la vista por el proceso nocturno (mensajes.md §4.7).
+            "TrasladoEntreCuentasAplicado");
         ClavesDeEvento.EsValida(CatalogoDeMensajesDeCarteraV1.HechosAContabilidad.Single(t => t.Type == CupoRotativoOtorgadoV1.Type).FormaDeClave,
             ClavesDeEvento.ConfirmacionPor(Guid.NewGuid())).Should().BeTrue();
     }
