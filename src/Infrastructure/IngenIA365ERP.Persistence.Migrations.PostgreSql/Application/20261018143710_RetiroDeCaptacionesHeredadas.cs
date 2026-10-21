@@ -40,8 +40,11 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
             //     docs/operaciones/captaciones-retiro-heredado.md la fecha, el ambiente, las bases, las filas por tabla y la decisión
             //     tomada donde hubo filas. Corrido sólo en local el 2026-10-18 (PostgreSQL 5433, contenedor ingenia365-dev-postgres:
             //     ingenia365erp; la administrativa ingenia365erp_admin no tiene ninguna de las 45): 0 filas en las 45; sin aprobación.
-            //   Respaldo: pendiente: <base>-AAAAMMDD-pre-f014.dump de cada base de cooperativa antes de aplicarla en cada ambiente.
-            //   Segundo revisor: pendiente (lo nombra el dueño, como T1083 de la 013).
+            //   Diagnóstico (2026-10-21): DEV y QA (ingenia365erp y coop_prueba) y producción (erp-pdn: ingenia365erp y cooflopal): las 45 tablas heredadas
+            //     existen y tienen 0 filas en cada base; sin aprobación (la guarda pasa sola). Resultados en docs/operaciones/captaciones-retiro-heredado.md.
+            //   Respaldo: pg_dump -Fc de cada base en /root/respaldos (erp-nonprod: erp-dev-*, erp-qa-*; erp-pdn: erp-pdn-ingenia365erp, erp-pdn-ingenia365erp_admin y
+            //     erp-pdn-cooflopal), con sufijo 20261021-pre-f013-f014.dump y cabecera PGDMP.
+            //   Segundo revisor: Jorman Copete (dueño), con su aprobación del 2026-10-21 para la promoción (decisiones D15 y H7).
             // Con la guarda, sólo se pierden filas que el dueño aprobó perder (fila LND.CaptacionesHeredadas.RetiroAprobado de la cooperativa).
 
             // (1) Guarda: sólo sobre las captaciones heredadas vacías, o con la aprobación del dueño en la base.
