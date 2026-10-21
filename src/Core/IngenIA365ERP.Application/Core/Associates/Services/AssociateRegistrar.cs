@@ -1,5 +1,6 @@
-using IngenIA365ERP.Application.Common.Interfaces;
+﻿using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Application.Core.AssociateGroups;
 using IngenIA365ERP.Application.Core.Associates.Contracts;
 using IngenIA365ERP.Domain.Entities.Core;
 using Microsoft.EntityFrameworkCore;
@@ -28,8 +29,19 @@ public sealed class AssociateRegistrar(
                     "Esta persona ya esta registrada como asociado."));
         }
 
+        int? grupoId = null;
+        if (input.AssociateGroupPublicId is { } grupoPublicId)
+        {
+            var grupo = await context.AssociateGroups.AsNoTracking()
+                .FirstOrDefaultAsync(g => g.PublicId == grupoPublicId && !g.IsDeleted, ct);
+            if (grupo is null) return Result.Failure<Associate>(AssociateGroupErrors.NotFound());
+            if (!grupo.IsActive) return Result.Failure<Associate>(AssociateGroupErrors.Inactive());
+            grupoId = grupo.Id;
+        }
+
         var associate = new Associate
         {
+            AssociateGroupId = grupoId,
             Person = person,
             PersonId = person.Id,
             JoinDate = input.JoinDate,

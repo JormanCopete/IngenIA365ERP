@@ -1,4 +1,4 @@
-@inject NavigationManager Navigation
+﻿@inject NavigationManager Navigation
 @inject IngenIA365ERP.Shared.Services.Ventas.VentasClient Ventas
 @inject IngenIA365ERP.Shared.Services.Security.PermisosDelUsuario Permisos
 @inject IngenIA365ERP.Shared.Services.Cartera.DoblesDePruebaClient DoblesDeCartera
@@ -560,6 +560,9 @@
             </PermissionGate>
             <NavLink href="/maestros/empresas" class="nav-subitem">Empresas</NavLink>
             <NavLink href="/maestros/centros-costo" class="nav-subitem">Centros de Costo</NavLink>
+            <PermissionGate Required="Core.AssociateGroups.View">
+                <NavLink href="/maestros/grupos-del-asociado" class="nav-subitem">Grupos del asociado</NavLink>
+            </PermissionGate>
             <NavLink href="/maestros/secciones" class="nav-subitem">Secciones</NavLink>
             <NavLink href="/maestros/profesiones" class="nav-subitem">Profesiones</NavLink>
             <NavLink href="/maestros/cargos" class="nav-subitem">Cargos</NavLink>

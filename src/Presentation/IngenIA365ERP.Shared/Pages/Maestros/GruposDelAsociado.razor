@@ -1,0 +1,39 @@
+﻿@page "/maestros/grupos-del-asociado"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Components.Inventario
+@using IngenIA365ERP.Shared.Services.Inventario
+@using static IngenIA365ERP.Shared.Components.Inventario.CatalogoDeInventarioModelo
+@inject InventarioClient Inventario
+
+<PageTitle>Grupos del asociado - IngenIA365ERP</PageTitle>
+
+@* Grupos del asociado: la clasificación libre de la cooperativa (zona, empresa, gremio, agencia…). No son centros de costo
+   ni llevan datos contables o de nómina; el código no cambia una vez creado. Uno que tienen asociados no se inactiva. *@
+<PermissionGate Required="Core.AssociateGroups.View" MostrarAviso="true">
+    <CatalogoDeInventario Titulo="Grupos del asociado"
+                          Descripcion="Clasificación libre de los asociados (zona, empresa, gremio, agencia…). No afecta la contabilidad ni la nómina."
+                          RutaBase="@InventarioClient.RutaDeGruposDelAsociado"
+                          CatalogoDeCodigo="grupos-del-asociado"
+                          LargoDeNombre="80"
+                          PermisoDeVer="Core.AssociateGroups.View"
+                          PermisoDeAdministrar="Core.AssociateGroups.Manage"
+                          Campos="@_campos"
+                          AvisoAlInactivar="Un grupo que tienen asociados no se inactiva: cámbielos de grupo antes."
+                          Cargar="@CargarAsync"
+                          Guardar="@GuardarAsync" />
+</PermissionGate>
+
+@code {
+    private static readonly IReadOnlyList<CampoDeCatalogo> _campos =
+    [
+        new CampoDeCatalogo("description", "Descripción", Largo: 200),
+    ];
+
+    private async Task<ResultadoDeInventario<IReadOnlyList<FilaDeCatalogo>>> CargarAsync(bool inactivos) =>
+        Filas(await Inventario.ListarGruposDelAsociadoAsync(inactivos), g => new FilaDeCatalogo(g.PublicId, g.Code, g.Name, g.IsActive, false,
+            new Dictionary<string, string?> { ["description"] = g.Description }));
+
+    private async Task<(bool, string?)> GuardarAsync(FilaDeCatalogo? fila, string? codigo, string nombre, IReadOnlyDictionary<string, string?> v, Services.Http.ClaveDeOperacion clave) =>
+        Resultado(await Inventario.GuardarGrupoDelAsociadoAsync(fila?.PublicId,
+            new GrupoDelAsociadoRequest(codigo, nombre, v.GetValueOrDefault("description")), clave));
+}

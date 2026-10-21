@@ -1,4 +1,4 @@
-using IngenIA365ERP.Application.Common.Interfaces;
+﻿using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Core.People.Services;
 using MediatR;
@@ -24,7 +24,10 @@ public record AssociateRowDto(
     string? Status,
     decimal ContributionRate,
     decimal ExternalSalary,
-    string? ExternalEmployerName);
+    string? ExternalEmployerName,
+    Guid? AssociateGroupPublicId = null,
+    string? AssociateGroupCode = null,
+    string? AssociateGroupName = null);
 
 public record ListAssociatesQuery : IRequest<Result<PagedList<AssociateRowDto>>>
 {
@@ -32,6 +35,7 @@ public record ListAssociatesQuery : IRequest<Result<PagedList<AssociateRowDto>>>
     public int PageSize { get; init; } = 20;
     public string? SearchTerm { get; init; }
     public string? Status { get; init; }
+    public Guid? AssociateGroupPublicId { get; init; }
 }
 
 public class ListAssociatesQueryHandler(IApplicationDbContext context)
@@ -47,6 +51,9 @@ public class ListAssociatesQueryHandler(IApplicationDbContext context)
 
         if (!string.IsNullOrWhiteSpace(request.Status))
             query = query.Where(x => x.a.Status == request.Status);
+
+        if (request.AssociateGroupPublicId is { } grupo)
+            query = query.Where(x => x.a.AssociateGroup != null && x.a.AssociateGroup.PublicId == grupo);
 
         if (!string.IsNullOrWhiteSpace(request.SearchTerm))
         {
@@ -79,7 +86,10 @@ public class ListAssociatesQueryHandler(IApplicationDbContext context)
                 x.a.Status,
                 x.a.ContributionRate,
                 x.a.ExternalSalary,
-                x.a.ExternalEmployerName))
+                x.a.ExternalEmployerName,
+                x.a.AssociateGroup != null ? x.a.AssociateGroup.PublicId : (Guid?)null,
+                x.a.AssociateGroup != null ? x.a.AssociateGroup.Code : null,
+                x.a.AssociateGroup != null ? x.a.AssociateGroup.Name : null))
             .ToListAsync(ct);
 
         return Result.Success(new PagedList<AssociateRowDto>(
@@ -97,7 +107,7 @@ public record AssociateEditDto(
     decimal ContributionRate,
     Guid? EmployerCompanyPublicId,
     Guid? BranchPublicId,
-    Guid? CostCenterPublicId,
+    Guid? AssociateGroupPublicId,
     Guid? SectionPublicId,
     short CutoffDay,
     string? Status,
@@ -157,7 +167,7 @@ public class GetAssociateByPersonIdQueryHandler(IApplicationDbContext context)
             .Include(a => a.Person)
             .Include(a => a.EmployerCompany)
             .Include(a => a.Branch)
-            .Include(a => a.CostCenter)
+            .Include(a => a.AssociateGroup)
             .Include(a => a.Section)
             .Include(a => a.Advisor)
             .Include(a => a.Committee)
@@ -181,7 +191,7 @@ public class GetAssociateByPersonIdQueryHandler(IApplicationDbContext context)
             PersonFactory.NombreVisible(p.FirstName, p.OtherNames, p.LastName, p.SecondLastName, p.BusinessName),
             p.TaxId,
             entity.JoinDate, entity.ContributionRate,
-            entity.EmployerCompany?.PublicId, entity.Branch?.PublicId, entity.CostCenter?.PublicId,
+            entity.EmployerCompany?.PublicId, entity.Branch?.PublicId, entity.AssociateGroup?.PublicId,
             entity.Section?.PublicId, entity.CutoffDay, entity.Status, entity.CategoryRating,
             entity.Advisor?.PublicId, entity.Committee?.PublicId,
             entity.AssociateClass, entity.PaymentType, entity.ContributionPledged,
@@ -209,7 +219,7 @@ public class GetAssociateByIdQueryHandler(IApplicationDbContext context)
             .Include(a => a.Person)
             .Include(a => a.EmployerCompany)
             .Include(a => a.Branch)
-            .Include(a => a.CostCenter)
+            .Include(a => a.AssociateGroup)
             .Include(a => a.Section)
             .Include(a => a.Advisor)
             .Include(a => a.Committee)
@@ -237,7 +247,7 @@ public class GetAssociateByIdQueryHandler(IApplicationDbContext context)
             entity.ContributionRate,
             entity.EmployerCompany?.PublicId,
             entity.Branch?.PublicId,
-            entity.CostCenter?.PublicId,
+            entity.AssociateGroup?.PublicId,
             entity.Section?.PublicId,
             entity.CutoffDay,
             entity.Status,
