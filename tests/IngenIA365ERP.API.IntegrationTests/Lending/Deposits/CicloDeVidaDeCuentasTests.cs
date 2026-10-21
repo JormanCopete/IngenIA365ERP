@@ -3,6 +3,7 @@ using System.Text.Json;
 using FluentAssertions;
 using IngenIA365ERP.API.IntegrationTests.Attachments;
 using IngenIA365ERP.API.IntegrationTests.Identity;
+using IngenIA365ERP.API.IntegrationTests.Integration;
 using IngenIA365ERP.Domain.Enums.Lending;
 using Microsoft.EntityFrameworkCore;
 
@@ -61,6 +62,65 @@ public class CicloDeVidaDeCuentasTests(CentralIdentityApiFixture fx)
             await MovimientosTests.ConsignarAsync(http, coop.TokenAdmin, cuenta, titular, 10_000m, finDeMes.AddDays(1), medio: "Transfer");
             (await EstadoAsync(http, coop.TokenAdmin, cuenta)).Should().Be((int)MemberAccountStatus.Active);
         }
+    }
+
+    /// <summary>
+    /// E264 (decisión del dueño del 2026-10-22): los avisos al titular salen por correo electrónico. El aviso de inactividad es un informativo por el canal
+    /// <c>CORREO</c> (el correo de la plataforma, nunca <c>SIMULADO</c>): sin la autorización del canal de contacto queda excluido y no sale nada; con ella
+    /// sale por <c>IEmailSender</c> (<c>fx.Emails</c>) y deja su evidencia (<c>Sent</c> con la referencia <c>CORREO-…</c>).
+    /// </summary>
+    [Fact]
+    public async Task E264_el_aviso_de_inactividad_sale_por_correo_solo_con_la_autorizacion_del_canal()
+    {
+        var coop = await CaptacionesE2E.CooperativaConCaptacionesAsync(fx, "ciclo_aviso");
+        using var http = fx.CreateClient();
+        var admin = coop.TokenAdmin;
+        await CarteraE2E.PersonaDelAdministradorAsync(http, coop.Cooperativa);
+        var usuarios = await UsuariosDeCartera.CrearAsync(fx, coop.Cooperativa);
+        var hoy = CarteraE2E.Hoy(fx);
+        var linea = await LineaConInactividadAsync(http, admin, hoy, "AHAVISO");
+        var autorizado = await MovimientosTests.AsociadoAsync(http, admin, "AvisoAutorizado");
+        var sinAutorizar = await MovimientosTests.AsociadoAsync(http, admin, "AvisoSinAutorizar");
+        var cuentaAutorizada = await MovimientosTests.CuentaAsync(http, admin, usuarios.O1.AgenciaPublicId, linea, autorizado);
+        var cuentaSin = await MovimientosTests.CuentaAsync(http, admin, usuarios.O1.AgenciaPublicId, linea, sinAutorizar);
+        await MovimientosTests.ConsignarAsync(http, admin, cuentaAutorizada, autorizado, 1_000_000m, hoy, medio: "Transfer");
+        await MovimientosTests.ConsignarAsync(http, admin, cuentaSin, sinAutorizar, 1_000_000m, hoy, medio: "Transfer");
+
+        (await CarteraE2E.EnviarAsync(http, admin, HttpMethod.Post, "/api/compliance/habeas-data/policies/", new
+        {
+            title = "Política de contacto (e2e del aviso de inactividad)", contentMarkdown = "Texto de la política del canal de contacto.",
+            effectiveFrom = DateTime.UtcNow.AddMinutes(-1), purpose = "ContactChannel",
+        })).IsSuccessStatusCode.Should().BeTrue();
+        var evidencia = await OriginacionE2E.SubirEvidenciaAsync(http, admin, autorizado);
+        var autorizacion = await CarteraE2E.ConClaveAsync(http, admin, HttpMethod.Post, "/api/compliance/habeas-data/authorizations", new
+        {
+            personPublicId = autorizado, purpose = "ContactChannel", contactChannel = "Email", evidenceAttachmentPublicId = evidencia, grantedAt = DateTime.UtcNow,
+        });
+        autorizacion.StatusCode.Should().Be(HttpStatusCode.Created, await autorizacion.Content.ReadAsStringAsync());
+        var correoAutorizado = (await CarteraE2E.GetAsync(http, admin, $"/api/core/people/{autorizado}")).GetProperty("email").GetString()!;
+        var correoSin = (await CarteraE2E.GetAsync(http, admin, $"/api/core/people/{sinAutorizar}")).GetProperty("email").GetString()!;
+
+        using (CausacionE2E.RelojEn(fx, hoy.AddDays(30)))
+            await CausacionE2E.CicloDeHoyAsync(fx, http, admin, coop.TenantPublicId);
+        (await EstadoAsync(http, admin, cuentaAutorizada)).Should().Be((int)MemberAccountStatus.Inactive);
+
+        // Los avisos quedaron en la cola por el correo de la plataforma; el despacho respeta la ventana legal (si hoy no es hábil, espera al día siguiente).
+        var avisos = await CausacionE2E.EnLaBaseAsync(fx, coop.TenantPublicId, db => db.DebtorMessages.AsNoTracking()
+            .Where(m => m.OriginKind == IngenIA365ERP.Domain.Entities.Lending.Collections.DebtorMessage.OrigenInactividadDeCuenta)
+            .Select(m => new { m.PublicId, m.Channel, m.ChannelCode, m.Purpose }).ToListAsync());
+        avisos.Should().NotBeEmpty();
+        avisos.Should().OnlyContain(a => a.Channel == MessageChannel.Email && a.ChannelCode == "CORREO", "el aviso va por correo, no por el simulado");
+
+        var conductor = new ConductorDelDespachador(fx);
+        for (var paso = 0; paso < 12 && !fx.Emails.Sent.Any(m => m.To == correoAutorizado); paso++)
+            using (conductor.Adelantar(TimeSpan.FromDays(30) + TimeSpan.FromHours(paso * 7)))
+                await fx.CorrerTareaAsync(coop.TenantPublicId, IngenIA365ERP.Application.Lending.Collections.Tareas.TareaDeMensajesAlDeudor.NombreDeLaTarea);
+
+        fx.Emails.Sent.Should().Contain(m => m.To == correoAutorizado, "con la autorización del canal el aviso de inactividad sale por correo");
+        fx.Emails.Sent.Should().NotContain(m => m.To == correoSin, "sin la autorización del canal de contacto no se le escribe");
+        var eventos = await CausacionE2E.EnLaBaseAsync(fx, coop.TenantPublicId, db => db.DebtorMessageEvents.AsNoTracking()
+            .Where(e => e.Kind == DebtorMessageEventKind.Sent).Select(e => e.ProviderReference).ToListAsync());
+        eventos.Should().Contain(r => r != null && r.StartsWith("CORREO-"), "la evidencia del envío real");
     }
 
     [Fact]

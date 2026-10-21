@@ -3030,3 +3030,24 @@ la instrucción sellada al abrir es hecho y no se edita, y `null` significaba «
 - **Cliente y pantalla.** `CaptacionesClient.RetirarInstruccionDeContratoAsync`; botón «Retirar la instrucción» en la ficha del contrato (con el motivo del formulario).
 - **Pruebas.** Application (`AhorroContractualTests.E263_…`: retirada y vencimiento a disposición sin mover dinero y con idempotencia, retiro de la sellada al abrir, rechazo tras el
   vencimiento y en una cuenta que no es contractual), Shared (ruta, método y clave) y e2e (`E263_el_asociado_retira_la_instruccion_…`, PostgreSQL y SQL Server). Manual del contractual.
+
+### 27.15 E264 · por ahora los avisos salen por correo electrónico (decisión del dueño del 2026-10-22)
+
+«El proveedor de SMS y WhatsApp queda para otra fase; por ahora los avisos serían como correo electrónico.» **El diseño ya lo tenía** (feature 013, K1; T0083, T74): el correo
+es un canal real, `CanalDeCorreo` sobre `IEmailSender` (código `CORREO`, `Capacidades` con adjuntos y sin consulta de entrega), registrado por `AddApplicationServices`, y
+`ColaDeMensajesAlDeudor.CodigoDeCanalAsync` sella `CORREO` para todo mensaje por correo (nunca `SIMULADO`); sólo SMS y WhatsApp caen en `SIMULADO` cuando la cooperativa no tiene
+proveedor configurado, y la guardia (`GuardiaDeCanalesExternos`, `RealDelivery`) les quita el efecto en producción: el mensaje no sale y queda `Simulated`. Se verificó la
+cadena completa **sin cambios de código**:
+
+- **Quién usa el correo.** `EnvioDeCobranza` prueba correo, SMS y WhatsApp en ese orden (etapa de cobranza, aviso previo, aviso del gasto); los informativos de captaciones
+  (inactividad `PREINACTIV`/`INACTIVA`, cambio de tasa, mayoría de edad, contractual, no reclamados) y de Cartera (abono, libranza, no aplicados, traslado de libranza), el envío de
+  documentos y de simulaciones piden `MessageChannel.Email` directamente. Las plantillas sembradas traen una fila por canal, así que cada aviso tiene su correo.
+- **Reglas que se conservan.** La ventana legal de la Ley 2300 (horario, tope diario, canal fijado en la semana) y las exclusiones (sin autorización del canal —o la de tratamiento
+  general en la entrega de documentos—, evidencia exigida a la cobranza, sin destino, fallecido, insolvencia) se evalúan al encolar y otra vez al despachar, igual para los tres canales.
+  El destino se copia del maestro al despachar. El registro: `Sent` con `CORREO-{id}` y el destino; el correo no consulta entrega (queda en `Sent`, no pasa a `Delivered`).
+- **Lo que sigue abierto.** T0931 (batería de conformidad con los adaptadores reales de SMS y WhatsApp) y T0952 (los adaptadores) quedan abiertas hasta que haya proveedor; mientras
+  tanto SMS y WhatsApp siguen `SIMULADO` y el aviso previo con efecto legal en producción es el que sale por correo o por carta con guía.
+- **Pruebas nuevas (e2e, PostgreSQL y SQL Server).** `MensajesAlDeudorTests.E264_la_entrega_por_correo_sale_de_verdad_…` (sale por el `IEmailSender` de la fixture, `fx.Emails`, con su
+  evidencia; no se repite al despachar de nuevo; el SMS de la misma cooperativa sigue simulado), `…E264_sin_autorizacion_de_tratamiento_el_correo_no_sale_…` y
+  `CicloDeVidaDeCuentasTests.E264_el_aviso_de_inactividad_sale_por_correo_solo_con_la_autorizacion_del_canal` (un informativo de captaciones: canal `CORREO`, sin la autorización
+  del canal de contacto no se escribe, con ella sale y deja su referencia).

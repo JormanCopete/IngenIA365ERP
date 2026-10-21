@@ -289,8 +289,12 @@ está en el código) y nace **en trámite**: desde ahí el reporte lleva la marc
   nacional y no se inventa.
 - **Aviso a los codeudores** (2026-10-16): `AvisoPrevio.IncluirCodeudores` arranca en `false`; el dueño confirma si su política es avisarles
   (y reportarlos) o no.
-- **SMS y WhatsApp reales**: pendientes de proveedor. Hoy esos canales salen por `SIMULADO`, que en producción **no** es constancia del
-  aviso previo; mientras tanto, el aviso previo con efecto legal en producción sale por correo o por carta con guía. Ver el runbook.
+- **SMS y WhatsApp reales**: pendientes de proveedor (decisión del dueño del 2026-10-22: «queda para otra fase; por ahora los avisos son como correo»).
+  Hoy esos canales salen por `SIMULADO`, que en producción **no** es constancia del aviso previo ni sale al titular; mientras tanto, los avisos al
+  titular —cobranza, aviso previo, gasto de cobranza, informativos como la inactividad, el cambio de tasa o la mayoría de edad— salen por **correo
+  electrónico real** (canal `CORREO`, el correo de la plataforma), con las mismas reglas de siempre: ventana de la Ley 2300, autorización del canal con su
+  evidencia (o la de tratamiento general en la entrega de documentos), destino leído del maestro al despachar y registro del envío (`Sent` con la
+  referencia `CORREO-…`). El correo no informa la entrega: el mensaje queda en `Sent`. Ver el runbook.
 - **Permisos de las plantillas de rol** (resuelto en el bloque D): el jefe trae aprobar acuerdos, el cobro jurídico, las campañas y los avisos
   previos; el gestor, enviar y registrar avisos previos (y subir la guía). La alerta `Cartera.AvisoPrevioSinConstancia` va a quien registra la
   constancia. Una cooperativa que ya creó sus roles desde las plantillas **no** los recibe sola: los agrega en Seguridad › Roles.

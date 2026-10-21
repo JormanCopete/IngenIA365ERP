@@ -153,6 +153,78 @@ public sealed class MensajesAlDeudorTests(CentralIdentityApiFixture fx)
             .GetProperty("body").GetString().Should().Contain("esta listo");
     }
 
+    // ------------------------------------------------------------------------------ el correo es un canal real (E264) --
+
+    /// <summary>
+    /// E264 (decisión del dueño del 2026-10-22: «el proveedor de SMS y WhatsApp queda para otra fase; por ahora los avisos serían como correo»): el
+    /// correo ya era un canal real del diseño —<c>CanalDeCorreo</c> sobre <c>IEmailSender</c>, código <c>CORREO</c>, nunca <c>SIMULADO</c>—. Se
+    /// comprueba de punta a punta: la entrega de un documento por correo sale por el <c>IEmailSender</c> de la fixture (<c>fx.Emails</c>), al destino
+    /// del maestro, con su evidencia (<c>Sent</c>, sin la marca de simulado, referencia <c>CORREO-…</c>); el SMS de la misma cooperativa sigue siendo
+    /// <c>SIMULADO</c>.
+    /// </summary>
+    [Fact]
+    public async Task E264_la_entrega_por_correo_sale_de_verdad_por_el_correo_de_la_plataforma_con_su_evidencia()
+    {
+        var esc = await EscenarioAsync();
+        using var http = fx.CreateClient();
+        var admin = esc.Coop.TokenAdmin;
+        var correo = (await CarteraE2E.GetAsync(http, admin, $"/api/core/people/{esc.Titular}")).GetProperty("email").GetString()!;
+
+        var resp = await CarteraE2E.ConClaveAsync(http, admin, HttpMethod.Post, Mensajes, new
+        {
+            recipientPersonPublicId = esc.Titular, channel = "Email", purpose = "DocumentDelivery", templateCode = "ENVIODOC",
+            variables = new Dictionary<string, string>
+            {
+                ["ClaseDeDocumento"] = "Paz y salvo", ["NumeroDelDocumento"] = "PS-E264", ["CodigoDeVerificacion"] = "ABCD-EFGH-JKLM-NPQR",
+            },
+        });
+        resp.StatusCode.Should().Be(HttpStatusCode.Created, await resp.Content.ReadAsStringAsync());
+        var id = (await CarteraE2E.LeerAsync(resp)).GetProperty("publicId").GetGuid();
+        fx.Emails.Sent.Should().NotContain(m => m.To == correo && m.BodyHtml.Contains("PS-E264"), "antes de despachar no ha salido nada");
+
+        await DespacharAsync(esc);
+
+        var detalle = await CarteraE2E.GetAsync(http, admin, $"{Mensajes}/{id}");
+        detalle.GetProperty("channelCode").GetString().Should().Be("CORREO", "el correo es el canal de la plataforma, no el simulado");
+        detalle.GetProperty("message").GetProperty("simulated").GetBoolean().Should().BeFalse();
+        detalle.GetProperty("message").GetProperty("status").GetInt32().Should().BeOneOf((int)DebtorMessageEventKind.Sent, (int)DebtorMessageEventKind.Delivered);
+        detalle.GetProperty("destinationAddress").GetString().Should().Be(correo, "el destino se copia del maestro al despachar");
+        var salio = detalle.GetProperty("events").EnumerateArray().Single(e => e.GetProperty("kind").GetInt32() == (int)DebtorMessageEventKind.Sent);
+        salio.GetProperty("destinationAddress").GetString().Should().Be(correo);
+        salio.GetProperty("providerReference").GetString().Should().StartWith("CORREO-", "la evidencia del envío");
+        detalle.GetProperty("events").EnumerateArray().Should().NotContain(e => e.GetProperty("kind").GetInt32() == (int)DebtorMessageEventKind.Simulated);
+
+        var enviado = fx.Emails.Sent.Should().ContainSingle(m => m.To == correo && m.BodyHtml.Contains("PS-E264")).Subject;
+        enviado.Subject.Should().NotBeNullOrWhiteSpace();
+        enviado.BodyHtml.Should().Contain("ABCD-EFGH-JKLM-NPQR");
+
+        // Despachar de nuevo no repite el correo.
+        await DespacharAsync(esc);
+        fx.Emails.Sent.Count(m => m.To == correo && m.BodyHtml.Contains("PS-E264")).Should().Be(1);
+    }
+
+    [Fact]
+    public async Task E264_sin_autorizacion_de_tratamiento_el_correo_no_sale_y_el_sms_sigue_simulado()
+    {
+        var esc = await EscenarioAsync();
+        using var http = fx.CreateClient();
+        var admin = esc.Coop.TokenAdmin;
+        var sinAutorizacion = await CarteraE2E.PersonaAsync(http, admin, "SinAutorizar", "Correo", Movil);
+        var correo = (await CarteraE2E.GetAsync(http, admin, $"/api/core/people/{sinAutorizacion}")).GetProperty("email").GetString()!;
+
+        var rechazado = await CarteraE2E.ConClaveAsync(http, admin, HttpMethod.Post, Mensajes, new
+        {
+            recipientPersonPublicId = sinAutorizacion, channel = "Email", purpose = "DocumentDelivery", templateCode = "ENVIODOC",
+            variables = new Dictionary<string, string>
+            {
+                ["ClaseDeDocumento"] = "Paz y salvo", ["NumeroDelDocumento"] = "PS-E264-SIN", ["CodigoDeVerificacion"] = "ABCD-EFGH-JKLM-NPQR",
+            },
+        });
+        rechazado.IsSuccessStatusCode.Should().BeFalse("sin la autorización de tratamiento no se contacta a la persona: " + await rechazado.Content.ReadAsStringAsync());
+        await DespacharAsync(esc);
+        fx.Emails.Sent.Should().NotContain(m => m.To == correo, "ni el despacho posterior lo manda");
+    }
+
     // ------------------------------------------------------------------------------ con un crédito (US3) --
 
     /// <summary>
