@@ -1,4 +1,4 @@
-@page "/maestros/centros-costo"
+﻿@page "/maestros/centros-costo"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
 @using System.ComponentModel.DataAnnotations
 @using System.Net.Http.Json
@@ -269,6 +269,7 @@
             // CompanyName y CompanyTaxId son strings denormalizados (no FK).
             var payload = new
             {
+                Code = _model.Code ?? string.Empty, // la pantalla siempre lo manda: vacío = sin código
                 Name = _model.Name,
                 CompanyName = _model.CompanyName,
                 CompanyTaxId = _model.CompanyTaxId,
