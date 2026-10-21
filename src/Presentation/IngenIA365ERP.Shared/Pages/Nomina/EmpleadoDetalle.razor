@@ -144,6 +144,18 @@ else
                             </SfDropDownList>
                         </div>
                         <div>
+                            <label>Centro de costo</label>
+                            <PermissionGate Required="Payroll.Employees.Update">
+                                <ChildContent>
+                                    <SelectorDeCentroDeCosto Value="_labor.CostCenterPublicId" ValueChanged="@AlCambiarCentro" />
+                                </ChildContent>
+                                <Fallback>
+                                    <SfTextBox Value="@_employee.CentroDeCostoTexto" Readonly="true" CssClass="e-disabled" />
+                                </Fallback>
+                            </PermissionGate>
+                            <span class="hint">El comprobante de nómina lo usa en las cuentas que manejan centro de costo. Vacío = cuentas por defecto del concepto.</span>
+                        </div>
+                        <div>
                             <label>Fecha de Ingreso</label>
                             <SfDatePicker TValue="DateTime" Value="@_employee.HireDate"
                                           Format="dd/MM/yyyy" Readonly="true" CssClass="e-disabled" />
@@ -563,6 +575,7 @@ else
             // Feature 010
             ApprenticeStage = _employee.ApprenticeStage,
             DisbursementBankPublicId = _employee.DisbursementBankPublicId,
+            CostCenterPublicId = _employee.CostCenterPublicId,
             PilaContributorType = pila?.ContributorType,
             PilaContributorSubtype = pila?.ContributorSubtype,
             DivipolaDepartment = pila?.DivipolaDepartment,
@@ -622,6 +635,12 @@ else
     }
 
     private void MarkChanged() => _hasChanges = true;
+
+    private void AlCambiarCentro(Guid? centro)
+    {
+        _labor.CostCenterPublicId = centro;
+        MarkChanged();
+    }
 
     // --- Guardar cambios laborales ---
 
@@ -696,6 +715,9 @@ else
                 ClearApprenticeStage = _labor.ApprenticeStage is null && _employee.ApprenticeStage is not null,
                 DisbursementBankPublicId = _labor.DisbursementBankPublicId,
                 ClearDisbursementBank = _labor.DisbursementBankPublicId is null && _employee.DisbursementBankPublicId is not null,
+                // Nulo = no cambia; «Ninguno» manda la orden de quitarlo (el PUT reemplaza, pero el centro mueve las cuentas del comprobante).
+                CostCenterPublicId = _labor.CostCenterPublicId,
+                ClearCostCenter = _labor.CostCenterPublicId is null && _employee.CostCenterPublicId is not null,
             };
 
             var res = await Http.PutAsJsonAsync($"/api/payroll/employees/{EmployeeId}", payload);
@@ -742,6 +764,7 @@ else
         // Feature 010 (contracts/api.md §12)
         public int? ApprenticeStage { get; set; }
         public Guid? DisbursementBankPublicId { get; set; }
+        public Guid? CostCenterPublicId { get; set; }
         public string? PilaContributorType { get; set; }
         public string? PilaContributorSubtype { get; set; }
         public string? DivipolaDepartment { get; set; }

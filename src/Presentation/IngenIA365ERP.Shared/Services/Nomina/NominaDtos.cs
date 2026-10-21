@@ -392,6 +392,13 @@ public sealed class FichaEmpleadoDto
     public string? SecondLastName { get; init; }
     public string FullName { get; init; } = "";
 
+    /// <summary>Centro de costo contable (COR_CostCenters) que toma el comprobante de nómina; nulo = sin centro (cuentas por defecto).</summary>
+    public Guid? CostCenterPublicId { get; init; }
+    public string? CostCenterCode { get; init; }
+    public string? CostCenterName { get; init; }
+    public string CentroDeCostoTexto => CostCenterPublicId is null ? "Ninguno"
+        : string.IsNullOrWhiteSpace(CostCenterCode) ? CostCenterName ?? "" : $"{CostCenterCode} · {CostCenterName}";
+
     /// <summary>«WILLIAN ANDRÉS LAGOS PÉREZ»: el que manda la API o, si no viene, las cuatro partes.</summary>
     public string NombreCompleto => NombreDePersona.PreferirCompuesto(FullName, FirstName, OtherNames, LastName, SecondLastName);
     /// <summary>Primer nombre y otros nombres, para el campo «Nombres».</summary>
