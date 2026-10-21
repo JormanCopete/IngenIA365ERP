@@ -1,4 +1,4 @@
-using IngenIA365ERP.Architecture.Tests.Helpers;
+﻿using IngenIA365ERP.Architecture.Tests.Helpers;
 using System.Text.RegularExpressions;
 
 namespace IngenIA365ERP.Architecture.Tests.Principles;
@@ -114,6 +114,21 @@ public class PrincipioXII_MigracionesDestructivas
         ComprobarRetiroConGuarda("RetiroDeLaCarteraHeredada", "LND.RetiroHeredado.Aprobado", "THROW 50013");
     }
 
+    /// <summary>Grupos del asociado (2026-10-21): la primera marca de tiempo de sus migraciones; la 014 termina aquí.</summary>
+    private const string InicioGruposDelAsociado = "20261021000000";
+
+    /// <summary>
+    /// Grupos del asociado: <c>RetiroDelCentroDeCostoDelAsociado</c> —borra <c>COR_Associates.CostCenterId</c>, que nadie escribía— es la
+    /// única migración destructiva del cambio (<c>GruposDelAsociado</c> es aditiva). Su <c>Up()</c> lleva la cabecera de aprobación y su
+    /// guarda se niega con <c>THROW 50015</c> en SQL Server y <c>RAISE EXCEPTION</c> en PostgreSQL si alguna fila tiene valor.
+    /// </summary>
+    [Fact]
+    public void El_retiro_del_centro_de_costo_del_asociado_es_la_unica_destructiva_de_los_grupos_y_lleva_su_guarda()
+    {
+        Assert.Equal(["RetiroDelCentroDeCostoDelAsociado.cs"], DestructivasEntre(InicioGruposDelAsociado, "99999999999999"));
+        ComprobarRetiroConGuarda("RetiroDelCentroDeCostoDelAsociado", "RetiroDelCentroDeCostoDelAsociado:", "THROW 50015");
+    }
+
     /// <summary>Feature 014: la primera marca de tiempo de sus migraciones.</summary>
     private const string Inicio014 = "20261018000000";
 
@@ -126,7 +141,7 @@ public class PrincipioXII_MigracionesDestructivas
     [Fact]
     public void El_retiro_de_captaciones_heredadas_es_la_unica_destructiva_de_la_014_y_lleva_su_guarda()
     {
-        Assert.Equal(["RetiroDeCaptacionesHeredadas.cs"], DestructivasEntre(Inicio014, "99999999999999"));
+        Assert.Equal(["RetiroDeCaptacionesHeredadas.cs"], DestructivasEntre(Inicio014, InicioGruposDelAsociado));
         ComprobarRetiroConGuarda("RetiroDeCaptacionesHeredadas", "LND.CaptacionesHeredadas.RetiroAprobado", "THROW 50014");
     }
 

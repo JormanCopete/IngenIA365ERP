@@ -18,7 +18,7 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
             //   Qué borra: la columna CostCenterId de COR_Associates con su índice y su llave a COR_CostCenters. Ningún comando la escribía
             //     (la consulta de asociados sólo la leía) y el centro de costo del asociado se reemplaza por el grupo del asociado
             //     (COR_Associates.AssociateGroupId, migración GruposDelAsociado). El catálogo COR_CostCenters no se toca.
-            //   Diagnóstico (2026-10-21, sólo lectura por SSH): DEV (ingenia365erp) y QA (ingenia365erp y coop_prueba): COR_Associates tiene 0 filas, 0 con CostCenterId.
+            //   Diagnóstico: (2026-10-21, sólo lectura por SSH) DEV (ingenia365erp) y QA (ingenia365erp y coop_prueba): COR_Associates tiene 0 filas, 0 con CostCenterId.
             //     Producción (erp-pdn: ingenia365erp y cooflopal): pendiente de correr por el dueño antes de promover (cooflopal tenía 0 filas en COR_Associates):
             //     SELECT count(*) FROM dbo."COR_Associates" WHERE "CostCenterId" IS NOT NULL;   (incluye filas dadas de baja)
             //     Se espera 0 en todas (producción: cooflopal tiene 0 filas en COR_Associates). La guarda de abajo lo comprueba sola.
