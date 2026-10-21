@@ -36,6 +36,13 @@ public record EmployeeInput : IFichaPilaDian
     /// <summary>Plan de nómina al que entra. Nulo = el plan por defecto de la cooperativa.</summary>
     public Guid? PayrollPlanPublicId { get; init; }
 
+    /// <summary>
+    /// Centro de costo contable del empleado (<c>COR_CostCenters</c>). Nulo = sin centro: el comprobante
+    /// de nómina usa las cuentas por defecto de cada concepto. No lleva la bandera de «quitar»: el alta no tiene
+    /// nada que quitar.
+    /// </summary>
+    public Guid? CostCenterPublicId { get; init; }
+
     // Banca nomina
     public Guid? PayrollBankPublicId { get; init; }
     public string? PayrollBankAccountNumber { get; init; }

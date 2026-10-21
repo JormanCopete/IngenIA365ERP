@@ -1,5 +1,6 @@
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Application.Core.CostCenters;
 using IngenIA365ERP.Application.Payroll.EmployeeManagement.Contracts;
 using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Entities.Payroll;
@@ -55,6 +56,17 @@ public sealed class EmployeeRegistrar(
                     "La clase de riesgo ARL elegida no existe."));
         }
 
+        // Centro de costo contable (opcional): debe existir; sin él, el comprobante usa las cuentas por defecto.
+        int? centroDeCostoId = null;
+        if (input.CostCenterPublicId is { } centroPublicId)
+        {
+            centroDeCostoId = await context.CostCenters.AsNoTracking()
+                .Where(c => c.PublicId == centroPublicId && !c.IsDeleted)
+                .Select(c => (int?)c.Id)
+                .FirstOrDefaultAsync(ct);
+            if (centroDeCostoId is null) return Result.Failure<Employee>(CostCenterErrors.NotFound());
+        }
+
         // Plan de nómina (feature 005): todo empleado nace en el plan por defecto de la
         // cooperativa. Sin esto queda con PayrollPlanId = 0, fuera de cualquier período:
         // no admite novedades ni entra en la liquidación. Cambiar de plan es
@@ -84,6 +96,7 @@ public sealed class EmployeeRegistrar(
             PayrollCompanyId = 1,
             PayrollPlanId = plan ?? 0,
             CostCenterId = "",
+            CostCenterRefId = centroDeCostoId,
             AreaCode = "",
             SectionId = "",
             TerminationCause = "",
