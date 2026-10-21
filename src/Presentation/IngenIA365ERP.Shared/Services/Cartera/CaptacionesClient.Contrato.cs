@@ -25,4 +25,9 @@ public sealed partial class CaptacionesClient
     public Task<ResultadoDeInventario<ContratoDeAhorroDto>> CambiarInstruccionDeContratoAsync(Guid cuenta, CambiarInstruccionDeContratoRequest request,
         ClaveDeOperacion clave, CancellationToken ct = default) =>
         Enviar<ContratoDeAhorroDto>(HttpMethod.Put, $"{RutaDeCuentas}/{cuenta}/maturity-instruction", request, clave, ct);
+
+    /// <summary>Retira la instrucción al vencimiento (E263): al vencer, el contrato queda a disposición del titular sin mover dinero.</summary>
+    public Task<ResultadoDeInventario<ContratoDeAhorroDto>> RetirarInstruccionDeContratoAsync(Guid cuenta, RetirarInstruccionDeContratoRequest request,
+        ClaveDeOperacion clave, CancellationToken ct = default) =>
+        Enviar<ContratoDeAhorroDto>(HttpMethod.Post, $"{RutaDeCuentas}/{cuenta}/maturity-instruction/withdraw", request, clave, ct);
 }

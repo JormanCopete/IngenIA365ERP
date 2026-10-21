@@ -163,6 +163,11 @@
                     </div>
                     <SfButton CssClass="e-outline" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(_motivo) || (_clase == TextosDeContrato.PorTraslado && _destino is null))"
                               OnClick="@CambiarInstruccionAsync">Guardar la instrucción</SfButton>
+                    @if (c.Instruction is not null)
+                    {
+                        <SfButton CssClass="e-flat" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@RetirarInstruccionAsync">Retirar la instrucción</SfButton>
+                        <p class="texto-tenue">Retirada la instrucción, al vencer el contrato queda a disposición del titular y no se mueve dinero. Pide el motivo.</p>
+                    }
                 </PermissionGate>
             }
         }
@@ -230,6 +235,20 @@
         _motivo = null;
         _contrato = r.Value ?? _contrato;
         await Notification.SuccessAsync("Instrucción al vencimiento guardada.");
+        await OnCambio.InvokeAsync();
+    }
+
+    private async Task RetirarInstruccionAsync()
+    {
+        using var carga = _guardado.Iniciar();
+        _errores = [];
+        var r = await Cliente.RetirarInstruccionDeContratoAsync(Cuenta.PublicId, new RetirarInstruccionDeContratoRequest(_motivo!.Trim()), _clave);
+        if (!r.IsSuccess) { _errores = [.. LineasDeCreditoClient.Explicar(r)]; return; }
+        _clave = new ClaveDeOperacion();
+        _motivo = null;
+        _destino = null;
+        _contrato = r.Value ?? _contrato;
+        await Notification.SuccessAsync("Instrucción al vencimiento retirada: el contrato quedará a disposición al vencer.");
         await OnCambio.InvokeAsync();
     }
 

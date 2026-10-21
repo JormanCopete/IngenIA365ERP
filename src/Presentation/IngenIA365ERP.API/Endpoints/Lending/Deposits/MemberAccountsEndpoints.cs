@@ -120,6 +120,13 @@ public class MemberAccountsEndpoints : ICarterModule
             .ConClaveDeOperacion()
             .RequirePermission(AdministrarPartes);
 
+        // E263: retirar la instrucción al vencimiento (el contrato vence a disposición); el motivo viaja en el cuerpo.
+        cuentas.MapPost("/{id:guid}/maturity-instruction/withdraw", async (Guid id, MotivoRequest body, HttpContext http, ISender sender, CancellationToken ct) =>
+                await sender.Send(new WithdrawContractualMaturityInstructionCommand(id, body.Reason ?? string.Empty) { OperationKey = http.ClaveDeOperacion() }, ct))
+            .WithName("Lending_Accounts_WithdrawContractualMaturityInstruction")
+            .ConClaveDeOperacion()
+            .RequirePermission(AdministrarPartes);
+
         // ------------------------------------------------------------------------- intereses y cancelación (US5, T135, T139) --
         cuentas.MapGet("/{id:guid}/settlements", async (Guid id, int? page, int? pageSize, ISender sender, CancellationToken ct) =>
                 await sender.Send(new ListInterestSettlementsQuery(id, page ?? 1, pageSize ?? 50), ct))

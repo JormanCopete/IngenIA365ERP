@@ -17,6 +17,9 @@ public sealed record InstruccionDeContratoRequest(int Kind, Guid? TargetAccountP
 /// <summary>El cuerpo de <c>PUT /api/lending/accounts/{id}/maturity-instruction</c> (api.md §4): la instrucción, plana, y el motivo.</summary>
 public sealed record CambiarInstruccionDeContratoRequest(int Kind, Guid? TargetAccountPublicId, BeneficiarioDeGiroRequest? Payee, string Reason);
 
+/// <summary>El cuerpo de <c>POST /api/lending/accounts/{id}/maturity-instruction/withdraw</c> (E263): sólo el motivo.</summary>
+public sealed record RetirarInstruccionDeContratoRequest(string Reason);
+
 /// <summary>El contrato en la ficha de la cuenta (<c>MemberAccountDto.contractual</c>).</summary>
 public sealed record ResumenDeContratoDto(decimal Installment, int Periodicity, int Installments, int PaidInstallments, int ArrearsInstallments, int Status,
     DateOnly? MaturityDate);

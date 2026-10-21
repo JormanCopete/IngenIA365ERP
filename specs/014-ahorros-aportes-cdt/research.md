@@ -3014,3 +3014,19 @@ cuenta; la migrada ya no se ancla al corte. Sin migración.
   regla anterior, porque trasladar saldos abandonados a no reclamados por el solo hecho de migrar no fue lo que el dueño respondió. Una cuenta migrada ya `Inactive` sigue naciendo
   inactiva desde el corte.
 - **Pruebas.** Application (`CicloDeVidaDeCuentasTests`: `DesdeCuando` de la migrada, `DesdeCuandoParaNoReclamados`, el conteo de la revisión previa). Manual de inactividad y de líneas y apertura.
+
+### 27.14 E263 · la instrucción de vencimiento del contractual se puede retirar (decisión del dueño del 2026-10-22; refina E248)
+
+E248 dejó dicho que la instrucción, una vez dada, sólo se cambiaba por otro destino admitido. El dueño pidió que **pueda retirarse**. Sin migración: la cuenta ya guarda su
+instrucción en `MaturityInstructionJson`, y el retiro es una **marca** en ese mismo JSON (`InstruccionDeContractual.Retirada`, con usuario, instante y motivo) y no un `null`:
+la instrucción sellada al abrir es hecho y no se edita, y `null` significaba «rige la sellada».
+
+- **Comando** `WithdrawContractualMaturityInstructionCommand` (`POST /api/lending/accounts/{id}/maturity-instruction/withdraw`, `Lending.Accounts.Parties.Manage`, el mismo permiso que
+  la cambia; con `Idempotency-Key` y motivo obligatorio). Las mismas guardas que cambiarla: sólo un contractual (`Lending.Savings.NotContractual`) y vigente
+  (`Lending.Contractual.NotCurrent`: vencido, cumplido, cancelado). Retirar lo ya retirado responde el contrato sin escribir. Cambiar la instrucción después de retirarla es posible
+  mientras el contrato esté vigente.
+- **Efecto.** `CierreDeContractual.DestinoAsync` no mueve nada con una instrucción retirada (ni la sellada); queda el efecto de la línea ante el incumplimiento (`MoveToDemand`), que
+  es de la línea. El contrato vence a disposición, se levanta `Cartera.ContractualADisposicion` y la lectura del contrato muestra «sin instrucción».
+- **Cliente y pantalla.** `CaptacionesClient.RetirarInstruccionDeContratoAsync`; botón «Retirar la instrucción» en la ficha del contrato (con el motivo del formulario).
+- **Pruebas.** Application (`AhorroContractualTests.E263_…`: retirada y vencimiento a disposición sin mover dinero y con idempotencia, retiro de la sellada al abrir, rechazo tras el
+  vencimiento y en una cuenta que no es contractual), Shared (ruta, método y clave) y e2e (`E263_el_asociado_retira_la_instruccion_…`, PostgreSQL y SQL Server). Manual del contractual.

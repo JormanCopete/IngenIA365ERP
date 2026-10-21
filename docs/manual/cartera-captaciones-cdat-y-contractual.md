@@ -104,6 +104,10 @@ bonificación. **El contrato no cambia aunque la línea cambie después.**
   pestaña del contrato («Instrucción», con motivo y auditoría). Una instrucción que la línea no admite se rechaza
   (`Lending.Contractual.DestinationNotAllowedByLine`, «La línea de este ahorro contractual no admite…»). Lo que admite es la versión de la línea con la
   que se selló el contrato: un cambio posterior de la línea no lo toca.
+- **Retirar la instrucción** (E263): antes del vencimiento, en la misma pestaña, «Retirar la instrucción» (con motivo, auditado, con el mismo permiso que
+  la cambia: `Lending.Accounts.Parties.Manage`). Vale también para la que se selló al abrir. Al vencer, el contrato queda **a disposición** del titular y no
+  se mueve dinero (alerta `Cartera.ContractualADisposicion`). Retirarla de nuevo no falla ni escribe; vencido el contrato responde
+  `Lending.Contractual.NotCurrent`. El asociado puede volver a dar una instrucción mientras el contrato esté vigente.
 - Al vencer el proceso nocturno ejecuta **sólo** lo que dice la instrucción **y** lo que la línea admite. Sin instrucción (o con una que la línea ya no
   admite, o si la cuenta destino ya no está viva) **no se mueve dinero**: el contrato queda **vencido, a disposición del titular**, y se levanta la
   alerta `Cartera.ContractualADisposicion` para quien administra las cuentas; el titular decide después con «Cancelación». El pasar a la vista por

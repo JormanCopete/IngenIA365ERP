@@ -452,6 +452,8 @@ public sealed class CierreDeContractual(
     public async Task<EntregaDeContractual?> DestinoAsync(MemberAccount cuenta, MemberAccountTermsVersion vigente, bool aLaVista, CancellationToken ct)
     {
         var pedida = InstruccionDeContractual.Leer(cuenta.MaturityInstructionJson);
+        // E263: una instrucción retirada no mueve nada (ni la sellada en la apertura): sólo queda el efecto de la línea ante el incumplimiento (aLaVista).
+        if (pedida is { Retirada: true } && !aLaVista) return null;
         // E248: sólo se ejecuta lo que el asociado decidió Y lo que la línea admite; si no, nada se mueve y queda a disposición.
         var versionDeLinea = await db.DepositLineVersions.AsNoTracking().FirstOrDefaultAsync(v => v.Id == vigente.DepositLineVersionId, ct);
         var admiteTraslado = AperturaDeContractual.Admite(versionDeLinea, CloseDeliveryKind.TransferToAccount);

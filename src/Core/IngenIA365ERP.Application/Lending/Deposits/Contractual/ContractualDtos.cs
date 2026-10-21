@@ -34,11 +34,19 @@ public sealed record InstruccionDeContractual(
     string? AccountNumber,
     int? Usuario,
     DateTime Dada,
-    string Motivo)
+    string Motivo,
+    bool Retirada = false)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { Converters = { new JsonStringEnumConverter() } };
 
     public string Serializar() => JsonSerializer.Serialize(this, Json);
+
+    /// <summary>
+    /// La marca de «instrucción retirada» (E263): el titular quitó la instrucción antes del vencimiento. Manda sobre la sellada en la apertura —que es hecho y no se
+    /// edita—, así que el contrato vence a disposición y no mueve dinero. El tipo es irrelevante (nunca se ejecuta).
+    /// </summary>
+    public static InstruccionDeContractual MarcaDeRetiro(int? usuario, DateTime cuando, string motivo) =>
+        new(CloseDeliveryKind.TransferToAccount, null, null, null, null, null, usuario, cuando, motivo, Retirada: true);
 
     public static InstruccionDeContractual? Leer(string? json)
     {

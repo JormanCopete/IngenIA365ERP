@@ -83,6 +83,56 @@ public sealed class SetContractualMaturityInstructionCommandHandler(
     private static Result<ContractualDto> Falla(Error e) => Result.Failure<ContractualDto>(e);
 }
 
+/// <summary>
+/// <c>POST /api/lending/accounts/{id}/maturity-instruction/withdraw</c> (<c>Lending.Accounts.Parties.Manage</c>, el mismo permiso que la cambia; con clave y motivo;
+/// feature 014, E263): <b>retira</b> la instrucción al vencimiento del contractual antes de que el contrato termine, también la sellada en la apertura. Al vencer,
+/// el contrato queda <b>a disposición</b> del titular sin mover dinero y se levanta la alerta <c>Cartera.ContractualADisposicion</c>. Idempotente: retirar una
+/// instrucción ya retirada responde el contrato sin escribir; después del vencimiento responde <c>Lending.Contractual.NotCurrent</c>. (nuevo)
+/// </summary>
+public sealed record WithdrawContractualMaturityInstructionCommand(Guid AccountPublicId, string Reason)
+    : IRequest<Result<ContractualDto>>, IOperacionIdempotente, IConMotivo
+{
+    public Guid OperationKey { get; init; }
+}
+
+public sealed class WithdrawContractualMaturityInstructionCommandValidator : ValidadorConMotivo<WithdrawContractualMaturityInstructionCommand>
+{
+    public WithdrawContractualMaturityInstructionCommandValidator() => RuleFor(x => x.AccountPublicId).NotEmpty();
+}
+
+public sealed class WithdrawContractualMaturityInstructionCommandHandler(
+    IApplicationDbContext db,
+    IContextoDeLineasDeCaptacion contexto,
+    LectorDeContractual lector,
+    IAlcanceDeCartera alcance,
+    LendingAuditEmitter auditoria,
+    IActorActual actorActual,
+    IDateTimeService reloj) : IRequestHandler<WithdrawContractualMaturityInstructionCommand, Result<ContractualDto>>
+{
+    public async Task<Result<ContractualDto>> Handle(WithdrawContractualMaturityInstructionCommand request, CancellationToken ct)
+    {
+        if (contexto.Entrega < EntregaDeCartera.K9) return Falla(ErroresDeContractual.EntregaNoDisponible("El ahorro contractual"));
+        var leida = await LectorDeCuentas.CuentaEnAlcanceAsync(db, alcance, auditoria, request.AccountPublicId, seguir: true, ct);
+        if (leida.IsFailure) return Falla(leida.Error);
+        var cuenta = leida.Value;
+        if (cuenta.DepositClass != DepositClass.Contractual) return Falla(ErroresDeContractual.NoEsContractual(cuenta.Number));
+        if (cuenta.Status is not (MemberAccountStatus.Active or MemberAccountStatus.Inactive or MemberAccountStatus.Opening)
+            || cuenta.ContractualStatus == ContractualStatus.Fulfilled)
+            return Falla(ErroresDeContractual.NoVigente(cuenta.Number, cuenta.Status, cuenta.ContractualStatus));
+
+        if (InstruccionDeContractual.Leer(cuenta.MaturityInstructionJson) is not { Retirada: true })
+        {
+            var actor = await actorActual.ObtenerAsync(ct);
+            cuenta.MaturityInstructionJson = InstruccionDeContractual
+                .MarcaDeRetiro(actor.UserId, reloj.UtcNow, IncumplimientoDeContractual.Recortar(request.Reason, 300)).Serializar();
+            await db.SaveChangesAsync(ct);
+        }
+        return await RespuestasDeContractual.DtoAsync(db, lector, cuenta, reloj.HoyLocal, ct);
+    }
+
+    private static Result<ContractualDto> Falla(Error e) => Result.Failure<ContractualDto>(e);
+}
+
 // ------------------------------------------------------------------------------------------------------------- consultas --
 
 /// <summary>
@@ -216,6 +266,7 @@ public static class RespuestasDeContractual
         CancellationToken ct)
     {
         var pedida = InstruccionDeContractual.Leer(cuenta.MaturityInstructionJson);
+        if (pedida is { Retirada: true }) return null;
         if (pedida is not null)
         {
             var numero = pedida.TargetAccountPublicId is { } id

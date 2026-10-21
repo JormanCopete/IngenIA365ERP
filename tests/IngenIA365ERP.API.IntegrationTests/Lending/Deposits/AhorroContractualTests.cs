@@ -221,4 +221,37 @@ public class AhorroContractualTests(CentralIdentityApiFixture fx)
             .CountAsync(m => m.Type == IngenIA365ERP.Application.Common.Integration.Contracts.Lending.Deposits.TrasladoEntreCuentasAplicadoV1.Type));
         traslados.Should().Be(1, "sólo el contrato con instrucción generó el traslado");
     }
+
+    [Fact]
+    public async Task E263_el_asociado_retira_la_instruccion_y_el_contrato_vence_a_disposicion()
+    {
+        var e = await ArmarAsync("retira");
+        using var http = fx.CreateClient();
+        var admin = e.Coop.TokenAdmin;
+        var linea = await LineaContractualAsync(http, admin, e.Hoy, "CONTRAT5");
+        var cuenta = await ContratoAsync(http, e, linea);
+        var vence = e.Hoy.AddMonths(12);
+        (await CarteraE2E.GetAsync(http, admin, $"{Cuentas}/{cuenta}/contractual")).GetProperty("instruction").ValueKind.Should().NotBe(System.Text.Json.JsonValueKind.Null);
+
+        var retiro = await CarteraE2E.ConClaveAsync(http, admin, HttpMethod.Post, $"{Cuentas}/{cuenta}/maturity-instruction/withdraw",
+            new { reason = "El asociado prefiere decidir al vencer" });
+        retiro.StatusCode.Should().Be(HttpStatusCode.OK, await retiro.Content.ReadAsStringAsync());
+        (await CarteraE2E.LeerAsync(retiro)).GetProperty("instruction").ValueKind.Should().Be(System.Text.Json.JsonValueKind.Null);
+        var repetido = await CarteraE2E.ConClaveAsync(http, admin, HttpMethod.Post, $"{Cuentas}/{cuenta}/maturity-instruction/withdraw",
+            new { reason = "El asociado prefiere decidir al vencer" });
+        repetido.StatusCode.Should().Be(HttpStatusCode.OK, "retirar lo ya retirado no falla");
+
+        await MesesAsync(http, e, cuenta, vence, _ => true);
+
+        var final = await CarteraE2E.GetAsync(http, admin, $"{Cuentas}/{cuenta}");
+        final.GetProperty("status").GetInt32().Should().Be((int)MemberAccountStatus.Matured, "a disposición del titular: no se movió dinero");
+        final.GetProperty("balances").GetProperty("balance").GetDecimal().Should().BeGreaterThan(2_400_000m);
+        (await CarteraE2E.GetAsync(http, admin, $"{Cuentas}/{e.Vista}")).GetProperty("balances").GetProperty("balance").GetDecimal().Should().Be(0m);
+        var alertas = await CausacionE2E.EnLaBaseAsync(fx, e.Coop.TenantPublicId, db => db.Alerts.AsNoTracking().CountAsync(a => a.TypeCode == "Cartera.ContractualADisposicion"));
+        alertas.Should().BeGreaterThan(0, "se levanta la alerta Cartera.ContractualADisposicion");
+
+        var tarde = await CarteraE2E.ConClaveAsync(http, admin, HttpMethod.Post, $"{Cuentas}/{cuenta}/maturity-instruction/withdraw", new { reason = "Ya venció" });
+        tarde.StatusCode.Should().NotBe(HttpStatusCode.OK);
+        (await CarteraE2E.CodigoDeErrorAsync(tarde)).Should().Be("Lending.Contractual.NotCurrent");
+    }
 }

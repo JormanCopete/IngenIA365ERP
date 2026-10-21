@@ -39,6 +39,18 @@ public class ContratoDeAhorroClientTests
     }
 
     [Fact]
+    public async Task Retirar_la_instruccion_va_por_POST_con_su_clave_y_sin_Authorization()
+    {
+        await _cliente.RetirarInstruccionDeContratoAsync(Cuenta, new RetirarInstruccionDeContratoRequest("El titular ya no quiere moverlo"), new ClaveDeOperacion());
+
+        var vista = _servidor.Vistas.Should().ContainSingle().Subject;
+        vista.Metodo.Should().Be("POST");
+        vista.Ruta.Should().Be($"/api/lending/accounts/{Cuenta}/maturity-instruction/withdraw");
+        vista.Clave.Should().NotBeNullOrWhiteSpace();
+        vista.Authorization.Should().BeNull();
+    }
+
+    [Fact]
     public async Task El_contrato_y_las_condiciones_se_leen_sin_clave()
     {
         await _cliente.ContratoDeAhorroAsync(Cuenta);

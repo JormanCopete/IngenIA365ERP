@@ -573,6 +573,72 @@ public sealed class AhorroContractualTests : IDisposable
         (await SaldoAsync(vista.PublicId, MemberAccountConcept.Principal)).Should().Be(0m);
     }
 
+    private async Task<Result<ContractualDto>> RetirarAsync(Guid cuenta, string motivo = "El asociado ya no quiere moverlo") =>
+        await new WithdrawContractualMaturityInstructionCommandHandler(_a.Db, _a.C.Contexto, Lector(), G.Alcance, G.Auditoria, G.Actor, G.Reloj)
+            .Handle(new WithdrawContractualMaturityInstructionCommand(cuenta, motivo) { OperationKey = Guid.NewGuid() }, default);
+
+    [Fact]
+    public async Task E263_retirada_la_instruccion_el_contrato_vence_a_disposicion_sin_mover_dinero()
+    {
+        var vista = await ALaVistaAsync();
+        var cuenta = await ContratoAsync(await LineaAsync());
+        (await InstruirAsync(cuenta.PublicId, new ContractualMaturityInstructionInput(CloseDeliveryKind.TransferToAccount, vista.PublicId))).IsSuccess.Should().BeTrue();
+
+        var retirada = await RetirarAsync(cuenta.PublicId);
+        retirada.IsSuccess.Should().BeTrue(retirada.IsFailure ? $"{retirada.Error.Code}: {retirada.Error.Message}" : string.Empty);
+        retirada.Value.Instruction.Should().BeNull("ya no rige ninguna instrucción");
+        _a.Db.ChangeTracker.Clear();
+        // Idempotente: retirar lo ya retirado responde el contrato sin tocar nada.
+        (await RetirarAsync(cuenta.PublicId)).IsSuccess.Should().BeTrue();
+        _a.Db.ChangeTracker.Clear();
+
+        var id = await IdAsync(cuenta.PublicId);
+        await NochesAsync(id, Hoy, Vencimiento, async d =>
+        {
+            if (d.Day == 1) await PagarAsync(cuenta, d);
+        });
+        (await CuentaAsync(cuenta.PublicId)).Status.Should().Be(MemberAccountStatus.Matured, "a disposición del titular");
+        (await SaldoAsync(cuenta.PublicId, MemberAccountConcept.Principal)).Should().BeGreaterThan(0m);
+        (await SaldoAsync(vista.PublicId, MemberAccountConcept.Principal)).Should().Be(0m);
+        (await _a.Db.IntegrationMessages.CountAsync(m => m.Type == TrasladoEntreCuentasAplicadoV1.Type)).Should().Be(0);
+    }
+
+    [Fact]
+    public async Task E263_retirar_tambien_deja_sin_efecto_la_instruccion_sellada_al_abrir()
+    {
+        var vista = await ALaVistaAsync();
+        var cuenta = (await AbrirAsync(await LineaAsync(), new ContractualTermsInput(Cuota, 12,
+            new ContractualMaturityInstructionInput(CloseDeliveryKind.TransferToAccount, vista.PublicId)))).Value;
+
+        (await RetirarAsync(cuenta.PublicId)).Value.Instruction.Should().BeNull("la sellada tampoco rige ya");
+        _a.Db.ChangeTracker.Clear();
+        var id = await IdAsync(cuenta.PublicId);
+        await NochesAsync(id, Hoy, Vencimiento, async d =>
+        {
+            if (d.Day == 1) await PagarAsync(cuenta, d);
+        });
+        (await CuentaAsync(cuenta.PublicId)).Status.Should().Be(MemberAccountStatus.Matured);
+        (await SaldoAsync(vista.PublicId, MemberAccountConcept.Principal)).Should().Be(0m);
+    }
+
+    [Fact]
+    public async Task E263_despues_del_vencimiento_o_en_una_cuenta_que_no_es_contractual_la_retirada_se_rechaza_con_su_motivo()
+    {
+        var vista = await ALaVistaAsync();
+        var cuenta = await ContratoAsync(await LineaAsync());
+        var id = await IdAsync(cuenta.PublicId);
+        await NochesAsync(id, Hoy, Vencimiento, async d =>
+        {
+            if (d.Day == 1) await PagarAsync(cuenta, d);
+        });
+
+        var tarde = await RetirarAsync(cuenta.PublicId);
+        tarde.IsFailure.Should().BeTrue();
+        tarde.Error.Code.Should().Be(ErroresDeContractual.CodigoNoVigente);
+        tarde.Error.Message.Should().Contain("no está vigente");
+        (await RetirarAsync(vista.PublicId)).Error.Code.Should().Be(ErroresDeContractual.CodigoNoEsContractual);
+    }
+
     [Fact]
     public async Task La_causacion_del_contractual_no_pasa_del_vencimiento()
     {
