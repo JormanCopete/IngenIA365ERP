@@ -234,7 +234,7 @@ nueva trae las suyas—; y quien integre por API cambia `/api/lending/{familia}`
 | 2026-10-07 | local (5432) | `coop_beta` | 0 | 0 | 0 | 0 | 0 | 0 | no | la guarda pasa sola |
 | 2026-10-21 | DEV | `ingenia365erp` (sin bases de cooperativa) | 0 | 0 | 0 | 0 | 0 | 0 | no | la guarda pasa sola; respaldo `erp-dev-ingenia365erp-20261021-pre-f013-f014.dump` (PGDMP, 2,0 MB) y `…_admin-…` (68 kB) en `/root/respaldos` de erp-nonprod |
 | 2026-10-21 | QA | `ingenia365erp` y `coop_prueba` | 0 | 0 | 0 | 0 | 0 | 0 | no | la guarda pasa sola; respaldos `erp-qa-ingenia365erp-…`, `erp-qa-coop_prueba-…` (55 MB) y `…_admin-…` con el mismo sufijo `20261021-pre-f013-f014.dump` |
-| pendiente | PDN | cada base, con autorización expresa | | | | | | | | Polish (fase 24) |
+| 2026-10-21 | PDN | `ingenia365erp` y `cooflopal` (la administrativa no tiene LND_) | 0 | 0 | 0 | 0 | 0 | 0 | no | la guarda pasa sola; respaldos `erp-pdn-ingenia365erp-`, `erp-pdn-ingenia365erp_admin-` y `erp-pdn-cooflopal-20261021-pre-f013-f014.dump` (PGDMP, 2,0 MB, 73 kB y 56 MB) en `/root/respaldos` de erp-pdn; segundo revisor: el dueño |
 
 ## 10. Síntomas
 

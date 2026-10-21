@@ -45,8 +45,12 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
             //     fecha, los ambientes y las bases revisadas, las filas por tabla retirada, los ACC_Documents con origen CAR y la
             //     decisión tomada donde hubo filas. Corrido sólo en local el 2026-10-07 (PostgreSQL 5432: ingenia365erp, coop_alfa,
             //     coop_beta): 0 filas en las 55, en SIPLA, en Nómina con LoanPortfolioId y en ACC_Documents CAR; sin aprobación.
-            //   Respaldo: pendiente (fase 24, T1084): <base>-AAAAMMDD-pre-f013.dump de cada base, también de la administrativa.
-            //   Segundo revisor: pendiente (pregunta H7, fase 24, T1083).
+            //   Diagnóstico (2026-10-21): DEV y QA (ingenia365erp y coop_prueba) y producción (erp-pdn: ingenia365erp y cooflopal): 93 tablas LND_ por base,
+            //     0 filas en las 55 retiradas y en las 38 conservadas; 0 filas en PAY_SettlementDeductions y PAY_Novelties con LoanPortfolioId y 0 ACC_Documents con
+            //     origen CAR; sin aprobación (la guarda pasa sola). Resultados en docs/operaciones/cartera-retiro-heredado.md.
+            //   Respaldo: pg_dump -Fc de cada base en /root/respaldos (erp-nonprod: erp-dev-*, erp-qa-*; erp-pdn: erp-pdn-ingenia365erp, erp-pdn-ingenia365erp_admin y
+            //     erp-pdn-cooflopal), con sufijo 20261021-pre-f013-f014.dump y cabecera PGDMP.
+            //   Segundo revisor: Jorman Copete (dueño), con su aprobación del 2026-10-21 para la promoción (decisiones D15 y H7).
             // Con la guarda, sólo se pierden filas que el dueño aprobó perder (fila LND.RetiroHeredado.Aprobado de la cooperativa).
 
             // (1) Guarda: sólo sobre la cartera heredada vacía, o con la aprobación del dueño en la base.
