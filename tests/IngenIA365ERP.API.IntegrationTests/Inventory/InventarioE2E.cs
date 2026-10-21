@@ -162,8 +162,16 @@ public static partial class InventarioE2E
             // connections» justo mientras se aprovisionaba la cooperativa: el alta responde 200 con la cooperativa registrada pero sin su
             // base («Reparable con POST /api/saas/tenants/{publicId}/provision», dice el log del servidor). Se hace la reparación que
             // documenta el producto y se reintenta una vez; un 500 que persista sigue fallando la prueba.
-            var reparacion = await EnviarAsync(http, tokenMaestro, HttpMethod.Post, $"/api/saas/tenants/{tenant}/provision", null);
-            reparacion.IsSuccessStatusCode.Should().BeTrue($"reparar el aprovisionamiento de {correo}: «{await reparacion.Content.ReadAsStringAsync()}»");
+            // El contenedor puede tardar unos segundos en volver a aceptar conexiones (recuperación tras el fallo): se reintenta la
+            // reparación hasta 8 veces, con diez segundos de espera, antes de dar la prueba por caída.
+            HttpResponseMessage? reparacion = null;
+            for (var intento = 1; intento <= 8; intento++)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(10));
+                reparacion = await EnviarAsync(http, tokenMaestro, HttpMethod.Post, $"/api/saas/tenants/{tenant}/provision", null);
+                if (reparacion.IsSuccessStatusCode) break;
+            }
+            reparacion!.IsSuccessStatusCode.Should().BeTrue($"reparar el aprovisionamiento de {correo}: «{await reparacion.Content.ReadAsStringAsync()}»");
             resp = await http.PostAsJsonAsync("/api/invitations/accept", new { token = token.Groups[1].Value, registration = new { password = clave } });
         }
         resp.StatusCode.Should().Be(HttpStatusCode.OK, $"aceptar la invitación de {correo}: «{await resp.Content.ReadAsStringAsync()}»");

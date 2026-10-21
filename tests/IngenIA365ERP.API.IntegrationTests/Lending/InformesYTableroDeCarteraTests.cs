@@ -53,7 +53,7 @@ public sealed class InformesYTableroDeCarteraTests(CentralIdentityApiFixture fx)
         "contributions-by-member", "charges", "depositor-concentration", "deposits-reconciliation", "deposit-accounts-by-status", "installments-in-arrears",
         "insured-deposits", "garnishments", "exogena-1019", "exogena-1020", "liquidity-fund", "gmf", "interest-and-withholding", "deposit-transactions",
         "deposit-balances", "unclaimed", "sicses-aportes", "sicses-captaciones", "sicses-cotitulares", "sicses-fondo-liquidez", "sicses-saldos-diarios",
-        "negotiated-rates", "term-deposit-maturities",
+        "negotiated-rates", "term-deposit-maturities", "liquidity-deposit-bands",
     ];
 
     [Fact]
