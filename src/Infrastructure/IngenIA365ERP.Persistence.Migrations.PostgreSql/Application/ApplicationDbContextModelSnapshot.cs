@@ -6509,9 +6509,6 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasColumnType("numeric(10,5)")
                         .HasDefaultValue(0m);
 
-                    b.Property<int?>("CostCenterId")
-                        .HasColumnType("integer");
-
                     b.Property<bool>("CpAdmin")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
@@ -6850,9 +6847,6 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
 
                     b.HasIndex("CommitteeId")
                         .HasDatabaseName("IX_COR_Associates_CommitteeId");
-
-                    b.HasIndex("CostCenterId")
-                        .HasDatabaseName("IX_COR_Associates_CostCenterId");
 
                     b.HasIndex("EmployerCompanyId")
                         .HasDatabaseName("IX_COR_Associates_EmployerCompanyId");
@@ -56459,11 +56453,6 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasForeignKey("CommitteeId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("IngenIA365ERP.Domain.Entities.Core.CostCenter", "CostCenter")
-                        .WithMany()
-                        .HasForeignKey("CostCenterId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
                     b.HasOne("IngenIA365ERP.Domain.Entities.Core.EmployerCompany", "EmployerCompany")
                         .WithMany()
                         .HasForeignKey("EmployerCompanyId")
@@ -56492,8 +56481,6 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.Navigation("Branch");
 
                     b.Navigation("Committee");
-
-                    b.Navigation("CostCenter");
 
                     b.Navigation("EmployerCompany");
 
