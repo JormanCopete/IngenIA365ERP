@@ -102,7 +102,7 @@ public sealed class InformesYTableroDeCarteraTests(CentralIdentityApiFixture fx)
         var delOficial = (await CarteraE2E.GetAsync(http, oficial, Informes)).EnumerateArray().Select(v => v.GetProperty("key").GetString()).ToList();
         delOficial.Should().BeEquivalentTo(["placement", "receipts", "payroll-agreements", "quality", "vintages", "concentration",
                 // Las de la 014 sin datos del titular (agregadas): sólo piden Lending.Reports.View.
-                "deposits-reconciliation", "liquidity-fund", "deposit-balances", "sicses-fondo-liquidez", "sicses-saldos-diarios"],
+                "deposits-reconciliation", "liquidity-fund", "deposit-balances", "sicses-fondo-liquidez", "sicses-saldos-diarios", "liquidity-deposit-bands"],
             "sin Lending.Loans.Read no se ofrecen las vistas con datos del deudor; la concentración sí, porque por línea, sector y pagaduría es agregada");
         foreach (var vista in ConDatosDelDeudor)
             (await CarteraE2E.MandarGetAsync(http, oficial, $"{Informes}/{vista}")).StatusCode.Should().Be(HttpStatusCode.NotFound, $"{vista} sin Loans.Read");

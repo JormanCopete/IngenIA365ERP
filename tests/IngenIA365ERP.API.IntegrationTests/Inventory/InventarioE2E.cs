@@ -155,25 +155,24 @@ public static partial class InventarioE2E
         var token = System.Text.RegularExpressions.Regex.Match(mensaje!.BodyHtml, @"token=([A-Za-z0-9_\-]+)");
         token.Success.Should().BeTrue("el correo de invitación trae token=");
 
-        var resp = await http.PostAsJsonAsync("/api/invitations/accept", new { token = token.Groups[1].Value, registration = new { password = clave } });
-        if (resp.StatusCode == HttpStatusCode.InternalServerError && tokenMaestro is not null && tenantPublicId is { } tenant)
+        // En la suite completa el contenedor de la base llegó a responder «57P03: the database system is not yet accepting connections»
+        // justo mientras se aprovisionaba la cooperativa (recuperación tras un fallo del servidor de pruebas bajo carga): el alta responde 200
+        // con la cooperativa registrada pero sin su base. Aceptar la invitación en ese estado deja a medias la identidad central (el reintento
+        // responde «EmailAlreadyRegistered»), así que **antes** de aceptar se asegura el aprovisionamiento con la reparación que documenta el
+        // producto («POST /api/saas/tenants/{publicId}/provision», idempotente), con espera hasta 80 segundos a que la base vuelva.
+        if (tokenMaestro is not null && tenantPublicId is { } tenant)
         {
-            // En la suite completa el contenedor de la base llegó a responder «57P03: the database system is not yet accepting
-            // connections» justo mientras se aprovisionaba la cooperativa: el alta responde 200 con la cooperativa registrada pero sin su
-            // base («Reparable con POST /api/saas/tenants/{publicId}/provision», dice el log del servidor). Se hace la reparación que
-            // documenta el producto y se reintenta una vez; un 500 que persista sigue fallando la prueba.
-            // El contenedor puede tardar unos segundos en volver a aceptar conexiones (recuperación tras el fallo): se reintenta la
-            // reparación hasta 8 veces, con diez segundos de espera, antes de dar la prueba por caída.
             HttpResponseMessage? reparacion = null;
-            for (var intento = 1; intento <= 8; intento++)
+            for (var intento = 1; intento <= 9; intento++)
             {
-                await Task.Delay(TimeSpan.FromSeconds(10));
                 reparacion = await EnviarAsync(http, tokenMaestro, HttpMethod.Post, $"/api/saas/tenants/{tenant}/provision", null);
                 if (reparacion.IsSuccessStatusCode) break;
+                await Task.Delay(TimeSpan.FromSeconds(10));
             }
-            reparacion!.IsSuccessStatusCode.Should().BeTrue($"reparar el aprovisionamiento de {correo}: «{await reparacion.Content.ReadAsStringAsync()}»");
-            resp = await http.PostAsJsonAsync("/api/invitations/accept", new { token = token.Groups[1].Value, registration = new { password = clave } });
+            reparacion!.IsSuccessStatusCode.Should().BeTrue($"asegurar el aprovisionamiento de {correo}: «{await reparacion.Content.ReadAsStringAsync()}»");
         }
+
+        var resp = await http.PostAsJsonAsync("/api/invitations/accept", new { token = token.Groups[1].Value, registration = new { password = clave } });
         resp.StatusCode.Should().Be(HttpStatusCode.OK, $"aceptar la invitación de {correo}: «{await resp.Content.ReadAsStringAsync()}»");
         var acceso = (await LeerAsync(resp)).GetProperty("accessToken").GetString();
         acceso.Should().NotBeNullOrWhiteSpace();
