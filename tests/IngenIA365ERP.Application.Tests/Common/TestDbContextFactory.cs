@@ -1,4 +1,4 @@
-﻿using IngenIA365ERP.Application.Common.Interfaces;
+using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Domain.Entities.Accounting;
 using IngenIA365ERP.Domain.Entities.Accounting.Transactions;
 using IngenIA365ERP.Domain.Entities.Admin;
@@ -957,6 +957,8 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
         // Feature 010: corridas con Kind y las tablas de N1. BankAccountType es el alias en Domain de
         // PayrollBankAccountType (misma columna en la base); aqui tambien se ignora para no duplicarla.
         modelBuilder.Entity<Employee>(b => b.Ignore(e => e.BankAccountType));
+        // Centro de costo del empleado: la FK explícita (la convención la ataría al código heredado de texto, CostCenterId).
+        modelBuilder.Entity<Employee>(b => b.HasOne(e => e.CostCenter).WithMany().HasForeignKey(e => e.CostCenterRefId));
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Payroll.Transactions.PayrollRun>(b =>
         {
             b.Ignore(r => r.EsEspecial); b.Ignore(r => r.EsCoherente); b.Ignore(r => r.SourceTypeName);
