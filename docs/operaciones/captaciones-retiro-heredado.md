@@ -171,8 +171,8 @@ contracts/api.md); la tarjeta débito queda sin emitir ni mover hasta su propia 
 | 2026-10-18 | local (PostgreSQL 5433, `ingenia365-dev-postgres`) | `ingenia365erp` | 0 (las 45 existen) | no | la guarda pasa sola |
 | 2026-10-18 | local (PostgreSQL 5433) | `ingenia365erp_admin` | no tiene ninguna de las 45 | — | no aplica |
 | pendiente | local (SQL Server, si hay bases) | cada base de cooperativa | | | dueño |
-| pendiente | DEV | cada base de cooperativa e `ingenia365erp` | | | dueño (T005) |
-| pendiente | QA | cada base de cooperativa e `ingenia365erp` | | | dueño (T005) |
+| 2026-10-21 | DEV | `ingenia365erp` | 45 tablas, 0 filas | respaldo `erp-dev-ingenia365erp-20261021-pre-f013-f014.dump` | la guarda pasa sola; diagnóstico con comprobación por tabla (`dbo`), porque el script original, sin esquema, falla con `search_path` por defecto |
+| 2026-10-21 | QA | `ingenia365erp` y `coop_prueba` | 45 tablas, 0 filas en cada una | respaldos `erp-qa-ingenia365erp-…` y `erp-qa-coop_prueba-…` (`20261021-pre-f013-f014.dump`) | la guarda pasa sola |
 | pendiente | PDN | cada base, con autorización expresa | | | dueño (T005) |
 
 ## 9a. Decisión del dueño del 2026-10-18 (D15; cierra T005)
