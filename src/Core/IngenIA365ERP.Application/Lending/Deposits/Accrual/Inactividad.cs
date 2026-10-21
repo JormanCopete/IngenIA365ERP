@@ -54,8 +54,8 @@ public sealed class ReactivacionDeCuenta(ReclasificacionDeCuenta reclasificacion
 /// <summary>
 /// El subpaso «inactividad» del paso de captaciones (feature 014, US14, T208; FR-058, FR-084, D21; research §23): en cada tanda, las cuentas de captación
 /// <b>activas</b> —no el CDAT, que no tiene movimientos del titular— cuya versión vigente de la línea trae <c>InactivityDays</c>. Se mide desde el último
-/// movimiento del titular (<c>LND_MemberAccountControls.LastHolderActivityDate</c>; sin él, la activación o la apertura); en una cuenta migrada nunca antes del
-/// corte (research E119, decisión A: el plazo corre desde la activación). Cumplido el plazo, en una transacción con el cerrojo del proceso (salta la cuenta
+/// movimiento del titular (<c>LND_MemberAccountControls.LastHolderActivityDate</c>; sin él, la activación o la apertura), en toda cuenta por igual: la migrada
+/// ya no tiene regla propia (research E262, respuesta 69 del dueño; antes corría desde el corte). Cumplido el plazo, en una transacción con el cerrojo del proceso (salta la cuenta
 /// ocupada): la cuenta pasa a <c>Inactive</c> desde el día que lo detecta el proceso, sus saldos se reclasifican al capital de captación inactiva
 /// (<c>CaptacionReclasificada</c>, causa <c>Inactivity</c>) y se avisa al titular (<c>INACTIVA</c>). <c>Captaciones.DiasDeAvisoPrevioDeInactividad</c> días
 /// antes se le avisa que pasará (<c>PREINACTIV</c>), una vez por plazo. El abono de intereses, los cargos (también el de inactividad, que causa el subpaso de
@@ -86,12 +86,19 @@ public sealed class Inactividad(
     }
 
     /// <summary>
-    /// Desde cuándo se mide la inactividad de una cuenta (FR-084; research E119): el último movimiento del titular, la activación o la apertura; en una
-    /// migrada, nunca antes del corte (la víspera de la activación).
+    /// Desde cuándo se mide la inactividad de una cuenta (FR-084; research E262, respuesta 69 del dueño): el último movimiento del titular, la activación o la
+    /// apertura, <b>igual en toda cuenta</b>: la migrada se mide como una creada desde el aplicativo (su último movimiento viene en la carga).
     /// </summary>
-    public static DateOnly DesdeCuando(MemberAccount cuenta, DateOnly? ultimoMovimiento)
+    public static DateOnly DesdeCuando(MemberAccount cuenta, DateOnly? ultimoMovimiento) =>
+        ultimoMovimiento ?? cuenta.ActivatedOn ?? cuenta.OpenedOn;
+
+    /// <summary>
+    /// Desde cuándo corre el plazo de <b>no reclamados</b> de una cuenta inactiva (research E119 A, que E262 no toca): como <see cref="DesdeCuando"/>, pero en una
+    /// migrada nunca antes del corte (la víspera de la activación): lo abandonado no se traslada por haber sido migrado.
+    /// </summary>
+    public static DateOnly DesdeCuandoParaNoReclamados(MemberAccount cuenta, DateOnly? ultimoMovimiento)
     {
-        var desde = ultimoMovimiento ?? cuenta.ActivatedOn ?? cuenta.OpenedOn;
+        var desde = DesdeCuando(cuenta, ultimoMovimiento);
         if (cuenta.Origin == MemberAccountOrigin.Migration && cuenta.ActivatedOn is { } activada && desde < activada.AddDays(-1))
             desde = activada.AddDays(-1);
         return desde;

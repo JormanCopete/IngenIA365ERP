@@ -155,7 +155,7 @@ public sealed class NoReclamados(
         {
             var habilitado = await HabilitadoAsync(hoy, ct);
             if (!habilitado) return (null, No("RuleNotEnabled", "El traslado de cuentas inactivas no está habilitado."), true);
-            var desde = Inactividad.DesdeCuando(cuenta, ultimo);
+            var desde = Inactividad.DesdeCuandoParaNoReclamados(cuenta, ultimo);
             var dias = await Inactividad.EnteroAsync(parametros, ParametrosDeCartera.CuentasAbandonadasDiasSinMovimiento, hoy, ct) ?? 0;
             var cumple = desde.AddDays(dias);
             if (hoy < cumple)

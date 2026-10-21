@@ -131,6 +131,10 @@ Lo que hay que saber de lo migrado: el interés causado al corte se liquida en l
 inactiva **desde el corte**; el número migrado se conserva; el CDAT migrado no recibe título al activar (se emite desde su ficha); el contractual
 migrado trae cuotas pagadas y atrasadas y, si venía incumplido, nace incumplido desde el corte.
 
+**Advertencia (no bloquea).** Una cuenta migrada activa se inactiva como cualquier otra: la primera noche tras activar, la que tenga su último movimiento
+anterior al plazo de inactividad de su línea queda inactiva y su titular recibe el aviso. La revisión previa dice cuántas son
+(`Lending.Migration.InactivityOnActivation`); revise la fecha del último movimiento de la carga antes de activar.
+
 ## 8. Pendiente de validar
 
 Mayoría de edad, días de fecha valor, umbral de origen de fondos, tope de la cuota de fondos de empleados, fracción mínima a aportes, límites de

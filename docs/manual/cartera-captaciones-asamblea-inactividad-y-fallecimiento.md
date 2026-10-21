@@ -71,7 +71,12 @@ excedentes cuyo giro rechaza Tesorería queda por pagar en Contabilidad: volver 
 ## 5. Inactividad
 
 - Una cuenta pasa a **inactiva** cuando lleva los **días de inactividad de su línea** (D21: 360) sin movimiento del **titular**; el abono de intereses
-  y los cargos no cuentan como movimiento. Una cuenta migrada cuenta desde el corte. El CDAT no se mide.
+  y los cargos no cuentan como movimiento. **La cuenta migrada se trata igual que una creada desde el aplicativo** (E262, respuesta 69): se mide desde su último movimiento (el que trae la
+  carga). El CDAT no se mide.
+- **Advertencia al activar**: la primera noche tras activar, toda cuenta migrada activa con último movimiento anterior al plazo de inactividad de su línea queda
+  inactiva y su titular recibe el aviso `INACTIVA`. La revisión previa de la migración de captaciones lo muestra (aviso `Lending.Migration.InactivityOnActivation`,
+  con cuántas cuentas son); no bloquea. Para evitarlo, corrija la fecha del último movimiento de la carga o el plazo de la línea antes de activar.
+  El plazo de **no reclamados** de una cuenta migrada ya inactiva sigue corriendo desde el corte.
 - Avisos: `PREINACTIV` `Captaciones.DiasDeAvisoPrevioDeInactividad` (30) días antes y `INACTIVA` al inactivar.
 - Al inactivar, los saldos se **reclasifican** al rol de capital inactivo (`CaptacionReclasificada`, comprobante `CN`); sigue causando si la línea lo
   dice; el cargo de inactividad, si existe, se causa sobre la cuenta ya inactiva.

@@ -177,14 +177,33 @@ public sealed partial class CicloDeVidaDeCuentasTests : IDisposable
     }
 
     [Fact]
-    public void US14_la_inactividad_de_una_cuenta_migrada_cuenta_desde_el_corte()
+    public void US14_la_inactividad_de_una_cuenta_migrada_se_mide_como_la_de_cualquier_otra()
     {
         var migrada = MemberAccount.Abrir(1, LineNature.Deposit, DepositClass.Demand, 1, 1, HandlingMode.Indistinct, new DateOnly(2015, 1, 1), null,
             DateTime.UtcNow, MemberAccountOrigin.Migration, cargaId: 1);
         migrada.Activar(new DateOnly(2026, 11, 1), DateTime.UtcNow);
 
-        Application.Lending.Deposits.Accrual.Inactividad.DesdeCuando(migrada, new DateOnly(2020, 5, 5)).Should().Be(new DateOnly(2026, 10, 31), "el último movimiento real es anterior al corte");
+        Application.Lending.Deposits.Accrual.Inactividad.DesdeCuando(migrada, new DateOnly(2020, 5, 5)).Should().Be(new DateOnly(2020, 5, 5), "E262: la migrada cuenta desde su último movimiento real, como cualquier otra");
         Application.Lending.Deposits.Accrual.Inactividad.DesdeCuando(migrada, new DateOnly(2026, 11, 20)).Should().Be(new DateOnly(2026, 11, 20));
+        Application.Lending.Deposits.Accrual.Inactividad.DesdeCuando(migrada, null).Should().Be(new DateOnly(2026, 11, 1), "sin movimiento, la activación");
+        Application.Lending.Deposits.Accrual.Inactividad.DesdeCuandoParaNoReclamados(migrada, new DateOnly(2020, 5, 5)).Should().Be(new DateOnly(2026, 10, 31),
+            "lo abandonado sigue contando desde el corte (E119 A): no se traslada a no reclamados por haber sido migrado");
+    }
+
+    [Fact]
+    public void E262_la_revision_previa_cuenta_las_migradas_que_se_inactivarian_la_primera_noche()
+    {
+        var noche = new DateOnly(2026, 12, 1);
+        var cuentas = new[]
+        {
+            (MemberAccountStatus.Active, DepositClass.Demand, new DateOnly(2024, 1, 1), (int?)365),   // cumple el plazo
+            (MemberAccountStatus.Active, DepositClass.Demand, new DateOnly(2026, 6, 1), (int?)365),   // movimiento reciente
+            (MemberAccountStatus.Active, DepositClass.Demand, new DateOnly(2020, 1, 1), (int?)null),  // la línea no mide inactividad
+            (MemberAccountStatus.Active, DepositClass.TermDeposit, new DateOnly(2020, 1, 1), (int?)365), // el CDAT no se mide
+            (MemberAccountStatus.Inactive, DepositClass.Demand, new DateOnly(2020, 1, 1), (int?)365),  // ya inactiva
+        };
+
+        Application.Lending.Deposits.Migration.ValidacionEntrePartesDeCaptaciones.CuentasQueSeInactivarianAlActivar(cuentas, noche).Should().Be(1);
     }
 
     [Fact]

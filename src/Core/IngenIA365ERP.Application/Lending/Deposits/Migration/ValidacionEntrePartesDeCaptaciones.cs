@@ -40,7 +40,7 @@ public sealed record ValidacionDeCaptaciones(IReadOnlyList<ErrorEntrePartes> Err
 /// Sólo lee. (nuevo)
 /// </summary>
 public sealed class ValidacionEntrePartesDeCaptaciones(IApplicationDbContext db, ReglasDeParametrosDeCartera parametros,
-    IngenIA365ERP.Application.Common.Calendar.ICalendarioHabil? calendario = null)
+    IngenIA365ERP.Application.Common.Calendar.ICalendarioHabil? calendario = null, IDateTimeService? reloj = null)
 {
     public async Task<ValidacionDeCaptaciones> ValidarAsync(FilasDeLaCarga filas, CancellationToken ct)
     {
@@ -298,6 +298,24 @@ public sealed class ValidacionEntrePartesDeCaptaciones(IApplicationDbContext db,
             }
         }
 
+        // ------------------------------------------------------------------------------------------ inactividad (E262) --
+        // Advertencia, no bloqueo: la migrada se mide como cualquier otra, así que la primera noche tras activar se inactiva (y se avisa al titular) toda
+        // cuenta activa cuyo último movimiento sea anterior al plazo de inactividad de su línea. Se cuenta aquí para que quien revisa lo vea antes.
+        if (carga.Nature == LineNature.Deposit && filas.CuentasDeAhorro.Count > 0)
+        {
+            var hoy = reloj?.HoyLocal ?? corte.AddDays(1);
+            var primeraNoche = hoy > corte ? hoy : corte.AddDays(1);
+            var plazos = lineas.ToDictionary(l => l.Key, l => l.Value.DeCaptacion?.InactivityDays, StringComparer.OrdinalIgnoreCase);
+            var cuantas = CuentasQueSeInactivarianAlActivar(
+                filas.CuentasDeAhorro.Select(x => (x.Fila.Status, x.Fila.DepositClass, x.Fila.LastHolderActivityDate ?? x.Fila.OpenedOn,
+                    plazos.GetValueOrDefault(x.Fila.CreditLineCode))), primeraNoche);
+            if (cuantas > 0)
+                avisos.Add(new ErrorEntrePartes(P.MemberAccounts, null, 0, C.FechaUltimoMovimientoDelTitular, CodigoInactividadAlActivar,
+                    $"{cuantas} cuenta(s) activa(s) de la carga quedarían inactivas la primera noche tras activar (su último movimiento es anterior al plazo de "
+                    + "inactividad de su línea) y sus titulares recibirían el aviso de inactividad. La cuenta migrada se mide igual que cualquier otra; si no es lo "
+                    + "esperado, corrija la fecha del último movimiento o el plazo de la línea antes de activar."));
+        }
+
         // ------------------------------------------------------------------------------------------------------ CDAT --
         if (filas.Cdat.Count > 0)
         {
@@ -353,6 +371,16 @@ public sealed class ValidacionEntrePartesDeCaptaciones(IApplicationDbContext db,
         var personasDeLaCarga = cuentas.Select(c => c.TitularId).Concat(filas.PartesDeCuenta.Select(p => p.Fila.PersonId)).Distinct().Count();
         return new ValidacionDeCaptaciones(errores, avisos, cuentas.Count, personasDeLaCarga);
     }
+
+    public const string CodigoInactividadAlActivar = "Lending.Migration.InactivityOnActivation";
+
+    /// <summary>
+    /// Cuántas cuentas activas de ahorro (no CDAT) con plazo de inactividad en su línea cumplirían ese plazo a la fecha dada, desde su último movimiento (o
+    /// apertura). Pura: la misma cuenta del subpaso <c>Inactividad</c> (<c>d &gt;= desde + días</c>).
+    /// </summary>
+    public static int CuentasQueSeInactivarianAlActivar(
+        IEnumerable<(MemberAccountStatus Estado, DepositClass Clase, DateOnly Desde, int? Dias)> cuentas, DateOnly fecha) =>
+        cuentas.Count(c => c.Estado == MemberAccountStatus.Active && c.Clase != DepositClass.TermDeposit && c.Dias is > 0 && fecha >= c.Desde.AddDays(c.Dias.Value));
 
     private static string Pesos(decimal valor) => valor.ToString("N2", CultureInfo.GetCultureInfo("es-CO"));
 }

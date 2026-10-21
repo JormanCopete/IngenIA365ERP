@@ -2695,10 +2695,7 @@ comportamiento (una de líneas de captación, el conteo de permisos) se **ajusta
   `Lineas`), con revisión previa, todo-o-nada, las mismas reglas del alta unitaria (`ReglasDeLineaDeCaptacion`, topes de aportes, perfil, entrega), alcance de línea
   (fuera de alcance la línea «no existe»), y rutas `GET/POST /api/lending/lines/deposit|contribution/template.xlsx|import` (permisos `DepositLines.*` y `ContributionLines.*`).
   Cubren la tasa fija o por tramos y los datos de cada clase (CDAT, contractual, permanente); **los cargos y la tasa variable se siguen configurando en pantalla**.
-- **69 · inactividad de la cuenta migrada — AMBIGUA, sin cambio.** «Se inactiva por el usuario, como una cuenta que no viene de migración». Hoy una cuenta (migrada o no)
-  la inactiva el proceso diario a los días de su línea, y la migrada cuenta desde el corte. Quitar esa regla haría que, al activar, toda migrada con último movimiento
-  viejo se inactivara el primer día (con aviso al titular). Se pide confirmar si querían (a) que la migrada se mida como cualquier otra, con ese riesgo, o (b) que la
-  inactivación sea siempre una acción manual del usuario.
+- **69 · inactividad de la cuenta migrada — resuelta (E262, §27.13).** La migrada se mide como cualquier otra, desde su último movimiento; la revisión previa avisa cuántas se inactivarían la primera noche.
 - **71 · el aprobador debe tener la oficina y la línea del caso en su alcance (E250).** `FuenteDeAprobacionDeCuenta.AlAprobarElNivelAsync` valida el alcance de Cartera
   **del aprobador** (`AlcanceDeCarteraDeUnUsuario`: oficinas y líneas de sus asignaciones y los permisos de alcance total de sus roles) contra la cuenta; si falta responde
   `Lending.Savings.ApproverOutOfScope`. Aplica con o sin política de niveles.
@@ -2748,7 +2745,7 @@ comportamiento (una de líneas de captación, el conteo de permisos) se **ajusta
 
 ### 27.2 Lo que queda para el dueño o para la corrida final
 
-Pendientes de código: 64, 65, 89, 90, 91, 92, 93, 96 y 103 (la 97 quedó hecha en E253, §27.4); ambigua: 69. Las e2e de 59, 67, 71, 74, 76, 86, 87, 99–101 y 104 no están escritas (la corrida final de los dos
+Pendientes de código: sólo la 103 (espera el cotejo T235) y las de terceros; 64, 65, 82, 89–93, 96 y 97 están construidas (E253–E261) y la 69 quedó resuelta en E262. Las e2e de 59, 67, 71, 74, 76, 86, 87, 99–101 y 104 no están escritas (la corrida final de los dos
 motores las cubre una por una); sí se ajustó la de líneas de captación y el conteo de permisos (164). Los defectos nuevos son parámetros «pendientes de validar» de la contadora:
 `Documentos.LotesProgramados`, `SeguroDeDepositos.RepartoDeCotitulares`, `RiesgoDeLiquidez.RetirosALaVistaMetodo`, `.DiasDeHistoriaDelRetiro`, `.ConfianzaDelRetiro` y
 `.ActivosLiquidosContables`.
@@ -3003,3 +3000,17 @@ la **sube por plantilla** de importación. Migración aditiva `CaptacionesBaseDe
 - **Pruebas.** Domain (`RevalorizacionYExcedentesTests`: la base subida manda sobre los saldos, el que no está o está en cero no participa). Application (`AsambleaTests.E261_…`: errores por
   fila y columna, todo o nada, revisar no guarda, carga, corrección y versión, el cero, aplicar y no admitir más cargas; el validador y la decisión con otra base) y los contadores del
   modelo (184 tablas y la base entre los hechos de sólo inserción). e2e (`AsambleaTests.E261_…`: plantilla, revisión con error, aplicación y reparto por HTTP). Verdes en PostgreSQL y SQL Server.
+
+### 27.13 E262 · la cuenta migrada se inactiva como cualquier otra (respuesta 69, 2026-10-22)
+
+Respuesta del dueño: «las cuentas migradas se inactivan de la misma forma que una cuenta creada desde el aplicativo». Se quitó la regla especial de E119 A para la **inactividad**:
+`Inactividad.DesdeCuando` mide desde el último movimiento del titular (que la carga trae en `fechaUltimoMovimientoDelTitular`), o la activación, o la apertura, igual en toda
+cuenta; la migrada ya no se ancla al corte. Sin migración.
+
+- **Advertencia, no bloqueo.** La primera noche tras activar, toda cuenta migrada activa con último movimiento anterior al plazo de inactividad de su línea queda inactiva y su
+  titular recibe el aviso `INACTIVA`. La validación entre partes (la revisión previa de la carga de captaciones) añade el aviso `Lending.Migration.InactivityOnActivation` con cuántas
+  cuentas serían (`ValidacionEntrePartesDeCaptaciones.CuentasQueSeInactivarianAlActivar`, pura; mide a la fecha de hoy o al día siguiente del corte, lo que sea más tarde).
+- **Lo que no cambia.** El plazo de **no reclamados** de una cuenta migrada ya inactiva sigue contando desde el corte (E119 A): `Inactividad.DesdeCuandoParaNoReclamados` conserva la
+  regla anterior, porque trasladar saldos abandonados a no reclamados por el solo hecho de migrar no fue lo que el dueño respondió. Una cuenta migrada ya `Inactive` sigue naciendo
+  inactiva desde el corte.
+- **Pruebas.** Application (`CicloDeVidaDeCuentasTests`: `DesdeCuando` de la migrada, `DesdeCuandoParaNoReclamados`, el conteo de la revisión previa). Manual de inactividad y de líneas y apertura.
