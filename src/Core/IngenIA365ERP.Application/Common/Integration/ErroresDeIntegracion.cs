@@ -47,6 +47,40 @@ public static class ErroresDeIntegracion
     public static Error LoteNoIniciado(Guid batchPublicId) =>
         new ErrorConDatos("Integration.Batch.NotRunning", "El lote no está en curso: sólo se cierra un lote que corrió.", new { batchPublicId });
 
+    // ------------------------------------------------------------------ registro de participantes (feature 013, T16, T20)
+
+    /// <summary>Dos consumidores para el mismo destino: el arranque falla (T15; no es un error de una petición).</summary>
+    public const string CodigoConsumidorDuplicado = "Integration.Destination.DuplicateConsumer";
+
+    public const string CodigoDobleEnProduccion = "Integration.Participant.TestDoubleInProduction";
+    public const string CodigoVersionNoSoportada = "Integration.Participant.VersionNotSupported";
+    public const string CodigoParticipanteSeCruza = "Integration.Participant.Overlaps";
+    public const string CodigoParticipanteEnUso = "Integration.Participant.InUse";
+    public const string CodigoParticipanteNoEncontrado = "Integration.Participant.NotFound";
+
+    public static Error DobleEnProduccion(string code) =>
+        new ErrorConDatos(CodigoDobleEnProduccion, "Un doble de prueba no puede registrarse en un despliegue de producción.", new { code });
+
+    public static Error VersionNoSoportada(string contract, int version, IReadOnlyList<int> supported) =>
+        new ErrorConDatos(CodigoVersionNoSoportada,
+            supported.Count == 0
+                ? $"Cartera no conoce el contrato {contract}: no se puede adoptar ninguna versión."
+                : $"Cartera no acepta la versión {version} de {contract}; acepta {string.Join(", ", supported)}.",
+            new { contract, supported });
+
+    public static Error ParticipanteSeCruza(string code, string? destination, DateOnly validFrom) =>
+        new ErrorConDatos(CodigoParticipanteSeCruza,
+            "Ya hay un participante vigente con esa clave o ese destino en esas fechas: habilitar o inhabilitar cierra la fila vigente desde una fecha posterior a su inicio.",
+            new { code, destination, validFrom });
+
+    public static Error ParticipanteEnUso(string code, string destination) =>
+        new ErrorConDatos(CodigoParticipanteEnUso,
+            $"El destino {destination} es el de Cartera activada: no se retira mientras Cartera esté activa.",
+            new { code, destination });
+
+    public static Error ParticipanteNoEncontrado(Guid participantPublicId) =>
+        new ErrorConDatos(CodigoParticipanteNoEncontrado, "El participante del registro de integración no existe.", new { participantPublicId });
+
     public static Error DestinoNoDisponible(string destination) =>
         new ErrorConDatos("Integration.Destination.Unavailable",
             $"El destino {destination} todavía no está disponible en esta instalación.",

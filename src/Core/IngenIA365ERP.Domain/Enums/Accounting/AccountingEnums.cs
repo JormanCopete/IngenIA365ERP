@@ -64,3 +64,9 @@ public enum FixedAssetStatus { Active = 1, FullyDepreciated = 2, Retired = 3 }
 public enum InstallmentStatus { Pending = 1, Posted = 2, Reversed = 3 }
 
 public enum AssetRunStatus { Posted = 1, Reversed = 2 }
+
+/// <summary>
+/// Feature 013 (T0634; data-model parte 3 §5.4 y §9.2, DC-18): qué indicador de la entidad registra el contador en
+/// <c>ACC_RegulatoryIndicators</c>. Se guarda como int; un valor nunca se renumera.
+/// </summary>
+public enum RegulatoryIndicatorKind { TechnicalCapital = 1, SolvencyRatio = 2 }

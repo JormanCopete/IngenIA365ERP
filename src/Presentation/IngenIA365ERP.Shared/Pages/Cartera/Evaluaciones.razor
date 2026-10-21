@@ -1,0 +1,267 @@
+@page "/cartera/evaluaciones"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Http
+@inject CastigosClient Castigos
+@inject CreditosClient Creditos
+@inject INotificationService Notification
+
+<PageTitle>Evaluación de cartera - IngenIA365ERP</PageTitle>
+
+@* Feature 013, K3, US14 (T0917; contracts/api.md §12.6; FR-102): la evaluación de cartera. Se prepara con un corte (fin de mes), el mes de efecto y,
+   por crédito, la categoría propuesta con su justificación frente a la de las reglas al corte. La recomienda el comité de riesgos y la aprueba el
+   consejo, cada uno con un punto en Actas; aplicada, es la candidata «Evaluación» de cada crédito desde el cierre de su mes de efecto.
+   Bloque D (decisiones del dueño del 2026-10-15): se descarta con motivo mientras no se aplique, y prepararla avisa la periodicidad de la norma si
+   sigue pendiente de validar. *@
+<PermissionGate Required="Lending.Ratings.Read" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Evaluación de cartera</h3>
+        <PermissionGate Required="Lending.PortfolioEvaluations.Prepare">
+            <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@AbrirNueva">Nueva evaluación</SfButton>
+        </PermissionGate>
+    </div>
+    <div class="toolbar">
+        <label class="campo">Estado
+            <select class="e-input" @bind="_estado">
+                <option value="">Todos</option>
+                @foreach (var e in TextosDeCastigos.EstadosDeEvaluacion) { <option value="@e.Nombre">@e.Texto</option> }
+            </select>
+        </label>
+        <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Consultar</SfButton>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        <div class="tabla-desplazable">
+            <table class="data-grid">
+                <thead><tr><th>Número</th><th>Corte</th><th>Mes de efecto</th><th>Estado</th><th class="numero">Créditos</th><th>Comité</th><th>Consejo</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var e in _filas)
+                    {
+                        var fila = e;
+                        <tr>
+                            <td>@fila.Number</td>
+                            <td>@fila.CutoffDate.ToString("yyyy-MM-dd")</td>
+                            <td>@fila.EffectMonth</td>
+                            <td>@TextosDeCastigos.EstadoDeEvaluacion(fila.Status)</td>
+                            <td class="numero">@fila.LoanCount</td>
+                            <td>@Punto(fila.RecommendationItem)</td>
+                            <td>@Punto(fila.ApprovalItem)</td>
+                            <td><SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirDetalleAsync(fila.PublicId, 1))">Ver</SfButton></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (_filas.Count == 0) { <p class="texto-tenue">No hay evaluaciones con ese filtro.</p> }
+    </IndicadorDeCarga>
+
+    @if (_evaluacion is { } ev)
+    {
+        <div class="info-card">
+            <IndicadorDeCarga Cargando="@_detalle.Activa">
+                <div class="page-header">
+                    <h4>Evaluación @ev.Number · @TextosDeCastigos.EstadoDeEvaluacion(ev.Status)</h4>
+                    <div class="toolbar">
+                        @if (ev.Status is 1 or 2 or 3)
+                        {
+                            <PermissionGate Required="Lending.PortfolioEvaluations.Prepare">
+                                <input class="e-input" placeholder="Motivo del descarte" @bind="_motivoDescarte" maxlength="500" />
+                                <SfButton CssClass="e-flat e-small" Disabled="@(_accion.Activa || string.IsNullOrWhiteSpace(_motivoDescarte))" OnClick="@DescartarAsync">Descartar evaluación</SfButton>
+                            </PermissionGate>
+                        }
+                        @if (ev.Status == 3 && ev.RecommendationItem is not null && ev.ApprovalItem is not null)
+                        {
+                            <PermissionGate Required="Lending.PortfolioEvaluations.Apply">
+                                <SfButton CssClass="e-primary e-small" Disabled="@_accion.Activa" OnClick="@AplicarAsync">Aplicar</SfButton>
+                            </PermissionGate>
+                        }
+                    </div>
+                </div>
+                <p class="texto-tenue">Corte @ev.CutoffDate.ToString("yyyy-MM-dd") · se refleja en el cierre de @ev.EffectMonth · comité: @Punto(ev.RecommendationItem) · consejo: @Punto(ev.ApprovalItem)</p>
+                @if (ev.Status == 1) { <p class="aviso">Llévela al comité de riesgos en Actas (punto «Recomendación» sobre esta evaluación) y después al consejo.</p> }
+                @if (ev.Status == 2) { <p class="aviso">Recomendada: el consejo la decide en Actas con un punto «Decisión».</p> }
+                @if (ev.Warnings is { Count: > 0 } avisos)
+                {
+                    @foreach (var a in avisos)
+                    {
+                        <p class="aviso aviso-info">@a.Message @if (a.WhoFixes?.Page is { } pagina) { <a href="@pagina">Corregirlo</a> }</p>
+                    }
+                }
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th>Crédito</th><th>Deudor</th><th>Por las reglas al corte</th><th>Propuesta</th><th>Justificación</th></tr></thead>
+                        <tbody>
+                            @foreach (var c in ev.Loans)
+                            {
+                                <tr>
+                                    <td><a href="/cartera/creditos/@c.LoanPublicId">@c.LoanNumber</a></td>
+                                    <td>@c.Debtor.Name</td>
+                                    <td>@TextosDeCastigos.Categoria(c.RuleRatingAtCutoff)</td>
+                                    <td>@TextosDeCastigos.Categoria(c.ProposedCategory, c.ProposedSubcategory)</td>
+                                    <td>@c.Reason</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                @if (ev.LoanCount > ev.PageSize)
+                {
+                    <div class="toolbar">
+                        <SfButton CssClass="e-flat e-small" Disabled="@(ev.Page <= 1)" OnClick="@(() => AbrirDetalleAsync(ev.PublicId, ev.Page - 1))">Anterior</SfButton>
+                        <span>Página @ev.Page de @((ev.LoanCount + ev.PageSize - 1) / ev.PageSize)</span>
+                        <SfButton CssClass="e-flat e-small" Disabled="@(ev.Page * ev.PageSize >= ev.LoanCount)" OnClick="@(() => AbrirDetalleAsync(ev.PublicId, ev.Page + 1))">Siguiente</SfButton>
+                    </div>
+                }
+            </IndicadorDeCarga>
+        </div>
+    }
+</div>
+
+<SfDialog @bind-Visible="_mostrarNueva" Header="Nueva evaluación de cartera" Width="720px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_accion.Activa" Texto="Preparando…">
+                <div class="form-grid">
+                    <label class="campo">Corte (último día del mes) * <input class="e-input" type="date" @bind="_corte" /></label>
+                    <label class="campo">Mes de efecto (AAAA-MM) * <input class="e-input" @bind="_mesDeEfecto" maxlength="7" placeholder="2027-01" /></label>
+                    <label class="campo campo-ancho">Criterios aplicados (JSON) <input class="e-input" @bind="_criterios" maxlength="2000" /></label>
+                </div>
+                <div class="form-grid">
+                    <label class="campo">Crédito (número) <input class="e-input" @bind="_buscarCredito" maxlength="40" /></label>
+                    <SfButton CssClass="e-flat e-small" OnClick="@BuscarCreditoAsync">Buscar</SfButton>
+                </div>
+                @foreach (var c in _encontrados.Where(c => _lineas.All(l => l.Credito.PublicId != c.PublicId)))
+                {
+                    var credito = c;
+                    <div class="toolbar">
+                        <span>@credito.Number · @credito.Debtor.Name · @(credito.InformativeRating ?? "—")</span>
+                        <SfButton CssClass="e-flat e-small" OnClick="@(() => _lineas.Add(new LineaEditable(credito)))">Agregar</SfButton>
+                    </div>
+                }
+                @foreach (var l in _lineas)
+                {
+                    var linea = l;
+                    <div class="toolbar">
+                        <span>@linea.Credito.Number</span>
+                        <select class="e-input" @bind="linea.Categoria" aria-label="Categoría propuesta">
+                            @foreach (var cat in TextosDeRiesgo.Categorias) { <option value="@cat">@cat</option> }
+                            <option value="E1">E1</option>
+                            <option value="E2">E2</option>
+                        </select>
+                        <input class="e-input" @bind="linea.Justificacion" maxlength="1000" placeholder="Justificación" aria-label="Justificación" />
+                        <SfButton CssClass="e-flat e-small" OnClick="@(() => _lineas.Remove(linea))">Quitar</SfButton>
+                    </div>
+                }
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_accion.Activa || _corte is null || string.IsNullOrWhiteSpace(_mesDeEfecto) || _lineas.Count == 0 || _lineas.Any(l => string.IsNullOrWhiteSpace(l.Justificacion)))"
+                              OnClick="@PrepararAsync">Preparar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarNueva = false)">Volver</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private sealed class LineaEditable(CreditoEnListaDto credito)
+    {
+        public CreditoEnListaDto Credito { get; } = credito;
+        public string Categoria { get; set; } = "D";
+        public string? Justificacion { get; set; }
+    }
+
+    private readonly EstadoDeCarga _carga = new(), _detalle = new(), _accion = new();
+    private List<EvaluacionDeCarteraDto> _filas = [];
+    private List<CreditoEnListaDto> _encontrados = [];
+    private List<LineaEditable> _lineas = [];
+    private EvaluacionDeCarteraDto? _evaluacion;
+    private string? _estado, _error, _mesDeEfecto, _criterios, _buscarCredito, _motivoDescarte;
+    private DateOnly? _corte;
+    private bool _mostrarNueva;
+    private ClaveDeOperacion _clave = new();
+
+    protected override Task OnInitializedAsync() => CargarAsync();
+
+    private static string Punto(PuntoDeEvaluacionDto? p) =>
+        p is null ? "—" : $"{TextosDeCastigos.Punto(p.MinutesNumber, p.Order)} ({TextosDeCastigos.Resultado(p.Outcome)})";
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Castigos.EvaluacionesAsync(string.IsNullOrEmpty(_estado) ? null : _estado);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer las evaluaciones."); return; }
+        _filas = r.Value ?? [];
+    }
+
+    private async Task AbrirDetalleAsync(Guid evaluacion, int pagina)
+    {
+        using var carga = _detalle.Iniciar();
+        var r = await Castigos.EvaluacionAsync(evaluacion, pagina);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo leer la evaluación."); return; }
+        _evaluacion = r.Value;
+    }
+
+    private void AbrirNueva()
+    {
+        _error = _mesDeEfecto = _criterios = _buscarCredito = null;
+        _corte = null;
+        _encontrados = [];
+        _lineas = [];
+        _clave = new ClaveDeOperacion();
+        _mostrarNueva = true;
+    }
+
+    private async Task BuscarCreditoAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_buscarCredito)) return;
+        using var carga = _accion.Iniciar();
+        var r = await Creditos.ListarAsync(_buscarCredito, tamano: 10);
+        _encontrados = r.IsSuccess ? [.. r.Value?.Items ?? []] : [];
+    }
+
+    private async Task PrepararAsync()
+    {
+        if (_corte is not { } corte) return;
+        using var carga = _accion.Iniciar();
+        _error = null;
+        var creditos = _lineas.Select(l => l.Categoria is "E1" or "E2"
+                ? new CreditoAEvaluarRequest(l.Credito.PublicId, "E", l.Justificacion!.Trim(), l.Categoria)
+                : new CreditoAEvaluarRequest(l.Credito.PublicId, l.Categoria, l.Justificacion!.Trim()))
+            .ToList();
+        var r = await Castigos.PrepararAsync(new EvaluacionRequest(corte, _mesDeEfecto!.Trim(), string.IsNullOrWhiteSpace(_criterios) ? null : _criterios.Trim(),
+            creditos), _clave);
+        if (!r.IsSuccess) { _error = r.ErrorMessage ?? "No se pudo preparar la evaluación."; return; }
+        _mostrarNueva = false;
+        _evaluacion = r.Value;
+        await Notification.SuccessAsync($"Evaluación {r.Value?.Number} preparada: llévela al comité de riesgos en Actas.");
+        if (r.Value?.Warnings is { Count: > 0 })
+            await Notification.WarningAsync("Hay valores de la norma pendientes de validar: véalos en el detalle de la evaluación.");
+        await CargarAsync();
+    }
+
+    private async Task DescartarAsync()
+    {
+        if (_evaluacion is not { } ev || string.IsNullOrWhiteSpace(_motivoDescarte)) return;
+        using var carga = _accion.Iniciar();
+        var r = await Castigos.DescartarEvaluacionAsync(ev.PublicId, _motivoDescarte.Trim(), new ClaveDeOperacion());
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo descartar la evaluación."); return; }
+        _motivoDescarte = null;
+        _evaluacion = r.Value;
+        await Notification.SuccessAsync("Evaluación descartada: se puede preparar otra del mismo corte.");
+        await CargarAsync();
+    }
+
+    private async Task AplicarAsync()
+    {
+        if (_evaluacion is not { RecommendationItem: { } comite, ApprovalItem: { } consejo } ev) return;
+        using var carga = _accion.Iniciar();
+        var r = await Castigos.AplicarEvaluacionAsync(ev.PublicId, new AplicarEvaluacionRequest(comite.ItemPublicId, consejo.ItemPublicId), new ClaveDeOperacion());
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo aplicar la evaluación."); return; }
+        _evaluacion = r.Value;
+        await Notification.SuccessAsync($"Evaluación aplicada: se refleja en el cierre de {ev.EffectMonth}.");
+        await CargarAsync();
+    }
+}

@@ -1,0 +1,536 @@
+@page "/admin/valores-nacionales"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Nomina
+@using static IngenIA365ERP.Shared.Services.Core.TextosDePlataforma
+@inject ValoresNacionalesClient Valores
+@inject INotificationService Notification
+@inject DescargaDeArchivos Descargas
+
+<PageTitle>Valores nacionales - IngenIA365ERP</PageTitle>
+
+@* Feature 013, fase 2 (T0095; T37–T41, C69, C83; contracts/api.md §21.3, §21.5): los valores nacionales (salario mínimo, UVT, usura,
+   IBR, IPC, festivos, límites legales) y los documentos normativos. El maestro, con segundo factor, los registra y corrige en el registro
+   central, importa y exporta el paquete entre ambientes y ve lo que falta para los próximos días. La cooperativa nunca modifica su copia:
+   la consulta a una fecha y con lo que se sabía a otra, ve la bitácora de réplicas y la revisa (conforme u objetada). Mientras nadie la
+   revise queda «pendiente de validar», que no bloquea los cálculos. *@
+<div class="pagina">
+    <div class="page-header">
+        <h3>Valores nacionales</h3>
+        <div class="toolbar">
+            <a class="e-btn e-flat" href="/manual">Ayuda</a>
+        </div>
+    </div>
+
+    @if (_esMaestro)
+    {
+        <h4>Registro central</h4>
+        <p class="texto-apoyo">Lo que se registra aquí lo copia la réplica a todas las cooperativas, en orden y una sola vez. Nada se borra ni se edita: un valor equivocado se corrige con otro que lo reemplaza y dice por qué.</p>
+
+        <IndicadorDeCarga Cargando="@_cargaFaltantes.Activa" Texto="Revisando lo que falta…">
+            @if (_faltantes.Count > 0)
+            {
+                <div class="aviso aviso-alerta">
+                    <b>Faltan @_faltantes.Count valor(es) para los próximos días:</b>
+                    <ul>@foreach (var f in _faltantes) { <li>@NombreDeValor(f.Code) @f.Key para el @f.Date.ToString("dd/MM/yyyy"): @f.Reason</li> }</ul>
+                </div>
+            }
+            else if (_faltantesRevisados)
+            {
+                <p class="aviso aviso-ok">No falta ningún valor esperado para los próximos días.</p>
+            }
+        </IndicadorDeCarga>
+
+        <div class="filtros-de-informe form-grid">
+            <label class="campo">Valor
+                <select class="e-input" @bind="_filtroCentral">
+                    <option value="">Todos</option>
+                    @foreach (var c in CodigosDeValor) { <option value="@c">@NombreDeValor(c)</option> }
+                </select>
+            </label>
+            <div class="toolbar">
+                <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_cargaCentral.Activa" OnClick="@CargarCentralAsync">Consultar</SfButton>
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@AbrirRegistro">Registrar valor</SfButton>
+                <SfButton CssClass="e-outline" IconCss="e-icons e-download" Disabled="@_exportando.Activa" OnClick="@ExportarAsync">Exportar paquete</SfButton>
+            </div>
+        </div>
+
+        <IndicadorDeCarga Cargando="@(_cargaCentral.Activa || _guardado.Activa)" Texto="@(_guardado.Activa ? "Guardando…" : "Cargando…")">
+            @if (_centrales.Count == 0)
+            {
+                <p class="texto-tenue">No hay valores registrados con ese filtro.</p>
+            }
+            else
+            {
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th>Valor</th><th>Clave</th><th>Desde</th><th>Hasta</th><th class="numero">Valor</th><th>Unidad</th><th>Fuente</th><th>Registró</th><th>Estado</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var v in _centrales)
+                            {
+                                <tr>
+                                    <td>@NombreDeValor(v.Code)</td><td>@(v.Label ?? v.Key)</td>
+                                    <td>@v.ValidFrom.ToString("dd/MM/yyyy")</td><td>@v.ValidTo?.ToString("dd/MM/yyyy")</td>
+                                    <td class="numero">@Valor(v.Value, v.Unit)</td><td>@Unidad(v.Unit)</td>
+                                    <td>@v.Source</td><td>@v.RegisteredBy · @v.RegisteredAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
+                                    <td>@(v.SupersededByPublicId is null ? (v.SupersedesPublicId is null ? "Vigente" : $"Corrección: {v.Reason}") : "Reemplazado")</td>
+                                    <td>@if (v.SupersededByPublicId is null) { <SfButton CssClass="e-flat" OnClick="@(() => AbrirCorreccion(v))">Corregir</SfButton> }</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </IndicadorDeCarga>
+
+        <h4>Importar valores</h4>
+        <ImportarPlantilla RutaBase="@ValoresNacionalesClient.RutaCentral" ConDatos="false" Aplicado="@(_ => CargarCentralAsync())" />
+
+        <h4>Documentos normativos del registro central</h4>
+        <div class="toolbar">
+            <SfButton CssClass="e-outline" IconCss="e-icons e-plus" OnClick="@AbrirDocumento">Registrar documento</SfButton>
+        </div>
+        <IndicadorDeCarga Cargando="@_cargaDocumentosCentrales.Activa">
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Documento</th><th>Código</th><th>Desde</th><th>Hasta</th><th>Versión del esquema</th><th>Cotejado</th><th>Fuente</th><th>Registró</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var d in _documentosCentrales)
+                        {
+                            <tr>
+                                <td>@NombreDeDocumento(d.Kind)</td><td>@d.Code</td><td>@d.ValidFrom.ToString("dd/MM/yyyy")</td><td>@d.ValidTo?.ToString("dd/MM/yyyy")</td>
+                                <td class="numero">@d.SchemaVersion</td><td>@(d.Verified ? "Sí" : "Pendiente de validar")</td><td>@d.Source</td>
+                                <td>@d.RegisteredBy · @d.RegisteredAt.ToLocalTime().ToString("dd/MM/yyyy")</td>
+                                <td><SfButton CssClass="e-flat" IconCss="e-icons e-download" OnClick="@(() => DescargarDocumentoCentralAsync(d))">Contenido</SfButton></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </IndicadorDeCarga>
+    }
+
+    @if (_tieneCooperativa)
+    {
+        <PermissionGate Required="Core.NationalValues.View" MostrarAviso="true">
+            <h4>Copia de esta cooperativa</h4>
+            <p class="texto-apoyo">La copia la escribe sólo la réplica. Con «Información hasta» se ve lo que se sabía a esa fecha (una liquidación de entonces no veía una corrección posterior).</p>
+            <div class="filtros-de-informe form-grid">
+                <label class="campo">Valor
+                    <select class="e-input" @bind="_filtroCopia">
+                        <option value="">Todos</option>
+                        @foreach (var c in CodigosDeValor) { <option value="@c">@NombreDeValor(c)</option> }
+                    </select>
+                </label>
+                <label class="campo">Vigente al <input type="date" class="e-input" value="@_fecha?.ToString("yyyy-MM-dd")" @onchange="@(e => _fecha = LeerFecha(e.Value))" /></label>
+                <label class="campo">Información hasta <input type="date" class="e-input" value="@_informacionHasta?.ToString("yyyy-MM-dd")" @onchange="@(e => _informacionHasta = LeerFecha(e.Value))" /></label>
+                <div class="toolbar">
+                    <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_cargaCopia.Activa" OnClick="@CargarCopiaAsync">Consultar</SfButton>
+                </div>
+            </div>
+            <IndicadorDeCarga Cargando="@(_cargaCopia.Activa || _revisando.Activa)" Texto="@(_revisando.Activa ? "Guardando la revisión…" : "Cargando…")">
+                @if (_copia.Count == 0)
+                {
+                    <p class="texto-tenue">Sin valores para ese filtro.</p>
+                }
+                else
+                {
+                    <div class="tabla-desplazable">
+                        <table class="data-grid">
+                            <thead><tr><th>Valor</th><th>Clave</th><th>Desde</th><th>Hasta</th><th class="numero">Valor</th><th>Unidad</th><th>Fuente</th><th>Conocido el</th><th>Revisión</th><th></th></tr></thead>
+                            <tbody>
+                                @foreach (var v in _copia)
+                                {
+                                    <tr>
+                                        <td>@NombreDeValor(v.Code)</td><td>@(v.Label ?? v.Key)</td>
+                                        <td>@v.ValidFrom.ToString("dd/MM/yyyy")</td><td>@v.ValidTo?.ToString("dd/MM/yyyy")</td>
+                                        <td class="numero">@Valor(v.Value, v.Unit)</td><td>@Unidad(v.Unit)</td><td>@v.Source</td>
+                                        <td>@v.KnownAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
+                                        <td>@EstadoDeRevision(v.Status)@if (v.Review is { } r) { <span class="texto-tenue"> · @r.By@(r.Note is { } n ? $": {n}" : "")</span> }</td>
+                                        <td>
+                                            <PermissionGate Required="Core.NationalValues.Review">
+                                                <SfButton CssClass="e-flat" OnClick="@(() => AbrirRevision(v.PublicId, null, $"{NombreDeValor(v.Code)} {v.Label ?? v.Key}"))">Revisar</SfButton>
+                                            </PermissionGate>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </IndicadorDeCarga>
+
+            <h4>Documentos normativos</h4>
+            <IndicadorDeCarga Cargando="@_cargaDocumentos.Activa">
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th>Documento</th><th>Desde</th><th>Hasta</th><th>Cotejado</th><th>Conocido el</th><th>Revisión</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var d in _documentos)
+                            {
+                                <tr>
+                                    <td>@NombreDeDocumento(d.Kind)</td><td>@d.ValidFrom.ToString("dd/MM/yyyy")</td><td>@d.ValidTo?.ToString("dd/MM/yyyy")</td>
+                                    <td>@(d.Verified ? "Sí" : "Pendiente de validar")</td><td>@d.KnownAt.ToLocalTime().ToString("dd/MM/yyyy")</td>
+                                    <td>@EstadoDeRevision(d.Status)</td>
+                                    <td>
+                                        <PermissionGate Required="Core.NationalValues.Review">
+                                            <SfButton CssClass="e-flat" OnClick="@(() => AbrirRevision(null, d.PublicId, NombreDeDocumento(d.Kind)))">Revisar</SfButton>
+                                        </PermissionGate>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </IndicadorDeCarga>
+
+            <h4>Bitácora de réplicas</h4>
+            <IndicadorDeCarga Cargando="@_cargaReplicas.Activa">
+                @if (_replicas.Count == 0)
+                {
+                    <p class="texto-tenue">Todavía no ha llegado ninguna réplica.</p>
+                }
+                else
+                {
+                    <div class="tabla-desplazable">
+                        <table class="data-grid">
+                            <thead><tr><th>Cuándo</th><th>Origen</th><th class="numero">Valores</th><th class="numero">Documentos</th><th>Resultado</th><th>Quién</th></tr></thead>
+                            <tbody>
+                                @foreach (var r in _replicas)
+                                {
+                                    <tr>
+                                        <td>@r.At.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td><td>@OrigenDeReplica(r.Origin)</td>
+                                        <td class="numero">@r.Values</td><td class="numero">@r.Documents</td><td>@r.Outcome</td><td>@r.ActorName</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </IndicadorDeCarga>
+        </PermissionGate>
+    }
+    else if (!_esMaestro)
+    {
+        <p class="aviso aviso-info">Elija una cooperativa para consultar su copia de los valores nacionales.</p>
+    }
+</div>
+
+<SfDialog @bind-Visible="_mostrarRegistro" Header="@(_corrigiendo is null ? "Registrar valor nacional" : "Corregir valor nacional")" Width="640px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                @if (_corrigiendo is { } c)
+                {
+                    <p class="texto-apoyo">Corrige @NombreDeValor(c.Code) @(c.Label ?? c.Key) desde el @c.ValidFrom.ToString("dd/MM/yyyy"). La corrección reemplaza al valor y queda con su motivo.</p>
+                }
+                <div class="form-grid">
+                    @if (_corrigiendo is null)
+                    {
+                        <label class="campo">Valor *
+                            <select class="e-input" @bind="_v.Codigo">@foreach (var cod in CodigosDeValor) { <option value="@cod">@NombreDeValor(cod)</option> }</select>
+                        </label>
+                        <label class="campo">Clave <input class="e-input" @bind="_v.Clave" maxlength="40" placeholder="Modalidad, límite o fecha del festivo" /></label>
+                    }
+                    <label class="campo">Desde * <input type="date" class="e-input" value="@_v.Desde.ToString("yyyy-MM-dd")" @onchange="@(e => _v.Desde = LeerFecha(e.Value) ?? _v.Desde)" /></label>
+                    <label class="campo">Hasta <input type="date" class="e-input" value="@_v.Hasta?.ToString("yyyy-MM-dd")" @onchange="@(e => _v.Hasta = LeerFecha(e.Value))" /></label>
+                    <label class="campo">Fecha de referencia <input type="date" class="e-input" value="@_v.Referencia?.ToString("yyyy-MM-dd")" @onchange="@(e => _v.Referencia = LeerFecha(e.Value))" /></label>
+                    <label class="campo">Valor <input type="number" step="any" class="e-input" @bind="_v.Valor" /><span class="texto-tenue">Tasas como fracción: 26,50 % se escribe 0,2650.</span></label>
+                    @if (_corrigiendo is null)
+                    {
+                        <label class="campo">Unidad
+                            <select class="e-input" @bind="_v.Unidad"><option value="">—</option>@foreach (var u in Unidades) { <option value="@u">@Unidad(u)</option> }</select>
+                        </label>
+                    }
+                    <label class="campo">Etiqueta <input class="e-input" @bind="_v.Etiqueta" maxlength="100" /></label>
+                    <label class="campo campo-ancho">Fuente * <input class="e-input" @bind="_v.Fuente" maxlength="300" placeholder="Norma, resolución o publicación" /></label>
+                    @if (_corrigiendo is not null)
+                    {
+                        <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_v.Motivo" maxlength="500" /></label>
+                    }
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(!PuedeGuardarValor)" OnClick="@GuardarValorAsync">Guardar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarRegistro = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarDocumento" Header="Registrar documento normativo" Width="720px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <div class="form-grid">
+                    <label class="campo">Documento *
+                        <select class="e-input" @bind="_d.Clase">
+                            <option value="CatalogoDeModalidades">@NombreDeDocumento("CatalogoDeModalidades")</option>
+                            <option value="TiposDeOrganizacion">@NombreDeDocumento("TiposDeOrganizacion")</option>
+                        </select>
+                    </label>
+                    <label class="campo">Código * <input class="e-input" @bind="_d.Codigo" maxlength="40" /></label>
+                    <label class="campo">Desde * <input type="date" class="e-input" value="@_d.Desde.ToString("yyyy-MM-dd")" @onchange="@(e => _d.Desde = LeerFecha(e.Value) ?? _d.Desde)" /></label>
+                    <label class="campo">Versión del esquema * <input type="number" class="e-input" @bind="_d.Esquema" /></label>
+                    <label class="campo-check"><input type="checkbox" @bind="_d.Cotejado" /> Cotejado con la fuente oficial</label>
+                    <label class="campo campo-ancho">Fuente * <input class="e-input" @bind="_d.Fuente" maxlength="300" /></label>
+                    <label class="campo campo-ancho">Contenido (JSON) * <textarea class="e-input" rows="10" @bind="_d.Contenido"></textarea></label>
+                    <label class="campo campo-ancho">Motivo <input class="e-input" @bind="_d.Motivo" maxlength="500" /></label>
+                </div>
+                @if (_erroresDeDocumento.Count > 0)
+                {
+                    <div class="aviso aviso-error"><ul>@foreach (var e in _erroresDeDocumento) { <li>@e</li> }</ul></div>
+                }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(_d.Contenido) || string.IsNullOrWhiteSpace(_d.Fuente) || string.IsNullOrWhiteSpace(_d.Codigo))" OnClick="@GuardarDocumentoAsync">Guardar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarDocumento = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarRevision" Header="Revisar la copia" Width="560px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_revisando.Activa" Texto="Guardando…">
+                <p class="texto-apoyo">@_queRevisa. La revisión no cambia el valor: deja constancia de que la cooperativa lo cotejó, o de por qué lo objeta.</p>
+                <div class="form-grid">
+                    <label class="campo">Decisión *
+                        <select class="e-input" @bind="_decision"><option value="@Conforme">Conforme</option><option value="@Objetado">Objetado</option></select>
+                    </label>
+                    <label class="campo campo-ancho">Nota @(_decision == Objetado ? "*" : "") <input class="e-input" @bind="_nota" maxlength="500" /></label>
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_revisando.Activa || (_decision == Objetado && string.IsNullOrWhiteSpace(_nota)))" OnClick="@GuardarRevisionAsync">Guardar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarRevision = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+@code {
+    private sealed class FormularioDeValor
+    {
+        public string Codigo { get; set; } = "USURA";
+        public string? Clave { get; set; }
+        public DateOnly Desde { get; set; } = DateOnly.FromDateTime(DateTime.Today);
+        public DateOnly? Hasta { get; set; }
+        public DateOnly? Referencia { get; set; }
+        public decimal? Valor { get; set; }
+        public string? Unidad { get; set; }
+        public string? Etiqueta { get; set; }
+        public string? Fuente { get; set; }
+        public string? Motivo { get; set; }
+    }
+
+    private sealed class FormularioDeDocumento
+    {
+        public string Clase { get; set; } = "CatalogoDeModalidades";
+        public string? Codigo { get; set; }
+        public DateOnly Desde { get; set; } = DateOnly.FromDateTime(DateTime.Today);
+        public short Esquema { get; set; } = 1;
+        public bool Cotejado { get; set; }
+        public string? Fuente { get; set; }
+        public string? Contenido { get; set; }
+        public string? Motivo { get; set; }
+    }
+
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private readonly EstadoDeCarga _cargaCentral = new(), _cargaFaltantes = new(), _cargaDocumentosCentrales = new(), _cargaCopia = new(),
+        _cargaDocumentos = new(), _cargaReplicas = new(), _guardado = new(), _revisando = new(), _exportando = new();
+    private ClaveDeOperacion _claveValor = new(), _claveDocumento = new(), _claveRevision = new();
+    private bool _esMaestro, _tieneCooperativa, _faltantesRevisados;
+    private string _filtroCentral = "", _filtroCopia = "";
+    private DateOnly? _fecha, _informacionHasta;
+    private List<ValorNacionalCentralDto> _centrales = [];
+    private List<ValorNacionalFaltanteDto> _faltantes = [];
+    private List<DocumentoNormativoCentralDto> _documentosCentrales = [];
+    private List<ValorNacionalDto> _copia = [];
+    private List<DocumentoNormativoDto> _documentos = [];
+    private List<ReplicaDeValoresNacionalesDto> _replicas = [];
+    private List<string> _erroresDeDocumento = [];
+
+    private bool _mostrarRegistro, _mostrarDocumento, _mostrarRevision;
+    private ValorNacionalCentralDto? _corrigiendo;
+    private FormularioDeValor _v = new();
+    private FormularioDeDocumento _d = new();
+    private Guid? _valorEnRevision, _documentoEnRevision;
+    private string _queRevisa = "", _decision = Conforme;
+    private string? _nota;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthState is not null)
+        {
+            var user = (await AuthState).User;
+            _esMaestro = bool.TryParse(user.FindFirst("is_global_master_admin")?.Value, out var maestro) && maestro;
+            _tieneCooperativa = !string.IsNullOrEmpty(user.FindFirst("active_tenant_id")?.Value);
+        }
+
+        var tareas = new List<Task>();
+        if (_esMaestro) tareas.AddRange([CargarCentralAsync(), CargarFaltantesAsync(), CargarDocumentosCentralesAsync()]);
+        if (_tieneCooperativa) tareas.AddRange([CargarCopiaAsync(), CargarDocumentosAsync(), CargarReplicasAsync()]);
+        await Task.WhenAll(tareas);
+    }
+
+    private bool PuedeGuardarValor =>
+        !_guardado.Activa && !string.IsNullOrWhiteSpace(_v.Fuente) && (_corrigiendo is null || !string.IsNullOrWhiteSpace(_v.Motivo));
+
+    private async Task CargarCentralAsync()
+    {
+        using var carga = _cargaCentral.Iniciar();
+        var r = await Valores.ListarCentralesAsync(codigo: Limpio(_filtroCentral), tamano: 200);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo consultar el registro central."); return; }
+        _centrales = [.. r.Value.Items];
+    }
+
+    private async Task CargarFaltantesAsync()
+    {
+        using var carga = _cargaFaltantes.Iniciar();
+        var r = await Valores.FaltantesAsync();
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo revisar lo que falta."); return; }
+        _faltantes = [.. r.Value];
+        _faltantesRevisados = true;
+    }
+
+    private async Task CargarDocumentosCentralesAsync()
+    {
+        using var carga = _cargaDocumentosCentrales.Iniciar();
+        var r = await Valores.ListarDocumentosCentralesAsync();
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los documentos."); return; }
+        _documentosCentrales = [.. r.Value];
+    }
+
+    private async Task CargarCopiaAsync()
+    {
+        using var carga = _cargaCopia.Iniciar();
+        DateTime? hasta = _informacionHasta is { } h ? h.ToDateTime(new TimeOnly(23, 59, 59), DateTimeKind.Local) : null;
+        var r = await Valores.ListarCopiaAsync(codigo: Limpio(_filtroCopia), fecha: _fecha, informacionHasta: hasta, tamano: 200);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo consultar la copia."); return; }
+        _copia = [.. r.Value.Items];
+    }
+
+    private async Task CargarDocumentosAsync()
+    {
+        using var carga = _cargaDocumentos.Iniciar();
+        var r = await Valores.ListarDocumentosAsync();
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los documentos."); return; }
+        _documentos = [.. r.Value];
+    }
+
+    private async Task CargarReplicasAsync()
+    {
+        using var carga = _cargaReplicas.Iniciar();
+        var r = await Valores.ReplicasAsync(tamano: 30);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo consultar la bitácora de réplicas."); return; }
+        _replicas = [.. r.Value.Items];
+    }
+
+    private void AbrirRegistro()
+    {
+        _corrigiendo = null;
+        _v = new FormularioDeValor();
+        _claveValor = new ClaveDeOperacion();
+        _mostrarRegistro = true;
+    }
+
+    private void AbrirCorreccion(ValorNacionalCentralDto valor)
+    {
+        _corrigiendo = valor;
+        _v = new FormularioDeValor
+        {
+            Codigo = valor.Code, Clave = valor.Key, Desde = valor.ValidFrom, Hasta = valor.ValidTo, Referencia = valor.ReferenceDate, Valor = valor.Value,
+            Unidad = valor.Unit, Etiqueta = valor.Label, Fuente = valor.Source,
+        };
+        _claveValor = new ClaveDeOperacion();
+        _mostrarRegistro = true;
+    }
+
+    private async Task GuardarValorAsync()
+    {
+        if (!PuedeGuardarValor) return;
+        using var guardado = _guardado.Iniciar();
+        var r = _corrigiendo is { } c
+            ? await Valores.CorregirAsync(c.PublicId, new CorregirValorNacionalRequest(_v.Valor, _v.Desde, _v.Hasta, _v.Referencia, _v.Fuente!.Trim(),
+                _v.Motivo!.Trim(), Limpio(_v.Etiqueta)), _claveValor)
+            : await Valores.RegistrarAsync(new RegistrarValorNacionalRequest(_v.Codigo, Limpio(_v.Clave), _v.Desde, _v.Hasta, _v.Referencia, _v.Valor,
+                Limpio(_v.Unidad), _v.Fuente!.Trim(), Limpio(_v.Etiqueta)), _claveValor);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo guardar el valor."); return; }
+        _mostrarRegistro = false;
+        await Notification.SuccessAsync(_corrigiendo is null ? "Valor registrado. La réplica lo llevará a las cooperativas." : "Corrección registrada.");
+        await Task.WhenAll(CargarCentralAsync(), CargarFaltantesAsync());
+    }
+
+    private void AbrirDocumento()
+    {
+        _d = new FormularioDeDocumento();
+        _erroresDeDocumento = [];
+        _claveDocumento = new ClaveDeOperacion();
+        _mostrarDocumento = true;
+    }
+
+    private async Task GuardarDocumentoAsync()
+    {
+        using var guardado = _guardado.Iniciar();
+        var r = await Valores.RegistrarDocumentoAsync(new RegistrarDocumentoNormativoRequest(_d.Clase, _d.Codigo!.Trim(), _d.Desde, null, _d.Esquema,
+            _d.Contenido!, _d.Cotejado, _d.Fuente!.Trim(), null, Limpio(_d.Motivo)), _claveDocumento);
+        if (!r.IsSuccess)
+        {
+            _erroresDeDocumento = [.. (r.Dato<List<ErrorDeDocumento>>("errors") ?? []).Select(e => $"{e.Path}: {e.Message}")];
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo registrar el documento.");
+            return;
+        }
+        _mostrarDocumento = false;
+        await Notification.SuccessAsync("Documento registrado.");
+        await CargarDocumentosCentralesAsync();
+    }
+
+    private void AbrirRevision(Guid? valor, Guid? documento, string queRevisa)
+    {
+        _valorEnRevision = valor;
+        _documentoEnRevision = documento;
+        _queRevisa = queRevisa;
+        _decision = Conforme;
+        _nota = null;
+        _claveRevision = new ClaveDeOperacion();
+        _mostrarRevision = true;
+    }
+
+    private async Task GuardarRevisionAsync()
+    {
+        using var revisando = _revisando.Iniciar();
+        var r = _valorEnRevision is { } v
+            ? await Valores.RevisarValorAsync(v, new RevisionDeValorRequest(_decision, Limpio(_nota)), _claveRevision)
+            : await Valores.RevisarDocumentoAsync(_documentoEnRevision!.Value, new RevisionDeDocumentoRequest(_decision, Limpio(_nota)), _claveRevision);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo guardar la revisión."); return; }
+        _mostrarRevision = false;
+        await Notification.SuccessAsync("Revisión registrada.");
+        await Task.WhenAll(CargarCopiaAsync(), CargarDocumentosAsync());
+    }
+
+    private async Task ExportarAsync()
+    {
+        using var exportando = _exportando.Iniciar();
+        var r = await Valores.ExportarAsync();
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo exportar el paquete."); return; }
+        await Descargas.GuardarAsync(r.Value.Nombre, r.Value.TipoContenido, r.Value.Contenido);
+    }
+
+    private async Task DescargarDocumentoCentralAsync(DocumentoNormativoCentralDto documento)
+    {
+        using var exportando = _exportando.Iniciar();
+        var r = await Valores.ContenidoCentralAsync(documento.PublicId);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo descargar el documento."); return; }
+        await Descargas.GuardarAsync($"{documento.Kind}-{documento.Code}.json", r.Value.TipoContenido, r.Value.Contenido);
+    }
+
+    private sealed record ErrorDeDocumento(string Path, string Message);
+
+    private static string? Limpio(string? texto) => string.IsNullOrWhiteSpace(texto) ? null : texto.Trim();
+
+    private static DateOnly? LeerFecha(object? valor) =>
+        DateOnly.TryParse(valor?.ToString(), System.Globalization.CultureInfo.InvariantCulture, out var f) ? f : null;
+}

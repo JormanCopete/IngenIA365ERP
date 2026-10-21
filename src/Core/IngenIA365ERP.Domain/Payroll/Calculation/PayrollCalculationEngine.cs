@@ -207,22 +207,56 @@ public sealed class PayrollCalculationEngine
             }
         }
 
-        // 9. Deducciones autorizadas (novedades) con tope y saldo diferido.
+        // 9. Deducciones autorizadas (novedades) con tope y saldo diferido. Feature 013 (T0163, G5, FR-112): la cuota de Cartera
+        // va primera entre las autorizadas, después de las de ley, y ya no salta el tope; lo que no cabe no se difiere: queda no
+        // descontado con su motivo (DeductionCap o InsufficientNet) y Nómina lo informa al contrato de obligaciones.
         var devengos = ctx.Lines.Where(l => l.Nature == ConceptNature.Earning).Sum(l => l.Amount);
         var deduccionesLey = ctx.Lines.Where(l => l.Nature == ConceptNature.Deduction).Sum(l => l.Amount);
         var pctMaximo = parameters.Fraction(LegalParameterCodes.MaxDeductionOfSalaryPct);
         var pMax = parameters.Describe(LegalParameterCodes.MaxDeductionOfSalaryPct);
         var disponible = Math.Max(0m, (devengos - deduccionesLey) * pctMaximo);
-        foreach (var (nov, def) in novedades.Where(x => x.Def.Nature == ConceptNature.Deduction
-                                                         && x.Def.CalculationKind != CalculationKind.CompositeOfConcepts))
+        var netoDisponible = Math.Max(0m, devengos - deduccionesLey);
+        var autorizadas = novedades
+            .Where(x => x.Def.Nature == ConceptNature.Deduction && x.Def.CalculationKind != CalculationKind.CompositeOfConcepts)
+            .Select((x, i) => (x.Nov, x.Def, Posicion: i))
+            .OrderBy(x => PrelacionDeCartera(x.Nov, input.Policies.CarteraDeductionOrder)).ThenBy(x => x.Posicion)
+            .ToList();
+        foreach (var (nov, def, _) in autorizadas)
         {
             var line = Evaluate(def, nov, ctx);
             if (line is null) continue;
 
-            if (nov.Origin == NoveltyOrigin.LoanDeduction)
+            if (nov.Origin is NoveltyOrigin.LoanDeduction or NoveltyOrigin.AccountDeduction)
             {
-                line.Explanation.Note("Origen", "Descuento ya aplicado y contabilizado por Cartera: se muestra para el neto y el comprobante, no genera asiento ni se difiere.");
+                var esperado = line.RawAmount;
+                var cabe = Math.Min(disponible, netoDisponible);
+                line.Explanation.Note("Origen", nov.Origin == NoveltyOrigin.LoanDeduction
+                    ? "Cuota de Cartera del período: va primera entre las deducciones autorizadas, después de las de ley, y Cartera la recibe al aprobar la nómina."
+                    : "Cuota de aportes o de ahorro del período: entra con las de Cartera, en el orden de la política PrelacionDescuentosDeCartera (por defecto aportes, créditos y ahorros), y la Cartera la recibe al aprobar la nómina.");
+                if (esperado > cabe)
+                {
+                    var motivo = netoDisponible <= disponible ? LoanNonDeductionReasons.InsufficientNet : LoanNonDeductionReasons.DeductionCap;
+                    line.Explanation.Step("Cuota esperada por Cartera", esperado);
+                    if (motivo == LoanNonDeductionReasons.DeductionCap)
+                        line.Explanation.Step($"Tope de deducciones autorizadas: {Fmt.Pct(pctMaximo)} de (devengos − deducciones de ley) ({pMax.Code}), menos lo ya descontado", disponible);
+                    else
+                        line.Explanation.Step("Neto disponible (devengos − deducciones de ley − lo ya descontado)", netoDisponible);
+                    line.Explanation.Step("No descontado: no se difiere, la cuota sigue exigible en Cartera", esperado - cabe);
+                    line.Explanation.Note("Motivo de no descuento", motivo);
+                    line.RawAmount = cabe;
+                    line.NotDeductedReason = motivo;
+                }
+                disponible = Math.Max(0m, disponible - line.RawAmount);
+                netoDisponible = Math.Max(0m, netoDisponible - line.RawAmount);
                 Add(line);
+                // Feature 013 (fase 9, defecto hallado por NominaRecaudaPorElContratoTests): la cuota que cabe entera se descuenta al centavo, aunque
+                // la política redondee al peso: redondeada hacia arriba, Cartera recibía unos centavos de más, los devolvía como excedente y la
+                // aprobación avisaba «no aplicado» cada mes. El neto se sigue redondeando al peso con el ajuste de redondeo. La que no cabe sigue
+                // la política (lo que se descuenta del tope, al peso; casos dorados cartera-02 y cartera-03).
+                if (line.NotDeductedReason is null) line.Amount = Math.Round(line.RawAmount, 2, MidpointRounding.AwayFromZero);
+                line.NotDeductedAmount = Math.Max(0m, (line.NotDeductedReason is null ? Math.Round(esperado, 2, MidpointRounding.AwayFromZero) : Round(esperado, rounding)) - line.Amount);
+                if (line.NotDeductedAmount == 0m) line.NotDeductedReason = null;
+                else line.Explanation.Summary = $"{line.Explanation.Summary} · no descontado {Fmt.Money(line.NotDeductedAmount)} ({line.NotDeductedReason})";
                 continue;
             }
 
@@ -236,6 +270,7 @@ public sealed class PayrollCalculationEngine
                 flags |= RunEmployeeFlag.DeductionsOverMax;
             }
             disponible = Math.Max(0m, disponible - line.RawAmount);
+            netoDisponible = Math.Max(0m, netoDisponible - line.RawAmount);
             Add(line);
         }
         Composites(ctx, novedades, refusals, d => d.Nature == ConceptNature.Deduction, Add);
@@ -292,7 +327,10 @@ public sealed class PayrollCalculationEngine
                 exp.Step("Suma de líneas redondeadas (devengos − deducciones)", totalDevengos - totalDeducciones);
                 exp.Step("Diferencia imputada al ajuste", ajuste);
                 exp.Summary = $"Ajuste por redondeo: {Fmt.Money(ajuste)}";
-                Add(LineFactory.Create(ajusteDef, ajuste, exp));
+                var lineaDeAjuste = LineFactory.Create(ajusteDef, ajuste, exp);
+                Add(lineaDeAjuste);
+                // El ajuste lleva lo que haga falta para cuadrar el neto, centavos incluidos (la cuota de Cartera va al centavo).
+                lineaDeAjuste.Amount = ajuste;
                 totalDevengos += ajuste;
             }
             else
@@ -461,4 +499,30 @@ public sealed class PayrollCalculationEngine
             InputsHash = hash,
         };
     }
+
+    /// <summary>
+    /// Feature 014 (E-02; contrato-de-cuentas §6.1): la prelación entre los descuentos de la Cartera dentro de las deducciones autorizadas —aportes
+    /// (<c>DESC_APORTES</c>), créditos (<c>DESC_CARTERA</c>) y ahorros (<c>DESC_AHORROS</c>)— y después las demás. Desde la decisión del dueño del
+    /// 2026-10-18 (D37) el orden entre las tres lo fija la política <c>PrelacionDescuentosDeCartera</c> de la cooperativa (<paramref name="orden"/>; por
+    /// defecto aportes → créditos → ahorros). Sin cuotas de cuentas, el orden de la 013 no cambia: Cartera primero.
+    /// </summary>
+    public static int PrelacionDeCartera(NoveltyInput n, IReadOnlyList<CarteraDeductionKind>? orden)
+    {
+        ArgumentNullException.ThrowIfNull(n);
+        CarteraDeductionKind? clase = n.Origin switch
+        {
+            NoveltyOrigin.AccountDeduction when string.Equals(n.ConceptCode, WellKnownConceptCodes.ContributionDeduction, StringComparison.OrdinalIgnoreCase)
+                => CarteraDeductionKind.Contributions,
+            NoveltyOrigin.LoanDeduction => CarteraDeductionKind.Loans,
+            NoveltyOrigin.AccountDeduction => CarteraDeductionKind.Savings,
+            _ => null,
+        };
+        if (clase is not { } c) return 3;
+        var lista = orden is { Count: 3 } ? orden : CarteraDeductionKinds.Defecto;
+        var posicion = lista.ToList().IndexOf(c);
+        return posicion < 0 ? CarteraDeductionKinds.Defecto.ToList().IndexOf(c) : posicion;
+    }
+
+    /// <summary>La prelación con el orden por defecto (aportes → créditos → ahorros).</summary>
+    public static int PrelacionDeCartera(NoveltyInput n) => PrelacionDeCartera(n, CarteraDeductionKinds.Defecto);
 }

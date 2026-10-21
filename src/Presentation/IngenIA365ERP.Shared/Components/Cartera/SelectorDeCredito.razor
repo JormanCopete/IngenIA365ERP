@@ -1,0 +1,64 @@
+@using IngenIA365ERP.Shared.Services.Cartera
+@inject CreditosClient Creditos
+
+@* Feature 013, K4 (T0958): elegir un crédito por su número o por el nombre del deudor en vez de escribir su identificador. La lista es la del alcance
+   de quien busca (GET /api/lending/loans): un crédito fuera de su alcance no existe para él. Al elegir devuelve el crédito completo, con su deudor y
+   sus codeudores, que son las únicas personas a las que la cobranza puede contactar (LaCobranzaNuncaContactaReferencias). *@
+<IndicadorDeCarga Cargando="@_carga.Activa" Compacto="true" Texto="Buscando…">
+    <div class="toolbar">
+        <input class="e-input" @bind="_buscar" @onkeydown="TeclaAsync" maxlength="60" placeholder="Número o deudor" aria-label="Buscar crédito" disabled="@Deshabilitado" />
+        <SfButton CssClass="e-flat e-small" Disabled="@(Deshabilitado || _carga.Activa)" OnClick="@BuscarAsync">Buscar</SfButton>
+    </div>
+    <select class="e-input" value="@(Value?.ToString() ?? "")" @onchange="CambiarAsync" disabled="@Deshabilitado" aria-label="Crédito">
+        <option value="">Elija un crédito…</option>
+        @foreach (var c in _encontrados)
+        {
+            <option value="@c.PublicId">@c.Number · @c.Debtor.Name · @c.DaysPastDue días de mora</option>
+        }
+    </select>
+    @if (_error is not null) { <span class="texto-tenue">@_error</span> }
+</IndicadorDeCarga>
+
+@code {
+    [Parameter] public Guid? Value { get; set; }
+    [Parameter] public EventCallback<Guid?> ValueChanged { get; set; }
+
+    /// <summary>Se dispara con el crédito completo elegido (deudor y codeudores), o nulo.</summary>
+    [Parameter] public EventCallback<CreditoDto?> Elegido { get; set; }
+
+    [Parameter] public bool Deshabilitado { get; set; }
+
+    /// <summary>La mora mínima de los créditos que se ofrecen (por defecto, todos).</summary>
+    [Parameter] public int? MoraMinima { get; set; }
+
+    private readonly EstadoDeCarga _carga = new();
+    private List<CreditoEnListaDto> _encontrados = [];
+    private string? _buscar, _error;
+
+    private async Task TeclaAsync(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await BuscarAsync();
+    }
+
+    private async Task BuscarAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_buscar)) return;
+        using var carga = _carga.Iniciar();
+        _error = null;
+        var r = await Creditos.ListarAsync(_buscar, moraMinima: MoraMinima, tamano: 10);
+        if (!r.IsSuccess) { _error = r.ErrorMessage ?? "No se pudo buscar."; _encontrados = []; return; }
+        _encontrados = [.. r.Value?.Items ?? []];
+        if (_encontrados.Count == 0) _error = "Ningún crédito coincide con la búsqueda.";
+    }
+
+    private async Task CambiarAsync(Microsoft.AspNetCore.Components.ChangeEventArgs e)
+    {
+        Guid? id = Guid.TryParse(e.Value?.ToString(), out var g) ? g : null;
+        Value = id;
+        await ValueChanged.InvokeAsync(id);
+        if (id is null) { await Elegido.InvokeAsync(null); return; }
+        using var carga = _carga.Iniciar();
+        var r = await Creditos.CreditoAsync(id.Value);
+        await Elegido.InvokeAsync(r.IsSuccess ? r.Value : null);
+    }
+}

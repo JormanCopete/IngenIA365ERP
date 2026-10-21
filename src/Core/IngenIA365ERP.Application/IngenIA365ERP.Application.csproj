@@ -29,6 +29,10 @@
     <EmbeddedResource Include="Payroll\Pila\Layouts\*.json" />
     <!-- Feature 012 (T180): los catálogos DIAN son datos versionados por vigencia, no tablas (CatalogoDian). -->
     <EmbeddedResource Include="ElectronicInvoicing\Catalogs\Data\*.json" />
+    <!-- Feature 013, K5 (T0998): los layouts del SICSES y de las centrales de riesgo son dato versionado embebido (CatalogoDeLayoutsDeCartera). -->
+    <EmbeddedResource Include="Lending\Regulatory\Layouts\*.json" />
+    <!-- Feature 014, US8 (T144): las cuentas CUIF que la plantilla de la matriz sugiere para captaciones y aportes son dato embebido, no código. -->
+    <EmbeddedResource Include="Accounting\Lending\Plantilla\*.json" />
   </ItemGroup>
 
 </Project>

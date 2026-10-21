@@ -9,6 +9,8 @@ namespace IngenIA365ERP.Application.Core.Associates.Commands.UpdateAssociate;
 /// <summary>
 /// Actualiza datos del rol asociado. La fila debe existir previamente.
 /// Datos personales se editan via UpdatePersonCommand desde la misma UI.
+/// Feature 014 (T102, E-04, FR-124): el retiro del asociado nace en la Cartera; aquí ya no se cambia el estado a retirado
+/// (<c>Associate.WithdrawalOwnedByLending</c>): lo cambia el consumo de <c>RetiroDeAsociadoAprobado</c>.
 /// </summary>
 public record UpdateAssociateCommand : IRequest<Result>
 {
@@ -53,12 +55,23 @@ public class UpdateAssociateCommandHandler(
     ICurrentUserService currentUser)
     : IRequestHandler<UpdateAssociateCommand, Result>
 {
+    public const string WithdrawalOwnedByLendingCode = "Associate.WithdrawalOwnedByLending";
+
+    /// <summary>El estado de un asociado retirado.</summary>
+    public const string EstadoRetirado = "R";
+
     public async Task<Result> Handle(UpdateAssociateCommand request, CancellationToken ct)
     {
         var entity = await context.Associates
             .FirstOrDefaultAsync(a => a.PublicId == request.PublicId && !a.IsDeleted, ct);
         if (entity is null)
             return Result.Failure(new Error("Associate.NotFound", "Asociado no encontrado."));
+
+        // Feature 014 (T102): el retiro lo tramita la Cartera; Asociados no retira por su cuenta.
+        if (string.Equals(request.Status?.Trim(), EstadoRetirado, StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(entity.Status?.Trim(), EstadoRetirado, StringComparison.OrdinalIgnoreCase))
+            return Result.Failure(new Error(WithdrawalOwnedByLendingCode,
+                "El retiro del asociado se radica y se aprueba en Cartera (Retiros de asociado): el estado cambia solo al aprobarse."));
 
         // Lookups
         if (request.EmployerCompanyPublicId.HasValue)

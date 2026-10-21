@@ -1,0 +1,184 @@
+@page "/cartera/centrales"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Http
+@inject RegulatorioDeCarteraClient Regulatorio
+@inject INotificationService Notification
+
+<PageTitle>Archivos para centrales de riesgo - IngenIA365ERP</PageTitle>
+
+@* Feature 013, K5, US16 (T1009; contracts/api.md §18; FR-137, SC-012): el archivo de novedades de cada central de riesgo desde el último que se
+   cargó. Sólo van quienes autorizaron el reporte con evidencia y, si el dato es negativo, con el aviso previo con constancia de su episodio; los
+   demás quedan excluidos con su motivo y la gestión que lo corrige. Validar no guarda nada; generar con bloqueantes deja una versión «validada» sin
+   archivo; sin bloqueantes exige reconocer las advertencias (layout sin cotejar). Marcar cargado con el radicado cierra el período de esa central. *@
+<PermissionGate Required="Lending.RegulatoryFiles.Read" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Archivos para centrales de riesgo</h3>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_layouts.Activa">
+        <div class="toolbar">
+            <label class="campo">Central
+                <select class="e-input" value="@_central" @onchange="@(e => CambiarCentral(e.Value?.ToString()))">
+                    @foreach (var c in _centrales) { <option value="@c.BureauCode">@c.BureauCode</option> }
+                </select>
+            </label>
+            <a href="/cartera/informes?vista=bureau-exclusions">Excluidos por central y período</a>
+        </div>
+        @if (Layout is { } l)
+        {
+            <p class="texto-apoyo">Layout @l.Code (versión @l.Version, vigente desde @l.ValidFrom.ToString("dd/MM/yyyy")) · @l.VerifiedFields de @l.TotalFields campos cotejados · fuente: @l.Source</p>
+            @if (l.UnverifiedFields > 0)
+            {
+                <p class="aviso aviso-alerta">El formato de @l.BureauCode tiene @l.UnverifiedFields de @l.TotalFields campos sin cotejar contra el instructivo de la central: cada generación lo advierte hasta que se coteje.</p>
+            }
+        }
+        @if (_centrales.Count == 0) { <p class="texto-tenue">No hay layouts de centrales de riesgo.</p> }
+    </IndicadorDeCarga>
+
+    @if (_central is not null)
+    {
+        <PermissionGate Required="Lending.CreditBureauFiles.Generate">
+            <div class="info-card">
+                <h4>Validar y generar el archivo de un período</h4>
+                <div class="toolbar">
+                    <label class="campo">Año <input class="e-input" type="number" min="2000" max="2999" value="@_anio" @onchange="@(e => CambiarPeriodo(e.Value, null))" /></label>
+                    <label class="campo">Mes <input class="e-input" type="number" min="1" max="12" value="@_mes" @onchange="@(e => CambiarPeriodo(null, e.Value))" /></label>
+                    <SfButton CssClass="e-outline" Disabled="@_accion.Activa" OnClick="@ValidarAsync">Validar</SfButton>
+                    <SfButton CssClass="e-primary" Disabled="@_accion.Activa" OnClick="@GenerarAsync">Generar</SfButton>
+                </div>
+                <IndicadorDeCarga Cargando="@_accion.Activa" Texto="Preparando el archivo…">
+                    @if (_validacion is { } v)
+                    {
+                        <p><strong>@_central · @TextosRegulatorios.Periodo(_anio, _mes)</strong> · layout @v.Layout · @v.Rows obligaciones · @v.Blocking bloqueantes · @v.Excluded.Count excluidos</p>
+                        @foreach (var w in v.Warnings.Where(w => w.Code.StartsWith("Lending.Regulatory.", StringComparison.Ordinal))) { <p class="aviso aviso-alerta">@w.Message</p> }
+                        <TablaDeIncidenciasRegulatorias Incidencias="@v.Issues.Where(i => !i.Code.StartsWith("Lending.Regulatory.", StringComparison.Ordinal)).ToList()" TextoSinIncidencias="El archivo no tiene inconsistencias." />
+                        <h4>Excluidos del archivo</h4>
+                        <TablaDeExcluidosDeCentral Excluidos="@v.Excluded" />
+                    }
+                    @if (_rechazo.Count > 0)
+                    {
+                        <p class="aviso aviso-error" role="alert">La generación quedó validada sin archivo: corrija estas inconsistencias y vuelva a generar.</p>
+                        <TablaDeIncidenciasRegulatorias Incidencias="@_rechazo" />
+                    }
+                </IndicadorDeCarga>
+            </div>
+        </PermissionGate>
+
+        <h4>Versiones generadas</h4>
+        <GeneracionesRegulatorias @ref="_generaciones" Clase="@RegulatorioDeCarteraClient.ClaseCentral" Central="@_central" />
+    }
+</div>
+
+<SfDialog @bind-Visible="_mostrarAdvertencias" Header="Reconocer las advertencias" Width="560px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_accion.Activa" Texto="Generando…">
+                <p>El archivo de @_central para @TextosRegulatorios.Periodo(_anio, _mes) se puede generar, pero tiene estas advertencias. Ninguna va dentro del archivo.</p>
+                <ul>
+                    @foreach (var w in _advertencias.DistinctBy(w => w.Message)) { <li>@w.Message</li> }
+                </ul>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@_accion.Activa" OnClick="@(() => GenerarConAsync(true))">Reconocer y generar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarAdvertencias = false)">Volver</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _layouts = new(), _accion = new();
+    private GeneracionesRegulatorias? _generaciones;
+    private List<LayoutRegulatorioDto> _centrales = [];
+    private string? _central;
+    private int _anio = DateTime.Today.AddMonths(-1).Year, _mes = DateTime.Today.AddMonths(-1).Month;
+    private ValidacionRegulatoriaDto? _validacion;
+    private IReadOnlyList<IncidenciaRegulatoriaDto> _rechazo = [];
+    private IReadOnlyList<AdvertenciaRegulatoriaDto> _advertencias = [];
+    private bool _mostrarAdvertencias;
+    private ClaveDeOperacion _clave = new();
+
+    private LayoutRegulatorioDto? Layout => _centrales.FirstOrDefault(c => c.BureauCode == _central);
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var carga = _layouts.Iniciar();
+        var r = await Regulatorio.LayoutsAsync();
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer los layouts."); return; }
+        // El vigente de cada central (el de vigencia más reciente).
+        _centrales = (r.Value ?? []).Where(l => l.Kind == RegulatorioDeCarteraClient.ClaseCentral && l.BureauCode is not null)
+            .GroupBy(l => l.BureauCode!).Select(g => g.OrderByDescending(l => l.ValidFrom).First()).OrderBy(l => l.BureauCode).ToList();
+        _central = _centrales.FirstOrDefault()?.BureauCode;
+    }
+
+    private void CambiarCentral(string? central)
+    {
+        _central = string.IsNullOrEmpty(central) ? null : central;
+        Limpiar();
+    }
+
+    private void CambiarPeriodo(object? anio, object? mes)
+    {
+        if (int.TryParse(anio?.ToString(), out var a)) _anio = a;
+        if (int.TryParse(mes?.ToString(), out var m)) _mes = m;
+        Limpiar();
+    }
+
+    private void Limpiar()
+    {
+        _validacion = null;
+        _rechazo = [];
+        _clave = new ClaveDeOperacion();
+    }
+
+    private async Task ValidarAsync()
+    {
+        if (_central is null) return;
+        using var carga = _accion.Iniciar();
+        _rechazo = [];
+        var r = await Regulatorio.ValidarCentralAsync(_central, _anio, _mes);
+        _validacion = r.IsSuccess ? r.Value : null;
+        if (!r.IsSuccess) await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo validar el archivo.");
+    }
+
+    private Task GenerarAsync()
+    {
+        if (_validacion is { Blocking: 0, Warnings.Count: > 0 } v)
+        {
+            _advertencias = v.Warnings;
+            _mostrarAdvertencias = true;
+            return Task.CompletedTask;
+        }
+        return GenerarConAsync(false);
+    }
+
+    private async Task GenerarConAsync(bool reconocer)
+    {
+        if (_central is null) return;
+        using var carga = _accion.Iniciar();
+        _rechazo = [];
+        var r = await Regulatorio.GenerarCentralAsync(_central, _anio, _mes, reconocer, _clave);
+        if (r.IsSuccess)
+        {
+            _mostrarAdvertencias = false;
+            _validacion = null;
+            await Notification.SuccessAsync($"Archivo {r.Value!.File.FileName} generado: {r.Value.File.Counts.Rows} obligaciones, {r.Value.File.Counts.Excluded} excluidos.");
+            if (_generaciones is not null) await _generaciones.RecargarAsync(r.Value);
+            return;
+        }
+        var advertencias = r.Dato<List<AdvertenciaRegulatoriaDto>>("warnings");
+        if (!reconocer && advertencias is { Count: > 0 })
+        {
+            _advertencias = advertencias;
+            _mostrarAdvertencias = true;
+            return;
+        }
+        _mostrarAdvertencias = false;
+        _rechazo = RegulatorioDeCarteraClient.IncidenciasDelRechazo(r);
+        await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo generar el archivo.");
+        if (_rechazo.Count > 0 && _generaciones is not null) await _generaciones.RecargarAsync();
+    }
+}

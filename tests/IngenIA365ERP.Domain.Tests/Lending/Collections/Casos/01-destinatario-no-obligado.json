@@ -1,0 +1,15 @@
+// Regla 1 (FR-122): sólo el deudor y los codeudores obligados reciben mensajes. Una referencia personal (o cualquier otro
+// que no esté obligado) se excluye, sea cual sea el propósito, el canal y la hora. Miércoles 11 de noviembre de 2026, 9:00.
+{
+  "caso": "01-destinatario-no-obligado",
+  "reglas": { "horario": { "lunesAViernes": ["07:00", "19:00"], "sabado": ["08:00", "15:00"] }, "contactosPorDia": 1, "noHabiles": ["2026-11-02", "2026-11-16"] },
+  "titular": { "rol": "Debtor", "obligado": false },
+  "escenarios": [
+    { "nombre": "cobranza a quien no está obligado",
+      "solicitud": { "pedido": "2026-11-11T09:00", "canal": "Sms", "proposito": "Collection", "inmediato": true },
+      "esperado": { "decision": "Excluido", "motivo": "RecipientNotObligated" } },
+    { "nombre": "ni siquiera un informativo",
+      "solicitud": { "pedido": "2026-11-11T09:00", "canal": "Email", "proposito": "Informative" },
+      "esperado": { "decision": "Excluido", "motivo": "RecipientNotObligated" } }
+  ]
+}

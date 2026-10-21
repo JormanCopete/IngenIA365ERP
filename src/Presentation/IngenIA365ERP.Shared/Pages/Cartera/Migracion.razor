@@ -1,0 +1,510 @@
+@page "/cartera/migracion"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Globalization
+@using System.Text.Json
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Http
+@inject CarteraClient Cartera
+@inject GobiernoDeCarteraClient Gobierno
+@inject INotificationService Notification
+
+<PageTitle>Migración de la cartera - IngenIA365ERP</PageTitle>
+
+@* Feature 013, US8 (T0759; DT §2.16; quickstart §3.3; contracts/api.md §19.1, §19.2; plantillas.md §5): la carga de la cartera vigente con fecha
+   de corte en 17 partes. Por parte se descarga la plantilla (encabezados en la fila 1) y se suben uno o varios archivos, cada uno con su revisión
+   previa —fila y columna, y la revisión en Excel— y todo o nada; «Reemplazar la parte» deja sin efecto los archivos anteriores. Aplicar sólo guarda
+   la carga: valida entre partes, calcula el cuadre contra Contabilidad y concilia las ventas a crédito; los créditos nacen al activar. Las pestañas
+   «Cuadre» (Lending.Reconciliation.View; sin documentos ni nombres), «Ventas» (marcar desde la lista con motivo) y «Diferencias» (aceptar varias con
+   el punto de una sesión cerrada, Lending.Migration.AcceptDifferences). *@
+<PermissionGate Required="Lending.Migration.Load" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Migración de la cartera</h3>
+        <div class="toolbar">
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_cargaLista.Activa" OnClick="@CargarListaAsync">Actualizar</SfButton>
+            <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@AbrirNueva">Carga nueva</SfButton>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_cargaLista.Activa">
+        <div class="tabla-desplazable">
+            <table class="data-grid">
+                <thead><tr><th>Carga</th><th>Corte</th><th>Estado</th><th class="numero">Créditos</th><th>Plazo para activar</th><th class="numero">Diferencias pendientes</th><th class="numero">Aceptadas</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var c in _cargas)
+                    {
+                        var carga = c;
+                        <tr>
+                            <td>@carga.Number</td>
+                            <td>@carga.CutoffDate.ToString("dd/MM/yyyy")</td>
+                            <td>@TextosDeMigracion.EstadoDeCarga(carga.Status)</td>
+                            <td class="numero">@carga.LoanCount.ToString("N0")</td>
+                            <td>@(carga.ActivationDeadline?.ToString("dd/MM/yyyy"))</td>
+                            <td class="numero">@carga.Differences.Pending</td>
+                            <td class="numero">@carga.Differences.Accepted</td>
+                            <td><SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirAsync(carga.PublicId))">Abrir</SfButton></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (_cargas.Count == 0) { <p class="texto-tenue">Todavía no hay cargas. «Carga nueva» pide la fecha de corte.</p> }
+    </IndicadorDeCarga>
+
+    @if (_actual is { } a)
+    {
+        <div class="info-card">
+            <div class="toolbar">
+                <h4>Carga @a.Number — corte @a.CutoffDate.ToString("dd/MM/yyyy") — @TextosDeMigracion.EstadoDeCarga(a.Status)</h4>
+                @if (a.Status == 1)
+                {
+                    <SfButton CssClass="e-primary" IconCss="e-icons e-check" OnClick="@AbrirAplicar">Aplicar la carga…</SfButton>
+                }
+            </div>
+            @if (a.Status == 2)
+            {
+                <p class="texto-apoyo">
+                    Aplicada el @(a.AppliedAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm")) por @a.AppliedBy. Se activa el
+                    @a.CutoffDate.AddDays(1).ToString("dd/MM/yyyy") y a más tardar el @(a.ActivationDeadline?.ToString("dd/MM/yyyy")).
+                    Cuadre: @(a.IsBalanced ? "aceptado" : "con diferencias pendientes") · Ventas: @(a.SalesReconciled ? "conciliadas" : "con diferencias pendientes").
+                </p>
+            }
+            <div class="toolbar">
+                <SfButton CssClass="@(_pestana == 0 ? "e-primary" : "e-outline")" OnClick="@(() => CambiarAsync(0))">Partes</SfButton>
+                <PermissionGate Required="Lending.Reconciliation.View">
+                    <SfButton CssClass="@(_pestana == 1 ? "e-primary" : "e-outline")" OnClick="@(() => CambiarAsync(1))">Cuadre</SfButton>
+                </PermissionGate>
+                <SfButton CssClass="@(_pestana == 2 ? "e-primary" : "e-outline")" OnClick="@(() => CambiarAsync(2))">Ventas</SfButton>
+                <SfButton CssClass="@(_pestana == 3 ? "e-primary" : "e-outline")" OnClick="@(() => CambiarAsync(3))">Diferencias</SfButton>
+            </div>
+
+            @if (_pestana == 0)
+            {
+                <IndicadorDeCarga Cargando="@_cargaDetalle.Activa">
+                    <div class="tabla-desplazable">
+                        <table class="data-grid">
+                            <thead><tr><th>Parte</th><th>Obligatoria</th><th class="numero">Archivos vigentes</th><th class="numero">Filas</th><th>Último archivo</th></tr></thead>
+                            <tbody>
+                                @foreach (var p in TextosDeMigracion.Partes)
+                                {
+                                    var tandas = a.Parts.Where(t => t.Part == p.Clave).ToList();
+                                    var vivas = tandas.Where(t => t.Status != 2).ToList();
+                                    <tr>
+                                        <td>@p.Nombre</td>
+                                        <td>@(p.Obligatoria ? "Sí" : "No")</td>
+                                        <td class="numero">@vivas.Count</td>
+                                        <td class="numero">@vivas.Sum(t => t.Rows).ToString("N0")</td>
+                                        <td>@(tandas.OrderByDescending(t => t.Batch).FirstOrDefault() is { } u ? $"{u.FileName} ({TextosDeMigracion.EstadoDeTanda(u.Status)})" : "")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    @if (a.ManualPrevails is { Count: > 0 } prevalece)
+                    {
+                        <p class="texto-apoyo">Lo registrado a mano que prevalece sobre la carga: @string.Join("; ", prevalece.Select(x => $"{x.Concept}: {x.Detail}"))</p>
+                    }
+                </IndicadorDeCarga>
+
+                @if (a.Status == 1)
+                {
+                    <div class="form-grid">
+                        <label class="campo">Parte
+                            <select class="e-input" @bind="_parte">
+                                @foreach (var p in TextosDeMigracion.Partes) { <option value="@p.Clave">@p.Nombre</option> }
+                            </select>
+                        </label>
+                        <label class="campo-check"><input type="checkbox" @bind="_reemplazar" /> Reemplazar la parte (deja sin efecto los archivos anteriores)</label>
+                    </div>
+                    <ImportarPlantilla @key="@($"{a.PublicId}-{_parte}-{_reemplazar}")" RutaBase="@CarteraClient.RutaDeParte(a.PublicId, _parte)"
+                                       PermisoDeDescarga="Lending.Migration.Load" PermisoDeImportacion="Lending.Migration.Load"
+                                       PermisoDeDescargaConDatos="Lending.Reports.ExportPersonalData" ConDatos="false"
+                                       QueryAdicional="@(_reemplazar ? "replace=true" : null)" Aplicado="@(_ => RecargarActualAsync())" />
+                }
+            }
+            else if (_pestana == 1)
+            {
+                <PermissionGate Required="Lending.Reconciliation.View" MostrarAviso="true">
+                    <IndicadorDeCarga Cargando="@_cargaCuadre.Activa" Texto="Leyendo el cuadre…">
+                        @if (_cuadre is { } q)
+                        {
+                            <p class="texto-apoyo">Versión @q.CheckVersion del cuadre a @q.CutoffDate.ToString("dd/MM/yyyy"). Los valores van en el sentido de Cartera.</p>
+                            <div class="tabla-desplazable">
+                                <table class="data-grid">
+                                    <thead><tr><th>Concepto</th><th>Modalidad</th><th>Sub-segmento</th><th>Categoría</th><th>Cuentas</th><th class="numero">Cartera</th><th class="numero">Contabilidad</th><th class="numero">Diferencia</th></tr></thead>
+                                    <tbody>
+                                        @foreach (var f in q.Rows)
+                                        {
+                                            <tr class="@(f.Difference != 0 ? "texto-alerta" : "")">
+                                                <td>@(f.Concept ?? f.Family)</td>
+                                                <td>@f.Modality</td>
+                                                <td>@f.Subsegment</td>
+                                                <td>@f.Category</td>
+                                                <td>@(f.Unresolved ? "Sin regla en la matriz" : string.Join(", ", f.Accounts.Select(c => c.Code)))</td>
+                                                <td class="numero">@f.Lending.ToString("N2")</td>
+                                                <td class="numero">@f.Accounting.ToString("N2")</td>
+                                                <td class="numero">@f.Difference.ToString("N2")</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                            @if (q.Rows.Count == 0) { <p class="texto-tenue">La carga no trae saldos que cuadrar.</p> }
+                        }
+                    </IndicadorDeCarga>
+                </PermissionGate>
+            }
+            else if (_pestana == 2)
+            {
+                <div class="toolbar">
+                    <label class="campo">Clase
+                        <select class="e-input" @bind="_claseDeVenta">
+                            <option value="0">Todas</option>
+                            @foreach (var c in TextosDeMigracion.ClasesDeVenta) { <option value="@c.Valor">@c.Texto</option> }
+                        </select>
+                    </label>
+                    <SfButton CssClass="e-primary" IconCss="e-icons e-search" Disabled="@_cargaVentas.Activa" OnClick="@CargarVentasAsync">Buscar</SfButton>
+                </div>
+                <IndicadorDeCarga Cargando="@_cargaVentas.Activa">
+                    <div class="tabla-desplazable">
+                        <table class="data-grid">
+                            <thead><tr><th>Factura</th><th>Fecha</th><th class="numero">Valor</th><th>Clase</th><th>Marca</th><th>Ajustes</th><th></th></tr></thead>
+                            <tbody>
+                                @foreach (var v in _ventas)
+                                {
+                                    var venta = v;
+                                    <tr>
+                                        <td>@venta.InvoiceNumber</td>
+                                        <td>@venta.SaleDate.ToString("dd/MM/yyyy")</td>
+                                        <td class="numero">@venta.Amount.ToString("N2")</td>
+                                        <td>@TextosDeMigracion.ClaseDeVenta(venta.Classification)@(venta.Accepted ? " (aceptada)" : "")</td>
+                                        <td>@(venta.MarkedFromList ? venta.MarkReason : "")</td>
+                                        <td>@venta.AdjustmentsUpToCutoff hasta el corte · @venta.AdjustmentsAfterCutoff después</td>
+                                        <td>
+                                            @if (a.Status == 2 && venta.Classification == 3 && !venta.Accepted)
+                                            {
+                                                <SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirMarca(venta, 2))">Cancelada antes del corte…</SfButton>
+                                                <SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirMarca(venta, 4))">Fuera de Cartera…</SfButton>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    @if (_ventas.Count == 0) { <p class="texto-tenue">No hay ventas a crédito hasta el corte con esa clase.</p> }
+                </IndicadorDeCarga>
+            }
+            else
+            {
+                <IndicadorDeCarga Cargando="@_cargaDiferencias.Activa">
+                    <div class="tabla-desplazable">
+                        <table class="data-grid">
+                            <thead><tr><th></th><th>Clase</th><th>Detalle</th><th class="numero">Cartera</th><th class="numero">Contabilidad</th><th class="numero">Diferencia</th><th>Aceptación</th></tr></thead>
+                            <tbody>
+                                @foreach (var d in _diferencias)
+                                {
+                                    var diferencia = d;
+                                    <tr>
+                                        <td>
+                                            @if (diferencia.AcceptedAt is null && a.Status == 2)
+                                            {
+                                                <input type="checkbox" checked="@_elegidas.Contains(diferencia.PublicId)" @onchange="@(e => Elegir(diferencia.PublicId, e.Value is true))" />
+                                            }
+                                        </td>
+                                        <td>@TextosDeMigracion.ClaseDeDiferencia(diferencia.Kind)</td>
+                                        <td>@(diferencia.InvoiceNumber ?? string.Join(" · ", new[] { diferencia.Concept, diferencia.Modality, diferencia.Subsegment, diferencia.Category, diferencia.Accounts }.Where(x => !string.IsNullOrWhiteSpace(x))))</td>
+                                        <td class="numero">@diferencia.Lending.ToString("N2")</td>
+                                        <td class="numero">@diferencia.Accounting.ToString("N2")</td>
+                                        <td class="numero">@diferencia.Difference.ToString("N2")</td>
+                                        <td>@(diferencia.AcceptedAt is { } en ? (diferencia.Kind == 1 ? $"{en.ToLocalTime():dd/MM/yyyy}: {diferencia.AcceptanceReason}" : "Aceptada") : "Pendiente")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    @if (_diferencias.Count == 0) { <p class="texto-tenue">La carga no tiene diferencias.</p> }
+                </IndicadorDeCarga>
+                @if (a.Status == 2 && _diferencias.Any(d => d.AcceptedAt is null))
+                {
+                    <PermissionGate Required="Lending.Migration.AcceptDifferences">
+                        <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Aceptando…">
+                            <div class="form-grid">
+                                <label class="campo campo-ancho">Punto del acta (sesiones cerradas)
+                                    <select class="e-input" @bind="_punto">
+                                        <option value="">Elija el punto…</option>
+                                        @foreach (var p in _puntos) { <option value="@p.SessionItemPublicId">@($"{p.Session.Body.Name} · acta {p.Session.Number} · {p.Title}")</option> }
+                                    </select>
+                                </label>
+                                <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" maxlength="400" /></label>
+                            </div>
+                            @if (_puntos.Count == 0)
+                            {
+                                <p class="texto-tenue">No hay puntos de actas cerradas sobre esta carga. Levante el punto «Diferencias de la activación» en Actas y órganos.</p>
+                            }
+                            @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                            <div class="toolbar">
+                                <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || _elegidas.Count == 0 || string.IsNullOrWhiteSpace(_punto) || string.IsNullOrWhiteSpace(_motivo))"
+                                          OnClick="@AceptarAsync">Aceptar @_elegidas.Count diferencia(s)</SfButton>
+                            </div>
+                        </IndicadorDeCarga>
+                    </PermissionGate>
+                }
+            }
+        </div>
+    }
+</div>
+
+<SfDialog @bind-Visible="_mostrarNueva" Header="Carga nueva" Width="480px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Creando…">
+                <p class="texto-apoyo">El corte es el último día que la cartera anterior manejó; Cartera se activa el día siguiente. Un borrador anterior queda reemplazado.</p>
+                <label class="campo">Fecha de corte * <input type="date" class="e-input" value="@_corte.ToString("yyyy-MM-dd")" @onchange="@(e => _corte = LeerFecha(e.Value) ?? _corte)" /></label>
+                <label class="campo campo-ancho">Notas <input class="e-input" @bind="_notas" maxlength="400" /></label>
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@_guardado.Activa" OnClick="@CrearAsync">Crear</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarNueva = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarAplicar" Header="Aplicar la carga" Width="760px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Validando entre partes y cuadrando…">
+                <p class="texto-apoyo">Aplicar sólo guarda la carga: los créditos nacen al activar. Si hay un error entre partes no se guarda nada.</p>
+                <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" maxlength="400" /></label>
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                @if (_erroresEntrePartes.Count > 0)
+                {
+                    <div class="tabla-desplazable">
+                        <table class="data-grid">
+                            <thead><tr><th>Parte</th><th class="numero">Archivo</th><th class="numero">Fila</th><th>Columna</th><th>Error</th></tr></thead>
+                            <tbody>
+                                @foreach (var e in _erroresEntrePartes)
+                                {
+                                    <tr><td>@TextosDeMigracion.Parte(e.Part)</td><td class="numero">@e.Batch</td><td class="numero">@e.Row</td><td>@e.Column</td><td>@e.Message</td></tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@AplicarAsync">Aplicar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarAplicar = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarMarca" Header="Marcar la venta" Width="520px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Marcando…">
+                <p class="texto-apoyo">@(_venta?.InvoiceNumber) — @TextosDeMigracion.ClaseDeVenta(_claseDeMarca)</p>
+                <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" maxlength="400" /></label>
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@MarcarAsync">Marcar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarMarca = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _cargaLista = new(), _cargaDetalle = new(), _cargaCuadre = new(), _cargaVentas = new(), _cargaDiferencias = new(),
+        _guardado = new();
+    private ClaveDeOperacion _clave = new();
+    private List<CargaDeMigracionDto> _cargas = [];
+    private CargaDeMigracionDto? _actual;
+    private CuadreDeMigracionDto? _cuadre;
+    private List<VentaDeMigracionDto> _ventas = [];
+    private List<DiferenciaDeMigracionDto> _diferencias = [];
+    private List<PuntoDeActaCerradaDto> _puntos = [];
+    private readonly HashSet<Guid> _elegidas = [];
+    private List<ErrorEntrePartesDto> _erroresEntrePartes = [];
+    private int _pestana, _claseDeVenta, _claseDeMarca;
+    private string _parte = TextosDeMigracion.Partes[0].Clave;
+    private bool _reemplazar, _mostrarNueva, _mostrarAplicar, _mostrarMarca;
+    private string? _error, _motivo, _notas, _punto;
+    private DateOnly _corte = DateOnly.FromDateTime(DateTime.Today).AddDays(-1);
+    private VentaDeMigracionDto? _venta;
+
+    protected override async Task OnInitializedAsync() => await CargarListaAsync();
+
+    private async Task CargarListaAsync()
+    {
+        using var carga = _cargaLista.Iniciar();
+        var r = await Cartera.CargasAsync();
+        if (!r.IsSuccess) { _cargas = []; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer las cargas."); return; }
+        _cargas = [.. (r.Value ?? []).OrderByDescending(c => c.Number)];
+    }
+
+    private async Task AbrirAsync(Guid carga)
+    {
+        using var estado = _cargaDetalle.Iniciar();
+        var r = await Cartera.CargaAsync(carga);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo leer la carga."); return; }
+        _actual = r.Value;
+        _cuadre = null;
+        _ventas = [];
+        _diferencias = [];
+        _elegidas.Clear();
+        await CambiarAsync(_pestana);
+    }
+
+    private async Task RecargarActualAsync()
+    {
+        if (_actual is { } a) await AbrirAsync(a.PublicId);
+        await CargarListaAsync();
+    }
+
+    private async Task CambiarAsync(int pestana)
+    {
+        _pestana = pestana;
+        if (_actual is null) return;
+        if (pestana == 1) await CargarCuadreAsync();
+        else if (pestana == 2) await CargarVentasAsync();
+        else if (pestana == 3) await CargarDiferenciasAsync();
+    }
+
+    private async Task CargarCuadreAsync()
+    {
+        if (_actual is not { } a) return;
+        using var carga = _cargaCuadre.Iniciar();
+        var r = await Cartera.CuadreAsync(a.PublicId);
+        if (!r.IsSuccess) { _cuadre = null; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo leer el cuadre."); return; }
+        _cuadre = r.Value;
+    }
+
+    private async Task CargarVentasAsync()
+    {
+        if (_actual is not { } a) return;
+        using var carga = _cargaVentas.Iniciar();
+        var r = await Cartera.VentasAsync(a.PublicId, _claseDeVenta == 0 ? null : _claseDeVenta, tamano: 200);
+        if (!r.IsSuccess) { _ventas = []; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer las ventas."); return; }
+        _ventas = [.. r.Value?.Items ?? []];
+    }
+
+    /// <summary>Las diferencias vigentes: las del cuadre y las de las ventas que todavía tienen la suya; y los puntos de acta sobre la carga.</summary>
+    private async Task CargarDiferenciasAsync()
+    {
+        if (_actual is not { } a) return;
+        using var carga = _cargaDiferencias.Iniciar();
+        var lista = new List<DiferenciaDeMigracionDto>();
+        var cuadre = await Cartera.CuadreAsync(a.PublicId);
+        if (cuadre.IsSuccess && cuadre.Value is { } q) lista.AddRange(q.Differences);
+        var ventas = await Cartera.VentasAsync(a.PublicId, tamano: 200);
+        if (ventas.IsSuccess)
+            lista.AddRange((ventas.Value?.Items ?? []).Where(v => v.DifferencePublicId is not null).Select(v => new DiferenciaDeMigracionDto(
+                v.DifferencePublicId!.Value, v.Classification == 4 ? 3 : 2, v.InvoiceNumber, null, null, null, null, null, v.InvoiceNumber, 0m, v.Amount, -v.Amount,
+                v.Accepted ? DateTime.UtcNow : null, v.Accepted ? "Aceptada" : null)));
+        _diferencias = lista;
+        _elegidas.RemoveWhere(id => !lista.Any(d => d.PublicId == id && d.AcceptedAt is null));
+        var puntos = await Gobierno.PuntosDeActasCerradasAsync("ActivationDifferences", sujetoId: a.PublicId);
+        _puntos = puntos.IsSuccess ? [.. puntos.Value?.Items ?? []] : [];
+    }
+
+    private void Elegir(Guid id, bool elegida)
+    {
+        if (elegida) _elegidas.Add(id); else _elegidas.Remove(id);
+    }
+
+    private void AbrirNueva()
+    {
+        _error = _notas = null;
+        _corte = DateOnly.FromDateTime(DateTime.Today).AddDays(-1);
+        _clave = new ClaveDeOperacion();
+        _mostrarNueva = true;
+    }
+
+    private async Task CrearAsync()
+    {
+        using var carga = _guardado.Iniciar();
+        _error = null;
+        var r = await Cartera.CrearCargaAsync(new CrearCargaRequest(_corte, string.IsNullOrWhiteSpace(_notas) ? null : _notas.Trim()), _clave);
+        if (!r.IsSuccess) { _error = r.ErrorMessage ?? "No se pudo crear la carga."; return; }
+        _mostrarNueva = false;
+        await Notification.SuccessAsync("Carga creada en borrador.");
+        await CargarListaAsync();
+        if (r.Value is { } nueva) { _pestana = 0; await AbrirAsync(nueva.PublicId); }
+    }
+
+    private void AbrirAplicar()
+    {
+        _error = _motivo = null;
+        _erroresEntrePartes = [];
+        _clave = new ClaveDeOperacion();
+        _mostrarAplicar = true;
+    }
+
+    private async Task AplicarAsync()
+    {
+        if (_actual is not { } a || string.IsNullOrWhiteSpace(_motivo)) return;
+        using var carga = _guardado.Iniciar();
+        _error = null;
+        _erroresEntrePartes = [];
+        var r = await Cartera.AplicarCargaAsync(a.PublicId, _motivo.Trim(), _clave);
+        if (!r.IsSuccess)
+        {
+            _error = r.ErrorMessage ?? "No se pudo aplicar la carga.";
+            _erroresEntrePartes = ErroresEntrePartes(r.Data);
+            return;
+        }
+        _mostrarAplicar = false;
+        await Notification.SuccessAsync("Carga aplicada. Revise el cuadre, las ventas y las diferencias.");
+        await RecargarActualAsync();
+    }
+
+    private void AbrirMarca(VentaDeMigracionDto venta, int clase)
+    {
+        _venta = venta;
+        _claseDeMarca = clase;
+        _error = _motivo = null;
+        _clave = new ClaveDeOperacion();
+        _mostrarMarca = true;
+    }
+
+    private async Task MarcarAsync()
+    {
+        if (_actual is not { } a || _venta is not { } v || string.IsNullOrWhiteSpace(_motivo)) return;
+        using var carga = _guardado.Iniciar();
+        _error = null;
+        var r = await Cartera.MarcarVentaAsync(a.PublicId, new MarcaDeVentaRequest(v.MessagePublicId, _claseDeMarca, _motivo.Trim()), _clave);
+        if (!r.IsSuccess) { _error = r.ErrorMessage ?? "No se pudo marcar la venta."; return; }
+        _mostrarMarca = false;
+        await Notification.SuccessAsync("Venta marcada.");
+        await CargarVentasAsync();
+    }
+
+    private async Task AceptarAsync()
+    {
+        if (_actual is not { } a || !Guid.TryParse(_punto, out var punto) || string.IsNullOrWhiteSpace(_motivo) || _elegidas.Count == 0) return;
+        using var carga = _guardado.Iniciar();
+        _error = null;
+        var r = await Cartera.AceptarDiferenciasAsync(a.PublicId, new AceptarDiferenciasRequest([.. _elegidas], punto, _motivo.Trim()), new ClaveDeOperacion());
+        if (!r.IsSuccess) { _error = r.ErrorMessage ?? "No se pudieron aceptar las diferencias."; return; }
+        _elegidas.Clear();
+        _motivo = null;
+        await Notification.SuccessAsync("Diferencias aceptadas.");
+        await RecargarActualAsync();
+    }
+
+    /// <summary>Los errores de <c>Lending.Migration.CrossPartErrors</c> (<c>data.errors[]</c>).</summary>
+    private static List<ErrorEntrePartesDto> ErroresEntrePartes(JsonElement? datos)
+    {
+        if (datos is not { ValueKind: JsonValueKind.Object } d || !d.TryGetProperty("errors", out var errores) || errores.ValueKind != JsonValueKind.Array) return [];
+        return errores.Deserialize<List<ErrorEntrePartesDto>>(new JsonSerializerOptions(JsonSerializerDefaults.Web)) ?? [];
+    }
+
+    private static DateOnly? LeerFecha(object? valor) =>
+        DateOnly.TryParse(valor?.ToString(), CultureInfo.InvariantCulture, out var f) ? f : null;
+}

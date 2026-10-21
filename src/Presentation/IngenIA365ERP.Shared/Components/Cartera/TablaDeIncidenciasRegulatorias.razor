@@ -1,0 +1,37 @@
+@using IngenIA365ERP.Shared.Services.Cartera
+
+@* Feature 013, K5, US16 (T1009): las inconsistencias de una validación o de una generación del SICSES o de una central —severidad, registro, campo,
+   crédito, ruta y mensaje—, primero las bloqueantes. Las advertencias de la generación (layout sin cotejar, modelo obligatorio no disponible) no
+   nombran campo: van aparte, nunca dentro del archivo. *@
+@if (Incidencias.Count == 0)
+{
+    <p class="texto-tenue">@TextoSinIncidencias</p>
+}
+else
+{
+    <div class="tabla-desplazable">
+        <table class="data-grid">
+            <thead><tr><th>Severidad</th><th>Registro</th><th>Fila</th><th>Campo</th><th>Crédito</th><th>Mensaje</th><th>Ruta</th></tr></thead>
+            <tbody>
+                @foreach (var i in Incidencias.OrderBy(i => i.Severity == "Blocking" ? 0 : 1).ThenBy(i => i.Row ?? int.MaxValue).ThenBy(i => i.Field ?? 0))
+                {
+                    <tr>
+                        <td><span class="badge @(i.Severity == "Blocking" ? "aviso-error" : "aviso-alerta")">@TextosRegulatorios.Severidad(i.Severity)</span></td>
+                        <td>@(i.Record ?? "—")</td>
+                        <td>@(i.Row?.ToString() ?? "—")</td>
+                        <td>@(i.Field is { } f ? $"{f} · {i.FieldName}" : i.FieldName ?? "—")</td>
+                        <td>@(i.Loan ?? "—")</td>
+                        <td>@i.Message</td>
+                        <td class="texto-tenue">@(i.Path ?? i.Code)</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    [Parameter] public IReadOnlyList<IncidenciaRegulatoriaDto> Incidencias { get; set; } = [];
+
+    [Parameter] public string TextoSinIncidencias { get; set; } = "Sin inconsistencias.";
+}

@@ -1,4 +1,5 @@
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Application.Payroll.Services;
 using IngenIA365ERP.Domain.Enums.Payroll;
 
 namespace IngenIA365ERP.Application.Payroll.Settlements.Common;
@@ -97,6 +98,86 @@ public static class SettlementErrors
         "Hay empleados con marca de pago vigente en esta liquidación. Retire las marcas (con motivo) antes de reversar.");
     public static readonly Error HasBlockers = new("Payroll.Settlement.ApprovalBlocked",
         "La liquidación tiene bloqueos (neto negativo, descuentos sobre el neto, negativas del motor). Corrija la causa y recalcule antes de aprobar.");
+
+    // ---------------------------------------- Cartera por el contrato (feature 013, T92, data-model §10.2) --
+
+    /// <summary>Al aprobar la definitiva, las obligaciones vivas del empleado en Cartera ya no son las que se propusieron.</summary>
+    public static Error LoanProposalOutdated(IReadOnlyList<string> propuestas, IReadOnlyList<string> vivas) =>
+        new ErrorConDatos("Payroll.Settlement.LoanProposalOutdated",
+            "Las obligaciones del empleado en Cartera cambiaron desde el cálculo. Recalcule la liquidación.",
+            new { proposed = propuestas, current = vivas });
+
+    /// <summary>Un descuento de la definitiva salió rechazado o con excedente: todo o nada, no se guardó nada.</summary>
+    public static Error LoanAmountsChanged(string detalle, object items) =>
+        new ErrorConDatos("Payroll.Settlement.LoanAmountsChanged",
+            $"Cartera no pudo aplicar los descuentos tal como se calcularon ({detalle}). Recalcule o ajuste los descuentos.",
+            new { items });
+
+    public const string LoanDeductionNotPostableCode = "Payroll.LoanDeductionNotPostable";
+
+    /// <summary>
+    /// Feature 013 (T0801; A8 = «Bloquear todo», respuesta del dueño del 2026-10-14): Cartera rechazó uno o más descuentos porque Contabilidad no tiene
+    /// cómo registrar el pago (<c>Lending.Prevalidation.NotPostable</c>, con la política <c>Contabilidad.FaltaDeRegla = Bloquear</c>). La aprobación
+    /// entera falla —ordinaria o definitiva— y dice qué regla falta; nada queda en Cartera ni en Nómina.
+    /// </summary>
+    public static Error LoanDeductionNotPostable(IReadOnlyList<(string Credito, string Mensaje, object? Datos)> rechazos) =>
+        new ErrorConDatos(LoanDeductionNotPostableCode,
+            $"No se aprobó: Contabilidad no tiene cómo registrar el recaudo de Cartera ({string.Join("; ", rechazos.Select(r => $"crédito {r.Credito}: {r.Mensaje}"))}). "
+            + "Pida a la contadora completar la matriz de Cartera y apruebe de nuevo.",
+            new { lendingCode = RecaudoPorNomina.CodigoNoContabilizable, loans = rechazos.Select(r => new { loanNumber = r.Credito, message = r.Mensaje, lending = r.Datos }).ToList() });
+
+    /// <summary>Al reversar la definitiva, Cartera no reversó un descuento: se revierte la reversión entera (R105).</summary>
+    public static Error LoanReversalRejected(string obligacion, string codigo, string mensaje) =>
+        new ErrorConDatos("Payroll.Settlement.LoanReversalRejected",
+            $"Cartera no reversó el descuento de {obligacion}: {mensaje} La liquidación sigue aprobada; resuelva lo que dice Cartera y vuelva a reversar.",
+            new { obligation = obligacion, lendingCode = codigo });
+
+    /// <summary>Aprobar sin reconocer que hay empleados en una carga de Cartera aplicada y sin activar (DE-10).</summary>
+    public static Error LendingPendingActivationAckRequired(IReadOnlyList<string> nombres) =>
+        new ErrorConDatos(LendingPendingActivationAckRequiredCode,
+            $"Confirme que sabe que Cartera está por activar para {nombres.Count} empleados ({string.Join(", ", nombres)}).",
+            new { count = nombres.Count, names = nombres });
+
+    public const string LendingPendingActivationAckRequiredCode = "Payroll.LendingPendingActivationAckRequired";
+    public const string LendingPendingActivationCode = "Payroll.LendingPendingActivation";
+    public const string LoanDeductionNotAppliedCode = "Payroll.LoanDeductionNotApplied";
+
+    /// <summary>Aviso: hay empleados en una carga de Cartera sin activar; esta nómina no les descuenta cuotas.</summary>
+    public static WarningDto LendingPendingActivation(IReadOnlyList<Guid> personPublicIds) =>
+        new(LendingPendingActivationCode,
+            "Hay empleados con créditos en una carga de Cartera sin activar: esta nómina no les descuenta cuotas.",
+            new { personPublicIds });
+
+    /// <summary>Aviso de la ordinaria: descuentos de Cartera que el contrato no aplicó (no bloquean: la línea bajó a lo aplicado).</summary>
+    public static WarningDto LoanDeductionNotApplied(IReadOnlyList<string> motivos) =>
+        new(LoanDeductionNotAppliedCode,
+            $"{motivos.Count} descuentos de Cartera no se aplicaron: {string.Join("; ", motivos)}.",
+            new { count = motivos.Count, reasons = motivos });
+
+    public const string AccountDeductionNotAppliedCode = "Payroll.AccountDeductionNotApplied";
+    public const string AccountDeductionNotPostableCode = "Payroll.AccountDeductionNotPostable";
+
+    /// <summary>Feature 014 (T089): aviso de la ordinaria, descuentos de aportes o de ahorro que la Cartera no tomó (la línea bajó a lo aplicado).</summary>
+    public static WarningDto AccountDeductionNotApplied(IReadOnlyList<string> motivos) =>
+        new(AccountDeductionNotAppliedCode,
+            $"{motivos.Count} descuentos de aportes o de ahorro no se aplicaron: {string.Join("; ", motivos)}.",
+            new { count = motivos.Count, reasons = motivos });
+
+    /// <summary>
+    /// Feature 014 (T089; A8 de la 013): la Cartera rechazó la consignación de aportes o de ahorro porque Contabilidad no tiene cómo registrarla; la
+    /// aprobación entera falla, igual que con los créditos.
+    /// </summary>
+    public static Error AccountDeductionNotPostable(IReadOnlyList<(string Cuenta, string Mensaje, object? Datos)> rechazos) =>
+        new ErrorConDatos(AccountDeductionNotPostableCode,
+            $"No se aprobó: Contabilidad no tiene cómo registrar el recaudo de aportes o de ahorro ({string.Join("; ", rechazos.Select(r => $"cuenta {r.Cuenta}: {r.Mensaje}"))}). "
+            + "Pida a la contadora completar la matriz de Cartera y apruebe de nuevo.",
+            new { lendingCode = RecaudoPorNomina.CodigoNoContabilizable, accounts = rechazos.Select(r => new { accountNumber = r.Cuenta, message = r.Mensaje, lending = r.Datos }).ToList() });
+
+    /// <summary>Feature 014 (T089): al reversar la nómina, la Cartera no reversó la consignación de una cuenta: se revierte la reversión entera.</summary>
+    public static Error AccountReversalRejected(string cuenta, string codigo, string mensaje) =>
+        new ErrorConDatos("Payroll.AccountReversalRejected",
+            $"La Cartera no reversó el descuento de la cuenta {cuenta}: {mensaje} La nómina sigue aprobada; resuelva lo que dice la Cartera y vuelva a reversar.",
+            new { account = cuenta, lendingCode = codigo });
 
     // -------------------------------------------------------- avisos (no bloquean) --
 

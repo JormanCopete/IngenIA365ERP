@@ -1,0 +1,23 @@
+{
+  // r06 (US9-5, SC-021): regla especial de pago único de la norma de prueba (D desde 8 días, E desde 91). A mano:
+  //  1. comercial de pago único con 10 días: la tabla general da A; la regla, D → D por «SingleInstallment»;
+  //  2. consumo de pago único con 5 días: ninguna regla alcanza → A por mora;
+  //  3. consumo de pago único con 95 días: la tabla da D, la regla E → E; 95 días no caben en ninguna condición de E (E1 desde 181),
+  //     así que va a la primera subcategoría, E1 (50 %): capital 4.000.000 × 50 % = 2.000.000;
+  //  4. consumo que no es de pago único con 10 días → A.
+  "nombre": "r06-pago-unico",
+  "creditos": [
+    { "id": 1, "deudor": 601, "segmento": "COMERCIAL_PN", "diasDeMora": 10, "pagoUnico": true },
+    { "id": 2, "deudor": 602, "segmento": "CONSUMO", "diasDeMora": 5, "pagoUnico": true },
+    { "id": 3, "deudor": 603, "segmento": "CONSUMO", "diasDeMora": 95, "pagoUnico": true, "saldos": { "capital": 4000000 } },
+    { "id": 4, "deudor": 604, "segmento": "CONSUMO", "diasDeMora": 10 }
+  ],
+  "esperado": {
+    "creditos": [
+      { "id": 1, "categoriaPorMora": "A", "categoria": "D", "causa": "SingleInstallment", "candidatas": [ "Arrears:A", "SingleInstallment:D" ] },
+      { "id": 2, "categoria": "A", "causa": "Arrears", "candidatas": [ "Arrears:A" ] },
+      { "id": 3, "categoriaPorMora": "D", "categoria": "E", "subcategoria": "E1", "causa": "SingleInstallment", "porcentaje": 0.50, "deterioroCapital": 2000000.00 },
+      { "id": 4, "categoria": "A", "causa": "Arrears" }
+    ]
+  }
+}

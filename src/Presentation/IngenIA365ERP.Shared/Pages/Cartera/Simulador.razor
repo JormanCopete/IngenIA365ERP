@@ -1,0 +1,25 @@
+@page "/cartera/simulador"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Cartera
+@inject NavigationManager Navegacion
+
+<PageTitle>Simulador de crédito - IngenIA365ERP</PageTitle>
+
+@* Feature 013, US2 (T0410; FR-034; quickstart §3.5 paso 1): simular un crédito sin registrar nada, imprimirlo o enviarlo a la persona. Desde
+   aquí se pasa a la solicitud nueva con lo simulado. *@
+<PermissionGate Required="Lending.Simulations.Run" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Simulador de crédito</h3>
+        <div class="toolbar">
+            <PermissionGate Required="Lending.Applications.Create">
+                <SfButton CssClass="e-outline" IconCss="e-icons e-plus" OnClick="@(() => Navegacion.NavigateTo("/cartera/solicitudes/nueva"))">Nueva solicitud</SfButton>
+            </PermissionGate>
+        </div>
+    </div>
+    <p class="texto-apoyo">La simulación no registra nada ni constituye una aprobación: muestra el plan, las tasas, el costo total y si cumple la usura del día.</p>
+    <IndicadorDeCarga Cargando="false">
+        <SimuladorDeCredito />
+    </IndicadorDeCarga>
+</div>
+</PermissionGate>

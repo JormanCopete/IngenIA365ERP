@@ -16,7 +16,9 @@ namespace IngenIA365ERP.Application.Common.Behaviors;
 /// <item>el módulo sale de <see cref="ModuloDeAuditoria.Inferir"/>, la misma inferencia del interceptor;</item>
 /// <item>el evento lleva actor (persona o proceso), IP, User-Agent, endpoint, canal (<c>web</c>, <c>app</c>,
 /// <c>pos</c>, <c>proceso</c>), origen, motivo (<see cref="IConMotivo"/>) y clave de operación en la
-/// metadata (<see cref="AuditoriaEncadenada.ContextoAsync"/>);</item>
+/// metadata (<see cref="AuditoriaEncadenada.ContextoAsync"/>); desde la feature 013 (T67, F10), también la oficina
+/// (<see cref="IConOficina"/> o, en Cartera, la oficina por defecto de quien opera) y el dispositivo (User-Agent más
+/// <c>X-Dispositivo</c>) en los metadatos <c>Office</c> y <c>Device</c>;</item>
 /// <item>un <c>Result.IsFailure</c> queda como <c>Rejected</c> con su <c>Error.Code</c> (antes quedaba como
 /// un éxito con el nombre del comando);</item>
 /// <item>en los <b>módulos encadenados</b> el evento no va a Mongo: se agrega a <c>COR_AuditOutbox</c> dentro
@@ -56,7 +58,7 @@ public class AuditBehavior<TRequest, TResponse>(
 
         var requestName = typeof(TRequest).Name;
         var (action, entityType) = ParseRequestName(requestName);
-        var contexto = await AuditoriaEncadenada.ContextoAsync(servicios, currentUserService, request, cancellationToken);
+        var contexto = await AuditoriaEncadenada.ContextoAsync(servicios, currentUserService, request, cancellationToken, Modulo);
 
         var flujo = AuditoriaEncadenada.EsEncadenado(Modulo) ? AuditoriaEncadenada.Flujo(contexto.TenantId) : null;
         var db = flujo is null ? null : servicios?.GetService<IApplicationDbContext>();

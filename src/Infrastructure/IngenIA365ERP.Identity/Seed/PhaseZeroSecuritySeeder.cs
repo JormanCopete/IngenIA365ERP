@@ -64,6 +64,9 @@ public sealed class PhaseZeroSecuritySeeder(IPermissionClaimsCache? cachePermiso
         // CompanyAdmin los recibe por "*" y Operator, ReadOnly y Auditor sólo sus *.View (ninguna escritura).
         await InventoryPermissionCatalogSeeder.SeedAsync(db, context.Logger);
         await ElectronicInvoicingPermissionCatalogSeeder.SeedAsync(db, context.Logger);
+        // Feature 013 (T0220, T60): los 123 Lending.* de la Cartera nueva, enteros desde K1. CompanyAdmin los recibe por "*" salvo
+        // Lending.Decisions.* y Lending.Sessions.Vote; Operator, ReadOnly y Auditor, sólo sus *.View.
+        await LendingPermissionCatalogSeeder.SeedAsync(db, context.Logger);
         var vinculosNuevos = await BuiltInRolesSeeder.SeedAsync(db, context.Logger);
         if (vinculosNuevos > 0)
             await InvalidarCachePermisosAsync(context, vinculosNuevos, ct);

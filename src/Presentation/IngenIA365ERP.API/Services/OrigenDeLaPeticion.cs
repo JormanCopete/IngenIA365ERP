@@ -39,6 +39,21 @@ internal sealed class OrigenDeLaPeticion(IHttpContextAccessor accessor, IIpAddre
 
     public string? Origen => Peticion is null ? ContextoAmbiental.Origen : Endpoint;
 
+    /// <summary>Feature 013 (T67, F10): la cabecera opcional <c>X-Dispositivo</c> de la aplicación MAUI, recortada a 200 caracteres.</summary>
+    public string? Dispositivo
+    {
+        get
+        {
+            var valor = Peticion?.Request.Headers[CabeceraDeDispositivo].ToString().Trim();
+            if (string.IsNullOrWhiteSpace(valor)) return null;
+            return valor.Length > LargoDelDispositivo ? valor[..LargoDelDispositivo] : valor;
+        }
+    }
+
+    public const string CabeceraDeDispositivo = "X-Dispositivo";
+
+    private const int LargoDelDispositivo = 200;
+
     internal static ExecutionChannel CanalDeLaCabecera(HttpContext http) =>
         string.Equals(http.Request.Headers[CabeceraDeCanal].ToString().Trim(), "app", StringComparison.OrdinalIgnoreCase)
             ? ExecutionChannel.App

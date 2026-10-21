@@ -1,0 +1,560 @@
+@page "/cartera/novedades"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Adjuntos
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Http
+@inject NovedadesClient Cliente
+@inject CreditosClient Creditos
+@inject AdjuntosClient Adjuntos
+@inject INotificationService Notification
+@inject NavigationManager Navegacion
+
+<PageTitle>Novedades de crédito - IngenIA365ERP</PageTitle>
+
+@* Feature 013, K3, US11 (T0892; contracts/api.md §11.1; FR-090–FR-093): las novedades de un crédito —prórroga, cambio de fecha o de tasa,
+   novación, refinanciación (también la que recoge créditos en mora) y cambio de oficina—. La causa la calcula el sistema: si la motiva el deterioro
+   de la capacidad de pago es reestructuración, cualquiera sea el mecanismo. Se pide, se simula (plan nuevo, calificación hoy y después, conteo,
+   usura y validación previa contable), se recogen los consentimientos de codeudores y garantes con su aceptación firmada, se radica, la decide quien
+   tiene la atribución (o el órgano en sesión) y se aplica con las salidas de quien no consintió. *@
+<PermissionGate Required="Lending.Novelties.Read" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Novedades de crédito</h3>
+        <PermissionGate Required="Lending.Novelties.Request">
+            <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@AbrirNueva">Nueva novedad</SfButton>
+        </PermissionGate>
+    </div>
+    <div class="toolbar">
+        <label class="campo">Estado
+            <select class="e-input" @bind="_estado">
+                <option value="">Todos</option>
+                @foreach (var e in TextosDeNovedades.Estados) { <option value="@e.Nombre">@e.Texto</option> }
+            </select>
+        </label>
+        <label class="campo">Causa
+            <select class="e-input" @bind="_causa">
+                <option value="">Todas</option>
+                <option value="Restructuring">Reestructuración</option>
+                <option value="Modification">Modificación</option>
+            </select>
+        </label>
+        <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@(() => CargarAsync(1))">Consultar</SfButton>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        <div class="tabla-desplazable">
+            <table class="data-grid">
+                <thead><tr><th>Número</th><th>Créditos</th><th>Mecanismo</th><th>Causa</th><th>Estado</th><th>Nivel</th><th>Pedida por</th><th>Fecha</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var n in _filas)
+                    {
+                        var fila = n;
+                        <tr>
+                            <td>@fila.Number</td>
+                            <td>@string.Join(", ", fila.Loans.Select(l => l.LoanNumber))</td>
+                            <td>@TextosDeNovedades.Mecanismo(fila.Mechanism)</td>
+                            <td>@TextosDeNovedades.Causa(fila.Cause)</td>
+                            <td>@TextosDeNovedades.Estado(fila.Status)</td>
+                            <td>@(fila.Level ?? "—")</td>
+                            <td>@fila.RequestedBy</td>
+                            <td>@fila.RequestedAt.ToLocalTime().ToString("dd/MM/yyyy")</td>
+                            <td><SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirAsync(fila.PublicId))">Ver</SfButton></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (_filas.Count == 0) { <p class="texto-tenue">No hay novedades con ese filtro.</p> }
+        @if (_total > TamanoDePagina)
+        {
+            <div class="toolbar">
+                <SfButton CssClass="e-flat e-small" Disabled="@(_pagina <= 1)" OnClick="@(() => CargarAsync(_pagina - 1))">Anterior</SfButton>
+                <span>Página @_pagina de @((_total + TamanoDePagina - 1) / TamanoDePagina)</span>
+                <SfButton CssClass="e-flat e-small" Disabled="@(_pagina * TamanoDePagina >= _total)" OnClick="@(() => CargarAsync(_pagina + 1))">Siguiente</SfButton>
+            </div>
+        }
+    </IndicadorDeCarga>
+
+    @if (_detalle is not null || _cargaDetalle.Activa)
+    {
+        <IndicadorDeCarga Cargando="@_cargaDetalle.Activa">
+            @if (_detalle is { } d)
+            {
+                <div class="info-card">
+                    <h4>Novedad @d.Number · @TextosDeNovedades.Mecanismo(d.Mechanism) · @TextosDeNovedades.Estado(d.Status)</h4>
+                    <div class="form-grid">
+                        <div class="campo"><b>Créditos</b> @string.Join(", ", d.Loans.Select(l => $"{l.LoanNumber} ({TextosDeNovedades.PapelDelCredito(l.Role)})"))</div>
+                        <div class="campo"><b>Causa</b> @TextosDeNovedades.Causa(d.Cause)</div>
+                        <div class="campo"><b>Calificación al pedirla</b> @d.RatingAtRequest</div>
+                        <div class="campo"><b>Motivo</b> @d.Reason</div>
+                        @if (d.NewLoanNumber is { } nuevo)
+                        {
+                            <div class="campo"><b>Crédito enlazado</b> <a href="/cartera/creditos/@d.NewLoanPublicId">@nuevo</a></div>
+                        }
+                        @if (d.CancelReason is { } anulada) { <div class="campo"><b>Anulada</b> @anulada</div> }
+                    </div>
+                    <p class="texto-apoyo">@d.CauseDetermination</p>
+
+                    @if ((_simulacion ?? d.Simulation) is { } s)
+                    {
+                        <h4>Simulación</h4>
+                        <div class="form-grid">
+                            <div class="campo"><b>Saldo de capital</b> @TextosDeCreditos.Pesos(s.PrincipalBalance)</div>
+                            <div class="campo"><b>Recogido</b> @TextosDeCreditos.Pesos(s.CollectedPrincipal)</div>
+                            <div class="campo"><b>Capitalizado</b> @TextosDeCreditos.Pesos(s.Capitalized)</div>
+                            <div class="campo"><b>Capital del plan nuevo</b> @TextosDeCreditos.Pesos(s.NewPrincipal)</div>
+                            <div class="campo"><b>Calificación hoy / después</b> @s.RatingNow / @s.RatingAfter</div>
+                            <div class="campo"><b>Reestructuraciones</b> @s.RestructuringCount</div>
+                            <div class="campo"><b>Usura</b> @s.Usury.Verdict (@TextosDeCreditos.Porcentaje(s.Usury.EffectiveRate) frente a @TextosDeCreditos.Porcentaje(s.Usury.UsuryRate))</div>
+                            <div class="campo"><b>Validación contable</b> @s.Prevalidation</div>
+                        </div>
+                        @foreach (var aviso in s.Warnings) { <p class="aviso aviso-info">@aviso</p> }
+                        @if (s.NewSchedule.Count > 0)
+                        {
+                            <div class="tabla-desplazable">
+                                <table class="data-grid">
+                                    <thead><tr><th>Cuota</th><th>Vence</th><th class="numero">Capital</th><th class="numero">Interés</th><th class="numero">Seguro</th><th class="numero">Saldo</th></tr></thead>
+                                    <tbody>
+                                        @foreach (var c in s.NewSchedule)
+                                        {
+                                            <tr><td>@c.Number</td><td>@c.DueDate.ToString("dd/MM/yyyy")</td><td class="numero">@TextosDeCreditos.Pesos(c.Principal)</td>
+                                                <td class="numero">@TextosDeCreditos.Pesos(c.Interest)</td><td class="numero">@TextosDeCreditos.Pesos(c.Insurance)</td>
+                                                <td class="numero">@TextosDeCreditos.Pesos(c.Balance)</td></tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                    }
+
+                    <h4>Consentimientos</h4>
+                    @if (d.Consents.Count == 0) { <p class="texto-tenue">El crédito no tiene codeudores, avalistas ni garantías de terceros.</p> }
+                    else
+                    {
+                        <table class="data-grid">
+                            <thead><tr><th>Parte</th><th>Papel</th><th>Estado</th><th>Decisión de quien aplica</th><th></th></tr></thead>
+                            <tbody>
+                                @foreach (var c in d.Consents)
+                                {
+                                    var consentimiento = c;
+                                    <tr>
+                                        <td>@consentimiento.Party.FullName</td>
+                                        <td>@TextosDeNovedades.PapelDeLaParte(consentimiento.Role)</td>
+                                        <td>@TextosDeNovedades.EstadoDelConsentimiento(consentimiento.Status)@(consentimiento.At is { } a ? $" · {a.ToLocalTime():dd/MM/yyyy}" : "")</td>
+                                        <td>
+                                            @if (d.Status == 3 && consentimiento.Status != 2)
+                                            {
+                                                <select class="e-input" value="@(_salidas.GetValueOrDefault(Clave(consentimiento)) ?? "")"
+                                                        @onchange="@(e => _salidas[Clave(consentimiento)] = e.Value?.ToString())">
+                                                    <option value="">Elegir…</option>
+                                                    @foreach (var r in TextosDeNovedades.Resoluciones) { <option value="@r.Nombre">@r.Texto</option> }
+                                                </select>
+                                            }
+                                            else { @TextosDeNovedades.Resolucion(consentimiento.RefusalResolution) }
+                                        </td>
+                                        <td>
+                                            @if (d.Status is 1 or 2 && consentimiento.Status == 1)
+                                            {
+                                                <PermissionGate Required="Lending.Novelties.Request">
+                                                    <SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirConsentimientoAsync(consentimiento))">Registrar…</SfButton>
+                                                </PermissionGate>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                        @if (d.Status == 3 && d.Consents.Any(c => c.Status != 2))
+                        {
+                            <label class="campo campo-ancho">Motivo de la decisión sobre quien no consintió <input class="e-input" @bind="_motivoSalida" maxlength="500" /></label>
+                            @if (d.Decisions.Any(x => x.PolicyException))
+                            {
+                                <label class="campo"><input type="checkbox" @bind="_usarExcepcion" /> Usar la excepción de cobertura aprobada si la garantía restante no alcanza</label>
+                            }
+                            else
+                            {
+                                <p class="texto-tenue campo-ancho">Si la garantía que queda no alcanza la cobertura de la línea, otra persona con el nivel de excepción debe aprobar la excepción de cobertura antes de aplicar; quien la aprueba no aplica.</p>
+                                <label class="campo campo-ancho">Motivo de la excepción de cobertura <input class="e-input" @bind="_motivoExcepcion" maxlength="500" /></label>
+                                <div class="toolbar">
+                                    <SfButton CssClass="e-outline" Disabled="@(string.IsNullOrWhiteSpace(_motivoExcepcion) || _accion.Activa)" OnClick="@AprobarExcepcionAsync">Aprobar excepción de cobertura</SfButton>
+                                </div>
+                            }
+                        }
+                    }
+
+                    @if (d.Routing is { } ruta)
+                    {
+                        <p class="texto-apoyo">Nivel: @ruta.LevelName@(ruta.GoverningBody is { } o ? $" · {o}" : "")@(ruta.RelatedParty ? " · persona vinculada" : "")</p>
+                    }
+                    @foreach (var dec in d.Decisions)
+                    {
+                        <p class="texto-tenue">@(dec.PolicyException ? "Excepción de cobertura aprobada por" : TextosDeNovedades.Decision(dec.Outcome)) @(dec.DecidedBy ?? "") el @dec.DecidedAt.ToLocalTime().ToString("dd/MM/yyyy")@(dec.Reason is { } m ? $": {m}" : "")</p>
+                    }
+                    @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+
+                    <IndicadorDeCarga Cargando="@_accion.Activa" Texto="Procesando…">
+                        <div class="toolbar">
+                            @if (d.Status == 1)
+                            {
+                                <PermissionGate Required="Lending.Novelties.Request">
+                                    <SfButton CssClass="e-outline" OnClick="@SimularAsync">Simular</SfButton>
+                                    <SfButton CssClass="e-primary" OnClick="@RadicarAsync">Radicar</SfButton>
+                                </PermissionGate>
+                            }
+                            @if (d.Status == 2)
+                            {
+                                <SfButton CssClass="e-primary" OnClick="@AbrirDecision">Decidir…</SfButton>
+                            }
+                            @if (d.Status == 3)
+                            {
+                                <PermissionGate Required="Lending.Novelties.Apply">
+                                    <SfButton CssClass="e-primary" OnClick="@(() => AplicarAsync(false))">Aplicar</SfButton>
+                                </PermissionGate>
+                            }
+                            @if (d.Status is 1 or 2 or 3)
+                            {
+                                <PermissionGate Required="Lending.Novelties.Request">
+                                    <input class="e-input" placeholder="Motivo para anular" @bind="_motivoAnulacion" maxlength="500" />
+                                    <SfButton CssClass="e-outline" Disabled="@string.IsNullOrWhiteSpace(_motivoAnulacion)" OnClick="@AnularAsync">Anular</SfButton>
+                                </PermissionGate>
+                            }
+                        </div>
+                    </IndicadorDeCarga>
+                </div>
+            }
+        </IndicadorDeCarga>
+    }
+</div>
+
+<SfDialog @bind-Visible="_mostrarNueva" Header="Nueva novedad" Width="640px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_accion.Activa" Texto="Registrando…">
+                <div class="form-grid">
+                    <label class="campo">Crédito (número)
+                        <input class="e-input" @bind="_buscarCredito" maxlength="40" />
+                    </label>
+                    <SfButton CssClass="e-flat e-small" OnClick="@BuscarCreditoAsync">Buscar</SfButton>
+                    @foreach (var c in _encontrados)
+                    {
+                        var credito = c;
+                        <label class="campo"><input type="checkbox" checked="@_creditos.Contains(credito.PublicId)"
+                                                    @onchange="@(e => Alternar(credito.PublicId, e.Value is true))" /> @credito.Number · @credito.Debtor.Name · @credito.DaysPastDue días</label>
+                    }
+                    <label class="campo">Mecanismo *
+                        <select class="e-input" @bind="_mecanismo">
+                            @foreach (var m in TextosDeNovedades.Mecanismos) { <option value="@m.Nombre">@m.Texto</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Por qué la pide el deudor *
+                        <select class="e-input" @bind="_motivoDelDeudor">
+                            @foreach (var m in TextosDeNovedades.Motivos) { <option value="@m.Nombre">@m.Texto</option> }
+                        </select>
+                    </label>
+                    @if (_mecanismo is "Extension" or "Novation" or "Refinancing")
+                    {
+                        <label class="campo">Cuotas del plan nuevo <input class="e-input" type="number" min="1" @bind="_cuotas" /></label>
+                        <label class="campo"><input type="checkbox" @bind="_capitalizar" /> Capitalizar el interés que se debe</label>
+                    }
+                    @if (_mecanismo is "RateChange" or "Novation" or "Refinancing")
+                    {
+                        <label class="campo">Tasa nueva (% EA) <input class="e-input" type="number" step="0.01" min="0" @bind="_tasa" /></label>
+                    }
+                    @if (_mecanismo is "PaymentDateChange" or "Extension" or "Novation" or "Refinancing")
+                    {
+                        <label class="campo">Día de pago <input class="e-input" type="number" min="1" max="31" @bind="_diaDePago" /></label>
+                    }
+                    <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" maxlength="1000" /></label>
+                </div>
+                <p class="texto-tenue">La causa (reestructuración o modificación) la calcula el sistema con la mora del crédito y lo que diga el deudor.</p>
+                @if (_errorNueva is not null) { <p class="aviso aviso-error" role="alert">@_errorNueva</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_accion.Activa || _creditos.Count == 0 || string.IsNullOrWhiteSpace(_motivo))" OnClick="@PedirAsync">Registrar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarNueva = false)">Volver</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarConsentimiento" Header="@($"Consentimiento de {_consentimiento?.Party.FullName}")" Width="560px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_accion.Activa" Texto="Registrando…">
+                @if (_detalle is { } d)
+                {
+                    <SubirSoporte OwnerEntityType="@NovedadesClient.DuenoDeConsentimientos" OwnerEntityPublicId="@d.PublicId" OnSubido="@CargarAdjuntosAsync" />
+                }
+                <label class="campo">Documento firmado
+                    <select class="e-input" @bind="_adjunto">
+                        <option value="">Sin documento</option>
+                        @foreach (var a in _adjuntos) { <option value="@a.PublicId">@a.FileName</option> }
+                    </select>
+                </label>
+                <label class="campo"><input type="checkbox" @bind="_acepto" /> La parte acepta la novedad</label>
+                <p class="texto-tenue">Aceptar exige el documento firmado; sin aceptar, el documento es la constancia si la hay.</p>
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@_accion.Activa" OnClick="@ConsentirAsync">Registrar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarConsentimiento = false)">Volver</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarDecision" Header="Decidir la novedad" Width="560px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_accion.Activa" Texto="Registrando la decisión…">
+                <DecisionDeCredito @bind-Pedido="_pedido" />
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@_accion.Activa" OnClick="@DecidirAsync">Registrar decisión</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarDecision = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private const int TamanoDePagina = 20;
+
+    [SupplyParameterFromQuery(Name = "credito")] public Guid? CreditoInicial { get; set; }
+    [SupplyParameterFromQuery(Name = "id")] public Guid? NovedadInicial { get; set; }
+
+    private readonly EstadoDeCarga _carga = new(), _cargaDetalle = new(), _accion = new();
+    private List<NovedadResumenDto> _filas = [];
+    private string? _estado, _causa, _error, _errorNueva, _motivo, _buscarCredito, _motivoAnulacion, _motivoSalida, _motivoExcepcion, _adjunto;
+    private string _mecanismo = "Extension", _motivoDelDeudor = "DebtorRequest";
+    private int? _cuotas, _diaDePago;
+    private decimal? _tasa;
+    private bool _capitalizar, _mostrarNueva, _mostrarConsentimiento, _mostrarDecision, _acepto, _usarExcepcion;
+    private int _pagina = 1;
+    private long _total;
+    private NovedadDeCreditoDto? _detalle;
+    private SimulacionDeNovedadDto? _simulacion;
+    private List<CreditoEnListaDto> _encontrados = [];
+    private readonly HashSet<Guid> _creditos = [];
+    private readonly Dictionary<string, string?> _salidas = [];
+    private ConsentimientoDeNovedadDto? _consentimiento;
+    private List<AdjuntoDto> _adjuntos = [];
+    private DecisionDeCredito.PedidoDeDecision _pedido = new();
+    private ClaveDeOperacion _clave = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarAsync(1);
+        if (NovedadInicial is { } id) await AbrirAsync(id);
+        else if (CreditoInicial is { } credito)
+        {
+            AbrirNueva();
+            var r = await Creditos.CreditoAsync(credito);
+            if (r.IsSuccess && r.Value is { } c)
+            {
+                _buscarCredito = c.Number;
+                await BuscarCreditoAsync();
+                _creditos.Add(credito);
+            }
+        }
+    }
+
+    private static string Clave(ConsentimientoDeNovedadDto c) => $"{c.Party.PersonPublicId}:{c.CollateralPublicId}";
+
+    private async Task CargarAsync(int pagina)
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Cliente.NovedadesAsync(string.IsNullOrEmpty(_estado) ? null : _estado, string.IsNullOrEmpty(_causa) ? null : _causa, null, pagina);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer las novedades."); return; }
+        _filas = [.. r.Value?.Items ?? []];
+        _total = r.Value?.TotalCount ?? 0;
+        _pagina = pagina;
+    }
+
+    private async Task AbrirAsync(Guid id)
+    {
+        using var carga = _cargaDetalle.Iniciar();
+        _error = null;
+        _simulacion = null;
+        _salidas.Clear();
+        var r = await Cliente.NovedadAsync(id);
+        if (!r.IsSuccess) { _detalle = null; await Notification.ErrorAsync(r.ErrorMessage ?? "La novedad no existe."); return; }
+        _detalle = r.Value;
+    }
+
+    private void AbrirNueva()
+    {
+        _errorNueva = _motivo = null;
+        _creditos.Clear();
+        _encontrados = [];
+        _cuotas = _diaDePago = null;
+        _tasa = null;
+        _capitalizar = false;
+        _clave = new ClaveDeOperacion();
+        _mostrarNueva = true;
+    }
+
+    private async Task BuscarCreditoAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_buscarCredito)) return;
+        using var carga = _accion.Iniciar();
+        var r = await Creditos.ListarAsync(_buscarCredito, tamano: 10);
+        _encontrados = r.IsSuccess ? [.. r.Value?.Items ?? []] : [];
+    }
+
+    private void Alternar(Guid credito, bool marcado)
+    {
+        if (marcado) _creditos.Add(credito); else _creditos.Remove(credito);
+    }
+
+    private async Task PedirAsync()
+    {
+        using var carga = _accion.Iniciar();
+        _errorNueva = null;
+        var principal = _creditos.First();
+        var recogidos = _mecanismo == "Refinancing" ? _creditos.Skip(1).ToList() : null;
+        var condiciones = new CondicionesDeNovedadDto(_tasa is { } t ? t / 100m : null, _cuotas, null, _diaDePago, null, _capitalizar,
+            recogidos is { Count: > 0 } ? recogidos : null);
+        var creditos = _mecanismo == "Refinancing" ? new List<Guid> { principal } : _creditos.ToList();
+        var r = await Cliente.PedirAsync(new NovedadRequest(creditos, _mecanismo, _motivoDelDeudor, condiciones, _motivo!.Trim()), _clave);
+        if (!r.IsSuccess) { _errorNueva = r.ErrorMessage ?? "No se pudo registrar la novedad."; return; }
+        _mostrarNueva = false;
+        await Notification.SuccessAsync($"Novedad {r.Value?.Number} registrada como {TextosDeNovedades.Causa(r.Value?.Cause ?? 0).ToLowerInvariant()}.");
+        await CargarAsync(1);
+        if (r.Value is { } n) await AbrirAsync(n.PublicId);
+    }
+
+    private async Task SimularAsync()
+    {
+        if (_detalle is not { } d) return;
+        using var carga = _accion.Iniciar();
+        _error = null;
+        var r = await Cliente.SimularAsync(d.PublicId);
+        if (!r.IsSuccess) { _error = r.ErrorMessage ?? "No se pudo simular."; return; }
+        _simulacion = r.Value;
+    }
+
+    private async Task RadicarAsync()
+    {
+        if (_detalle is not { } d) return;
+        using var carga = _accion.Iniciar();
+        _error = null;
+        var r = await Cliente.RadicarAsync(d.PublicId, new ClaveDeOperacion());
+        if (!r.IsSuccess) { _error = r.ErrorMessage ?? "No se pudo radicar."; return; }
+        await Notification.SuccessAsync("Novedad radicada.");
+        await CargarAsync(_pagina);
+        _detalle = r.Value;
+    }
+
+    private async Task AbrirConsentimientoAsync(ConsentimientoDeNovedadDto consentimiento)
+    {
+        _consentimiento = consentimiento;
+        _error = _adjunto = null;
+        _acepto = true;
+        _clave = new ClaveDeOperacion();
+        await CargarAdjuntosAsync();
+        _mostrarConsentimiento = true;
+    }
+
+    private async Task CargarAdjuntosAsync()
+    {
+        if (_detalle is not { } d) return;
+        var r = await Adjuntos.ListarAsync(NovedadesClient.DuenoDeConsentimientos, d.PublicId);
+        _adjuntos = (r.Value ?? []).Where(a => a.Disponible).ToList();
+    }
+
+    private async Task ConsentirAsync()
+    {
+        if (_detalle is not { } d || _consentimiento is not { } c) return;
+        using var carga = _accion.Iniciar();
+        _error = null;
+        var r = await Cliente.ConsentimientoAsync(d.PublicId, new ConsentimientoRequest(c.Party.PersonPublicId, _acepto,
+            Guid.TryParse(_adjunto, out var a) ? a : null, null, c.CollateralPublicId), _clave);
+        if (!r.IsSuccess) { _error = r.ErrorMessage ?? "No se pudo registrar el consentimiento."; return; }
+        _mostrarConsentimiento = false;
+        await AbrirAsync(d.PublicId);
+    }
+
+    private void AbrirDecision()
+    {
+        _pedido = new DecisionDeCredito.PedidoDeDecision();
+        _error = null;
+        _clave = new ClaveDeOperacion();
+        _mostrarDecision = true;
+    }
+
+    private async Task DecidirAsync()
+    {
+        if (_detalle is not { } d) return;
+        using var carga = _accion.Iniciar();
+        _error = null;
+        var r = await Cliente.DecidirNovedadAsync(d.PublicId, _pedido.ComoRequest(d.Routing?.ContentSha256), _clave);
+        if (!r.IsSuccess)
+        {
+            _error = r.ErrorCode == "Lending.Attribution.LevelRequired"
+                ? "Esta novedad la decide un órgano: llévela a sesión en Actas."
+                : r.ErrorMessage ?? "No se pudo registrar la decisión.";
+            return;
+        }
+        _mostrarDecision = false;
+        await Notification.SuccessAsync("Decisión registrada.");
+        await CargarAsync(_pagina);
+        await AbrirAsync(d.PublicId);
+    }
+
+    private async Task AplicarAsync(bool reconocer)
+    {
+        if (_detalle is not { } d) return;
+        using var carga = _accion.Iniciar();
+        _error = null;
+        var sinConsentir = d.Consents.Where(c => c.Status != 2 && !string.IsNullOrEmpty(_salidas.GetValueOrDefault(Clave(c))))
+            .Select(c => new SinConsentimientoRequest(c.Party.PersonPublicId, _salidas[Clave(c)]!, _motivoSalida?.Trim() ?? string.Empty, c.CollateralPublicId,
+                _usarExcepcion && _salidas[Clave(c)] == "ApplyWithGuaranteeExtinguished"))
+            .ToList();
+        var r = await Cliente.AplicarNovedadAsync(d.PublicId, new AplicarNovedadRequest(sinConsentir.Count > 0 ? sinConsentir : null, reconocer),
+            new ClaveDeOperacion());
+        if (!r.IsSuccess)
+        {
+            _error = r.ErrorMessage ?? "No se pudo aplicar la novedad.";
+            return;
+        }
+        await Notification.SuccessAsync(r.Value?.NewLoanNumber is { } nuevo
+            ? $"Novedad aplicada: nació el crédito enlazado {nuevo}."
+            : "Novedad aplicada: el crédito conserva su número con el plan nuevo.");
+        await CargarAsync(_pagina);
+        await AbrirAsync(d.PublicId);
+    }
+
+    private async Task AprobarExcepcionAsync()
+    {
+        if (_detalle is not { } d || string.IsNullOrWhiteSpace(_motivoExcepcion)) return;
+        using var carga = _accion.Iniciar();
+        _error = null;
+        var r = await Cliente.AprobarExcepcionDeCoberturaAsync(d.PublicId, _motivoExcepcion.Trim(), new ClaveDeOperacion());
+        if (!r.IsSuccess)
+        {
+            _error = r.ErrorCode == "Lending.Attribution.LevelRequired"
+                ? "La excepción de cobertura la aprueba quien tenga el nivel de excepción de la matriz."
+                : r.ErrorMessage ?? "No se pudo aprobar la excepción de cobertura.";
+            return;
+        }
+        _motivoExcepcion = null;
+        await Notification.SuccessAsync("Excepción de cobertura aprobada: otra persona puede aplicar la novedad.");
+        _detalle = r.Value;
+    }
+
+    private async Task AnularAsync()
+    {
+        if (_detalle is not { } d || string.IsNullOrWhiteSpace(_motivoAnulacion)) return;
+        using var carga = _accion.Iniciar();
+        _error = null;
+        var r = await Cliente.AnularNovedadAsync(d.PublicId, _motivoAnulacion.Trim(), new ClaveDeOperacion());
+        if (!r.IsSuccess) { _error = r.ErrorMessage ?? "No se pudo anular."; return; }
+        _motivoAnulacion = null;
+        await Notification.SuccessAsync("Novedad anulada.");
+        await CargarAsync(_pagina);
+        await AbrirAsync(d.PublicId);
+    }
+}

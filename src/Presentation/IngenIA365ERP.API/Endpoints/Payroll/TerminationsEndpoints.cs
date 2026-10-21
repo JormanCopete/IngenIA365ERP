@@ -69,7 +69,7 @@ public sealed class TerminationsEndpoints : ICarterModule
             .RequirePermission("Payroll.Settlements.Calculate");
 
         group.MapPost("/{runId:guid}/approve", async (Guid runId, ApproveBody body, ISender sender, CancellationToken ct) =>
-                await sender.Send(new ApproveSettlementCommand(runId, body.Confirm, body.PostingDate, body.ConfirmWithoutSegregation), ct))
+                await sender.Send(new ApproveSettlementCommand(runId, body.Confirm, body.PostingDate, body.ConfirmWithoutSegregation, body.AcknowledgeLendingPendingActivation), ct))
             .WithName("Payroll_Terminations_Approve")
             .AddEndpointFilter<ErrorEnvelopeFilter>()
             .RequirePermission("Payroll.Settlements.Approve");
@@ -138,6 +138,6 @@ public sealed class TerminationsEndpoints : ICarterModule
     }
 
     public sealed record AdjustDeductionBody(decimal Applied, string? Reason);
-    public sealed record ApproveBody(bool Confirm, DateOnly? PostingDate = null, bool ConfirmWithoutSegregation = false);
+    public sealed record ApproveBody(bool Confirm, DateOnly? PostingDate = null, bool ConfirmWithoutSegregation = false, bool AcknowledgeLendingPendingActivation = false);
     public sealed record ReasonBody(string Reason);
 }

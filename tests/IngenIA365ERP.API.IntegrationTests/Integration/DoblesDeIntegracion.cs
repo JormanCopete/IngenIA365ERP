@@ -1,5 +1,7 @@
 using System.Collections.Concurrent;
 using IngenIA365ERP.Application.Accounting.Inventory;
+using IngenIA365ERP.Application.Accounting.Lending;
+using IngenIA365ERP.Application.Accounting.Integration;
 using IngenIA365ERP.Application.Accounting.Inventory.Contabilizacion;
 using IngenIA365ERP.Application.Common.Integration;
 using IngenIA365ERP.Application.Common.Integration.Accounting;
@@ -18,6 +20,20 @@ public sealed class DoblesDeIntegracion
 {
     private readonly ConcurrentDictionary<Guid, bool> _sinRespuesta = new();
     private readonly ConcurrentDictionary<Guid, int> _fallosDelDestino = new();
+    private readonly ConcurrentDictionary<Guid, (decimal Valor, DateOnly Corte)> _patrimonioTecnico = new();
+
+    /// <summary>
+    /// Feature 013, US2 (T0384): desde ahora Contabilidad informa a Cartera, en esa cooperativa, un patrimonio técnico de
+    /// <paramref name="valor"/> con corte <paramref name="corte"/> (los indicadores reales los registra el contador desde US7). Sin marca, el
+    /// puerto responde lo del provisional: «no disponible».
+    /// </summary>
+    public void PatrimonioTecnico(Guid cooperativa, decimal valor, DateOnly corte) => _patrimonioTecnico[cooperativa] = (valor, corte);
+
+    /// <summary>Quita la marca: la cooperativa vuelve a «sin patrimonio técnico vigente».</summary>
+    public void SinPatrimonioTecnico(Guid cooperativa) => _patrimonioTecnico.TryRemove(cooperativa, out _);
+
+    internal (decimal Valor, DateOnly Corte)? PatrimonioDe(Guid? cooperativa) =>
+        cooperativa is { } c && _patrimonioTecnico.TryGetValue(c, out var p) ? p : null;
 
     /// <summary>Desde ahora la validación previa de esa cooperativa «no responde» (el puerto lanza).</summary>
     public void ContabilidadNoResponde(Guid cooperativa, bool noResponde = true)
@@ -85,4 +101,35 @@ public sealed class DestinoContabilidadConDoble(DestinoContabilidad real, Dobles
     public IReadOnlyList<TrabajoDeConsumo> PlanearLote(IReadOnlyList<MensajeEntrante> entregas) => real.PlanearLote(entregas);
 
     public Task<TotalesDeLoteEnDestino> TotalesDelLoteAsync(Guid batchPublicId, CancellationToken ct) => real.TotalesDelLoteAsync(batchPublicId, ct);
+}
+
+/// <summary>
+/// El puerto de Contabilidad para Cartera (feature 013, US2, T0384; US7 bloque C): el adaptador real (<see cref="ContabilidadParaCartera"/>),
+/// salvo en la cooperativa marcada: con <see cref="DoblesDeIntegracion.PatrimonioTecnico"/> los indicadores traen ese patrimonio técnico, y con
+/// <see cref="DoblesDeIntegracion.ContabilidadNoResponde"/> la validación previa «no responde» (el puerto lanza). Molde:
+/// <see cref="ContabilidadParaInventarioConDoble"/>. (nuevo)
+/// </summary>
+public sealed class ContabilidadParaCarteraConDoble(ContabilidadParaCartera real, DoblesDeIntegracion dobles, ICurrentTenantService tenant)
+    : IContabilidadParaCartera
+{
+    public Task<Result<ResultadoDeEvaluacionContableDto>> EvaluarAsync(IReadOnlyList<MensajeContableDto> hechos, CancellationToken ct) =>
+        dobles.NoResponde(DoblesDeIntegracion.Cooperativa(tenant))
+            ? throw new TimeoutException("Doble de pruebas: Contabilidad no responde.")
+            : real.EvaluarAsync(hechos, ct);
+
+    public Task<Result<SaldosMapeadosDeCarteraDto>> SaldosDeCuentasMapeadasAsync(DateOnly corte, IReadOnlyList<CombinacionDeSaldo> combinaciones,
+        CancellationToken ct) => real.SaldosDeCuentasMapeadasAsync(corte, combinaciones, ct);
+
+    public Task<Result<EstadoDelPeriodoDto>> EstadoDelPeriodoAsync(DateOnly fecha, CancellationToken ct) => real.EstadoDelPeriodoAsync(fecha, ct);
+
+    public async Task<Result<IndicadoresDeLaEntidadDto>> IndicadoresDeLaEntidadAsync(DateOnly fecha, CancellationToken ct)
+    {
+        if (dobles.PatrimonioDe(DoblesDeIntegracion.Cooperativa(tenant)) is not { } p || p.Corte > fecha)
+            return await real.IndicadoresDeLaEntidadAsync(fecha, ct);
+        return Result.Success(new IndicadoresDeLaEntidadDto(fecha, 0m, 0m,
+            new IndicadorRegistradoDto(Guid.NewGuid(), p.Valor, "COP", p.Corte, "Doble de pruebas (e2e)"), null));
+    }
+
+    public Task<Result<IReadOnlyList<CuentaBancariaDeOrigenDto>>> CuentasBancariasAsync(Guid? bancoPublicId, CancellationToken ct) =>
+        real.CuentasBancariasAsync(bancoPublicId, ct);
 }

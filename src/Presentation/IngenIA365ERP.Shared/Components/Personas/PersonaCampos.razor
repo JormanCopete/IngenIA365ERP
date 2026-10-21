@@ -1,4 +1,4 @@
-@using IngenIA365ERP.Shared.Models.Personas
+﻿@using IngenIA365ERP.Shared.Models.Personas
 
 @*
     Los campos de UNA sección del formulario de persona (feature 008, FR-006). Personas los
@@ -196,6 +196,8 @@
                        "Cambia la tarifa de algunas retenciones a personas naturales.")
                 @Marca(() => Modelo.IsObligatedToInvoice, v => Modelo.IsObligatedToInvoice = v, "Obligado a facturar",
                        "Si no lo está, comprarle exige documento soporte.")
+                @Marca(() => Modelo.IsObligatedToKeepBooks, v => Modelo.IsObligatedToKeepBooks = v, "Obligado a llevar contabilidad",
+                       "Si es persona natural y lo está, a sus rendimientos no se les descuenta el componente inflacionario.")
                 @Marca(() => Modelo.WithholdingExempt, v => Modelo.WithholdingExempt = v, "Exento de retención en la fuente",
                        "No se le practica retención en la fuente.")
                 @Marca(() => Modelo.IcaWithholdingExempt, v => Modelo.IcaWithholdingExempt = v, "Exento de ReteICA",

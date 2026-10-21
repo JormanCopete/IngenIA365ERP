@@ -1,0 +1,64 @@
+// GMF con la politica PerHolderLimit (Ley 2277, art. 881-1; P25): el tope es por titular sumando sus cuentas, sin marca. Dos retiros de
+// 10.000.000 de dos cuentas del mismo titular en el mes: el segundo usa los 8.330.900 que quedan y grava 1.669.100 -> 6.676.
+{
+  "descripcion": "Tope exento por titular sumando cuentas.",
+  "entrada": {
+    "politicas": [
+      {
+        "desde": "2026-01-01",
+        "tarifa": 0.004,
+        "topeExencionUvt": 350,
+        "uvt": 52374,
+        "politica": "PerHolderLimit",
+        "gravados": [
+          "Withdrawal",
+          "TransferToOtherHolder",
+          "TransferBetweenDemandAndTermDeposit",
+          "TermDepositRedemptionToAccount",
+          "Cancellation"
+        ],
+        "exentos": [
+          "TransferBetweenSameHolderSavings"
+        ]
+      }
+    ],
+    "movimientos": [
+      {
+        "id": "cuenta1",
+        "fecha": "2026-08-03",
+        "hecho": "Withdrawal",
+        "monto": 10000000,
+        "cuentaSujeta": true,
+        "esLaCuentaMarcada": false
+      },
+      {
+        "id": "cuenta2",
+        "fecha": "2026-08-25",
+        "hecho": "Withdrawal",
+        "monto": 10000000,
+        "cuentaSujeta": true,
+        "esLaCuentaMarcada": false
+      }
+    ]
+  },
+  "nombre": "gmf-06-tope-por-titular",
+  "esperado": {
+    "movimientos": [
+      {
+        "id": "cuenta1",
+        "exentoAplicado": 10000000,
+        "baseGravada": 0,
+        "valor": 0,
+        "exentoUsadoDespues": 10000000
+      },
+      {
+        "id": "cuenta2",
+        "exentoAplicado": 8330900,
+        "baseGravada": 1669100,
+        "valor": 6676,
+        "exentoUsadoDespues": 18330900
+      }
+    ],
+    "totalGmf": 6676
+  }
+}

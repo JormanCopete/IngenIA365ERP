@@ -1,0 +1,17 @@
+{
+  // Feature 013, T0021: documento de prueba de los tipos de organización solidaria (esquema 1). Todo «pendiente de
+  // validar»; no es la semilla central (T0055).
+  "employeeFundCategories": [
+    { "code": "PLENA", "name": "Categoría plena" },
+    { "code": "INTERMEDIA", "name": "Categoría intermedia" },
+    { "code": "BASICA", "name": "Categoría básica" }
+  ],
+  "organizationTypes": [
+    { "code": "COOP_AHORRO_CREDITO", "name": "Cooperativa de ahorro y crédito", "isEmployeeFund": false, "expectedLoss": "Admitted", "verified": false },
+    { "code": "COOP_MULTIACTIVA_SECCION_AC", "name": "Cooperativa multiactiva con sección de ahorro y crédito", "isEmployeeFund": false, "expectedLoss": "Admitted", "verified": false },
+    { "code": "COOP_INTEGRAL_SECCION_AC", "name": "Cooperativa integral con sección de ahorro y crédito", "isEmployeeFund": false, "expectedLoss": "Admitted", "verified": false },
+    { "code": "COOP_MULTIACTIVA", "name": "Cooperativa multiactiva sin sección de ahorro", "isEmployeeFund": false, "expectedLoss": "Admitted", "verified": false },
+    { "code": "FONDO_EMPLEADOS", "name": "Fondo de empleados", "isEmployeeFund": true, "expectedLoss": "Admitted", "verified": false },
+    { "code": "ASOCIACION_MUTUAL", "name": "Asociación mutual", "isEmployeeFund": false, "expectedLoss": "NotAdmitted", "verified": false }
+  ]
+}

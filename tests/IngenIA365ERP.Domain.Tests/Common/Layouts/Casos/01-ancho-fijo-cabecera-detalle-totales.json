@@ -1,0 +1,46 @@
+{
+  "nombre": "Ancho fijo con cabecera, detalle y totales; constantes, relleno y alineación, normalización a ASCII",
+  "derivacion": "Cabecera: 1 + 20270131 + 2 en 9 con ceros. Detalle 1: CC; 1020304050 (N, 12) → 001020304050; «José Peña Muñoz» → JOSE PENA MUNOZ + 5 espacios; 1234567,89 → 123456789 en 15; 0,265 con 4 decimales → 0.2650 en 8 → 000.2650; fecha con patrón yyyy-MM-dd; 0 días → 0000; observación vacía con pad '*' a la derecha → *****. Detalle 2: 900123456 → 000900123456; «Ana Lucía Ríos» → ANA LUCIA RIOS + 6; 500000 → 50000000 en 15; 0,1825 → 000.1825; 45 → 0045; «ok» → OK → ***OK. Totales: 3 + 1734567,89 → 173456789 en 17.",
+  "layout": {
+    "code": "PRUEBA-ANCHO-FIJO", "version": "1", "source": "Caso de prueba del motor", "validFrom": "2026-01-01",
+    "fileKind": "FixedWidth", "encoding": "us-ascii", "lineEnding": "CRLF", "normalizeText": true,
+    "records": [
+      { "code": "Header", "repeat": "Once", "length": 18, "fields": [
+        { "number": 1, "name": "Tipo de registro", "start": 1, "length": 1, "kind": "N", "format": "Integer", "required": true, "constant": "1", "verified": true },
+        { "number": 2, "name": "Fecha de corte", "start": 2, "length": 8, "kind": "N", "format": "Date", "required": true, "path": "Archivo.FechaDeCorte", "verified": true },
+        { "number": 3, "name": "Cantidad de registros", "start": 10, "length": 9, "kind": "N", "format": "Integer", "required": true, "path": "Totales.Registros", "verified": false } ] },
+      { "code": "Detail", "repeat": "PorCredito", "length": 77, "fields": [
+        { "number": 1, "name": "Tipo de registro", "start": 1, "length": 1, "kind": "N", "format": "Integer", "required": true, "constant": "2", "verified": true },
+        { "number": 2, "name": "Tipo de identificación", "start": 2, "length": 2, "kind": "A", "format": "Text", "required": true, "path": "Deudor.TipoDeDocumento", "allowedValues": ["CC", "CE", "NI"], "verified": true },
+        { "number": 3, "name": "Número de identificación", "start": 4, "length": 12, "kind": "N", "format": "Text", "required": true, "path": "Deudor.NumeroDeDocumento" },
+        { "number": 4, "name": "Nombre", "start": 16, "length": 20, "kind": "A", "format": "Text", "required": true, "path": "Deudor.Nombre" },
+        { "number": 5, "name": "Saldo de capital", "start": 36, "length": 15, "kind": "N", "format": "Amount2", "required": true, "path": "Saldos.Capital" },
+        { "number": 6, "name": "Tasa", "start": 51, "length": 8, "kind": "N", "format": "Rate", "decimals": 4, "required": true, "path": "Credito.Tasa" },
+        { "number": 7, "name": "Fecha de desembolso", "start": 59, "length": 10, "kind": "A", "format": "Date", "pattern": "yyyy-MM-dd", "required": true, "path": "Credito.FechaDeDesembolso" },
+        { "number": 8, "name": "Días de mora", "start": 69, "length": 4, "kind": "N", "format": "Integer", "required": true, "path": "Riesgo.DiasDeMora" },
+        { "number": 9, "name": "Observación", "start": 73, "length": 5, "kind": "A", "format": "Text", "path": "Credito.Observacion", "pad": "*", "align": "Right" } ] },
+      { "code": "Totals", "repeat": "Once", "length": 18, "fields": [
+        { "number": 1, "name": "Tipo de registro", "start": 1, "length": 1, "kind": "N", "format": "Integer", "required": true, "constant": "3" },
+        { "number": 2, "name": "Total de capital", "start": 2, "length": 17, "kind": "N", "format": "Amount2", "required": true, "path": "Totales.Capital" } ] }
+    ]
+  },
+  "filas": [
+    { "registro": "Header", "valores": { "Archivo.FechaDeCorte": "2027-01-31", "Totales.Registros": 2 } },
+    { "registro": "Detail", "credito": "CR-0001", "valores": { "Deudor.TipoDeDocumento": "CC", "Deudor.NumeroDeDocumento": "1020304050", "Deudor.Nombre": "José Peña Muñoz",
+      "Saldos.Capital": 1234567.89, "Credito.Tasa": 0.265, "Credito.FechaDeDesembolso": "2026-03-15", "Riesgo.DiasDeMora": 0, "Credito.Observacion": null } },
+    { "registro": "Detail", "credito": "CR-0002", "valores": { "Deudor.TipoDeDocumento": "NI", "Deudor.NumeroDeDocumento": "900123456", "Deudor.Nombre": "Ana Lucía Ríos",
+      "Saldos.Capital": 500000, "Credito.Tasa": 0.1825, "Credito.FechaDeDesembolso": "2025-12-01", "Riesgo.DiasDeMora": 45, "Credito.Observacion": "ok" } },
+    { "registro": "Totals", "valores": { "Totales.Capital": 1734567.89 } }
+  ],
+  "esperado": {
+    "escrito": true,
+    "finDeLinea": "\r\n",
+    "lineas": [
+      "120270131000000002",
+      "2CC001020304050JOSE PENA MUNOZ     000000123456789000.26502026-03-150000*****",
+      "2NI000900123456ANA LUCIA RIOS      000000050000000000.18252025-12-010045***OK",
+      "300000000173456789"
+    ],
+    "inconsistencias": []
+  }
+}

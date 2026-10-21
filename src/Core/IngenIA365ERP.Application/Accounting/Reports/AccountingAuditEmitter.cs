@@ -88,6 +88,22 @@ public sealed class AccountingAuditEmitter(
     public Task EmitirLoteDeInventarioProcesadoAsync(Guid batchPublicId, object detalle, CancellationToken ct) =>
         EmitAsync(Common.Audit.AuditEventTypes.AccountingInventoryBatchProcessed, "IntegrationBatch", batchPublicId, null, detalle, ct);
 
+    /// <summary>Feature 013, T0651 (§22): <c>Accounting.Lending.Posted</c>, el comprobante de una unidad o de un grupo de hechos de Cartera.</summary>
+    public Task EmitirContabilizacionDeCarteraAsync(Guid accountingDocumentPublicId, object detalle, CancellationToken ct) =>
+        EmitAsync(Common.Audit.AuditEventTypes.AccountingLendingPosted, "AccountingDocument", accountingDocumentPublicId, null, detalle, ct);
+
+    /// <summary>Feature 013, T0651: <c>Accounting.Lending.Rejected</c>, un hecho de Cartera rechazado con su código.</summary>
+    public Task EmitirRechazoDeCarteraAsync(Guid messagePublicId, object detalle, CancellationToken ct) =>
+        EmitAsync(Common.Audit.AuditEventTypes.AccountingLendingRejected, "IntegrationMessage", messagePublicId, null, detalle, ct);
+
+    /// <summary>Feature 013, T0651: <c>Accounting.Lending.BatchProcessed</c>, el cierre de un lote de hechos de Cartera.</summary>
+    public Task EmitirLoteDeCarteraProcesadoAsync(Guid batchPublicId, object detalle, CancellationToken ct) =>
+        EmitAsync(Common.Audit.AuditEventTypes.AccountingLendingBatchProcessed, "IntegrationBatch", batchPublicId, null, detalle, ct);
+
+    /// <summary>Feature 013, T0651 (§15): <c>Accounting.RegulatoryIndicator.Registered</c>, el patrimonio técnico o la solvencia que registra el contador.</summary>
+    public Task EmitirIndicadorRegulatorioRegistradoAsync(Guid indicatorPublicId, object detalle, CancellationToken ct) =>
+        EmitAsync(Common.Audit.AuditEventTypes.AccountingRegulatoryIndicatorRegistered, "RegulatoryIndicator", indicatorPublicId, null, detalle, ct);
+
     /// <summary>Exportación de un informe: qué informe, con qué filtros, en qué formato.</summary>
     public Task EmitirExportacionAsync(string informe, object filtros, string formato, int filas, CancellationToken ct) =>
         EmitAsync(Common.Audit.AuditEventTypes.AccountingReportExported, "AccountingReport", null, null,

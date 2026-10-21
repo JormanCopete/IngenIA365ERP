@@ -1,0 +1,256 @@
+@using System.Globalization
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Inventario
+@inject CaptacionesClient Cliente
+@inject INotificationService Notification
+
+@* Feature 014, US7 (T185; FR-024, FR-074, FR-075; contracts/api.md §4): el contrato de un ahorro contractual en la ficha de su cuenta. Las condiciones
+   selladas al abrir (cuota, periodicidad, plazo, tasa base, bonificada y de incumplimiento, tolerancia, efecto del incumplimiento y cuándo se reconoce la
+   bonificación), el cumplimiento a hoy (cuotas pagadas y atrasadas contra la tolerancia de la línea y los días de gracia), lo que lleva y lo proyectado al
+   vencimiento —cumpliendo y sin cumplir—, el plan de cuotas con su estado, la historia de las condiciones (la del incumplimiento a la tasa de castigo) y la
+   instrucción al vencimiento: trasladar a una cuenta a la vista del titular o girar; sin instrucción, al vencer queda a disposición. Cancelar antes del
+   vencimiento se hace en «Cancelación» y cuesta la reliquidación a la tasa de incumplimiento. *@
+<div class="info-card">
+    <h4>Contrato de ahorro@(_contrato is { } t ? $" · {TextosDeContrato.Estado(t.Status)}" : "")</h4>
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        @foreach (var e in _errores) { <p class="aviso aviso-error" role="alert">@e</p> }
+        @if (_contrato is { } c)
+        {
+            var k = c.Terms;
+            <dl class="form-grid">
+                <div><dt>Cuota</dt><dd>@Pesos(k.Installment) · @TextosDeCartera.Periodicidad(k.Periodicity)</dd></div>
+                <div><dt>Cuotas del plan</dt><dd>@k.Installments en @k.TermMonths meses</dd></div>
+                <div><dt>Vigencia</dt><dd>@k.StartDate.ToString("dd/MM/yyyy") al @k.MaturityDate.ToString("dd/MM/yyyy")</dd></div>
+                <div><dt>Valor pactado</dt><dd>@Pesos(k.CommittedAmount)</dd></div>
+                <div><dt>Tasa base</dt><dd>@TextosDeContrato.Tasa(k.BaseRate)@(k.AppliedRate != k.BaseRate ? $" · se aplica {TextosDeContrato.Tasa(k.AppliedRate)}" : "")</dd></div>
+                <div><dt>Tasa bonificada</dt><dd>@(k.BonusRate is null ? "La línea no bonifica" : TextosDeContrato.Tasa(k.BonusRate))</dd></div>
+                <div><dt>Tasa de incumplimiento</dt><dd>@TextosDeContrato.Tasa(k.BreachRate)</dd></div>
+                <div><dt>Cuotas atrasadas toleradas</dt><dd>@(k.ToleratedLateInstallments?.ToString(Es) ?? "—")</dd></div>
+                <div><dt>Si se incumple</dt><dd>@TextosDeContrato.Efecto(k.BreachEffect)</dd></div>
+                <div><dt>Bonificación</dt><dd>@TextosDeContrato.Reconocimiento(k.BonusRecognition)</dd></div>
+                <div><dt>Plazo de emisión</dt><dd>@TextosDeCdat.PlazoDeEmision(k.IssueTermBand)</dd></div>
+                <div><dt>Valor final cumpliendo</dt><dd>@(k.ProjectedFinalAmount is { } f ? Pesos(f) : "—")</dd></div>
+            </dl>
+            @if (k.MigratedPaidInstallments is { } migradas)
+            {
+                <p class="texto-tenue">Contrato migrado: llegó con @migradas cuotas pagadas en el sistema anterior.</p>
+            }
+
+            <h5>Cumplimiento</h5>
+            <dl class="form-grid">
+                <div><dt>Cuotas pagadas</dt><dd>@c.Compliance.Paid de @c.Compliance.Generated vencidas</dd></div>
+                <div><dt>Cuotas atrasadas</dt><dd>@c.Compliance.Late@(c.Compliance.LateNumbers.Count > 0 ? $" (n.º {string.Join(", ", c.Compliance.LateNumbers)})" : "")</dd></div>
+                <div><dt>Valor atrasado</dt><dd>@Pesos(c.Compliance.LateAmount)</dd></div>
+                <div><dt>Días de gracia de cada cuota</dt><dd>@c.Compliance.GraceDays</dd></div>
+            </dl>
+            @if (c.Status == TextosDeContrato.Vigente && c.Compliance.ExceedsTolerance)
+            {
+                <p class="aviso aviso-error">Tiene más cuotas atrasadas que las @c.Compliance.Tolerance toleradas: el proceso diario lo dejará incumplido.</p>
+            }
+            else if (c.Status == TextosDeContrato.Vigente && c.Compliance.Late > 0)
+            {
+                <p class="aviso aviso-info">Tiene cuotas atrasadas dentro de la tolerancia de la línea (@c.Compliance.Tolerance).</p>
+            }
+            @if (c.Status == TextosDeContrato.Incumplido)
+            {
+                <p class="aviso aviso-info">El contrato está incumplido: causa a la tasa de incumplimiento y no recibe la bonificación.</p>
+            }
+
+            <h5>Lo que lleva y lo proyectado</h5>
+            <dl class="form-grid">
+                <div><dt>Aportes a hoy</dt><dd>@Pesos(c.Projection.ContributionsToDate)</dd></div>
+                <div><dt>Interés a la tasa base a hoy</dt><dd>@Pesos(c.Projection.InterestAtBaseToDate)</dd></div>
+                <div><dt>Bonificación a hoy</dt><dd>@(c.Projection.BonusToDate is { } b ? Pesos(b) : "—")</dd></div>
+                <div><dt>Al vencer, a la tasa base</dt><dd>@Pesos(c.Projection.ValueAtMaturityAtBase)</dd></div>
+                <div><dt>Al vencer, cumpliendo</dt><dd>@(c.Projection.ValueAtMaturityIfFulfilled is { } v ? Pesos(v) : "—")</dd></div>
+                <div><dt>Bonificación proyectada</dt><dd>@(c.Projection.ProjectedBonus is { } pb ? Pesos(pb) : "—")</dd></div>
+                @if (c.Projection.ProvisionedBonus > 0m)
+                {
+                    <div><dt>Bonificación provisionada</dt><dd>@Pesos(c.Projection.ProvisionedBonus)</dd></div>
+                }
+            </dl>
+            <p class="texto-tenue">@c.Projection.Explanation</p>
+
+            <div class="toolbar">
+                <SfButton CssClass="e-flat" OnClick="@(() => _verPlan = !_verPlan)">@(_verPlan ? "Ocultar el plan de cuotas" : "Ver el plan de cuotas")</SfButton>
+                @if (c.History.Count > 1)
+                {
+                    <SfButton CssClass="e-flat" OnClick="@(() => _verHistoria = !_verHistoria)">@(_verHistoria ? "Ocultar la historia" : "Ver la historia de las condiciones")</SfButton>
+                }
+            </div>
+            @if (_verPlan)
+            {
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th class="numero">N.º</th><th>Vence</th><th class="numero">Cuota</th><th class="numero">Pagado</th><th class="numero">Pendiente</th><th>Estado</th></tr></thead>
+                        <tbody>
+                            @foreach (var q in c.Installments)
+                            {
+                                <tr>
+                                    <td class="numero">@q.Number</td>
+                                    <td>@q.DueDate.ToString("dd/MM/yyyy")</td>
+                                    <td class="numero">@Pesos(q.Amount)</td>
+                                    <td class="numero">@Pesos(q.Paid)</td>
+                                    <td class="numero">@Pesos(q.Pending)</td>
+                                    <td>@TextosDeContrato.EstadoDeCuota(q.Status, q.Late)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+            @if (_verHistoria)
+            {
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th class="numero">Versión</th><th>Causa</th><th>Desde</th><th class="numero">Tasa aplicada</th><th>Reglas</th></tr></thead>
+                        <tbody>
+                            @foreach (var h in c.History)
+                            {
+                                <tr>
+                                    <td class="numero">@h.Version</td>
+                                    <td>@TextosDeContrato.Causa(h.Cause)</td>
+                                    <td>@h.EffectiveDate.ToString("dd/MM/yyyy")</td>
+                                    <td class="numero">@TextosDeContrato.Tasa(h.AppliedRate)</td>
+                                    <td>@h.RulesVersion</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+
+            <h5>Al vencimiento</h5>
+            @if (c.Instruction is { } i)
+            {
+                <p>@(i.Kind == TextosDeContrato.PorTraslado
+                       ? $"Trasladar a la cuenta {i.TargetAccountNumber ?? "—"}"
+                       : $"Girar a {i.Payee?.FullName ?? "el titular"}")@(i.GivenAt is { } dada ? $" · dada el {dada.ToLocalTime():dd/MM/yyyy}" : "")</p>
+            }
+            else if (c.MaturedOn is { } vencio)
+            {
+                <p>Venció el @vencio.ToString("dd/MM/yyyy") y está a disposición del titular: se entrega con «Cancelación».</p>
+            }
+            else
+            {
+                <p class="texto-tenue">Sin instrucción: al vencer quedará a disposición del titular.</p>
+            }
+            @if (c.Status != TextosDeContrato.Cumplido && c.MaturedOn is null && Cuenta.Status != TextosDeCaptaciones.Cancelada && _admitidos == 0)
+            {
+                <p class="texto-tenue">La línea de este ahorro no admite destinos al vencer: lo ahorrado queda a disposición del titular.</p>
+            }
+            else if (c.Status != TextosDeContrato.Cumplido && c.MaturedOn is null && Cuenta.Status != TextosDeCaptaciones.Cancelada)
+            {
+                <PermissionGate Required="Lending.Accounts.Parties.Manage">
+                    <div class="form-grid">
+                        <label class="campo">Instrucción
+                            <select class="e-input" @bind="_clase">
+                                @if (Admite(TextosDeCaptaciones.DestinoTraslado)) { <option value="@TextosDeContrato.PorTraslado">Trasladar a una cuenta a la vista del titular</option> }
+                                @if (Admite(TextosDeCaptaciones.DestinoGiro)) { <option value="@TextosDeContrato.PorGiro">Girar a la cuenta registrada del titular</option> }
+                            </select>
+                        </label>
+                        @if (_clase == TextosDeContrato.PorTraslado)
+                        {
+                            <label class="campo">Cuenta destino
+                                <select class="e-input" @bind="_destino">
+                                    <option value="">Elija la cuenta</option>
+                                    @foreach (var d in _destinos) { <option value="@d.PublicId">@d.Number · @d.Line.Name</option> }
+                                </select>
+                            </label>
+                        }
+                        <label class="campo campo-ancho">Motivo <input class="e-input" maxlength="500" @bind="_motivo" /></label>
+                    </div>
+                    <SfButton CssClass="e-outline" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(_motivo) || (_clase == TextosDeContrato.PorTraslado && _destino is null))"
+                              OnClick="@CambiarInstruccionAsync">Guardar la instrucción</SfButton>
+                    @if (c.Instruction is not null)
+                    {
+                        <SfButton CssClass="e-flat" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@RetirarInstruccionAsync">Retirar la instrucción</SfButton>
+                        <p class="texto-tenue">Retirada la instrucción, al vencer el contrato queda a disposición del titular y no se mueve dinero. Pide el motivo.</p>
+                    }
+                </PermissionGate>
+            }
+        }
+    </IndicadorDeCarga>
+</div>
+
+@code {
+    private static readonly CultureInfo Es = CultureInfo.GetCultureInfo("es-CO");
+
+    [Parameter, EditorRequired] public CuentaDto Cuenta { get; set; } = default!;
+    [Parameter] public EventCallback OnCambio { get; set; }
+
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+    private ContratoDeAhorroDto? _contrato;
+    private List<CuentaEnListaDto> _destinos = [];
+    private List<string> _errores = [];
+    private bool _verPlan, _verHistoria;
+    private int _clase = TextosDeContrato.PorTraslado;
+    private int _admitidos = 3;
+
+    private bool Admite(int bit) => (_admitidos & bit) != 0;
+    private Guid? _destino;
+    private string? _motivo;
+    private ClaveDeOperacion _clave = new();
+    private Guid _cuentaLeida;
+    private int _estadoLeido;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Cuenta.PublicId == _cuentaLeida && Cuenta.Status == _estadoLeido) return;
+        _cuentaLeida = Cuenta.PublicId;
+        _estadoLeido = Cuenta.Status;
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        _errores = [];
+        var r = await Cliente.ContratoDeAhorroAsync(Cuenta.PublicId);
+        if (!r.IsSuccess) { _errores = [.. LineasDeCreditoClient.Explicar(r)]; return; }
+        _contrato = r.Value;
+        _admitidos = _contrato?.AllowedMaturityDestinations ?? 3;
+        if (_clase == TextosDeContrato.PorTraslado && !Admite(TextosDeCaptaciones.DestinoTraslado)) _clase = TextosDeContrato.PorGiro;
+        if (_contrato?.Instruction is { } i)
+        {
+            _clase = i.Kind;
+            _destino = i.TargetAccountPublicId;
+        }
+        var cuentas = await Cliente.CuentasAsync(titular: Cuenta.Holder.PersonPublicId, tamano: 50);
+        _destinos = [.. (cuentas.Value?.Items ?? []).Where(a => a.PublicId != Cuenta.PublicId && a.DepositClass == TextosDeCaptaciones.ALaVista
+                                                             && a.Status != TextosDeCaptaciones.Cancelada)];
+    }
+
+    private async Task CambiarInstruccionAsync()
+    {
+        using var carga = _guardado.Iniciar();
+        _errores = [];
+        var pedido = _clase == TextosDeContrato.PorTraslado
+            ? new CambiarInstruccionDeContratoRequest(TextosDeContrato.PorTraslado, _destino, null, _motivo!.Trim())
+            : new CambiarInstruccionDeContratoRequest(TextosDeContrato.PorGiro, null, new BeneficiarioDeGiroRequest(Cuenta.Holder.PersonPublicId), _motivo!.Trim());
+        var r = await Cliente.CambiarInstruccionDeContratoAsync(Cuenta.PublicId, pedido, _clave);
+        if (!r.IsSuccess) { _errores = [.. LineasDeCreditoClient.Explicar(r)]; return; }
+        _clave = new ClaveDeOperacion();
+        _motivo = null;
+        _contrato = r.Value ?? _contrato;
+        await Notification.SuccessAsync("Instrucción al vencimiento guardada.");
+        await OnCambio.InvokeAsync();
+    }
+
+    private async Task RetirarInstruccionAsync()
+    {
+        using var carga = _guardado.Iniciar();
+        _errores = [];
+        var r = await Cliente.RetirarInstruccionDeContratoAsync(Cuenta.PublicId, new RetirarInstruccionDeContratoRequest(_motivo!.Trim()), _clave);
+        if (!r.IsSuccess) { _errores = [.. LineasDeCreditoClient.Explicar(r)]; return; }
+        _clave = new ClaveDeOperacion();
+        _motivo = null;
+        _destino = null;
+        _contrato = r.Value ?? _contrato;
+        await Notification.SuccessAsync("Instrucción al vencimiento retirada: el contrato quedará a disposición al vencer.");
+        await OnCambio.InvokeAsync();
+    }
+
+    private static string Pesos(decimal valor) => "$ " + valor.ToString("N0", Es);
+}

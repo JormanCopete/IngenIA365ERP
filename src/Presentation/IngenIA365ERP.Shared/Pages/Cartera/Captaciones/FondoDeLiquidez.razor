@@ -1,0 +1,438 @@
+﻿@page "/cartera/fondo-de-liquidez"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Globalization
+@using IngenIA365ERP.Shared.Services.Adjuntos
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Http
+@inject CaptacionesClient Cliente
+@inject AdjuntosClient Adjuntos
+@inject INotificationService Notification
+
+<PageTitle>Fondo de liquidez - IngenIA365ERP</PageTitle>
+
+@* Feature 014, US15 (T217; FR-025, FR-109, FR-110; contracts/api.md §15; research §24): el fondo de liquidez a una fecha —la base por clase y banda de madurez,
+   el requerido según la categoría de la entidad y el régimen vigente (con la transición), el constituido y la diferencia—, la medición del riesgo de liquidez
+   (IRL y brecha por bandas), lo constituido que registra el tesorero con su soporte y las fotos con sus alertas. Sin datos de titulares: los depósitos
+   asegurados por ahorrador son la vista «insured-deposits» del centro de informes. *@
+<PermissionGate Required="Lending.LiquidityFund.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Fondo de liquidez</h3>
+        <div class="toolbar">
+            <label class="campo">Fecha
+                <input type="date" class="e-input" value="@_fecha.ToString("yyyy-MM-dd")" @onchange="@CambiarFechaAsync" />
+            </label>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+            <PermissionGate Required="Lending.LiquidityFund.Manage">
+                <SfButton CssClass="e-primary" IconCss="e-icons e-save" Disabled="@_foto.Activa" OnClick="@TomarFotoAsync">Tomar la foto de la fecha</SfButton>
+            </PermissionGate>
+        </div>
+    </div>
+
+    @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+
+    <SfTab>
+        <TabItems>
+            <TabItem>
+                <ChildContent><TabHeader Text="Posición" /></ChildContent>
+                <ContentTemplate>
+                    <IndicadorDeCarga Cargando="@_carga.Activa">
+                        @if (_posicion is { } p)
+                        {
+                            <p class="aviso @(p.Alert == "Shortfall" ? "aviso-error" : p.Alert == "Margin" ? "aviso-alerta" : "aviso-ok")" role="status">
+                                @TextosDeLiquidez.Alerta(p.Alert)@(p.Alert == "Shortfall" ? $": faltan {Pesos(p.Shortfall)}." : ".")
+                            </p>
+                            <div class="kpi-grid">
+                                <div class="kpi-card"><span class="kpi-label">Categoría</span><span class="kpi-value">@p.Category</span></div>
+                                <div class="kpi-card"><span class="kpi-label">Régimen</span><span class="kpi-value">@TextosDeLiquidez.Etapa(p.Regime.Stage)</span></div>
+                                <div class="kpi-card"><span class="kpi-label">Requerido</span><span class="kpi-value">@Pesos(p.Required)</span></div>
+                                <div class="kpi-card"><span class="kpi-label">Constituido</span><span class="kpi-value">@Pesos(p.Constituted)</span></div>
+                                <div class="kpi-card"><span class="kpi-label">Diferencia</span><span class="kpi-value">@Pesos(p.Difference)</span></div>
+                            </div>
+                            @if (p.Regime.Transition is { } t)
+                            {
+                                <p class="aviso aviso-info">En transición hasta el @t.EndsOn.ToString("dd/MM/yyyy"): el régimen por madurez residual requeriría @Pesos(t.NewRegimeRequired).</p>
+                            }
+                            <div class="tabla-desplazable">
+                                <table class="data-grid">
+                                    <thead><tr><th>Clase</th><th>Banda</th><th class="numero">Cuentas</th><th class="numero">Saldo</th><th class="numero">Intereses</th><th class="numero">Base</th><th class="numero">Porcentaje</th><th class="numero">Requerido</th></tr></thead>
+                                    <tbody>
+                                        @foreach (var r in p.Base)
+                                        {
+                                            <tr>
+                                                <td>@TextosDeLiquidez.Clase(r.DepositClass)</td>
+                                                <td>@(r.Band ?? "—")</td>
+                                                <td class="numero">@r.Accounts</td>
+                                                <td class="numero">@Pesos(r.Balance)</td>
+                                                <td class="numero">@Pesos(r.AccruedAndToAccrue)</td>
+                                                <td class="numero">@Pesos(r.Base)</td>
+                                                <td class="numero">@Porcentaje(r.Percent)</td>
+                                                <td class="numero">@Pesos(r.Required)</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                            @if (p.Base.Count == 0) { <p class="texto-tenue">No hay depósitos a la fecha.</p> }
+                            <p class="texto-tenue">@p.Regime.Source</p>
+                            @foreach (var linea in p.Explanation) { <p class="texto-tenue">@linea</p> }
+                        }
+                    </IndicadorDeCarga>
+                </ContentTemplate>
+            </TabItem>
+            <TabItem>
+                <ChildContent><TabHeader Text="Riesgo de liquidez" /></ChildContent>
+                <ContentTemplate>
+                    <div class="toolbar">
+                        <select class="e-input" value="@_medida" @onchange="@(e => CambiarMedidaAsync(e.Value?.ToString()))">
+                            <option value="Irl">Indicador de riesgo de liquidez (IRL)</option>
+                            <option value="Brecha">Brecha de liquidez</option>
+                        </select>
+                    </div>
+                    <IndicadorDeCarga Cargando="@_riesgoCarga.Activa">
+                        @if (_riesgo is { } m)
+                        {
+                            @if (m.Measure == "Irl")
+                            {
+                                <p class="aviso @(m.BelowThreshold ? "aviso-error" : "aviso-ok")" role="status">
+                                    IRL más bajo: @(m.MinimumIrl?.ToString("N4", Es) ?? "sin salidas en el horizonte")@(m.MinimumIrlBand is { } b ? $" (banda {b})" : "") · mínimo de la entidad @m.Threshold.ToString("N2", Es)@(m.BelowThreshold ? $" · el plan de ajuste vuelve a {m.AdjustmentPlanThreshold.ToString("N2", Es)}" : "")
+                                </p>
+                            }
+                            <div class="kpi-grid">
+                                <div class="kpi-card"><span class="kpi-label">Activos líquidos netos</span><span class="kpi-value">@Pesos(m.NetLiquidAssets)</span></div>
+                                @if (m.OutsideHorizon != 0m) { <div class="kpi-card"><span class="kpi-label">Fuera del horizonte</span><span class="kpi-value">@Pesos(m.OutsideHorizon)</span></div> }
+                            </div>
+                            <div class="tabla-desplazable">
+                                <table class="data-grid">
+                                    <thead><tr><th>Banda</th><th class="numero">Entradas</th><th class="numero">Salidas contractuales</th><th class="numero">Salidas no contractuales</th><th class="numero">Brecha</th><th class="numero">Brecha acumulada</th><th class="numero">IRL acumulado</th></tr></thead>
+                                    <tbody>
+                                        @foreach (var b in m.Bands)
+                                        {
+                                            <tr>
+                                                <td>@b.Band</td>
+                                                <td class="numero">@Pesos(b.Inflows)</td>
+                                                <td class="numero">@Pesos(b.ContractualOutflows)</td>
+                                                <td class="numero">@Pesos(b.NonContractualOutflows)</td>
+                                                <td class="numero">@Pesos(b.Gap)</td>
+                                                <td class="numero">@Pesos(b.CumulativeGap)</td>
+                                                <td class="numero">@(b.CumulativeIrl?.ToString("N4", Es) ?? "—")</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                            @foreach (var s in m.Assumptions) { <p class="texto-tenue">@s</p> }
+                        }
+                    </IndicadorDeCarga>
+                </ContentTemplate>
+            </TabItem>
+            <TabItem>
+                <ChildContent><TabHeader Text="Constituido" /></ChildContent>
+                <ContentTemplate>
+                    <div class="toolbar">
+                        <label class="campo"><input type="checkbox" checked="@_soloVigentes" @onchange="@(e => CambiarVigentesAsync(e.Value is true))" /> Sólo las vigentes en la fecha</label>
+                        <PermissionGate Required="Lending.LiquidityFund.Manage">
+                            <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@AbrirRegistro">Registrar inversión</SfButton>
+                        </PermissionGate>
+                    </div>
+                    <IndicadorDeCarga Cargando="@_inversionesCarga.Activa">
+                        <div class="tabla-desplazable">
+                            <table class="data-grid">
+                                <thead><tr><th>Instrumento</th><th>Entidad</th><th>Referencia</th><th class="numero">Valor</th><th>Desde</th><th>Vence</th><th>Hasta</th><th>Nota</th><th></th></tr></thead>
+                                <tbody>
+                                    @foreach (var i in _inversiones)
+                                    {
+                                        var inversion = i;
+                                        <tr>
+                                            <td>@TextosDeLiquidez.Instrumento(inversion.Kind)</td>
+                                            <td>@inversion.InstitutionName</td>
+                                            <td>@inversion.Reference</td>
+                                            <td class="numero">@Pesos(inversion.Amount)</td>
+                                            <td>@inversion.ConstitutedOn.ToString("dd/MM/yyyy")</td>
+                                            <td>@(inversion.MaturesOn?.ToString("dd/MM/yyyy") ?? "—")</td>
+                                            <td>@(inversion.WithdrawnOn?.ToString("dd/MM/yyyy") ?? "vigente")@(inversion.EndReason is { } m ? $" · {m}" : "")</td>
+                                            <td>@inversion.Note</td>
+                                            <td>
+                                                @if (inversion.WithdrawnOn is null)
+                                                {
+                                                    <PermissionGate Required="Lending.LiquidityFund.Manage">
+                                                        <SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirTerminar(inversion))">Terminar…</SfButton>
+                                                    </PermissionGate>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                        @if (_inversiones.Count == 0) { <p class="texto-tenue">No hay inversiones registradas con ese filtro.</p> }
+                    </IndicadorDeCarga>
+                </ContentTemplate>
+            </TabItem>
+            <TabItem>
+                <ChildContent><TabHeader Text="Fotos" /></ChildContent>
+                <ContentTemplate>
+                    <IndicadorDeCarga Cargando="@_fotosCarga.Activa">
+                        <div class="tabla-desplazable">
+                            <table class="data-grid">
+                                <thead><tr><th>Fecha</th><th>Categoría</th><th>Régimen</th><th class="numero">Requerido</th><th class="numero">Constituido</th><th class="numero">Faltante</th><th class="numero">IRL mínimo</th><th>Tomada por</th><th>Motivo</th></tr></thead>
+                                <tbody>
+                                    @foreach (var f in _fotos)
+                                    {
+                                        <tr>
+                                            <td>@f.Date.ToString("dd/MM/yyyy")</td>
+                                            <td>@f.Category</td>
+                                            <td>@TextosDeLiquidez.Etapa(f.RegimeStage)</td>
+                                            <td class="numero">@Pesos(f.Required)</td>
+                                            <td class="numero">@Pesos(f.Constituted)</td>
+                                            <td class="numero">@Pesos(f.Shortfall)</td>
+                                            <td class="numero">@(f.MinimumIrl?.ToString("N4", Es) ?? "—")</td>
+                                            <td>@(f.TakenByProcess ? "Ciclo diario" : "Tesorería")</td>
+                                            <td>@f.Reason</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                        @if (_fotos.Count == 0) { <p class="texto-tenue">No hay fotos en los últimos 90 días.</p> }
+                    </IndicadorDeCarga>
+                </ContentTemplate>
+            </TabItem>
+        </TabItems>
+    </SfTab>
+</div>
+
+<SfDialog @bind-Visible="_mostrarRegistro" Header="Registrar inversión del fondo" Width="680px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Registrando…">
+                <div class="form-grid">
+                    <label class="campo">Instrumento *
+                        <select class="e-input" @bind="_instrumento">
+                            @foreach (var (valor, texto) in TextosDeLiquidez.Instrumentos) { <option value="@valor">@texto</option> }
+                        </select>
+                    </label>
+                    <div class="campo campo-ancho">Entidad depositaria *
+                        <PersonSearchPicker Selected="@_entidad" SelectedChanged="@(e => _entidad = e)" ShowHelpText="false" Compacto="true" />
+                    </div>
+                    <label class="campo">Número del título o de la cuenta * <input class="e-input" maxlength="60" @bind="_referencia" /></label>
+                    <label class="campo">Valor *
+                        <input class="e-input numero" type="number" step="0.01" min="0" value="@(_valor?.ToString(CultureInfo.InvariantCulture))"
+                               @onchange="@(e => _valor = decimal.TryParse(e.Value?.ToString(), NumberStyles.Number, CultureInfo.InvariantCulture, out var v) ? v : null)" />
+                    </label>
+                    @if (_instrumento == 2)
+                    {
+                        <label class="campo">Tipo de título
+                            <select class="e-input" @bind="_tipoDeTitulo">
+                                <option value="CDT">CDT</option>
+                                <option value="CDAT">CDAT</option>
+                            </select>
+                        </label>
+                        <label class="campo">Intereses causados
+                            <input class="e-input numero" type="number" step="0.01" min="0" value="@(_intereses?.ToString(CultureInfo.InvariantCulture))"
+                                   @onchange="@(e => _intereses = decimal.TryParse(e.Value?.ToString(), NumberStyles.Number, CultureInfo.InvariantCulture, out var v) ? v : null)" />
+                        </label>
+                        <label class="campo"><input type="checkbox" @bind="_capitaliza" /> Los intereses se capitalizan</label>
+                    }
+                    <label class="campo">Constituida desde * <input type="date" class="e-input" value="@_desde.ToString("yyyy-MM-dd")" @onchange="@(e => _desde = LeerFecha(e.Value) ?? _desde)" /></label>
+                    <label class="campo">Vence <input type="date" class="e-input" value="@(_vence?.ToString("yyyy-MM-dd"))" @onchange="@(e => _vence = LeerFecha(e.Value))" /></label>
+                    <label class="campo campo-ancho">Nota <input class="e-input" maxlength="500" @bind="_nota" /></label>
+                    <label class="campo campo-ancho">Soporte *
+                        <select class="e-input" value="@(_soporte?.ToString() ?? "")" @onchange="@(e => _soporte = Guid.TryParse(e.Value?.ToString(), out var g) ? g : null)">
+                            <option value="">@(_soportes.Count == 0 ? "Suba primero el soporte" : "Elija el soporte…")</option>
+                            @foreach (var a in _soportes) { <option value="@a.PublicId">@a.FileName</option> }
+                        </select>
+                    </label>
+                    <div class="campo campo-ancho">
+                        <SubirSoporte OwnerEntityType="@TextosDeLiquidez.DuenoDeSoportes" OwnerEntityPublicId="@_reservado" OnSubido="@CargarSoportesAsync" />
+                    </div>
+                </div>
+                @if (_errorDialogo is not null) { <p class="aviso aviso-error" role="alert">@_errorDialogo</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(!PuedeRegistrar || _guardado.Activa)" OnClick="@RegistrarAsync">Registrar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarRegistro = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarTerminar" Header="Terminar inversión" Width="520px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                @if (_terminando is { } t) { <p>@TextosDeLiquidez.Instrumento(t.Kind) @t.Reference por @Pesos(t.Amount): deja de contar desde la fecha.</p> }
+                <label class="campo">Desde * <input type="date" class="e-input" value="@_finDesde.ToString("yyyy-MM-dd")" @onchange="@(e => _finDesde = LeerFecha(e.Value) ?? _finDesde)" /></label>
+                <label class="campo campo-ancho">Motivo * <textarea class="e-input" rows="2" maxlength="500" @bind="_motivoFin"></textarea></label>
+                @if (_errorDialogo is not null) { <p class="aviso aviso-error" role="alert">@_errorDialogo</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(string.IsNullOrWhiteSpace(_motivoFin) || _guardado.Activa)" OnClick="@TerminarAsync">Terminar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarTerminar = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private static readonly CultureInfo Es = CultureInfo.GetCultureInfo("es-CO");
+
+    private readonly EstadoDeCarga _carga = new(), _riesgoCarga = new(), _inversionesCarga = new(), _fotosCarga = new(), _foto = new(), _guardado = new();
+    private DateOnly _fecha = DateOnly.FromDateTime(DateTime.Today);
+    private PosicionDelFondoDto? _posicion;
+    private RiesgoDeLiquidezDto? _riesgo;
+    private List<InversionDelFondoDto> _inversiones = [];
+    private List<FotoDelFondoDto> _fotos = [];
+    private string _medida = "Irl";
+    private bool _soloVigentes = true;
+    private string? _error, _errorDialogo;
+
+    // Registro de una inversión.
+    private bool _mostrarRegistro, _mostrarTerminar;
+    private int _instrumento = 1;
+    private string _tipoDeTitulo = "CDT";
+    private decimal? _intereses;
+    private bool _capitaliza;
+    private PersonSearchPicker.PersonSearchItem? _entidad;
+    private string? _referencia, _nota, _motivoFin;
+    private decimal? _valor;
+    private DateOnly _desde = DateOnly.FromDateTime(DateTime.Today), _finDesde = DateOnly.FromDateTime(DateTime.Today);
+    private DateOnly? _vence;
+    private Guid _reservado = Guid.NewGuid();
+    private Guid? _soporte;
+    private List<AdjuntoDto> _soportes = [];
+    private InversionDelFondoDto? _terminando;
+    private ClaveDeOperacion _clave = new();
+
+    private bool PuedeRegistrar => _entidad is not null && !string.IsNullOrWhiteSpace(_referencia) && _valor is > 0m && _soporte is not null;
+
+    protected override Task OnInitializedAsync() => CargarAsync();
+
+    private async Task CambiarFechaAsync(Microsoft.AspNetCore.Components.ChangeEventArgs e)
+    {
+        if (LeerFecha(e.Value) is { } f) _fecha = f;
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        _error = null;
+        await Task.WhenAll(CargarPosicionAsync(), CargarRiesgoAsync(), CargarInversionesAsync(), CargarFotosAsync());
+    }
+
+    private async Task CargarPosicionAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Cliente.PosicionDelFondoAsync(_fecha);
+        if (!r.IsSuccess || r.Value is null) { _posicion = null; _error = string.Join(" ", LineasDeCreditoClient.Explicar(r)); return; }
+        _posicion = r.Value;
+    }
+
+    private async Task CargarRiesgoAsync()
+    {
+        using var carga = _riesgoCarga.Iniciar();
+        var r = await Cliente.RiesgoDeLiquidezAsync(_fecha, _medida);
+        _riesgo = r.IsSuccess ? r.Value : null;
+    }
+
+    private async Task CambiarMedidaAsync(string? medida)
+    {
+        _medida = medida == "Brecha" ? "Brecha" : "Irl";
+        await CargarRiesgoAsync();
+    }
+
+    private async Task CargarInversionesAsync()
+    {
+        using var carga = _inversionesCarga.Iniciar();
+        var r = await Cliente.InversionesDelFondoAsync(_soloVigentes ? _fecha : null);
+        _inversiones = r.IsSuccess && r.Value is not null ? [.. r.Value] : [];
+    }
+
+    private async Task CambiarVigentesAsync(bool solo)
+    {
+        _soloVigentes = solo;
+        await CargarInversionesAsync();
+    }
+
+    private async Task CargarFotosAsync()
+    {
+        using var carga = _fotosCarga.Iniciar();
+        var r = await Cliente.FotosDelFondoAsync();
+        _fotos = r.IsSuccess && r.Value is not null ? [.. r.Value] : [];
+    }
+
+    private async Task TomarFotoAsync()
+    {
+        using var carga = _foto.Iniciar();
+        var r = await Cliente.TomarFotoDelFondoAsync(new TomarFotoRequest(_fecha, "Foto del tesorero"), new ClaveDeOperacion());
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(string.Join(" ", LineasDeCreditoClient.Explicar(r))); return; }
+        await Notification.SuccessAsync(r.Value.Shortfall > 0m
+            ? $"Foto del {r.Value.Date:dd/MM/yyyy} tomada: faltan {Pesos(r.Value.Shortfall)} y se avisó al tesorero y a la gerencia."
+            : $"Foto del {r.Value.Date:dd/MM/yyyy} tomada.");
+        await CargarFotosAsync();
+    }
+
+    private void AbrirRegistro()
+    {
+        _reservado = Guid.NewGuid();
+        _clave = new ClaveDeOperacion();
+        _entidad = null;
+        _referencia = _nota = _errorDialogo = null;
+        _valor = null;
+        _vence = null;
+        _soporte = null;
+        _soportes = [];
+        _desde = _fecha;
+        _mostrarRegistro = true;
+    }
+
+    private async Task CargarSoportesAsync()
+    {
+        var r = await Adjuntos.ListarAsync(TextosDeLiquidez.DuenoDeSoportes, _reservado);
+        _soportes = r.IsSuccess ? [.. (r.Value ?? []).Where(a => a.Disponible).OrderByDescending(a => a.CreatedAt)] : [];
+        if (_soporte is null || _soportes.All(a => a.PublicId != _soporte)) _soporte = _soportes.FirstOrDefault()?.PublicId;
+    }
+
+    private async Task RegistrarAsync()
+    {
+        if (!PuedeRegistrar) return;
+        using var carga = _guardado.Iniciar();
+        _errorDialogo = null;
+        var r = await Cliente.RegistrarInversionDelFondoAsync(new RegistrarInversionRequest(_instrumento, _entidad!.PublicId, _referencia!.Trim(), _valor!.Value, _desde,
+            _vence, _soporte, string.IsNullOrWhiteSpace(_nota) ? null : _nota.Trim(), _reservado, _instrumento == 2 ? _tipoDeTitulo : null,
+            _instrumento == 2 ? _intereses ?? 0m : null, _instrumento == 2 ? _capitaliza : null), _clave);
+        if (!r.IsSuccess || r.Value is null) { _errorDialogo = string.Join(" ", LineasDeCreditoClient.Explicar(r)); return; }
+        _mostrarRegistro = false;
+        await Notification.SuccessAsync($"Inversión {r.Value.Reference} registrada.");
+        await Task.WhenAll(CargarPosicionAsync(), CargarInversionesAsync());
+    }
+
+    private void AbrirTerminar(InversionDelFondoDto inversion)
+    {
+        _terminando = inversion;
+        _finDesde = _fecha;
+        _motivoFin = _errorDialogo = null;
+        _clave = new ClaveDeOperacion();
+        _mostrarTerminar = true;
+    }
+
+    private async Task TerminarAsync()
+    {
+        if (_terminando is null) return;
+        using var carga = _guardado.Iniciar();
+        _errorDialogo = null;
+        var r = await Cliente.TerminarInversionDelFondoAsync(_terminando.PublicId, new TerminarInversionRequest(_finDesde, _motivoFin ?? string.Empty), _clave);
+        if (!r.IsSuccess || r.Value is null) { _errorDialogo = string.Join(" ", LineasDeCreditoClient.Explicar(r)); return; }
+        _mostrarTerminar = false;
+        await Notification.SuccessAsync($"La inversión {r.Value.Reference} deja de contar desde el {_finDesde:dd/MM/yyyy}.");
+        await Task.WhenAll(CargarPosicionAsync(), CargarInversionesAsync());
+    }
+
+    private static DateOnly? LeerFecha(object? valor) =>
+        DateOnly.TryParseExact(valor?.ToString(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var f) ? f : null;
+
+    private static string Pesos(decimal valor) => "$ " + valor.ToString("N2", Es);
+
+    private static string Porcentaje(decimal fraccion) => (fraccion * 100m).ToString("0.##", Es) + " %";
+}

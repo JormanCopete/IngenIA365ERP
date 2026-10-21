@@ -1,0 +1,33 @@
+{
+  // pe05 (K6a, T1013, T1015): historial parcial completado con la regla «DelCorte»: los 20 meses que faltan (2023-11..2025-06) toman la mora
+  // al corte de la migración (35 días en 2026-06). Filas de 2025-07 a 2026-06 en 0 días salvo el corte; transacciones de 2026-07 a 2026-10 en
+  // 0. Repasado con Casos/riesgo-pe.py. PENDIENTE DE FIRMA DE LA CONTADORA.
+  //   Máxima de 12 meses (2025-11..2026-10) = 35 → MORA1230 = 1, y por eso MORA2430N = 0; SINMORA 0. Z = −1,523 − 2,081 + 2,495 = −1,109;
+  //   puntaje 0,248057… → 0,2481 → B: el corte de B es 0,2481 inclusive y sólo el redondeo a 4 decimales (E9) lo deja en B (sin redondeo
+  //   sería C). Al día hoy, la mora del Anexo 1 da A; la máxima es la del modelo (B) y se homologa con mora actual 0 → A.
+  "nombre": "pe05-historial-parcial-del-corte",
+  "perdidaEsperada": {
+    "anexo2": "sembrado",
+    "contexto": { "tipoDeOrganizacion": "COOP_AHORRO_CREDITO", "fondoDeEmpleados": false, "smmlv": 1750905, "voluntaria": false },
+    "creditos": [
+      { "id": 501, "deudor": 501, "segmento": "CONSUMO_LIBRANZA", "diasDeMora": 0, "asociadoActivo": true, "cuota": 200000, "plazoEnMeses": 60,
+        "historial": {
+          "inicioDeLaCadena": "2022-05-10", "corteDeMigracion": "2026-06-30", "fechaDeReferencia": "2026-10-31", "mesesExigidos": 36,
+          "regla": "DelCorte", "diasDelCorte": 35,
+          "filas": [
+            { "credito": 501, "desde": "2025-07", "hasta": "2026-06", "dias": 0, "origen": "Migration" },
+            { "credito": 501, "desde": "2026-06", "dias": 35, "origen": "Migration" }
+          ],
+          "transacciones": [ { "desde": "2026-07", "hasta": "2026-10", "dias": 0 } ]
+        },
+        "garantia": "SIN_GARANTIA", "saldos": { "capital": 3000000, "interesCorriente": 0, "interesDeMora": 0, "otros": 0 } }
+    ],
+    "esperado": [
+      { "id": 501, "faltantes": 20, "completadosCon": 35, "incumplido": false, "z": -1.109, "puntaje": 0.2481, "calificacionDelModelo": "B",
+        "variables": [ "EA=1", "FE=0", "VALCUOTA=0", "FONDPLAZO=0", "MORA1230=1", "MORA1260=0", "SINMORA=0", "MORA2430N=0", "MORA3660=0" ],
+        "calificacionFinal": "B", "causa": "Model", "pi": 0.006, "pdi": 0.45, "exposicion": 3000000,
+        "deterioroCapital": 8100.00, "deterioroIntereses": 0, "deterioroOtros": 0, "total": 8100.00, "contable": "A", "homologada": true,
+        "explicacionContiene": [ "la mora al corte de la migración, regla DelCorte", "Homologación: modelo B con mora actual del deudor de 0 días → A." ] }
+    ]
+  }
+}

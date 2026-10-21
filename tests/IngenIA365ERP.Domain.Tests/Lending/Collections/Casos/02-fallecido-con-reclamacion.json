@@ -1,0 +1,20 @@
+// Regla 2 (FR-097, T102): con el deudor fallecido y la reclamación al seguro en trámite, ningún mensaje al fallecido y nada
+// de cobranza a los codeudores; un informativo al codeudor sí sale.
+{
+  "caso": "02-fallecido-con-reclamacion",
+  "reglas": { "horario": { "lunesAViernes": ["07:00", "19:00"], "sabado": ["08:00", "15:00"] }, "contactosPorDia": 1, "noHabiles": ["2026-11-02", "2026-11-16"] },
+  "titular": { "rol": "Debtor", "deudorFallecidoConReclamacion": true },
+  "escenarios": [
+    { "nombre": "informativo al fallecido",
+      "solicitud": { "pedido": "2026-11-11T09:00", "canal": "Email", "proposito": "Informative" },
+      "esperado": { "decision": "Excluido", "motivo": "DebtorDeceased" } },
+    { "nombre": "cobranza al codeudor",
+      "titular": { "rol": "CoDebtor", "deudorFallecidoConReclamacion": true },
+      "solicitud": { "pedido": "2026-11-11T09:00", "canal": "Sms", "proposito": "Collection" },
+      "esperado": { "decision": "Excluido", "motivo": "DebtorDeceased" } },
+    { "nombre": "informativo al codeudor",
+      "titular": { "rol": "CoDebtor", "deudorFallecidoConReclamacion": true },
+      "solicitud": { "pedido": "2026-11-11T09:00", "canal": "Sms", "proposito": "Informative" },
+      "esperado": { "decision": "Permitido", "en": "2026-11-11T09:00" } }
+  ]
+}

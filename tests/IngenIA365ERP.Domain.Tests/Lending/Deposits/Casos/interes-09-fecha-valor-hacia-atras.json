@@ -1,0 +1,78 @@
+// Una consignacion de 1.000.000 con fecha valor 5 de abril registrada el 25: lo que se sabia el 24 y lo que se sabe despues (FR-062).
+{
+  "nombre": "interes-09-fecha-valor-hacia-atras",
+  "descripcion": "Una consignacion de 1.000.000 con fecha valor 5 de abril registrada el 25: lo que se sabia el 24 y lo que se sabe despues (FR-062).",
+  "condiciones": {
+    "naturaleza": "Deposit",
+    "clase": "Demand",
+    "convencion": "Actual365",
+    "equivalencia": "Compound",
+    "metodoDeSaldo": "DailyBalance",
+    "tasaEA": 0.03,
+    "saldoMinimoParaInteres": 0,
+    "unidadDeRedondeo": 1,
+    "fechaDeApertura": "2026-03-31",
+    "periodicidadDeLiquidacion": "Monthly"
+  },
+  "operaciones": [
+    {
+      "id": "c1",
+      "tipo": "Deposit",
+      "fechaValor": "2026-03-31",
+      "registradoEn": "2026-03-31T15:00:00Z",
+      "monto": 2000000
+    },
+    {
+      "id": "c2",
+      "tipo": "Deposit",
+      "fechaValor": "2026-04-11",
+      "registradoEn": "2026-04-11T15:00:00Z",
+      "monto": 3000000
+    },
+    {
+      "id": "r1",
+      "tipo": "Withdrawal",
+      "fechaValor": "2026-04-21",
+      "registradoEn": "2026-04-21T15:00:00Z",
+      "monto": 3500000
+    },
+    {
+      "id": "c3",
+      "tipo": "Deposit",
+      "fechaValor": "2026-04-05",
+      "registradoEn": "2026-04-25T15:00:00Z",
+      "monto": 1000000
+    }
+  ],
+  "consultas": [
+    {
+      "modo": "Causacion",
+      "desde": "2026-03-31",
+      "fecha": "2026-04-24",
+      "informacionHasta": "2026-04-24T23:00:00Z",
+      "esperado": {
+        "interesCausado": 6154.958728
+      }
+    },
+    {
+      "modo": "Causacion",
+      "desde": "2026-03-31",
+      "fecha": "2026-04-24",
+      "informacionHasta": "2026-04-26T05:00:00Z",
+      "esperado": {
+        "interesCausado": 7774.684709
+      }
+    },
+    {
+      "modo": "Liquidacion",
+      "desde": "2026-03-31",
+      "fecha": "2026-04-30",
+      "informacionHasta": "2026-05-01T05:00:00Z",
+      "esperado": {
+        "interesCausado": 8989.479195,
+        "interesLiquidado": 8989,
+        "diferenciaDeRedondeo": -0.479195
+      }
+    }
+  ]
+}

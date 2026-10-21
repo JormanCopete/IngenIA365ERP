@@ -48,7 +48,8 @@ public sealed record SettlementLoadRequest(
 /// <summary>Una deuda propuesta desde Cartera o desde una libranza (FR-018a): lo que se persiste como <c>PAY_SettlementDeductions</c> y lo que el motor recibe ya validado.</summary>
 public sealed record DeudaPropuesta(
     SettlementDeductionKind Kind,
-    int? LoanPortfolioId,
+    Guid? ObligationPublicId,
+    string? ObligationNumber,
     int? RecurringNoveltyId,
     string Description,
     decimal Proposed,
@@ -125,6 +126,7 @@ public sealed class SettlementInputLoader(
     IApplicationDbContext db,
     PayrollPolicyReader policies,
     ProvisionBalanceReader provisiones,
+    Settlements.PropuestaDeDescuentosDeCartera propuestaDeCartera,
     ILogger<SettlementInputLoader> logger)
 {
     /// <summary>Meses de corridas aprobadas que se cargan hacia atrás desde el corte: alcanzan para el promedio de doce meses de cesantías y vacaciones.</summary>
@@ -361,7 +363,12 @@ public sealed class SettlementInputLoader(
         var idsAbiertos = periodosAbiertos.Select(p => p.Id).ToList();
         var novedadesPendientes = request.Kind == SettlementKind.Settlement && idsAbiertos.Count > 0
             ? await db.PayrollNovelties.AsNoTracking()
-                .Where(n => idsEmpleados.Contains(n.EmployeeId) && n.Status == NoveltyStatus.Active && idsAbiertos.Contains(n.PayPeriodId))
+                // Feature 013: la cuota de Cartera de la ordinaria (LoanDeduction) no entra a la definitiva: ésta propone los
+                // créditos por la consulta de obligaciones y una novedad de ese origen los descontaría dos veces.
+                .Where(n => idsEmpleados.Contains(n.EmployeeId) && n.Status == NoveltyStatus.Active && idsAbiertos.Contains(n.PayPeriodId)
+                            && n.Origin != NoveltyOrigin.LoanDeduction
+                            // Feature 014 (T089): tampoco la de aportes o de ahorro; la definitiva no recauda cuentas en K7 (E59).
+                            && n.Origin != NoveltyOrigin.AccountDeduction)
                 .Join(db.PayrollConceptDefinitions.AsNoTracking().IgnoreQueryFilters(), n => n.ConceptDefinitionId, c => c.Id,
                     (n, c) => new { Novelty = n, ConceptName = c.Name, c.Nature })
                 .OrderBy(x => x.Novelty.Id)
@@ -620,8 +627,8 @@ public sealed class SettlementInputLoader(
 
     /// <summary>
     /// Las deudas del empleado que la definitiva propone descontar (FR-018a, R7): préstamos de la
-    /// cooperativa leídos de Cartera por persona (saldo total, o la cuota causada y la mora, según la
-    /// política) y libranzas con terceros (cuotas causadas y no descontadas de la recurrente). Un
+    /// cooperativa por la consulta de obligaciones de Cartera (<see cref="Settlements.PropuestaDeDescuentosDeCartera"/>,
+    /// feature 013: saldo total o exigible, según la política) y libranzas con terceros (cuotas causadas y no descontadas de la recurrente). Un
     /// descuento que la responsable ya ajustó en una versión anterior conserva su valor aplicado si
     /// lo propuesto no cambió; si cambió, vuelve a lo propuesto y se avisa. Si Cartera falla, la
     /// propuesta de préstamos sale vacía con el aviso <c>Payroll.Settlement.PortfolioUnavailable</c>:
@@ -634,39 +641,13 @@ public sealed class SettlementInputLoader(
         var anteriores = terminacion.Deductions.Where(d => !d.IsDeleted && d.Status != SettlementDeductionStatus.Reverted).ToList();
         var propuestas = new List<DeudaPropuesta>();
 
-        // --- préstamos de la cooperativa (Cartera) ---
-        try
-        {
-            var creditos = await db.LoanPortfolios.AsNoTracking()
-                .Where(l => l.PersonId == e.PersonId && l.CurrentBalance > 0m && l.ClosingDate == null)
-                .OrderBy(l => l.DisbursementDate)
-                .ToListAsync(ct);
-            foreach (var c in creditos)
-            {
-                var propuesto = politicas.DeduccionAlRetiroModo == DeduccionAlRetiro.SaldoTotal
-                    ? c.CurrentBalance
-                    : Math.Min(c.CurrentBalance, c.InstallmentAmount + c.DefaultBalanceCurrent);
-                var desglose = JsonSerializer.Serialize(new
-                {
-                    capital = c.CapitalBalanceCurrent,
-                    intereses = c.InterestBalanceCurrent,
-                    mora = c.DefaultBalanceCurrent,
-                    cuotasPendientes = c.PendingInstallmentCount,
-                    cuota = c.InstallmentAmount,
-                    saldoTotal = c.CurrentBalance,
-                    modo = politicas.DeduccionAlRetiroModo.ToString(),
-                }, RunJson.Options);
-                propuestas.Add(Conservar(anteriores.FirstOrDefault(a => a.LoanPortfolioId == c.Id), new DeudaPropuesta(
-                    SettlementDeductionKind.CooperativeLoan, c.Id, null,
-                    $"Crédito {c.PortfolioNumber} ({c.DocumentType} {c.DocumentNumber})",
-                    propuesto, propuesto, desglose, WellKnownConceptCodes.LoanDeduction, AccountedByOtherModule: true, null, null), avisos, e));
-            }
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            logger.LogWarning(ex, "Cartera no respondió al proponer los descuentos de la definitiva del empleado {Employee}", e.PublicId);
-            avisos.Add(SettlementErrors.PortfolioUnavailable(ex.Message));
-        }
+        // --- préstamos de la cooperativa: por la consulta de obligaciones de Cartera (feature 013, T0157, R104) ---
+        var personaPublicId = await db.People.AsNoTracking().Where(p => p.Id == e.PersonId).Select(p => p.PublicId).FirstOrDefaultAsync(ct);
+        var cartera = await propuestaDeCartera.ProponerAsync(personaPublicId, politicas.DeduccionAlRetiroModo, avisos, ct);
+        foreach (var deuda in cartera.Deudas)
+            propuestas.Add(Conservar(anteriores.FirstOrDefault(a => a.ObligationPublicId == deuda.ObligationPublicId), deuda, avisos, e));
+        if (cartera.MigradaSinActivar)
+            avisos.Add(SettlementErrors.LendingPendingActivation([personaPublicId]));
 
         // --- libranzas con terceros: recurrentes LIBRANZA con cuotas causadas y no descontadas ---
         var libranzas = await db.PayrollRecurringNovelties.AsNoTracking()
@@ -711,7 +692,7 @@ public sealed class SettlementInputLoader(
                     cuotasTotales = r.TotalInstallments, modo = politicas.DeduccionAlRetiroModo.ToString(),
                 }, RunJson.Options);
                 propuestas.Add(Conservar(anteriores.FirstOrDefault(a => a.RecurringNoveltyId == r.Id), new DeudaPropuesta(
-                    SettlementDeductionKind.ThirdPartyLibranza, null, r.Id,
+                    SettlementDeductionKind.ThirdPartyLibranza, null, null, r.Id,
                     string.IsNullOrWhiteSpace(r.Notes) ? $"Libranza ({pendientes} cuota(s) causada(s) sin descontar)" : $"Libranza {r.Notes} ({pendientes} cuota(s) causada(s) sin descontar)",
                     propuesto, propuesto, desglose, LibranzaCode, AccountedByOtherModule: false, null, null), avisos, e));
             }

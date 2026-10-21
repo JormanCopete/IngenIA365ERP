@@ -90,6 +90,7 @@ campo con la misma clase a través de `POST /documents/validate`).
 | 11 | `Σ Debit == Σ Credit` | `Accounting.Document.Unbalanced` (trae la diferencia) |
 | 12 | número: `VoucherType.NextNumber` (incremento en memoria; índice único + reintento, R3) | — |
 | — | *enmienda 012* · `PrepareReversalAsync` sobre algo de Inventario (original de origen `INV` o petición de origen `INV`); va antes de toda otra comprobación de la reversión | `Accounting.Document.InventoryCorrectsWithNewVoucher` |
+| — | *enmienda E-01 de la 013 (2026-10-13)* · `PrepareReversalAsync` sobre algo de Cartera (original de origen `CAR` o petición de origen `CAR`); va antes de toda otra comprobación de la reversión, también antes de `ReasonRequired` | `Accounting.Document.LendingCorrectsWithNewVoucher` |
 
 Cada infracción lleva `Severidad` (Error | Aviso): los avisos se muestran y no impiden contabilizar.
 Cada error de línea lleva `data: { lineNumber, accountCode, rule, severity }` (FR-041). Al preparar,
@@ -114,6 +115,12 @@ El comando del módulo se marca `IReintentableAnteConcurrencia` para que
 > con su consumidor (`PostInventoryMessagesCommand`), por el mismo `PrepareAsync`, guardando
 > comprobante y recibo (`ACC_InventoryPostings`) juntos. Ver
 > `specs/012-inventario-comercial/contracts/contabilidad.md`.
+>
+> *Enmienda E-01 de la 013 (2026-10-13)*: **Cartera tampoco usa este molde**: no llama al contrato desde sus
+> comandos. Su operación, las transacciones de su libro y el hecho se guardan juntos en Cartera, y Contabilidad lo
+> contabiliza después con su consumidor (`PostLendingFactsCommand`, o `PostLendingSummaryGroupCommand` en la causación
+> resumida), por el mismo `PrepareAsync`, guardando comprobante y recibo (`ACC_LendingPostings`) juntos. Ver
+> `specs/013-cartera-financiera/contracts/contabilidad.md`.
 
 ## 4. Qué manda cada módulo (parametrización existente → líneas)
 
@@ -121,13 +128,14 @@ El comando del módulo se marca `IReintentableAnteConcurrencia` para que
 |---|---|---|---|---|---|
 | **Nómina** · aprobar corrida | `NM` | por concepto y centro: cuenta débito / cuenta crédito (`PayrollConceptDefinitionAccount`) | empleado en devengos y deducciones; **entidad vinculada** (EPS/ARL/fondo/caja) en aportes y provisiones (FR-088) | — | ya por FK |
 | Nómina · reversar | `NM` | `PrepareReversalAsync` | | | |
-| **Cartera** · desembolso | `DS` | capital: `CreditLineParameter.AccountCode` / banco: `COR_Banks.AccountingAccountCode` del banco elegido | asociado | `PG` + número de crédito | resolver códigos → `AccountId`; validar al guardar |
-| Cartera · recaudo | `RC` | banco o caja / capital, intereses (`AccountInterestIncome`), mora (`AccountInterestDefault`) | asociado | `PG` + crédito | ídem |
-| Cartera · causación de intereses | `CA` | `AccountInterestCxC` / `AccountInterestIncome` | asociado | `PG` + crédito | ídem |
-| Cartera · clasificación y provisión | `PV` | gasto provisión / provisión (nuevas columnas en `LND_CreditLineParameters`: `ProvisionExpenseAccount`, `ProvisionAccount`) | asociado | `PG` + crédito | **nueva parametrización**; sin ella, `Accounting.Parameterization.Missing` |
-| Cartera · descuento de nómina | `DN` | CxC nómina / capital-intereses | asociado | `PG` | `CreditLineParameter` |
+| **Cartera** · desembolso | `DS` | capital: `CreditLineParameter.AccountCode` / banco: `COR_Banks.AccountingAccountCode` del banco elegido | asociado | `PG` + número de crédito | resolver códigos → `AccountId`; validar al guardar | *(enmendada por la 013, ver E-01 abajo)*
+| Cartera · recaudo | `RC` | banco o caja / capital, intereses (`AccountInterestIncome`), mora (`AccountInterestDefault`) | asociado | `PG` + crédito | ídem | *(enmendada por la 013, ver E-01 abajo)*
+| Cartera · causación de intereses | `CA` | `AccountInterestCxC` / `AccountInterestIncome` | asociado | `PG` + crédito | ídem | *(enmendada por la 013, ver E-01 abajo)*
+| Cartera · clasificación y provisión | `PV` | gasto provisión / provisión (nuevas columnas en `LND_CreditLineParameters`: `ProvisionExpenseAccount`, `ProvisionAccount`) | asociado | `PG` + crédito | **nueva parametrización**; sin ella, `Accounting.Parameterization.Missing` | *(enmendada por la 013, ver E-01 abajo)*
+| Cartera · descuento de nómina | `DN` | CxC nómina / capital-intereses | asociado | `PG` | `CreditLineParameter` | *(enmendada por la 013, ver E-01 abajo)*
 | Ahorros · intereses | `AH` | gasto intereses / ahorro (`SavingsParameter.TreasuryAccount` + `InterestExpenseAccount` nueva) | asociado | `CT` + cuenta de ahorro | nueva columna |
 | **CDT** · liquidación de intereses | `CD` | gasto / CDT por pagar (`CdtParameter.TreasuryAccount` + `InterestExpenseAccount` nueva) | titular | `CT` + número CDT | nueva columna |
+| **Cartera** · por hechos *(enmienda E-01 de la 013, 2026-10-13; reemplaza las cinco filas de Cartera de arriba: desembolso `DS`, recaudo `RC`, causación `CA`, clasificación y provisión `PV` y descuento de nómina `DN`, con cuentas de `LND_CreditLineParameters`)* | `DS`, `RC`, `DN`, `CA`, `PV`, `CN` (por hecho y clase de recaudador, `ACC_LendingVoucherMappings`) | por la matriz `ACC_LendingPostingRules` | el del hecho (el natural del rol) | `PG` + número del crédito, o `FV` + factura en los roles de Comercial | 013 `contracts/contabilidad.md`; corregir → comprobante nuevo |
 | **Inventario** · por mensajes *(enmienda 012; reemplaza las filas «factura de venta», «entradas/salidas» y «anular», que decían `FV` con `ProductAccount`/`VatAccount`, `EI`/`SI` con `ProductAccount.NetAccountCode` y anular por `PrepareReversalAsync`)* | `FV`, `EI`, `SI`, `NV`, `CP`, `TR`, `AC`, `CJ` (por operación y tipo de documento, `ACC_InventoryVoucherMappings`) | por la matriz `ACC_InventoryPostingRules` | el del mensaje | según la cuenta | 012 `contracts/contabilidad.md`; anular → comprobante nuevo |
 | **Tesorería** · cheque | `CH` | `TreasuryConcept.DebitAccountId` / banco | beneficiario | `FP` + factura | **`TRS_Concepts` gana cuentas** |
 | Tesorería · factura por pagar / cobrar | `FP` / `CB` | concepto / CxP o CxC | tercero | `FC`/`FV` + número | ídem |
@@ -136,6 +144,15 @@ El comando del módulo se marca `IReintentableAnteConcurrencia` para que
 | Activos · baja | `DP` | acumulada y contrapartida / costo | — | — | ficha |
 | **Cierre** de ejercicio | `CI` | resultados (4/5/6/7 por rubro) / cuenta de resultado | — | — | `AccountingSetup.ResultAccountId` |
 | **Apertura** | `AP` | del archivo o digitadas | del archivo | del archivo | — |
+
+> **Enmienda E-01 de la feature 013 (Cartera financiera, T96, T54, T0181, 2026-10-07).** Las cinco filas de Cartera de esta
+> tabla (`DS`, `RC`, `CA`, `PV`, `DN` desde `LND_CreditLineParameters`) ya no rigen: Cartera no escribe asientos ni conoce
+> cuentas; emite hechos por la bandeja (`CAR → Accounting`) que Contabilidad contabiliza con su matriz
+> (`ACC_LendingPostingRules`, `ACC_LendingVoucherMappings`, clave `Operation`/`CollectorClass`), reutilizando los tipos `DS`,
+> `RC`, `DN`, `CA`, `PV` y agregando `CN`, con cruce `PG` + número del crédito. Los recaudos van contra el puente
+> `RecaudoPorAplicar` de cada recaudador (T53). La parametrización de cuentas en `LND_CreditLineParameters` se retira con la
+> cartera heredada (`AccountReferenceFinder` ya no la recorre). Ver `specs/013-cartera-financiera/contracts/contabilidad.md`
+> y data-model parte 3 §5.
 
 Toda cuenta de parametrización de módulo debe cumplir FR-016 al guardarse (`AccountEligibility`):
 de movimiento, activa, habilitada para ese módulo. `ListInvalidParameterizationsQuery` recorre
@@ -148,4 +165,6 @@ institucional falta.
 - No decide cuentas: las trae el módulo desde su parametrización.
 - No escribe saldos: no existen (R4).
 - No permite editar ni borrar un documento contabilizado: sólo `PrepareReversalAsync`, salvo lo de
-  Inventario, que no se reversa: se corrige con un comprobante nuevo (enmienda 012, D-01).
+  Inventario y lo de Cartera, que no se reversan: se corrigen con un comprobante nuevo (enmienda 012, D-01;
+  enmienda E-01 de la 013, 2026-10-13: el reverso del pago, del desembolso o la reapertura del cierre llega de
+  Cartera como un hecho nuevo con su propia fecha contable y las dimensiones vigentes del saldo).

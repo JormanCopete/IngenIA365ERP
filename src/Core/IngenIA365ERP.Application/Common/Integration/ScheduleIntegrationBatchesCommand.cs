@@ -78,7 +78,9 @@ public sealed class ScheduleIntegrationBatchesCommandHandler(
         {
             var horario = ClavesDeLote.Leer(clave);
             if (horario is null || horario.Disparador != ClavesDeLote.HoraDiaria) continue;
-            var hora = horario.Hora ?? await HoraVigenteAsync(horario.TipoDeDocumentoRaiz, hoy, ct);
+            // El respaldo de Inventario (su tipo de documento y Contabilidad.HoraDeLote) sólo vale para claves de Inventario
+            // (feature 013, T15): una clave de Cartera (CAR.{ShortCode}|…) sella su hora o no es de franja diaria.
+            var hora = horario.Hora ?? (horario.EsDeInventario ? await HoraVigenteAsync(horario.TipoDeDocumentoRaiz, hoy, ct) : null);
             if (hora is null) continue;
             var franja = hoy.ToDateTime(hora.Value);
             if (ahoraLocal < franja) continue;

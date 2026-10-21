@@ -112,7 +112,7 @@
             }
             @if (_corrida.Status == "Reversed")
             {
-                <p class="texto-tenue">Reversada por @_corrida.ReversedBy: @_corrida.ReversalReason. La ficha volvió a estar vigente; los recaudos de Cartera se reversan por su propio flujo.</p>
+                <p class="texto-tenue">Reversada por @_corrida.ReversedBy: @_corrida.ReversalReason. La ficha volvió a estar vigente y los recaudos de Cartera se reversaron en la misma operación.</p>
             }
             @if (_corrida.Blockers.Count > 0)
             {
@@ -143,7 +143,7 @@
             @if (_corrida.Status == "Approved")
             {
                 <PermissionGate Required="Payroll.Settlements.Reverse">
-                    <SfButton CssClass="e-outline e-danger" IconCss="e-icons e-undo" Disabled="@_ocupado" OnClick="@(() => { _motivo = string.Empty; _mostrarReversar = true; })" Title="Asiento espejo y ficha reabierta; los recaudos de Cartera se reversan aparte">Reversar</SfButton>
+                    <SfButton CssClass="e-outline e-danger" IconCss="e-icons e-undo" Disabled="@_ocupado" OnClick="@(() => { _motivo = string.Empty; _mostrarReversar = true; })" Title="Asiento espejo, ficha reabierta y los recaudos de Cartera reversados en la misma operación">Reversar</SfButton>
                 </PermissionGate>
                 <SfButton CssClass="e-outline" IconCss="e-icons e-file-document" Disabled="@_ocupado" OnClick="@DescargarComprobanteAsync">Comprobante del empleado</SfButton>
                 <PermissionGate Required="Payroll.Disbursement.Generate">
@@ -245,7 +245,7 @@
                                                         <span>@d.Reason</span> <small class="texto-tenue">— @d.AdjustedBy, @d.AdjustedAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</small>
                                                     }
                                                 </td>
-                                                <td class="monto">@(d.RemainingAfter?.ToString("N0") ?? "—")</td>
+                                                <td class="monto" title="@(d.RemainingIsExact ? "Saldo que da Cartera" : "Aproximado: saldo total menos lo aplicado")">@(d.RemainingAfter?.ToString("N0") ?? "—")@(d.RemainingAfter is not null && !d.RemainingIsExact && d.EsCredito ? " (aprox.)" : "")</td>
                                                 <td>@d.EstadoTexto</td>
                                                 <td>
                                                     @if (_corrida.EsBorrador)
@@ -317,7 +317,7 @@
                     <SfTextBox @bind-Value="_motivo" MaxLength="300" Multiline="true" Placeholder="Motivo del ajuste *" FloatLabelType="FloatLabelType.Always" />
                     @if (_ajustando.EsCredito)
                     {
-                        <p class="hint">Saldo que quedará en Cartera: <strong>@(Math.Max(0m, (_ajustando.CapitalBalance ?? 0m) + (_ajustando.InterestBalance ?? 0m) + (_ajustando.DefaultBalance ?? 0m) - _aplicado).ToString("N0"))</strong> (aproximado: Cartera aplica primero mora, luego intereses y luego capital).</p>
+                        <p class="hint">Al guardar, Cartera simula el pago y la tabla muestra el saldo <strong>exacto</strong> que quedaría en el crédito. Mientras Cartera no esté activada se muestra una aproximación (saldo total menos lo aplicado).</p>
                     }
                 </div>
                 <div class="toolbar">
@@ -341,8 +341,24 @@
                     <div class="info-card">
                         <span class="label">Qué se aprueba</span>
                         <p>La definitiva de <strong>@_terminacion.EmployeeName</strong> con retiro el @_terminacion.TerminationDate.ToString("dd/MM/yyyy"), v@_corrida.Version, neto a pagar <strong>@_corrida.Totals.Net.ToString("N0")</strong>@(_descuentos is { TotalApplied: > 0 } ? $" tras descontar {_descuentos.TotalApplied:N0} en obligaciones" : "").</p>
-                        <p class="texto-tenue">Al aprobar: comprobante contable contra las provisiones (por defecto con la fecha de retiro), cada descuento se aplica como recaudo en Cartera, la ficha queda retirada y se genera el documento para firma. Lo aprobado no se edita: se reversa.</p>
+                        <p class="texto-tenue">Al aprobar: Cartera vuelve a revisar los créditos y recibe cada descuento con la fecha de hoy (todos o ninguno), se genera el comprobante contable contra las provisiones (por defecto con la fecha de retiro), la ficha queda retirada y se genera el documento para firma. Lo aprobado no se edita: se reversa. Si se aprueba otro día, puede hacer falta recalcular.</p>
                     </div>
+                    @if (_desactualizadaPorCartera)
+                    {
+                        <div class="info-card">
+                            <span class="label">Cartera cambió</span>
+                            <p>@_mensajeCartera</p>
+                            <SfButton CssClass="e-primary" type="button" Disabled="@_ocupado" OnClick="@RecalcularDesdeAprobacionAsync">Recalcular ahora</SfButton>
+                        </div>
+                    }
+                    @if (_pideReconocerCartera)
+                    {
+                        <div class="info-card">
+                            <span class="label">Cartera por activar</span>
+                            <p>@_mensajeCartera</p>
+                            <label class="campo-check"><input type="checkbox" @bind="_reconoceCartera" /> Sé que Cartera está por activar y que esta liquidación no descuenta sus créditos.</label>
+                        </div>
+                    }
                     <SfDatePicker TValue="DateTime?" @bind-Value="_fechaContable" Placeholder="Fecha del comprobante (vacía = fecha de retiro)" FloatLabelType="FloatLabelType.Always" Format="dd/MM/yyyy" Min="@_terminacion.TerminationDate.ToDateTime(TimeOnly.MinValue)" Max="DateTime.Today" />
                     <label class="campo-check"><input type="checkbox" @bind="_confirmar" /> Confirmo aprobar la liquidación definitiva y cerrar la ficha de @_terminacion.EmployeeName.</label>
                     @if (_pideSegundaConfirmacion)
@@ -356,7 +372,7 @@
                 </div>
                 <div class="toolbar">
                     <SfButton CssClass="e-flat" type="button" OnClick="@(() => _mostrarAprobacion = false)">Cancelar</SfButton>
-                    <SfButton CssClass="e-success" type="button" Disabled="@(_guardado.Activa || !_confirmar || (_pideSegundaConfirmacion && !_confirmarSinSegregacion))" OnClick="@AprobarAsync">Aprobar</SfButton>
+                    <SfButton CssClass="e-success" type="button" Disabled="@(_guardado.Activa || !_confirmar || (_pideSegundaConfirmacion && !_confirmarSinSegregacion) || (_pideReconocerCartera && !_reconoceCartera))" OnClick="@AprobarAsync">Aprobar</SfButton>
                 </div>
             }
             </IndicadorDeCarga>
@@ -370,7 +386,7 @@
         <Content>
             <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Reversando…">
             <div class="pagina">
-                <p>Se deja un asiento espejo, la ficha vuelve a estar vigente y la terminación queda como reintegro. Los recaudos que la definitiva dejó en Cartera <strong>no se reversan solos</strong>: la respuesta los lista para reversarlos en Cartera.</p>
+                <p>Se deja un asiento espejo, la ficha vuelve a estar vigente y la terminación queda como reintegro. En la misma operación Cartera reversa los recaudos que la definitiva le entregó, con este motivo; si Cartera no puede reversar uno, no se reversa nada y se dice por qué.</p>
                 <SfTextBox @bind-Value="_motivo" MaxLength="300" Multiline="true" Placeholder="Motivo de la reversión *" FloatLabelType="FloatLabelType.Always" />
             </div>
             <div class="toolbar">
@@ -507,6 +523,9 @@
     private string _motivo = string.Empty;
     private DateTime? _fechaContable;
     private bool _confirmar, _confirmarSinSegregacion, _pideSegundaConfirmacion;
+    // Feature 013 (T0167): «Cartera por activar» y obligaciones que cambiaron desde el cálculo.
+    private bool _pideReconocerCartera, _reconoceCartera, _desactualizadaPorCartera;
+    private string _mensajeCartera = string.Empty;
     private SancionMoratoriaDto? _sancion;
     private List<MotivoDeRetiroDto> _motivos = [];
     private MotivoDeRetiroDto? _motivoEditando;
@@ -653,6 +672,8 @@
     private void AbrirAprobacion()
     {
         _confirmar = _confirmarSinSegregacion = _pideSegundaConfirmacion = false;
+        _pideReconocerCartera = _reconoceCartera = _desactualizadaPorCartera = false;
+        _mensajeCartera = string.Empty;
         _fechaContable = null;
         _mostrarAprobacion = true;
     }
@@ -661,9 +682,22 @@
     {
         if (RunId is not { } runId || _guardado.Activa) return;
         using var guardado = _guardado.Iniciar();
-        var res = await Nomina.AprobarDefinitivaAsync(runId, new AprobarLiquidacionRequest(true, _fechaContable is { } f ? DateOnly.FromDateTime(f) : null, ConfirmWithoutSegregation: _confirmarSinSegregacion));
+        var res = await Nomina.AprobarDefinitivaAsync(runId, new AprobarLiquidacionRequest(true, _fechaContable is { } f ? DateOnly.FromDateTime(f) : null,
+            ConfirmWithoutSegregation: _confirmarSinSegregacion, AcknowledgeLendingPendingActivation: _reconoceCartera));
         if (!res.IsSuccess)
         {
+            if (res.ErrorCode == "Payroll.LendingPendingActivationAckRequired")
+            {
+                _pideReconocerCartera = true;
+                _mensajeCartera = res.ErrorMessage ?? "La persona está en una carga de Cartera sin activar.";
+                return;
+            }
+            if (res.ErrorCode is "Payroll.Settlement.LoanProposalOutdated" or "Payroll.Settlement.LoanAmountsChanged")
+            {
+                _desactualizadaPorCartera = true;
+                _mensajeCartera = res.ErrorMessage ?? "Los créditos del empleado en Cartera cambiaron desde el cálculo. Recalcule la liquidación.";
+                return;
+            }
             if (res.ErrorCode == "Payroll.Settlement.SegregationConfirmationRequired" && !_pideSegundaConfirmacion)
             {
                 _pideSegundaConfirmacion = true;
@@ -678,6 +712,13 @@
         _mostrarAprobacion = false;
         await CargarListaAsync();
         await CargarDetalleAsync();
+    }
+
+    /// <summary>Feature 013: ante «Cartera cambió», el recálculo en un clic desde la aprobación.</summary>
+    private async Task RecalcularDesdeAprobacionAsync()
+    {
+        _mostrarAprobacion = false;
+        await RecalcularAsync();
     }
 
     private async Task ReversarAsync()

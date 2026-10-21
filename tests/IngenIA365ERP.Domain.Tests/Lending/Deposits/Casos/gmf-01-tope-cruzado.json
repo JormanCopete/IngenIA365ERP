@@ -1,0 +1,64 @@
+// GMF (US4, T109; investigacion-financiera §3.7, R07, D32): retiros de 20.000.000 en marzo de 2026 desde la cuenta marcada exenta.
+// Tope 350 UVT x 52.374 = 18.330.900; el exceso 1.669.100 x 0,004 = 6.676,4 -> 6.676 al peso.
+{
+  "descripcion": "Dos retiros de la cuenta marcada que cruzan el tope mensual exento.",
+  "entrada": {
+    "politicas": [
+      {
+        "desde": "2026-01-01",
+        "tarifa": 0.004,
+        "topeExencionUvt": 350,
+        "uvt": 52374,
+        "politica": "SingleMarkedAccount",
+        "gravados": [
+          "Withdrawal",
+          "TransferToOtherHolder",
+          "TransferBetweenDemandAndTermDeposit",
+          "TermDepositRedemptionToAccount",
+          "Cancellation"
+        ],
+        "exentos": [
+          "TransferBetweenSameHolderSavings"
+        ]
+      }
+    ],
+    "movimientos": [
+      {
+        "id": "r1",
+        "fecha": "2026-03-05",
+        "hecho": "Withdrawal",
+        "monto": 12000000,
+        "cuentaSujeta": true,
+        "esLaCuentaMarcada": true
+      },
+      {
+        "id": "r2",
+        "fecha": "2026-03-20",
+        "hecho": "Withdrawal",
+        "monto": 8000000,
+        "cuentaSujeta": true,
+        "esLaCuentaMarcada": true
+      }
+    ]
+  },
+  "nombre": "gmf-01-tope-cruzado",
+  "esperado": {
+    "movimientos": [
+      {
+        "id": "r1",
+        "exentoAplicado": 12000000,
+        "baseGravada": 0,
+        "valor": 0,
+        "exentoUsadoDespues": 12000000
+      },
+      {
+        "id": "r2",
+        "exentoAplicado": 6330900,
+        "baseGravada": 1669100,
+        "valor": 6676,
+        "exentoUsadoDespues": 18330900
+      }
+    ],
+    "totalGmf": 6676
+  }
+}

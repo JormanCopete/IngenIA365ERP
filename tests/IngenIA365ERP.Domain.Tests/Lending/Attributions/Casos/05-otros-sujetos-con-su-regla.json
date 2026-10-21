@@ -1,0 +1,42 @@
+// FR-038, FR-094: cada regla es de un sujeto y sólo casa con ése. El techo vale para todos los sujetos.
+//   1: todo cupo (CreditLimit) → gerencia
+//   2: novedad con 31 días de mora o más → comité
+//   3: condonación de interés de mora → gerencia
+//   4: condonación de capital → consejo
+{
+  "nombre": "05-otros-sujetos-con-su-regla",
+  "descripcion": "Cupos, novedades y condonaciones con su regla propia; la regla de un sujeto no toca a otro.",
+  "matriz": {
+    "niveles": [
+      { "codigo": "ANALISTA", "nombre": "Analista de crédito", "rango": 10, "clase": "Individual", "permiso": "Lending.Decisions.Analyst", "techo": 5000000 },
+      { "codigo": "EXCEP", "nombre": "Jefe de cartera (excepciones)", "rango": 15, "clase": "Individual", "permiso": "Lending.Decisions.Exceptions", "techo": 5000000, "excepcion": true },
+      { "codigo": "GERENCIA", "nombre": "Gerencia", "rango": 20, "clase": "Individual", "permiso": "Lending.Decisions.Management", "techo": 20000000 },
+      { "codigo": "COMITE", "nombre": "Comité de crédito", "rango": 30, "clase": "Collegiate", "organo": "COMCRED", "techo": 100000000 },
+      { "codigo": "CONSEJO", "nombre": "Consejo de administración", "rango": 40, "clase": "Collegiate", "organo": "CONSEJO", "consejo": true }
+    ],
+    "reglas": [
+      { "orden": 1, "sujeto": "CreditLimit", "nivelMinimo": "GERENCIA" },
+      { "orden": 2, "sujeto": "Novelty", "moraMinima": 31, "nivelMinimo": "COMITE" },
+      { "orden": 3, "sujeto": "Condonation", "concepto": "DefaultInterest", "nivelMinimo": "GERENCIA" },
+      { "orden": 4, "sujeto": "Condonation", "concepto": "Principal", "nivelMinimo": "CONSEJO" }
+    ]
+  },
+  "escenarios": [
+    { "nombre": "cupo de 2.000.000", "sujeto": { "sujeto": "CreditLimit", "montoConsolidado": 2000000 },
+      "esperado": { "nivel": "GERENCIA", "razones": [ { "clase": "AmountCeiling", "nivel": "ANALISTA" }, { "clase": "Rule", "nivel": "GERENCIA" } ] } },
+    { "nombre": "cupo de 30.000.000", "sujeto": { "sujeto": "CreditLimit", "montoConsolidado": 30000000 },
+      "esperado": { "nivel": "COMITE", "razones": [ { "clase": "AmountCeiling", "nivel": "COMITE" }, { "clase": "Rule", "nivel": "GERENCIA" } ] } },
+    { "nombre": "la regla del cupo no toca la solicitud", "sujeto": { "sujeto": "CreditApplication", "montoConsolidado": 2000000 },
+      "esperado": { "nivel": "ANALISTA", "razones": [ { "clase": "AmountCeiling", "nivel": "ANALISTA" } ] } },
+    { "nombre": "novedad con 45 días de mora", "sujeto": { "sujeto": "Novelty", "montoConsolidado": 1000000, "diasDeMora": 45 },
+      "esperado": { "nivel": "COMITE", "razones": [ { "clase": "AmountCeiling", "nivel": "ANALISTA" }, { "clase": "Rule", "nivel": "COMITE" } ] } },
+    { "nombre": "novedad con 10 días de mora", "sujeto": { "sujeto": "Novelty", "montoConsolidado": 1000000, "diasDeMora": 10 },
+      "esperado": { "nivel": "ANALISTA", "razones": [ { "clase": "AmountCeiling", "nivel": "ANALISTA" } ] } },
+    { "nombre": "condonación de capital", "sujeto": { "sujeto": "Condonation", "montoConsolidado": 100000, "concepto": "Principal" },
+      "esperado": { "nivel": "CONSEJO", "razones": [ { "clase": "AmountCeiling", "nivel": "ANALISTA" }, { "clase": "Rule", "nivel": "CONSEJO" } ] } },
+    { "nombre": "condonación de interés de mora", "sujeto": { "sujeto": "Condonation", "montoConsolidado": 50000, "concepto": "DefaultInterest" },
+      "esperado": { "nivel": "GERENCIA", "razones": [ { "clase": "AmountCeiling", "nivel": "ANALISTA" }, { "clase": "Rule", "nivel": "GERENCIA" } ] } },
+    { "nombre": "condonación de interés corriente", "sujeto": { "sujeto": "Condonation", "montoConsolidado": 50000, "concepto": "CurrentInterest" },
+      "esperado": { "nivel": "ANALISTA", "razones": [ { "clase": "AmountCeiling", "nivel": "ANALISTA" } ] } }
+  ]
+}

@@ -5,6 +5,7 @@ using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Compliance.HabeasData.Common;
 using IngenIA365ERP.Domain.Entities.Compliance;
+using IngenIA365ERP.Domain.Enums.Compliance;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -29,7 +30,8 @@ namespace IngenIA365ERP.Application.Compliance.HabeasData.PublishPolicyVersion;
 public sealed record PublishPolicyVersionCommand(
     string Title,
     string ContentMarkdown,
-    DateTime EffectiveFrom) : IRequest<Result<Guid>>;
+    DateTime EffectiveFrom,
+    DataAuthorizationPurpose Purpose = DataAuthorizationPurpose.GeneralTreatment) : IRequest<Result<Guid>>;
 
 public sealed class PublishPolicyVersionCommandValidator
     : AbstractValidator<PublishPolicyVersionCommand>
@@ -38,6 +40,7 @@ public sealed class PublishPolicyVersionCommandValidator
     {
         RuleFor(x => x.Title).NotEmpty().MaximumLength(300);
         RuleFor(x => x.ContentMarkdown).NotEmpty();
+        RuleFor(x => x.Purpose).IsInEnum();
         RuleFor(x => x.EffectiveFrom)
             .Must(d => d >= DateTime.UtcNow.AddMinutes(-5))
                 .WithMessage("La fecha de vigencia no puede ser pasada.")
@@ -69,7 +72,7 @@ public sealed class PublishPolicyVersionCommandHandler
         var actor = _currentUser.UserName ?? "SYSTEM";
 
         var currentVersion = await _db.HabeasDataPolicyVersions
-            .Where(p => p.TenantId == tenantId && p.EffectiveTo == null)
+            .Where(p => p.TenantId == tenantId && p.Purpose == request.Purpose && p.EffectiveTo == null)
             .FirstOrDefaultAsync(ct);
 
         if (currentVersion is not null)
@@ -79,7 +82,7 @@ public sealed class PublishPolicyVersionCommandHandler
         }
 
         var maxNumber = await _db.HabeasDataPolicyVersions
-            .Where(p => p.TenantId == tenantId)
+            .Where(p => p.TenantId == tenantId && p.Purpose == request.Purpose)
             .Select(p => (int?)p.VersionNumber)
             .MaxAsync(ct) ?? 0;
 
@@ -97,6 +100,7 @@ public sealed class PublishPolicyVersionCommandHandler
             EffectiveFrom = request.EffectiveFrom,
             EffectiveTo = null,
             PublishedBy = actor,
+            Purpose = request.Purpose,
             CreatedBy = actor,
             UpdatedBy = actor
         };

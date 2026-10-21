@@ -9,7 +9,8 @@ namespace IngenIA365ERP.Application.Tests.Payroll.Settlements.Settlement;
 /// <summary>
 /// Feature 010, US3 (T065): recalcular crea la versión siguiente, deja la anterior reemplazada,
 /// vuelve a leer Cartera, conserva los ajustes cuyo propuesto no cambió y repropone —con aviso— los
-/// que sí cambiaron; el descuento que Cartera ya no trae se retira.
+/// que sí cambiaron; el descuento que Cartera ya no trae se retira. Feature 013 (T0106, R118): Cartera se lee por la
+/// consulta de obligaciones y las filas se emparejan por <c>ObligationPublicId</c>.
 /// </summary>
 public class RecalculateSettlementCommandHandlerTests
 {
@@ -18,12 +19,12 @@ public class RecalculateSettlementCommandHandlerTests
     {
         var p = new DefinitivaDePrueba();
         var v1 = await p.RegistrarAnaAsync();
-        (await p.Ajustar().Handle(new AdjustSettlementDeductionCommand(v1.RunPublicId, p.Descuento(v1, 1001).ObligationPublicId, 1_000_000m, "Refinancia el resto"), CancellationToken.None)).IsSuccess.Should().BeTrue();
-        (await p.Ajustar().Handle(new AdjustSettlementDeductionCommand(v1.RunPublicId, p.Descuento(v1, 1002).ObligationPublicId, 100_000m, "Paga el resto por caja"), CancellationToken.None)).IsSuccess.Should().BeTrue();
-        // El asociado abonó al crédito 1002 después de registrar: su saldo en Cartera cambió.
-        p.Credito1002.CurrentBalance = 250_000m;
-        p.Credito1002.CapitalBalanceCurrent = 250_000m;
-        await p.D.Db.SaveChangesAsync();
+        (await p.Ajustar().Handle(new AdjustSettlementDeductionCommand(v1.RunPublicId, p.Descuento(v1, "1001").ObligationPublicId, 1_000_000m, "Refinancia el resto"), CancellationToken.None)).IsSuccess.Should().BeTrue();
+        (await p.Ajustar().Handle(new AdjustSettlementDeductionCommand(v1.RunPublicId, p.Descuento(v1, "1002").ObligationPublicId, 100_000m, "Paga el resto por caja"), CancellationToken.None)).IsSuccess.Should().BeTrue();
+        // El asociado abonó al crédito 1002 después de registrar: su saldo en Cartera cambió (feature 013: por la consulta).
+        p.Obligaciones.Quitar(p.PersonaDeAna);
+        p.Obligaciones.Agregar(p.PersonaDeAna, p.Credito1001);
+        p.Obligaciones.Agregar(p.PersonaDeAna, p.Credito1002 with { TotalBalance = 250_000m });
 
         var r = await p.Recalcular().Handle(new RecalculateSettlementCommand(v1.RunPublicId), CancellationToken.None);
 
@@ -36,13 +37,13 @@ public class RecalculateSettlementCommandHandlerTests
         corridas.Select(c => (c.Version, c.Status)).Should().Equal((1, PayrollRunStatus.Superseded), (2, PayrollRunStatus.Draft));
 
         // 1001: propuesto igual → conserva el ajuste con su motivo. 1002: propuesto cambió → vuelve al saldo y avisa.
-        var d1001 = p.Descuento(r.Value, 1001);
-        d1001.ObligationPublicId.Should().Be(p.Descuento(v1, 1001).ObligationPublicId, "la misma fila, no otra");
+        var d1001 = p.Descuento(r.Value, "1001");
+        d1001.ObligationPublicId.Should().Be(p.Descuento(v1, "1001").ObligationPublicId, "la misma fila, no otra");
         d1001.Proposed.Should().Be(1_500_000m);
         d1001.Applied.Should().Be(1_000_000m);
         d1001.Reason.Should().Be("Refinancia el resto");
         d1001.Status.Should().Be(SettlementDeductionStatus.Adjusted);
-        var d1002 = p.Descuento(r.Value, 1002);
+        var d1002 = p.Descuento(r.Value, "1002");
         d1002.Proposed.Should().Be(250_000m);
         d1002.Applied.Should().Be(250_000m);
         d1002.Reason.Should().BeNull();
@@ -61,9 +62,9 @@ public class RecalculateSettlementCommandHandlerTests
     {
         var p = new DefinitivaDePrueba();
         var v1 = await p.RegistrarAnaAsync();
-        p.Credito1002.CurrentBalance = 0m;
-        p.Credito1002.ClosingDate = new DateOnly(2026, 9, 16);
-        await p.D.Db.SaveChangesAsync();
+        // Feature 013: el crédito 1002 se canceló por caja; Cartera ya no lo informa vivo.
+        p.Obligaciones.Quitar(p.PersonaDeAna);
+        p.Obligaciones.Agregar(p.PersonaDeAna, p.Credito1001);
 
         var r = await p.Recalcular().Handle(new RecalculateSettlementCommand(v1.RunPublicId), CancellationToken.None);
 

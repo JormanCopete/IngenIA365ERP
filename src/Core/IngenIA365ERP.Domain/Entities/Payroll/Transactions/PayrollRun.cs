@@ -113,6 +113,17 @@ public class PayrollRun : AuditableEntity
     /// <summary>Excepciones autorizadas al aprobar: empleado, bandera, autorizador, motivo.</summary>
     public string? ExceptionsJson { get; set; }
 
+    /// <summary>
+    /// Feature 013 (DE-10, T92): quién reconoció «Cartera por activar» al aprobar —alguna persona de la nómina está en una carga de
+    /// Cartera aplicada y sin activar— (<c>AcknowledgeLendingPendingActivation</c>). Sin reconocimiento, la aprobación responde
+    /// <c>Payroll.LendingPendingActivationAckRequired</c>.
+    /// </summary>
+    [System.ComponentModel.DataAnnotations.MaxLength(150)]
+    public string? LendingActivationAckBy { get; set; }
+
+    /// <summary>Feature 013: cuándo se reconoció «Cartera por activar».</summary>
+    public DateTime? LendingActivationAckAt { get; set; }
+
     public PayPeriod? PayPeriod { get; set; }
     public Employee? Employee { get; set; }
     public EmploymentTermination? Termination { get; set; }

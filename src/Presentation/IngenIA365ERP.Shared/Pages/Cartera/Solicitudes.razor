@@ -1,0 +1,100 @@
+@page "/cartera/solicitudes"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Globalization
+@using IngenIA365ERP.Shared.Services.Cartera
+@inject OriginacionClient Originacion
+@inject INotificationService Notification
+@inject NavigationManager Navegacion
+
+<PageTitle>Solicitudes de crédito - IngenIA365ERP</PageTitle>
+
+@* Feature 013, US2 (T0411; FR-035–FR-042; contracts/api.md §4.2): las solicitudes del alcance de quien mira (oficinas y líneas), la más
+   reciente primero, con su estado, su nivel y la vigencia de la aprobación (vencida se calcula al leer). Lo que está fuera del alcance no
+   aparece ni cuenta. *@
+<PermissionGate Required="Lending.Applications.Read" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Solicitudes de crédito</h3>
+        <div class="toolbar">
+            <PermissionGate Required="Lending.Applications.Create">
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@(() => Navegacion.NavigateTo("/cartera/solicitudes/nueva"))">Nueva solicitud</SfButton>
+            </PermissionGate>
+        </div>
+    </div>
+
+    <div class="toolbar">
+        <label class="campo">Estado
+            <select class="e-input" @bind="_estado">
+                <option value="0">Todos</option>
+                @foreach (var e in TextosDeOriginacion.EstadosDeSolicitud) { <option value="@e.Valor">@e.Texto</option> }
+            </select>
+        </label>
+        <div class="campo">Solicitante <PersonSearchPicker @bind-Selected="_solicitante" ShowHelpText="false" Compacto="true" /></div>
+        <label class="campo-check"><input type="checkbox" @bind="_mias" /> Sólo las que radiqué</label>
+        <label class="campo">Desde <input type="date" class="e-input" @onchange="@(e => _desde = LeerFecha(e.Value))" /></label>
+        <label class="campo">Hasta <input type="date" class="e-input" @onchange="@(e => _hasta = LeerFecha(e.Value))" /></label>
+        <SfButton CssClass="e-primary" IconCss="e-icons e-search" Disabled="@_carga.Activa" OnClick="@(() => CargarAsync(1))">Buscar</SfButton>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        <p class="texto-apoyo">@_total solicitud(es).</p>
+        <div class="tabla-desplazable">
+            <table class="data-grid">
+                <thead><tr><th>Radicado</th><th>Solicitante</th><th>Línea</th><th>Oficina</th><th class="numero">Monto</th><th class="numero">Cuotas</th><th>Estado</th><th>Nivel</th><th>Radicada</th><th>Aprobación vence</th></tr></thead>
+                <tbody>
+                    @foreach (var s in _solicitudes)
+                    {
+                        var solicitud = s;
+                        <tr class="fila-seleccionable" @onclick="@(() => Navegacion.NavigateTo($"/cartera/solicitudes/{solicitud.PublicId}"))">
+                            <td>@(solicitud.Number ?? "Borrador")</td>
+                            <td>@solicitud.Applicant.FullName</td>
+                            <td>@solicitud.Line.Code · @solicitud.Line.Name</td>
+                            <td>@(solicitud.Office?.Name)</td>
+                            <td class="numero">@TextosDeOriginacion.Pesos(solicitud.Amount)</td>
+                            <td class="numero">@solicitud.Installments</td>
+                            <td>@TextosDeOriginacion.EstadoDeSolicitud(solicitud.Status)</td>
+                            <td>@(solicitud.LevelCode ?? "—")</td>
+                            <td>@(solicitud.SubmittedAt?.ToLocalTime().ToString("dd/MM/yyyy") ?? "—")</td>
+                            <td class="@(solicitud.ApprovalExpired ? "texto-alerta" : "")">
+                                @(solicitud.ApprovalExpiresAt?.ToString("dd/MM/yyyy") ?? "—")@(solicitud.ApprovalExpired ? " (vencida)" : "")
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (_solicitudes.Count == 0) { <p class="texto-tenue">Sin solicitudes con esos filtros.</p> }
+        <div class="toolbar">
+            <SfButton CssClass="e-flat" Disabled="@(_pagina <= 1)" OnClick="@(() => CargarAsync(_pagina - 1))">Anterior</SfButton>
+            <span class="texto-tenue">Página @_pagina</span>
+            <SfButton CssClass="e-flat" Disabled="@(_pagina * 20 >= _total)" OnClick="@(() => CargarAsync(_pagina + 1))">Siguiente</SfButton>
+        </div>
+    </IndicadorDeCarga>
+</div>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new();
+    private List<SolicitudEnListaDto> _solicitudes = [];
+    private long _total;
+    private int _estado, _pagina = 1;
+    private bool _mias;
+    private DateOnly? _desde, _hasta;
+    private PersonSearchPicker.PersonSearchItem? _solicitante;
+
+    protected override async Task OnInitializedAsync() => await CargarAsync(1);
+
+    private async Task CargarAsync(int pagina)
+    {
+        using var carga = _carga.Iniciar();
+        _pagina = pagina;
+        var r = await Originacion.SolicitudesAsync(new FiltrosDeSolicitudes(_estado == 0 ? null : _estado, Applicant: _solicitante?.PublicId,
+            Mine: _mias ? true : null, From: _desde, To: _hasta, Page: pagina));
+        if (!r.IsSuccess) { _solicitudes = []; _total = 0; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer las solicitudes."); return; }
+        _solicitudes = [.. r.Value?.Items ?? []];
+        _total = r.Value?.TotalCount ?? 0;
+    }
+
+    private static DateOnly? LeerFecha(object? valor) =>
+        DateOnly.TryParse(valor?.ToString(), CultureInfo.InvariantCulture, out var f) ? f : null;
+}

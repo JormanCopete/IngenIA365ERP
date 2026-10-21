@@ -485,7 +485,8 @@ public sealed class DiscardPosDraftCommandValidator : AbstractValidator<DiscardP
     }
 }
 
-public sealed class DiscardPosDraftCommandHandler(IApplicationDbContext db, BorradorDelPos pos, IAuditoriaDelPuntoDeVenta auditoria)
+public sealed class DiscardPosDraftCommandHandler(IApplicationDbContext db, BorradorDelPos pos, IAuditoriaDelPuntoDeVenta auditoria,
+    Sales.CreditoEnLaVenta? credito = null)
     : IRequestHandler<DiscardPosDraftCommand, Result<PosDraftDto>>
 {
     public Task<Result<PosDraftDto>> Handle(DiscardPosDraftCommand request, CancellationToken ct) =>
@@ -504,6 +505,13 @@ public sealed class DiscardPosDraftCommandHandler(IApplicationDbContext db, Borr
 
             await pos.RetirarAprobacionesAsync(venta, ct);
             venta.Descartar(usuario.Value.UserId, pos.Reloj.UtcNow, request.Reason);
+            // Feature 013 (T0177, T22): el número reservado en Cartera se libera por la clave de la reserva.
+            if (credito is not null)
+            {
+                var reservados = await db.DocumentPayments.AsNoTracking()
+                    .Where(p => p.DocumentId == venta.Id && !p.IsDeleted && p.ReservationPublicId != null).ToListAsync(ct);
+                await credito.LiberarAsync(reservados, request.Reason.Trim(), ct);
+            }
             await auditoria.AnotarAsync(AuditEventTypes.InventoryPosDiscarded, request, venta.PublicId,
                 new { reason = request.Reason.Trim(), venta.Total, lines = venta.Lines.Count(l => !l.IsDeleted) }, ct);
             await db.SaveChangesAsync(ct);

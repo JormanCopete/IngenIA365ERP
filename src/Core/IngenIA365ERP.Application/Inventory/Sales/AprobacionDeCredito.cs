@@ -79,7 +79,8 @@ public sealed class AprobacionDeCredito(IApplicationDbContext db, IMotorDeAproba
     public async Task<Result<ApprovalRequest?>> SolicitarAsync(InventoryDocument documento, IReadOnlyList<DocumentPayment> pagos, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(documento);
-        var creditos = pagos.Where(p => p.EsCredito && !p.IsDeleted).ToList();
+        // Feature 013 (T0176, §5.3): el crédito que Cartera validó no lleva aprobación provisional.
+        var creditos = pagos.Where(p => p.EsCredito && !p.IsDeleted && p.CreditOrigin != CreditOrigin.Validated).ToList();
         if (creditos.Count == 0) return Result.Success<ApprovalRequest?>(null);
 
         var actor = await actorActual.ObtenerAsync(ct);

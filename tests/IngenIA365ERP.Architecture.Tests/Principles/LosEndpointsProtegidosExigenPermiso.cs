@@ -45,6 +45,22 @@ public class LosEndpointsProtegidosExigenPermiso
         Path.Combine("Endpoints", "Reports", "Inventory*.cs"),
         // Feature 012 (T159): las rutas reutilizables de las plantillas (RutasDePlantilla.MapPlantilla).
         Path.Combine("Endpoints", "Common", "*.cs"),
+        // Feature 013, fase 2 (T0038; contracts/api.md §21, §22): la plataforma que pide Cartera —valores nacionales de la
+        // cooperativa, perfil regulatorio, canales externos, registro de participantes— y el cumplimiento (listas restrictivas,
+        // solicitudes del titular, autorizaciones por finalidad). Las rutas /api/saas/* del maestro van aparte (RequireMasterAdminAttribute).
+        Path.Combine("Endpoints", "Core", "NationalValuesEndpoints.cs"),
+        Path.Combine("Endpoints", "Core", "RegulatoryProfileEndpoints.cs"),
+        Path.Combine("Endpoints", "Core", "ExternalChannelsEndpoints.cs"),
+        Path.Combine("Endpoints", "Core", "IntegrationParticipantsEndpoints.cs"),
+        Path.Combine("Endpoints", "Compliance", "*.cs"),
+        Path.Combine("Endpoints", "HabeasDataModule.cs"),
+        // Feature 013, fase 3 (T0126, R9.1): toda ruta de Cartera, sin excepciones (hoy la carpeta no existe: las 63 rutas del
+        // crédito heredado se retiraron con T0192 y las de la Cartera nueva entran solas al aparecer). Feature 014 (T009, R28): lo
+        // conservado de ahorros y aportes (/api/savings, /api/reports/savings) se retiró y con ello su exención por nombre; las
+        // captaciones viven en Endpoints/Lending/Deposits y entran por este mismo glob, sin excepciones.
+        Path.Combine("Endpoints", "Lending", "*.cs"),
+        Path.Combine("Endpoints", "Lending", "Deposits", "*.cs"),
+        Path.Combine("Endpoints", "Reports", "Lending*.cs"),
     ];
 
     /// <summary>
@@ -125,6 +141,48 @@ public class LosEndpointsProtegidosExigenPermiso
         return tramos;
     }
 
+    /// <summary>
+    /// Feature 013, US7 (T0610): las rutas de la integración contable de Cartera entran al recorrido por los globs de <c>Endpoints/Accounting</c>
+    /// y <c>Endpoints/Lending</c>; aquí se fija que estén y que no se las exceptúe por nombre.
+    /// </summary>
+    [Fact]
+    public void Las_rutas_de_la_integracion_contable_de_Cartera_estan_en_el_recorrido()
+    {
+        var archivos = Archivos().ToHashSet(StringComparer.OrdinalIgnoreCase);
+        Assert.Contains(Path.Combine("Endpoints", "Accounting", "LendingIntegrationEndpoints.cs"), archivos);
+        Assert.Contains(Path.Combine("Endpoints", "Lending", "AccountingIntegrationEndpoints.cs"), archivos);
+        Assert.Contains(Path.Combine("Endpoints", "Lending", "LendingMessagesEndpoints.cs"), archivos);
+        // US13 (bloque 14B, T0768): los documentos al deudor y su verificación (Lending.Documents.*), sin ruta anónima (D21).
+        Assert.Contains(Path.Combine("Endpoints", "Lending", "DocumentsEndpoints.cs"), archivos);
+    }
+
+    /// <summary>
+    /// Feature 013, K5 (US16, T0994; api.md §18, DT §2.25): las nueve rutas de <c>Endpoints/Lending/RegulatoryEndpoints.cs</c> entran al recorrido por el
+    /// glob de <c>Endpoints/Lending</c> y cada una exige uno de los cuatro permisos del contrato —<c>RegulatoryFiles.Read</c>,
+    /// <c>RegulatoryReports.Generate</c>, <c>CreditBureauFiles.Generate</c>, <c>RegulatoryFiles.MarkUploaded</c>—, nunca un <c>View</c>.
+    /// </summary>
+    [Fact]
+    public void Las_rutas_regulatorias_de_Cartera_exigen_los_permisos_del_contrato()
+    {
+        var relativo = Path.Combine("Endpoints", "Lending", "RegulatoryEndpoints.cs");
+        Assert.Contains(relativo, Archivos().ToHashSet(StringComparer.OrdinalIgnoreCase));
+
+        var fuente = File.ReadAllText(Path.Combine(Api, relativo));
+        var tramos = Tramos(fuente);
+        Assert.Equal(9, tramos.Count);
+        string[] permitidos = ["Leer", "GenerarSicses", "GenerarCentral", "MarcarCargado"];
+        var infracciones = tramos
+            .Where(t => !permitidos.Any(p => t.Contains($".RequirePermission({p})", StringComparison.Ordinal)))
+            .Select(t => t[..Math.Min(90, t.Length)])
+            .ToList();
+        ReglaSobreFuente.SinInfracciones(infracciones, "Una ruta regulatoria de Cartera sin uno de los permisos de api.md §18");
+        Assert.Contains("Leer = \"Lending.RegulatoryFiles.Read\"", fuente, StringComparison.Ordinal);
+        Assert.Contains("GenerarSicses = \"Lending.RegulatoryReports.Generate\"", fuente, StringComparison.Ordinal);
+        Assert.Contains("GenerarCentral = \"Lending.CreditBureauFiles.Generate\"", fuente, StringComparison.Ordinal);
+        Assert.Contains("MarcarCargado = \"Lending.RegulatoryFiles.MarkUploaded\"", fuente, StringComparison.Ordinal);
+        Assert.DoesNotContain(".View\"", fuente, StringComparison.Ordinal);
+    }
+
     [Theory]
     [MemberData(nameof(LosArchivos))]
     public void Cada_ruta_lleva_RequirePermission(string relativo)
@@ -138,8 +196,10 @@ public class LosEndpointsProtegidosExigenPermiso
         // RutasDePlantilla.MapPlantilla, que exige su permiso adentro (Endpoints/Common entra al recorrido). Feature 012, T262:
         // lo mismo un grupo de documentos que publica sólo el ciclo común por CicloDeDocumentoRutas.MapCicloDeDocumento
         // (ajustes), que pone el permiso de cada ruta adentro (CicloDeDocumentoRutas.cs también entra al recorrido).
+        // Feature 013, T0312: LendingGroup.cs sólo arma el grupo base de Cartera; no publica rutas (lo fija Cartera_usa_el_grupo_base).
         Assert.True(tramos.Count > 0 || texto.Contains(".MapPlantilla(", StringComparison.Ordinal)
-                || texto.Contains(".MapCicloDeDocumento(", StringComparison.Ordinal),
+                || texto.Contains(".MapCicloDeDocumento(", StringComparison.Ordinal)
+                || string.Equals(Path.GetFileName(relativo), GrupoBaseDeCartera, StringComparison.Ordinal),
             $"{relativo} no declara ninguna ruta: ¿cambió la forma de mapear?");
 
         var sinPermiso = tramos
@@ -150,6 +210,35 @@ public class LosEndpointsProtegidosExigenPermiso
 
         Assert.True(sinPermiso.Count == 0,
             $"Rutas de {relativo} sin .RequirePermission( (features 008 y 009):\n  " + string.Join("\n  ", sinPermiso));
+    }
+
+    /// <summary>El archivo del grupo base de Cartera (feature 013, T0312).</summary>
+    private const string GrupoBaseDeCartera = "LendingGroup.cs";
+
+    [Fact]
+    public void Cartera_usa_el_grupo_base_con_la_auditoria_del_intento_denegado()
+    {
+        // Feature 013, US17 (T0264, T0312; api.md §1.1, T67): el grupo base lleva RequireAuthorization, el sobre de error y el metadato
+        // .AuditarIntentoDenegado(ModuloDeAuditoria.Lending) —un 404 por falta de permiso deja Lending.Access.Denied y un 400 del validador
+        // Lending.Request.Rejected—, y todo archivo de Endpoints/Lending arma sus grupos con LendingGroup.Grupo, nunca con un MapGroup propio
+        // (que se saltaría la auditoría). El permiso de cada ruta lo sigue exigiendo Cada_ruta_lleva_RequirePermission.
+        var carpeta = Path.Combine(Api, "Endpoints", "Lending");
+        var grupo = FuenteSinComentarios.Leer(Path.Combine(carpeta, GrupoBaseDeCartera));
+        Assert.Contains(".RequireAuthorization()", grupo, StringComparison.Ordinal);
+        Assert.Contains(".AuditarIntentoDenegado(ModuloDeAuditoria.Lending)", grupo, StringComparison.Ordinal);
+        Assert.Contains("AddEndpointFilter<ErrorEnvelopeFilter>()", grupo, StringComparison.Ordinal);
+        Assert.Contains("\"/api/lending\"", grupo, StringComparison.Ordinal);
+        Assert.Empty(Tramos(grupo));
+
+        var infractores = new List<string>();
+        foreach (var archivo in Directory.EnumerateFiles(carpeta, "*.cs").Where(a => Path.GetFileName(a) != GrupoBaseDeCartera))
+        {
+            var fuente = FuenteSinComentarios.Leer(archivo);
+            if (Regex.IsMatch(fuente, @"\.MapGroup\(")) infractores.Add($"{Path.GetFileName(archivo)}: arma un grupo propio con MapGroup");
+            if (!fuente.Contains("LendingGroup.Grupo(", StringComparison.Ordinal)) infractores.Add($"{Path.GetFileName(archivo)}: no usa LendingGroup.Grupo");
+            if (Regex.IsMatch(fuente, @"\bapp\.Map(Get|Post|Put|Delete|Patch)\(")) infractores.Add($"{Path.GetFileName(archivo)}: publica rutas fuera del grupo");
+        }
+        Assert.True(infractores.Count == 0, "Rutas de Cartera fuera del grupo base (T67):\n  " + string.Join("\n  ", infractores));
     }
 
     [Fact]
@@ -164,6 +253,16 @@ public class LosEndpointsProtegidosExigenPermiso
             Assert.True(File.Exists(ruta), $"{nombre} ya no existe: quitálo de CatalogosHeredadosSinPermiso.");
             Assert.DoesNotContain(".RequirePermission(", File.ReadAllText(ruta), StringComparison.Ordinal);
         }
+    }
+
+    [Fact]
+    public void Lo_conservado_de_ahorros_se_retiro_y_no_vuelve()
+    {
+        // Feature 014 (T009, R28): las 12 familias de /api/savings y los informes de /api/reports/savings se retiraron sin alias, y
+        // con ellas su exención por nombre. Que no vuelvan las carpetas: lo de captaciones vive en Endpoints/Lending/Deposits.
+        Assert.False(Directory.Exists(Path.Combine(Api, "Endpoints", "Savings")), "Endpoints/Savings volvió: las captaciones viven en Endpoints/Lending/Deposits.");
+        Assert.False(Directory.Exists(Path.Combine(Api, "Endpoints", "CDT")), "Endpoints/CDT volvió: el CDAT vive en Endpoints/Lending/Deposits.");
+        Assert.False(File.Exists(Path.Combine(Api, "Endpoints", "Reports", "SavingsReportsEndpoints.cs")), "Volvió SavingsReportsEndpoints.cs.");
     }
 
     [Fact]
@@ -219,6 +318,40 @@ public class LosEndpointsProtegidosExigenPermiso
     }
 
     [Fact]
+    public void Las_vistas_de_cartera_exigen_ver_y_exportar()
+    {
+        // Feature 013, US15 (T0773; contracts/api.md §17, DT §2.25): toda vista de /api/reports/lending se publica con MapVistaDeCartera —una
+        // ruta por vista—, que pone Lending.Reports.View y, al exportar, Lending.Reports.Export, más Lending.Loans.Read para consultar y
+        // Lending.Reports.ExportPersonalData para exportar en las vistas con datos del deudor (C84), y audita Lending.Report.Exported. Además del
+        // registro de vistas, sólo esa extensión puede llamar a MapGet; las rutas heredadas (aging/pdf, loan-statement) no vuelven.
+        var archivo = Path.Combine(Api, "Endpoints", "Reports", "LendingReportsEndpoints.cs");
+        Assert.True(File.Exists(archivo), $"No existe {archivo}.");
+
+        var tramos = Tramos(File.ReadAllText(archivo));
+        Assert.True(tramos.Count == 2,
+            $"LendingReportsEndpoints.cs publica {tramos.Count} rutas con .Map*(: sólo el registro de vistas (GET /) y la de " +
+            "MapVistaDeCartera. Registrá cada vista con group.MapVistaDeCartera(…).");
+        Assert.All(tramos, t => Assert.Contains(".RequirePermission(", t, StringComparison.Ordinal));
+        Assert.Contains(".RequirePermission(PermisoDeVer)", tramos[1], StringComparison.Ordinal);
+        Assert.Contains(".RequirePermissionWhenExporting(PermisoDeExportar)", tramos[1], StringComparison.Ordinal);
+        Assert.Contains("EmitirExportacionAsync", tramos[1], StringComparison.Ordinal);
+        Assert.Contains("PermisoDeDatosPersonales", tramos[1], StringComparison.Ordinal);
+        Assert.Contains("RequiredPermission", tramos[1], StringComparison.Ordinal);
+
+        var fuente = FuenteSinComentarios.Leer(archivo);
+        Assert.Contains("PermisoDeVer = \"Lending.Reports.View\"", fuente, StringComparison.Ordinal);
+        Assert.Contains("PermisoDeExportar = \"Lending.Reports.Export\"", fuente, StringComparison.Ordinal);
+        Assert.Contains("PermisoDeDatosPersonales = \"Lending.Reports.ExportPersonalData\"", fuente, StringComparison.Ordinal);
+        Assert.DoesNotContain("aging/pdf", fuente, StringComparison.Ordinal);
+        Assert.DoesNotContain("loan-statement", fuente, StringComparison.Ordinal);
+
+        // Una ruta por vista: cada MapVistaDeCartera del registro nombra una vista distinta (las siete de K1, como mínimo).
+        var vistas = Regex.Matches(fuente, @"\.MapVistaDeCartera\((\w+)\.Vista").Select(m => m.Groups[1].Value).ToList();
+        Assert.True(vistas.Count >= 7, $"Se esperaban al menos las siete vistas de K1 y hay {vistas.Count}.");
+        Assert.Equal(vistas.Count, vistas.Distinct(StringComparer.Ordinal).Count());
+    }
+
+    [Fact]
     public void Las_rutas_de_la_integracion_contable_de_inventario_entran_al_recorrido()
     {
         // Feature 012, T447 (US7, I2): el lado contable (/api/accounting/inventory) y la bandeja de Inventario
@@ -236,6 +369,23 @@ public class LosEndpointsProtegidosExigenPermiso
             Assert.True(File.Exists(Path.Combine(Api, esperado)), $"No existe {esperado} (T528, T529).");
             Assert.Contains(esperado, archivos);
         }
+    }
+
+    [Fact]
+    public void Las_rutas_del_registro_central_exigen_al_maestro()
+    {
+        // Feature 013, fase 2 (T0038; B5, contracts/api.md §21.5): /api/saas/national-values y /api/saas/regulatory-documents no llevan
+        // código de permiso —corren sin cooperativa—: el grupo entero pasa por RequireMasterAdminAttribute.Check (maestro con segundo
+        // factor). Se fija que cada grupo del archivo se arme con esa guarda y que ninguna ruta se publique fuera de un grupo.
+        var archivo = Path.Combine(Api, "Endpoints", "Saas", "NationalValuesEndpoints.cs");
+        Assert.True(File.Exists(archivo), $"No existe {archivo}.");
+        var fuente = FuenteSinComentarios.Leer(archivo);
+        Assert.Contains("RequireMasterAdminAttribute.Check(", fuente, StringComparison.Ordinal);
+        Assert.Contains("\"/api/saas/national-values\"", fuente, StringComparison.Ordinal);
+        Assert.Contains("\"/api/saas/regulatory-documents\"", fuente, StringComparison.Ordinal);
+        Assert.Equal(1, Regex.Matches(fuente, @"\.MapGroup\(").Count);
+        Assert.DoesNotMatch(@"\bapp\.Map(Get|Post|Put|Delete|Patch)\(", fuente);
+        Assert.True(Tramos(fuente).Count >= 10, "El registro central publica al menos diez rutas (§21.5).");
     }
 
     [Fact]

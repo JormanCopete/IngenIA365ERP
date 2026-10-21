@@ -14,6 +14,13 @@ public sealed record AlcanceDeSucursales(bool Restringido, IReadOnlySet<int> Suc
     public static AlcanceDeSucursales Limitado(IEnumerable<int> sucursales, int? porDefecto) =>
         new(true, sucursales.ToHashSet(), porDefecto);
 
+    /// <summary>
+    /// La semántica abierta de Contabilidad sobre el salto común de <see cref="IngenIA365ERP.Application.Common.Security.OficinasDelUsuario"/> (feature 013, T62): sin
+    /// asignaciones, sin restricción; con asignaciones, sólo sus sucursales contables (vacío si ninguna está vinculada).
+    /// </summary>
+    public static AlcanceDeSucursales De(IngenIA365ERP.Application.Common.Security.OficinasAsignadas oficinas) =>
+        oficinas.TieneAsignaciones ? Limitado(oficinas.Sucursales, oficinas.PorDefecto) : SinRestriccion;
+
     public bool Permite(int branchId) => !Restringido || Sucursales.Contains(branchId);
 }
 

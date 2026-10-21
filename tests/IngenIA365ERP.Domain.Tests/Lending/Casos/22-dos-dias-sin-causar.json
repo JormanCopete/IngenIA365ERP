@@ -1,0 +1,79 @@
+// SC-020, FR-066, US4-4 (quickstart §1.2, caso 22): dos días sin causar. La marca de agua quedó en el 30-01-2027; la puesta al día
+// causa de a un día, en orden, el 31-01 con la usura de enero (30 %: la pactada de 27 % pasa) y el 01-02 con la de febrero (26 %:
+// se topa). Real/365, así el 31 causa. Lo que causan los dos días es exactamente lo que la reconstrucción pone en el libro esos
+// días; causar un día dos veces da lo mismo y causar sin la marca en la víspera se rechaza (CausacionIdempotenteTests).
+// Calculado con calcular.py (decimal de 40 dígitos). Pendiente de validar por la contadora.
+{
+  "nombre": "Dos días sin causar",
+  "condiciones": {
+    "sistema": "LevelPayment", "convencion": "Actual365", "equivalencia": "Compound",
+    "redondeo": { "unidad": 0.01, "modo": "AwayFromZero", "momento": "PerConcept" },
+    "prelacion": "OldestInstallmentFirst",
+    "monto": 4000000, "plazoCuotas": 12, "periodicidad": "Monthly", "tasaEA": 0.270000,
+    "fechaDesembolso": "2027-01-25", "modalidad": "CONSUMO",
+    "claseDeMora": "RelativeToCurrent", "factorDeMora": 1.5
+  },
+  "series": {
+    "usura": [
+      { "clave": "CONSUMO", "desde": "2027-01-01", "hasta": "2027-01-31", "ea": 0.300000, "registradoEn": "2026-12-31T15:00:00Z",
+        "publicId": "0b7a3c8e-1d1a-4f6e-9a01-000000000221" },
+      { "clave": "CONSUMO", "desde": "2027-02-01", "hasta": "2027-02-28", "ea": 0.260000, "registradoEn": "2027-01-29T15:00:00Z",
+        "publicId": "0b7a3c8e-1d1a-4f6e-9a01-000000000222" }
+    ]
+  },
+  "operaciones": [
+    { "id": "D1", "tipo": "Disbursement", "monto": 4000000, "fechaValor": "2027-01-25", "registradoEn": "2027-01-25T15:00:00Z" }
+  ],
+  "consultas": [
+    {
+      "modo": "Causacion",
+      "marca": "2027-01-30",
+      "fecha": "2027-02-01",
+      "informacionHasta": "2027-02-02T06:00:00Z",
+      "esperado": {
+        "causacion": [
+          { "dia": "2027-01-31", "concepto": "CurrentInterest", "cuota": 1, "valor": 2628.82 },
+          { "dia": "2027-02-01", "concepto": "CurrentInterest", "cuota": 1, "valor": 2533.53 }
+        ]
+      }
+    },
+    {
+      "fecha": "2027-02-01",
+      "informacionHasta": "2027-02-02T06:00:00Z",
+      "libroDesde": "2027-01-31",
+      "esperado": {
+        "saldos": { "Principal": 4000000, "CurrentInterest": 18280.63 },
+        "porCuota": [
+          { "cuota": 1, "concepto": "Principal", "valor": 296281.84 },
+          { "cuota": 1, "concepto": "CurrentInterest", "valor": 18280.63 },
+          { "cuota": 2, "concepto": "Principal", "valor": 309775.80 },
+          { "cuota": 3, "concepto": "Principal", "valor": 308710.57 },
+          { "cuota": 4, "concepto": "Principal", "valor": 317102.55 },
+          { "cuota": 5, "concepto": "Principal", "valor": 321544.44 },
+          { "cuota": 6, "concepto": "Principal", "valor": 329772.96 },
+          { "cuota": 7, "concepto": "Principal", "valor": 334901.34 },
+          { "cuota": 8, "concepto": "Principal", "valor": 341769.34 },
+          { "cuota": 9, "concepto": "Principal", "valor": 349740.26 },
+          { "cuota": 10, "concepto": "Principal", "valor": 355950.48 },
+          { "cuota": 11, "concepto": "Principal", "valor": 363740.79 },
+          { "cuota": 12, "concepto": "Principal", "valor": 370709.63 }
+        ],
+        "capitalVencido": 0,
+        "diasDeMora": 0,
+        "cuotaMasAntigua": null,
+        "cuotasVencidas": 0,
+        "suspendida": false,
+        "valorParaCancelar": 4018280.63,
+        "tasaDiariaCorriente": 0.000633383299703294,
+        "tasaDiariaMora": 0.000633383299703294,
+        "usuraTopada": true,
+        "validaHasta": null,
+        "transiciones": [],
+        "libro": [
+          { "dia": "2027-01-31", "clase": "Accrual", "concepto": "CurrentInterest", "cuota": 1, "valor": 2628.82 },
+          { "dia": "2027-02-01", "clase": "Accrual", "concepto": "CurrentInterest", "cuota": 1, "valor": 2533.53 }
+        ]
+      }
+    }
+  ]
+}

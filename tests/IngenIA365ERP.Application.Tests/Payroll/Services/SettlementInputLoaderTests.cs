@@ -1,7 +1,8 @@
 using FluentAssertions;
 using IngenIA365ERP.Application.Payroll.Services;
 using IngenIA365ERP.Application.Tests.Payroll.Common;
-using IngenIA365ERP.Domain.Entities.Lending;
+using IngenIA365ERP.Application.Common.Integration.Lending;
+using IngenIA365ERP.Application.Tests.Common.Integration.Lending;
 using IngenIA365ERP.Domain.Entities.Payroll;
 using IngenIA365ERP.Domain.Entities.Payroll.Transactions;
 using IngenIA365ERP.Domain.Enums.Payroll;
@@ -190,11 +191,12 @@ public class SettlementInputLoaderTests
         };
         d.Db.EmploymentTerminations.Add(terminacion);
 
-        // Cartera: dos créditos vivos y uno cerrado, por persona.
-        d.Db.LoanPortfolios.AddRange(
-            new LoanPortfolio { PersonId = d.Ana.PersonId, PortfolioNumber = 1001, CurrentBalance = 1_500_000m, CapitalBalanceCurrent = 1_400_000m, InterestBalanceCurrent = 100_000m, InstallmentAmount = 250_000m, PendingInstallmentCount = 6, DisbursementDate = new DateOnly(2026, 1, 10), CreatedBy = "test" },
-            new LoanPortfolio { PersonId = d.Ana.PersonId, PortfolioNumber = 1002, CurrentBalance = 300_000m, CapitalBalanceCurrent = 300_000m, InstallmentAmount = 100_000m, PendingInstallmentCount = 3, DisbursementDate = new DateOnly(2026, 5, 10), CreatedBy = "test" },
-            new LoanPortfolio { PersonId = d.Ana.PersonId, PortfolioNumber = 1003, CurrentBalance = 0m, ClosingDate = new DateOnly(2026, 3, 1), DisbursementDate = new DateOnly(2025, 1, 10), CreatedBy = "test" });
+        // Cartera (feature 013, por la consulta de obligaciones): dos créditos vivos, uno cancelado y uno como codeudora.
+        var anaPersona = d.Db.People.Single(x => x.Id == d.Ana.PersonId).PublicId;
+        var c1001 = d.Obligaciones.Agregar(anaPersona, ConsultaDeObligacionesDePrueba.Obligacion("1001", 1_500_000m, cuota: 250_000m) with { Principal = 1_400_000m, CurrentInterest = 100_000m });
+        d.Obligaciones.Agregar(anaPersona, ConsultaDeObligacionesDePrueba.Obligacion("1002", 300_000m, cuota: 100_000m));
+        d.Obligaciones.Agregar(anaPersona, ConsultaDeObligacionesDePrueba.Obligacion("1003", 0m, estado: EstadoDeObligacion.PaidOff));
+        d.Obligaciones.Agregar(anaPersona, ConsultaDeObligacionesDePrueba.Obligacion("1004", 900_000m, rol: RolEnLaObligacion.CoDebtor));
         // Libranza con un tercero: cuota de 50.000 desde junio, 4 cuotas causadas (jun–sep) y 2 descontadas.
         d.Db.PayrollRecurringNovelties.Add(new PayrollRecurringNovelty
         {
@@ -218,14 +220,17 @@ public class SettlementInputLoaderTests
 
         // Deudas: saldo total de los dos créditos vivos (política por defecto) y las cuotas causadas sin descontar de la libranza.
         cargado.Deudas.Should().HaveCount(3);
-        var credito = cargado.Deudas.Single(x => x.LoanPortfolioId != null && x.Description.Contains("1001"));
+        var credito = cargado.Deudas.Single(x => x.ObligationPublicId == c1001.ObligationPublicId);
+        credito.ObligationNumber.Should().Be("1001");
         credito.Kind.Should().Be(SettlementDeductionKind.CooperativeLoan);
         credito.Proposed.Should().Be(1_500_000m);
         credito.Applied.Should().Be(1_500_000m);
         credito.ConceptCode.Should().Be(WellKnownConceptCodes.LoanDeduction);
-        credito.AccountedByOtherModule.Should().BeTrue("Cartera contabiliza el recaudo (D-08)");
+        credito.AccountedByOtherModule.Should().BeFalse("enmienda D-08 (feature 013): DESC_CARTERA contabiliza contra la cuenta del concepto");
         credito.BreakdownJson.Should().Contain("\"capital\":1400000").And.Contain("\"intereses\":100000");
         cargado.Deudas.Should().NotContain(x => x.Description.Contains("1003"), "el crédito cerrado no se propone");
+        cargado.Deudas.Should().NotContain(x => x.Description.Contains("1004"), "nunca las de codeudor (G4)");
+        d.Obligaciones.Consultas.Should().ContainSingle().Which.IncludeAsCoDebtor.Should().BeFalse();
         var libranza = cargado.Deudas.Single(x => x.RecurringNoveltyId != null);
         libranza.Kind.Should().Be(SettlementDeductionKind.ThirdPartyLibranza);
         libranza.Proposed.Should().Be(2 * 50_000m, "cuatro cuotas causadas (junio a septiembre) menos dos descontadas");
@@ -356,12 +361,13 @@ public class SettlementInputLoaderTests
         await d.Db.SaveChangesAsync();
         var terminacion = new EmploymentTermination { EmployeeId = d.Ana.Id, TerminationDate = new DateOnly(2026, 3, 20), TerminationReasonId = motivo.Id, CreatedBy = "test" };
         d.Db.EmploymentTerminations.Add(terminacion);
-        d.Db.LoanPortfolios.Add(new LoanPortfolio { PersonId = d.Ana.PersonId, PortfolioNumber = 7, CurrentBalance = 1_000_000m, InstallmentAmount = 120_000m, DefaultBalanceCurrent = 30_000m, DisbursementDate = new DateOnly(2026, 1, 1), CreatedBy = "test" });
         await d.Db.SaveChangesAsync();
+        d.Obligaciones.Agregar(d.Db.People.Single(x => x.Id == d.Ana.PersonId).PublicId,
+            ConsultaDeObligacionesDePrueba.Obligacion("7", 1_000_000m, exigible: 150_000m, cuota: 120_000m));
 
         d.Politica(CompanyPolicyKeys.DeduccionAlRetiroModo, CompanyPolicyKeys.DeduccionAlRetiroModoValores.SoloCuotasCausadas, new DateOnly(2020, 1, 1));
         var cuotas = await d.SettlementLoader.LoadAsync(SettlementLoadRequest.Definitiva(d.Ana.Id, terminacion.Id, new DateOnly(2026, 3, 20)), CancellationToken.None);
-        cuotas.Employees.Single().Deudas.Single().Proposed.Should().Be(150_000m, "la cuota más la mora, no el saldo");
+        cuotas.Employees.Single().Deudas.Single().Proposed.Should().Be(150_000m, "lo exigible (DueAmount), no el saldo");
 
         var politica = await d.Db.CompanyPolicies.SingleAsync();
         politica.Value = CompanyPolicyKeys.DeduccionAlRetiroModoValores.NoProponer;
@@ -376,13 +382,13 @@ public class SettlementInputLoaderTests
         var d = ConSeisMesesAprobados();
         var motivo = new TerminationReason { Code = "RENUNCIA", Name = "Renuncia", IsSeeded = true, CreatedBy = "test" };
         d.Db.TerminationReasons.Add(motivo);
-        var credito = new LoanPortfolio { PersonId = d.Ana.PersonId, PortfolioNumber = 9, CurrentBalance = 800_000m, DisbursementDate = new DateOnly(2026, 1, 1), CreatedBy = "test" };
-        d.Db.LoanPortfolios.Add(credito);
         await d.Db.SaveChangesAsync();
+        var persona = d.Db.People.Single(x => x.Id == d.Ana.PersonId).PublicId;
+        var credito = d.Obligaciones.Agregar(persona, ConsultaDeObligacionesDePrueba.Obligacion("9", 800_000m));
         var terminacion = new EmploymentTermination { EmployeeId = d.Ana.Id, TerminationDate = new DateOnly(2026, 3, 20), TerminationReasonId = motivo.Id, CreatedBy = "test" };
         terminacion.Deductions.Add(new SettlementDeduction
         {
-            Kind = SettlementDeductionKind.CooperativeLoan, LoanPortfolioId = credito.Id, Description = "Crédito 9", ProposedAmount = 800_000m, AppliedAmount = 300_000m,
+            Kind = SettlementDeductionKind.CooperativeLoan, ObligationPublicId = credito.ObligationPublicId, ObligationNumber = "9", Description = "Crédito 9", ProposedAmount = 800_000m, AppliedAmount = 300_000m,
             AdjustmentReason = "Acuerdo de pago por el resto", Status = SettlementDeductionStatus.Adjusted, CreatedBy = "test",
         });
         d.Db.EmploymentTerminations.Add(terminacion);
@@ -394,8 +400,8 @@ public class SettlementInputLoaderTests
         deuda.AdjustmentReason.Should().Be("Acuerdo de pago por el resto");
         igual.Warnings.Should().BeEmpty();
 
-        credito.CurrentBalance = 750_000m;
-        await d.Db.SaveChangesAsync();
+        d.Obligaciones.Quitar(persona);
+        d.Obligaciones.Agregar(persona, credito with { TotalBalance = 750_000m });
         var cambio = await d.SettlementLoader.LoadAsync(SettlementLoadRequest.Definitiva(d.Ana.Id, terminacion.Id, new DateOnly(2026, 3, 20)), CancellationToken.None);
         cambio.Employees.Single().Deudas.Single().Applied.Should().Be(750_000m, "el saldo cambió: vuelve a proponerse y se avisa");
         cambio.Warnings.Should().ContainSingle(w => w.Code == "Payroll.Settlement.DeductionReproposed");

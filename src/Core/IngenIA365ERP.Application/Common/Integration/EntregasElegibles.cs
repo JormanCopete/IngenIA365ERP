@@ -74,7 +74,7 @@ public sealed class EntregasElegibles(IApplicationDbContext db, IEnumerable<IDes
                 from d in elegibles
                 join m in db.IntegrationMessages.AsNoTracking() on d.MessageId equals m.Id
                 orderby m.Id
-                select new Fila(m.Id, m.PublicId, m.OriginPublicId, m.OriginEventKey, d.Attempts))
+                select new Fila(m.Id, m.PublicId, m.OriginPublicId, m.OriginEventKey, d.Attempts, m.OriginModule))
             .Take(tanda)
             .ToListAsync(ct);
         if (filas.Count == 0) return [];
@@ -87,7 +87,7 @@ public sealed class EntregasElegibles(IApplicationDbContext db, IEnumerable<IDes
                 join m in db.IntegrationMessages.AsNoTracking() on d.MessageId equals m.Id
                 where origenes.Contains(m.OriginPublicId)
                 orderby m.Id
-                select new Fila(m.Id, m.PublicId, m.OriginPublicId, m.OriginEventKey, d.Attempts))
+                select new Fila(m.Id, m.PublicId, m.OriginPublicId, m.OriginEventKey, d.Attempts, m.OriginModule))
             .ToListAsync(ct);
         var claves = filas.Select(f => (f.Origen, f.Clave)).ToHashSet();
         filas.AddRange(resto.Where(f => !yaLeidos.Contains(f.Id) && claves.Contains((f.Origen, f.Clave))));
@@ -95,9 +95,12 @@ public sealed class EntregasElegibles(IApplicationDbContext db, IEnumerable<IDes
         return filas
             .OrderBy(f => f.Id)
             .GroupBy(f => (f.Origen, f.Clave))
-            .Select(g => new UnidadDeConsumo(destino, g.Key.Origen, g.Key.Clave, g.Select(f => f.PublicId).ToList(), lotePublico, g.Max(f => f.Intentos)))
+            .Select(g => new UnidadDeConsumo(destino, g.Key.Origen, g.Key.Clave, g.Select(f => f.PublicId).ToList(), lotePublico, g.Max(f => f.Intentos))
+            {
+                OriginModule = g.First().Modulo,
+            })
             .ToList();
     }
 
-    private sealed record Fila(long Id, Guid PublicId, Guid Origen, string Clave, int Intentos);
+    private sealed record Fila(long Id, Guid PublicId, Guid Origen, string Clave, int Intentos, string Modulo);
 }

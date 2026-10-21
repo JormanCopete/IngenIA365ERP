@@ -5,14 +5,12 @@ using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Entities.Accounting;
 using IngenIA365ERP.Domain.Entities.Accounting.Transactions;
 using IngenIA365ERP.Domain.Entities.Accounting.Inventory;
-using IngenIA365ERP.Domain.Entities.Lending;
 using IngenIA365ERP.Domain.Entities.Parameters;
 using IngenIA365ERP.Domain.Entities.Payroll;
 using IngenIA365ERP.Domain.Entities.Integration;
 using IngenIA365ERP.Domain.Entities.Integration.Transactions;
 using IngenIA365ERP.Domain.Entities.Inventory;
 using IngenIA365ERP.Domain.Entities.Inventory.Documents;
-using IngenIA365ERP.Domain.Entities.CDT;
 using IngenIA365ERP.Domain.Entities.Debit;
 using IngenIA365ERP.Domain.Entities.Treasury;
 using IngenIA365ERP.Domain.Entities.Security;
@@ -159,101 +157,6 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<FixedAssetInstallment> FixedAssetInstallments => Set<FixedAssetInstallment>();
     public DbSet<AssetRun> AssetRuns => Set<AssetRun>();
 
-    // === Lending (93) ===
-    public DbSet<LoanPortfolio> LoanPortfolios => Set<LoanPortfolio>();
-    public DbSet<LendingTransaction> LendingTransactions => Set<LendingTransaction>();
-    public DbSet<PendingInstallment> PendingInstallments => Set<PendingInstallment>();
-    public DbSet<CreditLineParameter> CreditLineParameters => Set<CreditLineParameter>();
-    public DbSet<CreditParameter> CreditParameters => Set<CreditParameter>();
-    public DbSet<DefaultRecord> DefaultRecords => Set<DefaultRecord>();
-    public DbSet<DefaultLiquidation> DefaultLiquidations => Set<DefaultLiquidation>();
-    public DbSet<ExtraPayment> ExtraPayments => Set<ExtraPayment>();
-    public DbSet<ExtraPaymentBalance> ExtraPaymentBalances => Set<ExtraPaymentBalance>();
-    public DbSet<Guarantee> Guarantees => Set<Guarantee>();
-    public DbSet<CollectionCase> CollectionCases => Set<CollectionCase>();
-    public DbSet<CollectionMaster> CollectionMasters => Set<CollectionMaster>();
-    public DbSet<CollectionNotice> CollectionNotices => Set<CollectionNotice>();
-    public DbSet<CollectionNoticeDetail> CollectionNoticeDetails => Set<CollectionNoticeDetail>();
-    public DbSet<CollectionNoticeParam> CollectionNoticeParams => Set<CollectionNoticeParam>();
-    public DbSet<CollectionPeriod> CollectionPeriods => Set<CollectionPeriod>();
-    public DbSet<CollectionDateEntry> CollectionDateEntries => Set<CollectionDateEntry>();
-    public DbSet<SavingsAccount> SavingsAccounts => Set<SavingsAccount>();
-    public DbSet<SavingsParameter> SavingsParameters => Set<SavingsParameter>();
-    public DbSet<DepositAccount> DepositAccounts => Set<DepositAccount>();
-    public DbSet<DepositEntry> DepositEntries => Set<DepositEntry>();
-    public DbSet<DepositAudit> DepositAudits => Set<DepositAudit>();
-    public DbSet<DepositSeal> DepositSeals => Set<DepositSeal>();
-    public DbSet<DepositSignature> DepositSignatures => Set<DepositSignature>();
-    public DbSet<PayrollDeduction> PayrollDeductions => Set<PayrollDeduction>();
-    public DbSet<PayrollDeductionConcept> PayrollDeductionConcepts => Set<PayrollDeductionConcept>();
-    public DbSet<PayrollDeductionEntry> PayrollDeductionEntries => Set<PayrollDeductionEntry>();
-    public DbSet<PayrollDeductionPeriod> PayrollDeductionPeriods => Set<PayrollDeductionPeriod>();
-    public DbSet<PortfolioClassification> PortfolioClassifications => Set<PortfolioClassification>();
-    public DbSet<PortfolioAccount> PortfolioAccounts => Set<PortfolioAccount>();
-    public DbSet<PortfolioBalance> PortfolioBalances => Set<PortfolioBalance>();
-    public DbSet<PortfolioInvoice> PortfolioInvoices => Set<PortfolioInvoice>();
-    public DbSet<LoanApplication> LoanApplications => Set<LoanApplication>();
-    public DbSet<ApplicationAsset> ApplicationAssets => Set<ApplicationAsset>();
-    public DbSet<ApplicationCodebtor> ApplicationCodebtors => Set<ApplicationCodebtor>();
-    public DbSet<ApplicationExtra> ApplicationExtras => Set<ApplicationExtra>();
-    public DbSet<ApplicationReference> ApplicationReferences => Set<ApplicationReference>();
-    public DbSet<ApplicationStatus> ApplicationStatuses => Set<ApplicationStatus>();
-    public DbSet<LoanRestructuring> LoanRestructurings => Set<LoanRestructuring>();
-    public DbSet<InsurancePolicy> InsurancePolicies => Set<InsurancePolicy>();
-    public DbSet<InsuranceBeneficiary> InsuranceBeneficiaries => Set<InsuranceBeneficiary>();
-    public DbSet<InterestRate> InterestRates => Set<InterestRate>();
-    public DbSet<RateByTerm> RatesByTerm => Set<RateByTerm>();
-    public DbSet<TermRate> TermRates => Set<TermRate>();
-    public DbSet<PeriodicityParameter> PeriodicityParameters => Set<PeriodicityParameter>();
-    public DbSet<DeductionValue> DeductionValues => Set<DeductionValue>();
-    public DbSet<TransactionCode> TransactionCodes => Set<TransactionCode>();
-    public DbSet<LendingDocument> LendingDocuments => Set<LendingDocument>();
-    public DbSet<InvoiceMaster> InvoiceMasters => Set<InvoiceMaster>();
-    public DbSet<InvoiceDetail> InvoiceDetails => Set<InvoiceDetail>();
-    public DbSet<InvoiceLineItem> InvoiceLineItems => Set<InvoiceLineItem>();
-    public DbSet<AccrualEntry> AccrualEntries => Set<AccrualEntry>();
-    public DbSet<AccrualPeriod> AccrualPeriods => Set<AccrualPeriod>();
-    public DbSet<ProvisionParameter> ProvisionParameters => Set<ProvisionParameter>();
-    public DbSet<ShortLongTermPortfolio> ShortLongTermPortfolios => Set<ShortLongTermPortfolio>();
-    public DbSet<CreditLineAudit> CreditLineAudits => Set<CreditLineAudit>();
-    public DbSet<BiometricRecord> BiometricRecords => Set<BiometricRecord>();
-    public DbSet<BlacklistEntry> BlacklistEntries => Set<BlacklistEntry>();
-    public DbSet<MoneyLaunderingDeclaration> MoneyLaunderingDeclarations => Set<MoneyLaunderingDeclaration>();
-    public DbSet<UnusualTransaction> UnusualTransactions => Set<UnusualTransaction>();
-    public DbSet<UnusualTransactionEntry> UnusualTransactionEntries => Set<UnusualTransactionEntry>();
-    public DbSet<SiplaParameter> SiplaParameters => Set<SiplaParameter>();
-    public DbSet<SiplaGroupParameter> SiplaGroupParameters => Set<SiplaGroupParameter>();
-    public DbSet<ScoringParameter> ScoringParameters => Set<ScoringParameter>();
-    public DbSet<ScoringRange> ScoringRanges => Set<ScoringRange>();
-    public DbSet<RiskAssessment> RiskAssessments => Set<RiskAssessment>();
-    public DbSet<Cashier> Cashiers => Set<Cashier>();
-    public DbSet<CashBase> CashBases => Set<CashBase>();
-    public DbSet<Checkbook> Checkbooks => Set<Checkbook>();
-    public DbSet<CheckClearing> CheckClearings => Set<CheckClearing>();
-    public DbSet<OnlineQuery> OnlineQueries => Set<OnlineQuery>();
-    public DbSet<PersonAsset> PersonAssets => Set<PersonAsset>();
-    public DbSet<PreviousInstallment> PreviousInstallments => Set<PreviousInstallment>();
-    public DbSet<Minute> Minutes => Set<Minute>();
-    public DbSet<MinuteAttendee> MinuteAttendees => Set<MinuteAttendee>();
-    public DbSet<ContributionReduction> ContributionReductions => Set<ContributionReduction>();
-    public DbSet<ContributionReductionParam> ContributionReductionParams => Set<ContributionReductionParam>();
-    public DbSet<ActivityEnrollment> ActivityEnrollments => Set<ActivityEnrollment>();
-    public DbSet<AssociateActivity> AssociateActivities => Set<AssociateActivity>();
-    public DbSet<AssociateDisease> AssociateDiseases => Set<AssociateDisease>();
-    public DbSet<AssociateWithdrawal> AssociateWithdrawals => Set<AssociateWithdrawal>();
-    public DbSet<AuxiliaryApplication> LendingAuxiliaryApplications => Set<AuxiliaryApplication>();
-    public DbSet<AuxiliaryApplicationLine> AuxiliaryApplicationLines => Set<AuxiliaryApplicationLine>();
-    public DbSet<AuxAppInstallment> AuxAppInstallments => Set<AuxAppInstallment>();
-    public DbSet<AuxAppInstallmentBeneficiary> AuxAppInstallmentBeneficiaries => Set<AuxAppInstallmentBeneficiary>();
-    public DbSet<RecreationApplication> RecreationApplications => Set<RecreationApplication>();
-    public DbSet<HousingApplicationParam> HousingApplicationParams => Set<HousingApplicationParam>();
-    public DbSet<HousingParameter> HousingParameters => Set<HousingParameter>();
-    public DbSet<Subsidy> Subsidies => Set<Subsidy>();
-    public DbSet<WithdrawalStatus> WithdrawalStatuses => Set<WithdrawalStatus>();
-    public DbSet<Zone> Zones => Set<Zone>();
-    public DbSet<ZoneType> ZoneTypes => Set<ZoneType>();
-    public DbSet<SubZone> SubZones => Set<SubZone>();
-
     // === Payroll (27) ===
     public DbSet<Employee> Employees => Set<Employee>();
     public DbSet<PayrollConcept> PayrollConcepts => Set<PayrollConcept>();
@@ -308,6 +211,8 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<TerminationReason> TerminationReasons => Set<TerminationReason>();
     public DbSet<EmploymentTermination> EmploymentTerminations => Set<EmploymentTermination>();
     public DbSet<SettlementDeduction> SettlementDeductions => Set<SettlementDeduction>();
+    public DbSet<Domain.Entities.Payroll.Transactions.PayrollLoanDeduction> PayrollLoanDeductions => Set<Domain.Entities.Payroll.Transactions.PayrollLoanDeduction>();
+    public DbSet<Domain.Entities.Payroll.Transactions.PayrollAccountDeduction> PayrollAccountDeductions => Set<Domain.Entities.Payroll.Transactions.PayrollAccountDeduction>();
     public DbSet<WithholdingRateCalculation> WithholdingRateCalculations => Set<WithholdingRateCalculation>();
     public DbSet<WithholdingRateCalculationMonth> WithholdingRateCalculationMonths => Set<WithholdingRateCalculationMonth>();
     public DbSet<SeveranceFundDeposit> SeveranceFundDeposits => Set<SeveranceFundDeposit>();
@@ -412,6 +317,7 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pos.DayClose> DayCloses => Set<IngenIA365ERP.Domain.Entities.Inventory.Pos.DayClose>();
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pos.DayCloseLine> DayCloseLines => Set<IngenIA365ERP.Domain.Entities.Inventory.Pos.DayCloseLine>();
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Documents.DocumentPayment> DocumentPayments => Set<IngenIA365ERP.Domain.Entities.Inventory.Documents.DocumentPayment>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Documents.LendingObligationResponse> LendingObligationResponses => Set<IngenIA365ERP.Domain.Entities.Inventory.Documents.LendingObligationResponse>();
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Documents.VoucherRedemption> VoucherRedemptions => Set<IngenIA365ERP.Domain.Entities.Inventory.Documents.VoucherRedemption>();
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Documents.DocumentLineDiscount> DocumentLineDiscounts => Set<IngenIA365ERP.Domain.Entities.Inventory.Documents.DocumentLineDiscount>();
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pricing.PriceList> PriceLists => Set<IngenIA365ERP.Domain.Entities.Inventory.Pricing.PriceList>();
@@ -427,15 +333,6 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<IngenIA365ERP.Domain.Entities.ElectronicInvoicing.ElectronicDocument> ElectronicDocuments => Set<IngenIA365ERP.Domain.Entities.ElectronicInvoicing.ElectronicDocument>();
     public DbSet<IngenIA365ERP.Domain.Entities.ElectronicInvoicing.Transactions.ElectronicDocumentVersion> ElectronicDocumentVersions => Set<IngenIA365ERP.Domain.Entities.ElectronicInvoicing.Transactions.ElectronicDocumentVersion>();
     public DbSet<IngenIA365ERP.Domain.Entities.ElectronicInvoicing.Transactions.ElectronicDocumentTransmission> ElectronicDocumentTransmissions => Set<IngenIA365ERP.Domain.Entities.ElectronicInvoicing.Transactions.ElectronicDocumentTransmission>();
-
-    // === CDT (7) ===
-    public DbSet<Certificate> Certificates => Set<Certificate>();
-    public DbSet<CertificateEntry> CertificateEntries => Set<CertificateEntry>();
-    public DbSet<CdtParameter> CdtParameters => Set<CdtParameter>();
-    public DbSet<CdtRateByTerm> CdtRatesByTerm => Set<CdtRateByTerm>();
-    public DbSet<CdtAssociateReference> CdtAssociateReferences => Set<CdtAssociateReference>();
-    public DbSet<CdtAudit> CdtAudits => Set<CdtAudit>();
-    public DbSet<CdtParameterAudit> CdtParameterAudits => Set<CdtParameterAudit>();
 
     // === Debit (7) ===
     public DbSet<DebitCard> DebitCards => Set<DebitCard>();
@@ -478,6 +375,11 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<InventoryPostingRule> InventoryPostingRules => Set<InventoryPostingRule>();
     public DbSet<InventoryVoucherMapping> InventoryVoucherMappings => Set<InventoryVoucherMapping>();
     public DbSet<InventoryPosting> InventoryPostings => Set<InventoryPosting>();
+    // Feature 013, US7 (T0636): el lado contable de la integración con Cartera.
+    public DbSet<IngenIA365ERP.Domain.Entities.Accounting.Lending.LendingPostingRule> LendingPostingRules => Set<IngenIA365ERP.Domain.Entities.Accounting.Lending.LendingPostingRule>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Accounting.Lending.LendingVoucherMapping> LendingVoucherMappings => Set<IngenIA365ERP.Domain.Entities.Accounting.Lending.LendingVoucherMapping>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Accounting.Transactions.LendingPosting> LendingPostings => Set<IngenIA365ERP.Domain.Entities.Accounting.Transactions.LendingPosting>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Accounting.Lending.RegulatoryIndicator> RegulatoryIndicators => Set<IngenIA365ERP.Domain.Entities.Accounting.Lending.RegulatoryIndicator>();
     // Feature 012 (T33, T34; T081): aprobaciones de plataforma y montos maximos por permiso (adelanto de T096).
     public DbSet<ApprovalPolicy> ApprovalPolicies => Set<ApprovalPolicy>();
     public DbSet<ApprovalPolicyLevel> ApprovalPolicyLevels => Set<ApprovalPolicyLevel>();
@@ -487,6 +389,20 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     // Feature 012 (T39; T091-T094): alertas de plataforma. (Adelanto de T096.)
     public DbSet<AlertType> AlertTypes => Set<AlertType>();
     public DbSet<Alert> Alerts => Set<Alert>();
+    // Feature 013 (T37, T39, T41): copia de los valores nacionales, su bitácora de réplicas y las revisiones.
+    public DbSet<Domain.Entities.Core.NationalValues.NationalValue> NationalValues => Set<Domain.Entities.Core.NationalValues.NationalValue>();
+    public DbSet<Domain.Entities.Core.NationalValues.RegulatoryDocument> RegulatoryDocuments => Set<Domain.Entities.Core.NationalValues.RegulatoryDocument>();
+    public DbSet<Domain.Entities.Core.NationalValues.NationalValueReplication> NationalValueReplications => Set<Domain.Entities.Core.NationalValues.NationalValueReplication>();
+    public DbSet<Domain.Entities.Core.NationalValues.NationalValueReview> NationalValueReviews => Set<Domain.Entities.Core.NationalValues.NationalValueReview>();
+    public DbSet<Domain.Entities.Core.RegulatoryProfileVersion> RegulatoryProfileVersions => Set<Domain.Entities.Core.RegulatoryProfileVersion>();
+    // Feature 013 (T0087, T0088): listas restrictivas y solicitudes del titular.
+    public DbSet<Domain.Entities.Compliance.RestrictiveListLoad> RestrictiveListLoads => Set<Domain.Entities.Compliance.RestrictiveListLoad>();
+    public DbSet<Domain.Entities.Compliance.RestrictiveListEntry> RestrictiveListEntries => Set<Domain.Entities.Compliance.RestrictiveListEntry>();
+    public DbSet<Domain.Entities.Compliance.DataSubjectRequest> DataSubjectRequests => Set<Domain.Entities.Compliance.DataSubjectRequest>();
+    // Feature 013 (T0077): el registro de participantes de la integración.
+    public DbSet<IntegrationParticipant> IntegrationParticipants => Set<IntegrationParticipant>();
+    public DbSet<Domain.Entities.Core.ExternalChannelSetting> ExternalChannelSettings => Set<Domain.Entities.Core.ExternalChannelSetting>();
+    public DbSet<IntegrationParticipantAdoption> IntegrationParticipantAdoptions => Set<IntegrationParticipantAdoption>();
     public DbSet<UserMenuAccess> UserMenuAccesses => Set<UserMenuAccess>();
     public DbSet<SecurityModule> SecurityModules => Set<SecurityModule>();
     public DbSet<UserAssignment> UserAssignments => Set<UserAssignment>();
@@ -546,6 +462,198 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<UserTenantAssignment> UserTenantAssignments => Set<UserTenantAssignment>();
     public DbSet<UserBranchAssignment> UserBranchAssignments => Set<UserBranchAssignment>();
 
+    // Feature 013, fase 3 (T0236): Cartera nueva, migración CarteraNucleo. Sólo forma; cada historia les da comportamiento.
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Collections.CreditReportClaim> CreditReportClaims => Set<IngenIA365ERP.Domain.Entities.Lending.Collections.CreditReportClaim>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Collections.DebtorMessage> DebtorMessages => Set<IngenIA365ERP.Domain.Entities.Lending.Collections.DebtorMessage>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Collections.DebtorMessageEvent> DebtorMessageEvents => Set<IngenIA365ERP.Domain.Entities.Lending.Collections.DebtorMessageEvent>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Collections.PriorNotice> PriorNotices => Set<IngenIA365ERP.Domain.Entities.Lending.Collections.PriorNotice>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Configuration.CommercialTermEquivalence> CommercialTermEquivalences => Set<IngenIA365ERP.Domain.Entities.Lending.Configuration.CommercialTermEquivalence>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Configuration.ContributionBalanceLoad> ContributionBalanceLoads => Set<IngenIA365ERP.Domain.Entities.Lending.Configuration.ContributionBalanceLoad>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Configuration.CreditLine> CreditLines => Set<IngenIA365ERP.Domain.Entities.Lending.Configuration.CreditLine>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Configuration.CreditLineCollateralRule> CreditLineCollateralRules => Set<IngenIA365ERP.Domain.Entities.Lending.Configuration.CreditLineCollateralRule>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Configuration.CreditLineDocumentRequirement> CreditLineDocumentRequirements => Set<IngenIA365ERP.Domain.Entities.Lending.Configuration.CreditLineDocumentRequirement>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Configuration.CreditLineInsurance> CreditLineInsurances => Set<IngenIA365ERP.Domain.Entities.Lending.Configuration.CreditLineInsurance>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Configuration.CreditLineRateBand> CreditLineRateBands => Set<IngenIA365ERP.Domain.Entities.Lending.Configuration.CreditLineRateBand>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Configuration.CreditLineVersion> CreditLineVersions => Set<IngenIA365ERP.Domain.Entities.Lending.Configuration.CreditLineVersion>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Configuration.LendingFactType> LendingFactTypes => Set<IngenIA365ERP.Domain.Entities.Lending.Configuration.LendingFactType>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Configuration.LendingNumberSequence> LendingNumberSequences => Set<IngenIA365ERP.Domain.Entities.Lending.Configuration.LendingNumberSequence>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Configuration.LendingSetup> LendingSetups => Set<IngenIA365ERP.Domain.Entities.Lending.Configuration.LendingSetup>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Configuration.UserCreditLineScope> UserCreditLineScopes => Set<IngenIA365ERP.Domain.Entities.Lending.Configuration.UserCreditLineScope>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Documents.IssuedDocumentEvent> IssuedDocumentEvents => Set<IngenIA365ERP.Domain.Entities.Lending.Documents.IssuedDocumentEvent>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Documents.IssuedDocumentLoan> IssuedDocumentLoans => Set<IngenIA365ERP.Domain.Entities.Lending.Documents.IssuedDocumentLoan>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Documents.IssuedLendingDocument> IssuedLendingDocuments => Set<IngenIA365ERP.Domain.Entities.Lending.Documents.IssuedLendingDocument>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Documents.RegulatoryFile> RegulatoryFiles => Set<IngenIA365ERP.Domain.Entities.Lending.Documents.RegulatoryFile>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Documents.RegulatoryFileLine> RegulatoryFileLines => Set<IngenIA365ERP.Domain.Entities.Lending.Documents.RegulatoryFileLine>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Governance.AttributionLevel> AttributionLevels => Set<IngenIA365ERP.Domain.Entities.Lending.Governance.AttributionLevel>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Governance.AttributionMatrix> AttributionMatrices => Set<IngenIA365ERP.Domain.Entities.Lending.Governance.AttributionMatrix>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Governance.AttributionRule> AttributionRules => Set<IngenIA365ERP.Domain.Entities.Lending.Governance.AttributionRule>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Governance.CaseParticipation> CaseParticipations => Set<IngenIA365ERP.Domain.Entities.Lending.Governance.CaseParticipation>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Governance.ConnectedGroup> ConnectedGroups => Set<IngenIA365ERP.Domain.Entities.Lending.Governance.ConnectedGroup>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Governance.ConnectedGroupMember> ConnectedGroupMembers => Set<IngenIA365ERP.Domain.Entities.Lending.Governance.ConnectedGroupMember>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Governance.CreditDecision> CreditDecisions => Set<IngenIA365ERP.Domain.Entities.Lending.Governance.CreditDecision>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Governance.GoverningBody> GoverningBodies => Set<IngenIA365ERP.Domain.Entities.Lending.Governance.GoverningBody>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Governance.GoverningBodyMember> GoverningBodyMembers => Set<IngenIA365ERP.Domain.Entities.Lending.Governance.GoverningBodyMember>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Governance.GoverningBodyRuleVersion> GoverningBodyRuleVersions => Set<IngenIA365ERP.Domain.Entities.Lending.Governance.GoverningBodyRuleVersion>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Governance.RelatedParty> RelatedParties => Set<IngenIA365ERP.Domain.Entities.Lending.Governance.RelatedParty>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Governance.Session> LendingSessions => Set<IngenIA365ERP.Domain.Entities.Lending.Governance.Session>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Governance.SessionAttendance> SessionAttendances => Set<IngenIA365ERP.Domain.Entities.Lending.Governance.SessionAttendance>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Governance.SessionItem> SessionItems => Set<IngenIA365ERP.Domain.Entities.Lending.Governance.SessionItem>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Governance.SessionVote> SessionVotes => Set<IngenIA365ERP.Domain.Entities.Lending.Governance.SessionVote>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Integration.AccountingFactPart> AccountingFactParts => Set<IngenIA365ERP.Domain.Entities.Lending.Integration.AccountingFactPart>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Integration.LendingInboundMessage> LendingInboundMessages => Set<IngenIA365ERP.Domain.Entities.Lending.Integration.LendingInboundMessage>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Integration.LendingInboundMessageEvaluation> LendingInboundMessageEvaluations => Set<IngenIA365ERP.Domain.Entities.Lending.Integration.LendingInboundMessageEvaluation>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Integration.LendingProcessRun> LendingProcessRuns => Set<IngenIA365ERP.Domain.Entities.Lending.Integration.LendingProcessRun>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Integration.LendingProcessRunError> LendingProcessRunErrors => Set<IngenIA365ERP.Domain.Entities.Lending.Integration.LendingProcessRunError>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Loans.InsolvencyProceeding> InsolvencyProceedings => Set<IngenIA365ERP.Domain.Entities.Lending.Loans.InsolvencyProceeding>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Loans.InsuranceClaim> InsuranceClaims => Set<IngenIA365ERP.Domain.Entities.Lending.Loans.InsuranceClaim>();
+    // Feature 013, US9 (T0697): riesgo y cierres (CarteraRiesgo).
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Risk.MonthlyClose> MonthlyCloses => Set<IngenIA365ERP.Domain.Entities.Lending.Risk.MonthlyClose>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Risk.MonthlyCloseLoan> MonthlyCloseLoans => Set<IngenIA365ERP.Domain.Entities.Lending.Risk.MonthlyCloseLoan>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Risk.MonthlyCloseGeneralImpairment> MonthlyCloseGeneralImpairments => Set<IngenIA365ERP.Domain.Entities.Lending.Risk.MonthlyCloseGeneralImpairment>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Risk.MonthlyCloseReopening> MonthlyCloseReopenings => Set<IngenIA365ERP.Domain.Entities.Lending.Risk.MonthlyCloseReopening>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Risk.LoanArrearsHistoryEntry> LoanArrearsHistory => Set<IngenIA365ERP.Domain.Entities.Lending.Risk.LoanArrearsHistoryEntry>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Risk.AnalysisRating> AnalysisRatings => Set<IngenIA365ERP.Domain.Entities.Lending.Risk.AnalysisRating>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Risk.RiskPolicyVersion> RiskPolicyVersions => Set<IngenIA365ERP.Domain.Entities.Lending.Risk.RiskPolicyVersion>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Risk.ImpairmentModelElection> ImpairmentModelElections => Set<IngenIA365ERP.Domain.Entities.Lending.Risk.ImpairmentModelElection>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Risk.ArrearsHistoryLoad> ArrearsHistoryLoads => Set<IngenIA365ERP.Domain.Entities.Lending.Risk.ArrearsHistoryLoad>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Loans.Loan> Loans => Set<IngenIA365ERP.Domain.Entities.Lending.Loans.Loan>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Loans.LoanControl> LoanControls => Set<IngenIA365ERP.Domain.Entities.Lending.Loans.LoanControl>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Loans.LoanParty> LoanParties => Set<IngenIA365ERP.Domain.Entities.Lending.Loans.LoanParty>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Loans.LoanTermsVersion> LoanTermsVersions => Set<IngenIA365ERP.Domain.Entities.Lending.Loans.LoanTermsVersion>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Migration.LendingActivation> LendingActivations => Set<IngenIA365ERP.Domain.Entities.Lending.Migration.LendingActivation>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Migration.MigrationArrearsHistoryRow> MigrationArrearsHistoryRows => Set<IngenIA365ERP.Domain.Entities.Lending.Migration.MigrationArrearsHistoryRow>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Migration.MigrationAuthorizationRow> MigrationAuthorizationRows => Set<IngenIA365ERP.Domain.Entities.Lending.Migration.MigrationAuthorizationRow>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Migration.MigrationBalanceRow> MigrationBalanceRows => Set<IngenIA365ERP.Domain.Entities.Lending.Migration.MigrationBalanceRow>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Migration.MigrationBlockRow> MigrationBlockRows => Set<IngenIA365ERP.Domain.Entities.Lending.Migration.MigrationBlockRow>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Migration.MigrationBureauReportRow> MigrationBureauReportRows => Set<IngenIA365ERP.Domain.Entities.Lending.Migration.MigrationBureauReportRow>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Migration.MigrationChargedOffRow> MigrationChargedOffRows => Set<IngenIA365ERP.Domain.Entities.Lending.Migration.MigrationChargedOffRow>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Migration.MigrationClaimRow> MigrationClaimRows => Set<IngenIA365ERP.Domain.Entities.Lending.Migration.MigrationClaimRow>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Migration.MigrationCoDebtorRow> MigrationCoDebtorRows => Set<IngenIA365ERP.Domain.Entities.Lending.Migration.MigrationCoDebtorRow>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Migration.MigrationCollateralRow> MigrationCollateralRows => Set<IngenIA365ERP.Domain.Entities.Lending.Migration.MigrationCollateralRow>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Migration.MigrationCreditLimitRow> MigrationCreditLimitRows => Set<IngenIA365ERP.Domain.Entities.Lending.Migration.MigrationCreditLimitRow>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Migration.MigrationInstallmentRow> MigrationInstallmentRows => Set<IngenIA365ERP.Domain.Entities.Lending.Migration.MigrationInstallmentRow>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Migration.MigrationLoad> MigrationLoads => Set<IngenIA365ERP.Domain.Entities.Lending.Migration.MigrationLoad>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Migration.MigrationLoadDifference> MigrationLoadDifferences => Set<IngenIA365ERP.Domain.Entities.Lending.Migration.MigrationLoadDifference>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Migration.MigrationLoadPart> MigrationLoadParts => Set<IngenIA365ERP.Domain.Entities.Lending.Migration.MigrationLoadPart>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Migration.MigrationLoanRow> MigrationLoanRows => Set<IngenIA365ERP.Domain.Entities.Lending.Migration.MigrationLoanRow>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Migration.MigrationPriorNoticeRow> MigrationPriorNoticeRows => Set<IngenIA365ERP.Domain.Entities.Lending.Migration.MigrationPriorNoticeRow>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Migration.MigrationRelatedPartyRow> MigrationRelatedPartyRows => Set<IngenIA365ERP.Domain.Entities.Lending.Migration.MigrationRelatedPartyRow>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Migration.MigrationRestructuringRow> MigrationRestructuringRows => Set<IngenIA365ERP.Domain.Entities.Lending.Migration.MigrationRestructuringRow>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Migration.MigrationRiskDataRow> MigrationRiskDataRows => Set<IngenIA365ERP.Domain.Entities.Lending.Migration.MigrationRiskDataRow>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Migration.MigrationSaleReconciliation> MigrationSaleReconciliations => Set<IngenIA365ERP.Domain.Entities.Lending.Migration.MigrationSaleReconciliation>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Migration.MigrationSaleRow> MigrationSaleRows => Set<IngenIA365ERP.Domain.Entities.Lending.Migration.MigrationSaleRow>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Migration.ProvisionalCollection> ProvisionalCollections => Set<IngenIA365ERP.Domain.Entities.Lending.Migration.ProvisionalCollection>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Operations.DisbursementFile> DisbursementFiles => Set<IngenIA365ERP.Domain.Entities.Lending.Operations.DisbursementFile>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Operations.DisbursementFileLine> DisbursementFileLines => Set<IngenIA365ERP.Domain.Entities.Lending.Operations.DisbursementFileLine>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Operations.DisbursementOrder> DisbursementOrders => Set<IngenIA365ERP.Domain.Entities.Lending.Operations.DisbursementOrder>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Operations.DisbursementOrderResult> DisbursementOrderResults => Set<IngenIA365ERP.Domain.Entities.Lending.Operations.DisbursementOrderResult>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Operations.InstallmentNonDeduction> InstallmentNonDeductions => Set<IngenIA365ERP.Domain.Entities.Lending.Operations.InstallmentNonDeduction>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Operations.LoanOperation> LoanOperations => Set<IngenIA365ERP.Domain.Entities.Lending.Operations.LoanOperation>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Origination.BureauQuery> BureauQueries => Set<IngenIA365ERP.Domain.Entities.Lending.Origination.BureauQuery>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Origination.Collateral> Collaterals => Set<IngenIA365ERP.Domain.Entities.Lending.Origination.Collateral>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Origination.CreditApplication> CreditApplications => Set<IngenIA365ERP.Domain.Entities.Lending.Origination.CreditApplication>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Origination.CreditApplicationCheck> CreditApplicationChecks => Set<IngenIA365ERP.Domain.Entities.Lending.Origination.CreditApplicationCheck>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Origination.CreditApplicationDocument> CreditApplicationDocuments => Set<IngenIA365ERP.Domain.Entities.Lending.Origination.CreditApplicationDocument>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Origination.CreditApplicationParty> CreditApplicationParties => Set<IngenIA365ERP.Domain.Entities.Lending.Origination.CreditApplicationParty>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Origination.CreditLimit> CreditLimits => Set<IngenIA365ERP.Domain.Entities.Lending.Origination.CreditLimit>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Origination.CreditScore> CreditScores => Set<IngenIA365ERP.Domain.Entities.Lending.Origination.CreditScore>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Origination.DebtorBlock> DebtorBlocks => Set<IngenIA365ERP.Domain.Entities.Lending.Origination.DebtorBlock>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Origination.DebtorControl> DebtorControls => Set<IngenIA365ERP.Domain.Entities.Lending.Origination.DebtorControl>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Origination.LoanNumberReservation> LoanNumberReservations => Set<IngenIA365ERP.Domain.Entities.Lending.Origination.LoanNumberReservation>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Origination.PrepaymentPreference> PrepaymentPreferences => Set<IngenIA365ERP.Domain.Entities.Lending.Origination.PrepaymentPreference>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Origination.PromissoryNote> PromissoryNotes => Set<IngenIA365ERP.Domain.Entities.Lending.Origination.PromissoryNote>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Origination.ScreeningResult> ScreeningResults => Set<IngenIA365ERP.Domain.Entities.Lending.Origination.ScreeningResult>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.LoanPayrollLink> LoanPayrollLinks => Set<IngenIA365ERP.Domain.Entities.Lending.Payroll.LoanPayrollLink>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollAgreement> PayrollAgreements => Set<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollAgreement>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollAgreementVersion> PayrollAgreementVersions => Set<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollAgreementVersion>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollAgreementContact> PayrollAgreementContacts => Set<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollAgreementContact>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollAgreementResultCode> PayrollAgreementResultCodes => Set<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollAgreementResultCode>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollAgreementFileGroup> PayrollAgreementFileGroups => Set<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollAgreementFileGroup>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollAgreementConceptEquivalence> PayrollAgreementConceptEquivalences => Set<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollAgreementConceptEquivalence>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollDeductionFile> PayrollDeductionFiles => Set<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollDeductionFile>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollDeductionFileLine> PayrollDeductionFileLines => Set<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollDeductionFileLine>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollDeductionResult> PayrollDeductionResults => Set<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollDeductionResult>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollDeductionFileAccountLine> PayrollDeductionFileAccountLines => Set<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollDeductionFileAccountLine>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollDeductionAccountResult> PayrollDeductionAccountResults => Set<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollDeductionAccountResult>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollDeductionUnmatchedLine> PayrollDeductionUnmatchedLines => Set<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollDeductionUnmatchedLine>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.NonDeductionFollowUp> NonDeductionFollowUps => Set<IngenIA365ERP.Domain.Entities.Lending.Payroll.NonDeductionFollowUp>();
+    // K3 (feature 013, CarteraNovedades).
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Operations.LoanNovelty> LoanNovelties => Set<IngenIA365ERP.Domain.Entities.Lending.Operations.LoanNovelty>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Operations.LoanNoveltyLoan> LoanNoveltyLoans => Set<IngenIA365ERP.Domain.Entities.Lending.Operations.LoanNoveltyLoan>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Operations.LoanNoveltyConsent> LoanNoveltyConsents => Set<IngenIA365ERP.Domain.Entities.Lending.Operations.LoanNoveltyConsent>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Operations.Waiver> Waivers => Set<IngenIA365ERP.Domain.Entities.Lending.Operations.Waiver>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Operations.WaiverLine> WaiverLines => Set<IngenIA365ERP.Domain.Entities.Lending.Operations.WaiverLine>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Operations.WriteOffBatch> WriteOffBatches => Set<IngenIA365ERP.Domain.Entities.Lending.Operations.WriteOffBatch>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Operations.WriteOffBatchItem> WriteOffBatchItems => Set<IngenIA365ERP.Domain.Entities.Lending.Operations.WriteOffBatchItem>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Risk.PortfolioEvaluation> PortfolioEvaluations => Set<IngenIA365ERP.Domain.Entities.Lending.Risk.PortfolioEvaluation>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Risk.PortfolioEvaluationLoan> PortfolioEvaluationLoans => Set<IngenIA365ERP.Domain.Entities.Lending.Risk.PortfolioEvaluationLoan>();
+    // K4 (feature 013, CarteraCobranza).
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Collections.MessageCampaign> MessageCampaigns => Set<IngenIA365ERP.Domain.Entities.Lending.Collections.MessageCampaign>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Collections.CollectionStage> CollectionStages => Set<IngenIA365ERP.Domain.Entities.Lending.Collections.CollectionStage>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Collections.CollectionStageHistoryEntry> CollectionStageHistory => Set<IngenIA365ERP.Domain.Entities.Lending.Collections.CollectionStageHistoryEntry>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Collections.CollectorAssignmentRule> CollectorAssignmentRules => Set<IngenIA365ERP.Domain.Entities.Lending.Collections.CollectorAssignmentRule>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Collections.CollectorAssignment> CollectorAssignments => Set<IngenIA365ERP.Domain.Entities.Lending.Collections.CollectorAssignment>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Collections.CollectionAction> CollectionActions => Set<IngenIA365ERP.Domain.Entities.Lending.Collections.CollectionAction>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Collections.PaymentPromise> PaymentPromises => Set<IngenIA365ERP.Domain.Entities.Lending.Collections.PaymentPromise>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Collections.PaymentAgreement> PaymentAgreements => Set<IngenIA365ERP.Domain.Entities.Lending.Collections.PaymentAgreement>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Collections.PaymentAgreementInstallment> PaymentAgreementInstallments => Set<IngenIA365ERP.Domain.Entities.Lending.Collections.PaymentAgreementInstallment>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Collections.LegalProcess> LegalProcesses => Set<IngenIA365ERP.Domain.Entities.Lending.Collections.LegalProcess>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Collections.LegalProcessAction> LegalProcessActions => Set<IngenIA365ERP.Domain.Entities.Lending.Collections.LegalProcessAction>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Projections.LoanDailyPosition> LoanDailyPositions => Set<IngenIA365ERP.Domain.Entities.Lending.Projections.LoanDailyPosition>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Schedules.RepaymentInstallment> RepaymentInstallments => Set<IngenIA365ERP.Domain.Entities.Lending.Schedules.RepaymentInstallment>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Schedules.RepaymentScheduleVersion> RepaymentScheduleVersions => Set<IngenIA365ERP.Domain.Entities.Lending.Schedules.RepaymentScheduleVersion>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Transactions.LoanTransaction> LoanTransactions => Set<IngenIA365ERP.Domain.Entities.Lending.Transactions.LoanTransaction>();
+    // Feature 014 (T021–T026): las cuentas de captación y aportes y su libro.
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.MemberAccount> MemberAccounts => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.MemberAccount>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.MemberAccountParty> MemberAccountParties => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.MemberAccountParty>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.GmfExemptAccount> GmfExemptAccounts => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.GmfExemptAccount>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Restrictions.AccountHold> AccountHolds => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Restrictions.AccountHold>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Restrictions.Garnishment> Garnishments => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Restrictions.Garnishment>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Restrictions.GarnishmentResponse> GarnishmentResponses => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Restrictions.GarnishmentResponse>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.AccountInstallment> AccountInstallments => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.AccountInstallment>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.AccountInstallmentNonDeduction> AccountInstallmentNonDeductions => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.AccountInstallmentNonDeduction>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.ContributionRequest> ContributionRequests => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.ContributionRequest>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Processes.MembershipWithdrawal> MembershipWithdrawals => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Processes.MembershipWithdrawal>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Processes.MembershipWithdrawalLine> MembershipWithdrawalLines => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Processes.MembershipWithdrawalLine>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Processes.AssemblyDistribution> AssemblyDistributions => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Processes.AssemblyDistribution>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Processes.AssemblyDistributionLine> AssemblyDistributionLines => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Processes.AssemblyDistributionLine>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Processes.AssemblyReturnBase> AssemblyReturnBases => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Processes.AssemblyReturnBase>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Processes.DeceasedHolderCase> DeceasedHolderCases => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Processes.DeceasedHolderCase>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Processes.UnclaimedBalance> UnclaimedBalances => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Processes.UnclaimedBalance>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Liquidity.LiquidityFundSnapshot> LiquidityFundSnapshots => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Liquidity.LiquidityFundSnapshot>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Liquidity.LiquidityFundHolding> LiquidityFundHoldings => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Liquidity.LiquidityFundHolding>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Core.AssociateInboundMessage> AssociateInboundMessages => Set<IngenIA365ERP.Domain.Entities.Core.AssociateInboundMessage>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Documents.IssuedDocumentAccount> IssuedDocumentAccounts => Set<IngenIA365ERP.Domain.Entities.Lending.Documents.IssuedDocumentAccount>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.AccountPayoutOrder> AccountPayoutOrders => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.AccountPayoutOrder>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Transactions.MemberAccountOperation> MemberAccountOperations => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Transactions.MemberAccountOperation>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Transactions.MemberAccountTransaction> MemberAccountTransactions => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Transactions.MemberAccountTransaction>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Projections.MemberAccountDailyPosition> MemberAccountDailyPositions => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Projections.MemberAccountDailyPosition>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Projections.MemberAccountControl> MemberAccountControls => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Projections.MemberAccountControl>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Configuration.DepositLineVersion> DepositLineVersions => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Configuration.DepositLineVersion>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Configuration.DepositLineRateTier> DepositLineRateTiers => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Configuration.DepositLineRateTier>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Configuration.ContributionLineVersion> ContributionLineVersions => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Configuration.ContributionLineVersion>();
+    // Feature 014, US4 (T110, T114, T118).
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Transactions.GmfMonthlyUsage> GmfMonthlyUsages => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Transactions.GmfMonthlyUsage>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Transactions.InterestSettlement> InterestSettlements => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Transactions.InterestSettlement>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Transactions.WithholdingAccumulation> WithholdingAccumulations => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Transactions.WithholdingAccumulation>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Migration.MigrationLineEquivalenceRow> MigrationLineEquivalenceRows => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Migration.MigrationLineEquivalenceRow>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Migration.MigrationContributionAccountRow> MigrationContributionAccountRows => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Migration.MigrationContributionAccountRow>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Migration.MigrationAccountRow> MigrationAccountRows => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Migration.MigrationAccountRow>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Migration.MigrationAccountPartyRow> MigrationAccountPartyRows => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Migration.MigrationAccountPartyRow>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Migration.MigrationAccountInstallmentRow> MigrationAccountInstallmentRows => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Migration.MigrationAccountInstallmentRow>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Migration.MigrationGmfExemptionRow> MigrationGmfExemptionRows => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Migration.MigrationGmfExemptionRow>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Migration.MigrationHoldRow> MigrationHoldRows => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Migration.MigrationHoldRow>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Migration.MigrationTaxYearRow> MigrationTaxYearRows => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Migration.MigrationTaxYearRow>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Configuration.DepositLineCharge> DepositLineCharges => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Configuration.DepositLineCharge>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.AccountCharge> AccountCharges => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.AccountCharge>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.AccountChargeExemption> AccountChargeExemptions => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.AccountChargeExemption>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.DirectDebitMandate> DirectDebitMandates => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.DirectDebitMandate>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.MemberAccountTermsVersion> MemberAccountTermsVersions => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.MemberAccountTermsVersion>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.TermDepositScheduleItem> TermDepositScheduleItems => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.TermDepositScheduleItem>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Configuration.NegotiatedRateRule> NegotiatedRateRules => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Configuration.NegotiatedRateRule>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.NegotiatedRateRequest> NegotiatedRateRequests => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.NegotiatedRateRequest>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Migration.MigrationTermDepositRow> MigrationTermDepositRows => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Migration.MigrationTermDepositRow>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         // Esquema constante, y eso es el cambio.
@@ -592,6 +700,28 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
 
     /// <inheritdoc />
     public void DescartarCambios() => ChangeTracker.Clear();
+
+    /// <inheritdoc />
+    public void DescartarCambiosSalvo(params object[] conservar)
+    {
+        ArgumentNullException.ThrowIfNull(conservar);
+        // El token de concurrencia de cada una (en PostgreSQL, la sombra xmin) antes de soltar: Attach lo dejaría en su valor por defecto.
+        var tokens = conservar.Distinct(ReferenceEqualityComparer.Instance).Select(entidad => (Entidad: entidad!, Valores: Entry(entidad!).Properties
+                .Where(p => p.Metadata.IsConcurrencyToken).Select(p => (p.Metadata.Name, p.CurrentValue)).ToList()))
+            .ToList();
+        ChangeTracker.Clear();
+        foreach (var (entidad, valores) in tokens)
+        {
+            var entrada = Attach(entidad);
+            foreach (var (nombre, valor) in valores)
+            {
+                var propiedad = entrada.Property(nombre);
+                propiedad.CurrentValue = valor;
+                propiedad.OriginalValue = valor;
+                propiedad.IsModified = false;
+            }
+        }
+    }
 
     public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {

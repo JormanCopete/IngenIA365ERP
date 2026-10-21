@@ -52,6 +52,23 @@ public class CasosDoradosTests
         (t.Earnings - t.Deductions).Should().Be(t.Net, "la suma de líneas redondeadas debe coincidir con el neto (FR-017)");
 
         resultado.Flags.Should().Be(caso.Esperado.Banderas);
+
+        // Feature 013 (T0103, FR-112): lo no descontado de la cuota de Cartera y su motivo, por línea.
+        if (caso.Esperado.NoDescontados is { } noDescontados)
+        {
+            var reales = resultado.Lines.Where(l => l.NotDeductedAmount != 0m)
+                .Select(l => (l.Code, l.NotDeductedAmount, l.NotDeductedReason)).ToList();
+            reales.Should().BeEquivalentTo(noDescontados.Select(n => (n.Concepto, n.Valor, (string?)n.Motivo)), o => o.WithStrictOrdering(),
+                "lo no descontado de cada línea y su motivo");
+            resultado.Lines.Should().OnlyContain(l => l.DeferredAmount == 0m || l.NotDeductedAmount == 0m, "lo no descontado de Cartera no se difiere");
+        }
+        // Feature 013 (enmienda D-08 de la 010, T53, T0631; pregunta C1, rige «sí»): la cuota de Cartera contabiliza contra la cuenta del
+        // concepto DESC_CARTERA (el puente «recaudos por nómina para Cartera»), como cualquier descuento.
+        resultado.Lines.Where(l => l.Code.Equals("DESC_CARTERA", StringComparison.OrdinalIgnoreCase) && l.Amount != 0m)
+            .Should().OnlyContain(l => l.AffectsAccounting, "DESC_CARTERA contabiliza en la ordinaria (enmienda D-08)");
+        if (caso.Esperado.OrdenDeAutorizadas is { } orden)
+            resultado.Lines.Where(l => orden.Contains(l.Code, StringComparer.OrdinalIgnoreCase)).OrderBy(l => l.Order).Select(l => l.Code)
+                .Should().Equal(orden, "orden de las deducciones autorizadas: la cuota de Cartera va primera");
         if (caso.Esperado.DiasPagados is { } dias)
             resultado.Tranches.Sum(x => x.PaidDays).Should().Be(dias, "días pagados");
         if (caso.Esperado.DiasAusencia is { } ausencia)

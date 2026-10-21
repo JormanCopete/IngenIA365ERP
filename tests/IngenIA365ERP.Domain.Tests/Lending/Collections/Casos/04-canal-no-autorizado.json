@@ -1,0 +1,17 @@
+// Regla 4 (US12-4): el titular sólo autorizó el correo. Un SMS se excluye, también si es informativo; por correo sale.
+{
+  "caso": "04-canal-no-autorizado",
+  "reglas": { "horario": { "lunesAViernes": ["07:00", "19:00"], "sabado": ["08:00", "15:00"] }, "contactosPorDia": 1, "noHabiles": ["2026-11-02", "2026-11-16"] },
+  "titular": { "canalesAutorizados": ["Email"] },
+  "escenarios": [
+    { "nombre": "cobranza por SMS",
+      "solicitud": { "pedido": "2026-11-11T09:00", "canal": "Sms", "proposito": "Collection", "inmediato": true },
+      "esperado": { "decision": "Excluido", "motivo": "ChannelNotAuthorized" } },
+    { "nombre": "informativo por SMS",
+      "solicitud": { "pedido": "2026-11-11T09:00", "canal": "Sms", "proposito": "Informative" },
+      "esperado": { "decision": "Excluido", "motivo": "ChannelNotAuthorized" } },
+    { "nombre": "cobranza por correo",
+      "solicitud": { "pedido": "2026-11-11T09:00", "canal": "Email", "proposito": "Collection" },
+      "esperado": { "decision": "Permitido", "en": "2026-11-11T09:00" } }
+  ]
+}

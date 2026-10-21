@@ -1,0 +1,890 @@
+{
+  "descripcion": "Escenario común de los casos dorados del constructor de Cartera (feature 013, T0612): el CUIF de ensayo (auxiliares habilitadas para CAR; los nombres y códigos son de ejemplo, no del CUIF sembrado), la matriz vigente desde el 2026-01-01 con los roles de T52 (hecho * en los de saldo; el ingreso del ajuste de Comercial con su hecho fijado), las sucursales y las personas de los sobres. Los mapeos de tipo de comprobante son los de la semilla (contracts/contabilidad.md §5): el escenario los toma de LendingVoucherMappingsSeeder. Las líneas esperadas llevan el rol del que salen y el mapa hecho/concepto/créditos.",
+  "sucursales": {
+    "principal": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+    "norte": "c8e2f3a4-1b5c-4d6e-9f70-2b3c4d5e6f71"
+  },
+  "personas": [
+    {
+      "alias": "ana",
+      "publicId": "a1b2c3d4-0000-4000-8000-000000000002",
+      "nombre": "Ana Deudora"
+    },
+    {
+      "alias": "luis",
+      "publicId": "a1b2c3d4-0000-4000-8000-000000000003",
+      "nombre": "Luis Deudor"
+    },
+    {
+      "alias": "aseguradora",
+      "publicId": "a1b2c3d4-0000-4000-8000-0000000000a5",
+      "nombre": "Aseguradora de ensayo"
+    },
+    {
+      "alias": "pagador",
+      "publicId": "a1b2c3d4-0000-4000-8000-0000000000b6",
+      "nombre": "Empresa pagadora de ensayo"
+    },
+    {
+      "alias": "beneficiario",
+      "publicId": "a1b2c3d4-0000-4000-8000-0000000000c7",
+      "nombre": "Beneficiario de ensayo"
+    },
+    {
+      "alias": "abogado",
+      "publicId": "a1b2c3d4-0000-4000-8000-0000000000d8",
+      "nombre": "Abogado de cobranza de ensayo"
+    }
+  ],
+  "cuentas": [
+    {
+      "codigo": "14050501",
+      "nombre": "Capital vivienda categoría A (K6b)",
+      "naturaleza": "Debit",
+      "tercero": true,
+      "cruce": true
+    },
+    {
+      "codigo": "14050601",
+      "nombre": "Interés corriente vivienda categoría A (K6b)",
+      "naturaleza": "Debit"
+    },
+    {
+      "codigo": "41505001",
+      "nombre": "Corrección monetaria UVR de la cartera de vivienda (K6b)",
+      "naturaleza": "Credit"
+    },
+    {
+      "codigo": "14410501",
+      "nombre": "Capital consumo con libranza categoría A",
+      "naturaleza": "Debit",
+      "tercero": true,
+      "cruce": true
+    },
+    {
+      "codigo": "14411501",
+      "nombre": "Capital consumo con libranza categoría C",
+      "naturaleza": "Debit",
+      "tercero": true,
+      "cruce": true
+    },
+    {
+      "codigo": "14420501",
+      "nombre": "Capital consumo sin libranza categoría A",
+      "naturaleza": "Debit",
+      "tercero": true,
+      "cruce": true
+    },
+    {
+      "codigo": "14421501",
+      "nombre": "Capital consumo sin libranza categoría C",
+      "naturaleza": "Debit",
+      "tercero": true,
+      "cruce": true
+    },
+    {
+      "codigo": "14421701",
+      "nombre": "Capital consumo categoría D",
+      "naturaleza": "Debit",
+      "tercero": true,
+      "cruce": true
+    },
+    {
+      "codigo": "14422501",
+      "nombre": "Capital consumo categoría E",
+      "naturaleza": "Debit",
+      "tercero": true,
+      "cruce": true
+    },
+    {
+      "codigo": "14690501",
+      "nombre": "Capital créditos a empleados categoría A",
+      "naturaleza": "Debit",
+      "tercero": true,
+      "cruce": true
+    },
+    {
+      "codigo": "14691501",
+      "nombre": "Capital créditos a empleados categoría C",
+      "naturaleza": "Debit",
+      "tercero": true,
+      "cruce": true
+    },
+    {
+      "codigo": "14430501",
+      "nombre": "Interés corriente consumo A",
+      "naturaleza": "Debit",
+      "tercero": true,
+      "cruce": true
+    },
+    {
+      "codigo": "14430502",
+      "nombre": "Interés de mora consumo A",
+      "naturaleza": "Debit",
+      "tercero": true,
+      "cruce": true
+    },
+    {
+      "codigo": "14430602",
+      "nombre": "Interés de mora consumo B",
+      "naturaleza": "Debit",
+      "tercero": true,
+      "cruce": true
+    },
+    {
+      "codigo": "14431501",
+      "nombre": "Interés corriente consumo C",
+      "naturaleza": "Debit",
+      "tercero": true,
+      "cruce": true
+    },
+    {
+      "codigo": "14432501",
+      "nombre": "Interés corriente consumo E",
+      "naturaleza": "Debit",
+      "tercero": true,
+      "cruce": true
+    },
+    {
+      "codigo": "14433001",
+      "nombre": "Interés corriente consumo A con periodos de gracia",
+      "naturaleza": "Debit",
+      "tercero": true,
+      "cruce": true
+    },
+    {
+      "codigo": "14440501",
+      "nombre": "Seguro por cobrar consumo A",
+      "naturaleza": "Debit",
+      "tercero": true,
+      "cruce": true
+    },
+    {
+      "codigo": "14440502",
+      "nombre": "Gastos de cobranza por cuenta del asociado A",
+      "naturaleza": "Debit",
+      "tercero": true,
+      "cruce": true
+    },
+    {
+      "codigo": "14441501",
+      "nombre": "Seguro por cobrar consumo C",
+      "naturaleza": "Debit",
+      "tercero": true,
+      "cruce": true
+    },
+    {
+      "codigo": "16909501",
+      "nombre": "Gastos de cobranza por cobrar",
+      "naturaleza": "Debit",
+      "tercero": true,
+      "cruce": true
+    },
+    {
+      "codigo": "14450501",
+      "nombre": "Deterioro capital consumo A",
+      "naturaleza": "Credit"
+    },
+    {
+      "codigo": "14450502",
+      "nombre": "Deterioro intereses consumo A",
+      "naturaleza": "Credit"
+    },
+    {
+      "codigo": "14450602",
+      "nombre": "Deterioro intereses de mora consumo B",
+      "naturaleza": "Credit"
+    },
+    {
+      "codigo": "14451501",
+      "nombre": "Deterioro capital consumo C",
+      "naturaleza": "Credit"
+    },
+    {
+      "codigo": "14451502",
+      "nombre": "Deterioro intereses consumo C",
+      "naturaleza": "Credit"
+    },
+    {
+      "codigo": "14451503",
+      "nombre": "Deterioro pagos por cuenta consumo C",
+      "naturaleza": "Credit"
+    },
+    {
+      "codigo": "14452501",
+      "nombre": "Deterioro capital consumo E",
+      "naturaleza": "Credit"
+    },
+    {
+      "codigo": "14452502",
+      "nombre": "Deterioro intereses consumo E",
+      "naturaleza": "Credit"
+    },
+    {
+      "codigo": "14751501",
+      "nombre": "Deterioro capital créditos a empleados C",
+      "naturaleza": "Credit"
+    },
+    {
+      "codigo": "14680501",
+      "nombre": "Deterioro general",
+      "naturaleza": "Credit"
+    },
+    {
+      "codigo": "14681001",
+      "nombre": "Deterioro adicional",
+      "naturaleza": "Credit"
+    },
+    {
+      "codigo": "81150501",
+      "nombre": "Intereses en suspenso consumo D",
+      "naturaleza": "Debit"
+    },
+    {
+      "codigo": "81150502",
+      "nombre": "Intereses en suspenso consumo E",
+      "naturaleza": "Debit"
+    },
+    {
+      "codigo": "86050501",
+      "nombre": "Deudoras contingentes por contra",
+      "naturaleza": "Credit"
+    },
+    {
+      "codigo": "83101501",
+      "nombre": "Cartera castigada capital",
+      "naturaleza": "Debit"
+    },
+    {
+      "codigo": "83101502",
+      "nombre": "Cartera castigada intereses",
+      "naturaleza": "Debit"
+    },
+    {
+      "codigo": "83101503",
+      "nombre": "Cartera castigada intereses en suspenso",
+      "naturaleza": "Debit"
+    },
+    {
+      "codigo": "88050501",
+      "nombre": "Deudoras de control por contra",
+      "naturaleza": "Credit"
+    },
+    {
+      "codigo": "27500501",
+      "nombre": "Anticipos de deudores de cartera",
+      "naturaleza": "Credit",
+      "tercero": true,
+      "cruce": true
+    },
+    {
+      "codigo": "27500502",
+      "nombre": "Saldos a favor de deudores de cartera",
+      "naturaleza": "Credit",
+      "tercero": true,
+      "cruce": true
+    },
+    {
+      "codigo": "24400501",
+      "nombre": "Seguros por pagar",
+      "naturaleza": "Credit",
+      "tercero": true
+    },
+    {
+      "codigo": "24409501",
+      "nombre": "Cuentas por pagar a terceros de cobranza",
+      "naturaleza": "Credit",
+      "tercero": true
+    },
+    {
+      "codigo": "11059501",
+      "nombre": "Recaudos por aplicar de caja",
+      "naturaleza": "Debit",
+      "tercero": true
+    },
+    {
+      "codigo": "11059502",
+      "nombre": "Recaudos por aplicar del recaudador de prueba",
+      "naturaleza": "Debit",
+      "tercero": true
+    },
+    {
+      "codigo": "25059501",
+      "nombre": "Recaudos por nómina para Cartera",
+      "naturaleza": "Credit",
+      "tercero": true
+    },
+    {
+      "codigo": "24959501",
+      "nombre": "Desembolsos por girar",
+      "naturaleza": "Credit",
+      "tercero": true
+    },
+    {
+      "codigo": "24959502",
+      "nombre": "Desembolsos por girar a terceros",
+      "naturaleza": "Credit",
+      "tercero": true
+    },
+    {
+      "codigo": "13059501",
+      "nombre": "Puente de ventas a crédito con Cartera",
+      "naturaleza": "Debit",
+      "tercero": true,
+      "cruce": true
+    },
+    {
+      "codigo": "13050502",
+      "nombre": "Cuenta por cobrar provisional de ventas a crédito",
+      "naturaleza": "Debit",
+      "tercero": true,
+      "cruce": true
+    },
+    {
+      "codigo": "41502501",
+      "nombre": "Intereses corrientes de consumo",
+      "naturaleza": "Credit"
+    },
+    {
+      "codigo": "41502502",
+      "nombre": "Intereses de mora de consumo",
+      "naturaleza": "Credit"
+    },
+    {
+      "codigo": "41502503",
+      "nombre": "Intereses de consumo cobrados en suspenso",
+      "naturaleza": "Credit"
+    },
+    {
+      "codigo": "41502509",
+      "nombre": "Intereses reversados por ajustes de Comercial",
+      "naturaleza": "Credit"
+    },
+    {
+      "codigo": "41509501",
+      "nombre": "Ingresos por gastos de cobranza",
+      "naturaleza": "Credit",
+      "centro": true
+    },
+    {
+      "codigo": "51150501",
+      "nombre": "Gasto deterioro capital consumo",
+      "naturaleza": "Debit"
+    },
+    {
+      "codigo": "51150502",
+      "nombre": "Gasto deterioro intereses consumo",
+      "naturaleza": "Debit"
+    },
+    {
+      "codigo": "51150503",
+      "nombre": "Gasto deterioro pagos por cuenta consumo",
+      "naturaleza": "Debit"
+    },
+    {
+      "codigo": "51152901",
+      "nombre": "Gasto deterioro general",
+      "naturaleza": "Debit"
+    },
+    {
+      "codigo": "51156301",
+      "nombre": "Gasto deterioro adicional",
+      "naturaleza": "Debit"
+    },
+    {
+      "codigo": "42252401",
+      "nombre": "Recuperación deterioro capital consumo",
+      "naturaleza": "Credit"
+    },
+    {
+      "codigo": "42252402",
+      "nombre": "Recuperación deterioro general",
+      "naturaleza": "Credit"
+    },
+    {
+      "codigo": "42252403",
+      "nombre": "Recuperación deterioro intereses consumo",
+      "naturaleza": "Credit"
+    },
+    {
+      "codigo": "51159501",
+      "nombre": "Gasto por condonaciones",
+      "naturaleza": "Debit"
+    },
+    {
+      "codigo": "51159502",
+      "nombre": "Gasto por castigo de cartera",
+      "naturaleza": "Debit"
+    },
+    {
+      "codigo": "42254601",
+      "nombre": "Recuperación de cartera castigada",
+      "naturaleza": "Credit"
+    },
+    {
+      "codigo": "27959501",
+      "nombre": "Intereses capitalizados por diferir consumo",
+      "naturaleza": "Credit",
+      "tercero": true,
+      "cruce": true
+    },
+    {
+      "codigo": "91150501",
+      "nombre": "Créditos aprobados no desembolsados",
+      "naturaleza": "Credit",
+      "tercero": true
+    },
+    {
+      "codigo": "91300501",
+      "nombre": "Cupos de crédito rotativo otorgados",
+      "naturaleza": "Credit",
+      "tercero": true
+    },
+    {
+      "codigo": "91100501",
+      "nombre": "Bienes y valores recibidos en garantía",
+      "naturaleza": "Credit",
+      "tercero": true,
+      "cruce": true
+    },
+    {
+      "codigo": "96050501",
+      "nombre": "Acreedoras contingentes por contra",
+      "naturaleza": "Debit"
+    }
+  ],
+  "matriz": [
+    {
+      "rol": "Capital",
+      "cuenta": "14410501",
+      "modalidad": "CONSUMO",
+      "subsegmento": "ConLibranza",
+      "categoria": "A"
+    },
+    {
+      "rol": "Capital",
+      "cuenta": "14420501",
+      "modalidad": "CONSUMO",
+      "subsegmento": "SinLibranza",
+      "categoria": "A"
+    },
+    {
+      "rol": "Capital",
+      "cuenta": "14411501",
+      "modalidad": "CONSUMO",
+      "subsegmento": "ConLibranza",
+      "categoria": "C"
+    },
+    {
+      "rol": "Capital",
+      "cuenta": "14421501",
+      "modalidad": "CONSUMO",
+      "subsegmento": "SinLibranza",
+      "categoria": "C"
+    },
+    {
+      "rol": "Capital",
+      "cuenta": "14421701",
+      "modalidad": "CONSUMO",
+      "categoria": "D"
+    },
+    {
+      "rol": "Capital",
+      "cuenta": "14422501",
+      "modalidad": "CONSUMO",
+      "categoria": "E"
+    },
+    {
+      "rol": "Capital",
+      "cuenta": "14690501",
+      "modalidad": "CONSUMO",
+      "categoria": "A",
+      "empleado": true
+    },
+    {
+      "rol": "Capital",
+      "cuenta": "14691501",
+      "modalidad": "CONSUMO",
+      "categoria": "C",
+      "empleado": true
+    },
+    {
+      "rol": "InteresPorCobrar",
+      "cuenta": "14430501",
+      "modalidad": "CONSUMO",
+      "categoria": "A",
+      "concepto": "CurrentInterest"
+    },
+    {
+      "rol": "InteresPorCobrar",
+      "cuenta": "14433001",
+      "modalidad": "CONSUMO",
+      "categoria": "A",
+      "concepto": "CurrentInterest",
+      "gracia": true
+    },
+    {
+      "rol": "InteresPorCobrar",
+      "cuenta": "14430502",
+      "modalidad": "CONSUMO",
+      "categoria": "A",
+      "concepto": "DefaultInterest"
+    },
+    {
+      "rol": "InteresPorCobrar",
+      "cuenta": "14430602",
+      "modalidad": "CONSUMO",
+      "categoria": "B",
+      "concepto": "DefaultInterest"
+    },
+    {
+      "rol": "InteresPorCobrar",
+      "cuenta": "14431501",
+      "modalidad": "CONSUMO",
+      "categoria": "C",
+      "concepto": "CurrentInterest"
+    },
+    {
+      "rol": "InteresPorCobrar",
+      "cuenta": "14432501",
+      "modalidad": "CONSUMO",
+      "categoria": "E",
+      "concepto": "CurrentInterest"
+    },
+    {
+      "rol": "PagoPorCuentaDelAsociado",
+      "cuenta": "14440501",
+      "modalidad": "CONSUMO",
+      "categoria": "A",
+      "concepto": "Insurance"
+    },
+    {
+      "rol": "PagoPorCuentaDelAsociado",
+      "cuenta": "14440502",
+      "modalidad": "CONSUMO",
+      "categoria": "A",
+      "concepto": "CollectionFee"
+    },
+    {
+      "rol": "PagoPorCuentaDelAsociado",
+      "cuenta": "14441501",
+      "modalidad": "CONSUMO",
+      "categoria": "C",
+      "concepto": "Insurance"
+    },
+    {
+      "rol": "CargoPorCobrar",
+      "cuenta": "16909501",
+      "concepto": "CollectionFee"
+    },
+    {
+      "rol": "DeterioroIndividual",
+      "cuenta": "14450501",
+      "modalidad": "CONSUMO",
+      "categoria": "A",
+      "concepto": "Principal"
+    },
+    {
+      "rol": "DeterioroIndividual",
+      "cuenta": "14450502",
+      "modalidad": "CONSUMO",
+      "categoria": "A",
+      "concepto": "CurrentInterest"
+    },
+    {
+      "rol": "DeterioroIndividual",
+      "cuenta": "14450602",
+      "modalidad": "CONSUMO",
+      "categoria": "B",
+      "concepto": "DefaultInterest"
+    },
+    {
+      "rol": "DeterioroIndividual",
+      "cuenta": "14451501",
+      "modalidad": "CONSUMO",
+      "categoria": "C",
+      "concepto": "Principal"
+    },
+    {
+      "rol": "DeterioroIndividual",
+      "cuenta": "14751501",
+      "modalidad": "CONSUMO",
+      "categoria": "C",
+      "concepto": "Principal",
+      "empleado": true
+    },
+    {
+      "rol": "DeterioroIndividual",
+      "cuenta": "14451502",
+      "modalidad": "CONSUMO",
+      "categoria": "C",
+      "concepto": "CurrentInterest"
+    },
+    {
+      "rol": "DeterioroIndividual",
+      "cuenta": "14451503",
+      "modalidad": "CONSUMO",
+      "categoria": "C",
+      "concepto": "Insurance"
+    },
+    {
+      "rol": "DeterioroIndividual",
+      "cuenta": "14452501",
+      "modalidad": "CONSUMO",
+      "categoria": "E",
+      "concepto": "Principal"
+    },
+    {
+      "rol": "DeterioroIndividual",
+      "cuenta": "14452502",
+      "modalidad": "CONSUMO",
+      "categoria": "E",
+      "concepto": "CurrentInterest"
+    },
+    {
+      "rol": "DeterioroGeneral",
+      "cuenta": "14680501",
+      "motivo": "General"
+    },
+    {
+      "rol": "DeterioroGeneral",
+      "cuenta": "14681001",
+      "motivo": "Additional"
+    },
+    {
+      "rol": "SuspensoEnOrden",
+      "cuenta": "81150501",
+      "modalidad": "CONSUMO",
+      "categoria": "D",
+      "concepto": "CurrentInterestInSuspense"
+    },
+    {
+      "rol": "SuspensoEnOrden",
+      "cuenta": "81150502",
+      "modalidad": "CONSUMO",
+      "categoria": "E",
+      "concepto": "CurrentInterestInSuspense"
+    },
+    {
+      "rol": "ContraOrdenContingente",
+      "cuenta": "86050501"
+    },
+    {
+      "rol": "CastigadaEnOrden",
+      "cuenta": "83101501",
+      "concepto": "Principal"
+    },
+    {
+      "rol": "CastigadaEnOrden",
+      "cuenta": "83101502",
+      "concepto": "CurrentInterest"
+    },
+    {
+      "rol": "CastigadaEnOrden",
+      "cuenta": "83101503",
+      "concepto": "CurrentInterestInSuspense"
+    },
+    {
+      "rol": "ContraOrdenControl",
+      "cuenta": "88050501"
+    },
+    {
+      "rol": "Anticipo",
+      "cuenta": "27500501"
+    },
+    {
+      "rol": "SaldoAFavor",
+      "cuenta": "27500502"
+    },
+    {
+      "rol": "SeguroPorPagar",
+      "cuenta": "24400501"
+    },
+    {
+      "rol": "CuentaPorPagarATercero",
+      "cuenta": "24409501"
+    },
+    {
+      "rol": "RecaudoPorAplicar",
+      "cuenta": "11059501",
+      "clase": "Receipts"
+    },
+    {
+      "rol": "RecaudoPorAplicar",
+      "cuenta": "11059502",
+      "clase": "Test"
+    },
+    {
+      "rol": "RecaudoPorAplicar",
+      "cuenta": "25059501",
+      "clase": "Payroll"
+    },
+    {
+      "rol": "RecaudoPorAplicar",
+      "cuenta": "24959501",
+      "clase": "OwnLoanPayoff"
+    },
+    {
+      "rol": "DesembolsoPorGirar",
+      "cuenta": "24959501",
+      "motivo": "Transfer"
+    },
+    {
+      "rol": "DesembolsoPorGirar",
+      "cuenta": "24959501",
+      "motivo": "Check"
+    },
+    {
+      "rol": "DesembolsoPorGirar",
+      "cuenta": "24959502",
+      "motivo": "ThirdPartyPayment"
+    },
+    {
+      "rol": "PuenteComercial",
+      "cuenta": "13059501"
+    },
+    {
+      "rol": "CuentaPorCobrarComercial",
+      "cuenta": "13050502"
+    },
+    {
+      "rol": "Ingreso",
+      "cuenta": "41502501",
+      "modalidad": "CONSUMO",
+      "concepto": "CurrentInterest"
+    },
+    {
+      "rol": "Ingreso",
+      "cuenta": "41502502",
+      "modalidad": "CONSUMO",
+      "concepto": "DefaultInterest"
+    },
+    {
+      "rol": "Ingreso",
+      "cuenta": "41502503",
+      "modalidad": "CONSUMO",
+      "concepto": "CurrentInterestInSuspense"
+    },
+    {
+      "rol": "Ingreso",
+      "cuenta": "41502509",
+      "op": "CreditoAjustadoDesdeComercial",
+      "modalidad": "CONSUMO",
+      "concepto": "CurrentInterest"
+    },
+    {
+      "rol": "Ingreso",
+      "cuenta": "41509501",
+      "modalidad": "CONSUMO",
+      "concepto": "CollectionFee",
+      "centro": true
+    },
+    {
+      "rol": "GastoDeterioro",
+      "cuenta": "51150501",
+      "motivo": "Individual",
+      "modalidad": "CONSUMO",
+      "concepto": "Principal"
+    },
+    {
+      "rol": "GastoDeterioro",
+      "cuenta": "51150502",
+      "motivo": "Individual",
+      "modalidad": "CONSUMO",
+      "concepto": "CurrentInterest"
+    },
+    {
+      "rol": "GastoDeterioro",
+      "cuenta": "51150503",
+      "motivo": "Individual",
+      "modalidad": "CONSUMO",
+      "concepto": "Insurance"
+    },
+    {
+      "rol": "GastoDeterioro",
+      "cuenta": "51152901",
+      "motivo": "General"
+    },
+    {
+      "rol": "GastoDeterioro",
+      "cuenta": "51156301",
+      "motivo": "Additional"
+    },
+    {
+      "rol": "RecuperacionDeterioro",
+      "cuenta": "42252401",
+      "motivo": "Individual",
+      "modalidad": "CONSUMO",
+      "concepto": "Principal"
+    },
+    {
+      "rol": "RecuperacionDeterioro",
+      "cuenta": "42252403",
+      "motivo": "Individual",
+      "modalidad": "CONSUMO",
+      "concepto": "CurrentInterest"
+    },
+    {
+      "rol": "RecuperacionDeterioro",
+      "cuenta": "42252402",
+      "motivo": "General"
+    },
+    {
+      "rol": "GastoDeCastigoOCondonacion",
+      "cuenta": "51159501",
+      "motivo": "Waiver",
+      "concepto": "DefaultInterest"
+    },
+    {
+      "rol": "GastoDeCastigoOCondonacion",
+      "cuenta": "51159502",
+      "motivo": "WriteOff",
+      "concepto": "Principal"
+    },
+    {
+      "rol": "IngresoPorRecuperacion",
+      "cuenta": "42254601"
+    },
+    {
+      "rol": "IngresoDiferido",
+      "cuenta": "27959501",
+      "modalidad": "CONSUMO"
+    },
+    {
+      "rol": "ContingenteAcreedora",
+      "cuenta": "91150501",
+      "motivo": "ApprovedNotDisbursed"
+    },
+    {
+      "rol": "ContingenteAcreedora",
+      "cuenta": "91300501",
+      "motivo": "RevolvingLimit"
+    },
+    {
+      "rol": "ContingenteAcreedora",
+      "cuenta": "91100501",
+      "motivo": "CollateralReceived"
+    },
+    {
+      "rol": "ContraContingenteAcreedora",
+      "cuenta": "96050501",
+      "motivo": "ApprovedNotDisbursed"
+    },
+    {
+      "rol": "ContraContingenteAcreedora",
+      "cuenta": "96050501",
+      "motivo": "RevolvingLimit"
+    },
+    {
+      "rol": "ContraContingenteAcreedora",
+      "cuenta": "96050501",
+      "motivo": "CollateralReceived"
+    }
+  ],
+  "periodosAbiertos": [
+    "2026-11",
+    "2026-12",
+    "2027-03"
+  ],
+  "hoy": "2027-04-30"
+}

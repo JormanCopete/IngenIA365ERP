@@ -153,6 +153,13 @@ public static class AuditEventTypes
     public const string AccountingInventoryBatchProcessed = "Accounting.Inventory.BatchProcessed";
     // Feature 012, T509 (api.md §26.1): la importación aplicada de la matriz de reglas de Inventario.
     public const string AccountingInventoryRulesImported = "Accounting.InventoryRules.Imported";
+    // Feature 013, T0643 (api.md §23.1): la importación aplicada de la matriz de reglas de Cartera.
+    public const string AccountingLendingRulesImported = "Accounting.LendingRules.Imported";
+    // Feature 013, T0651 (contracts/contabilidad.md §22): el consumo de los hechos de Cartera y el registro de los indicadores regulatorios.
+    public const string AccountingLendingPosted = "Accounting.Lending.Posted";
+    public const string AccountingLendingRejected = "Accounting.Lending.Rejected";
+    public const string AccountingLendingBatchProcessed = "Accounting.Lending.BatchProcessed";
+    public const string AccountingRegulatoryIndicatorRegistered = "Accounting.RegulatoryIndicator.Registered";
 
     // -------------------- Inventario (feature 012, T44, T181) --------------------
     // Eventos explicitos que no salen de un comando: la exportacion de una vista de
@@ -215,6 +222,107 @@ public static class AuditEventTypes
     // Alta de una persona con AutorizacionAlCrear cuando la cooperativa no tiene politica publicada: el alta
     // procede y queda la constancia «sin politica vigente» (la alerta Personas.SinPoliticaDeDatos es de I3, T616).
     public const string PersonDataAuthorizationNoCurrentPolicy = "Person.DataAuthorization.NoCurrentPolicy";
+
+    // -------------------- Cartera (feature 013, T67, C89; research §13 y R136) --------------------
+    // Lecturas sensibles: la lista fija que emite LendingAuditEmitter (LasLecturasSensiblesDeCarteraSeAuditan). La consulta de
+    // cupo de Comercial usa el EventId de Lending.CreditStatus.Queried como EvidenceId.
+    public const string LendingPayoffViewed = "Lending.Payoff.Viewed";
+    public const string LendingCreditBureauReportViewed = "Lending.CreditBureauReport.Viewed";
+    public const string LendingDocumentReprinted = "Lending.Document.Reprinted";
+    public const string LendingDocumentVerified = "Lending.Document.Verified";
+    public const string LendingReportExported = "Lending.Report.Exported";
+    public const string LendingSessionViewed = "Lending.Session.Viewed";
+    public const string LendingRelatedPartyViewed = "Lending.RelatedParty.Viewed";
+    public const string LendingCreditStatusQueried = "Lending.CreditStatus.Queried";
+    public const string LendingAccessOutOfScope = "Lending.Access.OutOfScope";
+    public const string LendingScreeningMatchReleased = "Lending.ScreeningMatch.Released";
+
+    // US3 (T0444, T23): la distribución completa por cuota y concepto de una operación del libro (desembolso, reverso); no es lectura.
+    public const string LendingOperationRegistered = "Lending.Operation.Registered";
+
+    // US8 (T0752): la activación de Cartera con sus requisitos, conteos y huellas; no es lectura.
+    public const string LendingActivationRegistered = "Lending.Activation.Registered";
+
+    // K3, bloque D (decisión del dueño del 2026-10-15): el crédito que se excluye de un lote de castigo al aplicarlo porque ya no cumple; no es lectura.
+    public const string LendingWriteOffItemExcluded = "Lending.WriteOffItem.Excluded";
+
+    // K4 (T0944; C64): el evento resumen del registro de la etapa de cobranza migrada al desplegar K4, por cooperativa, con la tabla de equivalencia
+    // de códigos; no es lectura.
+    public const string LendingMigratedCollectionStagesRegistered = "Lending.CollectionStages.MigratedRegistered";
+    /// <summary>K6a (T1034): la adopción o el desistimiento voluntario del modelo de pérdida esperada.</summary>
+    public const string LendingImpairmentModelElectionRegistered = "Lending.ImpairmentModel.ElectionRegistered";
+    /// <summary>K6a (T1035; C46): el resumen de una carga complementaria del historial de mora.</summary>
+    public const string LendingArrearsHistoryLoadApplied = "Lending.ArrearsHistory.LoadApplied";
+
+    // US13 (T0784, T0785): la emisión de un documento al deudor (también lectura de sus datos: cuenta como lectura sensible, nota 10 de PG) y su
+    // anulación manual. La reimpresión y la verificación son Lending.Document.Reprinted y .Verified, de la lista cerrada.
+    public const string LendingDocumentIssued = "Lending.Document.Issued";
+    public const string LendingDocumentVoided = "Lending.Document.Voided";
+
+    // US3 (T0454, bloque 7B): la emisión del enlace de descarga de un archivo de desembolsos (adaptadores §6.2: «enlace firmado de 60 s, auditado»).
+    public const string LendingDisbursementFileDownloaded = "Lending.DisbursementFile.Downloaded";
+
+    // K2 (T0836; C46): el evento resumen de cada archivo de descuentos (sus líneas van con [SinDiffDeAuditoria]) y el enlace de descarga.
+    public const string LendingPayrollDeductionFileGenerated = "Lending.PayrollDeductionFile.Generated";
+    public const string LendingPayrollDeductionFileDownloaded = "Lending.PayrollDeductionFile.Downloaded";
+
+    // K5 (US16, T1004; C46): el evento resumen de cada generación regulatoria (SICSES o central; las líneas de las centrales van con
+    // [SinDiffDeAuditoria]), su marca de cargado con el radicado y el enlace de descarga (trae deudores: se registra cada emisión).
+    public const string LendingRegulatoryFileGenerated = "Lending.RegulatoryFile.Generated";
+    public const string LendingRegulatoryFileUploaded = "Lending.RegulatoryFile.Uploaded";
+    public const string LendingRegulatoryFileDownloaded = "Lending.RegulatoryFile.Downloaded";
+
+    // US5 (bloque 9B, T0546; interfaces §3.13; T68, A11): el contrato de obligaciones. El intento va por un contexto aparte (sobrevive a la
+    // reversión del recaudador); el hecho, en COR_AuditOutbox dentro de la transacción con la distribución completa. Las lecturas del contrato
+    // (listar y simular) llevan D, R y la huella; no son de la lista cerrada de lecturas sensibles.
+    public const string LendingObligationContractAttempted = "Lending.ObligationContract.Attempted";
+    public const string LendingObligationContractApplied = "Lending.ObligationContract.Applied";
+    public const string LendingObligationContractReversed = "Lending.ObligationContract.Reversed";
+    public const string LendingObligationContractCreditBalanceResolved = "Lending.ObligationContract.CreditBalanceResolved";
+    public const string LendingObligationContractRejected = "Lending.ObligationContract.Rejected";
+    public const string LendingObligationContractListed = "Lending.ObligationContract.Listed";
+    public const string LendingObligationContractSimulated = "Lending.ObligationContract.Simulated";
+
+    // Feature 014, US3 (T083; contrato-de-cuentas §3.15): el contrato de cuentas, con la misma mecánica que el de obligaciones —el intento por un
+    // contexto aparte, el hecho en COR_AuditOutbox dentro de la transacción con el antes y el después por concepto—. Consultar, listar y simular son
+    // lecturas sensibles de saldos del titular (FR-003).
+    public const string LendingAccountContractAttempted = "Lending.AccountContract.Attempted";
+    public const string LendingAccountContractDeposited = "Lending.AccountContract.Deposited";
+    public const string LendingAccountContractWithdrawn = "Lending.AccountContract.Withdrawn";
+    public const string LendingAccountContractTransferred = "Lending.AccountContract.Transferred";
+    public const string LendingAccountContractReversed = "Lending.AccountContract.Reversed";
+    public const string LendingAccountContractRejected = "Lending.AccountContract.Rejected";
+    public const string LendingAccountContractQueried = "Lending.AccountContract.Queried";
+    public const string LendingAccountContractListed = "Lending.AccountContract.Listed";
+    public const string LendingAccountContractSimulated = "Lending.AccountContract.Simulated";
+
+    /// <summary>Feature 014, US4 (T123; api.md §4): el libro o las operaciones de la cuenta de un titular, vistos en la pantalla.</summary>
+    public const string LendingSavingsTransactionsViewed = "Lending.Savings.TransactionsViewed";
+
+    /// <summary>Feature 014, US16 (T164; api.md §4): el saldo de una cuenta de un titular (o los saldos de una persona) visto en la pantalla.</summary>
+    public const string LendingSavingsBalanceViewed = "Lending.Savings.BalanceViewed";
+
+    /// <summary>Feature 014, US16 (T164; api.md §4): el extracto en pantalla de una cuenta de un titular.</summary>
+    public const string LendingSavingsStatementViewed = "Lending.Savings.StatementViewed";
+
+    /// <summary>Feature 014, US11 (T189; FR-003): un embargo o la lista de embargos —oficio, demandante y lo retenido de la persona— vistos en la pantalla.</summary>
+    public const string LendingGarnishmentViewed = "Lending.Garnishment.Viewed";
+
+    // Feature 014, US3 (T086): la devolución de aportes sin retiro y la cesión entre asociados, pedidas y decididas por personas distintas.
+    public const string LendingContributionRefundRequested = "Lending.ContributionRefund.Requested";
+    public const string LendingContributionRefundApproved = "Lending.ContributionRefund.Approved";
+    public const string LendingContributionAssignmentRequested = "Lending.ContributionAssignment.Requested";
+    public const string LendingContributionAssignmentApproved = "Lending.ContributionAssignment.Approved";
+
+    // US6 (la reutiliza): la reserva y liberación de números de Comercial.
+    public const string LendingNumberReservationAttempted = "Lending.NumberReservation.Attempted";
+    public const string LendingNumberReservationReserved = "Lending.NumberReservation.Reserved";
+    public const string LendingNumberReservationReleased = "Lending.NumberReservation.Released";
+
+    // Intentos del grupo /api/lending (T67, F9): el 404 por falta de permiso y el 400 del validador, que corre antes que
+    // AuditBehavior. Los registra el metadato AuditarIntentoDenegado de la API por AuditoriaDeIntentos.
+    public const string LendingAccessDenied = "Lending.Access.Denied";
+    public const string LendingRequestRejected = "Lending.Request.Rejected";
 
     // -------------------- Database (feature 004 multi-motor) --------------------
     public const string DatabaseSeedExecuted = "Database.Seed.Executed";

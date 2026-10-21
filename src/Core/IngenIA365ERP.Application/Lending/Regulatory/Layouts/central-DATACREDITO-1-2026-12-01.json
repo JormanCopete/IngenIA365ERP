@@ -1,0 +1,493 @@
+{
+  "code": "CENTRAL-DATACREDITO-v1",
+  "kind": "CreditBureau",
+  "bureauCode": "DATACREDITO",
+  "version": "1",
+  "source": "Formato de reporte de obligaciones de DataCrédito Experian para suscriptores (por cotejar)",
+  "validFrom": "2026-12-01",
+  "validTo": null,
+  "fileKind": "FixedWidth",
+  "encoding": "iso-8859-1",
+  "lineEnding": "CRLF",
+  "normalizeText": true,
+  "records": [
+    {
+      "code": "Header",
+      "repeat": "Once",
+      "length": 400,
+      "fields": [
+        {
+          "number": 1,
+          "name": "Indicador de registro",
+          "start": 1,
+          "length": 1,
+          "kind": "A",
+          "format": "Text",
+          "required": true,
+          "constant": "H",
+          "verified": false
+        },
+        {
+          "number": 2,
+          "name": "Código del suscriptor",
+          "start": 2,
+          "length": 6,
+          "kind": "N",
+          "format": "Text",
+          "required": true,
+          "path": "Archivo.CodigoDeSuscriptor",
+          "verified": false
+        },
+        {
+          "number": 3,
+          "name": "Tipo de cuenta",
+          "start": 8,
+          "length": 2,
+          "kind": "N",
+          "format": "Text",
+          "required": true,
+          "path": "Archivo.TipoDeCuenta",
+          "verified": false
+        },
+        {
+          "number": 4,
+          "name": "Fecha de corte",
+          "start": 10,
+          "length": 8,
+          "kind": "N",
+          "format": "Date",
+          "required": true,
+          "path": "Archivo.FechaDeCorte",
+          "pattern": "yyyyMMdd",
+          "verified": false
+        },
+        {
+          "number": 5,
+          "name": "Indicador de entrega",
+          "start": 18,
+          "length": 1,
+          "kind": "A",
+          "format": "Text",
+          "required": true,
+          "constant": "N",
+          "verified": false
+        },
+        {
+          "number": 6,
+          "name": "Espacio reservado",
+          "start": 19,
+          "length": 382,
+          "kind": "A",
+          "format": "Text",
+          "required": false,
+          "verified": false
+        }
+      ]
+    },
+    {
+      "code": "Detail",
+      "repeat": "PorObligacionYTitular",
+      "length": 400,
+      "fields": [
+        {
+          "number": 1,
+          "name": "Indicador de registro",
+          "start": 1,
+          "length": 1,
+          "kind": "A",
+          "format": "Text",
+          "required": true,
+          "constant": "D",
+          "verified": false
+        },
+        {
+          "number": 2,
+          "name": "Tipo de identificación",
+          "start": 2,
+          "length": 1,
+          "kind": "N",
+          "format": "Text",
+          "required": true,
+          "path": "Titular.TipoDeIdentificacion",
+          "verified": false
+        },
+        {
+          "number": 3,
+          "name": "Número de identificación",
+          "start": 3,
+          "length": 11,
+          "kind": "N",
+          "format": "Text",
+          "required": true,
+          "path": "Titular.NumeroDeDocumento",
+          "verified": false
+        },
+        {
+          "number": 4,
+          "name": "Número de la obligación",
+          "start": 14,
+          "length": 18,
+          "kind": "A",
+          "format": "Text",
+          "required": true,
+          "path": "Obligacion.Numero",
+          "verified": false
+        },
+        {
+          "number": 5,
+          "name": "Nombre completo del titular",
+          "start": 32,
+          "length": 45,
+          "kind": "A",
+          "format": "Text",
+          "required": true,
+          "path": "Titular.Nombre",
+          "verified": false
+        },
+        {
+          "number": 6,
+          "name": "Calidad del titular",
+          "start": 77,
+          "length": 2,
+          "kind": "N",
+          "format": "Text",
+          "required": true,
+          "path": "Titular.Calidad",
+          "verified": false
+        },
+        {
+          "number": 7,
+          "name": "Fecha de apertura",
+          "start": 79,
+          "length": 8,
+          "kind": "N",
+          "format": "Date",
+          "required": true,
+          "path": "Obligacion.FechaDeApertura",
+          "pattern": "yyyyMMdd",
+          "verified": false
+        },
+        {
+          "number": 8,
+          "name": "Fecha de vencimiento",
+          "start": 87,
+          "length": 8,
+          "kind": "N",
+          "format": "Date",
+          "required": true,
+          "path": "Obligacion.FechaDeVencimiento",
+          "pattern": "yyyyMMdd",
+          "verified": false
+        },
+        {
+          "number": 9,
+          "name": "Novedad (estado de la obligación)",
+          "start": 95,
+          "length": 2,
+          "kind": "N",
+          "format": "Text",
+          "required": true,
+          "path": "Obligacion.Novedad",
+          "verified": false
+        },
+        {
+          "number": 10,
+          "name": "Estado de origen de la cuenta",
+          "start": 97,
+          "length": 1,
+          "kind": "N",
+          "format": "Text",
+          "required": true,
+          "path": "Obligacion.EstadoDeOrigen",
+          "verified": false
+        },
+        {
+          "number": 11,
+          "name": "Fecha del estado de origen",
+          "start": 98,
+          "length": 8,
+          "kind": "N",
+          "format": "Date",
+          "required": false,
+          "path": "Obligacion.FechaDelEstadoDeOrigen",
+          "pattern": "yyyyMMdd",
+          "verified": false
+        },
+        {
+          "number": 12,
+          "name": "Valor inicial",
+          "start": 106,
+          "length": 15,
+          "kind": "N",
+          "format": "Amount2",
+          "required": true,
+          "path": "Obligacion.ValorInicial",
+          "verified": false
+        },
+        {
+          "number": 13,
+          "name": "Saldo de la deuda",
+          "start": 121,
+          "length": 15,
+          "kind": "N",
+          "format": "Amount2",
+          "required": true,
+          "path": "Saldos.Total",
+          "verified": false
+        },
+        {
+          "number": 14,
+          "name": "Saldo en mora",
+          "start": 136,
+          "length": 15,
+          "kind": "N",
+          "format": "Amount2",
+          "required": true,
+          "path": "Saldos.EnMora",
+          "verified": false
+        },
+        {
+          "number": 15,
+          "name": "Valor de la cuota",
+          "start": 151,
+          "length": 15,
+          "kind": "N",
+          "format": "Amount2",
+          "required": true,
+          "path": "Obligacion.ValorDeLaCuota",
+          "verified": false
+        },
+        {
+          "number": 16,
+          "name": "Periodicidad de pago",
+          "start": 166,
+          "length": 1,
+          "kind": "N",
+          "format": "Text",
+          "required": true,
+          "path": "Obligacion.Periodicidad",
+          "verified": false
+        },
+        {
+          "number": 17,
+          "name": "Cuotas canceladas",
+          "start": 167,
+          "length": 3,
+          "kind": "N",
+          "format": "Integer",
+          "required": true,
+          "path": "Obligacion.CuotasPagadas",
+          "verified": false
+        },
+        {
+          "number": 18,
+          "name": "Total de cuotas",
+          "start": 170,
+          "length": 3,
+          "kind": "N",
+          "format": "Integer",
+          "required": true,
+          "path": "Obligacion.CuotasPactadas",
+          "verified": false
+        },
+        {
+          "number": 19,
+          "name": "Cuotas en mora",
+          "start": 173,
+          "length": 3,
+          "kind": "N",
+          "format": "Integer",
+          "required": true,
+          "path": "Obligacion.CuotasEnMora",
+          "verified": false
+        },
+        {
+          "number": 20,
+          "name": "Días de mora",
+          "start": 176,
+          "length": 4,
+          "kind": "N",
+          "format": "Integer",
+          "required": true,
+          "path": "Riesgo.DiasDeMora",
+          "verified": false
+        },
+        {
+          "number": 21,
+          "name": "Fecha límite de pago",
+          "start": 180,
+          "length": 8,
+          "kind": "N",
+          "format": "Date",
+          "required": false,
+          "path": "Obligacion.FechaLimiteDePago",
+          "pattern": "yyyyMMdd",
+          "verified": false
+        },
+        {
+          "number": 22,
+          "name": "Fecha del último pago",
+          "start": 188,
+          "length": 8,
+          "kind": "N",
+          "format": "Date",
+          "required": false,
+          "path": "Obligacion.FechaDelUltimoPago",
+          "pattern": "yyyyMMdd",
+          "verified": false
+        },
+        {
+          "number": 23,
+          "name": "Marca de reclamo en trámite",
+          "start": 196,
+          "length": 1,
+          "kind": "A",
+          "format": "Text",
+          "required": false,
+          "path": "Reporte.MarcaDeReclamo",
+          "allowedValues": [
+            "R"
+          ],
+          "verified": false
+        },
+        {
+          "number": 24,
+          "name": "Retiro de un reporte hecho sin aviso",
+          "start": 197,
+          "length": 1,
+          "kind": "A",
+          "format": "Text",
+          "required": false,
+          "path": "Reporte.MarcaDeRetiro",
+          "allowedValues": [
+            "X"
+          ],
+          "verified": false
+        },
+        {
+          "number": 25,
+          "name": "Ciudad de residencia (DIVIPOLA)",
+          "start": 198,
+          "length": 5,
+          "kind": "N",
+          "format": "Text",
+          "required": false,
+          "path": "Titular.CodigoDeCiudad",
+          "verified": false
+        },
+        {
+          "number": 26,
+          "name": "Dirección de residencia",
+          "start": 203,
+          "length": 60,
+          "kind": "A",
+          "format": "Text",
+          "required": false,
+          "path": "Titular.Direccion",
+          "verified": false
+        },
+        {
+          "number": 27,
+          "name": "Teléfono",
+          "start": 263,
+          "length": 15,
+          "kind": "A",
+          "format": "Text",
+          "required": false,
+          "path": "Titular.Telefono",
+          "verified": false
+        },
+        {
+          "number": 28,
+          "name": "Correo electrónico",
+          "start": 278,
+          "length": 60,
+          "kind": "A",
+          "format": "Text",
+          "required": false,
+          "path": "Titular.Correo",
+          "verified": false
+        },
+        {
+          "number": 29,
+          "name": "Espacio reservado",
+          "start": 338,
+          "length": 63,
+          "kind": "A",
+          "format": "Text",
+          "required": false,
+          "verified": false
+        }
+      ]
+    },
+    {
+      "code": "Totals",
+      "repeat": "Once",
+      "length": 400,
+      "fields": [
+        {
+          "number": 1,
+          "name": "Indicador de registro",
+          "start": 1,
+          "length": 1,
+          "kind": "A",
+          "format": "Text",
+          "required": true,
+          "constant": "Z",
+          "verified": false
+        },
+        {
+          "number": 2,
+          "name": "Fecha de corte",
+          "start": 2,
+          "length": 8,
+          "kind": "N",
+          "format": "Date",
+          "required": true,
+          "path": "Archivo.FechaDeCorte",
+          "pattern": "yyyyMMdd",
+          "verified": false
+        },
+        {
+          "number": 3,
+          "name": "Número de registros de detalle",
+          "start": 10,
+          "length": 8,
+          "kind": "N",
+          "format": "Integer",
+          "required": true,
+          "path": "Totales.Registros",
+          "verified": false
+        },
+        {
+          "number": 4,
+          "name": "Suma de los saldos de la deuda",
+          "start": 18,
+          "length": 18,
+          "kind": "N",
+          "format": "Amount2",
+          "required": true,
+          "path": "Totales.SaldoTotal",
+          "verified": false
+        },
+        {
+          "number": 5,
+          "name": "Espacio reservado",
+          "start": 36,
+          "length": 365,
+          "kind": "A",
+          "format": "Text",
+          "required": false,
+          "verified": false
+        }
+      ]
+    }
+  ],
+  "notes": [
+    "Pregunta I7 sin respuesta del dueño: campos reconstruidos del instructivo público, cada uno con verified=false hasta cotejarlo con el instructivo vigente y con un archivo aceptado por el validador (SC-019). Cotejar es publicar una versión nueva con verified=true, verifiedBy, verifiedOn y verifiedAgainst.",
+    "Las rutas (path) son el vocabulario que entrega la proyección de Application; un cambio de ruta es un cambio de la proyección y del layout a la vez.",
+    "Una línea de detalle por obligación y titular (deudor o codeudor con su propia autorización); los excluidos no van en el archivo (data-model §28.2).",
+    "Los códigos de tipo de identificación, calidad, novedad, estado de origen y periodicidad son los de la central por cotejar; la proyección traduce los del ERP.",
+    "Los valores van en pesos con dos decimales implícitos hasta cotejar si la central los pide enteros o en miles."
+  ]
+}

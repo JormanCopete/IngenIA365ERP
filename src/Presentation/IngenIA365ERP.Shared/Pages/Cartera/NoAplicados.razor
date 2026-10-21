@@ -1,0 +1,159 @@
+@page "/cartera/no-aplicados"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Http
+@inject LibranzaClient Libranza
+@inject INotificationService Notification
+
+<PageTitle>No aplicados - IngenIA365ERP</PageTitle>
+
+@* Feature 013, K2, US10 (T0852; contracts/api.md §13.3; FR-112, FR-115, C32, C88): las cuotas que la pagaduría o la nómina propia no descontaron,
+   con su motivo y su seguimiento —también las de la nómina propia nacidas en K1 y las de la puesta en marcha—, dentro del alcance de oficina y
+   línea. Resolver una abierta (pasar a caja, enviar a cobranza o cerrar) exige motivo y avisa al deudor por sus canales autorizados; la cuota sigue
+   exigible: resolver no la paga. *@
+<PermissionGate Required="Lending.PayrollDeductionFiles.Read" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>No aplicados</h3>
+    </div>
+    <div class="toolbar">
+        <label class="campo">Pagaduría
+            <select class="e-input" @bind="_convenio">
+                <option value="">Todas</option>
+                @foreach (var c in _convenios) { <option value="@c.PublicId">@c.Code · @c.Payer.LegalName</option> }
+            </select>
+        </label>
+        <label class="campo">Origen
+            <select class="e-input" @bind="_origen">
+                <option value="">Todos</option>
+                @foreach (var o in TextosDeLibranza.Origenes) { <option value="@o.Valor">@o.Texto</option> }
+            </select>
+        </label>
+        <label class="campo">Estado
+            <select class="e-input" @bind="_estado">
+                <option value="Open">Abiertos</option>
+                <option value="Resolved">Resueltos</option>
+                <option value="">Todos</option>
+            </select>
+        </label>
+        <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@(() => CargarAsync(1))">Consultar</SfButton>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        <div class="tabla-desplazable">
+            <table class="data-grid">
+                <thead><tr><th>Crédito</th><th>Deudor</th><th>Cuota</th><th>Vence</th><th>Origen</th><th>Motivo</th><th class="numero">Esperado</th><th class="numero">No descontado</th><th>Seguimiento</th><th>Desde</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var n in _filas)
+                    {
+                        var fila = n;
+                        <tr>
+                            <td><a href="/cartera/creditos/@fila.LoanPublicId">@fila.LoanNumber</a></td>
+                            <td>@fila.Debtor</td>
+                            <td>@fila.InstallmentNumber</td>
+                            <td>@fila.DueDate.ToString("dd/MM/yyyy")</td>
+                            <td>@TextosDeLibranza.Origen(fila.Origin)@(fila.Collector is { } r ? $" · {r}" : "")</td>
+                            <td>@TextosDeLibranza.Motivo(fila.Reason)@(fila.ReasonText is { } t ? $": {t}" : "")</td>
+                            <td class="numero">@TextosDeCreditos.Pesos(fila.ExpectedAmount)</td>
+                            <td class="numero">@TextosDeCreditos.Pesos(fila.NotDeductedAmount)</td>
+                            <td>@TextosDeLibranza.Seguimiento(fila.LastAction)@(fila.NotifiedAt is { } a ? $" · avisado {a.ToLocalTime():dd/MM/yyyy}" : "")</td>
+                            <td>@fila.Since.ToLocalTime().ToString("dd/MM/yyyy")</td>
+                            <td>
+                                @if (!fila.Resolved)
+                                {
+                                    <PermissionGate Required="Lending.PayrollNotApplied.Manage">
+                                        <SfButton CssClass="e-flat e-small" OnClick="@(() => Abrir(fila))">Resolver…</SfButton>
+                                    </PermissionGate>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (_filas.Count == 0) { <p class="texto-tenue">No hay no aplicados con ese filtro.</p> }
+        @if (_total > TamanoDePagina)
+        {
+            <div class="toolbar">
+                <SfButton CssClass="e-flat e-small" Disabled="@(_pagina <= 1)" OnClick="@(() => CargarAsync(_pagina - 1))">Anterior</SfButton>
+                <span>Página @_pagina de @((_total + TamanoDePagina - 1) / TamanoDePagina)</span>
+                <SfButton CssClass="e-flat e-small" Disabled="@(_pagina * TamanoDePagina >= _total)" OnClick="@(() => CargarAsync(_pagina + 1))">Siguiente</SfButton>
+            </div>
+        }
+    </IndicadorDeCarga>
+</div>
+
+<SfDialog @bind-Visible="_mostrar" Header="@($"Resolver la cuota {_fila?.InstallmentNumber} del crédito {_fila?.LoanNumber}")" Width="520px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_accion.Activa" Texto="Registrando…">
+                <label class="campo">Qué se hace
+                    <select class="e-input" @bind="_accionElegida">
+                        @foreach (var r in TextosDeLibranza.Resoluciones) { <option value="@r.Valor">@r.Texto</option> }
+                    </select>
+                </label>
+                <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" maxlength="500" /></label>
+                <p class="texto-tenue">Se avisa al deudor por sus canales autorizados. La cuota sigue exigible.</p>
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_accion.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@ResolverAsync">Registrar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrar = false)">Volver</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private const int TamanoDePagina = 50;
+
+    private readonly EstadoDeCarga _carga = new(), _accion = new();
+    private List<ConvenioResumenDto> _convenios = [];
+    private List<NoAplicadoDeLibranzaDto> _filas = [];
+    private string? _convenio, _origen, _motivo, _error;
+    private string _estado = "Open", _accionElegida = "MovedToCashPayment";
+    private int _pagina = 1;
+    private long _total;
+    private bool _mostrar;
+    private NoAplicadoDeLibranzaDto? _fila;
+    private ClaveDeOperacion _clave = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var r = await Libranza.ConveniosAsync(incluirInactivos: true);
+        _convenios = r.IsSuccess ? [.. r.Value ?? []] : [];
+        await CargarAsync(1);
+    }
+
+    private async Task CargarAsync(int pagina)
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Libranza.NoAplicadosAsync(Guid.TryParse(_convenio, out var c) ? c : null, string.IsNullOrEmpty(_origen) ? null : _origen,
+            string.IsNullOrEmpty(_estado) ? null : _estado, pagina);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer los no aplicados."); return; }
+        _filas = [.. r.Value?.Items ?? []];
+        _total = r.Value?.TotalCount ?? 0;
+        _pagina = pagina;
+    }
+
+    private void Abrir(NoAplicadoDeLibranzaDto fila)
+    {
+        _fila = fila;
+        _motivo = _error = null;
+        _accionElegida = "MovedToCashPayment";
+        _clave = new ClaveDeOperacion();
+        _mostrar = true;
+    }
+
+    private async Task ResolverAsync()
+    {
+        if (_fila is null || string.IsNullOrWhiteSpace(_motivo)) return;
+        using var carga = _accion.Iniciar();
+        var r = await Libranza.ResolverAsync(_fila.PublicId, new ResolucionDeNoAplicadoRequest(_accionElegida, _motivo.Trim()), _clave);
+        if (!r.IsSuccess) { _error = r.ErrorMessage ?? "No se pudo resolver."; return; }
+        _mostrar = false;
+        await Notification.SuccessAsync("Registrado; se avisó al deudor.");
+        await CargarAsync(_pagina);
+    }
+}

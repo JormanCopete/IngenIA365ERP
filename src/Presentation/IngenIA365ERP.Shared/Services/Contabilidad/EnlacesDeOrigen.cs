@@ -18,6 +18,9 @@ public static class EnlacesDeOrigen
         "InventoryDocument" => $"/inventario/documentos/{sourcePublicId}",
         "InventoryPostingBatch" => $"/contabilidad/inventario/lotes/{sourcePublicId}",
         "InventoryProduct" => $"/inventario/productos/{sourcePublicId}",
+        // Feature 013 (T0651): Cartera (los SourceType de OrigenesDeCartera en Application): el hecho en la bandeja; el resumido, su lote.
+        "LendingIssuedDocument" => $"/cartera/bandeja-de-mensajes?origen={sourcePublicId}",
+        "LendingPostingBatch" => $"/contabilidad/cartera/lotes/{sourcePublicId}",
         _ => null,
     };
 }

@@ -81,7 +81,7 @@ public sealed class UsersModule : ICarterModule
     private static async Task<object?> UpdateAsync(
         Guid publicId, [FromBody] UpdateUserBody body, ISender sender, CancellationToken ct) =>
         await sender.Send(new UpdateUserCommand(
-            publicId, body.Email, body.IdentificationNumber, body.PersonId), ct);
+            publicId, body.Email, body.IdentificationNumber, body.PersonId, body.PersonPublicId), ct);
 
     private static async Task<object?> DisableAsync(
         Guid publicId, ISender sender, CancellationToken ct) =>
@@ -116,7 +116,11 @@ public sealed record UsersListQueryParams(
     string? Search, bool IncludeDisabled = false, string? RoleCode = null,
     int? Page = null, int? PageSize = null);
 
-public sealed record UpdateUserBody(string Email, string? IdentificationNumber, int? PersonId);
+/// <summary>
+/// El cuerpo de <c>PUT /api/admin/users/{publicId}</c>. Feature 013 (T0267): la persona del maestro va por
+/// <c>personPublicId</c> (Principio VI); <c>personId</c> queda por compatibilidad.
+/// </summary>
+public sealed record UpdateUserBody(string Email, string? IdentificationNumber, int? PersonId, Guid? PersonPublicId = null);
 public sealed record AssignRoleBody(Guid RolePublicId);
 public sealed record AssignBranchBody(Guid BranchPublicId, bool IsDefault);
 public sealed record AdminResetPasswordBody(string NewPassword);

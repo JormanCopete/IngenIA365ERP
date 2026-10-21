@@ -1,0 +1,119 @@
+// La cooperativa guardo 8 % para los depositos (menos que el piso legal del 10 %: rige el piso) y 3 % para el permanente solo al retiro (mas estricto que el 2 %: rige el suyo). Con intereses causados en la base por decision de la cooperativa.
+{
+  "nombre": "liquidez-04-pisos-legales-y-cooperativa-mas-estricta",
+  "descripcion": "La cooperativa guardo 8 % para los depositos (menos que el piso legal del 10 %: rige el piso) y 3 % para el permanente solo al retiro (mas estricto que el 2 %: rige el suyo). Con intereses causados en la base por decision de la cooperativa.",
+  "entrada": {
+    "tipo": "fondo",
+    "fecha": "2026-10-31",
+    "regla": {
+      "regimen": "General",
+      "porcentajeDepositos": 0.08,
+      "porcentajePermanenteSoloAlRetirarse": 0.03,
+      "incluyeInteresesCausados": true,
+      "fuente": "Parametro de la cooperativa"
+    },
+    "general": {
+      "regimen": "General",
+      "porcentajeDepositos": 0.1,
+      "porcentajePermanenteSoloAlRetirarse": 0.02,
+      "fuente": "Decreto 1068 de 2015 art. 2.11.7.2.1.1 (Decreto 976 de 2026, Seccion 1)"
+    },
+    "pisos": {
+      "depositos": 0.1,
+      "permanenteSoloAlRetirarse": 0.02,
+      "bandaMediaPlena": 0.05,
+      "permanenteSoloAlRetirarsePlena": 0.05
+    },
+    "depositos": [
+      {
+        "clase": "ALaVista",
+        "capital": 50000000,
+        "interesCausado": 120.55
+      },
+      {
+        "clase": "ALaVista",
+        "capital": 1234567.89,
+        "interesCausado": 10
+      },
+      {
+        "clase": "Cdat",
+        "capital": 30000000,
+        "interesCausado": 250000,
+        "interesPorCausar": 900000,
+        "diasAlVencimiento": 120
+      },
+      {
+        "clase": "Contractual",
+        "capital": 5000000,
+        "interesCausado": 20000,
+        "diasAlVencimiento": 300
+      },
+      {
+        "clase": "PermanenteSoloAlRetirarse",
+        "capital": 20000000
+      },
+      {
+        "clase": "PermanenteConRetiroParcial",
+        "capital": 4000000.05
+      }
+    ]
+  },
+  "esperado": {
+    "regimen": "General",
+    "requerido": 9650469.85,
+    "renglones": [
+      {
+        "clase": "ALaVista",
+        "banda": null,
+        "cuentas": 2,
+        "capital": 51234567.89,
+        "intereses": 130.55,
+        "base": 51234698.44,
+        "porcentaje": 0.1,
+        "requerido": 5123469.84
+      },
+      {
+        "clase": "Cdat",
+        "banda": null,
+        "cuentas": 1,
+        "capital": 30000000,
+        "intereses": 250000,
+        "base": 30250000,
+        "porcentaje": 0.1,
+        "requerido": 3025000
+      },
+      {
+        "clase": "Contractual",
+        "banda": null,
+        "cuentas": 1,
+        "capital": 5000000,
+        "intereses": 20000,
+        "base": 5020000,
+        "porcentaje": 0.1,
+        "requerido": 502000
+      },
+      {
+        "clase": "PermanenteConRetiroParcial",
+        "banda": null,
+        "cuentas": 1,
+        "capital": 4000000.05,
+        "intereses": 0,
+        "base": 4000000.05,
+        "porcentaje": 0.1,
+        "requerido": 400000.01
+      },
+      {
+        "clase": "PermanenteSoloAlRetirarse",
+        "banda": null,
+        "cuentas": 1,
+        "capital": 20000000,
+        "intereses": 0,
+        "base": 20000000,
+        "porcentaje": 0.03,
+        "requerido": 600000
+      }
+    ],
+    "nuevo": null,
+    "finDeLaTransicion": null
+  }
+}

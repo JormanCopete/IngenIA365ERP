@@ -1,0 +1,19 @@
+@using IngenIA365ERP.Shared.Services.Contabilidad
+
+@* Feature 013, US7 (T0666; contracts/contabilidad.md §13.3): quién corrige un hallazgo o un rechazo de un hecho de Cartera —el módulo, el
+   enlace a la pantalla y el permiso que hace falta—, tal como lo manda la API (QuienCorrigeEnCartera). Sin pantalla es un defecto del
+   emisor: va a soporte. (nuevo) *@
+@if (Quien is null)
+{
+    <span>—</span>
+}
+else
+{
+    <span>@TextosDeContabilidadDeCartera.ModuloQueCorrige(Quien.Module)</span>
+    @if (Quien.Page is { } pagina) { <br /><a href="@pagina">Ir a corregirlo</a> }
+    @if (Quien.Permission is { } permiso) { <br /><span class="texto-tenue">Permiso @permiso</span> }
+}
+
+@code {
+    [Parameter] public QuienCorrigeDto? Quien { get; set; }
+}

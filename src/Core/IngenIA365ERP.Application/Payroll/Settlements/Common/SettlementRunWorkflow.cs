@@ -26,8 +26,9 @@ public sealed record SettlementApprovalRequest(
 /// El ciclo de vida común a las cuatro liquidaciones especiales (feature 010, T028): aprobar,
 /// reversar y descartar. Cada comando por tipo (prima, cesantías, vacaciones, definitiva) le
 /// pasa su <c>Kind</c> esperado y, si tiene algo propio que dejar en la misma transacción
-/// (cerrar la ficha, confirmar el movimiento, aplicar pagos en Cartera), lo entrega en el gancho
-/// <c>antesDeGuardar</c>: todo cae en UN <c>SaveChanges</c>, o nada.
+/// (cerrar la ficha, confirmar el movimiento), lo entrega en el gancho <c>antesDeGuardar</c>: todo
+/// cae en UN <c>SaveChanges</c>, o nada. Lo que debe ocurrir antes del comprobante —los recaudos de
+/// la definitiva en Cartera por el contrato de obligaciones (feature 013)— va en <c>antesDeContabilizar</c>.
 ///
 /// <para>
 /// Aprobar: el <c>Kind</c> de la ruta debe ser el de la corrida (<c>KindMismatch</c>), la corrida
@@ -54,7 +55,16 @@ public sealed class SettlementRunWorkflow(
 
     // ---------------------------------------------------------------------- aprobar --
 
-    public async Task<Result<SettlementApprovedDto>> ApproveAsync(SettlementApprovalRequest request, Gancho? antesDeGuardar, CancellationToken ct)
+    public Task<Result<SettlementApprovedDto>> ApproveAsync(SettlementApprovalRequest request, Gancho? antesDeGuardar, CancellationToken ct) =>
+        ApproveAsync(request, antesDeContabilizar: null, antesDeGuardar, ct);
+
+    /// <summary>
+    /// Aprobar con un gancho <paramref name="antesDeContabilizar"/> (feature 013, T0158; R104): corre después de las validaciones
+    /// y la segregación y <b>antes</b> de armar el comprobante, dentro de la misma transacción. La definitiva lo usa para volver a
+    /// consultar Cartera y aplicar sus descuentos por el contrato de obligaciones: así el comprobante y el recaudo dicen lo mismo,
+    /// y un fallo aborta sin comprobante. Devolver un fallo aborta sin guardar nada.
+    /// </summary>
+    public async Task<Result<SettlementApprovedDto>> ApproveAsync(SettlementApprovalRequest request, Gancho? antesDeContabilizar, Gancho? antesDeGuardar, CancellationToken ct)
     {
         var run = await db.PayrollRuns.FirstOrDefaultAsync(r => r.PublicId == request.RunPublicId, ct);
         if (run is null) return Result.Failure<SettlementApprovedDto>(SettlementErrors.RunNotFound);
@@ -83,6 +93,13 @@ public sealed class SettlementRunWorkflow(
         // --- comprobante, sin guardar ---
         var fecha = poster.ResolverFecha(run, request.PostingDate);
         if (fecha.IsFailure) return Result.Failure<SettlementApprovedDto>(fecha.Error);
+
+        // --- lo propio que debe ocurrir antes del comprobante (la definitiva: recaudos en Cartera, feature 013) ---
+        if (antesDeContabilizar is not null)
+        {
+            var previo = await antesDeContabilizar(run, empleados, ct);
+            if (previo.IsFailure) return Result.Failure<SettlementApprovedDto>(previo.Error);
+        }
         var detalle = $"{SettlementLabels.Etiqueta(run, empleados.Count == 1 ? await NombreAsync(empleados[0].EmployeeId, ct) : null)} v{run.Version}";
         AccountingDocument? documento = null;
         if (empleados.Count > 0)

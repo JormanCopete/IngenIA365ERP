@@ -230,6 +230,8 @@ figure aquí (completo o como `.Sufijo` bajo su recurso). Los **avisos** no son 
 | `Payroll.Termination.ReasonSeverancePayReserved` | 422 | crear o editar un motivo propio con `generatesSeverancePay = true`: la marca la pone la ley y sólo la lleva `DESP_SINJC` | |
 | `Payroll.Holiday.YearNotLoaded` | — | **aviso** del conteo de hábiles (§5, §10.2): el rango toca un año sin festivos cargados | `{ years[] }` |
 | `Payroll.WithholdingRange.Overlap` | 422 | heredado de la tabla de retención propia del plan (`/api/payroll/withholding-parameters`, 2026-09-19): el tramo en UVT se cruza con otro del mismo plan | |
+| `Payroll.LegalParameter.NationalValue` | 422 | enmienda de la feature 013 (T93, regla 4): `POST /api/payroll/legal-parameters` con `SMMLV` o `UVT`; son valores nacionales y los proyecta sólo la réplica | |
+| `Payroll.Holiday.National` | 422 | enmienda de la feature 013 (T93, regla 4): `DELETE /api/payroll/holidays/{id}` sobre un festivo `National` (proyección de la réplica) | |
 
 Códigos de exclusión (`excluded[].reasonCode`, `SettlementReasonCodes`): a los del motor
 (`SalarioIntegral`, `AprendizLectiva`, `Pasante`, `YaPagadaEnDefinitiva`, `SinDiasEnElSemestre`,
@@ -447,7 +449,8 @@ usa el mismo motor con `scope = SeveranceDeposit` (el indicado o el vigente al c
 
 `GET /?year=` → `[{ holidayPublicId, date, name, origin, isSeeded, createdBy, createdAt }]` (View);
 `origin` es `HolidayOrigin`: `Ley51Fixed` (1), `Ley51MovedToMonday` (2), `Ley51Easter` (3) —los
-tres de la semilla—, `Decreed` (4), `Manual` (5). `POST /` `{ date, name, origin?: Manual \| Decreed }`
+tres de la semilla—, `Decreed` (4), `Manual` (5) y, desde la feature 013 (T93), `National` (6): la
+proyección de un `FESTIVO` replicado, que no se retira desde aquí (422 `Payroll.Holiday.National`). `POST /` `{ date, name, origin?: Manual \| Decreed }`
 → 201 `{ holidayPublicId }` (Manage; por defecto `Manual`; otro origen → 422
 `Payroll.Holiday.OriginInvalid`; fecha repetida → `.DateDuplicate`) · `DELETE /{id}` soft, sólo
 `Manual`/`Decreed` (Manage; 422 `Payroll.Holiday.Seeded`; `.NotFound`). Semilla 2026-2028 por la

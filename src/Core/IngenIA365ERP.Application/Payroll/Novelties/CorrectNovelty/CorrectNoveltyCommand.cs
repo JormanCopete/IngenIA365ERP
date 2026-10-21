@@ -56,7 +56,7 @@ public sealed class CorrectNoveltyCommandHandler(
         if (anterior.Status != NoveltyStatus.Active)
             return Result.Failure<Guid>(new Error("Payroll.NoveltyNotActive",
                 $"La novedad está {anterior.Status}: sólo se corrige la versión activa."));
-        if (anterior.Origin is NoveltyOrigin.CarryOver or NoveltyOrigin.LoanDeduction)
+        if (anterior.Origin is NoveltyOrigin.CarryOver or NoveltyOrigin.LoanDeduction or NoveltyOrigin.AccountDeduction)
             return Result.Failure<Guid>(new Error("Payroll.NoveltyNotActive",
                 "Esta novedad la generó el sistema (traslado o Cartera): corrija la novedad origen."));
         if (anterior.Origin == NoveltyOrigin.VacationLeave)

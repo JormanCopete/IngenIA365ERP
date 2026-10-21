@@ -1,0 +1,164 @@
+// Categoria plena antes del fin de la transicion (42 meses del Decreto 976 de 2026): rige el regimen general y el de madurez residual se informa.
+{
+  "nombre": "liquidez-03-plena-en-transicion",
+  "descripcion": "Categoria plena antes del fin de la transicion (42 meses del Decreto 976 de 2026): rige el regimen general y el de madurez residual se informa.",
+  "entrada": {
+    "tipo": "fondo",
+    "fecha": "2026-10-31",
+    "regla": {
+      "regimen": "PorMadurez",
+      "porcentajeDepositos": 0.1,
+      "porcentajePermanenteSoloAlRetirarse": 0.05,
+      "bandas": [
+        {
+          "hastaDias": 30,
+          "porcentaje": 0.1
+        },
+        {
+          "hastaDias": 540,
+          "porcentaje": 0.05
+        },
+        {
+          "hastaDias": null,
+          "porcentaje": 0
+        }
+      ],
+      "incluyeInteresesCausados": true,
+      "incluyeInteresesPorCausar": true,
+      "redencionAnticipadaEnLaPrimeraBanda": true,
+      "finDeLaTransicion": "2030-02-06",
+      "fuente": "Decreto 1068 de 2015 art. 2.11.7.2.2.1 (Decreto 976 de 2026, Seccion 2)"
+    },
+    "general": {
+      "regimen": "General",
+      "porcentajeDepositos": 0.1,
+      "porcentajePermanenteSoloAlRetirarse": 0.02,
+      "fuente": "Decreto 1068 de 2015 art. 2.11.7.2.1.1 (Decreto 976 de 2026, Seccion 1)"
+    },
+    "pisos": {
+      "depositos": 0.1,
+      "permanenteSoloAlRetirarse": 0.02,
+      "bandaMediaPlena": 0.05,
+      "permanenteSoloAlRetirarsePlena": 0.05
+    },
+    "depositos": [
+      {
+        "clase": "Cdat",
+        "capital": 10000000,
+        "interesCausado": 50000,
+        "interesPorCausar": 30000,
+        "diasAlVencimiento": 20
+      },
+      {
+        "clase": "Cdat",
+        "capital": 40000000,
+        "interesCausado": 100000,
+        "interesPorCausar": 1200000,
+        "diasAlVencimiento": 200
+      },
+      {
+        "clase": "Cdat",
+        "capital": 25000000,
+        "interesCausado": 10000,
+        "interesPorCausar": 3000000,
+        "diasAlVencimiento": 600
+      },
+      {
+        "clase": "Cdat",
+        "capital": 7000000,
+        "interesCausado": 70000,
+        "interesPorCausar": 0,
+        "diasAlVencimiento": -3
+      },
+      {
+        "clase": "Contractual",
+        "capital": 6000000,
+        "interesCausado": 15000,
+        "interesPorCausar": 45000,
+        "diasAlVencimiento": 45,
+        "redencionAnticipadaPactada": true
+      },
+      {
+        "clase": "Contractual",
+        "capital": 3000000.33,
+        "interesCausado": 3333.33,
+        "interesPorCausar": 9999.99,
+        "diasAlVencimiento": 540
+      },
+      {
+        "clase": "ALaVista",
+        "capital": 15000000,
+        "interesCausado": 2500
+      },
+      {
+        "clase": "PermanenteSoloAlRetirarse",
+        "capital": 8000000
+      },
+      {
+        "clase": "PermanenteConRetiroParcial",
+        "capital": 2000000
+      }
+    ]
+  },
+  "esperado": {
+    "regimen": "General",
+    "requerido": 10960000.03,
+    "renglones": [
+      {
+        "clase": "ALaVista",
+        "banda": null,
+        "cuentas": 1,
+        "capital": 15000000,
+        "intereses": 0,
+        "base": 15000000,
+        "porcentaje": 0.1,
+        "requerido": 1500000
+      },
+      {
+        "clase": "Cdat",
+        "banda": null,
+        "cuentas": 4,
+        "capital": 82000000,
+        "intereses": 0,
+        "base": 82000000,
+        "porcentaje": 0.1,
+        "requerido": 8200000
+      },
+      {
+        "clase": "Contractual",
+        "banda": null,
+        "cuentas": 2,
+        "capital": 9000000.33,
+        "intereses": 0,
+        "base": 9000000.33,
+        "porcentaje": 0.1,
+        "requerido": 900000.03
+      },
+      {
+        "clase": "PermanenteConRetiroParcial",
+        "banda": null,
+        "cuentas": 1,
+        "capital": 2000000,
+        "intereses": 0,
+        "base": 2000000,
+        "porcentaje": 0.1,
+        "requerido": 200000
+      },
+      {
+        "clase": "PermanenteSoloAlRetirarse",
+        "banda": null,
+        "cuentas": 1,
+        "capital": 8000000,
+        "intereses": 0,
+        "base": 8000000,
+        "porcentaje": 0.02,
+        "requerido": 160000
+      }
+    ],
+    "nuevo": {
+      "regimen": "PorMadurez",
+      "requerido": 6636916.68
+    },
+    "finDeLaTransicion": "2030-02-06"
+  }
+}

@@ -1,0 +1,34 @@
+@using IngenIA365ERP.Shared.Services.Cartera
+
+@* Feature 013, K2, US10 (T0852): las líneas de un archivo de descuentos —o de su vista previa— en el orden de la prelación por fecha de libranza:
+   empleado ante la pagaduría, crédito, cuota, lo del período, lo vencido, el total y la novedad frente al último archivo enviado. *@
+<div class="tabla-desplazable">
+    <table class="data-grid">
+        <thead>
+            <tr><th>#</th><th>Empleado</th><th>Crédito</th><th>Deudor</th><th>Cuota</th><th>Vence</th><th class="numero">Del período</th><th class="numero">Vencido</th><th class="numero">Total</th><th>Novedad</th><th>Libranza desde</th></tr>
+        </thead>
+        <tbody>
+            @foreach (var l in Lineas)
+            {
+                <tr>
+                    <td>@l.LineNumber</td>
+                    <td>@(l.EmployeeId ?? "—")</td>
+                    <td><a href="/cartera/creditos/@l.LoanPublicId">@l.LoanNumber</a></td>
+                    <td>@l.Debtor</td>
+                    <td>@(l.InstallmentNumber?.ToString() ?? "—")</td>
+                    <td>@(l.DueDate?.ToString("dd/MM/yyyy") ?? "—")</td>
+                    <td class="numero">@TextosDeCreditos.Pesos(l.CurrentAmount)</td>
+                    <td class="numero">@TextosDeCreditos.Pesos(l.PastDueAmount)</td>
+                    <td class="numero">@TextosDeCreditos.Pesos(l.Total)</td>
+                    <td>@TextosDeLibranza.Novedad(l.Novelty)@(l.PreviousAmount is { } antes ? $" (antes {TextosDeCreditos.Pesos(antes)})" : "")</td>
+                    <td>@l.LibranzaDate.ToString("dd/MM/yyyy")</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+@if (Lineas.Count == 0) { <p class="texto-tenue">No hay líneas.</p> }
+
+@code {
+    [Parameter] public IReadOnlyList<LineaDeDescuentoDto> Lineas { get; set; } = [];
+}

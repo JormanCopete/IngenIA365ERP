@@ -1,0 +1,23 @@
+{
+  // r09 (SC-021; FR-098): insolvencia (Leyes 1116 y 1564). A mano:
+  //  1. 120 días (la mora daría D) con la negociación en curso, iniciada en B → la calificación se mantiene: B por «Insolvency»;
+  //  2. igual, pero la negociación fracasó → E por la norma (insolvency.failedCategory); 120 días no caben en E1 (desde 181) → E1;
+  //  3. acuerdo de insolvencia = reestructuración: reestructurado en C sin cuotas pagadas → C por «Restructured»;
+  //  4. otro consumo del deudor del 1, al día → B por arrastre de la calificación que se mantiene.
+  "nombre": "r09-insolvencia",
+  "creditos": [
+    { "id": 1, "deudor": 901, "segmento": "CONSUMO", "diasDeMora": 120, "insolvencia": { "estado": "Negotiating", "categoriaAlIniciar": "B" } },
+    { "id": 2, "deudor": 902, "segmento": "CONSUMO", "diasDeMora": 120, "insolvencia": { "estado": "Failed", "categoriaAlIniciar": "B" } },
+    { "id": 3, "deudor": 903, "segmento": "CONSUMO", "diasDeMora": 30, "insolvencia": { "estado": "Agreement", "categoriaAlIniciar": "C" },
+      "reestructuracion": { "categoriaAlReestructurar": "C", "cuotasPagadasSeguidas": 0 } },
+    { "id": 4, "deudor": 901, "segmento": "CONSUMO", "diasDeMora": 0 }
+  ],
+  "esperado": {
+    "creditos": [
+      { "id": 1, "categoriaPorMora": "D", "categoria": "B", "causa": "Insolvency", "candidatas": [ "Insolvency:B" ] },
+      { "id": 2, "categoriaPorMora": "D", "categoria": "E", "subcategoria": "E1", "causa": "Insolvency", "candidatas": [ "Arrears:D", "Insolvency:E" ] },
+      { "id": 3, "categoriaPorMora": "A", "categoria": "C", "causa": "Restructured", "candidatas": [ "Arrears:A", "Restructured:C" ] },
+      { "id": 4, "categoria": "B", "causa": "Drag" }
+    ]
+  }
+}

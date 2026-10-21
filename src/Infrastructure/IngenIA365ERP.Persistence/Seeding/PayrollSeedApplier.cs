@@ -7,7 +7,7 @@ using Microsoft.Extensions.Logging;
 namespace IngenIA365ERP.Persistence.Seeding;
 
 /// <summary>
-/// Reaplica la semilla de nómina (conceptos, parámetros legales, clases ARL, comprobante NM, motivos de retiro, festivos, políticas) sobre la
+/// Reaplica la semilla de nómina (conceptos, parámetros legales, clases ARL, comprobante NM, motivos de retiro, políticas) sobre la
 /// base de la cooperativa ACTIVA —el <see cref="ApplicationDbContext"/> ya resuelto al
 /// tenant de la petición—, con los mismos seeders idempotentes del arranque. Sólo inserta
 /// lo que falta; nunca actualiza lo existente (D-10). Es lo que dispara
@@ -21,8 +21,9 @@ public sealed class PayrollSeedApplier(ApplicationDbContext tenantDb, IHostEnvir
         IDataSeeder[] seeders =
         [
             new PayrollPlansSeeder(), new PayrollConceptDefinitionsSeeder(), new PayrollLegalParametersSeeder(), new WorkRiskClassesSeeder(), new VoucherTypesSeeder(),
-            // Feature 010: motivos de retiro, festivos y políticas por empresa entran por el mismo botón «Reaplicar semilla».
-            new TerminationReasonsSeeder(), new HolidaysSeeder(), new CompanyPoliciesSeeder(), new BankFileFormatsSeeder(),
+            // Feature 010: motivos de retiro y políticas por empresa entran por el mismo botón «Reaplicar semilla». Los festivos,
+            // el SMMLV y la UVT los trae la réplica de valores nacionales (feature 013, T93), no esta semilla.
+            new TerminationReasonsSeeder(), new CompanyPoliciesSeeder(), new BankFileFormatsSeeder(),
         ];
 
         var resultado = new List<(string, int)>();

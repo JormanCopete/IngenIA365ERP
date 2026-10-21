@@ -1,0 +1,132 @@
+@page "/compliance/listas-restrictivas"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Compliance
+@using static IngenIA365ERP.Shared.Services.Core.TextosDePlataforma
+@inject ListasRestrictivasClient Listas
+@inject INotificationService Notification
+
+<PageTitle>Listas restrictivas - IngenIA365ERP</PageTitle>
+
+@* Feature 013, fase 2 (T0095; T70, F-18; contracts/api.md §22.1; contracts/plantillas.md §4): las listas restrictivas que mantiene el
+   oficial de cumplimiento mientras no haya proveedor contratado. Cada carga es una versión nueva de su lista, con fuente, fecha de
+   publicación y vigencia; la anterior queda reemplazada. La carga se revisa antes de aplicarla (las mismas reglas, sin guardar nada) y se
+   aplica todo o nada. Las entradas no son personas del maestro: son lo que publica la lista. *@
+<PermissionGate Required="Compliance.RestrictiveLists.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Listas restrictivas</h3>
+        <div class="toolbar">
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+        </div>
+    </div>
+
+    <h4>Cargas</h4>
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        @if (_cargas.Count == 0)
+        {
+            <p class="aviso aviso-info">Todavía no hay listas cargadas. Descargue la plantilla, diligénciela con la lista publicada y súbala abajo.</p>
+        }
+        else
+        {
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Lista</th><th class="numero">Versión</th><th>Estado</th><th>Publicada</th><th>Vigente desde</th><th class="numero">Entradas</th><th>Fuente</th><th>Cargó</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var c in _cargas.OrderBy(c => c.ListCode, StringComparer.Ordinal).ThenByDescending(c => c.Version))
+                        {
+                            <tr>
+                                <td>@c.ListCode</td><td class="numero">@c.Version</td><td>@EstadoDeCarga(c.Status)</td>
+                                <td>@c.PublishedOn?.ToString("dd/MM/yyyy")</td><td>@c.ValidFrom.ToString("dd/MM/yyyy")</td>
+                                <td class="numero">@c.Rows.ToString("N0")</td><td>@c.Source</td>
+                                <td>@c.LoadedBy · @c.LoadedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
+                                <td><SfButton CssClass="e-flat" OnClick="@(() => VerEntradasAsync(c))">Ver entradas</SfButton></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </IndicadorDeCarga>
+
+    @if (_cargaElegida is { } elegida)
+    {
+        <h4>Entradas de @elegida.ListCode, versión @elegida.Version</h4>
+        <div class="filtros-de-informe form-grid">
+            <label class="campo">Buscar <input class="e-input" @bind="_buscar" placeholder="Documento o nombre" /></label>
+            <div class="toolbar">
+                <SfButton CssClass="e-outline" IconCss="e-icons e-search" Disabled="@_cargaEntradas.Activa" OnClick="@(() => CargarEntradasAsync(1))">Buscar</SfButton>
+            </div>
+        </div>
+        <IndicadorDeCarga Cargando="@_cargaEntradas.Activa">
+            @if (_entradas.Count == 0)
+            {
+                <p class="texto-tenue">Sin entradas para esa búsqueda.</p>
+            }
+            else
+            {
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th>Clase</th><th>Documento</th><th>Nombre</th><th>Alias</th><th>Programa</th><th>Notas</th></tr></thead>
+                        <tbody>
+                            @foreach (var e in _entradas)
+                            {
+                                <tr>
+                                    <td>@ClaseDeEntrada(e.EntityKind)</td><td>@e.DocumentType @e.DocumentNumber</td><td>@e.FullName</td>
+                                    <td>@e.Aliases</td><td>@e.Program</td><td>@e.Notes</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-flat" Disabled="@(_pagina <= 1 || _cargaEntradas.Activa)" OnClick="@(() => CargarEntradasAsync(_pagina - 1))">Anterior</SfButton>
+                    <span class="texto-tenue">Página @_pagina de @_paginas</span>
+                    <SfButton CssClass="e-flat" Disabled="@(_pagina >= _paginas || _cargaEntradas.Activa)" OnClick="@(() => CargarEntradasAsync(_pagina + 1))">Siguiente</SfButton>
+                </div>
+            }
+        </IndicadorDeCarga>
+    }
+
+    <h4>Cargar una lista</h4>
+    <p class="texto-apoyo">Cada archivo es una versión nueva de su lista. Primero se revisa sin guardar nada; si no hay errores, se aplica completa. Un documento repetido en el archivo es un error.</p>
+    <ImportarPlantilla RutaBase="@ListasRestrictivasClient.Ruta" PermisoDeDescarga="Compliance.RestrictiveLists.View"
+                       PermisoDeImportacion="Compliance.RestrictiveLists.Load" ConDatos="false" Aplicado="@(_ => CargarAsync())" />
+</div>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new(), _cargaEntradas = new();
+    private List<CargaDeListaRestrictivaDto> _cargas = [];
+    private CargaDeListaRestrictivaDto? _cargaElegida;
+    private List<EntradaDeListaRestrictivaDto> _entradas = [];
+    private string? _buscar;
+    private int _pagina = 1, _paginas = 1;
+
+    protected override Task OnInitializedAsync() => CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Listas.CargasAsync();
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las listas."); return; }
+        _cargas = [.. r.Value];
+    }
+
+    private Task VerEntradasAsync(CargaDeListaRestrictivaDto carga)
+    {
+        _cargaElegida = carga;
+        _buscar = null;
+        return CargarEntradasAsync(1);
+    }
+
+    private async Task CargarEntradasAsync(int pagina)
+    {
+        if (_cargaElegida is null) return;
+        using var carga = _cargaEntradas.Iniciar();
+        var r = await Listas.EntradasAsync(_cargaElegida.PublicId, string.IsNullOrWhiteSpace(_buscar) ? null : _buscar.Trim(), pagina);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las entradas."); return; }
+        _entradas = [.. r.Value.Items];
+        _pagina = pagina;
+        _paginas = Math.Max(1, r.Value.TotalPages);
+    }
+}

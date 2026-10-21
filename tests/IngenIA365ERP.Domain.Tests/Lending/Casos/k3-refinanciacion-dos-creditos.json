@@ -1,0 +1,85 @@
+// FR-090, FR-046 (T0858): REFINANCIACIÓN decidida el 15-09-2026 que recoge el crédito base (cuota 8 pagada: saldo 1.072.498,21) y
+// otro del mismo deudor (1.800.000 a 10 cuotas, 26 % EA, desembolsado el 05-11-2025, con la 7 pagada y la 8 y la 9 en mora: saldo de
+// capital 576.843,36). Crédito enlazado nuevo desde la cuota 1: capital 1.649.341,57 en 24 cuotas al 22 % EA; los costos (120.000) no
+// entran. Vence los 15 (el día del crédito principal).
+// El crédito base de los casos de K3: 3.000.000 a 12 cuotas mensuales fijas, 24 % EA, 30/360, desembolsado el 15-01-2026 (vence los 15).
+// Su plan (calcular.py): saldo tras la cuota 5 = 1.827.884,60; la cuota 6 (15-07-2026) lleva 247.295,52 de capital y 33.062,01 de
+// interés; saldo tras la 6 = 1.580.589,08; tras la 7 = 1.328.820,59; tras la 8 = 1.072.498,21; tras la 9 = 811.539,58.
+// La usura de CONSUMO es 26,5 % desde el 01-01-2026 y 27 % desde el 01-07-2026.
+// Regla (FR-091, T29): el plan se regenera desde la fecha de la decisión con la versión de reglas vigente; capital = saldo + lo que
+// recoge una refinanciación + lo capitalizado; los costos de la novedad nunca entran. Calculado con calcular.py (bloque «K3»).
+// Pendiente de validar por la contadora.
+{
+  "nombre": "k3-refinanciacion-dos-creditos",
+  "condiciones": {
+    "sistema": "LevelPayment", "convencion": "Thirty360", "equivalencia": "Compound",
+    "redondeo": { "unidad": 0.01, "modo": "AwayFromZero", "momento": "PerConcept" },
+    "prelacion": "OldestInstallmentFirst",
+    "monto": 3000000, "plazoCuotas": 12, "periodicidad": "Monthly", "tasaEA": 0.240000,
+    "fechaDesembolso": "2026-01-15", "modalidad": "CONSUMO"
+  },
+  "series": {
+    "usura": [
+      { "clave": "CONSUMO", "desde": "2026-01-01", "ea": 0.265000, "registradoEn": "2025-12-31T15:00:00Z",
+        "publicId": "0b7a3c8e-1d1a-4f6e-9a01-000000003001" },
+      { "clave": "CONSUMO", "desde": "2026-07-01", "ea": 0.270000, "registradoEn": "2026-06-30T15:00:00Z",
+        "publicId": "0b7a3c8e-1d1a-4f6e-9a01-000000003002" }
+    ],
+    "festivos": []
+  },
+  "operaciones": [],
+  "novedades": [
+    {
+      "nombre": "recoge-dos-creditos",
+      "mecanismo": "Refinancing",
+      "causa": "Restructuring",
+      "fecha": "2026-09-15",
+      "saldoDeCapital": 1072498.21,
+      "interesCapitalizado": 0,
+      "saldosRecogidos": [
+        576843.36
+      ],
+      "costos": 120000,
+      "cuotas": 24,
+      "tasaEA": 0.220000,
+      "creditoEnlazado": true,
+      "esperado": {
+        "primeraCuota": 1,
+        "capital": 1649341.57,
+        "tasas": { "diaria": 0.000552516077322552, "nominalDelPeriodo": 0.016708963873128260, "cuotaNivelada": 83985.47, "efectiva": 0.220131, "efectivaSinCargos": 0.220131 },
+        "plan": {
+          "interesDeGracia": 0,
+          "residuo": -0.15,
+          "totales": { "capital": 1649341.57, "interes": 366309.56, "seguro": 0 },
+          "cuotas": [
+            { "numero": 1, "vencimiento": "2026-10-15", "dias": 30, "capital": 56426.68, "interes": 27558.79, "seguro": 0, "saldo": 1592914.89 },
+            { "numero": 2, "vencimiento": "2026-11-15", "dias": 30, "capital": 57369.51, "interes": 26615.96, "seguro": 0, "saldo": 1535545.38 },
+            { "numero": 3, "vencimiento": "2026-12-15", "dias": 30, "capital": 58328.10, "interes": 25657.37, "seguro": 0, "saldo": 1477217.28 },
+            { "numero": 4, "vencimiento": "2027-01-15", "dias": 30, "capital": 59302.70, "interes": 24682.77, "seguro": 0, "saldo": 1417914.58 },
+            { "numero": 5, "vencimiento": "2027-02-15", "dias": 30, "capital": 60293.59, "interes": 23691.88, "seguro": 0, "saldo": 1357620.99 },
+            { "numero": 6, "vencimiento": "2027-03-15", "dias": 30, "capital": 61301.03, "interes": 22684.44, "seguro": 0, "saldo": 1296319.96 },
+            { "numero": 7, "vencimiento": "2027-04-15", "dias": 30, "capital": 62325.31, "interes": 21660.16, "seguro": 0, "saldo": 1233994.65 },
+            { "numero": 8, "vencimiento": "2027-05-15", "dias": 30, "capital": 63366.70, "interes": 20618.77, "seguro": 0, "saldo": 1170627.95 },
+            { "numero": 9, "vencimiento": "2027-06-15", "dias": 30, "capital": 64425.49, "interes": 19559.98, "seguro": 0, "saldo": 1106202.46 },
+            { "numero": 10, "vencimiento": "2027-07-15", "dias": 30, "capital": 65501.97, "interes": 18483.50, "seguro": 0, "saldo": 1040700.49 },
+            { "numero": 11, "vencimiento": "2027-08-15", "dias": 30, "capital": 66596.44, "interes": 17389.03, "seguro": 0, "saldo": 974104.05 },
+            { "numero": 12, "vencimiento": "2027-09-15", "dias": 30, "capital": 67709.20, "interes": 16276.27, "seguro": 0, "saldo": 906394.85 },
+            { "numero": 13, "vencimiento": "2027-10-15", "dias": 30, "capital": 68840.55, "interes": 15144.92, "seguro": 0, "saldo": 837554.30 },
+            { "numero": 14, "vencimiento": "2027-11-15", "dias": 30, "capital": 69990.81, "interes": 13994.66, "seguro": 0, "saldo": 767563.49 },
+            { "numero": 15, "vencimiento": "2027-12-15", "dias": 30, "capital": 71160.28, "interes": 12825.19, "seguro": 0, "saldo": 696403.21 },
+            { "numero": 16, "vencimiento": "2028-01-15", "dias": 30, "capital": 72349.29, "interes": 11636.18, "seguro": 0, "saldo": 624053.92 },
+            { "numero": 17, "vencimiento": "2028-02-15", "dias": 30, "capital": 73558.18, "interes": 10427.29, "seguro": 0, "saldo": 550495.74 },
+            { "numero": 18, "vencimiento": "2028-03-15", "dias": 30, "capital": 74787.26, "interes": 9198.21, "seguro": 0, "saldo": 475708.48 },
+            { "numero": 19, "vencimiento": "2028-04-15", "dias": 30, "capital": 76036.87, "interes": 7948.60, "seguro": 0, "saldo": 399671.61 },
+            { "numero": 20, "vencimiento": "2028-05-15", "dias": 30, "capital": 77307.37, "interes": 6678.10, "seguro": 0, "saldo": 322364.24 },
+            { "numero": 21, "vencimiento": "2028-06-15", "dias": 30, "capital": 78599.10, "interes": 5386.37, "seguro": 0, "saldo": 243765.14 },
+            { "numero": 22, "vencimiento": "2028-07-15", "dias": 30, "capital": 79912.41, "interes": 4073.06, "seguro": 0, "saldo": 163852.73 },
+            { "numero": 23, "vencimiento": "2028-08-15", "dias": 30, "capital": 81247.66, "interes": 2737.81, "seguro": 0, "saldo": 82605.07 },
+            { "numero": 24, "vencimiento": "2028-09-15", "dias": 30, "capital": 82605.07, "interes": 1380.25, "seguro": 0, "saldo": 0 }
+          ]
+        },
+        "usura": { "veredicto": "Pasa", "usura": 0.270000, "holgura": 0.049869 }
+      }
+    }
+  ]
+}

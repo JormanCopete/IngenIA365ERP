@@ -1,0 +1,127 @@
+{
+  "descripcion": "Contingente: la garantía de un crédito existente cruza contra su número porque la cuenta lo exige.",
+  "sobre": {
+    "version": 1,
+    "kind": "Business",
+    "originModule": "CAR",
+    "originEventKey": "Confirmation",
+    "origin": {
+      "kind": "Operation",
+      "documentClass": null,
+      "documentTypeCode": null,
+      "number": "GAR-000017",
+      "publicId": "0d0d0165-0000-4000-8000-000000000165",
+      "operationDate": "2026-11-09"
+    },
+    "related": null,
+    "chainRootPublicId": "0e0e0166-0000-4000-8000-000000000166",
+    "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+    "costCenterPublicId": null,
+    "warehouseCode": null,
+    "personPublicId": "a1b2c3d4-0000-4000-8000-000000000002",
+    "currency": "COP",
+    "exchangeRate": 1,
+    "originUser": {
+      "centralUserId": "d4e5f6a7-b8c9-4d0e-9f1a-2b3c4d5e6f70",
+      "name": "Usuario de ensayo"
+    },
+    "emittedAt": "2026-11-09T15:00:00Z"
+  },
+  "mensajes": [
+    {
+      "messageId": "0f0f0168-0000-4000-8000-000000000168",
+      "type": "GarantiaConstituida",
+      "kind": "Business",
+      "originDocumentClass": "Collateral",
+      "payload": {
+        "debtorPersonPublicId": "a1b2c3d4-0000-4000-8000-000000000002",
+        "loan": {
+          "loanPublicId": "7b8c9d0e-1f2a-4b3c-9d4e-000000000123",
+          "loanNumber": "000123"
+        },
+        "subject": {
+          "kind": "Collateral",
+          "publicId": "9a9a0167-0000-4000-8000-000000000167",
+          "number": "GAR-000017"
+        },
+        "valueDate": "2026-11-09",
+        "registeredAt": "2026-11-09T16:00:00Z",
+        "dimensions": {
+          "creditLineCode": "LIB01",
+          "modalityCode": "CONSUMO",
+          "subsegmentCode": "ConLibranza",
+          "riskCategory": "A",
+          "riskSubcategory": "None",
+          "isEmployee": false,
+          "inGracePeriod": false,
+          "restructured": false,
+          "writtenOff": false,
+          "collectorClass": null,
+          "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+          "impairmentModel": "ArrearsAnnex1",
+          "riskSegment": "CONSUMO",
+          "valueUnit": "Pesos"
+        },
+        "creditLineCode": "LIB01",
+        "movement": "Constituted",
+        "amounts": [
+          {
+            "concept": "Principal",
+            "installmentNumber": null,
+            "amount": 20000000.0,
+            "uvrAmount": null,
+            "onBehalfOfAssociate": false,
+            "reasonCode": "CollateralReceived"
+          }
+        ],
+        "balanceAfter": 20000000.0,
+        "causeFact": null
+      }
+    }
+  ],
+  "esperado": {
+    "tipo": "CN",
+    "fecha": "2026-11-09",
+    "origen": "LendingIssuedDocument",
+    "lineas": [
+      {
+        "rol": "ContraContingenteAcreedora",
+        "cuenta": "96050501",
+        "debito": 20000000.0,
+        "credito": 0.0,
+        "tercero": null,
+        "cruce": null,
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "GarantiaConstituida"
+          ],
+          "concepto": "Principal",
+          "creditos": [
+            "000123"
+          ]
+        }
+      },
+      {
+        "rol": "ContingenteAcreedora",
+        "cuenta": "91100501",
+        "debito": 0.0,
+        "credito": 20000000.0,
+        "tercero": "ana",
+        "cruce": "PG 000123",
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "GarantiaConstituida"
+          ],
+          "concepto": "Principal",
+          "creditos": [
+            "000123"
+          ]
+        }
+      }
+    ]
+  }
+}

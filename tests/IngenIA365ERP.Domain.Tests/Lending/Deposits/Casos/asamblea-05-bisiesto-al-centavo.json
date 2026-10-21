@@ -1,0 +1,91 @@
+// Revalorizacion del 5,25 % sobre el saldo promedio de 2028 (366 dias) al centavo, con un IPC del 6 % que no la limita; el fondo de 11.000,55 no alcanza y se prorratea al centavo.
+{
+  "nombre": "asamblea-05-bisiesto-al-centavo",
+  "descripcion": "Revalorizacion del 5,25 % sobre el saldo promedio de 2028 (366 dias) al centavo, con un IPC del 6 % que no la limita; el fondo de 11.000,55 no alcanza y se prorratea al centavo.",
+  "entrada": {
+    "clase": "Revaluation",
+    "ejercicio": 2028,
+    "base": "AverageBalance",
+    "porcentaje": 0.0525,
+    "valor": null,
+    "fondo": 11000.55,
+    "limiteLegal": 0.06,
+    "unidad": 0.01,
+    "asociados": [
+      {
+        "persona": 7,
+        "cuenta": 21,
+        "movimientos": [
+          {
+            "fecha": "2028-02-29",
+            "monto": 123456.78
+          }
+        ]
+      },
+      {
+        "persona": 5,
+        "cuenta": 22,
+        "movimientos": [
+          {
+            "fecha": "2027-12-31",
+            "monto": 98765.43
+          },
+          {
+            "fecha": "2028-12-31",
+            "monto": 50000
+          }
+        ]
+      },
+      {
+        "persona": 6,
+        "cuenta": 23,
+        "movimientos": [
+          {
+            "fecha": "2028-06-15",
+            "monto": 45000.01
+          },
+          {
+            "fecha": "2028-06-16",
+            "monto": -0.01
+          }
+        ]
+      }
+    ]
+  },
+  "esperado": {
+    "baseTotal": 227047.48,
+    "tasaAplicada": 0.0525,
+    "limitadaPorElLimiteLegal": false,
+    "totalCalculado": 11919.99,
+    "prorrateada": true,
+    "factor": 0.922866,
+    "totalAplicado": 11000.55,
+    "remanente": 0,
+    "lineas": [
+      {
+        "persona": 5,
+        "cuenta": 22,
+        "base": 98902.04,
+        "calculado": 5192.36,
+        "aplicado": 4791.85,
+        "limitadaPorMinimo": false
+      },
+      {
+        "persona": 6,
+        "cuenta": 23,
+        "base": 24590.16,
+        "calculado": 1290.98,
+        "aplicado": 1191.4,
+        "limitadaPorMinimo": false
+      },
+      {
+        "persona": 7,
+        "cuenta": 21,
+        "base": 103555.28,
+        "calculado": 5436.65,
+        "aplicado": 5017.3,
+        "limitadaPorMinimo": false
+      }
+    ]
+  }
+}

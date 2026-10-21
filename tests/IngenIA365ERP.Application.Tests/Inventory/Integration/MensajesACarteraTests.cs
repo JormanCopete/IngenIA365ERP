@@ -61,6 +61,7 @@ public class MensajesACarteraTests
         var pago = c.Db.DocumentPayments.AsNoTracking().Single(p => p.DocumentId == venta.Id && !p.IsDeleted);
 
         var mensaje = Mensajes(c, venta.PublicId, VentaACreditoRegistradaV1.Type).Should().ContainSingle().Subject;
+        mensaje.Version.Should().Be(2, "feature 013 (T0118, T18): Comercial emite sólo la v2");
         mensaje.OriginEventKey.Should().Be(ClavesDeEvento.ConfirmacionPor(pago.PublicId));
         mensaje.PersonPublicId.Should().Be(c.AsociadoX.PublicId);
         var entrega = c.Db.IntegrationMessageDeliveries.AsNoTracking().Single(e => e.MessageId == mensaje.Id);
@@ -80,6 +81,26 @@ public class MensajesACarteraTests
         contenido["origin"]!.GetValue<string>().Should().Be("ProvisionalCredit");
         contenido["accountsReceivableRecordedBy"]!.GetValue<string>().Should().Be("Contabilidad");
         contenido["approval"]!["approvedBy"]!["name"]!.GetValue<string>().Should().Be("supervisor", "aprueba el supervisor, nunca el cajero");
+        contenido["reservedLoanNumber"].Should().BeNull("con Cartera no habilitada no hay reserva");
+        contenido["reservationPublicId"].Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Un_credito_sin_Cartera_no_emite_la_venta_ni_el_ajuste_de_su_nota()
+    {
+        // Feature 013 (T0118, A6, R115): el pago con CreditWithoutLending no emite VentaACreditoRegistrada ni AjusteDeVentaACredito.
+        var c = await CreditoDePrueba.CrearAsync();
+        var medio = c.Db.PaymentMeans.Single(m => m.Id == c.CredAsoc.Id);
+        medio.CreditWithoutLending = true;
+        await c.Db.SaveChangesAsync();
+        var venta = await VentaAprobadaAsync(c);
+
+        await NotaAsync(c, venta, devolucion: false);
+
+        Mensajes(c, venta.PublicId, VentaACreditoRegistradaV1.Type).Should().BeEmpty();
+        c.Db.IntegrationMessages.AsNoTracking().Where(m => m.Type == AjusteDeVentaACreditoV1.Type).Should().BeEmpty();
+        c.Db.IntegrationMessages.AsNoTracking().Where(m => m.OriginPublicId == venta.PublicId && m.Type == VentaFacturadaV1.Type)
+            .Should().ContainSingle("Contabilidad sí recibe la venta con su cuenta por cobrar");
     }
 
     [Fact]

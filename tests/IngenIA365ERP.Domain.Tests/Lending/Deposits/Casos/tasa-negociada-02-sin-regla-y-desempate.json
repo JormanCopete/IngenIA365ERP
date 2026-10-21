@@ -1,0 +1,67 @@
+// Sin regla que case no se negocia; dos reglas igual de especificas se desempatan por prioridad.
+{
+  "nombre": "tasa-negociada-02-sin-regla-y-desempate",
+  "descripcion": "Sin regla que case no se negocia; dos reglas igual de especificas se desempatan por prioridad.",
+  "entrada": {
+    "reglas": [
+      {
+        "codigo": "OF2",
+        "prioridad": 5,
+        "oficina": 2,
+        "margenMaximo": 0.01
+      },
+      {
+        "codigo": "WEB",
+        "prioridad": 2,
+        "canal": "Web",
+        "margenMaximo": 0.008
+      },
+      {
+        "codigo": "OFI",
+        "prioridad": 1,
+        "oficina": 1,
+        "margenMaximo": 0.006
+      }
+    ],
+    "pedidos": [
+      {
+        "antiguedadMeses": 6,
+        "monto": 5000000,
+        "plazoDias": 90,
+        "tasaDeTabla": 0.08,
+        "saldoDelTitular": 5000000,
+        "oficina": 3,
+        "canal": null,
+        "margenPedido": 0.002,
+        "atribucion": 0.01
+      },
+      {
+        "antiguedadMeses": 6,
+        "monto": 5000000,
+        "plazoDias": 90,
+        "tasaDeTabla": 0.08,
+        "saldoDelTitular": 5000000,
+        "oficina": 1,
+        "canal": "Web",
+        "margenPedido": 0.007,
+        "atribucion": null
+      }
+    ]
+  },
+  "esperado": {
+    "evaluaciones": [
+      {
+        "regla": null,
+        "codigo": "Lending.NegotiatedRate.NoApplicableRule",
+        "seAplicaSola": false,
+        "esperaAprobador": false
+      },
+      {
+        "regla": "OFI",
+        "codigo": "Lending.NegotiatedRate.MarginAboveRule",
+        "seAplicaSola": false,
+        "esperaAprobador": false
+      }
+    ]
+  }
+}

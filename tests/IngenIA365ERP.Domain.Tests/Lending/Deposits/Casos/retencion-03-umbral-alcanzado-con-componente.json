@@ -1,0 +1,151 @@
+// El mismo ahorro de una persona natural no obligada: se descuenta el componente inflacionario de 2025 (55,43 %) y se retiene el 7 % del resto.
+{
+  "nombre": "retencion-03-umbral-alcanzado-con-componente",
+  "descripcion": "El mismo ahorro de una persona natural no obligada: se descuenta el componente inflacionario de 2025 (55,43 %) y se retiene el 7 % del resto.",
+  "entrada": {
+    "politica": {
+      "tarifa": 0.07,
+      "umbralDiarioUvt": 0.055,
+      "uvt": 52374,
+      "alcance": "ExceptTermDeposit",
+      "componenteInflacionarioAplica": true,
+      "componenteInflacionario": 0.5543,
+      "unidadDeRedondeo": 1
+    },
+    "titular": {
+      "perfil": "Standard",
+      "personaNaturalNoObligada": true
+    },
+    "clase": "Demand",
+    "interesBruto": 971812,
+    "interesesDiarios": [
+      {
+        "dia": "2026-04-01",
+        "interes": 32393.748403
+      },
+      {
+        "dia": "2026-04-02",
+        "interes": 32393.748403
+      },
+      {
+        "dia": "2026-04-03",
+        "interes": 32393.748403
+      },
+      {
+        "dia": "2026-04-04",
+        "interes": 32393.748403
+      },
+      {
+        "dia": "2026-04-05",
+        "interes": 32393.748403
+      },
+      {
+        "dia": "2026-04-06",
+        "interes": 32393.748403
+      },
+      {
+        "dia": "2026-04-07",
+        "interes": 32393.748403
+      },
+      {
+        "dia": "2026-04-08",
+        "interes": 32393.748403
+      },
+      {
+        "dia": "2026-04-09",
+        "interes": 32393.748403
+      },
+      {
+        "dia": "2026-04-10",
+        "interes": 32393.748403
+      },
+      {
+        "dia": "2026-04-11",
+        "interes": 32393.748403
+      },
+      {
+        "dia": "2026-04-12",
+        "interes": 32393.748403
+      },
+      {
+        "dia": "2026-04-13",
+        "interes": 32393.748403
+      },
+      {
+        "dia": "2026-04-14",
+        "interes": 32393.748403
+      },
+      {
+        "dia": "2026-04-15",
+        "interes": 32393.748403
+      },
+      {
+        "dia": "2026-04-16",
+        "interes": 32393.748403
+      },
+      {
+        "dia": "2026-04-17",
+        "interes": 32393.748403
+      },
+      {
+        "dia": "2026-04-18",
+        "interes": 32393.748403
+      },
+      {
+        "dia": "2026-04-19",
+        "interes": 32393.748403
+      },
+      {
+        "dia": "2026-04-20",
+        "interes": 32393.748403
+      },
+      {
+        "dia": "2026-04-21",
+        "interes": 32393.748403
+      },
+      {
+        "dia": "2026-04-22",
+        "interes": 32393.748403
+      },
+      {
+        "dia": "2026-04-23",
+        "interes": 32393.748403
+      },
+      {
+        "dia": "2026-04-24",
+        "interes": 32393.748403
+      },
+      {
+        "dia": "2026-04-25",
+        "interes": 32393.748403
+      },
+      {
+        "dia": "2026-04-26",
+        "interes": 32393.748403
+      },
+      {
+        "dia": "2026-04-27",
+        "interes": 32393.748403
+      },
+      {
+        "dia": "2026-04-28",
+        "interes": 32393.748403
+      },
+      {
+        "dia": "2026-04-29",
+        "interes": 32393.748403
+      },
+      {
+        "dia": "2026-04-30",
+        "interes": 32393.748403
+      }
+    ]
+  },
+  "esperado": {
+    "umbralAlcanzado": true,
+    "componente": 538675,
+    "baseGravable": 433137,
+    "valor": 30320,
+    "motivo": null
+  }
+}

@@ -91,8 +91,9 @@ public sealed class MensajesDelDocumento(IApplicationDbContext db, ILectorDePara
     {
         var solicitudes = new List<SolicitudDeEmision>();
         var ajustesDeCosto = contenidos.OfType<AjusteDeCostoReconocidoV1>().ToList();
-        var aCartera = contenidos.Where(c => c is VentaACreditoRegistradaV1 or AjusteDeVentaACreditoV1).ToList();
-        var delEvento = contenidos.Where(c => c is not AjusteDeCostoReconocidoV1 && c is not VentaACreditoRegistradaV1 && c is not AjusteDeVentaACreditoV1).ToList();
+        var aCartera = contenidos.Where(c => c is VentaACreditoRegistradaV1 or VentaACreditoRegistradaV2 or AjusteDeVentaACreditoV1).ToList();
+        var delEvento = contenidos.Where(c => c is not AjusteDeCostoReconocidoV1 && c is not VentaACreditoRegistradaV1 && c is not VentaACreditoRegistradaV2
+            && c is not AjusteDeVentaACreditoV1).ToList();
 
         if (delEvento.Count > 0)
         {
@@ -129,6 +130,10 @@ public sealed class MensajesDelDocumento(IApplicationDbContext db, ILectorDePara
             {
                 case VentaACreditoRegistradaV1 venta:
                     solicitudes.Add(new SolicitudDeEmision(origen, ClavesDeEvento.ConfirmacionPor(venta.CreditPayment.PaymentPublicId), [venta],
+                        new ModoDeEntrega.Sellado(DeliveryMode.Online), ValidacionPrevia: validacion));
+                    break;
+                case VentaACreditoRegistradaV2 ventaV2:
+                    solicitudes.Add(new SolicitudDeEmision(origen, ClavesDeEvento.ConfirmacionPor(ventaV2.CreditPayment.PaymentPublicId), [ventaV2],
                         new ModoDeEntrega.Sellado(DeliveryMode.Online), ValidacionPrevia: validacion));
                     break;
                 case AjusteDeVentaACreditoV1 ajuste:
@@ -209,7 +214,7 @@ public sealed class MensajesDelDocumento(IApplicationDbContext db, ILectorDePara
                     Type = tipo.Type,
                     Version = tipo.Version,
                     Kind = tipo.Kind ?? solicitud.KindDelOriginal ?? IntegrationMessageKind.Business,
-                    OriginModule = EmisorDeMensajes.ModuloDeOrigen,
+                    OriginModule = ModulosDeOrigen.Inventario,
                     OriginEventKey = solicitud.OriginEventKey,
                     Origin = new MessageOriginV1
                     {
@@ -249,5 +254,5 @@ public sealed class MensajesDelDocumento(IApplicationDbContext db, ILectorDePara
     /// <summary>¿Alguno de los sobres es un mensaje de negocio a Contabilidad? (lo único que la validación previa evalúa).</summary>
     public static bool HayNegocioAContabilidad(IReadOnlyList<MensajeContableDto> sobres) =>
         sobres.Any(m => m.Envelope.Kind == IntegrationMessageKind.Business
-            && CatalogoDeMensajesV1.Todos.Any(t => t.Type == m.Envelope.Type && t.Destination == IntegrationDestinations.Accounting));
+            && CatalogoDeMensajesV1.Todos.Any(t => t.Type == m.Envelope.Type && t.AdmiteDestino(IntegrationDestinations.Accounting)));
 }

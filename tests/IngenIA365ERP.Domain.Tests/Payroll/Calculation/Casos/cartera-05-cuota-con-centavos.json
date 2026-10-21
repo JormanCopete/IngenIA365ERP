@@ -1,0 +1,24 @@
+{
+  "nombre": "Cuota de Cartera con centavos que cabe entera: se descuenta al centavo aunque la política redondee al peso",
+  "descripcion": "Feature 013 (fase 9; defecto hallado por la e2e NominaRecaudaPorElContratoTests). El caso 01 con una cuota de 500.000,40: redondeada al peso se descontaban 500.000 o 500.001 y Cartera recibía de menos (un no descontado de centavos) o de más (un excedente devuelto y el aviso Payroll.LoanDeductionNotApplied cada mes). Ahora la línea DESC_CARTERA lleva 500.000,40 y el neto se redondea al peso con el ajuste: 2.249.095 − 160.000 − 500.000,40 = 1.589.094,60 → 1.589.095 con ajuste de 0,40.",
+  "periodo": { "inicio": "2026-03-01", "fin": "2026-03-31", "periodicidad": "Monthly" },
+  "empleado": {
+    "nombre": "Luis Nieto", "clase": "Standard", "ingreso": "2020-08-03",
+    "salarios": [ { "desde": "2020-08-03", "mensual": 2000000 } ],
+    "afiliaciones": { "salud": true, "pension": true, "arl": 1, "caja": true },
+    "procedimientoRetencion": 1
+  },
+  "novedades": [ { "concepto": "DESC_CARTERA", "valor": 500000.40, "origen": "LoanDeduction", "descripcion": "Cuota del crédito 0000123 (Cartera)" } ],
+  "politicas": { "redondeo": "Peso", "exoneracion": false },
+  "esperado": {
+    "lineas": {
+      "SALARIO": 2000000, "AUX_TRANSPORTE": 249095, "AJUSTE_REDONDEO": 0.40,
+      "SALUD_EMP": 80000, "PENSION_EMP": 80000, "FSP": 0, "RETEFTE": 0, "DESC_CARTERA": 500000.40,
+      "SALUD_EMPLEADOR": 170000, "PENSION_EMPLEADOR": 240000, "ARL": 10440, "SENA": 40000, "ICBF": 60000, "CAJA": 80000,
+      "PROV_CESANTIAS": 187350, "PROV_INT_CESANTIAS": 22491, "PROV_PRIMA": 187350, "PROV_VACACIONES": 83400
+    },
+    "totales": { "devengos": 2249095.40, "deducciones": 660000.40, "aportesEmpleador": 600440, "provisiones": 480591, "neto": 1589095, "ajusteRedondeo": 0.40 },
+    "banderas": "None", "diasPagados": 30,
+    "noDescontados": []
+  }
+}

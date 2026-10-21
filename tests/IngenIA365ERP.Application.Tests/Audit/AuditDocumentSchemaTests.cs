@@ -259,6 +259,19 @@ public class AuditDocumentSchemaTests
         json.Should().Contain("\"action\" : \"Rejected\"");
     }
 
+    /// <summary>
+    /// Feature 013 (T0560, A11): <c>?operationKey=</c> busca la clave sola o dentro de la lista separada por coma que deja el contrato de
+    /// obligaciones en <c>metadata.OperationKey</c>, escapada (una clave <c>TST:…</c> o <c>NOM:…</c> no es una expresión).
+    /// </summary>
+    [Fact]
+    public void ElFiltroPorClaveDeOperacion_BuscaLaClaveEnLaListaDelLote()
+    {
+        var json = Render(AuditDocumentSchema.Filtro(new AuditQueryParameters { OperationKey = "NOM:ab.c" })).ToJson();
+
+        json.Should().Contain("metadata.OperationKey").And.Contain("Metadata.OperationKey");
+        json.Should().Contain(@"(^|,)NOM:ab\\.c(,|$)", "el punto va escapado (en el JSON, con su barra escapada)");
+    }
+
     [Fact]
     public void SinCondiciones_ElFiltroEsVacio()
     {

@@ -211,9 +211,12 @@ public sealed class BankFileFormatDefinition
     /// <summary>El tipo de dato que el origen sugiere cuando el formato no lo dice.</summary>
     public static BankFieldDataType TipoPorDefecto(BankFieldSource source) => source switch
     {
-        BankFieldSource.Amount or BankFieldSource.TotalAmount or BankFieldSource.SeveranceBaseSalary => BankFieldDataType.Amount,
-        BankFieldSource.PaymentDate or BankFieldSource.GenerationDate or BankFieldSource.PayeeHireDate => BankFieldDataType.Date,
-        BankFieldSource.LineNumber or BankFieldSource.LineCount or BankFieldSource.Sequence or BankFieldSource.SeveranceDays or BankFieldSource.Year => BankFieldDataType.Integer,
+        BankFieldSource.Amount or BankFieldSource.TotalAmount or BankFieldSource.SeveranceBaseSalary
+            or BankFieldSource.PastDueAmount or BankFieldSource.DeductedAmount => BankFieldDataType.Amount,
+        BankFieldSource.PaymentDate or BankFieldSource.GenerationDate or BankFieldSource.PayeeHireDate
+            or BankFieldSource.DueDate or BankFieldSource.LibranzaDate or BankFieldSource.DeductionDate => BankFieldDataType.Date,
+        BankFieldSource.LineNumber or BankFieldSource.LineCount or BankFieldSource.Sequence or BankFieldSource.SeveranceDays or BankFieldSource.Year
+            or BankFieldSource.InstallmentNumber or BankFieldSource.PeriodYear or BankFieldSource.PeriodMonth => BankFieldDataType.Integer,
         _ => BankFieldDataType.Text,
     };
 

@@ -1,0 +1,423 @@
+using System.Text.RegularExpressions;
+using IngenIA365ERP.Architecture.Tests.Helpers;
+
+namespace IngenIA365ERP.Architecture.Tests.Principles;
+
+/// <summary>
+/// Feature 013, FR-004 y SC-015 (DT §2.25, T62): toda consulta de Cartera con datos de deudores filtra por el
+/// alcance de oficina y línea del usuario, y falla cerrado.
+///
+/// <para>La lista nace vacía en el Setup (feature 013, T0006) y la llena cada historia con sus handlers de consulta; con la lista vacía la prueba pasa porque no hay nada que violar.</para>
+///
+/// <para>
+/// US17 (T0259, T0273) la llena y la cierra: cada consulta de <c>Application/Lending</c> (un <c>record …Query</c>) o está en un archivo que
+/// aplica el alcance (<see cref="Archivos"/>) o está en <see cref="Exceptuadas"/> con su motivo. Una consulta nueva que no está en ninguna de
+/// las dos rompe la prueba: quien la escribe decide si filtra o por qué no.
+/// </para>
+/// </summary>
+public class LasConsultasDeCarteraRespetanElAlcance
+{
+    /// <summary>Handlers de consulta de Cartera (relativos a <c>src/</c>).</summary>
+    private static readonly string[] Archivos =
+    [
+        // US17 (T0259): reclamos sobre el reporte por la oficina del crédito; la vista previa de la matriz por la línea; el alcance de un
+        // usuario (las líneas que asigna quien asigna); la bandeja de alertas de Cartera (C68).
+        "Core/IngenIA365ERP.Application/Lending/Collections/ListCreditReportClaimsQuery.cs",
+        "Core/IngenIA365ERP.Application/Lending/Attributions/AttributionMatrixCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/Common/LendingUserScopeCommands.cs",
+        "Core/IngenIA365ERP.Application/Common/Alerts/VisibilidadDeAlertas.cs",
+        // US17 (T0273): la cola de mensajes al deudor y la vista previa de una plantilla con un crédito de ejemplo.
+        "Core/IngenIA365ERP.Application/Lending/Collections/DebtorMessageQueries.cs",
+        "Core/IngenIA365ERP.Application/Lending/Collections/MessageTemplateQueries.cs",
+        // US1 (T0341): las líneas son el eje del alcance por línea. La lista filtra por PorLinea; el detalle, la versión, la consulta de usura
+        // y el puntaje de una línea fuera del alcance responden el 404 de la línea (ConsultasDeLineas.LineaEnAlcanceAsync).
+        "Core/IngenIA365ERP.Application/Lending/Configuration/CreditLineQueries.cs",
+        "Core/IngenIA365ERP.Application/Lending/Configuration/CreditLineScoringCommands.cs",
+        // US2 (bloque 6A): la simulación y su PDF por la línea del alcance (SimulacionEnAlcance → LineaEnAlcanceAsync); las solicitudes por
+        // oficina y línea (la lista con PorOficinaYLinea; el detalle y el enrutamiento con SolicitudEnAlcance, el 404 de la solicitud).
+        "Core/IngenIA365ERP.Application/Lending/Origination/SimulationQueries.cs",
+        "Core/IngenIA365ERP.Application/Lending/Origination/CreditApplicationQueries.cs",
+        // US2 (bloque 6B): las consultas a centrales (las de una solicitud fuera del alcance no aparecen y su detalle es el 404), «Mis pendientes»
+        // (solicitudes por oficina y línea, cupos por línea) y los cupos (por la línea del alcance; el consolidado y el rotativo sin línea son de
+        // la persona).
+        "Core/IngenIA365ERP.Application/Lending/Adapters/BureauQueryCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/Attributions/ListPendingLendingDecisionsQuery.cs",
+        "Core/IngenIA365ERP.Application/Lending/Origination/CreditLimits/CreditLimitQueries.cs",
+        // US3 (bloque 7A, parte de T0428): los tramos y las órdenes de giro por la oficina y la línea de su crédito (la lista filtra en silencio;
+        // el detalle responde el 404 de la orden).
+        "Core/IngenIA365ERP.Application/Lending/Disbursements/ListLoanDisbursementsQuery.cs",
+        "Core/IngenIA365ERP.Application/Lending/Disbursements/ListDisbursementOrdersQuery.cs",
+        "Core/IngenIA365ERP.Application/Lending/Disbursements/GetDisbursementOrderQuery.cs",
+        // US3 (bloque 7B, parte de T0428): las garantías y los pagarés por la oficina y la línea de su solicitud o su crédito (la lista filtra en
+        // silencio; el detalle responde el 404 de la garantía); los archivos de desembolsos que llevan alguna orden de un crédito del alcance.
+        "Core/IngenIA365ERP.Application/Lending/Disbursements/Collaterals/ListCollateralsQuery.cs",
+        "Core/IngenIA365ERP.Application/Lending/Disbursements/Collaterals/GetCollateralQuery.cs",
+        "Core/IngenIA365ERP.Application/Lending/Disbursements/PromissoryNotes/ListPromissoryNotesQuery.cs",
+        "Core/IngenIA365ERP.Application/Lending/Disbursements/Files/ListDisbursementFilesQuery.cs",
+        // US4 (bloque 8B, T0503, T0504): los créditos por la oficina y la línea (la lista con PorOficinaYLinea; el detalle, el plan, las
+        // operaciones, el comprobante y el libro con CreditoEnAlcance, el 404 del crédito); la liquidación y el estado de cuenta con
+        // LecturaDelCredito (el mismo 404 y Lending.Access.OutOfScope).
+        "Core/IngenIA365ERP.Application/Lending/Loans/ListLoansQuery.cs",
+        "Core/IngenIA365ERP.Application/Lending/Loans/GetLoanQuery.cs",
+        "Core/IngenIA365ERP.Application/Lending/Loans/GetRepaymentScheduleQuery.cs",
+        "Core/IngenIA365ERP.Application/Lending/Loans/ListRepaymentScheduleVersionsQuery.cs",
+        "Core/IngenIA365ERP.Application/Lending/Loans/ListLoanOperationsQuery.cs",
+        "Core/IngenIA365ERP.Application/Lending/Loans/GetLoanOperationQuery.cs",
+        "Core/IngenIA365ERP.Application/Lending/Loans/ListLoanTransactionsQuery.cs",
+        "Core/IngenIA365ERP.Application/Lending/Settlement/GetLoanSettlementQuery.cs",
+        "Core/IngenIA365ERP.Application/Lending/Settlement/GetLoanStatementQuery.cs",
+        // US5 (bloque 9B, T0552–T0554): la simulación de pantalla, la vista previa del reverso y la preferencia del crédito, por CreditoEnAlcance.
+        "Core/IngenIA365ERP.Application/Lending/Payments/Queries/SimulateLoanPaymentQuery.cs",
+        "Core/IngenIA365ERP.Application/Lending/Payments/Queries/PreviewLoanPaymentReversalQuery.cs",
+        "Core/IngenIA365ERP.Application/Lending/Payments/Queries/GetPrepaymentPreferenceQuery.cs",
+        // US6 (bloque 10A, T0595, T0596): los recibos de lo que llega a Cartera por la oficina y la línea de su crédito (uno sin crédito —rechazado o
+        // no incorporado— no es de ninguna oficina; el detalle responde el 404 del recibo) y las reservas de número por las de su crédito.
+        "Core/IngenIA365ERP.Application/Lending/Integration/Comercial/MensajesRecibidos.cs",
+        "Core/IngenIA365ERP.Application/Lending/Origination/Queries/ListLoanNumberReservationsQuery.cs",
+        // US7 (bloque B, T0658; parte de T0610): la conciliación contable por las oficinas del alcance (y una sucursal fuera de él es el 404), los
+        // hechos contables por la sucursal de su sobre y una parte por su oficina (fuera, Lending.AccountingFactPart.NotFound).
+        "Core/IngenIA365ERP.Application/Lending/Integration/Queries/LendingAccountingQueries.cs",
+        // US9 (bloque 12B, T0674): la calificación informativa y la de un crédito (la lista por oficina y línea; el crédito por CreditoEnAlcance), las
+        // calificaciones por análisis (por la oficina y la línea de su crédito), las líneas y el reporte de cambios de un cierre (PorOficinaYLinea),
+        // el cuadre del cierre (la conciliación con el alcance de oficinas) y la completitud del historial de mora (los créditos del alcance).
+        "Core/IngenIA365ERP.Application/Lending/Risk/RatingQueries.cs",
+        "Core/IngenIA365ERP.Application/Lending/Risk/AnalysisRatingCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/Risk/MonthlyCloseQueries.cs",
+        "Core/IngenIA365ERP.Application/Lending/Risk/ImpairmentModelQueries.cs",
+        // US13 (bloque 14A, T0785): la lista y el detalle de documentos emitidos filtran por los créditos que cubren (DocumentosEmitidos.Visibles).
+        // La verificación no mira la oficina: devuelve sólo los datos esenciales a una persona de la cooperativa (D21).
+        "Core/IngenIA365ERP.Application/Lending/Documents/IssuedDocumentQueries.cs",
+        // US15 (bloque 14C, T0773, T0797): las siete vistas de K1 del centro de informes leen los créditos por AmbitoDeInformeDeCartera, que
+        // aplica PorOficinaYLinea en la consulta; los mensajes por ProyeccionDeMensajesAlDeudor.ConAlcance; la conciliación de la migración, de
+        // toda la cooperativa, sólo con el alcance total (si no, vacía).
+        "Core/IngenIA365ERP.Application/Lending/Reports/AmbitoDeInformeDeCartera.cs",
+        "Core/IngenIA365ERP.Application/Lending/Reports/Vistas/AgingReportQuery.cs",
+        "Core/IngenIA365ERP.Application/Lending/Reports/Vistas/PlacementReportQuery.cs",
+        "Core/IngenIA365ERP.Application/Lending/Reports/Vistas/ReceiptsReportQuery.cs",
+        "Core/IngenIA365ERP.Application/Lending/Reports/Vistas/TransactionsReportQuery.cs",
+        "Core/IngenIA365ERP.Application/Lending/Reports/Vistas/UsuryReportQuery.cs",
+        "Core/IngenIA365ERP.Application/Lending/Reports/Vistas/DebtorMessagesReportQuery.cs",
+        "Core/IngenIA365ERP.Application/Lending/Reports/Vistas/MigrationReconciliationReportQuery.cs",
+        // K2 (US10, bloque B; T0818): los archivos de descuento y sus líneas (por los créditos de sus líneas, el 404 fuera), los no aplicados, lo
+        // pendiente de giro y las dos vistas de la libranza.
+        "Core/IngenIA365ERP.Application/Lending/Payroll/Files/PayrollDeductionFileQueries.cs",
+        "Core/IngenIA365ERP.Application/Lending/Payroll/NotApplied/InstallmentNonDeductionCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/Payroll/Agreements/PendingPayrollTransfersQuery.cs",
+        "Core/IngenIA365ERP.Application/Lending/Reports/Vistas/PayrollReportQueries.cs",
+        // K3 (US11, bloque B; T0868): las novedades y las condonaciones por la oficina y la línea de su crédito (la lista con PorOficinaYLinea; el
+        // detalle y la simulación con NovedadesDeCartera.LeerAsync / CondonacionesDeCartera.LeerAsync, el 404 del asunto); las reclamaciones al
+        // seguro por las de su crédito; la vista de reestructurados por AmbitoDeInformeDeCartera.
+        "Core/IngenIA365ERP.Application/Lending/Novelties/NoveltyQueries.cs",
+        "Core/IngenIA365ERP.Application/Lending/Novelties/SimulateLoanNoveltyQuery.cs",
+        "Core/IngenIA365ERP.Application/Lending/Waivers/WaiverQueries.cs",
+        "Core/IngenIA365ERP.Application/Lending/DebtorEvents/InsuranceClaimAndInsolvencyCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/Reports/Vistas/RestructuredReportQuery.cs",
+        // K3 (US14, bloque B; T0901): los lotes de castigo (la lista sólo con los que tienen todos sus créditos en el alcance; el detalle con
+        // CastigosDeCartera.LeerAsync, el 404 del lote), las evaluaciones de cartera (la lista con las que tienen algún crédito del alcance; el detalle
+        // sólo con sus créditos del alcance) y la vista charge-offs por AmbitoDeInformeDeCartera.
+        "Core/IngenIA365ERP.Application/Lending/WriteOffs/WriteOffBatchQueries.cs",
+        "Core/IngenIA365ERP.Application/Lending/Risk/Evaluations/PortfolioEvaluationQueries.cs",
+        "Core/IngenIA365ERP.Application/Lending/Reports/Vistas/ChargeOffsReportQuery.cs",
+        // K4 (US12, bloque B; T0932): la cobranza. La historia de asignaciones y la agenda por la oficina y la línea del crédito (las del deudor
+        // completo, sólo con el alcance total); las gestiones, las promesas, los acuerdos, el cobro jurídico, los gastos por causar y los avisos previos
+        // por la oficina y la línea de su crédito (la lista filtra en silencio; el detalle responde el 404 del asunto); la vista previa de una campaña
+        // selecciona sólo créditos del alcance (la lista de campañas trae conteos, sin deudores); las cuatro vistas de la cobranza por
+        // AmbitoDeInformeDeCartera.
+        "Core/IngenIA365ERP.Application/Lending/Collections/Assignments/CollectorAssignmentCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/Collections/Actions/CollectionActionCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/Collections/Agreements/PaymentAgreementCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/Collections/Legal/LegalProcessCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/Collections/Fees/CollectionFeeCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/Collections/Campaigns/MessageCampaignCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/Collections/PriorNotices/PriorNoticeCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/Reports/Vistas/CollectionReportQueries.cs",
+        // K5 (US15, T0981, T0983): la calidad, las cosechas y la concentración leen los créditos y las líneas de cierre por AmbitoDeInformeDeCartera;
+        // los documentos emitidos por DocumentosEmitidos.Visibles con el alcance; el tablero, todas sus fichas por AmbitoDeInformeDeCartera y sus
+        // filtros de oficina y línea sólo con las del alcance.
+        "Core/IngenIA365ERP.Application/Lending/Reports/Vistas/QualityReportQuery.cs",
+        "Core/IngenIA365ERP.Application/Lending/Reports/Vistas/VintagesReportQuery.cs",
+        "Core/IngenIA365ERP.Application/Lending/Reports/Vistas/ConcentrationReportQuery.cs",
+        "Core/IngenIA365ERP.Application/Lending/Reports/Vistas/IssuedDocumentsReportQuery.cs",
+        // K5 (US16, T1006): los excluidos del archivo de una central, por la oficina y la línea de su crédito.
+        "Core/IngenIA365ERP.Application/Lending/Reports/Vistas/BureauExclusionsReportQuery.cs",
+        "Core/IngenIA365ERP.Application/Lending/Reports/GetLendingDashboardQuery.cs",
+        // Feature 014, US1 (T066): el catálogo común de líneas filtra por PorLinea; el detalle y las versiones de una línea fuera del alcance (o de
+        // una naturaleza cuyo View no tiene quien pregunta) responden el 404 de la línea (LectorDeLineasDeCaptacion.LineaEnAlcanceAsync).
+        "Core/IngenIA365ERP.Application/Lending/Deposits/Lines/LendingLineQueries.cs",
+        // Feature 014, US2 (T073, T075): las cuentas y las marcas del GMF por la oficina y la línea de la cuenta (las listas y los conteos con
+        // PorOficinaYLinea; el detalle y las partes de una cuenta fuera del alcance responden el 404 de la cuenta, LectorDeCuentas.CuentaEnAlcanceAsync).
+        "Core/IngenIA365ERP.Application/Lending/Deposits/Accounts/MemberAccountQueries.cs",
+        // Feature 014, US6 (T170, T171): los CDAT por oficina y línea (la lista y el calendario con PorOficinaYLinea; el detalle, el plan y los títulos con
+        // CdatEnAlcanceAsync, el 404 del CDAT); la simulación por la línea del alcance (LineaEnAlcanceAsync); las reglas de tasa negociada por la línea; las
+        // solicitudes por la oficina y la línea de su CDAT (la lista filtra; el detalle responde el 404 de la solicitud).
+        "Core/IngenIA365ERP.Application/Lending/Deposits/TermDeposits/TermDepositQueries.cs",
+        "Core/IngenIA365ERP.Application/Lending/Deposits/TermDeposits/ConstituteTermDepositCommand.cs",
+        "Core/IngenIA365ERP.Application/Lending/Deposits/TermDeposits/NegotiatedRates/NegotiatedRateRequestCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/Deposits/TermDeposits/NegotiatedRates/NegotiatedRateRuleCommands.cs",
+        // Feature 014, US6 (T173, T176): la instrucción, la renovación, la simulación y la redención de un CDAT fuera del alcance responden su 404
+        // (CdatEnAlcanceAsync); las vistas de vencimientos, tasas negociadas y concentración de depositantes, por VistasDeCaptaciones.CuentasAsync.
+        "Core/IngenIA365ERP.Application/Lending/Deposits/TermDeposits/TermDepositMaturityCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/Deposits/Reports/TermDepositReportQueries.cs",
+        // Feature 014, US3 (T086, T088, T093): las vistas de aportes del centro de informes, las solicitudes de devolución y cesión y las cuotas exigibles
+        // filtran por la oficina y la línea de la cuenta.
+        "Core/IngenIA365ERP.Application/Lending/Deposits/Reports/ContributionReportQueries.cs",
+        "Core/IngenIA365ERP.Application/Lending/Deposits/Contributions/ContributionRequestCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/Deposits/Contributions/ContributionQueries.cs",
+        "Core/IngenIA365ERP.Application/Lending/Deposits/Accounts/GmfExemption/GmfExemptionCommands.cs",
+        // Feature 014, US10 (T097, T099): el retiro del asociado por la oficina y la línea de su cuenta de aportes (la lista con PorOficinaYLinea; el
+        // detalle, la vista previa y las escrituras de un retiro fuera del alcance responden el 404 del retiro, RetirosDeAsociado.EnAlcanceAsync).
+        "Core/IngenIA365ERP.Application/Lending/Deposits/Withdrawals/MembershipWithdrawalQueries.cs",
+        "Core/IngenIA365ERP.Application/Lending/Deposits/Withdrawals/SettleMembershipWithdrawalCommand.cs",
+        // Feature 014, US4 (T111, T116, T119, T121, T123): las operaciones, el libro, los cargos, las autorizaciones de débito automático y el uso del
+        // GMF por la oficina y la línea de la cuenta (una cuenta fuera del alcance responde su 404, LectorDeCuentas.CuentaEnAlcanceAsync); el
+        // catálogo de cargos de una línea, el 404 de la línea; las vistas de captaciones del centro de informes, con PorOficinaYLinea.
+        "Core/IngenIA365ERP.Application/Lending/Deposits/Operations/MemberAccountOperationCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/Deposits/Operations/DirectDebitMandateCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/Deposits/Charges/AccountChargeCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/Deposits/Reports/DepositReportQueries.cs",
+        // Feature 014, US5 (T133, T135, T137, T139): las liquidaciones, la simulación, la vista previa de la cancelación y la vista de intereses y retención.
+        "Core/IngenIA365ERP.Application/Lending/Deposits/Accrual/InterestSettlementCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/Deposits/Accounts/CloseMemberAccountCommand.cs",
+        "Core/IngenIA365ERP.Application/Lending/Deposits/Reports/InterestReportQueries.cs",
+        // Feature 014, US8 (T146): la conciliación de captaciones toma el alcance de quien pregunta (y una sucursal fuera de él es el 404).
+        "Core/IngenIA365ERP.Application/Lending/Deposits/Reports/DepositsReconciliationReportQuery.cs",
+        // Feature 014, US9 (T152): la descarga con datos de una parte de la migración sale dentro del alcance de oficina y línea de quien descarga.
+        "Core/IngenIA365ERP.Application/Lending/Deposits/Migration/GetDepositMigrationPartDataQuery.cs",
+        // Feature 014, US16 (T164): el saldo a (D, R) y el extracto en pantalla de una cuenta fuera del alcance responden su 404
+        // (LectorDeCuentas.CuentaEnAlcanceAsync).
+        "Core/IngenIA365ERP.Application/Lending/Deposits/Accounts/MemberAccountStatementQueries.cs",
+        // US7 (T182): el contrato del ahorro contractual, sus condiciones selladas y su instrucción al vencimiento, por la cuenta en el alcance
+        // (LectorDeCuentas.CuentaEnAlcanceAsync: fuera, el 404 de la cuenta).
+        "Core/IngenIA365ERP.Application/Lending/Deposits/Contractual/ContractualCommands.cs",
+        // US11 (T189): los embargos exigen el alcance sobre todas las cuentas de la persona (AlcanceDeEmbargos.PersonaEnAlcanceAsync, falla cerrado); los
+        // bloqueos, la cuenta en el alcance; la vista garnishments deja fuera a las personas con una cuenta fuera del alcance.
+        "Core/IngenIA365ERP.Application/Lending/Deposits/Holds/GarnishmentCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/Deposits/Holds/AccountHoldCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/Deposits/Reports/GarnishmentsReportQuery.cs",
+        // US12 (T203): una decisión de asamblea es de toda la cooperativa: la lista, el detalle y la simulación exigen alcance total
+        // (DistribucionesDeAsamblea.AlcanceTotalAsync; fuera, la lista vacía y el 404 de la decisión).
+        "Core/IngenIA365ERP.Application/Lending/Deposits/Assembly/AssemblyDistributionQueries.cs",
+        // US14 (T209, T210): los casos de fallecimiento exigen el alcance sobre todas las cuentas de la persona (VistaDeFallecimientos.LeerAsync con
+        // AlcanceDeEmbargos.PersonaEnAlcanceAsync, falla cerrado); los saldos no reclamados, por la oficina y la línea de su cuenta de origen (la lista y la vista
+        // unclaimed filtran; el pago fuera del alcance responde el 404 del saldo).
+        "Core/IngenIA365ERP.Application/Lending/Deposits/Deceased/DeceasedCaseCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/Deposits/Unclaimed/UnclaimedCommands.cs",
+        // US15 (T216): el fondo de liquidez, el riesgo y lo constituido exigen alcance total (AlcanceDelFondoDeLiquidez); los depósitos asegurados filtran
+        // por las cuentas del ahorrador en el alcance.
+        "Core/IngenIA365ERP.Application/Lending/Deposits/Liquidity/LiquidityFundCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/Deposits/Liquidity/LiquidityReportQueries.cs",
+        // US17 (T219, T221): las cuentas por estado filtran por oficina y línea (VistasDeCaptaciones.CuentasAsync); la vista previa de los formatos
+        // regulatorios y validar o generar un formato exigen alcance total (AlcanceDeFormatosDeCaptaciones): el formato es de toda la cooperativa.
+        "Core/IngenIA365ERP.Application/Lending/Deposits/Reports/RegulatoryReportQueries.cs",
+        "Core/IngenIA365ERP.Application/Lending/Regulatory/Captaciones/DepositRegulatoryFileCommands.cs",
+    ];
+
+    /// <summary>
+    /// US15 (T0773, DT §2.25): toda consulta del centro de informes de Cartera (<c>Application/Lending/Reports</c>) y la del tablero
+    /// (<c>GetLendingDashboardQuery</c>, de K5: mientras no exista, la regla queda preparada) recibe <see cref="IngenIA365ERP.Application.Common.Interfaces.Security.IAlcanceDeCartera"/>
+    /// en su handler y lee el alcance (<c>ObtenerAsync</c> o el ámbito de informe, que lo lee); ninguna se exceptúa: una vista sin alcance mostraría
+    /// otra oficina.
+    /// </summary>
+    [Fact]
+    public void Las_consultas_del_centro_de_informes_y_del_tablero_piden_el_alcance_en_su_handler()
+    {
+        var raiz = RepoPath.FindRepoRoot();
+        var lending = Path.Combine(raiz, "src", "Core", "IngenIA365ERP.Application", "Lending");
+        var archivos = Directory.Exists(Path.Combine(lending, "Reports"))
+            ? Directory.EnumerateFiles(Path.Combine(lending, "Reports"), "*.cs", SearchOption.AllDirectories).ToList()
+            : [];
+        archivos.AddRange(Directory.EnumerateFiles(lending, "*.cs", SearchOption.AllDirectories)
+            .Where(a => FuenteSinComentarios.Leer(a).Contains("record GetLendingDashboardQuery", StringComparison.Ordinal)));
+
+        var infracciones = new List<string>();
+        var consultas = 0;
+        foreach (var archivo in archivos.Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            var texto = FuenteSinComentarios.Leer(archivo);
+            foreach (Match m in Consulta.Matches(texto))
+            {
+                consultas++;
+                var nombre = m.Groups[1].Value;
+                if (Exceptuadas.ContainsKey(nombre)) infracciones.Add($"{nombre}: una vista del centro de informes no se exceptúa del alcance");
+                if (!Regex.IsMatch(texto, $@"class {nombre}Handler\([^)]*IAlcanceDeCartera[^)]*\)[\s\S]*?(\.ObtenerAsync\(|AmbitoDeInformeDeCartera\.LeerAsync\()"))
+                    infracciones.Add($"{Path.GetRelativePath(raiz, archivo)}: {nombre}Handler no recibe IAlcanceDeCartera ni lee el alcance");
+            }
+        }
+        Assert.True(consultas >= 7, $"Se esperaban al menos las siete vistas de K1 en Application/Lending/Reports y se encontraron {consultas}.");
+        ReglaSobreFuente.SinInfracciones(infracciones, "Una consulta del centro de informes de Cartera no aplica el alcance (FR-004, SC-015)");
+    }
+
+    /// <summary>Consultas de <c>Application/Lending</c> que no filtran por oficina ni línea, con el motivo.</summary>
+    private static readonly Dictionary<string, string> Exceptuadas = new(StringComparer.Ordinal)
+    {
+        // Catálogos y configuración sin oficina (T0259).
+        ["ListAttributionMatricesQuery"] = "catálogo de la cooperativa: la matriz no tiene oficina",
+        ["GetAttributionMatrixQuery"] = "catálogo de la cooperativa: la matriz no tiene oficina",
+        ["ListGoverningBodiesQuery"] = "catálogo de la cooperativa: los órganos no tienen oficina",
+        ["GetGoverningBodyQuery"] = "catálogo de la cooperativa: los órganos no tienen oficina",
+        ["ListLendingTemplatesQuery"] = "registro de plantillas vacías: no trae datos",
+        // US13 (bloque 14B, T0781): el logotipo y la firma de los documentos son de la cooperativa, no de una oficina.
+        ["GetLendingDocumentImagesQuery"] = "configuración de la cooperativa: el logotipo y la imagen de la firma no tienen oficina",
+        ["GetLendingTemplateQuery"] = "definición de una plantilla vacía: no trae datos",
+        ["ListMessageTemplatesQuery"] = "plantillas de mensaje: textos de la cooperativa, sin deudores",
+        ["GetMessageTemplateHistoryQuery"] = "plantillas de mensaje: textos de la cooperativa, sin deudores",
+        // Actas y vinculados (T0259, decisión del bloque F): el acta es del órgano y los vinculados son personas por su vínculo con la
+        // cooperativa; ninguno tiene oficina. Las dos lecturas quedan auditadas (LasLecturasSensiblesDeCarteraSeAuditan) y el alcance de cada
+        // sujeto del acta lo aplica su historia cuando lo describe (IAsuntoDeActa).
+        ["ListSessionsQuery"] = "el acta es del órgano, no de una oficina",
+        ["GetSessionQuery"] = "el acta es del órgano, no de una oficina (lectura auditada)",
+        ["ListSessionItemsQuery"] = "puntos de actas cerradas del órgano, no de una oficina",
+        ["GetSessionMinutesPdfQuery"] = "el acta es del órgano, no de una oficina (lectura auditada)",
+        ["ListRelatedPartiesQuery"] = "los vinculados son personas por su vínculo con la cooperativa, sin oficina (lectura auditada)",
+        // Migración y activación (fase 3): de toda la cooperativa, con Lending.Migration.Load o Lending.Activation.Execute.
+        ["ListMigrationLoadsQuery"] = "la carga de migración es de toda la cooperativa",
+        ["GetMigrationLoadQuery"] = "la carga de migración es de toda la cooperativa",
+        // US8 (bloque 13A): el cuadre y la conciliación de ventas de la carga son de toda la cooperativa (el cuadre sin datos de deudores, C85).
+        ["GetMigrationBalanceCheckQuery"] = "el cuadre de la carga es de toda la cooperativa y no trae datos de deudores",
+        ["GetMigrationSalesReconciliationQuery"] = "la conciliación de ventas de la carga es de toda la cooperativa",
+        ["GetLendingActivationStatusQuery"] = "la activación es de toda la cooperativa",
+        // US1 (T0341): lo nacional y lo de la cooperativa que no es de una línea.
+        ["ListModalitiesQuery"] = "documento nacional CatalogoDeModalidades: sin oficina ni línea",
+        ["ListCommercialTermEquivalencesQuery"] = "equivalencias de Comercial: son de la cooperativa, no de una línea",
+        // US2 (T0393): los grupos conectados son personas por su vínculo económico o jurídico, sin oficina; las dos lecturas quedan auditadas.
+        ["ListConnectedGroupsQuery"] = "los grupos conectados son personas por su vínculo, sin oficina (lectura auditada)",
+        ["GetConnectedGroupQuery"] = "los grupos conectados son personas por su vínculo, sin oficina (lectura auditada)",
+        // US2 (bloque 6B): el oficial de cumplimiento no es un rol de Cartera (C84): ve los resultados de listas con su permiso, sin el alcance de
+        // oficina y línea; los bloqueos y los saldos de aportes son de la persona, sin oficina.
+        ["ListScreeningResultsQuery"] = "el oficial de cumplimiento no lleva el alcance de Cartera: exige Compliance.RestrictiveLists.Release (C84)",
+        ["GetScreeningResultQuery"] = "el oficial de cumplimiento no lleva el alcance de Cartera: exige Compliance.RestrictiveLists.Release (C84)",
+        ["ListDebtorBlocksQuery"] = "los bloqueos y embargos son de la persona, no de una oficina",
+        ["ListContributionBalancesQuery"] = "el saldo de aportes es de la persona, no de una oficina (D19)",
+        // Feature 014, US3 (T090, T093): el resumen de aportes es de la persona; los grupos de archivo y las equivalencias son del convenio, un
+        // catálogo de la cooperativa.
+        ["ListTestCollectorAccountInstallmentsQuery"] = "doble de prueba de Recaudo fuera de producción (T20): llama al contrato de cuentas, que no aplica el alcance",
+        // Feature 014, US4 (T113): los mismos dobles para consultar y simular sobre el contrato de cuentas.
+        ["ListTestCollectorAccountsQuery"] = "doble de prueba de Recaudo fuera de producción (T20): llama al contrato de cuentas, que no aplica el alcance",
+        ["SimulateTestCollectorAccountOperationQuery"] = "doble de prueba de Recaudo fuera de producción (T20): llama al contrato de cuentas, que no aplica el alcance",
+        ["GetContributionsSummaryQuery"] = "el resumen de aportes es de la persona, no de una oficina (D19): el mismo saldo de IConsultaDeAportes",
+        ["ListPayrollAgreementFileGroupsQuery"] = "catálogo de la cooperativa: los grupos de archivo de un convenio no tienen oficina ni deudores",
+        ["ListPayrollAgreementConceptEquivalencesQuery"] = "catálogo de la cooperativa: las equivalencias de un convenio no tienen oficina ni deudores",
+        // US3 (bloque 7A): la vista previa evalúa por RequisitosDelDesembolso, que asegura el alcance de la solicitud (el 404 fuera de él).
+        ["PreviewDisbursementQuery"] = "la asegura RequisitosDelDesembolso con el alcance de la solicitud (AsegurarAsync, el 404 de la solicitud)",
+        // US3 (bloque 7B): la vista previa del archivo toma las órdenes por PreparacionDeArchivoDeDesembolsos, que filtra por el alcance de su
+        // crédito; las cuentas de origen son cuentas bancarias del plan (Contabilidad), sin deudores ni oficina.
+        ["PreviewDisbursementFileQuery"] = "la filtra PreparacionDeArchivoDeDesembolsos: sólo órdenes de créditos del alcance (PorOficinaYLinea)",
+        ["ListDisbursementSourceAccountsQuery"] = "cuentas bancarias del plan de cuentas por IContabilidadParaCartera: sin deudores ni oficina",
+        ["ListTestTreasuryOrdersQuery"] ="doble de prueba de Tesorería fuera de producción (T20): ve lo que recibe la tesorería, no una oficina",
+        // US4 (bloque 8B, T0499, T0505): las corridas son de toda la cooperativa y no traen datos del deudor (Lending.Processes.View); la
+        // verificación del libro es de toda la cartera, del auditor (Lending.Integrity.Verify), y sólo devuelve números de crédito y cifras.
+        ["ListLendingProcessRunsQuery"] = "las corridas son de toda la cooperativa y no traen datos del deudor (Processes.View)",
+        ["GetLendingProcessRunQuery"] = "las corridas son de toda la cooperativa y no traen datos del deudor (Processes.View)",
+        ["VerifyLendingLedgerIntegrityQuery"] = "la verificación del libro es de toda la cartera (Integrity.Verify, el auditor): número del crédito y cifras",
+        // US5 (bloque 9B, T0556): el recaudador de prueba llama al contrato de obligaciones, que es un puerto sin el alcance de Cartera (FR-004).
+        ["ListTestCollectorObligationsQuery"] = "doble de prueba de Recaudo fuera de producción (T20): llama al contrato, que no aplica el alcance (FR-004)",
+        ["SimulateTestCollectorPaymentQuery"] = "doble de prueba de Recaudo fuera de producción (T20): llama al contrato, que no aplica el alcance (FR-004)",
+        // US7: el catálogo sembrado de tipos de hecho (LND_FactTypes), de la cooperativa y sin deudores.
+        ["ListLendingFactTypesQuery"] = "catálogo de la cooperativa: los tipos de hecho no tienen oficina ni deudores",
+        ["ListTestCollectorReversalsQuery"] = "doble de prueba de Recaudo fuera de producción (T20): ve lo que recibe el recaudador, no una oficina",
+        // US9 (bloque 12B): lo de toda la cooperativa, sin datos de deudores.
+        ["ListImpairmentModelElectionsQuery"] = "las elecciones del modelo de deterioro son del consejo para toda la cooperativa: sin deudores ni oficina (K6a, T1034)",
+        ["GetRiskPolicyQuery"] = "la política SARC es del consejo y la norma es nacional: celdas y versiones, sin deudores ni oficina (Parameters.View)",
+        ["GetMonthlyCloseReadinessQuery"] = "los requisitos del cierre son de toda la cooperativa: conteos y estados, sin deudores (MonthlyClose.Execute)",
+        // K2 (US10, bloque B): los convenios son un catálogo de la cooperativa; el archivo de una pagaduría lleva todas sus obligaciones.
+        ["ListPayrollAgreementsQuery"] = "catálogo de la cooperativa: un convenio de libranza no tiene oficina (contactos sin documento, C84)",
+        ["GetPayrollAgreementQuery"] = "catálogo de la cooperativa: un convenio de libranza no tiene oficina (contactos sin documento, C84)",
+        ["PreviewPayrollDeductionFileQuery"] =
+            "el archivo de una pagaduría lleva todas las obligaciones del convenio, de cualquier oficina: lo prepara quien genera (PayrollDeductionFiles.Generate)",
+        // K3 (US11, bloque B; T0868): los eventos del deudor se guardan como bloqueos de la persona y el proceso de insolvencia es de la persona.
+        ["ListDebtorEventsQuery"] = "los eventos del deudor son bloqueos de la persona, no de una oficina (como ListDebtorBlocksQuery)",
+        ["ListInsolvencyProceedingsQuery"] = "el proceso de insolvencia es de la persona y alcanza todos sus créditos, de cualquier oficina (FR-098)",
+        // K4 (US12, bloque B; T0932): las etapas de cobranza y las reglas de reparto son catálogos de la cooperativa, sin deudores ni oficina.
+        ["ListCollectionStagesQuery"] = "catálogo de la cooperativa: las etapas de cobranza no tienen oficina ni deudores",
+        ["ListCollectorAssignmentRulesQuery"] = "catálogo de la cooperativa: una regla de reparto nombra oficinas y gestores, no deudores",
+        // K5 (US16, T0999): los layouts regulatorios son documentos nacionales embebidos, iguales para todas las cooperativas.
+        ["ListRegulatoryLayoutsQuery"] = "layouts nacionales embebidos (SICSES y centrales): sin oficina, sin deudores, sin datos de la cooperativa",
+        // K5 (US16, T1004): el SICSES y el archivo de una central llevan toda la cartera de la cooperativa, de cualquier oficina y línea; los leen sólo
+        // quienes tienen Lending.RegulatoryFiles.Read o generan (RegulatoryReports.Generate, CreditBureauFiles.Generate). La vista bureau-exclusions
+        // sí filtra por el alcance (es del centro de informes).
+        ["ValidateSicsesFileQuery"] = "el formato del SICSES lleva toda la cartera de la cooperativa: lo valida quien lo genera (RegulatoryReports.Generate)",
+        ["ValidateCreditBureauFileQuery"] = "el archivo de una central lleva toda la cartera de la cooperativa: lo valida quien lo genera (CreditBureauFiles.Generate)",
+        // Feature 014, US9 (T153–T156): la carga de migración de aportes y captaciones es de toda la cooperativa (como la de créditos): lista, detalle,
+        // cuadre por conjunto de cuentas (sin titulares), cifras de referencia por línea y concepto y el estado de la activación, sin datos de titulares.
+        ["ListDepositMigrationLoadsQuery"] = "las cargas de migración son de toda la cooperativa: partes, conteos y totales, sin titulares (Deposits.Migration)",
+        ["GetDepositMigrationLoadQuery"] = "las cargas de migración son de toda la cooperativa: partes, conteos y totales, sin titulares (Deposits.Migration)",
+        ["GetDepositMigrationBalanceCheckQuery"] = "el cuadre de la carga es de toda la cooperativa, por conjunto de cuentas y sin titulares (Reconciliation.View)",
+        ["GetDepositReferenceFiguresQuery"] = "las cifras de referencia son totales por línea y concepto de toda la cooperativa, sin titulares (Deposits.Migration)",
+        ["GetDepositsActivationStatusQuery"] = "la activación de aportes o captaciones es de toda la cooperativa: requisitos y conteos (Deposits.Activate)",
+        ["ListRegulatoryFilesQuery"] = "las generaciones regulatorias son de toda la cooperativa (SICSES y centrales): se leen con RegulatoryFiles.Read",
+        ["GetRegulatoryFileQuery"] = "una generación regulatoria es de toda la cooperativa (SICSES y centrales): se lee con RegulatoryFiles.Read",
+    };
+
+    private static readonly Regex Requerido = new(@"AlcanceDeCartera", RegexOptions.Compiled);
+
+    private static readonly Regex Consulta = new(@"public\s+sealed\s+record\s+(\w+Query)\b", RegexOptions.Compiled);
+
+    [Fact]
+    public void Cada_consulta_filtra_por_el_alcance()
+    {
+        var faltantes = ReglaSobreFuente.Faltantes(ReglaSobreFuente.ArchivosNombrados(Archivos), Requerido);
+        ReglaSobreFuente.SinInfracciones(faltantes, "Una consulta de Cartera no filtra por el alcance (SC-015)");
+    }
+
+    /// <summary>
+    /// US1 (T0341): la lista de líneas filtra en silencio por la línea (<c>PorLinea</c>) y el detalle, la versión, la consulta de usura y el
+    /// puntaje pasan por la guarda que responde el 404 de la línea fuera del alcance.
+    /// </summary>
+    [Fact]
+    public void Las_consultas_de_lineas_filtran_por_la_linea_o_responden_el_404_de_la_linea()
+    {
+        var raiz = RepoPath.FindRepoRoot();
+        var consultas = FuenteSinComentarios.Leer(Path.Combine(raiz, "src", "Core", "IngenIA365ERP.Application", "Lending", "Configuration", "CreditLineQueries.cs"));
+        var puntaje = FuenteSinComentarios.Leer(Path.Combine(raiz, "src", "Core", "IngenIA365ERP.Application", "Lending", "Configuration", "CreditLineScoringCommands.cs"));
+        var comunes = FuenteSinComentarios.Leer(Path.Combine(raiz, "src", "Core", "IngenIA365ERP.Application", "Lending", "Configuration", "CreditLineCommands.cs"));
+
+        Assert.Matches(@"class ListCreditLinesQueryHandler[\s\S]*?\.PorLinea\(alcance", consultas);
+        foreach (var handler in new[] { "GetCreditLineQueryHandler", "GetCreditLineVersionQueryHandler", "CheckCreditLineUsuryQueryHandler" })
+            Assert.Matches($@"class {handler}[\s\S]*?LineaEnAlcanceAsync\(", consultas);
+        Assert.Matches(@"class GetCreditLineScoringQueryHandler[\s\S]*?LineaEnAlcanceAsync\(", puntaje);
+        Assert.Matches(@"LineaEnAlcanceAsync[\s\S]*?AsegurarAsync\(null, linea\.Id, ErroresDeLineasDeCredito\.LineaInexistente\(\)", comunes);
+    }
+
+    /// <summary>
+    /// US7 (T0610): las tres consultas de la integración contable vistas desde Cartera piden el alcance en su handler —la conciliación por las
+    /// oficinas (y una sucursal fuera de él es el 404), los hechos por la sucursal de su sobre, una parte por su oficina—.
+    /// </summary>
+    [Fact]
+    public void Las_consultas_contables_de_Cartera_piden_el_alcance_en_su_handler()
+    {
+        var consultas = FuenteSinComentarios.Leer(Path.Combine(RepoPath.FindRepoRoot(), "src", "Core", "IngenIA365ERP.Application", "Lending",
+            "Integration", "Queries", "LendingAccountingQueries.cs"));
+        foreach (var handler in new[] { "GetLendingAccountingReconciliationQueryHandler", "ListLendingAccountingFactsQueryHandler", "GetAccountingFactPartQueryHandler" })
+            Assert.Matches($@"class {handler}\([^)]*IAlcanceDeCartera[\s\S]*?\.ObtenerAsync\(", consultas);
+    }
+
+    [Fact]
+    public void Cada_consulta_de_Cartera_filtra_o_esta_exceptuada_con_motivo()
+    {
+        var raiz = RepoPath.FindRepoRoot();
+        var conAlcance = Archivos.Select(a => Path.GetFullPath(Path.Combine(raiz, "src", a))).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var carpeta = Path.Combine(raiz, "src", "Core", "IngenIA365ERP.Application", "Lending");
+
+        var encontradas = new HashSet<string>(StringComparer.Ordinal);
+        var infracciones = new List<string>();
+        foreach (var archivo in Directory.EnumerateFiles(carpeta, "*.cs", SearchOption.AllDirectories))
+        {
+            var texto = FuenteSinComentarios.Leer(archivo);
+            foreach (Match m in Consulta.Matches(texto))
+            {
+                var nombre = m.Groups[1].Value;
+                encontradas.Add(nombre);
+                if (conAlcance.Contains(Path.GetFullPath(archivo)) || Exceptuadas.ContainsKey(nombre)) continue;
+                infracciones.Add($"{Path.GetRelativePath(raiz, archivo)}: {nombre} no aplica el alcance ni está exceptuada con motivo");
+            }
+        }
+
+        foreach (var (nombre, motivo) in Exceptuadas)
+        {
+            if (string.IsNullOrWhiteSpace(motivo)) infracciones.Add($"{nombre}: exceptuada sin motivo");
+            if (!encontradas.Contains(nombre)) infracciones.Add($"{nombre}: exceptuada pero ya no existe en Application/Lending (quitála de la lista)");
+        }
+
+        ReglaSobreFuente.SinInfracciones(infracciones, "Consultas de Cartera sin alcance ni excepción (FR-004, SC-015)");
+    }
+}

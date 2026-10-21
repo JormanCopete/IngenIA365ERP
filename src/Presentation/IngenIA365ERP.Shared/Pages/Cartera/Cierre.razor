@@ -1,0 +1,411 @@
+@page "/cartera/cierres/{Id:guid}"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Text.Json
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Contabilidad
+@using IngenIA365ERP.Shared.Services.Http
+@inject RiesgoClient Riesgo
+@inject INotificationService Notification
+
+<PageTitle>Cierre de Cartera - IngenIA365ERP</PageTitle>
+
+@* Feature 013, US9 (T0714; contracts/api.md §12.3; T47, C58): el detalle de un cierre. El encabezado con la información hasta R, la marca de agua de
+   valores nacionales, los documentos normativos usados con su huella, la política SARC y el modelo por segmento; las líneas por crédito
+   (categoría, causa, días, base, garantías admisibles y deterioro, con su explicación); el reporte de cambios frente al cierre anterior (el
+   primero, frente al base); el cuadre con Contabilidad al último día del mes, con enlace a la conciliación; las partes emitidas con su
+   mensaje; y las reaperturas. Nada de esto se edita: un error se corrige reabriendo desde Cierres. Leer exige Lending.Ratings.Read; el cuadre,
+   Lending.Reconciliation.View. *@
+<PermissionGate Required="Lending.Ratings.Read" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>@Titulo</h3>
+        <div class="toolbar">
+            <a href="/cartera/cierres">Volver a Cierres</a>
+            @foreach (var (pestana, titulo) in Pestanas)
+            {
+                var p = pestana;
+                if (p == Pestana.Cuadre)
+                {
+                    <PermissionGate Required="Lending.Reconciliation.View">
+                        <SfButton CssClass="@(_pestana == p ? "e-primary" : "e-outline")" OnClick="@(() => AbrirAsync(p))">@titulo</SfButton>
+                    </PermissionGate>
+                }
+                else
+                {
+                    <SfButton CssClass="@(_pestana == p ? "e-primary" : "e-outline")" OnClick="@(() => AbrirAsync(p))">@titulo</SfButton>
+                }
+            }
+        </div>
+    </div>
+
+    @if (_pestana == Pestana.Encabezado)
+    {
+        <IndicadorDeCarga Cargando="@_cargaEncabezado.Activa">
+            @if (_c is { } c)
+            {
+                <div class="kpi-grid">
+                    <div class="kpi-card"><span class="kpi-value">@c.Close.Totals.Loans.ToString("N0")</span><span class="kpi-label">Créditos</span></div>
+                    <div class="kpi-card"><span class="kpi-value">@c.Close.Totals.GrossPortfolio.ToString("N2")</span><span class="kpi-label">Cartera bruta</span></div>
+                    <div class="kpi-card"><span class="kpi-value">@c.Close.Totals.IndividualImpairment.ToString("N2")</span><span class="kpi-label">Deterioro individual</span></div>
+                    <div class="kpi-card"><span class="kpi-value">@c.Close.Totals.GeneralImpairment.ToString("N2")</span><span class="kpi-label">Deterioro general</span></div>
+                </div>
+                <div class="info-card">
+                    <p>
+                        @TextosDeRiesgo.ClaseDeCierre(c.Close.Kind) · versión @c.Close.Version · @TextosDeRiesgo.EstadoDeCierre(c.Close.Status).ToLowerInvariant()
+                        · corte @c.Close.CloseDate.ToString("dd/MM/yyyy") · cerrado el @c.Close.ClosedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")
+                    </p>
+                    <p class="texto-tenue">
+                        Con la información registrada hasta el @c.Close.InformationCutoffAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss") ·
+                        valores nacionales hasta la secuencia @c.NationalValuesWatermark · huella de las líneas @Corta(c.LinesSha256)
+                    </p>
+                    @if (c.Close.Marks.ObligatoryModelUnavailable)
+                    {
+                        <p class="aviso aviso-alerta">La cooperativa está obligada al modelo de pérdida esperada y todavía no está disponible: este cierre aplicó el Anexo 1.</p>
+                    }
+                    @if (c.Close.Marks.UnvalidatedParameters)
+                    {
+                        <p class="aviso aviso-alerta">Algunas tablas de la norma están pendientes de validar por la contadora: el cierre las usó tal como están.</p>
+                    }
+                    @if (c.Close.Marks.IncompleteHistory)
+                    {
+                        <p class="aviso aviso-info">Hay créditos en pérdida esperada sin historial de mora completo: el cierre completó los meses que faltaban con la regla @ReglaDeMesesFaltantes(c.IncompleteHistory).</p>
+                        @if (CreditosSinHistorial(c.IncompleteHistory) is { Count: > 0 } sinHistorial)
+                        {
+                            <p class="texto-apoyo">Créditos: @string.Join(", ", sinHistorial). También aparecen en el reporte de cambios.</p>
+                        }
+                    }
+                    @if (c.PreviousClosePublicId is { } anterior) { <p><a href="@($"/cartera/cierres/{anterior}")">Cierre con el que se compara</a></p> }
+                    @if (c.SupersedesClosePublicId is { } reemplaza) { <p><a href="@($"/cartera/cierres/{reemplaza}")">Versión que reemplaza</a></p> }
+                    <p>Política SARC: @(c.RiskPolicyVersionNumber is { } v ? $"versión {v} del consejo" : "sin política propia: rige la norma")</p>
+                </div>
+
+                <h4>Documentos normativos usados</h4>
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <tbody>
+                            @foreach (var (nombre, valor) in Filas(c.DocumentsUsed)) { <tr><td>@nombre</td><td>@valor</td></tr> }
+                        </tbody>
+                    </table>
+                </div>
+
+                <h4>Modelo de deterioro por segmento</h4>
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <tbody>
+                            @foreach (var (nombre, valor) in Filas(c.ModelBySegment)) { <tr><td>@nombre</td><td>@valor</td></tr> }
+                        </tbody>
+                    </table>
+                </div>
+
+                <h4>Partes emitidas</h4>
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th>Hecho</th><th>Tramo</th><th>Oficina</th><th class="numero">Créditos</th><th class="numero">Total</th><th>Fecha contable</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var p in c.Parts)
+                            {
+                                <tr>
+                                    <td>@TextosDeContabilidadDeCartera.TipoDeHecho(p.FactType)</td>
+                                    <td>@(p.BatchNumber?.ToString() ?? "—")</td>
+                                    <td>@p.Branch</td>
+                                    <td class="numero">@p.LoanCount</td>
+                                    <td class="numero">@p.TotalAmount.ToString("N2")</td>
+                                    <td>@p.AccountingDate.ToString("dd/MM/yyyy")</td>
+                                    <td>
+                                        @if (p.MessagePublicId is { } m)
+                                        {
+                                            <PermissionGate Required="Lending.Messages.Read">
+                                                <a href="@($"/cartera/bandeja-de-mensajes?mensaje={m}")">Mensaje y comprobante</a>
+                                            </PermissionGate>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                            @if (c.Parts.Count == 0) { <tr><td colspan="7" class="texto-tenue">El cierre no emitió partes (el base nunca emite: lo migrado ya está en el libro).</td></tr> }
+                        </tbody>
+                    </table>
+                </div>
+
+                <h4>Reaperturas</h4>
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th>Fecha</th><th>Quién</th><th>Motivo</th><th class="numero">Reversos</th></tr></thead>
+                        <tbody>
+                            @foreach (var r in c.Reopenings)
+                            {
+                                <tr>
+                                    <td>@r.ReopenedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
+                                    <td>@(r.ReopenedBy ?? "—")</td>
+                                    <td>@r.Reason</td>
+                                    <td class="numero">@r.ReversalPartCount</td>
+                                </tr>
+                            }
+                            @if (c.Reopenings.Count == 0) { <tr><td colspan="4" class="texto-tenue">Sin reaperturas.</td></tr> }
+                        </tbody>
+                    </table>
+                </div>
+            }
+            else if (_error is not null)
+            {
+                <p class="aviso aviso-alerta">@_error</p>
+            }
+        </IndicadorDeCarga>
+    }
+    else if (_pestana == Pestana.Lineas)
+    {
+        <div class="toolbar">
+            <label class="campo">Categoría
+                <select class="e-input" @bind="_categoria">
+                    <option value="">Todas</option>
+                    @foreach (var c in TextosDeRiesgo.Categorias) { <option value="@c">@c</option> }
+                </select>
+            </label>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-search" Disabled="@_cargaLineas.Activa" OnClick="@(() => CargarLineasAsync(1))">Filtrar</SfButton>
+        </div>
+        <IndicadorDeCarga Cargando="@_cargaLineas.Activa">
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Crédito</th><th>Deudor</th><th>Modalidad</th><th class="numero">Días</th><th>Categoría</th><th>Contable</th><th>Causa</th><th class="numero">Capital</th><th class="numero">Base</th><th class="numero">Garantía admisible</th><th class="numero">%</th><th class="numero">Deterioro</th><th class="numero">Variación</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var l in _lineas)
+                        {
+                            var linea = l;
+                            <tr class="@(linea.Current ? "" : "texto-tenue")">
+                                <td><a href="@($"/cartera/creditos/{linea.LoanPublicId}")">@linea.LoanNumber</a></td>
+                                <td>@linea.Debtor.Name</td>
+                                <td>@linea.Modality@if (linea.ExpectedLoss is not null) { <br /><span class="texto-tenue">Pérdida esperada</span> }</td>
+                                <td class="numero">@linea.DaysPastDue</td>
+                                <td>@TextosDeRiesgo.Categoria(linea.Category, linea.Subcategory)</td>
+                                <td>@linea.AccountingCategory</td>
+                                <td>@TextosDeRiesgo.Causa(linea.Cause)</td>
+                                <td class="numero">@linea.PrincipalBalance.ToString("N2")</td>
+                                <td class="numero">@linea.ImpairmentBase.ToString("N2")</td>
+                                <td class="numero">@linea.CollateralAdmissibleValue.ToString("N2")</td>
+                                <td class="numero">@((linea.ImpairmentPercentage * 100m).ToString("N2"))</td>
+                                <td class="numero">@linea.TotalImpairment.ToString("N2")</td>
+                                <td class="numero">@linea.ImpairmentDelta.ToString("N2")</td>
+                                <td><SfButton CssClass="e-flat e-small" OnClick="@(() => _explicada = _explicada == linea.LoanPublicId ? null : linea.LoanPublicId)">@(_explicada == linea.LoanPublicId ? "Cerrar" : "Por qué")</SfButton></td>
+                            </tr>
+                            @if (_explicada == linea.LoanPublicId)
+                            {
+                                <tr>
+                                    <td colspan="14">
+                                        @if (linea.ExpectedLoss is { } pe)
+                                        {
+                                            <div class="kpi-grid">
+                                                <div class="kpi-card"><span class="kpi-value">@Porcentaje(pe.ProbabilityOfDefault)</span><span class="kpi-label">Probabilidad de incumplimiento (@TextosDeRiesgo.TablaDePi(pe.ProbabilityOfDefaultKey))</span></div>
+                                                <div class="kpi-card"><span class="kpi-value">@Porcentaje(pe.LossGivenDefault)</span><span class="kpi-label">Pérdida dado el incumplimiento (@TextosDeRiesgo.GarantiaDePdi(pe.CollateralType))</span></div>
+                                                <div class="kpi-card"><span class="kpi-value">@(pe.ExposureAtDefault?.ToString("N2") ?? "—")</span><span class="kpi-label">Exposición</span></div>
+                                                <div class="kpi-card"><span class="kpi-value">@linea.TotalImpairment.ToString("N2")</span><span class="kpi-label">Deterioro</span></div>
+                                            </div>
+                                            <p class="texto-apoyo">
+                                                @TextosDeRiesgo.Segmento(pe.Segment) · puntaje @(pe.Score?.ToString("N4") ?? "—") (Z @(pe.Z?.ToString("N4") ?? "—"))
+                                                · calificación del modelo @(pe.ModelRating ?? "—") · homologada @linea.AccountingCategory
+                                                · @(pe.IsInDefault == true ? $"en incumplimiento desde hace {pe.DaysInDefault ?? 0} días" : "sin incumplimiento")
+                                            </p>
+                                            @if (pe.IncompleteArrearsHistory) { <p class="aviso aviso-info">El historial de mora de este crédito se completó con la regla de meses faltantes.</p> }
+                                        }
+                                        <ul>@foreach (var e in linea.Explanation) { <li>@e</li> }</ul>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                        @if (_lineas.Count == 0 && !_cargaLineas.Activa) { <tr><td colspan="14" class="texto-tenue">Sin líneas con estos filtros.</td></tr> }
+                    </tbody>
+                </table>
+            </div>
+            <p class="texto-tenue">Una línea en gris ya no está vigente: su cierre se reabrió.</p>
+            @Paginacion(_paginaLineas, _totalLineas, CargarLineasAsync)
+        </IndicadorDeCarga>
+    }
+    else if (_pestana == Pestana.Cambios)
+    {
+        <IndicadorDeCarga Cargando="@_cargaCambios.Activa">
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Crédito</th><th>Deudor</th><th>Anterior</th><th>Nueva</th><th>Causa</th></tr></thead>
+                    <tbody>
+                        @foreach (var c in _cambios)
+                        {
+                            <tr>
+                                <td><a href="@($"/cartera/creditos/{c.LoanPublicId}")">@c.LoanNumber</a></td>
+                                <td>@c.Debtor.Name</td>
+                                <td>@(c.Previous ?? "Nuevo")</td>
+                                <td>@c.Current</td>
+                                <td>@TextosDeRiesgo.Causa(c.Cause)@if (c.IncompleteHistory) { <br /><span class="texto-tenue">Historial de mora completado con la regla</span> }</td>
+                            </tr>
+                        }
+                        @if (_cambios.Count == 0 && !_cargaCambios.Activa) { <tr><td colspan="5" class="texto-tenue">Ningún crédito cambió de categoría frente al cierre anterior.</td></tr> }
+                    </tbody>
+                </table>
+            </div>
+            @Paginacion(_paginaCambios, _totalCambios, CargarCambiosAsync)
+        </IndicadorDeCarga>
+    }
+    else if (_pestana == Pestana.Cuadre)
+    {
+        <PermissionGate Required="Lending.Reconciliation.View" MostrarAviso="true">
+            <IndicadorDeCarga Cargando="@_cargaCuadre.Activa" Texto="Comparando con Contabilidad…">
+                @if (_cuadre is { } q)
+                {
+                    <p class="texto-apoyo">Al @q.Date.ToString("dd/MM/yyyy"). <a href="@($"/cartera/conciliacion-contable?date={q.Date:yyyy-MM-dd}")">Abrir la conciliación con su explicación</a></p>
+                    <div class="tabla-desplazable">
+                        <table class="data-grid">
+                            <thead><tr><th>Conjunto</th><th class="numero">Cartera</th><th class="numero">Contable</th><th class="numero">Diferencia</th><th class="numero">Sin explicar</th></tr></thead>
+                            <tbody>
+                                @foreach (var s in q.Sets)
+                                {
+                                    <tr class="@(s.Unexplained != 0 ? "resaltada" : "")">
+                                        <td>@TextosDeContabilidadDeCartera.Familia(s.Family)</td>
+                                        <td class="numero">@s.LendingBalance.ToString("N2")</td>
+                                        <td class="numero">@s.AccountingBalance.ToString("N2")</td>
+                                        <td class="numero">@s.Difference.ToString("N2")</td>
+                                        <td class="numero">@s.Unexplained.ToString("N2")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    @if (q.UnexplainedTotal == 0) { <p class="aviso aviso-ok">Toda diferencia está explicada por hechos que todavía no llegan al libro.</p> }
+                }
+            </IndicadorDeCarga>
+        </PermissionGate>
+    }
+</div>
+</PermissionGate>
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private const int TamanoDePagina = 50;
+
+    private enum Pestana { Encabezado, Lineas, Cambios, Cuadre }
+
+    private static readonly (Pestana, string)[] Pestanas =
+        [(Pestana.Encabezado, "Encabezado"), (Pestana.Lineas, "Líneas por crédito"), (Pestana.Cambios, "Reporte de cambios"), (Pestana.Cuadre, "Cuadre con Contabilidad")];
+
+    private readonly EstadoDeCarga _cargaEncabezado = new(), _cargaLineas = new(), _cargaCambios = new(), _cargaCuadre = new();
+    private readonly HashSet<Pestana> _leidas = [];
+    private Pestana _pestana = Pestana.Encabezado;
+    private CierreDto? _c;
+    private string? _error;
+    private string _categoria = string.Empty;
+    private Guid? _explicada;
+    private List<LineaDelCierreDto> _lineas = [];
+    private List<CambioDeCalificacionDto> _cambios = [];
+    private long _totalLineas, _totalCambios;
+    private int _paginaLineas = 1, _paginaCambios = 1;
+    private ConciliacionContableDto? _cuadre;
+
+    private string Titulo => _c is { } c
+        ? c.Close.Kind == "Base" ? $"Cierre base del {c.Close.CloseDate:dd/MM/yyyy}" : $"Cierre de {TextosDeRiesgo.Mes(c.Close.Month)} {c.Close.Year}"
+        : "Cierre de Cartera";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _leidas.Clear();
+        _pestana = Pestana.Encabezado;
+        using var carga = _cargaEncabezado.Iniciar();
+        var r = await Riesgo.CierreAsync(Id);
+        _c = r.IsSuccess ? r.Value : null;
+        _error = r.IsSuccess ? null : r.ErrorMessage ?? "El cierre no existe.";
+    }
+
+    private async Task AbrirAsync(Pestana pestana)
+    {
+        _pestana = pestana;
+        if (!_leidas.Add(pestana)) return;
+        switch (pestana)
+        {
+            case Pestana.Lineas: await CargarLineasAsync(1); break;
+            case Pestana.Cambios: await CargarCambiosAsync(1); break;
+            case Pestana.Cuadre: await CargarCuadreAsync(); break;
+        }
+    }
+
+    private async Task CargarLineasAsync(int pagina)
+    {
+        using var carga = _cargaLineas.Iniciar();
+        var r = await Riesgo.LineasAsync(Id, string.IsNullOrWhiteSpace(_categoria) ? null : _categoria, pagina, TamanoDePagina);
+        if (!r.IsSuccess || r.Value is null) { _lineas = []; _totalLineas = 0; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer las líneas."); return; }
+        (_lineas, _totalLineas, _paginaLineas) = ([.. r.Value.Items], r.Value.TotalCount, pagina);
+    }
+
+    private async Task CargarCambiosAsync(int pagina)
+    {
+        using var carga = _cargaCambios.Iniciar();
+        var r = await Riesgo.CambiosAsync(Id, pagina, TamanoDePagina);
+        if (!r.IsSuccess || r.Value is null) { _cambios = []; _totalCambios = 0; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo leer el reporte de cambios."); return; }
+        (_cambios, _totalCambios, _paginaCambios) = ([.. r.Value.Items], r.Value.TotalCount, pagina);
+    }
+
+    private async Task CargarCuadreAsync()
+    {
+        using var carga = _cargaCuadre.Iniciar();
+        var r = await Riesgo.CuadreAsync(Id);
+        _cuadre = r.IsSuccess ? r.Value : null;
+        if (!r.IsSuccess) await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo leer el cuadre.");
+    }
+
+    private RenderFragment Paginacion(int pagina, long total, Func<int, Task> ir) => __builder =>
+    {
+        if (total <= TamanoDePagina) return;
+        <div class="toolbar">
+            <SfButton CssClass="e-outline" Disabled="@(pagina <= 1)" OnClick="@(() => ir(pagina - 1))">Anterior</SfButton>
+            <span>Página @pagina de @((total + TamanoDePagina - 1) / TamanoDePagina)</span>
+            <SfButton CssClass="e-outline" Disabled="@(pagina * TamanoDePagina >= total)" OnClick="@(() => ir(pagina + 1))">Siguiente</SfButton>
+        </div>
+    };
+
+    /// <summary>Un objeto o lista JSON sellado (documentos, modelo por segmento) como filas «nombre · valor».</summary>
+    private static List<(string, string)> Filas(JsonElement json)
+    {
+        var filas = new List<(string, string)>();
+        switch (json.ValueKind)
+        {
+            case JsonValueKind.Object:
+                foreach (var p in json.EnumerateObject()) filas.Add((p.Name, Texto(p.Value)));
+                break;
+            case JsonValueKind.Array:
+                var i = 1;
+                foreach (var e in json.EnumerateArray()) filas.Add(((i++).ToString(), Texto(e)));
+                break;
+        }
+        return filas;
+    }
+
+    private static string Texto(JsonElement e) => e.ValueKind switch
+    {
+        JsonValueKind.Object => string.Join(" · ", e.EnumerateObject().Select(p => $"{p.Name}: {Texto(p.Value)}")),
+        JsonValueKind.Array => string.Join(", ", e.EnumerateArray().Select(Texto)),
+        JsonValueKind.String => e.GetString() ?? string.Empty,
+        _ => e.ToString(),
+    };
+
+    /// <summary>K6a: la regla de meses faltantes sellada en el encabezado (<c>missingMonthsRule</c>, con <c>fixedDays</c> si es «Fija»).</summary>
+    private static string ReglaDeMesesFaltantes(JsonElement? json)
+    {
+        if (json is not { ValueKind: JsonValueKind.Object } j || !j.TryGetProperty("missingMonthsRule", out var regla)) return "de la cooperativa";
+        var texto = regla.ToString() switch
+        {
+            "MayorObservada" => "«la mayor mora observada»",
+            "DelCorte" => "«la mora del corte»",
+            "Fija" => "«días fijos»",
+            var otra => $"«{otra}»",
+        };
+        return j.TryGetProperty("fixedDays", out var dias) && dias.ValueKind == JsonValueKind.Number ? $"{texto} ({dias} días)" : texto;
+    }
+
+    /// <summary>K6a: los números de crédito de <c>loans[]</c> del encabezado (cada uno objeto con <c>loanNumber</c>, o el número como texto).</summary>
+    private static List<string> CreditosSinHistorial(JsonElement? json)
+    {
+        if (json is not { ValueKind: JsonValueKind.Object } j || !j.TryGetProperty("loans", out var creditos) || creditos.ValueKind != JsonValueKind.Array) return [];
+        return creditos.EnumerateArray()
+            .Select(e => e.ValueKind == JsonValueKind.Object && e.TryGetProperty("loanNumber", out var n) ? n.ToString() : e.ToString())
+            .ToList();
+    }
+
+    private static string Porcentaje(decimal? v) => v is { } x ? (x * 100m).ToString("N2") + " %" : "—";
+
+    private static string Corta(string huella) => huella.Length > 12 ? huella[..12] + "…" : huella;
+}

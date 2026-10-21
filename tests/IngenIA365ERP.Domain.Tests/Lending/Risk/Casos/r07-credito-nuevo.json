@@ -1,0 +1,22 @@
+{
+  // r07 (SC-021): regla del crédito nuevo (la norma de prueba: A). A mano:
+  //  1. nuevo, al día → A por «NewLoan» (empata con la mora y gana la causa más específica: es la que se sella al desembolsar);
+  //  2. nuevo de un deudor que tiene otro consumo en C (70 días) → C por arrastre;
+  //  3. ese otro consumo → C por mora;
+  //  4. nuevo con 35 días de mora → B por mora (peor que la categoría del crédito nuevo).
+  "nombre": "r07-credito-nuevo",
+  "creditos": [
+    { "id": 1, "deudor": 701, "segmento": "CONSUMO", "diasDeMora": 0, "nuevo": true },
+    { "id": 2, "deudor": 702, "segmento": "CONSUMO", "diasDeMora": 0, "nuevo": true },
+    { "id": 3, "deudor": 702, "segmento": "CONSUMO", "diasDeMora": 70 },
+    { "id": 4, "deudor": 704, "segmento": "CONSUMO", "diasDeMora": 35, "nuevo": true }
+  ],
+  "esperado": {
+    "creditos": [
+      { "id": 1, "categoria": "A", "causa": "NewLoan", "candidatas": [ "Arrears:A", "NewLoan:A" ] },
+      { "id": 2, "categoria": "C", "causa": "Drag", "candidatas": [ "Arrears:A", "NewLoan:A", "Drag:C" ] },
+      { "id": 3, "categoria": "C", "causa": "Arrears" },
+      { "id": 4, "categoria": "B", "causa": "Arrears" }
+    ]
+  }
+}

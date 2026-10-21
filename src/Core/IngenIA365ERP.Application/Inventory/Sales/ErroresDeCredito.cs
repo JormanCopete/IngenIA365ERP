@@ -7,7 +7,7 @@ namespace IngenIA365ERP.Application.Inventory.Sales;
 /// (<c>reasons[]</c>) y el cobro usan <b>los mismos códigos</b>: <c>Inventory.Credit.PersonNotIdentified</c>, <c>.PersonInactive</c>,
 /// <c>.NotAssociate</c>, <c>.NotCustomer</c>. <c>.TermsOutOfRange</c> (condiciones fuera de los máximos del medio) y
 /// <c>.MeansNotCredit</c> (evaluar un medio que no es de crédito) son (nuevo). Los de Cartera habilitada (<c>.LendingBlocked</c>,
-/// <c>.QuotaExceeded</c>, <c>.LendingNoResponse</c>) son de la entrega IC (T662, bloqueada por D-02).
+/// <c>.QuotaExceeded</c>, <c>.LendingNoResponse</c>) los suma la feature 013 (T0176; contracts/interfaces.md §5.3, T95).
 /// </summary>
 public static class ErroresDeCredito
 {
@@ -17,6 +17,9 @@ public static class ErroresDeCredito
     public const string NotCustomerCode = "Inventory.Credit.NotCustomer";
     public const string TermsOutOfRangeCode = "Inventory.Credit.TermsOutOfRange";
     public const string MeansNotCreditCode = "Inventory.Credit.MeansNotCredit";
+    public const string LendingBlockedCode = "Inventory.Credit.LendingBlocked";
+    public const string QuotaExceededCode = "Inventory.Credit.QuotaExceeded";
+    public const string LendingNoResponseCode = "Inventory.Credit.LendingNoResponse";
 
     public static Error PersonNotIdentified() => new(PersonNotIdentifiedCode,
         "Una venta a crédito exige un cliente identificado: al consumidor final no se le vende a crédito.");
@@ -46,6 +49,25 @@ public static class ErroresDeCredito
     public static Error AprobadorSinMonto(decimal monto, decimal maximo) => new ErrorConDatos(IngenIA365ERP.Application.Common.Approvals.ErroresDeAprobaciones.CodigoExcedeLimite,
         $"Su monto máximo para vender a crédito es {maximo:N2} y el crédito es de {monto:N2}: lo aprueba alguien con un monto mayor.",
         new { amount = monto, maxAmount = maximo, currency = "COP", permissionCode = AprobacionDeCredito.Permiso });
+
+    /// <summary>Feature 013 (T0176, §5.3): Cartera dice que la persona está bloqueada o que su estado no admite la venta.</summary>
+    public static Error LendingBlocked(string nombre, string? motivo) => new ErrorConDatos(LendingBlockedCode,
+        string.IsNullOrWhiteSpace(motivo)
+            ? $"Cartera no admite una venta a crédito a {nombre} por su estado crediticio."
+            : $"Cartera no admite una venta a crédito a {nombre}: {motivo}",
+        new { name = nombre, reason = motivo });
+
+    /// <summary>Feature 013 (T0176, §5.3): lo financiado supera el cupo disponible que informa Cartera (<c>data.availableQuota</c>).</summary>
+    public static Error QuotaExceeded(decimal monto, decimal? disponible) => new ErrorConDatos(QuotaExceededCode,
+        disponible is { } d
+            ? $"El crédito de {monto:N2} supera el cupo disponible en Cartera ({d:N2}). Venda una parte de contado o con otro medio."
+            : $"El crédito de {monto:N2} supera el cupo disponible en Cartera. Venda una parte de contado o con otro medio.",
+        new { amount = monto, availableQuota = disponible, currency = "COP" });
+
+    /// <summary>Feature 013 (T0176, §5.3): Cartera no respondió en <c>Cartera.ConsultaSegundos</c> y la política es <c>Bloquear</c>.</summary>
+    public static Error LendingNoResponse(int segundos) => new ErrorConDatos(LendingNoResponseCode,
+        $"Cartera no respondió en {segundos} segundos y la política de la cooperativa es no vender a crédito sin su respuesta. Intente de nuevo en un momento.",
+        new { seconds = segundos });
 
     public static Error MeansNotCredit(string medio) => new ErrorConDatos(MeansNotCreditCode,
         $"El medio {medio} no es de crédito: sólo se evalúan los de crédito a asociados o comercial.", new { paymentMeansCode = medio });

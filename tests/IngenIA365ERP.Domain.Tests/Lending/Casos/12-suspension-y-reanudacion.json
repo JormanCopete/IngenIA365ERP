@@ -1,0 +1,229 @@
+// SC-023, FR-065, US4-3 (quickstart §1.2, caso 12): suspensión de la causación en consumo. El umbral de la modalidad llega como
+// serie (lo saca la aplicación del Anexo 1 vigente: la primera altura que suspende, 61 días). La cuota 1 vence el sábado
+// 05-12-2026 (hábil): su capital vence el 06-12 y el 04-02-2027 la altura llega a 61: desde ese día lo NUEVO se causa en
+// CurrentInterestInSuspense y DefaultInterestInSuspense; lo causado antes sigue en CurrentInterest y DefaultInterest (no se
+// reclasifica). La reanudación por la regla por defecto (altura bajo el umbral vigente, sin otro disparador) se ve con un cambio de
+// umbral a 121 días desde el 10-03-2027: ese día la altura (95) queda debajo y la causación se reanuda; el 05-04-2027 la altura
+// llega a 121 y se suspende otra vez. La reanudación por pago es de US5 (casos 11 y 19). Sin pagos.
+// Calculado con calcular.py (decimal de 40 dígitos). Pendiente de validar por la contadora.
+{
+  "nombre": "Suspensión y reanudación",
+  "condiciones": {
+    "sistema": "LevelPayment", "convencion": "Thirty360", "equivalencia": "Compound",
+    "redondeo": { "unidad": 0.01, "modo": "AwayFromZero", "momento": "PerConcept" },
+    "prelacion": "OldestInstallmentFirst",
+    "monto": 2000000, "plazoCuotas": 6, "periodicidad": "Monthly", "tasaEA": 0.250000,
+    "fechaDesembolso": "2026-11-05", "modalidad": "CONSUMO",
+    "claseDeMora": "RelativeToCurrent", "factorDeMora": 1.5
+  },
+  "series": {
+    "usura": [ { "clave": "CONSUMO", "desde": "2026-11-01", "ea": 0.265000, "registradoEn": "2026-10-31T15:00:00Z",
+                 "publicId": "0b7a3c8e-1d1a-4f6e-9a01-000000000012" } ],
+    "festivos": [ "2026-12-08", "2026-12-25", "2027-01-01", "2027-01-11", "2027-03-22" ],
+    "umbralesDeSuspension": [ { "desde": "2026-01-01", "dias": 61 }, { "desde": "2027-03-10", "dias": 121 } ]
+  },
+  "operaciones": [
+    { "id": "D1", "tipo": "Disbursement", "monto": 2000000, "fechaValor": "2026-11-05", "registradoEn": "2026-11-05T15:00:00Z" }
+  ],
+  "consultas": [
+    {
+      "fecha": "2027-02-03",
+      "informacionHasta": "2027-02-03T23:00:00Z",
+      "esperado": {
+        "saldos": { "Principal": 2000000, "CurrentInterest": 92881.91, "DefaultInterest": 18137.95 },
+        "porCuota": [
+          { "cuota": 1, "concepto": "Principal", "valor": 318031.53 },
+          { "cuota": 1, "concepto": "CurrentInterest", "valor": 37538.53 },
+          { "cuota": 1, "concepto": "DefaultInterest", "valor": 12159.63 },
+          { "cuota": 2, "concepto": "Principal", "valor": 324000.75 },
+          { "cuota": 2, "concepto": "CurrentInterest", "valor": 31569.31 },
+          { "cuota": 2, "concepto": "DefaultInterest", "valor": 5978.32 },
+          { "cuota": 3, "concepto": "Principal", "valor": 330082 },
+          { "cuota": 3, "concepto": "CurrentInterest", "valor": 23774.07 },
+          { "cuota": 4, "concepto": "Principal", "valor": 336277.40 },
+          { "cuota": 5, "concepto": "Principal", "valor": 342589.08 },
+          { "cuota": 6, "concepto": "Principal", "valor": 349019.24 }
+        ],
+        "capitalVencido": 642032.28,
+        "diasDeMora": 60,
+        "cuotaMasAntigua": 1,
+        "cuotasVencidas": 2,
+        "suspendida": false,
+        "valorParaCancelar": 2111019.86,
+        "tasaDiariaCorriente": 0.000620035340587494,
+        "tasaDiariaMora": 0.000653191353786404,
+        "usuraTopada": true,
+        "validaHasta": null,
+        "transiciones": []
+      }
+    },
+    {
+      "fecha": "2027-02-04",
+      "informacionHasta": "2027-02-04T23:00:00Z",
+      "libroDesde": "2027-02-03",
+      "esperado": {
+        "saldos": { "Principal": 2000000, "CurrentInterest": 92881.91, "DefaultInterest": 18137.95, "CurrentInterestInSuspense": 841.99, "DefaultInterestInSuspense": 419.37 },
+        "porCuota": [
+          { "cuota": 1, "concepto": "Principal", "valor": 318031.53 },
+          { "cuota": 1, "concepto": "CurrentInterest", "valor": 37538.53 },
+          { "cuota": 1, "concepto": "DefaultInterest", "valor": 12159.63 },
+          { "cuota": 1, "concepto": "DefaultInterestInSuspense", "valor": 207.74 },
+          { "cuota": 2, "concepto": "Principal", "valor": 324000.75 },
+          { "cuota": 2, "concepto": "CurrentInterest", "valor": 31569.31 },
+          { "cuota": 2, "concepto": "DefaultInterest", "valor": 5978.32 },
+          { "cuota": 2, "concepto": "DefaultInterestInSuspense", "valor": 211.63 },
+          { "cuota": 3, "concepto": "Principal", "valor": 330082 },
+          { "cuota": 3, "concepto": "CurrentInterest", "valor": 23774.07 },
+          { "cuota": 3, "concepto": "CurrentInterestInSuspense", "valor": 841.99 },
+          { "cuota": 4, "concepto": "Principal", "valor": 336277.40 },
+          { "cuota": 5, "concepto": "Principal", "valor": 342589.08 },
+          { "cuota": 6, "concepto": "Principal", "valor": 349019.24 }
+        ],
+        "capitalVencido": 642032.28,
+        "diasDeMora": 61,
+        "cuotaMasAntigua": 1,
+        "cuotasVencidas": 2,
+        "suspendida": true,
+        "valorParaCancelar": 2112281.22,
+        "tasaDiariaCorriente": 0.000620035340587494,
+        "tasaDiariaMora": 0.000653191353786404,
+        "usuraTopada": true,
+        "validaHasta": null,
+        "transiciones": [
+          { "fecha": "2027-02-04", "suspendida": true }
+        ],
+        "libro": [
+          { "dia": "2027-02-03", "clase": "Accrual", "concepto": "CurrentInterest", "cuota": 3, "valor": 856.20 },
+          { "dia": "2027-02-03", "clase": "Accrual", "concepto": "DefaultInterest", "cuota": 1, "valor": 211.43 },
+          { "dia": "2027-02-03", "clase": "Accrual", "concepto": "DefaultInterest", "cuota": 2, "valor": 215.40 },
+          { "dia": "2027-02-04", "clase": "Accrual", "concepto": "CurrentInterestInSuspense", "cuota": 3, "valor": 841.99 },
+          { "dia": "2027-02-04", "clase": "Accrual", "concepto": "DefaultInterestInSuspense", "cuota": 1, "valor": 207.74 },
+          { "dia": "2027-02-04", "clase": "Accrual", "concepto": "DefaultInterestInSuspense", "cuota": 2, "valor": 211.63 }
+        ]
+      }
+    },
+    {
+      "fecha": "2027-03-10",
+      "informacionHasta": "2027-03-10T23:00:00Z",
+      "libroDesde": "2027-03-09",
+      "esperado": {
+        "saldos": { "Principal": 2000000, "CurrentInterest": 93310.73, "DefaultInterest": 18992.57, "CurrentInterestInSuspense": 22694.04, "DefaultInterestInSuspense": 23491.71 },
+        "porCuota": [
+          { "cuota": 1, "concepto": "Principal", "valor": 318031.53 },
+          { "cuota": 1, "concepto": "CurrentInterest", "valor": 37538.53 },
+          { "cuota": 1, "concepto": "DefaultInterest", "valor": 12367.36 },
+          { "cuota": 1, "concepto": "DefaultInterestInSuspense", "valor": 7538.81 },
+          { "cuota": 2, "concepto": "Principal", "valor": 324000.75 },
+          { "cuota": 2, "concepto": "CurrentInterest", "valor": 31569.31 },
+          { "cuota": 2, "concepto": "DefaultInterest", "valor": 6189.95 },
+          { "cuota": 2, "concepto": "DefaultInterestInSuspense", "valor": 7680.31 },
+          { "cuota": 3, "concepto": "Principal", "valor": 330082 },
+          { "cuota": 3, "concepto": "CurrentInterest", "valor": 23774.07 },
+          { "cuota": 3, "concepto": "DefaultInterest", "valor": 215.61 },
+          { "cuota": 3, "concepto": "CurrentInterestInSuspense", "valor": 1684.50 },
+          { "cuota": 3, "concepto": "DefaultInterestInSuspense", "valor": 7393.11 },
+          { "cuota": 4, "concepto": "Principal", "valor": 336277.40 },
+          { "cuota": 4, "concepto": "DefaultInterest", "valor": 219.65 },
+          { "cuota": 4, "concepto": "CurrentInterestInSuspense", "valor": 19292.66 },
+          { "cuota": 4, "concepto": "DefaultInterestInSuspense", "valor": 879.48 },
+          { "cuota": 5, "concepto": "Principal", "valor": 342589.08 },
+          { "cuota": 5, "concepto": "CurrentInterest", "valor": 428.82 },
+          { "cuota": 5, "concepto": "CurrentInterestInSuspense", "valor": 1716.88 },
+          { "cuota": 6, "concepto": "Principal", "valor": 349019.24 }
+        ],
+        "capitalVencido": 1308391.68,
+        "diasDeMora": 95,
+        "cuotaMasAntigua": 1,
+        "cuotasVencidas": 4,
+        "suspendida": false,
+        "valorParaCancelar": 2158489.05,
+        "tasaDiariaCorriente": 0.000620035340587494,
+        "tasaDiariaMora": 0.000653191353786404,
+        "usuraTopada": true,
+        "validaHasta": null,
+        "transiciones": [
+          { "fecha": "2027-02-04", "suspendida": true },
+          { "fecha": "2027-03-10", "suspendida": false }
+        ],
+        "libro": [
+          { "dia": "2027-03-09", "clase": "Accrual", "concepto": "CurrentInterestInSuspense", "cuota": 5, "valor": 429.62 },
+          { "dia": "2027-03-09", "clase": "Accrual", "concepto": "DefaultInterestInSuspense", "cuota": 1, "valor": 208.14 },
+          { "dia": "2027-03-09", "clase": "Accrual", "concepto": "DefaultInterestInSuspense", "cuota": 2, "valor": 212.05 },
+          { "dia": "2027-03-09", "clase": "Accrual", "concepto": "DefaultInterestInSuspense", "cuota": 3, "valor": 216.03 },
+          { "dia": "2027-03-09", "clase": "Accrual", "concepto": "DefaultInterestInSuspense", "cuota": 4, "valor": 220.09 },
+          { "dia": "2027-03-10", "clase": "Accrual", "concepto": "CurrentInterest", "cuota": 5, "valor": 428.82 },
+          { "dia": "2027-03-10", "clase": "Accrual", "concepto": "DefaultInterest", "cuota": 1, "valor": 207.73 },
+          { "dia": "2027-03-10", "clase": "Accrual", "concepto": "DefaultInterest", "cuota": 2, "valor": 211.63 },
+          { "dia": "2027-03-10", "clase": "Accrual", "concepto": "DefaultInterest", "cuota": 3, "valor": 215.61 },
+          { "dia": "2027-03-10", "clase": "Accrual", "concepto": "DefaultInterest", "cuota": 4, "valor": 219.65 }
+        ]
+      }
+    },
+    {
+      "fecha": "2027-04-06",
+      "informacionHasta": "2027-04-06T23:00:00Z",
+      "libroDesde": "2027-04-04",
+      "esperado": {
+        "saldos": { "Principal": 2000000, "CurrentInterest": 103682.60, "DefaultInterest": 39672.01, "CurrentInterestInSuspense": 23339.26, "DefaultInterestInSuspense": 25424.74 },
+        "porCuota": [
+          { "cuota": 1, "concepto": "Principal", "valor": 318031.53 },
+          { "cuota": 1, "concepto": "CurrentInterest", "valor": 37538.53 },
+          { "cuota": 1, "concepto": "DefaultInterest", "valor": 17393.92 },
+          { "cuota": 1, "concepto": "DefaultInterestInSuspense", "valor": 7954.28 },
+          { "cuota": 2, "concepto": "Principal", "valor": 324000.75 },
+          { "cuota": 2, "concepto": "CurrentInterest", "valor": 31569.31 },
+          { "cuota": 2, "concepto": "DefaultInterest", "valor": 11310.86 },
+          { "cuota": 2, "concepto": "DefaultInterestInSuspense", "valor": 8103.58 },
+          { "cuota": 3, "concepto": "Principal", "valor": 330082 },
+          { "cuota": 3, "concepto": "CurrentInterest", "valor": 23774.07 },
+          { "cuota": 3, "concepto": "DefaultInterest", "valor": 5432.63 },
+          { "cuota": 3, "concepto": "CurrentInterestInSuspense", "valor": 1684.50 },
+          { "cuota": 3, "concepto": "DefaultInterestInSuspense", "valor": 7824.32 },
+          { "cuota": 4, "concepto": "Principal", "valor": 336277.40 },
+          { "cuota": 4, "concepto": "DefaultInterest", "valor": 5534.60 },
+          { "cuota": 4, "concepto": "CurrentInterestInSuspense", "valor": 19292.66 },
+          { "cuota": 4, "concepto": "DefaultInterestInSuspense", "valor": 1318.78 },
+          { "cuota": 5, "concepto": "Principal", "valor": 342589.08 },
+          { "cuota": 5, "concepto": "CurrentInterest", "valor": 10800.69 },
+          { "cuota": 5, "concepto": "CurrentInterestInSuspense", "valor": 2145.70 },
+          { "cuota": 5, "concepto": "DefaultInterestInSuspense", "valor": 223.78 },
+          { "cuota": 6, "concepto": "Principal", "valor": 349019.24 },
+          { "cuota": 6, "concepto": "CurrentInterestInSuspense", "valor": 216.40 }
+        ],
+        "capitalVencido": 1650980.76,
+        "diasDeMora": 122,
+        "cuotaMasAntigua": 1,
+        "cuotasVencidas": 5,
+        "suspendida": true,
+        "valorParaCancelar": 2192118.61,
+        "tasaDiariaCorriente": 0.000620035340587494,
+        "tasaDiariaMora": 0.000653191353786404,
+        "usuraTopada": true,
+        "validaHasta": null,
+        "transiciones": [
+          { "fecha": "2027-02-04", "suspendida": true },
+          { "fecha": "2027-03-10", "suspendida": false },
+          { "fecha": "2027-04-05", "suspendida": true }
+        ],
+        "libro": [
+          { "dia": "2027-04-04", "clase": "Accrual", "concepto": "CurrentInterest", "cuota": 5, "valor": 435.25 },
+          { "dia": "2027-04-04", "clase": "Accrual", "concepto": "DefaultInterest", "cuota": 1, "valor": 211.01 },
+          { "dia": "2027-04-04", "clase": "Accrual", "concepto": "DefaultInterest", "cuota": 2, "valor": 214.98 },
+          { "dia": "2027-04-04", "clase": "Accrual", "concepto": "DefaultInterest", "cuota": 3, "valor": 219.01 },
+          { "dia": "2027-04-04", "clase": "Accrual", "concepto": "DefaultInterest", "cuota": 4, "valor": 223.13 },
+          { "dia": "2027-04-05", "clase": "Accrual", "concepto": "CurrentInterestInSuspense", "cuota": 5, "valor": 428.82 },
+          { "dia": "2027-04-05", "clase": "Accrual", "concepto": "DefaultInterestInSuspense", "cuota": 1, "valor": 207.74 },
+          { "dia": "2027-04-05", "clase": "Accrual", "concepto": "DefaultInterestInSuspense", "cuota": 2, "valor": 211.64 },
+          { "dia": "2027-04-05", "clase": "Accrual", "concepto": "DefaultInterestInSuspense", "cuota": 3, "valor": 215.61 },
+          { "dia": "2027-04-05", "clase": "Accrual", "concepto": "DefaultInterestInSuspense", "cuota": 4, "valor": 219.65 },
+          { "dia": "2027-04-06", "clase": "Accrual", "concepto": "CurrentInterestInSuspense", "cuota": 6, "valor": 216.40 },
+          { "dia": "2027-04-06", "clase": "Accrual", "concepto": "DefaultInterestInSuspense", "cuota": 1, "valor": 207.73 },
+          { "dia": "2027-04-06", "clase": "Accrual", "concepto": "DefaultInterestInSuspense", "cuota": 2, "valor": 211.63 },
+          { "dia": "2027-04-06", "clase": "Accrual", "concepto": "DefaultInterestInSuspense", "cuota": 3, "valor": 215.60 },
+          { "dia": "2027-04-06", "clase": "Accrual", "concepto": "DefaultInterestInSuspense", "cuota": 4, "valor": 219.65 },
+          { "dia": "2027-04-06", "clase": "Accrual", "concepto": "DefaultInterestInSuspense", "cuota": 5, "valor": 223.78 }
+        ]
+      }
+    }
+  ]
+}

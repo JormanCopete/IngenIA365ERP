@@ -212,7 +212,11 @@
             var sobre = await resp.Content.ReadFromJsonAsync<SobreDeError>();
             if (!string.IsNullOrWhiteSpace(sobre?.Message)) return sobre.Message!;
         }
-        catch { /* cuerpo sin sobre */ }
+        catch (System.Text.Json.JsonException)
+        {
+            // El cuerpo no trae el sobre de error: se informa el código HTTP.
+            return $"Error {(int)resp.StatusCode}";
+        }
         return $"Error {(int)resp.StatusCode}";
     }
 

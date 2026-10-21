@@ -1,0 +1,43 @@
+// Investigacion 3.6: CDAT de 488.088 al 4 %, sin umbral (ExceptTermDeposit), con componente 55,43 %: base 217.541, retencion 8.702.
+{
+  "nombre": "retencion-04-cdat-con-componente",
+  "descripcion": "Investigacion 3.6: CDAT de 488.088 al 4 %, sin umbral (ExceptTermDeposit), con componente 55,43 %: base 217.541, retencion 8.702.",
+  "entrada": {
+    "politica": {
+      "tarifa": 0.04,
+      "umbralDiarioUvt": 0.055,
+      "uvt": 52374,
+      "alcance": "ExceptTermDeposit",
+      "componenteInflacionarioAplica": true,
+      "componenteInflacionario": 0.5543,
+      "unidadDeRedondeo": 1
+    },
+    "titular": {
+      "perfil": "Standard",
+      "personaNaturalNoObligada": true
+    },
+    "clase": "TermDeposit",
+    "interesBruto": 488088,
+    "interesesDiarios": [
+      {
+        "dia": "2026-01-02",
+        "interes": 2711.6
+      },
+      {
+        "dia": "2026-01-03",
+        "interes": 2711.6
+      },
+      {
+        "dia": "2026-01-04",
+        "interes": 2711.6
+      }
+    ]
+  },
+  "esperado": {
+    "umbralAlcanzado": false,
+    "componente": 270547,
+    "baseGravable": 217541,
+    "valor": 8702,
+    "motivo": null
+  }
+}

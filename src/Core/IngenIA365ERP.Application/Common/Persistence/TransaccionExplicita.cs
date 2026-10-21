@@ -38,6 +38,16 @@ namespace IngenIA365ERP.Application.Common.Persistence;
 public static class TransaccionExplicita
 {
     /// <summary>
+    /// ¿Hay una transacción de base de datos en curso en el contexto? (feature 013, DE-02, §2.6; T91). Lo preguntan las escrituras
+    /// de los puertos de Cartera (<c>IContratoDeObligaciones</c>, <c>IReservasDeCartera</c>), que corren en la unidad de trabajo de
+    /// quien llama y nunca abren la suya: sin transacción responden <c>Lending.Contract.TransactionRequired</c>. Sin un
+    /// <see cref="DbContext"/> real detrás (un doble) o en InMemory, que no tiene transacciones, responde falso: las pruebas que lo
+    /// necesitan sustituyen el puerto.
+    /// </summary>
+    public static bool HayEnCurso(IApplicationDbContext db) =>
+        db is DbContext ctx && ctx.Database.CurrentTransaction is not null;
+
+    /// <summary>
     /// Corre <paramref name="trabajo"/> en una transacción (o en la que ya está en curso). Cada repetición de
     /// la estrategia descarta los cambios pendientes antes de volver a llamar al trabajo.
     /// </summary>

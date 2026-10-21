@@ -1,0 +1,127 @@
+{
+  "descripcion": "Contingente: el desembolso baja la aprobación con un valor negativo, que invierte el lado.",
+  "sobre": {
+    "version": 1,
+    "kind": "Business",
+    "originModule": "CAR",
+    "originEventKey": "Confirmation:88888888888888888888888888888888",
+    "origin": {
+      "kind": "Operation",
+      "documentClass": null,
+      "documentTypeCode": null,
+      "number": "DES-000123-CAD",
+      "publicId": "0d0d0157-0000-4000-8000-000000000157",
+      "operationDate": "2026-11-03"
+    },
+    "related": null,
+    "chainRootPublicId": "0e0e0158-0000-4000-8000-000000000158",
+    "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+    "costCenterPublicId": null,
+    "warehouseCode": null,
+    "personPublicId": "a1b2c3d4-0000-4000-8000-000000000002",
+    "currency": "COP",
+    "exchangeRate": 1,
+    "originUser": {
+      "centralUserId": "d4e5f6a7-b8c9-4d0e-9f1a-2b3c4d5e6f70",
+      "name": "Usuario de ensayo"
+    },
+    "emittedAt": "2026-11-03T15:00:00Z"
+  },
+  "mensajes": [
+    {
+      "messageId": "0f0f0160-0000-4000-8000-000000000160",
+      "type": "CreditoAprobadoSinDesembolsar",
+      "kind": "Business",
+      "originDocumentClass": "LoanDisbursement",
+      "payload": {
+        "debtorPersonPublicId": "a1b2c3d4-0000-4000-8000-000000000002",
+        "loan": {
+          "loanPublicId": "7b8c9d0e-1f2a-4b3c-9d4e-000000000123",
+          "loanNumber": "000123"
+        },
+        "subject": {
+          "kind": "CreditApplication",
+          "publicId": "9a9a0159-0000-4000-8000-000000000159",
+          "number": "SOL-000311"
+        },
+        "valueDate": "2026-11-03",
+        "registeredAt": "2026-11-03T16:00:00Z",
+        "dimensions": {
+          "creditLineCode": "LIB01",
+          "modalityCode": "CONSUMO",
+          "subsegmentCode": "ConLibranza",
+          "riskCategory": "A",
+          "riskSubcategory": "None",
+          "isEmployee": false,
+          "inGracePeriod": false,
+          "restructured": false,
+          "writtenOff": false,
+          "collectorClass": null,
+          "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+          "impairmentModel": "ArrearsAnnex1",
+          "riskSegment": "CONSUMO",
+          "valueUnit": "Pesos"
+        },
+        "creditLineCode": "LIB01",
+        "movement": "Disbursed",
+        "amounts": [
+          {
+            "concept": "Principal",
+            "installmentNumber": null,
+            "amount": -10000000.0,
+            "uvrAmount": null,
+            "onBehalfOfAssociate": false,
+            "reasonCode": "ApprovedNotDisbursed"
+          }
+        ],
+        "balanceAfter": 0.0,
+        "causeFact": null
+      }
+    }
+  ],
+  "esperado": {
+    "tipo": "CN",
+    "fecha": "2026-11-03",
+    "origen": "LendingIssuedDocument",
+    "lineas": [
+      {
+        "rol": "ContingenteAcreedora",
+        "cuenta": "91150501",
+        "debito": 10000000.0,
+        "credito": 0.0,
+        "tercero": "ana",
+        "cruce": null,
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "CreditoAprobadoSinDesembolsar"
+          ],
+          "concepto": "Principal",
+          "creditos": [
+            "000123"
+          ]
+        }
+      },
+      {
+        "rol": "ContraContingenteAcreedora",
+        "cuenta": "96050501",
+        "debito": 0.0,
+        "credito": 10000000.0,
+        "tercero": null,
+        "cruce": null,
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "CreditoAprobadoSinDesembolsar"
+          ],
+          "concepto": "Principal",
+          "creditos": [
+            "000123"
+          ]
+        }
+      }
+    ]
+  }
+}

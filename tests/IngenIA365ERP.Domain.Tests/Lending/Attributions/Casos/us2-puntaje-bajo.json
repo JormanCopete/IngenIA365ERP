@@ -1,0 +1,24 @@
+// FR-037 en la solicitud: un puntaje bajo el mínimo no rechaza; sube la solicitud al nivel de excepción (el jefe de cartera). Si el
+// monto ya la lleva más arriba (gerencia), gana el de mayor rango: los niveles no se acumulan.
+{
+  "nombre": "us2-puntaje-bajo",
+  "descripcion": "Puntaje bajo el mínimo: nivel de excepción, salvo que el monto pida más.",
+  "matriz": {
+    "niveles": [
+      { "codigo": "ANALISTA", "nombre": "Analista de crédito", "rango": 10, "clase": "Individual", "permiso": "Lending.Decisions.Analyst", "techo": 5000000 },
+      { "codigo": "EXCEP", "nombre": "Jefe de cartera (excepciones)", "rango": 15, "clase": "Individual", "permiso": "Lending.Decisions.Exceptions", "techo": 5000000, "excepcion": true },
+      { "codigo": "GERENCIA", "nombre": "Gerencia", "rango": 20, "clase": "Individual", "permiso": "Lending.Decisions.Management", "techo": 20000000 },
+      { "codigo": "COMITE", "nombre": "Comité de crédito", "rango": 30, "clase": "Collegiate", "organo": "COMCRED", "techo": 100000000 },
+      { "codigo": "CONSEJO", "nombre": "Consejo de administración", "rango": 40, "clase": "Collegiate", "organo": "CONSEJO", "consejo": true }
+    ],
+    "reglas": []
+  },
+  "escenarios": [
+    { "nombre": "3.000.000 con puntaje bajo: excepción", "sujeto": { "linea": "CONLIB", "montoConsolidado": 3000000, "puntajeBajoElMinimo": true },
+      "esperado": { "nivel": "EXCEP", "razones": [ { "clase": "AmountCeiling", "nivel": "ANALISTA" }, { "clase": "Exception", "nivel": "EXCEP" } ] } },
+    { "nombre": "3.000.000 con alertas (validaciones en advertencia): excepción", "sujeto": { "linea": "CONLIB", "montoConsolidado": 3000000, "alertas": true },
+      "esperado": { "nivel": "EXCEP", "razones": [ { "clase": "AmountCeiling", "nivel": "ANALISTA" }, { "clase": "Exception", "nivel": "EXCEP" } ] } },
+    { "nombre": "15.000.000 con puntaje bajo: gerencia (rango mayor)", "sujeto": { "linea": "CONLIB", "montoConsolidado": 15000000, "puntajeBajoElMinimo": true },
+      "esperado": { "nivel": "GERENCIA", "razones": [ { "clase": "AmountCeiling", "nivel": "GERENCIA" }, { "clase": "Exception", "nivel": "EXCEP" } ] } }
+  ]
+}

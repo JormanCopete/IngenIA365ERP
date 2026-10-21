@@ -1,7 +1,9 @@
 using System.Reflection;
 using FluentValidation;
+using IngenIA365ERP.Application.Common.Audit;
 using IngenIA365ERP.Application.Common.Models;
 using MediatR;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace IngenIA365ERP.Application.Common.Behaviors;
 
@@ -11,8 +13,14 @@ namespace IngenIA365ERP.Application.Common.Behaviors;
 /// fallos se traducen a <c>Result.Failure("Validation.Invalid", msg)</c>
 /// con el detalle combinado de las reglas violadas. Para handlers que no
 /// usan Result, se lanza <see cref="ValidationException"/> (compatibilidad).
+///
+/// <para>
+/// Feature 013 (T67, F9): como corre antes que <c>AuditBehavior</c>, un rechazo de forma nunca llega a la auditoría de comandos. Por
+/// eso lo anota —el comando y cada campo con el código de su regla, sin el valor— en <see cref="RechazosDeFormaDeLaPeticion"/>, y el
+/// metadato <c>AuditarIntentoDenegado</c> del grupo de rutas lo registra como <c>{Módulo}.Request.Rejected</c>.
+/// </para>
 /// </summary>
-public class ValidationBehavior<TRequest, TResponse>(IEnumerable<IValidator<TRequest>> validators)
+public class ValidationBehavior<TRequest, TResponse>(IEnumerable<IValidator<TRequest>> validators, IServiceProvider? servicios = null)
     : IPipelineBehavior<TRequest, TResponse>
     where TRequest : notnull
 {
@@ -36,6 +44,8 @@ public class ValidationBehavior<TRequest, TResponse>(IEnumerable<IValidator<TReq
             return await next(cancellationToken);
 
         var combined = string.Join("; ", failures.Select(f => f.ErrorMessage));
+        servicios?.GetService<RechazosDeFormaDeLaPeticion>()?.Anotar(typeof(TRequest).Name,
+            failures.Select(f => new CampoRechazado(f.PropertyName, string.IsNullOrWhiteSpace(f.ErrorCode) ? "Invalid" : f.ErrorCode)));
 
         // Si TResponse es Result o Result<T>, devolvemos un fallo del propio Result
         // — el pipeline mantiene la semántica funcional y el endpoint puede

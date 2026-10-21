@@ -158,6 +158,7 @@
         public string? Name { get; set; }
 
         [Required(ErrorMessage = "Obligatorio.")] [MaxLength(50)]
+        [RegularExpression("^[a-z][a-z0-9_]*$", ErrorMessage = "En minúsculas, sólo letras, dígitos y guion bajo, empezando por una letra.")]
         public string? SchemaName { get; set; }
 
         [Required(ErrorMessage = "Obligatorio.")] [MaxLength(20)]

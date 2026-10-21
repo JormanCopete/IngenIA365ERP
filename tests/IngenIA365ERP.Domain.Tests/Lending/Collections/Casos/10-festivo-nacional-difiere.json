@@ -1,0 +1,11 @@
+// Regla 8 con un festivo NACIONAL: el lunes 16 de noviembre de 2026 (Independencia de Cartagena, trasladado) difiere al
+// martes 17 a las 7:00. La cooperativa tiene un festivo «Manual» de Nómina el martes 17: no cuenta (E5), el motor sólo
+// recibe los nacionales, así que el martes sí se contacta.
+{
+  "caso": "10-festivo-nacional-difiere",
+  "reglas": { "horario": { "lunesAViernes": ["07:00", "19:00"], "sabado": ["08:00", "15:00"] }, "contactosPorDia": 1, "noHabiles": ["2026-11-02", "2026-11-16"] },
+  "festivosManualesDeNomina": ["2026-11-17"],
+  "titular": {},
+  "solicitud": { "pedido": "2026-11-16T10:00", "canal": "Sms", "proposito": "Collection" },
+  "esperado": { "decision": "Diferido", "siguiente": "2026-11-17T07:00", "motivos": ["Holiday"] }
+}

@@ -17,7 +17,9 @@ public class PermisosDeInventarioTests
          .. PayrollPermissionCatalogSeeder.Catalog.Select(p => $"{p.Resource}.{p.Action}"),
          .. AccountingPermissionCatalogSeeder.Catalog.Select(p => $"{p.Resource}.{p.Action}"),
          .. InventoryPermissionCatalogSeeder.Catalog.Select(p => $"{p.Resource}.{p.Action}"),
-         .. ElectronicInvoicingPermissionCatalogSeeder.Catalog.Select(p => $"{p.Resource}.{p.Action}")];
+         .. ElectronicInvoicingPermissionCatalogSeeder.Catalog.Select(p => $"{p.Resource}.{p.Action}"),
+         // Feature 013: con el catálogo de Cartera, las trece plantillas de Cartera tampoco omiten códigos.
+         .. LendingPermissionCatalogSeeder.Catalog.Select(p => $"{p.Resource}.{p.Action}")];
 
     /// <summary>§2.10, tal cual: los códigos <c>Inventory.*</c>.</summary>
     private static readonly string[] Inventario =

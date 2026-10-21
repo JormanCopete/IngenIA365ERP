@@ -1,0 +1,68 @@
+// FR-074: con 1 cuota tolerada y 5 dias de gracia, la cuota 5 sin pagar esta atrasada y la 6 (vencida hace 3 dias) todavia no: 1 atrasada no supera la tolerancia.
+{
+  "nombre": "contractual-04-tolerancia-y-gracia",
+  "descripcion": "FR-074: con 1 cuota tolerada y 5 dias de gracia, la cuota 5 sin pagar esta atrasada y la 6 (vencida hace 3 dias) todavia no: 1 atrasada no supera la tolerancia.",
+  "entrada": {
+    "condiciones": {
+      "cuota": 200000,
+      "periodicidad": "Monthly",
+      "plazoMeses": 12,
+      "inicio": "2027-01-15",
+      "tasaBase": 0.06,
+      "convencion": "Thirty360",
+      "unidadDeRedondeo": 1,
+      "modoDeRedondeo": "AwayFromZero"
+    },
+    "cumplimiento": {
+      "dia": "2027-07-18",
+      "tolerancia": 1,
+      "diasDeGracia": 5,
+      "cuotas": [
+        {
+          "numero": 1,
+          "pagado": 200000
+        },
+        {
+          "numero": 2,
+          "pagado": 200000
+        },
+        {
+          "numero": 3,
+          "pagado": 200000
+        },
+        {
+          "numero": 4,
+          "pagado": 200000
+        },
+        {
+          "numero": 5,
+          "pagado": 0
+        },
+        {
+          "numero": 6,
+          "pagado": 0
+        }
+      ]
+    }
+  },
+  "esperado": {
+    "vencimiento": "2028-01-15",
+    "plazoDeEmision": "SixToTwelve",
+    "cuotas": 12,
+    "primeraCuota": "2027-02-15",
+    "ultimaCuota": "2028-01-15",
+    "totalPactado": 2400000,
+    "interesProyectadoBase": 65306,
+    "valorFinalBase": 2465306,
+    "cumplimiento": {
+      "generadas": 6,
+      "pagadas": 4,
+      "atrasadas": 1,
+      "numerosAtrasados": [
+        5
+      ],
+      "superaLaTolerancia": false,
+      "completo": false
+    }
+  }
+}

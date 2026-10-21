@@ -13,7 +13,7 @@ namespace IngenIA365ERP.Application.Inventory.Documents;
 /// <summary>
 /// Descarta un borrador (feature 012, T145; contracts/api.md §9.3, <c>POST /{id}/discard</c>; FR-005): queda
 /// <c>Discarded</c> con quién, cuándo y por qué, se conserva y se audita; sus vínculos se dan de baja lógica (suelta los
-/// orígenes). No consume número. (nuevo)
+/// orígenes). No consume número. Feature 013 (T0177, T22): libera en Cartera el número reservado de sus pagos de crédito. (nuevo)
 /// </summary>
 public sealed record DiscardInventoryDraftCommand(Guid DocumentPublicId, DocumentClassGroup ExpectedGroup, string Reason)
     : IRequest<Result>, IConMotivo, IOperacionIdempotente
@@ -33,7 +33,8 @@ public sealed class DiscardInventoryDraftCommandHandler(
     IApplicationDbContext db,
     IActorActual actorActual,
     IDateTimeService reloj,
-    VistaDeDocumentos vista)
+    VistaDeDocumentos vista,
+    Sales.CreditoEnLaVenta? credito = null)
     : IRequestHandler<DiscardInventoryDraftCommand, Result>
 {
     public async Task<Result> Handle(DiscardInventoryDraftCommand request, CancellationToken ct)
@@ -66,6 +67,14 @@ public sealed class DiscardInventoryDraftCommandHandler(
         // US9 (T337): el documento del proveedor de una factura o nota descartada deja libre su número.
         var detalle = await db.SupplierInvoiceDetails.FirstOrDefaultAsync(d => d.DocumentId == documento.Id, ct);
         if (detalle is not null) detalle.IsReleased = true;
+
+        // Feature 013 (T22): el número reservado en Cartera se libera por la clave de la reserva.
+        if (credito is not null)
+        {
+            var reservados = await db.DocumentPayments.AsNoTracking()
+                .Where(p => p.DocumentId == documento.Id && !p.IsDeleted && p.ReservationPublicId != null).ToListAsync(ct);
+            await credito.LiberarAsync(reservados, request.Reason.Trim(), ct);
+        }
 
         await db.SaveChangesAsync(ct);
         return Result.Success();

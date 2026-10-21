@@ -26,7 +26,8 @@ namespace IngenIA365ERP.Application.Payroll.Services;
 /// <item>En las cesantías anuales, <c>CESANTIAS</c> deja la cuenta por pagar <b>al fondo</b> (la persona
 /// vinculada al fondo del empleado, FR-088) e <c>INT_CESANTIAS</c> al empleado; en la definitiva ambas
 /// van al empleado.</item>
-/// <item><c>DESC_CARTERA</c> no genera asiento (Cartera contabiliza el recaudo, D-08): viene con <c>AffectsAccounting = false</c>.</item>
+/// <item><c>DESC_CARTERA</c> contabiliza contra la cuenta del concepto, el puente «recaudos por nómina para Cartera» (feature 013,
+/// enmienda D-08 de la 010, T53); sin cuentas, <c>Payroll.Settlement.ConceptAccountsMissing</c>.</item>
 /// <item>Antes de tocar el contexto comprueba que la contabilidad esté iniciada y que todo concepto con
 /// asiento tenga cuentas; si falta una responde <c>Payroll.Settlement.ConceptAccountsMissing</c> con la
 /// lista y no agrega nada al libro.</item>

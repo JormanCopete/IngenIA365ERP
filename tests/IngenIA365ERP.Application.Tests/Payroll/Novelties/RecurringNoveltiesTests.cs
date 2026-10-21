@@ -19,13 +19,13 @@ public class RecurringNoveltiesTests
     private static readonly ICurrentUserService Contadora = NominaTestData.UsuarioDePrueba("contadora@demo", 9);
 
     private static CalculatePayrollRunCommandHandler Calculador(NominaTestData d) =>
-        new(d.Db, d.Loader, d.Recurrentes, d.Lock, d.Clock, d.User, NullLogger<CalculatePayrollRunCommandHandler>.Instance);
+        new(d.Db, d.Loader, d.Recurrentes, d.CuotasDeCartera, d.CuotasDeCuentas, d.Lock, d.Clock, d.User, NullLogger<CalculatePayrollRunCommandHandler>.Instance);
 
     private static async Task Aprobar(NominaTestData d, Guid runId)
     {
         var poster = d.Contabilizador(Contadora);
         var audit = new PayrollAuditEmitter(d.Audit, Contadora, d.Clock, NullLogger<PayrollAuditEmitter>.Instance, CooperativaDePrueba.Actual);
-        var r = await new ApprovePayrollRunCommandHandler(d.Db, poster, d.Policies, d.Permissions, d.Clock, Contadora, audit, d.StaleMarker)
+        var r = await new ApprovePayrollRunCommandHandler(d.Db, poster, d.Policies, d.Permissions, d.Clock, Contadora, audit, d.StaleMarker, d.Recaudo, d.Obligaciones, d.RecaudoDeCuentas)
             .Handle(new ApprovePayrollRunCommand(runId, Confirm: true), CancellationToken.None);
         r.IsSuccess.Should().BeTrue(r.Error.Message);
     }

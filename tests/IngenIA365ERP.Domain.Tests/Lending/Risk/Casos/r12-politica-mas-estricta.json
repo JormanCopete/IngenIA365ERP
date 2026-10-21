@@ -1,0 +1,61 @@
+{
+  // r12 (SC-023; T45): la política del consejo endurece celda por celda; donde es más blanda, rige la norma. Política de consumo: B
+  // desde 21 días (norma 31: más estricta, rige), C desde 70 (norma 61: más blanda, rige la norma), C al 15 % (norma 10 %: rige), D al
+  // 15 % (norma 20 %: rige la norma); garantía no hipotecaria del primer tramo al 60 % (norma 70 %: rige); general mínimo 1,5 %.
+  // A queda de 0 a 20 días. A mano, capital 1.000.000 cada uno:
+  //  1. 25 días → B por la política (la norma daría A) → 1 % = 10.000;
+  //  2. 65 días → C (el inicio de C sigue en 61) → 15 % = 150.000;
+  //  3. 100 días → D → 20 % (la norma) = 200.000;
+  //  4. 75 días → C; no hipotecaria 500.000 × 0,60 = 300.000; base 700.000 × 15 % = 105.000.
+  // Variante «norma-endurecida»: después de validar la política la norma sube C de consumo al 25 %: gana la norma (la política, que
+  // pedía 15 %, queda más blanda): 2 → 250.000 y 4 → 175.000.
+  "nombre": "r12-politica-mas-estricta",
+  "politica": {
+    "segments": [
+      { "code": "CONSUMO",
+        "categories": [ { "category": "B", "minDaysPastDue": 21 }, { "category": "C", "minDaysPastDue": 70 } ],
+        "impairmentRates": [ { "category": "C", "rate": 0.15 }, { "category": "D", "rate": 0.15 } ] }
+    ],
+    "collateral": [ { "nature": "NonMortgage", "brackets": [ { "fromMonths": 0, "admissibleFraction": 0.60 } ] } ],
+    "generalImpairment": { "minimumRate": 0.015 }
+  },
+  "creditos": [
+    { "id": 1, "deudor": 1201, "segmento": "CONSUMO", "diasDeMora": 25, "saldos": { "capital": 1000000 } },
+    { "id": 2, "deudor": 1202, "segmento": "CONSUMO", "diasDeMora": 65, "saldos": { "capital": 1000000 } },
+    { "id": 3, "deudor": 1203, "segmento": "CONSUMO", "diasDeMora": 100, "saldos": { "capital": 1000000 } },
+    { "id": 4, "deudor": 1204, "segmento": "CONSUMO", "diasDeMora": 75, "saldos": { "capital": 1000000 },
+      "garantias": [ { "naturaleza": "NonMortgage", "valor": 500000 } ] }
+  ],
+  "esperado": {
+    "celdas": [
+      { "ruta": "segments.CONSUMO.categories.B.minDaysPastDue", "norma": 31, "propuesta": 21, "efectiva": 21 },
+      { "ruta": "segments.CONSUMO.categories.C.minDaysPastDue", "norma": 61, "propuesta": 70, "efectiva": 61 },
+      { "ruta": "segments.CONSUMO.impairmentRates.C", "norma": 0.10, "propuesta": 0.15, "efectiva": 0.15 },
+      { "ruta": "segments.CONSUMO.impairmentRates.D", "norma": 0.20, "propuesta": 0.15, "efectiva": 0.20 },
+      { "ruta": "collateral.NonMortgage.brackets.0.admissibleFraction", "norma": 0.70, "propuesta": 0.60, "efectiva": 0.60 },
+      { "ruta": "generalImpairment.minimumRate", "norma": 0.01, "propuesta": 0.015, "efectiva": 0.015 }
+    ],
+    "menosEstrictas": [ "segments.CONSUMO.categories.C.minDaysPastDue", "segments.CONSUMO.impairmentRates.D" ],
+    "creditos": [
+      { "id": 1, "categoriaPorMora": "B", "categoria": "B", "causa": "Arrears", "porcentaje": 0.01, "deterioroCapital": 10000.00 },
+      { "id": 2, "categoria": "C", "causa": "Arrears", "porcentaje": 0.15, "deterioroCapital": 150000.00 },
+      { "id": 3, "categoria": "D", "causa": "Arrears", "porcentaje": 0.20, "deterioroCapital": 200000.00 },
+      { "id": 4, "categoria": "C", "causa": "Arrears", "garantiaAdmisible": 300000, "base": 700000, "porcentaje": 0.15, "deterioroCapital": 105000.00 }
+    ]
+  },
+  "variantes": [
+    {
+      "nombre": "norma-endurecida",
+      "norma": "anexo1-endurecido",
+      "esperado": {
+        "menosEstrictas": [ "segments.CONSUMO.categories.C.minDaysPastDue", "segments.CONSUMO.impairmentRates.C", "segments.CONSUMO.impairmentRates.D" ],
+        "creditos": [
+          { "id": 1, "categoria": "B", "causa": "Arrears", "deterioroCapital": 10000.00 },
+          { "id": 2, "categoria": "C", "causa": "Arrears", "porcentaje": 0.25, "deterioroCapital": 250000.00 },
+          { "id": 3, "categoria": "D", "causa": "Arrears", "deterioroCapital": 200000.00 },
+          { "id": 4, "categoria": "C", "causa": "Arrears", "base": 700000, "porcentaje": 0.25, "deterioroCapital": 175000.00 }
+        ]
+      }
+    }
+  ]
+}

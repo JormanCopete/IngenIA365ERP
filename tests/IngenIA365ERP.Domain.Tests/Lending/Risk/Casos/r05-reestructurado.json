@@ -1,0 +1,27 @@
+{
+  // r05 (US11-4, SC-021; FR-093): reestructurados con la regla de la norma de prueba (mínimo B; mejora una categoría por cada 3
+  // cuotas pagadas seguidas; si recae en mora, regresa a la de reestructurar). A mano, con mora al día salvo el 4:
+  //  1. reestructurado en C, 0 cuotas → C;  2. en C, 3 cuotas → 1 tramo → B;  3. en C, 7 cuotas → 2 tramos → A;
+  //  4. en D, 3 cuotas, pero hoy con 15 días de mora → recae: D (la mora sola daría A);  5. pedido estando en A → el mínimo, B;
+  //  6. en B con 4 cuotas (un tramo lo llevaría a A), pero con 45 días de mora recae a B; la mora también da B: en el empate gana la
+  //     causa más específica, «Restructured».
+  "nombre": "r05-reestructurado",
+  "creditos": [
+    { "id": 1, "deudor": 501, "segmento": "CONSUMO", "diasDeMora": 0, "reestructuracion": { "categoriaAlReestructurar": "C", "cuotasPagadasSeguidas": 0 } },
+    { "id": 2, "deudor": 502, "segmento": "CONSUMO", "diasDeMora": 0, "reestructuracion": { "categoriaAlReestructurar": "C", "cuotasPagadasSeguidas": 3 } },
+    { "id": 3, "deudor": 503, "segmento": "CONSUMO", "diasDeMora": 0, "reestructuracion": { "categoriaAlReestructurar": "C", "cuotasPagadasSeguidas": 7 } },
+    { "id": 4, "deudor": 504, "segmento": "CONSUMO", "diasDeMora": 15, "reestructuracion": { "categoriaAlReestructurar": "D", "cuotasPagadasSeguidas": 3 } },
+    { "id": 5, "deudor": 505, "segmento": "CONSUMO", "diasDeMora": 0, "reestructuracion": { "categoriaAlReestructurar": "A", "cuotasPagadasSeguidas": 0 } },
+    { "id": 6, "deudor": 506, "segmento": "CONSUMO", "diasDeMora": 45, "reestructuracion": { "categoriaAlReestructurar": "B", "cuotasPagadasSeguidas": 4 } }
+  ],
+  "esperado": {
+    "creditos": [
+      { "id": 1, "categoriaPorMora": "A", "categoria": "C", "causa": "Restructured", "candidatas": [ "Arrears:A", "Restructured:C" ] },
+      { "id": 2, "categoria": "B", "causa": "Restructured" },
+      { "id": 3, "categoria": "A", "causa": "Restructured", "candidatas": [ "Arrears:A", "Restructured:A" ] },
+      { "id": 4, "categoriaPorMora": "A", "categoria": "D", "causa": "Restructured", "explicacionContiene": [ "volvió a la mora" ] },
+      { "id": 5, "categoria": "B", "causa": "Restructured" },
+      { "id": 6, "categoriaPorMora": "B", "categoria": "B", "causa": "Restructured", "candidatas": [ "Arrears:B", "Restructured:B" ] }
+    ]
+  }
+}

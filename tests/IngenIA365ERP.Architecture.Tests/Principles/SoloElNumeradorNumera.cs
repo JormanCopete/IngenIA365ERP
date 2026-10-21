@@ -29,7 +29,27 @@ public class SoloElNumeradorNumera
     ];
 
     /// <summary>Nombres de archivo (sin ruta) que pueden escribirlas.</summary>
-    private static readonly string[] NumeradoresAutorizados = ["Numerador.cs", "NumeradorFiscal.cs"];
+    private static readonly string[] NumeradoresAutorizados = ["Numerador.cs", "NumeradorFiscal.cs", "NumeradorDeCartera.cs"];
+
+    /// <summary>
+    /// Feature 013 (T0144, C48): en Cartera el <c>Number</c> de toda tabla y el <c>NextValue</c> de <c>LND_NumberSequences</c> los
+    /// escribe sólo <c>NumeradorDeCartera</c> (el de un hecho nace en su inicializador con el número que el numerador devolvió).
+    /// </summary>
+    [Fact]
+    public void En_Cartera_solo_el_numerador_asigna_numeros()
+    {
+        var root = RepoPath.FindRepoRoot();
+        var escritura = new Regex(@"\.Number\s*(=(?!=)|\+=|-=|\+\+|--)", RegexOptions.Compiled);
+        var infractores = RepoPath.ProductionCSharpFiles()
+            .Where(f => f.Replace(Path.DirectorySeparatorChar, '/').Contains("/Lending/", StringComparison.Ordinal))
+            .Where(f => Path.GetFileName(f) != "NumeradorDeCartera.cs")
+            .Where(f => escritura.IsMatch(FuenteSinComentarios.Leer(f)))
+            .Select(f => Path.GetRelativePath(root, f))
+            .ToList();
+
+        Assert.True(infractores.Count == 0, "Número de Cartera asignado fuera de NumeradorDeCartera (C48):\n  " + string.Join("\n  ", infractores));
+        Assert.True(File.Exists(Path.Combine(root, "src", "Core", "IngenIA365ERP.Application", "Lending", "Common", "NumeradorDeCartera.cs")));
+    }
 
     /// <summary>
     /// Carpetas (fragmentos de ruta) del comercio donde <c>Number</c> es el número de un documento de inventario y sólo lo
@@ -152,6 +172,41 @@ public class SoloElNumeradorNumera
         Assert.True(pedidos == 1, "EmitRadianEventCommand debe pedir el número del evento a NumeradorFiscal.NumerarEventoAsync (T802).");
         Assert.True(infractores.Count == 0,
             "Consecutivos de eventos RADIAN fuera del NumeradorFiscal (FR-038, T16, T802):\n  " + string.Join("\n  ", infractores));
+    }
+
+    /// <summary>
+    /// Feature 014 (T037, T032; data-model §0.4, §1.3 con research E03): las clases de número de captaciones —<c>MemberAccount</c> 16,
+    /// <c>MemberAccountOperation</c> 17, <c>MembershipWithdrawal</c> 18, <c>AssemblyDistribution</c> 19 y <c>DeceasedHolderCase</c> 20— las numera sólo
+    /// <c>NumeradorDeCartera</c>: él las nombra todas, busca los números ya usados de las cuentas y sus operaciones (y de las órdenes de giro de cuentas,
+    /// que comparten consecutivo con las de desembolso), y ningún otro archivo de producción las pide a <c>AsignarAsync</c> directamente ni asigna el
+    /// <c>Number</c> de una cuenta, una operación de cuenta o una orden de giro de cuentas.
+    /// </summary>
+    [Fact]
+    public void Las_clases_de_numero_de_captaciones_las_numera_el_numerador()
+    {
+        var root = RepoPath.FindRepoRoot();
+        var clases = new Dictionary<string, int>
+        {
+            ["MemberAccount"] = 16, ["MemberAccountOperation"] = 17, ["MembershipWithdrawal"] = 18, ["AssemblyDistribution"] = 19, ["DeceasedHolderCase"] = 20,
+        };
+        foreach (var (nombre, valor) in clases)
+            Assert.Equal(valor, (int)Enum.Parse<IngenIA365ERP.Domain.Enums.Lending.LendingNumberKind>(nombre));
+
+        var numerador = FuenteSinComentarios.Leer(Path.Combine(root, "src", "Core", "IngenIA365ERP.Application", "Lending", "Common", "NumeradorDeCartera.cs"));
+        foreach (var nombre in clases.Keys)
+            Assert.Contains($"LendingNumberKind.{nombre}", numerador, StringComparison.Ordinal);
+        Assert.Matches(@"LendingNumberKind\.MemberAccount\s*=>\s*db\.MemberAccounts", numerador);
+        Assert.Matches(@"LendingNumberKind\.MemberAccountOperation\s*=>\s*db\.MemberAccountOperations", numerador);
+        Assert.Contains("db.AccountPayoutOrders", numerador, StringComparison.Ordinal);
+
+        var pideDirecto = new Regex(@"\bAsignarAsync\(\s*LendingNumberKind\.(MemberAccount|MemberAccountOperation|MembershipWithdrawal|AssemblyDistribution|DeceasedHolderCase)\b",
+            RegexOptions.Compiled);
+        var infractores = RepoPath.ProductionCSharpFiles()
+            .Where(f => Path.GetFileName(f) != "NumeradorDeCartera.cs")
+            .Where(f => pideDirecto.IsMatch(FuenteSinComentarios.Leer(f)))
+            .Select(f => Path.GetRelativePath(root, f))
+            .ToList();
+        Assert.True(infractores.Count == 0, "Números de captaciones pedidos fuera de los métodos del numerador (C48):\n  " + string.Join("\n  ", infractores));
     }
 
     [Fact]

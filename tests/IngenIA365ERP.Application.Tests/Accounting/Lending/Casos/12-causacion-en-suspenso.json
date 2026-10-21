@@ -1,0 +1,163 @@
+{
+  "descripcion": "§24 ejemplo 9 (causación): con la causación suspendida, el interés va a cuentas de orden.",
+  "sobre": {
+    "version": 1,
+    "kind": "Business",
+    "originModule": "CAR",
+    "originEventKey": "Confirmation:22222222222222222222222222222222",
+    "origin": {
+      "kind": "Operation",
+      "documentClass": null,
+      "documentTypeCode": null,
+      "number": "CAU-20261114-2",
+      "publicId": "0d0d0053-0000-4000-8000-000000000053",
+      "operationDate": "2026-11-14"
+    },
+    "related": null,
+    "chainRootPublicId": "0e0e0054-0000-4000-8000-000000000054",
+    "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+    "costCenterPublicId": null,
+    "warehouseCode": null,
+    "personPublicId": null,
+    "currency": "COP",
+    "exchangeRate": 1,
+    "originUser": {
+      "centralUserId": null,
+      "name": "Proceso de integración"
+    },
+    "emittedAt": "2026-11-14T15:00:00Z"
+  },
+  "mensajes": [
+    {
+      "messageId": "0f0f0056-0000-4000-8000-000000000056",
+      "type": "InteresCausado",
+      "kind": "Business",
+      "originDocumentClass": "AccountingFactPart",
+      "payload": {
+        "runKind": "DailyCycle",
+        "runPublicId": "0c0c0055-0000-4000-8000-000000000055",
+        "factDate": "2026-11-14",
+        "batchNumber": 1,
+        "partNumber": 1,
+        "closeVersion": null,
+        "catchUpOperation": null,
+        "totals": [
+          {
+            "dimensions": {
+              "creditLineCode": "COM01",
+              "modalityCode": "CONSUMO",
+              "subsegmentCode": "SinLibranza",
+              "riskCategory": "D",
+              "riskSubcategory": "None",
+              "isEmployee": false,
+              "inGracePeriod": false,
+              "restructured": false,
+              "writtenOff": false,
+              "collectorClass": null,
+              "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+              "impairmentModel": "ArrearsAnnex1",
+              "riskSegment": "CONSUMO",
+              "valueUnit": "Pesos"
+            },
+            "amounts": [
+              {
+                "concept": "CurrentInterestInSuspense",
+                "installmentNumber": 6,
+                "amount": 3000.0,
+                "uvrAmount": null,
+                "onBehalfOfAssociate": false,
+                "reasonCode": null
+              }
+            ],
+            "loanCount": 1
+          }
+        ],
+        "lines": [
+          {
+            "loan": {
+              "loanPublicId": "7b8c9d0e-1f2a-4b3c-9d4e-000000000200",
+              "loanNumber": "000200"
+            },
+            "debtorPersonPublicId": "a1b2c3d4-0000-4000-8000-000000000003",
+            "counterpartyPersonPublicId": null,
+            "dimensions": {
+              "creditLineCode": "COM01",
+              "modalityCode": "CONSUMO",
+              "subsegmentCode": "SinLibranza",
+              "riskCategory": "D",
+              "riskSubcategory": "None",
+              "isEmployee": false,
+              "inGracePeriod": false,
+              "restructured": false,
+              "writtenOff": false,
+              "collectorClass": null,
+              "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+              "impairmentModel": "ArrearsAnnex1",
+              "riskSegment": "CONSUMO",
+              "valueUnit": "Pesos"
+            },
+            "previousDimensions": null,
+            "amounts": [
+              {
+                "concept": "CurrentInterestInSuspense",
+                "installmentNumber": 6,
+                "amount": 3000.0,
+                "uvrAmount": null,
+                "onBehalfOfAssociate": false,
+                "reasonCode": null
+              }
+            ],
+            "valueDate": null
+          }
+        ],
+        "lineCount": 1,
+        "controlTotal": 3000.0
+      }
+    }
+  ],
+  "esperado": {
+    "tipo": "CA",
+    "fecha": "2026-11-14",
+    "origen": "LendingIssuedDocument",
+    "lineas": [
+      {
+        "rol": "SuspensoEnOrden",
+        "cuenta": "81150501",
+        "debito": 3000.0,
+        "credito": 0.0,
+        "tercero": null,
+        "cruce": null,
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "InteresCausado"
+          ],
+          "concepto": "CurrentInterestInSuspense",
+          "creditos": [
+            "000200"
+          ]
+        }
+      },
+      {
+        "rol": "ContraOrdenContingente",
+        "cuenta": "86050501",
+        "debito": 0.0,
+        "credito": 3000.0,
+        "tercero": null,
+        "cruce": null,
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "InteresCausado"
+          ],
+          "concepto": "CurrentInterestInSuspense",
+          "creditos": [
+            "000200"
+          ]
+        }
+      }
+    ]
+  }
+}

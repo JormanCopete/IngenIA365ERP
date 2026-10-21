@@ -1,0 +1,83 @@
+// Distribucion de excedentes por un valor de 1.000.000 sobre el saldo promedio: el valor se reparte por la base con el mayor residuo y la suma es exactamente el valor (sin limite legal: no es revalorizacion).
+{
+  "nombre": "asamblea-03-excedentes-por-valor",
+  "descripcion": "Distribucion de excedentes por un valor de 1.000.000 sobre el saldo promedio: el valor se reparte por la base con el mayor residuo y la suma es exactamente el valor (sin limite legal: no es revalorizacion).",
+  "entrada": {
+    "clase": "SurplusDistribution",
+    "ejercicio": 2026,
+    "base": "AverageBalance",
+    "porcentaje": null,
+    "valor": 1000000,
+    "fondo": 1000000,
+    "limiteLegal": null,
+    "unidad": 1,
+    "asociados": [
+      {
+        "persona": 1,
+        "cuenta": 11,
+        "movimientos": [
+          {
+            "fecha": "2026-01-01",
+            "monto": 1000000
+          }
+        ]
+      },
+      {
+        "persona": 2,
+        "cuenta": 12,
+        "movimientos": [
+          {
+            "fecha": "2026-01-01",
+            "monto": 1000000
+          }
+        ]
+      },
+      {
+        "persona": 3,
+        "cuenta": 13,
+        "movimientos": [
+          {
+            "fecha": "2026-01-01",
+            "monto": 1000000
+          }
+        ]
+      }
+    ]
+  },
+  "esperado": {
+    "baseTotal": 3000000,
+    "tasaAplicada": 0.3333333333,
+    "limitadaPorElLimiteLegal": false,
+    "totalCalculado": 1000000,
+    "prorrateada": false,
+    "factor": null,
+    "totalAplicado": 1000000,
+    "remanente": 0,
+    "lineas": [
+      {
+        "persona": 1,
+        "cuenta": 11,
+        "base": 1000000,
+        "calculado": 333334,
+        "aplicado": 333334,
+        "limitadaPorMinimo": false
+      },
+      {
+        "persona": 2,
+        "cuenta": 12,
+        "base": 1000000,
+        "calculado": 333333,
+        "aplicado": 333333,
+        "limitadaPorMinimo": false
+      },
+      {
+        "persona": 3,
+        "cuenta": 13,
+        "base": 1000000,
+        "calculado": 333333,
+        "aplicado": 333333,
+        "limitadaPorMinimo": false
+      }
+    ]
+  }
+}

@@ -3,7 +3,8 @@ using IngenIA365ERP.Application.Common.Interfaces.Caching;
 using IngenIA365ERP.Application.Payroll.Novelties.RegisterNovelty;
 using IngenIA365ERP.Application.Payroll.Runs.CalculatePayrollRun;
 using IngenIA365ERP.Application.Tests.Payroll.Common;
-using IngenIA365ERP.Domain.Entities.Lending;
+using IngenIA365ERP.Application.Common.Integration.Lending;
+using IngenIA365ERP.Application.Payroll.Services;
 using IngenIA365ERP.Domain.Enums.Payroll;
 using IngenIA365ERP.Domain.Payroll.Calculation;
 using Microsoft.EntityFrameworkCore;
@@ -16,7 +17,7 @@ namespace IngenIA365ERP.Application.Tests.Payroll.Runs;
 public class CalculatePayrollRunCommandHandlerTests
 {
     private static CalculatePayrollRunCommandHandler Handler(NominaTestData d) =>
-        new(d.Db, d.Loader, d.Recurrentes, d.Lock, d.Clock, d.User, NullLogger<CalculatePayrollRunCommandHandler>.Instance);
+        new(d.Db, d.Loader, d.Recurrentes, d.CuotasDeCartera, d.CuotasDeCuentas, d.Lock, d.Clock, d.User, NullLogger<CalculatePayrollRunCommandHandler>.Instance);
 
     private static async Task RegistrarHoras(NominaTestData d, decimal horas = 6m)
     {
@@ -156,24 +157,128 @@ public class CalculatePayrollRunCommandHandlerTests
         carla.NotesJson.Should().Contain("Procedimiento 2");
     }
 
+    /// <summary>Una cuota de Cartera del período de marzo para Ana (feature 013, T0110).</summary>
+    private static CuotaDeNominaDto Cuota(NominaTestData d, Guid obligacion, decimal valor, string numero = "0000123") =>
+        new(d.Db.People.Single(p => p.Id == d.Ana.PersonId).PublicId, obligacion, numero, "CONSUMO", 7, new DateOnly(2026, 3, 31), valor, 0m, 1);
+
     [Fact]
-    public async Task Los_descuentos_de_cartera_entran_como_lineas_sin_asiento()
+    public async Task La_cuota_de_Cartera_entra_como_novedad_LoanDeduction_con_asiento_y_deja_su_fila_Calculated()
     {
         var d = new NominaTestData();
-        var persona = await d.Db.People.SingleAsync(p => p.Id == d.Ana.PersonId);
-        d.Db.PayrollDeductionEntries.Add(new PayrollDeductionEntry
-        {
-            Period = 202603, CompanyCode = "01", PersonCode = persona.TaxId, EntryType = "DN", ConceptCode = "CR",
-            StartDate = "20260301", EndDate = "20260331", Amount = 150_000m, TotalAmount = 150_000m, CreatedBy = "cartera",
-        });
-        d.Db.SaveChanges();
+        var obligacion = Guid.NewGuid();
+        d.Obligaciones.AgregarCuota(Cuota(d, obligacion, 150_000m));
 
         var r = await Handler(d).Handle(new CalculatePayrollRunCommand(d.Marzo.PublicId), CancellationToken.None);
 
         r.IsSuccess.Should().BeTrue(r.Error.Message);
+        var consulta = d.Obligaciones.ConsultasDeCuotas.Should().ContainSingle().Subject;
+        consulta.PeriodStart.Should().Be(new DateOnly(2026, 3, 1));
+        consulta.PeriodEnd.Should().Be(new DateOnly(2026, 3, 31));
+
+        // Una novedad por empleado, obligación y período, con la obligación (C55).
+        var novedad = await d.Db.PayrollNovelties.SingleAsync(n => n.Origin == NoveltyOrigin.LoanDeduction);
+        novedad.ObligationPublicId.Should().Be(obligacion);
+        novedad.ObligationNumber.Should().Be("0000123");
+        novedad.ConceptCode.Should().Be(WellKnownConceptCodes.LoanDeduction);
+        novedad.Amount.Should().Be(150_000m);
+        novedad.InstallmentNumber.Should().Be(7);
+
+        // Enmienda D-08 (T53): la línea DESC_CARTERA ahora contabiliza (contra el puente «recaudos por nómina para Cartera»).
         var linea = await d.Db.PayrollRunLines.SingleAsync(l => l.ConceptCode == WellKnownConceptCodes.LoanDeduction);
         linea.Amount.Should().Be(150_000m);
-        linea.AffectsAccounting.Should().BeFalse("Cartera ya contabilizó (D-08)");
+        linea.AffectsAccounting.Should().BeTrue("enmienda D-08: DESC_CARTERA contabiliza contra la cuenta del concepto");
         r.Value.Totals.Net.Should().Be(2_089_095m - 150_000m);
+
+        var fila = await d.Db.PayrollLoanDeductions.SingleAsync();
+        fila.Status.Should().Be(PayrollLoanDeductionStatus.Calculated);
+        fila.ObligationPublicId.Should().Be(obligacion);
+        fila.ObligationNumber.Should().Be("0000123");
+        fila.ExpectedAmount.Should().Be(150_000m);
+        fila.DeductedAmount.Should().Be(150_000m);
+        fila.NotDeductedAmount.Should().Be(0m);
+        fila.NotDeductedReason.Should().BeNull();
+        fila.PayrollRunLineId.Should().Be(linea.Id);
+        (await d.Db.PayrollRuns.SingleAsync(x => x.PublicId == r.Value.RunPublicId)).Id.Should().Be(fila.PayrollRunId);
+    }
+
+    [Fact]
+    public async Task Lo_que_no_cabe_en_el_tope_queda_no_descontado_con_motivo_y_no_se_difiere()
+    {
+        var d = new NominaTestData();
+        d.Obligaciones.AgregarCuota(Cuota(d, Guid.NewGuid(), 2_500_000m));
+
+        var r = await Handler(d).Handle(new CalculatePayrollRunCommand(d.Marzo.PublicId), CancellationToken.None);
+
+        r.IsSuccess.Should().BeTrue(r.Error.Message);
+        var fila = await d.Db.PayrollLoanDeductions.SingleAsync();
+        fila.ExpectedAmount.Should().Be(2_500_000m);
+        fila.DeductedAmount.Should().Be(1_044_548m, "50 % de (2.249.095 − 160.000), al peso");
+        fila.NotDeductedAmount.Should().Be(1_455_452m);
+        fila.NotDeductedReason.Should().Be("DeductionCap");
+        r.Value.Blockers.Should().BeEmpty("lo no descontado de Cartera no bloquea ni deja neto negativo");
+    }
+
+    [Fact]
+    public async Task Recalcular_reemplaza_la_novedad_si_la_cuota_cambio_y_anula_la_que_Cartera_ya_no_informa()
+    {
+        var d = new NominaTestData();
+        var a = Guid.NewGuid();
+        var b = Guid.NewGuid();
+        d.Obligaciones.AgregarCuota(Cuota(d, a, 150_000m, "A-1"));
+        d.Obligaciones.AgregarCuota(Cuota(d, b, 90_000m, "B-1"));
+        (await Handler(d).Handle(new CalculatePayrollRunCommand(d.Marzo.PublicId), CancellationToken.None)).IsSuccess.Should().BeTrue();
+
+        d.Obligaciones.LimpiarCuotas();
+        d.Obligaciones.AgregarCuota(Cuota(d, a, 175_000m, "A-1"));
+        var v2 = await Handler(d).Handle(new CalculatePayrollRunCommand(d.Marzo.PublicId), CancellationToken.None);
+
+        v2.IsSuccess.Should().BeTrue(v2.Error.Message);
+        var novedades = await d.Db.PayrollNovelties.Where(n => n.Origin == NoveltyOrigin.LoanDeduction).ToListAsync();
+        novedades.Should().HaveCount(3, "nada se borra: la de A se reemplazó y la de B se anuló");
+        var vigente = novedades.Single(n => n.Status == NoveltyStatus.Active);
+        vigente.ObligationPublicId.Should().Be(a);
+        vigente.Amount.Should().Be(175_000m);
+        vigente.SupersedesNoveltyId.Should().Be(novedades.Single(n => n.Status == NoveltyStatus.Superseded).Id);
+        novedades.Single(n => n.ObligationPublicId == b).Status.Should().Be(NoveltyStatus.Cancelled);
+        var filasV2 = await d.Db.PayrollLoanDeductions.Where(f => f.PayrollRun!.PublicId == v2.Value.RunPublicId).ToListAsync();
+        filasV2.Should().ContainSingle().Which.ExpectedAmount.Should().Be(175_000m);
+    }
+
+    [Fact]
+    public async Task Con_personas_migradas_sin_activar_avisa_y_no_descuenta()
+    {
+        var d = new NominaTestData();
+        d.Obligaciones.MarcarMigrada(d.Db.People.Single(p => p.Id == d.Ana.PersonId).PublicId);
+
+        var r = await Handler(d).Handle(new CalculatePayrollRunCommand(d.Marzo.PublicId), CancellationToken.None);
+
+        r.IsSuccess.Should().BeTrue(r.Error.Message);
+        r.Value.Warnings.Should().Contain(CuotasDeCarteraEnNomina.AvisoCarteraPorActivar);
+        (await d.Db.PayrollLoanDeductions.CountAsync()).Should().Be(0);
+    }
+
+    [Fact]
+    public async Task Si_Cartera_no_responde_el_calculo_sigue_y_avisa()
+    {
+        var d = new NominaTestData();
+        d.Obligaciones.Caida = new TimeoutException("Cartera no responde (simulado).");
+
+        var r = await Handler(d).Handle(new CalculatePayrollRunCommand(d.Marzo.PublicId), CancellationToken.None);
+
+        r.IsSuccess.Should().BeTrue(r.Error.Message);
+        r.Value.Warnings.Should().Contain(CuotasDeCarteraEnNomina.AvisoCarteraNoResponde);
+    }
+
+    [Fact]
+    public async Task Sin_Cartera_activada_la_nomina_calcula_igual_que_siempre()
+    {
+        var d = new NominaTestData();
+
+        var r = await Handler(d).Handle(new CalculatePayrollRunCommand(d.Marzo.PublicId), CancellationToken.None);
+
+        r.IsSuccess.Should().BeTrue(r.Error.Message);
+        (await d.Db.PayrollNovelties.CountAsync(n => n.Origin == NoveltyOrigin.LoanDeduction)).Should().Be(0);
+        (await d.Db.PayrollLoanDeductions.CountAsync()).Should().Be(0);
+        r.Value.Totals.Net.Should().Be(2_089_095m);
     }
 }

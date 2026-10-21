@@ -1,0 +1,105 @@
+{
+  // r11 (SC-023; FR-104): deterioro general por sucursal, modalidad, sub-segmento, empleado y modelo. Mínimo = cartera bruta (capital)
+  // × el mayor entre el perfil GENERAL de la norma (1 %) y el límite legal DETERIORO_GENERAL_MINIMO (1 %); adicional de la política
+  // del consejo 0,5 %, que compensa el individual de la misma dimensión hasta donde alcance. El crédito 5 está en pérdida esperada,
+  // que (por parámetro) no lleva general en este caso. A mano:
+  //  · sucursal 1, consumo sin libranza, no empleado: créditos 1 (10.000.000, A, individual 0) y 2 (5.000.000, 45 días → B 1 % =
+  //    50.000): bruta 15.000.000; mínimo 150.000; adicional 75.000; compensa min(75.000; 50.000) = 50.000; total 175.000; antes
+  //    100.000; delta 75.000.
+  //  · sucursal 1, consumo sin libranza, empleado: crédito 4 (3.000.000, A): 30.000 + 15.000 − 0 = 45.000.
+  //  · sucursal 2, comercial persona natural: crédito 3 (20.000.000, 100 días → C 20 % = 4.000.000): 200.000 + 100.000 − 100.000 =
+  //    200.000.
+  //  · sucursal 3, microcrédito empresarial: ya no tiene cartera; tenía 50.000 → sale en 0, delta −50.000.
+  // Variante «limite-legal-mas-alto» (1,2 %): 180.000 + 75.000 − 50.000 = 205.000; 36.000 + 15.000 = 51.000; 240.000 + 100.000 −
+  // 100.000 = 240.000. Variante «sin-adicional» (política vacía): sólo el mínimo, sin compensación.
+  "nombre": "r11-deterioro-general",
+  "politica": { "generalImpairment": { "additionalRate": 0.005, "additionalCompensatesIndividual": true } },
+  "creditos": [
+    { "id": 1, "deudor": 1101, "segmento": "CONSUMO", "diasDeMora": 0, "saldos": { "capital": 10000000 } },
+    { "id": 2, "deudor": 1102, "segmento": "CONSUMO", "diasDeMora": 45, "saldos": { "capital": 5000000 } },
+    { "id": 3, "deudor": 1103, "segmento": "COMERCIAL_PN", "diasDeMora": 100, "saldos": { "capital": 20000000 } },
+    { "id": 4, "deudor": 1104, "segmento": "CONSUMO", "diasDeMora": 0, "saldos": { "capital": 3000000 } },
+    { "id": 5, "deudor": 1105, "segmento": "CONSUMO", "diasDeMora": 0, "saldos": { "capital": 1000000 } }
+  ],
+  "general": {
+    "perfil": "COOP_AHORRO_CREDITO",
+    "limiteLegalMinimo": 0.01,
+    "modelosConGeneral": [ "ArrearsAnnex1" ],
+    "lineas": [
+      { "credito": 1, "sucursal": 1, "modalidad": "CONSUMO", "subsegmento": "SinLibranza", "empleado": false },
+      { "credito": 2, "sucursal": 1, "modalidad": "CONSUMO", "subsegmento": "SinLibranza", "empleado": false },
+      { "credito": 3, "sucursal": 2, "modalidad": "COMERCIAL", "subsegmento": "PersonaNatural", "empleado": false },
+      { "credito": 4, "sucursal": 1, "modalidad": "CONSUMO", "subsegmento": "SinLibranza", "empleado": true },
+      { "credito": 5, "sucursal": 1, "modalidad": "CONSUMO", "subsegmento": "ConLibranza", "empleado": false, "modelo": "ExpectedLossAnnex2" }
+    ],
+    "anteriores": [
+      { "sucursal": 1, "modalidad": "CONSUMO", "subsegmento": "SinLibranza", "empleado": false, "monto": 100000 },
+      { "sucursal": 3, "modalidad": "MICROCREDITO", "subsegmento": "Empresarial", "empleado": false, "monto": 50000 }
+    ]
+  },
+  "esperado": {
+    "creditos": [
+      { "id": 2, "categoria": "B", "causa": "Arrears", "deterioroTotal": 50000.00 },
+      { "id": 3, "categoria": "C", "causa": "Arrears", "deterioroTotal": 4000000.00 }
+    ],
+    "celdas": [ { "ruta": "generalImpairment.additionalRate", "norma": 0, "propuesta": 0.005, "efectiva": 0.005 } ],
+    "general": [
+      { "sucursal": 1, "modalidad": "CONSUMO", "subsegmento": "SinLibranza", "empleado": false, "carteraBruta": 15000000, "porcentajeMinimo": 0.01,
+        "porcentajeAdicional": 0.005, "montoMinimo": 150000, "montoAdicional": 75000, "compensacion": 50000, "total": 175000, "anterior": 100000, "delta": 75000 },
+      { "sucursal": 1, "modalidad": "CONSUMO", "subsegmento": "SinLibranza", "empleado": true, "carteraBruta": 3000000, "porcentajeMinimo": 0.01,
+        "porcentajeAdicional": 0.005, "montoMinimo": 30000, "montoAdicional": 15000, "compensacion": 0, "total": 45000, "anterior": 0, "delta": 45000 },
+      { "sucursal": 2, "modalidad": "COMERCIAL", "subsegmento": "PersonaNatural", "empleado": false, "carteraBruta": 20000000, "porcentajeMinimo": 0.01,
+        "porcentajeAdicional": 0.005, "montoMinimo": 200000, "montoAdicional": 100000, "compensacion": 100000, "total": 200000, "anterior": 0, "delta": 200000 },
+      { "sucursal": 3, "modalidad": "MICROCREDITO", "subsegmento": "Empresarial", "empleado": false, "carteraBruta": 0, "porcentajeMinimo": 0.01,
+        "porcentajeAdicional": 0.005, "montoMinimo": 0, "montoAdicional": 0, "compensacion": 0, "total": 0, "anterior": 50000, "delta": -50000 }
+    ]
+  },
+  "variantes": [
+    {
+      "nombre": "limite-legal-mas-alto",
+      "general": {
+        "perfil": "COOP_AHORRO_CREDITO", "limiteLegalMinimo": 0.012, "modelosConGeneral": [ "ArrearsAnnex1" ],
+        "lineas": [
+          { "credito": 1, "sucursal": 1, "modalidad": "CONSUMO", "subsegmento": "SinLibranza", "empleado": false },
+          { "credito": 2, "sucursal": 1, "modalidad": "CONSUMO", "subsegmento": "SinLibranza", "empleado": false },
+          { "credito": 3, "sucursal": 2, "modalidad": "COMERCIAL", "subsegmento": "PersonaNatural", "empleado": false },
+          { "credito": 4, "sucursal": 1, "modalidad": "CONSUMO", "subsegmento": "SinLibranza", "empleado": true },
+          { "credito": 5, "sucursal": 1, "modalidad": "CONSUMO", "subsegmento": "ConLibranza", "empleado": false, "modelo": "ExpectedLossAnnex2" }
+        ],
+        "anteriores": [
+          { "sucursal": 1, "modalidad": "CONSUMO", "subsegmento": "SinLibranza", "empleado": false, "monto": 100000 },
+          { "sucursal": 3, "modalidad": "MICROCREDITO", "subsegmento": "Empresarial", "empleado": false, "monto": 50000 }
+        ]
+      },
+      "esperado": {
+        "general": [
+          { "sucursal": 1, "modalidad": "CONSUMO", "subsegmento": "SinLibranza", "empleado": false, "carteraBruta": 15000000, "porcentajeMinimo": 0.012,
+            "porcentajeAdicional": 0.005, "montoMinimo": 180000, "montoAdicional": 75000, "compensacion": 50000, "total": 205000, "anterior": 100000, "delta": 105000 },
+          { "sucursal": 1, "modalidad": "CONSUMO", "subsegmento": "SinLibranza", "empleado": true, "carteraBruta": 3000000, "porcentajeMinimo": 0.012,
+            "porcentajeAdicional": 0.005, "montoMinimo": 36000, "montoAdicional": 15000, "compensacion": 0, "total": 51000, "anterior": 0, "delta": 51000 },
+          { "sucursal": 2, "modalidad": "COMERCIAL", "subsegmento": "PersonaNatural", "empleado": false, "carteraBruta": 20000000, "porcentajeMinimo": 0.012,
+            "porcentajeAdicional": 0.005, "montoMinimo": 240000, "montoAdicional": 100000, "compensacion": 100000, "total": 240000, "anterior": 0, "delta": 240000 },
+          { "sucursal": 3, "modalidad": "MICROCREDITO", "subsegmento": "Empresarial", "empleado": false, "carteraBruta": 0, "porcentajeMinimo": 0.012,
+            "porcentajeAdicional": 0.005, "montoMinimo": 0, "montoAdicional": 0, "compensacion": 0, "total": 0, "anterior": 50000, "delta": -50000 }
+        ]
+      }
+    },
+    {
+      "nombre": "sin-adicional",
+      "politica": {},
+      "esperado": {
+        "celdas": [],
+        "general": [
+          { "sucursal": 1, "modalidad": "CONSUMO", "subsegmento": "SinLibranza", "empleado": false, "carteraBruta": 15000000, "porcentajeMinimo": 0.01,
+            "porcentajeAdicional": 0, "montoMinimo": 150000, "montoAdicional": 0, "compensacion": 0, "total": 150000, "anterior": 100000, "delta": 50000 },
+          { "sucursal": 1, "modalidad": "CONSUMO", "subsegmento": "SinLibranza", "empleado": true, "carteraBruta": 3000000, "porcentajeMinimo": 0.01,
+            "porcentajeAdicional": 0, "montoMinimo": 30000, "montoAdicional": 0, "compensacion": 0, "total": 30000, "anterior": 0, "delta": 30000 },
+          { "sucursal": 2, "modalidad": "COMERCIAL", "subsegmento": "PersonaNatural", "empleado": false, "carteraBruta": 20000000, "porcentajeMinimo": 0.01,
+            "porcentajeAdicional": 0, "montoMinimo": 200000, "montoAdicional": 0, "compensacion": 0, "total": 200000, "anterior": 0, "delta": 200000 },
+          { "sucursal": 3, "modalidad": "MICROCREDITO", "subsegmento": "Empresarial", "empleado": false, "carteraBruta": 0, "porcentajeMinimo": 0.01,
+            "porcentajeAdicional": 0, "montoMinimo": 0, "montoAdicional": 0, "compensacion": 0, "total": 0, "anterior": 50000, "delta": -50000 }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,57 @@
+// El orden de la cooperativa pone el ahorro permanente primero; sin tope: lo protegido queda en la cuenta a la vista y se retiene del permanente.
+{
+  "nombre": "embargo-03-orden-de-clases",
+  "descripcion": "El orden de la cooperativa pone el ahorro permanente primero; sin tope: lo protegido queda en la cuenta a la vista y se retiene del permanente.",
+  "entrada": {
+    "tope": null,
+    "porAlimentos": false,
+    "limite": 50000000,
+    "aplicacion": "AllProtectedAccounts",
+    "ordenDeClases": [
+      "Permanent",
+      "Demand"
+    ],
+    "cuentas": [
+      {
+        "id": 1,
+        "clase": "Demand",
+        "abiertaEl": "2020-01-10",
+        "saldo": 40000000,
+        "retenidoPorOtros": 0,
+        "protegida": true,
+        "embargable": true
+      },
+      {
+        "id": 2,
+        "clase": "Permanent",
+        "abiertaEl": "2021-05-01",
+        "saldo": 30000000,
+        "retenidoPorOtros": 0,
+        "protegida": true,
+        "embargable": true
+      }
+    ]
+  },
+  "esperado": {
+    "limiteAplicado": 50000000,
+    "protegido": 50000000,
+    "totalEmbargable": 20000000,
+    "retenido": 20000000,
+    "cuentas": [
+      {
+        "id": 2,
+        "orden": 1,
+        "protegido": 10000000,
+        "embargable": 20000000,
+        "retenido": 20000000
+      },
+      {
+        "id": 1,
+        "orden": 2,
+        "protegido": 40000000,
+        "embargable": 0,
+        "retenido": 0
+      }
+    ]
+  }
+}

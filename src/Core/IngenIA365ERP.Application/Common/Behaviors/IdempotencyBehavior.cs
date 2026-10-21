@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Text.Json;
+using IngenIA365ERP.Application.Common.Alerts;
 using IngenIA365ERP.Application.Common.Audit;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Security;
@@ -29,6 +30,9 @@ namespace IngenIA365ERP.Application.Common.Behaviors;
 /// revierte todo y la clave no queda: reintentar con ella vuelve a ejecutar.</item>
 /// <item>Un duplicado que llega mientras el primero corre queda esperando en el índice único; cuando el
 /// primero confirma, su inserción choca y aquí se lee la fila confirmada y se responde como repetición.</item>
+/// <item>Feature 013 (US1-3): las alertas que se encolan en <see cref="AlertasDiferidas"/> durante la operación se levantan al
+/// terminar, ya fuera de la transacción —tras un fallo, después de descartar lo que el intento revertido dejó en el contexto—: así
+/// sobrevive el aviso de un valor nacional faltante aunque el comando que lo necesitaba falle por eso.</item>
 /// </list>
 ///
 /// <para>
@@ -68,6 +72,26 @@ public sealed class IdempotencyBehavior<TRequest, TResponse>(
         if (previa is not null)
             return await RepetirAsync(previa, huella, usuarioCentral, cancellationToken);
 
+        var diferidas = servicios.GetService<AlertasDiferidas>();
+        var deAfuera = diferidas?.Abrir() == true;
+        TResponse respuesta;
+        try
+        {
+            respuesta = await EjecutarUnaVezAsync(db, clave, huella, usuarioCentral, actor, next, cancellationToken);
+        }
+        finally
+        {
+            diferidas?.Cerrar();
+        }
+        if (deAfuera)
+            await LevantarDiferidasAsync(diferidas!, db, respuesta is Result { IsFailure: true }, cancellationToken);
+        return respuesta;
+    }
+
+    private async Task<TResponse> EjecutarUnaVezAsync(IApplicationDbContext db, Guid clave, string huella, Guid usuarioCentral, Execution.Actor actor,
+        RequestHandlerDelegate<TResponse> next, CancellationToken cancellationToken)
+    {
+        OperationKey? previa;
         try
         {
             return await TransaccionExplicita.EjecutarAsync(db, async () =>
@@ -103,6 +127,33 @@ public sealed class IdempotencyBehavior<TRequest, TResponse>(
             logger.LogInformation("[Operacion.Concurrente] La clave {Clave} de {Operacion} llegó dos veces a la vez; se responde con la confirmada.",
                 clave, Operacion);
             return await RepetirAsync(previa, huella, usuarioCentral, cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// Levanta lo encolado en <see cref="AlertasDiferidas"/>, fuera de la transacción. Tras un fallo descarta antes lo que quedó en el contexto:
+    /// ya no existe en la base (se revirtió) y guardar la alerta lo volvería a escribir. Una alerta que no se levanta se anota y no cambia la
+    /// respuesta de la operación.
+    /// </summary>
+    private async Task LevantarDiferidasAsync(AlertasDiferidas diferidas, IApplicationDbContext db, bool fallo, CancellationToken ct)
+    {
+        var pendientes = diferidas.Tomar();
+        if (pendientes.Count == 0) return;
+        var alertas = servicios.GetService<IAlertas>();
+        if (alertas is null) return;
+        if (fallo) db.DescartarCambios();
+        foreach (var alerta in pendientes)
+        {
+            try
+            {
+                var r = await alertas.LevantarAsync(alerta, ct);
+                if (r.IsFailure)
+                    logger.LogWarning("[Alertas.DiferidaNoLevantada] {Tipo} de {Operacion}: {Codigo}.", alerta.TypeCode, Operacion, r.Error.Code);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                logger.LogWarning(ex, "[Alertas.DiferidaNoLevantada] {Tipo} de {Operacion}.", alerta.TypeCode, Operacion);
+            }
         }
     }
 

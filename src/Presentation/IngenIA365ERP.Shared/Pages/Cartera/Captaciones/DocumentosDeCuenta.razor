@@ -1,0 +1,333 @@
+@using System.Globalization
+@using IngenIA365ERP.Shared.Services.Adjuntos
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Http
+@inject CarteraClient Cartera
+@inject CaptacionesClient Cliente
+@inject AdjuntosClient Adjuntos
+@inject INotificationService Notification
+
+@* Feature 014, US13 (T199; contracts/documentos.md §2 y §3; FR-101 a FR-106; research E178): los documentos al titular desde la ficha de una cuenta (ahorro,
+   CDAT o contractual) o desde la ficha de aportes. El saldo a una fecha y el extracto en pantalla (las dos rutas de la fase 11, lecturas auditadas); la
+   emisión en un paso —extracto de un período, certificado de saldo a una fecha con o sin bloqueos y embargos, constancia y paz y salvo de aportes,
+   certificado tributario del año y certificado de retención de un período— para descargar o enviar por correo (el mismo extracto sin cambios devuelve la
+   copia ya emitida); los documentos de la cuenta o de la persona con su estado, el PDF guardado y su código; y, en un CDAT, el título pendiente si no salió
+   al constituir. *@
+<div class="info-card">
+    <h4>Documentos al titular</h4>
+
+    @if (CuentaPublicId is { } cuentaId)
+    {
+        <IndicadorDeCarga Cargando="@_cargaConsulta.Activa">
+            <div class="toolbar">
+                <label class="campo">Saldo al <input class="e-input" type="date" @bind="_fechaDeSaldo" /></label>
+                <SfButton CssClass="e-outline" OnClick="@(() => SaldoAsync(cuentaId))">Ver el saldo</SfButton>
+                <label class="campo">Extracto del <input class="e-input" type="date" @bind="_desde" /></label>
+                <label class="campo">al <input class="e-input" type="date" @bind="_hasta" /></label>
+                <SfButton CssClass="e-outline" OnClick="@(() => ExtractoAsync(cuentaId))">Ver el extracto</SfButton>
+            </div>
+            @if (_saldo is { } s)
+            {
+                <dl class="form-grid">
+                    <div><dt>Saldo del titular al @s.Date.ToString("dd/MM/yyyy")</dt><dd>@Pesos(s.HolderBalance)</dd></div>
+                    @foreach (var c in s.ByConcept.Where(c => c.Value != 0m))
+                    {
+                        <div><dt>@Concepto(c.Key)</dt><dd>@Pesos(c.Value)</dd></div>
+                    }
+                    @if (s.AccruedNotSettled is { } causado)
+                    {
+                        <div><dt>Causado sin liquidar</dt><dd>@causado.ToString("#,0.00", Es)</dd></div>
+                    }
+                    <div><dt>Disponible</dt><dd>@Disponible(s.Available)</dd></div>
+                </dl>
+            }
+            @if (_extracto is { } x)
+            {
+                <p>Saldo inicial @Pesos(x.OpeningBalance) · intereses abonados @Pesos(x.InterestCredited) · retención @Pesos(x.Withholding) · GMF @Pesos(x.Gmf)
+                    · saldo final <strong>@Pesos(x.ClosingBalance)</strong></p>
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th>Fecha valor</th><th>Operación</th><th>Tipo</th><th class="numero">Valor</th><th class="numero">Retención</th>
+                            <th class="numero">GMF</th><th class="numero">Saldo</th></tr></thead>
+                        <tbody>
+                            @foreach (var l in x.Lines)
+                            {
+                                <tr>
+                                    <td>@l.ValueDate.ToString("dd/MM/yyyy")</td>
+                                    <td>@l.OperationNumber</td>
+                                    <td>@TipoDeLinea(l.Kind)</td>
+                                    <td class="numero">@Pesos(l.Amount)</td>
+                                    <td class="numero">@Pesos(l.Withholding)</td>
+                                    <td class="numero">@Pesos(l.Gmf)</td>
+                                    <td class="numero">@Pesos(l.Balance)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                @if (x.Lines.Count == 0) { <p class="texto-tenue">Sin movimientos en el período.</p> }
+            }
+            @foreach (var e in _erroresDeConsulta) { <p class="aviso aviso-error" role="alert">@e</p> }
+        </IndicadorDeCarga>
+    }
+
+    <PermissionGate Required="Lending.Documents.Issue">
+        <IndicadorDeCarga Cargando="@_emision.Activa">
+            <div class="form-grid">
+                <label class="campo">Documento
+                    <select class="e-input" @bind="_clase">
+                        @foreach (var (valor, texto) in ClasesQueOfrece)
+                        {
+                            <option value="@valor">@texto</option>
+                        }
+                    </select>
+                </label>
+                @if (_clase is "AccountStatement" or "WithholdingCertificate")
+                {
+                    <label class="campo">Desde <input class="e-input" type="date" @bind="_desde" /></label>
+                    <label class="campo">Hasta <input class="e-input" type="date" @bind="_hasta" /></label>
+                }
+                @if (_clase is "AccountBalanceCertificate" or "ContributionCertificate")
+                {
+                    <label class="campo">Fecha de corte <input class="e-input" type="date" @bind="_corte" /></label>
+                }
+                @if (_clase == "AccountBalanceCertificate")
+                {
+                    <label class="campo-check"><input type="checkbox" @bind="_conRestricciones" /> Incluir bloqueos y embargos (si el titular lo pide)</label>
+                }
+                @if (_clase == "ContributionCertificate")
+                {
+                    <label class="campo-check"><input type="checkbox" @bind="_conPermanente" /> Incluir el ahorro permanente</label>
+                }
+                @if (_clase == "DepositTaxCertificate")
+                {
+                    <label class="campo">Año gravable <input class="e-input" type="number" @bind="_año" /></label>
+                }
+                <label class="campo">Entrega
+                    <select class="e-input" @bind="_entrega">
+                        <option value="Download">Descargar</option>
+                        <option value="Email">Enviar por correo</option>
+                    </select>
+                </label>
+            </div>
+            <div class="toolbar">
+                <SfButton CssClass="e-primary" Disabled="@_emision.Activa" OnClick="@EmitirAsync">Emitir</SfButton>
+                @if (EsCdat && CuentaPublicId is { } cdat)
+                {
+                    <SfButton CssClass="e-outline" Disabled="@_emision.Activa" OnClick="@(() => TituloPendienteAsync(cdat))">Emitir el título pendiente</SfButton>
+                }
+            </div>
+            @foreach (var e in _erroresDeEmision) { <p class="aviso aviso-error" role="alert">@e</p> }
+        </IndicadorDeCarga>
+    </PermissionGate>
+
+    <PermissionGate Required="Lending.Documents.Read">
+        <IndicadorDeCarga Cargando="@_cargaLista.Activa">
+            @if (_documentos.Count == 0)
+            {
+                <p class="texto-tenue">Todavía no hay documentos emitidos@(CuentaPublicId is null ? " de captaciones para la persona" : " de esta cuenta").</p>
+            }
+            else
+            {
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th>Número</th><th>Documento</th><th>Período o corte</th><th>Emitido</th><th>Estado</th><th>Código</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var d in _documentos)
+                            {
+                                <tr>
+                                    <td>@d.Number</td>
+                                    <td>@TextosDeDocumentos.Clase(d.Kind)</td>
+                                    <td>@(d.PeriodFrom is { } pd ? $"{TextosDeDocumentos.Fecha(pd)} – {TextosDeDocumentos.Fecha(d.PeriodTo)}" : d.Year is { } y ? y.ToString(Es) : TextosDeDocumentos.Fecha(d.CutoffDate))</td>
+                                    <td>@TextosDeDocumentos.Momento(d.IssuedAt)</td>
+                                    <td><span class="aviso @TextosDeDocumentos.AvisoDeEstado(d.Status)">@TextosDeDocumentos.Estado(d.Status)</span></td>
+                                    <td>@d.VerificationCode</td>
+                                    <td>
+                                        @if (d.Status != "Voided")
+                                        {
+                                            <PermissionGate Required="Lending.Documents.Reprint">
+                                                <SfButton CssClass="e-flat" Disabled="@_cargaLista.Activa" OnClick="@(() => DescargarAsync(d.PublicId, d.Number))">PDF</SfButton>
+                                            </PermissionGate>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </IndicadorDeCarga>
+    </PermissionGate>
+</div>
+
+@code {
+    private static readonly CultureInfo Es = CultureInfo.GetCultureInfo("es-CO");
+    private static DateOnly Hoy => DateOnly.FromDateTime(DateTime.Today);
+
+    /// <summary>A nombre de quién se emiten los documentos (el titular de la cuenta o el asociado de la ficha de aportes).</summary>
+    [Parameter, EditorRequired] public Guid PersonaPublicId { get; set; }
+
+    /// <summary>La cuenta de la ficha (nula en la ficha de aportes: los documentos van por la persona).</summary>
+    [Parameter] public Guid? CuentaPublicId { get; set; }
+
+    /// <summary>¿La ficha es de aportes? (ofrece la constancia y el paz y salvo).</summary>
+    [Parameter] public bool EsAportes { get; set; }
+
+    /// <summary>¿La cuenta es un CDAT? (ofrece emitir el título pendiente).</summary>
+    [Parameter] public bool EsCdat { get; set; }
+
+    /// <summary>Se avisa al emitir (la ficha del CDAT recarga sus títulos).</summary>
+    [Parameter] public EventCallback OnCambio { get; set; }
+
+    private readonly EstadoDeCarga _cargaConsulta = new(), _emision = new(), _cargaLista = new();
+    private SaldoDeCuentaALaFechaDto? _saldo;
+    private ExtractoEnPantallaDto? _extracto;
+    private List<DocumentoEmitidoDto> _documentos = [];
+    private List<string> _erroresDeConsulta = [], _erroresDeEmision = [];
+    private DateOnly _fechaDeSaldo = Hoy, _corte = Hoy;
+    private DateOnly _desde = new(Hoy.Year, Hoy.Month, 1), _hasta = Hoy;
+    private short _año = (short)(Hoy.Year - 1);
+    private string _clase = "AccountStatement", _entrega = "Download";
+    private bool _conRestricciones, _conPermanente;
+    private ClaveDeOperacion _clave = new();
+    private (Guid Persona, Guid? Cuenta) _leido;
+
+    private IEnumerable<(string Valor, string Texto)> ClasesQueOfrece
+    {
+        get
+        {
+            if (CuentaPublicId is not null)
+            {
+                yield return ("AccountStatement", "Extracto de cuenta");
+                yield return ("AccountBalanceCertificate", "Certificado de saldo de la cuenta");
+            }
+            if (EsAportes)
+            {
+                yield return ("ContributionCertificate", "Constancia de aportes");
+                yield return ("ContributionClearance", "Paz y salvo de aportes");
+            }
+            yield return ("DepositTaxCertificate", "Certificado tributario de captaciones");
+            yield return ("WithholdingCertificate", "Certificado de retención en la fuente");
+        }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_leido == (PersonaPublicId, CuentaPublicId)) return;
+        _leido = (PersonaPublicId, CuentaPublicId);
+        _clase = ClasesQueOfrece.First().Valor;
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        using var carga = _cargaLista.Iniciar();
+        var r = CuentaPublicId is { } cuenta
+            ? await Cartera.DocumentosAsync(tamano: 50, cuenta: cuenta)
+            : await Cartera.DocumentosAsync(persona: PersonaPublicId, tamano: 50);
+        _documentos = [.. (r.Value?.Items ?? []).Where(d => CuentaPublicId is not null || TextosDeDocumentos.ClasesDeCaptaciones.Any(c => c.Valor == d.Kind))];
+    }
+
+    private async Task SaldoAsync(Guid cuenta)
+    {
+        using var carga = _cargaConsulta.Iniciar();
+        _erroresDeConsulta = [];
+        var r = await Cliente.SaldoALaFechaAsync(cuenta, _fechaDeSaldo);
+        if (!r.IsSuccess) { _erroresDeConsulta.Add(r.ErrorMessage ?? "No se pudo consultar el saldo."); return; }
+        _saldo = r.Value;
+    }
+
+    private async Task ExtractoAsync(Guid cuenta)
+    {
+        using var carga = _cargaConsulta.Iniciar();
+        _erroresDeConsulta = [];
+        var r = await Cliente.ExtractoEnPantallaAsync(cuenta, _desde, _hasta);
+        if (!r.IsSuccess) { _erroresDeConsulta.Add(r.ErrorMessage ?? "No se pudo consultar el extracto."); return; }
+        _extracto = r.Value;
+    }
+
+    private async Task EmitirAsync()
+    {
+        using var carga = _emision.Iniciar();
+        _erroresDeEmision = [];
+        var deCuenta = _clase is "AccountStatement" or "AccountBalanceCertificate";
+        var pedido = new EmitirDocumentoRequest(_clase, PersonaPublicId, null,
+            _clase is "AccountBalanceCertificate" or "ContributionCertificate" ? _corte : null,
+            _clase is "AccountStatement" or "WithholdingCertificate" ? new PeriodoDeDocumentoRequest(_desde, _hasta) : null,
+            _clase == "DepositTaxCertificate" ? _año : null, _entrega,
+            deCuenta ? CuentaPublicId : null,
+            _clase == "AccountBalanceCertificate" ? _conRestricciones : null,
+            _clase == "ContributionCertificate" ? _conPermanente : null);
+        var r = await Cartera.EmitirDocumentoAsync(pedido, _clave);
+        if (!r.IsSuccess || r.Value is not { } emitido)
+        {
+            _erroresDeEmision.Add(r.ErrorMessage ?? "No se pudo emitir el documento.");
+            return;
+        }
+        _clave = new ClaveDeOperacion();
+        await Notification.SuccessAsync(emitido.AlreadyIssued
+            ? $"El extracto {emitido.Number} ya estaba emitido para ese período y no cambió: se entrega la misma copia."
+            : emitido.DebtorMessagePublicId is not null
+                ? $"Documento {emitido.Number} emitido; el correo quedó en la cola de mensajes. Código {emitido.VerificationCode}."
+                : $"Documento {emitido.Number} emitido. Código {emitido.VerificationCode}.");
+        if (emitido.Download?.Url is { } url) await Adjuntos.DescargarAsync(url, $"{emitido.Number.ToLowerInvariant()}.pdf");
+        await CargarAsync();
+        await OnCambio.InvokeAsync();
+    }
+
+    private async Task TituloPendienteAsync(Guid cdat)
+    {
+        using var carga = _emision.Iniciar();
+        _erroresDeEmision = [];
+        var r = await Cliente.EmitirTituloDeCdatAsync(cdat, new ClaveDeOperacion());
+        if (!r.IsSuccess || r.Value is not { } titulo) { _erroresDeEmision.Add(r.ErrorMessage ?? "No se pudo emitir el título."); return; }
+        await Notification.SuccessAsync($"El título {titulo.Number} del CDAT está emitido.");
+        await CargarAsync();
+        await OnCambio.InvokeAsync();
+    }
+
+    private async Task DescargarAsync(Guid documento, string numero)
+    {
+        using var carga = _cargaLista.Iniciar();
+        var r = await Cartera.EnlaceDeDocumentoAsync(documento);
+        if (!r.IsSuccess || r.Value?.Url is not { } url) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo descargar el documento."); return; }
+        await Adjuntos.DescargarAsync(url, $"{numero.ToLowerInvariant()}.pdf");
+    }
+
+    private static string Pesos(decimal valor) => "$ " + valor.ToString("#,0.00", Es);
+
+    private static string Disponible(DisponibleDeCuentaDto d) =>
+        $"{Pesos(d.Available)} (saldo {Pesos(d.Balance)} − bloqueos {Pesos(d.Holds)} − embargos {Pesos(d.Garnishments)} − canje {Pesos(d.PendingClearance)} − mínimo {Pesos(d.MinimumBalance)})";
+
+    private static string Concepto(string concepto) => concepto switch
+    {
+        "Principal" => "Capital",
+        "InterestPayable" => "Interés por pagar",
+        "Withholding" => "Retención",
+        "Gmf" => "GMF",
+        "ContributionMinimum" => "Aportes mínimos",
+        "ContributionOrdinary" => "Aportes ordinarios",
+        "ContributionExtraordinary" => "Aportes extraordinarios",
+        "ContributionRevaluation" => "Aportes revalorizados",
+        "ChargeReceivable" => "Cargos por cobrar",
+        "Bonus" => "Bonificación",
+        _ => concepto,
+    };
+
+    private static string TipoDeLinea(string clase) => clase switch
+    {
+        "InterestAccrued" => "Interés causado del mes",
+        "Deposit" => "Consignación",
+        "Withdrawal" => "Retiro",
+        "Transfer" => "Traslado",
+        "Reversal" => "Reverso",
+        "InterestSettlement" => "Liquidación de intereses",
+        "Charge" => "Cargo",
+        "Cancellation" => "Cancelación",
+        "TermDepositConstitution" => "Constitución del CDAT",
+        "TermDepositInterestPayment" => "Pago de intereses del CDAT",
+        "TermDepositRedemption" => "Redención del CDAT",
+        "GarnishmentConsignment" => "Consignación por embargo",
+        _ => clase,
+    };
+}

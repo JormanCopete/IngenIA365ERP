@@ -1,0 +1,30 @@
+{
+  // r02 (SC-021): subcategorías con su condición tipada. Consumo y comercial persona jurídica por días de mora (E1 hasta 360 y 540;
+  // E2 desde 361 y 541); vivienda por meses en E (E1 de 0 a 6 al 30 %, E2 de 7 a 18 al 60 % y desde 19 al 100 %); comercial persona
+  // natural no tiene subcategorías. Capital de 1.000.000 sin garantías ni intereses: el deterioro es capital × porcentaje.
+  "nombre": "r02-subcategorias",
+  "creditos": [
+    { "id": 1, "deudor": 201, "segmento": "CONSUMO", "diasDeMora": 181, "saldos": { "capital": 1000000 } },
+    { "id": 2, "deudor": 202, "segmento": "CONSUMO", "diasDeMora": 360, "saldos": { "capital": 1000000 } },
+    { "id": 3, "deudor": 203, "segmento": "CONSUMO", "diasDeMora": 361, "saldos": { "capital": 1000000 } },
+    { "id": 4, "deudor": 204, "segmento": "COMERCIAL_PJ", "diasDeMora": 540, "saldos": { "capital": 1000000 } },
+    { "id": 5, "deudor": 205, "segmento": "COMERCIAL_PJ", "diasDeMora": 541, "saldos": { "capital": 1000000 } },
+    { "id": 6, "deudor": 206, "segmento": "VIVIENDA", "diasDeMora": 600, "mesesEnE": 2, "saldos": { "capital": 1000000 } },
+    { "id": 7, "deudor": 207, "segmento": "VIVIENDA", "diasDeMora": 800, "mesesEnE": 7, "saldos": { "capital": 1000000 } },
+    { "id": 8, "deudor": 208, "segmento": "VIVIENDA", "diasDeMora": 1100, "mesesEnE": 19, "saldos": { "capital": 1000000 } },
+    { "id": 9, "deudor": 209, "segmento": "COMERCIAL_PN", "diasDeMora": 400, "saldos": { "capital": 1000000 } }
+  ],
+  "esperado": {
+    "creditos": [
+      { "id": 1, "categoria": "E", "subcategoria": "E1", "causa": "Arrears", "porcentaje": 0.50, "deterioroCapital": 500000.00, "deterioroTotal": 500000.00 },
+      { "id": 2, "categoria": "E", "subcategoria": "E1", "causa": "Arrears", "porcentaje": 0.50, "deterioroCapital": 500000.00 },
+      { "id": 3, "categoria": "E", "subcategoria": "E2", "causa": "Arrears", "porcentaje": 1, "deterioroCapital": 1000000.00 },
+      { "id": 4, "categoria": "E", "subcategoria": "E1", "causa": "Arrears", "porcentaje": 0.75, "deterioroCapital": 750000.00 },
+      { "id": 5, "categoria": "E", "subcategoria": "E2", "causa": "Arrears", "porcentaje": 1, "deterioroCapital": 1000000.00 },
+      { "id": 6, "categoria": "E", "subcategoria": "E1", "causa": "Arrears", "porcentaje": 0.30, "deterioroCapital": 300000.00 },
+      { "id": 7, "categoria": "E", "subcategoria": "E2", "causa": "Arrears", "porcentaje": 0.60, "deterioroCapital": 600000.00 },
+      { "id": 8, "categoria": "E", "subcategoria": "E2", "causa": "Arrears", "porcentaje": 1, "deterioroCapital": 1000000.00 },
+      { "id": 9, "categoria": "E", "subcategoria": "None", "causa": "Arrears", "porcentaje": 1, "deterioroCapital": 1000000.00 }
+    ]
+  }
+}

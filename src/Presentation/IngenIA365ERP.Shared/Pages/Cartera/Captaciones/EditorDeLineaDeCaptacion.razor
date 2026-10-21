@@ -1,0 +1,505 @@
+@using System.Globalization
+@using IngenIA365ERP.Shared.Services.Cartera
+
+@* Feature 014, US1 (T070; contracts/api.md §3 DepositLineVersionInput y ContributionLineVersionInput; data-model §2.1, §2.2, §2.5): el editor de
+   una versión de una línea de captación o de aportes, por secciones. Lo usan el alta (primera versión) y «Nueva versión», que parte de la vigente.
+   Las tasas y fracciones se digitan en puntos (3 = 3 % EA) y viajan como fracción. En captación, la clase decide qué bloque se muestra: el CDAT
+   (plazos, intereses, prórroga, gracia, vencimiento y redención), el contractual (cuota, plazo, bonificación e incumplimiento) o el permanente.
+   Nada aquí guarda: guarda la pantalla. *@
+<div class="editor-version-linea">
+    @if (Errores is { Count: > 0 })
+    {
+        <div class="aviso aviso-error" role="alert">
+            <ul>@foreach (var e in Errores) { <li>@e</li> }</ul>
+        </div>
+    }
+
+    @if (Naturaleza == TextosDeCaptaciones.Aportes && Aportes is { } a)
+    {
+        <div class="info-card">
+            <h4>Vigencia</h4>
+            <div class="form-grid">
+                <label class="campo">Rige desde *
+                    <input type="date" class="e-input" value="@a.ValidFrom.ToString("yyyy-MM-dd")" @onchange="@(e => a.ValidFrom = LeerFecha(e.Value) ?? a.ValidFrom)" />
+                </label>
+                <label class="campo campo-ancho">Motivo de la versión * <input class="e-input" maxlength="300" @bind="a.Reason" /></label>
+            </div>
+        </div>
+
+        <div class="info-card">
+            <h4>Mínimo no reducible por asociado</h4>
+            <div class="form-grid">
+                <label class="campo">Forma *
+                    <select class="e-input" @bind="a.MinimumNonReducible.Kind">
+                        @foreach (var m in TextosDeCaptaciones.ModosDeValorDeAportes) { <option value="@m.Valor">@m.Texto</option> }
+                    </select>
+                </label>
+                @if (a.MinimumNonReducible.Kind == 1)
+                {
+                    <label class="campo">Valor ($) * <input class="e-input numero" type="number" min="0" step="0.01" @bind="a.MinimumNonReducible.Amount" /></label>
+                }
+                else
+                {
+                    <label class="campo">@(a.MinimumNonReducible.Kind == 2 ? "Porcentaje del ingreso (%) *" : "Salarios mínimos *")
+                        <input class="e-input numero" type="number" min="0" step="any" value="@ValorDeFraccion(a.MinimumNonReducible.Kind, a.MinimumNonReducible.Fraction)"
+                               @onchange="@(e => a.MinimumNonReducible.Fraction = LeerFraccion(a.MinimumNonReducible.Kind, e.Value))" />
+                    </label>
+                }
+            </div>
+        </div>
+
+        <div class="info-card">
+            <h4>Cuota periódica</h4>
+            <div class="form-grid">
+                <label class="campo">Forma *
+                    <select class="e-input" @bind="a.Installment.Kind">
+                        @foreach (var m in TextosDeCaptaciones.ModosDeValorDeAportes) { <option value="@m.Valor">@m.Texto</option> }
+                    </select>
+                </label>
+                @if (a.Installment.Kind == 1)
+                {
+                    <label class="campo">Valor ($) * <input class="e-input numero" type="number" min="0" step="0.01" @bind="a.Installment.Amount" /></label>
+                }
+                else
+                {
+                    <label class="campo">@(a.Installment.Kind == 2 ? "Porcentaje del ingreso (%) *" : "Salarios mínimos *")
+                        <input class="e-input numero" type="number" min="0" step="any" value="@ValorDeFraccion(a.Installment.Kind, a.Installment.Fraction)"
+                               @onchange="@(e => a.Installment.Fraction = LeerFraccion(a.Installment.Kind, e.Value))" />
+                    </label>
+                }
+                <label class="campo">Periodicidad *
+                    <select class="e-input" @bind="a.Installment.Periodicity">
+                        @foreach (var p in TextosDeCartera.Periodicidades.Where(p => p.Valor != 0)) { <option value="@p.Valor">@p.Texto</option> }
+                    </select>
+                </label>
+                <label class="campo">Día de vencimiento <input class="e-input numero" type="number" min="1" max="31" @bind="a.Installment.DueDay" /></label>
+                <label class="campo">Redondeo a ($)
+                    <select class="e-input" value="@a.Installment.RoundingUnit.ToString("0.##", CultureInfo.InvariantCulture)" @onchange="@(e => a.Installment.RoundingUnit = LeerUnidad(e.Value))">
+                        @foreach (var u in Unidades) { <option value="@u.ToString("0.##", CultureInfo.InvariantCulture)">@u.ToString("N2", Es)</option> }
+                    </select>
+                </label>
+                <label class="campo">Modo de redondeo
+                    <select class="e-input" @bind="a.Installment.RoundingMode">
+                        @foreach (var m in TextosDeCartera.ModosDeRedondeo) { <option value="@m.Valor">@m.Texto</option> }
+                    </select>
+                </label>
+                <label class="campo-check"><input type="checkbox" @bind="a.Installment.MinimumFirst" /> Lo pagado completa el mínimo antes de ir a ordinarios</label>
+            </div>
+        </div>
+
+        <div class="info-card">
+            <h4>Reparto con ahorro permanente</h4>
+            <div class="form-grid">
+                <label class="campo-check">
+                    <input type="checkbox" checked="@(a.PermanentSavingsShare is not null)"
+                           @onchange="@(e => a.PermanentSavingsShare = e.Value is true ? new RepartoConPermanenteRequest() : null)" />
+                    Parte de la cuota va a ahorro permanente
+                </label>
+                @if (a.PermanentSavingsShare is { } reparto)
+                {
+                    <label class="campo">Línea de ahorro permanente *
+                        <select class="e-input" @bind="reparto.DepositLinePublicId">
+                            <option value="@Guid.Empty">Elija…</option>
+                            @foreach (var l in LineasDeClase(TextosDeCaptaciones.Permanente)) { <option value="@l.PublicId">@l.Code · @l.Name</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Parte de la cuota (%) *
+                        <input class="e-input numero" type="number" min="0" max="100" step="any" value="@Puntos(reparto.Fraction)"
+                               @onchange="@(e => reparto.Fraction = Fraccion(e.Value) ?? 0m)" />
+                    </label>
+                }
+            </div>
+            <p class="texto-tenue">En un fondo de empleados la cuota obligatoria no supera el tope legal del ingreso y la parte de aportes no baja de la mínima.</p>
+        </div>
+
+        <div class="info-card">
+            <h4>Extraordinarios, límites y devolución</h4>
+            <div class="form-grid">
+                <label class="campo-check"><input type="checkbox" @bind="a.AllowsExtraordinary" /> Admite aportes extraordinarios</label>
+                <label class="campo">Límite de participación (%)
+                    <input class="e-input numero" type="number" min="0" max="100" step="any" value="@Puntos(a.MaxParticipationFraction)"
+                           @onchange="@(e => a.MaxParticipationFraction = Fraccion(e.Value))" />
+                </label>
+                <label class="campo">Si un aporte excede el límite
+                    <select class="e-input" @bind="a.ExcessAction">
+                        @foreach (var x in TextosDeCaptaciones.AccionesDelExceso) { <option value="@x.Valor">@x.Texto</option> }
+                    </select>
+                </label>
+                <label class="campo">Plazo de devolución (días) * <input class="e-input numero" type="number" min="0" @bind="a.RefundTermDays" /></label>
+                <label class="campo-check"><input type="checkbox" @bind="a.AllowsTransferBetweenMembers" /> Los estatutos permiten ceder aportes entre asociados</label>
+                <label class="campo-check"><input type="checkbox" @bind="a.LossDeductionEnabled" /> Descuenta pérdidas al devolver</label>
+            </div>
+        </div>
+    }
+    else if (Captacion is { } v)
+    {
+        <div class="info-card">
+            <h4>Vigencia y elegibilidad</h4>
+            <div class="form-grid">
+                <label class="campo">Rige desde *
+                    <input type="date" class="e-input" value="@v.ValidFrom.ToString("yyyy-MM-dd")" @onchange="@(e => v.ValidFrom = LeerFecha(e.Value) ?? v.ValidFrom)" />
+                </label>
+                <label class="campo campo-ancho">Motivo de la versión * <input class="e-input" maxlength="300" @bind="v.Reason" /></label>
+                <label class="campo-check"><input type="checkbox" @bind="v.RequiresMembership" /> Exige asociado vigente</label>
+                <label class="campo-check"><input type="checkbox" @bind="v.AllowsCoHolders" /> Admite cotitulares</label>
+                <label class="campo-check"><input type="checkbox" @bind="v.AllowsMinors" /> Admite menores de edad</label>
+                <label class="campo-check"><input type="checkbox" @bind="v.AllowsLegalEntities" /> Admite personas jurídicas</label>
+                @if (Clase is TextosDeCaptaciones.ALaVista or TextosDeCaptaciones.Contractual)
+                {
+                    <label class="campo-check"><input type="checkbox" @bind="v.AllowsPartialWithdrawals" /> Admite retiros parciales</label>
+                }
+            </div>
+        </div>
+
+        <div class="info-card">
+            <h4>Tasa</h4>
+            <div class="form-grid">
+                <label class="campo">Clase de tasa *
+                    <select class="e-input" value="@v.Rate.Kind" @onchange="@(e => CambiarClaseDeTasa(v, LeerEntero(e.Value) ?? 1))">
+                        @foreach (var c in TextosDeCartera.ClasesDeTasa) { <option value="@c.Valor">@c.Texto</option> }
+                    </select>
+                </label>
+                @if (v.Rate.Kind == 1)
+                {
+                    <label class="campo">Tasa base (% EA)@(v.Rate.Tiers.Count == 0 ? " *" : "")
+                        <input class="e-input numero" type="number" step="any" min="0" value="@Puntos(v.Rate.EffectiveAnnual)" @onchange="@(e => v.Rate.EffectiveAnnual = Fraccion(e.Value))" />
+                    </label>
+                }
+                else if (v.Rate.Variable is { } variable)
+                {
+                    <label class="campo">Índice * <input class="e-input" maxlength="20" @bind="variable.IndexCode" /></label>
+                    <label class="campo">Clave del índice * <input class="e-input" maxlength="20" @bind="variable.IndexKey" /></label>
+                    <label class="campo">Margen (puntos) <input class="e-input numero" type="number" step="any" value="@Puntos(variable.Margin)" @onchange="@(e => variable.Margin = Fraccion(e.Value) ?? 0m)" /></label>
+                    <label class="campo">Piso (% EA) <input class="e-input numero" type="number" step="any" value="@Puntos(variable.Floor)" @onchange="@(e => variable.Floor = Fraccion(e.Value))" /></label>
+                    <label class="campo">Techo (% EA) <input class="e-input numero" type="number" step="any" value="@Puntos(variable.Ceiling)" @onchange="@(e => variable.Ceiling = Fraccion(e.Value))" /></label>
+                }
+                @if (v.Rate.Tiers.Count > 0 && Clase != TextosDeCaptaciones.Cdat)
+                {
+                    <label class="campo">Cómo aplican los tramos
+                        <select class="e-input" value="@(v.Rate.TierMode ?? 1)" @onchange="@(e => v.Rate.TierMode = LeerEntero(e.Value))">
+                            @foreach (var m in TextosDeCaptaciones.ModosDeTramos) { <option value="@m.Valor">@m.Texto</option> }
+                        </select>
+                    </label>
+                }
+                <label class="campo-check"><input type="checkbox" @bind="v.DeclaresAgreedRate" /> Cada cuenta sella su tasa al abrir (tasa pactada)</label>
+                <label class="campo-check"><input type="checkbox" @bind="v.NegotiatedRateAllowed" /> Admite tasa negociada</label>
+                @if (Clase != TextosDeCaptaciones.Cdat)
+                {
+                    <label class="campo">Aviso de cambio de tasa (días)
+                        <input class="e-input numero" type="number" min="0" @bind="v.RateChangeNoticeDays" />
+                    </label>
+                }
+            </div>
+
+            <h5>@(Clase == TextosDeCaptaciones.Cdat ? "Tramos por plazo y monto" : "Tramos por saldo")</h5>
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead>
+                        <tr>
+                            @if (Clase == TextosDeCaptaciones.Cdat)
+                            {
+                                <th class="numero">Plazo desde (días)</th><th class="numero">Plazo hasta</th><th class="numero">Monto desde</th><th class="numero">Monto hasta</th>
+                            }
+                            else
+                            {
+                                <th class="numero">Saldo desde</th><th class="numero">Saldo hasta</th>
+                            }
+                            <th class="numero">@(v.Rate.Kind == 1 ? "Tasa (% EA)" : "Margen (puntos)")</th><th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var t in v.Rate.Tiers)
+                        {
+                            var tramo = t;
+                            <tr>
+                                @if (Clase == TextosDeCaptaciones.Cdat)
+                                {
+                                    <td><input class="e-input numero" type="number" min="1" @bind="tramo.TermDaysFrom" /></td>
+                                    <td><input class="e-input numero" type="number" min="1" @bind="tramo.TermDaysTo" /></td>
+                                    <td><input class="e-input numero" type="number" min="0" step="0.01" @bind="tramo.AmountFrom" /></td>
+                                    <td><input class="e-input numero" type="number" min="0" step="0.01" @bind="tramo.AmountTo" /></td>
+                                }
+                                else
+                                {
+                                    <td><input class="e-input numero" type="number" min="0" step="0.01" @bind="tramo.BalanceFrom" /></td>
+                                    <td><input class="e-input numero" type="number" min="0" step="0.01" @bind="tramo.BalanceTo" /></td>
+                                }
+                                <td>
+                                    @if (v.Rate.Kind == 1)
+                                    {
+                                        <input class="e-input numero" type="number" step="any" min="0" value="@Puntos(tramo.EffectiveAnnual)" @onchange="@(e => tramo.EffectiveAnnual = Fraccion(e.Value))" />
+                                    }
+                                    else
+                                    {
+                                        <input class="e-input numero" type="number" step="any" value="@Puntos(tramo.Margin)" @onchange="@(e => tramo.Margin = Fraccion(e.Value))" />
+                                    }
+                                </td>
+                                <td><SfButton CssClass="e-flat e-small" IconCss="e-icons e-trash" OnClick="@(() => v.Rate.Tiers.Remove(tramo))">Quitar</SfButton></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <div class="toolbar">
+                <SfButton CssClass="e-outline e-small" IconCss="e-icons e-plus" OnClick="@(() => v.Rate.Tiers.Add(new TramoDeCaptacionRequest()))">Agregar tramo</SfButton>
+            </div>
+            @if (Clase != TextosDeCaptaciones.Cdat)
+            {
+                <p class="texto-tenue">Los tramos de saldo empiezan en cero y siguen sin huecos: el siguiente empieza un centavo después de donde termina el anterior.</p>
+            }
+        </div>
+
+        <div class="info-card">
+            <h4>Cálculo, mínimos y liquidación</h4>
+            <div class="form-grid">
+                @if (Clase != TextosDeCaptaciones.Cdat)
+                {
+                    <label class="campo">Método de saldo
+                        <select class="e-input" @bind="v.BalanceMethod">
+                            @foreach (var m in TextosDeCaptaciones.MetodosDeSaldo) { <option value="@m.Valor">@m.Texto</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Liquidación de intereses
+                        <select class="e-input" @bind="v.SettlementPeriodicity">
+                            @foreach (var p in TextosDeCartera.Periodicidades) { <option value="@p.Valor">@p.Texto</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Día de liquidación <input class="e-input numero" type="number" min="1" max="31" @bind="v.SettlementDay" /></label>
+                }
+                <label class="campo">Convención de días
+                    <select class="e-input" @bind="v.DayCount">
+                        @foreach (var c in TextosDeCartera.Convenciones) { <option value="@c.Valor">@c.Texto</option> }
+                    </select>
+                </label>
+                <label class="campo">Equivalencia de tasas
+                    <select class="e-input" @bind="v.RateEquivalence">
+                        @foreach (var c in TextosDeCartera.Equivalencias) { <option value="@c.Valor">@c.Texto</option> }
+                    </select>
+                </label>
+                <label class="campo">Redondeo a ($)
+                    <select class="e-input" value="@v.Rounding.Unit.ToString("0.##", CultureInfo.InvariantCulture)" @onchange="@(e => v.Rounding.Unit = LeerUnidad(e.Value))">
+                        @foreach (var u in Unidades) { <option value="@u.ToString("0.##", CultureInfo.InvariantCulture)">@u.ToString("N2", Es)</option> }
+                    </select>
+                </label>
+                <label class="campo">Modo de redondeo
+                    <select class="e-input" @bind="v.Rounding.Mode">
+                        @foreach (var m in TextosDeCartera.ModosDeRedondeo) { <option value="@m.Valor">@m.Texto</option> }
+                    </select>
+                </label>
+                <label class="campo">Mínimo para abrir ($) <input class="e-input numero" type="number" min="0" step="0.01" @bind="v.Minimums.ToOpen" /></label>
+                <label class="campo">Mínimo para mantener ($) <input class="e-input numero" type="number" min="0" step="0.01" @bind="v.Minimums.ToMaintain" /></label>
+                <label class="campo">Mínimo para ganar interés ($) <input class="e-input numero" type="number" min="0" step="0.01" @bind="v.Minimums.ToEarnInterest" /></label>
+            </div>
+        </div>
+
+        <div class="info-card">
+            <h4>Impuestos, límites e inactividad</h4>
+            <div class="form-grid">
+                <label class="campo">Tarifa de retención
+                    <select class="e-input" value="@(v.Tax.WithholdingRateParameterCode ?? "")" @onchange="@(e => v.Tax.WithholdingRateParameterCode = string.IsNullOrEmpty(e.Value?.ToString()) ? null : e.Value!.ToString())">
+                        @foreach (var t in TextosDeCaptaciones.TarifasDeRetencion) { <option value="@t.Valor">@t.Texto</option> }
+                    </select>
+                </label>
+                <label class="campo-check"><input type="checkbox" @bind="v.Tax.GmfApplies" /> Grava GMF</label>
+                <label class="campo-check"><input type="checkbox" @bind="v.Tax.GmfOnDeceasedAndUnclaimed" disabled="@(!v.Tax.GmfApplies)" /> Cobra GMF en la entrega por fallecimiento y en los saldos no reclamados <span class="texto-tenue">(pendiente de validar por la contadora)</span></label>
+                <label class="campo">Retiro máximo por operación ($) <input class="e-input numero" type="number" min="0" step="0.01" @bind="v.Limits.MaxWithdrawalPerOperation" /></label>
+                <label class="campo">Retiro máximo diario ($) <input class="e-input numero" type="number" min="0" step="0.01" @bind="v.Limits.MaxWithdrawalPerDay" /></label>
+                <label class="campo">Efectivo máximo por operación ($) <input class="e-input numero" type="number" min="0" step="0.01" @bind="v.Limits.MaxCashPerOperation" /></label>
+                <label class="campo">Efectivo máximo diario ($) <input class="e-input numero" type="number" min="0" step="0.01" @bind="v.Limits.MaxCashPerDay" /></label>
+                <label class="campo">Días para inactividad <input class="e-input numero" type="number" min="1" @bind="v.Inactivity.Days" /></label>
+                <label class="campo-check"><input type="checkbox" @bind="v.Inactivity.KeepsAccruing" /> Sigue causando inactiva</label>
+                <label class="campo-check"><input type="checkbox" @bind="v.Inactivity.SuspendsOnTotalGarnishment" /> Suspende la causación con embargo total</label>
+                <label class="campo-check"><input type="checkbox" @bind="v.Inactivity.SuspendsOnDeceased" /> Suspende la causación por fallecimiento</label>
+            </div>
+        </div>
+
+        @if (Clase == TextosDeCaptaciones.Cdat && v.TermDeposit is { } cdat)
+        {
+            <div class="info-card">
+                <h4>CDAT</h4>
+                <div class="form-grid">
+                    <label class="campo">Plazo mínimo (días) * <input class="e-input numero" type="number" min="1" @bind="cdat.MinTermDays" /></label>
+                    <label class="campo">Plazo máximo (días) * <input class="e-input numero" type="number" min="1" @bind="cdat.MaxTermDays" /></label>
+                    <div class="campo campo-ancho">Pago de intereses *
+                        @foreach (var p in TextosDeCartera.Periodicidades)
+                        {
+                            var periodicidad = p.Valor;
+                            <label class="campo-check"><input type="checkbox" checked="@cdat.InterestPeriodicities.Contains(periodicidad)" @onchange="@(e => Marcar(cdat.InterestPeriodicities, periodicidad, e.Value is true))" /> @(periodicidad == 0 ? "Al vencimiento" : p.Texto)</label>
+                        }
+                    </div>
+                    <div class="campo">Intereses *
+                        @foreach (var m in TextosDeCaptaciones.ModalidadesDeInteres)
+                        {
+                            var modalidad = m.Valor;
+                            <label class="campo-check"><input type="checkbox" checked="@cdat.Timings.Contains(modalidad)" @onchange="@(e => Marcar(cdat.Timings, modalidad, e.Value is true))" /> @m.Texto</label>
+                        }
+                    </div>
+                    <label class="campo-check"><input type="checkbox" @bind="cdat.RolloverAutomatic" /> Se prorroga solo</label>
+                    <label class="campo">Máximo de prórrogas <input class="e-input numero" type="number" min="1" @bind="cdat.MaxRollovers" /></label>
+                    <label class="campo">Tasa de la prórroga
+                        <select class="e-input" @bind="cdat.RolloverRateRule">
+                            @foreach (var r in TextosDeCaptaciones.ReglasDeProrroga) { <option value="@r.Valor">@r.Texto</option> }
+                        </select>
+                    </label>
+                    <label class="campo-check"><input type="checkbox" @bind="cdat.RolloverCapitalizes" /> La prórroga capitaliza los intereses</label>
+                    <label class="campo">Días hábiles de gracia <input class="e-input numero" type="number" min="0" @bind="cdat.GraceBusinessDays" /></label>
+                    <label class="campo-check"><input type="checkbox" @bind="cdat.GraceAccrues" /> La gracia causa</label>
+                    <label class="campo">Si no se prorroga
+                        <select class="e-input" @bind="cdat.AfterMaturity">
+                            @foreach (var t in TextosDeCaptaciones.TratamientosAlVencer) { <option value="@t.Valor">@t.Texto</option> }
+                        </select>
+                    </label>
+                    @if (cdat.AfterMaturity == 2)
+                    {
+                        <label class="campo">Línea a la vista destino *
+                            <select class="e-input" value="@cdat.DemandLinePublicId" @onchange="@(e => cdat.DemandLinePublicId = Guid.TryParse(e.Value?.ToString(), out var g) && g != Guid.Empty ? g : null)">
+                                <option value="@Guid.Empty">Elija…</option>
+                                @foreach (var l in LineasDeClase(TextosDeCaptaciones.ALaVista)) { <option value="@l.PublicId">@l.Code · @l.Name</option> }
+                            </select>
+                        </label>
+                    }
+                    <label class="campo-check"><input type="checkbox" @bind="cdat.EarlyRedemption.Allowed" /> Admite redención anticipada</label>
+                    @if (cdat.EarlyRedemption.Allowed)
+                    {
+                        <label class="campo">Penalidad *
+                            <select class="e-input" value="@(cdat.EarlyRedemption.PenaltyMode ?? 1)" @onchange="@(e => cdat.EarlyRedemption.PenaltyMode = LeerEntero(e.Value))">
+                                @foreach (var p in TextosDeCaptaciones.PenalidadesDeRedencion) { <option value="@p.Valor">@p.Texto</option> }
+                            </select>
+                        </label>
+                        @if ((cdat.EarlyRedemption.PenaltyMode ?? 1) == 1)
+                        {
+                            <label class="campo">Tasa de penalidad (% EA) *
+                                <input class="e-input numero" type="number" step="any" min="0" value="@Puntos(cdat.EarlyRedemption.PenaltyRateEa)" @onchange="@(e => cdat.EarlyRedemption.PenaltyRateEa = Fraccion(e.Value))" />
+                            </label>
+                        }
+                        else
+                        {
+                            <label class="campo">Interés que pierde (%) *
+                                <input class="e-input numero" type="number" step="any" min="0" max="100" value="@Puntos(cdat.EarlyRedemption.PenaltyDiscount)" @onchange="@(e => cdat.EarlyRedemption.PenaltyDiscount = Fraccion(e.Value))" />
+                            </label>
+                        }
+                        <label class="campo">Días mínimos antes de redimir <input class="e-input numero" type="number" min="0" @bind="cdat.EarlyRedemption.MinDaysBeforeRedemption" /></label>
+                    }
+                </div>
+            </div>
+        }
+        else if (Clase == TextosDeCaptaciones.Contractual && v.Contractual is { } contractual)
+        {
+            <div class="info-card">
+                <h4>Ahorro contractual</h4>
+                <div class="form-grid">
+                    <label class="campo">Periodicidad de la cuota *
+                        <select class="e-input" @bind="contractual.InstallmentPeriodicity">
+                            @foreach (var p in TextosDeCartera.Periodicidades.Where(p => p.Valor != 0)) { <option value="@p.Valor">@p.Texto</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Cuota mínima ($) * <input class="e-input numero" type="number" min="0" step="0.01" @bind="contractual.MinInstallment" /></label>
+                    <label class="campo">Plazo mínimo (meses) * <input class="e-input numero" type="number" min="1" @bind="contractual.TermMonthsFrom" /></label>
+                    <label class="campo">Plazo máximo (meses) * <input class="e-input numero" type="number" min="1" @bind="contractual.TermMonthsTo" /></label>
+                    <label class="campo">Tasa bonificada (% EA)
+                        <input class="e-input numero" type="number" step="any" min="0" value="@Puntos(contractual.BonusRateEa)" @onchange="@(e => contractual.BonusRateEa = Fraccion(e.Value))" />
+                    </label>
+                    <label class="campo">Reconocimiento de la bonificación
+                        <select class="e-input" @bind="contractual.BonusRecognition">
+                            @foreach (var r in TextosDeCaptaciones.ReconocimientosDeBonificacion) { <option value="@r.Valor">@r.Texto</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Cuotas atrasadas toleradas <input class="e-input numero" type="number" min="0" @bind="contractual.ToleranceInstallments" /></label>
+                    <label class="campo">Si incumple *
+                        <select class="e-input" @bind="contractual.BreachEffect">
+                            @foreach (var x in TextosDeCaptaciones.EfectosDelIncumplimiento) { <option value="@x.Valor">@x.Texto</option> }
+                        </select>
+                    </label>
+                    <fieldset class="campo campo-ancho">
+                        <legend>Al vencer el contrato, el asociado puede elegir</legend>
+                        <label class="campo-check"><input type="checkbox" checked="@contractual.AdmiteDestino(TextosDeCaptaciones.DestinoTraslado)"
+                                                          @onchange="@(e => contractual.FijarDestino(TextosDeCaptaciones.DestinoTraslado, e.Value is true))" /> Trasladar lo ahorrado a su cuenta de ahorro a la vista</label>
+                        <label class="campo-check"><input type="checkbox" checked="@contractual.AdmiteDestino(TextosDeCaptaciones.DestinoGiro)"
+                                                          @onchange="@(e => contractual.FijarDestino(TextosDeCaptaciones.DestinoGiro, e.Value is true))" /> Devolverlo con una orden de giro</label>
+                        <span class="texto-tenue">El asociado deja su decisión en el contrato; sin decisión (o sin ninguna de estas opciones) queda a disposición del titular y no se mueve dinero.</span>
+                    </fieldset>
+                    @if (contractual.BreachEffect == 1)
+                    {
+                        <label class="campo">Tasa castigo (% EA) *
+                            <input class="e-input numero" type="number" step="any" min="0" value="@Puntos(contractual.BreachRateEa)" @onchange="@(e => contractual.BreachRateEa = Fraccion(e.Value))" />
+                        </label>
+                    }
+                </div>
+            </div>
+        }
+        else if (Clase == TextosDeCaptaciones.Permanente && v.Permanent is { } permanente)
+        {
+            <div class="info-card">
+                <h4>Ahorro permanente</h4>
+                <div class="form-grid">
+                    <label class="campo-check"><input type="checkbox" @bind="permanente.WithdrawableOnlyOnMembershipWithdrawal" /> Sólo se retira al retiro del asociado</label>
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private static readonly CultureInfo Es = CultureInfo.GetCultureInfo("es-CO");
+    private static readonly decimal[] Unidades = [0.01m, 1m, 10m, 100m, 1000m];
+
+    /// <summary>La naturaleza de la línea: captación (2) o aportes (3).</summary>
+    [Parameter, EditorRequired] public int Naturaleza { get; set; }
+
+    /// <summary>La clase de la línea de captación (decide el bloque que se muestra).</summary>
+    [Parameter] public int Clase { get; set; } = TextosDeCaptaciones.ALaVista;
+
+    [Parameter] public VersionDeCaptacionRequest? Captacion { get; set; }
+
+    [Parameter] public VersionDeAportesRequest? Aportes { get; set; }
+
+    /// <summary>Las líneas de captación que una versión puede nombrar (la a la vista destino de un CDAT, la del ahorro permanente).</summary>
+    [Parameter] public IReadOnlyList<LineaDelCatalogoDto> Lineas { get; set; } = [];
+
+    [Parameter] public IReadOnlyList<string>? Errores { get; set; }
+
+    private IEnumerable<LineaDelCatalogoDto> LineasDeClase(int clase) => Lineas.Where(l => l.Nature == TextosDeCaptaciones.Captacion && l.DepositClass == clase);
+
+    private static void CambiarClaseDeTasa(VersionDeCaptacionRequest v, int clase)
+    {
+        v.Rate.Kind = clase;
+        if (clase == 2)
+        {
+            v.Rate.Variable ??= new TasaVariableDeCaptacionRequest();
+            v.Rate.EffectiveAnnual = null;
+            foreach (var t in v.Rate.Tiers) { t.Margin ??= t.EffectiveAnnual; t.EffectiveAnnual = null; }
+        }
+        else
+        {
+            v.Rate.Variable = null;
+            foreach (var t in v.Rate.Tiers) { t.EffectiveAnnual ??= t.Margin; t.Margin = null; }
+        }
+    }
+
+    private static void Marcar(List<int> lista, int valor, bool marcado)
+    {
+        if (marcado && !lista.Contains(valor)) lista.Add(valor);
+        if (!marcado) lista.Remove(valor);
+    }
+
+    /// <summary>Una fracción en puntos para el campo (0,03 → «3»).</summary>
+    private static string Puntos(decimal? fraccion) => fraccion is { } f ? (f * 100m).ToString("0.######", CultureInfo.InvariantCulture) : string.Empty;
+
+    /// <summary>Lo digitado en puntos, como fracción (3 → 0,03).</summary>
+    private static decimal? Fraccion(object? valor) =>
+        decimal.TryParse(valor?.ToString(), NumberStyles.Number, CultureInfo.InvariantCulture, out var d) ? decimal.Round(d / 100m, 6) : null;
+
+    /// <summary>En porcentaje del ingreso se digita en puntos; en salarios mínimos, tal cual.</summary>
+    private static string ValorDeFraccion(int modo, decimal? fraccion) =>
+        modo == 2 ? Puntos(fraccion) : fraccion?.ToString("0.######", CultureInfo.InvariantCulture) ?? string.Empty;
+
+    private static decimal? LeerFraccion(int modo, object? valor) =>
+        modo == 2 ? Fraccion(valor) : decimal.TryParse(valor?.ToString(), NumberStyles.Number, CultureInfo.InvariantCulture, out var d) ? d : null;
+
+    private static decimal LeerUnidad(object? valor) =>
+        decimal.TryParse(valor?.ToString(), NumberStyles.Number, CultureInfo.InvariantCulture, out var d) ? d : 1m;
+
+    private static DateOnly? LeerFecha(object? valor) => DateOnly.TryParse(valor?.ToString(), CultureInfo.InvariantCulture, out var f) ? f : null;
+
+    private static int? LeerEntero(object? valor) => int.TryParse(valor?.ToString(), out var n) ? n : null;
+}

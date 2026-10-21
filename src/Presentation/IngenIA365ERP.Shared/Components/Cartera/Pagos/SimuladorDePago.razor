@@ -1,0 +1,167 @@
+@using System.Globalization
+@using IngenIA365ERP.Shared.Services.Cartera
+@inject PagosClient Pagos
+
+@* Feature 013, US5 (T0562; FR-071–FR-076, FR-013; contracts/api.md §10): simula un pago del crédito con la MISMA función que lo distribuye al
+   aplicarlo (FR-072), sin escribir nada. Siete modalidades; en el abono extraordinario sin elección muestra los dos planes lado a lado (reducir
+   el plazo o la cuota: el deudor decide, la entidad nunca, Ley 2032); en el anticipo, el aviso de que no rebaja intereses; si sobra algo, el
+   excedente y a dónde iría. No hay botón de aplicar: el pago entra por el recaudador (caja, Nómina…). *@
+<PermissionGate Required="Lending.Payments.Simulate" MostrarAviso="true">
+    <div class="info-card">
+        <h4>Simular un pago</h4>
+        <p class="texto-apoyo">La simulación no registra nada: muestra cómo se repartiría el pago entre cuotas y conceptos con la prelación del crédito.
+            El pago se aplica en caja o por el recaudador que lo reciba.</p>
+        <div class="form-grid">
+            <label class="campo">Modalidad *
+                <select class="e-input" value="@_modalidad" @onchange="@(e => CambiarModalidad(e.Value?.ToString()))">
+                    @foreach (var m in TextosDePagos.Modalidades) { <option value="@m.Valor">@m.Texto</option> }
+                </select>
+            </label>
+            <label class="campo">Valor @(PideValor ? "*" : "(vacío = lo que cuesta)")
+                <input class="e-input" type="number" min="0" step="1" @bind="_valor" />
+            </label>
+            <label class="campo">Fecha valor *
+                <input type="date" class="e-input" value="@_fechaValor.ToString("yyyy-MM-dd")" @onchange="@(e => _fechaValor = LeerFecha(e.Value) ?? _fechaValor)" />
+            </label>
+            @if (_modalidad == "SpecificInstallment")
+            {
+                <label class="campo">Cuota *
+                    <input class="e-input" type="number" min="1" step="1" @bind="_cuota" />
+                </label>
+            }
+            @if (_modalidad == "ExtraordinaryPrincipal")
+            {
+                <label class="campo">Elección del deudor
+                    <select class="e-input" @bind="_eleccion">
+                        <option value="">Ver los dos planes (o la preferencia registrada)</option>
+                        @foreach (var e in TextosDePagos.Elecciones) { <option value="@e.Valor">@e.Texto</option> }
+                    </select>
+                </label>
+            }
+        </div>
+        <div class="toolbar">
+            <SfButton CssClass="e-primary" IconCss="e-icons e-play" Disabled="@(_carga.Activa || !Completo)" OnClick="@SimularAsync">Simular</SfButton>
+        </div>
+        @if (_modalidad == "Advance")
+        {
+            <p class="aviso aviso-info">Un anticipo cubre cuotas futuras cuando vencen y no rebaja intereses. Para pagar menos intereses, abone a capital.</p>
+        }
+
+        <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Simulando…">
+            @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+            @if (_simulacion is { } s)
+            {
+                <div class="kpi-grid">
+                    <div class="kpi-card"><span class="kpi-label">@TextosDePagos.Modalidad(s.Modality)</span><span class="kpi-value">@TextosDeCreditos.Pesos(s.Amount)</span></div>
+                    <div class="kpi-card"><span class="kpi-label">Fecha valor</span><span class="kpi-value">@TextosDeCreditos.Fecha(s.ValueDate)</span></div>
+                    <div class="kpi-card"><span class="kpi-label">Anticipo</span><span class="kpi-value">@TextosDeCreditos.Pesos(s.Advance)</span></div>
+                    <div class="kpi-card"><span class="kpi-label">Saldo a favor</span><span class="kpi-value">@TextosDeCreditos.Pesos(s.CreditBalance)</span></div>
+                    <div class="kpi-card"><span class="kpi-label">Vale hasta</span><span class="kpi-value">@TextosDeCreditos.Fecha(s.ValidUntil)</span></div>
+                </div>
+                @foreach (var a in s.Notices) { <p class="aviso aviso-alerta">@a.Message</p> }
+                @if (s.Surplus > 0m)
+                {
+                    <p class="aviso aviso-alerta">Sobran @TextosDeCreditos.Pesos(s.Surplus): el crédito no los necesita y quedarían como saldo a favor del deudor,
+                        para devolverle o aplicar a otra obligación.</p>
+                }
+                @if (s.PrepaymentChoice is { } elegida) { <p class="texto-apoyo">Elección aplicada: @TextosDePagos.Eleccion(elegida).</p> }
+
+                <div class="info-card">
+                    <h4>Distribución</h4>
+                    <table class="data-grid">
+                        <thead><tr><th class="numero">Cuota</th><th>Concepto</th><th class="numero">Valor</th></tr></thead>
+                        <tbody>
+                            @foreach (var d in s.Distribution)
+                            {
+                                <tr><td class="numero">@(d.Installment?.ToString(CultureInfo.InvariantCulture) ?? "—")</td><td>@TextosDeCreditos.Concepto(d.Concept)</td><td class="numero">@TextosDeCreditos.Pesos(d.Amount)</td></tr>
+                            }
+                        </tbody>
+                    </table>
+                    @if (s.Distribution.Count == 0) { <p class="texto-tenue">El pago no cubriría ningún concepto exigible.</p> }
+                </div>
+
+                <div class="info-card">
+                    <h4>Lo que quedaría</h4>
+                    <table class="data-grid">
+                        <thead><tr><th>Concepto</th><th class="numero">Saldo</th></tr></thead>
+                        <tbody>
+                            @foreach (var (concepto, valor) in s.ResultingBalances.Where(x => x.Value != 0m))
+                            {
+                                <tr><td>@TextosDeCreditos.Concepto(concepto)</td><td class="numero">@TextosDeCreditos.Pesos(valor)</td></tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                @if (s.Alternatives.Count > 0)
+                {
+                    <p class="texto-apoyo">El deudor no ha elegido ni tiene preferencia registrada: estos son los dos planes posibles. Sin elección, el abono
+                        quedaría como saldo a favor.</p>
+                    <div class="rejilla-tarjetas">
+                        @foreach (var (clave, alternativa) in s.Alternatives.OrderBy(x => x.Key))
+                        {
+                            <div class="info-card">
+                                <h4>@TextosDePagos.Eleccion(clave)</h4>
+                                <p>@alternativa.Installments cuotas de @TextosDeCreditos.Pesos(alternativa.InstallmentAmount)</p>
+                                <PlanDelPago Cuotas="@alternativa.Schedule" />
+                            </div>
+                        }
+                    </div>
+                }
+                else if (s.NewPlan is { } plan)
+                {
+                    <div class="info-card">
+                        <h4>Plan después del pago</h4>
+                        <p>@plan.InstallmentCount cuotas de @TextosDeCreditos.Pesos(plan.InstallmentAmount)@(plan.NextDueDate is { } p ? $"; la próxima vence el {TextosDeCreditos.Fecha(p)}" : "").</p>
+                        <PlanDelPago Cuotas="@plan.Installments" />
+                    </div>
+                }
+            }
+        </IndicadorDeCarga>
+    </div>
+</PermissionGate>
+
+@code {
+    [Parameter, EditorRequired] public Guid CreditoId { get; set; }
+
+    private readonly EstadoDeCarga _carga = new();
+    private string _modalidad = "CycleInstallment";
+    private decimal? _valor;
+    private DateOnly _fechaValor = DateOnly.FromDateTime(DateTime.Today);
+    private int? _cuota;
+    private string _eleccion = "";
+    private PagoSimuladoDto? _simulacion;
+    private string? _error;
+
+    /// <summary>La cancelación y «lo vencido» cuestan lo que cuestan; las otras piden valor.</summary>
+    private bool PideValor => _modalidad is not ("FullPayoff" or "PastDue");
+
+    private bool Completo => (!PideValor || _valor > 0m) && (_modalidad != "SpecificInstallment" || _cuota > 0);
+
+    private void CambiarModalidad(string? modalidad)
+    {
+        _modalidad = modalidad ?? "CycleInstallment";
+        _simulacion = null;
+        _error = null;
+    }
+
+    private async Task SimularAsync()
+    {
+        using var carga = _carga.Iniciar();
+        _error = null;
+        var r = await Pagos.SimularAsync(CreditoId, new SimulacionDePagoRequest(_modalidad, _valor is > 0m ? _valor : null, _fechaValor,
+            _modalidad == "ExtraordinaryPrincipal" && _eleccion.Length > 0 ? _eleccion : null, _modalidad == "SpecificInstallment" ? _cuota : null));
+        if (!r.IsSuccess)
+        {
+            _simulacion = null;
+            var pendientes = r.Dato<int[]>("pendingBefore");
+            _error = (r.ErrorMessage ?? "No se pudo simular el pago.")
+                     + (pendientes is { Length: > 0 } ? $" Antes hay que pagar las cuotas {string.Join(", ", pendientes)}." : "");
+            return;
+        }
+        _simulacion = r.Value;
+    }
+
+    private static DateOnly? LeerFecha(object? valor) =>
+        DateOnly.TryParse(valor?.ToString(), CultureInfo.InvariantCulture, out var f) ? f : null;
+}

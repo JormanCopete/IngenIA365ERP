@@ -1,0 +1,132 @@
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Http
+@inject GobiernoDeCarteraClient Gobierno
+@inject INotificationService Notification
+
+@* Feature 013, fase 4 (T0322; US17, T62; contracts/api.md §3.8): el alcance de Cartera de un usuario sobre GET/PUT
+   /api/lending/scopes/users/{id} (molde AlcanceComercialDeUsuario). Las oficinas son de SÓLO LECTURA —las asigna Seguridad— con la sucursal
+   contable de cada una; las líneas de crédito que opera se reemplazan en bloque, a lo sumo una por defecto. Una línea fuera del alcance de
+   quien asigna no existe para él. Desde US1 (T0362) se eligen de la lista de líneas por código y nombre (SelectorDeLineaDeCredito). *@
+<IndicadorDeCarga Cargando="@_carga.Activa">
+    @if (_alcance is { } a)
+    {
+        <p class="texto-apoyo">
+            @a.User.Name @(a.User.Email is null ? "" : $"({a.User.Email})")
+            @if (a.HasAllOffices) { <span class="aviso aviso-ok">Ve todas las oficinas por permiso.</span> }
+            @if (a.HasAllLines) { <span class="aviso aviso-ok">Opera todas las líneas por permiso.</span> }
+        </p>
+        <h4>Oficinas (las asigna Seguridad)</h4>
+        <div class="tabla-desplazable">
+            <table class="data-grid">
+                <thead><tr><th>Oficina</th><th>Sucursal contable</th><th>Por defecto</th></tr></thead>
+                <tbody>
+                    @foreach (var o in a.Offices)
+                    {
+                        <tr>
+                            <td>@o.Code · @o.Name</td>
+                            <td>@(o.AccountingBranch is { } s ? $"{s.Code} · {s.Name}" : "Sin vincular")</td>
+                            <td>@(o.IsDefault ? "Sí" : "")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (a.Offices.Count == 0 && !a.HasAllOffices) { <p class="texto-tenue">Sin oficinas asignadas: no verá ningún crédito.</p> }
+
+        <h4>Líneas de crédito</h4>
+        <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando el alcance…">
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Línea</th><th>Por defecto</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var l in _lineas)
+                        {
+                            var linea = l;
+                            <tr>
+                                <td>@linea.Etiqueta</td>
+                                <td><input type="radio" name="linea-por-defecto" checked="@(_porDefecto == linea.Id)" @onchange="@(() => _porDefecto = linea.Id)" /></td>
+                                <td><SfButton CssClass="e-flat e-small" IconCss="e-icons e-trash" OnClick="@(() => Quitar(linea))" /></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <div class="toolbar">
+                <SelectorDeLineaDeCredito @bind-Value="_nuevaLinea" LineaElegida="@(l => _elegida = l)" Excluir="@_lineas.Select(l => l.Id).ToList()" />
+                <SfButton CssClass="e-outline" IconCss="e-icons e-plus" Disabled="@(_elegida is null)" OnClick="@Agregar">Agregar línea</SfButton>
+                <SfButton CssClass="e-primary" Disabled="@_guardado.Activa" OnClick="@GuardarAsync">Guardar alcance</SfButton>
+            </div>
+            @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+        </IndicadorDeCarga>
+    }
+</IndicadorDeCarga>
+
+@code {
+    /// <summary>El usuario (<c>SEC_Users.PublicId</c>) cuyo alcance se edita.</summary>
+    [Parameter, EditorRequired] public Guid Usuario { get; set; }
+
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+    private readonly ClaveDeOperacion _clave = new();
+    private AlcanceDeCarteraDto? _alcance;
+    private List<LineaEditable> _lineas = [];
+    private Guid? _porDefecto;
+    private Guid? _nuevaLinea;
+    private LineaDeCreditoResumenDto? _elegida;
+    private string? _error;
+    private Guid _cargado;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Usuario == _cargado) return;
+        _cargado = Usuario;
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        _error = null;
+        var r = await Gobierno.AlcanceDeUsuarioAsync(Usuario);
+        if (!r.IsSuccess || r.Value is null)
+        {
+            _alcance = null;
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo leer el alcance de Cartera del usuario.");
+            return;
+        }
+        Mostrar(r.Value);
+    }
+
+    private void Mostrar(AlcanceDeCarteraDto alcance)
+    {
+        _alcance = alcance;
+        _lineas = [.. alcance.Lines.Select(l => new LineaEditable(l.CreditLinePublicId, $"{l.Code} · {l.Name}"))];
+        _porDefecto = alcance.Lines.FirstOrDefault(l => l.IsDefault)?.CreditLinePublicId;
+    }
+
+    private void Agregar()
+    {
+        _error = null;
+        if (_elegida is not { } linea) { _error = "Elija la línea que va a agregar."; return; }
+        if (_lineas.All(l => l.Id != linea.PublicId)) _lineas.Add(new LineaEditable(linea.PublicId, $"{linea.Code} · {linea.Name}"));
+        _nuevaLinea = null;
+        _elegida = null;
+    }
+
+    private void Quitar(LineaEditable linea)
+    {
+        _lineas.Remove(linea);
+        if (_porDefecto == linea.Id) _porDefecto = null;
+    }
+
+    private async Task GuardarAsync()
+    {
+        using var carga = _guardado.Iniciar();
+        _error = null;
+        var r = await Gobierno.FijarLineasAsync(Usuario, new FijarLineasRequest(_lineas.Select(l => new LineaAsignadaRequest(l.Id, l.Id == _porDefecto)).ToList()), _clave);
+        if (!r.IsSuccess || r.Value is null) { _error = r.ErrorMessage ?? "No se pudo guardar el alcance."; return; }
+        Mostrar(r.Value);
+        await Notification.SuccessAsync("Alcance de Cartera guardado.");
+    }
+
+    private sealed record LineaEditable(Guid Id, string Etiqueta);
+}

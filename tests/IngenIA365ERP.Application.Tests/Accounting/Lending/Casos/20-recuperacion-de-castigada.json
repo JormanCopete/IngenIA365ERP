@@ -1,0 +1,270 @@
+{
+  "descripcion": "§24 ejemplo 14 (recuperación): todo lo pagado sobre un castigado va a la recuperación y baja la castigada en orden por concepto.",
+  "sobre": {
+    "version": 1,
+    "kind": "Business",
+    "originModule": "CAR",
+    "originEventKey": "Confirmation",
+    "origin": {
+      "kind": "Operation",
+      "documentClass": null,
+      "documentTypeCode": null,
+      "number": "PAG-000995",
+      "publicId": "0d0d0088-0000-4000-8000-000000000088",
+      "operationDate": "2026-12-10"
+    },
+    "related": null,
+    "chainRootPublicId": "0e0e0089-0000-4000-8000-000000000089",
+    "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+    "costCenterPublicId": null,
+    "warehouseCode": null,
+    "personPublicId": "a1b2c3d4-0000-4000-8000-000000000003",
+    "currency": "COP",
+    "exchangeRate": 1,
+    "originUser": {
+      "centralUserId": "d4e5f6a7-b8c9-4d0e-9f1a-2b3c4d5e6f70",
+      "name": "Usuario de ensayo"
+    },
+    "emittedAt": "2026-12-10T15:00:00Z"
+  },
+  "mensajes": [
+    {
+      "messageId": "0f0f0091-0000-4000-8000-000000000091",
+      "type": "PagoAplicado",
+      "kind": "Business",
+      "originDocumentClass": "PaymentApplication",
+      "payload": {
+        "loan": {
+          "loanPublicId": "7b8c9d0e-1f2a-4b3c-9d4e-000000000300",
+          "loanNumber": "000300"
+        },
+        "debtorPersonPublicId": "a1b2c3d4-0000-4000-8000-000000000003",
+        "valueDate": "2026-12-10",
+        "registeredAt": "2026-12-10T15:00:00Z",
+        "dimensions": {
+          "creditLineCode": "COM01",
+          "modalityCode": "CONSUMO",
+          "subsegmentCode": "SinLibranza",
+          "riskCategory": "E",
+          "riskSubcategory": "None",
+          "isEmployee": false,
+          "inGracePeriod": false,
+          "restructured": false,
+          "writtenOff": true,
+          "collectorClass": "Receipts",
+          "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+          "impairmentModel": "ArrearsAnnex1",
+          "riskSegment": "CONSUMO",
+          "valueUnit": "Pesos"
+        },
+        "amounts": [],
+        "rulesVersion": "LND-2026.1",
+        "collector": {
+          "collectorCode": "REC",
+          "collectorClass": "Receipts",
+          "idempotencyKey": "REC:c0de0090-0000-4000-8000-000000000090",
+          "meansClass": "Cash",
+          "payerPersonPublicId": "a1b2c3d4-0000-4000-8000-000000000003",
+          "receipt": {
+            "number": "R-0001",
+            "date": "2026-12-10",
+            "officePublicId": null,
+            "meansReference": null,
+            "documentKind": null
+          }
+        },
+        "modality": "PastDue",
+        "amountReceived": 500000.0,
+        "surplus": 0.0,
+        "reallocations": [],
+        "prepaymentChoice": null,
+        "newPlan": null,
+        "paidOff": false,
+        "finalityUntil": null,
+        "simulationId": null,
+        "deductionFileLinePublicId": null,
+        "insuranceClaimPublicId": null
+      }
+    },
+    {
+      "messageId": "0f0f0092-0000-4000-8000-000000000092",
+      "type": "RecuperacionDeCastigada",
+      "kind": "Business",
+      "originDocumentClass": "PaymentApplication",
+      "payload": {
+        "loan": {
+          "loanPublicId": "7b8c9d0e-1f2a-4b3c-9d4e-000000000300",
+          "loanNumber": "000300"
+        },
+        "debtorPersonPublicId": "a1b2c3d4-0000-4000-8000-000000000003",
+        "valueDate": "2026-12-10",
+        "registeredAt": "2026-12-10T15:00:00Z",
+        "dimensions": {
+          "creditLineCode": "COM01",
+          "modalityCode": "CONSUMO",
+          "subsegmentCode": "SinLibranza",
+          "riskCategory": "E",
+          "riskSubcategory": "None",
+          "isEmployee": false,
+          "inGracePeriod": false,
+          "restructured": false,
+          "writtenOff": true,
+          "collectorClass": "Receipts",
+          "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+          "impairmentModel": "ArrearsAnnex1",
+          "riskSegment": "CONSUMO",
+          "valueUnit": "Pesos"
+        },
+        "amounts": [
+          {
+            "concept": "CurrentInterestInSuspense",
+            "installmentNumber": null,
+            "amount": 150000.0,
+            "uvrAmount": null,
+            "onBehalfOfAssociate": false,
+            "reasonCode": null
+          },
+          {
+            "concept": "CurrentInterest",
+            "installmentNumber": null,
+            "amount": 200000.0,
+            "uvrAmount": null,
+            "onBehalfOfAssociate": false,
+            "reasonCode": null
+          },
+          {
+            "concept": "Principal",
+            "installmentNumber": null,
+            "amount": 150000.0,
+            "uvrAmount": null,
+            "onBehalfOfAssociate": false,
+            "reasonCode": null
+          }
+        ],
+        "original": null,
+        "rulesVersion": "LND-2026.1"
+      }
+    }
+  ],
+  "esperado": {
+    "tipo": "RC",
+    "fecha": "2026-12-10",
+    "origen": "LendingIssuedDocument",
+    "lineas": [
+      {
+        "rol": "RecaudoPorAplicar",
+        "cuenta": "11059501",
+        "debito": 500000.0,
+        "credito": 0.0,
+        "tercero": "luis",
+        "cruce": null,
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "RecuperacionDeCastigada"
+          ],
+          "concepto": null,
+          "creditos": [
+            "000300"
+          ]
+        }
+      },
+      {
+        "rol": "IngresoPorRecuperacion",
+        "cuenta": "42254601",
+        "debito": 0.0,
+        "credito": 500000.0,
+        "tercero": null,
+        "cruce": null,
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "RecuperacionDeCastigada"
+          ],
+          "concepto": null,
+          "creditos": [
+            "000300"
+          ]
+        }
+      },
+      {
+        "rol": "ContraOrdenControl",
+        "cuenta": "88050501",
+        "debito": 500000.0,
+        "credito": 0.0,
+        "tercero": null,
+        "cruce": null,
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "RecuperacionDeCastigada"
+          ],
+          "concepto": null,
+          "creditos": [
+            "000300"
+          ]
+        }
+      },
+      {
+        "rol": "CastigadaEnOrden",
+        "cuenta": "83101503",
+        "debito": 0.0,
+        "credito": 150000.0,
+        "tercero": null,
+        "cruce": null,
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "RecuperacionDeCastigada"
+          ],
+          "concepto": "CurrentInterestInSuspense",
+          "creditos": [
+            "000300"
+          ]
+        }
+      },
+      {
+        "rol": "CastigadaEnOrden",
+        "cuenta": "83101502",
+        "debito": 0.0,
+        "credito": 200000.0,
+        "tercero": null,
+        "cruce": null,
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "RecuperacionDeCastigada"
+          ],
+          "concepto": "CurrentInterest",
+          "creditos": [
+            "000300"
+          ]
+        }
+      },
+      {
+        "rol": "CastigadaEnOrden",
+        "cuenta": "83101501",
+        "debito": 0.0,
+        "credito": 150000.0,
+        "tercero": null,
+        "cruce": null,
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "RecuperacionDeCastigada"
+          ],
+          "concepto": "Principal",
+          "creditos": [
+            "000300"
+          ]
+        }
+      }
+    ]
+  }
+}

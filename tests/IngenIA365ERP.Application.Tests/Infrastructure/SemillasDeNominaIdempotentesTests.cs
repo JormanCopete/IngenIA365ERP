@@ -21,8 +21,8 @@ namespace IngenIA365ERP.Application.Tests.Infrastructure;
 ///
 /// <para>
 /// Y los tres de la feature 010 (T017): <see cref="TerminationReasonsSeeder"/> no cambia
-/// <c>GeneratesSeverancePay</c> de un motivo existente; <see cref="HolidaysSeeder"/> no pisa un
-/// festivo <c>Decreed</c>; <see cref="CompanyPoliciesSeeder"/> no pisa una vigencia existente.
+/// <c>GeneratesSeverancePay</c> de un motivo existente; <see cref="CompanyPoliciesSeeder"/> no pisa una
+/// vigencia existente. (Los festivos pasaron a la semilla central en la feature 013.)
 /// </para>
 /// </summary>
 public class SemillasDeNominaIdempotentesTests
@@ -56,8 +56,13 @@ public class SemillasDeNominaIdempotentesTests
         catalogo.Should().OnlyContain(p => p.Name.Length <= 120 && p.Code.Length <= 40);
         catalogo.Where(p => p.Kind != LegalParameterKind.RangeTable).Should().OnlyContain(p => p.Value != null);
         catalogo.Where(p => p.Kind == LegalParameterKind.RangeTable).Should().OnlyContain(p => p.Value == null && p.Ranges.Count > 0);
-        // La nómina ordinaria sigue encontrando todo lo que exige.
-        LegalParameterCodes.Required.Except(catalogo.Select(p => p.Code)).Should().BeEmpty();
+        // Feature 013 (T93 regla 2): el SMMLV y la UVT ya no los siembra Nómina; los proyecta la réplica (Order 88).
+        catalogo.Select(p => p.Code).Should().NotContain([LegalParameterCodes.Smmlv, LegalParameterCodes.Uvt]);
+        // La nómina ordinaria sigue encontrando todo lo que exige con la proyección de la réplica.
+        LegalParameterCodes.Required.Except(PayrollLegalParametersSeeder.ConValoresNacionales().Select(p => p.Code)).Should().BeEmpty();
+        PayrollLegalParametersSeeder.ProyeccionDeValoresNacionales().Select(p => (p.Code, p.Value)).Should()
+            .BeEquivalentTo([(LegalParameterCodes.Smmlv, (decimal?)1_750_905m), (LegalParameterCodes.Uvt, (decimal?)52_374m)],
+                "la semilla central trae los valores 2026 que antes sembraba Nómina");
     }
 
     [Fact]
@@ -107,30 +112,33 @@ public class SemillasDeNominaIdempotentesTests
         using var db = TestDbContextFactory.Create();
         var base2026 = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         // Una cooperativa sembrada con la semilla de la feature 005: textos genéricos.
+        // (Feature 013: el SMMLV y la UVT ya no son de esta semilla; el caso se prueba con el auxilio de transporte y su tope.)
         db.PayrollLegalParameters.Add(new PayrollLegalParameter
         {
-            Code = LegalParameterCodes.Smmlv, Name = "Salario mínimo", Kind = LegalParameterKind.Amount, Value = 1_750_905m,
+            Code = LegalParameterCodes.TransportAllowance, Name = "Auxilio de transporte", Kind = LegalParameterKind.Amount, Value = 249_095m,
             ValidFrom = base2026, Source = "Decreto de salario mínimo y auxilio de transporte 2026", CreatedBy = SeedContext.ParametricCreatedBy,
         });
         // …y una fila que la contadora ya precisó por su cuenta.
         db.PayrollLegalParameters.Add(new PayrollLegalParameter
         {
-            Code = LegalParameterCodes.Uvt, Name = "UVT", Kind = LegalParameterKind.Amount, Value = 52_374m,
-            ValidFrom = base2026, Source = "Resolución 000238 de 2025, revisada por Rafaela", CreatedBy = SeedContext.ParametricCreatedBy,
+            Code = LegalParameterCodes.TransportAllowanceCapSmmlv, Name = "Tope del auxilio", Kind = LegalParameterKind.Amount, Value = 2m,
+            ValidFrom = base2026, Source = "Ley 15 de 1959, revisada por Rafaela", CreatedBy = SeedContext.ParametricCreatedBy,
         });
         await db.SaveChangesAsync();
 
         await PayrollLegalParametersSeeder.AplicarAsync(db, CancellationToken.None);
 
-        var smmlv = await db.PayrollLegalParameters.SingleAsync(p => p.Code == LegalParameterCodes.Smmlv);
-        smmlv.Source.Should().Be(PayrollLegalParametersSeeder.Catalogo().Single(p => p.Code == LegalParameterCodes.Smmlv).Source);
-        smmlv.Value.Should().Be(1_750_905m, "sólo cambia la norma, nunca el valor");
-        smmlv.UpdatedBy.Should().Be(SeedContext.ParametricCreatedBy);
+        var auxilio = await db.PayrollLegalParameters.SingleAsync(p => p.Code == LegalParameterCodes.TransportAllowance);
+        auxilio.Source.Should().Be(PayrollLegalParametersSeeder.Catalogo().Single(p => p.Code == LegalParameterCodes.TransportAllowance).Source);
+        auxilio.Value.Should().Be(249_095m, "sólo cambia la norma, nunca el valor");
+        auxilio.UpdatedBy.Should().Be(SeedContext.ParametricCreatedBy);
 
-        var uvt = await db.PayrollLegalParameters.SingleAsync(p => p.Code == LegalParameterCodes.Uvt);
-        uvt.Source.Should().Be("Resolución 000238 de 2025, revisada por Rafaela");
-        uvt.UpdatedBy.Should().BeNull();
-        (await db.PayrollLegalParameters.CountAsync(p => p.Code == LegalParameterCodes.Uvt)).Should().Be(1, "la vigencia ya existía: no se duplica");
+        var tope = await db.PayrollLegalParameters.SingleAsync(p => p.Code == LegalParameterCodes.TransportAllowanceCapSmmlv);
+        tope.Source.Should().Be("Ley 15 de 1959, revisada por Rafaela");
+        tope.UpdatedBy.Should().BeNull();
+        (await db.PayrollLegalParameters.CountAsync(p => p.Code == LegalParameterCodes.TransportAllowanceCapSmmlv)).Should().Be(1, "la vigencia ya existía: no se duplica");
+        (await db.PayrollLegalParameters.AnyAsync(p => p.Code == LegalParameterCodes.Smmlv || p.Code == LegalParameterCodes.Uvt)).Should()
+            .BeFalse("feature 013 (T93 regla 2): el SMMLV y la UVT los escribe sólo la réplica");
     }
 
     [Fact]
@@ -347,31 +355,9 @@ public class SemillasDeNominaIdempotentesTests
     }
 
     // ------------------------------------------------------------ festivos (010) --
-
-    [Fact]
-    public async Task Los_festivos_de_tres_anios_se_siembran_una_vez_y_no_pisan_un_puente_decretado()
-    {
-        using var db = TestDbContextFactory.Create();
-        // La cooperativa registró un puente decretado justo en una fecha de la Ley 51 y un festivo manual en otra.
-        db.Holidays.Add(new Holiday { Date = new DateOnly(2026, 11, 2), Name = "Puente decretado", Origin = HolidayOrigin.Decreed, Year = 2026, CreatedBy = "contadora@coop" });
-        db.Holidays.Add(new Holiday { Date = new DateOnly(2026, 12, 24), Name = "Día de la cooperativa", Origin = HolidayOrigin.Manual, Year = 2026, CreatedBy = "contadora@coop" });
-        await db.SaveChangesAsync();
-
-        var primera = await HolidaysSeeder.AplicarAsync(db, CancellationToken.None);
-        var segunda = await HolidaysSeeder.AplicarAsync(db, CancellationToken.None);
-
-        primera.Should().Be(HolidaysSeeder.Años.Count * 18 - 1, "18 por año menos la fecha que ya era festivo por decreto");
-        segunda.Should().Be(0);
-        var todosLosSantos = await db.Holidays.SingleAsync(h => h.Date == new DateOnly(2026, 11, 2));
-        todosLosSantos.Origin.Should().Be(HolidayOrigin.Decreed, "la fila de la cooperativa se respeta");
-        todosLosSantos.Name.Should().Be("Puente decretado");
-        (await db.Holidays.CountAsync(h => h.Origin == HolidayOrigin.Manual)).Should().Be(1);
-        (await db.Holidays.CountAsync(h => h.Year == 2027)).Should().Be(18);
-        (await db.Holidays.Where(h => h.Year == 2026).Select(h => h.Date).ToListAsync()).Should().OnlyHaveUniqueItems();
-        (await db.Holidays.SingleAsync(h => h.Date == new DateOnly(2026, 1, 12))).Origin.Should().Be(HolidayOrigin.Ley51MovedToMonday, "Reyes cae martes 6 y se corre al lunes 12");
-        (await db.Holidays.SingleAsync(h => h.Date == new DateOnly(2026, 4, 3))).Origin.Should().Be(HolidayOrigin.Ley51Easter, "Viernes Santo");
-        (await db.Holidays.SingleAsync(h => h.Date == new DateOnly(2026, 12, 25))).Origin.Should().Be(HolidayOrigin.Ley51Fixed);
-    }
+    // Feature 013 (T93 regla 2): HolidaysSeeder se retiró. Los festivos Ley 51 los siembra la central
+    // (PlatformNationalValuesSeeder, RegistroCentralDeValoresNacionalesTests) y los proyecta la réplica, que no pisa un festivo
+    // Decreed ni Manual de la cooperativa (EfectoDeReplicacionEnNominaTests).
 
     // ----------------------------------------------------------- políticas (010) --
 

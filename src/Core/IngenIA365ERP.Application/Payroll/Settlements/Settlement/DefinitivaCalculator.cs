@@ -99,7 +99,7 @@ public sealed class DefinitivaCalculator(
                 {
                     TerminationId = terminacion.Id,
                     Kind = deuda.Kind,
-                    LoanPortfolioId = deuda.LoanPortfolioId,
+                    ObligationPublicId = deuda.ObligationPublicId,
                     RecurringNoveltyId = deuda.RecurringNoveltyId,
                     CreatedAt = ahora,
                     CreatedBy = quien,
@@ -115,6 +115,7 @@ public sealed class DefinitivaCalculator(
             }
 
             var conservaAjuste = deuda.Applied < deuda.Proposed;
+            fila.ObligationNumber = deuda.ObligationNumber ?? fila.ObligationNumber;
             fila.Description = deuda.Description;
             fila.ProposedAmount = deuda.Proposed;
             fila.ProposedBreakdownJson = deuda.BreakdownJson;
@@ -125,6 +126,9 @@ public sealed class DefinitivaCalculator(
                 fila.AdjustedBy = null;
                 fila.AdjustedAt = null;
             }
+            // Feature 013: el saldo exacto que simuló un ajuste deja de valer si el descuento vuelve a lo propuesto.
+            if (!conservaAjuste && fila.Status is not (SettlementDeductionStatus.Applied or SettlementDeductionStatus.Reverted))
+                fila.RemainingBalanceAfter = null;
             if (fila.Status is not (SettlementDeductionStatus.Applied or SettlementDeductionStatus.Reverted))
                 fila.Status = conservaAjuste ? SettlementDeductionStatus.Adjusted : SettlementDeductionStatus.Proposed;
             vivas.Add(fila);
@@ -142,7 +146,8 @@ public sealed class DefinitivaCalculator(
 
     private static bool Coincide(SettlementDeduction fila, DeudaPropuesta deuda) =>
         fila.Kind == deuda.Kind
-        && ((deuda.LoanPortfolioId is { } prestamo && fila.LoanPortfolioId == prestamo)
+        // Feature 013 (R118): el crédito se empareja por la obligación de Cartera, nunca por el crédito heredado.
+        && ((deuda.ObligationPublicId is { } obligacion && fila.ObligationPublicId == obligacion)
             || (deuda.RecurringNoveltyId is { } libranza && fila.RecurringNoveltyId == libranza)
             || (deuda.DeductionPublicId is { } pid && fila.PublicId == pid));
 

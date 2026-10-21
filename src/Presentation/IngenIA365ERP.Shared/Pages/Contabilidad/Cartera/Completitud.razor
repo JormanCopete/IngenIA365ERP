@@ -1,0 +1,247 @@
+@page "/contabilidad/cartera/completitud"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Contabilidad
+@using IngenIA365ERP.Shared.Services.Cartera
+@inject IntegracionContableDeCarteraClient Integracion
+@inject INotificationService Notification
+@inject NavigationManager Nav
+
+<PageTitle>Completitud de la matriz de Cartera - IngenIA365ERP</PageTitle>
+
+@* Feature 013, US7 (T0665; contracts/api.md §23.3, contracts/contabilidad.md §3.7, §13.3): lo que le falta a la matriz a una fecha (?date=)
+   para que todo lo que Cartera usa se pueda contabilizar. Cuatro listas —combinaciones en uso sin regla, clases de recaudador sin cuenta
+   puente, reglas con una cuenta que ya no es elegible, hechos sin tipo de comprobante— y los avisos, que no impiden nada. Cada hallazgo
+   dice quién lo corrige (módulo, pantalla y permiso, la tabla de §13.3 en QuienCorrigeEnCartera) y lleva a esa pantalla. Vacía, la matriz
+   está completa. *@
+<PermissionGate Required="Accounting.LendingRules.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Completitud de la matriz contable de Cartera</h3>
+        <div class="toolbar">
+            <label class="campo">A la fecha <input type="date" class="e-input" value="@(_fecha.ToString("yyyy-MM-dd"))" @onchange="@(e => _fecha = LeerFecha(e.Value) ?? _fecha)" /></label>
+            @* Feature 014 (T149): la naturaleza filtra las combinaciones sin regla y las reglas no elegibles. *@
+            <label class="campo">Naturaleza
+                <select class="e-input" @bind="_naturaleza">
+                    @foreach (var n in TextosDeContabilidadDeCartera.FiltrosDeNaturaleza) { <option value="@n.Clave">@n.Nombre</option> }
+                </select>
+            </label>
+            <SfButton CssClass="e-primary" IconCss="e-icons e-search" Disabled="@_carga.Activa" OnClick="@ConsultarAsync">Consultar</SfButton>
+            <a class="e-btn e-outline" href="/contabilidad/cartera/matriz">Matriz</a>
+            <a class="e-btn e-outline" href="/contabilidad/cartera/tipos-de-comprobante">Tipos de comprobante</a>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Revisando la matriz…">
+        @if (_c is { } c)
+        {
+            <div class="kpi-grid">
+                <div class="kpi-card"><span class="kpi-value">@c.Summary.Total</span><span class="kpi-label">Pendientes en total</span></div>
+                <div class="kpi-card"><span class="kpi-value">@c.MissingRules.Count</span><span class="kpi-label">Combinaciones sin regla</span></div>
+                <div class="kpi-card"><span class="kpi-value">@c.CollectorsWithoutBridge.Count</span><span class="kpi-label">Recaudadores sin cuenta puente</span></div>
+                <div class="kpi-card"><span class="kpi-value">@c.IneligibleRules.Count</span><span class="kpi-label">Reglas con cuenta no elegible</span></div>
+                <div class="kpi-card"><span class="kpi-value">@c.UnmappedOperations.Count</span><span class="kpi-label">Hechos sin tipo de comprobante</span></div>
+            </div>
+            @if (c.Summary.Total == 0)
+            {
+                <p class="aviso aviso-ok">La matriz está completa al @c.Date.ToString("dd/MM/yyyy"): todo lo que Cartera usa tiene su regla y su tipo de comprobante.</p>
+            }
+
+            @if (Faltantes(c).Count > 0)
+            {
+                <h4>Combinaciones en uso sin regla</h4>
+                <p class="texto-tenue">En captaciones y aportes la cuenta sugerida es la del CUIF: una sugerencia pendiente de la contadora, no una regla.</p>
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th>Hecho</th><th>Rol</th><th>Naturaleza</th><th>Dimensiones</th><th>Líneas que la usan</th><th>Último uso</th><th>Cuenta sugerida</th><th>Quién corrige</th></tr></thead>
+                        <tbody>
+                            @foreach (var f in Faltantes(c))
+                            {
+                                <tr>
+                                    <td>@Hecho(f.Operation)</td>
+                                    <td>@TextosDeContabilidadDeCartera.Rol(f.Role)</td>
+                                    <td>@TextosDeContabilidadDeCartera.NaturalezaDeLinea(f.Nature ?? "Placement")</td>
+                                    <td>@Dimensiones(f.Dimensions)</td>
+                                    <td>@(f.CreditLines.Count == 0 ? "—" : string.Join(", ", f.CreditLines))</td>
+                                    <td>@(f.LastUsedAt?.ToString("dd/MM/yyyy") ?? "—")</td>
+                                    <td>@(f.SuggestedAccount ?? "—")</td>
+                                    <td>@Corrige(Matriz, $"/contabilidad/cartera/matriz?rol={Uri.EscapeDataString(f.Role)}&operacion={Uri.EscapeDataString(f.Operation)}", "Crear la regla")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+
+            @if (c.CollectorsWithoutBridge.Count > 0)
+            {
+                <h4>Clases de recaudador sin cuenta puente</h4>
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th>Clase</th><th>Recaudadores</th><th>Quién corrige</th></tr></thead>
+                        <tbody>
+                            @foreach (var r in c.CollectorsWithoutBridge)
+                            {
+                                <tr>
+                                    <td>@TextosDePagos.ClaseDeRecaudador(r.CollectorClass)</td>
+                                    <td>@(r.Collectors.Count == 0 ? "—" : string.Join(", ", r.Collectors))</td>
+                                    <td>@Corrige(Matriz, $"/contabilidad/cartera/matriz?rol={RolDelPuente}", "Crear la regla")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+
+            @if (c.IneligibleRules.Any(r => TextosDeContabilidadDeCartera.RolDeLaNaturaleza(r.Role, _naturaleza)))
+            {
+                <h4>Reglas con una cuenta que ya no es elegible</h4>
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th>Hecho</th><th>Rol</th><th>Cuenta</th><th>Por qué</th><th>Quién corrige</th></tr></thead>
+                        <tbody>
+                            @foreach (var r in c.IneligibleRules.Where(r => TextosDeContabilidadDeCartera.RolDeLaNaturaleza(r.Role, _naturaleza)))
+                            {
+                                <tr>
+                                    <td>@Hecho(r.Operation)</td><td>@TextosDeContabilidadDeCartera.Rol(r.Role)</td><td>@r.AccountCode</td><td>@r.Reason</td>
+                                    <td>
+                                        @Corrige(PlanDeCuentas, "/contabilidad/plan-de-cuentas", "Plan de cuentas")
+                                        <br /><a href="@($"/contabilidad/cartera/matriz?regla={r.RulePublicId}")">o cambie la cuenta de la regla</a>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+
+            @if (c.UnmappedOperations.Count > 0)
+            {
+                <h4>Hechos sin tipo de comprobante</h4>
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th>Hecho</th><th>Clase de recaudador</th><th>Qué pasa</th><th>Quién corrige</th></tr></thead>
+                        <tbody>
+                            @foreach (var o in c.UnmappedOperations)
+                            {
+                                <tr>
+                                    <td>@TextosDeContabilidadDeCartera.TipoDeHecho(o.Operation)</td>
+                                    <td>@(string.IsNullOrWhiteSpace(o.CollectorClass) || o.CollectorClass == "*" ? "Todas" : TextosDePagos.ClaseDeRecaudador(o.CollectorClass))</td>
+                                    <td>@o.Message</td>
+                                    <td>@Corrige(TiposDeComprobante, "/contabilidad/cartera/tipos-de-comprobante", "Mapear")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+
+            @if (c.Warnings.Count > 0)
+            {
+                <h4>Avisos (no impiden contabilizar)</h4>
+                <ul>
+                    @foreach (var a in c.Warnings)
+                    {
+                        <li>
+                            @a.Message
+                            @if (a.RulePublicId is { } regla) { <text> · </text><a href="@($"/contabilidad/cartera/matriz?regla={regla}")">Ver la regla</a> }
+                            else if (a.AccountCode is not null) { <text> · </text><a href="/contabilidad/plan-de-cuentas">Plan de cuentas</a> }
+                        </li>
+                    }
+                </ul>
+            }
+        }
+        else if (_error is not null)
+        {
+            <p class="aviso aviso-alerta">@_error</p>
+        }
+    </IndicadorDeCarga>
+</div>
+</PermissionGate>
+
+@code {
+    /// <summary>Quién corrige cada lista (la tabla de §13.3): módulo y permiso; la pantalla la da cada fila.</summary>
+    private sealed record Responsable(string Modulo, string Permiso);
+
+    private static readonly Responsable Matriz = new("Contabilidad", "Accounting.LendingRules.Manage");
+    private static readonly Responsable TiposDeComprobante = new("Contabilidad", "Accounting.LendingRules.Manage");
+    private static readonly Responsable PlanDeCuentas = new("Contabilidad", "Accounting.Accounts.Manage");
+
+    /// <summary>El rol de la cuenta puente del recaudo.</summary>
+    private const string RolDelPuente = "RecaudoPorAplicar";
+
+    [SupplyParameterFromQuery(Name = "date")] public DateOnly? FechaInicial { get; set; }
+
+    private readonly EstadoDeCarga _carga = new();
+    private DateOnly _fecha = DateOnly.FromDateTime(DateTime.Today);
+    private CompletitudDeCarteraDto? _c;
+    private string? _error;
+
+    /// <summary>Feature 014 (T149): el filtro de naturaleza (vacío = todas).</summary>
+    private string _naturaleza = "";
+
+    /// <summary>Las combinaciones sin regla de la naturaleza elegida (sin naturaleza en la fila = de créditos).</summary>
+    private IReadOnlyList<ReglaFaltanteDeCarteraDto> Faltantes(CompletitudDeCarteraDto c) => c.MissingRules
+        .Where(f => string.IsNullOrEmpty(_naturaleza) || (_naturaleza == "Deposit") == (f.Nature is "Deposit" or "Contribution"))
+        .ToList();
+
+    protected override Task OnParametersSetAsync()
+    {
+        if (FechaInicial is { } f) _fecha = f;
+        return CargarAsync();
+    }
+
+    /// <summary>Consultar deja la fecha en la dirección (?date=) para poder compartirla.</summary>
+    private Task ConsultarAsync()
+    {
+        if (FechaInicial == _fecha) return CargarAsync();
+        Nav.NavigateTo(Nav.GetUriWithQueryParameter("date", _fecha.ToString("yyyy-MM-dd")));
+        return Task.CompletedTask;
+    }
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Integracion.CompletitudAsync(_fecha);
+        _c = r.IsSuccess ? r.Value : null;
+        _error = r.IsSuccess ? null : r.ErrorMessage ?? "No se pudo revisar la matriz.";
+        if (!r.IsSuccess) await Notification.ErrorAsync(_error!);
+    }
+
+    private static RenderFragment Corrige(Responsable quien, string pagina, string accion) => __builder =>
+    {
+        <span>@quien.Modulo · <a href="@pagina">@accion</a></span>
+        <br /><span class="texto-tenue">Permiso @quien.Permiso</span>
+    };
+
+    private static string Hecho(string? operacion) => string.IsNullOrWhiteSpace(operacion) || operacion == "*"
+        ? "Todos"
+        : TextosDeContabilidadDeCartera.TipoDeHecho(operacion);
+
+    private static string Dimensiones(DimensionesDeReglaDeCarteraRequest d)
+    {
+        static string SiNo(bool v) => v ? "sí" : "no";
+        var partes = new[]
+        {
+            d.CreditLineCode is { } l ? $"línea {l}" : null,
+            d.ModalityCode is { } m ? $"modalidad {m}" : null,
+            d.SubsegmentCode is { } s ? $"subsegmento {s}" : null,
+            d.RiskCategory is { } c ? $"categoría {c}" : null,
+            d.ConceptCode is { } k ? TextosDeCreditos.Concepto(k).ToLowerInvariant() : null,
+            d.IsEmployee is { } e ? $"empleado {SiNo(e)}" : null,
+            d.InGracePeriod is { } g ? $"en gracia {SiNo(g)}" : null,
+            d.OnBehalfOfAssociate is { } p ? $"por cuenta del asociado {SiNo(p)}" : null,
+            d.Restructured is { } r ? $"reestructurado {SiNo(r)}" : null,
+            d.CollectorClass is { } q ? $"recaudo {TextosDePagos.ClaseDeRecaudador(q).ToLowerInvariant()}" : null,
+            d.ReasonCode is { } mo ? $"motivo {TextosDeContabilidadDeCartera.Motivo(mo).ToLowerInvariant()}" : null,
+            d.LineNature is { } n ? $"naturaleza {TextosDeContabilidadDeCartera.ValorDeCaptacion(n).ToLowerInvariant()}" : null,
+            d.DepositClass is { } dc ? $"clase {TextosDeContabilidadDeCartera.ValorDeCaptacion(dc).ToLowerInvariant()}" : null,
+            d.IssueTermBand is { } pz ? $"plazo {TextosDeContabilidadDeCartera.ValorDeCaptacion(pz).ToLowerInvariant()}" : null,
+            d.ContributionClass is { } ca ? $"aportes {TextosDeContabilidadDeCartera.ValorDeCaptacion(ca).ToLowerInvariant()}" : null,
+            d.AccountFlag is { } mk ? $"marca {TextosDeContabilidadDeCartera.ValorDeCaptacion(mk).ToLowerInvariant()}" : null,
+        }.Where(x => x is not null).ToList();
+        return partes.Count == 0 ? "Todas" : string.Join(" · ", partes);
+    }
+
+    private static DateOnly? LeerFecha(object? valor) =>
+        DateOnly.TryParse(valor?.ToString(), System.Globalization.CultureInfo.InvariantCulture, out var f) ? f : null;
+}

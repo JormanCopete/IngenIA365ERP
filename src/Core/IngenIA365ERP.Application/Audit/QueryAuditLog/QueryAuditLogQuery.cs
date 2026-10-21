@@ -35,6 +35,12 @@ public sealed record QueryAuditLogQuery(
 
     /// <summary>Feature 012 (T423; <c>?result=</c>): <c>Rejected</c> sólo los rechazos, <c>Accepted</c> lo demás; nulo, todo.</summary>
     public string? Outcome { get; init; }
+
+    /// <summary>
+    /// Feature 013 (US5, T0560; api.md §24, A11): <c>?operationKey=</c> trae juntos el intento (<c>Lending.ObligationContract.Attempted</c>) y el hecho
+    /// del contrato de obligaciones; un intento sin hecho pasado el tiempo máximo de una transacción se rotula «revertido con el recaudador».
+    /// </summary>
+    public string? OperationKey { get; init; }
 }
 
 public sealed class QueryAuditLogQueryValidator : AbstractValidator<QueryAuditLogQuery>
@@ -48,6 +54,7 @@ public sealed class QueryAuditLogQueryValidator : AbstractValidator<QueryAuditLo
             .Must(r => r is null or "Rejected" or "Accepted")
             .WithMessage("«result» admite Rejected o Accepted.");
         RuleForEach(x => x.Modules).NotEmpty().MaximumLength(60);
+        RuleFor(x => x.OperationKey).MaximumLength(200);
 
         RuleFor(x => x).Custom((query, ctx) =>
         {
@@ -90,10 +97,30 @@ public sealed class QueryAuditLogQueryHandler
     /// </summary>
     private readonly ICurrentTenantService _cooperativaActual;
 
-    public QueryAuditLogQueryHandler(IAuditService audit, ICurrentTenantService cooperativaActual)
+    private readonly IDateTimeService? _reloj;
+
+    /// <summary>
+    /// Feature 013 (A11): lo que puede durar la transacción de un recaudador. Un intento del contrato sin su hecho después de esto fue revertido con el
+    /// recaudador (el intento se escribe aparte y sobrevive; el hecho viaja en la misma transacción).
+    /// </summary>
+    public static readonly TimeSpan TiempoMaximoDeUnaTransaccion = TimeSpan.FromMinutes(5);
+
+    /// <summary>El rótulo de un intento del contrato sin hecho (A11).</summary>
+    public const string RotuloRevertidoConElRecaudador = "Revertido con el recaudador";
+
+    private static readonly HashSet<string> HechosDelContrato =
+    [
+        IngenIA365ERP.Application.Common.Audit.AuditEventTypes.LendingObligationContractApplied,
+        IngenIA365ERP.Application.Common.Audit.AuditEventTypes.LendingObligationContractReversed,
+        IngenIA365ERP.Application.Common.Audit.AuditEventTypes.LendingObligationContractCreditBalanceResolved,
+        IngenIA365ERP.Application.Common.Audit.AuditEventTypes.LendingObligationContractRejected,
+    ];
+
+    public QueryAuditLogQueryHandler(IAuditService audit, ICurrentTenantService cooperativaActual, IDateTimeService? reloj = null)
     {
         _audit = audit;
         _cooperativaActual = cooperativaActual;
+        _reloj = reloj;
     }
 
     public async Task<Result<PagedResult<AuditLogEntryDto>>> Handle(
@@ -128,15 +155,36 @@ public sealed class QueryAuditLogQueryHandler
             PageSize = pageSize,
             Modules = request.Modules?.Where(m => !string.IsNullOrWhiteSpace(m)).Select(m => m.Trim()).Distinct().ToList(),
             Outcome = NullIfBlank(request.Outcome),
+            OperationKey = NullIfBlank(request.OperationKey)?.Trim(),
         };
 
         var paged = await _audit.QueryAsync(serviceParams, ct);
 
         var items = paged.Items.Select(MapToDto).ToList();
+        if (serviceParams.OperationKey is not null) items = Rotular(items);
         var result = new PagedResult<AuditLogEntryDto>(
             items, page, pageSize, paged.TotalCount);
 
         return Result.Success(result);
+    }
+
+    /// <summary>
+    /// A11: con <c>?operationKey=</c>, un intento del contrato sin hecho entre él y el intento siguiente de la misma clave (o ahora), pasado el tiempo
+    /// máximo de una transacción, se rotula «revertido con el recaudador»: el recaudador deshizo su transacción y con ella el hecho que Cartera había
+    /// dejado dentro. El hecho de un reintento posterior no cuenta para el intento anterior.
+    /// </summary>
+    private List<AuditLogEntryDto> Rotular(List<AuditLogEntryDto> items)
+    {
+        const string intento = IngenIA365ERP.Application.Common.Audit.AuditEventTypes.LendingObligationContractAttempted;
+        var ahora = _reloj?.UtcNow ?? DateTime.UtcNow;
+        var hechos = items.Where(i => HechosDelContrato.Contains(i.Action)).Select(i => i.Timestamp).ToList();
+        var intentos = items.Where(i => i.Action == intento).Select(i => i.Timestamp).Order().ToList();
+        bool Revertido(AuditLogEntryDto i)
+        {
+            var siguiente = intentos.Where(t => t > i.Timestamp).Cast<DateTime?>().FirstOrDefault() ?? DateTime.MaxValue;
+            return !hechos.Any(h => h >= i.Timestamp && h < siguiente) && ahora - i.Timestamp > TiempoMaximoDeUnaTransaccion;
+        }
+        return items.Select(i => i.Action == intento && Revertido(i) ? i with { Label = RotuloRevertidoConElRecaudador } : i).ToList();
     }
 
     private static string? NullIfBlank(string? value) =>

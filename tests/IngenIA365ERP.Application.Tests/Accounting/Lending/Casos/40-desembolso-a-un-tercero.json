@@ -1,0 +1,143 @@
+{
+  "descripcion": "Tercero natural: DesembolsoPorGirar lleva al beneficiario sellado en la orden (ThirdPartyPayment), no al deudor.",
+  "sobre": {
+    "version": 1,
+    "kind": "Business",
+    "originModule": "CAR",
+    "originEventKey": "Confirmation",
+    "origin": {
+      "kind": "Operation",
+      "documentClass": null,
+      "documentTypeCode": null,
+      "number": "DES-000124",
+      "publicId": "0d0d0176-0000-4000-8000-000000000176",
+      "operationDate": "2026-11-04"
+    },
+    "related": null,
+    "chainRootPublicId": "0e0e0177-0000-4000-8000-000000000177",
+    "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+    "costCenterPublicId": null,
+    "warehouseCode": null,
+    "personPublicId": "a1b2c3d4-0000-4000-8000-000000000003",
+    "currency": "COP",
+    "exchangeRate": 1,
+    "originUser": {
+      "centralUserId": "d4e5f6a7-b8c9-4d0e-9f1a-2b3c4d5e6f70",
+      "name": "Usuario de ensayo"
+    },
+    "emittedAt": "2026-11-04T15:00:00Z"
+  },
+  "mensajes": [
+    {
+      "messageId": "0f0f0179-0000-4000-8000-000000000179",
+      "type": "CreditoDesembolsado",
+      "kind": "Business",
+      "originDocumentClass": "LoanDisbursement",
+      "payload": {
+        "loan": {
+          "loanPublicId": "7b8c9d0e-1f2a-4b3c-9d4e-000000000124",
+          "loanNumber": "000124"
+        },
+        "debtorPersonPublicId": "a1b2c3d4-0000-4000-8000-000000000003",
+        "valueDate": "2026-11-04",
+        "registeredAt": "2026-11-04T15:00:00Z",
+        "dimensions": {
+          "creditLineCode": "LIB01",
+          "modalityCode": "CONSUMO",
+          "subsegmentCode": "ConLibranza",
+          "riskCategory": "A",
+          "riskSubcategory": "None",
+          "isEmployee": false,
+          "inGracePeriod": false,
+          "restructured": false,
+          "writtenOff": false,
+          "collectorClass": null,
+          "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+          "impairmentModel": "ArrearsAnnex1",
+          "riskSegment": "CONSUMO",
+          "valueUnit": "Pesos"
+        },
+        "amounts": [
+          {
+            "concept": "Principal",
+            "installmentNumber": null,
+            "amount": 2000000.0,
+            "uvrAmount": null,
+            "onBehalfOfAssociate": false,
+            "reasonCode": "ThirdPartyPayment"
+          }
+        ],
+        "original": null,
+        "rulesVersion": "LND-2026.1",
+        "tranche": {
+          "number": 1,
+          "isLast": true
+        },
+        "disbursementForm": "ThirdPartyPayment",
+        "payeePersonPublicId": "a1b2c3d4-0000-4000-8000-0000000000c7",
+        "grossAmount": 2000000.0,
+        "payoffDeductions": [],
+        "netToDisburse": 2000000.0,
+        "disbursementOrderPublicId": "0d1e0178-0000-4000-8000-000000000178",
+        "inKind": null,
+        "plan": {
+          "scheduleVersion": 1,
+          "amortizationSystem": "LevelPayment",
+          "periodicity": "Monthly",
+          "installmentCount": 36,
+          "installmentAmount": 392184.0,
+          "firstDueDate": "2026-12-30",
+          "finalDueDate": "2029-11-30",
+          "annualEffectiveRate": 0.245,
+          "dayCountConvention": "Thirty360",
+          "rulesVersion": "LND-2026.1"
+        }
+      }
+    }
+  ],
+  "esperado": {
+    "tipo": "DS",
+    "fecha": "2026-11-04",
+    "origen": "LendingIssuedDocument",
+    "lineas": [
+      {
+        "rol": "Capital",
+        "cuenta": "14410501",
+        "debito": 2000000.0,
+        "credito": 0.0,
+        "tercero": "luis",
+        "cruce": "PG 000124",
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "CreditoDesembolsado"
+          ],
+          "concepto": "Principal",
+          "creditos": [
+            "000124"
+          ]
+        }
+      },
+      {
+        "rol": "DesembolsoPorGirar",
+        "cuenta": "24959502",
+        "debito": 0.0,
+        "credito": 2000000.0,
+        "tercero": "beneficiario",
+        "cruce": null,
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "CreditoDesembolsado"
+          ],
+          "concepto": "Principal",
+          "creditos": [
+            "000124"
+          ]
+        }
+      }
+    ]
+  }
+}

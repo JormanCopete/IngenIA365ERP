@@ -1,15 +1,18 @@
 using FluentAssertions;
 using IngenIA365ERP.Application.Attachments.UploadAttachment;
 using IngenIA365ERP.Application.Common.Audit;
+using IngenIA365ERP.Application.Common.Integration.Lending;
 using IngenIA365ERP.Application.Common.Interfaces.Audit;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Payroll.Runs.ApprovePayrollRun;
 using IngenIA365ERP.Application.Payroll.Runs.CalculatePayrollRun;
 using IngenIA365ERP.Application.Payroll.Services;
 using IngenIA365ERP.Application.Payroll.Settlements.Settlement;
+using IngenIA365ERP.Application.Tests.Common.Integration.Lending;
 using IngenIA365ERP.Application.Tests.Payroll.Settlements.Common;
 using IngenIA365ERP.Domain.Enums.Payroll;
 using IngenIA365ERP.Domain.Payroll.Calculation;
+using IngenIA365ERP.Domain.Payroll.Policies;
 using IngenIA365ERP.Domain.Payroll.Settlements;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -18,19 +21,23 @@ using NSubstitute;
 namespace IngenIA365ERP.Application.Tests.Payroll.Settlements.Settlement;
 
 /// <summary>
-/// Feature 010, US3 (FR-020, T065; research R14): aprobar la definitiva contabiliza por el ciclo común,
-/// aplica cada descuento de Cartera con el <b>recaudo real</b> (<c>RecaudoDeCredito</c>: cuotas, transacción
-/// RC y comprobante RC por el contrato) con el valor aplicado, cierra la ficha, apaga la bandera de
-/// empleado, deja el movimiento de vacaciones y adjunta el PDF; la ordinaria siguiente excluye al
-/// retirado y la prima del semestre sabe lo que ya se pagó aquí. El recaudo corre dentro de la misma
-/// unidad de trabajo sin reintento anidado: si Cartera falla, nada queda aprobado.
+/// Feature 010, US3 (FR-020, T065; research R14): aprobar la definitiva contabiliza por el ciclo común, cierra la ficha,
+/// apaga la bandera de empleado, deja el movimiento de vacaciones y adjunta el PDF; la ordinaria siguiente excluye al
+/// retirado y la prima del semestre sabe lo que ya se pagó aquí.
+/// <para>
+/// Feature 013 (T0107; T92, R104, R109): los descuentos de Cartera se aplican por el contrato de obligaciones
+/// (<c>ContratoDeObligacionesDePrueba</c>) en el gancho <c>antesDeContabilizar</c>: se vuelve a consultar (conjunto distinto →
+/// <c>LoanProposalOutdated</c>), el lote va <c>NonInteractive</c>, recaudador <c>NOM</c>/<c>Payroll</c>, clase
+/// <c>OwnPayrollDeduction</c>, pagadora Ana, fecha valor = aprobación, clave <c>NOM:{run:N}:{obligación:N}</c> en orden
+/// ascendente, todo o nada (<c>LoanAmountsChanged</c>), y con «Cartera por activar» exige el reconocimiento.
+/// </para>
 /// </summary>
 public class ApproveSettlementCommandHandlerTests
 {
-    private static ApproveSettlementCommand Aprobar(Guid runId) => new(runId, Confirm: true);
+    private static ApproveSettlementCommand Aprobar(Guid runId, bool reconocer = false) => new(runId, Confirm: true, AcknowledgeLendingPendingActivation: reconocer);
 
     [Fact]
-    public async Task Aprobar_contabiliza_recauda_en_Cartera_por_obligacion_con_lo_aplicado_cierra_la_ficha_y_adjunta_el_documento()
+    public async Task Aprobar_aplica_el_lote_por_el_contrato_guarda_comprobante_y_saldo_contabiliza_DESC_CARTERA_y_cierra_la_ficha()
     {
         var p = new DefinitivaDePrueba();
         p.ConContabilidad();
@@ -38,7 +45,8 @@ public class ApproveSettlementCommandHandlerTests
         persona.IsEmployee = true;
         await p.D.Db.SaveChangesAsync();
         var t = await p.RegistrarAnaAsync();
-        (await p.Ajustar().Handle(new AdjustSettlementDeductionCommand(t.RunPublicId, p.Descuento(t, 1001).ObligationPublicId, 1_000_000m, "Refinancia el resto"), CancellationToken.None)).IsSuccess.Should().BeTrue();
+        (await p.Ajustar().Handle(new AdjustSettlementDeductionCommand(t.RunPublicId, p.Descuento(t, "1001").ObligationPublicId, 1_000_000m, "Refinancia el resto"), CancellationToken.None)).IsSuccess.Should().BeTrue();
+        p.Contrato.ComoRespondeAplicar[p.Credito1001.ObligationPublicId] = new(ResultadoDelContrato.Applied, SaldoQueQueda: 500_000m);
         p.Sender.Send(Arg.Any<UploadAttachmentCommand>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult(Result.Success(Guid.NewGuid())));
 
         var r = await p.Aprobar().Handle(Aprobar(t.RunPublicId), CancellationToken.None);
@@ -48,47 +56,38 @@ public class ApproveSettlementCommandHandlerTests
         r.Value.PortfolioPayments.Should().HaveCount(2, "dos créditos con valor aplicado; la libranza no pasa por Cartera");
         r.Value.SettlementDocumentAttachmentPublicId.Should().NotBeNull();
 
-        // Cartera recaudó de verdad, una transacción RC por obligación con lo APLICADO (no lo propuesto), a la fecha de retiro.
-        var recaudos = await p.D.Db.LendingTransactions.AsNoTracking().Where(x => x.VoucherType == "RC").ToListAsync();
-        recaudos.Should().HaveCount(2, "dos créditos con valor aplicado; la libranza no pasa por Cartera");
-        var recaudo1001 = recaudos.Single(x => x.PortfolioNumber == 1001);
-        recaudo1001.CreditAmount.Should().Be(1_000_000m);
-        recaudo1001.TransactionDate.Should().Be(DefinitivaDePrueba.Retiro);
-        recaudos.Single(x => x.PortfolioNumber == 1002).CreditAmount.Should().Be(300_000m);
-        // Cuatro cuotas de 1001 quedaron en cero y dos siguen vivas; las tres de 1002 se saldaron.
-        var cuotas1001 = await p.D.Db.PendingInstallments.AsNoTracking().Where(x => x.PortfolioNumber == 1001).ToListAsync();
-        cuotas1001.Count(x => x.BalanceCapital == 0m).Should().Be(4);
-        cuotas1001.Sum(x => x.BalanceCapital).Should().Be(500_000m);
-        (await p.D.Db.PendingInstallments.AsNoTracking().Where(x => x.PortfolioNumber == 1002).SumAsync(x => x.BalanceCapital)).Should().Be(0m);
+        // El lote: uno solo, sin interacción, de la nómina, en orden ascendente de obligación.
+        var lote = p.Contrato.Aplicaciones.Should().ContainSingle().Subject;
+        lote.Collector.Should().Be(new Recaudador("NOM", ClaseDeRecaudador.Payroll));
+        lote.Form.Should().Be(FormaDeAplicacion.NonInteractive);
+        lote.NotDeducted.Should().BeEmpty();
+        lote.Payments.Select(x => x.ObligationPublicId).Should().BeInAscendingOrder();
+        lote.Payments.Should().OnlyContain(x => x.MeansClass == ClaseDeMedioDeRecaudo.OwnPayrollDeduction && x.PayerPublicId == p.PersonaDeAna
+                                                && x.ValueDate == new DateOnly(2026, 9, 20) && x.SimulationId == null
+                                                && x.IdempotencyKey == $"NOM:{t.RunPublicId:N}:{x.ObligationPublicId:N}");
+        var pago1001 = lote.Payments.Single(x => x.ObligationPublicId == p.Credito1001.ObligationPublicId);
+        pago1001.Modality.Should().Be(ModalidadDePago.FreeAmount, "se ajustó");
+        pago1001.Amount.Should().Be(1_000_000m, "lo APLICADO, no lo propuesto");
+        var pago1002 = lote.Payments.Single(x => x.ObligationPublicId == p.Credito1002.ObligationPublicId);
+        pago1002.Modality.Should().Be(ModalidadDePago.FullPayoff, "política SaldoTotal sin ajuste");
+        pago1002.Amount.Should().Be(300_000m);
 
-        // El comprobante RC lo hizo Cartera por el contrato: la «caja» es la cuenta débito parametrizada de DESC_CARTERA y el
-        // crédito va a la cuenta de cartera de la línea, con Ana como tercera; la nómina no duplica ese asiento (D-08).
-        var cuentaDescuento = await (from a in p.D.Db.PayrollConceptDefinitionAccounts join c in p.D.Db.ChartOfAccounts on a.DebitAccountId equals c.Id
-                                     where a.ConceptCode == WellKnownConceptCodes.LoanDeduction select c).SingleAsync();
-        var cuentaCartera = await p.D.Db.ChartOfAccounts.SingleAsync(c => c.Code == DefinitivaDePrueba.CuentaCartera);
-        var comprobantesRc = await p.D.Db.AccountingDocuments.AsNoTracking().Include(d => d.VoucherType).Where(d => d.SourceType == "LoanPayment").ToListAsync();
-        comprobantesRc.Should().HaveCount(2);
-        comprobantesRc.Should().OnlyContain(d => d.VoucherType!.Code == "RC" && d.Date == DefinitivaDePrueba.Retiro);
-        var rc1001 = comprobantesRc.Single(d => d.SourcePublicId == recaudo1001.PublicId);
-        var lineasRc = await p.D.Db.JournalEntries.AsNoTracking().Where(j => j.DocumentId == rc1001.Id).ToListAsync();
-        lineasRc.Single(j => j.Debit > 0m).Should().Match<Domain.Entities.Accounting.Transactions.JournalEntry>(j => j.AccountId == cuentaDescuento.Id && j.Debit == 1_000_000m && j.PersonId == p.D.Ana.PersonId);
-        lineasRc.Single(j => j.Credit > 0m).Should().Match<Domain.Entities.Accounting.Transactions.JournalEntry>(j => j.AccountId == cuentaCartera.Id && j.Credit == 1_000_000m && j.PersonId == p.D.Ana.PersonId);
-        (await p.D.Db.JournalEntries.AsNoTracking().CountAsync(j => j.AccountId == cuentaDescuento.Id && j.Document!.SourceType == "SettlementRun")).Should().Be(0, "DESC_CARTERA no lleva asiento en el comprobante de la definitiva");
-
-        // El descuento guarda el recaudo y el saldo que quedó; el saldo bajó exactamente lo aplicado.
+        // El descuento guarda el comprobante de Cartera y el saldo que quedó.
         var terminacion = await p.D.Db.EmploymentTerminations.Include(x => x.Deductions).SingleAsync(x => x.PublicId == t.TerminationPublicId);
         terminacion.Status.Should().Be(TerminationStatus.Settled);
         terminacion.SettlementDocumentAttachmentPublicId.Should().Be(r.Value.SettlementDocumentAttachmentPublicId);
         terminacion.Deductions.Should().OnlyContain(d => d.Status == SettlementDeductionStatus.Applied);
-        var d1001 = terminacion.Deductions.Single(d => d.LoanPortfolioId == p.Credito1001.Id);
-        d1001.CarteraTransactionPublicId.Should().Be(recaudo1001.PublicId);
+        var d1001 = terminacion.Deductions.Single(d => d.ObligationPublicId == p.Credito1001.ObligationPublicId);
+        d1001.ObligationNumber.Should().Be("1001");
+        d1001.CarteraTransactionPublicId.Should().NotBeNull().And.Be(r.Value.PortfolioPayments.Single(x => x.ObligationPublicId == d1001.PublicId).PaymentPublicId);
         d1001.RemainingBalanceAfter.Should().Be(500_000m);
-        var credito1001 = await p.D.Db.LoanPortfolios.AsNoTracking().SingleAsync(l => l.Id == p.Credito1001.Id);
-        credito1001.CurrentBalance.Should().Be(500_000m, "Cartera bajó exactamente lo aplicado");
-        credito1001.PaidInstallments.Should().Be(4);
-        credito1001.ClosingDate.Should().BeNull();
-        (await p.D.Db.LoanPortfolios.AsNoTracking().SingleAsync(l => l.Id == p.Credito1002.Id)).ClosingDate.Should().Be(DefinitivaDePrueba.Retiro, "el crédito 1002 quedó cancelado");
         r.Value.PortfolioPayments.Single(x => x.ObligationPublicId == d1001.PublicId).Remaining.Should().Be(500_000m);
+
+        // Enmienda D-08: DESC_CARTERA contabiliza en el comprobante de la definitiva contra la cuenta del concepto.
+        var cuentaDescuento = await (from a in p.D.Db.PayrollConceptDefinitionAccounts join c in p.D.Db.ChartOfAccounts on a.CreditAccountId equals c.Id
+                                     where a.ConceptCode == WellKnownConceptCodes.LoanDeduction select c).SingleAsync();
+        (await p.D.Db.JournalEntries.AsNoTracking().Where(j => j.AccountId == cuentaDescuento.Id && j.Document!.SourceType == "SettlementRun").SumAsync(j => j.Credit + j.Debit))
+            .Should().Be(1_300_000m, "lo aplicado de los dos créditos va a la cuenta de DESC_CARTERA");
 
         // La ficha se cerró y la persona dejó de ser empleada.
         var ficha = await p.D.Db.Employees.SingleAsync(e => e.Id == p.D.Ana.Id);
@@ -97,62 +96,126 @@ public class ApproveSettlementCommandHandlerTests
         ficha.TerminationCause.Should().Be("Despido sin justa causa");
         (await p.D.Db.People.SingleAsync(x => x.Id == p.D.Ana.PersonId)).IsEmployee.Should().BeFalse();
 
-        // La corrida quedó aprobada con su comprobante y las vacaciones pagadas quedaron como movimiento.
         var run = await p.D.Db.PayrollRuns.Include(x => x.AccountingDocument).SingleAsync(x => x.PublicId == t.RunPublicId);
         run.Status.Should().Be(PayrollRunStatus.Approved);
-        run.AccountingDocument.Should().NotBeNull();
         run.AccountingDocument!.SourceType.Should().Be("SettlementRun");
+        run.LendingActivationAckBy.Should().BeNull("nadie estaba en una carga por activar");
         var movimiento = await p.D.Db.VacationMovements.SingleAsync(m => m.EmployeeId == p.D.Ana.Id && m.Kind == VacationMovementKind.SettlementPayout);
         movimiento.Status.Should().Be(VacationMovementStatus.Liquidated);
         movimiento.PayrollRunId.Should().Be(run.Id);
-        movimiento.BusinessDays.Should().BePositive();
 
         await p.D.Audit.Received(1).AppendAsync(Arg.Is<AuditEventDocument>(e => e.Action == AuditEventTypes.PayrollEmployeeTerminated), Arg.Any<CancellationToken>());
         await p.D.Audit.Received(1).AppendAsync(Arg.Is<AuditEventDocument>(e => e.Action == AuditEventTypes.PayrollSettlementApproved), Arg.Any<CancellationToken>());
     }
 
     [Fact]
-    public async Task Si_Cartera_rechaza_un_recaudo_nada_queda_aprobado()
+    public async Task Politica_SoloCuotasCausadas_aplica_la_cuota_del_ciclo()
+    {
+        var p = new DefinitivaDePrueba();
+        p.D.Politica(CompanyPolicyKeys.DeduccionAlRetiroModo, CompanyPolicyKeys.DeduccionAlRetiroModoValores.SoloCuotasCausadas, new DateOnly(2026, 1, 1));
+        p.ConContabilidad();
+        var t = await p.RegistrarAnaAsync();
+        p.Descuento(t, "1001").Proposed.Should().Be(250_000m, "SoloCuotasCausadas propone lo exigible (DueAmount)");
+
+        var r = await p.Aprobar().Handle(Aprobar(t.RunPublicId), CancellationToken.None);
+
+        r.IsSuccess.Should().BeTrue(r.Error.Message);
+        p.Contrato.Aplicaciones.Single().Payments.Should().OnlyContain(x => x.Modality == ModalidadDePago.CycleInstallment);
+    }
+
+    [Fact]
+    public async Task Un_item_rechazado_responde_LoanAmountsChanged_con_los_valores_de_Cartera_y_nada_queda_aprobado()
     {
         var p = new DefinitivaDePrueba();
         p.ConContabilidad();
         var t = await p.RegistrarAnaAsync();
-        // El crédito 1001 tiene saldo pero Cartera no tiene sus cuotas: el recaudo real responde Payment.NoInstallments.
-        foreach (var cuota in await p.D.Db.PendingInstallments.Where(x => x.PortfolioNumber == 1001).ToListAsync()) cuota.IsDeleted = true;
-        await p.D.Db.SaveChangesAsync();
+        p.Contrato.ComoRespondeAplicar[p.Credito1001.ObligationPublicId] = ContratoDeObligacionesDePrueba.Rechazo();
 
         var r = await p.Aprobar().Handle(Aprobar(t.RunPublicId), CancellationToken.None);
 
         r.IsFailure.Should().BeTrue();
-        r.Error.Code.Should().Be("Payment.NoInstallments");
-        r.Error.Message.Should().Contain("Crédito 1001");
-        // Sin transacción real (InMemory) el contexto queda con los cambios en memoria, pero nada se guardó como aprobado antes del fallo.
+        r.Error.Code.Should().Be("Payroll.Settlement.LoanAmountsChanged");
+        r.Error.Message.Should().Contain("1001").And.Contain("ya no recibe pagos");
+        r.Error.Should().BeOfType<ErrorConDatos>();
         (await p.D.Db.EmploymentTerminations.AsNoTracking().SingleAsync(x => x.PublicId == t.TerminationPublicId)).Status.Should().Be(TerminationStatus.Registered);
         (await p.D.Db.Employees.AsNoTracking().SingleAsync(e => e.Id == p.D.Ana.Id)).Status.Should().Be(1, "la ficha sigue vigente");
-        (await p.D.Db.LendingTransactions.AsNoTracking().CountAsync()).Should().Be(0, "el recaudo no se guarda por su cuenta: va en la transacción de la aprobación");
+        (await p.D.Db.PayrollRuns.AsNoTracking().SingleAsync(x => x.PublicId == t.RunPublicId)).Status.Should().Be(PayrollRunStatus.Draft);
+        (await p.D.Db.SettlementDeductions.AsNoTracking().Where(d => d.Termination!.PublicId == t.TerminationPublicId).ToListAsync())
+            .Should().OnlyContain(d => d.CarteraTransactionPublicId == null, "todo o nada: no se guardó ningún comprobante");
     }
 
     [Fact]
-    public async Task Si_la_cuenta_del_recaudo_no_esta_habilitada_para_Cartera_la_aprobacion_lo_dice_y_no_recauda()
+    public async Task Un_descuento_que_Contabilidad_no_puede_registrar_responde_LoanDeductionNotPostable_y_nada_queda_aprobado()
     {
+        // Feature 013, T0801 (A8 = «Bloquear todo», 2026-10-14): el rechazo por la matriz contable tiene su propio código y dice qué regla falta.
         var p = new DefinitivaDePrueba();
         p.ConContabilidad();
-        var cuenta = await (from a in p.D.Db.PayrollConceptDefinitionAccounts join c in p.D.Db.ChartOfAccounts on a.DebitAccountId equals c.Id
-                            where a.ConceptCode == WellKnownConceptCodes.LoanDeduction select c).SingleAsync();
-        cuenta.EnabledModules &= ~Domain.Enums.Accounting.AccountingModules.Lending;
-        await p.D.Db.SaveChangesAsync();
         var t = await p.RegistrarAnaAsync();
+        p.Contrato.ComoRespondeAplicar[p.Credito1001.ObligationPublicId] = ContratoDeObligacionesDePrueba.Rechazo(RecaudoPorNomina.CodigoNoContabilizable,
+            "Contabilidad no tiene cómo registrar PagoAplicado en el rol RecaudoPorAplicar. Pida a la contadora completar la matriz de Cartera.");
 
         var r = await p.Aprobar().Handle(Aprobar(t.RunPublicId), CancellationToken.None);
 
-        r.Error.Code.Should().Be("Accounting.Account.NotEligible");
-        r.Error.Message.Should().Contain(cuenta.Code).And.Contain("Crédito 1001");
-        (await p.D.Db.LendingTransactions.AsNoTracking().CountAsync()).Should().Be(0);
+        r.IsFailure.Should().BeTrue();
+        r.Error.Code.Should().Be("Payroll.LoanDeductionNotPostable");
+        r.Error.Message.Should().Contain("1001").And.Contain("RecaudoPorAplicar");
+        (await p.D.Db.PayrollRuns.AsNoTracking().SingleAsync(x => x.PublicId == t.RunPublicId)).Status.Should().Be(PayrollRunStatus.Draft);
+        (await p.D.Db.EmploymentTerminations.AsNoTracking().SingleAsync(x => x.PublicId == t.TerminationPublicId)).Status.Should().Be(TerminationStatus.Registered);
+    }
+
+    [Fact]
+    public async Task Un_excedente_tambien_responde_LoanAmountsChanged()
+    {
+        var p = new DefinitivaDePrueba();
+        p.ConContabilidad();
+        var t = await p.RegistrarAnaAsync();
+        p.Contrato.ComoRespondeAplicar[p.Credito1002.ObligationPublicId] = new(ResultadoDelContrato.Applied, Excedente: 20_000m);
+
+        var r = await p.Aprobar().Handle(Aprobar(t.RunPublicId), CancellationToken.None);
+
+        r.Error.Code.Should().Be("Payroll.Settlement.LoanAmountsChanged");
+        r.Error.Message.Should().Contain("1002").And.Contain("280.000");
         (await p.D.Db.PayrollRuns.AsNoTracking().SingleAsync(x => x.PublicId == t.RunPublicId)).Status.Should().Be(PayrollRunStatus.Draft);
     }
 
     [Fact]
-    public async Task Sin_cuentas_para_DESC_CARTERA_la_aprobacion_se_niega_nombrando_el_concepto_y_no_llama_a_Cartera()
+    public async Task Si_las_obligaciones_vivas_cambiaron_desde_el_calculo_responde_LoanProposalOutdated_sin_llamar_al_contrato()
+    {
+        var p = new DefinitivaDePrueba();
+        p.ConContabilidad();
+        var t = await p.RegistrarAnaAsync();
+        p.Obligaciones.Agregar(p.PersonaDeAna, ConsultaDeObligacionesDePrueba.Obligacion("1003", 80_000m, exigible: 80_000m));
+
+        var r = await p.Aprobar().Handle(Aprobar(t.RunPublicId), CancellationToken.None);
+
+        r.Error.Code.Should().Be("Payroll.Settlement.LoanProposalOutdated");
+        r.Error.Message.Should().Contain("Recalcule");
+        p.Contrato.Aplicaciones.Should().BeEmpty();
+        (await p.D.Db.PayrollRuns.AsNoTracking().SingleAsync(x => x.PublicId == t.RunPublicId)).Status.Should().Be(PayrollRunStatus.Draft);
+    }
+
+    [Fact]
+    public async Task Con_la_persona_migrada_sin_activar_exige_reconocerlo_y_lo_guarda_en_la_corrida()
+    {
+        var p = new DefinitivaDePrueba(conCartera: false);
+        p.ConContabilidad();
+        p.Obligaciones.MarcarMigrada(p.PersonaDeAna);
+        var t = await p.RegistrarAnaAsync();
+        t.Warnings.Should().Contain(w => w.Code == "Payroll.LendingPendingActivation");
+
+        var sinReconocer = await p.Aprobar().Handle(Aprobar(t.RunPublicId), CancellationToken.None);
+        sinReconocer.Error.Code.Should().Be("Payroll.LendingPendingActivationAckRequired");
+        sinReconocer.Error.Message.Should().Contain("Ana");
+
+        var reconocida = await p.Aprobar().Handle(Aprobar(t.RunPublicId, reconocer: true), CancellationToken.None);
+        reconocida.IsSuccess.Should().BeTrue(reconocida.Error.Message);
+        var run = await p.D.Db.PayrollRuns.AsNoTracking().SingleAsync(x => x.PublicId == t.RunPublicId);
+        run.LendingActivationAckBy.Should().Be(DefinitivaDePrueba.Contadora.UserName);
+        run.LendingActivationAckAt.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task Sin_cuentas_para_DESC_CARTERA_la_aprobacion_se_niega_nombrando_el_concepto()
     {
         var p = new DefinitivaDePrueba();
         p.ConContabilidad();
@@ -165,7 +228,7 @@ public class ApproveSettlementCommandHandlerTests
 
         r.Error.Code.Should().Be("Payroll.Settlement.ConceptAccountsMissing");
         r.Error.Should().BeOfType<ErrorConDatos>().Which.Data.Should().BeEquivalentTo(new { conceptCodes = new[] { WellKnownConceptCodes.LoanDeduction } });
-        (await p.D.Db.LendingTransactions.AsNoTracking().CountAsync()).Should().Be(0);
+        (await p.D.Db.PayrollRuns.AsNoTracking().SingleAsync(x => x.PublicId == t.RunPublicId)).Status.Should().Be(PayrollRunStatus.Draft);
     }
 
     [Fact]
@@ -204,7 +267,7 @@ public class ApproveSettlementCommandHandlerTests
         var p = new DefinitivaDePrueba(conCartera: false);
         p.ConContabilidad();
         // Septiembre ya calculado con Ana, antes de registrar el retiro del 15.
-        var ordinaria = new CalculatePayrollRunCommandHandler(p.D.Db, p.D.Loader, p.D.Recurrentes, p.D.Lock, p.D.Clock, p.D.User, NullLogger<CalculatePayrollRunCommandHandler>.Instance);
+        var ordinaria = new CalculatePayrollRunCommandHandler(p.D.Db, p.D.Loader, p.D.Recurrentes, p.D.CuotasDeCartera, p.D.CuotasDeCuentas, p.D.Lock, p.D.Clock, p.D.User, NullLogger<CalculatePayrollRunCommandHandler>.Instance);
         var calculada = await ordinaria.Handle(new CalculatePayrollRunCommand(p.Septiembre.PublicId), CancellationToken.None);
         calculada.IsSuccess.Should().BeTrue(calculada.Error.Message);
         (await p.D.Db.PayrollRunEmployees.CountAsync(e => e.Run!.PublicId == calculada.Value.RunPublicId && e.EmployeeId == p.D.Ana.Id)).Should().Be(1);
@@ -231,11 +294,11 @@ public class ApproveSettlementCommandHandlerTests
         var p = new DefinitivaDePrueba(conCartera: false);
         p.ConContabilidad();
         var t = await p.RegistrarAnaAsync();
-        var ordinaria = new CalculatePayrollRunCommandHandler(p.D.Db, p.D.Loader, p.D.Recurrentes, p.D.Lock, p.D.Clock, p.D.User, NullLogger<CalculatePayrollRunCommandHandler>.Instance);
+        var ordinaria = new CalculatePayrollRunCommandHandler(p.D.Db, p.D.Loader, p.D.Recurrentes, p.D.CuotasDeCartera, p.D.CuotasDeCuentas, p.D.Lock, p.D.Clock, p.D.User, NullLogger<CalculatePayrollRunCommandHandler>.Instance);
         var calculada = await ordinaria.Handle(new CalculatePayrollRunCommand(p.Septiembre.PublicId), CancellationToken.None);
         calculada.IsSuccess.Should().BeTrue(calculada.Error.Message);
         var audit = new PayrollAuditEmitter(p.D.Audit, DefinitivaDePrueba.Contadora, p.D.Clock, NullLogger<PayrollAuditEmitter>.Instance);
-        var aprobador = new ApprovePayrollRunCommandHandler(p.D.Db, p.D.Contabilizador(DefinitivaDePrueba.Contadora), p.D.Policies, p.D.Permissions, p.D.Clock, DefinitivaDePrueba.Contadora, audit, p.D.StaleMarker);
+        var aprobador = new ApprovePayrollRunCommandHandler(p.D.Db, p.D.Contabilizador(DefinitivaDePrueba.Contadora), p.D.Policies, p.D.Permissions, p.D.Clock, DefinitivaDePrueba.Contadora, audit, p.D.StaleMarker, p.D.Recaudo, p.D.Obligaciones, p.D.RecaudoDeCuentas);
 
         var aprobada = await aprobador.Handle(new ApprovePayrollRunCommand(calculada.Value.RunPublicId, Confirm: true), CancellationToken.None);
 

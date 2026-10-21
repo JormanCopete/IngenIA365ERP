@@ -1,0 +1,81 @@
+// GMF: con tarifa cero desde el 2026-07-01 (el Gobierno elimina el impuesto, FR-022) no se calcula desde esa fecha y lo anterior se
+// conserva: retiro de 1.000.000 de una cuenta no marcada el 30 de junio = 4.000; el mismo retiro el 1 de julio = 0.
+{
+  "descripcion": "Cambio de tarifa a cero con vigencia.",
+  "entrada": {
+    "politicas": [
+      {
+        "desde": "2026-01-01",
+        "tarifa": 0.004,
+        "topeExencionUvt": 350,
+        "uvt": 52374,
+        "politica": "SingleMarkedAccount",
+        "gravados": [
+          "Withdrawal",
+          "TransferToOtherHolder",
+          "TransferBetweenDemandAndTermDeposit",
+          "TermDepositRedemptionToAccount",
+          "Cancellation"
+        ],
+        "exentos": [
+          "TransferBetweenSameHolderSavings"
+        ]
+      },
+      {
+        "desde": "2026-07-01",
+        "tarifa": 0,
+        "topeExencionUvt": 350,
+        "uvt": 52374,
+        "politica": "SingleMarkedAccount",
+        "gravados": [
+          "Withdrawal",
+          "TransferToOtherHolder",
+          "TransferBetweenDemandAndTermDeposit",
+          "TermDepositRedemptionToAccount",
+          "Cancellation"
+        ],
+        "exentos": [
+          "TransferBetweenSameHolderSavings"
+        ]
+      }
+    ],
+    "movimientos": [
+      {
+        "id": "junio",
+        "fecha": "2026-06-30",
+        "hecho": "Withdrawal",
+        "monto": 1000000,
+        "cuentaSujeta": true,
+        "esLaCuentaMarcada": false
+      },
+      {
+        "id": "julio",
+        "fecha": "2026-07-01",
+        "hecho": "Withdrawal",
+        "monto": 1000000,
+        "cuentaSujeta": true,
+        "esLaCuentaMarcada": false
+      }
+    ]
+  },
+  "nombre": "gmf-05-tarifa-cero-desde-una-fecha",
+  "esperado": {
+    "movimientos": [
+      {
+        "id": "junio",
+        "exentoAplicado": 0,
+        "baseGravada": 1000000,
+        "valor": 4000,
+        "exentoUsadoDespues": 0
+      },
+      {
+        "id": "julio",
+        "exentoAplicado": 0,
+        "baseGravada": 0,
+        "valor": 0,
+        "exentoUsadoDespues": 0
+      }
+    ],
+    "totalGmf": 4000
+  }
+}

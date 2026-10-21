@@ -1,0 +1,93 @@
+// FR-024: la bonificacion se mide sobre los aportes en su fecha valor real (real/365): la cuota 3 llega 10 dias tarde y la 7 en dos partes.
+{
+  "nombre": "contractual-05-aportes-en-sus-fechas-reales",
+  "descripcion": "FR-024: la bonificacion se mide sobre los aportes en su fecha valor real (real/365): la cuota 3 llega 10 dias tarde y la 7 en dos partes.",
+  "entrada": {
+    "condiciones": {
+      "cuota": 200000,
+      "periodicidad": "Monthly",
+      "plazoMeses": 12,
+      "inicio": "2027-01-15",
+      "tasaBase": 0.06,
+      "convencion": "Actual365",
+      "unidadDeRedondeo": 1,
+      "modoDeRedondeo": "AwayFromZero",
+      "tasaBonificada": 0.08
+    },
+    "aportes": [
+      {
+        "fecha": "2027-02-15",
+        "monto": 200000
+      },
+      {
+        "fecha": "2027-03-15",
+        "monto": 200000
+      },
+      {
+        "fecha": "2027-04-25",
+        "monto": 200000
+      },
+      {
+        "fecha": "2027-05-15",
+        "monto": 200000
+      },
+      {
+        "fecha": "2027-06-15",
+        "monto": 200000
+      },
+      {
+        "fecha": "2027-07-15",
+        "monto": 200000
+      },
+      {
+        "fecha": "2027-09-15",
+        "monto": 200000
+      },
+      {
+        "fecha": "2027-10-15",
+        "monto": 200000
+      },
+      {
+        "fecha": "2027-11-15",
+        "monto": 200000
+      },
+      {
+        "fecha": "2027-12-15",
+        "monto": 200000
+      },
+      {
+        "fecha": "2028-01-15",
+        "monto": 200000
+      },
+      {
+        "fecha": "2027-08-10",
+        "monto": 100000
+      },
+      {
+        "fecha": "2027-08-20",
+        "monto": 100000
+      }
+    ],
+    "bonificacion": true
+  },
+  "esperado": {
+    "vencimiento": "2028-01-15",
+    "plazoDeEmision": "SixToTwelve",
+    "cuotas": 12,
+    "primeraCuota": "2027-02-15",
+    "ultimaCuota": "2028-01-15",
+    "totalPactado": 2400000,
+    "interesProyectadoBase": 65619,
+    "valorFinalBase": 2465619,
+    "interesProyectadoBonificado": 87195,
+    "bonificacionProyectada": 21576,
+    "valorFinalCumpliendo": 2487195,
+    "bonificacion": {
+      "aportes": 2400000,
+      "interesBase": 65286,
+      "interesOtraTasa": 86749,
+      "diferencia": 21463,
+      "valorFinalOtraTasa": 2486749
+    }
+  }
+}

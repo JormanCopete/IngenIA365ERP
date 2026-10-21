@@ -1,0 +1,46 @@
+@using IngenIA365ERP.Shared.Services.Cartera
+
+@* Feature 013, K6b (T1060; FR-024, D18): lo de un crédito en UVR a la fecha consultada, en la liquidación y el estado de cuenta: la UVR del día
+   —la publicada o, a una fecha sin UVR publicada, la proyectada desde la última, que sólo se muestra—, el capital y el valor para cancelar en
+   UVR y en pesos, y los saldos por concepto en UVR. Sólo lectura; lo pinta quien ya cargó la liquidación o el estado, dentro de su indicador. *@
+<div class="info-card">
+    <h4>En UVR</h4>
+    @if (Uvr.Projected)
+    {
+        <p class="aviso aviso-alerta">@Uvr.Legend</p>
+    }
+    else
+    {
+        <p class="texto-apoyo">@Uvr.Legend</p>
+    }
+    <div class="kpi-grid">
+        <div class="kpi-card"><span class="kpi-label">UVR del @TextosDeCreditos.Fecha(Uvr.UvrDate)@(Uvr.Projected ? " (proyectada)" : "")</span><span class="kpi-value">@TextosDeCreditos.ValorDeUvr(Uvr.UvrValue)</span></div>
+        <div class="kpi-card"><span class="kpi-label">Capital en UVR</span><span class="kpi-value">@TextosDeCreditos.Uvr(Uvr.PrincipalUvr)</span></div>
+        <div class="kpi-card"><span class="kpi-label">Para cancelar en UVR</span><span class="kpi-value">@TextosDeCreditos.Uvr(Uvr.ToPayOffUvr)</span></div>
+        <div class="kpi-card"><span class="kpi-label">Para cancelar en pesos</span><span class="kpi-value">@TextosDeCreditos.Pesos(ToPayOff)</span></div>
+    </div>
+    @if (Uvr.BalancesUvr.Count > 0)
+    {
+        <table class="data-grid">
+            <thead><tr><th>Concepto</th><th class="numero">Saldo en UVR</th></tr></thead>
+            <tbody>
+                @foreach (var (concepto, valor) in Uvr.BalancesUvr.Where(x => x.Value != 0m))
+                {
+                    <tr><td>@TextosDeCreditos.Concepto(concepto)</td><td class="numero">@TextosDeCreditos.Uvr(valor)</td></tr>
+                }
+            </tbody>
+        </table>
+    }
+    @if (Uvr.LastPublished < Uvr.UvrDate)
+    {
+        <p class="texto-tenue">Última UVR publicada: @TextosDeCreditos.Fecha(Uvr.LastPublished).</p>
+    }
+</div>
+
+@code {
+    /// <summary>Lo de UVR de la liquidación o el estado de cuenta.</summary>
+    [Parameter, EditorRequired] public CreditoEnUvrDto Uvr { get; set; } = default!;
+
+    /// <summary>El valor para cancelar en pesos de la misma consulta.</summary>
+    [Parameter] public decimal ToPayOff { get; set; }
+}

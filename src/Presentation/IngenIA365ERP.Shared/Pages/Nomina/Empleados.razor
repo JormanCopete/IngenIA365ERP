@@ -389,8 +389,8 @@
 
         // WhenAll no termina hasta que terminan todas, incluso si alguna ya falló; la excepción
         // agregada se ignora aquí porque cada tarea se revisa una por una justo debajo.
-        try { await Task.WhenAll(epsTask, pensionsTask, arlTask, arlClasesTask, cesantiasTask, cajasTask, planesTask, banksTask, citiesTask); }
-        catch { /* se revisa tarea por tarea */ }
+        // SuppressThrowing: la excepción agregada no se lanza; cada tarea se revisa justo debajo.
+        await Task.WhenAll(epsTask, pensionsTask, arlTask, arlClasesTask, cesantiasTask, cajasTask, planesTask, banksTask, citiesTask).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing | ConfigureAwaitOptions.ContinueOnCapturedContext);
 
         var caidos = new List<string>();
         _eps = Resultado(epsTask, "EPS", caidos).Select(x => new LookupOption(x.PublicId, x.Name)).ToList();

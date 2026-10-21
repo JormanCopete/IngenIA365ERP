@@ -314,12 +314,15 @@ public class ContabilidadNiifTests(CentralIdentityApiFixture fx)
         }
 
         // (g) reversar deja el neto en cero; reversar dos veces rechaza; la reversión no se reversa
-        var reversion = await ReversarAsync(http, admin, b1, "Se digitó de más");
+        // El espejo se fecha igual que el original. Sin fecha el servidor toma hoy, y el balance de septiembre de abajo
+        // lo dejaba fuera en cuanto el calendario pasó a octubre (daba 33 en vez de 22).
+        var reversion = await ReversarAsync(http, admin, b1, "Se digitó de más", fecha);
         var original = await GetAsync(http, admin, $"/api/accounting/documents/{b1}");
         original.GetProperty("status").GetString().Should().Be("Reversed");
         original.GetProperty("reversal").GetProperty("reversedByPublicId").GetGuid().Should().Be(reversion);
         var reverso = await GetAsync(http, admin, $"/api/accounting/documents/{reversion}");
         reverso.GetProperty("kind").GetString().Should().Be("Reversal");
+        reverso.GetProperty("date").GetString().Should().Be(fecha.ToString("yyyy-MM-dd"), "septiembre está abierto: el espejo queda en la fecha pedida");
         reverso.GetProperty("lines").EnumerateArray().Single(l => l.GetProperty("accountCode").GetString() == GastoConcurrencia).GetProperty("credit").GetDecimal().Should().Be(11m);
         var otraVez = await EnviarAsync(http, admin, HttpMethod.Post, $"/api/accounting/documents/{b1}/reverse", new { reason = "otra vez" });
         (await CodigoDeErrorAsync(otraVez)).Should().Be("Accounting.Document.AlreadyReversed");

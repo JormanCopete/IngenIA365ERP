@@ -1,0 +1,216 @@
+namespace IngenIA365ERP.Domain.Enums.Lending;
+
+// Crédito, libro, operaciones y numeración de Cartera (feature 013, T0201; decisiones-transversales §2.7; data-model §9.1 y
+// parte 1 §10, C65). Se guardan por su número; un valor nunca se renumera (EnumeracionesDeCarteraTests).
+
+/// <summary>Concepto de saldo de un crédito (M). <c>Advance</c> y <c>CreditBalance</c> son pasivos con el deudor.</summary>
+public enum LoanConcept
+{
+    Principal = 1,
+    CurrentInterest = 2,
+    DefaultInterest = 3,
+    CurrentInterestInSuspense = 4,
+    DefaultInterestInSuspense = 5,
+    Insurance = 6,
+    CollectionFee = 7,
+    OtherCharge = 8,
+    Advance = 9,
+    CreditBalance = 10,
+}
+
+/// <summary>Clase de una fila del libro (<c>LND_LoanTransactions</c>, M).</summary>
+public enum LoanTransactionKind
+{
+    Disbursement = 1,
+    OpeningBalance = 2,
+    Accrual = 3,
+    AccrualAdjustment = 4,
+    SuspenseReclassification = 5,
+    PaymentAllocation = 6,
+    PaymentReallocation = 7,
+    AdvanceReceived = 8,
+    AdvanceApplied = 9,
+    CreditBalanceRecognized = 10,
+    CreditBalanceSettled = 11,
+    Charge = 12,
+    Waiver = 13,
+    CommercialAdjustment = 14,
+    WriteOff = 15,
+    Recovery = 16,
+
+    /// <summary>
+    /// K3 (T0874; data-model §9.1, §5.1): la capitalización de una novedad. En el crédito que capitaliza, <c>−</c> el interés de cada concepto y
+    /// cuota que pasa a capital y <c>+Principal</c> sin cuota por el total (el plan nuevo lo reparte); en una novación o refinanciación, el
+    /// <c>−</c> va en el crédito anterior y el <c>+Principal</c> en el enlazado. (nuevo)
+    /// </summary>
+    Capitalization = 17,
+
+    /// <summary>
+    /// K3 (T0874): el saldo que el crédito anterior de una novación o refinanciación traslada al enlazado: <c>−</c> cada concepto y cuota que
+    /// queda, para que el anterior termine en cero. (nuevo)
+    /// </summary>
+    TransferToLinkedLoan = 18,
+
+    /// <summary>
+    /// K3 (T0874): lo que recibe el crédito enlazado de una novación o refinanciación: <c>+Principal</c> sin cuota por el capital trasladado y
+    /// <c>+</c> los demás conceptos en su primera cuota (anticipo y saldo a favor, sin cuota). (nuevo)
+    /// </summary>
+    TransferFromLinkedLoan = 19,
+
+    /// <summary>
+    /// K6b (T1054, T1056; FR-024, D18, pregunta E12): la <b>corrección monetaria</b> de un crédito en UVR. Cada día valor, lo que cambió el valor en
+    /// pesos de lo que se debe en UVR (capital y demás conceptos de la cuota) por el cambio de la UVR del día, sin contar lo que causó ni lo que
+    /// movieron las operaciones: <c>U(saldo en UVR × UVR del día) − U(saldo en UVR de la víspera × UVR de la víspera) − lo causado − lo movido</c>.
+    /// La escribe la causación diaria y la lleva a Contabilidad el hecho <c>CorreccionMonetariaUvrCausada</c>. (nuevo)
+    /// </summary>
+    MonetaryCorrection = 20,
+}
+
+/// <summary>Clase de una operación (<c>LND_LoanOperations</c>, M, FR-048, FR-142).</summary>
+public enum LoanOperationKind
+{
+    Disbursement = 1,
+    OpeningBalance = 2,
+    Payment = 3,
+    PaymentReversal = 4,
+    DisbursementReversal = 5,
+    RateReset = 6,
+    TermsChange = 7,
+    Charge = 8,
+    Waiver = 9,
+    CommercialAdjustment = 10,
+    WriteOff = 11,
+    PreferenceChange = 12,
+    CreditBalanceResolution = 13,
+    ProvisionalCollection = 14,
+}
+
+/// <summary>Estado del crédito (spec, Key Entities; data-model §8.1).</summary>
+public enum LoanStatus
+{
+    PendingDisbursement = 1,
+    Active = 2,
+    PaidOff = 3,
+    WrittenOff = 4,
+    Voided = 5,
+    Novated = 6,
+}
+
+/// <summary>Por qué camino nació el crédito.</summary>
+public enum LoanOrigin
+{
+    Origination = 1,
+    Commercial = 2,
+    Migration = 3,
+}
+
+/// <summary>Estado de la obligación de una venta que Cartera responde a Comercial (estados de <c>ObligacionCreada</c>, T18).</summary>
+public enum SaleObligationStatus
+{
+    Validated = 1,
+    ValidationFailed = 2,
+    Migrated = 3,
+    CancelledBeforeCutoff = 4,
+}
+
+/// <summary>Vínculo de un crédito con su origen (<c>LND_Loans.OriginLinkKind</c>): reemplazo de Comercial (K1), novación y refinanciación (K3).</summary>
+public enum LoanLinkKind
+{
+    Replacement = 1,
+    Novation = 2,
+    Refinancing = 3,
+}
+
+/// <summary>
+/// Causa de una versión de condiciones (<c>LND_LoanTermsVersions.Cause</c>). 5 a 10 nacen con K3. El traslado de pagaduría y el
+/// cambio de forma de pago no son versión de condiciones: son un vínculo nuevo en <c>LND_LoanPayrollLinks</c> (C44).
+/// </summary>
+public enum TermsVersionCause
+{
+    Origination = 1,
+    CommercialSale = 2,
+    Migration = 3,
+    RateReset = 4,
+    Restructuring = 5,
+    Modification = 6,
+    Extension = 7,
+    PaymentDateChange = 8,
+    RateChange = 9,
+    Novation = 10,
+}
+
+/// <summary>Forma de un tramo de desembolso; <c>InKind</c> es la venta de Comercial y nunca emite orden de giro.</summary>
+public enum DisbursementForm
+{
+    Transfer = 1,
+    Check = 2,
+    ThirdPartyPayment = 3,
+    InKind = 4,
+}
+
+/// <summary>Estado de una orden de giro (FR-045; data-model §8.4).</summary>
+public enum DisbursementOrderStatus
+{
+    Issued = 1,
+    Disbursed = 2,
+    Rejected = 3,
+    CheckNotCashed = 4,
+    Voided = 5,
+}
+
+/// <summary>Estado de una reserva de número de Comercial (PM-10, T22).</summary>
+public enum LoanNumberReservationStatus
+{
+    Reserved = 1,
+    Used = 2,
+    Released = 3,
+    Expired = 4,
+}
+
+/// <summary>
+/// Qué numera una fila de <c>LND_NumberSequences</c> (C48). <c>PayrollDeductionFile</c> es de K2 y <c>RegulatoryFile</c> de K5; K3 (T0878, T0884) suma la
+/// novedad y la condonación (columna entera: sin migración).
+/// </summary>
+public enum LendingNumberKind
+{
+    Loan = 1,
+    Operation = 2,
+    Application = 3,
+    DisbursementOrder = 4,
+    DisbursementFile = 5,
+    SessionMinutes = 6,
+    IssuedDocument = 7,
+    PayrollDeductionFile = 8,
+    RegulatoryFile = 9,
+    LoanNovelty = 10,
+    Waiver = 11,
+
+    /// <summary>K3 (US14, T0906): el lote de castigo (columna entera: sin migración).</summary>
+    WriteOffBatch = 12,
+
+    /// <summary>K3 (US14, T0912): la evaluación de cartera (columna entera: sin migración).</summary>
+    PortfolioEvaluation = 13,
+
+    /// <summary>K4 (US12, T0946): el acuerdo de pago (columna entera: sin migración).</summary>
+    PaymentAgreement = 14,
+
+    /// <summary>K4 (US12, T0947): el proceso de cobro jurídico (columna entera: sin migración).</summary>
+    LegalProcess = 15,
+
+    // Feature 014 (T014; data-model §1.3 con los valores de research E03: 10 a 15 ya eran de la 013).
+
+    /// <summary>El número de una cuenta de captación o de aportes, por línea (<c>ScopeKey</c> = código de la línea).</summary>
+    MemberAccount = 16,
+
+    /// <summary>El comprobante de una operación de cuenta (<c>ScopeKey</c> = nombre de <c>MemberAccountOperationKind</c>).</summary>
+    MemberAccountOperation = 17,
+
+    /// <summary>El radicado del retiro del asociado.</summary>
+    MembershipWithdrawal = 18,
+
+    /// <summary>Una distribución de la asamblea (revalorización, excedentes, amortización).</summary>
+    AssemblyDistribution = 19,
+
+    /// <summary>Un caso de fallecimiento del titular.</summary>
+    DeceasedHolderCase = 20,
+}

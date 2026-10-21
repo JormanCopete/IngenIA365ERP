@@ -46,4 +46,5 @@ public sealed record AuditLogEntryDto(
     string Result = "Accepted",
     string? ErrorCode = null,
     string? OperationKey = null,
-    long? ChainSeq = null);
+    long? ChainSeq = null,
+    string? Label = null);

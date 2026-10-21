@@ -37,6 +37,7 @@ public static partial class ClavesDeEvento
         FormaDeClaveDeEvento.Cierre => ConVersion().Match(clave) is { Success: true } m && m.Groups[1].Value == "Close",
         FormaDeClaveDeEvento.Reapertura => ConVersion().Match(clave) is { Success: true } m && m.Groups[1].Value == "Reopen",
         FormaDeClaveDeEvento.Reclasificacion => clave == Reclasificacion,
+        FormaDeClaveDeEvento.ConfirmacionOPorPublicId => clave == Confirmacion || ConPublicId().IsMatch(clave),
         _ => false,
     };
 

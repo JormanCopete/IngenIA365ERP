@@ -178,9 +178,13 @@ public class AutorizacionAlCrearTests
     [Fact]
     public void La_interfaz_sólo_admite_el_PublicId()
     {
-        var parametros = typeof(IAutorizacionDeDatos).GetMethod(nameof(IAutorizacionDeDatos.VigenteAsync))!.GetParameters();
+        // Feature 013 (T0086): suma la sobrecarga por finalidad y canal; ninguna recibe el Id interno.
+        var sobrecargas = typeof(IAutorizacionDeDatos).GetMethods().Where(m => m.Name == nameof(IAutorizacionDeDatos.VigenteAsync)).ToList();
 
-        parametros.Select(p => p.ParameterType).Should().Equal(typeof(Guid), typeof(CancellationToken));
+        sobrecargas.Should().HaveCount(2);
+        sobrecargas.Should().ContainSingle(m => m.GetParameters().Select(p => p.ParameterType).SequenceEqual(new[] { typeof(Guid), typeof(CancellationToken) }));
+        sobrecargas.SelectMany(m => m.GetParameters()).Should().NotContain(p => p.ParameterType == typeof(int));
+        sobrecargas.Should().OnlyContain(m => m.GetParameters()[0].ParameterType == typeof(Guid));
     }
 
     [Fact]

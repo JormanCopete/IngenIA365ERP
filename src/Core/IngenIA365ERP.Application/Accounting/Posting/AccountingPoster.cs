@@ -191,6 +191,12 @@ public sealed class AccountingPoster(IApplicationDbContext db, IDateTimeService 
         if (string.Equals(original.OriginModule, ModuloContable.Inventario, StringComparison.Ordinal)
             || string.Equals(origin.Module, ModuloContable.Inventario, StringComparison.Ordinal))
             return Fallo(AccountingErrors.DocumentInventoryCorrectsWithNewVoucher(original.OriginModule, original.SourceType, original.SourcePublicId));
+        // Feature 013 (T55, contracts/contabilidad.md §9): lo de Cartera tampoco. Cada reverso (del pago, del desembolso, del cierre) llega
+        // como un comprobante nuevo de su propio hecho, con su fecha contable y las dimensiones vigentes. Las mismas dos puntas, antes del
+        // motivo. Lo vigila LoDeCarteraSeCorrigeConComprobanteNuevo.
+        if (string.Equals(original.OriginModule, ModuloContable.Cartera, StringComparison.Ordinal)
+            || string.Equals(origin.Module, ModuloContable.Cartera, StringComparison.Ordinal))
+            return Fallo(AccountingErrors.DocumentLendingCorrectsWithNewVoucher(original.OriginModule, original.SourceType, original.SourcePublicId));
         if (string.IsNullOrWhiteSpace(reason)) return Fallo(AccountingErrors.ReasonRequired);
         if (original.Kind == DocumentKind.Reversal || original.ReversesDocumentId is not null) return Fallo(AccountingErrors.DocumentIsReversal);
         if (original.Status == DocumentStatus.Reversed || original.ReversedByDocumentId is not null) return Fallo(AccountingErrors.DocumentAlreadyReversed);

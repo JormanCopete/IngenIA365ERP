@@ -137,6 +137,8 @@ public static class DependencyInjection
         services.AddScoped<IApplicationDbContext>(sp => sp.GetRequiredService<ApplicationDbContext>());
         // Feature 012 (T15, T138): el cerrojo pesimista de la confirmacion, con el SQL de cada motor sobre el propio contexto.
         services.AddScoped<Application.Inventory.Common.ICerrojoDeInventario, Inventory.CerrojoDeInventario>();
+        // Feature 013 (T0206, T34): el cerrojo de Cartera (LND_Setup → deudores → créditos → numeración).
+        services.AddScoped<Application.Lending.Common.ICerrojoDeCartera, Lending.CerrojoDeCartera>();
         // Feature 012 (I3, T597): el candado por clave (ambito de una lista de precios, rol de un tope) dentro de la transaccion.
         services.AddScoped<Application.Inventory.Common.ICerrojoPorClave, Inventory.CerrojoPorClave>();
         // Feature 012 (I3, T606): el toque de la sesion de caja antes del cerrojo del cobro (UPDATE ... WHERE Status = Open).
@@ -178,9 +180,9 @@ public static class DependencyInjection
         services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.PayrollConceptDefinitionsSeeder>();
         services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.PayrollLegalParametersSeeder>();
         services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.WorkRiskClassesSeeder>();
-        // Feature 010: motivos de retiro, festivos de la Ley 51 y políticas por empresa (T017).
+        // Feature 010: motivos de retiro y políticas por empresa (T017). Los festivos de la Ley 51 los siembra desde la
+        // feature 013 la central (PlatformNationalValuesSeeder, Order 6) y los proyecta la réplica (Order 88): HolidaysSeeder se retiró (T93).
         services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.TerminationReasonsSeeder>();
-        services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.HolidaysSeeder>();
         services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.CompanyPoliciesSeeder>();
         services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.BankFileFormatsSeeder>();
         // Contabilidad (feature 009): tipos de comprobante (reemplaza al NM de nomina) y tipos de documento cruce, desde JSON incrustado.
@@ -211,6 +213,24 @@ public static class DependencyInjection
         services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.CashDenominationsSeeder>();
         services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.DefaultPaymentMeansSeeder>();
         services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.ConsumidorFinalSeeder>();
+        // Feature 013 (T0055, T0059; DT §2.21): el registro central de valores nacionales (Admin, Order 6) y su copia en cada
+        // cooperativa (Tenant, Order 88). No hacen nada hasta que las bases tengan ValoresNacionales y PlataformaParaCartera.
+        services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.PlatformNationalValuesSeeder>();
+        services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.NationalValuesReplicaSeeder>();
+        // Feature 013 (T0085; T76): las nueve plantillas de mensaje de Cartera «pendiente de validar» (Tenant, Order 91). No hace nada
+        // hasta que la base tenga PlataformaParaCartera, que agrega las columnas de versión a COR_NotificationTemplates.
+        services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.LendingMessageTemplatesSeeder>();
+        // Feature 013, K4 (T0941): las cuatro etapas de cobranza por defecto «pendiente de validar» (Tenant, Order 92). No hace nada hasta que la
+        // base tenga CarteraCobranza ni si la cooperativa ya tiene etapas.
+        services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.CollectionStagesSeeder>();
+        // Feature 013 (T0223; C110, C117): los 35 tipos de hecho de Cartera con su código corto (Tenant, Order 90). No hace nada hasta
+        // que la base tenga CarteraNucleo, que crea LND_FactTypes.
+        services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.LendingFactTypesSeeder>();
+        // Feature 013, US7 (T0637; T54, C79): el tipo de comprobante y el cruce por defecto de cada hecho de Cartera (Tenant, Order 89),
+        // «pendiente de validar». No hace nada hasta que la base tenga IntegracionContableDeCartera, que crea su tabla.
+        services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.LendingVoucherMappingsSeeder>();
+        // La lectura de la central que sólo usa el replicador (T0057).
+        services.AddScoped<Application.Common.NationalValues.IRegistroCentralDeValoresNacionales, Services.RegistroCentralDeValoresNacionales>();
         services.AddScoped<Seeding.IDataSeeder, Seeding.Demo.DemoDataSeeder>();
         services.AddScoped<Application.Common.Interfaces.Database.IDataSeedRunner, Seeding.DataSeedRunner>();
         // Feature 005: reaplicar la semilla de nomina sobre la cooperativa activa desde la pantalla de conceptos.

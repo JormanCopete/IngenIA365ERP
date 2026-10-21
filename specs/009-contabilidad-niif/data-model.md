@@ -75,6 +75,9 @@ cambian. **Eliminación (FR-013)**: sólo si `FirstMovementAt IS NULL` y ninguna
 `ACC_BudgetLines`, `ACC_ExogenousConceptAccounts`) la referencia. *Enmienda 012 (D-01)*: la lista
 decía `INV_ProductAccounts` e `INV_VatAccounts`, que se retiran con `RetiroDelInventarioHeredado`;
 entra la matriz de Inventario (`AccountReferenceFinder`).
+*Enmienda 013 (E-01, 2026-10-13)*: salen `LND_CreditLineParameters` (y las tablas de la cartera heredada `LND_PortfolioAccounts`
+y `LND_ProvisionParameters`), que se retiran con `RetiroDeLaCarteraHeredada`; entra la matriz de Cartera
+`ACC_LendingPostingRules` (`AccountReferenceFinder`, `ListInvalidParameterizationsQuery`).
 **Reemplazo del plan (US1 esc. 2, FR-004)**: sólo con `Locked = false`; marca `IsDeleted` todas las
 cuentas `Origin = Catalog`, copia el catálogo nuevo y actualiza `AccountingSetup.CatalogId`; queda
 auditado con el catálogo anterior y el nuevo. Por eso el único de `Code` es filtrado.
@@ -94,6 +97,8 @@ fuente única): `CG` manual; reservados por módulo `NM` Nómina; `DS`, `RC`, `C
 `AH` Ahorros; `CD` CDT; `FV`, `EI`, `SI`, `NV`, `CP`, `TR`, `AC`, `CJ` Inventario (*enmienda 012*: antes
 sólo `FV`, `EI`, `SI`; 23 tipos en total); `CH`, `FP`, `CB` Tesorería; `DP` activos; `AP`
 apertura; `CI` cierre. Un código pertenece a un solo módulo (`ModuleCode`).
+*Enmienda 013 (E-01, 2026-10-13)*: la semilla suma `CN` «Novedades de cartera» (`Usage = Module`, `ModuleCode = CAR`; 24 tipos en
+total); si una cooperativa ya tenía un `CN` de otro uso, `VoucherTypesSeeder` no lo pisa y lo deja en el log.
 
 ### `ACC_CrossDocumentTypes` — `CrossDocumentType`
 
@@ -182,6 +187,23 @@ Tres tablas nuevas de Contabilidad que nacen con la feature 012 (migración
   el recibo de cada mensaje de Inventario procesado, único por `MessagePublicId`; es el vínculo
   documento de Inventario → comprobante que antes iba en `INV_Documents.AccountingDocumentId`.
 
+### Integración con Cartera (enmienda E-01 de la 013, 2026-10-13)
+
+Cuatro tablas nuevas de Contabilidad que nacen con la feature 013 (migración
+`IntegracionContableDeCartera`); su definición completa vive en
+`specs/013-cartera-financiera/data-model.md` (parte 3 §5) y en
+`specs/013-cartera-financiera/contracts/contabilidad.md` §4:
+
+- `ACC_LendingPostingRules` — `LendingPostingRule`: la matriz de Cartera (hecho × rol × dimensiones por
+  código → cuenta), con vigencia y peso de especificidad; es la parametrización contable de Cartera y la
+  referencia que impide eliminar una cuenta.
+- `ACC_LendingVoucherMappings` — `LendingVoucherMapping`: el tipo de comprobante (`DS`, `RC`, `DN`, `CA`,
+  `PV`, `CN`) y el documento cruce por hecho y clase de recaudador.
+- `ACC_LendingPostings` — `LendingPosting` (hecho inmutable, `Entities/Accounting/Transactions`): el recibo
+  de cada hecho de Cartera procesado, único por `MessagePublicId`.
+- `ACC_RegulatoryIndicators` — `RegulatoryIndicator`: patrimonio técnico y relación de solvencia que
+  registra el contador, con soporte (sólo inserción).
+
 ## 4. Conciliación bancaria
 
 - `ACC_BankStatementColumnMaps` — `BankStatementColumnMap`: `AccountId` (único), `DateColumn`,
@@ -255,6 +277,9 @@ Tres tablas nuevas de Contabilidad que nacen con la feature 012 (migración
 | `PAY_HealthInsuranceProviders`, `PAY_WorkRiskProviders`, `PAY_PensionProviders`, `PAY_SeveranceProviders`, `PAY_FamilyCompensationFunds`, `COR_Banks` | `PersonId` (FK `COR_People`, nullable) | FR-088 |
 | `TRS_Concepts` | `DebitAccountId`, `CreditAccountId` (FK nullable) | R16 |
 | `LND_CreditLineParameters`, `LND_SavingsParameters`, `CDT_Parameters`, `COR_Banks` | sin columnas nuevas: los códigos existentes se resuelven a `AccountId` al contabilizar y se validan al guardar (FR-016). *Enmienda 012*: la fila nombraba también `INV_ProductAccounts` e `INV_VatAccounts`, que se retiran; Inventario va por `ACC_InventoryPostingRules` | R16 |
+
+*Enmienda 013 (E-01, 2026-10-13)*: en la fila `LND_CreditLineParameters`, los códigos de cuenta de Cartera ya no se resuelven al
+contabilizar: Cartera va por `ACC_LendingPostingRules` y esas columnas se retiran con la cartera heredada.
 
 *Enmienda 012 (D-01)*: la fila `INV_Documents` · `AccountingDocumentId` (FK nullable, «vínculo para
 anular») se elimina: el vínculo documento → comprobante vive en `ACC_InventoryPostings`, y lo de

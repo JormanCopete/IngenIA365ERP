@@ -55,6 +55,10 @@ public sealed class AddLegalParameterVersionCommandHandler(IApplicationDbContext
     public async Task<Result<Guid>> Handle(AddLegalParameterVersionCommand request, CancellationToken ct)
     {
         var code = request.Code.Trim().ToUpperInvariant();
+        // Feature 013 (T93, regla 4): el SMMLV y la UVT son valores nacionales; los proyecta sólo la réplica.
+        if (NationalValues.EfectoDeReplicacionEnNomina.CodigosProyectados.Contains(code))
+            return Result.Failure<Guid>(new Error("Payroll.LegalParameter.NationalValue",
+                $"El {code} es un valor nacional: lo registra la plataforma, no Nómina."));
         var desde = request.ValidFrom.Date;
         var versiones = await db.PayrollLegalParameters.Include(p => p.Ranges).Where(p => p.Code == code).OrderByDescending(p => p.ValidFrom).ToListAsync(ct);
         var actual = versiones.FirstOrDefault();

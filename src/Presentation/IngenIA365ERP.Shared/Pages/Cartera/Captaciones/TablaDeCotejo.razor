@@ -1,0 +1,28 @@
+@using IngenIA365ERP.Shared.Services.Cartera
+
+@* Feature 014, US9 (T159): el cotejo de los totales cargados con las cifras de referencia que entrega la cooperativa, por línea y concepto (FR-118). Sin
+   ruta propia: lo usan la pantalla de saldos iniciales y su cuadre. *@
+<div class="tabla-desplazable">
+    <table class="data-grid">
+        <thead><tr><th>Línea</th><th>Concepto</th><th class="numero">Cuentas</th><th class="numero">Cargado</th><th class="numero">Referencia</th><th class="numero">Diferencia</th><th>Fuente</th></tr></thead>
+        <tbody>
+            @foreach (var f in Filas)
+            {
+                <tr class="@(f.Difference is { } d && d != 0 ? "texto-alerta" : "")">
+                    <td>@f.LineCode</td>
+                    <td>@TextosDeMigracionDeCaptaciones.Concepto(f.Concept)</td>
+                    <td class="numero">@f.Accounts.ToString("N0")</td>
+                    <td class="numero">@f.Loaded.ToString("N2")</td>
+                    <td class="numero">@(f.Reference?.ToString("N2") ?? "—")</td>
+                    <td class="numero">@(f.Difference?.ToString("N2") ?? "—")</td>
+                    <td>@f.Source</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+@if (Filas.Count == 0) { <p class="texto-tenue">Todavía no hay totales cargados ni cifras de referencia.</p> }
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<CotejoDeCifraDto> Filas { get; set; } = [];
+}

@@ -1,4 +1,4 @@
-using FluentValidation;
+﻿using FluentValidation;
 
 namespace IngenIA365ERP.Application.Core.People.Contracts;
 
@@ -67,6 +67,7 @@ public record PersonInput
     public bool? IsSimpleTaxRegime { get; init; }
     public bool? IsIncomeTaxFiler { get; init; }
     public bool? IsObligatedToInvoice { get; init; }
+    public bool? IsObligatedToKeepBooks { get; init; }
     public bool? IsLargeContributor { get; init; }
     public bool? WithholdingExempt { get; init; }
     public bool? IcaWithholdingExempt { get; init; }

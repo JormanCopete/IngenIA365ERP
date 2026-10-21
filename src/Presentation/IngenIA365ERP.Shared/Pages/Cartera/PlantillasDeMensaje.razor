@@ -1,0 +1,230 @@
+@page "/cartera/plantillas-de-mensaje"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Globalization
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Http
+@inject MensajesAlDeudorClient Mensajes
+@inject INotificationService Notification
+
+<PageTitle>Plantillas de mensaje - IngenIA365ERP</PageTitle>
+
+@* Feature 013, fase 4 (T0310; US17, T76; contracts/api.md §14.1): las plantillas de los mensajes al deudor por código y canal, versionadas:
+   una versión publicada no se edita, se publica otra desde una fecha. El editor muestra la lista blanca de variables del propósito (la API
+   rechaza las demás), el largo y los segmentos del SMS y, en WhatsApp, el identificador de la plantilla aprobada por el proveedor. La vista
+   previa rinde el texto con datos de ejemplo sin guardar nada. *@
+<PermissionGate Required="Lending.MessageTemplates.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Plantillas de mensaje</h3>
+        <div class="toolbar">
+            <PermissionGate Required="Lending.MessageTemplates.Manage">
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@(() => AbrirEditor(null))">Nueva plantilla</SfButton>
+            </PermissionGate>
+        </div>
+    </div>
+
+    <div class="toolbar">
+        <label class="campo">Propósito
+            <select class="e-input" @bind="_filtroProposito">
+                <option value="0">Todos</option>
+                @foreach (var p in TextosDeCartera.Propositos) { <option value="@p.Valor">@p.Texto</option> }
+            </select>
+        </label>
+        <label class="campo">Canal
+            <select class="e-input" @bind="_filtroCanal">
+                <option value="0">Todos</option>
+                @foreach (var c in TextosDeCartera.Canales) { <option value="@c.Valor">@c.Texto</option> }
+            </select>
+        </label>
+        <SfButton CssClass="e-primary" IconCss="e-icons e-search" Disabled="@_carga.Activa" OnClick="@CargarAsync">Buscar</SfButton>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        <div class="tabla-desplazable">
+            <table class="data-grid">
+                <thead><tr><th>Código</th><th>Propósito</th><th>Canal</th><th class="numero">Versión</th><th>Vigencia</th><th>Texto</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var t in _plantillas)
+                    {
+                        var plantilla = t;
+                        <tr class="@(_historialDe == plantilla.Code ? "resaltada" : "")">
+                            <td>@plantilla.Code@(plantilla.IsSeeded ? " (sembrada)" : "")</td>
+                            <td>@TextosDeCartera.Proposito(plantilla.Purpose)</td>
+                            <td>@TextosDeCartera.Canal(plantilla.Channel)</td>
+                            <td class="numero">@plantilla.Version</td>
+                            <td>@plantilla.ValidFrom.ToString("dd/MM/yyyy") – @(plantilla.ValidTo?.ToString("dd/MM/yyyy") ?? "vigente")</td>
+                            <td>
+                                @if (plantilla.Subject is not null) { <strong>@plantilla.Subject</strong><br /> }
+                                @plantilla.Body
+                                @if (plantilla.ReviewPending) { <br /><span class="aviso aviso-alerta">Pendiente de revisar</span> }
+                                @foreach (var w in plantilla.Warnings) { <br /><span class="texto-tenue">@w.Mensaje</span> }
+                            </td>
+                            <td>
+                                <SfButton CssClass="e-flat e-small" OnClick="@(() => VerHistorialAsync(plantilla))">Historial</SfButton>
+                                <PermissionGate Required="Lending.MessageTemplates.Manage">
+                                    <SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirEditor(plantilla))">Nueva versión</SfButton>
+                                </PermissionGate>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (_plantillas.Count == 0) { <p class="texto-tenue">Sin plantillas con esos filtros.</p> }
+    </IndicadorDeCarga>
+
+    @if (_historialDe is not null)
+    {
+        <div class="info-card">
+            <h4>Versiones de @_historialDe</h4>
+            <IndicadorDeCarga Cargando="@_cargaHistorial.Activa">
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th class="numero">Versión</th><th>Canal</th><th>Vigencia</th><th>Texto</th><th>Proveedor</th></tr></thead>
+                        <tbody>
+                            @foreach (var v in _historial.OrderByDescending(v => v.Version))
+                            {
+                                <tr>
+                                    <td class="numero">@v.Version</td>
+                                    <td>@TextosDeCartera.Canal(v.Channel)</td>
+                                    <td>@v.ValidFrom.ToString("dd/MM/yyyy") – @(v.ValidTo?.ToString("dd/MM/yyyy") ?? "vigente")</td>
+                                    <td>@(v.Subject is null ? "" : $"{v.Subject} — ")@v.Body</td>
+                                    <td>@v.ProviderTemplateId</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </IndicadorDeCarga>
+        </div>
+    }
+</div>
+
+<SfDialog @bind-Visible="_mostrarEditor" Header="@(_nueva ? "Nueva plantilla" : "Nueva versión de la plantilla")" Width="760px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Procesando…">
+                <div class="form-grid">
+                    <label class="campo">Código * <input class="e-input" @bind="_codigo" maxlength="40" disabled="@(!_nueva)" /></label>
+                    <label class="campo">Propósito *
+                        <select class="e-input" @bind="_proposito" disabled="@(!_nueva)">
+                            @foreach (var p in TextosDeCartera.Propositos) { <option value="@p.Valor">@p.Texto</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Canal *
+                        <select class="e-input" @bind="_canal">
+                            @foreach (var c in TextosDeCartera.Canales) { <option value="@c.Valor">@c.Texto</option> }
+                        </select>
+                    </label>
+                    @if (_canal is 1 or 4)
+                    {
+                        <label class="campo campo-ancho">Asunto <input class="e-input" @bind="_asunto" maxlength="200" /></label>
+                    }
+                    @if (_canal == 3)
+                    {
+                        <label class="campo">Plantilla aprobada del proveedor * <input class="e-input" @bind="_proveedor" maxlength="100" /></label>
+                    }
+                    <label class="campo campo-ancho">Texto * (variables entre dobles llaves)
+                        <textarea class="e-input" rows="6" @bind="_cuerpo" @bind:event="oninput"></textarea>
+                    </label>
+                    <label class="campo">Desde * <input type="date" class="e-input" value="@_desde.ToString("yyyy-MM-dd")" @onchange="@(e => _desde = LeerFecha(e.Value) ?? _desde)" /></label>
+                    <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" maxlength="500" /></label>
+                </div>
+                <p class="texto-tenue">Variables admitidas: @string.Join(", ", TextosDeCartera.VariablesPermitidas(_proposito).Select(v => "{{" + v + "}}")).</p>
+                <p class="texto-tenue">@(_cuerpo?.Length ?? 0) caracteres@(_canal == 2 ? " (el SMS se cobra por segmentos: la vista previa los cuenta con los datos de ejemplo)" : "").</p>
+                <div class="toolbar">
+                    <SfButton CssClass="e-outline" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(_cuerpo))" OnClick="@VistaPreviaAsync">Vista previa</SfButton>
+                </div>
+                @if (_vista is { } v)
+                {
+                    <div class="info-card">
+                        @if (v.Subject is not null) { <p><strong>@v.Subject</strong></p> }
+                        <p>@v.Body</p>
+                        <p class="texto-tenue">@v.Length caracteres@(v.Segments is { } s ? $" · {s} segmento(s) de SMS" : "")</p>
+                        @foreach (var w in v.Warnings) { <p class="aviso aviso-alerta">@w.Mensaje</p> }
+                    </div>
+                }
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(_codigo) || string.IsNullOrWhiteSpace(_cuerpo) || string.IsNullOrWhiteSpace(_motivo))" OnClick="@GuardarAsync">Publicar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarEditor = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new(), _cargaHistorial = new(), _guardado = new();
+    private ClaveDeOperacion _clave = new();
+    private List<VersionDePlantillaDeMensajeDto> _plantillas = [], _historial = [];
+    private int _filtroProposito, _filtroCanal, _proposito = 1, _canal = 1;
+    private string? _historialDe, _codigo, _asunto, _cuerpo, _proveedor, _motivo, _error;
+    private bool _mostrarEditor, _nueva;
+    private DateOnly _desde = DateOnly.FromDateTime(DateTime.Today).AddDays(1);
+    private VistaPreviaDeMensajeDto? _vista;
+
+    protected override async Task OnInitializedAsync() => await CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Mensajes.PlantillasAsync(_filtroProposito == 0 ? null : _filtroProposito, _filtroCanal == 0 ? null : _filtroCanal);
+        if (!r.IsSuccess) { _plantillas = []; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer las plantillas."); return; }
+        _plantillas = [.. (r.Value ?? []).OrderBy(p => p.Code, StringComparer.Ordinal).ThenBy(p => p.Channel)];
+    }
+
+    private async Task VerHistorialAsync(VersionDePlantillaDeMensajeDto plantilla)
+    {
+        _historialDe = plantilla.Code;
+        using var carga = _cargaHistorial.Iniciar();
+        var r = await Mensajes.HistorialDePlantillaAsync(plantilla.Code);
+        if (!r.IsSuccess) { _historial = []; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo leer el historial."); return; }
+        _historial = [.. r.Value ?? []];
+    }
+
+    private void AbrirEditor(VersionDePlantillaDeMensajeDto? base_)
+    {
+        _nueva = base_ is null;
+        _codigo = base_?.Code;
+        _proposito = base_?.Purpose ?? 1;
+        _canal = base_?.Channel ?? 1;
+        _asunto = base_?.Subject;
+        _cuerpo = base_?.Body;
+        _proveedor = base_?.ProviderTemplateId;
+        _desde = DateOnly.FromDateTime(DateTime.Today).AddDays(1);
+        _motivo = _error = null;
+        _vista = null;
+        _clave = new ClaveDeOperacion();
+        _mostrarEditor = true;
+    }
+
+    private async Task VistaPreviaAsync()
+    {
+        using var carga = _guardado.Iniciar();
+        _error = null;
+        var r = await Mensajes.VistaPreviaAsync(new VistaPreviaDeMensajeRequest(_canal, null, _cuerpo, _proposito, _canal is 1 or 4 ? _asunto : null, null,
+            _canal == 3 ? _proveedor : null));
+        if (!r.IsSuccess) { _vista = null; _error = r.ErrorMessage ?? "No se pudo armar la vista previa."; return; }
+        _vista = r.Value;
+    }
+
+    private async Task GuardarAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_codigo) || string.IsNullOrWhiteSpace(_cuerpo) || string.IsNullOrWhiteSpace(_motivo)) return;
+        using var carga = _guardado.Iniciar();
+        _error = null;
+        var r = await Mensajes.NuevaVersionDePlantillaAsync(_codigo.Trim().ToUpperInvariant(), new VersionDePlantillaDeMensajeRequest(_proposito, _canal,
+            _canal is 1 or 4 && !string.IsNullOrWhiteSpace(_asunto) ? _asunto.Trim() : null, _cuerpo, null,
+            _canal == 3 && !string.IsNullOrWhiteSpace(_proveedor) ? _proveedor.Trim() : null, _desde, _motivo.Trim()), _clave);
+        if (!r.IsSuccess || r.Value is null) { _error = r.ErrorMessage ?? "No se pudo publicar la versión."; return; }
+        _mostrarEditor = false;
+        await Notification.SuccessAsync($"Plantilla {r.Value.Code} versión {r.Value.Version} publicada.");
+        await CargarAsync();
+        if (_historialDe == r.Value.Code) await VerHistorialAsync(r.Value);
+    }
+
+    private static DateOnly? LeerFecha(object? valor) =>
+        DateOnly.TryParse(valor?.ToString(), CultureInfo.InvariantCulture, out var f) ? f : null;
+}

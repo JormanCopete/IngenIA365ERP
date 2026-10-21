@@ -52,10 +52,8 @@ public sealed class PayrollLegalParametersSeeder : IDataSeeder
     private static DateTime Utc(int año, int mes, int día) => new(año, mes, día, 0, 0, 0, DateTimeKind.Utc);
 
     // --- Normas exactas (feature 010, R4). Cada una cabe en los 200 caracteres de Source. ---
-    private const string FuenteSmmlv = "Decreto 1469 de 2025 (Decreto 159 de 2026, mismo valor)";
     private const string FuenteAuxilio = "Decreto 1470 de 2025";
     private const string FuenteAuxilioTope = "Ley 15 de 1959 art. 2; Ley 1 de 1963";
-    private const string FuenteUvt = "Resolución DIAN 000238 del 15-12-2025";
     private const string FuenteSalud = "Ley 100 de 1993 art. 204; Ley 1122 de 2007 art. 10";
     private const string FuentePension = "Ley 100 de 1993 art. 20; Ley 797 de 2003 art. 7";
     private const string FuenteSaludAprendiz = "Ley 2466 de 2025 art. 21";
@@ -114,10 +112,10 @@ public sealed class PayrollLegalParametersSeeder : IDataSeeder
     {
         var lista = new List<PayrollLegalParameter>
         {
-            Monto(LegalParameterCodes.Smmlv, "Salario mínimo mensual legal vigente", 1_750_905m, FuenteSmmlv),
+            // Feature 013 (T93 regla 2): el SMMLV y la UVT ya no se siembran aquí; son valores nacionales y los proyecta la
+            // réplica (NationalValuesReplicaSeeder, Order 88). Ver ProyeccionDeValoresNacionales.
             Monto(LegalParameterCodes.TransportAllowance, "Auxilio de transporte mensual", 249_095m, FuenteAuxilio),
             Cantidad(LegalParameterCodes.TransportAllowanceCapSmmlv, "Tope de salario para auxilio de transporte (en SMMLV)", 2m, FuenteAuxilioTope),
-            Monto(LegalParameterCodes.Uvt, "Unidad de Valor Tributario", 52_374m, FuenteUvt),
 
             Porcentaje(LegalParameterCodes.HealthEmployeePct, "Salud a cargo del empleado", 4m, FuenteSalud),
             Porcentaje(LegalParameterCodes.PensionEmployeePct, "Pensión a cargo del empleado", 4m, FuentePension),
@@ -285,6 +283,33 @@ public sealed class PayrollLegalParametersSeeder : IDataSeeder
 
         return lista;
     }
+
+    /// <summary>
+    /// Feature 013 (T93): lo que la réplica deja en <c>PAY_LegalParameters</c> de una cooperativa nueva a partir de la semilla
+    /// central (<see cref="PlatformNationalValuesSeeder"/>): el <c>SMMLV</c> y la <c>UVT</c> con su vigencia y su norma. Esta semilla
+    /// no los inserta; lo usan las pruebas y los casos dorados que necesitan el juego completo de parámetros
+    /// (<see cref="ConValoresNacionales"/>).
+    /// </summary>
+    public static IReadOnlyList<PayrollLegalParameter> ProyeccionDeValoresNacionales()
+    {
+        var nombres = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            [LegalParameterCodes.Smmlv] = "Salario mínimo mensual legal vigente",
+            [LegalParameterCodes.Uvt] = "Unidad de Valor Tributario",
+        };
+        return PlatformNationalValuesSeeder.Catalogo().Values
+            .Where(v => nombres.ContainsKey(v.Code) && v.Value is not null)
+            .Select(v =>
+            {
+                var p = Monto(v.Code, nombres[v.Code], v.Value!.Value, v.Source);
+                p.ValidFrom = DateTime.SpecifyKind(v.ValidFrom.ToDateTime(TimeOnly.MinValue), DateTimeKind.Utc);
+                return p;
+            })
+            .ToList();
+    }
+
+    /// <summary>El juego completo con que queda una cooperativa nueva: lo de esta semilla más la proyección de la réplica.</summary>
+    public static IReadOnlyList<PayrollLegalParameter> ConValoresNacionales() => [.. ProyeccionDeValoresNacionales(), .. Catalogo()];
 
     private static PayrollLegalParameter Monto(string code, string name, decimal value, string source) =>
         Nuevo(code, name, LegalParameterKind.Amount, value, source);

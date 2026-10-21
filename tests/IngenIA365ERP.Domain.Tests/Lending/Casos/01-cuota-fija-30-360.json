@@ -1,0 +1,99 @@
+// SC-017, SC-023 (quickstart §1.2, caso 01): cuota fija mensual en 30/360. Desembolso el 31 de enero de 2027: los vencimientos
+// caen el último día de cada mes (28 de febrero, 31 de marzo, 30 de abril…), porque el mes que no tiene el 31 vence su último día.
+// En 30/360 todos los períodos son de 30 días: del 31-01 al 28-02 hay 30 (el 31 vale 30 y el fin de febrero completa 30), y del
+// 28-02 al 31-03 otros 30 (el 31 no causa). Tasa diaria = RaizEntera(1,24; 360) − 1 a 18 decimales; i = (1 + r_d)^30 − 1.
+// La cuota fija sale del valor presente: A = 1.200.000 / Σ v_k; la última cuota paga el saldo y absorbe el residuo.
+// Calculado con calcular.py (decimal de 40 dígitos). Pendiente de validar por la contadora (D1, C7 §7.7).
+{
+  "nombre": "Cuota fija 30/360",
+  "condiciones": {
+    "sistema": "LevelPayment", "convencion": "Thirty360", "equivalencia": "Compound",
+    "redondeo": { "unidad": 0.01, "modo": "AwayFromZero", "momento": "PerConcept" },
+    "prelacion": "OldestInstallmentFirst",
+    "monto": 1200000, "plazoCuotas": 12, "periodicidad": "Monthly", "tasaEA": 0.240000,
+    "fechaDesembolso": "2027-01-31", "modalidad": "CONSUMO"
+  },
+  "series": {
+    "usura": [ { "clave": "CONSUMO", "desde": "2027-01-01", "ea": 0.265000, "registradoEn": "2026-12-31T15:00:00Z",
+                 "publicId": "0b7a3c8e-1d1a-4f6e-9a01-000000000001" } ],
+    "festivos": []
+  },
+  "operaciones": [],
+  "consultas": [
+    {
+      "modo": "PagosATiempo",
+      "fecha": "2027-02-14",
+      "informacionHasta": "2027-02-14T23:00:00Z",
+      "esperado": {
+        "causado": [
+          { "cuota": 1, "concepto": "CurrentInterest", "valor": 10080.64 }
+        ]
+      }
+    },
+    {
+      "modo": "PagosATiempo",
+      "fecha": "2027-02-28",
+      "informacionHasta": "2027-02-28T23:00:00Z",
+      "esperado": {
+        "causado": [
+          { "cuota": 1, "concepto": "CurrentInterest", "valor": 21705.10 }
+        ]
+      }
+    },
+    {
+      "modo": "PagosATiempo",
+      "fecha": "2027-03-16",
+      "informacionHasta": "2027-03-16T23:00:00Z",
+      "esperado": {
+        "causado": [
+          { "cuota": 1, "concepto": "CurrentInterest", "valor": 21705.10 },
+          { "cuota": 2, "concepto": "CurrentInterest", "valor": 10658.85 }
+        ]
+      }
+    },
+    {
+      "modo": "PagosATiempo",
+      "fecha": "2028-01-31",
+      "informacionHasta": "2028-01-31T23:00:00Z",
+      "esperado": {
+        "causado": [
+          { "cuota": 1, "concepto": "CurrentInterest", "valor": 21705.10 },
+          { "cuota": 2, "concepto": "CurrentInterest", "valor": 20069.30 },
+          { "cuota": 3, "concepto": "CurrentInterest", "valor": 18403.90 },
+          { "cuota": 4, "concepto": "CurrentInterest", "valor": 16708.39 },
+          { "cuota": 5, "concepto": "CurrentInterest", "valor": 14982.21 },
+          { "cuota": 6, "concepto": "CurrentInterest", "valor": 13224.81 },
+          { "cuota": 7, "concepto": "CurrentInterest", "valor": 11435.61 },
+          { "cuota": 8, "concepto": "CurrentInterest", "valor": 9614.06 },
+          { "cuota": 9, "concepto": "CurrentInterest", "valor": 7759.56 },
+          { "cuota": 10, "concepto": "CurrentInterest", "valor": 5871.52 },
+          { "cuota": 11, "concepto": "CurrentInterest", "valor": 3949.32 },
+          { "cuota": 12, "concepto": "CurrentInterest", "valor": 1992.36 }
+        ]
+      }
+    }
+  ],
+  "esperado": {
+    "tasas": { "diaria": 0.000597710167622401, "nominalDelPeriodo": 0.018087582483510675, "cuotaNivelada": 112143.01, "efectiva": 0.241990, "efectivaSinCargos": 0.241990 },
+    "plan": {
+      "interesDeGracia": 0,
+      "residuo": 0.02,
+      "totales": { "capital": 1200000, "interes": 145716.14, "seguro": 0 },
+      "cuotas": [
+        { "numero": 1, "vencimiento": "2027-02-28", "dias": 30, "capital": 90437.91, "interes": 21705.10, "seguro": 0, "saldo": 1109562.09 },
+        { "numero": 2, "vencimiento": "2027-03-31", "dias": 30, "capital": 92073.71, "interes": 20069.30, "seguro": 0, "saldo": 1017488.38 },
+        { "numero": 3, "vencimiento": "2027-04-30", "dias": 30, "capital": 93739.11, "interes": 18403.90, "seguro": 0, "saldo": 923749.27 },
+        { "numero": 4, "vencimiento": "2027-05-31", "dias": 30, "capital": 95434.62, "interes": 16708.39, "seguro": 0, "saldo": 828314.65 },
+        { "numero": 5, "vencimiento": "2027-06-30", "dias": 30, "capital": 97160.80, "interes": 14982.21, "seguro": 0, "saldo": 731153.85 },
+        { "numero": 6, "vencimiento": "2027-07-31", "dias": 30, "capital": 98918.20, "interes": 13224.81, "seguro": 0, "saldo": 632235.65 },
+        { "numero": 7, "vencimiento": "2027-08-31", "dias": 30, "capital": 100707.40, "interes": 11435.61, "seguro": 0, "saldo": 531528.25 },
+        { "numero": 8, "vencimiento": "2027-09-30", "dias": 30, "capital": 102528.95, "interes": 9614.06, "seguro": 0, "saldo": 428999.30 },
+        { "numero": 9, "vencimiento": "2027-10-31", "dias": 30, "capital": 104383.45, "interes": 7759.56, "seguro": 0, "saldo": 324615.85 },
+        { "numero": 10, "vencimiento": "2027-11-30", "dias": 30, "capital": 106271.49, "interes": 5871.52, "seguro": 0, "saldo": 218344.36 },
+        { "numero": 11, "vencimiento": "2027-12-31", "dias": 30, "capital": 108193.69, "interes": 3949.32, "seguro": 0, "saldo": 110150.67 },
+        { "numero": 12, "vencimiento": "2028-01-31", "dias": 30, "capital": 110150.67, "interes": 1992.36, "seguro": 0, "saldo": 0 }
+      ]
+    },
+    "usura": { "veredicto": "Pasa", "usura": 0.265000, "holgura": 0.023010 }
+  }
+}

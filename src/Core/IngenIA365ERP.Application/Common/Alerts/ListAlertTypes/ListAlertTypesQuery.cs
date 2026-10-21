@@ -9,9 +9,10 @@ namespace IngenIA365ERP.Application.Common.Alerts.ListAlertTypes;
 /// Los tipos de alerta configurados en la cooperativa (feature 012, T39, T094; contracts/api.md §16.2,
 /// <c>GET /api/inventory/alert-types</c>, <c>Inventory.Alerts.View</c>): por cada tipo del catálogo, la versión vigente
 /// en <see cref="AsOf"/> (hoy si no viene) o, si no hay, la más reciente, con <c>activeRecipients</c> y
-/// <c>withoutRecipient</c> (el reporte de completitud de SC-022). Los tipos sin ninguna versión no aparecen.
+/// <c>withoutRecipient</c> (el reporte de completitud de SC-022). Los tipos sin ninguna versión no aparecen. Feature 013 (T0313,
+/// api.md §3.10): con <see cref="Module"/>, sólo los tipos de ese módulo del catálogo (<c>/api/lending/alert-types</c> manda <c>Lending</c>).
 /// </summary>
-public sealed record ListAlertTypesQuery(DateOnly? AsOf = null) : IRequest<Result<IReadOnlyList<AlertTypeDto>>>;
+public sealed record ListAlertTypesQuery(DateOnly? AsOf = null, string? Module = null) : IRequest<Result<IReadOnlyList<AlertTypeDto>>>;
 
 public sealed class ListAlertTypesQueryHandler(IApplicationDbContext db, IDestinatariosPorPermiso destinatarios, IDateTimeService reloj)
     : IRequestHandler<ListAlertTypesQuery, Result<IReadOnlyList<AlertTypeDto>>>
@@ -24,6 +25,7 @@ public sealed class ListAlertTypesQueryHandler(IApplicationDbContext db, IDestin
         var resultado = new List<AlertTypeDto>();
         foreach (var definicion in TiposDeAlerta.Todos)
         {
+            if (!string.IsNullOrWhiteSpace(request.Module) && !string.Equals(definicion.Module, request.Module, StringComparison.Ordinal)) continue;
             var delTipo = versiones.Where(v => v.TypeCode == definicion.TypeCode).OrderByDescending(v => v.ValidFrom).ToList();
             var version = delTipo.FirstOrDefault(v => v.VigenteEn(fecha)) ?? delTipo.FirstOrDefault();
             if (version is null) continue;

@@ -4,6 +4,7 @@ using System.Text.Json;
 using IngenIA365ERP.Application.Common.Integration.Contracts.Inventory;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Application.Common.Paging;
 using IngenIA365ERP.Domain.Entities.Integration;
 using IngenIA365ERP.Domain.Entities.Integration.Transactions;
 using IngenIA365ERP.Domain.Enums.Inventory;
@@ -36,22 +37,65 @@ public sealed class MensajesEntrantes(IApplicationDbContext db) : IMensajesEntra
         if (faltantes.Count > 0)
             return Result.Failure<IReadOnlyList<MensajeEntrante>>(ErroresDeIntegracion.MensajeNoEncontrado(faltantes[0]));
 
+        return await ArmarAsync(filas.Select(f => (f.Mensaje, f.Entrega)).ToList(), ct);
+    }
+
+    /// <summary>
+    /// Lo que espera en el destino sin consumir nada (feature 013, T19): sólo lee; no crea intentos ni cambia entregas. Los
+    /// estados son los que bloquean (<see cref="EntregasElegibles.Bloqueantes"/>): lo que el destino todavía no procesó.
+    /// </summary>
+    public async Task<Result<PagedResult<MensajeEntrante>>> PendientesAsync(
+        string destino, IReadOnlyCollection<string> tipos, DateOnly hastaFechaDeOperacion, PageRequest pagina, CancellationToken ct)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(destino);
+        ArgumentNullException.ThrowIfNull(tipos);
+        ArgumentNullException.ThrowIfNull(pagina);
+        var listaDeTipos = tipos.Distinct(StringComparer.Ordinal).ToList();
+        var pendientes = EntregasElegibles.Bloqueantes.ToArray();
+
+        var consulta =
+            from m in db.IntegrationMessages.AsNoTracking()
+            join d in db.IntegrationMessageDeliveries.AsNoTracking() on m.Id equals d.MessageId
+            where d.Destination == destino && pendientes.Contains(d.Status)
+                  && (listaDeTipos.Count == 0 || listaDeTipos.Contains(m.Type))
+                  && m.OperationDate <= hastaFechaDeOperacion
+            select new { Mensaje = m, Entrega = d };
+
+        var total = await consulta.CountAsync(ct);
+        var filas = await consulta.OrderBy(f => f.Mensaje.Id)
+            .Skip((pagina.SafePage - 1) * pagina.SafePageSize).Take(pagina.SafePageSize)
+            .ToListAsync(ct);
+
+        var armados = await ArmarAsync(filas.Select(f => (f.Mensaje, f.Entrega)).ToList(), ct);
+        return armados.IsFailure
+            ? Result.Failure<PagedResult<MensajeEntrante>>(armados.Error)
+            : Result.Success(new PagedResult<MensajeEntrante>(armados.Value, pagina.SafePage, pagina.SafePageSize, total));
+    }
+
+    /// <summary>Verifica la huella de cada mensaje y arma lo que ve el consumidor, en el orden recibido.</summary>
+    private async Task<Result<IReadOnlyList<MensajeEntrante>>> ArmarAsync(
+        IReadOnlyList<(IntegrationMessage Mensaje, IntegrationMessageDelivery Entrega)> filas, CancellationToken ct)
+    {
         var lotes = await LotesAsync(db, filas.Select(f => f.Entrega.BatchId), ct);
 
         var resultado = new List<MensajeEntrante>(filas.Count);
-        foreach (var fila in filas)
+        foreach (var (mensaje, entrega) in filas)
         {
-            if (!HuellaCoincide(fila.Mensaje))
-                return Result.Failure<IReadOnlyList<MensajeEntrante>>(ErroresDeIntegracion.ContenidoAlterado(fila.Mensaje.PublicId));
+            if (!HuellaCoincide(mensaje))
+                return Result.Failure<IReadOnlyList<MensajeEntrante>>(ErroresDeIntegracion.ContenidoAlterado(mensaje.PublicId));
 
-            var contenido = Deserializar(fila.Mensaje);
+            var contenido = Deserializar(mensaje);
             resultado.Add(new MensajeEntrante(
-                Sobre(fila.Mensaje, contenido),
+                Sobre(mensaje, contenido),
                 contenido,
-                fila.Mensaje.PayloadJson,
-                fila.Mensaje.PayloadSha256,
-                fila.Mensaje.PrevalidationOutcome,
-                Entrega(fila.Entrega, lotes)));
+                mensaje.PayloadJson,
+                mensaje.PayloadSha256,
+                mensaje.PrevalidationOutcome,
+                Entrega(entrega, lotes))
+            {
+                OriginDocumentClassText = mensaje.OriginDocumentClass,
+                RelatedDocumentClassText = mensaje.RelatedDocumentClass,
+            });
         }
 
         return Result.Success<IReadOnlyList<MensajeEntrante>>(resultado);
@@ -67,7 +111,7 @@ public sealed class MensajesEntrantes(IApplicationDbContext db) : IMensajesEntra
     /// <summary>El contenido con su record del catálogo (tipo y versión), o el <c>JsonElement</c> si no está.</summary>
     public static object? Deserializar(IntegrationMessage mensaje)
     {
-        var tipo = CatalogoDeMensajesV1.Todos.FirstOrDefault(t => t.Type == mensaje.Type && t.Version == mensaje.Version);
+        var tipo = CatalogoDeMensajes.Buscar(mensaje.Type, mensaje.Version);
         return tipo is null
             ? JsonSerializer.Deserialize<JsonElement>(mensaje.PayloadJson, OpcionesDeMensajes.Opciones)
             : JsonSerializer.Deserialize(mensaje.PayloadJson, tipo.Record, OpcionesDeMensajes.Opciones);

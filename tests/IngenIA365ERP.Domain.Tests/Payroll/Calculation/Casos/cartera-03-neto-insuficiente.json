@@ -1,0 +1,25 @@
+{
+  "nombre": "Cuota de Cartera de 2.500.000 con el tope en el 100 %: el neto no alcanza",
+  "descripcion": "Feature 013 (T0103, FR-112). Con MAX_DEDUCCION_SALARIO_PCT = 100 (parámetro sobrescrito sólo en este caso, para aislar el motivo) el tope es todo el neto después de las deducciones de ley: 2.249.095 − 160.000 = 2.089.095. La cuota de 2.500.000 no cabe en el neto: se descuentan 2.089.095, el neto queda en cero y 2.500.000 − 2.089.095 = 410.905 quedan no descontados con motivo InsufficientNet (no se difieren y la cuota sigue exigible en Cartera).",
+  "periodo": { "inicio": "2026-03-01", "fin": "2026-03-31", "periodicidad": "Monthly" },
+  "empleado": {
+    "nombre": "Luis Nieto", "clase": "Standard", "ingreso": "2020-08-03",
+    "salarios": [ { "desde": "2020-08-03", "mensual": 2000000 } ],
+    "afiliaciones": { "salud": true, "pension": true, "arl": 1, "caja": true },
+    "procedimientoRetencion": 1
+  },
+  "novedades": [ { "concepto": "DESC_CARTERA", "valor": 2500000, "origen": "LoanDeduction", "descripcion": "Cuota del crédito 0000123 (Cartera)" } ],
+  "politicas": { "redondeo": "Peso", "exoneracion": false },
+  "parametros": { "MAX_DEDUCCION_SALARIO_PCT": 100 },
+  "esperado": {
+    "lineas": {
+      "SALARIO": 2000000, "AUX_TRANSPORTE": 249095,
+      "SALUD_EMP": 80000, "PENSION_EMP": 80000, "FSP": 0, "RETEFTE": 0, "DESC_CARTERA": 2089095,
+      "SALUD_EMPLEADOR": 170000, "PENSION_EMPLEADOR": 240000, "ARL": 10440, "SENA": 40000, "ICBF": 60000, "CAJA": 80000,
+      "PROV_CESANTIAS": 187350, "PROV_INT_CESANTIAS": 22491, "PROV_PRIMA": 187350, "PROV_VACACIONES": 83400
+    },
+    "totales": { "devengos": 2249095, "deducciones": 2249095, "aportesEmpleador": 600440, "provisiones": 480591, "neto": 0, "ajusteRedondeo": 0 },
+    "banderas": "None", "diasPagados": 30,
+    "noDescontados": [ { "concepto": "DESC_CARTERA", "valor": 410905, "motivo": "InsufficientNet" } ]
+  }
+}

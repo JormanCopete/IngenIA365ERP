@@ -1,0 +1,37 @@
+// SC-023, D1 (quickstart §1.2, caso 29): equivalencia LINEAL frente a la compuesta. NA_12 = 12·((1,26)^(1/12) − 1) y
+// r_d = NA_12 / 360; la tasa de n días es r_d·n. Un mes completo (30 días) da lo mismo que la compuesta; el primer período, de 50
+// días (20-02 → 10-04 en 30/360, día de pago 10), no: lineal 50·r_d frente a la compuesta (1 + r_d')^50 − 1 con
+// r_d' = RaizEntera(1,26; 360) − 1. Redondeo al centavo AL PAR. Calculado con calcular.py. Pendiente de validar por la contadora (D1).
+{
+  "nombre": "Equivalencia lineal con primer período de 50 días",
+  "condiciones": {
+    "sistema": "LevelPayment", "convencion": "Thirty360", "equivalencia": "Linear",
+    "redondeo": { "unidad": 0.01, "modo": "ToEven", "momento": "PerConcept" },
+    "prelacion": "OldestInstallmentFirst",
+    "monto": 1500000, "plazoCuotas": 6, "periodicidad": "Monthly", "tasaEA": 0.260000,
+    "fechaDesembolso": "2027-02-20", "diaDePago": 10, "modalidad": "CONSUMO"
+  },
+  "series": {
+    "usura": [ { "clave": "CONSUMO", "desde": "2027-02-01", "ea": 0.265000, "registradoEn": "2027-01-29T15:00:00Z",
+                 "publicId": "0b7a3c8e-1d1a-4f6e-9a01-000000000029" } ]
+  },
+  "operaciones": [],
+  "consultas": [],
+  "esperado": {
+    "tasas": { "diaria": 0.000648198898708585, "nominalDelPeriodo": 0.019445966961257536, "cuotaNivelada": 270687.26, "efectiva": 0.262974, "efectivaSinCargos": 0.262974 },
+    "plan": {
+      "interesDeGracia": 0,
+      "residuo": 0.04,
+      "totales": { "capital": 1500000, "interes": 124123.60, "seguro": 0 },
+      "cuotas": [
+        { "numero": 1, "vencimiento": "2027-04-10", "dias": 50, "capital": 222072.34, "interes": 48614.92, "seguro": 0, "saldo": 1277927.66 },
+        { "numero": 2, "vencimiento": "2027-05-10", "dias": 30, "capital": 245836.72, "interes": 24850.54, "seguro": 0, "saldo": 1032090.94 },
+        { "numero": 3, "vencimiento": "2027-06-10", "dias": 30, "capital": 250617.25, "interes": 20070.01, "seguro": 0, "saldo": 781473.69 },
+        { "numero": 4, "vencimiento": "2027-07-10", "dias": 30, "capital": 255490.75, "interes": 15196.51, "seguro": 0, "saldo": 525982.94 },
+        { "numero": 5, "vencimiento": "2027-08-10", "dias": 30, "capital": 260459.01, "interes": 10228.25, "seguro": 0, "saldo": 265523.93 },
+        { "numero": 6, "vencimiento": "2027-09-10", "dias": 30, "capital": 265523.93, "interes": 5163.37, "seguro": 0, "saldo": 0 }
+      ]
+    },
+    "usura": { "veredicto": "Pasa", "usura": 0.265000, "holgura": 0.002026 }
+  }
+}

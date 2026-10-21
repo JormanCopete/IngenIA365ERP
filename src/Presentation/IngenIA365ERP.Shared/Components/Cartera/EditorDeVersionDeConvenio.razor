@@ -1,0 +1,134 @@
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Nomina
+
+@* Feature 013, K2, US10 (T0852; contracts/api.md §13.1): la versión de un convenio de libranza, compartida por el alta de una pagaduría y por la
+   versión nueva del detalle. Los formatos de ida (ámbito PayrollDeductionRequest) y de vuelta (PayrollDeductionResult) se eligen por referencia;
+   el tope va en porcentaje y viaja como fracción; los códigos de respuesta de la pagaduría se traducen a descontado, descontado en parte o no
+   descontado con su motivo. No guarda: quien lo usa arma el pedido con Modelo.Pedido(). *@
+<div class="form-grid">
+    <label class="campo">Rige desde * <input class="e-input" type="date" @bind="Version.ValidFrom" /></label>
+    <label class="campo">Periodicidad
+        <select class="e-input" @bind="Version.Periodicity">
+            <option value="Monthly">Mensual</option>
+            <option value="Biweekly">Quincenal</option>
+        </select>
+    </label>
+    <label class="campo">Día de corte * <input class="e-input" type="number" min="1" max="31" @bind="Version.CutoffDay" /></label>
+    <label class="campo">Día de envío <input class="e-input" type="number" min="1" max="31" @bind="Version.SendDay" /></label>
+    <label class="campo">Día de pago * <input class="e-input" type="number" min="1" max="31" @bind="Version.PayDay" /></label>
+    <label class="campo">Antelación del archivo (días) <input class="e-input" type="number" min="0" max="60" @bind="Version.SendLeadDays" /></label>
+    <label class="campo campo-ancho">Formato de ida *
+        <select class="e-input" @bind="Version.OutboundFormat">
+            <option value="">Elija…</option>
+            @foreach (var f in FormatosDeIda) { <option value="@f.FormatPublicId">@f.Code · @f.Name</option> }
+        </select>
+    </label>
+    <label class="campo campo-ancho">Formato de vuelta *
+        <select class="e-input" @bind="Version.ResultFormat">
+            <option value="">Elija…</option>
+            @foreach (var f in FormatosDeVuelta) { <option value="@f.FormatPublicId">@f.Code · @f.Name</option> }
+        </select>
+    </label>
+    <label class="campo">Tope propio (%) <input class="e-input" type="number" min="1" max="100" step="0.01" @bind="Version.TopePorcentaje" placeholder="Sin tope propio" /></label>
+    <label class="campo">Ventana de giro (días) <input class="e-input" type="number" min="1" @bind="Version.TransferWindowDays" placeholder="La de la cooperativa" /></label>
+    <label class="campo">Regla del no aplicado
+        <select class="e-input" @bind="Version.NotAppliedAction">
+            @foreach (var r in TextosDeLibranza.ReglasDeNoAplicado) { <option value="@r.Valor">@r.Texto</option> }
+        </select>
+    </label>
+    <label class="campo">Forma de pago alterna
+        <select class="e-input" @bind="Version.AlternateRepaymentChannel">
+            @foreach (var r in TextosDeLibranza.FormasAlternas) { <option value="@r.Valor">@r.Texto</option> }
+        </select>
+    </label>
+    <label class="campo-check"><input type="checkbox" @bind="Version.IncludesPastDue" /> El archivo lleva lo vencido</label>
+    <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="Version.Reason" maxlength="500" /></label>
+</div>
+<h4>Códigos de respuesta de la pagaduría</h4>
+<div class="tabla-desplazable">
+    <table class="data-grid">
+        <thead><tr><th>Código</th><th>Descripción</th><th>Resultado</th><th>Motivo del no descuento</th><th></th></tr></thead>
+        <tbody>
+            @foreach (var c in Version.Codigos)
+            {
+                var codigo = c;
+                <tr>
+                    <td><input class="e-input" @bind="codigo.Code" maxlength="10" /></td>
+                    <td><input class="e-input" @bind="codigo.Description" maxlength="120" /></td>
+                    <td>
+                        <select class="e-input" @bind="codigo.Outcome">
+                            @foreach (var r in TextosDeLibranza.Resultados) { <option value="@r.Valor">@r.Texto</option> }
+                        </select>
+                    </td>
+                    <td>
+                        @if (codigo.Outcome != "Deducted")
+                        {
+                            <select class="e-input" @bind="codigo.Reason">
+                                @foreach (var m in TextosDeLibranza.Motivos) { <option value="@m.Valor">@m.Texto</option> }
+                            </select>
+                        }
+                    </td>
+                    <td><SfButton CssClass="e-flat e-small" OnClick="@(() => Version.Codigos.Remove(codigo))">Quitar</SfButton></td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+<SfButton CssClass="e-flat e-small" IconCss="e-icons e-plus" OnClick="@(() => Version.Codigos.Add(new FilaDeCodigo()))">Agregar código</SfButton>
+
+@code {
+    [Parameter, EditorRequired] public Modelo Version { get; set; } = new();
+    [Parameter] public IReadOnlyList<FormatoBancarioResumenDto> FormatosDeIda { get; set; } = [];
+    [Parameter] public IReadOnlyList<FormatoBancarioResumenDto> FormatosDeVuelta { get; set; } = [];
+
+    /// <summary>Un código de respuesta en edición.</summary>
+    public sealed class FilaDeCodigo
+    {
+        public string Code { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+        public string Outcome { get; set; } = "Deducted";
+        public string Reason { get; set; } = "Other";
+    }
+
+    /// <summary>La versión en edición.</summary>
+    public sealed class Modelo
+    {
+        public DateOnly ValidFrom { get; set; } = DateOnly.FromDateTime(DateTime.Today);
+        public string Periodicity { get; set; } = "Monthly";
+        public int CutoffDay { get; set; } = 20;
+        public int? SendDay { get; set; } = 25;
+        public int PayDay { get; set; } = 30;
+        public int SendLeadDays { get; set; } = 5;
+        public string? OutboundFormat { get; set; }
+        public string? ResultFormat { get; set; }
+        public decimal? TopePorcentaje { get; set; }
+        public int? TransferWindowDays { get; set; }
+        public string NotAppliedAction { get; set; } = "MovedToCashPayment";
+        public string AlternateRepaymentChannel { get; set; } = "Cashier";
+        public bool IncludesPastDue { get; set; }
+        public string? Reason { get; set; }
+        public List<FilaDeCodigo> Codigos { get; set; } = [new() { Code = "00", Description = "Descontado", Outcome = "Deducted" }];
+
+        public bool Completo => Guid.TryParse(OutboundFormat, out _) && Guid.TryParse(ResultFormat, out _) && !string.IsNullOrWhiteSpace(Reason);
+
+        public VersionDeConvenioRequest Pedido() => new()
+        {
+            ValidFrom = ValidFrom,
+            Periodicity = Periodicity,
+            CutoffDay = CutoffDay,
+            SendDay = SendDay,
+            PayDay = PayDay,
+            SendLeadDays = SendLeadDays,
+            OutboundFormatPublicId = Guid.Parse(OutboundFormat!),
+            ResultFormatPublicId = Guid.Parse(ResultFormat!),
+            DeductionCap = TopePorcentaje is { } t && t > 0m ? Math.Round(t / 100m, 6) : null,
+            TransferWindowDays = TransferWindowDays,
+            NotAppliedAction = NotAppliedAction,
+            AlternateRepaymentChannel = AlternateRepaymentChannel,
+            IncludesPastDue = IncludesPastDue,
+            Reason = Reason?.Trim() ?? string.Empty,
+            ResultCodes = Codigos.Where(c => !string.IsNullOrWhiteSpace(c.Code))
+                .Select(c => new CodigoDeRespuestaRequest(c.Code.Trim(), c.Description.Trim(), c.Outcome, c.Outcome == "Deducted" ? null : c.Reason)).ToList(),
+        };
+    }
+}

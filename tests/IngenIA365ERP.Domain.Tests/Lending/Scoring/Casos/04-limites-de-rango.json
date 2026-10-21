@@ -1,0 +1,38 @@
+// Los rangos son cerrados a la izquierda y abiertos a la derecha: 12 meses cae en [12, 36), 0,3 en [0,3; 0,5) y 700 en [700, +∞).
+// Un valor que ningún rango contiene da cero puntos y la explicación lo dice.
+{
+  "nombre": "04-limites-de-rango",
+  "descripcion": "Desde incluido, hasta excluido; fuera de todo rango, cero.",
+  "modelo": {
+    "nivelDeExcepcion": "EXCEP",
+    "minimo": 600,
+    "variables": [
+      { "codigo": "ANTIG", "nombre": "Antigüedad como asociado", "fuente": "Applicant.AssociateSeniorityMonths", "peso": 0.4,
+        "rangos": [ { "desde": 0, "hasta": 12, "puntos": 300 }, { "desde": 12, "hasta": 36, "puntos": 600 }, { "desde": 36, "puntos": 900 } ] },
+      { "codigo": "RELCI", "nombre": "Relación cuota/ingreso", "fuente": "Application.PaymentCapacityRatio", "peso": 0.4,
+        "rangos": [ { "desde": 0, "hasta": 0.3, "puntos": 900 }, { "desde": 0.3, "hasta": 0.5, "puntos": 600 }, { "desde": 0.5, "puntos": 200 } ] },
+      { "codigo": "CENTRAL", "nombre": "Puntaje de central", "fuente": "Bureau.Score", "peso": 0.2,
+        "rangos": [ { "desde": 0, "hasta": 500, "puntos": 200 }, { "desde": 500, "hasta": 700, "puntos": 500 }, { "desde": 700, "puntos": 800 } ] }
+    ]
+  },
+  "escenarios": [
+    // 240 + 240 + 160 = 640: cada valor es el «desde» de su rango.
+    { "nombre": "en el borde izquierdo",
+      "valores": { "Applicant.AssociateSeniorityMonths": 12, "Application.PaymentCapacityRatio": 0.3, "Bureau.Score": 700 },
+      "esperado": { "puntaje": 640, "bajoElMinimo": false,
+        "variables": [ { "codigo": "ANTIG", "puntos": 600, "aporte": 240 }, { "codigo": "RELCI", "puntos": 600, "aporte": 240 },
+                       { "codigo": "CENTRAL", "puntos": 800, "aporte": 160 } ] } },
+    // 120 + 360 + 100 = 580: justo antes del «hasta», en el rango de abajo.
+    { "nombre": "justo antes del borde derecho",
+      "valores": { "Applicant.AssociateSeniorityMonths": 11, "Application.PaymentCapacityRatio": 0.2999, "Bureau.Score": 699.9999 },
+      "esperado": { "puntaje": 580, "bajoElMinimo": true,
+        "variables": [ { "codigo": "ANTIG", "puntos": 300, "aporte": 120 }, { "codigo": "RELCI", "puntos": 900, "aporte": 360 },
+                       { "codigo": "CENTRAL", "puntos": 500, "aporte": 100 } ] } },
+    // 0 + 240 + 160 = 400: −1 no cae en ningún rango.
+    { "nombre": "valor fuera de todos los rangos",
+      "valores": { "Applicant.AssociateSeniorityMonths": -1, "Application.PaymentCapacityRatio": 0.3, "Bureau.Score": 700 },
+      "esperado": { "puntaje": 400, "bajoElMinimo": true,
+        "variables": [ { "codigo": "ANTIG", "puntos": 0, "aporte": 0, "fueraDeRango": true } ],
+        "explicacionContiene": [ "valor -1 fuera de todos sus rangos: cero puntos" ] } }
+  ]
+}

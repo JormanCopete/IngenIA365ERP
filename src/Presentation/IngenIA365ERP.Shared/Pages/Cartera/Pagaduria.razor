@@ -1,0 +1,502 @@
+@page "/cartera/pagadurias/{Id:guid}"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Nomina
+@inject LibranzaClient Libranza
+@inject INotificationService Notification
+
+<PageTitle>Pagaduría - IngenIA365ERP</PageTitle>
+
+@* Feature 013, K2, US10 (T0852; contracts/api.md §13.1; FR-108, FR-112–FR-114, C84): el detalle de una pagaduría. Cuatro pestañas: las versiones
+   del convenio (una nueva cierra la anterior la víspera; lo usado por un archivo enviado no se edita), los contactos (personas del maestro con su
+   papel y su contacto institucional, nunca su documento), los códigos de respuesta de la versión que rige y lo descontado pendiente de giro por
+   período, con los días de mora de la pagaduría y si superó el umbral. Leer exige Lending.PayrollAgreements.View; escribir, .Manage; los
+   pendientes de giro son de créditos y van bajo Lending.PayrollDeductionFiles.Read con el alcance de quien pregunta. *@
+<PermissionGate Required="Lending.PayrollAgreements.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>@(_convenio is { } c ? $"{c.Code} · {c.Name}" : "Pagaduría")</h3>
+        <div class="toolbar">
+            <a href="/cartera/pagadurias">Volver a Pagadurías</a>
+            <SfButton CssClass="@(_pestana == 0 ? "e-primary" : "e-outline")" OnClick="@(() => _pestana = 0)">Versiones</SfButton>
+            <SfButton CssClass="@(_pestana == 1 ? "e-primary" : "e-outline")" OnClick="@(() => _pestana = 1)">Contactos</SfButton>
+            <SfButton CssClass="@(_pestana == 2 ? "e-primary" : "e-outline")" OnClick="@(() => _pestana = 2)">Códigos de respuesta</SfButton>
+            <PermissionGate Required="Lending.PayrollDeductionFiles.Read">
+                <SfButton CssClass="@(_pestana == 3 ? "e-primary" : "e-outline")" OnClick="@AbrirPendientesAsync">Pendientes de giro</SfButton>
+            </PermissionGate>
+            <SfButton CssClass="@(_pestana == 4 ? "e-primary" : "e-outline")" OnClick="@AbrirGruposAsync">Grupos y equivalencias</SfButton>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        @if (_convenio is { } c)
+        {
+            <div class="info-card">
+                <p><strong>@c.Payer.LegalName</strong> · NIT @c.Payer.TaxId@(c.IsOwnPayroll ? " · nómina propia de la cooperativa" : "") ·
+                    @TextosDeLibranza.EstadoDeConvenio(c.Status) · @c.ActiveLoans créditos vinculados</p>
+            </div>
+
+            @if (_pestana == 0)
+            {
+                <div class="toolbar">
+                    <PermissionGate Required="Lending.PayrollAgreements.Manage">
+                        <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@AbrirVersionAsync">Nueva versión</SfButton>
+                    </PermissionGate>
+                </div>
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th>Vigencia</th><th>Periodicidad</th><th>Corte · envío · pago</th><th>Ida</th><th>Vuelta</th><th>Tope</th><th>Ventana</th><th>Lo vencido</th><th>No aplicado</th><th>Forma alterna</th></tr></thead>
+                        <tbody>
+                            @foreach (var v in c.Versions.OrderByDescending(v => v.ValidFrom))
+                            {
+                                <tr>
+                                    <td>@v.ValidFrom.ToString("dd/MM/yyyy") – @(v.ValidTo?.ToString("dd/MM/yyyy") ?? "abierta")</td>
+                                    <td>@TextosDeLibranza.Periodicidad(v.Periodicity)</td>
+                                    <td>@v.CutoffDay · @(v.SendDay?.ToString() ?? "—") · @v.PayDay</td>
+                                    <td>@v.OutboundFormatCode</td>
+                                    <td>@v.ResultFormatCode</td>
+                                    <td>@TextosDeLibranza.Tope(v.DeductionCap)</td>
+                                    <td>@(v.TransferWindowDays is { } d ? $"{d} días" : "La de la cooperativa")</td>
+                                    <td>@(v.IncludesPastDue ? "Sí" : "No")</td>
+                                    <td>@TextosDeLibranza.Seguimiento(v.NotAppliedAction)</td>
+                                    <td>@TextosDeLibranza.FormaDePago(v.AlternateRepaymentChannel)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+            else if (_pestana == 1)
+            {
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th>Nombre</th><th>Papel</th><th>Correo</th><th>Teléfono</th><th>Desde</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var k in c.Contacts)
+                            {
+                                <tr><td>@k.Name@(k.IsPrimary ? " (principal)" : "")</td><td>@k.Role</td><td>@k.Email</td><td>@k.Phone</td><td>@k.ValidFrom.ToString("dd/MM/yyyy")</td><td></td></tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                @if (c.Contacts.Count == 0) { <p class="texto-tenue">El convenio no tiene contactos.</p> }
+                <PermissionGate Required="Lending.PayrollAgreements.Manage">
+                    <div class="info-card">
+                        <h4>Contactos del convenio</h4>
+                        <p class="texto-apoyo">Los contactos son personas del maestro; guardar reemplaza los vigentes.</p>
+                        @foreach (var f in _contactos)
+                        {
+                            var fila = f;
+                            <div class="toolbar">
+                                <span>@fila.Nombre</span>
+                                <input class="e-input" @bind="fila.Papel" placeholder="Papel (Nómina, Tesorería…)" maxlength="60" />
+                                <label><input type="checkbox" @bind="fila.Principal" /> Principal</label>
+                                <SfButton CssClass="e-flat e-small" OnClick="@(() => _contactos.Remove(fila))">Quitar</SfButton>
+                            </div>
+                        }
+                        <div class="campo campo-ancho">Agregar persona
+                            <PersonSearchPicker Selected="@_nuevoContacto" SelectedChanged="@AgregarContacto" ShowHelpText="false" Compacto="true" />
+                        </div>
+                        <SfButton CssClass="e-primary" Disabled="@_accion.Activa" OnClick="@GuardarContactosAsync">Guardar contactos</SfButton>
+                    </div>
+                </PermissionGate>
+            }
+            else if (_pestana == 2)
+            {
+                var vigente = c.Versions.FirstOrDefault(v => v.PublicId == c.CurrentVersion?.VersionPublicId) ?? c.Versions.OrderByDescending(v => v.ValidFrom).FirstOrDefault();
+                @if (vigente is null)
+                {
+                    <p class="texto-tenue">El convenio no tiene versiones.</p>
+                }
+                else
+                {
+                    <p class="texto-apoyo">Los de la versión desde el @vigente.ValidFrom.ToString("dd/MM/yyyy"). Para cambiarlos, registre una versión nueva.</p>
+                    <table class="data-grid">
+                        <thead><tr><th>Código</th><th>Descripción</th><th>Resultado</th><th>Motivo</th></tr></thead>
+                        <tbody>
+                            @foreach (var r in vigente.ResultCodes)
+                            {
+                                <tr><td>@r.Code</td><td>@r.Description</td><td>@TextosDeLibranza.Resultado(r.Outcome)</td><td>@(r.Reason is null ? "—" : TextosDeLibranza.Motivo(r.Reason))</td></tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            }
+        }
+    </IndicadorDeCarga>
+
+    @if (_pestana == 3)
+    {
+        <div class="toolbar">
+            <label class="campo">Al <input class="e-input" type="date" @bind="_fechaDePendientes" /></label>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_cargaPendientes.Activa" OnClick="@CargarPendientesAsync">Consultar</SfButton>
+        </div>
+        <IndicadorDeCarga Cargando="@_cargaPendientes.Activa">
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Período</th><th>Archivo</th><th class="numero">Líneas</th><th class="numero">Descontado</th><th>Descuento</th><th>Debe girar</th><th class="numero">Días de mora de la pagaduría</th><th>Umbral</th></tr></thead>
+                    <tbody>
+                        @foreach (var p in _pendientes)
+                        {
+                            <tr class="@(p.ThresholdExceeded ? "texto-alerta" : "")">
+                                <td>@TextosDeLibranza.Periodo(p.Year, p.Month, p.SubPeriod)</td>
+                                <td><a href="/cartera/archivos-de-descuento/@p.FilePublicId">@p.FileNumber</a></td>
+                                <td class="numero">@p.Lines</td>
+                                <td class="numero">@TextosDeCreditos.Pesos(p.Amount)</td>
+                                <td>@(p.FirstDeductionDate?.ToString("dd/MM/yyyy") ?? "—")</td>
+                                <td>@(p.TransferDueDate?.ToString("dd/MM/yyyy") ?? "—")</td>
+                                <td class="numero">@p.PaymasterArrearsDays</td>
+                                <td>@(p.ThresholdDays is { } u ? $"{u} días{(p.ThresholdExceeded ? " · superado" : "")}" : "Sin umbral: no se imputa al deudor")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            @if (_pendientes.Count == 0) { <p class="texto-tenue">No hay descuentos pendientes de giro.</p> }
+        </IndicadorDeCarga>
+    }
+
+    @* Feature 014, US3 (T094; api.md §18.3; FR-125): los grupos de archivo (un archivo por grupo, con sus formatos) y las equivalencias entre los
+       códigos de la pagaduría y las líneas y conceptos de la Cartera, con su reparto. Fijar cualquiera de los dos registra una versión nueva del
+       convenio; la generación por grupo todavía no está disponible (un convenio con grupos no genera aún su archivo). *@
+    @if (_pestana == 4)
+    {
+        <div class="toolbar">
+            <label class="campo">Al <input class="e-input" type="date" @bind="_fechaDeGrupos" /></label>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_cargaGrupos.Activa" OnClick="@CargarGruposAsync">Consultar</SfButton>
+        </div>
+        <IndicadorDeCarga Cargando="@_cargaGrupos.Activa">
+            <h4>Grupos de archivo</h4>
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Código</th><th>Grupo</th><th>Ida</th><th>Vuelta</th><th>Corte · antelación · pago</th><th>Vigencia</th></tr></thead>
+                    <tbody>
+                        @foreach (var g in _grupos)
+                        {
+                            <tr>
+                                <td>@g.Code</td><td>@g.Name</td><td>@g.OutboundFormat.Code</td><td>@g.ResultFormat.Code</td>
+                                <td>@(g.Calendar.CutoffDay?.ToString() ?? "versión") · @(g.Calendar.SendLeadDays?.ToString() ?? "versión") · @(g.Calendar.PayDay?.ToString() ?? "versión")</td>
+                                <td>@g.ValidFrom.ToString("dd/MM/yyyy") – @(g.ValidTo?.ToString("dd/MM/yyyy") ?? "abierta")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            @if (_grupos.Count == 0) { <p class="texto-tenue">La versión que rige genera un solo archivo con sus formatos.</p> }
+
+            <h4>Equivalencias de concepto</h4>
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Código de la pagaduría</th><th>Descripción</th><th>Grupo</th><th>Reparto</th><th>Agrupa</th></tr></thead>
+                    <tbody>
+                        @foreach (var e in _equivalencias)
+                        {
+                            <tr>
+                                <td>@e.PaymasterConceptCode</td><td>@e.Description</td><td>@(e.FileGroupCode ?? "—")</td><td>@TextosDeAportes.Reparto(e.Split)</td>
+                                <td>@string.Join(" · ", e.Members.Select(m => $"{TextosDeAportes.Naturaleza(m.Nature)} {m.LineCode} {m.Concept} ({m.Priority})"))</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            @if (_equivalencias.Count == 0) { <p class="texto-tenue">Sin equivalencias: la respuesta de la pagaduría se lee por crédito.</p> }
+        </IndicadorDeCarga>
+
+        <PermissionGate Required="Lending.PayrollAgreements.Manage">
+            <div class="info-card">
+                <h4>Fijar los grupos de archivo</h4>
+                <p class="texto-apoyo">Registra una versión nueva del convenio desde la fecha; las equivalencias vigentes pasan con su grupo.</p>
+                @foreach (var f in _filasDeGrupo)
+                {
+                    var fila = f;
+                    <div class="form-grid">
+                        <label class="campo">Código <input class="e-input" @bind="fila.Code" maxlength="10" /></label>
+                        <label class="campo">Nombre <input class="e-input" @bind="fila.Name" maxlength="120" /></label>
+                        <label class="campo">Formato de ida
+                            <select class="e-input" @bind="fila.Ida">
+                                <option value="">Elija…</option>
+                                @foreach (var x in _formatosDeIda) { <option value="@x.FormatPublicId">@x.Code · @x.Name</option> }
+                            </select>
+                        </label>
+                        <label class="campo">Formato de vuelta
+                            <select class="e-input" @bind="fila.Vuelta">
+                                <option value="">Elija…</option>
+                                @foreach (var x in _formatosDeVuelta) { <option value="@x.FormatPublicId">@x.Code · @x.Name</option> }
+                            </select>
+                        </label>
+                        <label class="campo">Día de corte propio <input class="e-input" type="number" min="1" max="31" @bind="fila.Corte" /></label>
+                        <SfButton CssClass="e-flat e-small" OnClick="@(() => _filasDeGrupo.Remove(fila))">Quitar</SfButton>
+                    </div>
+                }
+                <div class="form-grid">
+                    <label class="campo">Desde * <input class="e-input" type="date" @bind="_desdeGrupos" /></label>
+                    <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivoGrupos" maxlength="500" /></label>
+                </div>
+                @if (_errorGrupos is not null) { <p class="aviso aviso-error" role="alert">@_errorGrupos</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-outline" OnClick="@(() => _filasDeGrupo.Add(new FilaDeGrupo()))">Agregar grupo</SfButton>
+                    <SfButton CssClass="e-primary" Disabled="@(_accion.Activa || !GruposCompletos)" OnClick="@FijarGruposAsync">Fijar grupos</SfButton>
+                </div>
+            </div>
+
+            <div class="info-card">
+                <h4>Fijar las equivalencias</h4>
+                <p class="texto-apoyo">
+                    Cada código agrupa ítems «Naturaleza:Línea:Concepto:Prioridad» separados por punto y coma; la naturaleza es Placement (crédito),
+                    Contribution (aportes) o Deposit (ahorro); «*» es cualquier línea e «Installment» la cuota completa. Ejemplo:
+                    <code>Contribution:*:Installment:1; Deposit:AHPERM:Installment:2</code>. Un ítem va en un solo código.
+                </p>
+                @foreach (var f in _filasDeEquivalencia)
+                {
+                    var fila = f;
+                    <div class="form-grid">
+                        <label class="campo">Código <input class="e-input" @bind="fila.Code" maxlength="20" /></label>
+                        <label class="campo">Descripción <input class="e-input" @bind="fila.Description" maxlength="200" /></label>
+                        <label class="campo">Grupo <input class="e-input" @bind="fila.Grupo" maxlength="10" placeholder="Sin grupos, vacío" /></label>
+                        <label class="campo">Reparto
+                            <select class="e-input" @bind="fila.Split">
+                                <option value="Priority">Por prioridad</option>
+                                <option value="Proportional">A prorrata</option>
+                            </select>
+                        </label>
+                        <label class="campo campo-ancho">Ítems <input class="e-input" @bind="fila.Items" /></label>
+                        <SfButton CssClass="e-flat e-small" OnClick="@(() => _filasDeEquivalencia.Remove(fila))">Quitar</SfButton>
+                    </div>
+                }
+                <div class="form-grid">
+                    <label class="campo">Desde * <input class="e-input" type="date" @bind="_desdeEquivalencias" /></label>
+                    <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivoEquivalencias" maxlength="500" /></label>
+                </div>
+                @if (_errorEquivalencias is not null) { <p class="aviso aviso-error" role="alert">@_errorEquivalencias</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-outline" OnClick="@(() => _filasDeEquivalencia.Add(new FilaDeEquivalencia()))">Agregar código</SfButton>
+                    <SfButton CssClass="e-primary" Disabled="@(_accion.Activa || string.IsNullOrWhiteSpace(_motivoEquivalencias))" OnClick="@FijarEquivalenciasAsync">Fijar equivalencias</SfButton>
+                </div>
+            </div>
+        </PermissionGate>
+    }
+</div>
+
+<SfDialog @bind-Visible="_mostrarVersion" Header="Nueva versión del convenio" Width="760px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_accion.Activa" Texto="Registrando la versión…">
+                <EditorDeVersionDeConvenio Version="@_version" FormatosDeIda="@_formatosDeIda" FormatosDeVuelta="@_formatosDeVuelta" />
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_accion.Activa || !_version.Completo)" OnClick="@RegistrarVersionAsync">Registrar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarVersion = false)">Volver</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private sealed class FilaDeContacto
+    {
+        public Guid Persona { get; init; }
+        public string Nombre { get; init; } = string.Empty;
+        public string? Papel { get; set; }
+        public bool Principal { get; set; }
+    }
+
+    private readonly EstadoDeCarga _carga = new(), _accion = new(), _cargaPendientes = new();
+    private int _pestana;
+    private ConvenioDto? _convenio;
+    private List<FilaDeContacto> _contactos = [];
+    private PersonSearchPicker.PersonSearchItem? _nuevoContacto;
+    private List<PendienteDeGiroDto> _pendientes = [];
+    private DateOnly _fechaDePendientes = DateOnly.FromDateTime(DateTime.Today);
+    private bool _mostrarVersion;
+    private string? _error;
+    private EditorDeVersionDeConvenio.Modelo _version = new();
+    private List<FormatoBancarioResumenDto> _formatosDeIda = [], _formatosDeVuelta = [];
+    private ClaveDeOperacion _clave = new(), _claveDeContactos = new(), _claveDeGrupos = new(), _claveDeEquivalencias = new();
+
+    // Feature 014 (T094): grupos de archivo y equivalencias.
+    private sealed class FilaDeGrupo
+    {
+        public string? Code { get; set; }
+        public string? Name { get; set; }
+        public Guid? Ida { get; set; }
+        public Guid? Vuelta { get; set; }
+        public int? Corte { get; set; }
+    }
+
+    private sealed class FilaDeEquivalencia
+    {
+        public string? Code { get; set; }
+        public string? Description { get; set; }
+        public string? Grupo { get; set; }
+        public string Split { get; set; } = "Priority";
+        public string? Items { get; set; }
+    }
+
+    private readonly EstadoDeCarga _cargaGrupos = new();
+    private DateOnly _fechaDeGrupos = DateOnly.FromDateTime(DateTime.Today), _desdeGrupos = DateOnly.FromDateTime(DateTime.Today).AddDays(1),
+        _desdeEquivalencias = DateOnly.FromDateTime(DateTime.Today).AddDays(1);
+    private List<GrupoDeArchivoDto> _grupos = [];
+    private List<EquivalenciaDeConceptoDto> _equivalencias = [];
+    private List<FilaDeGrupo> _filasDeGrupo = [];
+    private List<FilaDeEquivalencia> _filasDeEquivalencia = [];
+    private string? _motivoGrupos, _motivoEquivalencias, _errorGrupos, _errorEquivalencias;
+
+    private bool GruposCompletos => _filasDeGrupo.Count > 0 && !string.IsNullOrWhiteSpace(_motivoGrupos)
+                                    && _filasDeGrupo.All(f => !string.IsNullOrWhiteSpace(f.Code) && !string.IsNullOrWhiteSpace(f.Name) && f.Ida is not null && f.Vuelta is not null);
+
+    protected override Task OnParametersSetAsync() => CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Libranza.ConvenioAsync(Id);
+        if (!r.IsSuccess) { _convenio = null; await Notification.ErrorAsync(r.ErrorMessage ?? "La pagaduría no existe."); return; }
+        _convenio = r.Value;
+        _contactos = [.. (_convenio?.Contacts ?? []).Select(k => new FilaDeContacto { Persona = k.PersonPublicId, Nombre = k.Name, Papel = k.Role, Principal = k.IsPrimary })];
+    }
+
+    private void AgregarContacto(PersonSearchPicker.PersonSearchItem? persona)
+    {
+        if (persona is null || _contactos.Any(k => k.Persona == persona.PublicId)) return;
+        _contactos.Add(new FilaDeContacto { Persona = persona.PublicId, Nombre = persona.FullName });
+        _nuevoContacto = null;
+    }
+
+    private async Task GuardarContactosAsync()
+    {
+        using var carga = _accion.Iniciar();
+        var r = await Libranza.ContactosAsync(Id, _contactos.Select(k => new ContactoDeConvenioRequest(k.Persona, k.Papel, k.Principal)).ToList(), _claveDeContactos);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron guardar los contactos."); return; }
+        _claveDeContactos = new ClaveDeOperacion();
+        await Notification.SuccessAsync("Contactos guardados.");
+        await CargarAsync();
+    }
+
+    private async Task AbrirVersionAsync()
+    {
+        _error = null;
+        _version = new EditorDeVersionDeConvenio.Modelo();
+        if (_convenio?.Versions.OrderByDescending(v => v.ValidFrom).FirstOrDefault() is { } ultima)
+        {
+            _version.ValidFrom = ultima.ValidFrom.AddDays(1) > _version.ValidFrom ? ultima.ValidFrom.AddDays(1) : _version.ValidFrom;
+            _version.CutoffDay = ultima.CutoffDay;
+            _version.SendDay = ultima.SendDay;
+            _version.PayDay = ultima.PayDay;
+            _version.SendLeadDays = ultima.SendLeadDays;
+            _version.OutboundFormat = ultima.OutboundFormatPublicId.ToString();
+            _version.ResultFormat = ultima.ResultFormatPublicId.ToString();
+            _version.TopePorcentaje = ultima.DeductionCap is { } t ? t * 100m : null;
+            _version.TransferWindowDays = ultima.TransferWindowDays;
+            _version.IncludesPastDue = ultima.IncludesPastDue;
+            _version.NotAppliedAction = ultima.NotAppliedAction;
+            _version.AlternateRepaymentChannel = ultima.AlternateRepaymentChannel;
+            _version.Periodicity = ultima.Periodicity;
+            _version.Codigos = [.. ultima.ResultCodes.Select(x => new EditorDeVersionDeConvenio.FilaDeCodigo
+            {
+                Code = x.Code, Description = x.Description, Outcome = x.Outcome, Reason = x.Reason ?? "Other",
+            })];
+        }
+        _clave = new ClaveDeOperacion();
+        _mostrarVersion = true;
+        using var carga = _accion.Iniciar();
+        _formatosDeIda = [.. (await Libranza.FormatosAsync(LibranzaClient.AmbitoDeIda)).Value ?? []];
+        _formatosDeVuelta = [.. (await Libranza.FormatosAsync(LibranzaClient.AmbitoDeVuelta)).Value ?? []];
+    }
+
+    private async Task RegistrarVersionAsync()
+    {
+        using var carga = _accion.Iniciar();
+        _error = null;
+        var r = await Libranza.VersionAsync(Id, _version.Pedido(), _clave);
+        if (!r.IsSuccess) { _error = r.ErrorMessage ?? "No se pudo registrar la versión."; return; }
+        _mostrarVersion = false;
+        _convenio = r.Value;
+        await Notification.SuccessAsync("Versión registrada.");
+    }
+
+    private async Task AbrirGruposAsync()
+    {
+        _pestana = 4;
+        _claveDeGrupos = new ClaveDeOperacion();
+        _claveDeEquivalencias = new ClaveDeOperacion();
+        await CargarGruposAsync();
+        _formatosDeIda = [.. (await Libranza.FormatosAsync(LibranzaClient.AmbitoDeIda)).Value ?? []];
+        _formatosDeVuelta = [.. (await Libranza.FormatosAsync(LibranzaClient.AmbitoDeVuelta)).Value ?? []];
+    }
+
+    private async Task CargarGruposAsync()
+    {
+        using var carga = _cargaGrupos.Iniciar();
+        var g = await Libranza.GruposAsync(Id, _fechaDeGrupos);
+        var e = await Libranza.EquivalenciasAsync(Id, _fechaDeGrupos);
+        _grupos = [.. g.Value ?? []];
+        _equivalencias = [.. e.Value ?? []];
+        if (!g.IsSuccess) await Notification.ErrorAsync(g.ErrorMessage ?? "No se pudieron leer los grupos de archivo.");
+        _filasDeGrupo = [.. _grupos.Select(x => new FilaDeGrupo { Code = x.Code, Name = x.Name, Ida = x.OutboundFormat.PublicId, Vuelta = x.ResultFormat.PublicId, Corte = x.Calendar.CutoffDay })];
+        _filasDeEquivalencia = [.. _equivalencias.Select(x => new FilaDeEquivalencia
+        {
+            Code = x.PaymasterConceptCode, Description = x.Description, Grupo = x.FileGroupCode, Split = x.Split,
+            Items = string.Join("; ", x.Members.Select(m => $"{m.Nature}:{m.LineCode}:{m.Concept}:{m.Priority}")),
+        })];
+    }
+
+    private async Task FijarGruposAsync()
+    {
+        if (!GruposCompletos) return;
+        using var carga = _accion.Iniciar();
+        _errorGrupos = null;
+        var r = await Libranza.FijarGruposAsync(Id, new GruposDeArchivoRequest(_desdeGrupos,
+            [.. _filasDeGrupo.Select(f => new GrupoDeArchivoRequest(f.Code!.Trim().ToUpperInvariant(), f.Name!.Trim(), f.Ida!.Value, f.Vuelta!.Value, f.Corte))],
+            _motivoGrupos!.Trim()), _claveDeGrupos);
+        if (!r.IsSuccess) { _errorGrupos = r.ErrorMessage ?? "No se pudieron fijar los grupos."; return; }
+        _claveDeGrupos = new ClaveDeOperacion();
+        await Notification.SuccessAsync("Grupos fijados: rige una versión nueva del convenio.");
+        await CargarAsync();
+        await CargarGruposAsync();
+    }
+
+    private async Task FijarEquivalenciasAsync()
+    {
+        using var carga = _accion.Iniciar();
+        _errorEquivalencias = null;
+        var equivalencias = new List<EquivalenciaDeConceptoRequest>();
+        foreach (var (f, i) in _filasDeEquivalencia.Select((f, i) => (f, i)))
+        {
+            var miembros = new List<MiembroDeEquivalenciaRequest>();
+            foreach (var item in (f.Items ?? string.Empty).Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                var partes = item.Split(':', StringSplitOptions.TrimEntries);
+                if (partes.Length is < 3 or > 4) { _errorEquivalencias = $"El ítem «{item}» del código {f.Code} no tiene la forma Naturaleza:Línea:Concepto:Prioridad."; return; }
+                miembros.Add(new MiembroDeEquivalenciaRequest(partes[0], partes[1], partes[2], partes.Length == 4 && int.TryParse(partes[3], out var p) ? p : 1));
+            }
+            equivalencias.Add(new EquivalenciaDeConceptoRequest((f.Code ?? string.Empty).Trim(), (f.Description ?? f.Code ?? string.Empty).Trim(), f.Split, miembros,
+                string.IsNullOrWhiteSpace(f.Grupo) ? null : f.Grupo.Trim().ToUpperInvariant(), i + 1));
+        }
+        var r = await Libranza.FijarEquivalenciasAsync(Id, new EquivalenciasDeConceptoRequest(_desdeEquivalencias, equivalencias, _motivoEquivalencias!.Trim()),
+            _claveDeEquivalencias);
+        if (!r.IsSuccess) { _errorEquivalencias = r.ErrorMessage ?? "No se pudieron fijar las equivalencias."; return; }
+        _claveDeEquivalencias = new ClaveDeOperacion();
+        await Notification.SuccessAsync("Equivalencias fijadas: rige una versión nueva del convenio.");
+        await CargarAsync();
+        await CargarGruposAsync();
+    }
+
+    private async Task AbrirPendientesAsync()
+    {
+        _pestana = 3;
+        await CargarPendientesAsync();
+    }
+
+    private async Task CargarPendientesAsync()
+    {
+        using var carga = _cargaPendientes.Iniciar();
+        var r = await Libranza.PendientesDeGiroAsync(Id, _fechaDePendientes);
+        if (!r.IsSuccess) { _pendientes = []; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer los pendientes de giro."); return; }
+        _pendientes = [.. r.Value ?? []];
+    }
+}

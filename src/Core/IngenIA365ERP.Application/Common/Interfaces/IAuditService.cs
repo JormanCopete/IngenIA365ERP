@@ -85,6 +85,12 @@ public record AuditQueryParameters
     /// <c>Accepted</c> todo lo demás; nulo, todo.
     /// </summary>
     public string? Outcome { get; init; }
+
+    /// <summary>
+    /// Feature 013 (US5, T0560; api.md §24, A11): la clave de una operación (<c>Metadata.OperationKey</c>, que en el contrato de obligaciones lleva
+    /// las claves del lote separadas por coma): trae juntos el intento y el hecho del contrato. Nulo o vacío no filtra.
+    /// </summary>
+    public string? OperationKey { get; init; }
 }
 
 // === Result records ===

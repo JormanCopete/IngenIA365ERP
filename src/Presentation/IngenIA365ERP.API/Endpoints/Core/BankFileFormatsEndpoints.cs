@@ -13,6 +13,9 @@ namespace IngenIA365ERP.API.Endpoints.Core;
 /// </summary>
 public sealed class BankFileFormatsEndpoints : ICarterModule
 {
+    /// <summary>El tamaño máximo del archivo de prueba de la vista previa de lectura.</summary>
+    public const int TamanoMaximoDePrueba = 2 * 1024 * 1024;
+
     public void AddRoutes(IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/core/bank-file-formats")
@@ -34,6 +37,30 @@ public sealed class BankFileFormatsEndpoints : ICarterModule
         group.MapGet("/{id:guid}", async (Guid id, ISender sender, CancellationToken ct) =>
                 await sender.Send(new GetBankFileFormatQuery(id), ct))
             .WithName("Core_BankFileFormats_Get")
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .RequirePermission("Core.BankFileFormats.View");
+
+        // Feature 013, K2 (T0832): lee un archivo de prueba con el formato (FlatFileReader), sin guardar nada: la vista previa del formato de vuelta.
+        group.MapPost("/{id:guid}/read-preview", async (Guid id, HttpContext http, ISender sender, CancellationToken ct) =>
+            {
+                if (!http.Request.HasFormContentType)
+                    return Results.Json(new { code = "Validation.Invalid", message = "Adjunte el archivo de prueba.", traceId = http.TraceIdentifier },
+                        statusCode: StatusCodes.Status400BadRequest);
+                var formulario = await http.Request.ReadFormAsync(ct);
+                var archivo = formulario.Files.FirstOrDefault();
+                if (archivo is null || archivo.Length == 0)
+                    return Results.Json(new { code = "Validation.Invalid", message = "Adjunte el archivo de prueba.", traceId = http.TraceIdentifier },
+                        statusCode: StatusCodes.Status400BadRequest);
+                if (archivo.Length > TamanoMaximoDePrueba)
+                    return Results.Json(new { code = "Archivo.DemasiadoGrande", message = "El archivo de prueba pesa más de 2 MB.", traceId = http.TraceIdentifier },
+                        statusCode: StatusCodes.Status413PayloadTooLarge);
+                using var ms = new MemoryStream();
+                await archivo.CopyToAsync(ms, ct);
+                return (object)await sender.Send(new ReadBankFileSampleQuery(id, ms.ToArray()), ct);
+            })
+            .WithName("Core_BankFileFormats_ReadPreview")
+            .DisableAntiforgery()
+            .WithMetadata(new Microsoft.AspNetCore.Mvc.RequestSizeLimitAttribute(TamanoMaximoDePrueba + 64 * 1024))
             .AddEndpointFilter<ErrorEnvelopeFilter>()
             .RequirePermission("Core.BankFileFormats.View");
 

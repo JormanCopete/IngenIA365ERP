@@ -1,0 +1,218 @@
+{
+  "code": "SICSES-FONDO-LIQUIDEZ-v1",
+  "kind": "DepositsSicses",
+  "formatCode": "sicses-fondo-liquidez",
+  "bureauCode": null,
+  "version": "1",
+  "source": "Formato F27 del SICSES (código 9067), fondo de liquidez, instructivo D-GEIN-010 v04 §6.7: generalidades (saldos de depósitos por clase y la devolución del ahorro permanente) y campos 1 a 9 por título, Superintendencia de la Economía Solidaria (por cotejar)",
+  "validFrom": "2026-01-01",
+  "validTo": null,
+  "fileKind": "Delimited",
+  "delimiter": "|",
+  "encoding": "utf-8",
+  "lineEnding": "CRLF",
+  "normalizeText": true,
+  "records": [
+    {
+      "code": "Header",
+      "repeat": "Once",
+      "fields": [
+        {
+          "number": 1,
+          "name": "Saldo de depósitos",
+          "order": 1,
+          "length": 20,
+          "kind": "N",
+          "format": "AmountPoint2",
+          "required": true,
+          "path": "Fondo.SaldoDeDepositos",
+          "verified": false
+        },
+        {
+          "number": 2,
+          "name": "Devolución del ahorro permanente (1 al desvincularse, 2 retiro parcial)",
+          "order": 2,
+          "length": 1,
+          "kind": "N",
+          "format": "Integer",
+          "required": true,
+          "path": "Fondo.DevolucionDelPermanente",
+          "allowedValues": [
+            "1",
+            "2"
+          ],
+          "verified": false
+        },
+        {
+          "number": 3,
+          "name": "Total saldo depósitos de ahorro a la vista",
+          "order": 3,
+          "length": 20,
+          "kind": "N",
+          "format": "AmountPoint2",
+          "required": true,
+          "path": "Fondo.ALaVista",
+          "verified": false
+        },
+        {
+          "number": 4,
+          "name": "Total saldo depósitos de ahorro a término",
+          "order": 4,
+          "length": 20,
+          "kind": "N",
+          "format": "AmountPoint2",
+          "required": true,
+          "path": "Fondo.ATermino",
+          "verified": false
+        },
+        {
+          "number": 5,
+          "name": "Total saldo depósitos de ahorro contractual",
+          "order": 5,
+          "length": 20,
+          "kind": "N",
+          "format": "AmountPoint2",
+          "required": true,
+          "path": "Fondo.Contractual",
+          "verified": false
+        },
+        {
+          "number": 6,
+          "name": "Total saldo depósitos de ahorro permanente",
+          "order": 6,
+          "length": 20,
+          "kind": "N",
+          "format": "AmountPoint2",
+          "required": true,
+          "path": "Fondo.Permanente",
+          "verified": false
+        }
+      ]
+    },
+    {
+      "code": "Detail",
+      "repeat": "PorTitulo",
+      "fields": [
+        {
+          "number": 1,
+          "name": "Nit de la entidad",
+          "order": 1,
+          "length": 15,
+          "kind": "A",
+          "format": "Text",
+          "required": true,
+          "path": "Titulo.NitDeLaEntidad",
+          "verified": false
+        },
+        {
+          "number": 2,
+          "name": "Nombre de la entidad",
+          "order": 2,
+          "length": 100,
+          "kind": "A",
+          "format": "Text",
+          "required": true,
+          "path": "Titulo.NombreDeLaEntidad",
+          "verified": false
+        },
+        {
+          "number": 3,
+          "name": "Tipo de título",
+          "order": 3,
+          "length": 1,
+          "kind": "N",
+          "format": "Integer",
+          "required": true,
+          "path": "Titulo.Tipo",
+          "allowedValues": [
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6"
+          ],
+          "verified": false
+        },
+        {
+          "number": 4,
+          "name": "Número del título",
+          "order": 4,
+          "length": 30,
+          "kind": "A",
+          "format": "Text",
+          "required": true,
+          "path": "Titulo.Numero",
+          "verified": false
+        },
+        {
+          "number": 5,
+          "name": "Valor capital",
+          "order": 5,
+          "length": 20,
+          "kind": "N",
+          "format": "AmountPoint2",
+          "required": true,
+          "path": "Titulo.ValorCapital",
+          "verified": false
+        },
+        {
+          "number": 6,
+          "name": "Valor intereses",
+          "order": 6,
+          "length": 20,
+          "kind": "N",
+          "format": "AmountPoint2",
+          "required": true,
+          "path": "Titulo.ValorIntereses",
+          "verified": false
+        },
+        {
+          "number": 7,
+          "name": "Plazo",
+          "order": 7,
+          "length": 5,
+          "kind": "N",
+          "format": "Integer",
+          "required": false,
+          "path": "Titulo.PlazoEnDias",
+          "verified": false
+        },
+        {
+          "number": 8,
+          "name": "Fecha de vencimiento",
+          "order": 8,
+          "length": 10,
+          "kind": "A",
+          "format": "Date",
+          "required": false,
+          "path": "Titulo.FechaDeVencimiento",
+          "pattern": "dd/MM/yyyy",
+          "verified": false
+        },
+        {
+          "number": 9,
+          "name": "Capitaliza intereses",
+          "order": 9,
+          "length": 2,
+          "kind": "A",
+          "format": "Text",
+          "required": true,
+          "path": "Titulo.CapitalizaIntereses",
+          "allowedValues": [
+            "SI",
+            "NO"
+          ],
+          "verified": false
+        }
+      ]
+    }
+  ],
+  "notes": [
+    "Campos reconstruidos de la fuente pública citada en «source»; cada uno lleva verified=false hasta que la contadora lo coteje con el instructivo vigente y un archivo aceptado por el validador (P8, P9). Cotejar es publicar una versión nueva con verified=true, verifiedBy, verifiedOn y verifiedAgainst.",
+    "Las rutas (path) son el vocabulario que entrega la proyección de captaciones de Application; cambiar una ruta es cambiar la proyección y el layout a la vez.",
+    "La periodicidad y el plazo son informativos (decisión del dueño): la entidad decide cuándo reporta; el SICSES de captaciones usa el mismo plazo informativo del perfil regulatorio o de Sicses.MesesDeCorte y Sicses.DiasDePlazo que el formato de cartera.",
+    "El encabezado sale de los depósitos al último día del mes (capital e intereses causados del libro, por clase); la devolución del permanente, de las líneas de ahorro permanente vigentes (2 si alguna admite retiro parcial). El detalle, de las inversiones del fondo vigentes ese día.",
+    "Tipo de título: 1 CDT, 2 CDAT, 3 bonos, 4 cuentas de ahorro, 5 patrimonio autónomo, 6 fondos de valores. La inversión registrada no distingue CDT de CDAT ni guarda los intereses ni si se capitalizan: CDT, 0 y NO hasta cotejar (para la contadora); una inversión «Otra» no tiene tipo y el validador la bloquea."
+  ]
+}

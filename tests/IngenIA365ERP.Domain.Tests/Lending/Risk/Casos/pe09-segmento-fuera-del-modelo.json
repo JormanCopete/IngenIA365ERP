@@ -1,0 +1,35 @@
+{
+  // pe09 (K6a, T1013, T1014; T50, FR-105): una cooperativa de ahorro y crédito obligada con K6a desplegada: el selector lleva los tres
+  // segmentos de pérdida esperada a ExpectedLossAnnex2/Obligated sin marca; un crédito de microcrédito (sin segmento de pérdida esperada)
+  // sigue el Anexo 1 (NotObligated) y no se puntúa. El comercial de persona natural al día: Z = −3,133 − 0,752 − 0,234 = −4,119; puntaje
+  // 0,0160 → A; PI 1,11 %, PDI hipotecaria 40 % (primer tramo) → 222.000 sobre 50.000.000. Repasado con Casos/riesgo-pe.py.
+  // PENDIENTE DE FIRMA DE LA CONTADORA.
+  "nombre": "pe09-segmento-fuera-del-modelo",
+  "selector": { "regla": "regla-prueba", "tipo": "COOP_AHORRO_CREDITO", "entrega": "K6a" },
+  "esperado": {
+    "marca": false,
+    "selector": [
+      { "segmento": "CONSUMO_LIBRANZA", "modelo": "ExpectedLossAnnex2", "fundamento": "Obligated", "marca": false },
+      { "segmento": "CONSUMO_SIN_LIBRANZA", "modelo": "ExpectedLossAnnex2", "fundamento": "Obligated", "marca": false },
+      { "segmento": "COMERCIAL_PN", "modelo": "ExpectedLossAnnex2", "fundamento": "Obligated", "marca": false }
+    ]
+  },
+  "perdidaEsperada": {
+    "anexo2": "sembrado",
+    "contexto": { "tipoDeOrganizacion": "COOP_AHORRO_CREDITO", "fondoDeEmpleados": false, "smmlv": 1750905, "voluntaria": false },
+    "creditos": [
+      { "id": 901, "deudor": 901, "segmento": null, "segmentoSarc": "MICROCREDITO", "diasDeMora": 0, "asociadoActivo": true,
+        "moraMensual": { "hasta": "2026-10", "meses": 36 }, "garantia": "SIN_GARANTIA",
+        "saldos": { "capital": 1000000, "interesCorriente": 0, "interesDeMora": 0, "otros": 0 } },
+      { "id": 902, "deudor": 902, "segmento": "COMERCIAL_PN", "diasDeMora": 0, "asociadoActivo": true, "cuota": 2000000, "plazoEnMeses": 120,
+        "moraMensual": { "hasta": "2026-10", "meses": 36 }, "garantia": "HIPOTECARIA",
+        "saldos": { "capital": 50000000, "interesCorriente": 0, "interesDeMora": 0, "otros": 0 } }
+    ],
+    "esperado": [
+      { "id": 901, "modelo": "ArrearsAnnex1" },
+      { "id": 902, "modelo": "ExpectedLossAnnex2", "incumplido": false, "z": -4.119, "puntaje": 0.0160, "calificacionDelModelo": "A",
+        "calificacionFinal": "A", "causa": "Arrears", "pi": 0.0111, "pdi": 0.40, "deterioroCapital": 222000.00, "total": 222000.00,
+        "contable": "A", "homologada": true }
+    ]
+  }
+}

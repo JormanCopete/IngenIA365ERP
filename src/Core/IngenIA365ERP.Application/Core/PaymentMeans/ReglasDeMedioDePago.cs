@@ -50,13 +50,15 @@ public static class ReglasDeMedioDePago
     public const string Comision = "CommissionRange";
     public const string Tolerancia = "ToleranceRange";
     public const string ConjuntoExplicito = "ExplicitSetExists";
+    public const string CreditoSinCarteraSoloEnCredito = "CreditWithoutLendingOnlyForCredit";
 
     /// <summary>El arqueo efectivo del medio: el que viene o el de la clase.</summary>
     public static CashCountMethod ArqueoDe(PaymentMeansInput input) => input.CountMethod ?? ClasesDeMedio.ArqueoPorDefecto(input.Class);
 
     /// <summary>
     /// Deja el medio en el contexto (nuevo, o el existente modificado) con las reglas de §22.1: código único para uno nuevo; con
-    /// pagos, la clase, la red, el adquirente y el arqueo no cambian (<c>Core.PaymentMeans.InUse</c>); las combinaciones; la
+    /// pagos, la clase, la red, el adquirente, el arqueo y «crédito sin Cartera» (feature 013, A6) no cambian
+    /// (<c>Core.PaymentMeans.InUse</c>); las combinaciones; la
     /// tecla rápida única entre activos; el código DIAN contra <see cref="CatalogoDian"/> a <paramref name="hoy"/>. Con
     /// <paramref name="comprobarConjuntos"/>, prender una marca «todos» con un conjunto explícito vivo es
     /// <c>Inventory.PaymentMeans.AvailabilityConflict</c> (la importación reemplaza el conjunto y no lo pide). No guarda.
@@ -77,7 +79,8 @@ public static class ReglasDeMedioDePago
             var cambiaAlgoFijo = existente.Class != input.Class
                 || existente.CardNetworkId != datos.Red?.Id
                 || existente.CardAcquirerId != datos.Adquirente?.Id
-                || existente.CountMethod != arqueo;
+                || existente.CountMethod != arqueo
+                || existente.CreditWithoutLending != input.CreditWithoutLending;
             if (cambiaAlgoFijo)
             {
                 var pagos = await PagosAsync(db, existente.Id, ct);
@@ -125,6 +128,7 @@ public static class ReglasDeMedioDePago
         medio.DefaultInstallments = credito is null ? null : credito.DefaultInstallments ?? credito.MaxInstallments;
         medio.InstallmentPeriodDays = credito?.PeriodicityDays;
         medio.SuggestedCreditLineCode = string.IsNullOrWhiteSpace(credito?.SuggestedLineCode) ? null : credito!.SuggestedLineCode!.Trim().ToUpperInvariant();
+        medio.CreditWithoutLending = input.CreditWithoutLending;
         medio.OfferedAtAllPointsOfSale = input.OfferedAtAllPoints;
         medio.OfferedInAllChannels = input.OfferedOnAllChannels;
         medio.OfferedForAllDocumentTypes = input.OfferedForAllDocumentTypes;
@@ -191,6 +195,12 @@ public static class ReglasDeMedioDePago
         else if (input.CreditDefaults is not null)
         {
             return PaymentMeansErrors.Invalid("creditDefaults", CondicionesSoloEnCredito, "Las condiciones de crédito sólo van en los medios de crédito.");
+        }
+        else if (input.CreditWithoutLending)
+        {
+            // Feature 013 (T0173, A6): «crédito sin Cartera» sólo tiene sentido en un medio de crédito.
+            return PaymentMeansErrors.Invalid("creditWithoutLending", CreditoSinCarteraSoloEnCredito,
+                "«Crédito sin Cartera» sólo va en los medios de crédito a asociados o comercial.");
         }
 
         if (input.ToleranceAmount < 0)

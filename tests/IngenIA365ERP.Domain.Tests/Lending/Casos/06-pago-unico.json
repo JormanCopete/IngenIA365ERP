@@ -1,0 +1,31 @@
+// SC-017 (quickstart §1.2, caso 06): pago único al vencimiento. 181 días reales del 10-11-2026 al 10-05-2027 en real/365;
+// interés = 2.000.000 × ((1 + r_d)^181 − 1) con r_d = RaizEntera(1,20; 365) − 1. Redondeo al centavo HACIA ABAJO, por total.
+// La efectiva de un solo flujo es (1 + i)^(365/181) − 1: la pactada. Calculado con calcular.py. Pendiente de validar.
+{
+  "nombre": "Pago único real/365",
+  "condiciones": {
+    "sistema": "Bullet", "convencion": "Actual365", "equivalencia": "Compound",
+    "redondeo": { "unidad": 0.01, "modo": "Down", "momento": "PerTotal" },
+    "prelacion": "OldestInstallmentFirst",
+    "monto": 2000000, "plazoCuotas": 1, "periodicidad": "SinglePayment", "tasaEA": 0.200000,
+    "fechaDesembolso": "2026-11-10", "primerVencimiento": "2027-05-10", "modalidad": "CONSUMO"
+  },
+  "series": {
+    "usura": [ { "clave": "CONSUMO", "desde": "2026-11-01", "ea": 0.265000, "registradoEn": "2026-10-30T15:00:00Z",
+                 "publicId": "0b7a3c8e-1d1a-4f6e-9a01-000000000006" } ]
+  },
+  "operaciones": [],
+  "consultas": [],
+  "esperado": {
+    "tasas": { "diaria": 0.000499635890955618, "nominalDelPeriodo": 0.200000000000000000, "cuotaNivelada": null, "efectiva": 0.200000, "efectivaSinCargos": 0.200000 },
+    "plan": {
+      "interesDeGracia": 0,
+      "residuo": 0,
+      "totales": { "capital": 2000000, "interes": 189249.28, "seguro": 0 },
+      "cuotas": [
+        { "numero": 1, "vencimiento": "2027-05-10", "dias": 181, "capital": 2000000, "interes": 189249.28, "seguro": 0, "saldo": 0 }
+      ]
+    },
+    "usura": { "veredicto": "Pasa", "usura": 0.265000, "holgura": 0.065000 }
+  }
+}

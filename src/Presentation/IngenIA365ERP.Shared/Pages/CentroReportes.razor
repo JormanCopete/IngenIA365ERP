@@ -82,50 +82,83 @@
         </div>
     </div>
 
-    <!-- Cartera -->
+    <!-- Cartera (feature 013, US15, T0800): las tarjetas de crédito vuelven con las vistas del centro de informes de Cartera -->
     <div class="report-section">
         <h4 class="report-section-title">
-            <span class="e-icons e-bank"></span>Cartera Financiera
+            <span class="e-icons e-money"></span>Cartera
         </h4>
         <div class="report-cards">
             <div class="report-card">
-                <div class="report-card-icon"><span class="e-icons e-file-new"></span></div>
+                <div class="report-card-icon"><span class="e-icons e-table"></span></div>
                 <div class="report-card-body">
-                    <h5>Extracto de Credito</h5>
-                    <p>Estado de cuenta detallado de un credito: tabla de amortizacion y pagos realizados.</p>
-                    <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/reportes/extracto-credito")'>Generar</SfButton>
+                    <h5>Cartera por edades</h5>
+                    <p>Saldo de capital por rango de dias de mora a una fecha de corte, credito por credito, con la calificacion informativa.</p>
+                    <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/cartera/informes?vista=aging")'>Generar</SfButton>
                 </div>
             </div>
             <div class="report-card">
-                <div class="report-card-icon"><span class="e-icons e-clock"></span></div>
+                <div class="report-card-icon"><span class="e-icons e-list-unordered"></span></div>
                 <div class="report-card-body">
-                    <h5>Cartera por Edades</h5>
-                    <p>Clasificacion de la cartera por antigueedad: vigente, 1-30, 31-60, 61-90, 91-180, 180+ dias.</p>
-                    <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/reportes/cartera-edades")'>Generar</SfButton>
+                    <h5>Movimientos de un crédito</h5>
+                    <p>Las filas del libro de cartera por fecha valor, contable o de registro, con su operacion y su mensaje.</p>
+                    <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/cartera/informes?vista=transactions")'>Generar</SfButton>
                 </div>
             </div>
             <div class="report-card">
-                <div class="report-card-icon"><span class="e-icons e-review"></span></div>
+                <div class="report-card-icon"><span class="e-icons e-chart"></span></div>
                 <div class="report-card-body">
-                    <h5>Calificacion de Cartera</h5>
-                    <p>Calificacion de riesgo de la cartera segun normatividad de la Supersolidaria.</p>
-                    <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/cartera/calificacion")'>Generar</SfButton>
+                    <h5>Usura</h5>
+                    <p>Creditos topados por la usura y lineas a menos de los puntos de alerta de la usura vigente.</p>
+                    <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/cartera/informes?vista=usury")'>Generar</SfButton>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Feature 014, US17 (T222): captaciones y aportes; cada tarjeta abre su vista del centro de informes de Cartera o la pantalla de reportes regulatorios. -->
+    <div class="report-section">
+        <h4 class="report-section-title">
+            <span class="e-icons e-money"></span>Captaciones y aportes
+        </h4>
+        <div class="report-cards">
+            <div class="report-card">
+                <div class="report-card-icon"><span class="e-icons e-table"></span></div>
+                <div class="report-card-body">
+                    <h5>Saldos de captaciones</h5>
+                    <p>El saldo de las cuentas de captacion al corte por linea, oficina o clase, sin datos de titulares.</p>
+                    <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/cartera/informes?vista=deposit-balances")'>Generar</SfButton>
                 </div>
             </div>
             <div class="report-card">
-                <div class="report-card-icon"><span class="e-icons e-paste"></span></div>
+                <div class="report-card-icon"><span class="e-icons e-list-unordered"></span></div>
                 <div class="report-card-body">
-                    <h5>Extracto de Ahorro</h5>
-                    <p>Estado de cuenta de ahorros con movimientos y saldos.</p>
-                    <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/cartera/extractos")'>Generar</SfButton>
+                    <h5>Cuentas por estado</h5>
+                    <p>Las cuentas de captacion y de aportes con su estado, su saldo y sus marcas (embargo, exencion de GMF).</p>
+                    <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/cartera/informes?vista=deposit-accounts-by-status")'>Generar</SfButton>
                 </div>
             </div>
             <div class="report-card">
-                <div class="report-card-icon"><span class="e-icons e-file-text"></span></div>
+                <div class="report-card-icon"><span class="e-icons e-people"></span></div>
                 <div class="report-card-body">
-                    <h5>Certificado CDT</h5>
-                    <p>Certificado de deposito a termino con condiciones, intereses y vencimiento.</p>
-                    <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/cartera/cdt")'>Generar</SfButton>
+                    <h5>Aportes por asociado</h5>
+                    <p>El saldo de aportes de cada asociado por clase, con sus cuotas en mora.</p>
+                    <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/cartera/informes?vista=contributions-by-member")'>Generar</SfButton>
+                </div>
+            </div>
+            <div class="report-card">
+                <div class="report-card-icon"><span class="e-icons e-chart"></span></div>
+                <div class="report-card-body">
+                    <h5>Intereses y retencion</h5>
+                    <p>Las liquidaciones de intereses del periodo con su componente inflacionario, su base y la retencion practicada.</p>
+                    <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/cartera/informes?vista=interest-and-withholding")'>Generar</SfButton>
+                </div>
+            </div>
+            <div class="report-card">
+                <div class="report-card-icon"><span class="e-icons e-description"></span></div>
+                <div class="report-card-body">
+                    <h5>Reportes regulatorios</h5>
+                    <p>Los formatos del SICSES de captaciones, aportes, saldos diarios y fondo de liquidez, y la exogena 1019 y 1020: validar, generar y marcar cargado.</p>
+                    <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/cartera/captaciones/reportes-regulatorios")'>Abrir</SfButton>
                 </div>
             </div>
         </div>

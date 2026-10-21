@@ -53,7 +53,15 @@ public class SendNotApplicableMessagesCommandTests
     }
 
     private SendNotApplicableMessagesCommandHandler Handler(ILectorDeParametros? parametros = null) =>
-        new(_b.Db, _b.ActorActual, _b.Reloj, parametros ?? ParametrosConModo("EnLinea"), Substitute.For<ISenalDeMensajes>());
+        new(_b.Db, _b.ActorActual, _b.Reloj, Vistas(_b, parametros ?? ParametrosConModo("EnLinea")), Substitute.For<ISenalDeMensajes>());
+
+    /// <summary>La vista de Inventario de la bandeja (feature 013, T0075): el modo de paso por tipo de documento sale de ella.</summary>
+    public static IVistaDeBandejaDelModulo[] Vistas(BandejaDePrueba b, ILectorDeParametros parametros)
+    {
+        var alcance = Substitute.For<Application.Common.Interfaces.Security.IAlcanceDeInventario>();
+        alcance.ObtenerAsync(Arg.Any<CancellationToken>()).Returns(Application.Common.Interfaces.Security.AlcanceDeInventario.Total);
+        return [new IngenIA365ERP.Application.Inventory.Integration.VistaDeBandejaDeInventario(b.Db, alcance, parametros)];
+    }
 
     private static SendNotApplicableMessagesCommand Enviar(Guid corte, IReadOnlyList<Guid>? tipos = null) =>
         new(BandejaDePrueba.Fecha.AddDays(-5), BandejaDePrueba.Fecha, tipos, corte, "Los traslados ya pasan a contabilidad") { OperationKey = Guid.NewGuid() };

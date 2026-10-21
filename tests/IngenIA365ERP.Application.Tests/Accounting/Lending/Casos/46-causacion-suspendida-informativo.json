@@ -1,0 +1,69 @@
+{
+  "descripcion": "Informativo: la suspensión no reclasifica lo causado antes (T30); sin comprobante.",
+  "sobre": {
+    "version": 1,
+    "kind": "Business",
+    "originModule": "CAR",
+    "originEventKey": "Confirmation:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "origin": {
+      "kind": "Operation",
+      "documentClass": null,
+      "documentTypeCode": null,
+      "number": "SUS-000200",
+      "publicId": "0d0d0201-0000-4000-8000-000000000201",
+      "operationDate": "2026-11-16"
+    },
+    "related": null,
+    "chainRootPublicId": "0e0e0202-0000-4000-8000-000000000202",
+    "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+    "costCenterPublicId": null,
+    "warehouseCode": null,
+    "personPublicId": "a1b2c3d4-0000-4000-8000-000000000003",
+    "currency": "COP",
+    "exchangeRate": 1,
+    "originUser": {
+      "centralUserId": null,
+      "name": "Proceso de integración"
+    },
+    "emittedAt": "2026-11-16T15:00:00Z"
+  },
+  "mensajes": [
+    {
+      "messageId": "0f0f0203-0000-4000-8000-000000000203",
+      "type": "CausacionSuspendida",
+      "kind": "Informational",
+      "originDocumentClass": "AccountingFactPart",
+      "payload": {
+        "loan": {
+          "loanPublicId": "7b8c9d0e-1f2a-4b3c-9d4e-000000000200",
+          "loanNumber": "000200"
+        },
+        "debtorPersonPublicId": "a1b2c3d4-0000-4000-8000-000000000003",
+        "dimensions": {
+          "creditLineCode": "COM01",
+          "modalityCode": "CONSUMO",
+          "subsegmentCode": "SinLibranza",
+          "riskCategory": "D",
+          "riskSubcategory": "None",
+          "isEmployee": false,
+          "inGracePeriod": false,
+          "restructured": false,
+          "writtenOff": false,
+          "collectorClass": null,
+          "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+          "impairmentModel": "ArrearsAnnex1",
+          "riskSegment": "CONSUMO",
+          "valueUnit": "Pesos"
+        },
+        "registeredAt": "2026-11-16T05:00:00Z",
+        "effectiveDate": "2026-11-16",
+        "cause": "ArrearsThreshold",
+        "daysPastDue": 91,
+        "causeFact": null
+      }
+    }
+  ],
+  "esperado": {
+    "sinComprobante": "Informational"
+  }
+}

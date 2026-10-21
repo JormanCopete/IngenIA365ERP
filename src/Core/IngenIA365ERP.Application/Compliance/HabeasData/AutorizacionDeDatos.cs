@@ -4,6 +4,7 @@ using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Compliance.HabeasData.Common;
 using IngenIA365ERP.Domain.Entities.Compliance;
 using IngenIA365ERP.Domain.Entities.Core;
+using IngenIA365ERP.Domain.Enums.Compliance;
 using Microsoft.EntityFrameworkCore;
 
 namespace IngenIA365ERP.Application.Compliance.HabeasData;
@@ -46,7 +47,7 @@ public sealed class AutorizacionDeDatos(
         if (autorizacion.PolicyVersionPublicId is not { } versionMostrada || versionMostrada == Guid.Empty)
         {
             var vigente = await db.HabeasDataPolicyVersions.AsNoTracking()
-                .Where(p => p.TenantId == cooperativa && p.EffectiveTo == null)
+                .Where(p => p.TenantId == cooperativa && p.Purpose == DataAuthorizationPurpose.GeneralTreatment && p.EffectiveTo == null)
                 .Select(p => (int?)p.VersionNumber)
                 .FirstOrDefaultAsync(ct);
             if (vigente is { } numero)
@@ -113,7 +114,10 @@ public sealed class AutorizacionDeDatos(
     /// <summary>Quien recibe la alerta de alta sin política (T46).</summary>
     public const string PermisoDeConsentimiento = "Compliance.HabeasData.RecordConsent";
 
-    public async Task<AutorizacionVigente?> VigenteAsync(Guid personPublicId, CancellationToken ct)
+    public Task<AutorizacionVigente?> VigenteAsync(Guid personPublicId, CancellationToken ct) =>
+        VigenteAsync(personPublicId, DataAuthorizationPurpose.GeneralTreatment, null, ct);
+
+    public async Task<AutorizacionVigente?> VigenteAsync(Guid personPublicId, DataAuthorizationPurpose finalidad, string? canal, CancellationToken ct)
     {
         if (!int.TryParse(usuario.TenantId, out var cooperativa)) return null;
         var personaId = await db.People.AsNoTracking()
@@ -122,14 +126,149 @@ public sealed class AutorizacionDeDatos(
             .FirstOrDefaultAsync(ct);
         if (personaId is null) return null;
 
-        var ultima = await db.HabeasDataConsents.AsNoTracking()
-            .Where(c => c.TenantId == cooperativa && c.PersonId == personaId)
+        DataAuthorizationChannel? deCanal = null;
+        if (finalidad == DataAuthorizationPurpose.ContactChannel && !string.IsNullOrWhiteSpace(canal))
+        {
+            if (!Enum.TryParse<DataAuthorizationChannel>(canal.Trim(), ignoreCase: true, out var leido) || !Enum.IsDefined(leido)) return null;
+            deCanal = leido;
+        }
+
+        var consulta = db.HabeasDataConsents.AsNoTracking()
+            .Where(c => c.TenantId == cooperativa && c.PersonId == personaId && c.Purpose == finalidad);
+        if (deCanal is { } elCanal) consulta = consulta.Where(c => c.ContactChannel == elCanal);
+
+        var ultima = await consulta
             .OrderByDescending(c => c.ActionAt).ThenByDescending(c => c.Id)
-            .Select(c => new { c.Action, c.ActionAt, c.Channel, Version = c.PolicyVersion!.PublicId, Numero = c.PolicyVersion.VersionNumber })
+            .Select(c => new
+            {
+                c.PublicId, c.Action, c.ActionAt, c.Channel, c.Purpose, c.ContactChannel, c.Origin, c.EvidenceAttachmentPublicId,
+                Version = c.PolicyVersion!.PublicId, Numero = c.PolicyVersion.VersionNumber,
+            })
             .FirstOrDefaultAsync(ct);
         return ultima is null
             ? null
-            : new AutorizacionVigente(ultima.Action, ultima.Action == AccionesDeConsentimiento.Accepted, ultima.Version, ultima.Numero, ultima.ActionAt, ultima.Channel);
+            : new AutorizacionVigente(ultima.Action, ultima.Action == AccionesDeConsentimiento.Accepted, ultima.Version, ultima.Numero, ultima.ActionAt, ultima.Channel)
+            {
+                Purpose = ultima.Purpose,
+                ContactChannel = ultima.ContactChannel,
+                Origin = ultima.Origin,
+                ConsentPublicId = ultima.PublicId,
+                HasEvidence = ultima.EvidenceAttachmentPublicId is not null || ultima.Origin != DataAuthorizationOrigin.Migration,
+            };
+    }
+
+    /// <summary>Feature 013 (T0086): sin finalidad vigente para registrar la decisión.</summary>
+    public static Error SinPoliticaDeLaFinalidad(DataAuthorizationPurpose finalidad) => new ErrorConDatos(HabeasDataErrorCodes.NoCurrentPolicy,
+        $"La cooperativa no tiene una política de tratamiento de datos vigente para la finalidad {finalidad}: publíquela antes de registrar la autorización.",
+        new { purpose = finalidad.ToString() });
+
+    /// <summary>Feature 013 (T0086): el canal es obligatorio con la finalidad <c>ContactChannel</c> y no va con otra.</summary>
+    public static readonly Error CanalDeContactoRequerido = new(Error.Validation.Code,
+        "La autorización de un canal de contacto dice cuál canal (Sms, WhatsApp, Email, Call o Visit); las demás finalidades no llevan canal.");
+
+    public async Task<Result<Guid>> AgregarAsync(AutorizacionAAgregar autorizacion, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(autorizacion);
+        if (!int.TryParse(usuario.TenantId, out var cooperativa))
+            return Result.Failure<Guid>("Auth.TenantRequired", "El usuario actual no está asociado a una cooperativa.");
+        if ((autorizacion.Purpose == DataAuthorizationPurpose.ContactChannel) != (autorizacion.ContactChannel is not null))
+            return Result.Failure<Guid>(CanalDeContactoRequerido);
+
+        var personaId = db.People.Local.FirstOrDefault(p => p.PublicId == autorizacion.PersonPublicId)?.Id is { } local and > 0
+            ? local
+            : await db.People.AsNoTracking().Where(p => p.PublicId == autorizacion.PersonPublicId).Select(p => (int?)p.Id).FirstOrDefaultAsync(ct);
+        if (personaId is not { } persona)
+            return Result.Failure<Guid>(new Error("Core.Person.NotFound", "La persona no existe en esta cooperativa."));
+
+        var version = await VersionDePoliticaAsync(cooperativa, autorizacion.Purpose, autorizacion.PolicyVersionPublicId, ct);
+        if (version.IsFailure) return Result.Failure<Guid>(version.Error);
+
+        var actor = usuario.UserName ?? "SYSTEM";
+        var consentimiento = new HabeasDataConsent
+        {
+            TenantId = cooperativa,
+            PersonId = persona,
+            PolicyVersionId = version.Value,
+            Action = autorizacion.Decision == DecisionDeAutorizacion.Declined ? AccionesDeConsentimiento.Declined : AccionesDeConsentimiento.Accepted,
+            ActionAt = autorizacion.DecidedAt,
+            ActionBy = actor,
+            Channel = CanalPorDefecto,
+            Notes = autorizacion.Notes,
+            Purpose = autorizacion.Purpose,
+            ContactChannel = autorizacion.ContactChannel,
+            EvidenceAttachmentPublicId = autorizacion.EvidenceAttachmentPublicId,
+            Origin = autorizacion.Origin,
+            CreatedBy = actor,
+            UpdatedBy = actor,
+        };
+        db.HabeasDataConsents.Add(consentimiento);
+        return Result.Success(consentimiento.PublicId);
+    }
+
+    /// <summary>
+    /// Feature 013 (T69 b, T0088): la fila <c>Revoked</c> de una finalidad (y canal) que pidió el titular, sin guardar; la guarda
+    /// <c>RespondDataSubjectRequestCommand</c> en el mismo <c>SaveChanges</c> que la respuesta (data-model parte 3 §4.9). Toma la
+    /// versión de la última decisión de esa finalidad o, si nunca decidió, la vigente de la finalidad; sin ninguna no hay qué
+    /// revocar y devuelve nulo.
+    /// </summary>
+    public async Task<HabeasDataConsent?> AgregarRevocacionAsync(
+        int personaId, DataAuthorizationPurpose finalidad, DataAuthorizationChannel? canal, DateTime revocadaEl, string notas, CancellationToken ct)
+    {
+        if (!int.TryParse(usuario.TenantId, out var cooperativa)) return null;
+        var ultima = await db.HabeasDataConsents.AsNoTracking()
+            .Where(c => c.TenantId == cooperativa && c.PersonId == personaId && c.Purpose == finalidad && (canal == null || c.ContactChannel == canal))
+            .OrderByDescending(c => c.ActionAt).ThenByDescending(c => c.Id)
+            .Select(c => (int?)c.PolicyVersionId)
+            .FirstOrDefaultAsync(ct);
+        var idDeVersion = ultima;
+        if (idDeVersion is null)
+        {
+            var vigente = await VersionDePoliticaAsync(cooperativa, finalidad, null, ct);
+            if (vigente.IsFailure) return null;
+            idDeVersion = vigente.Value;
+        }
+
+        var actor = usuario.UserName ?? "SYSTEM";
+        var revocacion = new HabeasDataConsent
+        {
+            TenantId = cooperativa,
+            PersonId = personaId,
+            PolicyVersionId = idDeVersion.Value,
+            Action = AccionesDeConsentimiento.Revoked,
+            ActionAt = revocadaEl,
+            ActionBy = actor,
+            Channel = CanalPorDefecto,
+            Notes = notas.Length > 2000 ? notas[..2000] : notas,
+            Purpose = finalidad,
+            ContactChannel = canal,
+            Origin = DataAuthorizationOrigin.TitularRequest,
+            CreatedBy = actor,
+            UpdatedBy = actor,
+        };
+        db.HabeasDataConsents.Add(revocacion);
+        return revocacion;
+    }
+
+    /// <summary>La versión de política (Id) indicada, de esta cooperativa y de la finalidad, o la vigente de la finalidad.</summary>
+    private async Task<Result<int>> VersionDePoliticaAsync(int cooperativa, DataAuthorizationPurpose finalidad, Guid? versionPublicId, CancellationToken ct)
+    {
+        if (versionPublicId is { } indicada && indicada != Guid.Empty)
+        {
+            var id = await db.HabeasDataPolicyVersions.AsNoTracking()
+                .Where(p => p.TenantId == cooperativa && p.PublicId == indicada && p.Purpose == finalidad)
+                .Select(p => (int?)p.Id)
+                .FirstOrDefaultAsync(ct);
+            return id is { } encontrada
+                ? Result.Success(encontrada)
+                : Result.Failure<int>(new Error(PoliticaDesconocida, "La versión de la política de tratamiento de datos no existe en esta cooperativa para esa finalidad."));
+        }
+
+        var vigente = await db.HabeasDataPolicyVersions.AsNoTracking()
+            .Where(p => p.TenantId == cooperativa && p.Purpose == finalidad && p.EffectiveTo == null)
+            .OrderByDescending(p => p.VersionNumber)
+            .Select(p => (int?)p.Id)
+            .FirstOrDefaultAsync(ct);
+        return vigente is { } v ? Result.Success(v) : Result.Failure<int>(SinPoliticaDeLaFinalidad(finalidad));
     }
 }
 

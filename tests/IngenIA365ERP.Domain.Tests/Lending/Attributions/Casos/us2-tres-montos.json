@@ -1,0 +1,24 @@
+// US2-5 (quickstart §3.5): tres solicitudes de 3.000.000, 15.000.000 y 60.000.000 de personas sin otras deudas con la cooperativa
+// (el consolidado es lo pedido) van solas al analista, a la gerencia y al comité. Matriz del ensayo (quickstart §2.7).
+{
+  "nombre": "us2-tres-montos",
+  "descripcion": "Tres montos, tres niveles.",
+  "matriz": {
+    "niveles": [
+      { "codigo": "ANALISTA", "nombre": "Analista de crédito", "rango": 10, "clase": "Individual", "permiso": "Lending.Decisions.Analyst", "techo": 5000000 },
+      { "codigo": "EXCEP", "nombre": "Jefe de cartera (excepciones)", "rango": 15, "clase": "Individual", "permiso": "Lending.Decisions.Exceptions", "techo": 5000000, "excepcion": true },
+      { "codigo": "GERENCIA", "nombre": "Gerencia", "rango": 20, "clase": "Individual", "permiso": "Lending.Decisions.Management", "techo": 20000000 },
+      { "codigo": "COMITE", "nombre": "Comité de crédito", "rango": 30, "clase": "Collegiate", "organo": "COMCRED", "techo": 100000000 },
+      { "codigo": "CONSEJO", "nombre": "Consejo de administración", "rango": 40, "clase": "Collegiate", "organo": "CONSEJO", "consejo": true }
+    ],
+    "reglas": []
+  },
+  "escenarios": [
+    { "nombre": "3.000.000 al analista", "sujeto": { "linea": "CONLIB", "montoConsolidado": 3000000, "plazoMeses": 24 },
+      "esperado": { "nivel": "ANALISTA", "razones": [ { "clase": "AmountCeiling", "nivel": "ANALISTA" } ] } },
+    { "nombre": "15.000.000 a la gerencia", "sujeto": { "linea": "CONLIB", "montoConsolidado": 15000000, "plazoMeses": 36 },
+      "esperado": { "nivel": "GERENCIA", "razones": [ { "clase": "AmountCeiling", "nivel": "GERENCIA" } ] } },
+    { "nombre": "60.000.000 al comité", "sujeto": { "linea": "CONLIB", "montoConsolidado": 60000000, "plazoMeses": 60 },
+      "esperado": { "nivel": "COMITE", "razones": [ { "clase": "AmountCeiling", "nivel": "COMITE" } ] } }
+  ]
+}

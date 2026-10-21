@@ -1,0 +1,102 @@
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Http
+@inject LibranzaClient Libranza
+@inject INotificationService Notification
+
+@* Feature 013, K2, US10 (T0852; contracts/api.md §13.3; FR-116, US10-5, C44): «Trasladar libranza» desde el expediente del crédito. A otra pagaduría
+   con convenio —con la identificación ante ella y la certificación nueva (adjunto, fecha e ingreso neto), contra la que se mide la capacidad de
+   descuento— conservando la fecha de libranza para la prelación; o, sin pagaduría nueva (retiro sin nuevo empleador), a la forma de pago alterna del
+   convenio con aviso al deudor. Un crédito que no es de libranza responde que no lo es. *@
+<SfDialog @bind-Visible="Visible" Header="Trasladar la libranza" Width="620px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_accion.Activa" Texto="Trasladando…">
+                <div class="form-grid">
+                    <label class="campo campo-ancho">Pagaduría nueva
+                        <select class="e-input" @bind="_convenio">
+                            <option value="">Ninguna: pasa a la forma de pago alterna del convenio</option>
+                            @foreach (var c in _convenios.Where(c => !c.IsOwnPayroll)) { <option value="@c.PublicId">@c.Code · @c.Payer.LegalName</option> }
+                        </select>
+                    </label>
+                    @if (!string.IsNullOrEmpty(_convenio))
+                    {
+                        <label class="campo">Identificación ante la pagaduría <input class="e-input" @bind="_empleado" maxlength="30" /></label>
+                        <label class="campo">Certificación (adjunto) <input class="e-input" @bind="_certificacion" placeholder="Identificador del adjunto" /></label>
+                        <label class="campo">Fecha de la certificación <input class="e-input" type="date" @bind="_fechaCertificacion" /></label>
+                        <label class="campo">Ingreso neto certificado <input class="e-input" type="number" min="0" step="1" @bind="_ingreso" /></label>
+                    }
+                    <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" maxlength="500" /></label>
+                </div>
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                @if (_hecho is { } h)
+                {
+                    <p class="aviso aviso-exito">Libranza trasladada: ahora se paga por @TextosDeLibranza.FormaDePago(h.RepaymentChannel)@(h.AgreementCode is { } a ? $" ({a})" : "")
+                        desde el @h.ValidFrom.ToString("dd/MM/yyyy")@(h.LibranzaDate is { } f ? $", con la fecha de libranza del {f:dd/MM/yyyy}" : "").</p>
+                    @foreach (var w in h.Warnings) { <p class="aviso aviso-alerta">@w</p> }
+                }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_accion.Activa || !Puede)" OnClick="@TrasladarAsync">Trasladar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@CerrarAsync">Volver</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+@code {
+    [Parameter] public Guid CreditoId { get; set; }
+    [Parameter] public bool Visible { get; set; }
+    [Parameter] public EventCallback<bool> VisibleChanged { get; set; }
+    [Parameter] public EventCallback Trasladado { get; set; }
+
+    private readonly EstadoDeCarga _accion = new();
+    private List<ConvenioResumenDto> _convenios = [];
+    private string? _convenio, _empleado, _certificacion, _motivo, _error;
+    private DateOnly? _fechaCertificacion;
+    private decimal? _ingreso;
+    private TrasladoDeLibranzaDto? _hecho;
+    private ClaveDeOperacion _clave = new();
+    private bool _abierto;
+
+    private bool Puede => !string.IsNullOrWhiteSpace(_motivo)
+                          && (string.IsNullOrEmpty(_convenio) || (Guid.TryParse(_certificacion, out _) && _fechaCertificacion is not null && _ingreso is > 0m));
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Visible && !_abierto)
+        {
+            _abierto = true;
+            _convenio = _empleado = _certificacion = _motivo = _error = null;
+            _fechaCertificacion = null;
+            _ingreso = null;
+            _hecho = null;
+            _clave = new ClaveDeOperacion();
+            using var carga = _accion.Iniciar();
+            var r = await Libranza.ConveniosAsync();
+            _convenios = r.IsSuccess ? [.. r.Value ?? []] : [];
+        }
+        else if (!Visible) _abierto = false;
+    }
+
+    private async Task TrasladarAsync()
+    {
+        using var carga = _accion.Iniciar();
+        _error = null;
+        var nuevo = Guid.TryParse(_convenio, out var c) ? c : (Guid?)null;
+        var r = await Libranza.TrasladarAsync(CreditoId, new TrasladoDeLibranzaRequest(nuevo, nuevo is null ? null : _empleado?.Trim(),
+            nuevo is not null && Guid.TryParse(_certificacion, out var adjunto) ? adjunto : null, nuevo is null ? null : _fechaCertificacion,
+            nuevo is null ? null : _ingreso, _motivo!.Trim()), _clave);
+        if (!r.IsSuccess) { _error = r.ErrorMessage ?? "No se pudo trasladar la libranza."; return; }
+        _hecho = r.Value;
+        _clave = new ClaveDeOperacion();
+        await Notification.SuccessAsync("Libranza trasladada.");
+        await Trasladado.InvokeAsync();
+    }
+
+    private async Task CerrarAsync()
+    {
+        Visible = false;
+        _abierto = false;
+        await VisibleChanged.InvokeAsync(false);
+    }
+}

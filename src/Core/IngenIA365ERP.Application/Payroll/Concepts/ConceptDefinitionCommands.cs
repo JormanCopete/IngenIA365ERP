@@ -381,7 +381,9 @@ public sealed class SetConceptAccountsCommandHandler(IApplicationDbContext db, I
         var ccPorPublicId = centros.ToDictionary(c => c.PublicId, c => c.Id);
 
         var ahora = clock.UtcNow;
-        var existentes = await db.PayrollConceptDefinitionAccounts.Where(a => a.ConceptCode == code).ToListAsync(ct);
+        // Con las retiradas (feature 013, T0801): los dos índices únicos no miran el borrado lógico, así que una fila retirada se revive en vez de
+        // agregar otra con el mismo concepto y centro (hasta el 2026-10-14, poner, quitar y volver a poner respondía 500).
+        var existentes = await db.PayrollConceptDefinitionAccounts.IgnoreQueryFilters().Where(a => a.ConceptCode == code).ToListAsync(ct);
         var deseadas = request.Rows.Select(r => new
         {
             CostCenterId = r.CostCenterPublicId is { } pid ? (int?)ccPorPublicId[pid] : null,
@@ -394,6 +396,7 @@ public sealed class SetConceptAccountsCommandHandler(IApplicationDbContext db, I
             var deseada = deseadas.FirstOrDefault(d => d.CostCenterId == fila.CostCenterId);
             if (deseada is null)
             {
+                if (fila.IsDeleted) continue;
                 // Retirar = marcar; la fila sigue para la historia de lo aprobado con ella (Principio VII).
                 fila.IsDeleted = true;
                 fila.DeletedAt = ahora;
@@ -402,6 +405,9 @@ public sealed class SetConceptAccountsCommandHandler(IApplicationDbContext db, I
             }
             fila.DebitAccountId = deseada.Debit;
             fila.CreditAccountId = deseada.Credit;
+            fila.IsDeleted = false;
+            fila.DeletedAt = null;
+            fila.DeletedBy = null;
             fila.UpdatedAt = ahora;
             fila.UpdatedBy = user.UserName;
         }

@@ -1,0 +1,33 @@
+// FR-037: sin dato, la variable toma los puntos de su rango «sin dato» declarado (la central: 400) o cero si no lo declara (la
+// relación cuota/ingreso), y la explicación lo dice. Un dato faltante no detiene el cálculo.
+{
+  "nombre": "03-sin-dato-de-central",
+  "descripcion": "Sin dato: el rango «sin dato» o cero, explicado.",
+  "modelo": {
+    "nivelDeExcepcion": "EXCEP",
+    "minimo": 600,
+    "variables": [
+      { "codigo": "ANTIG", "nombre": "Antigüedad como asociado", "fuente": "Applicant.AssociateSeniorityMonths", "peso": 0.4,
+        "rangos": [ { "desde": 0, "hasta": 12, "puntos": 300 }, { "desde": 12, "hasta": 36, "puntos": 600 }, { "desde": 36, "puntos": 900 } ] },
+      { "codigo": "RELCI", "nombre": "Relación cuota/ingreso", "fuente": "Application.PaymentCapacityRatio", "peso": 0.4,
+        "rangos": [ { "desde": 0, "hasta": 0.3, "puntos": 900 }, { "desde": 0.3, "hasta": 0.5, "puntos": 600 }, { "desde": 0.5, "puntos": 200 } ] },
+      { "codigo": "CENTRAL", "nombre": "Puntaje de central", "fuente": "Bureau.Score", "peso": 0.2,
+        "rangos": [ { "desde": 0, "hasta": 500, "puntos": 200 }, { "desde": 500, "hasta": 700, "puntos": 500 }, { "desde": 700, "puntos": 800 },
+                    { "sinDato": true, "puntos": 400 } ] }
+    ]
+  },
+  "escenarios": [
+    // 240 + 360 + 0,2 × 400 = 680.
+    { "nombre": "sin consulta a centrales",
+      "valores": { "Applicant.AssociateSeniorityMonths": 30, "Application.PaymentCapacityRatio": 0.25, "Bureau.Score": null },
+      "esperado": { "puntaje": 680, "bajoElMinimo": false,
+        "variables": [ { "codigo": "CENTRAL", "puntos": 400, "aporte": 80, "sinDato": true } ],
+        "explicacionContiene": [ "sin dato: toma los puntos de su rango «sin dato» (400)" ] } },
+    // 240 + 0 + 80 = 320: la relación no declara rango «sin dato» y la fuente ni siquiera viene.
+    { "nombre": "sin central ni relación cuota/ingreso",
+      "valores": { "Applicant.AssociateSeniorityMonths": 30 },
+      "esperado": { "puntaje": 320, "bajoElMinimo": true,
+        "variables": [ { "codigo": "RELCI", "puntos": 0, "aporte": 0, "sinDato": true }, { "codigo": "CENTRAL", "puntos": 400, "aporte": 80, "sinDato": true } ],
+        "explicacionContiene": [ "sin dato y sin rango «sin dato» declarado: cero puntos" ] } }
+  ]
+}

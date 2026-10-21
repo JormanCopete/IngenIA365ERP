@@ -124,9 +124,11 @@ public class LasConsultasDeInventarioRespetanElAlcance
 
     /// <summary>
     /// Servicios de Application que aplican el alcance por encargo del handler (T562): un handler que recibe uno de ellos en su
-    /// constructor lo aplica sin nombrar <c>IAlcanceDeInventario</c>. La prueba exige que cada uno sí lo nombre.
+    /// constructor lo aplica sin nombrar <c>IAlcanceDeInventario</c>. La prueba exige que cada uno sí lo nombre. Feature 013 (T0075): la
+    /// vista de Inventario de la bandeja (<c>VistaDeBandejaDeInventario</c>), que la bandeja y su detalle reciben como
+    /// <c>IVistaDeBandejaDelModulo</c>.
     /// </summary>
-    private static readonly string[] AplicadoresDeAlcance = ["SesionesDeCaja", "BorradorDelPos"];
+    private static readonly string[] AplicadoresDeAlcance = ["SesionesDeCaja", "BorradorDelPos", "VistaDeBandejaDeInventario"];
 
     [Fact]
     public void Cada_consulta_de_inventario_aplica_el_alcance()

@@ -1,0 +1,425 @@
+@page "/cartera/avisos-previos"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Adjuntos
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Http
+@inject CobranzaClient Cliente
+@inject AdjuntosClient Adjuntos
+@inject INotificationService Notification
+
+<PageTitle>Avisos previos y reclamos - IngenIA365ERP</PageTitle>
+
+@* Feature 013, K4, US12 (T0958; contracts/api.md §14.3, §14.4; FR-123, T69, T77; Leyes 1266 y 2157): el aviso previo al reporte negativo, uno por
+   episodio de mora, y los reclamos sobre el reporte. Un dato negativo no entra al archivo de centrales sin un aviso con constancia: el estado se
+   deriva de las comunicaciones del episodio (pendiente, en curso, válido, cerrado) y quien recae en mora necesita un aviso nuevo. Se envía por correo,
+   SMS o WhatsApp (queda la constancia del envío); la carta se registra con su guía y el adjunto. Un canal simulado no vale en producción. Los reclamos
+   tienen plazo en días hábiles, una prórroga y, vencido sin respuesta, se dan por aceptados tácitamente. Leer exige Lending.PriorNotices.Read y
+   Lending.CreditReportClaims.Read; enviar, Lending.PriorNotices.Send; constancia, Lending.PriorNotices.RegisterEvidence; reclamos,
+   Lending.CreditReportClaims.Manage. *@
+<PermissionGate Required="Lending.PriorNotices.Read" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Avisos previos y reclamos</h3>
+        <div class="toolbar">
+            <SfButton CssClass="@(_pestana == 0 ? "e-primary" : "e-outline")" OnClick="@(() => CambiarAsync(0))">Avisos previos</SfButton>
+            <SfButton CssClass="@(_pestana == 1 ? "e-primary" : "e-outline")" OnClick="@(() => CambiarAsync(1))">Reclamos sobre el reporte</SfButton>
+        </div>
+    </div>
+
+    @if (_pestana == 0)
+    {
+        <div class="toolbar">
+            <label class="campo">Estado
+                <select class="e-input" @bind="_estado">
+                    <option value="">Todos</option>
+                    @foreach (var e in TextosDeCobranza.EstadosDeAviso) { <option value="@e.Valor">@e.Texto</option> }
+                </select>
+            </label>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@(() => CargarAvisosAsync(1))">Consultar</SfButton>
+        </div>
+        <IndicadorDeCarga Cargando="@_carga.Activa">
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Crédito</th><th>Deudor</th><th>Episodio desde</th><th>Comunicaciones</th><th>Constancia</th><th>Se puede reportar desde</th><th>Estado</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var a in _avisos)
+                        {
+                            var aviso = a;
+                            <tr>
+                                <td><a href="/cartera/creditos/@aviso.Loan.LoanPublicId">@aviso.Loan.Number</a></td>
+                                <td>@aviso.Person.FullName</td>
+                                <td>@aviso.EpisodeStart.ToString("dd/MM/yyyy")@(aviso.EpisodeClosedOn is { } c ? $" al {c:dd/MM/yyyy}" : "")</td>
+                                <td>
+                                    @aviso.Communications.Count de @aviso.RequiredCommunications
+                                    <span class="texto-tenue">@string.Join(" · ", aviso.Communications.Select(m => $"{TextosDeCobranza.CanalDeMensaje(m.Channel)} {(m.SentAt is { } s ? s.LocalDateTime.ToString("dd/MM") : "pendiente")}{(m.ManualEvidence ? " (carta)" : "")}"))</span>
+                                </td>
+                                <td>@(aviso.EvidenceDate?.ToString("dd/MM/yyyy") ?? "—")</td>
+                                <td>@(aviso.EarliestReportDate?.ToString("dd/MM/yyyy") ?? "—")</td>
+                                <td>@TextosDeCobranza.EstadoDeAviso(aviso.Status)@(aviso.Origin == "Migration" ? " · migrado" : "")</td>
+                                <td>
+                                    @if (aviso.Status is 1 or 2)
+                                    {
+                                        <PermissionGate Required="Lending.PriorNotices.Send">
+                                            <SfButton CssClass="e-flat e-small e-primary" OnClick="@(() => AbrirEnvio(aviso))">Enviar…</SfButton>
+                                        </PermissionGate>
+                                        <PermissionGate Required="Lending.PriorNotices.RegisterEvidence">
+                                            <SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirConstanciaAsync(aviso))">Registrar carta…</SfButton>
+                                        </PermissionGate>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            @if (_avisos.Count == 0) { <p class="texto-tenue">No hay avisos con ese filtro.</p> }
+            <Paginador Pagina="@_pagina" Total="@_total" Tamano="@TamanoDePagina" Cambia="@CargarAvisosAsync" />
+        </IndicadorDeCarga>
+    }
+    else
+    {
+        <PermissionGate Required="Lending.CreditReportClaims.Read" MostrarAviso="true">
+            <div class="toolbar">
+                <label class="campo">Estado
+                    <select class="e-input" @bind="_estadoDeReclamo">
+                        <option value="">Todos</option>
+                        @for (var i = 1; i <= 4; i++) { <option value="@i">@TextosDeCartera.EstadoDeReclamo(i)</option> }
+                    </select>
+                </label>
+                <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@(() => CargarReclamosAsync(1))">Consultar</SfButton>
+                <PermissionGate Required="Lending.CreditReportClaims.Manage">
+                    <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@AbrirReclamo">Registrar reclamo</SfButton>
+                </PermissionGate>
+            </div>
+            <IndicadorDeCarga Cargando="@_carga.Activa">
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th>Titular</th><th>Crédito</th><th>Clase</th><th>Recibido</th><th>Vence</th><th>Estado</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var r in _reclamos)
+                            {
+                                var reclamo = r;
+                                <tr>
+                                    <td>@reclamo.Person.FullName</td>
+                                    <td>@(reclamo.Loan?.Number ?? "—")</td>
+                                    <td>@TextosDeCartera.ClaseDeReclamo(reclamo.Kind)</td>
+                                    <td>@reclamo.ReceivedAt.ToString("dd/MM/yyyy")</td>
+                                    <td>@reclamo.DueDate.ToString("dd/MM/yyyy")@(reclamo.Extended ? " · prorrogado" : "")</td>
+                                    <td>@TextosDeCartera.EstadoDeReclamo(reclamo.Status)</td>
+                                    <td>
+                                        @if (reclamo.Status == 1)
+                                        {
+                                            <PermissionGate Required="Lending.CreditReportClaims.Manage">
+                                                <SfButton CssClass="e-flat e-small e-primary" OnClick="@(() => AbrirRespuesta(reclamo))">Responder…</SfButton>
+                                                @if (!reclamo.Extended) { <SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirMotivoDeReclamo(reclamo, "extend"))">Prorrogar…</SfButton> }
+                                                <SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirMotivoDeReclamo(reclamo, "withdraw"))">Desistir…</SfButton>
+                                            </PermissionGate>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                @if (_reclamos.Count == 0) { <p class="texto-tenue">No hay reclamos con ese filtro.</p> }
+                <Paginador Pagina="@_pagina" Total="@_total" Tamano="@TamanoDePagina" Cambia="@CargarReclamosAsync" />
+            </IndicadorDeCarga>
+        </PermissionGate>
+    }
+</div>
+
+<SfDialog @bind-Visible="_mostrarEnvio" Header="Enviar el aviso previo" Width="520px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_accion.Activa" Texto="Enviando…">
+                <p>El mensaje sale por la plantilla de aviso previo y dentro de la ventana de contacto de la Ley 2300; si hoy no se puede, sale a la primera hora permitida.</p>
+                <label class="campo">Canal *
+                    <select class="e-input" @bind="_canal">
+                        @foreach (var c in TextosDeCobranza.CanalesDeAviso) { <option value="@c.Nombre">@c.Texto</option> }
+                    </select>
+                </label>
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@_accion.Activa" OnClick="@EnviarAsync">Enviar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarEnvio = false)">Volver</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarConstancia" Header="Constancia de una carta" Width="600px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_accion.Activa" Texto="Registrando…">
+                @if (_aviso is { } a)
+                {
+                    <SubirSoporte OwnerEntityType="@CobranzaClient.DuenoDeConstancias" OwnerEntityPublicId="@a.PublicId" OnSubido="@CargarAdjuntosAsync" />
+                }
+                <label class="campo">Guía o constancia del envío *
+                    <select class="e-input" @bind="_adjunto">
+                        <option value="">Elija el archivo…</option>
+                        @foreach (var x in _adjuntos) { <option value="@x.PublicId">@x.FileName</option> }
+                    </select>
+                </label>
+                <div class="form-grid">
+                    <label class="campo">Comunicación número * <input class="e-input" type="number" min="1" max="9" @bind="_numero" /></label>
+                    <label class="campo">Enviada el * <input class="e-input" type="date" @bind="_enviada" /></label>
+                    <label class="campo">Transportadora * <input class="e-input" @bind="_transportadora" maxlength="100" /></label>
+                    <label class="campo">Número de guía * <input class="e-input" @bind="_guia" maxlength="60" /></label>
+                </div>
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_accion.Activa || string.IsNullOrEmpty(_adjunto) || string.IsNullOrWhiteSpace(_transportadora) || string.IsNullOrWhiteSpace(_guia))" OnClick="@ConstanciaAsync">Registrar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarConstancia = false)">Volver</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarReclamo" Header="Registrar un reclamo sobre el reporte" Width="620px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_accion.Activa" Texto="Registrando…">
+                <label class="campo campo-ancho">Titular * <PersonSearchPicker @bind-Selected="_titular" ShowHelpText="false" Compacto="true" /></label>
+                <div class="form-grid">
+                    <label class="campo">Clase *
+                        <select class="e-input" @bind="_claseDeReclamo">
+                            <option value="Claim">Reclamo</option>
+                            <option value="Impersonation">Suplantación</option>
+                        </select>
+                    </label>
+                    <label class="campo">Recibido el * <input class="e-input" type="date" @bind="_recibido" /></label>
+                    <label class="campo">Canal por el que llegó * <input class="e-input" @bind="_canalDeReclamo" maxlength="60" placeholder="Correo, oficina, carta…" /></label>
+                </div>
+                <label class="campo campo-ancho">Descripción * <input class="e-input" @bind="_descripcion" maxlength="2000" /></label>
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_accion.Activa || _titular is null || string.IsNullOrWhiteSpace(_descripcion) || string.IsNullOrWhiteSpace(_canalDeReclamo))" OnClick="@RegistrarReclamoAsync">Registrar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarReclamo = false)">Volver</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarRespuesta" Header="Responder el reclamo" Width="600px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_accion.Activa" Texto="Registrando…">
+                <label class="campo campo-ancho">Respuesta al titular * <input class="e-input" @bind="_respuesta" maxlength="2000" /></label>
+                <label class="campo"><input type="checkbox" @bind="_daLaRazon" /> Se le da la razón al titular</label>
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_accion.Activa || string.IsNullOrWhiteSpace(_respuesta))" OnClick="@ResponderAsync">Responder</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarRespuesta = false)">Volver</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarMotivo" Header="@(_accionDeReclamo == "extend" ? "Prorrogar el plazo" : "Desistir del reclamo")" Width="520px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_accion.Activa" Texto="Guardando…">
+                @if (_accionDeReclamo == "extend") { <p class="texto-tenue">El plazo se prorroga una sola vez.</p> }
+                <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" maxlength="500" /></label>
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_accion.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@ConMotivoAsync">Guardar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarMotivo = false)">Volver</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private const int TamanoDePagina = 20;
+
+    private readonly EstadoDeCarga _carga = new(), _accion = new();
+    private int _pestana, _pagina = 1;
+    private long _total;
+    private List<AvisoPrevioDto> _avisos = [];
+    private List<ReclamoDeCentralesDto> _reclamos = [];
+    private List<AdjuntoDto> _adjuntos = [];
+    private AvisoPrevioDto? _aviso;
+    private ReclamoDeCentralesDto? _reclamo;
+    private PersonSearchPicker.PersonSearchItem? _titular;
+    private string? _estado, _estadoDeReclamo, _error, _motivo, _canal = "Sms", _adjunto, _transportadora, _guia, _claseDeReclamo = "Claim", _canalDeReclamo, _descripcion,
+        _respuesta, _accionDeReclamo;
+    private bool _mostrarEnvio, _mostrarConstancia, _mostrarReclamo, _mostrarRespuesta, _mostrarMotivo, _daLaRazon;
+    private int _numero = 1;
+    private DateTime? _enviada = DateTime.Today, _recibido = DateTime.Today;
+    private ClaveDeOperacion _clave = new();
+
+    protected override async Task OnInitializedAsync() => await CargarAvisosAsync(1);
+
+    private async Task CambiarAsync(int pestana)
+    {
+        _pestana = pestana;
+        if (pestana == 0) await CargarAvisosAsync(1); else await CargarReclamosAsync(1);
+    }
+
+    private async Task CargarAvisosAsync(int pagina)
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Cliente.AvisosAsync(null, int.TryParse(_estado, out var e) ? e : null, pagina);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer los avisos."); return; }
+        _avisos = [.. r.Value?.Items ?? []];
+        _total = r.Value?.TotalCount ?? 0;
+        _pagina = pagina;
+    }
+
+    private async Task CargarReclamosAsync(int pagina)
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Cliente.ReclamosAsync(int.TryParse(_estadoDeReclamo, out var e) ? e : null, null, pagina);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer los reclamos."); return; }
+        _reclamos = [.. r.Value?.Items ?? []];
+        _total = r.Value?.TotalCount ?? 0;
+        _pagina = pagina;
+    }
+
+    // ------------------------------------------------------------------------------------------------ avisos --
+
+    private void AbrirEnvio(AvisoPrevioDto aviso)
+    {
+        _aviso = aviso;
+        _error = null;
+        _canal = "Sms";
+        _clave = new ClaveDeOperacion();
+        _mostrarEnvio = true;
+    }
+
+    private async Task EnviarAsync()
+    {
+        if (_aviso is not { } a) return;
+        using var carga = _accion.Iniciar();
+        _error = null;
+        var r = await Cliente.EnviarAvisoAsync(a.PublicId, _canal!, _clave);
+        if (!r.IsSuccess)
+        {
+            _error = r.ErrorCode == "Lending.PriorNotice.AlreadyEvidenced" ? "Este aviso ya tiene todas sus comunicaciones." : r.ErrorMessage ?? "No se pudo enviar el aviso.";
+            return;
+        }
+        _mostrarEnvio = false;
+        await Notification.SuccessAsync("Aviso previo en cola; la constancia queda cuando salga.");
+        await CargarAvisosAsync(_pagina);
+    }
+
+    private async Task AbrirConstanciaAsync(AvisoPrevioDto aviso)
+    {
+        _aviso = aviso;
+        _error = _adjunto = _transportadora = _guia = null;
+        _numero = Math.Min(aviso.Communications.Count + 1, Math.Max(aviso.RequiredCommunications, 1));
+        _enviada = DateTime.Today;
+        _clave = new ClaveDeOperacion();
+        await CargarAdjuntosAsync();
+        _mostrarConstancia = true;
+    }
+
+    private async Task CargarAdjuntosAsync()
+    {
+        if (_aviso is not { } a) return;
+        var r = await Adjuntos.ListarAsync(CobranzaClient.DuenoDeConstancias, a.PublicId);
+        _adjuntos = (r.Value ?? []).Where(x => x.Disponible).ToList();
+    }
+
+    private async Task ConstanciaAsync()
+    {
+        if (_aviso is not { } a || !Guid.TryParse(_adjunto, out var adjunto)) return;
+        using var carga = _accion.Iniciar();
+        _error = null;
+        var enviada = new DateTimeOffset(DateTime.SpecifyKind((_enviada ?? DateTime.Today).Date.AddHours(12), DateTimeKind.Local));
+        var r = await Cliente.RegistrarConstanciaAsync(a.PublicId, new ConstanciaDeAvisoRequest(_numero, enviada, _transportadora!.Trim(), _guia!.Trim(), adjunto), _clave);
+        if (!r.IsSuccess)
+        {
+            _error = r.ErrorCode == "Lending.PriorNotice.EvidenceDuplicate" ? "Esa comunicación ya tiene constancia." : r.ErrorMessage ?? "No se pudo registrar la constancia.";
+            return;
+        }
+        _mostrarConstancia = false;
+        await Notification.SuccessAsync("Constancia registrada.");
+        await CargarAvisosAsync(_pagina);
+    }
+
+    // ----------------------------------------------------------------------------------------------- reclamos --
+
+    private void AbrirReclamo()
+    {
+        _error = _descripcion = _canalDeReclamo = null;
+        _titular = null;
+        _claseDeReclamo = "Claim";
+        _recibido = DateTime.Today;
+        _clave = new ClaveDeOperacion();
+        _mostrarReclamo = true;
+    }
+
+    private async Task RegistrarReclamoAsync()
+    {
+        if (_titular is not { } t) return;
+        using var carga = _accion.Iniciar();
+        _error = null;
+        var r = await Cliente.RegistrarReclamoAsync(new RegistrarReclamoRequest(t.PublicId, _claseDeReclamo!, DateOnly.FromDateTime(_recibido ?? DateTime.Today),
+            _canalDeReclamo!.Trim(), _descripcion!.Trim()), _clave);
+        if (!r.IsSuccess) { _error = r.ErrorMessage ?? "No se pudo registrar el reclamo."; return; }
+        _mostrarReclamo = false;
+        await Notification.SuccessAsync($"Reclamo registrado; vence el {r.Value?.DueDate:dd/MM/yyyy}.");
+        await CargarReclamosAsync(1);
+    }
+
+    private void AbrirRespuesta(ReclamoDeCentralesDto reclamo)
+    {
+        _reclamo = reclamo;
+        _respuesta = null;
+        _error = null;
+        _daLaRazon = false;
+        _clave = new ClaveDeOperacion();
+        _mostrarRespuesta = true;
+    }
+
+    private async Task ResponderAsync()
+    {
+        if (_reclamo is not { } c) return;
+        using var carga = _accion.Iniciar();
+        _error = null;
+        var r = await Cliente.ResponderReclamoAsync(c.PublicId, new ResponderReclamoRequest(_respuesta!.Trim(), _daLaRazon), _clave);
+        if (!r.IsSuccess) { _error = r.ErrorMessage ?? "No se pudo responder el reclamo."; return; }
+        _mostrarRespuesta = false;
+        await Notification.SuccessAsync("Reclamo respondido.");
+        await CargarReclamosAsync(_pagina);
+    }
+
+    private void AbrirMotivoDeReclamo(ReclamoDeCentralesDto reclamo, string accion)
+    {
+        _reclamo = reclamo;
+        _accionDeReclamo = accion;
+        _motivo = _error = null;
+        _clave = new ClaveDeOperacion();
+        _mostrarMotivo = true;
+    }
+
+    private async Task ConMotivoAsync()
+    {
+        if (_reclamo is not { } c || string.IsNullOrWhiteSpace(_motivo)) return;
+        using var carga = _accion.Iniciar();
+        _error = null;
+        var r = _accionDeReclamo == "extend" ? await Cliente.ProrrogarReclamoAsync(c.PublicId, _motivo.Trim(), _clave) : await Cliente.DesistirReclamoAsync(c.PublicId, _motivo.Trim(), _clave);
+        if (!r.IsSuccess)
+        {
+            _error = r.ErrorCode switch
+            {
+                "Lending.CreditReportClaim.AlreadyExtended" => "El plazo de este reclamo ya se prorrogó una vez.",
+                "Lending.CreditReportClaim.NotInProcess" => "El reclamo ya no está en trámite.",
+                _ => r.ErrorMessage ?? "No se pudo guardar.",
+            };
+            return;
+        }
+        _mostrarMotivo = false;
+        await Notification.SuccessAsync(_accionDeReclamo == "extend" ? "Plazo prorrogado." : "Reclamo desistido.");
+        await CargarReclamosAsync(_pagina);
+    }
+}

@@ -17,6 +17,12 @@ public static class WellKnownConceptCodes
     public const string Withholding = "RETEFTE";
     public const string RoundingAdjustment = "AJUSTE_REDONDEO";
     public const string LoanDeduction = "DESC_CARTERA";
+
+    /// <summary>Feature 014 (E-02, R18): la cuota de aportes que la nómina descuenta para la Cartera por el contrato de cuentas.</summary>
+    public const string ContributionDeduction = "DESC_APORTES";
+
+    /// <summary>Feature 014 (E-02, R18): la cuota del ahorro permanente o contractual que la nómina descuenta por el contrato de cuentas.</summary>
+    public const string SavingsDeduction = "DESC_AHORROS";
     public const string GeneralSickLeave = "INCAP_GENERAL";
     public const string HealthEmployer = "SALUD_EMPLEADOR";
     public const string PensionEmployer = "PENSION_EMPLEADOR";

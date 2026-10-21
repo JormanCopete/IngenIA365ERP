@@ -1,0 +1,202 @@
+using System.Globalization;
+using IngenIA365ERP.Application.Common.Models;
+
+namespace IngenIA365ERP.Application.Lending.Payroll;
+
+/// <summary>
+/// Los errores de la libranza (feature 013, K2, T0848; data-model §10 y §24; api.md §13): convenios, capacidad de descuento, archivo de
+/// descuentos, respuestas de la pagaduría, pago de la pagaduría por el contrato, traslado y no aplicados. El código es el contrato; el mensaje
+/// lo lee la persona y nunca lleva el código (<c>TextosDeCarteraTests</c>). (nuevo)
+/// </summary>
+public static class ErroresDeLibranza
+{
+    public const string CodigoConvenioInexistente = "Lending.PayrollAgreement.NotFound";
+    public const string CodigoPagadorNoJuridico = "Lending.PayrollAgreement.PayerNotLegalEntity";
+    public const string CodigoSinRegistroDeOperador = "Lending.PayrollAgreement.OperatorRegistrationMissing";
+    public const string CodigoNominaPropiaRepetida = "Lending.PayrollAgreement.OwnPayrollAlreadyExists";
+    public const string CodigoNominaPropiaNoEsLaCooperativa = "Lending.PayrollAgreement.OwnPayrollNotCooperative";
+    public const string CodigoVersionCruzada = "Lending.PayrollAgreement.VersionOverlaps";
+    public const string CodigoVersionEnUso = "Lending.PayrollAgreement.VersionInUse";
+    public const string CodigoSinVersionVigente = "Lending.PayrollAgreement.NoCurrentVersion";
+    public const string CodigoConvenioNoDisponible = "Lending.PayrollAgreement.NotAvailable";
+    public const string CodigoCodigoDeRespuestaRepetido = "Lending.PayrollAgreement.ResultCodeDuplicate";
+    public const string CodigoCapacidadExcedida = "Lending.Payroll.DeductionCapacityExceeded";
+    public const string CodigoCertificacionRequerida = "Lending.Payroll.CertificationRequired";
+    public const string CodigoNoEsLibranza = "Lending.Loan.NotPayroll";
+    public const string CodigoArchivoYaEnviado = "Lending.PayrollFile.AlreadySent";
+    public const string CodigoArchivoReemplazado = "Lending.PayrollFile.Superseded";
+    public const string CodigoHuellaDistinta = "Lending.PayrollFile.HashMismatch";
+    public const string CodigoLineasQueNoCasan = "Lending.PayrollFile.LineMismatch";
+    public const string CodigoNominaPropiaSinArchivo = "Lending.PayrollFile.OwnPayrollHasNoFile";
+    public const string CodigoArchivoVacio = "Lending.PayrollFile.Empty";
+    public const string CodigoNoCabe = "Lending.PayrollFile.LineTooLong";
+    public const string CodigoPeriodoInvalido = "Lending.PayrollFile.PeriodInvalid";
+    public const string CodigoArchivoInexistente = "Lending.PayrollDeductionFile.NotFound";
+    public const string CodigoReferenciaRequerida = "Lending.Payment.PaymasterReferenceRequired";
+    public const string CodigoReferenciaInvalida = "Lending.Payment.PaymasterReferenceInvalid";
+    public const string CodigoNoAplicadoYaResuelto = "Lending.InstallmentNonDeduction.AlreadyResolved";
+    public const string CodigoNoAplicadoInexistente = "Lending.InstallmentNonDeduction.NotFound";
+
+    public static Error ConvenioInexistente() => new(CodigoConvenioInexistente, "El convenio de libranza no existe.");
+
+    public static Error PagadorNoJuridico(string nombre) => new ErrorConDatos(CodigoPagadorNoJuridico,
+        $"«{nombre}» no es una persona jurídica: la pagaduría de un convenio de libranza es una empresa o entidad registrada en Maestros › Personas.",
+        new { payer = nombre });
+
+    public static Error SinRegistroDeOperador(DateOnly fecha) => new ErrorConDatos(CodigoSinRegistroDeOperador,
+        $"El perfil regulatorio vigente al {fecha:yyyy-MM-dd} no registra a la cooperativa como operadora de libranza: regístrelo en el perfil "
+        + "regulatorio antes de crear convenios o radicar por libranza.", new { date = fecha });
+
+    public static Error NominaPropiaRepetida(string codigo) => new ErrorConDatos(CodigoNominaPropiaRepetida,
+        $"Ya existe el convenio de la nómina propia ({codigo}): la cooperativa tiene uno solo.", new { existingCode = codigo });
+
+    public static Error NominaPropiaNoEsLaCooperativa() => new(CodigoNominaPropiaNoEsLaCooperativa,
+        "El convenio de la nómina propia lleva como pagaduría a la cooperativa misma: la persona jurídica con el NIT de la empresa.");
+
+    public static Error VersionCruzada(DateOnly desde, DateOnly ultima) => new ErrorConDatos(CodigoVersionCruzada,
+        $"La versión nueva empieza el {desde:yyyy-MM-dd} y la última registrada empieza el {ultima:yyyy-MM-dd}: una versión nueva empieza después "
+        + "de la anterior, que rige hasta la víspera.", new { validFrom = desde, lastValidFrom = ultima });
+
+    public static Error VersionEnUso(string archivo, DateOnly hasta) => new ErrorConDatos(CodigoVersionEnUso,
+        $"La versión vigente ya respaldó el archivo enviado {archivo}, que cubre hasta el {hasta:yyyy-MM-dd}: la versión nueva empieza después de ese día.",
+        new { file = archivo, coveredUntil = hasta });
+
+    public static Error SinVersionVigente(string codigo, DateOnly fecha) => new ErrorConDatos(CodigoSinVersionVigente,
+        $"El convenio {codigo} no tiene una versión vigente al {fecha:yyyy-MM-dd}: registre la versión antes de generar el archivo.",
+        new { agreement = codigo, date = fecha });
+
+    public static Error ConvenioNoDisponible(string? codigo, string motivo) => new ErrorConDatos(CodigoConvenioNoDisponible,
+        codigo is null ? $"El convenio de libranza no está disponible: {motivo}." : $"El convenio {codigo} no está disponible: {motivo}.",
+        new { agreement = codigo, reason = motivo });
+
+    public static Error CodigoDeRespuestaRepetido(string codigo) => new ErrorConDatos(CodigoCodigoDeRespuestaRepetido,
+        $"El código de respuesta «{codigo}» viene dos veces en la misma versión.", new { code = codigo });
+
+    public static Error CapacidadExcedida(decimal disponible, decimal pedido) => new ErrorConDatos(CodigoCapacidadExcedida,
+        $"La cuota de {Pesos(pedido)} no cabe en la capacidad de descuento: quedan {Pesos(disponible)} disponibles sobre lo certificado.",
+        new { available = disponible, requested = pedido });
+
+    public static Error CertificacionRequerida() => new(CodigoCertificacionRequerida,
+        "La libranza con una pagaduría exige la certificación laboral y de descuentos con su fecha y el ingreso neto certificado.");
+
+    public static Error NoEsLibranza(string numero) => new ErrorConDatos(CodigoNoEsLibranza,
+        $"El crédito {numero} no se paga por libranza: no tiene pagaduría que trasladar.", new { loan = numero });
+
+    public static Error ArchivoYaEnviado(string numero) => new ErrorConDatos(CodigoArchivoYaEnviado,
+        $"El archivo {numero} del período ya se envió a la pagaduría: no se regenera ni se anula. La corrección va como novedad del período siguiente.",
+        new { file = numero });
+
+    public static Error ArchivoReemplazado(string numero, string estado) => new ErrorConDatos(CodigoArchivoReemplazado,
+        $"El archivo {numero} ya no es la versión vigente del período (está {Estado(estado)}).", new { file = numero, status = estado });
+
+    public static Error HuellaDistinta(string numero) => new ErrorConDatos(CodigoHuellaDistinta,
+        $"La huella informada no es la del archivo {numero}: Recaudo envió otro contenido.", new { file = numero });
+
+    public static Error LineasQueNoCasan(IReadOnlyList<object> lineas) => new ErrorConDatos(CodigoLineasQueNoCasan,
+        $"{lineas.Count} línea(s) del resultado no son del archivo citado o esperan otro valor: Recaudo debe corregir y enviar un resultado nuevo.",
+        new { lines = lineas });
+
+    public static Error NominaPropiaSinArchivo(string codigo) => new ErrorConDatos(CodigoNominaPropiaSinArchivo,
+        $"El convenio {codigo} es la nómina propia: no genera archivo, Nómina aplica sus descuentos por el contrato de obligaciones.",
+        new { agreement = codigo });
+
+    public static Error ArchivoVacio(string codigo, int anio, int mes) => new ErrorConDatos(CodigoArchivoVacio,
+        string.Create(CultureInfo.InvariantCulture, $"El convenio {codigo} no tiene obligaciones ni novedades para el período {anio}-{mes:00}: no hay archivo que generar."),
+        new { agreement = codigo, year = anio, month = mes });
+
+    public static Error PeriodoInvalido(int anio, int mes, int? subPeriodo) => new ErrorConDatos(CodigoPeriodoInvalido,
+        string.Create(CultureInfo.InvariantCulture, $"El período {anio}-{mes:00}{(subPeriodo is { } s ? $"/{s}" : string.Empty)} no existe para la periodicidad del convenio: ")
+        + "una pagaduría mensual tiene un solo archivo por mes y una quincenal, dos (1 y 2).", new { year = anio, month = mes, subPeriod = subPeriodo });
+
+    public static Error NoCabe(int linea, string campo, string credito) => new ErrorConDatos(CodigoNoCabe,
+        $"El crédito {credito} no cabe en el formato de ida: el campo «{campo}» es más largo de lo que admite.",
+        new { line = linea, field = campo, loan = credito });
+
+    public static Error ArchivoInexistente() => new(CodigoArchivoInexistente, "El archivo de descuentos no existe.");
+
+    public static Error ReferenciaRequerida(string credito) => new ErrorConDatos(CodigoReferenciaRequerida,
+        $"El crédito {credito} tiene lo descontado por esta pagaduría pendiente de giro: el pago debe citar la línea del archivo que cubre.",
+        new { loan = credito });
+
+    public static Error ReferenciaInvalida(string credito) => new ErrorConDatos(CodigoReferenciaInvalida,
+        $"La línea citada no está pendiente de giro para el crédito {credito} y esta pagaduría: ya se giró, no se descontó o es de otro crédito.",
+        new { loan = credito });
+
+    public static Error NoAplicadoYaResuelto() => new(CodigoNoAplicadoYaResuelto, "El no aplicado ya se resolvió.");
+
+    public static Error NoAplicadoInexistente() => new(CodigoNoAplicadoInexistente, "El no aplicado no existe.");
+
+    // ------------------------------------------------------------- feature 014, K7 (T090, T091; api.md §18.3; data-model §1.4) --
+
+    public const string CodigoLineaSinGrupo = "Lending.PayrollAgreement.LineWithoutGroup";
+    public const string CodigoGrupoRepetido = "Lending.PayrollAgreement.FileGroupDuplicate";
+    public const string CodigoEquivalenciaRepetida = "Lending.PayrollAgreement.EquivalenceDuplicate";
+    public const string CodigoGrupoRequerido = "Lending.PayrollFile.FileGroupRequired";
+    public const string CodigoGrupoInexistente = "Lending.PayrollFile.FileGroupNotFound";
+    public const string CodigoRecaudoSinV2 = "Lending.PayrollAgreement.ReceiptsVersionNotAdopted";
+    public const string CodigoConceptoSinEquivalencia = "Lending.PayrollFile.ConceptWithoutEquivalence";
+    public const string CodigoEmpleadoSinEquivalencia = "Lending.PayrollFile.EmployeeWithoutEquivalence";
+    public const string CodigoLineaDeCuentaSinCodigo = "Lending.PayrollFile.AccountLineWithoutPaymasterCode";
+    public const string CodigoDescuentoSobrante = "Lending.PayrollFile.DeductedExceedsSent";
+
+    /// <summary>Una equivalencia sin grupo de archivo (o con uno que no existe) en una versión que usa grupos.</summary>
+    public static Error LineaSinGrupo(string codigo, string? grupo) => new ErrorConDatos(CodigoLineaSinGrupo,
+        grupo is null
+            ? $"El código {codigo} de la pagaduría no dice en qué archivo va: el convenio usa grupos de archivo y cada código va en uno."
+            : $"El código {codigo} de la pagaduría va en el grupo {grupo}, que el convenio no tiene: elija uno de sus grupos de archivo.",
+        new { lineCode = codigo, fileGroupCode = grupo });
+
+    public static Error GrupoRepetido(string codigo) => new ErrorConDatos(CodigoGrupoRepetido,
+        $"El grupo de archivo {codigo} aparece dos veces: cada grupo lleva su código.", new { fileGroupCode = codigo });
+
+    public static Error EquivalenciaRepetida(string codigo) => new ErrorConDatos(CodigoEquivalenciaRepetida,
+        $"El código {codigo} de la pagaduría aparece dos veces: cada código va una sola vez con todos sus ítems.", new { paymasterConceptCode = codigo });
+
+    /// <summary>
+    /// Feature 014 (T091, decisión del dueño del 2026-10-18, D36): la versión del convenio genera un archivo por grupo y no se dijo cuál (o se pidió un
+    /// grupo a un convenio sin grupos).
+    /// </summary>
+    public static Error GrupoRequerido(string convenio, IReadOnlyList<string> grupos) => new ErrorConDatos(CodigoGrupoRequerido,
+        grupos.Count == 0
+            ? $"El convenio {convenio} no separa los archivos por grupo: genere el archivo sin grupo."
+            : $"El convenio {convenio} genera un archivo por grupo: elija cuál ({string.Join(", ", grupos)}).",
+        new { agreement = convenio, fileGroups = grupos });
+
+    /// <summary>El grupo pedido no es de la versión vigente del convenio.</summary>
+    public static Error GrupoInexistente(string convenio, string grupo, IReadOnlyList<string> grupos) => new ErrorConDatos(CodigoGrupoInexistente,
+        $"El convenio {convenio} no tiene el grupo de archivo {grupo} en la versión vigente al período: elija uno de {string.Join(", ", grupos)}.",
+        new { agreement = convenio, fileGroupCode = grupo, fileGroups = grupos });
+
+    /// <summary>
+    /// Recaudo no adoptó <c>DescuentosPorPagaduria</c> v2 (mensajes.md §5.4): un archivo con cuotas de cuentas no se genera, porque la v1 sólo lleva
+    /// créditos.
+    /// </summary>
+    /// <summary>Feature 014 (respuesta 59 B del dueño, E250): una línea de aportes o de ahorro con descuento por pagaduría sin código de concepto bloquea el archivo.</summary>
+    public static Error LineaDeCuentaSinCodigo(string convenio, IReadOnlyList<string> lineas) => new ErrorConDatos(CodigoLineaDeCuentaSinCodigo,
+        $"El archivo del convenio {convenio} no se genera: las líneas {string.Join(", ", lineas)} de aportes o ahorro se descuentan por pagaduría y no tienen "
+        + "código de concepto de la pagaduría. Asígnelo en el convenio, pestaña «Grupos y equivalencias» (cartera/pagadurias), y genere de nuevo.",
+        new { agreement = convenio, lines = lineas });
+
+    public static Error RecaudoSinV2(string convenio) => new ErrorConDatos(CodigoRecaudoSinV2,
+        $"El archivo del convenio {convenio} lleva cuotas de cuentas y Recaudo no adoptó DescuentosPorPagaduria v2: regístrelo en el registro de integración "
+        + "con esa versión adoptada.", new { agreement = convenio, contract = "DescuentosPorPagaduria", version = 2 });
+
+    /// <summary>Una referencia de pagaduría que no es una línea del archivo pendiente de giro de esa cuenta.</summary>
+    public static Error ReferenciaDeCuentaInvalida(string cuenta) => new ErrorConDatos(CodigoReferenciaInvalida,
+        $"La referencia de la pagaduría no es una cuota de la cuenta {cuenta} descontada y pendiente de giro.", new { account = cuenta });
+
+    /// <summary>El problema de las equivalencias que encontró la regla pura, como error de la API.</summary>
+    public static Error DeEquivalencias(Domain.Lending.Payroll.ProblemaDeEquivalencias p) =>
+        new ErrorConDatos(p.Codigo, p.Mensaje, new { paymasterConceptCode = p.CodigoDePagaduria });
+
+    /// <summary>Un valor en pesos con separadores de Colombia.</summary>
+    public static string Pesos(decimal valor) => "$" + valor.ToString("N2", new CultureInfo("es-CO"));
+
+    private static string Estado(string estado) => estado switch
+    {
+        "Superseded" => "reemplazado por una versión posterior",
+        "Voided" => "anulado",
+        "Sent" => "enviado",
+        _ => "generado",
+    };
+}

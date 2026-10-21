@@ -1,0 +1,55 @@
+{
+  // r10 (SC-023; FR-103): deterioro individual del Anexo 1. Base = capital − Σ valor de la garantía × fracción admisible por meses de
+  // mora (días ÷ 30, meses cumplidos; tablas no hipotecaria 70/50/0 por [0,12) [12,24) [24,∞) e hipotecaria 70/50/30/15/0 por
+  // [0,18) [18,24) [24,30) [30,36) [36,∞)); sin aportes (D19). Con la causación suspendida (desde C) los intereses y otros conceptos
+  // causados y no pagados van al 100 %. A mano, al centavo:
+  //  1. consumo, 75 días → C 10 %; 2 meses; no hipotecaria 4.000.000 × 0,70 = 2.800.000; base 10.000.000 − 2.800.000 = 7.200.000;
+  //     capital 720.000; suspendido: intereses 150.000,45 + 12.345,67 = 162.346,12; otros 8.000; total 890.346,12.
+  //  2. comercial, 400 días → E 100 %; 13 meses; hipotecaria 60.000.000 × 0,70 = 42.000.000; base 8.000.000; intereses
+  //     1.234.567,89 + 98.765,43 = 1.333.333,32; total 9.333.333,32.
+  //  3. comercial, 750 días → 25 meses: hipotecaria al 30 % = 18.000.000; base 50.000.000 − 18.000.000 = 32.000.000.
+  //  4. comercial, 720 días → 24 meses: la no hipotecaria ya no se admite (0); base = capital 3.000.000.
+  //  5. consumo, 45 días → B 1 %; 1 mes; la garantía admisible (1.400.000) supera el capital (1.234.567): base 0; en B no hay
+  //     suspensión, así que el interés de 50.000 no se deteriora.
+  //  6. microcrédito, 100 días → D 50 %; capital 777.777,77 × 0,5 = 388.888,885 → 388.888,89 (medio al alza).
+  //  7. consumo, 360 días → E1 50 %; 12 meses: no hipotecaria al 50 % = 500.000; base 1.500.000 → 750.000.
+  //  8. comercial, 200 días → D 50 %; 6 meses; hipotecaria 1.000.000 × 0,7 + no hipotecaria 500.000 × 0,7 = 1.050.000; base
+  //     5.000.000 − 1.050.000 = 3.950.000 → 1.975.000.
+  "nombre": "r10-deterioro-individual-anexo1",
+  "creditos": [
+    { "id": 1, "deudor": 1001, "segmento": "CONSUMO", "diasDeMora": 75,
+      "saldos": { "capital": 10000000, "interesCorriente": 150000.45, "interesDeMora": 12345.67, "otros": 8000 },
+      "garantias": [ { "naturaleza": "NonMortgage", "valor": 4000000 } ] },
+    { "id": 2, "deudor": 1002, "segmento": "COMERCIAL_PN", "diasDeMora": 400,
+      "saldos": { "capital": 50000000, "interesCorriente": 1234567.89, "interesDeMora": 98765.43 },
+      "garantias": [ { "naturaleza": "Mortgage", "valor": 60000000 } ] },
+    { "id": 3, "deudor": 1003, "segmento": "COMERCIAL_PN", "diasDeMora": 750,
+      "saldos": { "capital": 50000000 }, "garantias": [ { "naturaleza": "Mortgage", "valor": 60000000 } ] },
+    { "id": 4, "deudor": 1004, "segmento": "COMERCIAL_PN", "diasDeMora": 720,
+      "saldos": { "capital": 3000000 }, "garantias": [ { "naturaleza": "NonMortgage", "valor": 5000000 } ] },
+    { "id": 5, "deudor": 1005, "segmento": "CONSUMO", "diasDeMora": 45,
+      "saldos": { "capital": 1234567, "interesCorriente": 50000 }, "garantias": [ { "naturaleza": "NonMortgage", "valor": 2000000 } ] },
+    { "id": 6, "deudor": 1006, "segmento": "MICROCREDITO", "diasDeMora": 100, "saldos": { "capital": 777777.77 } },
+    { "id": 7, "deudor": 1007, "segmento": "CONSUMO", "diasDeMora": 360,
+      "saldos": { "capital": 2000000 }, "garantias": [ { "naturaleza": "NonMortgage", "valor": 1000000 } ] },
+    { "id": 8, "deudor": 1008, "segmento": "COMERCIAL_PN", "diasDeMora": 200, "saldos": { "capital": 5000000 },
+      "garantias": [ { "naturaleza": "Mortgage", "valor": 1000000 }, { "naturaleza": "NonMortgage", "valor": 500000 } ] }
+  ],
+  "esperado": {
+    "creditos": [
+      { "id": 1, "categoria": "C", "causa": "Arrears", "garantiaAdmisible": 2800000, "aportes": 0, "base": 7200000, "porcentaje": 0.10,
+        "deterioroCapital": 720000.00, "deterioroIntereses": 162346.12, "deterioroOtros": 8000.00, "deterioroTotal": 890346.12,
+        "explicacionContiene": [ "rige D19", "al 100 %" ] },
+      { "id": 2, "categoria": "E", "causa": "Arrears", "garantiaAdmisible": 42000000, "base": 8000000, "porcentaje": 1,
+        "deterioroCapital": 8000000.00, "deterioroIntereses": 1333333.32, "deterioroOtros": 0.00, "deterioroTotal": 9333333.32 },
+      { "id": 3, "categoria": "E", "causa": "Arrears", "garantiaAdmisible": 18000000, "base": 32000000, "deterioroCapital": 32000000.00, "deterioroTotal": 32000000.00 },
+      { "id": 4, "categoria": "E", "causa": "Arrears", "garantiaAdmisible": 0, "base": 3000000, "deterioroCapital": 3000000.00 },
+      { "id": 5, "categoria": "B", "causa": "Arrears", "garantiaAdmisible": 1400000, "base": 0, "porcentaje": 0.01,
+        "deterioroCapital": 0.00, "deterioroIntereses": 0.00, "deterioroTotal": 0.00 },
+      { "id": 6, "categoria": "D", "causa": "Arrears", "base": 777777.77, "porcentaje": 0.50, "deterioroCapital": 388888.89, "deterioroTotal": 388888.89 },
+      { "id": 7, "categoria": "E", "subcategoria": "E1", "causa": "Arrears", "garantiaAdmisible": 500000, "base": 1500000, "porcentaje": 0.50,
+        "deterioroCapital": 750000.00 },
+      { "id": 8, "categoria": "D", "causa": "Arrears", "garantiaAdmisible": 1050000, "base": 3950000, "porcentaje": 0.50, "deterioroCapital": 1975000.00 }
+    ]
+  }
+}

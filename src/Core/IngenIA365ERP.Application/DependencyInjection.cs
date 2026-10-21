@@ -1,4 +1,4 @@
-using System.Reflection;
+﻿using System.Reflection;
 using FluentValidation;
 using IngenIA365ERP.Application.Common.Behaviors;
 using IngenIA365ERP.Application.Common.Interfaces.Security;
@@ -92,6 +92,12 @@ public static class DependencyInjection
         // sobre el de nómina, persistencia y ciclo de vida comunes a las cuatro (T026-T028).
         services.AddScoped<Payroll.Services.ProvisionBalanceReader>();
         services.AddScoped<Payroll.Services.SettlementInputLoader>();
+        // Feature 013 (T0157, T0158, T0162): Nómina recauda por el contrato de obligaciones de Cartera.
+        services.AddScoped<Payroll.Settlements.PropuestaDeDescuentosDeCartera>();
+        services.AddScoped<Payroll.Services.RecaudoPorNomina>();
+        services.AddScoped<Payroll.Services.CuotasDeCarteraEnNomina>();
+        services.AddScoped<Payroll.Services.RecaudoDeCuentasPorNomina>();
+        services.AddScoped<Payroll.Services.CuotasDeCuentasEnNomina>();
         // Feature 010 (US8): dispersión bancaria sobre el motor genérico de archivos planos (Common/BankFiles).
         services.AddScoped<Payroll.Dispersion.PayrollDisbursementLines>();
         services.AddScoped<Payroll.Dispersion.PreparacionDeDispersion>();
@@ -118,12 +124,50 @@ public static class DependencyInjection
         // del motor tributario a una fecha). Scoped: memorizan por peticion.
         services.AddScoped<Common.Taxation.IValorUvt, Common.Taxation.LectorDeUvt>();
         services.AddScoped<Core.Taxes.LectorDeCatalogoTributario>();
+        // Feature 013 (T37–T42, T93): valores nacionales. Los validadores de documentos normativos de la plataforma (Cartera
+        // registra los suyos en sus fases), el nucleo unico de la replica con sus efectos (singletons sin estado: reciben el
+        // contexto por parametro) y los tres lectores unicos de la copia de la cooperativa.
+        services.AddSingleton<Domain.Common.NationalValues.IValidadorDeDocumentoNormativo, Domain.Common.NationalValues.ValidadorDeCatalogoDeModalidades>();
+        services.AddSingleton<Domain.Common.NationalValues.IValidadorDeDocumentoNormativo, Domain.Common.NationalValues.ValidadorDeTiposDeOrganizacion>();
+        // Feature 013 (T0204): los documentos normativos de Cartera (Anexo 1 y regla de pérdida esperada); el Anexo 2 lo suma K6a.
+        services.AddSingleton<Domain.Common.NationalValues.IValidadorDeDocumentoNormativo>(Lending.Risk.ValidadorDeDocumentoNormativoDeCartera.Anexo1);
+        services.AddSingleton<Domain.Common.NationalValues.IValidadorDeDocumentoNormativo>(Lending.Risk.ValidadorDeDocumentoNormativoDeCartera.ReglaDePerdidaEsperada);
+        // US9 (T0691): el del Anexo 2 rechaza todo contenido hasta K6a; desde K6a (T1025) lee el documento tipado.
+        services.AddSingleton<Domain.Common.NationalValues.IValidadorDeDocumentoNormativo>(Lending.Risk.ValidadorDeDocumentoNormativoDeCartera.Anexo2);
+        services.AddSingleton<Common.NationalValues.IEfectoDeReplicacion, Payroll.NationalValues.EfectoDeReplicacionEnNomina>();
+        services.AddSingleton<Common.NationalValues.IEfectoDeReplicacion, Common.NationalValues.EfectoDeReplicacionLimitesLegales>();
+        // Feature 013, US1 (T0357): una usura o un catálogo de modalidades nuevos bloquean o cierran las líneas que ya no los respetan.
+        services.AddSingleton<Common.NationalValues.IEfectoDeReplicacion, Lending.Configuration.EfectoDeReplicacionUsuraEnLineas>();
+        services.AddScoped<Common.NationalValues.ReplicacionDeValoresNacionales>();
+        services.AddScoped<Common.NationalValues.IValoresNacionales, Common.NationalValues.LectorDeValoresNacionales>();
+        services.AddScoped<Common.NationalValues.INormativaVigente, Common.NationalValues.LectorDeDocumentoNormativo>();
+        services.AddScoped<Common.Calendar.ICalendarioHabil, Common.Calendar.CalendarioDeDiasHabiles>();
         // Feature 012 (T226 US1, T286 US3): Inventario resuelve los ambitos Warehouse y DocumentType y pone las reglas del alta
         // de parametros (periodo cerrado, inicio de periodo para Costeo.*, modo de paso por cadena y tipo fiscal sin paso) y de
         // las politicas de aprobacion. Una sola instancia por peticion para las tres interfaces.
         services.AddScoped<Inventory.Common.ReglasDePlataformaDeInventario>();
-        services.AddScoped<Common.Parameters.IResolutorDeAmbitoDeParametro>(sp => sp.GetRequiredService<Inventory.Common.ReglasDePlataformaDeInventario>());
-        services.AddScoped<Common.Parameters.IReglasDeParametros>(sp => sp.GetRequiredService<Inventory.Common.ReglasDePlataformaDeInventario>());
+        // Feature 013 (T43, T0067): el resolutor de ambitos y las reglas del alta son compuestos por modulo. Inventario registra sus
+        // cinco ambitos (los mismos que antes resolvia o negaba) y sus reglas siguen siendo las de todo modulo sin reglas propias;
+        // Cartera registra las suyas para LND (ReglasDeParametrosDeCartera) y, cuando existan LND_CreditLines y LND_FactTypes, el
+        // resolutor de CreditLine y LendingFactType.
+        services.AddScoped(sp => new Common.Parameters.ResolutorDeAmbitoDeModulo(
+            Domain.Inventory.Parameters.ParametrosDeInventario.Modulo,
+            [Domain.Enums.Parameters.ParameterScopeKind.Warehouse, Domain.Enums.Parameters.ParameterScopeKind.DocumentType,
+             Domain.Enums.Parameters.ParameterScopeKind.PointOfSale, Domain.Enums.Parameters.ParameterScopeKind.CashRegister,
+             Domain.Enums.Parameters.ParameterScopeKind.ThirdPartyKind],
+            sp.GetRequiredService<Inventory.Common.ReglasDePlataformaDeInventario>()));
+        // Feature 013 (T0653): Cartera resuelve el ambito LendingFactType (Contabilidad.ModoDePaso y sus hermanas por tipo de hecho).
+        services.AddScoped(sp => new Common.Parameters.ResolutorDeAmbitoDeModulo(
+            Domain.Lending.Parameters.ParametrosDeCartera.Modulo, Lending.Common.ResolutorDeAmbitoDeCartera.Ambitos,
+            new Lending.Common.ResolutorDeAmbitoDeCartera(sp.GetRequiredService<Common.Interfaces.IApplicationDbContext>())));
+        services.AddScoped<Common.Parameters.IResolutorDeAmbitoDeParametro, Common.Parameters.ResolutorDeAmbitoCompuesto>();
+        services.AddScoped<Lending.Common.ReglasDeParametrosDeCartera>();
+        services.AddScoped<Common.Parameters.IReglasDeParametrosDeModulo>(sp => sp.GetRequiredService<Lending.Common.ReglasDeParametrosDeCartera>());
+        services.AddScoped<Common.Parameters.IReglasDeParametros>(sp => new Common.Parameters.ReglasDeParametrosPorModulo(
+            sp.GetRequiredService<Inventory.Common.ReglasDePlataformaDeInventario>(),
+            sp.GetServices<Common.Parameters.IReglasDeParametrosDeModulo>()));
+        // Feature 013 (T50, T0064): el lector bitemporal del perfil regulatorio de la cooperativa.
+        services.AddScoped<Common.NationalValues.IPerfilRegulatorio, Common.NationalValues.LectorDePerfilRegulatorio>();
         services.AddScoped<Common.Approvals.IReglasDePoliticaDeAprobacion>(sp => sp.GetRequiredService<Inventory.Common.ReglasDePlataformaDeInventario>());
         // Feature 012 (T7, T9, T078): el unico escritor de la bandeja de salida. Scoped porque recuerda lo que emitio
         // en su ambito (dos eventos del mismo guardado, o un relacionado en la transaccion de su original).
@@ -133,17 +177,32 @@ public static class DependencyInjection
         // llevan los defectos del contrato; la API los reemplaza con Integration:Retries (T527).
         services.AddScoped<Common.Integration.IMensajesEntrantes, Common.Integration.MensajesEntrantes>();
         services.AddScoped<Common.Integration.EntregasElegibles>();
+        // Feature 013 (T0075, T0078; T16, T19): la vista de cada módulo en la bandeja (Inventario aquí; Cartera la agrega US7) y el
+        // registro de participantes: su lector y su único escritor (agrega sin guardar). IAmbienteDeDespliegue lo pone la API.
+        services.AddScoped<Common.Integration.IVistaDeBandejaDelModulo, Inventory.Integration.VistaDeBandejaDeInventario>();
+        // Feature 013 (US7, bloque B): la bandeja vista desde Cartera (alcance por oficina, modo de paso por tipo de hecho).
+        services.AddScoped<Common.Integration.IVistaDeBandejaDelModulo, Lending.Integration.VistaDeBandejaDeCartera>();
+        services.AddScoped<Common.Integration.IRegistroDeIntegracion, Common.Integration.RegistroDeIntegracion>();
+        services.AddScoped<Common.Integration.EscritorDelRegistroDeIntegracion>();
+        AddCanalesExternos(services);
         // Feature 012, I2 (T505-T510): la matriz contable de Inventario. La resolucion (carga en bloque y elige por peso), el
         // punto unico de sus reglas (alta, version, desactivacion e importacion) y el resolutor del tipo de comprobante de una
         // unidad. IDimensionesDeInventario lo registra Inventario (T519).
         services.AddScoped<Accounting.Inventory.Reglas.ResolutorDeReglas>();
         services.AddScoped<Accounting.Inventory.Reglas.ReglasDeLaMatriz>();
         services.AddScoped<Accounting.Inventory.Reglas.TiposDeComprobanteDeInventario>();
+        // Feature 013, US7 (T0641, T0642): la matriz contable de Cartera (resolución, reglas al guardar, tipos de comprobante). El puerto
+        // IDimensionesDeCartera lo implementa Cartera (DimensionesDeCartera, T0657).
+        services.AddScoped<Accounting.Lending.Reglas.ResolutorDeReglasDeCartera>();
+        services.AddScoped<Accounting.Lending.Reglas.ReglasDeLaMatrizDeCartera>();
+        services.AddScoped<Accounting.Lending.Contabilizacion.TiposDeComprobanteDeCartera>();
         // Feature 012, I2 (T511-T517): el consumidor contable. Contabilidad es un destino de la bandeja (consume por
         // PostInventoryMessagesCommand y PostInventorySummaryGroupCommand, planea los lotes con AgrupadorDeResumidos) y el
         // adaptador IContabilidadParaInventario le da a Inventario sus cuatro consultas en proceso.
         services.AddScoped<Accounting.Inventory.Contabilizacion.ConsumoDeInventario>();
-        services.AddScoped<Common.Integration.IDestinoDeMensajes, Accounting.Inventory.Contabilizacion.DestinoContabilidad>();
+        // Feature 013, US7 (T0645, T0647): el mismo destino reparte por módulo; lo común del consumidor de Cartera.
+        services.AddScoped<Accounting.Lending.Contabilizacion.ConsumoDeCartera>();
+        services.AddScoped<Common.Integration.IDestinoDeMensajes, Accounting.Integration.DestinoContabilidad>();
         services.AddScoped<Common.Integration.Accounting.IContabilidadParaInventario, Accounting.Inventory.ContabilidadParaInventario>();
         services.AddOptions<Common.Integration.ReintentosDeIntegracion>();
         // Feature 012 (T33, T34, T083-T085): el motor de aprobaciones y lo que comparte con sus consultas. Las reglas
@@ -157,6 +216,10 @@ public static class DependencyInjection
         // Feature 012 (T39, T093-T094): levantar y atender alertas, y qué alertas alcanzan a quien pregunta. Los
         // destinatarios por permiso (IDestinatariosPorPermiso) los resuelve la API. Adelanto de T096.
         services.AddScoped<Common.Alerts.IAlertas, Common.Alerts.Alertas>();
+        // Feature 013 (US1-3): las alertas que sobreviven a la operación que las descubre (las levanta IdempotencyBehavior al terminar).
+        services.AddScoped<Common.Alerts.AlertasDiferidas>();
+        // Feature 013 (C68, T0090): el alcance de Cartera sobre los destinatarios; hasta US17 no filtra.
+        services.TryAddScoped<Common.Alerts.IFiltroDeAlcanceDeAlertas, Common.Alerts.SinFiltroDeAlcanceDeAlertas>();
         services.AddScoped<Common.Alerts.VisibilidadDeAlertas>();
         // Feature 012 (T35, T090): el alcance comercial de un usuario, leído y escrito sólo por los puertos de asignación.
         services.AddScoped<Inventory.Security.Scopes.VistaDeAlcanceComercial>();
@@ -164,6 +227,104 @@ public static class DependencyInjection
         services.AddScoped<Inventory.Salespeople.RolDeVendedor>();
         // Feature 012 (T16, T139): el unico que asigna numero a un documento de inventario no fiscal.
         services.AddScoped<Inventory.Documents.Numeracion.Numerador>();
+        // Feature 013 (T0207, T0208): el numerador y el registro del libro de Cartera, únicos escritores de lo suyo.
+        services.AddScoped<Lending.Common.NumeradorDeCartera>();
+        services.AddScoped<Lending.Ledger.RegistroDeCartera>();
+        // Feature 014 (T030): el único escritor del libro de cuentas de captación y aportes.
+        services.AddScoped<Lending.Deposits.Ledger.RegistroDeCuentas>();
+        // Feature 014 (T051–T055): el paso de captaciones del ciclo diario (sus subpasos, ISubpasoDeCaptaciones, los registra cada historia), la
+        // sección de captaciones del cierre, los requisitos y la activación sin carga de aportes y captaciones.
+        services.AddScoped<Lending.Deposits.Accrual.PasoDeCaptaciones>();
+        services.AddScoped<Lending.Deposits.Accrual.SeccionDeCaptacionesDelCierre>();
+        services.AddScoped<Lending.Deposits.Activation.RequisitosDeActivacionDeCaptaciones>();
+        services.AddScoped<Lending.Deposits.Activation.ActivacionDeCaptacionesSinCarga>();
+        // US9 (T153–T156): la migración de aportes y captaciones, su cuadre y la activación con carga.
+        services.AddScoped<Lending.Deposits.Migration.ValidacionEntrePartesDeCaptaciones>();
+        services.AddScoped<Lending.Deposits.Migration.CuadreDeCaptaciones>();
+        services.AddScoped<Lending.Deposits.Activation.NacimientoDeCuentasMigradas>();
+        services.AddScoped<Lending.Deposits.Activation.ActivacionDeCaptacionesConCarga>();
+        // Feature 014, US1 (T064–T067): el único que registra una versión de una línea de captación o de aportes, lo que esas líneas leen fuera de sí
+        // (perfil regulatorio, topes de aportes, anticipación del aviso, entrega) y el aviso de cambio de tasa a los titulares.
+        services.AddScoped<Lending.Deposits.Lines.AltaDeVersionDeCaptacion>();
+        services.AddScoped<Lending.Deposits.Lines.IContextoDeLineasDeCaptacion, Lending.Deposits.Lines.ContextoDeLineasDeCaptacion>();
+        services.AddScoped<Lending.Deposits.Lines.AvisoDeCambioDeTasa>();
+        // Feature 014, US2 (T073–T076): la titularidad común a la apertura y al cambio de partes, y el subpaso de la mayoría de edad del paso de
+        // captaciones (el primero que se registra).
+        services.AddScoped<Lending.Deposits.Accounts.TitularidadDeCuentas>();
+        services.AddScoped<Lending.Deposits.Accrual.ISubpasoDeCaptaciones, Lending.Deposits.Accrual.MayoriaDeEdad>();
+        // US3 (T082): las cuotas exigibles de aportes y del ahorro permanente, después de la mayoría de edad.
+        services.AddScoped<Lending.Deposits.Accrual.ISubpasoDeCaptaciones, Lending.Deposits.Contributions.GeneradorDeCuotas>();
+        // Feature 013 (T0284–T0289, US17): el alcance por oficina y línea (la API registra el de la petición; aquí, el que falla
+        // cerrado), el salto común de oficinas que también usa UserBranchScope, el único escritor de LND_CaseParticipations, las
+        // lecturas sensibles de Cartera y el último rechazo de forma de la petición (para Lending.Request.Rejected).
+        services.AddScoped<Common.Security.OficinasDelUsuario>();
+        services.AddScoped<Lending.Common.AlcanceDeCarteraDelActor>();
+        services.AddScoped<Lending.Common.AlcanceDeCarteraDeUnUsuario>();
+        services.AddScoped<Common.Integration.Accounting.IActivosLiquidosParaCartera, Accounting.Lending.ActivosLiquidosParaCartera>();
+        services.TryAddScoped<Common.Interfaces.Security.IAlcanceDeCartera, Common.Interfaces.Security.AlcanceDeCarteraCerrado>();
+        services.AddScoped<Lending.Segregation.RegistroDeIntervenciones>();
+        services.AddScoped<Lending.Common.LendingAuditEmitter>();
+        services.AddScoped<Common.Audit.RechazosDeFormaDeLaPeticion>();
+        // Feature 013 (T0293–T0303, US17 bloque D): el gobierno de Cartera —la matriz vigente, los vinculados vigentes y su alta única, lo
+        // que la ley fija sobre los vinculados, los asuntos de acta por sujeto (cada historia registra el suyo; dos con el mismo sujeto no
+        // arman el registro), la validación única del punto de acta cerrado, el voto presencial y el PDF del acta (la API registra el de
+        // QuestPDF, T0297; sin él el acta se cierra sin adjunto)—.
+        // Feature 013, US1 (T0352–T0355): las reglas únicas de una versión de línea, su único escritor, el lector a (D, R) de la versión
+        // vigente y el de las equivalencias de Comercial a la fecha de la venta.
+        services.AddScoped<Lending.Configuration.ReglasDeLineaDeCredito>();
+        // K6b (T1051, T1055): los límites de vivienda y el tope de tasa de vivienda, para la línea, la solicitud y el desembolso.
+        services.AddScoped<Lending.Housing.LectorDeVivienda>();
+        services.AddScoped<Lending.Configuration.AltaDeVersionDeLinea>();
+        services.AddScoped<Lending.Configuration.VersionVigenteDeLinea>();
+        services.AddScoped<Lending.Configuration.EquivalenciasDeComercio>();
+        services.AddScoped<Lending.Attributions.MatrizVigenteDeAtribuciones>();
+        services.AddScoped<Lending.Attributions.VinculadosVigentes>();
+        services.AddScoped<Lending.Attributions.AltaDeVinculados>();
+        services.AddScoped<Lending.Sessions.ReglasDeVinculados>();
+        services.AddScoped<Lending.Sessions.AsuntosDeActa>();
+        services.AddScoped<Lending.Sessions.PuntoDeActaCerrado>();
+        services.AddScoped<Lending.Sessions.PresenciaEnSesion>();
+        services.TryAddScoped<Lending.Sessions.IActaDeSesionEnPdf, Lending.Sessions.SinActaEnPdf>();
+        services.AddScoped<Lending.Sessions.IAsuntoDeActa, Lending.Activation.AsuntoDeDiferenciasDeActivacion>();
+        // Feature 013, US2 (bloque 6A; T0389–T0396): el simulador, la exposición consolidada, la capacidad de pago y de descuento, el grupo
+        // conectado, la concentración, las validaciones de la originación, el enrutamiento y la evaluación de la solicitud. Los puertos que
+        // las validaciones consumen —IConsultaDeListasDeCartera, IDisponibleDeCupo, IBloqueosDelDeudor— los registra el bloque 6B (abajo); el
+        // renderizador del PDF de la simulación lo registra la API (QuestPDF).
+        services.AddScoped<Lending.Origination.SimuladorDeCredito>();
+        services.AddScoped<Lending.Origination.SimulacionEnAlcance>();
+        services.AddScoped<Lending.Origination.ExposicionConsolidadaDelDeudor>();
+        services.AddScoped<Lending.Origination.CapacidadDePago>();
+        services.AddScoped<Lending.Origination.ConnectedGroups.GrupoConectadoDelDeudor>();
+        services.AddScoped<Lending.Origination.ValidacionDeConcentracion>();
+        services.AddScoped<Lending.Origination.ValidacionesDeOriginacion>();
+        services.AddScoped<Lending.Origination.EnrutamientoDeSolicitud>();
+        services.AddScoped<Lending.Origination.EvaluacionDeSolicitud>();
+        services.AddScoped<Lending.Origination.ArmadoDeSolicitud>();
+        // Feature 013, US2 (bloque 6B; T0398–T0407): la consulta de listas de Cartera, el disponible de cupo y los bloqueos (los puertos que
+        // consumen las validaciones), el saldo de aportes (D19: Aportes primero, la plantilla si responde «no disponible»), los cupos y su
+        // enrutamiento y revalidación, la atribución de quien decide, la decisión individual por sujeto y los asuntos de acta de la solicitud y del
+        // cupo. La tarea cartera.re-escaneo-de-listas la registra Program.cs.
+        // Feature 014, US3 (T084; research E33): la consulta de aportes es ya la real; responde «no disponible» hasta la activación de aportes de la
+        // cooperativa, y SaldoDeAportesVigente usa entonces la plantilla (D19). ConsultaDeAportesNoDisponible queda para las pruebas.
+        services.TryAddScoped<Common.Integration.Lending.IConsultaDeAportes, Lending.Integration.ConsultaDeAportesDeCartera>();
+        services.AddScoped<Lending.Origination.CreditLimits.SaldoDeAportesVigente>();
+        services.AddScoped<Lending.Origination.ConsultaDeListasDeCartera>();
+        services.AddScoped<Lending.Origination.IConsultaDeListasDeCartera>(sp => sp.GetRequiredService<Lending.Origination.ConsultaDeListasDeCartera>());
+        services.AddScoped<Lending.Origination.CreditLimits.DisponibleDeCupo>();
+        services.AddScoped<Lending.Origination.IDisponibleDeCupo>(sp => sp.GetRequiredService<Lending.Origination.CreditLimits.DisponibleDeCupo>());
+        services.AddScoped<Lending.Origination.CreditLimits.BloqueosDelDeudor>();
+        services.AddScoped<Lending.Origination.IBloqueosDelDeudor>(sp => sp.GetRequiredService<Lending.Origination.CreditLimits.BloqueosDelDeudor>());
+        services.AddScoped<Lending.Origination.CreditLimits.EnrutamientoDeCupo>();
+        services.AddScoped<Lending.Origination.CreditLimits.RevalidacionDeCupos>();
+        services.AddScoped<Lending.Attributions.AtribucionDelDecisor>();
+        services.AddScoped<Lending.Origination.DecisionSobreSolicitud>();
+        services.AddScoped<Lending.Attributions.IDecisionIndividual>(sp => sp.GetRequiredService<Lending.Origination.DecisionSobreSolicitud>());
+        services.AddScoped<Lending.Origination.CreditLimits.DecisionSobreCupo>();
+        services.AddScoped<Lending.Attributions.IDecisionIndividual>(sp => sp.GetRequiredService<Lending.Origination.CreditLimits.DecisionSobreCupo>());
+        services.AddScoped<Lending.Sessions.IAsuntoDeActa, Lending.Origination.AsuntoDeActaDeSolicitud>();
+        services.AddScoped<Lending.Sessions.IAsuntoDeActa, Lending.Origination.AsuntoDeActaDeCupo>();
+        // Feature 013 (T0226): el conductor de corridas de Cartera; los IEjecutorDeCorridaDeCartera los suman US4 y US9.
+        services.AddScoped<Lending.Processes.ConductorDeCorridasDeCartera>();
         // Feature 012 (T142-T150): el ciclo común del documento y los tipos. Las estrategias por clase (IEfectoDeClase) las
         // registra cada historia; los maestros del documento (bodegas, productos, unidades, corte) los reemplaza US1/US3
         // (TryAdd); la guardia fiscal y la validación previa se registran en I3/I4 e I2 (sin registro se omiten).
@@ -344,7 +505,260 @@ public static class DependencyInjection
         // I3 (T651-T656, US6): el crédito provisional. Mientras no exista el destino Lending ni fecha en Cartera.IntegracionHabilitadaDesde,
         // las consultas a Cartera responden CarteraNoHabilitada (la entrega IC, T661, registra la real). El crédito dentro del pago, su
         // aprobación (SourceType DocumentPayment, Subject ProvisionalCredit) y la marca de lo que se está aprobando en la petición.
-        services.AddScoped<Common.Integration.Lending.IConsultasDeCartera, Common.Integration.Lending.ConsultasDeCarteraNoHabilitada>();
+        // Feature 013, US6 (T0582, T0584): las consultas y las reservas de Cartera son ya las reales (Application/Lending/Integration); antes de
+        // activar Cartera responden lo mismo que las provisionales (CarteraNoHabilitada / NotEnabled), así que Comercial sigue con el crédito
+        // provisional hasta la activación (interfaces §5.3).
+        services.AddScoped<Common.Integration.Lending.IConsultasDeCartera, Lending.Integration.ConsultasDeCartera>();
+        // Feature 013 (T0152, T85): los puertos que Cartera ofrece. US5 (bloque 9B, T0550): el contrato de obligaciones y la consulta de
+        // obligaciones son ya los reales (Application/Lending/Integration), Scoped sobre el IApplicationDbContext del ámbito de quien llama; antes de
+        // activar responden igual que los provisionales (interfaces §3.17). Las reservas siguen «no habilitadas» hasta US6.
+        services.AddScoped<Common.Integration.Lending.IConsultaDeObligaciones, Lending.Integration.ObligacionesDeCartera>();
+        services.AddScoped<Common.Integration.Lending.IContratoDeObligaciones, Lending.Integration.ContratoDeObligacionesDeCartera>();
+        services.AddScoped<Common.Integration.Lending.IReservasDeCartera, Lending.Integration.ReservasDeCartera>();
+        // Feature 014 (T040, T083; contrato-de-cuentas §3.13, research E33): el contrato de cuentas es ya el real; responde «no habilitado» sin efectos
+        // por naturaleza mientras aportes o captaciones no tengan su fecha de activación (ContratoDeCuentasSinActivar queda para las pruebas). Sus
+        // piezas: la consignación, el reverso y las reglas de aportes; los validadores (Contrato/ValidadoresDelContratoDeCuentas.cs) los registra
+        // AddValidatorsFromAssembly.
+        services.AddScoped<Lending.Deposits.Contributions.ReglasDeAportes>();
+        services.AddScoped<Lending.Deposits.Contributions.ConsignacionEnCuentas>();
+        services.AddScoped<Lending.Deposits.Contributions.ReversionDeCuentas>();
+        // US4 (T111, T116): las reglas comunes de los movimientos (disponible, firmas, topes, atribución, GMF, canje), el retiro, el traslado y los cargos.
+        services.AddScoped<Lending.Deposits.Operations.ReglasDeMovimientos>();
+        services.AddScoped<Lending.Deposits.Operations.RetiroDeCuenta>();
+        services.AddScoped<Lending.Deposits.Operations.TrasladoDeCuenta>();
+        services.AddScoped<Lending.Deposits.Charges.CargosDeCuentas>();
+        services.AddScoped<Lending.Deposits.Charges.FacturasDeCargos>();
+        // Feature 014, US14 (T208): la reactivación con su reclasificación y los subpasos de la inactividad y de las marcas del GMF que rigen desde hoy,
+        // antes de los cargos periódicos (el cargo por inactividad se causa sobre la cuenta ya inactiva).
+        services.AddScoped<Lending.Deposits.Accrual.ReactivacionDeCuenta>();
+        services.AddScoped<Lending.Deposits.Accrual.ISubpasoDeCaptaciones, Lending.Deposits.Accrual.MarcasQueRigen>();
+        services.AddScoped<Lending.Deposits.Accrual.ISubpasoDeCaptaciones, Lending.Deposits.Accrual.Inactividad>();
+        // US14 (T209): los saldos no reclamados y su subpaso, después de la inactividad.
+        services.AddScoped<Lending.Deposits.Unclaimed.NoReclamados>();
+        services.AddScoped<Lending.Deposits.Accrual.ISubpasoDeCaptaciones, Lending.Deposits.Unclaimed.NoReclamadosDelCiclo>();
+        // US14 (T210): el fallecimiento del titular —las cuentas, los beneficiarios, el reparto y la entrega— y su lectura.
+        services.AddScoped<Lending.Deposits.Deceased.Fallecimientos>();
+        services.AddScoped<Lending.Deposits.Deceased.VistaDeFallecimientos>();
+        // US15 (T216): el fondo de liquidez, el riesgo de liquidez y los depósitos asegurados, sus fotos y el cierre del día del paso de captaciones.
+        services.AddScoped<Lending.Deposits.Liquidity.FondoDeLiquidezDeCartera>();
+        services.AddScoped<Lending.Deposits.Liquidity.FotosDelFondoDeLiquidez>();
+        services.AddScoped<Lending.Deposits.Accrual.ICierreDelDiaDeCaptaciones, Lending.Deposits.Liquidity.FondoDeLiquidezDelCiclo>();
+        // US4 (T116, T119): los subpasos de los cargos periódicos y del débito automático, después de las cuotas.
+        services.AddScoped<Lending.Deposits.Accrual.ISubpasoDeCaptaciones, Lending.Deposits.Charges.CargosPeriodicos>();
+        services.AddScoped<Lending.Deposits.Accrual.ISubpasoDeCaptaciones, Lending.Deposits.Operations.DebitoAutomatico>();
+        // Feature 014, US11 (T189): los bloqueos y embargos —la reclasificación por la marca, lo retenido y su recálculo diario, antes de la causación (que lee
+        // la suspensión por embargo total)—.
+        services.AddScoped<Lending.Deposits.Holds.ReclasificacionDeCuenta>();
+        services.AddScoped<Lending.Deposits.Holds.RetencionDeEmbargos>();
+        services.AddScoped<Lending.Deposits.Accrual.ISubpasoDeCaptaciones, Lending.Deposits.Holds.EmbargosDelCiclo>();
+        // Feature 014, US5 (T131–T135): el interés de las cuentas de captación. La causación y la liquidación son los últimos subpasos del paso de
+        // captaciones (después de las cuotas, los cargos y el débito automático, que mueven los saldos del día): se causa el día con su saldo de cierre
+        // y se liquida lo que venció (research E95).
+        services.AddScoped<Lending.Deposits.Accrual.LectorDeInteres>();
+        services.AddScoped<Lending.Deposits.Accrual.ReglasDeRetencion>();
+        services.AddScoped<Lending.Deposits.Accrual.PartesDeHechosDeCaptaciones>();
+        services.AddScoped<Lending.Deposits.Accrual.AjusteDeCausacionDeCuenta>();
+        services.AddScoped<Lending.Deposits.Accrual.LiquidacionDeIntereses>();
+        services.AddScoped<Lending.Deposits.Accrual.LiquidacionALaFecha>();
+        services.AddScoped<Lending.Deposits.Accounts.CancelacionDeCuenta>();
+        services.AddScoped<Lending.Deposits.Accrual.CausacionDeCaptaciones>();
+        services.AddScoped<Lending.Deposits.Accrual.ISubpasoDeCaptaciones>(sp => sp.GetRequiredService<Lending.Deposits.Accrual.CausacionDeCaptaciones>());
+        services.AddScoped<Lending.Deposits.Accrual.ISubpasoDeCaptaciones, Lending.Deposits.Accrual.LiquidacionPeriodicaDeIntereses>();
+        // Feature 014, US6 (T172, T173): el pago de intereses, la prórroga y la salida del CDAT, y su subpaso del ciclo diario, después de la causación y de la
+        // liquidación (el día ya causado se paga y vence).
+        services.AddScoped<Lending.Deposits.TermDeposits.PagoDeInteresesDeCdat>();
+        services.AddScoped<Lending.Deposits.TermDeposits.ProrrogaDeCdat>();
+        services.AddScoped<Lending.Deposits.TermDeposits.SalidaDeCdat>();
+        services.AddScoped<Lending.Deposits.Accrual.ISubpasoDeCaptaciones, Lending.Deposits.TermDeposits.CicloDelCdat>();
+        // Feature 014, US7 (T182, T183): el ahorro contractual —su lectura, la constitución del contrato al abrir, sus cuotas, el incumplimiento, la bonificación y
+        // el fin del contrato— y su subpaso del ciclo diario, el último (después del CDAT: el día ya causado y liquidado vence o incumple).
+        services.AddScoped<Lending.Deposits.Contractual.LectorDeContractual>();
+        services.AddScoped<Lending.Deposits.Contractual.AperturaDeContractual>();
+        services.AddScoped<Lending.Deposits.Contractual.GeneradorDeCuotasDeContractual>();
+        services.AddScoped<Lending.Deposits.Contractual.IncumplimientoDeContractual>();
+        services.AddScoped<Lending.Deposits.Contractual.BonificacionDeContractual>();
+        services.AddScoped<Lending.Deposits.Contractual.CierreDeContractual>();
+        services.AddScoped<Lending.Deposits.Accrual.ISubpasoDeCaptaciones, Lending.Deposits.Contractual.CicloDelContractual>();
+        // US4 (T111): la aprobación de un retiro o una consignación en efectivo sobre la atribución (aprobador presente, mecánica de la plataforma).
+        services.AddScoped<Common.Approvals.IFuenteDeAprobacion, Lending.Deposits.Operations.FuenteDeAprobacionDeCuenta>();
+        // US3 (T086): lo común de la devolución de aportes sin retiro y la cesión entre asociados.
+        services.AddScoped<Lending.Deposits.Contributions.SolicitudesDeAportes>();
+        // US3 (T087): la constancia y el paz y salvo de aportes, y la anulación de documentos por el reverso de una operación de cuenta.
+        services.AddScoped<Lending.Deposits.Documents.DocumentosDeAportes>();
+        services.AddScoped<Lending.Deposits.Documents.AnulacionDeDocumentosDeCuentas>();
+        // US10 (T097–T103): el retiro del asociado —lo común del trámite, el plan de la liquidación, el cruce con la aplicación de pagos, las órdenes de
+        // giro de cuentas (también el resultado de Tesorería), la liquidación emitida, el asunto de acta y el arrastre del reverso de un pago cruzado—.
+        services.AddScoped<Lending.Deposits.Withdrawals.RetirosDeAsociado>();
+        services.AddScoped<Lending.Deposits.Withdrawals.PlanesDeLiquidacionDeRetiro>();
+        services.AddScoped<Lending.Deposits.Withdrawals.CruceDeRetiro>();
+        services.AddScoped<Lending.Deposits.Operations.OrdenesDeGiroDeCuentas>();
+        services.AddScoped<Lending.Deposits.Operations.RegiroDeOrdenesDeCuentas>();
+        services.AddScoped<Lending.Deposits.Documents.DocumentosDeRetiro>();
+        // Feature 014, US13 (T196): los documentos al titular de captaciones, la emisión en la unidad de trabajo de quien la pide, los títulos del CDAT
+        // y la respuesta al juzgado como documento.
+        services.AddScoped<Lending.Deposits.Documents.DocumentosDeCaptaciones>();
+        services.AddScoped<Lending.Documents.EmisionDeDocumentosDeCartera>();
+        services.AddScoped<Lending.Deposits.Documents.TitulosDeCdat>();
+        services.AddScoped<Lending.Deposits.Documents.RespuestasAlJuzgado>();
+        services.AddScoped<Lending.Sessions.IAsuntoDeActa, Lending.Deposits.Withdrawals.AsuntoDeRetiroDeAsociado>();
+        // Feature 014, US12 (T203): la asamblea —revalorización, excedentes y amortización— y su asunto de acta.
+        services.AddScoped<Lending.Deposits.Assembly.DistribucionesDeAsamblea>();
+        services.AddScoped<Lending.Sessions.IAsuntoDeActa, Lending.Deposits.Assembly.AsuntoDeDecisionDeAsamblea>();
+        services.TryAddScoped<Lending.Payments.IArrastreDeReversoDePago, Lending.Deposits.Withdrawals.ArrastreDelCruceAlRetiro>();
+        // Feature 014, US6 (T170, T171): el CDAT —la apertura común (también de OpenMemberAccountCommand), la lectura y la cotización, el fondeo (por
+        // traslado y por el recaudador del contrato de cuentas)— y la tasa negociada con su asunto de acta.
+        services.AddScoped<Lending.Deposits.Accounts.AperturaDeCuentas>();
+        services.AddScoped<Lending.Deposits.TermDeposits.LectorDeCdat>();
+        services.AddScoped<Lending.Deposits.TermDeposits.CotizacionDeCdat>();
+        services.AddScoped<Lending.Deposits.TermDeposits.ConstitucionDeCdat>();
+        services.AddScoped<Lending.Deposits.TermDeposits.NegotiatedRates.NegociacionDeTasa>();
+        services.AddScoped<Lending.Sessions.IAsuntoDeActa, Lending.Deposits.TermDeposits.NegotiatedRates.AsuntoDeTasaNegociada>();
+        services.AddScoped<Lending.Integration.ContratoDeCuentasDeCartera>();
+        services.AddScoped<Common.Integration.Lending.IContratoDeCuentas>(sp => sp.GetRequiredService<Lending.Integration.ContratoDeCuentasDeCartera>());
+        // US6 (T0582–T0594): la verificación de listas sin escribir de la consulta, y el consumidor de Comercial con sus piezas (los validadores de
+        // la reserva, Integration/Reservas, los registra AddValidatorsFromAssembly).
+        services.AddScoped<Lending.Origination.IVerificacionDeListas>(sp => sp.GetRequiredService<Lending.Origination.ConsultaDeListasDeCartera>());
+        services.AddScoped<Lending.Integration.Comercial.RecibosDeCartera>();
+        services.AddScoped<Lending.Integration.Comercial.ConversionDeVentaACredito>();
+        services.AddScoped<Lending.Integration.Comercial.EvaluacionDeVentaACredito>();
+        services.AddScoped<Lending.Integration.Comercial.NacimientoDeObligacionDeVenta>();
+        services.AddScoped<Lending.Integration.Comercial.ConsumoDeVentaACredito>();
+        services.AddScoped<Lending.Integration.Comercial.AjusteDesdeComercial>();
+        services.AddScoped<Lending.Integration.Comercial.VentasAnterioresAlCorte>();
+        services.AddScoped<Lending.Migration.ConciliacionDeVentasDeLaCarga>();
+        // US8 (bloque 13A, T0738–T0746): la carga de la migración —cuadre, conciliación, la carga vigente antes de activar y la revalidación de cupos—.
+        services.AddScoped<Lending.Migration.CuadreDeMigracion>();
+        services.AddScoped<Lending.Migration.ConciliacionDeVentasDeMigracion>();
+        services.AddScoped<Lending.Migration.CargaVigenteDeCartera>();
+        services.AddScoped<Lending.Migration.RevalidacionDeCuposMigrados>();
+        // US5 (bloque 9B, T0538–T0548): el núcleo de los pagos, sus reglas y su auditoría. Los validadores del contrato (Contrato/
+        // ValidadoresDelContrato.cs) los registra AddValidatorsFromAssembly. Los cierres de Cartera (US9) y la vigencia de documentos (US13) nacen
+        // vacíos y sus historias los reemplazan.
+        services.AddScoped<Lending.Integration.ITransaccionDelRecaudador, Lending.Integration.TransaccionDelRecaudador>();
+        services.AddScoped<Lending.Integration.AuditoriaDeEscriturasDeCartera>();
+        services.AddScoped<Lending.Integration.Contrato.NoDescontadosDelLote>();
+        // US9 (bloque 12C): los cierres de Cartera ya existen; el esqueleto SinCierresDeCartera queda sólo para las pruebas.
+        services.TryAddScoped<Lending.Payments.ICierresDeCartera, Lending.Risk.CierresDeCarteraVigentes>();
+        // US13 (T0787): la anulación de documentos por reverso ya existe; el esqueleto SinDocumentosQueAnular queda sólo para las pruebas.
+        services.TryAddScoped<Lending.Payments.IVigenciaDeDocumentosDeCartera, Lending.Documents.AnulacionDeDocumentosPorReverso>();
+        // US13 (bloque 14A, T0782–T0786): los documentos al deudor. El renderizador del PDF (IDocumentoDeCarteraRenderer) lo registra la API (T0789).
+        services.AddScoped<Lending.Documents.ConstructorDeDocumentosDeCartera>();
+        services.AddScoped<Lending.Documents.EntregaDeDocumentosDeCartera>();
+        services.AddSingleton<Lending.Documents.IGeneradorDeCodigosDeVerificacion, Lending.Documents.GeneradorDeCodigosDeVerificacion>();
+        services.AddScoped<Lending.Payments.IAvisoDeAbonoConPreferencia, Lending.Payments.AvisoDeAbonoPorMensajeria>();
+        services.AddScoped<Lending.Payments.ReglasDeFechaValor>();
+        services.AddScoped<Lending.Payments.FirmezaDelPago>();
+        services.AddScoped<Lending.Payments.PreferenciaDePrepagoVigente>();
+        services.AddScoped<Lending.Payments.AplicacionDePagos>();
+        services.AddScoped<Lending.Payments.ReversionDePago>();
+        services.AddScoped<Lending.Payments.ResolucionDeSaldoAFavor>();
+        // Feature 013 (T0227-T0229, T0233; C106, C107): el puerto de Contabilidad para Cartera en su forma provisional (US7 registra el
+        // adaptador real ContabilidadParaCartera con la misma firma), las piezas tempranas de la integración contable de Cartera, su
+        // único emisor y los requisitos de la activación. Los dobles de prueba (TesoreriaDePrueba) los registra la API, nunca aquí.
+        // Feature 013, T0650: el adaptador real (Application/Accounting/Lending) reemplaza al provisional de la fase 3, con la misma firma (C106).
+        services.AddScoped<Common.Integration.Accounting.IContabilidadParaCartera, Accounting.Lending.ContabilidadParaCartera>();
+        services.AddScoped<Lending.Integration.FechaContable>();
+        services.AddScoped<Lending.Integration.ModoDePasoDeCartera>();
+        services.AddScoped<Lending.Integration.ValidacionPreviaContableDeCartera>();
+        // T0801 (A8 = «Bloquear todo», 2026-10-14): la validación previa de las tandas de los procesos.
+        services.AddScoped<Lending.Integration.ValidacionPreviaDeProceso>();
+        services.AddScoped<Lending.Integration.ValidacionPreviaDeCaptaciones>();
+        // Feature 014, US8 (T146): los saldos de captaciones por combinación para la conciliación.
+        services.AddScoped<Lending.Integration.SaldosContablesDeCaptaciones>();
+        // Feature 013, US7 (T0657, T0658): el puerto de las dimensiones de Cartera para Contabilidad (enmienda A1) y la conciliacion.
+        services.AddScoped<Lending.Integration.SaldosContablesDeCartera>();
+        services.AddScoped<Lending.Integration.ConciliacionContableDeCartera>();
+        // T0659 (A3): los tres contingentes (aprobado sin desembolsar, cupo rotativo; la garantía la emiten sus operaciones).
+        services.AddScoped<Lending.Integration.MovimientoContingenteDeCartera>();
+        services.AddScoped<Common.Integration.Lending.IDimensionesDeCartera, Lending.Integration.DimensionesDeCartera>();
+        services.AddScoped<Lending.Integration.CategoriaContableDeCartera>();
+        services.AddScoped<Lending.Integration.EmisionDeCartera>();
+        services.AddScoped<Lending.Activation.RequisitosDeActivacion>();
+        // US8 (bloque 13B, T0748–T0752): la activación con cartera previa.
+        services.AddScoped<Lending.Activation.RecalculoDelCuadreDeActivacion>();
+        services.AddScoped<Lending.Activation.ValidacionDeCobrosProvisionales>();
+        services.AddScoped<Lending.Activation.NacimientoDeCreditosMigrados>();
+        services.AddScoped<Lending.Activation.NacimientoDeLoDelDeudorMigrado>();
+        // Feature 013, US4 (bloque 8B): la carga de la reconstrucción, las series regulatorias, las partes de hechos, la puesta al día y el ciclo
+        // diario. IMotorDeCreditoEnDesembolso (el punto de extensión de la fase 7) ya es el motor real.
+        services.AddScoped<Lending.Engine.ISeriesRegulatorias, Lending.Engine.SeriesRegulatoriasDeCartera>();
+        services.AddScoped<Lending.Engine.CargadorDeReconstruccion>();
+        services.AddScoped<Lending.Accrual.PartesDeHechosDeCartera>();
+        services.AddScoped<Lending.Accrual.PuestaAlDiaDeCredito>();
+        services.AddScoped<Lending.Disbursements.IMotorDeCreditoEnDesembolso, Lending.Disbursements.MotorDeCreditoEnDesembolso>();
+        services.AddScoped<Lending.Accrual.ParametrosDeLaTandaDeCartera>();
+        services.AddScoped<Lending.Accrual.ReajusteDeTasa>();
+        services.AddScoped<Lending.Ledger.VerificacionDelLibro>();
+        services.AddScoped<Lending.Accrual.CicloDiarioDeCartera>();
+        services.AddScoped<Lending.Accrual.CorreccionDeValorNacional>();
+        services.AddScoped<Lending.Processes.IEjecutorDeCorridaDeCartera, Lending.Accrual.EjecutorDelCicloDiario>();
+        services.AddScoped<Lending.Processes.IEjecutorDeCorridaDeCartera, Lending.Accrual.EjecutorDeLaCorreccionDeValorNacional>();
+        services.AddSingleton<Common.NationalValues.IEfectoDeReplicacion, Lending.Accrual.EfectoDeReplicacionCorreccionDeValorNacional>();
+        services.AddScoped<Lending.Processes.Tareas.MarcaDeTareaDiariaDeCartera>();
+        // Feature 013, US9 (bloque 12B, T0699–T0711): el riesgo y los cierres. El contexto (norma, política efectiva, parámetros, indicadores,
+        // perfil y modelo por segmento), la carga en bloque, la calificación informativa (también la del ciclo), los requisitos, el cierre mensual y
+        // su reapertura con sus ejecutores, el cierre base, la política SARC con su asunto de acta, la obligación sobrevenida (alta del perfil y
+        // réplica) y la calificación contable vigente (ya registrada arriba).
+        services.AddScoped<Lending.Risk.LectorDeIndicadoresDeLaEntidad>();
+        services.AddScoped<Lending.Risk.PoliticaSarcVigente>();
+        services.AddScoped<Lending.Risk.LectorDelContextoDeRiesgo>();
+        services.AddScoped<Lending.Risk.CargadorDeRiesgo>();
+        services.AddScoped<Lending.Risk.CargadorDePerdidaEsperada>();
+        services.AddScoped<Lending.Risk.CalificacionInformativa>();
+        services.AddScoped<Lending.Risk.CalificacionDelCiclo>();
+        services.AddScoped<Lending.Risk.RequisitosDelCierreMensual>();
+        services.AddScoped<Lending.Risk.CierreMensualDeCartera>();
+        services.AddScoped<Lending.Risk.ReaperturaDelCierre>();
+        services.AddScoped<Lending.Risk.CierreBase>();
+        services.AddScoped<Lending.Processes.IEjecutorDeCorridaDeCartera, Lending.Risk.EjecutorDelCierreMensual>();
+        services.AddScoped<Lending.Processes.IEjecutorDeCorridaDeCartera, Lending.Risk.EjecutorDeLaReapertura>();
+        services.AddScoped<Lending.Sessions.IAsuntoDeActa, Lending.Risk.AsuntoDeActaPoliticaSarc>();
+        // K6a (T1034): el cambio voluntario del modelo de deterioro como asunto del acta del consejo.
+        services.AddScoped<Lending.Sessions.IAsuntoDeActa, Lending.Risk.AsuntoDeActaCambioDelModelo>();
+        services.AddScoped<Core.RegulatoryProfile.IEvaluadorDeObligacionDePerdidaEsperada, Lending.Risk.EvaluadorDeObligacionDePerdidaEsperada>();
+        services.AddSingleton<Common.NationalValues.IEfectoDeReplicacion, Lending.Risk.EfectoDeReplicacionObligacionSobrevenida>();
+        // Feature 013, US3 (bloque 7C, T0449) y US6 (T0586): Cartera como destino de la bandeja: ResultadoDelGiro v1 y la familia de Comercial
+        // (VentaACreditoRegistrada y AjusteDeVentaACredito en toda versión, C16). El destino Lending cuenta cuando su consumidor acepta todo lo que la
+        // fila CAR adopta (RegistroDeIntegracion.ImplementacionDisponible): desde US6 acepta lo que la semilla adopta y el despachador le entrega.
+        services.AddScoped<Common.Integration.IDestinoDeMensajes, Lending.Integration.DestinoCartera>();
+        // Feature 013, US6 (T0598; DT §2.9, CH9): Comercial como destino Inventory, el único; guarda ObligacionCreada y ObligacionRechazada v1 en
+        // INV_LendingObligationResponses (número y estado, nunca saldos). La fila INV del registro lo adopta desde la semilla.
+        services.AddScoped<Common.Integration.IDestinoDeMensajes, Inventory.Integration.DestinoInventario>();
+        // Feature 014, US10 (T098; mensajes.md §7, research C16, E-04): Asociados recibe el retiro aprobado en la Cartera (participante ASO, que siembra
+        // CaptacionesAportes).
+        services.AddScoped<Common.Integration.IDestinoDeMensajes, Core.Associates.Integration.DestinoAsociados>();
+        services.AddScoped<Lending.Disbursements.RequisitosDelDesembolso>();
+        services.AddScoped<Lending.Disbursements.TramoDeDesembolso>();
+        services.AddScoped<Lending.Disbursements.RecogidaEnElDesembolso>();
+        services.AddScoped<Lending.Disbursements.ReversoDeDesembolso>();
+        // Feature 013, US3 (bloque 7B): el pagaré por el depósito de valores y el archivo plano de desembolsos con el motor común.
+        services.AddScoped<Lending.Disbursements.PromissoryNotes.DepositoDelPagare>();
+        services.AddScoped<Lending.Disbursements.LoanDisbursementLines>();
+        services.AddScoped<Lending.Disbursements.Files.PreparacionDeArchivoDeDesembolsos>();
+        // Feature 013, K2 (US10, bloque B): la libranza —convenios, el archivo de descuentos con el motor común y el seguimiento de los no aplicados—.
+        services.AddScoped<Lending.Payroll.ConveniosDeLibranza>();
+        services.AddScoped<Lending.Payroll.Agreements.AltaDeVersionDeConvenio>();
+        services.AddScoped<Lending.Payroll.Agreements.CopiaDeVersionDeConvenio>();
+        services.AddScoped<Lending.Payroll.Files.PayrollDeductionLines>();
+        services.AddScoped<Lending.Payroll.Files.PreparacionDeArchivoDeDescuentos>();
+        services.AddScoped<Lending.Payroll.Results.SeguimientoDeNoAplicados>();
+        // Feature 013, K3 (US11, bloque B): novedades (cálculo, enrutamiento, hechos, simulación, decisión individual y asunto de acta) y condonaciones.
+        services.AddScoped<Lending.Novelties.CalculoDeNovedad>();
+        services.AddScoped<Lending.Novelties.EnrutamientoDeNovedad>();
+        services.AddScoped<Lending.Novelties.HechosDeLaNovedad>();
+        services.AddScoped<Lending.Novelties.SimulacionDeNovedad>();
+        services.AddScoped<Lending.Novelties.DecisionSobreNovedad>();
+        services.AddScoped<Lending.Attributions.IDecisionIndividual>(sp => sp.GetRequiredService<Lending.Novelties.DecisionSobreNovedad>());
+        services.AddScoped<Lending.Sessions.IAsuntoDeActa, Lending.Novelties.AsuntoDeNovedad>();
+        services.AddScoped<Lending.Waivers.CondonacionesDeCartera>();
+        services.AddScoped<Lending.Waivers.DecisionSobreCondonacion>();
+        services.AddScoped<Lending.Attributions.IDecisionIndividual>(sp => sp.GetRequiredService<Lending.Waivers.DecisionSobreCondonacion>());
+        services.AddScoped<Lending.Sessions.IAsuntoDeActa, Lending.Waivers.AsuntoDeCondonacion>();
+        // Feature 013, K3 (US14, bloque B): el castigo (verificación, lote y su asunto de acta del consejo) y la evaluación de cartera (comité y consejo).
+        services.AddScoped<Lending.WriteOffs.CastigosDeCartera>();
+        services.AddScoped<Lending.Common.NormaPendienteDeCartera>();
+        services.AddScoped<Lending.Sessions.IAsuntoDeActa, Lending.WriteOffs.AsuntoDeLoteDeCastigo>();
+        services.AddScoped<Lending.Sessions.IAsuntoDeActa, Lending.Risk.Evaluations.AsuntoDeEvaluacionDeCartera>();
         services.AddScoped<Inventory.Sales.CreditoEnLaVenta>();
         services.AddScoped<Inventory.Sales.CreditosAprobadosEnCurso>();
         services.AddScoped<Inventory.Sales.AprobacionDeCredito>();
@@ -379,9 +793,6 @@ public static class DependencyInjection
         // Feature 012 (T49, T156): el motor común de las plantillas de importación (revisión y aplicación).
         services.AddScoped<Common.Imports.EjecutorDeImportacion>();
         services.AddScoped<Accounting.Accounts.AccountEligibility>();
-        // El recaudo de Cartera como servicio: ProcessPaymentCommand lo llama por el pipeline y la
-        // definitiva (feature 010, D-08) directo, dentro de su transacción y sin reintento anidado.
-        services.AddScoped<Lending.Payments.Services.RecaudoDeCredito>();
         services.AddScoped<Payroll.Novelties.CarryOverNoveltiesService>();
         services.AddScoped<Payroll.Novelties.RecurringNovelties.RecurringNoveltiesMaterializer>();
         services.AddScoped<Payroll.Runs.Queries.RunSummaryBuilder>();
@@ -423,5 +834,56 @@ public static class DependencyInjection
         services.AddSingleton<ISecureTokenGenerator, SecureTokenGenerator>();
 
         return services;
+    }
+
+    /// <summary>
+    /// Feature 013 (T0079, T0081, T0083; T71–T74; contracts/adaptadores-y-archivos.md §2): los defectos de los canales externos. La guardia
+    /// del efecto legal (con <c>CanalesExternosOptions</c>, que fija Program.cs), el correo como canal de mensajería siempre disponible, los
+    /// registros de mensajería y de listas sobre los adaptadores que haya, las credenciales sin archivo, el circuito que no se abre y la
+    /// carga de listas vacía. <c>AddExternalChannels</c> (sólo desde Program.cs, después de esto) suma los simulados y reemplaza
+    /// credenciales y circuito; T0087 reemplaza la carga de listas.
+    /// </summary>
+    private static void AddCanalesExternos(IServiceCollection services)
+    {
+        services.AddOptions<Lending.Adapters.CanalesExternosOptions>();
+        services.AddSingleton<Lending.Adapters.GuardiaDeCanalesExternos>();
+        services.TryAddScoped<Common.ExternalChannels.ICredencialesDeCanalExterno, Common.ExternalChannels.SinCredencialesDeCanalExterno>();
+        services.TryAddScoped<Common.ExternalChannels.ICircuitoDeCanalExterno, Common.ExternalChannels.CircuitoSiempreCerrado>();
+
+        services.AddSingleton(new Common.ExternalChannels.CanalExternoRegistrado(
+            Common.ExternalChannels.PuertosExternos.Mensajeria, Common.ExternalChannels.CodigosDeCanalExterno.Correo, typeof(Common.Messaging.CanalDeCorreo)));
+        services.AddScoped<Common.Messaging.ICanalDeMensajeria, Common.Messaging.CanalDeCorreo>();
+        services.AddScoped<Common.Messaging.ICanalesDeMensajeria, Common.Messaging.CanalesDeMensajeria>();
+        services.AddScoped<Common.ExternalChannels.IRegistroDeCanalesExternos>(sp => sp.GetRequiredService<Common.Messaging.ICanalesDeMensajeria>());
+
+        // Feature 013 (T0306, C108): la cola de mensajes al deudor, único escritor de LND_DebtorMessages y LND_DebtorMessageEvents. Nunca
+        // guarda: encola en la unidad de trabajo de quien lo motiva. Sus tareas (cartera.mensajes, cartera.entregas) las registra Program.cs.
+        services.AddScoped<Lending.Collections.ColaDeMensajesAlDeudor>();
+        // Feature 013, K4 (T0943, T0944): el paso (7) del ciclo diario —la cobranza— y el ejecutor de la corrida que registra la etapa migrada (C64).
+        services.AddScoped<Lending.Collections.CobranzaDelCicloDiario>();
+        services.AddScoped<Lending.Processes.IEjecutorDeCorridaDeCartera, Lending.Collections.Stages.EjecutorDeEtapasMigradas>();
+        // Feature 013, K5 (T0999): los layouts del SICSES y de las centrales se cargan y validan aquí, al componer: un JSON mal formado
+        // impide arrancar (adaptadores-y-archivos.md §7.2).
+        services.AddSingleton(Lending.Regulatory.CatalogoDeLayoutsDeCartera.Embebido);
+        // Feature 013, K5 (T1002–T1004): las proyecciones del SICSES y de las centrales, la preparación común y la generación.
+        services.AddScoped<Lending.Regulatory.ProyeccionSicsesCartera>();
+        // Feature 014, US17 (T220): los formatos regulatorios de captaciones (SICSES de captaciones y exógena).
+        services.AddScoped<Lending.Regulatory.Captaciones.ProyeccionDeCaptaciones>();
+        services.AddScoped<Lending.Regulatory.ProyeccionCentralDeRiesgo>();
+        services.AddScoped<Lending.Regulatory.PreparacionDeArchivoRegulatorio>();
+        services.AddScoped<Lending.Regulatory.GeneracionDeArchivoRegulatorio>();
+
+        // Feature 013 (T0087): la carga vigente de CARGA-PROPIA se lee de COR_RestrictiveListLoads/Entries.
+        services.TryAddScoped<Common.Compliance.ICargaDeListasRestrictivas, Compliance.RestrictiveLists.CargaDeListasRestrictivasEnBase>();
+        // Feature 013 (T0088): el deber de conservar del titular; hasta la fase 3 responde «sin obligaciones registradas».
+        services.TryAddScoped<Compliance.DataSubjectRequests.IDeberDeConservacionDelTitular, Compliance.DataSubjectRequests.DeberDeConservacionPorObligaciones>();
+        services.AddScoped<Common.Compliance.IProveedoresDeListas, Common.Compliance.ProveedoresDeListas>();
+        services.AddScoped<Common.ExternalChannels.IRegistroDeCanalesExternos>(sp => sp.GetRequiredService<Common.Compliance.IProveedoresDeListas>());
+        // Feature 013, US2 (T0400): el registro de centrales de riesgo; sin AddExternalChannels no tiene adaptadores (el defecto «sin canal»).
+        services.AddScoped<Lending.Adapters.ICentralesDeRiesgo, Lending.Adapters.CentralesDeRiesgo>();
+        services.AddScoped<Common.ExternalChannels.IRegistroDeCanalesExternos>(sp => sp.GetRequiredService<Lending.Adapters.ICentralesDeRiesgo>());
+        // Feature 013, US3 (T0436): el registro de depósitos de valores; sin AddExternalChannels no tiene adaptadores (el defecto «sin canal»).
+        services.AddScoped<Lending.Adapters.IDepositosDeValores, Lending.Adapters.DepositosDeValores>();
+        services.AddScoped<Common.ExternalChannels.IRegistroDeCanalesExternos>(sp => sp.GetRequiredService<Lending.Adapters.IDepositosDeValores>());
     }
 }

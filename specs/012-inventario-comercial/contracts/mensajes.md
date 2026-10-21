@@ -699,12 +699,12 @@ reemplazado). `GrupoContableReclasificado` usa el valor general.
 
 | `DeliveryStatus` | Qué significa | Llega desde | Pasa a |
 |---|---|---|---|
-| `Pending` | Espera entrega. | emisión (`Online`, `Always`); resultado `Retry`, con `NextAttemptAt` | `Processed`, `Rejected`, o sigue `Pending` |
-| `InBatch` | Espera su lote o corre en uno (`BatchId`). | emisión por lotes; orden de lote, reproceso o envío posterior | `Processed`, `Rejected`, o sigue `InBatch` con `NextAttemptAt` si el resultado es `Retry` |
+| `Pending` | Espera entrega. | emisión (`Online`, `Always`); resultado `Retry`, con `NextAttemptAt` | `Processed`, `Rejected`, `ValidationFailed` (sólo Lending, enmienda C18 de la 013), o sigue `Pending` |
+| `InBatch` | Espera su lote o corre en uno (`BatchId`). | emisión por lotes; orden de lote, reproceso o envío posterior | `Processed`, `Rejected`, `ValidationFailed` (sólo Lending, enmienda C18 de la 013), o sigue `InBatch` con `NextAttemptAt` si el resultado es `Retry` |
 | `Processed` | El destino lo procesó; `ResultReference` es el comprobante (o el recibo de un informativo), y `ResultVoucherTypeCode`/`ResultVoucherNumber` su tipo y número, que da el consumidor. | consumo | `ValidationFailed` (sólo Lending) |
 | `Rejected` | Regla de negocio; guarda código y motivo. No se reintenta solo. | consumo | `InBatch` por `ReprocessMessagesCommand` |
 | `NotApplicable` | Modo `NoPasa` sellado: se conserva para trazabilidad y conciliación, no se entrega. | emisión | `InBatch` por `SendNotApplicableMessagesCommand` (FR-078) |
-| `ValidationFailed` | Sólo Lending: Cartera validó la venta pendiente en contra (FR-061). La venta sigue confirmada. | IC | — |
+| `ValidationFailed` | Sólo Lending: Cartera validó la venta pendiente en contra (FR-061). La venta sigue confirmada. | `Processed` (validación posterior); **directo desde `Pending` o `InBatch`** cuando el consumidor de Cartera responde `ResultadoDeConsumo.ValidationFailed(ref, número, código, motivo)` y `RegisterDeliveryResultCommand` deja el intento `DeliveryAttemptOutcome.ValidationFailed = 5` (enmienda C18 de la feature 013) | — |
 
 Bloquean a sus dependientes `Pending`, `InBatch` y `Rejected`. Quién escribe la entrega: el emisor
 (al nacer), `RegisterDeliveryResultCommand` (resultado del consumo y la bitácora
@@ -728,6 +728,11 @@ Bloquean a sus dependientes `Pending`, `InBatch` y `Rejected`. Quién escribe la
   (`Accounting.InventoryBatches.Run` e `Inventory.Messages.Reprocess`); un `ValidationFailed`,
   `Integracion.ValidacionFallida`.
 - **Destino sin consumidor** (Lending hasta IC): se salta, sin intentos ni alertas.
+- **Enmienda de la feature 013 (C21, aditiva).** Un `Processed` de Cartera que no incorpora la venta (una
+  venta anterior al corte aceptada sin migrar, una venta de servicios aceptada fuera de Cartera, o un
+  ajuste de cualquiera de ellas) deja su recibo sin comprobante con el motivo
+  `MotivoSinComprobante.NotIncorporated = 3` (con `ReferenciasDeResultado.NoIncorporada`); los valores
+  `Informational = 1` y `ZeroValue = 2` no cambian. Lo agrega la fase de la 013 que lo usa.
 
 ## 12. Versiones
 
@@ -743,6 +748,11 @@ Bloquean a sus dependientes `Pending`, `InBatch` y `Rejected`. Quién escribe la
   v1 en `Pending`, `InBatch`, `Rejected` o `NotApplicable`.
 - Versiones aceptadas hoy: Contabilidad, v1 de los dieciocho tipos 1 a 18; Cartera, las declarará IC
   (se espera v1 de 19 y 20).
+- **Enmienda de la feature 013 (C16, FR-053).** El consumidor de Cartera (`DestinoCartera.Acepta`) admite
+  **toda versión de la familia de la venta** (`VentaACreditoRegistrada` y `AjusteDeVentaACredito`), de modo
+  que una versión que no sabe procesar no queda `Rejected` con `Integration.VersionNotAccepted` en la
+  bandeja: la recibe y responde el hecho `ObligacionRechazada` a Comercial con el motivo, por el camino de
+  las respuestas (specs/013-cartera-financiera, contracts/mensajes.md).
 
 ## 13. Qué hace cada consumidor
 

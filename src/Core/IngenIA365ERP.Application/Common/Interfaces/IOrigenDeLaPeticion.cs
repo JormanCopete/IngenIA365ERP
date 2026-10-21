@@ -26,4 +26,11 @@ public interface IOrigenDeLaPeticion
 
     /// <summary>En una petición, el endpoint; en segundo plano, <c>Mensaje:{id}</c>, <c>Lote:{número}</c> o <c>Tarea:{nombre}</c>.</summary>
     string? Origen { get; }
+
+    /// <summary>
+    /// Feature 013 (T67, F10): el dispositivo que declara la aplicación MAUI en la cabecera opcional <c>X-Dispositivo</c>; nulo en el
+    /// navegador y en segundo plano. Junto con el <see cref="UserAgent"/> forma el metadato <c>Device</c> del evento. Como
+    /// <c>X-Canal</c>, describe y no concede nada.
+    /// </summary>
+    string? Dispositivo { get; }
 }

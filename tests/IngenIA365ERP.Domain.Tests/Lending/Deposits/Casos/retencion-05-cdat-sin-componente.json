@@ -1,0 +1,43 @@
+// Investigacion 3.2: el mismo CDAT sin descontar el componente (politica en falso): 4 % de 488.088 = 19.524.
+{
+  "nombre": "retencion-05-cdat-sin-componente",
+  "descripcion": "Investigacion 3.2: el mismo CDAT sin descontar el componente (politica en falso): 4 % de 488.088 = 19.524.",
+  "entrada": {
+    "politica": {
+      "tarifa": 0.04,
+      "umbralDiarioUvt": 0.055,
+      "uvt": 52374,
+      "alcance": "ExceptTermDeposit",
+      "componenteInflacionarioAplica": false,
+      "componenteInflacionario": 0.5543,
+      "unidadDeRedondeo": 1
+    },
+    "titular": {
+      "perfil": "Standard",
+      "personaNaturalNoObligada": true
+    },
+    "clase": "TermDeposit",
+    "interesBruto": 488088,
+    "interesesDiarios": [
+      {
+        "dia": "2026-01-02",
+        "interes": 2711.6
+      },
+      {
+        "dia": "2026-01-03",
+        "interes": 2711.6
+      },
+      {
+        "dia": "2026-01-04",
+        "interes": 2711.6
+      }
+    ]
+  },
+  "esperado": {
+    "umbralAlcanzado": false,
+    "componente": 0,
+    "baseGravable": 488088,
+    "valor": 19524,
+    "motivo": null
+  }
+}

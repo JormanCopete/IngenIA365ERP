@@ -1,4 +1,5 @@
 using IngenIA365ERP.Domain.Entities.Compliance;
+using IngenIA365ERP.Domain.Enums.Compliance;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -24,13 +25,16 @@ public class HabeasDataPolicyVersionConfiguration
         builder.Property(e => e.Sha256Hex).HasMaxLength(64).IsRequired();
         builder.Property(e => e.EffectiveFrom).IsRequired();
         builder.Property(e => e.PublishedBy).HasMaxLength(100).IsRequired();
+        // Feature 013 (T69 a, C68, T0086): la finalidad, como texto; las versiones existentes quedan en GeneralTreatment.
+        builder.Property(e => e.Purpose).HasConversion<string>().HasMaxLength(30).IsRequired()
+            .HasDefaultValue(DataAuthorizationPurpose.GeneralTreatment).HasSentinel((DataAuthorizationPurpose)0);
 
-        // VersionNumber único por tenant.
-        builder.HasIndex(e => new { e.TenantId, e.VersionNumber }).IsUnique()
+        // VersionNumber único por tenant y finalidad (C68: se rehace con Purpose).
+        builder.HasIndex(e => new { e.TenantId, e.Purpose, e.VersionNumber }).IsUnique()
             .HasDatabaseName("UK_CMP_HabeasPolicyVersions_TenantVersion");
 
-        // A lo sumo UNA versión vigente por tenant (EffectiveTo IS NULL).
-        builder.HasIndex(e => e.TenantId)
+        // A lo sumo UNA versión vigente por tenant y finalidad (EffectiveTo IS NULL).
+        builder.HasIndex(e => new { e.TenantId, e.Purpose })
             .IsUnique()
             .HasFilter("[EffectiveTo] IS NULL AND [IsDeleted] = 0")
             .HasDatabaseName("UK_CMP_HabeasPolicyVersions_Current");

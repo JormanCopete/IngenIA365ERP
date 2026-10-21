@@ -22,6 +22,12 @@ public sealed record SetPermissionAmountLimitCommand(
     : IRequest<Result<PermissionAmountLimitDto>>, IOperacionIdempotente, IConMotivo
 {
     public Guid OperationKey { get; init; }
+
+    /// <summary>
+    /// El módulo de la ruta (feature 013, T0292): <c>/api/inventory/amount-limits</c> manda <c>Inventory</c> y
+    /// <c>/api/lending/amount-limits</c>, <c>Lending</c>; sólo se admiten los limitables de ese módulo. Nulo: cualquiera.
+    /// </summary>
+    public string? Module { get; init; }
 }
 
 /// <summary>Motivo (hasta 300), permiso, fecha y un monto no negativo con 2 decimales.</summary>
@@ -54,8 +60,8 @@ public sealed class SetPermissionAmountLimitCommandHandler(IApplicationDbContext
         if (rol is null) return Result.Failure<PermissionAmountLimitDto>(Error.NotFound);
 
         var permiso = request.PermissionCode.Trim();
-        if (!PermisosLimitables.Admite(permiso))
-            return Result.Failure<PermissionAmountLimitDto>(ErroresDeAprobaciones.NoLimitable(permiso));
+        if (!PermisosLimitables.Admite(permiso, request.Module))
+            return Result.Failure<PermissionAmountLimitDto>(ErroresDeAprobaciones.NoLimitable(permiso, request.Module));
 
         var concede = await db.RolePermissions
             .Where(rp => rp.RoleId == rol.Id && !rp.IsDeleted)

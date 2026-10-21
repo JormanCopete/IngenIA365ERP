@@ -1,0 +1,18 @@
+@using System.Globalization
+@using IngenIA365ERP.Shared.Services.Cartera
+
+@* Feature 013, US5 (T0563): una distribución del contrato de obligaciones por cuota y concepto (el concepto viaja como número). Sólo muestra. *@
+<table class="data-grid">
+    <thead><tr><th class="numero">Cuota</th><th>Concepto</th><th class="numero">Valor</th></tr></thead>
+    <tbody>
+        @foreach (var d in Lineas)
+        {
+            <tr><td class="numero">@(d.InstallmentNumber?.ToString(CultureInfo.InvariantCulture) ?? "—")</td><td>@TextosDePagos.Concepto(d.Concept)</td><td class="numero">@TextosDeCreditos.Pesos(d.Amount)</td></tr>
+        }
+    </tbody>
+</table>
+@if (Lineas.Count == 0) { <p class="texto-tenue">Sin distribución.</p> }
+
+@code {
+    [Parameter] public IReadOnlyList<LineaDelContratoDto> Lineas { get; set; } = [];
+}

@@ -1,9 +1,7 @@
 using FluentValidation;
 using IngenIA365ERP.Application.Common.Interfaces;
-using IngenIA365ERP.Application.Common.Interfaces.Security;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Common.Paging;
-using IngenIA365ERP.Application.Inventory.Common;
 using IngenIA365ERP.Domain.Entities.Integration;
 using IngenIA365ERP.Domain.Entities.Integration.Transactions;
 using IngenIA365ERP.Domain.Enums.Integration;
@@ -19,8 +17,10 @@ namespace IngenIA365ERP.Application.Common.Integration;
 /// (<c>blockedBy</c>, calculado), <c>destinationAvailable</c> (falso para un destino sin consumidor, como Cartera hasta IC) y el
 /// <c>result</c> leído <b>sólo</b> de la entrega —nunca de tablas <c>ACC_</c> (FR-014)—. Con <see cref="Closure"/> suma toda la
 /// clausura de relacionados de cualquier fecha (la vista previa del envío posterior, FR-078) y devuelve el
-/// <c>cutoffMessagePublicId</c>. Filtra por el alcance de bodega (<see cref="IAlcanceDeInventario"/>) sobre el documento de origen;
-/// las operaciones sin documento (cierre, reapertura, reclasificación) sólo las ve quien tiene todas las bodegas. El <c>Id</c>
+/// <c>cutoffMessagePublicId</c>. Qué entregas se ven lo decide la vista del módulo (<see cref="IVistaDeBandejaDelModulo"/>, feature
+/// 013, T0075): en Inventario, <c>VistaDeBandejaDeInventario</c>, que aplica el alcance de bodega (<c>IAlcanceDeInventario</c>)
+/// sobre el documento de origen —las operaciones sin documento (cierre, reapertura, reclasificación) sólo las ve quien tiene todas
+/// las bodegas—. <see cref="Modulo"/> elige la vista; <c>/api/inventory/messages</c> no lo manda y queda Inventario. El <c>Id</c>
 /// <c>bigint</c> nunca sale (Principio VI). Con <c>status=Rejected</c> y <see cref="PrevalidationOutcome"/> mide SC-021.
 /// </summary>
 public sealed record ListIntegrationMessagesQuery(
@@ -36,7 +36,8 @@ public sealed record ListIntegrationMessagesQuery(
     bool Closure = false,
     PrevalidationOutcome? PrevalidationOutcome = null,
     int Page = 1,
-    int PageSize = 50) : IRequest<Result<BandejaDeMensajesDto>>;
+    int PageSize = 50,
+    string Modulo = ModulosDeOrigen.Inventario) : IRequest<Result<BandejaDeMensajesDto>>;
 
 public sealed class ListIntegrationMessagesQueryValidator : AbstractValidator<ListIntegrationMessagesQuery>
 {
@@ -118,13 +119,13 @@ public sealed record BloqueoDelMensajeDto(Guid MessagePublicId, string Type, Del
 
 public sealed class ListIntegrationMessagesQueryHandler(
     IApplicationDbContext db,
-    IAlcanceDeInventario alcanceDeInventario,
+    IEnumerable<IVistaDeBandejaDelModulo> vistas,
     IEnumerable<IDestinoDeMensajes> destinos) : IRequestHandler<ListIntegrationMessagesQuery, Result<BandejaDeMensajesDto>>
 {
     public async Task<Result<BandejaDeMensajesDto>> Handle(ListIntegrationMessagesQuery request, CancellationToken ct)
     {
-        var alcance = await alcanceDeInventario.ObtenerAsync(ct);
-        var visibles = VistaDeMensajes.Visibles(db, alcance);
+        var vista = VistasDeBandeja.Del(vistas, request.Modulo);
+        var visibles = await vista.VisiblesAsync(ct);
 
         var sinEstado = Filtrar(visibles, request);
         var conteos = await sinEstado.GroupBy(d => d.Status).Select(g => new { g.Key, Cantidad = g.Count() }).ToListAsync(ct);
@@ -156,7 +157,7 @@ public sealed class ListIntegrationMessagesQueryHandler(
             .Include(d => d.Message)
             .ToListAsync(ct);
 
-        var filas = await VistaDeMensajes.ProyectarAsync(db, entregas, destinos, ct);
+        var filas = await VistaDeMensajes.ProyectarAsync(db, entregas, destinos, ct, vista.RutaDelLoteResumido);
         return Result.Success(new BandejaDeMensajesDto(
             new PagedResult<IntegrationMessageDto>(filas, pagina.SafePage, pagina.SafePageSize, total),
             new ConteoPorEstadoDto(
@@ -190,9 +191,11 @@ public sealed class ListIntegrationMessagesQueryHandler(
 /// El detalle de un mensaje de la bandeja (feature 012, T504; api.md §25.2, <c>GET /api/inventory/messages/{id}</c>): la fila de la
 /// bandeja más el contenido (<c>payload</c>, inmutable, con su <c>payloadSha256</c>), los intentos, de qué depende y quién depende
 /// de él. <see cref="Destination"/> elige la entrega si el mensaje tiene más de una. Fuera del alcance, el mismo
-/// <c>Integration.Message.NotFound</c> que algo inexistente.
+/// <c>Integration.Message.NotFound</c> que algo inexistente. El alcance lo aplica la vista del módulo (<see cref="Modulo"/>; en
+/// Inventario, con <c>IAlcanceDeInventario</c>).
 /// </summary>
-public sealed record GetIntegrationMessageQuery(Guid MessagePublicId, string? Destination = null) : IRequest<Result<IntegrationMessageDetailDto>>;
+public sealed record GetIntegrationMessageQuery(Guid MessagePublicId, string? Destination = null, string Modulo = ModulosDeOrigen.Inventario)
+    : IRequest<Result<IntegrationMessageDetailDto>>;
 
 public sealed class GetIntegrationMessageQueryValidator : AbstractValidator<GetIntegrationMessageQuery>
 {
@@ -229,18 +232,18 @@ public sealed record VecinoDelMensajeDto(Guid MessagePublicId, string Type, Deli
 
 public sealed class GetIntegrationMessageQueryHandler(
     IApplicationDbContext db,
-    IAlcanceDeInventario alcanceDeInventario,
+    IEnumerable<IVistaDeBandejaDelModulo> vistas,
     IEnumerable<IDestinoDeMensajes> destinos) : IRequestHandler<GetIntegrationMessageQuery, Result<IntegrationMessageDetailDto>>
 {
     public async Task<Result<IntegrationMessageDetailDto>> Handle(GetIntegrationMessageQuery request, CancellationToken ct)
     {
-        var alcance = await alcanceDeInventario.ObtenerAsync(ct);
-        var consulta = VistaDeMensajes.Visibles(db, alcance).Where(d => d.Message!.PublicId == request.MessagePublicId);
+        var vista = VistasDeBandeja.Del(vistas, request.Modulo);
+        var consulta = (await vista.VisiblesAsync(ct)).Where(d => d.Message!.PublicId == request.MessagePublicId);
         if (!string.IsNullOrWhiteSpace(request.Destination)) consulta = consulta.Where(d => d.Destination == request.Destination);
         var entrega = await consulta.OrderBy(d => d.Destination).Include(d => d.Message).FirstOrDefaultAsync(ct);
         if (entrega is null) return Result.Failure<IntegrationMessageDetailDto>(ErroresDeIntegracion.MensajeNoEncontrado(request.MessagePublicId));
 
-        var fila = (await VistaDeMensajes.ProyectarAsync(db, [entrega], destinos, ct))[0];
+        var fila = (await VistaDeMensajes.ProyectarAsync(db, [entrega], destinos, ct, vista.RutaDelLoteResumido))[0];
         var mensaje = entrega.Message!;
 
         var intentos = await (
@@ -279,21 +282,13 @@ public sealed class GetIntegrationMessageQueryHandler(
             .ToListAsync(ct);
 }
 
-/// <summary>Lo común de la bandeja y su detalle: el alcance y la proyección a <see cref="IntegrationMessageDto"/>. (nuevo)</summary>
+/// <summary>
+/// Lo común de la bandeja y su detalle: la proyección a <see cref="IntegrationMessageDto"/>. Qué se ve lo decide la vista de cada
+/// módulo (<see cref="IVistaDeBandejaDelModulo"/>; la de Inventario se movió a <c>VistaDeBandejaDeInventario</c>, feature 013,
+/// T0075). (nuevo)
+/// </summary>
 public static class VistaDeMensajes
 {
-    /// <summary>
-    /// Las entregas que el alcance deja ver: con todas las bodegas, todas; si no, las de un documento de origen visible
-    /// (<see cref="FiltroDeAlcance.DocumentosVisibles"/>).
-    /// </summary>
-    public static IQueryable<IntegrationMessageDelivery> Visibles(IApplicationDbContext db, Interfaces.Security.AlcanceDeInventario alcance)
-    {
-        var entregas = db.IntegrationMessageDeliveries.AsNoTracking();
-        if (alcance.TodasLasBodegas) return entregas;
-        var documentos = db.InventoryDocuments.AsNoTracking().DocumentosVisibles(alcance, db.DocumentLinks.AsNoTracking(), db.InventoryDocuments.AsNoTracking());
-        return entregas.Where(d => d.Message!.OriginKind == MessageOriginKind.Document && documentos.Any(doc => doc.PublicId == d.Message.OriginPublicId));
-    }
-
     public static IQueryable<IntegrationMessageDelivery> PorDestinoYEstado(IQueryable<IntegrationMessageDelivery> consulta, string? destino, DeliveryStatus? estado)
     {
         if (!string.IsNullOrWhiteSpace(destino)) consulta = consulta.Where(d => d.Destination == destino);
@@ -302,10 +297,16 @@ public static class VistaDeMensajes
     }
 
     public static async Task<IReadOnlyList<IntegrationMessageDto>> ProyectarAsync(
-        IApplicationDbContext db, IReadOnlyList<IntegrationMessageDelivery> entregas, IEnumerable<IDestinoDeMensajes> destinos, CancellationToken ct)
+        IApplicationDbContext db, IReadOnlyList<IntegrationMessageDelivery> entregas, IEnumerable<IDestinoDeMensajes> destinos, CancellationToken ct,
+        Func<Guid, string>? rutaDelLoteResumido = null)
     {
+        var rutaDelLote = rutaDelLoteResumido ?? (lote => $"/contabilidad/inventario/lotes/{lote:D}");
         if (entregas.Count == 0) return [];
-        var conConsumidor = destinos.Select(d => d.Destino).ToHashSet(StringComparer.Ordinal);
+        // Disponible = hay en el despliegue un consumidor del destino que acepta ese tipo y versión (feature 013, US3: DestinoCartera consume
+        // ResultadoDelGiro desde K1, pero las ventas a crédito de Comercial siguen sin consumidor hasta US6 y la bandeja lo sigue diciendo).
+        var consumidores = destinos.ToList();
+        bool Disponible(string destino, string tipo, short version) =>
+            consumidores.Any(d => string.Equals(d.Destino, destino, StringComparison.Ordinal) && d.Acepta(tipo, version));
 
         var loteIds = entregas.Where(e => e.BatchId != null).Select(e => e.BatchId!.Value).Distinct().ToList();
         var lotes = loteIds.Count == 0
@@ -343,20 +344,20 @@ public static class VistaDeMensajes
                 e.NextAttemptAt,
                 e.LastErrorCode is null && e.LastErrorMessage is null ? null : new ErrorDelMensajeDto(e.LastErrorCode, e.LastErrorMessage, e.LastErrorDataJson),
                 e.ProcessedAt,
-                Resultado(e, lote),
+                Resultado(e, lote, rutaDelLote),
                 new OrigenDelMensajeDto(m.OriginKind, m.OriginDocumentClass, m.OriginDocumentTypeCode, m.OriginNumber, m.OriginPublicId, m.OperationDate),
                 m.RelatedPublicId is Guid r ? new RelacionadoDelMensajeDto(r, m.RelatedDocumentClass, m.RelatedNumber) : null,
                 m.OriginUserName,
                 m.PrevalidationOutcome,
                 bloqueos.Where(b => b.MessageId == e.MessageId && b.Destination == e.Destination)
                     .Select(b => new BloqueoDelMensajeDto(b.PublicId, b.Type, b.Status)).ToList(),
-                conConsumidor.Contains(e.Destination),
+                Disponible(e.Destination, m.Type, m.Version),
                 null);
         }).ToList();
     }
 
     /// <summary>El resultado leído de la entrega: nunca de <c>ACC_</c> (FR-014).</summary>
-    private static ResultadoDelMensajeDto? Resultado(IntegrationMessageDelivery e, IntegrationBatch? lote)
+    private static ResultadoDelMensajeDto? Resultado(IntegrationMessageDelivery e, IntegrationBatch? lote, Func<Guid, string> rutaDelLote)
     {
         if (e.Status != DeliveryStatus.Processed && e.Status != DeliveryStatus.ValidationFailed) return null;
         var sinComprobante = ReferenciasDeResultado.SinComprobante(e.ResultReference);
@@ -366,7 +367,7 @@ public static class VistaDeMensajes
         var resumido = lote is not null
                        && (lote.Granularity == PostingGranularity.Summarized
                            || ClavesDeLote.Leer(lote.ScheduleKey)?.GranularidadDelLote == PostingGranularity.Summarized);
-        var ruta = resumido ? $"/contabilidad/inventario/lotes/{lote!.PublicId:D}" : $"/contabilidad/comprobantes/{comprobante:D}";
+        var ruta = resumido ? rutaDelLote(lote!.PublicId) : $"/contabilidad/comprobantes/{comprobante:D}";
         return new ResultadoDelMensajeDto(e.ResultVoucherTypeCode, e.ResultVoucherNumber, comprobante, ruta, null);
     }
 }

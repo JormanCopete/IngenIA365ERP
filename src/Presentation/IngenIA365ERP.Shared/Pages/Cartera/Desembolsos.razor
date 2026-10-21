@@ -1,0 +1,512 @@
+@page "/cartera/desembolsos"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Adjuntos
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Nomina
+@inject DesembolsosClient ClienteDeDesembolsos
+@inject ArchivosDeDesembolsoClient ClienteDeArchivos
+@inject OriginacionClient Originacion
+@inject AdjuntosClient Adjuntos
+@inject HttpClient Http
+@inject INotificationService Notification
+@inject NavigationManager Navegacion
+
+<PageTitle>Desembolsos - IngenIA365ERP</PageTitle>
+
+@* Feature 013, US3 (T0459; FR-045–FR-048, D12, C10; contracts/api.md §8.4, §9): tres pestañas.
+   - Desembolsar: la solicitud aprobada (llega con ?solicitud= desde su expediente), la forma y el beneficiario con su cuenta (propuestos desde
+     el deudor), la vista previa —usura del día, aprobación vigente, garantías y pagaré pendientes, recogidas con «requiere reestructuración»,
+     neto y plan— y confirmar con la huella de la vista previa que se vio y, si hay avisos, reconociéndolos.
+   - Órdenes de giro: pedir la anulación a Tesorería, el giro nuevo de un crédito pendiente de giro y anular el crédito.
+   - Archivos de desembolsos: formato del ámbito de desembolsos, cuenta de origen del plan, órdenes pendientes con su motivo, generar,
+     descargar por enlace firmado y anular antes del primer resultado de Tesorería. *@
+<PermissionGate Required="Lending.Disbursements.Execute" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Desembolsos</h3>
+        <div class="toolbar">
+            <SfButton CssClass="@(_pestana == 0 ? "e-primary" : "e-outline")" OnClick="@(() => _pestana = 0)">Desembolsar</SfButton>
+            <SfButton CssClass="@(_pestana == 1 ? "e-primary" : "e-outline")" OnClick="@(() => CambiarAsync(1))">Órdenes de giro</SfButton>
+            <PermissionGate Required="Lending.DisbursementFiles.Generate">
+                <SfButton CssClass="@(_pestana == 2 ? "e-primary" : "e-outline")" OnClick="@(() => CambiarAsync(2))">Archivos de desembolsos</SfButton>
+            </PermissionGate>
+        </div>
+    </div>
+
+    @if (_pestana == 0)
+    {
+        <IndicadorDeCarga Cargando="@_cargaSolicitud.Activa">
+            @if (_solicitud is null)
+            {
+                <p class="texto-apoyo">Abra la solicitud aprobada desde su expediente (botón «Desembolsar») para traerla aquí.</p>
+                <SfButton CssClass="e-outline" OnClick="@(() => Navegacion.NavigateTo("/cartera/solicitudes"))">Ir a las solicitudes</SfButton>
+            }
+            else
+            {
+                var s = _solicitud;
+                <div class="info-card">
+                    <p><strong>Solicitud @s.Number</strong> · @s.Applicant.FullName · @s.Line.Code · @s.Line.Name ·
+                        @TextosDeOriginacion.EstadoDeSolicitud(s.Status)</p>
+                    @if (s.Approval is { } a)
+                    {
+                        <p>Aprobado @(a.Amount is { } m ? TextosDeOriginacion.Pesos(m) : TextosDeOriginacion.Pesos(s.Amount)) · vence @(a.ExpiresAt?.ToString("dd/MM/yyyy"))</p>
+                    }
+                </div>
+                <div class="info-card">
+                    <h4>Giro</h4>
+                    <div class="toolbar">
+                        <label class="campo">Forma
+                            <select class="e-input" @bind="_forma">
+                                @foreach (var f in TextosDeDesembolso.Formas) { <option value="@f.Valor">@f.Texto</option> }
+                            </select>
+                        </label>
+                        <label class="campo">Fecha valor <input class="e-input" type="date" @bind="_fechaValor" /></label>
+                        <label class="campo">Valor del tramo <input class="e-input" type="number" min="0" step="1" @bind="_tramo" placeholder="Lo aprobado" /></label>
+                    </div>
+                    <div class="toolbar">
+                        <div class="campo">Beneficiario (vacío = el deudor) <PersonSearchPicker @bind-Selected="_beneficiario" ShowHelpText="false" Compacto="true" /></div>
+                        @if (_forma != "Check")
+                        {
+                            <label class="campo">Banco
+                                <select class="e-input" @bind="_banco">
+                                    <option value="">El registrado en la persona</option>
+                                    @foreach (var b in _bancos) { <option value="@b.PublicId">@b.Name</option> }
+                                </select>
+                            </label>
+                            <label class="campo">Tipo de cuenta
+                                <select class="e-input" @bind="_tipoDeCuenta">
+                                    <option value="">—</option>
+                                    <option value="Savings">Ahorros</option>
+                                    <option value="Checking">Corriente</option>
+                                </select>
+                            </label>
+                            <label class="campo">Cuenta <input class="e-input" @bind="_cuenta" maxlength="34" /></label>
+                        }
+                        @if (_forma == "Transfer")
+                        {
+                            <label class="campo"><input type="checkbox" @bind="_porArchivo" /> Se paga por archivo de desembolsos</label>
+                        }
+                    </div>
+                    <p class="texto-tenue">La recogida de créditos propios se elige con la lista de créditos del deudor, que llega con la consulta de créditos.</p>
+                    <div class="toolbar">
+                        <SfButton CssClass="e-outline" Disabled="@_vista.Activa" OnClick="@VistaPreviaAsync">Vista previa</SfButton>
+                    </div>
+                </div>
+            }
+        </IndicadorDeCarga>
+
+        <IndicadorDeCarga Cargando="@_vista.Activa" Texto="Evaluando el desembolso…">
+            @if (_previa is { } p)
+            {
+                <div class="kpi-grid">
+                    <div class="kpi-card"><span class="kpi-label">Tramo</span><span class="kpi-value">@p.Tranche</span></div>
+                    <div class="kpi-card"><span class="kpi-label">Bruto</span><span class="kpi-value">@TextosDeOriginacion.Pesos(p.GrossAmount)</span></div>
+                    <div class="kpi-card"><span class="kpi-label">Neto a girar</span><span class="kpi-value">@TextosDeOriginacion.Pesos(p.NetToDisburse)</span></div>
+                    <div class="kpi-card"><span class="kpi-label">Tasa efectiva con cargos</span><span class="kpi-value">@p.Usury.Rate.ToString("P2")</span></div>
+                </div>
+                <div class="info-card">
+                    <p class="@(p.Usury.Passes ? "aviso aviso-exito" : "aviso aviso-error")">
+                        Usura del día @(p.Usury.Usury is { } u ? u.ToString("P2") : "sin publicar"): @(p.Usury.Passes ? "cumple" : "la supera")
+                    </p>
+                    <p class="@(p.Approval.Valid ? "aviso aviso-exito" : "aviso aviso-error")">
+                        Aprobación @(p.Approval.Valid ? "vigente" : "vencida") hasta el @(p.Approval.ExpiresAt?.ToString("dd/MM/yyyy"))
+                    </p>
+                    @if (!p.Collaterals.Perfected)
+                    {
+                        <p class="aviso aviso-alerta">Garantías pendientes:</p>
+                        <ul>@foreach (var g in p.Collaterals.Pending) { <li>@TextosDeDesembolso.ClaseDeGarantia(g.Kind): @g.Reason</li> }</ul>
+                    }
+                    @if (p.Payoffs.Count > 0)
+                    {
+                        <h4>Recogidas</h4>
+                        <table class="data-grid">
+                            <thead><tr><th>Crédito</th><th class="numero">Para cancelar</th><th class="numero">Días de mora</th><th></th></tr></thead>
+                            <tbody>
+                                @foreach (var r in p.Payoffs)
+                                {
+                                    <tr><td>@r.Number</td><td class="numero">@TextosDeOriginacion.Pesos(r.ToPayOff)</td><td class="numero">@r.DaysPastDue</td>
+                                        <td>@(r.RequiresRestructuring ? "Requiere reestructuración" : "")</td></tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+                    @if (p.Segregation.Conflict is not null)
+                    {
+                        <p class="aviso aviso-error">Usted decidió este crédito: otra persona debe desembolsarlo.</p>
+                    }
+                    @foreach (var b in p.Blocking) { <p class="aviso aviso-error">@TextosDeDesembolso.Bloqueo(b)</p> }
+                    @foreach (var w in p.Warnings) { <p class="aviso aviso-alerta">@w</p> }
+                </div>
+                <div class="info-card">
+                    <h4>Plan propuesto: @p.Schedule.InstallmentCount cuotas al @p.Schedule.AnnualEffectiveRate.ToString("P2") EA</h4>
+                    <div class="tabla-desplazable">
+                        <table class="data-grid">
+                            <thead><tr><th>Cuota</th><th>Vence</th><th class="numero">Capital</th><th class="numero">Interés</th><th class="numero">Seguros</th><th class="numero">Total</th></tr></thead>
+                            <tbody>
+                                @foreach (var c in p.Schedule.Installments)
+                                {
+                                    <tr><td>@c.Number</td><td>@c.DueDate.ToString("dd/MM/yyyy")</td><td class="numero">@TextosDeOriginacion.Pesos(c.Principal)</td>
+                                        <td class="numero">@TextosDeOriginacion.Pesos(c.Interest)</td><td class="numero">@TextosDeOriginacion.Pesos(c.Insurance)</td>
+                                        <td class="numero">@TextosDeOriginacion.Pesos(c.Total)</td></tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                @if (p.Blocking.Count == 0)
+                {
+                    <div class="toolbar">
+                        @if (p.Warnings.Count > 0)
+                        {
+                            <label class="campo"><input type="checkbox" @bind="_reconocer" /> Leí los avisos y desembolso de todas formas</label>
+                        }
+                        <SfButton CssClass="e-primary" Disabled="@(_accion.Activa || (p.Warnings.Count > 0 && !_reconocer))" OnClick="@DesembolsarAsync">Desembolsar</SfButton>
+                    </div>
+                }
+            }
+            @if (_resultado is { } hecho)
+            {
+                <div class="info-card">
+                    <p class="aviso aviso-exito">Crédito @hecho.LoanNumber desembolsado (tramo @hecho.Tranche, operación @hecho.OperationNumber).
+                        Orden de giro @(hecho.Order?.Number) por @TextosDeOriginacion.Pesos(hecho.NetToDisburse).</p>
+                </div>
+            }
+        </IndicadorDeCarga>
+    }
+    else if (_pestana == 1)
+    {
+        <div class="toolbar">
+            <label class="campo">Estado
+                <select class="e-input" value="@_estadoDeOrden" @onchange="@(e => FiltrarOrdenesAsync(e.Value?.ToString()))">
+                    <option value="">Todas</option>
+                    @foreach (var e in TextosDeDesembolso.EstadosDeOrden) { <option value="@e.Valor">@e.Texto</option> }
+                </select>
+            </label>
+        </div>
+        <IndicadorDeCarga Cargando="@_cargaOrdenes.Activa">
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Orden</th><th>Crédito</th><th>Tramo</th><th>Forma</th><th>Beneficiario</th><th>Cuenta</th><th class="numero">Neto</th><th>Estado</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var o in _ordenes)
+                        {
+                            var orden = o;
+                            <tr>
+                                <td>@orden.Number@(orden.PreviousOrderNumber is { } ant ? $" (reemplaza {ant})" : "")</td>
+                                <td>@orden.LoanNumber</td>
+                                <td>@orden.Tranche</td>
+                                <td>@TextosDeDesembolso.Forma(orden.Form)@(orden.PaidByFile ? " · por archivo" : "")</td>
+                                <td>@orden.Beneficiary.Name</td>
+                                <td>@(orden.Beneficiary.Bank) @TextosDeDesembolso.TipoDeCuenta(orden.Beneficiary.AccountType) @orden.Beneficiary.Account</td>
+                                <td class="numero">@TextosDeOriginacion.Pesos(orden.NetAmount)</td>
+                                <td>@TextosDeDesembolso.EstadoDeOrden(orden.Status)@(orden.VoidRequested ? " · anulación pedida" : "")@(orden.FileReference is { } a ? $" · archivo {a}" : "")</td>
+                                <td>
+                                    @if (orden.Status == "Issued" && !orden.VoidRequested)
+                                    {
+                                        <PermissionGate Required="Lending.DisbursementOrders.Void">
+                                            <SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirMotivo(orden, AccionDeOrden.AnularOrden))">Anular…</SfButton>
+                                        </PermissionGate>
+                                    }
+                                    @if (orden.Status is "Rejected" or "CheckNotCashed" or "Voided")
+                                    {
+                                        <SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirMotivo(orden, AccionDeOrden.GiroNuevo))">Giro nuevo…</SfButton>
+                                        <PermissionGate Required="Lending.Disbursements.Void">
+                                            <SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirMotivo(orden, AccionDeOrden.AnularCredito))">Anular el crédito…</SfButton>
+                                        </PermissionGate>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            @if (_ordenes.Count == 0) { <p class="texto-tenue">No hay órdenes de giro con ese filtro.</p> }
+        </IndicadorDeCarga>
+    }
+    else
+    {
+        <div class="toolbar">
+            <label class="campo">Formato
+                <select class="e-input" value="@_formato" @onchange="@(e => ElegirFormatoAsync(e.Value?.ToString()))">
+                    <option value="">Elija…</option>
+                    @foreach (var f in _formatos) { <option value="@f.FormatPublicId">@f.Code · @f.Name@(f.BankName is { } b ? $" ({b})" : " (genérico)")</option> }
+                </select>
+            </label>
+            <label class="campo">Cuenta de origen
+                <select class="e-input" @bind="_cuentaDeOrigen">
+                    <option value="">Elija…</option>
+                    @foreach (var c in _cuentas) { <option value="@c.AccountPublicId">@c.Code · @c.Name</option> }
+                </select>
+            </label>
+            <SfButton CssClass="e-outline" Disabled="@(_accion.Activa || _formato is null || _cuentaDeOrigen is null)" OnClick="@VistaPreviaDeArchivoAsync">Vista previa</SfButton>
+            <SfButton CssClass="e-primary" Disabled="@(_accion.Activa || _previaDeArchivo is not { Lines.Count: > 0 })" OnClick="@GenerarAsync">Generar</SfButton>
+        </div>
+        <IndicadorDeCarga Cargando="@_accion.Activa" Texto="Preparando el archivo…">
+            @if (_previaDeArchivo is { } pa)
+            {
+                <div class="info-card">
+                    <p><strong>@pa.FileName</strong> · @pa.Lines.Count líneas · @TextosDeOriginacion.Pesos(pa.Total)</p>
+                    @if (pa.Pending.Count > 0)
+                    {
+                        <h4>Órdenes que no entran</h4>
+                        <ul>@foreach (var x in pa.Pending) { <li>@x.OrderNumber (@TextosDeOriginacion.Pesos(x.NetAmount)): @TextosDeDesembolso.MotivoDePendiente(x.Reason)</li> }</ul>
+                    }
+                </div>
+            }
+        </IndicadorDeCarga>
+        <IndicadorDeCarga Cargando="@_cargaArchivos.Activa">
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Archivo</th><th>Formato</th><th>Cuenta de origen</th><th>Pago</th><th class="numero">Órdenes</th><th class="numero">Total</th><th>Estado</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var a in _archivos)
+                        {
+                            var archivo = a;
+                            <tr>
+                                <td>@archivo.Number</td>
+                                <td>@archivo.FormatCode</td>
+                                <td>@archivo.SourceAccountMasked</td>
+                                <td>@archivo.PaymentDate.ToString("dd/MM/yyyy")</td>
+                                <td class="numero">@archivo.Orders</td>
+                                <td class="numero">@TextosDeOriginacion.Pesos(archivo.Total)</td>
+                                <td>@TextosDeDesembolso.EstadoDeArchivo(archivo.Status)@(archivo.HasResults ? " · con resultados" : "")</td>
+                                <td>
+                                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-download" Disabled="@_accion.Activa" OnClick="@(() => DescargarAsync(archivo))">Descargar</SfButton>
+                                    @if (archivo.Status == "Generated" && !archivo.HasResults)
+                                    {
+                                        <SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirAnulacionDeArchivo(archivo))">Anular…</SfButton>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            @if (_archivos.Count == 0) { <p class="texto-tenue">Todavía no hay archivos de desembolsos.</p> }
+        </IndicadorDeCarga>
+    }
+</div>
+
+<SfDialog @bind-Visible="_mostrarMotivo" Header="@TituloDelDialogo" Width="520px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_accion.Activa" Texto="Registrando…">
+                @if (_accionDeOrden == AccionDeOrden.GiroNuevo)
+                {
+                    <label class="campo">Forma
+                        <select class="e-input" @bind="_formaDelGiro">
+                            @foreach (var f in TextosDeDesembolso.Formas) { <option value="@f.Valor">@f.Texto</option> }
+                        </select>
+                    </label>
+                }
+                <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" maxlength="500" /></label>
+                @if (_errorDialogo is not null) { <p class="aviso aviso-error" role="alert">@_errorDialogo</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_accion.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@ConfirmarMotivoAsync">Registrar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarMotivo = false)">Volver</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    [SupplyParameterFromQuery(Name = "solicitud")] public Guid? SolicitudInicial { get; set; }
+
+    private enum AccionDeOrden { AnularOrden, GiroNuevo, AnularCredito, AnularArchivo }
+
+    private readonly EstadoDeCarga _cargaSolicitud = new(), _vista = new(), _accion = new(), _cargaOrdenes = new(), _cargaArchivos = new();
+    private int _pestana;
+    private SolicitudDto? _solicitud;
+    private string _forma = "Transfer", _formaDelGiro = "Transfer";
+    private DateOnly? _fechaValor;
+    private decimal? _tramo;
+    private PersonSearchPicker.PersonSearchItem? _beneficiario;
+    private string? _banco, _tipoDeCuenta, _cuenta, _motivo, _errorDialogo, _estadoDeOrden, _formato, _cuentaDeOrigen;
+    private bool _porArchivo, _reconocer, _mostrarMotivo;
+    private List<BancoItem> _bancos = [];
+    private VistaPreviaDeDesembolsoDto? _previa;
+    private DesembolsoRealizadoDto? _resultado;
+    private ClaveDeOperacion _clave = new();
+    private List<OrdenDeGiroDto> _ordenes = [];
+    private OrdenDeGiroDto? _orden;
+    private ArchivoDeDesembolsoDto? _archivo;
+    private AccionDeOrden _accionDeOrden;
+    private List<FormatoBancarioResumenDto> _formatos = [];
+    private List<CuentaDeOrigenDto> _cuentas = [];
+    private VistaPreviaDeArchivoDto? _previaDeArchivo;
+    private List<ArchivoDeDesembolsoDto> _archivos = [];
+
+    private string TituloDelDialogo => _accionDeOrden switch
+    {
+        AccionDeOrden.AnularOrden => $"Pedir la anulación de la orden {_orden?.Number}",
+        AccionDeOrden.GiroNuevo => $"Giro nuevo del crédito {_orden?.LoanNumber}",
+        AccionDeOrden.AnularCredito => $"Anular el crédito {_orden?.LoanNumber}",
+        _ => $"Anular el archivo {_archivo?.Number}",
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        _bancos = await Http.TryGetListAsync<BancoItem>("/api/core/banks?PageNumber=1&PageSize=500&SortBy=name");
+        if (SolicitudInicial is { } id) await CargarSolicitudAsync(id);
+    }
+
+    private async Task CargarSolicitudAsync(Guid id)
+    {
+        using var carga = _cargaSolicitud.Iniciar();
+        var r = await Originacion.SolicitudAsync(id);
+        _solicitud = r.IsSuccess ? r.Value : null;
+        if (!r.IsSuccess) await Notification.ErrorAsync(r.ErrorMessage ?? "La solicitud no existe.");
+    }
+
+    private DesembolsoRequest Pedido() => new()
+    {
+        ApplicationPublicId = _solicitud!.PublicId,
+        TrancheAmount = _tramo is > 0 ? _tramo : null,
+        ValueDate = _fechaValor,
+        Form = _forma,
+        Beneficiary = _beneficiario is null && _banco is null && string.IsNullOrWhiteSpace(_cuenta)
+            ? null
+            : new BeneficiarioRequest(_beneficiario?.PublicId ?? _solicitud.Applicant.PersonPublicId,
+                Guid.TryParse(_banco, out var b) ? b : null, string.IsNullOrEmpty(_tipoDeCuenta) ? null : _tipoDeCuenta,
+                string.IsNullOrWhiteSpace(_cuenta) ? null : _cuenta.Trim()),
+        PaidByFile = _forma == "Transfer" && _porArchivo,
+    };
+
+    private async Task VistaPreviaAsync()
+    {
+        if (_solicitud is null) return;
+        using var carga = _vista.Iniciar();
+        _resultado = null;
+        _reconocer = false;
+        var r = await ClienteDeDesembolsos.VistaPreviaAsync(Pedido());
+        _previa = r.IsSuccess ? r.Value : null;
+        if (!r.IsSuccess) await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo evaluar el desembolso.");
+        _clave = new ClaveDeOperacion();
+    }
+
+    private async Task DesembolsarAsync()
+    {
+        if (_solicitud is null || _previa is null) return;
+        using var carga = _accion.Iniciar();
+        var r = await ClienteDeDesembolsos.DesembolsarAsync(Pedido() with
+        {
+            ExpectedPreviewSha256 = _previa.PreviewSha256,
+            AcknowledgeWarnings = _reconocer,
+        }, _clave);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo desembolsar."); return; }
+        _resultado = r.Value;
+        _previa = null;
+        await Notification.SuccessAsync($"Crédito {r.Value!.LoanNumber} desembolsado.");
+        await CargarSolicitudAsync(_solicitud.PublicId);
+    }
+
+    private async Task CambiarAsync(int pestana)
+    {
+        _pestana = pestana;
+        if (pestana == 1) await CargarOrdenesAsync();
+        if (pestana == 2) await CargarArchivosAsync();
+    }
+
+    private async Task FiltrarOrdenesAsync(string? estado)
+    {
+        _estadoDeOrden = string.IsNullOrEmpty(estado) ? null : estado;
+        await CargarOrdenesAsync();
+    }
+
+    private async Task CargarOrdenesAsync()
+    {
+        using var carga = _cargaOrdenes.Iniciar();
+        _ordenes = [.. (await ClienteDeDesembolsos.OrdenesAsync(_estadoDeOrden)).Value?.Items ?? []];
+    }
+
+    private void AbrirMotivo(OrdenDeGiroDto orden, AccionDeOrden accion)
+    {
+        _orden = orden;
+        _accionDeOrden = accion;
+        _motivo = null;
+        _errorDialogo = null;
+        _clave = new ClaveDeOperacion();
+        _mostrarMotivo = true;
+    }
+
+    private void AbrirAnulacionDeArchivo(ArchivoDeDesembolsoDto archivo)
+    {
+        _archivo = archivo;
+        _accionDeOrden = AccionDeOrden.AnularArchivo;
+        _motivo = null;
+        _errorDialogo = null;
+        _clave = new ClaveDeOperacion();
+        _mostrarMotivo = true;
+    }
+
+    private async Task ConfirmarMotivoAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_motivo)) return;
+        using var carga = _accion.Iniciar();
+        _errorDialogo = null;
+        var motivo = _motivo.Trim();
+        string? error = _accionDeOrden switch
+        {
+            AccionDeOrden.AnularOrden => (await ClienteDeDesembolsos.AnularOrdenAsync(_orden!.PublicId, motivo, _clave)) is { IsSuccess: false } a ? a.ErrorMessage ?? "" : null,
+            AccionDeOrden.GiroNuevo => (await ClienteDeDesembolsos.GiroNuevoAsync(_orden!.PublicId, new GiroNuevoRequest(_formaDelGiro, null, motivo), _clave)) is { IsSuccess: false } g ? g.ErrorMessage ?? "" : null,
+            AccionDeOrden.AnularCredito => (await ClienteDeDesembolsos.AnularCreditoAsync(_orden!.LoanPublicId, motivo, _clave)) is { IsSuccess: false } c ? c.ErrorMessage ?? "" : null,
+            _ => (await ClienteDeArchivos.AnularAsync(_archivo!.PublicId, motivo, _clave)) is { IsSuccess: false } f ? f.ErrorMessage ?? "" : null,
+        };
+        if (error is not null) { _errorDialogo = error.Length > 0 ? error : "No se pudo registrar."; return; }
+        _mostrarMotivo = false;
+        await Notification.SuccessAsync("Registrado.");
+        if (_accionDeOrden == AccionDeOrden.AnularArchivo) await CargarArchivosAsync(); else await CargarOrdenesAsync();
+    }
+
+    private async Task CargarArchivosAsync()
+    {
+        using var carga = _cargaArchivos.Iniciar();
+        if (_formatos.Count == 0) _formatos = [.. (await ClienteDeArchivos.FormatosAsync()).Value ?? []];
+        _archivos = [.. (await ClienteDeArchivos.ArchivosAsync()).Value?.Items ?? []];
+    }
+
+    private async Task ElegirFormatoAsync(string? formato)
+    {
+        _formato = string.IsNullOrEmpty(formato) ? null : formato;
+        _cuentaDeOrigen = null;
+        _previaDeArchivo = null;
+        _cuentas = Guid.TryParse(_formato, out var id) ? [.. (await ClienteDeArchivos.CuentasDeOrigenAsync(id)).Value ?? []] : [];
+    }
+
+    private ArchivoDeDesembolsoRequest PedidoDeArchivo() =>
+        new(Guid.Parse(_formato!), Guid.Parse(_cuentaDeOrigen!));
+
+    private async Task VistaPreviaDeArchivoAsync()
+    {
+        if (_formato is null || _cuentaDeOrigen is null) return;
+        using var carga = _accion.Iniciar();
+        var r = await ClienteDeArchivos.VistaPreviaAsync(PedidoDeArchivo());
+        _previaDeArchivo = r.IsSuccess ? r.Value : null;
+        if (!r.IsSuccess) await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo preparar el archivo.");
+        _clave = new ClaveDeOperacion();
+    }
+
+    private async Task GenerarAsync()
+    {
+        if (_formato is null || _cuentaDeOrigen is null) return;
+        using var carga = _accion.Iniciar();
+        var r = await ClienteDeArchivos.GenerarAsync(PedidoDeArchivo(), _clave);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo generar el archivo."); return; }
+        _previaDeArchivo = null;
+        await Notification.SuccessAsync($"Archivo {r.Value!.File.Number} generado con {r.Value.File.Orders} órdenes.");
+        await CargarArchivosAsync();
+    }
+
+    private async Task DescargarAsync(ArchivoDeDesembolsoDto archivo)
+    {
+        using var carga = _accion.Iniciar();
+        var r = await ClienteDeArchivos.EnlaceAsync(archivo.PublicId);
+        if (!r.IsSuccess || r.Value?.Url is not { } url) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo descargar el archivo."); return; }
+        await Adjuntos.DescargarAsync(url, archivo.FileName);
+    }
+
+    private sealed class BancoItem { public Guid PublicId { get; set; } public string Name { get; set; } = ""; }
+}

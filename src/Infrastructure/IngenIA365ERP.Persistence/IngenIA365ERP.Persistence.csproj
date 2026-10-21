@@ -38,6 +38,8 @@
   <ItemGroup>
     <!-- Feature 009 (R9): los catalogos contables son datos incrustados, no codigo. -->
     <EmbeddedResource Include="Seeding\Parametric\Data\*.json" />
+    <!-- Feature 013 (T0055): la semilla del registro central de valores nacionales y sus documentos normativos. -->
+    <EmbeddedResource Include="Seeding\Parametric\Data\NationalValues\*.json" />
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="IngenIA365ERP.Application.Tests" />

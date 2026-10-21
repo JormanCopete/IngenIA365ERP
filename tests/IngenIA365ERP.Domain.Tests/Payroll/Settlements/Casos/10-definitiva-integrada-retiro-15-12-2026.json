@@ -29,7 +29,7 @@
     "PROV_VACACIONES": 1100000
   },
   "deudas": [
-    { "concepto": "DESC_CARTERA", "descripcion": "Crédito 00123 — saldo total", "propuesto": 500000, "aplicado": 500000, "contabilizadaPorOtroModulo": true }
+    { "concepto": "DESC_CARTERA", "descripcion": "Crédito 00123 — saldo total", "propuesto": 500000, "aplicado": 500000 }
   ],
   "terminacion": { "motivo": "RENUNCIA", "nombreMotivo": "Renuncia voluntaria", "generaIndemnizacion": false },
   "politicas": { "arranqueNomina": "2026-12-01" },

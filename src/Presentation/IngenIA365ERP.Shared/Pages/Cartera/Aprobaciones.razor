@@ -1,0 +1,161 @@
+@page "/cartera/aprobaciones"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Http
+@inject OriginacionClient Originacion
+@inject NovedadesClient Novedades
+@inject INotificationService Notification
+@inject NavigationManager Navegacion
+
+<PageTitle>Mis pendientes - IngenIA365ERP</PageTitle>
+
+@* Feature 013, US2 (T0412; T65, FR-038; contracts/api.md §4.3): lo que la persona puede decidir ahora (tiene el permiso del nivel, el alcance y
+   no está excluida) y lo que está en agenda de sus órganos. Decidir es un paso con la huella del enrutamiento que se vio; si el contenido
+   cambió, la solicitud se reenruta y se avisa. Lo colegiado se lleva a sesión en Actas. El motivo de exclusión se muestra tal cual.
+   K3 (T0892): también las novedades y las condonaciones radicadas, que se deciden por sus propias rutas con la huella de su enrutamiento. *@
+<PermissionGate Required="Lending.Applications.Read" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Mis pendientes</h3>
+        <div class="toolbar">
+            <select class="e-input" @bind="_sujeto" aria-label="Asunto">
+                <option value="">Todos los asuntos</option>
+                <option value="CreditApplication">Solicitudes</option>
+                <option value="CreditLimit">Cupos</option>
+                <option value="Novelty">Novedades</option>
+                <option value="Condonation">Condonaciones</option>
+            </select>
+            <SfButton CssClass="e-primary" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        <div class="tabla-desplazable">
+            <table class="data-grid">
+                <thead><tr><th>Asunto</th><th>Número</th><th>Resumen</th><th class="numero">Monto</th><th>Nivel</th><th>Desde</th><th>Dónde se decide</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var p in _pendientes)
+                    {
+                        var pendiente = p;
+                        <tr>
+                            <td>@TextosDeOriginacion.Sujeto(pendiente.Subject)</td>
+                            <td>@(pendiente.Number ?? "—")</td>
+                            <td>@pendiente.Summary</td>
+                            <td class="numero">@TextosDeOriginacion.Pesos(pendiente.Amount)</td>
+                            <td>@pendiente.LevelName</td>
+                            <td>@(pendiente.Since?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? "—")</td>
+                            <td>@TextosDeOriginacion.Ruta(pendiente.Route)@(pendiente.GoverningBody is { } o ? $" · {o}" : "")</td>
+                            <td>
+                                @if (pendiente.Route == "Session")
+                                {
+                                    <PermissionGate Required="Lending.Sessions.Read">
+                                        <SfButton CssClass="e-flat e-small" OnClick="@(() => Navegacion.NavigateTo("/cartera/actas"))">Llevar a sesión</SfButton>
+                                    </PermissionGate>
+                                }
+                                else if (pendiente.CanDecide)
+                                {
+                                    <SfButton CssClass="e-flat e-small e-primary" OnClick="@(() => AbrirDecision(pendiente))">Decidir…</SfButton>
+                                }
+                                else
+                                {
+                                    <span class="texto-tenue">@TextosDeOriginacion.Exclusion(pendiente.ExcludedReason)</span>
+                                }
+                                @if (pendiente.Subject == "CreditApplication")
+                                {
+                                    <SfButton CssClass="e-flat e-small" OnClick="@(() => Navegacion.NavigateTo($"/cartera/solicitudes/{pendiente.SubjectPublicId}"))">Ver</SfButton>
+                                }
+                                else if (pendiente.Subject == "Novelty")
+                                {
+                                    <SfButton CssClass="e-flat e-small" OnClick="@(() => Navegacion.NavigateTo($"/cartera/novedades?id={pendiente.SubjectPublicId}"))">Ver</SfButton>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (_pendientes.Count == 0) { <p class="texto-tenue">No tiene asuntos pendientes de decidir.</p> }
+    </IndicadorDeCarga>
+</div>
+
+<SfDialog @bind-Visible="_mostrarDecision" Header="Decidir" Width="560px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Registrando la decisión…">
+                <p class="texto-apoyo">@(_aDecidir?.Summary) — @(_aDecidir is { } d ? TextosDeOriginacion.Pesos(d.Amount) : "")</p>
+                <DecisionDeCredito @bind-Pedido="_pedido" />
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@_guardado.Activa" OnClick="@DecidirAsync">Registrar decisión</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarDecision = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+    private List<DecisionPendienteDto> _pendientes = [];
+    private string _sujeto = "";
+    private bool _mostrarDecision;
+    private DecisionPendienteDto? _aDecidir;
+    private DecisionDeCredito.PedidoDeDecision _pedido = new();
+    private string? _error, _huella;
+    private ClaveDeOperacion _clave = new();
+
+    protected override async Task OnInitializedAsync() => await CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Originacion.PendientesAsync(string.IsNullOrEmpty(_sujeto) ? null : _sujeto);
+        if (!r.IsSuccess) { _pendientes = []; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer los pendientes."); return; }
+        _pendientes = [.. r.Value?.Items ?? []];
+    }
+
+    private async Task AbrirDecision(DecisionPendienteDto pendiente)
+    {
+        _aDecidir = pendiente;
+        _pedido = new DecisionDeCredito.PedidoDeDecision();
+        _error = _huella = null;
+        _clave = new ClaveDeOperacion();
+        if (pendiente.Subject == "CreditApplication")
+        {
+            var r = await Originacion.EnrutamientoAsync(pendiente.SubjectPublicId);
+            _huella = r.Value?.ContentSha256;
+        }
+        else if (pendiente.Subject == "Novelty")
+            _huella = (await Novedades.NovedadAsync(pendiente.SubjectPublicId)).Value?.Routing?.ContentSha256;
+        else if (pendiente.Subject == "Condonation")
+            _huella = (await Novedades.CondonacionAsync(pendiente.SubjectPublicId)).Value?.Routing?.ContentSha256;
+        _mostrarDecision = true;
+    }
+
+    private async Task DecidirAsync()
+    {
+        if (_aDecidir is not { } p) return;
+        using var carga = _guardado.Iniciar();
+        _error = null;
+        var pedido = _pedido.ComoRequest(_huella);
+        var r = p.Subject switch
+        {
+            "CreditLimit" => await Originacion.DecidirCupoAsync(p.SubjectPublicId, pedido, _clave),
+            "Novelty" => await Novedades.DecidirNovedadAsync(p.SubjectPublicId, pedido, _clave),
+            "Condonation" => await Novedades.DecidirCondonacionAsync(p.SubjectPublicId, pedido, _clave),
+            _ => await Originacion.DecidirSolicitudAsync(p.SubjectPublicId, pedido, _clave),
+        };
+        if (!r.IsSuccess)
+        {
+            _error = r.ErrorCode == "Lending.Decision.ContentChanged"
+                ? "El contenido cambió desde que lo abrió (por ejemplo, otra deuda de la persona) y se volvió a enrutar. Revise y decida de nuevo."
+                : r.ErrorMessage ?? "No se pudo registrar la decisión.";
+            if (r.ErrorCode == "Lending.Decision.ContentChanged") await CargarAsync();
+            return;
+        }
+        _mostrarDecision = false;
+        await Notification.SuccessAsync("Decisión registrada.");
+        await CargarAsync();
+    }
+}

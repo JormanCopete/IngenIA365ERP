@@ -1,0 +1,105 @@
+{
+  "descripcion": "Contingente (A3, C91): la contra deudora contra la acreedora contingente; sin crédito, sin cruce.",
+  "sobre": {
+    "version": 1,
+    "kind": "Business",
+    "originModule": "CAR",
+    "originEventKey": "Confirmation",
+    "origin": {
+      "kind": "Operation",
+      "documentClass": null,
+      "documentTypeCode": null,
+      "number": "SOL-000311",
+      "publicId": "0d0d0153-0000-4000-8000-000000000153",
+      "operationDate": "2026-11-02"
+    },
+    "related": null,
+    "chainRootPublicId": "0e0e0154-0000-4000-8000-000000000154",
+    "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+    "costCenterPublicId": null,
+    "warehouseCode": null,
+    "personPublicId": "a1b2c3d4-0000-4000-8000-000000000002",
+    "currency": "COP",
+    "exchangeRate": 1,
+    "originUser": {
+      "centralUserId": "d4e5f6a7-b8c9-4d0e-9f1a-2b3c4d5e6f70",
+      "name": "Usuario de ensayo"
+    },
+    "emittedAt": "2026-11-02T15:00:00Z"
+  },
+  "mensajes": [
+    {
+      "messageId": "0f0f0156-0000-4000-8000-000000000156",
+      "type": "CreditoAprobadoSinDesembolsar",
+      "kind": "Business",
+      "originDocumentClass": "CreditApplication",
+      "payload": {
+        "debtorPersonPublicId": "a1b2c3d4-0000-4000-8000-000000000002",
+        "loan": null,
+        "subject": {
+          "kind": "CreditApplication",
+          "publicId": "9a9a0155-0000-4000-8000-000000000155",
+          "number": "SOL-000311"
+        },
+        "valueDate": "2026-11-02",
+        "registeredAt": "2026-11-02T16:00:00Z",
+        "dimensions": null,
+        "creditLineCode": "LIB01",
+        "movement": "Approved",
+        "amounts": [
+          {
+            "concept": "Principal",
+            "installmentNumber": null,
+            "amount": 10000000.0,
+            "uvrAmount": null,
+            "onBehalfOfAssociate": false,
+            "reasonCode": "ApprovedNotDisbursed"
+          }
+        ],
+        "balanceAfter": 10000000.0,
+        "causeFact": null
+      }
+    }
+  ],
+  "esperado": {
+    "tipo": "CN",
+    "fecha": "2026-11-02",
+    "origen": "LendingIssuedDocument",
+    "lineas": [
+      {
+        "rol": "ContraContingenteAcreedora",
+        "cuenta": "96050501",
+        "debito": 10000000.0,
+        "credito": 0.0,
+        "tercero": null,
+        "cruce": null,
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "CreditoAprobadoSinDesembolsar"
+          ],
+          "concepto": "Principal",
+          "creditos": []
+        }
+      },
+      {
+        "rol": "ContingenteAcreedora",
+        "cuenta": "91150501",
+        "debito": 0.0,
+        "credito": 10000000.0,
+        "tercero": "ana",
+        "cruce": null,
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "CreditoAprobadoSinDesembolsar"
+          ],
+          "concepto": "Principal",
+          "creditos": []
+        }
+      }
+    ]
+  }
+}

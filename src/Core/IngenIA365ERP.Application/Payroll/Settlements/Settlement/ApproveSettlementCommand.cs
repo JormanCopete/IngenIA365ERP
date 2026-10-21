@@ -5,8 +5,8 @@ using IngenIA365ERP.Application.Common.Audit;
 using IngenIA365ERP.Application.Common.Behaviors;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
-using IngenIA365ERP.Application.Lending.Payments.Commands.ProcessPayment;
-using IngenIA365ERP.Application.Lending.Payments.Services;
+using IngenIA365ERP.Application.Common.Integration.Lending;
+using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Application.Payroll.Services;
 using IngenIA365ERP.Application.Payroll.Settlements.Common;
 using IngenIA365ERP.Domain.Entities.Payroll;
@@ -24,14 +24,16 @@ namespace IngenIA365ERP.Application.Payroll.Settlements.Settlement;
 /// <c>POST /{runId}/approve</c>) sobre el ciclo común <see cref="SettlementRunWorkflow"/>, con lo
 /// propio de la definitiva en el gancho <c>antesDeGuardar</c> y todo dentro de una transacción:
 /// <list type="bullet">
-/// <item>cada descuento de Cartera con valor aplicado se paga por <see cref="RecaudoDeCredito"/> —el cuerpo
-/// de <c>ProcessPaymentCommand</c>, llamado <b>directo</b> y no por <c>ISender</c>— (forma de pago <c>NM</c>,
-/// referencia = número de la liquidación, la cuenta del recaudo es la cuenta débito del concepto
-/// <c>DESC_CARTERA</c>): Cartera contabiliza el recaudo y la nómina no lo duplica (D-08); el descuento
-/// guarda el recaudo y el saldo que quedó. Anidar el comando era un defecto: es reintentable, y su
-/// reintento vaciaba el <c>ChangeTracker</c> compartido dejando el recaudo guardado con la corrida en
-/// borrador. Hoy un conflicto de concurrencia deshace la transacción entera y este comando —también
-/// reintentable— se repite entero;</item>
+/// <item>feature 013 (T0159, R104, T92): en el gancho <c>antesDeContabilizar</c>, antes del comprobante, vuelve a
+/// consultar las obligaciones del empleado en Cartera (<see cref="PropuestaDeDescuentosDeCartera"/>): si el conjunto vivo
+/// ya no es el propuesto, <c>Payroll.Settlement.LoanProposalOutdated</c>; con la persona «migrada, sin activar» exige
+/// <see cref="ApproveSettlementCommand.AcknowledgeLendingPendingActivation"/>. Después aplica los descuentos por el contrato
+/// de obligaciones (<see cref="RecaudoPorNomina"/>, llamado <b>directo</b> y no por <c>ISender</c>; fecha valor = la de
+/// aprobación; <c>FullPayoff</c>, <c>CycleInstallment</c> o <c>FreeAmount</c> si se ajustó), <b>todo o nada</b>: un ítem
+/// rechazado o con excedente responde <c>Payroll.Settlement.LoanAmountsChanged</c> y se revierte todo. El descuento guarda
+/// el comprobante de Cartera y el saldo que quedó. <c>DESC_CARTERA</c> contabiliza en la definitiva contra la cuenta del
+/// concepto (enmienda D-08); sin cuentas, <c>Payroll.Settlement.ConceptAccountsMissing</c>. Un conflicto de concurrencia
+/// deshace la transacción entera y este comando —reintentable— se repite entero;</item>
 /// <item>la ficha se cierra (<c>Status = -1</c>, <c>TerminationDate</c>, <c>TerminationCause</c> = nombre
 /// del motivo) y la persona deja de ser empleada;</item>
 /// <item>las vacaciones pagadas quedan como movimiento <c>SettlementPayout</c> liquidado;</item>
@@ -48,7 +50,8 @@ public sealed record ApproveSettlementCommand(
     Guid RunPublicId,
     bool Confirm,
     DateOnly? PostingDate = null,
-    bool ConfirmWithoutSegregation = false) : IRequest<Result<SettlementApprovedWithPortfolioDto>>, IReintentableAnteConcurrencia;
+    bool ConfirmWithoutSegregation = false,
+    bool AcknowledgeLendingPendingActivation = false) : IRequest<Result<SettlementApprovedWithPortfolioDto>>, IReintentableAnteConcurrencia;
 
 public sealed class ApproveSettlementCommandValidator : AbstractValidator<ApproveSettlementCommand>
 {
@@ -58,7 +61,9 @@ public sealed class ApproveSettlementCommandValidator : AbstractValidator<Approv
 public sealed class ApproveSettlementCommandHandler(
     IApplicationDbContext db,
     SettlementRunWorkflow workflow,
-    RecaudoDeCredito recaudo,
+    PropuestaDeDescuentosDeCartera propuesta,
+    RecaudoPorNomina recaudo,
+    PayrollPolicyReader policies,
     ISender sender,
     IDateTimeService clock,
     ICurrentUserService user,
@@ -69,9 +74,6 @@ public sealed class ApproveSettlementCommandHandler(
     ILogger<ApproveSettlementCommandHandler> logger)
     : IRequestHandler<ApproveSettlementCommand, Result<SettlementApprovedWithPortfolioDto>>
 {
-    /// <summary>Forma de pago con la que Cartera registra el recaudo por descuento en la liquidación (research R7).</summary>
-    public const string FormaDePagoNomina = "NM";
-
     public async Task<Result<SettlementApprovedWithPortfolioDto>> Handle(ApproveSettlementCommand request, CancellationToken ct)
     {
         var run = await db.PayrollRuns.AsNoTracking().FirstOrDefaultAsync(r => r.PublicId == request.RunPublicId, ct);
@@ -93,7 +95,13 @@ public sealed class ApproveSettlementCommandHandler(
         var peticion = new SettlementApprovalRequest(run.PublicId, PayrollRunKind.Settlement, request.Confirm, request.PostingDate, ConfirmEmpty: false, request.ConfirmWithoutSegregation);
 
         var aprobado = await TransaccionDeLiquidacion.EjecutarAsync(db,
-            () => workflow.ApproveAsync(peticion, (corrida, filas, token) => CerrarFichaYPagarAsync(corrida, filas, terminacion, empleado, persona, pagos, token), ct), ct);
+            () =>
+            {
+                pagos.Clear();
+                return workflow.ApproveAsync(peticion,
+                    (corrida, _, token) => AplicarEnCarteraAsync(corrida, terminacion, persona, request.AcknowledgeLendingPendingActivation, pagos, token),
+                    (corrida, filas, token) => CerrarFichaAsync(corrida, filas, terminacion, empleado, persona, token), ct);
+            }, ct);
         if (aprobado.IsFailure) return Result.Failure<SettlementApprovedWithPortfolioDto>(aprobado.Error);
 
         await audit.EmitAsync(AuditEventTypes.PayrollEmployeeTerminated, nameof(Employee), empleado.PublicId,
@@ -112,48 +120,112 @@ public sealed class ApproveSettlementCommandHandler(
             aprobado.Value.PostingDate, aprobado.Value.ApprovedWithoutSegregation, pagos, adjunto));
     }
 
-    /// <summary>Lo propio de la definitiva dentro de la transacción de la aprobación. Un fallo aquí revierte todo, recaudos incluidos.</summary>
-    private async Task<Result> CerrarFichaYPagarAsync(PayrollRun corrida, IReadOnlyList<PayrollRunEmployee> filas, EmploymentTermination terminacion,
-        Employee empleado, Domain.Entities.Core.Person? persona, List<PortfolioPaymentDto> pagos, CancellationToken ct)
+    /// <summary>
+    /// Feature 013 (T0159): antes del comprobante, vuelve a consultar Cartera y aplica los descuentos de la definitiva por el
+    /// contrato de obligaciones, todo o nada. Un fallo aquí revierte todo, recaudos incluidos.
+    /// </summary>
+    private async Task<Result> AplicarEnCarteraAsync(PayrollRun corrida, EmploymentTermination terminacion, Domain.Entities.Core.Person? persona,
+        bool reconocido, List<PortfolioPaymentDto> pagos, CancellationToken ct)
+    {
+        var prestamos = terminacion.Deductions
+            .Where(d => !d.IsDeleted && d.Status is not SettlementDeductionStatus.Reverted && d.Kind == SettlementDeductionKind.CooperativeLoan)
+            .ToList();
+        if (persona is null) return prestamos.Count == 0 ? Result.Success() : Result.Failure(SettlementErrors.EmployeeNotFound);
+
+        // --- el conjunto vivo de hoy contra lo propuesto (R104) ---
+        var politicas = await policies.ReadAsync(terminacion.TerminationDate, ct);
+        PropuestaDeDescuentosDeCartera.PropuestaDeCartera vivas;
+        try
+        {
+            vivas = await propuesta.VivasAsync(persona.PublicId, politicas.DeduccionAlRetiroModo, ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
+        {
+            logger.LogWarning(ex, "Cartera no respondió al aprobar la definitiva {Run}", corrida.PublicId);
+            if (prestamos.Count == 0) return Result.Success();
+            return Result.Failure(new Error(SettlementErrors.PortfolioUnavailableCode,
+                "Cartera no respondió al confirmar los descuentos de la liquidación. Intente aprobar de nuevo en unos minutos."));
+        }
+
+        if (vivas.MigradaSinActivar)
+        {
+            if (!reconocido)
+                return Result.Failure(SettlementErrors.LendingPendingActivationAckRequired(
+                    [NombreDePersona.Completo(persona.FirstName, persona.OtherNames, persona.LastName, persona.SecondLastName)]));
+            corrida.LendingActivationAckBy = user.UserName ?? string.Empty;
+            corrida.LendingActivationAckAt = clock.UtcNow;
+        }
+
+        var propuestas = prestamos.Where(d => d.ObligationPublicId is not null).ToDictionary(d => d.ObligationPublicId!.Value);
+        var actuales = vivas.Deudas.Where(d => d.ObligationPublicId is not null).ToDictionary(d => d.ObligationPublicId!.Value);
+        if (!propuestas.Keys.ToHashSet().SetEquals(actuales.Keys))
+            return Result.Failure(SettlementErrors.LoanProposalOutdated(
+                propuestas.Values.Select(d => d.ObligationNumber ?? d.Description).ToList(),
+                actuales.Values.Select(d => d.ObligationNumber ?? d.Description).ToList()));
+
+        var conValor = propuestas.Values.Where(d => d.AppliedAmount > 0m).ToList();
+        if (conValor.Count == 0) return Result.Success();
+
+        // --- el lote, todo o nada (FR-088) ---
+        var hoy = clock.HoyLocal;
+        var recibo = new ReferenciaDeRecibo($"Liquidación definitiva v{corrida.Version}", hoy, null, null, "Liquidacion");
+        var lote = new LoteDeNomina(corrida.PublicId, recibo, hoy,
+            conValor.Select(d => new PagoDeNomina(d.ObligationPublicId!.Value, persona.PublicId, Modalidad(d, politicas.DeduccionAlRetiroModo), d.AppliedAmount)).ToList(),
+            []);
+        var resultado = await recaudo.AplicarAsync(lote, ct);
+
+        // Feature 013, T0801 (A8 = «Bloquear todo», 2026-10-14): lo que Contabilidad no puede registrar se dice con su propio código.
+        var noContabilizables = resultado.Pagos.Where(p => p.NoContabilizable).ToList();
+        if (noContabilizables.Count > 0)
+            return Result.Failure(SettlementErrors.LoanDeductionNotPostable(noContabilizables
+                .Select(p => (propuestas[p.ObligationPublicId].ObligationNumber ?? propuestas[p.ObligationPublicId].Description, p.Respuesta.Message,
+                    (object?)p.Respuesta.Data)).ToList()));
+
+        var fallidos = resultado.Pagos.Where(p => !p.Aplicado || p.Excedente > 0m || p.ValorAplicado != p.Enviado).ToList();
+        if (fallidos.Count > 0)
+        {
+            var items = resultado.Pagos.Select(p => new
+            {
+                obligationPublicId = p.ObligationPublicId,
+                obligationNumber = propuestas[p.ObligationPublicId].ObligationNumber,
+                sent = p.Enviado,
+                result = p.Respuesta.Result.ToString(),
+                code = p.Respuesta.Code,
+                message = p.Respuesta.Message,
+                applied = p.ValorAplicado,
+                surplus = p.Excedente,
+            }).ToList();
+            var detalle = string.Join("; ", fallidos.Select(p =>
+                $"{propuestas[p.ObligationPublicId].ObligationNumber ?? propuestas[p.ObligationPublicId].Description}: " +
+                (p.Aplicado ? $"Cartera tomó {Domain.Payroll.Calculation.Rules.Fmt.Num(p.ValorAplicado)} de {Domain.Payroll.Calculation.Rules.Fmt.Num(p.Enviado)}" : p.Respuesta.Message)));
+            return Result.Failure(SettlementErrors.LoanAmountsChanged(detalle, items));
+        }
+
+        foreach (var p in resultado.Pagos)
+        {
+            var d = propuestas[p.ObligationPublicId];
+            var comprobante = p.Respuesta.Value!;
+            d.CarteraTransactionPublicId = comprobante.OperationPublicId;
+            d.RemainingBalanceAfter = comprobante.BalancesAfter.PayoffAmount;
+            pagos.Add(new PortfolioPaymentDto(d.PublicId, comprobante.OperationPublicId, d.AppliedAmount, d.RemainingBalanceAfter, d.Description));
+        }
+        return Result.Success();
+    }
+
+    /// <summary>La modalidad del pago (R104): ajustado → valor libre; si no, según la política con que se propuso.</summary>
+    private static ModalidadDePago Modalidad(SettlementDeduction d, DeduccionAlRetiro modo) =>
+        d.FueAjustado ? ModalidadDePago.FreeAmount
+        : modo == DeduccionAlRetiro.SoloCuotasCausadas ? ModalidadDePago.CycleInstallment
+        : ModalidadDePago.FullPayoff;
+
+    /// <summary>Lo propio de la definitiva dentro de la transacción de la aprobación, después del comprobante. Un fallo aquí revierte todo.</summary>
+    private async Task<Result> CerrarFichaAsync(PayrollRun corrida, IReadOnlyList<PayrollRunEmployee> filas, EmploymentTermination terminacion,
+        Employee empleado, Domain.Entities.Core.Person? persona, CancellationToken ct)
     {
         var ahora = clock.UtcNow;
         var quien = user.UserName ?? string.Empty;
         var fecha = terminacion.TerminationDate;
         var referencia = corrida.AccountingDocument?.Referencia() ?? $"Definitiva v{corrida.Version}";
-
-        // --- recaudos en Cartera, uno por obligación con valor aplicado ---
-        var prestamos = terminacion.Deductions
-            .Where(d => !d.IsDeleted && d.Status is not SettlementDeductionStatus.Reverted && d.Kind == SettlementDeductionKind.CooperativeLoan && d.AppliedAmount > 0m && d.LoanPortfolioId is not null)
-            .ToList();
-        string? cuentaDelRecaudo = null;
-        if (prestamos.Count > 0)
-        {
-            cuentaDelRecaudo = await CuentaDebitoDelDescuentoAsync(empleado, ct);
-            if (cuentaDelRecaudo is null) return Result.Failure(SettlementErrors.ConceptAccountsMissing([WellKnownConceptCodes.LoanDeduction]));
-        }
-        foreach (var d in prestamos)
-        {
-            var credito = await db.LoanPortfolios.FirstOrDefaultAsync(l => l.Id == d.LoanPortfolioId, ct);
-            if (credito is null)
-                return Result.Failure(new Error("Payroll.Settlement.PortfolioUnavailable", $"El crédito del descuento «{d.Description}» ya no existe en Cartera. Recalcule la liquidación antes de aprobar."));
-
-            var pago = await recaudo.AplicarAsync(new ProcessPaymentCommand
-            {
-                PortfolioPublicId = credito.PublicId,
-                Amount = d.AppliedAmount,
-                PaymentDate = fecha,
-                PaymentMethod = FormaDePagoNomina,
-                Reference = $"Liquidación definitiva {referencia}",
-                CashAccountCode = cuentaDelRecaudo,
-            }, ct);
-            if (pago.IsFailure)
-                return Result.Failure(new Error(pago.Error.Code, $"Cartera no pudo aplicar el descuento «{d.Description}» ({d.AppliedAmount:N0}): {pago.Error.Message}"));
-
-            var saldoQueQueda = await db.LoanPortfolios.AsNoTracking().Where(l => l.Id == credito.Id).Select(l => l.CurrentBalance).FirstOrDefaultAsync(ct);
-            d.CarteraTransactionPublicId = pago.Value.TransactionPublicId;
-            d.RemainingBalanceAfter = saldoQueQueda;
-            pagos.Add(new PortfolioPaymentDto(d.PublicId, pago.Value.TransactionPublicId, d.AppliedAmount, saldoQueQueda, d.Description));
-        }
 
         foreach (var d in terminacion.Deductions.Where(d => !d.IsDeleted && d.Status is not SettlementDeductionStatus.Reverted))
         {
@@ -212,25 +284,6 @@ public sealed class ApproveSettlementCommandHandler(
             await staleMarker.MarkStaleAsync(periodoId, $"Se aprobó la liquidación definitiva ({referencia}) del empleado retirado el {fecha:dd/MM/yyyy}: ya no entra a la nómina ordinaria de este período (D-29).", ct);
 
         return Result.Success();
-    }
-
-    /// <summary>
-    /// La cuenta con la que Cartera recibe el recaudo: la cuenta <b>débito</b> parametrizada para
-    /// <c>DESC_CARTERA</c> (la del pasivo con el empleado que el descuento reduce), por el centro de
-    /// costo de la ficha o la fila por defecto. Sin ella no hay recaudo, y la aprobación lo dice.
-    /// </summary>
-    private async Task<string?> CuentaDebitoDelDescuentoAsync(Employee empleado, CancellationToken ct)
-    {
-        var filas = await db.PayrollConceptDefinitionAccounts.AsNoTracking()
-            .Where(a => !a.IsDeleted && a.ConceptCode == WellKnownConceptCodes.LoanDeduction)
-            .Select(a => new { a.CostCenterId, a.DebitAccountId })
-            .ToListAsync(ct);
-        if (filas.Count == 0) return null;
-        int? centro = null;
-        if (!string.IsNullOrWhiteSpace(empleado.CostCenterId))
-            centro = await db.CostCenters.AsNoTracking().Where(c => c.LegacyCode == empleado.CostCenterId).Select(c => (int?)c.Id).FirstOrDefaultAsync(ct);
-        var fila = filas.FirstOrDefault(f => centro is not null && f.CostCenterId == centro) ?? filas.FirstOrDefault(f => f.CostCenterId == null) ?? filas[0];
-        return await db.ChartOfAccounts.AsNoTracking().Where(c => c.Id == fila.DebitAccountId).Select(c => c.Code).FirstOrDefaultAsync(ct);
     }
 
     /// <summary>El PDF para firma queda adjunto a la terminación; si no se puede, la aprobación sigue y el documento se genera al pedirlo.</summary>

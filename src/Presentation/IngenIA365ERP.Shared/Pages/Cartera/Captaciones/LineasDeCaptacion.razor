@@ -1,0 +1,426 @@
+@using System.Globalization
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Inventario
+@inject CaptacionesClient Cliente
+@inject INotificationService Notification
+
+@* Feature 014, US1 (T070; FR-027–FR-029, FR-038; contracts/api.md §3; research E43): las líneas de captación o de aportes del catálogo común de la
+   Cartera, dentro de /cartera/lineas (que filtra por naturaleza). La lista trae la clase, el estado y el resumen de la versión vigente; el detalle
+   consulta la versión a una fecha (la anterior a un cambio sigue viéndose a su fecha), muestra el historial, registra una versión nueva —que parte
+   de la vigente— y cierra o reabre (reabrir también activa una línea que nació en borrador). Toda escritura lleva su clave de operación. *@
+<PermissionGate Required="@PermisoVer" MostrarAviso="true">
+    <div class="toolbar">
+        <input type="search" class="e-input" placeholder="Buscar código o nombre…" @bind="_buscar" @bind:event="oninput" />
+        <label><input type="checkbox" checked="@_conCerradas" @onchange="@(e => CambiarCerradasAsync(e.Value is true))" /> Ver cerradas</label>
+        <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+        <PermissionGate Required="@PermisoAdministrar">
+            <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@AbrirAlta">Nueva línea</SfButton>
+        </PermissionGate>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        <div class="tabla-desplazable">
+            <table class="data-grid">
+                <thead>
+                    <tr>
+                        <th>Código</th><th>Nombre</th>
+                        @if (EsCaptacion) { <th>Clase</th> }
+                        <th>Estado</th><th>Versión vigente</th><th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var l in Filtradas)
+                    {
+                        var linea = l;
+                        <tr>
+                            <td>@linea.Code</td>
+                            <td>@linea.Name</td>
+                            @if (EsCaptacion) { <td>@TextosDeCaptaciones.Clase(linea.DepositClass)</td> }
+                            <td>
+                                @TextosDeCartera.EstadoDeLinea(linea.Status)
+                                @if (linea.ClosedReason is { } motivo) { <br /><span class="texto-tenue">@TextosDeCartera.MotivoDeCierreDeLinea(motivo)</span> }
+                            </td>
+                            <td>
+                                @if (linea.CurrentVersion is { } v) { <span>Desde @v.ValidFrom.ToString("dd/MM/yyyy") · @v.Summary</span> }
+                                else { <span class="texto-tenue">Sin versión vigente hoy</span> }
+                            </td>
+                            <td><SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirDetalleAsync(linea.PublicId))">Ver</SfButton></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (_lineas.Count == 0)
+        {
+            <p class="texto-tenue">@(EsCaptacion ? "No hay líneas de captación en su alcance." : "No hay línea de aportes en su alcance.") Regístrela con «Nueva línea».</p>
+        }
+    </IndicadorDeCarga>
+</PermissionGate>
+
+<SfDialog @bind-Visible="_mostrarAlta" Header="@(EsCaptacion ? "Nueva línea de captación" : "Nueva línea de aportes")" Width="1000px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Registrando la línea…">
+                <div class="form-grid">
+                    <CampoCodigo Catalogo="lineas-de-credito" @bind-Value="_codigo" Obligatorio="true" Etiqueta="Código" />
+                    <label class="campo">Nombre * <input class="e-input" maxlength="120" @bind="_nombre" /></label>
+                    @if (EsCaptacion)
+                    {
+                        <label class="campo">Clase *
+                            <select class="e-input" value="@_clase" @onchange="@(e => CambiarClase(int.TryParse(e.Value?.ToString(), out var c) ? c : TextosDeCaptaciones.ALaVista))">
+                                @foreach (var c in TextosDeCaptaciones.Clases) { <option value="@c.Valor">@c.Texto</option> }
+                            </select>
+                        </label>
+                    }
+                    <label class="campo-check"><input type="checkbox" @bind="_activa" /> Activarla ya (si no, queda en borrador)</label>
+                </div>
+                <EditorDeLineaDeCaptacion Naturaleza="@Naturaleza" Clase="@_clase" Captacion="@_versionDeCaptacion" Aportes="@_versionDeAportes" Lineas="@_todas" Errores="@_errores" />
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(_codigo) || string.IsNullOrWhiteSpace(_nombre))" OnClick="@CrearAsync">Registrar línea</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarAlta = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarDetalle" Header="@(_detalle is null ? "Línea" : $"Línea {_detalle.Code} · {_detalle.Name}")" Width="1000px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@(_cargaDetalle.Activa || _guardadoDetalle.Activa)">
+                @if (_detalle is { } d)
+                {
+                    <div class="toolbar">
+                        <span>@TextosDeCaptaciones.Naturaleza(d.Nature)@(d.DepositClass is { } cl ? $" · {TextosDeCaptaciones.Clase(cl)}" : "") · @TextosDeCartera.EstadoDeLinea(d.Status)</span>
+                        <label class="campo">Ver la versión vigente el
+                            <input type="date" class="e-input" value="@_fecha.ToString("yyyy-MM-dd")" @onchange="@(e => CambiarFechaAsync(e.Value))" />
+                        </label>
+                    </div>
+                    @if (d.CloseNotes is { } notas) { <p class="texto-tenue">Cerrada: @notas</p> }
+
+                    <div class="info-card">
+                        <h4>Versión vigente el @d.Date.ToString("dd/MM/yyyy")</h4>
+                        @if (d.DepositVersion is { } v)
+                        {
+                            <dl class="form-grid">
+                                <div><dt>Versión</dt><dd>@v.VersionNumber, desde @v.ValidFrom.ToString("dd/MM/yyyy")@(v.ValidTo is { } h ? $" hasta {h:dd/MM/yyyy}" : "")</dd></div>
+                                <div><dt>Tasa</dt><dd>@TasaDeCaptacion(v)</dd></div>
+                                <div><dt>Mínimos</dt><dd>abrir @Pesos(v.MinOpeningAmount) · mantener @Pesos(v.MinBalance) · ganar interés @Pesos(v.MinBalanceForInterest)</dd></div>
+                                <div><dt>Cálculo</dt><dd>@TextosDeCaptaciones.MetodoDeSaldo(v.BalanceMethod) · @TextosDeCartera.Convencion(v.DayCount) · liquidación @TextosDeCartera.Periodicidad(v.SettlementPeriodicity).ToLowerInvariant()</dd></div>
+                                <div><dt>Retención y GMF</dt><dd>@(TextosDeCaptaciones.TarifasDeRetencion.FirstOrDefault(t => t.Valor == v.WithholdingRateParameterCode).Texto ?? "Tarifa de la clase") · @(v.GmfApplies ? "grava GMF" : "no grava GMF")@(v.GmfApplies && !v.GmfOnDeceasedAndUnclaimed ? " · sin GMF en fallecimiento y no reclamados" : "")</dd></div>
+                                <div><dt>Titulares</dt><dd>@(v.RequiresMembership ? "Exige asociado" : "No exige asociado")@(v.AllowsCoHolders ? " · cotitulares" : "")@(v.AllowsMinors ? " · menores" : "")@(v.AllowsPartialWithdrawals ? " · retiros parciales" : "")</dd></div>
+                                @if (v.TermDeposit is { } c)
+                                {
+                                    <div><dt>CDAT</dt><dd>plazo @c.MinTermDays a @c.MaxTermDays días · @(c.RolloverAutomatic ? "se prorroga solo" : "sin prórroga automática")@(v.DemandLine is { } dl ? $" · pasa a {dl.Code} al vencer" : "")</dd></div>
+                                }
+                                @if (v.Contractual is { } k)
+                                {
+                                    <div><dt>Contractual</dt><dd>cuota mínima @Pesos(k.MinInstallment) · @k.TermMonthsFrom a @k.TermMonthsTo meses</dd></div>
+                                }
+                            </dl>
+                        }
+                        else if (d.ContributionVersion is { } a)
+                        {
+                            <dl class="form-grid">
+                                <div><dt>Versión</dt><dd>@a.VersionNumber, desde @a.ValidFrom.ToString("dd/MM/yyyy")@(a.ValidTo is { } h ? $" hasta {h:dd/MM/yyyy}" : "")</dd></div>
+                                <div><dt>Mínimo no reducible</dt><dd>@ValorDeAportes(a.MinimumNonReducible.Kind, a.MinimumNonReducible.Amount, a.MinimumNonReducible.Fraction)</dd></div>
+                                <div><dt>Cuota</dt><dd>@ValorDeAportes(a.Installment.Kind, a.Installment.Amount, a.Installment.Fraction), @TextosDeCartera.Periodicidad(a.Installment.Periodicity).ToLowerInvariant()</dd></div>
+                                @if (a.PermanentSavingsLine is { } p)
+                                {
+                                    <div><dt>Ahorro permanente</dt><dd>@Porcentaje(a.PermanentSavingsFraction) de la cuota a @p.Code</dd></div>
+                                }
+                                <div><dt>Devolución</dt><dd>@a.RefundTermDays días@(a.AllowsExtraordinary ? " · admite extraordinarios" : "")</dd></div>
+                            </dl>
+                        }
+                        else
+                        {
+                            <p class="texto-tenue">Ese día la línea todavía no tenía una versión vigente.</p>
+                        }
+                    </div>
+
+                    @* US6 (T179; FR-127): las reglas de tasa negociada de una línea de CDAT que la admite. *@
+                    @if (d.DepositClass == TextosDeCaptaciones.Cdat && d.DepositVersion is { NegotiatedRateAllowed: true })
+                    {
+                        <ReglasDeTasaNegociada Linea="@d.PublicId" />
+                    }
+
+                    <h5>Historial de versiones</h5>
+                    <div class="tabla-desplazable">
+                        <table class="data-grid">
+                            <thead><tr><th class="numero">Versión</th><th>Desde</th><th>Hasta</th><th>Motivo</th><th>Registrada</th></tr></thead>
+                            <tbody>
+                                @foreach (var h in d.Versions)
+                                {
+                                    <tr>
+                                        <td class="numero">@h.VersionNumber@(h.IsCurrent ? " (vigente)" : "")</td>
+                                        <td>@h.ValidFrom.ToString("dd/MM/yyyy")</td>
+                                        <td>@(h.ValidTo?.ToString("dd/MM/yyyy") ?? "—")</td>
+                                        <td>@h.Reason</td>
+                                        <td>@h.RegisteredAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm") @h.RegisteredBy</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <PermissionGate Required="@PermisoAdministrar">
+                        <div class="form-grid">
+                            <label class="campo campo-ancho">Motivo (para cerrar o reabrir) <input class="e-input" maxlength="500" @bind="_motivo" /></label>
+                        </div>
+                        @if (_errorDetalle is not null) { <p class="aviso aviso-error" role="alert">@_errorDetalle</p> }
+                        <div class="toolbar">
+                            @if (d.Status != 3)
+                            {
+                                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@AbrirNuevaVersion">Nueva versión</SfButton>
+                            }
+                            @if (d.Status == 2)
+                            {
+                                <SfButton CssClass="e-outline" Disabled="@string.IsNullOrWhiteSpace(_motivo)" OnClick="@CerrarAsync">Cerrar a cuentas nuevas</SfButton>
+                            }
+                            else
+                            {
+                                <SfButton CssClass="e-outline" Disabled="@string.IsNullOrWhiteSpace(_motivo)" OnClick="@ReabrirAsync">@(d.Status == 1 ? "Activar" : "Reabrir")</SfButton>
+                            }
+                        </div>
+                    </PermissionGate>
+                }
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarVersion" Header="Nueva versión" Width="1000px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardadoVersion.Activa" Texto="Registrando la versión…">
+                <p class="texto-tenue">
+                    La versión nueva rige desde su fecha (nunca antes de hoy); la anterior sigue hasta la víspera y lo ya causado no cambia. Un cambio de tasa
+                    de una línea a la vista se avisa a los titulares con la anticipación del reglamento.
+                </p>
+                <EditorDeLineaDeCaptacion Naturaleza="@Naturaleza" Clase="@(_detalle?.DepositClass ?? TextosDeCaptaciones.ALaVista)" Captacion="@_nuevaDeCaptacion"
+                                          Aportes="@_nuevaDeAportes" Lineas="@_todas" Errores="@_erroresVersion" />
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@_guardadoVersion.Activa" OnClick="@RegistrarVersionAsync">Registrar versión</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarVersion = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+@code {
+    private static readonly CultureInfo Es = CultureInfo.GetCultureInfo("es-CO");
+
+    /// <summary>La naturaleza que lista: captación (2) o aportes (3).</summary>
+    [Parameter, EditorRequired] public int Naturaleza { get; set; }
+
+    private readonly EstadoDeCarga _carga = new(), _guardado = new(), _cargaDetalle = new(), _guardadoDetalle = new(), _guardadoVersion = new();
+    private List<LineaDelCatalogoDto> _lineas = [];
+    private IReadOnlyList<LineaDelCatalogoDto> _todas = [];
+    private LineaDeCaptacionDto? _detalle;
+    private VersionDeCaptacionRequest? _versionDeCaptacion, _nuevaDeCaptacion;
+    private VersionDeAportesRequest? _versionDeAportes, _nuevaDeAportes;
+    private List<string> _errores = [], _erroresVersion = [];
+    private ClaveDeOperacion _clave = new(), _claveDetalle = new(), _claveVersion = new();
+    private bool _conCerradas, _mostrarAlta, _mostrarDetalle, _mostrarVersion, _activa = true;
+    private int _clase = TextosDeCaptaciones.ALaVista;
+    private string _buscar = string.Empty;
+    private string? _codigo, _nombre, _motivo, _errorDetalle;
+    private DateOnly _fecha = DateOnly.FromDateTime(DateTime.Today);
+    private int _naturalezaCargada;
+
+    private bool EsCaptacion => Naturaleza == TextosDeCaptaciones.Captacion;
+    private string PermisoVer => EsCaptacion ? "Lending.DepositLines.View" : "Lending.ContributionLines.View";
+    private string PermisoAdministrar => EsCaptacion ? "Lending.DepositLines.Manage" : "Lending.ContributionLines.Manage";
+
+    private IEnumerable<LineaDelCatalogoDto> Filtradas =>
+        string.IsNullOrWhiteSpace(_buscar)
+            ? _lineas
+            : _lineas.Where(l => l.Code.Contains(_buscar.Trim(), StringComparison.OrdinalIgnoreCase) || l.Name.Contains(_buscar.Trim(), StringComparison.OrdinalIgnoreCase));
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_naturalezaCargada == Naturaleza) return;
+        _naturalezaCargada = Naturaleza;
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Cliente.LineasAsync(Naturaleza, _conCerradas);
+        if (!r.IsSuccess) { _lineas = []; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer las líneas."); return; }
+        _lineas = [.. r.Value ?? []];
+        // Las líneas de captación que una versión puede nombrar (la a la vista destino de un CDAT, la del ahorro permanente de los aportes).
+        var captacion = Naturaleza == TextosDeCaptaciones.Captacion ? r : await Cliente.LineasAsync(TextosDeCaptaciones.Captacion);
+        _todas = captacion.IsSuccess ? captacion.Value ?? [] : [];
+    }
+
+    private async Task CambiarCerradasAsync(bool valor)
+    {
+        _conCerradas = valor;
+        await CargarAsync();
+    }
+
+    // ---------------------------------------------------------------------------------------------------------- alta --
+
+    private void AbrirAlta()
+    {
+        _codigo = _nombre = null;
+        _errores = [];
+        _activa = true;
+        _clase = TextosDeCaptaciones.ALaVista;
+        _versionDeCaptacion = EsCaptacion ? new VersionDeCaptacionRequest { Reason = "Alta de la línea" } : null;
+        _versionDeAportes = EsCaptacion ? null : new VersionDeAportesRequest { Reason = "Alta de la línea" };
+        _clave = new ClaveDeOperacion();
+        _mostrarAlta = true;
+    }
+
+    private void CambiarClase(int clase)
+    {
+        _clase = clase;
+        _versionDeCaptacion?.AjustarALaClase(clase);
+    }
+
+    private async Task CrearAsync()
+    {
+        using var carga = _guardado.Iniciar();
+        _errores = [];
+        var codigo = _codigo!.Trim().ToUpperInvariant();
+        var r = EsCaptacion
+            ? await Cliente.CrearCaptacionAsync(new CrearLineaDeCaptacionRequest
+            {
+                Code = codigo, Name = _nombre!.Trim(), DepositClass = _clase, Active = _activa, FirstVersion = _versionDeCaptacion!,
+            }, _clave)
+            : await Cliente.CrearAportesAsync(new CrearLineaDeAportesRequest { Code = codigo, Name = _nombre!.Trim(), Active = _activa, FirstVersion = _versionDeAportes! }, _clave);
+        if (!r.IsSuccess || r.Value is null)
+        {
+            _errores = [.. LineasDeCreditoClient.Explicar(r)];
+            return;
+        }
+        _mostrarAlta = false;
+        await Notification.SuccessAsync($"Línea {r.Value.Code} registrada{(r.Value.Status == 1 ? " en borrador" : "")}.");
+        await CargarAsync();
+    }
+
+    // ------------------------------------------------------------------------------------------------------- detalle --
+
+    private async Task AbrirDetalleAsync(Guid linea)
+    {
+        _fecha = DateOnly.FromDateTime(DateTime.Today);
+        _motivo = _errorDetalle = null;
+        _claveDetalle = new ClaveDeOperacion();
+        _mostrarDetalle = true;
+        await LeerDetalleAsync(linea);
+    }
+
+    private async Task LeerDetalleAsync(Guid linea)
+    {
+        using var carga = _cargaDetalle.Iniciar();
+        var r = await Cliente.LineaAsync(linea, _fecha);
+        if (!r.IsSuccess) { _detalle = null; _errorDetalle = r.ErrorMessage ?? "No se pudo leer la línea."; return; }
+        _detalle = r.Value;
+    }
+
+    private async Task CambiarFechaAsync(object? valor)
+    {
+        if (!DateOnly.TryParse(valor?.ToString(), CultureInfo.InvariantCulture, out var fecha) || _detalle is null) return;
+        _fecha = fecha;
+        await LeerDetalleAsync(_detalle.PublicId);
+    }
+
+    private async Task CerrarAsync()
+    {
+        if (_detalle is null) return;
+        using var carga = _guardadoDetalle.Iniciar();
+        var r = await Cliente.CerrarLineaAsync(_detalle.PublicId, _motivo!.Trim(), _claveDetalle);
+        await DespuesDelCambioAsync(r, "cerrada");
+    }
+
+    private async Task ReabrirAsync()
+    {
+        if (_detalle is null) return;
+        using var carga = _guardadoDetalle.Iniciar();
+        var r = await Cliente.ReabrirLineaAsync(_detalle.PublicId, _motivo!.Trim(), _claveDetalle);
+        await DespuesDelCambioAsync(r, "activa");
+    }
+
+    private async Task DespuesDelCambioAsync(ResultadoDeInventario<LineaDeCaptacionDto> r, string estado)
+    {
+        if (!r.IsSuccess || r.Value is null) { _errorDetalle = string.Join(" ", LineasDeCreditoClient.Explicar(r)); return; }
+        _detalle = r.Value;
+        _motivo = _errorDetalle = null;
+        _claveDetalle = new ClaveDeOperacion();
+        await Notification.SuccessAsync($"La línea {r.Value.Code} quedó {estado}.");
+        await CargarAsync();
+    }
+
+    // ------------------------------------------------------------------------------------------------- nueva versión --
+
+    private void AbrirNuevaVersion()
+    {
+        if (_detalle is null) return;
+        _erroresVersion = [];
+        _claveVersion = new ClaveDeOperacion();
+        if (EsCaptacion)
+        {
+            _nuevaDeCaptacion = _detalle.DepositVersion?.ComoPedido() ?? new VersionDeCaptacionRequest();
+            _nuevaDeCaptacion.ValidFrom = DateOnly.FromDateTime(DateTime.Today);
+            _nuevaDeCaptacion.Reason = string.Empty;
+            _nuevaDeCaptacion.AjustarALaClase(_detalle.DepositClass ?? TextosDeCaptaciones.ALaVista);
+        }
+        else
+        {
+            _nuevaDeAportes = _detalle.ContributionVersion?.ComoPedido() ?? new VersionDeAportesRequest();
+            _nuevaDeAportes.ValidFrom = DateOnly.FromDateTime(DateTime.Today);
+            _nuevaDeAportes.Reason = string.Empty;
+        }
+        _mostrarVersion = true;
+    }
+
+    private async Task RegistrarVersionAsync()
+    {
+        if (_detalle is null) return;
+        using var carga = _guardadoVersion.Iniciar();
+        _erroresVersion = [];
+        IReadOnlyList<string>? errores = null;
+        if (EsCaptacion)
+        {
+            var r = await Cliente.NuevaVersionDeCaptacionAsync(_detalle.PublicId, _nuevaDeCaptacion!, _claveVersion);
+            if (!r.IsSuccess) errores = LineasDeCreditoClient.Explicar(r);
+        }
+        else
+        {
+            var r = await Cliente.NuevaVersionDeAportesAsync(_detalle.PublicId, _nuevaDeAportes!, _claveVersion);
+            if (!r.IsSuccess) errores = LineasDeCreditoClient.Explicar(r);
+        }
+        if (errores is not null) { _erroresVersion = [.. errores]; return; }
+        _mostrarVersion = false;
+        await Notification.SuccessAsync("Versión registrada.");
+        await LeerDetalleAsync(_detalle.PublicId);
+        await CargarAsync();
+    }
+
+    // -------------------------------------------------------------------------------------------------------- textos --
+
+    private static string Pesos(decimal valor) => "$ " + valor.ToString("N0", Es);
+
+    private static string Porcentaje(decimal? fraccion) => fraccion is { } f ? LineasDeCreditoClient.Porcentaje(f) : "—";
+
+    private static string TasaDeCaptacion(VersionDeCaptacionDto v)
+    {
+        if (v.RateKind == 2) return $"{v.IndexCode} {v.IndexKey} + {LineasDeCreditoClient.Puntos(v.Margin ?? 0m)}";
+        if (v.Tiers.Count == 0) return $"{Porcentaje(v.EffectiveAnnual)} EA";
+        return string.Join(" · ", v.Tiers.Select(t => t.TermDaysFrom is not null || t.AmountFrom is not null
+            ? $"{t.TermDaysFrom}–{t.TermDaysTo} días: {Porcentaje(t.EffectiveAnnual)} EA"
+            : $"desde {Pesos(t.BalanceFrom ?? 0m)}: {Porcentaje(t.EffectiveAnnual)} EA"));
+    }
+
+    private static string ValorDeAportes(int modo, decimal? monto, decimal? fraccion) => modo switch
+    {
+        1 => Pesos(monto ?? 0m),
+        2 => $"{Porcentaje(fraccion)} del ingreso",
+        _ => $"{(fraccion ?? 0m).ToString("0.######", Es)} salarios mínimos",
+    };
+}

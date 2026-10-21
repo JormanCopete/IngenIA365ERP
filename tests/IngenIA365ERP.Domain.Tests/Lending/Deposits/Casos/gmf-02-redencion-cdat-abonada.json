@@ -1,0 +1,49 @@
+// GMF: redencion del CDAT de investigacion-financiera §3.2 abonada a la cuenta de ahorros del titular (Oficio DIAN 2787 de 2019,
+// D32): base capital mas intereses 10.488.088 x 0,004 = 41.952,352 -> 41.952. El CDAT no es la cuenta marcada: no hay exencion.
+{
+  "descripcion": "Redencion de CDAT abonada en cuenta, gravada sobre capital mas intereses.",
+  "entrada": {
+    "politicas": [
+      {
+        "desde": "2026-01-01",
+        "tarifa": 0.004,
+        "topeExencionUvt": 350,
+        "uvt": 52374,
+        "politica": "SingleMarkedAccount",
+        "gravados": [
+          "Withdrawal",
+          "TransferToOtherHolder",
+          "TransferBetweenDemandAndTermDeposit",
+          "TermDepositRedemptionToAccount",
+          "Cancellation"
+        ],
+        "exentos": [
+          "TransferBetweenSameHolderSavings"
+        ]
+      }
+    ],
+    "movimientos": [
+      {
+        "id": "red",
+        "fecha": "2026-06-30",
+        "hecho": "TermDepositRedemptionToAccount",
+        "monto": 10488088,
+        "cuentaSujeta": true,
+        "esLaCuentaMarcada": false
+      }
+    ]
+  },
+  "nombre": "gmf-02-redencion-cdat-abonada",
+  "esperado": {
+    "movimientos": [
+      {
+        "id": "red",
+        "exentoAplicado": 0,
+        "baseGravada": 10488088,
+        "valor": 41952,
+        "exentoUsadoDespues": 0
+      }
+    ],
+    "totalGmf": 41952
+  }
+}

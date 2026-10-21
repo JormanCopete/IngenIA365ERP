@@ -1,0 +1,60 @@
+// Investigacion 3.2: 10.000.000 a 180 dias al 10 % EA, intereses al vencimiento, base 365: 481.244.
+{
+  "nombre": "cdat-01-vencimiento-base-365",
+  "descripcion": "Investigacion 3.2: 10.000.000 a 180 dias al 10 % EA, intereses al vencimiento, base 365: 481.244.",
+  "entrada": {
+    "condiciones": {
+      "capital": 10000000,
+      "tasaEA": 0.1,
+      "inicio": "2027-01-13",
+      "plazoDias": 180,
+      "periodicidad": "SinglePayment",
+      "modalidad": "Arrears",
+      "convencion": "Actual365",
+      "unidadDeRedondeo": 1,
+      "modoDeRedondeo": "AwayFromZero"
+    },
+    "gracia": 3,
+    "causacionEn": [
+      "2027-01-14",
+      "2027-04-13",
+      "2027-07-11",
+      "2027-07-12"
+    ]
+  },
+  "esperado": {
+    "vencimiento": "2027-07-12",
+    "fechaDePagoAlVencimiento": "2027-07-12",
+    "plazoDeEmision": "SixToTwelve",
+    "periodos": [
+      {
+        "numero": 1,
+        "desde": "2027-01-13",
+        "hasta": "2027-07-12",
+        "fechaDePago": "2027-07-12",
+        "dias": 180,
+        "interes": 481244
+      }
+    ],
+    "interesTotal": 481244,
+    "finDeLaGracia": "2027-07-15",
+    "acumulados": [
+      {
+        "dia": "2027-01-14",
+        "acumulado": 2611.578761
+      },
+      {
+        "dia": "2027-04-13",
+        "acumulado": 237794.680856
+      },
+      {
+        "dia": "2027-07-11",
+        "acumulado": 478507.447988
+      },
+      {
+        "dia": "2027-07-12",
+        "acumulado": 481244
+      }
+    ]
+  }
+}

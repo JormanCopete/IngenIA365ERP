@@ -1,0 +1,165 @@
+@page "/cartera/retiros-asociado"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Globalization
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Http
+@inject CaptacionesClient Cliente
+@inject INotificationService Notification
+@inject NavigationManager Navegacion
+
+<PageTitle>Retiros de asociado - IngenIA365ERP</PageTitle>
+
+@* Feature 014, US10 (T106; FR-076 a FR-080; contracts/api.md §11): el trámite del retiro del asociado vive en la Cartera. La lista de los retiros del
+   alcance por estado y causa, y la radicación con la causa, el detalle y la fecha de la solicitud (una solicitud viva por persona). La aprobación con el
+   punto del acta, la liquidación con el cruce contra los créditos y la devolución se hacen en la ficha (/cartera/retiros-asociado/{id}). *@
+<PermissionGate Required="Lending.MembershipWithdrawals.File" AnyOf="@Permisos" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Retiros de asociado</h3>
+        <div class="toolbar">
+            <select class="e-input" value="@_estado" @onchange="@(e => CambiarEstadoAsync(e.Value?.ToString()))">
+                <option value="">Todos los estados</option>
+                @foreach (var (valor, nombre) in TextosDeRetiros.Estados)
+                {
+                    <option value="@valor">@nombre</option>
+                }
+            </select>
+            <select class="e-input" value="@_causa" @onchange="@(e => CambiarCausaAsync(e.Value?.ToString()))">
+                <option value="">Todas las causas</option>
+                @foreach (var (valor, nombre) in TextosDeRetiros.Causas)
+                {
+                    <option value="@valor">@nombre</option>
+                }
+            </select>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+            <PermissionGate Required="Lending.MembershipWithdrawals.File">
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@AbrirRadicacion">Radicar retiro</SfButton>
+            </PermissionGate>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        <div class="tabla-desplazable">
+            <table class="data-grid">
+                <thead>
+                    <tr><th>Radicado</th><th>Asociado</th><th>Causa</th><th>Radicado el</th><th>Estado</th><th class="numero">Devolución</th><th></th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var r in _retiros)
+                    {
+                        var retiro = r;
+                        <tr>
+                            <td>@retiro.Number</td>
+                            <td>@retiro.Person.FullName<br /><span class="texto-tenue">@retiro.Person.DocumentNumber</span></td>
+                            <td>@TextosDeRetiros.Causa(retiro.Cause)</td>
+                            <td>@retiro.FiledOn.ToString("dd/MM/yyyy")</td>
+                            <td>@TextosDeRetiros.Estado(retiro.Status)</td>
+                            <td class="numero">@(retiro.Settlement is { } s ? Pesos(s.Refund) : "—")</td>
+                            <td><SfButton CssClass="e-flat e-small" OnClick="@(() => Navegacion.NavigateTo($"/cartera/retiros-asociado/{retiro.PublicId}"))">Ver</SfButton></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (_retiros.Count == 0) { <p class="texto-tenue">No hay retiros con esos filtros en su alcance.</p> }
+    </IndicadorDeCarga>
+</div>
+
+<SfDialog @bind-Visible="_mostrarRadicacion" Header="Radicar el retiro del asociado" Width="620px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_accion.Activa" Texto="Radicando el retiro…">
+                <div class="campo campo-ancho">
+                    <span>Asociado *</span>
+                    <PersonSearchPicker Selected="@_persona" SelectedChanged="@(p => _persona = p)" ShowHelpText="false" Compacto="true" />
+                </div>
+                <label class="campo">Causa *
+                    <select class="e-input" @bind="_causaNueva">
+                        @foreach (var (valor, nombre) in TextosDeRetiros.Causas)
+                        {
+                            <option value="@valor">@nombre</option>
+                        }
+                    </select>
+                </label>
+                <label class="campo">Fecha de la solicitud <input class="e-input" type="date" @bind="_fechaSolicitud" /></label>
+                <label class="campo campo-ancho">Detalle de la causa @(_causaNueva == 99 ? "*" : "")
+                    <textarea class="e-input" rows="2" maxlength="500" @bind="_detalle"></textarea>
+                </label>
+                <label class="campo campo-ancho">Nota <textarea class="e-input" rows="2" maxlength="500" @bind="_nota"></textarea></label>
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_accion.Activa || _persona is null || (_causaNueva == 99 && string.IsNullOrWhiteSpace(_detalle)))"
+                              OnClick="@RadicarAsync">Radicar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarRadicacion = false)">Volver</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private static readonly CultureInfo Es = CultureInfo.GetCultureInfo("es-CO");
+
+    private readonly EstadoDeCarga _carga = new(), _accion = new();
+    private static readonly string[] Permisos = ["Lending.MembershipWithdrawals.Approve", "Lending.MembershipWithdrawals.Settle"];
+    private List<RetiroDeAsociadoDto> _retiros = [];
+    private string _estado = string.Empty, _causa = string.Empty;
+    private bool _mostrarRadicacion;
+    private PersonSearchPicker.PersonSearchItem? _persona;
+    private int _causaNueva = 1;
+    private DateTime? _fechaSolicitud = DateTime.Today;
+    private string? _detalle, _nota, _error;
+    private ClaveDeOperacion _clave = new();
+
+    protected override Task OnInitializedAsync() => CargarAsync();
+
+    private async Task CambiarEstadoAsync(string? estado)
+    {
+        _estado = estado ?? string.Empty;
+        await CargarAsync();
+    }
+
+    private async Task CambiarCausaAsync(string? causa)
+    {
+        _causa = causa ?? string.Empty;
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Cliente.RetirosAsync(Numero(_estado), Numero(_causa));
+        if (!r.IsSuccess || r.Value is null) { _retiros = []; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer los retiros."); return; }
+        _retiros = [.. r.Value.Items];
+    }
+
+    private void AbrirRadicacion()
+    {
+        _persona = null;
+        _causaNueva = 1;
+        _fechaSolicitud = DateTime.Today;
+        _detalle = _nota = _error = null;
+        _clave = new ClaveDeOperacion();
+        _mostrarRadicacion = true;
+    }
+
+    private async Task RadicarAsync()
+    {
+        if (_persona is null) return;
+        using var carga = _accion.Iniciar();
+        _error = null;
+        var r = await Cliente.RadicarRetiroAsync(new RadicarRetiroRequest(_persona.PublicId, _causaNueva, Vacio(_detalle),
+            _fechaSolicitud is { } f ? DateOnly.FromDateTime(f) : null, null, Vacio(_nota)), _clave);
+        if (!r.IsSuccess || r.Value is null) { _error = string.Join(" ", LineasDeCreditoClient.Explicar(r)); return; }
+        _mostrarRadicacion = false;
+        await Notification.SuccessAsync($"Retiro {r.Value.Number} radicado: queda por decidir en una sesión del órgano.");
+        Navegacion.NavigateTo($"/cartera/retiros-asociado/{r.Value.PublicId}");
+    }
+
+    private static int? Numero(string? texto) => int.TryParse(texto, NumberStyles.Integer, CultureInfo.InvariantCulture, out var n) ? n : null;
+
+    private static string? Vacio(string? texto) => string.IsNullOrWhiteSpace(texto) ? null : texto.Trim();
+
+    private static string Pesos(decimal valor) => "$ " + valor.ToString("N0", Es);
+}
