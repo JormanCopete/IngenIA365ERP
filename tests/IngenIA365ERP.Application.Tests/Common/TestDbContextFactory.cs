@@ -1,4 +1,4 @@
-using IngenIA365ERP.Application.Common.Interfaces;
+﻿using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Domain.Entities.Accounting;
 using IngenIA365ERP.Domain.Entities.Accounting.Transactions;
 using IngenIA365ERP.Domain.Entities.Admin;
@@ -165,6 +165,7 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     public DbSet<Associate> Associates => Set<Associate>();
     public DbSet<Branch> Branches => Set<Branch>();
     public DbSet<CostCenter> CostCenters => Set<CostCenter>();
+    public DbSet<AssociateGroup> AssociateGroups => Set<AssociateGroup>();
     public DbSet<City> Cities => Set<City>();
     public DbSet<Bank> Banks => Set<Bank>();
     public DbSet<BankFileFormat> BankFileFormats => Set<BankFileFormat>();

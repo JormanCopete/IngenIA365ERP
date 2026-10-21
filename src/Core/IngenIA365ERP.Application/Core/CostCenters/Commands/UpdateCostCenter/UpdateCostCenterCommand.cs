@@ -1,4 +1,4 @@
-using IngenIA365ERP.Application.Common.Catalogos;
+﻿using IngenIA365ERP.Application.Common.Catalogos;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using MediatR;
@@ -35,8 +35,9 @@ public class UpdateCostCenterCommandHandler(
         if (entity is null)
             return Result.Failure(Error.NotFound);
 
-        var codigo = CodigoDeCatalogo.Normalizar(request.Code);
-        if (codigo is not null)
+        // Código nulo = «no se envió»: se conserva el que tiene. Vacío = quitarlo a propósito.
+        var codigo = request.Code is null ? entity.LegacyCode : CodigoDeCatalogo.Normalizar(request.Code);
+        if (codigo is not null && request.Code is not null)
         {
             var repetido = await context.CostCenters.AsNoTracking()
                 .FirstOrDefaultAsync(e => e.LegacyCode == codigo && e.Id != entity.Id && !e.IsDeleted, cancellationToken);

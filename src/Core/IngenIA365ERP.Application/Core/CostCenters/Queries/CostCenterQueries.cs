@@ -1,4 +1,4 @@
-using IngenIA365ERP.Application.Common.Interfaces;
+﻿using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -40,6 +40,7 @@ public class ListCostCentersQueryHandler(IApplicationDbContext context)
             var term = request.SearchTerm.Trim().ToLower();
             query = query.Where(e =>
                 e.Name.ToLower().Contains(term) ||
+                (e.LegacyCode != null && e.LegacyCode.ToLower().Contains(term)) ||
                 (e.CompanyName != null && e.CompanyName.ToLower().Contains(term)));
         }
 

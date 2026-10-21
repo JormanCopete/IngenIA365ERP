@@ -1,4 +1,4 @@
-@page "/asociados/registro"
+﻿@page "/asociados/registro"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
 @using System.Net.Http.Json
 @inject HttpClient Http
@@ -157,6 +157,13 @@
                                     <label>Comité</label>
                                     <SfDropDownList TValue="Guid?" TItem="LookupOption" @bind-Value="_associateModel.CommitteePublicId"
                                                     DataSource="@_committees" AllowFiltering="true" Placeholder="Seleccione">
+                                        <DropDownListFieldSettings Text="Name" Value="PublicId" />
+                                    </SfDropDownList>
+                                </div>
+                                <div>
+                                    <label>Grupo del asociado</label>
+                                    <SfDropDownList TValue="Guid?" TItem="LookupOption" @bind-Value="_associateModel.AssociateGroupPublicId"
+                                                    DataSource="@_groups" AllowFiltering="true" ShowClearButton="true" Placeholder="Sin grupo">
                                         <DropDownListFieldSettings Text="Name" Value="PublicId" />
                                     </SfDropDownList>
                                 </div>
@@ -323,6 +330,7 @@
     private IReadOnlyList<OpcionDeCiudad> _ciudades = [];
     private List<LookupOption> _branches = new();
     private List<LookupOption> _committees = new();
+    private List<LookupOption> _groups = new();
     private List<LookupOption> _banks = new();
     private List<CodeOption> _accountTypes = new() { new("A", "Ahorros"), new("C", "Corriente") };
 
@@ -354,14 +362,16 @@
         var branchesTask = Http.GetListAsync<LookupRaw>("/api/core/branches?PageNumber=1&PageSize=500");
         var committeesTask = Http.GetListAsync<LookupRaw>("/api/core/committees?PageNumber=1&PageSize=500");
         var banksTask = Http.GetListAsync<LookupRaw>("/api/core/banks?PageNumber=1&PageSize=500");
+        var groupsTask = Http.GetListAsync<LookupRaw>("/api/core/associate-groups");
         // SuppressThrowing: la excepción agregada no se lanza; cada tarea se revisa justo debajo.
-        await Task.WhenAll(citiesTask, branchesTask, committeesTask, banksTask).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing | ConfigureAwaitOptions.ContinueOnCapturedContext);
+        await Task.WhenAll(citiesTask, branchesTask, committeesTask, banksTask, groupsTask).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing | ConfigureAwaitOptions.ContinueOnCapturedContext);
 
         var caidos = new List<string>();
         _ciudades = citiesTask.IsCompletedSuccessfully ? citiesTask.Result : Caido(citiesTask, "ciudades", caidos, (IReadOnlyList<OpcionDeCiudad>)[]);
         _branches = Resultado(branchesTask, "sucursales", caidos).Select(x => new LookupOption(x.PublicId, x.Name)).ToList();
         _committees = Resultado(committeesTask, "comités", caidos).Select(x => new LookupOption(x.PublicId, x.Name)).ToList();
         _banks = Resultado(banksTask, "bancos", caidos).Select(x => new LookupOption(x.PublicId, x.Name)).ToList();
+        _groups = Resultado(groupsTask, "grupos del asociado", caidos).Select(x => new LookupOption(x.PublicId, x.Name)).ToList();
 
         if (caidos.Count > 0)
             await Notification.ErrorAsync($"No se pudieron cargar estos catálogos: {string.Join("; ", caidos)}. Recargá la página antes de registrar un asociado.");
@@ -533,6 +543,7 @@
         BranchPublicId = a.BranchPublicId,
         SectionPublicId = a.SectionPublicId,
         CommitteePublicId = a.CommitteePublicId,
+        AssociateGroupPublicId = a.AssociateGroupPublicId,
         CategoryRating = a.CategoryRating,
         AssociateClass = a.AssociateClass,
         PaymentType = a.PaymentType,
@@ -627,11 +638,11 @@
         }
     }
 
-    /// <summary>Los 23 campos de <c>AssociateInput</c>; con <c>PersonPublicId</c> es <c>RegisterAssociateCommand</c>, con <c>Status</c> el PUT.</summary>
+    /// <summary>Los 24 campos de <c>AssociateInput</c>; con <c>PersonPublicId</c> es <c>RegisterAssociateCommand</c>, con <c>Status</c> el PUT.</summary>
     private PayloadAfiliacionDto PayloadAfiliacion() => new(
         _associateModel.JoinDateDt is { } j ? DateOnly.FromDateTime(j) : null,
         _associateModel.ContributionRate, _associateModel.EmployerCompanyPublicId, _associateModel.BranchPublicId,
-        _associateModel.SectionPublicId, _associateModel.CommitteePublicId, _associateModel.CategoryRating,
+        _associateModel.SectionPublicId, _associateModel.CommitteePublicId, _associateModel.AssociateGroupPublicId, _associateModel.CategoryRating,
         _associateModel.AssociateClass, _associateModel.PaymentType, _associateModel.ContributionPledged,
         _associateModel.ExternalEmployerName,
         _associateModel.ExternalEmploymentStartDateDt is { } e ? DateOnly.FromDateTime(e) : null,
@@ -748,6 +759,7 @@
         public string? Status { get; set; }
         public string? CategoryRating { get; set; }
         public Guid? CommitteePublicId { get; set; }
+        public Guid? AssociateGroupPublicId { get; set; }
         public string? AssociateClass { get; set; }
         public string? PaymentType { get; set; }
         public decimal ContributionPledged { get; set; }
@@ -774,6 +786,7 @@
         public Guid? BranchPublicId { get; set; }
         public Guid? SectionPublicId { get; set; }
         public Guid? CommitteePublicId { get; set; }
+        public Guid? AssociateGroupPublicId { get; set; }
         public string? CategoryRating { get; set; }
         public string? AssociateClass { get; set; }
         public string? PaymentType { get; set; }
@@ -797,7 +810,7 @@
     /// <summary><c>AssociateInput</c> del servidor; <c>PersonPublicId</c> y <c>Status</c> sólo viajan cuando aplican.</summary>
     private sealed record PayloadAfiliacionDto(
         DateOnly? JoinDate, decimal ContributionRate, Guid? EmployerCompanyPublicId, Guid? BranchPublicId,
-        Guid? SectionPublicId, Guid? CommitteePublicId, string? CategoryRating, string? AssociateClass, string? PaymentType,
+        Guid? SectionPublicId, Guid? CommitteePublicId, Guid? AssociateGroupPublicId, string? CategoryRating, string? AssociateClass, string? PaymentType,
         decimal ContributionPledged, string? ExternalEmployerName, DateOnly? ExternalEmploymentStartDate,
         decimal ExternalSalary, string? ExternalSalaryType, decimal ExternalSeverance, string? ExternalSeveranceFund,
         Guid? DepositBankPublicId, string? DepositBankAccountNumber, string? DepositBankAccountType,

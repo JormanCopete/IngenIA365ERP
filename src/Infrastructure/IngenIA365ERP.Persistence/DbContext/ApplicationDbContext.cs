@@ -1,4 +1,4 @@
-using IngenIA365ERP.Application.Common.Integration;
+﻿using IngenIA365ERP.Application.Common.Integration;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Domain.Common;
 using IngenIA365ERP.Domain.Entities.Core;
@@ -82,6 +82,7 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<Associate> Associates => Set<Associate>();
     public DbSet<Branch> Branches => Set<Branch>();
     public DbSet<CostCenter> CostCenters => Set<CostCenter>();
+    public DbSet<AssociateGroup> AssociateGroups => Set<AssociateGroup>();
     public DbSet<City> Cities => Set<City>();
     public DbSet<Bank> Banks => Set<Bank>();
     public DbSet<BankFileFormat> BankFileFormats => Set<BankFileFormat>();

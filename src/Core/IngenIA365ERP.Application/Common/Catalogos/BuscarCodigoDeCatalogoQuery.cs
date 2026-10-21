@@ -1,4 +1,4 @@
-using IngenIA365ERP.Application.Common.Interfaces;
+﻿using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -57,6 +57,8 @@ public sealed class BuscarCodigoDeCatalogoQueryHandler(IApplicationDbContext db)
         "bancos" => db.Banks.AsNoTracking().Where(e => !e.IsDeleted && e.LegacyCode == codigo).Select(e => new Hallazgo(e.PublicId, e.Name)),
         "empresas" => db.Companies.AsNoTracking().Where(e => !e.IsDeleted && e.LegacyCode == codigo).Select(e => new Hallazgo(e.PublicId, e.Name)),
         "centros-costo" => db.CostCenters.AsNoTracking().Where(e => !e.IsDeleted && e.LegacyCode == codigo).Select(e => new Hallazgo(e.PublicId, e.Name)),
+        // Grupos del asociado: el código es obligatorio y único entre vivos.
+        "grupos-del-asociado" => db.AssociateGroups.AsNoTracking().Where(e => !e.IsDeleted && e.Code == codigo).Select(e => new Hallazgo(e.PublicId, e.Name)),
         "secciones" => db.Sections.AsNoTracking().Where(e => !e.IsDeleted && e.LegacyCode == codigo).Select(e => new Hallazgo(e.PublicId, e.Name)),
         "profesiones" => db.Professions.AsNoTracking().Where(e => !e.IsDeleted && e.LegacyCode == codigo).Select(e => new Hallazgo(e.PublicId, e.Name)),
         "cargos" => db.Positions.AsNoTracking().Where(e => !e.IsDeleted && e.LegacyCode == codigo).Select(e => new Hallazgo(e.PublicId, e.Name)),

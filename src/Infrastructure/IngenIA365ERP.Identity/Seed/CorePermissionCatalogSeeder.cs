@@ -1,4 +1,4 @@
-using IngenIA365ERP.Application.Common.Interfaces;
+﻿using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Domain.Entities.Security;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -36,6 +36,10 @@ public static class CorePermissionCatalogSeeder
         ("Core.Associates", "View",   "Ver asociados y su afiliación"),
         ("Core.Associates", "Create", "Registrar asociados (con persona existente o nueva)"),
         ("Core.Associates", "Update", "Editar la afiliación de un asociado"),
+
+        // Grupos del asociado: clasificación libre (zona, empresa, gremio, agencia…), sin efecto contable.
+        ("Core.AssociateGroups", "View",   "Ver los grupos del asociado"),
+        ("Core.AssociateGroups", "Manage", "Crear, editar, inactivar y reactivar grupos del asociado"),
 
         // Feature 010 (N4, D-42): los formatos de archivo bancario son de Core, ligados al banco, y los
         // comparten nómina, tesorería y contabilidad; verlos lo tiene todo rol (*.View), administrarlos

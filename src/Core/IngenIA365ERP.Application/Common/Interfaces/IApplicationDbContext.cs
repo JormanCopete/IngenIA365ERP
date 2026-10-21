@@ -1,4 +1,4 @@
-using IngenIA365ERP.Domain.Entities.Accounting;
+﻿using IngenIA365ERP.Domain.Entities.Accounting;
 using IngenIA365ERP.Domain.Entities.Accounting.Transactions;
 using IngenIA365ERP.Domain.Entities.Accounting.Inventory;
 using IngenIA365ERP.Domain.Entities.Admin;
@@ -29,6 +29,7 @@ public interface IApplicationDbContext
     DbSet<Associate> Associates { get; }
     DbSet<Branch> Branches { get; }
     DbSet<CostCenter> CostCenters { get; }
+    DbSet<AssociateGroup> AssociateGroups { get; }
     DbSet<City> Cities { get; }
     DbSet<Bank> Banks { get; }
     DbSet<BankFileFormat> BankFileFormats { get; }

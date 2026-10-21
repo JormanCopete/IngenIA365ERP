@@ -1,4 +1,4 @@
-using FluentValidation;
+﻿using FluentValidation;
 
 namespace IngenIA365ERP.Application.Core.Associates.Contracts;
 
@@ -16,6 +16,7 @@ public record AssociateInput
     public Guid? BranchPublicId { get; init; }
     public Guid? SectionPublicId { get; init; }
     public Guid? CommitteePublicId { get; init; }
+    public Guid? AssociateGroupPublicId { get; init; }
     public string? CategoryRating { get; init; }
     public string? AssociateClass { get; init; }
     public string? PaymentType { get; init; }
