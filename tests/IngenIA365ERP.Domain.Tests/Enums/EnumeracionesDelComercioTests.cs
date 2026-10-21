@@ -159,15 +159,21 @@ public class EnumeracionesDelComercioTests
              (DeliveryStatus.Rejected, 3), (DeliveryStatus.NotApplicable, 4), (DeliveryStatus.ValidationFailed, 5));
         Fija((DeliveryMode.Online, 1), (DeliveryMode.Batch, 2), (DeliveryMode.NotPosted, 3), (DeliveryMode.Always, 4));
         Fija((BatchTrigger.Scheduled, 1), (BatchTrigger.CashSessionClose, 2), (BatchTrigger.PeriodClose, 3),
-             (BatchTrigger.Manual, 4), (BatchTrigger.Reprocess, 5), (BatchTrigger.SendNotApplicable, 6));
+             (BatchTrigger.Manual, 4), (BatchTrigger.Reprocess, 5), (BatchTrigger.SendNotApplicable, 6),
+             // Feature 013 (data-model parte 3 §9.3, DC-11): valores aditivos de Cartera.
+             (BatchTrigger.LendingAccrualRun, 7), (BatchTrigger.LendingMonthlyClose, 8));
         Fija((BatchStatus.Requested, 0), (BatchStatus.Running, 1), (BatchStatus.Completed, 2),
              (BatchStatus.CompletedWithRejections, 3), (BatchStatus.Empty, 4));
         Fija((ActorKind.Person, 1), (ActorKind.Process, 2));
         Fija((ExecutionChannel.Web, 1), (ExecutionChannel.App, 2), (ExecutionChannel.Pos, 3), (ExecutionChannel.Process, 4));
-        Fija((PrevalidationOutcome.Postable, 1), (PrevalidationOutcome.NoResponse, 2), (PrevalidationOutcome.NotApplicable, 3));
+        // Feature 013 (C21; contabilidad.md §13.2): NotPostable, que sólo sella Cartera (adelantado de US7 por T0228).
+        Fija((PrevalidationOutcome.Postable, 1), (PrevalidationOutcome.NoResponse, 2), (PrevalidationOutcome.NotApplicable, 3),
+             (PrevalidationOutcome.NotPostable, 4));
         Fija((MessageOriginKind.Document, 1), (MessageOriginKind.Operation, 2));
         Fija((DeliveryAttemptOutcome.Processed, 1), (DeliveryAttemptOutcome.AlreadyProcessed, 2),
-             (DeliveryAttemptOutcome.Rejected, 3), (DeliveryAttemptOutcome.Retry, 4));
+             (DeliveryAttemptOutcome.Rejected, 3), (DeliveryAttemptOutcome.Retry, 4),
+             // Feature 013 (data-model parte 3 §9.3, PM-09, C18): la validación negativa de Cartera.
+             (DeliveryAttemptOutcome.ValidationFailed, 5));
     }
 
     [Fact]
@@ -175,5 +181,9 @@ public class EnumeracionesDelComercioTests
     {
         IntegrationDestinations.Accounting.Should().Be("Accounting");
         IntegrationDestinations.Lending.Should().Be("Lending");
+        // Feature 013 (data-model parte 3 §9.3; PM-06, CH9, CH10): destinos de los hechos de Cartera.
+        IntegrationDestinations.Inventory.Should().Be("Inventory");
+        IntegrationDestinations.Treasury.Should().Be("Treasury");
+        IntegrationDestinations.Receipts.Should().Be("Receipts");
     }
 }

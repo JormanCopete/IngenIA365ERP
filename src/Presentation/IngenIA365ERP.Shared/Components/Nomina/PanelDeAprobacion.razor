@@ -1,8 +1,10 @@
-﻿@*
+@*
     PanelDeAprobacion — diálogo de aprobación (contracts/ui.md §2): resumen de totales,
     lista de bloqueos con casilla «Autorizar excepción» + motivo (visible sólo con el
     permiso), texto de confirmación explícito, y segunda confirmación cuando la
     cooperativa permite aprobar sin segregación. Emite Aprobar con la petición armada.
+    Feature 013 (T0167): vista previa de lo que se entrega a Cartera (descuentos y no descontados) y la
+    casilla de reconocimiento de «Cartera por activar» cuando el servidor la pide.
 *@
 @using IngenIA365ERP.Shared.Services.Nomina
 
@@ -54,6 +56,39 @@
                         </table>
                     }
 
+                    <IndicadorDeCarga Cargando="@CargandoCartera" Texto="Consultando los descuentos de Cartera…">
+                        @if (DescuentosDeCartera is { Count: > 0 } cartera)
+                        {
+                            <span class="label">Descuentos de Cartera (@cartera.Count)</span>
+                            <p class="texto-tenue">Al aprobar, cada descuento se entrega a Cartera antes del comprobante. Si Cartera no recibe uno, la aprobación sigue: el descuento baja a lo que Cartera tomó y el neto del empleado sube.</p>
+                            <table class="data-grid">
+                                <thead><tr><th>Empleado</th><th>Crédito</th><th class="num">Cuota</th><th class="num">Descontado</th><th class="num">Sin descontar</th><th>Motivo</th></tr></thead>
+                                <tbody>
+                                    @foreach (var d in cartera)
+                                    {
+                                        <tr>
+                                            <td>@d.Employee.Name</td>
+                                            <td>@d.ObligationNumber</td>
+                                            <td class="num">@d.Expected.ToString("N0")</td>
+                                            <td class="num">@d.Deducted.ToString("N0")</td>
+                                            <td class="num">@d.NotDeducted.ToString("N0")</td>
+                                            <td class="texto-tenue">@d.MotivoTexto</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        }
+                    </IndicadorDeCarga>
+
+                    @if (_pideReconocerCartera)
+                    {
+                        <div class="info-card">
+                            <span class="label">Cartera por activar</span>
+                            <p>@_mensajeCartera</p>
+                            <label class="campo-check"><input type="checkbox" @bind="_reconoceCartera" /> Sé que Cartera está por activar y que esta nómina no les descuenta cuotas a esos empleados.</label>
+                        </div>
+                    }
+
                     @if (Corrida.EmployeeCount == 0)
                     {
                         <label class="campo-check"><input type="checkbox" @bind="_confirmarVacio" /> Entiendo que el período no tiene empleados y quiero aprobarlo vacío.</label>
@@ -91,9 +126,17 @@
     [Parameter] public EventCallback<AprobarRequest> Aprobar { get; set; }
     [Parameter] public bool Enviando { get; set; }
 
+    /// <summary>Feature 013: los descuentos de Cartera de la corrida (vista previa del lote).</summary>
+    [Parameter] public IReadOnlyList<DescuentoDeCarteraDto>? DescuentosDeCartera { get; set; }
+    [Parameter] public bool CargandoCartera { get; set; }
+
     private readonly HashSet<string> _autorizadas = [];
     private readonly Dictionary<string, string> _motivos = [];
-    private bool _confirmar, _confirmarVacio, _confirmarSinSegregacion, _pideSegundaConfirmacion;
+    private bool _confirmar, _confirmarVacio, _confirmarSinSegregacion, _pideSegundaConfirmacion, _pideReconocerCartera, _reconoceCartera;
+    private string _mensajeCartera = string.Empty;
+
+    /// <summary>La pantalla la llama cuando el servidor pidió reconocer «Cartera por activar».</summary>
+    public void PedirReconocerCartera(string mensaje) { _pideReconocerCartera = true; _mensajeCartera = mensaje; StateHasChanged(); }
 
     /// <summary>La pantalla la llama cuando el servidor pidió la segunda confirmación (Payroll.SegregationConfirmationRequired).</summary>
     public void PedirSegundaConfirmacion() { _pideSegundaConfirmacion = true; StateHasChanged(); }
@@ -101,7 +144,8 @@
     public void Reiniciar()
     {
         _autorizadas.Clear(); _motivos.Clear();
-        _confirmar = _confirmarVacio = _confirmarSinSegregacion = _pideSegundaConfirmacion = false;
+        _confirmar = _confirmarVacio = _confirmarSinSegregacion = _pideSegundaConfirmacion = _pideReconocerCartera = _reconoceCartera = false;
+        _mensajeCartera = string.Empty;
     }
 
     private static string Clave(BloqueoDto b) => $"{b.EmployeePublicId}|{b.Flag}";
@@ -119,7 +163,8 @@
         !Enviando && _confirmar && Corrida is not null
         && (Corrida.EmployeeCount > 0 || _confirmarVacio)
         && TodosLosBloqueosCubiertos
-        && (!_pideSegundaConfirmacion || _confirmarSinSegregacion);
+        && (!_pideSegundaConfirmacion || _confirmarSinSegregacion)
+        && (!_pideReconocerCartera || _reconoceCartera);
 
     private async Task Enviar()
     {
@@ -128,7 +173,7 @@
             .Where(b => _autorizadas.Contains(Clave(b)))
             .Select(b => new ExcepcionAprobacionDto(b.EmployeePublicId, b.Flag, Motivo(Clave(b)).Trim()))
             .ToList();
-        await Aprobar.InvokeAsync(new AprobarRequest(true, excepciones, _confirmarVacio, _confirmarSinSegregacion));
+        await Aprobar.InvokeAsync(new AprobarRequest(true, excepciones, _confirmarVacio, _confirmarSinSegregacion, _reconoceCartera));
     }
 
     private async Task Cerrar() => await OnDialogVisibleChanged(false);

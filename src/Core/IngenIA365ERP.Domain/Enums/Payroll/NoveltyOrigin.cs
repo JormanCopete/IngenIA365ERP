@@ -15,4 +15,10 @@ public enum NoveltyOrigin
     /// que las recurrentes: la anula la reversión o el descarte de la corrida, no una persona.
     /// </summary>
     VacationLeave = 6,
+
+    /// <summary>
+    /// Feature 014 (E-02; contrato-de-cuentas §6.1): la cuota de aportes o de ahorro (<c>DESC_APORTES</c>, <c>DESC_AHORROS</c>) que la Cartera
+    /// informa exigible por el contrato de cuentas; una por empleado, cuenta y período. Como la de Cartera, no se edita a mano.
+    /// </summary>
+    AccountDeduction = 7,
 }

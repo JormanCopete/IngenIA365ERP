@@ -1,0 +1,216 @@
+@page "/cartera/acuerdos-de-pago"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Http
+@inject CobranzaClient Cliente
+@inject INotificationService Notification
+
+<PageTitle>Acuerdos de pago - IngenIA365ERP</PageTitle>
+
+@* Feature 013, K4, US12 (T0958; contracts/api.md §14.7; FR-120): los acuerdos de pago sobre lo vencido. Se proponen con sus cuotas, los aprueba otra
+   persona distinta de quien los propuso, y su cumplimiento se deriva solo de los pagos vigentes: «Al día», «Cumplido» o «Incumplido» (el incumplido
+   devuelve el crédito a la etapa que le corresponde por su mora). Un acuerdo que cambia las condiciones del crédito no es un acuerdo de pago sino una
+   novedad (Novedades). Leer exige Lending.Collections.Read; proponer y cancelar, Lending.PaymentAgreements.Create; aprobar y rechazar,
+   Lending.PaymentAgreements.Approve. *@
+<PermissionGate Required="Lending.Collections.Read" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Acuerdos de pago</h3>
+        <PermissionGate Required="Lending.PaymentAgreements.Create">
+            <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@AbrirNuevo">Nuevo acuerdo</SfButton>
+        </PermissionGate>
+    </div>
+    <div class="toolbar">
+        <label class="campo">Estado
+            <select class="e-input" @bind="_estado">
+                <option value="">Todos</option>
+                @foreach (var e in TextosDeCobranza.EstadosDeAcuerdo) { <option value="@e.Valor">@e.Texto</option> }
+            </select>
+        </label>
+        <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@(() => CargarAsync(1))">Consultar</SfButton>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        <div class="tabla-desplazable">
+            <table class="data-grid">
+                <thead><tr><th>Número</th><th>Crédito</th><th>Deudor</th><th class="numero">Vencido al acordar</th><th class="numero">Acordado</th><th>Cuotas</th><th>Estado</th><th>Cumplimiento</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var a in _filas)
+                    {
+                        var acuerdo = a;
+                        <tr>
+                            <td>@acuerdo.Number</td>
+                            <td><a href="/cartera/creditos/@acuerdo.Loan.LoanPublicId">@acuerdo.Loan.Number</a></td>
+                            <td>@acuerdo.Debtor.FullName</td>
+                            <td class="numero">@TextosDeCreditos.Pesos(acuerdo.PastDueAmountAtAgreement)</td>
+                            <td class="numero">@TextosDeCreditos.Pesos(acuerdo.TotalAmount)</td>
+                            <td>@string.Join(" · ", acuerdo.Installments.Select(c => $"{c.DueDate:dd/MM} {TextosDeCreditos.Pesos(c.Amount)}"))</td>
+                            <td>@TextosDeCobranza.EstadoDeAcuerdo(acuerdo.Status)@(acuerdo.RejectionReason is { } r ? $" · {r}" : "")@(acuerdo.CancelReason is { } c ? $" · {c}" : "")</td>
+                            <td>
+                                @TextosDeCobranza.DesempenoDeAcuerdo(acuerdo.Performance)
+                                @if (acuerdo.Compliance is { } k) { <span class="texto-tenue"> · pagado @TextosDeCreditos.Pesos(k.Paid) de @TextosDeCreditos.Pesos(k.Total)@(k.BrokenOn is { } b ? $" · incumplió el {b:dd/MM/yyyy}" : "")</span> }
+                            </td>
+                            <td>
+                                @if (acuerdo.Status == 1)
+                                {
+                                    <PermissionGate Required="Lending.PaymentAgreements.Approve">
+                                        <SfButton CssClass="e-flat e-small e-primary" Disabled="@_accion.Activa" OnClick="@(() => AprobarAsync(acuerdo))">Aprobar</SfButton>
+                                        <SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirMotivo(acuerdo, true))">Rechazar…</SfButton>
+                                    </PermissionGate>
+                                }
+                                @if (acuerdo.Status is 1 or 2)
+                                {
+                                    <PermissionGate Required="Lending.PaymentAgreements.Create">
+                                        <SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirMotivo(acuerdo, false))">Cancelar…</SfButton>
+                                    </PermissionGate>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (_filas.Count == 0) { <p class="texto-tenue">No hay acuerdos con ese filtro.</p> }
+        <Paginador Pagina="@_pagina" Total="@_total" Tamano="@TamanoDePagina" Cambia="@CargarAsync" />
+    </IndicadorDeCarga>
+</div>
+
+<SfDialog @bind-Visible="_mostrarNuevo" Header="Nuevo acuerdo de pago" Width="680px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_accion.Activa" Texto="Registrando…">
+                <SelectorDeCredito @bind-Value="_credito" MoraMinima="1" />
+                <p class="texto-tenue">Las cuotas cubren lo vencido; si cambian el plazo, la tasa o la cuota del crédito, tramítelo como novedad.</p>
+                @foreach (var l in _cuotas)
+                {
+                    var cuota = l;
+                    <div class="toolbar">
+                        <label class="campo">Vence <input class="e-input" type="date" @bind="cuota.Fecha" /></label>
+                        <label class="campo">Valor ($) <input class="e-input" type="number" min="1" step="1" @bind="cuota.Valor" /></label>
+                        <SfButton CssClass="e-flat e-small" OnClick="@(() => _cuotas.Remove(cuota))">Quitar</SfButton>
+                    </div>
+                }
+                <SfButton CssClass="e-flat e-small" OnClick="@(() => _cuotas.Add(new CuotaEditable()))">Agregar cuota</SfButton>
+                <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" maxlength="1000" /></label>
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_accion.Activa || _credito is null || _cuotas.Count == 0 || string.IsNullOrWhiteSpace(_motivo))" OnClick="@ProponerAsync">Proponer</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarNuevo = false)">Volver</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarMotivo" Header="@(_rechaza ? "Rechazar el acuerdo" : "Cancelar el acuerdo")" Width="520px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_accion.Activa" Texto="Guardando…">
+                <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" maxlength="500" /></label>
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_accion.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@ConMotivoAsync">@(_rechaza ? "Rechazar" : "Cancelar acuerdo")</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarMotivo = false)">Volver</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private const int TamanoDePagina = 20;
+
+    private sealed class CuotaEditable
+    {
+        public DateTime? Fecha { get; set; } = DateTime.Today.AddDays(7);
+        public decimal Valor { get; set; }
+    }
+
+    private readonly EstadoDeCarga _carga = new(), _accion = new();
+    private List<AcuerdoDePagoDto> _filas = [];
+    private List<CuotaEditable> _cuotas = [];
+    private string? _estado, _error, _motivo;
+    private bool _mostrarNuevo, _mostrarMotivo, _rechaza;
+    private int _pagina = 1;
+    private long _total;
+    private Guid? _credito;
+    private AcuerdoDePagoDto? _elegido;
+    private ClaveDeOperacion _clave = new();
+
+    protected override async Task OnInitializedAsync() => await CargarAsync(1);
+
+    private async Task CargarAsync(int pagina)
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Cliente.AcuerdosAsync(int.TryParse(_estado, out var e) ? e : null, null, pagina);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer los acuerdos."); return; }
+        _filas = [.. r.Value?.Items ?? []];
+        _total = r.Value?.TotalCount ?? 0;
+        _pagina = pagina;
+    }
+
+    private void AbrirNuevo()
+    {
+        _error = _motivo = null;
+        _credito = null;
+        _cuotas = [new CuotaEditable()];
+        _clave = new ClaveDeOperacion();
+        _mostrarNuevo = true;
+    }
+
+    private async Task ProponerAsync()
+    {
+        if (_credito is not { } credito) return;
+        using var carga = _accion.Iniciar();
+        _error = null;
+        var cuotas = _cuotas.Where(c => c.Fecha is not null && c.Valor > 0).Select(c => new CuotaDeAcuerdoRequest(DateOnly.FromDateTime(c.Fecha!.Value), c.Valor)).ToList();
+        var r = await Cliente.ProponerAcuerdoAsync(new AcuerdoDePagoRequest(credito, cuotas, _motivo!.Trim()), _clave);
+        if (!r.IsSuccess)
+        {
+            _error = r.ErrorCode == "Lending.PaymentAgreement.ChangesTerms"
+                ? "El acuerdo cambia las condiciones del crédito: tramítelo como una novedad (Novedades) con el acuerdo de pago como soporte."
+                : r.ErrorMessage ?? "No se pudo proponer el acuerdo.";
+            return;
+        }
+        _mostrarNuevo = false;
+        await Notification.SuccessAsync($"Acuerdo {r.Value?.Number} propuesto; lo aprueba otra persona.");
+        await CargarAsync(1);
+    }
+
+    private async Task AprobarAsync(AcuerdoDePagoDto acuerdo)
+    {
+        using var carga = _accion.Iniciar();
+        var r = await Cliente.AprobarAcuerdoAsync(acuerdo.PublicId, null, new ClaveDeOperacion());
+        if (!r.IsSuccess)
+        {
+            await Notification.ErrorAsync(r.ErrorCode == "Lending.Segregation.Conflict"
+                ? "Quien propone el acuerdo no puede aprobarlo: lo aprueba otra persona."
+                : r.ErrorMessage ?? "No se pudo aprobar el acuerdo.");
+            return;
+        }
+        await Notification.SuccessAsync("Acuerdo aprobado.");
+        await CargarAsync(_pagina);
+    }
+
+    private void AbrirMotivo(AcuerdoDePagoDto acuerdo, bool rechaza)
+    {
+        _elegido = acuerdo;
+        _rechaza = rechaza;
+        _motivo = _error = null;
+        _clave = new ClaveDeOperacion();
+        _mostrarMotivo = true;
+    }
+
+    private async Task ConMotivoAsync()
+    {
+        if (_elegido is not { } a || string.IsNullOrWhiteSpace(_motivo)) return;
+        using var carga = _accion.Iniciar();
+        _error = null;
+        var r = _rechaza ? await Cliente.RechazarAcuerdoAsync(a.PublicId, _motivo.Trim(), _clave) : await Cliente.CancelarAcuerdoAsync(a.PublicId, _motivo.Trim(), _clave);
+        if (!r.IsSuccess) { _error = r.ErrorMessage ?? "No se pudo guardar."; return; }
+        _mostrarMotivo = false;
+        await Notification.SuccessAsync(_rechaza ? "Acuerdo rechazado." : "Acuerdo cancelado.");
+        await CargarAsync(_pagina);
+    }
+}

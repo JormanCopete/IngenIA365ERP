@@ -133,7 +133,8 @@ public static class LineFactory
         bool? affectsAccounting = null)
     {
         var contabiliza = affectsAccounting ?? concept.Nature != ConceptNature.Informative;
-        if (novelty?.Origin == NoveltyOrigin.LoanDeduction) contabiliza = false; // D-08: Cartera ya contabilizó
+        // Feature 013 (enmienda D-08 de la 010, T53, C1): la cuota de Cartera contabiliza contra la cuenta del concepto DESC_CARTERA
+        // (el puente «recaudos por nómina para Cartera»); antes la omitía porque Cartera ya había contabilizado el recaudo.
         return new CalculationLine
         {
             ConceptDefinitionId = concept.Id,

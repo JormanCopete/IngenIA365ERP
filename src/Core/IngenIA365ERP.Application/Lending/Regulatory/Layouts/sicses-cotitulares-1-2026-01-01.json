@@ -1,0 +1,122 @@
+{
+  "code": "SICSES-COTITULARES-v1",
+  "kind": "DepositsSicses",
+  "formatCode": "sicses-cotitulares",
+  "bureauCode": null,
+  "version": "1",
+  "source": "Formato 9068 del SICSES, informe de cotitulares de depósitos (NIF), columnas 01 a 06 del instructivo D-GEIN-010 v04 §6.11, Superintendencia de la Economía Solidaria (por cotejar)",
+  "validFrom": "2026-01-01",
+  "validTo": null,
+  "fileKind": "Delimited",
+  "delimiter": "|",
+  "encoding": "utf-8",
+  "lineEnding": "CRLF",
+  "normalizeText": true,
+  "records": [
+    {
+      "code": "Detail",
+      "repeat": "PorCotitular",
+      "fields": [
+        {
+          "number": 1,
+          "name": "Tipo de identificación del titular",
+          "order": 1,
+          "length": 1,
+          "kind": "A",
+          "format": "Text",
+          "required": true,
+          "path": "Titular.TipoDeIdentificacion",
+          "allowedValues": [
+            "C",
+            "N",
+            "P",
+            "E",
+            "T",
+            "R",
+            "U",
+            "O"
+          ],
+          "verified": false
+        },
+        {
+          "number": 2,
+          "name": "Número de identificación del titular",
+          "order": 2,
+          "length": 15,
+          "kind": "A",
+          "format": "Text",
+          "required": true,
+          "path": "Titular.NumeroDeIdentificacion",
+          "verified": false
+        },
+        {
+          "number": 3,
+          "name": "Tipo de identificación del cotitular",
+          "order": 3,
+          "length": 1,
+          "kind": "A",
+          "format": "Text",
+          "required": true,
+          "path": "Cotitular.TipoDeIdentificacion",
+          "allowedValues": [
+            "C",
+            "N",
+            "P",
+            "E",
+            "T",
+            "R",
+            "U",
+            "O"
+          ],
+          "verified": false
+        },
+        {
+          "number": 4,
+          "name": "Número de identificación del cotitular",
+          "order": 4,
+          "length": 15,
+          "kind": "A",
+          "format": "Text",
+          "required": true,
+          "path": "Cotitular.NumeroDeIdentificacion",
+          "verified": false
+        },
+        {
+          "number": 5,
+          "name": "Tipo de depósito",
+          "order": 5,
+          "length": 1,
+          "kind": "N",
+          "format": "Integer",
+          "required": true,
+          "path": "Cuenta.TipoDeAhorro",
+          "allowedValues": [
+            "1",
+            "2",
+            "3",
+            "4",
+            "5"
+          ],
+          "verified": false
+        },
+        {
+          "number": 6,
+          "name": "Número del depósito",
+          "order": 6,
+          "length": 30,
+          "kind": "A",
+          "format": "Text",
+          "required": true,
+          "path": "Cuenta.Numero",
+          "verified": false
+        }
+      ]
+    }
+  ],
+  "notes": [
+    "Campos reconstruidos de la fuente pública citada en «source»; cada uno lleva verified=false hasta que la contadora lo coteje con el instructivo vigente y un archivo aceptado por el validador (P8, P9). Cotejar es publicar una versión nueva con verified=true, verifiedBy, verifiedOn y verifiedAgainst.",
+    "Las rutas (path) son el vocabulario que entrega la proyección de captaciones de Application; cambiar una ruta es cambiar la proyección y el layout a la vez.",
+    "La periodicidad y el plazo son informativos (decisión del dueño): la entidad decide cuándo reporta; el SICSES de captaciones usa el mismo plazo informativo del perfil regulatorio o de Sicses.MesesDeCorte y Sicses.DiasDePlazo que el formato de cartera.",
+    "Una fila por cotitular vigente al último día del mes de cada cuenta de captación viva; acompaña al 9026 (su columna «el depósito tiene cotitulares» en S). Los nombres los toma el SICSES del formato de usuarios: no van en el archivo."
+  ]
+}

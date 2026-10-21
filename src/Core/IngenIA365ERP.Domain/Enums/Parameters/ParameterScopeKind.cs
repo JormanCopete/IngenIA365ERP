@@ -14,4 +14,10 @@ public enum ParameterScopeKind
     PointOfSale = 3,
     CashRegister = 4,
     ThirdPartyKind = 5,
+
+    /// <summary>Feature 013 (T43, R17): una línea de crédito de Cartera (<c>LND_CreditLines</c>).</summary>
+    CreditLine = 6,
+
+    /// <summary>Feature 013 (T43, DC-11): un tipo de hecho de Cartera (<c>LND_FactTypes</c>).</summary>
+    LendingFactType = 7,
 }

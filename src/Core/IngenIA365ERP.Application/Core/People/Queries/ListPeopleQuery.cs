@@ -1,4 +1,4 @@
-using IngenIA365ERP.Application.Common.Interfaces;
+﻿using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Core.People.Services;
 using MediatR;
@@ -158,6 +158,7 @@ public record PersonEditDto(
     public bool IsSimpleTaxRegime { get; init; }
     public bool IsIncomeTaxFiler { get; init; }
     public bool IsObligatedToInvoice { get; init; }
+    public bool IsObligatedToKeepBooks { get; init; }
     public bool IsLargeContributor { get; init; }
     public bool WithholdingExempt { get; init; }
     public bool IcaWithholdingExempt { get; init; }
@@ -219,6 +220,7 @@ public class GetPersonByIdQueryHandler(IApplicationDbContext context)
             IsSimpleTaxRegime = person.IsSimpleTaxRegime,
             IsIncomeTaxFiler = person.IsIncomeTaxFiler,
             IsObligatedToInvoice = person.IsObligatedToInvoice,
+            IsObligatedToKeepBooks = person.IsObligatedToKeepBooks,
             IsLargeContributor = person.IsLargeContributor,
             WithholdingExempt = person.WithholdingExempt,
             IcaWithholdingExempt = person.IcaWithholdingExempt,

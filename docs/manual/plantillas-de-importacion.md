@@ -147,6 +147,58 @@ I3; la 16 (matriz contable) descarga e importa con I2. El detalle y la receta de
 [inventario-puesta-en-marcha.md](../operaciones/inventario-puesta-en-marcha.md) y en la pantalla
 `/inventario/plantillas`.
 
+## 5a. Cartera: la carga de migración por partes y los cobros provisionales
+
+> Feature 013 (US8, K1). Las columnas de cada parte y de los cobros están en
+> [contracts/plantillas.md](../../specs/013-cartera-financiera/contracts/plantillas.md) §5 y §6, que son la única fuente: aquí no se
+> copian. El procedimiento completo de la puesta en marcha, en
+> [cartera-puesta-en-marcha.md](../operaciones/cartera-puesta-en-marcha.md).
+
+**Las partes.** La cartera vigente entra con fecha de corte en una **carga** de 17 partes (`lending.migration.{parte}`: créditos, cuotas,
+saldos, mora/calificación/deterioro —las cuatro obligatorias— y reestructuraciones, codeudores, garantías, castigados, ventas, cupos,
+bloqueos, autorizaciones, avisos previos, reportes, reclamos, vinculados e historial de mora). Cada parte es una plantilla de una hoja
+`Datos` (admite `.csv`) sobre la ruta `/api/lending/migration/loads/{id}/parts/{parte}`, con la misma mecánica de §2: plantilla vacía,
+revisar sin guardar, aplicar todo o nada, errores por fila y columna, revisión en Excel. **Ninguna crea personas.** La parte sale de la
+ruta (`RutasDePlantilla.MapPlantillaPorRuta`, la forma generalizada de `MapPlantilla`); una parte desconocida es
+`Lending.Template.NotFound`. La pantalla es `/cartera/migracion`, que reutiliza `<ImportarPlantilla>` con `QueryAdicional`.
+
+**Varios archivos por parte.** Una parte grande se sube en varios archivos: cada `apply` agrega su archivo como una **tanda** (una fila de
+`LND_MigrationLoadParts`). El mismo archivo otra vez es «sin cambio»; una llave repetida en otra tanda es `Import.Row.Duplicate` y nombra
+la tanda; `replace=true` deja las tandas anteriores `Superseded` antes de agregar el archivo. Las referencias a otras partes son avisos al
+importar y errores al aplicar la carga (`Lending.Migration.CrossPartErrors`, con parte, tanda, fila y columna).
+
+**Aplicar la carga no es aplicar una plantilla**: es `ApplyMigrationLoadCommand`, que valida entre partes, cuadra contra Contabilidad y
+concilia las ventas; los créditos nacen al activar.
+
+**Cobros provisionales** (`lending.provisional-collections`): una sola hoja, **sólo se revisa** (`/api/lending/activation/provisional-
+collections/review`); la revisión deja el archivo como adjunto y la activación lo vuelve a validar y guarda las filas. No hay `apply`.
+
+**Orden de carga** de una cooperativa que inicia (plantillas.md §0.1): lo que no tiene plantilla (personas, oficinas vinculadas, valores
+nacionales, perfil, órganos, roles); líneas y matriz contable; vinculados, saldos de aportes y listas restrictivas; la carga de migración;
+la aceptación de diferencias con acta; la activación con los cobros provisionales.
+
+## 5b. Cartera: el registro de plantillas `lending.*`
+
+> Feature 013, fase 24 (T1072). El registro es `CatalogoDePlantillasDeCartera.Todas` (`Application/Lending/Imports`), que la pantalla
+> `/cartera/plantillas` muestra en su **orden de carga**; las columnas, en
+> [contracts/plantillas.md](../../specs/013-cartera-financiera/contracts/plantillas.md). Todas siguen la mecánica de §2 (revisar sin guardar,
+> aplicar todo o nada, errores por fila y columna, `Idempotency-Key`); las que traen datos personales exigen además
+> `Lending.Reports.ExportPersonalData` para descargarlas con datos.
+
+| Clave | Qué carga | Ruta | Ver / Importar | Desde |
+|---|---|---|---|---|
+| `lending.credit-lines` | Líneas con tasas, documentos, seguros, garantías y equivalencias de plazos de Comercial (6 hojas) | `/api/lending/credit-lines` | `Lending.CreditLines.View` / `.Manage` | K1 |
+| `lending.related-parties` | Personas vinculadas (Ley 454, art. 61) | `/api/lending/related-parties` | `Lending.Templates.View` / `Lending.RelatedParties.Manage` | K1 |
+| `lending.contribution-balances` | Saldos de aportes y ahorro permanente para el cupo por múltiplo | `/api/lending/contribution-balances` | `Lending.Templates.View` / `Lending.CreditLimits.Assign` | K1 |
+| `lending.migration.{parte}` | Las 17 partes de la carga de migración (§5a) | `/api/lending/migration/loads/{id}/parts/{parte}` | `Lending.Templates.View` / `Lending.Migration.Load` | K1 |
+| `lending.provisional-collections` | Cobros provisionales entre el corte y la activación (sólo se revisa, §5a) | `/api/lending/activation/provisional-collections` | `Lending.Templates.View` / `Lending.Activation.Execute` | K1 |
+| `lending.payroll-agreements` | Pagadurías, convenios, contactos y códigos de respuesta (3 hojas) | `/api/lending/payroll-agreements` | `Lending.PayrollAgreements.View` / `.Manage` | K2 |
+| `lending.arrears-history` | Historial de mora complementario para la pérdida esperada | `/api/lending/risk/arrears-history` | `Lending.Templates.View` / `Lending.ArrearsHistory.Import` | K6a |
+
+Fuera del registro de Cartera, pero de la misma familia: la **matriz contable de Cartera** (`/contabilidad/cartera/matriz`, sus filas sugeridas
+vienen **sin cuenta** y la contadora las diligencia; ver [cartera-integracion-contable.md](cartera-integracion-contable.md) §3) y la de
+**valores nacionales** del maestro (`saas.national-values`, ver [valores-nacionales.md](../operaciones/valores-nacionales.md) §3).
+
 ## 6. Diferencias con lo que el plan decía
 
 - **La 009 no se pasó a esta mecánica.** La carga de auxiliares (`ImportAccountsCommand`), la apertura

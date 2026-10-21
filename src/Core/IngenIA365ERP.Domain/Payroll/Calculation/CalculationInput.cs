@@ -52,6 +52,51 @@ public sealed record CalculationPolicies
     /// «no» por defecto). Salud, pensión y parafiscales se causan completos en todo caso.
     /// </summary>
     public bool CotizaArlEnVacaciones { get; init; }
+
+    /// <summary>
+    /// Feature 014 (decisión del dueño del 2026-10-18, D37): el orden de los descuentos de la Cartera dentro de las deducciones autorizadas
+    /// —aportes, créditos y ahorros—, de la política <c>PrelacionDescuentosDeCartera</c> de la cooperativa, con vigencia. Por defecto aportes → créditos →
+    /// ahorros (E-02).
+    /// </summary>
+    public IReadOnlyList<CarteraDeductionKind> CarteraDeductionOrder { get; init; } = CarteraDeductionKinds.Defecto;
+}
+
+/// <summary>Las clases de descuento de la Cartera en la nómina (feature 014, D37). (nuevo)</summary>
+public enum CarteraDeductionKind
+{
+    Contributions = 1,
+    Loans = 2,
+    Savings = 3,
+}
+
+/// <summary>El orden por defecto de <see cref="CarteraDeductionKind"/> y su lectura desde el texto de la política (feature 014, D37). (nuevo)</summary>
+public static class CarteraDeductionKinds
+{
+    /// <summary>Aportes → créditos → ahorros (E-02 de la feature 014).</summary>
+    public static IReadOnlyList<CarteraDeductionKind> Defecto { get; } = [CarteraDeductionKind.Contributions, CarteraDeductionKind.Loans, CarteraDeductionKind.Savings];
+
+    /// <summary>
+    /// El texto de la política (<c>Aportes,Creditos,Ahorros</c> en cualquier orden, los tres una vez) como lista; nulo si no es una permutación de los tres.
+    /// </summary>
+    public static IReadOnlyList<CarteraDeductionKind>? Leer(string? texto)
+    {
+        if (string.IsNullOrWhiteSpace(texto)) return null;
+        var partes = texto.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        var lista = new List<CarteraDeductionKind>(3);
+        foreach (var parte in partes)
+        {
+            CarteraDeductionKind? clase = parte switch
+            {
+                "Aportes" => CarteraDeductionKind.Contributions,
+                "Creditos" => CarteraDeductionKind.Loans,
+                "Ahorros" => CarteraDeductionKind.Savings,
+                _ => null,
+            };
+            if (clase is not { } c || lista.Contains(c)) return null;
+            lista.Add(c);
+        }
+        return lista.Count == 3 ? lista : null;
+    }
 }
 
 public sealed record EmployeeInput

@@ -19,6 +19,27 @@ public static class ErroresDeParametros
     public const string CodigoEnPeriodoCerrado = "Parameters.ValidFromInClosedPeriod";
     public const string CodigoActaRequerida = "Parameters.LegalSourceRequired";
 
+    /// <summary>
+    /// Feature 013 (T43; api.md §3.4): la clave existe en el catálogo pero su entrega todavía no llegó. Cartera lo nombra
+    /// <c>Lending.Parameter.NotYetAvailable</c>; un módulo sin nombre propio responde éste. (nuevo)
+    /// </summary>
+    public const string CodigoNoDisponibleTodavia = "Parameters.NotYetAvailable";
+
+    /// <summary>El código de «todavía no disponible» de cada línea de entregas que lo nombra (api.md §3.4 para Cartera).</summary>
+    private static readonly IReadOnlyDictionary<string, string> NoDisponiblePorLinea = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        [EntregaDeModulo.LineaDeCartera] = "Lending.Parameter.NotYetAvailable",
+    };
+
+    /// <summary>
+    /// Feature 013 (T43): la clave es de una entrega posterior a la vigente de su línea; no se ofrece ni se acepta todavía
+    /// (422, <c>data: { key, availableFrom }</c>).
+    /// </summary>
+    public static Error NoDisponibleTodavia(DefinicionDeParametro definicion) => new ErrorConDatos(
+        NoDisponiblePorLinea.GetValueOrDefault(definicion.DisponibleDesde.Modulo, CodigoNoDisponibleTodavia),
+        $"«{definicion.Clave}» todavía no está disponible: llega con la entrega {definicion.DisponibleDesde}.",
+        new { key = definicion.Clave, availableFrom = definicion.DisponibleDesde.ToString() });
+
     /// <summary>§7 (US3, T286): <c>Costeo.Metodo</c> y <c>Costeo.Ambito</c> sólo desde el primer día de un período abierto sin movimientos posteriores.</summary>
     public static Error RequiereInicioDePeriodo(string clave, DateOnly? earliestAllowed) => new ErrorConDatos(CodigoRequiereInicioDePeriodo,
         earliestAllowed is { } desde
@@ -35,7 +56,7 @@ public static class ErroresDeParametros
         $"No existe el parámetro «{modulo}/{clave}».");
 
     public static Error ValorNoAdmitido(DefinicionDeParametro definicion, string? valor,
-        EntregaDelComercio entrega = CatalogoDeParametros.EntregaVigente) => new ErrorConDatos(CodigoValorNoAdmitido,
+        EntregaDeModulo? entrega = null) => new ErrorConDatos(CodigoValorNoAdmitido,
         $"El valor «{valor}» no es admitido en «{definicion.Clave}». Elegí uno de los admitidos.",
         new { allowed = definicion.Admitidos(entrega) });
 

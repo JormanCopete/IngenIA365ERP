@@ -1,9 +1,12 @@
 using Carter;
 using IngenIA365ERP.API.Filters;
+using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Application.Common.Parameters;
 using IngenIA365ERP.Application.Common.Parameters.AddParameterVersion;
 using IngenIA365ERP.Application.Common.Parameters.GetParameterHistory;
 using IngenIA365ERP.Application.Common.Parameters.ListParameters;
 using IngenIA365ERP.Domain.Enums.Parameters;
+using IngenIA365ERP.Domain.Lending.Parameters;
 using MediatR;
 
 namespace IngenIA365ERP.API.Endpoints.Inventory;
@@ -30,16 +33,19 @@ public class ParametersEndpoints : ICarterModule
             .AddEndpointFilter<ErrorEnvelopeFilter>()
             .RequirePermission("Inventory.Parameters.View");
 
-        group.MapGet("/{module}/{key}/history", async (string module, string key, ParameterScopeKind? scopeKind, Guid? scopePublicId,
+        group.MapGet("/{module}/{key}/history", async Task<object> (string module, string key, ParameterScopeKind? scopeKind, Guid? scopePublicId,
                 ISender sender, CancellationToken ct) =>
-                await sender.Send(new GetParameterHistoryQuery(module, key, scopeKind, scopePublicId), ct))
+                EsDeCartera(module)
+                    ? Result.Failure<object>(ErroresDeParametros.ClaveInexistente(module, key))
+                    : (object)await sender.Send(new GetParameterHistoryQuery(module, key, scopeKind, scopePublicId), ct))
             .WithName("Inventory_Parameters_History")
             .AddEndpointFilter<ErrorEnvelopeFilter>()
             .RequirePermission("Inventory.Parameters.View");
 
-        group.MapPost("/{module}/{key}/versions", async (string module, string key, AgregarVigenciaRequest body, HttpContext http,
+        group.MapPost("/{module}/{key}/versions", async Task<object> (string module, string key, AgregarVigenciaRequest body, HttpContext http,
                 ISender sender, CancellationToken ct) =>
             {
+                if (EsDeCartera(module)) return Result.Failure<object>(ErroresDeParametros.ClaveInexistente(module, key));
                 var command = new AddParameterVersionCommand(module, key, body.ScopeKind, body.ScopePublicId, body.Chain,
                     body.Value ?? string.Empty, body.ValidFrom, body.Reason ?? string.Empty, body.LegalSource,
                     body.ConfirmFiscalWithoutPosting ?? false)
@@ -56,6 +62,13 @@ public class ParametersEndpoints : ICarterModule
             .ConClaveDeOperacion()
             .RequirePermission("Inventory.Parameters.Manage");
     }
+
+    /// <summary>
+    /// Feature 013 (T43): las claves de Cartera (<c>LND</c>) tienen su ruta y su permiso (api.md §3.4, <c>Lending.Parameters.*</c>);
+    /// por la de Inventario no se leen ni se registran, así quien administra parámetros de Inventario no cambia los de Cartera.
+    /// </summary>
+    private static bool EsDeCartera(string module) =>
+        string.Equals(module?.Trim(), ParametrosDeCartera.Modulo, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>El cuerpo del alta (contracts/api.md §7); módulo y clave van en la ruta.</summary>
     public sealed record AgregarVigenciaRequest(

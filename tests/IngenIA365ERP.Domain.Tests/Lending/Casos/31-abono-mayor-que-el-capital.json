@@ -1,0 +1,102 @@
+// FR-075, FR-076, D5 (quickstart §1.2, caso 31): un abono extraordinario mayor que el capital. El 20-08, sin nada exigible, llegan
+// 1.250.000 de abono a capital con «reducir el plazo»: como alcanza el capital por vencer, se trata como CANCELACIÓN (aviso
+// Lending.Payment.TreatedAsPayoff): cubre la corriente causada hasta ese día y todo el capital, y lo que sobra es excedente que vuelve
+// al recaudador y nunca entra a Cartera. Después no se causa nada. Calculado con calcular.py (decimal de 40 dígitos). Pendiente de
+// validar por la contadora.
+{
+  "nombre": "Abono mayor que el capital",
+  "condiciones": {
+    "sistema": "LevelPayment", "convencion": "Thirty360", "equivalencia": "Compound",
+    "redondeo": { "unidad": 0.01, "modo": "AwayFromZero", "momento": "PerConcept" },
+    "prelacion": "OldestInstallmentFirst",
+    "monto": 1200000, "plazoCuotas": 12, "periodicidad": "Monthly", "tasaEA": 0.240000,
+    "fechaDesembolso": "2026-08-01", "modalidad": "CONSUMO",
+    "claseDeMora": "RelativeToCurrent", "factorDeMora": 1.5
+  },
+  "series": {
+    "usura": [
+      { "clave": "CONSUMO", "desde": "2026-01-01", "ea": 0.300000, "registradoEn": "2025-12-31T15:00:00Z",
+        "publicId": "0b7a3c8e-1d1a-4f6e-9a01-000000000311" }
+    ],
+    "umbralesDeSuspension": [ { "desde": "2020-01-01", "dias": 61 } ]
+  },
+  "operaciones": [
+    { "id": "D1", "tipo": "Disbursement", "monto": 1200000, "fechaValor": "2026-08-01", "registradoEn": "2026-08-01T14:00:00Z" },
+    {
+      "id": "P1",
+      "tipo": "Payment",
+      "modalidad": "ExtraordinaryPrincipal",
+      "valor": 1250000,
+      "eleccion": "ReduceTerm",
+      "fechaValor": "2026-08-20",
+      "registradoEn": "2026-08-20T16:00:00Z",
+      "esperado": {
+        "distribucion": [
+          { "cuota": 1, "concepto": "CurrentInterest", "valor": 13701.35 },
+          { "cuota": 1, "concepto": "Principal", "valor": 90437.91 },
+          { "cuota": 2, "concepto": "Principal", "valor": 92073.71 },
+          { "cuota": 3, "concepto": "Principal", "valor": 93739.11 },
+          { "cuota": 4, "concepto": "Principal", "valor": 95434.62 },
+          { "cuota": 5, "concepto": "Principal", "valor": 97160.80 },
+          { "cuota": 6, "concepto": "Principal", "valor": 98918.20 },
+          { "cuota": 7, "concepto": "Principal", "valor": 100707.40 },
+          { "cuota": 8, "concepto": "Principal", "valor": 102528.95 },
+          { "cuota": 9, "concepto": "Principal", "valor": 104383.45 },
+          { "cuota": 10, "concepto": "Principal", "valor": 106271.49 },
+          { "cuota": 11, "concepto": "Principal", "valor": 108193.69 },
+          { "cuota": 12, "concepto": "Principal", "valor": 110150.67 }
+        ],
+        "anticipoUsado": [],
+        "anticipo": 0,
+        "cuotaDelAnticipo": null,
+        "saldoAFavor": 0,
+        "excedente": 36298.65,
+        "aplicado": 1213701.35,
+        "cancela": true,
+        "avisos": [
+          "Lending.Payment.TreatedAsPayoff"
+        ]
+      }
+    }
+  ],
+  "consultas": [
+    {
+      "fecha": "2026-09-30",
+      "informacionHasta": "2026-09-30T23:59:59Z",
+      "libroDesde": "2026-08-20",
+      "esperado": {
+        "saldos": {
+
+        },
+        "porCuota": [],
+        "capitalVencido": 0,
+        "diasDeMora": 0,
+        "cuotaMasAntigua": null,
+        "cuotasVencidas": 0,
+        "suspendida": false,
+        "valorParaCancelar": 0,
+        "tasaDiariaCorriente": 0.000597710167622401,
+        "tasaDiariaMora": 0.000729055255204437,
+        "usuraTopada": true,
+        "validaHasta": null,
+        "transiciones": [],
+        "libro": [
+          { "dia": "2026-08-20", "clase": "PaymentAllocation", "concepto": "Principal", "cuota": 1, "valor": -90437.91 },
+          { "dia": "2026-08-20", "clase": "PaymentAllocation", "concepto": "Principal", "cuota": 2, "valor": -92073.71 },
+          { "dia": "2026-08-20", "clase": "PaymentAllocation", "concepto": "Principal", "cuota": 3, "valor": -93739.11 },
+          { "dia": "2026-08-20", "clase": "PaymentAllocation", "concepto": "Principal", "cuota": 4, "valor": -95434.62 },
+          { "dia": "2026-08-20", "clase": "PaymentAllocation", "concepto": "Principal", "cuota": 5, "valor": -97160.80 },
+          { "dia": "2026-08-20", "clase": "PaymentAllocation", "concepto": "Principal", "cuota": 6, "valor": -98918.20 },
+          { "dia": "2026-08-20", "clase": "PaymentAllocation", "concepto": "Principal", "cuota": 7, "valor": -100707.40 },
+          { "dia": "2026-08-20", "clase": "PaymentAllocation", "concepto": "Principal", "cuota": 8, "valor": -102528.95 },
+          { "dia": "2026-08-20", "clase": "PaymentAllocation", "concepto": "Principal", "cuota": 9, "valor": -104383.45 },
+          { "dia": "2026-08-20", "clase": "PaymentAllocation", "concepto": "Principal", "cuota": 10, "valor": -106271.49 },
+          { "dia": "2026-08-20", "clase": "PaymentAllocation", "concepto": "Principal", "cuota": 11, "valor": -108193.69 },
+          { "dia": "2026-08-20", "clase": "PaymentAllocation", "concepto": "Principal", "cuota": 12, "valor": -110150.67 },
+          { "dia": "2026-08-20", "clase": "PaymentAllocation", "concepto": "CurrentInterest", "cuota": 1, "valor": -13701.35 },
+          { "dia": "2026-08-20", "clase": "Accrual", "concepto": "CurrentInterest", "cuota": 1, "valor": 725.01 }
+        ]
+      }
+    }
+  ]
+}

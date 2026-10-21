@@ -1,0 +1,70 @@
+// El CDAT no es deposito de ahorro (no lo protege el limite) y el ahorro permanente de un fondo de empleados es inembargable: se retiene del CDAT.
+{
+  "nombre": "embargo-06-cdat-y-clase-inembargable",
+  "descripcion": "El CDAT no es deposito de ahorro (no lo protege el limite) y el ahorro permanente de un fondo de empleados es inembargable: se retiene del CDAT.",
+  "entrada": {
+    "tope": 12000000,
+    "porAlimentos": false,
+    "limite": 50000000,
+    "aplicacion": "AllProtectedAccounts",
+    "ordenDeClases": [],
+    "cuentas": [
+      {
+        "id": 1,
+        "clase": "Demand",
+        "abiertaEl": "2020-01-10",
+        "saldo": 10000000,
+        "retenidoPorOtros": 0,
+        "protegida": true,
+        "embargable": true
+      },
+      {
+        "id": 2,
+        "clase": "Permanent",
+        "abiertaEl": "2019-03-01",
+        "saldo": 8000000,
+        "retenidoPorOtros": 0,
+        "protegida": true,
+        "embargable": false
+      },
+      {
+        "id": 3,
+        "clase": "TermDeposit",
+        "abiertaEl": "2025-06-01",
+        "saldo": 20000000,
+        "retenidoPorOtros": 0,
+        "protegida": false,
+        "embargable": true
+      }
+    ]
+  },
+  "esperado": {
+    "limiteAplicado": 50000000,
+    "protegido": 10000000,
+    "totalEmbargable": 20000000,
+    "retenido": 12000000,
+    "cuentas": [
+      {
+        "id": 2,
+        "orden": 1,
+        "protegido": 0,
+        "embargable": 0,
+        "retenido": 0
+      },
+      {
+        "id": 1,
+        "orden": 2,
+        "protegido": 10000000,
+        "embargable": 0,
+        "retenido": 0
+      },
+      {
+        "id": 3,
+        "orden": 3,
+        "protegido": 0,
+        "embargable": 20000000,
+        "retenido": 12000000
+      }
+    ]
+  }
+}

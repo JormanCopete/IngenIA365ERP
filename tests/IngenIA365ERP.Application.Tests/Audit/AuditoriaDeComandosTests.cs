@@ -20,6 +20,10 @@ namespace IngenIA365ERP.Application.Tests.Audit
 {
     using IngenIA365ERP.Application.Tests.AuditoriaDePrueba.Core;
     using IngenIA365ERP.Application.Tests.AuditoriaDePrueba.Parameters;
+    using IngenIA365ERP.Application.Tests.AuditoriaDePrueba.Compliance;
+    using IngenIA365ERP.Application.Tests.AuditoriaDePrueba.NationalValues;
+    using IngenIA365ERP.Application.Tests.AuditoriaDePrueba.Lending;
+    using IngenIA365ERP.Application.Tests.AuditoriaDePrueba.Lending.Deposits;
 
     /// <summary>
     /// T017, segunda mitad (feature 012; decisiones-transversales T36, T37; contracts/api.md §1.6): lo que la
@@ -66,8 +70,21 @@ namespace IngenIA365ERP.Application.Tests.Audit
         [InlineData("IngenIA365ERP.Application.Core.People", "Core")]
         [InlineData("IngenIA365ERP.Application.Inventory.Integration", "Inventory")]
         [InlineData("IngenIA365ERP.Application.Accounting.Inventory", "Accounting")]
-        [InlineData("IngenIA365ERP.Application.Lending.Payments.Commands.ProcessPayment", "Lending")]
+        // Feature 013 (T0128, C89): Cartera es Lending. Feature 014 (T007, R28): la regla «.Savings» de lo conservado se retiró
+        // con él; las captaciones y los aportes son Cartera (Lending.Deposits), encadenados y de diez años como el crédito.
+        [InlineData("IngenIA365ERP.Application.Lending.Collections", "Lending")]
+        [InlineData("IngenIA365ERP.Domain.Entities.Lending", "Lending")]
+        [InlineData("IngenIA365ERP.Application.Lending.Deposits.Accounts", "Lending")]
+        [InlineData("IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts", "Lending")]
+        [InlineData("IngenIA365ERP.Application.Core.Savings", "Core")]
         [InlineData("IngenIA365ERP.Application.Audit.RegisterOptionAccess", "Navigation")]
+        // Feature 013 (T0092): cumplimiento y valores nacionales, antes de .Admin y de .Core.
+        [InlineData("IngenIA365ERP.Application.Compliance.HabeasData.AcceptConsent", "Compliance")]
+        [InlineData("IngenIA365ERP.Application.Compliance.RestrictiveLists", "Compliance")]
+        [InlineData("IngenIA365ERP.Domain.Entities.Compliance", "Compliance")]
+        [InlineData("IngenIA365ERP.Application.Common.NationalValues", "NationalValues")]
+        [InlineData("IngenIA365ERP.Application.Core.NationalValues", "NationalValues")]
+        [InlineData("IngenIA365ERP.Domain.Entities.Admin.NationalValues", "NationalValues")]
         [InlineData("IngenIA365ERP.Application.Identity.Auth.WebAuthn", "General")]
         [InlineData(null, "General")]
         public void Una_sola_inferencia_reconoce_los_modulos_nuevos_antes_que_Core(string? ns, string modulo)
@@ -79,8 +96,12 @@ namespace IngenIA365ERP.Application.Tests.Audit
         public void Los_modulos_encadenados_son_los_de_T38_sin_Contabilidad()
         {
             AuditoriaEncadenada.Modulos.Should().BeEquivalentTo(
-                ["Inventory", "ElectronicInvoicing", "Integration", "Approvals", "Alerts", "Parameters", "Taxes", "PaymentMeans", "Navigation"]);
+                ["Inventory", "ElectronicInvoicing", "Integration", "Approvals", "Alerts", "Parameters", "Taxes", "PaymentMeans", "Navigation",
+                    "Compliance", "NationalValues", "Lending"]);
+            // Feature 013 (T0092, T0128): los módulos nuevos también guardan diez años; Cartera entre ellos (FR-003, SC-014).
+            IngenIA365ERP.Audit.Indexes.AuditRetention.ModulosDeDiezAnios.Should().Contain(["Compliance", "NationalValues", "Lending"]);
             AuditoriaEncadenada.EsEncadenado("Accounting").Should().BeFalse("pregunta C1");
+            AuditoriaEncadenada.EsEncadenado("Lending").Should().BeTrue("todo evento de Cartera va sellado por la cadena (C89)");
             AuditoriaEncadenada.Flujo(Cooperativa).Should().Be(Flujo);
         }
 
@@ -169,6 +190,51 @@ namespace IngenIA365ERP.Application.Tests.Audit
             evento.TenantId.Should().Be(Cooperativa.ToString("N"));
             evento.Metadata.Should().Contain("Reason", "Cambio de política").And.Contain("Channel", "app");
             evento.NewValuesJson.Should().Contain("INV");
+        }
+
+        [Fact]
+        public async Task Un_evento_de_Compliance_y_otro_de_NationalValues_salen_encadenados_por_el_outbox()
+        {
+            await Behavior<RegistrarSolicitudDePruebaCommand, Result>().Handle(
+                new RegistrarSolicitudDePruebaCommand(Guid.NewGuid(), "Revocación pedida por escrito"), _ => Task.FromResult(Result.Success()), CancellationToken.None);
+            await Behavior<RevisarValorDePruebaCommand, Result>().Handle(
+                new RevisarValorDePruebaCommand(Guid.NewGuid(), "Cotejado con la norma"), _ => Task.FromResult(Result.Success()), CancellationToken.None);
+
+            _enMongo.Should().BeEmpty("los dos módulos van por la cadena");
+            var filas = await _db.AuditOutbox.OrderBy(f => f.Id).ToListAsync();
+            filas.Select(f => f.Module).Should().Equal("Compliance", "NationalValues");
+            filas.Should().OnlyContain(f => f.Stream == Flujo);
+        }
+
+        [Fact]
+        public async Task Un_evento_de_Cartera_queda_en_el_outbox_del_mismo_guardado_y_no_en_Mongo()
+        {
+            // Feature 013 (T0128, C89): un comando del espacio Lending deja su evento Lending.* en COR_AuditOutbox.
+            var comando = new RegistrarObligacionDePruebaCommand(Guid.NewGuid(), "Alta de la obligación");
+
+            var r = await Behavior<RegistrarObligacionDePruebaCommand, Result>().Handle(comando, _ => Task.FromResult(Result.Success()), CancellationToken.None);
+
+            r.IsSuccess.Should().BeTrue();
+            _enMongo.Should().BeEmpty("Cartera va por la cadena de sellos, no directo a Mongo");
+            var fila = (await _db.AuditOutbox.ToListAsync()).Should().ContainSingle().Subject;
+            fila.Module.Should().Be("Lending");
+            fila.Stream.Should().Be(Flujo);
+            fila.Forwarded.Should().BeFalse();
+            var evento = AuditoriaEncadenada.LeerCarga(fila.PayloadJson!);
+            evento.Module.Should().Be("Lending");
+            evento.Action.Should().Be("RegistrarObligacionDePrueba");
+            evento.Metadata.Should().Contain("Reason", "Alta de la obligación");
+        }
+
+        [Fact]
+        public async Task Un_evento_de_captaciones_va_por_la_cadena_como_Cartera()
+        {
+            // Feature 014 (T007, R28): lo conservado de ahorros iba por Mongo como «Savings»; las captaciones son Cartera.
+            await Behavior<AbrirAhorroDePruebaCommand, Result>().Handle(new AbrirAhorroDePruebaCommand(Guid.NewGuid(), "Apertura"),
+                _ => Task.FromResult(Result.Success()), CancellationToken.None);
+
+            _enMongo.Should().BeEmpty();
+            (await _db.AuditOutbox.ToListAsync()).Should().ContainSingle().Which.Module.Should().Be("Lending");
         }
 
         [Fact]
@@ -326,6 +392,26 @@ namespace IngenIA365ERP.Application.Tests.AuditoriaDePrueba.Core
         [NoAuditar]
         public string Clave { get; set; } = string.Empty;
     }
+}
+
+namespace IngenIA365ERP.Application.Tests.AuditoriaDePrueba.Compliance
+{
+    public sealed record RegistrarSolicitudDePruebaCommand(Guid OperationKey, string Reason) : IRequest<Result>, IOperacionIdempotente, IConMotivo;
+}
+
+namespace IngenIA365ERP.Application.Tests.AuditoriaDePrueba.NationalValues
+{
+    public sealed record RevisarValorDePruebaCommand(Guid OperationKey, string Reason) : IRequest<Result>, IOperacionIdempotente, IConMotivo;
+}
+
+namespace IngenIA365ERP.Application.Tests.AuditoriaDePrueba.Lending
+{
+    public sealed record RegistrarObligacionDePruebaCommand(Guid OperationKey, string Reason) : IRequest<Result>, IOperacionIdempotente, IConMotivo;
+}
+
+namespace IngenIA365ERP.Application.Tests.AuditoriaDePrueba.Lending.Deposits
+{
+    public sealed record AbrirAhorroDePruebaCommand(Guid OperationKey, string Reason) : IRequest<Result>, IOperacionIdempotente, IConMotivo;
 }
 
 namespace IngenIA365ERP.Application.Tests.AuditoriaDePrueba.Parameters

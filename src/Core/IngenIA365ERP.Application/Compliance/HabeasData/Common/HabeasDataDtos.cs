@@ -1,3 +1,5 @@
+using IngenIA365ERP.Domain.Enums.Compliance;
+
 namespace IngenIA365ERP.Application.Compliance.HabeasData.Common;
 
 /// <summary>Proyección de una versión de política habeas data.</summary>
@@ -9,7 +11,11 @@ public sealed record HabeasDataPolicyDto(
     DateTime EffectiveFrom,
     DateTime? EffectiveTo,
     string PublishedBy,
-    bool IsCurrent);
+    bool IsCurrent)
+{
+    /// <summary>Feature 013 (T0086): la finalidad de la versión.</summary>
+    public DataAuthorizationPurpose Purpose { get; init; } = DataAuthorizationPurpose.GeneralTreatment;
+}
 
 /// <summary>Proyección detallada (incluye contenido).</summary>
 public sealed record HabeasDataPolicyDetailDto(
@@ -31,7 +37,15 @@ public sealed record HabeasDataHistoryItemDto(
     DateTime ActionAt,
     string ActionBy,
     string? Channel,
-    string? Notes);
+    string? Notes)
+{
+    /// <summary>Feature 013 (T0086): la finalidad, el canal de contacto y el origen de la decisión.</summary>
+    public DataAuthorizationPurpose Purpose { get; init; } = DataAuthorizationPurpose.GeneralTreatment;
+
+    public DataAuthorizationChannel? ContactChannel { get; init; }
+
+    public DataAuthorizationOrigin Origin { get; init; } = DataAuthorizationOrigin.PersonRegistration;
+}
 
 public static class HabeasDataErrorCodes
 {
@@ -39,6 +53,12 @@ public static class HabeasDataErrorCodes
     public const string AlreadyRevoked = "Compliance.HabeasData.AlreadyRevoked";
     public const string NoActiveConsent = "Compliance.HabeasData.NoActiveConsent";
     public const string Validation_EffectiveFromInPast = "Validation.HabeasData.EffectiveFromInPast";
+
+    /// <summary>Feature 013 (T0086): el adjunto de evidencia no existe, no es de la persona o no es de tipo <c>DataAuthorization</c>.</summary>
+    public const string EvidenceNotFound = "Compliance.HabeasData.EvidenceNotFound";
+
+    /// <summary>Feature 013 (T0086): una autorización que no es migrada exige su evidencia.</summary>
+    public const string EvidenceRequired = "Compliance.HabeasData.EvidenceRequired";
 }
 
 /// <summary>

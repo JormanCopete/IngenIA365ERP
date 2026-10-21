@@ -27,12 +27,12 @@ public class LaPersonaSeEscribeEnUnSoloSitio
         Path.Combine("Services", "Core", "PersonasClient.cs"),
     ];
 
-    /// <summary>Buscadores ad-hoc heredados de antes de la 008: los migra la fase 2 a <c>PersonSearchPicker</c>.</summary>
-    private static readonly string[] BuscadoresAdHocHeredados =
-    [
-        Path.Combine("Pages", "CarteraFinanciera", "Recaudos.razor"),
-        Path.Combine("Pages", "CarteraFinanciera", "SolicitudCredito.razor"),
-    ];
+    /// <summary>
+    /// Buscadores ad-hoc heredados de antes de la 008. Los dos que quedaban (<c>Recaudos</c> y <c>SolicitudCredito</c> de la cartera
+    /// heredada) se fueron con sus pantallas al retirar el crédito heredado (feature 013, T0193): la lista queda vacía y cualquier
+    /// buscador ad-hoc nuevo rompe la prueba.
+    /// </summary>
+    private static readonly string[] BuscadoresAdHocHeredados = [];
 
     private static readonly Regex EscribePersona = new(
         @"(PostAsJsonAsync|PutAsJsonAsync|CrearAsync|ActualizarAsync)\s*(<[^>]+>)?\s*\(\s*\$?""/?api/core/people(/|""|\{)",

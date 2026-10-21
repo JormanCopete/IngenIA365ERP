@@ -159,7 +159,7 @@
                         {
                             <p>Cuenta por cobrar registrada por: <b>@(cr.AccountsReceivableRecordedBy ?? "—")</b></p>
                             <table class="data-grid">
-                                <thead><tr><th>Medio</th><th class="numero">Financiado</th><th class="numero">Cuotas</th><th class="numero">Plazo (días)</th><th class="numero">Cada (días)</th><th>Primer vencimiento</th><th>Último vencimiento</th><th>Línea sugerida</th><th>Estado</th><th>Aprobación</th></tr></thead>
+                                <thead><tr><th>Medio</th><th class="numero">Financiado</th><th class="numero">Cuotas</th><th class="numero">Plazo (días)</th><th class="numero">Cada (días)</th><th>Primer vencimiento</th><th>Último vencimiento</th><th>Línea sugerida</th><th>Estado</th><th>Aprobación</th><th>Crédito en Cartera</th><th>Estado en Cartera</th></tr></thead>
                                 <tbody>
                                     @foreach (var p in cr.Payments)
                                     {
@@ -169,6 +169,13 @@
                                             <td>@p.FirstDueDate?.ToString("dd/MM/yyyy")</td><td>@p.FinalDueDate?.ToString("dd/MM/yyyy")</td><td>@p.SuggestedLineCode</td>
                                             <td>@TextosDeVentas.OrigenDeCredito(p.CreditOrigin)@(p.PendingValidation ? " · pendiente de validar" : "")</td>
                                             <td>@(p.Approval is { } a ? $"{a.Status}{(a.ApprovedByName is { } n ? $" · {n}" : "")}{(a.DecidedAt is { } f ? $" · {f.ToLocalTime():dd/MM/yyyy HH:mm}" : "")}" : "—")</td>
+                                            @* Feature 013 (T0600): el número del crédito y su estado en Cartera; nunca saldos ni cuotas (enmienda de FR-062). *@
+                                            <td>@(p.LendingObligation?.ObligationNumber ?? p.ReservedLoanNumber ?? "—")</td>
+                                            <td>
+                                                @* Sin respuesta ni mensaje a Cartera (crédito provisional o sin Cartera): nada que mostrar. *@
+                                                <span>@(p.LendingObligation is null && cr.LendingMessages.Count == 0 ? "—" : TextosDeVentas.EstadoEnCartera(p.LendingObligation))</span>
+                                                @if (p.LendingObligation?.Reason is { } motivo) { <br /><span class="texto-tenue">@motivo</span> }
+                                            </td>
                                         </tr>
                                     }
                                 </tbody>

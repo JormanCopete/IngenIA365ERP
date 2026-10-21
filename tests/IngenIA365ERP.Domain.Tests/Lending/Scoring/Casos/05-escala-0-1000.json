@@ -1,0 +1,34 @@
+// Escala de 0 a 1.000 con puntos de cuatro decimales y pesos de seis (alias Puntaje 12,4 y Fraccion 9,6). Cada aporte se redondea
+// a cuatro decimales (mitad hacia arriba) y el puntaje es la suma de los aportes, así la explicación suma exactamente el puntaje.
+// puntaje.py: 0,333333 × 1000 = 333,333; 0,333333 × 755,5555 = 251,8515814815 → 251,8516; 0,333334 × 987,6543 = 329,2187584362
+// → 329,2188; suma 914,4034 (la suma sin redondear, 914,4033399177, daría 914,4033: se redondea cada aporte).
+{
+  "nombre": "05-escala-0-1000",
+  "descripcion": "Puntos con cuatro decimales y pesos con seis; aportes redondeados a cuatro.",
+  "modelo": {
+    "nivelDeExcepcion": "EXCEP",
+    "minimo": 500,
+    "variables": [
+      { "codigo": "APORT", "nombre": "Saldo de aportes", "fuente": "Applicant.ContributionsBalance", "peso": 0.333333,
+        "rangos": [ { "desde": 0, "hasta": 1000000, "puntos": 333.3333 }, { "desde": 1000000, "puntos": 1000 } ] },
+      { "codigo": "EDAD", "nombre": "Edad del solicitante", "fuente": "Applicant.Age", "peso": 0.333333,
+        "rangos": [ { "desde": 18, "hasta": 25, "puntos": 412.5 }, { "desde": 25, "hasta": 60, "puntos": 755.5555 }, { "desde": 60, "puntos": 600.0001 } ] },
+      { "codigo": "MORA", "nombre": "Mora máxima interna", "fuente": "Internal.MaxDaysPastDue12M", "peso": 0.333334,
+        "rangos": [ { "desde": 0, "hasta": 1, "puntos": 987.6543 }, { "desde": 1, "hasta": 31, "puntos": 500 }, { "desde": 31, "puntos": 0 } ] }
+    ]
+  },
+  "escenarios": [
+    { "nombre": "asociado con aportes, 40 años, sin mora",
+      "valores": { "Applicant.ContributionsBalance": 2500000, "Applicant.Age": 40, "Internal.MaxDaysPastDue12M": 0 },
+      "esperado": { "puntaje": 914.4034, "bajoElMinimo": false,
+        "variables": [ { "codigo": "APORT", "puntos": 1000, "aporte": 333.333 }, { "codigo": "EDAD", "puntos": 755.5555, "aporte": 251.8516 },
+                       { "codigo": "MORA", "puntos": 987.6543, "aporte": 329.2188 } ],
+        "explicacionContiene": [ "Puntaje 914.4034 de un máximo de" ] } },
+    // 0,333333 × 333,3333 = 111,1109888889 → 111,1110; 0,333333 × 412,5 = 137,4998625 → 137,4999; 0,333334 × 500 = 166,667.
+    { "nombre": "aportes bajos, 22 años, 15 días de mora",
+      "valores": { "Applicant.ContributionsBalance": 500000, "Applicant.Age": 22, "Internal.MaxDaysPastDue12M": 15 },
+      "esperado": { "puntaje": 415.2779, "bajoElMinimo": true,
+        "variables": [ { "codigo": "APORT", "puntos": 333.3333, "aporte": 111.111 }, { "codigo": "EDAD", "puntos": 412.5, "aporte": 137.4999 },
+                       { "codigo": "MORA", "puntos": 500, "aporte": 166.667 } ] } }
+  ]
+}

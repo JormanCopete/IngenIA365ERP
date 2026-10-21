@@ -56,6 +56,19 @@ public sealed class ReprocessMessagesCommandHandler(
         if (noRechazados.Count > 0)
             return Result.Failure<LoteOrdenadoDto>(ErroresDeIntegracion.MensajesNoRechazados(noRechazados));
 
+        // Feature 013 (US7, C01): una unidad de consumo es el origen y su evento (AgrupadorDeResumidos.Unidades): un pago y sus acompañantes son
+        // un solo comprobante. Reprocesar un mensaje de la unidad trae a los demás rechazados de la misma unidad; hasta el 2026-10-13 el
+        // PagoAplicado reprocesado solo salía «sin comprobante (valor cero)» y su AnticipoRecibido quedaba rechazado aparte.
+        var unidades = entregas.Select(e => (e.Message!.OriginModule, e.Message.OriginPublicId, e.Message.OriginEventKey)).Distinct().ToList();
+        var origenes = unidades.Select(u => u.OriginPublicId).Distinct().ToList();
+        var yaElegidas = entregas.Select(e => e.Id).ToHashSet();
+        var companeras = await db.IntegrationMessageDeliveries
+            .Include(d => d.Message)
+            .Where(d => d.Destination == destino && d.Status == DeliveryStatus.Rejected && origenes.Contains(d.Message!.OriginPublicId))
+            .ToListAsync(ct);
+        entregas.AddRange(companeras.Where(d => !yaElegidas.Contains(d.Id)
+            && unidades.Contains((d.Message!.OriginModule, d.Message.OriginPublicId, d.Message.OriginEventKey))));
+
         // Una versión que el destino ya no acepta sigue rechazada.
         var consumidor = destinos.FirstOrDefault(d => d.Destino == destino);
         var elegidas = entregas.Where(e => consumidor is null || consumidor.Acepta(e.Message!.Type, e.Message.Version)).ToList();

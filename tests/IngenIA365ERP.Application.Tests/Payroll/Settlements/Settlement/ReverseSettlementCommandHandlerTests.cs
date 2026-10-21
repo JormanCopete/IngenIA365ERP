@@ -1,6 +1,8 @@
 using FluentAssertions;
 using IngenIA365ERP.Application.Common.Audit;
+using IngenIA365ERP.Application.Common.Integration.Lending;
 using IngenIA365ERP.Application.Common.Interfaces.Audit;
+using IngenIA365ERP.Application.Tests.Common.Integration.Lending;
 using IngenIA365ERP.Application.Payroll.Settlements.Settlement;
 using IngenIA365ERP.Domain.Enums.Payroll;
 using Microsoft.EntityFrameworkCore;
@@ -10,13 +12,15 @@ namespace IngenIA365ERP.Application.Tests.Payroll.Settlements.Settlement;
 
 /// <summary>
 /// Feature 010, US3 (FR-020, T065): reversar la definitiva deja el espejo, reabre la ficha, marca la
-/// terminación como reintegro y los descuentos como reversados, y lista los recaudos de Cartera que
-/// hay que reversar allá; descartar el borrador anula la terminación sin tocar la ficha.
+/// terminación como reintegro y los descuentos como reversados; descartar el borrador anula la terminación sin tocar la
+/// ficha. Feature 013 (T0108, R105): en la misma transacción reversa en Cartera, por el contrato de obligaciones, cada
+/// descuento aplicado con la clave del pago y el motivo, guarda <c>CarteraReversalPublicId</c>, y un rechazo revierte la
+/// reversión entera con el motivo de Cartera.
 /// </summary>
 public class ReverseSettlementCommandHandlerTests
 {
     [Fact]
-    public async Task Reversar_reabre_la_ficha_reintegra_la_terminacion_y_lista_los_recaudos_de_Cartera()
+    public async Task Reversar_reversa_los_recaudos_por_el_contrato_reabre_la_ficha_y_reintegra_la_terminacion()
     {
         var p = new DefinitivaDePrueba();
         p.ConContabilidad();
@@ -32,8 +36,14 @@ public class ReverseSettlementCommandHandlerTests
         r.IsSuccess.Should().BeTrue(r.Error.Message);
         r.Value.ReversalNumber.Should().StartWith("NM-");
         r.Value.PortfolioPayments.Should().HaveCount(2, "los dos recaudos que la aprobación dejó en Cartera");
-        r.Value.PortfolioPayments.Should().OnlyContain(x => x.PaymentPublicId != null && x.Applied > 0m);
-        r.Value.Message.Should().Contain("no se reversan desde aquí");
+        r.Value.PortfolioPayments.Should().OnlyContain(x => x.PaymentPublicId != null && x.Applied > 0m && x.ReversalPublicId != null);
+        r.Value.Message.Should().Contain("se reversaron en Cartera");
+
+        // Cartera recibió un reverso por cada pago, con la clave con que se aplicó y el motivo.
+        var claves = p.Contrato.Aplicaciones.Single().Payments.Select(x => x.IdempotencyKey).ToList();
+        p.Contrato.Reversos.Should().HaveCount(2);
+        p.Contrato.Reversos.Select(x => x.PaymentIdempotencyKey).Should().BeEquivalentTo(claves);
+        p.Contrato.Reversos.Should().OnlyContain(x => x.Reason == "Se equivocó la fecha de retiro" && x.Collector == Recaudador.Nomina);
 
         var ficha = await p.D.Db.Employees.SingleAsync(e => e.Id == p.D.Ana.Id);
         ficha.Status.Should().Be(1);
@@ -46,6 +56,7 @@ public class ReverseSettlementCommandHandlerTests
         terminacion.ReinstateReason.Should().Be("Se equivocó la fecha de retiro");
         terminacion.ReinstatedBy.Should().Be("contadora@demo");
         terminacion.Deductions.Should().OnlyContain(d => d.Status == SettlementDeductionStatus.Reverted);
+        terminacion.Deductions.Where(d => d.Kind == SettlementDeductionKind.CooperativeLoan).Should().OnlyContain(d => d.CarteraReversalPublicId != null);
 
         var run = await p.D.Db.PayrollRuns.Include(x => x.ReversalAccountingDocument).SingleAsync(x => x.PublicId == t.RunPublicId);
         run.Status.Should().Be(PayrollRunStatus.Reversed);
@@ -98,6 +109,26 @@ public class ReverseSettlementCommandHandlerTests
         await p.D.Db.SaveChangesAsync();
         p.D.Db.ChangeTracker.Clear();
         (await p.Reversar().Handle(new ReverseSettlementCommand(t.RunPublicId, "Se equivocó la fecha de retiro"), CancellationToken.None)).IsSuccess.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Si_Cartera_rechaza_un_reverso_la_reversion_entera_se_revierte_con_su_motivo()
+    {
+        var p = new DefinitivaDePrueba();
+        p.ConContabilidad();
+        var t = await p.RegistrarAnaAsync();
+        (await p.Aprobar().Handle(new ApproveSettlementCommand(t.RunPublicId, true), CancellationToken.None)).IsSuccess.Should().BeTrue();
+        p.Contrato.ComoRespondeReversar[p.Credito1002.ObligationPublicId] =
+            ContratoDeObligacionesDePrueba.Rechazo("Lending.Reversal.OfReversal", "El pago ya fue reversado.");
+
+        var r = await p.Reversar().Handle(new ReverseSettlementCommand(t.RunPublicId, "Error de fecha"), CancellationToken.None);
+
+        r.Error.Code.Should().Be("Payroll.Settlement.LoanReversalRejected");
+        r.Error.Message.Should().Contain("1002").And.Contain("ya fue reversado");
+        p.D.Db.ChangeTracker.Clear();
+        (await p.D.Db.PayrollRuns.SingleAsync(x => x.PublicId == t.RunPublicId)).Status.Should().Be(PayrollRunStatus.Approved);
+        (await p.D.Db.Employees.SingleAsync(e => e.Id == p.D.Ana.Id)).Status.Should().Be(-1, "la ficha sigue retirada");
+        (await p.D.Db.EmploymentTerminations.SingleAsync(x => x.PublicId == t.TerminationPublicId)).Status.Should().Be(TerminationStatus.Settled);
     }
 
     [Fact]

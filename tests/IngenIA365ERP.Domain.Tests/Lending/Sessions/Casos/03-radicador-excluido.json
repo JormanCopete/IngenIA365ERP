@@ -1,0 +1,40 @@
+// US2-6: el miembro 101 radicó la solicitud. Está presente (cuenta para el quórum, que es de la sesión), pero en este
+// punto está excluido: su voto se rechaza y no cuenta entre los elegibles. Los elegibles son 3 (102, 103, 104) y hacen
+// falta 3 / 2 + 1 = 2 a favor. Si se contara como elegible, la base sería 4 y harían falta 3: el punto no saldría.
+{
+  "nombre": "03-radicador-excluido",
+  "descripcion": "El radicador vota, su voto se rechaza y no entra en la base de la mayoría.",
+  "regla": {
+    "quorum": { "numerador": 1, "denominador": 2, "comparacion": "MoreThan" },
+    "mayoria": { "numerador": 1, "denominador": 2, "comparacion": "MoreThan", "base": "PresentEligible" },
+    "vinculados": { "numerador": 4, "denominador": 5 }
+  },
+  "miembros": [
+    { "persona": 101 }, { "persona": 102 }, { "persona": 103 }, { "persona": 104 }, { "persona": 105 }
+  ],
+  "escenarios": [
+    {
+      "nombre": "el radicador vota a favor de lo suyo",
+      "presentes": [101, 102, 103, 104],
+      "punto": {
+        "regla": "Majority",
+        "excluidos": [ { "persona": 101, "motivo": "Radicó la solicitud" } ],
+        "votos": [
+          { "voto": 1, "persona": 101, "valor": "For" },
+          { "voto": 2, "persona": 102, "valor": "For" },
+          { "voto": 3, "persona": 103, "valor": "For" },
+          { "voto": 4, "persona": 104, "valor": "Against" }
+        ]
+      },
+      // 2 × 2 = 4 > 1 × 3 = 3 → aprobado.
+      "esperado": {
+        "quorum": { "cumple": true, "composicion": 5, "requerido": 3, "presentesElegibles": 4 },
+        "elegibles": 3, "base": 3, "requeridos": 2,
+        "aFavor": 2, "enContra": 1, "abstenciones": 0,
+        "resultado": "Aprobado",
+        "rechazados": [ { "persona": 101, "motivo": "Excluido" } ],
+        "explicacionContiene": ["Radicó la solicitud"]
+      }
+    }
+  ]
+}

@@ -1,0 +1,198 @@
+@page "/cartera/captaciones/reportes-regulatorios"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Http
+@inject RegulatorioDeCarteraClient Regulatorio
+@inject INotificationService Notification
+
+<PageTitle>Reportes regulatorios de captaciones - IngenIA365ERP</PageTitle>
+
+@* Feature 014, US17 (T222; contracts/api.md §18.2; FR-111, FR-112): los formatos del SICSES de captaciones y aportes (9026, 9068, 9013, 169 y 9067) de un
+   mes cerrado y los de la exógena (1019 y 1020) de un año cerrado. Validar no guarda nada; generar con bloqueantes deja una versión «validada» sin
+   archivo; sin bloqueantes exige reconocer las advertencias —el formato sin cotejar—, que nunca van dentro del archivo. Regenerar deja la versión anterior
+   reemplazada; marcar cargado con el radicado cierra el período. Las fechas de reporte son informativas: la entidad decide cuándo reporta. *@
+<PermissionGate Required="Lending.RegulatoryFiles.Read" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Reportes regulatorios de captaciones</h3>
+    </div>
+
+    <div class="toolbar">
+        <label class="campo">Formato
+            <select class="e-input" value="@_formato" @onchange="@(e => CambiarFormato(e.Value?.ToString()))">
+                @foreach (var f in FormatosRegulatoriosDeCaptaciones.Todos) { <option value="@f.Codigo">@f.Nombre</option> }
+            </select>
+        </label>
+        <a href="@($"/cartera/informes?vista={_formato}")">Vista previa en el centro de informes</a>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_layouts.Activa">
+        @if (_layout is { } l)
+        {
+            <p class="texto-apoyo">Layout @l.Code (versión @l.Version, vigente desde @l.ValidFrom.ToString("dd/MM/yyyy")) · @l.VerifiedFields de @l.TotalFields campos cotejados · fuente: @l.Source</p>
+            @if (l.UnverifiedFields > 0)
+            {
+                <p class="aviso aviso-alerta">Formato sin cotejar: @l.UnverifiedFields de @l.TotalFields campos no se han cotejado contra el instructivo vigente; cada generación lo advierte hasta que se coteje.</p>
+            }
+        }
+        else if (!_layouts.Activa)
+        {
+            <p class="aviso">No hay layout de este formato.</p>
+        }
+    </IndicadorDeCarga>
+
+    <PermissionGate Required="Lending.RegulatoryReports.Generate">
+        <div class="info-card">
+            <h4>Validar y generar el formato de un período cerrado</h4>
+            <div class="toolbar">
+                <label class="campo">Año <input class="e-input" type="number" min="2000" max="2999" value="@_anio" @onchange="@(e => CambiarPeriodo(e.Value, null))" /></label>
+                @if (!Anual)
+                {
+                    <label class="campo">Mes <input class="e-input" type="number" min="1" max="12" value="@_mes" @onchange="@(e => CambiarPeriodo(null, e.Value))" /></label>
+                }
+                <SfButton CssClass="e-outline" Disabled="@_accion.Activa" OnClick="@ValidarAsync">Validar</SfButton>
+                <SfButton CssClass="e-primary" Disabled="@_accion.Activa" OnClick="@GenerarAsync">Generar</SfButton>
+            </div>
+            <IndicadorDeCarga Cargando="@_accion.Activa" Texto="Preparando el formato…">
+                @if (_validacion is { } v)
+                {
+                    <p><strong>@Periodo</strong> · layout @v.Layout · @v.Rows filas · @v.Blocking bloqueantes@(v.DueDate is { } d ? $" · fecha informativa de reporte: {d:dd/MM/yyyy}" : "")</p>
+                    @foreach (var w in v.Warnings.Where(w => w.Code.StartsWith("Lending.Regulatory.", StringComparison.Ordinal))) { <p class="aviso aviso-alerta">@w.Message</p> }
+                    <TablaDeIncidenciasRegulatorias Incidencias="@v.Issues.Where(i => !i.Code.StartsWith("Lending.Regulatory.", StringComparison.Ordinal)).ToList()" TextoSinIncidencias="El formato no tiene inconsistencias." />
+                }
+                @if (_rechazo.Count > 0)
+                {
+                    <p class="aviso aviso-error" role="alert">La generación quedó validada sin archivo: corrija estas inconsistencias (en los maestros o en las cuentas) y vuelva a generar.</p>
+                    <TablaDeIncidenciasRegulatorias Incidencias="@_rechazo" />
+                }
+            </IndicadorDeCarga>
+        </div>
+    </PermissionGate>
+
+    <h4>Versiones generadas</h4>
+    <GeneracionesRegulatorias @ref="_generaciones" Clase="@Clase" Formato="@_formato" />
+</div>
+
+<SfDialog @bind-Visible="_mostrarAdvertencias" Header="Reconocer las advertencias" Width="560px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_accion.Activa" Texto="Generando…">
+                <p>El formato de @Periodo se puede generar, pero tiene estas advertencias. Ninguna va dentro del archivo.</p>
+                <ul>
+                    @foreach (var w in _advertencias.DistinctBy(w => w.Message)) { <li>@w.Message</li> }
+                </ul>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@_accion.Activa" OnClick="@(() => GenerarConAsync(true))">Reconocer y generar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarAdvertencias = false)">Volver</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _layouts = new(), _accion = new();
+    private GeneracionesRegulatorias? _generaciones;
+    private IReadOnlyList<LayoutRegulatorioDto> _todos = [];
+    private LayoutRegulatorioDto? _layout;
+    private string _formato = FormatosRegulatoriosDeCaptaciones.Todos[0].Codigo;
+    private int _anio = DateTime.Today.AddMonths(-1).Year, _mes = DateTime.Today.AddMonths(-1).Month;
+    private ValidacionRegulatoriaDto? _validacion;
+    private IReadOnlyList<IncidenciaRegulatoriaDto> _rechazo = [];
+    private IReadOnlyList<AdvertenciaRegulatoriaDto> _advertencias = [];
+    private bool _mostrarAdvertencias;
+    private ClaveDeOperacion _clave = new();
+
+    private bool Anual => FormatosRegulatoriosDeCaptaciones.Todos.FirstOrDefault(f => f.Codigo == _formato).Anual;
+
+    private int Clase => Anual ? RegulatorioDeCarteraClient.ClaseExogena : RegulatorioDeCarteraClient.ClaseSicsesDeCaptaciones;
+
+    private string Periodo => Anual ? $"el año {_anio}" : TextosRegulatorios.Periodo(_anio, _mes);
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var carga = _layouts.Iniciar();
+        var r = await Regulatorio.LayoutsAsync();
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer los layouts."); return; }
+        _todos = r.Value ?? [];
+        ElegirLayout();
+    }
+
+    private void ElegirLayout() =>
+        _layout = _todos.Where(l => l.FormatCode == _formato).OrderByDescending(l => l.ValidFrom).FirstOrDefault();
+
+    private void CambiarFormato(string? formato)
+    {
+        if (string.IsNullOrWhiteSpace(formato) || formato == _formato) return;
+        var antesAnual = Anual;
+        _formato = formato;
+        if (Anual && !antesAnual) _anio = DateTime.Today.Year - 1;
+        if (!Anual && antesAnual) _anio = DateTime.Today.AddMonths(-1).Year;
+        ElegirLayout();
+        Limpiar();
+    }
+
+    private void CambiarPeriodo(object? anio, object? mes)
+    {
+        if (int.TryParse(anio?.ToString(), out var a)) _anio = a;
+        if (int.TryParse(mes?.ToString(), out var m)) _mes = m;
+        Limpiar();
+    }
+
+    private void Limpiar()
+    {
+        _validacion = null;
+        _rechazo = [];
+        _clave = new ClaveDeOperacion();
+    }
+
+    private int? Mes => Anual ? null : _mes;
+
+    private async Task ValidarAsync()
+    {
+        using var carga = _accion.Iniciar();
+        _rechazo = [];
+        var r = await Regulatorio.ValidarCaptacionesAsync(_formato, _anio, Mes);
+        _validacion = r.IsSuccess ? r.Value : null;
+        if (!r.IsSuccess) await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo validar el formato.");
+    }
+
+    private Task GenerarAsync()
+    {
+        // Validado sin bloqueantes y con advertencias: se reconocen antes de generar.
+        if (_validacion is { Blocking: 0, Warnings.Count: > 0 } v)
+        {
+            _advertencias = v.Warnings;
+            _mostrarAdvertencias = true;
+            return Task.CompletedTask;
+        }
+        return GenerarConAsync(false);
+    }
+
+    private async Task GenerarConAsync(bool reconocer)
+    {
+        using var carga = _accion.Iniciar();
+        _rechazo = [];
+        var r = await Regulatorio.GenerarCaptacionesAsync(_formato, _anio, Mes, reconocer, _clave);
+        if (r.IsSuccess)
+        {
+            _mostrarAdvertencias = false;
+            _validacion = null;
+            await Notification.SuccessAsync($"Formato {r.Value!.File.FileName} generado con {r.Value.File.Counts.Rows} filas.");
+            if (_generaciones is not null) await _generaciones.RecargarAsync(r.Value);
+            return;
+        }
+        var advertencias = r.Dato<List<AdvertenciaRegulatoriaDto>>("warnings");
+        if (!reconocer && advertencias is { Count: > 0 })
+        {
+            _advertencias = advertencias;
+            _mostrarAdvertencias = true;
+            return;
+        }
+        _mostrarAdvertencias = false;
+        _rechazo = RegulatorioDeCarteraClient.IncidenciasDelRechazo(r);
+        await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo generar el formato.");
+        if (_rechazo.Count > 0 && _generaciones is not null) await _generaciones.RecargarAsync();
+    }
+}

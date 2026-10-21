@@ -68,10 +68,11 @@ public class ArrendamientosDeTrabajosDeFondoTests
     }
 
     [Fact]
-    public void Los_cinco_nombres_son_los_fijos_de_la_plataforma()
+    public void Los_nombres_son_los_fijos_de_la_plataforma()
     {
+        // Feature 013 (T0225): «lending.process» lo siembra PlataformaParaCartera.
         NombresDeArrendamiento.Todos.Should().Equal(
-            "integration.dispatch", "audit.forward", "einvoicing.process", "scheduled.tasks", "email.dispatch");
+            "integration.dispatch", "audit.forward", "einvoicing.process", "scheduled.tasks", "email.dispatch", "lending.process");
         NombresDeArrendamiento.Todos.Should().OnlyContain(n => n.Length <= 100);
     }
 

@@ -1,0 +1,19 @@
+{
+  // Feature 013 (T0204; data-model parte 3 §12.4; R15): versión inicial de la regla de pérdida esperada (Supersolidaria, Circular
+  // Externa 100 del 2026-05-12) para la semilla central. Obliga al modelo de referencia a las cooperativas de ahorro y crédito, a las
+  // multiactivas e integrales con sección de ahorro y a los fondos de empleados de categoría plena; las demás aplican el Anexo 1 y
+  // pueden adoptarlo voluntariamente con aviso de 15 días. Pendiente de cotejo (verified = false, pregunta E8).
+  "obligatedOrganizationTypes": [ "COOP_AHORRO_CREDITO", "COOP_MULTIACTIVA_SECCION_AC", "COOP_INTEGRAL_SECCION_AC", "FONDO_EMPLEADOS" ],
+  "obligatedEmployeeFundCategories": [ "PLENA" ],
+  "coveredSegments": [ "CONSUMO_LIBRANZA", "CONSUMO_SIN_LIBRANZA", "COMERCIAL_PN" ],
+  "historyMonths": 36,
+  "voluntaryNoticeDays": 15,
+  // US9 (T0691): procedencia de cada dato, todo «pendiente de validar» (E8). En K1 la regla sólo detecta la obligación (D28).
+  "provenance": [
+    { "table": "obligatedOrganizationTypes", "verified": false, "source": "Supersolidaria, CE 100 del 2026-05-12: tipos obligados al modelo de referencia; transcripción del equipo, sin cotejar (E8)" },
+    { "table": "obligatedEmployeeFundCategories", "verified": false, "source": "CE 100 del 2026-05-12: fondos de empleados de categoría plena; sin cotejar (E8)" },
+    { "table": "coveredSegments", "verified": false, "source": "CE 100 del 2026-05-12 y Anexo 2: consumo con y sin libranza y comercial persona natural; sin cotejar (E8)" },
+    { "table": "historyMonths", "verified": false, "source": "Anexo 2: mora máxima mensual de hasta 36 meses; sin cotejar (E8)" },
+    { "table": "voluntaryNoticeDays", "verified": false, "source": "CE 100 del 2026-05-12: aviso de 15 días a la Superintendencia (pregunta E2: se cuenta contra la fecha desde); sin cotejar" }
+  ]
+}

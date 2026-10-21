@@ -17,7 +17,8 @@ namespace IngenIA365ERP.Application.Tests.Payroll.Terminations;
 /// <summary>
 /// Feature 010, US3 (T065): registrar la terminación crea la terminación y la definitiva en borrador
 /// en una acción, propone los descuentos desde Cartera y las libranzas según la política, respeta
-/// FR-021 (fecha en período aprobado), no admite dos terminaciones vivas, avisa si Cartera no
+/// FR-021 (fecha en período aprobado), no admite dos terminaciones vivas (feature 013, T0109: Cartera por la consulta de
+/// obligaciones, con <c>ConsultaDeObligacionesDePrueba</c>), avisa si Cartera no
 /// responde y deja la ficha vigente.
 /// </summary>
 public class RegisterTerminationCommandHandlerTests
@@ -48,13 +49,17 @@ public class RegisterTerminationCommandHandlerTests
 
         // Descuentos: saldo total de cada crédito vivo (política SaldoTotal) y sólo las cuotas causadas sin descontar de la libranza.
         terminacion.Deductions.Should().HaveCount(3);
-        p.Descuento(t, 1001).Proposed.Should().Be(1_500_000m);
-        p.Descuento(t, 1001).Applied.Should().Be(1_500_000m);
-        // En Cartera el saldo del crédito es capital (el recaudo sólo le resta el capital pagado); el desglose lo dice.
-        p.Descuento(t, 1001).CapitalBalance.Should().Be(1_500_000m);
-        p.Descuento(t, 1001).InterestBalance.Should().Be(0m);
-        p.Descuento(t, 1001).RemainingAfter.Should().Be(0m, "aplicado el saldo total no queda nada en Cartera");
-        p.Descuento(t, 1002).Proposed.Should().Be(300_000m);
+        p.Descuento(t, "1001").Proposed.Should().Be(1_500_000m);
+        p.Descuento(t, "1001").Applied.Should().Be(1_500_000m);
+        // Feature 013 (R104): el desglose sale de la consulta de obligaciones (capital, intereses) con las mismas claves de la 010.
+        p.Descuento(t, "1001").CapitalBalance.Should().Be(p.Credito1001.Principal);
+        p.Descuento(t, "1001").InterestBalance.Should().Be(p.Credito1001.CurrentInterest);
+        p.Descuento(t, "1001").ObligationNumber.Should().Be("1001");
+        terminacion.Deductions.Where(d => d.Kind == SettlementDeductionKind.CooperativeLoan).Select(d => d.ObligationPublicId)
+            .Should().BeEquivalentTo(new Guid?[] { p.Credito1001.ObligationPublicId, p.Credito1002.ObligationPublicId });
+        p.Obligaciones.Consultas.Should().OnlyContain(c => !c.IncludeAsCoDebtor && c.PersonPublicIds.SequenceEqual(new[] { p.PersonaDeAna }));
+        p.Descuento(t, "1001").RemainingAfter.Should().Be(0m, "aplicado el saldo total no queda nada en Cartera");
+        p.Descuento(t, "1002").Proposed.Should().Be(300_000m);
         p.LibranzaDe(t).Proposed.Should().Be(100_000m, "cuatro cuotas causadas de junio a septiembre menos dos descontadas");
         t.Deductions.TotalProposed.Should().Be(1_900_000m);
         t.Deductions.NetAfterDeductions.Should().Be(t.Deductions.Net - 1_900_000m);
@@ -64,7 +69,7 @@ public class RegisterTerminationCommandHandlerTests
         var descuentos = lineas.Where(l => l.SettlementDeductionId != null).ToList();
         descuentos.Should().HaveCount(3);
         descuentos.Select(l => l.SettlementDeductionId).Should().BeEquivalentTo(terminacion.Deductions.Select(d => (int?)d.Id));
-        descuentos.Where(l => l.ConceptCode == WellKnownConceptCodes.LoanDeduction).Should().OnlyContain(l => !l.AffectsAccounting, "Cartera contabiliza el recaudo (D-08)");
+        descuentos.Where(l => l.ConceptCode == WellKnownConceptCodes.LoanDeduction).Should().OnlyContain(l => l.AffectsAccounting, "enmienda D-08 (feature 013): DESC_CARTERA contabiliza contra la cuenta del concepto");
         descuentos.Sum(l => l.Amount).Should().Be(1_900_000m);
         run.TotalNet.Should().Be(t.Totals.Net);
 
@@ -82,8 +87,8 @@ public class RegisterTerminationCommandHandlerTests
 
         var t = await p.RegistrarAnaAsync();
 
-        p.Descuento(t, 1001).Proposed.Should().Be(250_000m, "la cuota de 250.000 sin mora");
-        p.Descuento(t, 1002).Proposed.Should().Be(100_000m);
+        p.Descuento(t, "1001").Proposed.Should().Be(250_000m, "la cuota de 250.000 sin mora");
+        p.Descuento(t, "1002").Proposed.Should().Be(100_000m);
         p.LibranzaDe(t).Proposed.Should().Be(100_000m, "la libranza no depende de la política del crédito");
     }
 
@@ -171,46 +176,14 @@ public class RegisterTerminationCommandHandlerTests
     public async Task Si_Cartera_no_responde_la_propuesta_de_creditos_sale_vacia_con_aviso_la_libranza_sigue_y_no_bloquea()
     {
         var p = new DefinitivaDePrueba();
-        var caida = CarteraCaida(p);
-        var loader = new SettlementInputLoader(caida, p.D.Policies, new ProvisionBalanceReader(caida), NullLogger<SettlementInputLoader>.Instance);
-        var handler = new RegisterTerminationCommandHandler(caida, loader, new SettlementRunPersister(caida, p.D.Clock, p.D.User), p.D.Clock, p.D.User, p.D.AuditEmitter);
+        p.Obligaciones.Caida = new InvalidOperationException("Cartera no disponible (simulado).");
 
-        var r = await handler.Handle(new RegisterTerminationCommand(p.D.Ana.PublicId, DefinitivaDePrueba.Retiro, "DESP_SINJC", DianContractType.FixedTerm, new DateOnly(2026, 12, 31)), CancellationToken.None);
+        var r = await p.Registrar().Handle(new RegisterTerminationCommand(p.D.Ana.PublicId, DefinitivaDePrueba.Retiro, "DESP_SINJC", DianContractType.FixedTerm, new DateOnly(2026, 12, 31)), CancellationToken.None);
 
         r.IsSuccess.Should().BeTrue("Cartera caída avisa, no bloquea: " + r.Error.Message);
         r.Value.Warnings.Should().ContainSingle(w => w.Code == "Payroll.Settlement.PortfolioUnavailable");
         r.Value.Deductions.Items.Should().ContainSingle(i => i.Kind == SettlementDeductionKind.ThirdPartyLibranza, "la libranza no depende de Cartera");
         r.Value.Deductions.Items.Should().NotContain(i => i.Kind == SettlementDeductionKind.CooperativeLoan);
         (await p.D.Db.PayrollRuns.CountAsync(x => x.Kind == PayrollRunKind.Settlement && x.Status == PayrollRunStatus.Draft)).Should().Be(1);
-    }
-
-    /// <summary>El mismo contexto de pruebas, salvo que la tabla de Cartera no responde.</summary>
-    private static IApplicationDbContext CarteraCaida(DefinitivaDePrueba p)
-    {
-        var real = p.D.Db;
-        var db = Substitute.For<IApplicationDbContext>();
-        db.Employees.Returns(real.Employees);
-        db.People.Returns(real.People);
-        db.EmploymentTerminations.Returns(real.EmploymentTerminations);
-        db.TerminationReasons.Returns(real.TerminationReasons);
-        db.SettlementDeductions.Returns(real.SettlementDeductions);
-        db.PayPeriods.Returns(real.PayPeriods);
-        db.PayrollPlans.Returns(real.PayrollPlans);
-        db.PayrollRuns.Returns(real.PayrollRuns);
-        db.PayrollRunEmployees.Returns(real.PayrollRunEmployees);
-        db.PayrollRunLines.Returns(real.PayrollRunLines);
-        db.WorkRiskRates.Returns(real.WorkRiskRates);
-        db.SalaryChanges.Returns(real.SalaryChanges);
-        db.PayrollConceptDefinitions.Returns(real.PayrollConceptDefinitions);
-        db.PayrollLegalParameters.Returns(real.PayrollLegalParameters);
-        db.EmployeeWithholdingRates.Returns(real.EmployeeWithholdingRates);
-        db.EmployeeTaxDeductions.Returns(real.EmployeeTaxDeductions);
-        db.PayrollNovelties.Returns(real.PayrollNovelties);
-        db.PayrollRecurringNovelties.Returns(real.PayrollRecurringNovelties);
-        db.EmployeeBenefitOpeningBalances.Returns(real.EmployeeBenefitOpeningBalances);
-        db.VacationMovements.Returns(real.VacationMovements);
-        db.LoanPortfolios.Returns(_ => throw new InvalidOperationException("Cartera no disponible (simulado)."));
-        db.SaveChangesAsync(Arg.Any<CancellationToken>()).Returns(ci => real.SaveChangesAsync(ci.Arg<CancellationToken>()));
-        return db;
     }
 }

@@ -91,6 +91,7 @@ public sealed record NovedadDto(
         "Recurring" => "Recurrente",
         "Retroactive" => "Retroactiva",
         "LoanDeduction" => "Cartera",
+        "AccountDeduction" => "Aportes y ahorro",
         "CarryOver" => "Traslado",
         _ => Origin,
     };

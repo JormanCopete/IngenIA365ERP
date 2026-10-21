@@ -39,6 +39,11 @@ public class DocumentPaymentConfiguration : IEntityTypeConfiguration<DocumentPay
         builder.Property(e => e.SuggestedCreditLineCode).HasMaxLength(20);
         builder.Property(e => e.PendingValidation).HasDefaultValue(false);
         builder.Property(e => e.AccountsReceivableRecordedBy).HasMaxLength(12);
+        // Feature 013 (T0172, C67, A6): lo que la venta guarda de Cartera, sellado al confirmar; nunca saldos ni cuotas.
+        builder.Property(e => e.ReservedLoanNumber).HasMaxLength(30);
+        builder.Property(e => e.CreditLineCode).HasMaxLength(20);
+        builder.Property(e => e.ConsultationEvidence).HasMaxLength(64);
+        builder.Property(e => e.CreditWithoutLending).HasDefaultValue(false);
 
         builder.HasOne(e => e.Document).WithMany().HasForeignKey(e => e.DocumentId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(e => e.PaymentMeans).WithMany().HasForeignKey(e => e.PaymentMeansId).OnDelete(DeleteBehavior.Restrict);

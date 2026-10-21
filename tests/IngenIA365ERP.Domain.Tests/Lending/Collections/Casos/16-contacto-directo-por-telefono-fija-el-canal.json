@@ -1,0 +1,28 @@
+// K4 (T0921, US12-2; adaptadores-y-archivos.md §4.8): una gestión con contacto directo por teléfono el lunes 9 de noviembre de 2026
+// fija el canal «teléfono» para la semana (lunes 9 a domingo 15). Un WhatsApp de cobranza el miércoles 11 no sale: la semana siguiente
+// empieza el lunes 16, que es festivo, así que la apertura es el martes 17 a las 7:00. Un informativo no respeta el canal semanal; una
+// gestión sin contacto directo (no contestó) no fija nada; el mismo lunes, además, ya se cumplió el contacto del día.
+{
+  "caso": "16-contacto-directo-por-telefono-fija-el-canal",
+  "reglas": { "horario": { "lunesAViernes": ["07:00", "19:00"], "sabado": ["08:00", "15:00"] }, "contactosPorDia": 1, "noHabiles": ["2026-11-02", "2026-11-16"] },
+  "titular": {},
+  "historial": [ { "id": 1, "en": "2026-11-09T10:15", "canal": "Phone", "directo": true } ],
+  "escenarios": [
+    { "nombre": "US12-2: teléfono el lunes, WhatsApp el miércoles",
+      "solicitud": { "pedido": "2026-11-11T09:00", "canal": "WhatsApp", "proposito": "Collection", "inmediato": true },
+      "esperado": { "decision": "Diferido", "siguiente": "2026-11-17T07:00", "motivos": ["WeeklyChannelLocked"] } },
+    { "nombre": "aviso previo por SMS la misma semana",
+      "solicitud": { "pedido": "2026-11-11T09:00", "canal": "Sms", "proposito": "PriorNotice" },
+      "esperado": { "decision": "Diferido", "siguiente": "2026-11-17T07:00", "motivos": ["WeeklyChannelLocked"] } },
+    { "nombre": "un informativo por SMS sí sale",
+      "solicitud": { "pedido": "2026-11-11T09:00", "canal": "Sms", "proposito": "Informative" },
+      "esperado": { "decision": "Permitido", "en": "2026-11-11T09:00" } },
+    { "nombre": "el mismo lunes: tope del día y canal de la semana",
+      "solicitud": { "pedido": "2026-11-09T11:00", "canal": "Sms", "proposito": "Collection" },
+      "esperado": { "decision": "Diferido", "siguiente": "2026-11-17T07:00", "motivos": ["DailyLimitReached", "WeeklyChannelLocked"] } },
+    { "nombre": "una llamada sin contacto directo no fija el canal",
+      "historial": [ { "id": 1, "en": "2026-11-09T10:15", "canal": "Phone", "directo": false } ],
+      "solicitud": { "pedido": "2026-11-11T09:00", "canal": "WhatsApp", "proposito": "Collection" },
+      "esperado": { "decision": "Permitido", "en": "2026-11-11T09:00" } }
+  ]
+}

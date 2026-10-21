@@ -1,0 +1,162 @@
+@page "/cartera/pagadurias"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Components.Cartera
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Nomina
+@inject LibranzaClient Libranza
+@inject INotificationService Notification
+@inject NavigationManager Navegacion
+
+<PageTitle>Pagadurías - IngenIA365ERP</PageTitle>
+
+@* Feature 013, K2, US10 (T0852; contracts/api.md §13.1; FR-108, I13, C84): las pagadurías con su convenio de libranza. La lista con la versión que
+   rige y los créditos vinculados; el alta de una pagaduría (persona jurídica del maestro; la nómina propia es la cooperativa) con su primera
+   versión —fechas de la nómina, formatos de ida y vuelta por referencia, tope, ventana de giro, regla del no aplicado y códigos de respuesta—; y la
+   carga masiva con la plantilla lending.payroll-agreements. El detalle (versiones, contactos, códigos y pendientes de giro) se abre desde la lista. *@
+<PermissionGate Required="Lending.PayrollAgreements.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Pagadurías</h3>
+        <div class="toolbar">
+            <SfButton CssClass="@(_pestana == 0 ? "e-primary" : "e-outline")" OnClick="@(() => _pestana = 0)">Convenios</SfButton>
+            <PermissionGate Required="Lending.PayrollAgreements.Manage">
+                <SfButton CssClass="@(_pestana == 1 ? "e-primary" : "e-outline")" OnClick="@(() => _pestana = 1)">Carga masiva</SfButton>
+            </PermissionGate>
+        </div>
+    </div>
+
+    @if (_pestana == 0)
+    {
+        <div class="toolbar">
+            <label><input type="checkbox" checked="@_conInactivos" @onchange="@(e => CambiarInactivosAsync(e.Value is true))" /> Ver suspendidos y cerrados</label>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+            <PermissionGate Required="Lending.PayrollAgreements.Manage">
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@AbrirAltaAsync">Nueva pagaduría</SfButton>
+            </PermissionGate>
+        </div>
+
+        <IndicadorDeCarga Cargando="@_carga.Activa">
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead>
+                        <tr><th>Código</th><th>Convenio</th><th>Pagaduría</th><th>NIT</th><th>Rige desde</th><th>Corte · envío · pago</th><th class="numero">Créditos</th><th>Estado</th><th></th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var c in _convenios)
+                        {
+                            var convenio = c;
+                            <tr>
+                                <td>@convenio.Code</td>
+                                <td>@convenio.Name@(convenio.IsOwnPayroll ? " · nómina propia" : "")</td>
+                                <td>@convenio.Payer.LegalName</td>
+                                <td>@convenio.Payer.TaxId</td>
+                                <td>@(convenio.CurrentVersion is { } v ? v.ValidFrom.ToString("dd/MM/yyyy") : "Sin versión vigente")</td>
+                                <td>@(convenio.CurrentVersion is { } w ? $"{w.CutoffDay} · {(w.SendDay?.ToString() ?? "—")} · {w.PayDay}" : "—")</td>
+                                <td class="numero">@convenio.ActiveLoans</td>
+                                <td>@TextosDeLibranza.EstadoDeConvenio(convenio.Status)</td>
+                                <td><SfButton CssClass="e-flat e-small" OnClick="@(() => Navegacion.NavigateTo($"/cartera/pagadurias/{convenio.PublicId}"))">Ver</SfButton></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            @if (_convenios.Count == 0) { <p class="texto-tenue">No hay pagadurías con convenio. Regístrelas una a una o con la plantilla.</p> }
+        </IndicadorDeCarga>
+    }
+    else
+    {
+        <div class="info-card">
+            <h4>Plantilla de convenios de pagaduría</h4>
+            <p class="texto-apoyo">
+                Tres hojas: <b>Convenios</b> (una fila por versión: código, pagaduría por su NIT y fecha desde), <b>Contactos</b> y
+                <b>CodigosDeRespuesta</b>. Se aplican las mismas reglas que al registrar un convenio en pantalla; la pagaduría debe existir como persona
+                jurídica en Maestros › Personas (la plantilla no crea personas).
+            </p>
+            <ImportarPlantilla RutaBase="@LibranzaClient.RutaDeConvenios" PermisoDeDescarga="Lending.PayrollAgreements.View"
+                               PermisoDeImportacion="Lending.PayrollAgreements.Manage" ConDatos="false" Aplicado="@(_ => CargarAsync())" />
+        </div>
+    }
+</div>
+
+<SfDialog @bind-Visible="_mostrarAlta" Header="Nueva pagaduría" Width="760px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_accion.Activa" Texto="Registrando el convenio…">
+                <div class="form-grid">
+                    <label class="campo">Código *
+                        <input class="e-input" @bind="_codigo" maxlength="10" placeholder="PAGMUN01" />
+                    </label>
+                    <label class="campo campo-ancho">Nombre del convenio * <input class="e-input" @bind="_nombre" maxlength="120" /></label>
+                    <div class="campo campo-ancho">Pagaduría (persona jurídica) *
+                        <PersonSearchPicker @bind-Selected="_pagaduria" ShowHelpText="false" Compacto="true" />
+                    </div>
+                    <label class="campo-check"><input type="checkbox" @bind="_nominaPropia" /> Es la nómina propia de la cooperativa</label>
+                </div>
+                <EditorDeVersionDeConvenio Version="@_version" FormatosDeIda="@_formatosDeIda" FormatosDeVuelta="@_formatosDeVuelta" />
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_accion.Activa || !PuedeCrear)" OnClick="@CrearAsync">Registrar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarAlta = false)">Volver</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new(), _accion = new();
+    private int _pestana;
+    private bool _conInactivos, _mostrarAlta, _nominaPropia;
+    private List<ConvenioResumenDto> _convenios = [];
+    private List<FormatoBancarioResumenDto> _formatosDeIda = [], _formatosDeVuelta = [];
+    private string? _codigo, _nombre, _error;
+    private PersonSearchPicker.PersonSearchItem? _pagaduria;
+    private EditorDeVersionDeConvenio.Modelo _version = new();
+    private ClaveDeOperacion _clave = new();
+
+    private bool PuedeCrear => !string.IsNullOrWhiteSpace(_codigo) && !string.IsNullOrWhiteSpace(_nombre) && _pagaduria is not null && _version.Completo;
+
+    protected override Task OnInitializedAsync() => CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Libranza.ConveniosAsync(_conInactivos);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer las pagadurías."); return; }
+        _convenios = [.. r.Value ?? []];
+    }
+
+    private async Task CambiarInactivosAsync(bool valor)
+    {
+        _conInactivos = valor;
+        await CargarAsync();
+    }
+
+    private async Task AbrirAltaAsync()
+    {
+        _codigo = _nombre = _error = null;
+        _pagaduria = null;
+        _nominaPropia = false;
+        _version = new EditorDeVersionDeConvenio.Modelo();
+        _clave = new ClaveDeOperacion();
+        _mostrarAlta = true;
+        using var carga = _accion.Iniciar();
+        _formatosDeIda = [.. (await Libranza.FormatosAsync(LibranzaClient.AmbitoDeIda)).Value ?? []];
+        _formatosDeVuelta = [.. (await Libranza.FormatosAsync(LibranzaClient.AmbitoDeVuelta)).Value ?? []];
+    }
+
+    private async Task CrearAsync()
+    {
+        if (!PuedeCrear) return;
+        using var carga = _accion.Iniciar();
+        _error = null;
+        var r = await Libranza.CrearAsync(new ConvenioRequest(_codigo!.Trim().ToUpperInvariant(), _nombre!.Trim(), _pagaduria!.PublicId, _nominaPropia,
+            _version.Pedido()), _clave);
+        if (!r.IsSuccess) { _error = r.ErrorMessage ?? "No se pudo registrar el convenio."; return; }
+        _mostrarAlta = false;
+        await Notification.SuccessAsync($"Convenio {r.Value!.Code} registrado.");
+        Navegacion.NavigateTo($"/cartera/pagadurias/{r.Value.PublicId}");
+    }
+}

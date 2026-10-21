@@ -1,0 +1,154 @@
+{
+  "descripcion": "§24 ejemplo 10 (venta sellada «Cartera»): el capital contra el rol de Comercial, que cruza siempre contra la factura (C79).",
+  "sobre": {
+    "version": 1,
+    "kind": "Business",
+    "originModule": "CAR",
+    "originEventKey": "Confirmation",
+    "origin": {
+      "kind": "Operation",
+      "documentClass": null,
+      "documentTypeCode": null,
+      "number": "DES-000501",
+      "publicId": "0d0d0067-0000-4000-8000-000000000067",
+      "operationDate": "2026-11-25"
+    },
+    "related": null,
+    "chainRootPublicId": "0e0e0068-0000-4000-8000-000000000068",
+    "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+    "costCenterPublicId": null,
+    "warehouseCode": null,
+    "personPublicId": "a1b2c3d4-0000-4000-8000-000000000002",
+    "currency": "COP",
+    "exchangeRate": 1,
+    "originUser": {
+      "centralUserId": "d4e5f6a7-b8c9-4d0e-9f1a-2b3c4d5e6f70",
+      "name": "Usuario de ensayo"
+    },
+    "emittedAt": "2026-11-25T15:00:00Z"
+  },
+  "mensajes": [
+    {
+      "messageId": "0f0f0071-0000-4000-8000-000000000071",
+      "type": "CreditoDesembolsado",
+      "kind": "Business",
+      "originDocumentClass": "LoanDisbursement",
+      "payload": {
+        "loan": {
+          "loanPublicId": "7b8c9d0e-1f2a-4b3c-9d4e-000000000501",
+          "loanNumber": "000501"
+        },
+        "debtorPersonPublicId": "a1b2c3d4-0000-4000-8000-000000000002",
+        "valueDate": "2026-11-25",
+        "registeredAt": "2026-11-25T15:00:00Z",
+        "dimensions": {
+          "creditLineCode": "COM01",
+          "modalityCode": "CONSUMO",
+          "subsegmentCode": "SinLibranza",
+          "riskCategory": "A",
+          "riskSubcategory": "None",
+          "isEmployee": false,
+          "inGracePeriod": false,
+          "restructured": false,
+          "writtenOff": false,
+          "collectorClass": null,
+          "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+          "impairmentModel": "ArrearsAnnex1",
+          "riskSegment": "CONSUMO",
+          "valueUnit": "Pesos"
+        },
+        "amounts": [
+          {
+            "concept": "Principal",
+            "installmentNumber": null,
+            "amount": 1200000.0,
+            "uvrAmount": null,
+            "onBehalfOfAssociate": false,
+            "reasonCode": "Cartera"
+          }
+        ],
+        "original": null,
+        "rulesVersion": "LND-2026.1",
+        "tranche": {
+          "number": 1,
+          "isLast": true
+        },
+        "disbursementForm": "InKind",
+        "payeePersonPublicId": null,
+        "grossAmount": 1200000.0,
+        "payoffDeductions": [],
+        "netToDisburse": 0.0,
+        "disbursementOrderPublicId": null,
+        "inKind": {
+          "saleMessageId": "5a1e0069-0000-4000-8000-000000000069",
+          "invoice": {
+            "module": "INV",
+            "publicId": "6d7e8f90-a1b2-4c3d-8e4f-5a6b7c8d9e0f",
+            "documentClass": "PosEquivalentDocument",
+            "number": "PV01-1532"
+          },
+          "creditPaymentPublicId": "5a1f0070-0000-4000-8000-000000000070",
+          "accountsReceivableRecordedBy": "Cartera",
+          "replacesLoan": null
+        },
+        "plan": {
+          "scheduleVersion": 1,
+          "amortizationSystem": "LevelPayment",
+          "periodicity": "Monthly",
+          "installmentCount": 36,
+          "installmentAmount": 392184.0,
+          "firstDueDate": "2026-12-30",
+          "finalDueDate": "2029-11-30",
+          "annualEffectiveRate": 0.245,
+          "dayCountConvention": "Thirty360",
+          "rulesVersion": "LND-2026.1"
+        }
+      }
+    }
+  ],
+  "esperado": {
+    "tipo": "DS",
+    "fecha": "2026-11-25",
+    "origen": "LendingIssuedDocument",
+    "lineas": [
+      {
+        "rol": "Capital",
+        "cuenta": "14420501",
+        "debito": 1200000.0,
+        "credito": 0.0,
+        "tercero": "ana",
+        "cruce": "PG 000501",
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "CreditoDesembolsado"
+          ],
+          "concepto": "Principal",
+          "creditos": [
+            "000501"
+          ]
+        }
+      },
+      {
+        "rol": "PuenteComercial",
+        "cuenta": "13059501",
+        "debito": 0.0,
+        "credito": 1200000.0,
+        "tercero": "ana",
+        "cruce": "FV PV01-1532",
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "CreditoDesembolsado"
+          ],
+          "concepto": "Principal",
+          "creditos": [
+            "000501"
+          ]
+        }
+      }
+    ]
+  }
+}

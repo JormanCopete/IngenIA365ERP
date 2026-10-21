@@ -1,0 +1,207 @@
+@using System.Globalization
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Http
+@inject RiesgoClient Riesgo
+@inject INotificationService Notification
+
+@* Feature 013, US9 (T0715; contracts/api.md §12.1; T45, C52): la pestaña «Riesgo» de /cartera/parametros. La norma vigente (Anexo 1) con su huella y
+   las tablas todavía sin cotejar, la política SARC del consejo que rige y la efectiva celda a celda —norma, propuesta y lo que rige: siempre lo
+   más estricto—, y las versiones con su estado. Registrar una versión (Lending.RiskPolicy.Manage) pide el esquema parcial del Anexo 1 en JSON,
+   desde cuándo y el motivo; una celda menos estricta que la norma se rechaza y se lista con su ruta. Validarla (Lending.RiskPolicy.Validate)
+   pide el punto del acta del consejo, y no la valida quien la registró. *@
+<IndicadorDeCarga Cargando="@_carga.Activa" Texto="Leyendo la política…">
+    @if (_p is { } p)
+    {
+        <div class="info-card">
+            <h4>Norma vigente al @p.Date.ToString("dd/MM/yyyy")</h4>
+            @if (p.Anexo1 is { } n)
+            {
+                <p>@n.Code, vigente desde el @n.ValidFrom.ToString("dd/MM/yyyy") · huella @(n.Sha256.Length > 12 ? n.Sha256[..12] + "…" : n.Sha256)</p>
+                @if (n.UnverifiedTables.Count > 0)
+                {
+                    <p class="aviso aviso-alerta">Pendiente de validar por la contadora: @string.Join(", ", n.UnverifiedTables). Se aplica tal como está y el cierre lo marca.</p>
+                }
+            }
+            else
+            {
+                <p class="aviso aviso-alerta">No hay norma vigente a esta fecha: el cierre no puede calificar.</p>
+            }
+            <p>
+                @(p.EffectiveVersionPublicId is null ? "Sin política propia: rige la norma." : "Rige la política validada del consejo, celda por celda donde es más estricta.")
+                @if (p.GeneralImpairmentAdditional > 0)
+                {
+                    <text> Deterioro general adicional: @((p.GeneralImpairmentAdditional * 100m).ToString("N2"))%@(p.AdditionalCompensatesIndividual ? ", que compensa el individual" : "").</text>
+                }
+            </p>
+        </div>
+
+        @if (p.Combined.Count > 0)
+        {
+            <h4>Celdas de la política</h4>
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Celda</th><th class="numero">Norma</th><th class="numero">Propuesta</th><th class="numero">Rige</th></tr></thead>
+                    <tbody>
+                        @foreach (var c in p.Combined)
+                        {
+                            <tr class="@(c.Effective != c.Norm ? "resaltada" : "")">
+                                <td>@c.Path</td>
+                                <td class="numero">@c.Norm.ToString("0.######", CultureInfo.InvariantCulture)</td>
+                                <td class="numero">@c.Proposed.ToString("0.######", CultureInfo.InvariantCulture)</td>
+                                <td class="numero">@c.Effective.ToString("0.######", CultureInfo.InvariantCulture)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+
+        <h4>Versiones</h4>
+        <div class="tabla-desplazable">
+            <table class="data-grid">
+                <thead><tr><th>Versión</th><th>Desde</th><th>Estado</th><th>Registró</th><th>Validó</th><th>Motivo</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var v in p.Versions)
+                    {
+                        var version = v;
+                        <tr>
+                            <td>@version.VersionNumber</td>
+                            <td>@version.ValidFrom.ToString("dd/MM/yyyy")</td>
+                            <td>@TextosDeRiesgo.EstadoDeVersion(version.Status)</td>
+                            <td>@(version.RegisteredBy ?? "—")</td>
+                            <td>@(version.ValidatedBy is { } quien ? $"{quien}, {version.ValidatedAt?.ToLocalTime():dd/MM/yyyy}" : "—")</td>
+                            <td>@version.Reason</td>
+                            <td>
+                                @if (version.Status == "PendingValidation")
+                                {
+                                    <PermissionGate Required="Lending.RiskPolicy.Validate">
+                                        <SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirValidacion(version))">Validar</SfButton>
+                                    </PermissionGate>
+                                }
+                            </td>
+                        </tr>
+                    }
+                    @if (p.Versions.Count == 0) { <tr><td colspan="7" class="texto-tenue">El consejo no ha registrado política propia.</td></tr> }
+                </tbody>
+            </table>
+        </div>
+
+        <PermissionGate Required="Lending.RiskPolicy.Manage">
+            <SfButton CssClass="e-primary" OnClick="@AbrirNueva">Registrar versión de la política</SfButton>
+        </PermissionGate>
+    }
+</IndicadorDeCarga>
+
+@if (_mostrarNueva)
+{
+    <div class="info-card">
+        <IndicadorDeCarga Cargando="@_guardado.Activa">
+            <h4>Nueva versión de la política SARC</h4>
+            <p class="texto-tenue">Sólo se aceptan celdas más estrictas que la norma (porcentajes mayores, inicios de categoría menores, garantías menores). Rige desde la fecha que se elija, una vez validada con el acta del consejo.</p>
+            <label class="campo">Rige desde <input type="date" class="e-input" value="@(_desde.ToString("yyyy-MM-dd"))" @onchange="@(e => _desde = DateOnly.TryParse(e.Value?.ToString(), CultureInfo.InvariantCulture, out var f) ? f : _desde)" /></label>
+            <label class="campo">Política (esquema parcial del Anexo 1, JSON) <textarea class="e-input" rows="10" @bind="_politica"></textarea></label>
+            <label class="campo">Motivo <input class="e-input" @bind="_motivo" maxlength="500" /></label>
+            @if (_error is { } error) { <p class="aviso aviso-alerta">@error</p> }
+            @if (_celdas.Count > 0)
+            {
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th>Celda menos estricta</th><th class="numero">Norma</th><th class="numero">Propuesta</th></tr></thead>
+                        <tbody>
+                            @foreach (var c in _celdas) { <tr><td>@c.Path</td><td class="numero">@c.Norm</td><td class="numero">@c.Proposed</td></tr> }
+                        </tbody>
+                    </table>
+                </div>
+            }
+            <div class="toolbar">
+                <SfButton CssClass="e-primary" Disabled="@(string.IsNullOrWhiteSpace(_politica) || string.IsNullOrWhiteSpace(_motivo))" OnClick="@RegistrarAsync">Registrar</SfButton>
+                <SfButton CssClass="e-outline" OnClick="@(() => _mostrarNueva = false)">Cancelar</SfButton>
+            </div>
+        </IndicadorDeCarga>
+    </div>
+}
+
+@if (_aValidar is { } aValidar)
+{
+    <div class="info-card">
+        <IndicadorDeCarga Cargando="@_guardado.Activa">
+            <h4>Validar la versión @aValidar.VersionNumber</h4>
+            <p class="texto-tenue">El punto del acta del consejo que la aprobó (sujeto «política SARC»). Quien la registró no puede validarla.</p>
+            <label class="campo">Punto del acta <input class="e-input" @bind="_punto" placeholder="Identificador del punto" /></label>
+            @if (_errorDeValidacion is { } error) { <p class="aviso aviso-alerta">@error</p> }
+            <div class="toolbar">
+                <SfButton CssClass="e-primary" Disabled="@string.IsNullOrWhiteSpace(_punto)" OnClick="@ValidarAsync">Validar</SfButton>
+                <SfButton CssClass="e-outline" OnClick="@(() => _aValidar = null)">Cancelar</SfButton>
+            </div>
+        </IndicadorDeCarga>
+    </div>
+}
+
+@code {
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+    private PoliticaSarcDto? _p;
+    private bool _mostrarNueva;
+    private DateOnly _desde = DateOnly.FromDateTime(DateTime.Today);
+    private string? _politica, _motivo, _error, _punto, _errorDeValidacion;
+    private List<CeldaMenosEstrictaDto> _celdas = [];
+    private VersionDePoliticaSarcDto? _aValidar;
+    private ClaveDeOperacion _claveNueva = new(), _claveValidacion = new();
+
+    protected override async Task OnInitializedAsync() => await CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Riesgo.PoliticaAsync();
+        _p = r.IsSuccess ? r.Value : null;
+        if (!r.IsSuccess) await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo leer la política SARC.");
+    }
+
+    private void AbrirNueva()
+    {
+        _politica = _p?.Overrides;
+        _motivo = _error = null;
+        _celdas = [];
+        _desde = DateOnly.FromDateTime(DateTime.Today);
+        _claveNueva = new ClaveDeOperacion();
+        _mostrarNueva = true;
+    }
+
+    private async Task RegistrarAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_politica) || string.IsNullOrWhiteSpace(_motivo)) return;
+        using var carga = _guardado.Iniciar();
+        _error = null;
+        _celdas = [];
+        var r = await Riesgo.RegistrarVersionAsync(new NuevaVersionDePoliticaSarcRequest(_desde, _politica.Trim(), _motivo.Trim()), _claveNueva);
+        if (!r.IsSuccess)
+        {
+            _error = r.ErrorMessage ?? "No se pudo registrar la versión.";
+            _celdas = r.Dato<List<CeldaMenosEstrictaDto>>("cells") ?? [];
+            return;
+        }
+        _mostrarNueva = false;
+        await Notification.SuccessAsync("Versión registrada: queda pendiente de validar con el acta del consejo.");
+        await CargarAsync();
+    }
+
+    private void AbrirValidacion(VersionDePoliticaSarcDto version)
+    {
+        _aValidar = version;
+        _punto = _errorDeValidacion = null;
+        _claveValidacion = new ClaveDeOperacion();
+    }
+
+    private async Task ValidarAsync()
+    {
+        if (_aValidar is not { } v) return;
+        if (!Guid.TryParse(_punto?.Trim(), out var punto)) { _errorDeValidacion = "El punto del acta no es un identificador válido."; return; }
+        using var carga = _guardado.Iniciar();
+        _errorDeValidacion = null;
+        var r = await Riesgo.ValidarVersionAsync(v.PublicId, punto, _claveValidacion);
+        if (!r.IsSuccess) { _errorDeValidacion = r.ErrorMessage ?? "No se pudo validar la versión."; return; }
+        _aValidar = null;
+        await Notification.SuccessAsync($"Versión {v.VersionNumber} validada: rige desde el {v.ValidFrom:dd/MM/yyyy}.");
+        await CargarAsync();
+    }
+}

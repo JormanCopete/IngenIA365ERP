@@ -1,0 +1,500 @@
+@page "/cartera/lineas/{Id:guid}"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Globalization
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Inventario
+@inject LineasDeCreditoClient Lineas
+@inject INotificationService Notification
+@inject NavigationManager Navegacion
+
+<PageTitle>Línea de crédito - IngenIA365ERP</PageTitle>
+
+@* Feature 013, US1 (T0361; FR-019–FR-033, FR-037; contracts/api.md §3.1, §3.3): una línea con su versión vigente y su historial. Nada se
+   edita en su sitio: un cambio es una VERSIÓN NUEVA desde una fecha (nunca antes de hoy), que parte de la vigente; la anterior rige hasta la
+   víspera y los créditos vivos conservan lo pactado. El panel de usura consulta usury-check al salir de cada campo de tasa: la usura
+   certificada de la modalidad a la fecha de la versión, la efectiva con cargos de la vigente y su holgura; el control exacto de la versión
+   digitada (con sus bandas y los seguros que computan) lo hace la API al registrar, y si la supera responde con la usura, la modalidad y la
+   diferencia sin guardar nada. El puntaje va en su pestaña con su permiso; cerrar, reabrir y borrar piden motivo. Fuera del alcance de quien
+   mira, la línea no existe (el 404 genérico). *@
+<PermissionGate Required="Lending.CreditLines.View" MostrarAviso="true">
+<div class="pagina">
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        @if (_linea is { } l)
+        {
+            <div class="page-header">
+                <h3>@l.Code · @l.Name</h3>
+                <div class="toolbar">
+                    <SfButton CssClass="e-outline" IconCss="e-icons e-arrow-left" OnClick="@(() => Navegacion.NavigateTo("/cartera/lineas"))">Líneas</SfButton>
+                    <SfButton CssClass="@(_pestana == 0 ? "e-primary" : "e-outline")" OnClick="@(() => _pestana = 0)">Versión vigente</SfButton>
+                    <SfButton CssClass="@(_pestana == 1 ? "e-primary" : "e-outline")" OnClick="@(() => _pestana = 1)">Historial</SfButton>
+                    <PermissionGate Required="Lending.Scoring.View">
+                        <SfButton CssClass="@(_pestana == 2 ? "e-primary" : "e-outline")" OnClick="@AbrirPuntajeAsync">Puntaje</SfButton>
+                    </PermissionGate>
+                </div>
+            </div>
+
+            <div class="info-card">
+                <p>
+                    <b>@TextosDeCartera.EstadoDeLinea(l.Status)</b>
+                    @if (l.ClosedReason is { } motivo) { <span> · @TextosDeCartera.MotivoDeCierreDeLinea(motivo)@(l.CloseNotes is null ? "" : $": {l.CloseNotes}")</span> }
+                    @if (l.Purpose is not null) { <span class="texto-tenue"> · @l.Purpose</span> }
+                </p>
+                @if (l.UsuryBlockedSince is { } bloqueo)
+                {
+                    <p class="aviso aviso-alerta">
+                        Cerrada por usura desde el @bloqueo.ToString("dd/MM/yyyy"): la usura certificada quedó por debajo de su tasa. No admite créditos
+                        nuevos hasta registrar una versión bajo la usura; los créditos vivos se topan solos cada día.
+                    </p>
+                }
+                else if (!l.AdmitsNewCredits && l.Status != 3)
+                {
+                    <p class="aviso aviso-info">Todavía no admite créditos nuevos.</p>
+                }
+                <PermissionGate Required="Lending.CreditLines.Manage">
+                    <div class="toolbar">
+                        <SfButton CssClass="e-primary" IconCss="e-icons e-plus" Disabled="@(l.Status == 3)" OnClick="@AbrirVersionAsync">Nueva versión</SfButton>
+                        @if (l.Status == 3)
+                        {
+                            <SfButton CssClass="e-outline" OnClick="@(() => AbrirMotivo(Accion.Reabrir))">Reabrir</SfButton>
+                        }
+                        else
+                        {
+                            <SfButton CssClass="e-outline" OnClick="@(() => AbrirMotivo(Accion.Cerrar))">Cerrar</SfButton>
+                        }
+                        <SfButton CssClass="e-outline" IconCss="e-icons e-trash" OnClick="@(() => AbrirMotivo(Accion.Borrar))">Borrar</SfButton>
+                    </div>
+                </PermissionGate>
+            </div>
+
+            @if (_pestana == 0)
+            {
+                @if (l.CurrentVersion is { } v)
+                {
+                    <ResumenDeVersion V="@v" />
+                }
+                else
+                {
+                    <p class="texto-tenue">La línea no tiene versión vigente hoy.</p>
+                }
+                @if (l.Housing is { } vivienda)
+                {
+                    @* K6b (T1060; FR-024, D18): las reglas de la Ley 546 que rigen la línea de vivienda hoy, con su fuente: el tope de tasa y los cinco
+                       límites (valores nacionales replicados de la central). Lo que falte se dice: sin él la línea no origina ni desembolsa. *@
+                    <div class="info-card">
+                        <h4>Vivienda: tope y límites de la Ley 546 al @vivienda.Date.ToString("dd/MM/yyyy")</h4>
+                        @foreach (var falta in vivienda.Missing) { <p class="aviso aviso-alerta" role="alert">@falta</p> }
+                        <div class="tabla-desplazable">
+                            <table class="data-grid">
+                                <thead><tr><th>Regla</th><th class="numero">Valor</th><th>Fuente</th></tr></thead>
+                                <tbody>
+                                    @if (vivienda.RateCap is { } tope)
+                                    {
+                                        <tr><td>Tope de tasa de vivienda (desde @tope.ValidFrom.ToString("dd/MM/yyyy"))</td><td class="numero">@TextosDeCreditos.Porcentaje(tope.Rate) EA</td><td>@(tope.Source ?? "—")</td></tr>
+                                    }
+                                    @foreach (var limite in vivienda.Limits)
+                                    {
+                                        <tr><td>@TextosDeCreditos.LimiteDeVivienda(limite.Code).Nombre</td><td class="numero">@TextosDeCreditos.ValorDeLimiteDeVivienda(limite.Code, limite.Value)</td><td>@(limite.Source ?? "—")</td></tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                        <p class="texto-tenue">La tasa de la línea se controla contra el menor entre el tope de vivienda y la usura del día.</p>
+                    </div>
+                }
+            }
+            else if (_pestana == 1)
+            {
+                <div class="info-card">
+                    <h4>Versiones</h4>
+                    <div class="tabla-desplazable">
+                        <table class="data-grid">
+                            <thead><tr><th class="numero">N.º</th><th>Desde</th><th>Hasta</th><th>Motivo</th><th>Registró</th><th>Registrada</th><th></th></tr></thead>
+                            <tbody>
+                                @foreach (var h in l.Versions.OrderByDescending(h => h.ValidFrom))
+                                {
+                                    var version = h;
+                                    <tr class="@(version.IsCurrent ? "resaltada" : "")">
+                                        <td class="numero">@version.VersionNumber</td>
+                                        <td>@version.ValidFrom.ToString("dd/MM/yyyy")</td>
+                                        <td>@(version.ValidTo?.ToString("dd/MM/yyyy") ?? (version.IsCurrent ? "(vigente)" : "—"))</td>
+                                        <td>@version.Reason</td>
+                                        <td>@version.RegisteredBy</td>
+                                        <td>@version.RegisteredAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
+                                        <td><SfButton CssClass="e-flat e-small" OnClick="@(() => VerVersionAsync(version.PublicId))">Ver</SfButton></td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <IndicadorDeCarga Cargando="@_cargaVersion.Activa">
+                    @if (_versionVista is { } vista) { <ResumenDeVersion V="@vista" /> }
+                </IndicadorDeCarga>
+            }
+            else
+            {
+                <div class="info-card">
+                    <h4>Puntaje de la línea</h4>
+                    <IndicadorDeCarga Cargando="@_cargaPuntaje.Activa">
+                        @if (_puntaje is { } p)
+                        {
+                            <p class="texto-apoyo">
+                                Versión desde @p.ValidFrom.ToString("dd/MM/yyyy") · puntaje mínimo @(p.MinimumScore?.ToString("N2") ?? "sin mínimo")
+                                @(p.ExceptionLevelCode is null ? "" : $" · bajo el mínimo decide {p.ExceptionLevelCode}")
+                            </p>
+                            <div class="tabla-desplazable">
+                                <table class="data-grid">
+                                    <thead><tr><th>Variable</th><th>Fuente</th><th class="numero">Peso</th><th>Rangos (desde – hasta: puntos)</th></tr></thead>
+                                    <tbody>
+                                        @foreach (var x in p.Variables)
+                                        {
+                                            <tr>
+                                                <td>@x.Code · @x.Name</td>
+                                                <td>@x.Source</td>
+                                                <td class="numero">@x.Weight.ToString("0.####", CultureInfo.GetCultureInfo("es-CO"))</td>
+                                                <td>@string.Join("; ", x.Ranges.Select(r => $"{r.From?.ToString() ?? "−∞"} – {r.To?.ToString() ?? "∞"}: {r.Points}"))</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                            @if (p.Variables.Count == 0) { <p class="texto-tenue">La línea no usa puntaje.</p> }
+                        }
+                    </IndicadorDeCarga>
+
+                    <PermissionGate Required="Lending.Scoring.Manage">
+                        <h5>Nuevo bloque de puntaje</h5>
+                        <p class="texto-tenue">Crea una versión que copia todo y cambia sólo el puntaje. Los pesos van de 0 a 1 y suman 1.</p>
+                        <IndicadorDeCarga Cargando="@_guardadoPuntaje.Activa" Texto="Registrando el puntaje…">
+                            @foreach (var x in _variables)
+                            {
+                                var variable = x;
+                                <div class="form-grid">
+                                    <label class="campo">Código * <input class="e-input" maxlength="20" @bind="variable.Codigo" /></label>
+                                    <label class="campo">Nombre * <input class="e-input" maxlength="120" @bind="variable.Nombre" /></label>
+                                    <label class="campo">Fuente *
+                                        <select class="e-input" @bind="variable.Fuente">
+                                            <option value="">Elija…</option>
+                                            @foreach (var f in _puntaje?.AllowedSources ?? []) { <option value="@f">@f</option> }
+                                        </select>
+                                    </label>
+                                    <label class="campo">Peso * <input class="e-input numero" type="number" step="0.0001" min="0" max="1" @bind="variable.Peso" /></label>
+                                    <label class="campo campo-ancho">Rangos * <input class="e-input" placeholder="0-12:200; 12-:800" @bind="variable.Rangos" /></label>
+                                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-trash" OnClick="@(() => _variables.Remove(variable))">Quitar</SfButton>
+                                </div>
+                            }
+                            <div class="form-grid">
+                                <label class="campo">Desde * <input type="date" class="e-input" value="@_desdePuntaje.ToString("yyyy-MM-dd")" @onchange="@(e => _desdePuntaje = LeerFecha(e.Value) ?? _desdePuntaje)" /></label>
+                                <label class="campo">Puntaje mínimo <input class="e-input numero" type="number" step="0.01" @bind="_minimo" /></label>
+                                <label class="campo">Nivel de excepción <input class="e-input" maxlength="20" @bind="_nivelDeExcepcion" /></label>
+                                <label class="campo campo-ancho">Motivo * <input class="e-input" maxlength="300" @bind="_motivoPuntaje" /></label>
+                            </div>
+                            @if (_errorPuntaje is not null) { <p class="aviso aviso-error" role="alert">@_errorPuntaje</p> }
+                            <div class="toolbar">
+                                <SfButton CssClass="e-outline" IconCss="e-icons e-plus" OnClick="@(() => _variables.Add(new VariableEditable()))">Agregar variable</SfButton>
+                                <SfButton CssClass="e-primary" Disabled="@(_guardadoPuntaje.Activa || string.IsNullOrWhiteSpace(_motivoPuntaje))" OnClick="@GuardarPuntajeAsync">Registrar puntaje</SfButton>
+                            </div>
+                        </IndicadorDeCarga>
+                    </PermissionGate>
+                </div>
+            }
+        }
+        else if (!_carga.Activa)
+        {
+            <p class="texto-tenue">La línea de crédito no existe o no está en su alcance.</p>
+        }
+    </IndicadorDeCarga>
+</div>
+
+<SfDialog @bind-Visible="_mostrarVersion" Header="Nueva versión" Width="1100px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@(_guardado.Activa || _cargaModalidades.Activa)" Texto="@(_guardado.Activa ? "Registrando la versión…" : "Leyendo el catálogo de modalidades…")">
+                @if (_editada is { } editada)
+                {
+                    <div class="info-card">
+                        <h4>Usura</h4>
+                        <IndicadorDeCarga Cargando="@_consultaUsura.Activa" Compacto="true" Texto="Consultando la usura…">
+                            @if (_usura is { } u)
+                            {
+                                <p>
+                                    Usura certificada @(u.UsuryKey ?? u.ModalityCode) al @u.Date.ToString("dd/MM/yyyy"):
+                                    <b>@(u.UsuryRate is { } usura ? $"{LineasDeCreditoClient.Porcentaje(usura)} EA" : "no registrada")</b>.
+                                    La versión vigente llega a @LineasDeCreditoClient.Porcentaje(u.EffectiveRate) EA con sus cargos
+                                    @(u.Headroom is { } h ? $"({(h >= 0 ? "holgura" : "exceso")} de {LineasDeCreditoClient.Puntos(Math.Abs(h))})" : "").
+                                </p>
+                                @if (u.UsuryRate is { } tope && editada.Rates.Current.Kind == 1 && editada.Rates.Current.EffectiveAnnual is { } digitada)
+                                {
+                                    var diferencia = tope - digitada;
+                                    <p class="@(diferencia < 0 ? "aviso aviso-error" : "aviso aviso-info")">
+                                        La tasa digitada, @LineasDeCreditoClient.Porcentaje(digitada) EA, queda
+                                        @(diferencia < 0 ? $"{LineasDeCreditoClient.Puntos(-diferencia)} por encima" : $"{LineasDeCreditoClient.Puntos(diferencia)} por debajo")
+                                        de la usura. Con los seguros que computan, la convención de días y cada banda, el control exacto lo hace el sistema al registrar.
+                                    </p>
+                                }
+                                @if (u.ComputableCharges.Count > 0)
+                                {
+                                    <p class="texto-tenue">Cargos que computan: @string.Join(", ", u.ComputableCharges.Select(c => $"{c.Code} {c.Amount:N0}")).</p>
+                                }
+                            }
+                            @if (_errorUsura is not null) { <p class="aviso aviso-alerta">@_errorUsura</p> }
+                        </IndicadorDeCarga>
+                    </div>
+                    <EditorDeVersionDeLinea V="@editada" Modalidades="@_modalidades" LineaId="@Id" NombresDeAseguradoras="@_aseguradoras" Errores="@_errores"
+                                            CampoDeTasaSalio="@ConsultarUsuraAsync" />
+                    <div class="toolbar">
+                        <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(editada.Reason))" OnClick="@GuardarVersionAsync">Registrar versión</SfButton>
+                        <SfButton CssClass="e-outline" OnClick="@(() => _mostrarVersion = false)">Cancelar</SfButton>
+                    </div>
+                }
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarMotivo" Header="@TituloDeAccion" Width="520px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_accion.Activa" Texto="Registrando…">
+                <p class="texto-apoyo">@AyudaDeAccion</p>
+                <label class="campo campo-ancho">Motivo * <input class="e-input" maxlength="500" @bind="_motivo" /></label>
+                @if (_errorAccion is not null) { <p class="aviso aviso-error" role="alert">@_errorAccion</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_accion.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@EjecutarAccionAsync">Confirmar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarMotivo = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private enum Accion { Cerrar, Reabrir, Borrar }
+
+    private readonly EstadoDeCarga _carga = new(), _cargaVersion = new(), _cargaPuntaje = new(), _guardadoPuntaje = new(), _guardado = new(),
+        _cargaModalidades = new(), _consultaUsura = new(), _accion = new();
+    private LineaDeCreditoDto? _linea;
+    private VersionDeLineaDto? _versionVista;
+    private PuntajeDeLineaDto? _puntaje;
+    private CatalogoDeModalidadesDto? _modalidades;
+    private VersionDeLineaRequest? _editada;
+    private ConsultaDeUsuraDto? _usura;
+    private Dictionary<Guid, string> _aseguradoras = [];
+    private List<string> _errores = [];
+    private readonly List<VariableEditable> _variables = [];
+    private ClaveDeOperacion _clave = new(), _claveAccion = new(), _clavePuntaje = new();
+    private int _pestana;
+    private bool _mostrarVersion, _mostrarMotivo;
+    private Accion _accionElegida;
+    private string? _motivo, _errorAccion, _errorUsura, _motivoPuntaje, _nivelDeExcepcion, _errorPuntaje;
+    private decimal? _minimo;
+    private DateOnly _desdePuntaje = DateOnly.FromDateTime(DateTime.Today);
+
+    protected override async Task OnParametersSetAsync() => await CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Lineas.LineaAsync(Id);
+        if (!r.IsSuccess) { _linea = null; if (r.StatusCode != 404) await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo leer la línea."); return; }
+        _linea = r.Value;
+    }
+
+    private async Task VerVersionAsync(Guid version)
+    {
+        using var carga = _cargaVersion.Iniciar();
+        var r = await Lineas.VersionAsync(Id, version);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo leer la versión."); return; }
+        _versionVista = r.Value;
+    }
+
+    // -------------------------------------------------------------------------------------------- versión --
+
+    private async Task AbrirVersionAsync()
+    {
+        if (_linea?.CurrentVersion is not { } vigente) { await Notification.ErrorAsync("La línea no tiene versión vigente de la que partir."); return; }
+        // Nunca antes de hoy y después de la última registrada (dos versiones no empiezan el mismo día).
+        var hoy = DateOnly.FromDateTime(DateTime.Today);
+        var ultima = _linea.Versions.Count == 0 ? vigente.ValidFrom : _linea.Versions.Max(h => h.ValidFrom);
+        _editada = VersionDeLineaRequest.DesdeLaVigente(vigente, ultima >= hoy ? ultima.AddDays(1) : hoy);
+        _aseguradoras = vigente.Insurances.Where(s => s.InsurerName is not null).GroupBy(s => s.InsurerPersonPublicId)
+            .ToDictionary(g => g.Key, g => g.First().InsurerName!);
+        _errores = [];
+        _usura = null;
+        _errorUsura = null;
+        _clave = new ClaveDeOperacion();
+        _mostrarVersion = true;
+        if (_modalidades is null)
+        {
+            using var carga = _cargaModalidades.Iniciar();
+            var r = await Lineas.ModalidadesAsync();
+            if (r.IsSuccess) _modalidades = r.Value;
+            else _errores = [r.ErrorMessage ?? "No hay catálogo nacional de modalidades vigente."];
+        }
+        await ConsultarUsuraAsync();
+    }
+
+    /// <summary>La usura a la fecha de la versión que se digita, con la vigente como referencia (usury-check no escribe).</summary>
+    private async Task ConsultarUsuraAsync()
+    {
+        if (_editada is not { } v) return;
+        using var carga = _consultaUsura.Iniciar();
+        _errorUsura = null;
+        var r = await Lineas.ConsultarUsuraAsync(Id, new ConsultaDeUsuraRequest(Date: v.ValidFrom));
+        if (!r.IsSuccess) { _usura = null; _errorUsura = r.ErrorMessage ?? "No se pudo consultar la usura de esa fecha."; return; }
+        _usura = r.Value;
+    }
+
+    private async Task GuardarVersionAsync()
+    {
+        if (_editada is not { } v) return;
+        using var carga = _guardado.Iniciar();
+        _errores = [];
+        var r = await Lineas.NuevaVersionAsync(Id, v, _clave);
+        if (!r.IsSuccess) { _errores = [.. LineasDeCreditoClient.Explicar(r)]; return; }
+        _mostrarVersion = false;
+        await Notification.SuccessAsync($"Versión registrada desde el {v.ValidFrom:dd/MM/yyyy}.");
+        await CargarAsync();
+    }
+
+    // ---------------------------------------------------------------------------------- cerrar, reabrir, borrar --
+
+    private string TituloDeAccion => _accionElegida switch
+    {
+        Accion.Cerrar => "Cerrar la línea",
+        Accion.Reabrir => "Reabrir la línea",
+        _ => "Borrar la línea",
+    };
+
+    private string AyudaDeAccion => _accionElegida switch
+    {
+        Accion.Cerrar => "La línea deja de admitir créditos nuevos, simulaciones y ventas. Los créditos vivos no cambian.",
+        Accion.Reabrir => "Vuelve a admitir créditos nuevos si su versión vigente pasa la usura de hoy.",
+        _ => "Sólo se borra una línea sin solicitudes, créditos, cupos ni mensajes; si los tiene, ciérrela.",
+    };
+
+    private void AbrirMotivo(Accion accion)
+    {
+        _accionElegida = accion;
+        _motivo = _errorAccion = null;
+        _claveAccion = new ClaveDeOperacion();
+        _mostrarMotivo = true;
+    }
+
+    private async Task EjecutarAccionAsync()
+    {
+        using var carga = _accion.Iniciar();
+        _errorAccion = null;
+        var motivo = _motivo!.Trim();
+        switch (_accionElegida)
+        {
+            case Accion.Cerrar:
+            {
+                var r = await Lineas.CerrarAsync(Id, motivo, _claveAccion);
+                if (!r.IsSuccess) { _errorAccion = r.ErrorMessage ?? "No se pudo cerrar la línea."; return; }
+                break;
+            }
+            case Accion.Reabrir:
+            {
+                var r = await Lineas.ReabrirAsync(Id, motivo, _claveAccion);
+                if (!r.IsSuccess) { _errorAccion = string.Join(" ", LineasDeCreditoClient.Explicar(r)); return; }
+                break;
+            }
+            default:
+            {
+                var r = await Lineas.BorrarAsync(Id, motivo, _claveAccion);
+                if (!r.IsSuccess)
+                {
+                    _errorAccion = r.ErrorCode == "Lending.CreditLine.HasLoans"
+                        ? "La línea tiene solicitudes, créditos, cupos o mensajes: no se borra. Ciérrela a créditos nuevos."
+                        : r.ErrorMessage ?? "No se pudo borrar la línea.";
+                    return;
+                }
+                _mostrarMotivo = false;
+                await Notification.SuccessAsync("Línea borrada.");
+                Navegacion.NavigateTo("/cartera/lineas");
+                return;
+            }
+        }
+        _mostrarMotivo = false;
+        await Notification.SuccessAsync(_accionElegida == Accion.Cerrar ? "Línea cerrada a créditos nuevos." : "Línea reabierta.");
+        await CargarAsync();
+    }
+
+    // -------------------------------------------------------------------------------------------- puntaje --
+
+    private async Task AbrirPuntajeAsync()
+    {
+        _pestana = 2;
+        using var carga = _cargaPuntaje.Iniciar();
+        var r = await Lineas.PuntajeAsync(Id);
+        if (!r.IsSuccess) { _puntaje = null; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo leer el puntaje."); return; }
+        _puntaje = r.Value;
+        _minimo = _puntaje?.MinimumScore;
+        _nivelDeExcepcion = _puntaje?.ExceptionLevelCode;
+        _variables.Clear();
+        foreach (var x in _puntaje?.Variables ?? [])
+            _variables.Add(new VariableEditable
+            {
+                Codigo = x.Code, Nombre = x.Name, Fuente = x.Source, Peso = x.Weight,
+                Rangos = string.Join("; ", x.Ranges.Select(r => $"{Num(r.From)}-{Num(r.To)}:{r.Points.ToString(CultureInfo.InvariantCulture)}")),
+            });
+    }
+
+    private async Task GuardarPuntajeAsync()
+    {
+        _errorPuntaje = null;
+        var variables = new List<VariableDePuntajeDto>();
+        foreach (var x in _variables)
+        {
+            var rangos = LeerRangos(x.Rangos);
+            if (rangos is null) { _errorPuntaje = $"Los rangos de {x.Codigo} no se entienden: use «desde-hasta:puntos» separados por punto y coma."; return; }
+            variables.Add(new VariableDePuntajeDto(x.Codigo?.Trim() ?? "", x.Nombre?.Trim() ?? "", x.Fuente ?? "", x.Peso, rangos));
+        }
+        using var carga = _guardadoPuntaje.Iniciar();
+        var r = await Lineas.FijarPuntajeAsync(Id, new PuntajeRequest(_desdePuntaje, _motivoPuntaje!.Trim(), _minimo,
+            string.IsNullOrWhiteSpace(_nivelDeExcepcion) ? null : _nivelDeExcepcion.Trim(), variables), _clavePuntaje);
+        if (!r.IsSuccess) { _errorPuntaje = string.Join(" ", LineasDeCreditoClient.Explicar(r)); return; }
+        _clavePuntaje = new ClaveDeOperacion();
+        _motivoPuntaje = null;
+        await Notification.SuccessAsync("Puntaje registrado como una versión nueva de la línea.");
+        await CargarAsync();
+        await AbrirPuntajeAsync();
+    }
+
+    /// <summary>«0-12:200; 12-:800» → rangos; nulo si algo no se entiende.</summary>
+    private static List<RangoDePuntajeDto>? LeerRangos(string? texto)
+    {
+        var rangos = new List<RangoDePuntajeDto>();
+        foreach (var parte in (texto ?? "").Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var dos = parte.Split(':');
+            if (dos.Length != 2 || !decimal.TryParse(dos[1].Trim().Replace(',', '.'), NumberStyles.Number, CultureInfo.InvariantCulture, out var puntos)) return null;
+            var limites = dos[0].Split('-');
+            if (limites.Length != 2) return null;
+            rangos.Add(new RangoDePuntajeDto(Limite(limites[0]), Limite(limites[1]), puntos));
+        }
+        return rangos.Count == 0 ? null : rangos;
+
+        static decimal? Limite(string s) =>
+            decimal.TryParse(s.Trim().Replace(',', '.'), NumberStyles.Number, CultureInfo.InvariantCulture, out var d) ? d : null;
+    }
+
+    private static string Num(decimal? d) => d?.ToString(CultureInfo.InvariantCulture) ?? "";
+
+    private sealed class VariableEditable
+    {
+        public string? Codigo { get; set; }
+        public string? Nombre { get; set; }
+        public string? Fuente { get; set; }
+        public decimal Peso { get; set; }
+        public string? Rangos { get; set; }
+    }
+
+    private static DateOnly? LeerFecha(object? valor) =>
+        DateOnly.TryParse(valor?.ToString(), CultureInfo.InvariantCulture, out var f) ? f : null;
+}

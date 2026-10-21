@@ -1,0 +1,370 @@
+@page "/cartera/ahorros"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Globalization
+@using IngenIA365ERP.Shared.Services.Adjuntos
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Inventario
+@inject CaptacionesClient Cliente
+@inject InventarioClient Inventario
+@inject PersonasClient Personas
+@inject AdjuntosClient Adjuntos
+@inject PermisosDelUsuario Permisos
+@inject INotificationService Notification
+@inject NavigationManager Navegacion
+
+<PageTitle>Cuentas de ahorro y aportes - IngenIA365ERP</PageTitle>
+
+@* Feature 014, US2 (T079; FR-016, FR-030 a FR-036; contracts/api.md §4): las cuentas de captación y de aportes del alcance y su apertura en tres
+   pasos: 1) el titular —se busca en el maestro y, si no está, se registra con PersonaDialog—, la línea y la oficina; 2) cotitulares, firmantes,
+   representante y beneficiarios (EditorDeTitularidad), con los soportes del titular; 3) la exención del GMF y el origen de fondos, y abrir. La cuenta
+   nace activa o en apertura (retenida por listas restrictivas o esperando el depósito de apertura); su ficha es /cartera/ahorros/{id}. *@
+<PermissionGate Required="Lending.Accounts.Read" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Cuentas de ahorro y aportes</h3>
+        <div class="toolbar">
+            <PermissionGate Required="Lending.Accounts.Open">
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@AbrirAperturaAsync">Abrir cuenta</SfButton>
+            </PermissionGate>
+        </div>
+    </div>
+
+    <div class="toolbar">
+        <input type="search" class="e-input" placeholder="Número, documento o nombre del titular…" @bind="_buscar" @bind:event="oninput" @onkeyup="@BuscarConEnter" />
+        <select class="e-input" value="@(_naturaleza?.ToString() ?? "")" @onchange="@(e => CambiarNaturalezaAsync(e.Value))">
+            <option value="">Captación y aportes</option>
+            <option value="@TextosDeCaptaciones.Captacion">Captación</option>
+            <option value="@TextosDeCaptaciones.Aportes">Aportes</option>
+        </select>
+        <select class="e-input" value="@(_estado?.ToString() ?? "")" @onchange="@(e => CambiarEstadoAsync(e.Value))">
+            <option value="">Todos los estados</option>
+            @foreach (var e in TextosDeCaptaciones.EstadosDeCuenta) { <option value="@e.Valor">@e.Texto</option> }
+        </select>
+        <SfButton CssClass="e-outline" IconCss="e-icons e-search" Disabled="@_carga.Activa" OnClick="@(() => CargarAsync(1))">Buscar</SfButton>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        <div class="tabla-desplazable">
+            <table class="data-grid">
+                <thead>
+                    <tr><th>Número</th><th>Titular</th><th>Línea</th><th>Clase</th><th>Oficina</th><th>Estado</th><th class="numero">Saldo</th><th>Marcas</th><th></th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var c in _cuentas)
+                    {
+                        var cuenta = c;
+                        <tr>
+                            <td>@cuenta.Number</td>
+                            <td>@cuenta.Holder.FullName<br /><span class="texto-tenue">@cuenta.Holder.DocumentNumber</span></td>
+                            <td>@cuenta.Line.Code · @cuenta.Line.Name</td>
+                            <td>@(cuenta.DepositClass is { } cl ? TextosDeCaptaciones.Clase(cl) : TextosDeCaptaciones.Naturaleza(cuenta.Nature))</td>
+                            <td>@(cuenta.Office?.Name ?? "—")</td>
+                            <td>@TextosDeCaptaciones.EstadoDeCuenta(cuenta.Status)</td>
+                            <td class="numero">@Pesos(cuenta.Balance)</td>
+                            <td>@string.Join(" · ", cuenta.Marks.Select(TextosDeCaptaciones.MarcaDeCuenta))</td>
+                            <td><SfButton CssClass="e-flat e-small" OnClick="@(() => Navegacion.NavigateTo($"/cartera/ahorros/{cuenta.PublicId}"))">Ver</SfButton></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (_cuentas.Count == 0)
+        {
+            <p class="texto-tenue">No hay cuentas que coincidan en su alcance.</p>
+        }
+        else
+        {
+            <div class="toolbar">
+                <SfButton CssClass="e-flat" Disabled="@(_pagina <= 1)" OnClick="@(() => CargarAsync(_pagina - 1))">Anterior</SfButton>
+                <span class="texto-tenue">Página @_pagina de @Math.Max(1, (int)Math.Ceiling(_total / (double)TamanoDePagina)) · @_total cuentas</span>
+                <SfButton CssClass="e-flat" Disabled="@(_pagina * TamanoDePagina >= _total)" OnClick="@(() => CargarAsync(_pagina + 1))">Siguiente</SfButton>
+            </div>
+        }
+    </IndicadorDeCarga>
+</div>
+
+<SfDialog @bind-Visible="_mostrarApertura" Header="Abrir cuenta" Width="1000px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@(_cargaApertura.Activa || _guardado.Activa)" Texto="@(_guardado.Activa ? "Abriendo la cuenta…" : "Leyendo líneas y oficinas…")">
+                <p class="texto-apoyo">Paso 1 de 3 — el titular, la línea y la oficina.</p>
+                <div class="form-grid">
+                    <div class="campo campo-ancho">Titular *
+                        <PersonSearchPicker Selected="@_titular" SelectedChanged="@CambiarTitularAsync" ShowHelpText="false" Compacto="true"
+                                            PermitirCrear="@_puedeCrearPersona" OnCrearPersona="@CrearPersona"
+                                            TextoSinResultados="Regístrela con «Crear persona» y vuelva a buscarla." />
+                    </div>
+                    <label class="campo">Línea *
+                        <select class="e-input" value="@(_linea?.ToString() ?? "")" @onchange="@(e => CambiarLinea(e.Value))">
+                            <option value="">Elija la línea…</option>
+                            @foreach (var l in _lineas) { <option value="@l.PublicId">@l.Code · @l.Name (@(l.DepositClass is { } cl ? TextosDeCaptaciones.Clase(cl) : TextosDeCaptaciones.Naturaleza(l.Nature)))</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Oficina *
+                        <select class="e-input" @bind="_oficina">
+                            <option value="">Elija la oficina…</option>
+                            @foreach (var o in _oficinas) { <option value="@o.PublicId">@o.Name</option> }
+                        </select>
+                    </label>
+                </div>
+
+                @if (_titular is not null && _linea is not null)
+                {
+                    <p class="texto-apoyo">Paso 2 de 3 — quién maneja la cuenta y quién la hereda.</p>
+                    <SubirSoporte OwnerEntityType="@CaptacionesClient.DuenoDeSoportesDeTitularidad" OwnerEntityPublicId="@_titular.PublicId"
+                                  Rotulo="Subir un soporte del titular" Ayuda="Registro civil, decisión judicial, constancia de beneficiarios o declaración de origen de fondos"
+                                  OnSubido="@CargarSoportesAsync" />
+                    <EditorDeTitularidad Partes="@_pedido.Parties" Beneficiarios="@_pedido.Beneficiaries" Soportes="@_soportes" EsAportes="@EsAportes"
+                                         @bind-Manejo="_pedido.HandlingMode" Titular="@_titular.PublicId" />
+
+                    @if (EsContractual && _pedido.Contractual is { } contrato)
+                    {
+                        @* US7 (T185; FR-074): el contrato del ahorro contractual. La periodicidad, las tasas, la tolerancia y el efecto del incumplimiento los
+                           pone la línea y quedan sellados al abrir; la primera cuota vence un período después. *@
+                        <p class="texto-apoyo">El contrato de ahorro — la cuota y el plazo deben caber en los de la línea; las tasas y la tolerancia las pone la línea.</p>
+                        <div class="form-grid">
+                            <label class="campo">Cuota *
+                                <SfNumericTextBox TValue="decimal" @bind-Value="contrato.Installment" Min="0" Format="N0" ShowSpinButton="false" />
+                            </label>
+                            <label class="campo">Plazo en meses *
+                                <SfNumericTextBox TValue="int" @bind-Value="contrato.TermMonths" Min="1" Max="600" Format="N0" />
+                            </label>
+                            @if (_admitidos != 0)
+                            {
+                                <label class="campo">Al vencer el contrato
+                                    <select class="e-input" value="@_alVencer" @onchange="@(e => CambiarAlVencerAsync(e.Value))">
+                                        <option value="0">Queda a disposición del titular</option>
+                                        @if ((_admitidos & TextosDeCaptaciones.DestinoTraslado) != 0) { <option value="@TextosDeContrato.PorTraslado">Trasladar a su cuenta de ahorro a la vista</option> }
+                                        @if ((_admitidos & TextosDeCaptaciones.DestinoGiro) != 0) { <option value="@TextosDeContrato.PorGiro">Devolverlo con una orden de giro a su cuenta registrada</option> }
+                                    </select>
+                                </label>
+                                @if (_alVencer == TextosDeContrato.PorTraslado)
+                                {
+                                    <label class="campo">Cuenta a la vista destino *
+                                        <select class="e-input" @bind="_cuentaDestino">
+                                            <option value="">Elija la cuenta</option>
+                                            @foreach (var d in _cuentasVista) { <option value="@d.PublicId">@d.Number · @d.Line.Name</option> }
+                                        </select>
+                                    </label>
+                                }
+                            }
+                        </div>
+                    }
+
+                    <p class="texto-apoyo">Paso 3 de 3 — exención y soportes.</p>
+                    <div class="form-grid">
+                        @if (!EsAportes)
+                        {
+                            <label class="campo-check"><input type="checkbox" @bind="_pedido.MarkGmfExempt" /> Marcarla exenta del GMF (una sola por persona)</label>
+                        }
+                        @if (_pedido.Beneficiaries.Count > 0)
+                        {
+                            @* Decisión del dueño del 2026-10-18 (D34): la constancia se exige también al abrir. *@
+                            <label class="campo">Constancia de beneficiarios (obligatoria)
+                                <select class="e-input" @bind="_pedido.BeneficiaryRecordAttachmentPublicId">
+                                    <option value="">Elija la constancia firmada por el titular</option>
+                                    @foreach (var a in _soportes) { <option value="@a.PublicId">@a.FileName</option> }
+                                </select>
+                            </label>
+                        }
+                        <label class="campo">Declaración de origen de fondos
+                            <select class="e-input" @bind="_origenDeFondos">
+                                <option value="">No aplica</option>
+                                @foreach (var a in _soportes) { <option value="@a.PublicId">@a.FileName</option> }
+                            </select>
+                        </label>
+                    </div>
+                }
+
+                @foreach (var e in _errores) { <p class="aviso aviso-error" role="alert">@e</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || _titular is null || _linea is null || _oficina is null
+                                                                  || (EsContractual && _pedido.Contractual is not { Installment: > 0m, TermMonths: > 0 }))"
+                              OnClick="@AbrirCuentaAsync">Abrir cuenta</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarApertura = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<PersonaDialog @bind-Visible="_mostrarPersona" DocumentoInicial="@_documentoInicial" CapturarAutorizacion="true" OnGuardado="@PersonaGuardadaAsync" />
+</PermissionGate>
+
+@code {
+    private const int TamanoDePagina = 20;
+    private static readonly CultureInfo Es = CultureInfo.GetCultureInfo("es-CO");
+
+    private readonly EstadoDeCarga _carga = new(), _cargaApertura = new(), _guardado = new();
+    private List<CuentaEnListaDto> _cuentas = [];
+    private long _total;
+    private int _pagina = 1;
+    private int? _naturaleza, _estado;
+    private string _buscar = string.Empty;
+
+    private IReadOnlyList<LineaDelCatalogoDto> _lineas = [];
+    private IReadOnlyList<SucursalContableDto> _oficinas = [];
+    private IReadOnlyList<AdjuntoDto> _soportes = [];
+    private PersonSearchPicker.PersonSearchItem? _titular;
+    private Guid? _linea, _oficina, _origenDeFondos;
+    private AbrirCuentaRequest _pedido = new();
+    private int _alVencer, _admitidos = 3;
+    private Guid? _cuentaDestino;
+    private IReadOnlyList<CuentaEnListaDto> _cuentasVista = [];
+    private List<string> _errores = [];
+    private ClaveDeOperacion _clave = new();
+    private bool _mostrarApertura, _mostrarPersona, _puedeCrearPersona;
+    private string? _documentoInicial;
+
+    private bool EsAportes => _lineas.FirstOrDefault(l => l.PublicId == _linea)?.Nature == TextosDeCaptaciones.Aportes;
+
+    private bool EsContractual => _lineas.FirstOrDefault(l => l.PublicId == _linea)?.DepositClass == TextosDeCaptaciones.Contractual;
+
+    protected override async Task OnInitializedAsync() => await CargarAsync(1);
+
+    private async Task CargarAsync(int pagina)
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Cliente.CuentasAsync(string.IsNullOrWhiteSpace(_buscar) ? null : _buscar.Trim(), _naturaleza, _estado, pagina: pagina, tamano: TamanoDePagina);
+        if (!r.IsSuccess || r.Value is null) { _cuentas = []; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer las cuentas."); return; }
+        _cuentas = [.. r.Value.Items];
+        _total = r.Value.TotalCount;
+        _pagina = pagina;
+    }
+
+    private async Task BuscarConEnter(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await CargarAsync(1);
+    }
+
+    private async Task CambiarNaturalezaAsync(object? valor)
+    {
+        _naturaleza = int.TryParse(valor?.ToString(), out var n) ? n : null;
+        await CargarAsync(1);
+    }
+
+    private async Task CambiarEstadoAsync(object? valor)
+    {
+        _estado = int.TryParse(valor?.ToString(), out var n) ? n : null;
+        await CargarAsync(1);
+    }
+
+    // ------------------------------------------------------------------------------------------------------- apertura --
+
+    private async Task AbrirAperturaAsync()
+    {
+        _titular = null;
+        _linea = _oficina = _origenDeFondos = null;
+        _pedido = new AbrirCuentaRequest();
+        _alVencer = 0;
+        _cuentaDestino = null;
+        _soportes = [];
+        _errores = [];
+        _clave = new ClaveDeOperacion();
+        _mostrarApertura = true;
+        using var carga = _cargaApertura.Iniciar();
+        _puedeCrearPersona = await Permisos.TieneAsync("Core.People.Create");
+        var captacion = await Cliente.LineasAsync(TextosDeCaptaciones.Captacion);
+        var aportes = await Cliente.LineasAsync(TextosDeCaptaciones.Aportes);
+        // Sólo las activas abren cuentas; un CDAT se constituye en su pantalla.
+        _lineas = [.. (captacion.Value ?? []).Concat(aportes.Value ?? []).Where(l => l.Status == 2 && l.DepositClass != TextosDeCaptaciones.Cdat)];
+        _oficinas = (await Inventario.ListarSucursalesAsync()).Value ?? [];
+        if (_oficinas.Count == 1) _oficina = _oficinas[0].PublicId;
+    }
+
+    private async Task CambiarTitularAsync(PersonSearchPicker.PersonSearchItem? persona)
+    {
+        _titular = persona;
+        _pedido.Parties.RemoveAll(p => p.PersonPublicId == persona?.PublicId);
+        _pedido.Beneficiaries.RemoveAll(b => b.PersonPublicId == persona?.PublicId);
+        await CargarSoportesAsync();
+    }
+
+    private async Task CambiarLinea(object? valor)
+    {
+        _linea = Guid.TryParse(valor?.ToString(), out var g) ? g : null;
+        _pedido.Contractual = EsContractual ? _pedido.Contractual ?? new ContratoDeAhorroRequest() : null;
+        _alVencer = 0;
+        _cuentaDestino = null;
+        _admitidos = 3;
+        if (EsContractual && _linea is { } id)
+        {
+            // E248: lo que el asociado puede elegir al vencer es lo que la línea admite.
+            var linea = await Cliente.LineaAsync(id);
+            _admitidos = linea.Value?.DepositVersion?.Contractual?.MaturityDestinations ?? 3;
+        }
+        if (EsAportes)
+        {
+            _pedido.Parties.Clear();
+            _pedido.HandlingMode = TextosDeCaptaciones.Indistinto;
+            _pedido.MarkGmfExempt = false;
+        }
+    }
+
+    private async Task CargarSoportesAsync()
+    {
+        if (_titular is null) { _soportes = []; return; }
+        var r = await Adjuntos.ListarAsync(CaptacionesClient.DuenoDeSoportesDeTitularidad, _titular.PublicId);
+        _soportes = (r.Value ?? []).Where(a => a.Disponible).ToList();
+    }
+
+    private void CrearPersona(string termino)
+    {
+        _documentoInicial = termino.All(char.IsDigit) ? termino : null;
+        _mostrarPersona = true;
+    }
+
+    private async Task PersonaGuardadaAsync(Guid publicId)
+    {
+        _mostrarPersona = false;
+        var r = await Personas.ObtenerAsync(publicId);
+        if (r.IsSuccess && r.Value is { } p)
+            await CambiarTitularAsync(new PersonSearchPicker.PersonSearchItem { PublicId = p.PublicId, IdentificationNumber = p.TaxId, FullName = p.NombreVisible });
+    }
+
+    private async Task CambiarAlVencerAsync(object? valor)
+    {
+        _alVencer = int.TryParse(valor?.ToString(), out var n) ? n : 0;
+        _cuentaDestino = null;
+        if (_alVencer == TextosDeContrato.PorTraslado && _titular is not null)
+        {
+            var cuentas = await Cliente.CuentasAsync(titular: _titular.PublicId, tamano: 50);
+            _cuentasVista = [.. (cuentas.Value?.Items ?? []).Where(a => a.DepositClass == TextosDeCaptaciones.ALaVista && a.Status != TextosDeCaptaciones.Cancelada)];
+        }
+    }
+
+    private async Task AbrirCuentaAsync()
+    {
+        if (_titular is null || _linea is null || _oficina is null) return;
+        if (_pedido.Contractual is { } contrato)
+            contrato.MaturityInstruction = _alVencer switch
+            {
+                TextosDeContrato.PorTraslado when _cuentaDestino is { } destino => new InstruccionDeContratoRequest(TextosDeContrato.PorTraslado, destino),
+                TextosDeContrato.PorGiro => new InstruccionDeContratoRequest(TextosDeContrato.PorGiro, null, new BeneficiarioDeGiroRequest(_titular.PublicId)),
+                _ => null,
+            };
+        using var carga = _guardado.Iniciar();
+        _errores = [];
+        _pedido.HolderPersonPublicId = _titular.PublicId;
+        _pedido.LinePublicId = _linea.Value;
+        _pedido.OfficePublicId = _oficina.Value;
+        _pedido.SourceOfFunds = _origenDeFondos is { } origen ? new OrigenDeFondosRequest(origen) : null;
+        var r = await Cliente.AbrirCuentaAsync(_pedido, _clave);
+        if (!r.IsSuccess || r.Value is null)
+        {
+            _errores = [.. LineasDeCreditoClient.Explicar(r)];
+            if (r.ErrorCode == "Lending.Savings.MembersOnly") _errores.Add("Vincúlelo primero en Asociados › Registro y vuelva a abrir la cuenta.");
+            return;
+        }
+        _mostrarApertura = false;
+        var cuenta = r.Value;
+        if (cuenta.Warnings.Count > 0)
+            await Notification.WarningAsync($"Cuenta {cuenta.Number} en apertura: {cuenta.Warnings[0].Message}");
+        else
+            await Notification.SuccessAsync($"Cuenta {cuenta.Number} {(cuenta.Status == TextosDeCaptaciones.Activa ? "abierta" : "en apertura")}.");
+        Navegacion.NavigateTo($"/cartera/ahorros/{cuenta.PublicId}");
+    }
+
+    private static string Pesos(decimal valor) => "$ " + valor.ToString("N0", Es);
+}

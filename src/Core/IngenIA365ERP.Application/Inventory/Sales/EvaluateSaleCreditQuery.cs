@@ -57,7 +57,14 @@ public sealed record CreditDefaultsDto(short? MaxInstallments, short? TermDays, 
     short? DefaultInstallments);
 
 /// <summary><c>lending</c> (IC): lo que responde Cartera, nulo en el crédito provisional. (nuevo)</summary>
-public sealed record LendingStatusDto(string Status, decimal? AvailableQuota, IReadOnlyList<LineaDeCreditoDto> Lines, string? EvidenceId);
+public sealed record LendingStatusDto(string Status, decimal? AvailableQuota, IReadOnlyList<LineaDeCreditoDto> Lines, string? EvidenceId)
+{
+    /// <summary>Feature 013 (T0599, §5.1): si Cartera admite vender a crédito a la persona (estado y mora); con <c>false</c> la confirmación responde <c>LendingBlocked</c>.</summary>
+    public bool AllowsSale { get; init; } = true;
+
+    /// <summary>Feature 013 (T0599): el motivo del bloqueo en español, sin detalle de listas.</summary>
+    public string? BlockReason { get; init; }
+}
 
 /// <summary>La evaluación de §23.1. (nuevo)</summary>
 public sealed record SaleCreditEvaluationDto(
@@ -70,7 +77,9 @@ public sealed record SaleCreditEvaluationDto(
     LendingStatusDto? Lending);
 
 /// <summary>
-/// La evaluación del crédito provisional (T653): con <see cref="CarteraNoHabilitada"/>, <c>lendingEnabled = false</c>, <c>origin =
+/// La evaluación del crédito (T653; feature 013, T0177: el origen es el real —<c>Validated</c> si Cartera respondió, <c>LendingNoResponse</c>
+/// si no respondió a tiempo, <c>ProvisionalCredit</c> si no está habilitada o el medio es <c>CreditWithoutLending</c>— y un crédito validado no
+/// pide aprobación provisional). Con <see cref="CarteraNoHabilitada"/>, <c>lendingEnabled = false</c>, <c>origin =
 /// ProvisionalCredit</c>, <c>requiresApproval = true</c> y <c>lending</c> nulo; la elegibilidad con los códigos <c>Inventory.Credit.*</c>;
 /// los niveles de la política <c>ProvisionalCredit</c> del tipo o el nivel fijo con <c>Inventory.Sales.SellOnCredit</c>, y el mayor monto
 /// máximo de ese permiso entre quienes podrían aprobar (<c>SEC_PermissionAmountLimits</c>, sin contar a quien consulta). (nuevo)
@@ -96,7 +105,18 @@ public sealed class EvaluateSaleCreditQueryHandler(
         var canal = request.PointOfSalePublicId is { } punto
             ? await db.PointsOfSale.AsNoTracking().Where(p => p.PublicId == punto).Select(p => p.SalesChannel!.Code).FirstOrDefaultAsync(ct)
             : null;
-        var estado = await cartera.EstadoCrediticioAsync(new ConsultaCrediticia(persona.PublicId, medio.Class, request.Amount, fecha, canal), ct);
+        // Feature 013 (T0177, §5.3): el origen real. Un medio CreditWithoutLending no pregunta a Cartera; sin respuesta a tiempo, el origen
+        // es LendingNoResponse (la confirmación aplica después Cartera.PoliticaSinRespuesta).
+        var estado = medio.CreditWithoutLending
+            ? CarteraNoHabilitada.Instancia
+            : await CreditoEnLaVenta.ConsultarConPlazoAsync(cartera, new ConsultaCrediticia(persona.PublicId, medio.Class, request.Amount, fecha, canal),
+                CreditoEnLaVenta.SegundosPorDefecto, ct);
+        var origen = estado switch
+        {
+            null => CreditOrigin.LendingNoResponse,
+            { LendingEnabled: false } => CreditOrigin.ProvisionalCredit,
+            _ => CreditOrigin.Validated,
+        };
 
         var evaluacion = await motor.EvaluarAsync(ApprovalSubjects.ProvisionalCredit, request.DocumentTypePublicId, fecha, request.Amount, null, ct);
         IReadOnlyList<NivelDeAprobacion> niveles = evaluacion.IsSuccess ? evaluacion.Value.Evaluacion.Niveles : [];
@@ -106,14 +126,16 @@ public sealed class EvaluateSaleCreditQueryHandler(
             actor.UserId is int yo ? [yo] : [], ct);
 
         return Result.Success(new SaleCreditEvaluationDto(
-            estado.LendingEnabled,
-            CreditOrigin.ProvisionalCredit,
+            estado?.LendingEnabled ?? true,
+            origen,
             new CreditPersonDto(persona.PublicId, elegibilidad.Nombre, elegibilidad.IsAssociate, elegibilidad.AssociateActive, elegibilidad.IsCustomer,
                 elegibilidad.Elegible, elegibilidad.Motivos.Select(m => new CreditReasonDto(m.Code, m.Message)).ToList()),
-            niveles.Count > 0,
+            origen != CreditOrigin.Validated && niveles.Count > 0,
             new CreditApprovalDto(niveles.Select(n => new CreditApprovalLevelDto(n.Order, n.PermissionCode, n.Threshold)).ToList(), maximo),
             new CreditDefaultsDto(medio.MaxInstallments, medio.DefaultTermDays, medio.InstallmentPeriodDays, medio.SuggestedCreditLineCode,
                 CreditoEnLaVenta.MaximoDePlazo(medio), medio.DefaultInstallments),
-            estado.LendingEnabled ? new LendingStatusDto(estado.Status, estado.AvailableQuota, estado.Lines, estado.EvidenceId) : null));
+            estado is { LendingEnabled: true }
+                ? new LendingStatusDto(estado.Status, estado.AvailableQuota, estado.Lines, estado.EvidenceId) { AllowsSale = estado.AllowsSale, BlockReason = estado.BlockReason }
+                : null));
     }
 }

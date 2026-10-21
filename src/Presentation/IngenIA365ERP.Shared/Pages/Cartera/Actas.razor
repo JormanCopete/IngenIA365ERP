@@ -1,0 +1,571 @@
+@page "/cartera/actas"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Globalization
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Http
+@inject GobiernoDeCarteraClient Gobierno
+@inject INotificationService Notification
+
+<PageTitle>Actas y órganos - IngenIA365ERP</PageTitle>
+
+@* Feature 013, fase 4 (T0317; US17, T64, FR-039, FR-040; contracts/api.md §3.6 y §5): las sesiones de los órganos de decisión y sus actas
+   —convocar, y en el detalle (SesionDialog) asistencia, puntos, votos con presencia, cierre sellado y PDF— y la pestaña «Órganos»: consejo,
+   junta, comités y gerencia con sus reglas de quórum y mayoría versionadas (una versión nueva no reescribe la anterior) y sus miembros con
+   vigencia (de un miembro sólo nombre y cargo, C84). Un acta cerrada se ve de sólo lectura. *@
+<PermissionGate Required="Lending.Sessions.Read" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Actas y órganos</h3>
+        <div class="toolbar">
+            <SfButton CssClass="@(_pestana == 0 ? "e-primary" : "e-outline")" OnClick="@(() => _pestana = 0)">Sesiones</SfButton>
+            <PermissionGate Required="Lending.GoverningBodies.View">
+                <SfButton CssClass="@(_pestana == 1 ? "e-primary" : "e-outline")" OnClick="@AbrirOrganosAsync">Órganos</SfButton>
+            </PermissionGate>
+        </div>
+    </div>
+
+    @if (_pestana == 0)
+    {
+        <div class="toolbar">
+            <label class="campo">Órgano
+                <select class="e-input" @bind="_filtroOrgano">
+                    <option value="">Todos</option>
+                    @foreach (var o in _organos) { <option value="@o.PublicId">@o.Code · @o.Name</option> }
+                </select>
+            </label>
+            <label class="campo">Estado
+                <select class="e-input" @bind="_filtroEstado">
+                    <option value="0">Todos</option>
+                    @foreach (var e in TextosDeCartera.EstadosDeSesion) { <option value="@e.Valor">@e.Texto</option> }
+                </select>
+            </label>
+            <SfButton CssClass="e-primary" IconCss="e-icons e-search" Disabled="@_carga.Activa" OnClick="@CargarAsync">Buscar</SfButton>
+            <PermissionGate Required="Lending.Sessions.Manage">
+                <SfButton CssClass="e-outline" IconCss="e-icons e-plus" OnClick="@AbrirConvocatoria">Convocar</SfButton>
+            </PermissionGate>
+        </div>
+        <IndicadorDeCarga Cargando="@_carga.Activa">
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Acta</th><th>Órgano</th><th>Fecha</th><th>Clase</th><th>Modalidad</th><th>Estado</th><th class="numero">Puntos</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var s in _sesiones)
+                        {
+                            var sesion = s;
+                            <tr>
+                                <td>@(sesion.Number ?? "—")</td>
+                                <td>@sesion.Body.Code · @sesion.Body.Name</td>
+                                <td>@sesion.HeldOn.ToString("dd/MM/yyyy")</td>
+                                <td>@TextosDeCartera.ClaseDeSesion(sesion.Kind)</td>
+                                <td>@TextosDeCartera.Modalidad(sesion.Mode)</td>
+                                <td>@TextosDeCartera.EstadoDeSesion(sesion.Status)</td>
+                                <td class="numero">@sesion.Items</td>
+                                <td><SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirSesion(sesion.PublicId))">@(sesion.Status == 3 ? "Ver acta" : "Abrir")</SfButton></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            @if (_sesiones.Count == 0) { <p class="texto-tenue">Sin sesiones con esos filtros.</p> }
+        </IndicadorDeCarga>
+    }
+    else
+    {
+        <div class="toolbar">
+            <SfCheckBox TChecked="bool" Checked="@_conInactivos" CheckedChanged="@((bool v) => CambiarInactivosAsync(v))" Label="Incluir inactivos" />
+            <PermissionGate Required="Lending.GoverningBodies.Manage">
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@AbrirNuevoOrgano">Nuevo órgano</SfButton>
+            </PermissionGate>
+        </div>
+        <IndicadorDeCarga Cargando="@_cargaOrganos.Activa">
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Órgano</th><th>Clase</th><th>Decide crédito</th><th>Próxima acta</th><th>Quórum</th><th>Mayoría</th><th class="numero">Miembros</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var o in _organos)
+                        {
+                            var organo = o;
+                            <tr class="@(_organo?.PublicId == organo.PublicId ? "resaltada" : "")">
+                                <td>@organo.Code · @organo.Name @(organo.IsActive ? "" : "(inactivo)")</td>
+                                <td>@TextosDeCartera.ClaseDeOrgano(organo.Kind)</td>
+                                <td>@(organo.DecidesCredit ? "Sí" : "No")</td>
+                                <td>@organo.NextMinutesNumber</td>
+                                <td>@TextosDeCartera.Fraccion(organo.CurrentRules?.Quorum)</td>
+                                <td>@TextosDeCartera.Fraccion(organo.CurrentRules?.OrdinaryMajority)</td>
+                                <td class="numero">@organo.Members</td>
+                                <td><SfButton CssClass="e-flat e-small" OnClick="@(() => VerOrganoAsync(organo.PublicId))">Detalle</SfButton></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </IndicadorDeCarga>
+
+        @if (_organo is { } det)
+        {
+            <div class="info-card">
+                <h4>@det.Code · @det.Name</h4>
+                <IndicadorDeCarga Cargando="@_cargaDetalle.Activa">
+                    <PermissionGate Required="Lending.GoverningBodies.Manage">
+                        <div class="toolbar">
+                            <SfButton CssClass="e-outline" IconCss="e-icons e-plus" OnClick="@AbrirMiembro">Nombrar miembro</SfButton>
+                            <SfButton CssClass="e-outline" OnClick="@AbrirReglas">Nuevas reglas</SfButton>
+                            @if (det.IsActive) { <SfButton CssClass="e-flat" OnClick="@(() => AbrirMotivo(AccionConMotivo.Inactivar, null))">Inactivar…</SfButton> }
+                        </div>
+                    </PermissionGate>
+                    <h4>Miembros</h4>
+                    <div class="tabla-desplazable">
+                        <table class="data-grid">
+                            <thead><tr><th>Persona</th><th>Papel</th><th>Vota</th><th>Suplente de</th><th>Vigencia</th><th>Nombramiento</th><th></th></tr></thead>
+                            <tbody>
+                                @foreach (var m in det.MemberList.OrderBy(m => m.ValidTo is not null).ThenBy(m => m.Role))
+                                {
+                                    var miembro = m;
+                                    <tr class="@(miembro.ValidTo is null ? "" : "texto-tenue")">
+                                        <td>@miembro.Person.FullName</td>
+                                        <td>@TextosDeCartera.Papel(miembro.Role)</td>
+                                        <td>@(miembro.Votes ? "Sí" : "No")</td>
+                                        <td>@(det.MemberList.FirstOrDefault(x => x.MemberPublicId == miembro.AlternateForMemberPublicId)?.Person.FullName)</td>
+                                        <td>@miembro.ValidFrom.ToString("dd/MM/yyyy") – @(miembro.ValidTo?.ToString("dd/MM/yyyy") ?? "vigente")</td>
+                                        <td>@miembro.AppointmentNotes</td>
+                                        <td>
+                                            @if (miembro.ValidTo is null)
+                                            {
+                                                <PermissionGate Required="Lending.GoverningBodies.Manage">
+                                                    <SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirMotivo(AccionConMotivo.TerminarMiembro, miembro))">Terminar…</SfButton>
+                                                </PermissionGate>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    <h4>Reglas de quórum y mayoría</h4>
+                    <div class="tabla-desplazable">
+                        <table class="data-grid">
+                            <thead><tr><th class="numero">Versión</th><th>Desde</th><th>Quórum</th><th>Mayoría</th><th>Base</th><th>Vinculados</th><th>Fuente</th><th>Motivo</th></tr></thead>
+                            <tbody>
+                                @foreach (var r in det.RulesHistory.OrderByDescending(r => r.Version))
+                                {
+                                    <tr>
+                                        <td class="numero">@r.Version</td>
+                                        <td>@r.ValidFrom.ToString("dd/MM/yyyy")</td>
+                                        <td>@TextosDeCartera.Fraccion(r.Quorum)</td>
+                                        <td>@TextosDeCartera.Fraccion(r.OrdinaryMajority)</td>
+                                        <td>@TextosDeCartera.BaseDeMayoria(r.MajorityBase)</td>
+                                        <td>@TextosDeCartera.Fraccion(r.RelatedPartyFraction)</td>
+                                        <td>@r.Source</td>
+                                        <td>@r.Reason</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </IndicadorDeCarga>
+            </div>
+        }
+    }
+</div>
+
+<SesionDialog @bind-Visible="_mostrarSesion" SesionId="@_sesionAbierta" Cambio="@CargarAsync" />
+
+<SfDialog @bind-Visible="_mostrarConvocatoria" Header="Convocar una sesión" Width="600px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Convocando…">
+                <div class="form-grid">
+                    <label class="campo">Órgano *
+                        <select class="e-input" @bind="_convOrgano">
+                            <option value="">Elija…</option>
+                            @foreach (var o in _organos.Where(o => o.IsActive)) { <option value="@o.PublicId">@o.Code · @o.Name</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Clase
+                        <select class="e-input" @bind="_convClase">
+                            @foreach (var x in TextosDeCartera.ClasesDeSesion) { <option value="@x.Valor">@x.Texto</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Modalidad
+                        <select class="e-input" @bind="_convModalidad">
+                            @foreach (var x in TextosDeCartera.Modalidades) { <option value="@x.Valor">@x.Texto</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Fecha * <input type="date" class="e-input" value="@_convFecha.ToString("yyyy-MM-dd")" @onchange="@(e => _convFecha = LeerFecha(e.Value) ?? _convFecha)" /></label>
+                    <label class="campo campo-ancho">Lugar <input class="e-input" @bind="_convLugar" maxlength="200" /></label>
+                    <label class="campo campo-ancho">Notas <input class="e-input" @bind="_convNotas" maxlength="1000" /></label>
+                </div>
+                @if (_organos.Count == 0) { <p class="texto-tenue">No hay órganos visibles: créelos en la pestaña «Órganos».</p> }
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || _convOrgano is null)" OnClick="@ConvocarAsync">Convocar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarConvocatoria = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarReglas" Header="@(_creandoOrgano ? "Nuevo órgano" : "Nuevas reglas del órgano")" Width="700px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Registrando…">
+                <div class="form-grid">
+                    @if (_creandoOrgano)
+                    {
+                        <label class="campo">Código * <input class="e-input" @bind="_orgCodigo" maxlength="10" /></label>
+                        <label class="campo campo-ancho">Nombre * <input class="e-input" @bind="_orgNombre" maxlength="120" /></label>
+                        <label class="campo">Clase
+                            <select class="e-input" @bind="_orgClase">
+                                @foreach (var x in TextosDeCartera.ClasesDeOrgano) { <option value="@x.Valor">@x.Texto</option> }
+                            </select>
+                        </label>
+                        <label class="campo">Prefijo de las actas * <input class="e-input" @bind="_orgPrefijo" maxlength="10" /></label>
+                        <SfCheckBox @bind-Checked="_orgDecide" TChecked="bool" Label="Decide crédito" />
+                    }
+                    <label class="campo">Quórum
+                        <select class="e-input" @bind="_quorum.Comparison">
+                            @foreach (var x in TextosDeCartera.Comparaciones) { <option value="@x.Valor">@x.Texto</option> }
+                        </select>
+                        <input class="e-input" type="number" min="1" @bind="_quorum.Numerator" /> / <input class="e-input" type="number" min="1" @bind="_quorum.Denominator" />
+                    </label>
+                    <label class="campo">Mayoría ordinaria
+                        <select class="e-input" @bind="_mayoria.Comparison">
+                            @foreach (var x in TextosDeCartera.Comparaciones) { <option value="@x.Valor">@x.Texto</option> }
+                        </select>
+                        <input class="e-input" type="number" min="1" @bind="_mayoria.Numerator" /> / <input class="e-input" type="number" min="1" @bind="_mayoria.Denominator" />
+                    </label>
+                    <label class="campo">Base de la mayoría
+                        <select class="e-input" @bind="_baseMayoria">
+                            @foreach (var x in TextosDeCartera.BasesDeMayoria) { <option value="@x.Valor">@x.Texto</option> }
+                        </select>
+                    </label>
+                    <SfCheckBox @bind-Checked="_conVinculados" TChecked="bool" Label="Fracción calificada de vinculados (consejo)" />
+                    @if (_conVinculados)
+                    {
+                        <label class="campo">Vinculados (al menos)
+                            <input class="e-input" type="number" min="1" @bind="_vinculados.Numerator" /> / <input class="e-input" type="number" min="1" @bind="_vinculados.Denominator" />
+                        </label>
+                    }
+                    <label class="campo">Desde * <input type="date" class="e-input" value="@_reglasDesde.ToString("yyyy-MM-dd")" @onchange="@(e => _reglasDesde = LeerFecha(e.Value) ?? _reglasDesde)" /></label>
+                    <label class="campo campo-ancho">Fuente * (estatuto, reglamento, acta) <input class="e-input" @bind="_reglasFuente" maxlength="200" /></label>
+                    <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_reglasMotivo" maxlength="500" /></label>
+                </div>
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(_reglasMotivo) || string.IsNullOrWhiteSpace(_reglasFuente))" OnClick="@GuardarReglasAsync">Registrar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarReglas = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarMiembro" Header="Nombrar un miembro" Width="640px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Registrando…">
+                <div class="form-grid">
+                    <div class="campo campo-ancho">Persona *
+                        <PersonSearchPicker @bind-Selected="_miembroPersona" ShowHelpText="false" Compacto="true" />
+                    </div>
+                    <label class="campo">Papel
+                        <select class="e-input" @bind="_miembroPapel">
+                            @foreach (var x in TextosDeCartera.PapelesDeMiembro) { <option value="@x.Valor">@x.Texto</option> }
+                        </select>
+                    </label>
+                    @if (_miembroPapel == 4 && _organo is { } o)
+                    {
+                        <label class="campo">Suplente de *
+                            <select class="e-input" @bind="_miembroPrincipal">
+                                <option value="">Elija…</option>
+                                @foreach (var m in o.MemberList.Where(m => m.ValidTo is null && m.Role != 4)) { <option value="@m.MemberPublicId">@m.Person.FullName</option> }
+                            </select>
+                        </label>
+                    }
+                    <SfCheckBox @bind-Checked="_miembroVota" TChecked="bool" Label="Vota" />
+                    <label class="campo">Desde * <input type="date" class="e-input" value="@_miembroDesde.ToString("yyyy-MM-dd")" @onchange="@(e => _miembroDesde = LeerFecha(e.Value) ?? _miembroDesde)" /></label>
+                    <label class="campo campo-ancho">Nombramiento (acta, resolución) <input class="e-input" @bind="_miembroNotas" maxlength="500" /></label>
+                </div>
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || _miembroPersona is null)" OnClick="@NombrarAsync">Nombrar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarMiembro = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarMotivo" Header="@(_accion == AccionConMotivo.Inactivar ? "Inactivar el órgano" : "Terminar el nombramiento")" Width="520px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Registrando…">
+                @if (_accion == AccionConMotivo.TerminarMiembro)
+                {
+                    <p class="texto-apoyo">@(_miembroATerminar?.Person.FullName)</p>
+                    <label class="campo">Hasta * <input type="date" class="e-input" value="@_hasta.ToString("yyyy-MM-dd")" @onchange="@(e => _hasta = LeerFecha(e.Value) ?? _hasta)" /></label>
+                }
+                <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" maxlength="500" /></label>
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@ConMotivoAsync">Registrar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarMotivo = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private enum AccionConMotivo { Inactivar, TerminarMiembro }
+
+    private readonly EstadoDeCarga _carga = new(), _cargaOrganos = new(), _cargaDetalle = new(), _guardado = new();
+    private ClaveDeOperacion _clave = new();
+    private int _pestana;
+    private List<SesionEnListaDto> _sesiones = [];
+    private List<OrganoEnListaDto> _organos = [];
+    private OrganoDto? _organo;
+    private Guid? _filtroOrgano, _sesionAbierta;
+    private int _filtroEstado;
+    private bool _mostrarSesion, _mostrarConvocatoria, _mostrarReglas, _mostrarMiembro, _mostrarMotivo, _conInactivos, _creandoOrgano;
+    private string? _error, _motivo;
+
+    // Convocatoria.
+    private Guid? _convOrgano;
+    private int _convClase = 1, _convModalidad = 1;
+    private DateOnly _convFecha = DateOnly.FromDateTime(DateTime.Today);
+    private string? _convLugar, _convNotas;
+
+    // Órgano y reglas.
+    private string? _orgCodigo, _orgNombre, _orgPrefijo, _reglasFuente, _reglasMotivo;
+    private int _orgClase = 3, _baseMayoria = 1;
+    private bool _orgDecide = true, _conVinculados;
+    private FraccionEditable _quorum = new(), _mayoria = new(), _vinculados = new() { Numerator = 2, Denominator = 3, Comparison = 1 };
+    private DateOnly _reglasDesde = DateOnly.FromDateTime(DateTime.Today);
+
+    // Miembros.
+    private PersonSearchPicker.PersonSearchItem? _miembroPersona;
+    private int _miembroPapel = 3;
+    private Guid? _miembroPrincipal;
+    private bool _miembroVota = true;
+    private DateOnly _miembroDesde = DateOnly.FromDateTime(DateTime.Today);
+    private string? _miembroNotas;
+    private AccionConMotivo _accion;
+    private MiembroDeOrganoDto? _miembroATerminar;
+    private DateOnly _hasta = DateOnly.FromDateTime(DateTime.Today);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarOrganosAsync(silencioso: true);
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Gobierno.SesionesAsync(new FiltrosDeSesiones(_filtroOrgano, _filtroEstado == 0 ? null : _filtroEstado, PageSize: 100));
+        if (!r.IsSuccess) { _sesiones = []; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer las sesiones."); return; }
+        _sesiones = [.. r.Value?.Items ?? []];
+    }
+
+    /// <summary>Los órganos para los filtros y la convocatoria; sin permiso de verlos, la lista queda vacía sin aviso.</summary>
+    private async Task CargarOrganosAsync(bool silencioso = false)
+    {
+        using var carga = _cargaOrganos.Iniciar();
+        var r = await Gobierno.OrganosAsync(_conInactivos);
+        if (!r.IsSuccess)
+        {
+            _organos = [];
+            if (!silencioso) await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer los órganos.");
+            return;
+        }
+        _organos = [.. (r.Value ?? []).OrderBy(o => o.Code, StringComparer.Ordinal)];
+    }
+
+    private async Task AbrirOrganosAsync()
+    {
+        _pestana = 1;
+        await CargarOrganosAsync();
+    }
+
+    private async Task CambiarInactivosAsync(bool valor)
+    {
+        _conInactivos = valor;
+        await CargarOrganosAsync();
+    }
+
+    private async Task VerOrganoAsync(Guid organo)
+    {
+        using var carga = _cargaDetalle.Iniciar();
+        var r = await Gobierno.OrganoAsync(organo);
+        if (!r.IsSuccess) { _organo = null; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo leer el órgano."); return; }
+        _organo = r.Value;
+    }
+
+    private void AbrirSesion(Guid sesion)
+    {
+        _sesionAbierta = sesion;
+        _mostrarSesion = true;
+    }
+
+    private void AbrirConvocatoria()
+    {
+        _convOrgano = _filtroOrgano;
+        _convClase = _convModalidad = 1;
+        _convFecha = DateOnly.FromDateTime(DateTime.Today);
+        _convLugar = _convNotas = _error = null;
+        _clave = new ClaveDeOperacion();
+        _mostrarConvocatoria = true;
+    }
+
+    private async Task ConvocarAsync()
+    {
+        if (_convOrgano is not { } organo) return;
+        using var carga = _guardado.Iniciar();
+        _error = null;
+        var r = await Gobierno.ConvocarAsync(new ConvocarSesionRequest(organo, _convClase, _convModalidad, _convFecha,
+            string.IsNullOrWhiteSpace(_convLugar) ? null : _convLugar.Trim(), string.IsNullOrWhiteSpace(_convNotas) ? null : _convNotas.Trim()), _clave);
+        if (!r.IsSuccess || r.Value is null) { _error = r.ErrorMessage ?? "No se pudo convocar la sesión."; return; }
+        _mostrarConvocatoria = false;
+        await Notification.SuccessAsync("Sesión convocada.");
+        await CargarAsync();
+        AbrirSesion(r.Value.PublicId);
+    }
+
+    private void PrepararReglas(ReglasDeOrganoDto? actuales)
+    {
+        _quorum = actuales is { } a ? new FraccionEditable(a.Quorum) : new FraccionEditable();
+        _mayoria = actuales is { } b ? new FraccionEditable(b.OrdinaryMajority) : new FraccionEditable();
+        _conVinculados = actuales?.RelatedPartyFraction is not null;
+        _vinculados = actuales?.RelatedPartyFraction is { } v ? new FraccionEditable(v) : new FraccionEditable { Numerator = 2, Denominator = 3, Comparison = 1 };
+        _baseMayoria = actuales?.MajorityBase ?? 1;
+        _reglasFuente = actuales?.Source;
+        _reglasMotivo = _error = null;
+        _reglasDesde = DateOnly.FromDateTime(DateTime.Today);
+        _clave = new ClaveDeOperacion();
+        _mostrarReglas = true;
+    }
+
+    private void AbrirNuevoOrgano()
+    {
+        _creandoOrgano = true;
+        _orgCodigo = _orgNombre = _orgPrefijo = null;
+        _orgClase = 3;
+        _orgDecide = true;
+        PrepararReglas(null);
+    }
+
+    private void AbrirReglas()
+    {
+        _creandoOrgano = false;
+        PrepararReglas(_organo?.CurrentRules);
+    }
+
+    private ReglasDeOrganoRequest Reglas() => new(_quorum.Pedido(), _mayoria.Pedido(), _conVinculados ? _vinculados.Pedido() with { Comparison = 1 } : null,
+        _reglasDesde, _reglasMotivo!.Trim(), _reglasFuente!.Trim(), _baseMayoria);
+
+    private async Task GuardarReglasAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_reglasMotivo) || string.IsNullOrWhiteSpace(_reglasFuente)) return;
+        using var carga = _guardado.Iniciar();
+        _error = null;
+        if (_creandoOrgano)
+        {
+            if (string.IsNullOrWhiteSpace(_orgCodigo) || string.IsNullOrWhiteSpace(_orgNombre) || string.IsNullOrWhiteSpace(_orgPrefijo))
+            {
+                _error = "Indique código, nombre y prefijo de las actas.";
+                return;
+            }
+            var r = await Gobierno.CrearOrganoAsync(new CrearOrganoRequest(_orgCodigo.Trim().ToUpperInvariant(), _orgNombre.Trim(), _orgClase, _orgDecide,
+                _orgPrefijo.Trim().ToUpperInvariant(), Reglas()), _clave);
+            if (!r.IsSuccess || r.Value is null) { _error = r.ErrorMessage ?? "No se pudo crear el órgano."; return; }
+            _mostrarReglas = false;
+            await Notification.SuccessAsync($"Órgano {r.Value.Code} creado.");
+            await CargarOrganosAsync();
+            await VerOrganoAsync(r.Value.PublicId);
+            return;
+        }
+        if (_organo is not { } organo) return;
+        var reglas = await Gobierno.NuevasReglasAsync(organo.PublicId, Reglas(), _clave);
+        if (!reglas.IsSuccess) { _error = reglas.ErrorMessage ?? "No se pudieron registrar las reglas."; return; }
+        _mostrarReglas = false;
+        await Notification.SuccessAsync("Reglas registradas.");
+        await CargarOrganosAsync();
+        await VerOrganoAsync(organo.PublicId);
+    }
+
+    private void AbrirMiembro()
+    {
+        _miembroPersona = null;
+        _miembroPapel = 3;
+        _miembroPrincipal = null;
+        _miembroVota = true;
+        _miembroDesde = DateOnly.FromDateTime(DateTime.Today);
+        _miembroNotas = _error = null;
+        _clave = new ClaveDeOperacion();
+        _mostrarMiembro = true;
+    }
+
+    private async Task NombrarAsync()
+    {
+        if (_organo is not { } organo || _miembroPersona is not { } persona) return;
+        if (_miembroPapel == 4 && _miembroPrincipal is null) { _error = "Indique de quién es suplente."; return; }
+        using var carga = _guardado.Iniciar();
+        _error = null;
+        var r = await Gobierno.NombrarMiembroAsync(organo.PublicId, new NombrarMiembroRequest(persona.PublicId, _miembroPapel, _miembroVota, _miembroDesde,
+            _miembroPapel == 4 ? _miembroPrincipal : null, string.IsNullOrWhiteSpace(_miembroNotas) ? null : _miembroNotas.Trim(), null), _clave);
+        if (!r.IsSuccess) { _error = r.ErrorMessage ?? "No se pudo nombrar al miembro."; return; }
+        _mostrarMiembro = false;
+        await Notification.SuccessAsync("Miembro nombrado.");
+        await VerOrganoAsync(organo.PublicId);
+    }
+
+    private void AbrirMotivo(AccionConMotivo accion, MiembroDeOrganoDto? miembro)
+    {
+        _accion = accion;
+        _miembroATerminar = miembro;
+        _hasta = DateOnly.FromDateTime(DateTime.Today);
+        _motivo = _error = null;
+        _clave = new ClaveDeOperacion();
+        _mostrarMotivo = true;
+    }
+
+    private async Task ConMotivoAsync()
+    {
+        if (_organo is not { } organo || string.IsNullOrWhiteSpace(_motivo)) return;
+        using var carga = _guardado.Iniciar();
+        _error = null;
+        var r = _accion == AccionConMotivo.Inactivar
+            ? await Gobierno.InactivarOrganoAsync(organo.PublicId, _motivo.Trim(), _clave)
+            : await Gobierno.TerminarMiembroAsync(organo.PublicId, _miembroATerminar!.MemberPublicId, new FinDeVigenciaRequest(_hasta, _motivo.Trim()), _clave);
+        if (!r.IsSuccess) { _error = r.ErrorMessage ?? "No se pudo registrar."; return; }
+        _mostrarMotivo = false;
+        await Notification.SuccessAsync("Registrado.");
+        await CargarOrganosAsync();
+        await VerOrganoAsync(organo.PublicId);
+    }
+
+    private static DateOnly? LeerFecha(object? valor) =>
+        DateOnly.TryParse(valor?.ToString(), CultureInfo.InvariantCulture, out var f) ? f : null;
+
+    /// <summary>Una fracción en edición.</summary>
+    private sealed class FraccionEditable
+    {
+        public FraccionEditable() { }
+
+        public FraccionEditable(FraccionDto f)
+        {
+            Numerator = f.Numerator;
+            Denominator = f.Denominator;
+            Comparison = f.Comparison;
+        }
+
+        public int Numerator { get; set; } = 1;
+        public int Denominator { get; set; } = 2;
+        public int Comparison { get; set; } = 2;
+
+        public FraccionRequest Pedido() => new(Numerator, Denominator, Comparison);
+    }
+}

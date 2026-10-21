@@ -23,6 +23,19 @@ public sealed class TestAdminDbContext : Microsoft.EntityFrameworkCore.DbContext
     public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
     public DbSet<UserSetting> UserSettings => Set<UserSetting>();
     public DbSet<PromoContenido> PromoContenidos => Set<PromoContenido>();
+    // Feature 013 (T0022, T0023): registro central de valores nacionales.
+    public DbSet<PlatformNationalValue> PlatformNationalValues => Set<PlatformNationalValue>();
+    public DbSet<PlatformRegulatoryDocument> PlatformRegulatoryDocuments => Set<PlatformRegulatoryDocument>();
+    public DbSet<PlatformNationalValueCounter> PlatformNationalValueCounters => Set<PlatformNationalValueCounter>();
+
+    public void DescartarCambios() => ChangeTracker.Clear();
+
+    /// <summary>Como <c>AdminDbContext</c> (C68): los hechos de la central sólo se insertan.</summary>
+    public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    {
+        await IngenIA365ERP.Persistence.DbContext.GuardaDeInmutabilidad.VerificarAsync(this, cancellationToken);
+        return await base.SaveChangesAsync(cancellationToken);
+    }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -49,6 +62,9 @@ public sealed class TestAdminDbContext : Microsoft.EntityFrameworkCore.DbContext
         modelBuilder.Entity<PasswordResetToken>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<UserSetting>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<PromoContenido>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<PlatformNationalValue>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<PlatformRegulatoryDocument>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<PlatformNationalValueCounter>(b => b.Ignore("RowVersion"));
     }
 
     public static TestAdminDbContext Create(string? dbName = null)

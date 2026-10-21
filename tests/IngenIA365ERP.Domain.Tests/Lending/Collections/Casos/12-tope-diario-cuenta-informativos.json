@@ -1,0 +1,20 @@
+// Regla 9: un contacto por día, y los informativos cuentan. El miércoles 11 a las 8:00 ya salió un informativo por SMS;
+// la cobranza de las 10:00 pasa al jueves 12 a las 7:00. Un informativo no fija el canal semanal, así que el jueves sale
+// por WhatsApp.
+{
+  "caso": "12-tope-diario-cuenta-informativos",
+  "reglas": { "horario": { "lunesAViernes": ["07:00", "19:00"], "sabado": ["08:00", "15:00"] }, "contactosPorDia": 1, "noHabiles": ["2026-11-02", "2026-11-16"] },
+  "titular": {},
+  "historial": [ { "en": "2026-11-11T08:00", "canal": "Sms", "proposito": "Informative" } ],
+  "escenarios": [
+    { "nombre": "cobranza el mismo día",
+      "solicitud": { "pedido": "2026-11-11T10:00", "canal": "Sms", "proposito": "Collection" },
+      "esperado": { "decision": "Diferido", "siguiente": "2026-11-12T07:00", "motivos": ["DailyLimitReached"] } },
+    { "nombre": "otro informativo el mismo día también espera",
+      "solicitud": { "pedido": "2026-11-11T10:00", "canal": "Email", "proposito": "Informative" },
+      "esperado": { "decision": "Diferido", "siguiente": "2026-11-12T07:00", "motivos": ["DailyLimitReached"] } },
+    { "nombre": "cobranza al día siguiente",
+      "solicitud": { "pedido": "2026-11-12T10:00", "canal": "WhatsApp", "proposito": "Collection" },
+      "esperado": { "decision": "Permitido", "en": "2026-11-12T10:00" } }
+  ]
+}

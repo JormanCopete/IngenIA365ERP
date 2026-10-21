@@ -1,0 +1,26 @@
+@using IngenIA365ERP.Shared.Services.Cartera
+
+@* Feature 013, K5, US16 (T1009): los titulares que quedan fuera del archivo de una central —sin autorización de reporte, sin aviso previo con
+   constancia, reclamación al seguro en trámite, insolvencia, pagaduría en mora dentro del umbral— con la gestión que lo corrige. La misma lista,
+   por período, es la vista bureau-exclusions del centro de informes. *@
+<div class="tabla-desplazable">
+    <table class="data-grid">
+        <thead><tr><th>Crédito</th><th>Titular</th><th>Motivo</th><th>Gestión sugerida</th></tr></thead>
+        <tbody>
+            @foreach (var x in Excluidos)
+            {
+                <tr>
+                    <td><a href="/cartera/creditos/@x.LoanPublicId">@x.Loan</a></td>
+                    <td>@(x.IsDebtor ? "Deudor" : "Codeudor")</td>
+                    <td>@TextosRegulatorios.Motivo(x.Reason)</td>
+                    <td>@x.SuggestedAction</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+@if (Excluidos.Count == 0) { <p class="texto-tenue">Nadie queda excluido.</p> }
+
+@code {
+    [Parameter] public IReadOnlyList<ExcluidoDeCentralDto> Excluidos { get; set; } = [];
+}

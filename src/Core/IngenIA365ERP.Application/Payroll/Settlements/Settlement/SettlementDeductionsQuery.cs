@@ -72,13 +72,24 @@ public static class SettlementDeductionsReader
             catch (JsonException) { x = null; }
         }
         var cuotasCausadasSinDescontar = x?.CuotasCausadas is { } causadas && x.CuotasDescontadas is { } descontadas ? Math.Max(0, causadas - descontadas) : (int?)null;
-        decimal? saldoQueQueda = d.Status is SettlementDeductionStatus.Applied or SettlementDeductionStatus.Reverted
+        // Feature 013 (R105): el saldo exacto es el que dio Cartera —al aplicar o al simular el ajuste—; sin él, la aproximación
+        // del desglose (saldo total menos lo aplicado).
+        var exacto = d.RemainingBalanceAfter is not null
+                     && (d.Status is SettlementDeductionStatus.Applied or SettlementDeductionStatus.Reverted || d.Kind == SettlementDeductionKind.CooperativeLoan);
+        decimal? saldoQueQueda = exacto
             ? d.RemainingBalanceAfter
-            : d.Kind == SettlementDeductionKind.CooperativeLoan && x?.SaldoTotal is { } saldo ? Math.Max(0m, saldo - d.AppliedAmount) : null;
+            : d.Status is SettlementDeductionStatus.Applied or SettlementDeductionStatus.Reverted
+                ? d.RemainingBalanceAfter
+                : d.Kind == SettlementDeductionKind.CooperativeLoan && x?.SaldoTotal is { } saldo ? Math.Max(0m, saldo - d.AppliedAmount) : null;
         return new SettlementDeductionItemDto(
             d.PublicId, d.Kind, d.Description,
             x?.Capital, x?.Intereses, x?.Mora, x?.CuotasPendientes, cuotasCausadasSinDescontar,
             d.ProposedAmount, d.AppliedAmount, d.AdjustmentReason, d.AdjustedBy, d.AdjustedAt,
-            saldoQueQueda, d.Status, d.CarteraTransactionPublicId);
+            saldoQueQueda, d.Status, d.CarteraTransactionPublicId)
+        {
+            ObligationNumber = d.ObligationNumber,
+            CarteraReversalPublicId = d.CarteraReversalPublicId,
+            RemainingIsExact = exacto,
+        };
     }
 }

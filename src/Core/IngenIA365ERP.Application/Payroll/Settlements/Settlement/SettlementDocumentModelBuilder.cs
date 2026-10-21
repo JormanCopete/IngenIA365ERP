@@ -60,7 +60,7 @@ public sealed class SettlementDocumentModelBuilder(IApplicationDbContext db, ICu
         var deduccionesDeLey = lineas.Where(l => l.Nature == ConceptNature.Deduction && l.SettlementDeductionId == null).Select(Linea).ToList();
         var descuentos = deducciones.Select(d => new SettlementDocumentDeductionModel(
             d.Description, d.ProposedAmount, d.AppliedAmount, d.AdjustmentReason,
-            SettlementDeductionsReader.Item(d, run).RemainingAfter)).ToList();
+            SettlementDeductionsReader.Item(d, run).RemainingAfter, d.ObligationNumber)).ToList();
 
         var nombre = NombreDePersona.Completo(ficha.p);
         var diasDeServicio = CalendarConventions.Days(ficha.e.JoinDate.Date, terminacion.TerminationDate.ToDateTime(TimeOnly.MinValue));

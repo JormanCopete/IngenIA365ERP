@@ -1,0 +1,475 @@
+@page "/cartera/conciliacion-contable"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Globalization
+@using System.Text.Json
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Contabilidad
+@using IngenIA365ERP.Shared.Services.Http
+@inject ConciliacionContableClient Conciliacion
+@inject PermisosDelUsuario Permisos
+@inject HttpClient Http
+@inject INotificationService Notification
+@inject NavigationManager Nav
+
+<PageTitle>Conciliación contable de Cartera - IngenIA365ERP</PageTitle>
+
+@* Feature 013, US7 (T0668; contracts/api.md §16.3; contracts/contabilidad.md §14; DC-16, T58): Cartera frente a Contabilidad a una fecha (?date=).
+   Por conjunto de cuentas (familia de rol) el saldo de Cartera, el contable, la diferencia y su explicación —por estado de entrega y hecho por
+   hecho: lo que todavía no llegó al libro—, lo que queda sin explicar y si está del otro lado; el saldo de las cuentas puente por clase de
+   recaudador y las combinaciones con saldo que no tienen regla. La pestaña «Hechos» lista los hechos de Cartera a Contabilidad con su modo,
+   su estado y su comprobante (leídos de la entrega: Cartera no lee las tablas de Contabilidad) y abre el detalle de una parte con sus totales
+   por combinación y su lista por crédito. La conciliación exige Lending.Reconciliation.View; los hechos y las partes, Lending.Messages.Read
+   (la lista por crédito lleva el tercero). Todo con el alcance de oficinas de quien consulta. *@
+<PermissionGate Required="Lending.Reconciliation.View" AnyOf="@(new[] { "Lending.Messages.Read" })" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Conciliación contable de Cartera</h3>
+        <div class="toolbar">
+            <PermissionGate Required="Lending.Reconciliation.View">
+                <SfButton CssClass="@(_pestana == 0 ? "e-primary" : "e-outline")" OnClick="@(() => CambiarAsync(0))">Conciliación</SfButton>
+            </PermissionGate>
+            <PermissionGate Required="Lending.Messages.Read">
+                <SfButton CssClass="@(_pestana == 1 ? "e-primary" : "e-outline")" OnClick="@(() => CambiarAsync(1))">Hechos</SfButton>
+            </PermissionGate>
+        </div>
+    </div>
+
+    @if (_pestana == 0)
+    {
+        <PermissionGate Required="Lending.Reconciliation.View" MostrarAviso="true">
+            <div class="toolbar">
+                <label class="campo">A la fecha <input type="date" class="e-input" value="@(_fecha.ToString("yyyy-MM-dd"))" @onchange="@(e => _fecha = LeerFecha(e.Value) ?? _fecha)" /></label>
+                <label class="campo">Oficina
+                    <select class="e-input" value="@(_sucursal?.ToString() ?? "")" @onchange="@(e => _sucursal = Guid.TryParse(e.Value?.ToString(), out var g) ? g : null)">
+                        <option value="">Todas las de mi alcance</option>
+                        @foreach (var s in _sucursales) { <option value="@s.PublicId">@s.Name</option> }
+                    </select>
+                </label>
+                <SfButton CssClass="e-primary" IconCss="e-icons e-search" Disabled="@_carga.Activa" OnClick="@ConsultarAsync">Conciliar</SfButton>
+            </div>
+
+            <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Comparando saldos…">
+                @if (_c is { } c)
+                {
+                    <div class="kpi-grid">
+                        <div class="kpi-card"><span class="kpi-value">@c.Sets.Sum(s => s.LendingBalance).ToString("N2")</span><span class="kpi-label">Saldo en Cartera</span></div>
+                        <div class="kpi-card"><span class="kpi-value">@c.Sets.Sum(s => s.AccountingBalance).ToString("N2")</span><span class="kpi-label">Saldo contable</span></div>
+                        <div class="kpi-card"><span class="kpi-value">@c.Sets.Sum(s => s.Difference).ToString("N2")</span><span class="kpi-label">Diferencia</span></div>
+                        <div class="kpi-card"><span class="kpi-value">@c.UnexplainedTotal.ToString("N2")</span><span class="kpi-label">Sin explicar</span></div>
+                    </div>
+                    @if (c.UnexplainedTotal == 0 && c.UnresolvedCombinations.Count == 0)
+                    {
+                        <p class="aviso aviso-ok">Al @c.Date.ToString("dd/MM/yyyy") toda diferencia está explicada por hechos que todavía no llegan al libro.</p>
+                    }
+
+                    <h4>Conjuntos de cuentas</h4>
+                    <div class="tabla-desplazable">
+                        <table class="data-grid">
+                            <thead>
+                                <tr><th>Conjunto</th><th>Cuentas</th><th class="numero">Cartera</th><th class="numero">Contable</th><th class="numero">Diferencia</th><th class="numero">Pendiente</th><th class="numero">En lote</th><th class="numero">Rechazado</th><th class="numero">No pasa</th><th class="numero">Sin explicar</th><th></th></tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var s in c.Sets)
+                                {
+                                    var conjunto = s;
+                                    <tr class="@(conjunto.Unexplained != 0 ? "resaltada" : "")">
+                                        <td>@TextosDeContabilidadDeCartera.Familia(conjunto.Family)</td>
+                                        <td>@(conjunto.Accounts.Count == 0 ? "—" : string.Join(", ", conjunto.Accounts.Select(a => a.Code)))</td>
+                                        <td class="numero">@conjunto.LendingBalance.ToString("N2")</td>
+                                        <td class="numero">@conjunto.AccountingBalance.ToString("N2")</td>
+                                        <td class="numero">@conjunto.Difference.ToString("N2")</td>
+                                        <td class="numero">@conjunto.ExplainedBy.Pending.ToString("N2")</td>
+                                        <td class="numero">@conjunto.ExplainedBy.InBatch.ToString("N2")</td>
+                                        <td class="numero">@conjunto.ExplainedBy.Rejected.ToString("N2")</td>
+                                        <td class="numero">@conjunto.ExplainedBy.NotPosted.ToString("N2")</td>
+                                        <td class="numero">@conjunto.Unexplained.ToString("N2")@(conjunto.UnexplainedIsOtherSide ? " (del lado contable)" : "")</td>
+                                        <td><SfButton CssClass="e-flat e-small" OnClick="@(() => _abierto = _abierto == conjunto.Family ? null : conjunto.Family)">@(_abierto == conjunto.Family ? "Cerrar" : "Explicación")</SfButton></td>
+                                    </tr>
+                                }
+                                @if (c.Sets.Count == 0) { <tr><td colspan="11" class="texto-tenue">Sin saldos que conciliar a esa fecha.</td></tr> }
+                            </tbody>
+                        </table>
+                    </div>
+
+                    @if (c.Sets.FirstOrDefault(s => s.Family == _abierto) is { } abierto)
+                    {
+                        <div class="info-card">
+                            <h4>@TextosDeContabilidadDeCartera.Familia(abierto.Family)</h4>
+                            @if (abierto.Accounts.Count > 0)
+                            {
+                                <p class="texto-tenue">Cuentas: @string.Join(" · ", abierto.Accounts.Select(a => $"{a.Code} {a.Name}"))</p>
+                            }
+                            <h4>Hechos que explican la diferencia</h4>
+                            <div class="tabla-desplazable">
+                                <table class="data-grid">
+                                    <thead><tr><th>Hecho</th><th>Número</th><th>Fecha contable</th><th>Estado</th><th class="numero">Valor</th><th></th></tr></thead>
+                                    <tbody>
+                                        @foreach (var h in abierto.Facts)
+                                        {
+                                            <tr>
+                                                <td>@TextosDeContabilidadDeCartera.TipoDeHecho(h.Type)</td>
+                                                <td>@(h.Number ?? "—")</td>
+                                                <td>@h.AccountingDate.ToString("dd/MM/yyyy")</td>
+                                                <td>@TextosDeContabilidadDeCartera.EstadoDeEntrega(h.Status)</td>
+                                                <td class="numero">@h.Amount.ToString("N2")</td>
+                                                <td>
+                                                    <PermissionGate Required="Lending.Messages.Read">
+                                                        <a href="@($"/cartera/bandeja-de-mensajes?mensaje={h.MessagePublicId}")">Mensaje</a>
+                                                    </PermissionGate>
+                                                </td>
+                                            </tr>
+                                        }
+                                        @if (abierto.Facts.Count == 0) { <tr><td colspan="6" class="texto-tenue">Ningún hecho pendiente explica la diferencia.</td></tr> }
+                                    </tbody>
+                                </table>
+                            </div>
+                            <h4>Combinaciones del conjunto</h4>
+                            <div class="tabla-desplazable">
+                                <table class="data-grid">
+                                    <thead><tr><th>Rol</th><th>Combinación</th><th>Oficina</th><th class="numero">Saldo en Cartera</th></tr></thead>
+                                    <tbody>
+                                        @foreach (var k in abierto.Combinations)
+                                        {
+                                            <tr>
+                                                <td>@TextosDeContabilidadDeCartera.Rol(k.Role)</td>
+                                                <td>@Combinacion(k.CreditLine, k.Modality, k.Subsegment, k.Category, k.Concept, k.CollectorClass, k.Reason)</td>
+                                                <td>@Oficina(k.Branch)</td>
+                                                <td class="numero">@k.LendingBalance.ToString("N2")</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    }
+
+                    @if (c.Bridges.Count > 0)
+                    {
+                        <h4>Cuentas puente por clase de recaudador</h4>
+                        <div class="tabla-desplazable">
+                            <table class="data-grid">
+                                <thead><tr><th>Clase</th><th class="numero">Saldo</th></tr></thead>
+                                <tbody>
+                                    @foreach (var p in c.Bridges)
+                                    {
+                                        <tr class="@(p.Balance != 0 ? "resaltada" : "")">
+                                            <td>@TextosDePagos.ClaseDeRecaudador(p.CollectorClass)</td>
+                                            <td class="numero">@p.Balance.ToString("N2")</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                        <p class="texto-tenue">Un puente con saldo es recaudo recibido y todavía no aplicado a un crédito, o aplicado sin que su recaudador lo haya registrado.</p>
+                    }
+
+                    @if (c.UnresolvedCombinations.Count > 0)
+                    {
+                        <h4>Combinaciones con saldo sin regla en la matriz</h4>
+                        <p class="aviso aviso-alerta">Su saldo no se puede comparar: falta la regla que diga a qué cuenta va. La crea Contabilidad en la matriz contable de Cartera.</p>
+                        <div class="tabla-desplazable">
+                            <table class="data-grid">
+                                <thead><tr><th>Rol</th><th>Combinación</th><th>Oficina</th><th class="numero">Saldo en Cartera</th></tr></thead>
+                                <tbody>
+                                    @foreach (var k in c.UnresolvedCombinations)
+                                    {
+                                        <tr>
+                                            <td>@TextosDeContabilidadDeCartera.Rol(k.Role)</td>
+                                            <td>@Combinacion(k.CreditLine, k.Modality, null, k.Category, k.Concept, null, null)</td>
+                                            <td>@Oficina(k.Branch)</td>
+                                            <td class="numero">@k.LendingBalance.ToString("N2")</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                }
+                else if (_error is not null)
+                {
+                    <p class="aviso aviso-alerta">@_error</p>
+                }
+            </IndicadorDeCarga>
+        </PermissionGate>
+    }
+    else
+    {
+        <PermissionGate Required="Lending.Messages.Read" MostrarAviso="true">
+            <div class="toolbar">
+                <label class="campo">Hecho <input class="e-input" @bind="_hTipo" placeholder="InteresCausado…" maxlength="60" /></label>
+                <label class="campo">Estado
+                    <select class="e-input" @bind="_hEstado">
+                        <option value="">Todos</option>
+                        @foreach (var (_, nombre) in IngenIA365ERP.Shared.Services.Inventario.TextosDeInventario.NombresDeEstadoDeEntrega)
+                        {
+                            <option value="@nombre">@TextosDeContabilidadDeCartera.EstadoDeEntrega(nombre)</option>
+                        }
+                    </select>
+                </label>
+                <label class="campo">Desde <input type="date" class="e-input" value="@(_hDesde?.ToString("yyyy-MM-dd"))" @onchange="@(e => _hDesde = LeerFecha(e.Value))" /></label>
+                <label class="campo">Hasta <input type="date" class="e-input" value="@(_hHasta?.ToString("yyyy-MM-dd"))" @onchange="@(e => _hHasta = LeerFecha(e.Value))" /></label>
+                <label class="campo">Oficina
+                    <select class="e-input" value="@(_hSucursal?.ToString() ?? "")" @onchange="@(e => _hSucursal = Guid.TryParse(e.Value?.ToString(), out var g) ? g : null)">
+                        <option value="">Todas las de mi alcance</option>
+                        @foreach (var s in _sucursales) { <option value="@s.PublicId">@s.Name</option> }
+                    </select>
+                </label>
+                <SfButton CssClass="e-primary" IconCss="e-icons e-search" Disabled="@_cargaHechos.Activa" OnClick="@(() => CargarHechosAsync(1))">Buscar</SfButton>
+            </div>
+            <IndicadorDeCarga Cargando="@_cargaHechos.Activa">
+                <p class="texto-apoyo">@_totalHechos hecho(s).</p>
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th>Hecho</th><th>Número</th><th>Fecha contable</th><th>Oficina</th><th>Modo</th><th>Estado</th><th>Validación previa</th><th class="numero">Total</th><th>Comprobante</th><th>Parte</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var h in _hechos)
+                            {
+                                var hecho = h;
+                                <tr class="@(hecho.Status is "Rejected" or "ValidationFailed" ? "resaltada" : "")">
+                                    <td>@TextosDeContabilidadDeCartera.TipoDeHecho(hecho.Type)</td>
+                                    <td>@(hecho.Number ?? "—")</td>
+                                    <td>@hecho.AccountingDate.ToString("dd/MM/yyyy")</td>
+                                    <td>@Oficina(hecho.Branch)</td>
+                                    <td>@TextosDeContabilidadDeCartera.Modo(hecho.Mode)</td>
+                                    <td>@TextosDeContabilidadDeCartera.EstadoDeEntrega(hecho.Status)</td>
+                                    <td>@(hecho.PrevalidationOutcome is null ? "—" : TextosDeContabilidadDeCartera.ValidacionPrevia(hecho.PrevalidationOutcome))</td>
+                                    <td class="numero">@hecho.Totals.ToString("N2")</td>
+                                    <td>@(hecho.Voucher is { VoucherTypeCode: { } tipo } v ? $"{tipo} {v.VoucherNumber}" : "—")</td>
+                                    <td>
+                                        @if (hecho.Part is { } parte)
+                                        {
+                                            <SfButton CssClass="e-flat e-small" OnClick="@(() => VerParteAsync(parte.PartPublicId, 1))">@(parte.Tranche is { } t ? $"Tramo {t} · " : "")@parte.Loans crédito(s)</SfButton>
+                                        }
+                                        else { <span>—</span> }
+                                    </td>
+                                    <td><a href="@($"/cartera/bandeja-de-mensajes?mensaje={hecho.MessagePublicId}")">Mensaje</a></td>
+                                </tr>
+                            }
+                            @if (_hechos.Count == 0 && !_cargaHechos.Activa) { <tr><td colspan="11" class="texto-tenue">Sin hechos con estos filtros.</td></tr> }
+                        </tbody>
+                    </table>
+                </div>
+                @if (_totalHechos > TamanoDePagina)
+                {
+                    <div class="toolbar">
+                        <SfButton CssClass="e-outline" Disabled="@(_paginaHechos <= 1)" OnClick="@(() => CargarHechosAsync(_paginaHechos - 1))">Anterior</SfButton>
+                        <span>Página @_paginaHechos de @((_totalHechos + TamanoDePagina - 1) / TamanoDePagina)</span>
+                        <SfButton CssClass="e-outline" Disabled="@(_paginaHechos * TamanoDePagina >= _totalHechos)" OnClick="@(() => CargarHechosAsync(_paginaHechos + 1))">Siguiente</SfButton>
+                    </div>
+                }
+            </IndicadorDeCarga>
+
+            @if (_verParte)
+            {
+                <div class="info-card">
+                    <IndicadorDeCarga Cargando="@_cargaParte.Activa" Texto="Cargando la parte…">
+                        @if (_parte is { } p)
+                        {
+                            <h4>@TextosDeContabilidadDeCartera.TipoDeHecho(p.FactType) · @p.LoanCount crédito(s) · @p.TotalAmount.ToString("N2")</h4>
+                            <p class="texto-tenue">
+                                Fecha valor @p.ValueDate.ToString("dd/MM/yyyy") · fecha contable @p.AccountingDate.ToString("dd/MM/yyyy")
+                                @if (p.BatchNumber is { } n) { <text> · tramo @n</text> }
+                                @if (p.PrevalidationOutcome is { } vp) { <text> · validación previa: @TextosDeContabilidadDeCartera.ValidacionPrevia(vp).ToLowerInvariant()</text> }
+                                · @p.Messages.Count mensaje(s)
+                            </p>
+                            @if (TotalesPorCombinacion(p.TotalsByDimension) is { Count: > 0 } totales)
+                            {
+                                <h4>Totales por combinación</h4>
+                                <div class="tabla-desplazable">
+                                    <table class="data-grid">
+                                        <tbody>
+                                            @foreach (var (combinacion, valor) in totales)
+                                            {
+                                                <tr><td>@combinacion</td><td class="numero">@valor</td></tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            }
+                            <h4>Créditos</h4>
+                            <div class="tabla-desplazable">
+                                <table class="data-grid">
+                                    <thead>
+                                        <tr>
+                                            <th>Crédito</th><th>Deudor</th>
+                                            @foreach (var concepto in ConceptosDe(p)) { <th class="numero">@TextosDeCreditos.Concepto(concepto)</th> }
+                                            <th class="numero">Total</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var credito in p.Loans.Items)
+                                        {
+                                            <tr>
+                                                <td><a href="@($"/cartera/creditos/{credito.LoanPublicId}")">@credito.LoanNumber</a></td>
+                                                <td>@credito.Debtor</td>
+                                                @foreach (var concepto in ConceptosDe(p))
+                                                {
+                                                    <td class="numero">@(credito.ByConcept.TryGetValue(concepto, out var v) ? v.ToString("N2") : "")</td>
+                                                }
+                                                <td class="numero">@credito.Total.ToString("N2")</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                            @if (p.Loans.TotalCount > p.Loans.PageSize)
+                            {
+                                <div class="toolbar">
+                                    <SfButton CssClass="e-outline" Disabled="@(p.Loans.Page <= 1)" OnClick="@(() => VerParteAsync(p.PublicId, p.Loans.Page - 1))">Anterior</SfButton>
+                                    <span>Página @p.Loans.Page de @((p.Loans.TotalCount + p.Loans.PageSize - 1) / p.Loans.PageSize)</span>
+                                    <SfButton CssClass="e-outline" Disabled="@(p.Loans.Page * p.Loans.PageSize >= p.Loans.TotalCount)" OnClick="@(() => VerParteAsync(p.PublicId, p.Loans.Page + 1))">Siguiente</SfButton>
+                                </div>
+                            }
+                        }
+                        <SfButton CssClass="e-outline" OnClick="@(() => { _verParte = false; _parte = null; })">Cerrar</SfButton>
+                    </IndicadorDeCarga>
+                </div>
+            }
+        </PermissionGate>
+    }
+</div>
+</PermissionGate>
+
+@code {
+    private const int TamanoDePagina = 50;
+    private const string PermisoDeConciliacion = "Lending.Reconciliation.View";
+
+    private sealed class ItemCrudo { public Guid PublicId { get; set; } public string Name { get; set; } = ""; }
+
+    [SupplyParameterFromQuery(Name = "date")] public DateOnly? FechaInicial { get; set; }
+
+    private readonly EstadoDeCarga _carga = new(), _cargaHechos = new(), _cargaParte = new();
+    private int _pestana = -1, _paginaHechos = 1;
+    private long _totalHechos;
+    private DateOnly _fecha = DateOnly.FromDateTime(DateTime.Today);
+    private Guid? _sucursal, _hSucursal;
+    private List<ItemCrudo> _sucursales = [];
+    private ConciliacionContableDto? _c;
+    private string? _error, _abierto;
+    private string _hTipo = string.Empty, _hEstado = string.Empty;
+    private DateOnly? _hDesde, _hHasta;
+    private List<HechoContableDeCarteraDto> _hechos = [];
+    private ParteDeHechosContablesDto? _parte;
+    private bool _verParte;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _sucursales = await Http.TryGetListAsync<ItemCrudo>("/api/core/branches?PageNumber=1&PageSize=500&SortBy=name");
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (FechaInicial is { } f) _fecha = f;
+        // La pestaña inicial es la que el permiso deja ver: la conciliación si se puede, si no los hechos.
+        if (_pestana < 0) _pestana = await Permisos.TieneAsync(PermisoDeConciliacion) ? 0 : 1;
+        if (_pestana == 0) await CargarAsync();
+        else if (_hechos.Count == 0) await CargarHechosAsync(1);
+    }
+
+    private async Task CambiarAsync(int pestana)
+    {
+        _pestana = pestana;
+        if (pestana == 0 && _c is null) await CargarAsync();
+        if (pestana == 1 && _hechos.Count == 0) await CargarHechosAsync(1);
+    }
+
+    /// <summary>Conciliar deja la fecha en la dirección (?date=) para poder compartirla.</summary>
+    private Task ConsultarAsync()
+    {
+        if (FechaInicial == _fecha) return CargarAsync();
+        Nav.NavigateTo(Nav.GetUriWithQueryParameter("date", _fecha.ToString("yyyy-MM-dd")));
+        return Task.CompletedTask;
+    }
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Conciliacion.ConciliacionAsync(_fecha, _sucursal);
+        _c = r.IsSuccess ? r.Value : null;
+        _error = r.IsSuccess ? null : r.ErrorMessage ?? "No se pudo conciliar.";
+        if (!r.IsSuccess) await Notification.ErrorAsync(_error!);
+    }
+
+    private async Task CargarHechosAsync(int pagina)
+    {
+        using var carga = _cargaHechos.Iniciar();
+        var r = await Conciliacion.HechosAsync(new FiltroDeHechosContables(Vacio(_hTipo), Vacio(_hEstado), _hDesde, _hHasta, _hSucursal, null,
+            pagina, TamanoDePagina));
+        if (!r.IsSuccess || r.Value is null)
+        {
+            _hechos = [];
+            _totalHechos = 0;
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer los hechos.");
+            return;
+        }
+        _paginaHechos = pagina;
+        _hechos = [.. r.Value.Items];
+        _totalHechos = r.Value.TotalCount;
+    }
+
+    private async Task VerParteAsync(Guid parte, int pagina)
+    {
+        _verParte = true;
+        using var carga = _cargaParte.Iniciar();
+        var r = await Conciliacion.ParteAsync(parte, pagina);
+        _parte = r.IsSuccess ? r.Value : null;
+        if (!r.IsSuccess) await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo leer la parte.");
+    }
+
+    private string Oficina(Guid oficina) => _sucursales.FirstOrDefault(s => s.PublicId == oficina)?.Name ?? "—";
+
+    /// <summary>Los conceptos que aparecen en la página de créditos, en el orden en que se muestran los saldos.</summary>
+    private static IReadOnlyList<string> ConceptosDe(ParteDeHechosContablesDto p)
+    {
+        var presentes = p.Loans.Items.SelectMany(l => l.ByConcept.Keys).Distinct().ToList();
+        return [.. TextosDeCreditos.OrdenDeConceptos.Where(presentes.Contains), .. presentes.Where(c => !TextosDeCreditos.OrdenDeConceptos.Contains(c))];
+    }
+
+    /// <summary>
+    /// Los totales por combinación tal como se emitieron: un objeto o una lista de objetos con sus dimensiones y valores. Se muestran como
+    /// «dimensión valor · …» y el monto; si la forma no se reconoce, en una sola fila.
+    /// </summary>
+    private static List<(string Combinacion, string Valor)> TotalesPorCombinacion(JsonElement totales)
+    {
+        var filas = new List<(string, string)>();
+        IEnumerable<JsonElement> elementos = totales.ValueKind switch
+        {
+            JsonValueKind.Array => totales.EnumerateArray(),
+            JsonValueKind.Object => [totales],
+            _ => [],
+        };
+        foreach (var e in elementos)
+        {
+            if (e.ValueKind != JsonValueKind.Object) continue;
+            var partes = new List<string>();
+            var montos = new List<string>();
+            foreach (var p in e.EnumerateObject())
+            {
+                if (p.Value.ValueKind == JsonValueKind.Number) montos.Add($"{p.Name} {p.Value.GetDecimal().ToString("N2", CultureInfo.GetCultureInfo("es-CO"))}");
+                else if (p.Value.ValueKind is JsonValueKind.String or JsonValueKind.True or JsonValueKind.False) partes.Add($"{p.Name} {p.Value}");
+            }
+            filas.Add((partes.Count == 0 ? "—" : string.Join(" · ", partes), string.Join(" · ", montos)));
+        }
+        return filas;
+    }
+
+    private static string Combinacion(string? linea, string? modalidad, string? subsegmento, string? categoria, string? concepto, string? clase, string? motivo)
+    {
+        var partes = new[]
+        {
+            linea is { } l ? $"línea {l}" : null,
+            modalidad is { } m ? $"modalidad {m}" : null,
+            subsegmento is { } s ? $"subsegmento {s}" : null,
+            categoria is { } c ? $"categoría {c}" : null,
+            concepto is { } k ? TextosDeCreditos.Concepto(k).ToLowerInvariant() : null,
+            clase is { } q ? $"recaudo {TextosDePagos.ClaseDeRecaudador(q).ToLowerInvariant()}" : null,
+            motivo is { } mo ? $"motivo {TextosDeContabilidadDeCartera.Motivo(mo).ToLowerInvariant()}" : null,
+        }.Where(x => x is not null).ToList();
+        return partes.Count == 0 ? "—" : string.Join(" · ", partes);
+    }
+
+    private static string? Vacio(string? valor) => string.IsNullOrWhiteSpace(valor) ? null : valor.Trim();
+
+    private static DateOnly? LeerFecha(object? valor) =>
+        DateOnly.TryParse(valor?.ToString(), CultureInfo.InvariantCulture, out var f) ? f : null;
+}

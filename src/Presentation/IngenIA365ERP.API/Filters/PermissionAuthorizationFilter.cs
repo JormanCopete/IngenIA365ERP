@@ -162,8 +162,11 @@ public sealed class PermissionAuthorizationFilter : IEndpointFilter
     /// para <c>Generic.NotFound</c> y a la respuesta default de ASP.NET
     /// para un endpoint inexistente bajo el mismo <see cref="ErrorEnvelopeFilter"/>.
     /// </summary>
-    internal static IResult NotFoundEnvelope(HttpContext http) =>
-        Results.Json(
+    internal static IResult NotFoundEnvelope(HttpContext http)
+    {
+        // Feature 013 (T67, T0288): la marca que lee el metadato AuditarIntentoDenegado para registrar el intento antes de responder.
+        http.Items[MarcaDeDenegada] = true;
+        return Results.Json(
             new
             {
                 code = "Generic.NotFound",
@@ -171,4 +174,11 @@ public sealed class PermissionAuthorizationFilter : IEndpointFilter
                 traceId = http.TraceIdentifier
             },
             statusCode: StatusCodes.Status404NotFound);
+    }
+
+    /// <summary>La clave de <c>HttpContext.Items</c> con la que <see cref="NotFoundEnvelope"/> marca un 404 por falta de permiso.</summary>
+    internal const string MarcaDeDenegada = "__permiso_denegado";
+
+    /// <summary>Si la petición terminó en el 404 por falta de permiso (de este filtro o de los que reusan su respuesta).</summary>
+    internal static bool FueDenegada(HttpContext http) => http.Items.TryGetValue(MarcaDeDenegada, out var marca) && marca is true;
 }

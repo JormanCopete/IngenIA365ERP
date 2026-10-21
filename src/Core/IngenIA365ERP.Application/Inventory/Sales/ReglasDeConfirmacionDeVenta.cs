@@ -136,7 +136,14 @@ public sealed class ReglasDeConfirmacionDeVenta(
         if (aprobacionDeCredito is null || EsFacturaEnLugarDelDocumentoEquivalente(contexto.Documento))
             return Result.Success<Domain.Entities.Approvals.ApprovalRequest?>(null);
         var pagos = await PagosAsync(contexto.Documento, PaymentDirection.Received, ct);
-        return await aprobacionDeCredito.SolicitarAsync(contexto.Documento, pagos, ct);
+        var pedida = await aprobacionDeCredito.SolicitarAsync(contexto.Documento, pagos, ct);
+        // Feature 013 (T0176, T22): si la venta queda en aprobación, el número de Cartera se reserva igual, dentro de esta unidad de trabajo.
+        if (pedida.IsSuccess && pedida.Value is not null && credito is not null)
+        {
+            var reservada = await credito.ReservarAsync(contexto.Documento, pagos, ct);
+            if (reservada.IsFailure) return Result.Failure<Domain.Entities.Approvals.ApprovalRequest?>(reservada.Error);
+        }
+        return pedida;
     }
 
     /// <summary>Dentro del cerrojo: la foto de impuestos, los bonos, el toque de las sesiones y el vencimiento.</summary>
@@ -173,8 +180,15 @@ public sealed class ReglasDeConfirmacionDeVenta(
         var tocadas = await TocarSesionesAsync(pagos, ct);
         if (tocadas.IsFailure) return tocadas;
 
-        var credito = pagos.Where(p => ClasesDeMedio.EsCredito(p.MeansClass) && p.FinalDueDate is not null).Select(p => p.FinalDueDate!.Value).ToList();
-        if (credito.Count > 0 && documento.DueDate is null) documento.DueDate = credito.Max();
+        // Feature 013 (T0176, C24): el número de Cartera de cada crédito validado, dentro del cerrojo de Inventario y antes de numerar.
+        if (credito is not null)
+        {
+            var reservada = await credito.ReservarAsync(documento, pagos, ct);
+            if (reservada.IsFailure) return reservada;
+        }
+
+        var vencimientosDeCredito = pagos.Where(p => ClasesDeMedio.EsCredito(p.MeansClass) && p.FinalDueDate is not null).Select(p => p.FinalDueDate!.Value).ToList();
+        if (vencimientosDeCredito.Count > 0 && documento.DueDate is null) documento.DueDate = vencimientosDeCredito.Max();
         return Result.Success();
     }
 

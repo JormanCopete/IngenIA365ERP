@@ -1,0 +1,317 @@
+@page "/cartera/embargos"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Globalization
+@using IngenIA365ERP.Shared.Services.Adjuntos
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Http
+@inject CaptacionesClient Cliente
+@inject AdjuntosClient Adjuntos
+@inject PermisosDelUsuario Permisos
+@inject INotificationService Notification
+
+<PageTitle>Embargos - IngenIA365ERP</PageTitle>
+
+@* Feature 014, US11 (T192; FR-054, FR-055, FR-057; contracts/api.md §8; research §20): los embargos de las personas del alcance —registrar el oficio con su
+   soporte, ver lo retenido por cuenta con la explicación del límite inembargable, responder al juzgado con la plantilla de la cooperativa, consignar por
+   orden de giro y levantar (otra persona: quien registra no levanta)—. Los aportes no se embargan: el oficio que los nombra deja su respuesta. Los plazos
+   de respuesta son informativos. *@
+<PermissionGate Required="Lending.Accounts.Read" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Embargos</h3>
+        <div class="toolbar">
+            <PermissionGate Required="Lending.Garnishments.Register">
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@AbrirRegistro">Registrar embargo</SfButton>
+            </PermissionGate>
+        </div>
+    </div>
+
+    @if (_registrando)
+    {
+        <div class="info-card">
+            <h4>Registrar el oficio</h4>
+            <IndicadorDeCarga Cargando="@_cargaRegistro.Activa">
+                <div class="form-grid">
+                    <label class="campo">Persona embargada
+                        <PersonSearchPicker Selected="@_embargado" SelectedChanged="@CambiarEmbargadoAsync" ShowHelpText="false" Compacto="true" />
+                    </label>
+                    <label class="campo">Juzgado o entidad (persona del maestro)
+                        <PersonSearchPicker Selected="@_juzgado" SelectedChanged="@(p => { _juzgado = p; })" ShowHelpText="false" Compacto="true" />
+                    </label>
+                    <label class="campo">Autoridad
+                        <select class="e-input" @bind="_pedido.Authority">
+                            @foreach (var a in TextosDeEmbargos.Autoridades) { <option value="@a.Valor">@a.Texto</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Radicado del proceso <input class="e-input" maxlength="40" @bind="_pedido.ProcessNumber" /></label>
+                    <label class="campo">Número del oficio <input class="e-input" maxlength="40" @bind="_pedido.OfficeReference" /></label>
+                    <label class="campo">Fecha del oficio <input type="date" class="e-input" @bind="_fechaDelOficio" /></label>
+                    <label class="campo">Recibido <input type="date" class="e-input" @bind="_recibido" /></label>
+                    <label class="campo">Demandante <input class="e-input" maxlength="200" @bind="_pedido.ClaimantName" /></label>
+                    <label class="campo">Valor de la medida (vacío = sin límite) <input type="number" class="e-input" min="0" step="1" @bind="_pedido.Amount" /></label>
+                    <label class="campo">Cuenta de depósitos judiciales <input class="e-input" maxlength="25" @bind="_pedido.DestinationAccountNumber" /></label>
+                    <label class="campo-check"><input type="checkbox" @bind="_pedido.IsAlimony" /> Por alimentos (no aplica el límite inembargable)</label>
+                    <label class="campo-check"><input type="checkbox" @bind="_pedido.IncludesContributions" /> El oficio nombra también los aportes</label>
+                </div>
+                @if (_embargado is not null)
+                {
+                    <p class="texto-tenue">El oficio firmado se sube como soporte de la persona embargada y se elige abajo.</p>
+                    <SubirSoporte OwnerEntityType="@DuenoDeSoportes" OwnerEntityPublicId="@_embargado.PublicId" Rotulo="Subir el oficio" OnSubido="@CargarSoportesAsync" />
+                    <label class="campo">Oficio
+                        <select class="e-input" @bind="_soporte">
+                            <option value="">Elija el soporte</option>
+                            @foreach (var s in _soportes.Where(s => s.Disponible)) { <option value="@s.PublicId">@s.FileName (@s.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm"))</option> }
+                        </select>
+                    </label>
+                }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@_cargaRegistro.Activa" OnClick="@RegistrarAsync">Registrar</SfButton>
+                    <SfButton CssClass="e-flat" OnClick="@(() => _registrando = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </div>
+    }
+
+    <div class="toolbar">
+        <label class="campo">Persona <PersonSearchPicker Selected="@_filtroPersona" SelectedChanged="@CambiarFiltroAsync" ShowHelpText="false" Compacto="true" /></label>
+        <select class="e-input" value="@(_estado?.ToString() ?? "")" @onchange="@(e => CambiarEstadoAsync(e.Value))">
+            <option value="">Todos los estados</option>
+            @foreach (var e in TextosDeEmbargos.Estados) { <option value="@e.Valor">@e.Texto</option> }
+        </select>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        <div class="tabla-desplazable">
+            <table class="data-grid">
+                <thead><tr><th>Recibido</th><th>Embargado</th><th>Autoridad</th><th>Oficio</th><th class="numero">Medida</th><th class="numero">Retenido</th><th class="numero">Consignado</th><th>Estado</th><th>Responder antes de</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var g in _embargos)
+                    {
+                        var embargo = g;
+                        <tr>
+                            <td>@embargo.ReceivedOn.ToString("dd/MM/yyyy")</td>
+                            <td>@embargo.Person.FullName<br /><span class="texto-tenue">@embargo.Person.DocumentNumber</span></td>
+                            <td>@embargo.CourtName<br /><span class="texto-tenue">@TextosDeEmbargos.Autoridad(embargo.Authority)</span></td>
+                            <td>@embargo.OfficeReference@(embargo.IsAlimony ? " · alimentos" : "")</td>
+                            <td class="numero">@(embargo.Amount is { } m ? Pesos(m) : "sin límite")</td>
+                            <td class="numero">@Pesos(embargo.RetainedTotal)</td>
+                            <td class="numero">@Pesos(embargo.Consigned)</td>
+                            <td>@TextosDeEmbargos.Estado(embargo.Status)</td>
+                            <td>@(embargo.ResponseDueOn?.ToString("dd/MM/yyyy") ?? "—")@(embargo.ResponseOverdue ? " · vencido" : "")</td>
+                            <td><SfButton CssClass="e-flat e-small" OnClick="@(() => VerAsync(embargo.PublicId))">Ver</SfButton></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (_embargos.Count == 0)
+        {
+            <p class="texto-tenue">No hay embargos en su alcance con esos filtros.</p>
+        }
+    </IndicadorDeCarga>
+
+    @if (_detalle is not null)
+    {
+        var d = _detalle;
+        <div class="info-card">
+            <h4>Embargo @d.OfficeReference · @d.Person.FullName</h4>
+            <IndicadorDeCarga Cargando="@_cargaDetalle.Activa">
+                <p>@d.CourtName (@TextosDeEmbargos.Autoridad(d.Authority)) · proceso @d.ProcessNumber · demandante @d.ClaimantName · @TextosDeEmbargos.Estado(d.Status)</p>
+                <p>Medida: @(d.Amount is { } m ? Pesos(m) : "sin límite") · límite inembargable que rigió: @(d.UnembargableLimit is { } l ? Pesos(l) : "no aplica") · retenido @Pesos(d.RetainedTotal) · consignado @Pesos(d.Consigned)</p>
+                @foreach (var aviso in d.Warnings) { <p class="aviso aviso-info">@aviso</p> }
+                <table class="data-grid">
+                    <thead><tr><th>Orden</th><th>Cuenta</th><th>Clase</th><th class="numero">Saldo</th><th class="numero">Protegido</th><th class="numero">Embargable</th><th class="numero">Retenido</th></tr></thead>
+                    <tbody>
+                        @foreach (var r in d.Retained)
+                        {
+                            <tr><td>@r.Order</td><td>@r.Number</td><td>@(r.DepositClass ?? "—")</td><td class="numero">@Pesos(r.Balance)</td><td class="numero">@Pesos(r.Protected)</td><td class="numero">@Pesos(r.Garnishable)</td><td class="numero">@Pesos(r.Retained)</td></tr>
+                        }
+                    </tbody>
+                </table>
+                @if (d.Explanation.Count > 0)
+                {
+                    <ul>@foreach (var e in d.Explanation) { <li>@e</li> }</ul>
+                }
+
+                <h5>Respuestas al juzgado</h5>
+                <table class="data-grid">
+                    <thead><tr><th>Enviada</th><th>Clase</th><th class="numero">Retenido</th><th class="numero">Consignado</th></tr></thead>
+                    <tbody>
+                        @foreach (var r in d.Responses)
+                        {
+                            <tr><td>@r.SentOn.ToString("dd/MM/yyyy")</td><td>@TextosDeEmbargos.Respuesta(r.Kind)</td><td class="numero">@(r.RetainedAmount is { } x ? Pesos(x) : "—")</td><td class="numero">@(r.ConsignedAmount is { } y ? Pesos(y) : "—")</td></tr>
+                        }
+                    </tbody>
+                </table>
+
+                <PermissionGate Required="Lending.Garnishments.Register">
+                    <div class="toolbar">
+                        <select class="e-input" @bind="_claseDeRespuesta">
+                            @foreach (var r in TextosDeEmbargos.Respuestas) { <option value="@r.Valor">@r.Texto</option> }
+                        </select>
+                        <SfButton CssClass="e-outline" OnClick="@BorradorAsync">Ver borrador</SfButton>
+                    </div>
+                    @if (_borrador is not null)
+                    {
+                        <textarea class="e-input" rows="5" maxlength="4000" @bind="_borrador"></textarea>
+                        <div class="toolbar">
+                            <label class="campo">Enviada <input type="date" class="e-input" @bind="_enviada" /></label>
+                            <SfButton CssClass="e-primary" OnClick="@ResponderAsync">Registrar la respuesta enviada</SfButton>
+                        </div>
+                    }
+                    @if (d.Status == 2)
+                    {
+                        <div class="toolbar">
+                            <label class="campo">Consignar <input type="number" class="e-input" min="0" step="1" @bind="_aConsignar" /></label>
+                            <label class="campo">Motivo <input class="e-input" maxlength="300" @bind="_motivoConsignacion" /></label>
+                            <SfButton CssClass="e-primary" OnClick="@ConsignarAsync">Consignar al juzgado</SfButton>
+                        </div>
+                    }
+                </PermissionGate>
+                @if (d.Status == 2)
+                {
+                    <PermissionGate Required="Lending.Garnishments.Release">
+                        <div class="toolbar">
+                            <label class="campo">Oficio del desembargo <input class="e-input" maxlength="40" @bind="_oficioDeDesembargo" /></label>
+                            <label class="campo">Valor (parcial; vacío = todo) <input type="number" class="e-input" min="0" step="1" @bind="_valorDesembargo" /></label>
+                            <label class="campo">Motivo <input class="e-input" maxlength="300" @bind="_motivoDesembargo" /></label>
+                            <SfButton CssClass="e-outline" OnClick="@LevantarAsync">Levantar</SfButton>
+                        </div>
+                    </PermissionGate>
+                }
+            </IndicadorDeCarga>
+        </div>
+    }
+</div>
+</PermissionGate>
+
+@code {
+    /// <summary>El dueño de los soportes de embargos (la persona embargada).</summary>
+    public const string DuenoDeSoportes = "LendingGarnishmentSupport";
+
+    private static readonly CultureInfo Es = CultureInfo.GetCultureInfo("es-CO");
+    private readonly EstadoDeCarga _carga = new(), _cargaRegistro = new(), _cargaDetalle = new();
+    private List<EmbargoDto> _embargos = [];
+    private EmbargoDto? _detalle;
+    private int? _estado;
+    private PersonSearchPicker.PersonSearchItem? _filtroPersona, _embargado, _juzgado;
+    private bool _registrando;
+    private RegistrarEmbargoRequest _pedido = new();
+    private DateOnly _fechaDelOficio = DateOnly.FromDateTime(DateTime.Today), _recibido = DateOnly.FromDateTime(DateTime.Today), _enviada = DateOnly.FromDateTime(DateTime.Today);
+    private List<AdjuntoDto> _soportes = [];
+    private Guid? _soporte;
+    private ClaveDeOperacion _clave = new();
+    private int _claseDeRespuesta = 2;
+    private string? _borrador, _motivoConsignacion, _oficioDeDesembargo, _motivoDesembargo;
+    private decimal? _aConsignar, _valorDesembargo;
+
+    protected override Task OnInitializedAsync() => CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Cliente.EmbargosAsync(_filtroPersona?.PublicId, _estado, 1, 50);
+        if (!r.IsSuccess || r.Value is null) { _embargos = []; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer los embargos."); return; }
+        _embargos = [.. r.Value.Items];
+    }
+
+    private async Task CambiarFiltroAsync(PersonSearchPicker.PersonSearchItem? p) { _filtroPersona = p; await CargarAsync(); }
+
+    private async Task CambiarEstadoAsync(object? valor) { _estado = int.TryParse(valor?.ToString(), out var n) ? n : null; await CargarAsync(); }
+
+    private void AbrirRegistro() { _registrando = true; _pedido = new(); _clave = new(); _embargado = null; _juzgado = null; _soporte = null; _soportes = []; }
+
+    private async Task CambiarEmbargadoAsync(PersonSearchPicker.PersonSearchItem? p) { _embargado = p; _soporte = null; await CargarSoportesAsync(); }
+
+    private async Task CargarSoportesAsync()
+    {
+        if (_embargado is null) { _soportes = []; return; }
+        var r = await Adjuntos.ListarAsync(DuenoDeSoportes, _embargado.PublicId);
+        _soportes = r.Value ?? [];
+    }
+
+    private async Task RegistrarAsync()
+    {
+        if (_embargado is null || _juzgado is null || _soporte is null)
+        {
+            await Notification.ErrorAsync("Elija la persona embargada, el juzgado y el oficio subido.");
+            return;
+        }
+        using var carga = _cargaRegistro.Iniciar();
+        _pedido.PersonPublicId = _embargado.PublicId;
+        _pedido.CourtPersonPublicId = _juzgado.PublicId;
+        _pedido.OfficeDate = _fechaDelOficio;
+        _pedido.ReceivedOn = _recibido;
+        _pedido.SupportAttachmentPublicId = _soporte.Value;
+        var r = await Cliente.RegistrarEmbargoAsync(_pedido, _clave);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo registrar el embargo."); return; }
+        foreach (var aviso in r.Value.Warnings) await Notification.InfoAsync(aviso);
+        await Notification.SuccessAsync($"Embargo registrado: retiene {Pesos(r.Value.RetainedTotal)}.");
+        _registrando = false;
+        _detalle = r.Value;
+        await CargarAsync();
+    }
+
+    private async Task VerAsync(Guid embargo)
+    {
+        using var carga = _cargaDetalle.Iniciar();
+        _borrador = null;
+        _clave = new();
+        var r = await Cliente.EmbargoAsync(embargo);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo leer el embargo."); return; }
+        _detalle = r.Value;
+    }
+
+    private async Task BorradorAsync()
+    {
+        if (_detalle is null) return;
+        using var carga = _cargaDetalle.Iniciar();
+        var r = await Cliente.BorradorDeRespuestaAsync(_detalle.PublicId, _claseDeRespuesta);
+        _borrador = r.Value?.Text;
+        if (!r.IsSuccess) await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo armar el borrador.");
+    }
+
+    private async Task ResponderAsync()
+    {
+        if (_detalle is null) return;
+        using var carga = _cargaDetalle.Iniciar();
+        var r = await Cliente.RegistrarRespuestaAsync(_detalle.PublicId, new RespuestaAlJuzgadoRequest(_claseDeRespuesta, null, _enviada, _borrador), _clave);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo registrar la respuesta."); return; }
+        _borrador = null;
+        await VerAsync(_detalle.PublicId);
+    }
+
+    private async Task ConsignarAsync()
+    {
+        if (_detalle is null || _aConsignar is not > 0m || string.IsNullOrWhiteSpace(_motivoConsignacion))
+        {
+            await Notification.ErrorAsync("Indique el valor a consignar y el motivo.");
+            return;
+        }
+        using var carga = _cargaDetalle.Iniciar();
+        var r = await Cliente.ConsignarEmbargoAsync(_detalle.PublicId, new ConsignarEmbargoRequest(_aConsignar.Value, null, _motivoConsignacion), _clave);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo consignar."); return; }
+        await Notification.SuccessAsync($"Consignación por orden de giro: {string.Join(", ", r.Value.Lines.Select(l => $"{l.OrderNumber} ({Pesos(l.Amount)})"))}.");
+        _detalle = r.Value.Garnishment;
+        _clave = new();
+        await CargarAsync();
+    }
+
+    private async Task LevantarAsync()
+    {
+        if (_detalle is null || string.IsNullOrWhiteSpace(_oficioDeDesembargo) || string.IsNullOrWhiteSpace(_motivoDesembargo))
+        {
+            await Notification.ErrorAsync("Indique el oficio del desembargo y el motivo.");
+            return;
+        }
+        using var carga = _cargaDetalle.Iniciar();
+        var r = await Cliente.LevantarEmbargoAsync(_detalle.PublicId,
+            new LevantarEmbargoRequest(_oficioDeDesembargo, DateOnly.FromDateTime(DateTime.Today), null, _valorDesembargo, _motivoDesembargo), _clave);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo levantar el embargo."); return; }
+        _detalle = r.Value;
+        _clave = new();
+        await CargarAsync();
+    }
+
+    private static string Pesos(decimal valor) => "$ " + valor.ToString("N0", Es);
+}

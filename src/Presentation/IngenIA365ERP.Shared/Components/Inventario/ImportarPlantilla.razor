@@ -169,6 +169,12 @@
     /// <summary>La pantalla ya tiene sus propios botones de descarga.</summary>
     [Parameter] public bool MostrarDescargas { get; set; } = true;
 
+    /// <summary>
+    /// Feature 013 (US8, T0759): lo que la ruta de importación pide además del modo, sin «?» (<c>replace=true</c> al reemplazar una parte de la carga
+    /// de migración de Cartera). Nulo en las demás plantillas.
+    /// </summary>
+    [Parameter] public string? QueryAdicional { get; set; }
+
     /// <summary>Se aplicó el archivo: la pantalla vuelve a cargar su lista.</summary>
     [Parameter] public EventCallback<ResultadoDeImportacionDto> Aplicado { get; set; }
 
@@ -226,7 +232,7 @@
     {
         if (_contenido is null || _archivo is null) return;
         using var carga = _revisando.Iniciar();
-        var r = await Inventario.RevisarPlantillaAsync(RutaBase, _archivo, _contenido, _motivo, _claveDeRevision);
+        var r = await Inventario.RevisarPlantillaAsync(RutaBase, _archivo, _contenido, _motivo, _claveDeRevision, queryAdicional: QueryAdicional);
         if (!r.IsSuccess)
         {
             _revision = r.ComoImportacion();
@@ -242,7 +248,7 @@
         if (_contenido is null || _archivo is null) return;
         using var carga = _revisando.Iniciar();
         // Es otra revisión (otro formato de respuesta): su propia clave.
-        var r = await Inventario.RevisionEnExcelAsync(RutaBase, _archivo, _contenido, _motivo, new ClaveDeOperacion());
+        var r = await Inventario.RevisionEnExcelAsync(RutaBase, _archivo, _contenido, _motivo, new ClaveDeOperacion(), queryAdicional: QueryAdicional);
         if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo generar la revisión en Excel."); return; }
         await Descargas.GuardarAsync(r.Value!.Nombre, r.Value.TipoContenido, r.Value.Contenido);
     }
@@ -251,7 +257,7 @@
     {
         if (!PuedeAplicar) return;
         using var carga = _aplicando.Iniciar();
-        var r = await Inventario.AplicarPlantillaAsync(RutaBase, _archivo!, _contenido!, _motivo, _claveDeAplicacion);
+        var r = await Inventario.AplicarPlantillaAsync(RutaBase, _archivo!, _contenido!, _motivo, _claveDeAplicacion, queryAdicional: QueryAdicional);
         if (!r.IsSuccess)
         {
             if (r.ComoImportacion() is { } revision) _revision = revision;

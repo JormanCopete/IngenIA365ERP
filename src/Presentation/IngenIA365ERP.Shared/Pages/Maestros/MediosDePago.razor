@@ -224,6 +224,7 @@
                         <label class="campo">Cuotas máximas <input class="e-input numero" type="number" min="1" @bind="_credito.MaxInstallments" /></label>
                         <label class="campo">Periodicidad (días) <input class="e-input numero" type="number" min="1" @bind="_credito.PeriodicityDays" /></label>
                         <label class="campo">Línea sugerida <input class="e-input" @bind="_credito.SuggestedLineCode" maxlength="20" /></label>
+                        <label class="campo-check"><input type="checkbox" @bind="_m.CreditWithoutLending" /> Crédito sin Cartera (lo lleva Contabilidad)</label>
                     </div>
                     <p class="texto-tenue">Hasta que Cartera responda en línea, el crédito es provisional: el POS lo acepta con los montos de quien vende y queda por validar.</p>
                 }
@@ -516,6 +517,7 @@
             ToleranceAmount = m.ToleranceAmount, ExpectedCommissionRate = m.ExpectedCommissionRate, ExpectedCommissionFixed = m.ExpectedCommissionFixed,
             DianPaymentMeansCode = m.DianPaymentMeansCode, OfferedAtAllPoints = m.OfferedAtAllPoints, OfferedOnAllChannels = m.OfferedOnAllChannels,
             OfferedForAllDocumentTypes = m.OfferedForAllDocumentTypes, IsActive = m.IsActive, ValidFrom = m.ValidFrom, ValidTo = m.ValidTo, Notes = m.Notes,
+            CreditWithoutLending = m.CreditWithoutLending,
         };
         var c = m.CreditDefaults;
         _credito = new CreditoForm
@@ -544,7 +546,11 @@
             _m.CreditDefaults = new CreditoPorDefectoRequest(_credito.TermDays.Value, _credito.MaxInstallments.Value, _credito.PeriodicityDays.Value,
                 string.IsNullOrWhiteSpace(_credito.SuggestedLineCode) ? null : _credito.SuggestedLineCode.Trim(), _credito.MaxTermDays, _credito.DefaultInstallments);
         }
-        else _m.CreditDefaults = null;
+        else
+        {
+            _m.CreditDefaults = null;
+            _m.CreditWithoutLending = false;
+        }
         if (!EsTarjeta) { _m.CardNetworkPublicId = null; _m.CardAcquirerPublicId = null; }
 
         using var guardado = _guardado.Iniciar();

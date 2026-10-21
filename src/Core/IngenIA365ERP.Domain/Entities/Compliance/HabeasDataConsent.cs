@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using IngenIA365ERP.Domain.Common;
+using IngenIA365ERP.Domain.Enums.Compliance;
 
 namespace IngenIA365ERP.Domain.Entities.Compliance;
 
@@ -47,6 +48,21 @@ public class HabeasDataConsent : AuditableEntity
     /// <summary>Notas libres (motivo de revocación, referencia documental, etc.).</summary>
     [MaxLength(2000)]
     public string? Notes { get; set; }
+
+    /// <summary>
+    /// Feature 013 (T69 a, S10; data-model parte 3 §4.10): la finalidad que se autoriza, como texto. Las filas anteriores a la 013
+    /// quedan en <see cref="DataAuthorizationPurpose.GeneralTreatment"/> (<c>DEFAULT</c> de la columna).
+    /// </summary>
+    public DataAuthorizationPurpose Purpose { get; set; } = DataAuthorizationPurpose.GeneralTreatment;
+
+    /// <summary>Feature 013: el canal autorizado o revocado; obligatorio con <see cref="DataAuthorizationPurpose.ContactChannel"/>.</summary>
+    public DataAuthorizationChannel? ContactChannel { get; set; }
+
+    /// <summary>Feature 013 (T81): el adjunto de dueño <c>DataAuthorization</c>; nulo en una autorización migrada sin evidencia.</summary>
+    public Guid? EvidenceAttachmentPublicId { get; set; }
+
+    /// <summary>Feature 013: de dónde salió la autorización; las filas anteriores quedan en <c>PersonRegistration</c>.</summary>
+    public DataAuthorizationOrigin Origin { get; set; } = DataAuthorizationOrigin.PersonRegistration;
 
     // Navigation
     public HabeasDataPolicyVersion? PolicyVersion { get; set; }

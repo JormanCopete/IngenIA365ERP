@@ -1,0 +1,605 @@
+@using System.Globalization
+@using IngenIA365ERP.Shared.Services.Adjuntos
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Inventario
+@inject CaptacionesClient Cliente
+@inject AdjuntosClient Adjuntos
+@inject INotificationService Notification
+
+@* Feature 014, US4 (T124; FR-050 a FR-058, FR-090, FR-128, FR-129; contracts/api.md §4, §9 y §10): los movimientos de una cuenta en su ficha.
+   Las operaciones (con su comprobante, el libro de sólo lectura y el reverso, que nunca deja un sobregiro: lo de un recaudador lo reversa él), el retiro
+   por orden de giro y el traslado con su simulación previa (firmas, disponible con el GMF, cargos y atribución; sobre la atribución queda en espera de un
+   aprobador presente), los cargos causados (registrar uno por evento, condonar, reversar) con el estado de su factura, el débito automático (autorizar
+   con el soporte firmado, revocar) y el uso del tope exento del GMF del titular. El efectivo entra y sale por Recaudo, no por esta pantalla. *@
+<div class="info-card">
+    <h4>Operaciones</h4>
+    <IndicadorDeCarga Cargando="@_cargaOperaciones.Activa">
+        @if (_operaciones.Count == 0)
+        {
+            <p class="texto-tenue">La cuenta no tiene operaciones.</p>
+        }
+        else
+        {
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Número</th><th>Clase</th><th>Fecha valor</th><th class="numero">Valor</th><th>Recaudador</th><th>Estado</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var o in _operaciones)
+                        {
+                            <tr>
+                                <td>@o.Number</td>
+                                <td>@TextosDeCaptaciones.ClaseDeOperacion(o.Kind)</td>
+                                <td>@o.ValueDate.ToString("dd/MM/yyyy")</td>
+                                <td class="numero">@Pesos(o.Amount)</td>
+                                <td>@(o.Collector?.Code ?? (o.Origin == "Process" ? "Proceso" : "Cartera"))</td>
+                                <td>@Estado(o)</td>
+                                <td>
+                                    <SfButton CssClass="e-flat" OnClick="@(() => VerComprobanteAsync(o))">Comprobante</SfButton>
+                                    @if (o.ReversedBy is null && o.Reverses is null && o.Kind != Reverso)
+                                    {
+                                        <PermissionGate Required="Lending.Accounts.Reverse">
+                                            <SfButton CssClass="e-flat" OnClick="@(() => AbrirReverso(o))">Reversar</SfButton>
+                                        </PermissionGate>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        <div class="toolbar">
+            <SfButton CssClass="e-flat" Disabled="@(_pagina <= 1)" OnClick="@(() => PaginarAsync(-1))">Anteriores</SfButton>
+            <SfButton CssClass="e-flat" Disabled="@(_pagina * Tamano >= _total)" OnClick="@(() => PaginarAsync(1))">Siguientes</SfButton>
+            <SfButton CssClass="e-flat" OnClick="@VerLibroAsync">@(_libro is null ? "Ver el libro" : "Ocultar el libro")</SfButton>
+            @if (EsCaptacion && Cuenta.Status != TextosDeCaptaciones.Cancelada)
+            {
+                <PermissionGate Required="Lending.Accounts.Withdraw">
+                    <SfButton CssClass="e-outline" OnClick="@(() => AbrirMovimiento(Retiro))">Retiro por orden de giro</SfButton>
+                </PermissionGate>
+                <PermissionGate Required="Lending.Accounts.Transfer">
+                    <SfButton CssClass="e-outline" OnClick="@(() => AbrirMovimiento(Traslado))">Trasladar a otra cuenta</SfButton>
+                </PermissionGate>
+            }
+        </div>
+    </IndicadorDeCarga>
+    @if (_libro is { } libro)
+    {
+        <IndicadorDeCarga Cargando="@_cargaLibro.Activa">
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Fecha valor</th><th>Fecha contable</th><th>Clase</th><th>Concepto</th><th class="numero">Valor</th><th>Del titular</th></tr></thead>
+                    <tbody>
+                        @foreach (var f in libro)
+                        {
+                            <tr>
+                                <td>@f.ValueDate.ToString("dd/MM/yyyy")</td>
+                                <td>@f.AccountingDate.ToString("dd/MM/yyyy")</td>
+                                <td>@TextosDeCaptaciones.ClaseDeFila(f.Kind)</td>
+                                <td>@TextosDeCaptaciones.Concepto(f.Concept)</td>
+                                <td class="numero">@Pesos(f.Amount)</td>
+                                <td>@(f.CountsAsHolderActivity ? "Sí" : "No")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <p class="texto-tenue">Signo del libro: positivo, la cooperativa le debe más al titular. El GMF y la retención van en pareja con el capital.</p>
+        </IndicadorDeCarga>
+    }
+    @if (_usoDeGmf is { } uso && EsCaptacion)
+    {
+        <p class="texto-tenue">
+            GMF del titular este mes: exento usado @Pesos(uso.UsedExempt) de @Pesos(uso.CapAmount) (@uso.CapUvt.ToString("0.##", Es) UVT) · queda @Pesos(uso.Remaining)
+            · gravado @Pesos(uso.Taxed) · cobrado @Pesos(uso.GmfCharged)
+        </p>
+    }
+</div>
+
+@if (EsCaptacion)
+{
+    <div class="info-card">
+        <h4>Cargos</h4>
+        <IndicadorDeCarga Cargando="@_cargaCargos.Activa">
+            @if (_cargos.Count == 0)
+            {
+                <p class="texto-tenue">Sin cargos causados.</p>
+            }
+            else
+            {
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th>Cargo</th><th>Causado</th><th>Período</th><th class="numero">Valor</th><th>IVA</th><th>Estado</th><th>Factura</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var g in _cargos)
+                            {
+                                <tr>
+                                    <td>@g.Code</td>
+                                    <td>@g.CausedAt.ToLocalTime().ToString("dd/MM/yyyy")</td>
+                                    <td>@(g.PeriodFrom is { } d ? $"{d:dd/MM} – {g.PeriodTo:dd/MM/yyyy}" : "—")</td>
+                                    <td class="numero">@Pesos(g.Amount)</td>
+                                    <td>@(g.Vat ? "Gravado" : "—")</td>
+                                    <td>@TextosDeCaptaciones.EstadoDeCargo(g.Status)</td>
+                                    <td>@(g.Invoice is { } fac ? $"{fac.Number ?? "en trámite"} {fac.Status}" : "—")</td>
+                                    <td>
+                                        @if (g.Status is TextosDeCaptaciones.CargoCobrado or TextosDeCaptaciones.CargoPendiente)
+                                        {
+                                            <PermissionGate Required="Lending.Charges.Waive">
+                                                <SfButton CssClass="e-flat" OnClick="@(() => AbrirAccionDeCargo(g, Condonar))">Condonar</SfButton>
+                                            </PermissionGate>
+                                            <PermissionGate Required="Lending.Charges.Manage">
+                                                <SfButton CssClass="e-flat" OnClick="@(() => AbrirAccionDeCargo(g, ReversarCargo))">Reversar</SfButton>
+                                            </PermissionGate>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+            <PermissionGate Required="Lending.Charges.Manage">
+                <div class="form-grid">
+                    <label class="campo">Código del cargo <input class="e-input" maxlength="10" @bind="_nuevoCargo" /></label>
+                    <label class="campo">Referencia del evento <input class="e-input" maxlength="100" @bind="_referenciaDelCargo" /></label>
+                    <label class="campo campo-ancho">Motivo <input class="e-input" maxlength="500" @bind="_motivoDelCargo" /></label>
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-outline" Disabled="@(_accionDeCargo.Activa || string.IsNullOrWhiteSpace(_nuevoCargo) || string.IsNullOrWhiteSpace(_motivoDelCargo))"
+                              OnClick="@RegistrarCargoAsync">Causar el cargo</SfButton>
+                </div>
+            </PermissionGate>
+            @foreach (var e in _erroresDeCargo) { <p class="aviso aviso-error" role="alert">@e</p> }
+        </IndicadorDeCarga>
+    </div>
+
+    @if (Cuenta.DepositClass is TextosDeCaptaciones.ALaVista or TextosDeCaptaciones.Contractual)
+    {
+        <div class="info-card">
+            <h4>Débito automático</h4>
+            <IndicadorDeCarga Cargando="@_cargaDebitos.Activa">
+                @if (_debitos.Count == 0)
+                {
+                    <p class="texto-tenue">La cuenta no tiene autorizaciones de débito automático.</p>
+                }
+                else
+                {
+                    <div class="tabla-desplazable">
+                        <table class="data-grid">
+                            <thead><tr><th>Alcance</th><th>Crédito</th><th>Parcial</th><th>Desde</th><th>Hasta</th><th>Estado</th><th>Últimos débitos</th><th></th></tr></thead>
+                            <tbody>
+                                @foreach (var m in _debitos)
+                                {
+                                    <tr>
+                                        <td>@TextosDeCaptaciones.AlcanceDeDebito(m.Scope)</td>
+                                        <td>@(m.LoanNumber ?? "—")</td>
+                                        <td>@(m.AllowsPartial ? "Sí" : "No")</td>
+                                        <td>@m.ValidFrom.ToString("dd/MM/yyyy")</td>
+                                        <td>@(m.ValidTo?.ToString("dd/MM/yyyy") ?? "—")</td>
+                                        <td>@m.Status</td>
+                                        <td>@string.Join(" · ", m.LastDebits.Select(d => $"{d.ValueDate:dd/MM} {Pesos(d.Amount)}{(d.Reversed ? " (reversado)" : "")}"))</td>
+                                        <td>
+                                            @if (m.ValidTo is null && m.Status != "Revoked")
+                                            {
+                                                <PermissionGate Required="Lending.DirectDebits.Manage">
+                                                    <SfButton CssClass="e-flat" Disabled="@(_accionDeDebito.Activa || string.IsNullOrWhiteSpace(_motivoDelDebito))"
+                                                              OnClick="@(() => RevocarAsync(m))">Revocar</SfButton>
+                                                </PermissionGate>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                <PermissionGate Required="Lending.DirectDebits.Manage">
+                    <SubirSoporte OwnerEntityType="@CaptacionesClient.DuenoDeSoportesDeTitularidad" OwnerEntityPublicId="@Cuenta.Holder.PersonPublicId"
+                                  Rotulo="Subir la autorización firmada" Ayuda="La autorización del titular para debitar las cuotas de sus créditos" OnSubido="@CargarSoportesAsync" />
+                    <div class="form-grid">
+                        <label class="campo">Alcance
+                            <select class="e-input" @bind="_alcanceDelDebito">
+                                @foreach (var (valor, texto) in TextosDeCaptaciones.AlcancesDeDebito) { <option value="@valor">@texto</option> }
+                            </select>
+                        </label>
+                        @if (_alcanceDelDebito == "SingleLoan")
+                        {
+                            <label class="campo">Crédito (identificador)
+                                <input class="e-input" @bind="_creditoDelDebito" placeholder="00000000-0000-0000-0000-000000000000" />
+                            </label>
+                        }
+                        <label class="campo-check"><input type="checkbox" @bind="_debitoParcial" /> Debitar lo que alcance si no cubre la cuota</label>
+                        <label class="campo">Autorización firmada
+                            <select class="e-input" @bind="_soporteDelDebito">
+                                <option value="">Elija el soporte</option>
+                                @foreach (var a in _soportes) { <option value="@a.PublicId">@a.FileName</option> }
+                            </select>
+                        </label>
+                        <label class="campo campo-ancho">Motivo de la revocación <input class="e-input" maxlength="500" @bind="_motivoDelDebito" /></label>
+                    </div>
+                    <div class="toolbar">
+                        <SfButton CssClass="e-outline" Disabled="@(_accionDeDebito.Activa || _soporteDelDebito is null)" OnClick="@AutorizarAsync">Autorizar el débito</SfButton>
+                    </div>
+                </PermissionGate>
+                @foreach (var e in _erroresDeDebito) { <p class="aviso aviso-error" role="alert">@e</p> }
+            </IndicadorDeCarga>
+        </div>
+    }
+}
+
+<SfDialog @bind-Visible="_mostrarMovimiento" Header="@(_movimiento == Retiro ? "Retiro por orden de giro" : "Traslado a otra cuenta")" Width="720px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Aplicando…">
+                <div class="form-grid">
+                    <label class="campo">Valor <input class="e-input" type="number" min="0" step="0.01" @bind="_valor" /></label>
+                    @if (_movimiento == Traslado)
+                    {
+                        <label class="campo">Cuenta destino
+                            <select class="e-input" @bind="_destino">
+                                <option value="">Elija la cuenta</option>
+                                @foreach (var d in _destinos) { <option value="@d.PublicId">@d.Number · @d.Line.Name</option> }
+                            </select>
+                        </label>
+                    }
+                    <label class="campo campo-ancho">Motivo <input class="e-input" maxlength="500" @bind="_motivo" /></label>
+                </div>
+                <p class="texto-tenue">Firman: @string.Join(", ", Firmantes.Select(f => f.Nombre)). Quite a quien no firma este retiro.</p>
+                @foreach (var f in Firmantes)
+                {
+                    <label class="campo-check"><input type="checkbox" checked="@_firmas.Contains(f.Persona)" @onchange="@(e => Firmar(f.Persona, e.Value is true))" /> @f.Nombre</label>
+                }
+                @if (_simulacion is { } s)
+                {
+                    <dl class="form-grid">
+                        <div><dt>Disponible</dt><dd>@Pesos(s.Available.Available)</dd></div>
+                        <div><dt>Disponible después</dt><dd>@Pesos(s.AvailableAfter.Available)</dd></div>
+                        <div><dt>GMF</dt><dd>@(s.Gmf is { } g ? $"{Pesos(g.Amount)} (exento usado {Pesos(g.ExemptUsed)}, queda {Pesos(g.ExemptRemaining)})" : "No aplica")</dd></div>
+                        <div><dt>Cargos</dt><dd>@(s.Charges.Count == 0 ? "Ninguno" : string.Join(", ", s.Charges.Select(c => $"{c.ChargeCode} {Pesos(c.Amount)}")))</dd></div>
+                        <div><dt>Atribución</dt><dd>@(s.Attribution.RequiresApproval ? $"Supera su atribución ({Pesos(s.Attribution.MaxAmount ?? 0m)}): necesitará un aprobador presente" : "Dentro de su atribución")</dd></div>
+                    </dl>
+                    @foreach (var w in s.Warnings) { <p class="@(s.Allowed ? "aviso aviso-info" : "aviso aviso-error")">@w</p> }
+                }
+                @if (_pendiente is { } p)
+                {
+                    <p class="aviso aviso-info">La operación espera la aprobación @p de un aprobador presente con segundo factor; no movió saldo. Cuando se apruebe, vuelva a aplicarla.</p>
+                }
+                @foreach (var e in _erroresDeMovimiento) { <p class="aviso aviso-error" role="alert">@e</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-outline" Disabled="@(_guardado.Activa || _valor <= 0m)" OnClick="@SimularAsync">Simular</SfButton>
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || _valor <= 0m || (_movimiento == Traslado && _destino is null))" OnClick="@AplicarAsync">Aplicar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarMovimiento = false)">Cerrar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarMotivo" Header="@_tituloDelMotivo" Width="560px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa">
+                <label class="campo campo-ancho">Motivo * <input class="e-input" maxlength="500" @bind="_motivo" /></label>
+                @foreach (var e in _erroresDeMotivo) { <p class="aviso aviso-error" role="alert">@e</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@ConfirmarMotivoAsync">Confirmar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarMotivo = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarComprobante" Header="Comprobante" Width="820px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_cargaComprobante.Activa">
+                @if (_comprobante is { } c)
+                {
+                    <dl class="form-grid">
+                        <div><dt>Número</dt><dd>@c.Operation.Number</dd></div>
+                        <div><dt>Clase</dt><dd>@TextosDeCaptaciones.ClaseDeOperacion(c.Operation.Kind)</dd></div>
+                        <div><dt>Fechas</dt><dd>valor @c.Operation.ValueDate.ToString("dd/MM/yyyy") · contable @c.Operation.AccountingDate.ToString("dd/MM/yyyy") · registro @c.Operation.RegisteredAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</dd></div>
+                        <div><dt>Valor</dt><dd>@Pesos(c.Operation.Amount)</dd></div>
+                        <div><dt>Recibo</dt><dd>@(c.Operation.ReceiptReference ?? "—")</dd></div>
+                        <div><dt>Motivo</dt><dd>@(c.Operation.Reason ?? "—")</dd></div>
+                        @if (c.Gmf is { } g) { <div><dt>GMF</dt><dd>@Pesos(g.Amount) sobre @Pesos(g.TaxedBase) (exento aplicado @Pesos(g.ExemptApplied))</dd></div> }
+                    </dl>
+                    <div class="tabla-desplazable">
+                        <table class="data-grid">
+                            <thead><tr><th>Clase</th><th>Concepto</th><th class="numero">Valor</th></tr></thead>
+                            <tbody>
+                                @foreach (var f in c.Transactions)
+                                {
+                                    <tr><td>@TextosDeCaptaciones.ClaseDeFila(f.Kind)</td><td>@TextosDeCaptaciones.Concepto(f.Concept)</td><td class="numero">@Pesos(f.Amount)</td></tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    @if (c.Messages.Count > 0)
+                    {
+                        <p class="texto-tenue">Hechos: @string.Join(" · ", c.Messages.Select(m => $"{m.Type} ({m.Status})"))</p>
+                    }
+                }
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+@code {
+    private static readonly CultureInfo Es = CultureInfo.GetCultureInfo("es-CO");
+    private const int Tamano = 20;
+    private const int Reverso = 5;
+    private const string Retiro = "Withdrawal", Traslado = "Transfer", Condonar = "waive", ReversarCargo = "reverse-charge", ReversarOperacion = "reverse";
+
+    [Parameter, EditorRequired] public CuentaDto Cuenta { get; set; } = default!;
+
+    /// <summary>Lo que la ficha hace después de un movimiento (releer saldos).</summary>
+    [Parameter] public EventCallback OnCambio { get; set; }
+
+    private readonly EstadoDeCarga _cargaOperaciones = new(), _cargaLibro = new(), _cargaCargos = new(), _cargaDebitos = new(), _cargaComprobante = new(),
+        _guardado = new(), _accionDeCargo = new(), _accionDeDebito = new();
+    private List<OperacionDeCuentaDto> _operaciones = [];
+    private List<FilaDelLibroDeCuentaDto>? _libro;
+    private List<CargoDeCuentaDto> _cargos = [];
+    private List<AutorizacionDeDebitoDto> _debitos = [];
+    private List<CuentaEnListaDto> _destinos = [];
+    private IReadOnlyList<AdjuntoDto> _soportes = [];
+    private UsoDeGmfDto? _usoDeGmf;
+    private DetalleDeOperacionDto? _comprobante;
+    private SimulacionDeMovimientoDto? _simulacion;
+    private HashSet<Guid> _firmas = [];
+    private List<string> _erroresDeMovimiento = [], _erroresDeMotivo = [], _erroresDeCargo = [], _erroresDeDebito = [];
+    private ClaveDeOperacion _clave = new(), _claveDeCargo = new(), _claveDeDebito = new();
+    private int _pagina = 1;
+    private long _total;
+    private bool _mostrarMovimiento, _mostrarMotivo, _mostrarComprobante, _debitoParcial;
+    private string _movimiento = Retiro, _accionDelMotivo = ReversarOperacion, _tituloDelMotivo = string.Empty, _alcanceDelDebito = "AllLoansOfHolder";
+    private decimal _valor;
+    private Guid? _destino, _soporteDelDebito, _sujetoDelMotivo;
+    private Guid? _aprobacion;
+    private string? _motivo, _nuevoCargo, _referenciaDelCargo, _motivoDelCargo, _creditoDelDebito, _motivoDelDebito, _pendiente;
+    private Guid _cuentaLeida;
+
+    private bool EsCaptacion => Cuenta.Nature == TextosDeCaptaciones.Captacion;
+
+    private IReadOnlyList<(Guid Persona, string Nombre)> Firmantes =>
+        [(Cuenta.Holder.PersonPublicId, Cuenta.Holder.FullName),
+         .. Cuenta.Parties.Where(p => p.Role is TextosDeCaptaciones.Cotitular or TextosDeCaptaciones.Firmante or TextosDeCaptaciones.Representante)
+             .Select(p => (p.Person.PersonPublicId, p.Person.FullName))];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Cuenta.PublicId == _cuentaLeida) return;
+        _cuentaLeida = Cuenta.PublicId;
+        _pagina = 1;
+        _libro = null;
+        await Task.WhenAll(CargarOperacionesAsync(), CargarCargosAsync(), CargarDebitosAsync(), CargarUsoAsync());
+    }
+
+    private async Task RecargarAsync()
+    {
+        await Task.WhenAll(CargarOperacionesAsync(), CargarCargosAsync(), CargarDebitosAsync(), CargarUsoAsync());
+        if (_libro is not null) await LeerLibroAsync();
+        await OnCambio.InvokeAsync();
+    }
+
+    // ----------------------------------------------------------------------------------------------------- lecturas --
+
+    private async Task CargarOperacionesAsync()
+    {
+        using var carga = _cargaOperaciones.Iniciar();
+        var r = await Cliente.OperacionesAsync(Cuenta.PublicId, pagina: _pagina, tamano: Tamano);
+        _operaciones = [.. r.Value?.Items ?? []];
+        _total = r.Value?.TotalCount ?? 0;
+    }
+
+    private async Task PaginarAsync(int paso)
+    {
+        _pagina = Math.Max(1, _pagina + paso);
+        await CargarOperacionesAsync();
+    }
+
+    private async Task VerLibroAsync()
+    {
+        if (_libro is not null) { _libro = null; return; }
+        await LeerLibroAsync();
+    }
+
+    private async Task LeerLibroAsync()
+    {
+        using var carga = _cargaLibro.Iniciar();
+        _libro = [.. (await Cliente.LibroAsync(Cuenta.PublicId)).Value?.Items ?? []];
+    }
+
+    private async Task CargarCargosAsync()
+    {
+        if (!EsCaptacion) return;
+        using var carga = _cargaCargos.Iniciar();
+        _cargos = [.. (await Cliente.CargosAsync(Cuenta.PublicId)).Value?.Items ?? []];
+    }
+
+    private async Task CargarDebitosAsync()
+    {
+        if (!EsCaptacion) return;
+        using var carga = _cargaDebitos.Iniciar();
+        _debitos = [.. (await Cliente.DebitosAsync(Cuenta.PublicId)).Value ?? []];
+        await CargarSoportesAsync();
+    }
+
+    private async Task CargarUsoAsync()
+    {
+        if (!EsCaptacion) return;
+        _usoDeGmf = (await Cliente.UsoDeGmfAsync(Cuenta.Holder.PersonPublicId)).Value;
+    }
+
+    private async Task CargarSoportesAsync()
+    {
+        var r = await Adjuntos.ListarAsync(CaptacionesClient.DuenoDeSoportesDeTitularidad, Cuenta.Holder.PersonPublicId);
+        _soportes = (r.Value ?? []).Where(a => a.Disponible).ToList();
+    }
+
+    private async Task VerComprobanteAsync(OperacionDeCuentaDto o)
+    {
+        _comprobante = null;
+        _mostrarComprobante = true;
+        using var carga = _cargaComprobante.Iniciar();
+        _comprobante = (await Cliente.OperacionAsync(Cuenta.PublicId, o.PublicId)).Value;
+    }
+
+    // ------------------------------------------------------------------------------------------ retiro y traslado --
+
+    private async Task AbrirMovimiento(string clase)
+    {
+        _movimiento = clase;
+        _valor = 0m;
+        _destino = null;
+        _motivo = null;
+        _simulacion = null;
+        _pendiente = null;
+        _aprobacion = null;
+        _firmas = [Cuenta.Holder.PersonPublicId];
+        _erroresDeMovimiento = [];
+        _clave = new ClaveDeOperacion();
+        if (clase == Traslado)
+        {
+            var r = await Cliente.CuentasAsync(titular: Cuenta.Holder.PersonPublicId, tamano: 50);
+            _destinos = [.. (r.Value?.Items ?? []).Where(a => a.PublicId != Cuenta.PublicId)];
+        }
+        _mostrarMovimiento = true;
+    }
+
+    private void Firmar(Guid persona, bool firma)
+    {
+        if (firma) _firmas.Add(persona); else _firmas.Remove(persona);
+        _simulacion = null;
+    }
+
+    private async Task SimularAsync()
+    {
+        using var carga = _guardado.Iniciar();
+        _erroresDeMovimiento = [];
+        var r = await Cliente.SimularMovimientoAsync(Cuenta.PublicId, new SimularMovimientoRequest(_movimiento, _valor, _destino, [.. _firmas]));
+        if (!r.IsSuccess) { _erroresDeMovimiento = [.. LineasDeCreditoClient.Explicar(r)]; return; }
+        _simulacion = r.Value;
+    }
+
+    private async Task AplicarAsync()
+    {
+        using var carga = _guardado.Iniciar();
+        _erroresDeMovimiento = [];
+        var motivo = string.IsNullOrWhiteSpace(_motivo) ? null : _motivo.Trim();
+        var r = _movimiento == Retiro
+            ? await Cliente.RetirarPorGiroAsync(Cuenta.PublicId, new RetiroPorGiroRequest(_valor, null, null, [.. _firmas], motivo, _aprobacion), _clave)
+            : await Cliente.TrasladarAsync(Cuenta.PublicId, new TrasladoRequest(_destino!.Value, _valor, null, [.. _firmas], motivo, ApprovalPublicId: _aprobacion), _clave);
+        if (!r.IsSuccess) { _erroresDeMovimiento = [.. LineasDeCreditoClient.Explicar(r)]; return; }
+        if (r.Value is { Status: ResultadoDeMovimientoDto.PendienteDeAprobacion } espera)
+        {
+            // La solicitud queda en la bandeja de aprobaciones; al aprobarse, el mismo pedido con su número se aplica (otra clave).
+            _aprobacion = espera.ApprovalPublicId;
+            _pendiente = espera.ApprovalPublicId?.ToString("N")[..8];
+            _clave = new ClaveDeOperacion();
+            return;
+        }
+        _mostrarMovimiento = false;
+        var orden = r.Value?.Order is { } o ? $" con la orden de giro {o.Number}" : string.Empty;
+        await Notification.SuccessAsync($"Operación {r.Value?.Operation?.Number} aplicada{orden}.");
+        await RecargarAsync();
+    }
+
+    // ------------------------------------------------------------------------------------------- motivo y reversos --
+
+    private void AbrirReverso(OperacionDeCuentaDto o) =>
+        AbrirMotivo(ReversarOperacion, o.PublicId, $"Reversar la operación {o.Number}");
+
+    private void AbrirAccionDeCargo(CargoDeCuentaDto g, string accion) =>
+        AbrirMotivo(accion, g.PublicId, accion == Condonar ? $"Condonar el cargo {g.Code}" : $"Reversar el cargo {g.Code}");
+
+    private void AbrirMotivo(string accion, Guid sujeto, string titulo)
+    {
+        _accionDelMotivo = accion;
+        _sujetoDelMotivo = sujeto;
+        _tituloDelMotivo = titulo;
+        _motivo = null;
+        _erroresDeMotivo = [];
+        _clave = new ClaveDeOperacion();
+        _mostrarMotivo = true;
+    }
+
+    private async Task ConfirmarMotivoAsync()
+    {
+        if (_sujetoDelMotivo is not { } sujeto) return;
+        using var carga = _guardado.Iniciar();
+        _erroresDeMotivo = [];
+        var motivo = _motivo!.Trim();
+        IReadOnlyList<string> errores = _accionDelMotivo switch
+        {
+            Condonar => Errores(await Cliente.CondonarCargoAsync(Cuenta.PublicId, sujeto, motivo, _clave)),
+            ReversarCargo => Errores(await Cliente.ReversarCargoAsync(Cuenta.PublicId, sujeto, motivo, _clave)),
+            _ => Errores(await Cliente.ReversarOperacionAsync(Cuenta.PublicId, sujeto, motivo, _clave)),
+        };
+        if (errores.Count > 0) { _erroresDeMotivo = [.. errores]; return; }
+        _mostrarMotivo = false;
+        await Notification.SuccessAsync(_accionDelMotivo == Condonar ? "Cargo condonado." : "Reverso aplicado.");
+        await RecargarAsync();
+    }
+
+    private static IReadOnlyList<string> Errores<T>(ResultadoDeInventario<T> r) => r.IsSuccess ? [] : LineasDeCreditoClient.Explicar(r);
+
+    // ------------------------------------------------------------------------------------------------------ cargos --
+
+    private async Task RegistrarCargoAsync()
+    {
+        using var carga = _accionDeCargo.Iniciar();
+        _erroresDeCargo = [];
+        var r = await Cliente.RegistrarCargoAsync(Cuenta.PublicId, new CargoDePantallaRequest(_nuevoCargo!.Trim().ToUpperInvariant(),
+            string.IsNullOrWhiteSpace(_referenciaDelCargo) ? null : _referenciaDelCargo.Trim(), _motivoDelCargo!.Trim()), _claveDeCargo);
+        if (!r.IsSuccess) { _erroresDeCargo = [.. LineasDeCreditoClient.Explicar(r)]; return; }
+        _nuevoCargo = _referenciaDelCargo = _motivoDelCargo = null;
+        _claveDeCargo = new ClaveDeOperacion();
+        await Notification.SuccessAsync($"Cargo {r.Value?.Code} causado ({TextosDeCaptaciones.EstadoDeCargo(r.Value?.Status ?? 0)}).");
+        await RecargarAsync();
+    }
+
+    // ------------------------------------------------------------------------------------------- débito automático --
+
+    private async Task AutorizarAsync()
+    {
+        using var carga = _accionDeDebito.Iniciar();
+        _erroresDeDebito = [];
+        Guid? credito = null;
+        if (_alcanceDelDebito == "SingleLoan")
+        {
+            if (!Guid.TryParse(_creditoDelDebito, out var g)) { _erroresDeDebito = ["Escriba el identificador del crédito."]; return; }
+            credito = g;
+        }
+        var r = await Cliente.AutorizarDebitoAsync(new AutorizarDebitoRequest(Cuenta.PublicId, _alcanceDelDebito, credito, _debitoParcial, null, null,
+            _soporteDelDebito!.Value), _claveDeDebito);
+        if (!r.IsSuccess) { _erroresDeDebito = [.. LineasDeCreditoClient.Explicar(r)]; return; }
+        _soporteDelDebito = null;
+        _creditoDelDebito = null;
+        _claveDeDebito = new ClaveDeOperacion();
+        await Notification.SuccessAsync("Débito automático autorizado.");
+        await CargarDebitosAsync();
+    }
+
+    private async Task RevocarAsync(AutorizacionDeDebitoDto m)
+    {
+        using var carga = _accionDeDebito.Iniciar();
+        _erroresDeDebito = [];
+        var r = await Cliente.RevocarDebitoAsync(m.PublicId, new RevocarDebitoRequest(null, _motivoDelDebito!.Trim()), _claveDeDebito);
+        if (!r.IsSuccess) { _erroresDeDebito = [.. LineasDeCreditoClient.Explicar(r)]; return; }
+        _motivoDelDebito = null;
+        _claveDeDebito = new ClaveDeOperacion();
+        await Notification.SuccessAsync("Autorización revocada.");
+        await CargarDebitosAsync();
+    }
+
+    private static string Estado(OperacionDeCuentaDto o) =>
+        o.ReversedBy is not null ? "Reversada"
+        : o.ClearingUntil is { } canje && !o.Cleared ? $"En canje hasta {canje:dd/MM/yyyy}"
+        : "Aplicada";
+
+    private static string Pesos(decimal valor) => "$ " + valor.ToString("N0", Es);
+}

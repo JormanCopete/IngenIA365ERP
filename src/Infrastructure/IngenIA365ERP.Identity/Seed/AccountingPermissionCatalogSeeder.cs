@@ -73,6 +73,16 @@ public static class AccountingPermissionCatalogSeeder
         ("Accounting.InventoryRules",   "Manage",     "Parametrizar la matriz de contabilización del inventario"),
         ("Accounting.InventoryBatches", "View",       "Ver los lotes de contabilización del inventario"),
         ("Accounting.InventoryBatches", "Run",        "Ejecutar los lotes de contabilización del inventario"),
+
+        // Feature 013, US7 (T0638; contracts/contabilidad.md §3.8, §15; api.md §23): el lado contable de Cartera —la matriz y el mapeo de
+        // tipos de comprobante, los lotes que pasan los hechos al libro y los indicadores de la entidad—. Los siembra la API al arrancar,
+        // nunca el DbMigrator (T60); la consulta de lo contabilizado usa Accounting.Vouchers.View.
+        ("Accounting.LendingRules",          "View",   "Ver la matriz de contabilización de la cartera, su completitud y sus tipos de comprobante"),
+        ("Accounting.LendingRules",          "Manage", "Parametrizar la matriz de contabilización de la cartera y sus tipos de comprobante"),
+        ("Accounting.LendingBatches",        "View",   "Ver y previsualizar los lotes de contabilización de la cartera"),
+        ("Accounting.LendingBatches",        "Run",    "Ordenar los lotes de contabilización de la cartera"),
+        ("Accounting.RegulatoryIndicators",  "View",   "Ver el patrimonio técnico y la relación de solvencia registrados"),
+        ("Accounting.RegulatoryIndicators",  "Manage", "Registrar el patrimonio técnico y la relación de solvencia con su soporte"),
     ];
 
     public static async Task SeedAsync(IApplicationDbContext db, ILogger logger)

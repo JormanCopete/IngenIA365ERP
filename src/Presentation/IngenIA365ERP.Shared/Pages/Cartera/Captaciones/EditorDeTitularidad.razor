@@ -1,0 +1,186 @@
+@using System.Globalization
+@using IngenIA365ERP.Shared.Services.Adjuntos
+@using IngenIA365ERP.Shared.Services.Cartera
+
+@* Feature 014, US2 (T079; FR-033, FR-034): el editor de la titularidad de una cuenta, común a la apertura y al cambio de partes. El titular es el de
+   la cuenta y no se agrega aquí. En captación: el manejo (indistinto o conjunto), los cotitulares con su proporción (sin proporción se reparte por
+   igual), los firmantes con su límite y el representante legal con su fundamento y su soporte (obligatorio con un titular menor o persona jurídica).
+   En aportes sólo hay beneficiarios. Los beneficiarios suman 100 %; la suma se ve mientras se digita. Los soportes son adjuntos del titular que la
+   pantalla sube con SubirSoporte y aquí se eligen. Las reglas las decide el servidor; aquí sólo se arma el pedido. *@
+@if (!EsAportes)
+{
+    <div class="form-grid">
+        <label class="campo">Manejo
+            <select class="e-input" value="@Manejo" @onchange="@(e => CambiarManejoAsync(e.Value))">
+                @foreach (var m in TextosDeCaptaciones.Manejos) { <option value="@m.Valor">@m.Texto</option> }
+            </select>
+        </label>
+    </div>
+
+    <h5>Cotitulares, firmantes y representante</h5>
+    @if (Partes.Count > 0)
+    {
+        <div class="tabla-desplazable">
+            <table class="data-grid">
+                <thead><tr><th>Persona</th><th>Papel</th><th class="numero">Proporción</th><th class="numero">Límite de firma</th><th>Representación</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var p in Partes)
+                    {
+                        var parte = p;
+                        <tr>
+                            <td>@parte.Nombre</td>
+                            <td>@TextosDeCaptaciones.Papel(parte.Role)</td>
+                            <td class="numero">@(parte.Share is { } s ? (s * 100m).ToString("0.####", Es) + " %" : parte.Role == TextosDeCaptaciones.Cotitular ? "por igual" : "—")</td>
+                            <td class="numero">@(parte.SignatureLimit is { } l ? "$ " + l.ToString("N0", Es) : parte.Role == TextosDeCaptaciones.Firmante ? "sin límite" : "—")</td>
+                            <td>@(parte.Role == TextosDeCaptaciones.Representante ? $"{TextosDeCaptaciones.Fundamento(parte.RepresentationBasis)}{(parte.SupportAttachmentPublicId is null ? " · sin soporte" : " · con soporte")}" : "—")</td>
+                            <td><SfButton CssClass="e-flat e-small" OnClick="@(() => QuitarParteAsync(parte))">Quitar</SfButton></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+    <div class="form-grid">
+        <div class="campo campo-ancho">Persona <PersonSearchPicker @bind-Selected="_persona" ShowHelpText="false" Compacto="true" /></div>
+        <label class="campo">Papel
+            <select class="e-input" @bind="_papel">
+                @foreach (var x in TextosDeCaptaciones.PapelesQueSeAgregan) { <option value="@x.Valor">@x.Texto</option> }
+            </select>
+        </label>
+        @if (_papel == TextosDeCaptaciones.Cotitular)
+        {
+            <label class="campo">Proporción (%) <input class="e-input" type="number" min="0" max="100" step="0.01" @bind="_proporcion" placeholder="Vacío: por igual" /></label>
+        }
+        @if (_papel == TextosDeCaptaciones.Firmante)
+        {
+            <label class="campo">Límite por operación <input class="e-input" type="number" min="0" step="1" @bind="_limite" placeholder="Vacío: sin límite" /></label>
+        }
+        @if (_papel == TextosDeCaptaciones.Representante)
+        {
+            <label class="campo">Fundamento
+                <select class="e-input" @bind="_fundamento">
+                    @foreach (var f in TextosDeCaptaciones.Fundamentos) { <option value="@f.Valor">@f.Texto</option> }
+                </select>
+            </label>
+            <label class="campo">Soporte de la representación *
+                <select class="e-input" @bind="_soporte">
+                    <option value="">Elija el soporte…</option>
+                    @foreach (var a in Soportes) { <option value="@a.PublicId">@a.FileName</option> }
+                </select>
+            </label>
+        }
+    </div>
+    <div class="toolbar">
+        <SfButton CssClass="e-outline" IconCss="e-icons e-plus" Disabled="@(_persona is null)" OnClick="@AgregarParteAsync">Agregar parte</SfButton>
+    </div>
+}
+
+<h5>Beneficiarios</h5>
+@if (Beneficiarios.Count > 0)
+{
+    <div class="tabla-desplazable">
+        <table class="data-grid">
+            <thead><tr><th>Persona</th><th class="numero">Porcentaje</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var b in Beneficiarios)
+                {
+                    var beneficiario = b;
+                    <tr>
+                        <td>@beneficiario.Nombre</td>
+                        <td class="numero"><input class="e-input" type="number" min="0" max="100" step="0.01" value="@beneficiario.Percent.ToString(CultureInfo.InvariantCulture)" @onchange="@(e => CambiarPorcentajeAsync(beneficiario, e.Value))" /></td>
+                        <td><SfButton CssClass="e-flat e-small" OnClick="@(() => QuitarBeneficiarioAsync(beneficiario))">Quitar</SfButton></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    <p class="@(SumaDeBeneficiarios == 100m ? "texto-tenue" : "aviso aviso-error")">Suman @SumaDeBeneficiarios.ToString("0.##", Es) %@(SumaDeBeneficiarios == 100m ? "." : ": deben sumar exactamente 100 %.")</p>
+}
+<div class="form-grid">
+    <div class="campo campo-ancho">Beneficiario <PersonSearchPicker @bind-Selected="_beneficiario" ShowHelpText="false" Compacto="true" /></div>
+    <label class="campo">Porcentaje (%) <input class="e-input" type="number" min="0" max="100" step="0.01" @bind="_porcentaje" /></label>
+</div>
+<div class="toolbar">
+    <SfButton CssClass="e-outline" IconCss="e-icons e-plus" Disabled="@(_beneficiario is null || _porcentaje is not > 0m)" OnClick="@AgregarBeneficiarioAsync">Agregar beneficiario</SfButton>
+</div>
+
+@code {
+    private static readonly CultureInfo Es = CultureInfo.GetCultureInfo("es-CO");
+
+    [Parameter, EditorRequired] public List<ParteDeCuentaRequest> Partes { get; set; } = [];
+    [Parameter, EditorRequired] public List<BeneficiarioDeCuentaRequest> Beneficiarios { get; set; } = [];
+
+    /// <summary>Los soportes del titular ya subidos (los disponibles), para elegir el de la representación.</summary>
+    [Parameter] public IReadOnlyList<AdjuntoDto> Soportes { get; set; } = [];
+
+    [Parameter] public bool EsAportes { get; set; }
+    [Parameter] public int Manejo { get; set; } = TextosDeCaptaciones.Indistinto;
+    [Parameter] public EventCallback<int> ManejoChanged { get; set; }
+
+    /// <summary>El titular de la cuenta: no se agrega como parte ni como beneficiario.</summary>
+    [Parameter] public Guid? Titular { get; set; }
+
+    [Parameter] public EventCallback OnCambio { get; set; }
+
+    private PersonSearchPicker.PersonSearchItem? _persona, _beneficiario;
+    private int _papel = TextosDeCaptaciones.Cotitular;
+    private decimal? _proporcion, _limite, _porcentaje;
+    private string _fundamento = "Parent";
+    private Guid? _soporte;
+
+    private decimal SumaDeBeneficiarios => Beneficiarios.Sum(b => b.Percent);
+
+    private async Task CambiarManejoAsync(object? valor)
+    {
+        if (!int.TryParse(valor?.ToString(), out var manejo)) return;
+        Manejo = manejo;
+        await ManejoChanged.InvokeAsync(manejo);
+    }
+
+    private async Task AgregarParteAsync()
+    {
+        if (_persona is not { } p || p.PublicId == Titular || Partes.Any(x => x.PersonPublicId == p.PublicId)) return;
+        Partes.Add(new ParteDeCuentaRequest
+        {
+            PersonPublicId = p.PublicId,
+            Nombre = $"{p.FullName} ({p.IdentificationNumber})",
+            Role = _papel,
+            Share = _papel == TextosDeCaptaciones.Cotitular && _proporcion is { } prop ? prop / 100m : null,
+            SignatureLimit = _papel == TextosDeCaptaciones.Firmante ? _limite : null,
+            RepresentationBasis = _papel == TextosDeCaptaciones.Representante ? _fundamento : null,
+            SupportAttachmentPublicId = _papel == TextosDeCaptaciones.Representante ? _soporte : null,
+        });
+        _persona = null;
+        _proporcion = _limite = null;
+        _soporte = null;
+        await OnCambio.InvokeAsync();
+    }
+
+    private async Task QuitarParteAsync(ParteDeCuentaRequest parte)
+    {
+        Partes.Remove(parte);
+        await OnCambio.InvokeAsync();
+    }
+
+    private async Task AgregarBeneficiarioAsync()
+    {
+        if (_beneficiario is not { } b || _porcentaje is not { } pct || b.PublicId == Titular || Beneficiarios.Any(x => x.PersonPublicId == b.PublicId)) return;
+        Beneficiarios.Add(new BeneficiarioDeCuentaRequest { PersonPublicId = b.PublicId, Percent = pct, Nombre = $"{b.FullName} ({b.IdentificationNumber})" });
+        _beneficiario = null;
+        _porcentaje = null;
+        await OnCambio.InvokeAsync();
+    }
+
+    private async Task CambiarPorcentajeAsync(BeneficiarioDeCuentaRequest beneficiario, object? valor)
+    {
+        if (!decimal.TryParse(valor?.ToString(), NumberStyles.Number, CultureInfo.InvariantCulture, out var pct)) return;
+        beneficiario.Percent = pct;
+        await OnCambio.InvokeAsync();
+    }
+
+    private async Task QuitarBeneficiarioAsync(BeneficiarioDeCuentaRequest beneficiario)
+    {
+        Beneficiarios.Remove(beneficiario);
+        await OnCambio.InvokeAsync();
+    }
+}

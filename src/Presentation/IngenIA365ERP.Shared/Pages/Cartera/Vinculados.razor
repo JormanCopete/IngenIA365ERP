@@ -1,0 +1,389 @@
+@page "/cartera/vinculados"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Globalization
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Http
+@inject GobiernoDeCarteraClient Gobierno
+@inject CuposClient Cupos
+@inject INotificationService Notification
+
+<PageTitle>Personas vinculadas - IngenIA365ERP</PageTitle>
+
+@* Feature 013, fase 4 (T0318; US17, FR-040; contracts/api.md §3.7, plantillas.md §2): quiénes son vinculados de la cooperativa —miembros de
+   consejo y junta, representante legal, aportantes significativos y sus cónyuges y parientes— con vigencia. Un vínculo vigente lleva la
+   decisión de crédito al consejo con la mayoría calificada. Esta lectura trae documentos y queda auditada (por eso exige .Read, nunca un
+   .View). Nadie se crea aquí: la persona se busca en el maestro. La plantilla carga todo o nada y tampoco crea personas.
+   Feature 013, US2 (T0393; FR-041, C112): la pestaña «Grupos conectados» —personas con un riesgo común por vinculación económica o jurídica,
+   codeudor común o vínculo— que registra el jefe de cartera con su fundamento; la concentración se mide por deudor y por grupo con el mismo
+   límite. Leerlos también queda auditado. *@
+<PermissionGate Required="Lending.RelatedParties.Read" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Personas vinculadas</h3>
+        <div class="toolbar">
+            <PermissionGate Required="Lending.RelatedParties.Manage">
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@AbrirAlta">Registrar vínculo</SfButton>
+            </PermissionGate>
+            <SfButton CssClass="e-outline" OnClick="@(() => _mostrarPlantilla = !_mostrarPlantilla)">Plantilla</SfButton>
+        </div>
+    </div>
+
+    <div class="toolbar">
+        <SfButton CssClass="@(_pestana == 0 ? "e-primary" : "e-outline")" OnClick="@(() => _pestana = 0)">Vínculos</SfButton>
+        <SfButton CssClass="@(_pestana == 1 ? "e-primary" : "e-outline")" OnClick="@AbrirGruposAsync">Grupos conectados</SfButton>
+    </div>
+
+    @if (_pestana == 1)
+    {
+        <div class="info-card">
+            <div class="toolbar">
+                <h4>Grupos conectados</h4>
+                <label class="campo-check"><input type="checkbox" @bind="_conTerminados" /> Incluir terminados</label>
+                <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_cargaGrupos.Activa" OnClick="@CargarGruposAsync">Actualizar</SfButton>
+                <PermissionGate Required="Lending.RelatedParties.Manage">
+                    <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@AbrirGrupo">Registrar grupo</SfButton>
+                </PermissionGate>
+            </div>
+            <IndicadorDeCarga Cargando="@_cargaGrupos.Activa">
+                <table class="data-grid">
+                    <thead><tr><th>Grupo</th><th>Fundamento</th><th>Miembros</th><th>Desde</th><th>Estado</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var g in _grupos)
+                        {
+                            var grupo = g;
+                            <tr>
+                                <td>@grupo.Name<br /><span class="texto-tenue">@grupo.Grounds</span></td>
+                                <td>@TextosDeOriginacion.FundamentoDeGrupo(grupo.Basis)</td>
+                                <td>@string.Join(", ", grupo.Members.Where(m => m.EndedAt is null).Select(m => m.Person.FullName))</td>
+                                <td>@grupo.ValidFrom.ToString("dd/MM/yyyy")</td>
+                                <td>@(grupo.EndedAt is null ? "Vigente" : $"Terminado: {grupo.EndReason}")</td>
+                                <td>
+                                    @if (grupo.EndedAt is null)
+                                    {
+                                        <PermissionGate Required="Lending.RelatedParties.Manage">
+                                            <SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirMiembro(grupo))">Agregar miembro…</SfButton>
+                                            <SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirFinDeGrupo(grupo))">Terminar…</SfButton>
+                                        </PermissionGate>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                @if (_grupos.Count == 0) { <p class="texto-tenue">No hay grupos conectados registrados.</p> }
+            </IndicadorDeCarga>
+        </div>
+    }
+    else
+    {
+    @if (_mostrarPlantilla)
+    {
+        <div class="info-card">
+            <h4>Carga por plantilla</h4>
+            <ImportarPlantilla RutaBase="@GobiernoDeCarteraClient.RutaDeVinculados" PermisoDeDescarga="Lending.RelatedParties.Read"
+                               PermisoDeImportacion="Lending.RelatedParties.Manage" ConDatos="false" Aplicado="@(_ => CargarAsync())" />
+        </div>
+    }
+
+    <div class="toolbar">
+        <div class="campo">Persona
+            <PersonSearchPicker @bind-Selected="_filtroPersona" ShowHelpText="false" Compacto="true" />
+        </div>
+        <label class="campo">Fundamento
+            <select class="e-input" @bind="_filtroFundamento">
+                <option value="0">Todos</option>
+                @foreach (var f in TextosDeCartera.Fundamentos) { <option value="@f.Valor">@f.Texto</option> }
+            </select>
+        </label>
+        <label class="campo">Vigentes a <input type="date" class="e-input" @onchange="@(e => _filtroFecha = LeerFecha(e.Value))" /></label>
+        <SfButton CssClass="e-primary" IconCss="e-icons e-search" Disabled="@_carga.Activa" OnClick="@CargarAsync">Buscar</SfButton>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        <p class="texto-apoyo">@_total vínculo(s).</p>
+        <div class="tabla-desplazable">
+            <table class="data-grid">
+                <thead><tr><th>Persona</th><th>Documento</th><th>Fundamento</th><th>Vinculado a</th><th>Parentesco</th><th class="numero">% aportes</th><th>Vigencia</th><th>Origen</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var v in _vinculos)
+                    {
+                        var vinculo = v;
+                        <tr class="@(vinculo.ValidTo is { } h && h < Hoy ? "texto-tenue" : "")">
+                            <td>@vinculo.Person.FullName</td>
+                            <td>@vinculo.Person.DocumentType @vinculo.Person.DocumentNumber</td>
+                            <td>@TextosDeCartera.Fundamento(vinculo.Basis)</td>
+                            <td>@(vinculo.LinkedTo?.FullName)</td>
+                            <td>@TextosDeCartera.Parentesco(vinculo.KinshipKind, vinculo.KinshipDegree)</td>
+                            <td class="numero">@(vinculo.ContributionPercentage?.ToString("N2"))</td>
+                            <td>
+                                @vinculo.ValidFrom.ToString("dd/MM/yyyy") – @(vinculo.ValidTo?.ToString("dd/MM/yyyy") ?? "vigente")
+                                @if (vinculo.EndReason is not null) { <br /><span class="texto-tenue">@vinculo.EndReason</span> }
+                            </td>
+                            <td>@TextosDeCartera.OrigenDelVinculo(vinculo.Source)@(vinculo.Notes is null ? "" : $" · {vinculo.Notes}")</td>
+                            <td>
+                                @if (vinculo.ValidTo is null || vinculo.ValidTo >= Hoy)
+                                {
+                                    <PermissionGate Required="Lending.RelatedParties.Manage">
+                                        <SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirFin(vinculo))">Terminar…</SfButton>
+                                    </PermissionGate>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (_vinculos.Count == 0) { <p class="texto-tenue">Sin vínculos con esos filtros.</p> }
+    </IndicadorDeCarga>
+    }
+</div>
+
+<SfDialog @bind-Visible="_mostrarGrupo" Header="@_tituloGrupo" Width="620px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Registrando…">
+                <div class="form-grid">
+                    @if (_accionGrupo == "registrar")
+                    {
+                        <label class="campo campo-ancho">Nombre * <input class="e-input" @bind="_nombreGrupo" maxlength="150" /></label>
+                        <label class="campo">Fundamento *
+                            <select class="e-input" @bind="_fundamentoGrupo">
+                                @foreach (var f in TextosDeOriginacion.FundamentosDeGrupo) { <option value="@f.Valor">@f.Texto</option> }
+                            </select>
+                        </label>
+                        <label class="campo campo-ancho">Por qué forman un riesgo común * <input class="e-input" @bind="_motivo" maxlength="1000" /></label>
+                        <div class="campo campo-ancho">Miembros (al menos dos) *
+                            <PersonSearchPicker @bind-Selected="_miembro" ShowHelpText="false" Compacto="true" />
+                            <SfButton CssClass="e-flat e-small" Disabled="@(_miembro is null)" OnClick="@AgregarMiembroALaLista">Agregar</SfButton>
+                            <span class="texto-apoyo">@string.Join(", ", _miembros.Select(m => m.FullName))</span>
+                        </div>
+                    }
+                    else
+                    {
+                        @if (_accionGrupo == "miembro")
+                        {
+                            <div class="campo campo-ancho">Persona * <PersonSearchPicker @bind-Selected="_miembro" ShowHelpText="false" Compacto="true" /></div>
+                        }
+                        <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" maxlength="500" /></label>
+                    }
+                </div>
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@GuardarGrupoAsync">Registrar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarGrupo = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarAlta" Header="Registrar un vínculo" Width="680px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Registrando…">
+                <div class="form-grid">
+                    <div class="campo campo-ancho">Persona vinculada *
+                        <PersonSearchPicker @bind-Selected="_persona" ShowHelpText="false" Compacto="true" />
+                    </div>
+                    <label class="campo">Fundamento *
+                        <select class="e-input" @bind="_fundamento">
+                            @foreach (var f in TextosDeCartera.Fundamentos) { <option value="@f.Valor">@f.Texto</option> }
+                        </select>
+                    </label>
+                    @if (_fundamento is 5 or 6)
+                    {
+                        <div class="campo campo-ancho">Vinculado a * (el miembro o representante)
+                            <PersonSearchPicker @bind-Selected="_vinculadoA" ShowHelpText="false" Compacto="true" />
+                        </div>
+                    }
+                    @if (_fundamento == 6)
+                    {
+                        <label class="campo">Parentesco *
+                            <select class="e-input" @bind="_claseParentesco">
+                                @foreach (var p in TextosDeCartera.ClasesDeParentesco) { <option value="@p.Valor">@p.Texto</option> }
+                            </select>
+                        </label>
+                        <label class="campo">Grado * <input class="e-input" type="number" min="1" max="4" @bind="_grado" /></label>
+                    }
+                    @if (_fundamento == 4)
+                    {
+                        <label class="campo">% de aportes * <input class="e-input" type="number" min="0" max="100" step="0.01" @bind="_porcentaje" /></label>
+                    }
+                    <label class="campo">Desde * <input type="date" class="e-input" value="@_desde.ToString("yyyy-MM-dd")" @onchange="@(e => _desde = LeerFecha(e.Value) ?? _desde)" /></label>
+                    <label class="campo">Hasta (opcional) <input type="date" class="e-input" @onchange="@(e => _hastaAlta = LeerFecha(e.Value))" /></label>
+                    <label class="campo campo-ancho">Soporte (acta de elección, certificado, registro civil) <input class="e-input" @bind="_soporte" maxlength="500" /></label>
+                </div>
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || _persona is null)" OnClick="@RegistrarAsync">Registrar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarAlta = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarFin" Header="Terminar el vínculo" Width="520px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Registrando…">
+                <p class="texto-apoyo">@(_aTerminar?.Person.FullName) — @(_aTerminar is { } t ? TextosDeCartera.Fundamento(t.Basis) : "")</p>
+                <label class="campo">Hasta * <input type="date" class="e-input" value="@_hasta.ToString("yyyy-MM-dd")" @onchange="@(e => _hasta = LeerFecha(e.Value) ?? _hasta)" /></label>
+                <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" maxlength="500" /></label>
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@TerminarAsync">Terminar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarFin = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private static DateOnly Hoy => DateOnly.FromDateTime(DateTime.Today);
+
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+    private ClaveDeOperacion _clave = new();
+    private List<VinculadoDto> _vinculos = [];
+    private long _total;
+    private bool _mostrarAlta, _mostrarFin, _mostrarPlantilla;
+    private string? _error, _motivo, _soporte;
+    private PersonSearchPicker.PersonSearchItem? _filtroPersona, _persona, _vinculadoA;
+    private int _filtroFundamento, _fundamento = 1, _claseParentesco = 1;
+    private byte _grado = 1;
+    private decimal? _porcentaje;
+    private DateOnly? _filtroFecha, _hastaAlta;
+    private DateOnly _desde = DateOnly.FromDateTime(DateTime.Today), _hasta = DateOnly.FromDateTime(DateTime.Today);
+    private VinculadoDto? _aTerminar;
+
+    protected override async Task OnInitializedAsync() => await CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Gobierno.VinculadosAsync(_filtroPersona?.PublicId, _filtroFundamento == 0 ? null : _filtroFundamento, _filtroFecha, tamano: 200);
+        if (!r.IsSuccess) { _vinculos = []; _total = 0; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer los vínculos."); return; }
+        _vinculos = [.. r.Value?.Items ?? []];
+        _total = r.Value?.TotalCount ?? 0;
+    }
+
+    private void AbrirAlta()
+    {
+        _persona = _vinculadoA = null;
+        _fundamento = 1;
+        _claseParentesco = 1;
+        _grado = 1;
+        _porcentaje = null;
+        _desde = Hoy;
+        _hastaAlta = null;
+        _soporte = _error = null;
+        _clave = new ClaveDeOperacion();
+        _mostrarAlta = true;
+    }
+
+    private async Task RegistrarAsync()
+    {
+        if (_persona is not { } persona) return;
+        if (_fundamento is 5 or 6 && _vinculadoA is null) { _error = "Indique a quién está vinculada la persona."; return; }
+        using var carga = _guardado.Iniciar();
+        _error = null;
+        var r = await Gobierno.RegistrarVinculoAsync(new RegistrarVinculoRequest(persona.PublicId, _fundamento, _desde,
+            _fundamento is 5 or 6 ? _vinculadoA?.PublicId : null, _fundamento == 6 ? _claseParentesco : null, _fundamento == 6 ? _grado : null,
+            _fundamento == 4 ? _porcentaje : null, _hastaAlta, string.IsNullOrWhiteSpace(_soporte) ? null : _soporte.Trim(), null), _clave);
+        if (!r.IsSuccess) { _error = r.ErrorMessage ?? "No se pudo registrar el vínculo."; return; }
+        _mostrarAlta = false;
+        await Notification.SuccessAsync("Vínculo registrado.");
+        await CargarAsync();
+    }
+
+    private void AbrirFin(VinculadoDto vinculo)
+    {
+        _aTerminar = vinculo;
+        _hasta = Hoy;
+        _motivo = _error = null;
+        _clave = new ClaveDeOperacion();
+        _mostrarFin = true;
+    }
+
+    private async Task TerminarAsync()
+    {
+        if (_aTerminar is not { } v || string.IsNullOrWhiteSpace(_motivo)) return;
+        using var carga = _guardado.Iniciar();
+        _error = null;
+        var r = await Gobierno.TerminarVinculoAsync(v.PublicId, new FinDeVigenciaRequest(_hasta, _motivo.Trim()), _clave);
+        if (!r.IsSuccess) { _error = r.ErrorMessage ?? "No se pudo terminar el vínculo."; return; }
+        _mostrarFin = false;
+        await Notification.SuccessAsync("Vínculo terminado.");
+        await CargarAsync();
+    }
+
+    // ------------------------------------------------------------------------------------- grupos conectados --
+
+    private readonly EstadoDeCarga _cargaGrupos = new();
+    private int _pestana;
+    private bool _conTerminados, _mostrarGrupo;
+    private List<GrupoConectadoDto> _grupos = [];
+    private readonly List<PersonSearchPicker.PersonSearchItem> _miembros = [];
+    private PersonSearchPicker.PersonSearchItem? _miembro;
+    private GrupoConectadoDto? _grupo;
+    private string? _nombreGrupo, _tituloGrupo, _accionGrupo;
+    private int _fundamentoGrupo = 1;
+
+    private async Task AbrirGruposAsync()
+    {
+        _pestana = 1;
+        await CargarGruposAsync();
+    }
+
+    private async Task CargarGruposAsync()
+    {
+        using var carga = _cargaGrupos.Iniciar();
+        var r = await Cupos.GruposAsync(incluirTerminados: _conTerminados);
+        if (!r.IsSuccess) { _grupos = []; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer los grupos."); return; }
+        _grupos = [.. r.Value ?? []];
+    }
+
+    private void AbrirDialogoDeGrupo(string accion, string titulo, GrupoConectadoDto? grupo)
+    {
+        _accionGrupo = accion; _tituloGrupo = titulo; _grupo = grupo;
+        _motivo = _error = _nombreGrupo = null; _miembro = null; _miembros.Clear(); _fundamentoGrupo = 1;
+        _clave = new ClaveDeOperacion();
+        _mostrarGrupo = true;
+    }
+
+    private void AbrirGrupo() => AbrirDialogoDeGrupo("registrar", "Registrar un grupo conectado", null);
+    private void AbrirMiembro(GrupoConectadoDto grupo) => AbrirDialogoDeGrupo("miembro", $"Agregar un miembro a {grupo.Name}", grupo);
+    private void AbrirFinDeGrupo(GrupoConectadoDto grupo) => AbrirDialogoDeGrupo("terminar", $"Terminar {grupo.Name}", grupo);
+
+    private void AgregarMiembroALaLista()
+    {
+        if (_miembro is { } m && _miembros.All(x => x.PublicId != m.PublicId)) _miembros.Add(m);
+        _miembro = null;
+    }
+
+    private async Task GuardarGrupoAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_motivo)) return;
+        using var carga = _guardado.Iniciar();
+        _error = null;
+        var motivo = _motivo.Trim();
+        var r = _accionGrupo switch
+        {
+            "registrar" => await Cupos.RegistrarGrupoAsync(new RegistrarGrupoRequest(_nombreGrupo?.Trim() ?? "", _fundamentoGrupo, motivo,
+                _miembros.Select(m => m.PublicId).ToList()), _clave),
+            "miembro" when _miembro is { } m && _grupo is { } g => await Cupos.AgregarMiembroAsync(g.PublicId, new MiembroDeGrupoRequest(m.PublicId, motivo), _clave),
+            "terminar" when _grupo is { } g => await Cupos.TerminarGrupoAsync(g.PublicId, motivo, _clave),
+            _ => null,
+        };
+        if (r is null) { _error = "Elija la persona."; return; }
+        if (!r.IsSuccess) { _error = r.ErrorMessage ?? "No se pudo registrar."; return; }
+        _mostrarGrupo = false;
+        await Notification.SuccessAsync("Registrado.");
+        await CargarGruposAsync();
+    }
+
+    private static DateOnly? LeerFecha(object? valor) =>
+        DateOnly.TryParse(valor?.ToString(), CultureInfo.InvariantCulture, out var f) ? f : null;
+}

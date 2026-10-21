@@ -1,0 +1,191 @@
+{
+  "descripcion": "T0900 (§24 ejemplo 14 con faltante, K3, C81 pendiente de validar): el deterioro del último cierre no cubre todo el capital castigado; la diferencia va a GastoDeCastigoOCondonacion con el motivo WriteOff, el capital entra entero a castigada en orden y no hay suspenso que pasar a control.",
+  "sobre": {
+    "version": 1,
+    "kind": "Business",
+    "originModule": "CAR",
+    "originEventKey": "Confirmation",
+    "origin": {
+      "kind": "Operation",
+      "documentClass": null,
+      "documentTypeCode": null,
+      "number": "CAS-000301",
+      "publicId": "0d0d0093-0000-4000-8000-000000000093",
+      "operationDate": "2026-12-04"
+    },
+    "related": null,
+    "chainRootPublicId": "0e0e0094-0000-4000-8000-000000000094",
+    "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+    "costCenterPublicId": null,
+    "warehouseCode": null,
+    "personPublicId": "a1b2c3d4-0000-4000-8000-000000000003",
+    "currency": "COP",
+    "exchangeRate": 1,
+    "originUser": {
+      "centralUserId": "d4e5f6a7-b8c9-4d0e-9f1a-2b3c4d5e6f70",
+      "name": "Usuario de ensayo"
+    },
+    "emittedAt": "2026-12-04T15:00:00Z"
+  },
+  "mensajes": [
+    {
+      "messageId": "0f0f0097-0000-4000-8000-000000000097",
+      "type": "CreditoCastigado",
+      "kind": "Business",
+      "originDocumentClass": "WriteOff",
+      "payload": {
+        "loan": {
+          "loanPublicId": "7b8c9d0e-1f2a-4b3c-9d4e-000000000300",
+          "loanNumber": "000300"
+        },
+        "debtorPersonPublicId": "a1b2c3d4-0000-4000-8000-000000000003",
+        "valueDate": "2026-12-04",
+        "registeredAt": "2026-12-04T15:00:00Z",
+        "dimensions": {
+          "creditLineCode": "COM01",
+          "modalityCode": "CONSUMO",
+          "subsegmentCode": "SinLibranza",
+          "riskCategory": "E",
+          "riskSubcategory": "None",
+          "isEmployee": false,
+          "inGracePeriod": false,
+          "restructured": false,
+          "writtenOff": false,
+          "collectorClass": null,
+          "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+          "impairmentModel": "ArrearsAnnex1",
+          "riskSegment": "CONSUMO",
+          "valueUnit": "Pesos"
+        },
+        "amounts": [
+          {
+            "concept": "Principal",
+            "installmentNumber": null,
+            "amount": 3000000.0,
+            "uvrAmount": null,
+            "onBehalfOfAssociate": false,
+            "reasonCode": "Irrecuperable"
+          }
+        ],
+        "original": null,
+        "rulesVersion": "LND-2026.1",
+        "writeOffBatchPublicId": "3b1e0095-0000-4000-8000-000000000095",
+        "sessionItemPublicId": "3b1f0096-0000-4000-8000-000000000096",
+        "impairmentApplied": [
+          {
+            "concept": "Principal",
+            "installmentNumber": null,
+            "amount": 2400000.0,
+            "uvrAmount": null,
+            "onBehalfOfAssociate": false,
+            "reasonCode": null
+          }
+        ],
+        "impairmentShortfall": 600000.0,
+        "suspenseWrittenOff": []
+      }
+    }
+  ],
+  "esperado": {
+    "tipo": "PV",
+    "fecha": "2026-12-04",
+    "origen": "LendingIssuedDocument",
+    "lineas": [
+      {
+        "rol": "DeterioroIndividual",
+        "cuenta": "14452501",
+        "debito": 2400000.0,
+        "credito": 0.0,
+        "tercero": null,
+        "cruce": null,
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "CreditoCastigado"
+          ],
+          "concepto": "Principal",
+          "creditos": [
+            "000300"
+          ]
+        }
+      },
+      {
+        "rol": "GastoDeCastigoOCondonacion",
+        "cuenta": "51159502",
+        "debito": 600000.0,
+        "credito": 0.0,
+        "tercero": null,
+        "cruce": null,
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "CreditoCastigado"
+          ],
+          "concepto": "Principal",
+          "creditos": [
+            "000300"
+          ]
+        }
+      },
+      {
+        "rol": "Capital",
+        "cuenta": "14422501",
+        "debito": 0.0,
+        "credito": 3000000.0,
+        "tercero": "luis",
+        "cruce": "PG 000300",
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "CreditoCastigado"
+          ],
+          "concepto": "Principal",
+          "creditos": [
+            "000300"
+          ]
+        }
+      },
+      {
+        "rol": "CastigadaEnOrden",
+        "cuenta": "83101501",
+        "debito": 3000000.0,
+        "credito": 0.0,
+        "tercero": null,
+        "cruce": null,
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "CreditoCastigado"
+          ],
+          "concepto": "Principal",
+          "creditos": [
+            "000300"
+          ]
+        }
+      },
+      {
+        "rol": "ContraOrdenControl",
+        "cuenta": "88050501",
+        "debito": 0.0,
+        "credito": 3000000.0,
+        "tercero": null,
+        "cruce": null,
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "CreditoCastigado"
+          ],
+          "concepto": "Principal",
+          "creditos": [
+            "000300"
+          ]
+        }
+      }
+    ]
+  }
+}

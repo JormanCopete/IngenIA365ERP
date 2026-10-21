@@ -1,0 +1,302 @@
+{
+  "code": "CENTRAL-TRANSUNION-v1",
+  "kind": "CreditBureau",
+  "bureauCode": "TRANSUNION",
+  "version": "1",
+  "source": "Formato de reporte de información de obligaciones de TransUnion Colombia para fuentes (por cotejar)",
+  "validFrom": "2026-12-01",
+  "validTo": null,
+  "fileKind": "Delimited",
+  "delimiter": ";",
+  "encoding": "iso-8859-1",
+  "lineEnding": "CRLF",
+  "normalizeText": true,
+  "records": [
+    {
+      "code": "Detail",
+      "repeat": "PorObligacionYTitular",
+      "fields": [
+        {
+          "number": 1,
+          "name": "Tipo de identificación",
+          "order": 1,
+          "length": 2,
+          "kind": "A",
+          "format": "Text",
+          "required": true,
+          "path": "Titular.TipoDeIdentificacion",
+          "verified": false
+        },
+        {
+          "number": 2,
+          "name": "Número de identificación",
+          "order": 2,
+          "length": 15,
+          "kind": "A",
+          "format": "Text",
+          "required": true,
+          "path": "Titular.NumeroDeDocumento",
+          "verified": false
+        },
+        {
+          "number": 3,
+          "name": "Nombre o razón social",
+          "order": 3,
+          "length": 60,
+          "kind": "A",
+          "format": "Text",
+          "required": true,
+          "path": "Titular.Nombre",
+          "verified": false
+        },
+        {
+          "number": 4,
+          "name": "Número de la obligación",
+          "order": 4,
+          "length": 20,
+          "kind": "A",
+          "format": "Text",
+          "required": true,
+          "path": "Obligacion.Numero",
+          "verified": false
+        },
+        {
+          "number": 5,
+          "name": "Calidad del titular",
+          "order": 5,
+          "length": 1,
+          "kind": "A",
+          "format": "Text",
+          "required": true,
+          "path": "Titular.Calidad",
+          "verified": false
+        },
+        {
+          "number": 6,
+          "name": "Código del suscriptor",
+          "order": 6,
+          "length": 10,
+          "kind": "A",
+          "format": "Text",
+          "required": true,
+          "path": "Archivo.CodigoDeSuscriptor",
+          "verified": false
+        },
+        {
+          "number": 7,
+          "name": "Fecha de corte",
+          "order": 7,
+          "length": 8,
+          "kind": "N",
+          "format": "Date",
+          "required": true,
+          "path": "Archivo.FechaDeCorte",
+          "pattern": "yyyyMMdd",
+          "verified": false
+        },
+        {
+          "number": 8,
+          "name": "Fecha de apertura",
+          "order": 8,
+          "length": 8,
+          "kind": "N",
+          "format": "Date",
+          "required": true,
+          "path": "Obligacion.FechaDeApertura",
+          "pattern": "yyyyMMdd",
+          "verified": false
+        },
+        {
+          "number": 9,
+          "name": "Fecha de vencimiento",
+          "order": 9,
+          "length": 8,
+          "kind": "N",
+          "format": "Date",
+          "required": true,
+          "path": "Obligacion.FechaDeVencimiento",
+          "pattern": "yyyyMMdd",
+          "verified": false
+        },
+        {
+          "number": 10,
+          "name": "Estado de la obligación",
+          "order": 10,
+          "length": 2,
+          "kind": "A",
+          "format": "Text",
+          "required": true,
+          "path": "Obligacion.Novedad",
+          "verified": false
+        },
+        {
+          "number": 11,
+          "name": "Valor inicial",
+          "order": 11,
+          "length": 18,
+          "kind": "N",
+          "format": "AmountPoint2",
+          "required": true,
+          "path": "Obligacion.ValorInicial",
+          "verified": false
+        },
+        {
+          "number": 12,
+          "name": "Saldo total",
+          "order": 12,
+          "length": 18,
+          "kind": "N",
+          "format": "AmountPoint2",
+          "required": true,
+          "path": "Saldos.Total",
+          "verified": false
+        },
+        {
+          "number": 13,
+          "name": "Saldo en mora",
+          "order": 13,
+          "length": 18,
+          "kind": "N",
+          "format": "AmountPoint2",
+          "required": true,
+          "path": "Saldos.EnMora",
+          "verified": false
+        },
+        {
+          "number": 14,
+          "name": "Valor de la cuota",
+          "order": 14,
+          "length": 18,
+          "kind": "N",
+          "format": "AmountPoint2",
+          "required": true,
+          "path": "Obligacion.ValorDeLaCuota",
+          "verified": false
+        },
+        {
+          "number": 15,
+          "name": "Cuotas pagadas",
+          "order": 15,
+          "length": 3,
+          "kind": "N",
+          "format": "Integer",
+          "required": true,
+          "path": "Obligacion.CuotasPagadas",
+          "verified": false
+        },
+        {
+          "number": 16,
+          "name": "Cuotas pactadas",
+          "order": 16,
+          "length": 3,
+          "kind": "N",
+          "format": "Integer",
+          "required": true,
+          "path": "Obligacion.CuotasPactadas",
+          "verified": false
+        },
+        {
+          "number": 17,
+          "name": "Días de mora",
+          "order": 17,
+          "length": 4,
+          "kind": "N",
+          "format": "Integer",
+          "required": true,
+          "path": "Riesgo.DiasDeMora",
+          "verified": false
+        },
+        {
+          "number": 18,
+          "name": "Fecha del último pago",
+          "order": 18,
+          "length": 8,
+          "kind": "N",
+          "format": "Date",
+          "required": false,
+          "path": "Obligacion.FechaDelUltimoPago",
+          "pattern": "yyyyMMdd",
+          "verified": false
+        },
+        {
+          "number": 19,
+          "name": "Marca de reclamo en trámite",
+          "order": 19,
+          "length": 1,
+          "kind": "A",
+          "format": "Text",
+          "required": false,
+          "path": "Reporte.MarcaDeReclamo",
+          "allowedValues": [
+            "R"
+          ],
+          "verified": false
+        },
+        {
+          "number": 20,
+          "name": "Retiro de un reporte hecho sin aviso",
+          "order": 20,
+          "length": 1,
+          "kind": "A",
+          "format": "Text",
+          "required": false,
+          "path": "Reporte.MarcaDeRetiro",
+          "allowedValues": [
+            "X"
+          ],
+          "verified": false
+        },
+        {
+          "number": 21,
+          "name": "Ciudad de residencia (DIVIPOLA)",
+          "order": 21,
+          "length": 5,
+          "kind": "N",
+          "format": "Text",
+          "required": false,
+          "path": "Titular.CodigoDeCiudad",
+          "verified": false
+        },
+        {
+          "number": 22,
+          "name": "Dirección de residencia",
+          "order": 22,
+          "length": 60,
+          "kind": "A",
+          "format": "Text",
+          "required": false,
+          "path": "Titular.Direccion",
+          "verified": false
+        },
+        {
+          "number": 23,
+          "name": "Teléfono",
+          "order": 23,
+          "length": 15,
+          "kind": "A",
+          "format": "Text",
+          "required": false,
+          "path": "Titular.Telefono",
+          "verified": false
+        },
+        {
+          "number": 24,
+          "name": "Correo electrónico",
+          "order": 24,
+          "length": 60,
+          "kind": "A",
+          "format": "Text",
+          "required": false,
+          "path": "Titular.Correo",
+          "verified": false
+        }
+      ]
+    }
+  ],
+  "notes": [
+    "Pregunta I7 sin respuesta del dueño: campos reconstruidos del instructivo público, cada uno con verified=false hasta cotejarlo con el instructivo vigente y con un archivo aceptado por el validador (SC-019). Cotejar es publicar una versión nueva con verified=true, verifiedBy, verifiedOn y verifiedAgainst.",
+    "Las rutas (path) son el vocabulario que entrega la proyección de Application; un cambio de ruta es un cambio de la proyección y del layout a la vez.",
+    "Una línea por obligación y titular (deudor o codeudor con su propia autorización); los excluidos no van en el archivo (data-model §28.2).",
+    "Los códigos de tipo de identificación, calidad y estado son los de la central por cotejar; la proyección traduce los del ERP."
+  ]
+}

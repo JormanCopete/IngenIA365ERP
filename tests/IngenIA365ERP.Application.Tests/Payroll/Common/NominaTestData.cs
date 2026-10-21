@@ -7,6 +7,7 @@ using IngenIA365ERP.Application.Payroll.Novelties;
 using IngenIA365ERP.Application.Payroll.Novelties.RecurringNovelties;
 using IngenIA365ERP.Application.Payroll.Services;
 using IngenIA365ERP.Application.Tests.Common;
+using IngenIA365ERP.Application.Tests.Common.Integration.Lending;
 using IngenIA365ERP.Domain.Entities.Accounting;
 using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Entities.Payroll;
@@ -48,6 +49,18 @@ public sealed class NominaTestData
     public ProvisionBalanceReader SaldosDeProvision { get; }
     public SettlementInputLoader SettlementLoader { get; }
 
+    // Feature 013: Cartera por sus puertos, con dobles (sin configurar, Cartera sin activar y sin obligaciones).
+    public ConsultaDeObligacionesDePrueba Obligaciones { get; } = new();
+    public ContratoDeObligacionesDePrueba Contrato { get; } = new();
+    public RecaudoPorNomina Recaudo { get; }
+    public CuotasDeCarteraEnNomina CuotasDeCartera { get; }
+
+    // Feature 014 (T089): aportes y ahorro por el contrato de cuentas, con un doble (sin cuotas por defecto).
+    public ContratoDeCuentasDePrueba Cuentas { get; } = new();
+    public RecaudoDeCuentasPorNomina RecaudoDeCuentas { get; }
+    public CuotasDeCuentasEnNomina CuotasDeCuentas { get; }
+    public IngenIA365ERP.Application.Payroll.Settlements.PropuestaDeDescuentosDeCartera PropuestaDeCartera { get; }
+
     public PayrollPlan Plan { get; }
     public PayPeriod Marzo { get; }
     public Employee Ana { get; }
@@ -60,6 +73,8 @@ public sealed class NominaTestData
         Clock = Substitute.For<IDateTimeService>();
         Clock.UtcNow.Returns(Ahora);
         Clock.TodayUtc.Returns(DateOnly.FromDateTime(Ahora));
+        // Feature 013: la fecha local (los puertos de Cartera y la fecha valor de la definitiva la usan); el sustituto no ejecuta la implementación por defecto.
+        Clock.HoyLocal.Returns(DateOnly.FromDateTime(Ahora));
         User = UsuarioDePrueba("ana@demo", 7);
         Audit = Substitute.For<IAuditAppendOnlyWriter>();
         Lock = Substitute.For<IDistributedLock>();
@@ -74,7 +89,13 @@ public sealed class NominaTestData
         Policies = new PayrollPolicyReader(Db, Clock);
         Loader = new CalculationInputLoader(Db, Policies);
         SaldosDeProvision = new ProvisionBalanceReader(Db);
-        SettlementLoader = new SettlementInputLoader(Db, Policies, SaldosDeProvision, NullLogger<SettlementInputLoader>.Instance);
+        Recaudo = new RecaudoPorNomina(Contrato);
+        CuotasDeCartera = new CuotasDeCarteraEnNomina(Db, Obligaciones, Clock, User, NullLogger<CuotasDeCarteraEnNomina>.Instance);
+        RecaudoDeCuentas = new RecaudoDeCuentasPorNomina(Cuentas);
+        CuotasDeCuentas = new CuotasDeCuentasEnNomina(Db, Cuentas, Clock, User, NullLogger<CuotasDeCuentasEnNomina>.Instance);
+        PropuestaDeCartera = new IngenIA365ERP.Application.Payroll.Settlements.PropuestaDeDescuentosDeCartera(Obligaciones, Clock,
+            NullLogger<IngenIA365ERP.Application.Payroll.Settlements.PropuestaDeDescuentosDeCartera>.Instance);
+        SettlementLoader = new SettlementInputLoader(Db, Policies, SaldosDeProvision, PropuestaDeCartera, NullLogger<SettlementInputLoader>.Instance);
         Alcance = Substitute.For<IUserBranchScope>();
         Alcance.ObtenerAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult(AlcanceDeSucursales.SinRestriccion));
         Poster = Contabilizador(User);
@@ -83,7 +104,7 @@ public sealed class NominaTestData
         Plan = new PayrollPlan { Code = "DEFAULT", Name = "Nómina general", Periodicity = PayrollPeriodicity.Monthly, IsDefault = true, IsActive = true, CreatedBy = "system:seed" };
         Db.PayrollPlans.Add(Plan);
         Db.PayrollConceptDefinitions.AddRange(PayrollConceptDefinitionsSeeder.Catalogo());
-        Db.PayrollLegalParameters.AddRange(PayrollLegalParametersSeeder.Catalogo());
+        Db.PayrollLegalParameters.AddRange(PayrollLegalParametersSeeder.ConValoresNacionales());
         // Las cinco clases ARL con Ids que NO coinciden con la clase (una fila de relleno
         // antes): la ficha guarda la fila y la clase es su Code, no su Id.
         Db.WorkRiskRates.Add(new WorkRiskRate { Code = 9, Name = "Relleno", ShortName = "X", Rate = 0m, CreatedBy = "test", IsDeleted = true });
@@ -285,6 +306,7 @@ public sealed class NominaTestData
         var utc = DateTime.SpecifyKind(fecha, DateTimeKind.Utc);
         Clock.UtcNow.Returns(utc);
         Clock.TodayUtc.Returns(DateOnly.FromDateTime(utc));
+        Clock.HoyLocal.Returns(DateOnly.FromDateTime(utc));
     }
 
     /// <summary>Una política por empresa con vigencia (<c>PAY_CompanyPolicies</c>).</summary>

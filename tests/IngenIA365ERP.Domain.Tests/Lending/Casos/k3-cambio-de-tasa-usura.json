@@ -1,0 +1,92 @@
+// FR-090, FR-091 (T0858): CAMBIO DE TASA decidido el 15-08-2026 con la cuota 7 pagada (saldo 1.328.820,59, 5 cuotas, desde la 8).
+// La usura vigente a la fecha de la decisión es 27 % (desde el 01-07-2026): a 32 % EA el plan la EXCEDE (Lending.Usury.Exceeded, la
+// simulación lo dice y el comando no lo radica); a 18 % EA pasa.
+// El crédito base de los casos de K3: 3.000.000 a 12 cuotas mensuales fijas, 24 % EA, 30/360, desembolsado el 15-01-2026 (vence los 15).
+// Su plan (calcular.py): saldo tras la cuota 5 = 1.827.884,60; la cuota 6 (15-07-2026) lleva 247.295,52 de capital y 33.062,01 de
+// interés; saldo tras la 6 = 1.580.589,08; tras la 7 = 1.328.820,59; tras la 8 = 1.072.498,21; tras la 9 = 811.539,58.
+// La usura de CONSUMO es 26,5 % desde el 01-01-2026 y 27 % desde el 01-07-2026.
+// Regla (FR-091, T29): el plan se regenera desde la fecha de la decisión con la versión de reglas vigente; capital = saldo + lo que
+// recoge una refinanciación + lo capitalizado; los costos de la novedad nunca entran. Calculado con calcular.py (bloque «K3»).
+// Pendiente de validar por la contadora.
+{
+  "nombre": "k3-cambio-de-tasa-usura",
+  "condiciones": {
+    "sistema": "LevelPayment", "convencion": "Thirty360", "equivalencia": "Compound",
+    "redondeo": { "unidad": 0.01, "modo": "AwayFromZero", "momento": "PerConcept" },
+    "prelacion": "OldestInstallmentFirst",
+    "monto": 3000000, "plazoCuotas": 12, "periodicidad": "Monthly", "tasaEA": 0.240000,
+    "fechaDesembolso": "2026-01-15", "modalidad": "CONSUMO"
+  },
+  "series": {
+    "usura": [
+      { "clave": "CONSUMO", "desde": "2026-01-01", "ea": 0.265000, "registradoEn": "2025-12-31T15:00:00Z",
+        "publicId": "0b7a3c8e-1d1a-4f6e-9a01-000000003001" },
+      { "clave": "CONSUMO", "desde": "2026-07-01", "ea": 0.270000, "registradoEn": "2026-06-30T15:00:00Z",
+        "publicId": "0b7a3c8e-1d1a-4f6e-9a01-000000003002" }
+    ],
+    "festivos": []
+  },
+  "operaciones": [],
+  "novedades": [
+    {
+      "nombre": "tasa-32-excede-la-usura",
+      "mecanismo": "RateChange",
+      "causa": "Modification",
+      "fecha": "2026-08-15",
+      "saldoDeCapital": 1328820.59,
+      "interesCapitalizado": 0,
+      "saldosRecogidos": [],
+      "costos": 0,
+      "cuotas": 5,
+      "tasaEA": 0.320000,
+      "esperado": {
+        "primeraCuota": 8,
+        "capital": 1328820.59,
+        "tasas": { "diaria": 0.000771496718943941, "nominalDelPeriodo": 0.023405690796291974, "cuotaNivelada": 284713.06, "efectiva": 0.317787, "efectivaSinCargos": 0.317787 },
+        "plan": {
+          "interesDeGracia": 0,
+          "residuo": -0.01,
+          "totales": { "capital": 1328820.59, "interes": 94744.70, "seguro": 0 },
+          "cuotas": [
+            { "numero": 8, "vencimiento": "2026-09-15", "dias": 30, "capital": 253611.10, "interes": 31101.96, "seguro": 0, "saldo": 1075209.49 },
+            { "numero": 9, "vencimiento": "2026-10-15", "dias": 30, "capital": 259547.04, "interes": 25166.02, "seguro": 0, "saldo": 815662.45 },
+            { "numero": 10, "vencimiento": "2026-11-15", "dias": 30, "capital": 265621.92, "interes": 19091.14, "seguro": 0, "saldo": 550040.53 },
+            { "numero": 11, "vencimiento": "2026-12-15", "dias": 30, "capital": 271838.98, "interes": 12874.08, "seguro": 0, "saldo": 278201.55 },
+            { "numero": 12, "vencimiento": "2027-01-15", "dias": 30, "capital": 278201.55, "interes": 6511.50, "seguro": 0, "saldo": 0 }
+          ]
+        },
+        "usura": { "veredicto": "Excede", "usura": 0.270000, "holgura": -0.047787 }
+      }
+    },
+    {
+      "nombre": "tasa-18-pasa",
+      "mecanismo": "RateChange",
+      "causa": "Modification",
+      "fecha": "2026-08-15",
+      "saldoDeCapital": 1328820.59,
+      "interesCapitalizado": 0,
+      "saldosRecogidos": [],
+      "costos": 0,
+      "cuotas": 5,
+      "tasaEA": 0.180000,
+      "esperado": {
+        "primeraCuota": 8,
+        "capital": 1328820.59,
+        "tasas": { "diaria": 0.000459868036003398, "nominalDelPeriodo": 0.013888430348410033, "cuotaNivelada": 276939.07, "efectiva": 0.178825, "efectivaSinCargos": 0.178825 },
+        "plan": {
+          "interesDeGracia": 0,
+          "residuo": -0.01,
+          "totales": { "capital": 1328820.59, "interes": 55874.75, "seguro": 0 },
+          "cuotas": [
+            { "numero": 8, "vencimiento": "2026-09-15", "dias": 30, "capital": 258483.84, "interes": 18455.23, "seguro": 0, "saldo": 1070336.75 },
+            { "numero": 9, "vencimiento": "2026-10-15", "dias": 30, "capital": 262073.77, "interes": 14865.30, "seguro": 0, "saldo": 808262.98 },
+            { "numero": 10, "vencimiento": "2026-11-15", "dias": 30, "capital": 265713.57, "interes": 11225.50, "seguro": 0, "saldo": 542549.41 },
+            { "numero": 11, "vencimiento": "2026-12-15", "dias": 30, "capital": 269403.91, "interes": 7535.16, "seguro": 0, "saldo": 273145.50 },
+            { "numero": 12, "vencimiento": "2027-01-15", "dias": 30, "capital": 273145.50, "interes": 3793.56, "seguro": 0, "saldo": 0 }
+          ]
+        },
+        "usura": { "veredicto": "Pasa", "usura": 0.270000, "holgura": 0.091175 }
+      }
+    }
+  ]
+}

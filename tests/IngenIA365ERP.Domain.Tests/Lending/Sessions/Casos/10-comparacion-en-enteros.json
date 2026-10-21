@@ -1,0 +1,56 @@
+// R133: la comparación es votos × denominador frente a numerador × base, en enteros. «Al menos dos tercios» con 3
+// presentes y 2 a favor: 2 × 3 = 6 ≥ 2 × 3 = 6 → aprobado. En decimal, 2/3 = 0,6666666666666666666666666667 y
+// 0,666…7 × 3 = 2,0000000000000000000000000001 > 2: un cálculo con la fracción redondeada lo NEGARÍA.
+// Con 5 presentes hacen falta ceil(2 × 5 / 3) = ceil(10 / 3) = 4; tres no alcanzan (3 × 3 = 9 < 10).
+{
+  "nombre": "10-comparacion-en-enteros",
+  "descripcion": "La mayoría de dos tercios se compara en enteros, sin decimales.",
+  "regla": {
+    "quorum": { "numerador": 1, "denominador": 2, "comparacion": "MoreThan" },
+    "mayoria": { "numerador": 2, "denominador": 3, "comparacion": "AtLeast", "base": "PresentEligible" },
+    "vinculados": { "numerador": 4, "denominador": 5 }
+  },
+  "miembros": [
+    { "persona": 101 }, { "persona": 102 }, { "persona": 103 }, { "persona": 104 }, { "persona": 105 }
+  ],
+  "escenarios": [
+    {
+      "nombre": "dos de tres",
+      "presentes": [101, 102, 103],
+      "punto": {
+        "votos": [
+          { "voto": 1, "persona": 101, "valor": "For" },
+          { "voto": 2, "persona": 102, "valor": "For" },
+          { "voto": 3, "persona": 103, "valor": "Against" }
+        ]
+      },
+      "esperado": {
+        "quorum": { "cumple": true, "composicion": 5, "requerido": 3, "presentesElegibles": 3 },
+        "elegibles": 3, "base": 3, "requeridos": 2,
+        "aFavor": 2, "enContra": 1, "abstenciones": 0,
+        "resultado": "Aprobado",
+        "explicacionContiene": ["2 × 3 = 6 ≥ 2 × 3 = 6"]
+      }
+    },
+    {
+      "nombre": "tres de cinco",
+      "presentes": [101, 102, 103, 104, 105],
+      "punto": {
+        "votos": [
+          { "voto": 1, "persona": 101, "valor": "For" },
+          { "voto": 2, "persona": 102, "valor": "For" },
+          { "voto": 3, "persona": 103, "valor": "For" },
+          { "voto": 4, "persona": 104, "valor": "Against" },
+          { "voto": 5, "persona": 105, "valor": "Against" }
+        ]
+      },
+      "esperado": {
+        "quorum": { "cumple": true, "composicion": 5, "requerido": 3, "presentesElegibles": 5 },
+        "elegibles": 5, "base": 5, "requeridos": 4,
+        "aFavor": 3, "enContra": 2, "abstenciones": 0,
+        "resultado": "NoAprobado",
+        "explicacionContiene": ["3 × 3 = 9 < 2 × 5 = 10"]
+      }
+    }
+  ]
+}

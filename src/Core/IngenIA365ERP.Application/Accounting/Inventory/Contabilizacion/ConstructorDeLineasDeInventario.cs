@@ -701,7 +701,7 @@ public static class ConstructorDeLineasDeInventario
 
     /// <summary>¿El tipo de mensaje va a Contabilidad? (los de Cartera no se evalúan ni se contabilizan aquí).</summary>
     public static bool VaAContabilidad(string tipo) =>
-        CatalogoDeMensajesV1.Todos.Any(t => t.Type == tipo && t.Destination == IntegrationDestinations.Accounting);
+        CatalogoDeMensajesV1.Todos.Any(t => t.Type == tipo && t.AdmiteDestino(IntegrationDestinations.Accounting));
 
     /// <summary>¿La unidad es informativa? (sólo recibo, sin comprobante; §3.9).</summary>
     public static bool EsInformativa(IReadOnlyList<MensajeDeUnidad> unidad) =>

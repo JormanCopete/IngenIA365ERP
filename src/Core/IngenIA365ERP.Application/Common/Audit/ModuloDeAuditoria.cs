@@ -19,6 +19,7 @@ public static class ModuloDeAuditoria
     public const string Navigation = "Navigation";
     public const string Accounting = "Accounting";
     public const string Lending = "Lending";
+
     public const string Payroll = "Payroll";
     public const string Inventory = "Inventory";
     public const string Cdt = "CDT";
@@ -32,6 +33,12 @@ public static class ModuloDeAuditoria
     public const string Parameters = "Parameters";
     public const string Taxes = "Taxes";
     public const string PaymentMeans = "PaymentMeans";
+
+    /// <summary>Feature 013 (T67, T0092): habeas data, listas restrictivas y solicitudes del titular; encadenado, diez años.</summary>
+    public const string Compliance = "Compliance";
+
+    /// <summary>Feature 013 (T67, T0092): valores nacionales y su réplica; encadenado, diez años.</summary>
+    public const string NationalValues = "NationalValues";
     public const string Audit = "Audit";
     public const string Web = "Web";
     public const string Admin = "Admin";
@@ -45,6 +52,7 @@ public static class ModuloDeAuditoria
         // Feature 009 (FR-051): el ingreso a una opción del ERP es navegación, no una escritura del módulo.
         (".Audit.RegisterOptionAccess", Navigation),
         (".Accounting", Accounting),
+        // Feature 014 (T007, R28): la regla «.Savings» de lo conservado se retiró con él; las captaciones son «.Lending».
         (".Lending", Lending),
         (".Payroll", Payroll),
         (".Inventory", Inventory),
@@ -63,6 +71,9 @@ public static class ModuloDeAuditoria
         (".Core.Payments", PaymentMeans),
         (".Audit", Audit),
         (".Web", Web),
+        // Feature 013 (T67, T0092): cumplimiento y valores nacionales, antes de .Admin y de .Core.
+        (".Compliance", Compliance),
+        (".NationalValues", NationalValues),
         (".Admin", Admin),
         (".Core", Core),
     ];

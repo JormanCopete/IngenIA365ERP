@@ -185,3 +185,17 @@ public enum PurchaseMatchStatus { Held = 1, Approved = 2, Rejected = 3 }
 /// api.md §14.9 y §17.1; data-model §9.7): por valor, cantidad, peso, volumen o a mano.
 /// </summary>
 public enum LandedCostAllocationMethod { Value = 1, Quantity = 2, Weight = 3, Volume = 4, Manual = 5 }
+
+// ------------------------------------------------------------------------------- Cartera (feature 013) --
+
+/// <summary>
+/// Qué respondió Cartera a una venta a crédito (<c>INV_LendingObligationResponses.Outcome</c>; feature 013, T0174, DE-14;
+/// data-model parte 3 §8.3 y §9.2).
+/// </summary>
+public enum LendingObligationOutcome { Created = 1, Rejected = 2 }
+
+/// <summary>
+/// El estado con que Cartera creó (o no incorporó) la obligación de una venta a crédito
+/// (<c>INV_LendingObligationResponses.ValidationStatus</c>; feature 013, T0174, T18; data-model parte 3 §9.2).
+/// </summary>
+public enum LendingObligationState { Validated = 1, ValidationFailed = 2, Migrated = 3, CancelledBeforeCutoff = 4, NotIncorporated = 5 }

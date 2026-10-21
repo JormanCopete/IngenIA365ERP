@@ -53,7 +53,7 @@ public class SaveMyPreferencesCommandValidatorTests
     [Fact]
     public void PaginaInicio_RutaInterna_EsAceptada()
     {
-        _validador.Validate(Cmd("ui.pagina-inicio", "/cartera/recaudos")).IsValid.Should().BeTrue();
+        _validador.Validate(Cmd("ui.pagina-inicio", "/cartera/ahorros")).IsValid.Should().BeTrue();
     }
 
     [Theory]
@@ -72,14 +72,14 @@ public class SaveMyPreferencesCommandValidatorTests
     [Fact]
     public void Favoritos_ListaDeRutasInternas_EsAceptada()
     {
-        var json = JsonSerializer.Serialize(new[] { "/cartera/recaudos", "/contabilidad/saldos" });
+        var json = JsonSerializer.Serialize(new[] { "/cartera/ahorros", "/contabilidad/saldos" });
         _validador.Validate(Cmd("ui.favoritos", json)).IsValid.Should().BeTrue();
     }
 
     [Fact]
     public void Favoritos_ConUnaRutaExterna_EsRechazada()
     {
-        var json = JsonSerializer.Serialize(new[] { "/cartera/recaudos", "https://externo.example" });
+        var json = JsonSerializer.Serialize(new[] { "/cartera/ahorros", "https://externo.example" });
         _validador.Validate(Cmd("ui.favoritos", json)).IsValid.Should().BeFalse();
     }
 

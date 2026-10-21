@@ -1,0 +1,113 @@
+{
+  "descripcion": "CreditoModificado (K3) que sólo cambia el plan: sin importes, recibo ZeroValue sin comprobante.",
+  "sobre": {
+    "version": 1,
+    "kind": "Business",
+    "originModule": "CAR",
+    "originEventKey": "Confirmation",
+    "origin": {
+      "kind": "Operation",
+      "documentClass": null,
+      "documentTypeCode": null,
+      "number": "NOV-000251",
+      "publicId": "0d0d0145-0000-4000-8000-000000000145",
+      "operationDate": "2027-03-13"
+    },
+    "related": null,
+    "chainRootPublicId": "0e0e0146-0000-4000-8000-000000000146",
+    "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+    "costCenterPublicId": null,
+    "warehouseCode": null,
+    "personPublicId": "a1b2c3d4-0000-4000-8000-000000000003",
+    "currency": "COP",
+    "exchangeRate": 1,
+    "originUser": {
+      "centralUserId": "d4e5f6a7-b8c9-4d0e-9f1a-2b3c4d5e6f70",
+      "name": "Usuario de ensayo"
+    },
+    "emittedAt": "2027-03-13T15:00:00Z"
+  },
+  "mensajes": [
+    {
+      "messageId": "0f0f0148-0000-4000-8000-000000000148",
+      "type": "CreditoModificado",
+      "kind": "Business",
+      "originDocumentClass": "TermsChange",
+      "payload": {
+        "loan": {
+          "loanPublicId": "7b8c9d0e-1f2a-4b3c-9d4e-000000000250",
+          "loanNumber": "000250"
+        },
+        "debtorPersonPublicId": "a1b2c3d4-0000-4000-8000-000000000003",
+        "valueDate": "2027-03-13",
+        "registeredAt": "2027-03-13T15:00:00Z",
+        "dimensions": {
+          "creditLineCode": "COM01",
+          "modalityCode": "CONSUMO",
+          "subsegmentCode": "SinLibranza",
+          "riskCategory": "C",
+          "riskSubcategory": "None",
+          "isEmployee": false,
+          "inGracePeriod": false,
+          "restructured": false,
+          "writtenOff": false,
+          "collectorClass": null,
+          "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+          "impairmentModel": "ArrearsAnnex1",
+          "riskSegment": "CONSUMO",
+          "valueUnit": "Pesos"
+        },
+        "amounts": [],
+        "original": null,
+        "rulesVersion": "LND-2026.1",
+        "previousDimensions": {
+          "creditLineCode": "COM01",
+          "modalityCode": "CONSUMO",
+          "subsegmentCode": "SinLibranza",
+          "riskCategory": "C",
+          "riskSubcategory": "None",
+          "isEmployee": false,
+          "inGracePeriod": false,
+          "restructured": false,
+          "writtenOff": false,
+          "collectorClass": null,
+          "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+          "impairmentModel": "ArrearsAnnex1",
+          "riskSegment": "CONSUMO",
+          "valueUnit": "Pesos"
+        },
+        "noveltyPublicId": "7b8c0147-0000-4000-8000-000000000147",
+        "sessionItemPublicId": null,
+        "previousPlan": {
+          "scheduleVersion": 1,
+          "amortizationSystem": "LevelPayment",
+          "periodicity": "Monthly",
+          "installmentCount": 36,
+          "installmentAmount": 392184.0,
+          "firstDueDate": "2026-12-30",
+          "finalDueDate": "2029-11-30",
+          "annualEffectiveRate": 0.245,
+          "dayCountConvention": "Thirty360",
+          "rulesVersion": "LND-2026.1"
+        },
+        "newPlan": {
+          "scheduleVersion": 1,
+          "amortizationSystem": "LevelPayment",
+          "periodicity": "Monthly",
+          "installmentCount": 36,
+          "installmentAmount": 392184.0,
+          "firstDueDate": "2026-12-30",
+          "finalDueDate": "2029-11-30",
+          "annualEffectiveRate": 0.245,
+          "dayCountConvention": "Thirty360",
+          "rulesVersion": "LND-2026.1"
+        },
+        "restructuringCount": 0,
+        "newLoan": null
+      }
+    }
+  ],
+  "esperado": {
+    "sinComprobante": "ZeroValue"
+  }
+}

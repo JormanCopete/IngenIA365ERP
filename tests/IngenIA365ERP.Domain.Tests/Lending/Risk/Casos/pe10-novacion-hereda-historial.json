@@ -1,0 +1,34 @@
+{
+  // pe10 (K6a, T1013, T1015; FR-090, FR-105, T49): el crédito 1002 nace en Cartera en 2026-08 por NOVACIÓN del 1001 (migrado con corte
+  // 2026-06-30, desembolsado en 2023-02). El historial sigue la cadena: de 2023-11 a 2026-06 las filas de migración del 1001 (0 días salvo
+  // 50 en 2026-03), en 2026-07 el cierre del 1001, en 2026-08 y 2026-09 los cierres del 1002 y en 2026-10 las transacciones del 1002. No
+  // falta ningún mes. Aunque el 1002 nunca estuvo en mora, hereda los 50 días: MORA1230 = 1 → Z = −1,109; puntaje 0,2481 → B. Al día hoy, la
+  // mora da A; la máxima es la del modelo (B) y se homologa con mora actual 0 → A. Repasado con Casos/riesgo-pe.py.
+  // PENDIENTE DE FIRMA DE LA CONTADORA.
+  "nombre": "pe10-novacion-hereda-historial",
+  "perdidaEsperada": {
+    "anexo2": "sembrado",
+    "contexto": { "tipoDeOrganizacion": "COOP_AHORRO_CREDITO", "fondoDeEmpleados": false, "smmlv": 1750905, "voluntaria": false },
+    "creditos": [
+      { "id": 1002, "deudor": 1000, "segmento": "CONSUMO_LIBRANZA", "diasDeMora": 0, "asociadoActivo": true, "cuota": 300000, "plazoEnMeses": 36,
+        "historial": {
+          "inicioDeLaCadena": "2023-02-01", "antecesores": [ 1001 ], "corteDeMigracion": "2026-06-30", "fechaDeReferencia": "2026-10-31",
+          "mesesExigidos": 36, "regla": "MayorObservada", "diasDelCorte": 0,
+          "filas": [
+            { "credito": 1001, "desde": "2023-11", "hasta": "2026-06", "dias": 0, "origen": "Migration" },
+            { "credito": 1001, "desde": "2026-03", "dias": 50, "origen": "Migration" },
+            { "credito": 1001, "desde": "2026-07", "dias": 0, "origen": "MonthlyClose" },
+            { "credito": 1002, "desde": "2026-08", "hasta": "2026-09", "dias": 0, "origen": "MonthlyClose" }
+          ],
+          "transacciones": [ { "desde": "2026-10", "dias": 0 } ]
+        },
+        "garantia": "SIN_GARANTIA", "saldos": { "capital": 6000000, "interesCorriente": 0, "interesDeMora": 0, "otros": 0 } }
+    ],
+    "esperado": [
+      { "id": 1002, "faltantes": 0, "incumplido": false, "z": -1.109, "puntaje": 0.2481, "calificacionDelModelo": "B",
+        "variables": [ "EA=1", "FE=0", "VALCUOTA=0", "FONDPLAZO=0", "MORA1230=1", "MORA1260=0", "SINMORA=0", "MORA2430N=0", "MORA3660=0" ],
+        "calificacionFinal": "B", "causa": "Model", "pi": 0.006, "pdi": 0.45, "deterioroCapital": 16200.00, "total": 16200.00,
+        "contable": "A", "homologada": true, "explicacionContiene": [ "Historial completo" ] }
+    ]
+  }
+}

@@ -1,0 +1,54 @@
+// US11-1: el mismo titular con un embargo por alimentos de 60.000.000: el limite inembargable no aplica (CGP art. 594 num. 2).
+{
+  "nombre": "embargo-02-alimentos",
+  "descripcion": "US11-1: el mismo titular con un embargo por alimentos de 60.000.000: el limite inembargable no aplica (CGP art. 594 num. 2).",
+  "entrada": {
+    "tope": 60000000,
+    "porAlimentos": true,
+    "limite": 50000000,
+    "aplicacion": "AllProtectedAccounts",
+    "ordenDeClases": [],
+    "cuentas": [
+      {
+        "id": 1,
+        "clase": "Demand",
+        "abiertaEl": "2020-01-10",
+        "saldo": 40000000,
+        "retenidoPorOtros": 0,
+        "protegida": true,
+        "embargable": true
+      },
+      {
+        "id": 2,
+        "clase": "Permanent",
+        "abiertaEl": "2021-05-01",
+        "saldo": 30000000,
+        "retenidoPorOtros": 0,
+        "protegida": true,
+        "embargable": true
+      }
+    ]
+  },
+  "esperado": {
+    "limiteAplicado": 0,
+    "protegido": 0,
+    "totalEmbargable": 70000000,
+    "retenido": 60000000,
+    "cuentas": [
+      {
+        "id": 1,
+        "orden": 1,
+        "protegido": 0,
+        "embargable": 40000000,
+        "retenido": 40000000
+      },
+      {
+        "id": 2,
+        "orden": 2,
+        "protegido": 0,
+        "embargable": 30000000,
+        "retenido": 20000000
+      }
+    ]
+  }
+}

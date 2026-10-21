@@ -1,0 +1,56 @@
+{
+  // Feature 013 (T0055; DT §2.21; data-model parte 3 §12.4): versión inicial del catálogo de modalidades de la semilla
+  // central (PlatformNationalValuesSeeder, Admin, Order 6). Rige la propuesta de las preguntas E4 y E10 —populares
+  // productivas a microcrédito, productivas a comercial, microcrédito con Inmobiliario/Empresarial— hasta que el dueño y la
+  // contadora la coteje: todo «pendiente de validar» (verified = false), y el documento con Verified = 0.
+  "modalities": [
+    {
+      "code": "CONSUMO", "name": "Consumo", "verified": false,
+      "combinations": [
+        { "subsegment": "ConLibranza", "sarcSegment": "CONSUMO", "expectedLossSegment": "CONSUMO_LIBRANZA", "usuryKey": "CONSUMO_Y_ORDINARIO", "admitsUvr": false },
+        { "subsegment": "SinLibranza", "sarcSegment": "CONSUMO", "expectedLossSegment": "CONSUMO_SIN_LIBRANZA", "usuryKey": "CONSUMO_Y_ORDINARIO", "admitsUvr": false },
+        { "subsegment": "Empleados", "sarcSegment": "CONSUMO", "expectedLossSegment": "CONSUMO_LIBRANZA", "usuryKey": "CONSUMO_Y_ORDINARIO", "admitsUvr": false }
+      ]
+    },
+    {
+      "code": "COMERCIAL", "name": "Comercial", "verified": false,
+      "combinations": [
+        { "subsegment": "PersonaNatural", "sarcSegment": "COMERCIAL_PN", "expectedLossSegment": "COMERCIAL_PN", "usuryKey": "CONSUMO_Y_ORDINARIO", "admitsUvr": false },
+        { "subsegment": "PersonaJuridica", "sarcSegment": "COMERCIAL_PJ", "usuryKey": "CONSUMO_Y_ORDINARIO", "admitsUvr": false }
+      ]
+    },
+    {
+      "code": "VIVIENDA", "name": "Vivienda", "verified": false,
+      "combinations": [
+        { "sarcSegment": "VIVIENDA", "housingRateCap": true, "admitsUvr": true }
+      ]
+    },
+    {
+      "code": "MICROCREDITO", "name": "Microcrédito", "verified": false,
+      "combinations": [
+        { "subsegment": "Inmobiliario", "sarcSegment": "MICROCREDITO", "usuryKey": "MICROCREDITO", "admitsUvr": false },
+        { "subsegment": "Empresarial", "sarcSegment": "MICROCREDITO", "usuryKey": "MICROCREDITO", "admitsUvr": false }
+      ]
+    },
+    {
+      "code": "POPULAR_PRODUCTIVO_RURAL", "name": "Popular productivo rural", "verified": false,
+      "combinations": [ { "sarcSegment": "MICROCREDITO", "usuryKey": "POPULAR_PRODUCTIVO_RURAL", "admitsUvr": false } ]
+    },
+    {
+      "code": "POPULAR_PRODUCTIVO_URBANO", "name": "Popular productivo urbano", "verified": false,
+      "combinations": [ { "sarcSegment": "MICROCREDITO", "usuryKey": "POPULAR_PRODUCTIVO_URBANO", "admitsUvr": false } ]
+    },
+    {
+      "code": "PRODUCTIVO_RURAL", "name": "Productivo rural", "verified": false,
+      "combinations": [ { "sarcSegment": "COMERCIAL_PN", "usuryKey": "PRODUCTIVO_RURAL", "admitsUvr": false } ]
+    },
+    {
+      "code": "PRODUCTIVO_URBANO", "name": "Productivo urbano", "verified": false,
+      "combinations": [ { "sarcSegment": "COMERCIAL_PN", "usuryKey": "PRODUCTIVO_URBANO", "admitsUvr": false } ]
+    },
+    {
+      "code": "PRODUCTIVO_MAYOR_MONTO", "name": "Productivo de mayor monto", "verified": false,
+      "combinations": [ { "sarcSegment": "COMERCIAL_PN", "usuryKey": "PRODUCTIVO_MAYOR_MONTO", "admitsUvr": false } ]
+    }
+  ]
+}

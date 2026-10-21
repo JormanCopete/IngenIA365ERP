@@ -1,0 +1,516 @@
+@page "/cartera/documentos"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Globalization
+@using IngenIA365ERP.Shared.Services.Adjuntos
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Http
+@inject CarteraClient Cartera
+@inject CreditosClient Creditos
+@inject AdjuntosClient Adjuntos
+@inject INotificationService Notification
+@inject NavigationManager Navegacion
+
+<PageTitle>Documentos de Cartera - IngenIA365ERP</PageTitle>
+
+@* Feature 013, US13 (T0792; FR-131, FR-132; contracts/api.md §15): los documentos al deudor emitidos —plan de pagos, paz y salvo de una obligación o
+   general, certificado de saldo y, desde K5 (T0975), extracto de un período y certificado tributario de un año terminado— buscados por crédito o deudor, clase, estado y fecha de emisión, sólo los del alcance de quien mira. «Emitir» es
+   un diálogo de un paso con una confirmación: la clase, el crédito y el titular (deudor o codeudor), la fecha de corte del certificado de saldo, el
+   período del extracto o el año del certificado tributario, y si se descarga o se envía por correo. Una negativa del paz y salvo dice qué obligaciones tienen saldo o qué facturas siguen en reproceso. El detalle
+   muestra los eventos (emisión, entrega, anulación con su motivo y operación causa) y, según los permisos, reimprimir —el mismo PDF guardado—,
+   enviar por correo y anular con motivo. Llega con ?credito= desde el expediente del crédito (y ?emitir=true abre el diálogo con él elegido). *@
+<PermissionGate Required="Lending.Documents.Read" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Documentos de Cartera</h3>
+        <div class="toolbar">
+            <PermissionGate Required="Lending.Documents.Verify">
+                <SfButton CssClass="e-outline" OnClick="@(() => Navegacion.NavigateTo("/cartera/verificar"))">Verificar un código</SfButton>
+            </PermissionGate>
+            <PermissionGate Required="Lending.Documents.Issue">
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@(() => AbrirEmisionAsync(null))">Emitir</SfButton>
+            </PermissionGate>
+        </div>
+    </div>
+
+    <div class="toolbar">
+        <label class="campo">Crédito o deudor
+            <input class="e-input" @bind="_buscarFiltro" placeholder="CR-000123 o nombre" @onkeyup="@(e => { if (e.Key == "Enter") _ = BuscarCreditosDelFiltroAsync(); })" />
+        </label>
+        <SfButton CssClass="e-outline" IconCss="e-icons e-search" Disabled="@_cargaFiltro.Activa" OnClick="@BuscarCreditosDelFiltroAsync">Buscar crédito</SfButton>
+        <label class="campo">Clase
+            <select class="e-input" @bind="_clase">
+                <option value="">Todas</option>
+                @foreach (var c in TextosDeDocumentos.Clases) { <option value="@c.Valor">@c.Texto</option> }
+            </select>
+        </label>
+        <label class="campo">Estado
+            <select class="e-input" @bind="_estado">
+                <option value="">Todos</option>
+                @foreach (var e in TextosDeDocumentos.Estados) { <option value="@e.Valor">@e.Texto</option> }
+            </select>
+        </label>
+        <label class="campo">Desde <input type="date" class="e-input" @onchange="@(e => _desde = LeerFecha(e.Value))" /></label>
+        <label class="campo">Hasta <input type="date" class="e-input" @onchange="@(e => _hasta = LeerFecha(e.Value))" /></label>
+        <SfButton CssClass="e-primary" IconCss="e-icons e-search" Disabled="@_carga.Activa" OnClick="@(() => CargarAsync(1))">Buscar</SfButton>
+    </div>
+    <IndicadorDeCarga Cargando="@_cargaFiltro.Activa">
+        @if (_creditosDelFiltro.Count > 0)
+        {
+            <div class="toolbar">
+                @foreach (var c in _creditosDelFiltro)
+                {
+                    var credito = c;
+                    <SfButton CssClass="e-flat e-small" OnClick="@(() => FiltrarPorCreditoAsync(credito.PublicId, credito.Number))">@credito.Number · @credito.Debtor.Name</SfButton>
+                }
+            </div>
+        }
+        @if (_filtroDeCredito is not null)
+        {
+            <p class="texto-apoyo">Documentos del crédito @_numeroDelFiltro <SfButton CssClass="e-flat e-small" OnClick="@QuitarFiltroAsync">Quitar</SfButton></p>
+        }
+    </IndicadorDeCarga>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        <p class="texto-apoyo">@_total documento(s). El estado se calcula: anulado si tiene anulación, sujeto a firmeza hasta la fecha de firmeza, vigente en otro caso.</p>
+        <div class="tabla-desplazable">
+            <table class="data-grid">
+                <thead><tr><th>Número</th><th>Clase</th><th>Titular</th><th>Créditos</th><th>Emitido</th><th>Por</th><th>Entrega</th><th>Estado</th></tr></thead>
+                <tbody>
+                    @foreach (var d in _documentos)
+                    {
+                        var documento = d;
+                        <tr class="fila-seleccionable @(_detalle?.Document.PublicId == documento.PublicId ? "resaltada" : "")" @onclick="@(() => VerAsync(documento.PublicId))">
+                            <td>@documento.Number</td>
+                            <td>@TextosDeDocumentos.Clase(documento.Kind)</td>
+                            <td>@documento.Holder.FullName<br /><span class="texto-tenue">@documento.Holder.DocumentType @documento.Holder.DocumentNumber</span></td>
+                            <td>@string.Join(", ", documento.Loans.Select(l => l.Number))</td>
+                            <td>@TextosDeDocumentos.Momento(documento.IssuedAt)</td>
+                            <td>@documento.IssuedBy</td>
+                            <td>@TextosDeDocumentos.Entrega(documento.DeliveryMode)</td>
+                            <td>
+                                <span class="aviso @TextosDeDocumentos.AvisoDeEstado(documento.Status)">@TextosDeDocumentos.Estado(documento.Status)</span>
+                                @if (documento.Status == "SubjectToFinality") { <br /><span class="texto-tenue">hasta @TextosDeDocumentos.Fecha(documento.FinalityUntil)</span> }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (_documentos.Count == 0) { <p class="texto-tenue">Sin documentos con esos filtros.</p> }
+        <div class="toolbar">
+            <SfButton CssClass="e-flat" Disabled="@(_pagina <= 1)" OnClick="@(() => CargarAsync(_pagina - 1))">Anterior</SfButton>
+            <span class="texto-tenue">Página @_pagina</span>
+            <SfButton CssClass="e-flat" Disabled="@(_pagina * TamanoDePagina >= _total)" OnClick="@(() => CargarAsync(_pagina + 1))">Siguiente</SfButton>
+        </div>
+    </IndicadorDeCarga>
+
+    @if (_detalle is not null || _cargaDetalle.Activa)
+    {
+        <div class="info-card">
+            <IndicadorDeCarga Cargando="@(_cargaDetalle.Activa || _accion.Activa)">
+                @if (_detalle is { } det)
+                {
+                    var doc = det.Document;
+                    <div class="page-header">
+                        <h4>@TextosDeDocumentos.Clase(doc.Kind) @doc.Number</h4>
+                        <div class="toolbar">
+                            @if (doc.Status != "Voided")
+                            {
+                                <PermissionGate Required="Lending.Documents.Reprint">
+                                    <SfButton CssClass="e-outline" IconCss="e-icons e-download" OnClick="@(() => DescargarAsync(doc))">Descargar PDF</SfButton>
+                                </PermissionGate>
+                                <PermissionGate Required="Lending.Documents.Issue">
+                                    <SfButton CssClass="e-outline" OnClick="@(() => EnviarAsync(doc))">Enviar por correo</SfButton>
+                                </PermissionGate>
+                                <PermissionGate Required="Lending.Documents.Void">
+                                    <SfButton CssClass="e-outline" OnClick="@AbrirAnulacion">Anular…</SfButton>
+                                </PermissionGate>
+                            }
+                        </div>
+                    </div>
+                    <p>
+                        <span class="aviso @TextosDeDocumentos.AvisoDeEstado(doc.Status)">@TextosDeDocumentos.Estado(doc.Status)</span>
+                        @if (doc.IsTestEnvironment) { <span class="aviso aviso-alerta">Emitido en un ambiente de pruebas: sin validez</span> }
+                    </p>
+                    <p>Titular: <strong>@doc.Holder.FullName</strong> · @doc.Holder.DocumentType @doc.Holder.DocumentNumber</p>
+                    <p>Código de verificación: <strong>@doc.VerificationCode</strong></p>
+                    @if (doc.FinalityUntil is { } firmeza) { <p>La cancelación está sujeta a firmeza hasta el @TextosDeDocumentos.Fecha(firmeza).</p> }
+                    @if (doc.CoversCoDebts is { } codeudas) { <p>@(codeudas ? "Incluye" : "No incluye") las obligaciones en que la persona es codeudora.</p> }
+                    @if (det.OutsideLendingNote is { } nota) { <p class="aviso aviso-info">@nota</p> }
+                    <div class="tabla-desplazable">
+                        <table class="data-grid">
+                            <thead><tr><th>Dato</th><th>Valor</th></tr></thead>
+                            <tbody>
+                                @foreach (var (rotulo, valor) in TextosDeDocumentos.DatosEsenciales(det.EssentialData))
+                                {
+                                    <tr><td>@rotulo</td><td>@valor</td></tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    <h4>Eventos</h4>
+                    <div class="tabla-desplazable">
+                        <table class="data-grid">
+                            <thead><tr><th>Evento</th><th>Cuándo</th><th>Quién</th><th>Motivo</th><th>Operación causa</th></tr></thead>
+                            <tbody>
+                                @foreach (var e in det.Events)
+                                {
+                                    <tr>
+                                        <td>@TextosDeDocumentos.Evento(e.Kind)</td>
+                                        <td>@TextosDeDocumentos.Momento(e.At)</td>
+                                        <td>@(e.By ?? "Proceso de Cartera")</td>
+                                        <td>@(e.Reason ?? "—")</td>
+                                        <td>@(e.CauseOperation ?? "—")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </IndicadorDeCarga>
+        </div>
+    }
+</div>
+
+<SfDialog @bind-Visible="_mostrarEmision" Header="Emitir un documento" Width="640px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@(_emitiendo.Activa || _cargaCredito.Activa)" Texto="@(_emitiendo.Activa ? "Emitiendo…" : "Cargando…")">
+                @if (!_confirmando)
+                {
+                    <label class="campo campo-ancho">Clase *
+                        <select class="e-input" @bind="_claseAEmitir">
+                            @foreach (var c in TextosDeDocumentos.ClasesQueSeEmiten) { <option value="@c.Valor">@c.Texto</option> }
+                        </select>
+                    </label>
+                    <div class="toolbar">
+                        <label class="campo">Crédito o deudor * <input class="e-input" @bind="_buscarCredito" placeholder="CR-000123 o nombre" /></label>
+                        <SfButton CssClass="e-outline" IconCss="e-icons e-search" OnClick="@BuscarCreditosAsync">Buscar</SfButton>
+                    </div>
+                    @foreach (var c in _creditosEncontrados)
+                    {
+                        var credito = c;
+                        <SfButton CssClass="e-flat e-small" OnClick="@(() => ElegirCreditoAsync(credito.PublicId))">@credito.Number · @credito.Debtor.Name · @TextosDeCreditos.EstadoDeCredito(credito.Status)</SfButton>
+                    }
+                    @if (_credito is { } elegido)
+                    {
+                        <p class="texto-apoyo">Crédito <strong>@elegido.Number</strong> · @elegido.Line.Name · @TextosDeCreditos.EstadoDeCredito(elegido.Status)</p>
+                        <label class="campo campo-ancho">Titular *
+                            <select class="e-input" @bind="_titular">
+                                <option value="@elegido.Debtor.PublicId">@elegido.Debtor.Name (deudor)</option>
+                                @foreach (var co in elegido.CoDebtors) { <option value="@co.PublicId">@co.Name (codeudor)</option> }
+                            </select>
+                        </label>
+                        @if (_claseAEmitir == "GeneralClearance")
+                        {
+                            <p class="texto-tenue">El paz y salvo general cubre todas las obligaciones de crédito del titular; el crédito sólo sirve para elegirlo.</p>
+                        }
+                        @if (_claseAEmitir == "TaxCertificate")
+                        {
+                            <p class="texto-tenue">El certificado tributario cubre todos los créditos en que el titular es deudor; el crédito sólo sirve para elegirlo.</p>
+                        }
+                    }
+                    @if (_claseAEmitir == "BalanceCertificate")
+                    {
+                        <label class="campo">Fecha de corte (vacía = hoy)
+                            <input type="date" class="e-input" value="@(_corte?.ToString("yyyy-MM-dd"))" @onchange="@(e => _corte = LeerFecha(e.Value))" />
+                        </label>
+                    }
+                    @if (_claseAEmitir == "Statement")
+                    {
+                        <div class="toolbar">
+                            <label class="campo">Desde *
+                                <input type="date" class="e-input" value="@(_periodoDesde?.ToString("yyyy-MM-dd"))" @onchange="@(e => _periodoDesde = LeerFecha(e.Value))" />
+                            </label>
+                            <label class="campo">Hasta *
+                                <input type="date" class="e-input" value="@(_periodoHasta?.ToString("yyyy-MM-dd"))" @onchange="@(e => _periodoHasta = LeerFecha(e.Value))" />
+                            </label>
+                        </div>
+                        <p class="texto-tenue">Saldo inicial, operaciones por fecha valor y saldo final del período; hasta cinco años y no después de hoy.</p>
+                        @if (ErrorDelPeriodo is { } malPeriodo) { <p class="aviso aviso-alerta">@malPeriodo</p> }
+                    }
+                    @if (_claseAEmitir == "TaxCertificate")
+                    {
+                        <label class="campo">Año *
+                            <select class="e-input" @bind="_anio">
+                                @foreach (var a in AniosCertificables) { <option value="@a">@a</option> }
+                            </select>
+                        </label>
+                        <p class="texto-tenue">Intereses pagados en el año y saldo al 31 de diciembre de cada crédito; sólo años ya terminados.</p>
+                    }
+                    <div class="toolbar">
+                        <label class="campo"><input type="radio" name="entrega" checked="@(_entrega == "Download")" @onchange="@(() => _entrega = "Download")" /> Descargar</label>
+                        <label class="campo"><input type="radio" name="entrega" checked="@(_entrega == "Email")" @onchange="@(() => _entrega = "Email")" /> Enviar al correo del titular</label>
+                    </div>
+                    <div class="toolbar">
+                        <SfButton CssClass="e-primary" Disabled="@(!PuedeEmitir)" OnClick="@(() => { _confirmando = true; _errorEmision = null; })">Continuar</SfButton>
+                        <SfButton CssClass="e-outline" OnClick="@(() => _mostrarEmision = false)">Cancelar</SfButton>
+                    </div>
+                }
+                else
+                {
+                    <p>
+                        Se emitirá <strong>@TextosDeDocumentos.Clase(_claseAEmitir)</strong> a nombre de <strong>@NombreDelTitular</strong>
+                        @if (TextosDeDocumentos.LlevaCredito(_claseAEmitir)) { <span> del crédito <strong>@_credito?.Number</strong></span> }
+                        @if (_claseAEmitir == "BalanceCertificate") { <span> con corte al @TextosDeDocumentos.Fecha(_corte ?? DateOnly.FromDateTime(DateTime.Today))</span> }
+                        @if (_claseAEmitir == "Statement") { <span> del @TextosDeDocumentos.Fecha(_periodoDesde) al @TextosDeDocumentos.Fecha(_periodoHasta)</span> }
+                        @if (_claseAEmitir == "TaxCertificate") { <span> del año @_anio</span> }
+                        y se @(_entrega == "Email" ? "enviará a su correo" : "descargará").
+                        Queda numerado, con su código de verificación, y no se edita: si algo está mal se anula y se emite otro.
+                    </p>
+                    @if (_errorEmision is not null) { <p class="aviso aviso-error" role="alert">@_errorEmision</p> }
+                    @if (_obligacionesQueNiegan.Count > 0)
+                    {
+                        <p class="aviso aviso-error">Obligaciones con saldo:</p>
+                        <ul>@foreach (var o in _obligacionesQueNiegan) { <li>@o.Number: @TextosDeDocumentos.Pesos(o.Balance)</li> }</ul>
+                    }
+                    @if (_ventasQueNiegan.Count > 0)
+                    {
+                        <p class="aviso aviso-error">Ventas a crédito en reproceso:</p>
+                        <ul>@foreach (var v in _ventasQueNiegan) { <li>Factura @v.Invoice <span class="texto-tenue">(mensaje @v.MessagePublicId en la <a href="/cartera/bandeja-de-mensajes">bandeja de mensajes</a>)</span></li> }</ul>
+                    }
+                    <div class="toolbar">
+                        <SfButton CssClass="e-primary" Disabled="@_emitiendo.Activa" OnClick="@EmitirAsync">Confirmar y emitir</SfButton>
+                        <SfButton CssClass="e-outline" OnClick="@(() => { _confirmando = false; LimpiarNegativa(); })">Volver</SfButton>
+                    </div>
+                }
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarAnulacion" Header="Anular el documento" Width="520px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_accion.Activa" Texto="Anulando…">
+                <p class="texto-apoyo">@(_detalle?.Document.Number): el documento y su PDF se conservan; la verificación lo mostrará anulado con el motivo.</p>
+                <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" maxlength="500" /></label>
+                @if (_errorAnulacion is not null) { <p class="aviso aviso-error" role="alert">@_errorAnulacion</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_accion.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@AnularAsync">Anular</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarAnulacion = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private const int TamanoDePagina = 20;
+    private const string ClearanceDenied = "Lending.Document.ClearanceDenied";
+
+    [SupplyParameterFromQuery(Name = "credito")] public Guid? CreditoInicial { get; set; }
+    [SupplyParameterFromQuery(Name = "emitir")] public bool? EmitirAlEntrar { get; set; }
+
+    private readonly EstadoDeCarga _carga = new(), _cargaFiltro = new(), _cargaDetalle = new(), _accion = new(), _emitiendo = new(), _cargaCredito = new();
+    private ClaveDeOperacion _clave = new();
+    private List<DocumentoEmitidoDto> _documentos = [];
+    private List<CreditoEnListaDto> _creditosDelFiltro = [], _creditosEncontrados = [];
+    private List<ObligacionQueNiegaDto> _obligacionesQueNiegan = [];
+    private List<VentaQueNiegaDto> _ventasQueNiegan = [];
+    private DetalleDeDocumentoDto? _detalle;
+    private CreditoDto? _credito;
+    private long _total;
+    private int _pagina = 1;
+    private string? _clase, _estado, _buscarFiltro, _buscarCredito, _numeroDelFiltro, _errorEmision, _errorAnulacion, _motivo;
+    private DateOnly? _desde, _hasta, _corte, _periodoDesde, _periodoHasta;
+    private int _anio = DateTime.Today.Year - 1;
+    private Guid? _filtroDeCredito, _titular;
+    private string _claseAEmitir = "PaymentPlan", _entrega = "Download";
+    private bool _mostrarEmision, _mostrarAnulacion, _confirmando;
+
+    private bool PuedeEmitir => _credito is not null && _titular is not null && (_claseAEmitir != "Statement" || ErrorDelPeriodo is null);
+
+    /// <summary>K5: los años que se pueden certificar (los cinco anteriores al actual; el año en curso no ha terminado).</summary>
+    private static IEnumerable<int> AniosCertificables => Enumerable.Range(1, 5).Select(i => DateTime.Today.Year - i);
+
+    /// <summary>K5: lo que le falta al período del extracto antes de continuar (la API lo vuelve a validar).</summary>
+    private string? ErrorDelPeriodo => _periodoDesde is not { } d || _periodoHasta is not { } h ? "Elija la fecha inicial y la final del período."
+        : d > h ? "La fecha inicial es posterior a la final."
+        : h > DateOnly.FromDateTime(DateTime.Today) ? "El período no puede terminar después de hoy."
+        : h >= d.AddYears(5) ? "El período no puede abarcar más de cinco años."
+        : null;
+
+    private string NombreDelTitular => _credito is not { } c ? "—"
+        : c.Debtor.PublicId == _titular ? c.Debtor.Name
+        : c.CoDebtors.FirstOrDefault(x => x.PublicId == _titular)?.Name ?? "—";
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (CreditoInicial is { } credito)
+        {
+            _filtroDeCredito = credito;
+            using (_cargaFiltro.Iniciar())
+            {
+                var r = await Creditos.CreditoAsync(credito);
+                _numeroDelFiltro = r.IsSuccess ? r.Value?.Number : null;
+            }
+        }
+        await CargarAsync(1);
+        if (EmitirAlEntrar == true && CreditoInicial is { } elegido) await AbrirEmisionAsync(elegido);
+    }
+
+    private async Task CargarAsync(int pagina)
+    {
+        using var carga = _carga.Iniciar();
+        _pagina = pagina;
+        var r = await Cartera.DocumentosAsync(string.IsNullOrEmpty(_clase) ? null : _clase, null, _filtroDeCredito,
+            string.IsNullOrEmpty(_estado) ? null : _estado, _desde, _hasta, pagina, TamanoDePagina);
+        if (!r.IsSuccess) { _documentos = []; _total = 0; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer los documentos."); return; }
+        _documentos = [.. r.Value?.Items ?? []];
+        _total = r.Value?.TotalCount ?? 0;
+    }
+
+    private async Task BuscarCreditosDelFiltroAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_buscarFiltro)) return;
+        using var carga = _cargaFiltro.Iniciar();
+        var r = await Creditos.ListarAsync(_buscarFiltro, tamano: 10);
+        _creditosDelFiltro = r.IsSuccess ? [.. r.Value?.Items ?? []] : [];
+        if (_creditosDelFiltro.Count == 0) await Notification.WarningAsync("Ningún crédito del alcance coincide con la búsqueda.");
+    }
+
+    private async Task FiltrarPorCreditoAsync(Guid credito, string numero)
+    {
+        _filtroDeCredito = credito;
+        _numeroDelFiltro = numero;
+        _creditosDelFiltro = [];
+        await CargarAsync(1);
+    }
+
+    private async Task QuitarFiltroAsync()
+    {
+        _filtroDeCredito = null;
+        _numeroDelFiltro = null;
+        await CargarAsync(1);
+    }
+
+    private async Task VerAsync(Guid documento)
+    {
+        using var carga = _cargaDetalle.Iniciar();
+        var r = await Cartera.DocumentoAsync(documento);
+        if (!r.IsSuccess) { _detalle = null; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo leer el documento."); return; }
+        _detalle = r.Value;
+    }
+
+    // ------------------------------------------------------------------------------------------------------- emitir --
+
+    private async Task AbrirEmisionAsync(Guid? credito)
+    {
+        _claseAEmitir = "PaymentPlan";
+        _entrega = "Download";
+        _corte = null;
+        var hoy = DateOnly.FromDateTime(DateTime.Today);
+        _periodoDesde = new DateOnly(hoy.Year, hoy.Month, 1).AddMonths(-1);
+        _periodoHasta = new DateOnly(hoy.Year, hoy.Month, 1).AddDays(-1);
+        _anio = hoy.Year - 1;
+        _credito = null;
+        _titular = null;
+        _buscarCredito = null;
+        _creditosEncontrados = [];
+        _confirmando = false;
+        LimpiarNegativa();
+        _clave = new ClaveDeOperacion();
+        _mostrarEmision = true;
+        if (credito is { } c) await ElegirCreditoAsync(c);
+    }
+
+    private async Task BuscarCreditosAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_buscarCredito)) return;
+        using var carga = _cargaCredito.Iniciar();
+        var r = await Creditos.ListarAsync(_buscarCredito, tamano: 10);
+        _creditosEncontrados = r.IsSuccess ? [.. r.Value?.Items ?? []] : [];
+        if (_creditosEncontrados.Count == 0) _errorEmision = "Ningún crédito del alcance coincide con la búsqueda.";
+    }
+
+    private async Task ElegirCreditoAsync(Guid credito)
+    {
+        using var carga = _cargaCredito.Iniciar();
+        var r = await Creditos.CreditoAsync(credito);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo leer el crédito."); return; }
+        _credito = r.Value;
+        _titular = _credito.Debtor.PublicId;
+        _creditosEncontrados = [];
+    }
+
+    private void LimpiarNegativa()
+    {
+        _errorEmision = null;
+        _obligacionesQueNiegan = [];
+        _ventasQueNiegan = [];
+    }
+
+    private async Task EmitirAsync()
+    {
+        if (_credito is not { } credito || _titular is not { } titular) return;
+        using var carga = _emitiendo.Iniciar();
+        LimpiarNegativa();
+        var pedido = new EmitirDocumentoRequest(_claseAEmitir, titular, TextosDeDocumentos.LlevaCredito(_claseAEmitir) ? credito.PublicId : null,
+            _claseAEmitir == "BalanceCertificate" ? _corte : null,
+            _claseAEmitir == "Statement" && _periodoDesde is { } desde && _periodoHasta is { } hasta ? new PeriodoDeDocumentoRequest(desde, hasta) : null,
+            _claseAEmitir == "TaxCertificate" ? (short)_anio : null, _entrega);
+        var r = await Cartera.EmitirDocumentoAsync(pedido, _clave);
+        if (!r.IsSuccess)
+        {
+            _errorEmision = r.ErrorMessage ?? "No se pudo emitir el documento.";
+            if (r.ErrorCode == ClearanceDenied)
+            {
+                _obligacionesQueNiegan = [.. r.Dato<List<ObligacionQueNiegaDto>>("obligations") ?? []];
+                _ventasQueNiegan = [.. r.Dato<List<VentaQueNiegaDto>>("pendingSales") ?? []];
+            }
+            // Una negativa no consume la clave: otro intento, con los mismos datos o corregidos, lleva una nueva.
+            _clave = new ClaveDeOperacion();
+            return;
+        }
+        var emitido = r.Value!;
+        _mostrarEmision = false;
+        if (emitido.Download?.Url is { } url) await Adjuntos.DescargarAsync(url, $"{emitido.Number.ToLowerInvariant()}.pdf");
+        await Notification.SuccessAsync(emitido.DebtorMessagePublicId is not null
+            ? $"Documento {emitido.Number} emitido; el correo quedó en la cola de mensajes al deudor. Código {emitido.VerificationCode}."
+            : $"Documento {emitido.Number} emitido. Código {emitido.VerificationCode}.");
+        await CargarAsync(1);
+        await VerAsync(emitido.DocumentPublicId);
+    }
+
+    // --------------------------------------------------------------------------------------- reimprimir, enviar, anular --
+
+    private async Task DescargarAsync(DocumentoEmitidoDto documento)
+    {
+        using var carga = _accion.Iniciar();
+        var r = await Cartera.EnlaceDeDocumentoAsync(documento.PublicId);
+        if (!r.IsSuccess || r.Value?.Url is not { } url) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo descargar el documento."); return; }
+        await Adjuntos.DescargarAsync(url, $"{documento.Number.ToLowerInvariant()}.pdf");
+    }
+
+    private async Task EnviarAsync(DocumentoEmitidoDto documento)
+    {
+        using var carga = _accion.Iniciar();
+        var r = await Cartera.EnviarDocumentoAsync(documento.PublicId, null, new ClaveDeOperacion());
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo enviar el documento."); return; }
+        await Notification.SuccessAsync($"El documento {documento.Number} quedó en la cola de mensajes al deudor.");
+    }
+
+    private void AbrirAnulacion()
+    {
+        _motivo = _errorAnulacion = null;
+        _clave = new ClaveDeOperacion();
+        _mostrarAnulacion = true;
+    }
+
+    private async Task AnularAsync()
+    {
+        if (_detalle is not { } det || string.IsNullOrWhiteSpace(_motivo)) return;
+        using var carga = _accion.Iniciar();
+        var r = await Cartera.AnularDocumentoAsync(det.Document.PublicId, _motivo.Trim(), _clave);
+        if (!r.IsSuccess) { _errorAnulacion = r.ErrorMessage ?? "No se pudo anular el documento."; return; }
+        _mostrarAnulacion = false;
+        await Notification.SuccessAsync($"Documento {det.Document.Number} anulado.");
+        await CargarAsync(_pagina);
+        await VerAsync(det.Document.PublicId);
+    }
+
+    private static DateOnly? LeerFecha(object? valor) =>
+        DateOnly.TryParse(valor?.ToString(), CultureInfo.InvariantCulture, out var f) ? f : null;
+}

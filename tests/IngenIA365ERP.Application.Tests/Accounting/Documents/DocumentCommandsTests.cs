@@ -287,4 +287,85 @@ public class DocumentCommandsTests
         r.Error.Code.Should().Be("Accounting.Document.ModuleOwned");
         r.Error.Message.Should().Contain("reúne 3 documentos");
     }
+
+    // ---- feature 013, US7 (T0623, T0651; contracts/contabilidad.md §9): lo de Cartera se corrige en Cartera ----
+
+    private static async Task<AccountingDocument> ComprobanteDeCarteraAsync(Escenario e, string sourceType, Guid sourcePublicId)
+    {
+        if (!await e.D.Db.VoucherTypes.AnyAsync(v => v.Code == "CA"))
+        {
+            e.D.Db.VoucherTypes.Add(new VoucherType { Code = "CA", Name = "Causación de cartera", Usage = VoucherUsage.Module, ModuleCode = "CAR", IsSeeded = true, CreatedBy = "test" });
+            await e.D.Db.SaveChangesAsync();
+        }
+        var interes = e.D.Cuenta("14430599", modulos: AccountingModules.Lending);
+        var ingreso = e.D.Cuenta("41502599", AccountNature.Credit, modulos: AccountingModules.Lending);
+        var r = await e.D.Poster.PrepareAsync(ContabilidadTestData.Comprobante(interes, ingreso, origen: new AccountingOrigin("CAR", sourceType, sourcePublicId), tipo: "CA"), CancellationToken.None);
+        r.IsSuccess.Should().BeTrue(r.Error?.Message);
+        await e.D.Db.SaveChangesAsync();
+        return r.Value;
+    }
+
+    private static LendingPosting ReciboDeCartera(long documento, Guid lote, Guid mensaje, string? credito) => new()
+    {
+        MessagePublicId = mensaje, MessageType = "InteresCausado", SourceModule = "CAR", SourcePublicId = Guid.NewGuid(), LoanNumber = credito,
+        OperationDate = ContabilidadTestData.Marzo15, AccountingDocumentId = documento, BatchPublicId = lote, OriginUserName = "Proceso de integración",
+        ActorName = "Proceso de integración", ProcessedAt = ContabilidadTestData.Ahora, CreatedBy = "test",
+    };
+
+    [Fact]
+    public async Task Un_comprobante_de_cartera_se_corrige_en_cartera_con_comprobante_nuevo()
+    {
+        var e = new Escenario();
+        var pago = await ComprobanteDeCarteraAsync(e, "LendingIssuedDocument", Guid.NewGuid());
+
+        var r = await e.Reversador().Handle(new ReverseDocumentCommand(pago.PublicId, "no debería"), CancellationToken.None);
+
+        r.Error.Code.Should().Be("Accounting.Document.ModuleOwned");
+        r.Error.Message.Should().Contain("se corrige en Cartera").And.Contain("reverso del pago, del desembolso o reapertura del cierre").And.Contain("comprobante nuevo");
+        r.Error.Message.Should().NotContain("resumido");
+        (await e.D.Db.AccountingDocuments.SingleAsync(d => d.PublicId == pago.PublicId)).Status.Should().Be(DocumentStatus.Posted);
+    }
+
+    [Fact]
+    public async Task Un_resumido_de_cartera_dice_cuantos_creditos_reune()
+    {
+        var e = new Escenario();
+        var lote = Guid.NewGuid();
+        var resumido = await ComprobanteDeCarteraAsync(e, "LendingPostingBatch", lote);
+        // Las partes no llevan crédito en su recibo: los créditos salen de su lista por crédito (dos partes, tres créditos distintos).
+        foreach (var creditos in new[] { new[] { "000123", "000124" }, new[] { "000124", "000200" } })
+        {
+            var mensaje = Guid.NewGuid();
+            var lineas = string.Join(",", creditos.Select(c => $"{{\"loan\":{{\"loanPublicId\":\"{Guid.NewGuid()}\",\"loanNumber\":\"{c}\"}}}}"));
+            var payload = $"{{\"lines\":[{lineas}]}}";
+            e.D.Db.IntegrationMessages.Add(new IngenIA365ERP.Domain.Entities.Integration.Transactions.IntegrationMessage
+            {
+                PublicId = mensaje, Type = "InteresCausado", OriginModule = "CAR", OriginPublicId = Guid.NewGuid(), OriginEventKey = "Confirmation",
+                OperationDate = ContabilidadTestData.Marzo15, Currency = "COP", ExchangeRate = 1m, PayloadJson = payload, PayloadSha256 = "x",
+                OriginUserName = "Proceso de integración", EmittedAt = ContabilidadTestData.Ahora, CreatedBy = "test",
+            });
+            e.D.Db.LendingPostings.Add(ReciboDeCartera(resumido.Id, lote, mensaje, null));
+        }
+        await e.D.Db.SaveChangesAsync();
+
+        var r = await e.Reversador().Handle(new ReverseDocumentCommand(resumido.PublicId, "no debería"), CancellationToken.None);
+
+        r.Error.Code.Should().Be("Accounting.Document.ModuleOwned");
+        r.Error.Message.Should().Contain("reúne 3 créditos");
+    }
+
+    [Fact]
+    public async Task Un_resumido_de_hechos_por_credito_cuenta_los_creditos_de_sus_recibos()
+    {
+        var e = new Escenario();
+        var lote = Guid.NewGuid();
+        var resumido = await ComprobanteDeCarteraAsync(e, "LendingPostingBatch", lote);
+        e.D.Db.LendingPostings.Add(ReciboDeCartera(resumido.Id, lote, Guid.NewGuid(), "000123"));
+        e.D.Db.LendingPostings.Add(ReciboDeCartera(resumido.Id, lote, Guid.NewGuid(), "000123"));
+        await e.D.Db.SaveChangesAsync();
+
+        var r = await e.Reversador().Handle(new ReverseDocumentCommand(resumido.PublicId, "no debería"), CancellationToken.None);
+
+        r.Error.Message.Should().Contain("reúne 1 crédito.");
+    }
 }

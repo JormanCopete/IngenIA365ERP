@@ -1,0 +1,303 @@
+@page "/cartera/juridico"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Adjuntos
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Http
+@inject CobranzaClient Cliente
+@inject AdjuntosClient Adjuntos
+@inject INotificationService Notification
+
+<PageTitle>Cobro jurídico - IngenIA365ERP</PageTitle>
+
+@* Feature 013, K4, US12 (T0958; contracts/api.md §14.8; FR-124): los procesos de cobro jurídico. Sólo se abren para créditos que ya están en la etapa
+   jurídica; el abogado es una persona del maestro. Cada actuación (radicación, auto, embargo, audiencia, sentencia, honorarios, gastos…) queda con sus
+   adjuntos y es inmutable; los honorarios o gastos marcados «a cargo del deudor» siguen la regla de gastos de cobranza (se informan al deudor antes de
+   causarse). Una insolvencia abierta del deudor suspende el proceso solo; reanudarlo es de una persona, con motivo, cuando la insolvencia ya no está en
+   negociación (K4, bloque D: nunca se reanuda solo). Cerrar es concluir o retirar, con motivo. Leer exige Lending.Collections.Read; abrir, actuar,
+   reanudar y cerrar, Lending.LegalProcesses.Manage. *@
+<PermissionGate Required="Lending.Collections.Read" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Cobro jurídico</h3>
+        <PermissionGate Required="Lending.LegalProcesses.Manage">
+            <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@AbrirNuevo">Abrir proceso</SfButton>
+        </PermissionGate>
+    </div>
+    <div class="toolbar">
+        <label class="campo">Estado
+            <select class="e-input" @bind="_estado">
+                <option value="">Todos</option>
+                @foreach (var e in TextosDeCobranza.EstadosJuridicos) { <option value="@e.Valor">@e.Texto</option> }
+            </select>
+        </label>
+        <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@(() => CargarAsync(1))">Consultar</SfButton>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        <div class="tabla-desplazable">
+            <table class="data-grid">
+                <thead><tr><th>Número</th><th>Deudor</th><th>Créditos</th><th>Abogado</th><th>Despacho y radicado</th><th>Inicio</th><th>Estado</th><th>Última actuación</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var p in _filas)
+                    {
+                        var proceso = p;
+                        <tr>
+                            <td>@proceso.Number</td>
+                            <td>@proceso.Debtor.FullName</td>
+                            <td>@string.Join(", ", proceso.Loans.Select(l => l.Number))</td>
+                            <td>@proceso.Lawyer.FullName</td>
+                            <td>@(proceso.Court ?? "—") · @(proceso.FileNumber ?? "sin radicado")</td>
+                            <td>@proceso.StartDate.ToString("dd/MM/yyyy")</td>
+                            <td>@TextosDeCobranza.EstadoJuridico(proceso.Status)@(proceso.SuspendedByInsolvencyPublicId is not null ? " por insolvencia" : "")@(proceso.CloseReason is { } r ? $" · {r}" : "")</td>
+                            <td>@(proceso.LastAction is { } a ? $"{a.Date:dd/MM/yyyy} {TextosDeCobranza.ActuacionJuridica(a.Kind)}" : "—")</td>
+                            <td>
+                                @if (proceso.Status is >= 1 and <= 4)
+                                {
+                                    <PermissionGate Required="Lending.LegalProcesses.Manage">
+                                        <SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirActuacionAsync(proceso))">Actuación…</SfButton>
+                                        @if (proceso.Status == 4)
+                                        {
+                                            <SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirReanudar(proceso))">Reanudar…</SfButton>
+                                        }
+                                        <SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirCierre(proceso))">Cerrar…</SfButton>
+                                    </PermissionGate>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (_filas.Count == 0) { <p class="texto-tenue">No hay procesos con ese filtro.</p> }
+        <Paginador Pagina="@_pagina" Total="@_total" Tamano="@TamanoDePagina" Cambia="@CargarAsync" />
+    </IndicadorDeCarga>
+</div>
+
+<SfDialog @bind-Visible="_mostrarNuevo" Header="Abrir proceso de cobro jurídico" Width="680px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_accion.Activa" Texto="Abriendo…">
+                <p class="texto-tenue">Elija un crédito que esté en la etapa jurídica.</p>
+                <SelectorDeCredito @bind-Value="_credito" MoraMinima="1" />
+                <label class="campo campo-ancho">Abogado * <PersonSearchPicker @bind-Selected="_abogado" ShowHelpText="false" Compacto="true" /></label>
+                <div class="form-grid">
+                    <label class="campo">Despacho <input class="e-input" @bind="_despacho" maxlength="150" /></label>
+                    <label class="campo">Radicado <input class="e-input" @bind="_radicado" maxlength="60" /></label>
+                    <label class="campo">Tipo de proceso <input class="e-input" @bind="_tipo" maxlength="80" placeholder="Ejecutivo singular…" /></label>
+                    <label class="campo">Inicio * <input class="e-input" type="date" @bind="_inicio" /></label>
+                </div>
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_accion.Activa || _credito is null || _abogado is null)" OnClick="@AbrirAsync">Abrir</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarNuevo = false)">Volver</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarActuacion" Header="@($"Actuación del proceso {_elegido?.Number}")" Width="640px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_accion.Activa" Texto="Registrando…">
+                @if (_elegido is { } e)
+                {
+                    <SubirSoporte OwnerEntityType="@CobranzaClient.DuenoDeActuaciones" OwnerEntityPublicId="@e.PublicId" OnSubido="@CargarAdjuntosAsync" />
+                }
+                <label class="campo">Adjunto
+                    <select class="e-input" @bind="_adjunto">
+                        <option value="">Sin adjunto</option>
+                        @foreach (var x in _adjuntos) { <option value="@x.PublicId">@x.FileName</option> }
+                    </select>
+                </label>
+                <div class="form-grid">
+                    <label class="campo">Fecha * <input class="e-input" type="date" @bind="_fecha" /></label>
+                    <label class="campo">Clase *
+                        <select class="e-input" @bind="_clase">
+                            @foreach (var a in TextosDeCobranza.ActuacionesJuridicas) { <option value="@a.Nombre">@a.Texto</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Valor ($) <input class="e-input" type="number" min="0" step="1" @bind="_valor" /></label>
+                    <label class="campo"><input type="checkbox" @bind="_aCargoDelDeudor" /> A cargo del deudor</label>
+                </div>
+                <label class="campo campo-ancho">Descripción * <input class="e-input" @bind="_descripcion" maxlength="1000" /></label>
+                @if (_aCargoDelDeudor) { <p class="texto-tenue">El valor se le informa al deudor antes de causarse; se causa desde «Cobranza › Gastos por causar».</p> }
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_accion.Activa || string.IsNullOrWhiteSpace(_descripcion))" OnClick="@ActuarAsync">Registrar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarActuacion = false)">Volver</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarCierre" Header="@($"Cerrar el proceso {_elegido?.Number}")" Width="520px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_accion.Activa" Texto="Cerrando…">
+                <label class="campo">Resultado *
+                    <select class="e-input" @bind="_resultado">
+                        <option value="Concluded">Concluido</option>
+                        <option value="Withdrawn">Retirado</option>
+                    </select>
+                </label>
+                <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" maxlength="500" /></label>
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_accion.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@CerrarAsync">Cerrar proceso</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarCierre = false)">Volver</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+<SfDialog @bind-Visible="_mostrarReanudar" Header="@($"Reanudar el proceso {_elegido?.Number}")" Width="520px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_accion.Activa" Texto="Reanudando…">
+                <p class="texto-tenue">El proceso vuelve al estado que tenía antes de suspenderse. No se reanuda mientras el deudor siga en negociación de insolvencia.</p>
+                <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" maxlength="500" /></label>
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_accion.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@ReanudarAsync">Reanudar proceso</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarReanudar = false)">Volver</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private const int TamanoDePagina = 20;
+
+    private readonly EstadoDeCarga _carga = new(), _accion = new();
+    private List<ProcesoJuridicoDto> _filas = [];
+    private List<AdjuntoDto> _adjuntos = [];
+    private ProcesoJuridicoDto? _elegido;
+    private PersonSearchPicker.PersonSearchItem? _abogado;
+    private string? _estado, _error, _motivo, _despacho, _radicado, _tipo, _adjunto, _clase = "Order", _descripcion, _resultado = "Concluded";
+    private bool _mostrarNuevo, _mostrarActuacion, _mostrarCierre, _mostrarReanudar, _aCargoDelDeudor;
+    private int _pagina = 1;
+    private long _total;
+    private Guid? _credito;
+    private decimal? _valor;
+    private DateTime? _inicio = DateTime.Today, _fecha = DateTime.Today;
+    private ClaveDeOperacion _clave = new();
+
+    protected override async Task OnInitializedAsync() => await CargarAsync(1);
+
+    private async Task CargarAsync(int pagina)
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Cliente.ProcesosAsync(int.TryParse(_estado, out var e) ? e : null, null, null, pagina);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer los procesos."); return; }
+        _filas = [.. r.Value?.Items ?? []];
+        _total = r.Value?.TotalCount ?? 0;
+        _pagina = pagina;
+    }
+
+    private void AbrirNuevo()
+    {
+        _error = _despacho = _radicado = _tipo = null;
+        _credito = null;
+        _abogado = null;
+        _inicio = DateTime.Today;
+        _clave = new ClaveDeOperacion();
+        _mostrarNuevo = true;
+    }
+
+    private async Task AbrirAsync()
+    {
+        if (_credito is not { } credito || _abogado is not { } abogado) return;
+        using var carga = _accion.Iniciar();
+        _error = null;
+        var r = await Cliente.AbrirProcesoAsync(new AbrirProcesoJuridicoRequest([credito], abogado.PublicId, _despacho, _radicado, DateOnly.FromDateTime(_inicio ?? DateTime.Today), _tipo), _clave);
+        if (!r.IsSuccess)
+        {
+            _error = r.ErrorCode == "Lending.LegalProcess.LoanNotInLegalStage"
+                ? "El crédito todavía no está en la etapa jurídica: avanza solo por su mora o se ajusta en «Etapas de cobranza»."
+                : r.ErrorMessage ?? "No se pudo abrir el proceso.";
+            return;
+        }
+        _mostrarNuevo = false;
+        await Notification.SuccessAsync("Proceso abierto.");
+        await CargarAsync(1);
+    }
+
+    private async Task AbrirActuacionAsync(ProcesoJuridicoDto proceso)
+    {
+        _elegido = proceso;
+        _error = _descripcion = _adjunto = null;
+        _clase = "Order";
+        _valor = null;
+        _aCargoDelDeudor = false;
+        _fecha = DateTime.Today;
+        _clave = new ClaveDeOperacion();
+        await CargarAdjuntosAsync();
+        _mostrarActuacion = true;
+    }
+
+    private async Task CargarAdjuntosAsync()
+    {
+        if (_elegido is not { } p) return;
+        var r = await Adjuntos.ListarAsync(CobranzaClient.DuenoDeActuaciones, p.PublicId);
+        _adjuntos = (r.Value ?? []).Where(x => x.Disponible).ToList();
+    }
+
+    private async Task ActuarAsync()
+    {
+        if (_elegido is not { } p) return;
+        using var carga = _accion.Iniciar();
+        _error = null;
+        IReadOnlyList<Guid>? adjuntos = Guid.TryParse(_adjunto, out var a) ? [a] : null;
+        var r = await Cliente.RegistrarActuacionAsync(p.PublicId, new ActuacionJuridicaRequest(DateOnly.FromDateTime(_fecha ?? DateTime.Today), _clase!, _descripcion!.Trim(),
+            _valor is > 0 ? _valor : null, _aCargoDelDeudor, adjuntos), _clave);
+        if (!r.IsSuccess) { _error = r.ErrorMessage ?? "No se pudo registrar la actuación."; return; }
+        _mostrarActuacion = false;
+        await Notification.SuccessAsync("Actuación registrada.");
+        await CargarAsync(_pagina);
+    }
+
+    private void AbrirCierre(ProcesoJuridicoDto proceso)
+    {
+        _elegido = proceso;
+        _motivo = _error = null;
+        _resultado = "Concluded";
+        _clave = new ClaveDeOperacion();
+        _mostrarCierre = true;
+    }
+
+    private async Task CerrarAsync()
+    {
+        if (_elegido is not { } p || string.IsNullOrWhiteSpace(_motivo)) return;
+        using var carga = _accion.Iniciar();
+        _error = null;
+        var r = await Cliente.CerrarProcesoAsync(p.PublicId, new CerrarProcesoJuridicoRequest(_resultado!, _motivo.Trim()), _clave);
+        if (!r.IsSuccess) { _error = r.ErrorMessage ?? "No se pudo cerrar el proceso."; return; }
+        _mostrarCierre = false;
+        await Notification.SuccessAsync("Proceso cerrado.");
+        await CargarAsync(_pagina);
+    }
+
+    private void AbrirReanudar(ProcesoJuridicoDto proceso)
+    {
+        _elegido = proceso;
+        _motivo = _error = null;
+        _clave = new ClaveDeOperacion();
+        _mostrarReanudar = true;
+    }
+
+    private async Task ReanudarAsync()
+    {
+        if (_elegido is not { } p || string.IsNullOrWhiteSpace(_motivo)) return;
+        using var carga = _accion.Iniciar();
+        _error = null;
+        var r = await Cliente.ReanudarProcesoAsync(p.PublicId, _motivo.Trim(), _clave);
+        if (!r.IsSuccess) { _error = r.ErrorMessage ?? "No se pudo reanudar el proceso."; return; }
+        _mostrarReanudar = false;
+        await Notification.SuccessAsync("Proceso reanudado.");
+        await CargarAsync(_pagina);
+    }
+}

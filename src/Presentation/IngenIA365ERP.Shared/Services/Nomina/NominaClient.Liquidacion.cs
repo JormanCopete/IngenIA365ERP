@@ -33,6 +33,39 @@ public sealed partial class NominaClient
 
     public Task<InvitationApiResult<ResultadoAprobacionDto>> AprobarAsync(Guid corridaId, AprobarRequest request, CancellationToken ct = default) =>
         EnviarAsync<ResultadoAprobacionDto>(HttpMethod.Post, $"/api/payroll/runs/{corridaId}/approve", request, ct);
+
+    /// <summary>Feature 013 (T0166): los descuentos de Cartera de la corrida —esperado, descontado, no descontado y lo que Cartera aplicó—.</summary>
+    public Task<InvitationApiResult<IReadOnlyList<DescuentoDeCarteraDto>>> DescuentosDeCarteraAsync(Guid corridaId, CancellationToken ct = default) =>
+        EnviarAsync<IReadOnlyList<DescuentoDeCarteraDto>>(HttpMethod.Get, $"/api/payroll/runs/{corridaId}/loan-deductions", null, ct);
+}
+
+/// <summary>El empleado de un descuento de Cartera.</summary>
+public sealed record EmpleadoDeDescuentoDto(Guid PublicId, string Name, string Document);
+
+/// <summary>
+/// Un descuento de Cartera de la nómina ordinaria (feature 013, contracts/api.md §24). <c>Status</c>: 1 calculado, 2 aplicado,
+/// 3 aplicado en parte, 4 no aplicado, 5 rechazado, 6 reversado.
+/// </summary>
+public sealed record DescuentoDeCarteraDto(
+    EmpleadoDeDescuentoDto Employee, Guid ObligationPublicId, string ObligationNumber, decimal Expected, decimal Deducted, decimal NotDeducted,
+    string? Reason, int Status, Guid? CarteraReceiptPublicId, Guid? CarteraReversalPublicId, decimal? Applied, string? ResultMessage)
+{
+    public string EstadoTexto => Status switch
+    {
+        1 => "Calculado", 2 => "Aplicado en Cartera", 3 => "Aplicado en parte", 4 => "Sin descuento", 5 => "Rechazado por Cartera", 6 => "Reversado", _ => Status.ToString(),
+    };
+
+    public string MotivoTexto => Reason switch
+    {
+        "DeductionCap" => "No cupo en el tope de deducciones",
+        "InsufficientNet" => "El neto no alcanzaba",
+        "DeductionPriority" => "Prelación entre obligaciones",
+        "Termination" => "Retiro",
+        "Leave" => "Licencia",
+        "Disability" => "Incapacidad",
+        null or "" => string.Empty,
+        _ => "Otro",
+    };
 }
 
 public sealed record TotalesCorridaDto(decimal Earnings, decimal Deductions, decimal EmployerContributions, decimal Provisions, decimal Net, decimal RoundingAdjustment);
@@ -168,6 +201,8 @@ public sealed record DetalleEmpleadoCorridaDto(
     IReadOnlyList<TramoSalarioDto> SalaryTranches, IReadOnlyList<LineaCorridaDto> Lines, TotalesCorridaDto Totals,
     IReadOnlyList<string> Flags, bool Changed, IReadOnlyList<PasoDto> Bases, IReadOnlyList<string> Refusals, IReadOnlyList<string> Skips);
 
-public sealed record AprobarRequest(bool Confirm, IReadOnlyList<ExcepcionAprobacionDto> Exceptions, bool ConfirmEmpty = false, bool ConfirmWithoutSegregation = false);
+public sealed record AprobarRequest(bool Confirm, IReadOnlyList<ExcepcionAprobacionDto> Exceptions, bool ConfirmEmpty = false, bool ConfirmWithoutSegregation = false,
+    bool AcknowledgeLendingPendingActivation = false);
 
-public sealed record ResultadoAprobacionDto(Guid RunPublicId, Guid PeriodPublicId, Guid AccountingDocumentPublicId, string AccountingDocumentNumber, TotalesCorridaDto Totals, int EmployeeCount, bool ApprovedWithoutSegregation);
+public sealed record ResultadoAprobacionDto(Guid RunPublicId, Guid PeriodPublicId, Guid AccountingDocumentPublicId, string AccountingDocumentNumber, TotalesCorridaDto Totals, int EmployeeCount, bool ApprovedWithoutSegregation,
+    IReadOnlyList<AvisoCorridaDto>? Warnings = null);

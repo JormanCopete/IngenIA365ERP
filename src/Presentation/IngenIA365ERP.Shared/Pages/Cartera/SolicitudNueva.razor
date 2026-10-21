@@ -1,0 +1,192 @@
+@page "/cartera/solicitudes/nueva"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Inventario
+@inject OriginacionClient Originacion
+@inject InventarioClient Inventario
+@inject PersonasClient Personas
+@inject PermisosDelUsuario Permisos
+@inject INotificationService Notification
+@inject NavigationManager Navegacion
+
+<PageTitle>Nueva solicitud de crédito - IngenIA365ERP</PageTitle>
+
+@* Feature 013, US2 (T0411; FR-035; SC-009; quickstart §3.5 paso 2): radicar en tres pasos. 1) simular (el simulador queda visible, FR-013);
+   2) el solicitante —se busca en el maestro y, si no está, se registra con PersonaDialog—, la oficina, los codeudores con su capacidad, la
+   capacidad declarada y la preferencia de abono a capital; 3) se guarda el borrador y en su detalle se adjuntan los documentos y se radica.
+   Las autorizaciones de datos de cada persona se registran con su evidencia en Autorizaciones del titular: si falta, radicar lo dice. *@
+<PermissionGate Required="Lending.Applications.Create" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Nueva solicitud de crédito</h3>
+        <div class="toolbar">
+            <SfButton CssClass="e-outline" OnClick="@(() => Navegacion.NavigateTo("/cartera/solicitudes"))">Volver</SfButton>
+        </div>
+    </div>
+
+    <p class="texto-apoyo">Paso @_paso de 3 — @(_paso switch { 1 => "simule el crédito", 2 => "complete los datos de la solicitud", _ => "guarde el borrador" }).</p>
+
+    <SimuladorDeCredito SimulacionHecha="@TomarSimulacion" />
+
+    @if (_simulacion is { } sim)
+    {
+        <div class="info-card">
+            <h4>Datos de la solicitud</h4>
+            <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Leyendo las oficinas…">
+                <p class="texto-apoyo">@sim.Resultado.CreditLineCode · @sim.Resultado.CreditLineName — @TextosDeOriginacion.Pesos(sim.Resultado.Amount) en @sim.Resultado.InstallmentCount cuotas.</p>
+                <div class="form-grid">
+                    <div class="campo campo-ancho">Solicitante *
+                        <PersonSearchPicker @bind-Selected="_solicitante" ShowHelpText="false" Compacto="true" PermitirCrear="@_puedeCrearPersona"
+                                            OnCrearPersona="@CrearPersona" TextoSinResultados="Regístrela con «Crear persona» y vuelva a buscarla." />
+                    </div>
+                    <label class="campo">Oficina *
+                        <select class="e-input" @bind="_oficina">
+                            <option value="">Elija la oficina…</option>
+                            @foreach (var o in _oficinas) { <option value="@o.PublicId">@o.Name</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Destino <input class="e-input" @bind="_destino" maxlength="200" /></label>
+                    <label class="campo">Forma de pago
+                        <select class="e-input" @bind="_formaDePago">
+                            @foreach (var f in TextosDeOriginacion.FormasDePago) { <option value="@f.Valor">@f.Texto</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Abonos extraordinarios a capital *
+                        <select class="e-input" @bind="_preferencia">
+                            @foreach (var p in TextosDeOriginacion.PreferenciasDeAbono) { <option value="@p.Valor">@p.Texto</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Ingreso mensual <input class="e-input" type="number" min="0" @bind="_ingreso" /></label>
+                    <label class="campo">Gasto mensual <input class="e-input" type="number" min="0" @bind="_gasto" /></label>
+                    <label class="campo">Cuotas con terceros <input class="e-input" type="number" min="0" @bind="_externas" /></label>
+                    @if (sim.Resultado.IsHousing)
+                    {
+                        @* K6b (T1060; FR-024): en vivienda, VIS elige el porcentaje financiable de interés social (Ley 546 de 1999). *@
+                        <label class="campo-check"><input type="checkbox" @bind="_esVis" /> El inmueble es vivienda de interés social (VIS)</label>
+                    }
+                </div>
+
+                <h5>Codeudores</h5>
+                <div class="toolbar">
+                    <div class="campo"><PersonSearchPicker @bind-Selected="_codeudor" ShowHelpText="false" Compacto="true" /></div>
+                    <SfButton CssClass="e-outline" Disabled="@(_codeudor is null)" OnClick="@AgregarCodeudor">Agregar codeudor</SfButton>
+                </div>
+                @if (_codeudores.Count > 0)
+                {
+                    <table class="data-grid">
+                        <thead><tr><th>Codeudor</th><th class="numero">Ingreso</th><th class="numero">Gasto</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var c in _codeudores)
+                            {
+                                var codeudor = c;
+                                <tr>
+                                    <td>@codeudor.Nombre</td>
+                                    <td class="numero"><input class="e-input" type="number" min="0" @bind="codeudor.Ingreso" /></td>
+                                    <td class="numero"><input class="e-input" type="number" min="0" @bind="codeudor.Gasto" /></td>
+                                    <td><SfButton CssClass="e-flat e-small" OnClick="@(() => _codeudores.Remove(codeudor))">Quitar</SfButton></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+                <p class="aviso aviso-info">
+                    Cada persona necesita su autorización de tratamiento de datos para el estudio del crédito (y para consultar centrales si la
+                    línea lo exige), registrada con su evidencia en <a href="/cartera/autorizaciones">Autorizaciones del titular</a>.
+                </p>
+            </IndicadorDeCarga>
+
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando el borrador…">
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || _solicitante is null || _oficina is null)" OnClick="@GuardarAsync">Guardar borrador y adjuntar documentos</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </div>
+    }
+</div>
+
+<PersonaDialog @bind-Visible="_mostrarPersona" DocumentoInicial="@_documentoInicial" CapturarAutorizacion="true" OnGuardado="@PersonaGuardadaAsync" />
+</PermissionGate>
+
+@code {
+    private sealed class Codeudor
+    {
+        public Guid Persona { get; init; }
+        public string Nombre { get; init; } = "";
+        public decimal? Ingreso { get; set; }
+        public decimal? Gasto { get; set; }
+    }
+
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+    private (SimulacionRequest Entrada, SimulacionDto Resultado)? _simulacion;
+    private IReadOnlyList<SucursalContableDto> _oficinas = [];
+    private PersonSearchPicker.PersonSearchItem? _solicitante, _codeudor;
+    private readonly List<Codeudor> _codeudores = [];
+    private Guid? _oficina;
+    private string? _destino, _error, _documentoInicial;
+    private int _formaDePago = 1, _preferencia = 1, _paso = 1;
+    private decimal? _ingreso, _gasto, _externas;
+    private bool _puedeCrearPersona, _mostrarPersona, _esVis;
+    private ClaveDeOperacion _clave = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var carga = _carga.Iniciar();
+        _puedeCrearPersona = await Permisos.TieneAsync("Core.People.Create");
+        var r = await Inventario.ListarSucursalesAsync();
+        _oficinas = r.Value ?? [];
+    }
+
+    private void TomarSimulacion((SimulacionRequest Entrada, SimulacionDto Resultado) simulacion)
+    {
+        _simulacion = simulacion;
+        _paso = 2;
+        _clave = new ClaveDeOperacion();
+    }
+
+    private void CrearPersona(string termino)
+    {
+        _documentoInicial = termino.All(char.IsDigit) ? termino : null;
+        _mostrarPersona = true;
+    }
+
+    private async Task PersonaGuardadaAsync(Guid publicId)
+    {
+        _mostrarPersona = false;
+        var r = await Personas.ObtenerAsync(publicId);
+        if (r.IsSuccess && r.Value is { } p)
+            _solicitante = new PersonSearchPicker.PersonSearchItem { PublicId = p.PublicId, IdentificationNumber = p.TaxId, FullName = p.NombreVisible };
+    }
+
+    private void AgregarCodeudor()
+    {
+        if (_codeudor is not { } c || _codeudores.Any(x => x.Persona == c.PublicId) || c.PublicId == _solicitante?.PublicId) return;
+        _codeudores.Add(new Codeudor { Persona = c.PublicId, Nombre = c.FullName });
+        _codeudor = null;
+    }
+
+    private async Task GuardarAsync()
+    {
+        if (_simulacion is not { } sim || _solicitante is null || _oficina is null) return;
+        using var carga = _guardado.Iniciar();
+        _error = null;
+        _paso = 3;
+        var e = sim.Entrada;
+        var solicitud = new SolicitudRequest
+        {
+            ApplicantPersonPublicId = _solicitante.PublicId, OfficePublicId = _oficina.Value, CreditLinePublicId = e.CreditLinePublicId,
+            Purpose = string.IsNullOrWhiteSpace(_destino) ? null : _destino.Trim(), Amount = e.Amount, Installments = e.Installments,
+            Periodicity = e.Periodicity, ExpectedDisbursementDate = e.DisbursementDate, FirstDueDate = e.FirstDueDate, AmortizationSystem = e.AmortizationSystem,
+            Insurances = e.Insurances, PaymentForm = _formaDePago, PrepaymentPreference = _preferencia,
+            ApplicantCapacity = new CapacidadRequest(_ingreso, _gasto, _externas),
+            CoDebtors = _codeudores.Select(c => new ParteDeSolicitudRequest(c.Persona, c.Ingreso, c.Gasto)).ToList(),
+            SimulationSha256 = sim.Resultado.SimulationSha256,
+            IsSocialHousing = sim.Resultado.IsHousing ? _esVis : null,
+        };
+        var r = await Originacion.CrearAsync(solicitud, _clave);
+        if (!r.IsSuccess || r.Value is null) { _error = string.Join(" ", LineasDeCreditoClient.Explicar(r)); return; }
+        await Notification.SuccessAsync("Borrador guardado: adjunte los documentos y radique.");
+        Navegacion.NavigateTo($"/cartera/solicitudes/{r.Value.PublicId}");
+    }
+}

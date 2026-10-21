@@ -1,4 +1,4 @@
-using IngenIA365ERP.Shared.Models.Personas;
+﻿using IngenIA365ERP.Shared.Models.Personas;
 
 namespace IngenIA365ERP.Shared.Services.Core;
 
@@ -50,6 +50,7 @@ public sealed record PersonaDto
     public bool IsSimpleTaxRegime { get; init; }
     public bool IsIncomeTaxFiler { get; init; }
     public bool IsObligatedToInvoice { get; init; }
+    public bool IsObligatedToKeepBooks { get; init; }
     public bool IsLargeContributor { get; init; }
     public bool WithholdingExempt { get; init; }
     public bool IcaWithholdingExempt { get; init; }
@@ -101,6 +102,7 @@ public sealed record PersonaEntradaDto
     public bool? IsSimpleTaxRegime { get; init; }
     public bool? IsIncomeTaxFiler { get; init; }
     public bool? IsObligatedToInvoice { get; init; }
+    public bool? IsObligatedToKeepBooks { get; init; }
     public bool? IsLargeContributor { get; init; }
     public bool? WithholdingExempt { get; init; }
     public bool? IcaWithholdingExempt { get; init; }

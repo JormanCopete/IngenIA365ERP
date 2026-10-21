@@ -1,7 +1,6 @@
 using IngenIA365ERP.API.Filters.CentralIdentity;
-using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Security;
-using Microsoft.EntityFrameworkCore;
+using IngenIA365ERP.Application.Common.Security;
 
 namespace IngenIA365ERP.API.Services;
 
@@ -12,12 +11,16 @@ namespace IngenIA365ERP.API.Services;
 /// referencian por <c>TenantBranchPublicId</c>. Sin asignaciones no hay restricción; con
 /// asignaciones que ninguna sucursal contable referencia, el alcance queda vacío a propósito.
 /// El maestro global no tiene alcance.
+///
+/// <para>
+/// Feature 013 (T62, R131, T0284): el salto vive en <see cref="OficinasDelUsuario"/>, que también usa el alcance de Cartera; aquí
+/// queda sólo la semántica <b>abierta</b> de Contabilidad (<see cref="AlcanceDeSucursales.De"/>), que no cambia.
+/// </para>
 /// </summary>
 internal sealed class UserBranchScope(
     IHttpContextAccessor accessor,
     PermisosDeLaPeticion peticion,
-    IApplicationDbContext operativa,
-    IAdminDbContext admin) : IUserBranchScope
+    OficinasDelUsuario oficinasDelUsuario) : IUserBranchScope
 {
     public async Task<AlcanceDeSucursales> ObtenerAsync(CancellationToken ct)
     {
@@ -28,28 +31,6 @@ internal sealed class UserBranchScope(
         var (usuario, cooperativa) = await peticion.ResolverUsuarioYCooperativaAsync(http, ct);
         if (usuario is null || cooperativa is null) return AlcanceDeSucursales.SinRestriccion;
 
-        var asignaciones = await operativa.UserBranchAssignments.AsNoTracking()
-            .Where(a => a.UserId == usuario && a.TenantId == cooperativa && a.IsActive && !a.IsDeleted)
-            .Select(a => new { a.BranchId, a.IsDefault })
-            .ToListAsync(ct);
-        if (asignaciones.Count == 0) return AlcanceDeSucursales.SinRestriccion;
-
-        var idsAdm = asignaciones.Select(a => a.BranchId).Distinct().ToList();
-        var oficinas = await admin.TenantBranches.AsNoTracking()
-            .Where(b => idsAdm.Contains(b.Id) && b.IsActive && !b.IsDeleted)
-            .Select(b => new { b.Id, b.PublicId })
-            .ToListAsync(ct);
-        var publicIds = oficinas.Select(o => o.PublicId).ToList();
-
-        var sucursales = await operativa.Branches.AsNoTracking()
-            .Where(b => !b.IsDeleted && b.TenantBranchPublicId != null && publicIds.Contains(b.TenantBranchPublicId.Value))
-            .Select(b => new { b.Id, b.TenantBranchPublicId })
-            .ToListAsync(ct);
-
-        var porDefectoAdm = asignaciones.FirstOrDefault(a => a.IsDefault)?.BranchId;
-        var porDefectoPublicId = oficinas.FirstOrDefault(o => o.Id == porDefectoAdm)?.PublicId;
-        var porDefecto = sucursales.FirstOrDefault(s => s.TenantBranchPublicId == porDefectoPublicId)?.Id ?? sucursales.FirstOrDefault()?.Id;
-
-        return AlcanceDeSucursales.Limitado(sucursales.Select(s => s.Id), porDefecto);
+        return AlcanceDeSucursales.De(await oficinasDelUsuario.LeerAsync(usuario.Value, cooperativa.Value, ct));
     }
 }

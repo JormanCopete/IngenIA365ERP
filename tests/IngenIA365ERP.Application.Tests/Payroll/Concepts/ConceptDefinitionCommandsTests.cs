@@ -198,4 +198,26 @@ public class ConceptDefinitionCommandsTests
         var salario = await h.Handle(new DeactivateConceptDefinitionCommand("SALARIO", new DateTime(2026, 12, 31)), CancellationToken.None);
         salario.Error.Code.Should().Be("Payroll.ConceptSeedProtected");
     }
+
+    [Fact]
+    public async Task Poner_quitar_y_volver_a_poner_las_cuentas_de_un_concepto_revive_la_fila_por_defecto_en_vez_de_duplicarla()
+    {
+        // Feature 013, T0801: la e2e de Nómina con Cartera puso, quitó y volvió a poner las cuentas de DESC_CARTERA y la API respondió 500
+        // (UX_PAY_ConceptDefinitionAccounts_Default): la fila retirada queda marcada (Principio VII), el filtro global la escondía y el comando
+        // agregaba otra con el mismo concepto y sin centro de costo.
+        var d = new NominaTestData();
+        d.ConfigurarContabilidad();
+        var debito = d.Cuenta("51059901", "Gasto de prueba", Domain.Enums.Accounting.AccountNature.Debit);
+        var credito = d.Cuenta("25059901", "Pasivo de prueba", Domain.Enums.Accounting.AccountNature.Credit);
+        var h = new SetConceptAccountsCommandHandler(d.Db, d.Clock, d.User);
+
+        (await h.Handle(new SetConceptAccountsCommand("SALARIO", []), CancellationToken.None)).IsSuccess.Should().BeTrue();
+        var r = await h.Handle(new SetConceptAccountsCommand("SALARIO", [new ConceptAccountRow(null, debito.Code, credito.Code)]), CancellationToken.None);
+
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? r.Error.Message : string.Empty);
+        var todas = await d.Db.PayrollConceptDefinitionAccounts.IgnoreQueryFilters().AsNoTracking()
+            .Where(a => a.ConceptCode == "SALARIO" && a.CostCenterId == null).ToListAsync();
+        todas.Should().ContainSingle("la fila por defecto es una sola, viva o retirada: el índice único no mira el borrado lógico")
+            .Which.Should().BeEquivalentTo(new { IsDeleted = false, DebitAccountId = debito.Id, CreditAccountId = credito.Id }, o => o.ExcludingMissingMembers());
+    }
 }

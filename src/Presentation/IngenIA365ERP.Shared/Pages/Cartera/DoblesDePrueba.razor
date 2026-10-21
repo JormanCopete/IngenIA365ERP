@@ -1,0 +1,740 @@
+@page "/cartera/dobles-de-prueba"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Globalization
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Components.Cartera.Pagos
+@inject DoblesDePruebaClient Dobles
+@inject LibranzaClient Libranza
+@inject INotificationService Notification
+
+<PageTitle>Dobles de prueba de Cartera - IngenIA365ERP</PageTitle>
+
+@* Feature 013, US3 (T0461) y US5 (T0563; FR-089, T20, C35, C38; contracts/api.md §20): sólo fuera de producción. Dos pestañas:
+   - Tesorería: las órdenes de giro y anulaciones que recibió la tesorería de prueba, y el resultado de cada orden como lo emitiría Tesorería
+     (girada, rechazada, cheque no cobrado o anulada), con la persona que prueba como usuario de origen.
+   - Recaudador: ejercita el contrato de obligaciones como lo haría Recaudo: busca a la persona, lista sus obligaciones, simula, aplica en forma
+     interactiva (con el simulationId de la simulación) o no interactiva con la clave TST:{guid:N} que propone y deja repetir para probar la
+     idempotencia, reversa por la clave del pago, resuelve saldos a favor y anticipos, y muestra los PagoReversadoPorCartera recibidos.
+   Si el servidor no publica los dobles (404, producción), la página lo dice y no ofrece nada. *@
+<PermissionGate Required="Lending.TestDoubles.Operate" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Dobles de prueba de Cartera</h3>
+        <div class="toolbar">
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+        </div>
+    </div>
+    <p class="aviso aviso-alerta"><strong>Doble de prueba: no existe en producción.</strong> Lo que se emite aquí no lo hacen la Tesorería ni el Recaudo reales.</p>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        @if (_noDisponibles)
+        {
+            <p class="aviso aviso-info">Los dobles de prueba no están disponibles en este ambiente.</p>
+        }
+        else if (_errorDisponibles is not null)
+        {
+            <p class="aviso aviso-error" role="alert">@_errorDisponibles</p>
+        }
+        else if (_disponibles is not null)
+        {
+            <div class="toolbar">
+                <SfButton CssClass="@(_pestana == Pestana.Tesoreria ? "e-primary" : "e-outline")" OnClick="@(() => AbrirAsync(Pestana.Tesoreria))">Tesorería</SfButton>
+                <SfButton CssClass="@(_pestana == Pestana.Recaudador ? "e-primary" : "e-outline")" OnClick="@(() => AbrirAsync(Pestana.Recaudador))">Recaudador</SfButton>
+                <SfButton CssClass="@(_pestana == Pestana.Libranza ? "e-primary" : "e-outline")" OnClick="@(() => AbrirAsync(Pestana.Libranza))">Libranza</SfButton>
+            </div>
+        }
+    </IndicadorDeCarga>
+
+    @if (_disponibles is not null && _pestana == Pestana.Tesoreria)
+    {
+        <IndicadorDeCarga Cargando="@_cargaOrdenes.Activa">
+            <h4>Tesorería de prueba</h4>
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Orden</th><th>Crédito</th><th>Forma</th><th>Beneficiario</th><th class="numero">Neto</th><th>Estado</th><th>Resultados</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var o in _ordenes)
+                        {
+                            var orden = o;
+                            <tr>
+                                <td>@orden.OrderNumber</td>
+                                <td>@orden.LoanNumber</td>
+                                <td>@TextosDeDesembolso.Forma(orden.Form)@(orden.PaidByFile ? " · por archivo" : "")</td>
+                                <td>@orden.Beneficiary</td>
+                                <td class="numero">@TextosDeOriginacion.Pesos(orden.NetAmount)</td>
+                                <td>@TextosDeDesembolso.EstadoDeOrden(orden.Status)@(orden.VoidRequested ? $" · anulación pedida: {orden.VoidReason}" : "")</td>
+                                <td>@string.Join(", ", orden.Results.Select(TextosDeDesembolso.EstadoDeOrden))</td>
+                                <td>
+                                    @if (orden.Status is "Issued" or "Disbursed")
+                                    {
+                                        <SfButton CssClass="e-flat e-small" OnClick="@(() => Abrir(orden))">Resultado…</SfButton>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            @if (_ordenes.Count == 0) { <p class="texto-tenue">La tesorería de prueba no ha recibido órdenes.</p> }
+        </IndicadorDeCarga>
+    }
+    else if (_disponibles is not null && _pestana == Pestana.Recaudador)
+    {
+        @if (!_disponibles.Collector)
+        {
+            <p class="aviso aviso-info">El recaudador de prueba no está habilitado en este ambiente: falta su registro como participante de integración
+                (código TST) o la configuración de los dobles de prueba.</p>
+        }
+        else
+        {
+            @* 1. La persona y sus obligaciones, como las ve el recaudador. *@
+            <div class="info-card">
+                <h4>Obligaciones de la persona</h4>
+                <div class="form-grid">
+                    <div class="campo campo-ancho">Persona *
+                        <PersonSearchPicker Selected="@_persona" SelectedChanged="@ElegirPersonaAsync" ShowHelpText="false" Compacto="true" />
+                    </div>
+                    <label class="campo-check"><input type="checkbox" @bind="_comoCodeudor" /> Incluir donde es codeudor</label>
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_persona is null || _cargaObligaciones.Activa)" OnClick="@ListarAsync">Listar obligaciones</SfButton>
+                </div>
+                <IndicadorDeCarga Cargando="@_cargaObligaciones.Activa">
+                    @if (_errorObligaciones is not null) { <p class="aviso aviso-error" role="alert">@_errorObligaciones</p> }
+                    @if (_listado is { } l)
+                    {
+                        <p class="texto-apoyo">Cartera @TextosDePagos.EstadoDeCartera(l.LendingStatus) · al @TextosDeCreditos.Fecha(l.Date)@(_mensajeDelListado is { } m ? $" · {m}" : "")</p>
+                        <div class="tabla-desplazable">
+                            <table class="data-grid">
+                                <thead><tr><th>Número</th><th>Línea</th><th>Papel</th><th>Estado</th><th class="numero">Mora</th><th class="numero">Exigible hoy</th><th class="numero">Cuota del ciclo</th><th class="numero">Vencido</th><th class="numero">Para cancelar</th><th class="numero">Anticipo</th><th class="numero">Saldo a favor</th><th>Bloqueos</th><th></th></tr></thead>
+                                <tbody>
+                                    @foreach (var o in l.Obligations)
+                                    {
+                                        var obligacion = o;
+                                        var elegida = _obligacion?.ObligationPublicId == obligacion.ObligationPublicId;
+                                        <tr>
+                                            <td>@obligacion.Number</td><td>@obligacion.CreditLineCode · @obligacion.CreditLineName</td><td>@TextosDePagos.Rol(obligacion.Role)</td>
+                                            <td>@TextosDePagos.EstadoDeObligacion(obligacion.Status)</td><td class="numero">@obligacion.DaysPastDue</td>
+                                            <td class="numero">@TextosDeCreditos.Pesos(obligacion.DueToday)</td><td class="numero">@TextosDeCreditos.Pesos(obligacion.CycleInstallment)</td>
+                                            <td class="numero">@TextosDeCreditos.Pesos(obligacion.PastDue)</td><td class="numero">@TextosDeCreditos.Pesos(obligacion.PayoffAmount)</td>
+                                            <td class="numero">@TextosDeCreditos.Pesos(obligacion.Advance)</td><td class="numero">@TextosDeCreditos.Pesos(obligacion.CreditBalance)</td>
+                                            <td>@string.Join(", ", obligacion.BlockReasons)</td>
+                                            <td><SfButton CssClass="@(elegida ? "e-primary e-small" : "e-flat e-small")" OnClick="@(() => ElegirObligacion(obligacion))">@(elegida ? "Elegida" : "Elegir")</SfButton></td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                        @if (l.Obligations.Count == 0) { <p class="texto-tenue">La persona no tiene obligaciones que el recaudador pueda pagar.</p> }
+                    }
+                </IndicadorDeCarga>
+            </div>
+
+            @if (_obligacion is { } ob)
+            {
+                @* 2. Simular y aplicar un pago. *@
+                <div class="info-card">
+                    <h4>Pago a la obligación @ob.Number</h4>
+                    <div class="form-grid">
+                        <label class="campo">Modalidad *
+                            <select class="e-input" value="@_modalidad" @onchange="@(e => { _modalidad = e.Value?.ToString() ?? "FreeAmount"; _simulacion = null; })">
+                                @foreach (var m in ModalidadesDe(ob)) { <option value="@m.Valor">@m.Texto</option> }
+                            </select>
+                        </label>
+                        <label class="campo">Valor * <input class="e-input" type="number" min="0" step="1" @bind="_valor" /></label>
+                        <label class="campo">Fecha valor
+                            <input type="date" class="e-input" value="@_fechaValor.ToString("yyyy-MM-dd")" @onchange="@(e => _fechaValor = LeerFecha(e.Value) ?? _fechaValor)" />
+                        </label>
+                        @if (_modalidad == "SpecificInstallment")
+                        {
+                            <label class="campo">Cuota * <input class="e-input" type="number" min="1" step="1" @bind="_cuota" /></label>
+                        }
+                        @if (_modalidad == "ExtraordinaryPrincipal")
+                        {
+                            <label class="campo">Elección del deudor
+                                <select class="e-input" @bind="_eleccion">
+                                    <option value="">Sin elección (preferencia o saldo a favor)</option>
+                                    @foreach (var e in TextosDePagos.Elecciones) { <option value="@e.Valor">@e.Texto</option> }
+                                </select>
+                            </label>
+                        }
+                        <label class="campo">Clase de medio
+                            <select class="e-input" @bind="_medio">
+                                @foreach (var c in TextosDePagos.ClasesDeMedio) { <option value="@c.Valor">@c.Texto</option> }
+                            </select>
+                        </label>
+                        <label class="campo">Recibo * <input class="e-input" maxlength="40" @bind="_recibo" /></label>
+                        <label class="campo campo-ancho">Clave del pago (se puede repetir para probar la idempotencia) *
+                            <input class="e-input" maxlength="80" @bind="_clavePago" />
+                        </label>
+                        <label class="campo-check"><input type="checkbox" @bind="_interactiva" /> Forma interactiva (aplica la simulación vista)</label>
+                    </div>
+                    <div class="toolbar">
+                        <SfButton CssClass="e-outline" Disabled="@(_cargaPago.Activa || _valor is not > 0m)" OnClick="@SimularAsync">Simular</SfButton>
+                        <SfButton CssClass="e-primary" Disabled="@(_cargaPago.Activa || !PuedeAplicar)" OnClick="@AplicarAsync">Aplicar</SfButton>
+                        <SfButton CssClass="e-flat" Disabled="@_cargaPago.Activa" OnClick="@(() => { _clavePago = DoblesDePruebaClient.ClaveNueva(); _recibo = ReciboDe(_clavePago); })">Clave nueva</SfButton>
+                    </div>
+                    @if (_interactiva && _simulacion is null) { <p class="texto-apoyo">En forma interactiva se aplica lo que se simuló: simule primero.</p> }
+                    <IndicadorDeCarga Cargando="@_cargaPago.Activa">
+                        @if (_errorPago is not null) { <p class="aviso aviso-error" role="alert">@_errorPago</p> }
+                        @if (_simulacion is { } s)
+                        {
+                            <ResultadoDelContrato Resultado="@s.Result" Mensaje="@s.Message" />
+                            @if (s.Value is { } v)
+                            {
+                                <SimulacionDelRecaudador Simulacion="@v" AlElegir="@ElegirAlternativa" />
+                            }
+                        }
+                        @if (_aplicacion is { } a)
+                        {
+                            <h4>Respuesta del contrato</h4>
+                            @foreach (var item in a.Payments)
+                            {
+                                <ResultadoDelContrato Resultado="@item.Result" Mensaje="@item.Message" />
+                                @if (item.Value is { } k)
+                                {
+                                    <p class="texto-apoyo">Operación @k.Number · clave @k.IdempotencyKey · aplicado @TextosDeCreditos.Pesos(k.AppliedAmount) · anticipo
+                                        @TextosDeCreditos.Pesos(k.AdvanceAmount) · saldo a favor @TextosDeCreditos.Pesos(k.CreditBalanceAmount)@(k.PaidOff ? " · obligación cancelada" : "")@(k.FinalityUntil is { } f ? $" · en firme desde el {TextosDeCreditos.Fecha(f)}" : "")</p>
+                                    <DistribucionDelContrato Lineas="@k.Distribution" />
+                                    @foreach (var w in k.Warnings) { <p class="aviso aviso-alerta">@w</p> }
+                                }
+                            }
+                        }
+                    </IndicadorDeCarga>
+                </div>
+
+                @* 3. Reversar por la clave del pago. *@
+                <div class="info-card">
+                    <h4>Reversar un pago por su clave</h4>
+                    <div class="form-grid">
+                        <label class="campo campo-ancho">Clave del pago * <input class="e-input" maxlength="80" @bind="_claveAReversar" /></label>
+                        <label class="campo campo-ancho">Motivo * <input class="e-input" maxlength="500" @bind="_motivoReverso" /></label>
+                    </div>
+                    <div class="toolbar">
+                        <SfButton CssClass="e-outline" Disabled="@(_cargaReverso.Activa || string.IsNullOrWhiteSpace(_claveAReversar))" OnClick="@SimularReversoAsync">Ver la redistribución</SfButton>
+                        <SfButton CssClass="e-danger" Disabled="@(_cargaReverso.Activa || string.IsNullOrWhiteSpace(_claveAReversar) || string.IsNullOrWhiteSpace(_motivoReverso))" OnClick="@ReversarAsync">Reversar</SfButton>
+                    </div>
+                    <IndicadorDeCarga Cargando="@_cargaReverso.Activa">
+                        @if (_errorReverso is not null) { <p class="aviso aviso-error" role="alert">@_errorReverso</p> }
+                        @if (_simulacionDelReverso is { } sr)
+                        {
+                            <ResultadoDelContrato Resultado="@sr.Result" Mensaje="@sr.Message" />
+                            @if (sr.Value is { } v) { <SimulacionDelRecaudador Simulacion="@v" /> }
+                        }
+                        @if (_reverso is { } r)
+                        {
+                            <ResultadoDelContrato Resultado="@r.Result" Mensaje="@r.Message" />
+                            @if (r.Value is { } k)
+                            {
+                                <p class="texto-apoyo">Reverso @k.Number del pago @k.ReversedNumber por @TextosDeCreditos.Pesos(k.ReversedAmount)@(k.ObligationReopened ? " · la obligación volvió a quedar vigente" : "")@(k.ReallocatedPaymentNumbers.Count > 0 ? $" · pagos redistribuidos: {string.Join(", ", k.ReallocatedPaymentNumbers)}" : "").</p>
+                                <DistribucionDelContrato Lineas="@k.Adjustments" />
+                            }
+                        }
+                    </IndicadorDeCarga>
+                </div>
+
+                @* 4. Resolver un saldo a favor o un anticipo. *@
+                <div class="info-card">
+                    <h4>Resolver un saldo a favor o un anticipo</h4>
+                    <div class="form-grid">
+                        <label class="campo">Saldo
+                            <select class="e-input" @bind="_conceptoSaldo">
+                                <option value="CreditBalance">Saldo a favor (@TextosDeCreditos.Pesos(ob.CreditBalance))</option>
+                                <option value="Advance">Anticipo (@TextosDeCreditos.Pesos(ob.Advance))</option>
+                            </select>
+                        </label>
+                        <label class="campo">Forma
+                            <select class="e-input" @bind="_formaResolucion">
+                                @foreach (var f in TextosDePagos.FormasDeResolucion) { <option value="@f.Valor">@f.Texto</option> }
+                            </select>
+                        </label>
+                        <label class="campo">Valor (vacío = todo) <input class="e-input" type="number" min="0" step="1" @bind="_valorResolucion" /></label>
+                        @if (_formaResolucion == "ApplyToOtherObligation")
+                        {
+                            <label class="campo">Obligación destino *
+                                <select class="e-input" @bind="_destino">
+                                    <option value="">Elija…</option>
+                                    @foreach (var o in (_listado?.Obligations ?? []).Where(x => x.ObligationPublicId != ob.ObligationPublicId))
+                                    {
+                                        <option value="@o.ObligationPublicId">@o.Number</option>
+                                    }
+                                </select>
+                            </label>
+                            <label class="campo">Modalidad en el destino
+                                <select class="e-input" @bind="_modalidadDestino">
+                                    @foreach (var m in TextosDePagos.Modalidades) { <option value="@m.Valor">@m.Texto</option> }
+                                </select>
+                            </label>
+                        }
+                        @if (_formaResolucion == "ApplyAsExtraordinaryPrincipal" || (_formaResolucion == "ApplyToOtherObligation" && _modalidadDestino == "ExtraordinaryPrincipal"))
+                        {
+                            <label class="campo">Elección del deudor
+                                <select class="e-input" @bind="_eleccionResolucion">
+                                    <option value="">Sin elección</option>
+                                    @foreach (var e in TextosDePagos.Elecciones) { <option value="@e.Valor">@e.Texto</option> }
+                                </select>
+                            </label>
+                        }
+                        <label class="campo campo-ancho">Clave * <input class="e-input" maxlength="80" @bind="_claveResolucion" /></label>
+                    </div>
+                    <div class="toolbar">
+                        <SfButton CssClass="e-primary" Disabled="@(_cargaResolucion.Activa || string.IsNullOrWhiteSpace(_claveResolucion) || (_formaResolucion == "ApplyToOtherObligation" && string.IsNullOrEmpty(_destino)))" OnClick="@ResolverAsync">Resolver</SfButton>
+                        <SfButton CssClass="e-flat" Disabled="@_cargaResolucion.Activa" OnClick="@(() => _claveResolucion = DoblesDePruebaClient.ClaveNueva())">Clave nueva</SfButton>
+                    </div>
+                    <IndicadorDeCarga Cargando="@_cargaResolucion.Activa">
+                        @if (_errorResolucion is not null) { <p class="aviso aviso-error" role="alert">@_errorResolucion</p> }
+                        @if (_resolucion is { } rs)
+                        {
+                            <ResultadoDelContrato Resultado="@rs.Result" Mensaje="@rs.Message" />
+                            @if (rs.Value is { } k)
+                            {
+                                <p class="texto-apoyo">Operación @k.Number: @TextosDePagos.Concepto(k.Concept) por @TextosDeCreditos.Pesos(k.Amount) · @TextosDePagos.FormaDeResolucion(k.Form)@(k.TargetApplication is { } t ? $" · aplicado en {t.ObligationNumber} con la operación {t.Number}" : "").</p>
+                            }
+                        }
+                    </IndicadorDeCarga>
+                </div>
+            }
+
+            @* 5. Lo que Cartera le avisó al recaudador. *@
+            <div class="info-card">
+                <h4>Reversos que Cartera le avisó al recaudador</h4>
+                <div class="toolbar">
+                    <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_cargaRecibidos.Activa" OnClick="@CargarRecibidosAsync">Actualizar</SfButton>
+                </div>
+                <IndicadorDeCarga Cargando="@_cargaRecibidos.Activa">
+                    @if (_errorRecibidos is not null) { <p class="aviso aviso-error" role="alert">@_errorRecibidos</p> }
+                    <div class="tabla-desplazable">
+                        <table class="data-grid">
+                            <thead><tr><th>Recibido</th><th>Crédito</th><th>Pago</th><th>Reverso</th><th>Clave</th><th class="numero">Valor</th><th>Motivo</th><th>Entrega</th></tr></thead>
+                            <tbody>
+                                @foreach (var x in _recibidos)
+                                {
+                                    <tr><td>@TextosDeCreditos.Instante(x.EmittedAt)</td><td>@x.LoanNumber</td><td>@x.PaymentNumber</td><td>@x.ReversalNumber@(x.Reopened ? " (reabrió)" : "")</td>
+                                        <td>@x.IdempotencyKey</td><td class="numero">@TextosDeCreditos.Pesos(x.ReversedAmount)</td><td>@x.Reason</td>
+                                        <td>@TextosDeCreditos.EstadoDeMensaje(x.DeliveryStatus)</td></tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    @if (_recibidos.Count == 0 && _errorRecibidos is null) { <p class="texto-tenue">El recaudador de prueba no ha recibido reversos de Cartera.</p> }
+                </IndicadorDeCarga>
+            </div>
+        }
+    }
+    else if (_disponibles is not null && _pestana == Pestana.Libranza)
+    {
+        @* K2 (T0852; api.md §20): lo que Recaudo hace con un archivo de descuentos —entregarlo a la pagaduría y devolver su respuesta—. *@
+        @if (!_disponibles.Collector)
+        {
+            <p class="aviso aviso-info">El recaudador de prueba no está habilitado en este ambiente.</p>
+        }
+        else
+        {
+            <div class="info-card">
+                <h4>Archivos de descuento recibidos por el recaudador</h4>
+                <p class="texto-apoyo">Confirme la entrega de un archivo generado (queda «enviado») y cargue la respuesta de la pagaduría en el formato de vuelta de
+                    su convenio: una fila por crédito con su código de respuesta, lo descontado y la fecha del descuento.</p>
+                <div class="toolbar">
+                    <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_cargaArchivos.Activa" OnClick="@CargarArchivosDeLibranzaAsync">Actualizar</SfButton>
+                </div>
+                <IndicadorDeCarga Cargando="@_cargaArchivos.Activa">
+                    <div class="tabla-desplazable">
+                        <table class="data-grid">
+                            <thead><tr><th>Archivo</th><th>Convenio</th><th>Período</th><th class="numero">Líneas</th><th class="numero">Total</th><th>Estado</th><th></th></tr></thead>
+                            <tbody>
+                                @foreach (var a in _archivosDeLibranza)
+                                {
+                                    var archivo = a;
+                                    <tr>
+                                        <td>@archivo.Number (v@(archivo.Version))</td>
+                                        <td>@archivo.AgreementCode</td>
+                                        <td>@TextosDeLibranza.Periodo(archivo.Year, archivo.Month, archivo.SubPeriod)</td>
+                                        <td class="numero">@archivo.Lines</td>
+                                        <td class="numero">@TextosDeCreditos.Pesos(archivo.Total)</td>
+                                        <td>@TextosDeLibranza.EstadoDeArchivo(archivo.Status)</td>
+                                        <td>
+                                            @if (archivo.Status == "Generated")
+                                            {
+                                                <SfButton CssClass="e-flat e-small" Disabled="@_accionLibranza.Activa" OnClick="@(() => ConfirmarEnvioAsync(archivo))">Confirmar envío</SfButton>
+                                            }
+                                            @if (archivo.Status is "Generated" or "Sent")
+                                            {
+                                                <SfButton CssClass="e-flat e-small" OnClick="@(() => ElegirArchivoDeRespuesta(archivo))">Cargar respuesta…</SfButton>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    @if (_archivosDeLibranza.Count == 0) { <p class="texto-tenue">No hay archivos de descuento generados ni enviados.</p> }
+                </IndicadorDeCarga>
+            </div>
+            @if (_archivoDeRespuesta is { } elegido)
+            {
+                <div class="info-card">
+                    <h4>Respuesta de la pagaduría al archivo @elegido.Number</h4>
+                    <IndicadorDeCarga Cargando="@_accionLibranza.Activa" Texto="Leyendo la respuesta…">
+                        <InputFile OnChange="@ElegirRespuestaAsync" accept=".csv,.txt" />
+                        @if (_errorLibranza is not null) { <p class="aviso aviso-error" role="alert">@_errorLibranza</p> }
+                        <div class="toolbar">
+                            <SfButton CssClass="e-primary" Disabled="@(_accionLibranza.Activa || _respuesta is null)" OnClick="@EmitirRespuestaAsync">Emitir el resultado</SfButton>
+                            <SfButton CssClass="e-outline" OnClick="@(() => ElegirArchivoDeRespuesta(null))">Volver</SfButton>
+                        </div>
+                    </IndicadorDeCarga>
+                </div>
+            }
+        }
+    }
+</div>
+
+<SfDialog @bind-Visible="_mostrar" Header="@($"Resultado de la orden {_orden?.OrderNumber}")" Width="520px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_accion.Activa" Texto="Emitiendo el resultado…">
+                <label class="campo">Resultado
+                    <select class="e-input" @bind="_resultado">
+                        @foreach (var e in TextosDeDesembolso.EstadosDeOrden.Where(e => e.Valor != "Issued")) { <option value="@e.Valor">@e.Texto</option> }
+                    </select>
+                </label>
+                <label class="campo">Referencia de Tesorería * <input class="e-input" @bind="_referencia" maxlength="60" /></label>
+                <label class="campo">Valor (vacío = el neto) <input class="e-input" type="number" min="0" step="1" @bind="_valorOrden" /></label>
+                <label class="campo campo-ancho">Motivo <input class="e-input" @bind="_motivo" maxlength="500" /></label>
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_accion.Activa || string.IsNullOrWhiteSpace(_referencia))" OnClick="@EmitirAsync">Emitir</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrar = false)">Volver</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private enum Pestana { Tesoreria, Recaudador, Libranza }
+
+    private readonly EstadoDeCarga _carga = new(), _cargaOrdenes = new(), _accion = new(), _cargaObligaciones = new(), _cargaPago = new(),
+        _cargaReverso = new(), _cargaResolucion = new(), _cargaRecibidos = new(), _cargaArchivos = new(), _accionLibranza = new();
+    private Pestana _pestana = Pestana.Tesoreria;
+    private DoblesDisponiblesDto? _disponibles;
+    private bool _noDisponibles;
+    private string? _errorDisponibles;
+
+    // Tesorería.
+    private List<OrdenEnTesoreriaDePruebaDto> _ordenes = [];
+    private OrdenEnTesoreriaDePruebaDto? _orden;
+    private bool _mostrar;
+    private string _resultado = "Disbursed";
+    private string? _referencia, _motivo, _error;
+    private decimal? _valorOrden;
+    private ClaveDeOperacion _clave = new();
+
+    // Recaudador.
+    private PersonSearchPicker.PersonSearchItem? _persona;
+    private bool _comoCodeudor;
+    private ListadoDeObligacionesDto? _listado;
+    private string? _mensajeDelListado, _errorObligaciones;
+    private ObligacionListadaDto? _obligacion;
+    private string _modalidad = "CycleInstallment", _eleccion = "", _medio = "Cash";
+    private decimal? _valor;
+    private DateOnly _fechaValor = DateOnly.FromDateTime(DateTime.Today);
+    private int? _cuota;
+    private string _clavePago = DoblesDePruebaClient.ClaveNueva();
+    private string _recibo = "";
+    private bool _interactiva = true;
+    private RespuestaDelContratoDto<SimulacionDelContratoDto>? _simulacion;
+    private string? _simulationId;
+    private RespuestaDeAplicacionDto? _aplicacion;
+    private string? _errorPago;
+    private readonly ClaveDeOperacion _claveDeAplicar = new(), _claveDeReversar = new(), _claveDeResolver = new();
+
+    private string? _claveAReversar, _motivoReverso, _errorReverso;
+    private RespuestaDelContratoDto<SimulacionDelContratoDto>? _simulacionDelReverso;
+    private RespuestaDelContratoDto<ComprobanteDeReversoDelContratoDto>? _reverso;
+
+    private string _conceptoSaldo = "CreditBalance", _formaResolucion = "RefundThroughCollector", _modalidadDestino = "FreeAmount", _eleccionResolucion = "";
+    private string? _destino, _errorResolucion;
+    private decimal? _valorResolucion;
+    private string _claveResolucion = DoblesDePruebaClient.ClaveNueva();
+    private RespuestaDelContratoDto<ComprobanteDeResolucionDto>? _resolucion;
+
+    private List<PagoReversadoRecibidoDto> _recibidos = [];
+    private string? _errorRecibidos;
+    private bool _recibidosLeidos;
+
+    private bool PuedeAplicar => _obligacion is not null && _persona is not null && _valor is > 0m && !string.IsNullOrWhiteSpace(_clavePago)
+                                 && !string.IsNullOrWhiteSpace(_recibo) && (!_interactiva || _simulationId is not null);
+
+    protected override async Task OnInitializedAsync()
+    {
+        _recibo = ReciboDe(_clavePago);
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        using (_carga.Iniciar())
+        {
+            var r = await Dobles.ConsultarAsync();
+            _noDisponibles = r.StatusCode == 404;
+            _errorDisponibles = r.IsSuccess || _noDisponibles ? null : r.ErrorMessage ?? "No se pudo saber qué dobles de prueba hay.";
+            _disponibles = r.IsSuccess ? r.Value : null;
+        }
+        if (_disponibles is null) return;
+        if (_pestana == Pestana.Tesoreria) await CargarOrdenesAsync();
+        else if (_disponibles.Collector) await CargarRecibidosAsync();
+    }
+
+    private async Task AbrirAsync(Pestana pestana)
+    {
+        _pestana = pestana;
+        if (pestana == Pestana.Tesoreria) await CargarOrdenesAsync();
+        else if (pestana == Pestana.Libranza) await CargarArchivosDeLibranzaAsync();
+        else if (_disponibles is { Collector: true } && !_recibidosLeidos) await CargarRecibidosAsync();
+    }
+
+    // ------------------------------------------------------------------------------------------------- libranza --
+
+    private List<ArchivoDeDescuentosDto> _archivosDeLibranza = [];
+    private ArchivoDeDescuentosDto? _archivoDeRespuesta;
+    private (string Nombre, byte[] Contenido)? _respuesta;
+    private string? _errorLibranza;
+    private ClaveDeOperacion _claveDeEnvio = new(), _claveDeRespuesta = new();
+
+    private async Task CargarArchivosDeLibranzaAsync()
+    {
+        if (_disponibles is not { Collector: true }) { _archivosDeLibranza = []; return; }
+        using var carga = _cargaArchivos.Iniciar();
+        var generados = await Libranza.ArchivosAsync(estado: "Generated");
+        var enviados = await Libranza.ArchivosAsync(estado: "Sent");
+        if (!generados.IsSuccess)
+        {
+            _archivosDeLibranza = [];
+            await Notification.ErrorAsync(generados.StatusCode == 404
+                ? "Para ver los archivos de descuento hace falta el permiso de consultarlos (Cartera › Archivos de descuento)."
+                : generados.ErrorMessage ?? "No se pudieron leer los archivos de descuento.");
+            return;
+        }
+        _archivosDeLibranza = [.. (generados.Value?.Items ?? []).Concat(enviados.Value?.Items ?? []).OrderByDescending(a => a.GeneratedAt)];
+    }
+
+    private void ElegirArchivoDeRespuesta(ArchivoDeDescuentosDto? archivo)
+    {
+        _archivoDeRespuesta = archivo;
+        _respuesta = null;
+        _errorLibranza = null;
+        _claveDeRespuesta = new ClaveDeOperacion();
+    }
+
+    private async Task ConfirmarEnvioAsync(ArchivoDeDescuentosDto archivo)
+    {
+        using var carga = _accionLibranza.Iniciar();
+        _claveDeEnvio = new ClaveDeOperacion();
+        var r = await Libranza.ConfirmarEnvioDePruebaAsync(archivo.PublicId, new ConfirmacionDeEnvioDePruebaRequest("Portal", $"RAD-{archivo.Number}"), _claveDeEnvio);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo confirmar el envío."); return; }
+        await Notification.SuccessAsync($"Envío del archivo {archivo.Number} confirmado; Cartera lo marca enviado al procesar el mensaje.");
+        await CargarArchivosDeLibranzaAsync();
+    }
+
+    private async Task ElegirRespuestaAsync(InputFileChangeEventArgs e)
+    {
+        _errorLibranza = null;
+        using var ms = new MemoryStream();
+        await e.File.OpenReadStream(16 * 1024 * 1024).CopyToAsync(ms);
+        _respuesta = (e.File.Name, ms.ToArray());
+    }
+
+    private async Task EmitirRespuestaAsync()
+    {
+        if (_archivoDeRespuesta is not { } archivo || _respuesta is not { } respuesta) return;
+        using var carga = _accionLibranza.Iniciar();
+        var r = await Libranza.ResultadoDePruebaAsync(archivo.PublicId, respuesta.Nombre, respuesta.Contenido, _claveDeRespuesta);
+        if (!r.IsSuccess) { _errorLibranza = r.ErrorMessage ?? "No se pudo leer la respuesta."; return; }
+        await Notification.SuccessAsync($"Resultado emitido con {r.Value!.Lines} líneas.");
+        ElegirArchivoDeRespuesta(null);
+        await CargarArchivosDeLibranzaAsync();
+    }
+
+    private async Task CargarOrdenesAsync()
+    {
+        if (_disponibles is not { Treasury: true }) { _ordenes = []; return; }
+        using var carga = _cargaOrdenes.Iniciar();
+        var r = await Dobles.OrdenesAsync();
+        if (!r.IsSuccess) { _ordenes = []; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer las órdenes de la tesorería de prueba."); return; }
+        _ordenes = [.. r.Value ?? []];
+    }
+
+    // ------------------------------------------------------------------------------------------------ tesorería --
+
+    private void Abrir(OrdenEnTesoreriaDePruebaDto orden)
+    {
+        _orden = orden;
+        _resultado = orden.Status == "Disbursed" ? "CheckNotCashed" : "Disbursed";
+        _referencia = $"TES-{orden.OrderNumber}";
+        _valorOrden = null;
+        _motivo = null;
+        _error = null;
+        _clave = new ClaveDeOperacion();
+        _mostrar = true;
+    }
+
+    private async Task EmitirAsync()
+    {
+        if (_orden is null || string.IsNullOrWhiteSpace(_referencia)) return;
+        using (_accion.Iniciar())
+        {
+            var r = await Dobles.ResultadoAsync(_orden.OrderPublicId, new ResultadoDePruebaRequest(_resultado, _referencia.Trim(), Amount: _valorOrden,
+                Reason: string.IsNullOrWhiteSpace(_motivo) ? null : _motivo.Trim()), _clave);
+            if (!r.IsSuccess) { _error = r.ErrorMessage ?? "No se pudo emitir el resultado."; return; }
+        }
+        _mostrar = false;
+        await Notification.SuccessAsync("Resultado emitido: Cartera lo consume desde la bandeja de mensajes.");
+        await CargarOrdenesAsync();
+    }
+
+    // ----------------------------------------------------------------------------------------------- recaudador --
+
+    private async Task ElegirPersonaAsync(PersonSearchPicker.PersonSearchItem? persona)
+    {
+        _persona = persona;
+        _listado = null;
+        _obligacion = null;
+        _errorObligaciones = null;
+        if (persona is not null) await ListarAsync();
+    }
+
+    private async Task ListarAsync()
+    {
+        if (_persona is null) return;
+        using var carga = _cargaObligaciones.Iniciar();
+        var r = await Dobles.ObligacionesAsync(_persona.PublicId, _comoCodeudor);
+        if (!r.IsSuccess) { _listado = null; _errorObligaciones = MensajeDelRecaudador(r.StatusCode, r.ErrorMessage, "No se pudieron listar las obligaciones."); return; }
+        _errorObligaciones = null;
+        _listado = r.Value?.Value;
+        _mensajeDelListado = r.Value is { } respuesta && respuesta.Result != 4 ? respuesta.Message : null;
+        if (_obligacion is not null) _obligacion = _listado?.Obligations.FirstOrDefault(o => o.ObligationPublicId == _obligacion.ObligationPublicId);
+    }
+
+    private void ElegirObligacion(ObligacionListadaDto obligacion)
+    {
+        _obligacion = obligacion;
+        var admitidas = ModalidadesDe(obligacion);
+        _modalidad = admitidas.Any(m => m.Valor == "CycleInstallment") ? "CycleInstallment" : admitidas.FirstOrDefault().Valor ?? "FreeAmount";
+        _valor = obligacion.CycleInstallment > 0m ? obligacion.CycleInstallment : obligacion.DueToday > 0m ? obligacion.DueToday : null;
+        _simulacion = null;
+        _simulationId = null;
+        _aplicacion = null;
+        _errorPago = null;
+        _reverso = null;
+        _simulacionDelReverso = null;
+        _resolucion = null;
+        _destino = null;
+    }
+
+    private static IReadOnlyList<(int Numero, string Valor, string Texto)> ModalidadesDe(ObligacionListadaDto obligacion) =>
+        obligacion.AdmittedModalities.Count == 0
+            ? TextosDePagos.Modalidades
+            : [.. TextosDePagos.Modalidades.Where(m => obligacion.AdmittedModalities.Contains(m.Numero))];
+
+    private async Task SimularAsync()
+    {
+        if (_obligacion is null || _valor is not > 0m) return;
+        using var carga = _cargaPago.Iniciar();
+        _errorPago = null;
+        _aplicacion = null;
+        var r = await Dobles.SimularPagoAsync(new SimulacionDelRecaudadorRequest(_obligacion.ObligationPublicId, _modalidad, _valor.Value, _fechaValor,
+            Eleccion(), _modalidad == "SpecificInstallment" ? _cuota : null));
+        if (!r.IsSuccess) { _simulacion = null; _simulationId = null; _errorPago = MensajeDelRecaudador(r.StatusCode, r.ErrorMessage, "No se pudo simular el pago."); return; }
+        _simulacion = r.Value;
+        _simulationId = r.Value?.Value?.SimulationId;
+    }
+
+    /// <summary>Elegir una de las dos alternativas del abono: la aplicación interactiva usa su huella y su elección.</summary>
+    private void ElegirAlternativa(SimulacionDelContratoDto alternativa)
+    {
+        _simulationId = alternativa.SimulationId;
+        _eleccion = alternativa.Choice is { } c ? TextosDePagos.Elecciones.FirstOrDefault(e => e.Numero == c).Valor ?? "" : _eleccion;
+    }
+
+    private async Task AplicarAsync()
+    {
+        if (!PuedeAplicar || _obligacion is null || _persona is null || _valor is not { } valor) return;
+        using var carga = _cargaPago.Iniciar();
+        _errorPago = null;
+        var pago = new PagoDePruebaRequest(_clavePago.Trim(), _obligacion.ObligationPublicId, _modalidad, valor, _fechaValor, _medio, _persona.PublicId,
+            new ReciboDePruebaRequest(_recibo.Trim(), DateOnly.FromDateTime(DateTime.Today), MeansReference: _clavePago.Trim()), Eleccion(),
+            _modalidad == "SpecificInstallment" ? _cuota : null, _interactiva ? _simulationId : null);
+        var r = await Dobles.AplicarPagosAsync(new LoteDePagosDePruebaRequest([pago], _interactiva), _claveDeAplicar);
+        if (!r.IsSuccess) { _aplicacion = null; _errorPago = MensajeDelRecaudador(r.StatusCode, r.ErrorMessage, "No se pudo aplicar el pago."); return; }
+        _aplicacion = r.Value;
+        _claveAReversar = _clavePago.Trim();
+        // La clave del pago se conserva: aplicar otra vez con la misma prueba la idempotencia (AlreadyApplied). «Clave nueva» la cambia.
+        await ListarAsync();
+    }
+
+    private async Task SimularReversoAsync()
+    {
+        if (_obligacion is null || string.IsNullOrWhiteSpace(_claveAReversar)) return;
+        using var carga = _cargaReverso.Iniciar();
+        _errorReverso = null;
+        _reverso = null;
+        var r = await Dobles.SimularPagoAsync(new SimulacionDelRecaudadorRequest(_obligacion.ObligationPublicId, _modalidad, _valor ?? 0m, _fechaValor,
+            PaymentIdempotencyKeyToReverse: _claveAReversar.Trim()));
+        if (!r.IsSuccess) { _simulacionDelReverso = null; _errorReverso = MensajeDelRecaudador(r.StatusCode, r.ErrorMessage, "No se pudo simular el reverso."); return; }
+        _simulacionDelReverso = r.Value;
+    }
+
+    private async Task ReversarAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_claveAReversar) || string.IsNullOrWhiteSpace(_motivoReverso)) return;
+        using (_cargaReverso.Iniciar())
+        {
+            _errorReverso = null;
+            var r = await Dobles.ReversarPagoAsync(_claveAReversar, _motivoReverso.Trim(), _claveDeReversar);
+            if (!r.IsSuccess) { _reverso = null; _errorReverso = MensajeDelRecaudador(r.StatusCode, r.ErrorMessage, "No se pudo reversar el pago."); return; }
+            _reverso = r.Value;
+            _simulacionDelReverso = null;
+        }
+        await ListarAsync();
+    }
+
+    private async Task ResolverAsync()
+    {
+        if (_obligacion is null || string.IsNullOrWhiteSpace(_claveResolucion)) return;
+        using (_cargaResolucion.Iniciar())
+        {
+            _errorResolucion = null;
+            var aOtra = _formaResolucion == "ApplyToOtherObligation";
+            var eleccion = _eleccionResolucion.Length > 0 ? _eleccionResolucion : null;
+            var r = await Dobles.ResolverSaldoAsync(new ResolucionDePruebaRequest(_obligacion.ObligationPublicId, _formaResolucion, _claveResolucion.Trim(),
+                _valorResolucion is > 0m ? _valorResolucion : null, _conceptoSaldo,
+                aOtra && Guid.TryParse(_destino, out var destino) ? destino : null, aOtra ? _modalidadDestino : null, eleccion), _claveDeResolver);
+            if (!r.IsSuccess) { _resolucion = null; _errorResolucion = MensajeDelRecaudador(r.StatusCode, r.ErrorMessage, "No se pudo resolver el saldo."); return; }
+            _resolucion = r.Value;
+        }
+        await ListarAsync();
+    }
+
+    private async Task CargarRecibidosAsync()
+    {
+        using var carga = _cargaRecibidos.Iniciar();
+        var r = await Dobles.ReversosRecibidosAsync();
+        _recibidosLeidos = true;
+        if (!r.IsSuccess) { _recibidos = []; _errorRecibidos = MensajeDelRecaudador(r.StatusCode, r.ErrorMessage, "No se pudieron leer los reversos recibidos."); return; }
+        _errorRecibidos = null;
+        _recibidos = [.. (r.Value ?? []).OrderByDescending(x => x.EmittedAt)];
+    }
+
+    private string? Eleccion() => _modalidad == "ExtraordinaryPrincipal" && _eleccion.Length > 0 ? _eleccion : null;
+
+    private static string ReciboDe(string clave) => "TST-" + clave[^Math.Min(8, clave.Length)..].ToUpperInvariant();
+
+    /// <summary>Un 404 de las rutas del recaudador es que no está registrado en este despliegue.</summary>
+    private static string MensajeDelRecaudador(int? estado, string? mensaje, string porDefecto) =>
+        estado == 404 ? "El recaudador de prueba no está habilitado en este ambiente." : mensaje ?? porDefecto;
+
+    private static DateOnly? LeerFecha(object? valor) =>
+        DateOnly.TryParse(valor?.ToString(), CultureInfo.InvariantCulture, out var f) ? f : null;
+}

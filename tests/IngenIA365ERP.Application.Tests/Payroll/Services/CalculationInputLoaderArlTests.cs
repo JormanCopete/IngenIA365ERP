@@ -64,7 +64,7 @@ public class CalculationInputLoaderArlTests
     public void La_semilla_trae_las_cinco_clases_con_el_porcentaje_del_parametro_legal()
     {
         var clases = WorkRiskClassesSeeder.Catalogo();
-        var parametros = PayrollLegalParametersSeeder.Catalogo().ToDictionary(p => p.Code, p => p.Value);
+        var parametros = PayrollLegalParametersSeeder.ConValoresNacionales().ToDictionary(p => p.Code, p => p.Value);
 
         clases.Select(c => c.Code).Should().Equal(1, 2, 3, 4, 5);
         foreach (var c in clases)

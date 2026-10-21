@@ -34,7 +34,12 @@ public static class BankFileFormatErrors
         new ErrorConDatos("Core.BankFileFormat.InUse",
             $"Con este formato ya se generaron {archivos} archivo(s): su estructura no cambia. Sólo se editan el nombre, la vigencia final, las notas y el estado; para otra estructura cree una versión nueva.",
             new { files = archivos });
-    public static readonly Error Seeded = new("Core.BankFileFormat.Seeded", "Un formato sembrado no se borra; desactívelo o cierre su vigencia.");
+    /// <summary>Feature 013 (api.md §9.3, T0454): el formato elegido es de otro ámbito que el del archivo que se genera.</summary>
+    public static Error ScopeMismatch(string code, BankFileScope ambito, BankFileScope esperado) =>
+        new ErrorConDatos("Core.BankFileFormat.ScopeMismatch",
+            $"El formato {code} es de «{ambito}» y este archivo pide uno de «{esperado}». Elija un formato de ese ámbito.",
+            new { code, scope = ambito.ToString(), expected = esperado.ToString() });
+    public static readonly Error Seeded =new("Core.BankFileFormat.Seeded", "Un formato sembrado no se borra; desactívelo o cierre su vigencia.");
 }
 
 // -------------------------------------------------------------------- crear --
@@ -80,9 +85,15 @@ public sealed class CreateBankFileFormatCommandHandler(IApplicationDbContext db,
         return Result.Success(formato.PublicId);
     }
 
-    /// <summary>Otro formato activo del mismo banco y ámbito cuya vigencia se cruza con la pedida (un genérico no compite con los del banco).</summary>
+    /// <summary>
+    /// Otro formato activo del mismo banco y ámbito cuya vigencia se cruza con la pedida (un genérico no compite con los del banco). Los ámbitos
+    /// <see cref="SeleccionPorReferenciaAttribute">elegidos por referencia</see> (libranza de ida y de vuelta, feature 013 K2, T78) no compiten:
+    /// conviven varios genéricos vigentes, uno por pagaduría, y cada convenio nombra el suyo (DT §2.25,
+    /// <c>LosFormatosElegidosPorReferenciaNoCompitenPorVigencia</c>).
+    /// </summary>
     internal static async Task<BankFileFormat?> SolapadoAsync(IApplicationDbContext db, int? bankId, BankFileScope scope, DateOnly desde, DateOnly? hasta, int? excluirId, CancellationToken ct)
     {
+        if (SeleccionPorReferenciaAttribute.Tiene(scope)) return null;
         var candidatos = await db.BankFileFormats.AsNoTracking()
             .Where(f => f.BankId == bankId && f.Scope == scope && f.IsActive && (excluirId == null || f.Id != excluirId))
             .ToListAsync(ct);

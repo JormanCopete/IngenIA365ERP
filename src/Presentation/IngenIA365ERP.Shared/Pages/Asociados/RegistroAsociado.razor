@@ -354,8 +354,8 @@
         var branchesTask = Http.GetListAsync<LookupRaw>("/api/core/branches?PageNumber=1&PageSize=500");
         var committeesTask = Http.GetListAsync<LookupRaw>("/api/core/committees?PageNumber=1&PageSize=500");
         var banksTask = Http.GetListAsync<LookupRaw>("/api/core/banks?PageNumber=1&PageSize=500");
-        try { await Task.WhenAll(citiesTask, branchesTask, committeesTask, banksTask); }
-        catch { /* se revisa tarea por tarea */ }
+        // SuppressThrowing: la excepción agregada no se lanza; cada tarea se revisa justo debajo.
+        await Task.WhenAll(citiesTask, branchesTask, committeesTask, banksTask).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing | ConfigureAwaitOptions.ContinueOnCapturedContext);
 
         var caidos = new List<string>();
         _ciudades = citiesTask.IsCompletedSuccessfully ? citiesTask.Result : Caido(citiesTask, "ciudades", caidos, (IReadOnlyList<OpcionDeCiudad>)[]);

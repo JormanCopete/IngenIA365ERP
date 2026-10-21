@@ -13,7 +13,8 @@ namespace IngenIA365ERP.Application.Common.Parameters.AddParameterVersion;
 /// El único escritor de <c>COR_ParameterVersions</c> (feature 012, T21, T071; contracts/api.md §7;
 /// <c>LosParametrosSeLeenEnUnSoloSitio</c>). En orden:
 /// <list type="number">
-/// <item>la clave existe en su catálogo (<c>Parameters.KeyNotFound</c>, 404);</item>
+/// <item>la clave existe en su catálogo (<c>Parameters.KeyNotFound</c>, 404) y su entrega ya llegó (feature 013, T43:
+/// <c>Lending.Parameter.NotYetAvailable</c> en Cartera);</item>
 /// <item>el permiso propio de la clave, además del de la ruta (<c>Parameters.PermissionRequired</c>);</item>
 /// <item>el ámbito y el valor son admitidos (<c>.ScopeNotAllowed</c>, <c>.ValueNotAllowed</c> con
 /// <c>data.allowed</c>) y la fuente legal viene si la definición la exige (<c>Validation.Invalid</c>);</item>
@@ -31,7 +32,7 @@ public sealed class AddParameterVersionCommandHandler(
     IResolutorDeAmbitoDeParametro resolutor,
     IReglasDeParametros reglas,
     IEnumerable<IEfectoDeAltaDeParametro>? efectosDeAlta = null,
-    EntregaDelComercio entrega = CatalogoDeParametros.EntregaVigente)
+    EntregaDeModulo? entrega = null)
     : IRequestHandler<AddParameterVersionCommand, Result<AddParameterVersionResponse>>
 {
     public async Task<Result<AddParameterVersionResponse>> Handle(AddParameterVersionCommand request, CancellationToken ct)
@@ -39,6 +40,10 @@ public sealed class AddParameterVersionCommandHandler(
         var definicion = CatalogoDeParametros.Buscar(request.Module, request.Key);
         if (definicion is null)
             return Result.Failure<AddParameterVersionResponse>(ErroresDeParametros.ClaveInexistente(request.Module, request.Key));
+
+        // Feature 013 (T43): una clave de una entrega posterior a la vigente de su línea no se acepta todavía.
+        if (!definicion.DisponibleEnLaEntrega(entrega))
+            return Result.Failure<AddParameterVersionResponse>(ErroresDeParametros.NoDisponibleTodavia(definicion));
 
         if (definicion.PermisoAdicional is { } permiso && !await permisos.HasPermissionAsync(permiso, ct))
             return Result.Failure<AddParameterVersionResponse>(ErroresDeParametros.PermisoRequerido(permiso));

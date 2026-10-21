@@ -1,0 +1,213 @@
+{
+  "descripcion": "CreditoNovado (K3) con interés: el capital y el interés corriente causado pasan del crédito anterior al nuevo, cada uno por su rol de saldo (InteresPorCobrar con la categoría C); cada punta lleva el número de su crédito como cruce.",
+  "sobre": {
+    "version": 1,
+    "kind": "Business",
+    "originModule": "CAR",
+    "originEventKey": "Confirmation",
+    "origin": {
+      "kind": "Operation",
+      "documentClass": null,
+      "documentTypeCode": null,
+      "number": "NOV-000253",
+      "publicId": "0d0d0153-0000-4000-8000-000000000153",
+      "operationDate": "2027-03-14"
+    },
+    "related": null,
+    "chainRootPublicId": "0e0e0154-0000-4000-8000-000000000154",
+    "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+    "costCenterPublicId": null,
+    "warehouseCode": null,
+    "personPublicId": "a1b2c3d4-0000-4000-8000-000000000003",
+    "currency": "COP",
+    "exchangeRate": 1,
+    "originUser": {
+      "centralUserId": "d4e5f6a7-b8c9-4d0e-9f1a-2b3c4d5e6f70",
+      "name": "Usuario de ensayo"
+    },
+    "emittedAt": "2027-03-14T15:00:00Z"
+  },
+  "mensajes": [
+    {
+      "messageId": "0f0f0156-0000-4000-8000-000000000156",
+      "type": "CreditoNovado",
+      "kind": "Business",
+      "originDocumentClass": "TermsChange",
+      "payload": {
+        "loan": {
+          "loanPublicId": "7b8c9d0e-1f2a-4b3c-9d4e-000000000250",
+          "loanNumber": "000250"
+        },
+        "debtorPersonPublicId": "a1b2c3d4-0000-4000-8000-000000000003",
+        "valueDate": "2027-03-14",
+        "registeredAt": "2027-03-14T15:00:00Z",
+        "dimensions": {
+          "creditLineCode": "COM01",
+          "modalityCode": "CONSUMO",
+          "subsegmentCode": "SinLibranza",
+          "riskCategory": "C",
+          "riskSubcategory": "None",
+          "isEmployee": false,
+          "inGracePeriod": false,
+          "restructured": false,
+          "writtenOff": false,
+          "collectorClass": null,
+          "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+          "impairmentModel": "ArrearsAnnex1",
+          "riskSegment": "CONSUMO",
+          "valueUnit": "Pesos"
+        },
+        "amounts": [
+          {
+            "concept": "Principal",
+            "installmentNumber": null,
+            "amount": 2000000.0,
+            "uvrAmount": null,
+            "onBehalfOfAssociate": false,
+            "reasonCode": null
+          },
+          {
+            "concept": "CurrentInterest",
+            "installmentNumber": 1,
+            "amount": 35000.0,
+            "uvrAmount": null,
+            "onBehalfOfAssociate": false,
+            "reasonCode": null
+          }
+        ],
+        "original": null,
+        "rulesVersion": "LND-2026.1",
+        "previousDimensions": {
+          "creditLineCode": "COM01",
+          "modalityCode": "CONSUMO",
+          "subsegmentCode": "SinLibranza",
+          "riskCategory": "C",
+          "riskSubcategory": "None",
+          "isEmployee": false,
+          "inGracePeriod": false,
+          "restructured": false,
+          "writtenOff": false,
+          "collectorClass": null,
+          "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+          "impairmentModel": "ArrearsAnnex1",
+          "riskSegment": "CONSUMO",
+          "valueUnit": "Pesos"
+        },
+        "noveltyPublicId": "7b8c0155-0000-4000-8000-000000000155",
+        "sessionItemPublicId": null,
+        "previousPlan": {
+          "scheduleVersion": 1,
+          "amortizationSystem": "LevelPayment",
+          "periodicity": "Monthly",
+          "installmentCount": 36,
+          "installmentAmount": 392184.0,
+          "firstDueDate": "2026-12-30",
+          "finalDueDate": "2029-11-30",
+          "annualEffectiveRate": 0.245,
+          "dayCountConvention": "Thirty360",
+          "rulesVersion": "LND-2026.1"
+        },
+        "newPlan": {
+          "scheduleVersion": 1,
+          "amortizationSystem": "LevelPayment",
+          "periodicity": "Monthly",
+          "installmentCount": 36,
+          "installmentAmount": 392184.0,
+          "firstDueDate": "2026-12-30",
+          "finalDueDate": "2029-11-30",
+          "annualEffectiveRate": 0.245,
+          "dayCountConvention": "Thirty360",
+          "rulesVersion": "LND-2026.1"
+        },
+        "restructuringCount": 0,
+        "newLoan": {
+          "loanPublicId": "7b8c9d0e-1f2a-4b3c-9d4e-000000000251",
+          "loanNumber": "000251"
+        }
+      }
+    }
+  ],
+  "esperado": {
+    "tipo": "CN",
+    "fecha": "2027-03-14",
+    "origen": "LendingIssuedDocument",
+    "lineas": [
+      {
+        "rol": "Capital",
+        "cuenta": "14421501",
+        "debito": 2000000.0,
+        "credito": 0.0,
+        "tercero": "luis",
+        "cruce": "PG 000251",
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "CreditoNovado"
+          ],
+          "concepto": "Principal",
+          "creditos": [
+            "000251"
+          ]
+        }
+      },
+      {
+        "rol": "Capital",
+        "cuenta": "14421501",
+        "debito": 0.0,
+        "credito": 2000000.0,
+        "tercero": "luis",
+        "cruce": "PG 000250",
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "CreditoNovado"
+          ],
+          "concepto": "Principal",
+          "creditos": [
+            "000250"
+          ]
+        }
+      },
+      {
+        "rol": "InteresPorCobrar",
+        "cuenta": "14431501",
+        "debito": 35000.0,
+        "credito": 0.0,
+        "tercero": "luis",
+        "cruce": "PG 000251",
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "CreditoNovado"
+          ],
+          "concepto": "CurrentInterest",
+          "creditos": [
+            "000251"
+          ]
+        }
+      },
+      {
+        "rol": "InteresPorCobrar",
+        "cuenta": "14431501",
+        "debito": 0.0,
+        "credito": 35000.0,
+        "tercero": "luis",
+        "cruce": "PG 000250",
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "CreditoNovado"
+          ],
+          "concepto": "CurrentInterest",
+          "creditos": [
+            "000250"
+          ]
+        }
+      }
+    ]
+  }
+}

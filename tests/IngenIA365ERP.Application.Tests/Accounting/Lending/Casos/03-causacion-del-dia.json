@@ -1,0 +1,248 @@
+{
+  "descripcion": "§24 ejemplo 2: una parte de la causación; la cuenta de interés exige tercero y cruce y queda una línea por crédito; el ingreso se suma.",
+  "sobre": {
+    "version": 1,
+    "kind": "Business",
+    "originModule": "CAR",
+    "originEventKey": "Confirmation:00000000000000000000000000000000",
+    "origin": {
+      "kind": "Operation",
+      "documentClass": null,
+      "documentTypeCode": null,
+      "number": "CAU-20261114-1",
+      "publicId": "0d0d0010-0000-4000-8000-000000000010",
+      "operationDate": "2026-11-14"
+    },
+    "related": null,
+    "chainRootPublicId": "0e0e0011-0000-4000-8000-000000000011",
+    "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+    "costCenterPublicId": null,
+    "warehouseCode": null,
+    "personPublicId": null,
+    "currency": "COP",
+    "exchangeRate": 1,
+    "originUser": {
+      "centralUserId": null,
+      "name": "Proceso de integración"
+    },
+    "emittedAt": "2026-11-14T15:00:00Z"
+  },
+  "mensajes": [
+    {
+      "messageId": "0f0f0013-0000-4000-8000-000000000013",
+      "type": "InteresCausado",
+      "kind": "Business",
+      "originDocumentClass": "AccountingFactPart",
+      "payload": {
+        "runKind": "DailyCycle",
+        "runPublicId": "0c0c0012-0000-4000-8000-000000000012",
+        "factDate": "2026-11-14",
+        "batchNumber": 1,
+        "partNumber": 1,
+        "closeVersion": null,
+        "catchUpOperation": null,
+        "totals": [
+          {
+            "dimensions": {
+              "creditLineCode": "LIB01",
+              "modalityCode": "CONSUMO",
+              "subsegmentCode": "ConLibranza",
+              "riskCategory": "A",
+              "riskSubcategory": "None",
+              "isEmployee": false,
+              "inGracePeriod": false,
+              "restructured": false,
+              "writtenOff": false,
+              "collectorClass": null,
+              "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+              "impairmentModel": "ArrearsAnnex1",
+              "riskSegment": "CONSUMO",
+              "valueUnit": "Pesos"
+            },
+            "amounts": [
+              {
+                "concept": "CurrentInterest",
+                "installmentNumber": 3,
+                "amount": 4302.38,
+                "uvrAmount": null,
+                "onBehalfOfAssociate": false,
+                "reasonCode": null
+              }
+            ],
+            "loanCount": 1
+          },
+          {
+            "dimensions": {
+              "creditLineCode": "LIB01",
+              "modalityCode": "CONSUMO",
+              "subsegmentCode": "ConLibranza",
+              "riskCategory": "A",
+              "riskSubcategory": "None",
+              "isEmployee": false,
+              "inGracePeriod": false,
+              "restructured": false,
+              "writtenOff": false,
+              "collectorClass": null,
+              "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+              "impairmentModel": "ArrearsAnnex1",
+              "riskSegment": "CONSUMO",
+              "valueUnit": "Pesos"
+            },
+            "amounts": [
+              {
+                "concept": "CurrentInterest",
+                "installmentNumber": 1,
+                "amount": 2150.1,
+                "uvrAmount": null,
+                "onBehalfOfAssociate": false,
+                "reasonCode": null
+              }
+            ],
+            "loanCount": 1
+          }
+        ],
+        "lines": [
+          {
+            "loan": {
+              "loanPublicId": "7b8c9d0e-1f2a-4b3c-9d4e-000000000123",
+              "loanNumber": "000123"
+            },
+            "debtorPersonPublicId": "a1b2c3d4-0000-4000-8000-000000000002",
+            "counterpartyPersonPublicId": null,
+            "dimensions": {
+              "creditLineCode": "LIB01",
+              "modalityCode": "CONSUMO",
+              "subsegmentCode": "ConLibranza",
+              "riskCategory": "A",
+              "riskSubcategory": "None",
+              "isEmployee": false,
+              "inGracePeriod": false,
+              "restructured": false,
+              "writtenOff": false,
+              "collectorClass": null,
+              "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+              "impairmentModel": "ArrearsAnnex1",
+              "riskSegment": "CONSUMO",
+              "valueUnit": "Pesos"
+            },
+            "previousDimensions": null,
+            "amounts": [
+              {
+                "concept": "CurrentInterest",
+                "installmentNumber": 3,
+                "amount": 4302.38,
+                "uvrAmount": null,
+                "onBehalfOfAssociate": false,
+                "reasonCode": null
+              }
+            ],
+            "valueDate": null
+          },
+          {
+            "loan": {
+              "loanPublicId": "7b8c9d0e-1f2a-4b3c-9d4e-000000000124",
+              "loanNumber": "000124"
+            },
+            "debtorPersonPublicId": "a1b2c3d4-0000-4000-8000-000000000003",
+            "counterpartyPersonPublicId": null,
+            "dimensions": {
+              "creditLineCode": "LIB01",
+              "modalityCode": "CONSUMO",
+              "subsegmentCode": "ConLibranza",
+              "riskCategory": "A",
+              "riskSubcategory": "None",
+              "isEmployee": false,
+              "inGracePeriod": false,
+              "restructured": false,
+              "writtenOff": false,
+              "collectorClass": null,
+              "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+              "impairmentModel": "ArrearsAnnex1",
+              "riskSegment": "CONSUMO",
+              "valueUnit": "Pesos"
+            },
+            "previousDimensions": null,
+            "amounts": [
+              {
+                "concept": "CurrentInterest",
+                "installmentNumber": 1,
+                "amount": 2150.1,
+                "uvrAmount": null,
+                "onBehalfOfAssociate": false,
+                "reasonCode": null
+              }
+            ],
+            "valueDate": null
+          }
+        ],
+        "lineCount": 2,
+        "controlTotal": 6452.48
+      }
+    }
+  ],
+  "esperado": {
+    "tipo": "CA",
+    "fecha": "2026-11-14",
+    "origen": "LendingIssuedDocument",
+    "lineas": [
+      {
+        "rol": "InteresPorCobrar",
+        "cuenta": "14430501",
+        "debito": 4302.38,
+        "credito": 0.0,
+        "tercero": "ana",
+        "cruce": "PG 000123",
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "InteresCausado"
+          ],
+          "concepto": "CurrentInterest",
+          "creditos": [
+            "000123"
+          ]
+        }
+      },
+      {
+        "rol": "InteresPorCobrar",
+        "cuenta": "14430501",
+        "debito": 2150.1,
+        "credito": 0.0,
+        "tercero": "luis",
+        "cruce": "PG 000124",
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "InteresCausado"
+          ],
+          "concepto": "CurrentInterest",
+          "creditos": [
+            "000124"
+          ]
+        }
+      },
+      {
+        "rol": "Ingreso",
+        "cuenta": "41502501",
+        "debito": 0.0,
+        "credito": 6452.48,
+        "tercero": null,
+        "cruce": null,
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "InteresCausado"
+          ],
+          "concepto": "CurrentInterest",
+          "creditos": [
+            "000123",
+            "000124"
+          ]
+        }
+      }
+    ]
+  }
+}

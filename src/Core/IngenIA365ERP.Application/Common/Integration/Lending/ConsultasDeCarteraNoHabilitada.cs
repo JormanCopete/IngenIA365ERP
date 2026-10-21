@@ -13,4 +13,8 @@ public sealed class ConsultasDeCarteraNoHabilitada : IConsultasDeCartera
 
     public Task<EstadoDeValidacionDto> EstadoDeValidacionAsync(Guid messagePublicId, CancellationToken ct) =>
         Task.FromResult(new EstadoDeValidacionDto(EstadosDeValidacion.Pending, null, CarteraNoHabilitada.TextoPendiente));
+
+    /// <summary>Feature 014 (T043; contrato-de-cuentas §5): las dos naturalezas sin activar y listas vacías.</summary>
+    public Task<ProductosDeCaptacionDto> ProductosDeCaptacionAsync(ConsultaDeProductosDeCaptacion consulta, CancellationToken ct) =>
+        Task.FromResult(ProductosDeCaptacionDto.NoHabilitada);
 }

@@ -1,4 +1,4 @@
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 using IngenIA365ERP.Domain.Common;
 
 namespace IngenIA365ERP.Domain.Entities.Core;
@@ -191,6 +191,9 @@ public class Person : AuditableEntity
 
     /// <summary>Obligado a facturar. En falso, comprarle exige documento soporte (Res. 167/2021).</summary>
     public bool IsObligatedToInvoice { get; set; }
+
+    /// <summary>Obligado a llevar contabilidad (respuesta 63 B del dueño, E250): a la persona natural obligada no se le descuenta el componente inflacionario de la retención sobre rendimientos.</summary>
+    public bool IsObligatedToKeepBooks { get; set; }
 
     // Withholding auxiliar
     public bool WithholdingAux { get; set; }

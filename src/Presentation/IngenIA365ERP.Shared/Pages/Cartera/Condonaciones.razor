@@ -1,0 +1,295 @@
+@page "/cartera/condonaciones"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Http
+@inject NovedadesClient Novedades
+@inject CreditosClient Creditos
+@inject INotificationService Notification
+
+<PageTitle>Condonaciones - IngenIA365ERP</PageTitle>
+
+@* Feature 013, K3, US11 (T0892; contracts/api.md §11.2; FR-094): condonar intereses, seguros, honorarios y, sólo con el nivel de excepción, capital.
+   Cada concepto no supera su saldo; los días de mora y si el deudor es vinculado se sellan al pedirla y la enrutan con la matriz de atribuciones
+   (sobre la atribución del gerente va al nivel siguiente, siempre con motivo). Aplicarla registra la operación por el registro de Cartera y emite
+   CondonacionAprobada, que sale contra el deterioro individual del último cierre. *@
+<PermissionGate Required="Lending.Loans.Read" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Condonaciones</h3>
+        <PermissionGate Required="Lending.Condonations.Request">
+            <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@AbrirNueva">Nueva condonación</SfButton>
+        </PermissionGate>
+    </div>
+    <div class="toolbar">
+        <label class="campo">Estado
+            <select class="e-input" @bind="_estado">
+                <option value="">Todos</option>
+                @foreach (var e in TextosDeNovedades.Estados) { <option value="@e.Nombre">@e.Texto</option> }
+            </select>
+        </label>
+        <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@(() => CargarAsync(1))">Consultar</SfButton>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        <div class="tabla-desplazable">
+            <table class="data-grid">
+                <thead><tr><th>Número</th><th>Crédito</th><th>Conceptos</th><th class="numero">Total</th><th>Días de mora</th><th>Estado</th><th>Nivel</th><th>Pedida por</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var w in _filas)
+                    {
+                        var fila = w;
+                        <tr>
+                            <td>@fila.Number</td>
+                            <td><a href="/cartera/creditos/@fila.LoanPublicId">@fila.LoanNumber</a></td>
+                            <td>@string.Join(", ", fila.Concepts.Select(c => $"{TextosDeNovedades.Concepto(c.Concept)} {TextosDeCreditos.Pesos(c.Amount)}"))</td>
+                            <td class="numero">@TextosDeCreditos.Pesos(fila.TotalAmount)</td>
+                            <td>@fila.DaysPastDueAtRequest@(fila.IsRelatedParty ? " · vinculado" : "")</td>
+                            <td>@TextosDeNovedades.Estado(fila.Status)</td>
+                            <td>@(fila.Routing?.LevelName ?? "—")</td>
+                            <td>@fila.RequestedBy</td>
+                            <td>
+                                @if (fila.Status == 2)
+                                {
+                                    <SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirDecision(fila))">Decidir…</SfButton>
+                                }
+                                @if (fila.Status == 3)
+                                {
+                                    <PermissionGate Required="Lending.Condonations.Apply">
+                                        <SfButton CssClass="e-flat e-small e-primary" Disabled="@_accion.Activa" OnClick="@(() => AplicarAsync(fila))">Aplicar</SfButton>
+                                    </PermissionGate>
+                                }
+                                @if (fila.Status is 1 or 2 or 3)
+                                {
+                                    <PermissionGate Required="Lending.Condonations.Request">
+                                        <SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirAnulacion(fila))">Anular…</SfButton>
+                                    </PermissionGate>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (_filas.Count == 0) { <p class="texto-tenue">No hay condonaciones con ese filtro.</p> }
+        @if (_total > TamanoDePagina)
+        {
+            <div class="toolbar">
+                <SfButton CssClass="e-flat e-small" Disabled="@(_pagina <= 1)" OnClick="@(() => CargarAsync(_pagina - 1))">Anterior</SfButton>
+                <span>Página @_pagina de @((_total + TamanoDePagina - 1) / TamanoDePagina)</span>
+                <SfButton CssClass="e-flat e-small" Disabled="@(_pagina * TamanoDePagina >= _total)" OnClick="@(() => CargarAsync(_pagina + 1))">Siguiente</SfButton>
+            </div>
+        }
+    </IndicadorDeCarga>
+</div>
+
+<SfDialog @bind-Visible="_mostrarNueva" Header="Nueva condonación" Width="620px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_accion.Activa" Texto="Registrando…">
+                <div class="form-grid">
+                    <label class="campo">Crédito (número) <input class="e-input" @bind="_buscarCredito" maxlength="40" /></label>
+                    <SfButton CssClass="e-flat e-small" OnClick="@BuscarCreditoAsync">Buscar</SfButton>
+                    <label class="campo">Crédito *
+                        <select class="e-input" @bind="_credito">
+                            <option value="">Elegir…</option>
+                            @foreach (var c in _encontrados) { <option value="@c.PublicId">@c.Number · @c.Debtor.Name · @c.DaysPastDue días</option> }
+                        </select>
+                    </label>
+                </div>
+                @foreach (var l in _lineas)
+                {
+                    var linea = l;
+                    <div class="toolbar">
+                        <select class="e-input" @bind="linea.Concepto" aria-label="Concepto">
+                            @foreach (var c in TextosDeNovedades.Conceptos) { <option value="@c.Nombre">@c.Texto</option> }
+                        </select>
+                        <input class="e-input" type="number" min="0" step="1" @bind="linea.Valor" aria-label="Valor" />
+                        <SfButton CssClass="e-flat e-small" OnClick="@(() => _lineas.Remove(linea))">Quitar</SfButton>
+                    </div>
+                }
+                <SfButton CssClass="e-flat e-small" OnClick="@(() => _lineas.Add(new LineaEditable()))">Agregar concepto</SfButton>
+                <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" maxlength="1000" /></label>
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_accion.Activa || string.IsNullOrEmpty(_credito) || _lineas.Count == 0 || string.IsNullOrWhiteSpace(_motivo))"
+                              OnClick="@PedirAsync">Registrar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarNueva = false)">Volver</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarDecision" Header="@($"Decidir la condonación {_elegida?.Number}")" Width="560px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_accion.Activa" Texto="Registrando la decisión…">
+                <DecisionDeCredito @bind-Pedido="_pedido" />
+                <p class="texto-tenue">La condonación siempre lleva motivo.</p>
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@_accion.Activa" OnClick="@DecidirAsync">Registrar decisión</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarDecision = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarAnulacion" Header="@($"Anular la condonación {_elegida?.Number}")" Width="520px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_accion.Activa" Texto="Anulando…">
+                <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" maxlength="500" /></label>
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_accion.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@AnularAsync">Anular</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarAnulacion = false)">Volver</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private const int TamanoDePagina = 20;
+
+    [SupplyParameterFromQuery(Name = "credito")] public Guid? CreditoInicial { get; set; }
+
+    private sealed class LineaEditable
+    {
+        public string Concepto { get; set; } = "DefaultInterest";
+        public decimal Valor { get; set; }
+    }
+
+    private readonly EstadoDeCarga _carga = new(), _accion = new();
+    private List<CondonacionDto> _filas = [];
+    private List<CreditoEnListaDto> _encontrados = [];
+    private List<LineaEditable> _lineas = [];
+    private string? _estado, _error, _motivo, _buscarCredito, _credito;
+    private bool _mostrarNueva, _mostrarDecision, _mostrarAnulacion;
+    private int _pagina = 1;
+    private long _total;
+    private CondonacionDto? _elegida;
+    private DecisionDeCredito.PedidoDeDecision _pedido = new();
+    private ClaveDeOperacion _clave = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarAsync(1);
+        if (CreditoInicial is { } credito)
+        {
+            AbrirNueva();
+            var r = await Creditos.CreditoAsync(credito);
+            if (r.IsSuccess && r.Value is { } c)
+            {
+                _buscarCredito = c.Number;
+                await BuscarCreditoAsync();
+                _credito = credito.ToString();
+            }
+        }
+    }
+
+    private async Task CargarAsync(int pagina)
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Novedades.CondonacionesAsync(string.IsNullOrEmpty(_estado) ? null : _estado, CreditoInicial, pagina);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer las condonaciones."); return; }
+        _filas = [.. r.Value?.Items ?? []];
+        _total = r.Value?.TotalCount ?? 0;
+        _pagina = pagina;
+    }
+
+    private void AbrirNueva()
+    {
+        _error = _motivo = _credito = null;
+        _encontrados = [];
+        _lineas = [new LineaEditable()];
+        _clave = new ClaveDeOperacion();
+        _mostrarNueva = true;
+    }
+
+    private async Task BuscarCreditoAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_buscarCredito)) return;
+        using var carga = _accion.Iniciar();
+        var r = await Creditos.ListarAsync(_buscarCredito, tamano: 10);
+        _encontrados = r.IsSuccess ? [.. r.Value?.Items ?? []] : [];
+    }
+
+    private async Task PedirAsync()
+    {
+        if (!Guid.TryParse(_credito, out var credito)) return;
+        using var carga = _accion.Iniciar();
+        _error = null;
+        var conceptos = _lineas.Where(l => l.Valor > 0).Select(l => new ConceptoACondonarRequest(l.Concepto, l.Valor)).ToList();
+        var r = await Novedades.PedirCondonacionAsync(new CondonacionRequest(credito, conceptos, _motivo!.Trim()), _clave);
+        if (!r.IsSuccess)
+        {
+            _error = r.ErrorCode == "Lending.Waiver.ExceedsBalance" && r.Dato<decimal?>("balance") is { } saldo
+                ? $"{r.ErrorMessage} Saldo del concepto: {TextosDeCreditos.Pesos(saldo)}."
+                : r.ErrorMessage ?? "No se pudo registrar la condonación.";
+            return;
+        }
+        _mostrarNueva = false;
+        await Notification.SuccessAsync($"Condonación {r.Value?.Number} radicada; la decide {r.Value?.Routing?.LevelName ?? "el nivel que corresponde"}.");
+        await CargarAsync(1);
+    }
+
+    private void AbrirDecision(CondonacionDto condonacion)
+    {
+        _elegida = condonacion;
+        _pedido = new DecisionDeCredito.PedidoDeDecision();
+        _error = null;
+        _clave = new ClaveDeOperacion();
+        _mostrarDecision = true;
+    }
+
+    private async Task DecidirAsync()
+    {
+        if (_elegida is not { } w) return;
+        using var carga = _accion.Iniciar();
+        _error = null;
+        var r = await Novedades.DecidirCondonacionAsync(w.PublicId, _pedido.ComoRequest(w.Routing?.ContentSha256), _clave);
+        if (!r.IsSuccess)
+        {
+            _error = r.ErrorCode == "Lending.Attribution.LevelRequired"
+                ? "Esta condonación la decide un órgano: llévela a sesión en Actas."
+                : r.ErrorMessage ?? "No se pudo registrar la decisión.";
+            return;
+        }
+        _mostrarDecision = false;
+        await Notification.SuccessAsync("Decisión registrada.");
+        await CargarAsync(_pagina);
+    }
+
+    private async Task AplicarAsync(CondonacionDto condonacion)
+    {
+        using var carga = _accion.Iniciar();
+        var r = await Novedades.AplicarCondonacionAsync(condonacion.PublicId, new ClaveDeOperacion());
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo aplicar la condonación."); return; }
+        await Notification.SuccessAsync($"Condonación aplicada (operación {r.Value?.OperationNumber}); contra el deterioro: {TextosDeCreditos.Pesos(r.Value?.ImpairmentApplied ?? 0)}.");
+        await CargarAsync(_pagina);
+    }
+
+    private void AbrirAnulacion(CondonacionDto condonacion)
+    {
+        _elegida = condonacion;
+        _motivo = _error = null;
+        _clave = new ClaveDeOperacion();
+        _mostrarAnulacion = true;
+    }
+
+    private async Task AnularAsync()
+    {
+        if (_elegida is not { } w || string.IsNullOrWhiteSpace(_motivo)) return;
+        using var carga = _accion.Iniciar();
+        _error = null;
+        var r = await Novedades.AnularCondonacionAsync(w.PublicId, _motivo.Trim(), _clave);
+        if (!r.IsSuccess) { _error = r.ErrorMessage ?? "No se pudo anular."; return; }
+        _mostrarAnulacion = false;
+        await Notification.SuccessAsync("Condonación anulada.");
+        await CargarAsync(_pagina);
+    }
+}

@@ -365,6 +365,43 @@ public class AccountingPosterTests
         d.Db.ChangeTracker.Entries<AccountingDocument>().Should().OnlyContain(x => x.State == EntityState.Unchanged);
     }
 
+    // ---- feature 013, US7: lo de Cartera tampoco se reversa por el contrato (T0623, T55; contracts/contabilidad.md §9) ----
+
+    private static AccountingOrigin Cartera() => new(ModuloContable.Cartera, "LendingIssuedDocument", Guid.NewGuid());
+
+    [Fact]
+    public async Task Nada_de_cartera_se_reversa_por_el_contrato()
+    {
+        var d = new ContabilidadTestData();
+        d.Db.VoucherTypes.Add(new VoucherType { Code = "RC", Name = "Recaudos de cartera", Usage = VoucherUsage.Module, ModuleCode = "CAR", IsSeeded = true, CreatedBy = "test" });
+        await d.Db.SaveChangesAsync();
+        var puente = d.Cuenta("11059599", modulos: AccountingModules.Lending);
+        var capital = d.Cuenta("14410599", modulos: AccountingModules.Lending);
+        var origen = Cartera();
+        var pago = await d.Poster.PrepareAsync(ContabilidadTestData.Comprobante(puente, capital, origen: origen, tipo: "RC"), CancellationToken.None);
+        pago.IsSuccess.Should().BeTrue(pago.Error?.Message);
+        await d.Db.SaveChangesAsync();
+
+        var desdeCartera = await d.Poster.PrepareReversalAsync(pago.Value, Marzo15, "cheque devuelto", origen, CancellationToken.None);
+        desdeCartera.Error.Code.Should().Be("Accounting.Document.LendingCorrectsWithNewVoucher");
+        desdeCartera.Error.Should().BeOfType<ErrorConDatos>();
+
+        // Aunque quien lo pida diga ser Contabilidad, y aun sin motivo: la guarda va antes de ReasonRequired.
+        (await d.Poster.PrepareReversalAsync(pago.Value, Marzo15, " ", ContabilidadTestData.Manual(), CancellationToken.None))
+            .Error.Code.Should().Be("Accounting.Document.LendingCorrectsWithNewVoucher");
+
+        // Y un origen CAR tampoco reversa lo ajeno.
+        var caja = d.Cuenta("110505");
+        var ingreso = d.Cuenta("413505", AccountNature.Credit);
+        var manual = (await d.Poster.PrepareAsync(ContabilidadTestData.Comprobante(caja, ingreso), CancellationToken.None)).Value;
+        await d.Db.SaveChangesAsync();
+        (await d.Poster.PrepareReversalAsync(manual, Marzo15, "x", Cartera(), CancellationToken.None))
+            .Error.Code.Should().Be("Accounting.Document.LendingCorrectsWithNewVoucher");
+
+        pago.Value.Status.Should().Be(DocumentStatus.Posted, "el original nunca se toca");
+        d.Db.ChangeTracker.Entries<AccountingDocument>().Should().OnlyContain(x => x.State == EntityState.Unchanged);
+    }
+
     [Fact]
     public async Task El_usuario_de_origen_llega_a_registrado_por_y_sin_el_queda_quien_contabiliza()
     {

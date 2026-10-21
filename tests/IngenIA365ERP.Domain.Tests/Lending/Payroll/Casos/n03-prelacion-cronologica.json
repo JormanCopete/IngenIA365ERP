@@ -1,0 +1,28 @@
+// K2, T0803 (FR-111): la prelación cronológica. Cuatro libranzas del mismo deudor y de otros, llegadas en desorden; dos con la misma
+// fecha se ordenan por crédito. Sin cambios contra el base salvo la 304, que pide menos. El convenio no lleva lo vencido: los 10.000
+// vencidos de la 302 no viajan y no la vuelven un cambio. Calculado con novedades.py (decimal).
+{
+  "nombre": "Prelación por fecha de la libranza",
+  "incluyeVencido": false,
+  "base": [
+    { "credito": 301, "vinculo": 701, "persona": 9201, "fechaLibranza": "2024-12-01", "total": 50000, "novedad": "New" },
+    { "credito": 302, "vinculo": 702, "persona": 9201, "fechaLibranza": "2023-05-15", "total": 75000, "novedad": "New" },
+    { "credito": 303, "vinculo": 703, "persona": 9202, "fechaLibranza": "2024-12-01", "total": 64000, "novedad": "New" },
+    { "credito": 304, "vinculo": 704, "persona": 9201, "fechaLibranza": "2025-10-30", "total": 120000, "novedad": "New" }
+  ],
+  "obligaciones": [
+    { "credito": 304, "vinculo": 704, "persona": 9201, "fechaLibranza": "2025-10-30", "exigible": 119999.99, "vencido": 0 },
+    { "credito": 303, "vinculo": 703, "persona": 9202, "fechaLibranza": "2024-12-01", "exigible": 64000, "vencido": 0 },
+    { "credito": 302, "vinculo": 702, "persona": 9201, "fechaLibranza": "2023-05-15", "exigible": 75000, "vencido": 10000 },
+    { "credito": 301, "vinculo": 701, "persona": 9201, "fechaLibranza": "2024-12-01", "exigible": 50000, "vencido": 0 }
+  ],
+  "esperado": {
+    "lineas": [
+      {"linea": 1, "credito": 302, "novedad": "Unchanged", "corriente": 75000, "vencido": 0, "total": 75000, "anterior": 75000},
+      {"linea": 2, "credito": 301, "novedad": "Unchanged", "corriente": 50000, "vencido": 0, "total": 50000, "anterior": 50000},
+      {"linea": 3, "credito": 303, "novedad": "Unchanged", "corriente": 64000, "vencido": 0, "total": 64000, "anterior": 64000},
+      {"linea": 4, "credito": 304, "novedad": "Change", "corriente": 119999.99, "vencido": 0, "total": 119999.99, "anterior": 120000}
+    ],
+    "totales": {"nuevas": 0, "cambios": 1, "cancelaciones": 0, "sinCambio": 3, "montoNuevas": 0, "montoCambios": 119999.99, "montoSinCambio": 189000, "lineas": 4, "total": 308999.99}
+  }
+}

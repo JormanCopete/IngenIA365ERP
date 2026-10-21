@@ -27,7 +27,9 @@ public class RepartoDePermisosTests
         [.. DomainPermissionCatalogSeeder.Catalog.Select(p => $"{p.Resource}.{p.Action}"),
          .. CorePermissionCatalogSeeder.Catalog.Select(p => $"{p.Resource}.{p.Action}"),
          .. PayrollPermissionCatalogSeeder.Catalog.Select(p => $"{p.Resource}.{p.Action}"),
-         .. AccountingPermissionCatalogSeeder.Catalog.Select(p => $"{p.Resource}.{p.Action}")];
+         .. AccountingPermissionCatalogSeeder.Catalog.Select(p => $"{p.Resource}.{p.Action}"),
+         // Feature 013 (T0138): la Cartera nueva, con sus exclusiones de CompanyAdmin.
+         .. LendingPermissionCatalogSeeder.Catalog.Select(p => $"{p.Resource}.{p.Action}")];
 
     public static TheoryData<string> RolesBuiltIn =>
         [.. BuiltInRolesSeeder.PermissionPatterns.Keys];
@@ -125,7 +127,9 @@ public class RepartoDePermisosTests
     {
         // Feature 009 (contracts/api.md §1): 30 códigos Accounting.*; la compuerta T046 los cuenta en SEC_Permissions.
         // Feature 012 (T115): +4 del lado contable del inventario (InventoryRules.View/Manage, InventoryBatches.View/Run).
-        AccountingPermissionCatalogSeeder.Catalog.Should().HaveCount(34);
+        // Feature 013 (T0638): +6 del lado contable de la cartera (LendingRules.View/Manage, LendingBatches.View/Run,
+        // RegulatoryIndicators.View/Manage).
+        AccountingPermissionCatalogSeeder.Catalog.Should().HaveCount(40);
         AccountingPermissionCatalogSeeder.Catalog.Should().OnlyContain(p => p.Resource.StartsWith("Accounting."));
     }
 

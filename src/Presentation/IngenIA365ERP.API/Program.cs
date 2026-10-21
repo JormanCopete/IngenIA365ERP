@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Diagnostics;
+﻿using Microsoft.AspNetCore.Diagnostics;
 using AspNetCoreRateLimit;
 using Carter;
 using IngenIA365ERP.API.Endpoints.Attachments;
@@ -12,6 +12,7 @@ using IngenIA365ERP.Audit;
 using IngenIA365ERP.Audit.Configuration;
 using IngenIA365ERP.Caching.Services;
 using IngenIA365ERP.ElectronicInvoicing;
+using IngenIA365ERP.ExternalChannels;
 using IngenIA365ERP.Identity;
 using IngenIA365ERP.Identity.CentralIdentity;
 using IngenIA365ERP.Identity.Seed;
@@ -170,6 +171,10 @@ try
     // Feature 012 (I3, T607): fuera de produccion toda tirilla dice «SIN VALIDEZ FISCAL» (quickstart §5.13).
     builder.Services.Configure<IngenIA365ERP.Application.Inventory.Sales.TirillaOptions>(o =>
         o.AmbienteDePruebas = !builder.Environment.IsProduction());
+    // Feature 013 (T0082; T73, CH20): fuera de produccion un resultado del canal SIMULADO tiene efecto legal; en produccion
+    // GuardiaDeCanalesExternos se lo quita. Un solo criterio, el del despliegue: ninguna cooperativa lo cambia.
+    builder.Services.Configure<IngenIA365ERP.Application.Lending.Adapters.CanalesExternosOptions>(o =>
+        o.AmbienteDePruebas = !builder.Environment.IsProduction());
     builder.Services.AddSingleton<IDateTimeService, DateTimeService>();
     // T012: acceso a la IP del cliente desde Application/handlers, sin acoplar a HttpContext.
     builder.Services.AddSingleton<IIpAddressAccessor, IpAddressAccessor>();
@@ -202,6 +207,9 @@ try
         IngenIA365ERP.Application.Common.Interfaces.Security.IAsignacionesDePuntoDeVenta,
         IngenIA365ERP.Application.Common.Interfaces.Security.SinAsignacionesDePuntoDeVenta>(builder.Services);
     builder.Services.AddScoped<IngenIA365ERP.Application.Common.Interfaces.Security.IAlcanceDeInventario, IngenIA365ERP.API.Services.AlcanceDeInventarioDeLaPeticion>();
+    // Feature 013 (T62, R131, T0285): el alcance de Cartera por oficina y línea de la petición, que falla cerrado y es total en
+    // segundo plano. Antes de AddApplicationServices, cuyo TryAdd deja el cerrado sólo para los anfitriones sin petición.
+    builder.Services.AddScoped<IngenIA365ERP.Application.Common.Interfaces.Security.IAlcanceDeCartera, IngenIA365ERP.API.Services.AlcanceDeCarteraDeLaPeticion>();
     // Feature 012 (T39, T092): a quien le llega una alerta (permiso y alcance; sin nadie, CompanyAdmin). Adelanto de T096.
     builder.Services.AddScoped<IngenIA365ERP.Application.Common.Alerts.IDestinatariosPorPermiso, IngenIA365ERP.API.Services.DestinatariosPorPermiso>();
 
@@ -238,15 +246,81 @@ try
     // Feature 012 (T932, I6): la alerta diaria de los lotes con existencia proximos a vencer (no corre antes de I6).
     builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada>(
         new IngenIA365ERP.Application.Inventory.Catalog.Lots.TareaDeLotesProximosAVencer());
+    // Feature 013 (T0059, T39): la replica de valores nacionales en cada pasada y en cada cooperativa (tambien sin Cartera activada).
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada,
+        IngenIA365ERP.Application.Common.NationalValues.TareaDeReplicaDeValoresNacionales>();
+    // Feature 013 (T0088, T69 b): la revisión diaria de los plazos de las solicitudes del titular (cumplimiento.plazos-del-titular).
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada,
+        IngenIA365ERP.Application.Compliance.DataSubjectRequests.TareaDePlazosDelTitular>();
+    // Feature 013 (T0307, T75; DT §2.13): la cola de mensajes al deudor. cartera.mensajes reevalua y despacha cada minuto;
+    // cartera.entregas consulta la entrega al proveedor cada cuarto de hora. Las dos salen si Cartera no esta activada.
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada,
+        IngenIA365ERP.Application.Lending.Collections.Tareas.TareaDeMensajesAlDeudor>();
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada,
+        IngenIA365ERP.Application.Lending.Collections.Tareas.TareaDeEntregasAlDeudor>();
+    // Feature 013, US2 (T0404, C90): el re-escaneo de deudores y codeudores vivos al aplicarse una carga nueva de listas restrictivas.
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada,
+        IngenIA365ERP.Application.Lending.Origination.ReEscaneoDeListas>();
+    // Feature 013, US3 (T0455; DT §2.13): las tareas del desembolso. cartera.giros-sin-resultado y cartera.garantias-por-vencer una vez al dia;
+    // cartera.pagares cada hora (consulta el deposito por el canal sellado). Las tres salen si Cartera no esta activada.
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada,
+        IngenIA365ERP.Application.Lending.Disbursements.Tareas.TareaDeGirosSinResultado>();
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada,
+        IngenIA365ERP.Application.Lending.Disbursements.Tareas.TareaDePagares>();
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada,
+        IngenIA365ERP.Application.Lending.Disbursements.Tareas.TareaDeGarantiasPorVencer>();
+    // Feature 014 (respuesta 86 del dueño): los lotes de documentos al titular que cada cooperativa programa en Documentos.LotesProgramados.
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada,
+        IngenIA365ERP.Application.Lending.Deposits.Documents.TareaDeLotesDeDocumentos>();
+    // Feature 013, US6 (T0585; DT §2.13): cartera.reservas-vencidas una vez al dia (vence las reservas de numero sin usar; sale si Cartera no
+    // esta activada).
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada,
+        IngenIA365ERP.Application.Lending.Origination.Tareas.TareaDeReservasVencidas>();
+    // Feature 013, US4 (T0502; DT §2.13): la vigilancia de los procesos de Cartera cada hora (ciclo de ayer, créditos sin causar, tareas diarias).
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada,
+        IngenIA365ERP.Application.Lending.Processes.Tareas.VigilanciaDeCartera>();
+    // Feature 013, US9 (T0707; pregunta E6): cartera.cierre-programado una vez al dia; sale si Cartera no esta activada o el parametro
+    // Riesgo.CierreProgramado esta apagado (el defecto: el cierre es manual y la vigilancia alerta pasado el dia limite).
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada,
+        IngenIA365ERP.Application.Lending.Risk.TareaDeCierreProgramado>();
+    // Feature 013, K2 (T0845; DT §2.13): las tareas de la libranza una vez al dia. cartera.archivos-de-descuento alerta los archivos cuya
+    // antelacion llego sin generar; cartera.giros-de-pagaduria alerta los giros atrasados y avisa al deudor superado el umbral. Salen sin Cartera activada.
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada,
+        IngenIA365ERP.Application.Lending.Payroll.Tasks.TareaDeArchivosDeDescuento>();
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada,
+        IngenIA365ERP.Application.Lending.Payroll.Tasks.TareaDeGirosDePagaduria>();
+    // Feature 013, K4 (T0944; C64): cartera.etapas-migradas-k4, la tarea de una sola vez del despliegue de K4: pide la corrida que registra la etapa
+    // de cobranza migrada si la cooperativa está activada y todavía no la tiene; después no hace nada.
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada,
+        IngenIA365ERP.Application.Lending.Collections.Stages.TareaDeEtapasMigradas>();
     builder.Services.AddSingleton<IngenIA365ERP.API.Integration.ProgramadorDeTareas>();
     if (integracion.ScheduledTasks.Enabled)
         builder.Services.AddHostedService(sp => sp.GetRequiredService<IngenIA365ERP.API.Integration.ProgramadorDeTareas>());
+
+    // Feature 013 (T0225, T0226; T5, PM-13, C59): el procesador de Cartera (ciclo diario, cierre, reapertura y correccion por valor
+    // nacional), con el arrendamiento lending.process por cooperativa. Queda registrado aunque este apagado (Lending:Process:Enabled),
+    // para que las pruebas conduzcan una pasada a mano.
+    builder.Services
+        .AddOptions<IngenIA365ERP.API.Integration.OpcionesDelProcesoDeCartera>()
+        .Bind(builder.Configuration.GetSection(IngenIA365ERP.API.Integration.OpcionesDelProcesoDeCartera.SectionName))
+        .Validate(o => o.Problemas().Count == 0, "La sección Lending:Process de la configuración no es válida; ver OpcionesDelProcesoDeCartera.Problemas.")
+        .ValidateOnStart();
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Lending.Processes.PasadaDeCartera>();
+    builder.Services.AddSingleton<IngenIA365ERP.API.Integration.ProcesadorDeCartera>();
+    if (builder.Configuration.GetValue("Lending:Process:Enabled", true))
+        builder.Services.AddHostedService(sp => sp.GetRequiredService<IngenIA365ERP.API.Integration.ProcesadorDeCartera>());
 
     // Feature 012, I2 (T527): el despachador de mensajes de integracion (en linea, lotes programados y ordenados) y la
     // politica de reintentos que aplica RegisterDeliveryResultCommand, desde Integration:Retries (T10).
     builder.Services.Configure<IngenIA365ERP.Application.Common.Integration.ReintentosDeIntegracion>(
         builder.Configuration.GetSection($"{IngenIA365ERP.API.Integration.IntegrationOptions.SectionName}:Retries"));
     builder.Services.AddSingleton<IngenIA365ERP.API.Integration.DespachadorDeMensajes>();
+    // Feature 013 (T0076, T0078; T20, CH20): el carácter de producción del despliegue, un solo criterio (IsProduction).
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Interfaces.IAmbienteDeDespliegue>(
+        new IngenIA365ERP.API.Integration.AmbienteDeDespliegue(builder.Environment.IsProduction()));
+    // Feature 013 (T0230; T20, FR-089): los dobles de prueba de Cartera (TesoreriaDePrueba; US5 suma el recaudador), sólo con
+    // Lending:TestDoubles:Enabled = true fuera de producción; pedidos en producción, la API no arranca.
+    IngenIA365ERP.API.Integration.DoblesDePruebaDeCartera.Registrar(builder.Services, builder.Configuration, builder.Environment);
     if (integracion.Dispatcher.Enabled)
         builder.Services.AddHostedService(sp => sp.GetRequiredService<IngenIA365ERP.API.Integration.DespachadorDeMensajes>());
 
@@ -377,6 +451,13 @@ try
     if (builder.Configuration.GetValue("ElectronicInvoicing:Processor:Enabled", true))
         builder.Services.AddHostedService(sp => sp.GetRequiredService<IngenIA365ERP.ElectronicInvoicing.Processor.ProcesadorDeDocumentosElectronicos>());
 
+    // Feature 013 (T0082; T71, T72; contracts/adaptadores-y-archivos.md §2): los canales externos —mensajeria, listas restrictivas y,
+    // en sus fases, deposito de valores y centrales—. UNICO sitio que conoce el ensamblado de los adaptadores
+    // (LosProveedoresExternosSoloLosConoceSuAdaptador). Va despues de AddApplicationServices porque reemplaza sus defectos (credenciales
+    // sin archivo, circuito que no se abre) y suma los adaptadores a sus registros. Lee la seccion ExternalChannels (tiempos por canal y
+    // CredentialsPath del Secret erp-canales-externos).
+    builder.Services.AddExternalChannels(builder.Configuration);
+
     // Feature 002 — opciones del flujo de identidad central
     // (URL base del frontend para el enlace de invitaciones, lifetime, etc.).
     builder.Services.Configure<IngenIA365ERP.Application.Common.Configuration.IdentityEmailOptions>(
@@ -416,6 +497,14 @@ try
     builder.Services.AddSingleton<IngenIA365ERP.Application.Inventory.Purchasing.IOrdenDeCompraEnPdf, IngenIA365ERP.API.Reports.PurchaseOrderPdfRenderer>();
     // Feature 012 (I4, T750): la representacion grafica de los documentos electronicos, una sola plantilla para todos los canales.
     builder.Services.AddSingleton<IngenIA365ERP.Application.ElectronicInvoicing.IRepresentacionGraficaRenderer, IngenIA365ERP.API.Reports.RepresentacionGraficaRenderer>();
+    // Feature 013 (T0297): el acta de una sesión de Cartera en PDF. Al cerrar la sesión queda como adjunto de módulo no borrable;
+    // reemplaza el SinActaEnPdf que deja Application (por TryAdd) para los anfitriones sin QuestPDF.
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Lending.Sessions.IRenderizadorDeActaDeSesion, IngenIA365ERP.API.Reports.ActaDeSesionPdfRenderer>();
+    builder.Services.AddScoped<IngenIA365ERP.Application.Lending.Sessions.IActaDeSesionEnPdf, IngenIA365ERP.Application.Lending.Sessions.ActaDeSesionGuardada>();
+    // Feature 013, US2 (T0389): la simulación de crédito en PDF (descarga y envío a la persona simulada), sin número ni código.
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Lending.Origination.IRenderizadorDeSimulacion, IngenIA365ERP.API.Reports.SimulacionDeCreditoPdfRenderer>();
+    // Feature 013, US13 (T0789): los documentos al deudor (plan de pagos, paz y salvo, certificado de saldo) con su código y QR; sin él la emisión no resuelve.
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Lending.Documents.IDocumentoDeCarteraRenderer, IngenIA365ERP.API.Reports.DocumentoDeCarteraPdfRenderer>();
     // Feature 009: lector de archivos tabulares (catalogo propio, apertura, extracto). ClosedXML solo lo conoce la API.
     builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Interfaces.Files.ITabularFileReader, IngenIA365ERP.API.Reports.Importadores.ClosedXmlTabularFileReader>();
 
@@ -430,6 +519,14 @@ try
     builder.Services.AddIngenIaHealthChecks(builder.Configuration);
 
     var app = builder.Build();
+
+    // Feature 013 (T0076; T15): un solo consumidor por destino de la bandeja. Dos IDestinoDeMensajes con el mismo destino hacen fallar
+    // el arranque con Integration.Destination.DuplicateConsumer (antes el despachador tomaba el primero sin avisar).
+    using (var ambitoDeConsumidores = app.Services.CreateScope())
+    {
+        IngenIA365ERP.Application.Common.Integration.ConsumidoresPorDestino.Validar(
+            ambitoDeConsumidores.ServiceProvider.GetServices<IngenIA365ERP.Application.Common.Integration.IDestinoDeMensajes>());
+    }
 
     // Feature 004 (T019/T020) — bitacora de arranque de base de datos.
     // La validacion fail-fast de la seccion Database corre via ValidateOnStart

@@ -1,0 +1,184 @@
+@page "/admin/canales-externos"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Http
+@using static IngenIA365ERP.Shared.Services.Core.TextosDePlataforma
+@inject CanalesExternosClient Canales
+@inject INotificationService Notification
+
+<PageTitle>Canales externos - IngenIA365ERP</PageTitle>
+
+@* Feature 013, fase 2 (T0095; T71–T73; contracts/api.md §21.2; contracts/adaptadores-y-archivos.md §3): qué proveedor atiende cada clase
+   de canal (SMS, WhatsApp, depósito de valores, centrales de riesgo, listas restrictivas) desde una fecha, y la prueba de su credencial.
+   La credencial no se escribe ni se guarda aquí: vive en el secreto del ambiente y la pantalla sólo nombra su clave. El canal simulado se
+   admite siempre, pero lo que hace no tiene validez legal: el aviso queda fijo mientras sea el vigente. *@
+<PermissionGate Required="Core.ExternalChannels.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Canales externos</h3>
+        <div class="toolbar">
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+            <PermissionGate Required="Core.ExternalChannels.Manage">
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@Abrir">Nueva vigencia</SfButton>
+            </PermissionGate>
+        </div>
+    </div>
+
+    @if (_canales.Any(c => c.ValidTo is null && c.Simulated && c.ChannelCode == CanalSimulado))
+    {
+        <p class="aviso aviso-alerta"><b>Canal simulado: no tiene validez legal.</b> Mientras una clase use el canal simulado, lo que se envíe o consulte por ella es de prueba y en producción no produce efecto.</p>
+    }
+
+    <IndicadorDeCarga Cargando="@(_carga.Activa || _guardado.Activa)" Texto="@(_guardado.Activa ? "Guardando…" : "Cargando…")">
+        @if (_canales.Count == 0)
+        {
+            <p class="aviso aviso-info">No hay canales configurados: los mensajes y consultas externas no salen hasta configurar uno.</p>
+        }
+        else
+        {
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Clase</th><th>Central</th><th>Canal</th><th>Desde</th><th>Hasta</th><th>Credencial</th><th>Última verificación</th><th>Estado</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var c in _canales.OrderBy(c => c.Kind).ThenByDescending(c => c.ValidFrom))
+                        {
+                            <tr>
+                                <td>@ClaseDeCanal(c.Kind)</td><td>@(c.BureauCode ?? "—")</td>
+                                <td>@NombreDelCanal(c)</td>
+                                <td>@c.ValidFrom.ToString("dd/MM/yyyy")</td><td>@c.ValidTo?.ToString("dd/MM/yyyy")</td>
+                                <td>@(c.CredentialKey is null ? "No usa" : "En el secreto del ambiente")</td>
+                                <td>@ResultadoExterno(c.LastOutcome)@if (c.VerifiedAt is { } va) { <span class="texto-tenue"> · @va.ToLocalTime().ToString("dd/MM/yyyy HH:mm") · @c.VerifiedBy</span> }</td>
+                                <td>@Circuito(c.Circuit)</td>
+                                <td>
+                                    @if (c.ValidTo is null)
+                                    {
+                                        <PermissionGate Required="Core.ExternalChannels.Manage">
+                                            <SfButton CssClass="e-flat" Disabled="@_guardado.Activa" OnClick="@(() => VerificarAsync(c))">Verificar</SfButton>
+                                        </PermissionGate>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        @if (_verificacion is { } v)
+        {
+            <div class="aviso @(v.Outcome == 1 ? "aviso-ok" : "aviso-alerta")">@ResultadoExterno(v.Outcome)@(v.Detail is { } d ? $": {d}" : "")</div>
+        }
+    </IndicadorDeCarga>
+</div>
+
+<SfDialog @bind-Visible="_mostrar" Header="Nueva vigencia de canal" Width="640px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <p class="texto-apoyo">La vigencia anterior de la misma clase se cierra la víspera. Las operaciones ya hechas conservan el canal con que se hicieron.</p>
+                <div class="form-grid">
+                    <label class="campo">Clase *
+                        <select class="e-input" @bind="_f.Clase">@foreach (var (valor, _, texto) in ClasesDeCanal) { <option value="@valor">@texto</option> }</select>
+                    </label>
+                    @if (_f.Clase == 4)
+                    {
+                        <label class="campo">Central de riesgo * <input class="e-input" @bind="_f.Central" maxlength="10" /></label>
+                    }
+                    <label class="campo">Canal *
+                        <select class="e-input" @bind="_f.Canal">
+                            <option value="@CanalSimulado">Simulado (sin validez legal)</option>
+                            @if (_f.Clase == 5) { <option value="@CanalDeCargaPropia">Carga propia de listas</option> }
+                            <option value="otro">Otro proveedor…</option>
+                        </select>
+                    </label>
+                    @if (_f.Canal == "otro")
+                    {
+                        <label class="campo">Código del proveedor * <input class="e-input" @bind="_f.Proveedor" maxlength="30" /></label>
+                        <label class="campo campo-ancho">Clave de la credencial en el secreto * <input class="e-input" @bind="_f.Credencial" maxlength="100" /></label>
+                        <p class="texto-tenue campo-ancho">La credencial la carga soporte en el secreto del ambiente; aquí sólo se nombra. Verifíquela después de guardar.</p>
+                    }
+                    <label class="campo">Desde * <input type="date" class="e-input" value="@_f.Desde.ToString("yyyy-MM-dd")" @onchange="@(e => _f.Desde = LeerFecha(e.Value) ?? _f.Desde)" /></label>
+                    <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_f.Motivo" maxlength="300" /></label>
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(!PuedeGuardar)" OnClick="@GuardarAsync">Guardar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrar = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private sealed class Formulario
+    {
+        public int Clase { get; set; } = 1;
+        public string? Central { get; set; }
+        public string Canal { get; set; } = CanalSimulado;
+        public string? Proveedor { get; set; }
+        public string? Credencial { get; set; }
+        public DateOnly Desde { get; set; } = DateOnly.FromDateTime(DateTime.Today);
+        public string? Motivo { get; set; }
+    }
+
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+    private ClaveDeOperacion _clave = new(), _claveVerificar = new();
+    private List<CanalExternoDto> _canales = [];
+    private VerificacionDeCanalDto? _verificacion;
+    private bool _mostrar;
+    private Formulario _f = new();
+
+    private bool PuedeGuardar => !_guardado.Activa && !string.IsNullOrWhiteSpace(_f.Motivo)
+        && (_f.Clase != 4 || !string.IsNullOrWhiteSpace(_f.Central))
+        && (_f.Canal != "otro" || (!string.IsNullOrWhiteSpace(_f.Proveedor) && !string.IsNullOrWhiteSpace(_f.Credencial)));
+
+    protected override Task OnInitializedAsync() => CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Canales.ListarAsync();
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los canales."); return; }
+        _canales = [.. r.Value];
+    }
+
+    private void Abrir()
+    {
+        _f = new Formulario();
+        _clave = new ClaveDeOperacion();
+        _mostrar = true;
+    }
+
+    private async Task GuardarAsync()
+    {
+        if (!PuedeGuardar) return;
+        using var guardado = _guardado.Iniciar();
+        var otro = _f.Canal == "otro";
+        var request = new ConfiguracionDeCanalRequest(NombreDeClaseDeCanal(_f.Clase), _f.Clase == 4 ? _f.Central?.Trim().ToUpperInvariant() : null,
+            otro ? _f.Proveedor!.Trim().ToUpperInvariant() : _f.Canal, _f.Desde, otro ? _f.Credencial!.Trim() : null, _f.Motivo!.Trim());
+        var r = await Canales.ConfigurarAsync(request, _clave);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo guardar la vigencia."); return; }
+        _mostrar = false;
+        await Notification.SuccessAsync(otro ? "Vigencia registrada. Verifique la credencial antes de usar el canal." : "Vigencia registrada.");
+        await CargarAsync();
+    }
+
+    private async Task VerificarAsync(CanalExternoDto canal)
+    {
+        using var guardado = _guardado.Iniciar();
+        _claveVerificar = new ClaveDeOperacion();
+        var r = await Canales.VerificarAsync(canal.PublicId, _claveVerificar);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo verificar el canal."); return; }
+        _verificacion = r.Value;
+        await CargarAsync();
+    }
+
+    private static string NombreDelCanal(CanalExternoDto c) => c.ChannelCode switch
+    {
+        CanalSimulado => "Simulado (sin validez legal)",
+        CanalDeCargaPropia => "Carga propia de listas",
+        _ => c.ChannelCode,
+    };
+
+    private static DateOnly? LeerFecha(object? valor) =>
+        DateOnly.TryParse(valor?.ToString(), System.Globalization.CultureInfo.InvariantCulture, out var f) ? f : null;
+}

@@ -1,0 +1,39 @@
+// Cuota quincenal de 50.000 durante 18 meses: 36 cuotas cada 15 dias, plazo de emision de 18 meses o mas (CUIF 2125 largo plazo).
+{
+  "nombre": "contractual-06-quincenal-18-meses",
+  "descripcion": "Cuota quincenal de 50.000 durante 18 meses: 36 cuotas cada 15 dias, plazo de emision de 18 meses o mas (CUIF 2125 largo plazo).",
+  "entrada": {
+    "condiciones": {
+      "cuota": 50000,
+      "periodicidad": "Biweekly",
+      "plazoMeses": 18,
+      "inicio": "2027-03-01",
+      "tasaBase": 0.06,
+      "convencion": "Thirty360",
+      "unidadDeRedondeo": 1,
+      "modoDeRedondeo": "AwayFromZero",
+      "tasaBonificada": 0.075
+    },
+    "bonificacion": true
+  },
+  "esperado": {
+    "vencimiento": "2028-09-01",
+    "plazoDeEmision": "EighteenOrMore",
+    "cuotas": 36,
+    "primeraCuota": "2027-03-16",
+    "ultimaCuota": "2028-08-22",
+    "totalPactado": 1800000,
+    "interesProyectadoBase": 80149,
+    "valorFinalBase": 1880149,
+    "interesProyectadoBonificado": 100180,
+    "bonificacionProyectada": 20031,
+    "valorFinalCumpliendo": 1900180,
+    "bonificacion": {
+      "aportes": 1800000,
+      "interesBase": 80149,
+      "interesOtraTasa": 100180,
+      "diferencia": 20031,
+      "valorFinalOtraTasa": 1900180
+    }
+  }
+}

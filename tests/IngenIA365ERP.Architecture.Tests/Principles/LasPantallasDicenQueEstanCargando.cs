@@ -24,7 +24,74 @@ public class LasPantallasDicenQueEstanCargando
     /// de documento); «Ventas» entra con Canales (US1, T239); «Compras» y «Pos» los agrega la historia que crea la primera
     /// pantalla de cada carpeta.
     /// US9 (T358): «Compras» entra con sus pantallas de I1 (recepciones, compra directa, facturas, notas y devoluciones).
-    private static readonly string[] ModulosMigrados = ["Maestros", "Nomina", "Asociados", "Contabilidad", "Inventario", "Ventas", "Compras", "Pos"];
+    /// Feature 013, fase 2 (T0038, T0095): «Administracion» y «Compliance» entran con las seis pantallas de la plataforma de Cartera
+    /// (valores nacionales, perfil regulatorio, canales externos, participantes, listas restrictivas, solicitudes del titular).
+    /// Feature 013, fase 3 (T0188): «AhorrosYAportes» entró con las 18 pantallas conservadas de la cartera heredada; la feature 014
+    /// las retiró (T008, R28) y sus pantallas nuevas viven en «Cartera/Captaciones», dentro de «Cartera».
+    /// Feature 013, fase 4 (T0324): «Cartera» entra con las pantallas de gobierno, configuración y mensajes al deudor.
+    /// Feature 014 (T058): «Cartera/Captaciones», donde nacen las pantallas de captaciones y aportes, entra por su nombre aunque «Cartera» ya la
+    /// recorra: si la carpeta se mueve, la prueba lo dice.
+    private static readonly string[] ModulosMigrados =
+        ["Maestros", "Nomina", "Asociados", "Contabilidad", "Inventario", "Ventas", "Compras", "Pos", "Administracion", "Compliance",
+            "Cartera", "Cartera/Captaciones"];
+
+    /// <summary>Feature 013 (T0038): las pantallas de la fase 2 llevan su indicador aunque no usen <c>SfGrid</c>.</summary>
+    private static readonly string[] PantallasDeLaPlataformaDeCartera =
+    [
+        "Administracion/ValoresNacionales.razor",
+        "Administracion/PerfilRegulatorio.razor",
+        "Administracion/CanalesExternos.razor",
+        "Administracion/ParticipantesDeIntegracion.razor",
+        "Compliance/ListasRestrictivas.razor",
+        "Compliance/SolicitudesDelTitular.razor",
+        // Feature 013, US2 (T0414): las pantallas de la originación que cargan datos (el simulador lleva su indicador en el componente).
+        "Cartera/Solicitudes.razor",
+        "Cartera/SolicitudNueva.razor",
+        "Cartera/SolicitudDetalle.razor",
+        "Cartera/Aprobaciones.razor",
+        "Cartera/Cupos.razor",
+        "Cartera/Vinculados.razor",
+        // US5 (T0526, T0563): la caja de prueba con el recaudador y la tesorería de prueba.
+        "Cartera/DoblesDePrueba.razor",
+        // US7 (T0611): la integración contable de Cartera, también las que no usan SfGrid.
+        "Cartera/ConciliacionContable.razor",
+        "Cartera/BandejaDeMensajes.razor",
+        "Contabilidad/Cartera/Matriz.razor",
+        "Contabilidad/Cartera/TiposDeComprobanteDeCartera.razor",
+        "Contabilidad/Cartera/Completitud.razor",
+        "Contabilidad/Cartera/Lotes.razor",
+        "Contabilidad/Cartera/Lote.razor",
+        "Contabilidad/IndicadoresRegulatorios.razor",
+        "Contabilidad/Periodos.razor",
+        // US8 (bloque 13C, T0728): la carga de migración y la activación.
+        "Cartera/Migracion.razor",
+        "Cartera/Activacion.razor",
+        // US15 (T0799): el centro de informes de Cartera (no usa SfGrid: pinta TablaDeReporte).
+        "Cartera/Informes.razor",
+        // K5, US16 (T1009): el formato del SICSES y los archivos para las centrales de riesgo.
+        "Cartera/Sicses.razor",
+        "Cartera/Centrales.razor",
+        // Feature 014, US1 (T070): las líneas de captación y de aportes dentro del catálogo común (/cartera/lineas).
+        "Cartera/Captaciones/LineasDeCaptacion.razor",
+    ];
+
+    [Fact]
+    public void Las_pantallas_de_la_plataforma_de_Cartera_dicen_que_estan_cargando()
+    {
+        var pages = Path.Combine(RepoPath.FindRepoRoot(), "src", "Presentation", "IngenIA365ERP.Shared", "Pages");
+        foreach (var relativa in PantallasDeLaPlataformaDeCartera)
+        {
+            var archivo = Path.Combine(pages, relativa.Replace('/', Path.DirectorySeparatorChar));
+            Assert.True(File.Exists(archivo), $"No existe {relativa}.");
+            var texto = File.ReadAllText(archivo);
+            Assert.Contains("<IndicadorDeCarga", texto, StringComparison.Ordinal);
+            Assert.Contains("EstadoDeCarga", texto, StringComparison.Ordinal);
+            Assert.Contains("<PermissionGate", texto, StringComparison.Ordinal);
+            Assert.DoesNotContain("<style", texto, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotMatch(@"#[0-9a-fA-F]{3,6}\b|rgb\(", texto);
+            Assert.DoesNotContain("SOLIDO", texto, StringComparison.OrdinalIgnoreCase);
+        }
+    }
 
     private static IEnumerable<string> PantallasMigradas()
     {

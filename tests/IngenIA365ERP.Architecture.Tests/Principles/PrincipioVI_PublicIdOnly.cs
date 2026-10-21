@@ -47,6 +47,42 @@ public class PrincipioVI_PublicIdOnly
             + string.Join("\n  ", offenders));
     }
 
+    /// <summary>
+    /// Feature 013, fase 2 (T0038): las rutas nuevas de la plataforma de Cartera —valores nacionales (maestro y copia), perfil regulatorio,
+    /// canales externos, participantes, listas restrictivas, solicitudes del titular— identifican todo por <c>PublicId</c>: ningún
+    /// parámetro de ruta <c>:int</c> ni un <c>personId</c> entero. Las de habeas data por finalidad van por <c>personPublicId</c>; las
+    /// heredadas <c>{personId:int}</c> quedan marcadas en desuso (<c>[Obsolete]</c>).
+    /// </summary>
+    [Fact]
+    public void Las_rutas_de_la_plataforma_de_Cartera_van_por_PublicId()
+    {
+        var api = Path.Combine(Helpers.RepoPath.FindRepoRoot(), "src", "Presentation", "IngenIA365ERP.API", "Endpoints");
+        string[] archivos =
+        [
+            Path.Combine("Saas", "NationalValuesEndpoints.cs"),
+            Path.Combine("Core", "NationalValuesEndpoints.cs"),
+            Path.Combine("Core", "RegulatoryProfileEndpoints.cs"),
+            Path.Combine("Core", "ExternalChannelsEndpoints.cs"),
+            Path.Combine("Core", "IntegrationParticipantsEndpoints.cs"),
+            Path.Combine("Compliance", "RestrictiveListsEndpoints.cs"),
+            Path.Combine("Compliance", "DataSubjectRequestsEndpoints.cs"),
+        ];
+        var infractores = new List<string>();
+        foreach (var relativo in archivos)
+        {
+            var ruta = Path.Combine(api, relativo);
+            Assert.True(File.Exists(ruta), $"No existe {relativo}: si se movió, actualizá la lista.");
+            var texto = Helpers.FuenteSinComentarios.Leer(ruta);
+            if (System.Text.RegularExpressions.Regex.IsMatch(texto, @"\{\w+:int\}|\bint\s+\w*[Ii]d\b"))
+                infractores.Add(relativo);
+        }
+        Assert.True(infractores.Count == 0, "Rutas nuevas con Id entero (Principio VI):\n  " + string.Join("\n  ", infractores));
+
+        var habeas = Helpers.FuenteSinComentarios.Leer(Path.Combine(api, "HabeasDataModule.cs"));
+        Assert.Contains("\"/api/compliance/habeas-data/authorizations\"", habeas, StringComparison.Ordinal);
+        Assert.Contains("Guid? personPublicId", habeas, StringComparison.Ordinal);
+    }
+
     private static List<string> FindOffenders(Assembly asm, string[] suffixes) =>
         asm.GetTypes()
             .Where(t => t.IsClass && t.IsPublic)

@@ -242,6 +242,54 @@ desde la fecha del primer pago, y activar; `AVVILLAS-1` se deja inactivo o se bo
 exige un origen que no está en `GET /api/core/bank-file-formats/sources`, eso sí es una tarea de
 programa (enum `BankFieldSource`, validador y `FlatFileWriterTests`).
 
+## 4f. Antes de la primera nómina con descuentos de Cartera (feature 013, enmienda E-03)
+
+Desde la feature 013 la nómina **recauda por el contrato de obligaciones de Cartera**: Nómina es
+un recaudador más (código `NOM`, clase `Payroll`, sembrado en el registro de integración de cada
+cooperativa) y la ordinaria funciona como una **pagaduría interna**.
+
+- **`DESC_CARTERA` contabiliza** en el comprobante `NM` y en la definitiva (enmienda D-08 de la
+  010): la cuenta **débito** es la de salarios por pagar que la nómina ya usa en sus deducciones;
+  la **crédito** es el puente «recaudos por nómina para Cartera», la misma cuenta contra la que
+  Cartera contabiliza el pago (comprobante `DN`). Así el puente queda en cero cuando los dos
+  lados se registraron, y su saldo explica lo que falta de uno u otro. **Parametrice las cuentas
+  del concepto antes de la primera nómina con descuentos de Cartera** (Nómina › Conceptos ›
+  `DESC_CARTERA` › Cuentas; `GET /api/payroll/concept-definitions/DESC_CARTERA/accounts`): sin
+  ellas esa nómina, o la definitiva, no se aprueba (`Payroll.Settlement.ConceptAccountsMissing`).
+  Las cuentas las valida la contadora; en Contabilidad, la regla `RecaudoPorAplicar` con clase
+  de recaudador `Payroll` tiene que apuntar al mismo puente.
+- **La ordinaria como pagaduría interna**: al calcular, Nómina pregunta a Cartera la cuota de
+  cada empleado en el período y la convierte en una novedad de descuento por obligación; la cuota
+  de Cartera va primera entre las deducciones autorizadas, después de las de ley, y lo que no
+  cabe en el tope o en el neto queda **no descontado** con su motivo (tope, neto insuficiente,
+  prioridad, retiro, licencia, incapacidad u otro). Al aprobar, aplica el lote en Cartera
+  **antes** de armar el `NM`, con lo descontado y lo no descontado en la misma llamada, con fecha
+  valor = fin del período. Si Cartera rechaza un ítem o le sobra plata, **no bloquea**: la línea
+  `DESC_CARTERA` baja a lo aplicado, el neto del empleado sube y se avisa
+  `Payroll.LoanDeductionNotApplied`. Reversar la nómina reversa sus recaudos en Cartera, todo o
+  nada; un usuario de Cartera no puede reversarlos desde Cartera.
+- **Panel de descuentos de Cartera**: en la pantalla de la liquidación, al aprobar, se ve la vista
+  previa del lote y, una vez aprobada, el panel de descuentos de Cartera
+  (`GET /api/payroll/runs/{runId}/loan-deductions`, `Payroll.Runs.View`): por empleado y
+  obligación, lo esperado, lo descontado, lo no descontado con su motivo, el estado (aplicado,
+  parcialmente aplicado, rechazado, reversado) y la referencia del recibo de Cartera.
+- **Antes de activar Cartera** no hay cuotas: la ordinaria y la definitiva se aprueban sin
+  descuentos de Cartera. Si una persona está en una carga de migración aplicada y todavía no
+  activada («Cartera por activar»), el cálculo avisa `Payroll.LendingPendingActivation` y aprobar
+  exige reconocerlo (`Payroll.LendingPendingActivationAckRequired`); queda en la corrida
+  (`LendingActivationAckBy/At`) y en la auditoría.
+
+Cómo comprobarlo contra la base de la cooperativa:
+
+```sql
+-- El recaudador de Nómina en el registro de integración (sembrado por PlataformaParaCartera).
+SELECT "Code", "Class", "Role", "IsEnabled", "ValidFrom", "ValidTo"
+FROM dbo."COR_IntegrationParticipants" WHERE "Code" = 'NOM' AND "IsDeleted" = false;
+-- Los descuentos de Cartera de una nómina aprobada.
+SELECT "ObligationNumber", "ExpectedAmount", "DeductedAmount", "NotDeductedAmount", "NotDeductedReason", "Status"
+FROM dbo."PAY_PayrollLoanDeductions" WHERE "PayrollRunId" = :run AND "IsDeleted" = false;
+```
+
 ## 5. Reaplicar la semilla
 
 Tras una actualización que traiga conceptos, parámetros o clases ARL nuevos, o si alguien

@@ -1,0 +1,29 @@
+// K4 (T0921, T0938; adaptadores-y-archivos.md §4.8): una corrección es otra gestión que anula la anterior, y la anulada deja de contar
+// en el historial: ni fija el canal de la semana ni gasta el contacto del día. La corrección cuenta por sí misma si fue contacto
+// directo. Lunes 9 de noviembre de 2026: la llamada (id 1) y su corrección (id 2); miércoles 11: el mensaje. El lunes 16 es festivo.
+{
+  "caso": "19-gestion-anulada-deja-de-contar",
+  "reglas": { "horario": { "lunesAViernes": ["07:00", "19:00"], "sabado": ["08:00", "15:00"] }, "contactosPorDia": 1, "noHabiles": ["2026-11-02", "2026-11-16"] },
+  "titular": {},
+  "escenarios": [
+    { "nombre": "la llamada anulada por una corrección sin contacto directo",
+      "historial": [ { "id": 1, "en": "2026-11-09T10:15", "canal": "Phone", "directo": true },
+                     { "id": 2, "en": "2026-11-09T16:00", "canal": "Phone", "directo": false, "anula": 1 } ],
+      "solicitud": { "pedido": "2026-11-11T09:00", "canal": "WhatsApp", "proposito": "Collection" },
+      "esperado": { "decision": "Permitido", "en": "2026-11-11T09:00" } },
+    { "nombre": "sin la corrección, la llamada fija el canal",
+      "historial": [ { "id": 1, "en": "2026-11-09T10:15", "canal": "Phone", "directo": true } ],
+      "solicitud": { "pedido": "2026-11-11T09:00", "canal": "WhatsApp", "proposito": "Collection" },
+      "esperado": { "decision": "Diferido", "siguiente": "2026-11-17T07:00", "motivos": ["WeeklyChannelLocked"] } },
+    { "nombre": "la corrección fue contacto directo por WhatsApp: fija ese canal",
+      "historial": [ { "id": 1, "en": "2026-11-09T10:15", "canal": "Phone", "directo": true },
+                     { "id": 2, "en": "2026-11-09T16:00", "canal": "WhatsApp", "directo": true, "anula": 1 } ],
+      "solicitud": { "pedido": "2026-11-11T09:00", "canal": "Sms", "proposito": "Collection" },
+      "esperado": { "decision": "Diferido", "siguiente": "2026-11-17T07:00", "motivos": ["WeeklyChannelLocked"] } },
+    { "nombre": "la anulada tampoco gasta el contacto del día",
+      "historial": [ { "id": 1, "en": "2026-11-09T10:15", "canal": "Phone", "directo": true },
+                     { "id": 2, "en": "2026-11-09T10:30", "canal": "Phone", "directo": false, "anula": 1 } ],
+      "solicitud": { "pedido": "2026-11-09T11:00", "canal": "Sms", "proposito": "Informative" },
+      "esperado": { "decision": "Permitido", "en": "2026-11-09T11:00" } }
+  ]
+}

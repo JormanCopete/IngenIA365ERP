@@ -16,7 +16,6 @@ public static class IdentitySeedData
         ("Administrator", "Acceso total al sistema", true),
         ("Auditor", "Solo lectura + reportes de auditoría", true),
         ("Accountant", "Módulo contabilidad completo", true),
-        ("LoanOfficer", "Módulo cartera financiera", true),
         ("Cashier", "Módulo depósitos/caja", true),
         ("PayrollManager", "Módulo nómina", true),
         ("ReadOnly", "Solo consultas en todos los módulos", true),
@@ -49,29 +48,8 @@ public static class IdentitySeedData
         ("Accounting", "CostCenters", "Create"),
         ("Accounting", "CostCenters", "Update"),
 
-        // === Lending (Cartera Financiera) ===
-        ("Lending", "LoanPortfolios", "Read"),
-        ("Lending", "LoanPortfolios", "Create"),
-        ("Lending", "LoanPortfolios", "Update"),
-        ("Lending", "LoanPortfolios", "Delete"),
-        ("Lending", "LoanPortfolios", "Print"),
-        ("Lending", "LoanApplications", "Read"),
-        ("Lending", "LoanApplications", "Create"),
-        ("Lending", "LoanApplications", "Approve"),
-        ("Lending", "LoanApplications", "Reject"),
-        ("Lending", "Transactions", "Read"),
-        ("Lending", "Transactions", "Create"),
-        ("Lending", "Collections", "Read"),
-        ("Lending", "Collections", "Create"),
-        ("Lending", "Collections", "Update"),
-        ("Lending", "Restructuring", "Read"),
-        ("Lending", "Restructuring", "Create"),
-        ("Lending", "Guarantees", "Read"),
-        ("Lending", "Guarantees", "Create"),
-        ("Lending", "Guarantees", "Update"),
-        ("Lending", "LoanReports", "Read"),
-        ("Lending", "LoanReports", "Print"),
-        ("Lending", "LoanReports", "Export"),
+        // === Lending: el bloque del crédito heredado (22 permisos) se retiró en la feature 013 (T0194, T89, R127);
+        //     los permisos Lending.* de la Cartera nueva los siembra la API al arrancar. ===
 
         // === Deposits (Depósitos/Caja) ===
         ("Deposits", "SavingsAccounts", "Read"),
@@ -158,7 +136,6 @@ public static class IdentitySeedData
         ["Administrator"] = ["*"], // All permissions
         ["Auditor"] = ["*.Read", "*.Print", "*.Export", "Security.AuditLog.*"],
         ["Accountant"] = ["Accounting.*", "Core.*.Read"],
-        ["LoanOfficer"] = ["Lending.*", "Core.*.Read", "Deposits.*.Read"],
         ["Cashier"] = ["Deposits.*", "Core.*.Read"],
         ["PayrollManager"] = ["Payroll.*", "Core.*.Read"],
         ["ReadOnly"] = ["*.Read"],

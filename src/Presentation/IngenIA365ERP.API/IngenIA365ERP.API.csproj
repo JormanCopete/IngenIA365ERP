@@ -56,6 +56,8 @@
     <ProjectReference Include="..\..\Infrastructure\IngenIA365ERP.Storage\IngenIA365ERP.Storage.csproj" />
     <!-- Feature 012, I4 (T688): adaptadores de facturacion electronica; solo Program.cs los compone. -->
     <ProjectReference Include="..\..\Infrastructure\IngenIA365ERP.ElectronicInvoicing\IngenIA365ERP.ElectronicInvoicing.csproj" />
+    <!-- Feature 013 (T0012): canales externos de Cartera y de la plataforma; solo Program.cs los compone. -->
+    <ProjectReference Include="..\..\Infrastructure\IngenIA365ERP.ExternalChannels\IngenIA365ERP.ExternalChannels.csproj" />
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="IngenIA365ERP.API.IntegrationTests" />

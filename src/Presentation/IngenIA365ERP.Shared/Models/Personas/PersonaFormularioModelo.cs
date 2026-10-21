@@ -1,4 +1,4 @@
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 using IngenIA365ERP.Shared.Services.Core;
 
 namespace IngenIA365ERP.Shared.Models.Personas;
@@ -103,6 +103,7 @@ public sealed class PersonaFormularioModelo
     public bool IsSimpleTaxRegime { get; set; }
     public bool IsIncomeTaxFiler { get; set; }
     public bool IsObligatedToInvoice { get; set; }
+    public bool IsObligatedToKeepBooks { get; set; }
     public bool IsLargeContributor { get; set; }
     public bool WithholdingExempt { get; set; }
     public bool IcaWithholdingExempt { get; set; }
@@ -162,6 +163,7 @@ public sealed class PersonaFormularioModelo
         IsSimpleTaxRegime = p.IsSimpleTaxRegime,
         IsIncomeTaxFiler = p.IsIncomeTaxFiler,
         IsObligatedToInvoice = p.IsObligatedToInvoice,
+        IsObligatedToKeepBooks = p.IsObligatedToKeepBooks,
         IsLargeContributor = p.IsLargeContributor,
         WithholdingExempt = p.WithholdingExempt,
         IcaWithholdingExempt = p.IcaWithholdingExempt,
@@ -204,6 +206,7 @@ public sealed class PersonaFormularioModelo
         IsSimpleTaxRegime = IsSimpleTaxRegime,
         IsIncomeTaxFiler = IsIncomeTaxFiler,
         IsObligatedToInvoice = IsObligatedToInvoice,
+        IsObligatedToKeepBooks = IsObligatedToKeepBooks,
         IsLargeContributor = IsLargeContributor,
         WithholdingExempt = WithholdingExempt,
         IcaWithholdingExempt = IcaWithholdingExempt,

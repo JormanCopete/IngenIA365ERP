@@ -57,6 +57,12 @@ public sealed record AlertTypeDto(
 /// <param name="RecipientPermissions">
 /// Permisos destinatarios que reemplazan a los del tipo (el del nivel pendiente en <c>Aprobaciones.Pendiente</c>).
 /// </param>
+/// <param name="ModuloDeOrigen">
+/// Feature 013 (PM-15, C68): el módulo del caso (<c>CAR</c>, <c>INV</c>… de <c>ModulosDeOrigen</c>). De la lista del tipo se
+/// descartan los permisos del otro módulo (<see cref="FiltroPorModuloDeOrigen"/>); no toca <paramref name="RecipientPermissions"/>.
+/// </param>
+/// <param name="ScopeBranchPublicId">Feature 013 (C68): la oficina del crédito o de la solicitud (alcance de Cartera).</param>
+/// <param name="ScopeCreditLinePublicId">Feature 013 (C68): la línea del crédito (alcance de Cartera).</param>
 public sealed record AlertaALevantar(
     string TypeCode,
     string Subject,
@@ -66,7 +72,10 @@ public sealed record AlertaALevantar(
     Guid? ScopeWarehousePublicId = null,
     Guid? ScopePointOfSalePublicId = null,
     string? DedupKey = null,
-    IReadOnlyList<string>? RecipientPermissions = null);
+    IReadOnlyList<string>? RecipientPermissions = null,
+    string? ModuloDeOrigen = null,
+    Guid? ScopeBranchPublicId = null,
+    Guid? ScopeCreditLinePublicId = null);
 
 /// <summary>Qué pasó al pedir levantar una alerta. (nuevo)</summary>
 public enum DesenlaceDeAlerta

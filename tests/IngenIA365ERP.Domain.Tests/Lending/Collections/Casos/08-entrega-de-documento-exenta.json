@@ -1,0 +1,23 @@
+// Regla 7 (I3): la entrega de un documento pedido por el titular queda exenta de las reglas 8 a 10: sale un domingo, un
+// festivo de noche o con el tope diario cumplido. No necesita autorización de canal, pero sí la de tratamiento general.
+{
+  "caso": "08-entrega-de-documento-exenta",
+  "reglas": { "horario": { "lunesAViernes": ["07:00", "19:00"], "sabado": ["08:00", "15:00"] }, "contactosPorDia": 1, "noHabiles": ["2026-11-02", "2026-11-16"] },
+  "titular": { "canalesAutorizados": [] },
+  "escenarios": [
+    { "nombre": "un domingo",
+      "solicitud": { "pedido": "2026-11-15T10:00", "canal": "Email", "proposito": "DocumentDelivery", "inmediato": true },
+      "esperado": { "decision": "Permitido", "en": "2026-11-15T10:00" } },
+    { "nombre": "un festivo a las 21:00",
+      "solicitud": { "pedido": "2026-11-16T21:00", "canal": "Email", "proposito": "DocumentDelivery", "inmediato": true },
+      "esperado": { "decision": "Permitido", "en": "2026-11-16T21:00" } },
+    { "nombre": "con el tope diario cumplido",
+      "historial": [ { "en": "2026-11-11T08:00", "canal": "Email", "proposito": "Informative" } ],
+      "solicitud": { "pedido": "2026-11-11T09:00", "canal": "Email", "proposito": "DocumentDelivery", "inmediato": true },
+      "esperado": { "decision": "Permitido", "en": "2026-11-11T09:00" } },
+    { "nombre": "sin autorización de tratamiento general",
+      "titular": { "canalesAutorizados": [], "autorizacionGeneral": false },
+      "solicitud": { "pedido": "2026-11-11T09:00", "canal": "Email", "proposito": "DocumentDelivery", "inmediato": true },
+      "esperado": { "decision": "Excluido", "motivo": "ChannelNotAuthorized" } }
+  ]
+}

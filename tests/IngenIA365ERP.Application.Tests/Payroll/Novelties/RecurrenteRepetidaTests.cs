@@ -20,7 +20,7 @@ namespace IngenIA365ERP.Application.Tests.Payroll.Novelties;
 public class RecurrenteRepetidaTests
 {
     private static CalculatePayrollRunCommandHandler Calculador(NominaTestData d) =>
-        new(d.Db, d.Loader, d.Recurrentes, d.Lock, d.Clock, d.User, NullLogger<CalculatePayrollRunCommandHandler>.Instance);
+        new(d.Db, d.Loader, d.Recurrentes, d.CuotasDeCartera, d.CuotasDeCuentas, d.Lock, d.Clock, d.User, NullLogger<CalculatePayrollRunCommandHandler>.Instance);
 
     private static CreateRecurringNoveltyCommandHandler Registrador(NominaTestData d) => new(d.Db, d.Clock, d.User, d.StaleMarker);
 

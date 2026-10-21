@@ -158,6 +158,10 @@ public sealed class ErrorEnvelopeFilter : IEndpointFilter
             "Import.ModeRequired" => StatusCodes.Status400BadRequest,
             _ when code.StartsWith("Archivo.", StringComparison.Ordinal) => StatusCodes.Status400BadRequest,
 
+            // Feature 013 (contracts/api.md §1.14, T66): la segregación de Cartera es una regla de negocio —la persona ya intervino en el
+            // expediente—, no un choque de versiones. Sin esta línea la regla «.Conflict» la sacaba como 409 (US2, bloque 6C).
+            "Lending.Segregation.Conflict" => StatusCodes.Status422UnprocessableEntity,
+
             _ when code.StartsWith("Validation.", StringComparison.Ordinal) => StatusCodes.Status400BadRequest,
             _ when code.EndsWith(".NotFound", StringComparison.Ordinal) => StatusCodes.Status404NotFound,
             _ when code.EndsWith(".Unauthorized", StringComparison.Ordinal) => StatusCodes.Status401Unauthorized,

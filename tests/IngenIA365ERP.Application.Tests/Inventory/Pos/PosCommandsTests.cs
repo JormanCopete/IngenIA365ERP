@@ -424,6 +424,35 @@ public class PosCommandsTests
         t.Db.InventoryDocuments.Single(d => d.PublicId == venta.DraftPublicId).Status.Should().Be(DocumentStatus.Discarded);
     }
 
+    [Fact]
+    public async Task Descartar_el_borrador_libera_en_Cartera_el_numero_reservado_por_su_clave()
+    {
+        // Feature 013 (T0117, T22): DiscardPosDraftCommand llama LiberarAsync con la clave de la reserva del pago de crédito.
+        var t = await CrearAsync();
+        var venta = await t.AbrirAsync(BarraUnidad);
+        var documento = t.Db.InventoryDocuments.Single(d => d.PublicId == venta.DraftPublicId);
+        var reservado = new DocumentPayment
+        {
+            DocumentId = documento.Id, LineNumber = 1, PaymentMeansId = 1, Amount = 2_000m, MeansCode = "CREDASOC", MeansName = "Crédito",
+            MeansClass = Domain.Enums.Core.PaymentMeansClass.AssociateCredit, DianPaymentMeansCode = "1",
+            ReservedLoanNumber = "CR-0003001", ReservationPublicId = Guid.NewGuid(),
+        };
+        t.Db.DocumentPayments.Add(reservado);
+        await t.Db.SaveChangesAsync();
+        var reservas = new IngenIA365ERP.Application.Tests.Common.Integration.Lending.ReservasDeCarteraDePrueba();
+        var credito = new CreditoEnLaVenta(t.Db, Substitute.For<IngenIA365ERP.Application.Common.Parameters.ILectorDeParametros>(),
+            new IngenIA365ERP.Application.Common.Integration.Lending.ConsultasDeCarteraNoHabilitada(), reservas);
+
+        var r = await new DiscardPosDraftCommandHandler(t.Db, t.Pos(), t.Auditoria(), credito)
+            .Handle(new DiscardPosDraftCommand(venta.DraftPublicId, "El cliente se arrepintió"), default);
+
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? r.Error.Message : string.Empty);
+        var liberada = reservas.Liberaciones.Should().ContainSingle().Subject;
+        liberada.IdempotencyKey.Should().Be(CreditoEnLaVenta.ClaveDeReserva(reservado.PublicId, 2_000m));
+        liberada.PaymentPublicId.Should().Be(reservado.PublicId);
+        liberada.Reason.Should().Be("El cliente se arrepintió");
+    }
+
     // ---------------------------------------------------------------------------------- entrega y reimpresión --
 
     [Fact]

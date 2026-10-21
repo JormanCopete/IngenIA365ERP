@@ -1,0 +1,130 @@
+{
+  "descripcion": "§24 ejemplo 11: el cobro en caja que Contabilidad registró contra la provisional se incorpora: la provisional queda en cero por factura.",
+  "sobre": {
+    "version": 1,
+    "kind": "Business",
+    "originModule": "CAR",
+    "originEventKey": "Confirmation",
+    "origin": {
+      "kind": "Operation",
+      "documentClass": null,
+      "documentTypeCode": null,
+      "number": "CPI-000501",
+      "publicId": "0d0d0072-0000-4000-8000-000000000072",
+      "operationDate": "2026-11-26"
+    },
+    "related": null,
+    "chainRootPublicId": "0e0e0073-0000-4000-8000-000000000073",
+    "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+    "costCenterPublicId": null,
+    "warehouseCode": null,
+    "personPublicId": "a1b2c3d4-0000-4000-8000-000000000002",
+    "currency": "COP",
+    "exchangeRate": 1,
+    "originUser": {
+      "centralUserId": "d4e5f6a7-b8c9-4d0e-9f1a-2b3c4d5e6f70",
+      "name": "Usuario de ensayo"
+    },
+    "emittedAt": "2026-11-26T15:00:00Z"
+  },
+  "mensajes": [
+    {
+      "messageId": "0f0f0075-0000-4000-8000-000000000075",
+      "type": "CobroProvisionalIncorporado",
+      "kind": "Business",
+      "originDocumentClass": "ProvisionalCollection",
+      "payload": {
+        "loan": {
+          "loanPublicId": "7b8c9d0e-1f2a-4b3c-9d4e-000000000501",
+          "loanNumber": "000501"
+        },
+        "debtorPersonPublicId": "a1b2c3d4-0000-4000-8000-000000000002",
+        "valueDate": "2026-11-26",
+        "registeredAt": "2026-11-26T15:00:00Z",
+        "dimensions": {
+          "creditLineCode": "COM01",
+          "modalityCode": "CONSUMO",
+          "subsegmentCode": "SinLibranza",
+          "riskCategory": "A",
+          "riskSubcategory": "None",
+          "isEmployee": false,
+          "inGracePeriod": false,
+          "restructured": false,
+          "writtenOff": false,
+          "collectorClass": null,
+          "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+          "impairmentModel": "ArrearsAnnex1",
+          "riskSegment": "CONSUMO",
+          "valueUnit": "Pesos"
+        },
+        "amounts": [
+          {
+            "concept": "Principal",
+            "installmentNumber": 1,
+            "amount": 300000.0,
+            "uvrAmount": null,
+            "onBehalfOfAssociate": false,
+            "reasonCode": null
+          }
+        ],
+        "original": null,
+        "rulesVersion": "LND-2026.1",
+        "invoice": {
+          "module": "INV",
+          "publicId": "6d7e8f90-a1b2-4c3d-8e4f-5a6b7c8d9e0f",
+          "documentClass": "PosEquivalentDocument",
+          "number": "PV01-1532"
+        },
+        "accountsReceivableRecordedBy": "Contabilidad",
+        "accountingReference": "RC-77",
+        "activationPublicId": "ac710074-0000-4000-8000-000000000074",
+        "templateRow": 2
+      }
+    }
+  ],
+  "esperado": {
+    "tipo": "RC",
+    "fecha": "2026-11-26",
+    "origen": "LendingIssuedDocument",
+    "lineas": [
+      {
+        "rol": "CuentaPorCobrarComercial",
+        "cuenta": "13050502",
+        "debito": 300000.0,
+        "credito": 0.0,
+        "tercero": "ana",
+        "cruce": "FV PV01-1532",
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "CobroProvisionalIncorporado"
+          ],
+          "concepto": "Principal",
+          "creditos": [
+            "000501"
+          ]
+        }
+      },
+      {
+        "rol": "Capital",
+        "cuenta": "14420501",
+        "debito": 0.0,
+        "credito": 300000.0,
+        "tercero": "ana",
+        "cruce": "PG 000501",
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "CobroProvisionalIncorporado"
+          ],
+          "concepto": "Principal",
+          "creditos": [
+            "000501"
+          ]
+        }
+      }
+    ]
+  }
+}

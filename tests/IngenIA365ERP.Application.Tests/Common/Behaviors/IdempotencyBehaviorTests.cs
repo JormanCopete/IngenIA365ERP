@@ -1,4 +1,5 @@
 using FluentAssertions;
+using IngenIA365ERP.Application.Common.Alerts;
 using IngenIA365ERP.Application.Common.Audit;
 using IngenIA365ERP.Application.Common.Behaviors;
 using IngenIA365ERP.Application.Common.Execution;
@@ -268,5 +269,75 @@ public class IdempotencyBehaviorTests
         // En un motor real la transacción revierte y la fila no queda (e2e T021); InMemory no revierte,
         // pero el resultado nunca se escribe para un fallo.
         (await _db.OperationKeys.Where(k => k.ResultJson != null).CountAsync()).Should().Be(0);
+    }
+
+    // ------------------------------------------------------------------- alertas diferidas (feature 013, US1-3) --
+
+    private (IdempotencyBehavior<TPedido, TRespuesta> Behavior, AlertasDiferidas Diferidas, List<AlertaALevantar> Levantadas) ConAlertas<TPedido, TRespuesta>()
+        where TPedido : notnull
+    {
+        var servicios = new ServiceCollection();
+        servicios.AddSingleton<IApplicationDbContext>(_db);
+        var actor = Substitute.For<IActorActual>();
+        actor.ObtenerAsync(Arg.Any<CancellationToken>()).Returns(_ => Task.FromResult(_actor));
+        servicios.AddSingleton(actor);
+        servicios.AddSingleton(_auditoria);
+        servicios.AddSingleton(_estado);
+        var diferidas = new AlertasDiferidas();
+        servicios.AddSingleton(diferidas);
+        var levantadas = new List<AlertaALevantar>();
+        var alertas = Substitute.For<IAlertas>();
+        alertas.LevantarAsync(Arg.Do<AlertaALevantar>(levantadas.Add), Arg.Any<CancellationToken>())
+            .Returns(Result.Success(new AlertaLevantada(Guid.NewGuid(), DesenlaceDeAlerta.Levantada, 1, false)));
+        servicios.AddSingleton(alertas);
+        return (new IdempotencyBehavior<TPedido, TRespuesta>(servicios.BuildServiceProvider(), NullLogger<IdempotencyBehavior<TPedido, TRespuesta>>.Instance),
+            diferidas, levantadas);
+    }
+
+    private static AlertaALevantar Faltante() => new("Cartera.ValorNacionalFaltante", "Falta USURA MICROCREDITO", "No hay usura del día.",
+        DedupKey: "Cartera.ValorNacionalFaltante:USURA:MICROCREDITO:2026-12-01");
+
+    [Fact]
+    public async Task Una_alerta_encolada_durante_un_comando_que_falla_se_levanta_al_terminar_fuera_de_la_transaccion()
+    {
+        var (behavior, diferidas, levantadas) = ConAlertas<AltaDePrueba, Result<RespuestaDePrueba>>();
+
+        var r = await behavior.Handle(new AltaDePrueba(Guid.NewGuid(), "X", "1", 1), _ =>
+        {
+            diferidas.Activa.Should().BeTrue("la operación abre la cola");
+            diferidas.Encolar(Faltante());
+            levantadas.Should().BeEmpty("adentro sólo se encola");
+            return Task.FromResult(Result.Failure<RespuestaDePrueba>(new Error("NationalValues.Missing", "Falta la usura.")));
+        }, CancellationToken.None);
+
+        r.Error.Code.Should().Be("NationalValues.Missing", "la alerta no cambia la respuesta");
+        levantadas.Should().ContainSingle().Which.TypeCode.Should().Be("Cartera.ValorNacionalFaltante");
+        diferidas.Activa.Should().BeFalse();
+        diferidas.Tomar().Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Tras_un_exito_lo_encolado_tambien_se_levanta_y_una_operacion_anidada_no_vacia_la_cola()
+    {
+        var (behavior, diferidas, levantadas) = ConAlertas<AltaDePrueba, Result<RespuestaDePrueba>>();
+        diferidas.Abrir(); // una operación de afuera ya abierta
+
+        await behavior.Handle(new AltaDePrueba(Guid.NewGuid(), "X", "1", 1), _ =>
+        {
+            diferidas.Encolar(Faltante());
+            return Task.FromResult(Result.Success(Respuesta("1")));
+        }, CancellationToken.None);
+
+        levantadas.Should().BeEmpty("la anidada deja la cola a la de afuera");
+        diferidas.Activa.Should().BeTrue();
+        diferidas.Cerrar();
+
+        var (otro, otraCola, otrasLevantadas) = ConAlertas<AltaDePrueba, Result<RespuestaDePrueba>>();
+        await otro.Handle(new AltaDePrueba(Guid.NewGuid(), "Y", "2", 2), _ =>
+        {
+            otraCola.Encolar(Faltante());
+            return Task.FromResult(Result.Success(Respuesta("2")));
+        }, CancellationToken.None);
+        otrasLevantadas.Should().ContainSingle("tras el éxito se levanta después de confirmar");
     }
 }

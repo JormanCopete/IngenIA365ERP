@@ -1,0 +1,206 @@
+@page "/cartera/captaciones/activacion"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Globalization
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Inventario
+@inject CaptacionesClient Captaciones
+@inject GobiernoDeCarteraClient Gobierno
+@inject INotificationService Notification
+
+<PageTitle>Activación de captaciones y aportes - IngenIA365ERP</PageTitle>
+
+@* Feature 014, US9 (T159; FR-116, FR-117; api.md §16): la activación de aportes o de captaciones, cada una aparte y después de los créditos, con
+   Lending.Deposits.Activate. Con una carga aplicada: la fecha es el día siguiente al corte (no editable), el plazo de fecha valor, el punto del acta que
+   aprueba la activación y sus diferencias, y la lista de requisitos con quién arregla cada uno. Sin carga (cooperativa sin historia): la fecha la elige
+   quien activa. Las cuentas nacen con su saldo inicial por concepto al corte, sin hechos contables. Después, el resumen de lo nacido. *@
+<PermissionGate Required="Lending.Deposits.Activate" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Activación de captaciones y aportes</h3>
+        <div class="toolbar">
+            <label class="campo">Naturaleza
+                <select class="e-input" value="@_naturaleza" @onchange="@(async e => { _naturaleza = e.Value?.ToString() ?? CaptacionesClient.Captaciones; _resultado = null; await CargarAsync(); })">
+                    <option value="@CaptacionesClient.Captaciones">Captaciones</option>
+                    <option value="@CaptacionesClient.Aportes">Aportes</option>
+                </select>
+            </label>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Revisando los requisitos…">
+        @if (_estado is { } e)
+        {
+            @if (e.ActivationDate is { } activada)
+            {
+                <p class="aviso aviso-ok">@TextosDeMigracionDeCaptaciones.Naturaleza(e.Nature) activados desde el @activada.ToString("dd/MM/yyyy")@(e.Load is { } c ? $", con la carga {c.Number} ({c.Accounts:N0} cuentas)" : ", sin carga").</p>
+            }
+            else
+            {
+                <div class="kpi-grid">
+                    <div class="kpi-card"><span class="kpi-value">@(e.Load is { } c ? $"{c.Number} · {TextosDeMigracion.EstadoDeCarga(c.Status)}" : "Sin carga")</span><span class="kpi-label">Carga</span></div>
+                    <div class="kpi-card"><span class="kpi-value">@(e.Load?.CutoffDate.ToString("dd/MM/yyyy") ?? "—")</span><span class="kpi-label">Corte</span></div>
+                    <div class="kpi-card"><span class="kpi-value">@(e.Load?.Accounts.ToString("N0") ?? "—")</span><span class="kpi-label">Cuentas</span></div>
+                    <div class="kpi-card"><span class="kpi-value">@(e.Deadline?.ToString("dd/MM/yyyy") ?? "—")</span><span class="kpi-label">Plazo</span></div>
+                </div>
+                @if (e.Load is null)
+                {
+                    <p class="aviso aviso-info">Sin carga: una cooperativa sin historia de @TextosDeMigracionDeCaptaciones.Naturaleza(e.Nature).ToLowerInvariant() activa sin saldos iniciales. Si tiene saldos que traer, cárguelos en <a href="/cartera/captaciones/migracion">Saldos iniciales</a>.</p>
+                }
+
+                <h4>Requisitos</h4>
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th>Requisito</th><th>Estado</th><th>Detalle</th><th>Quién lo arregla</th></tr></thead>
+                        <tbody>
+                            @foreach (var r in e.Requirements)
+                            {
+                                <tr class="@(r.Met ? "" : "texto-alerta")">
+                                    <td>@TextosDeMigracion.Requisito(r.Code)</td>
+                                    <td>@TextosDeMigracion.EstadoDeRequisito(r.Status)</td>
+                                    <td>@r.Detail</td>
+                                    <td>@QuienArregla(r.WhoFixes)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                @if (e.Warnings.Count > 0)
+                {
+                    <h4>Avisos que no bloquean</h4>
+                    <ul>@foreach (var w in e.Warnings) { <li><b>@TextosDeMigracion.Requisito(w.Code)</b>: @w.Detail @QuienArregla(w.WhoFixes)</li> }</ul>
+                }
+
+                <div class="info-card">
+                    <h4>Activar</h4>
+                    <div class="form-grid">
+                        @if (e.Load is { Status: 2 })
+                        {
+                            <label class="campo">Fecha de activación <input class="e-input" value="@(e.ExpectedDate?.ToString("dd/MM/yyyy"))" readonly /></label>
+                            <label class="campo campo-ancho">Punto del acta de activación *
+                                <select class="e-input" @bind="_punto">
+                                    <option value="">Elija el punto…</option>
+                                    @foreach (var p in _puntos) { <option value="@p.SessionItemPublicId">@($"{p.Session.Body.Name} · acta {p.Session.Number} · {p.Title}")</option> }
+                                </select>
+                            </label>
+                        }
+                        else
+                        {
+                            <label class="campo">Fecha de activación * <input type="date" class="e-input" value="@(_fecha?.ToString("yyyy-MM-dd"))" @onchange="@(x => _fecha = DateOnly.TryParse(x.Value?.ToString(), CultureInfo.InvariantCulture, out var d) ? d : null)" /></label>
+                        }
+                        <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" maxlength="400" /></label>
+                        <label class="campo-check"><input type="checkbox" @bind="_reconoceAvisos" /> Revisé los avisos que no bloquean</label>
+                    </div>
+                    @if (e.Load is { Status: 1 })
+                    {
+                        <p class="aviso aviso-alerta">La carga @e.Load.Number todavía es un borrador: aplíquela en Saldos iniciales antes de activar.</p>
+                    }
+                    @if (e.Load is { Status: 2 } && _puntos.Count == 0)
+                    {
+                        <p class="texto-tenue">No hay puntos de actas cerradas sobre la carga @e.Load.Number: el acta aprueba la activación y las diferencias aceptadas (Actas y órganos).</p>
+                    }
+                    @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                    @if (_faltantes.Count > 0)
+                    {
+                        <ul>@foreach (var f in _faltantes) { <li>@TextosDeMigracion.Requisito(f.Code): @f.Detail @QuienArregla(f.WhoFixes)</li> }</ul>
+                    }
+                    <div class="toolbar">
+                        <SfButton CssClass="e-primary" Disabled="@(!PuedeActivar)" OnClick="@(() => _confirmar = true)">Activar…</SfButton>
+                    </div>
+                </div>
+            }
+        }
+    </IndicadorDeCarga>
+
+    @if (_resultado is { } res)
+    {
+        <div class="info-card">
+            <h4>Lo que nació con la activación del @res.ActivationDate.ToString("dd/MM/yyyy")</h4>
+            <ul>
+                <li>@res.Accounts.ToString("N0") cuenta(s) con @res.OpeningTransactions.ToString("N0") transacción(es) de saldo inicial al corte, sin hechos contables.</li>
+            </ul>
+        </div>
+    }
+</div>
+
+<SfDialog @bind-Visible="_confirmar" Header="Activar" Width="520px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_activando.Activa" Texto="Activando: nacen las cuentas con su saldo inicial…">
+                <p>La activación no se deshace. Las cuentas de la carga nacen en una sola operación con sus saldos iniciales, su titularidad y sus cuotas atrasadas; si algo falla, no queda nada.</p>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@_activando.Activa" OnClick="@ActivarAsync">Activar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _confirmar = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new(), _activando = new();
+    private ClaveDeOperacion _clave = new();
+    private string _naturaleza = CaptacionesClient.Captaciones;
+    private EstadoDeActivacionDeCaptacionesDto? _estado;
+    private List<PuntoDeActaCerradaDto> _puntos = [];
+    private List<RequisitoDeActivacionDto> _faltantes = [];
+    private CaptacionesActivadasDto? _resultado;
+    private string? _error, _motivo, _punto;
+    private DateOnly? _fecha;
+    private bool _reconoceAvisos, _confirmar;
+
+    private bool PuedeActivar => _estado is { ActivationDate: null } e && !string.IsNullOrWhiteSpace(_motivo)
+                                 && (e.Warnings.Count == 0 || _reconoceAvisos)
+                                 && (e.Load is { Status: 2 } ? Guid.TryParse(_punto, out _) && e.ExpectedDate is not null : e.Load is null && _fecha is not null);
+
+    protected override async Task OnInitializedAsync() => await CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        _error = null;
+        _faltantes = [];
+        var r = await Captaciones.EstadoDeActivacionAsync(_naturaleza);
+        if (!r.IsSuccess) { _estado = null; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo leer el estado de la activación."); return; }
+        _estado = r.Value;
+        _fecha ??= _estado?.ExpectedDate;
+        _puntos = [];
+        if (_estado?.Load is { Status: 2 } vigente)
+        {
+            var puntos = await Gobierno.PuntosDeActasCerradasAsync("ActivationDifferences", sujetoId: vigente.PublicId);
+            _puntos = puntos.IsSuccess ? [.. puntos.Value?.Items ?? []] : [];
+        }
+    }
+
+    private static string QuienArregla(Services.Contabilidad.QuienCorrigeDto? quien) =>
+        quien is null ? "" : $"{quien.Module}{(quien.Page is null ? "" : $" ({quien.Page})")}{(quien.Permission is null ? "" : $", permiso {quien.Permission}")}";
+
+    private async Task ActivarAsync()
+    {
+        if (_estado is not { } e || string.IsNullOrWhiteSpace(_motivo)) return;
+        var conCarga = e.Load is { Status: 2 };
+        var fecha = conCarga ? e.ExpectedDate : _fecha;
+        if (fecha is null) return;
+        Guid? punto = conCarga && Guid.TryParse(_punto, out var p) ? p : null;
+        using var estado = _activando.Iniciar();
+        _error = null;
+        _faltantes = [];
+        var r = await Captaciones.ActivarAsync(new ActivarCaptacionesRequest(_naturaleza, fecha.Value, _motivo.Trim(), _reconoceAvisos,
+            conCarga ? e.Load!.PublicId : null, punto), _clave);
+        _confirmar = false;
+        if (!r.IsSuccess)
+        {
+            _error = r.ErrorMessage ?? "No se pudo activar.";
+            if (r.Data is { ValueKind: System.Text.Json.JsonValueKind.Object } d && d.TryGetProperty("missing", out var faltan))
+                _faltantes = System.Text.Json.JsonSerializer.Deserialize<List<RequisitoDeActivacionDto>>(faltan,
+                    new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web)) ?? [];
+            return;
+        }
+        _resultado = r.Value;
+        _clave = new ClaveDeOperacion();
+        await Notification.SuccessAsync($"{TextosDeMigracionDeCaptaciones.Naturaleza(e.Nature)} activados.");
+        await CargarAsync();
+    }
+}

@@ -41,7 +41,7 @@ public sealed class CasoDoradoRetencion
 
     public FixedRateInput ConstruirEntrada()
     {
-        var catalogo = PayrollLegalParametersSeeder.Catalogo().Where(p => p.ValidFrom <= MesDeCalculo && (p.ValidTo == null || p.ValidTo >= MesDeCalculo)).ToList();
+        var catalogo = PayrollLegalParametersSeeder.ConValoresNacionales().Where(p => p.ValidFrom <= MesDeCalculo && (p.ValidTo == null || p.ValidTo >= MesDeCalculo)).ToList();
         PayrollLegalParameter tabla;
         if (TablaDelPlan is { } t)
         {

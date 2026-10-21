@@ -1,0 +1,501 @@
+@page "/cartera/atribuciones"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Globalization
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Inventario
+@inject GobiernoDeCarteraClient Gobierno
+@inject INotificationService Notification
+
+<PageTitle>Atribuciones de Cartera - IngenIA365ERP</PageTitle>
+
+@* Feature 013, fase 4 (T0316; US17, T63, T65, FR-037, FR-040; contracts/api.md §3.5): la matriz de atribuciones es versionada y se publica
+   COMPLETA: la vigente rige hasta la víspera de la nueva y lo ya enrutado conserva la versión que lo enrutó. La vista previa «¿a qué nivel
+   iría?» enruta con la vigente sin escribir nada (el monto es el consolidado del deudor). La pestaña de montos operativos fija el tope por
+   rol de las cuatro atribuciones que lo admiten (desembolsar, asignar cupos, confirmar validaciones fallidas y fechar antes del cierre); las
+   decisiones de crédito no usan esos montos: las enruta la matriz. *@
+<PermissionGate Required="Lending.Attributions.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Atribuciones</h3>
+        <div class="toolbar">
+            <SfButton CssClass="@(_pestana == 0 ? "e-primary" : "e-outline")" OnClick="@(() => _pestana = 0)">Matriz</SfButton>
+            <SfButton CssClass="@(_pestana == 1 ? "e-primary" : "e-outline")" OnClick="@(() => _pestana = 1)">¿A qué nivel iría?</SfButton>
+            <SfButton CssClass="@(_pestana == 2 ? "e-primary" : "e-outline")" OnClick="@AbrirMontosAsync">Montos operativos</SfButton>
+        </div>
+    </div>
+
+    @if (_pestana == 0)
+    {
+        <div class="toolbar">
+            <SfCheckBox TChecked="bool" Checked="@_conHistoria" CheckedChanged="@((bool v) => CambiarHistoriaAsync(v))" Label="Ver todas las versiones" />
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+            <PermissionGate Required="Lending.Attributions.Manage">
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@AbrirEditor">Nueva versión</SfButton>
+            </PermissionGate>
+        </div>
+        <IndicadorDeCarga Cargando="@_carga.Activa">
+            @if (_matrices.Count == 0)
+            {
+                <p class="texto-tenue">No hay una matriz de atribuciones vigente: publique la primera versión.</p>
+            }
+            @foreach (var m in _matrices)
+            {
+                <div class="info-card">
+                    <h4>Versión @m.Version · desde @m.ValidFrom.ToString("dd/MM/yyyy") @(m.ValidTo is { } h ? $"hasta {h:dd/MM/yyyy}" : "(vigente)")</h4>
+                    <p class="texto-tenue">@m.Reason@(m.Source is null ? "" : $" · Fuente: {m.Source}") · registrada @m.RegisteredAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</p>
+                    <div class="tabla-desplazable">
+                        <table class="data-grid">
+                            <thead><tr><th class="numero">Rango</th><th>Nivel</th><th>Clase</th><th>Permiso u órgano</th><th class="numero">Tope consolidado</th><th>Marcas</th></tr></thead>
+                            <tbody>
+                                @foreach (var n in m.Levels.OrderBy(n => n.Order))
+                                {
+                                    <tr>
+                                        <td class="numero">@n.Order</td>
+                                        <td>@n.Code · @n.Name</td>
+                                        <td>@TextosDeCartera.ClaseDeNivel(n.Kind)</td>
+                                        <td>@(n.GoverningBody is { } o ? $"{o.Code} · {o.Name}" : n.PermissionCode)</td>
+                                        <td class="numero">@(n.ConsolidatedAmountCeiling?.ToString("N0") ?? "Sin tope")</td>
+                                        <td>@(n.IsExceptionLevel ? "Excepciones " : "")@(n.IsBoardLevel ? "Consejo" : "")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="tabla-desplazable">
+                        <table class="data-grid">
+                            <thead><tr><th class="numero">Orden</th><th>Sujeto</th><th>Condiciones</th><th>Nivel mínimo</th></tr></thead>
+                            <tbody>
+                                @foreach (var r in m.Rules.OrderBy(r => r.Order))
+                                {
+                                    <tr>
+                                        <td class="numero">@r.Order</td>
+                                        <td>@TextosDeCartera.Sujeto(r.Subject)</td>
+                                        <td>@Condiciones(r.Conditions)</td>
+                                        <td>@r.MinimumLevelCode</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    <p class="texto-tenue">Huella: @m.ContentSha256</p>
+                </div>
+            }
+        </IndicadorDeCarga>
+    }
+    else if (_pestana == 1)
+    {
+        <div class="info-card">
+            <h4>¿A qué nivel iría?</h4>
+            <p class="texto-apoyo">Enruta con la matriz vigente a la fecha, sin registrar nada. El monto es el consolidado del deudor.</p>
+            <div class="form-grid">
+                <label class="campo">Sujeto
+                    <select class="e-input" @bind="_prevSujeto">
+                        @foreach (var s in TextosDeCartera.Sujetos) { <option value="@s.Codigo">@s.Texto</option> }
+                    </select>
+                </label>
+                <label class="campo">Monto consolidado * <input class="e-input" type="number" min="0" step="1" @bind="_prevMonto" /></label>
+                <label class="campo">Plazo (cuotas) <input class="e-input" type="number" min="0" @bind="_prevPlazo" /></label>
+                <label class="campo">Puntaje <input class="e-input" type="number" step="0.01" @bind="_prevPuntaje" /></label>
+                <label class="campo">Días de mora <input class="e-input" type="number" min="0" @bind="_prevMora" /></label>
+                <label class="campo">Garantía
+                    <select class="e-input" @bind="_prevGarantia">
+                        <option value="0">Ninguna</option>
+                        @foreach (var g in TextosDeCartera.Garantias) { <option value="@g.Valor">@g.Texto</option> }
+                    </select>
+                </label>
+                <label class="campo">Fecha <input type="date" class="e-input" value="@(_prevFecha?.ToString("yyyy-MM-dd") ?? "")" @onchange="@(e => _prevFecha = LeerFecha(e.Value))" /></label>
+                <div class="campo campo-ancho">Persona (opcional: un vínculo vigente lleva al consejo)
+                    <PersonSearchPicker @bind-Selected="_prevPersona" ShowHelpText="false" Compacto="true" />
+                </div>
+                <SfCheckBox @bind-Checked="_prevExcepcion" TChecked="bool" Label="Es una excepción a la política" />
+            </div>
+            <div class="toolbar">
+                <SfButton CssClass="e-primary" Disabled="@(_vistaPrevia.Activa || _prevMonto <= 0)" OnClick="@VistaPreviaAsync">Consultar</SfButton>
+            </div>
+            <IndicadorDeCarga Cargando="@_vistaPrevia.Activa" Texto="Enrutando…">
+                @if (_prevError is not null) { <p class="aviso aviso-error" role="alert">@_prevError</p> }
+                @if (_resultado is { } res)
+                {
+                    <p><strong>Nivel: @res.EffectiveLevel.Code · @res.EffectiveLevel.Name</strong> (@TextosDeCartera.ClaseDeNivel(res.EffectiveLevel.Kind)@(res.EffectiveLevel.GoverningBody is { } o ? $", {o.Name}" : ""))
+                        <br /><span class="texto-tenue">Matriz versión @res.MatrixVersion · consolidado @res.ConsolidatedAmount.ToString("N0")</span></p>
+                    <ul>
+                        @foreach (var r in res.Reasons) { <li>@TextosDeCartera.RazonDeEnrutamiento(r.Kind) (@r.LevelCode): @r.Detail</li> }
+                    </ul>
+                    @if (res.NonExceptionable.Count > 0)
+                    {
+                        <p class="aviso aviso-alerta">No se exceptúan en ningún nivel: @string.Join(", ", res.NonExceptionable.Select(TextosDeCartera.NoExceptuable)).</p>
+                    }
+                }
+            </IndicadorDeCarga>
+        </div>
+    }
+    else
+    {
+        <div class="toolbar">
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_cargaMontos.Activa" OnClick="@CargarMontosAsync">Actualizar</SfButton>
+            <PermissionGate Required="Lending.Attributions.Manage">
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@AbrirMonto">Fijar monto</SfButton>
+            </PermissionGate>
+        </div>
+        <IndicadorDeCarga Cargando="@_cargaMontos.Activa">
+            <p class="texto-apoyo">El límite efectivo de un usuario es el mayor de sus roles activos que conceden el permiso; un rol que lo concede sin fila no tiene límite.</p>
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Rol</th><th>Atribución</th><th class="numero">Monto máximo</th><th>Vigencia</th><th>Motivo</th><th>Registró</th></tr></thead>
+                    <tbody>
+                        @foreach (var l in _montos)
+                        {
+                            <tr>
+                                <td>@l.Role.Name</td>
+                                <td>@l.PermissionCode</td>
+                                <td class="numero">@(l.MaxAmount?.ToString("N0") ?? "Sin límite") @l.Currency</td>
+                                <td>@l.ValidFrom.ToString("dd/MM/yyyy") – @(l.ValidTo?.ToString("dd/MM/yyyy") ?? "vigente")</td>
+                                <td>@l.Reason</td>
+                                <td>@l.CreatedBy</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            @if (_montos.Count == 0) { <p class="texto-tenue">Ningún rol tiene monto fijado: quien tenga el permiso no tiene límite.</p> }
+        </IndicadorDeCarga>
+    }
+</div>
+
+<SfDialog @bind-Visible="_mostrarEditor" Header="Nueva versión de la matriz" Width="1100px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Publicando…">
+                <p class="texto-apoyo">Se publica la versión completa: niveles y reglas. La vigente rige hasta la víspera de la nueva.</p>
+                <div class="form-grid">
+                    <label class="campo">Desde * <input type="date" class="e-input" value="@_desde.ToString("yyyy-MM-dd")" @onchange="@(e => _desde = LeerFecha(e.Value) ?? _desde)" /></label>
+                    <label class="campo campo-ancho">Fuente (acta o acuerdo) <input class="e-input" @bind="_fuente" maxlength="200" /></label>
+                    <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" maxlength="500" /></label>
+                </div>
+                <h4>Niveles</h4>
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th>Código</th><th>Nombre</th><th class="numero">Rango</th><th>Clase</th><th>Permiso (individual)</th><th>Órgano (colegiado)</th><th class="numero">Tope</th><th>Excepciones</th><th>Consejo</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var n in _niveles)
+                            {
+                                var nivel = n;
+                                <tr>
+                                    <td><input class="e-input" @bind="nivel.Code" maxlength="20" /></td>
+                                    <td><input class="e-input" @bind="nivel.Name" maxlength="100" /></td>
+                                    <td><input class="e-input" type="number" @bind="nivel.Order" /></td>
+                                    <td>
+                                        <select class="e-input" @bind="nivel.Kind">
+                                            @foreach (var k in TextosDeCartera.ClasesDeNivel) { <option value="@k.Valor">@k.Texto</option> }
+                                        </select>
+                                    </td>
+                                    <td><input class="e-input" @bind="nivel.PermissionCode" disabled="@(nivel.Kind != 1)" /></td>
+                                    <td>
+                                        <select class="e-input" @bind="nivel.GoverningBody" disabled="@(nivel.Kind != 2)">
+                                            <option value="">—</option>
+                                            @foreach (var o in _organos) { <option value="@o.PublicId">@o.Code · @o.Name</option> }
+                                        </select>
+                                    </td>
+                                    <td><input class="e-input" type="number" min="0" @bind="nivel.Ceiling" /></td>
+                                    <td><input type="checkbox" @bind="nivel.IsExceptionLevel" /></td>
+                                    <td><input type="checkbox" @bind="nivel.IsBoardLevel" /></td>
+                                    <td><SfButton CssClass="e-flat e-small" IconCss="e-icons e-trash" OnClick="@(() => _niveles.Remove(nivel))" /></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                <SfButton CssClass="e-flat" IconCss="e-icons e-plus" OnClick="@(() => _niveles.Add(new NivelEditable { Order = _niveles.Count + 1, Kind = 1 }))">Agregar nivel</SfButton>
+
+                <h4>Reglas</h4>
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th class="numero">Orden</th><th>Sujeto</th><th class="numero">Monto desde</th><th class="numero">Monto hasta</th><th class="numero">Mora desde</th><th>Mecanismo</th><th>Causa</th><th>Excepción</th><th>Nivel mínimo</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var r in _reglas)
+                            {
+                                var regla = r;
+                                <tr>
+                                    <td><input class="e-input" type="number" @bind="regla.Order" /></td>
+                                    <td>
+                                        <select class="e-input" @bind="regla.Subject">
+                                            @foreach (var s in TextosDeCartera.Sujetos) { <option value="@s.Codigo">@s.Texto</option> }
+                                        </select>
+                                    </td>
+                                    <td><input class="e-input" type="number" min="0" @bind="regla.MinAmount" /></td>
+                                    <td><input class="e-input" type="number" min="0" @bind="regla.MaxAmount" /></td>
+                                    <td><input class="e-input" type="number" min="0" @bind="regla.MinDaysPastDue" /></td>
+                                    <td>
+                                        <select class="e-input" @bind="regla.NoveltyMechanism" disabled="@(regla.Subject != "Novelty")">
+                                            <option value="">Cualquiera</option>
+                                            @foreach (var m in TextosDeCartera.MecanismosDeNovedad) { <option value="@m.Valor">@m.Texto</option> }
+                                        </select>
+                                    </td>
+                                    <td>
+                                        <select class="e-input" @bind="regla.NoveltyCause" disabled="@(regla.Subject != "Novelty")">
+                                            <option value="">Cualquiera</option>
+                                            @foreach (var c in TextosDeCartera.CausasDeNovedad) { <option value="@c.Valor">@c.Texto</option> }
+                                        </select>
+                                    </td>
+                                    <td><input type="checkbox" @bind="regla.PolicyException" /></td>
+                                    <td>
+                                        <select class="e-input" @bind="regla.MinimumLevelCode">
+                                            <option value="">—</option>
+                                            @foreach (var n in _niveles.Where(n => !string.IsNullOrWhiteSpace(n.Code))) { <option value="@n.Code">@n.Code</option> }
+                                        </select>
+                                    </td>
+                                    <td><SfButton CssClass="e-flat e-small" IconCss="e-icons e-trash" OnClick="@(() => _reglas.Remove(regla))" /></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                <SfButton CssClass="e-flat" IconCss="e-icons e-plus" OnClick="@(() => _reglas.Add(new ReglaEditable { Order = _reglas.Count + 1 }))">Agregar regla</SfButton>
+                <p class="texto-tenue">Las demás condiciones de una regla copiada (línea, modalidad, plazo, garantía, puntaje) se conservan tal como estaban.</p>
+
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(_motivo) || _niveles.Count == 0)" OnClick="@PublicarAsync">Publicar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarEditor = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarMonto" Header="Fijar el monto de una atribución" Width="560px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Registrando…">
+                <div class="form-grid">
+                    <label class="campo">Rol *
+                        <select class="e-input" @bind="_rol">
+                            <option value="">Elija…</option>
+                            @foreach (var r in _roles) { <option value="@r.PublicId">@r.Name</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Atribución *
+                        <select class="e-input" @bind="_permisoDeMonto">
+                            @foreach (var p in GobiernoDeCarteraClient.PermisosLimitables) { <option value="@p">@p</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Monto máximo (vacío = sin límite) <input class="e-input" type="number" min="0" @bind="_montoMaximo" /></label>
+                    <label class="campo">Desde * <input type="date" class="e-input" value="@_desdeMonto.ToString("yyyy-MM-dd")" @onchange="@(e => _desdeMonto = LeerFecha(e.Value) ?? _desdeMonto)" /></label>
+                    <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivoMonto" maxlength="500" /></label>
+                </div>
+                @if (_roles.Count == 0) { <p class="texto-tenue">No se pudieron leer los roles (exige ver roles de Seguridad).</p> }
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || _rol is null || string.IsNullOrWhiteSpace(_motivoMonto))" OnClick="@FijarMontoAsync">Registrar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarMonto = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new(), _vistaPrevia = new(), _cargaMontos = new(), _guardado = new();
+    private ClaveDeOperacion _clave = new();
+    private int _pestana;
+    private bool _conHistoria, _mostrarEditor, _mostrarMonto, _montosCargados;
+    private List<MatrizDeAtribucionesDto> _matrices = [];
+    private List<OrganoEnListaDto> _organos = [];
+    private List<MontoMaximoDto> _montos = [];
+    private List<RolDeCooperativaDto> _roles = [];
+    private string? _error, _fuente, _motivo, _motivoMonto, _prevError;
+
+    // Editor de la versión nueva.
+    private List<NivelEditable> _niveles = [];
+    private List<ReglaEditable> _reglas = [];
+    private DateOnly _desde = DateOnly.FromDateTime(DateTime.Today).AddDays(1);
+
+    // Vista previa.
+    private string _prevSujeto = "CreditApplication";
+    private decimal _prevMonto;
+    private int? _prevPlazo, _prevMora;
+    private decimal? _prevPuntaje;
+    private int _prevGarantia;
+    private bool _prevExcepcion;
+    private DateOnly? _prevFecha;
+    private PersonSearchPicker.PersonSearchItem? _prevPersona;
+    private VistaPreviaDeAtribucionDto? _resultado;
+
+    // Montos.
+    private Guid? _rol;
+    private string _permisoDeMonto = GobiernoDeCarteraClient.PermisosLimitables[0];
+    private decimal? _montoMaximo;
+    private DateOnly _desdeMonto = DateOnly.FromDateTime(DateTime.Today);
+
+    protected override async Task OnInitializedAsync() => await CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Gobierno.MatricesAsync(conHistoria: _conHistoria);
+        if (!r.IsSuccess) { _matrices = []; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo leer la matriz de atribuciones."); return; }
+        _matrices = [.. (r.Value ?? []).OrderByDescending(m => m.Version)];
+    }
+
+    private async Task CambiarHistoriaAsync(bool valor)
+    {
+        _conHistoria = valor;
+        await CargarAsync();
+    }
+
+    private static string Condiciones(CondicionesDeReglaDto c)
+    {
+        var partes = new List<string>();
+        if (c.MinConsolidatedAmount is { } min) partes.Add($"monto ≥ {min:N0}");
+        if (c.MaxConsolidatedAmount is { } max) partes.Add($"monto ≤ {max:N0}");
+        if (c.MinTermMonths is { } pmin) partes.Add($"plazo ≥ {pmin} meses");
+        if (c.MaxTermMonths is { } pmax) partes.Add($"plazo ≤ {pmax} meses");
+        if (c.CollateralKind is { } g) partes.Add($"garantía {TextosDeCartera.Garantia(g)}");
+        if (c.ModalityCode is { } mod) partes.Add($"modalidad {mod}");
+        if (c.CreditLinePublicId is not null) partes.Add("una línea");
+        if (c.ScoreBelowMinimum == true) partes.Add("puntaje bajo el mínimo");
+        if (c.HasWarnings == true) partes.Add("con alertas");
+        if (c.PolicyException == true) partes.Add("excepción a la política");
+        if (c.MinDaysPastDue is { } dmin) partes.Add($"mora ≥ {dmin} días");
+        if (c.MaxDaysPastDue is { } dmax) partes.Add($"mora ≤ {dmax} días");
+        if (c.NoveltyMechanism is { } mec) partes.Add($"mecanismo {TextosDeCartera.MecanismoDeNovedad(mec)}");
+        if (c.NoveltyCause is { } causa) partes.Add($"causa {TextosDeCartera.CausaDeNovedad(causa)}");
+        return partes.Count == 0 ? "Siempre" : string.Join(", ", partes);
+    }
+
+    private async Task AbrirEditor()
+    {
+        var vigente = _matrices.FirstOrDefault(m => m.ValidTo is null) ?? _matrices.FirstOrDefault();
+        _niveles = vigente?.Levels.OrderBy(n => n.Order).Select(n => new NivelEditable
+        {
+            Code = n.Code, Name = n.Name, Order = n.Order, Kind = n.Kind, PermissionCode = n.PermissionCode, GoverningBody = n.GoverningBody?.PublicId,
+            Ceiling = n.ConsolidatedAmountCeiling, IsExceptionLevel = n.IsExceptionLevel, IsBoardLevel = n.IsBoardLevel,
+        }).ToList() ?? [];
+        _reglas = vigente?.Rules.OrderBy(r => r.Order).Select(r => new ReglaEditable
+        {
+            Order = r.Order, Subject = r.Subject, MinimumLevelCode = r.MinimumLevelCode, Original = r.Conditions,
+            MinAmount = r.Conditions.MinConsolidatedAmount, MaxAmount = r.Conditions.MaxConsolidatedAmount,
+            MinDaysPastDue = r.Conditions.MinDaysPastDue, PolicyException = r.Conditions.PolicyException == true,
+            NoveltyMechanism = r.Conditions.NoveltyMechanism, NoveltyCause = r.Conditions.NoveltyCause,
+        }).ToList() ?? [];
+        _desde = DateOnly.FromDateTime(DateTime.Today).AddDays(1);
+        _fuente = vigente?.Source;
+        _motivo = _error = null;
+        _clave = new ClaveDeOperacion();
+        _mostrarEditor = true;
+        var organos = await Gobierno.OrganosAsync();
+        _organos = organos.IsSuccess ? [.. organos.Value ?? []] : [];
+    }
+
+    private async Task PublicarAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_motivo)) return;
+        var niveles = _niveles.Select(n => new NivelDeAtribucionRequest(n.Code.Trim().ToUpperInvariant(), n.Name.Trim(), n.Order, n.Kind,
+            n.Kind == 1 && !string.IsNullOrWhiteSpace(n.PermissionCode) ? n.PermissionCode.Trim() : null, n.Kind == 2 ? n.GoverningBody : null, n.Ceiling,
+            n.IsExceptionLevel, n.IsBoardLevel)).ToList();
+        var reglas = _reglas.Select(r => new ReglaDeAtribucionRequest(r.Order, r.Subject, r.MinimumLevelCode, (r.Original ?? new CondicionesDeReglaDto()) with
+        {
+            MinConsolidatedAmount = r.MinAmount,
+            MaxConsolidatedAmount = r.MaxAmount,
+            MinDaysPastDue = r.MinDaysPastDue,
+            PolicyException = r.PolicyException ? true : null,
+            NoveltyMechanism = r.Subject == "Novelty" ? r.NoveltyMechanism : null,
+            NoveltyCause = r.Subject == "Novelty" ? r.NoveltyCause : null,
+        })).ToList();
+        using var carga = _guardado.Iniciar();
+        _error = null;
+        var r = await Gobierno.PublicarMatrizAsync(new PublicarMatrizRequest(_desde, _motivo.Trim(), string.IsNullOrWhiteSpace(_fuente) ? null : _fuente.Trim(),
+            niveles, reglas), _clave);
+        if (!r.IsSuccess) { _error = r.ErrorMessage ?? "No se pudo publicar la matriz."; return; }
+        _mostrarEditor = false;
+        await Notification.SuccessAsync($"Matriz versión {r.Value?.Version} publicada desde el {_desde:dd/MM/yyyy}.");
+        await CargarAsync();
+    }
+
+    private async Task VistaPreviaAsync()
+    {
+        using var carga = _vistaPrevia.Iniciar();
+        _prevError = null;
+        _resultado = null;
+        var r = await Gobierno.VistaPreviaDeAtribucionAsync(new VistaPreviaDeAtribucionRequest(_prevSujeto, _prevMonto, null, _prevPersona?.PublicId, _prevPlazo,
+            _prevGarantia == 0 ? null : [_prevGarantia], _prevPuntaje, null, _prevMora, null, _prevExcepcion, _prevFecha));
+        if (!r.IsSuccess) { _prevError = r.ErrorMessage ?? "No se pudo enrutar."; return; }
+        _resultado = r.Value;
+    }
+
+    private async Task AbrirMontosAsync()
+    {
+        _pestana = 2;
+        if (!_montosCargados) await CargarMontosAsync();
+    }
+
+    private async Task CargarMontosAsync()
+    {
+        using var carga = _cargaMontos.Iniciar();
+        var r = await Gobierno.MontosAsync();
+        if (!r.IsSuccess) { _montos = []; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer los montos."); return; }
+        _montos = [.. (r.Value ?? []).OrderBy(m => m.Role.Name).ThenBy(m => m.PermissionCode).ThenByDescending(m => m.ValidFrom)];
+        _montosCargados = true;
+    }
+
+    private async Task AbrirMonto()
+    {
+        _rol = null;
+        _montoMaximo = null;
+        _motivoMonto = _error = null;
+        _desdeMonto = DateOnly.FromDateTime(DateTime.Today);
+        _clave = new ClaveDeOperacion();
+        _mostrarMonto = true;
+        if (_roles.Count == 0)
+        {
+            var roles = await Gobierno.RolesAsync();
+            _roles = roles.IsSuccess ? [.. (roles.Value?.Items ?? []).Where(r => r.IsActive).OrderBy(r => r.Name)] : [];
+        }
+    }
+
+    private async Task FijarMontoAsync()
+    {
+        if (_rol is not { } rol || string.IsNullOrWhiteSpace(_motivoMonto)) return;
+        using var carga = _guardado.Iniciar();
+        _error = null;
+        var r = await Gobierno.FijarMontoAsync(new FijarMontoMaximoRequest(rol, _permisoDeMonto, _montoMaximo, _desdeMonto, _motivoMonto.Trim()), _clave);
+        if (!r.IsSuccess) { _error = r.ErrorMessage ?? "No se pudo fijar el monto."; return; }
+        _mostrarMonto = false;
+        await Notification.SuccessAsync("Monto registrado.");
+        await CargarMontosAsync();
+    }
+
+    private static DateOnly? LeerFecha(object? valor) =>
+        DateOnly.TryParse(valor?.ToString(), CultureInfo.InvariantCulture, out var f) ? f : null;
+
+    /// <summary>Un nivel en edición.</summary>
+    private sealed class NivelEditable
+    {
+        public string Code { get; set; } = "";
+        public string Name { get; set; } = "";
+        public int Order { get; set; }
+        public int Kind { get; set; } = 1;
+        public string? PermissionCode { get; set; }
+        public Guid? GoverningBody { get; set; }
+        public decimal? Ceiling { get; set; }
+        public bool IsExceptionLevel { get; set; }
+        public bool IsBoardLevel { get; set; }
+    }
+
+    /// <summary>Una regla en edición; <see cref="Original"/> conserva las condiciones que la pantalla no edita.</summary>
+    private sealed class ReglaEditable
+    {
+        public int Order { get; set; }
+        public string Subject { get; set; } = "CreditApplication";
+        public string MinimumLevelCode { get; set; } = "";
+        public decimal? MinAmount { get; set; }
+        public decimal? MaxAmount { get; set; }
+        public int? MinDaysPastDue { get; set; }
+        public bool PolicyException { get; set; }
+        public int? NoveltyMechanism { get; set; }
+        public int? NoveltyCause { get; set; }
+        public CondicionesDeReglaDto? Original { get; set; }
+    }
+}

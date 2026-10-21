@@ -1,0 +1,479 @@
+@page "/cartera/captaciones/migracion"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Globalization
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Inventario
+@using IngenIA365ERP.Shared.Services.Nomina
+@inject CaptacionesClient Captaciones
+@inject GobiernoDeCarteraClient Gobierno
+@inject INotificationService Notification
+@inject DescargaDeArchivos Descargas
+
+<PageTitle>Saldos iniciales de captaciones y aportes - IngenIA365ERP</PageTitle>
+
+@* Feature 014, US9 (T159; quickstart US9; contracts/api.md §16; plantillas-y-archivos.md §1.1, §4): la carga de los saldos iniciales de aportes o de
+   captaciones al corte, una naturaleza a la vez. Por parte se descarga la plantilla (encabezados en la fila 1) y se suben uno o varios archivos con su
+   revisión previa —fila y columna— y todo o nada; «Reemplazar la parte» deja sin efecto los archivos anteriores; en las cuentas de aportes, «Tomar de los
+   saldos cargados». Aplicar valida entre partes y calcula el cuadre contra Contabilidad; las cuentas nacen al activar (/cartera/captaciones/activacion).
+   Las pestañas «Cuadre» (Lending.Reconciliation.View; sin titulares, con el cotejo de las cifras de referencia), «Cifras de referencia» (los totales que
+   entrega la cooperativa) y «Diferencias» (aceptar con el punto de una sesión cerrada). Ninguna pantalla nombra al sistema anterior. *@
+<PermissionGate Required="Lending.Deposits.Migration" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Saldos iniciales de captaciones y aportes</h3>
+        <div class="toolbar">
+            <label class="campo">Naturaleza
+                <select class="e-input" value="@_naturaleza" @onchange="@(async e => { _naturaleza = e.Value?.ToString() ?? CaptacionesClient.Captaciones; _actual = null; await CargarListaAsync(); })">
+                    <option value="@CaptacionesClient.Captaciones">Captaciones</option>
+                    <option value="@CaptacionesClient.Aportes">Aportes</option>
+                </select>
+            </label>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_cargaLista.Activa" OnClick="@CargarListaAsync">Actualizar</SfButton>
+            <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@(() => { _nueva = true; _corte = null; _notas = null; })">Carga nueva</SfButton>
+        </div>
+    </div>
+    <p class="texto-apoyo">Cada cuenta nace al activar con un saldo inicial por concepto fechado al corte, sin hechos contables: Contabilidad ya tiene esos saldos. Una carga aplicada que se reemplaza no se borra y sirve de ensayo.</p>
+
+    <IndicadorDeCarga Cargando="@_cargaLista.Activa">
+        <div class="tabla-desplazable">
+            <table class="data-grid">
+                <thead><tr><th>Carga</th><th>Corte</th><th>Estado</th><th class="numero">Cuentas</th><th>Plazo para activar</th><th class="numero">Diferencias pendientes</th><th class="numero">Aceptadas</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var c in _cargas)
+                    {
+                        var carga = c;
+                        <tr>
+                            <td>@carga.Number</td>
+                            <td>@carga.CutoffDate.ToString("dd/MM/yyyy")</td>
+                            <td>@TextosDeMigracion.EstadoDeCarga(carga.Status)</td>
+                            <td class="numero">@carga.AccountCount.ToString("N0")</td>
+                            <td>@(carga.ActivationDeadline?.ToString("dd/MM/yyyy"))</td>
+                            <td class="numero">@carga.Differences.Pending</td>
+                            <td class="numero">@carga.Differences.Accepted</td>
+                            <td><SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirAsync(carga.PublicId))">Abrir</SfButton></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (_cargas.Count == 0) { <p class="texto-tenue">Todavía no hay cargas de @TextosDeMigracionDeCaptaciones.Naturaleza(Naturaleza).ToLowerInvariant(). «Carga nueva» pide la fecha de corte.</p> }
+    </IndicadorDeCarga>
+
+    @if (_actual is { } a)
+    {
+        <div class="info-card">
+            <div class="toolbar">
+                <h4>Carga @a.Number de @TextosDeMigracionDeCaptaciones.Naturaleza(a.Nature).ToLowerInvariant() — corte @a.CutoffDate.ToString("dd/MM/yyyy") — @TextosDeMigracion.EstadoDeCarga(a.Status)</h4>
+                @if (a.Status == 1)
+                {
+                    <SfButton CssClass="e-primary" IconCss="e-icons e-check" OnClick="@(() => { _aplicar = true; _motivo = null; _erroresEntrePartes = []; })">Aplicar la carga…</SfButton>
+                }
+            </div>
+            @if (a.Status == 2)
+            {
+                <p class="texto-apoyo">
+                    Aplicada el @(a.AppliedAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm")) por @a.AppliedBy. Se activa el @a.CutoffDate.AddDays(1).ToString("dd/MM/yyyy") y a más
+                    tardar el @(a.ActivationDeadline?.ToString("dd/MM/yyyy")). Cuadre: @(a.IsBalanced ? "sin diferencias pendientes" : "con diferencias pendientes").
+                </p>
+            }
+            @if (a.Warnings.Count > 0)
+            {
+                <ul class="texto-apoyo">@foreach (var w in a.Warnings) { <li>@w.Part, fila @w.Row: @w.Message</li> }</ul>
+            }
+            <div class="toolbar">
+                <SfButton CssClass="@(_pestana == 0 ? "e-primary" : "e-outline")" OnClick="@(() => CambiarAsync(0))">Partes</SfButton>
+                <PermissionGate Required="Lending.Reconciliation.View">
+                    <SfButton CssClass="@(_pestana == 1 ? "e-primary" : "e-outline")" OnClick="@(() => CambiarAsync(1))">Cuadre</SfButton>
+                </PermissionGate>
+                <SfButton CssClass="@(_pestana == 2 ? "e-primary" : "e-outline")" OnClick="@(() => CambiarAsync(2))">Cifras de referencia</SfButton>
+                <SfButton CssClass="@(_pestana == 3 ? "e-primary" : "e-outline")" OnClick="@(() => CambiarAsync(3))">Diferencias</SfButton>
+            </div>
+
+            @if (_pestana == 0)
+            {
+                <IndicadorDeCarga Cargando="@_cargaDetalle.Activa">
+                    <div class="tabla-desplazable">
+                        <table class="data-grid">
+                            <thead><tr><th>Parte</th><th>Obligatoria</th><th class="numero">Archivos vigentes</th><th class="numero">Filas</th><th>Disponible</th></tr></thead>
+                            <tbody>
+                                @foreach (var p in a.PartsSummary)
+                                {
+                                    <tr>
+                                        <td>@p.Name</td>
+                                        <td>@(p.Required ? "Sí" : "No")</td>
+                                        <td class="numero">@p.Batches</td>
+                                        <td class="numero">@p.Rows.ToString("N0")</td>
+                                        <td>@(p.Available ? "Sí" : $"Llega con {p.AvailableWith ?? "una entrega posterior"}")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    @if (a.Totals.Count > 0)
+                    {
+                        <h4>Totales cargados</h4>
+                        <table class="data-grid">
+                            <thead><tr><th>Línea</th><th>Concepto</th><th class="numero">Cuentas</th><th class="numero">Valor</th></tr></thead>
+                            <tbody>@foreach (var t in a.Totals) { <tr><td>@t.LineCode</td><td>@TextosDeMigracionDeCaptaciones.Concepto(t.Concept)</td><td class="numero">@t.Accounts</td><td class="numero">@t.Amount.ToString("N2")</td></tr> }</tbody>
+                        </table>
+                    }
+                </IndicadorDeCarga>
+
+                @if (a.Status == 1)
+                {
+                    <div class="form-grid">
+                        <label class="campo">Parte
+                            <select class="e-input" @bind="_parte">
+                                @foreach (var p in a.PartsSummary.Where(p => p.Available)) { <option value="@p.Part">@p.Name</option> }
+                            </select>
+                        </label>
+                        <label class="campo-check"><input type="checkbox" @bind="_reemplazar" /> Reemplazar la parte (deja sin efecto los archivos anteriores)</label>
+                    </div>
+                    @if (_parte == "contribution-accounts")
+                    {
+                        <IndicadorDeCarga Cargando="@_descargaDeSaldos.Activa" Compacto="true">
+                            <div class="toolbar">
+                                <SfButton CssClass="e-outline" IconCss="e-icons e-download" Disabled="@_descargaDeSaldos.Activa" OnClick="@TomarDeLosSaldosAsync">Tomar de los saldos cargados</SfButton>
+                                <span class="texto-tenue">La plantilla llena con los saldos de aportes registrados con la fecha del corte: revísela, complétela y súbala.</span>
+                            </div>
+                        </IndicadorDeCarga>
+                    }
+                    @if (!string.IsNullOrEmpty(_parte))
+                    {
+                        <ImportarPlantilla @key="@($"{a.PublicId}-{_parte}-{_reemplazar}")" RutaBase="@CaptacionesClient.RutaDeParte(a.PublicId, _parte)"
+                                           PermisoDeDescarga="Lending.Deposits.Migration" PermisoDeImportacion="Lending.Deposits.Migration"
+                                           PermisoDeDescargaConDatos="Lending.Reports.ExportPersonalData"
+                                           QueryAdicional="@(_reemplazar ? "replace=true" : null)" Aplicado="@(_ => RecargarActualAsync())" />
+                    }
+                }
+            }
+            else if (_pestana == 1)
+            {
+                <PermissionGate Required="Lending.Reconciliation.View" MostrarAviso="true">
+                    <IndicadorDeCarga Cargando="@_cargaCuadre.Activa" Texto="Leyendo el cuadre…">
+                        @if (_cuadre is { } q)
+                        {
+                            <p class="texto-apoyo">Versión @q.CheckVersion del cuadre al @q.CutoffDate.ToString("dd/MM/yyyy"). Los valores van en el sentido de la Cartera; sin titulares.</p>
+                            <div class="tabla-desplazable">
+                                <table class="data-grid">
+                                    <thead><tr><th>Concepto</th><th>Línea</th><th>Clase</th><th>Marca</th><th>Cuentas contables</th><th class="numero">Cartera</th><th class="numero">Contabilidad</th><th class="numero">Diferencia</th></tr></thead>
+                                    <tbody>
+                                        @foreach (var f in q.Rows)
+                                        {
+                                            <tr class="@(f.Difference != 0 ? "texto-alerta" : "")">
+                                                <td>@TextosDeMigracionDeCaptaciones.Concepto(f.Concept ?? f.Family)</td>
+                                                <td>@f.Line</td>
+                                                <td>@(f.DepositClass ?? f.ContributionClass)</td>
+                                                <td>@f.AccountFlag</td>
+                                                <td>@(f.Unresolved ? "Sin regla en la matriz" : string.Join(", ", f.Accounts.Select(c => c.Code)))</td>
+                                                <td class="numero">@f.Lending.ToString("N2")</td>
+                                                <td class="numero">@f.Accounting.ToString("N2")</td>
+                                                <td class="numero">@f.Difference.ToString("N2")</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                            @if (q.Rows.Count == 0) { <p class="texto-tenue">El cuadre se calcula al aplicar la carga.</p> }
+                            @if (q.ReferenceFigures.Any(r => r.Reference is not null))
+                            {
+                                <h4>Cotejo con las cifras de referencia</h4>
+                                <TablaDeCotejo Filas="@q.ReferenceFigures" />
+                            }
+                        }
+                    </IndicadorDeCarga>
+                </PermissionGate>
+            }
+            else if (_pestana == 2)
+            {
+                <IndicadorDeCarga Cargando="@_cargaCifras.Activa" Texto="Leyendo las cifras de referencia…">
+                    <p class="texto-apoyo">Los totales por línea y concepto que entrega la cooperativa (su balance de prueba o su reporte de saldos al corte). Se cotejan con lo cargado antes de aplicar y en el cuadre.</p>
+                    @if (_cifras is { } cf)
+                    {
+                        <TablaDeCotejo Filas="@cf.Comparison" />
+                        <p class="texto-apoyo">Cargado: @cf.TotalLoaded.ToString("N2") · Referencia: @(cf.TotalReference?.ToString("N2") ?? "sin cifras")</p>
+                    }
+                    @if (a.Status is 1 or 2)
+                    {
+                        <h4>Registrar las cifras</h4>
+                        <table class="data-grid">
+                            <thead><tr><th>Línea</th><th>Concepto</th><th class="numero">Valor</th><th>Fuente</th><th></th></tr></thead>
+                            <tbody>
+                                @foreach (var fila in _edicion)
+                                {
+                                    var f = fila;
+                                    <tr>
+                                        <td><input class="e-input" @bind="f.Linea" maxlength="10" /></td>
+                                        <td>
+                                            <select class="e-input" @bind="f.Concepto">
+                                                @foreach (var c in TextosDeMigracionDeCaptaciones.ConceptosDe(a.Nature)) { <option value="@c">@TextosDeMigracionDeCaptaciones.Concepto(c)</option> }
+                                            </select>
+                                        </td>
+                                        <td><input class="e-input numero" @bind="f.Valor" /></td>
+                                        <td><input class="e-input" @bind="f.Fuente" maxlength="120" /></td>
+                                        <td><SfButton CssClass="e-flat e-small" OnClick="@(() => _edicion.Remove(f))">Quitar</SfButton></td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                        <div class="toolbar">
+                            <SfButton CssClass="e-outline" IconCss="e-icons e-plus" OnClick="@(() => _edicion.Add(new FilaDeCifra { Concepto = TextosDeMigracionDeCaptaciones.ConceptosDe(a.Nature)[0] }))">Agregar cifra</SfButton>
+                            <SfButton CssClass="e-primary" Disabled="@_guardandoCifras.Activa" OnClick="@GuardarCifrasAsync">Guardar las cifras</SfButton>
+                        </div>
+                        @if (_erroresDeCifras.Count > 0) { <ul class="aviso aviso-error">@foreach (var e in _erroresDeCifras) { <li>@e</li> }</ul> }
+                    }
+                </IndicadorDeCarga>
+            }
+            else
+            {
+                <IndicadorDeCarga Cargando="@_cargaDiferencias.Activa">
+                    @if (_cuadre is { } q)
+                    {
+                        <div class="tabla-desplazable">
+                            <table class="data-grid">
+                                <thead><tr><th></th><th>Concepto</th><th>Cuentas</th><th class="numero">Cartera</th><th class="numero">Contabilidad</th><th class="numero">Diferencia</th><th>Aceptada</th></tr></thead>
+                                <tbody>
+                                    @foreach (var d in q.Differences)
+                                    {
+                                        var dif = d;
+                                        <tr>
+                                            <td>@if (dif.AcceptedAt is null) { <input type="checkbox" checked="@_elegidas.Contains(dif.PublicId)" @onchange="@(e => Elegir(dif.PublicId, e.Value is true))" /> }</td>
+                                            <td>@TextosDeMigracionDeCaptaciones.Concepto(dif.Concept ?? "")</td>
+                                            <td>@dif.Accounts</td>
+                                            <td class="numero">@dif.Lending.ToString("N2")</td>
+                                            <td class="numero">@dif.Accounting.ToString("N2")</td>
+                                            <td class="numero">@dif.Difference.ToString("N2")</td>
+                                            <td>@(dif.AcceptedAt is null ? "" : $"{dif.AcceptedAt.Value.ToLocalTime():dd/MM/yyyy}: {dif.AcceptanceReason}")</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                        @if (q.Differences.Count == 0) { <p class="texto-tenue">Sin diferencias en la versión vigente del cuadre.</p> }
+                        @if (a.Status == 2 && q.Differences.Any(d => d.AcceptedAt is null))
+                        {
+                            <PermissionGate Required="Lending.Migration.AcceptDifferences">
+                                <div class="form-grid">
+                                    <label class="campo campo-ancho">Punto del acta *
+                                        <select class="e-input" @bind="_punto">
+                                            <option value="">Elija el punto…</option>
+                                            @foreach (var p in _puntos) { <option value="@p.SessionItemPublicId">@($"{p.Session.Body.Name} · acta {p.Session.Number} · {p.Title}")</option> }
+                                        </select>
+                                    </label>
+                                    <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivoDeAceptacion" maxlength="400" /></label>
+                                </div>
+                                @if (_puntos.Count == 0) { <p class="texto-tenue">No hay puntos de actas cerradas sobre esta carga (Actas y órganos).</p> }
+                                <SfButton CssClass="e-primary" Disabled="@(_elegidas.Count == 0 || !Guid.TryParse(_punto, out _) || string.IsNullOrWhiteSpace(_motivoDeAceptacion) || _aceptando.Activa)"
+                                          OnClick="@AceptarAsync">Aceptar las diferencias elegidas</SfButton>
+                            </PermissionGate>
+                        }
+                    }
+                </IndicadorDeCarga>
+            }
+        </div>
+    }
+</div>
+
+<SfDialog @bind-Visible="_nueva" Header="Carga nueva" Width="480px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_creando.Activa" Texto="Creando la carga…">
+                <p class="texto-apoyo">Una carga de @TextosDeMigracionDeCaptaciones.Naturaleza(Naturaleza).ToLowerInvariant() con su fecha de corte. Un borrador anterior de la misma naturaleza queda reemplazado.</p>
+                <label class="campo">Fecha de corte * <input type="date" class="e-input" value="@(_corte?.ToString("yyyy-MM-dd"))" @onchange="@(e => _corte = DateOnly.TryParse(e.Value?.ToString(), CultureInfo.InvariantCulture, out var d) ? d : null)" /></label>
+                <label class="campo">Notas <input class="e-input" @bind="_notas" maxlength="300" /></label>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_corte is null || _creando.Activa)" OnClick="@CrearAsync">Crear</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _nueva = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_aplicar" Header="Aplicar la carga" Width="640px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_aplicando.Activa" Texto="Validando entre partes y calculando el cuadre…">
+                <p>Aplicar sólo guarda la carga: valida entre partes (todo o nada) y calcula el cuadre contra Contabilidad. La aplicada anterior de la misma naturaleza queda reemplazada.</p>
+                <label class="campo">Motivo * <input class="e-input" @bind="_motivo" maxlength="400" /></label>
+                @if (_erroresEntrePartes.Count > 0)
+                {
+                    <div class="tabla-desplazable">
+                        <table class="data-grid">
+                            <thead><tr><th>Parte</th><th class="numero">Tanda</th><th class="numero">Fila</th><th>Columna</th><th>Error</th></tr></thead>
+                            <tbody>@foreach (var x in _erroresEntrePartes) { <tr><td>@x.Part</td><td class="numero">@x.Batch</td><td class="numero">@x.Row</td><td>@x.Column</td><td>@x.Message</td></tr> }</tbody>
+                        </table>
+                    </div>
+                }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(string.IsNullOrWhiteSpace(_motivo) || _aplicando.Activa)" OnClick="@AplicarAsync">Aplicar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _aplicar = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _cargaLista = new(), _cargaDetalle = new(), _cargaCuadre = new(), _cargaCifras = new(), _cargaDiferencias = new(),
+        _creando = new(), _aplicando = new(), _aceptando = new(), _guardandoCifras = new(), _descargaDeSaldos = new();
+    private ClaveDeOperacion _claveDeAlta = new(), _claveDeAplicacion = new(), _claveDeAceptacion = new(), _claveDeCifras = new();
+    private string _naturaleza = CaptacionesClient.Captaciones;
+    private List<CargaDeCaptacionesDto> _cargas = [];
+    private CargaDeCaptacionesDto? _actual;
+    private CuadreDeCaptacionesDto? _cuadre;
+    private CifrasDeReferenciaDto? _cifras;
+    private List<PuntoDeActaCerradaDto> _puntos = [];
+    private List<ErrorEntrePartesDto> _erroresEntrePartes = [];
+    private List<string> _erroresDeCifras = [];
+    private readonly HashSet<Guid> _elegidas = [];
+    private List<FilaDeCifra> _edicion = [];
+    private int _pestana;
+    private string? _parte, _motivo, _notas, _punto, _motivoDeAceptacion;
+    private DateOnly? _corte;
+    private bool _nueva, _aplicar, _reemplazar;
+
+    private int Naturaleza => _naturaleza == CaptacionesClient.Aportes ? TextosDeMigracionDeCaptaciones.NaturalezaAportes : TextosDeMigracionDeCaptaciones.NaturalezaCaptaciones;
+
+    /// <summary>Una fila editable de las cifras de referencia.</summary>
+    private sealed class FilaDeCifra
+    {
+        public string? Linea { get; set; }
+        public string Concepto { get; set; } = "";
+        public decimal Valor { get; set; }
+        public string? Fuente { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync() => await CargarListaAsync();
+
+    private async Task CargarListaAsync()
+    {
+        using var carga = _cargaLista.Iniciar();
+        var r = await Captaciones.CargasAsync(_naturaleza);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer las cargas."); return; }
+        _cargas = [.. r.Value ?? []];
+    }
+
+    private async Task AbrirAsync(Guid carga)
+    {
+        using var estado = _cargaDetalle.Iniciar();
+        var r = await Captaciones.CargaAsync(carga);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo abrir la carga."); return; }
+        _actual = r.Value;
+        _parte = _actual?.PartsSummary.FirstOrDefault(p => p.Available)?.Part;
+        _cuadre = null;
+        _cifras = null;
+        _elegidas.Clear();
+        await CambiarAsync(_pestana);
+    }
+
+    private async Task RecargarActualAsync()
+    {
+        if (_actual is { } a) await AbrirAsync(a.PublicId);
+        await CargarListaAsync();
+    }
+
+    private async Task CambiarAsync(int pestana)
+    {
+        _pestana = pestana;
+        if (_actual is not { } a) return;
+        if (pestana is 1 or 3)
+        {
+            using var estado = (pestana == 1 ? _cargaCuadre : _cargaDiferencias).Iniciar();
+            var r = await Captaciones.CuadreAsync(a.PublicId);
+            _cuadre = r.IsSuccess ? r.Value : null;
+            if (!r.IsSuccess) await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo leer el cuadre.");
+            if (pestana == 3)
+            {
+                var puntos = await Gobierno.PuntosDeActasCerradasAsync("ActivationDifferences", sujetoId: a.PublicId);
+                _puntos = puntos.IsSuccess ? [.. puntos.Value?.Items ?? []] : [];
+            }
+        }
+        else if (pestana == 2)
+        {
+            using var estado = _cargaCifras.Iniciar();
+            var r = await Captaciones.CifrasDeReferenciaAsync(a.PublicId);
+            _cifras = r.IsSuccess ? r.Value : null;
+            _edicion = _cifras?.Figures.Select(f => new FilaDeCifra { Linea = f.LineCode, Concepto = f.Concept, Valor = f.Amount, Fuente = f.Source }).ToList() ?? [];
+        }
+    }
+
+    private async Task CrearAsync()
+    {
+        if (_corte is not { } corte) return;
+        using var estado = _creando.Iniciar();
+        var r = await Captaciones.CrearCargaAsync(new CrearCargaDeCaptacionesRequest(_naturaleza, corte, _notas), _claveDeAlta);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo crear la carga."); return; }
+        _claveDeAlta = new ClaveDeOperacion();
+        _nueva = false;
+        await CargarListaAsync();
+        await AbrirAsync(r.Value!.PublicId);
+    }
+
+    private async Task AplicarAsync()
+    {
+        if (_actual is not { } a || string.IsNullOrWhiteSpace(_motivo)) return;
+        using var estado = _aplicando.Iniciar();
+        _erroresEntrePartes = [];
+        var r = await Captaciones.AplicarCargaAsync(a.PublicId, _motivo.Trim(), _claveDeAplicacion);
+        if (!r.IsSuccess)
+        {
+            if (r.Data is { ValueKind: System.Text.Json.JsonValueKind.Object } d && d.TryGetProperty("errors", out var errores))
+                _erroresEntrePartes = System.Text.Json.JsonSerializer.Deserialize<List<ErrorEntrePartesDto>>(errores,
+                    new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web)) ?? [];
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo aplicar la carga.");
+            return;
+        }
+        _claveDeAplicacion = new ClaveDeOperacion();
+        _aplicar = false;
+        await Notification.SuccessAsync(r.Value!.BalanceCheck.IsBalanced ? "Carga aplicada: el cuadre no tiene diferencias." : "Carga aplicada: el cuadre tiene diferencias por aceptar.");
+        await RecargarActualAsync();
+    }
+
+    private async Task TomarDeLosSaldosAsync()
+    {
+        if (_actual is not { } a) return;
+        using var estado = _descargaDeSaldos.Iniciar();
+        var r = await Captaciones.DescargarDesdeSaldosDeAportesAsync(a.PublicId);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo preparar la plantilla."); return; }
+        await Descargas.GuardarAsync(r.Value!.Nombre, r.Value.TipoContenido, r.Value.Contenido);
+    }
+
+    private async Task GuardarCifrasAsync()
+    {
+        if (_actual is not { } a) return;
+        using var estado = _guardandoCifras.Iniciar();
+        _erroresDeCifras = [];
+        var r = await Captaciones.RegistrarCifrasDeReferenciaAsync(a.PublicId, new CifrasDeReferenciaRequest(_edicion
+            .Where(f => !string.IsNullOrWhiteSpace(f.Linea)).Select(f => new CifraDeReferenciaDto(f.Linea!.Trim(), f.Concepto, f.Valor, f.Fuente)).ToList()), _claveDeCifras);
+        if (!r.IsSuccess)
+        {
+            if (r.Data is { ValueKind: System.Text.Json.JsonValueKind.Object } d && d.TryGetProperty("errors", out var errores))
+                _erroresDeCifras = errores.EnumerateArray().Select(e => e.GetString() ?? "").ToList();
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron guardar las cifras.");
+            return;
+        }
+        _claveDeCifras = new ClaveDeOperacion();
+        _cifras = r.Value;
+        await Notification.SuccessAsync("Cifras de referencia guardadas.");
+    }
+
+    private void Elegir(Guid diferencia, bool elegida)
+    {
+        if (elegida) _elegidas.Add(diferencia); else _elegidas.Remove(diferencia);
+    }
+
+    private async Task AceptarAsync()
+    {
+        if (_actual is not { } a || !Guid.TryParse(_punto, out var punto) || string.IsNullOrWhiteSpace(_motivoDeAceptacion)) return;
+        using var estado = _aceptando.Iniciar();
+        var r = await Captaciones.AceptarDiferenciasAsync(a.PublicId, new AceptarDiferenciasRequest(_elegidas.ToList(), punto, _motivoDeAceptacion.Trim()), _claveDeAceptacion);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron aceptar las diferencias."); return; }
+        _claveDeAceptacion = new ClaveDeOperacion();
+        _elegidas.Clear();
+        await Notification.SuccessAsync("Diferencias aceptadas.");
+        await RecargarActualAsync();
+    }
+}

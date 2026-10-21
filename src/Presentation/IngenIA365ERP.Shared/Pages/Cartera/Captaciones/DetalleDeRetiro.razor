@@ -1,0 +1,328 @@
+@page "/cartera/retiros-asociado/{Id:guid}"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Globalization
+@using IngenIA365ERP.Shared.Services.Adjuntos
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Http
+@inject CaptacionesClient Cliente
+@inject CarteraClient Cartera
+@inject AdjuntosClient Adjuntos
+@inject INotificationService Notification
+
+<PageTitle>Retiro de asociado - IngenIA365ERP</PageTitle>
+
+@* Feature 014, US10 (T106; FR-076 a FR-080; contracts/api.md §11, documentos.md §2.8): la ficha del retiro. Radicado: desistir (quien radica) o
+   registrar la decisión del órgano con el PublicId del punto del acta cerrada (quien radicó no decide). Aprobado o por rehacer: la vista previa de la
+   liquidación a una fecha —aportes por clase, ahorros, cruces con la prelación D14, descuento por pérdidas si el acta lo dispuso, devolución y el mínimo
+   irreducible de la entidad— y liquidar con su huella; la devolución sale por orden de giro a Tesorería (la transferencia a otra cuenta llega con K8).
+   Liquidado: las líneas, las órdenes de devolución, la liquidación emitida y, si quedó pendiente, aprobar la devolución (otra persona que quien liquidó). *@
+<PermissionGate Required="Lending.MembershipWithdrawals.File" AnyOf="@Permisos" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>@(_retiro is { } t ? $"Retiro {t.Number} · {t.Person.FullName}" : "Retiro de asociado")</h3>
+        <div class="toolbar">
+            <a href="/cartera/retiros-asociado">Volver a Retiros de asociado</a>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+            @if (_retiro is { } r)
+            {
+                @if (r.Status == TextosDeRetiros.Radicado)
+                {
+                    <PermissionGate Required="Lending.MembershipWithdrawals.File">
+                        <SfButton CssClass="e-outline" OnClick="@(() => Abrir(Dialogo.Desistir))">Desistir</SfButton>
+                    </PermissionGate>
+                    <PermissionGate Required="Lending.MembershipWithdrawals.Approve">
+                        <SfButton CssClass="e-primary" OnClick="@(() => Abrir(Dialogo.Aprobar))">Registrar aprobación</SfButton>
+                        <SfButton CssClass="e-outline" OnClick="@(() => Abrir(Dialogo.Negar))">Registrar negación</SfButton>
+                    </PermissionGate>
+                }
+                @if (r.Status == TextosDeRetiros.Liquidado && Pendiente(r))
+                {
+                    <PermissionGate Required="Lending.MembershipWithdrawals.Approve">
+                        <SfButton CssClass="e-primary" OnClick="@(() => Abrir(Dialogo.Devolucion))">Aprobar devolución</SfButton>
+                    </PermissionGate>
+                }
+                @if (r.Settlement?.DocumentPublicId is { } documento)
+                {
+                    <SfButton CssClass="e-outline" IconCss="e-icons e-download" Disabled="@_accion.Activa" OnClick="@(() => DescargarAsync(documento))">
+                        Liquidación @r.Settlement.DocumentNumber
+                    </SfButton>
+                }
+            }
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        @if (_retiro is { } r)
+        {
+            <div class="info-card">
+                <p>
+                    @r.Person.FullName (@r.Person.DocumentNumber) · cuenta de aportes @r.ContributionAccountNumber · causa: @TextosDeRetiros.Causa(r.Cause)
+                    @(string.IsNullOrWhiteSpace(r.CauseDetail) ? "" : $"({r.CauseDetail})") · radicado el @r.FiledOn.ToString("dd/MM/yyyy")
+                </p>
+                <p><strong>Estado:</strong> @TextosDeRetiros.Estado(r.Status)</p>
+                @if (r.Approval is { } a)
+                {
+                    <p>
+                        Decisión del órgano @(a.SessionNumber is { } n ? $"(acta {n})" : "") el @a.On.ToLocalTime().ToString("dd/MM/yyyy")
+                        @(a.EffectiveDate is { } f ? $"· fecha del retiro {f:dd/MM/yyyy}" : "") @(string.IsNullOrWhiteSpace(a.Reason) ? "" : $"· {a.Reason}")
+                    </p>
+                }
+                @if (r.DesistedAt is { } d) { <p>Desistido el @d.ToLocalTime().ToString("dd/MM/yyyy"): @r.DesistReason</p> }
+                @if (r.ToRedoReason is { } rehacer) { <p class="aviso aviso-alerta">@rehacer</p> }
+            </div>
+
+            @if (r.Settlement is { } s)
+            {
+                <div class="kpi-grid">
+                    <div class="kpi-card"><span class="kpi-value">@Pesos(s.Contributions)</span><span class="kpi-label">Aportes</span></div>
+                    <div class="kpi-card"><span class="kpi-value">@Pesos(s.Savings)</span><span class="kpi-label">Ahorros</span></div>
+                    <div class="kpi-card"><span class="kpi-value">@Pesos(s.Crossed)</span><span class="kpi-label">Cruzado con créditos</span></div>
+                    <div class="kpi-card"><span class="kpi-value">@Pesos(s.LossDeduction)</span><span class="kpi-label">Pérdidas</span></div>
+                    <div class="kpi-card"><span class="kpi-value">@Pesos(s.Refund)</span><span class="kpi-label">Devolución</span></div>
+                </div>
+                @if (s.RefundHeldByInstitutionalMinimum)
+                {
+                    <p class="aviso aviso-alerta">La devolución quedó pendiente: perforaría el mínimo irreducible de la entidad. Se avisó al gerente.</p>
+                }
+                else if (s.RefundDueOn is { } plazo && s.Refund > 0)
+                {
+                    <p class="texto-apoyo">Plazo de la devolución: @plazo.ToString("dd/MM/yyyy").</p>
+                }
+                <h4>Liquidación @s.Version</h4>
+                <TablaDeLineasDeRetiro Lineas="@r.Lines" />
+                @if (r.RefundOrders.Count > 0)
+                {
+                    <h4>Órdenes de devolución</h4>
+                    <div class="tabla-desplazable">
+                        <table class="data-grid">
+                            <thead><tr><th>Orden</th><th>Cuenta</th><th class="numero">Valor</th><th>Estado</th><th>Resultado a más tardar</th></tr></thead>
+                            <tbody>
+                                @foreach (var o in r.RefundOrders)
+                                {
+                                    <tr>
+                                        <td>@o.Number</td><td>@o.AccountNumber</td><td class="numero">@Pesos(o.Amount)</td>
+                                        <td>@TextosDeRetiros.EstadoDeOrden(o.Status)</td><td>@o.ResultDueOn.ToString("dd/MM/yyyy")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            }
+        }
+    </IndicadorDeCarga>
+
+    @if (_retiro is { } porLiquidar && (porLiquidar.Status == TextosDeRetiros.Aprobado || porLiquidar.Status == TextosDeRetiros.PorRehacer))
+    {
+        <PermissionGate Required="Lending.MembershipWithdrawals.Settle">
+            <h4>Liquidar el retiro</h4>
+            <div class="toolbar">
+                <label class="campo">Fecha <input class="e-input" type="date" @bind="_fechaLiquidacion" /></label>
+                <label class="campo"><input type="checkbox" @bind="_conPerdidas" /> Descontar pérdidas (acta)</label>
+                @if (_conPerdidas)
+                {
+                    <label class="campo">Punto del acta <input class="e-input" @bind="_puntoPerdidas" placeholder="PublicId del punto" /></label>
+                    <label class="campo">Año <input class="e-input" type="number" @bind="_anioPerdidas" /></label>
+                    <label class="campo">Proporción (%) <input class="e-input" type="number" step="0.0001" @bind="_proporcionPerdidas" /></label>
+                }
+                <SfButton CssClass="e-outline" Disabled="@_cargaVista.Activa" OnClick="@VistaPreviaAsync">Ver la liquidación</SfButton>
+            </div>
+            <IndicadorDeCarga Cargando="@_cargaVista.Activa">
+                @if (_vista is { } v)
+                {
+                    @foreach (var aviso in v.Warnings) { <p class="aviso aviso-alerta">@aviso</p> }
+                    <div class="kpi-grid">
+                        <div class="kpi-card"><span class="kpi-value">@Pesos(v.Contributions)</span><span class="kpi-label">Aportes</span></div>
+                        <div class="kpi-card"><span class="kpi-value">@Pesos(v.Savings)</span><span class="kpi-label">Ahorros</span></div>
+                        <div class="kpi-card"><span class="kpi-value">@Pesos(v.Crossed)</span><span class="kpi-label">Cruce con créditos</span></div>
+                        <div class="kpi-card"><span class="kpi-value">@Pesos(v.LossDeduction?.Amount ?? 0)</span><span class="kpi-label">Pérdidas</span></div>
+                        <div class="kpi-card"><span class="kpi-value">@Pesos(v.Refund)</span><span class="kpi-label">Devolución (hasta @v.RefundDueOn.ToString("dd/MM/yyyy"))</span></div>
+                    </div>
+                    <p class="texto-apoyo">
+                        Capital social @Pesos(v.EntityMinimum.Capital) → @Pesos(v.EntityMinimum.CapitalAfter)
+                        @(v.EntityMinimum.Minimum is { } m ? $"· mínimo irreducible {Pesos(m)}" : "· sin mínimo irreducible fijado")
+                        @(v.EntityMinimum.WouldBreach ? "· la devolución de los aportes quedaría pendiente (los ahorros se devuelven)" : "")
+                        · el cruce toma primero @(v.FundsOrder == "AhorrosPrimero" ? "los ahorros" : "los aportes")
+                    </p>
+                    @if (v.Offsets.Count > 0)
+                    {
+                        <div class="tabla-desplazable">
+                            <table class="data-grid">
+                                <thead><tr><th>Prelación</th><th>Crédito</th><th class="numero">Días de mora</th><th class="numero">Para cancelar</th><th class="numero">Se aplica</th><th>Lo cancela</th></tr></thead>
+                                <tbody>
+                                    @foreach (var c in v.Offsets)
+                                    {
+                                        <tr>
+                                            <td>@c.Priority</td><td>@c.Number</td><td class="numero">@c.DaysPastDue</td><td class="numero">@Pesos(c.Payoff)</td>
+                                            <td class="numero">@Pesos(c.Amount)</td><td>@(c.PaysOff ? "Sí" : "No")</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                    <TablaDeLineasDeRetiro Lineas="@v.Lines" />
+                    @if (v.PendingLoanBalance > 0)
+                    {
+                        @* Decisión del dueño del 2026-10-18 (D45): quien liquida elige qué pasa con lo que los créditos siguen debiendo. *@
+                        <label class="campo campo-ancho">Los créditos siguen debiendo @Pesos(v.PendingLoanBalance): ¿qué pasa con ese saldo?
+                            <select class="e-input" @bind="_saldoPendiente">
+                                <option value="MoveToCashier">Pasan a recibir los pagos por caja</option>
+                                <option value="KeepRepaymentChannel">Conservan su forma de pago (libranza o nómina)</option>
+                            </select>
+                        </label>
+                    }
+                    <div class="toolbar">
+                        <label class="campo campo-ancho">Motivo * <input class="e-input" maxlength="500" @bind="_motivoLiquidacion" /></label>
+                        <SfButton CssClass="e-primary" Disabled="@(_accion.Activa || string.IsNullOrWhiteSpace(_motivoLiquidacion))" OnClick="@LiquidarAsync">
+                            Liquidar (orden de giro a Tesorería)
+                        </SfButton>
+                    </div>
+                    @if (_errorLiquidacion is not null) { <p class="aviso aviso-error" role="alert">@_errorLiquidacion</p> }
+                }
+            </IndicadorDeCarga>
+        </PermissionGate>
+    }
+</div>
+
+<SfDialog @bind-Visible="_mostrarDialogo" Header="@Titulo()" Width="560px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_accion.Activa" Texto="Registrando…">
+                @if (_dialogo is Dialogo.Aprobar or Dialogo.Negar)
+                {
+                    <label class="campo campo-ancho">Punto del acta cerrada (PublicId) * <input class="e-input" @bind="_punto" /></label>
+                    @if (_dialogo == Dialogo.Aprobar)
+                    {
+                        <label class="campo">Fecha del retiro * <input class="e-input" type="date" @bind="_fechaEfectiva" /></label>
+                    }
+                }
+                @if (_dialogo == Dialogo.Devolucion)
+                {
+                    <p class="texto-apoyo">Se ordena el giro a Tesorería de lo que quedó por devolver; sin beneficiario bancario, la cuenta de depósito del asociado.</p>
+                }
+                <label class="campo campo-ancho">Motivo * <textarea class="e-input" rows="3" maxlength="500" @bind="_motivo"></textarea></label>
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_accion.Activa || !Completo())" OnClick="@ConfirmarAsync">Confirmar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarDialogo = false)">Volver</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private static readonly CultureInfo Es = CultureInfo.GetCultureInfo("es-CO");
+    private static readonly string[] Permisos = ["Lending.MembershipWithdrawals.Approve", "Lending.MembershipWithdrawals.Settle"];
+
+    private enum Dialogo { Desistir, Aprobar, Negar, Devolucion }
+
+    [Parameter] public Guid Id { get; set; }
+
+    private readonly EstadoDeCarga _carga = new(), _cargaVista = new(), _accion = new();
+    private RetiroDeAsociadoDto? _retiro;
+    private VistaPreviaDeRetiroDto? _vista;
+    private DateTime? _fechaLiquidacion = DateTime.Today, _fechaEfectiva = DateTime.Today;
+    private bool _conPerdidas, _mostrarDialogo;
+    private string? _puntoPerdidas, _punto, _motivo, _motivoLiquidacion, _error, _errorLiquidacion;
+    private string _saldoPendiente = "MoveToCashier";
+    private int _anioPerdidas = DateTime.Today.Year - 1;
+    private decimal _proporcionPerdidas;
+    private Dialogo _dialogo;
+    private ClaveDeOperacion _clave = new(), _claveLiquidacion = new();
+
+    protected override Task OnParametersSetAsync() => CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Cliente.RetiroAsync(Id);
+        if (!r.IsSuccess || r.Value is null) { _retiro = null; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo leer el retiro."); return; }
+        _retiro = r.Value;
+    }
+
+    private static bool Pendiente(RetiroDeAsociadoDto r) =>
+        r.Settlement is { Refund: > 0 } s && (s.RefundHeldByInstitutionalMinimum || r.RefundOrders.All(o => o.Status is 3 or 4 or 5));
+
+    private void Abrir(Dialogo dialogo)
+    {
+        _dialogo = dialogo;
+        _punto = _motivo = _error = null;
+        _fechaEfectiva = DateTime.Today;
+        _clave = new ClaveDeOperacion();
+        _mostrarDialogo = true;
+    }
+
+    private string Titulo() => _dialogo switch
+    {
+        Dialogo.Desistir => "Desistir del retiro",
+        Dialogo.Aprobar => "Registrar la aprobación del órgano",
+        Dialogo.Negar => "Registrar la negación del órgano",
+        _ => "Aprobar la devolución pendiente",
+    };
+
+    private bool Completo() =>
+        !string.IsNullOrWhiteSpace(_motivo)
+        && (_dialogo is not (Dialogo.Aprobar or Dialogo.Negar) || Guid.TryParse(_punto, out _))
+        && (_dialogo != Dialogo.Aprobar || _fechaEfectiva is not null);
+
+    private async Task ConfirmarAsync()
+    {
+        if (!Completo()) return;
+        using var carga = _accion.Iniciar();
+        _error = null;
+        var motivo = _motivo!.Trim();
+        var r = _dialogo switch
+        {
+            Dialogo.Desistir => await Cliente.DesistirRetiroAsync(Id, motivo, _clave),
+            Dialogo.Aprobar => await Cliente.AprobarRetiroAsync(Id, new DecisionDeRetiroRequest(Guid.Parse(_punto!), DateOnly.FromDateTime(_fechaEfectiva!.Value), motivo), _clave),
+            Dialogo.Negar => await Cliente.NegarRetiroAsync(Id, new DecisionDeRetiroRequest(Guid.Parse(_punto!), null, motivo), _clave),
+            _ => await Cliente.AprobarDevolucionDeRetiroAsync(Id, new AprobarDevolucionDeRetiroRequest(null, null, motivo), _clave),
+        };
+        if (!r.IsSuccess || r.Value is null) { _error = string.Join(" ", LineasDeCreditoClient.Explicar(r)); return; }
+        _mostrarDialogo = false;
+        _retiro = r.Value;
+        await Notification.SuccessAsync($"Retiro {r.Value.Number}: {TextosDeRetiros.Estado(r.Value.Status).ToLower(Es)}.");
+    }
+
+    private DescuentoPorPerdidasRequest? Perdidas() =>
+        _conPerdidas && Guid.TryParse(_puntoPerdidas, out var punto) ? new DescuentoPorPerdidasRequest(punto, _anioPerdidas, _proporcionPerdidas / 100m) : null;
+
+    private async Task VistaPreviaAsync()
+    {
+        using var carga = _cargaVista.Iniciar();
+        _errorLiquidacion = null;
+        _vista = null;
+        var r = await Cliente.VistaPreviaDeRetiroAsync(Id, new VistaPreviaDeRetiroRequest(Fecha(_fechaLiquidacion), Perdidas()));
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(string.Join(" ", LineasDeCreditoClient.Explicar(r))); return; }
+        _vista = r.Value;
+        _claveLiquidacion = new ClaveDeOperacion();
+    }
+
+    private async Task LiquidarAsync()
+    {
+        if (_vista is null || string.IsNullOrWhiteSpace(_motivoLiquidacion)) return;
+        using var carga = _accion.Iniciar();
+        _errorLiquidacion = null;
+        var r = await Cliente.LiquidarRetiroAsync(Id, new LiquidarRetiroRequest(Fecha(_fechaLiquidacion), _vista.Sha256, Perdidas(),
+            new FormaDeDevolucionRequest("DisbursementOrder"), _motivoLiquidacion.Trim(), _vista.PendingLoanBalance > 0 ? _saldoPendiente : null), _claveLiquidacion);
+        if (!r.IsSuccess || r.Value is null) { _errorLiquidacion = string.Join(" ", LineasDeCreditoClient.Explicar(r)); return; }
+        _retiro = r.Value;
+        _vista = null;
+        await Notification.SuccessAsync($"Retiro {r.Value.Number} liquidado.");
+    }
+
+    private async Task DescargarAsync(Guid documento)
+    {
+        using var carga = _accion.Iniciar();
+        var r = await Cartera.EnlaceDeDocumentoAsync(documento);
+        if (!r.IsSuccess || r.Value?.Url is not { } url) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo descargar la liquidación."); return; }
+        await Adjuntos.DescargarAsync(url, $"{(_retiro?.Settlement?.DocumentNumber ?? "liquidacion").ToLowerInvariant()}.pdf");
+    }
+
+    private static DateOnly? Fecha(DateTime? fecha) => fecha is { } f ? DateOnly.FromDateTime(f) : null;
+
+    private static string Pesos(decimal valor) => "$ " + valor.ToString("N0", Es);
+}

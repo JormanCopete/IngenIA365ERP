@@ -1,0 +1,74 @@
+{
+  // r15 (US9-8, SC-023; D28, FR-105): una cooperativa de ahorro y crédito, obligada por la regla de pérdida esperada a los tres
+  // segmentos (consumo con y sin libranza, comercial persona natural), con la entrega K1 desplegada: cada segmento sigue en el
+  // Anexo 1, con fundamento «Obligated» y la marca «modelo obligatorio no disponible»; el cierre lleva la marca. Sus créditos se
+  // califican y deterioran con el Anexo 1: consumo con libranza de 75 días → C 10 % × 3.000.000 = 300.000.
+  // Variantes: con K6a desplegada, los tres van a pérdida esperada «Obligated» sin marca; una multiactiva sin sección de ahorro no
+  // está obligada (Anexo 1 «NotObligated», sin marca); un fondo de empleados de categoría intermedia tampoco; y una no obligada con
+  // adopción voluntaria de dos segmentos y K6a desplegada los pasa a pérdida esperada «Voluntary».
+  "nombre": "r15-selector-sin-k6a",
+  "creditos": [
+    { "id": 1, "deudor": 1501, "segmento": "CONSUMO", "diasDeMora": 75, "saldos": { "capital": 3000000 } }
+  ],
+  "selector": { "regla": "regla-prueba", "tipo": "COOP_AHORRO_CREDITO", "entrega": "K1" },
+  "esperado": {
+    "creditos": [ { "id": 1, "categoria": "C", "causa": "Arrears", "porcentaje": 0.10, "deterioroCapital": 300000.00 } ],
+    "marca": true,
+    "selector": [
+      { "segmento": "CONSUMO_LIBRANZA", "modelo": "ArrearsAnnex1", "fundamento": "Obligated", "marca": true },
+      { "segmento": "CONSUMO_SIN_LIBRANZA", "modelo": "ArrearsAnnex1", "fundamento": "Obligated", "marca": true },
+      { "segmento": "COMERCIAL_PN", "modelo": "ArrearsAnnex1", "fundamento": "Obligated", "marca": true }
+    ]
+  },
+  "variantes": [
+    {
+      "nombre": "con-k6a",
+      "selector": { "regla": "regla-prueba", "tipo": "COOP_AHORRO_CREDITO", "entrega": "K6a" },
+      "esperado": {
+        "marca": false,
+        "selector": [
+          { "segmento": "CONSUMO_LIBRANZA", "modelo": "ExpectedLossAnnex2", "fundamento": "Obligated", "marca": false },
+          { "segmento": "CONSUMO_SIN_LIBRANZA", "modelo": "ExpectedLossAnnex2", "fundamento": "Obligated", "marca": false },
+          { "segmento": "COMERCIAL_PN", "modelo": "ExpectedLossAnnex2", "fundamento": "Obligated", "marca": false }
+        ]
+      }
+    },
+    {
+      "nombre": "no-obligada",
+      "selector": { "regla": "regla-prueba", "tipo": "COOP_MULTIACTIVA", "entrega": "K1" },
+      "esperado": {
+        "marca": false,
+        "selector": [
+          { "segmento": "CONSUMO_LIBRANZA", "modelo": "ArrearsAnnex1", "fundamento": "NotObligated", "marca": false },
+          { "segmento": "CONSUMO_SIN_LIBRANZA", "modelo": "ArrearsAnnex1", "fundamento": "NotObligated", "marca": false },
+          { "segmento": "COMERCIAL_PN", "modelo": "ArrearsAnnex1", "fundamento": "NotObligated", "marca": false }
+        ]
+      }
+    },
+    {
+      "nombre": "fondo-de-categoria-intermedia",
+      "selector": { "regla": "regla-prueba", "tipo": "FONDO_EMPLEADOS", "categoriaDeFondo": "INTERMEDIA", "entrega": "K1" },
+      "esperado": {
+        "marca": false,
+        "selector": [
+          { "segmento": "CONSUMO_LIBRANZA", "modelo": "ArrearsAnnex1", "fundamento": "NotObligated", "marca": false },
+          { "segmento": "CONSUMO_SIN_LIBRANZA", "modelo": "ArrearsAnnex1", "fundamento": "NotObligated", "marca": false },
+          { "segmento": "COMERCIAL_PN", "modelo": "ArrearsAnnex1", "fundamento": "NotObligated", "marca": false }
+        ]
+      }
+    },
+    {
+      "nombre": "adopcion-voluntaria-con-k6a",
+      "selector": { "regla": "regla-prueba", "tipo": "COOP_MULTIACTIVA", "entrega": "K6a", "eleccion": "VoluntaryAdoption",
+                    "segmentosDeLaEleccion": [ "CONSUMO_LIBRANZA", "CONSUMO_SIN_LIBRANZA" ] },
+      "esperado": {
+        "marca": false,
+        "selector": [
+          { "segmento": "CONSUMO_LIBRANZA", "modelo": "ExpectedLossAnnex2", "fundamento": "Voluntary", "marca": false },
+          { "segmento": "CONSUMO_SIN_LIBRANZA", "modelo": "ExpectedLossAnnex2", "fundamento": "Voluntary", "marca": false },
+          { "segmento": "COMERCIAL_PN", "modelo": "ArrearsAnnex1", "fundamento": "NotObligated", "marca": false }
+        ]
+      }
+    }
+  ]
+}

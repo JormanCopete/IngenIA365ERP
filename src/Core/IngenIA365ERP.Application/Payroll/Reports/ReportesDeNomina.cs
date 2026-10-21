@@ -27,13 +27,18 @@ public static class ReportesDeNomina
         _ => nature,
     };
 
-    public static string NombreOrigen(string origin, int? cuota, int? total) => origin switch
+    public static string NombreOrigen(string origin, int? cuota, int? total, string? obligacion = null) => origin switch
     {
+        // Feature 013 (T0168): la cuota de Cartera dice de qué obligación es.
+        "LoanDeduction" when !string.IsNullOrWhiteSpace(obligacion) => $"Cartera (obligación {obligacion})",
         "Manual" => "Manual",
         "Import" => "Importada",
         "Recurring" => total is { } t ? $"Recurrente (cuota {cuota}/{t})" : $"Recurrente (cuota {cuota})",
         "Retroactive" => "Ajuste retroactivo",
         "LoanDeduction" => "Cartera",
+        // Feature 014 (T089): la cuota de aportes o de ahorro dice de qué cuenta es.
+        "AccountDeduction" when !string.IsNullOrWhiteSpace(obligacion) => $"Aportes y ahorro (cuenta {obligacion})",
+        "AccountDeduction" => "Aportes y ahorro",
         "CarryOver" => "Arrastre",
         _ => origin,
     };
@@ -183,7 +188,7 @@ public sealed class NovedadesPeriodoReportQueryHandler(IApplicationDbContext db,
         var filas = novedades.OrderBy(n => n.EmployeeName).ThenBy(n => n.ConceptCode).Select(n => new FilaExportable(
         [
             n.EmployeeName, n.EmployeeDocument, n.ConceptName, n.ConceptCode, n.Quantity, n.Amount, n.StartDate, n.EndDate, n.EstimatedAmount,
-            ReportesDeNomina.NombreOrigen(n.Origin, n.InstallmentNumber, n.InstallmentTotal),
+            ReportesDeNomina.NombreOrigen(n.Origin, n.InstallmentNumber, n.InstallmentTotal, n.ObligationNumber),
             ReportesDeNomina.NombreEstadoNovedad(n.Status) + (string.IsNullOrWhiteSpace(n.StatusReason) ? "" : $" — {n.StatusReason}"),
             n.CreatedBy, n.CreatedAt,
         ], ReportesDeNomina.NombreNaturaleza(n.Nature))).ToList();

@@ -35,6 +35,9 @@ public static class ClavesDeLote
         return new HorarioDeLote(partes[0], partes[1], hora, partes[3]);
     }
 
+    /// <summary>El prefijo de las claves de Cartera: <c>CAR.{ShortCode}|{disparador}|{hora}|{granularidad}</c> (feature 013, C06).</summary>
+    public const string PrefijoDeCartera = "CAR.";
+
     /// <summary>El disparador de la franja diaria (<c>Contabilidad.DisparadorDeLote</c>).</summary>
     public const string HoraDiaria = "HoraDiaria";
 
@@ -43,6 +46,46 @@ public static class ClavesDeLote
 
     /// <summary>El disparador del cierre del período de inventario (<c>Contabilidad.DisparadorDeLote</c>; el lote lo crea <c>CloseInventoryPeriodCommand</c>). (nuevo, T522)</summary>
     public const string CierreDePeriodo = "CierreDePeriodo";
+
+    /// <summary>
+    /// El disparador de Cartera que agrupa lo resumido al terminar la causación del día (<c>Contabilidad.DisparadorDeLote</c> en el ámbito
+    /// <c>LendingFactType</c>; feature 013, T0635, C06, C09; contabilidad.md §10.2): el lote lo crea el guardado con que termina la corrida
+    /// <c>DailyCycle</c> (<c>BatchTrigger.LendingAccrualRun</c>). La hora va vacía. (nuevo)
+    /// </summary>
+    public const string FinDeCausacion = "FinDeCausacion";
+
+    /// <summary>
+    /// El disparador de Cartera del cierre mensual (feature 013, T0635, C06): el lote lo crea el cierre de Cartera
+    /// (<c>BatchTrigger.LendingMonthlyClose</c>) con alcance <c>LendingClose:{aaaa-mm}</c>. La hora va vacía. (nuevo)
+    /// </summary>
+    public const string CierreDeCartera = "CierreDeCartera";
+
+    /// <summary>
+    /// Granularidades de un lote de Cartera (<c>Contabilidad.GranularidadDeLote</c>; feature 013, T0635, C07, C09): un comprobante por
+    /// operación (<see cref="GranularidadPorHecho"/>), uno por día y tipo de comprobante con la sucursal en cada línea
+    /// (<see cref="GranularidadPorDia"/>, el defecto) o uno por día, tipo y sucursal (<see cref="GranularidadPorDiaYSucursal"/>). (nuevo)
+    /// </summary>
+    public const string GranularidadPorHecho = "PorHecho";
+
+    public const string GranularidadPorDia = "PorDia";
+
+    public const string GranularidadPorDiaYSucursal = "PorDiaYSucursal";
+
+    /// <summary>Las tres granularidades de Cartera, en el orden del parámetro.</summary>
+    public static IReadOnlyList<string> GranularidadesDeCartera { get; } = [GranularidadPorDia, GranularidadPorDiaYSucursal, GranularidadPorHecho];
+
+    /// <summary>
+    /// La <c>ScheduleKey</c> de Cartera <paramref name="scheduleKey"/> con el código corto <paramref name="codigoCorto"/> (feature 013, T0653, C01,
+    /// C06): un acompañante sella el disparador, la hora y la granularidad de su principal con su propio corto. Una clave que no es de Cartera
+    /// (no empieza por <see cref="PrefijoDeCartera"/>) o un corto vacío la dejan igual. (nuevo)
+    /// </summary>
+    public static string ConCodigoCortoDeCartera(string scheduleKey, string? codigoCorto)
+    {
+        ArgumentNullException.ThrowIfNull(scheduleKey);
+        if (string.IsNullOrWhiteSpace(codigoCorto) || !scheduleKey.StartsWith(PrefijoDeCartera, StringComparison.Ordinal)) return scheduleKey;
+        var separador = scheduleKey.IndexOf('|', StringComparison.Ordinal);
+        return separador < 0 ? scheduleKey : PrefijoDeCartera + codigoCorto + scheduleKey[separador..];
+    }
 
     /// <summary><c>BatchScopeKey</c> del disparador <c>CierreDeTurno</c>: <c>CashSession:{publicId}</c>.</summary>
     public static string SesionDeCaja(Guid cashSessionPublicId) => $"CashSession:{cashSessionPublicId:D}";
@@ -58,6 +101,17 @@ public static class ClavesDeLote
 /// </summary>
 public sealed record HorarioDeLote(string TipoDeDocumentoRaiz, string Disparador, TimeOnly? Hora, string Granularidad)
 {
+    /// <summary>
+    /// El módulo de la clave (feature 013, C06): las de Cartera empiezan por <c>CAR.</c> (<c>CAR.{ShortCode}</c>); las de Inventario
+    /// llevan el código del tipo de documento, sin prefijo de módulo.
+    /// </summary>
+    public string Modulo => TipoDeDocumentoRaiz.StartsWith(ClavesDeLote.PrefijoDeCartera, StringComparison.Ordinal)
+        ? ModulosDeOrigen.Cartera
+        : ModulosDeOrigen.Inventario;
+
+    /// <summary>¿Es una clave de Inventario (la única que usa el respaldo de <c>InventoryDocumentTypes</c>)?</summary>
+    public bool EsDeInventario => Modulo == ModulosDeOrigen.Inventario;
+
     public Domain.Enums.Inventory.PostingGranularity GranularidadDelLote =>
         Granularidad is "Resumido" or nameof(Domain.Enums.Inventory.PostingGranularity.Summarized)
             ? Domain.Enums.Inventory.PostingGranularity.Summarized

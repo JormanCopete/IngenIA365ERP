@@ -11,6 +11,13 @@ namespace IngenIA365ERP.Application.Common.Alerts;
 /// punto (<see cref="IAlcanceDeInventario"/>), o (b) se la notificaron (así le llegan las que se enrutaron a
 /// <c>CompanyAdmin</c> y las de <c>Aprobaciones.Pendiente</c>, cuyos destinatarios son el permiso del nivel). Las demás
 /// son el mismo 404 que una inexistente. El administrador maestro las ve todas. (nuevo)
+///
+/// <para>
+/// Feature 013 (T0303, C68, SC-015): una alerta de Cartera guarda en <c>COR_Alerts</c> la oficina (<c>ScopeBranchPublicId</c>, la
+/// <c>COR_Branches</c> del caso) y la línea (<c>ScopeCreditLinePublicId</c>); por permiso destinatario sólo la ve quien además las tiene en
+/// su alcance de Cartera (<see cref="IAlcanceDeCartera"/>, que falla cerrado). La que se le notificó (p. ej. la enrutada a
+/// <c>CompanyAdmin</c> sin destinatario) la ve siempre.
+/// </para>
 /// </summary>
 public sealed class VisibilidadDeAlertas(
     IApplicationDbContext db,
@@ -18,7 +25,8 @@ public sealed class VisibilidadDeAlertas(
     IActorActual actorActual,
     IAlcanceDeInventario alcanceDeLaPeticion,
     IAsignacionesDeBodega bodegas,
-    IAsignacionesDePuntoDeVenta puntos)
+    IAsignacionesDePuntoDeVenta puntos,
+    IAlcanceDeCartera? alcanceDeCartera = null)
 {
     /// <summary>Las alertas visibles, como consulta (sin materializar) para que quien llama filtre y pagine.</summary>
     public async Task<IQueryable<Alert>> VisiblesAsync(CancellationToken ct)
@@ -47,10 +55,23 @@ public sealed class VisibilidadDeAlertas(
             db.Alerts.Where(a => a.ScopePointOfSalePublicId != null).Select(a => a.ScopePointOfSalePublicId!.Value),
             puntos.BuscarAsync, alcance.IncluyePunto, ct);
 
+        // Feature 013 (T0303, C68): la oficina y la línea de una alerta de Cartera, contra el alcance de Cartera (sin él, cerrado).
+        var cartera = alcanceDeCartera is null ? AlcanceDeCartera.Vacio : await alcanceDeCartera.ObtenerAsync(ct);
+        var todasLasOficinas = cartera.TodasLasOficinas;
+        var todasLasLineas = cartera.TodasLasLineas;
+        var idsDeOficina = cartera.Oficinas.ToArray();
+        var idsDeLinea = cartera.Lineas.ToArray();
+        Guid[] oficinasPermitidas = todasLasOficinas ? [] : await db.Branches.AsNoTracking()
+            .Where(b => idsDeOficina.Contains(b.Id)).Select(b => b.PublicId).ToArrayAsync(ct);
+        Guid[] lineasPermitidas = todasLasLineas ? [] : await db.CreditLines.AsNoTracking()
+            .Where(l => idsDeLinea.Contains(l.Id)).Select(l => l.PublicId).ToArrayAsync(ct);
+
         return db.Alerts.Where(a =>
             (tiposPermitidos.Contains(a.AlertTypeId)
              && (a.ScopeWarehousePublicId == null || todasLasBodegas || bodegasPermitidas.Contains(a.ScopeWarehousePublicId.Value))
-             && (a.ScopePointOfSalePublicId == null || todosLosPuntos || puntosPermitidos.Contains(a.ScopePointOfSalePublicId.Value)))
+             && (a.ScopePointOfSalePublicId == null || todosLosPuntos || puntosPermitidos.Contains(a.ScopePointOfSalePublicId.Value))
+             && (a.ScopeBranchPublicId == null || todasLasOficinas || oficinasPermitidas.Contains(a.ScopeBranchPublicId.Value))
+             && (a.ScopeCreditLinePublicId == null || todasLasLineas || lineasPermitidas.Contains(a.ScopeCreditLinePublicId.Value)))
             || db.Notifications.Any(n => n.AlertPublicId == a.PublicId && n.RecipientUserPublicId == yo));
     }
 

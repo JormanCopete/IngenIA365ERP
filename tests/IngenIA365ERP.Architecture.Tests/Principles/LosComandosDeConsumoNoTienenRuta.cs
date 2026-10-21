@@ -30,6 +30,32 @@ public class LosComandosDeConsumoNoTienenRuta
         "ScheduleIntegrationBatchesCommand",
         "StartIntegrationBatchCommand",
         "CloseIntegrationBatchCommand",
+        // Feature 013, US3 (T0428): el consumo del resultado del giro (lo manda DestinoCartera) y los comandos de las tres tareas del
+        // desembolso (los manda cada ITareaProgramada por IEjecutorEnCooperativa).
+        "ConsumeTreasuryResultCommand",
+        "AlertDisbursementOrdersWithoutResultCommand",
+        "SyncPromissoryNotesCommand",
+        "AlertExpiringCollateralsCommand",
+        // US6 (T0577): el consumo de las ventas a crédito y sus ajustes (lo manda DestinoCartera), el de las respuestas de Cartera en Comercial (lo
+        // manda DestinoInventario) y el vencimiento de las reservas de número (lo manda cartera.reservas-vencidas).
+        "ConsumeCommercialCreditMessageCommand",
+        "ConsumeLendingObligationResponseCommand",
+        "ExpireLoanNumberReservationsCommand",
+        // US7 (T0609): el consumo contable de los hechos de Cartera, por unidad y por grupo resumido (los manda DestinoContabilidad).
+        "PostLendingFactsCommand",
+        "PostLendingSummaryGroupCommand",
+        // US9 (bloque 12B, T0674): la tanda del cierre (la corre el procesador con la persona que ordenó), el cierre base (lo crea la activación,
+        // C60) y el cierre programado (lo manda la tarea cartera.cierre-programado).
+        "ExecuteMonthlyCloseCommand",
+        "CreateBaseCloseCommand",
+        "RunScheduledMonthlyCloseCommand",
+        // K2 (US10, bloque B; T0818): lo que Recaudo devuelve del archivo de descuentos (lo manda DestinoCartera, que reparte por tipo con
+        // ConsumeReceiptsMessageCommand) y los comandos de las dos tareas de la libranza (los manda cada ITareaProgramada).
+        "ConsumeReceiptsMessageCommand",
+        "ConsumePayrollFileSentCommand",
+        "ConsumePayrollDeductionResultCommand",
+        "AlertPendingPayrollDeductionFilesCommand",
+        "AlertOverduePayrollTransfersCommand",
     ];
 
     [Fact]

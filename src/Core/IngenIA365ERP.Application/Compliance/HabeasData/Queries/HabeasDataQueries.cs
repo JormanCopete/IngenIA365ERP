@@ -2,6 +2,7 @@ using FluentValidation;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Compliance.HabeasData.Common;
+using IngenIA365ERP.Domain.Enums.Compliance;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -65,7 +66,7 @@ public sealed class ListPoliciesQueryHandler
                 p.EffectiveFrom,
                 p.EffectiveTo,
                 p.PublishedBy,
-                p.EffectiveTo == null))
+                p.EffectiveTo == null) { Purpose = p.Purpose })
             .ToListAsync(ct);
 
         return Result.Success<IReadOnlyList<HabeasDataPolicyDto>>(items);
@@ -135,7 +136,7 @@ public sealed class ListHabeasDataHistoryQueryHandler
 
         var items = await _db.HabeasDataConsents
             .Where(c => c.TenantId == tenantId && c.PersonId == request.PersonId)
-            .OrderByDescending(c => c.ActionAt)
+            .OrderByDescending(c => c.ActionAt).ThenByDescending(c => c.Id)
             .Include(c => c.PolicyVersion)
             .Select(c => new HabeasDataHistoryItemDto(
                 c.PublicId,
@@ -145,7 +146,7 @@ public sealed class ListHabeasDataHistoryQueryHandler
                 c.ActionAt,
                 c.ActionBy,
                 c.Channel,
-                c.Notes))
+                c.Notes) { Purpose = c.Purpose, ContactChannel = c.ContactChannel, Origin = c.Origin })
             .ToListAsync(ct);
 
         return Result.Success<IReadOnlyList<HabeasDataHistoryItemDto>>(items);
@@ -170,7 +171,7 @@ public sealed class GetCurrentPolicyQueryHandler(IApplicationDbContext db, ICurr
             return Result.Failure<PoliticaVigenteDto>("Auth.TenantRequired", "El usuario actual no está asociado a una cooperativa.");
 
         var dto = await db.HabeasDataPolicyVersions.AsNoTracking()
-            .Where(p => p.TenantId == tenantId && p.EffectiveTo == null)
+            .Where(p => p.TenantId == tenantId && p.Purpose == DataAuthorizationPurpose.GeneralTreatment && p.EffectiveTo == null)
             .OrderByDescending(p => p.VersionNumber)
             .Select(p => new PoliticaVigenteDto(p.PublicId, p.VersionNumber, p.Title, p.ContentMarkdown, p.EffectiveFrom))
             .FirstOrDefaultAsync(ct);

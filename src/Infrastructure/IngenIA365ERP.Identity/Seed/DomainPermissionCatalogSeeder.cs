@@ -93,6 +93,24 @@ public static class DomainPermissionCatalogSeeder
         ("Compliance.HabeasData",  "Revoke",        "Registrar revocación de consentimiento"),
         ("Compliance.HabeasData",  "ViewHistory",   "Consultar historial de consentimientos"),
 
+        // Feature 013 (T0093; decisiones-transversales §2.14, C84): permisos de plataforma de Cartera. Los siembra la API al
+        // arrancar, antes de BuiltInRolesSeeder, nunca el DbMigrator (T60). «View» sólo donde no hay datos personales: las
+        // listas restrictivas no son personas del maestro; «Release» ve las coincidencias con deudores.
+        ("Core.IntegrationParticipants", "View",   "Consultar el registro de recaudadores y destinos de integración"),
+        ("Core.IntegrationParticipants", "Manage", "Registrar, habilitar y retirar recaudadores y destinos de integración"),
+        ("Core.NationalValues",    "View",     "Consultar la copia de los valores nacionales y la bitácora de réplicas"),
+        ("Core.NationalValues",    "Review",   "Revisar (validar) los valores nacionales replicados"),
+        ("Core.RegulatoryProfile", "View",     "Consultar el perfil regulatorio de la cooperativa"),
+        ("Core.RegulatoryProfile", "Manage",   "Registrar o corregir versiones del perfil regulatorio"),
+        ("Core.ExternalChannels",  "View",     "Consultar la configuración de los canales externos"),
+        ("Core.ExternalChannels",  "Manage",   "Configurar y verificar los canales externos"),
+        ("Compliance.RestrictiveLists", "View",    "Consultar las cargas de listas restrictivas y sus entradas"),
+        ("Compliance.RestrictiveLists", "Load",    "Cargar una versión de una lista restrictiva"),
+        ("Compliance.RestrictiveLists", "Release", "Revisar y liberar coincidencias en listas restrictivas"),
+        ("Compliance.DataSubjectRequests", "Read",     "Consultar las solicitudes del titular de los datos"),
+        ("Compliance.DataSubjectRequests", "Register", "Registrar una solicitud del titular de los datos"),
+        ("Compliance.DataSubjectRequests", "Respond",  "Prorrogar y responder solicitudes del titular de los datos"),
+
         // SaaS operator (acceso transversal del operador del producto)
         ("Saas.AuditLog",          "Verify",   "Validar HMAC de un PDF firmado del audit log"),
     ];

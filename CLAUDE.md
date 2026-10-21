@@ -142,7 +142,9 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   `docs/operaciones/llavero-dataprotection.md`.
 - **Multi-tenancy**: Una base de datos por cooperativa (constitución v2.0.0, Principio IV).
   El aislamiento es físico. La base administrativa `IngenIA365ERP_Admin` es una sola y
-  vive fuera de toda base de cooperativa.
+  vive fuera de toda base de cooperativa. Desde la 013 guarda también los **valores nacionales** con vigencia
+  (`ADM_NationalValues`: usura, UVR, topes, tipos de organización, Anexo 2) y sus soportes (`ADM_RegulatoryDocuments`),
+  que se replican a `COR_` de cada cooperativa.
 - **Códigos de catálogo** (desde el 2026-09-12): en todo catálogo el código es la
   nomenclatura de la cooperativa —alfanumérico, en mayúsculas, sin espacios, único en su
   tabla— y nunca un identificador del sistema (para eso están `Id` y `PublicId`). Lo
@@ -592,6 +594,189 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   revisor y respaldos por base (T985), usuario de Mongo sólo de inserción y clave de anclas propia en
   producción (T986), confirmar D8/D9/C10 (T987), QA en DEV/QA y MAUI a mano (T996, T997).
 
+- **Cartera financiera (feature 013, rama `013-cartera-financiera`, K1 a K6b construidas (fases 1–23) y Polish local (fase 24,
+  2026-10-17); rama local, sin merge ni despliegue)**: Cartera desde cero (créditos del sector solidario) en reemplazo de la heredada, por entregas K1–K6b; K1
+  es el mínimo para salir en vivo y **no sale sin Recaudo y Tesorería** (en prueba, un recaudador y una tesorería de
+  prueba, que no existen en producción). Hasta aquí: plataforma y retiro de las tablas `LND_` de crédito heredadas
+  (fases 1–3), gobierno y seguridad (US17), líneas y usura (US1), originación (US2), desembolso, garantías y pagaré
+  (US3), causación diaria y liquidación (US4), pagos por el **contrato de obligaciones** —Cartera no aplica pagos por
+  pantalla— (US5), ventas a crédito de Comercial (US6) y la **integración contable** (US7, fase 11). Reglas que no se
+  negocian de US7: **Cartera no conoce cuentas ni escribe asientos** —emite hechos `CAR → Accounting` en la misma
+  transacción que su operación, ningún hecho lleva una cuenta, y Contabilidad sólo conoce a Cartera por
+  `IDimensionesDeCartera` y la bandeja (`CarteraNoConoceContabilidad` en las dos direcciones,
+  `LosHechosDeCarteraNoLlevanCuentas`)—; el destino `Accounting` sigue con **un solo consumidor**, `DestinoContabilidad`
+  (mudado a `Application/Accounting/Integration` con lo común de los dos emisores), que es un **enrutador de dos
+  emisores**: `INV` a los comandos de Inventario sin cambios, `CAR` a `PostLendingFactsCommand` /
+  `PostLendingSummaryGroupCommand`, siempre por `AccountingPoster`; la **matriz** `ACC_LendingPostingRules` resuelve
+  hecho × rol (26 roles) × dimensiones **por código** (exigidas por igualdad; opcionales con pesos Línea 512, Empleado
+  256, Gracia 128, Sub-segmento 64, Reestructurado 32, PorCuentaDelAsociado 16, Sucursal 4 y Hecho 2 **sólo en los roles
+  de resultado**; el hecho va en `*` en los roles de saldo, orden, pasivo, puente, diferido y contingentes; el centro de
+  costo se asigna y no pesa, C77), con vigencia y sin retroactividad sobre lo contabilizado, plantilla con **filas
+  sugeridas sin cuenta** (no se siembra ninguna regla) y completitud; **un comprobante por unidad** (una operación y su
+  modo; los acompañantes sellan el del principal y el tipo sale del hecho principal: `DS`, `RC`, `DN` si recauda Nómina,
+  `CA`, `PV` y el nuevo `CN` —24 tipos sembrados, 40 permisos contables—) y la causación **por lotes resumida**: un `CA`
+  por día con la sucursal en cada línea y una línea por crédito donde la cuenta exige tercero o cruce; los reversos
+  heredan el modo de su original; la **validación previa** (`IContabilidadParaCartera.EvaluarAsync`) la gobierna el
+  parámetro `Contabilidad.FaltaDeRegla`, que **arranca en «Bloquear»** (A8, decisión del dueño del 2026-10-14): si falta
+  la regla, la pantalla no confirma (`Lending.Prevalidation.NotPostable`), el contrato rechaza el pago, Nómina no
+  aprueba (`Payroll.LoanDeductionNotPostable`), la venta de Comercial queda en reproceso y el proceso detiene su tanda y
+  alerta (`Cartera.HechoNoContabilizable`); con «Advertir» todo se aplica, sella y alerta, y sin contabilidad iniciada o
+  con el hecho en «no pasa» nada se bloquea. `.PoliticaSinRespuesta` (Contabilidad no responde) sigue bloqueando sólo
+  en pantalla; lo de
+  Cartera **no se reversa desde Comprobantes** (`Accounting.Document.ModuleOwned` con mensaje propio y
+  `Accounting.Document.LendingCorrectsWithNewVoucher` en `PrepareReversalAsync`): se corrige con un **comprobante
+  nuevo** de su propio hecho y fecha, con las dimensiones vigentes del saldo; Contabilidad **no cierra un mes que
+  Cartera, activada, no cerró** (`Accounting.Period.LendingNotClosed`, sin reconocimiento; avisos reconocibles
+  `LendingPending` y `LendingLoadWillExpire`), leyendo sólo recibos `ACC_LendingPostings` y entregas; la conciliación
+  compara **por conjuntos de cuentas** y explica cada diferencia hecho por hecho; `DESC_CARTERA` vuelve a contabilizar
+  en Nómina contra el puente «recaudos por nómina para Cartera» (enmienda D-08 de la 010). La 009 quedó enmendada en
+  sus artefactos (E-01, 2026-10-13). **Las migraciones de K1 están congeladas desde el 2026-10-15 (T0802)**:
+  `CarteraNucleo` (93 tablas `LND_`), `CarteraRiesgo` (7) e `IntegracionContableDeCartera` (cuatro `ACC_`), en ese orden
+  detrás de `RetiroDeLaCarteraHeredada`, todas aditivas; todo cambio de esquema posterior (K2–K6b, la feature 014 de
+  Ahorros o una corrección de K1) es una **migración nueva**, nunca una regeneración. **K2, libranza (fase 15,
+2026-10-15)**: migración aditiva `CarteraLibranza` (8 tablas, 6 columnas nulas en tablas de K1, adopción por `CAR` de
+`EnvioDeDescuentosConfirmado` y `ResultadoDeDescuentos`); convenios de pagaduría versionados con formatos de ida y vuelta
+elegidos **por referencia** (ámbitos 5 y 6 de `COR_BankFileFormats`, genéricos, sin cruce de vigencias; `FlatFileReader` es
+el inverso de `FlatFileWriter`), archivo de descuentos inmutable por pagaduría y período que va a Recaudo como
+`DescuentosPorPagaduria`, y lo **descontado y no girado no causa mora** al deudor mientras la pagaduría esté dentro del
+umbral `LIBRANZA_UMBRAL_MORA_PAGADURIA` (sin valor sembrado: sin él nunca se imputa); el giro se aplica por el contrato con
+`DeductionFileLinePublicId` y fecha valor del descuento. Receta: `docs/manual/cartera-libranza-y-pagadurias.md`.
+**K3 (fases 16–17, 2026-10-15)**: migración aditiva `CarteraNovedades` (9 tablas; mecanismo y causa en
+`LND_AttributionRules`). Las novedades se clasifican por su **causa** (reestructuración o modificación,
+`ClasificadorDeNovedad` sobre el `Anexo1`) y regeneran el plan; novación y refinanciación **trasladan** el saldo a un crédito
+enlazado (`TransferToLinkedLoan`/`FromLinkedLoan`), no lo recogen por pago, y no giran dinero nuevo (decisión del dueño);
+la excepción de cobertura la aprueba **otra persona**; el fracaso de la insolvencia mantiene el bloqueo (se levanta a mano)
+y el acuerdo lo levanta solo. Castigo por **lote** que decide el consejo: al aplicar, el crédito que ya no cumple se
+excluye y el resto se castiga; el castigado sigue causando en suspenso y concilia contra cuentas de orden. La evaluación
+de cartera (comité y consejo) entra al cierre desde su mes de efecto y la última aplicada reemplaza a las anteriores.
+Recetas: `docs/manual/cartera-novedades-y-condonaciones.md`, `docs/manual/cartera-castigo-y-evaluacion.md`.
+**K4, cobranza (fase 18, 2026-10-16)**: migraciones aditivas `CarteraCobranza` (11 tablas) y `CarteraCobranzaSalida`
+(`CollectorUserId` nulo en gestiones y asignaciones). Etapas versionadas por días de mora (semilla de cuatro «pendiente de
+validar», Order 92), reparto por reglas, agenda, gestiones, promesas, acuerdos de pago, cobro jurídico, campañas, aviso
+previo por episodio y reclamos ante centrales; el paso de cobranza es el paso 7 del ciclo diario (`CobranzaDelCicloDiario`).
+Reglas: la **ventana de la Ley 2300 cuenta también las gestiones con contacto directo**; la cobranza nunca contacta
+referencias; el ciclo **propone** el gasto y lo avisa (`GASTOCOBR`), y lo **causa una persona** sólo tras el aviso
+`Sent`/`Delivered` (`Charge` por `RegistroDeCartera`); el tope del gasto es parámetro (`Cobranza.TopeGasto.Porcentaje` y
+`.ValorMaximo`, sin semilla = sin tope); el crédito que se pone al día **sale de la cobranza** (historia `Source = Exit`,
+gestión de sistema `LeftCollection` no anulable, asignación cerrada) y si recae es un episodio nuevo; el proceso jurídico
+suspendido por insolvencia se reanuda **a mano** (`/resume`, nunca mientras la insolvencia negocia); la etapa migrada se
+registra con una corrida (`process-runs` con `kind: MigratedCollectionStages` y motivo, o la tarea de una sola vez
+`cartera.etapas-migradas-k4`), no con la semilla. SMS y WhatsApp reales siguen `SIMULADO` hasta que haya proveedor
+(T0931/T0952). Recetas: `docs/manual/cartera-cobranza-y-aviso-previo.md`, `docs/operaciones/cartera-despliegue-k4.md`.
+**K5, documentos, informes y regulatorios (fases 19–21, 2026-10-16)**: migraciones aditivas `CarteraInformes`
+(`LND_RegulatoryFiles` y `LND_RegulatoryFileLines`) y `CarteraComprobanteDeCargue` (`ReceiptAttachmentPublicId` nulo).
+Documentos al deudor: **extracto** de un período y **certificado tributario** del año (sólo créditos donde la persona es
+deudora; el anticipo aplicado a intereses cuenta sólo si **ingresó** en el año; el saldo al 31/12 por conceptos según
+`Documentos.CertificadoTributario.SaldoIncluye`, por defecto los cinco = el saldo de siempre, rige el vigente al emitir).
+Informes `quality`, `vintages`, `concentration` (datos del deudor sólo agrupada por deudor o grupo), `issued-documents` y
+`bureau-exclusions`, y el **tablero** `GET /api/lending/dashboard` (`/cartera/tablero`, sin datos personales); «vencida» es
+más que `Informes.DiasCarteraVencida` (30, pendiente de validar). El **SICSES** (formato 9027, del cierre mensual vigente;
+plazo por nivel de supervisión en `sicsesReport` de `TiposDeOrganizacion`, pendiente de validar) y los **archivos de
+centrales** (novedades desde el último `Uploaded`; sólo con autorización `CreditBureauReport` con evidencia y, si el dato es
+negativo, aviso previo `Complete` del titular —el codeudor recibe el suyo sólo con `AvisoPrevio.IncluirCodeudores`—; la mora
+se reporta por **rangos configurables por modalidad**, `Centrales.RangosDeMora`, y es negativa desde el rango que diga; los
+demás quedan excluidos con su motivo) salen de un motor genérico puro, `Domain/Common/Layouts` (la PILA no lo usa), sobre
+layouts JSON embebidos con vigencia desde 2026-12-01 que **están sin cotejar** (`verified = false`): cada generación lleva
+`Lending.Regulatory.LayoutSinCotejar` y la marca D28 va como advertencia, nunca dentro del archivo. Con bloqueantes queda una
+versión `Validated` sin archivo (422 `BlockingIssues`); regenerar deja `Superseded`; marcar cargado con radicado y
+comprobante cierra el período. Suscriptor por central en `Centrales.CodigosDeSuscriptor`. Rutas `/api/lending/regulatory`
+(`RegulatoryFiles.Read`, nunca un `View`), pantallas `/cartera/sicses` y `/cartera/centrales`. Recetas:
+`docs/manual/cartera-documentos-al-deudor.md`, `docs/manual/cartera-informes-y-tablero.md`,
+`docs/operaciones/cartera-sicses-y-centrales.md`; cotejar los layouts es del dueño (T1011). **Las e2e de K5 están escritas
+y se corren una sola vez al final de todas las fases** (decisión del dueño).
+**K6a, pérdida esperada (fase 22, 2026-10-17)**: migración aditiva `CarteraPerdidaEsperada` (`LND_ImpairmentModelElections`,
+`LND_ArrearsHistoryLoads` y siete columnas nulas de PE en `LND_MonthlyCloseLoans`, para el 9083) y `EntregaVigente = K6a`.
+Consumo con y sin libranza y comercial de persona natural se deterioran por el **Anexo 2** (CE 68 de 2024) en las obligadas
+desde su primer cierre y en las que lo adoptan: Z → puntaje logístico en `decimal` (`FuncionLogistica`, redondeo E9) → PI
+de la tabla del tipo de organización (o `VOLUNTARIA`) × PDI por garantía (con varias, la mayor) × exposición, con la
+calificación homologada (`MotorDePerdidaEsperada`). **No hay hechos contables nuevos**. Una obligada no activa sin el Anexo 2
+ni el historial de mora completo (`RequirementsMissing`); los meses que faltan entran por la plantilla
+`lending.arrears-history` y lo que siga faltando lo completa el cierre con la regla de meses faltantes y lo marca. La no
+obligada adopta o desiste con acta, estudio y aviso subidos a la propuesta (pestaña «Modelo de deterioro» de
+`/cartera/cierres`). El Anexo 2 sembrado va `verified = false` y **sin la PI voluntaria** (nadie adopta hasta registrarla);
+el 9083 espera instructivo. Recetas: `docs/operaciones/cartera-perdida-esperada.md`, `docs/manual/cartera-perdida-esperada.md`.
+**K6b, vivienda Ley 546 y UVR (fase 23, 2026-10-17)**: migración aditiva `CarteraVivienda` (15 columnas, ninguna tabla).
+Con `EntregaVigente = K6b` se abre la modalidad Vivienda (reglas `LND-2026.2`): tasa fija bajo el menor entre
+`TOPE_TASA_VIVIENDA` y la usura, sin mora sobre intereses, prepago sin penalidad; plazo, financiable general y VIS
+(`IsSocialHousing`) y cuota-ingreso son cinco `LIMITE` sembrados «pendiente de validar»; el desembolso exige hipoteca de
+primer grado (`MortgageRank`). Un crédito en **UVR** (sin tramos) se lleva en UVR a la diezmilésima y se valora en pesos con
+la UVR de cada día, registrada **un valor por día** en la central (sin semilla); sin la UVR del día ese crédito no se causa
+(`NationalValues.Missing`). La corrección monetaria diaria es el hecho masivo `CorreccionMonetariaUvrCausada` (CMU,
+comprobante `CA`; propuesta por defecto de E12). Las respuestas ganan `housing`, `uvr`, `denominationUnit` e
+`isSocialHousing` opcionales (api.md §29). Recetas: `docs/manual/cartera-vivienda-y-uvr.md`,
+`docs/operaciones/valores-nacionales.md` §3a.
+**Reglas transversales de la 013 (cierre local, 2026-10-17)**: **un solo escritor del libro de Cartera**,
+`RegistroDeCartera` (`NadieEscribeElLibroDeCarteraFueraDelRegistro`); **una sola fuente de saldos**,
+`ReconstruccionDeCredito` (no hay saldos guardados que no salgan de ella); los pagos entran sólo por el **contrato de
+obligaciones v1**; los **valores nacionales** (usura, UVR, topes, tipos de organización, Anexo 2) se registran una vez en la
+base administrativa (`ADM_NationalValues`, `ADM_RegulatoryDocuments`) y se **replican** a `COR_` de cada cooperativa; corregir
+una USURA o una UVR ya replicada encola la corrida `NationalValueCorrection`, que corrige desde el día afectado hasta la última
+marca con filas nuevas (nunca edita lo aplicado) y manda el reparto en pesos de un pago de ese día en su propio hecho
+`PagoRedistribuidoPorValorNacional` (PRN, comprobante `CA`; decisión del dueño); los **cierres son inmutables**; el modelo de
+deterioro va por cooperativa y segmento; **los layouts son dato** con cotejo (`verified`); los documentos al deudor llevan
+código de verificación; los permisos `Lending.*` los siembra la API al arrancar; las pruebas de DT §2.25 tienen nombre fijo.
+Verde al cierre local: e2e en PostgreSQL y SQL Server (Lending 108 pasan y 7 omitidas de rendimiento; todo el proyecto 585 y
+16). Índice de recetas: `docs/manual/cartera.md`. Pendiente del dueño o de ambiente: cotejar layouts y Anexo 2, PI voluntaria,
+UVR y topes reales en la central, T1078–T1089 (QA, MAUI, despliegue).
+**Decisiones del dueño del 2026-10-18 (T1091–T1097, sin migración)**: el reparto de un pago se corrige con
+`PagoRedistribuidoPorValorNacional` (PRN) también en la corrida de una **usura** (el saldo a favor que deja un pago viaja
+ahí; mismo asiento neto que C93), y las `reallocations` de `PagoAplicado`/`PagoReversado` se asientan **en el comprobante
+del pago o del reverso** con el constructor de PRN (`contabilidad.md` §30–§31). En las centrales, la mora bajo el rango
+negativo de `Centrales.RangosDeMora` va **con sus días reales y sin marca negativa**. Plazos y periodicidades regulatorias
+son **informativos**: nada se bloquea por ellos; la evaluación de cartera fuera de periodicidad avisa
+(`PortfolioEvaluationOutsidePeriodicity`); cada cooperativa fija su periodicidad del SICSES con
+`Sicses.MesesDeCorte`/`Sicses.DiasDePlazo`, y el último día hábil descuenta los `FESTIVO` (`ICalendarioHabil`). El
+certificado tributario lleva en renglones aparte el **anticipo recibido** en el año y pendiente al 31/12 y la **corrección
+monetaria UVR** del año. Los **requisitos de la activación se exigen en todos los ambientes** (no hay `Waived`); fuera de
+producción sólo cuentan como recaudador y tesorería los dobles `TST`/`TES`, y las e2e los cumplen con
+`CarteraE2E.RequisitosDeActivacionAsync`. Confirmado: SOLIDO sin créditos en UVR, un solo tope de vivienda, UVR sin
+tramos, avisar al cargar y bloquear al activar el historial faltante (`78926dd2`); el pago que cambia de cancelar por la
+UVR sigue a soporte.
+Rutas `/api/accounting/lending/*`, `/api/accounting/regulatory-indicators`,
+  `/api/lending/accounting/*` y `/api/lending/messages`; pantallas `/contabilidad/cartera/{matriz, tipos-de-comprobante,
+  completitud, lotes, lotes/{id}}`, `/contabilidad/indicadores-regulatorios`, `/cartera/conciliacion-contable`, la
+  pestaña «Emitidos» de `/cartera/bandeja-de-mensajes` y los reconocimientos de Cartera en `/contabilidad/periodos`.
+  Recetas: `docs/manual/contabilidad-contrato-de-contabilizacion.md` §9 y `docs/manual/cartera-integracion-contable.md`
+  (para la contadora, con lo pendiente de validar); las de fases anteriores, `docs/manual/cartera-*.md`.
+
+- **Captaciones y aportes (feature 014, rama `014-ahorros-aportes-cdt`, K7 a K11 y Polish, 2026-10-19; rama local, sin
+  merge ni despliegue)**: ahorro a la vista, permanente, contractual, CDAT y aportes sociales **dentro de la Cartera de la
+  013**, en reemplazo de las captaciones heredadas, retiradas con `RetiroDeCaptacionesHeredadas` (destructiva con guarda;
+  el dueño autorizó y es el segundo revisor, D15) junto con `/api/savings` y sus pantallas. **La línea es común**
+  (`LND_CreditLines.Nature`: colocación, captación, aportes) con versión de condiciones propia por naturaleza, y la cuenta
+  es una sola entidad, `MemberAccount`. Reglas que no se negocian: **un solo escritor del libro de cuentas**,
+  `RegistroDeCuentas`, y **una sola fuente de saldos**, `ReconstruccionDeCuenta` (a la fecha D con lo conocido hasta R);
+  **los movimientos de caja entran sólo por el contrato de cuentas** (`IContratoDeCuentas` v1: consignar, retirar,
+  trasladar, reversar), como los pagos por el contrato de obligaciones —la cancelación en efectivo por el contrato sigue
+  rechazada hasta que exista Recaudo—; **Captaciones no conoce cuentas**: emite hechos por la misma matriz
+  `ACC_LendingPostingRules` y `DestinoContabilidad` (17 roles, 5 dimensiones nuevas que no pesan, comprobantes `MA`, `CC`,
+  `TD`, `AO`, `RA`) con la validación previa de `Contabilidad.FaltaDeRegla`; el ciclo diario corre por
+  `PasoDeCaptaciones`/`ISubpasoDeCaptaciones` y `CicloDelCdat`; lo que sale de la transacción (el correo de una reversión
+  tardía) va por `TareasTrasElCommit`; **sin valores legales en el código** (componente inflacionario, inembargable, tope
+  del seguro de depósitos y tope de entrega sin sucesión son valores nacionales; lo demás, parámetros con vigencia);
+  motores puros con **67 casos dorados** (`Domain.Tests/Lending/Deposits/Casos`, recalculados con `calcular.py`);
+  requisitos de activación en **todos** los ambientes (D14), activación por naturaleza y roles sugeridos `DeCaptaciones`
+  (D18). Entregas: **K7** aportes, cuota, recaudo por Nómina y pagadurías, retiro del asociado con cruce de deuda; **K8**
+  ahorro a la vista, intereses, retención con componente inflacionario, GMF, cargos, débito automático, bloqueos,
+  embargos con límite inembargable, documentos al titular; **K9** CDAT (título no negociable, tasa negociada) y ahorro
+  contractual; **K10** revalorización, excedentes y amortización de asamblea, inactividad, no reclamados y fallecimiento;
+  **K11** fondo de liquidez (Decreto 976 de 2026), IRL y brecha, depósitos asegurados, SICSES 9026, 9068, 9013, 169 y
+  9067 y exógena 1019 y 1020, **sin cotejar** (`verified = false`; plazos informativos, como en la 013).
+  **`EntregaVigente = K11`**: las cinco salen juntas y ninguna va a producción sin Recaudo y Tesorería reales.
+  **Migraciones**: una sola par, `CaptacionesAportes` (53 tablas `LND_`, SQL a mano para T044, `NOM` y `ASO`),
+  **congelada desde el 2026-10-19 (T225)** con `RetiroDeCaptacionesHeredadas` y las de la 013:
+  `LasMigracionesCongeladasNoSeRegeneran` guarda la huella de cada `.cs` y `.Designer.cs` (comentarios incluidos: anotar
+  respaldo y revisor en la cabecera exige actualizar la huella en el mismo commit); todo cambio de esquema es una
+  migración nueva. 180 rutas nuevas bajo `/api/lending/...` (`Endpoints/Lending/Deposits/`), permisos `Lending.*` (163,
+  los siembra la API); pantallas `/cartera/captaciones/*`, `/cartera/fondo-de-liquidez`,
+  `/cartera/captaciones/reportes-regulatorios`; la ficha de la persona muestra sólo lo del titular y las cuentas como
+  cotitular salen aparte (`GET /api/core/people/{id}/co-held-accounts`). Recetas: `docs/manual/cartera-captaciones.md`
+  (índice y ocho temáticos), `contabilidad-contrato-de-contabilizacion.md` §10, runbooks
+  `docs/operaciones/captaciones-puesta-en-marcha.md`, `captaciones-despliegue.md` y `captaciones-retiro-heredado.md`.
+  Pendiente del dueño: medir el piloto (T234), validar con la contadora la matriz y sus cuentas CUIF, los casos dorados y
+  los siete layouts (T235), promover (T236), MAUI a mano y cargar los valores nacionales sin semilla; preguntas abiertas
+  en `specs/014-ahorros-aportes-cdt/research.md`.
+
 ## Arquitectura
 Clean Architecture en 4 capas:
 - `src/Core/` — Domain, Application
@@ -600,18 +785,18 @@ Clean Architecture en 4 capas:
 
 ## Totales
 
-Instantánea del 2026-09-26 (cierre de la entrega I1 de la feature 012, en su rama `012-inventario-comercial`), remedida. **Son cifras que
+Instantánea del 2026-10-19 (cierre local de la feature 014, K7 a K11 y Polish, en su rama `014-ahorros-aportes-cdt`), remedida. **Son cifras que
 envejecen**: las de antes llevaban meses desfasadas —decían 113 endpoints cuando había
 ~619, y 398 pruebas cuando eran 616— y nadie lo notaba porque nada las contrasta. Si
 dudás, medí en vez de creerles; el comando está al lado.
 
 | | | cómo medirlo |
 |---|---|---|
-| Rutas REST | 856 (2026-09-26, I1 de la feature 012: +84 sobre las 772 del cierre de la 011 —catálogo, bodegas, documentos, compras, conteos, traslados, períodos, puesta en marcha, aprobaciones, parámetros, alertas, alcances, informes de inventario, impuestos—, ya descontadas las del inventario heredado que se retiraron) | `grep -rhE "^\s*[a-zA-Z]+\.Map(Get\|Post\|Put\|Delete\|Patch)\(" --include=*.cs src/Presentation/IngenIA365ERP.API/Endpoints/ \| wc -l` |
-| Páginas Blazor | 201 con `@page` (2026-09-26; I1 de la 012 retiró las 21 pantallas del inventario heredado y sumó las suyas: `/inventario/*`, `/compras/*`, `/ventas/canales`, `/ventas/vendedores`, `/maestros/impuestos`) | `grep -rl "@page" --include=*.razor src/Presentation/IngenIA365ERP.Shared/Pages/ \| wc -l` |
-| Reportes PDF | 12 clases `*Report` (2026-09-26; el retiro del inventario heredado se llevó `InventoryValuationReport`: los informes de inventario nuevos salen del centro de informes como `TablaExportable`) | `grep -rhoE "static class [A-Za-z]+Report\b" src/Presentation/IngenIA365ERP.API/Reports/*.cs \| wc -l` |
-| Pruebas sin contenedores | 3.215 el 2026-09-26, cierre de I1 de la 012 (516 Domain, 2.324 Application, 209 Architecture, 164 Shared, 2 Load), todas pasan | `dotnet test tests/IngenIA365ERP.<X>.Tests` |
-| Pruebas de integración | 404 el 2026-09-26 con Docker en PostgreSQL: 398 pasan y 6 omitidas con su motivo (la de hashes, `[Fact(Skip)]`, y cinco de la 012: tres de volumen que sólo corren con `RUN_PERF_TESTS=1`, una que espera los tipos fiscales de I3/I4 y una que por HTTP no puede fechar la foto de un conteo en un mes ya terminado); una cayó por un contenedor de Mongo que no arrancó (código 48) y pasó al repetirla. Las colecciones «Nomina e2e», «Contabilidad e2e» e «Inventario e2e» corren en paralelo sobre contenedores distintos; las de adjuntos suman MinIO de `quay.io` y el host «Adjuntos sobre S3» (`ApiConAlmacenS3Fixture`) | `dotnet test tests/IngenIA365ERP.API.IntegrationTests` |
+| Rutas REST | 1.403 (2026-10-19, feature 014: +180 de Captaciones y aportes, −74 del ahorro heredado y otras retiradas). Antes: 1.322 (2026-10-17, feature 013: +466 sobre las 856 de I1 —Cartera K1 a K6b, su integración contable, valores nacionales y regulatorios—). Antes: 856 (2026-09-26, I1 de la feature 012: +84 sobre las 772 del cierre de la 011 —catálogo, bodegas, documentos, compras, conteos, traslados, períodos, puesta en marcha, aprobaciones, parámetros, alertas, alcances, informes de inventario, impuestos—, ya descontadas las del inventario heredado que se retiraron) | `grep -rhE "^\s*[a-zA-Z]+\.Map(Get\|Post\|Put\|Delete\|Patch)\(" --include=*.cs src/Presentation/IngenIA365ERP.API/Endpoints/ \| wc -l` |
+| Páginas Blazor | 281 con `@page` (2026-10-19, feature 014: retiró las pantallas heredadas de ahorro y sumó `/cartera/captaciones/*` y `/cartera/fondo-de-liquidez`). Antes: 283 (2026-10-17, feature 013: +82, `/cartera/*` y las de Contabilidad para Cartera). Antes: 201 (2026-09-26; I1 de la 012 retiró las 21 pantallas del inventario heredado y sumó las suyas: `/inventario/*`, `/compras/*`, `/ventas/canales`, `/ventas/vendedores`, `/maestros/impuestos`) | `grep -rl "@page" --include=*.razor src/Presentation/IngenIA365ERP.Shared/Pages/ \| wc -l` |
+| Reportes PDF | 16 clases `*Report` (2026-10-19, feature 014: se retiraron `PersonPortfolioReport`, `CdtCertificateReport` y `SavingsStatementReport` y se sumó `DocumentosDeCaptacionesReport`, en la subcarpeta `Reports/Captaciones/`: por eso el comando ahora es recursivo). Antes: 18 (2026-10-17, feature 013: +6, documentos al deudor y de Cartera) | `grep -rhoE "static class [A-Za-z]+Report\b" --include=*.cs src/Presentation/IngenIA365ERP.API/Reports/ \| wc -l` |
+| Pruebas sin contenedores | 10.078 el 2026-10-19, cierre local de la 014 (2.630 Domain, 6.193 Application, 757 Architecture, 498 Shared), todas pasan. Antes: 9.109 el 2026-10-17, cierre local de la 013 (2.298 Domain, 5.706 Application, 638 Architecture, 467 Shared), todas pasan. Antes: 3.215 el 2026-09-26 (516 Domain, 2.324 Application, 209 Architecture, 164 Shared, 2 Load) | `dotnet test tests/IngenIA365ERP.<X>.Tests` |
+| Pruebas de integración | 601 el 2026-10-17 en PostgreSQL **y** SQL Server: 585 pasan y 16 omitidas con su motivo en cada motor (Lending 108 y 7, las de rendimiento que piden `RUN_PERF_TESTS=1`); filtro por módulo `--filter "FullyQualifiedName~IntegrationTests.Lending"`, motor por `DB_PROVIDER`. Antes: 404 el 2026-09-26 con Docker en PostgreSQL: 398 pasan y 6 omitidas con su motivo (la de hashes, `[Fact(Skip)]`, y cinco de la 012: tres de volumen que sólo corren con `RUN_PERF_TESTS=1`, una que espera los tipos fiscales de I3/I4 y una que por HTTP no puede fechar la foto de un conteo en un mes ya terminado); una cayó por un contenedor de Mongo que no arrancó (código 48) y pasó al repetirla. Las colecciones «Nomina e2e», «Contabilidad e2e» e «Inventario e2e» corren en paralelo sobre contenedores distintos; las de adjuntos suman MinIO de `quay.io` y el host «Adjuntos sobre S3» (`ApiConAlmacenS3Fixture`) | `dotnet test tests/IngenIA365ERP.API.IntegrationTests` |
 | Errores de compilación | 0 | `dotnet build IngenIA365ERP.slnx` |
 
 **Las de integración** levantan contenedores (Testcontainers) y exigen Docker Desktop
@@ -660,12 +845,16 @@ Ver `README.md` para instrucciones de ejecución y `docs/INDICE-DOCUMENTACION.md
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan at
-[specs/012-inventario-comercial/plan.md](specs/012-inventario-comercial/plan.md)
+[specs/014-ahorros-aportes-cdt/plan.md](specs/014-ahorros-aportes-cdt/plan.md)
 along with its companion artifacts:
-- [spec.md](specs/012-inventario-comercial/spec.md)
-- [research.md](specs/012-inventario-comercial/research.md)
-- [data-model.md](specs/012-inventario-comercial/data-model.md)
-- [quickstart.md](specs/012-inventario-comercial/quickstart.md)
-- [decisiones-transversales.md](specs/012-inventario-comercial/decisiones-transversales.md)
-- [contracts/](specs/012-inventario-comercial/contracts/)
+- [spec.md](specs/014-ahorros-aportes-cdt/spec.md)
+- [investigacion-financiera.md](specs/014-ahorros-aportes-cdt/investigacion-financiera.md)
+- [research.md](specs/014-ahorros-aportes-cdt/research.md)
+- [data-model.md](specs/014-ahorros-aportes-cdt/data-model.md)
+- [quickstart.md](specs/014-ahorros-aportes-cdt/quickstart.md)
+- [contracts/](specs/014-ahorros-aportes-cdt/contracts/)
+
+The 014 extends the Cartera of the 013: also read
+[specs/013-cartera-financiera/plan.md](specs/013-cartera-financiera/plan.md) and
+[decisiones-transversales.md](specs/013-cartera-financiera/decisiones-transversales.md).
 <!-- SPECKIT END -->

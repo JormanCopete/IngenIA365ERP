@@ -1,0 +1,25 @@
+// US2-5 con exposición (T63, FR-038): manda el monto CONSOLIDADO, no lo pedido. La solicitud de 15.000.000 cabe en la gerencia
+// (techo 20.000.000), pero la persona es codeudora de un crédito vivo con 8.000.000 de capital: 15.000.000 + 8.000.000 = 23.000.000
+// pasa el techo de la gerencia y la solicitud va al comité. La suma la arma ExposicionConsolidadaDelDeudor (US2); el motor la recibe.
+{
+  "nombre": "us2-5-consolidado-sobre-gerencia",
+  "descripcion": "Lo pedido cabe en la gerencia; el consolidado con una codeuda, no.",
+  "matriz": {
+    "niveles": [
+      { "codigo": "ANALISTA", "nombre": "Analista de crédito", "rango": 10, "clase": "Individual", "permiso": "Lending.Decisions.Analyst", "techo": 5000000 },
+      { "codigo": "EXCEP", "nombre": "Jefe de cartera (excepciones)", "rango": 15, "clase": "Individual", "permiso": "Lending.Decisions.Exceptions", "techo": 5000000, "excepcion": true },
+      { "codigo": "GERENCIA", "nombre": "Gerencia", "rango": 20, "clase": "Individual", "permiso": "Lending.Decisions.Management", "techo": 20000000 },
+      { "codigo": "COMITE", "nombre": "Comité de crédito", "rango": 30, "clase": "Collegiate", "organo": "COMCRED", "techo": 100000000 },
+      { "codigo": "CONSEJO", "nombre": "Consejo de administración", "rango": 40, "clase": "Collegiate", "organo": "CONSEJO", "consejo": true }
+    ],
+    "reglas": []
+  },
+  "escenarios": [
+    { "nombre": "lo pedido solo (sin exposición): gerencia", "sujeto": { "linea": "CONLIB", "montoConsolidado": 15000000, "plazoMeses": 36 },
+      "esperado": { "nivel": "GERENCIA", "razones": [ { "clase": "AmountCeiling", "nivel": "GERENCIA" } ] } },
+    { "nombre": "15.000.000 + 8.000.000 como codeudor = 23.000.000: comité", "sujeto": { "linea": "CONLIB", "montoConsolidado": 23000000, "plazoMeses": 36 },
+      "esperado": { "nivel": "COMITE", "razones": [ { "clase": "AmountCeiling", "nivel": "COMITE" } ] } },
+    { "nombre": "consolidado justo en el techo de la gerencia", "sujeto": { "linea": "CONLIB", "montoConsolidado": 20000000, "plazoMeses": 36 },
+      "esperado": { "nivel": "GERENCIA", "razones": [ { "clase": "AmountCeiling", "nivel": "GERENCIA" } ] } }
+  ]
+}

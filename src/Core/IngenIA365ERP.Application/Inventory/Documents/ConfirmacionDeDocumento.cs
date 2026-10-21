@@ -337,7 +337,7 @@ public sealed class ConfirmacionDeDocumento(
     /// <summary>¿La clase emite algún mensaje de negocio a Contabilidad? (el saldo inicial sólo emite informativos).</summary>
     public static bool EmiteNegocioAContabilidad(DescripcionDeClase clase) =>
         clase.Messages.Any(tipoDeMensaje => CatalogoDeMensajesV1.Todos.Any(t =>
-            t.Type == tipoDeMensaje && t.Destination == IntegrationDestinations.Accounting && t.Kind == IntegrationMessageKind.Business));
+            t.Type == tipoDeMensaje && t.AdmiteDestino(IntegrationDestinations.Accounting) && t.Kind == IntegrationMessageKind.Business));
 
     private static Result<ConfirmationResultDto> Falla(Error error) => Result.Failure<ConfirmationResultDto>(error);
 }

@@ -1,0 +1,63 @@
+// FR-090, FR-091 (T0858): CAMBIO DE FECHA DE PAGO a petición del deudor, decidido el 20-07-2026 (a mitad del período de la cuota 7),
+// con la cuota 6 pagada: saldo 1.580.589,08 en las 6 cuotas que quedan, ahora los días 30. Vencidas hasta el 20-07: 6 → sigue la 7. El
+// primer vencimiento es el primer día 30 que no cae antes de un período después de la decisión: 30-08-2026 (el 20-08 es el límite).
+// El crédito base de los casos de K3: 3.000.000 a 12 cuotas mensuales fijas, 24 % EA, 30/360, desembolsado el 15-01-2026 (vence los 15).
+// Su plan (calcular.py): saldo tras la cuota 5 = 1.827.884,60; la cuota 6 (15-07-2026) lleva 247.295,52 de capital y 33.062,01 de
+// interés; saldo tras la 6 = 1.580.589,08; tras la 7 = 1.328.820,59; tras la 8 = 1.072.498,21; tras la 9 = 811.539,58.
+// La usura de CONSUMO es 26,5 % desde el 01-01-2026 y 27 % desde el 01-07-2026.
+// Regla (FR-091, T29): el plan se regenera desde la fecha de la decisión con la versión de reglas vigente; capital = saldo + lo que
+// recoge una refinanciación + lo capitalizado; los costos de la novedad nunca entran. Calculado con calcular.py (bloque «K3»).
+// Pendiente de validar por la contadora.
+{
+  "nombre": "k3-cambio-de-fecha",
+  "condiciones": {
+    "sistema": "LevelPayment", "convencion": "Thirty360", "equivalencia": "Compound",
+    "redondeo": { "unidad": 0.01, "modo": "AwayFromZero", "momento": "PerConcept" },
+    "prelacion": "OldestInstallmentFirst",
+    "monto": 3000000, "plazoCuotas": 12, "periodicidad": "Monthly", "tasaEA": 0.240000,
+    "fechaDesembolso": "2026-01-15", "modalidad": "CONSUMO"
+  },
+  "series": {
+    "usura": [
+      { "clave": "CONSUMO", "desde": "2026-01-01", "ea": 0.265000, "registradoEn": "2025-12-31T15:00:00Z",
+        "publicId": "0b7a3c8e-1d1a-4f6e-9a01-000000003001" },
+      { "clave": "CONSUMO", "desde": "2026-07-01", "ea": 0.270000, "registradoEn": "2026-06-30T15:00:00Z",
+        "publicId": "0b7a3c8e-1d1a-4f6e-9a01-000000003002" }
+    ],
+    "festivos": []
+  },
+  "operaciones": [],
+  "novedades": [
+    {
+      "nombre": "dia-30-desde-la-cuota-7",
+      "mecanismo": "PaymentDateChange",
+      "causa": "Modification",
+      "fecha": "2026-07-20",
+      "saldoDeCapital": 1580589.08,
+      "interesCapitalizado": 0,
+      "saldosRecogidos": [],
+      "costos": 0,
+      "cuotas": 6,
+      "diaDePago": 30,
+      "esperado": {
+        "primeraCuota": 7,
+        "capital": 1580589.08,
+        "tasas": { "diaria": 0.000597710167622401, "nominalDelPeriodo": 0.018087582483510675, "cuotaNivelada": 282037.77, "efectiva": 0.237939, "efectivaSinCargos": 0.237939 },
+        "plan": {
+          "interesDeGracia": 0,
+          "residuo": -0.02,
+          "totales": { "capital": 1580589.08, "interes": 111637.52, "seguro": 0 },
+          "cuotas": [
+            { "numero": 7, "vencimiento": "2026-08-30", "dias": 40, "capital": 243804.60, "interes": 38233.17, "seguro": 0, "saldo": 1336784.48 },
+            { "numero": 8, "vencimiento": "2026-09-30", "dias": 30, "capital": 257858.57, "interes": 24179.20, "seguro": 0, "saldo": 1078925.91 },
+            { "numero": 9, "vencimiento": "2026-10-30", "dias": 30, "capital": 262522.61, "interes": 19515.16, "seguro": 0, "saldo": 816403.30 },
+            { "numero": 10, "vencimiento": "2026-11-30", "dias": 30, "capital": 267271.01, "interes": 14766.76, "seguro": 0, "saldo": 549132.29 },
+            { "numero": 11, "vencimiento": "2026-12-30", "dias": 30, "capital": 272105.29, "interes": 9932.48, "seguro": 0, "saldo": 277027 },
+            { "numero": 12, "vencimiento": "2027-01-30", "dias": 30, "capital": 277027, "interes": 5010.75, "seguro": 0, "saldo": 0 }
+          ]
+        },
+        "usura": { "veredicto": "Pasa", "usura": 0.270000, "holgura": 0.032061 }
+      }
+    }
+  ]
+}

@@ -3,6 +3,7 @@
 @using System.Text.Json
 @using IngenIA365ERP.Shared.Services.Nomina
 @inject NominaClient Nomina
+@inject IngenIA365ERP.Shared.Services.Cartera.LibranzaClient Libranza
 @inject HttpClient Http
 @inject INotificationService Notification
 
@@ -26,6 +27,9 @@
             <option value="PayrollDisbursement">Dispersión de nómina</option>
             <option value="SeveranceDeposit">Consignación de cesantías</option>
             <option value="SupplierPayments">Pagos a proveedores</option>
+            <option value="LoanDisbursement">Desembolsos de crédito</option>
+            <option value="PayrollDeductionRequest">Libranza: archivo de descuentos (ida)</option>
+            <option value="PayrollDeductionResult">Libranza: respuesta de la pagaduría (vuelta)</option>
         </select>
         <PermissionGate Required="Core.BankFileFormats.Manage">
             <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@(() => AbrirNuevo(null))">Nuevo formato</SfButton>
@@ -103,6 +107,9 @@
                                 <option value="PayrollDisbursement">Dispersión de nómina</option>
                                 <option value="SeveranceDeposit">Consignación de cesantías</option>
                                 <option value="SupplierPayments">Pagos a proveedores (tesorería)</option>
+                                <option value="LoanDisbursement">Desembolsos de crédito (Cartera)</option>
+                                <option value="PayrollDeductionRequest">Libranza: archivo de descuentos (ida, Cartera)</option>
+                                <option value="PayrollDeductionResult">Libranza: respuesta de la pagaduría (vuelta, Cartera)</option>
                             </select>
                         </label>
                         <SfDatePicker TValue="DateTime" Value="@_def.ValidFrom.ToDateTime(TimeOnly.MinValue)" ValueChanged="@((DateTime d) => _def.ValidFrom = DateOnly.FromDateTime(d))" Placeholder="Vigente desde" FloatLabelType="FloatLabelType.Always" Enabled="@(_enUso == 0)" />
@@ -226,6 +233,42 @@
                             <TabItem>
                                 <ChildContent><TabHeader Text="Vista previa" /></ChildContent>
                                 <ContentTemplate>
+                                    @if (_def.Scope == "PayrollDeductionResult")
+                                    {
+                                        @* Feature 013, K2 (T0832): el formato de vuelta se prueba leyendo una respuesta de la pagaduría, sin guardar nada. *@
+                                        <p class="texto-tenue">Lee un archivo de respuesta de la pagaduría con este formato, sin guardar nada: cada fila con sus valores por origen y los errores con su línea y campo. Se lee con el formato guardado; guarde primero los cambios.</p>
+                                        @if (_editandoId is null)
+                                        {
+                                            <p class="aviso">Guarde el formato para probar la lectura.</p>
+                                        }
+                                        else
+                                        {
+                                            <InputFile OnChange="@LeerPruebaAsync" accept=".csv,.txt" />
+                                        }
+                                        <IndicadorDeCarga Cargando="@_vistaCarga.Activa" Texto="Leyendo…">
+                                        @if (_lectura is { } lec)
+                                        {
+                                            <p class="texto-tenue">@lec.DetailLineCount línea(s) de detalle · @lec.Rows.Count leída(s) · @lec.Errors.Count error(es)</p>
+                                            @if (lec.Errors.Count > 0)
+                                            {
+                                                <div class="aviso"><ul>@foreach (var e in lec.Errors) { <li>Línea @e.LineNumber @(e.Field is { } c ? $"· {c}" : ""): @e.Message</li> }</ul></div>
+                                            }
+                                            <div class="tabla-desplazable">
+                                                <table class="data-grid">
+                                                    <thead><tr><th>Línea</th>@foreach (var o in OrigenesLeidos(lec)) { <th>@o</th> }</tr></thead>
+                                                    <tbody>
+                                                        @foreach (var fila in lec.Rows)
+                                                        {
+                                                            <tr><td>@fila.LineNumber</td>@foreach (var o in OrigenesLeidos(lec)) { <td>@(fila.Values.GetValueOrDefault(o) ?? "—")</td> }</tr>
+                                                        }
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        }
+                                        </IndicadorDeCarga>
+                                    }
+                                    else
+                                    {
                                     <p class="texto-tenue">Escribe las primeras líneas con una liquidación aprobada real, sin guardar nada. Pegue el id de la corrida (se ve en la dirección de la pantalla de la liquidación, <code>?corrida=</code>) o venga desde Dispersión con «Probar formato».</p>
                                     <div class="fila-campos">
                                         <SfTextBox @bind-Value="_corridaPrueba" Placeholder="Id de la corrida aprobada" FloatLabelType="FloatLabelType.Always" Width="360px" />
@@ -247,6 +290,7 @@
                                         }
                                     }
                                     </IndicadorDeCarga>
+                                    }
                                 </ContentTemplate>
                             </TabItem>
                         </TabItems>
@@ -417,6 +461,22 @@
         var res = await Nomina.VistaPreviaDeDispersionAsync(new VistaPreviaDeDispersionRequest(corrida, null, DateOnly.FromDateTime(DateTime.Today), null, "PRUEBA", _def));
         if (!res.IsSuccess) { _vista = null; await Notification.ErrorAsync(res.ErrorCode == "Generic.NotFound" ? NotificationServiceExtensions.SinPermiso : res.ErrorMessage ?? "No se pudo armar la vista previa."); return; }
         _vista = res.Value;
+    }
+
+    private IngenIA365ERP.Shared.Services.Cartera.LecturaDeFormatoDto? _lectura;
+
+    private static IReadOnlyList<string> OrigenesLeidos(IngenIA365ERP.Shared.Services.Cartera.LecturaDeFormatoDto lectura) =>
+        lectura.Rows.SelectMany(r => r.Values.Keys).Distinct().ToList();
+
+    private async Task LeerPruebaAsync(InputFileChangeEventArgs e)
+    {
+        if (_editandoId is not { } id) return;
+        using var carga = _vistaCarga.Iniciar();
+        using var ms = new MemoryStream();
+        await e.File.OpenReadStream(2 * 1024 * 1024).CopyToAsync(ms);
+        var r = await Libranza.LeerConFormatoAsync(id, e.File.Name, ms.ToArray());
+        _lectura = r.IsSuccess ? r.Value : null;
+        if (!r.IsSuccess) await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo leer el archivo de prueba.");
     }
 
     private async Task GuardarAsync()

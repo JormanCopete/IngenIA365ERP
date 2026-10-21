@@ -1,0 +1,152 @@
+{
+  "descripcion": "§24 ejemplo 1: desembolso por transferencia; el puente con Tesorería lleva el valor del tramo y el beneficiario como tercero.",
+  "sobre": {
+    "version": 1,
+    "kind": "Business",
+    "originModule": "CAR",
+    "originEventKey": "Confirmation",
+    "origin": {
+      "kind": "Operation",
+      "documentClass": null,
+      "documentTypeCode": null,
+      "number": "DES-000123",
+      "publicId": "0d0d0001-0000-4000-8000-000000000001",
+      "operationDate": "2026-11-03"
+    },
+    "related": null,
+    "chainRootPublicId": "0e0e0002-0000-4000-8000-000000000002",
+    "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+    "costCenterPublicId": null,
+    "warehouseCode": null,
+    "personPublicId": "a1b2c3d4-0000-4000-8000-000000000002",
+    "currency": "COP",
+    "exchangeRate": 1,
+    "originUser": {
+      "centralUserId": "d4e5f6a7-b8c9-4d0e-9f1a-2b3c4d5e6f70",
+      "name": "Usuario de ensayo"
+    },
+    "emittedAt": "2026-11-03T15:00:00Z"
+  },
+  "mensajes": [
+    {
+      "messageId": "0f0f0005-0000-4000-8000-000000000005",
+      "type": "CreditoDesembolsado",
+      "kind": "Business",
+      "originDocumentClass": "LoanDisbursement",
+      "payload": {
+        "loan": {
+          "loanPublicId": "7b8c9d0e-1f2a-4b3c-9d4e-000000000123",
+          "loanNumber": "000123"
+        },
+        "debtorPersonPublicId": "a1b2c3d4-0000-4000-8000-000000000002",
+        "valueDate": "2026-11-03",
+        "registeredAt": "2026-11-03T15:00:00Z",
+        "dimensions": {
+          "creditLineCode": "LIB01",
+          "modalityCode": "CONSUMO",
+          "subsegmentCode": "ConLibranza",
+          "riskCategory": "A",
+          "riskSubcategory": "None",
+          "isEmployee": false,
+          "inGracePeriod": false,
+          "restructured": false,
+          "writtenOff": false,
+          "collectorClass": null,
+          "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+          "impairmentModel": "ArrearsAnnex1",
+          "riskSegment": "CONSUMO",
+          "valueUnit": "Pesos"
+        },
+        "amounts": [
+          {
+            "concept": "Principal",
+            "installmentNumber": null,
+            "amount": 10000000.0,
+            "uvrAmount": null,
+            "onBehalfOfAssociate": false,
+            "reasonCode": "Transfer"
+          }
+        ],
+        "original": null,
+        "rulesVersion": "LND-2026.1",
+        "tranche": {
+          "number": 1,
+          "isLast": true
+        },
+        "disbursementForm": "Transfer",
+        "payeePersonPublicId": "a1b2c3d4-0000-4000-8000-000000000002",
+        "grossAmount": 10000000.0,
+        "payoffDeductions": [
+          {
+            "loan": {
+              "loanPublicId": "7b8c9d0e-1f2a-4b3c-9d4e-000000000077",
+              "loanNumber": "000077"
+            },
+            "operationPublicId": "0f1e0003-0000-4000-8000-000000000003",
+            "amount": 2300000.0
+          }
+        ],
+        "netToDisburse": 7700000.0,
+        "disbursementOrderPublicId": "0d1e0004-0000-4000-8000-000000000004",
+        "inKind": null,
+        "plan": {
+          "scheduleVersion": 1,
+          "amortizationSystem": "LevelPayment",
+          "periodicity": "Monthly",
+          "installmentCount": 36,
+          "installmentAmount": 392184.0,
+          "firstDueDate": "2026-12-30",
+          "finalDueDate": "2029-11-30",
+          "annualEffectiveRate": 0.245,
+          "dayCountConvention": "Thirty360",
+          "rulesVersion": "LND-2026.1"
+        }
+      }
+    }
+  ],
+  "esperado": {
+    "tipo": "DS",
+    "fecha": "2026-11-03",
+    "origen": "LendingIssuedDocument",
+    "lineas": [
+      {
+        "rol": "Capital",
+        "cuenta": "14410501",
+        "debito": 10000000.0,
+        "credito": 0.0,
+        "tercero": "ana",
+        "cruce": "PG 000123",
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "CreditoDesembolsado"
+          ],
+          "concepto": "Principal",
+          "creditos": [
+            "000123"
+          ]
+        }
+      },
+      {
+        "rol": "DesembolsoPorGirar",
+        "cuenta": "24959501",
+        "debito": 0.0,
+        "credito": 10000000.0,
+        "tercero": "ana",
+        "cruce": null,
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "CreditoDesembolsado"
+          ],
+          "concepto": "Principal",
+          "creditos": [
+            "000123"
+          ]
+        }
+      }
+    ]
+  }
+}

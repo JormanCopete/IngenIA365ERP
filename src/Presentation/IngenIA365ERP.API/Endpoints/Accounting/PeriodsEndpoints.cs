@@ -16,8 +16,11 @@ public class PeriodsEndpoints : ICarterModule
     public sealed record AbrirEjercicioRequest(int Year);
     public sealed record MotivoRequest(string Reason);
 
-    /// <summary>El cuerpo opcional de cerrar un mes: reconocer los mensajes de Inventario pendientes (feature 012, contracts/contabilidad.md §8).</summary>
-    public sealed record CerrarPeriodoRequest(bool? AcknowledgeInventoryPending);
+    /// <summary>
+    /// El cuerpo opcional de cerrar un mes: reconocer los mensajes de Inventario pendientes (feature 012, contracts/contabilidad.md §8) y,
+    /// desde la feature 013 (T0652, api.md §24), los hechos de Cartera pendientes y la carga de Cartera que el cierre dejaría sin activar.
+    /// </summary>
+    public sealed record CerrarPeriodoRequest(bool? AcknowledgeInventoryPending, bool? AcknowledgeLendingPending = null, bool? AcknowledgeLendingLoad = null);
 
     public void AddRoutes(IEndpointRouteBuilder app)
     {
@@ -51,9 +54,11 @@ public class PeriodsEndpoints : ICarterModule
             .AddEndpointFilter<ErrorEnvelopeFilter>()
             .RequirePermission("Accounting.Periods.CloseYear");
 
-        // Feature 012 (T491, contracts/api.md §29): cuerpo opcional { acknowledgeInventoryPending }.
+        // Feature 012 (T491, contracts/api.md §29): cuerpo opcional { acknowledgeInventoryPending }; feature 013 (T0652) suma
+        // { acknowledgeLendingPending, acknowledgeLendingLoad }. Accounting.Period.LendingNotClosed no se reconoce.
         group.MapPost("/{year:int}/{month:int}/close", async (int year, int month, CerrarPeriodoRequest? body, ISender sender, CancellationToken ct) =>
-                await sender.Send(new ClosePeriodCommand(year, month, body?.AcknowledgeInventoryPending ?? false), ct))
+                await sender.Send(new ClosePeriodCommand(year, month, body?.AcknowledgeInventoryPending ?? false,
+                    body?.AcknowledgeLendingPending ?? false, body?.AcknowledgeLendingLoad ?? false), ct))
             .WithName("Accounting_Periods_Close")
             .AddEndpointFilter<ErrorEnvelopeFilter>()
             .RequirePermission("Accounting.Periods.Close");

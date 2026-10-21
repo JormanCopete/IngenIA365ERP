@@ -1,0 +1,27 @@
+// Regla 8, horario: lunes a viernes de 7:00 a 19:00 y sábados de 8:00 a 15:00; el final no se incluye (a las 19:00 en
+// punto ya no). Viernes 13, sábado 14, domingo 15 y lunes 16 festivo de noviembre de 2026.
+{
+  "caso": "11-fuera-de-horario",
+  "reglas": { "horario": { "lunesAViernes": ["07:00", "19:00"], "sabado": ["08:00", "15:00"] }, "contactosPorDia": 1, "noHabiles": ["2026-11-02", "2026-11-16"] },
+  "titular": {},
+  "escenarios": [
+    { "nombre": "viernes 19:30 pasa al sábado 8:00",
+      "solicitud": { "pedido": "2026-11-13T19:30", "canal": "Sms", "proposito": "Collection" },
+      "esperado": { "decision": "Diferido", "siguiente": "2026-11-14T08:00", "motivos": ["OutsideHours"] } },
+    { "nombre": "sábado 15:00 pasa al martes (domingo y lunes festivo)",
+      "solicitud": { "pedido": "2026-11-14T15:00", "canal": "Sms", "proposito": "Collection" },
+      "esperado": { "decision": "Diferido", "siguiente": "2026-11-17T07:00", "motivos": ["OutsideHours"] } },
+    { "nombre": "miércoles 6:30 espera a las 7:00",
+      "solicitud": { "pedido": "2026-11-11T06:30", "canal": "Sms", "proposito": "Informative" },
+      "esperado": { "decision": "Diferido", "siguiente": "2026-11-11T07:00", "motivos": ["OutsideHours"] } },
+    { "nombre": "miércoles 19:00 en punto pasa al jueves",
+      "solicitud": { "pedido": "2026-11-11T19:00", "canal": "Sms", "proposito": "Collection" },
+      "esperado": { "decision": "Diferido", "siguiente": "2026-11-12T07:00", "motivos": ["OutsideHours"] } },
+    { "nombre": "miércoles 7:00 en punto sale",
+      "solicitud": { "pedido": "2026-11-11T07:00", "canal": "Sms", "proposito": "Collection" },
+      "esperado": { "decision": "Permitido", "en": "2026-11-11T07:00" } },
+    { "nombre": "sábado 14:59 sale",
+      "solicitud": { "pedido": "2026-11-14T14:59", "canal": "Sms", "proposito": "Collection" },
+      "esperado": { "decision": "Permitido", "en": "2026-11-14T14:59" } }
+  ]
+}

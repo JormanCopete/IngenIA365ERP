@@ -1,0 +1,229 @@
+{
+  "descripcion": "§24 ejemplo 5 (T55): el pago acreditó A; el cierre de noviembre pasó el crédito a C y el reverso, fechado en diciembre, restituye en C con la matriz de su fecha.",
+  "sobre": {
+    "version": 1,
+    "kind": "Business",
+    "originModule": "CAR",
+    "originEventKey": "Confirmation",
+    "origin": {
+      "kind": "Operation",
+      "documentClass": null,
+      "documentTypeCode": null,
+      "number": "REV-000981",
+      "publicId": "0d0d0031-0000-4000-8000-000000000031",
+      "operationDate": "2026-12-01"
+    },
+    "related": {
+      "publicId": "0d0d9999-0000-4000-8000-000000009999",
+      "number": "PAG-000981"
+    },
+    "chainRootPublicId": "0e0e0032-0000-4000-8000-000000000032",
+    "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+    "costCenterPublicId": null,
+    "warehouseCode": null,
+    "personPublicId": "a1b2c3d4-0000-4000-8000-000000000002",
+    "currency": "COP",
+    "exchangeRate": 1,
+    "originUser": {
+      "centralUserId": "d4e5f6a7-b8c9-4d0e-9f1a-2b3c4d5e6f70",
+      "name": "Usuario de ensayo"
+    },
+    "emittedAt": "2026-12-01T15:00:00Z"
+  },
+  "mensajes": [
+    {
+      "messageId": "0f0f0036-0000-4000-8000-000000000036",
+      "type": "PagoReversado",
+      "kind": "Business",
+      "originDocumentClass": "PaymentReversal",
+      "payload": {
+        "loan": {
+          "loanPublicId": "7b8c9d0e-1f2a-4b3c-9d4e-000000000123",
+          "loanNumber": "000123"
+        },
+        "debtorPersonPublicId": "a1b2c3d4-0000-4000-8000-000000000002",
+        "valueDate": "2026-11-20",
+        "registeredAt": "2026-11-20T15:00:00Z",
+        "dimensions": {
+          "creditLineCode": "LIB01",
+          "modalityCode": "CONSUMO",
+          "subsegmentCode": "ConLibranza",
+          "riskCategory": "C",
+          "riskSubcategory": "None",
+          "isEmployee": false,
+          "inGracePeriod": false,
+          "restructured": false,
+          "writtenOff": false,
+          "collectorClass": "Receipts",
+          "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+          "impairmentModel": "ArrearsAnnex1",
+          "riskSegment": "CONSUMO",
+          "valueUnit": "Pesos"
+        },
+        "amounts": [
+          {
+            "concept": "Principal",
+            "installmentNumber": 3,
+            "amount": 380000.0,
+            "uvrAmount": null,
+            "onBehalfOfAssociate": false,
+            "reasonCode": null
+          },
+          {
+            "concept": "CurrentInterest",
+            "installmentNumber": 3,
+            "amount": 105000.0,
+            "uvrAmount": null,
+            "onBehalfOfAssociate": false,
+            "reasonCode": null
+          },
+          {
+            "concept": "Insurance",
+            "installmentNumber": 3,
+            "amount": 15000.0,
+            "uvrAmount": null,
+            "onBehalfOfAssociate": true,
+            "reasonCode": null
+          },
+          {
+            "concept": "Advance",
+            "installmentNumber": 4,
+            "amount": 200000.0,
+            "uvrAmount": null,
+            "onBehalfOfAssociate": false,
+            "reasonCode": null
+          }
+        ],
+        "original": {
+          "messageId": "0a0a0033-0000-4000-8000-000000000033",
+          "type": "PagoAplicado",
+          "originPublicId": "0b0b0034-0000-4000-8000-000000000034",
+          "number": "PAG-000981"
+        },
+        "rulesVersion": "LND-2026.1",
+        "initiatedBy": "Collector",
+        "reason": "Cheque devuelto",
+        "collector": {
+          "collectorCode": "REC",
+          "collectorClass": "Receipts",
+          "idempotencyKey": "REC:c0de0035-0000-4000-8000-000000000035",
+          "meansClass": "Cash",
+          "payerPersonPublicId": "a1b2c3d4-0000-4000-8000-000000000002",
+          "receipt": {
+            "number": "R-0001",
+            "date": "2026-11-20",
+            "officePublicId": null,
+            "meansReference": null,
+            "documentKind": null
+          }
+        },
+        "reversedAmount": 700000.0,
+        "reallocations": [],
+        "reopened": false
+      },
+      "relatedDocumentClass": "PaymentApplication"
+    }
+  ],
+  "esperado": {
+    "tipo": "RC",
+    "fecha": "2026-12-01",
+    "origen": "LendingIssuedDocument",
+    "lineas": [
+      {
+        "rol": "Capital",
+        "cuenta": "14411501",
+        "debito": 380000.0,
+        "credito": 0.0,
+        "tercero": "ana",
+        "cruce": "PG 000123",
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "PagoReversado"
+          ],
+          "concepto": "Principal",
+          "creditos": [
+            "000123"
+          ]
+        }
+      },
+      {
+        "rol": "InteresPorCobrar",
+        "cuenta": "14431501",
+        "debito": 105000.0,
+        "credito": 0.0,
+        "tercero": "ana",
+        "cruce": "PG 000123",
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "PagoReversado"
+          ],
+          "concepto": "CurrentInterest",
+          "creditos": [
+            "000123"
+          ]
+        }
+      },
+      {
+        "rol": "PagoPorCuentaDelAsociado",
+        "cuenta": "14441501",
+        "debito": 15000.0,
+        "credito": 0.0,
+        "tercero": "ana",
+        "cruce": "PG 000123",
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "PagoReversado"
+          ],
+          "concepto": "Insurance",
+          "creditos": [
+            "000123"
+          ]
+        }
+      },
+      {
+        "rol": "Anticipo",
+        "cuenta": "27500501",
+        "debito": 200000.0,
+        "credito": 0.0,
+        "tercero": "ana",
+        "cruce": "PG 000123",
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "PagoReversado"
+          ],
+          "concepto": "Advance",
+          "creditos": [
+            "000123"
+          ]
+        }
+      },
+      {
+        "rol": "RecaudoPorAplicar",
+        "cuenta": "11059501",
+        "debito": 0.0,
+        "credito": 700000.0,
+        "tercero": "ana",
+        "cruce": null,
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "PagoReversado"
+          ],
+          "concepto": null,
+          "creditos": [
+            "000123"
+          ]
+        }
+      }
+    ]
+  }
+}

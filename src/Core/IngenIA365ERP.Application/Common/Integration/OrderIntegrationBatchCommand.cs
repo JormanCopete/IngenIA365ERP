@@ -33,14 +33,21 @@ public sealed record OrderIntegrationBatchCommand(
 {
     public Guid OperationKey { get; init; }
 
-    public AlcanceDeLote Alcance => new(From, To, DocumentTypeCodes, ScheduleKey, BranchPublicId);
+    /// <summary>
+    /// El módulo de origen de los hechos que toma el lote (feature 013, T0645, T15; contracts/contabilidad.md §6): un lote nunca mezcla
+    /// Inventario y Cartera. Por defecto <c>INV</c>, la ruta de Inventario; la de Cartera (<c>/api/accounting/lending/batches</c>) pone <c>CAR</c>.
+    /// </summary>
+    public string OriginModule { get; init; } = ModulosDeOrigen.Inventario;
+
+    public AlcanceDeLote Alcance => new(From, To, DocumentTypeCodes, ScheduleKey, BranchPublicId, OriginModule);
 }
 
 /// <summary>
 /// El alcance de un lote manual y de su vista previa (api.md §26.4): rango de fechas de operación, tipos de documento, horario
 /// y sucursal. (nuevo)
 /// </summary>
-public sealed record AlcanceDeLote(DateOnly From, DateOnly To, IReadOnlyList<string>? DocumentTypeCodes, string? ScheduleKey, Guid? BranchPublicId)
+public sealed record AlcanceDeLote(
+    DateOnly From, DateOnly To, IReadOnlyList<string>? DocumentTypeCodes, string? ScheduleKey, Guid? BranchPublicId, string? OriginModule = null)
 {
     /// <summary>
     /// Las entregas a Contabilidad que un lote manual tomaría: <c>InBatch</c> sin lote, con fecha de operación en el rango y los
@@ -67,6 +74,11 @@ public sealed record AlcanceDeLote(DateOnly From, DateOnly To, IReadOnlyList<str
         }
 
         if (BranchPublicId is Guid sucursal) consulta = consulta.Where(d => d.Message!.BranchPublicId == sucursal);
+        if (!string.IsNullOrWhiteSpace(OriginModule))
+        {
+            var modulo = OriginModule;
+            consulta = consulta.Where(d => d.Message!.OriginModule == modulo);
+        }
         return consulta.OrderBy(d => d.MessageId);
     }
 }
@@ -79,6 +91,8 @@ public sealed class OrderIntegrationBatchCommandValidator : ValidadorConMotivo<O
         RuleFor(x => x.To).GreaterThanOrEqualTo(x => x.From).WithMessage("La fecha final no puede ser anterior a la inicial.");
         RuleFor(x => x.ScheduleKey).MaximumLength(60);
         RuleForEach(x => x.DocumentTypeCodes).NotEmpty().MaximumLength(10);
+        RuleFor(x => x.OriginModule).Must(m => m is ModulosDeOrigen.Inventario or ModulosDeOrigen.Cartera)
+            .WithMessage("Un lote manual de Contabilidad es de Inventario (INV) o de Cartera (CAR).");
     }
 }
 
@@ -95,16 +109,23 @@ public sealed class OrderIntegrationBatchCommandHandler(
         if (corte is null)
             return Result.Failure<LoteOrdenadoDto>(ErroresDeIntegracion.MensajeNoEncontrado(request.CutoffMessagePublicId));
 
+        // Un lote manual en curso del mismo módulo que se cruza con el alcance (T15: el de Inventario no detiene al de Cartera ni al revés).
+        // El módulo de un lote es el de sus hechos; uno recién pedido, sin hechos asignados todavía, se cuenta como de los dos.
+        var modulo = request.OriginModule;
         var enCurso = await db.IntegrationBatches.AsNoTracking()
             .Where(b => b.Destination == IntegrationDestinations.Accounting && b.Trigger == BatchTrigger.Manual
                         && (b.Status == BatchStatus.Requested || b.Status == BatchStatus.Running)
                         && (b.DateFrom == null || b.DateFrom <= request.To) && (b.DateTo == null || b.DateTo >= request.From)
-                        && (b.ScheduleKey == null || request.ScheduleKey == null || b.ScheduleKey == request.ScheduleKey))
+                        && (b.ScheduleKey == null || request.ScheduleKey == null || b.ScheduleKey == request.ScheduleKey)
+                        && (!db.IntegrationMessageDeliveries.Any(d => d.BatchId == b.Id)
+                            || db.IntegrationMessageDeliveries.Any(d => d.BatchId == b.Id && d.Message!.OriginModule == modulo)))
             .OrderBy(b => b.Id)
             .Select(b => new { b.PublicId, b.Number })
             .FirstOrDefaultAsync(ct);
         if (enCurso is not null)
-            return Result.Failure<LoteOrdenadoDto>(AccountingErrors.InventoryBatchAlreadyRunning(enCurso.PublicId, enCurso.Number));
+            return Result.Failure<LoteOrdenadoDto>(modulo == ModulosDeOrigen.Cartera
+                ? AccountingErrors.LendingBatchAlreadyRunning(enCurso.PublicId, enCurso.Number)
+                : AccountingErrors.InventoryBatchAlreadyRunning(enCurso.PublicId, enCurso.Number));
 
         var actor = await actorActual.ObtenerAsync(ct);
         var resultado = await TransaccionExplicita.EjecutarAsync(db, async () =>

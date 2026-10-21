@@ -28,6 +28,22 @@ public class LaSegregacionNoUsaUserIdDelToken
         // (RevisionDeReorden, que corre como actor proceso).
         Path.Combine("Core", "IngenIA365ERP.Application", "Inventory", "Salespeople"),
         Path.Combine("Core", "IngenIA365ERP.Application", "Inventory", "Replenishment"),
+        // Feature 013, US17 (T0262, R135): donde Cartera decide quién puede votar, decidir o cerrar —sesiones, atribuciones, el registro de
+        // intervenciones— y sus motores puros. US2 (bloque 6A) suma Application/Lending/Origination: quien arma, radica, analiza y anula.
+        Path.Combine("Core", "IngenIA365ERP.Application", "Lending", "Sessions"),
+        Path.Combine("Core", "IngenIA365ERP.Application", "Lending", "Attributions"),
+        Path.Combine("Core", "IngenIA365ERP.Application", "Lending", "Segregation"),
+        Path.Combine("Core", "IngenIA365ERP.Application", "Lending", "Origination"),
+        // US3 (bloque 7C, T0428): quien desembolsa, anula la orden o el crédito, y quien registra garantías y pagarés.
+        Path.Combine("Core", "IngenIA365ERP.Application", "Lending", "Disbursements"),
+        // K3 (US11, bloque B; T0868): quien radica, decide y aplica una novedad o una condonación.
+        Path.Combine("Core", "IngenIA365ERP.Application", "Lending", "Novelties"),
+        Path.Combine("Core", "IngenIA365ERP.Application", "Lending", "Waivers"),
+        // K3 (US14, bloque B; T0901): quien arma, aplica y reporta un lote de castigo.
+        Path.Combine("Core", "IngenIA365ERP.Application", "Lending", "WriteOffs"),
+        Path.Combine("Core", "IngenIA365ERP.Domain", "Lending", "Attributions"),
+        Path.Combine("Core", "IngenIA365ERP.Domain", "Lending", "Sessions"),
+        Path.Combine("Core", "IngenIA365ERP.Domain", "Lending", "Segregation"),
     ];
 
     private static readonly Regex UserIdOCorreo = new(@"\.(UserId|Email)\b", RegexOptions.Compiled);

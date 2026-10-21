@@ -1,0 +1,98 @@
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Http
+@inject PagosClient Pagos
+@inject INotificationService Notification
+
+@* Feature 013, US5 (T0562; FR-035, FR-075, D24; contracts/api.md §8.3): la instrucción permanente y revocable del deudor para imputar sus
+   abonos extraordinarios a capital (Ley 2032): reducir el plazo o reducir la cuota. La entidad nunca decide por él: sin preferencia ni
+   elección, el abono queda como saldo a favor. Muestra la vigente y su historia (nada se borra: cada cambio es una versión nueva) y, con
+   Lending.PrepaymentPreferences.Manage, el cambio con su motivo. *@
+<PermissionGate Required="Lending.Loans.Read" MostrarAviso="true">
+    <div class="info-card">
+        <h4>Preferencia del deudor para abonos a capital</h4>
+        <IndicadorDeCarga Cargando="@_carga.Activa">
+            @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+            @if (_preferencia is { } p)
+            {
+                <p><strong>Vigente:</strong> @(p.Current is { } c ? $"{TextosDePagos.Eleccion(c.Choice)} desde {TextosDeCreditos.Instante(c.Since)} ({TextosDePagos.OrigenDePreferencia(c.Origin)})" : "Sin preferencia registrada")</p>
+                @if (p.Current?.Choice is null)
+                {
+                    <p class="texto-apoyo">Sin preferencia, un abono extraordinario sin elección del deudor queda como saldo a favor hasta que él decida.</p>
+                }
+                @if (p.History.Count > 0)
+                {
+                    <table class="data-grid">
+                        <thead><tr><th class="numero">Versión</th><th>Preferencia</th><th>Desde</th><th>Origen</th></tr></thead>
+                        <tbody>
+                            @foreach (var v in p.History.OrderByDescending(x => x.Version))
+                            {
+                                <tr><td class="numero">@v.Version</td><td>@TextosDePagos.Eleccion(v.Choice)</td><td>@TextosDeCreditos.Instante(v.Since)</td><td>@TextosDePagos.OrigenDePreferencia(v.Origin)</td></tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            }
+        </IndicadorDeCarga>
+
+        <PermissionGate Required="Lending.PrepaymentPreferences.Manage">
+            <h4>Cambiar la preferencia</h4>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <div class="form-grid">
+                    <label class="campo">Nueva preferencia
+                        <select class="e-input" @bind="_eleccion">
+                            @foreach (var e in TextosDePagos.Elecciones) { <option value="@e.Valor">@e.Texto</option> }
+                            <option value="">Revocar (sin preferencia)</option>
+                        </select>
+                    </label>
+                    <label class="campo campo-ancho">Motivo (la instrucción del deudor) *
+                        <input class="e-input" maxlength="500" @bind="_motivo" />
+                    </label>
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@GuardarAsync">Guardar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </PermissionGate>
+    </div>
+</PermissionGate>
+
+@code {
+    [Parameter, EditorRequired] public Guid CreditoId { get; set; }
+
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+    private PreferenciaDePrepagoDto? _preferencia;
+    private string _eleccion = "ReduceTerm";
+    private string? _motivo, _error;
+    private ClaveDeOperacion _clave = new();
+    private Guid _cargado;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (CreditoId == _cargado) return;
+        _cargado = CreditoId;
+        _clave = new ClaveDeOperacion();
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Pagos.PreferenciaAsync(CreditoId);
+        if (!r.IsSuccess) { _preferencia = null; _error = r.ErrorMessage ?? "No se pudo leer la preferencia del deudor."; return; }
+        _error = null;
+        _preferencia = r.Value;
+    }
+
+    private async Task GuardarAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_motivo)) return;
+        using (_guardado.Iniciar())
+        {
+            var r = await Pagos.CambiarPreferenciaAsync(CreditoId, new CambioDePreferenciaRequest(_eleccion.Length > 0 ? _eleccion : null, _motivo.Trim()), _clave);
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo cambiar la preferencia."); return; }
+            _motivo = null;
+            await Notification.SuccessAsync("Preferencia del deudor registrada.");
+        }
+        await CargarAsync();
+    }
+}

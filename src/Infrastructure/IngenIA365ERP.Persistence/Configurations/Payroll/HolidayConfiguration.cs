@@ -18,6 +18,9 @@ public class HolidayConfiguration : IEntityTypeConfiguration<Holiday>
 
         builder.Property(e => e.Name).HasMaxLength(80).IsRequired();
 
+        // Feature 013 (T93, C68; data-model parte 3 §7.5): la fila central de la que es proyección. Migración PlataformaParaCartera.
+        builder.Property(e => e.NationalValuePublicId);
+
         builder.HasIndex(e => e.Date).IsUnique()
             .HasDatabaseName("UK_PAY_Holidays_Date")
             .HasFilter("[IsDeleted] = 0");

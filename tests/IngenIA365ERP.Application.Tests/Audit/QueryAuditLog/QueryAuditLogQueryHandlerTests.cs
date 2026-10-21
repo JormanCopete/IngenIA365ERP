@@ -258,4 +258,39 @@ public class QueryAuditLogQueryHandlerTests
             .Validate(new QueryAuditLogQuery(null, null, null, null, null, null, null, new PageRequest()) { Outcome = resultado })
             .IsValid.Should().Be(valido);
     }
+
+    /// <summary>
+    /// Feature 013 (T0560, A11): con <c>?operationKey=</c> el intento del contrato sin ningún hecho a partir de él, pasado el tiempo máximo de una
+    /// transacción, se rotula «Revertido con el recaudador»; con su hecho, o todavía dentro del tiempo, no.
+    /// </summary>
+    [Fact]
+    public async Task Con_la_clave_de_operacion_el_intento_sin_hecho_pasado_el_tiempo_se_rotula_revertido()
+    {
+        var audit = Substitute.For<IAuditService>();
+        var cu = Substitute.For<ICurrentTenantService>();
+        cu.TenantId.Returns("demo");
+        var reloj = Substitute.For<IDateTimeService>();
+        var ahora = new DateTime(2026, 10, 11, 15, 0, 0, DateTimeKind.Utc);
+        reloj.UtcNow.Returns(ahora);
+        AuditLogEntry Evento(string id, string accion, DateTime cuando) =>
+            new(id, "demo", "7", "jefe", accion, "ObligationContract", "NOM:x", "Lending", null, null, null, null, null, 0, cuando,
+                new Dictionary<string, string> { ["OperationKey"] = "NOM:x" });
+        var viejo = Evento("1", "Lending.ObligationContract.Attempted", ahora.AddMinutes(-30));
+        var conHecho = Evento("2", "Lending.ObligationContract.Attempted", ahora.AddMinutes(-20));
+        var hecho = Evento("3", "Lending.ObligationContract.Applied", ahora.AddMinutes(-20).AddSeconds(1));
+        var reciente = Evento("4", "Lending.ObligationContract.Attempted", ahora.AddMinutes(-1));
+        audit.QueryAsync(Arg.Any<AuditQueryParameters>(), Arg.Any<CancellationToken>())
+            .Returns(new PagedList<AuditLogEntry>([reciente, hecho, conHecho, viejo], 4, 1, 50));
+        var handler = new QueryAuditLogQueryHandler(audit, cu, reloj);
+
+        var result = await handler.Handle(new QueryAuditLogQuery(null, null, null, null, null, null, null, new PageRequest()) { OperationKey = " NOM:x " },
+            CancellationToken.None);
+
+        await audit.Received(1).QueryAsync(Arg.Is<AuditQueryParameters>(p => p.OperationKey == "NOM:x"), Arg.Any<CancellationToken>());
+        var porId = result.Value.Items.ToDictionary(i => i.Id, i => i.Label);
+        porId["1"].Should().Be(QueryAuditLogQueryHandler.RotuloRevertidoConElRecaudador);
+        porId["2"].Should().BeNull("tiene su hecho");
+        porId["3"].Should().BeNull();
+        porId["4"].Should().BeNull("todavía puede estar en la transacción del recaudador");
+    }
 }

@@ -1,0 +1,41 @@
+// Cargos: la misma cuota de 8.000 en una linea que condona lo que no alcanza (ShortfallPolicy = Waive): con 3.000 cobrables no se
+// causa.
+{
+  "descripcion": "La linea condona el cargo que no alcanza.",
+  "entrada": {
+    "cargo": {
+      "codigo": "CUOTAMAN",
+      "clase": "MaintenanceFee",
+      "disparador": "Periodic",
+      "modo": "FixedAmount",
+      "valorFijo": 8000,
+      "periodicidad": "Monthly",
+      "politicaSiNoAlcanza": "Waive"
+    },
+    "casos": [
+      {
+        "montoDeLaOperacion": 100000,
+        "saldoPromedio": 1000000,
+        "saldoMinimo": 500000,
+        "mesesDeAntiguedad": 12,
+        "titularEsEmpleado": false,
+        "cuentaExentaDeGmf": false,
+        "titularMenor": false,
+        "oficina": "11111111-1111-1111-1111-111111111111",
+        "exoneracionIndividual": false,
+        "operacionesEnElPeriodo": 1,
+        "cobrableSinBajarDelMinimo": 3000
+      }
+    ]
+  },
+  "nombre": "cargo-06-condonado-por-la-linea",
+  "esperado": {
+    "casos": [
+      {
+        "resultado": "NoSeCausa",
+        "valor": 0,
+        "exoneracion": "ShortfallWaived"
+      }
+    ]
+  }
+}

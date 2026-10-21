@@ -1,0 +1,77 @@
+// GMF: el reverso de un retiro devuelve al tope del mes lo exento que uso y espeja su valor (FR-002). Retiro de 19.000.000 de la
+// cuenta marcada: exento 18.330.900, gravado 669.100 x 0,004 = 2.676,4 -> 2.676; reverso: -2.676 y el tope vuelve a cero usado;
+// un retiro posterior de 1.000.000 queda exento.
+{
+  "descripcion": "Retiro, su reverso y un retiro posterior dentro del tope recuperado.",
+  "entrada": {
+    "politicas": [
+      {
+        "desde": "2026-01-01",
+        "tarifa": 0.004,
+        "topeExencionUvt": 350,
+        "uvt": 52374,
+        "politica": "SingleMarkedAccount",
+        "gravados": [
+          "Withdrawal",
+          "TransferToOtherHolder",
+          "TransferBetweenDemandAndTermDeposit",
+          "TermDepositRedemptionToAccount",
+          "Cancellation"
+        ],
+        "exentos": [
+          "TransferBetweenSameHolderSavings"
+        ]
+      }
+    ],
+    "movimientos": [
+      {
+        "id": "r1",
+        "fecha": "2026-05-04",
+        "hecho": "Withdrawal",
+        "monto": 19000000,
+        "cuentaSujeta": true,
+        "esLaCuentaMarcada": true
+      },
+      {
+        "id": "rv",
+        "fecha": "2026-05-04",
+        "reversa": "r1"
+      },
+      {
+        "id": "r2",
+        "fecha": "2026-05-06",
+        "hecho": "Withdrawal",
+        "monto": 1000000,
+        "cuentaSujeta": true,
+        "esLaCuentaMarcada": true
+      }
+    ]
+  },
+  "nombre": "gmf-04-reverso",
+  "esperado": {
+    "movimientos": [
+      {
+        "id": "r1",
+        "exentoAplicado": 18330900,
+        "baseGravada": 669100,
+        "valor": 2676,
+        "exentoUsadoDespues": 18330900
+      },
+      {
+        "id": "rv",
+        "exentoAplicado": -18330900,
+        "baseGravada": -669100,
+        "valor": -2676,
+        "exentoUsadoDespues": 0
+      },
+      {
+        "id": "r2",
+        "exentoAplicado": 1000000,
+        "baseGravada": 0,
+        "valor": 0,
+        "exentoUsadoDespues": 1000000
+      }
+    ],
+    "totalGmf": 0
+  }
+}

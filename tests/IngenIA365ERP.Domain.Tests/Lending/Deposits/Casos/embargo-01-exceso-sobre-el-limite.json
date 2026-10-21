@@ -1,0 +1,54 @@
+// US11 prueba independiente: dos cuentas de ahorro que suman 70.000.000 con un limite de 50.000.000 (valor de prueba); el embargo judicial de 15.000.000 retiene solo del exceso, en el orden (la mas antigua primero).
+{
+  "nombre": "embargo-01-exceso-sobre-el-limite",
+  "descripcion": "US11 prueba independiente: dos cuentas de ahorro que suman 70.000.000 con un limite de 50.000.000 (valor de prueba); el embargo judicial de 15.000.000 retiene solo del exceso, en el orden (la mas antigua primero).",
+  "entrada": {
+    "tope": 15000000,
+    "porAlimentos": false,
+    "limite": 50000000,
+    "aplicacion": "AllProtectedAccounts",
+    "ordenDeClases": [],
+    "cuentas": [
+      {
+        "id": 1,
+        "clase": "Demand",
+        "abiertaEl": "2020-01-10",
+        "saldo": 40000000,
+        "retenidoPorOtros": 0,
+        "protegida": true,
+        "embargable": true
+      },
+      {
+        "id": 2,
+        "clase": "Permanent",
+        "abiertaEl": "2021-05-01",
+        "saldo": 30000000,
+        "retenidoPorOtros": 0,
+        "protegida": true,
+        "embargable": true
+      }
+    ]
+  },
+  "esperado": {
+    "limiteAplicado": 50000000,
+    "protegido": 50000000,
+    "totalEmbargable": 20000000,
+    "retenido": 15000000,
+    "cuentas": [
+      {
+        "id": 1,
+        "orden": 1,
+        "protegido": 20000000,
+        "embargable": 20000000,
+        "retenido": 15000000
+      },
+      {
+        "id": 2,
+        "orden": 2,
+        "protegido": 30000000,
+        "embargable": 0,
+        "retenido": 0
+      }
+    ]
+  }
+}

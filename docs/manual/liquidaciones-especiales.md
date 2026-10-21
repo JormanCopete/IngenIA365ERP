@@ -133,16 +133,37 @@ catálogo de fondos.
   la definitiva en borrador queda `Stale` y al recalcular sale sin el tramo. La prima y las
   cesantías ya pagadas por una corrida semestral/anual aprobada se omiten (`YaPagadaEnCorridaSemestral`,
   `YaPagadaEnCorridaAnual`).
-- **Descuentos** (`GET/PUT /{runId}/deductions`): créditos de Cartera y libranzas del
-  empleado, propuestos según la política `DeduccionAlRetiroModo` (`SaldoTotal`,
-  `SoloCuotasCausadas` —contadas con la misma regla `ApplyOn` de la recurrente—, `NoProponer`);
-  la responsable sólo puede **bajar** lo aplicado, con motivo, y queda auditado
-  (`Payroll.Settlement.DeductionAdjusted`). Si Cartera no responde, aviso, no bloqueo.
-- **Aprobar** cierra la ficha (`Status = -1`, `TerminationId`), recauda en Cartera por cada
-  obligación con lo aplicado —dentro de la misma unidad de trabajo: si el recaudo falla, no se
-  aprueba nada— y genera el **documento para firma** (PDF, `GET /{runId}/document`; el borrador
-  sale marcado «BORRADOR»). **Reversar** reabre la ficha y lista los recaudos a deshacer; si la
-  persona ya tiene una ficha nueva por reingreso responde `Payroll.Settlement.EmployeeRehired`.
+- **Descuentos** (`GET/PUT /{runId}/deductions`): las obligaciones de Cartera del empleado,
+  que Nómina **pregunta a Cartera** por la consulta de obligaciones (feature 013, enmienda E-03):
+  todas las vivas en las que es **deudor** —castigadas incluidas, de cualquier forma de pago;
+  nunca las de codeudor—, cada una con su número de obligación. Se proponen según la política
+  `DeduccionAlRetiroModo`: `SaldoTotal` (el saldo para cancelar), `SoloCuotasCausadas` (lo
+  exigible a la fecha) o `NoProponer`. La responsable sólo puede **bajar** lo aplicado, con
+  motivo, y queda auditado (`Payroll.Settlement.DeductionAdjusted`); al bajarlo la pantalla
+  muestra el **saldo exacto** que le queda a la obligación —lo simula Cartera, sin escribir—,
+  no un aproximado. Si Cartera no responde, aviso (`Payroll.Settlement.PortfolioUnavailable`) y
+  la propuesta sale vacía: no bloquea.
+- **Aprobar** cierra la ficha (`Status = -1`, `TerminationId`) y aplica en Cartera los
+  descuentos **todo o nada**, dentro de la misma transacción: antes vuelve a preguntar las
+  obligaciones y, si cambiaron desde la propuesta (entró un pago, nació otra), responde
+  `Payroll.Settlement.LoanProposalOutdated` y la pantalla recalcula en un clic; si Cartera
+  rechaza un ítem o le sobra plata (el saldo bajó), responde `Payroll.Settlement.LoanAmountsChanged`
+  con los valores de Cartera y **no se aprueba nada**, ni siquiera lo que Cartera alcanzó a
+  aplicar. Genera el **documento para firma** (PDF, `GET /{runId}/document`; el borrador sale
+  marcado «BORRADOR»).
+- **Reversar** reabre la ficha y **reversa en Cartera** cada descuento aplicado, en la misma
+  transacción: si Cartera rechaza uno, no se reversa nada. Un usuario de Cartera no puede
+  reversar esos pagos desde Cartera: son de Nómina. Si la persona ya tiene una ficha nueva por
+  reingreso responde `Payroll.Settlement.EmployeeRehired`.
+- **«Cartera por activar»**: mientras Cartera no esté activada no hay obligaciones exigibles y la
+  definitiva se aprueba sin descuentos de Cartera. Si el empleado está en una carga de migración
+  aplicada pero todavía no activada, el cálculo avisa `Payroll.LendingPendingActivation` y
+  aprobar exige marcar la casilla de reconocimiento (sin ella,
+  `Payroll.LendingPendingActivationAckRequired` con los nombres); quién lo reconoció y cuándo
+  queda en la corrida y en la auditoría.
+- `DESC_CARTERA` **contabiliza** en la definitiva contra el puente «recaudos por nómina para
+  Cartera» (ver `docs/operaciones/nomina-primer-periodo.md` §4f): sin cuentas del concepto, la
+  definitiva con descuentos de Cartera no se aprueba (`Payroll.Settlement.ConceptAccountsMissing`).
 - Sanción moratoria informativa (`GET /{runId}/late-payment-penalty`): no se contabiliza.
 
 ---
@@ -199,7 +220,8 @@ exigen el `View` del tipo de la corrida.
   definitiva: no los calcula ninguna corrida; N2 (PILA) los toma de la corrida `Settlement`.
 - Los devengos variables liquidados en la definitiva no entran al promedio de la prima ni de
   las cesantías de esa misma definitiva.
-- Archivo plano de consignación por fondo (N4), `pilaCode` del fondo (N2), recaudo en Cartera
-  sólo por Application.Tests hasta que exista desembolso por HTTP (E3 de la 009).
+- Archivo plano de consignación por fondo (N4) y `pilaCode` del fondo (N2). El recaudo en
+  Cartera pasa por el contrato de obligaciones de la feature 013; su e2e con créditos reales
+  (`NominaRecaudaPorElContratoTests`) llega con el contrato real de Cartera (US5).
 - Confirmaciones de la contadora: días del disfrute por calendario comercial (D-31),
   exoneración, `AffectsVacationBase`, aprendiz en práctica.

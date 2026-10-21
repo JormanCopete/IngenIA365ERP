@@ -1,0 +1,65 @@
+// T42: la cooperativa endureció la calificada de vinculados a 5/6 (el piso nacional es 4/5 y sólo se endurece).
+// Consejo de 10 principales, el interesado 110 excluido.
+//   Con 4/5:  5 × favorables ≥ 4 × 10 = 40 → 8 a favor bastarían.
+//   Con 5/6:  6 × favorables ≥ 5 × 10 = 50 → ceil(50 / 6) = 9.
+// Ocho a favor no alcanzan con la fracción sellada; nueve sí.
+{
+  "nombre": "09-fraccion-endurecida",
+  "descripcion": "La fracción de vinculados sellada (5/6) manda sobre el piso de 4/5.",
+  "regla": {
+    "quorum": { "numerador": 1, "denominador": 2, "comparacion": "MoreThan" },
+    "mayoria": { "numerador": 1, "denominador": 2, "comparacion": "MoreThan", "base": "PresentEligible" },
+    "vinculados": { "numerador": 5, "denominador": 6 }
+  },
+  "miembros": [
+    { "persona": 101 }, { "persona": 102 }, { "persona": 103 }, { "persona": 104 }, { "persona": 105 },
+    { "persona": 106 }, { "persona": 107 }, { "persona": 108 }, { "persona": 109 }, { "persona": 110 }
+  ],
+  "escenarios": [
+    {
+      "nombre": "ocho a favor",
+      "presentes": [101, 102, 103, 104, 105, 106, 107, 108, 109, 110],
+      "punto": {
+        "regla": "RelatedPartyQualified",
+        "excluidos": [ { "persona": 110, "motivo": "Es el solicitante" } ],
+        "votos": [
+          { "voto": 1, "persona": 101, "valor": "For" }, { "voto": 2, "persona": 102, "valor": "For" },
+          { "voto": 3, "persona": 103, "valor": "For" }, { "voto": 4, "persona": 104, "valor": "For" },
+          { "voto": 5, "persona": 105, "valor": "For" }, { "voto": 6, "persona": 106, "valor": "For" },
+          { "voto": 7, "persona": 107, "valor": "For" }, { "voto": 8, "persona": 108, "valor": "For" },
+          { "voto": 9, "persona": 109, "valor": "Against" }
+        ]
+      },
+      // Quórum: 10 / 2 + 1 = 6. 8 × 6 = 48 < 5 × 10 = 50 → no aprobado.
+      "esperado": {
+        "quorum": { "cumple": true, "composicion": 10, "requerido": 6, "presentesElegibles": 10 },
+        "elegibles": 9, "base": 10, "requeridos": 9,
+        "aFavor": 8, "enContra": 1, "abstenciones": 0,
+        "resultado": "NoAprobado",
+        "explicacionContiene": ["5/6", "8 × 6 = 48 < 5 × 10 = 50"]
+      }
+    },
+    {
+      "nombre": "nueve a favor",
+      "presentes": [101, 102, 103, 104, 105, 106, 107, 108, 109, 110],
+      "punto": {
+        "regla": "RelatedPartyQualified",
+        "excluidos": [ { "persona": 110, "motivo": "Es el solicitante" } ],
+        "votos": [
+          { "voto": 1, "persona": 101, "valor": "For" }, { "voto": 2, "persona": 102, "valor": "For" },
+          { "voto": 3, "persona": 103, "valor": "For" }, { "voto": 4, "persona": 104, "valor": "For" },
+          { "voto": 5, "persona": 105, "valor": "For" }, { "voto": 6, "persona": 106, "valor": "For" },
+          { "voto": 7, "persona": 107, "valor": "For" }, { "voto": 8, "persona": 108, "valor": "For" },
+          { "voto": 9, "persona": 109, "valor": "For" }
+        ]
+      },
+      // 9 × 6 = 54 ≥ 5 × 10 = 50 → aprobado.
+      "esperado": {
+        "quorum": { "cumple": true, "composicion": 10, "requerido": 6, "presentesElegibles": 10 },
+        "elegibles": 9, "base": 10, "requeridos": 9,
+        "aFavor": 9, "enContra": 0, "abstenciones": 0,
+        "resultado": "Aprobado"
+      }
+    }
+  ]
+}

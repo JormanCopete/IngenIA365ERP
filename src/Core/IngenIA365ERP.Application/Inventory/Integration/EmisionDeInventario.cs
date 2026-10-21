@@ -450,11 +450,11 @@ public sealed class EmisionDeInventario(
     public async Task<IReadOnlyList<object>> CreditoDeLaNotaDebitoAsync(InventoryDocument nota, InventoryDocument original, IReadOnlyList<DocumentPayment> pagos,
         CancellationToken ct)
     {
-        var creditos = pagos.Where(p => p.Direction == PaymentDirection.Received && !p.IsDeleted && p.EsCredito).OrderBy(p => p.LineNumber).ToList();
+        var creditos = pagos.Where(p => p.Direction == PaymentDirection.Received && !p.IsDeleted && p.PasaACartera).OrderBy(p => p.LineNumber).ToList();
         if (creditos.Count == 0) return [];
         var deLaVenta = await db.DocumentPayments.AsNoTracking()
             .Where(p => p.DocumentId == original.Id && !p.IsDeleted && p.Direction == PaymentDirection.Received
-                && (p.MeansClass == PaymentMeansClass.AssociateCredit || p.MeansClass == PaymentMeansClass.CustomerCredit))
+                && (p.MeansClass == PaymentMeansClass.AssociateCredit || p.MeansClass == PaymentMeansClass.CustomerCredit) && !p.CreditWithoutLending)
             .OrderBy(p => p.LineNumber).ToListAsync(ct);
         var registradas = await db.IntegrationMessages.AsNoTracking()
             .Where(m => m.OriginPublicId == original.PublicId && m.Type == VentaACreditoRegistradaV1.Type)
@@ -500,25 +500,27 @@ public sealed class EmisionDeInventario(
     // ------------------------------------------------------------------------------------- Cartera (US6) --
 
     /// <summary>
-    /// <c>VentaACreditoRegistrada</c> v1 (I3, T656; mensajes.md §8.1): una por pago de crédito <c>Received</c> de la venta, con la foto de la
+    /// <c>VentaACreditoRegistrada</c> (I3, T656; mensajes.md §8.1): una por pago de crédito <c>Received</c> de la venta, con la foto de la
     /// contraparte, el valor financiado, las condiciones del medio (T32), la línea sugerida, la marca «pendiente de validar», el origen del
     /// crédito, la aprobación (nunca el cajero) y el sello <c>accountsReceivableRecordedBy</c>. La clave de cada una es
-    /// <c>Confirmation:{paymentPublicId:N}</c> y la pone <see cref="MensajesDelDocumento.Solicitudes"/>.
+    /// <c>Confirmation:{paymentPublicId:N}</c> y la pone <see cref="MensajesDelDocumento.Solicitudes"/>. Feature 013 (T0175, T18, R113, R115):
+    /// sólo la <b>v2</b>, con la línea elegida, la evidencia de la consulta, el número reservado y la reserva; un pago con
+    /// <c>CreditWithoutLending</c> no emite nada a Cartera.
     /// </summary>
-    public async Task<IReadOnlyList<VentaACreditoRegistradaV1>> VentasACreditoAsync(InventoryDocument documento, IReadOnlyList<DocumentPayment> pagos,
+    public async Task<IReadOnlyList<VentaACreditoRegistradaV2>> VentasACreditoAsync(InventoryDocument documento, IReadOnlyList<DocumentPayment> pagos,
         CancellationToken ct)
     {
-        var creditos = pagos.Where(p => p.Direction == PaymentDirection.Received && !p.IsDeleted && p.EsCredito).OrderBy(p => p.LineNumber).ToList();
+        var creditos = pagos.Where(p => p.Direction == PaymentDirection.Received && !p.IsDeleted && p.PasaACartera).OrderBy(p => p.LineNumber).ToList();
         if (creditos.Count == 0) return [];
         var persona = documento.CounterpartyPersonId is int pid ? await db.People.AsNoTracking().FirstOrDefaultAsync(p => p.Id == pid, ct) : null;
         var foto = persona is null ? null : FotoDeLaContraparte.De(documento, persona);
         var caja = await DeCajaAsync(documento, ct);
         var canal = documento.SalesChannelId is int c ? await db.SalesChannels.AsNoTracking().Where(x => x.Id == c).Select(x => x.Code).FirstOrDefaultAsync(ct) : null;
 
-        var lista = new List<VentaACreditoRegistradaV1>(creditos.Count);
+        var lista = new List<VentaACreditoRegistradaV2>(creditos.Count);
         foreach (var p in creditos)
         {
-            lista.Add(new VentaACreditoRegistradaV1
+            lista.Add(new VentaACreditoRegistradaV2
             {
                 ThirdPartyKind = p.MeansClass == PaymentMeansClass.AssociateCredit ? "Associate" : "Customer",
                 Person = new PartySnapshotV1 { TaxIdType = foto?.DianIdTypeCode ?? string.Empty, TaxId = foto?.TaxId ?? string.Empty, Name = foto?.LegalName ?? string.Empty },
@@ -529,15 +531,17 @@ public sealed class EmisionDeInventario(
                 DocumentTotal = documento.Total,
                 AmountDue = documento.AmountDue,
                 Terms = CondicionesDelCredito(p, documento.OperationDate),
-                CreditLineCode = null,
+                CreditLineCode = p.CreditLineCode,
                 SuggestedCreditLineCode = p.SuggestedCreditLineCode,
                 PendingValidation = p.PendingValidation,
                 Origin = p.CreditOrigin ?? CreditOrigin.ProvisionalCredit,
                 Approval = await AprobacionDelCreditoAsync(p, ct),
-                ConsultationEvidence = null,
+                ConsultationEvidence = p.ConsultationEvidence,
                 AccountsReceivableRecordedBy = p.AccountsReceivableRecordedBy ?? Sales.CreditoEnLaVenta.Contabilidad,
                 PointOfSaleCode = caja.PointOfSaleCode,
                 SalesChannelCode = canal,
+                ReservedLoanNumber = p.ReservedLoanNumber,
+                ReservationPublicId = p.ReservationPublicId,
             });
         }
         return lista;
@@ -557,7 +561,7 @@ public sealed class EmisionDeInventario(
     {
         var creditos = await db.DocumentPayments.AsNoTracking()
             .Where(p => p.DocumentId == original.Id && !p.IsDeleted && p.Direction == PaymentDirection.Received
-                && (p.MeansClass == PaymentMeansClass.AssociateCredit || p.MeansClass == PaymentMeansClass.CustomerCredit))
+                && (p.MeansClass == PaymentMeansClass.AssociateCredit || p.MeansClass == PaymentMeansClass.CustomerCredit) && !p.CreditWithoutLending)
             .OrderBy(p => p.LineNumber).ToListAsync(ct);
         if (creditos.Count == 0) return [];
         var originales = await db.IntegrationMessages.AsNoTracking()
@@ -602,13 +606,13 @@ public sealed class EmisionDeInventario(
         if ((rechazoEnCurso?.ReemplazaA(documento.PublicId) ?? traslado?.DeLaFactura(documento.PublicId)) is not { } rechazadoPublicId)
             return [.. await VentasACreditoAsync(documento, pagos, ct)];
 
-        var creditos = pagos.Where(p => p.Direction == PaymentDirection.Received && !p.IsDeleted && p.EsCredito).OrderBy(p => p.LineNumber).ToList();
+        var creditos = pagos.Where(p => p.Direction == PaymentDirection.Received && !p.IsDeleted && p.PasaACartera).OrderBy(p => p.LineNumber).ToList();
         if (creditos.Count == 0) return [];
 
         var rechazado = await db.InventoryDocuments.AsNoTracking().FirstAsync(d => d.PublicId == rechazadoPublicId, ct);
         var delRechazado = await db.DocumentPayments.AsNoTracking()
             .Where(p => p.DocumentId == rechazado.Id && !p.IsDeleted && p.Direction == PaymentDirection.Received
-                && (p.MeansClass == PaymentMeansClass.AssociateCredit || p.MeansClass == PaymentMeansClass.CustomerCredit))
+                && (p.MeansClass == PaymentMeansClass.AssociateCredit || p.MeansClass == PaymentMeansClass.CustomerCredit) && !p.CreditWithoutLending)
             .OrderBy(p => p.LineNumber).ToListAsync(ct);
         var registradas = await db.IntegrationMessages.AsNoTracking()
             .Where(m => m.OriginPublicId == rechazado.PublicId && m.Type == VentaACreditoRegistradaV1.Type)

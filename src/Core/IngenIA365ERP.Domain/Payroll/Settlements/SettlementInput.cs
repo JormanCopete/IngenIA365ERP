@@ -218,7 +218,11 @@ public sealed record ProposedDeductionInput
     public decimal ProposedAmount { get; init; }
     public decimal AppliedAmount { get; init; }
 
-    /// <summary>Verdadero cuando otro módulo ya contabiliza el recaudo (Cartera, D-08): la línea no genera asiento.</summary>
+    /// <summary>
+    /// Sin efecto desde la feature 013 (enmienda D-08 de la 010, T53, T0660): todo descuento propuesto contabiliza contra la cuenta de su concepto
+    /// y ningún cargador lo pone en verdadero. Se conserva porque entra en la huella de las entradas (<c>SettlementInputsHasher</c>): quitarlo
+    /// cambiaría la huella de las definitivas ya calculadas.
+    /// </summary>
     public bool AccountedByOtherModule { get; init; }
 }
 

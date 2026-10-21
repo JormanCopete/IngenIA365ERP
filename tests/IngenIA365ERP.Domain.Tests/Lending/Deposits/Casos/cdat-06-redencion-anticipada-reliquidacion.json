@@ -1,0 +1,51 @@
+// Redencion anticipada a los 90 dias con penalidad por reliquidacion a 2 % EA (D18): lo causado baja a lo reliquidado.
+{
+  "nombre": "cdat-06-redencion-anticipada-reliquidacion",
+  "descripcion": "Redencion anticipada a los 90 dias con penalidad por reliquidacion a 2 % EA (D18): lo causado baja a lo reliquidado.",
+  "entrada": {
+    "condiciones": {
+      "capital": 10000000,
+      "tasaEA": 0.1,
+      "inicio": "2027-01-13",
+      "plazoDias": 180,
+      "periodicidad": "SinglePayment",
+      "modalidad": "Arrears",
+      "convencion": "Actual360",
+      "unidadDeRedondeo": 1,
+      "modoDeRedondeo": "AwayFromZero"
+    },
+    "redencion": {
+      "fecha": "2027-04-13",
+      "interesPagado": 0,
+      "penalidad": {
+        "modo": "PenaltyRate",
+        "tasa": 0.02
+      }
+    }
+  },
+  "esperado": {
+    "vencimiento": "2027-07-12",
+    "fechaDePagoAlVencimiento": "2027-07-12",
+    "plazoDeEmision": "SixToTwelve",
+    "periodos": [
+      {
+        "numero": 1,
+        "desde": "2027-01-13",
+        "hasta": "2027-07-12",
+        "fechaDePago": "2027-07-12",
+        "dias": 180,
+        "interes": 488088
+      }
+    ],
+    "interesTotal": 488088,
+    "redencion": {
+      "diasCorridos": 90,
+      "interesCausado": 241136.890844,
+      "interesReliquidado": 49629,
+      "ajusteDeCausacion": -191507.890844,
+      "penalidadSobreInteres": 0,
+      "penalidadSobreCapital": 0,
+      "interesAPagar": 49629
+    }
+  }
+}

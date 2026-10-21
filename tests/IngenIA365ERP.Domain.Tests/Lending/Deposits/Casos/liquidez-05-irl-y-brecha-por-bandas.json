@@ -1,0 +1,144 @@
+// IRL y brecha en las cuatro bandas del Anexo 1 (1-15, 16-30, 31-60, 61-90): activos liquidos netos con descuentos, entradas de cartera ajustadas, salidas contractuales y no contractuales; un flujo despues de 90 dias queda fuera del horizonte. El IRL mas bajo esta en la segunda banda.
+{
+  "nombre": "liquidez-05-irl-y-brecha-por-bandas",
+  "descripcion": "IRL y brecha en las cuatro bandas del Anexo 1 (1-15, 16-30, 31-60, 61-90): activos liquidos netos con descuentos, entradas de cartera ajustadas, salidas contractuales y no contractuales; un flujo despues de 90 dias queda fuera del horizonte. El IRL mas bajo esta en la segunda banda.",
+  "entrada": {
+    "tipo": "riesgo",
+    "bandas": [
+      15,
+      30,
+      60,
+      90
+    ],
+    "activos": [
+      {
+        "concepto": "Fondo de liquidez: cuenta de ahorros",
+        "valor": 9000000,
+        "descuento": 0
+      },
+      {
+        "concepto": "Fondo de liquidez: CDT",
+        "valor": 2500000,
+        "descuento": 0.2
+      }
+    ],
+    "flujos": [
+      {
+        "tipo": "Entrada",
+        "concepto": "Cuotas de cartera",
+        "dias": 10,
+        "monto": 3000000
+      },
+      {
+        "tipo": "Entrada",
+        "concepto": "Cuotas de cartera",
+        "dias": 25,
+        "monto": 2500000.55
+      },
+      {
+        "tipo": "Entrada",
+        "concepto": "Cuotas de cartera",
+        "dias": 45,
+        "monto": 4000000
+      },
+      {
+        "tipo": "Entrada",
+        "concepto": "Cuotas de cartera",
+        "dias": 80,
+        "monto": 4200000
+      },
+      {
+        "tipo": "SalidaContractual",
+        "concepto": "CDAT",
+        "dias": -2,
+        "monto": 5000000
+      },
+      {
+        "tipo": "SalidaContractual",
+        "concepto": "CDAT",
+        "dias": 20,
+        "monto": 18000000
+      },
+      {
+        "tipo": "SalidaContractual",
+        "concepto": "CDAT",
+        "dias": 59,
+        "monto": 1000000
+      },
+      {
+        "tipo": "SalidaContractual",
+        "concepto": "Contractual",
+        "dias": 95,
+        "monto": 7000000
+      },
+      {
+        "tipo": "SalidaNoContractual",
+        "concepto": "Ahorro a la vista",
+        "dias": 1,
+        "monto": 1500000
+      },
+      {
+        "tipo": "SalidaNoContractual",
+        "concepto": "Aportes y permanente",
+        "dias": 30,
+        "monto": 300000
+      },
+      {
+        "tipo": "SalidaNoContractual",
+        "concepto": "Aportes y permanente",
+        "dias": 60,
+        "monto": 300000
+      },
+      {
+        "tipo": "SalidaNoContractual",
+        "concepto": "Aportes y permanente",
+        "dias": 90,
+        "monto": 300000.33
+      }
+    ]
+  },
+  "esperado": {
+    "activosLiquidosNetos": 11000000,
+    "bandas": [
+      {
+        "banda": "1 a 15 días",
+        "entradas": 3000000,
+        "salidasContractuales": 5000000,
+        "salidasNoContractuales": 1500000,
+        "brecha": -3500000,
+        "brechaAcumulada": -3500000,
+        "irlAcumulado": 2.1538
+      },
+      {
+        "banda": "16 a 30 días",
+        "entradas": 2500000.55,
+        "salidasContractuales": 18000000,
+        "salidasNoContractuales": 300000,
+        "brecha": -15799999.45,
+        "brechaAcumulada": -19299999.45,
+        "irlAcumulado": 0.6653
+      },
+      {
+        "banda": "31 a 60 días",
+        "entradas": 4000000,
+        "salidasContractuales": 1000000,
+        "salidasNoContractuales": 300000,
+        "brecha": 2700000,
+        "brechaAcumulada": -16599999.45,
+        "irlAcumulado": 0.7854
+      },
+      {
+        "banda": "61 a 90 días",
+        "entradas": 4200000,
+        "salidasContractuales": 0,
+        "salidasNoContractuales": 300000.33,
+        "brecha": 3899999.67,
+        "brechaAcumulada": -12699999.78,
+        "irlAcumulado": 0.9356
+      }
+    ],
+    "irlMinimo": 0.6653,
+    "bandaDelIrlMinimo": "16 a 30 días",
+    "fueraDelHorizonte": 7000000
+  }
+}

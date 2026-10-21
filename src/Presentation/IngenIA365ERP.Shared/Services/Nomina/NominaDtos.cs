@@ -178,7 +178,7 @@ public sealed record VigenciaPoliticaCreadaDto(Guid PublicId, IReadOnlyList<stri
 
 // ------------------------------------------------------------------ festivos --
 
-/// <summary><c>Origin</c> es <c>HolidayOrigin</c>: 1 fijo Ley 51, 2 trasladado al lunes, 3 por Pascua, 4 decretado, 5 manual.</summary>
+/// <summary><c>Origin</c> es <c>HolidayOrigin</c>: 1 fijo Ley 51, 2 trasladado al lunes, 3 por Pascua, 4 decretado, 5 manual, 6 nacional (feature 013, réplica de valores nacionales).</summary>
 public sealed record FestivoDto(Guid HolidayPublicId, DateOnly Date, string Name, int Origin, bool IsSeeded, string? CreatedBy, DateTime CreatedAt)
 {
     public string OrigenTexto => Origin switch
@@ -188,6 +188,7 @@ public sealed record FestivoDto(Guid HolidayPublicId, DateOnly Date, string Name
         3 => "Ley 51 (por Pascua)",
         4 => "Decretado",
         5 => "Manual",
+        6 => "Nacional (valor nacional replicado)",
         _ => Origin.ToString(),
     };
     public string DiaTexto => Date.ToString("dddd");

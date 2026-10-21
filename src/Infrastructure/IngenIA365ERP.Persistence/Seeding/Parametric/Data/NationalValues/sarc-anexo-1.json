@@ -1,0 +1,177 @@
+{
+  // Feature 013 (T0204; data-model parte 3 §12.4; R54): versión inicial del Anexo 1 del SARC (Supersolidaria, Circular Básica
+  // Contable y Financiera, Capítulo II del Título IV, versión del 2025-01-31) para la semilla central (PlatformNationalValuesSeeder,
+  // Admin, Order 6). TODO pendiente de cotejo con el texto oficial (verified = false, pregunta E8): mientras tanto la cooperativa ve
+  // la alerta Cartera.NormativaPendienteDeValidar. Los porcentajes van como fracción (0,01 = 1 %). Un cambio de la norma es una
+  // versión nueva del documento, nunca un cambio de programa.
+  //
+  // US9 (T0691, 2026-10-13): se completa el contenido con las reglas que usan los motores de calificación y deterioro (newLoan,
+  // insolvency) y con la procedencia de cada tabla ("provenance", al final): de dónde se transcribió y verified = false en TODAS.
+  // Ninguna cifra se cotejó todavía contra el texto oficial; la contadora las coteja (E8) y, mientras tanto, «pendiente de validar»
+  // no bloquea: marca el cierre (E1). Del Anexo 1, sólo la tabla de comercial persona jurídica viene como imagen en el PDF.
+  "segments": [
+    {
+      "code": "COMERCIAL_PN",
+      "name": "Comercial persona natural",
+      "categories": [
+        { "category": "A", "minDaysPastDue": 0, "maxDaysPastDue": 30 },
+        { "category": "B", "minDaysPastDue": 31, "maxDaysPastDue": 90 },
+        { "category": "C", "minDaysPastDue": 91, "maxDaysPastDue": 180 },
+        { "category": "D", "minDaysPastDue": 181, "maxDaysPastDue": 360 },
+        { "category": "E", "minDaysPastDue": 361, "maxDaysPastDue": null }
+      ],
+      "impairmentRates": [
+        { "category": "A", "base": "Uncovered", "rate": 0 },
+        { "category": "B", "base": "Uncovered", "rate": 0.01 },
+        { "category": "C", "base": "Uncovered", "rate": 0.20 },
+        { "category": "D", "base": "Uncovered", "rate": 0.50 },
+        { "category": "E", "base": "Uncovered", "rate": 1 }
+      ],
+      "accrualSuspensionCategory": "C"
+    },
+    {
+      "code": "COMERCIAL_PJ",
+      "name": "Comercial persona jurídica",
+      "categories": [
+        { "category": "A", "minDaysPastDue": 0, "maxDaysPastDue": 30 },
+        { "category": "B", "minDaysPastDue": 31, "maxDaysPastDue": 90 },
+        { "category": "C", "minDaysPastDue": 91, "maxDaysPastDue": 180 },
+        { "category": "D", "minDaysPastDue": 181, "maxDaysPastDue": 360 },
+        { "category": "E", "minDaysPastDue": 361, "maxDaysPastDue": null }
+      ],
+      "impairmentRates": [
+        { "category": "A", "base": "Uncovered", "rate": 0 },
+        { "category": "B", "base": "Uncovered", "rate": 0.01 },
+        { "category": "C", "base": "Uncovered", "rate": 0.20 },
+        { "category": "D", "base": "Uncovered", "rate": 0.50 },
+        { "category": "E", "subcategory": "E1", "condition": { "kind": "DaysPastDue", "from": 361, "to": 540 }, "base": "Uncovered", "rate": 0.75 },
+        { "category": "E", "subcategory": "E2", "condition": { "kind": "DaysPastDue", "from": 541, "to": null }, "base": "Uncovered", "rate": 1 }
+      ],
+      "accrualSuspensionCategory": "C"
+    },
+    {
+      "code": "CONSUMO",
+      "name": "Consumo",
+      "categories": [
+        { "category": "A", "minDaysPastDue": 0, "maxDaysPastDue": 30 },
+        { "category": "B", "minDaysPastDue": 31, "maxDaysPastDue": 60 },
+        { "category": "C", "minDaysPastDue": 61, "maxDaysPastDue": 90 },
+        { "category": "D", "minDaysPastDue": 91, "maxDaysPastDue": 180 },
+        { "category": "E", "minDaysPastDue": 181, "maxDaysPastDue": null }
+      ],
+      "impairmentRates": [
+        { "category": "A", "base": "Uncovered", "rate": 0 },
+        { "category": "B", "base": "Uncovered", "rate": 0.01 },
+        { "category": "C", "base": "Uncovered", "rate": 0.10 },
+        { "category": "D", "base": "Uncovered", "rate": 0.20 },
+        { "category": "E", "subcategory": "E1", "condition": { "kind": "DaysPastDue", "from": 181, "to": 360 }, "base": "Uncovered", "rate": 0.50 },
+        { "category": "E", "subcategory": "E2", "condition": { "kind": "DaysPastDue", "from": 361, "to": null }, "base": "Uncovered", "rate": 1 }
+      ],
+      "accrualSuspensionCategory": "C"
+    },
+    {
+      "code": "MICROCREDITO",
+      "name": "Microcrédito",
+      "categories": [
+        { "category": "A", "minDaysPastDue": 0, "maxDaysPastDue": 30 },
+        { "category": "B", "minDaysPastDue": 31, "maxDaysPastDue": 60 },
+        { "category": "C", "minDaysPastDue": 61, "maxDaysPastDue": 90 },
+        { "category": "D", "minDaysPastDue": 91, "maxDaysPastDue": 120 },
+        { "category": "E", "minDaysPastDue": 121, "maxDaysPastDue": null }
+      ],
+      "impairmentRates": [
+        { "category": "A", "base": "Uncovered", "rate": 0 },
+        { "category": "B", "base": "Uncovered", "rate": 0.01 },
+        { "category": "C", "base": "Uncovered", "rate": 0.20 },
+        { "category": "D", "base": "Uncovered", "rate": 0.50 },
+        { "category": "E", "base": "Uncovered", "rate": 1 }
+      ],
+      "accrualSuspensionCategory": "C"
+    },
+    {
+      "code": "VIVIENDA",
+      "name": "Vivienda",
+      "categories": [
+        { "category": "A", "minDaysPastDue": 0, "maxDaysPastDue": 60 },
+        { "category": "B", "minDaysPastDue": 61, "maxDaysPastDue": 150 },
+        { "category": "C", "minDaysPastDue": 151, "maxDaysPastDue": 360 },
+        { "category": "D", "minDaysPastDue": 361, "maxDaysPastDue": 540 },
+        { "category": "E", "minDaysPastDue": 541, "maxDaysPastDue": null }
+      ],
+      "impairmentRates": [
+        { "category": "A", "base": "Uncovered", "rate": 0 },
+        { "category": "B", "base": "Uncovered", "rate": 0.01 },
+        { "category": "C", "base": "Uncovered", "rate": 0.10 },
+        { "category": "D", "base": "Uncovered", "rate": 0.20 },
+        { "category": "E", "subcategory": "E1", "condition": { "kind": "MonthsInE", "from": 0, "to": 6 }, "base": "Uncovered", "rate": 0.30 },
+        { "category": "E", "subcategory": "E2", "condition": { "kind": "MonthsInE", "from": 7, "to": 18 }, "base": "Uncovered", "rate": 0.60 },
+        { "category": "E", "subcategory": "E2", "condition": { "kind": "MonthsInE", "from": 19, "to": null }, "base": "Uncovered", "rate": 1 }
+      ],
+      "accrualSuspensionCategory": "C"
+    }
+  ],
+  "singleInstallment": [
+    { "category": "D", "minDaysPastDue": 8 },
+    { "category": "E", "minDaysPastDue": 91 }
+  ],
+  "drag": { "fromCategory": "B", "withinSegment": true, "includesCoDebts": false },
+  "contributions": { "deductible": true, "requiresNoLosses": true, "requiresMinimumSolvency": true },
+  "collateral": [
+    {
+      "nature": "NonMortgage",
+      "brackets": [
+        { "fromMonths": 0, "toMonths": 12, "admissibleFraction": 0.70 },
+        { "fromMonths": 12, "toMonths": 24, "admissibleFraction": 0.50 },
+        { "fromMonths": 24, "toMonths": null, "admissibleFraction": 0 }
+      ]
+    },
+    {
+      "nature": "Mortgage",
+      "brackets": [
+        { "fromMonths": 0, "toMonths": 18, "admissibleFraction": 0.70 },
+        { "fromMonths": 18, "toMonths": 24, "admissibleFraction": 0.50 },
+        { "fromMonths": 24, "toMonths": 30, "admissibleFraction": 0.30 },
+        { "fromMonths": 30, "toMonths": 36, "admissibleFraction": 0.15 },
+        { "fromMonths": 36, "toMonths": null, "admissibleFraction": 0 }
+      ]
+    }
+  ],
+  "restructured": { "minimumCategory": "B", "consecutivePaidInstallmentsToImprove": 3 },
+  "generalImpairment": [
+    { "profile": "GENERAL", "minimumRate": 0.01 }
+  ],
+  // Crédito nuevo: la categoría con la que nace un crédito sin línea en el cierre anterior (la peor del deudor la pone el arrastre).
+  "newLoan": { "category": "A" },
+  // Insolvencia (Leyes 1116 de 2006 y 1564 de 2012, FR-098): en negociación se mantiene la calificación; si fracasa, ésta.
+  "insolvency": { "failedCategory": "E" },
+  // K3 (T0873, FR-090): una novedad a petición del deudor sin deterioro es «modificación» sólo si la mora de los últimos meses no pasa del
+  // límite de su segmento; un modificado que vuelve a la mora por encima de relapseDaysPastDue días pasa a reestructurado.
+  "modifications": {
+    "lookbackMonths": 6,
+    "relapseDaysPastDue": 30,
+    "limits": [
+      { "segment": "COMERCIAL_PN", "maxDaysPastDue": 90 },
+      { "segment": "COMERCIAL_PJ", "maxDaysPastDue": 90 },
+      { "segment": "CONSUMO", "maxDaysPastDue": 60 },
+      { "segment": "MICROCREDITO", "maxDaysPastDue": 60 },
+      { "segment": "VIVIENDA", "maxDaysPastDue": 90 }
+    ]
+  },
+  "provenance": [
+    { "table": "segments.COMERCIAL_PN", "verified": false, "source": "CBCF (Supersolidaria, CE 22 de 2020 y modificaciones), Tít. IV Cap. II, Anexo 1: rangos de mora y porcentajes de la cartera comercial; transcripción de memoria del equipo, sin cotejar (E8)" },
+    { "table": "segments.COMERCIAL_PJ", "verified": false, "source": "CBCF, Tít. IV Cap. II, Anexo 1: tabla de comercial persona jurídica, que el PDF trae como imagen; transcripción del equipo, la coteja la contadora (E8)" },
+    { "table": "segments.CONSUMO", "verified": false, "source": "CBCF, Tít. IV Cap. II, Anexo 1: rangos de mora y porcentajes de consumo con E1/E2 por días; transcripción de memoria, sin cotejar (E8)" },
+    { "table": "segments.MICROCREDITO", "verified": false, "source": "CBCF, Tít. IV Cap. II, Anexo 1: rangos de mora y porcentajes de microcrédito; transcripción de memoria, sin cotejar (E8)" },
+    { "table": "segments.VIVIENDA", "verified": false, "source": "CBCF, Tít. IV Cap. II, Anexo 1: rangos de mora y porcentajes de vivienda; E1/E2 por meses en E aproximados desde los tramos en días; sin cotejar (E8, D18: vivienda es K6b)" },
+    { "table": "singleInstallment", "verified": false, "source": "CBCF, Tít. IV Cap. II: regla especial de los créditos con pago único de capital; días y categorías propuestos por el equipo, sin cotejar (E8)" },
+    { "table": "newLoan", "verified": false, "source": "CBCF, Tít. IV Cap. II: calificación de créditos nuevos; propuesta del equipo (A), sin cotejar (E8)" },
+    { "table": "insolvency", "verified": false, "source": "Ley 1116 de 2006 y Ley 1564 de 2012 con CBCF Tít. IV Cap. II: la calificación se mantiene en la negociación; la categoría si fracasa (E) es propuesta del equipo, sin cotejar" },
+    { "table": "drag", "verified": false, "source": "CBCF, Tít. IV Cap. II: arrastre por modalidad desde B, sin codeudas (FR-100); sin cotejar" },
+    { "table": "contributions", "verified": false, "source": "CBCF, Tít. IV Cap. II: aportes deducibles sin pérdidas y con solvencia; no se aplica mientras rija D19; sin cotejar" },
+    { "table": "collateral.NonMortgage", "verified": false, "source": "CBCF, Tít. IV Cap. II, Anexo 1: porcentajes de las garantías no hipotecarias por meses de mora; transcripción de memoria, sin cotejar (E8)" },
+    { "table": "collateral.Mortgage", "verified": false, "source": "CBCF, Tít. IV Cap. II, Anexo 1: porcentajes de las garantías hipotecarias por meses de mora; transcripción de memoria, sin cotejar (E8)" },
+    { "table": "restructured", "verified": false, "source": "CBCF, Tít. IV Cap. II: calificación de reestructurados (mínimo B, una categoría por cada 3 cuotas pagadas seguidas, FR-093); propuesta del equipo, sin cotejar" },
+    { "table": "modifications", "verified": false, "source": "Regla de modificaciones (mora máxima en los últimos 6 meses: 60 días consumo y microcrédito, 90 comercial y vivienda; vuelve a reestructurado con 30 días bajo las condiciones nuevas): la de la CE 026 de 2017 de la SFC tomada por analogía; falta cotejarla con la CBCF de la Supersolidaria (E8, K3)" },
+    { "table": "generalImpairment", "verified": false, "source": "CBCF, Tít. IV Cap. II, Anexo 1: deterioro general mínimo del 1 % de la cartera bruta (perfil GENERAL); acotado por el límite DETERIORO_GENERAL_MINIMO; sin cotejar" }
+  ]
+}

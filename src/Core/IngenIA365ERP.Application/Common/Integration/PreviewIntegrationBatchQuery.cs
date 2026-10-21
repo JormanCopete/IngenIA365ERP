@@ -23,7 +23,8 @@ public sealed record PreviewIntegrationBatchQuery(
     string? ScheduleKey,
     Guid? BranchPublicId) : IRequest<Result<VistaPreviaDeLoteDto>>
 {
-    public AlcanceDeLote Alcance => new(From, To, DocumentTypeCodes, ScheduleKey, BranchPublicId);
+    /// <summary>Sólo los hechos de Inventario (feature 013, T15): la vista previa de Cartera es <c>PreviewLendingBatchQuery</c>.</summary>
+    public AlcanceDeLote Alcance => new(From, To, DocumentTypeCodes, ScheduleKey, BranchPublicId, ModulosDeOrigen.Inventario);
 }
 
 public sealed class PreviewIntegrationBatchQueryValidator : AbstractValidator<PreviewIntegrationBatchQuery>

@@ -168,7 +168,7 @@ public sealed class GetInventoryDashboardQueryHandler(
         // Mensajes y lotes: las consultas de la bandeja.
         if (await permisos.HasPermissionAsync(PermisoDeMensajes, ct))
         {
-            var entregas = VistaDeMensajes.Visibles(db, alcance);
+            var entregas = Integration.VistaDeBandejaDeInventario.Visibles(db, alcance);
             if (a.Bodegas is not null)
             {
                 var ids = a.Bodegas.ToList();

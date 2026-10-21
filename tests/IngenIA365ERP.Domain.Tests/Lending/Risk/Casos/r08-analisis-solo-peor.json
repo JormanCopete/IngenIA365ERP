@@ -1,0 +1,22 @@
+{
+  // r08 (US9-4, SC-021; FR-101): la calificación por análisis nunca mejora la de las reglas. A mano:
+  //  1. al día con análisis en D → D por «Analysis»;
+  //  2. 75 días (C) con un análisis en B (registrado cuando estaba al día) → C por mora: el análisis no mejora;
+  //  3. al día con análisis en E2 → E2 por «Analysis»; deterioro 1.500.000 × 100 % = 1.500.000;
+  //  4. 75 días (C) con análisis en C → empate; gana la mora, que es la causa de las reglas.
+  "nombre": "r08-analisis-solo-peor",
+  "creditos": [
+    { "id": 1, "deudor": 801, "segmento": "CONSUMO", "diasDeMora": 0, "analisis": { "categoria": "D" } },
+    { "id": 2, "deudor": 802, "segmento": "CONSUMO", "diasDeMora": 75, "analisis": { "categoria": "B" } },
+    { "id": 3, "deudor": 803, "segmento": "CONSUMO", "diasDeMora": 0, "analisis": { "categoria": "E", "subcategoria": "E2" }, "saldos": { "capital": 1500000 } },
+    { "id": 4, "deudor": 804, "segmento": "CONSUMO", "diasDeMora": 75, "analisis": { "categoria": "C" } }
+  ],
+  "esperado": {
+    "creditos": [
+      { "id": 1, "categoriaPorMora": "A", "categoria": "D", "causa": "Analysis", "candidatas": [ "Arrears:A", "Analysis:D" ] },
+      { "id": 2, "categoria": "C", "causa": "Arrears", "candidatas": [ "Arrears:C", "Analysis:B" ] },
+      { "id": 3, "categoria": "E", "subcategoria": "E2", "causa": "Analysis", "contable": "E", "porcentaje": 1, "deterioroCapital": 1500000.00 },
+      { "id": 4, "categoria": "C", "causa": "Arrears", "candidatas": [ "Arrears:C", "Analysis:C" ] }
+    ]
+  }
+}

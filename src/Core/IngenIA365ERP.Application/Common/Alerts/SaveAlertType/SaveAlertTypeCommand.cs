@@ -28,6 +28,12 @@ public sealed record SaveAlertTypeCommand(
     : IRequest<Result<AlertTypeDto>>, IOperacionIdempotente, IConMotivo
 {
     public Guid OperationKey { get; init; }
+
+    /// <summary>
+    /// Feature 013 (T0313, api.md §3.10): el módulo de la ruta. Con él, un tipo de otro módulo del catálogo es inexistente
+    /// (<c>Alerts.Type.NotFound</c>): quien configura las alertas de Cartera no cambia las de Inventario. Nulo, como antes.
+    /// </summary>
+    public string? Module { get; init; }
 }
 
 /// <summary>
@@ -63,7 +69,9 @@ public sealed class SaveAlertTypeCommandHandler(IApplicationDbContext db, IDesti
     public async Task<Result<AlertTypeDto>> Handle(SaveAlertTypeCommand request, CancellationToken ct)
     {
         var definicion = TiposDeAlerta.Buscar(request.TypeCode);
-        if (definicion is null) return Result.Failure<AlertTypeDto>(ErroresDeAlertas.TipoInexistente(request.TypeCode));
+        if (definicion is null
+            || (!string.IsNullOrWhiteSpace(request.Module) && !string.Equals(definicion.Module, request.Module, StringComparison.Ordinal)))
+            return Result.Failure<AlertTypeDto>(ErroresDeAlertas.TipoInexistente(request.TypeCode));
 
         if (!request.Channels.Contains(AlertChannels.InApp))
             return Result.Failure<AlertTypeDto>(ErroresDeAlertas.AplicacionRequerida());

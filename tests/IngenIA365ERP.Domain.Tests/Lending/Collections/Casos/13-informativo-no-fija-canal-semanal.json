@@ -1,0 +1,26 @@
+// Regla 10 e I2: un mensaje de cobranza fija el canal de la semana (lunes a domingo) para la cobranza; un informativo no lo
+// fija ni lo respeta. Lunes 9 de noviembre de 2026: un mensaje; miércoles 11: el que se pide. La semana siguiente empieza
+// el lunes 16, que es festivo, así que la apertura es el martes 17.
+{
+  "caso": "13-informativo-no-fija-canal-semanal",
+  "reglas": { "horario": { "lunesAViernes": ["07:00", "19:00"], "sabado": ["08:00", "15:00"] }, "contactosPorDia": 1, "noHabiles": ["2026-11-02", "2026-11-16"] },
+  "titular": {},
+  "escenarios": [
+    { "nombre": "tras un informativo por SMS, cobranza por WhatsApp",
+      "historial": [ { "en": "2026-11-09T10:00", "canal": "Sms", "proposito": "Informative" } ],
+      "solicitud": { "pedido": "2026-11-11T09:00", "canal": "WhatsApp", "proposito": "Collection" },
+      "esperado": { "decision": "Permitido", "en": "2026-11-11T09:00" } },
+    { "nombre": "tras una cobranza por SMS, cobranza por WhatsApp",
+      "historial": [ { "en": "2026-11-09T10:00", "canal": "Sms", "proposito": "Collection" } ],
+      "solicitud": { "pedido": "2026-11-11T09:00", "canal": "WhatsApp", "proposito": "Collection", "inmediato": true },
+      "esperado": { "decision": "Diferido", "siguiente": "2026-11-17T07:00", "motivos": ["WeeklyChannelLocked"] } },
+    { "nombre": "tras una cobranza por SMS, cobranza por el mismo SMS",
+      "historial": [ { "en": "2026-11-09T10:00", "canal": "Sms", "proposito": "Collection" } ],
+      "solicitud": { "pedido": "2026-11-11T09:00", "canal": "Sms", "proposito": "Collection" },
+      "esperado": { "decision": "Permitido", "en": "2026-11-11T09:00" } },
+    { "nombre": "tras una cobranza por SMS, informativo por WhatsApp",
+      "historial": [ { "en": "2026-11-09T10:00", "canal": "Sms", "proposito": "Collection" } ],
+      "solicitud": { "pedido": "2026-11-11T09:00", "canal": "WhatsApp", "proposito": "Informative" },
+      "esperado": { "decision": "Permitido", "en": "2026-11-11T09:00" } }
+  ]
+}

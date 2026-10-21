@@ -1,0 +1,55 @@
+// Quórum de la semilla F7: más de la mitad de la composición (5 principales con voto).
+// 3 presentes: 3 × 2 = 6 > 1 × 5 = 5 → hay quórum (el mínimo es 5 / 2 + 1 = 3, división entera).
+// 2 presentes: 2 × 2 = 4 ≤ 5 → no hay quórum y el punto no se decide aunque los dos voten a favor.
+{
+  "nombre": "01-quorum-mayoria-absoluta",
+  "descripcion": "Quórum MoreThan 1/2 sobre la composición: 3 de 5 pasa, 2 de 5 no.",
+  "regla": {
+    "quorum": { "numerador": 1, "denominador": 2, "comparacion": "MoreThan" },
+    "mayoria": { "numerador": 1, "denominador": 2, "comparacion": "MoreThan", "base": "PresentEligible" },
+    "vinculados": { "numerador": 4, "denominador": 5 }
+  },
+  "miembros": [
+    { "persona": 101 }, { "persona": 102 }, { "persona": 103 }, { "persona": 104 }, { "persona": 105 }
+  ],
+  "escenarios": [
+    {
+      "nombre": "tres presentes",
+      "presentes": [101, 102, 103],
+      "punto": {
+        "regla": "Majority",
+        "votos": [
+          { "voto": 1, "persona": 101, "valor": "For" },
+          { "voto": 2, "persona": 102, "valor": "For" },
+          { "voto": 3, "persona": 103, "valor": "Against" }
+        ]
+      },
+      // Mayoría: 3 presentes elegibles; requeridos 3 / 2 + 1 = 2; 2 × 2 = 4 > 1 × 3 = 3 → aprobado.
+      "esperado": {
+        "quorum": { "cumple": true, "composicion": 5, "requerido": 3, "presentesElegibles": 3 },
+        "elegibles": 3, "base": 3, "requeridos": 2,
+        "aFavor": 2, "enContra": 1, "abstenciones": 0,
+        "resultado": "Aprobado",
+        "explicacionContiene": ["3 × 2 = 6 > 1 × 5 = 5", "2 × 2 = 4 > 1 × 3 = 3"]
+      }
+    },
+    {
+      "nombre": "dos presentes",
+      "presentes": [101, 102],
+      "punto": {
+        "regla": "Majority",
+        "votos": [
+          { "voto": 1, "persona": 101, "valor": "For" },
+          { "voto": 2, "persona": 102, "valor": "For" }
+        ]
+      },
+      "esperado": {
+        "quorum": { "cumple": false, "composicion": 5, "requerido": 3, "presentesElegibles": 2 },
+        "elegibles": 2, "base": 2, "requeridos": 2,
+        "aFavor": 2, "enContra": 0, "abstenciones": 0,
+        "resultado": "SinQuorum",
+        "explicacionContiene": ["2 × 2 = 4 ≤ 1 × 5 = 5"]
+      }
+    }
+  ]
+}

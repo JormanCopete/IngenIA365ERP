@@ -1,0 +1,152 @@
+{
+  "descripcion": "§24 ejemplo 13 (K3): lo condonado sale contra el deterioro hasta su saldo y el resto contra el gasto de condonación.",
+  "sobre": {
+    "version": 1,
+    "kind": "Business",
+    "originModule": "CAR",
+    "originEventKey": "Confirmation",
+    "origin": {
+      "kind": "Operation",
+      "documentClass": null,
+      "documentTypeCode": null,
+      "number": "CON-000123",
+      "publicId": "0d0d0079-0000-4000-8000-000000000079",
+      "operationDate": "2026-12-03"
+    },
+    "related": null,
+    "chainRootPublicId": "0e0e0080-0000-4000-8000-000000000080",
+    "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+    "costCenterPublicId": null,
+    "warehouseCode": null,
+    "personPublicId": "a1b2c3d4-0000-4000-8000-000000000002",
+    "currency": "COP",
+    "exchangeRate": 1,
+    "originUser": {
+      "centralUserId": "d4e5f6a7-b8c9-4d0e-9f1a-2b3c4d5e6f70",
+      "name": "Usuario de ensayo"
+    },
+    "emittedAt": "2026-12-03T15:00:00Z"
+  },
+  "mensajes": [
+    {
+      "messageId": "0f0f0082-0000-4000-8000-000000000082",
+      "type": "CondonacionAprobada",
+      "kind": "Business",
+      "originDocumentClass": "Waiver",
+      "payload": {
+        "loan": {
+          "loanPublicId": "7b8c9d0e-1f2a-4b3c-9d4e-000000000123",
+          "loanNumber": "000123"
+        },
+        "debtorPersonPublicId": "a1b2c3d4-0000-4000-8000-000000000002",
+        "valueDate": "2026-12-03",
+        "registeredAt": "2026-12-03T15:00:00Z",
+        "dimensions": {
+          "creditLineCode": "LIB01",
+          "modalityCode": "CONSUMO",
+          "subsegmentCode": "ConLibranza",
+          "riskCategory": "B",
+          "riskSubcategory": "None",
+          "isEmployee": false,
+          "inGracePeriod": false,
+          "restructured": false,
+          "writtenOff": false,
+          "collectorClass": null,
+          "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+          "impairmentModel": "ArrearsAnnex1",
+          "riskSegment": "CONSUMO",
+          "valueUnit": "Pesos"
+        },
+        "amounts": [
+          {
+            "concept": "DefaultInterest",
+            "installmentNumber": 5,
+            "amount": 80000.0,
+            "uvrAmount": null,
+            "onBehalfOfAssociate": false,
+            "reasonCode": "AcuerdoDePago"
+          }
+        ],
+        "original": null,
+        "rulesVersion": "LND-2026.1",
+        "waiverPublicId": "3a1e0081-0000-4000-8000-000000000081",
+        "sessionItemPublicId": null,
+        "impairmentApplied": [
+          {
+            "concept": "DefaultInterest",
+            "installmentNumber": 5,
+            "amount": 4000.0,
+            "uvrAmount": null,
+            "onBehalfOfAssociate": false,
+            "reasonCode": "AcuerdoDePago"
+          }
+        ],
+        "impairmentShortfall": 76000.0
+      }
+    }
+  ],
+  "esperado": {
+    "tipo": "CN",
+    "fecha": "2026-12-03",
+    "origen": "LendingIssuedDocument",
+    "lineas": [
+      {
+        "rol": "DeterioroIndividual",
+        "cuenta": "14450602",
+        "debito": 4000.0,
+        "credito": 0.0,
+        "tercero": null,
+        "cruce": null,
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "CondonacionAprobada"
+          ],
+          "concepto": "DefaultInterest",
+          "creditos": [
+            "000123"
+          ]
+        }
+      },
+      {
+        "rol": "GastoDeCastigoOCondonacion",
+        "cuenta": "51159501",
+        "debito": 76000.0,
+        "credito": 0.0,
+        "tercero": null,
+        "cruce": null,
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "CondonacionAprobada"
+          ],
+          "concepto": "DefaultInterest",
+          "creditos": [
+            "000123"
+          ]
+        }
+      },
+      {
+        "rol": "InteresPorCobrar",
+        "cuenta": "14430602",
+        "debito": 0.0,
+        "credito": 80000.0,
+        "tercero": "ana",
+        "cruce": "PG 000123",
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "CondonacionAprobada"
+          ],
+          "concepto": "DefaultInterest",
+          "creditos": [
+            "000123"
+          ]
+        }
+      }
+    ]
+  }
+}

@@ -66,6 +66,9 @@ Los mensajes se versionan: un cambio de forma es un record `…V2` nuevo en el c
 
 ### Lo que en I1 todavía no está
 
+> **Actualizado por la feature 013 (fase 2):** lo que sigue describe I1. El despachador llegó con I2 y el emisor dejó de ser de
+> Inventario con la 013: ver la sección 9.
+
 - **No hay despachador.** `DespachadorDeMensajes`, que lee `Integration:Dispatcher` y `Integration:Retries`
   y entrega por el camino común de MediatR, es de **I2**. En I1 los mensajes nacen, quedan `Pending` (o
   `InBatch`, o `NotApplicable` si el modo es «no pasa») y **nadie los entrega**. Son correctos y quedan
@@ -253,3 +256,122 @@ destinatarios, canales, severidad, entrega) y la semilla lo agrega sola.
 | Configuración | sección `Integration` de `API/appsettings.json` (validada al arrancar) |
 | Migración | `PlataformaParaInventario` (aditiva, par PostgreSQL / SQL Server) |
 | Pruebas de arquitectura | `InventarioNoConoceContabilidadNiCartera`, `NingunTrabajoDeFondoOperaSinCooperativa`, `LosComandosDeConsumoNoTienenRuta`, `LosParametrosSeLeenEnUnSoloSitio`, `LaSegregacionNoUsaUserIdDelToken`, `LosHechosInmutablesNoSeModifican` |
+
+## 9. Feature 013: varios emisores, el proceso como origen y el registro de participantes
+
+> Feature 013 (cartera financiera), fase 2 (T10–T19; C16, C18, C35, C36; T0068–T0078, T0100). Contrato:
+> [specs/013-cartera-financiera/contracts/mensajes.md](../../specs/013-cartera-financiera/contracts/mensajes.md) §1–§9, §13 y §14 y
+> data-model parte 3 §4.6 y §4.11. Lo de esta sección **amplía** las secciones 2 y 3: nada de lo que hacía Inventario cambió de bytes
+> (`ContratosDeMensajesTests` sigue igual).
+
+### 9.1 La bandeja tiene varios emisores
+
+- **El módulo de origen sale del tipo, nunca de la solicitud.** `TipoDeMensaje` declara `OriginModule` (`INV`, `CAR`, `TES`, `REC`;
+  `ModulosDeOrigen`), sus `Destinos` y si `AdmiteProceso`. El catálogo es uno, **agregado**: `CatalogoDeMensajes` une
+  `CatalogoDeMensajesV1` (los veinte de Inventario, sin mover), `CatalogoDeMensajesDeCarteraV1` (los hechos de Cartera a Contabilidad y lo
+  que Cartera manda a Comercial, Tesorería y Recaudo) y `CatalogoDeMensajesHaciaCarteraV1` (lo que otros le mandan a Cartera).
+  `ElCatalogoDeMensajesEsUnico` fija que `(Type, Version)` no se repita y que todo record de `Contracts/` esté en el catálogo.
+- Una solicitud que mezcla módulos se rechaza (excepción: es un defecto del programa).
+- Un tipo con varios destinos exige `SolicitudDeEmision.Destino`.
+- `SolicitudDeEmision.CadenaDeOrden` pone el mensaje en la cadena de otro (`ChainRootPublicId`): así las respuestas de Cartera a
+  Comercial salen en el orden de la venta que las originó.
+- La constante `EmisorDeMensajes.ModuloDeOrigen = "INV"` ya no existe. El único escritor de la bandeja sigue siendo `EmisorDeMensajes`
+  y sigue sin guardar (`SoloElEmisorEscribeLaBandeja`).
+
+### 9.2 El proceso como origen (T11): la excepción a «el mensaje lo origina una persona»
+
+La regla de la sección 2 (punto 3) sigue para todo lo de Inventario, Tesorería y Recaudo. El usuario de origen se resuelve así:
+
+1. la **persona** que actúa;
+2. si no hay, `SolicitudDeEmision.UsuarioDeOrigen` (la persona que ordenó, cuando el comando corre después);
+3. si tampoco, el **proceso** (`OriginActorKind = Process`, `OriginUserCentralId` nulo, nombre «Proceso de integración»), **sólo** si el
+   tipo tiene `AdmiteProceso = true`. Si no lo admite, el emisor lanza y no escribe nada.
+
+`AdmiteProceso` es una lista cerrada: los tipos de Cartera de contracts/mensajes.md §6 (la causación diaria, los cierres, los tres
+contingentes de A3…), y `false` en todo `INV`, `TES` y `REC` (`EmisionesDeProcesoPermitidas`). La migración `PlataformaParaCartera` agrega
+`COR_IntegrationMessages.OriginActorKind` (`DEFAULT 1`, persona) y admite `OriginUserCentralId` nulo.
+
+### 9.3 El registro de participantes y la habilitación de destinos (T16)
+
+Un destino ya no «está» porque exista su consumidor: **cuenta** si tiene una fila en `COR_IntegrationParticipants` habilitada y vigente a
+hoy, su implementación está en el despliegue con la versión que adoptó, y no es un doble de prueba en producción. Lo lee
+`IRegistroDeIntegracion`; lo escribe `EscritorDelRegistroDeIntegracion`, que agrega sin guardar (la activación de Cartera habilita su
+destino en la misma transacción).
+
+La migración `PlataformaParaCartera` siembra, en cada cooperativa:
+
+| Participante | Papel | Destino | Habilitado | Adopta |
+|---|---|---|---|---|
+| `CNT` (Contabilidad) | destino | `Accounting` | sí | lo que declara su consumidor |
+| `INV` (Comercial) | destino | `Inventory` | sí | `ObligacionCreada` v1, `ObligacionRechazada` v1 |
+| `NOM` (Nómina) | recaudador | — | sí | `ProveedorDeObligaciones` v1 |
+| `CAR` (Cartera) | destino | `Lending` | **no**, hasta la activación | `VentaACreditoRegistrada` v1 y v2, `AjusteDeVentaACredito` v1, `ResultadoDelGiro` v1 |
+
+**Sin la fila `CNT` el despachador ya no recorre `Accounting`**: por eso la migración va antes que cualquier despliegue de este código.
+
+Pantalla **Administración › Participantes de la integración** (`/admin/participantes-de-integracion`; `Core.IntegrationParticipants.View`
+y `.Manage`), rutas `/api/core/integration-participants` (+ `{id}/retire`). Habilitar, inhabilitar o retirar **cierra** la vigencia la
+víspera y abre otra: la historia queda. Los dobles de prueba (`TST`, `IsTestDouble`) se registran por cooperativa fuera de producción
+(`Integration.Participant.TestDoubleInProduction` en producción); una versión que el despliegue no implementa responde
+`Integration.Participant.VersionNotSupported`; dos vigencias del mismo participante, papel y destino no se cruzan
+(`Integration.Participant.Overlaps`). Las claves derivadas del recaudador (`:reverso`, `:destino`, `TST:{guid}`) viven en
+`ClavesDeRecaudador`.
+
+Lo que va a un destino que no cuenta queda **`Pending` sin intentos ni alertas**: así espera una venta a crédito de Comercial hasta que se
+active Cartera. `GetSalesDocumentCreditQuery` («¿hay destino?») pregunta al registro, no a la existencia del consumidor.
+
+### 9.4 `ValidationFailed` (T17, C18)
+
+Un consumidor que recibe un mensaje bien formado pero que no puede aceptar por una regla de negocio responde
+`ResultadoDeConsumo.ValidationFailed(referencia, número, código, motivo)`. `RegisterDeliveryResultCommand` lleva la entrega a
+`DeliveryStatus.ValidationFailed` **directo** desde `Pending` o `InBatch`, deja el intento `ValidationFailed = 5` y levanta
+`Integracion.ValidacionFallida` con destinatarios del **módulo de origen** (`DestinatariosDeIntegracion`). No se reintenta: el origen
+corrige y emite otro mensaje.
+
+Para quien consume por lotes o necesita mirar antes, `IMensajesEntrantes.PendientesAsync(destino, tipos, hastaFechaDeOperacion, página)`
+lista sin consumir ni crear intentos; `MensajeEntrante` trae la clase del documento como texto (`OriginDocumentClassText`,
+`RelatedDocumentClassText`) y `UnidadDeConsumo` su `OriginModule`.
+
+### 9.5 Los turnos del despachador (T15, T19)
+
+`DespachadorDeMensajes` recorre sólo los destinos con consumidor **y** fila que cuenta (`DestinosHabilitadosAsync`, ya sin leer
+`ParametrosDeInventario.CarteraIntegracionHabilitadaDesde`), y los **turna**: una tanda por destino en cada vuelta, dentro del presupuesto
+de la pasada (`Integration:Dispatcher:BudgetSeconds`). Así el atraso de Contabilidad no se come el tiempo de la respuesta a Comercial. El
+arranque falla con `Integration.Destination.DuplicateConsumer` si dos `IDestinoDeMensajes` declaran el mismo destino
+(`ConsumidoresPorDestino.Validar`, en `Program.cs` después de `Build()`; `UnSoloConsumidorPorDestino`).
+
+Del lado contable, `PlanearLote` separa por `OriginModule`, `VersionesAceptadas` es por módulo y la lista de pendientes del cierre es
+`ListPendingIntegrationMessagesQuery(módulo)`. La bandeja (`/api/inventory/messages*`) elige su vista por módulo
+(`IVistaDeBandejaDelModulo`; la de Inventario no cambió).
+
+### 9.6 Dónde está cada cosa (013)
+
+| | |
+|---|---|
+| Catálogo agregado | `Application/Common/Integration/CatalogoDeMensajes.cs`, `Contracts/Lending/` |
+| Registro | `Application/Common/Integration/{IRegistroDeIntegracion,RegistroDeIntegracion,EscritorDelRegistroDeIntegracion,ContratosDeIntegracion,ClavesDeRecaudador}.cs`; `Application/Core/IntegrationParticipants/`; `API/Endpoints/Core/IntegrationParticipantsEndpoints.cs` |
+| Consumo | `Application/Common/Integration/{IMensajesEntrantes,MensajesEntrantes,RegisterDeliveryResultCommand,DestinatariosDeIntegracion,ConsumidoresPorDestino}.cs` |
+| Migración | `PlataformaParaCartera` (par PostgreSQL / SQL Server, con la semilla del registro y el arrendamiento `lending.process`) |
+| Pruebas | Application `EmisorDeMensajesConVariosModulosTests`, `RegistroDeIntegracionTests`, `ConsumoConValidacionFallidaTests`, `MensajesEntrantesPendientesTests`; arquitectura `ElCatalogoDeMensajesEsUnico`, `EmisionesDeProcesoPermitidas`, `UnSoloConsumidorPorDestino`, `SoloElEmisorEscribeLaBandeja`; e2e `PlataformaParaCarteraTests` |
+
+### 9.7 Los canales externos (T71–T73)
+
+La bandeja de mensajes cruza entre módulos del ERP; lo que el ERP le pide a un **tercero** fuera de su base (SMS y WhatsApp al deudor,
+listas restrictivas, depósito de valores, centrales de riesgo) va por otro camino: un **puerto** de Application y un **adaptador** en el
+proyecto `IngenIA365ERP.ExternalChannels`, que sólo conoce `API/Program.cs` (`LosProveedoresExternosSoloLosConoceSuAdaptador`). Cada
+cooperativa elige por clase y con vigencia qué canal atiende (`COR_ExternalChannelSettings`, `/admin/canales-externos`) y la operación sella
+el código del canal con que se hizo. Tres reglas:
+
+- **Credenciales fuera de la base**: en el Secret `erp-canales-externos` de cada ambiente, una clave por cooperativa y canal, que se carga con
+  `tools/scripts/crear-secreto-canales-externos.ps1` (`LasCredencialesDeCanalesExternosNoTocanLaBase`).
+- **Una sola guardia del efecto legal** (`GuardiaDeCanalesExternos`): en producción un resultado del canal `SIMULADO` no produce efecto
+  (`Lending.Adapter.SimulatedInProduction`); `CARGA-PROPIA` sí.
+- **Un circuito por cooperativa y canal** (`CircuitoDeCanalExterno`): con fallas seguidas el canal se suspende y alerta
+  `Cartera.CanalExternoNoDisponible`.
+
+El **correo no es un canal externo**: sale por `IEmailSender` (`CORREO`). Hay **dos caminos de correo** y no se mezclan: las
+**notificaciones de usuario** (alertas de la plataforma a quien trabaja en el ERP, `COR_Notifications`/`COR_Alerts`) y los **mensajes al
+deudor** (cola `ColaDeMensajesAlDeudor` con plantilla versionada, autorización de tratamiento de datos, ventana de contacto de la Ley 2300
+y evidencia de entrega; el envío de documentos y de la simulación usa esta cola). Detalle operativo en
+[canales-externos.md](../operaciones/canales-externos.md); los mensajes al deudor, en
+[cartera-gobierno-y-seguridad.md](cartera-gobierno-y-seguridad.md) §7.

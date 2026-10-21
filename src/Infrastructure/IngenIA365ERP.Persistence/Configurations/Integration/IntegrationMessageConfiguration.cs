@@ -48,7 +48,9 @@ public class IntegrationMessageConfiguration : IEntityTypeConfiguration<Integrat
         builder.Property(e => e.PayloadJson).IsRequired();
         builder.Property(e => e.PayloadSha256).HasMaxLength(64).IsFixedLength().IsUnicode(false).IsRequired();
         builder.Property(e => e.PrevalidationOutcome).HasConversion<int?>();
-        builder.Property(e => e.OriginUserCentralId).IsRequired();
+        // Feature 013 (T0072; T11, PM-02): el proceso origina los tipos que admiten proceso; entonces no hay identidad central.
+        builder.Property(e => e.OriginActorKind).HasConversion<int>().HasDefaultValue(Domain.Enums.Integration.ActorKind.Person).IsRequired();
+        builder.Property(e => e.OriginUserCentralId);
         builder.Property(e => e.OriginUserName).HasMaxLength(150).IsRequired();
         builder.Property(e => e.EmittedAt).IsRequired();
 

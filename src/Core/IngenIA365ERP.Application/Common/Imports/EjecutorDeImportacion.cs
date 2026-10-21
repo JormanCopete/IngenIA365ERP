@@ -78,12 +78,9 @@ public sealed class EjecutorDeImportacion(
         var concedidos = permisos.EsMaestroGlobal
             ? new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             : new HashSet<string>(await permisos.ListAsync(ct), StringComparer.OrdinalIgnoreCase);
-        var contexto = new ContextoDeImportacion(plantilla, modo, comando.Reason, concedidos, permisos.EsMaestroGlobal);
-
-        var lectura = await LeerHojasAsync(plantilla, archivo, contexto, ct);
-        if (lectura.IsFailure) return Result.Failure<ImportResultDto>(lectura.Error);
-
-        ComprobarPermisos(contexto);
+        var preparado = await PrepararContextoAsync(lector, plantilla, modo, archivo, comando.Reason, concedidos, permisos.EsMaestroGlobal, ct);
+        if (preparado.IsFailure) return Result.Failure<ImportResultDto>(preparado.Error);
+        var contexto = preparado.Value;
 
         return modo == ModoDeImportacion.Review
             ? await RevisarAsync(contexto, archivo, procesar, ct)
@@ -92,7 +89,24 @@ public sealed class EjecutorDeImportacion(
 
     // --------------------------------------------------------------- lectura --
 
-    private async Task<Result> LeerHojasAsync(DefinicionDePlantilla plantilla, ArchivoDeImportacion archivo, ContextoDeImportacion contexto, CancellationToken ct)
+    /// <summary>
+    /// Arma el contexto de una importación: lee las hojas con <paramref name="lector"/> y comprueba los permisos de hoja y
+    /// columna (§0.7). Lo comparte la importación del registro central de valores nacionales (feature 013, C82), que no corre
+    /// sobre la base de una cooperativa y tiene su propia transacción sobre <c>IAdminDbContext</c>: misma definición, mismo
+    /// lector, mismas reglas de celda.
+    /// </summary>
+    internal static async Task<Result<ContextoDeImportacion>> PrepararContextoAsync(
+        ITabularFileReader lector, DefinicionDePlantilla plantilla, ModoDeImportacion modo, ArchivoDeImportacion archivo,
+        string? motivo, IReadOnlySet<string> permisos, bool todosLosPermisos, CancellationToken ct)
+    {
+        var contexto = new ContextoDeImportacion(plantilla, modo, motivo, permisos, todosLosPermisos);
+        var lectura = await LeerHojasAsync(lector, plantilla, archivo, contexto, ct);
+        if (lectura.IsFailure) return Result.Failure<ContextoDeImportacion>(lectura.Error);
+        ComprobarPermisos(contexto);
+        return Result.Success(contexto);
+    }
+
+    private static async Task<Result> LeerHojasAsync(ITabularFileReader lector, DefinicionDePlantilla plantilla, ArchivoDeImportacion archivo, ContextoDeImportacion contexto, CancellationToken ct)
     {
         IReadOnlyList<string> presentes = [];
         if (!plantilla.EsDeUnaHoja)

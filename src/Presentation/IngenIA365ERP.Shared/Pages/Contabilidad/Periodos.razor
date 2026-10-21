@@ -4,6 +4,7 @@
 @using IngenIA365ERP.Shared.Services.Http
 @inject ContabilidadClient Contabilidad
 @inject IntegracionContableClient Integracion
+@inject IntegracionContableDeCarteraClient IntegracionDeCartera
 @inject INotificationService Notification
 
 <PageTitle>Períodos contables - IngenIA365ERP</PageTitle>
@@ -17,7 +18,12 @@
    (pendientes, en lote o rechazadas), cerrar responde Accounting.Period.InventoryPending y la pantalla lo dice —cuántas hay por estado,
    la fecha más antigua y los tipos— y ofrece «Procesar ahora» (previsualiza y ordena el lote manual del mes; exige
    Accounting.InventoryBatches.Run) o «Cerrar de todos modos» (reenvía con AcknowledgeInventoryPending = true y queda auditado: lo que
-   siga pendiente se rechazará por período cerrado y se recupera reabriendo el mes). *@
+   siga pendiente se rechazará por período cerrado y se recupera reabriendo el mes).
+   Feature 013, US7 (T0652; contracts/api.md §24, contracts/contabilidad.md §12): con Cartera activa, cerrar un mes que Cartera no ha cerrado
+   responde Accounting.Period.LendingNotClosed y la pantalla lo dice sin ofrecer cerrar (se cierra primero en Cartera); con hechos de Cartera
+   del mes sin procesar (Accounting.Period.LendingPending) ofrece «Procesar ahora» (previsualiza y ordena el lote manual de Cartera del mes;
+   exige Accounting.LendingBatches.Run) y «Cerrar de todos modos»; con una carga de Cartera que el cierre dejaría sin activar
+   (Accounting.Period.LendingLoadWillExpire), «Cerrar de todos modos». Los reconocimientos se acumulan: cada reintento lleva los ya dados. *@
 <PermissionGate Required="Accounting.Periods.View" MostrarAviso="true">
 <div class="page-header">
     <h3>Períodos contables</h3>
@@ -144,6 +150,78 @@
     </DialogTemplates>
 </SfDialog>
 
+<SfDialog @bind-Visible="_mostrarCarteraSinCerrar" Header="@($"Cartera no ha cerrado {(_aCerrar is null ? "" : Mes(_aCerrar.Month))} {_aCerrar?.Year}")" Width="560px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            @if (_carteraSinCerrar is { } sin)
+            {
+                <p>Cartera está activa desde el @sin.ActivationDate.ToString("dd/MM/yyyy") y todavía no cerró este mes. Contabilidad no puede cerrarlo antes: el cierre de Cartera deja los últimos hechos del mes (causación y deterioro).</p>
+                <p class="texto-tenue">
+                    @if (sin.LastLendingClose is { } ultimo) { <span>El último cierre vigente de Cartera es del @ultimo.Date.ToString("dd/MM/yyyy").</span> }
+                    else { <span>Cartera todavía no ha cerrado ningún mes.</span> }
+                </p>
+            }
+            <p>Ciérrelo primero en Cartera (<a href="/cartera/cierres">Cierres del mes</a>) y vuelva a intentarlo.</p>
+            <div class="toolbar">
+                <SfButton CssClass="e-outline" OnClick="@(() => _mostrarCarteraSinCerrar = false)">Entendido</SfButton>
+            </div>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarCarteraPendiente" Header="@($"Cartera tiene hechos de {(_aCerrar is null ? "" : Mes(_aCerrar.Month))} {_aCerrar?.Year} sin contabilizar")" Width="600px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_procesando.Activa" Texto="Ordenando el lote…">
+                @if (_pendientesDeCartera is { } pend)
+                {
+                    <p>Contabilidad todavía no recibe @(pend.Pending + pend.InBatch + pend.Rejected) hecho(s) de Cartera fechados en el mes:</p>
+                    <ul>
+                        <li>@pend.Pending pendiente(s)</li>
+                        <li>@pend.InBatch en un lote</li>
+                        <li>@pend.Rejected rechazado(s): se corrigen y se reprocesan desde la <a href="/cartera/bandeja-de-mensajes?pestana=emitidos">bandeja de mensajes de Cartera</a></li>
+                    </ul>
+                    <p class="texto-tenue">
+                        @if (pend.OldestOperationDate is { } masAntigua) { <span>El más antiguo es del @masAntigua.ToString("dd/MM/yyyy"). </span> }
+                        @if (pend.Types.Count > 0) { <span>Tipos: @string.Join(", ", pend.Types.Select(TextosDeContabilidadDeCartera.TipoDeHecho)).</span> }
+                    </p>
+                    <p>Si cierra de todos modos, lo que siga pendiente se rechazará por período cerrado y se recupera reabriendo el mes. Queda en la auditoría.</p>
+                }
+                @if (_loteDeCartera is { } lote)
+                {
+                    <p class="aviso aviso-ok">Lote @lote.Number ordenado: corre en segundo plano. <a href="@($"/contabilidad/cartera/lotes/{lote.BatchPublicId}")">Ver el lote</a> y, al terminar, vuelva a cerrar el mes.</p>
+                }
+                <div class="toolbar">
+                    <PermissionGate Required="Accounting.LendingBatches.Run">
+                        <SfButton CssClass="e-primary" Disabled="@(_procesando.Activa || _loteDeCartera is not null)" OnClick="@ProcesarCarteraAhoraAsync">Procesar ahora</SfButton>
+                    </PermissionGate>
+                    <PermissionGate Required="Accounting.LendingBatches.View">
+                        <a class="e-btn e-outline" href="@LotesDeCarteraDelMes">Ver en lotes de Cartera</a>
+                    </PermissionGate>
+                    <SfButton CssClass="e-outline" Disabled="@(_ocupado || _procesando.Activa)" OnClick="@CerrarConCarteraPendienteAsync">Cerrar de todos modos</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarCarteraPendiente = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarCargaQueVence" Header="Una carga de Cartera quedaría sin activar" Width="560px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            @if (_cargaQueVence is { } carga)
+            {
+                <p>La carga de saldos de Cartera con corte al @carga.CutoffDate.ToString("dd/MM/yyyy") todavía no se activó. Si cierra este mes, esa carga ya no podrá activarse y habrá que cargarla de nuevo.</p>
+            }
+            <p>Active Cartera primero o cierre de todos modos; queda en la auditoría.</p>
+            <div class="toolbar">
+                <SfButton CssClass="e-primary" Disabled="@_ocupado" OnClick="@CerrarConCargaSinActivarAsync">Cerrar de todos modos</SfButton>
+                <SfButton CssClass="e-outline" OnClick="@(() => _mostrarCargaQueVence = false)">Cancelar</SfButton>
+            </div>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
 <SfDialog @bind-Visible="_mostrarCerrarEjercicio" Header="@($"Cerrar el ejercicio {_ejercicio?.Year}")" Width="520px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
@@ -177,6 +255,18 @@
     private PendientesDeInventarioDelMesDto? _pendientes;
     private LoteOrdenadoDeIntegracionDto? _loteOrdenado;
     private ClaveDeOperacion _claveDelLote = new();
+    // Feature 013 (T0652): los avisos de Cartera al cerrar y los reconocimientos ya dados en este intento.
+    private bool _mostrarCarteraSinCerrar, _mostrarCarteraPendiente, _mostrarCargaQueVence;
+    private bool _reconoceInventario, _reconoceCartera, _reconoceCarga;
+    private CarteraSinCerrarDto? _carteraSinCerrar;
+    private PendientesDeCarteraDelMesDto? _pendientesDeCartera;
+    private CargaDeCarteraQueVenceDto? _cargaQueVence;
+    private LoteOrdenadoDeIntegracionDto? _loteDeCartera;
+    private ClaveDeOperacion _claveDelLoteDeCartera = new();
+
+    private string LotesDeCarteraDelMes => _aCerrar is { } p
+        ? $"/contabilidad/cartera/lotes?desde={p.StartDate:yyyy-MM-dd}&hasta={p.EndDate:yyyy-MM-dd}"
+        : "/contabilidad/cartera/lotes";
     private List<int> _anios = [];
     private int _anio;
     private EjercicioDto? _ejercicio;
@@ -203,26 +293,88 @@
         _ejercicio = r.Value;
     }
 
-    private async Task CerrarAsync(PeriodoContableDto p)
+    private Task CerrarAsync(PeriodoContableDto p)
     {
+        _aCerrar = p;
+        _reconoceInventario = _reconoceCartera = _reconoceCarga = false;
+        return IntentarCerrarAsync();
+    }
+
+    /// <summary>
+    /// Cierra el mes con los reconocimientos dados hasta ahora; cada aviso abre su diálogo y su «Cerrar de todos modos» vuelve aquí con un
+    /// reconocimiento más (el servidor responde un aviso a la vez). Se ramifica por el código, nunca por el texto.
+    /// </summary>
+    private async Task IntentarCerrarAsync()
+    {
+        if (_aCerrar is not { } p) return;
         _ocupado = true;
         try
         {
-            var r = await Contabilidad.CerrarPeriodoAsync(p.Year, p.Month, reconocerPendientesDeInventario: false);
-            if (r.ErrorCode == ContabilidadClient.CodigoInventarioPendiente)
+            var r = await Contabilidad.CerrarPeriodoAsync(p.Year, p.Month, _reconoceInventario, _reconoceCartera, _reconoceCarga);
+            switch (r.ErrorCode)
             {
-                _aCerrar = p;
-                _pendientes = r.DatosComo<PendientesDeInventarioDelMesDto>();
-                _loteOrdenado = null;
-                _claveDelLote = new ClaveDeOperacion();
-                _mostrarPendientes = true;
-                return;
+                case ContabilidadClient.CodigoInventarioPendiente:
+                    _pendientes = r.DatosComo<PendientesDeInventarioDelMesDto>();
+                    _loteOrdenado = null;
+                    _claveDelLote = new ClaveDeOperacion();
+                    _mostrarPendientes = true;
+                    return;
+                case TextosDeContabilidadDeCartera.CarteraSinCerrar:
+                    _carteraSinCerrar = r.DatosComo<CarteraSinCerrarDto>();
+                    _mostrarCarteraSinCerrar = true;
+                    return;
+                case TextosDeContabilidadDeCartera.CarteraPendiente:
+                    _pendientesDeCartera = r.DatosComo<PendientesDeCarteraDelMesDto>();
+                    _loteDeCartera = null;
+                    _claveDelLoteDeCartera = new ClaveDeOperacion();
+                    _mostrarCarteraPendiente = true;
+                    return;
+                case TextosDeContabilidadDeCartera.CargaQueVence:
+                    _cargaQueVence = r.DatosComo<CargaDeCarteraQueVenceDto>();
+                    _mostrarCargaQueVence = true;
+                    return;
             }
             if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo cerrar el período."); return; }
-            await Notification.SuccessAsync($"{Mes(p.Month)} {p.Year} cerrado.");
+            var reconocido = _reconoceInventario || _reconoceCartera || _reconoceCarga;
+            await Notification.SuccessAsync(reconocido
+                ? $"{Mes(p.Month)} {p.Year} cerrado con avisos reconocidos (quedó en la auditoría)."
+                : $"{Mes(p.Month)} {p.Year} cerrado.");
             await CargarAsync();
         }
         finally { _ocupado = false; }
+    }
+
+    /// <summary>Previsualiza el mes y ordena el lote manual de Cartera hasta el corte de la vista previa (T0652, §12).</summary>
+    private async Task ProcesarCarteraAhoraAsync()
+    {
+        if (_aCerrar is not { } p) return;
+        using var procesando = _procesando.Iniciar();
+        var previa = await IntegracionDeCartera.VistaPreviaDeLoteAsync(new VistaPreviaDeLoteDeCarteraRequest(p.StartDate, p.EndDate, null, null));
+        if (!previa.IsSuccess) { await Notification.ErrorAsync(previa.ErrorMessage ?? "No se pudo previsualizar el lote de Cartera del mes."); return; }
+        if (previa.Value?.CutoffMessagePublicId is not { } corte)
+        {
+            await Notification.InfoAsync("No hay nada que contabilizar ahora: los rechazados se corrigen y se reprocesan desde la bandeja de mensajes de Cartera.");
+            return;
+        }
+        var r = await IntegracionDeCartera.OrdenarLoteAsync(new OrdenDeLoteDeCarteraRequest(corte, p.StartDate, p.EndDate, null, null,
+            $"Procesar los hechos de Cartera pendientes antes de cerrar {Mes(p.Month)} {p.Year}"), _claveDelLoteDeCartera);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo ordenar el lote."); return; }
+        _loteDeCartera = r.Value;
+        await Notification.SuccessAsync($"Lote {r.Value.Number} ordenado: se procesa en segundo plano.");
+    }
+
+    private Task CerrarConCarteraPendienteAsync()
+    {
+        _mostrarCarteraPendiente = false;
+        _reconoceCartera = true;
+        return IntentarCerrarAsync();
+    }
+
+    private Task CerrarConCargaSinActivarAsync()
+    {
+        _mostrarCargaQueVence = false;
+        _reconoceCarga = true;
+        return IntentarCerrarAsync();
     }
 
     /// <summary>Previsualiza el mes y ordena el lote manual hasta el corte de la vista previa (T536, §8).</summary>
@@ -244,19 +396,11 @@
         await Notification.SuccessAsync($"Lote {r.Value.Number} ordenado: se procesa en segundo plano.");
     }
 
-    private async Task CerrarDeTodosModosAsync()
+    private Task CerrarDeTodosModosAsync()
     {
-        if (_aCerrar is not { } p) return;
-        _ocupado = true;
-        try
-        {
-            var r = await Contabilidad.CerrarPeriodoAsync(p.Year, p.Month, reconocerPendientesDeInventario: true);
-            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo cerrar el período."); return; }
-            _mostrarPendientes = false;
-            await Notification.SuccessAsync($"{Mes(p.Month)} {p.Year} cerrado con operaciones de Inventario pendientes (quedó en la auditoría).");
-            await CargarAsync();
-        }
-        finally { _ocupado = false; }
+        _mostrarPendientes = false;
+        _reconoceInventario = true;
+        return IntentarCerrarAsync();
     }
 
     private async Task ReabrirAsync()

@@ -51,10 +51,13 @@
                 }
             </Template>
         </GridColumn>
-        <GridColumn HeaderText="Acciones" Width="130" TextAlign="TextAlign.Center" AllowFiltering="false" AllowSorting="false">
+        <GridColumn HeaderText="Acciones" Width="170" TextAlign="TextAlign.Center" AllowFiltering="false" AllowSorting="false">
             <Template>
                 @{
                     var p = context as PersonRow;
+                    @* Feature 014 (D20): las cuentas donde la persona es cotitular, en su ventana aparte. *@
+                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-people"
+                              OnClick="@(() => AbrirCotitular(p!))" Title="Cuentas como cotitular" />
                     <PermissionGate Required="Core.People.Update">
                         <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit"
                                   OnClick="@(() => OpenEdit(p!))" Title="Editar" />
@@ -75,6 +78,8 @@
                RolesRegistrables="@_rolesRegistrables"
                OnGuardado="@OnGuardadoAsync" OnRegistrarRol="@RegistrarRolAsync" />
 
+<CuentasComoCotitular @bind-Visible="_showCotitular" PersonaPublicId="@_cotitularId" Nombre="@_cotitularNombre" />
+
 <ConfirmDialog @bind-Visible="_showConfirm" OnConfirm="ConfirmDelete"
                Message="¿Está seguro de eliminar esta persona? Podrá restaurarla quien tenga el permiso de eliminar." />
 
@@ -87,7 +92,9 @@
     private string _roleFilter = "";
     private System.Threading.CancellationTokenSource? _searchDebounce;
 
-    private bool _showDialog, _showConfirm;
+    private bool _showDialog, _showConfirm, _showCotitular;
+    private Guid? _cotitularId;
+    private string? _cotitularNombre;
     private Guid? _editId;
     private Guid _deleteId;
 
@@ -194,6 +201,15 @@
             _ => null,
         };
         if (destino is not null) Nav.NavigateTo(destino);
+    }
+
+    // ---------- Cuentas como cotitular (feature 014, D20) ----------
+
+    private void AbrirCotitular(PersonRow row)
+    {
+        _cotitularId = row.PublicId;
+        _cotitularNombre = row.FullName;
+        _showCotitular = true;
     }
 
     // ---------- Eliminar ----------

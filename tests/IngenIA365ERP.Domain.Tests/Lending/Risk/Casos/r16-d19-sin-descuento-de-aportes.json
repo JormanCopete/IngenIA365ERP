@@ -1,0 +1,35 @@
+{
+  // r16 (SC-023; D19, T0694): el deudor 1600 tiene aportes que, con la norma (aportes deducibles sin pérdidas y con solvencia), se
+  // descontarían a prorrata de la base del deterioro individual: 1.000.000 al crédito 1 y 500.000 al crédito 2. Con D19 vigente el
+  // descuento es cero y la explicación lo dice; tampoco hay excepción de aportes en el arrastre (el crédito 2 queda en C).
+  // A mano: 1. consumo 75 días → C; base 5.000.000 (sin descontar 1.000.000) × 10 % = 500.000.
+  //         2. consumo al día arrastrado a C; base 2.000.000 (sin descontar 500.000) × 10 % = 200.000.
+  // Variante «sin-indicadores» (sin D19 pero sin indicadores vigentes de la entidad, C33): lo mismo; la explicación nombra los
+  // indicadores.
+  "nombre": "r16-d19-sin-descuento-de-aportes",
+  "creditos": [
+    { "id": 1, "deudor": 1600, "segmento": "CONSUMO", "diasDeMora": 75, "saldos": { "capital": 5000000 }, "aportes": 1000000 },
+    { "id": 2, "deudor": 1600, "segmento": "CONSUMO", "diasDeMora": 0, "saldos": { "capital": 2000000 }, "aportes": 500000 }
+  ],
+  "esperado": {
+    "creditos": [
+      { "id": 1, "categoria": "C", "causa": "Arrears", "aportes": 0, "base": 5000000, "deterioroCapital": 500000.00,
+        "explicacionContiene": [ "Aportes a prorrata 1000000: no se descuentan (rige D19" ] },
+      { "id": 2, "categoria": "C", "causa": "Drag", "aportes": 0, "base": 2000000, "deterioroCapital": 200000.00,
+        "explicacionContiene": [ "sin excepción de aportes (rige D19", "Aportes a prorrata 500000: no se descuentan (rige D19" ] }
+    ]
+  },
+  "variantes": [
+    {
+      "nombre": "sin-indicadores",
+      "opciones": { "rigeD19": false, "indicadoresDisponibles": false },
+      "esperado": {
+        "creditos": [
+          { "id": 1, "categoria": "C", "causa": "Arrears", "aportes": 0, "base": 5000000, "deterioroCapital": 500000.00,
+            "explicacionContiene": [ "no tiene indicadores vigentes" ] },
+          { "id": 2, "categoria": "C", "causa": "Drag", "aportes": 0, "base": 2000000, "deterioroCapital": 200000.00 }
+        ]
+      }
+    }
+  ]
+}

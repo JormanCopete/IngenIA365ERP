@@ -83,9 +83,48 @@ namespace IngenIA365ERP.App
             // Feature 012, I4 (T752): facturación electrónica (configuración, resoluciones, documentos, contingencias).
             builder.Services.AddScoped<IngenIA365ERP.Shared.Services.FacturacionElectronica.FacturacionElectronicaClient>();
             builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Core.MediosDePagoClient>();
+            // Feature 013, fase 2 (T0094): plataforma de Cartera (valores nacionales, perfil regulatorio, canales, participantes, cumplimiento).
+            builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Core.ValoresNacionalesClient>();
+            builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Core.PerfilRegulatorioClient>();
+            builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Core.CanalesExternosClient>();
+            builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Core.ParticipantesDeIntegracionClient>();
+            builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Compliance.ListasRestrictivasClient>();
+            builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Compliance.SolicitudesDelTitularClient>();
+            // Feature 013, fase 4 (T0315, T0310): gobierno, configuración y mensajes al deudor de Cartera.
+            builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.GobiernoDeCarteraClient>();
+            builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.ConfiguracionDeCarteraClient>();
+            builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.LineasDeCreditoClient>();
+            builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.MensajesAlDeudorClient>();
+            builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.OriginacionClient>();
+            builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.CuposClient>();
+            builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.DesembolsosClient>();
+            builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.GarantiasClient>();
+            builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.ArchivosDeDesembolsoClient>();
+            builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.LibranzaClient>();
+            builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.DoblesDePruebaClient>();
+            builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.CreditosClient>();
+            builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.CorridasDeCarteraClient>();
+            // Feature 013, US6 (T0601): los recibos de lo que llega a Cartera (bandeja de mensajes).
+            builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.MensajesRecibidosClient>();
+            // Feature 013, US5 (T0561): pagos por pantalla (simular, reversar, preferencia del deudor).
+            builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.PagosClient>();
+            builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.NovedadesClient>();
+            builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.CobranzaClient>();
+            builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.CastigosClient>();
+            // Feature 014 (T057): captaciones y aportes.
+            builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.CaptacionesClient>();
             builder.Services.AddSingleton<IImpresionDeDocumentos, ImpresionNativa>();
             // Feature 012, US7 (T532): el lado contable de la integración con Inventario; misma salvedad (CentralAuthClient, verificacion de MAUI).
             builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Contabilidad.IntegracionContableClient>();
+            // Feature 013, US7 (T0663): el lado contable de la integración con Cartera y, desde Cartera, hechos, conciliación y emitidos.
+            builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Contabilidad.IntegracionContableDeCarteraClient>();
+            builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.ConciliacionContableClient>();
+            builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.CarteraClient>();
+            builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.RiesgoClient>();
+            // Feature 013, US15 (T0799): el centro de informes de Cartera.
+            builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.InformesDeCarteraClient>();
+            builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.TableroDeCarteraClient>();
+            builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.RegulatorioDeCarteraClient>();
             builder.Services.AddSingleton<INotificationService, NotificationService>();
             builder.Services.AddSingleton<ILoadingService, LoadingService>();
 

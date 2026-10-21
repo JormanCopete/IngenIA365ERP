@@ -251,6 +251,17 @@ descarte y el documento que queda en aprobación **no consumen número**. Sin se
 `Number`, `NextValue` o `LastIssuedNumber` (ésta, la de la resolución DIAN, la escribirá el numerador
 fiscal de I4).
 
+### 10a. La venta a crédito y Cartera (feature 013, US6)
+
+Entre el cerrojo de existencias y la numeración, la confirmación de una venta a crédito **validada por Cartera** reserva el número del
+crédito por `IReservasDeCartera`, bajo un punto de guardado propio (`PuntoDeGuardado`): si Cartera falla por algo técnico, se deshace sólo
+la reserva y la venta se confirma sin número. Lo que el pago guarda de Cartera (`INV_DocumentPayments`): el origen (`Validated`,
+`ProvisionalCredit`, `LendingNoResponse`), la evidencia de la consulta (`ConsultationEvidence`), la línea elegida (`CreditLineCode`), el
+número y la reserva (`ReservedLoanNumber`, `ReservationPublicId`) y quién registra la cuenta por cobrar. La respuesta de Cartera
+(`ObligacionCreada` u `ObligacionRechazada`) la guarda `DestinoInventario`, el consumidor del destino `Inventory`, en
+`INV_LendingObligationResponses`: **número y estado, nunca saldos ni cuotas**. La pestaña «Crédito» de la venta muestra la última. Ver
+[cartera-ventas-a-credito.md](cartera-ventas-a-credito.md).
+
 ## 11. Qué NO hacer
 
 - No hacer `db.KardexEntries.Add(...)` ni asignar `Physical`/`AverageCost` fuera de `RegistroDeKardex`.

@@ -1,0 +1,198 @@
+@page "/contabilidad/cartera/tipos-de-comprobante"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Contabilidad
+@using IngenIA365ERP.Shared.Services.Cartera
+@inject IntegracionContableDeCarteraClient Integracion
+@inject ContabilidadClient Contabilidad
+@inject INotificationService Notification
+
+<PageTitle>Tipos de comprobante de Cartera - IngenIA365ERP</PageTitle>
+
+@* Feature 013, US7 (T0665; contracts/api.md §23.2, contracts/contabilidad.md §4.2, §5): con qué tipo de comprobante —y qué documento cruce—
+   contabiliza Contabilidad cada hecho de Cartera, en general o para una clase de recaudador en particular (gana la más específica). La
+   semilla deja las filas «pendiente de validar»: guardarlas, aunque sea igual, es la conformidad de la contadora. Cambiar una fila la
+   reemplaza en su sitio con motivo (el cambio queda en la auditoría: el mapeo no tiene vigencia). El tipo de comprobante tiene que ser de
+   uso «Módulo», de Cartera y activo: la lista sólo ofrece ésos y el servidor lo vuelve a exigir (Accounting.VoucherType.NotAllowedForModule). *@
+<PermissionGate Required="Accounting.LendingRules.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Tipos de comprobante de Cartera</h3>
+        <div class="toolbar">
+            <a class="e-btn e-outline" href="/contabilidad/cartera/matriz">Matriz</a>
+            <a class="e-btn e-outline" href="/contabilidad/cartera/completitud">Completitud</a>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+            <PermissionGate Required="Accounting.LendingRules.Manage">
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@(() => Abrir(null))">Nuevo mapeo</SfButton>
+            </PermissionGate>
+        </div>
+    </div>
+    <p class="texto-apoyo">Una fila sin clase de recaudador vale para todo el hecho; una con clase, sólo para los recaudos de esa clase. Las filas «pendiente de validar» vienen de la semilla y esperan la conformidad de la contadora.</p>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        @if (_mapeos.Count(m => m.ReviewPending) is > 0 and var pendientes)
+        {
+            <p class="aviso aviso-alerta">@pendientes fila(s) pendientes de validar.</p>
+        }
+        <div class="tabla-desplazable">
+            <table class="data-grid">
+                <thead><tr><th>Hecho</th><th>Clase de recaudador</th><th>Tipo de comprobante</th><th>Documento cruce</th><th>Origen</th><th>Estado</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var m in _mapeos)
+                    {
+                        var mapeo = m;
+                        <tr class="@(mapeo.ReviewPending ? "resaltada" : "")">
+                            <td>@TextosDeContabilidadDeCartera.TipoDeHecho(mapeo.Operation)</td>
+                            <td>@Clase(mapeo.CollectorClass)</td>
+                            <td>@mapeo.VoucherType.Code · @mapeo.VoucherType.Name</td>
+                            <td>@(mapeo.CrossDocumentType?.Code ?? "—")</td>
+                            <td>@(mapeo.IsSeeded ? "Semilla" : "De la cooperativa")</td>
+                            <td>@if (mapeo.ReviewPending) { <span class="aviso aviso-alerta">Pendiente de validar</span> } else { <span>Validado</span> }</td>
+                            <td>
+                                <PermissionGate Required="Accounting.LendingRules.Manage">
+                                    <SfButton CssClass="e-flat e-small" OnClick="@(() => Abrir(mapeo))">@(mapeo.ReviewPending ? "Validar o cambiar…" : "Cambiar…")</SfButton>
+                                </PermissionGate>
+                            </td>
+                        </tr>
+                    }
+                    @if (_mapeos.Count == 0 && !_carga.Activa)
+                    {
+                        <tr><td colspan="7" class="texto-tenue">@(_error ?? "Sin mapeos: la semilla no se aplicó en esta cooperativa.")</td></tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </IndicadorDeCarga>
+</div>
+
+<SfDialog @bind-Visible="_mostrar" Header="@(_editando is null ? "Nuevo mapeo" : "Cambiar el mapeo")" Width="560px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <div class="form-grid">
+                    <label class="campo">Hecho *
+                        <select class="e-input" disabled="@(_editando is not null)" @bind="_f.Operacion">
+                            <option value="">Elija…</option>
+                            @foreach (var o in _operaciones) { <option value="@o">@TextosDeContabilidadDeCartera.TipoDeHecho(o)</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Clase de recaudador
+                        <select class="e-input" disabled="@(_editando is not null)" @bind="_f.Clase">
+                            <option value="">Todas</option>
+                            @foreach (var c in _clases) { <option value="@c">@TextosDePagos.ClaseDeRecaudador(c)</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Tipo de comprobante *
+                        <select class="e-input" value="@(_f.TipoDeComprobante?.ToString() ?? "")" @onchange="@(e => _f.TipoDeComprobante = Guid.TryParse(e.Value?.ToString(), out var g) ? g : null)">
+                            <option value="">Elija…</option>
+                            @foreach (var t in _tiposDeComprobante) { <option value="@t.PublicId">@t.Code · @t.Name</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Documento cruce
+                        <select class="e-input" value="@(_f.Cruce?.ToString() ?? "")" @onchange="@(e => _f.Cruce = Guid.TryParse(e.Value?.ToString(), out var g) ? g : null)">
+                            <option value="">Sin cruce</option>
+                            @foreach (var c in _cruces) { <option value="@c.PublicId">@c.Code · @c.Name</option> }
+                        </select>
+                    </label>
+                    <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_f.Motivo" @bind:event="oninput" maxlength="500" /></label>
+                </div>
+                @if (_editando is { ReviewPending: true })
+                {
+                    <p class="texto-tenue">Guardar la fila, aunque quede igual, la marca como validada.</p>
+                }
+                @if (_tiposDeComprobante.Count == 0)
+                {
+                    <p class="aviso aviso-alerta">No hay tipos de comprobante de uso «Módulo» para Cartera activos. Créelos en Contabilidad › Tipos de comprobante.</p>
+                }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(!PuedeGuardar)" OnClick="@GuardarAsync">Guardar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrar = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private sealed class Formulario
+    {
+        public string? Operacion { get; set; }
+        public string? Clase { get; set; }
+        public Guid? TipoDeComprobante { get; set; }
+        public Guid? Cruce { get; set; }
+        public string? Motivo { get; set; }
+    }
+
+    private const string ModuloCartera = "CAR";
+
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+    private List<MapeoDeComprobanteDeCarteraDto> _mapeos = [];
+    private List<string> _operaciones = [], _clases = [];
+    private List<TipoComprobanteDto> _tiposDeComprobante = [];
+    private List<TipoCruceDto> _cruces = [];
+    private MapeoDeComprobanteDeCarteraDto? _editando;
+    private Formulario _f = new();
+    private bool _mostrar;
+    private string? _error;
+
+    private bool PuedeGuardar => !_guardado.Activa && !string.IsNullOrWhiteSpace(_f.Operacion) && _f.TipoDeComprobante is not null
+                                 && !string.IsNullOrWhiteSpace(_f.Motivo);
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var catalogo = Integracion.CatalogoAsync();
+        var comprobantes = Contabilidad.ListarTiposDeComprobanteAsync();
+        var cruces = Contabilidad.ListarTiposDeCruceAsync();
+        await Task.WhenAll(catalogo, comprobantes, cruces);
+        _operaciones = catalogo.Result.IsSuccess ? [.. (catalogo.Result.Value?.Operations ?? []).Where(o => !o.IsInformational).Select(o => o.Code)] : [];
+        _clases = catalogo.Result.IsSuccess ? [.. catalogo.Result.Value?.Dimensions.CollectorClasses ?? []] : [];
+        _tiposDeComprobante = comprobantes.Result.IsSuccess
+            ? [.. (comprobantes.Result.Value ?? []).Where(t => t.IsActive && t.Usage == "Module" && t.ModuleCode == ModuloCartera).OrderBy(t => t.Code)]
+            : [];
+        _cruces = cruces.Result.IsSuccess ? [.. (cruces.Result.Value ?? []).Where(c => c.IsActive).OrderBy(c => c.Code)] : [];
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Integracion.MapeosAsync();
+        _error = r.IsSuccess ? null : r.ErrorMessage;
+        _mapeos = r.IsSuccess ? [.. (r.Value ?? []).OrderBy(m => m.Operation).ThenBy(m => m.CollectorClass)] : [];
+        if (!r.IsSuccess) await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los mapeos.");
+    }
+
+    private void Abrir(MapeoDeComprobanteDeCarteraDto? mapeo)
+    {
+        _editando = mapeo;
+        _f = mapeo is null
+            ? new Formulario()
+            : new Formulario
+            {
+                Operacion = mapeo.Operation, Clase = EsTodas(mapeo.CollectorClass) ? null : mapeo.CollectorClass,
+                TipoDeComprobante = mapeo.VoucherType.PublicId, Cruce = mapeo.CrossDocumentType?.PublicId,
+            };
+        _mostrar = true;
+    }
+
+    private async Task GuardarAsync()
+    {
+        if (!PuedeGuardar) return;
+        using var guardado = _guardado.Iniciar();
+        var r = await Integracion.FijarMapeoAsync(new MapeoDeComprobanteDeCarteraRequest(_f.Operacion!,
+            string.IsNullOrWhiteSpace(_f.Clase) ? null : _f.Clase, _f.TipoDeComprobante!.Value, _f.Cruce, _f.Motivo!.Trim()));
+        if (!r.IsSuccess)
+        {
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo guardar el mapeo.");
+            return;
+        }
+        _mostrar = false;
+        await Notification.SuccessAsync("Mapeo guardado.");
+        await CargarAsync();
+    }
+
+    private static bool EsTodas(string? clase) => string.IsNullOrWhiteSpace(clase) || clase == "*";
+
+    private static string Clase(string? clase) => EsTodas(clase) ? "Todas" : TextosDePagos.ClaseDeRecaudador(clase);
+}

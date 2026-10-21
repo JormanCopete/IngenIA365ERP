@@ -43,6 +43,28 @@
     <None Include="Inventory\Costing\Prorrateo\*.json" CopyToOutputDirectory="PreserveNewest" />
     <!-- Feature 012, I6 (T943): casos dorados de la rotación y los días de inventario, calculados a mano. -->
     <None Include="Inventory\Analytics\Casos\*.json" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Feature 013 (T0021): documentos normativos de prueba para los lectores tipados de valores nacionales. -->
+    <None Include="Common\NationalValues\Documentos\*.json" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Feature 013, K5 (T0987): casos del motor generico de layouts (ancho fijo, delimitado, bloqueantes), derivados a mano. -->
+    <None Include="Common\Layouts\Casos\*.json" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Feature 013, US17 (T0240, T0241, T0269): casos dorados de la votacion, las atribuciones y la ventana legal de contacto,
+         calculados a mano. -->
+    <None Include="Lending\Sessions\Casos\*.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Lending\Attributions\Casos\*.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Lending\Collections\Casos\*.json" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Feature 013, US1 (T0330, T0331): casos dorados del motor financiero (plan, tasas y usura), calculados con la hoja
+         Lending\Casos\calcular.py (decimal de 40 digitos), que se versiona junto a ellos. -->
+    <None Include="Lending\Casos\*.json" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Feature 013, US2 (T0364): casos dorados del puntaje, calculados a mano con la hoja Lending\Scoring\Casos\puntaje.py. -->
+    <None Include="Lending\Scoring\Casos\*.json" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Feature 013, US9 (T0672): casos dorados de riesgo, calculados a mano y repasados con la hoja Lending\Risk\Casos\riesgo.py
+         (decimal de 40 digitos), sobre las normas de prueba de Lending\Risk\Normas. -->
+    <None Include="Lending\Risk\Casos\*.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Lending\Risk\Normas\*.json" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Feature 013, K2 (T0803): casos dorados de las novedades de libranza, calculados con la hoja Lending\Payroll\Casos\novedades.py. -->
+    <None Include="Lending\Payroll\Casos\*.json" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Feature 014 (T004): casos dorados de captaciones, calculados con la hoja Lending\Deposits\Casos\calcular.py (R12). -->
+    <None Include="Lending\Deposits\Casos\*.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Core\IngenIA365ERP.Domain\IngenIA365ERP.Domain.csproj" />

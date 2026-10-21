@@ -1,0 +1,60 @@
+// F7: en una cooperativa sin actividad financiera no rige la calificada de vinculados del art. 61; el punto con un
+// vinculado (el consejero 105, excluido) va por la mayoría de los ESTATUTOS sellada en la versión de reglas del órgano.
+// Aquí los estatutos dicen «al menos dos tercios de la composición»: 3 × favorables ≥ 2 × 5 = 10 → ceil(10 / 3) = 4.
+// La versión de reglas no trae fracción de vinculados.
+{
+  "nombre": "08-sin-actividad-financiera",
+  "descripcion": "Sin actividad financiera el punto con vinculado se decide por la mayoría de los estatutos.",
+  "regla": {
+    "quorum": { "numerador": 1, "denominador": 2, "comparacion": "MoreThan" },
+    "mayoria": { "numerador": 2, "denominador": 3, "comparacion": "AtLeast", "base": "Composition" }
+  },
+  "miembros": [
+    { "persona": 101 }, { "persona": 102 }, { "persona": 103 }, { "persona": 104 }, { "persona": 105 }
+  ],
+  "escenarios": [
+    {
+      "nombre": "cuatro a favor",
+      "presentes": [101, 102, 103, 104, 105],
+      "punto": {
+        "regla": "Majority",
+        "excluidos": [ { "persona": 105, "motivo": "Vinculado: es el solicitante" } ],
+        "votos": [
+          { "voto": 1, "persona": 101, "valor": "For" },
+          { "voto": 2, "persona": 102, "valor": "For" },
+          { "voto": 3, "persona": 103, "valor": "For" },
+          { "voto": 4, "persona": 104, "valor": "For" }
+        ]
+      },
+      // 4 × 3 = 12 ≥ 2 × 5 = 10 → aprobado.
+      "esperado": {
+        "quorum": { "cumple": true, "composicion": 5, "requerido": 3, "presentesElegibles": 5 },
+        "elegibles": 4, "base": 5, "requeridos": 4,
+        "aFavor": 4, "enContra": 0, "abstenciones": 0,
+        "resultado": "Aprobado",
+        "explicacionContiene": ["4 × 3 = 12 ≥ 2 × 5 = 10"]
+      }
+    },
+    {
+      "nombre": "tres a favor",
+      "presentes": [101, 102, 103, 104, 105],
+      "punto": {
+        "regla": "Majority",
+        "excluidos": [ { "persona": 105, "motivo": "Vinculado: es el solicitante" } ],
+        "votos": [
+          { "voto": 1, "persona": 101, "valor": "For" },
+          { "voto": 2, "persona": 102, "valor": "For" },
+          { "voto": 3, "persona": 103, "valor": "For" },
+          { "voto": 4, "persona": 104, "valor": "Against" }
+        ]
+      },
+      // 3 × 3 = 9 < 2 × 5 = 10 → no aprobado.
+      "esperado": {
+        "quorum": { "cumple": true, "composicion": 5, "requerido": 3, "presentesElegibles": 5 },
+        "elegibles": 4, "base": 5, "requeridos": 4,
+        "aFavor": 3, "enContra": 1, "abstenciones": 0,
+        "resultado": "NoAprobado"
+      }
+    }
+  ]
+}

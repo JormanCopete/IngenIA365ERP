@@ -1,0 +1,195 @@
+// FR-075, Ley 1555 de 2012 (quickstart §1.2, caso 32; parámetro PREPAGO_TOPE_SMMLV de data-model §12.5, dirección Mayor): el abono
+// extraordinario a capital va sin penalidad, comisión ni cargo cuando el monto original del crédito no supera el tope (veces el SMMLV
+// vigente al desembolso). (a) 1.200.000 con un SMMLV de 1.500.000 y 880 veces: dentro del tope. (b) «por-encima»: 1.500.000.000
+// supera 1.320.000.000; rige la regla de prepago sellada, que aquí no pacta cargo, así que la distribución es la misma. (c)
+// «tope-de-la-cooperativa»: el mismo crédito con 1.100 veces de la cooperativa (más que la ley) queda dentro: rige lo más favorable.
+// La operación sella WithinLegalPrepaymentCap con este resultado (la aplicación lo lee de IValoresNacionales; aquí el SMMLV es un dato
+// del caso, no el legal). Calculado con calcular.py (decimal de 40 dígitos). Pendiente de validar por la contadora.
+{
+  "nombre": "Abono y tope legal de prepago",
+  "condiciones": {
+    "sistema": "LevelPayment", "convencion": "Thirty360", "equivalencia": "Compound",
+    "redondeo": { "unidad": 0.01, "modo": "AwayFromZero", "momento": "PerConcept" },
+    "prelacion": "OldestInstallmentFirst",
+    "monto": 1200000, "plazoCuotas": 12, "periodicidad": "Monthly", "tasaEA": 0.240000,
+    "fechaDesembolso": "2026-08-01", "modalidad": "CONSUMO",
+    "claseDeMora": "RelativeToCurrent", "factorDeMora": 1.5
+  },
+  "variantes": [
+    {
+      "nombre": "por-encima",
+      "condiciones": {
+        "sistema": "LevelPayment",
+        "convencion": "Thirty360",
+        "equivalencia": "Compound",
+        "redondeo": { "unidad": 0.01, "modo": "AwayFromZero", "momento": "PerConcept" },
+        "prelacion": "OldestInstallmentFirst",
+        "monto": 1500000000,
+        "plazoCuotas": 12,
+        "periodicidad": "Monthly",
+        "tasaEA": 0.240000,
+        "fechaDesembolso": "2026-08-01",
+        "modalidad": "CONSUMO",
+        "claseDeMora": "RelativeToCurrent",
+        "factorDeMora": 1.5
+      },
+      "operaciones": [
+        { "id": "D1", "tipo": "Disbursement", "monto": 1500000000, "fechaValor": "2026-08-01", "registradoEn": "2026-08-01T14:00:00Z" },
+        {
+          "id": "P1",
+          "tipo": "Payment",
+          "modalidad": "ExtraordinaryPrincipal",
+          "valor": 100000000,
+          "eleccion": "ReduceInstallment",
+          "fechaValor": "2026-08-20",
+          "registradoEn": "2026-08-20T16:00:00Z",
+          "topeLegal": { "smmlv": 1500000, "vecesNacional": 880 },
+          "esperado": {
+            "distribucion": [
+              { "cuota": null, "concepto": "Principal", "valor": 100000000 }
+            ],
+            "anticipoUsado": [],
+            "anticipo": 0,
+            "cuotaDelAnticipo": null,
+            "saldoAFavor": 0,
+            "excedente": 0,
+            "aplicado": 100000000,
+            "cancela": false,
+            "avisos": [],
+            "planNuevo": {
+              "cuotas": [
+                { "numero": 1, "vencimiento": "2026-09-01", "dias": 30, "capital": 104569661.47, "interes": 26358982.22, "seguro": 0, "saldo": 1295430338.53 },
+                { "numero": 2, "vencimiento": "2026-10-01", "dias": 30, "capital": 107497440.59, "interes": 23431203.10, "seguro": 0, "saldo": 1187932897.94 },
+                { "numero": 3, "vencimiento": "2026-11-01", "dias": 30, "capital": 109441809.41, "interes": 21486834.28, "seguro": 0, "saldo": 1078491088.53 },
+                { "numero": 4, "vencimiento": "2026-12-01", "dias": 30, "capital": 111421347.17, "interes": 19507296.52, "seguro": 0, "saldo": 967069741.36 },
+                { "numero": 5, "vencimiento": "2027-01-01", "dias": 30, "capital": 113436689.98, "interes": 17491953.71, "seguro": 0, "saldo": 853633051.38 },
+                { "numero": 6, "vencimiento": "2027-02-01", "dias": 30, "capital": 115488485.46, "interes": 15440158.23, "seguro": 0, "saldo": 738144565.92 },
+                { "numero": 7, "vencimiento": "2027-03-01", "dias": 30, "capital": 117577392.97, "interes": 13351250.72, "seguro": 0, "saldo": 620567172.95 },
+                { "numero": 8, "vencimiento": "2027-04-01", "dias": 30, "capital": 119704083.76, "interes": 11224559.93, "seguro": 0, "saldo": 500863089.19 },
+                { "numero": 9, "vencimiento": "2027-05-01", "dias": 30, "capital": 121869241.25, "interes": 9059402.44, "seguro": 0, "saldo": 378993847.94 },
+                { "numero": 10, "vencimiento": "2027-06-01", "dias": 30, "capital": 124073561.20, "interes": 6855082.49, "seguro": 0, "saldo": 254920286.74 },
+                { "numero": 11, "vencimiento": "2027-07-01", "dias": 30, "capital": 126317751.98, "interes": 4610891.71, "seguro": 0, "saldo": 128602534.76 },
+                { "numero": 12, "vencimiento": "2027-08-01", "dias": 30, "capital": 128602534.76, "interes": 2326108.96, "seguro": 0, "saldo": 0 }
+              ],
+              "totales": { "capital": 1400000000, "interes": 171143724.31 }
+            },
+            "topeLegal": { "dentroDelTope": false, "topeEnPesos": 1320000000, "veces": 880 }
+          }
+        }
+      ]
+    },
+    {
+      "nombre": "tope-de-la-cooperativa",
+      "condiciones": {
+        "sistema": "LevelPayment",
+        "convencion": "Thirty360",
+        "equivalencia": "Compound",
+        "redondeo": { "unidad": 0.01, "modo": "AwayFromZero", "momento": "PerConcept" },
+        "prelacion": "OldestInstallmentFirst",
+        "monto": 1500000000,
+        "plazoCuotas": 12,
+        "periodicidad": "Monthly",
+        "tasaEA": 0.240000,
+        "fechaDesembolso": "2026-08-01",
+        "modalidad": "CONSUMO",
+        "claseDeMora": "RelativeToCurrent",
+        "factorDeMora": 1.5
+      },
+      "operaciones": [
+        { "id": "D1", "tipo": "Disbursement", "monto": 1500000000, "fechaValor": "2026-08-01", "registradoEn": "2026-08-01T14:00:00Z" },
+        {
+          "id": "P1",
+          "tipo": "Payment",
+          "modalidad": "ExtraordinaryPrincipal",
+          "valor": 100000000,
+          "eleccion": "ReduceInstallment",
+          "fechaValor": "2026-08-20",
+          "registradoEn": "2026-08-20T16:00:00Z",
+          "topeLegal": { "smmlv": 1500000, "vecesNacional": 880, "vecesCooperativa": 1100 },
+          "esperado": {
+            "distribucion": [
+              { "cuota": null, "concepto": "Principal", "valor": 100000000 }
+            ],
+            "anticipoUsado": [],
+            "anticipo": 0,
+            "cuotaDelAnticipo": null,
+            "saldoAFavor": 0,
+            "excedente": 0,
+            "aplicado": 100000000,
+            "cancela": false,
+            "avisos": [],
+            "planNuevo": {
+              "cuotas": [
+                { "numero": 1, "vencimiento": "2026-09-01", "dias": 30, "capital": 104569661.47, "interes": 26358982.22, "seguro": 0, "saldo": 1295430338.53 },
+                { "numero": 2, "vencimiento": "2026-10-01", "dias": 30, "capital": 107497440.59, "interes": 23431203.10, "seguro": 0, "saldo": 1187932897.94 },
+                { "numero": 3, "vencimiento": "2026-11-01", "dias": 30, "capital": 109441809.41, "interes": 21486834.28, "seguro": 0, "saldo": 1078491088.53 },
+                { "numero": 4, "vencimiento": "2026-12-01", "dias": 30, "capital": 111421347.17, "interes": 19507296.52, "seguro": 0, "saldo": 967069741.36 },
+                { "numero": 5, "vencimiento": "2027-01-01", "dias": 30, "capital": 113436689.98, "interes": 17491953.71, "seguro": 0, "saldo": 853633051.38 },
+                { "numero": 6, "vencimiento": "2027-02-01", "dias": 30, "capital": 115488485.46, "interes": 15440158.23, "seguro": 0, "saldo": 738144565.92 },
+                { "numero": 7, "vencimiento": "2027-03-01", "dias": 30, "capital": 117577392.97, "interes": 13351250.72, "seguro": 0, "saldo": 620567172.95 },
+                { "numero": 8, "vencimiento": "2027-04-01", "dias": 30, "capital": 119704083.76, "interes": 11224559.93, "seguro": 0, "saldo": 500863089.19 },
+                { "numero": 9, "vencimiento": "2027-05-01", "dias": 30, "capital": 121869241.25, "interes": 9059402.44, "seguro": 0, "saldo": 378993847.94 },
+                { "numero": 10, "vencimiento": "2027-06-01", "dias": 30, "capital": 124073561.20, "interes": 6855082.49, "seguro": 0, "saldo": 254920286.74 },
+                { "numero": 11, "vencimiento": "2027-07-01", "dias": 30, "capital": 126317751.98, "interes": 4610891.71, "seguro": 0, "saldo": 128602534.76 },
+                { "numero": 12, "vencimiento": "2027-08-01", "dias": 30, "capital": 128602534.76, "interes": 2326108.96, "seguro": 0, "saldo": 0 }
+              ],
+              "totales": { "capital": 1400000000, "interes": 171143724.31 }
+            },
+            "topeLegal": { "dentroDelTope": true, "topeEnPesos": 1650000000, "veces": 1100 }
+          }
+        }
+      ]
+    }
+  ],
+  "series": {
+    "usura": [
+      { "clave": "CONSUMO", "desde": "2026-01-01", "ea": 0.300000, "registradoEn": "2025-12-31T15:00:00Z",
+        "publicId": "0b7a3c8e-1d1a-4f6e-9a01-000000000321" }
+    ],
+    "umbralesDeSuspension": [ { "desde": "2020-01-01", "dias": 61 } ]
+  },
+  "operaciones": [
+    { "id": "D1", "tipo": "Disbursement", "monto": 1200000, "fechaValor": "2026-08-01", "registradoEn": "2026-08-01T14:00:00Z" },
+    {
+      "id": "P1",
+      "tipo": "Payment",
+      "modalidad": "ExtraordinaryPrincipal",
+      "valor": 300000,
+      "eleccion": "ReduceInstallment",
+      "fechaValor": "2026-08-20",
+      "registradoEn": "2026-08-20T16:00:00Z",
+      "topeLegal": { "smmlv": 1500000, "vecesNacional": 880 },
+      "esperado": {
+        "distribucion": [
+          { "cuota": null, "concepto": "Principal", "valor": 300000 }
+        ],
+        "anticipoUsado": [],
+        "anticipo": 0,
+        "cuotaDelAnticipo": null,
+        "saldoAFavor": 0,
+        "excedente": 0,
+        "aplicado": 300000,
+        "cancela": false,
+        "avisos": [],
+        "planNuevo": {
+          "cuotas": [
+            { "numero": 1, "vencimiento": "2026-09-01", "dias": 30, "capital": 64779.06, "interes": 19636.40, "seguro": 0, "saldo": 835220.94 },
+            { "numero": 2, "vencimiento": "2026-10-01", "dias": 30, "capital": 69308.33, "interes": 15107.13, "seguro": 0, "saldo": 765912.61 },
+            { "numero": 3, "vencimiento": "2026-11-01", "dias": 30, "capital": 70561.95, "interes": 13853.51, "seguro": 0, "saldo": 695350.66 },
+            { "numero": 4, "vencimiento": "2026-12-01", "dias": 30, "capital": 71838.25, "interes": 12577.21, "seguro": 0, "saldo": 623512.41 },
+            { "numero": 5, "vencimiento": "2027-01-01", "dias": 30, "capital": 73137.63, "interes": 11277.83, "seguro": 0, "saldo": 550374.78 },
+            { "numero": 6, "vencimiento": "2027-02-01", "dias": 30, "capital": 74460.51, "interes": 9954.95, "seguro": 0, "saldo": 475914.27 },
+            { "numero": 7, "vencimiento": "2027-03-01", "dias": 30, "capital": 75807.32, "interes": 8608.14, "seguro": 0, "saldo": 400106.95 },
+            { "numero": 8, "vencimiento": "2027-04-01", "dias": 30, "capital": 77178.49, "interes": 7236.97, "seguro": 0, "saldo": 322928.46 },
+            { "numero": 9, "vencimiento": "2027-05-01", "dias": 30, "capital": 78574.46, "interes": 5841, "seguro": 0, "saldo": 244354 },
+            { "numero": 10, "vencimiento": "2027-06-01", "dias": 30, "capital": 79995.69, "interes": 4419.77, "seguro": 0, "saldo": 164358.31 },
+            { "numero": 11, "vencimiento": "2027-07-01", "dias": 30, "capital": 81442.62, "interes": 2972.84, "seguro": 0, "saldo": 82915.69 },
+            { "numero": 12, "vencimiento": "2027-08-01", "dias": 30, "capital": 82915.69, "interes": 1499.74, "seguro": 0, "saldo": 0 }
+          ],
+          "totales": { "capital": 900000, "interes": 112985.49 }
+        },
+        "topeLegal": { "dentroDelTope": true, "topeEnPesos": 1320000000, "veces": 880 }
+      }
+    }
+  ]
+}

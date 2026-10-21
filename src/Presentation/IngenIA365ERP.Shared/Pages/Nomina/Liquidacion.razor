@@ -1,4 +1,4 @@
-﻿@page "/nomina/liquidacion"
+@page "/nomina/liquidacion"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
 @using IngenIA365ERP.Shared.Services.Nomina
 @using IngenIA365ERP.Shared.Components.Nomina
@@ -332,6 +332,48 @@
 }
 </IndicadorDeCarga>
 
+@* ------------------------------------------------- descuentos de Cartera (feature 013, T0167) --- *@
+@if (_corrida is not null)
+{
+    <div class="info-card">
+        <div class="toolbar">
+            <span class="label">Descuentos de Cartera</span>
+            <SfButton CssClass="e-flat" IconCss="e-icons e-refresh" Disabled="@_cargaCartera.Activa" OnClick="@CargarDescuentosDeCarteraAsync">Ver descuentos de Cartera</SfButton>
+        </div>
+        <IndicadorDeCarga Cargando="@_cargaCartera.Activa" Texto="Consultando los descuentos de Cartera…">
+            @if (_descuentosDeCartera is null)
+            {
+                <p class="texto-tenue">Las cuotas de los créditos con la cooperativa que se descuentan en esta nómina, lo que no cupo y lo que Cartera recibió al aprobar.</p>
+            }
+            else if (_descuentosDeCartera.Count == 0)
+            {
+                <p class="texto-tenue">Esta nómina no tiene descuentos de Cartera.</p>
+            }
+            else
+            {
+                <table class="data-grid">
+                    <thead><tr><th>Empleado</th><th>Crédito</th><th class="num">Cuota</th><th class="num">Descontado</th><th class="num">Sin descontar</th><th>Motivo</th><th class="num">Recibido por Cartera</th><th>Estado</th></tr></thead>
+                    <tbody>
+                        @foreach (var d in _descuentosDeCartera)
+                        {
+                            <tr>
+                                <td>@d.Employee.Name</td>
+                                <td>@d.ObligationNumber</td>
+                                <td class="num">@d.Expected.ToString("N0")</td>
+                                <td class="num">@d.Deducted.ToString("N0")</td>
+                                <td class="num">@d.NotDeducted.ToString("N0")</td>
+                                <td class="texto-tenue">@d.MotivoTexto</td>
+                                <td class="num">@(d.Applied?.ToString("N0") ?? "—")</td>
+                                <td title="@d.ResultMessage">@d.EstadoTexto</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </IndicadorDeCarga>
+    </div>
+}
+
 @* ------------------------------------------------------------- detalle del empleado --- *@
 <SfDialog @bind-Visible="_mostrarDetalle" Header="@(_detalle is null ? "Detalle" : $"{_detalle.EmployeeName} · {_detalle.Document}")" Width="920px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
@@ -419,7 +461,8 @@
 </SfDialog>
 
 <PanelDeAprobacion @ref="_panel" @bind-Visible="_mostrarAprobacion" Corrida="_corrida" Periodo="_periodo"
-                   PuedeAutorizarExcepciones="true" Enviando="_ocupado" Aprobar="AprobarAsync" />
+                   PuedeAutorizarExcepciones="true" Enviando="_ocupado" Aprobar="AprobarAsync"
+                   DescuentosDeCartera="_descuentosDeCartera" CargandoCartera="_cargaCartera.Activa" />
 
 @* ------------------------------------------------------------------ reversar --- *@
 <SfDialog @bind-Visible="_mostrarDescartar" Header="Descartar el borrador" Width="560px" IsModal="true" ShowCloseIcon="true">
@@ -519,6 +562,9 @@
     // Indicador de carga por zona (ver docs/manual/indicador-de-carga.md); _ocupado sigue
     // siendo la bandera de las acciones (calcular, aprobar, reversar…).
     private readonly EstadoDeCarga _carga = new();
+    // Feature 013 (T0167): los descuentos de Cartera de la corrida, en su propia zona de carga.
+    private readonly EstadoDeCarga _cargaCartera = new();
+    private IReadOnlyList<DescuentoDeCarteraDto>? _descuentosDeCartera;
     private SelectorDePeriodo? _selector;
     private PanelDeAprobacion? _panel;
     private PeriodoPagoDto? _periodo;
@@ -812,10 +858,21 @@
         _mostrarDetalle = true;
     }
 
-    private void AbrirAprobacion()
+    private async Task AbrirAprobacion()
     {
         _panel?.Reiniciar();
         _mostrarAprobacion = true;
+        await CargarDescuentosDeCarteraAsync();
+    }
+
+    /// <summary>Feature 013: los descuentos de Cartera de la corrida (vista previa del lote y panel de la corrida).</summary>
+    private async Task CargarDescuentosDeCarteraAsync()
+    {
+        if (_corrida is null) return;
+        using var carga = _cargaCartera.Iniciar();
+        StateHasChanged();
+        var res = await Nomina.DescuentosDeCarteraAsync(_corrida.PublicId);
+        _descuentosDeCartera = res.IsSuccess ? res.Value : null;
     }
 
     private async Task AprobarAsync(AprobarRequest request)
@@ -827,6 +884,12 @@
             var res = await Nomina.AprobarAsync(_corrida.PublicId, request);
             if (!res.IsSuccess)
             {
+                if (res.ErrorCode == "Payroll.LendingPendingActivationAckRequired")
+                {
+                    _panel?.PedirReconocerCartera(res.ErrorMessage ?? "Hay empleados con créditos en una carga de Cartera sin activar.");
+                    await Notification.WarningAsync("Confirme que sabe que Cartera está por activar para estos empleados.");
+                    return;
+                }
                 if (res.ErrorCode == "Payroll.SegregationConfirmationRequired")
                 {
                     _panel?.PedirSegundaConfirmacion();
@@ -838,6 +901,8 @@
             }
             _mostrarAprobacion = false;
             await Notification.SuccessAsync($"Período aprobado. Comprobante {res.Value!.AccountingDocumentNumber}; neto {res.Value.Totals.Net:N0}.");
+            foreach (var aviso in res.Value.Warnings ?? [])
+                await Notification.WarningAsync(aviso.Message);
             await RefrescarTrasCambioAsync();
         }
         finally { _ocupado = false; }

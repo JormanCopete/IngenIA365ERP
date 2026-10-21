@@ -1,0 +1,92 @@
+@page "/cartera/plantillas"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Nomina
+@inject ConfiguracionDeCarteraClient Configuracion
+@inject DescargaDeArchivos Descargas
+@inject INotificationService Notification
+
+<PageTitle>Plantillas de Cartera - IngenIA365ERP</PageTitle>
+
+@* Feature 013, fase 4 (T0320; US17, T82; contracts/api.md §3.9, plantillas.md §0.1): el registro de plantillas de Cartera con lo que puede
+   hacer quien pregunta. La descarga es el libro vacío (encabezados en la fila 1 e instrucciones en otra hoja); importar vive en la ruta de
+   cada recurso y con su permiso, todo o nada, y ninguna plantilla crea personas. Una plantilla de una entrega que no llegó se descarga para
+   prepararla pero no se importa. *@
+<PermissionGate Required="Lending.Templates.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Plantillas de Cartera</h3>
+        <div class="toolbar">
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        <div class="tabla-desplazable">
+            <table class="data-grid">
+                <thead><tr><th>Plantilla</th><th>Hojas</th><th>Entrega</th><th>Datos personales</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var p in _plantillas)
+                    {
+                        var plantilla = p;
+                        <tr class="@(_elegida?.Key == plantilla.Key ? "resaltada" : "")">
+                            <td><strong>@plantilla.Name</strong><br />@plantilla.Description<br /><span class="texto-tenue">@plantilla.Key</span></td>
+                            <td>@string.Join(", ", plantilla.Sheets)</td>
+                            <td>@TextosDeCartera.Entrega(plantilla.AvailableFrom)</td>
+                            <td>@(plantilla.PersonalData ? "Sí" : "No")</td>
+                            <td>
+                                @if (plantilla.CanDownload)
+                                {
+                                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-download" Disabled="@_descarga.Activa" OnClick="@(() => DescargarAsync(plantilla))">Vacía</SfButton>
+                                }
+                                @if (plantilla.CanImport)
+                                {
+                                    <SfButton CssClass="e-flat e-small" OnClick="@(() => _elegida = plantilla)">Importar…</SfButton>
+                                }
+                                else
+                                {
+                                    <span class="texto-tenue">Importa quien tenga @plantilla.ImportPermission@(plantilla.AvailableFrom > 1 ? $", desde {TextosDeCartera.Entrega(plantilla.AvailableFrom)}" : "")</span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (_plantillas.Count == 0) { <p class="texto-tenue">Sin plantillas disponibles.</p> }
+    </IndicadorDeCarga>
+    <IndicadorDeCarga Cargando="@_descarga.Activa" Compacto="true" Texto="Preparando el archivo…" />
+
+    @if (_elegida is { } e)
+    {
+        <div class="info-card">
+            <h4>Importar: @e.Name</h4>
+            <ImportarPlantilla RutaBase="@e.Route" PermisoDeImportacion="@e.ImportPermission" MostrarDescargas="false" ConDatos="false" />
+        </div>
+    }
+</div>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new(), _descarga = new();
+    private List<PlantillaDeCarteraDto> _plantillas = [];
+    private PlantillaDeCarteraDto? _elegida;
+
+    protected override async Task OnInitializedAsync() => await CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Configuracion.PlantillasAsync();
+        if (!r.IsSuccess) { _plantillas = []; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo leer el registro de plantillas."); return; }
+        _plantillas = [.. r.Value ?? []];
+    }
+
+    private async Task DescargarAsync(PlantillaDeCarteraDto plantilla)
+    {
+        using var carga = _descarga.Iniciar();
+        var r = await Configuracion.DescargarPlantillaAsync(plantilla.Key);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo descargar la plantilla."); return; }
+        await Descargas.GuardarAsync(r.Value.Nombre, r.Value.TipoContenido, r.Value.Contenido);
+    }
+}

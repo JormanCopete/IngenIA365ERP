@@ -1,0 +1,211 @@
+{
+  // Feature 013, K6a (T1026; data-model parte 3 §12.4; R54): el Anexo 2 del Capítulo II del Título IV de la Circular Básica Contable y
+  // Financiera (Supersolidaria), «modelos de referencia para la estimación de las pérdidas esperadas», en el texto que sustituyó la
+  // Circular Externa 68 del 2024-07-24 (Diario Oficial 52.828 del 2024-07-25; rige desde su publicación). Para la semilla central
+  // (PlatformNationalValuesSeeder, Admin, Order 6); se replica a cada cooperativa.
+  //
+  // Transcripción del equipo del 2026-10-16 (pregunta E8): TODO va con verified = false hasta que el dueño y la contadora lo coteje con la
+  // circular consolidada vigente. Del TEXTO de la circular: las tres ecuaciones Z, la definición de cada variable, los cortes del puntaje
+  // (num. 3.4), la PDI sin incumplimiento (45 % / 50 %) y la definición de VEA. De las IMÁGENES de la circular (transcritas a mano): la
+  // ecuación del puntaje, las tres tablas de PI por tipo de organización (4.1.1–4.1.3), la tabla de PDI por tipo de garantía (4.3) y las
+  // dos tablas de homologación (5). Lo que NO se transcribió por no tenerlo con certeza queda dicho en "provenance" y en tasks.md:
+  //   - la PI de la aplicación voluntaria (clave VOLUNTARIA, Circular Externa 100 del 2026-05-12): no se consiguió el texto; hasta que se
+  //     registre, el motor se niega a calcular la pérdida esperada voluntaria en vez de inventarla;
+  //   - la PI de las cooperativas integrales CON sección de ahorro (COOP_INTEGRAL_SECCION_AC, obligadas por la CE 100): las tablas de la
+  //     CE 68 no traen esa columna;
+  //   - el último tramo de «sin garantía» se lee «00» en la imagen; se transcribe 90 días (el del modelo análogo de la Superfinanciera).
+  // La PI de libranza de las asociaciones mutuales y de las integrales sin sección de ahorro es idéntica en la imagen (se transcribe tal cual).
+  // Los porcentajes van como fracción (0,0067 = 0,67 %). Un cambio de la norma es una versión nueva del documento, nunca un cambio de programa.
+  "scoreDecimals": 4,
+  // CBCF Cap. II num. 5.3 punto 1 (citado por el anexo): un crédito a una sola cuota con mora superior a siete días está incumplido.
+  "singleInstallmentDefaultDaysPastDue": 7,
+  // Interpretación del equipo, a validar: lo causado y no pagado de un crédito con la causación suspendida se deteriora al 100 %, como en el
+  // Anexo 1, también en pérdida esperada.
+  "suspendedConceptsFullyImpaired": true,
+  "variables": [
+    { "code": "EA", "kind": "ActiveAssociate", "description": "Estado del asociado en el mes de evaluación (formato 9999): 1 si está activo." },
+    { "code": "FE", "kind": "EmployeeFund", "description": "1 si el tipo de organización es fondo de empleados." },
+    { "code": "VALCUOTA", "kind": "InstallmentAtMostSmmlvFraction", "fraction": 0.10, "onlyEmployeeFund": true,
+      "description": "Fondo de empleados con cuota del mes de calificación menor o igual al 10 % del SMMLV." },
+    { "code": "FONDPLAZO", "kind": "TermAtMostMonths", "months": 6, "onlyEmployeeFund": true,
+      "description": "Fondo de empleados con plazo del préstamo menor o igual a seis meses (el texto la define como SFONDPLAZO)." },
+    { "code": "MORA1230", "kind": "ArrearsHistory", "description": "Mora máxima de los últimos 12 meses entre 31 y 60 días.",
+      "conditions": [ { "months": 12, "measure": "Max", "fromDays": 31, "toDays": 60 } ] },
+    { "code": "MORA1260", "kind": "ArrearsHistory", "description": "Mora máxima de los últimos 12 meses mayor a 60 días.",
+      "conditions": [ { "months": 12, "measure": "Max", "fromDays": 61 } ] },
+    { "code": "MORA2430N", "kind": "ArrearsHistory",
+      "description": "Mora máxima de los últimos 24 meses entre 31 y 60 días y MORA1230 igual a 0 (con la primera, la mora máxima de 12 meses no pasa de 30).",
+      "conditions": [ { "months": 24, "measure": "Max", "fromDays": 31, "toDays": 60 }, { "months": 12, "measure": "Max", "fromDays": 0, "toDays": 30 } ] },
+    { "code": "MORA3660", "kind": "ArrearsHistory",
+      "description": "Mora máxima de los últimos 36 meses mayor a 60 sin mora mayor a 60 días en los últimos 24 meses.",
+      "conditions": [ { "months": 36, "measure": "Max", "fromDays": 61 }, { "months": 24, "measure": "Max", "fromDays": 0, "toDays": 60 } ] },
+    { "code": "SINMORA", "kind": "ArrearsHistory", "description": "Sin moras mayores a 30 días en los últimos 36 meses.",
+      "conditions": [ { "months": 36, "measure": "Max", "fromDays": 0, "toDays": 30 } ] },
+    { "code": "MORA315", "kind": "ArrearsHistory", "description": "Mora máxima de los últimos 3 meses entre 16 y 30 días.",
+      "conditions": [ { "months": 3, "measure": "Max", "fromDays": 16, "toDays": 30 } ] },
+    { "code": "MORTRIM", "kind": "ArrearsHistory", "description": "Una o más moras de entre 31 y 60 días en los últimos 3 meses.",
+      "conditions": [ { "months": 3, "measure": "AnyMonth", "fromDays": 31, "toDays": 60 } ] }
+  ],
+  "segments": [
+    {
+      "code": "CONSUMO_LIBRANZA", "name": "Consumo con libranza", "sarcSegment": "CONSUMO", "defaultDaysPastDue": 90,
+      "intercept": -1.523,
+      "terms": [
+        { "variable": "EA", "coefficient": -2.081 }, { "variable": "FE", "coefficient": -0.916 }, { "variable": "VALCUOTA", "coefficient": -0.165 },
+        { "variable": "FONDPLAZO", "coefficient": -0.632 }, { "variable": "MORA1230", "coefficient": 2.495 }, { "variable": "MORA1260", "coefficient": 3.062 },
+        { "variable": "SINMORA", "coefficient": -0.575 }, { "variable": "MORA2430N", "coefficient": 0.319 }, { "variable": "MORA3660", "coefficient": 1.615 }
+      ],
+      "cutoffs": [ { "rating": "A", "upTo": 0.1648 }, { "rating": "B", "upTo": 0.2481 }, { "rating": "C", "upTo": 0.3677 }, { "rating": "D", "upTo": 0.5230 }, { "rating": "E", "upTo": 1 } ],
+      "performingLossGivenDefault": [ { "collateralType": "NO_IDONEA", "rate": 0.45 }, { "collateralType": "SIN_GARANTIA", "rate": 0.45 } ]
+    },
+    {
+      "code": "CONSUMO_SIN_LIBRANZA", "name": "Consumo sin libranza", "sarcSegment": "CONSUMO", "defaultDaysPastDue": 90,
+      "intercept": -2.189,
+      "terms": [
+        { "variable": "EA", "coefficient": -1.186 }, { "variable": "MORA1230", "coefficient": 1.999 }, { "variable": "MORA1260", "coefficient": 2.906 },
+        { "variable": "SINMORA", "coefficient": -0.35 }, { "variable": "MORA2430N", "coefficient": 0.18 }, { "variable": "MORA315", "coefficient": 0.624 }
+      ],
+      "cutoffs": [ { "rating": "A", "upTo": 0.0732 }, { "rating": "B", "upTo": 0.2017 }, { "rating": "C", "upTo": 0.3849 }, { "rating": "D", "upTo": 0.5931 }, { "rating": "E", "upTo": 1 } ],
+      "performingLossGivenDefault": [ { "collateralType": "NO_IDONEA", "rate": 0.45 }, { "collateralType": "SIN_GARANTIA", "rate": 0.50 } ]
+    },
+    {
+      "code": "COMERCIAL_PN", "name": "Comercial persona natural", "sarcSegment": "COMERCIAL_PN", "defaultDaysPastDue": 120,
+      "intercept": -3.133,
+      "terms": [
+        { "variable": "EA", "coefficient": -0.752 }, { "variable": "MORA1230", "coefficient": 2.347 }, { "variable": "MORA1260", "coefficient": 3.722 },
+        { "variable": "SINMORA", "coefficient": -0.234 }, { "variable": "MORTRIM", "coefficient": 0.449 }, { "variable": "MORA2430N", "coefficient": 0.881 }
+      ],
+      "cutoffs": [ { "rating": "A", "upTo": 0.0208 }, { "rating": "B", "upTo": 0.1768 }, { "rating": "C", "upTo": 0.5441 }, { "rating": "D", "upTo": 0.7626 }, { "rating": "E", "upTo": 1 } ],
+      "performingLossGivenDefault": [ { "collateralType": "NO_IDONEA", "rate": 0.45 }, { "collateralType": "SIN_GARANTIA", "rate": 0.50 } ]
+    }
+  ],
+  // Numeral 4.1: PI a doce meses por segmento, calificación y tipo de organización (imágenes de la circular); el incumplido, 100 %.
+  // Columnas de la circular → códigos: asociaciones mutuales ASOCIACION_MUTUAL; cooperativas de trabajo asociado COOP_TRABAJO_ASOCIADO;
+  // especializada de ahorro y crédito COOP_AHORRO_CREDITO; especializada sin sección de ahorro COOP_ESPECIALIZADA_SIN_AHORRO; fondos de
+  // empleados FONDO_EMPLEADOS; integral sin sección de ahorro COOP_INTEGRAL_SIN_AHORRO; multiactiva con ahorro y crédito
+  // COOP_MULTIACTIVA_SECCION_AC; multiactiva sin sección de ahorro COOP_MULTIACTIVA. Tres de esos códigos todavía no están en el documento
+  // TiposDeOrganizacion (COOP_TRABAJO_ASOCIADO, COOP_ESPECIALIZADA_SIN_AHORRO, COOP_INTEGRAL_SIN_AHORRO); consumo sin libranza no trae
+  // integral sin sección de ahorro y comercial persona natural no trae trabajo asociado.
+  "probabilityOfDefault": [
+    { "segment": "CONSUMO_LIBRANZA", "organizationType": "ASOCIACION_MUTUAL", "defaultRate": 1,
+      "ratings": [ { "rating": "A", "rate": 0.0067 }, { "rating": "B", "rate": 0.0199 }, { "rating": "C", "rate": 0.0462 }, { "rating": "D", "rate": 0.0624 }, { "rating": "E", "rate": 0.2566 } ] },
+    { "segment": "CONSUMO_LIBRANZA", "organizationType": "COOP_TRABAJO_ASOCIADO", "defaultRate": 1,
+      "ratings": [ { "rating": "A", "rate": 0.0095 }, { "rating": "B", "rate": 0.0216 }, { "rating": "C", "rate": 0.1061 }, { "rating": "D", "rate": 0.2526 }, { "rating": "E", "rate": 0.3811 } ] },
+    { "segment": "CONSUMO_LIBRANZA", "organizationType": "COOP_AHORRO_CREDITO", "defaultRate": 1,
+      "ratings": [ { "rating": "A", "rate": 0.005 }, { "rating": "B", "rate": 0.006 }, { "rating": "C", "rate": 0.0441 }, { "rating": "D", "rate": 0.0448 }, { "rating": "E", "rate": 0.2273 } ] },
+    { "segment": "CONSUMO_LIBRANZA", "organizationType": "COOP_ESPECIALIZADA_SIN_AHORRO", "defaultRate": 1,
+      "ratings": [ { "rating": "A", "rate": 0.0229 }, { "rating": "B", "rate": 0.0254 }, { "rating": "C", "rate": 0.0337 }, { "rating": "D", "rate": 0.0412 }, { "rating": "E", "rate": 0.3281 } ] },
+    { "segment": "CONSUMO_LIBRANZA", "organizationType": "FONDO_EMPLEADOS", "defaultRate": 1,
+      "ratings": [ { "rating": "A", "rate": 0.002 }, { "rating": "B", "rate": 0.017 }, { "rating": "C", "rate": 0.044 }, { "rating": "D", "rate": 0.0935 }, { "rating": "E", "rate": 0.2044 } ] },
+    { "segment": "CONSUMO_LIBRANZA", "organizationType": "COOP_INTEGRAL_SIN_AHORRO", "defaultRate": 1,
+      "ratings": [ { "rating": "A", "rate": 0.0067 }, { "rating": "B", "rate": 0.0199 }, { "rating": "C", "rate": 0.0462 }, { "rating": "D", "rate": 0.0624 }, { "rating": "E", "rate": 0.2566 } ] },
+    { "segment": "CONSUMO_LIBRANZA", "organizationType": "COOP_MULTIACTIVA_SECCION_AC", "defaultRate": 1,
+      "ratings": [ { "rating": "A", "rate": 0.004 }, { "rating": "B", "rate": 0.0217 }, { "rating": "C", "rate": 0.0406 }, { "rating": "D", "rate": 0.1027 }, { "rating": "E", "rate": 0.2263 } ] },
+    { "segment": "CONSUMO_LIBRANZA", "organizationType": "COOP_MULTIACTIVA", "defaultRate": 1,
+      "ratings": [ { "rating": "A", "rate": 0.0116 }, { "rating": "B", "rate": 0.0209 }, { "rating": "C", "rate": 0.0407 }, { "rating": "D", "rate": 0.0737 }, { "rating": "E", "rate": 0.2013 } ] },
+    { "segment": "CONSUMO_SIN_LIBRANZA", "organizationType": "ASOCIACION_MUTUAL", "defaultRate": 1,
+      "ratings": [ { "rating": "A", "rate": 0.0032 }, { "rating": "B", "rate": 0.0156 }, { "rating": "C", "rate": 0.0294 }, { "rating": "D", "rate": 0.0981 }, { "rating": "E", "rate": 0.4192 } ] },
+    { "segment": "CONSUMO_SIN_LIBRANZA", "organizationType": "COOP_TRABAJO_ASOCIADO", "defaultRate": 1,
+      "ratings": [ { "rating": "A", "rate": 0.0172 }, { "rating": "B", "rate": 0.16 }, { "rating": "C", "rate": 0.2657 }, { "rating": "D", "rate": 0.3582 }, { "rating": "E", "rate": 0.4646 } ] },
+    { "segment": "CONSUMO_SIN_LIBRANZA", "organizationType": "COOP_AHORRO_CREDITO", "defaultRate": 1,
+      "ratings": [ { "rating": "A", "rate": 0.015 }, { "rating": "B", "rate": 0.0595 }, { "rating": "C", "rate": 0.1382 }, { "rating": "D", "rate": 0.3277 }, { "rating": "E", "rate": 0.4171 } ] },
+    { "segment": "CONSUMO_SIN_LIBRANZA", "organizationType": "COOP_ESPECIALIZADA_SIN_AHORRO", "defaultRate": 1,
+      "ratings": [ { "rating": "A", "rate": 0.0403 }, { "rating": "B", "rate": 0.0843 }, { "rating": "C", "rate": 0.0959 }, { "rating": "D", "rate": 0.2812 }, { "rating": "E", "rate": 0.3986 } ] },
+    { "segment": "CONSUMO_SIN_LIBRANZA", "organizationType": "FONDO_EMPLEADOS", "defaultRate": 1,
+      "ratings": [ { "rating": "A", "rate": 0.0195 }, { "rating": "B", "rate": 0.1088 }, { "rating": "C", "rate": 0.2313 }, { "rating": "D", "rate": 0.3589 }, { "rating": "E", "rate": 0.5014 } ] },
+    { "segment": "CONSUMO_SIN_LIBRANZA", "organizationType": "COOP_MULTIACTIVA_SECCION_AC", "defaultRate": 1,
+      "ratings": [ { "rating": "A", "rate": 0.0186 }, { "rating": "B", "rate": 0.0789 }, { "rating": "C", "rate": 0.2029 }, { "rating": "D", "rate": 0.4052 }, { "rating": "E", "rate": 0.4451 } ] },
+    { "segment": "CONSUMO_SIN_LIBRANZA", "organizationType": "COOP_MULTIACTIVA", "defaultRate": 1,
+      "ratings": [ { "rating": "A", "rate": 0.0354 }, { "rating": "B", "rate": 0.0819 }, { "rating": "C", "rate": 0.165 }, { "rating": "D", "rate": 0.363 }, { "rating": "E", "rate": 0.4227 } ] },
+    { "segment": "COMERCIAL_PN", "organizationType": "COOP_MULTIACTIVA_SECCION_AC", "defaultRate": 1,
+      "ratings": [ { "rating": "A", "rate": 0.0151 }, { "rating": "B", "rate": 0.0442 }, { "rating": "C", "rate": 0.1765 }, { "rating": "D", "rate": 0.2787 }, { "rating": "E", "rate": 0.605 } ] },
+    { "segment": "COMERCIAL_PN", "organizationType": "COOP_AHORRO_CREDITO", "defaultRate": 1,
+      "ratings": [ { "rating": "A", "rate": 0.0111 }, { "rating": "B", "rate": 0.0499 }, { "rating": "C", "rate": 0.1659 }, { "rating": "D", "rate": 0.4143 }, { "rating": "E", "rate": 0.5281 } ] },
+    { "segment": "COMERCIAL_PN", "organizationType": "COOP_ESPECIALIZADA_SIN_AHORRO", "defaultRate": 1,
+      "ratings": [ { "rating": "A", "rate": 0.0419 }, { "rating": "B", "rate": 0.1304 }, { "rating": "C", "rate": 0.2564 }, { "rating": "D", "rate": 0.51 }, { "rating": "E", "rate": 0.6082 } ] },
+    { "segment": "COMERCIAL_PN", "organizationType": "FONDO_EMPLEADOS", "defaultRate": 1,
+      "ratings": [ { "rating": "A", "rate": 0.0173 }, { "rating": "B", "rate": 0.0608 }, { "rating": "C", "rate": 0.1958 }, { "rating": "D", "rate": 0.3604 }, { "rating": "E", "rate": 0.5185 } ] },
+    { "segment": "COMERCIAL_PN", "organizationType": "COOP_INTEGRAL_SIN_AHORRO", "defaultRate": 1,
+      "ratings": [ { "rating": "A", "rate": 0.039 }, { "rating": "B", "rate": 0.1365 }, { "rating": "C", "rate": 0.187 }, { "rating": "D", "rate": 0.3985 }, { "rating": "E", "rate": 0.61 } ] },
+    { "segment": "COMERCIAL_PN", "organizationType": "COOP_MULTIACTIVA", "defaultRate": 1,
+      "ratings": [ { "rating": "A", "rate": 0.0211 }, { "rating": "B", "rate": 0.0706 }, { "rating": "C", "rate": 0.2344 }, { "rating": "D", "rate": 0.3933 }, { "rating": "E", "rate": 0.6027 } ] },
+    { "segment": "COMERCIAL_PN", "organizationType": "ASOCIACION_MUTUAL", "defaultRate": 1,
+      "ratings": [ { "rating": "A", "rate": 0.0183 }, { "rating": "B", "rate": 0.0353 }, { "rating": "C", "rate": 0.1258 }, { "rating": "D", "rate": 0.1919 }, { "rating": "E", "rate": 0.4464 } ] }
+  ],
+  // Numeral 4.3: PDI por tipo de garantía y días después del incumplimiento (imagen de la circular). Antes del incumplimiento rige el primer
+  // tramo, salvo la garantía no idónea y sin garantía, que tienen la PDI propia de cada segmento (performingLossGivenDefault).
+  "lossGivenDefault": [
+    { "collateralType": "PRENDARIA", "name": "Prendarias (vehículos, maquinaria)", "idoneous": true,
+      "brackets": [ { "fromDaysAfterDefault": 0, "rate": 0.50 }, { "fromDaysAfterDefault": 270, "rate": 0.70 }, { "fromDaysAfterDefault": 540, "rate": 1 } ] },
+    { "collateralType": "CONTRATOS_FIDUCIA", "name": "Contratos de fiducia", "idoneous": true,
+      "brackets": [ { "fromDaysAfterDefault": 0, "rate": 0.50 }, { "fromDaysAfterDefault": 270, "rate": 0.70 }, { "fromDaysAfterDefault": 540, "rate": 1 } ] },
+    { "collateralType": "PIGNORACION_RENTAS", "name": "Pignoración de rentas", "idoneous": true, "brackets": [ { "fromDaysAfterDefault": 0, "rate": 0 } ] },
+    { "collateralType": "DEPOSITOS_DINERO", "name": "Depósitos de dinero en garantía", "idoneous": true, "brackets": [ { "fromDaysAfterDefault": 0, "rate": 0 } ] },
+    { "collateralType": "CARTAS_STAND_BY", "name": "Cartas stand by", "idoneous": true, "brackets": [ { "fromDaysAfterDefault": 0, "rate": 0 } ] },
+    { "collateralType": "TITULOS_VALORES_IF", "name": "Títulos valores endosados en garantía emitidos por instituciones financieras", "idoneous": true,
+      "brackets": [ { "fromDaysAfterDefault": 0, "rate": 0.12 } ] },
+    { "collateralType": "GARANTIA_SOBERANA", "name": "Garantía soberana de la Nación (Ley 617 de 2000)", "idoneous": true,
+      "brackets": [ { "fromDaysAfterDefault": 0, "rate": 0 } ] },
+    { "collateralType": "FONDOS_GARANTIAS", "name": "Garantías emitidas por fondos de garantías que administran recursos públicos (FAG, FNG)", "idoneous": true,
+      "brackets": [ { "fromDaysAfterDefault": 0, "rate": 0.12 } ] },
+    { "collateralType": "DERECHOS_COBRO", "name": "Derechos de cobro", "idoneous": true,
+      "brackets": [ { "fromDaysAfterDefault": 0, "rate": 0.45 }, { "fromDaysAfterDefault": 360, "rate": 0.80 }, { "fromDaysAfterDefault": 720, "rate": 1 } ] },
+    { "collateralType": "OTRAS_IDONEAS", "name": "Otras garantías idóneas", "idoneous": true,
+      "brackets": [ { "fromDaysAfterDefault": 0, "rate": 0.50 }, { "fromDaysAfterDefault": 270, "rate": 0.70 }, { "fromDaysAfterDefault": 540, "rate": 1 } ] },
+    { "collateralType": "HIPOTECARIA", "name": "Hipotecaria", "idoneous": true,
+      "brackets": [ { "fromDaysAfterDefault": 0, "rate": 0.40 }, { "fromDaysAfterDefault": 360, "rate": 0.70 }, { "fromDaysAfterDefault": 720, "rate": 1 } ] },
+    { "collateralType": "FIDUCIA_INMUEBLES", "name": "Fiducia sobre bienes inmuebles", "idoneous": true,
+      "brackets": [ { "fromDaysAfterDefault": 0, "rate": 0.50 }, { "fromDaysAfterDefault": 270, "rate": 0.70 }, { "fromDaysAfterDefault": 540, "rate": 1 } ] },
+    { "collateralType": "NO_IDONEA", "name": "Garantía no idónea (avalistas, codeudores y garantías que no cumplen las características de idoneidad)", "idoneous": false,
+      "brackets": [ { "fromDaysAfterDefault": 0, "rate": 0.60 }, { "fromDaysAfterDefault": 210, "rate": 0.70 }, { "fromDaysAfterDefault": 420, "rate": 1 } ] },
+    { "collateralType": "SIN_GARANTIA", "name": "Sin garantía (firma personal)", "idoneous": false,
+      "brackets": [ { "fromDaysAfterDefault": 0, "rate": 0.75 }, { "fromDaysAfterDefault": 30, "rate": 0.85 }, { "fromDaysAfterDefault": 90, "rate": 1 } ] }
+  ],
+  // Numeral 5: homologación obligatoria a la calificación contable. «Mora actual» = la mora máxima del deudor en todos sus créditos alineados
+  // por modalidad. Sólo procede cuando la calificación máxima es la del modelo (Anexo 1 numeral 3); el incumplido se homologa siempre.
+  "homologation": [
+    {
+      "segments": [ "CONSUMO_LIBRANZA", "CONSUMO_SIN_LIBRANZA" ],
+      "rows": [
+        { "modelRating": "A", "fromCurrentDaysPastDue": 0, "accountingRating": "A" },
+        { "modelRating": "B", "fromCurrentDaysPastDue": 0, "toCurrentDaysPastDue": 30, "accountingRating": "A" },
+        { "modelRating": "B", "fromCurrentDaysPastDue": 31, "accountingRating": "B" },
+        { "modelRating": "C", "fromCurrentDaysPastDue": 0, "toCurrentDaysPastDue": 30, "accountingRating": "B" },
+        { "modelRating": "C", "fromCurrentDaysPastDue": 31, "accountingRating": "C" },
+        { "modelRating": "D", "fromCurrentDaysPastDue": 0, "accountingRating": "C" },
+        { "modelRating": "E", "fromCurrentDaysPastDue": 0, "accountingRating": "C" },
+        { "modelRating": "Default", "fromCurrentDaysPastDue": 91, "toCurrentDaysPastDue": 180, "accountingRating": "D" },
+        { "modelRating": "Default", "fromCurrentDaysPastDue": 181, "accountingRating": "E" }
+      ]
+    },
+    {
+      "segments": [ "COMERCIAL_PN" ],
+      "rows": [
+        { "modelRating": "A", "fromCurrentDaysPastDue": 0, "accountingRating": "A" },
+        { "modelRating": "B", "fromCurrentDaysPastDue": 0, "toCurrentDaysPastDue": 30, "accountingRating": "A" },
+        { "modelRating": "B", "fromCurrentDaysPastDue": 31, "accountingRating": "B" },
+        { "modelRating": "C", "fromCurrentDaysPastDue": 0, "toCurrentDaysPastDue": 30, "accountingRating": "B" },
+        { "modelRating": "C", "fromCurrentDaysPastDue": 31, "accountingRating": "C" },
+        { "modelRating": "D", "fromCurrentDaysPastDue": 0, "accountingRating": "C" },
+        { "modelRating": "E", "fromCurrentDaysPastDue": 0, "accountingRating": "C" },
+        { "modelRating": "Default", "fromCurrentDaysPastDue": 121, "toCurrentDaysPastDue": 150, "accountingRating": "D" },
+        { "modelRating": "Default", "fromCurrentDaysPastDue": 151, "accountingRating": "E" }
+      ]
+    }
+  ],
+  // CBCF Cap. II num. 5.4.1: deterioro general mínimo sobre la cartera bruta (el porcentaje es el límite DETERIORO_GENERAL_MINIMO y el Anexo 1);
+  // la lectura del equipo es que alcanza también a los segmentos en pérdida esperada de todo tipo de organización. Pendiente de validar.
+  "generalImpairment": [ { "organizationType": "*", "appliesToExpectedLoss": true } ],
+  "provenance": [
+    { "table": "scoreDecimals", "verified": false, "source": "Anexo 2 num. 3.4 (CE 68 de 2024): los cortes del puntaje traen cuatro decimales; redondear el puntaje a esa escala es lectura del equipo (E9)" },
+    { "table": "singleInstallmentDefaultDaysPastDue", "verified": false, "source": "CBCF Tít. IV Cap. II num. 5.3 punto 1, citado por el Anexo 2: crédito a una sola cuota con mora superior a 7 días; sin cotejar (E8)" },
+    { "table": "suspendedConceptsFullyImpaired", "verified": false, "source": "Interpretación del equipo: el deterioro al 100 % de lo causado de un crédito suspendido rige también en pérdida esperada; a validar por la contadora" },
+    { "table": "variables", "verified": false, "source": "Anexo 2 nums. 3.1–3.3 (CE 68 de 2024), texto: definiciones de EA, FE, VALCUOTA, FONDPLAZO, MORA1230, MORA1260, MORA2430N, MORA3660, SINMORA, MORA315 y MORTRIM; que las ventanas incluyan el mes de evaluación es lectura del equipo; sin cotejar (E8)" },
+    { "table": "segments", "verified": false, "source": "Anexo 2 nums. 3.1–3.4 (CE 68 de 2024), texto: ecuaciones Z y cortes del puntaje (límite superior, inclusive); umbral de incumplimiento de la CBCF Cap. II num. 5.3 (consumo más de 90 días, comercial persona natural más de 120); sin cotejar (E8)" },
+    { "table": "probabilityOfDefault", "verified": false, "source": "Anexo 2 nums. 4.1.1–4.1.3 (CE 68 de 2024), IMÁGENES transcritas a mano por el equipo el 2026-10-16; falta la PI VOLUNTARIA (CE 100) y la de las integrales con sección de ahorro (E8)" },
+    { "table": "lossGivenDefault", "verified": false, "source": "Anexo 2 num. 4.3 (CE 68 de 2024), IMAGEN transcrita a mano; el último tramo de «sin garantía» se lee «00» y se transcribe 90 días por analogía con la Superfinanciera (E8)" },
+    { "table": "performingLossGivenDefault", "verified": false, "source": "Anexo 2 num. 4.3 (CE 68 de 2024), texto: libranza 45 % y 45 % con mora hasta 90 días; sin libranza y comercial persona natural 45 % y 50 %, «para moras mayores a 30 días la PDI no se modifica» (se lee: rige hasta el incumplimiento); sin cotejar (E8)" },
+    { "table": "homologation", "verified": false, "source": "Anexo 2 num. 5 (CE 68 de 2024), IMÁGENES transcritas a mano; sin cotejar (E8)" },
+    { "table": "generalImpairment", "verified": false, "source": "CBCF Tít. IV Cap. II num. 5.4.1: deterioro general mínimo del 1 % de la cartera bruta; que alcance a los segmentos en pérdida esperada es lectura del equipo; sin cotejar" }
+  ]
+}

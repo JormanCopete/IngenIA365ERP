@@ -136,6 +136,9 @@ public sealed class PayrollPolicyReader(IApplicationDbContext db, IDateTimeServi
             _ => DeduccionAlRetiro.SaldoTotal,
         };
 
+        // Feature 014 (D37): el orden de los descuentos de la Cartera.
+        var prelacion = CarteraDeductionKinds.Leer(Admitido(CompanyPolicyKeys.PrelacionDescuentosDeCartera)) ?? CarteraDeductionKinds.Defecto;
+
         var mapaTexto = Valor(CompanyPolicyKeys.DianMedioPagoMapa);
         var mapa = LeerMapa(mapaTexto);
         if (mapa is null) errores.Add(Invalido(CompanyPolicyKeys.DianMedioPagoMapa, mapaTexto));
@@ -156,7 +159,10 @@ public sealed class PayrollPolicyReader(IApplicationDbContext db, IDateTimeServi
 
         return Result.Success(new PoliticasDeNomina(
             fecha, redondeo, umbral, mismoUsuario, exonerada, semana, pagoAnticipado, arlEnVacaciones, topes, secuenciaP2, plazoDian,
-            mapa ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase), deduccion, arranque));
+            mapa ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase), deduccion, arranque)
+        {
+            PrelacionDeCartera = prelacion,
+        });
     }
 
     private static string Invalido(string clave, string valor)
@@ -214,8 +220,14 @@ public sealed record PoliticasDeNomina(
     /// <summary>Nombre anterior de <see cref="Exonerada114_1"/> (feature 005): la nómina ordinaria lo lee por aquí.</summary>
     public bool ApplyEmployerExemption => Exonerada114_1;
 
+    /// <summary>Feature 014 (D37): el orden de los descuentos de la Cartera (política <c>PrelacionDescuentosDeCartera</c>).</summary>
+    public IReadOnlyList<CarteraDeductionKind> PrelacionDeCartera { get; init; } = CarteraDeductionKinds.Defecto;
+
     /// <summary>Lo que el motor ordinario recibe.</summary>
-    public CalculationPolicies ForCalculation() => new() { Rounding = Rounding, ApplyEmployerExemption = Exonerada114_1, CotizaArlEnVacaciones = CotizaArlEnVacaciones };
+    public CalculationPolicies ForCalculation() => new()
+    {
+        Rounding = Rounding, ApplyEmployerExemption = Exonerada114_1, CotizaArlEnVacaciones = CotizaArlEnVacaciones, CarteraDeductionOrder = PrelacionDeCartera,
+    };
 
     /// <summary>Lo que el motor de liquidaciones recibe (Domain no conoce esta clase).</summary>
     public SettlementPolicies ForSettlement() => new()

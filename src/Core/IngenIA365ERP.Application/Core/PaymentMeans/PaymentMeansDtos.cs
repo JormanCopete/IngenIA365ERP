@@ -56,6 +56,13 @@ public sealed record PaymentMeansInput
     public decimal? ExpectedCommissionFixed { get; init; }
     public string DianPaymentMeansCode { get; init; } = string.Empty;
     public CreditDefaultsInput? CreditDefaults { get; init; }
+
+    /// <summary>
+    /// Feature 013 (T0173, A6, D29): crédito que no pasa a Cartera (cuotas de servicios a asociados). Sólo en clases de crédito; como la
+    /// clase, no cambia una vez el medio tiene pagos.
+    /// </summary>
+    public bool CreditWithoutLending { get; init; }
+
     public bool OfferedAtAllPoints { get; init; } = true;
     public bool OfferedOnAllChannels { get; init; } = true;
     public bool OfferedForAllDocumentTypes { get; init; } = true;
@@ -118,6 +125,9 @@ public sealed record PaymentMeansDto(
     string? Notes)
 {
     public int? PaymentsCount { get; init; }
+
+    /// <summary>Feature 013 (T0173, A6): crédito que no pasa a Cartera.</summary>
+    public bool CreditWithoutLending { get; init; }
 
     public PaymentMeansAvailabilityDto? Availability { get; init; }
 }

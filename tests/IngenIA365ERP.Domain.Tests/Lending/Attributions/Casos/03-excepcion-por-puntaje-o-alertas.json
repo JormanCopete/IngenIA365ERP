@@ -1,0 +1,29 @@
+// FR-037: un puntaje bajo el mínimo o una alerta sube el sujeto al nivel de excepción (EXCEP, rango 15). No se acumula:
+// gana el mayor entre el techo y la excepción. Con 3.000.000 el techo dice analista (10) y la excepción jefe (15) → jefe;
+// con 60.000.000 el techo dice comité (30) → comité, aunque el puntaje esté bajo.
+{
+  "nombre": "03-excepcion-por-puntaje-o-alertas",
+  "descripcion": "La excepción sube al nivel de excepción; gana el mayor y los niveles no se acumulan.",
+  "matriz": {
+    "niveles": [
+      { "codigo": "ANALISTA", "nombre": "Analista de crédito", "rango": 10, "clase": "Individual", "permiso": "Lending.Decisions.Analyst", "techo": 5000000 },
+      { "codigo": "EXCEP", "nombre": "Jefe de cartera (excepciones)", "rango": 15, "clase": "Individual", "permiso": "Lending.Decisions.Exceptions", "techo": 5000000, "excepcion": true },
+      { "codigo": "GERENCIA", "nombre": "Gerencia", "rango": 20, "clase": "Individual", "permiso": "Lending.Decisions.Management", "techo": 20000000 },
+      { "codigo": "COMITE", "nombre": "Comité de crédito", "rango": 30, "clase": "Collegiate", "organo": "COMCRED", "techo": 100000000 },
+      { "codigo": "CONSEJO", "nombre": "Consejo de administración", "rango": 40, "clase": "Collegiate", "organo": "CONSEJO", "consejo": true }
+    ],
+    "reglas": []
+  },
+  "escenarios": [
+    { "nombre": "puntaje bajo con 3.000.000", "sujeto": { "montoConsolidado": 3000000, "puntajeBajoElMinimo": true },
+      "esperado": { "nivel": "EXCEP", "razones": [ { "clase": "AmountCeiling", "nivel": "ANALISTA" }, { "clase": "Exception", "nivel": "EXCEP" } ] } },
+    { "nombre": "puntaje bajo con 15.000.000", "sujeto": { "montoConsolidado": 15000000, "puntajeBajoElMinimo": true },
+      "esperado": { "nivel": "GERENCIA", "razones": [ { "clase": "AmountCeiling", "nivel": "GERENCIA" }, { "clase": "Exception", "nivel": "EXCEP" } ] } },
+    { "nombre": "puntaje bajo con 60.000.000", "sujeto": { "montoConsolidado": 60000000, "puntajeBajoElMinimo": true },
+      "esperado": { "nivel": "COMITE", "razones": [ { "clase": "AmountCeiling", "nivel": "COMITE" }, { "clase": "Exception", "nivel": "EXCEP" } ] } },
+    { "nombre": "alertas con 3.000.000", "sujeto": { "montoConsolidado": 3000000, "alertas": true },
+      "esperado": { "nivel": "EXCEP", "razones": [ { "clase": "AmountCeiling", "nivel": "ANALISTA" }, { "clase": "Exception", "nivel": "EXCEP" } ] } },
+    { "nombre": "puntaje bajo y vinculado con 3.000.000", "sujeto": { "montoConsolidado": 3000000, "puntajeBajoElMinimo": true, "hayVinculado": true },
+      "esperado": { "nivel": "CONSEJO", "razones": [ { "clase": "AmountCeiling", "nivel": "ANALISTA" }, { "clase": "RelatedParty", "nivel": "CONSEJO" }, { "clase": "Exception", "nivel": "EXCEP" } ] } }
+  ]
+}

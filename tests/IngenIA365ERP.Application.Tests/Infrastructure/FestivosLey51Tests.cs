@@ -1,7 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using FluentAssertions;
-using IngenIA365ERP.Persistence.Seeding.Parametric;
+using IngenIA365ERP.Domain.Common.Calendar;
 
 namespace IngenIA365ERP.Application.Tests.Infrastructure;
 

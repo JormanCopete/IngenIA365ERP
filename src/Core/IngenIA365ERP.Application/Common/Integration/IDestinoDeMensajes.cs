@@ -56,7 +56,14 @@ public sealed record UnidadDeConsumo(
     string OriginEventKey,
     IReadOnlyList<Guid> MessagePublicIds,
     Guid? BatchPublicId,
-    int IntentosLeidos);
+    int IntentosLeidos)
+{
+    /// <summary>
+    /// El módulo que emitió la unidad (feature 013, T15): un destino con varios emisores (Contabilidad) reparte por él. Una unidad
+    /// nunca mezcla módulos: todos sus mensajes vienen de la misma solicitud de emisión.
+    /// </summary>
+    public string OriginModule { get; init; } = ModulosDeOrigen.Inventario;
+}
 
 /// <summary>
 /// Lo que el despachador entrega al destino de una vez: una unidad, o un grupo resumido con su clave (§5.3 de
@@ -86,6 +93,18 @@ public enum MotivoSinComprobante
 
     /// <summary>Un documento cuyo valor contable es cero.</summary>
     ZeroValue = 2,
+
+    /// <summary>
+    /// Feature 013 (T17, C21; mensajes.md §14.4): Cartera recibió una venta o un ajuste que no se incorpora (aceptada sin migrar, fuera de Cartera,
+    /// o fechada hasta el corte sin conciliación): deja su recibo, no una obligación.
+    /// </summary>
+    NotIncorporated = 3,
+
+    /// <summary>
+    /// Feature 013 (C21; contracts/contabilidad.md §7.1 paso 8): las dos puntas de un traslado de Cartera resolvieron la misma cuenta,
+    /// sucursal, tercero y cruce: deja su recibo, no su comprobante.
+    /// </summary>
+    SameAccounts = 4,
 }
 
 /// <summary>
@@ -120,6 +139,14 @@ public abstract record ResultadoDeConsumo
 
     /// <summary>Falla transitoria (o el original aún no está): se reintenta con espera creciente.</summary>
     public sealed record Retry(string Reason, string? Code = null) : ResultadoDeConsumo;
+
+    /// <summary>
+    /// Sólo el destino <c>Lending</c> (feature 013, T17, CH12; contracts/mensajes.md §14.4): la obligación se creó, pero con la
+    /// validación fallida (FR-052). La entrega queda <c>ValidationFailed</c> —terminal, no bloquea a sus dependientes— con la
+    /// referencia al crédito (<paramref name="LoanPublicId"/>, <paramref name="LoanNumber"/>) y el código y el motivo como en un
+    /// rechazo; levanta <c>Integracion.ValidacionFallida</c>.
+    /// </summary>
+    public sealed record ValidationFailed(Guid LoanPublicId, string LoanNumber, string Code, string Reason) : ResultadoDeConsumo;
 }
 
 /// <summary>
@@ -132,15 +159,29 @@ public static class ReferenciasDeResultado
 
     public const string ValorCero = "sin comprobante (valor cero)";
 
+    /// <summary>Feature 013 (C21): la venta o el ajuste que Cartera no incorporó.</summary>
+    public const string NoIncorporada = "no incorporada";
+
+    /// <summary>Feature 013 (C21): el traslado de Cartera cuyas dos puntas resolvieron las mismas cuentas.</summary>
+    public const string MismasCuentas = "sin comprobante (mismas cuentas)";
+
     public static string De(Guid? comprobante, MotivoSinComprobante? sinComprobante) => comprobante is { } id
         ? id.ToString("D")
-        : sinComprobante == MotivoSinComprobante.ZeroValue ? ValorCero : Informativo;
+        : sinComprobante switch
+        {
+            MotivoSinComprobante.ZeroValue => ValorCero,
+            MotivoSinComprobante.NotIncorporated => NoIncorporada,
+            MotivoSinComprobante.SameAccounts => MismasCuentas,
+            _ => Informativo,
+        };
 
     /// <summary>El motivo de un recibo sin comprobante, o nulo si la referencia es un comprobante.</summary>
     public static MotivoSinComprobante? SinComprobante(string? referencia) => referencia switch
     {
         Informativo => MotivoSinComprobante.Informational,
         ValorCero => MotivoSinComprobante.ZeroValue,
+        NoIncorporada => MotivoSinComprobante.NotIncorporated,
+        MismasCuentas => MotivoSinComprobante.SameAccounts,
         _ => null,
     };
 }

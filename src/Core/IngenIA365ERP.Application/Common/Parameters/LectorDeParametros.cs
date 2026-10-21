@@ -13,15 +13,21 @@ namespace IngenIA365ERP.Application.Common.Parameters;
 /// cien líneas no consulta cien veces la misma clave.
 /// </summary>
 /// <remarks>
-/// <paramref name="entrega"/> es la entrega del comercio con que se interpretan los valores (por defecto, la vigente del despliegue):
-/// las pruebas de una entrega posterior (I5: <c>Peps</c>) la fijan, como <c>EfectosDeClase</c>.
+/// <paramref name="entrega"/> es la entrega con que se interpretan los valores de su línea (por defecto, la vigente de cada línea):
+/// las pruebas de una entrega anterior del comercio (I4: sin <c>Peps</c>) la fijan, como <c>EfectosDeClase</c>. Feature 013 (T43):
+/// es una <see cref="EntregaDeModulo"/>; <see cref="EntregaDelComercio"/> se convierte sola.
 /// </remarks>
-public sealed class LectorDeParametros(IApplicationDbContext db, EntregaDelComercio entrega = CatalogoDeParametros.EntregaVigente) : ILectorDeParametros
+public sealed class LectorDeParametros(IApplicationDbContext db, EntregaDeModulo? entrega = null) : ILectorDeParametros
 {
-    private readonly Dictionary<(string, string, ParameterScopeKind, int, DateOnly), Result<ValorDeParametro>> _memoria = [];
+    private readonly Dictionary<(string, string, ParameterScopeKind, int, DateOnly, DateTime?), Result<ValorDeParametro>> _memoria = [];
     private readonly Dictionary<(string, string), IReadOnlyList<VigenciaDeParametro>> _vigenciasPorClave = [];
+    private readonly Dictionary<(string, string, DateTime), IReadOnlyList<VigenciaDeParametro>> _conocidasPorClave = [];
 
-    public async Task<Result<ValorDeParametro>> LeerAsync(string modulo, string clave, DateOnly fecha,
+    public Task<Result<ValorDeParametro>> LeerAsync(string modulo, string clave, DateOnly fecha,
+        ParameterScopeKind ambito = ParameterScopeKind.None, int ambitoId = 0, CancellationToken ct = default) =>
+        LeerAsync(modulo, clave, fecha, null, ambito, ambitoId, ct);
+
+    public async Task<Result<ValorDeParametro>> LeerAsync(string modulo, string clave, DateOnly fecha, DateTime? informacionHasta,
         ParameterScopeKind ambito = ParameterScopeKind.None, int ambitoId = 0, CancellationToken ct = default)
     {
         var definicion = CatalogoDeParametros.Buscar(modulo, clave);
@@ -32,10 +38,12 @@ public sealed class LectorDeParametros(IApplicationDbContext db, EntregaDelComer
         if (ambito == ParameterScopeKind.None || !definicion.AdmiteAmbito(ambito))
             (ambito, ambitoId) = (ParameterScopeKind.None, 0);
 
-        var llave = (definicion.Modulo, definicion.Clave, ambito, ambitoId, fecha);
+        var llave = (definicion.Modulo, definicion.Clave, ambito, ambitoId, fecha, informacionHasta);
         if (_memoria.TryGetValue(llave, out var memorizado)) return memorizado;
 
-        var vigencias = await VigenciasDeLaClaveAsync(definicion, ct);
+        var vigencias = informacionHasta is { } r
+            ? await ConocidasEnAsync(definicion, r, ct)
+            : await VigenciasDeLaClaveAsync(definicion, ct);
         var vigente = VigenteA(vigencias, fecha, ambito, ambitoId)
                       ?? (ambito == ParameterScopeKind.None ? null : VigenteA(vigencias, fecha, ParameterScopeKind.None, 0));
 
@@ -87,6 +95,40 @@ public sealed class LectorDeParametros(IApplicationDbContext db, EntregaDelComer
             .Where(v => v.ScopeKind == ambito && v.ScopeId == ambitoId && v.VigenteEn(fecha))
             .OrderByDescending(v => v.ValidFrom)
             .FirstOrDefault();
+
+    /// <summary>
+    /// Las vigencias de la clave tal como se conocían en R (feature 013, T38): las creadas hasta R, incluidas las dadas de baja
+    /// después de R (una baja posterior a R no cuenta), con el <c>ValidTo</c> guardado ignorado y derivado de la vigencia siguiente
+    /// del mismo ámbito y entidad conocida en R (la víspera de su <c>ValidFrom</c>; sin siguiente, abierta).
+    /// </summary>
+    private async Task<IReadOnlyList<VigenciaDeParametro>> ConocidasEnAsync(DefinicionDeParametro definicion, DateTime r, CancellationToken ct)
+    {
+        var llave = (definicion.Modulo, definicion.Clave, r);
+        if (_conocidasPorClave.TryGetValue(llave, out var cacheadas)) return cacheadas;
+
+        var filas = await db.ParameterVersions.IgnoreQueryFilters().AsNoTracking()
+            .Where(v => v.Module == definicion.Modulo && v.Key == definicion.Clave && v.CreatedAt <= r
+                        && (!v.IsDeleted || (v.DeletedAt != null && v.DeletedAt > r)))
+            .Select(v => new VigenciaDeParametro(v.PublicId, v.Module, v.Key, v.ScopeKind, v.ScopeId, v.Value, v.ValidFrom, v.ValidTo,
+                v.Reason, v.LegalSource, v.CreatedBy, v.CreatedAt))
+            .ToListAsync(ct);
+
+        var conocidas = filas
+            .GroupBy(v => (v.ScopeKind, v.ScopeId))
+            .SelectMany(serie =>
+            {
+                var ordenadas = serie.OrderBy(v => v.ValidFrom).ThenBy(v => v.CreatedAt).ToList();
+                return ordenadas.Select((v, i) =>
+                {
+                    var siguiente = ordenadas.Skip(i + 1).FirstOrDefault(s => s.ValidFrom > v.ValidFrom);
+                    return v with { ValidTo = siguiente?.ValidFrom.AddDays(-1) };
+                });
+            })
+            .ToList();
+
+        _conocidasPorClave[llave] = conocidas;
+        return conocidas;
+    }
 
     private async Task<IReadOnlyList<VigenciaDeParametro>> VigenciasDeLaClaveAsync(DefinicionDeParametro definicion, CancellationToken ct)
     {

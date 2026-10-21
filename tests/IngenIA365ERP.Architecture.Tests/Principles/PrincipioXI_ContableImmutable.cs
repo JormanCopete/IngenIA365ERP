@@ -19,6 +19,8 @@ public class PrincipioXI_ContableImmutable
     [
         "Entities/Accounting/Transactions",
         "Entities/Lending/Transactions",
+        // Feature 014 (T029; data-model §0.1): el libro de cuentas de captación y aportes y su hecho primario.
+        "Entities/Lending/Deposits/Transactions",
         "Entities/Payroll/Transactions",
         // Feature 012 (T019; decisiones-transversales §2.18, T7, T33): los mensajes de integración y sus
         // entregas, y las solicitudes y decisiones de aprobación, son hechos: no se borran.
@@ -47,6 +49,69 @@ public class PrincipioXI_ContableImmutable
             .ToList();
 
         Assert.True(offenders.Count == 0, "Consumos de capa borrados (Principio XI, T825):\n  " + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>
+    /// Feature 013, T0144: la regla se activa sola con <c>Entities/Lending/Transactions</c>, donde vive <c>LoanTransaction</c> (el libro de
+    /// Cartera), y nadie borra ni actualiza sus filas (se corrigen con un espejo, FR-002).
+    /// </summary>
+    [Fact]
+    public void El_libro_de_Cartera_esta_en_el_espacio_protegido_y_nadie_lo_borra_ni_lo_actualiza()
+    {
+        var root = RepoPath.FindRepoRoot();
+        var carpeta = Path.Combine(root, "src", "Core", "IngenIA365ERP.Domain", "Entities", "Lending", "Transactions");
+        Assert.True(File.Exists(Path.Combine(carpeta, "LoanTransaction.cs")), "LoanTransaction vive en Entities/Lending/Transactions (data-model §0.1).");
+        Assert.Equal("IngenIA365ERP.Domain.Entities.Lending.Transactions", typeof(IngenIA365ERP.Domain.Entities.Lending.Transactions.LoanTransaction).Namespace);
+
+        var escritura = new Regex(@"\.LoanTransactions\s*\.\s*(Remove|RemoveRange|Update|UpdateRange|ExecuteDelete|ExecuteDeleteAsync|ExecuteUpdate|ExecuteUpdateAsync)\b", RegexOptions.Compiled);
+        var infractores = RepoPath.ProductionCSharpFiles()
+            .Where(f => escritura.IsMatch(File.ReadAllText(f)))
+            .Select(f => Path.GetRelativePath(root, f))
+            .ToList();
+        Assert.True(infractores.Count == 0, "Filas del libro de Cartera borradas o actualizadas (Principio XI):\n  " + string.Join("\n  ", infractores));
+    }
+
+    /// <summary>
+    /// Feature 013, US4 (T0480): la posición diaria (se versiona, nunca se sobrescribe: D13), las partes de los hechos contables y las operaciones
+    /// tampoco se borran ni se actualizan en bloque; la regla de arriba sólo ve el libro.
+    /// </summary>
+    [Fact]
+    public void Las_posiciones_las_partes_y_las_operaciones_de_Cartera_no_se_borran()
+    {
+        var root = RepoPath.FindRepoRoot();
+        var escritura = new Regex(@"\.(LoanDailyPositions|AccountingFactParts|LoanOperations)\s*\.\s*(Remove|RemoveRange|ExecuteDelete|ExecuteDeleteAsync|ExecuteUpdate|ExecuteUpdateAsync)\b",
+            RegexOptions.Compiled);
+        var infractores = RepoPath.ProductionCSharpFiles()
+            .Where(f => escritura.IsMatch(File.ReadAllText(f)))
+            .Select(f => Path.GetRelativePath(root, f))
+            .ToList();
+        Assert.True(infractores.Count == 0, "Posiciones, partes u operaciones de Cartera borradas o actualizadas en bloque (Principio XI):\n  "
+            + string.Join("\n  ", infractores));
+    }
+
+    /// <summary>
+    /// Feature 014 (T029; data-model §0.1, §4.1–§4.3): el libro de cuentas (<c>MemberAccountTransaction</c>) vive en
+    /// <c>Entities/Lending/Deposits/Transactions</c>, dentro del espacio protegido, y nadie borra ni actualiza en bloque sus filas, sus operaciones
+    /// ni sus posiciones diarias (se corrigen con un espejo o una versión nueva, FR-002).
+    /// </summary>
+    [Fact]
+    public void El_libro_de_cuentas_esta_en_el_espacio_protegido_y_nadie_lo_borra_ni_lo_actualiza()
+    {
+        var root = RepoPath.FindRepoRoot();
+        var carpeta = Path.Combine(root, "src", "Core", "IngenIA365ERP.Domain", "Entities", "Lending", "Deposits", "Transactions");
+        Assert.True(File.Exists(Path.Combine(carpeta, "MemberAccountTransaction.cs")), "MemberAccountTransaction vive en Entities/Lending/Deposits/Transactions.");
+        Assert.Equal("IngenIA365ERP.Domain.Entities.Lending.Deposits.Transactions",
+            typeof(IngenIA365ERP.Domain.Entities.Lending.Deposits.Transactions.MemberAccountTransaction).Namespace);
+        Assert.Contains("Entities/Lending/Deposits/Transactions", ProtectedNamespaces);
+
+        var escritura = new Regex(
+            @"\.(MemberAccountTransactions|MemberAccountOperations|MemberAccountDailyPositions)\s*\.\s*(Remove|RemoveRange|Update|UpdateRange|ExecuteDelete|ExecuteDeleteAsync|ExecuteUpdate|ExecuteUpdateAsync)\b",
+            RegexOptions.Compiled);
+        var infractores = RepoPath.ProductionCSharpFiles()
+            .Where(f => escritura.IsMatch(File.ReadAllText(f)))
+            .Select(f => Path.GetRelativePath(root, f))
+            .ToList();
+        Assert.True(infractores.Count == 0, "Filas del libro de cuentas borradas o actualizadas (Principio XI):\n  " + string.Join("\n  ", infractores));
     }
 
     private static readonly Regex RemoveCall = new(

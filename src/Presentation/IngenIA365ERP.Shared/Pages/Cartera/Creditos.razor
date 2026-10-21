@@ -1,0 +1,116 @@
+@page "/cartera/creditos"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Inventario
+@inject CreditosClient Cliente
+@inject LineasDeCreditoClient Lineas
+@inject InventarioClient Inventario
+@inject INotificationService Notification
+@inject NavigationManager Navegacion
+
+<PageTitle>Créditos - IngenIA365ERP</PageTitle>
+
+@* Feature 013, US4 (T0508; FR-061–FR-069; contracts/api.md §8.1): los créditos del alcance de quien mira (oficinas y líneas), buscados por
+   número o deudor, línea, oficina, estado, modalidad y mora mínima. Los saldos y la mora son los de la posición diaria vigente, con su fecha;
+   la liquidación exacta a una fecha está en el detalle. Lo que está fuera del alcance no aparece ni cuenta. *@
+<PermissionGate Required="Lending.Loans.Read" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Créditos</h3>
+    </div>
+
+    <div class="toolbar">
+        <label class="campo">Número o deudor <input class="e-input" @bind="_buscar" placeholder="CR-000123 o nombre" /></label>
+        <label class="campo">Estado
+            <select class="e-input" @bind="_estado">
+                <option value="">Todos</option>
+                @foreach (var e in TextosDeCreditos.EstadosDeCredito) { <option value="@e.Valor">@e.Texto</option> }
+            </select>
+        </label>
+        <label class="campo">Línea
+            <select class="e-input" @bind="_linea">
+                <option value="">Todas</option>
+                @foreach (var l in _lineas) { <option value="@l.PublicId">@l.Code · @l.Name</option> }
+            </select>
+        </label>
+        <label class="campo">Oficina
+            <select class="e-input" @bind="_oficina">
+                <option value="">Todas</option>
+                @foreach (var o in _oficinas) { <option value="@o.PublicId">@o.Name</option> }
+            </select>
+        </label>
+        <label class="campo">Modalidad <input class="e-input" @bind="_modalidad" placeholder="CONSUMO" /></label>
+        <label class="campo">Mora mínima (días) <input type="number" min="0" class="e-input" @bind="_moraMinima" /></label>
+        <SfButton CssClass="e-primary" IconCss="e-icons e-search" Disabled="@_carga.Activa" OnClick="@(() => CargarAsync(1))">Buscar</SfButton>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        <p class="texto-apoyo">@_total crédito(s). Los saldos son los de la última posición diaria; la liquidación a una fecha está en el detalle.</p>
+        <div class="tabla-desplazable">
+            <table class="data-grid">
+                <thead><tr><th>Número</th><th>Deudor</th><th>Línea</th><th>Oficina</th><th>Estado</th><th class="numero">Desembolsado</th><th class="numero">Saldo de capital</th><th class="numero">Días de mora</th><th>Posición al</th><th>Marcas</th></tr></thead>
+                <tbody>
+                    @foreach (var c in _creditos)
+                    {
+                        var credito = c;
+                        <tr class="fila-seleccionable" @onclick="@(() => Navegacion.NavigateTo($"/cartera/creditos/{credito.PublicId}"))">
+                            <td>@credito.Number</td>
+                            <td>@credito.Debtor.Name</td>
+                            <td>@credito.Line.Code · @credito.Line.Name</td>
+                            <td>@credito.Office.Name</td>
+                            <td>@TextosDeCreditos.EstadoDeCredito(credito.Status)</td>
+                            <td class="numero">@TextosDeCreditos.Pesos(credito.DisbursedAmount)</td>
+                            <td class="numero">@TextosDeCreditos.Pesos(credito.PrincipalBalance)</td>
+                            <td class="numero @(credito.DaysPastDue > 0 ? "texto-alerta" : "")">@credito.DaysPastDue</td>
+                            <td>@TextosDeCreditos.Fecha(credito.PositionDate)</td>
+                            <td>@string.Join(", ", credito.Marks.Select(TextosDeCreditos.Marca))</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (_creditos.Count == 0) { <p class="texto-tenue">Sin créditos con esos filtros.</p> }
+        <div class="toolbar">
+            <SfButton CssClass="e-flat" Disabled="@(_pagina <= 1)" OnClick="@(() => CargarAsync(_pagina - 1))">Anterior</SfButton>
+            <span class="texto-tenue">Página @_pagina</span>
+            <SfButton CssClass="e-flat" Disabled="@(_pagina * TamanoDePagina >= _total)" OnClick="@(() => CargarAsync(_pagina + 1))">Siguiente</SfButton>
+        </div>
+    </IndicadorDeCarga>
+</div>
+</PermissionGate>
+
+@code {
+    private const int TamanoDePagina = 20;
+    private readonly EstadoDeCarga _carga = new();
+    private List<CreditoEnListaDto> _creditos = [];
+    private IReadOnlyList<LineaDeCreditoResumenDto> _lineas = [];
+    private IReadOnlyList<SucursalContableDto> _oficinas = [];
+    private long _total;
+    private int _pagina = 1;
+    private int? _moraMinima;
+    private string? _buscar, _estado, _linea, _oficina, _modalidad;
+
+    protected override async Task OnInitializedAsync()
+    {
+        using (_carga.Iniciar())
+        {
+            var lineas = await Lineas.LineasAsync(new FiltrosDeLineas(IncludeClosed: true));
+            _lineas = lineas.Value ?? [];
+            var oficinas = await Inventario.ListarSucursalesAsync();
+            _oficinas = oficinas.Value ?? [];
+        }
+        await CargarAsync(1);
+    }
+
+    private async Task CargarAsync(int pagina)
+    {
+        using var carga = _carga.Iniciar();
+        _pagina = pagina;
+        var r = await Cliente.ListarAsync(_buscar, string.IsNullOrEmpty(_estado) ? null : _estado, Guid.TryParse(_linea, out var l) ? l : null,
+            Guid.TryParse(_oficina, out var o) ? o : null, string.IsNullOrWhiteSpace(_modalidad) ? null : _modalidad.Trim().ToUpperInvariant(),
+            _moraMinima, pagina, TamanoDePagina);
+        if (!r.IsSuccess) { _creditos = []; _total = 0; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer los créditos."); return; }
+        _creditos = [.. r.Value?.Items ?? []];
+        _total = r.Value?.TotalCount ?? 0;
+    }
+}

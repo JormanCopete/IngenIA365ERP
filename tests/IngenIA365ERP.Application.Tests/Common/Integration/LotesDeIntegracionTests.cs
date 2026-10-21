@@ -226,7 +226,7 @@ public class LotesDeIntegracionTests
         var parametros = SendNotApplicableMessagesCommandTests.ParametrosConModo("NoPasa");
         SendNotApplicableMessagesCommandTests.TipoDeDocumento(_b, "TRASL");
 
-        var r = await new SendNotApplicableMessagesCommandHandler(_b.Db, _b.ActorActual, _b.Reloj, parametros, _senal).Handle(
+        var r = await new SendNotApplicableMessagesCommandHandler(_b.Db, _b.ActorActual, _b.Reloj, SendNotApplicableMessagesCommandTests.Vistas(_b, parametros), _senal).Handle(
             new SendNotApplicableMessagesCommand(BandejaDePrueba.Fecha, BandejaDePrueba.Fecha, null, m.PublicId, "Ya pasan") { OperationKey = Guid.NewGuid() }, default);
 
         r.Error.Code.Should().Be("Integration.SendNotApplicable.ModeStillNotPosted");

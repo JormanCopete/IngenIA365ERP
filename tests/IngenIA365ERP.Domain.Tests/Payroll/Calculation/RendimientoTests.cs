@@ -22,7 +22,7 @@ public class RendimientoTests
         var conceptos = PayrollConceptDefinitionsSeeder.Catalogo();
         var id = 0;
         foreach (var c in conceptos) c.Id = ++id;
-        var parametros = PayrollLegalParametersSeeder.Catalogo();
+        var parametros = PayrollLegalParametersSeeder.ConValoresNacionales();
         id = 0;
         foreach (var p in parametros) p.Id = ++id;
 

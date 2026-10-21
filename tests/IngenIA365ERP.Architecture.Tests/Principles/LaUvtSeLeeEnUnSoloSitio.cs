@@ -80,4 +80,20 @@ public class LaUvtSeLeeEnUnSoloSitio
             .Select(t => t.Name).ToList();
         Assert.Equal(["LectorDeUvt"], implementaciones);
     }
+
+    /// <summary>
+    /// Feature 013 (T0036; T93, A7): con la réplica de valores nacionales la UVT la escribe sólo <c>EfectoDeReplicacionEnNomina</c> en la
+    /// proyección de Nómina, y el lector sigue siendo <c>LectorDeUvt</c> sobre esa proyección, sin cambio: no lee la copia de valores
+    /// nacionales directo (eso es de <c>IValoresNacionales</c>) ni hay un segundo lector de la UVT.
+    /// </summary>
+    [Fact]
+    public void El_lector_de_UVT_sigue_leyendo_la_proyeccion_de_Nomina()
+    {
+        var lector = FuenteSinComentarios.Leer(Path.Combine(RepoPath.FindRepoRoot(), "src", "Core", "IngenIA365ERP.Application", "Common", "Taxation",
+            "LectorDeUvt.cs"));
+        Assert.Contains("PayrollLegalParameters", lector, StringComparison.Ordinal);
+        Assert.Contains("LegalParameterCodes.Uvt", lector, StringComparison.Ordinal);
+        Assert.DoesNotMatch(@"\.(NationalValues|RegulatoryDocuments)\b", lector);
+        Assert.DoesNotContain("IValoresNacionales", lector, StringComparison.Ordinal);
+    }
 }

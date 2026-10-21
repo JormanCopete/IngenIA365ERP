@@ -1,0 +1,238 @@
+{
+  "descripcion": "CreditoReestructurado (K3, contabilidad.md §2.1): lo causado que se capitaliza pasa de InteresPorCobrar a capital; lo suspendido que se capitaliza va contra el ingreso diferido y su orden contingente se cancela. El traslado a «reestructurado» no cambia de cuenta.",
+  "sobre": {
+    "version": 1,
+    "kind": "Business",
+    "originModule": "CAR",
+    "originEventKey": "Confirmation",
+    "origin": {
+      "kind": "Operation",
+      "documentClass": null,
+      "documentTypeCode": null,
+      "number": "NOV-000250",
+      "publicId": "0d0d0141-0000-4000-8000-000000000141",
+      "operationDate": "2027-03-12"
+    },
+    "related": null,
+    "chainRootPublicId": "0e0e0142-0000-4000-8000-000000000142",
+    "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+    "costCenterPublicId": null,
+    "warehouseCode": null,
+    "personPublicId": "a1b2c3d4-0000-4000-8000-000000000003",
+    "currency": "COP",
+    "exchangeRate": 1,
+    "originUser": {
+      "centralUserId": "d4e5f6a7-b8c9-4d0e-9f1a-2b3c4d5e6f70",
+      "name": "Usuario de ensayo"
+    },
+    "emittedAt": "2027-03-12T15:00:00Z"
+  },
+  "mensajes": [
+    {
+      "messageId": "0f0f0144-0000-4000-8000-000000000144",
+      "type": "CreditoReestructurado",
+      "kind": "Business",
+      "originDocumentClass": "TermsChange",
+      "payload": {
+        "loan": {
+          "loanPublicId": "7b8c9d0e-1f2a-4b3c-9d4e-000000000250",
+          "loanNumber": "000250"
+        },
+        "debtorPersonPublicId": "a1b2c3d4-0000-4000-8000-000000000003",
+        "valueDate": "2027-03-12",
+        "registeredAt": "2027-03-12T15:00:00Z",
+        "dimensions": {
+          "creditLineCode": "COM01",
+          "modalityCode": "CONSUMO",
+          "subsegmentCode": "SinLibranza",
+          "riskCategory": "C",
+          "riskSubcategory": "None",
+          "isEmployee": false,
+          "inGracePeriod": false,
+          "restructured": true,
+          "writtenOff": false,
+          "collectorClass": null,
+          "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+          "impairmentModel": "ArrearsAnnex1",
+          "riskSegment": "CONSUMO",
+          "valueUnit": "Pesos"
+        },
+        "amounts": [
+          {
+            "concept": "CurrentInterest",
+            "installmentNumber": null,
+            "amount": 96400.0,
+            "uvrAmount": null,
+            "onBehalfOfAssociate": false,
+            "reasonCode": "Capitalizacion"
+          },
+          {
+            "concept": "CurrentInterestInSuspense",
+            "installmentNumber": null,
+            "amount": 20000.0,
+            "uvrAmount": null,
+            "onBehalfOfAssociate": false,
+            "reasonCode": "Capitalizacion"
+          }
+        ],
+        "original": null,
+        "rulesVersion": "LND-2026.1",
+        "previousDimensions": {
+          "creditLineCode": "COM01",
+          "modalityCode": "CONSUMO",
+          "subsegmentCode": "SinLibranza",
+          "riskCategory": "C",
+          "riskSubcategory": "None",
+          "isEmployee": false,
+          "inGracePeriod": false,
+          "restructured": false,
+          "writtenOff": false,
+          "collectorClass": null,
+          "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+          "impairmentModel": "ArrearsAnnex1",
+          "riskSegment": "CONSUMO",
+          "valueUnit": "Pesos"
+        },
+        "noveltyPublicId": "7b8c0143-0000-4000-8000-000000000143",
+        "sessionItemPublicId": null,
+        "previousPlan": {
+          "scheduleVersion": 1,
+          "amortizationSystem": "LevelPayment",
+          "periodicity": "Monthly",
+          "installmentCount": 36,
+          "installmentAmount": 392184.0,
+          "firstDueDate": "2026-12-30",
+          "finalDueDate": "2029-11-30",
+          "annualEffectiveRate": 0.245,
+          "dayCountConvention": "Thirty360",
+          "rulesVersion": "LND-2026.1"
+        },
+        "newPlan": {
+          "scheduleVersion": 1,
+          "amortizationSystem": "LevelPayment",
+          "periodicity": "Monthly",
+          "installmentCount": 36,
+          "installmentAmount": 392184.0,
+          "firstDueDate": "2026-12-30",
+          "finalDueDate": "2029-11-30",
+          "annualEffectiveRate": 0.245,
+          "dayCountConvention": "Thirty360",
+          "rulesVersion": "LND-2026.1"
+        },
+        "restructuringCount": 1,
+        "newLoan": null
+      }
+    }
+  ],
+  "esperado": {
+    "tipo": "CN",
+    "fecha": "2027-03-12",
+    "origen": "LendingIssuedDocument",
+    "lineas": [
+      {
+        "rol": "Capital",
+        "cuenta": "14421501",
+        "debito": 116400.0,
+        "credito": 0.0,
+        "tercero": "luis",
+        "cruce": "PG 000250",
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "CreditoReestructurado"
+          ],
+          "concepto": null,
+          "creditos": [
+            "000250"
+          ]
+        }
+      },
+      {
+        "rol": "InteresPorCobrar",
+        "cuenta": "14431501",
+        "debito": 0.0,
+        "credito": 96400.0,
+        "tercero": "luis",
+        "cruce": "PG 000250",
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "CreditoReestructurado"
+          ],
+          "concepto": "CurrentInterest",
+          "creditos": [
+            "000250"
+          ]
+        }
+      },
+      {
+        "rol": "IngresoDiferido",
+        "cuenta": "27959501",
+        "debito": 0.0,
+        "credito": 20000.0,
+        "tercero": "luis",
+        "cruce": "PG 000250",
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "CreditoReestructurado"
+          ],
+          "concepto": "CurrentInterestInSuspense",
+          "creditos": [
+            "000250"
+          ]
+        }
+      },
+      {
+        "rol": "ContraOrdenContingente",
+        "cuenta": "86050501",
+        "debito": 20000.0,
+        "credito": 0.0,
+        "tercero": null,
+        "cruce": null,
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "CreditoReestructurado"
+          ],
+          "concepto": "CurrentInterestInSuspense",
+          "creditos": [
+            "000250"
+          ]
+        }
+      },
+      {
+        "rol": "SuspensoEnOrden",
+        "cuenta": "81150501",
+        "debito": 0.0,
+        "credito": 20000.0,
+        "tercero": null,
+        "cruce": null,
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "CreditoReestructurado"
+          ],
+          "concepto": "CurrentInterestInSuspense",
+          "creditos": [
+            "000250"
+          ]
+        }
+      }
+    ]
+  },
+  "matrizExtra": [
+    {
+      "rol": "SuspensoEnOrden",
+      "cuenta": "81150501",
+      "modalidad": "CONSUMO",
+      "categoria": "C",
+      "concepto": "CurrentInterestInSuspense"
+    }
+  ]
+}

@@ -33,6 +33,8 @@ public class NingunTrabajoDeFondoOperaSinCooperativa
         // Feature 012, I4 (T731, T672): el procesador de documentos electrónicos. Pasa por IEjecutorEnCooperativa, escribe sólo con
         // EmitElectronicDocumentCommand y lo arranca sólo API/Program.cs (Procesador_de_documentos_electronicos_arranca_solo_desde_Program).
         Path.Combine("src", "Infrastructure", "IngenIA365ERP.ElectronicInvoicing", "Processor", "ProcesadorDeDocumentosElectronicos.cs"),
+        // Feature 013 (T0226, T0144): el procesador de Cartera; su pasada (PasadaDeCartera) corre todo por IEjecutorEnCooperativa.
+        Path.Combine("src", "Presentation", "IngenIA365ERP.API", "Integration", "ProcesadorDeCartera.cs"),
     ];
 
     [Fact]
@@ -55,6 +57,29 @@ public class NingunTrabajoDeFondoOperaSinCooperativa
             "ProcesadorDeDocumentosElectronicos.cs"));
         Assert.Contains("IEjecutorEnCooperativa", procesador);
         Assert.Contains("EmitElectronicDocumentCommand", procesador);
+    }
+
+    /// <summary>
+    /// Feature 013, US4 (T0480; T5, C59): el procesador de Cartera se arranca sólo desde <c>API/Program.cs</c> (el DbMigrator nunca lo
+    /// arranca), su pasada corre cada cooperativa por <c>IEjecutorEnCooperativa</c> y el ciclo diario escribe sólo dentro de la tanda (la
+    /// guarda de arriba lo exige del procesador; ésta, de la pasada que llama).
+    /// </summary>
+    [Fact]
+    public void Procesador_de_Cartera_arranca_solo_desde_Program_y_su_pasada_va_por_el_ejecutor()
+    {
+        var root = RepoPath.FindRepoRoot();
+        var arranque = new Regex(@"\bAddHostedService\b[^;]*\bProcesadorDeCartera\b", RegexOptions.Compiled | RegexOptions.Singleline);
+        var arrancan = RepoPath.ProductionCSharpFiles()
+            .Where(f => arranque.IsMatch(FuenteSinComentarios.Leer(f)))
+            .Select(f => Path.GetRelativePath(root, f))
+            .ToList();
+        Assert.True(arrancan.Count == 1 && string.Equals(arrancan[0], ProgramDeLaApi, StringComparison.OrdinalIgnoreCase),
+            "ProcesadorDeCartera se arranca sólo con AddHostedService en API/Program.cs (T5). Lo arrancan:\n  " + string.Join("\n  ", arrancan));
+
+        var pasada = FuenteSinComentarios.Leer(Path.Combine(root, "src", "Core", "IngenIA365ERP.Application", "Lending", "Processes", "PasadaDeCartera.cs"));
+        Assert.Contains("IEjecutorEnCooperativa", pasada);
+        Assert.Contains("ConductorDeCorridasDeCartera", pasada);
+        Assert.DoesNotContain("SaveChangesAsync", pasada);
     }
 
     /// <summary>
@@ -226,5 +251,36 @@ public class NingunTrabajoDeFondoOperaSinCooperativa
         foreach (var archivo in GuardanPorSuCuenta.Keys)
             Assert.True(TrabajosDeFondo.Any(t => Path.GetFileName(t) == archivo),
                 $"{archivo} está en GuardanPorSuCuenta pero no en TrabajosDeFondo.");
+    }
+
+    /// <summary>
+    /// Feature 013, fase 2 (T0038): las tareas de la plataforma de Cartera no son servicios de fondo propios sino
+    /// <c>ITareaProgramada</c> que corre <c>ProgramadorDeTareas</c> (por cooperativa, con <c>IEjecutorEnCooperativa</c>): la réplica de
+    /// valores nacionales (<c>valores-nacionales.replicar</c>, T39) y la revisión de plazos del titular
+    /// (<c>cumplimiento.plazos-del-titular</c>, T69). Se registran en <c>API/Program.cs</c> y escriben sólo por comandos.
+    /// </summary>
+    [Theory]
+    [InlineData(typeof(IngenIA365ERP.Application.Common.NationalValues.TareaDeReplicaDeValoresNacionales), "valores-nacionales.replicar",
+        "ReplicateNationalValuesCommand")]
+    [InlineData(typeof(IngenIA365ERP.Application.Compliance.DataSubjectRequests.TareaDePlazosDelTitular), "cumplimiento.plazos-del-titular",
+        "AlertDataSubjectRequestDeadlinesCommand")]
+    public void Las_tareas_de_la_plataforma_de_Cartera_corren_por_el_programador(Type tarea, string nombre, string comando)
+    {
+        Assert.True(typeof(IngenIA365ERP.Application.Common.Execution.ITareaProgramada).IsAssignableFrom(tarea), $"{tarea.Name} no es ITareaProgramada.");
+        var instancia = (IngenIA365ERP.Application.Common.Execution.ITareaProgramada)Activator.CreateInstance(tarea)!;
+        Assert.Equal(nombre, instancia.Nombre);
+
+        var root = RepoPath.FindRepoRoot();
+        var program = FuenteSinComentarios.Leer(Path.Combine(root, ProgramDeLaApi));
+        Assert.Matches($@"ITareaProgramada,\s*[\w.]*\b{tarea.Name}>", program);
+
+        // El cuerpo de la clase: desde su declaración hasta el final del archivo (las dos son la última clase de su archivo).
+        var archivo = RepoPath.ProductionCSharpFiles().Single(f => Regex.IsMatch(FuenteSinComentarios.Leer(f), $@"\bclass\s+{tarea.Name}\b"));
+        var fuente = FuenteSinComentarios.Leer(archivo);
+        var cuerpo = fuente[Regex.Match(fuente, $@"\bclass\s+{tarea.Name}\b").Index..];
+        Assert.Contains("ISender", cuerpo, StringComparison.Ordinal);
+        Assert.Contains(comando, cuerpo, StringComparison.Ordinal);
+        Assert.DoesNotContain("SaveChanges", cuerpo, StringComparison.Ordinal);
+        Assert.DoesNotContain("IApplicationDbContext", cuerpo, StringComparison.Ordinal);
     }
 }

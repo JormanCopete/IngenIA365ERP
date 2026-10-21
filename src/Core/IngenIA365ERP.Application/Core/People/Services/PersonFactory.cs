@@ -1,4 +1,4 @@
-using IngenIA365ERP.Application.Common.Interfaces;
+﻿using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Core.People.Contracts;
 using IngenIA365ERP.Domain.Entities.Core;
@@ -102,6 +102,7 @@ public sealed class PersonFactory(
         if (input.IsSimpleTaxRegime is { } simple) persona.IsSimpleTaxRegime = simple;
         if (input.IsIncomeTaxFiler is { } declarante) persona.IsIncomeTaxFiler = declarante;
         if (input.IsObligatedToInvoice is { } factura) persona.IsObligatedToInvoice = factura;
+        if (input.IsObligatedToKeepBooks is { } contabilidad) persona.IsObligatedToKeepBooks = contabilidad;
         if (input.IsLargeContributor is { } gran) persona.IsLargeContributor = gran;
         if (input.WithholdingExempt is { } exento) persona.WithholdingExempt = exento;
         if (input.IcaWithholdingExempt is { } exentoIca) persona.IcaWithholdingExempt = exentoIca;

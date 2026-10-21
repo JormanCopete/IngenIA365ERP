@@ -1,0 +1,24 @@
+{
+  "nombre": "Un carácter que la codificación no representa es advertencia: el archivo se escribe",
+  "derivacion": "En us-ascii sin normalizar, la ñ de «Peña» se escribe como ? en los bytes (el texto conserva la ñ) y la validación lo advierte; no bloquea.",
+  "layout": {
+    "code": "PRUEBA-ASCII", "version": "1", "source": "Caso de prueba del motor", "validFrom": "2026-01-01",
+    "fileKind": "Delimited", "delimiter": ",", "encoding": "us-ascii", "lineEnding": "CRLF",
+    "records": [
+      { "code": "Detail", "fields": [
+        { "number": 1, "name": "Nombre", "order": 1, "length": 20, "kind": "A", "format": "Text", "required": true, "path": "Deudor.Nombre" },
+        { "number": 2, "name": "Días de mora", "order": 2, "length": 4, "kind": "N", "format": "Integer", "required": true, "path": "Riesgo.DiasDeMora" } ] }
+    ]
+  },
+  "filas": [
+    { "registro": "Detail", "credito": "CR-20", "valores": { "Deudor.Nombre": "Peña", "Riesgo.DiasDeMora": 12 } }
+  ],
+  "esperado": {
+    "escrito": true,
+    "finDeLinea": "\r\n",
+    "lineas": [ "Peña,12" ],
+    "inconsistencias": [
+      { "severidad": "Warning", "codigo": "Layout.CaracterNoRepresentable", "registro": "Detail", "campo": 1, "credito": "CR-20", "ruta": "Deudor.Nombre", "fila": 0 }
+    ]
+  }
+}

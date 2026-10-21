@@ -1,0 +1,53 @@
+// Investigacion 3.3: por saldo promedio (2.833.333) con interes diario simple da lo mismo que el diario: 6.884.
+{
+  "nombre": "interes-03-saldo-promedio",
+  "descripcion": "Investigacion 3.3: por saldo promedio (2.833.333) con interes diario simple da lo mismo que el diario: 6.884.",
+  "condiciones": {
+    "naturaleza": "Deposit",
+    "clase": "Demand",
+    "convencion": "Actual365",
+    "equivalencia": "Compound",
+    "metodoDeSaldo": "AverageBalance",
+    "tasaEA": 0.03,
+    "saldoMinimoParaInteres": 0,
+    "unidadDeRedondeo": 1,
+    "fechaDeApertura": "2026-03-31",
+    "periodicidadDeLiquidacion": "Monthly"
+  },
+  "operaciones": [
+    {
+      "id": "c1",
+      "tipo": "Deposit",
+      "fechaValor": "2026-03-31",
+      "registradoEn": "2026-03-31T15:00:00Z",
+      "monto": 2000000
+    },
+    {
+      "id": "c2",
+      "tipo": "Deposit",
+      "fechaValor": "2026-04-11",
+      "registradoEn": "2026-04-11T15:00:00Z",
+      "monto": 3000000
+    },
+    {
+      "id": "r1",
+      "tipo": "Withdrawal",
+      "fechaValor": "2026-04-21",
+      "registradoEn": "2026-04-21T15:00:00Z",
+      "monto": 3500000
+    }
+  ],
+  "consultas": [
+    {
+      "modo": "Liquidacion",
+      "desde": "2026-03-31",
+      "fecha": "2026-04-30",
+      "informacionHasta": "2026-05-01T05:00:00Z",
+      "esperado": {
+        "interesCausado": 6883.83542,
+        "interesLiquidado": 6884,
+        "diferenciaDeRedondeo": 0.16458
+      }
+    }
+  ]
+}

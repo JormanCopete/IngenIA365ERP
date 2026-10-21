@@ -1,6 +1,7 @@
 @inject NavigationManager Navigation
 @inject IngenIA365ERP.Shared.Services.Ventas.VentasClient Ventas
 @inject IngenIA365ERP.Shared.Services.Security.PermisosDelUsuario Permisos
+@inject IngenIA365ERP.Shared.Services.Cartera.DoblesDePruebaClient DoblesDeCartera
 
 <div class="nav-menu">
     <div class="brand">
@@ -63,44 +64,259 @@
             <PermissionGate Required="Accounting.InventoryBatches.View">
                 <NavLink href="/contabilidad/inventario/lotes" class="nav-subitem">Lotes de contabilización</NavLink>
             </PermissionGate>
+            @* Feature 013, US7 (T0669): el lado contable de la integración con Cartera (enmienda E-01 de la 009) y los indicadores
+               regulatorios que Cartera lee. El detalle de un lote (/contabilidad/cartera/lotes/{id}) se abre desde la lista. *@
+            <span class="nav-subgroup-title">Cartera</span>
+            <PermissionGate Required="Accounting.LendingRules.View">
+                <NavLink href="/contabilidad/cartera/matriz" class="nav-subitem">Matriz contable</NavLink>
+                <NavLink href="/contabilidad/cartera/tipos-de-comprobante" class="nav-subitem">Tipos de comprobante</NavLink>
+                <NavLink href="/contabilidad/cartera/completitud" class="nav-subitem">Completitud de la matriz</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Accounting.LendingBatches.View">
+                <NavLink href="/contabilidad/cartera/lotes" class="nav-subitem">Lotes de contabilización</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Accounting.RegulatoryIndicators.View">
+                <NavLink href="/contabilidad/indicadores-regulatorios" class="nav-subitem">Indicadores regulatorios</NavLink>
+            </PermissionGate>
         </NavMenuGroup>
 
-        <NavMenuGroup Icon="e-money" Title="Cartera Financiera" Expanded="SidebarOpen">
-            <NavLink href="/cartera/solicitudes" class="nav-subitem">Solicitudes Credito</NavLink>
-            <NavLink href="/cartera/creditos" class="nav-subitem">Cartera Creditos</NavLink>
-            <NavLink href="/cartera/recaudos" class="nav-subitem">Recaudos/Pagos</NavLink>
-            <NavLink href="/cartera/mora" class="nav-subitem">Mora y Cobro</NavLink>
-            <NavLink href="/cartera/ahorros" class="nav-subitem">Cuentas de Ahorro</NavLink>
-            <NavLink href="/cartera/depositos" class="nav-subitem">Depositos</NavLink>
-            <NavLink href="/cartera/retiros" class="nav-subitem">Retiros</NavLink>
-            <NavLink href="/cartera/cdt" class="nav-subitem">CDT Certificados</NavLink>
-            <NavLink href="/cartera/cdt/nuevo" class="nav-subitem">Nuevo CDT</NavLink>
-            <NavLink href="/cartera/aportes" class="nav-subitem">Aportes</NavLink>
-            <NavLink href="/cartera/retiros-asociado" class="nav-subitem">Retiro Asociado</NavLink>
-            <NavLink href="/cartera/lineas-credito" class="nav-subitem">Lineas de Credito</NavLink>
-            <NavLink href="/cartera/codigos-movimiento" class="nav-subitem">Codigos Movimiento</NavLink>
-            <NavLink href="/cartera/parametros-ahorro" class="nav-subitem">Parametros Ahorro</NavLink>
-            <NavLink href="/cartera/tasas-interes" class="nav-subitem">Tasas de Interes</NavLink>
-            <NavLink href="/cartera/parametros-provision" class="nav-subitem">Parametros Provision</NavLink>
-            <NavLink href="/cartera/zonas" class="nav-subitem">Zonas</NavLink>
-            <NavLink href="/cartera/tipos-zona" class="nav-subitem">Tipos de Zona</NavLink>
-            <NavLink href="/cartera/scoring" class="nav-subitem">Scoring</NavLink>
-            <NavLink href="/cartera/conceptos-descuento" class="nav-subitem">Conceptos Descuento</NavLink>
-            <NavLink href="/cartera/estados-retiro" class="nav-subitem">Estados Retiro</NavLink>
-            <NavLink href="/cartera/parametros-vivienda" class="nav-subitem">Param. Vivienda</NavLink>
-            <NavLink href="/cartera/parametros-sipla" class="nav-subitem">Param. SIPLA</NavLink>
-            <NavLink href="/cartera/parametros-periodicidad" class="nav-subitem">Periodicidad</NavLink>
-            <NavLink href="/cartera/tasas-plazo" class="nav-subitem">Tasas por Plazo</NavLink>
-            <NavLink href="/cartera/cuentas-cartera" class="nav-subitem">Cuentas Cartera</NavLink>
-            <NavLink href="/cartera/causacion" class="nav-subitem">Causacion Intereses</NavLink>
-            <NavLink href="/cartera/calificacion" class="nav-subitem">Calificacion Cartera</NavLink>
-            <NavLink href="/cartera/descuento-nomina" class="nav-subitem">Descuento Nomina</NavLink>
-            <NavLink href="/cartera/extractos" class="nav-subitem">Extractos</NavLink>
-            <NavLink href="/cartera/ahorros/liquidacion" class="nav-subitem">Liq. Int. Ahorros</NavLink>
-            <NavLink href="/cartera/cdt/liquidacion" class="nav-subitem">Liq. Int. CDTs</NavLink>
-            <span class="nav-subgroup-title">Reportes</span>
-            <NavLink href="/reportes/extracto-credito" class="nav-subitem">Extracto Credito</NavLink>
-            <NavLink href="/reportes/cartera-edades" class="nav-subitem">Cartera por Edades</NavLink>
+        @* Feature 014 (T008, R28): el grupo «Ahorros y aportes» de lo conservado de la cartera heredada se retiró con sus 16
+           enlaces. T057: el grupo «Captaciones y aportes» nace vacío y sin mostrarse; cada historia suma su enlace (con el permiso de
+           consulta de su página, TodoEnlaceDelMenuTieneSuPagina) y, con el primero, pone HayEnlacesDeCaptaciones en verdadero. *@
+        @if (HayEnlacesDeCaptaciones)
+        {
+            <NavMenuGroup Icon="e-money" Title="Captaciones y aportes" Expanded="SidebarOpen">
+                @* US1 (T070): las líneas de captación y de aportes viven en el catálogo común de líneas, filtrado por su naturaleza. *@
+                <span class="nav-subgroup-title">Configuración</span>
+                <PermissionGate Required="Lending.DepositLines.View">
+                    <NavLink href="/cartera/lineas?naturaleza=captacion" class="nav-subitem" Match="NavLinkMatch.All">Líneas de captación</NavLink>
+                </PermissionGate>
+                <PermissionGate Required="Lending.ContributionLines.View">
+                    <NavLink href="/cartera/lineas?naturaleza=aportes" class="nav-subitem" Match="NavLinkMatch.All">Líneas de aportes</NavLink>
+                </PermissionGate>
+                @* US2 (T079): las cuentas de ahorro y de aportes, su apertura y su ficha (/cartera/ahorros/{id}, que se abre desde la lista). *@
+                <span class="nav-subgroup-title">Cuentas</span>
+                <PermissionGate Required="Lending.Accounts.Read">
+                    <NavLink href="/cartera/ahorros" class="nav-subitem">Cuentas de ahorro y aportes</NavLink>
+                </PermissionGate>
+                @* US3 (T094): el resumen de aportes de un asociado, las devoluciones y las cesiones por aprobar; la ficha (/cartera/aportes/{persona})
+                   se abre desde allí. *@
+                <PermissionGate Required="Lending.Accounts.Read">
+                    <NavLink href="/cartera/aportes" class="nav-subitem">Aportes sociales</NavLink>
+                </PermissionGate>
+                @* US6 (T179): los CDAT —lista, calendario de vencimientos y tasas negociadas por decidir—; la constitución (/cartera/cdat/nuevo) y la ficha
+                   (/cartera/cdat/{id}) se abren desde allí. *@
+                <PermissionGate Required="Lending.Accounts.Read">
+                    <NavLink href="/cartera/cdat" class="nav-subitem">CDAT</NavLink>
+                </PermissionGate>
+                @* US11 (T192): los embargos —registrar el oficio, lo retenido con el límite inembargable, responder al juzgado, consignar y levantar—. *@
+                <PermissionGate Required="Lending.Accounts.Read">
+                    <NavLink href="/cartera/embargos" class="nav-subitem">Embargos</NavLink>
+                </PermissionGate>
+                @* US10 (T106): el retiro del asociado —radicar, decidir con acta, liquidar con el cruce y devolver—; la ficha
+                   (/cartera/retiros-asociado/{id}) se abre desde la lista. *@
+                <PermissionGate Required="Lending.MembershipWithdrawals.File" AnyOf="@(new[] { "Lending.MembershipWithdrawals.Approve", "Lending.MembershipWithdrawals.Settle" })">
+                    <NavLink href="/cartera/retiros-asociado" class="nav-subitem">Retiros de asociado</NavLink>
+                </PermissionGate>
+                @* US12 (T205): la asamblea —revalorización de aportes, distribución de excedentes y amortización—, simulada y aplicada con el acta. *@
+                <PermissionGate Required="Lending.Assembly.Register" AnyOf="@(new[] { "Lending.Assembly.Approve" })">
+                    <NavLink href="/cartera/asamblea" class="nav-subitem">Asamblea</NavLink>
+                </PermissionGate>
+                @* US14 (T212): el fallecimiento del titular con la entrega a sus beneficiarios, y los saldos no reclamados. *@
+                <PermissionGate Required="Lending.DeceasedCases.Register" AnyOf="@(new[] { "Lending.DeceasedCases.Approve" })">
+                    <NavLink href="/cartera/fallecimientos" class="nav-subitem">Fallecimientos</NavLink>
+                </PermissionGate>
+                <PermissionGate Required="Lending.Accounts.Read">
+                    <NavLink href="/cartera/no-reclamados" class="nav-subitem">No reclamados</NavLink>
+                </PermissionGate>
+                @* US15 (T217): el fondo de liquidez, el riesgo de liquidez y lo constituido. *@
+                <PermissionGate Required="Lending.LiquidityFund.View">
+                    <NavLink href="/cartera/fondo-de-liquidez" class="nav-subitem">Fondo de liquidez</NavLink>
+                </PermissionGate>
+                @* US17 (T222): los formatos del SICSES de captaciones y de la exógena —validar, generar, descargar y marcar cargado—. *@
+                <PermissionGate Required="Lending.RegulatoryFiles.Read">
+                    <NavLink href="/cartera/captaciones/reportes-regulatorios" class="nav-subitem">Reportes regulatorios</NavLink>
+                </PermissionGate>
+                @* Decisión del dueño del 2026-10-18 (D53): los niveles de aprobación de los movimientos que superan la atribución, por cooperativa. *@
+                <PermissionGate Required="Lending.Attributions.View">
+                    <NavLink href="/cartera/captaciones/aprobaciones" class="nav-subitem">Aprobación de movimientos</NavLink>
+                </PermissionGate>
+                @* US9 (T159): los saldos iniciales al corte y la activación de aportes y de captaciones, cada una aparte. *@
+                <span class="nav-subgroup-title">Puesta en marcha</span>
+                <PermissionGate Required="Lending.Deposits.Migration">
+                    <NavLink href="/cartera/captaciones/migracion" class="nav-subitem">Saldos iniciales</NavLink>
+                </PermissionGate>
+                <PermissionGate Required="Lending.Deposits.Activate">
+                    <NavLink href="/cartera/captaciones/activacion" class="nav-subitem">Activación</NavLink>
+                </PermissionGate>
+            </NavMenuGroup>
+        }
+
+        @* Feature 013, fase 4 (T0324, T0310; US17): la Cartera nueva —gobierno, configuración y mensajes al deudor—, cada enlace con el
+           permiso de consulta de su página. El detalle de una sesión se abre desde Actas, sin enlace propio; el de una línea de crédito
+           (/cartera/lineas/{id}) y sus equivalencias de Comercio, desde Líneas de crédito (US1, T0362). *@
+        <NavMenuGroup Icon="e-money" Title="Cartera" Expanded="SidebarOpen">
+            <PermissionGate Required="Lending.DebtorMessages.Read">
+                <NavLink href="/cartera/mensajes" class="nav-subitem">Mensajes al deudor</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Lending.Alerts.View">
+                <NavLink href="/cartera/alertas" class="nav-subitem">Alertas</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Compliance.HabeasData.ViewHistory">
+                <NavLink href="/cartera/autorizaciones" class="nav-subitem">Autorizaciones del titular</NavLink>
+            </PermissionGate>
+            @* US2 (T0414): la originación —simular, solicitudes, «Mis pendientes» y cupos—. La solicitud nueva y el detalle se abren desde
+               Solicitudes, sin enlace propio. *@
+            <span class="nav-subgroup-title">Originación</span>
+            <PermissionGate Required="Lending.Simulations.Run">
+                <NavLink href="/cartera/simulador" class="nav-subitem">Simulador</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Lending.Applications.Read">
+                <NavLink href="/cartera/solicitudes" class="nav-subitem">Solicitudes</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Lending.Applications.Read">
+                <NavLink href="/cartera/aprobaciones" class="nav-subitem">Mis pendientes</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Lending.CreditLimits.Read">
+                <NavLink href="/cartera/cupos" class="nav-subitem">Cupos</NavLink>
+            </PermissionGate>
+            @* US3 (T0462): el desembolso con sus órdenes de giro y archivos; las garantías y el pagaré viven en el expediente de la solicitud.
+               Los dobles de prueba sólo se dibujan si el servidor los publica (fuera de producción). *@
+            <span class="nav-subgroup-title">Desembolso</span>
+            <PermissionGate Required="Lending.Disbursements.Execute">
+                <NavLink href="/cartera/desembolsos" class="nav-subitem">Desembolsos</NavLink>
+            </PermissionGate>
+            @if (_doblesDeCartera)
+            {
+                <PermissionGate Required="Lending.TestDoubles.Operate">
+                    <NavLink href="/cartera/dobles-de-prueba" class="nav-subitem">Dobles de prueba</NavLink>
+                </PermissionGate>
+            }
+            @* US4 (T0510): los créditos con su liquidación a cualquier fecha, estado de cuenta, plan, operaciones y libro. Las corridas del
+               proceso diario se ven en el detalle de la bandeja de mensajes (DT §2.16 no fija pantalla de corridas). *@
+            <span class="nav-subgroup-title">Créditos</span>
+            <PermissionGate Required="Lending.Loans.Read">
+                <NavLink href="/cartera/creditos" class="nav-subitem">Créditos</NavLink>
+            </PermissionGate>
+            @* K3, US11 (T0893): las novedades (prórroga, fecha, tasa, novación, refinanciación) y las condonaciones. Los eventos del deudor, la
+               insolvencia y las reclamaciones al seguro viven en el detalle del crédito. *@
+            <PermissionGate Required="Lending.Novelties.Read">
+                <NavLink href="/cartera/novedades" class="nav-subitem">Novedades</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Lending.Loans.Read">
+                <NavLink href="/cartera/condonaciones" class="nav-subitem">Condonaciones</NavLink>
+            </PermissionGate>
+            @* K3, US14 (T0918): los lotes de castigo y la evaluación de cartera; los decide el consejo (y el comité de riesgos) en Actas. *@
+            <PermissionGate Required="Lending.Loans.Read">
+                <NavLink href="/cartera/castigos" class="nav-subitem">Castigos</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Lending.Ratings.Read">
+                <NavLink href="/cartera/evaluaciones" class="nav-subitem">Evaluación de cartera</NavLink>
+            </PermissionGate>
+            @* K4, US12 (T0959): la cobranza —etapas y reparto, cartera por gestor, agenda del día, acuerdos de pago, campañas, avisos previos y
+               reclamos sobre el reporte, y el cobro jurídico—. *@
+            <span class="nav-subgroup-title">Cobranza</span>
+            <PermissionGate Required="Lending.Collections.Read">
+                <NavLink href="/cartera/etapas-de-cobranza" class="nav-subitem">Etapas de cobranza</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Lending.Collections.Read">
+                <NavLink href="/cartera/cobranza" class="nav-subitem">Cobranza</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Lending.Collections.Read">
+                <NavLink href="/cartera/agenda" class="nav-subitem">Agenda</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Lending.Collections.Read">
+                <NavLink href="/cartera/acuerdos-de-pago" class="nav-subitem">Acuerdos de pago</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Lending.Campaigns.Manage">
+                <NavLink href="/cartera/campanas" class="nav-subitem">Campañas</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Lending.PriorNotices.Read">
+                <NavLink href="/cartera/avisos-previos" class="nav-subitem">Avisos previos</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Lending.Collections.Read">
+                <NavLink href="/cartera/juridico" class="nav-subitem">Cobro jurídico</NavLink>
+            </PermissionGate>
+            @* US13 (T0793): los documentos al deudor (plan de pagos, paz y salvo, certificado de saldo) y la verificación de su código. *@
+            <PermissionGate Required="Lending.Documents.Read">
+                <NavLink href="/cartera/documentos" class="nav-subitem">Documentos</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Lending.Documents.Verify">
+                <NavLink href="/cartera/verificar" class="nav-subitem">Verificar documento</NavLink>
+            </PermissionGate>
+            @* US6 (T0602): lo que llega a Cartera (ventas a crédito, ajustes, resultados del giro) y las corridas del proceso. *@
+            <PermissionGate Required="Lending.Messages.Read">
+                <NavLink href="/cartera/bandeja-de-mensajes" class="nav-subitem">Bandeja de mensajes</NavLink>
+            </PermissionGate>
+            @* US7 (T0669): Cartera frente a Contabilidad —la conciliación y los hechos contables con sus partes—. *@
+            <PermissionGate Required="Lending.Reconciliation.View" AnyOf="@(new[] { "Lending.Messages.Read" })">
+                <NavLink href="/cartera/conciliacion-contable" class="nav-subitem">Conciliación contable</NavLink>
+            </PermissionGate>
+            @* US9 (T0715): los cierres del mes —calificación, deterioro, reapertura— y la calificación informativa. *@
+            <PermissionGate Required="Lending.Ratings.Read">
+                <NavLink href="/cartera/cierres" class="nav-subitem">Cierres del mes</NavLink>
+            </PermissionGate>
+            @* US15 (T0800): el centro de informes de Cartera (edades, colocación, recaudo, movimientos, usura, mensajes y migración en K1). *@
+            <PermissionGate Required="Lending.Reports.View">
+                <NavLink href="/cartera/informes" class="nav-subitem">Informes de cartera</NavLink>
+            </PermissionGate>
+            @* K5, US15 (T0985): el tablero de Cartera —saldo, colocación, calidad, deterioro, recaudo, cosechas, promesas, mensajes y alertas—
+               del alcance de quien lo abre. *@
+            <PermissionGate Required="Lending.Dashboard.View">
+                <NavLink href="/cartera/tablero" class="nav-subitem">Tablero de cartera</NavLink>
+            </PermissionGate>
+            @* K5, US16 (T1009): el formato de cartera del SICSES y los archivos para las centrales de riesgo —validar, generar, descargar y marcar
+               cargado—; traen deudores, así que se abren con RegulatoryFiles.Read, nunca con un View. *@
+            <PermissionGate Required="Lending.RegulatoryFiles.Read">
+                <NavLink href="/cartera/sicses" class="nav-subitem">Formato SICSES</NavLink>
+                <NavLink href="/cartera/centrales" class="nav-subitem">Centrales de riesgo</NavLink>
+            </PermissionGate>
+            @* K2, US10 (T0853): la libranza —pagadurías con su convenio, archivos de descuento por período y las cuotas no aplicadas—. El detalle de
+               una pagaduría y el de un archivo se abren desde sus listas. *@
+            <span class="nav-subgroup-title">Libranza</span>
+            <PermissionGate Required="Lending.PayrollAgreements.View">
+                <NavLink href="/cartera/pagadurias" class="nav-subitem">Pagadurías</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Lending.PayrollDeductionFiles.Read">
+                <NavLink href="/cartera/archivos-de-descuento" class="nav-subitem">Archivos de descuento</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Lending.PayrollDeductionFiles.Read">
+                <NavLink href="/cartera/no-aplicados" class="nav-subitem">No aplicados</NavLink>
+            </PermissionGate>
+            <span class="nav-subgroup-title">Gobierno</span>
+            <PermissionGate Required="Lending.Sessions.Read">
+                <NavLink href="/cartera/actas" class="nav-subitem">Actas y órganos</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Lending.Attributions.View">
+                <NavLink href="/cartera/atribuciones" class="nav-subitem">Atribuciones</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Lending.RelatedParties.Read">
+                <NavLink href="/cartera/vinculados" class="nav-subitem">Personas vinculadas</NavLink>
+            </PermissionGate>
+            <span class="nav-subgroup-title">Configuración</span>
+            <PermissionGate Required="Lending.CreditLines.View">
+                <NavLink href="/cartera/lineas" class="nav-subitem">Líneas de crédito</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Lending.Parameters.View">
+                <NavLink href="/cartera/parametros" class="nav-subitem">Parámetros</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Lending.MessageTemplates.View">
+                <NavLink href="/cartera/plantillas-de-mensaje" class="nav-subitem">Plantillas de mensaje</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Lending.Templates.View">
+                <NavLink href="/cartera/plantillas" class="nav-subitem">Plantillas de carga</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Lending.Scopes.Manage">
+                <NavLink href="/cartera/alcances" class="nav-subitem">Alcance de usuarios</NavLink>
+            </PermissionGate>
+            @* US8 (T0761): la puesta en marcha —la carga por partes con su cuadre y la activación con el acta—. *@
+            <span class="nav-subgroup-title">Puesta en marcha</span>
+            <PermissionGate Required="Lending.Migration.Load">
+                <NavLink href="/cartera/migracion" class="nav-subitem">Migración</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Lending.Activation.Execute">
+                <NavLink href="/cartera/activacion" class="nav-subitem">Activación</NavLink>
+            </PermissionGate>
         </NavMenuGroup>
 
         @* Feature 012 (T239, decisiones-transversales §2.11): cada enlace del comercio con el permiso de consulta de su página. *@
@@ -302,11 +518,6 @@
             <NavLink href="/reportes/nomina" class="nav-subitem">Reportes de nomina</NavLink>
         </NavMenuGroup>
 
-        <NavMenuGroup Icon="e-description" Title="CDT" Expanded="SidebarOpen">
-            <NavLink href="/cdt/parametros" class="nav-subitem">Parametros CDT</NavLink>
-            <NavLink href="/cdt/tasas-plazo" class="nav-subitem">Tasas por Plazo</NavLink>
-        </NavMenuGroup>
-
         <NavMenuGroup Icon="e-money" Title="Tarjeta Debito" Expanded="SidebarOpen">
             <NavLink href="/debito/tarjetas" class="nav-subitem">Tarjetas</NavLink>
             <NavLink href="/debito/movimientos-tarjeta" class="nav-subitem">Movimientos</NavLink>
@@ -397,7 +608,32 @@
             <PermissionGate Required="ElectronicInvoicing.Settings.View">
                 <NavLink href="/admin/facturacion-electronica" class="nav-subitem">Facturación electrónica</NavLink>
             </PermissionGate>
+            @* Feature 013, fase 2 (T0095): la plataforma que pide Cartera. *@
+            <PermissionGate Required="Core.NationalValues.View">
+                <NavLink href="/admin/valores-nacionales" class="nav-subitem">Valores nacionales</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Core.RegulatoryProfile.View">
+                <NavLink href="/admin/perfil-regulatorio" class="nav-subitem">Perfil regulatorio</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Core.ExternalChannels.View">
+                <NavLink href="/admin/canales-externos" class="nav-subitem">Canales externos</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Core.IntegrationParticipants.View">
+                <NavLink href="/admin/participantes-de-integracion" class="nav-subitem">Participantes de la integración</NavLink>
+            </PermissionGate>
         </NavMenuGroup>
+
+        @* Feature 013, fase 2 (T0095): cumplimiento de habeas data y listas restrictivas. *@
+        <PermissionGate AnyOf="@(new[] { "Compliance.RestrictiveLists.View", "Compliance.DataSubjectRequests.Read" })" Required="Compliance.RestrictiveLists.View">
+            <NavMenuGroup Icon="e-description" Title="Cumplimiento" Expanded="SidebarOpen">
+                <PermissionGate Required="Compliance.RestrictiveLists.View">
+                    <NavLink href="/compliance/listas-restrictivas" class="nav-subitem">Listas restrictivas</NavLink>
+                </PermissionGate>
+                <PermissionGate Required="Compliance.DataSubjectRequests.Read">
+                    <NavLink href="/compliance/solicitudes-del-titular" class="nav-subitem">Solicitudes del titular</NavLink>
+                </PermissionGate>
+            </NavMenuGroup>
+        </PermissionGate>
         }
 
         @* Feature 003 (US2, FR-105..FR-107) — identidad central por rol. *@
@@ -424,6 +660,8 @@
                 <NavLink href="/saas/register-tenant" class="nav-subitem">Registrar Cooperativa</NavLink>
                 <NavLink href="/saas/force-mfa-reset" class="nav-subitem">Reset MFA Usuarios</NavLink>
                 <NavLink href="/security/mfa-reset-approvals" class="nav-subitem">Aprobaciones MFA</NavLink>
+                @* Feature 013 (T0095): el registro central de valores nacionales, que la réplica copia a cada cooperativa. *@
+                <NavLink href="/admin/valores-nacionales" class="nav-subitem">Valores nacionales</NavLink>
                 @* Vive en la base administrativa y lo gestiona el maestro: es el
                    contenido del panel del login, que se sirve antes de elegir
                    cooperativa. Por eso está aquí y no sólo en Administracion,
@@ -436,6 +674,9 @@
 </div>
 
 @code {
+    /// <summary>Feature 014 (T057): el grupo de captaciones se muestra cuando tenga su primer enlace; US1 (T070) le puso las líneas.</summary>
+    private static readonly bool HayEnlacesDeCaptaciones = true;
+
     [Parameter] public bool SidebarOpen { get; set; } = true;
 
     [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
@@ -445,6 +686,8 @@
     private string _activeTenantId = "";
     private string? _cooperativaRevisada;
     private bool _sesionSinPos;
+    private bool _doblesDeCartera;
+    private string? _doblesRevisados;
 
     /// <summary>
     /// Hay cooperativa activa en el token. Es lo que decide si se muestran las
@@ -460,6 +703,20 @@
         _isMaster = bool.TryParse(user.FindFirst("is_global_master_admin")?.Value, out var master) && master;
         _activeTenantId = user.FindFirst("active_tenant_id")?.Value ?? "";
         await RevisarSesionDeCajaAsync();
+        await RevisarDoblesDeCarteraAsync();
+    }
+
+    /// <summary>
+    /// Feature 013, US3 (T0462): «Dobles de prueba» sólo aparece si el servidor los publica (fuera de producción, api.md §20). Se pregunta una vez
+    /// por cooperativa y sólo a quien los opera; si la consulta falla, el enlace no se dibuja.
+    /// </summary>
+    private async Task RevisarDoblesDeCarteraAsync()
+    {
+        if (!_tieneCooperativa || _doblesRevisados == _activeTenantId) return;
+        _doblesRevisados = _activeTenantId;
+        _doblesDeCartera = false;
+        if (!await Permisos.TieneAsync("Lending.TestDoubles.Operate")) return;
+        _doblesDeCartera = await DoblesDeCartera.DisponiblesAsync() is { Treasury: true };
     }
 
     /// <summary>

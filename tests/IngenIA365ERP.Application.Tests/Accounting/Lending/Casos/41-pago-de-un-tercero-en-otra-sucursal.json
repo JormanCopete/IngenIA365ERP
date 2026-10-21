@@ -1,0 +1,144 @@
+{
+  "descripcion": "Tercero natural y sucursal: el puente lleva al pagador; cada línea va en la sucursal del hecho.",
+  "sobre": {
+    "version": 1,
+    "kind": "Business",
+    "originModule": "CAR",
+    "originEventKey": "Confirmation",
+    "origin": {
+      "kind": "Operation",
+      "documentClass": null,
+      "documentTypeCode": null,
+      "number": "PAG-000983",
+      "publicId": "0d0d0180-0000-4000-8000-000000000180",
+      "operationDate": "2026-11-23"
+    },
+    "related": null,
+    "chainRootPublicId": "0e0e0181-0000-4000-8000-000000000181",
+    "branchPublicId": "c8e2f3a4-1b5c-4d6e-9f70-2b3c4d5e6f71",
+    "costCenterPublicId": null,
+    "warehouseCode": null,
+    "personPublicId": "a1b2c3d4-0000-4000-8000-0000000000b6",
+    "currency": "COP",
+    "exchangeRate": 1,
+    "originUser": {
+      "centralUserId": "d4e5f6a7-b8c9-4d0e-9f1a-2b3c4d5e6f70",
+      "name": "Usuario de ensayo"
+    },
+    "emittedAt": "2026-11-23T15:00:00Z"
+  },
+  "mensajes": [
+    {
+      "messageId": "0f0f0183-0000-4000-8000-000000000183",
+      "type": "PagoAplicado",
+      "kind": "Business",
+      "originDocumentClass": "PaymentApplication",
+      "payload": {
+        "loan": {
+          "loanPublicId": "7b8c9d0e-1f2a-4b3c-9d4e-000000000124",
+          "loanNumber": "000124"
+        },
+        "debtorPersonPublicId": "a1b2c3d4-0000-4000-8000-000000000003",
+        "valueDate": "2026-11-23",
+        "registeredAt": "2026-11-23T15:00:00Z",
+        "dimensions": {
+          "creditLineCode": "LIB01",
+          "modalityCode": "CONSUMO",
+          "subsegmentCode": "ConLibranza",
+          "riskCategory": "A",
+          "riskSubcategory": "None",
+          "isEmployee": false,
+          "inGracePeriod": false,
+          "restructured": false,
+          "writtenOff": false,
+          "collectorClass": "Receipts",
+          "branchPublicId": "c8e2f3a4-1b5c-4d6e-9f70-2b3c4d5e6f71",
+          "impairmentModel": "ArrearsAnnex1",
+          "riskSegment": "CONSUMO",
+          "valueUnit": "Pesos"
+        },
+        "amounts": [
+          {
+            "concept": "Principal",
+            "installmentNumber": 2,
+            "amount": 60000.0,
+            "uvrAmount": null,
+            "onBehalfOfAssociate": false,
+            "reasonCode": null
+          }
+        ],
+        "rulesVersion": "LND-2026.1",
+        "collector": {
+          "collectorCode": "REC",
+          "collectorClass": "Receipts",
+          "idempotencyKey": "REC:c0de0182-0000-4000-8000-000000000182",
+          "meansClass": "Cash",
+          "payerPersonPublicId": "a1b2c3d4-0000-4000-8000-0000000000b6",
+          "receipt": {
+            "number": "R-0001",
+            "date": "2026-11-23",
+            "officePublicId": null,
+            "meansReference": null,
+            "documentKind": null
+          }
+        },
+        "modality": "PastDue",
+        "amountReceived": 60000.0,
+        "surplus": 0.0,
+        "reallocations": [],
+        "prepaymentChoice": null,
+        "newPlan": null,
+        "paidOff": false,
+        "finalityUntil": null,
+        "simulationId": null,
+        "deductionFileLinePublicId": null,
+        "insuranceClaimPublicId": null
+      }
+    }
+  ],
+  "esperado": {
+    "tipo": "RC",
+    "fecha": "2026-11-23",
+    "origen": "LendingIssuedDocument",
+    "lineas": [
+      {
+        "rol": "RecaudoPorAplicar",
+        "cuenta": "11059501",
+        "debito": 60000.0,
+        "credito": 0.0,
+        "tercero": "pagador",
+        "cruce": null,
+        "sucursal": "norte",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "PagoAplicado"
+          ],
+          "concepto": null,
+          "creditos": [
+            "000124"
+          ]
+        }
+      },
+      {
+        "rol": "Capital",
+        "cuenta": "14410501",
+        "debito": 0.0,
+        "credito": 60000.0,
+        "tercero": "luis",
+        "cruce": "PG 000124",
+        "sucursal": "norte",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "PagoAplicado"
+          ],
+          "concepto": "Principal",
+          "creditos": [
+            "000124"
+          ]
+        }
+      }
+    ]
+  }
+}

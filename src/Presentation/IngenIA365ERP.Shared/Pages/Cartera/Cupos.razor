@@ -1,0 +1,409 @@
+@page "/cartera/cupos"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Globalization
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Http
+@inject CuposClient ClienteDeCupos
+@inject OriginacionClient Originacion
+@inject INotificationService Notification
+
+<PageTitle>Cupos de crédito - IngenIA365ERP</PageTitle>
+
+@* Feature 013, US2 (T0413; FR-049, FR-058–FR-060, D19; contracts/api.md §7): el disponible de una persona (cupo − saldos vivos − reservas −
+   aprobadas sin desembolsar, calculado al leer), otorgar y terminar cupos —uno que supera el monto operativo de quien lo otorga o que la matriz
+   lleva a otro nivel queda esperando decisión, sin error—, la preferencia de abono del rotativo, los bloqueos y embargos, los saldos de aportes
+   por plantilla y, para el oficial de cumplimiento, las coincidencias en listas pendientes de liberar. *@
+<PermissionGate Required="Lending.CreditLimits.Read" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Cupos de crédito</h3>
+        <div class="toolbar">
+            <PermissionGate Required="Lending.CreditLimits.Assign">
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" Disabled="@(_persona is null)" OnClick="@AbrirOtorgar">Otorgar cupo</SfButton>
+            </PermissionGate>
+            <PermissionGate Required="Lending.Blocks.Manage">
+                <SfButton CssClass="e-outline" Disabled="@(_persona is null)" OnClick="@AbrirBloqueo">Registrar bloqueo o embargo</SfButton>
+            </PermissionGate>
+            <SfButton CssClass="e-outline" OnClick="@(() => _mostrarPlantilla = !_mostrarPlantilla)">Saldos de aportes</SfButton>
+            <PermissionGate Required="Lending.NumberReservations.Read">
+                <SfButton CssClass="@(_mostrarReservas ? "e-primary" : "e-outline")" OnClick="@AlternarReservasAsync">Reservas de número</SfButton>
+            </PermissionGate>
+        </div>
+    </div>
+
+    @if (_mostrarReservas)
+    {
+        @* US6 (T0603; api.md §7.3; FR-057, T22): los números que Comercial reservó al confirmar ventas a crédito; una reserva vencida nunca se reasigna. *@
+        <div class="info-card">
+            <h4>Reservas de número de las ventas a crédito</h4>
+            <div class="toolbar">
+                <label class="campo">Estado
+                    <select class="e-input" @bind="_estadoReserva">
+                        <option value="">Todos</option>
+                        @foreach (var (valor, texto) in TextosDeIntegracion.EstadosDeReserva) { <option value="@valor">@texto</option> }
+                    </select>
+                </label>
+                <label class="campo">Número <input class="e-input" @bind="_numeroReserva" maxlength="20" /></label>
+                <SfButton CssClass="e-primary" IconCss="e-icons e-search" Disabled="@_cargaReservas.Activa" OnClick="@CargarReservasAsync">Buscar</SfButton>
+            </div>
+            <IndicadorDeCarga Cargando="@_cargaReservas.Activa">
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th>Número</th><th>Estado</th><th class="numero">Valor</th><th>Persona</th><th>Pago de Comercial</th><th>Reservado</th><th>Vence</th><th>Crédito que lo usó</th></tr></thead>
+                        <tbody>
+                            @foreach (var r in _reservas)
+                            {
+                                <tr>
+                                    <td>@r.LoanNumber</td>
+                                    <td>@TextosDeIntegracion.EstadoDeReserva(r.Status)@(r.ReleaseReason is { } motivo ? $" · {motivo}" : "")</td>
+                                    <td class="numero">@TextosDeOriginacion.Pesos(r.Amount)</td>
+                                    <td>@r.Person.Name</td>
+                                    <td><a href="@($"/ventas/documentos/{r.PaymentReference.SalesDocumentPublicId}")">Ver la venta</a></td>
+                                    <td>@r.ReservedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
+                                    <td>@r.ExpiresAt.ToString("dd/MM/yyyy")</td>
+                                    <td>@if (r.UsedByLoanPublicId is { } credito) { <a href="@($"/cartera/creditos/{credito}")">Ver el crédito</a> } else { <span>—</span> }</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                @if (_reservas.Count == 0) { <p class="texto-tenue">No hay reservas con esos filtros.</p> }
+            </IndicadorDeCarga>
+        </div>
+    }
+
+    @if (_mostrarPlantilla)
+    {
+        <div class="info-card">
+            <h4>Saldos de aportes y ahorro permanente por plantilla</h4>
+            <p class="texto-apoyo">Mientras Aportes no responda en línea, el cupo calculado y los requisitos usan la última carga con corte a la fecha.</p>
+            <ImportarPlantilla RutaBase="@CuposClient.RutaDeSaldosDeAportes" PermisoDeDescarga="Lending.CreditLimits.Read"
+                               PermisoDeImportacion="Lending.CreditLimits.Assign" ConDatos="false" Aplicado="@(_ => CargarAsync())" />
+        </div>
+    }
+
+    <div class="toolbar">
+        <div class="campo">Persona <PersonSearchPicker @bind-Selected="_persona" ShowHelpText="false" Compacto="true" /></div>
+        <SfButton CssClass="e-primary" IconCss="e-icons e-search" Disabled="@(_carga.Activa || _persona is null)" OnClick="@CargarAsync">Consultar</SfButton>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        @if (_disponible is { } d)
+        {
+            <div class="kpi-grid">
+                <div class="kpi-card"><span class="kpi-label">Consolidado disponible</span><span class="kpi-value">@(d.Consolidated is { } c ? TextosDeOriginacion.Pesos(c.Available) : "Sin cupo")</span></div>
+                <div class="kpi-card"><span class="kpi-label">Rotativo disponible</span><span class="kpi-value">@TextosDeOriginacion.Pesos(d.Revolving.Sum(r => r.Available))</span></div>
+                <div class="kpi-card"><span class="kpi-label">Días de mora</span><span class="kpi-value">@(d.DaysPastDue?.ToString() ?? "—")</span></div>
+                <div class="kpi-card"><span class="kpi-label">Bloqueos vigentes</span><span class="kpi-value">@d.Blocks.Count</span></div>
+            </div>
+        }
+        <h4>Cupos</h4>
+        <div class="tabla-desplazable">
+            <table class="data-grid">
+                <thead><tr><th>Clase</th><th>Línea</th><th class="numero">Monto</th><th>Origen</th><th>Estado</th><th>Vigencia</th><th>Abonos</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var c in _cupos)
+                    {
+                        var cupo = c;
+                        <tr>
+                            <td>@TextosDeOriginacion.ClaseDeCupo(cupo.Kind)</td>
+                            <td>@(cupo.Line is { } l ? $"{l.Code} · {l.Name}" : "—")</td>
+                            <td class="numero">@TextosDeOriginacion.Pesos(cupo.Amount)</td>
+                            <td>@TextosDeOriginacion.OrigenDeCupo(cupo.Origin)</td>
+                            <td>@TextosDeOriginacion.EstadoDeCupo(cupo.Status)@(cupo.Routing is { } r ? $" ({r.LevelName})" : "")@(cupo.BlockReason is { } b ? $" · {TextosDeOriginacion.ClaseDeBloqueo(b)}" : "")</td>
+                            <td>@cupo.ValidFrom.ToString("dd/MM/yyyy") – @(cupo.ValidTo?.ToString("dd/MM/yyyy") ?? "vigente")</td>
+                            <td>@TextosDeOriginacion.PreferenciaDeAbono(cupo.PrepaymentPreference)</td>
+                            <td>
+                                @if (cupo.Status is "Active" or "Blocked")
+                                {
+                                    <PermissionGate Required="Lending.CreditLimits.Assign">
+                                        <SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirTerminar(cupo))">Terminar…</SfButton>
+                                        <SfButton CssClass="e-flat e-small" OnClick="@(() => RevalidarAsync(cupo))">Revalidar</SfButton>
+                                    </PermissionGate>
+                                }
+                                @if (cupo.Kind == 3 && cupo.Status == "Active")
+                                {
+                                    <PermissionGate Required="Lending.PrepaymentPreferences.Manage">
+                                        <SfButton CssClass="e-flat e-small" OnClick="@(() => CambiarPreferenciaAsync(cupo))">Cambiar abonos</SfButton>
+                                    </PermissionGate>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (_persona is not null && _cupos.Count == 0) { <p class="texto-tenue">La persona no tiene cupos.</p> }
+
+        <h4>Bloqueos y embargos</h4>
+        <table class="data-grid">
+            <thead><tr><th>Clase</th><th>Origen</th><th>Motivo</th><th>Desde</th><th>Levantado</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var b in _bloqueos)
+                {
+                    var bloqueo = b;
+                    <tr>
+                        <td>@TextosDeOriginacion.ClaseDeBloqueo(bloqueo.Kind)</td>
+                        <td>@(bloqueo.Origin == "Manual" ? "Manual" : "Automático")</td>
+                        <td>@bloqueo.Reason</td>
+                        <td>@bloqueo.Since.ToString("dd/MM/yyyy")</td>
+                        <td>@(bloqueo.LiftedAt?.ToLocalTime().ToString("dd/MM/yyyy") ?? "—")</td>
+                        <td>
+                            @if (bloqueo.LiftedAt is null && (bloqueo.Origin == "Manual" || bloqueo.CanLiftManually))
+                            {
+                                <PermissionGate Required="Lending.Blocks.Manage">
+                                    <SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirLevantar(bloqueo))">Levantar…</SfButton>
+                                </PermissionGate>
+                            }
+                            else if (bloqueo.LiftedAt is null)
+                            {
+                                <span class="texto-tenue">@bloqueo.HowItLifts</span>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+
+        <h4>Saldos de aportes</h4>
+        <table class="data-grid">
+            <thead><tr><th class="numero">Aportes</th><th class="numero">Ahorro permanente</th><th>Corte</th><th>Cargado</th></tr></thead>
+            <tbody>
+                @foreach (var s in _saldos)
+                {
+                    <tr><td class="numero">@TextosDeOriginacion.Pesos(s.Contributions)</td><td class="numero">@TextosDeOriginacion.Pesos(s.PermanentSavings)</td><td>@s.CutoffDate.ToString("dd/MM/yyyy")</td><td>@s.LoadedAt.ToLocalTime().ToString("dd/MM/yyyy")</td></tr>
+                }
+            </tbody>
+        </table>
+    </IndicadorDeCarga>
+
+    <PermissionGate Required="Compliance.RestrictiveLists.Release">
+        <div class="info-card">
+            <h4>Coincidencias en listas restrictivas pendientes de liberar</h4>
+            <IndicadorDeCarga Cargando="@_cargaListas.Activa">
+                <table class="data-grid">
+                    <thead><tr><th>Persona</th><th>Documento</th><th>Contexto</th><th>Resultado</th><th>Coincide con</th><th>Consultada</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var r in _listas)
+                        {
+                            var resultado = r;
+                            <tr>
+                                <td>@resultado.Person.FullName</td>
+                                <td>@resultado.Person.DocumentNumber</td>
+                                <td>@(resultado.Context switch { 1 => "Solicitud", 2 => "Venta", 3 => "Cupo", _ => "Re-escaneo" })</td>
+                                <td>@TextosDeOriginacion.ResultadoDeListas(resultado.Outcome)</td>
+                                <td>@string.Join("; ", resultado.Matches.Select(m => $"{m.ListCode}: {m.EntryName}"))</td>
+                                <td>@resultado.QueriedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
+                                <td><SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirLiberar(resultado))">Liberar…</SfButton></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                @if (_listas.Count == 0) { <p class="texto-tenue">No hay coincidencias pendientes.</p> }
+            </IndicadorDeCarga>
+        </div>
+    </PermissionGate>
+</div>
+
+<SfDialog @bind-Visible="_mostrarOtorgar" Header="Otorgar un cupo" Width="620px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Otorgando…">
+                <div class="form-grid">
+                    <label class="campo">Clase *
+                        <select class="e-input" @bind="_clase">
+                            @foreach (var c in TextosDeOriginacion.ClasesDeCupo) { <option value="@c.Valor">@c.Texto</option> }
+                        </select>
+                    </label>
+                    @if (_clase == 2)
+                    {
+                        <div class="campo">Línea * <SelectorDeLineaDeCredito @bind-Value="_linea" /></div>
+                    }
+                    <label class="campo">Monto * <input class="e-input" type="number" min="0" step="1000" @bind="_monto" /></label>
+                    <label class="campo">Desde * <input type="date" class="e-input" value="@_desde.ToString("yyyy-MM-dd")" @onchange="@(e => _desde = LeerFecha(e.Value) ?? _desde)" /></label>
+                    @if (_clase == 3)
+                    {
+                        <label class="campo">Abonos a capital
+                            <select class="e-input" @bind="_preferencia">
+                                @foreach (var p in TextosDeOriginacion.PreferenciasDeAbono) { <option value="@p.Valor">@p.Texto</option> }
+                            </select>
+                        </label>
+                    }
+                    <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" maxlength="500" /></label>
+                </div>
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || _monto <= 0 || string.IsNullOrWhiteSpace(_motivo))" OnClick="@OtorgarAsync">Otorgar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarOtorgar = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarMotivo" Header="@_tituloDelMotivo" Width="520px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Registrando…">
+                @if (_accionDelMotivo == "bloquear")
+                {
+                    <label class="campo">Clase
+                        <select class="e-input" @bind="_claseDeBloqueo">
+                            <option value="1">Manual</option>
+                            <option value="9">Embargo</option>
+                        </select>
+                    </label>
+                }
+                @if (_accionDelMotivo == "terminar")
+                {
+                    <label class="campo">Hasta * <input type="date" class="e-input" value="@_desde.ToString("yyyy-MM-dd")" @onchange="@(e => _desde = LeerFecha(e.Value) ?? _desde)" /></label>
+                }
+                <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" maxlength="500" /></label>
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@ConfirmarMotivoAsync">Registrar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarMotivo = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new(), _cargaListas = new(), _guardado = new(), _cargaReservas = new();
+    private List<ReservaDeNumeroDto> _reservas = [];
+    private bool _mostrarReservas;
+    private string _estadoReserva = string.Empty;
+    private string? _numeroReserva;
+
+    private async Task AlternarReservasAsync()
+    {
+        _mostrarReservas = !_mostrarReservas;
+        if (_mostrarReservas && _reservas.Count == 0) await CargarReservasAsync();
+    }
+
+    private async Task CargarReservasAsync()
+    {
+        using var carga = _cargaReservas.Iniciar();
+        var r = await ClienteDeCupos.ReservasAsync(string.IsNullOrEmpty(_estadoReserva) ? null : _estadoReserva,
+            string.IsNullOrWhiteSpace(_numeroReserva) ? null : _numeroReserva.Trim());
+        if (!r.IsSuccess || r.Value is null) { _reservas = []; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer las reservas de número."); return; }
+        _reservas = [.. r.Value.Items];
+    }
+    private PersonSearchPicker.PersonSearchItem? _persona;
+    private DisponibleDto? _disponible;
+    private List<CupoDto> _cupos = [];
+    private List<BloqueoDto> _bloqueos = [];
+    private List<SaldoDeAportesDto> _saldos = [];
+    private List<ResultadoDeListasDto> _listas = [];
+    private bool _mostrarPlantilla, _mostrarOtorgar, _mostrarMotivo;
+    private int _clase = 1, _preferencia = 1, _claseDeBloqueo = 1;
+    private Guid? _linea;
+    private decimal _monto;
+    private DateOnly _desde = DateOnly.FromDateTime(DateTime.Today);
+    private string? _motivo, _error, _tituloDelMotivo, _accionDelMotivo;
+    private Guid _objetivo;
+    private ClaveDeOperacion _clave = new();
+
+    protected override async Task OnInitializedAsync() => await CargarListasAsync();
+
+    private async Task CargarAsync()
+    {
+        if (_persona is not { } p) return;
+        using var carga = _carga.Iniciar();
+        var disponible = await ClienteDeCupos.DisponibleAsync(p.PublicId);
+        _disponible = disponible.Value;
+        _cupos = [.. (await ClienteDeCupos.CuposAsync(new FiltrosDeCupos(p.PublicId, PageSize: 100))).Value?.Items ?? []];
+        _bloqueos = [.. (await ClienteDeCupos.BloqueosAsync(new FiltrosDeBloqueos(p.PublicId, PageSize: 100))).Value?.Items ?? []];
+        _saldos = [.. (await ClienteDeCupos.SaldosDeAportesAsync(p.PublicId)).Value?.Items ?? []];
+        if (!disponible.IsSuccess) await Notification.ErrorAsync(disponible.ErrorMessage ?? "No se pudo leer el disponible.");
+    }
+
+    private async Task CargarListasAsync()
+    {
+        using var carga = _cargaListas.Iniciar();
+        var r = await Originacion.ResultadosDeListasAsync("Blocked");
+        _listas = r.IsSuccess ? [.. r.Value?.Items ?? []] : [];
+    }
+
+    private void AbrirOtorgar()
+    {
+        _clase = 1; _monto = 0; _linea = null; _motivo = _error = null; _desde = DateOnly.FromDateTime(DateTime.Today);
+        _clave = new ClaveDeOperacion();
+        _mostrarOtorgar = true;
+    }
+
+    private async Task OtorgarAsync()
+    {
+        if (_persona is not { } p || string.IsNullOrWhiteSpace(_motivo)) return;
+        using var carga = _guardado.Iniciar();
+        _error = null;
+        var r = await ClienteDeCupos.OtorgarAsync(new OtorgarCupoRequest(p.PublicId, _clase, _clase == 2 ? _linea : null, 2, _monto, _desde, null,
+            _clase == 3 ? _preferencia : null, _motivo.Trim()), _clave);
+        if (!r.IsSuccess || r.Value is null) { _error = r.ErrorMessage ?? "No se pudo otorgar el cupo."; return; }
+        _mostrarOtorgar = false;
+        var c = r.Value;
+        if (c.Warnings.Count > 0) await Notification.WarningAsync(string.Join(" ", c.Warnings.Select(w => w.Message)));
+        else if (c.Status == "PendingDecision") await Notification.SuccessAsync($"El cupo espera la decisión de {c.Routing?.LevelName}.");
+        else await Notification.SuccessAsync("Cupo otorgado.");
+        await CargarAsync();
+        await CargarListasAsync();
+    }
+
+    private void AbrirMotivo(string accion, string titulo, Guid objetivo)
+    {
+        _accionDelMotivo = accion; _tituloDelMotivo = titulo; _objetivo = objetivo;
+        _motivo = _error = null; _desde = DateOnly.FromDateTime(DateTime.Today); _claseDeBloqueo = 1;
+        _clave = new ClaveDeOperacion();
+        _mostrarMotivo = true;
+    }
+
+    private void AbrirTerminar(CupoDto cupo) => AbrirMotivo("terminar", "Terminar el cupo", cupo.PublicId);
+    private void AbrirBloqueo() => AbrirMotivo("bloquear", "Registrar un bloqueo o embargo", _persona?.PublicId ?? Guid.Empty);
+    private void AbrirLevantar(BloqueoDto bloqueo) => AbrirMotivo("levantar", "Levantar el bloqueo", bloqueo.PublicId);
+    private void AbrirLiberar(ResultadoDeListasDto resultado) => AbrirMotivo("liberar", "Liberar la coincidencia", resultado.PublicId);
+
+    private async Task ConfirmarMotivoAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_motivo)) return;
+        using var carga = _guardado.Iniciar();
+        _error = null;
+        var motivo = _motivo.Trim();
+        (bool Ok, string? Mensaje) r = _accionDelMotivo switch
+        {
+            "terminar" => Res(await ClienteDeCupos.TerminarAsync(_objetivo, _desde, motivo, _clave)),
+            "bloquear" => Res(await ClienteDeCupos.BloquearAsync(new BloqueoRequest(_objetivo, _claseDeBloqueo, motivo), _clave)),
+            "levantar" => Res(await ClienteDeCupos.LevantarAsync(_objetivo, motivo, _clave)),
+            _ => Res(await Originacion.LiberarCoincidenciaAsync(_objetivo, motivo, _clave)),
+        };
+        if (!r.Ok) { _error = r.Mensaje ?? "No se pudo registrar."; return; }
+        _mostrarMotivo = false;
+        await Notification.SuccessAsync("Registrado.");
+        await CargarAsync();
+        await CargarListasAsync();
+    }
+
+    private async Task RevalidarAsync(CupoDto cupo)
+    {
+        using var carga = _guardado.Iniciar();
+        var r = await ClienteDeCupos.RevalidarAsync(cupo.PublicId, "Revalidación pedida desde la pantalla de cupos", new ClaveDeOperacion());
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo revalidar."); return; }
+        await CargarAsync();
+    }
+
+    private async Task CambiarPreferenciaAsync(CupoDto cupo)
+    {
+        using var carga = _guardado.Iniciar();
+        var nueva = cupo.PrepaymentPreference == 1 ? 2 : 1;
+        var r = await ClienteDeCupos.CambiarPreferenciaAsync(cupo.PublicId, new PreferenciaDeAbonoRequest(nueva, "Cambio pedido por el deudor"), new ClaveDeOperacion());
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo cambiar la preferencia."); return; }
+        await Notification.SuccessAsync($"Abonos a capital: {TextosDeOriginacion.PreferenciaDeAbono(nueva)}.");
+        await CargarAsync();
+    }
+
+    private static (bool, string?) Res<T>(IngenIA365ERP.Shared.Services.Inventario.ResultadoDeInventario<T> r) => (r.IsSuccess, r.ErrorMessage);
+
+    private static DateOnly? LeerFecha(object? valor) =>
+        DateOnly.TryParse(valor?.ToString(), CultureInfo.InvariantCulture, out var f) ? f : null;
+}

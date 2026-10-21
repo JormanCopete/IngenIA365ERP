@@ -1,0 +1,42 @@
+{
+  // pe01 (K6a, T1013; SC-021, SC-023): consumo con libranza en una cooperativa de ahorro y crédito obligada, con el Anexo 2 SEMBRADO (CE 68
+  // de 2024, transcripción sin cotejar, E8) y el Anexo 1 sembrado para la calificación. Calculado a mano y repasado con Casos/riesgo-pe.py
+  // (decimal de 40 dígitos, sin el C#). PENDIENTE DE FIRMA DE LA CONTADORA (quickstart §12).
+  //   1: al día, sin mora en 36 meses → EA=1, SINMORA=1: Z = −1,523 − 2,081 − 0,575 = −4,179; puntaje 0,0151 → A. PI 0,50 % (A), PDI sin
+  //      garantía 45 % (libranza sin incumplimiento) → 0,00225 sobre capital, intereses y otros.
+  //   2: 45 días hoy (MORA1230=1): Z = −1,523 − 2,081 + 2,495 = −1,109; puntaje 0,248057… → 0,2481 → B (corte de B inclusive). La mora
+  //      da B. Homologación: modelo B con mora actual del deudor 45 > 30 → B. PI 0,60 %, PDI garantía no idónea 45 %.
+  //   3: consumo SIN libranza del mismo deudor, al día: el modelo da A (Z −3,725, 0,0235), pero el arrastre del segmento SARC CONSUMO (la
+  //      alineación de libranza y sin libranza del num. 4.1) la lleva a B. Como la máxima no es la del modelo, NO se homologa: contable B.
+  //      PI de sin libranza B 5,95 %, PDI sin garantía 50 %.
+  "nombre": "pe01-consumo-con-libranza",
+  "perdidaEsperada": {
+    "anexo2": "sembrado",
+    "contexto": { "tipoDeOrganizacion": "COOP_AHORRO_CREDITO", "fondoDeEmpleados": false, "smmlv": 1750905, "voluntaria": false },
+    "creditos": [
+      { "id": 1, "deudor": 101, "segmento": "CONSUMO_LIBRANZA", "diasDeMora": 0, "asociadoActivo": true, "cuota": 350000, "plazoEnMeses": 36,
+        "moraMensual": { "hasta": "2026-10", "meses": 36 }, "garantia": "SIN_GARANTIA",
+        "saldos": { "capital": 10000000, "interesCorriente": 100000, "interesDeMora": 20000, "otros": 15000 } },
+      { "id": 2, "deudor": 102, "segmento": "CONSUMO_LIBRANZA", "diasDeMora": 45, "asociadoActivo": true, "cuota": 250000, "plazoEnMeses": 24,
+        "moraMensual": { "hasta": "2026-10", "meses": 36, "dias": { "2026-09": 15, "2026-10": 45 } }, "garantia": "NO_IDONEA",
+        "saldos": { "capital": 5000000, "interesCorriente": 60000, "interesDeMora": 20000, "otros": 0 } },
+      { "id": 3, "deudor": 102, "segmento": "CONSUMO_SIN_LIBRANZA", "diasDeMora": 0, "asociadoActivo": true, "cuota": 120000, "plazoEnMeses": 24,
+        "moraMensual": { "hasta": "2026-10", "meses": 36 }, "garantia": "SIN_GARANTIA",
+        "saldos": { "capital": 2000000, "interesCorriente": 30000, "interesDeMora": 0, "otros": 0 } }
+    ],
+    "esperado": [
+      { "id": 1, "incumplido": false, "z": -4.179, "puntaje": 0.0151, "calificacionDelModelo": "A",
+        "variables": [ "EA=1", "FE=0", "VALCUOTA=0", "FONDPLAZO=0", "MORA1230=0", "MORA1260=0", "SINMORA=1", "MORA2430N=0", "MORA3660=0" ],
+        "calificacionFinal": "A", "causa": "Arrears", "pi": 0.005, "pdi": 0.45, "exposicion": 10135000,
+        "deterioroCapital": 22500.00, "deterioroIntereses": 270.00, "deterioroOtros": 33.75, "total": 22803.75, "contable": "A", "homologada": true },
+      { "id": 2, "incumplido": false, "z": -1.109, "puntaje": 0.2481, "calificacionDelModelo": "B",
+        "calificacionFinal": "B", "causa": "Arrears", "pi": 0.006, "pdi": 0.45, "exposicion": 5080000,
+        "deterioroCapital": 13500.00, "deterioroIntereses": 216.00, "deterioroOtros": 0, "total": 13716.00, "contable": "B", "homologada": true,
+        "explicacionContiene": [ "Homologación: modelo B con mora actual del deudor de 45 días → B." ] },
+      { "id": 3, "incumplido": false, "z": -3.725, "puntaje": 0.0235, "calificacionDelModelo": "A",
+        "calificacionFinal": "B", "causa": "Drag", "pi": 0.0595, "pdi": 0.50, "exposicion": 2030000,
+        "deterioroCapital": 59500.00, "deterioroIntereses": 892.50, "deterioroOtros": 0, "total": 60392.50, "contable": "B", "homologada": false,
+        "explicacionContiene": [ "Sin homologación" ] }
+    ]
+  }
+}

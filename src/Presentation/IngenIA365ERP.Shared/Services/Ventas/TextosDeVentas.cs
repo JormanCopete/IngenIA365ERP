@@ -355,6 +355,24 @@ public static class TextosDeVentas
     public static string EstadoDeCierreDelDia(int v) => Texto(EstadosDeCierreDelDia, v, "Estado");
     public static string DireccionDePago(int v) => Texto(DireccionesDePago, v, "Dirección");
     public static string OrigenDeCredito(int? v) => v is { } x ? Texto(OrigenesDeCredito, x, "Origen") : "—";
+
+    /// <summary>
+    /// Feature 013, US6 (T0600): el estado de Cartera de un pago a crédito según la última respuesta guardada: «validada», «validación fallida»,
+    /// «migrada», «cancelada antes del corte», «no incorporada» o «pendiente: queda para reproceso». Nunca saldos ni cuotas.
+    /// </summary>
+    public static string EstadoEnCartera(RespuestaDeCarteraDto? r) => r is null
+        ? "Pendiente: Cartera aún no responde"
+        : r.ValidationStatus switch
+        {
+            "Validated" => "Validada",
+            "ValidationFailed" => "Validación fallida",
+            "Migrated" => "Migrada",
+            "CancelledBeforeCutoff" => "Cancelada antes del corte",
+            "NotIncorporated" => "No incorporada",
+            _ when r.Outcome == "Rejected" && r.Retryable => "Pendiente: queda para reproceso",
+            _ when r.Outcome == "Rejected" => "Rechazada por Cartera",
+            _ => "Pendiente",
+        };
     public static string EstadoDeBono(int? v) => v is { } x ? Texto(EstadosDeBono, x, "Bono") : "—";
     public static string ClaseDePromocion(int v) => Texto(ClasesDePromocion, v, "Clase");
     public static string AmbitoDePromocion(int v) => Texto(AmbitosDePromocion, v, "Ámbito");

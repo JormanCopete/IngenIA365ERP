@@ -64,6 +64,63 @@ public class TodoEnlaceDelMenuTieneSuPagina
             "Tarjetas del Centro de Reportes sin página (@page): quitá la tarjeta hasta que exista la pantalla, o apuntala a una que exista.\n  " + string.Join("\n  ", sinPagina));
     }
 
+    /// <summary>
+    /// Feature 013, fase 2 (T0038, T0095): las seis pantallas de la plataforma de Cartera tienen su enlace en el menú y su página, para que
+    /// ninguna quede huérfana (existir y no tener cómo llegar) ni apunte a «Página no encontrada».
+    /// </summary>
+    [Theory]
+    [InlineData("/admin/valores-nacionales")]
+    [InlineData("/admin/perfil-regulatorio")]
+    [InlineData("/admin/canales-externos")]
+    [InlineData("/admin/participantes-de-integracion")]
+    [InlineData("/compliance/listas-restrictivas")]
+    [InlineData("/compliance/solicitudes-del-titular")]
+    public void Las_pantallas_de_la_plataforma_de_Cartera_estan_en_el_menu(string ruta)
+    {
+        var shared = Shared();
+        var menu = File.ReadAllText(Path.Combine(shared, "Layout", "NavMenu.razor"));
+        Assert.Contains(Enlace.Matches(menu).Select(m => m.Groups[1].Value), href => href == ruta);
+        Assert.True(Existe(Rutas(shared), ruta), $"{ruta} está en el menú pero no tiene @page.");
+    }
+
+    /// <summary>
+    /// Feature 013, US7 (T0611; DT §2.16): las pantallas de la integración contable de Cartera —el subgrupo «Cartera» de Contabilidad, los
+    /// indicadores regulatorios y la conciliación contable de Cartera— están en el menú y tienen su página. El detalle de un lote
+    /// (<c>/contabilidad/cartera/lotes/{Id:guid}</c>) se abre desde la lista y desde el enlace de origen de un comprobante: sólo exige su página.
+    /// </summary>
+    [Theory]
+    [InlineData("/contabilidad/cartera/matriz", true)]
+    [InlineData("/contabilidad/cartera/tipos-de-comprobante", true)]
+    [InlineData("/contabilidad/cartera/completitud", true)]
+    [InlineData("/contabilidad/cartera/lotes", true)]
+    [InlineData("/contabilidad/cartera/lotes/{Id:guid}", false)]
+    [InlineData("/contabilidad/indicadores-regulatorios", true)]
+    [InlineData("/cartera/conciliacion-contable", true)]
+    // US8 (bloque 13C, T0728): la puesta en marcha —la carga de migración y la activación—.
+    [InlineData("/cartera/migracion", true)]
+    [InlineData("/cartera/activacion", true)]
+    // US13 (bloque 14B, T0768): los documentos al deudor y la verificación de su código.
+    [InlineData("/cartera/documentos", true)]
+    [InlineData("/cartera/verificar", true)]
+    // US15 (T0800): el centro de informes de Cartera; las tarjetas de Cartera del Centro de Reportes llevan a él con ?vista=.
+    [InlineData("/cartera/informes", true)]
+    // US10 (T0853, K2): la libranza; el detalle de una pagaduría y el de un archivo se abren desde sus listas.
+    [InlineData("/cartera/pagadurias", true)]
+    [InlineData("/cartera/pagadurias/{Id:guid}", false)]
+    [InlineData("/cartera/archivos-de-descuento", true)]
+    [InlineData("/cartera/archivos-de-descuento/{Id:guid}", false)]
+    [InlineData("/cartera/no-aplicados", true)]
+    public void Las_pantallas_de_la_integracion_contable_de_Cartera_tienen_su_pagina(string ruta, bool enElMenu)
+    {
+        var shared = Shared();
+        if (enElMenu)
+        {
+            var menu = File.ReadAllText(Path.Combine(shared, "Layout", "NavMenu.razor"));
+            Assert.Contains(Enlace.Matches(menu).Select(m => m.Groups[1].Value), href => href == ruta);
+        }
+        Assert.True(Existe(Rutas(shared), ruta), $"{ruta} no tiene @page.");
+    }
+
     private static string Shared() =>
         Path.Combine(RepoPath.FindRepoRoot(), "src", "Presentation", "IngenIA365ERP.Shared");
 

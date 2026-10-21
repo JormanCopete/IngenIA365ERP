@@ -1,0 +1,55 @@
+@using IngenIA365ERP.Shared.Services.Cartera
+@inject LineasDeCreditoClient Lineas
+
+@* Feature 013, US1 (T0362; pendiente de la fase 4): elegir una línea de crédito por su código y nombre en vez de escribir su identificador.
+   Lo usan el alcance de Cartera de un usuario y el ámbito «línea» de los parámetros. La lista es la del alcance de quien elige
+   (GET /api/lending/credit-lines): una línea fuera de su alcance no existe para él. *@
+<IndicadorDeCarga Cargando="@_carga.Activa" Compacto="true" Texto="Leyendo las líneas…">
+    <select class="e-input" value="@(Value?.ToString() ?? "")" @onchange="CambiarAsync" disabled="@Deshabilitado" aria-label="@Etiqueta">
+        <option value="">@Placeholder</option>
+        @foreach (var l in Opciones)
+        {
+            <option value="@l.PublicId">@l.Code · @l.Name@(l.Status == 3 ? " (cerrada)" : "")</option>
+        }
+    </select>
+    @if (_error is not null) { <span class="texto-tenue">@_error</span> }
+</IndicadorDeCarga>
+
+@code {
+    [Parameter] public Guid? Value { get; set; }
+    [Parameter] public EventCallback<Guid?> ValueChanged { get; set; }
+
+    /// <summary>Se dispara con la línea elegida completa (código y nombre), o nula.</summary>
+    [Parameter] public EventCallback<LineaDeCreditoResumenDto?> LineaElegida { get; set; }
+
+    /// <summary>Las que no se ofrecen (las que ya están en la lista que se edita).</summary>
+    [Parameter] public IReadOnlyCollection<Guid>? Excluir { get; set; }
+
+    [Parameter] public bool IncluirCerradas { get; set; }
+    [Parameter] public bool Deshabilitado { get; set; }
+    [Parameter] public string Placeholder { get; set; } = "Elija una línea…";
+    [Parameter] public string Etiqueta { get; set; } = "Línea de crédito";
+
+    private readonly EstadoDeCarga _carga = new();
+    private List<LineaDeCreditoResumenDto> _lineas = [];
+    private string? _error;
+
+    private IEnumerable<LineaDeCreditoResumenDto> Opciones =>
+        _lineas.Where(l => Excluir is null || !Excluir.Contains(l.PublicId) || l.PublicId == Value);
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Lineas.LineasAsync(new FiltrosDeLineas(IncludeClosed: IncluirCerradas));
+        if (!r.IsSuccess) { _error = r.ErrorMessage ?? "No se pudieron leer las líneas de crédito."; return; }
+        _lineas = [.. (r.Value ?? []).OrderBy(l => l.Code, StringComparer.Ordinal)];
+    }
+
+    private async Task CambiarAsync(Microsoft.AspNetCore.Components.ChangeEventArgs e)
+    {
+        Guid? id = Guid.TryParse(e.Value?.ToString(), out var g) ? g : null;
+        Value = id;
+        await ValueChanged.InvokeAsync(id);
+        await LineaElegida.InvokeAsync(id is null ? null : _lineas.FirstOrDefault(l => l.PublicId == id));
+    }
+}

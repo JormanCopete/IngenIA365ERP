@@ -1,0 +1,669 @@
+@page "/cartera/creditos/{Id:guid}"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Globalization
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Components.Cartera.Pagos
+@using IngenIA365ERP.Shared.Services.Http
+@inject CreditosClient Creditos
+@inject GarantiasClient Garantias
+@inject DesembolsosClient Desembolsos
+@inject INotificationService Notification
+@inject NavigationManager Navegacion
+
+<PageTitle>Crédito - IngenIA365ERP</PageTitle>
+
+@* Feature 013, US4 (T0509; FR-061–FR-070, C83; contracts/api.md §8.1): el expediente de un crédito en pestañas, cada una con su indicador de
+   carga y leída al abrirla: resumen; liquidación a una fecha D «con la información hasta» R (Lending.Payoffs.Read, lectura auditada) con su
+   explicación de días, base y tasa; estado de cuenta; el plan con sus versiones; las operaciones con su comprobante de aplicación; el libro
+   (sólo lectura); y las garantías, el pagaré y las órdenes de giro. Liquidar no escribe nada: la misma (D, R) da siempre lo mismo y la huella lo
+   muestra. Fuera del alcance de oficina o línea el crédito no existe (el mismo 404).
+   US5 (T0562): la pestaña «Simular pago» (Lending.Payments.Simulate; siete modalidades, sin aplicar: el pago entra por el recaudador), la
+   «Preferencia de abono» del deudor (Ley 2032) y, en el comprobante de un pago no reversado, su reverso con vista previa. *@
+<PermissionGate Required="Lending.Loans.Read" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Crédito @(_c?.Number)</h3>
+        <div class="toolbar">
+            @* US13 (T0792): los documentos del crédito y el diálogo de emitir con el crédito elegido. *@
+            <PermissionGate Required="Lending.Documents.Read">
+                <SfButton CssClass="e-outline" OnClick="@(() => Navegacion.NavigateTo($"/cartera/documentos?credito={Id}&emitir=true"))">Documentos</SfButton>
+            </PermissionGate>
+            @* K2 (T0852): trasladar la libranza a otra pagaduría o a la forma de pago alterna del convenio. *@
+            <PermissionGate Required="Lending.PayrollTransfers.Manage">
+                <SfButton CssClass="e-outline" OnClick="@(() => _mostrarTraslado = true)">Trasladar libranza</SfButton>
+            </PermissionGate>
+            @* K3 (T0892): pedir una novedad o una condonación con el crédito elegido. *@
+            <PermissionGate Required="Lending.Novelties.Request">
+                <SfButton CssClass="e-outline" OnClick="@(() => Navegacion.NavigateTo($"/cartera/novedades?credito={Id}"))">Novedad</SfButton>
+            </PermissionGate>
+            <PermissionGate Required="Lending.Condonations.Request">
+                <SfButton CssClass="e-outline" OnClick="@(() => Navegacion.NavigateTo($"/cartera/condonaciones?credito={Id}"))">Condonar</SfButton>
+            </PermissionGate>
+            <SfButton CssClass="e-outline" OnClick="@(() => Navegacion.NavigateTo("/cartera/creditos"))">Volver</SfButton>
+        </div>
+    </div>
+
+    <div class="toolbar">
+        @foreach (var (pestana, titulo) in Pestanas)
+        {
+            var p = pestana;
+            if (p == Pestana.Liquidacion)
+            {
+                <PermissionGate Required="Lending.Payoffs.Read">
+                    <SfButton CssClass="@(_pestana == p ? "e-primary" : "e-outline")" OnClick="@(() => AbrirAsync(p))">@titulo</SfButton>
+                </PermissionGate>
+            }
+            else if (p == Pestana.Calificacion)
+            {
+                <PermissionGate Required="Lending.Ratings.Read">
+                    <SfButton CssClass="@(_pestana == p ? "e-primary" : "e-outline")" OnClick="@(() => AbrirAsync(p))">@titulo</SfButton>
+                </PermissionGate>
+            }
+            else if (p == Pestana.Simular)
+            {
+                <PermissionGate Required="Lending.Payments.Simulate">
+                    <SfButton CssClass="@(_pestana == p ? "e-primary" : "e-outline")" OnClick="@(() => AbrirAsync(p))">@titulo</SfButton>
+                </PermissionGate>
+            }
+            else
+            {
+                <SfButton CssClass="@(_pestana == p ? "e-primary" : "e-outline")" OnClick="@(() => AbrirAsync(p))">@titulo</SfButton>
+            }
+        }
+    </div>
+
+    @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+
+    @if (_pestana == Pestana.Resumen)
+    {
+        <IndicadorDeCarga Cargando="@_cargaResumen.Activa">
+            @if (_c is { } c)
+            {
+                <div class="kpi-grid">
+                    <div class="kpi-card"><span class="kpi-label">Estado</span><span class="kpi-value">@TextosDeCreditos.EstadoDeCredito(c.Status)</span></div>
+                    <div class="kpi-card"><span class="kpi-label">Aprobado</span><span class="kpi-value">@TextosDeCreditos.Pesos(c.Amounts.Approved)</span></div>
+                    <div class="kpi-card"><span class="kpi-label">Desembolsado</span><span class="kpi-value">@TextosDeCreditos.Pesos(c.Amounts.Disbursed)</span></div>
+                    <div class="kpi-card"><span class="kpi-label">Tramos</span><span class="kpi-value">@c.Amounts.Tranches</span></div>
+                </div>
+                <div class="info-card">
+                    <p><strong>Deudor:</strong> @c.Debtor.Name
+                        @if (c.CoDebtors.Count > 0) { <span> · <strong>Codeudores:</strong> @string.Join(", ", c.CoDebtors.Select(x => x.Name))</span> }</p>
+                    <p><strong>Línea:</strong> @c.Line.Code · @c.Line.Name · <strong>Oficina:</strong> @c.Office.Name · <strong>Modalidad:</strong> @c.Modality@(c.Subsegment is { } s ? $" ({s})" : "")</p>
+                    <p><strong>Origen:</strong> @TextosDeCreditos.Origen(c.Origin)@(c.InvoiceReference is { } factura ? $" · factura de origen {factura}" : "")</p>
+                    @if (c.Terms is { } t)
+                    {
+                        <p><strong>Tasa:</strong> @TextosDeCreditos.ClaseDeTasa(t.RateKind) @TextosDeCreditos.Porcentaje(t.EffectiveAnnual) EA
+                            @if (t.IndexCode is { } indice) { <span>(@indice + @TextosDeCreditos.Porcentaje(t.Margin))</span> }
+                            · <strong>Reglas de cálculo:</strong> @t.RulesVersion · <strong>Versión de condiciones:</strong> @t.Version
+                            · <strong>Unidad:</strong> @TextosDeCreditos.UnidadDeCapital(t.DenominationUnit)</p>
+                        @if (t.EnUvr)
+                        {
+                            @* K6b (T1060; FR-024): el capital se debe en UVR; los pesos de cada pestaña son su valor a la UVR del día consultado. *@
+                            <p class="aviso aviso-info">Crédito en UVR: el saldo se lleva en UVR y se convierte a pesos con la UVR de cada día. La liquidación y el estado de cuenta muestran la UVR del día y los saldos en las dos unidades.</p>
+                        }
+                    }
+                    @if (c.ValidationFailure is { } falla)
+                    {
+                        @* US6 (T0603; FR-052, B8): la obligación de una venta cuya validación falló: no se anula la venta y el deudor queda bloqueado para
+                           crédito nuevo hasta que alguien con atribución la confirme por excepción. *@
+                        @if (falla.ConfirmedByExceptionAt is { } confirmada)
+                        {
+                            <p class="aviso aviso-info">La validación de la venta falló (@(falla.Reason ?? "sin motivo")) y se confirmó por excepción el @confirmada.ToLocalTime().ToString("dd/MM/yyyy HH:mm").</p>
+                        }
+                        else
+                        {
+                            <div class="aviso aviso-alerta" role="alert">
+                                <p><strong>Validación fallida:</strong> @(falla.Reason ?? "la venta no cumplió las verificaciones de Cartera a su fecha.")</p>
+                                <p>El crédito existe y se causa y cobra como cualquier otro; el deudor no recibe crédito nuevo mientras no se confirme por excepción.</p>
+                                <PermissionGate Required="Lending.ValidationFailures.Confirm">
+                                    <SfButton CssClass="e-primary e-small" OnClick="@AbrirConfirmacion">Confirmar por excepción…</SfButton>
+                                </PermissionGate>
+                            </div>
+                        }
+                    }
+                    @{ var marcas = Marcas(c.Marks); }
+                    @if (marcas.Count > 0) { <p><strong>Marcas:</strong> @string.Join(", ", marcas)</p> }
+                    @if (c.Blocks.Count > 0)
+                    {
+                        <p><strong>Bloqueos del deudor:</strong> @string.Join(", ", c.Blocks.Select(b => $"{TextosDeCreditos.CausaDeBloqueo(b.Kind)} desde {TextosDeCreditos.Fecha(b.Since)}{(b.Automatic ? " (automático)" : "")}"))</p>
+                    }
+                    @if (c.Links.Application is { } solicitud)
+                    {
+                        <p><SfButton CssClass="e-flat e-small" OnClick="@(() => Navegacion.NavigateTo($"/cartera/solicitudes/{solicitud}"))">Ver la solicitud</SfButton></p>
+                    }
+                </div>
+            }
+        </IndicadorDeCarga>
+    }
+    else if (_pestana == Pestana.Liquidacion)
+    {
+        <PermissionGate Required="Lending.Payoffs.Read" MostrarAviso="true">
+            <div class="toolbar">
+                <label class="campo">Fecha de la liquidación <input type="date" class="e-input" value="@_fecha?.ToString("yyyy-MM-dd")" @onchange="@(e => _fecha = LeerFecha(e.Value))" /></label>
+                <label class="campo">Con la información hasta <input type="datetime-local" class="e-input" @onchange="@(e => _hasta = LeerInstante(e.Value))" /></label>
+                <SfButton CssClass="e-primary" Disabled="@_cargaLiquidacion.Activa" OnClick="@LiquidarAsync">Liquidar</SfButton>
+            </div>
+            <p class="texto-apoyo">Sin «información hasta», la liquidación usa todo lo registrado. Con una hora pasada, muestra lo que se sabía entonces: una operación registrada después no la cambia.</p>
+            <IndicadorDeCarga Cargando="@_cargaLiquidacion.Activa">
+                @if (_liquidacion is { } l)
+                {
+                    <div class="kpi-grid">
+                        <div class="kpi-card"><span class="kpi-label">Para cancelar al @TextosDeCreditos.Fecha(l.Date)</span><span class="kpi-value">@TextosDeCreditos.Pesos(l.ToPayOff)</span></div>
+                        <div class="kpi-card"><span class="kpi-label">Días de mora</span><span class="kpi-value">@l.DaysPastDue</span></div>
+                        <div class="kpi-card"><span class="kpi-label">Vale hasta</span><span class="kpi-value">@(l.ValidUntil is { } v ? TextosDeCreditos.Fecha(v) : "—")</span></div>
+                    </div>
+                    @if (l.Uvr is { } uvrL)
+                    {
+                        <EnUvrDelCredito Uvr="@uvrL" ToPayOff="@l.ToPayOff" />
+                    }
+                    @if (l.Suspended) { <p class="aviso aviso-alerta">La causación de este crédito está suspendida: lo causado desde entonces va en suspenso.</p> }
+                    @if (l.UsuryCapped) { <p class="aviso aviso-alerta">La tasa del día se topó en la usura.</p> }
+                    @foreach (var w in l.Warnings) { <p class="aviso aviso-alerta">@w</p> }
+                    <div class="info-card">
+                        <h4>Saldos por concepto</h4>
+                        <table class="data-grid">
+                            <thead><tr><th>Concepto</th><th class="numero">Valor</th></tr></thead>
+                            <tbody>
+                                @foreach (var (concepto, valor) in Ordenados(l.ByConcept))
+                                {
+                                    <tr><td>@TextosDeCreditos.Concepto(concepto)</td><td class="numero">@TextosDeCreditos.Pesos(valor)</td></tr>
+                                }
+                                @foreach (var (concepto, valor) in l.Credits.Where(x => x.Value != 0m))
+                                {
+                                    <tr><td>@TextosDeCreditos.Concepto(concepto) (a su favor)</td><td class="numero">@TextosDeCreditos.Pesos(valor)</td></tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="info-card">
+                        <h4>Por cuota</h4>
+                        <div class="tabla-desplazable">
+                            <table class="data-grid">
+                                <thead><tr><th class="numero">Cuota</th><th>Vence</th>@foreach (var k in ConceptosDe(l.ByInstallment)) { <th class="numero">@TextosDeCreditos.Concepto(k)</th> }</tr></thead>
+                                <tbody>
+                                    @foreach (var cuota in l.ByInstallment)
+                                    {
+                                        <tr><td class="numero">@cuota.Number</td><td>@TextosDeCreditos.Fecha(cuota.DueDate)</td>
+                                            @foreach (var k in ConceptosDe(l.ByInstallment)) { <td class="numero">@TextosDeCreditos.Pesos(cuota.Balances.GetValueOrDefault(k))</td> }</tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="info-card">
+                        <h4>Cómo se calculó</h4>
+                        <div class="tabla-desplazable">
+                            <table class="data-grid">
+                                <thead><tr><th>Concepto</th><th class="numero">Cuota</th><th>Desde</th><th>Hasta</th><th class="numero">Días</th><th class="numero">Base</th><th class="numero">Tasa EA</th><th class="numero">Valor</th><th>Notas</th></tr></thead>
+                                <tbody>
+                                    @foreach (var x in l.Explanation)
+                                    {
+                                        <tr><td>@TextosDeCreditos.Concepto(x.Concept)</td><td class="numero">@(x.Installment?.ToString() ?? "—")</td><td>@TextosDeCreditos.Fecha(x.From)</td>
+                                            <td>@TextosDeCreditos.Fecha(x.To)</td><td class="numero">@x.Days</td><td class="numero">@TextosDeCreditos.Pesos(x.Base)</td>
+                                            <td class="numero">@TextosDeCreditos.Porcentaje(x.EffectiveAnnual)</td><td class="numero">@TextosDeCreditos.Pesos(x.Amount)</td>
+                                            <td>@(x.CappedByUsury ? "Topada en la usura" : "")@(x.Suspended ? " En suspenso" : "")</td></tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                        @foreach (var linea in l.ExplanationText) { <p class="texto-tenue">@linea</p> }
+                        <p class="texto-tenue">Reglas de cálculo @l.RulesVersion · huella @l.Fingerprint</p>
+                    </div>
+                }
+            </IndicadorDeCarga>
+        </PermissionGate>
+    }
+    else if (_pestana == Pestana.Estado)
+    {
+        <div class="toolbar">
+            <label class="campo">Fecha <input type="date" class="e-input" value="@_fechaEstado?.ToString("yyyy-MM-dd")" @onchange="@(e => _fechaEstado = LeerFecha(e.Value))" /></label>
+            <SfButton CssClass="e-primary" Disabled="@_cargaEstado.Activa" OnClick="@CargarEstadoAsync">Consultar</SfButton>
+        </div>
+        <IndicadorDeCarga Cargando="@_cargaEstado.Activa">
+            @if (_estado is { } e)
+            {
+                <div class="kpi-grid">
+                    <div class="kpi-card"><span class="kpi-label">Para cancelar</span><span class="kpi-value">@TextosDeCreditos.Pesos(e.ToPayOff)</span></div>
+                    <div class="kpi-card"><span class="kpi-label">Días de mora</span><span class="kpi-value">@e.DaysPastDue</span></div>
+                    <div class="kpi-card"><span class="kpi-label">Cuotas vencidas</span><span class="kpi-value">@e.InstallmentsPastDue</span></div>
+                    <div class="kpi-card"><span class="kpi-label">Calificación</span><span class="kpi-value">@(e.OfficialRating ?? e.InformativeRating ?? "—")</span></div>
+                </div>
+                @if (e.Uvr is { } uvrE)
+                {
+                    <EnUvrDelCredito Uvr="@uvrE" ToPayOff="@e.ToPayOff" />
+                }
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th class="numero">Cuota</th><th>Vence</th><th>Exigible</th><th>Estado</th><th class="numero">Capital</th><th class="numero">Interés</th><th class="numero">Seguro</th><th class="numero">Cuota</th><th class="numero">Debe</th></tr></thead>
+                        <tbody>
+                            @foreach (var q in e.Installments)
+                            {
+                                <tr><td class="numero">@q.Number</td><td>@TextosDeCreditos.Fecha(q.DueDate)</td><td>@TextosDeCreditos.Fecha(q.ExigibleDate)</td>
+                                    <td class="@(q.Status == "PastDue" ? "texto-alerta" : "")">@TextosDeCreditos.EstadoDeCuota(q.Status)</td>
+                                    <td class="numero">@TextosDeCreditos.Pesos(q.Principal)</td><td class="numero">@TextosDeCreditos.Pesos(q.Interest)</td>
+                                    <td class="numero">@TextosDeCreditos.Pesos(q.Insurance)</td><td class="numero">@TextosDeCreditos.Pesos(q.Total)</td>
+                                    <td class="numero">@TextosDeCreditos.Pesos(q.Owed.Values.Sum())</td></tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                @if (e.NotApplied.Count > 0)
+                {
+                    <div class="info-card">
+                        <h4>Cuotas no aplicadas por la pagaduría o la nómina</h4>
+                        <ul>@foreach (var n in e.NotApplied) { <li>Cuota @n.Installment (@TextosDeCreditos.Fecha(n.DueDate)): @(n.ReasonText ?? n.Reason) — @TextosDeCreditos.Pesos(n.NotDeductedAmount)</li> }</ul>
+                    </div>
+                }
+            }
+        </IndicadorDeCarga>
+    }
+    else if (_pestana == Pestana.Plan)
+    {
+        <IndicadorDeCarga Cargando="@_cargaPlan.Activa">
+            <div class="toolbar">
+                <label class="campo">Versión del plan
+                    <select class="e-input" value="@_plan?.Version" @onchange="@(e => CambiarVersionAsync(e.Value))">
+                        @foreach (var v in _versiones) { <option value="@v.Version">@v.Version — @TextosDeCreditos.CausaDelPlan(v.Cause), desde @TextosDeCreditos.Fecha(v.ValidFrom)</option> }
+                    </select>
+                </label>
+            </div>
+            @if (_plan is { } p)
+            {
+                <p class="texto-apoyo">Versión @p.Version desde @TextosDeCreditos.Fecha(p.ValidFrom) (@TextosDeCreditos.CausaDelPlan(p.Reason)); capital base @TextosDeCreditos.Pesos(p.PrincipalBase); regenerada desde la cuota @p.FirstRegeneratedInstallment.</p>
+                @if (p.UvrValue is { } uvrPlan)
+                {
+                    <p class="aviso aviso-info">Plan en UVR: las cuotas se pactan en UVR; los pesos son su valor a la UVR de @TextosDeCreditos.ValorDeUvr(uvrPlan) con que se generó el plan, no lo que se paga en cada fecha.</p>
+                }
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th class="numero">Cuota</th><th>Vence</th><th>Exigible</th><th class="numero">Saldo inicial</th><th class="numero">Capital</th><th class="numero">Interés</th><th class="numero">Seguro</th><th class="numero">Cuota</th><th class="numero">Saldo final</th>@if (p.UvrValue is not null) { <th class="numero">Cuota (UVR)</th><th class="numero">Saldo final (UVR)</th> }</tr></thead>
+                        <tbody>
+                            @foreach (var q in p.Installments)
+                            {
+                                <tr><td class="numero">@q.Number</td><td>@TextosDeCreditos.Fecha(q.DueDate)</td><td>@TextosDeCreditos.Fecha(q.ExigibleDate)</td>
+                                    <td class="numero">@TextosDeCreditos.Pesos(q.OpeningPrincipal)</td><td class="numero">@TextosDeCreditos.Pesos(q.Principal)</td>
+                                    <td class="numero">@TextosDeCreditos.Pesos(q.Interest)</td><td class="numero">@TextosDeCreditos.Pesos(q.Insurance)</td>
+                                    <td class="numero">@TextosDeCreditos.Pesos(q.Total)</td><td class="numero">@TextosDeCreditos.Pesos(q.ClosingPrincipal)</td>
+                                    @if (p.UvrValue is not null) { <td class="numero">@TextosDeCreditos.Uvr(q.Uvr?.Total)</td><td class="numero">@TextosDeCreditos.Uvr(q.Uvr?.ClosingPrincipal)</td> }</tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </IndicadorDeCarga>
+    }
+    else if (_pestana == Pestana.Operaciones)
+    {
+        <IndicadorDeCarga Cargando="@_cargaOperaciones.Activa">
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Número</th><th>Clase</th><th>Fecha valor</th><th>Fecha contable</th><th>Registrada</th><th class="numero">Valor</th><th>Quién</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var o in _operaciones)
+                        {
+                            var operacion = o;
+                            <tr class="fila-seleccionable" @onclick="@(() => VerComprobanteAsync(operacion.PublicId))">
+                                <td>@operacion.Number</td><td>@TextosDeCreditos.ClaseDeOperacion(operacion.Kind)@(operacion.ReversedBy is not null ? " (reversada)" : "")</td>
+                                <td>@TextosDeCreditos.Fecha(operacion.ValueDate)</td><td>@TextosDeCreditos.Fecha(operacion.AccountingDate)</td>
+                                <td>@TextosDeCreditos.Instante(operacion.RegisteredAt)</td><td class="numero">@TextosDeCreditos.Pesos(operacion.Amount)</td><td>@operacion.Actor</td>
+                                <td>
+                                    @if (operacion.Kind == "Payment" && operacion.ReversedBy is null && TextosDePagos.QuienReversa(operacion.Collector?.Class) is null)
+                                    {
+                                        <PermissionGate Required="Lending.Payments.Reverse">
+                                            <span @onclick:stopPropagation="true"><SfButton CssClass="e-flat e-small" OnClick="@(() => VerComprobanteAsync(operacion.PublicId))">Reversar…</SfButton></span>
+                                        </PermissionGate>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            @if (_operaciones.Count == 0) { <p class="texto-tenue">Sin operaciones.</p> }
+        </IndicadorDeCarga>
+        <IndicadorDeCarga Cargando="@_cargaComprobante.Activa">
+            @if (_comprobante is { } k)
+            {
+                <div class="info-card">
+                    <h4>Comprobante de aplicación @k.Operation.Number</h4>
+                    <table class="data-grid">
+                        <thead><tr><th class="numero">Cuota</th><th>Concepto</th><th class="numero">Valor</th></tr></thead>
+                        <tbody>
+                            @foreach (var d in k.Distribution)
+                            {
+                                <tr><td class="numero">@(d.Installment?.ToString() ?? "—")</td><td>@TextosDeCreditos.Concepto(d.Concept)</td><td class="numero">@TextosDeCreditos.Pesos(d.Amount)</td></tr>
+                            }
+                        </tbody>
+                    </table>
+                    @if (k.Operation.Collector is { } recaudador)
+                    {
+                        <p class="texto-apoyo">Recaudó: @TextosDePagos.ClaseDeRecaudador(recaudador.Class)@(recaudador.Code is { } codigo ? $" ({codigo})" : "")
+                            @if (k.Operation.MeansClass is { } medio) { <span> · medio: @TextosDePagos.ClaseDeMedio(medio)</span> }</p>
+                    }
+                    @if (k.Receipt is { } recibo)
+                    {
+                        <p class="texto-apoyo">
+                            @if (recibo.Modality is { } modalidad) { <span>@TextosDePagos.Modalidad(modalidad)</span> }
+                            @if (recibo.PrepaymentChoice is { } eleccion) { <span> · @TextosDePagos.Eleccion(eleccion)@(recibo.ChoiceFromPreference == true ? " (por la preferencia del deudor)" : "")</span> }
+                            @if (recibo.ReceiptNumber is { } numero) { <span> · recibo @numero@(recibo.ReceiptDate is { } fr ? $" del {TextosDeCreditos.Fecha(fr)}" : "")</span> }
+                            @if (recibo.ReceiptMeansReference is { } referencia) { <span> · referencia @referencia</span> }
+                            @if (recibo.Excess is > 0m) { <span> · excedente @TextosDeCreditos.Pesos(recibo.Excess.Value)</span> }
+                            @if (recibo.FinalityDate is { } firme) { <span> · en firme desde el @TextosDeCreditos.Fecha(firme)</span> }
+                        </p>
+                        @if (recibo.Reason is { } motivo) { <p class="texto-apoyo">Motivo: @motivo</p> }
+                    }
+                    @if (k.Messages.Count > 0)
+                    {
+                        <p class="texto-tenue">Hechos emitidos: @string.Join(", ", k.Messages.Select(m => $"{m.Type} ({TextosDeCreditos.EstadoDeMensaje(m.Status)})"))</p>
+                    }
+                </div>
+                @if (k.Operation.Kind == "Payment")
+                {
+                    <ReversoDePago CreditoId="@Id" Operacion="@k.Operation" Reversado="@AlReversarAsync" />
+                }
+            }
+        </IndicadorDeCarga>
+    }
+    else if (_pestana == Pestana.Simular)
+    {
+        <SimuladorDePago CreditoId="@Id" />
+    }
+    else if (_pestana == Pestana.Preferencia)
+    {
+        <PreferenciaDePrepago CreditoId="@Id" />
+    }
+    else if (_pestana == Pestana.Libro)
+    {
+        <IndicadorDeCarga Cargando="@_cargaLibro.Activa">
+            <p class="texto-apoyo">El libro no se edita: una corrección es otra fila que reversa o ajusta la anterior.</p>
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Fecha valor</th><th>Fecha contable</th><th>Movimiento</th><th>Concepto</th><th class="numero">Cuota</th><th class="numero">Valor</th>@if (LibroEnUvr) { <th class="numero">Valor (UVR)</th><th class="numero">UVR</th> }<th>Registrado</th></tr></thead>
+                    <tbody>
+                        @foreach (var f in _libro)
+                        {
+                            <tr><td>@TextosDeCreditos.Fecha(f.ValueDate)</td><td>@TextosDeCreditos.Fecha(f.AccountingDate)</td><td>@TextosDeCreditos.ClaseDeMovimiento(f.Kind)@(f.ReversesTransaction is not null ? " (reverso)" : "")</td>
+                                <td>@TextosDeCreditos.Concepto(f.Concept)</td><td class="numero">@(f.Installment?.ToString() ?? "—")</td>
+                                <td class="numero">@TextosDeCreditos.Pesos(f.Amount)</td>
+                                @if (LibroEnUvr) { <td class="numero">@TextosDeCreditos.Uvr(f.UvrAmount)</td><td class="numero">@TextosDeCreditos.ValorDeUvr(f.UvrValue)</td> }
+                                <td>@TextosDeCreditos.Instante(f.RegisteredAt)</td></tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <div class="toolbar">
+                <SfButton CssClass="e-flat" Disabled="@(_paginaLibro <= 1)" OnClick="@(() => CargarLibroAsync(_paginaLibro - 1))">Anterior</SfButton>
+                <span class="texto-tenue">Página @_paginaLibro de @Math.Max(1, (int)Math.Ceiling(_totalLibro / 50.0))</span>
+                <SfButton CssClass="e-flat" Disabled="@(_paginaLibro * 50 >= _totalLibro)" OnClick="@(() => CargarLibroAsync(_paginaLibro + 1))">Siguiente</SfButton>
+            </div>
+        </IndicadorDeCarga>
+    }
+    else if (_pestana == Pestana.Garantias)
+    {
+        <IndicadorDeCarga Cargando="@_cargaGarantias.Activa">
+            <PermissionGate Required="Lending.Guarantees.Read">
+                <div class="info-card">
+                    <h4>Garantías</h4>
+                    <table class="data-grid">
+                        <thead><tr><th>Clase</th><th>Descripción</th><th class="numero">Valor admisible</th><th>Estado</th></tr></thead>
+                        <tbody>
+                            @foreach (var g in _garantias)
+                            {
+                                <tr><td>@TextosDeDesembolso.ClaseDeGarantia(g.Kind)</td><td>@g.Description</td><td class="numero">@TextosDeCreditos.Pesos(g.AdmissibleValue)</td><td>@TextosDeDesembolso.EstadoDeGarantia(g.Status)</td></tr>
+                            }
+                        </tbody>
+                    </table>
+                    @if (_garantias.Count == 0) { <p class="texto-tenue">Sin garantías registradas.</p> }
+                    @foreach (var p in _pagares)
+                    {
+                        <p><strong>Pagaré:</strong> @(p.Number ?? "sin número") · @TextosDeDesembolso.FormaDePagare(p.Form) · @TextosDeDesembolso.EstadoDePagare(p.Status)</p>
+                    }
+                </div>
+            </PermissionGate>
+            <div class="info-card">
+                <h4>Órdenes de giro</h4>
+                <table class="data-grid">
+                    <thead><tr><th>Número</th><th class="numero">Tramo</th><th>Forma</th><th class="numero">Neto</th><th>Emitida</th><th>Estado</th></tr></thead>
+                    <tbody>
+                        @foreach (var o in _ordenes)
+                        {
+                            <tr><td>@o.Number</td><td class="numero">@o.Tranche</td><td>@TextosDeDesembolso.Forma(o.Form)</td><td class="numero">@TextosDeCreditos.Pesos(o.NetAmount)</td>
+                                <td>@TextosDeCreditos.Instante(o.IssuedAt)</td><td>@TextosDeDesembolso.EstadoDeOrden(o.Status)</td></tr>
+                        }
+                    </tbody>
+                </table>
+                @if (_ordenes.Count == 0) { <p class="texto-tenue">Sin órdenes de giro.</p> }
+            </div>
+        </IndicadorDeCarga>
+    }
+    else if (_pestana == Pestana.Calificacion)
+    {
+        @* US9 (T0715): la informativa del día, la oficial del último cierre y la calificación por análisis. *@
+        <PermissionGate Required="Lending.Ratings.Read" MostrarAviso="true">
+            <CalificacionDelCredito CreditoId="@Id" />
+        </PermissionGate>
+    }
+    else if (_pestana == Pestana.Eventos)
+    {
+        @* K3 (T0892): eventos del deudor, insolvencia y reclamaciones al seguro del crédito. *@
+        <EventosDelDeudor CreditoId="@Id" PersonaId="@_c?.Debtor.PublicId" />
+    }
+</div>
+
+<SfDialog @bind-Visible="_mostrarConfirmacion" Header="Confirmar por excepción" Width="560px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Registrando…">
+                <p class="texto-apoyo">
+                    La obligación queda validada y se levanta el bloqueo del deudor. Si el valor supera su atribución, el crédito pasa a decisión de quien
+                    corresponda. Listas restrictivas, usura, autorización de datos y capacidad de pago no admiten excepción.
+                </p>
+                <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" maxlength="500" /></label>
+                @if (_errorConfirmacion is not null) { <p class="aviso aviso-error" role="alert">@_errorConfirmacion</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@ConfirmarAsync">Confirmar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarConfirmacion = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+<TrasladoDeLibranza CreditoId="@Id" @bind-Visible="_mostrarTraslado" />
+</PermissionGate>
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    // K2 (T0852): el traslado de la libranza.
+    private bool _mostrarTraslado;
+
+    // US6 (T0603): la confirmación por excepción de una validación fallida.
+    private readonly EstadoDeCarga _guardado = new();
+    private ClaveDeOperacion _claveConfirmacion = new();
+    private bool _mostrarConfirmacion;
+    private string? _motivo, _errorConfirmacion;
+
+    private void AbrirConfirmacion()
+    {
+        _motivo = _errorConfirmacion = null;
+        _claveConfirmacion = new ClaveDeOperacion();
+        _mostrarConfirmacion = true;
+    }
+
+    private async Task ConfirmarAsync()
+    {
+        if (_c is not { } c || string.IsNullOrWhiteSpace(_motivo)) return;
+        using var carga = _guardado.Iniciar();
+        _errorConfirmacion = null;
+        var r = await Creditos.ConfirmarValidacionFallidaAsync(c.PublicId, _motivo.Trim(), _claveConfirmacion);
+        if (!r.IsSuccess || r.Value is null) { _errorConfirmacion = r.ErrorMessage ?? "No se pudo confirmar por excepción."; return; }
+        _c = r.Value;
+        _mostrarConfirmacion = false;
+        await Notification.SuccessAsync(r.Value.ValidationFailure?.ConfirmedByExceptionAt is null
+            ? "La confirmación supera su atribución: el crédito pasó a decisión."
+            : "Validación confirmada por excepción: el bloqueo del deudor se levantó.");
+    }
+
+    private enum Pestana { Resumen, Liquidacion, Estado, Plan, Operaciones, Simular, Preferencia, Libro, Garantias, Calificacion, Eventos }
+
+    private static readonly (Pestana, string)[] Pestanas =
+    [
+        (Pestana.Resumen, "Resumen"), (Pestana.Liquidacion, "Liquidación"), (Pestana.Estado, "Estado de cuenta"), (Pestana.Plan, "Plan de pagos"),
+        (Pestana.Operaciones, "Operaciones"), (Pestana.Simular, "Simular pago"), (Pestana.Preferencia, "Preferencia de abono"), (Pestana.Libro, "Libro"),
+        (Pestana.Garantias, "Garantías y giro"), (Pestana.Calificacion, "Calificación"), (Pestana.Eventos, "Eventos y reclamaciones"),
+    ];
+
+    private readonly EstadoDeCarga _cargaResumen = new(), _cargaLiquidacion = new(), _cargaEstado = new(), _cargaPlan = new(), _cargaOperaciones = new(),
+        _cargaComprobante = new(), _cargaLibro = new(), _cargaGarantias = new();
+    private Pestana _pestana = Pestana.Resumen;
+
+    /// <summary>K6b: ¿alguna fila de la página del libro trae su valor en UVR?</summary>
+    private bool LibroEnUvr => _libro.Any(f => f.UvrAmount is not null);
+    private CreditoDto? _c;
+    private LiquidacionDto? _liquidacion;
+    private EstadoDeCuentaDto? _estado;
+    private PlanDelCreditoDto? _plan;
+    private IReadOnlyList<VersionDelPlanDto> _versiones = [];
+    private List<OperacionDelCreditoDto> _operaciones = [];
+    private ComprobanteDeOperacionDto? _comprobante;
+    private List<FilaDelLibroDto> _libro = [];
+    private List<GarantiaDto> _garantias = [];
+    private List<PagareDto> _pagares = [];
+    private List<OrdenDeGiroDto> _ordenes = [];
+    private readonly HashSet<Pestana> _leidas = [];
+    private DateOnly? _fecha, _fechaEstado;
+    private DateTime? _hasta;
+    private int _paginaLibro = 1;
+    private long _totalLibro;
+    private string? _error;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        using var carga = _cargaResumen.Iniciar();
+        var r = await Creditos.CreditoAsync(Id);
+        if (!r.IsSuccess) { _c = null; _error = r.ErrorMessage ?? "El crédito no existe o está fuera de su alcance."; return; }
+        _c = r.Value;
+        _error = null;
+    }
+
+    private async Task AbrirAsync(Pestana pestana)
+    {
+        _pestana = pestana;
+        if (!_leidas.Add(pestana)) return;
+        switch (pestana)
+        {
+            case Pestana.Estado: await CargarEstadoAsync(); break;
+            case Pestana.Plan: await CargarPlanAsync(null); break;
+            case Pestana.Operaciones: await CargarOperacionesAsync(); break;
+            case Pestana.Libro: await CargarLibroAsync(1); break;
+            case Pestana.Garantias: await CargarGarantiasAsync(); break;
+        }
+    }
+
+    private async Task LiquidarAsync()
+    {
+        using var carga = _cargaLiquidacion.Iniciar();
+        var r = await Creditos.LiquidacionAsync(Id, _fecha, _hasta);
+        if (!r.IsSuccess) { _liquidacion = null; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo liquidar el crédito."); return; }
+        _liquidacion = r.Value;
+    }
+
+    private async Task CargarEstadoAsync()
+    {
+        using var carga = _cargaEstado.Iniciar();
+        var r = await Creditos.EstadoDeCuentaAsync(Id, _fechaEstado);
+        if (!r.IsSuccess) { _estado = null; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo leer el estado de cuenta."); return; }
+        _estado = r.Value;
+    }
+
+    private async Task CargarPlanAsync(int? version)
+    {
+        using var carga = _cargaPlan.Iniciar();
+        if (_versiones.Count == 0)
+        {
+            var v = await Creditos.VersionesDelPlanAsync(Id);
+            _versiones = v.Value ?? [];
+        }
+        var r = await Creditos.PlanAsync(Id, version);
+        if (!r.IsSuccess) { _plan = null; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo leer el plan de pagos."); return; }
+        _plan = r.Value;
+    }
+
+    private Task CambiarVersionAsync(object? valor) =>
+        int.TryParse(valor?.ToString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var v) ? CargarPlanAsync(v) : Task.CompletedTask;
+
+    private async Task CargarOperacionesAsync()
+    {
+        using var carga = _cargaOperaciones.Iniciar();
+        var r = await Creditos.OperacionesAsync(Id, 1, 100);
+        if (!r.IsSuccess) { _operaciones = []; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer las operaciones."); return; }
+        _operaciones = [.. r.Value?.Items ?? []];
+    }
+
+    private async Task VerComprobanteAsync(Guid operacion)
+    {
+        using var carga = _cargaComprobante.Iniciar();
+        var r = await Creditos.OperacionAsync(Id, operacion);
+        if (!r.IsSuccess) { _comprobante = null; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo leer el comprobante."); return; }
+        _comprobante = r.Value;
+    }
+
+    /// <summary>
+    /// Tras un reverso cambian las operaciones, el libro, el estado de cuenta y el plan: se vuelven a leer las operaciones con el comprobante del
+    /// pago reversado, y las otras pestañas se leen otra vez al abrirlas.
+    /// </summary>
+    private async Task AlReversarAsync(PagoReversadoDto reverso)
+    {
+        _leidas.RemoveWhere(p => p is Pestana.Estado or Pestana.Plan or Pestana.Libro);
+        _liquidacion = null;
+        _versiones = [];
+        var pago = _comprobante?.Operation.PublicId;
+        await CargarOperacionesAsync();
+        if (pago is { } id) await VerComprobanteAsync(id);
+    }
+
+    private async Task CargarLibroAsync(int pagina)
+    {
+        using var carga = _cargaLibro.Iniciar();
+        _paginaLibro = pagina;
+        var r = await Creditos.LibroAsync(Id, pagina: pagina);
+        if (!r.IsSuccess) { _libro = []; _totalLibro = 0; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo leer el libro."); return; }
+        _libro = [.. r.Value?.Items ?? []];
+        _totalLibro = r.Value?.TotalCount ?? 0;
+    }
+
+    private async Task CargarGarantiasAsync()
+    {
+        using var carga = _cargaGarantias.Iniciar();
+        var g = await Garantias.GarantiasAsync(credito: Id);
+        _garantias = [.. g.Value?.Items ?? []];
+        var p = await Garantias.PagaresAsync(credito: Id);
+        _pagares = [.. p.Value?.Items ?? []];
+        var o = await Desembolsos.OrdenesAsync(credito: Id);
+        _ordenes = [.. o.Value?.Items ?? []];
+    }
+
+    private static List<string> Marcas(MarcasDelCreditoDto m)
+    {
+        var marcas = new List<string>();
+        if (m.Suspended) marcas.Add(TextosDeCreditos.Marca("Suspended"));
+        if (m.UsuryCapped) marcas.Add(TextosDeCreditos.Marca("UsuryCapped"));
+        if (m.Restructured) marcas.Add($"{TextosDeCreditos.Marca("Restructured")} ({m.RestructuringCount})");
+        if (m.ValidationFailed) marcas.Add(TextosDeCreditos.Marca("ValidationFailed"));
+        return marcas;
+    }
+
+    private static IEnumerable<KeyValuePair<string, decimal>> Ordenados(IReadOnlyDictionary<string, decimal> saldos) =>
+        saldos.Where(x => x.Value != 0m).OrderBy(x => TextosDeCreditos.OrdenDeConceptos.ToList().IndexOf(x.Key) is var i && i < 0 ? int.MaxValue : i);
+
+    private static List<string> ConceptosDe(IReadOnlyList<CuotaDeLaLiquidacionDto> cuotas) =>
+        [.. cuotas.SelectMany(c => c.Balances.Where(b => b.Value != 0m).Select(b => b.Key)).Distinct()
+            .OrderBy(k => TextosDeCreditos.OrdenDeConceptos.ToList().IndexOf(k) is var i && i < 0 ? int.MaxValue : i)];
+
+    private static DateOnly? LeerFecha(object? valor) =>
+        DateOnly.TryParse(valor?.ToString(), CultureInfo.InvariantCulture, out var f) ? f : null;
+
+    /// <summary>La hora local que escribe la persona, como instante UTC.</summary>
+    private static DateTime? LeerInstante(object? valor) =>
+        DateTime.TryParse(valor?.ToString(), CultureInfo.InvariantCulture, DateTimeStyles.AssumeLocal, out var f) ? f.ToUniversalTime() : null;
+}

@@ -1,6 +1,7 @@
 using FluentAssertions;
 using IngenIA365ERP.Application.Accounting.Inventory;
 using IngenIA365ERP.Application.Accounting.Inventory.Consultas;
+using IngenIA365ERP.Application.Accounting.Integration;
 using IngenIA365ERP.Application.Accounting.Inventory.Contabilizacion;
 using IngenIA365ERP.Application.Accounting.Inventory.Reglas;
 using IngenIA365ERP.Application.Common.Integration;

@@ -438,6 +438,8 @@ public sealed class ImportPaymentMeansCommandHandler(IApplicationDbContext db, E
                 OfferedOnAllChannels = Todos(listaCanales, existente?.OfferedInAllChannels),
                 OfferedForAllDocumentTypes = Todos(listaTipos, existente?.OfferedForAllDocumentTypes),
                 IsActive = activo, ValidFrom = desde.Value, ValidTo = hasta, Notes = existente?.Notes,
+                // Feature 013 (T0173, A6): la plantilla 11 no trae la columna; conserva lo que el medio tenga (se edita en la pantalla).
+                CreditWithoutLending = existente?.CreditWithoutLending ?? false,
             };
 
             var antes = existente is null ? null : Resumen(existente);

@@ -1,0 +1,171 @@
+{
+  "descripcion": "§24 ejemplo 6: lo que recauda Nómina va en DN contra el puente de nómina, que queda en cero.",
+  "sobre": {
+    "version": 1,
+    "kind": "Business",
+    "originModule": "CAR",
+    "originEventKey": "Confirmation",
+    "origin": {
+      "kind": "Operation",
+      "documentClass": null,
+      "documentTypeCode": null,
+      "number": "NOM-2026-11-2",
+      "publicId": "0d0d0037-0000-4000-8000-000000000037",
+      "operationDate": "2026-11-30"
+    },
+    "related": null,
+    "chainRootPublicId": "0e0e0038-0000-4000-8000-000000000038",
+    "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+    "costCenterPublicId": null,
+    "warehouseCode": null,
+    "personPublicId": "a1b2c3d4-0000-4000-8000-000000000002",
+    "currency": "COP",
+    "exchangeRate": 1,
+    "originUser": {
+      "centralUserId": "d4e5f6a7-b8c9-4d0e-9f1a-2b3c4d5e6f70",
+      "name": "Usuario de ensayo"
+    },
+    "emittedAt": "2026-11-30T15:00:00Z"
+  },
+  "mensajes": [
+    {
+      "messageId": "0f0f0040-0000-4000-8000-000000000040",
+      "type": "PagoAplicado",
+      "kind": "Business",
+      "originDocumentClass": "PaymentApplication",
+      "payload": {
+        "loan": {
+          "loanPublicId": "7b8c9d0e-1f2a-4b3c-9d4e-000000000123",
+          "loanNumber": "000123"
+        },
+        "debtorPersonPublicId": "a1b2c3d4-0000-4000-8000-000000000002",
+        "valueDate": "2026-11-30",
+        "registeredAt": "2026-11-30T15:00:00Z",
+        "dimensions": {
+          "creditLineCode": "LIB01",
+          "modalityCode": "CONSUMO",
+          "subsegmentCode": "ConLibranza",
+          "riskCategory": "A",
+          "riskSubcategory": "None",
+          "isEmployee": false,
+          "inGracePeriod": false,
+          "restructured": false,
+          "writtenOff": false,
+          "collectorClass": "Payroll",
+          "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+          "impairmentModel": "ArrearsAnnex1",
+          "riskSegment": "CONSUMO",
+          "valueUnit": "Pesos"
+        },
+        "amounts": [
+          {
+            "concept": "Principal",
+            "installmentNumber": 3,
+            "amount": 340000.0,
+            "uvrAmount": null,
+            "onBehalfOfAssociate": false,
+            "reasonCode": null
+          },
+          {
+            "concept": "CurrentInterest",
+            "installmentNumber": 3,
+            "amount": 110000.0,
+            "uvrAmount": null,
+            "onBehalfOfAssociate": false,
+            "reasonCode": null
+          }
+        ],
+        "rulesVersion": "LND-2026.1",
+        "collector": {
+          "collectorCode": "NOM",
+          "collectorClass": "Payroll",
+          "idempotencyKey": "NOM:c0de0039-0000-4000-8000-000000000039",
+          "meansClass": "Cash",
+          "payerPersonPublicId": "a1b2c3d4-0000-4000-8000-000000000002",
+          "receipt": {
+            "number": "R-0001",
+            "date": "2026-11-30",
+            "officePublicId": null,
+            "meansReference": null,
+            "documentKind": null
+          }
+        },
+        "modality": "PastDue",
+        "amountReceived": 450000.0,
+        "surplus": 0.0,
+        "reallocations": [],
+        "prepaymentChoice": null,
+        "newPlan": null,
+        "paidOff": false,
+        "finalityUntil": null,
+        "simulationId": null,
+        "deductionFileLinePublicId": null,
+        "insuranceClaimPublicId": null
+      }
+    }
+  ],
+  "esperado": {
+    "tipo": "DN",
+    "fecha": "2026-11-30",
+    "origen": "LendingIssuedDocument",
+    "lineas": [
+      {
+        "rol": "RecaudoPorAplicar",
+        "cuenta": "25059501",
+        "debito": 450000.0,
+        "credito": 0.0,
+        "tercero": "ana",
+        "cruce": null,
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "PagoAplicado"
+          ],
+          "concepto": null,
+          "creditos": [
+            "000123"
+          ]
+        }
+      },
+      {
+        "rol": "Capital",
+        "cuenta": "14410501",
+        "debito": 0.0,
+        "credito": 340000.0,
+        "tercero": "ana",
+        "cruce": "PG 000123",
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "PagoAplicado"
+          ],
+          "concepto": "Principal",
+          "creditos": [
+            "000123"
+          ]
+        }
+      },
+      {
+        "rol": "InteresPorCobrar",
+        "cuenta": "14430501",
+        "debito": 0.0,
+        "credito": 110000.0,
+        "tercero": "ana",
+        "cruce": "PG 000123",
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "PagoAplicado"
+          ],
+          "concepto": "CurrentInterest",
+          "creditos": [
+            "000123"
+          ]
+        }
+      }
+    ]
+  }
+}

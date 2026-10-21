@@ -51,7 +51,7 @@ public class PreferenciasHandlersTests
 
         await handler.Handle(
             new SaveMyPreferencesCommand(
-                new Dictionary<string, string?> { ["ui.pagina-inicio"] = "/cartera/recaudos" }),
+                new Dictionary<string, string?> { ["ui.pagina-inicio"] = "/cartera/ahorros" }),
             CancellationToken.None);
 
         db.UserSettings.Single().TenantPublicId.Should().Be(Cooperativa);
@@ -67,7 +67,7 @@ public class PreferenciasHandlersTests
 
         var r = await handler.Handle(
             new SaveMyPreferencesCommand(
-                new Dictionary<string, string?> { ["ui.pagina-inicio"] = "/cartera/recaudos" }),
+                new Dictionary<string, string?> { ["ui.pagina-inicio"] = "/cartera/ahorros" }),
             CancellationToken.None);
 
         r.IsSuccess.Should().BeFalse();
@@ -117,7 +117,7 @@ public class PreferenciasHandlersTests
         await using var db = TestAdminDbContext.Create();
         db.UserSettings.AddRange(
             new UserSetting { CentralUserId = Usuario, TenantPublicId = Guid.Empty,        SettingKey = "ui.tema",           SettingValue = "oscuro" },
-            new UserSetting { CentralUserId = Usuario, TenantPublicId = Cooperativa,       SettingKey = "ui.pagina-inicio",  SettingValue = "/cartera/recaudos" },
+            new UserSetting { CentralUserId = Usuario, TenantPublicId = Cooperativa,       SettingKey = "ui.pagina-inicio",  SettingValue = "/cartera/ahorros" },
             new UserSetting { CentralUserId = Usuario, TenantPublicId = OtraCooperativa,   SettingKey = "ui.pagina-inicio",  SettingValue = "/contabilidad/saldos" });
         await db.SaveChangesAsync();
 
@@ -128,7 +128,7 @@ public class PreferenciasHandlersTests
 
         r.IsSuccess.Should().BeTrue();
         r.Value!.Tema.Should().Be("oscuro", "la apariencia es global");
-        r.Value.PaginaInicio.Should().Be("/cartera/recaudos", "no debe filtrarse la de otra cooperativa");
+        r.Value.PaginaInicio.Should().Be("/cartera/ahorros", "no debe filtrarse la de otra cooperativa");
     }
 
     [Fact]

@@ -1,0 +1,21 @@
+// El aplazamiento busca el día pedido y los 14 siguientes. Con los no hábiles del 1 al 15 de diciembre de 2026 (una lista
+// de prueba: el motor recibe la que le dan; los domingos 6 y 13 ya lo son), lo pedido el martes 1 no encuentra ventana
+// hasta el 15 → Excluido(NoWindow). Lo pedido el miércoles 2 sí alcanza el miércoles 16 a las 7:00.
+{
+  "caso": "14-sin-ventana-en-14-dias",
+  "reglas": {
+    "horario": { "lunesAViernes": ["07:00", "19:00"], "sabado": ["08:00", "15:00"] },
+    "contactosPorDia": 1,
+    "noHabiles": ["2026-12-01", "2026-12-02", "2026-12-03", "2026-12-04", "2026-12-05", "2026-12-07", "2026-12-08",
+                  "2026-12-09", "2026-12-10", "2026-12-11", "2026-12-12", "2026-12-14", "2026-12-15"]
+  },
+  "titular": {},
+  "escenarios": [
+    { "nombre": "pedido el martes 1",
+      "solicitud": { "pedido": "2026-12-01T09:00", "canal": "Sms", "proposito": "Collection" },
+      "esperado": { "decision": "Excluido", "motivo": "NoWindow" } },
+    { "nombre": "pedido el miércoles 2",
+      "solicitud": { "pedido": "2026-12-02T09:00", "canal": "Sms", "proposito": "Collection" },
+      "esperado": { "decision": "Diferido", "siguiente": "2026-12-16T07:00", "motivos": ["Holiday"] } }
+  ]
+}

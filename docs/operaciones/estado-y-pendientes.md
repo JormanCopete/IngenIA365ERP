@@ -625,6 +625,28 @@ no se ven en la consola salvo que se migren; `RendimientoDeInformesTests` (SC-00
 líneas) sin escribir; MAUI no registra los clientes contables (pantallas contables inertes en la app
 de escritorio, desde E1). E3 (cartera, inventario, tesorería y CDT por el contrato) y E4
 (conciliación, impuestos, exógena, activos) van en ramas posteriores.
+
+**Impuestos y retención en la fuente (E4, pendiente; revisado el 2026-10-08).** Documento para la
+contadora: [docs/implementacion/retencion-en-la-fuente-contadora.pdf](../implementacion/retencion-en-la-fuente-contadora.pdf).
+
+- **Lo que existe**:
+  - el **catálogo tributario** de Core (`/maestros/impuestos`: `COR_TaxDefinitions`, `COR_WithholdingConcepts`, `COR_TaxRates`), con tarifas por concepto, vigencia, base mínima en UVT y condiciones según el perfil del tercero y de la cooperativa. Sembrado `impuestos-co.json`: compras 2,5/3,5 %, servicios 4/6 %, honorarios 10/11 %, arriendos 3,5 %, transporte 1 % y ReteIVA 15 %, todo «pendiente de validar»;
+  - el **perfil tributario** en la ficha de la persona;
+  - el **cálculo automático sólo en las compras de Inventario** (`MotorTributario`; el concepto sale del producto, `Product.WithholdingConceptId`), que pasa a Contabilidad por mensaje y por la matriz (rol `Retencion`).
+- **En Contabilidad la cuenta valida, no calcula.** La auxiliar de impuesto tiene clase, una tarifa con vigencia (`ACC_AccountTaxRates`) y la exigencia de base. `AccountLineRules` exige base y valor = base × tarifa ± `TaxTolerance`. Por eso hace falta **una auxiliar por tarifa**, y la matriz rechaza la contabilización si la tarifa de la cuenta no coincide con la del catálogo. En un comprobante manual (egreso de honorarios, por ejemplo) la persona digita base y valor, y no intervienen ni el catálogo ni el perfil del tercero. `ChartOfAccount.TaxConceptCode` es texto libre sin uso.
+- **Lo que falta, en este orden** (tareas T142–T146 y US11 T148–T153 de `specs/009-contabilidad-niif/tasks.md`; las entidades `ACC_TaxForms`, `ACC_WithholdingCertificates*` y `ACC_Exogenous*` ya existen, pero sin handlers, rutas ni pantallas, y `WithholdingCertificateReport` no lo llama nadie):
+  1. informe de retenciones practicadas, por período, concepto, tarifa y tercero, cuadrado contra las auxiliares;
+  2. certificados de retención (ReteFuente, ReteIVA, ReteICA), en PDF, con reexpedición y envío;
+  3. borradores de los formularios 350, IVA, ICA y GMF, guardados por período;
+  4. **retención automática en egresos y pagos** que no son compras (honorarios, arriendos, servicios pagados desde tesorería o comprobante), con el mismo catálogo y el perfil del tercero. Se cruza con la feature 014 (Tesorería);
+  5. concepto de retención por línea del documento y base mínima acumulada en el mes por tercero;
+  6. información exógena por formatos parametrizables por año.
+- **Datos por completar**:
+  - base mínima de ReteIVA y tarifas de ReteICA por municipio y CIIU, que carga la cooperativa por plantilla;
+  - validación del catálogo y de las auxiliares por tarifa por la contadora;
+  - perfil tributario de los proveedores frecuentes;
+  - formatos de exógena y certificados que usa hoy la cooperativa.
+- **Fuera de la 013**: Cartera no practica retención; su «certificado tributario» es de intereses pagados por el deudor (T0973).
 #### P16 — Feature 010 (nómina completa): N1, N2 y N4 en `develop` y en **producción** (`release c388a17`, 2026-09-22); N3 pendiente
 
 La **entrega N1** —prima de servicios, cesantías e intereses del año, vacaciones y liquidación
@@ -781,6 +803,97 @@ Pendientes abiertos de la feature, fuera de las entregas:
   pantallas de Inventario y Compras de I1 y la aprobación presencial con llave se verifican a mano en
   Windows y Android y se anota el resultado.
 
+#### P19 — Feature 013 (cartera financiera): K1 a K6b construidas en su rama, **sin desplegar**
+
+**Estado: rama local `013-cartera-financiera`, sin merge a `develop` y sin desplegar en DEV, QA ni producción** (corte 2026-10-17, fase 24
+de Polish hecha en local). Cartera desde cero en reemplazo de la heredada, por entregas; el índice de manuales y runbooks es
+[cartera.md](../manual/cartera.md) y la puesta en marcha, [cartera-puesta-en-marcha.md](cartera-puesta-en-marcha.md).
+
+| Entrega | Qué trae | DEV | QA | Producción | Release | Respaldo antes de promover |
+|---|---|---|---|---|---|---|
+| K1 | plataforma, retiro de lo heredado, gobierno, líneas, originación, desembolso, causación, pagos por el contrato, ventas a crédito, integración contable, riesgo y cierre, migración y activación, documentos | — | — | — | — | `<base>-AAAAMMDD-pre-f013.dump` por base (destructiva `RetiroDeLaCarteraHeredada`, segundo revisor H7) |
+| K2 | libranza (`CarteraLibranza`) | — | — | — | — | `<base>-AAAAMMDD-pre-f013-k2.dump` |
+| K3 | novedades, condonaciones y castigo (`CarteraNovedades`) | — | — | — | — | `…-pre-f013-k3.dump` |
+| K4 | cobranza y aviso previo (`CarteraCobranza`, `CarteraCobranzaSalida`) | — | — | — | — | `…-pre-f013-k4.dump` |
+| K5 | extracto, certificado tributario, informes, tablero, SICSES y centrales (`CarteraInformes`, `CarteraComprobanteDeCargue`) | — | — | — | — | `…-pre-f013-k5.dump` |
+| K6a | pérdida esperada (`CarteraPerdidaEsperada`) | — | — | — | — | `…-pre-f013-k6a.dump` |
+| K6b | vivienda y UVR (`CarteraVivienda`) | — | — | — | — | `…-pre-f013-k6b.dump` |
+
+Lo que hay que saber antes de llevarla a un ambiente:
+
+- **K1 no sale en vivo sin Recaudo y Tesorería reales** (Q1 B): en producción la activación responde
+  `Lending.Activation.RequirementsMissing` mientras no haya un recaudador `Receipts` y un destino `Treasury` registrados sin dobles de
+  prueba. Las doce condiciones de salida están en el runbook de puesta en marcha §10.
+- Las migraciones de K1 están **congeladas** (T0802): todo cambio de esquema es una migración nueva. El orden y la cabecera
+  `MIGRACION-DESTRUCTIVA-APROBADA` del retiro (diagnóstico, respaldo y segundo revisor, hoy «pendiente») en
+  [cartera-retiro-heredado.md](cartera-retiro-heredado.md).
+- Los permisos `Lending.*` los siembra la API al arrancar, no el DbMigrator.
+
+Pendientes abiertos de la feature (dueño, contadora o ambiente):
+
+1. **Recaudo y Tesorería** (Q1): especificarlas, construirlas y desplegarlas; sin ellas COOFLOPAL no sale en vivo con Cartera.
+2. **Cotejos de layouts** (I7, SC-019): el SICSES y los archivos de centrales llevan campos `verified = false` hasta que el dueño los coteje
+   con el instructivo vigente y un archivo aceptado; mientras tanto generar exige reconocer la alerta.
+3. **Anexo 2** (E8): cotejar el Anexo 2 sembrado (PI de la aplicación voluntaria, integrales con sección de ahorro, el «00») antes de la primera
+   cooperativa obligada.
+4. **Corrección monetaria UVR** (T1049, E12): la cuenta de la corrección monetaria la elige la contadora; los créditos en UVR van en un solo
+   tramo; la corrección de una UVR ya causada recalcula los días causados desde la fase 24 (runbook de valores nacionales §3a), salvo el
+   reparto de un pago aplicado en un día corregido.
+5. **Verificación en MAUI** (T1081): no hay pruebas de navegador ni de la app; las pantallas de Cartera, el simulador, la votación en presencia
+   con llave o código y los documentos se prueban a mano en Windows y Android.
+6. **Corrida final** (T1064, T1071): las e2e de Cartera (colección «Cartera e2e») y las de volumen (`RUN_PERF_TESTS=1`) en PostgreSQL y SQL
+   Server, de una vez, antes de promover; el guion `tools/scripts/carga-cartera-sintetica.ps1` sirve para medir con volumen en DEV y QA.
+7. **QA por rol, ensayo general de COOFLOPAL, validación de la contadora y promoción** (T1078–T1089): con autorización expresa del dueño.
+
+#### P20 — Feature 014 (ahorros, aportes y CDAT en la Cartera): K7 a K11 construidas en su rama, **sin desplegar**
+
+**Estado: rama local `014-ahorros-aportes-cdt`, sin merge a `develop` y sin desplegar en DEV, QA ni producción** (corte 2026-10-19). Las
+captaciones (ahorro a la vista, CDAT, contractual y permanente) y los aportes, dentro de la Cartera, en reemplazo de lo heredado. Las cinco
+entregas salen **juntas** (`CatalogoDeCartera.EntregaVigente = K11`, decisión Q1). Despliegue: [captaciones-despliegue.md](captaciones-despliegue.md);
+puesta en marcha por cooperativa: [captaciones-puesta-en-marcha.md](captaciones-puesta-en-marcha.md); retiro de lo heredado:
+[captaciones-retiro-heredado.md](captaciones-retiro-heredado.md); parte contable: [manual contable §10](../manual/contabilidad-contrato-de-contabilizacion.md).
+
+| Entregas | Migraciones | DEV | QA | Producción | Release | Respaldo antes de promover |
+|---|---|---|---|---|---|---|
+| K7 a K11 | `RetiroDeCaptacionesHeredadas` (destructiva con guarda; D15: el dueño autoriza y es segundo revisor) y `CaptacionesAportes` (aditiva), congeladas desde el 2026-10-19 (T225) | — | — | — | — | `<base>-AAAAMMDD-pre-f014.dump` por base |
+
+Lo que hay que saber antes de llevarla a un ambiente:
+
+- Va **detrás de la 013** (sus migraciones hasta `CarteraVivienda`), que tampoco está desplegada (P19).
+- **Nada de captaciones sale en vivo sin Recaudo y Tesorería reales** (Q1): se puede desplegar, pero en producción ninguna cooperativa activa
+  aportes ni captaciones mientras `AccountsCollectorRegistered` y `TreasuryDestinationRegistered` falten sin dobles de prueba. Los requisitos
+  de la activación se exigen en **todos** los ambientes (D14); fuera de producción sólo cuentan los dobles `TST`/`TES`.
+- La cabecera `MIGRACION-DESTRUCTIVA-APROBADA` del retiro dice hoy «pendiente» en respaldo y segundo revisor. Escribirlos **cambia la huella**
+  que fija `LasMigracionesCongeladasNoSeRegeneran`: ese commit actualiza la huella a propósito, antes de la primera promoción
+  ([captaciones-despliegue.md](captaciones-despliegue.md) §2.3).
+- Los permisos `Lending.*` (163) los siembra la API al arrancar, no el DbMigrator.
+
+Pendientes abiertos de la feature:
+
+1. **Medición con la cooperativa piloto** (T234, dueño): tiempos de apertura y caja (SC-004) y éxito al primer intento (SC-018); se registran en
+   [captaciones-puesta-en-marcha.md](captaciones-puesta-en-marcha.md) §10.
+2. **Validación de la contadora** (T235, dueño y contadora): los parámetros «pendiente de validar» —P2 (umbral diario de retención y el CDAT),
+   P3 (GMF en fondos de empleados), P8 (SICSES), P9 (exógena), P10 (certificado tributario y aportes), P11 (límite de revalorización), P12
+   (participación en aportes), P26 (bonificación del contractual)—, la matriz contable con las **cuentas CUIF sugeridas** (manual contable
+   §10.7) y los casos dorados de captaciones; además, lo listado «para la contadora» en research §15.2 a §25.2.
+3. **Cotejo de layouts** (T235): SICSES **9026, 9068, 9013, 169 y 9067** y exógena **1019 y 1020** van `verified = false`; cada generación
+   lleva la alerta de formato sin cotejar hasta que el dueño los coteje con el instructivo vigente y un archivo aceptado.
+4. **Promoción a DEV y QA** (T236, dueño): diagnóstico, respaldo por base, la fila `LND.CaptacionesHeredadas.RetiroAprobado` en cada base (D15)
+   y el nombre del segundo revisor en la cabecera antes de aplicar el retiro fuera de local.
+5. **Corrida final de pruebas** (T230): las e2e «Captaciones e2e» están escritas y compiladas, **sin correr** (decisión del dueño: se corren una
+   vez al final), en PostgreSQL **y** SQL Server, junto con las de la 013; las de volumen con `RUN_PERF_TESTS=1`.
+6. **MAUI a mano**: no hay pruebas de navegador ni de la app; las pantallas de captaciones (apertura, caja, CDAT, retiro del asociado,
+   documentos, activación) se prueban a mano en Windows y Android.
+7. **Valores nacionales sin semilla** (maestro, con su fuente): `LIMITE_INEMBARGABLE` (P5), `TOPE_ENTREGA_SIN_SUCESION` (P6), los límites de
+   participación en aportes (P12) y el `IPC` para la revalorización; los sembrados (`COMPONENTE_INFLACIONARIO` 2025, `TOPE_SEGURO_DEPOSITOS`, los
+   `LIMITE` de la 014) siguen «pendientes de validar».
+8. **Preguntas abiertas al dueño** (research §13.4 y §14.1 a §25.1): entre otras, si la entidad puede superar el tope legal de la cuota de
+   fondos de empleados (D29), el descuento del ahorro permanente en la pérdida esperada (D39), el reverso del cruce al retiro en un solo
+   comprobante (§15.1), si el contrato de cuentas se bloquea por la validación previa (E108, hoy sí), las plantillas de importación de líneas
+   (§16.1) y la base de los retornos de excedentes (§22.1).
+9. **Brechas conocidas** ([captaciones-puesta-en-marcha.md](captaciones-puesta-en-marcha.md) §9): las líneas de captación y de aportes no admiten
+   versión retroactiva y la carga exige versión vigente al corte (crearlas a más tardar el día del corte).
+
 ### 🟡 Prioridad media
 
 #### P4 — Sellado mensual regulatorio suspendido
@@ -824,6 +937,18 @@ found`), y la Web arrancaba mostrando una página en blanco.
 
 Se agregó una comprobación puntual en el `Dockerfile` de la Web, pero un paso de
 CI que ejecute cada imagen (`--help`, *health check*) cerraría la clase completa.
+
+#### P18 — Feature nueva de Ahorros: ahorros, aportes y CDT (después de K1 de la 013) — ✅ especificada y construida como la feature 014 (ver P20)
+
+> Superado: la feature 014 (ahorros, aportes y CDAT dentro de la Cartera) se especificó y construyó en su rama y retiró las 38 tablas
+> conservadas y las 7 `CDT_`. Lo que sigue abierto está en **P20**. El texto de abajo queda como historia.
+
+Respuesta del dueño a la pregunta A10 de la 013 (2026-10-14, `specs/013-cartera-financiera/decisiones-transversales.md` §5):
+ahorros, aportes y CDT se **renuevan en una feature propia de Ahorros**, que se especifica **después de K1** de Cartera.
+Hasta entonces sigue lo construido en la 013: las 38 tablas conservadas de la cartera heredada, en el espacio de nombres
+`Savings`, con rutas `/api/savings/*` y `/api/reports/savings/*`, sin cambios funcionales (FR-144). **No se ha construido
+nada de la feature nueva**: falta especificarla (`/speckit-specify`), con lo que Cartera ya consume de aportes (saldos de
+aportes para el cupo, D19) y el retiro de asociado (FR-061) como interfaces que esa feature tendrá que ofrecer.
 
 ### 🟢 Prioridad baja
 

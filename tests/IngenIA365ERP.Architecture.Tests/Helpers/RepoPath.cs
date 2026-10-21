@@ -30,8 +30,25 @@ internal static class RepoPath
                 continue;
             if (file.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
                 continue;
-            // Excluir el proyecto Legacy — código importado del VB.NET original con sus propias heurísticas.
-            if (file.Contains($"{Path.DirectorySeparatorChar}IngenIA365ERP.Legacy{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
+            yield return file;
+        }
+    }
+
+    /// <summary>
+    /// Feature 013 (T0008): las pantallas <c>.razor</c> de producción, con las mismas exclusiones que
+    /// <see cref="ProductionCSharpFiles"/>; un <c>catch</c> vacío en un bloque <c>@code</c> calla el error igual.
+    /// </summary>
+    public static IEnumerable<string> ProductionRazorFiles()
+    {
+        var root = FindRepoRoot();
+        var src = Path.Combine(root, "src");
+        if (!Directory.Exists(src)) yield break;
+
+        foreach (var file in Directory.EnumerateFiles(src, "*.razor", SearchOption.AllDirectories))
+        {
+            if (file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
+                continue;
+            if (file.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
                 continue;
             yield return file;
         }

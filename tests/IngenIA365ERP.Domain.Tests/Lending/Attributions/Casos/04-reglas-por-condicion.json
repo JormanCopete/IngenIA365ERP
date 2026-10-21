@@ -1,0 +1,51 @@
+// FR-038: las reglas suben el nivel mínimo por condiciones distintas del monto. Una regla casa si casan TODAS sus
+// condiciones no nulas (los rangos de monto y de plazo son con los extremos incluidos); cada regla que casa es una razón
+// y gana el mayor. Todas son de solicitudes de crédito.
+//   1: línea ROTATIVO → gerencia            4: garantía hipotecaria → comité
+//   2: modalidad MICROCREDITO → comité       5: excepción a la política → comité
+//   3: plazo de 61 meses o más → gerencia    6: línea CONCAJA de 1.000.000 a 4.000.000 → gerencia
+{
+  "nombre": "04-reglas-por-condicion",
+  "descripcion": "Reglas por línea, modalidad, plazo, garantía, excepción a la política y rango de monto.",
+  "matriz": {
+    "niveles": [
+      { "codigo": "ANALISTA", "nombre": "Analista de crédito", "rango": 10, "clase": "Individual", "permiso": "Lending.Decisions.Analyst", "techo": 5000000 },
+      { "codigo": "EXCEP", "nombre": "Jefe de cartera (excepciones)", "rango": 15, "clase": "Individual", "permiso": "Lending.Decisions.Exceptions", "techo": 5000000, "excepcion": true },
+      { "codigo": "GERENCIA", "nombre": "Gerencia", "rango": 20, "clase": "Individual", "permiso": "Lending.Decisions.Management", "techo": 20000000 },
+      { "codigo": "COMITE", "nombre": "Comité de crédito", "rango": 30, "clase": "Collegiate", "organo": "COMCRED", "techo": 100000000 },
+      { "codigo": "CONSEJO", "nombre": "Consejo de administración", "rango": 40, "clase": "Collegiate", "organo": "CONSEJO", "consejo": true }
+    ],
+    "reglas": [
+      { "orden": 1, "linea": "ROTATIVO", "nivelMinimo": "GERENCIA" },
+      { "orden": 2, "modalidad": "MICROCREDITO", "nivelMinimo": "COMITE" },
+      { "orden": 3, "plazoMinimo": 61, "nivelMinimo": "GERENCIA" },
+      { "orden": 4, "garantia": "Mortgage", "nivelMinimo": "COMITE" },
+      { "orden": 5, "excepcionALaPolitica": true, "nivelMinimo": "COMITE" },
+      { "orden": 6, "linea": "CONCAJA", "montoMinimo": 1000000, "montoMaximo": 4000000, "nivelMinimo": "GERENCIA" }
+    ]
+  },
+  "escenarios": [
+    { "nombre": "rotativo de 2.000.000", "sujeto": { "linea": "ROTATIVO", "montoConsolidado": 2000000 },
+      "esperado": { "nivel": "GERENCIA", "razones": [ { "clase": "AmountCeiling", "nivel": "ANALISTA" }, { "clase": "Rule", "nivel": "GERENCIA" } ] } },
+    { "nombre": "rotativo de 25.000.000: manda el techo", "sujeto": { "linea": "ROTATIVO", "montoConsolidado": 25000000 },
+      "esperado": { "nivel": "COMITE", "razones": [ { "clase": "AmountCeiling", "nivel": "COMITE" }, { "clase": "Rule", "nivel": "GERENCIA" } ] } },
+    { "nombre": "microcrédito de 2.000.000", "sujeto": { "linea": "MICRO", "modalidad": "MICROCREDITO", "montoConsolidado": 2000000 },
+      "esperado": { "nivel": "COMITE", "razones": [ { "clase": "AmountCeiling", "nivel": "ANALISTA" }, { "clase": "Rule", "nivel": "COMITE" } ] } },
+    { "nombre": "plazo de 72 meses", "sujeto": { "linea": "CONLIB", "montoConsolidado": 2000000, "plazoMeses": 72 },
+      "esperado": { "nivel": "GERENCIA", "razones": [ { "clase": "AmountCeiling", "nivel": "ANALISTA" }, { "clase": "Rule", "nivel": "GERENCIA" } ] } },
+    { "nombre": "plazo de 60 meses no casa", "sujeto": { "linea": "CONLIB", "montoConsolidado": 2000000, "plazoMeses": 60 },
+      "esperado": { "nivel": "ANALISTA", "razones": [ { "clase": "AmountCeiling", "nivel": "ANALISTA" } ] } },
+    { "nombre": "sin plazo informado la regla de plazo no casa", "sujeto": { "linea": "CONLIB", "montoConsolidado": 2000000 },
+      "esperado": { "nivel": "ANALISTA", "razones": [ { "clase": "AmountCeiling", "nivel": "ANALISTA" } ] } },
+    { "nombre": "rotativo a 72 meses: casan dos reglas", "sujeto": { "linea": "ROTATIVO", "montoConsolidado": 2000000, "plazoMeses": 72 },
+      "esperado": { "nivel": "GERENCIA", "razones": [ { "clase": "AmountCeiling", "nivel": "ANALISTA" }, { "clase": "Rule", "nivel": "GERENCIA" }, { "clase": "Rule", "nivel": "GERENCIA" } ] } },
+    { "nombre": "con hipoteca entre sus garantías", "sujeto": { "linea": "CONLIB", "montoConsolidado": 2000000, "garantias": ["PromissoryNote", "Mortgage"] },
+      "esperado": { "nivel": "COMITE", "razones": [ { "clase": "AmountCeiling", "nivel": "ANALISTA" }, { "clase": "Rule", "nivel": "COMITE" } ] } },
+    { "nombre": "excepción a la política con 1.000.000", "sujeto": { "linea": "CONLIB", "montoConsolidado": 1000000, "excepcionALaPolitica": true },
+      "esperado": { "nivel": "COMITE", "razones": [ { "clase": "AmountCeiling", "nivel": "ANALISTA" }, { "clase": "Rule", "nivel": "COMITE" } ] } },
+    { "nombre": "CONCAJA de 2.000.000 dentro del rango", "sujeto": { "linea": "CONCAJA", "montoConsolidado": 2000000 },
+      "esperado": { "nivel": "GERENCIA", "razones": [ { "clase": "AmountCeiling", "nivel": "ANALISTA" }, { "clase": "Rule", "nivel": "GERENCIA" } ] } },
+    { "nombre": "CONCAJA de 4.500.000 fuera del rango", "sujeto": { "linea": "CONCAJA", "montoConsolidado": 4500000 },
+      "esperado": { "nivel": "ANALISTA", "razones": [ { "clase": "AmountCeiling", "nivel": "ANALISTA" } ] } }
+  ]
+}

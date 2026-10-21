@@ -47,7 +47,7 @@ public sealed class CasoDoradoPila
     /// <summary>La semilla completa: el catálogo 2026 más las revisiones con vigencia futura, cerrando la anterior de cada código como hace el seeder.</summary>
     public static List<PayrollLegalParameter> SemillaCompleta()
     {
-        var lista = PayrollLegalParametersSeeder.Catalogo().ToList();
+        var lista = PayrollLegalParametersSeeder.ConValoresNacionales().ToList();
         foreach (var revision in PayrollLegalParametersSeeder.Revisiones().OrderBy(r => r.ValidFrom))
         {
             var ultima = lista.Where(p => p.Code.Equals(revision.Code, StringComparison.OrdinalIgnoreCase) && p.ValidFrom < revision.ValidFrom).OrderByDescending(p => p.ValidFrom).FirstOrDefault();
