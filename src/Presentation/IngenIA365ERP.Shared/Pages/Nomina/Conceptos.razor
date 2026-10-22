@@ -289,7 +289,7 @@
                         @foreach (var fila in _filasCuentas)
                         {
                             <tr>
-                                <td><SfTextBox @bind-Value="fila.CostCenterPublicId" Placeholder="vacío = por defecto (PublicId del centro)" /></td>
+                                <td><SelectorDeCentroDeCosto @bind-Value="fila.CostCenterPublicId" Placeholder="Por defecto (sin centro)" /></td>
                                 <td>
                                     <BuscadorDeCuenta Modulo="NOM" @bind-Cuenta="fila.Debito" />
                                     @if (fila.Debito is not null) { <span class="hint">@Reglas(fila.Debito)</span> }
@@ -570,7 +570,7 @@
         _filasCuentas = actuales.IsSuccess && actuales.Value!.Count > 0
             ? actuales.Value.Select(f => new FilaCuenta
             {
-                CostCenterPublicId = f.CostCenterPublicId?.ToString() ?? string.Empty,
+                CostCenterPublicId = f.CostCenterPublicId,
                 Debito = ComoBuscada(f.Debit), Credito = ComoBuscada(f.Credit),
                 ProblemaDebito = f.Debit.Problem is { } pd ? $"La cuenta {pd}." : null,
                 ProblemaCredito = f.Credit.Problem is { } pc ? $"La cuenta {pc}." : null,
@@ -598,7 +598,7 @@
         try
         {
             var filas = _filasCuentas.Select(f => new CuentaDeConceptoRequest(
-                Guid.TryParse(f.CostCenterPublicId, out var cc) ? cc : null, f.Debito?.Code ?? string.Empty, f.Credito?.Code ?? string.Empty)).ToList();
+                f.CostCenterPublicId, f.Debito?.Code ?? string.Empty, f.Credito?.Code ?? string.Empty)).ToList();
             var res = await Nomina.GuardarCuentasDeConceptoAsync(_cuentasDe.Code, filas);
             if (!res.IsSuccess) { await Notification.ErrorAsync(res.ErrorMessage ?? "No se pudieron guardar las cuentas."); return; }
             await Notification.SuccessAsync("Cuentas guardadas.");
@@ -678,7 +678,7 @@
 
     private sealed class FilaCuenta
     {
-        public string CostCenterPublicId { get; set; } = string.Empty;
+        public Guid? CostCenterPublicId { get; set; }
         public CuentaBuscadaDto? Debito { get; set; }
         public CuentaBuscadaDto? Credito { get; set; }
         public string? ProblemaDebito { get; set; }

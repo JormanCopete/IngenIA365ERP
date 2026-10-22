@@ -16,6 +16,9 @@
         <SfTextBox Placeholder="Buscar por documento, nombre o apellido..." @bind-Value="_search"
                    Width="320px"
                    ValueChange="@((Syncfusion.Blazor.Inputs.ChangedEventArgs e) => OnSearchChanged())" />
+        <span class="filtro-centro" style="display:inline-block;width:240px;vertical-align:middle">
+            <SelectorDeCentroDeCosto Value="_centroFiltro" ValueChanged="AlCambiarCentroAsync" Placeholder="Todos los centros de costo" />
+        </span>
         <SfCheckBox @bind-Checked="_activeOnly" Label="Solo activos"
                     ValueChange="@((Syncfusion.Blazor.Buttons.ChangeEventArgs<bool> e) => LoadData())" />
         <PermissionGate Required="Payroll.Employees.Create">
@@ -46,6 +49,7 @@
                 }
             </Template>
         </GridColumn>
+        <GridColumn Field="@nameof(EmployeeRow.CentroDeCosto)" HeaderText="Centro de costo" Width="200" />
         <GridColumn Field="@nameof(EmployeeRow.Email)" HeaderText="Email" Width="220" />
         <GridColumn HeaderText="Acciones" Width="170" TextAlign="TextAlign.Center"
                     AllowFiltering="false" AllowSorting="false">
@@ -174,6 +178,16 @@
                                             <p class="hint">El cambio de plan lleva fecha de efecto: no puede caer dentro de un período abierto o calculado del plan actual.</p>
                                         }
                                     }
+                                </div>
+                                <div>
+                                    <label>Centro de costo</label>
+                                    <PermissionGate Required="@(_isNewEmployee ? "Payroll.Employees.Create" : "Payroll.Employees.Update")">
+                                        <ChildContent>
+                                            <SelectorDeCentroDeCosto @bind-Value="_employeeModel.CostCenterPublicId" />
+                                        </ChildContent>
+                                        <Fallback><p class="texto-tenue">Sin permiso para asignarlo.</p></Fallback>
+                                    </PermissionGate>
+                                    <span class="hint">El comprobante de nómina lo usa en las cuentas que manejan centro de costo. Vacío = cuentas por defecto del concepto.</span>
                                 </div>
                                 <div>
                                     <label>EPS</label>
@@ -320,6 +334,14 @@
     private Guid? _personPublicId;       // null si la persona es nueva
     private PersonaFormularioModelo _personaModelo = PersonaFormularioModelo.Nuevo();
     private EmployeeModel _employeeModel = new();
+    private Guid? _centroFiltro;
+    private Guid? _centroOriginal;
+
+    private async Task AlCambiarCentroAsync(Guid? centro)
+    {
+        _centroFiltro = centro;
+        await LoadData();
+    }
     private Colision? _colision;
 
     // Terminar contrato
@@ -435,6 +457,7 @@
         {
             var url = "/api/payroll/employees?PageNumber=1&PageSize=500"
                    + (_activeOnly ? "&ActiveOnly=true" : "")
+                   + (_centroFiltro is { } centro ? $"&CostCenterPublicId={centro}" : "")
                    + (string.IsNullOrWhiteSpace(_search) ? "" : $"&Search={Uri.EscapeDataString(_search)}");
             _items = await Http.GetListAsync<EmployeeRow>(url);
         }
@@ -550,6 +573,7 @@
         _dialogTitle = $"Editar empleado: {NombreDePersona.PreferirCompuesto(ficha.FullName, ficha.FirstName, ficha.OtherNames, ficha.LastName, ficha.SecondLastName)}";
         _employeeModel = MapEmployeeDto(ficha);
         _planOriginal = ficha.PayrollPlanPublicId; _planDesde = DateTime.Today;
+        _centroOriginal = ficha.CostCenterPublicId;
         _showEditDialog = true;
     }
 
@@ -665,7 +689,10 @@
                     PayrollBankPublicId = _employeeModel.PayrollBankPublicId,
                     PayrollBankAccountNumber = string.IsNullOrWhiteSpace(_employeeModel.PayrollBankAccountNumber)
                         ? null : _employeeModel.PayrollBankAccountNumber,
-                    PayrollBankAccountType = _employeeModel.PayrollBankAccountType
+                    PayrollBankAccountType = _employeeModel.PayrollBankAccountType,
+                    // Nulo = no cambia; «Ninguno» manda la orden de quitarlo (UpdateEmployeeCommand.ClearCostCenter).
+                    CostCenterPublicId = _employeeModel.CostCenterPublicId,
+                    ClearCostCenter = _employeeModel.CostCenterPublicId is null && _centroOriginal is not null
                 };
                 resEmp = await Http.PutAsJsonAsync($"/api/payroll/employees/{_employeePublicId}", updatePayload);
                 // El plan no va en el PUT: cambiarlo lleva fecha de efecto y sus propias reglas.
@@ -711,7 +738,7 @@
         _employeeModel.WorkRiskRatePublicId, _employeeModel.SeveranceProviderPublicId, _employeeModel.FamilyCompensationFundPublicId,
         _employeeModel.PayrollPlanPublicId, _employeeModel.PayrollBankPublicId,
         string.IsNullOrWhiteSpace(_employeeModel.PayrollBankAccountNumber) ? null : _employeeModel.PayrollBankAccountNumber,
-        _employeeModel.PayrollBankAccountType);
+        _employeeModel.PayrollBankAccountType, _employeeModel.CostCenterPublicId);
 
     /// <summary>Documento duplicado o de una eliminada: se ofrece la salida junto al formulario (FR-007, FR-016); lo demás, como aviso.</summary>
     private async Task FalloDelAltaAsync(string? codigo, string? mensaje)
@@ -816,7 +843,8 @@
         PayrollPlanPublicId = e.PayrollPlanPublicId,
         PayrollBankPublicId = e.PayrollBankPublicId,
         PayrollBankAccountNumber = e.PayrollBankAccountNumber ?? "",
-        PayrollBankAccountType = e.PayrollBankAccountType
+        PayrollBankAccountType = e.PayrollBankAccountType,
+        CostCenterPublicId = e.CostCenterPublicId
     };
 
     // ---------- Modelos ----------
@@ -831,6 +859,9 @@
         public DateTime HireDate { get; set; }
         public string StatusText { get; set; } = "";
         public string Email { get; set; } = "";
+        public string? CostCenterCode { get; set; }
+        public string? CostCenterName { get; set; }
+        public string CentroDeCosto => string.IsNullOrWhiteSpace(CostCenterName) ? "" : string.IsNullOrWhiteSpace(CostCenterCode) ? CostCenterName : $"{CostCenterCode} · {CostCenterName}";
     }
 
     private class EmployeeDetailDto
@@ -856,6 +887,7 @@
         public Guid? PayrollBankPublicId { get; set; }
         public string? PayrollBankAccountNumber { get; set; }
         public int PayrollBankAccountType { get; set; }
+        public Guid? CostCenterPublicId { get; set; }
     }
 
     /// <summary>Datos laborales dentro del diálogo.</summary>
@@ -874,10 +906,11 @@
         public Guid? PayrollBankPublicId { get; set; }
         public string? PayrollBankAccountNumber { get; set; }
         public int PayrollBankAccountType { get; set; } = 1;
+        public Guid? CostCenterPublicId { get; set; }
     }
 
     /// <summary>
-    /// Los 13 campos de <c>EmployeeInput</c> del servidor. Con <c>PersonPublicId</c> es
+    /// Los 14 campos de <c>EmployeeInput</c> del servidor. Con <c>PersonPublicId</c> es
     /// <c>RegisterEmployeeCommand</c> (persona existente); sin él es la parte «employee» del alta
     /// en un paso, donde el servidor no lo espera y lo ignora.
     /// </summary>
@@ -886,7 +919,7 @@
         Guid? HealthInsurancePublicId, Guid? PensionProviderPublicId, Guid? WorkRiskProviderPublicId,
         Guid? WorkRiskRatePublicId, Guid? SeveranceProviderPublicId, Guid? FamilyCompensationFundPublicId,
         Guid? PayrollPlanPublicId, Guid? PayrollBankPublicId, string? PayrollBankAccountNumber, int PayrollBankAccountType,
-        Guid? PersonPublicId = null);
+        Guid? CostCenterPublicId = null, Guid? PersonPublicId = null);
 
     private sealed record Colision(string Mensaje, bool Eliminada);
 

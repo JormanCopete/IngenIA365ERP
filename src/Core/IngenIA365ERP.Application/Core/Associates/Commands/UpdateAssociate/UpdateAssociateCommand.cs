@@ -1,6 +1,7 @@
-using FluentValidation;
+﻿using FluentValidation;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Application.Core.AssociateGroups;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -23,6 +24,7 @@ public record UpdateAssociateCommand : IRequest<Result>
     public Guid? BranchPublicId { get; init; }
     public Guid? SectionPublicId { get; init; }
     public Guid? CommitteePublicId { get; init; }
+    public Guid? AssociateGroupPublicId { get; init; }
     public string? CategoryRating { get; init; }
     public string? AssociateClass { get; init; }
     public string? PaymentType { get; init; }
@@ -105,6 +107,17 @@ public class UpdateAssociateCommandHandler(
             entity.CommitteeId = c?.Id;
         }
         else { entity.CommitteeId = null; }
+
+        // Grupo del asociado: debe existir y estar activo; si ya lo tiene, conservarlo aunque se haya inactivado.
+        if (request.AssociateGroupPublicId.HasValue)
+        {
+            var g = await context.AssociateGroups.AsNoTracking()
+                .FirstOrDefaultAsync(x => x.PublicId == request.AssociateGroupPublicId.Value && !x.IsDeleted, ct);
+            if (g is null) return Result.Failure(AssociateGroupErrors.NotFound());
+            if (!g.IsActive && g.Id != entity.AssociateGroupId) return Result.Failure(AssociateGroupErrors.Inactive());
+            entity.AssociateGroupId = g.Id;
+        }
+        else { entity.AssociateGroupId = null; }
 
         if (request.DepositBankPublicId.HasValue)
         {

@@ -1,4 +1,4 @@
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 using IngenIA365ERP.Domain.Common;
 
 namespace IngenIA365ERP.Domain.Entities.Core;
@@ -33,7 +33,8 @@ public class Associate : AuditableEntity
     public DateOnly? JoinDate { get; set; }
     public decimal ContributionRate { get; set; }
     public int? BranchId { get; set; }
-    public int? CostCenterId { get; set; }
+    /// <summary>Grupo del asociado (zona, empresa, gremio, agencia…): clasificación libre de la cooperativa, sin efecto contable.</summary>
+    public int? AssociateGroupId { get; set; }
     public int? SectionId { get; set; }
     public short CutoffDay { get; set; }
 
@@ -223,7 +224,7 @@ public class Associate : AuditableEntity
     public Person Person { get; set; } = null!;
     public EmployerCompany? EmployerCompany { get; set; }
     public Branch? Branch { get; set; }
-    public CostCenter? CostCenter { get; set; }
+    public AssociateGroup? AssociateGroup { get; set; }
     public Section? Section { get; set; }
     public WithdrawalReason? WithdrawalReason { get; set; }
     public Advisor? Advisor { get; set; }

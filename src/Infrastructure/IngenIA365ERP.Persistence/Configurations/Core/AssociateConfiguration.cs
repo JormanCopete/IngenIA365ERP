@@ -1,4 +1,4 @@
-using IngenIA365ERP.Domain.Entities.Core;
+﻿using IngenIA365ERP.Domain.Entities.Core;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -101,7 +101,7 @@ public class AssociateConfiguration : IEntityTypeConfiguration<Associate>
         // === FK indexes ===
         builder.HasIndex(e => e.EmployerCompanyId).HasDatabaseName("IX_COR_Associates_EmployerCompanyId");
         builder.HasIndex(e => e.BranchId).HasDatabaseName("IX_COR_Associates_BranchId");
-        builder.HasIndex(e => e.CostCenterId).HasDatabaseName("IX_COR_Associates_CostCenterId");
+        builder.HasIndex(e => e.AssociateGroupId).HasDatabaseName("IX_COR_Associates_AssociateGroupId");
         builder.HasIndex(e => e.SectionId).HasDatabaseName("IX_COR_Associates_SectionId");
         builder.HasIndex(e => e.AdvisorId).HasDatabaseName("IX_COR_Associates_AdvisorId");
         builder.HasIndex(e => e.CommitteeId).HasDatabaseName("IX_COR_Associates_CommitteeId");
@@ -111,7 +111,7 @@ public class AssociateConfiguration : IEntityTypeConfiguration<Associate>
         // === Relationships ===
         builder.HasOne(e => e.EmployerCompany).WithMany().HasForeignKey(e => e.EmployerCompanyId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(e => e.Branch).WithMany().HasForeignKey(e => e.BranchId).OnDelete(DeleteBehavior.Restrict);
-        builder.HasOne(e => e.CostCenter).WithMany().HasForeignKey(e => e.CostCenterId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne(e => e.AssociateGroup).WithMany().HasForeignKey(e => e.AssociateGroupId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(e => e.Section).WithMany().HasForeignKey(e => e.SectionId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(e => e.WithdrawalReason).WithMany().HasForeignKey(e => e.WithdrawalReasonId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(e => e.Advisor).WithMany().HasForeignKey(e => e.AdvisorId).OnDelete(DeleteBehavior.Restrict);

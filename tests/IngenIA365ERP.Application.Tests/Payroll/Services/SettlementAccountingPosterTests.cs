@@ -183,4 +183,46 @@ public class SettlementAccountingPosterTests
         SettlementAccountingPoster.TerceroPara(PayrollRunKind.Severance)(linea).Should().Be(EntidadInstitucional.Ninguna);
         SettlementAccountingPoster.TerceroPara(PayrollRunKind.Settlement)(linea).Should().Be(EntidadInstitucional.Ninguna);
     }
+
+    // ---------------- Centro de costo del empleado (2026-10-22): las especiales reutilizan la armada de la ordinaria ----------------
+
+    [Fact]
+    public async Task La_prima_lleva_el_centro_de_costo_de_la_ficha_en_la_cuenta_que_lo_maneja()
+    {
+        var d = LiquidacionDePrueba.ConPrimerSemestre();
+        LiquidacionDePrueba.ConContabilidad(d);
+        var cuentas = await d.Db.PayrollConceptDefinitionAccounts.SingleAsync(a => a.ConceptCode == "PRIMA");
+        (await d.Db.ChartOfAccounts.SingleAsync(a => a.Id == cuentas.DebitAccountId)).RequiresCostCenter = true;
+        await d.Db.SaveChangesAsync();
+        var centro = await d.Db.CostCenters.SingleAsync(c => c.LegacyCode == "01");
+        d.Ana.CostCenterRefId.Should().Be(centro.Id);
+        var run = await LiquidacionDePrueba.PrimaAsync(d);
+        var filas = await LiquidacionDePrueba.FilasAsync(d, run);
+
+        var r = await d.ContabilizadorDeLiquidaciones(Contadora).PostAsync(run, filas, postingDate: null, "Prima 2026-I", CancellationToken.None);
+
+        r.IsSuccess.Should().BeTrue(r.Error.Message);
+        r.Value.Lines.Where(a => a.AccountId == cuentas.DebitAccountId && a.Debit > 0).Should().ContainSingle()
+            .Which.CostCenterId.Should().Be(centro.Id);
+    }
+
+    [Fact]
+    public async Task La_prima_con_una_cuenta_que_exige_centro_y_un_empleado_sin_el_nombra_al_empleado()
+    {
+        var d = LiquidacionDePrueba.ConPrimerSemestre();
+        LiquidacionDePrueba.ConContabilidad(d);
+        var cuentas = await d.Db.PayrollConceptDefinitionAccounts.SingleAsync(a => a.ConceptCode == "PRIMA");
+        (await d.Db.ChartOfAccounts.SingleAsync(a => a.Id == cuentas.DebitAccountId)).RequiresCostCenter = true;
+        d.Ana.CostCenterRefId = null;
+        await d.Db.SaveChangesAsync();
+        var run = await LiquidacionDePrueba.PrimaAsync(d);
+        var filas = await LiquidacionDePrueba.FilasAsync(d, run);
+
+        var r = await d.ContabilizadorDeLiquidaciones(Contadora).PostAsync(run, filas, postingDate: null, "Prima 2026-I", CancellationToken.None);
+
+        r.IsFailure.Should().BeTrue();
+        r.Error.Code.Should().Be("Payroll.Employee.CostCenterRequired");
+        r.Error.Message.Should().Contain("Ana Prueba");
+        (await d.Db.AccountingDocuments.CountAsync()).Should().Be(0);
+    }
 }

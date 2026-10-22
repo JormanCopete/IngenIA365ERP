@@ -6448,6 +6448,9 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasMaxLength(4)
                         .HasColumnType("character varying(4)");
 
+                    b.Property<int?>("AssociateGroupId")
+                        .HasColumnType("integer");
+
                     b.Property<string>("AssociatePensionType")
                         .HasMaxLength(10)
                         .HasColumnType("character varying(10)");
@@ -6505,9 +6508,6 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasPrecision(10, 5)
                         .HasColumnType("numeric(10,5)")
                         .HasDefaultValue(0m);
-
-                    b.Property<int?>("CostCenterId")
-                        .HasColumnType("integer");
 
                     b.Property<bool>("CpAdmin")
                         .ValueGeneratedOnAdd()
@@ -6839,14 +6839,14 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.HasIndex("AdvisorId")
                         .HasDatabaseName("IX_COR_Associates_AdvisorId");
 
+                    b.HasIndex("AssociateGroupId")
+                        .HasDatabaseName("IX_COR_Associates_AssociateGroupId");
+
                     b.HasIndex("BranchId")
                         .HasDatabaseName("IX_COR_Associates_BranchId");
 
                     b.HasIndex("CommitteeId")
                         .HasDatabaseName("IX_COR_Associates_CommitteeId");
-
-                    b.HasIndex("CostCenterId")
-                        .HasDatabaseName("IX_COR_Associates_CostCenterId");
 
                     b.HasIndex("EmployerCompanyId")
                         .HasDatabaseName("IX_COR_Associates_EmployerCompanyId");
@@ -6953,6 +6953,82 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasDatabaseName("UK_COR_AssociateCategories_PublicId");
 
                     b.ToTable("COR_AssociateCategories", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Core.AssociateGroup", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_AssociateGroups_Code")
+                        .HasFilter("\"IsDeleted\" = FALSE");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_AssociateGroups_PublicId");
+
+                    b.ToTable("COR_AssociateGroups", "dbo");
                 });
 
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Core.AssociateInboundMessage", b =>
@@ -47056,6 +47132,9 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasMaxLength(8)
                         .HasColumnType("character varying(8)");
 
+                    b.Property<int?>("CostCenterRefId")
+                        .HasColumnType("integer");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -47335,6 +47414,9 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasColumnName("xmin");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CostCenterRefId")
+                        .HasDatabaseName("IX_PAY_Employees_CostCenterRefId");
 
                     b.HasIndex("DisbursementBankId")
                         .HasDatabaseName("IX_PAY_Employees_DisbursementBank");
@@ -56362,6 +56444,11 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasForeignKey("AdvisorId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Core.AssociateGroup", "AssociateGroup")
+                        .WithMany()
+                        .HasForeignKey("AssociateGroupId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("IngenIA365ERP.Domain.Entities.Core.Branch", "Branch")
                         .WithMany()
                         .HasForeignKey("BranchId")
@@ -56370,11 +56457,6 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.HasOne("IngenIA365ERP.Domain.Entities.Core.Committee", "Committee")
                         .WithMany()
                         .HasForeignKey("CommitteeId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("IngenIA365ERP.Domain.Entities.Core.CostCenter", "CostCenter")
-                        .WithMany()
-                        .HasForeignKey("CostCenterId")
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("IngenIA365ERP.Domain.Entities.Core.EmployerCompany", "EmployerCompany")
@@ -56400,11 +56482,11 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
 
                     b.Navigation("Advisor");
 
+                    b.Navigation("AssociateGroup");
+
                     b.Navigation("Branch");
 
                     b.Navigation("Committee");
-
-                    b.Navigation("CostCenter");
 
                     b.Navigation("EmployerCompany");
 
@@ -62943,6 +63025,12 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
 
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.Employee", b =>
                 {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Core.CostCenter", "CostCenter")
+                        .WithMany()
+                        .HasForeignKey("CostCenterRefId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("FK_PAY_Employees_COR_CostCenters_CostCenterRefId");
+
                     b.HasOne("IngenIA365ERP.Domain.Entities.Core.Bank", null)
                         .WithMany()
                         .HasForeignKey("DisbursementBankId")
@@ -62959,6 +63047,8 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasForeignKey("PersonId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.Navigation("CostCenter");
 
                     b.Navigation("PayrollPlan");
 

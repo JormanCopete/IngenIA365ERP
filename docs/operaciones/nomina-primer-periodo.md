@@ -290,6 +290,16 @@ SELECT "ObligationNumber", "ExpectedAmount", "DeductedAmount", "NotDeductedAmoun
 FROM dbo."PAY_PayrollLoanDeductions" WHERE "PayrollRunId" = :run AND "IsDeleted" = false;
 ```
 
+## 4g. Centro de costo de los empleados (2026-10-22)
+
+Antes de aprobar la primera nómina con contabilidad: si alguna cuenta de los conceptos (Nómina ›
+Conceptos › Cuentas) **exige centro de costo**, todo empleado que liquide necesita uno en su ficha
+(Nómina › Empleados › Centro de costo); sin él la aprobación responde `Payroll.Employee.CostCenterRequired`
+y nombra a los empleados que faltan. Con cuentas que no lo exigen el centro es opcional y sin centro se
+usan las cuentas por defecto del concepto. El centro viene de la FK `PAY_Employees.CostCenterRefId`; la
+migración `CentroDeCostoDelEmpleado` la puebla desde el código de texto heredado cuando existía. Receta:
+`docs/manual/nomina-centro-de-costo-del-empleado.md`.
+
 ## 5. Reaplicar la semilla
 
 Tras una actualización que traiga conceptos, parámetros o clases ARL nuevos, o si alguien

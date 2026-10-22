@@ -165,6 +165,7 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     public DbSet<Associate> Associates => Set<Associate>();
     public DbSet<Branch> Branches => Set<Branch>();
     public DbSet<CostCenter> CostCenters => Set<CostCenter>();
+    public DbSet<AssociateGroup> AssociateGroups => Set<AssociateGroup>();
     public DbSet<City> Cities => Set<City>();
     public DbSet<Bank> Banks => Set<Bank>();
     public DbSet<BankFileFormat> BankFileFormats => Set<BankFileFormat>();
@@ -956,6 +957,8 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
         // Feature 010: corridas con Kind y las tablas de N1. BankAccountType es el alias en Domain de
         // PayrollBankAccountType (misma columna en la base); aqui tambien se ignora para no duplicarla.
         modelBuilder.Entity<Employee>(b => b.Ignore(e => e.BankAccountType));
+        // Centro de costo del empleado: la FK explícita (la convención la ataría al código heredado de texto, CostCenterId).
+        modelBuilder.Entity<Employee>(b => b.HasOne(e => e.CostCenter).WithMany().HasForeignKey(e => e.CostCenterRefId));
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Payroll.Transactions.PayrollRun>(b =>
         {
             b.Ignore(r => r.EsEspecial); b.Ignore(r => r.EsCoherente); b.Ignore(r => r.SourceTypeName);
