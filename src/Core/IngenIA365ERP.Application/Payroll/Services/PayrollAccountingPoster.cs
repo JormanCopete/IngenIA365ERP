@@ -2,6 +2,7 @@ using IngenIA365ERP.Application.Accounting.Posting;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Domain.Entities.Accounting.Transactions;
+using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Entities.Payroll;
 using IngenIA365ERP.Domain.Entities.Payroll.Transactions;
 using IngenIA365ERP.Domain.Enums.Payroll;
@@ -58,22 +59,27 @@ public sealed class PayrollAccountingPoster(IApplicationDbContext db, Accounting
         Func<PayrollRunLine, EntidadInstitucional>? terceroPorLinea,
         CancellationToken ct)
     {
-        // --- centro de costo de cada empleado (código legado → Id); sin centro, la cuenta decide ---
-        var codigosCc = employees.Select(e => e.Employee.CostCenterId).Where(c => !string.IsNullOrWhiteSpace(c)).Distinct().ToList();
-        var centros = await db.CostCenters.AsNoTracking()
-            .Where(c => !c.IsDeleted && c.LegacyCode != null && codigosCc.Contains(c.LegacyCode))
-            .Select(c => new { c.Id, c.LegacyCode })
-            .ToListAsync(ct);
-        var ccPorCodigo = centros.ToDictionary(c => c.LegacyCode!, c => c.Id, StringComparer.OrdinalIgnoreCase);
+        // --- centro de costo de cada empleado: la FK PAY_Employees.CostCenterRefId (nula = sin centro) ---
+        // Hasta el 2026-10-22 se casaba el texto Employee.CostCenterId con COR_CostCenters.LegacyCode, nadie lo
+        // escribía y un código que no casaba dejaba el centro en nulo sin avisar.
+        var idsDeCentros = employees.Select(e => e.Employee.CostCenterRefId).Where(c => c is not null).Select(c => c!.Value).Distinct().ToList();
+        var centrosEliminados = idsDeCentros.Count == 0 ? new HashSet<int>()
+            : (await db.CostCenters.AsNoTracking().Where(c => idsDeCentros.Contains(c.Id) && c.IsDeleted).Select(c => c.Id).ToListAsync(ct)).ToHashSet();
+        var conCentroEliminado = employees.Where(e => e.Employee.CostCenterRefId is { } c && centrosEliminados.Contains(c)).Select(e => e.Employee).ToList();
+        if (conCentroEliminado.Count > 0)
+            return Result.Failure<AccountingDocument>(await ErrorDeEmpleadosAsync("Payroll.Employee.CostCenterDeleted",
+                "tiene asignado un centro de costo que fue eliminado", "tienen asignado un centro de costo que fue eliminado",
+                conCentroEliminado, null, ct));
 
         // --- entidades institucionales de los empleados: nombre y persona vinculada (FR-088) ---
         var entidades = await CargarEntidadesAsync(employees.Select(e => e.Employee).ToList(), ct);
 
         // --- agrupar por (concepto, centro de costo, tercero) ---
         var grupos = new Dictionary<Grupo, decimal>();
+        var empleadosDelGrupo = new Dictionary<Grupo, List<Employee>>();
         foreach (var (_, employee, lines) in employees)
         {
-            int? cc = !string.IsNullOrWhiteSpace(employee.CostCenterId) && ccPorCodigo.TryGetValue(employee.CostCenterId, out var id) ? id : null;
+            int? cc = employee.CostCenterRefId;
             foreach (var line in lines.Where(l => l.AffectsAccounting && l.Amount != 0m))
             {
                 var entidad = terceroPorLinea?.Invoke(line) ?? TercerosDeNomina.EntidadDe(line.ConceptCode, line.Nature);
@@ -82,6 +88,8 @@ public sealed class PayrollAccountingPoster(IApplicationDbContext db, Accounting
                     : entidades.Buscar(entidad, IdDeEntidad(employee, entidad));
                 var key = new Grupo(line.ConceptCode, cc, personId, entidad, nombre);
                 grupos[key] = grupos.GetValueOrDefault(key) + line.Amount;
+                if (!empleadosDelGrupo.TryGetValue(key, out var delGrupo)) empleadosDelGrupo[key] = delGrupo = [];
+                if (!delGrupo.Contains(employee)) delGrupo.Add(employee);
             }
         }
 
@@ -125,6 +133,31 @@ public sealed class PayrollAccountingPoster(IApplicationDbContext db, Accounting
                 new { accountCode = cuenta, concept = a.Grupo.Code, entity = nombreEntidad, entityKind = a.Grupo.Entidad.ToString() }));
         }
 
+        // --- centro de costo: si la cuenta del concepto lo EXIGE y el empleado no lo tiene, se dice a quién asignárselo
+        //     (el contrato sólo diría «la cuenta X exige centro de costo», sin nombrar a nadie) ---
+        var manejaCentro = await db.ChartOfAccounts.AsNoTracking()
+            .Where(c => idsDeCuenta.Contains(c.Id) && c.RequiresCostCenter)
+            .Select(c => new { c.Id, c.Code })
+            .ToDictionaryAsync(c => c.Id, c => c.Code, ct);
+        var sinCentro = new Dictionary<Employee, HashSet<string>>();
+        foreach (var a in asientos.Where(a => a.Grupo.CostCenterId is null))
+        {
+            var exige = manejaCentro.GetValueOrDefault(a.DebitAccountId) ?? manejaCentro.GetValueOrDefault(a.CreditAccountId);
+            if (exige is null) continue;
+            foreach (var empleado in empleadosDelGrupo[a.Grupo])
+            {
+                if (!sinCentro.TryGetValue(empleado, out var detalleDelEmpleado)) sinCentro[empleado] = detalleDelEmpleado = [];
+                detalleDelEmpleado.Add($"{a.Grupo.Code} (cuenta {exige})");
+            }
+        }
+        if (sinCentro.Count > 0)
+            return Result.Failure<AccountingDocument>(await ErrorDeEmpleadosAsync("Payroll.Employee.CostCenterRequired",
+                "no tiene centro de costo y la cuenta contable de uno de sus conceptos lo exige",
+                "no tienen centro de costo y la cuenta contable de alguno de sus conceptos lo exige",
+                sinCentro.Keys.ToList(), sinCentro, ct));
+
+        // El contrato descarta el centro en la línea cuya cuenta no lo maneja (AccountingPoster), así que el centro del
+        // empleado viaja en todas las líneas y sólo "pega" donde la cuenta lo maneja.
         var lineas = new List<PostingLine>(asientos.Count * 2);
         foreach (var a in asientos)
         {
@@ -147,6 +180,43 @@ public sealed class PayrollAccountingPoster(IApplicationDbContext db, Accounting
         poster.PrepareReversalAsync(original, documentDate, reason, origen, ct);
 
     // --------------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// Error que nombra a los empleados a corregir. <c>data.employees</c> trae cada uno con su ficha, documento y, si
+    /// aplica, los conceptos cuya cuenta exige el centro.
+    /// </summary>
+    private async Task<Error> ErrorDeEmpleadosAsync(string codigo, string causaSingular, string causaPlural,
+        IReadOnlyList<Employee> empleados, Dictionary<Employee, HashSet<string>>? conceptosPorEmpleado, CancellationToken ct)
+    {
+        var personas = empleados.Select(e => e.PersonId).Distinct().ToList();
+        var datos = await db.People.AsNoTracking().Where(p => personas.Contains(p.Id))
+            .Select(p => new { p.Id, p.FirstName, p.OtherNames, p.LastName, p.SecondLastName, p.TaxId })
+            .ToDictionaryAsync(p => p.Id, ct);
+        var detalle = empleados
+            .Select(e =>
+            {
+                var p = datos.GetValueOrDefault(e.PersonId);
+                var nombre = p is null ? $"empleado #{e.Id}" : NombreDePersona.Completo(p.FirstName, p.OtherNames, p.LastName, p.SecondLastName);
+                return new
+                {
+                    employeePublicId = e.PublicId,
+                    name = nombre,
+                    document = p?.TaxId ?? "",
+                    concepts = conceptosPorEmpleado is not null && conceptosPorEmpleado.TryGetValue(e, out var cs)
+                        ? cs.OrderBy(c => c, StringComparer.Ordinal).ToArray() : Array.Empty<string>(),
+                };
+            })
+            .OrderBy(x => x.name, StringComparer.CurrentCultureIgnoreCase)
+            .ToList();
+        const int MostrarEnElMensaje = 5;
+        var nombres = string.Join(", ", detalle.Take(MostrarEnElMensaje).Select(x => string.IsNullOrEmpty(x.document) ? x.name : $"{x.name} (doc. {x.document})"));
+        var resto = detalle.Count > MostrarEnElMensaje ? $" y {detalle.Count - MostrarEnElMensaje} más" : "";
+        const string Remedio = "Asigne un centro de costo en la ficha de cada empleado (Nómina › Empleados) antes de aprobar.";
+        var mensaje = detalle.Count == 1
+            ? $"El empleado {nombres} {causaSingular}. {Remedio}"
+            : $"{detalle.Count} empleados ({nombres}{resto}) {causaPlural}. {Remedio}";
+        return new ErrorConDatos(codigo, mensaje, new { employees = detalle });
+    }
 
     private static int IdDeEntidad(Employee e, EntidadInstitucional entidad) => entidad switch
     {

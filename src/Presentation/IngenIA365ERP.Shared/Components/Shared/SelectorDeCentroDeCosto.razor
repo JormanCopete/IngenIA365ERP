@@ -1,0 +1,67 @@
+@inject HttpClient Http
+@inject INotificationService Notification
+
+@*
+    Selector del catálogo de centros de costo contables (COR_CostCenters): el mismo en la ficha del empleado,
+    el alta, el filtro del listado y las cuentas por concepto. Se busca escribiendo parte del código o del
+    nombre («100 · Administración»), y la «x» deja la opción «Ninguno» (valor nulo).
+
+    Carga el catálogo una sola vez al montarse, dentro de su propio IndicadorDeCarga compacto: el resto de la
+    pantalla sigue usable. Si el catálogo no se pudo leer lo dice, en vez de mostrar una lista vacía que parece
+    «no hay centros».
+*@
+
+<IndicadorDeCarga Cargando="@_carga.Activa" Compacto="true">
+    <SfDropDownList TValue="Guid?" TItem="OpcionDeCentro"
+                    Value="@Value"
+                    ValueChanged="@AlCambiar"
+                    DataSource="@_centros"
+                    Placeholder="@Placeholder"
+                    AllowFiltering="true"
+                    FilterType="Syncfusion.Blazor.DropDowns.FilterType.Contains"
+                    ShowClearButton="true"
+                    Enabled="@(!Disabled)">
+        <DropDownListFieldSettings Text="Etiqueta" Value="PublicId" />
+    </SfDropDownList>
+</IndicadorDeCarga>
+
+@code {
+    [Parameter] public Guid? Value { get; set; }
+    [Parameter] public EventCallback<Guid?> ValueChanged { get; set; }
+    [Parameter] public string Placeholder { get; set; } = "Ninguno";
+    [Parameter] public bool Disabled { get; set; }
+
+    private readonly EstadoDeCarga _carga = new();
+    private List<OpcionDeCentro> _centros = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var carga = _carga.Iniciar();
+        try
+        {
+            _centros = (await Http.GetListAsync<CentroCrudo>("/api/core/cost-centers?PageNumber=1&PageSize=500"))
+                .OrderBy(c => c.Code ?? "", StringComparer.OrdinalIgnoreCase).ThenBy(c => c.Name, StringComparer.OrdinalIgnoreCase)
+                .Select(c => new OpcionDeCentro(c.PublicId, string.IsNullOrWhiteSpace(c.Code) ? c.Name : $"{c.Code} · {c.Name}"))
+                .ToList();
+        }
+        catch (Exception)
+        {
+            await Notification.ErrorAsync("No se pudo cargar el catálogo de centros de costo. Recargue la página antes de asignarlo.");
+        }
+    }
+
+    private async Task AlCambiar(Guid? nuevo)
+    {
+        Value = nuevo;
+        await ValueChanged.InvokeAsync(nuevo);
+    }
+
+    private sealed record OpcionDeCentro(Guid PublicId, string Etiqueta);
+
+    private sealed class CentroCrudo
+    {
+        public Guid PublicId { get; set; }
+        public string? Code { get; set; }
+        public string Name { get; set; } = "";
+    }
+}

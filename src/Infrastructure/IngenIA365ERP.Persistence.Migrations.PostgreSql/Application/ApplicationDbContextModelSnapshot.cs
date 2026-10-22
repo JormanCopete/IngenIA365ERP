@@ -47132,6 +47132,9 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasMaxLength(8)
                         .HasColumnType("character varying(8)");
 
+                    b.Property<int?>("CostCenterRefId")
+                        .HasColumnType("integer");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -47411,6 +47414,9 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasColumnName("xmin");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CostCenterRefId")
+                        .HasDatabaseName("IX_PAY_Employees_CostCenterRefId");
 
                     b.HasIndex("DisbursementBankId")
                         .HasDatabaseName("IX_PAY_Employees_DisbursementBank");
@@ -63019,6 +63025,12 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
 
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.Employee", b =>
                 {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Core.CostCenter", "CostCenter")
+                        .WithMany()
+                        .HasForeignKey("CostCenterRefId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("FK_PAY_Employees_COR_CostCenters_CostCenterRefId");
+
                     b.HasOne("IngenIA365ERP.Domain.Entities.Core.Bank", null)
                         .WithMany()
                         .HasForeignKey("DisbursementBankId")
@@ -63035,6 +63047,8 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasForeignKey("PersonId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.Navigation("CostCenter");
 
                     b.Navigation("PayrollPlan");
 

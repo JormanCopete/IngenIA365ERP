@@ -514,6 +514,15 @@ gráfica de la nómina electrónica (§8.2), comprobantes del empleado (§2).
   devuelve además `disbursementBankName`, `disbursementBankTransferCode`, `vacationBalance?`,
   `openingBalance?`, `currentWithholdingRate?`, `termination?`. La cuenta bancaria de nómina
   (`payrollBankId`, `payrollBankAccountType`, `payrollBankAccountNumber`) ya existe y no cambia.
+- **Centro de costo del empleado (2026-10-22, feature de centros de costo)**: `POST /api/payroll/employees`,
+  `/with-person` y `PUT /api/payroll/employees/{id}` aceptan `costCenterPublicId?` (fila de `COR_CostCenters`;
+  inexistente o eliminada → 422 `Core.CostCenter.NotFound`). En el `PUT`, nulo = no cambia (los clientes que no lo
+  conocen no lo borran) y `clearCostCenter: true` lo deja en «Ninguno»; el cambio audita
+  `Payroll.Employee.CostCenterChanged` con antes y después. El `GET` de la ficha y el listado devuelven
+  `costCenterPublicId`, `costCenterCode` y `costCenterName`, y el listado filtra por `costCenterPublicId`. El
+  comprobante `NM` (ordinaria y especiales) lo toma de la ficha: si la cuenta de un concepto **exige** centro y el
+  empleado no lo tiene → 422 `Payroll.Employee.CostCenterRequired`, y si su centro fue eliminado después →
+  `Payroll.Employee.CostCenterDeleted`; los dos con `data.employees[] { employeePublicId, name, document, concepts[] }`.
 - `PUT /api/payroll/health-providers/{id}`, `/pension-providers`, `/work-risk-providers`,
   `/severance-providers`, `/family-compensation-funds` aceptan `pilaCode` (6, distinto del `Code`
   de la cooperativa) y `GET /api/core/banks/{id}` expone `transferCode` (código ACH del banco

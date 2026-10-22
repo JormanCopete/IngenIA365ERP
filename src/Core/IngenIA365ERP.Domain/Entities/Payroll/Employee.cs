@@ -42,8 +42,23 @@ public class Employee : AuditableEntity
 
     public PayrollPlan? PayrollPlan { get; set; }
 
+    /// <summary>
+    /// COLUMNA HEREDADA (hasta el 2026-10-22 era el centro de costo del empleado): el <c>LegacyCode</c> del
+    /// centro de <c>COR_CostCenters</c>, sin llave foránea. Ya nada la lee ni la escribe; la fuente de verdad
+    /// es <see cref="CostCenterRefId"/>. Se retira con una migración propia con guarda, no en la que la
+    /// reemplazó (<c>CentroDeCostoDelEmpleado</c>).
+    /// </summary>
     [MaxLength(8)]
     public string CostCenterId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Centro de costo contable del empleado (<c>COR_CostCenters</c>, FK Restrict). Nulo = sin centro: el
+    /// comprobante <c>NM</c> usa las cuentas por defecto de cada concepto, que es lo que pasaba antes de
+    /// poder asignarlo. Lo toma <c>PayrollAccountingPoster</c> para las líneas del comprobante.
+    /// </summary>
+    public int? CostCenterRefId { get; set; }
+
+    public CostCenter? CostCenter { get; set; }
 
     // === DATOS LABORALES INTERNOS ===
 

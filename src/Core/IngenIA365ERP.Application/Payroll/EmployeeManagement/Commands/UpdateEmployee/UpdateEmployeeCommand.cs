@@ -1,8 +1,11 @@
 using FluentValidation;
+using IngenIA365ERP.Application.Common.Audit;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Application.Core.CostCenters;
 using IngenIA365ERP.Application.Payroll.EmployeeManagement.Contracts;
 using IngenIA365ERP.Application.Payroll.EmployeeManagement.Services;
+using IngenIA365ERP.Application.Payroll.Services;
 using IngenIA365ERP.Domain.Entities.Payroll;
 using IngenIA365ERP.Domain.Enums.Payroll;
 using MediatR;
@@ -43,6 +46,15 @@ public record UpdateEmployeeCommand : IRequest<Result>, IFichaPilaDian
     /// <summary>Caja de compensación familiar (fila de <c>PAY_FamilyCompensationFunds</c>).</summary>
     public Guid? FamilyCompensationFundPublicId { get; init; }
 
+    /// <summary>
+    /// Centro de costo contable del empleado (<c>COR_CostCenters</c>). Nulo = no cambia (las pantallas y los
+    /// clientes anteriores a la 2026-10-22 no lo mandan y no deben borrar el que la ficha ya tiene);
+    /// <see cref="ClearCostCenter"/> lo deja en «Ninguno». Distinto de los demás catálogos de este comando, que
+    /// con nulo se ponen en cero: aquí quitar el centro cambia las cuentas del comprobante de nómina.
+    /// </summary>
+    public Guid? CostCenterPublicId { get; init; }
+    public bool ClearCostCenter { get; init; }
+
     public Guid? PayrollBankPublicId { get; init; }
     public string? PayrollBankAccountNumber { get; init; }
     public int PayrollBankAccountType { get; init; }
@@ -69,7 +81,8 @@ public record UpdateEmployeeCommand : IRequest<Result>, IFichaPilaDian
 public class UpdateEmployeeCommandHandler(
     IApplicationDbContext context,
     IDateTimeService dateTime,
-    ICurrentUserService currentUser)
+    ICurrentUserService currentUser,
+    PayrollAuditEmitter? audit = null)
     : IRequestHandler<UpdateEmployeeCommand, Result>
 {
     public async Task<Result> Handle(UpdateEmployeeCommand request, CancellationToken ct)
@@ -156,6 +169,19 @@ public class UpdateEmployeeCommandHandler(
             disbursementBankId = banco.Id;
         }
 
+        // Centro de costo: nulo no toca; ClearCostCenter lo quita; un Guid debe existir.
+        var centroAnterior = employee.CostCenterRefId;
+        var centroNuevo = centroAnterior;
+        if (request.ClearCostCenter && request.CostCenterPublicId is null) centroNuevo = null;
+        else if (request.CostCenterPublicId is { } centroPublicId)
+        {
+            centroNuevo = await context.CostCenters.AsNoTracking()
+                .Where(c => c.PublicId == centroPublicId && !c.IsDeleted)
+                .Select(c => (int?)c.Id)
+                .FirstOrDefaultAsync(ct);
+            if (centroNuevo is null) return Result.Failure(CostCenterErrors.NotFound());
+        }
+
         var previousSalary = employee.Salary;
         var salaryChanged = previousSalary != request.BaseSalary;
 
@@ -172,6 +198,7 @@ public class UpdateEmployeeCommandHandler(
         employee.PayrollBankAccountType = request.PayrollBankAccountType;
         var reparoDeFicha = FichaPilaDian.Aplicar(employee, request, disbursementBankId, request.ClearApprenticeStage);
         if (reparoDeFicha is not null) return Result.Failure(reparoDeFicha);
+        employee.CostCenterRefId = centroNuevo;
         employee.UpdatedAt = dateTime.UtcNow;
         employee.UpdatedBy = currentUser.UserName;
 
@@ -192,8 +219,20 @@ public class UpdateEmployeeCommandHandler(
         }
 
         await context.SaveChangesAsync(ct);
+
+        // El cambio del centro de costo mueve las cuentas del comprobante de nómina: queda con antes y después.
+        if (audit is not null && centroNuevo != centroAnterior)
+            await audit.EmitAsync(AuditEventTypes.PayrollEmployeeCostCenterChanged, nameof(Employee), employee.PublicId,
+                await DescribirCentroAsync(centroAnterior, ct), await DescribirCentroAsync(centroNuevo, ct), ct);
+
         return Result.Success();
     }
+
+    private async Task<object?> DescribirCentroAsync(int? id, CancellationToken ct) =>
+        id is null ? new { costCenter = (string?)null }
+            : await context.CostCenters.AsNoTracking().Where(c => c.Id == id)
+                .Select(c => new { costCenter = (string?)(c.LegacyCode ?? c.Name), costCenterName = (string?)c.Name, costCenterPublicId = (Guid?)c.PublicId })
+                .FirstOrDefaultAsync(ct);
 
     /// <summary>
     /// Mueve la fecha de ingreso si nada de lo ya registrado la contradice. Null si quedó

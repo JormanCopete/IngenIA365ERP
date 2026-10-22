@@ -100,6 +100,8 @@ public static class AuditEventTypes
     // Eventos explícitos además del AuditBehavior genérico (contracts/permissions.md §Auditoría):
     // llevan EntityPublicId y valores antes/después.
     public const string PayrollSalaryChanged = "Payroll.SalaryChanged";
+    /// <summary>Se asignó, cambió o quitó el centro de costo contable de la ficha del empleado (antes y después).</summary>
+    public const string PayrollEmployeeCostCenterChanged = "Payroll.Employee.CostCenterChanged";
     public const string PayrollRunApproved = "Payroll.Run.Approved";
     public const string PayrollRunReversed = "Payroll.Run.Reversed";
     public const string PayrollRunDiscarded = "Payroll.Run.Discarded";

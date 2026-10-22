@@ -18,7 +18,11 @@ public record EmployeeDto(
     decimal Salary,
     DateTime HireDate,
     string StatusText,
-    string Email);
+    string Email,
+    // Centro de costo contable (COR_CostCenters); nulo = sin centro.
+    Guid? CostCenterPublicId = null,
+    string? CostCenterCode = null,
+    string? CostCenterName = null);
 
 public record SalaryHistoryDto(
     DateTime EffectiveDate,
@@ -141,7 +145,11 @@ public record EmployeeDetailDto(
     // NombreDePersona: la pantalla lo mostraba como «FirstName LastName».
     string? OtherNames = null,
     string? SecondLastName = null,
-    string FullName = "");
+    string FullName = "",
+    // Centro de costo contable del empleado (nulo = sin centro: cuentas por defecto del concepto).
+    Guid? CostCenterPublicId = null,
+    string? CostCenterCode = null,
+    string? CostCenterName = null);
 
 // --- List Employees ---
 
@@ -151,6 +159,8 @@ public record ListEmployeesQuery : IRequest<Result<PagedList<EmployeeDto>>>
     public int PageSize { get; init; } = 20;
     public string? Search { get; init; }
     public bool? ActiveOnly { get; init; }
+    /// <summary>Sólo los empleados de ese centro de costo contable.</summary>
+    public Guid? CostCenterPublicId { get; init; }
 }
 
 public class ListEmployeesQueryHandler(IApplicationDbContext context)
@@ -168,6 +178,9 @@ public class ListEmployeesQueryHandler(IApplicationDbContext context)
 
         if (request.ActiveOnly == true)
             query = query.Where(x => x.e.Status == 1);
+
+        if (request.CostCenterPublicId is { } centroFiltro)
+            query = query.Where(x => x.e.CostCenter != null && x.e.CostCenter.PublicId == centroFiltro);
 
         if (!string.IsNullOrWhiteSpace(request.Search))
         {
@@ -195,7 +208,10 @@ public class ListEmployeesQueryHandler(IApplicationDbContext context)
                 x.e.Salary,
                 x.e.JoinDate,
                 x.e.Status == 1 ? "Activo" : x.e.Status == -1 ? "Retirado" : "Inactivo",
-                x.p.Email ?? ""))
+                x.p.Email ?? "",
+                x.e.CostCenter != null ? x.e.CostCenter.PublicId : (Guid?)null,
+                x.e.CostCenter != null ? x.e.CostCenter.LegacyCode : null,
+                x.e.CostCenter != null ? x.e.CostCenter.Name : null))
             .ToListAsync(ct);
 
         return Result.Success(new PagedList<EmployeeDto>(
@@ -306,6 +322,13 @@ public class GetEmployeeByIdQueryHandler(IApplicationDbContext context, IDateTim
             var bank = await context.Banks.AsNoTracking()
                 .FirstOrDefaultAsync(b => b.Id == bankIntId, ct);
             if (bank is not null) { bankName = bank.Name; bankPublicId = bank.PublicId; }
+        }
+
+        Guid? centroPublicId = null; string? centroCodigo = null, centroNombre = null;
+        if (employee.CostCenterRefId is { } centroId)
+        {
+            var centro = await context.CostCenters.AsNoTracking().FirstOrDefaultAsync(c => c.Id == centroId, ct);
+            if (centro is not null) { centroPublicId = centro.PublicId; centroCodigo = centro.LegacyCode; centroNombre = centro.Name; }
         }
 
         // Salary history
@@ -423,6 +446,9 @@ public class GetEmployeeByIdQueryHandler(IApplicationDbContext context, IDateTim
             termination,
             person.OtherNames,
             person.SecondLastName,
-            NombreDePersona.Completo(person)));
+            NombreDePersona.Completo(person),
+            centroPublicId,
+            centroCodigo,
+            centroNombre));
     }
 }

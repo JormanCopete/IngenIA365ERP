@@ -187,6 +187,8 @@ public sealed class NominaTestData
             FamilySubsidyId = 1,
             WithholdingProcedure = procedimientoRetencion,
             CostCenterId = "01",
+            // La FK (feature 2026-10-22): el centro "01" de la prueba, si ya existe; ConfigurarContabilidad completa a los anteriores.
+            CostCenterRefId = Db.CostCenters.Where(c => c.LegacyCode == "01").Select(c => (int?)c.Id).FirstOrDefault(),
             CreatedBy = "test",
         };
         Db.Employees.Add(e);
@@ -228,10 +230,14 @@ public sealed class NominaTestData
     {
         Principal = new Branch { Name = "Principal", CreatedBy = "test" };
         Db.Branches.Add(Principal);
-        Db.CostCenters.Add(new CostCenter { LegacyCode = "01", Name = "Administración", CreatedBy = "test" });
+        var centroAdministracion = new CostCenter { LegacyCode = "01", Name = "Administración", CreatedBy = "test" };
+        Db.CostCenters.Add(centroAdministracion);
         Db.VoucherTypes.Add(new VoucherType { Code = "NM", Name = "Nómina", Usage = VoucherUsage.Module, ModuleCode = "NOM", NextNumber = 1, IsSeeded = true, CreatedBy = "test" });
         var catalogo = new AccountCatalog { Code = "PRUEBA", Name = "Catálogo de prueba", Version = "2026", CreatedBy = "test" };
         Db.AccountCatalogs.Add(catalogo);
+        Db.SaveChanges();
+        foreach (var anterior in Db.Employees.Where(x => x.CostCenterId == "01" && x.CostCenterRefId == null).ToList())
+            anterior.CostCenterRefId = centroAdministracion.Id;
         Db.SaveChanges();
         Db.AccountingSetups.Add(new AccountingSetup
         {

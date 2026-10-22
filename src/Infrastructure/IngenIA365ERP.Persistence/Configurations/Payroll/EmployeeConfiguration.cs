@@ -32,6 +32,10 @@ public class EmployeeConfiguration : IEntityTypeConfiguration<Employee>
 
         // === Labor data ===
         builder.Property(e => e.CostCenterId).HasMaxLength(8).IsRequired();
+        // Centro de costo contable (migración CentroDeCostoDelEmpleado): FK real; el string de arriba queda heredado.
+        builder.HasOne(e => e.CostCenter).WithMany().HasForeignKey(e => e.CostCenterRefId)
+            .OnDelete(DeleteBehavior.Restrict).HasConstraintName("FK_PAY_Employees_COR_CostCenters_CostCenterRefId");
+        builder.HasIndex(e => e.CostCenterRefId).HasDatabaseName("IX_PAY_Employees_CostCenterRefId");
         builder.Property(e => e.AreaCode).HasMaxLength(4);
         builder.Property(e => e.SectionId).HasMaxLength(4);
         builder.Property(e => e.Salary).HasPrecision(18, 2);

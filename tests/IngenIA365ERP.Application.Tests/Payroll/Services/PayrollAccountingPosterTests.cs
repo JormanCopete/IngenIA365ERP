@@ -37,9 +37,11 @@ public class PayrollAccountingPosterTests
             d.Obligaciones.AgregarCuota(new CuotaDeNominaDto(persona, new Guid("00000000-0000-0000-0000-000000000001"), "B-1", "CONSUMO", 9,
                 new DateOnly(2026, 3, 31), 2_500_000m, 0m, 2));
         }
-        d.Db.CostCenters.Add(new CostCenter { LegacyCode = "02", Name = "Comercial", CreatedBy = "test" });
+        var comercial = new CostCenter { LegacyCode = "02", Name = "Comercial", CreatedBy = "test" };
+        d.Db.CostCenters.Add(comercial);
+        await d.Db.SaveChangesAsync();
         var bruno = d.Empleado("Bruno", 3_000_000m, new DateTime(2024, 2, 1));
-        bruno.CostCenterId = "02";
+        bruno.CostCenterRefId = comercial.Id;
         await d.Db.SaveChangesAsync();
 
         var calc = new CalculatePayrollRunCommandHandler(d.Db, d.Loader, d.Recurrentes, d.CuotasDeCartera, d.CuotasDeCuentas, d.Lock, d.Clock, d.User, NullLogger<CalculatePayrollRunCommandHandler>.Instance);
@@ -363,5 +365,117 @@ public class PayrollAccountingPosterTests
 
         r.Error.Code.Should().Be("Payroll.ConceptWithoutAccounts");
         r.Error.Message.Should().Contain("DESC_CARTERA");
+    }
+
+    // ---------------- Centro de costo del empleado (decisión del 2026-10-22): FK, no texto ----------------
+
+    private static async Task ExigirCentroEnElGastoDeSalarioAsync(Calculada c)
+    {
+        var cuentas = await c.D.Db.PayrollConceptDefinitionAccounts.SingleAsync(a => a.ConceptCode == "SALARIO");
+        (await c.D.Db.ChartOfAccounts.SingleAsync(a => a.Id == cuentas.DebitAccountId)).RequiresCostCenter = true;
+        await c.D.Db.SaveChangesAsync();
+    }
+
+    [Fact]
+    public async Task El_centro_sale_de_la_FK_del_empleado_y_no_del_codigo_heredado_de_texto()
+    {
+        var c = await Calcular();
+        await ExigirCentroEnElGastoDeSalarioAsync(c);
+        // El texto viejo ya no cuenta: uno vacío y el otro con un código que no casa con nada.
+        foreach (var e in await c.D.Db.Employees.ToListAsync()) e.CostCenterId = e.CostCenterRefId is null ? "" : "ZZ";
+        await c.D.Db.SaveChangesAsync();
+        var cc01 = await c.D.Db.CostCenters.SingleAsync(x => x.LegacyCode == "01");
+        var cc02 = await c.D.Db.CostCenters.SingleAsync(x => x.LegacyCode == "02");
+
+        var r = await Contabilizar(c);
+
+        r.IsSuccess.Should().BeTrue(r.Error.Message);
+        var debitos = r.Value.Lines.Where(a => a.Description == "Nómina SALARIO" && a.Debit > 0).ToList();
+        debitos.Should().HaveCount(2);
+        debitos.Single(a => a.CostCenterId == cc01.Id).Debit.Should().Be(2_000_000m);
+        debitos.Single(a => a.CostCenterId == cc02.Id).Debit.Should().Be(3_000_000m);
+    }
+
+    [Fact]
+    public async Task Un_empleado_sin_centro_usa_las_cuentas_por_defecto_y_la_linea_queda_sin_centro()
+    {
+        var c = await Calcular(); // las cuentas de la prueba no exigen centro
+        foreach (var e in await c.D.Db.Employees.ToListAsync()) e.CostCenterRefId = null;
+        await c.D.Db.SaveChangesAsync();
+
+        var r = await Contabilizar(c);
+
+        r.IsSuccess.Should().BeTrue(r.Error.Message);
+        r.Value.Lines.Should().OnlyContain(a => a.CostCenterId == null);
+        r.Value.Lines.Where(a => a.Description == "Nómina SALARIO" && a.Debit > 0).Sum(a => a.Debit).Should().Be(5_000_000m, "el empleado es el tercero: una línea por cada uno");
+    }
+
+    [Fact]
+    public async Task La_fila_de_cuentas_del_centro_manda_sobre_la_fila_por_defecto_del_concepto()
+    {
+        var c = await Calcular();
+        var cc02 = await c.D.Db.CostCenters.SingleAsync(x => x.LegacyCode == "02");
+        var porDefecto = await c.D.Db.PayrollConceptDefinitionAccounts.SingleAsync(a => a.ConceptCode == "SALARIO");
+        var gastoComercial = c.D.Cuenta("510599", "Gasto salario comercial", IngenIA365ERP.Domain.Enums.Accounting.AccountNature.Debit, exigeCentroDeCosto: true);
+        c.D.Db.PayrollConceptDefinitionAccounts.Add(new PayrollConceptDefinitionAccount
+        {
+            ConceptCode = "SALARIO", CostCenterId = cc02.Id, DebitAccountId = gastoComercial.Id, CreditAccountId = porDefecto.CreditAccountId, CreatedBy = "test",
+        });
+        await c.D.Db.SaveChangesAsync();
+
+        var r = await Contabilizar(c);
+
+        r.IsSuccess.Should().BeTrue(r.Error.Message);
+        var debitos = r.Value.Lines.Where(a => a.Description == "Nómina SALARIO" && a.Debit > 0).ToList();
+        debitos.Should().ContainSingle(a => a.AccountId == gastoComercial.Id && a.CostCenterId == cc02.Id && a.Debit == 3_000_000m);
+        debitos.Should().ContainSingle(a => a.AccountId == porDefecto.DebitAccountId && a.Debit == 2_000_000m);
+    }
+
+    [Fact]
+    public async Task Si_la_cuenta_exige_centro_y_el_empleado_no_lo_tiene_el_error_nombra_al_empleado()
+    {
+        var c = await Calcular();
+        await ExigirCentroEnElGastoDeSalarioAsync(c);
+        var bruno = c.Empleados.Single(e => e.Employee.Salary == 3_000_000m).Employee;
+        bruno.CostCenterRefId = null;
+        await c.D.Db.SaveChangesAsync();
+
+        var r = await Contabilizar(c);
+
+        r.IsFailure.Should().BeTrue();
+        r.Error.Code.Should().Be("Payroll.Employee.CostCenterRequired");
+        r.Error.Message.Should().Contain("Bruno Prueba").And.Contain("centro de costo").And.Contain("ficha de cada empleado");
+        r.Error.Message.Should().NotContain("Ana", "Ana sí tiene centro");
+        var datos = System.Text.Json.JsonSerializer.Serialize(((IngenIA365ERP.Application.Common.Models.ErrorConDatos)r.Error).Data);
+        datos.Should().Contain(bruno.PublicId.ToString()).And.Contain("SALARIO");
+        (await c.D.Db.AccountingDocuments.CountAsync()).Should().Be(0);
+    }
+
+    [Fact]
+    public async Task Varios_empleados_sin_centro_se_nombran_todos_y_el_mensaje_va_en_plural()
+    {
+        var c = await Calcular();
+        await ExigirCentroEnElGastoDeSalarioAsync(c);
+        foreach (var e in await c.D.Db.Employees.ToListAsync()) e.CostCenterRefId = null;
+        await c.D.Db.SaveChangesAsync();
+
+        var r = await Contabilizar(c);
+
+        r.Error.Code.Should().Be("Payroll.Employee.CostCenterRequired");
+        r.Error.Message.Should().StartWith("2 empleados").And.Contain("Bruno Prueba").And.Contain("Ana");
+    }
+
+    [Fact]
+    public async Task Un_centro_eliminado_despues_de_asignarlo_se_dice_con_el_empleado()
+    {
+        var c = await Calcular();
+        var cc02 = await c.D.Db.CostCenters.SingleAsync(x => x.LegacyCode == "02");
+        cc02.IsDeleted = true;
+        await c.D.Db.SaveChangesAsync();
+
+        var r = await Contabilizar(c);
+
+        r.Error.Code.Should().Be("Payroll.Employee.CostCenterDeleted");
+        r.Error.Message.Should().Contain("Bruno Prueba").And.Contain("eliminado");
     }
 }
