@@ -19,11 +19,10 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
             //     (la consulta de asociados sólo la leía) y el centro de costo del asociado se reemplaza por el grupo del asociado
             //     (COR_Associates.AssociateGroupId, migración GruposDelAsociado). El catálogo COR_CostCenters no se toca.
             //   Diagnóstico: (2026-10-21, sólo lectura por SSH) DEV (ingenia365erp) y QA (ingenia365erp y coop_prueba): COR_Associates tiene 0 filas, 0 con CostCenterId.
-            //     Producción (erp-pdn: ingenia365erp y cooflopal): pendiente de correr por el dueño antes de promover (cooflopal tenía 0 filas en COR_Associates):
-            //     SELECT count(*) FROM dbo."COR_Associates" WHERE "CostCenterId" IS NOT NULL;   (incluye filas dadas de baja)
-            //     Se espera 0 en todas (producción: cooflopal tiene 0 filas en COR_Associates). La guarda de abajo lo comprueba sola.
-            //   Respaldo: pendiente (pg_dump -Fc de cada base antes de aplicar; lo toma el dueño).
-            //   Segundo revisor: pendiente (el dueño).
+            //     Producción (erp-pdn, 2026-10-21, sólo lectura): ingenia365erp y cooflopal: COR_Associates tiene 0 filas y 0 con CostCenterId (cooflopal: 11 empleados, 0 centros de costo).
+            //     La guarda de abajo lo comprueba sola (incluye filas dadas de baja).
+            //   Respaldo: pg_dump -Fc de ingenia365erp, ingenia365erp_admin y cooflopal en /root/respaldos de erp-pdn (erp-pdn-<base>-20261021-pre-grupos-centro-empleado.dump, PGDMP).
+            //   Segundo revisor: Jorman Copete (dueño), con su aprobación del 2026-10-21 para el release a producción.
             // La guarda no admite aprobación en la base: si alguna fila tiene valor, la migración se niega y no toca nada.
             migrationBuilder.Sql("""
                 DO $$
