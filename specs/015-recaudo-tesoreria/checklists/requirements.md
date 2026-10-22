@@ -31,23 +31,26 @@
 
 ## Notes
 
-- **Quedan tres marcas de aclaración** (el máximo permitido), todas de alcance y con recomendación:
-  - **C1 (FR-021)**: caja de Recaudo y caja del punto de venta de la 012, ¿separadas, una sola o caja mixta?
-  - **C2 (FR-091)**: canales en línea del primer día, ¿sólo archivos o también pasarela en línea?
-  - **C3 (FR-161)**: módulo de Tesorería heredado, ¿retiro con guarda, consulta de sólo lectura o migración de
-    pendientes antes de retirarlo?
-  Se resuelven con `/speckit-clarify`; la especificación funciona con la opción recomendada mientras tanto.
-- **Revisión**: dos pasadas propias contra esta lista. La primera corrigió tres fugas de implementación (nombres de
-  motores de base de datos y de la tecnología de las pantallas, salvo en la cita textual del pedido del dueño) y un
-  error de redacción; la segunda agregó el orden de activación (Recaudo y Tesorería antes que Cartera y Captaciones,
-  FR-150). No hubo verificación adversarial con subagentes; se recomienda antes de `/speckit-plan`.
+- **Sin marcas de aclaración.** C1, C2 y C3 y la confirmación de D2 las resolvió el dueño el 2026-10-22 (opción
+  recomendada en las tres); C3 quedó con su momento enmendado (retiro después de T2).
+- **Revisión adversarial (2026-10-22)**: cuatro revisores —operación y salida en vivo, calidad y constitución,
+  coherencia con los contratos, norma financiera y regulatoria— con 113 hallazgos en total. Se aplicaron todos los
+  que no dependían de una decisión del dueño, sin duplicados; los que sí dependían se resolvieron con las ocho
+  decisiones del dueño del mismo día (Clarifications): Tesorería heredada hasta T2, paralelo en QA, retiro de los
+  dobles, cheques mínimos (devolución y chequera), servicios como cuentas por cobrar de Comercial, conciliación
+  mínima, activación con cuadre provisional y recorte R0/T0.
+- **Cambios que afectan esta lista**: el encabezado ya no dice «sin clarificar»; SC-005, SC-008 y SC-015 dejaron de
+  contradecir FR-032, D15 y FR-141; FR-163 ya no contradice FR-148; «Interfaces» lista las consultas y mensajes
+  nuevos; las preguntas que bloquean la salida están en «Pendientes del dueño» con fecha límite; cada FR lleva su
+  entrega y hay una tabla de alcance por entrega.
+- **Totales**: 26 historias (US24 salida en vivo, US25 conciliación mínima y US26 antifraude son nuevas), 228 FR
+  (FR-170 a FR-228 nuevos, ubicados en su sección) y 32 SC (SC-023 a SC-032 nuevos). No se renumeró ningún requisito
+  existente.
 - **Detalle técnico permitido, como en la 013 y la 014**: el contexto describe el estado del módulo heredado y de los
-  contratos vigentes por su función (sin nombres de tablas, clases ni rutas) para fundamentar el retiro y la
-  adopción. Los requisitos hablan en términos de negocio.
-- **Pendiente de confirmar por el dueño**: decisiones por defecto D1 a D32, interpretaciones I-1 a I-3, conflictos C1 a
-  C11 con otras features y las preguntas P1 a P6 y P9. No son marcas: la especificación funciona con ellas.
-- **Pendiente del oficial de cumplimiento, la contadora y el tributarista**: P7, P8, P10 a P12; los valores se
-  siembran «pendiente de validar».
+  contratos vigentes por su función (sin nombres de tablas, clases ni rutas). FR-004 y FR-042 hablan de atomicidad y
+  no de transacciones; FR-112, de huella verificable. Quedan dos menciones a una «verificación automática» (FR-009 y
+  FR-170), que son criterios de aceptación medibles, no diseño.
+- **Pendiente del dueño, del oficial de cumplimiento, de la contadora y del tributarista**: «Pendientes del dueño»
+  (P1 a P19). Bloquean la salida P1 (sólo sin formato genérico), P4, P6 (la pagaduría), P7 (umbrales y listas), P12 y
+  P15; ninguno es una marca: la especificación funciona con los defectos.
 - **Sin el nombre del sistema anterior**: verificado; se habla de «lo heredado» y de «cifras de referencia».
-
-- 2026-10-22: las tres aclaraciones (C1, C2, C3) y la confirmación de D2 quedaron resueltas por el dueño (opción recomendada en todas); no quedan marcas.
