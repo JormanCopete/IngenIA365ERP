@@ -1,4 +1,46 @@
 <!--
+SYNC IMPACT REPORT — v2.0.1
+===========================
+Version change: 2.0.0 → 2.0.1
+Fecha: 2026-10-23
+Bump rationale: PATCH — enmienda de los Estándares Técnicos Adicionales, no de un
+principio: la lista de prefijos de tabla suma `RCD_` (Recaudo) y `TES_` (Tesorería
+nueva) y aclara que `TRS_` queda sólo para lo heredado de Tesorería hasta su retiro.
+No agrega obligaciones ni cambia ningún principio; la sección dice que un cambio
+aquí «no exige bump MAJOR pero sí PR y revisión».
+
+Motivo: la feature 015 (Recaudo y Tesorería) construye dos módulos nuevos que
+conviven con la Tesorería heredada (`TRS_Checks`, `TRS_Concepts`, `TRS_Invoices`)
+hasta T2, cuando ésta se retira con migración destructiva con guarda. Un prefijo
+distinto del heredado deja visible, tabla por tabla, qué se retira (research.md
+R-03 de la 015, hallazgo CO3 del /speckit-analyze del 2026-10-23).
+
+Principios modificados: ninguno.
+Secciones modificadas:
+  Estándares Técnicos Adicionales — «Tablas SQL»: + `RCD_`, + `TES_`; `TRS_`
+  marcado como heredado hasta su retiro.
+Secciones añadidas: ninguna.  Secciones retiradas: ninguna.
+
+Plantillas y documentos:
+  ✅ .specify/templates/plan-template.md — sin cambios (no lista prefijos).
+  ✅ .specify/templates/spec-template.md — sin cambios.
+  ✅ .specify/templates/tasks-template.md — sin cambios.
+  ✅ README.md — tabla «Modulos»: filas Recaudo (`RCD_`) y Tesorería (`TES_`);
+     `TRS_` como Tesorería heredada.
+  ✅ specs/015-recaudo-tesoreria/{spec,plan,research,decisiones-transversales}.md —
+     citan esta enmienda (commit de la 015 que sigue a éste).
+  ⚠ CLAUDE.md — no lista prefijos; se actualiza con la sección de la 015 al
+     cerrar R0/T0 (tarea de la 015).
+
+Revisión: redactada a pedido del dueño del producto (Jorman Copete), que es el
+revisor de esta enmienda (2026-10-23). La descripción del PR de la 015 la cita
+(tarea de la 015). Governance pide issue [Constitution] y dos revisores; como en
+la v2.0.0, queda escrito aquí que hoy hay uno solo.
+
+Follow-up TODOs: ninguno.
+-->
+
+<!--
 SYNC IMPACT REPORT — v2.0.0
 ===========================
 Version change: 1.0.0 → 2.0.0
@@ -445,7 +487,9 @@ bump MAJOR pero sí PR y revisión):
 
 - **Entities**: PascalCase singular (`Person`, `Employee`, `JournalEntry`).
 - **Tablas SQL**: prefijo de módulo: `COR_`, `ACC_`, `LND_`, `PAY_`, `INV_`,
-  `CDT_`, `DEB_`, `TRS_`, `SEC_`, `AUD_`, `WEB_`, `ADM_`.
+  `CDT_`, `DEB_`, `RCD_` (Recaudo), `TES_` (Tesorería), `SEC_`, `AUD_`, `WEB_`,
+  `ADM_`. `TRS_` queda sólo para lo heredado de Tesorería hasta su retiro; ninguna
+  tabla nueva lo usa (enmienda v2.0.1).
 - **Endpoints REST**: `/api/{module}/{plural-kebab}`
   (ej. `/api/core/people`, `/api/payroll/employees`).
 - **Commands / Queries**: verbo en infinitivo + entidad
@@ -517,4 +561,4 @@ bump MAJOR pero sí PR y revisión):
   constitución, **gana esta constitución** hasta que sea formalmente
   enmendada por el procedimiento descrito arriba.
 
-**Version**: 2.0.0 | **Ratified**: 2026-05-03 | **Last Amended**: 2026-08-22
+**Version**: 2.0.1 | **Ratified**: 2026-05-03 | **Last Amended**: 2026-10-23
