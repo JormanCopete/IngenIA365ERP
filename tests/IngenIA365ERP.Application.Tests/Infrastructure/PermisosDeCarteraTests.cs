@@ -18,7 +18,9 @@ public class PermisosDeCarteraTests
          .. AccountingPermissionCatalogSeeder.Catalog.Select(p => $"{p.Resource}.{p.Action}"),
          .. InventoryPermissionCatalogSeeder.Catalog.Select(p => $"{p.Resource}.{p.Action}"),
          .. ElectronicInvoicingPermissionCatalogSeeder.Catalog.Select(p => $"{p.Resource}.{p.Action}"),
-         .. LendingPermissionCatalogSeeder.Catalog.Select(p => $"{p.Resource}.{p.Action}")];
+         .. LendingPermissionCatalogSeeder.Catalog.Select(p => $"{p.Resource}.{p.Action}"),
+         // Feature 015 (T0044): Recaudo, Tesorería y sus piezas de plataforma.
+         .. ReceiptsAndTreasuryPermissionCatalogSeeder.Catalog.Select(p => $"{p.Resource}.{p.Action}")];
 
     /// <summary>DT §2.14 y api.md §2.1, tal cual, más <c>PrepaymentPreferences.Manage</c> (C85): 123; con los 39 de la feature 014, 162.</summary>
     private static readonly string[] Cartera =

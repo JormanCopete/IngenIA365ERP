@@ -26,6 +26,14 @@ public class RecaudoYTesoreriaSeHablanPorSusPuertos
     /// <summary>Los puertos entre los dos módulos: nombre completo del tipo y el espacio de nombres donde vive (el del módulo que lo ofrece).</summary>
     private static readonly (string Tipo, string EspacioDeNombres)[] Puertos =
     [
+        // Fase 2 (T0040; interfaces.md §2): los siete puertos y el espacio del módulo que los ofrece.
+        ("IngenIA365ERP.Application.Common.Integration.Treasury.ICuentasBancariasPropias", "IngenIA365ERP.Application.Common.Integration.Treasury"),
+        ("IngenIA365ERP.Application.Common.Integration.Treasury.IMovimientosBancariosParaRecaudo", "IngenIA365ERP.Application.Common.Integration.Treasury"),
+        ("IngenIA365ERP.Application.Common.Integration.Treasury.IRemesasDeTesoreria", "IngenIA365ERP.Application.Common.Integration.Treasury"),
+        ("IngenIA365ERP.Application.Common.Integration.Treasury.IOrdenesDePagoDeTesoreria", "IngenIA365ERP.Application.Common.Integration.Treasury"),
+        ("IngenIA365ERP.Application.Common.Integration.Receipts.IRecaudoParaConciliacion", "IngenIA365ERP.Application.Common.Integration.Receipts"),
+        ("IngenIA365ERP.Application.Common.Integration.Receipts.IPartidasDesdeConciliacion", "IngenIA365ERP.Application.Common.Integration.Receipts"),
+        ("IngenIA365ERP.Application.Common.Integration.Receipts.IResultadoDeOrdenesDeRecaudo", "IngenIA365ERP.Application.Common.Integration.Receipts"),
     ];
 
     private static readonly Lazy<ArchUnitNET.Domain.Architecture> Arquitectura = new(() => new ArchLoader()

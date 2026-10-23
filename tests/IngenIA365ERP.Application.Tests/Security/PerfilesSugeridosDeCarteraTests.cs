@@ -19,7 +19,9 @@ public class PerfilesSugeridosDeCarteraTests
          .. AccountingPermissionCatalogSeeder.Catalog.Select(p => $"{p.Resource}.{p.Action}"),
          .. InventoryPermissionCatalogSeeder.Catalog.Select(p => $"{p.Resource}.{p.Action}"),
          .. ElectronicInvoicingPermissionCatalogSeeder.Catalog.Select(p => $"{p.Resource}.{p.Action}"),
-         .. LendingPermissionCatalogSeeder.Catalog.Select(p => $"{p.Resource}.{p.Action}")];
+         .. LendingPermissionCatalogSeeder.Catalog.Select(p => $"{p.Resource}.{p.Action}"),
+         // Feature 015 (T0044): Recaudo, Tesorería y sus piezas de plataforma.
+         .. ReceiptsAndTreasuryPermissionCatalogSeeder.Catalog.Select(p => $"{p.Resource}.{p.Action}")];
 
     private static IReadOnlyList<string> Codigos(string clave) => PerfilesSugeridos.Expandir(PerfilesSugeridos.Buscar(clave)!, Catalogo).Codigos;
 

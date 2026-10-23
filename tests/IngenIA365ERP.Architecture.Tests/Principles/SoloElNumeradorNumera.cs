@@ -26,10 +26,33 @@ public class SoloElNumeradorNumera
         "NextValue",
         // Entrega I4 (US8): COR_DianNumberingResolutions.
         "LastIssuedNumber",
+        // Feature 015 (T0021; R-13): COR_Sequences, la numeración de Recaudo (RCD:{código}:{prefijo}) y Tesorería (TES:{código}).
+        "NextSequence",
     ];
 
+    /// <summary>
+    /// Feature 015 (T0021; R-13; FR-007, FR-026): en Recaudo y en la Tesorería nueva el <c>Number</c> de un documento lo asignan sólo sus
+    /// numeradores (los documentos lo reciben del valor que el numerador devuelve, en su inicializador o en la confirmación).
+    /// </summary>
+    [Fact]
+    public void En_Recaudo_y_Tesoreria_solo_los_numeradores_asignan_numeros()
+    {
+        var root = RepoPath.FindRepoRoot();
+        var escritura = new Regex(@"\.Number\s*(=(?!=)|\+=|-=|\+\+|--)", RegexOptions.Compiled);
+        var infractores = RecaudoYTesoreria.ArchivosDeRecaudo().Concat(RecaudoYTesoreria.ArchivosDeTesoreria())
+            .Where(f => Path.GetFileName(f) is not ("NumeradorDeRecaudo.cs" or "NumeradorDeTesoreria.cs"))
+            .Where(f => escritura.IsMatch(FuenteSinComentarios.Leer(f)))
+            .Select(f => Path.GetRelativePath(root, f))
+            .ToList();
+        Assert.True(infractores.Count == 0, "Número de Recaudo o Tesorería asignado fuera de su numerador (R-13):\n  " + string.Join("\n  ", infractores));
+        Assert.True(File.Exists(Path.Combine(root, "src", "Core", "IngenIA365ERP.Application", "Receipts", "Common", "NumeradorDeRecaudo.cs")));
+        Assert.True(File.Exists(Path.Combine(root, "src", "Core", "IngenIA365ERP.Application", "Treasury", "Common", "NumeradorDeTesoreria.cs")));
+    }
+
     /// <summary>Nombres de archivo (sin ruta) que pueden escribirlas.</summary>
-    private static readonly string[] NumeradoresAutorizados = ["Numerador.cs", "NumeradorFiscal.cs", "NumeradorDeCartera.cs"];
+    private static readonly string[] NumeradoresAutorizados = ["Numerador.cs", "NumeradorFiscal.cs", "NumeradorDeCartera.cs",
+        // Feature 015 (T0021; R-13): los únicos escritores de COR_Sequences para RCD: y TES:.
+        "NumeradorDeRecaudo.cs", "NumeradorDeTesoreria.cs"];
 
     /// <summary>
     /// Feature 013 (T0144, C48): en Cartera el <c>Number</c> de toda tabla y el <c>NextValue</c> de <c>LND_NumberSequences</c> los

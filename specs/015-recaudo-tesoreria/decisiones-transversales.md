@@ -176,6 +176,23 @@ Lo que tasks.md marcaba **(nuevo)** y lo que trajeron el `/speckit-analyze` y la
 | `docs/operaciones/recaudo-tesoreria-despliegue.md` | runbook de despliegue de R0/T0 y de cada entrega posterior | tasks.md T0326 |
 | `DevolucionPorPagar` | rol existente de Captaciones (013/014) que salda el giro de una devolución (no `RefundPayable`) | contabilidad.md §1, §4 |
 
+**Fijados en la construcción de la fase 2 (2026-10-24)**. Los aprobó el dueño ese día:
+
+| Nombre | Qué | Dónde |
+|---|---|---|
+| `UK_COR_Sequences_Name_RcdTes` **(nuevo)** | la numeración de Recaudo y Tesorería vive en `COR_Sequences` con la clave en `Name` (`RCD:{código}:{prefijo}`, `TES:{código}`), el módulo en `DocumentType` y el prefijo en `ShortName`. Un índice único filtrado a `DocumentType IN ('RCD','TES')` deja al cerrojo crear la fila que falta sin numerar dos veces; las filas heredadas de `sys_consecu` quedan fuera del filtro | `SequenceConfiguration`; migración `PlataformaParaRecaudoYTesoreria` |
+| `OrdenDeCerrojos` | lleva, por unidad de trabajo, los niveles ya tomados por los dos cerrojos y lanza si llegan fuera del orden de data-model §0.5 (también una fila `RCD_` después de una `TES_`, CH16) | `Application/Receipts/Common` |
+| `ModuloActivoBehavior` · `IEscrituraDeRecaudo` · `IEscrituraDeTesoreria` | la guarda de módulo activo como comportamiento de MediatR, no como filtro de ruta. La escritura de negocio marcada responde `Receipts.NotActivated` o `Treasury.NotActivated`; la configuración y la puesta en marcha no se marcan | `Application/Common/Behaviors` |
+| `ModuloDeAuditoria.Receipts` · `ModuloDeAuditoria.GoLive` | módulos encadenados con diez años de conservación. Las cuentas bancarias de la persona (`.Core.PersonBankAccounts`) se auditan en `Treasury`. `Conservacion.Anios` se registra con piso de 5, pero el TTL del flujo sigue fijo en diez años: hacer que lo lea el parámetro queda **pendiente**, porque exige que la infraestructura de auditoría lea parámetros por cooperativa | `Application/Common/Audit` |
+| `EntregaDeRecaudo` (`R0`, `R1`, `R2`) · `EntregaDeTesoreria` (`T0`, `T1`, `T2`) | las líneas de entregas `RCD` y `TES` de los parámetros | `Domain/Receipts`, `Domain/Treasury` |
+| `CatalogoDeParametros.ModulosConRutaPropia` | `LND`, `RCD` y `TES` no aparecen en la ruta de parámetros de Inventario | `Domain/Common/Parametros` |
+| `FormatosGenericosDeRecaudoYTesoreria` | los cuatro genéricos de §4 de archivos-y-plantillas. Los siembra `BankFileFormatsSeeder`, que es un `IDataSeeder` paramétrico idempotente por código, y no la migración. `RESPUESTA-PAGADURIA-GENERICA` es CSV, no XLSX: el motor común sólo lee archivos planos. El código admite 20 caracteres: `RESP-PAGOS-GENERICO` y `RESP-PAGADURIA-GEN` | `Application/Common/BankFiles` |
+| `BankFieldSource` 100–111 y 120–125 | los orígenes de lectura del extracto y de la respuesta a pagos (archivos-y-plantillas §2); la referencia del movimiento se llama `MovementReference` porque `Reference` ya era sinónimo de `BatchReference` | `Domain/Enums/Core/BankFiles.cs` |
+| `PerfilesSugeridos.ModuloRecaudo` · `.ModuloTesoreria` | las siete plantillas de rol viven en `PerfilesSugeridos`, como las de Cartera, y no en el sembrador de permisos | `Application/Security/Roles/Plantillas` |
+| `ReceiptsAndTreasuryPermissionCatalogSeeder.LecturasSensibles` | `Core.PersonBankAccounts.View`, `Treasury.BankBalances.View` y `Receipts.Session.ViewExpected` no van en el `*.View` de Operator, ReadOnly ni Auditor | `Identity/Seed` |
+| Claves `CuentasDestino.*` y `Contabilidad.CierreExigeConciliaciones` | van en el módulo de parámetros `TES`, que es quien las usa, en vez de abrir un módulo «plataforma» o `ACC` sin ruta ni permiso | `ParametrosDeRecaudoYTesoreria` |
+| Copia de `Person.SupplierBank*` | sólo se copia la cuenta cuyo código de banco casa con `COR_Banks.TransferCode` o `LegacyCode`; las demás siguen en la persona | migración `PlataformaParaRecaudoYTesoreria` |
+
 ## 3. Decisiones transversales
 
 ### Módulos y frontera

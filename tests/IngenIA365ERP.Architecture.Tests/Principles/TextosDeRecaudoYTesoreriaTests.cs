@@ -20,6 +20,8 @@ public class TextosDeRecaudoYTesoreriaTests
     /// <summary>Archivos de textos de los dos módulos (relativos a <c>src/</c>).</summary>
     private static readonly string[] Archivos =
     [
+        // Fase 2 (T0032): la pantalla de plataforma de las cuentas bancarias de la persona.
+        "Presentation/IngenIA365ERP.Shared/Pages/Maestros/CuentasBancariasDePersona.razor",
     ];
 
     private static readonly string[] Informes =

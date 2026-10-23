@@ -44,6 +44,9 @@ public class LaSegregacionNoUsaUserIdDelToken
         Path.Combine("Core", "IngenIA365ERP.Domain", "Lending", "Attributions"),
         Path.Combine("Core", "IngenIA365ERP.Domain", "Lending", "Sessions"),
         Path.Combine("Core", "IngenIA365ERP.Domain", "Lending", "Segregation"),
+        // Feature 015 (E-06; T0029, T0033): quien pide y quien aprueba una cuenta bancaria de una persona, y quien decide el go/no-go.
+        Path.Combine("Core", "IngenIA365ERP.Application", "Core", "PersonBankAccounts"),
+        Path.Combine("Core", "IngenIA365ERP.Application", "Common", "GoLive"),
     ];
 
     private static readonly Regex UserIdOCorreo = new(@"\.(UserId|Email)\b", RegexOptions.Compiled);

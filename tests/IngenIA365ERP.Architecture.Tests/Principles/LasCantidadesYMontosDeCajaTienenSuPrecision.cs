@@ -27,6 +27,9 @@ public class LasCantidadesYMontosDeCajaTienenSuPrecision
     /// <summary>Archivos exentos (relativos a la raíz, barras normales): los de los alias.</summary>
     private static readonly string[] Exentos =
     [
+        // Fase 2 (T0037).
+        "src/Infrastructure/IngenIA365ERP.Persistence/Configurations/Receipts/PrecisionDeRecaudo.cs",
+        "src/Infrastructure/IngenIA365ERP.Persistence/Configurations/Treasury/PrecisionDeTesoreria.cs",
     ];
 
     private static readonly string[] Alias = ["Monto", "Tarifa", "Facial"];

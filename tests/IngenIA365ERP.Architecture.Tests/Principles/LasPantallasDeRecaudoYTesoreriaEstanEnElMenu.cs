@@ -26,6 +26,8 @@ public class LasPantallasDeRecaudoYTesoreriaEstanEnElMenu
     /// <summary>Páginas de detalle (con parámetro de ruta): archivo, la ruta tal como la declara <c>@page</c> y permiso.</summary>
     private static readonly (string Archivo, string Ruta, string Permiso)[] Detalles =
     [
+        // Fase 2 (T0032): las cuentas bancarias de la persona, a las que se llega desde PersonaDialog.
+        ("Pages/Maestros/CuentasBancariasDePersona.razor", "/maestros/personas/{PersonaPublicId:guid}/cuentas-bancarias", "Core.PersonBankAccounts.View"),
     ];
 
     [Fact]

@@ -33,7 +33,13 @@ public class LasPantallasDicenQueEstanCargando
     /// recorra: si la carpeta se mueve, la prueba lo dice.
     private static readonly string[] ModulosMigrados =
         ["Maestros", "Nomina", "Asociados", "Contabilidad", "Inventario", "Ventas", "Compras", "Pos", "Administracion", "Compliance",
-            "Cartera", "Cartera/Captaciones"];
+            "Cartera", "Cartera/Captaciones",
+            // Feature 015 (T0022; R-35; FR-018): «Tesoreria» entra con la Tesorería nueva; sus cuatro pantallas heredadas quedan fuera por nombre
+            // (HeredadasDeTesoreria) hasta su retiro. «Recaudo» entra con su primera pantalla (la carpeta todavía no existe).
+            "Tesoreria"];
+
+    /// <summary>Feature 015 (T0022): las pantallas heredadas de Tesorería, que conviven sin el patrón hasta su retiro después de T2.</summary>
+    private static readonly string[] HeredadasDeTesoreria = ["Cheques.razor", "ConceptosTesoreria.razor", "FacturasTesoreria.razor", "FlujoCaja.razor"];
 
     /// <summary>Feature 013 (T0038): las pantallas de la fase 2 llevan su indicador aunque no usen <c>SfGrid</c>.</summary>
     private static readonly string[] PantallasDeLaPlataformaDeCartera =
@@ -101,7 +107,12 @@ public class LasPantallasDicenQueEstanCargando
             var carpeta = Path.Combine(pages, modulo);
             Assert.True(Directory.Exists(carpeta), $"No existe {carpeta}: si el módulo se movió, actualizá ModulosMigrados.");
             foreach (var f in Directory.EnumerateFiles(carpeta, "*.razor", SearchOption.AllDirectories))
+            {
+                // Feature 015 (T0022): lo heredado de Tesorería, en la raíz de Pages/Tesoreria, queda fuera por nombre.
+                if (modulo == "Tesoreria" && Path.GetDirectoryName(f) == carpeta && HeredadasDeTesoreria.Contains(Path.GetFileName(f), StringComparer.Ordinal))
+                    continue;
                 yield return f;
+            }
         }
     }
 

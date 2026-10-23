@@ -538,6 +538,14 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Configuration.NegotiatedRateRule> NegotiatedRateRules => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Configuration.NegotiatedRateRule>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.NegotiatedRateRequest> NegotiatedRateRequests => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.NegotiatedRateRequest>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Migration.MigrationTermDepositRow> MigrationTermDepositRows => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Migration.MigrationTermDepositRow>();
+    // ---- Feature 015 (T0028, T0033, T0036, T0039): plataforma y esqueleto de Recaudo y Tesorería ----
+    public DbSet<IngenIA365ERP.Domain.Entities.Core.PersonBankAccount> PersonBankAccounts => Set<IngenIA365ERP.Domain.Entities.Core.PersonBankAccount>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Core.GoLive.GoLiveChecklist> GoLiveChecklists => Set<IngenIA365ERP.Domain.Entities.Core.GoLive.GoLiveChecklist>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Core.GoLive.GoLiveChecklistItem> GoLiveChecklistItems => Set<IngenIA365ERP.Domain.Entities.Core.GoLive.GoLiveChecklistItem>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Core.Sequence> Sequences => Set<IngenIA365ERP.Domain.Entities.Core.Sequence>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Configuration.ReceiptsSetup> ReceiptsSetups => Set<IngenIA365ERP.Domain.Entities.Receipts.Configuration.ReceiptsSetup>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.PayerControl> PayerControls => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.PayerControl>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Activation.TreasurySetup> TreasurySetups => Set<IngenIA365ERP.Domain.Entities.Treasury.Activation.TreasurySetup>();
     DbSet<DebitCard> IApplicationDbContext.DebitCards => throw new NotImplementedException();
     DbSet<DebitAgreementParameter> IApplicationDbContext.DebitAgreementParameters => throw new NotImplementedException();
     DbSet<PosTerminal> IApplicationDbContext.PosTerminals => throw new NotImplementedException();
@@ -561,6 +569,14 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
 
         base.OnModelCreating(modelBuilder);
 
+        // Feature 015 (T0028, T0033, T0036): las entidades nuevas con su filtro de borrado lógico, sin RowVersion (InMemory).
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Core.PersonBankAccount>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Core.GoLive.GoLiveChecklist>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Core.GoLive.GoLiveChecklistItem>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Core.Sequence>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Configuration.ReceiptsSetup>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Operations.PayerControl>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Treasury.Activation.TreasurySetup>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         // Feature 013 (T0236): Cartera nueva con su filtro de borrado lógico, sin RowVersion (InMemory).
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Lending.Collections.CreditReportClaim>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Lending.Collections.DebtorMessage>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });

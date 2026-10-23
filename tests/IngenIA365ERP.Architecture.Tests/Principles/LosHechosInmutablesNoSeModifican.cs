@@ -283,6 +283,41 @@ public class LosHechosInmutablesNoSeModifican
         ["LiquidityFundSnapshot"] = [],
     };
 
+    /// <summary>
+    /// Feature 015, T0020 (FR-002; Principio XI; data-model §0.2): los hechos de Recaudo y de la Tesorería nueva (las entidades marcadas H) y las
+    /// únicas propiedades que admiten escribirse una vez. Nace vacía: la llena cada fase que crea entidades H (recibos, medios, aplicaciones,
+    /// anulaciones, movimientos, arqueos cerrados, líneas de extracto, archivos de pago, resultados…). Recorre <c>Domain/Entities/Receipts</c> y
+    /// los hijos de <c>Domain/Entities/Treasury</c>, sin la raíz heredada.
+    /// </summary>
+    private static readonly Dictionary<string, string[]> HechosDeRecaudoYTesoreria = new(StringComparer.Ordinal)
+    {
+    };
+
+    [Fact]
+    public void Los_hechos_de_Recaudo_y_Tesoreria_llevan_el_marcador_y_solo_sus_columnas_de_escritura_unica_tienen_set()
+    {
+        var hecho = typeof(IngenIA365ERP.Domain.Common.IHechoInmutable);
+        var tipos = typeof(IngenIA365ERP.Domain.Common.BaseEntity).Assembly.GetTypes()
+            .Where(t => t is { IsClass: true, IsAbstract: false } && t.Namespace is { } ns
+                && (ns.StartsWith("IngenIA365ERP.Domain.Entities.Receipts", StringComparison.Ordinal)
+                    || ns.StartsWith("IngenIA365ERP.Domain.Entities.Treasury.", StringComparison.Ordinal)))
+            .ToList();
+        var infractores = new List<string>();
+        foreach (var (nombre, unicas) in HechosDeRecaudoYTesoreria)
+        {
+            var tipo = tipos.SingleOrDefault(t => t.Name == nombre);
+            if (tipo is null) { infractores.Add($"{nombre}: no está en Entities/Receipts ni en Entities/Treasury"); continue; }
+            if (!hecho.IsAssignableFrom(tipo)) infractores.Add($"{nombre}: no es IHechoInmutable");
+            var marcadas = tipo.GetProperties().Where(p => p.IsDefined(typeof(IngenIA365ERP.Domain.Common.EscrituraUnicaAttribute), true))
+                .Select(p => p.Name).OrderBy(n => n).ToList();
+            if (!marcadas.SequenceEqual(unicas.OrderBy(n => n)))
+                infractores.Add($"{nombre}: [EscrituraUnica] [{string.Join(", ", marcadas)}]; se esperaba [{string.Join(", ", unicas)}]");
+        }
+        var otrosHechos = tipos.Where(t => hecho.IsAssignableFrom(t) && !HechosDeRecaudoYTesoreria.ContainsKey(t.Name)).Select(t => t.Name).ToList();
+        Assert.True(otrosHechos.Count == 0, "Hechos de Recaudo o Tesorería que no están en la lista (decidir su escritura única): " + string.Join(", ", otrosHechos));
+        Assert.True(infractores.Count == 0, "Hechos de Recaudo o Tesorería que se pueden modificar (Principio XI):\n  " + string.Join("\n  ", infractores));
+    }
+
     [Fact]
     public void Los_hechos_de_Cartera_llevan_el_marcador_y_solo_sus_columnas_de_escritura_unica_tienen_set()
     {

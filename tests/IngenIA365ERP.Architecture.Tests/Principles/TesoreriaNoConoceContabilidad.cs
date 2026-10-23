@@ -23,6 +23,10 @@ public class TesoreriaNoConoceContabilidad
     /// <summary>Los puertos contables de Tesorería y exactamente sus métodos.</summary>
     private static readonly (string Tipo, string[] Metodos)[] Puertos =
     [
+        // Fase 2 (T0041; interfaces.md §3).
+        ("IngenIA365ERP.Application.Common.Integration.Accounting.IContabilidadParaTesoreria",
+            ["CuentasBancariasDelPlanAsync", "CuentasPorPagarAsync", "EvaluarAsync", "MovimientosDeCuentaBancariaAsync", "SaldoContableAsync",
+             "SaldoEnLibrosAsync", "VincularCuentaBancariaAsync", "VinculoAsync"]),
     ];
 
     /// <summary>Los espacios del consumidor contable de Tesorería.</summary>

@@ -28,9 +28,11 @@ public class RecaudoYTesoreriaNoTienenValoresLegalesFijos
     /// <summary>Los valores de data-model §23 que rigen hoy como parámetro: no pueden aparecer escritos en el código.</summary>
     private static readonly string[] SospechososLiterales = ["5000000", "5_000_000", "30000000", "30_000_000", "0.004m", "0.004M"];
 
-    /// <summary>Archivos exentos (relativos a la raíz, barras normales): ninguno por ahora.</summary>
+    /// <summary>Archivos exentos (relativos a la raíz, barras normales).</summary>
     private static readonly string[] Exentos =
     [
+        // Fase 2 (T0042): el catálogo de las claves RCD y TES es donde viven los defectos como dato (texto con vigencia), no reglas.
+        "src/Core/IngenIA365ERP.Domain/Receipts/Parameters/ParametrosDeRecaudoYTesoreria.cs",
     ];
 
     [Fact]

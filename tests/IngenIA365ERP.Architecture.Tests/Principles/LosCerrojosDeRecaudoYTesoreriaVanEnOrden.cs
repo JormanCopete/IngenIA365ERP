@@ -22,16 +22,24 @@ public class LosCerrojosDeRecaudoYTesoreriaVanEnOrden
     /// <summary>Los únicos archivos (relativos a <c>src/</c>) que escriben SQL de candados sobre tablas <c>RCD_</c> o <c>TES_</c>.</summary>
     private static readonly string[] QuienesTomanCerrojos =
     [
+        // Fase 2 (T0038).
+        "Infrastructure/IngenIA365ERP.Persistence/Receipts/CerrojoDeRecaudo.cs",
+        "Infrastructure/IngenIA365ERP.Persistence/Receipts/SqlDelCerrojoDeRecaudo.cs",
+        "Infrastructure/IngenIA365ERP.Persistence/Treasury/CerrojoDeTesoreria.cs",
+        "Infrastructure/IngenIA365ERP.Persistence/Treasury/SqlDelCerrojoDeTesoreria.cs",
     ];
 
     /// <summary>Las tablas de los niveles de Recaudo que toma el cerrojo, en el orden de data-model §0.5 (sin los de los contratos).</summary>
     private static readonly string[] NivelesDeRecaudo =
     [
+        "RCD_Setup", "RCD_CollectionPointDays", "RCD_CashSessions", "RCD_Vaults", "RCD_PayerControls",
+        "RCD_PayerCreditBalances", "RCD_UnidentifiedItems", "RCD_PaymasterRemittanceLines", "RCD_ReceivedChecks", "RCD_Receipts", "COR_Sequences",
     ];
 
     /// <summary>Las tablas de los niveles de Tesorería, en su orden.</summary>
     private static readonly string[] NivelesDeTesoreria =
     [
+        "TES_Setup", "TES_BankAccounts", "TES_Checkbooks", "TES_PaymentBatches", "TES_PaymentOrders", "TES_Reconciliations",
     ];
 
     private static readonly Regex Candado = new(@"FOR\s+(UPDATE|SHARE)|UPDLOCK|XLOCK|HOLDLOCK", RegexOptions.Compiled);

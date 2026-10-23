@@ -30,6 +30,9 @@ public class RecaudoNoConoceContabilidad
     /// <summary>Los puertos contables de Recaudo y exactamente sus métodos (orden ordinal).</summary>
     private static readonly (string Tipo, string[] Metodos)[] Puertos =
     [
+        // Fase 2 (T0041; interfaces.md §3).
+        ("IngenIA365ERP.Application.Common.Integration.Accounting.IContabilidadParaRecaudo",
+            ["CuentasPorCobrarComercialesAsync", "EstadoDelPeriodoAsync", "EvaluarAsync", "SaldoContableAsync"]),
     ];
 
     /// <summary>Los espacios del consumidor contable de Recaudo, que no dependen de Recaudo (la inversa).</summary>
