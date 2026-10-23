@@ -119,6 +119,8 @@ builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Core.ValoresNacionalesC
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Core.PerfilRegulatorioClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Core.CanalesExternosClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Core.ParticipantesDeIntegracionClient>();
+// Feature 015 (T0032): las cuentas bancarias de la persona.
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Core.CuentasBancariasDePersonaClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Compliance.ListasRestrictivasClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Compliance.SolicitudesDelTitularClient>();
 // Feature 013, fase 4 (T0315, T0310): gobierno, configuración y mensajes al deudor de Cartera.

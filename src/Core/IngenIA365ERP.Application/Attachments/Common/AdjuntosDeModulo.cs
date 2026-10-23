@@ -334,6 +334,62 @@ public static class AdjuntosDeModulo
     /// </summary>
     public const string SoporteDelFondoDeLiquidez = "LendingLiquidityFundSupport";
 
+    // ------------------------------------------------------------- feature 015 (T0027; data-model §16.3; FR-112, FR-156) --
+    // Los tipos de Recaudo, Tesorería y la plataforma de la 015. Los que genera un módulo (archivo de pago, acta de arqueo, informe de
+    // conciliación) van en DeModulo: se leen con el permiso del módulo, no se borran ni reciben subidas. Los que sube una persona se leen con el
+    // permiso de su pantalla y no se borran: son evidencia. Sólo la certificación bancaria de una persona admite subidas desde la fase 2; los
+    // demás las admiten con la pantalla y la regla de su historia (FR-019): hasta entonces responden OwnerNotAllowed.
+
+    /// <summary>La declaración de origen de fondos de un recibo (FR-094): la sube el cajero; se lee con <c>Receipts.Compliance.View</c>.</summary>
+    public const string OrigenDeFondosDeRecaudo = "ReceiptsSourceOfFunds";
+
+    /// <summary>La imagen de un recibo de contingencia del talonario (FR-186): se lee con <c>Receipts.Receipt.View</c>.</summary>
+    public const string ImagenDeContingencia = "ReceiptsContingencyImage";
+
+    /// <summary>El acta de arqueo que genera el cierre de la sesión: se lee con <c>Receipts.Session.View</c>.</summary>
+    public const string ActaDeArqueo = "ReceiptsCountMinutes";
+
+    /// <summary>El archivo de respuesta de una pagaduría tal como llegó (FR-077): se lee con <c>Receipts.Paymasters.View</c>.</summary>
+    public const string RespuestaDePagaduria = "ReceiptsPaymasterResponse";
+
+    /// <summary>El archivo de pago de un lote tal como se generó, con su SHA-256 (FR-112): se lee con <c>Treasury.PaymentFiles.Download</c>.</summary>
+    public const string ArchivoDePagoDeTesoreria = "TreasuryPaymentFile";
+
+    /// <summary>La respuesta del banco a un archivo de pago (FR-118): se lee con <c>Treasury.Orders.View</c>.</summary>
+    public const string RespuestaDelBancoDeTesoreria = "TreasuryPaymentResponse";
+
+    /// <summary>El extracto bancario cargado (FR-196): se lee con <c>Treasury.Statements.View</c>.</summary>
+    public const string ExtractoDeTesoreria = "TreasuryStatement";
+
+    /// <summary>La constancia de entrega de un cheque girado: se lee con <c>Treasury.Checks.View</c>.</summary>
+    public const string ConstanciaDeEntregaDeCheque = "TreasuryDeliveryReceipt";
+
+    /// <summary>El informe de una conciliación cerrada que genera Tesorería: se lee con <c>Treasury.Reconciliation.View</c>.</summary>
+    public const string InformeDeConciliacion = "TreasuryReconciliationReport";
+
+    /// <summary>
+    /// La certificación bancaria de una cuenta de una persona (E-06, FR-210): el dueño es la <b>persona</b> (<c>OwnerEntityPublicId</c> = su
+    /// <c>PublicId</c>), porque se sube antes de pedir la cuenta, que la cita en <c>CertificateAttachmentPublicId</c>. Se lee con
+    /// <c>Core.PersonBankAccounts.View</c>, se sube con <c>Core.PersonBankAccounts.Request</c> sobre una persona que exista y no se borra: respalda
+    /// a qué cuenta se le gira.
+    /// </summary>
+    public const string CertificacionBancariaDePersona = "PersonBankCertificate";
+
+    private const string VerCuentasDePersona = "Core.PersonBankAccounts.View";
+    private const string PedirCuentasDePersona = "Core.PersonBankAccounts.Request";
+
+    /// <summary>Los tipos de la 015 que sube una persona: se conservan (son evidencia).</summary>
+    private static readonly IReadOnlyDictionary<string, string> DeRecaudoYTesoreriaSubidos = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        [OrigenDeFondosDeRecaudo] = "Receipts.Compliance.View",
+        [ImagenDeContingencia] = "Receipts.Receipt.View",
+        [RespuestaDePagaduria] = "Receipts.Paymasters.View",
+        [RespuestaDelBancoDeTesoreria] = "Treasury.Orders.View",
+        [ExtractoDeTesoreria] = "Treasury.Statements.View",
+        [ConstanciaDeEntregaDeCheque] = "Treasury.Checks.View",
+        [CertificacionBancariaDePersona] = VerCuentasDePersona,
+    };
+
     private const string VerFondoDeLiquidez = "Lending.LiquidityFund.View";
     private const string AdministrarFondoDeLiquidez = "Lending.LiquidityFund.Manage";
 
@@ -415,6 +471,10 @@ public static class AdjuntosDeModulo
         [ArchivoRegulatorio] = new("Lending.RegulatoryFiles.Read", Borrable: false, "el archivo del SICSES o de una central de riesgo tal como se generó"),
         [CobrosProvisionales] = new("Lending.Activation.Execute", Borrable: false, "el archivo de cobros provisionales revisado para la activación de Cartera"),
         [DocumentoEmitidoDeCartera] = new(LeerDocumentosDeCartera, Borrable: false, "un documento emitido de Cartera (plan de pagos, paz y salvo o certificado)"),
+        // Feature 015 (T0027): lo que generan Recaudo y Tesorería.
+        [ActaDeArqueo] = new("Receipts.Session.View", Borrable: false, "el acta de arqueo de una sesión de caja"),
+        [ArchivoDePagoDeTesoreria] = new("Treasury.PaymentFiles.Download", Borrable: false, "el archivo de pago de un lote que se entregó al banco"),
+        [InformeDeConciliacion] = new("Treasury.Reconciliation.View", Borrable: false, "el informe de una conciliación bancaria cerrada"),
     };
 
     /// <summary>La regla de un tipo que genera un módulo, o nula si no lo es.</summary>
@@ -457,6 +517,8 @@ public static class AdjuntosDeModulo
             SoporteDeCambioDelModelo => LeerCalificaciones,
             SoporteDeTitularidad => LeerCuentas,
             SoporteDeEmbargo => LeerCuentas,
+            // Feature 015 (T0027): los que sube una persona, con el permiso de su pantalla.
+            { } tipo when DeRecaudoYTesoreriaSubidos.TryGetValue(tipo, out var deLaPantalla) => deLaPantalla,
             _ => De(ownerEntityType)?.PermisoDeLectura,
         };
         return permiso is null || await permisos.HasPermissionAsync(permiso, ct);
@@ -616,6 +678,13 @@ public static class AdjuntosDeModulo
                 : new ErrorConDatos(AttachmentErrorCodes.OwnerLocked, "La decisión de asamblea ya no está en borrador: sus soportes quedaron sellados.",
                     new { ownerEntityType });
         }
+        if (ownerEntityType == CertificacionBancariaDePersona)
+        {
+            // Feature 015 (T0027, T0032): la certificación bancaria, de la persona titular, de quien pide la cuenta.
+            if (!await permisos.HasPermissionAsync(PedirCuentasDePersona, ct) || !await db.People.AnyAsync(p => p.PublicId == ownerEntityPublicId, ct))
+                return new Error("Generic.NotFound", "Persona no encontrada.");
+            return null;
+        }
         if (ownerEntityType == SoporteDeTitularidad)
         {
             // Feature 014, US2: los soportes de la titularidad de una cuenta, del titular, de quien abre cuentas o administra sus partes.
@@ -745,6 +814,12 @@ public static class AdjuntosDeModulo
         if (ownerEntityType == SoporteDeAsamblea)
             return new ErrorConDatos(AttachmentErrorCodes.OwnerLocked,
                 "Es un soporte de una decisión de asamblea (acta o proyecto de distribución): se conserva y no se puede borrar.",
+                new { ownerEntityType });
+        // Feature 015 (T0027): lo que sube una persona en Recaudo y Tesorería es evidencia (origen de fondos, contingencia, respuestas, extractos,
+        // constancias, certificación bancaria): se conserva.
+        if (ownerEntityType is not null && DeRecaudoYTesoreriaSubidos.ContainsKey(ownerEntityType))
+            return new ErrorConDatos(AttachmentErrorCodes.OwnerLocked,
+                "Es evidencia de Recaudo o Tesorería (origen de fondos, contingencia, respuesta, extracto, constancia o certificación bancaria): se conserva y no se puede borrar.",
                 new { ownerEntityType });
         // Feature 014, US2: los soportes de la titularidad de una cuenta respaldan quién la maneja y a quién se entrega.
         if (ownerEntityType == SoporteDeTitularidad)

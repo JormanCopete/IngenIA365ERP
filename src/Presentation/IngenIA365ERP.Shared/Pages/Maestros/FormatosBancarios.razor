@@ -26,7 +26,9 @@
             <option value="">Todos los ámbitos</option>
             <option value="PayrollDisbursement">Dispersión de nómina</option>
             <option value="SeveranceDeposit">Consignación de cesantías</option>
-            <option value="SupplierPayments">Pagos a proveedores</option>
+            <option value="TreasuryPayments">Pagos de tesorería</option>
+            <option value="BankStatement">Extracto bancario (lectura)</option>
+            <option value="TreasuryPaymentResponse">Respuesta del banco a pagos (lectura)</option>
             <option value="LoanDisbursement">Desembolsos de crédito</option>
             <option value="PayrollDeductionRequest">Libranza: archivo de descuentos (ida)</option>
             <option value="PayrollDeductionResult">Libranza: respuesta de la pagaduría (vuelta)</option>
@@ -106,7 +108,9 @@
                             <select class="e-input" @bind="_def.Scope" disabled="@(_enUso > 0)">
                                 <option value="PayrollDisbursement">Dispersión de nómina</option>
                                 <option value="SeveranceDeposit">Consignación de cesantías</option>
-                                <option value="SupplierPayments">Pagos a proveedores (tesorería)</option>
+                                <option value="TreasuryPayments">Pagos de tesorería (archivo de un lote)</option>
+                                <option value="BankStatement">Extracto bancario (lectura, tesorería)</option>
+                                <option value="TreasuryPaymentResponse">Respuesta del banco a pagos (lectura, tesorería)</option>
                                 <option value="LoanDisbursement">Desembolsos de crédito (Cartera)</option>
                                 <option value="PayrollDeductionRequest">Libranza: archivo de descuentos (ida, Cartera)</option>
                                 <option value="PayrollDeductionResult">Libranza: respuesta de la pagaduría (vuelta, Cartera)</option>

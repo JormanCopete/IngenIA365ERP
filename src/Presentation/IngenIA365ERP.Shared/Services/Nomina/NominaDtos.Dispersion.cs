@@ -15,7 +15,9 @@ public sealed record FormatoBancarioResumenDto(
     {
         "PayrollDisbursement" => "Dispersión de nómina",
         "SeveranceDeposit" => "Consignación de cesantías",
-        "SupplierPayments" => "Pagos a proveedores (tesorería)",
+        "TreasuryPayments" => "Pagos de tesorería",
+        "BankStatement" => "Extracto bancario",
+        "TreasuryPaymentResponse" => "Respuesta del banco a pagos",
         "LoanDisbursement" => "Desembolsos de crédito",
         "PayrollDeductionRequest" => "Libranza: archivo de descuentos (ida)",
         "PayrollDeductionResult" => "Libranza: respuesta de la pagaduría (vuelta)",

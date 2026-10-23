@@ -1,6 +1,7 @@
 using IngenIA365ERP.Application.Common.ExternalChannels;
 using IngenIA365ERP.Domain.Enums.Compliance;
 using IngenIA365ERP.Domain.Enums.ExternalChannels;
+using ScreeningContext = IngenIA365ERP.Domain.Enums.Lending.ScreeningContext;
 
 namespace IngenIA365ERP.Application.Common.Compliance;
 
@@ -93,6 +94,24 @@ public sealed record CargaDeListasRestrictivas(IReadOnlyList<VersionDeListaConsu
 public interface ICargaDeListasRestrictivas
 {
     Task<CargaDeListasRestrictivas> LeerVigenteAsync(DateOnly fecha, CancellationToken ct);
+}
+
+/// <summary>
+/// El efecto de una coincidencia según el contexto de la consulta (feature 015, T0025; R-24; FR-010, FR-098, FR-203; D22). En el recaudo
+/// (<see cref="ScreeningContext.Collection"/>) y en el giro (<see cref="ScreeningContext.Disbursement"/>) una coincidencia en una lista
+/// <b>vinculante</b> bloquea siempre: lo impone la norma y no hay parámetro para que «siga» (<c>Receipts.Compliance.BindingListMatch</c>,
+/// <c>Treasury.Compliance.BindingListMatch</c>). Una coincidencia en una lista no vinculante sigue el parámetro
+/// <c>Sarlaft.ListasNoVinculantes.Efecto</c> (<c>Sigue</c> o <c>Retiene</c>). Los contextos de Cartera conservan su tratamiento. (nuevo)
+/// </summary>
+public static class EfectoDeListasPorContexto
+{
+    /// <summary>¿Una coincidencia vinculante en este contexto bloquea sin excepción posible?</summary>
+    public static bool LaVinculanteBloqueaSiempre(ScreeningContext contexto) =>
+        contexto is ScreeningContext.Collection or ScreeningContext.Disbursement;
+
+    /// <summary>¿El contexto es de Recaudo o Tesorería (feature 015)?</summary>
+    public static bool EsDeRecaudoOTesoreria(ScreeningContext contexto) =>
+        contexto is ScreeningContext.Collection or ScreeningContext.Disbursement;
 }
 
 /// <summary>El defecto sin listas cargadas: toda consulta de <c>CARGA-PROPIA</c> responde <c>NoMatch</c> sin versiones. (nuevo)</summary>

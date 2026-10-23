@@ -29,6 +29,8 @@ public static class DependencyInjection
         {
             cfg.RegisterServicesFromAssembly(assembly);
             cfg.AddBehavior(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
+            // 1b) Feature 015 (T0019): la guarda de módulo activo de Recaudo y Tesorería, después de validar y antes de abrir la transacción.
+            cfg.AddBehavior(typeof(IPipelineBehavior<,>), typeof(ModuloActivoBehavior<,>));
             cfg.AddBehavior(typeof(IPipelineBehavior<,>), typeof(LoggingBehavior<,>));
             // 2b) Feature 012 (T13, T14): los comandos IOperacionIdempotente abren aqui su transaccion
             //     (TransaccionExplicita) y guardan la clave en COR_OperationKeys; va ANTES de Audit para
@@ -163,6 +165,10 @@ public static class DependencyInjection
         services.AddScoped<Common.Parameters.IResolutorDeAmbitoDeParametro, Common.Parameters.ResolutorDeAmbitoCompuesto>();
         services.AddScoped<Lending.Common.ReglasDeParametrosDeCartera>();
         services.AddScoped<Common.Parameters.IReglasDeParametrosDeModulo>(sp => sp.GetRequiredService<Lending.Common.ReglasDeParametrosDeCartera>());
+        // Feature 015 (T0042, TR43): las reglas de RCD (la hora de corte contra el inicio del ciclo de Cartera, el de la API o 00:30) y de TES.
+        services.AddScoped<Common.Parameters.IReglasDeParametrosDeModulo>(sp => new Receipts.Setup.ReglasDeParametrosDeRecaudo(
+            sp.GetService<Lending.Processes.ParametrosDeLaPasada>()?.HoraDeInicio ?? Receipts.Setup.ReglasDeParametrosDeRecaudo.InicioPorDefecto));
+        services.AddScoped<Common.Parameters.IReglasDeParametrosDeModulo, Treasury.Common.ReglasDeParametrosDeTesoreria>();
         services.AddScoped<Common.Parameters.IReglasDeParametros>(sp => new Common.Parameters.ReglasDeParametrosPorModulo(
             sp.GetRequiredService<Inventory.Common.ReglasDePlataformaDeInventario>(),
             sp.GetServices<Common.Parameters.IReglasDeParametrosDeModulo>()));
@@ -229,6 +235,12 @@ public static class DependencyInjection
         services.AddScoped<Inventory.Documents.Numeracion.Numerador>();
         // Feature 013 (T0207, T0208): el numerador y el registro del libro de Cartera, únicos escritores de lo suyo.
         services.AddScoped<Lending.Common.NumeradorDeCartera>();
+        // Feature 015 (T0038, T0039, T0030, T0048): el orden de los cerrojos de Recaudo y Tesorería (uno por unidad de trabajo), sus numeradores
+        // y las cuentas bancarias de la persona.
+        services.AddScoped<Receipts.Common.OrdenDeCerrojos>();
+        services.AddScoped<Receipts.Common.NumeradorDeRecaudo>();
+        services.AddScoped<Treasury.Common.NumeradorDeTesoreria>();
+        services.AddScoped<Core.PersonBankAccounts.ICuentasBancariasDePersona, Core.PersonBankAccounts.CuentasBancariasDePersona>();
         services.AddScoped<Lending.Ledger.RegistroDeCartera>();
         // Feature 014 (T030): el único escritor del libro de cuentas de captación y aportes.
         services.AddScoped<Lending.Deposits.Ledger.RegistroDeCuentas>();

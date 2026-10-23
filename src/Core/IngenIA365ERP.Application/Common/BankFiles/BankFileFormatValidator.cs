@@ -73,7 +73,38 @@ public static class BankFileFormatValidator
             // Feature 014 (T091): la respuesta por empleado y por código de la pagaduría.
             BankFieldSource.AccountNumber, BankFieldSource.PaymasterConceptCode,
         ],
+        // Feature 015 (T0023; archivos-y-plantillas.md §2, §3): el archivo de pago de un lote con el contexto genérico, el extracto y la
+        // respuesta del banco. El número de cuenta de la respuesta es la del beneficiario (no la de Cartera): por eso se admite aquí.
+        [BankFileScope.TreasuryPayments] =
+        [
+            BankFieldSource.PayeeDocumentType, BankFieldSource.PayeeDocument, BankFieldSource.PayeeFullName, BankFieldSource.PayeeFirstNames,
+            BankFieldSource.PayeeLastNames, BankFieldSource.PayeeBankCode, BankFieldSource.PayeeAccountType, BankFieldSource.PayeeAccountNumber,
+            BankFieldSource.PayeeEmail, BankFieldSource.Amount, BankFieldSource.Concept, BankFieldSource.BatchReference,
+        ],
+        [BankFileScope.BankStatement] =
+        [
+            BankFieldSource.MovementDate, BankFieldSource.ValueDate, BankFieldSource.Direction, BankFieldSource.Amount, BankFieldSource.Debit,
+            BankFieldSource.Credit, BankFieldSource.MovementReference, BankFieldSource.BankSequence, BankFieldSource.DepositorTaxId,
+            BankFieldSource.DepositorName, BankFieldSource.Description, BankFieldSource.Balance, BankFieldSource.OfficeCode,
+        ],
+        [BankFileScope.TreasuryPaymentResponse] =
+        [
+            BankFieldSource.BeneficiaryTaxId, BankFieldSource.BankCode, BankFieldSource.AccountNumber, BankFieldSource.Amount,
+            BankFieldSource.Outcome, BankFieldSource.BankCause, BankFieldSource.BankDate, BankFieldSource.BankReference,
+        ],
     };
+
+    /// <summary>
+    /// Feature 015 (T0023): los orígenes que sólo leen el extracto y la respuesta de pagos: fuera de esos ámbitos son error al guardar el
+    /// formato (un escritor los escribiría vacíos).
+    /// </summary>
+    private static readonly HashSet<BankFieldSource> SoloDeLectura =
+    [
+        BankFieldSource.MovementDate, BankFieldSource.ValueDate, BankFieldSource.Direction, BankFieldSource.Debit, BankFieldSource.Credit,
+        BankFieldSource.BankSequence, BankFieldSource.DepositorTaxId, BankFieldSource.DepositorName, BankFieldSource.Description,
+        BankFieldSource.Balance, BankFieldSource.OfficeCode, BankFieldSource.BeneficiaryTaxId, BankFieldSource.BankCode,
+        BankFieldSource.Outcome, BankFieldSource.BankCause, BankFieldSource.BankDate, BankFieldSource.BankReference,
+    ];
 
     /// <summary>
     /// Los orígenes que sólo resuelve Cartera (feature 013, K1 y K2): fuera de los ámbitos que los admiten —también en los de nómina y
@@ -154,6 +185,8 @@ public static class BankFileFormatValidator
                     Error(nombre, f.Order, f.Name, $"{src} no es un origen del ámbito {ambito} (admite {string.Join(", ", admitidos.Order())}).");
                 else if (admitidos is null && SoloDeCartera.Contains(src.Value))
                     Error(nombre, f.Order, f.Name, $"{src} es un origen de Cartera: no sirve en el ámbito {def.Scope}.");
+                else if (admitidos is null && SoloDeLectura.Contains(src.Value))
+                    Error(nombre, f.Order, f.Name, $"{src} es un origen de lectura del extracto o de la respuesta de pagos: no sirve en el ámbito {def.Scope}.");
                 if (string.IsNullOrWhiteSpace(f.Name)) Error(nombre, f.Order, null, "Cada campo lleva nombre.");
                 if (esFijo && (f.Length is null || f.Length <= 0)) Error(nombre, f.Order, f.Name, "En ancho fijo todo campo tiene largo.");
                 if (f.Length is < 0) Error(nombre, f.Order, f.Name, "El largo no puede ser negativo.");

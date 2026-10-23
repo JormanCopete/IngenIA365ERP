@@ -17,7 +17,10 @@ public static class ModuloContable
     public const string Cdt = "CDT";
     public const string Activos = "ACT";
 
-    public static readonly IReadOnlyList<string> Codigos = [Contabilidad, Nomina, Cartera, Inventario, Tesoreria, Cdt, Activos];
+    /// <summary>Feature 015 (T0035; R-02; CH11): Recaudo. Tesorería ya tenía <c>TES</c>, que ahora usa la Tesorería nueva.</summary>
+    public const string Recaudo = "REC";
+
+    public static readonly IReadOnlyList<string> Codigos = [Contabilidad, Nomina, Cartera, Inventario, Tesoreria, Cdt, Activos, Recaudo];
 
     public static AccountingModules? Bandera(string module) => module switch
     {
@@ -28,6 +31,7 @@ public static class ModuloContable
         Tesoreria => AccountingModules.Treasury,
         Cdt => AccountingModules.Savings,
         Activos => AccountingModules.Assets,
+        Recaudo => AccountingModules.Receipts,
         _ => null,
     };
 

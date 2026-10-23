@@ -525,7 +525,10 @@
             <NavLink href="/debito/datafonos" class="nav-subitem">Datafonos</NavLink>
         </NavMenuGroup>
 
-        <NavMenuGroup Icon="e-cheque" Title="Tesoreria" Expanded="SidebarOpen">
+        @* Feature 015 (T0047; R-04; FR-162): lo heredado de Tesorería convive hasta T2 bajo su propio grupo. Los grupos «Recaudo» y
+           «Tesorería» nacen con su primera página (TodoEnlaceDelMenuTieneSuPagina): ninguno enlaza todavía a una ruta sin @page. *@
+        <NavMenuGroup Icon="e-cheque" Title="Tesorería · heredada" Expanded="SidebarOpen">
+            <span class="nav-subgroup-title">Cuentas por pagar y cheques de proveedores hasta T2</span>
             <NavLink href="/tesoreria/cheques" class="nav-subitem">Cheques</NavLink>
             <NavLink href="/tesoreria/facturas" class="nav-subitem">Facturas CxP/CxC</NavLink>
             <NavLink href="/tesoreria/flujo-caja" class="nav-subitem">Flujo de Caja</NavLink>

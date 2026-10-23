@@ -597,6 +597,16 @@ public interface IApplicationDbContext
     // viven en IAdminDbContext. Quien las necesite desde un handler tiene que pedir
     // ese contexto y decirlo, en vez de alcanzarlas por la puerta de atras.
 
+    // ---- Feature 015 (T0028, T0033, T0036, T0039; data-model §1.1, §3.1, §9.1, §16): plataforma y esqueleto de Recaudo y Tesorería ----
+    DbSet<IngenIA365ERP.Domain.Entities.Core.PersonBankAccount> PersonBankAccounts { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Core.GoLive.GoLiveChecklist> GoLiveChecklists { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Core.GoLive.GoLiveChecklistItem> GoLiveChecklistItems { get; }
+    /// <summary><c>COR_Sequences</c>: la numeración de Recaudo y Tesorería (clave en <c>Name</c>). Sólo la escriben sus numeradores.</summary>
+    DbSet<IngenIA365ERP.Domain.Entities.Core.Sequence> Sequences { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Configuration.ReceiptsSetup> ReceiptsSetups { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.PayerControl> PayerControls { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Treasury.Activation.TreasurySetup> TreasurySetups { get; }
+
     /// <summary>
     /// Descarta todo lo que el contexto tenga sin guardar (feature 009, R3): lo usa el reintento
     /// por concurrencia entre un intento y el siguiente. No toca la base.

@@ -54,6 +54,27 @@ public static class AuditoriaEncadenada
         ModuloDeAuditoria.NationalValues,
         // Feature 013 (T0189, C89; FR-003, SC-014): todo evento Lending.* sale por COR_AuditOutbox, sellado.
         ModuloDeAuditoria.Lending,
+        // Feature 015 (T0043; TR37, R-32; FR-014, FR-178; SC-019): Recaudo y Tesorería —con las cuentas bancarias de la persona— y la lista de
+        // go/no-go. La conservación es el flujo de diez años, el defecto de Conservacion.Anios; que el TTL lea el parámetro (piso de cinco años)
+        // queda pendiente: exige que la infraestructura de auditoría lea parámetros por cooperativa (decisiones-transversales §2.7).
+        ModuloDeAuditoria.Receipts,
+        ModuloDeAuditoria.Treasury,
+        ModuloDeAuditoria.GoLive,
+    ];
+
+    /// <summary>
+    /// Las lecturas sensibles de Recaudo y Tesorería que dejan evento (feature 015, T0043; R-32): una lista cerrada. Cada lectura que nombra
+    /// el evento lo escribe con <see cref="RegistrarAsync"/>; las exportaciones de informes de los dos módulos también son sensibles. (nuevo)
+    /// </summary>
+    public static IReadOnlyList<string> LecturasSensiblesDeRecaudoYTesoreria { get; } =
+    [
+        "Receipts.Person.PayablesRead",
+        "Treasury.BankBalances.Read",
+        "Core.PersonBankAccount.Read",
+        "Core.PersonBankAccount.Changed",
+        "Receipts.Sarlaft.ReportRead",
+        "Receipts.Report.Exported",
+        "Treasury.Report.Exported",
     ];
 
     /// <summary>Sufijo de la clase de retención de diez años.</summary>

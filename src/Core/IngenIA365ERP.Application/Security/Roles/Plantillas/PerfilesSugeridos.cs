@@ -324,6 +324,86 @@ public static class PerfilesSugeridos
                 "Lending.Scope.AllOffices", "Lending.Scope.AllLines",
             ],
             "Todas las oficinas y líneas; sólo cifras, sin datos de titulares."),
+
+        // ------------------------------------------------- Recaudo y Tesorería (feature 015, T0045; FR-176; R-06; contracts/api.md §1.5) --
+        // Viven aquí y no en el sembrador de permisos (desviación de tasks.md T0045): las plantillas de rol del ERP son propuestas en código. Llevan
+        // los permisos de Cartera y Captaciones que los contratos verifican sobre quien actúa. Activar Recaudo exige al menos un cajero y un
+        // supervisor con estos permisos.
+        new("recaudo.cajero", ModuloRecaudo, "Cajero",
+            "Abre su sesión, registra recibos multiproducto por los contratos de Cartera y Captaciones, mueve su caja y la arquea.",
+            [
+                "Receipts.Session.Open", "Receipts.Session.View", "Receipts.Session.Move", "Receipts.Session.Close", "Receipts.Receipt.Register",
+                "Receipts.Receipt.View", "Receipts.Receipt.Print", "Receipts.Voiding.Request", "Receipts.Checks.View",
+                "Lending.Accounts.Deposit", "Core.People.Create", "Attachments.Upload", "Attachments.Download",
+            ],
+            "Sus cajas y puntos: hay que asignárselos (alcance de Recaudo). El arqueo es ciego: no trae Receipts.Session.ViewExpected."),
+
+        new("recaudo.supervisor", ModuloRecaudo, "Supervisor de caja",
+            "Aprueba diferencias de arqueo y anulaciones, cierra sesiones olvidadas y el día del punto, lleva la bóveda y las remesas.",
+            [
+                "Receipts.Setup.View", "Receipts.Session.*", "Receipts.Count.ApproveDifference", "Receipts.Day.Close", "Receipts.Vault.*",
+                "Receipts.Receipt.View", "Receipts.Receipt.Print", "Receipts.Receipt.RegisterContingency", "Receipts.Receipt.Backdate",
+                "Receipts.Voiding.*", "Receipts.Reversals.*", "Receipts.CreditBalances.*", "Receipts.Checks.*", "Receipts.Reports.View",
+                "Lending.Payments.BackdateBeforeClose", "Lending.Accounts.Deposit", "Lending.Accounts.Withdraw",
+                "Attachments.Upload", "Attachments.Download",
+            ],
+            "Sus oficinas y puntos; límite de monto en Receipts.Count.ApproveDifference, Voiding.Approve, Receipt.Backdate y en los permisos de "
+            + "Cartera con monto si la cooperativa lo fija. No aprueba lo que él mismo registró."),
+
+        new("recaudo.analista", ModuloRecaudo, "Analista de recaudo",
+            "Identifica abonos bancarios, resuelve partidas y saldos a favor, carga respuestas y aplica giros de pagadurías.",
+            [
+                "Receipts.BankItems.*", "Receipts.UnidentifiedItems.View", "Receipts.UnidentifiedItems.Resolve", "Receipts.CreditBalances.*",
+                "Receipts.Paymasters.*", "Receipts.Receipt.View", "Receipts.Reports.View", "Receipts.Reports.Export", "Treasury.Statements.Load",
+                "Treasury.Statements.View", "Attachments.Upload", "Attachments.Download",
+            ],
+            "Todas las cuentas de recaudo y pagadurías que se le asignen; pasar una partida a ingreso es del supervisor con aprobación."),
+
+        new("tesoreria.tesorero", ModuloTesoreria, "Tesorero",
+            "Administra cuentas propias y chequeras, prepara lotes, genera y envía archivos de pago, registra resultados y confirma remesas.",
+            [
+                "Treasury.BankAccounts.*", "Treasury.BankBalances.View", "Treasury.Orders.*", "Treasury.Batches.Prepare", "Treasury.PaymentFiles.*",
+                "Treasury.Results.Register", "Treasury.Checkbooks.*", "Treasury.Checks.*", "Treasury.Remittances.*", "Treasury.LiquidityFund.Request",
+                "Treasury.Reports.View", "Treasury.Reports.Export", "Core.PersonBankAccounts.View", "Core.PersonBankAccounts.Request",
+                "Attachments.Upload", "Attachments.Download",
+            ],
+            "Sus cuentas bancarias; no aprueba lotes ni el uso del fondo de liquidez (segregación) ni las cuentas destino que él pidió."),
+
+        new("tesoreria.aprobador", ModuloTesoreria, "Aprobador de pagos",
+            "Aprueba lotes de pago y el uso del fondo de liquidez, y aprueba las cuentas bancarias de las personas.",
+            [
+                "Treasury.Orders.View", "Treasury.Batches.Approve", "Treasury.LiquidityFund.Approve", "Treasury.BankAccounts.View",
+                "Treasury.Reports.View", "Core.PersonBankAccounts.View", "Core.PersonBankAccounts.Approve", "Attachments.Download",
+            ],
+            "Límite de monto en Treasury.Batches.Approve y LiquidityFund.Approve si la cooperativa lo fija. No aprueba lo que él armó."),
+
+        new("tesoreria.conciliador", ModuloTesoreria, "Conciliador bancario",
+            "Carga extractos, concilia las cuentas propias y registra partidas conciliatorias; no gira.",
+            [
+                "Treasury.Statements.Load", "Treasury.Statements.View", "Treasury.Reconciliation.*", "Treasury.BankAccounts.View",
+                "Treasury.BankBalances.View", "Treasury.Reports.View", "Treasury.Reports.Export", "Attachments.Upload", "Attachments.Download",
+            ],
+            "Sus cuentas bancarias. La segregación impide conciliar la cuenta de la que él mismo gira."),
+
+        new("cumplimiento.oficial", ModuloRecaudo, "Oficial de cumplimiento",
+            "Revisa las señales de efectivo y las coincidencias en listas, libera lo retenido y genera el reporte de transacciones en efectivo.",
+            [
+                "Receipts.Compliance.*", "Receipts.Sarlaft.Report", "Receipts.Receipt.View", "Receipts.Reports.View", "Receipts.Reports.Export",
+                "Treasury.Orders.View", "Compliance.RestrictiveLists.Release", "Receipts.Scope.All", "Attachments.Download",
+            ],
+            "Todas las oficinas (trae Receipts.Scope.All); la lectura de los datos del pagador queda auditada."),
+    ];
+
+    /// <summary>El módulo de las plantillas de Recaudo y la de cumplimiento (feature 015, T0045).</summary>
+    public const string ModuloRecaudo = "Receipts";
+
+    /// <summary>El módulo de las plantillas de la Tesorería nueva (feature 015, T0045).</summary>
+    public const string ModuloTesoreria = "Treasury";
+
+    /// <summary>Las claves de las siete plantillas de la 015 (FR-176).</summary>
+    public static IReadOnlyList<string> ClavesDeRecaudoYTesoreria { get; } =
+    [
+        "recaudo.cajero", "recaudo.supervisor", "recaudo.analista", "tesoreria.tesorero", "tesoreria.aprobador", "tesoreria.conciliador", "cumplimiento.oficial",
     ];
 
     /// <summary>La plantilla por clave (sin distinguir mayúsculas), o <c>null</c>.</summary>

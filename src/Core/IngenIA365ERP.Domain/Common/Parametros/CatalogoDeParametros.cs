@@ -36,6 +36,9 @@ public static class CatalogoDeParametros
     {
         [EntregaDeModulo.LineaDelComercio] = EntregaVigente,
         [EntregaDeModulo.LineaDeCartera] = CatalogoDeCartera.EntregaVigente,
+        // Feature 015 (T0042): Recaudo y la Tesorería nueva.
+        [EntregaDeModulo.LineaDeRecaudo] = Receipts.CatalogoDeRecaudo.EntregaVigente,
+        [EntregaDeModulo.LineaDeTesoreria] = Treasury.CatalogoDeTesoreria.EntregaVigente,
     };
 
     /// <summary>La entrega vigente de la línea <paramref name="linea"/> (<c>INV</c>, <c>LND</c>).</summary>
@@ -52,11 +55,22 @@ public static class CatalogoDeParametros
         fijada is { } f && string.Equals(f.Modulo, linea, StringComparison.Ordinal) ? f : EntregaVigenteDe(linea);
 
     public static IReadOnlyList<string> Modulos { get; } =
-        [ParametrosDeInventario.Modulo, ParametrosTributarios.Modulo, ParametrosDeFacturacionElectronica.Modulo, ParametrosDeCartera.Modulo];
+        [ParametrosDeInventario.Modulo, ParametrosTributarios.Modulo, ParametrosDeFacturacionElectronica.Modulo, ParametrosDeCartera.Modulo,
+         Receipts.Parameters.ParametrosDeRecaudoYTesoreria.ModuloRecaudo, Receipts.Parameters.ParametrosDeRecaudoYTesoreria.ModuloTesoreria];
 
     public static IReadOnlyList<DefinicionDeParametro> Todas { get; } =
         [.. ParametrosDeInventario.Definiciones, .. ParametrosTributarios.Definiciones, .. ParametrosDeFacturacionElectronica.Definiciones,
-         .. ParametrosDeCartera.Definiciones];
+         .. ParametrosDeCartera.Definiciones, .. Receipts.Parameters.ParametrosDeRecaudoYTesoreria.Definiciones];
+
+    /// <summary>
+    /// Los módulos cuyas claves tienen su ruta y su permiso propios (feature 013, T43: Cartera; feature 015, T0042: Recaudo y Tesorería): la
+    /// lista sin módulo y la ruta de parámetros de Inventario no los muestran ni los registran.
+    /// </summary>
+    public static IReadOnlySet<string> ModulosConRutaPropia { get; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        ParametrosDeCartera.Modulo, Receipts.Parameters.ParametrosDeRecaudoYTesoreria.ModuloRecaudo,
+        Receipts.Parameters.ParametrosDeRecaudoYTesoreria.ModuloTesoreria,
+    };
 
     private static readonly Dictionary<(string, string), DefinicionDeParametro> PorClave =
         Todas.ToDictionary(d => (d.Modulo.ToUpperInvariant(), d.Clave.ToUpperInvariant()));

@@ -139,6 +139,9 @@ public static class DependencyInjection
         services.AddScoped<Application.Inventory.Common.ICerrojoDeInventario, Inventory.CerrojoDeInventario>();
         // Feature 013 (T0206, T34): el cerrojo de Cartera (LND_Setup → deudores → créditos → numeración).
         services.AddScoped<Application.Lending.Common.ICerrojoDeCartera, Lending.CerrojoDeCartera>();
+        // Feature 015 (T0038, T0048): los cerrojos de Recaudo y Tesorería, que comparten el OrdenDeCerrojos del ámbito.
+        services.AddScoped<Application.Receipts.Common.ICerrojoDeRecaudo, Receipts.CerrojoDeRecaudo>();
+        services.AddScoped<Application.Treasury.Common.ICerrojoDeTesoreria, Treasury.CerrojoDeTesoreria>();
         // Feature 012 (I3, T597): el candado por clave (ambito de una lista de precios, rol de un tope) dentro de la transaccion.
         services.AddScoped<Application.Inventory.Common.ICerrojoPorClave, Inventory.CerrojoPorClave>();
         // Feature 012 (I3, T606): el toque de la sesion de caja antes del cerrojo del cobro (UPDATE ... WHERE Status = Open).

@@ -654,6 +654,13 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Configuration.NegotiatedRateRule> NegotiatedRateRules => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Configuration.NegotiatedRateRule>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.NegotiatedRateRequest> NegotiatedRateRequests => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.NegotiatedRateRequest>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Migration.MigrationTermDepositRow> MigrationTermDepositRows => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Migration.MigrationTermDepositRow>();
+    // ---- Feature 015 (T0028, T0033, T0036): plataforma y esqueleto de Recaudo y Tesorería ----
+    public DbSet<IngenIA365ERP.Domain.Entities.Core.PersonBankAccount> PersonBankAccounts => Set<IngenIA365ERP.Domain.Entities.Core.PersonBankAccount>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Core.GoLive.GoLiveChecklist> GoLiveChecklists => Set<IngenIA365ERP.Domain.Entities.Core.GoLive.GoLiveChecklist>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Core.GoLive.GoLiveChecklistItem> GoLiveChecklistItems => Set<IngenIA365ERP.Domain.Entities.Core.GoLive.GoLiveChecklistItem>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Configuration.ReceiptsSetup> ReceiptsSetups => Set<IngenIA365ERP.Domain.Entities.Receipts.Configuration.ReceiptsSetup>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.PayerControl> PayerControls => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.PayerControl>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Activation.TreasurySetup> TreasurySetups => Set<IngenIA365ERP.Domain.Entities.Treasury.Activation.TreasurySetup>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
