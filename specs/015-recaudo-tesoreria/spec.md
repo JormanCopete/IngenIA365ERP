@@ -253,7 +253,7 @@ Hitos que fija la salida de COOFLOPAL (plan de implantación) y que esta especif
   proveedores; se retira con la guarda (C3) cuando T2 traiga pagos a proveedores y conciliación completa, migrando
   antes sus pendientes (FR-161).
 - Q: ¿Dónde corre el paralelo de COOFLOPAL del 11/11 al 27/11? → A: **En QA, con una copia de la parametrización
-  de COOFLOPAL** y la versión disponible de R0/R1; producción queda limpia para la carga definitiva del 28/11
+  de COOFLOPAL** y la versión disponible de R0/T0 y lo que haya de R1/T1; producción queda limpia para la carga definitiva del 28/11
   (FR-226).
 - Q: ¿Qué pasa con los dobles de prueba TST y TES cuando existan Recaudo y Tesorería reales? → A: **Se retiran.**
   Las pruebas de punta a punta de Cartera y Captaciones migran a los módulos reales (un solo consumidor por
@@ -276,6 +276,30 @@ Hitos que fija la salida de COOFLOPAL (plan de implantación) y que esta especif
   devolución de cheque; conciliación mínima; SARLAFT básico. El resto de R1 y T1 sigue después; cada requisito
   lleva su entrega («Entregas»).
 
+### Session 2026-10-23
+
+Decisiones del dueño sobre los hallazgos del `/speckit-analyze` del 2026-10-23.
+
+- Q: CO1 · ¿Cómo cumplen el Principio X las corridas no interactivas (extractos, giros de pagaduría), que aplican miles
+  de líneas sin un evento por recibo? → A: **Un evento resumen por corrida que lleva la lista de cada recibo aplicado
+  (su `PublicId`) con su huella, verificable recibo por recibo**, escrito por `COR_AuditOutbox` en la cadena de sellos,
+  más uno por línea rechazada. Con eso el principio se cumple sin desviación (FR-014, I-3).
+- Q: I3 · ¿Hasta cuándo se regeneran las migraciones de R0/T0? → A: **Se congelan al desplegarse en QA el 10/11**
+  (hito del bloque 3): desde ahí no se regenera nada y cada cambio posterior de R0/T0 es una migración nueva, aditiva y
+  en par. Antes del 10/11 sí se regeneran (la base de DEV del 04/11 se recrea).
+- Q: I7 · ¿Conviven la conciliación bancaria de Tesorería y la de Contabilidad (009, FR-055 a FR-060)? → A: **La de
+  Tesorería reemplaza a la de Contabilidad** (enmienda E-04 a la 009): un solo extracto y una sola conciliación por
+  cuenta, en Tesorería. Las tablas `ACC_BankReconciliations`, `ACC_BankStatementLines` y `ACC_BankStatementColumnMaps`
+  quedan sin uso (no se borran en esta feature; su retiro, si se hace, es una migración destructiva aparte, pendiente) y
+  la reapertura de un período contable mira la conciliación de Tesorería por un puerto (FR-167, FR-216).
+- Q: CO3 · ¿Qué prefijo llevan las tablas nuevas, si la constitución sólo lista `TRS_` para Tesorería? → A: **`RCD_`
+  (Recaudo) y `TES_` (Tesorería nueva), por enmienda de la constitución** (Estándares Técnicos Adicionales, v2.0.1 del
+  2026-10-23, revisor el dueño); `TRS_` queda para lo heredado hasta su retiro.
+- Q: CO2 · ¿Se aprueba que Recaudo llame directo a los contratos de Cartera y Captaciones y a los puertos entre los dos
+  módulos dentro de su transacción (Principio III)? → A: **Sí, se aprueba formalmente la desviación**, como T101 de la
+  013: cada puerto ejecuta su validador y escribe su evento. Queda en Complexity Tracking del plan y en la descripción
+  del PR.
+
 ### Opciones que se presentaron (2026-10-22)
 
 Las opciones con que se presentaron las tres primeras decisiones; el dueño eligió la recomendada en las tres
@@ -297,7 +321,8 @@ Las opciones con que se presentaron las tres primeras decisiones; el dueño elig
 
 ## Conflictos con la constitución y con decisiones vigentes
 
-La especificación no modifica la constitución.
+La especificación no modifica ningún principio de la constitución. La única enmienda que pide es de los Estándares
+Técnicos Adicionales: los prefijos de tabla `RCD_` y `TES_` (v2.0.1, 2026-10-23; Clarifications 2026-10-23).
 
 ### Con la constitución
 
@@ -309,7 +334,9 @@ La especificación no modifica la constitución.
 - **I-3 · Principio X.** Toda operación monetaria (recibo, egreso, giro, traslado, anulación) queda en la
   auditoría con cadena de sellos; la declaración de origen de fondos y las alertas de efectivo son datos de la
   operación. La conservación de documentos es un parámetro que nunca baja del mínimo de cinco años del principio
-  (FR-178).
+  (FR-178). Las corridas no interactivas (extractos, giros de pagaduría) dejan un evento resumen por corrida con la
+  lista de cada recibo aplicado (su `PublicId` y su huella), verificable recibo por recibo en la cadena de sellos, y uno
+  por línea rechazada (decisión del dueño del 2026-10-23).
 
 | Principio | Cómo lo cumple |
 |---|---|
@@ -378,6 +405,12 @@ La especificación no modifica la constitución.
 - **C13 · Plan de implantación de COOFLOPAL.** El plan usa la Tesorería heredada para cuentas por pagar y
   cheques de proveedores, corre el paralelo desde el 11/11 y cuadra la apertura después del 01/12. **Decidido**:
   la heredada convive hasta T2, el paralelo corre en QA y la activación admite cuadre provisional (Clarifications).
+- **C14 · 009, conciliación bancaria de Contabilidad.** La 009 especificó su propia conciliación (FR-055 a FR-060:
+  extracto, mapeo de columnas, cruce, partidas, cierre y reapertura) sobre `ACC_BankReconciliations`,
+  `ACC_BankStatementLines` y `ACC_BankStatementColumnMaps`, y la reapertura de un período las marca desactualizadas.
+  Habría dos extractos y dos conciliaciones por cuenta. **Decidido (2026-10-23)**: la de Tesorería **reemplaza** a la
+  de Contabilidad (enmienda E-04, FR-167, FR-216); las tres tablas quedan sin uso y la reapertura del período mira la
+  conciliación de Tesorería por un puerto.
 
 ## Alcance
 
@@ -1563,7 +1596,8 @@ Cada requisito lleva su entrega entre paréntesis (ver «Entregas»). Los FR-170
 - **FR-011 · Permisos y alcance.** *(R0, T0)* Permisos propios por acción (consultar, registrar, anular, aprobar,
   exportar, configurar) en Recaudo y en Tesorería, sembrados completos con la primera entrega. El alcance limita
   por **oficina, punto y caja** (Recaudo), por **cuenta bancaria propia** (Tesorería) y según FR-175 en los canales
-  sin caja; falla cerrado y responde como ante lo inexistente.
+  sin caja; falla cerrado y responde como ante lo inexistente. El alcance de Tesorería por cuenta bancaria propia es
+  éste (FR-106 remite aquí).
 - **FR-012 · Segregación.** *(R0, T0)* Quien registra no aprueba lo suyo: anulaciones, diferencias de arqueo,
   reclasificaciones entre medios, fechas valor anteriores, partidas clasificadas a otro concepto, lotes de pago,
   cambios de cuenta de un beneficiario, órdenes manuales, notas bancarias, traslados, usos del fondo de liquidez y
@@ -1576,7 +1610,9 @@ Cada requisito lleva su entrega entre paréntesis (ver «Entregas»). Los FR-170
   dinero hasta aprobarse.
 - **FR-014 · Auditoría.** *(R0, T0)* Toda operación, rechazo, aprobación y lectura sensible (lo que debe y paga una
   persona, saldos bancarios, cambios de cuenta de un beneficiario, exportaciones, reportes de transacciones) queda
-  en la auditoría con cadena de sellos, con la conservación de FR-178.
+  en la auditoría con cadena de sellos, con la conservación de FR-178. Una corrida no interactiva (extracto, giro de
+  pagaduría) deja un evento resumen que lista cada recibo aplicado (su `PublicId` y su huella), verificable recibo por
+  recibo, y un evento por línea rechazada.
 - **FR-015 · Errores visibles.** *(R0, T0)* Mensajes en español con código por módulo; cada rechazo de un contrato
   se muestra por ítem con su motivo; las fallas de consumo de mensajes quedan en la bandeja con reproceso; las
   tareas programadas alertan su falla.
@@ -1707,8 +1743,13 @@ Cada requisito lleva su entrega entre paréntesis (ver «Entregas»). Los FR-170
   aprobar diferencias y cerrar el día. Un punto con el día abierto no detiene el lote contable de los demás: el lote
   corre con las sesiones cerradas y los recibos de las abiertas entran en el siguiente; se alerta.
 - **FR-185 · Hora de corte y orden de las tareas.** *(R0)* Cada cooperativa fija la hora de corte del día de
-  Recaudo. Las tareas nocturnas corren en orden fijo: cierre de lotes de Recaudo, cuadre diario y después el ciclo
-  diario de Cartera (causación y mora), de modo que lo pagado en el día cuente antes de calcular la mora.
+  Recaudo (`Recaudo.HoraDeCorte`). Lo pagado en el día cuenta antes de que el ciclo diario de Cartera calcule la mora
+  por una **restricción de configuración comprobada**, no por dependencias entre tareas: la hora de corte tiene que
+  caer antes del inicio del ciclo de Cartera (`Lending:Process:StartTimeLocal`, 00:30 por defecto), contadas las dos en
+  la línea del día de operación (si el inicio del ciclo es de madrugada, se compara contra el día siguiente). Una
+  versión del parámetro que no la cumpla se rechaza, y la activación y la lista de go/no-go la verifican. El lote del
+  día de Recaudo corre tras la hora de corte y el cuadre diario después del lote de su cooperativa (cada tarea mira la
+  marca de corrida de la anterior); `ProgramadorDeTareas` no declara dependencias.
 - **FR-186 · Contingencia de la caja.** *(R0)* Si la caja no puede operar (sin sistema o sin red), el punto usa un
   talonario prenumerado registrado. Los recibos se digitan después con la fecha valor del talonario, dentro de la
   ventana de fecha valor del contrato, con permiso propio, marca «contingencia» y la imagen del talonario; un
@@ -1812,9 +1853,8 @@ Cada requisito lleva su entrega entre paréntesis (ver «Entregas»). Los FR-170
   fuera de alcance.
 - **FR-056 · Efectivo entregado.** *(R1)* Cuenta para los topes de la caja y para el control de efectivo (sección
   J).
-- **FR-193 · Devolución de aportes al retiro.** *(T0)* Sale por la orden de giro de Captaciones (transferencia,
-  cheque o pago a tercero). En efectivo, sólo si Captaciones la autoriza por el contrato de cuentas como un retiro
-  que entrega la caja (R1); una orden de giro en efectivo exigiría una versión nueva de la orden.
+- **FR-193 · Devolución de aportes al retiro.** *(T0)* Véase FR-114: sale por la orden de giro de Captaciones; en
+  efectivo, sólo como un retiro por el contrato de cuentas que entrega la caja (R1).
 
 #### E · Anulación y reversos
 
@@ -2004,10 +2044,10 @@ Cada requisito lleva su entrega entre paréntesis (ver «Entregas»). Los FR-170
   dinero, no se entrega, no se incluye la orden en un lote— y alerta de inmediato al oficial para su reporte; no es
   parametrizable a «sigue». Sólo el oficial libera a la persona si es un falso positivo, con soporte. Tesorería
   consulta a todo beneficiario de una orden de pago antes de aprobar el lote.
-- **FR-204 · Registro único de efectivo con el punto de venta.** *(R1)* El efectivo que reciben y entregan las cajas
-  de Recaudo y las del punto de venta alimenta un solo registro de transacciones en efectivo por persona, con
-  acumulados, señales de fraccionamiento y reporte consolidados (enmienda FR-166). En R0 los acumulados cuentan sólo
-  lo de Recaudo.
+- **FR-204 · Registro único de efectivo con el punto de venta.** *(R0 sólo Recaudo; R1 con el punto de venta)* En R0
+  el registro de transacciones en efectivo y sus acumulados cuentan sólo lo de Recaudo. En R1, el efectivo que reciben
+  y entregan las cajas de Recaudo y las del punto de venta alimenta un solo registro por persona, con acumulados,
+  señales de fraccionamiento y reporte consolidados (enmienda FR-166).
 - **FR-205 · GMF en egresos por cuentas contables.** *(T0; R1 en los egresos de caja)* Cuando un egreso de caja o un
   pago de Tesorería dispone de recursos registrados en una cuenta contable para pagar o transferir a un tercero
   —devoluciones de saldos a favor y excedentes, devolución de partidas al consignante, pagos por cuenta del
@@ -2029,7 +2069,7 @@ Cada requisito lleva su entrega entre paréntesis (ver «Entregas»). Los FR-170
 - **FR-104 · Traslados entre cuentas propias** *(T1)* con aprobación por monto, hecho y tránsito hasta el extracto.
 - **FR-105 · Remesas.** *(T0)* De bóveda a banco y de banco a bóveda, enlazadas con Recaudo, con acta y sello de
   bolsa (FR-182); efectivo en tránsito con alerta si no se confirma en los días configurados.
-- **FR-106 · Alcance** *(T0)* por cuenta bancaria propia.
+- **FR-106 · Alcance** *(T0)* Véase FR-011 (el alcance por cuenta bancaria propia es parte de él).
 - **FR-207 · Fondo de liquidez restringido.** *(T0)* Una cuenta con propósito «fondo de liquidez» no admite otro
   propósito, ni lotes de pago, traslados ni remesas desde ella, salvo un **uso del fondo** con causal de la norma
   (atender a depositantes o reducción de depósitos), aprobación y alerta de aviso previo a la Supersolidaria; su
@@ -2063,8 +2103,11 @@ Cada requisito lleva su entrega entre paréntesis (ver «Entregas»). Los FR-170
   allí; un archivo no enviado se anula y sus órdenes vuelven a la bandeja.
 - **FR-113 · Cheques.** *(T0)* Las órdenes de forma cheque se pagan con la chequera de la cuenta (FR-219); el cheque
   se entrega con constancia de recibido.
-- **FR-114 · Efectivo.** *(T0)* Una orden de giro no se paga en efectivo (su forma no lo admite); el efectivo sale
-  por la caja con el contrato (FR-051, FR-053).
+- **FR-114 · Efectivo.** *(T0)* Una orden de giro no se paga en efectivo (su forma no lo admite: transferencia,
+  cheque o pago a tercero); el efectivo sale por la caja con el contrato (FR-051, FR-053). Es la regla única (D20): la
+  devolución de aportes al retiro sale por la orden de giro de Captaciones y, en efectivo, sólo como un retiro que
+  Captaciones autoriza por el contrato de cuentas y entrega la caja (R1); una orden de giro en efectivo exigiría una
+  versión nueva de la orden (FR-193 remite aquí).
 - **FR-115 · Anulación de una orden.** *(T0)* Si la orden está en la bandeja o en un lote no enviado, sale y se
   responde «anulada»; si el archivo ya se envió, sigue hasta conocer el resultado.
 - **FR-116 · Unicidad.** *(T0)* Una orden en a lo sumo un lote no anulado; el valor girado de una **orden de giro**
@@ -2133,8 +2176,8 @@ Cada requisito lleva su entrega entre paréntesis (ver «Entregas»). Los FR-170
 - **FR-130 · Partidas conciliatorias.** *(T2)* Cheques girados no cobrados, consignaciones y remesas en tránsito,
   notas bancarias (registradas como hechos de Tesorería con aprobación) y abonos no identificados (que pasan a
   partidas por identificar de Recaudo).
-- **FR-131 · Cierre.** *(T0)* La conciliación del mes se cierra con su informe (saldo extracto, partidas, saldo
-  libros); se reabre con motivo y permiso.
+- **FR-131 · Cierre.** *(T0)* Véase FR-216 (cierre de la conciliación del mes con su informe y reapertura con
+  motivo y permiso).
 - **FR-132 · Aviso al cierre contable.** *(T1)* Contabilidad avisa al cerrar un mes con conciliaciones abiertas o
   sesiones de caja sin cerrar; informativo por defecto, bloqueante si la cooperativa lo configura.
 - **FR-133 · Adquirentes y convenios.** *(T2)* Lo cobrado por lote de datáfono (en Recaudo y, por la consulta de la
@@ -2145,7 +2188,9 @@ Cada requisito lleva su entrega entre paréntesis (ver «Entregas»). Los FR-170
   remesas, pagos y cheques de Tesorería y movimientos contables de la cuenta (enmienda FR-167); marca manual de lo
   que no cruza; los abonos sin registro pasan a Recaudo como partidas; informe de partidas conciliatorias con saldo
   del extracto, partidas y saldo en libros; cierre y reapertura (FR-131). Nada se cruza dos veces. Las reglas
-  configurables, las notas bancarias como hechos y los extractos de varios bancos son de T2.
+  configurables, las notas bancarias como hechos y los extractos de varios bancos son de T2. Es la **única**
+  conciliación bancaria de la cooperativa: reemplaza a la de Contabilidad (FR-055 a FR-060 de la 009, enmienda E-04 en
+  FR-167); la reapertura de un período contable marca desactualizadas las conciliaciones cerradas de ese mes.
 - **FR-217 · Segregación de la conciliación.** *(T0)* Concilia una persona distinta de quien prepara o aprueba pagos
   de esa cuenta en el período (por defecto, Contabilidad); las partidas conciliatorias se ven por antigüedad con
   alerta; un cargo no identificado (embargo, débito no autorizado) levanta una alerta propia.
@@ -2215,9 +2260,8 @@ Cada requisito lleva su entrega entre paréntesis (ver «Entregas»). Los FR-170
   adopten) y destino de sus mensajes (pago reversado, consignación reversada, descuentos por pagaduría en las dos
   versiones); emite la confirmación de envío y el resultado de descuentos (dos versiones). Tesorería: destino de
   giros (orden en sus dos versiones, anulación y, con E-01, archivo de desembolsos); emite el resultado del giro.
-- **FR-148 · Reemplazo de los dobles.** *(R0, T0)* Los dobles de prueba se retiran en todos los ambientes cuando se
-  despliegan Recaudo y Tesorería reales (FR-223); ningún ambiente admite registrarlos y el registro real no depende
-  de retirar una fila a mano.
+- **FR-148 · Reemplazo de los dobles.** *(R0, T0)* Véase FR-223 (retiro de los dobles en todo ambiente); el registro
+  real no depende de retirar una fila a mano.
 - **FR-149 · Versiones.** *(R0, T0)* Adoptar una versión es un registro con vigencia; los mensajes conservan su
   versión; una versión no adoptada se rechaza con su motivo.
 - **FR-150 · Activación de Recaudo y Tesorería** *(R0, T0)* por cooperativa con fecha. Recaudo exige puntos, cajas,
@@ -2232,7 +2276,7 @@ Cada requisito lleva su entrega entre paréntesis (ver «Entregas»). Los FR-170
   de tesorería dejan de existir: no se registran en ningún ambiente, sus filas del registro en las cooperativas de
   los ambientes de prueba se retiran conservando su historia, y la bandeja tiene un solo consumidor por destino.
   Fuera de producción tampoco valen para la activación de Cartera y Captaciones: cuentan Recaudo y Tesorería reales,
-  como en producción (enmiendas FR-164 y FR-165).
+  como en producción (enmiendas FR-164 y FR-165). Es la regla única de los dobles (FR-148 y FR-163 remiten aquí).
 - **FR-224 · Migración de las pruebas de Cartera y Captaciones.** *(R0, T0)* Las pruebas de punta a punta de
   Cartera y Captaciones que usaban los dobles se reescriben sobre Recaudo y Tesorería reales (registro, activación,
   recibos, giros y resultados), en los dos motores de base de datos, y quedan en verde antes de retirar los dobles.
@@ -2276,10 +2320,10 @@ Cada requisito lleva su entrega entre paréntesis (ver «Entregas»). Los FR-170
   y pantallas se quitan sin alias (Clarifications, C3 = A).
 - **FR-162 · Menú.** *(R0, T0)* Recaudo y Tesorería tienen su grupo de menú; todo enlace apunta a una página
   existente.
-- **FR-163 · Dobles de prueba.** *(R0, T0)* No hay dobles de prueba de recaudador ni de tesorería en ningún ambiente
-  (FR-223); las pruebas de Cartera y Captaciones usan los módulos reales (FR-224).
+- **FR-163 · Dobles de prueba.** *(R0, T0)* Véase FR-223 (no hay dobles en ningún ambiente) y FR-224 (las pruebas de
+  Cartera y Captaciones usan los módulos reales).
 - **FR-226 · Paralelo en QA.** *(R0, T0)* El paralelo de una cooperativa corre en QA sobre una copia de su
-  parametrización, con la versión disponible; al terminar, un informe compara lo registrado con las cifras de
+  parametrización, con la versión disponible de R0/T0 y lo que haya de R1/T1; al terminar, un informe compara lo registrado con las cifras de
   referencia por día, medio y producto. Producción no recibe datos del paralelo: la carga definitiva parte limpia.
 - **FR-227 · Ensayo general y go/no-go.** *(R0, T0)* Antes de la carga definitiva, un ensayo general en QA y una
   lista de go/no-go verificable en el sistema: completitud de la matriz al 100 % de lo que no esté en «no pasa»; un
@@ -2295,7 +2339,8 @@ Cada requisito lleva su entrega entre paréntesis (ver «Entregas»). Los FR-170
 
 #### V · Enmiendas a otras features
 
-- **FR-164 · E-01 a la 013 (Cartera).** *(T0 el mensaje del archivo y los dobles; R1 lo demás)* (a) Excepción de la
+- **FR-164 · E-01 a la 013 (Cartera).** *(R0/T0: c y e; R1: a y b; T2: d; como la tabla E-01 de
+  contracts/contratos-v2.md)* (a) Excepción de la
   ventana de fecha valor para el pago que identifica una partida bancaria, citando la partida, como **versión 2 del
   contrato de obligaciones** (el giro de pagaduría con su línea ya está exento y no se toca); Recaudo adopta v1 y v2 y
   la activación de Cartera sigue admitiendo la v1. (b) Consulta de las personas y obligaciones de una carga aplicada
@@ -2303,7 +2348,8 @@ Cada requisito lleva su entrega entre paréntesis (ver «Entregas»). Los FR-170
   Tesorería lo concilie (convivencia, D16). (d) Recaudos esperados por fecha para la posición de liquidez (T2). (e)
   Retiro de los dobles y de la regla que, fuera de producción, sólo cuenta a los dobles como recaudador y tesorería
   (FR-223).
-- **FR-165 · E-02 a la 014 (Captaciones).** *(R0 dobles y recaudadora; R1 lo demás)* (a) La exención de fecha valor
+- **FR-165 · E-02 a la 014 (Captaciones).** *(R0: b, c y g; R1: a y d; T2: e y f; como la tabla E-02 de
+  contracts/contratos-v2.md)* (a) La exención de fecha valor
   de la consignación que cita la **línea del archivo de descuentos** (como ya la tiene Cartera) y la de la partida
   bancaria, como **versión 2 del contrato de cuentas**. (b) Tesorería no se registra como recaudadora (D2); la clase
   y los destinos que la nombran se conservan sin uso. (c) Cada módulo conserva su umbral de declaración y Recaudo
@@ -2319,7 +2365,13 @@ Cada requisito lleva su entrega entre paréntesis (ver «Entregas»). Los FR-170
   hechos con su matriz; consulta de pendientes por tercero y documento cruce (cuentas por cobrar comerciales, R1, y
   por pagar, T2); movimientos contables de una cuenta bancaria para conciliar; el vínculo cuenta bancaria propia ↔
   cuenta contable; el aviso de cierre de FR-132; y la guarda que niega el cierre del mes de la activación con un
-  cuadre provisional pendiente (FR-228).
+  cuadre provisional pendiente (FR-228). Además (decisión del dueño del 2026-10-23), **la conciliación bancaria de
+  Tesorería reemplaza a la de Contabilidad** (FR-055 a FR-060 de la 009): un solo extracto y una sola conciliación por
+  cuenta, en Tesorería (FR-216); `ACC_BankReconciliations`, `ACC_BankStatementLines` y `ACC_BankStatementColumnMaps`
+  quedan sin uso y nadie las escribe (su retiro, si se hace, es una migración destructiva aparte, pendiente); la
+  reapertura de un período contable deja de marcarlas y marca desactualizadas, por un puerto de Tesorería, las
+  conciliaciones cerradas de ese mes. La marca «cuenta bancaria» de la cuenta contable (FR-055) sigue en Contabilidad y
+  es la que exige el vínculo.
 - **FR-168 · E-05 a la 010 (Nómina).** *(T2)* Los archivos de dispersión de nómina se informan a Tesorería como
   compromiso y para conciliar; Nómina sigue pagando con su archivo.
 - **FR-169 · E-06 a la plataforma.** *(R0, T0)* Códigos de participante de Recaudo y Tesorería; ámbitos nuevos del
@@ -2547,7 +2599,7 @@ Si el dueño no responde, rige la propuesta. Las que el dueño ya decidió lo di
 - **D18 · Segregación**: preparar y aprobar son dos personas distintas por defecto; que una tercera registre el
   resultado es configurable.
 - **D19 · Aprobación de lotes** por monto con niveles sucesivos; un solo nivel si el monto cabe en la atribución.
-- **D20 · Sin efectivo en órdenes**: el efectivo sale por la caja (conflicto C10).
+- **D20 · Sin efectivo en órdenes**: el efectivo sale por la caja (conflicto C10; regla en FR-114).
 - **D29 · Conciliaciones abiertas al cierre contable**: aviso informativo.
 - **D39 · Conciliador**: Contabilidad.
 - **D40 · Período de espera de una cuenta destino cambiada**: configurable, sin valor sembrado (pendiente del dueño).

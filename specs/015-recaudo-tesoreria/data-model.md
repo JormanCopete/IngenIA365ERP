@@ -95,6 +95,21 @@ en SQL Server. Los niveles que la transacción ya tiene no esperan.
 Ninguna operación toma una persona después de una cuenta suya (FR-170). `LosCerrojosDeRecaudoYTesoreriaVanEnOrden`
 fija que sólo estos dos tipos toman cerrojos y el orden de las llamadas a los contratos.
 
+**Dirección Tesorería → Recaudo** (CH16, TR10). El orden global es Recaudo antes que Tesorería también cuando quien
+llama es Tesorería. Un comando de Tesorería que va a llamar a `IResultadoDeOrdenesDeRecaudo` (resultado de una orden de
+origen `Receipts`: registrar el resultado, en bloque, rechazo técnico del archivo, entrega o anulación de un cheque) o a
+`IPartidasDesdeConciliacion` (abono sin registro de una conciliación) llama **primero** a `TomarCerrojosAsync` del
+puerto, que toma con `CerrojoDeRecaudo` los niveles de Recaudo que esa escritura necesita:
+
+| Puerto | Niveles de Recaudo que toma antes | Después, Tesorería toma |
+|---|---|---|
+| `IResultadoDeOrdenesDeRecaudo` | 1 `RCD_Setup` (compartido) y 6 las filas de origen de esas órdenes (`RCD_PayerCreditBalances`, `RCD_UnidentifiedItems`) por `Id` | 1 `TES_Setup`, 2 la cuenta, 4 el lote, 5 las órdenes |
+| `IPartidasDesdeConciliacion` | 1 `RCD_Setup` (compartido); la partida nueva no tiene fila que tomar | 1 `TES_Setup`, 6 la conciliación |
+
+Ninguna transacción toma una fila `RCD_` después de una `TES_`; `LosCerrojosDeRecaudoYTesoreriaVanEnOrden` lo fija
+(«ningún comando de `Treasury` llama a un método de escritura de esos puertos sin haber llamado antes a
+`TomarCerrojosAsync`»).
+
 ### 0.6 Fechas
 
 Fecha local `America/Bogota` (`HoyLocal`). Todo documento con dinero lleva `RegisteredAt` (instante UTC), `ValueDate`
@@ -425,6 +440,13 @@ Corrida no interactiva (aplicación de un extracto, de un giro de pagaduría, de
 Líneas: `LineRef`, `IdempotencyKey`, `Outcome` (`Applied`, `AlreadyApplied`, `Rejected`, `Skipped`), `Code`, `Message`,
 `ReceiptId?`, `ResolutionPublicId?`. Reprocesar una línea repite su clave.
 
+**Auditoría de la corrida** (Principio X, FR-014, TR37): al terminar cada tanda y al cerrar la corrida se escribe por
+`COR_AuditOutbox`, en la misma transacción que la última línea de la tanda, el evento `Receipts.ProcessingRun.Summary`
+con `runPublicId`, conteos, `InputsHash` y la lista `receipts[] { publicId, sha256 }` de cada recibo aplicado en esa tanda
+(`sha256` = `HuellaDeRecibo` del recibo tal como quedó), más un evento por línea rechazada. La lista cubre exactamente los
+recibos de las líneas `Applied` (los de reproceso, en la tanda del reproceso); cada huella se verifica recalculándola
+desde el recibo.
+
 ---
 
 ## 6. Recaudo · pagadurías y libranza (R0)
@@ -596,8 +618,8 @@ Recibo único por `MessagePublicId`, como §6.1.
 
 `Number`, `BankAccountId` (origen; nunca del fondo de liquidez sin uso aprobado), `Form` (`File`, `BankPortal`, `Checks`),
 `BankFileFormatId?` (vigente al preparar, sellado), `PreparedBy`, `PreparedAt`, `OrderCount`, `Total`, `GmfEstimate`,
-`ApprovalRequestPublicId?`, `Status` (`Draft`, `PendingApproval`, `Approved`, `FileGenerated`, `Sent`, `PartiallyConfirmed`,
-`Confirmed`, `RejectedByBank`, `Voided`) [mutable], `InputsHash`.
+`ApprovalRequestPublicId?`, `Status` (enum `PaymentBatchState`, §20: `Draft`, `PendingApproval`, `Approved`,
+`FileGenerated`, `Sent`, `PartiallyConfirmed`, `Confirmed`, `RejectedByBank`, `Voided`) [mutable], `InputsHash`.
 
 ### 10.4 `TES_PaymentBatchItems`
 
@@ -668,6 +690,10 @@ para registrar resultados y conciliar (FR-108, D16).
 
 ## 12. Tesorería · extractos y conciliación mínima (T0)
 
+El extracto (§12.1) va en `TesoreriaNucleo`; la conciliación (§12.2 a §12.4) en el par nuevo `TesoreriaConciliacionMinima`,
+posterior al congelamiento del 10/11 (§25). Es la **única** conciliación bancaria de la cooperativa: reemplaza a la de
+Contabilidad (§17.5, TR41).
+
 ### 12.1 `TES_BankStatements` · `TES_BankStatementLines` (H) (FR-065, FR-196, FR-197, R-06)
 
 - `TES_BankStatements`: `BankAccountId`, `Source` (`BankFormat`, `GenericTemplate`, `Manual`), `BankFileFormatId?`,
@@ -685,8 +711,10 @@ para registrar resultados y conciliar (FR-108, D16).
 
 `BankAccountId`, `PeriodYear`, `PeriodMonth`, `Version` (reabrir crea versión nueva sobre la cerrada), `Kind`
 (`Minimal`, `Complete` en T2), `ConciliatorUserId`, `StatementBalance`, `LedgerBalance` (de E-04), `ReconcilingItemsTotal`,
-`Difference`, `Status` (`Open`, `Closed`, `Reopened`), `ClosedAt?`, `ReportAttachmentPublicId?`, `ReopenReason?`,
-`ReopenedBy?`. UK `(BankAccountId, PeriodYear, PeriodMonth, Version)`. Cerrar exige `Difference = 0`
+`Difference`, `Status` (`Open`, `Closed`, `Reopened`, `Outdated`), `ClosedAt?`, `ReportAttachmentPublicId?`,
+`ReopenReason?`, `ReopenedBy?`. `Outdated` lo pone sólo `IConciliacionBancariaParaContabilidad` cuando Contabilidad reabre
+el período del mes (antes lo hacía `ReopenPeriodCommand` sobre `ACC_BankReconciliations`); se vuelve a conciliar con una
+versión nueva. UK `(BankAccountId, PeriodYear, PeriodMonth, Version)`. Cerrar exige `Difference = 0`
 (`Treasury.Reconciliation.NotSquared`). Segregación: el conciliador no preparó ni aprobó pagos de esa cuenta en el período
 (`Treasury.Reconciliation.SegregationConflict`, FR-217).
 
@@ -725,7 +753,7 @@ identificado: embargo, débito no autorizado, FR-217).
 |---|---|---|
 | `TES_BankNotes` | notas bancarias (GMF, comisión, intereses en bruto con retención, impuestos) con aprobación y su hecho | FR-130, FR-218 |
 | `TES_ReconciliationRules` | reglas configurables de emparejamiento | FR-129 |
-| `TES_AcquirerSettlements` · `…Lines` | conciliación de adquirentes con los lotes de datáfono de Recaudo y del punto de venta | FR-133 |
+| `TES_AcquirerSettlements` · `TES_AcquirerSettlementLines` | conciliación de adquirentes con los lotes de datáfono de Recaudo y del punto de venta | FR-133 |
 | `TES_CashFlowCategories` · `TES_CashFlowProjections` | flujo de caja proyectado, real contra proyectado | FR-137, FR-138 |
 | `TES_LiquiditySnapshots` | posición diaria con sus componentes y los que faltaron | FR-137 |
 | `TES_LegacyPendingLoads` | cheques sin cobrar y facturas por pagar migrados desde lo heredado antes del retiro | FR-161 |
@@ -753,9 +781,15 @@ identificado: embargo, débito no autorizado, FR-217).
 ### 15.1 `RCD_Activations` · `TES_Activations`
 
 `ActivatedOn`, `CutoffDate` (la activación rige el día siguiente al corte, FR-159), `ActivatedBy`, `RequirementsJson`
-(lo verificado), `OpeningSquareId`, `GoLiveChecklistPublicId?`. Una sola vigente por módulo.
+(lo verificado), `OpeningSquareId?`, `GoLiveChecklistPublicId?`, `IsMinimal`. Una sola vigente por módulo. Nacen en
+`RecaudoNucleo` y `TesoreriaNucleo` con la **activación mínima** del bloque 2 (TR42: `IsMinimal = true`,
+`OpeningSquareId` nulo, sólo los requisitos básicos); la FK de `OpeningSquareId` llega con el par
+`RecaudoYTesoreriaPuestaEnMarcha`. La activación completa (fase 19) exige el cuadre y deja `IsMinimal = false`; en
+producción no hay activación mínima.
 
 ### 15.2 `RCD_OpeningSquares` · `RCD_OpeningSquareLines` · `TES_OpeningSquares` · `TES_OpeningSquareLines` (FR-158, FR-228)
+
+Con `RCD_ReferenceFigures` y `TES_ReferenceFigures`, en el par nuevo `RecaudoYTesoreriaPuestaEnMarcha` (§25).
 
 - Cabecera: `Kind` (`Definitive`, `Provisional`), `Status` (`Pending`, `Squared`, `AcceptedWithMinutes`,
   `ProvisionalApproved`, `Superseded`) [mutable], `ApprovedBy?`, `Reason?`, `DeadlineOn?` (provisional),
@@ -806,10 +840,10 @@ FR-226).
 |---|---|---|
 | `BankFileScope` | `SupplierPayments = 3` se **renombra** `TreasuryPayments = 3`; nuevos `BankStatement = 7`, `CollectionAgreementFile = 8` (R2), `TreasuryPaymentResponse = 9`, `PaymentGatewayFile = 10` (R2), `AcquirerSettlement = 11` (T2) | FR-169, R-20 |
 | `COR_BankFileFormats` | semillas genéricas `EXTRACTO-GENERICO` (ámbito 7), `PAGOS-GENERICO` (ámbito 3, CSV), `RESPUESTA-PAGOS-GENERICO` (ámbito 9), `RESPUESTA-PAGADURIA-GENERICA` (ámbito 6) | FR-196, FR-201, FR-213 |
-| `ScreeningContext` (listas) | `Collection`, `Disbursement` | FR-098, FR-203 |
+| `ScreeningContext` (listas; `Domain/Enums/Lending/OriginationEnums.cs`) | `Collection = 6`, `Disbursement = 7` (1 a 5 ya están tomados: `Application`, `Sale`, `CreditLimit`, `ListRescan`, `AccountOpening`) | FR-098, FR-203 |
 | `COR_AlertTypes` | los de §22 | FR-169 |
 | `IntegrationParticipantClass`, `ClavesDeRecaudador` | `Test` y `TST` quedan reservados sin uso; el escritor los rechaza en todo ambiente | FR-223 |
-| `COR_IntegrationParticipants` | migración de datos `RetiroDeLosDoblesDePrueba` | FR-223 |
+| `COR_IntegrationParticipants` | migración de datos `RetiroDeLosDoblesDePrueba`: sólo cierra vigencias (`ValidTo`), porque la entidad es `IHechoInmutable` | FR-223 |
 | `AccountingModules` | `Receipts = 128` | R-02 |
 | `ModuloContable` | `Recaudo = "REC"` | R-02 |
 | `AdjuntosDeModulo` | `ReceiptsSourceOfFunds`, `ReceiptsContingencyImage`, `ReceiptsCountMinutes`, `ReceiptsPaymasterResponse`, `TreasuryPaymentFile`, `TreasuryPaymentResponse`, `TreasuryStatement`, `TreasuryDeliveryReceipt`, `TreasuryReconciliationReport`, `PersonBankCertificate` (no borrables los que generan los módulos) | FR-112, FR-156 |
@@ -846,6 +880,15 @@ bloqueante si `Contabilidad.CierreExigeConciliaciones`, FR-132), leídos por `IE
 [contracts/interfaces.md](contracts/interfaces.md)).
 
 ---
+
+### 17.5 Conciliación bancaria de la 009, sin uso (E-04, TR41)
+
+La conciliación de Tesorería (§12) **reemplaza** a la de Contabilidad (009, FR-055 a FR-060; decisión del dueño del
+2026-10-23). `ACC_BankReconciliations`, `ACC_BankStatementLines` y `ACC_BankStatementColumnMaps` (entidades
+`BankReconciliation`, `BankStatementLine`, `BankStatementColumnMap`) quedan **sin uso**: nadie las escribe
+(`NadieEscribeLaConciliacionBancariaDeContabilidad`) y `ReopenPeriodCommand` deja de marcarlas `Outdated` y llama a
+`IConciliacionBancariaParaContabilidad`. **No se borran en esta feature**: su retiro, si se hace, es una migración
+destructiva aparte, con guarda, respaldo y segundo revisor (pendiente, research.md «Pendientes»).
 
 ## 18. Cartera y Captaciones (`LND_`, E-01 y E-02)
 
@@ -979,13 +1022,15 @@ Ningún proceso registra un resultado; repetirlo no cambia nada.
 | `PaymentForm` | `Transfer = 1`, `Check = 2`, `ThirdPartyPayment = 3` |
 | `PaymentOrderState` | `Received = 1`, `Pending = 2`, `Ready = 3`, `InBatch = 4`, `Approved = 5`, `Sent = 6`, `Disbursed = 7`, `Rejected = 8`, `CheckNotCashed = 9`, `Voided = 10`, `RejectedOnArrival = 11` |
 | `PaymentBatchForm` | `File = 1`, `BankPortal = 2`, `Checks = 3` |
+| `PaymentBatchState` | `Draft = 1`, `PendingApproval = 2`, `Approved = 3`, `FileGenerated = 4`, `Sent = 5`, `PartiallyConfirmed = 6`, `Confirmed = 7`, `RejectedByBank = 8`, `Voided = 9` |
 | `DisbursementOutcome` | `Disbursed = 1`, `Rejected = 2`, `CheckNotCashed = 3`, `Voided = 4` (texto en el mensaje, como v1) |
 | `IssuedCheckState` | `Issued = 1`, `Delivered = 2`, `Cashed = 3`, `Voided = 4`, `NotCashed = 5`, `SpoiledBlank = 6` |
 | `RemittanceState` | `InTransit = 1`, `Confirmed = 2`, `Expired = 3`, `Voided = 4` |
-| `ReconciliationState` | `Open = 1`, `Closed = 2`, `Reopened = 3` |
+| `ReconciliationState` | `Open = 1`, `Closed = 2`, `Reopened = 3`, `Outdated = 4` |
 | `OpeningSquareKind` | `Definitive = 1`, `Provisional = 2` |
 | `PersonBankAccountState` | `PendingApproval = 1`, `Active = 2`, `Rejected = 3`, `Retired = 4` |
 | `BankFileScope` (existente) | ver §16.3 |
+| `ScreeningContext` (existente, `Domain/Enums/Lending/OriginationEnums.cs`) | se suman `Collection = 6`, `Disbursement = 7` |
 
 `LosEnumsDelContratoNumeranComoElDominio` se extiende a los que viajan en mensajes.
 
@@ -1021,9 +1066,12 @@ Ningún proceso registra un resultado; repetirlo no cambia nada.
 | `Treasury.Compliance.BindingListMatch` | FR-203 |
 | `Receipts.Activation.RequirementsMissing` · `Treasury.Activation.RequirementsMissing` (con `data.missing[]`) | FR-150, US9-4 |
 | `Integration.Participant.TestDoublesRetired` | FR-223 |
+| `Receipts.Setup.CutoffAfterLendingCycle` | versión de `Recaudo.HoraDeCorte` que no cae antes del ciclo de Cartera (FR-185, TR43) |
+| `Approvals.PresenceRequired` (`428`, **nuevo**) | la caja pide el aprobador presente; la repetición lleva `X-Approval-Request` y la misma clave; las fallas del desafío son las `Approvals.Presence.*` existentes (`NotRequester`, `Invalid`, `Expired`, `TotpReused`) (FR-013, api.md §1.4) |
+| `Lending.Payment.BankItemDateMismatch` (**nuevo**, de Cartera, R1) | v2 del contrato con la partida citada y `ValueDate ≠ MovementDate` (contratos-v2.md §1.2) |
 | `Core.PersonBankAccount.SelfApproval` · `.CertificateRequired` | FR-210 |
 | `Accounting.Period.OpeningSquarePending` · `Accounting.OwnBankAccount.AlreadyLinked` · `Accounting.Document.ModuleOwned` (Recaudo y Tesorería) | FR-145, FR-228 |
-| `Validation.Invalid` · `Generic.NotFound` · `Request.BodyInvalid` | comunes |
+| `Validation.Invalid` · `Generic.NotFound` · `Request.BodyInvalid` · `Operation.KeyReused` (409, misma clave y otra huella) | comunes |
 
 ---
 
@@ -1111,10 +1159,12 @@ Lo heredado de tarjeta débito (`Domain/Entities/Debit`, `/tarjeta-debito/*`) **
 | # | Entrega | Migración | Tipo | Contenido |
 |---|---|---|---|---|
 | 1 | R0/T0 | `PlataformaParaRecaudoYTesoreria` | aditiva con datos | `COR_PersonBankAccounts` (+ copia de `Person.SupplierBank*` como `Imported`), `COR_GoLiveChecklists(Items)`, semillas de formatos genéricos, tipos de alerta, tipos de adjunto |
-| 2 | R0/T0 | `RetiroDeLosDoblesDePrueba` | datos, idempotente | cierra las filas `IsTestDouble = true` de `COR_IntegrationParticipants` y sus adopciones; en producción no hace nada |
-| 3 | R0 | `RecaudoNucleo` | aditiva | §1 a §7.2, §15 (Recaudo); semilla de `RCD_Setup`, tipos de documento, conceptos del sistema, reglas de modalidad, causales de devolución |
-| 4 | T0 | `TesoreriaNucleo` | aditiva | §9 a §12, §15 (Tesorería); semilla de `TES_Setup` |
-| 5 | R0/T0 | `IntegracionContableDeRecaudoYTesoreria` | aditiva | §17; semilla de tipos de comprobante sugeridos y mapeos sin cuenta |
+| 2 | R0/T0 | `RetiroDeLosDoblesDePrueba` | datos, idempotente | cierra las filas vigentes `IsTestDouble = true` de `COR_IntegrationParticipants` y sus adopciones **sólo con `ValidTo`** (la entidad es `IHechoInmutable`: `IsEnabled` y `Reason` no se escriben; el motivo va a la auditoría), como `EscritorDelRegistroDeIntegracion.RetirarAsync`; en producción no hace nada |
+| 3 | R0 | `RecaudoNucleo` | aditiva | §1 a §7.2 y `RCD_Activations` de §15.1 (64 tablas); semilla de `RCD_Setup`, tipos de documento, conceptos del sistema, reglas de modalidad, causales de devolución |
+| 4 | T0 | `TesoreriaNucleo` | aditiva | §9 a §11, §12.1, §10.8 y `TES_Activations` de §15.1 (22 tablas); semilla de `TES_Setup` |
+| 5 | R0/T0 | `IntegracionContableDeRecaudoYTesoreria` | aditiva | §17.1 a §17.3; semilla de tipos de comprobante sugeridos y mapeos sin cuenta |
+| 5a | T0 | `TesoreriaConciliacionMinima` | aditiva, posterior al 10/11 | §12.2 a §12.4 (3 tablas `TES_`) |
+| 5b | R0/T0 | `RecaudoYTesoreriaPuestaEnMarcha` | aditiva, posterior al 10/11 | §15.2 y las cifras de referencia (3 `RCD_`, 3 `TES_`) y la FK de `OpeningSquareId` en las activaciones |
 | 6 | R1 | `RecaudoCompleto` | aditiva | §7.3, §8.1 |
 | 7 | R1 | `CarteraYCaptacionesConPartidaCitada` | aditiva | §18 |
 | 8 | T1 | `TesoreriaCompleta` | aditiva | §13.1 |
@@ -1122,8 +1172,10 @@ Lo heredado de tarjeta débito (`Domain/Entities/Debit`, `/tarjeta-debito/*`) **
 | 10 | T2 | `TesoreriaAmpliada` | aditiva | §13.2 |
 | 11 | después de T2 | `RetiroDeLaTesoreriaHeredada` | **destructiva con guarda** | §24 |
 
-Orden en R0/T0: 1 → 2 → 3 → 4 → 5. Los pares de R0/T0 se regeneran mientras se construyen y se congelan al promover a
-producción (tarea de cierre de la fase 5); después, todo cambio es una migración nueva. Las semillas van con
+Orden de aplicación en R0/T0: 1 → 3 → 4 → 5 → 5a → 5b → 2 (el de las marcas de tiempo). Los pares 1, 3, 4 y 5 se
+regeneran mientras se construyen hasta el despliegue en QA del 10/11 (T0271) y ahí se **congelan**, con sus huellas en
+`LasMigracionesCongeladasNoSeRegeneran` (decisión del dueño del 2026-10-23); desde ese día no se regenera nada y todo
+cambio de R0/T0 es un par nuevo y aditivo (5a, 5b, 2 y los que hagan falta), cuyas huellas se sellan al cierre (T0337). Las semillas van con
 `INSERT … WHERE NOT EXISTS` en los dos motores. Los permisos `Receipts.*` y `Treasury.*` y las plantillas de rol los
 siembra la API al arrancar (no el DbMigrator), como los de Cartera.
 
@@ -1134,5 +1186,7 @@ siembra la API al arrancar (no el DbMigrator), como los de Cartera.
 Entidades y tablas de §1 a §17; enums de §20; errores de §21; alertas de §22; parámetros de §23; migraciones de §25;
 `CerrojoDeRecaudo`, `CerrojoDeTesoreria`, `NumeradorDeRecaudo`, `NumeradorDeTesoreria`, `PrecisionDeRecaudo`,
 `PrecisionDeTesoreria`, `ImputacionDeMedios`, `ArqueoDeCaja`, `SenalesDeEfectivo`, `TransicionesDelResultado`,
-`EvaluadorDeGmfDeEgresos`, `CalculoDeGmf`, `DestinoRecaudo`, `DestinoTesoreria`. La lista consolidada está en
+`EvaluadorDeGmfDeEgresos`, `CalculoDeGmf`, `DestinoRecaudo`, `DestinoTesoreria`, `PaymentBatchState`,
+`Receipts.ProcessingRun.Summary`, `TomarCerrojosAsync`, `TesoreriaConciliacionMinima`, `RecaudoYTesoreriaPuestaEnMarcha`.
+La lista consolidada está en
 [decisiones-transversales.md](decisiones-transversales.md) §2.

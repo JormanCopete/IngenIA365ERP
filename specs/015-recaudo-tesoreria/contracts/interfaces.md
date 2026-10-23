@@ -41,28 +41,33 @@ no calcula intereses, firmeza ni GMF de captaciones.
 
 ## 2. Puertos entre Recaudo y Tesorería (R-05)
 
+Cada comentario se lee **ofrece → usa**: el módulo que implementa el puerto y el que lo llama. Los dos puertos que
+Tesorería llama sobre Recaudo para escribir (`IPartidasDesdeConciliacion`, `IResultadoDeOrdenesDeRecaudo`) tienen
+`TomarCerrojosAsync` **(nuevo)**: Tesorería lo llama antes de tomar sus propios cerrojos, para que el orden global
+Recaudo → Tesorería (TR10) valga también en esa dirección (data-model §0.5, CH16).
+
 ```csharp
 namespace IngenIA365ERP.Application.Common.Integration.Treasury;
 
-public interface ICuentasBancariasPropias                    // Tesorería → Recaudo (R0)
+public interface ICuentasBancariasPropias                    // ofrece Tesorería → usa Recaudo (R0)
 {
     Task<IReadOnlyList<CuentaBancariaPropiaDto>> DeRecaudoAsync(Guid? branchPublicId, CancellationToken ct); // con alcance
     Task<CuentaBancariaPropiaDto?> PorPublicIdAsync(Guid publicId, CancellationToken ct);
 }
 
-public interface IMovimientosBancariosParaRecaudo            // Tesorería → Recaudo (R0)
+public interface IMovimientosBancariosParaRecaudo            // ofrece Tesorería → usa Recaudo (R0)
 {
     Task<PaginaDto<LineaDeExtractoDto>> AbonosPorIdentificarAsync(FiltroDeAbonos filtro, CancellationToken ct);
     Task MarcarIdentificacionAsync(Guid statementLinePublicId, decimal identificado, CancellationToken ct); // escribe RecaudoStatus
 }
 
-public interface IRemesasDeTesoreria                         // Tesorería → Recaudo (T0) y Comercial (T1)
+public interface IRemesasDeTesoreria                         // ofrece Tesorería → usan Recaudo (T0) y Comercial (T1)
 {
     Task<RemesaRegistradaDto> RegistrarAsync(SolicitudDeRemesa solicitud, CancellationToken ct);  // en la transacción del despacho
     Task<EstadoDeRemesaDto> EstadoAsync(Guid remittancePublicId, CancellationToken ct);
 }
 
-public interface IOrdenesDePagoDeTesoreria                   // Tesorería → Recaudo (T0)
+public interface IOrdenesDePagoDeTesoreria                   // ofrece Tesorería → usa Recaudo (T0)
 {
     Task<OrdenDePagoEmitidaDto> EmitirAsync(SolicitudDeOrdenDePago solicitud, CancellationToken ct); // devolución de saldo a favor o partida
     Task<EstadoDeOrdenDto> EstadoAsync(Guid paymentOrderPublicId, CancellationToken ct);
@@ -70,18 +75,20 @@ public interface IOrdenesDePagoDeTesoreria                   // Tesorería → R
 
 namespace IngenIA365ERP.Application.Common.Integration.Receipts;
 
-public interface IRecaudoParaConciliacion                    // Recaudo → Tesorería (T0)
+public interface IRecaudoParaConciliacion                    // ofrece Recaudo → usa Tesorería (T0)
 {
     Task<IReadOnlyList<RegistroConciliableDto>> RegistrosAsync(Guid ownBankAccountPublicId, DateOnly desde, DateOnly hasta, CancellationToken ct);
 }
 
-public interface IPartidasDesdeConciliacion                  // Recaudo → Tesorería (T0)
+public interface IPartidasDesdeConciliacion                  // ofrece Recaudo → usa Tesorería (T0)
 {
+    Task TomarCerrojosAsync(Guid ownBankAccountPublicId, CancellationToken ct);                          // antes de los cerrojos de Tesorería
     Task<PartidaCreadaDto> CrearAsync(Guid statementLinePublicId, string motivo, CancellationToken ct);  // US25-2
 }
 
-public interface IResultadoDeOrdenesDeRecaudo                // Recaudo → Tesorería (T0)
+public interface IResultadoDeOrdenesDeRecaudo                // ofrece Recaudo → usa Tesorería (T0)
 {
+    Task TomarCerrojosAsync(IReadOnlyList<Guid> paymentOrderPublicIds, CancellationToken ct);           // antes de los cerrojos de Tesorería
     Task InformarAsync(Guid paymentOrderPublicId, string outcome, DateOnly occurredOn, string? reason, CancellationToken ct);
 }
 ```
@@ -136,6 +143,17 @@ public interface IEstadoOperativoParaElCierre
 
 `PeriodCommands` (cierre de mes) consulta `IEstadoOperativoParaElCierre` igual que hoy consulta `CarteraEnElCierre`.
 
+```csharp
+public interface IConciliacionBancariaParaContabilidad      // ofrece Tesorería → usa Contabilidad (T0; TR41)
+{
+    Task<int> MarcarDesactualizadasAsync(int anio, int mes, string motivo, CancellationToken ct);
+    // al reabrir un período contable: las TES_Reconciliations cerradas de ese mes pasan a Outdated, con evento de auditoría
+}
+```
+
+`ReopenPeriodCommandHandler` (`Application/Accounting/Periods/PeriodCommands.cs`) llama a este puerto en vez de marcar
+`ACC_BankReconciliations`, que quedan sin uso (la conciliación de Tesorería reemplaza a la de la 009, E-04).
+
 ## 4. Comercial, Nómina y plataforma
 
 | Puerto | Ofrece | Usa | Entrega |
@@ -143,6 +161,7 @@ public interface IEstadoOperativoParaElCierre
 | `IEfectivoDelPuntoDeVenta` | Comercial | Recaudo (registro único, FR-204) | R1 |
 | `ILotesDeDatafonoDelPuntoDeVenta` | Comercial | Tesorería (adquirentes) | T2 |
 | `IRecaudoDeNominaParaConsolidado` | Nómina | Recaudo (consolidado de sólo lectura) | R1 |
+| `IReferenciasDePago` **(nuevo, DT §2.7)** | Recaudo | Cartera (referencia de pago estable en el extracto y el plan de pagos al asociado, FR-090; sin leer `RCD_`) | R2 |
 | `IListasRestrictivas` (contextos `Collection`, `Disbursement`) | plataforma | Recaudo, Tesorería | R0, T0 |
 | `IAutorizacionDeDatos` | plataforma | Recaudo (avisos por correo, FR-020; pagador ocasional, FR-016) | R0 (alta), R1 (avisos) |
 | `ICalendarioHabil` | plataforma | Recaudo (firmeza mostrada, plazos de cheques y libranza), Tesorería (días sin resultado) | R0, T0 |
@@ -169,5 +188,6 @@ auditada (`Core.PersonBankAccount.Read`).
 `RecaudoYTesoreriaSeHablanPorSusPuertos`, `RecaudoNoConoceContabilidad`, `TesoreriaNoConoceContabilidad`,
 `LaCarteraSoloSeTocaPorSusInterfaces` (ampliada con `Receipts` y `Treasury` como llamadores),
 `LasCuentasSeTocanSoloPorElContrato` (ya vigila `Receipts` y `Treasury`), `LosPuertosDeRecaudoYTesoreriaValidanYAuditanSusEscrituras`,
-`LosCerrojosDeRecaudoYTesoreriaVanEnOrden`; Application: el recibo con tres aplicaciones y un rechazo en la tercera no
+`LosCerrojosDeRecaudoYTesoreriaVanEnOrden` (también la dirección Tesorería → Recaudo), `NadieEscribeLaConciliacionBancariaDeContabilidad`;
+Application: el recibo con tres aplicaciones y un rechazo en la tercera no
 deja nada (SC-006); e2e de concurrencia con dos cajas sobre la misma persona (SC-032).

@@ -21,7 +21,8 @@ bancaria propia por su `PublicId`, que Contabilidad resuelve por el vínculo (`A
 | Consultas | saldo contable por cuenta a una fecha (cuadres), movimientos contables de una cuenta bancaria (conciliación mínima, FR-209), cuentas por cobrar comerciales pendientes (R1), cuentas por pagar pendientes (T2) | R0, T0, R1, T2 |
 | Comprobantes | `Accounting.Document.ModuleOwned` para `REC` y `TES` con mensaje «se corrige desde Recaudo / Tesorería» (FR-145) | R0, T0 |
 | Guarda de cierre | `Accounting.Period.OpeningSquarePending` (FR-228); en T1, aviso de conciliaciones abiertas y sesiones sin cerrar (FR-132) | R0, T0, T1 |
-| Conciliación de puentes | la de la 013 suma el lado de `REC` y `TES` en los puentes `RecaudoPorAplicar`, `DesembolsoPorGirar`, `RefundPayable` | R0, T0 |
+| Conciliación de puentes | la de la 013 suma el lado de `REC` y `TES` en los puentes `RecaudoPorAplicar`, `DesembolsoPorGirar`, `DevolucionPorPagar` | R0, T0 |
+| Conciliación bancaria | la de Tesorería **reemplaza** a la de Contabilidad (009, FR-055 a FR-060; decisión del dueño del 2026-10-23): `ACC_BankReconciliations`, `ACC_BankStatementLines` y `ACC_BankStatementColumnMaps` quedan sin uso (nadie las escribe; su retiro, si se hace, es una migración destructiva aparte, pendiente); `ReopenPeriodCommand` deja de marcarlas y marca las de Tesorería por `IConciliacionBancariaParaContabilidad` | T0 |
 | Cambio de política | «bloquear» → «advertir» con permiso propio, motivo, auditoría y alerta diaria (FR-221) | R0, T0 |
 
 ## 2. Forma común de un hecho
@@ -92,7 +93,7 @@ el original no se toca (FR-064, US8-3).
 
 | Tipo v1 | Origen | Débito → Crédito (roles) | Entrega |
 |---|---|---|---|
-| `PagoDeOrdenGirado` | resultado «girada» de una transferencia o pago a tercero | `PuenteDeGiroDelOrigen` (Cartera: `DesembolsoPorGirar`; Captaciones: `RefundPayable` por `OrderKind`; Recaudo: `PuenteDeDevolucion`) → `Banco` | T0 |
+| `PagoDeOrdenGirado` | resultado «girada» de una transferencia o pago a tercero | `PuenteDeGiroDelOrigen` (Cartera: `DesembolsoPorGirar`; Captaciones: `DevolucionPorPagar` por `OrderKind`; Recaudo: `PuenteDeDevolucion`) → `Banco` | T0 |
 | `ChequeGiradoEmitido` | cheque emitido | `PuenteDeGiroDelOrigen` → `Banco` | T0 |
 | `ChequeGiradoAnulado` | cheque anulado | espejo del emitido (causa `SpoiledBeforeDelivery` o `NotCashed`) | T0 |
 | `GmfDePagoCausado` | pago que dispone de una cuenta contable a favor de un tercero (FR-205) | `GmfGasto` → `GmfPorPagar` (o `Banco` si el banco lo cobra en el mismo débito, según parámetro) | T0 |
@@ -105,7 +106,7 @@ el original no se toca (FR-064, US8-3).
 | `UsoDelFondoDeLiquidez` | uso aprobado | informativo (el movimiento lo hace el pago o traslado que lo usa) | T0 |
 
 El rol `PuenteDeGiroDelOrigen` se resuelve por `OrderOrigin` y `OrderKind`, para que la contadora lo mapee a la **misma**
-cuenta que el puente del origen: así `DesembolsoPorGirar` y `RefundPayable` quedan en cero (FR-144) y la conciliación de
+cuenta que el puente del origen: así `DesembolsoPorGirar` y `DevolucionPorPagar` quedan en cero (FR-144) y la conciliación de
 puentes explica cada diferencia hecho por hecho.
 
 ## 5. Roles

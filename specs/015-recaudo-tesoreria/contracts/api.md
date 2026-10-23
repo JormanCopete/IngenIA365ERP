@@ -19,7 +19,7 @@ heredadas `/api/treasury/{checks,concepts,invoices,cash-flow}` **no cambian** ha
 
 Toda escritura lleva `Idempotency-Key` (Guid) (`LosComandosDeRecaudoYTesoreriaLlevanClave`). Misma clave y misma
 huella → la respuesta original (`200` con el mismo documento); misma clave y otra huella → `409`
-`Request.IdempotencyKeyReused`. La caja usa la **misma** clave al reconfirmar tras `DistributionChanged` o tras una
+`Operation.KeyReused`. La caja usa la **misma** clave al reconfirmar tras `DistributionChanged` o tras una
 aprobación (FR-172).
 
 ### 1.3 Respuestas de error
@@ -31,16 +31,18 @@ Las pantallas ramifican por `code`, nunca por el texto.
 
 ### 1.4 Aprobación presente (caja)
 
-Una operación que exige aprobador presente responde `428` `Approvals.PresenceRequired` con `data.approvalRequestPublicId`
-y el monto; la pantalla pide el desafío (`/api/approvals/presence-challenges`, de la 012), y la operación se repite con la
-misma `Idempotency-Key` y el encabezado `X-Approval-Request`.
+Una operación que exige aprobador presente responde `428` `Approvals.PresenceRequired` **(nuevo)** con
+`data.approvalRequestPublicId` y el monto; la pantalla pide el desafío (`/api/approvals/presence-challenges`, de la 012), y
+la operación se repite con la misma `Idempotency-Key` y el encabezado `X-Approval-Request` **(nuevo)**. El código `428`, el
+código y el encabezado son nuevos (decisiones-transversales.md §2.7); las fallas del desafío no lo son: responden `422`
+con los `Approvals.Presence.*` de la 012 (`NotRequester`, `Invalid`, `Expired`, `TotpReused`), nunca `401`.
 
 ### 1.5 Permisos
 
 Se siembran completos con R0/T0 (FR-011); los de entregas futuras existen desde el primer día y sus rutas responden
 `404` hasta su entrega. Plantillas de rol sembradas (FR-176): `recaudo.cajero`, `recaudo.supervisor`,
 `recaudo.analista`, `tesoreria.tesorero`, `tesoreria.aprobador`, `tesoreria.conciliador`, `cumplimiento.oficial`,
-con los permisos de Cartera y Captaciones que los contratos verifican sobre quien actúa (`Lending.Payments.BackdateClosed`
+con los permisos de Cartera y Captaciones que los contratos verifican sobre quien actúa (`Lending.Payments.BackdateBeforeClose`
 con monto, `Lending.Accounts.Deposit`, `Lending.Accounts.Withdraw` con monto). Activar Recaudo exige al menos un cajero
 y un supervisor con esos permisos.
 
@@ -187,6 +189,9 @@ y un supervisor con esos permisos.
 
 ## 12. Tesorería · remesas, extractos y conciliación mínima (T0)
 
+Es la única conciliación bancaria de la cooperativa: reemplaza a la de Contabilidad (E-04 a la 009, FR-055 a FR-060; TR41).
+Reabrir un período contable marca `Outdated` las conciliaciones cerradas de ese mes, por `IConciliacionBancariaParaContabilidad`.
+
 | Método y ruta | Permiso | Qué |
 |---|---|---|
 | `GET /api/treasury/remittances?state=` · `POST /{id}/confirm` | `Treasury.Remittances.View` / `.Confirm` | confirmar con soporte si no cruza |
@@ -212,7 +217,7 @@ y un supervisor con esos permisos.
 
 | Método y ruta | Permiso | Qué |
 |---|---|---|
-| `GET /api/receipts/activation/requirements` · `POST /api/receipts/activation` | `Receipts.Activation.View` / `.Activate` | requisitos y activación (abre las filas del registro) |
+| `GET /api/receipts/activation/requirements` · `POST /api/receipts/activation` | `Receipts.Activation.View` / `.Activate` | requisitos y activación (abre las filas del registro); existen desde el bloque 2 con la activación mínima (TR42) y la fase 19 les suma el cuadre y los demás requisitos |
 | `GET /api/treasury/activation/requirements` · `POST /api/treasury/activation` | `Treasury.Activation.View` / `.Activate` | ídem |
 | `GET /api/receipts/opening-squares/current` · `POST …/provisional` · `POST …/definitive` | `Receipts.Activation.ProvisionalSquare` / `.Square` | cuadre provisional o definitivo |
 | `GET /api/treasury/opening-squares/current` · `POST …/provisional` · `POST …/definitive` | `Treasury.Activation.ProvisionalSquare` / `.Square` | ídem |
@@ -248,7 +253,7 @@ auditado) y `GET /api/reports/treasury/{vista}` (`Treasury.Reports.View` / `.Exp
 
 | Vista | Entrega |
 |---|---|
-| `session-close`, `day-close`, `daily-collection` (punto, caja, cajero, medio, canal, módulo, producto o línea), `receipts-by-cashier`, `voided-receipts`, `exceptions` (fecha valor, reclasificación, contingencia), `unidentified-items` (antigüedad), `payer-credit-balances`, `paymasters`, `returned-checks`, `contingency-pending` | R0 |
+| `session-close`, `day-close`, `daily-collection` (punto, caja, cajero, medio, canal, módulo, producto o línea), `receipts-by-cashier`, `voided-receipts`, `exceptions` (fecha valor, reclasificación, contingencia), `unidentified-items` (antigüedad), `payer-credit-balances`, `paymasters`, `returned-checks`, `contingency-pending`, `parallel-comparison` (lo registrado contra las cifras de referencia, FR-226) | R0 |
 | `consolidated-collection` (con Nómina y débito automático de sólo lectura), `voidings-with-reissue`, `delinquent-paymasters`, `received-checks`, `cash-transactions`, `pending-application-load` | R1 |
 | `channels`, `agreements` | R2 |
 | `orders-by-state`, `batches`, `rejected-and-reissue`, `recent-account-changes`, `issued-checks`, `bank-balances`, `minimal-reconciliation` | T0 |

@@ -12,7 +12,7 @@ una migración nueva y aditiva.
 | E-01 | 013 Cartera | (a) `ProveedorDeObligaciones` v2 con la partida citada; (b) consulta de la carga aplicada sin activar; (c) mensaje del archivo de desembolsos; (d) recaudos esperados; (e) retiro de los dobles y de la regla que sólo los cuenta fuera de producción | (c), (e) T0/R0; (a), (b) R1; (d) T2 |
 | E-02 | 014 Captaciones | (a) `ProveedorDeCuentas` v2 con la línea de pagaduría y la partida; (b) Tesorería no recaudadora; (c) umbral de declaración por módulo; (d) cancelación con entrega; (e) saldo del fondo de liquidez; (f) recaudos esperados; (g) retiro de los dobles | (b), (c), (g) R0; (a), (d) R1; (e), (f) T2 |
 | E-03 | 012 Comercial | efectivo del punto de venta; ventas a crédito sin Cartera; facturas de proveedor; lotes de datáfono; remesa del punto de venta | R1, T1, T2 |
-| E-04 | 009 Contabilidad | dos emisores y matrices, vínculo, consultas, guardas | R0, T0 ([contabilidad.md](contabilidad.md)) |
+| E-04 | 009 Contabilidad | dos emisores y matrices, vínculo, consultas, guardas; la conciliación bancaria de Tesorería reemplaza a la de la 009 (FR-055 a FR-060), cuyas tablas `ACC_Bank*` quedan sin uso | R0, T0 ([contabilidad.md](contabilidad.md)) |
 | E-05 | 010 Nómina | dispersión informada a Tesorería | T2 |
 | E-06 | Plataforma | códigos de participante, ámbitos de formatos, plantillas genéricas, cuentas bancarias de la persona, alertas, contextos de listas, go/no-go | R0, T0 |
 
@@ -47,7 +47,7 @@ public sealed record PartidaBancariaCitada(
 - Un recaudador que adoptó v2 puede mandar `BankItem`; uno con v1 que lo mande recibe `Rejected` con
   `Integration.Participant.VersionNotSupported`.
 - Con `BankItem` y `ValueDate = MovementDate`, Cartera **exime la ventana** `Pagos.DiasMaximosFechaValor`; no exime el
-  corte de la carga (`Lending.Payment.BeforeCutoff`) ni el permiso con monto de un mes cerrado
+  corte de la carga (`Lending.Contract.BeforeCutoff`) ni el permiso con monto de un mes cerrado
   (`Lending.Payment.ValueDateBeforeClosing`). `ValueDate ≠ MovementDate` con `BankItem`: `Rejected`
   `Lending.Payment.BankItemDateMismatch` **(nuevo)**.
 - Cartera guarda `LND_LoanOperations.BankItemPublicId` (migración `CarteraYCaptacionesConPartidaCitada`) y lo incluye en

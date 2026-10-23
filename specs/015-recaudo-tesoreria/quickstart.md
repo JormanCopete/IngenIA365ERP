@@ -13,7 +13,10 @@ dotnet test tests/IngenIA365ERP.Domain.Tests --filter "FullyQualifiedName~Receip
 dotnet test tests/IngenIA365ERP.Application.Tests --filter "FullyQualifiedName~Receipts|FullyQualifiedName~Treasury"
 dotnet test tests/IngenIA365ERP.Architecture.Tests
 
-# e2e (Docker Desktop encendido), en los dos motores; al cierre de R0/T0 (decisión del dueño: e2e al final)
+# e2e (Docker Desktop encendido), en los dos motores; al cierre de R0/T0 (decisión del dueño: e2e al final).
+# Dos excepciones declaradas: la e2e de humo de la caja al cierre del bloque 2 (T0183c, filtro
+# "FullyQualifiedName~IntegrationTests.Receipts.CajaDeHumoTests") y la puerta de FR-224 (T0301, filtro
+# "FullyQualifiedName~IntegrationTests.Lending").
 $env:DB_PROVIDER="PostgreSql"; dotnet test tests/IngenIA365ERP.API.IntegrationTests --filter "FullyQualifiedName~IntegrationTests.Receipts|FullyQualifiedName~IntegrationTests.Treasury|FullyQualifiedName~IntegrationTests.Lending"
 $env:DB_PROVIDER="SqlServer";  dotnet test tests/IngenIA365ERP.API.IntegrationTests --filter "…igual…"
 
@@ -38,8 +41,8 @@ $env:RUN_PERF_TESTS="1"; dotnet test tests/IngenIA365ERP.API.IntegrationTests --
 
 ## 2. Preparar una cooperativa de ensayo (DEV o QA)
 
-1. **Desplegar** la versión con R0 y T0. La migración `RetiroDeLosDoblesDePrueba` retira las filas `TST` y la `TES` del
-   doble; el arranque no encuentra dos consumidores (US9-2). Comprobar en `/admin/participantes-de-integracion` que las
+1. **Desplegar** la versión con R0 y T0. La migración `RetiroDeLosDoblesDePrueba` cierra (`ValidTo`) las filas `TST` y la
+   `TES` del doble; el arranque no encuentra dos consumidores (US9-2). Comprobar en `/admin/participantes-de-integracion` que las
    filas de los dobles aparecen con vigencia cerrada y motivo.
 2. **Contabilidad iniciada** con su plan (o sin iniciar: entonces todo hecho queda en «no pasa» y nada se bloquea).
 3. **Plataforma**: bancos con código ACH; formatos genéricos sembrados (`EXTRACTO-GENERICO`, `PAGOS-GENERICO`,
@@ -170,6 +173,8 @@ cuenta) y la contabilidad cuadrada (comprobantes y conciliación de puentes en c
    (FR-209).
 3. Marca a mano lo que no cruza; un abono sin registro pasa a Recaudo como partida; un cargo no identificado alerta.
 4. Cierra: el informe cuadra saldo del extracto, partidas y saldo en libros. Reabrir exige motivo y permiso.
+5. En Contabilidad, reabrir el período de ese mes: la conciliación cerrada de Tesorería queda «desactualizada» (E-04, la
+   única conciliación bancaria); nada se escribe en las tablas de conciliación de Contabilidad.
 
 ### J. Fondo de liquidez y SARLAFT (US14; SC-017, SC-028)
 
@@ -206,7 +211,7 @@ registrada del dueño.
 ## 5. Paralelo en QA (FR-226)
 
 Copia de la parametrización de COOFLOPAL en una cooperativa de QA; el equipo registra los recaudos del paralelo (11/11 a
-27/11) con la versión disponible; al terminar, el informe compara lo registrado con las cifras de referencia por día,
+27/11) con la versión disponible de R0/T0 y lo que haya de R1/T1; al terminar, el informe compara lo registrado con las cifras de referencia por día,
 medio y producto y explica cada diferencia (SC-024). Producción no recibe datos del paralelo: el 28/11 su base está
 limpia para la carga definitiva.
 

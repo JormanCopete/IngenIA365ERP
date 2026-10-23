@@ -6,8 +6,9 @@ Fase 0 del plan. Cada decisión lleva **Decisión**, **Razón** y **Alternativas
 lo que depende de datos del dueño (P1 a P19 de la spec) queda como **pendiente** con su defecto, y nunca se inventa.
 Las decisiones del dueño de `## Clarifications` (C1 = A, C2 = A, C3 = A, D2, el retiro de lo heredado después de T2, el
 paralelo en QA, el retiro de los dobles, el mínimo completo de cheques, los servicios como cuentas por cobrar de
-Comercial, la conciliación mínima en T1/T0, el cuadre provisional y el recorte R0/T0) se toman como dadas y no se
-reabren.
+Comercial, la conciliación mínima en T1/T0, el cuadre provisional y el recorte R0/T0) y las cinco del 2026-10-23
+(auditoría de las corridas con la lista de recibos, migraciones de R0/T0 congeladas el 10/11, conciliación única de
+Tesorería, prefijos por enmienda de la constitución, desviación III aprobada) se toman como dadas y no se reabren.
 
 Los nombres que este documento fija los recoge [decisiones-transversales.md](decisiones-transversales.md) §2, que manda
 sobre cualquier otra redacción.
@@ -49,11 +50,13 @@ sobre cualquier otra redacción.
 | R-31 | Aprobaciones | El motor de la 012; aprobador presente en caja, diferido en Tesorería |
 | R-32 | Auditoría | Módulos `Receipts` y `Treasury` en la cadena de sellos; lecturas sensibles con lista cerrada |
 | R-33 | Precisión | Montos 18,2; tarifas 9,6 como fracción; conteos enteros |
-| R-34 | Migraciones | Pares por entrega, aditivas; la destructiva del retiro, después de T2 |
+| R-34 | Migraciones | Pares por entrega, aditivas; los de R0/T0 congelados al desplegarse en QA el 10/11 y pares nuevos después; la destructiva del retiro, después de T2 |
 | R-35 | Pantallas | `Shared/Pages/Recaudo/*` y `Shared/Pages/Tesoreria/*` con `IndicadorDeCarga`; caja con atajos |
 | R-36 | Informes y documentos | Centro de informes con `TablaExportable`; QuestPDF con código de verificación |
 | R-37 | Pruebas | Casos dorados, arquitectura, e2e en los dos motores, la migración de las e2e de Cartera y Captaciones |
 | R-38 | Calendario de construcción | Propuesta de fechas para llegar al ensayo del 23/11 |
+| R-39 | Conciliación bancaria única | La de Tesorería reemplaza a la de Contabilidad (E-04 a la 009); las `ACC_Bank*` quedan sin uso |
+| R-40 | Activación mínima | Requisitos básicos y registro real en el bloque 2; la completa en la fase 19 |
 
 ---
 
@@ -118,7 +121,9 @@ nombres en español en las carpetas (descartado: rompe el criterio de la 009–0
 ## R-03 · Prefijos de tabla
 
 **Decisión**: `RCD_` para Recaudo y `TES_` para Tesorería. Lo heredado de Tesorería sigue en `TRS_` hasta su retiro;
-el lado contable en `ACC_Receipts*` y `ACC_Treasury*`; la plataforma en `COR_`.
+el lado contable en `ACC_Receipts*` y `ACC_Treasury*`; la plataforma en `COR_`. La constitución listaba sólo `TRS_` para
+Tesorería: los dos prefijos entran por la **enmienda 2.0.1** de sus Estándares Técnicos Adicionales (2026-10-23, revisor
+el dueño; hallazgo CO3 del analyze), que deja `TRS_` para lo heredado hasta su retiro.
 
 **Razón**: el inventario confirma que `RCD_` y `TES_` no se usan (sólo aparece «TES_» en comentarios con los nombres
 del sistema de origen de las tablas `TRS_`). Un prefijo distinto del heredado deja visible, tabla por tabla, qué se
@@ -157,6 +162,8 @@ beneficio); renombrar rutas heredadas (descartado: rompe la capacitación de COO
 **Decisión**: son dos módulos con datos propios. **Ninguno escribe ni lee las tablas del otro**: se hablan por puertos
 síncronos en `Application/Common/Integration/{Receipts,Treasury}`, que corren en la unidad de trabajo de quien llama
 (misma base, misma transacción), como los contratos de la 013.
+
+Las columnas se leen «ofrece → usa»: el módulo que implementa el puerto y el que lo llama.
 
 | Puerto | Lo ofrece | Lo usa | Para qué | Entrega |
 |---|---|---|---|---|
@@ -297,6 +304,12 @@ efectivo; ninguna porción en cero. Caso dorado por cada regla.
 - Una prueba de arquitectura (`LosCerrojosDeRecaudoYTesoreriaVanEnOrden`) fija que sólo `CerrojoDeRecaudo` y
   `CerrojoDeTesoreria` toman cerrojos y que ninguna operación de Recaudo llama a Captaciones antes que a Cartera.
 
+- **Dirección Tesorería → Recaudo** (CH16): cuando un comando de Tesorería llama a `IResultadoDeOrdenesDeRecaudo` (resultado
+  de una orden de Recaudo) o a `IPartidasDesdeConciliacion` (abono sin registro), primero llama a `TomarCerrojosAsync` del
+  puerto, que toma los niveles de Recaudo (`RCD_Setup` compartido y las filas de origen de esas órdenes por `Id`), y sólo
+  después toma `TES_Setup`, la cuenta, el lote, las órdenes o la conciliación. Así ninguna transacción toma una fila
+  `RCD_` después de una `TES_` y el orden global Recaudo → Tesorería se respeta en las dos direcciones.
+
 **Razón**: FR-007, FR-170, SC-032. Recaudo toma lo suyo **antes** de llamar a los contratos para que nunca espere a
 Cartera con una fila suya tomada en otro orden: los contratos no toman filas `RCD_`.
 
@@ -371,8 +384,8 @@ por la respuesta de Cartera al aplicar (`Lending.Payment.PaymasterReferenceInval
 **Decisión**: en extractos, giros de pagadurías y archivos de convenio, cada línea (o el recibo que la cubre) va en su
 **propia** `TransaccionExplicita` con su clave. Un rechazo deja la línea en «no aplicada» con su motivo y el dinero
 como partida, saldo de la pagaduría o saldo a favor del pagador; reprocesar repite la misma clave. La corrida queda
-registrada (`RCD_ProcessingRuns`, con conteos, totales y huella) y se audita con un evento resumen por corrida y uno por
-línea rechazada. La aplicación la hace la persona que confirma, de forma sincrónica por tandas con indicador de avance;
+registrada (`RCD_ProcessingRuns`, con conteos, totales y huella) y se audita con un evento resumen por corrida que lista
+cada recibo aplicado con su `PublicId` y su huella, y uno por línea rechazada (R-32). La aplicación la hace la persona que confirma, de forma sincrónica por tandas con indicador de avance;
 nunca un proceso programado (FR-174).
 
 **Razón**: FR-171, SC-010 (5.000 líneas en menos de 5 minutos), SC-030.
@@ -408,7 +421,7 @@ cambiar el contrato exigiría que Cartera adopte otra versión).
 - Un rechazo de transferencia antes de «girada» no tiene hecho (nunca hubo débito en libros).
 
 **Razón**: FR-119 prohíbe «girada» al marcar enviado; la práctica contable del cheque es registrarlo al girarlo.
-Así el puente de giro del origen (`DesembolsoPorGirar`, `RefundPayable`) se salda exactamente cuando el origen recibe
+Así el puente de giro del origen (`DesembolsoPorGirar`, `DevolucionPorPagar`) se salda exactamente cuando el origen recibe
 «girada» (FR-144).
 
 **Alternativas**: hecho al marcar enviado con un puente «pagos en tránsito» (descartado: un rol más y una partida
@@ -552,10 +565,12 @@ dueño pidió parámetros; se anota como mejora posible para la feature tributar
   Tesorería **no** se registra como recaudadora (D2): `ClaseDeRecaudador.Treasury` y los destinos que la nombran se
   conservan sin uso;
 - **Retiro de los dobles** (FR-223) en tres piezas del mismo despliegue:
-  1. migración de datos `RetiroDeLosDoblesDePrueba` (idempotente): toda fila `IsTestDouble = true` de
-     `COR_IntegrationParticipants` queda `IsEnabled = false`, `ValidTo` = fecha del despliegue y motivo «retirado al
-     desplegar Recaudo y Tesorería reales»; sus adopciones se cierran; no se borra nada (historia). En producción no hay
-     filas y no hace nada;
+  1. migración de datos `RetiroDeLosDoblesDePrueba` (idempotente): toda fila vigente (`ValidTo` nulo) con
+     `IsTestDouble = true` de `COR_IntegrationParticipants` se **cierra** con `ValidTo` = fecha del despliegue, como
+     `EscritorDelRegistroDeIntegracion.RetirarAsync`; es la única columna escribible, porque `IntegrationParticipant` es
+     `IHechoInmutable` (`IsEnabled` y `Reason` son de sólo inicio). Sus adopciones se cierran igual; el motivo «retirado
+     al desplegar Recaudo y Tesorería reales» va a la auditoría; no se borra nada (historia). En producción no hay filas
+     y no hace nada;
   2. el código se borra: `Application/Lending/Integration/DoblesDePrueba/*`, `TestDoublesEndpoints`, `DoblesDePrueba.razor`,
      la clave `Lending:TestDoubles:Enabled`, `RecaudadorDePrueba.CodigoDeTesoreria`, el permiso
      `Lending.TestDoubles.Operate` (se da de baja sin borrar sus asignaciones históricas);
@@ -571,8 +586,14 @@ dueño pidió parámetros; se anota como mejora posible para la feature tributar
 
 **Razón**: FR-147, FR-148, FR-163, FR-223, FR-224, SC-027; el único consumidor por destino impide que convivan.
 
-**Alternativas**: dejar los dobles detrás de una bandera (descartado por el dueño); borrar las filas (descartado:
-Principio VII y la historia de QA).
+- **Bandera transitoria** del 04/11 al 19/11: mientras el código de los dobles exista, `DestinoRecaudo` y
+  `DestinoTesoreria` se registran en DI sólo con `Lending:TestDoubles:Enabled = false` (T0141). Se pone en `false` en DEV
+  para el hito del 04/11 (T0184), en QA para el paralelo del 10/11 (T0271) y en la fixture de las e2e antes de la puerta
+  (T0300a); desaparece con el código de los dobles el 19/11 (T0307). Una cooperativa que todavía tenga la fila del doble
+  `TES` vigente la ve cerrada por la activación (mínima o completa) antes de registrar la real (TR42).
+
+**Alternativas**: dejar los dobles detrás de una bandera **como estado final** (descartado por el dueño: la bandera sólo
+vive del 04/11 al 19/11); borrar las filas (descartado: Principio VII y la historia de QA).
 
 ## R-27 · Activación de Recaudo y Tesorería y cuadre provisional
 
@@ -588,6 +609,8 @@ bóvedas, bancos, partidas, cheques en tránsito) contra el saldo contable de Co
 (`Recaudo.CuadreProvisionalPendiente`, `Tesoreria.CuadreProvisionalPendiente`) que escala al vencer, y la **guarda de
 cierre** en Contabilidad (`Accounting.Period.OpeningSquarePending`) que niega el cierre del mes de la activación sin el
 definitivo (E-04, FR-228). El definitivo cierra la alerta y queda enlazado al provisional.
+
+La activación nace **mínima** en el bloque 2 (R-40) y esta decisión la completa en la fase 19 sobre el mismo comando.
 
 **Razón**: FR-150, FR-157 a FR-159, FR-228, US13, US24.
 
@@ -664,12 +687,18 @@ alcance de la cuenta, el convenio o la pagaduría (FR-175). Un cajero cobra a pe
 transacción, `AuditOutboxForwarder` a Mongo), con la conservación de FR-178 (`Conservacion.Anios`, diez por defecto,
 nunca menos de cinco). Eventos por operación con antes y después; lecturas sensibles con una lista cerrada:
 `Receipts.Person.PayablesRead` (lo que puede pagar una persona), `Treasury.BankBalances.Read`,
-`Core.PersonBankAccount.Read/Changed`, `Receipts.Sarlaft.ReportRead`, exportaciones. Las corridas no interactivas se
-auditan con un evento resumen y uno por línea rechazada (desviación X de la 013, mismo criterio).
+`Core.PersonBankAccount.Read/Changed`, `Receipts.Sarlaft.ReportRead`, exportaciones. Las corridas no interactivas
+(extractos, giros de pagaduría, `AplicacionNoInteractiva`) se auditan con **un evento resumen por corrida**
+(`Receipts.ProcessingRun.Summary`, por `COR_AuditOutbox` en la cadena de sellos) que lleva la **lista de cada recibo
+aplicado** (`receipts[] { publicId, sha256 }`, la huella `HuellaDeRecibo` del recibo tal como quedó) y uno por línea
+rechazada. Es verificable recibo por recibo: recalcular la huella del recibo y compararla con la del evento sellado; la
+lista cubre exactamente los recibos de la corrida, incluidos los de reproceso (decisión del dueño del 2026-10-23, CO1).
 
-**Razón**: Principio X, FR-014, SC-019.
+**Razón**: Principio X (cada operación monetaria queda en la cadena de sellos), FR-014, SC-019, sin saturar la auditoría
+con 5.000 eventos por giro: un evento sellado con 5.000 huellas da la misma verificación.
 
-**Alternativas**: auditar cada línea aplicada (descartado: el recibo y el hecho ya son la traza; volumen sin valor).
+**Alternativas**: auditar cada línea aplicada con su evento (descartado: volumen sin verificación adicional); un evento
+resumen sin la lista (la desviación X que traía la 013; descartado por el dueño: no permite verificar recibo por recibo).
 
 ## R-33 · Precisión
 
@@ -688,19 +717,26 @@ auditan con un evento resumen y uno por línea rechazada (desviación X de la 01
 
 | Entrega | Migraciones (en orden) |
 |---|---|
-| R0 + T0 | `PlataformaParaRecaudoYTesoreria`, `RetiroDeLosDoblesDePrueba` (datos), `RecaudoNucleo`, `TesoreriaNucleo`, `IntegracionContableDeRecaudoYTesoreria` |
+| R0 + T0 (congeladas al 10/11) | `PlataformaParaRecaudoYTesoreria`, `RecaudoNucleo`, `TesoreriaNucleo`, `IntegracionContableDeRecaudoYTesoreria` |
+| R0 + T0 (nuevas después del 10/11) | `TesoreriaConciliacionMinima`, `RecaudoYTesoreriaPuestaEnMarcha`, `RetiroDeLosDoblesDePrueba` (datos) y cualquier cambio posterior de R0/T0 |
 | R1 | `RecaudoCompleto`, `CarteraYCaptacionesConPartidaCitada` (E-01/E-02) |
 | T1 | `TesoreriaCompleta` |
 | R2 | `RecaudoCanales` |
 | T2 | `TesoreriaAmpliada` |
 | Después de T2 | `RetiroDeLaTesoreriaHeredada` (destructiva con guarda, commit propio) |
 
-Los pares de R0/T0 se regeneran mientras se construyen y se **congelan** al promover a producción (antes del 28/11):
-desde ahí, todo cambio es una migración nueva (`LasMigracionesCongeladasNoSeRegeneran`).
+Los pares de R0/T0 se regeneran mientras se construyen **hasta el despliegue en QA del 10/11** (T0271; la base de DEV
+del 04/11 se recrea) y ahí se **congelan**, con sus huellas en `LasMigracionesCongeladasNoSeRegeneran` (decisión del
+dueño del 2026-10-23, I3). Desde ese día no se regenera nada: cada cambio posterior de R0/T0 es un par nuevo, aditivo y
+con su huella al cierre (T0337).
 
-**Razón**: Principio XII y el precedente de la 013 (T0802).
+**Razón**: Principio XII y el precedente de la 013 (T0802); QA guarda desde el 10/11 los datos del paralelo y una
+migración regenerada no se aplicaría sobre ellos.
 
-**Alternativas**: una sola migración por feature (descartado: R1 y T2 salen meses después).
+**Alternativas**: congelar al promover a producción (lo que decía este documento hasta el 2026-10-23; descartado: QA ya
+tendría aplicada una versión distinta de la misma migración).
+
+**Alternativas** (de la división por entrega): una sola migración por feature (descartado: R1 y T2 salen meses después).
 
 ## R-35 · Pantallas
 
@@ -737,17 +773,13 @@ producto enmascarado y el valor (FR-177).
   mínima (≈10), transiciones del resultado (≈8), evaluador de GMF (≈8), armado de lotes y pendientes (≈6);
 - **Application**: cada comando con su validador; idempotencia (misma y otra huella); todo o nada con rechazo inducido
   en el tercer ítem; «la distribución cambió»; procesos no interactivos con líneas rechazadas;
-- **Arquitectura** (nuevas): `RecaudoYTesoreriaSeHablanPorSusPuertos`, `RecaudoNoConoceContabilidad`,
-  `TesoreriaNoConoceContabilidad`, `LosHechosDeRecaudoYTesoreriaNoLlevanCuentas`, `RecaudoYTesoreriaNoTienenValoresLegalesFijos`,
-  `LosComandosDeRecaudoYTesoreriaLlevanClave`, `LosCerrojosDeRecaudoYTesoreriaVanEnOrden`, `NoHayDoblesDePrueba`,
-  `NingunProcesoAplicaPagosNiInformaResultados`, `LoDeRecaudoYTesoreriaNoSeReversaDesdeComprobantes`,
-  `LasCantidadesYMontosDeCajaTienenSuPrecision`; **ampliadas**: `ElCatalogoDeMensajesEsUnico` (los tipos `REC` y `TES`
-  nuevos), `SoloElNumeradorNumera`, `LasPantallasDicenQueEstanCargando`, `TodoEnlaceDelMenuTieneSuPagina`,
-  `LosEndpointsProtegidosExigenPermiso`, `UnSoloConsumidorPorDestino`, `LasCuentasSeTocanSoloPorElContrato`;
+- **Arquitectura**: las dieciséis nuevas y las catorce ampliadas que enumera plan.md («Testing»), entre ellas
+  `LosPuertosDeRecaudoYTesoreriaValidanYAuditanSusEscrituras` y `NadieEscribeLaConciliacionBancariaDeContabilidad`;
 - **e2e** (Testcontainers, PostgreSQL y SQL Server): colección «Recaudo y Tesorería e2e» con cooperativas aisladas para
   la activación; los recorridos de SC-002; la **migración** de las e2e de Cartera y Captaciones a los módulos reales
   (FR-224); la regla del dueño de correr las e2e contra base de datos al final de las fases se respeta: se escriben
-  durante la construcción y se corren juntas al cierre de R0/T0;
+  durante la construcción y se corren juntas al cierre de R0/T0, con dos excepciones declaradas: la e2e de humo de la
+  caja al cierre del bloque 2 (T0183c) y la puerta de FR-224 (T0301);
 - **Rendimiento** con `RUN_PERF_TESTS=1`: SC-010, SC-011, SC-023, SC-031, SC-032.
 
 **Razón**: Principios II y XI; el precedente de la 013.
@@ -762,10 +794,10 @@ y T0 completas, y al paralelo del 11/11 con lo que haya:
 | Fechas | Qué | Hito |
 |---|---|---|
 | 22/10–27/10 | Fase 1: plataforma (E-06, ámbitos, contextos de listas, go/no-go), esqueleto de los dos módulos, permisos y roles, migraciones base, puertos internos | — |
-| 28/10–04/11 | Fase 2: R0 caja (puntos, cajas, sesión, arqueo, bóveda), operación de caja y recibo por los dos contratos, anulación; T0 cuentas bancarias, bandeja de órdenes, lotes por archivo y portal, aprobación, resultado y regiro | 04/11: un recibo y un giro de punta a punta en DEV |
-| 05/11–10/11 | Fase 3: extractos y partidas, pagaduría completa, cheque recibido y devuelto, chequera mínima y cheques, remesas, hechos y matrices, validación previa, SARLAFT básico | 10/11: versión al paralelo en QA (caja, recibo, extracto, giro) |
+| 28/10–04/11 | Fase 2: R0 caja (puntos, cajas, sesión, arqueo, bóveda), operación de caja y recibo por los dos contratos, anulación; T0 cuentas bancarias, bandeja de órdenes, lotes por archivo y portal, aprobación, resultado y regiro; activación mínima (R-40) y e2e de humo de la caja | 04/11: un recibo y un giro de punta a punta en DEV |
+| 05/11–10/11 | Fase 3: extractos y partidas, pagaduría completa, cheque recibido y devuelto, chequera mínima y cheques, remesas, hechos y matrices, validación previa, SARLAFT básico | 10/11: versión al paralelo en QA (caja, recibo, extracto, giro); migraciones de R0/T0 congeladas |
 | 11/11–19/11 | Fase 4: conciliación mínima, puesta en marcha y plantillas, activación con cuadre provisional, go/no-go, guarda de cierre, informes R0/T0, manuales, migración de las e2e de Cartera y Captaciones y retiro de los dobles | 19/11: R0 y T0 completas en QA |
-| 20/11–22/11 | Fase 5: e2e en los dos motores, rendimiento, congelamiento de las migraciones | 22/11: congelado |
+| 20/11–22/11 | Fase 5: e2e en los dos motores, rendimiento, huellas de las migraciones nuevas posteriores al 10/11 | 22/11: todo con huella |
 | 23/11–25/11 | Ensayo general en QA (SC-002) | go/no-go del ensayo |
 | 26/11–27/11 | Correcciones del ensayo y despliegue a producción (respaldos por base) | 27/11: R0 y T0 en producción |
 | 28/11 | Go/no-go y carga definitiva | — |
@@ -776,7 +808,47 @@ debe estar en producción **antes del primer vencimiento de enero de 2027** si l
 
 **Razón**: el calendario de la spec es inamovible; las fases agrupan lo que tiene dependencia técnica.
 
-**Alternativas**: construir R1 antes de la salida (descartado por el dueño: recorte mínimo).
+**Alternativas**: construir R1 antes de la salida (descartado por el dueño: recorte mínimo). Si un hito se atrasa, rigen
+las líneas de recorte de plan.md.
+
+## R-39 · Conciliación bancaria única, de Tesorería
+
+**Decisión** (decisión del dueño del 2026-10-23, I7): la conciliación de Tesorería (FR-216) **reemplaza** a la de
+Contabilidad (009, FR-055 a FR-060), como parte de la enmienda E-04: un solo extracto (R-06) y una sola conciliación por
+cuenta y mes. En el código:
+- `ACC_BankReconciliations`, `ACC_BankStatementLines` y `ACC_BankStatementColumnMaps` (entidades `BankReconciliation`,
+  `BankStatementLine`, `BankStatementColumnMap` en `Domain/Entities/Accounting`, configuradas en
+  `Persistence/Configurations/Accounting/SatelliteConfigurations.cs`) quedan **sin uso**: ningún comando las escribe
+  (`NadieEscribeLaConciliacionBancariaDeContabilidad`). No se borran en esta feature; su retiro, si se hace, es una
+  migración destructiva aparte (pendiente, con guarda, respaldo y segundo revisor);
+- `ReopenPeriodCommandHandler` (`Application/Accounting/Periods/PeriodCommands.cs`), que hoy marca `Outdated` las
+  `ACC_BankReconciliations` cerradas del período, pasa a llamar a `IConciliacionBancariaParaContabilidad` (Tesorería
+  ofrece, Contabilidad usa), que marca `Outdated` las `TES_Reconciliations` cerradas de ese mes; el evento
+  `Accounting.Period.Reopened` conserva `outdatedReconciliations`;
+- la marca «cuenta bancaria» de la cuenta contable (FR-055) sigue en Contabilidad: es la que exige el vínculo
+  `ACC_OwnBankAccountLinks`; el banco y el número viven en `TES_BankAccounts`.
+
+**Razón**: dos conciliaciones del mismo banco divergirían; el extracto ya es único (R-06).
+
+**Alternativas**: conservar las dos con sincronización (descartado: dos verdades); que la 009 concilie sobre el extracto de
+Tesorería (descartado: Tesorería es dueña de las cuentas, los pagos y los cheques que se cruzan).
+
+## R-40 · Activación mínima en el bloque 2
+
+**Decisión** (hallazgo I2 del analyze): `ActivateReceiptsCommand` y `ActivateTreasuryCommand` nacen en el bloque 2
+(T0183a, T0183b), antes del hito del 04/11, con **requisitos básicos** (Recaudo: punto, caja, cajero, medios, tipos de
+documento; Tesorería: una cuenta bancaria vinculada y un formato o la forma portal del banco) y el **registro real** de
+`REC` (recaudador y destino) y `TES` (destino) en el mismo guardado, con `RCD_Activations` y `TES_Activations` (sin cuadre:
+`OpeningSquareId` nulo). Si la cooperativa tiene vigente la fila del doble `TES`, la activación la cierra antes por
+`EscritorDelRegistroDeIntegracion.RetirarAsync` (`ValidTo`), con el motivo en la auditoría. Los hitos del 04/11 (DEV) y del
+10/11 (QA) la usan en vez del registro a mano. La fase 19 completa el mismo comando: cuadre definitivo o provisional,
+matriz completa con contabilidad iniciada, supervisor con los permisos de FR-176, chequera si ofrece cheques, verificación
+de la hora de corte (FR-185).
+
+**Razón**: el hito del 04/11 y el paralelo del 11/11 necesitan los participantes reales registrados; registrarlos a mano en
+`/admin/participantes-de-integracion` no prueba el camino que se usará el 01/12.
+
+**Alternativas**: registro a mano hasta la fase 19 (descartado: dos caminos al mismo estado).
 
 ---
 
@@ -799,3 +871,5 @@ debe estar en producción **antes del primer vencimiento de enero de 2027** si l
 | P18 cuadre | aprueba quien tenga `…Activation.ProvisionalSquare` | no |
 | P19 conservación | diez años pendiente de validar | no |
 | P5, P9, P16 | fuera del diseño de R0/T0 | no |
+| Retiro de `ACC_BankReconciliations`, `ACC_BankStatementLines`, `ACC_BankStatementColumnMaps` (R-39) | quedan sin uso y nadie las escribe | no; si se hace, migración destructiva aparte con guarda, respaldo y segundo revisor |
+| Recortes de R0/T0 (plan.md, «Líneas de recorte») | ninguno: R0/T0 completo | lo decide el dueño en cada hito y se anota aquí |

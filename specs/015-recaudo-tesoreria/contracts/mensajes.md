@@ -170,13 +170,18 @@ Lo escribe la activación de cada módulo con `EscritorDelRegistroDeIntegracion`
 | `TES` | `Treasury` | `MessageDestination` | `Treasury` | `OrdenDeGiroEmitida` v1 y v2, `AnulacionDeOrdenDeGiro` v1, `ArchivoDeDesembolsosGenerado` v1, `ArchivoDeDesembolsosAnulado` v1 | `FacturaDeProveedorPorPagar` v1, `DispersionDeNominaGenerada` v1 (T2) |
 
 Tesorería **no** tiene fila `ObligationsCollector` (D2). La clase `ClaseDeRecaudador.Treasury`, la gramática
-`TES:{documento:N}:{cuenta:N}` de la 014 y el destino `Treasury` en `PagoReversadoPorCartera` se conservan sin uso.
+`TES:{documento:N}:{cuenta:N}` de la 014 y el destino `Treasury` de `ConsignacionReversadaPorCartera` (que la 014 manda a
+`Treasury` cuando el recaudador era Tesorería) se conservan sin uso. `PagoReversadoPorCartera` va sólo a `Receipts`.
+
+La activación que escribe estas filas existe desde el bloque 2 en forma **mínima** (requisitos básicos, TR42); la fase 19
+la completa. Si la cooperativa tiene vigente la fila del doble `TES`, la activación la cierra antes por
+`EscritorDelRegistroDeIntegracion.RetirarAsync` (`ValidTo`, motivo en la auditoría) y después registra la real.
 
 ## 8. Retiro de los dobles (FR-223)
 
 | Pieza | Qué se hace |
 |---|---|
-| Filas `TST` (`Class = Test`, `IsTestDouble = true`) y la fila `TES` del doble en cooperativas de DEV y QA | migración `RetiroDeLosDoblesDePrueba`: `IsEnabled = false`, `ValidTo` = fecha del despliegue, motivo; adopciones cerradas; nada se borra |
+| Filas `TST` (`Class = Test`, `IsTestDouble = true`) y la fila `TES` del doble en cooperativas de DEV y QA | migración `RetiroDeLosDoblesDePrueba`: sólo `ValidTo` = fecha del despliegue en las vigentes (`IntegrationParticipant` es `IHechoInmutable`: `IsEnabled` y `Reason` no se escriben), como `EscritorDelRegistroDeIntegracion.RetirarAsync`; adopciones cerradas igual; el motivo «retirado al desplegar Recaudo y Tesorería reales» va a la auditoría; nada se borra |
 | `TesoreriaDePrueba`, `RecaudadorDePrueba`, sus comandos, `TestDoublesEndpoints`, `DoblesDePrueba.razor`, `Lending:TestDoubles:Enabled` | se borran del código |
 | `EscritorDelRegistroDeIntegracion` | rechaza `Class = Test` o `IsTestDouble = true` en todo ambiente (`Integration.Participant.TestDoublesRetired`) |
 | `RequisitosDeActivacion` (Cartera) y `RequisitosDeActivacionDeCaptaciones` | sólo cuentan `Receipts` y `Treasury` reales, en todo ambiente (E-01 e, E-02 g) |

@@ -1,9 +1,9 @@
 # Decisiones transversales — 015 Recaudo y Tesorería
 
-**Feature**: 015 | **Fecha**: 2026-10-22 | Molde: `013/decisiones-transversales.md`
+**Feature**: 015 | **Fecha**: 2026-10-22, actualizado el 2026-10-23 (`/speckit-analyze` y decisiones del dueño) | Molde: `013/decisiones-transversales.md`
 
 Este documento **manda** sobre cualquier otra redacción de nombres en los artefactos de la 015. Recoge los nombres
-canónicos (§2), las decisiones transversales TR1–TR40 (§3), los choques entre frentes y cómo se resolvieron (§4) y las
+canónicos (§2), las decisiones transversales TR1–TR43 (§3), los choques entre frentes y cómo se resolvieron (§4) y las
 preguntas que quedan para el dueño con su propuesta por defecto (§5). Las decisiones del dueño de `## Clarifications` de
 la spec no se reabren.
 
@@ -20,7 +20,8 @@ la spec no se reabren.
 
 - Inglés para entidades, tablas, columnas, rutas, permisos y códigos de error; español para motores puros, puertos,
   mensajes, parámetros, alertas y pruebas (desviación registrada de la 013, T101).
-- Módulos `Receipts` (código `REC`) y `Treasury` (código `TES`); prefijos `RCD_` y `TES_`; rutas `/api/receipts/*`,
+- Módulos `Receipts` (código `REC`) y `Treasury` (código `TES`); prefijos `RCD_` y `TES_` (en la constitución desde la
+  enmienda 2.0.1 del 2026-10-23; `TRS_` sólo para lo heredado hasta su retiro); rutas `/api/receipts/*`,
   `/api/treasury/*`; pantallas `/recaudo/*`, `/tesoreria/*`; permisos `Receipts.*`, `Treasury.*`.
 
 ### 2.2 Espacios de nombres y carpetas
@@ -53,8 +54,8 @@ la spec no se reabren.
   `RCD_UnidentifiedItemResolutions`, `RCD_ProcessingRuns`, `RCD_ProcessingRunLines`, `RCD_InboundMessages`,
   `RCD_PayrollDeductionFiles`, `RCD_PayrollDeductionFileLines`, `RCD_PayrollFileSendings`, `RCD_PaymasterResponses`,
   `RCD_PaymasterResponseLines`, `RCD_PaymasterRemittances`, `RCD_PaymasterRemittanceLines`, `RCD_CashTransactions`,
-  `RCD_ComplianceAlertsLog`, `RCD_Activations`, `RCD_OpeningSquares`, `RCD_OpeningSquareLines`, `RCD_ReferenceFigures`
-  (67 tablas).
+  `RCD_ComplianceAlertsLog`, `RCD_Activations` (64 tablas; `RCD_Activations` nace con la activación mínima del bloque 2,
+  TR42).
 - **Recaudo R1** (`RecaudoCompleto`): `RCD_CashTransactionReports`, `RCD_CashTransactionReportLines`,
   `RCD_CashDisbursements`, `RCD_CashDisbursementVoidings`, `RCD_PendingApplications`,
   `RCD_PendingApplicationResolutions`, `RCD_ReportedDeposits`, `RCD_IdentificationRules`,
@@ -67,8 +68,12 @@ la spec no se reabren.
   `TES_PaymentFiles`, `TES_PaymentFileLines`, `TES_PaymentResponses`, `TES_PaymentResponseLines`,
   `TES_DisbursementResults`, `TES_LendingDisbursementFiles`, `TES_LendingDisbursementFileOrders`, `TES_Checkbooks`,
   `TES_IssuedChecks`, `TES_IssuedCheckEvents`, `TES_CashRemittances`, `TES_BankStatements`, `TES_BankStatementLines`,
-  `TES_Reconciliations`, `TES_ReconciliationMatches`, `TES_ReconcilingItems`, `TES_Activations`, `TES_OpeningSquares`,
-  `TES_OpeningSquareLines`, `TES_ReferenceFigures` (28).
+  `TES_Activations` (22).
+- **Tesorería T0, conciliación mínima** (`TesoreriaConciliacionMinima`, par nuevo y aditivo posterior al congelamiento del
+  10/11): `TES_Reconciliations`, `TES_ReconciliationMatches`, `TES_ReconcilingItems` (3).
+- **Recaudo y Tesorería, puesta en marcha** (`RecaudoYTesoreriaPuestaEnMarcha`, par nuevo y aditivo posterior al
+  10/11): `RCD_OpeningSquares`, `RCD_OpeningSquareLines`, `RCD_ReferenceFigures`, `TES_OpeningSquares`,
+  `TES_OpeningSquareLines`, `TES_ReferenceFigures` (6). Con éstas, R0 sigue en 67 `RCD_` y T0 en 28 `TES_`.
 - **Tesorería T1** (`TesoreriaCompleta`): `TES_ManualOrderConcepts`, `TES_BankAccountSigners`, `TES_BankAccountTokens`,
   `TES_Transfers`, `TES_PaymentVouchers`, `TES_MonthEndCheckRuns` (6).
 - **Tesorería T2** (`TesoreriaAmpliada`): `TES_BankNotes`, `TES_ReconciliationRules`, `TES_AcquirerSettlements`,
@@ -80,6 +85,8 @@ la spec no se reabren.
   `ACC_ReceiptsVoucherMappings`, `ACC_TreasuryPostingRules`, `ACC_TreasuryPostings`, `ACC_TreasuryVoucherMappings`,
   `ACC_OwnBankAccountLinks` (7).
 - **Retiro** (después de T2): `TRS_Checks`, `TRS_Concepts`, `TRS_Invoices`.
+- **Sin uso desde R0/T0** (E-04, TR41): `ACC_BankReconciliations`, `ACC_BankStatementLines`, `ACC_BankStatementColumnMaps`.
+  No se borran en esta feature; su retiro, si se hace, es una migración destructiva aparte (pendiente).
 
 ### 2.4 Motores, puertos y servicios con nombre fijo
 
@@ -101,21 +108,25 @@ la spec no se reabren.
 | `RequisitosDeActivacionDeRecaudo` · `…DeTesoreria` | requisitos verificables | Application/*/Activation |
 | `AlcanceDeRecaudoDeLaPeticion` · `AlcanceDeTesoreriaDeLaPeticion` | alcance | API/Services |
 | `ValidadorDeOrdenes` | FR-109, FR-203, FR-210 | Application/Treasury/Orders |
-| Puertos | `ICuentasBancariasPropias`, `IMovimientosBancariosParaRecaudo`, `IRemesasDeTesoreria`, `IOrdenesDePagoDeTesoreria`, `IRecaudoParaConciliacion`, `IPartidasDesdeConciliacion`, `IResultadoDeOrdenesDeRecaudo`, `IContabilidadParaRecaudo`, `IContabilidadParaTesoreria`, `IDimensionesDeRecaudo`, `IDimensionesDeTesoreria`, `IEstadoOperativoParaElCierre`, `ICuentasBancariasDePersona`, `IVerificacionDeSalida`, `IConsultaDeCargaSinActivar` (R1), `IEfectivoDelPuntoDeVenta` (R1) | [contracts/interfaces.md](contracts/interfaces.md) |
+| Puertos | `ICuentasBancariasPropias`, `IMovimientosBancariosParaRecaudo`, `IRemesasDeTesoreria`, `IOrdenesDePagoDeTesoreria`, `IRecaudoParaConciliacion`, `IPartidasDesdeConciliacion`, `IResultadoDeOrdenesDeRecaudo`, `IContabilidadParaRecaudo`, `IContabilidadParaTesoreria`, `IDimensionesDeRecaudo`, `IDimensionesDeTesoreria`, `IEstadoOperativoParaElCierre`, `IConciliacionBancariaParaContabilidad`, `ICuentasBancariasDePersona`, `IVerificacionDeSalida`, `IConsultaDeCargaSinActivar` (R1), `IEfectivoDelPuntoDeVenta` (R1), `IReferenciasDePago` (R2) | [contracts/interfaces.md](contracts/interfaces.md) |
 
 ### 2.5 Tareas programadas (sólo proponen, preparan y alertan, FR-174)
 
 | Tarea | Hora | Qué |
 |---|---|---|
-| `recaudo.lote-del-dia` | tras la hora de corte | dispara el lote contable resumido de recibos (lo hace Contabilidad); orden fijo FR-185 |
+| `recaudo.lote-del-dia` | tras la hora de corte | dispara el lote contable resumido de recibos (lo hace Contabilidad) y deja su marca de corrida; el orden con Cartera es la restricción de FR-185 (TR43), no una dependencia |
 | `recaudo.cuadre-diario` | después del lote | `RCD_DailySquares` y alerta |
 | `recaudo.sesiones-olvidadas` | hora de corte | marca `ForgottenOpen` y alerta |
 | `recaudo.antiguedad` | diaria | partidas, saldos a favor, extractos sin cargar, contingencia por digitar, cuadre provisional, política en «advertir» |
 | `tesoreria.vigilancia` | diaria | órdenes sin resultado, cheques sin cobrar, remesas sin confirmar, partidas conciliatorias antiguas, cuadre provisional, política en «advertir» |
 
-El orden con el ciclo diario de Cartera: lote de Recaudo → cuadre diario → ciclo diario de Cartera (FR-185), coordinado
-por `ProgramadorDeTareas` con dependencias declaradas. Ninguna tarea llama a los contratos ni registra resultados
-(`NingunProcesoAplicaPagosNiInformaResultados`).
+El orden con el ciclo diario de Cartera (lote de Recaudo → cuadre diario → ciclo diario de Cartera, FR-185) **no** lo
+coordina `ProgramadorDeTareas`, que no declara dependencias entre tareas: es una **restricción de configuración
+comprobada** (TR43). `Recaudo.HoraDeCorte` tiene que caer antes de `Lending:Process:StartTimeLocal` (00:30) en la línea
+del día de operación (un inicio de madrugada se cuenta en el día siguiente); una versión del parámetro que no la cumpla
+se rechaza con `Receipts.Setup.CutoffAfterLendingCycle`, y la activación y la lista de go/no-go la verifican. Dentro de
+Recaudo, el cuadre diario de una cooperativa no corre hasta que el lote de ese día terminó (marca de corrida del lote).
+Ninguna tarea llama a los contratos ni registra resultados (`NingunProcesoAplicaPagosNiInformaResultados`).
 
 ### 2.6 Permisos (sembrados por la API al arrancar)
 
@@ -140,11 +151,37 @@ RegisterRemittance/ApplyRemittance`, `Receipts.Compliance.View/Release`, `Receip
 (`SEC_PermissionAmountLimits`): `Receipts.Voiding.Approve`, `Receipts.Count.ApproveDifference`,
 `Receipts.Receipt.Backdate`, `Treasury.Batches.Approve`, `Treasury.LiquidityFund.Approve`, `Treasury.Transfers.Approve`.
 
+### 2.7 Nombres fijados después del diseño (2026-10-23)
+
+Lo que tasks.md marcaba **(nuevo)** y lo que trajeron el `/speckit-analyze` y las decisiones del dueño:
+
+| Nombre | Qué | Dónde |
+|---|---|---|
+| `PaymentBatchState` | `Draft = 1`, `PendingApproval = 2`, `Approved = 3`, `FileGenerated = 4`, `Sent = 5`, `PartiallyConfirmed = 6`, `Confirmed = 7`, `RejectedByBank = 8`, `Voided = 9` | data-model §10.3, §20 |
+| `ReconciliationState.Outdated = 4` | la conciliación cerrada de un mes cuyo período contable se reabrió | data-model §12.2, §20 |
+| `ScreeningContext.Collection = 6` · `.Disbursement = 7` | contextos de listas (1 a 5 ya existen) en `Domain/Enums/Lending/OriginationEnums.cs` | data-model §16.3, §20 |
+| `Lending.Payment.BankItemDateMismatch` | v2 del contrato de obligaciones, `ValueDate ≠ MovementDate` con la partida citada (R1) | contratos-v2.md §1.2; data-model §21 |
+| `Receipts.Setup.CutoffAfterLendingCycle` | versión de `Recaudo.HoraDeCorte` que no cae antes del ciclo de Cartera (TR43) | data-model §21 |
+| `428` · `Approvals.PresenceRequired` · encabezado `X-Approval-Request` | la caja pide el aprobador presente y la operación se repite con la misma clave; las fallas del desafío reusan los `Approvals.Presence.*` de la 012 (`NotRequester`, `Invalid`, `Expired`, `TotpReused`) | api.md §1.4; data-model §21 |
+| `AdoptContractVersionCommand` | Recaudo adopta las v2 de los contratos (R1) | `Application/Receipts/Activation` |
+| `IReferenciasDePago` | referencia de pago estable para los documentos al asociado (R2) | `Application/Common/Integration/Receipts` |
+| `IConciliacionBancariaParaContabilidad` | Tesorería ofrece, Contabilidad usa: la reapertura de un período marca desactualizadas las conciliaciones cerradas del mes (TR41) | interfaces.md §3 |
+| `TomarCerrojosAsync` | en `IResultadoDeOrdenesDeRecaudo` e `IPartidasDesdeConciliacion`: Tesorería toma el nivel de Recaudo antes de sus propios cerrojos (CH16) | interfaces.md §2; data-model §0.5 |
+| `Receipts.ProcessingRun.Summary` | evento resumen de una corrida no interactiva con `receipts[] { publicId, sha256 }` (huella `HuellaDeRecibo`) y `rejectedLines` (TR37) | data-model §5.3 |
+| vista `parallel-comparison` | informe del paralelo contra las cifras de referencia | api.md §17 |
+| `TesoreriaConciliacionMinima` · `RecaudoYTesoreriaPuestaEnMarcha` | pares nuevos y aditivos posteriores al congelamiento del 10/11 | data-model §25 |
+| `NadieEscribeLaConciliacionBancariaDeContabilidad` | prueba de arquitectura: ningún tipo escribe `ACC_BankReconciliations`, `ACC_BankStatementLines` ni `ACC_BankStatementColumnMaps` | tests/IngenIA365ERP.Architecture.Tests/Principles |
+| `IsMinimal` | columna de `RCD_Activations` y `TES_Activations`: activación mínima del bloque 2 (TR42) | data-model §15.1 |
+| `CajaDeHumoTests` | e2e de humo de la caja, excepción declarada a «e2e una sola vez» | tests/IngenIA365ERP.API.IntegrationTests/Receipts |
+| `docs/operaciones/recaudo-tesoreria-despliegue.md` | runbook de despliegue de R0/T0 y de cada entrega posterior | tasks.md T0326 |
+| `DevolucionPorPagar` | rol existente de Captaciones (013/014) que salda el giro de una devolución (no `RefundPayable`) | contabilidad.md §1, §4 |
+
 ## 3. Decisiones transversales
 
 ### Módulos y frontera
 
-- **TR1** · Dos módulos `Receipts`/`Treasury`, códigos `REC`/`TES`, prefijos `RCD_`/`TES_` (R-02, R-03).
+- **TR1** · Dos módulos `Receipts`/`Treasury`, códigos `REC`/`TES`, prefijos `RCD_`/`TES_` por la enmienda 2.0.1 de la
+  constitución (R-02, R-03).
 - **TR2** · Lo heredado de Tesorería no se toca hasta T2; lo nuevo en subcarpetas y subrutas; el cheque girado se llama
   `IssuedCheck` (R-04).
 - **TR3** · Recaudo y Tesorería se hablan por puertos síncronos en la misma transacción; ninguno toca las tablas del otro
@@ -158,7 +195,9 @@ RegisterRemittance/ApplyRemittance`, `Receipts.Compliance.View/Release`, `Receip
 - **TR7** · Clave por porción `REC:{recibo:N}:{aplicación:N}:{clase}`; pagaduría `REC:{giro:N}:{línea:N}` (R-09).
 - **TR8** · Huella de negocio sin simulación, aprobador ni instante; claves sin vencimiento (R-10).
 - **TR9** · Imputación de medios pura y configurable; el cheque al final (R-11).
-- **TR10** · Cerrojos en orden fijo: Recaudo → Cartera → Captaciones → Tesorería → numeración (R-12).
+- **TR10** · Cerrojos en orden fijo: Recaudo → Cartera → Captaciones → Tesorería → numeración (R-12). Vale en las dos
+  direcciones: cuando Tesorería llama a Recaudo (`IResultadoDeOrdenesDeRecaudo`, `IPartidasDesdeConciliacion`), toma
+  antes el nivel de Recaudo por `TomarCerrojosAsync` y sólo después los suyos (CH16).
 - **TR11** · Numeración al final, `COR_Sequences` (R-13).
 - **TR12** · Sesión con valores sellados al abrir; arqueo puro; un cierre no se reabre (R-14).
 - **TR13** · Bóveda de Recaudo; remesa de Tesorería registrada por puerto en la misma transacción (R-15).
@@ -209,12 +248,29 @@ RegisterRemittance/ApplyRemittance`, `Receipts.Compliance.View/Release`, `Receip
 
 - **TR35** · Alcance por oficina, punto, caja, pagaduría y cuenta bancaria; falla cerrado (R-30).
 - **TR36** · Aprobaciones de la 012: presente en caja, diferida en Tesorería; segregación por persona (R-31).
-- **TR37** · Auditoría encadenada con módulos `Receipts` y `Treasury`; lecturas sensibles con lista cerrada; corridas con
-  evento resumen (R-32).
+- **TR37** · Auditoría encadenada con módulos `Receipts` y `Treasury`; lecturas sensibles con lista cerrada; cada corrida
+  no interactiva deja un evento resumen (`Receipts.ProcessingRun.Summary`) con la lista de cada recibo aplicado
+  (`PublicId` y huella `HuellaDeRecibo`), verificable recibo por recibo, por `COR_AuditOutbox` en la cadena de sellos, y
+  uno por línea rechazada. Cumple el Principio X sin desviación (decisión del dueño del 2026-10-23; R-32).
 - **TR38** · Precisión por alias; nada en coma flotante (R-33).
 - **TR39** · Caja en tres pasos con atajos, en Web y MAUI, con `IndicadorDeCarga` (R-35).
-- **TR40** · Migraciones pares por entrega, congeladas al promover R0/T0; el retiro heredado, destructivo con guarda,
-  después de T2 (R-34).
+- **TR40** · Migraciones pares por entrega. Los pares de R0/T0 se regeneran hasta el despliegue en QA del 10/11 (T0271)
+  y ahí se **congelan** con sus huellas en `LasMigracionesCongeladasNoSeRegeneran`; desde entonces todo cambio de R0/T0
+  es un par nuevo y aditivo (decisión del dueño del 2026-10-23). El retiro heredado, destructivo con guarda, después de
+  T2 (R-34).
+
+### Después del analyze (2026-10-23)
+
+- **TR41** · La conciliación bancaria es **una sola, de Tesorería**: reemplaza a la de Contabilidad (enmienda E-04 a la
+  009, FR-055 a FR-060). `ACC_BankReconciliations`, `ACC_BankStatementLines` y `ACC_BankStatementColumnMaps` quedan sin
+  uso y nadie las escribe; `ReopenPeriodCommand` marca las de Tesorería por `IConciliacionBancariaParaContabilidad`
+  (R-39).
+- **TR42** · **Activación mínima** de Recaudo y Tesorería en el bloque 2 (requisitos básicos y registro real de `REC` y
+  `TES` en el mismo guardado), para que el hito del 04/11 en DEV y el paralelo en QA del 10/11 operen sin registro a
+  mano; la activación completa (cuadre, matriz, supervisor con permisos, chequera) la completa la fase 19 sobre el
+  mismo comando (R-40).
+- **TR43** · La hora de corte es una **restricción de configuración comprobada**, no una dependencia entre tareas (§2.5,
+  FR-185).
 
 ## 4. Choques y cómo se resolvieron
 
@@ -234,6 +290,8 @@ RegisterRemittance/ApplyRemittance`, `Receipts.Compliance.View/Release`, `Receip
 | CH12 | El cerrojo de Cartera y Captaciones es «setup → persona → crédito → cuenta» y FR-170 dice «obligaciones antes que cuentas» | un lote de obligaciones y después uno de cuentas: la persona ya tomada no espera (TR6, TR10) |
 | CH13 | La ruta `/api/treasury/checks` y la pantalla `/tesoreria/cheques` son heredadas | lo nuevo usa `/issued-checks`, `/checkbooks` y `/tesoreria/cheques-girados`, `/tesoreria/chequeras` |
 | CH14 | Lo heredado y el paralelo necesitan cotejarse contra lo que traía la cooperativa | se habla de «lo heredado» y de «cifras de referencia» (`RCD_ReferenceFigures`, `TES_ReferenceFigures`); ningún texto del producto nombra el sistema anterior |
+| CH15 | La 009 tiene su propia conciliación bancaria (FR-055 a FR-060, tablas `ACC_Bank*`) y la reapertura de un período las marca `Outdated` | la de Tesorería la reemplaza (TR41); la reapertura mira la de Tesorería por puerto |
+| CH16 | TR10 fija Recaudo → … → Tesorería, pero Tesorería llama a Recaudo al registrar el resultado de una orden de Recaudo o al crear una partida desde la conciliación, con sus filas ya tomadas | Tesorería toma el nivel de Recaudo por el puerto (`TomarCerrojosAsync`) antes de sus cerrojos; el orden global no se invierte (data-model §0.5) |
 
 ## 5. Preguntas al dueño (con propuesta por defecto)
 
@@ -247,7 +305,7 @@ RegisterRemittance/ApplyRemittance`, `Receipts.Compliance.View/Release`, `Receip
 | Q6 | ¿Los días sin resultado (3), sin cobrar un cheque (30) y a cuenta por pagar (180) son razonables como defecto? | Sí, «pendiente de validar» |
 | Q7 | ¿Un faltante de caja menor que la tolerancia del medio se registra igual como hecho? | Sí, con motivo y sin aprobación (FR-032) |
 | Q8 | ¿El GMF de un pago que dispone de una cuenta contable se causa como gasto y por pagar, o lo cobra el banco en el mismo débito? | Parámetro `Gmf.HechosGeneradoresDeEgresos` con la forma; defecto «gasto y por pagar» hasta la validación del tributarista (P10) |
-| Q9 | ¿El paralelo en QA corre con las e2e de Cartera y Captaciones ya migradas a los módulos reales? | Sí: los dobles no existen en QA desde el despliegue de R0/T0 |
+| Q9 | ¿El paralelo en QA corre con las e2e de Cartera y Captaciones ya migradas a los módulos reales? | En dos tiempos. Del 04/11 (DEV) y del 10/11 (QA) al 19/11 rige la **bandera transitoria** `Lending:TestDoubles:Enabled = false` (T0141): el código de los dobles sigue, sus consumidores no se registran y los reales sí, y Recaudo y Tesorería se registran con la activación mínima (TR42). Desde el despliegue en QA del 19/11 el código de los dobles ya no existe (T0307), después de la puerta de las e2e migradas (T0301) |
 | Q10 | ¿La lista de go/no-go vive en la plataforma y sirve también para Cartera y Captaciones? | Sí (TR34) |
 
 Los pendientes de datos del dueño P1 a P19 están en [research.md](research.md) «Pendientes del dueño que tocan el diseño»,
