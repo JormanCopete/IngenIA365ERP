@@ -39,6 +39,20 @@ $env:RUN_PERF_TESTS="1"; dotnet test tests/IngenIA365ERP.API.IntegrationTests --
 | e2e de Cartera y Captaciones migradas a los módulos reales | FR-224 | SC-001, SC-027 |
 | Rendimiento: 20 cajeros concurrentes; respuesta de pagaduría de 5.000 líneas; lote de 1.000 órdenes; conciliación de 500 movimientos | | SC-023, SC-010, SC-011, SC-031 |
 
+### Lo que debe seguir verde
+
+Línea base anotada por T0007 el **2026-10-23** sobre el commit `b86e5d9c` (rama `015-recaudo-tesoreria`, antes de escribir código de
+la 015), con `dotnet test tests/IngenIA365ERP.<X>.Tests` y sin contenedores. Las e2e no se corren ahora (decisión del dueño: una sola vez
+al final de R0/T0). Cada fase comprueba contra estas cifras que nada de Cartera, Captaciones, Inventario, Nómina ni Contabilidad se cayó:
+el conteo sólo sube con las pruebas nuevas de la 015 y ninguna de las que había deja de pasar.
+
+| Proyecto | Pasan | Fallan | Omitidas |
+|---|---|---|---|
+| `IngenIA365ERP.Domain.Tests` | 2.652 | 0 | 0 |
+| `IngenIA365ERP.Application.Tests` | 6.283 | 0 | 0 |
+| `IngenIA365ERP.Architecture.Tests` | 760 | 0 | 0 |
+| `IngenIA365ERP.Shared.Tests` | 499 | 0 | 0 |
+
 ## 2. Preparar una cooperativa de ensayo (DEV o QA)
 
 1. **Desplegar** la versión con R0 y T0. La migración `RetiroDeLosDoblesDePrueba` cierra (`ValidTo`) las filas `TST` y la

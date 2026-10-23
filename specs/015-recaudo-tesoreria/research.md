@@ -873,3 +873,30 @@ de la hora de corte (FR-185).
 | P5, P9, P16 | fuera del diseño de R0/T0 | no |
 | Retiro de `ACC_BankReconciliations`, `ACC_BankStatementLines`, `ACC_BankStatementColumnMaps` (R-39) | quedan sin uso y nadie las escribe | no; si se hace, migración destructiva aparte con guarda, respaldo y segundo revisor |
 | Recortes de R0/T0 (plan.md, «Líneas de recorte») | ninguno: R0/T0 completo | lo decide el dueño en cada hito y se anota aquí |
+
+### Seguimiento de los pendientes P1–P19 (T0010)
+
+Una fila por pendiente, copiada de la spec («Pendientes del dueño») y de la tabla de arriba. Cada tarea del dueño de tasks.md que reciba
+la respuesta la anota en «respuesta» con su fecha; hasta entonces rige lo de «rige mientras tanto». Abierta el 2026-10-23.
+
+| Pendiente | Quién | Fecha límite | Rige mientras tanto | Bloquea la salida | Respuesta |
+|---|---|---|---|---|---|
+| P1 · Bancos y estructuras (extracto, recaudo, pagos, respuesta; AV Villas desde la 010, T147) | dueño | 06/11 | `EXTRACTO-GENERICO`, `PAGOS-GENERICO`, `RESPUESTA-PAGOS-GENERICO` o la forma «portal del banco» (FR-213) | sólo si no se acepta el genérico ni el portal | — |
+| P2 · Cheques en ventanilla y convenios | dueño | 06/11 | clase cheque apagada (`Caja.AdmiteCheque = no`, D37); sin convenios hasta R2 | no | — |
+| P3 · Bóveda por oficina o caja principal | dueño | 06/11 | cada oficina configura una u otra; sin defecto | no (es configuración) | — |
+| P4 · Personal, niveles por monto, segregación, espera de cuentas destino | dueño | 13/11 | plantillas de rol sembradas sin asignar; montos sin valor = sin atribución; `CuentasDestino.DiasDeEspera` sin valor = sin espera | **sí**: roles, alcances y segundo factor son condición del go/no-go | — |
+| P5 · Pagos a proveedores en T2 | dueño | — | siguen en la Tesorería heredada | no | — |
+| P6 · Pagadurías, convenios, prelación y respuesta | dueño | 06/11 | convenios y formatos de vuelta como dato; `RESPUESTA-PAGADURIA-GENERICA` | **sí**, la de la pagaduría (no la de la caja): la quincena del 15/12 exige archivo hacia el 10/12 | — |
+| P7 · SARLAFT: umbrales, suspensión del reporte, alcance, ausencia, fraccionamiento, listas, estructura | oficial de cumplimiento | 20/11 (estructura del reporte: enero de 2027) | 5 y 30 millones «pendientes de validar»; reporte `Vigente`; alcance `SoloEfectivo`; tres operaciones en siete días | **sí** en umbrales y listas | — |
+| P8 · Faltantes, sobrantes y partidas: cuentas, plazos y destino | contadora | 20/11 | filas sugeridas sin cuenta; `Caja.Sobrantes.DiasAntesDeIngreso` sin valor; partidas como pasivo | forma parte de P12 | — |
+| P9 · Tarjeta débito heredada y convenios con redes | dueño | — | no se toca (D32) | no | — |
+| P10 · GMF: hechos generadores de egresos y exenciones | tributarista | 20/11 | `Gmf.Tarifa` 0,004 «pendiente de validar»; sólo devoluciones gravadas; desembolso al deudor exento | no | — |
+| P11 · Fecha valor de las partidas tardías (E-01, E-02) | contadora | — | v1 de los contratos y corrección por condonación hasta R1 | no | — |
+| P12 · Matriz de Recaudo y Tesorería | contadora | 20/11 | filas sugeridas sin cuenta; `Contabilidad.FaltaDeRegla = Bloquear` | **sí**: completitud al 100 % del go/no-go | — |
+| P13 · Servicios a asociados | dueño | 13/11 | R0 cobra lo que financia Cartera | no | — |
+| P14 · Devolución de aportes en efectivo | dueño | 13/11 | devolución por orden de giro | no | — |
+| P15 · Escenarios de no-go parcial y plan de reversa | dueño | 20/11 | la lista de go/no-go exige el escenario escrito | **sí** | — |
+| P16 · Plan de implantación (K19, M19, K24, K26, ensayo, go/no-go) | dueño | 06/11 | el calendario de la spec | no | — |
+| P17 · Fondo de liquidez: cuentas y aviso previo | oficial de cumplimiento | 20/11 | ninguna cuenta con el propósito «fondo» hasta que se marque | no | — |
+| P18 · Cuadre de apertura: quién aprueba el provisional y fecha del definitivo | contadora | 02/12–04/12 | aprueba quien tenga `…Activation.ProvisionalSquare` | no | — |
+| P19 · Conservación: diez años y su fuente | tributarista | — | `Conservacion.Anios` 10 «pendiente de validar», nunca menos de 5 | no | — |

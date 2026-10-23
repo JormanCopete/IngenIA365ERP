@@ -285,6 +285,24 @@ public class CentralIdentityApiFixture : IAsyncLifetime
             (servicios, c) => tarea.EjecutarAsync(servicios, c), ct);
     }
 
+    /// <summary>
+    /// Feature 015 (T0008; decisiones-transversales §2.5): corre, en orden de nombre, <b>todas</b> las tareas programadas cuyo nombre empieza por
+    /// <paramref name="prefijo"/> (<c>recaudo.</c>, <c>tesoreria.</c>) con <see cref="CorrerTareaAsync"/>: el lote del día, el cuadre diario,
+    /// las sesiones olvidadas, la antigüedad y la vigilancia, como si hubiera pasado la hora de corte. El programador, el despachador y el
+    /// reenvío de auditoría siguen apagados: las e2e los conducen a mano. Devuelve los nombres de las tareas que corrió.
+    /// </summary>
+    public async Task<IReadOnlyList<string>> CorrerTareasDelModuloAsync(Guid tenantPublicId, string prefijo, CancellationToken ct = default)
+    {
+        var nombres = Factory.Services.GetServices<IngenIA365ERP.Application.Common.Execution.ITareaProgramada>()
+            .Select(t => t.Nombre)
+            .Where(n => n.StartsWith(prefijo, StringComparison.Ordinal))
+            .Order(StringComparer.Ordinal)
+            .ToList();
+        foreach (var nombre in nombres)
+            await CorrerTareaAsync(tenantPublicId, nombre, ct);
+        return nombres;
+    }
+
     /// <summary>Secreto TOTP del maestro, una vez inscrito. Lo usa <see cref="IniciarSesionMaestroAsync"/>.</summary>
     private string? _secretoMaestro;
 
