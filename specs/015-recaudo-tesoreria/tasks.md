@@ -2075,9 +2075,27 @@ fecha legal de giro calculada con el calendario hábil como aviso informativo; e
 **Independent Test**: registrar la fecha de pago de la nómina de una pagaduría y ver la fecha legal de giro a tres días hábiles;
 sin giro a esa fecha, alerta `Recaudo.GiroDePagaduriaTardio` sin bloquear nada; el informe de morosas la lista.
 
-- [ ] T0382 [P] [US7] Escribir tests/IngenIA365ERP.Application.Tests/Receipts/Paymasters/CalendarioDePagaduriasTests.cs (FR-082; FR-010): `Libranza.DiasHabilesGiro` (3, «pendiente de validar») con `ICalendarioHabil`; aviso informativo; alerta del giro tardío; nada se bloquea
-- [ ] T0383 [US7] Crear `RCD_PaymasterCalendar` (src/Core/IngenIA365ERP.Domain/Entities/Receipts/Paymasters/PaymasterCalendarEntry.cs) y su configuración, `RegisterPaymasterPayDateCommand` en src/Core/IngenIA365ERP.Application/Receipts/Paymasters/ y la sección del giro tardío en la tarea T0197
-- [ ] T0384 [US7] Mostrar el calendario por pagaduría en src/Presentation/IngenIA365ERP.Shared/Pages/Recaudo/Pagadurias.razor y regenerar en src/Infrastructure/IngenIA365ERP.Persistence.Migrations.{PostgreSql,SqlServer}/Application/ el par `RecaudoCompleto`
+- [X] T0382 [P] [US7] Escribir tests/IngenIA365ERP.Application.Tests/Receipts/Paymasters/CalendarioDePagaduriasTests.cs (FR-082; FR-010): `Libranza.DiasHabilesGiro` (3, «pendiente de validar») con `ICalendarioHabil`; aviso informativo; alerta del giro tardío; nada se bloquea
+- [X] T0383 [US7] Crear `RCD_PaymasterCalendar` (src/Core/IngenIA365ERP.Domain/Entities/Receipts/Paymasters/PaymasterCalendarEntry.cs) y su configuración, `RegisterPaymasterPayDateCommand` en src/Core/IngenIA365ERP.Application/Receipts/Paymasters/ y la sección del giro tardío en la tarea T0197
+- [X] T0384 [US7] Mostrar el calendario por pagaduría en src/Presentation/IngenIA365ERP.Shared/Pages/Recaudo/Pagadurias.razor y regenerar en src/Infrastructure/IngenIA365ERP.Persistence.Migrations.{PostgreSql,SqlServer}/Application/ el par `RecaudoCompleto`
+
+**Notas de la construcción de la fase 28 (2026-10-24)**. Pruebas escritas y compiladas, sin correr. Desviaciones y decisiones; los nombres nuevos quedan en
+decisiones-transversales §2.7:
+
+- **T0382**: `Receipts/Paymasters/CalendarioDePagaduriasTests` (la fecha legal cuenta días hábiles desde el día siguiente, sin fines de semana ni festivos; el parámetro
+  manda y registrar otra vez corrige la misma fila; registrar no cambia el archivo; lo no girado pasada la fecha alerta y entra al informe de morosas), sobre
+  `PagaduriasDePrueba` con un `ICalendarioHabil` de prueba.
+- **T0383**: `PaymasterCalendarEntry` (`RCD_PaymasterCalendar`, una por pagaduría y período con `SubPeriod = 0` si paga una vez al mes; guarda `BusinessDays`, el
+  `Libranza.DiasHabilesGiro` vigente a la fecha de pago, sellado), el motor puro **nuevo** `Domain/Receipts/Pagadurias/CalendarioLegalDeGiro` (sobre
+  `CalendarioHabil.SumarHabiles`, con sábado y domingo de descanso y los festivos de la central), `RegisterPaymasterPayDateCommand` (registra o corrige; auditado
+  `Receipts.Paymaster.PayDateRegistered`), `GetPaymasterCalendarQuery` (por pagaduría y período: enviado, descontado, girado, pendiente, fecha legal y si va tarde; con
+  `onlyLate`, el **informe de pagadurías morosas**) y la sección **nueva** `AntiguedadDeRecaudo.GirosDePagaduriaTardiosAsync` de la tarea de T0197 con la alerta
+  `Recaudo.GiroDePagaduriaTardio` (ya existía en el catálogo, R1), una vez por pagaduría y período. Nada se bloquea por el plazo (FR-010). **Desviación**: el informe de
+  morosas es la consulta con `onlyLate` y su vista en la pantalla; su exportación a archivo va con los informes de la fase 31.
+- **T0384**: rutas `GET/POST /api/receipts/paymaster-calendar` (ver con los permisos de pagadurías, registrar con `Receipts.Paymasters.RegisterRemittance`); sección
+  «Calendario de giro» en `/recaudo/pagadurias` con «Sólo pagadurías morosas» y la fecha de pago por fila. `RecaudoCompleto` regenerado en par con la tabla; «No
+  changes» en los dos motores; paridad en par (Application 70). Compilan API, Web, Web.Client, Persistence y las cinco de pruebas. Sin probar en navegador.
+
 
 ---
 

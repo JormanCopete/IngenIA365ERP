@@ -553,6 +553,15 @@ Lo que tasks.md marcaba **(nuevo)** y lo que trajeron el `/speckit-analyze` y la
 | `Identificacion.AplicarAlCargar` · `ConsignacionReportada.{Modo, DiasParaVerificar, DiasDeVentana}` (RCD, R1) · alerta `Recaudo.ConsignacionReportadaSinVerificar` · `AntiguedadDeRecaudo.ConsignacionesReportadasAsync` | parámetros y aviso | `ParametrosDeRecaudoYTesoreria`, `TiposDeAlerta`, `Receipts/Tareas` |
 | rutas `/api/receipts/identification-rules`, `/api/receipts/bank-items/{lineId}/proposal`, `/api/receipts/bank-items/apply-on-load`, `/api/receipts/reported-deposits` · pantallas `/recaudo/reglas-de-identificacion`, `/recaudo/consignaciones-reportadas` · eventos `Receipts.IdentificationRule.Saved`, `Receipts.BankItems.AppliedOnLoad`, `Receipts.ReportedDeposit.{Registered, Verified}` | rutas, pantallas y auditoría | `API/Endpoints/Receipts/IdentificationEndpoints.cs`, `Shared/Pages/Recaudo` |
 
+**Fijados en la construcción de la fase 28 (2026-10-24)**:
+
+| Nombre | Qué | Dónde |
+|---|---|---|
+| `RCD_PaymasterCalendar` (`PaymasterCalendarEntry`: `PayrollPayDate`, `BusinessDays`, `LegalRemittanceDate`, `SubPeriod`) | la fecha de pago de la nómina y la fecha legal de giro | par `RecaudoCompleto`; `Entities/Receipts/Paymasters/PaymasterCalendarEntry.cs` |
+| `CalendarioLegalDeGiro` · `EstadoDelPeriodoDePagaduria` | el motor puro del calendario | `Domain/Receipts/Pagadurias/CalendarioLegalDeGiro.cs` |
+| `RegisterPaymasterPayDateCommand` · `GetPaymasterCalendarQuery` (con `OnlyLate`, el informe de morosas) · `PaymasterCalendarRowDto` · `CalendarioDePagadurias` · `AntiguedadDeRecaudo.GirosDePagaduriaTardiosAsync` · evento `Receipts.Paymaster.PayDateRegistered` | comando, consulta y aviso | `Receipts/Paymasters/CalendarioDePagadurias.cs`, `Receipts/Tareas` |
+| rutas `GET/POST /api/receipts/paymaster-calendar` · sección «Calendario de giro» de `/recaudo/pagadurias` | rutas y pantalla | `API/Endpoints/Receipts/PaymastersEndpoints.cs`, `Shared/Pages/Recaudo/Pagadurias.razor` |
+
 ## 3. Decisiones transversales
 
 ### Módulos y frontera
