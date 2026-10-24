@@ -18,7 +18,8 @@ namespace IngenIA365ERP.Application.Receipts.Compliance;
 /// vigentes (y su versión) y alerta al oficial (<c>Recaudo.AcumuladoDeEfectivo</c>, <c>Recaudo.Fraccionamiento</c>), una vez por persona, señal y mes, dejando el rastro
 /// en <c>RCD_ComplianceAlertsLog</c>. <b>Sólo informa</b>: ninguna señal bloquea. Sin guardar: lo guarda quien llama. En R0 sólo cuenta lo de Recaudo. (nuevo)
 /// </summary>
-public sealed class RegistroDeEfectivo(IApplicationDbContext db, ILectorDeParametros lector, IAlertas alertas, IDateTimeService reloj)
+public sealed class RegistroDeEfectivo(IApplicationDbContext db, ILectorDeParametros lector, IAlertas alertas, IDateTimeService reloj,
+    IngenIA365ERP.Application.Common.Integration.Inventory.IEfectivoDelPuntoDeVenta? puntoDeVenta = null)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
@@ -108,6 +109,20 @@ public sealed class RegistroDeEfectivo(IApplicationDbContext db, ILectorDeParame
     private static decimal Decimal(IngenIA365ERP.Application.Common.Models.Result<ValorDeParametro> r) =>
         r.IsSuccess && r.Value.Valor is decimal v ? v : 0m;
 
+    /// <summary>
+    /// Feature 015, R1 (T0390; FR-204): el efectivo del punto de venta de <paramref name="personas"/> entre dos fechas como transacciones de efectivo (recibido y devuelto
+    /// cuentan igual, como los egresos de caja, FR-099). Sin puerto, nada.
+    /// </summary>
+    public async Task<IReadOnlyList<TransaccionDeEfectivo>> DelPuntoDeVentaAsync(IReadOnlyCollection<int> personas, DateOnly desde, DateOnly hasta, CancellationToken ct)
+    {
+        if (puntoDeVenta is null || personas.Count == 0) return [];
+        var publicos = await db.People.AsNoTracking().IgnoreQueryFilters().Where(p => personas.Contains(p.Id)).ToDictionaryAsync(p => p.PublicId, p => p.Id, ct);
+        return (await puntoDeVenta.PorPeriodoAsync(desde, hasta, ct))
+            .Where(e => publicos.ContainsKey(e.PersonPublicId) && e.CashReceived + e.CashRefunded > 0m)
+            .Select(e => new TransaccionDeEfectivo(publicos[e.PersonPublicId], publicos[e.PersonPublicId], e.OperationDate, e.CashReceived + e.CashRefunded))
+            .ToList();
+    }
+
     private async Task<IReadOnlyList<SenalDetectada>> EvaluarAsync(CashTransaction nueva, CancellationToken ct)
     {
         var p = await ParametrosAsync(nueva.OccurredOn, ct);
@@ -117,6 +132,8 @@ public sealed class RegistroDeEfectivo(IApplicationDbContext db, ILectorDeParame
             .Where(t => (personas.Contains(t.PersonId) || personas.Contains(t.PayerPersonId)) && t.OccurredOn >= desde && t.OccurredOn <= nueva.OccurredOn)
             .Select(t => new TransaccionDeEfectivo(t.PersonId, t.PayerPersonId, t.OccurredOn, t.CashAmount)).ToListAsync(ct);
         previas.Add(new TransaccionDeEfectivo(nueva.PersonId, nueva.PayerPersonId, nueva.OccurredOn, nueva.CashAmount));
+        // Feature 015, R1 (T0390; FR-204; E-03): el registro único suma el efectivo del punto de venta por su puerto, sin copiar sus filas.
+        previas.AddRange(await DelPuntoDeVentaAsync(personas, desde, nueva.OccurredOn, ct));
         var senales = SenalesDeEfectivo.Evaluar(nueva.PersonId, previas, nueva.OccurredOn, p).ToList();
         if (nueva.PayerPersonId != nueva.PersonId) senales.AddRange(SenalesDeEfectivo.Evaluar(nueva.PayerPersonId, previas, nueva.OccurredOn, p));
         var mes = nueva.Month.ToString(CultureInfo.InvariantCulture);

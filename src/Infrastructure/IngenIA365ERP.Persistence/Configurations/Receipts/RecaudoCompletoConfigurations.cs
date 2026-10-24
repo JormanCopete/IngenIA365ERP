@@ -1,5 +1,6 @@
 ﻿using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Entities.Receipts.Banks;
+using IngenIA365ERP.Domain.Entities.Receipts.Compliance;
 using IngenIA365ERP.Domain.Entities.Receipts.Configuration;
 using IngenIA365ERP.Domain.Entities.Receipts.Sessions;
 using IngenIA365ERP.Domain.Entities.Receipts.Operations;
@@ -165,5 +166,48 @@ public class PaymasterCalendarEntryConfiguration : IEntityTypeConfiguration<Paym
         builder.HasIndex(e => new { e.PaymasterPersonId, e.PeriodYear, e.PeriodMonth, e.SubPeriod }).IsUnique().HasFilter("[IsDeleted] = 0")
             .HasDatabaseName($"UK_{Tabla}_Paymaster_Period");
         builder.HasIndex(e => e.LegalRemittanceDate).HasDatabaseName($"IX_{Tabla}_LegalRemittanceDate");
+    }
+}
+
+/// <summary><c>RCD_CashTransactionReports</c>: una generación del reporte de transacciones de un mes (FR-096; data-model §7.3). Versión única por período. (nuevo)</summary>
+public class CashTransactionReportConfiguration : IEntityTypeConfiguration<CashTransactionReport>
+{
+    public const string Tabla = "RCD_CashTransactionReports";
+
+    public void Configure(EntityTypeBuilder<CashTransactionReport> builder)
+    {
+        builder.ComoEntidadDeRecaudo(Tabla);
+        builder.HasOne<User>().WithMany().HasForeignKey(e => e.GeneratedByUserId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<User>().WithMany().HasForeignKey(e => e.UploadedByUserId).OnDelete(DeleteBehavior.Restrict);
+        builder.Property(e => e.Scope).HasConversion<int>();
+        builder.Property(e => e.ApplicationState).HasConversion<int>();
+        builder.Property(e => e.Status).HasConversion<int>();
+        builder.Property(e => e.LayoutCode).HasMaxLength(80).IsRequired();
+        builder.Property(e => e.LayoutVersion).HasMaxLength(20).IsRequired();
+        builder.Property(e => e.FileName).HasMaxLength(200);
+        builder.Property(e => e.Sha256).HasMaxLength(64);
+        builder.Property(e => e.UploadReference).HasMaxLength(60);
+        builder.Property(e => e.IssuesJson).IsRequired();
+        builder.Property(e => e.Total).Monto();
+        builder.HasIndex(e => new { e.PeriodYear, e.PeriodMonth, e.Version }).IsUnique().HasFilter("[IsDeleted] = 0").HasDatabaseName($"UK_{Tabla}_Period_Version");
+    }
+}
+
+/// <summary><c>RCD_CashTransactionReportLines</c> (H): las líneas del reporte (individuales y múltiples). (nuevo)</summary>
+public class CashTransactionReportLineConfiguration : IEntityTypeConfiguration<CashTransactionReportLine>
+{
+    public const string Tabla = "RCD_CashTransactionReportLines";
+
+    public void Configure(EntityTypeBuilder<CashTransactionReportLine> builder)
+    {
+        builder.ComoEntidadDeRecaudo(Tabla);
+        builder.HasOne<CashTransactionReport>().WithMany().HasForeignKey(e => e.CashTransactionReportId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<Person>().WithMany().HasForeignKey(e => e.PersonId).OnDelete(DeleteBehavior.Restrict);
+        builder.Property(e => e.Kind).HasConversion<int>();
+        builder.Property(e => e.Amount).Monto();
+        builder.Property(e => e.DocumentNumber).HasMaxLength(30);
+        builder.Property(e => e.DocumentsJson).IsRequired();
+        builder.Property(e => e.Source).HasMaxLength(30).IsRequired();
+        builder.HasIndex(e => new { e.CashTransactionReportId, e.LineNumber }).IsUnique().HasDatabaseName($"UK_{Tabla}_Report_Line");
     }
 }

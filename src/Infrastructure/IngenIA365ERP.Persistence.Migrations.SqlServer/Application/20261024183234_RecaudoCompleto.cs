@@ -134,6 +134,67 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                 });
 
             migrationBuilder.CreateTable(
+                name: "RCD_CashTransactionReports",
+                schema: "dbo",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    PeriodYear = table.Column<int>(type: "int", nullable: false),
+                    PeriodMonth = table.Column<int>(type: "int", nullable: false),
+                    Version = table.Column<int>(type: "int", nullable: false),
+                    Scope = table.Column<int>(type: "int", nullable: false),
+                    ApplicationState = table.Column<int>(type: "int", nullable: false),
+                    LayoutCode = table.Column<string>(type: "nvarchar(80)", maxLength: 80, nullable: false),
+                    LayoutVersion = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
+                    LayoutVerified = table.Column<bool>(type: "bit", nullable: false),
+                    Status = table.Column<int>(type: "int", nullable: false),
+                    FileAttachmentPublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    FileName = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: true),
+                    Sha256 = table.Column<string>(type: "nvarchar(64)", maxLength: 64, nullable: true),
+                    UploadReference = table.Column<string>(type: "nvarchar(60)", maxLength: 60, nullable: true),
+                    UploadedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UploadedByUserId = table.Column<int>(type: "int", nullable: true),
+                    UploadSupportAttachmentPublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    IssuesJson = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    BlockingIssues = table.Column<int>(type: "int", nullable: false),
+                    Warnings = table.Column<int>(type: "int", nullable: false),
+                    IsAbsenceReport = table.Column<bool>(type: "bit", nullable: false),
+                    Lines = table.Column<int>(type: "int", nullable: false),
+                    Total = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    GeneratedByUserId = table.Column<int>(type: "int", nullable: false),
+                    GeneratedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    SupersededAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_RCD_CashTransactionReports", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_RCD_CashTransactionReports_SEC_Users_GeneratedByUserId",
+                        column: x => x.GeneratedByUserId,
+                        principalSchema: "dbo",
+                        principalTable: "SEC_Users",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_RCD_CashTransactionReports_SEC_Users_UploadedByUserId",
+                        column: x => x.UploadedByUserId,
+                        principalSchema: "dbo",
+                        principalTable: "SEC_Users",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "RCD_IdentificationRules",
                 schema: "dbo",
                 columns: table => new
@@ -405,6 +466,52 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                 });
 
             migrationBuilder.CreateTable(
+                name: "RCD_CashTransactionReportLines",
+                schema: "dbo",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    CashTransactionReportId = table.Column<int>(type: "int", nullable: false),
+                    LineNumber = table.Column<int>(type: "int", nullable: false),
+                    Kind = table.Column<int>(type: "int", nullable: false),
+                    PersonId = table.Column<int>(type: "int", nullable: false),
+                    Amount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    TransactionCount = table.Column<int>(type: "int", nullable: false),
+                    OccurredOn = table.Column<DateOnly>(type: "date", nullable: true),
+                    DocumentNumber = table.Column<string>(type: "nvarchar(30)", maxLength: 30, nullable: true),
+                    DocumentsJson = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    Source = table.Column<string>(type: "nvarchar(30)", maxLength: 30, nullable: false),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_RCD_CashTransactionReportLines", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_RCD_CashTransactionReportLines_COR_People_PersonId",
+                        column: x => x.PersonId,
+                        principalSchema: "dbo",
+                        principalTable: "COR_People",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_RCD_CashTransactionReportLines_RCD_CashTransactionReports_CashTransactionReportId",
+                        column: x => x.CashTransactionReportId,
+                        principalSchema: "dbo",
+                        principalTable: "RCD_CashTransactionReports",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "RCD_PendingApplicationResolutions",
                 schema: "dbo",
                 columns: table => new
@@ -558,6 +665,53 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                 name: "UK_RCD_CashDisbursementVoidings_PublicId",
                 schema: "dbo",
                 table: "RCD_CashDisbursementVoidings",
+                column: "PublicId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_RCD_CashTransactionReportLines_PersonId",
+                schema: "dbo",
+                table: "RCD_CashTransactionReportLines",
+                column: "PersonId");
+
+            migrationBuilder.CreateIndex(
+                name: "UK_RCD_CashTransactionReportLines_PublicId",
+                schema: "dbo",
+                table: "RCD_CashTransactionReportLines",
+                column: "PublicId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "UK_RCD_CashTransactionReportLines_Report_Line",
+                schema: "dbo",
+                table: "RCD_CashTransactionReportLines",
+                columns: new[] { "CashTransactionReportId", "LineNumber" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_RCD_CashTransactionReports_GeneratedByUserId",
+                schema: "dbo",
+                table: "RCD_CashTransactionReports",
+                column: "GeneratedByUserId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_RCD_CashTransactionReports_UploadedByUserId",
+                schema: "dbo",
+                table: "RCD_CashTransactionReports",
+                column: "UploadedByUserId");
+
+            migrationBuilder.CreateIndex(
+                name: "UK_RCD_CashTransactionReports_Period_Version",
+                schema: "dbo",
+                table: "RCD_CashTransactionReports",
+                columns: new[] { "PeriodYear", "PeriodMonth", "Version" },
+                unique: true,
+                filter: "[IsDeleted] = 0");
+
+            migrationBuilder.CreateIndex(
+                name: "UK_RCD_CashTransactionReports_PublicId",
+                schema: "dbo",
+                table: "RCD_CashTransactionReports",
                 column: "PublicId",
                 unique: true);
 
@@ -736,6 +890,10 @@ WHERE NOT EXISTS (SELECT 1 FROM [dbo].[RCD_DocumentTypes] t WHERE t.[Code] = v.c
                 schema: "dbo");
 
             migrationBuilder.DropTable(
+                name: "RCD_CashTransactionReportLines",
+                schema: "dbo");
+
+            migrationBuilder.DropTable(
                 name: "RCD_IdentificationRules",
                 schema: "dbo");
 
@@ -753,6 +911,10 @@ WHERE NOT EXISTS (SELECT 1 FROM [dbo].[RCD_DocumentTypes] t WHERE t.[Code] = v.c
 
             migrationBuilder.DropTable(
                 name: "RCD_CashDisbursements",
+                schema: "dbo");
+
+            migrationBuilder.DropTable(
+                name: "RCD_CashTransactionReports",
                 schema: "dbo");
 
             migrationBuilder.DropTable(

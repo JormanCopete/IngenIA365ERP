@@ -340,6 +340,10 @@ public static class DependencyInjection
         services.AddScoped<Receipts.BankItems.PartidasPorIdentificar>();
         // Feature 015, R1 (fase 27): las propuestas de identificación por reglas.
         services.AddScoped<Receipts.BankItems.PropuestasDeIdentificacion>();
+        // Feature 015, R1 (fase 29; E-03): el efectivo del punto de venta para el registro único de efectivo de Recaudo.
+        services.AddScoped<Common.Integration.Inventory.IEfectivoDelPuntoDeVenta, Inventory.Integration.EfectivoDelPuntoDeVenta>();
+        services.AddScoped<Receipts.Compliance.PreparacionDelReporteDeTransacciones>();
+        services.AddScoped<Receipts.Compliance.GeneracionDelReporteDeTransacciones>();
         services.AddScoped<Receipts.Paymasters.GirosDePagaduria>();
         services.AddScoped<Receipts.BankItems.IReprocesoDeCorrida>(sp => sp.GetRequiredService<Receipts.Paymasters.GirosDePagaduria>());
         services.AddScoped<Receipts.Tareas.AntiguedadDeRecaudo>();

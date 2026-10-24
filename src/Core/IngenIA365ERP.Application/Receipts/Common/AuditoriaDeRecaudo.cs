@@ -1,4 +1,4 @@
-using IngenIA365ERP.Application.Common.Audit;
+﻿using IngenIA365ERP.Application.Common.Audit;
 using IngenIA365ERP.Application.Common.Interfaces;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -36,6 +36,10 @@ public sealed class AuditoriaDeRecaudo(IServiceProvider servicios, ILogger<Audit
     /// <summary>Lo que puede pagar una persona (FR-037): la persona, cuántas obligaciones y cuentas se mostraron.</summary>
     public Task<Guid?> LoQuePuedePagarAsync(Guid personPublicId, int obligaciones, int cuentas, CancellationToken ct = default) =>
         LecturaAsync(EventoLoQuePuedePagar, "Person", personPublicId, new { obligations = obligaciones, accounts = cuentas }, ct);
+
+    /// <summary>Feature 015, R1 (T0390): la lectura del archivo del reporte de transacciones (trae datos de personas).</summary>
+    public Task<Guid?> ReporteDeEfectivoLeidoAsync(Guid reporte, int anio, int mes, int version, int lineas, CancellationToken ct = default) =>
+        LecturaAsync(EventoReporteDeEfectivoLeido, "CashTransactionReport", reporte, new { year = anio, month = mes, version, lines = lineas }, ct);
 
     /// <summary>Una exportación de un informe de Recaudo.</summary>
     public Task<Guid?> InformeExportadoAsync(string vista, string formato, int filas, object? filtros, CancellationToken ct = default) =>

@@ -1,4 +1,4 @@
-using IngenIA365ERP.Shared.Services.Http;
+﻿using IngenIA365ERP.Shared.Services.Http;
 using IngenIA365ERP.Shared.Services.Inventario;
 using IngenIA365ERP.Shared.Services.Security;
 using IngenIA365ERP.Shared.Services.Ventas;
@@ -24,6 +24,14 @@ public sealed record ReciboDeContingenciaRequest(Guid ContingencyBookPublicId, i
 
 public sealed record EstadoDeTalonarioDto(Guid PublicId, Guid CollectionPointPublicId, int FromNumber, int ToNumber, IReadOnlyList<int> Typed, IReadOnlyList<int> Pending,
     int Unused, int Status);
+
+/// <summary>Feature 015, R1 (T0391): una inconsistencia o advertencia de una generación del reporte. (nuevo)</summary>
+public sealed record InconsistenciaDelReporteDto(string Severity, string Code, string Message, int? Row, string? Field);
+
+/// <summary>Una generación del reporte de transacciones (estado 1 validado sin archivo, 2 generado, 3 reemplazado, 4 cargado). (nuevo)</summary>
+public sealed record ReporteDeTransaccionesDto(Guid PublicId, int Year, int Month, int Version, int Scope, int ApplicationState, string LayoutCode, bool LayoutVerified,
+    int Status, bool IsAbsenceReport, int Lines, decimal Total, int BlockingIssues, int Warnings, string? FileName, string? Sha256, string? UploadReference,
+    DateTime? UploadedAt, DateTime GeneratedAt, IReadOnlyList<InconsistenciaDelReporteDto> Issues);
 
 /// <summary>Cliente tipado del cumplimiento en la caja y de la contingencia (feature 015, US14 y US2, T0245). Las escrituras llevan <see cref="ClaveDeOperacion"/>. (nuevo)</summary>
 public sealed class CumplimientoClient(HttpClient http, CentralAuthClient auth)
@@ -55,6 +63,23 @@ public sealed class CumplimientoClient(HttpClient http, CentralAuthClient auth)
 
     public Task<ResultadoDeInventario<EstadoDeTalonarioDto>> TalonarioAsync(Guid talonario, CancellationToken ct = default) =>
         Enviar<EstadoDeTalonarioDto>(HttpMethod.Get, $"{Base}/contingency-books/{talonario}/status", null, null, ct);
+
+    // ---- Feature 015, R1 (T0391): el reporte de transacciones a la UIAF ----
+    public Task<ResultadoDeInventario<IReadOnlyList<ReporteDeTransaccionesDto>>> ReportesAsync(int? anio = null, CancellationToken ct = default) =>
+        Enviar<IReadOnlyList<ReporteDeTransaccionesDto>>(HttpMethod.Get, EnvioDeVentas.ConQuery($"{Base}/compliance/cash-transaction-reports",
+            EnvioDeVentas.Query(("year", EnvioDeVentas.Texto(anio)))), null, null, ct);
+
+    public Task<ResultadoDeInventario<ReporteDeTransaccionesDto>> GenerarReporteAsync(int anio, int mes, ClaveDeOperacion clave, CancellationToken ct = default) =>
+        Enviar<ReporteDeTransaccionesDto>(HttpMethod.Post, $"{Base}/compliance/cash-transaction-reports", new { year = anio, month = mes }, clave, ct);
+
+    public Task<ResultadoDeInventario<ReporteDeTransaccionesDto>> RegenerarReporteAsync(Guid reporte, ClaveDeOperacion clave, CancellationToken ct = default) =>
+        Enviar<ReporteDeTransaccionesDto>(HttpMethod.Post, $"{Base}/compliance/cash-transaction-reports/{reporte}/regenerate", null, clave, ct);
+
+    public Task<ResultadoDeInventario<ReporteDeTransaccionesDto>> MarcarCargadoAsync(Guid reporte, string radicado, ClaveDeOperacion clave, CancellationToken ct = default) =>
+        Enviar<ReporteDeTransaccionesDto>(HttpMethod.Post, $"{Base}/compliance/cash-transaction-reports/{reporte}/uploaded", new { reference = radicado }, clave, ct);
+
+    public Task<ResultadoDeInventario<EnlaceDeDescargaDeRecaudoDto>> ArchivoDelReporteAsync(Guid reporte, CancellationToken ct = default) =>
+        Enviar<EnlaceDeDescargaDeRecaudoDto>(HttpMethod.Get, $"{Base}/compliance/cash-transaction-reports/{reporte}/file", null, null, ct);
 
     private Task<ResultadoDeInventario<T>> Enviar<T>(HttpMethod metodo, string url, object? cuerpo, ClaveDeOperacion? clave, CancellationToken ct) =>
         EnvioDeRecaudo.EnviarAsync<T>(http, auth, metodo, url, cuerpo, clave, null, ct);

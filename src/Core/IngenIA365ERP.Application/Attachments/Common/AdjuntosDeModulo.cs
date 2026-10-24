@@ -363,6 +363,12 @@ public static class AdjuntosDeModulo
     /// <summary>El acta de arqueo que genera el cierre de la sesión: se lee con <c>Receipts.Session.View</c>.</summary>
     public const string ActaDeArqueo = "ReceiptsCountMinutes";
 
+    /// <summary>
+    /// Feature 015, R1 (T0390; FR-096): el archivo del reporte de transacciones a la UIAF tal como se generó (SHA-256 en <c>RCD_CashTransactionReports</c>; el dueño es
+    /// la generación). Lo genera Recaudo antes de guardar la fila; se lee con <c>Receipts.Sarlaft.Report</c> y no se borra. (nuevo)
+    /// </summary>
+    public const string ReporteDeTransaccionesDeEfectivo = "ReceiptsCashTransactionReport";
+
     /// <summary>El archivo de respuesta de una pagaduría tal como llegó (FR-077): se lee con <c>Receipts.Paymasters.View</c>.</summary>
     public const string RespuestaDePagaduria = "ReceiptsPaymasterResponse";
 
@@ -504,6 +510,7 @@ public static class AdjuntosDeModulo
         [DocumentoEmitidoDeCartera] = new(LeerDocumentosDeCartera, Borrable: false, "un documento emitido de Cartera (plan de pagos, paz y salvo o certificado)"),
         // Feature 015 (T0027): lo que generan Recaudo y Tesorería.
         [ActaDeArqueo] = new("Receipts.Session.View", Borrable: false, "el acta de arqueo de una sesión de caja"),
+        [ReporteDeTransaccionesDeEfectivo] = new("Receipts.Sarlaft.Report", Borrable: false, "el reporte de transacciones a la UIAF tal como se generó"),
         [ArchivoDePagoDeTesoreria] = new("Treasury.PaymentFiles.Download", Borrable: false, "el archivo de pago de un lote que se entregó al banco"),
         [InformeDeConciliacion] = new("Treasury.Reconciliation.View", Borrable: false, "el informe de una conciliación bancaria cerrada"),
     };

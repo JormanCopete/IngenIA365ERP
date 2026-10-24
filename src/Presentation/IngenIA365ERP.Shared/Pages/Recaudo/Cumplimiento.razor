@@ -1,9 +1,10 @@
-@page "/recaudo/cumplimiento"
+﻿@page "/recaudo/cumplimiento"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
 @using IngenIA365ERP.Shared.Services.Http
 @using IngenIA365ERP.Shared.Services.Recaudo
 @inject CumplimientoClient CumplimientoApi
 @inject INotificationService Notification
+@inject NavigationManager Navegacion
 
 <PageTitle>Cumplimiento - IngenIA365ERP</PageTitle>
 
@@ -61,6 +62,52 @@
         </IndicadorDeCarga>
     </section>
 
+    @* R1, US14 (T0391; FR-096): el reporte de transacciones a la UIAF sobre la estructura sin cotejar (advertencia, nunca en el archivo). *@
+    <PermissionGate Required="Receipts.Sarlaft.Report">
+        <section class="info-card">
+            <h4>Reporte de transacciones</h4>
+            <IndicadorDeCarga Cargando="@_reportes.Activa" Texto="Cargando los reportes…">
+                <div class="toolbar">
+                    <label class="campo">Año <input type="number" class="e-input" @bind="_anioDelReporte" /></label>
+                    <label class="campo">Mes <input type="number" class="e-input" min="1" max="12" @bind="_mesDelReporte" /></label>
+                    <SfButton CssClass="e-primary" OnClick="@GenerarReporteAsync">Generar</SfButton>
+                </div>
+                <table class="data-grid">
+                    <thead><tr><th>Período</th><th>Versión</th><th>Estado</th><th>Aplicación</th><th>Líneas</th><th>Total</th><th>Avisos</th><th>Radicado</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var r in _listaDeReportes)
+                        {
+                            <tr class="@(r.BlockingIssues > 0 ? "fila-alerta" : "")">
+                                <td>@r.Year-@r.Month.ToString("00")</td><td>@r.Version</td><td>@EstadoDelReporte(r.Status)@(r.IsAbsenceReport ? " (ausencia)" : "")</td>
+                                <td>@(r.ApplicationState == 2 ? "Suspendido" : "Vigente")</td><td>@r.Lines</td><td>@r.Total.ToString("N0")</td>
+                                <td>@string.Join(" · ", r.Issues.Select(i => i.Message))</td><td>@r.UploadReference</td>
+                                <td>
+                                    @if (r.Status == 2)
+                                    {
+                                        <SfButton CssClass="e-flat" OnClick="@(() => DescargarReporteAsync(r))">Archivo</SfButton>
+                                        <SfButton CssClass="e-flat" OnClick="@(() => { _cargado = r; _radicado = ""; })">Marcar cargado</SfButton>
+                                    }
+                                    @if (r.Status is 1 or 2)
+                                    {
+                                        <SfButton CssClass="e-flat" OnClick="@(() => RegenerarReporteAsync(r))">Regenerar</SfButton>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                @if (_cargado is { } c)
+                {
+                    <div class="toolbar">
+                        <label class="campo">Radicado del cargue de @c.Year-@c.Month.ToString("00") <input class="e-input" @bind="_radicado" maxlength="60" /></label>
+                        <SfButton CssClass="e-flat" OnClick="@(() => _cargado = null)">Cancelar</SfButton>
+                        <SfButton CssClass="e-primary" Disabled="@string.IsNullOrWhiteSpace(_radicado)" OnClick="@MarcarCargadoAsync">Marcar cargado</SfButton>
+                    </div>
+                }
+            </IndicadorDeCarga>
+        </section>
+    </PermissionGate>
+
     <section class="info-card">
         <h4>Registro de transacciones en efectivo</h4>
         <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Cargando el registro…">
@@ -80,7 +127,11 @@
 </PermissionGate>
 
 @code {
-    private readonly EstadoDeCarga _carga = new(), _senales = new(), _retenidas = new();
+    private readonly EstadoDeCarga _carga = new(), _senales = new(), _retenidas = new(), _reportes = new();
+    private IReadOnlyList<ReporteDeTransaccionesDto> _listaDeReportes = [];
+    private ReporteDeTransaccionesDto? _cargado;
+    private string _radicado = "";
+    private int _anioDelReporte = DateTime.Today.AddMonths(-1).Year, _mesDelReporte = DateTime.Today.AddMonths(-1).Month;
     private IReadOnlyList<TransaccionDeEfectivoDto> _transacciones = [];
     private IReadOnlyList<SenalDeCumplimientoDto> _listaDeSenales = [];
     private IReadOnlyList<OperacionRetenidaDto> _operaciones = [];
@@ -91,6 +142,56 @@
     {
         _mes = DateTime.Today.Year * 100 + DateTime.Today.Month;
         await CargarAsync();
+        await ReportesAsync();
+    }
+
+    private static string EstadoDelReporte(int s) => s switch { 1 => "Validado sin archivo", 2 => "Generado", 3 => "Reemplazado", 4 => "Cargado", _ => "" };
+
+    private async Task ReportesAsync()
+    {
+        using var carga = _reportes.Iniciar();
+        var r = await CumplimientoApi.ReportesAsync();
+        if (r.IsSuccess) _listaDeReportes = r.Value ?? [];
+    }
+
+    private async Task GenerarReporteAsync()
+    {
+        using (_reportes.Iniciar())
+        {
+            var r = await CumplimientoApi.GenerarReporteAsync(_anioDelReporte, _mesDelReporte, new Services.Http.ClaveDeOperacion());
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo generar el reporte."); return; }
+            await Notification.SuccessAsync(r.Value!.Status == 2 ? "Reporte generado." : "El reporte quedó validado sin archivo: revise los avisos.");
+        }
+        await ReportesAsync();
+    }
+
+    private async Task RegenerarReporteAsync(ReporteDeTransaccionesDto reporte)
+    {
+        using (_reportes.Iniciar())
+        {
+            var r = await CumplimientoApi.RegenerarReporteAsync(reporte.PublicId, new Services.Http.ClaveDeOperacion());
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo regenerar el reporte."); return; }
+        }
+        await ReportesAsync();
+    }
+
+    private async Task MarcarCargadoAsync()
+    {
+        if (_cargado is not { } c) return;
+        using (_reportes.Iniciar())
+        {
+            var r = await CumplimientoApi.MarcarCargadoAsync(c.PublicId, _radicado.Trim(), new Services.Http.ClaveDeOperacion());
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo marcar cargado."); return; }
+            _cargado = null;
+        }
+        await ReportesAsync();
+    }
+
+    private async Task DescargarReporteAsync(ReporteDeTransaccionesDto reporte)
+    {
+        var r = await CumplimientoApi.ArchivoDelReporteAsync(reporte.PublicId);
+        if (!r.IsSuccess || r.Value?.Url is not { } url) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo descargar el archivo."); return; }
+        Navegacion.NavigateTo(url, forceLoad: true);
     }
 
     private async Task CargarAsync()

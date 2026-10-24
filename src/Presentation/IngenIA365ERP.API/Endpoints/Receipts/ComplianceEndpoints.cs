@@ -1,4 +1,4 @@
-using Carter;
+﻿using Carter;
 using IngenIA365ERP.API.Filters;
 using IngenIA365ERP.Application.Receipts.BankItems;
 using IngenIA365ERP.Application.Receipts.CashDesk;
@@ -19,6 +19,7 @@ public class ComplianceEndpoints : ICarterModule
     public const string Liberar = "Receipts.Compliance.Release";
     public const string Registrar = "Receipts.Receipt.Register";
     public const string Contingencia = "Receipts.Receipt.RegisterContingency";
+    public const string Reportar = "Receipts.Sarlaft.Report";
 
     public void AddRoutes(IEndpointRouteBuilder app)
     {
@@ -29,6 +30,25 @@ public class ComplianceEndpoints : ICarterModule
             .WithName("Receipts_Compliance_Signals").RequirePermission(Ver);
         c.MapGet("/withheld", async (ISender s, CancellationToken ct) => await s.Send(new ListWithheldOperationsQuery(), ct))
             .WithName("Receipts_Compliance_Withheld").RequirePermission(new AlgunPermiso(Ver, Liberar));
+
+        // Feature 015, R1 (T0391; FR-096): el reporte de transacciones a la UIAF.
+        var rep = ReceiptsGroup.Grupo(app, "/compliance/cash-transaction-reports", "Recaudo Reporte de transacciones");
+        rep.MapGet("/", async (int? year, ISender s, CancellationToken ct) => await s.Send(new ListCashTransactionReportsQuery(year), ct))
+            .WithName("Receipts_CashTransactionReports_List").RequirePermission(Reportar);
+        rep.MapPost("/", async (PeriodoRequest body, HttpContext http, ISender s, CancellationToken ct) =>
+                await s.Send(new GenerateCashTransactionReportCommand(body.Year, body.Month) { OperationKey = http.ClaveDeOperacion() }, ct))
+            .WithName("Receipts_CashTransactionReports_Generate").ConClaveDeOperacion().RequirePermission(Reportar);
+        rep.MapPost("/{id:guid}/regenerate", async (Guid id, HttpContext http, ISender s, CancellationToken ct) =>
+                await s.Send(new RegenerateCashTransactionReportCommand(id) { OperationKey = http.ClaveDeOperacion() }, ct))
+            .WithName("Receipts_CashTransactionReports_Regenerate").ConClaveDeOperacion().RequirePermission(Reportar);
+        rep.MapPost("/{id:guid}/uploaded", async (Guid id, CargadoRequest body, HttpContext http, ISender s, CancellationToken ct) =>
+                await s.Send(new MarkCashTransactionReportUploadedCommand(id, body.Reference ?? string.Empty, body.UploadedAt, body.SupportAttachmentPublicId)
+                {
+                    OperationKey = http.ClaveDeOperacion(),
+                }, ct))
+            .WithName("Receipts_CashTransactionReports_Uploaded").ConClaveDeOperacion().RequirePermission(Reportar);
+        rep.MapGet("/{id:guid}/file", async (Guid id, ISender s, CancellationToken ct) => await s.Send(new GetCashTransactionReportFileQuery(id), ct))
+            .WithName("Receipts_CashTransactionReports_File").RequirePermission(Reportar);
 
         var o = ReceiptsGroup.Grupo(app, "/cash-operations", "Recaudo Cumplimiento");
         o.MapPost("/{id:guid}/withhold", async (Guid id, HttpContext http, ISender s, CancellationToken ct) =>
@@ -63,4 +83,8 @@ public class ComplianceEndpoints : ICarterModule
 
     public sealed record ContingenciaRequest(Guid ContingencyBookPublicId, int ContingencyNumber, Guid PayerPersonPublicId, DateOnly ValueDate,
         IReadOnlyList<ParteDeAbono>? Parts, Guid ImageAttachmentPublicId, PaymentMeansClass? MeansClass, Guid? DeliveredByPersonPublicId);
+
+    public sealed record PeriodoRequest(int Year, int Month);
+
+    public sealed record CargadoRequest(string? Reference, DateTime? UploadedAt, Guid? SupportAttachmentPublicId);
 }
