@@ -2677,6 +2677,9 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     ReleasedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
                     ReceiptId = table.Column<long>(type: "bigint", nullable: true),
                     SourceOfFundsDeclarationId = table.Column<int>(type: "int", nullable: true),
+                    RefundPaymentOrderPublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    RefundReleasePublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    RefundReleaseNumber = table.Column<string>(type: "nvarchar(30)", maxLength: 30, nullable: true),
                     PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
                     DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
@@ -3513,6 +3516,12 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                 schema: "dbo",
                 table: "RCD_CashOperations",
                 column: "ReceiptId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_RCD_CashOperations_RefundPaymentOrderPublicId",
+                schema: "dbo",
+                table: "RCD_CashOperations",
+                column: "RefundPaymentOrderPublicId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_RCD_CashOperations_ReleasedByUserId",

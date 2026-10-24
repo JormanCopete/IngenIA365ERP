@@ -270,6 +270,10 @@ public sealed class ResultadoDeOrdenesDeRecaudo(IApplicationDbContext db, ICerro
                               join s in db.PayerCreditBalances.AsNoTracking() on m.PayerCreditBalanceId equals s.Id
                               where m.DocumentPublicId != null && paymentOrderPublicIds.Contains(m.DocumentPublicId.Value)
                               select s.PersonId).Distinct().ToListAsync(ct);
+        // El pagador del dinero retenido que se devolvía por la orden (custodia, US14).
+        personas = personas.Union(await db.CashOperations.AsNoTracking()
+            .Where(o => o.RefundPaymentOrderPublicId != null && paymentOrderPublicIds.Contains(o.RefundPaymentOrderPublicId.Value))
+            .Select(o => o.PayerPersonId).ToListAsync(ct)).Distinct().ToList();
         if (personas.Count > 0) await cerrojo.BloquearPagadoresAsync(personas.Order().ToList(), ct);
         // US6 (fase 11): la partida devuelta al consignante por la orden (nivel 6).
         var partidas = await db.UnidentifiedItemResolutions.AsNoTracking()
@@ -292,6 +296,7 @@ public sealed class ResultadoDeOrdenesDeRecaudo(IApplicationDbContext db, ICerro
     {
         ValidarResultado(paymentOrderPublicId, outcome);
         if (await InformarPartidaAsync(paymentOrderPublicId, outcome, reason, ct)) return;
+        if (await InformarCustodiaAsync(paymentOrderPublicId, outcome, occurredOn, reason, ct)) return;
         var movimiento = await db.PayerCreditBalanceMovements.AsNoTracking()
             .Where(m => m.DocumentPublicId == paymentOrderPublicId && m.Kind == PayerCreditBalanceMovementKind.RefundedByOrder).OrderByDescending(m => m.Id)
             .FirstOrDefaultAsync(ct);
@@ -356,6 +361,42 @@ public sealed class ResultadoDeOrdenesDeRecaudo(IApplicationDbContext db, ICerro
             DocumentNumber = devolucion.DocumentNumber, ByUserId = devolucion.ByUserId, At = reloj.UtcNow,
             Note = string.IsNullOrWhiteSpace(reason) ? $"Orden {outcome}" : $"Orden {outcome}: {reason}",
         });
+        return true;
+    }
+
+    /// <summary>
+    /// La devolución del dinero retenido en custodia (US14, <c>RefundWithheldMoneyByOrderCommand</c>; pendiente de la fase 15 cerrado el 2026-10-24): «girada» la deja
+    /// como está; «rechazada», «cheque no cobrado» o «anulada» <b>reabre la custodia</b> —la operación vuelve a <c>Withheld</c>, sin liberación, para que el oficial la
+    /// libere o la devuelva otra vez— y emite <c>DevolucionNoGirada</c> del puente de la devolución a <c>CustodiaPorLista</c>, con la liberación como relacionado, simétrico
+    /// al saldo a favor. Repetir el mismo resultado no hace nada (la orden ya no está en la operación). Devuelve si la orden era de una custodia.
+    /// </summary>
+    private async Task<bool> InformarCustodiaAsync(Guid orden, string outcome, DateOnly occurredOn, string? reason, CancellationToken ct)
+    {
+        var operacion = await db.CashOperations.FirstOrDefaultAsync(o => o.RefundPaymentOrderPublicId == orden, ct);
+        if (operacion is null) return false;
+        await auditoria.AgregarAsync("Receipts.Compliance.RefundOrderResult", "CashOperation", operacion.PublicId, null, new { order = orden, outcome }, ct);
+        if (outcome == "Disbursed") return true;
+        var liberacion = operacion.RefundReleasePublicId ?? orden;
+        var numero = operacion.RefundReleaseNumber ?? string.Empty;
+        var custodia = await Compliance.CumplimientoDeCaja.CustodiaAsync(db, operacion, ct);
+        operacion.Status = CashOperationState.Withheld;
+        operacion.ReleasedByUserId = null;
+        operacion.ReleasedAt = null;
+        operacion.RefundPaymentOrderPublicId = null;
+        operacion.RefundReleasePublicId = null;
+        operacion.RefundReleaseNumber = null;
+        if (emision is not null && custodia is not null)
+        {
+            var sesion = await db.ReceiptsCashSessions.AsNoTracking().FirstAsync(s => s.Id == operacion.CashSessionId, ct);
+            var oficina = await (from c in db.CashBoxes.AsNoTracking()
+                                 join p in db.CollectionPoints.AsNoTracking() on c.CollectionPointId equals p.Id
+                                 where c.Id == sesion.CashBoxId
+                                 select p.BranchId).FirstAsync(ct);
+            var pagador = await db.People.AsNoTracking().IgnoreQueryFilters().Where(p => p.Id == operacion.PayerPersonId).Select(p => (Guid?)p.PublicId).FirstOrDefaultAsync(ct);
+            await emision.DevolucionNoGiradaAsync(Guid.NewGuid(), numero, orden, numero, outcome, EmisionDeRecaudo.VuelveALaCustodia, RolesDeRecaudo.CustodiaPorLista, pagador,
+                custodia.Amount, occurredOn, reason, oficina, null,
+                new IngenIA365ERP.Application.Common.Integration.DocumentoRelacionado(liberacion, EmisionDeRecaudo.ClaseCustodia, numero), ct);
+        }
         return true;
     }
 

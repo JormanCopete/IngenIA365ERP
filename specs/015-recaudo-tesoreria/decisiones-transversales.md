@@ -420,6 +420,7 @@ Lo que tasks.md marcaba **(nuevo)** y lo que trajeron el `/speckit-analyze` y la
 | Nombre | Qué | Dónde |
 |---|---|---|
 | `Sarlaft.PagadorTerceroFrecuente.Titulares` (3) · `Sarlaft.ConsignanteRepetido.Partidas` (2) | los dos umbrales de señales, parámetros `RCD` con vigencia «pendiente de validar» (P7); reemplazan a las constantes de `RegistroDeEfectivo` y `AntiguedadDeRecaudo` | `ParametrosDeRecaudoYTesoreria`, data-model §23 |
+| `CashOperation.{RefundPaymentOrderPublicId, RefundReleasePublicId, RefundReleaseNumber}` · `ResultadoDeOrdenesDeRecaudo.InformarCustodiaAsync` · `EmisionDeRecaudo.VuelveALaCustodia` (`ComplianceCustody`) · evento `Receipts.Compliance.RefundOrderResult` | la devolución no girada del dinero retenido reabre la custodia | `RCD_CashOperations` (par `RecaudoNucleo`), `CreditBalanceCommands.cs` |
 | `EmisionDeTesoreria.ValidacionPreviaAsync` · `EmisionDeTesoreria.PoliticaBloquear` · `Treasury.Prevalidation.NotPostable` (`ErroresDeTesoreria.NoContabilizable`) | la validación previa de las pantallas de Tesorería | `Treasury/Accounting/EmisionDeTesoreria.ValidacionPrevia.cs`, `ErroresDeTesoreria.cs` |
 
 ## 3. Decisiones transversales

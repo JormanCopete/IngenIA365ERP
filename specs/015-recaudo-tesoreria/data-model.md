@@ -296,6 +296,7 @@ Recaudo sobre la misma persona.
 | `CustodyMovementId?` | FK | dinero retenido en custodia (lista no vinculante con retención) |
 | `ReleasedBy?` · `ReleasedAt?` | | liberación por el oficial |
 | `ReceiptId?` | FK | al confirmar |
+| `RefundPaymentOrderPublicId?` · `RefundReleasePublicId?` · `RefundReleaseNumber?` | Guid · Guid · varchar(30) | la orden con que se devuelve el dinero retenido y su liberación; se vacían si la orden no se gira y la custodia se reabre **(nuevo, 2026-10-24)** |
 
 No es H: cambia mientras prepara. Un `Blocked` no admite medios ni confirmación (`Receipts.Compliance.BindingListMatch`).
 

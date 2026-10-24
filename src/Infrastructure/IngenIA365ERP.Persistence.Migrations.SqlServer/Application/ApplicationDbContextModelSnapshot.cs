@@ -57064,6 +57064,16 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.Property<long?>("ReceiptId")
                         .HasColumnType("bigint");
 
+                    b.Property<Guid?>("RefundPaymentOrderPublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("RefundReleaseNumber")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<Guid?>("RefundReleasePublicId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<DateTime?>("ReleasedAt")
                         .HasColumnType("datetime2");
 
@@ -57115,6 +57125,9 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
 
                     b.HasIndex("ReceiptId")
                         .HasDatabaseName("IX_RCD_CashOperations_ReceiptId");
+
+                    b.HasIndex("RefundPaymentOrderPublicId")
+                        .HasDatabaseName("IX_RCD_CashOperations_RefundPaymentOrderPublicId");
 
                     b.HasIndex("ReleasedByUserId");
 

@@ -17,9 +17,10 @@ public sealed partial class EmisionDeRecaudo
     /// <summary>A dónde vuelve el dinero (<see cref="DevolucionNoGiradaV1.ReturnsTo"/>).</summary>
     public const string VuelveAlSaldo = "PayerCreditBalance";
     public const string VuelveALaPartida = "UnidentifiedItem";
+    public const string VuelveALaCustodia = "ComplianceCustody";
 
     /// <param name="origen">El documento del rechazo (el movimiento o la resolución que lo registró en Recaudo).</param>
-    /// <param name="rolDeOrigen">El rol que recibe el dinero de vuelta (<c>SaldoAFavorDePagadores</c>, <c>SaldoDePagadurias</c>, <c>PartidasPorIdentificar</c>).</param>
+    /// <param name="rolDeOrigen">El rol que recibe el dinero de vuelta (<c>SaldoAFavorDePagadores</c>, <c>SaldoDePagadurias</c>, <c>PartidasPorIdentificar</c>, <c>CustodiaPorLista</c>).</param>
     public async Task<IntegrationMessage> DevolucionNoGiradaAsync(Guid origen, string numero, Guid ordenPublicId, string numeroDeOrden, string resultado, string vuelveA,
         string rolDeOrigen, Guid? beneficiario, decimal valor, DateOnly fecha, string? motivo, int branchId, Guid? cuentaPropia, DocumentoRelacionado original,
         CancellationToken ct)

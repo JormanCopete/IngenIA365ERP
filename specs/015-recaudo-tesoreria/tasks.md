@@ -1235,7 +1235,7 @@ decisiones-transversales §2.7:
   `POST …/cash-operations/{id}/withhold`, nuevo), porque un fallo de la confirmación revierte todo; el efectivo entra a la sesión como `Custody`. La liberación
   (`ReleaseWithheldOperationCommand`) la hace otra persona con soporte y sesión abierta (`CustodyRelease`; la operación queda liberada en `ReleasedAt` y la confirmación ya no
   la retiene). `RefundWithheldMoneyByOrderCommand` pide la orden a Tesorería con la clase nueva `WithheldMoneyRefund` (agregada a `OrdenesDePagoDeTesoreria.ClasesDeRecaudo`) y
-  el efectivo sigue en la caja hasta la remesa; el rechazo de esa orden todavía no reabre la custodia. `SubmitSourceOfFundsDeclarationCommand` no se creó: ya existe como
+  el efectivo sigue en la caja hasta la remesa; el rechazo de esa orden reabre la custodia desde el 2026-10-24 (nota de la fase 16). `SubmitSourceOfFundsDeclarationCommand` no se creó: ya existe como
   `DeclareSourceOfFundsCommand` (fase 6).
 - **T0241**: `RegistroDeEfectivo` escribe en la transacción del recibo (`ConfirmacionDeRecibo`) y de la anulación (`ApproveReceiptVoidingCommand`), los dos con un parámetro
   opcional para no tocar a quien los construye; las alertas se deduplican por persona, señal y mes. `ListCashTransactionsQuery` y `ListComplianceSignalsQuery` dejan su
@@ -1365,6 +1365,12 @@ decisiones-transversales §2.7:
 - **`PuenteDeDevolucion` (pendiente de las fases 10 y 11)**: el hecho nuevo `DevolucionNoGirada` v1 (`DNG`) lo emite `ResultadoDeOrdenesDeRecaudo` cuando Tesorería informa
   rechazada, anulada o con cheque no cobrado la devolución de un saldo a favor, de una pagaduría, de Cartera o de una partida: `PuenteDeDevolucion` → el rol de origen, con
   `Related` = el hecho de la devolución. La devolución del dinero retenido en custodia sigue sin reabrir la custodia (fase 15).
+  **Cerrado el 2026-10-24 (pendiente A3)**: `RefundWithheldMoneyByOrderCommand` deja en la operación la orden, la liberación y su número
+  (`RCD_CashOperations.RefundPaymentOrderPublicId`, `RefundReleasePublicId`, `RefundReleaseNumber`, con índice por la orden; agregadas al par `RecaudoNucleo`, sin
+  regenerar los otros: sus `.Designer` y el snapshot llevan el mismo bloque, `has-pending-model-changes` «No changes» en los dos motores); y
+  `ResultadoDeOrdenesDeRecaudo.InformarCustodiaAsync` con «rechazada», «anulada» o «cheque no cobrado» reabre la custodia (la operación vuelve a `Withheld`, sin
+  liberación ni orden, para liberarla o devolverla otra vez) y emite `DevolucionNoGirada` de `PuenteDeDevolucion` a `CustodiaPorLista` (`ReturnsTo = ComplianceCustody`),
+  con la liberación como relacionado; «girada» la deja abandonada; repetir el resultado no hace nada. Pruebas en `ListasEnLaCajaTests`, escritas, sin correr.
 - **T0268**: regenerados en orden los pares `RecaudoNucleo`, `TesoreriaNucleo` (con `TES_LendingDisbursementFiles`, `…FileOrders` y la FK de
   `TES_PaymentOrders.LendingDisbursementFileId`) e `IntegracionContableDeRecaudoYTesoreria` (las seis tablas `ACC_` nuevas y `ACC_OwnBankAccountLinks`: siete);
   `check-migration-parity.ps1` en par (Admin 15, Application 66) y `has-pending-model-changes` «No changes» en los dos motores. Los nombres de FK largos los recorta EF

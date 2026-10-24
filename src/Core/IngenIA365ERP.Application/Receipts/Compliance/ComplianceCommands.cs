@@ -246,6 +246,9 @@ public sealed class RefundWithheldMoneyByOrderCommandHandler(
         operacion.Status = CashOperationState.Abandoned;
         operacion.ReleasedByUserId = usuario;
         operacion.ReleasedAt = reloj.UtcNow;
+        operacion.RefundPaymentOrderPublicId = orden.PaymentOrderPublicId;
+        operacion.RefundReleasePublicId = liberacion;
+        operacion.RefundReleaseNumber = numero.Length <= 30 ? numero : numero[..30];
         await emision.CustodiaLiberadaAsync(liberacion, numero, sesion, operacion, custodia.Amount, devolucion: true, orden.PaymentOrderPublicId, request.SupportAttachmentPublicId,
             hoy, tipo.Code, custodia.FromMeansId, ct);
         await auditoria.AgregarAsync("Receipts.Compliance.RefundedByOrder", "CashOperation", operacion.PublicId, null,

@@ -37,6 +37,8 @@ public class CashOperationConfiguration : IEntityTypeConfiguration<CashOperation
         builder.HasIndex(e => e.CashSessionId).HasDatabaseName($"IX_{Tabla}_CashSessionId");
         builder.HasIndex(e => e.PayerPersonId).HasDatabaseName($"IX_{Tabla}_PayerPersonId");
         builder.HasIndex(e => e.ReceiptId).HasDatabaseName($"IX_{Tabla}_ReceiptId");
+        builder.Property(e => e.RefundReleaseNumber).HasMaxLength(30);
+        builder.HasIndex(e => e.RefundPaymentOrderPublicId).HasDatabaseName($"IX_{Tabla}_RefundPaymentOrderPublicId");
     }
 }
 

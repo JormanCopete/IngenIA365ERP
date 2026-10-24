@@ -57,6 +57,17 @@ public class CashOperation : AuditableEntity
     public long? ReceiptId { get; set; }
 
     public int? SourceOfFundsDeclarationId { get; set; }
+
+    /// <summary>
+    /// La orden de pago con que el oficial pidió devolver el dinero retenido (US14, <c>RefundWithheldMoneyByOrderCommand</c>), su liberación (el documento del hecho
+    /// <c>CustodiaLiberada</c>) y su número. Si Tesorería informa la orden rechazada, anulada o con cheque no cobrado, la custodia se reabre (la operación vuelve a
+    /// <c>Withheld</c>) y estos tres se vacían, simétrico a <c>DevolucionNoGirada</c> con el saldo a favor (pendiente de la fase 15, 2026-10-24). (nuevo)
+    /// </summary>
+    public Guid? RefundPaymentOrderPublicId { get; set; }
+
+    public Guid? RefundReleasePublicId { get; set; }
+
+    public string? RefundReleaseNumber { get; set; }
 }
 
 /// <summary>

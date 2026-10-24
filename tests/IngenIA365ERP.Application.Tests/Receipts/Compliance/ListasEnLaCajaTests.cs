@@ -4,6 +4,7 @@ using IngenIA365ERP.Application.Common.Integration.Treasury;
 using IngenIA365ERP.Application.Receipts.CashDesk;
 using IngenIA365ERP.Application.Receipts.Common;
 using IngenIA365ERP.Application.Receipts.Compliance;
+using IngenIA365ERP.Application.Receipts.CreditBalances;
 using IngenIA365ERP.Application.Tests.Receipts.CashDesk;
 using IngenIA365ERP.Domain.Entities.Receipts.Configuration;
 using IngenIA365ERP.Domain.Enums.Receipts;
@@ -104,5 +105,58 @@ public class ListasEnLaCajaTests
         r.Value.Status.Should().Be(CashOperationState.Abandoned);
         await ordenes.Received(1).EmitirAsync(Arg.Is<SolicitudDeOrdenDePago>(s => s.OrderKind == RefundWithheldMoneyByOrderCommandHandler.ClaseDeOrden && s.NetAmount == 100_000m),
             Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>
+    /// Pendiente de la fase 15 (2026-10-24): si Tesorería rechaza, anula o no cobra la orden de la devolución, la custodia se reabre —la operación vuelve a
+    /// <c>Withheld</c> sin liberación— y sale <c>DevolucionNoGirada</c> del puente a <c>CustodiaPorLista</c>, simétrico al saldo a favor; repetir el resultado no hace
+    /// nada y «girada» deja la operación como está.
+    /// </summary>
+    [Theory]
+    [InlineData("Rejected")]
+    [InlineData("Voided")]
+    [InlineData("CheckNotCashed")]
+    public async Task La_devolucion_no_girada_reabre_la_custodia(string resultado)
+    {
+        _k.C.E.Parametro(ParametrosDeRecaudoYTesoreria.SarlaftListasNoVinculantesEfecto, CumplimientoDeCaja.EfectoRetiene);
+        var op = await OperacionAsync(ScreeningOutcomeR.NonBindingMatch);
+        await Retener().Handle(new WithholdCashOperationCommand(op.PublicId) { OperationKey = Guid.NewGuid() }, default);
+        var orden = Guid.NewGuid();
+        var ordenes = Substitute.For<IOrdenesDePagoDeTesoreria>();
+        ordenes.EmitirAsync(Arg.Any<SolicitudDeOrdenDePago>(), Arg.Any<CancellationToken>()).Returns(new OrdenDePagoEmitidaDto(orden, "OP-1", "Ready"));
+        await new RefundWithheldMoneyByOrderCommandHandler(_k.C.E.Db, _k.C.E.Alcance, _k.C.E.Actor, _k.C.Cerrojo, _k.C.Numerador, ordenes, _k.C.Emision, Auditoria,
+            _k.C.E.Reloj).Handle(new RefundWithheldMoneyByOrderCommand(op.PublicId, Guid.NewGuid()) { OperationKey = Guid.NewGuid() }, default);
+
+        var puerto = new ResultadoDeOrdenesDeRecaudo(_k.C.E.Db, _k.C.Cerrojo, Auditoria, _k.C.E.Reloj, _k.C.Emision);
+        await puerto.TomarCerrojosAsync([orden], default);
+        await puerto.InformarAsync(orden, resultado, EscenarioDeRecaudo.Hoy, "Cuenta inexistente", default);
+        await _k.C.E.Db.SaveChangesAsync();
+        await puerto.InformarAsync(orden, resultado, EscenarioDeRecaudo.Hoy, "Cuenta inexistente", default);
+        await _k.C.E.Db.SaveChangesAsync();
+
+        var operacion = await _k.C.E.Db.CashOperations.SingleAsync(o => o.PublicId == op.PublicId);
+        operacion.Status.Should().Be(CashOperationState.Withheld, "la custodia se reabre para liberarla o devolverla otra vez");
+        operacion.ReleasedAt.Should().BeNull();
+        operacion.RefundPaymentOrderPublicId.Should().BeNull();
+        (await _k.C.E.Db.IntegrationMessages.CountAsync(m => m.Type == DevolucionNoGiradaV1.Type)).Should().Be(1, "repetir el resultado no hace nada");
+    }
+
+    [Fact]
+    public async Task La_devolucion_girada_deja_la_operacion_abandonada()
+    {
+        _k.C.E.Parametro(ParametrosDeRecaudoYTesoreria.SarlaftListasNoVinculantesEfecto, CumplimientoDeCaja.EfectoRetiene);
+        var op = await OperacionAsync(ScreeningOutcomeR.NonBindingMatch);
+        await Retener().Handle(new WithholdCashOperationCommand(op.PublicId) { OperationKey = Guid.NewGuid() }, default);
+        var orden = Guid.NewGuid();
+        var ordenes = Substitute.For<IOrdenesDePagoDeTesoreria>();
+        ordenes.EmitirAsync(Arg.Any<SolicitudDeOrdenDePago>(), Arg.Any<CancellationToken>()).Returns(new OrdenDePagoEmitidaDto(orden, "OP-1", "Ready"));
+        await new RefundWithheldMoneyByOrderCommandHandler(_k.C.E.Db, _k.C.E.Alcance, _k.C.E.Actor, _k.C.Cerrojo, _k.C.Numerador, ordenes, _k.C.Emision, Auditoria,
+            _k.C.E.Reloj).Handle(new RefundWithheldMoneyByOrderCommand(op.PublicId, Guid.NewGuid()) { OperationKey = Guid.NewGuid() }, default);
+
+        await new ResultadoDeOrdenesDeRecaudo(_k.C.E.Db, _k.C.Cerrojo, Auditoria, _k.C.E.Reloj, _k.C.Emision).InformarAsync(orden, "Disbursed", EscenarioDeRecaudo.Hoy, null, default);
+        await _k.C.E.Db.SaveChangesAsync();
+
+        (await _k.C.E.Db.CashOperations.SingleAsync(o => o.PublicId == op.PublicId)).Status.Should().Be(CashOperationState.Abandoned);
+        (await _k.C.E.Db.IntegrationMessages.AnyAsync(m => m.Type == DevolucionNoGiradaV1.Type)).Should().BeFalse();
     }
 }

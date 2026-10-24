@@ -2678,6 +2678,9 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     ReleasedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
                     ReceiptId = table.Column<long>(type: "bigint", nullable: true),
                     SourceOfFundsDeclarationId = table.Column<int>(type: "integer", nullable: true),
+                    RefundPaymentOrderPublicId = table.Column<Guid>(type: "uuid", nullable: true),
+                    RefundReleasePublicId = table.Column<Guid>(type: "uuid", nullable: true),
+                    RefundReleaseNumber = table.Column<string>(type: "character varying(30)", maxLength: 30, nullable: true),
                     xmin = table.Column<uint>(type: "xid", rowVersion: true, nullable: false),
                     PublicId = table.Column<Guid>(type: "uuid", nullable: false),
                     IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
@@ -3514,6 +3517,12 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 schema: "dbo",
                 table: "RCD_CashOperations",
                 column: "ReceiptId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_RCD_CashOperations_RefundPaymentOrderPublicId",
+                schema: "dbo",
+                table: "RCD_CashOperations",
+                column: "RefundPaymentOrderPublicId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_RCD_CashOperations_ReleasedByUserId",
