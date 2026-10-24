@@ -19,10 +19,11 @@ public class ReceiptsActivationEndpoints : ICarterModule
     public void AddRoutes(IEndpointRouteBuilder app)
     {
         var g = ReceiptsGroup.Grupo(app, "/activation", "Recaudo Activación");
-        g.MapGet("/requirements", async (ISender s, CancellationToken ct) => await s.Send(new Application.Receipts.Activation.GetReceiptsActivationRequirementsQuery(), ct))
+        g.MapGet("/requirements", async (bool? minimal, DateOnly? cutoffDate, ISender s, CancellationToken ct) =>
+                await s.Send(new Application.Receipts.Activation.GetReceiptsActivationRequirementsQuery(minimal ?? false, cutoffDate), ct))
             .WithName("Receipts_Activation_Requirements").RequirePermission(new AlgunPermiso("Receipts.Activation.View", "Receipts.Activation.Activate"));
         g.MapPost("/", async (ActivacionRequest? body, HttpContext http, ISender s, CancellationToken ct) =>
-                await s.Send(new Application.Receipts.Activation.ActivateReceiptsCommand(body?.CutoffDate) { OperationKey = http.ClaveDeOperacion() }, ct))
+                await s.Send(new Application.Receipts.Activation.ActivateReceiptsCommand(body?.CutoffDate, body?.Minimal ?? false) { OperationKey = http.ClaveDeOperacion() }, ct))
             .WithName("Receipts_Activation_Activate").ConClaveDeOperacion().RequirePermission("Receipts.Activation.Activate");
 
         // Feature 015, US13 (fase 18, T0289; api.md §14): el cuadre de apertura, las plantillas de puesta en marcha y las cifras de referencia.
@@ -53,7 +54,8 @@ public class ReceiptsActivationEndpoints : ICarterModule
                 new ImportReceiptsGoLiveTemplateCommand(http.Request.RouteValues["code"]?.ToString() ?? string.Empty, modo, archivo, motivo) { OperationKey = clave });
     }
 
-    public sealed record ActivacionRequest(DateOnly? CutoffDate);
+    /// <summary>Fase 19 (T0304): la activación completa por defecto; <c>minimal</c> sólo fuera de producción (el paralelo de QA).</summary>
+    public sealed record ActivacionRequest(DateOnly? CutoffDate, bool? Minimal = null);
 
     public sealed record CuadreProvisionalRequest(string Reason, DateOnly DeadlineOn, DateOnly? CutoffDate);
 

@@ -147,20 +147,27 @@ public sealed class RequisitosDeActivacion(
                 "Contabilidad", "/contabilidad/periodos", "Accounting.Periods.Reopen"));
 
         var participantes = await registro.QueCuentanAsync(fechaDeActivacion, ct);
-        var recaudador = participantes.Any(p => p.Role == IntegrationParticipantRole.ObligationsCollector
+        // Feature 015, US9 (T0305; SC-001): el recaudador y la tesorería son los módulos reales —Recaudo (REC) y Tesorería (TES), registrados por su propia
+        // activación—; el requisito lo dice y, si falta, manda a activarlos. Fuera de producción todavía cuentan los dobles (su rama la quita T0308).
+        var recaudadores = participantes.Where(p => p.Role == IntegrationParticipantRole.ObligationsCollector
             && (p.Class == IntegrationParticipantClass.Receipts || (!ambiente.EsProduccion && p.Class == IntegrationParticipantClass.Test))
-            && p.Adopciones.Any(a => a.Contrato == ContratosDeIntegracion.ProveedorDeObligaciones));
-        requisitos.Add(recaudador
-            ? Cumple(RecaudadorRegistrado, "Hay un recaudador de Recaudo en el registro.")
-            : Falta(RecaudadorRegistrado, "registrar el recaudador de Recaudo en el registro de integración", "Core",
-                "/admin/participantes-de-integracion", "Core.IntegrationParticipants.Manage"));
+            && p.Adopciones.Any(a => a.Contrato == ContratosDeIntegracion.ProveedorDeObligaciones)).ToList();
+        var recaudoReal = recaudadores.Any(p => p.Class == IntegrationParticipantClass.Receipts && !p.IsTestDouble);
+        requisitos.Add(recaudadores.Count > 0
+            ? Cumple(RecaudadorRegistrado, recaudoReal
+                ? "Recaudo (REC) está activado y registrado como recaudador."
+                : "El recaudador registrado es el de prueba: active Recaudo para que lo reemplace.")
+            : Falta(RecaudadorRegistrado, "activar Recaudo, que registra su recaudador en el mismo guardado", "Recaudo",
+                "/recaudo/activacion", "Receipts.Activation.Activate"));
 
         var tesoreria = await registro.DestinoAsync(IntegrationDestinations.Treasury, fechaDeActivacion, ct);
         requisitos.Add(tesoreria is not null
                        && (!ambiente.EsProduccion || !tesoreria.IsTestDouble) && tesoreria.Adopciones.Any(a => a.Contrato == OrdenDeGiroEmitidaV1.Type)
-            ? Cumple(TesoreriaRegistrada, "Hay un destino de Tesorería en el registro.")
-            : Falta(TesoreriaRegistrada, "registrar el destino de Tesorería en el registro de integración", "Core",
-                "/admin/participantes-de-integracion", "Core.IntegrationParticipants.Manage"));
+            ? Cumple(TesoreriaRegistrada, tesoreria.IsTestDouble
+                ? "El destino de Tesorería registrado es el de prueba: active Tesorería para que lo reemplace."
+                : "Tesorería (TES) está activada y registrada como destino de los giros.")
+            : Falta(TesoreriaRegistrada, "activar Tesorería, que registra su destino en el mismo guardado", "Tesorería",
+                "/tesoreria/activacion", "Treasury.Activation.Activate"));
 
         var (perdida, sinModeloObligatorio) = await PerdidaEsperadaAsync(fechaDeActivacion, ct);
         requisitos.Add(perdida);

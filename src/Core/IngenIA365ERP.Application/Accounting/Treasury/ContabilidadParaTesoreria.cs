@@ -121,4 +121,8 @@ public sealed class ContabilidadParaTesoreria(IApplicationDbContext db, IDateTim
             .OrderByDescending(l => l.ValidFrom)
             .Select(l => (int?)l.ChartOfAccountId)
             .FirstOrDefaultAsync(ct);
+
+    /// <summary>La completitud de la matriz de Tesorería (fase 19, T0303).</summary>
+    public async Task<CompletitudContableDeModuloDto> CompletitudDeLaMatrizAsync(DateOnly fecha, CancellationToken ct) =>
+        await Receipts.CompletitudDeModulo.LeerAsync(sender, Posting.ModuloContable.Tesoreria, await EstadoDelPeriodoAsync(fecha, ct), fecha, ct);
 }

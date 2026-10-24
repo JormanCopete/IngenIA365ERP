@@ -16,10 +16,11 @@ public class TreasuryActivationEndpoints : ICarterModule
     public void AddRoutes(IEndpointRouteBuilder app)
     {
         var g = TreasuryGroup.Grupo(app, "/activation", "Tesorería Activación");
-        g.MapGet("/requirements", async (ISender s, CancellationToken ct) => await s.Send(new GetTreasuryActivationRequirementsQuery(), ct))
+        g.MapGet("/requirements", async (bool? minimal, DateOnly? cutoffDate, bool? offersChecks, ISender s, CancellationToken ct) =>
+                await s.Send(new GetTreasuryActivationRequirementsQuery(minimal ?? false, cutoffDate, offersChecks ?? false), ct))
             .WithName("Treasury_Activation_Requirements").RequirePermission(new AlgunPermiso("Treasury.Activation.View", "Treasury.Activation.Activate"));
         g.MapPost("/", async (ActivacionRequest? body, HttpContext http, ISender s, CancellationToken ct) =>
-                await s.Send(new ActivateTreasuryCommand(body?.CutoffDate) { OperationKey = http.ClaveDeOperacion() }, ct))
+                await s.Send(new ActivateTreasuryCommand(body?.CutoffDate, body?.Minimal ?? false, body?.OffersChecks ?? false) { OperationKey = http.ClaveDeOperacion() }, ct))
             .WithName("Treasury_Activation_Activate").ConClaveDeOperacion().RequirePermission("Treasury.Activation.Activate");
 
         // Feature 015, US13 (fase 18, T0289; api.md §14): el cuadre de apertura, las plantillas de puesta en marcha (y la de cuentas de personas) y las cifras.
@@ -55,7 +56,8 @@ public class TreasuryActivationEndpoints : ICarterModule
     private static DefinicionDePlantilla? Definicion(HttpContext http) =>
         Codigo(http) == PlantillaDeCuentasBancariasDePersonas.Clave ? PlantillaDeCuentasBancariasDePersonas.Definicion : PlantillasDePuestaEnMarchaDeTesoreria.Por(Codigo(http));
 
-    public sealed record ActivacionRequest(DateOnly? CutoffDate);
+    /// <summary>Fase 19 (T0304): la activación completa por defecto; <c>minimal</c> sólo fuera de producción; <c>offersChecks</c> si la cooperativa gira cheques.</summary>
+    public sealed record ActivacionRequest(DateOnly? CutoffDate, bool? Minimal = null, bool? OffersChecks = null);
 
     public sealed record CuadreProvisionalRequest(string Reason, DateOnly DeadlineOn, DateOnly? CutoffDate);
 

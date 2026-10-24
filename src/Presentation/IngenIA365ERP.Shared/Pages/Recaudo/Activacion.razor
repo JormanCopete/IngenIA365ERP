@@ -1,0 +1,119 @@
+@page "/recaudo/activacion"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Recaudo
+@inject ActivacionDeModuloClient ActivacionApi
+@inject INotificationService Notification
+
+<PageTitle>Activación de Recaudo - IngenIA365ERP</PageTitle>
+
+@* Feature 015, US9 (T0304; FR-147, FR-150, FR-159, FR-176, FR-185; api.md §14): la activación completa de Recaudo. La lista de requisitos verificables —los básicos
+   (punto, caja con cajero, efectivo y transferencia, tipos de documento) y los de la activación completa (cuadre de la puesta en marcha definitivo o provisional,
+   cajero y supervisor con sus permisos, mes contable abierto, matriz contable completa con Contabilidad iniciada, hora de corte antes del ciclo de Cartera)—, el
+   cuadre que la activación toma y activar. La activación registra en el mismo guardado a Recaudo como recaudador (REC) y como destino de sus mensajes; desde ese
+   día Cartera y Captaciones ven en verde a su recaudador. La lista de salida en vivo (go/no-go) la suma la fase 21. *@
+<PermissionGate Required="Receipts.Activation.View" AnyOf="@(new[] { "Receipts.Activation.Activate" })" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Activación de Recaudo</h3>
+        <div class="toolbar">
+            <label class="campo">Fecha de corte <input type="date" class="e-input" @bind="_corte" /></label>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Revisar requisitos</SfButton>
+        </div>
+    </div>
+    <p class="texto-apoyo">
+        Recaudo se activa desde el día siguiente al corte de la puesta en marcha, con el mes contable abierto. Sin fecha de corte se toma la del último cuadre
+        registrado (definitivo, o provisional con su aprobación y fecha límite). Al activar, Recaudo queda registrado como recaudador de Cartera y Captaciones.
+    </p>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Revisando los requisitos…">
+        @if (_estado is { } e)
+        {
+            <div class="kpi-grid">
+                <div class="kpi-card"><span class="kpi-label">Estado</span><span class="kpi-value">@(e.Status == "Active" ? "Activo" : "Sin activar")</span></div>
+                <div class="kpi-card"><span class="kpi-label">Rige desde</span><span class="kpi-value">@(e.ActivatedOn?.ToString("dd/MM/yyyy") ?? e.CutoffDate?.AddDays(1).ToString("dd/MM/yyyy") ?? "—")</span></div>
+                <div class="kpi-card"><span class="kpi-label">Cuadre</span><span class="kpi-value">@Cuadre(e.OpeningSquareKind)</span></div>
+                <div class="kpi-card"><span class="kpi-label">Corte</span><span class="kpi-value">@(e.CutoffDate?.ToString("dd/MM/yyyy") ?? "—")</span></div>
+            </div>
+            @if (e.Status == "Active")
+            {
+                <p class="aviso aviso-ok">Recaudo está activo@(e.IsMinimal ? " con la activación mínima del paralelo" : string.Empty). Recaudo es el recaudador registrado de Cartera y Captaciones.</p>
+            }
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Requisito</th><th>Estado</th><th>Detalle</th></tr></thead>
+                    <tbody>
+                        @foreach (var r in e.Requirements)
+                        {
+                            <tr class="@(r.Met ? "" : "fila-alerta")">
+                                <td>@Nombre(r.Code)</td><td>@(r.Met ? "Cumple" : "Falta")</td><td>@r.Description</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            @if (e.Status != "Active")
+            {
+                <PermissionGate Required="Receipts.Activation.Activate">
+                    <div class="toolbar">
+                        <SfButton CssClass="e-primary" Disabled="@(!e.CanActivate || _carga.Activa)" OnClick="@ActivarAsync">Activar Recaudo</SfButton>
+                    </div>
+                </PermissionGate>
+            }
+        }
+    </IndicadorDeCarga>
+</div>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new();
+    private EstadoDeActivacionDeModuloDto? _estado;
+    private DateTime? _corte;
+    private ClaveDeOperacion _clave = new();
+
+    protected override Task OnInitializedAsync() => CargarAsync();
+
+    private static string Cuadre(string? clase) => clase switch
+    {
+        "Definitive" => "Definitivo",
+        "Provisional" => "Provisional",
+        _ => "Sin cuadre",
+    };
+
+    private static string Nombre(string codigo) => codigo switch
+    {
+        "CollectionPoint" => "Punto de recaudo",
+        "CashBoxWithCashier" => "Caja con cajero",
+        "CashMeans" => "Medio efectivo",
+        "TransferMeans" => "Medio transferencia",
+        "DocumentTypes" => "Tipos de documento",
+        "OpeningSquare" => "Cuadre de la puesta en marcha",
+        "CashierWithPermissions" => "Cajero con sus permisos",
+        "SupervisorWithPermissions" => "Supervisor con sus permisos",
+        "OpenAccountingMonth" => "Mes contable abierto",
+        "AccountingMatrixComplete" => "Matriz contable completa",
+        "CutoffBeforeLendingCycle" => "Hora de corte antes del ciclo de Cartera",
+        _ => codigo,
+    };
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await ActivacionApi.RequisitosAsync(PuestaEnMarchaClient.Recaudo, _corte is { } c ? DateOnly.FromDateTime(c) : null, false);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron revisar los requisitos de la activación."); return; }
+        _estado = r.Value;
+    }
+
+    private async Task ActivarAsync()
+    {
+        using (_carga.Iniciar())
+        {
+            var r = await ActivacionApi.ActivarAsync(PuestaEnMarchaClient.Recaudo,
+                new ActivacionDeModuloRequest(_corte is { } c ? DateOnly.FromDateTime(c) : null), _clave);
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo activar Recaudo."); return; }
+            _clave = new ClaveDeOperacion();
+            await Notification.SuccessAsync("Recaudo quedó activado y registrado como recaudador.");
+        }
+        await CargarAsync();
+    }
+}

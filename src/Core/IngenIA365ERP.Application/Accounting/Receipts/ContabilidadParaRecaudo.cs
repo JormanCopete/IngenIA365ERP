@@ -42,4 +42,20 @@ public sealed class ContabilidadParaRecaudo(
 
     public Task<IReadOnlyList<CuentaPorCobrarComercialDto>> CuentasPorCobrarComercialesAsync(Guid personPublicId, CancellationToken ct) =>
         Task.FromResult<IReadOnlyList<CuentaPorCobrarComercialDto>>([]);
+
+    /// <summary>La completitud de la matriz de Recaudo (fase 19, T0303): la misma consulta que la pantalla de completitud.</summary>
+    public async Task<CompletitudContableDeModuloDto> CompletitudDeLaMatrizAsync(DateOnly fecha, CancellationToken ct) =>
+        await CompletitudDeModulo.LeerAsync(sender, Posting.ModuloContable.Recaudo, await EstadoDelPeriodoAsync(fecha, ct), fecha, ct);
+}
+
+/// <summary>Lo común de la completitud de Recaudo y Tesorería para su activación (fase 19, T0303). (nuevo)</summary>
+public static class CompletitudDeModulo
+{
+    public static async Task<CompletitudContableDeModuloDto> LeerAsync(ISender sender, string modulo, EstadoDelPeriodoDto estado, DateOnly fecha, CancellationToken ct)
+    {
+        if (!estado.AccountingInitialized) return new CompletitudContableDeModuloDto(false, false, 100m, 0);
+        var r = await sender.Send(new GetModuleCompletenessQuery(modulo, fecha), ct);
+        if (r.IsFailure) return new CompletitudContableDeModuloDto(true, false, 0m, 0);
+        return new CompletitudContableDeModuloDto(true, r.Value.NotPosted, r.Value.Percent, r.Value.Total - r.Value.Complete);
+    }
 }

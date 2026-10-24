@@ -623,6 +623,10 @@
             <PermissionGate Required="Receipts.Imports.Run" AnyOf="@(new[] { "Receipts.Activation.View", "Receipts.Activation.Square", "Receipts.Activation.ProvisionalSquare" })">
                 <NavLink href="/recaudo/puesta-en-marcha" class="nav-subitem">Puesta en marcha</NavLink>
             </PermissionGate>
+            @* US9 (T0304): la activación completa, que registra a Recaudo como recaudador de Cartera y Captaciones. *@
+            <PermissionGate Required="Receipts.Activation.View" AnyOf="@(new[] { "Receipts.Activation.Activate" })">
+                <NavLink href="/recaudo/activacion" class="nav-subitem">Activación</NavLink>
+            </PermissionGate>
         </NavMenuGroup>
 
         @* Feature 015, US10 (T0147; FR-162): el grupo «Tesorería» nace con las cuentas bancarias propias y la ejecución de órdenes de giro. *@
@@ -668,6 +672,10 @@
             @* US13 (T0290): las plantillas, las cifras de referencia y el cuadre de apertura. *@
             <PermissionGate Required="Treasury.Imports.Run" AnyOf="@(new[] { "Treasury.Activation.View", "Treasury.Activation.Square", "Treasury.Activation.ProvisionalSquare" })">
                 <NavLink href="/tesoreria/puesta-en-marcha" class="nav-subitem">Puesta en marcha</NavLink>
+            </PermissionGate>
+            @* US9 (T0304): la activación completa, que registra a Tesorería como destino de los giros. *@
+            <PermissionGate Required="Treasury.Activation.View" AnyOf="@(new[] { "Treasury.Activation.Activate" })">
+                <NavLink href="/tesoreria/activacion" class="nav-subitem">Activación</NavLink>
             </PermissionGate>
         </NavMenuGroup>
 

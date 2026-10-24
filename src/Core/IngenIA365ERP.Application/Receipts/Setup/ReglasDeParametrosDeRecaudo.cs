@@ -22,6 +22,9 @@ public sealed class ReglasDeParametrosDeRecaudo(TimeOnly inicioDelCicloDeCartera
 
     public string Modulo => ParametrosDeRecaudoYTesoreria.ModuloRecaudo;
 
+    /// <summary>La hora de inicio del ciclo diario de Cartera con que se comprueba el corte (la activación la verifica también, fase 19, T0303).</summary>
+    public TimeOnly InicioDelCicloDeCartera => inicioDelCicloDeCartera;
+
     public Task<Result<DecisionDeReglasDeParametro>> EvaluarAsync(AltaDeParametro alta, CancellationToken ct)
     {
         if (alta.Definicion.Clave == ParametrosDeRecaudoYTesoreria.RecaudoHoraDeCorte

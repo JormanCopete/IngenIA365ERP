@@ -1,0 +1,116 @@
+@page "/tesoreria/activacion"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Recaudo
+@inject ActivacionDeModuloClient ActivacionApi
+@inject INotificationService Notification
+
+<PageTitle>Activación de Tesorería - IngenIA365ERP</PageTitle>
+
+@* Feature 015, US9 (T0304; FR-147, FR-150, FR-159, FR-213; api.md §14): la activación completa de Tesorería. Los requisitos —una cuenta de pagos vinculada, formato
+   de pagos o la forma «portal del banco», el cuadre de la puesta en marcha, la chequera si la cooperativa gira cheques, el mes contable abierto y la matriz
+   contable completa con Contabilidad iniciada—, el cuadre que toma y activar. La activación registra a Tesorería como destino de los giros (TES; nunca como
+   recaudador) en el mismo guardado. La lista de salida en vivo (go/no-go) la suma la fase 21. *@
+<PermissionGate Required="Treasury.Activation.View" AnyOf="@(new[] { "Treasury.Activation.Activate" })" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Activación de Tesorería</h3>
+        <div class="toolbar">
+            <label class="campo">Fecha de corte <input type="date" class="e-input" @bind="_corte" /></label>
+            <label class="campo-check"><input type="checkbox" @bind="_giraCheques" /> La cooperativa gira cheques</label>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Revisar requisitos</SfButton>
+        </div>
+    </div>
+    <p class="texto-apoyo">
+        Tesorería se activa desde el día siguiente al corte de la puesta en marcha, con el mes contable abierto. Sin fecha de corte se toma la del último cuadre
+        registrado (definitivo, o provisional con su aprobación y fecha límite). Al activar, Tesorería queda registrada como destino de los giros de Cartera y
+        Captaciones. Si la cooperativa gira cheques, se exige una chequera activa.
+    </p>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Revisando los requisitos…">
+        @if (_estado is { } e)
+        {
+            <div class="kpi-grid">
+                <div class="kpi-card"><span class="kpi-label">Estado</span><span class="kpi-value">@(e.Status == "Active" ? "Activo" : "Sin activar")</span></div>
+                <div class="kpi-card"><span class="kpi-label">Rige desde</span><span class="kpi-value">@(e.ActivatedOn?.ToString("dd/MM/yyyy") ?? e.CutoffDate?.AddDays(1).ToString("dd/MM/yyyy") ?? "—")</span></div>
+                <div class="kpi-card"><span class="kpi-label">Cuadre</span><span class="kpi-value">@Cuadre(e.OpeningSquareKind)</span></div>
+                <div class="kpi-card"><span class="kpi-label">Corte</span><span class="kpi-value">@(e.CutoffDate?.ToString("dd/MM/yyyy") ?? "—")</span></div>
+            </div>
+            @if (e.Status == "Active")
+            {
+                <p class="aviso aviso-ok">Tesorería está activa@(e.IsMinimal ? " con la activación mínima del paralelo" : string.Empty). Tesorería es el destino registrado de los giros.</p>
+            }
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Requisito</th><th>Estado</th><th>Detalle</th></tr></thead>
+                    <tbody>
+                        @foreach (var r in e.Requirements)
+                        {
+                            <tr class="@(r.Met ? "" : "fila-alerta")">
+                                <td>@Nombre(r.Code)</td><td>@(r.Met ? "Cumple" : "Falta")</td><td>@r.Description</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            @if (e.Status != "Active")
+            {
+                <PermissionGate Required="Treasury.Activation.Activate">
+                    <div class="toolbar">
+                        <SfButton CssClass="e-primary" Disabled="@(!e.CanActivate || _carga.Activa)" OnClick="@ActivarAsync">Activar Tesorería</SfButton>
+                    </div>
+                </PermissionGate>
+            }
+        }
+    </IndicadorDeCarga>
+</div>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new();
+    private EstadoDeActivacionDeModuloDto? _estado;
+    private DateTime? _corte;
+    private bool _giraCheques;
+    private ClaveDeOperacion _clave = new();
+
+    protected override Task OnInitializedAsync() => CargarAsync();
+
+    private static string Cuadre(string? clase) => clase switch
+    {
+        "Definitive" => "Definitivo",
+        "Provisional" => "Provisional",
+        _ => "Sin cuadre",
+    };
+
+    private static string Nombre(string codigo) => codigo switch
+    {
+        "LinkedPaymentsAccount" => "Cuenta de pagos vinculada",
+        "PaymentsFormatOrPortal" => "Formato de pagos o portal del banco",
+        "OpeningSquare" => "Cuadre de la puesta en marcha",
+        "CheckbookIfChecks" => "Chequera (si gira cheques)",
+        "OpenAccountingMonth" => "Mes contable abierto",
+        "AccountingMatrixComplete" => "Matriz contable completa",
+        _ => codigo,
+    };
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await ActivacionApi.RequisitosAsync(PuestaEnMarchaClient.Tesoreria, _corte is { } c ? DateOnly.FromDateTime(c) : null, _giraCheques);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron revisar los requisitos de la activación de Tesorería."); return; }
+        _estado = r.Value;
+    }
+
+    private async Task ActivarAsync()
+    {
+        using (_carga.Iniciar())
+        {
+            var r = await ActivacionApi.ActivarAsync(PuestaEnMarchaClient.Tesoreria,
+                new ActivacionDeModuloRequest(_corte is { } c ? DateOnly.FromDateTime(c) : null, OffersChecks: _giraCheques), _clave);
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo activar Tesorería."); return; }
+            _clave = new ClaveDeOperacion();
+            await Notification.SuccessAsync("Tesorería quedó activada y registrada como destino de los giros.");
+        }
+        await CargarAsync();
+    }
+}

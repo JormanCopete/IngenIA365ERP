@@ -41,6 +41,16 @@ public sealed record CuentaPorPagarDto(Guid DocumentPublicId, Guid PersonPublicI
 /// <summary>Un pendiente operativo que el cierre del mes contable consulta (FR-228; T1: conciliaciones abiertas, sesiones sin cerrar). (nuevo)</summary>
 public sealed record PendienteDeCierreDto(string Module, string Code, string Message, bool Blocks);
 
+/// <summary>
+/// La completitud de la matriz de un módulo para su activación (feature 015, US9, T0303; FR-150; nuevo, DT §2.7): con Contabilidad iniciada, el porcentaje de las
+/// combinaciones de la plantilla que tienen regla y cuántas faltan; con el modo de paso en «no pasa» (<see cref="NotPosted"/>) o sin Contabilidad iniciada, no se exige.
+/// </summary>
+public sealed record CompletitudContableDeModuloDto(bool AccountingInitialized, bool NotPosted, decimal Percent, int Missing)
+{
+    /// <summary>¿Cumple el requisito de FR-150?</summary>
+    public bool Cumple => !AccountingInitialized || NotPosted || Percent >= 100m;
+}
+
 /// <summary>Lo que Recaudo pregunta a Contabilidad (interfaces.md §3). (nuevo)</summary>
 public interface IContabilidadParaRecaudo
 {
@@ -55,6 +65,9 @@ public interface IContabilidadParaRecaudo
 
     /// <summary>R1.</summary>
     Task<IReadOnlyList<CuentaPorCobrarComercialDto>> CuentasPorCobrarComercialesAsync(Guid personPublicId, CancellationToken ct);
+
+    /// <summary>La completitud de la matriz de Recaudo a la fecha, para la activación (fase 19, T0303).</summary>
+    Task<CompletitudContableDeModuloDto> CompletitudDeLaMatrizAsync(DateOnly fecha, CancellationToken ct);
 }
 
 /// <summary>Lo que Tesorería pregunta a Contabilidad (interfaces.md §3). (nuevo)</summary>
@@ -84,6 +97,9 @@ public interface IContabilidadParaTesoreria
 
     /// <summary>T2.</summary>
     Task<IReadOnlyList<CuentaPorPagarDto>> CuentasPorPagarAsync(FiltroDeCuentasPorPagar filtro, CancellationToken ct);
+
+    /// <summary>La completitud de la matriz de Tesorería a la fecha, para la activación (fase 19, T0303).</summary>
+    Task<CompletitudContableDeModuloDto> CompletitudDeLaMatrizAsync(DateOnly fecha, CancellationToken ct);
 }
 
 // IDimensionesDeRecaudo e IDimensionesDeTesoreria: en IDimensionesDeRecaudoYTesoreria.cs (fase 16, T0260).

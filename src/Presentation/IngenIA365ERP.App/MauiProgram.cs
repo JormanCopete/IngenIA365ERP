@@ -105,6 +105,7 @@ namespace IngenIA365ERP.App
             builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Tesoreria.ChequesYRemesasClient>();
             builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Tesoreria.ConciliacionClient>();
             builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Recaudo.PuestaEnMarchaClient>();
+            builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Recaudo.ActivacionDeModuloClient>();
             builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Recaudo.CumplimientoClient>();
             builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Contabilidad.MatricesDeRecaudoYTesoreriaClient>();
             builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Tesoreria.ExtractosClient>();
