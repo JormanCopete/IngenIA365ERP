@@ -49,7 +49,7 @@ internal sealed class EscenarioDeTesoreria
     public IResultadoDeOrdenesDeRecaudo Recaudo { get; } = Substitute.For<IResultadoDeOrdenesDeRecaudo>();
     public EmisorDeMensajes Emisor => _emisor ??= new EmisorDeMensajes(E.Db, E.Actor, E.Reloj);
     public EmisionDeTesoreria Emision => new(E.Db, Emisor, Contabilidad, E.Lector, E.Actor);
-    public RegistroDeResultadosDelGiro Resultados => new(E.Db, E.Reloj, Emisor, Emision, Parametros, [Recaudo]);
+    public RegistroDeResultadosDelGiro Resultados => new(E.Db, E.Reloj, Emisor, Emision, Parametros, [Recaudo], Numerador);
     public SegregacionDeTesoreria Segregacion => new(E.Personas);
     public AprobacionDiferidaEnTesoreria Aprobacion => new(E.Db, Motor, E.Actor);
 

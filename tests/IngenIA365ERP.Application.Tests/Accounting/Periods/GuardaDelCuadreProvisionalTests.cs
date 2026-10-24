@@ -34,8 +34,12 @@ public class GuardaDelCuadreProvisionalTests
         return estado;
     }
 
-    private Task<Result> CerrarMarzoAsync(params IEstadoOperativoParaElCierre[] estados) =>
-        new ClosePeriodCommandHandler(_c.D.Db, _c.D.Clock, _c.D.User, _c.Emisor, estados).Handle(new ClosePeriodCommand(2026, 3), default);
+    private Task<Result> CerrarMarzoAsync(params IEstadoOperativoParaElCierre[] estados) => CerrarMarzoAsync(false, estados);
+
+    // T1 (fase 35, T0422): un aviso que no bloquea se reconoce con AcknowledgeOperationalPending.
+    private Task<Result> CerrarMarzoAsync(bool reconocer, params IEstadoOperativoParaElCierre[] estados) =>
+        new ClosePeriodCommandHandler(_c.D.Db, _c.D.Clock, _c.D.User, _c.Emisor, estados)
+            .Handle(new ClosePeriodCommand(2026, 3, AcknowledgeOperationalPending: reconocer), default);
 
     [Fact]
     public async Task Un_cuadre_provisional_pendiente_niega_el_cierre_del_mes_de_la_activacion()
@@ -50,8 +54,10 @@ public class GuardaDelCuadreProvisionalTests
     [Fact]
     public async Task Sin_pendientes_que_bloqueen_el_mes_cierra()
     {
-        var r = await CerrarMarzoAsync(Estado(), Estado(new PendienteDeCierreDto("TES", "Aviso", "Sólo informa.", Blocks: false)));
+        var sinReconocer = await CerrarMarzoAsync(Estado(), Estado(new PendienteDeCierreDto("TES", "Aviso", "Sólo informa.", Blocks: false)));
+        var r = await CerrarMarzoAsync(true, Estado(), Estado(new PendienteDeCierreDto("TES", "Aviso", "Sólo informa.", Blocks: false)));
 
+        sinReconocer.Error.Code.Should().Be("Aviso", "desde T1 un aviso operativo se reconoce antes de cerrar");
         r.IsSuccess.Should().BeTrue();
         (await _c.D.Db.AccountingPeriods.SingleAsync(p => p.StartDate == new DateOnly(2026, 3, 1))).Status.Should().Be(PeriodStatus.Closed);
     }
