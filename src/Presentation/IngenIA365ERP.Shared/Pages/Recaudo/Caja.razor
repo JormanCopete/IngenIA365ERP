@@ -41,6 +41,11 @@
         <div class="info-card">
             <h4>1. Persona (F2)</h4>
             <PersonSearchPicker @ref="_buscador" Selected="_persona" SelectedChanged="@PersonaElegidaAsync" PermitirCrear="true" OnCrearPersona="@CrearPersona" Compacto="true" />
+            @* Decisión del dueño del 2026-10-24 (T0113): también por el número del crédito o de la cuenta, que Cartera y Captaciones resuelven por su puerto. *@
+            <div class="toolbar">
+                <input class="e-input" placeholder="Número del crédito o de la cuenta" @bind="_numeroDeObligacion" @onkeydown="@NumeroTecladoAsync" maxlength="40" />
+                <SfButton CssClass="e-outline" Disabled="@(_cargaDePagables.Activa || string.IsNullOrWhiteSpace(_numeroDeObligacion))" OnClick="@BuscarPorNumeroAsync">Buscar por número</SfButton>
+            </div>
             <IndicadorDeCarga Cargando="@_cargaDePagables.Activa" Texto="Consultando lo que puede pagar…">
                 @if (_pagables is not null)
                 {
@@ -196,7 +201,7 @@
     private readonly Dictionary<Guid, string> _rechazados = [];
     private readonly List<MedioDeCajaRequest> _medios = [];
     private Guid? _aprobacion;
-    private string? _huella, _origen, _soporteDeDeclaracion, _documentoNuevo;
+    private string? _huella, _origen, _soporteDeDeclaracion, _documentoNuevo, _numeroDeObligacion;
     private bool _pideDeclaracion, _crearPersona;
 
     protected override async Task OnInitializedAsync()
@@ -236,10 +241,22 @@
         await CargarPagablesAsync(persona.PublicId);
     }
 
-    private async Task CargarPagablesAsync(Guid persona)
+    private async Task NumeroTecladoAsync(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await BuscarPorNumeroAsync();
+    }
+
+    private async Task BuscarPorNumeroAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_numeroDeObligacion)) return;
+        _persona = null;
+        await CargarPagablesAsync(null, _numeroDeObligacion.Trim());
+    }
+
+    private async Task CargarPagablesAsync(Guid? persona, string? numero = null)
     {
         using var carga = _cargaDePagables.Iniciar();
-        var r = await Cliente.LoQuePuedePagarAsync(persona, null);
+        var r = await Cliente.LoQuePuedePagarAsync(persona, null, numero: numero);
         if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo consultar lo que puede pagar."); return; }
         _pagables = r.Value;
         _items.Clear();

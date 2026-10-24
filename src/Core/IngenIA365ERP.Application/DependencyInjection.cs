@@ -317,6 +317,8 @@ public static class DependencyInjection
         // Feature 015, US5 (T0177): los puertos entre Recaudo y Tesorería de las devoluciones por orden de pago (R-05).
         services.AddScoped<Common.Integration.Treasury.IOrdenesDePagoDeTesoreria, Treasury.Orders.OrdenesDePagoDeTesoreria>();
         services.AddScoped<Common.Integration.Receipts.IResultadoDeOrdenesDeRecaudo, Receipts.CreditBalances.ResultadoDeOrdenesDeRecaudo>();
+        // Feature 015 (decisión del dueño del 2026-10-24, T0113): la búsqueda de una obligación por su número que Cartera y Captaciones ofrecen a la caja.
+        services.AddScoped<Common.Integration.Lending.IBusquedaDeObligaciones, Lending.Integration.BusquedaDeObligaciones>();
         // Feature 015, T0183b: los requisitos de la activación mínima de los dos módulos.
         services.AddScoped<Receipts.Activation.RequisitosDeActivacionDeRecaudo>();
         services.AddScoped<Treasury.Activation.RequisitosDeActivacionDeTesoreria>();

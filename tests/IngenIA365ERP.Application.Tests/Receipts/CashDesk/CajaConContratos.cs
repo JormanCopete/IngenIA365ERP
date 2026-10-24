@@ -21,6 +21,7 @@ internal sealed class CajaConContratos
     public IContratoDeObligaciones Obligaciones { get; } = Substitute.For<IContratoDeObligaciones>();
     public IContratoDeCuentas Cuentas { get; } = Substitute.For<IContratoDeCuentas>();
     public IListasDeRecaudo Listas { get; } = Substitute.For<IListasDeRecaudo>();
+    public IBusquedaDeObligaciones Busqueda { get; } = Substitute.For<IBusquedaDeObligaciones>();
 
     public Guid CreditoA { get; } = Guid.NewGuid();
     public Guid CreditoB { get; } = Guid.NewGuid();
@@ -76,7 +77,7 @@ internal sealed class CajaConContratos
         new(ResultadoDelContrato.Applied, "OK", "", new ComprobanteDeCuentaDto(Guid.NewGuid(), "CON-1", c.AccountPublicId, "AP-1", c.IdempotencyKey, "Deposit",
             c.ValueDate, c.ValueDate, DateTime.UtcNow, c.Amount, [], null, [], [], Disponible(), null, null, false, "h", "DEP-2026.1", []));
 
-    public GetPayablesQueryHandler Pagables() => new(C.E.Db, Obligaciones, Cuentas, C.E.Reloj, new AuditoriaDeRecaudo(C.E.Servicios,
+    public GetPayablesQueryHandler Pagables() => new(C.E.Db, Obligaciones, Cuentas, Busqueda, C.E.Reloj, new AuditoriaDeRecaudo(C.E.Servicios,
         Microsoft.Extensions.Logging.Abstractions.NullLogger<AuditoriaDeRecaudo>.Instance));
 
     public CreateCashOperationCommandHandler Crear() => new(C.E.Db, C.E.Alcance, C.E.Reloj);

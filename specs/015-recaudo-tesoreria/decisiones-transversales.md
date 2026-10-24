@@ -308,6 +308,14 @@ Lo que tasks.md marcaba **(nuevo)** y lo que trajeron el `/speckit-analyze` y la
 | `RequisitosDeActivacionDeRecaudo` · `RequisitosDeActivacionDeTesoreria` · `RequisitoDeActivacionDto` · `EstadoDeActivacionDto` · `ActivateReceiptsCommand` · `ActivateTreasuryCommand` | la activación mínima del bloque 2 (T0183b) | `Receipts/Activation`, `Treasury/Activation` |
 | `RecaudoYTesoreriaE2E.RegistrarYActivarAsync(http, coop)` | activa por las rutas lo que ya cumple sus requisitos básicos | `tests/…/Receipts/RecaudoYTesoreriaE2E.cs` |
 
+**Decisión del dueño del 2026-10-24 sobre T0113 (búsqueda por número)**:
+
+| Nombre | Qué | Dónde |
+|---|---|---|
+| `IBusquedaDeObligaciones.PorNumeroAsync` · `BusquedaPorNumero` · `ObligacionEncontradaDto` · `ClaseDeObligacionEncontrada` | el puerto de lectura que Cartera y Captaciones ofrecen a la caja: un crédito o una cuenta por su número, con la persona dueña | `Application/Common/Integration/Lending` (el espacio de los puertos de Cartera) |
+| `BusquedaDeObligaciones` | su implementación sobre créditos y cuentas | `Application/Lending/Integration` |
+| `GetPayablesQuery.ObligationNumber` · `GET /api/receipts/payables?number=` · `Receipts.Payables.AmbiguousNumber` | la caja llega a la persona por el número | `Receipts/CashDesk`, `CashDeskEndpoints.cs` |
+
 ## 3. Decisiones transversales
 
 ### Módulos y frontera

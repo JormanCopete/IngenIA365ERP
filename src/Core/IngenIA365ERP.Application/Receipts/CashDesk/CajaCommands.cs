@@ -26,19 +26,26 @@ namespace IngenIA365ERP.Application.Receipts.CashDesk;
 /// por <c>ListarAsync</c>, las cuentas por <c>ConsultarAsync</c> y lo exigible por <c>ListarExigiblesAsync</c>, y los conceptos varios de ingreso. Busca la
 /// persona por su <c>PublicId</c>, su documento o su código (el lector). (nuevo)
 /// </summary>
-public sealed record GetPayablesQuery(Guid? PersonPublicId = null, string? Document = null, bool IncludeCoDebtor = false) : IRequest<Result<LoQuePuedePagarDto>>;
+public sealed record GetPayablesQuery(Guid? PersonPublicId = null, string? Document = null, bool IncludeCoDebtor = false, string? ObligationNumber = null)
+    : IRequest<Result<LoQuePuedePagarDto>>;
 
 public sealed class GetPayablesQueryHandler(
     IApplicationDbContext db,
     IContratoDeObligaciones obligaciones,
     IContratoDeCuentas cuentas,
+    IBusquedaDeObligaciones busqueda,
     IDateTimeService reloj,
     AuditoriaDeRecaudo auditoria) : IRequestHandler<GetPayablesQuery, Result<LoQuePuedePagarDto>>
 {
     public async Task<Result<LoQuePuedePagarDto>> Handle(GetPayablesQuery request, CancellationToken ct)
     {
         var documento = request.Document?.Trim();
-        var persona = request.PersonPublicId is { } p
+        var porNumero = request.PersonPublicId is null && string.IsNullOrEmpty(documento) && !string.IsNullOrWhiteSpace(request.ObligationNumber)
+            ? await PorNumeroAsync(request.ObligationNumber!, ct)
+            : null;
+        if (porNumero is { IsFailure: true }) return Result.Failure<LoQuePuedePagarDto>(porNumero.Error);
+        var buscada = request.PersonPublicId ?? porNumero?.Value;
+        var persona = buscada is { } p
             ? await db.People.AsNoTracking().FirstOrDefaultAsync(x => x.PublicId == p, ct)
             : string.IsNullOrEmpty(documento) ? null
             : await db.People.AsNoTracking().FirstOrDefaultAsync(x => x.TaxId == documento || x.LegacyCode == documento, ct);
@@ -62,6 +69,23 @@ public sealed class GetPayablesQueryHandler(
         await auditoria.LoQuePuedePagarAsync(persona.PublicId, deObligaciones.Value?.Obligations.Count ?? 0, deCuentas.Value?.Accounts.Count ?? 0, ct);
         return Result.Success(new LoQuePuedePagarDto(persona.PublicId, OperacionesDeCaja.Nombre(persona), persona.TaxId, persona.IsAssociate,
             deObligaciones.Value, deCuentas.Value, exigibles.Value, conceptos, avisos));
+    }
+
+    /// <summary>
+    /// La persona dueña del crédito o de la cuenta con ese número, por el puerto de lectura de Cartera y Captaciones (decisión del dueño del 2026-10-24): Recaudo
+    /// no lee <c>LND_</c>. Sin coincidencia, <c>Receipts.Payables.PersonNotFound</c>; con dos personas distintas, <c>Receipts.Payables.AmbiguousNumber</c>.
+    /// </summary>
+    private async Task<Result<Guid>> PorNumeroAsync(string numero, CancellationToken ct)
+    {
+        var encontradas = await busqueda.PorNumeroAsync(new BusquedaPorNumero(numero), ct);
+        var personas = encontradas.Select(e => e.PersonPublicId).Distinct().ToList();
+        return personas.Count switch
+        {
+            0 => Result.Failure<Guid>(ErroresDeRecaudo.PersonaNoEncontrada()),
+            1 => Result.Success(personas[0]),
+            _ => Result.Failure<Guid>(new ErrorConDatos("Receipts.Payables.AmbiguousNumber",
+                $"El número {numero.Trim()} es de un crédito y de una cuenta de personas distintas: busque por el documento.", new { number = numero.Trim() })),
+        };
     }
 }
 

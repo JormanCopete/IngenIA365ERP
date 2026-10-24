@@ -180,7 +180,9 @@ public class LaCarteraSoloSeTocaPorSusInterfaces
         Assert.Equal(2, IConsultaDeAportes.VersionDelContrato);
         foreach (var puerto in PuertosOfrecidos)
             Assert.Equal("IngenIA365ERP.Application.Common.Integration.Lending", puerto.Namespace);
-        Assert.Equal(7, PuertosOfrecidos.Length);
+        // Feature 015 (decisión del dueño del 2026-10-24, T0113): la búsqueda de una obligación por su número, de sólo lectura.
+        Assert.Equal(["PorNumeroAsync"], MetodosDe(typeof(IBusquedaDeObligaciones)));
+        Assert.Equal(8, PuertosOfrecidos.Length);
     }
 
     [Fact]
@@ -327,6 +329,8 @@ public class LaCarteraSoloSeTocaPorSusInterfaces
     [
         typeof(IConsultasDeCartera), typeof(IReservasDeCartera), typeof(IConsultaDeObligaciones), typeof(IContratoDeObligaciones),
         typeof(IDimensionesDeCartera), typeof(IContratoDeCuentas), typeof(IConsultaDeAportes),
+        // Feature 015 (decisión del dueño del 2026-10-24, T0113): la búsqueda por número que usa la caja de Recaudo.
+        typeof(IBusquedaDeObligaciones),
     ];
 
     /// <summary>

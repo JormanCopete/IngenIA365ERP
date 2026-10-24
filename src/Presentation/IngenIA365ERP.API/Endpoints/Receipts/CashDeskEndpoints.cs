@@ -20,8 +20,8 @@ public class CashDeskEndpoints : ICarterModule
     public void AddRoutes(IEndpointRouteBuilder app)
     {
         var pagables = ReceiptsGroup.Grupo(app, "/payables", "Recaudo Caja");
-        pagables.MapGet("/", async (Guid? person, string? document, bool? includeCoDebtor, ISender s, CancellationToken ct) =>
-                await s.Send(new GetPayablesQuery(person, document, includeCoDebtor ?? false), ct))
+        pagables.MapGet("/", async (Guid? person, string? document, bool? includeCoDebtor, string? number, ISender s, CancellationToken ct) =>
+                await s.Send(new GetPayablesQuery(person, document, includeCoDebtor ?? false, number), ct))
             .WithName("Receipts_Payables_Get").RequirePermission(Registrar);
 
         var g = ReceiptsGroup.Grupo(app, "/cash-operations", "Recaudo Caja");

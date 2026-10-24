@@ -520,6 +520,13 @@ sin correr»). Desviaciones y decisiones; las que nacen aquí quedan en decision
   aplicación, `…:{clase}-{n}` (dos transferencias no comparten clave) (DT §2.7).
 - **T0113**: la persona se busca por su `PublicId`, su documento o su código (el lector); **la búsqueda por número de obligación no se construyó**: Cartera no
   ofrece ese puerto (`IConsultaDeObligaciones` busca por persona) y Recaudo no lee `LND_`. Queda para cuando Cartera lo ofrezca (decisión pendiente).
+  **Resuelto por la decisión del dueño del 2026-10-24**: Cartera y Captaciones ofrecen el puerto de lectura `IBusquedaDeObligaciones.PorNumeroAsync`
+  (`BusquedaPorNumero` → `ObligacionEncontradaDto`: clase `Loan`/`Account`, obligación, número, persona dueña con documento y nombre, estado), declarado con los
+  demás puertos de Cartera en `Application/Common/Integration/Lending` e implementado en `Application/Lending/Integration/BusquedaDeObligaciones` (créditos por su
+  número y deudor; cuentas de captación y aportes por su número y titular) —`LaCarteraSoloSeTocaPorSusInterfaces` exige ese espacio a todo puerto ofrecido y
+  ahora cuenta ocho—. `GetPayablesQuery` suma `ObligationNumber` (`GET /api/receipts/payables?number=`): sin coincidencia, `Receipts.Payables.PersonNotFound`;
+  con dos personas, `Receipts.Payables.AmbiguousNumber` (nuevo). La caja (`/recaudo/caja`) busca también por número (campo junto al buscador de personas, Enter).
+  Pruebas `BusquedaPorNumeroTests`, escritas sin correr.
 - **T0114**: el fondeo exacto del CDAT lo valida el contrato de cuentas al simular y al consignar (la caja no conoce el valor del título).
 - **T0115**: `ConfirmacionDeRecibo` numera después de los cerrojos propios y **antes de los contratos** (decisión del dueño del 2026-10-23). Guarda por pasos
   dentro de la misma transacción (las filas hijas necesitan el `Id` de su padre y las entidades no tienen navegaciones): sigue siendo todo o nada. El gancho
