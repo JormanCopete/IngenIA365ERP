@@ -524,4 +524,15 @@ public static class AccountingErrors
         new(line, field, code, message, severidad, accountCode);
 
     public static string NombreDeModulo(string module) => ModuloContable.Nombre(module);
+
+    /// <summary>
+    /// Feature 015, US8 (T0261; contabilidad.md §9; FR-145): lo de Recaudo y Tesorería no se reversa desde Comprobantes: se corrige con su documento (anulación,
+    /// ajuste, reverso) en su módulo y llega como comprobante nuevo de su hecho espejo. El código es el de siempre, <c>ModuleOwned</c>. (nuevo)
+    /// </summary>
+    public static Error DocumentReceiptsOrTreasuryOwned(string module, string? sourceType, Guid? sourcePublicId) =>
+        new ErrorConDatos("Accounting.Document.ModuleOwned",
+            module == ModuloContable.Recaudo
+                ? "Lo que viene de Recaudo no se reversa desde Comprobantes: se corrige desde Recaudo (anulación del recibo, ajuste de la sesión o reverso) y llega como comprobante nuevo."
+                : "Lo que viene de Tesorería no se reversa desde Comprobantes: se corrige desde Tesorería (anulación del cheque, resultado del giro) y llega como comprobante nuevo.",
+            new { origin = new { module, moduleName = ModuloContable.Nombre(module), sourceType, sourcePublicId } });
 }

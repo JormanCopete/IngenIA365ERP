@@ -62,6 +62,7 @@ public static class ModuloContable
         Tesoreria => "Tesorería",
         Cdt => "CDT y ahorros",
         Activos => "Activos",
+        Recaudo => "Recaudo",
         _ => module,
     };
 }

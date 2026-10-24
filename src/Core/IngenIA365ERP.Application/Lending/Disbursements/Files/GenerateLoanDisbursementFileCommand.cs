@@ -60,7 +60,8 @@ public sealed class GenerateLoanDisbursementFileCommandHandler(
     ICerrojoDeCartera cerrojo,
     ISender sender,
     IActorActual actorActual,
-    IDateTimeService reloj) : IRequestHandler<GenerateLoanDisbursementFileCommand, Result<DisbursementFileGeneratedDto>>
+    IDateTimeService reloj,
+    Integration.EmisionDeCartera? emision = null) : IRequestHandler<GenerateLoanDisbursementFileCommand, Result<DisbursementFileGeneratedDto>>
 {
     /// <summary>El prefijo del numerador de archivos de desembolso.</summary>
     public const string Prefijo = "ARD-";
@@ -153,6 +154,12 @@ public sealed class GenerateLoanDisbursementFileCommandHandler(
                 orden.AsignarArchivo(archivo.Id);
             }
             await db.SaveChangesAsync(ct);
+            // Feature 015 (T0267; E-01 c): el archivo viaja a Tesorería en la misma transacción, para que registre resultados y concilie.
+            if (emision is not null)
+            {
+                await emision.ArchivoDeDesembolsosAsync(archivo, anulado: false, ct);
+                await db.SaveChangesAsync(ct);
+            }
 
             var dto = (await ArchivosDeDesembolsos.DtosAsync(db, [archivo], ct))[0];
             return Result.Success(new DisbursementFileGeneratedDto(dto, p.Pendientes));

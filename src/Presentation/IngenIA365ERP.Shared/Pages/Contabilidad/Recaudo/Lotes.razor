@@ -1,0 +1,71 @@
+@page "/contabilidad/recaudo/lotes"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Contabilidad
+@inject MatricesDeRecaudoYTesoreriaClient Matrices
+@inject INotificationService Notification
+
+<PageTitle>Lotes de Recaudo - IngenIA365ERP</PageTitle>
+
+@* Feature 015, US8 (T0266; contabilidad.md §7): los lotes por los que pasaron hechos de Recaudo —los recibos de caja resumidos por día y punto los crea
+   recaudo.lote-del-dia con las sesiones cerradas—, con los hechos, los comprobantes que dejaron y sus totales. Sólo consulta. *@
+<PermissionGate Required="Accounting.ReceiptsMatrix.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Lotes de contabilización de Recaudo</h3>
+        <div class="toolbar">
+            <label class="campo">Desde <input type="date" class="e-input" value="@(_desde?.ToString("yyyy-MM-dd"))" @onchange="@(e => _desde = DateOnly.TryParse(e.Value?.ToString(), out var f) ? f : null)" /></label>
+            <label class="campo">Hasta <input type="date" class="e-input" value="@(_hasta?.ToString("yyyy-MM-dd"))" @onchange="@(e => _hasta = DateOnly.TryParse(e.Value?.ToString(), out var f) ? f : null)" /></label>
+            <SfButton CssClass="e-primary" IconCss="e-icons e-search" Disabled="@_carga.Activa" OnClick="@CargarAsync">Consultar</SfButton>
+            <a class="e-btn e-outline" href="/contabilidad/recaudo/matriz">Matriz</a>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Cargando los lotes…">
+        @if (_lotes.Count == 0)
+        {
+            <p class="texto-tenue">Ningún lote de Recaudo en el rango.</p>
+        }
+        else
+        {
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Lote</th><th>Disparador</th><th>Estado</th><th>Creado</th><th>Fechas</th><th>Hechos</th><th>Comprobantes</th><th>Sin comprobante</th><th>Débitos</th><th>Créditos</th></tr></thead>
+                    <tbody>
+                        @foreach (var l in _lotes)
+                        {
+                            <tr>
+                                <td>@l.Number</td>
+                                <td>@l.Trigger</td>
+                                <td>@l.Status</td>
+                                <td>@l.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
+                                <td>@(l.DateFrom?.ToString("dd/MM/yyyy") ?? "—") – @(l.DateTo?.ToString("dd/MM/yyyy") ?? "—")</td>
+                                <td>@l.Facts</td>
+                                <td>@l.Vouchers</td>
+                                <td>@l.WithoutVoucher</td>
+                                <td>@l.TotalDebit.ToString("N2")</td>
+                                <td>@l.TotalCredit.ToString("N2")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </IndicadorDeCarga>
+</div>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new();
+    private List<LoteDeModuloDto> _lotes = [];
+    private DateOnly? _desde, _hasta;
+
+    protected override Task OnInitializedAsync() => CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Matrices.LotesAsync(MatricesDeRecaudoYTesoreriaClient.Recaudo, _desde, _hasta);
+        if (r.IsSuccess) _lotes = r.Value!.ToList();
+        else await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer los lotes.");
+    }
+}

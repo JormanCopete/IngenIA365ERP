@@ -86,20 +86,7 @@ public interface IContabilidadParaTesoreria
     Task<IReadOnlyList<CuentaPorPagarDto>> CuentasPorPagarAsync(FiltroDeCuentasPorPagar filtro, CancellationToken ct);
 }
 
-/// <summary>Lo que Recaudo ofrece a Contabilidad para su matriz: códigos y nombres de puntos, cajas, medios y conceptos. (nuevo)</summary>
-public interface IDimensionesDeRecaudo
-{
-    Task<IReadOnlyList<DimensionDto>> DimensionesAsync(string dimension, CancellationToken ct);
-}
-
-/// <summary>Lo que Tesorería ofrece a Contabilidad para su matriz: cuentas propias y clases de orden. (nuevo)</summary>
-public interface IDimensionesDeTesoreria
-{
-    Task<IReadOnlyList<DimensionDto>> DimensionesAsync(string dimension, CancellationToken ct);
-}
-
-/// <summary>Un valor de una dimensión de la matriz: código y nombre. (nuevo)</summary>
-public sealed record DimensionDto(string Code, string Name, bool IsActive);
+// IDimensionesDeRecaudo e IDimensionesDeTesoreria: en IDimensionesDeRecaudoYTesoreria.cs (fase 16, T0260).
 
 /// <summary>
 /// Lo que Recaudo y Tesorería ofrecen al cierre del mes contable (interfaces.md §3): el cuadre provisional pendiente del mes de la activación

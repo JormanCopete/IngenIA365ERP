@@ -294,6 +294,13 @@ public static class DependencyInjection
         // Feature 015, US2 (T0091–T0095): el emisor de hechos de Recaudo (sobre la respuesta provisional de Contabilidad hasta la fase 16), el arqueo de
         // la sesión y lo que corren las tareas de la caja.
         services.AddScoped<Common.Integration.Accounting.IContabilidadParaRecaudo, Accounting.Receipts.ContabilidadParaRecaudo>();
+        // Feature 015, US8 (T0257): las matrices de Recaudo y Tesorería, su consumo y su validación previa.
+        services.AddScoped<Accounting.RecaudoYTesoreria.ResolutorDeLaMatriz>();
+        services.AddScoped<Accounting.RecaudoYTesoreria.ConsumoDeModulo>();
+        services.AddScoped<Accounting.RecaudoYTesoreria.ContabilizacionDeModulo>();
+        services.AddScoped<Accounting.RecaudoYTesoreria.EvaluacionPreviaDeModulo>();
+        services.AddScoped<Common.Integration.Accounting.IDimensionesDeRecaudo, Receipts.Accounting.DimensionesDeRecaudo>();
+        services.AddScoped<Common.Integration.Accounting.IDimensionesDeTesoreria, Treasury.Accounting.DimensionesDeTesoreria>();
         services.AddScoped<Receipts.Accounting.EmisionDeRecaudo>();
         services.AddScoped<Receipts.Sessions.ArqueosDeSesion>();
         services.AddScoped<Receipts.Sessions.Tareas.MarcaDeSesionesOlvidadas>();
@@ -328,6 +335,7 @@ public static class DependencyInjection
         services.AddScoped<Receipts.Paymasters.GirosDePagaduria>();
         services.AddScoped<Receipts.BankItems.IReprocesoDeCorrida>(sp => sp.GetRequiredService<Receipts.Paymasters.GirosDePagaduria>());
         services.AddScoped<Receipts.Tareas.AntiguedadDeRecaudo>();
+        services.AddScoped<Receipts.Tareas.LoteDelDiaDeRecaudo>();
         // Feature 015, T0183b: los requisitos de la activación mínima de los dos módulos.
         services.AddScoped<Receipts.Activation.RequisitosDeActivacionDeRecaudo>();
         services.AddScoped<Treasury.Activation.RequisitosDeActivacionDeTesoreria>();

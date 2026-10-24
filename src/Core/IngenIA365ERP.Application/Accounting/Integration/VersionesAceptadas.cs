@@ -19,7 +19,7 @@ public static class VersionesAceptadas
 {
     /// <summary>Las versiones aceptadas de cada módulo de origen.</summary>
     public static IReadOnlyDictionary<string, IReadOnlySet<(string Type, int Version)>> PorModulo { get; } =
-        new[] { ModulosDeOrigen.Inventario, ModulosDeOrigen.Cartera }.ToDictionary(
+        new[] { ModulosDeOrigen.Inventario, ModulosDeOrigen.Cartera, ModulosDeOrigen.Recaudo, ModulosDeOrigen.Tesoreria }.ToDictionary(
             m => m,
             m => (IReadOnlySet<(string Type, int Version)>)CatalogoDeMensajes.DelModulo(m)
                 .Where(t => t.AdmiteDestino(IntegrationDestinations.Accounting))
@@ -32,6 +32,11 @@ public static class VersionesAceptadas
 
     /// <summary>Las de Cartera (35 en V1).</summary>
     public static IReadOnlySet<(string Type, int Version)> DeCartera => PorModulo[ModulosDeOrigen.Cartera];
+
+    /// <summary>Las de Recaudo y las de Tesorería (feature 015, T0258; contabilidad.md §3, §4).</summary>
+    public static IReadOnlySet<(string Type, int Version)> DeRecaudo => PorModulo[ModulosDeOrigen.Recaudo];
+
+    public static IReadOnlySet<(string Type, int Version)> DeTesoreria => PorModulo[ModulosDeOrigen.Tesoreria];
 
     /// <summary>¿Acepta esta versión de este tipo? Busca el tipo en el catálogo agregado y responde por su módulo de origen (§6).</summary>
     public static bool Acepta(string type, int version) =>

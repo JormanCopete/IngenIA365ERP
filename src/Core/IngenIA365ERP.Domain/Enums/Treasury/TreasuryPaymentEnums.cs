@@ -147,3 +147,10 @@ public enum DisbursementOutcome
     CheckNotCashed = 3,
     Voided = 4,
 }
+
+/// <summary>El estado del archivo de desembolsos que Cartera informó a Tesorería (feature 015, T0267; data-model §10.8). (nuevo)</summary>
+public enum LendingDisbursementFileState
+{
+    Generated = 1,
+    Voided = 2,
+}

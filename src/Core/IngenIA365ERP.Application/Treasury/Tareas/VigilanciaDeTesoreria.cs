@@ -73,6 +73,21 @@ public sealed class VigilanciaDeTesoreria(IApplicationDbContext db, ParametrosDe
     /// Feature 015, US19 (T0228; FR-105): alerta cada remesa en tránsito más de <c>Remesas.DiasParaConfirmar</c> días (<c>Tesoreria.RemesaSinConfirmar</c>). Devuelve
     /// cuántas alertó.
     /// </summary>
+    /// <summary>
+    /// Feature 015, US8 (T0262; FR-221): mientras <c>Contabilidad.FaltaDeRegla</c> de Tesorería esté en «advertir», la alerta
+    /// <c>Tesoreria.PoliticaContableEnAdvertir</c> se repite cada día (una por día).
+    /// </summary>
+    public async Task<int> PoliticaContableEnAdvertirAsync(CancellationToken ct)
+    {
+        var hoy = reloj.HoyLocal;
+        var politica = await parametros.TextoAsync(ParametrosDeRecaudoYTesoreria.ContabilidadFaltaDeRegla, hoy, ct);
+        if (!string.Equals(politica, "Advertir", StringComparison.OrdinalIgnoreCase)) return 0;
+        await alertas.LevantarAsync(new AlertaALevantar(TiposDeAlerta.TesoreriaPoliticaContableEnAdvertir, "Política contable de Tesorería en «advertir»",
+            "Tesorería confirma operaciones aunque la matriz contable no tenga su regla: complete la matriz y vuelva la política a «bloquear».",
+            DedupKey: string.Create(CultureInfo.InvariantCulture, $"Tesoreria.PoliticaContableEnAdvertir:{hoy:yyyy-MM-dd}"), ModuloDeOrigen: "Treasury"), ct);
+        return 1;
+    }
+
     public async Task<int> RemesasSinConfirmarAsync(CancellationToken ct)
     {
         var hoy = reloj.HoyLocal;
@@ -107,5 +122,6 @@ public sealed class TareaDeVigilanciaDeTesoreria : ITareaProgramada
         await vigilancia.OrdenesSinResultadoAsync(ct);
         await vigilancia.ChequesSinCobrarAsync(ct);
         await vigilancia.RemesasSinConfirmarAsync(ct);
+        await vigilancia.PoliticaContableEnAdvertirAsync(ct);
     }
 }

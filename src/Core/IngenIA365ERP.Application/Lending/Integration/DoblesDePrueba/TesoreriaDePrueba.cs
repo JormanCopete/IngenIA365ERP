@@ -28,6 +28,9 @@ public sealed class TesoreriaDePrueba : IDestinoDeMensajes
         // Decisiones del dueño del 2026-10-18 (D19, D52): Tesorería como recaudador recibe el aviso de lo que la Cartera le reversó.
         (IngenIA365ERP.Application.Common.Integration.Contracts.Lending.Deposits.ConsignacionReversadaPorCarteraV1.Type, 1),
         (PagoReversadoPorCarteraV1.Type, 1),
+        // Feature 015 (T0267; E-01 c): el archivo de desembolsos de Cartera llega también a la tesorería de prueba.
+        (ArchivoDeDesembolsosGeneradoV1.Type, 1),
+        (ArchivoDeDesembolsosAnuladoV1.Type, 1),
     ];
 
     public string Destino => IntegrationDestinations.Treasury;

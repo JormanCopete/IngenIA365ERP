@@ -259,7 +259,8 @@ public sealed class RefundLendingCreditBalanceByOrderCommandHandler(
 /// orden; «rechazada», «cheque no cobrado» o «anulada» lo reabre (movimiento <c>RefundRejected</c>); la devolución del saldo de Cartera rechazada deja un saldo a favor
 /// del beneficiario en Recaudo. Toma sus cerrojos antes que los de Tesorería. Sin guardar. (nuevo)
 /// </summary>
-public sealed class ResultadoDeOrdenesDeRecaudo(IApplicationDbContext db, ICerrojoDeRecaudo cerrojo, AuditoriaDeRecaudo auditoria, IDateTimeService reloj)
+public sealed class ResultadoDeOrdenesDeRecaudo(IApplicationDbContext db, ICerrojoDeRecaudo cerrojo, AuditoriaDeRecaudo auditoria, IDateTimeService reloj,
+    EmisionDeRecaudo? emision = null)
     : IResultadoDeOrdenesDeRecaudo
 {
     public async Task TomarCerrojosAsync(IReadOnlyList<Guid> paymentOrderPublicIds, CancellationToken ct)
@@ -306,13 +307,25 @@ public sealed class ResultadoDeOrdenesDeRecaudo(IApplicationDbContext db, ICerro
             return;
         saldo.Balance += movimiento.Amount;
         saldo.Status = PayerCreditBalanceState.Open;
-        db.PayerCreditBalanceMovements.Add(new PayerCreditBalanceMovement
+        var rechazo = new PayerCreditBalanceMovement
         {
             PayerCreditBalanceId = saldo.Id, Kind = PayerCreditBalanceMovementKind.RefundRejected, Amount = movimiento.Amount, DocumentPublicId = paymentOrderPublicId,
             DocumentNumber = movimiento.DocumentNumber, RecordedAt = reloj.UtcNow,
             Note = string.IsNullOrWhiteSpace(reason) ? $"Orden {outcome}" : $"Orden {outcome}: {reason}",
-        });
-        _ = occurredOn;
+        };
+        db.PayerCreditBalanceMovements.Add(rechazo);
+        // Fase 16: el dinero vuelve del puente de la devolución al saldo a favor (DevolucionNoGirada). La devolución de Cartera nació con la orden como origen.
+        if (emision is not null)
+        {
+            var pagador = await db.People.AsNoTracking().IgnoreQueryFilters().Where(p => p.Id == saldo.PersonId).Select(p => (Guid?)p.PublicId).FirstOrDefaultAsync(ct);
+            var original = saldo.Origin == PayerCreditBalanceOrigin.LendingRefund
+                ? new IngenIA365ERP.Application.Common.Integration.DocumentoRelacionado(paymentOrderPublicId, EmisionDeRecaudo.ClaseDevolucionDeCartera, movimiento.DocumentNumber ?? string.Empty)
+                : new IngenIA365ERP.Application.Common.Integration.DocumentoRelacionado(movimiento.PublicId, EmisionDeRecaudo.ClaseSaldoAFavor, saldo.OriginDocumentNumber ?? string.Empty);
+            var rol = saldo.Kind == PayerCreditBalanceKind.Paymaster ? RolesDeRecaudo.SaldoDePagadurias : RolesDeRecaudo.SaldoAFavorDePagadores;
+            await emision.DevolucionNoGiradaAsync(rechazo.PublicId, saldo.OriginDocumentNumber ?? movimiento.DocumentNumber ?? string.Empty, paymentOrderPublicId,
+                movimiento.DocumentNumber ?? string.Empty, outcome, EmisionDeRecaudo.VuelveAlSaldo, rol, pagador, movimiento.Amount, occurredOn, reason, saldo.BranchId,
+                null, original, ct);
+        }
     }
 
     /// <summary>
@@ -332,6 +345,11 @@ public sealed class ResultadoDeOrdenesDeRecaudo(IApplicationDbContext db, ICerro
             return true;
         partida.Balance += devolucion.Amount;
         partida.Status = partida.Balance >= partida.Amount ? Domain.Enums.Receipts.UnidentifiedItemState.Open : Domain.Enums.Receipts.UnidentifiedItemState.PartiallyIdentified;
+        // Fase 16: el dinero vuelve del puente de la devolución a las partidas por identificar (DevolucionNoGirada).
+        if (emision is not null)
+            await emision.DevolucionNoGiradaAsync(Guid.NewGuid(), partida.Number, orden, devolucion.DocumentNumber ?? string.Empty, outcome, EmisionDeRecaudo.VuelveALaPartida,
+                RolesDeRecaudo.PartidasPorIdentificar, null, devolucion.Amount, reloj.HoyLocal, reason, partida.BranchId, partida.OwnBankAccountPublicId,
+                new IngenIA365ERP.Application.Common.Integration.DocumentoRelacionado(devolucion.PublicId, EmisionDeRecaudo.ClasePartida, partida.Number), ct);
         db.UnidentifiedItemResolutions.Add(new Domain.Entities.Receipts.Banks.UnidentifiedItemResolution
         {
             UnidentifiedItemId = partida.Id, Kind = Domain.Enums.Receipts.UnidentifiedItemResolutionKind.RefundRejected, Amount = devolucion.Amount, DocumentPublicId = orden,

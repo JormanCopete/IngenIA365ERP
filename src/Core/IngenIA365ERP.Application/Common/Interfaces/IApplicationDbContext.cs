@@ -666,9 +666,17 @@ public interface IApplicationDbContext
     DbSet<IngenIA365ERP.Domain.Entities.Treasury.Payments.PaymentResponseLine> PaymentResponseLines { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Treasury.Payments.DisbursementResult> DisbursementResults { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Accounting.Integration.OwnBankAccountLink> OwnBankAccountLinks { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Accounting.Integration.ReceiptsPostingRule> ReceiptsPostingRules { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Accounting.Integration.TreasuryPostingRule> TreasuryPostingRules { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Accounting.Integration.ReceiptsVoucherMapping> ReceiptsVoucherMappings { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Accounting.Integration.TreasuryVoucherMapping> TreasuryVoucherMappings { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Accounting.Integration.ReceiptsPosting> ReceiptsPostings { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Accounting.Integration.TreasuryPosting> TreasuryPostings { get; }
     // Feature 015, fases 11 a 16 (DbSets).
     DbSet<IngenIA365ERP.Domain.Entities.Treasury.Statements.BankStatement> TreasuryBankStatements { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Treasury.Statements.BankStatementLine> TreasuryBankStatementLines { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Treasury.Payments.LendingDisbursementFile> LendingDisbursementFiles { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Treasury.Payments.LendingDisbursementFileOrder> LendingDisbursementFileOrders { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Receipts.Banks.BankItemIdentification> BankItemIdentifications { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Receipts.Banks.UnidentifiedItem> UnidentifiedItems { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Receipts.Banks.UnidentifiedItemResolution> UnidentifiedItemResolutions { get; }

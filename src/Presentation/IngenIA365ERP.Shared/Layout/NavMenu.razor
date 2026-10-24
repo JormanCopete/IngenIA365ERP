@@ -78,6 +78,20 @@
             <PermissionGate Required="Accounting.RegulatoryIndicators.View">
                 <NavLink href="/contabilidad/indicadores-regulatorios" class="nav-subitem">Indicadores regulatorios</NavLink>
             </PermissionGate>
+            @* Feature 015, US8 (T0266): las matrices contables de Recaudo y de Tesorería (enmienda E-04 de la 009). *@
+            <span class="nav-subgroup-title">Recaudo</span>
+            <PermissionGate Required="Accounting.ReceiptsMatrix.View">
+                <NavLink href="/contabilidad/recaudo/matriz" class="nav-subitem">Matriz contable</NavLink>
+                <NavLink href="/contabilidad/recaudo/tipos-de-comprobante" class="nav-subitem">Tipos de comprobante</NavLink>
+                <NavLink href="/contabilidad/recaudo/completitud" class="nav-subitem">Completitud de la matriz</NavLink>
+                <NavLink href="/contabilidad/recaudo/lotes" class="nav-subitem">Lotes de contabilización</NavLink>
+            </PermissionGate>
+            <span class="nav-subgroup-title">Tesorería</span>
+            <PermissionGate Required="Accounting.TreasuryMatrix.View">
+                <NavLink href="/contabilidad/tesoreria/matriz" class="nav-subitem">Matriz contable</NavLink>
+                <NavLink href="/contabilidad/tesoreria/tipos-de-comprobante" class="nav-subitem">Tipos de comprobante</NavLink>
+                <NavLink href="/contabilidad/tesoreria/completitud" class="nav-subitem">Completitud de la matriz</NavLink>
+            </PermissionGate>
         </NavMenuGroup>
 
         @* Feature 014 (T008, R28): el grupo «Ahorros y aportes» de lo conservado de la cartera heredada se retiró con sus 16

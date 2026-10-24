@@ -13,7 +13,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20261024103224_RecaudoNucleo")]
+    [Migration("20261024113421_RecaudoNucleo")]
     partial class RecaudoNucleo
     {
         /// <inheritdoc />

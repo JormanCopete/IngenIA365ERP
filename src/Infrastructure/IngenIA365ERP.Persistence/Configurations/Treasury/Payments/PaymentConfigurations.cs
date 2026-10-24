@@ -41,6 +41,8 @@ public class PaymentOrderConfiguration : IEntityTypeConfiguration<PaymentOrder>
         builder.HasOne<Bank>().WithMany().HasForeignKey(e => e.DestinationBankId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<PersonBankAccount>().WithMany().HasForeignKey(e => e.PersonBankAccountId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<PaymentOrder>().WithMany().HasForeignKey(e => e.ReplacesOrderId).OnDelete(DeleteBehavior.Restrict);
+        // T0267 (E-01 c): el archivo de desembolsos de Cartera que la paga.
+        builder.HasOne<LendingDisbursementFile>().WithMany().HasForeignKey(e => e.LendingDisbursementFileId).OnDelete(DeleteBehavior.Restrict);
         builder.Property(e => e.Number).HasMaxLength(30).IsRequired();
         builder.Property(e => e.Origin).HasConversion<int>();
         builder.Property(e => e.OriginOrderNumber).HasMaxLength(30).IsRequired();

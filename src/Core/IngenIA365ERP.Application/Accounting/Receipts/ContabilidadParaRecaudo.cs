@@ -1,27 +1,33 @@
 using IngenIA365ERP.Application.Accounting.Lending.Consultas;
+using IngenIA365ERP.Application.Accounting.RecaudoYTesoreria;
 using IngenIA365ERP.Application.Common.Integration.Accounting;
+using IngenIA365ERP.Application.Common.Interfaces;
 using MediatR;
 
 namespace IngenIA365ERP.Application.Accounting.Receipts;
 
 /// <summary>
-/// Lo que Contabilidad responde a Recaudo (feature 015, T0091; R-22; FR-004; contracts/interfaces.md §3), <b>provisional hasta la fase 16 (US8)</b>, que trae
-/// la matriz <c>ACC_ReceiptsPostingRules</c>, la validación previa y los saldos por concepto:
+/// Lo que Contabilidad responde a Recaudo (feature 015, T0091, T0259; R-22, R-23; FR-004, FR-209; contracts/interfaces.md §3):
 /// <list type="bullet">
-/// <item>el estado del período es el de siempre (<see cref="GetAccountingPeriodStatusQuery"/>, el mismo que lee Cartera): sin contabilidad iniciada los hechos
-/// de Recaudo nacen <c>NotPosted</c>;</item>
-/// <item>la validación previa responde «contabilizable» con la política <see cref="PoliticaProvisional"/>: sin matriz no hay combinación que evaluar;</item>
-/// <item>el saldo contable responde vacío: el cuadre diario queda con el saldo contable «sin dato» y lo dice, no inventa un cero.</item>
+/// <item>la validación previa por la matriz <c>ACC_ReceiptsPostingRules</c> (<see cref="EvaluacionPreviaDeModulo"/>), con la política
+/// <c>Contabilidad.FaltaDeRegla</c> de <c>RCD</c>;</item>
+/// <item>el estado del período es el de siempre (<see cref="GetAccountingPeriodStatusQuery"/>, el mismo que lee Cartera);</item>
+/// <item>el saldo contable de un rol (caja por oficina, partidas, saldos a favor) a una fecha, por <see cref="SaldosPorRol"/>: sin regla para el rol, «sin dato».</item>
 /// </list>
-/// Recaudo no conoce nada de esto: sólo la interfaz (<c>RecaudoNoConoceContabilidad</c>). (nuevo)
+/// Recaudo no conoce nada de esto: sólo la interfaz (<c>RecaudoNoConoceContabilidad</c>). Las cuentas por cobrar comerciales llegan con R1. Sin evaluador (las
+/// pruebas que construyen la clase a mano) responde como antes de la fase 16: «contabilizable» y saldo «sin dato». (nuevo)
 /// </summary>
-public sealed class ContabilidadParaRecaudo(ISender sender) : IContabilidadParaRecaudo
+public sealed class ContabilidadParaRecaudo(
+    ISender sender, IApplicationDbContext? db = null, ResolutorDeLaMatriz? resolutor = null, EvaluacionPreviaDeModulo? evaluacion = null)
+    : IContabilidadParaRecaudo
 {
-    /// <summary>La política que informa la validación previa mientras no exista la matriz de Recaudo.</summary>
+    /// <summary>La política que informa la validación previa sin evaluador.</summary>
     public const string PoliticaProvisional = "SinMatriz";
 
     public Task<EvaluacionContableDto> EvaluarAsync(IReadOnlyList<CombinacionDeHecho> combinaciones, CancellationToken ct) =>
-        Task.FromResult(new EvaluacionContableDto(true, PoliticaProvisional, []));
+        evaluacion is null
+            ? Task.FromResult(new EvaluacionContableDto(true, PoliticaProvisional, []))
+            : evaluacion.EvaluarAsync(MatricesDeRecaudoYTesoreria.Recaudo, combinaciones, ct);
 
     public async Task<EstadoDelPeriodoDto> EstadoDelPeriodoAsync(DateOnly fecha, CancellationToken ct)
     {
@@ -30,7 +36,9 @@ public sealed class ContabilidadParaRecaudo(ISender sender) : IContabilidadParaR
     }
 
     public Task<IReadOnlyList<SaldoContableDto>> SaldoContableAsync(SolicitudDeSaldo solicitud, CancellationToken ct) =>
-        Task.FromResult<IReadOnlyList<SaldoContableDto>>([]);
+        db is null || resolutor is null
+            ? Task.FromResult<IReadOnlyList<SaldoContableDto>>([])
+            : SaldosPorRol.SaldoAsync(db, resolutor, MatricesDeRecaudoYTesoreria.Recaudo, solicitud, ct);
 
     public Task<IReadOnlyList<CuentaPorCobrarComercialDto>> CuentasPorCobrarComercialesAsync(Guid personPublicId, CancellationToken ct) =>
         Task.FromResult<IReadOnlyList<CuentaPorCobrarComercialDto>>([]);

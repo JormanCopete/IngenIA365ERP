@@ -1,0 +1,11 @@
+@page "/contabilidad/recaudo/tipos-de-comprobante"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Components.Contabilidad
+@using IngenIA365ERP.Shared.Services.Contabilidad
+
+<PageTitle>Tipos de comprobante de Recaudo - IngenIA365ERP</PageTitle>
+
+@* Feature 015, US8 (T0266): El tipo de comprobante de cada hecho de Recaudo. El componente lleva su IndicadorDeCarga por zona. *@
+<PermissionGate Required="Accounting.ReceiptsMatrix.View" MostrarAviso="true">
+    <TiposDeComprobanteDeRecaudoYTesoreria Modulo="@MatricesDeRecaudoYTesoreriaClient.Recaudo" />
+</PermissionGate>

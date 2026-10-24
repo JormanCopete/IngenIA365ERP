@@ -22,12 +22,15 @@ namespace IngenIA365ERP.Application.Treasury.Integration;
 /// </summary>
 public sealed class DestinoTesoreria(ISender sender, ILogger<DestinoTesoreria> logger) : IDestinoDeMensajes
 {
-    /// <summary>Los tipos y versiones que Tesorería adopta en T0 (mensajes.md §7; <c>ArchivoDeDesembolsos*</c> llegan con E-01 c, fase 16).</summary>
+    /// <summary>Los tipos y versiones que Tesorería adopta en T0 (mensajes.md §7), con <c>ArchivoDeDesembolsos*</c> de E-01 c (fase 16).</summary>
     public static readonly IReadOnlyList<(string Type, int Version)> Aceptados =
     [
         (OrdenDeGiroEmitidaV1.Type, 1),
         (OrdenDeGiroEmitidaV2.Type, 2),
         (AnulacionDeOrdenDeGiroV1.Type, 1),
+        // Feature 015, US10 (T0267; E-01 c): el archivo de desembolsos de Cartera, generado y anulado.
+        (ArchivoDeDesembolsosGeneradoV1.Type, 1),
+        (ArchivoDeDesembolsosAnuladoV1.Type, 1),
     ];
 
     public string Destino => IntegrationDestinations.Treasury;
@@ -58,11 +61,11 @@ public sealed class DestinoTesoreria(ISender sender, ILogger<DestinoTesoreria> l
         return resultados;
     }
 
-    /// <summary>La orden (clave <c>Confirmation</c>) o su anulación (clave <c>Confirmation:{orden:N}</c>).</summary>
+    /// <summary>La orden (clave <c>Confirmation</c>); con <c>Confirmation:{x}</c>, la anulación de la orden o el archivo de Cartera (lo decide el enrutador por el tipo).</summary>
     public static IRequest<IngenIA365ERP.Application.Common.Models.Result<ResultadoDeConsumo>> ComandoDe(UnidadDeConsumo unidad) =>
         string.Equals(unidad.OriginEventKey, ClavesDeEvento.Confirmacion, StringComparison.Ordinal)
             ? new ConsumePaymentOrderCommand(unidad.MessagePublicIds)
-            : new ConsumePaymentOrderVoidCommand(unidad.MessagePublicIds);
+            : new ConsumeKeyedTreasuryUnitCommand(unidad.MessagePublicIds);
 
     /// <summary>Una unidad por (módulo, origen, clave de evento): cada orden es su propio recibo.</summary>
     public IReadOnlyList<TrabajoDeConsumo> PlanearLote(IReadOnlyList<MensajeEntrante> entregas)

@@ -162,6 +162,11 @@ public static class AuditEventTypes
     public const string AccountingLendingRejected = "Accounting.Lending.Rejected";
     public const string AccountingLendingBatchProcessed = "Accounting.Lending.BatchProcessed";
     public const string AccountingRegulatoryIndicatorRegistered = "Accounting.RegulatoryIndicator.Registered";
+    // Feature 015, T0257 (contracts/contabilidad.md §1): el consumo de los hechos de Recaudo y Tesorería y el cambio de su política contable.
+    public const string AccountingReceiptsPosted = "Accounting.Receipts.Posted";
+    public const string AccountingReceiptsRejected = "Accounting.Receipts.Rejected";
+    public const string AccountingTreasuryPosted = "Accounting.Treasury.Posted";
+    public const string AccountingTreasuryRejected = "Accounting.Treasury.Rejected";
 
     // -------------------- Inventario (feature 012, T44, T181) --------------------
     // Eventos explicitos que no salen de un comando: la exportacion de una vista de

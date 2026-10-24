@@ -238,6 +238,9 @@ try
     // Feature 015, US6 (T0197): la antigüedad de Recaudo (partidas, saldos a favor, extractos sin cargar, partidas al cierre), por cooperativa; sólo alerta.
     builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada>(
         new IngenIA365ERP.Application.Receipts.Tareas.TareaDeAntiguedadDeRecaudo());
+    // Feature 015, US8 (T0263): el lote del día de Recaudo (los recibos de caja de las sesiones cerradas), pasada la hora de corte.
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada>(
+        new IngenIA365ERP.Application.Receipts.Tareas.TareaDeLoteDelDiaDeRecaudo());
     // Feature 015, US11 (T0160): la vigilancia de Tesorería (órdenes sin resultado), por cooperativa; sólo alerta.
     builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada>(
         new IngenIA365ERP.Application.Treasury.Tareas.TareaDeVigilanciaDeTesoreria());

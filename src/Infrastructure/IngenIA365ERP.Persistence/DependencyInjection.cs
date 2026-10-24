@@ -232,6 +232,8 @@ public static class DependencyInjection
         // Feature 013, US7 (T0637; T54, C79): el tipo de comprobante y el cruce por defecto de cada hecho de Cartera (Tenant, Order 89),
         // «pendiente de validar». No hace nada hasta que la base tenga IntegracionContableDeCartera, que crea su tabla.
         services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.LendingVoucherMappingsSeeder>();
+        // Feature 015, US8 (T0264): el tipo de comprobante por defecto de los hechos de Recaudo y Tesorería, sin cuentas.
+        services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.ReceiptsTreasuryVoucherMappingsSeeder>();
         // La lectura de la central que sólo usa el replicador (T0057).
         services.AddScoped<Application.Common.NationalValues.IRegistroCentralDeValoresNacionales, Services.RegistroCentralDeValoresNacionales>();
         services.AddScoped<Seeding.IDataSeeder, Seeding.Demo.DemoDataSeeder>();

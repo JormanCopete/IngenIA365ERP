@@ -114,7 +114,7 @@ public sealed partial class EmisionDeRecaudo(
 
     /// <summary>Emite un hecho en línea con su origen de documento. Sin guardar.</summary>
     private async Task<IntegrationMessage> EmitirAsync(object contenido, Guid origen, string claseDeDocumento, string? tipoDeDocumento, string numero,
-        DateOnly fechaDeOperacion, int branchId, Guid? tercero, CancellationToken ct)
+        DateOnly fechaDeOperacion, int branchId, Guid? tercero, CancellationToken ct, DocumentoRelacionado? relacionado = null)
     {
         var (fecha, modo) = await FechaYModoAsync(fechaDeOperacion, ct);
         var oficina = await db.Branches.AsNoTracking().IgnoreQueryFilters().Where(b => b.Id == branchId).Select(b => b.PublicId).FirstAsync(ct);
@@ -122,7 +122,8 @@ public sealed partial class EmisionDeRecaudo(
             new OrigenDeEmision(MessageOriginKind.Document, origen, claseDeDocumento, tipoDeDocumento, numero, fecha, oficina, PersonPublicId: tercero),
             ClavesDeEvento.Confirmacion,
             [contenido],
-            modo), ct);
+            modo,
+            Relacionado: relacionado), ct);
         return mensajes[0];
     }
 }

@@ -1,0 +1,103 @@
+@using IngenIA365ERP.Shared.Services.Contabilidad
+@inject MatricesDeRecaudoYTesoreriaClient Matrices
+@inject ContabilidadClient Contabilidad
+@inject INotificationService Notification
+
+@* Feature 015, US8 (T0266; contabilidad.md §8): con qué tipo de comprobante contabiliza Contabilidad cada hecho de Recaudo o de Tesorería. La semilla deja los
+   sugeridos (RR, RB, MC, AR, TP) «pendiente de validar»: guardarlos, aunque sea igual, es la conformidad de la contadora. Sólo se ofrecen tipos de uso «Módulo» del
+   módulo y activos; el servidor lo vuelve a exigir. *@
+<div class="pagina">
+    <div class="page-header">
+        <h3>Tipos de comprobante de @Nombre</h3>
+        <div class="toolbar">
+            <a class="e-btn e-outline" href="@($"{RutaBase}/matriz")">Matriz</a>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@(_carga.Activa || _guardado.Activa)" Texto="Cargando los tipos de comprobante…">
+        <div class="tabla-desplazable">
+            <table class="data-grid">
+                <thead><tr><th>Hecho</th><th>Sugerido</th><th>Tipo asignado</th><th>Estado</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var m in _mapeos)
+                    {
+                        <tr>
+                            <td>@m.FactName <span class="texto-tenue">(@m.FactType)</span></td>
+                            <td>@m.SuggestedVoucherType</td>
+                            <td>@(m.VoucherTypeCode ?? "sin tipo")</td>
+                            <td>@(m.VoucherTypeCode is null ? "Falta" : m.ValidatedAt is null ? "Pendiente de validar" : $"Validado el {m.ValidatedAt:dd/MM/yyyy}")</td>
+                            <td><PermissionGate Required="@PermisoAdministrar"><SfButton CssClass="e-flat" OnClick="@(() => Editar(m))">Asignar</SfButton></PermissionGate></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </IndicadorDeCarga>
+
+    @if (_editando is not null)
+    {
+        <div class="info-card">
+            <h4>@_editando.FactName</h4>
+            <label class="campo">Tipo de comprobante
+                <select class="e-input" @bind="_tipo">
+                    <option value="">Elija…</option>
+                    @foreach (var t in _tipos) { <option value="@t.PublicId">@t.Code · @t.Name</option> }
+                </select>
+            </label>
+            <label class="campo">Motivo <input class="e-input" @bind="_motivo" /></label>
+            <div class="toolbar">
+                <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || !Guid.TryParse(_tipo, out _) || string.IsNullOrWhiteSpace(_motivo))" OnClick="@GuardarAsync">Guardar</SfButton>
+                <SfButton CssClass="e-flat" OnClick="@(() => _editando = null)">Cancelar</SfButton>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Modulo { get; set; } = MatricesDeRecaudoYTesoreriaClient.Recaudo;
+
+    private bool EsRecaudo => Modulo == MatricesDeRecaudoYTesoreriaClient.Recaudo;
+    private string Nombre => EsRecaudo ? "Recaudo" : "Tesorería";
+    private string RutaBase => EsRecaudo ? "/contabilidad/recaudo" : "/contabilidad/tesoreria";
+    private string PermisoAdministrar => EsRecaudo ? "Accounting.ReceiptsMatrix.Manage" : "Accounting.TreasuryMatrix.Manage";
+    private string CodigoDeModulo => EsRecaudo ? "REC" : "TES";
+
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+    private List<MapeoDeModuloDto> _mapeos = [];
+    private List<TipoComprobanteDto> _tipos = [];
+    private MapeoDeModuloDto? _editando;
+    private string? _tipo, _motivo;
+
+    protected override Task OnInitializedAsync() => CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var mapeos = await Matrices.TiposDeComprobanteAsync(Modulo);
+        if (mapeos.IsSuccess) _mapeos = mapeos.Value!.ToList();
+        else await Notification.ErrorAsync(mapeos.ErrorMessage ?? "No se pudieron leer los tipos de comprobante.");
+        var tipos = await Contabilidad.ListarTiposDeComprobanteAsync();
+        _tipos = tipos.IsSuccess
+            ? tipos.Value!.Where(t => t.IsActive && t.Usage == "Module" && string.Equals(t.ModuleCode, CodigoDeModulo, StringComparison.OrdinalIgnoreCase)).ToList()
+            : [];
+    }
+
+    private void Editar(MapeoDeModuloDto m)
+    {
+        _editando = m;
+        _tipo = m.VoucherTypePublicId?.ToString();
+        _motivo = null;
+    }
+
+    private async Task GuardarAsync()
+    {
+        if (_editando is null || !Guid.TryParse(_tipo, out var tipo)) return;
+        using var g = _guardado.Iniciar();
+        var r = await Matrices.AsignarTipoAsync(Modulo, _editando.FactType, new MapeoDeModuloRequest(tipo, null, _motivo!.Trim()));
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo guardar el tipo de comprobante."); return; }
+        await Notification.SuccessAsync("Tipo de comprobante guardado.");
+        _editando = null;
+        await CargarAsync();
+    }
+}

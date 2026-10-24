@@ -120,3 +120,34 @@ public sealed record SaldoAFavorDeCarteraDevueltoV1
 
     public IReadOnlyList<FactLineV1> Lines { get; init; } = [];
 }
+
+/// <summary>
+/// <c>DevolucionNoGirada</c> v1 (<c>DNG</c>; feature 015, fase 16; contabilidad.md §3): Tesorería informó rechazada, anulada o con cheque no cobrado una orden de pago
+/// que Recaudo pidió para devolver dinero (un saldo a favor, una partida, el dinero retenido); el dinero vuelve a donde estaba: débito <c>PuenteDeDevolucion</c>,
+/// crédito al rol de origen (<c>SaldoAFavorDePagadores</c>, <c>SaldoDePagadurias</c>, <c>PartidasPorIdentificar</c>, <c>CustodiaPorLista</c> o el
+/// <c>PuenteDelModulo</c> de una devolución de Cartera). Corrige el hecho de la devolución: lleva su referencia en <c>Related</c>. (nuevo)
+/// </summary>
+public sealed record DevolucionNoGiradaV1
+{
+    public const string Type = "DevolucionNoGirada";
+
+    public Guid PaymentOrderPublicId { get; init; }
+
+    public string PaymentOrderNumber { get; init; } = string.Empty;
+
+    /// <summary><c>Rejected</c>, <c>CheckNotCashed</c> o <c>Voided</c>.</summary>
+    public string Outcome { get; init; } = string.Empty;
+
+    /// <summary>A dónde vuelve el dinero: <c>PayerCreditBalance</c>, <c>UnidentifiedItem</c>, <c>WithheldMoney</c>, <c>LendingRefund</c>.</summary>
+    public string ReturnsTo { get; init; } = string.Empty;
+
+    public Guid? BeneficiaryPersonPublicId { get; init; }
+
+    public decimal Amount { get; init; }
+
+    public DateOnly OccurredOn { get; init; }
+
+    public string? Reason { get; init; }
+
+    public IReadOnlyList<FactLineV1> Lines { get; init; } = [];
+}

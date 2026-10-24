@@ -10,15 +10,13 @@ namespace IngenIA365ERP.Application.Accounting.Treasury;
 /// <summary>
 /// Lo que Contabilidad responde a Tesorería (feature 015, US10, T0137; E-04; R-22; FR-102, FR-103, FR-209; contracts/interfaces.md §3). Es el <b>único</b> que
 /// escribe <c>ACC_OwnBankAccountLinks</c>: Tesorería pide el vínculo de su cuenta propia con la cuenta contable bancaria del plan y nunca ve la cuenta; sólo el
-/// vínculo resuelto (código y nombre) para mostrarlo. Lo que llega con la fase 16 (la matriz de Tesorería y su validación previa) responde provisional:
-/// <list type="bullet">
-/// <item><see cref="EvaluarAsync"/>: «contabilizable» con la política <see cref="PoliticaProvisional"/> (sin matriz no hay combinación que evaluar);</item>
-/// <item><see cref="SaldoContableAsync"/> y <see cref="CuentasPorPagarAsync"/> (T2): vacío.</item>
-/// </list>
+/// vínculo resuelto (código y nombre) para mostrarlo. Desde la fase 16 (T0259) la validación previa y el saldo de un rol salen de la matriz de Tesorería; las
+/// cuentas por pagar (T2) siguen vacías.
 /// El saldo en libros y los movimientos de la cuenta bancaria salen de <c>ACC_JournalEntries</c> contabilizados (no hay saldos guardados, FR-046 de la 009). Las
 /// escrituras van a la unidad de trabajo de quien llama, sin guardar: el alta de la cuenta propia y su vínculo nacen en el mismo guardado. (nuevo)
 /// </summary>
-public sealed class ContabilidadParaTesoreria(IApplicationDbContext db, IDateTimeService reloj, MediatR.ISender sender) : IContabilidadParaTesoreria
+public sealed class ContabilidadParaTesoreria(IApplicationDbContext db, IDateTimeService reloj, MediatR.ISender sender,
+    RecaudoYTesoreria.ResolutorDeLaMatriz? resolutor = null, RecaudoYTesoreria.EvaluacionPreviaDeModulo? evaluacion = null) : IContabilidadParaTesoreria
 {
     public async Task<EstadoDelPeriodoDto> EstadoDelPeriodoAsync(DateOnly fecha, CancellationToken ct)
     {
@@ -31,8 +29,11 @@ public sealed class ContabilidadParaTesoreria(IApplicationDbContext db, IDateTim
     public const string CodigoYaVinculada = "Accounting.OwnBankAccount.AlreadyLinked";
     public const string CodigoNoBancaria = "Accounting.OwnBankAccount.NotBankAccount";
 
+    /// <summary>La validación previa por la matriz <c>ACC_TreasuryPostingRules</c> (fase 16, T0259); sin evaluador, «contabilizable» con la política provisional.</summary>
     public Task<EvaluacionContableDto> EvaluarAsync(IReadOnlyList<CombinacionDeHecho> combinaciones, CancellationToken ct) =>
-        Task.FromResult(new EvaluacionContableDto(true, PoliticaProvisional, []));
+        evaluacion is null
+            ? Task.FromResult(new EvaluacionContableDto(true, PoliticaProvisional, []))
+            : evaluacion.EvaluarAsync(RecaudoYTesoreria.MatricesDeRecaudoYTesoreria.Tesoreria, combinaciones, ct);
 
     public async Task<IReadOnlyList<CuentaContableBancariaDto>> CuentasBancariasDelPlanAsync(Guid? bankPublicId, CancellationToken ct)
     {
@@ -104,8 +105,11 @@ public sealed class ContabilidadParaTesoreria(IApplicationDbContext db, IDateTim
             string.Create(CultureInfo.InvariantCulture, $"{f.Code}-{f.Number}"), f.Date, f.Debit, f.Credit, f.Description, f.OriginModule)).ToList();
     }
 
+    /// <summary>El saldo contable de un rol de la matriz de Tesorería (fase 16, T0259).</summary>
     public Task<IReadOnlyList<SaldoContableDto>> SaldoContableAsync(SolicitudDeSaldo solicitud, CancellationToken ct) =>
-        Task.FromResult<IReadOnlyList<SaldoContableDto>>([]);
+        resolutor is null
+            ? Task.FromResult<IReadOnlyList<SaldoContableDto>>([])
+            : RecaudoYTesoreria.SaldosPorRol.SaldoAsync(db, resolutor, RecaudoYTesoreria.MatricesDeRecaudoYTesoreria.Tesoreria, solicitud, ct);
 
     public Task<IReadOnlyList<CuentaPorPagarDto>> CuentasPorPagarAsync(FiltroDeCuentasPorPagar filtro, CancellationToken ct) =>
         Task.FromResult<IReadOnlyList<CuentaPorPagarDto>>([]);

@@ -55,7 +55,23 @@ public sealed class AntiguedadDeRecaudo(
 
     /// <summary>Todas las secciones de la tarea.</summary>
     public async Task<int> RevisarAsync(CancellationToken ct) =>
-        await PartidasAsync(ct) + await SaldosAFavorAsync(ct) + await ExtractosSinCargarAsync(ct) + await PartidasAlCierreAsync(ct) + await ContingenciaPorDigitarAsync(ct);
+        await PartidasAsync(ct) + await SaldosAFavorAsync(ct) + await ExtractosSinCargarAsync(ct) + await PartidasAlCierreAsync(ct) + await ContingenciaPorDigitarAsync(ct)
+        + await PoliticaContableEnAdvertirAsync(ct);
+
+    /// <summary>
+    /// Feature 015, US8 (T0262; FR-221): mientras <c>Contabilidad.FaltaDeRegla</c> de Recaudo esté en «advertir» se confirman operaciones sin regla contable; la
+    /// alerta <c>Recaudo.PoliticaContableEnAdvertir</c> se repite cada día (una por día) hasta que vuelva a «bloquear».
+    /// </summary>
+    public async Task<int> PoliticaContableEnAdvertirAsync(CancellationToken ct)
+    {
+        var hoy = reloj.HoyLocal;
+        var politica = await parametros.TextoAsync(ParametrosDeRecaudoYTesoreria.ContabilidadFaltaDeRegla, hoy, ct);
+        if (!string.Equals(politica, "Advertir", StringComparison.OrdinalIgnoreCase)) return 0;
+        await alertas.LevantarAsync(new AlertaALevantar(TiposDeAlerta.RecaudoPoliticaContableEnAdvertir, "Política contable de Recaudo en «advertir»",
+            "Recaudo confirma operaciones aunque la matriz contable no tenga su regla: complete la matriz y vuelva la política a «bloquear».",
+            DedupKey: string.Create(CultureInfo.InvariantCulture, $"Recaudo.PoliticaContableEnAdvertir:{hoy:yyyy-MM-dd}"), ModuloDeOrigen: "Receipts"), ct);
+        return 1;
+    }
 
     /// <summary>
     /// Feature 015, US2 (T0243; FR-186): los talonarios de contingencia con números sin digitar por debajo del último digitado (un recibo del papel que todavía no

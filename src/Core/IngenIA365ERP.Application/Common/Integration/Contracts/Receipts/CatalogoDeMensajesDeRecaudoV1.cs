@@ -45,6 +45,8 @@ public static class CatalogoDeMensajesDeRecaudoV1
         // US14 (fase 15): el dinero retenido en custodia por cumplimiento y su liberación.
         Hecho(typeof(DineroRetenidoEnCustodiaV1), DineroRetenidoEnCustodiaV1.Type, "DCU"),
         Hecho(typeof(CustodiaLiberadaV1), CustodiaLiberadaV1.Type, "CLB"),
+        // US8 (fase 16): la devolución por orden de pago que Tesorería no giró; el dinero vuelve a su origen.
+        Hecho(typeof(DevolucionNoGiradaV1), DevolucionNoGiradaV1.Type, "DNG"),
     ];
 
     private static TipoDeMensaje Hecho(Type record, string type, string codigoCorto) =>
