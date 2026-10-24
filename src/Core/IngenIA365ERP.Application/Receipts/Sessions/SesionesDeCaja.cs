@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Common.Scope;
@@ -125,6 +125,18 @@ public static class SesionesDeCaja
             var medio = m.FromMeansId ?? medioDelEfectivo;
             if (medio is null) continue;
             lista.Add(new MovimientoDeLaSesion(m.Kind, medio.Value, null, m.Amount, EsOrigen: false));
+        }
+        // Feature 015, R1 (T0372; R-14): los egresos de caja de la sesión salen del efectivo —también el que después se anuló: la sesión que lo entregó no
+        // cambia— y el dinero de un egreso anulado vuelve como entrada de la sesión donde se anula.
+        if (medioDelEfectivo is { } efectivo)
+        {
+            var egresos = await db.CashDisbursements.AsNoTracking().Where(e => e.CashSessionId == sesion.Id).Select(e => e.Amount).ToListAsync(ct);
+            lista.AddRange(egresos.Select(v => new MovimientoDeLaSesion(CashMovementKindR.CashDisbursement, efectivo, null, v)));
+            var vueltos = await (from v in db.CashDisbursementVoidings.AsNoTracking()
+                                 join e in db.CashDisbursements.AsNoTracking() on v.CashDisbursementId equals e.Id
+                                 where v.CashSessionId == sesion.Id
+                                 select e.Amount).ToListAsync(ct);
+            lista.AddRange(vueltos.Select(v => new MovimientoDeLaSesion(CashMovementKindR.CashDisbursementReturn, efectivo, null, v, EsOrigen: false)));
         }
         return lista;
     }

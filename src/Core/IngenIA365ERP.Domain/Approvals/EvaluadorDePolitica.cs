@@ -1,4 +1,4 @@
-namespace IngenIA365ERP.Domain.Approvals;
+﻿namespace IngenIA365ERP.Domain.Approvals;
 
 /// <summary>
 /// Un nivel sellado en <c>COR_ApprovalRequests.RequiredLevelsJson</c>, con la forma de data-model §21
@@ -122,6 +122,7 @@ public static class EvaluadorDePolitica
         ApprovalSubjects.LiquidityFundUse => new NivelDeAprobacion(1, 0m, "Treasury.LiquidityFund.Approve"),
         ApprovalSubjects.BankItemClassification => new NivelDeAprobacion(1, 0m, "Receipts.BankItems.Classify"),
         ApprovalSubjects.UnidentifiedItemToIncome => new NivelDeAprobacion(1, 0m, "Receipts.UnidentifiedItems.MoveToIncome"),
+        ApprovalSubjects.CashDisbursementApproval => new NivelDeAprobacion(1, 0m, "Receipts.Disbursements.Approve"),
         _ => null,
     };
 

@@ -1,4 +1,4 @@
-using IngenIA365ERP.Application.Common.Models;
+﻿using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Domain.Approvals;
 using IngenIA365ERP.Domain.Enums.Approvals;
 
@@ -147,7 +147,7 @@ public static class PermisosLimitables
             "Lending.TermDeposits.Redeem",
         ],
         // Feature 015 (T0044; DT §2.6; P4): los permisos de Recaudo y Tesorería que llevan monto (sin valor sembrado: sin límite = sin atribución).
-        [ModuloRecaudo] = ["Receipts.Voiding.Approve", "Receipts.Count.ApproveDifference", "Receipts.Receipt.Backdate"],
+        [ModuloRecaudo] = ["Receipts.Voiding.Approve", "Receipts.Count.ApproveDifference", "Receipts.Receipt.Backdate", "Receipts.Disbursements.Approve"],
         [ModuloTesoreria] = ["Treasury.Batches.Approve", "Treasury.LiquidityFund.Approve", "Treasury.Transfers.Approve"],
     };
 

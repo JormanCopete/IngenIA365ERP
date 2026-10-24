@@ -1,4 +1,4 @@
-namespace IngenIA365ERP.Domain.Enums.Receipts;
+﻿namespace IngenIA365ERP.Domain.Enums.Receipts;
 
 // Feature 015, US2 (T0089; data-model §2, §4.4, §19.2, §20): las enumeraciones de la sesión de caja, el arqueo y la bóveda. Se guardan como int y un valor
 // nunca se renumera. Las que data-model §20 no numera son (nuevo) y quedan en DT §2.7.
@@ -23,6 +23,12 @@ public enum CashMovementKindR
     MeansReclassification = 5,
     Custody = 6,
     CustodyRelease = 7,
+
+    /// <summary>Feature 015, R1 (T0369; R-14) (nuevo): un egreso de caja entregado; en el arqueo es una salida del medio efectivo. No es una fila de <c>RCD_CashMovements</c>.</summary>
+    CashDisbursement = 8,
+
+    /// <summary>Feature 015, R1 (T0369) (nuevo): el dinero de un egreso anulado que vuelve a la caja, en la sesión donde se anula; en el arqueo es una entrada.</summary>
+    CashDisbursementReturn = 9,
 }
 
 /// <summary>Qué se hace con una diferencia de arqueo (data-model §2.3): nada, cuenta por cobrar al cajero, gasto o sobrante.</summary>

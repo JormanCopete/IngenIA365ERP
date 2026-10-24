@@ -1,4 +1,4 @@
-using IngenIA365ERP.Domain.Common.Parametros;
+﻿using IngenIA365ERP.Domain.Common.Parametros;
 using IngenIA365ERP.Domain.Treasury;
 using static IngenIA365ERP.Domain.Common.Parametros.CatalogoDeParametros;
 
@@ -21,7 +21,7 @@ namespace IngenIA365ERP.Domain.Receipts.Parameters;
 /// <para>
 /// Tres desviaciones de data-model §23, anotadas en decisiones-transversales §2.7: las claves «de plataforma» (<c>CuentasDestino.*</c>) y la de
 /// Contabilidad (<c>Contabilidad.CierreExigeConciliaciones</c>, T1) viven en el módulo <c>TES</c>, que es quien las usa, en vez de inventar dos
-/// módulos de parámetros sin ruta ni permiso; <c>Gmf.*</c> va sólo en <c>TES</c> en R0/T0 (Recaudo la suma en R1); y la clave
+/// módulos de parámetros sin ruta ni permiso; <c>Gmf.*</c> va sólo en <c>TES</c> en R0/T0 y Recaudo suma en R1 sus propias tarifa, hechos generadores y redondeo para los egresos de caja (la exención de desembolsos no le aplica); y la clave
 /// <c>Contabilidad.ModoDePaso</c> va con el defecto de cada módulo (recibos de caja <c>PorLotes</c> en <c>RCD</c>, <c>EnLinea</c> en
 /// <c>TES</c>) hasta que exista el ámbito por tipo de hecho.
 /// </para>
@@ -49,6 +49,8 @@ public static class ParametrosDeRecaudoYTesoreria
     public const string CajaAdmitePosfechadoEnCustodia = "Caja.AdmitePosfechadoEnCustodia";
     public const string CajaCobroSoloDeSuOficina = "Caja.CobroSoloDeSuOficina";
     public const string CajaFechaValorAnteriorMaxDias = "Caja.FechaValorAnterior.MaxDias";
+    /// <summary>Feature 015, R1 (fase 26; FR-055) (nuevo): los egresos varios por la caja, apagados por defecto.</summary>
+    public const string CajaEgresosVarios = "Caja.EgresosVarios";
     public const string ReciboOrdenDeImputacion = "Recibo.OrdenDeImputacion";
     public const string ChequesPlazoPresentacionMismaPlaza = "Cheques.PlazoPresentacionMismaPlaza";
     public const string ChequesPlazoPresentacionOtraPlaza = "Cheques.PlazoPresentacionOtraPlaza";
@@ -145,6 +147,15 @@ public static class ParametrosDeRecaudoYTesoreria
                 ["SiguenComoPasivo", "Ingreso"], "SiguenComoPasivo", R0), PendienteContadora),
             Entero(ModuloRecaudo, ExtractosDiasHabilesSinCarga, "Días hábiles sin extracto cargado antes de avisar (FR-196); informativo.", "2", R0),
             Pendiente(Entero(ModuloRecaudo, LibranzaDiasHabilesGiro, "Días hábiles que tiene la pagaduría para girar (Ley 1527 art. 6); informativo.", "3", R1), PendienteDueno),
+
+            // ---- egresos de caja y su GMF (RCD, R1, fase 26) ----
+            SiNo(ModuloRecaudo, CajaEgresosVarios, "La caja entrega egresos varios por concepto (FR-055); apagado por defecto y, encendido, con aprobación y el tope del concepto.", false, R1),
+            Pendiente(NumeroDecimal(ModuloRecaudo, GmfTarifa, "Tarifa del GMF de los egresos de caja como fracción (ET art. 871).", "0.004", R1) with { Maximo = 1m },
+                PendienteTributarista),
+            Pendiente(Eleccion(ModuloRecaudo, GmfHechosGeneradoresDeEgresos,
+                "Qué egresos de caja causan GMF: las devoluciones de saldos a favor (DevolucionesYPartidas), también los varios (Todos) o ninguno; nunca lo que el origen ya liquidó (FR-205).",
+                ["DevolucionesYPartidas", "Todos", "Ninguno"], "DevolucionesYPartidas", R1), PendienteTributarista),
+            Pendiente(Eleccion(ModuloRecaudo, GmfRedondeo, "Redondeo del GMF de los egresos de caja.", ["AlPeso", "SinRedondeo"], "AlPeso", R1), PendienteTributarista),
 
             // ---- SARLAFT (RCD) ----
             Pendiente(NumeroDecimal(ModuloRecaudo, SarlaftUmbralDeclaracionOrigenFondos, "Valor por operación desde el que se exige la declaración de origen de fondos (P7).", "5000000", R0), PendienteCumplimiento),

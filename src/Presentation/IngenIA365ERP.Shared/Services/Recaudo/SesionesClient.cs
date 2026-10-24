@@ -1,4 +1,4 @@
-using System.Net.Http.Json;
+﻿using System.Net.Http.Json;
 using IngenIA365ERP.Shared.Services.Http;
 using IngenIA365ERP.Shared.Services.Inventario;
 using IngenIA365ERP.Shared.Services.Nomina;
@@ -18,6 +18,16 @@ public sealed record SesionDeCajaDto(Guid PublicId, Guid CashBoxPublicId, string
     bool IsForgotten, bool BlindCount, bool DoubleCustody, decimal? CashWarnCap, decimal? CashBlockCap, IReadOnlyList<MedioDeSesionDto> Means);
 
 public sealed record EsperadoDeMedioDto(Guid PaymentMeansPublicId, string Code, decimal Base, decimal Receipts, decimal Voided, decimal In, decimal Out, decimal Expected);
+
+/// <summary>Feature 015, R1 (T0374): un egreso de caja (clase 1 retiro, 2 saldo a favor de crédito, 3 saldo a favor de pagador, 4 vario, 5 cancelación). (nuevo)</summary>
+public sealed record EgresoDeCajaDto(Guid PublicId, string Number, int Kind, Guid SessionPublicId, Guid BeneficiaryPersonPublicId, string BeneficiaryName,
+    Guid? ReceivedByPersonPublicId, string? ReceivedByName, Guid? ProductPublicId, string? ProductNumber, string? ModuleVoucherNumber, decimal Amount, decimal? GmfAmount,
+    bool GmfByOrigin, DateOnly OperationDate, DateTime RegisteredAt, int Status, string VerificationCode, string? Reason, string? VoidingNumber);
+
+public sealed record EgresoRequest(Guid SessionPublicId, int Kind, Guid BeneficiaryPersonPublicId, decimal Amount, Guid? ProductPublicId, Guid? PayerCreditBalancePublicId,
+    Guid? MiscConceptPublicId, Guid? ReceivedByPersonPublicId, IReadOnlyList<Guid>? SignerPersonPublicIds, Guid? SignatureAttachmentPublicId, string? Reason);
+
+public sealed record AnularEgresoRequest(Guid SessionPublicId, string Reason);
 
 public sealed record EsperadoDeSesionDto(Guid SessionPublicId, bool Hidden, IReadOnlyList<EsperadoDeMedioDto> Means, decimal? Total, bool CashWarnCapReached);
 
@@ -159,6 +169,21 @@ public sealed class SesionesClient(HttpClient http, CentralAuthClient auth)
 
     public Task<ResultadoDeInventario<IReadOnlyList<DenominacionDeCajaDto>>> DenominacionesAsync(CancellationToken ct = default) =>
         Get<IReadOnlyList<DenominacionDeCajaDto>>("/api/core/cash-denominations", ct);
+
+    // ---- Feature 015, R1, US4 (T0374): los egresos de caja ----
+    public Task<ResultadoDeInventario<IReadOnlyList<EgresoDeCajaDto>>> EgresosAsync(Guid? sesion, DateOnly? dia = null, CancellationToken ct = default) =>
+        Get<IReadOnlyList<EgresoDeCajaDto>>(EnvioDeVentas.ConQuery($"{Base}/cash-disbursements",
+            EnvioDeVentas.Query(("session", EnvioDeVentas.Texto(sesion)), ("date", EnvioDeVentas.Texto(dia)))), ct);
+
+    public Task<ResultadoDeInventario<EgresoDeCajaDto>> EgresarAsync(EgresoRequest r, ClaveDeOperacion clave, Guid? aprobacion, CancellationToken ct = default) =>
+        Enviar<EgresoDeCajaDto>(HttpMethod.Post, $"{Base}/cash-disbursements", r, clave, aprobacion, ct);
+
+    public Task<ResultadoDeInventario<EgresoDeCajaDto>> AnularEgresoAsync(Guid egreso, AnularEgresoRequest r, ClaveDeOperacion clave, Guid? aprobacion,
+        CancellationToken ct = default) =>
+        Enviar<EgresoDeCajaDto>(HttpMethod.Post, $"{Base}/cash-disbursements/{egreso}/void", r, clave, aprobacion, ct);
+
+    public Task<InvitationApiResult<ArchivoDescargado>> DocumentoDeEgresoAsync(Guid egreso, CancellationToken ct = default) =>
+        EnvioDeVentas.DescargarAsync(http, auth, $"{Base}/cash-disbursements/{egreso}/document", "egreso.pdf", ct);
 
     public Task<InvitationApiResult<ArchivoDescargado>> InformeDeCierreAsync(Guid sesion, CancellationToken ct = default) =>
         EnvioDeVentas.DescargarAsync(http, auth, $"{Base}/sessions/{sesion}/close-report", "cierre-de-sesion.pdf", ct);

@@ -334,6 +334,7 @@ public static class PerfilesSugeridos
             [
                 "Receipts.Session.Open", "Receipts.Session.View", "Receipts.Session.Move", "Receipts.Session.Close", "Receipts.Receipt.Register",
                 "Receipts.Receipt.View", "Receipts.Receipt.Print", "Receipts.Voiding.Request", "Receipts.Checks.View",
+                "Receipts.Disbursements.View", "Receipts.Disbursements.Register",
                 "Lending.Accounts.Deposit", "Core.People.Create", "Attachments.Upload", "Attachments.Download",
             ],
             "Sus cajas y puntos: hay que asignárselos (alcance de Recaudo). El arqueo es ciego: no trae Receipts.Session.ViewExpected."),
@@ -344,7 +345,7 @@ public static class PerfilesSugeridos
                 "Receipts.Setup.View", "Receipts.Session.*", "Receipts.Count.ApproveDifference", "Receipts.Day.Close", "Receipts.Vault.*",
                 "Receipts.Receipt.View", "Receipts.Receipt.Print", "Receipts.Receipt.RegisterContingency", "Receipts.Receipt.Backdate",
                 "Receipts.Voiding.*", "Receipts.Reversals.*", "Receipts.CreditBalances.*", "Receipts.Checks.*", "Receipts.Reports.View",
-                "Receipts.PendingApplications.*",
+                "Receipts.PendingApplications.*", "Receipts.Disbursements.*",
                 "Lending.Payments.BackdateBeforeClose", "Lending.Accounts.Deposit", "Lending.Accounts.Withdraw",
                 "Attachments.Upload", "Attachments.Download",
             ],

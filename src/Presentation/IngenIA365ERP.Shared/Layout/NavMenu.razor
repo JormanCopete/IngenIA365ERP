@@ -572,6 +572,10 @@
             <PermissionGate Required="Receipts.PendingApplications.View">
                 <NavLink href="/recaudo/pendiente-de-aplicar" class="nav-subitem">Recaudo pendiente de aplicar</NavLink>
             </PermissionGate>
+            @* R1, US4 (T0374): los egresos de caja (retiros, saldos a favor, egresos varios). *@
+            <PermissionGate Required="Receipts.Disbursements.View" AnyOf="@(new[] { "Receipts.Disbursements.Register" })">
+                <NavLink href="/recaudo/egresos" class="nav-subitem">Egresos de caja</NavLink>
+            </PermissionGate>
             @* US6 (T0199): los bancos —extractos, abonos por identificar y partidas—. *@
             <span class="nav-subgroup-title">Bancos y pagadurías</span>
             <PermissionGate Required="Receipts.BankItems.View">

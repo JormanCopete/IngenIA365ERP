@@ -1,4 +1,4 @@
-using IngenIA365ERP.Domain.Enums.Core;
+﻿using IngenIA365ERP.Domain.Enums.Core;
 using IngenIA365ERP.Domain.Enums.Receipts;
 
 namespace IngenIA365ERP.Domain.Receipts.Arqueo;
@@ -109,10 +109,14 @@ public static class ArqueoDeCaja
                     break;
                 case CashMovementKindR.SupplyFromVault:
                 case CashMovementKindR.Custody:
+                // Feature 015, R1 (T0369): el dinero de un egreso anulado vuelve como entrada de la sesión donde se anula.
+                case CashMovementKindR.CashDisbursementReturn:
                     De(m.PaymentMeansId)[3] += m.Amount;
                     break;
                 case CashMovementKindR.WithdrawToVault:
                 case CashMovementKindR.CustodyRelease:
+                // Feature 015, R1 (T0369): el egreso de caja baja lo esperado (esperado − egresos).
+                case CashMovementKindR.CashDisbursement:
                     De(m.PaymentMeansId)[4] += m.Amount;
                     break;
                 case CashMovementKindR.TransferBetweenBoxes:

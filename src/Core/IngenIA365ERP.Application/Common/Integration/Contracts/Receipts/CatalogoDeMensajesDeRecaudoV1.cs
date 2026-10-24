@@ -50,6 +50,10 @@ public static class CatalogoDeMensajesDeRecaudoV1
         // R1, US3 (fase 25): el recaudo pendiente de aplicar, en línea.
         Hecho(typeof(RecaudoPendienteReconocidoV1), RecaudoPendienteReconocidoV1.Type, "RPR"),
         Hecho(typeof(RecaudoPendienteAplicadoV1), RecaudoPendienteAplicadoV1.Type, "RPA"),
+        // R1, US4 (fase 26): el egreso de caja, su GMF y su anulación, en línea.
+        Hecho(typeof(EgresoDeCajaEntregadoV1), EgresoDeCajaEntregadoV1.Type, "EGE"),
+        Hecho(typeof(GmfDeEgresoCausadoV1), GmfDeEgresoCausadoV1.Type, "GEC"),
+        Hecho(typeof(EgresoDeCajaAnuladoV1), EgresoDeCajaAnuladoV1.Type, "EGA"),
     ];
 
     private static TipoDeMensaje Hecho(Type record, string type, string codigoCorto) =>

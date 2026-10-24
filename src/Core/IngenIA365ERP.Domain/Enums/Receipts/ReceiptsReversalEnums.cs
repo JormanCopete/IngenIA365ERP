@@ -1,4 +1,4 @@
-namespace IngenIA365ERP.Domain.Enums.Receipts;
+﻿namespace IngenIA365ERP.Domain.Enums.Receipts;
 
 // Feature 015, US5 (T0174; data-model §4.1 a §4.3, §20): las enumeraciones de la anulación, los reversos de los módulos y los saldos a favor. Se guardan como int y
 // un valor nunca se renumera. Las que data-model §20 no numera son (nuevo) y quedan en DT §2.7.
@@ -54,6 +54,9 @@ public enum PayerCreditBalanceMovementKind
     RefundedByCash = 3,
     AppliedByReceipt = 4,
     RefundRejected = 5,
+
+    /// <summary>Feature 015, R1 (fase 26) (nuevo): la devolución en efectivo se anuló porque el dinero volvió a la caja; el saldo se reabre.</summary>
+    CashRefundVoided = 6,
 }
 
 /// <summary>El estado de la cuenta por cobrar al pagador (nuevo).</summary>

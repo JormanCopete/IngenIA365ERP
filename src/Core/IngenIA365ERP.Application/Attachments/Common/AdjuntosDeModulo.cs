@@ -1,4 +1,4 @@
-using IngenIA365ERP.Application.Common.Interfaces;
+﻿using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Payroll.Services;
 using IngenIA365ERP.Domain.Enums.Accounting;
@@ -356,7 +356,9 @@ public static class AdjuntosDeModulo
 
     private static readonly string[] PermisosQueSubenSoportesDeCaja =
         ["Receipts.Session.Reclassify", "Receipts.Session.Adjust", "Receipts.Session.SurpriseCount", "Receipts.Session.Close",
-         "Receipts.Session.CloseForgotten", "Receipts.Vault.Move", "Receipts.Count.ApproveDifference"];
+         "Receipts.Session.CloseForgotten", "Receipts.Vault.Move", "Receipts.Count.ApproveDifference",
+         // R1 (fase 26): la firma de quien recibe un egreso de caja, con la sesión como dueño.
+         "Receipts.Disbursements.Register"];
 
     /// <summary>El acta de arqueo que genera el cierre de la sesión: se lee con <c>Receipts.Session.View</c>.</summary>
     public const string ActaDeArqueo = "ReceiptsCountMinutes";

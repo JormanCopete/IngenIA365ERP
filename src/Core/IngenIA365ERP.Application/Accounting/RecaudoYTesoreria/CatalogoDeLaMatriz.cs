@@ -87,6 +87,9 @@ public static class MatricesDeRecaudoYTesoreria
             R(RolesDeRecaudo.PuenteDeDevolucion, "Puente de la devolución por orden de pago", ClaseDeOrden),
             // R1 (fase 25): el recaudo pendiente de aplicar, por módulo, con la persona como tercero.
             R(RolesDeRecaudo.RecaudoPendienteDeAplicar, "Recaudo pendiente de aplicar", Modulo),
+            // R1 (fase 26): el GMF de los egresos de caja, que asume la cooperativa.
+            Resultado(RolesDeRecaudo.GmfGasto, "Gasto por GMF de egresos de caja", Oficina),
+            R(RolesDeRecaudo.GmfPorPagar, "GMF por pagar de egresos de caja"),
         ],
         [
             H(ReciboEmitidoV1.Type, "Recibo de caja", "RR", [RolesDeRecaudo.Caja, RolesDeRecaudo.PuenteDelModulo],
@@ -126,6 +129,12 @@ public static class MatricesDeRecaudoYTesoreria
             H(RecaudoPendienteReconocidoV1.Type, "Recaudo pendiente de aplicar reconocido", "RR", [RolesDeRecaudo.RecaudoPendienteDeAplicar],
                 RolesDeRecaudo.Caja, RolesDeRecaudo.BancoRecaudo, RolesDeRecaudo.ChequesEnCanje, RolesDeRecaudo.MedioPorCobrar),
             H(RecaudoPendienteAplicadoV1.Type, "Recaudo pendiente aplicado", "RR", [RolesDeRecaudo.RecaudoPendienteDeAplicar, RolesDeRecaudo.PuenteDelModulo]),
+            // R1 (fase 26): el egreso de caja, su GMF y su anulación (contabilidad.md §3, §8), con el tipo sugerido EG.
+            H(EgresoDeCajaEntregadoV1.Type, "Egreso de caja", "EG", [RolesDeRecaudo.Caja],
+                RolesDeRecaudo.PuenteDelModulo, RolesDeRecaudo.SaldoAFavorDePagadores, RolesDeRecaudo.ConceptoVario),
+            H(GmfDeEgresoCausadoV1.Type, "GMF de egreso de caja", "EG", [RolesDeRecaudo.GmfGasto, RolesDeRecaudo.GmfPorPagar]),
+            H(EgresoDeCajaAnuladoV1.Type, "Egreso de caja anulado", "AR", [RolesDeRecaudo.Caja],
+                RolesDeRecaudo.PuenteDelModulo, RolesDeRecaudo.SaldoAFavorDePagadores, RolesDeRecaudo.ConceptoVario, RolesDeRecaudo.GmfGasto, RolesDeRecaudo.GmfPorPagar),
         ]);
 
     public static ModuloDeLaMatriz Tesoreria { get; } = new(

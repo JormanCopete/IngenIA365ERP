@@ -1,4 +1,4 @@
-using IngenIA365ERP.Application.Common.Approvals;
+﻿using IngenIA365ERP.Application.Common.Approvals;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Security;
 using IngenIA365ERP.Application.Common.Models;
@@ -27,7 +27,8 @@ public sealed class FuenteDeAprobacionDeRecaudo(IApplicationDbContext db, Person
     public const string CodigoAtribucionInsuficiente = "Receipts.Approval.ApproverLimitTooLow";
 
     private static readonly string[] SujetosConMonto =
-        [ApprovalSubjects.CashCountDifference, ApprovalSubjects.ReceiptBackdate, ApprovalSubjects.ReceiptVoiding];
+        [ApprovalSubjects.CashCountDifference, ApprovalSubjects.ReceiptBackdate, ApprovalSubjects.ReceiptVoiding,
+            ApprovalSubjects.CashDisbursementApproval];
 
     public string SourceType => ApprovalSourceTypes.ReceiptsOperation;
 

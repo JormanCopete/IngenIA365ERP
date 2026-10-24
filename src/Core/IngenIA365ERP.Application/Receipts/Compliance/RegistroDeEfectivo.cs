@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Text.Json;
 using IngenIA365ERP.Application.Common.Alerts;
 using IngenIA365ERP.Application.Common.Interfaces;
@@ -43,6 +43,36 @@ public sealed class RegistroDeEfectivo(IApplicationDbContext db, ILectorDeParame
         db.ReceiptsCashTransactions.Add(Fila(recibo, anulacion, numero, CashTransactionDocumentKind.Voiding, CashTransactionDirection.In, -original.CashAmount, original.PersonId,
             reloj.HoyLocal));
     }
+
+    /// <summary>
+    /// Feature 015, R1 (T0372; FR-099): el egreso de caja entregado es una fila <c>Out</c> del registro y cuenta para las mismas señales (el efectivo entregado suma
+    /// para el acumulado y el fraccionamiento del titular y de quien recibe).
+    /// </summary>
+    public async Task AlEgresarAsync(CashDisbursement egreso, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(egreso);
+        var fila = FilaDeEgreso(egreso, egreso.PublicId, egreso.Number, CashTransactionDocumentKind.CashDisbursement, egreso.Amount, egreso.OperationDate);
+        db.ReceiptsCashTransactions.Add(fila);
+        var senales = await EvaluarAsync(fila, ct);
+        fila.AlertsJson = JsonSerializer.Serialize(senales.Select(s => s.Senal.ToString()), Json);
+    }
+
+    /// <summary>Feature 015, R1 (T0372): la anulación del egreso, la fila <c>Out</c> con signo contrario (el registro nunca se edita).</summary>
+    public Task AlAnularEgresoAsync(CashDisbursement egreso, CashDisbursementVoiding anulacion, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(egreso);
+        ArgumentNullException.ThrowIfNull(anulacion);
+        db.ReceiptsCashTransactions.Add(FilaDeEgreso(egreso, anulacion.PublicId, anulacion.Number, CashTransactionDocumentKind.Voiding, -egreso.Amount, reloj.HoyLocal));
+        return Task.CompletedTask;
+    }
+
+    private static CashTransaction FilaDeEgreso(CashDisbursement egreso, Guid documento, string numero, CashTransactionDocumentKind clase, decimal efectivo, DateOnly fecha) => new()
+    {
+        DocumentPublicId = documento, DocumentNumber = numero.Length <= 30 ? numero : numero[..30], DocumentKind = clase, Direction = CashTransactionDirection.Out,
+        PersonId = egreso.BeneficiaryPersonId, PayerPersonId = egreso.ReceivedByPersonId ?? egreso.BeneficiaryPersonId, ReceivedByPersonId = egreso.ReceivedByPersonId,
+        CashAmount = efectivo, OtherMeansAmount = 0m, Channel = ReceiptChannel.CashDesk, BranchId = egreso.BranchId, OccurredOn = fecha,
+        Month = fecha.Year * 100 + fecha.Month,
+    };
 
     private CashTransaction Fila(Receipt recibo, Guid documento, string numero, CashTransactionDocumentKind clase, CashTransactionDirection sentido, decimal efectivo, int titular,
         DateOnly fecha) => new()

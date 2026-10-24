@@ -650,6 +650,8 @@ public interface IApplicationDbContext
     DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.ModuleReversal> ModuleReversals { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.PendingApplication> PendingApplications { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.PendingApplicationResolution> PendingApplicationResolutions { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.CashDisbursement> CashDisbursements { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.CashDisbursementVoiding> CashDisbursementVoidings { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.PayerCreditBalance> PayerCreditBalances { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.PayerCreditBalanceMovement> PayerCreditBalanceMovements { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.PayerReceivable> PayerReceivables { get; }

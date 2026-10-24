@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using IngenIA365ERP.Application.Receipts.Sessions;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
@@ -201,6 +201,38 @@ public static class DocumentosDeRecaudoReport
             row => { Firma(row, "Pidió", m.RequestedBy); row.ConstantItem(40); Firma(row, "Aprobó", m.ApprovedBy ?? string.Empty); });
     }
 
+    /// <summary>
+    /// El egreso de caja firmado (feature 015, R1, T0374; FR-051, FR-191): qué se entrega y de dónde, la autorización del módulo, el GMF (el que liquidó el origen o
+    /// el de Recaudo) y las firmas de quien entrega y de quien recibe. Anulado, lo dice arriba.
+    /// </summary>
+    public static byte[] Egreso(Application.Receipts.Disbursements.EgresoModel m)
+    {
+        ArgumentNullException.ThrowIfNull(m);
+        var detalle = $"{m.Kind} · fecha {m.OperationDate:yyyy-MM-dd} · caja {m.CashBox} · cajero {m.Cashier}"
+                      + (m.Voided ? $" · ANULADO ({m.VoidingNumber})" : string.Empty);
+        return Documento(m.Company, "Egreso de caja", m.Number, m.VerificationCode, $"Caja {m.CashBox}", $"Registrado {Hora(m.RegisteredAt)}", detalle,
+            col =>
+            {
+                void Fila(string rotulo, string? valor)
+                {
+                    if (string.IsNullOrWhiteSpace(valor)) return;
+                    col.Item().Row(r =>
+                    {
+                        r.ConstantItem(160).Text(rotulo).SemiBold();
+                        r.RelativeItem().Text(valor);
+                    });
+                }
+                Fila("Beneficiario", m.Beneficiary);
+                Fila("Recibe", m.ReceivedBy);
+                Fila("Producto", m.Product);
+                Fila("Autorización del módulo", m.ModuleVoucher);
+                Fila("Valor entregado", Pesos(m.Amount));
+                if (m.Gmf is > 0m) Fila(m.GmfByOrigin ? "GMF (liquidado por el módulo)" : "GMF (asume la cooperativa)", Pesos(m.Gmf.Value));
+                Fila("Motivo", m.Reason);
+            },
+            row => { Firma(row, "Entregó", m.Cashier); row.ConstantItem(40); Firma(row, "Recibí conforme", m.ReceivedBy ?? m.Beneficiary); });
+    }
+
     private static void Lineas(ColumnDescriptor col, IReadOnlyList<LineaDelDocumentoDto> lineas) =>
         col.Item().Table(t =>
         {
@@ -251,4 +283,6 @@ public sealed class DocumentosDeRecaudoPdfRenderer : IDocumentosDeRecaudoEnPdf
     public byte[] Recibo(Application.Receipts.CashDesk.ReciboModel modelo) => DocumentosDeRecaudoReport.Recibo(modelo);
 
     public byte[] Anulacion(Application.Receipts.Voidings.AnulacionModel modelo) => DocumentosDeRecaudoReport.Anulacion(modelo);
+
+    public byte[] Egreso(Application.Receipts.Disbursements.EgresoModel modelo) => DocumentosDeRecaudoReport.Egreso(modelo);
 }

@@ -1,4 +1,4 @@
-[
+﻿[
   // Feature 009 (data-model.md §1, contracts/contabilizacion.md §4). Un código pertenece a un solo
   // módulo: Manual sólo se digita desde Contabilidad; Module sólo lo genera su módulo; Opening,
   // Closing y Assets sólo su proceso. Los sembrados no se eliminan ni cambian de uso.
@@ -42,6 +42,8 @@
   { "code": "RB", "name": "Recibo de banco y pagaduría", "usage": "Module", "module": "REC" },
   { "code": "MC", "name": "Movimientos y diferencias de caja", "usage": "Module", "module": "REC" },
   { "code": "AR", "name": "Anulaciones y reversos de Recaudo", "usage": "Module", "module": "REC" },
+  // Feature 015, R1 (fase 26, T0373): los egresos de caja y su GMF.
+  { "code": "EG", "name": "Egreso de caja", "usage": "Module", "module": "REC" },
   { "code": "TP", "name": "Pago de Tesorería", "usage": "Module", "module": "TES" },
   { "code": "DP", "name": "Depreciación y amortización de activos", "usage": "Assets", "module": "ACT" },
   { "code": "AP", "name": "Apertura de saldos", "usage": "Opening", "module": null },

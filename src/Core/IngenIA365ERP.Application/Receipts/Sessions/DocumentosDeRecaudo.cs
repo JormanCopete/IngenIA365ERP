@@ -1,4 +1,4 @@
-using IngenIA365ERP.Application.Common.Interfaces;
+﻿using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Common.Scope;
 using IngenIA365ERP.Application.Receipts.Common;
@@ -27,6 +27,9 @@ public interface IDocumentosDeRecaudoEnPdf
 
     /// <summary>El documento de anulación de un recibo (fase 10, T0179).</summary>
     byte[] Anulacion(Voidings.AnulacionModel modelo);
+
+    /// <summary>Feature 015, R1 (T0374): el egreso de caja firmado. (nuevo)</summary>
+    byte[] Egreso(Disbursements.EgresoModel modelo);
 }
 
 /// <summary>La empresa del encabezado. (nuevo)</summary>

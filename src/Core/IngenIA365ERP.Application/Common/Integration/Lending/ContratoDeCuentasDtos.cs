@@ -264,3 +264,12 @@ public sealed record ComprobanteDeReversoDeCuentaDto(
     IReadOnlyList<LineaDeCuentaDto> Transactions,
     bool LeftTechnicalOverdraft,
     IReadOnlyList<Guid> VoidedDocumentPublicIds);
+
+/// <summary>
+/// Los códigos del contrato de cuentas que el recaudador distingue (feature 015, R1, fase 26; api.md §1.6): sobre la atribución, Captaciones deja la solicitud de
+/// aprobación y responde este código con <c>approvalPublicId</c> en los datos; el recaudador la pide presente y repite con la misma clave. (nuevo)
+/// </summary>
+public static class CodigosDelContratoDeCuentas
+{
+    public const string PendienteDeAprobacion = "Lending.Savings.PendingApproval";
+}

@@ -1,4 +1,4 @@
-namespace IngenIA365ERP.Domain.Approvals;
+﻿namespace IngenIA365ERP.Domain.Approvals;
 
 /// <summary>
 /// Qué se aprueba (feature 012, T33; decisiones-transversales §2.5; data-model §21). Son constantes de texto, no un
@@ -74,11 +74,17 @@ public static class ApprovalSubjects
     /// </summary>
     public const string UnidentifiedItemToIncome = "UnidentifiedItemToIncome";
 
+    /// <summary>
+    /// Feature 015, R1 (fase 26; FR-055, FR-061; nuevo, DT §2.7): el egreso vario de caja y la anulación de un egreso de caja. Regla fija de un nivel con
+    /// <c>Receipts.Disbursements.Approve</c> (con monto); lo aprueba otra persona, presente.
+    /// </summary>
+    public const string CashDisbursementApproval = "CashDisbursementApproval";
+
     /// <summary>Los cinco de data-model §21, en su orden, los dos de captaciones de la feature 014 y los siete de Recaudo y Tesorería de la 015.</summary>
     public static readonly IReadOnlyList<string> Todos =
         [DocumentConfirmation, DiscountOverCap, ProvisionalCredit, TransferDiscrepancy, PurchaseMatchException, AccountWithdrawal, AccountCashDeposit,
             CashCountDifference, CashMeansReclassification, ReceiptBackdate, CashSessionAdjustment, ReceiptVoiding, PaymentBatchApproval, LiquidityFundUse,
-            BankItemClassification, UnidentifiedItemToIncome];
+            BankItemClassification, UnidentifiedItemToIncome, CashDisbursementApproval];
 
     /// <summary>Si el texto es uno de los sujetos, escrito exacto (distingue mayúsculas).</summary>
     public static bool EsValido(string? sujeto) => sujeto is not null && Todos.Contains(sujeto, StringComparer.Ordinal);
