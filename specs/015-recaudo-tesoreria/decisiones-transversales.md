@@ -613,6 +613,18 @@ Lo que tasks.md marcaba **(nuevo)** y lo que trajeron el `/speckit-analyze` y la
 | `ExecuteDayCloseCommand.Remittance` (`RemesaDelCierreDelDia`) | la remesa del punto de venta por Tesorería (E-03, T1) | `Inventory/Cash/DayCloseCommands.cs` |
 | rutas `/api/treasury/transfers` (`/{id}/approve`, `/reject`, `/sent`, `/confirm`, `/void`) · `GET/POST /api/treasury/month-end/checks` · pantallas `/tesoreria/traslados`, `/tesoreria/cierre-de-cheques` · `TrasladosClient` · eventos `Treasury.Transfer.{Requested, Sent, Confirmed, Voided}`, `Treasury.MonthEndChecks.Run` | rutas, pantallas y auditoría | `API/Endpoints/Treasury/TransfersEndpoints.cs`, `Shared/Pages/Tesoreria` |
 
+**Fijados en la construcción de la fase 34 (2026-10-24)**:
+
+| Nombre | Qué | Dónde |
+|---|---|---|
+| `TES_ManualOrderConcepts` (`ManualOrderConcept`) · `TES_BankAccountSigners` (`BankAccountSigner`) · `TES_BankAccountTokens` (`BankAccountToken`), base `BankAccountAuthority` · columnas de la orden manual en `TES_PaymentOrders` (`ManualOrderConceptId`, `SupportAttachmentPublicId`, `WithholdingAmount`, `PreparedByUserId`, `ManualApprovalState`, `FirstApprovedByUserId/At`, `SecondApprovedByUserId/At`, `ManualRejectionReason`) | catálogo, firmantes, tokens y la orden manual | par `TesoreriaCompleta` |
+| `CreateManualPaymentOrderCommand` · `ApproveManualPaymentOrderCommand` · `RejectManualPaymentOrderCommand` · `ListManualPaymentOrdersQuery` · `ListManualOrderConceptsQuery` · `SaveManualOrderConceptCommand` · `OrdenesManuales` · `ManualPaymentOrderDto` · `ManualOrderConceptDto` | las órdenes manuales | `Treasury/Orders/OrdenesManuales.cs` |
+| `RegisterBankAccountSignerCommand` · `RegisterBankAccountTokenCommand` · `RetireBankAccountAuthorityCommand` · `DecideBankAccountAuthorityCommand` · `ListBankAccountAuthoritiesQuery` · `FirmantesYTokens` · `AprobableCambioDeFirmantes` · `VigilanciaDeFirmantes` · `BankAccountAuthorityDto` | firmantes y tokens | `Treasury/BankAccounts/FirmantesYTokens.cs` |
+| rol `RetencionEnLaFuentePorPagar` (posible en `PagoDeOrdenGirado`) · `EmisionDeTesoreria.LineasDelPago` | la retención de la orden manual al girar | `HechosDeTesoreriaT1V1.cs`, `CatalogoDeLaMatriz`, `EmisionDeTesoreria.Pagos.cs` |
+| permisos `Treasury.ManualOrders.ManageConcepts` y `Treasury.Signers.Approve` · alerta `Tesoreria.FirmanteRetirado` · motivo de pendiente `Treasury.ManualOrder.PendingApproval` | permisos, alerta y bandeja | `ReceiptsAndTreasuryPermissionCatalogSeeder`, `TiposDeAlerta`, `ValidadorDeOrdenes` |
+| errores `Treasury.ManualOrder.{ConceptInactive, OverConceptCap, BeneficiaryIsPreparer, BeneficiaryIsApprover, DeriveToAccountingPayable, InvalidWithholding, SelfApproval, SameApprover, NotPendingApproval, PendingApproval}` · `Treasury.Signer.{SelfApproval, InvalidState, AlreadyActive}` · `Treasury.Token.SerialInUse` | los errores | `Treasury/Common/ErroresDeTesoreria.T1.cs` |
+| rutas `/api/treasury/manual-order-concepts` · `/api/treasury/manual-orders` (`/{id}/approve`, `/reject`) · `/api/treasury/bank-accounts/{id}/{signers,tokens}` (`/{authorityId}/retire`, `/approve`, `/reject`) · pantallas `/tesoreria/ordenes-manuales`, `/tesoreria/firmantes` · `OrdenesManualesClient` · eventos `Treasury.ManualOrder.{Prepared, Approved, Rejected}`, `Treasury.ManualOrderConcept.Saved`, `Treasury.Signer.{Requested, RetirementRequested}`, `Treasury.Token.{Requested, RetirementRequested}` | rutas, pantallas y auditoría | `API/Endpoints/Treasury/ManualOrdersEndpoints.cs`, `Shared/Pages/Tesoreria` |
+
 ## 3. Decisiones transversales
 
 ### Módulos y frontera

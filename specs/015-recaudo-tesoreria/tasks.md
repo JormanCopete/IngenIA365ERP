@@ -2335,11 +2335,45 @@ FR-208, FR-211).
 **Independent Test**: una orden manual a nombre de quien la prepara se rechaza; con dos aprobadores y soporte entra a la bandeja
 y a un lote; un firmante que se retira de la cooperativa levanta la alerta.
 
-- [ ] T0414 [P] [US26] Escribir tests/IngenIA365ERP.Application.Tests/Treasury/Orders/OrdenesManualesTests.cs (FR-211; FR-012): catálogo cerrado `TES_ManualOrderConcepts` con tope y retención exigida; soporte obligatorio; dos aprobadores; beneficiario distinto de quien prepara o aprueba; sin retención que corresponda se deriva a una causación previa en Contabilidad; entra a la bandeja con origen `Manual`
-- [ ] T0415 [P] [US26] Escribir tests/IngenIA365ERP.Application.Tests/Treasury/BankAccounts/FirmantesYTokensTests.cs (FR-208): firmantes y tokens por cuenta con combinaciones (firma conjunta por monto) y vigencia; los cambios exigen acta y aprobación; alerta cuando un firmante se retira de la cooperativa
-- [ ] T0416 [P] [US26] Crear en src/Core/IngenIA365ERP.Domain/Entities/Treasury/Payments/ `ManualOrderConcept` y en Entities/Treasury/BankAccounts/ `BankAccountSigner`, `BankAccountToken` con su configuración (data-model §13.1)
-- [ ] T0417 [US26] Implementar en src/Core/IngenIA365ERP.Application/Treasury/Orders/ `CreateManualPaymentOrderCommand` y `ApproveManualPaymentOrderCommand`, el CRUD del catálogo, y en …/Treasury/BankAccounts/ los comandos de firmantes y tokens con su alerta (FR-208, FR-211)
-- [ ] T0418 [US26] Exponer `/api/treasury/manual-orders`, `/manual-order-concepts`, `/bank-accounts/{id}/signers|tokens` y crear las pantallas src/Presentation/IngenIA365ERP.Shared/Pages/Tesoreria/{OrdenesManuales,Firmantes}.razor con `IndicadorDeCarga`; regenerar en src/Infrastructure/IngenIA365ERP.Persistence.Migrations.{PostgreSql,SqlServer}/Application/ el par `TesoreriaCompleta`
+- [X] T0414 [P] [US26] Escribir tests/IngenIA365ERP.Application.Tests/Treasury/Orders/OrdenesManualesTests.cs (FR-211; FR-012): catálogo cerrado `TES_ManualOrderConcepts` con tope y retención exigida; soporte obligatorio; dos aprobadores; beneficiario distinto de quien prepara o aprueba; sin retención que corresponda se deriva a una causación previa en Contabilidad; entra a la bandeja con origen `Manual`
+- [X] T0415 [P] [US26] Escribir tests/IngenIA365ERP.Application.Tests/Treasury/BankAccounts/FirmantesYTokensTests.cs (FR-208): firmantes y tokens por cuenta con combinaciones (firma conjunta por monto) y vigencia; los cambios exigen acta y aprobación; alerta cuando un firmante se retira de la cooperativa
+- [X] T0416 [P] [US26] Crear en src/Core/IngenIA365ERP.Domain/Entities/Treasury/Payments/ `ManualOrderConcept` y en Entities/Treasury/BankAccounts/ `BankAccountSigner`, `BankAccountToken` con su configuración (data-model §13.1)
+- [X] T0417 [US26] Implementar en src/Core/IngenIA365ERP.Application/Treasury/Orders/ `CreateManualPaymentOrderCommand` y `ApproveManualPaymentOrderCommand`, el CRUD del catálogo, y en …/Treasury/BankAccounts/ los comandos de firmantes y tokens con su alerta (FR-208, FR-211)
+- [X] T0418 [US26] Exponer `/api/treasury/manual-orders`, `/manual-order-concepts`, `/bank-accounts/{id}/signers|tokens` y crear las pantallas src/Presentation/IngenIA365ERP.Shared/Pages/Tesoreria/{OrdenesManuales,Firmantes}.razor con `IndicadorDeCarga`; regenerar en src/Infrastructure/IngenIA365ERP.Persistence.Migrations.{PostgreSql,SqlServer}/Application/ el par `TesoreriaCompleta`
+
+**Notas de la construcción de la fase 34 (2026-10-24)**. Pruebas escritas y compiladas, sin correr. Desviaciones y decisiones; los nombres nuevos quedan en
+decisiones-transversales §2.7:
+
+- **T0414–T0415**: `Treasury/Orders/OrdenesManualesTests` (tope, derivar a causación sin la retención, concepto inactivo, soporte obligatorio, espera dos aprobaciones y
+  no queda lista, quien prepara no aprueba, con las dos queda lista, el beneficiario no prepara, el pago girado lleva la retención por pagar y cuadra) y
+  `Treasury/BankAccounts/FirmantesYTokensTests` (alta pendiente y aprobada, persona y clase repetidas, retiro con acta y aprobación que cierra la vigencia, token vigente
+  único, alerta del firmante retirado, quien pide no aprueba).
+- **T0416**: `ManualOrderConcept` (`Entities/Treasury/Payments/ManualOrderConcept.cs`: código de la cooperativa, tope, si exige retención y qué retención corresponde) y
+  `BankAccountSigner`, `BankAccountToken` sobre la base abstracta `BankAccountAuthority` (`Entities/Treasury/BankAccounts/BankAccountAuthorities.cs`; dos tablas, sin
+  jerarquía en EF) con su configuración en `TesoreriaCompletaConfigurations.cs`. **Desviación**: la orden manual **no tiene tabla propia**: es una fila de la bandeja
+  única `TES_PaymentOrders` con origen `Manual` y el código del concepto como `OrderKind`; el par suma a esa tabla diez columnas nulas (`ManualOrderConceptId` con FK,
+  `SupportAttachmentPublicId`, `WithholdingAmount`, `PreparedByUserId`, `ManualApprovalState`, las dos aprobaciones y `ManualRejectionReason`). La combinación de firmas
+  es por clase (`SignatureClass`), lo que firma solo (`MaxAmountAlone`) y si firma en conjunto; el ERP la guarda e informa, no la hace cumplir en el portal del banco.
+- **T0417**: `Treasury/Orders/OrdenesManuales.cs` con `CreateManualPaymentOrderCommand`, `ApproveManualPaymentOrderCommand`, `RejectManualPaymentOrderCommand` **(nuevo)**,
+  `ListManualPaymentOrdersQuery`, `ListManualOrderConceptsQuery` y `SaveManualOrderConceptCommand` (el duplicado responde el `Catalogo.CodigoDuplicado` de siempre).
+  **Desviación**: las dos aprobaciones de FR-211 son **propias de la orden** (primera y segunda, de dos personas distintas entre sí, de quien preparó y del beneficiario,
+  con `Treasury.ManualOrders.Approve`), no del motor de aprobaciones: la regla fija del motor es de un nivel y FR-211 pide dos personas siempre, sin importar el monto.
+  Mientras no tenga las dos, `ValidadorDeOrdenes` la deja pendiente con `Treasury.ManualOrder.PendingApproval` (no entra a lotes); con la segunda se valida como cualquiera
+  y queda lista o pendiente con sus motivos. La retención se registra en la orden (bruto = neto + retención) y, al girar, `PagoDeOrdenGirado` lleva el puente por el bruto,
+  el banco por el neto y el rol **nuevo** `RetencionEnLaFuentePorPagar` por la retención con el beneficiario como tercero (`EmisionDeTesoreria.LineasDelPago`); sin la
+  retención que el concepto exige, `Treasury.ManualOrder.DeriveToAccountingPayable` (la causación previa es de Contabilidad, hasta que T2 traiga las cuentas por pagar).
+  Firmantes y tokens en `Treasury/BankAccounts/FirmantesYTokens.cs`: `RegisterBankAccountSignerCommand`, `RegisterBankAccountTokenCommand`,
+  `RetireBankAccountAuthorityCommand`, `DecideBankAccountAuthorityCommand` y `ListBankAccountAuthoritiesQuery`, con el sujeto **nuevo** `BankAccountAuthorityChange`
+  (regla fija de un nivel con el permiso **nuevo** `Treasury.Signers.Approve`) y `AprobableCambioDeFirmantes`. La alerta **nueva** `Tesoreria.FirmanteRetirado` la levanta
+  `VigilanciaDeFirmantes` dentro de `tesoreria.vigilancia`: «se retira de la cooperativa» es **su usuario del ERP inactivo o todas sus fichas de empleado con retiro hasta
+  hoy** (interpretación; no hay otro dato de retiro de una persona). Permisos **nuevos** `Treasury.ManualOrders.ManageConcepts` y `Treasury.Signers.Approve`; las
+  plantillas `tesoreria.tesorero` (pide traslados, prepara órdenes manuales, lleva firmantes) y `tesoreria.aprobador` (los aprueba y lleva el catálogo) los suman.
+- **T0418**: rutas `/api/treasury/manual-order-concepts` (`GET`, `POST`, `PUT /{id}`), `/api/treasury/manual-orders` (`GET`, `POST`, `/{id}/approve`, `/{id}/reject`) y
+  `/api/treasury/bank-accounts/{id}/{signers|tokens}` (`GET`, `POST`, `/{authorityId}/retire`, `/approve`, `/reject`); pantallas `/tesoreria/ordenes-manuales` (con el
+  catálogo) y `/tesoreria/firmantes` con `IndicadorDeCarga`, en el menú y en `LasPantallasDeRecaudoYTesoreriaEstanEnElMenu` (cliente `OrdenesManualesClient`). Los
+  soportes y actas se indican por su identificador de adjunto, como en las demás pantallas de Tesorería. El par `TesoreriaCompleta` regenerado (cinco tablas y trece
+  columnas en total); «No changes» en SqlServer y PostgreSQL; paridad en par (Application 71). Compilan API, Web, Web.Client, Persistence y las cinco de pruebas. Sin
+  probar en navegador.
 
 ---
 
