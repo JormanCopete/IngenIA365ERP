@@ -1875,10 +1875,30 @@ número único y «otro», ofrecidos por punto y arqueados por su método (FR-02
 **Independent Test**: ofrecer tarjeta de débito en un punto sin adquirente se rechaza (`CardSetupIncomplete`); con su datáfono,
 pagar con tarjeta registrando lote y aprobación y arquear por lote; un bono usado dos veces se rechaza.
 
-- [ ] T0355 [P] [US1] Escribir tests/IngenIA365ERP.Application.Tests/Receipts/Setup/MediosDeR1Tests.cs: las clases de tarjeta, bono y otro dejan de responder `Receipts.PaymentMeans.NotInDelivery` desde R1; tarjeta sin adquirente o datáfono `.CardSetupIncomplete`; captura de lote y aprobación sin número de tarjeta; bono de número único `.VoucherAlreadyUsed` (FR-023, FR-024, FR-041)
-- [ ] T0356 [P] [US1] Ampliar los casos dorados del arqueo con lotes de datáfono y cotejo por referencia opcional en tests/IngenIA365ERP.Domain.Tests/Receipts/Casos/arqueo-tarjetas-*.json (FR-031)
-- [ ] T0357 [US1] Quitar la restricción de entrega R0 de `RCD_PaymentMeansCollectionPoints` (por la versión de reglas de Recaudo, no por código fijo), capturar en `UpdateCashOperationMeansCommand` red, datáfono, lote y aprobación, y emitir `ReciboEmitido` con el rol `MedioPorCobrar` para tarjetas (contabilidad.md §3, §5) en src/Core/IngenIA365ERP.Application/Receipts/
-- [ ] T0358 [US1] Ampliar `/recaudo/configuracion/medios` y `/recaudo/caja` (src/Presentation/IngenIA365ERP.Shared/Pages/Recaudo/) con las clases de R1, el lote de datáfono en el arqueo de `/recaudo/sesiones`, con `IndicadorDeCarga` por zona
+- [X] T0355 [P] [US1] Escribir tests/IngenIA365ERP.Application.Tests/Receipts/Setup/MediosDeR1Tests.cs: las clases de tarjeta, bono y otro dejan de responder `Receipts.PaymentMeans.NotInDelivery` desde R1; tarjeta sin adquirente o datáfono `.CardSetupIncomplete`; captura de lote y aprobación sin número de tarjeta; bono de número único `.VoucherAlreadyUsed` (FR-023, FR-024, FR-041)
+- [X] T0356 [P] [US1] Ampliar los casos dorados del arqueo con lotes de datáfono y cotejo por referencia opcional en tests/IngenIA365ERP.Domain.Tests/Receipts/Casos/arqueo-tarjetas-*.json (FR-031)
+- [X] T0357 [US1] Quitar la restricción de entrega R0 de `RCD_PaymentMeansCollectionPoints` (por la versión de reglas de Recaudo, no por código fijo), capturar en `UpdateCashOperationMeansCommand` red, datáfono, lote y aprobación, y emitir `ReciboEmitido` con el rol `MedioPorCobrar` para tarjetas (contabilidad.md §3, §5) en src/Core/IngenIA365ERP.Application/Receipts/
+- [X] T0358 [US1] Ampliar `/recaudo/configuracion/medios` y `/recaudo/caja` (src/Presentation/IngenIA365ERP.Shared/Pages/Recaudo/) con las clases de R1, el lote de datáfono en el arqueo de `/recaudo/sesiones`, con `IndicadorDeCarga` por zona
+
+**Notas de la construcción de la fase 24 (2026-10-24)**. Pruebas escritas y compiladas, sin correr:
+
+- **T0355**: `Receipts/Setup/MediosDeR1Tests` (sobre `CajaConContratos`): la entrega desplegada es R1; bono y otro se ofrecen; la tarjeta sin adquirente sigue en
+  `CardSetupIncomplete`; la captura de la tarjeta (datáfono del adquirente, lote, aprobación, sin el número) y el bono único también dentro de la operación.
+  `ParametrosDeRecaudoYTesoreriaTests` cambia: `Libranza.DiasHabilesGiro` ya se ofrece (R1); las de T1 siguen fuera.
+- **T0356**: `arqueo-tarjetas-01` (débito y crédito por lote en dos datáfonos, un lote corto sobre tolerancia), `-02` (pago anulado en la sesión, el lote neto del reverso)
+  y `-03` (bono cotejado por referencia —el cotejo opcional— y «otro» sin arqueo). El motor `ArqueoDeCaja` ya arqueaba por lote desde R0: no cambió.
+- **T0357**: «quitar la restricción de entrega» es subir `CatalogoDeRecaudo.EntregaVigente` a **R1** (la regla `MediosDeRecaudo.EnLaEntrega` ya decidía por la
+  entrega, no por clase fija); con eso también se ofrecen las claves de R1 de `RCD`. La captura de red, datáfono, lote y aprobación ya estaba en `MedioDeCajaDto` y
+  en `RCD_ReceiptMeans` desde R0; lo que faltaba era exigirla: `CapturaDeMedios` **(nuevo)** la valida en el paso de medios y otra vez al confirmar (el bono pudo usarse entre
+  los dos pasos) con `Receipts.PaymentMeans.CardCaptureIncomplete`, `.CardNumberNotAllowed` y `.ReferenceRequired` **(nuevos)**; la **red** es la del medio
+  (`PaymentMeans.CardNetworkId`), no se captura aparte. `ReciboEmitido` ya llevaba las tarjetas al rol `MedioPorCobrar` (`EmisionDeRecaudo.RolDelMedio`); se le suma
+  el **tercero** del débito: la persona del adquirente (`CardAcquirer.PersonId`), quien liquida el lote (contabilidad.md §5 dice «la red»: la red no es una persona del
+  maestro y el adquirente sí; anotado como desviación).
+- **T0358**: `/recaudo/caja` pide datáfono, lote y aprobación para las tarjetas (con el aviso de no escribir el número) y el número del bono; `/recaudo/sesiones` arquea las
+  tarjetas (método «total de comprobantes») lote por lote de datáfono; `/recaudo/configuracion/medios` dice qué clases se ofrecen. Con `IndicadorDeCarga` de las zonas
+  existentes. Sin probar en navegador.
+- Sin esquema: `RecaudoCompleto` no cambia. Compilan API, Web, Web.Client, Persistence y las cinco de pruebas.
+
 
 ---
 

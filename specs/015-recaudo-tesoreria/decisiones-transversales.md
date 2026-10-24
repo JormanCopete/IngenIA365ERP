@@ -507,6 +507,15 @@ Lo que tasks.md marcaba **(nuevo)** y lo que trajeron el `/speckit-analyze` y la
 | `ConservacionDeAuditoria` (`ModuloDeParametros`, `AniosAsync`, `VenceEl`, `Defecto`) · `AuditEventDocument.RetentionYears` · `AuditoriaEncadenada.EscribirCarga` | `Conservacion.Anios` en la auditoría (piso de cinco) | `Common/Audit`, `Common/Interfaces/Audit` |
 | `RecaudoCompleto` · `CarteraYCaptacionesConPartidaCitada` | los dos pares de R1 | `Persistence.Migrations.{PostgreSql,SqlServer}/Application` |
 
+**Fijados en la construcción de la fase 24 (2026-10-24)**:
+
+| Nombre | Qué | Dónde |
+|---|---|---|
+| `CatalogoDeRecaudo.EntregaVigente = R1` | la entrega desplegada de Recaudo | `Domain/Receipts/CatalogoDeRecaudo.cs` |
+| `CapturaDeMedios` (`ValidarAsync`, `PareceNumeroDeTarjeta`) · `Receipts.PaymentMeans.{CardCaptureIncomplete, CardNumberNotAllowed, ReferenceRequired}` | la captura de tarjetas, bonos y «otro» | `Receipts/CashDesk/CapturaDeMedios.cs`, `Receipts/Common/ErroresDeRecaudo.Recibos.cs` |
+| tercero del `MedioPorCobrar` = persona del adquirente (`EmisionDeRecaudo.AdquirentesDeLosMediosAsync`) | el débito de las tarjetas en `ReciboEmitido` | `Receipts/Accounting/EmisionDeRecaudo.Recibos.cs` |
+| casos `arqueo-tarjetas-01..03` | casos dorados del arqueo de R1 | `tests/IngenIA365ERP.Domain.Tests/Receipts/Casos` |
+
 ## 3. Decisiones transversales
 
 ### Módulos y frontera
