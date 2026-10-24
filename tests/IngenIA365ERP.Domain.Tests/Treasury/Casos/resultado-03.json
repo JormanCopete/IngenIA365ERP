@@ -1,0 +1,13 @@
+{
+  "nombre": "Cheque enviado, sólo girado",
+  "estado": "Sent",
+  "forma": "Check",
+  "pagadaPorArchivo": false,
+  "anulacionDelOrigen": false,
+  "resultado": "Rejected",
+  "esperado": {
+    "admite": false,
+    "hacia": null,
+    "codigo": "Treasury.Result.InvalidTransition"
+  }
+}

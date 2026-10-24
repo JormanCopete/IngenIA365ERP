@@ -594,6 +594,9 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Payments.PaymentBatchItem> PaymentBatchItems => Set<IngenIA365ERP.Domain.Entities.Treasury.Payments.PaymentBatchItem>();
     public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Payments.PaymentFile> PaymentFiles => Set<IngenIA365ERP.Domain.Entities.Treasury.Payments.PaymentFile>();
     public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Payments.PaymentFileLine> PaymentFileLines => Set<IngenIA365ERP.Domain.Entities.Treasury.Payments.PaymentFileLine>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Payments.PaymentResponse> PaymentResponses => Set<IngenIA365ERP.Domain.Entities.Treasury.Payments.PaymentResponse>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Payments.PaymentResponseLine> PaymentResponseLines => Set<IngenIA365ERP.Domain.Entities.Treasury.Payments.PaymentResponseLine>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Payments.DisbursementResult> DisbursementResults => Set<IngenIA365ERP.Domain.Entities.Treasury.Payments.DisbursementResult>();
     public DbSet<IngenIA365ERP.Domain.Entities.Accounting.Integration.OwnBankAccountLink> OwnBankAccountLinks => Set<IngenIA365ERP.Domain.Entities.Accounting.Integration.OwnBankAccountLink>();
     DbSet<DebitCard> IApplicationDbContext.DebitCards => throw new NotImplementedException();
     DbSet<DebitAgreementParameter> IApplicationDbContext.DebitAgreementParameters => throw new NotImplementedException();

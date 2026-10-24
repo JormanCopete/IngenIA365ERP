@@ -307,6 +307,8 @@ public class LosHechosInmutablesNoSeModifican
         ["PaymentFile"] = ["DownloadedByUserId", "DownloadedAt", "SentAt", "SentByUserId", "UploadedAtBankBy", "AuthorizedAtBankBy", "VoidedAt", "VoidReason",
             "RejectedByBankAt", "RejectedByBankReason"],
         ["PaymentFileLine"] = [],
+        // Fase 8, US11 (T0157; data-model §10.7): el resultado del giro se inserta una vez y no cambia (UK (PaymentOrderId, Outcome)).
+        ["DisbursementResult"] = [],
     };
 
     /// <summary>

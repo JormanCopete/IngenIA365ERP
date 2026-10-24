@@ -1,0 +1,13 @@
+{
+  "nombre": "Transferencia enviada, girada",
+  "estado": "Sent",
+  "forma": "Transfer",
+  "pagadaPorArchivo": false,
+  "anulacionDelOrigen": false,
+  "resultado": "Disbursed",
+  "esperado": {
+    "admite": true,
+    "hacia": "Disbursed",
+    "codigo": null
+  }
+}

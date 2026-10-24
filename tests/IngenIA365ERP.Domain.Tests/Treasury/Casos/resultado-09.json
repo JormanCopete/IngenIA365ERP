@@ -1,0 +1,13 @@
+{
+  "nombre": "Orden pagada por archivo de Cartera, lista",
+  "estado": "Ready",
+  "forma": "Transfer",
+  "pagadaPorArchivo": true,
+  "anulacionDelOrigen": false,
+  "resultado": "Disbursed",
+  "esperado": {
+    "admite": true,
+    "hacia": "Disbursed",
+    "codigo": null
+  }
+}

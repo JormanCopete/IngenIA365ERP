@@ -21,6 +21,7 @@ public class NingunProcesoAplicaPagosNiInformaResultados
     /// <summary>Los nombres de tipo de las tareas programadas de los dos módulos.</summary>
     private static readonly string[] Tareas =
     [
+        "TareaDeSesionesOlvidadas", "TareaDeCuadreDiario", "TareaDeVigilanciaDeTesoreria",
     ];
 
     private static readonly Regex EscrituraProhibida = new(

@@ -3,9 +3,11 @@ using IngenIA365ERP.Application.Common.Integration;
 using IngenIA365ERP.Application.Common.Integration.Accounting;
 using IngenIA365ERP.Application.Common.Integration.Contracts.Inventory;
 using IngenIA365ERP.Application.Common.Integration.Contracts.Lending;
+using IngenIA365ERP.Application.Common.Integration.Receipts;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Common.Scope;
 using IngenIA365ERP.Application.Core.PersonBankAccounts;
+using IngenIA365ERP.Application.Treasury.Accounting;
 using IngenIA365ERP.Application.Treasury.Common;
 using IngenIA365ERP.Application.Treasury.LiquidityFund;
 using IngenIA365ERP.Application.Treasury.Orders;
@@ -44,7 +46,14 @@ internal sealed class EscenarioDeTesoreria
     public CuentasBancariasDePersona CuentasDePersona => new(E.Db, E.Lector, E.Reloj);
     public ValidadorDeOrdenes Validador => new(E.Db, CuentasDePersona, Listas, E.Alertas, E.Reloj);
     public GuardaDelFondoDeLiquidez Fondo => new(E.Db);
-    public RegistroDeResultadosDelGiro Resultados => new(E.Db, E.Reloj);
+    public IResultadoDeOrdenesDeRecaudo Recaudo { get; } = Substitute.For<IResultadoDeOrdenesDeRecaudo>();
+    public EmisorDeMensajes Emisor => _emisor ??= new EmisorDeMensajes(E.Db, E.Actor, E.Reloj);
+    public EmisionDeTesoreria Emision => new(E.Db, Emisor, Contabilidad, E.Lector, E.Actor);
+    public RegistroDeResultadosDelGiro Resultados => new(E.Db, E.Reloj, Emisor, Emision, Parametros, [Recaudo]);
+    public SegregacionDeTesoreria Segregacion => new(E.Personas);
+    public AprobacionDiferidaEnTesoreria Aprobacion => new(E.Db, Motor, E.Actor);
+
+    private EmisorDeMensajes? _emisor;
 
     public Bank Banco { get; }
     public Bank BancoSinCodigo { get; }
