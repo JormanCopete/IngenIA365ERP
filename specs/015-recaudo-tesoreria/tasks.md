@@ -1663,15 +1663,33 @@ exige `Receipts.Reports.Export` y deja el evento de auditoría.
 
 ### Tests for User Story 21 (parte R0/T0)
 
-- [ ] T0311 [P] [US21] Escribir tests/IngenIA365ERP.Application.Tests/Receipts/Reports/InformesDeRecaudoR0Tests.cs (FR-152 R0): `session-close`, `day-close`, `daily-collection` (punto, caja, cajero, medio, canal, módulo y producto o línea: crédito frente a aporte), `receipts-by-cashier`, `voided-receipts`, `exceptions` (fecha valor, reclasificación, contingencia), `unidentified-items` (antigüedad), `payer-credit-balances`, `paymasters`, `returned-checks`, `contingency-pending`; con alcance; columnas ocultas con `_`; `daily-collection` cuadra con los cierres de sesión (US21 «Independent Test»)
-- [ ] T0312 [P] [US21] Escribir tests/IngenIA365ERP.Application.Tests/Treasury/Reports/InformesDeTesoreriaT0Tests.cs (FR-153 T0): `orders-by-state` (antigüedad), `batches`, `rejected-and-reissue`, `recent-account-changes`, `issued-checks`, `bank-balances`, `minimal-reconciliation`; con alcance por cuenta
+- [X] T0311 [P] [US21] Escribir tests/IngenIA365ERP.Application.Tests/Receipts/Reports/InformesDeRecaudoR0Tests.cs (FR-152 R0): `session-close`, `day-close`, `daily-collection` (punto, caja, cajero, medio, canal, módulo y producto o línea: crédito frente a aporte), `receipts-by-cashier`, `voided-receipts`, `exceptions` (fecha valor, reclasificación, contingencia), `unidentified-items` (antigüedad), `payer-credit-balances`, `paymasters`, `returned-checks`, `contingency-pending`; con alcance; columnas ocultas con `_`; `daily-collection` cuadra con los cierres de sesión (US21 «Independent Test»)
+- [X] T0312 [P] [US21] Escribir tests/IngenIA365ERP.Application.Tests/Treasury/Reports/InformesDeTesoreriaT0Tests.cs (FR-153 T0): `orders-by-state` (antigüedad), `batches`, `rejected-and-reissue`, `recent-account-changes`, `issued-checks`, `bank-balances`, `minimal-reconciliation`; con alcance por cuenta
 - [ ] T0313 [P] [US21] Escribir la e2e tests/IngenIA365ERP.API.IntegrationTests/Receipts/InformesDeRecaudoYTesoreriaTests.cs (exportación con permiso y auditada; SC-018); se corre en la fase 22
 
 ### Implementation for User Story 21 (parte R0/T0)
 
-- [ ] T0314 [US21] Implementar las vistas de R0 en src/Core/IngenIA365ERP.Application/Receipts/Reports/ y las de T0 en src/Core/IngenIA365ERP.Application/Treasury/Reports/ como `TablaExportable`, con su registro de vistas (R-36; api.md §17)
-- [ ] T0315 [US21] Exponer src/Presentation/IngenIA365ERP.API/Endpoints/Reports/ReceiptsReportsEndpoints.cs (`/api/reports/receipts/{vista}?format=`) y TreasuryReportsEndpoints.cs (`/api/reports/treasury/{vista}`) con `Receipts.Reports.View/Export` y `Treasury.Reports.View/Export` (`RequirePermissionWhenExporting`), auditando cada exportación (FR-154)
-- [ ] T0316 [US21] Crear las pantallas src/Presentation/IngenIA365ERP.Shared/Pages/Recaudo/Informes.razor (`/recaudo/informes?vista=`) y src/Presentation/IngenIA365ERP.Shared/Pages/Tesoreria/Informes.razor (`/tesoreria/informes?vista=`) con `IndicadorDeCarga` por zona, y las tarjetas de Recaudo y Tesorería en el Centro de Reportes (`/reportes`), cuyos `NavigateTo` revisa `TodoEnlaceDelMenuTieneSuPagina`; llenar `LasPantallasDeRecaudoYTesoreriaEstanEnElMenu` con todas las pantallas de R0/T0
+- [X] T0314 [US21] Implementar las vistas de R0 en src/Core/IngenIA365ERP.Application/Receipts/Reports/ y las de T0 en src/Core/IngenIA365ERP.Application/Treasury/Reports/ como `TablaExportable`, con su registro de vistas (R-36; api.md §17)
+- [X] T0315 [US21] Exponer src/Presentation/IngenIA365ERP.API/Endpoints/Reports/ReceiptsReportsEndpoints.cs (`/api/reports/receipts/{vista}?format=`) y TreasuryReportsEndpoints.cs (`/api/reports/treasury/{vista}`) con `Receipts.Reports.View/Export` y `Treasury.Reports.View/Export` (`RequirePermissionWhenExporting`), auditando cada exportación (FR-154)
+- [X] T0316 [US21] Crear las pantallas src/Presentation/IngenIA365ERP.Shared/Pages/Recaudo/Informes.razor (`/recaudo/informes?vista=`) y src/Presentation/IngenIA365ERP.Shared/Pages/Tesoreria/Informes.razor (`/tesoreria/informes?vista=`) con `IndicadorDeCarga` por zona, y las tarjetas de Recaudo y Tesorería en el Centro de Reportes (`/reportes`), cuyos `NavigateTo` revisa `TodoEnlaceDelMenuTieneSuPagina`; llenar `LasPantallasDeRecaudoYTesoreriaEstanEnElMenu` con todas las pantallas de R0/T0
+
+
+**Notas de la construcción de la fase 20 (2026-10-24)**. Pruebas escritas y compiladas, sin correr. Detenida antes de las verificaciones de EF por falta de disco en C (0 bytes libres):
+
+- **T0311, T0312**: `Receipts/Reports/InformesDeRecaudoR0Tests` y `Treasury/Reports/InformesDeTesoreriaT0Tests` (registro, cada vista responde su tabla, cuadre del recaudo por medio con
+  las vueltas, por módulo, alcance, saldos bancarios por el puerto, regiro). **T0313 (pendiente)**: la e2e se escribe y se corre en la fase 22; sin marcar.
+- **T0314**: tipos comunes en `Application/Common/Reports/InformesDeRecaudoYTesoreria.cs` (`VistaDeInformeDeRecaudoYTesoreria`, `FiltrosDeInformeDeRecaudoYTesoreria`: `from`,
+  `to`, `asOf`, `branch`, `point`, `cashBox`, `account`, `groupBy`; rango hasta 366 días; `Reports.ReceiptsTreasury.RangeInvalid`/`.FilterInvalid`), porque los dos módulos no se
+  conocen. Recaudo: `VistasDeRecaudo` (11 vistas) y un solo `ReceiptsReportQuery`/`Handler` con un método por vista (no una consulta por vista). Tesorería:
+  `VistasDeTesoreria.Vistas` (7) y `TreasuryReportQuery`; `recent-account-changes` se reenvía a la consulta de la fase 9; `bank-balances` pregunta `SaldoEnLibrosAsync` y audita
+  `Treasury.BankBalances.Read`. `daily-collection` agrupa por `groupBy` (medio por defecto; el efectivo neto de las vueltas). `exceptions`: la «reclasificación» se lee como fecha
+  valor corregida (`OriginalValueDate`); no hay otra reclasificación modelada en R0. `paymasters` compara lo enviado en los archivos con lo girado en el rango.
+- **T0315**: `ReceiptsReportsEndpoints` y `TreasuryReportsEndpoints` (registro en `GET /`, una ruta por vista con `RequirePermission` y `RequirePermissionWhenExporting`,
+  auditoría `Receipts.Report.Exported`/`Treasury.Report.Exported` por `InformeExportadoAsync`). Los permisos ya estaban sembrados.
+- **T0316**: pantallas `/recaudo/informes` y `/tesoreria/informes` (selector del registro, filtros, `TablaDeReporte`, Excel y PDF), en el menú; tarjetas de Recaudo y Tesorería
+  en `/reportes`; `InformesDeRecaudoYTesoreriaClient` en Web, Web.Client y MAUI; `LasPantallasDeRecaudoYTesoreriaEstanEnElMenu` lista todas las pantallas de R0/T0 con
+  indicador y suma `Las_paginas_delgadas_de_la_matriz_existen_protegidas_y_en_el_menu`. Sin probar en navegador.
+- Sin esquema: no hubo migración. Compilan API, Web, Web.Client, Persistence y las cinco de pruebas. **No se corrió** `has-pending-model-changes` ni la paridad (disco C lleno).
 
 ---
 
