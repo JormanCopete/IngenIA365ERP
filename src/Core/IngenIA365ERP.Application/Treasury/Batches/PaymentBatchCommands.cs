@@ -1,5 +1,6 @@
 using System.Globalization;
 using FluentValidation;
+using IngenIA365ERP.Application.Common.Alerts;
 using IngenIA365ERP.Application.Common.Approvals;
 using IngenIA365ERP.Application.Common.BankFiles;
 using IngenIA365ERP.Application.Common.Behaviors;
@@ -434,17 +435,25 @@ public sealed class GetPaymentBatchQueryHandler(IApplicationDbContext db, IAlcan
 /// Lo que se verifica antes de aprobar un lote, en un solo sitio (feature 015, US10 y US26, T0143, T0166, T0167): las listas vinculantes sobre todo beneficiario
 /// (FR-203). La revisión expresa de las cuentas cambiadas (FR-210) la suma US26. (nuevo)
 /// </summary>
-public sealed class GuardasDeAprobacionDelLote(IApplicationDbContext db, IListasDeTesoreria listas)
+public sealed class GuardasDeAprobacionDelLote(IApplicationDbContext db, IListasDeTesoreria listas, IAlertas alertas)
 {
     public async Task<Result> AntesDeAprobarAsync(PaymentBatch lote, CancellationToken ct)
     {
         var items = await (from i in db.PaymentBatchItems.AsNoTracking()
                            join o in db.PaymentOrders.AsNoTracking() on i.PaymentOrderId equals o.Id
                            where i.PaymentBatchId == lote.Id && i.IsLive
-                           select new { o.Number, o.BeneficiaryPersonId }).ToListAsync(ct);
+                           select new { o.PublicId, o.Number, o.BeneficiaryPersonId, o.BeneficiaryName, i.Flags, i.ExplicitlyReviewedByUserId }).ToListAsync(ct);
+        // US26 (T0166; FR-210): una orden a una cuenta destino cambiada hace pocos días no se aprueba sin su revisión expresa por otra persona.
+        var sinRevisar = items.Where(i => i.Flags.HasFlag(PaymentBatchItemFlags.RecentAccountChange) && i.ExplicitlyReviewedByUserId is null).Select(i => i.Number).ToList();
+        if (sinRevisar.Count > 0) return Result.Failure(ErroresDeTesoreria.RevisionRequerida(sinRevisar));
+        // US26 (T0167; FR-203): las listas vinculantes sobre todo beneficiario antes de aprobar; una coincidencia alerta al oficial de inmediato.
         var resultado = await listas.EvaluarAsync(items.Select(i => i.BeneficiaryPersonId).Distinct().ToList(), ct);
-        if (resultado.HayVinculante)
-            return Result.Failure(ErroresDeTesoreria.ListaVinculanteEnLote(items.Where(i => resultado.Vinculantes.Contains(i.BeneficiaryPersonId)).Select(i => i.Number).ToList()));
-        return Result.Success();
+        if (!resultado.HayVinculante) return Result.Success();
+        var bloqueadas = items.Where(i => resultado.Vinculantes.Contains(i.BeneficiaryPersonId)).ToList();
+        foreach (var b in bloqueadas)
+            await alertas.LevantarAsync(new AlertaALevantar(TiposDeAlerta.TesoreriaListaVinculante, "Beneficiario en lista vinculante",
+                $"El beneficiario de la orden {b.Number} ({b.BeneficiaryName}) del lote {lote.Number} coincidió en una lista vinculante al aprobar: no se aprueba ni se paga.",
+                "PaymentOrder", b.PublicId, DedupKey: $"Tesoreria.ListaVinculante:{b.PublicId:N}", ModuloDeOrigen: "Treasury"), ct);
+        return Result.Failure(ErroresDeTesoreria.ListaVinculanteEnLote(bloqueadas.Select(i => i.Number).ToList()));
     }
 }

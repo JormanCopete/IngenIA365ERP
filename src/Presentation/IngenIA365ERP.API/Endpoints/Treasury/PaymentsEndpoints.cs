@@ -61,6 +61,10 @@ public class PaymentsEndpoints : ICarterModule
         lotes.MapPost("/{id:guid}/reject", async (Guid id, MotivoRequest body, HttpContext http, ISender s, CancellationToken ct) =>
                 await s.Send(new RejectPaymentBatchCommand(id, body.Reason ?? string.Empty) { OperationKey = http.ClaveDeOperacion() }, ct))
             .WithName("Treasury_PaymentBatches_Reject").ConClaveDeOperacion().RequirePermission(AprobarLotes);
+        // US26 (T0166; FR-210): la revisión expresa de una orden marcada, por otra persona que quien preparó el lote.
+        lotes.MapPost("/{id:guid}/items/{itemId:guid}/review", async (Guid id, Guid itemId, MotivoRequest body, HttpContext http, ISender s, CancellationToken ct) =>
+                await s.Send(new ReviewPaymentBatchItemCommand(id, itemId, body.Reason) { OperationKey = http.ClaveDeOperacion() }, ct))
+            .WithName("Treasury_PaymentBatches_ReviewItem").ConClaveDeOperacion().RequirePermission(AprobarLotes);
         lotes.MapPost("/{id:guid}/file", async (Guid id, HttpContext http, ISender s, CancellationToken ct) =>
                 await s.Send(new GeneratePaymentFileCommand(id) { OperationKey = http.ClaveDeOperacion() }, ct))
             .WithName("Treasury_PaymentBatches_File").ConClaveDeOperacion().RequirePermission(GenerarArchivo);
@@ -71,6 +75,12 @@ public class PaymentsEndpoints : ICarterModule
                     OperationKey = http.ClaveDeOperacion(),
                 }, ct))
             .WithName("Treasury_PaymentBatches_SentByPortal").ConClaveDeOperacion().RequirePermission(MarcarEnviado);
+
+        // US26 (T0169; FR-153): la vista de las órdenes a cuentas cambiadas; la fase 20 la lleva al centro de reportes con su exportación.
+        var vistas = TreasuryGroup.Grupo(app, "/reports", "Tesorería Informes");
+        vistas.MapGet("/" + IngenIA365ERP.Application.Treasury.Reports.VistasDeTesoreria.CambiosRecientesDeCuenta, async (DateOnly from, DateOnly to, ISender s, CancellationToken ct) =>
+                await s.Send(new IngenIA365ERP.Application.Treasury.Reports.RecentAccountChangesQuery(from, to), ct))
+            .WithName("Treasury_Reports_RecentAccountChanges").RequirePermission(VerOrdenes);
 
         var archivos = TreasuryGroup.Grupo(app, "/payment-files", "Tesorería Archivos de pago");
         archivos.MapGet("/", async (Guid? batch, ISender s, CancellationToken ct) => await s.Send(new ListPaymentFilesQuery(batch), ct))

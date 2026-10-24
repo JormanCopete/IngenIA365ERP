@@ -286,6 +286,15 @@ Lo que tasks.md marcaba **(nuevo)** y lo que trajeron el `/speckit-analyze` y la
 | `VigilanciaDeTesoreria` · `TareaDeVigilanciaDeTesoreria` (`tesoreria.vigilancia`, cada 6 h) | sólo alerta; en T0 las órdenes enviadas sin resultado a `Giros.DiasSinResultado` días hábiles | `Application/Treasury/Tareas` |
 | `ResultadosClient` · `/tesoreria/resultados` | la pantalla de US11 | `Shared` |
 
+**Fijados en la construcción de la fase 9 (2026-10-24)**:
+
+| Nombre | Qué | Dónde |
+|---|---|---|
+| `ReviewPaymentBatchItemCommand` · `POST /api/treasury/payment-batches/{id}/items/{itemId}/review` (cuerpo `reason` = la nota) · `Treasury.Batch.ItemNotFlagged` | la revisión expresa de una orden marcada, con nota, por otra persona que quien preparó | `Application/Treasury/Batches`, `PaymentsEndpoints.cs` |
+| `GuardasDeAprobacionDelLote(db, listas, alertas)` | exige la revisión de `RecentAccountChange` antes de las listas, y alerta `Tesoreria.ListaVinculante` al encontrar la coincidencia | `PaymentBatchCommands.cs` |
+| `VistasDeTesoreria` · `RecentAccountChangesQuery` · `GET /api/treasury/reports/recent-account-changes` | el registro de vistas de Tesorería nace con una vista; la fase 20 lo completa | `Application/Treasury/Reports` |
+| `ResultadosE2E.CargarRespuestaAsync` | la carga de la respuesta del banco por multipart en las e2e | `tests/…/Treasury/CuentaDestinoCambiadaYArchivoAlteradoTests.cs` |
+
 ## 3. Decisiones transversales
 
 ### Módulos y frontera

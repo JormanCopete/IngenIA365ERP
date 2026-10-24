@@ -742,15 +742,37 @@ entra a un lote aprobado.
 
 ### Tests for User Story 26
 
-- [ ] T0164 [P] [US26] Escribir tests/IngenIA365ERP.Application.Tests/Treasury/Batches/MarcasDelLoteTests.cs (FR-210; SC-026): la orden a una cuenta cambiada dentro de `CuentasDestino.DiasDeMarca` lleva `RecentAccountChange` y el lote no se aprueba sin `ExplicitlyReviewedBy` (`Treasury.Batch.ReviewRequired`); cuenta compartida y de usuario interno alertan `Plataforma.CuentaDestinoCompartida` y `Tesoreria.CuentaDestinoCambiada`; las importadas sin certificación se marcan (Q4)
-- [ ] T0165 [P] [US26] Escribir la e2e tests/IngenIA365ERP.API.IntegrationTests/Treasury/CuentaDestinoCambiadaYArchivoAlteradoTests.cs (US26 «Independent Test», quickstart recorrido G pasos 2 y 6; SC-026) y la parte de Tesorería de tests/IngenIA365ERP.API.IntegrationTests/Receipts/ListaVinculanteBloqueaTests.cs (beneficiario en lista vinculante: cero órdenes en un lote aprobado, alerta inmediata `Tesoreria.ListaVinculante`; SC-025); se corren en la fase 22
+- [X] T0164 [P] [US26] Escribir tests/IngenIA365ERP.Application.Tests/Treasury/Batches/MarcasDelLoteTests.cs (FR-210; SC-026): la orden a una cuenta cambiada dentro de `CuentasDestino.DiasDeMarca` lleva `RecentAccountChange` y el lote no se aprueba sin `ExplicitlyReviewedBy` (`Treasury.Batch.ReviewRequired`); cuenta compartida y de usuario interno alertan `Plataforma.CuentaDestinoCompartida` y `Tesoreria.CuentaDestinoCambiada`; las importadas sin certificación se marcan (Q4)
+- [X] T0165 [P] [US26] Escribir la e2e tests/IngenIA365ERP.API.IntegrationTests/Treasury/CuentaDestinoCambiadaYArchivoAlteradoTests.cs (US26 «Independent Test», quickstart recorrido G pasos 2 y 6; SC-026) y la parte de Tesorería de tests/IngenIA365ERP.API.IntegrationTests/Receipts/ListaVinculanteBloqueaTests.cs (beneficiario en lista vinculante: cero órdenes en un lote aprobado, alerta inmediata `Tesoreria.ListaVinculante`; SC-025); se corren en la fase 22
 
 ### Implementation for User Story 26
 
-- [ ] T0166 [US26] Implementar en src/Core/IngenIA365ERP.Application/Treasury/Batches/ReviewPaymentBatchItemCommand.cs la revisión expresa por una persona distinta de quien preparó (`POST /api/treasury/payment-batches/{id}/items/{itemId}/review`, `Treasury.Batches.Approve`) y la guarda en `ApprovePaymentBatchCommand` (FR-210)
-- [ ] T0167 [US26] Completar en src/Core/IngenIA365ERP.Application/Treasury/Orders/ValidadorDeOrdenes.cs y src/Core/IngenIA365ERP.Domain/Treasury/Lotes/ArmadoDeLote.cs las marcas `SharedDestination`, `InternalUserAccount` e `ImportedAccountWithoutCertificate` con `ICuentasBancariasDePersona.VerificarAsync`, y la consulta de listas vinculantes sobre todo beneficiario antes de aprobar el lote (`Treasury.Compliance.BindingListMatch`, alerta inmediata al oficial) (FR-203, FR-210)
-- [ ] T0168 [US26] Mostrar en src/Presentation/IngenIA365ERP.Shared/Pages/Tesoreria/Lotes.razor las marcas por orden y la revisión expresa, y en Resultados.razor las líneas con discrepancia (FR-212), con `IndicadorDeCarga` por zona
-- [ ] T0169 [US26] Agregar la vista `recent-account-changes` (órdenes marcadas por cambio de cuenta) al registro de vistas de Tesorería (src/Core/IngenIA365ERP.Application/Treasury/Reports/) que crea la fase 20 (FR-153)
+- [X] T0166 [US26] Implementar en src/Core/IngenIA365ERP.Application/Treasury/Batches/ReviewPaymentBatchItemCommand.cs la revisión expresa por una persona distinta de quien preparó (`POST /api/treasury/payment-batches/{id}/items/{itemId}/review`, `Treasury.Batches.Approve`) y la guarda en `ApprovePaymentBatchCommand` (FR-210)
+- [X] T0167 [US26] Completar en src/Core/IngenIA365ERP.Application/Treasury/Orders/ValidadorDeOrdenes.cs y src/Core/IngenIA365ERP.Domain/Treasury/Lotes/ArmadoDeLote.cs las marcas `SharedDestination`, `InternalUserAccount` e `ImportedAccountWithoutCertificate` con `ICuentasBancariasDePersona.VerificarAsync`, y la consulta de listas vinculantes sobre todo beneficiario antes de aprobar el lote (`Treasury.Compliance.BindingListMatch`, alerta inmediata al oficial) (FR-203, FR-210)
+- [X] T0168 [US26] Mostrar en src/Presentation/IngenIA365ERP.Shared/Pages/Tesoreria/Lotes.razor las marcas por orden y la revisión expresa, y en Resultados.razor las líneas con discrepancia (FR-212), con `IndicadorDeCarga` por zona
+- [X] T0169 [US26] Agregar la vista `recent-account-changes` (órdenes marcadas por cambio de cuenta) al registro de vistas de Tesorería (src/Core/IngenIA365ERP.Application/Treasury/Reports/) que crea la fase 20 (FR-153)
+
+
+**Notas de la construcción de la fase 9 (2026-10-24)**. Pruebas escritas y compiladas, sin correr. Desviaciones y decisiones (las nuevas, en
+decisiones-transversales §2.7):
+
+- **T0164**: escritas sobre `EscenarioDeTesoreria` con `CuentasDestino.DiasDeMarca = 10`: cuenta cambiada hace 3 días (marca, revisión exigida, quien preparó no
+  revisa, otra persona sí), hace 30 (sin marca), compartida con otro beneficiario, importada sin certificación, orden sin marcas y lista vinculante al aprobar.
+- **T0165**: las dos e2e están escritas (`CuentaDestinoCambiadaYArchivoAlteradoTests` fija `CuentasDestino.DiasDeEspera = 0` y `.DiasDeMarca = 30` por la ruta de
+  parámetros para no depender de la semilla; `Receipts/ListaVinculanteBloqueaTests` cambia el documento del beneficiario para que el canal **simulado** lo encuentre,
+  termina en 9 = `Match`, y revalida la orden). La parte de Recaudo de `ListaVinculanteBloqueaTests` la suma la fase 15. Se corren en la fase 22; `ResultadosE2E`
+  (nuevo) carga la respuesta por multipart.
+- **T0166**: `ReviewPaymentBatchItemCommand` en su archivo; la revisión exige **nota** (la pantalla la pide), se hace en borrador o en aprobación, no cambia la huella
+  del lote (no cambia lo que se paga) y responde `Treasury.Batch.ItemNotFlagged` (nuevo) para una orden sin marcas. Cualquier marca admite revisión; sólo
+  `RecentAccountChange` la exige para aprobar (`GuardasDeAprobacionDelLote`, `Treasury.Batch.ReviewRequired`, antes de las listas).
+- **T0167**: las marcas `SharedDestination`, `InternalUserAccount` e `ImportedAccountWithoutCertificate` (con `ICuentasBancariasDePersona.VerificarAsync`) y la consulta de
+  listas antes de aprobar ya estaban desde la fase 7; esta fase suma la **alerta inmediata** `Tesoreria.ListaVinculante` cuando la guarda de aprobación encuentra la
+  coincidencia (antes sólo alertaba la validación de la orden).
+- **T0168**: `Lotes.razor` pide la nota de la revisión y ofrece revisar cualquier orden marcada; `Resultados.razor` (fase 8) ya muestra las líneas con discrepancia.
+- **T0169**: no hay todavía registro de vistas de Tesorería (lo arma la fase 20): nace mínimo en `Application/Treasury/Reports/VistasDeTesoreria.cs` con
+  `recent-account-changes` (`RecentAccountChangesQuery`, `TablaExportable`, alcance por cuenta, columna oculta `_orden`) y la ruta JSON
+  `GET /api/treasury/reports/recent-account-changes?from=&to=` (`Treasury.Orders.View`); la fase 20 la lleva al centro de reportes con su exportación.
+- Sin cambios de esquema: no hay migración en esta fase.
 
 ---
 

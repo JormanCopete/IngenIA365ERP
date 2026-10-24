@@ -69,6 +69,14 @@
                         </PermissionGate>
                     }
                 </div>
+                @if (_lote.Items.Any(i => i.Flags != 0 && i.ReviewedByName is null) && _lote.Status is 1 or 2)
+                {
+                    <PermissionGate Required="Treasury.Batches.Approve">
+                        <label class="campo">Qué revisó de las cuentas marcadas (certificación, llamada al beneficiario…) *
+                            <input class="e-input" @bind="_notaRevision" maxlength="500" />
+                        </label>
+                    </PermissionGate>
+                }
                 <table class="data-grid">
                     <thead><tr><th>Orden</th><th>Beneficiario</th><th>Valor</th><th>GMF</th><th>Marcas</th><th>Revisión</th></tr></thead>
                     <tbody>
@@ -79,10 +87,10 @@
                                 <td>@i.GmfEstimate.ToString("N2")</td><td>@IngenIA365ERP.Shared.Pages.Tesoreria.Ordenes.Marcas(i.Flags)</td>
                                 <td>
                                     @if (i.ReviewedByName is not null) { <span>Revisó @i.ReviewedByName</span> }
-                                    else if (i.RequiresReview && _lote.Status is 1 or 2)
+                                    else if ((i.RequiresReview || i.Flags != 0) && _lote.Status is 1 or 2)
                                     {
                                         <PermissionGate Required="Treasury.Batches.Approve">
-                                            <SfButton CssClass="e-flat" OnClick="@(() => RevisarAsync(i))">Revisar la cuenta cambiada</SfButton>
+                                            <SfButton CssClass="e-flat" OnClick="@(() => RevisarAsync(i))">@(i.RequiresReview ? "Revisar la cuenta cambiada" : "Revisar la marca")</SfButton>
                                         </PermissionGate>
                                     }
                                 </td>
@@ -152,7 +160,7 @@
     private LoteDePagoDto? _lote;
     private VistaPreviaDeLoteDto? _vista;
     private string _cuenta = "", _uso = "";
-    private string? _cargo, _autorizo;
+    private string? _cargo, _autorizo, _notaRevision;
     private int _forma = 1;
     private DateOnly _fecha = DateOnly.FromDateTime(DateTime.Today);
     private bool _visible;
@@ -250,8 +258,9 @@
 
     private async Task RevisarAsync(ItemDeLoteDto i)
     {
+        if (string.IsNullOrWhiteSpace(_notaRevision)) { await Notification.WarningAsync("Escriba qué revisó antes de marcar la revisión."); return; }
         using var g = _detalleCarga.Iniciar();
-        await Despues(await LotesApi.RevisarAsync(_lote!.PublicId, i.PublicId, null, new ClaveDeOperacion()), $"Cuenta destino de {i.OrderNumber} revisada.");
+        await Despues(await LotesApi.RevisarAsync(_lote!.PublicId, i.PublicId, _notaRevision.Trim(), new ClaveDeOperacion()), $"Cuenta destino de {i.OrderNumber} revisada.");
     }
 
     private async Task GenerarAsync()
