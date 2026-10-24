@@ -35,8 +35,8 @@ public class LasPantallasDicenQueEstanCargando
         ["Maestros", "Nomina", "Asociados", "Contabilidad", "Inventario", "Ventas", "Compras", "Pos", "Administracion", "Compliance",
             "Cartera", "Cartera/Captaciones",
             // Feature 015 (T0022; R-35; FR-018): «Tesoreria» entra con la Tesorería nueva; sus cuatro pantallas heredadas quedan fuera por nombre
-            // (HeredadasDeTesoreria) hasta su retiro. «Recaudo» entra con su primera pantalla (la carpeta todavía no existe).
-            "Tesoreria"];
+            // (HeredadasDeTesoreria) hasta su retiro. «Recaudo» entra con su primera pantalla (fases 3 y 4, T0063 y T0077: la configuración).
+            "Tesoreria", "Recaudo"];
 
     /// <summary>Feature 015 (T0022): las pantallas heredadas de Tesorería, que conviven sin el patrón hasta su retiro después de T2.</summary>
     private static readonly string[] HeredadasDeTesoreria = ["Cheques.razor", "ConceptosTesoreria.razor", "FacturasTesoreria.razor", "FlujoCaja.razor"];

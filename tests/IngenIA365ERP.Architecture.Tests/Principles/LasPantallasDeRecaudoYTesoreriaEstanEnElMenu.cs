@@ -21,6 +21,16 @@ public class LasPantallasDeRecaudoYTesoreriaEstanEnElMenu
     /// <summary>Pantallas del menú: archivo (relativo a Shared), ruta y permiso.</summary>
     private static readonly (string Archivo, string Ruta, string Permiso)[] Pantallas =
     [
+        // Fases 3 y 4 (T0063, T0077): el alcance y la configuración de Recaudo.
+        ("Pages/Recaudo/Configuracion/Puntos.razor", "/recaudo/configuracion/puntos", "Receipts.Setup.View"),
+        ("Pages/Recaudo/Configuracion/Cajas.razor", "/recaudo/configuracion/cajas", "Receipts.Setup.View"),
+        ("Pages/Recaudo/Configuracion/Medios.razor", "/recaudo/configuracion/medios", "Receipts.Setup.View"),
+        ("Pages/Recaudo/Configuracion/Bovedas.razor", "/recaudo/configuracion/bovedas", "Receipts.Setup.View"),
+        ("Pages/Recaudo/Configuracion/TiposDeDocumento.razor", "/recaudo/configuracion/tipos-de-documento", "Receipts.Setup.View"),
+        ("Pages/Recaudo/Configuracion/Conceptos.razor", "/recaudo/configuracion/conceptos", "Receipts.Setup.View"),
+        ("Pages/Recaudo/Configuracion/Talonarios.razor", "/recaudo/configuracion/talonarios", "Receipts.Setup.View"),
+        ("Pages/Recaudo/Configuracion/Suplencias.razor", "/recaudo/configuracion/suplencias", "Receipts.Setup.View"),
+        ("Pages/Recaudo/Configuracion/Alcance.razor", "/recaudo/configuracion/alcance", "Receipts.Scope.Manage"),
     ];
 
     /// <summary>Páginas de detalle (con parámetro de ruta): archivo, la ruta tal como la declara <c>@page</c> y permiso.</summary>

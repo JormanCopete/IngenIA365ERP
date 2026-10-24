@@ -546,6 +546,22 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Configuration.ReceiptsSetup> ReceiptsSetups => Set<IngenIA365ERP.Domain.Entities.Receipts.Configuration.ReceiptsSetup>();
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.PayerControl> PayerControls => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.PayerControl>();
     public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Activation.TreasurySetup> TreasurySetups => Set<IngenIA365ERP.Domain.Entities.Treasury.Activation.TreasurySetup>();
+    // ---- Feature 015, fases 3 a 6: Recaudo y Tesorería ----
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Configuration.UserCollectionPointScope> UserCollectionPointScopes => Set<IngenIA365ERP.Domain.Entities.Receipts.Configuration.UserCollectionPointScope>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Configuration.UserCashBoxScope> UserCashBoxScopes => Set<IngenIA365ERP.Domain.Entities.Receipts.Configuration.UserCashBoxScope>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Configuration.UserPaymasterScope> UserPaymasterScopes => Set<IngenIA365ERP.Domain.Entities.Receipts.Configuration.UserPaymasterScope>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.BankAccounts.UserBankAccountScope> UserBankAccountScopes => Set<IngenIA365ERP.Domain.Entities.Treasury.BankAccounts.UserBankAccountScope>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Configuration.CollectionPoint> CollectionPoints => Set<IngenIA365ERP.Domain.Entities.Receipts.Configuration.CollectionPoint>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Configuration.CashBox> CashBoxes => Set<IngenIA365ERP.Domain.Entities.Receipts.Configuration.CashBox>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Configuration.CashBoxCashier> CashBoxCashiers => Set<IngenIA365ERP.Domain.Entities.Receipts.Configuration.CashBoxCashier>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Configuration.PaymentMeansCollectionPoint> PaymentMeansCollectionPoints => Set<IngenIA365ERP.Domain.Entities.Receipts.Configuration.PaymentMeansCollectionPoint>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Configuration.ReceiptDocumentType> ReceiptDocumentTypes => Set<IngenIA365ERP.Domain.Entities.Receipts.Configuration.ReceiptDocumentType>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Configuration.MiscConcept> MiscConcepts => Set<IngenIA365ERP.Domain.Entities.Receipts.Configuration.MiscConcept>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Configuration.ContingencyBook> ContingencyBooks => Set<IngenIA365ERP.Domain.Entities.Receipts.Configuration.ContingencyBook>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Configuration.SupervisorDelegation> SupervisorDelegations => Set<IngenIA365ERP.Domain.Entities.Receipts.Configuration.SupervisorDelegation>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Configuration.ChannelModalityRule> ChannelModalityRules => Set<IngenIA365ERP.Domain.Entities.Receipts.Configuration.ChannelModalityRule>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Vaults.Vault> Vaults => Set<IngenIA365ERP.Domain.Entities.Receipts.Vaults.Vault>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Vaults.VaultCustodian> VaultCustodians => Set<IngenIA365ERP.Domain.Entities.Receipts.Vaults.VaultCustodian>();
     DbSet<DebitCard> IApplicationDbContext.DebitCards => throw new NotImplementedException();
     DbSet<DebitAgreementParameter> IApplicationDbContext.DebitAgreementParameters => throw new NotImplementedException();
     DbSet<PosTerminal> IApplicationDbContext.PosTerminals => throw new NotImplementedException();
@@ -577,6 +593,21 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Configuration.ReceiptsSetup>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Operations.PayerControl>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Treasury.Activation.TreasurySetup>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Configuration.UserCollectionPointScope>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Configuration.UserCashBoxScope>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Configuration.UserPaymasterScope>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Treasury.BankAccounts.UserBankAccountScope>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Configuration.CollectionPoint>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Configuration.CashBox>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Configuration.CashBoxCashier>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Configuration.PaymentMeansCollectionPoint>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Configuration.ReceiptDocumentType>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Configuration.MiscConcept>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Configuration.ContingencyBook>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Configuration.SupervisorDelegation>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Configuration.ChannelModalityRule>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Vaults.Vault>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Vaults.VaultCustodian>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         // Feature 013 (T0236): Cartera nueva con su filtro de borrado lógico, sin RowVersion (InMemory).
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Lending.Collections.CreditReportClaim>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Lending.Collections.DebtorMessage>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });

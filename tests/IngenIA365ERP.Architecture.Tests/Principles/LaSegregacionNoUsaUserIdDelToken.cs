@@ -47,6 +47,12 @@ public class LaSegregacionNoUsaUserIdDelToken
         // Feature 015 (E-06; T0029, T0033): quien pide y quien aprueba una cuenta bancaria de una persona, y quien decide el go/no-go.
         Path.Combine("Core", "IngenIA365ERP.Application", "Core", "PersonBankAccounts"),
         Path.Combine("Core", "IngenIA365ERP.Application", "Common", "GoLive"),
+        // Feature 015, US12 (T0055; R-31; FR-012): Recaudo entero (quien registra no aprueba: arqueos, reclasificaciones, fechas valor, ajustes, anulaciones)
+        // y las carpetas nuevas de Tesorería donde se decide quién prepara, aprueba, descarga o concilia (lo heredado queda fuera, R-04). Cada carpeta
+        // nueva de Treasury con segregación se suma aquí cuando nace (Batches, PaymentFiles, Results, Reconciliation).
+        Path.Combine("Core", "IngenIA365ERP.Application", "Receipts"),
+        Path.Combine("Core", "IngenIA365ERP.Application", "Treasury", "Common"),
+        Path.Combine("Core", "IngenIA365ERP.Application", "Treasury", "Security"),
     ];
 
     private static readonly Regex UserIdOCorreo = new(@"\.(UserId|Email)\b", RegexOptions.Compiled);
