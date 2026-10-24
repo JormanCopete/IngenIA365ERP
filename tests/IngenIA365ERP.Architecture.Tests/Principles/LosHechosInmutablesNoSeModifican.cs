@@ -314,6 +314,9 @@ public class LosHechosInmutablesNoSeModifican
         ["ReceiptVoiding"] = ["Number", "ApprovedByUserId", "DecidedAt", "DecisionReason", "OmittedApplicationsJson", "PayerCreditBalanceId"],
         ["ModuleReversal"] = ["ConfirmedByUserId", "ConfirmedAt", "ConfirmationNote", "PayerCreditBalanceId"],
         ["PayerCreditBalanceMovement"] = [],
+        // Fase 11, US6 (T0191, T0192; data-model §5, §12.1): el extracto y sus líneas (lo que Recaudo identifica y el estado en la conciliación son columnas
+        // mutables), la identificación de cada abono y las resoluciones de las partidas.
+        ["BankStatement"] = [], ["BankStatementLine"] = [], ["BankItemIdentification"] = [], ["UnidentifiedItemResolution"] = [],
     };
 
     /// <summary>
@@ -324,6 +327,7 @@ public class LosHechosInmutablesNoSeModifican
     {
         ["Receipt"] = ["Status"], ["ReceiptMeans"] = ["Status"], ["ReceiptApplication"] = ["Status"], ["ReceiptApplicationPortion"] = ["Status"],
         ["ReceiptVoiding"] = ["Status"], ["ModuleReversal"] = ["Cause"],
+        ["BankStatementLine"] = ["DuplicateDecision", "RecaudoStatus", "RecaudoIdentifiedAmount", "ReconciliationStatus"],
     };
 
     [Fact]

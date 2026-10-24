@@ -606,6 +606,14 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Payments.PaymentResponseLine> PaymentResponseLines => Set<IngenIA365ERP.Domain.Entities.Treasury.Payments.PaymentResponseLine>();
     public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Payments.DisbursementResult> DisbursementResults => Set<IngenIA365ERP.Domain.Entities.Treasury.Payments.DisbursementResult>();
     public DbSet<IngenIA365ERP.Domain.Entities.Accounting.Integration.OwnBankAccountLink> OwnBankAccountLinks => Set<IngenIA365ERP.Domain.Entities.Accounting.Integration.OwnBankAccountLink>();
+    // Feature 015, fases 11 a 16 (DbSets).
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Statements.BankStatement> TreasuryBankStatements => Set<IngenIA365ERP.Domain.Entities.Treasury.Statements.BankStatement>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Statements.BankStatementLine> TreasuryBankStatementLines => Set<IngenIA365ERP.Domain.Entities.Treasury.Statements.BankStatementLine>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Banks.BankItemIdentification> BankItemIdentifications => Set<IngenIA365ERP.Domain.Entities.Receipts.Banks.BankItemIdentification>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Banks.UnidentifiedItem> UnidentifiedItems => Set<IngenIA365ERP.Domain.Entities.Receipts.Banks.UnidentifiedItem>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Banks.UnidentifiedItemResolution> UnidentifiedItemResolutions => Set<IngenIA365ERP.Domain.Entities.Receipts.Banks.UnidentifiedItemResolution>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Banks.ProcessingRun> ProcessingRuns => Set<IngenIA365ERP.Domain.Entities.Receipts.Banks.ProcessingRun>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Banks.ProcessingRunLine> ProcessingRunLines => Set<IngenIA365ERP.Domain.Entities.Receipts.Banks.ProcessingRunLine>();
     DbSet<DebitCard> IApplicationDbContext.DebitCards => throw new NotImplementedException();
     DbSet<DebitAgreementParameter> IApplicationDbContext.DebitAgreementParameters => throw new NotImplementedException();
     DbSet<PosTerminal> IApplicationDbContext.PosTerminals => throw new NotImplementedException();
@@ -687,6 +695,13 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Treasury.Activation.TreasuryActivation>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Accounting.Integration.OwnBankAccountLink>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceiptVoiding>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Treasury.Statements.BankStatement>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Treasury.Statements.BankStatementLine>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Banks.BankItemIdentification>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Banks.UnidentifiedItem>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Banks.UnidentifiedItemResolution>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Banks.ProcessingRun>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Banks.ProcessingRunLine>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Operations.ModuleReversal>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Operations.PayerCreditBalance>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Operations.PayerCreditBalanceMovement>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });

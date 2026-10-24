@@ -22,6 +22,8 @@ public class NingunProcesoAplicaPagosNiInformaResultados
     private static readonly string[] Tareas =
     [
         "TareaDeSesionesOlvidadas", "TareaDeCuadreDiario", "TareaDeVigilanciaDeTesoreria",
+        // Fase 11 (T0197): la antigüedad de Recaudo.
+        "TareaDeAntiguedadDeRecaudo",
     ];
 
     private static readonly Regex EscrituraProhibida = new(

@@ -31,6 +31,10 @@ public class LasPantallasDeRecaudoYTesoreriaEstanEnElMenu
         ("Pages/Recaudo/Configuracion/Talonarios.razor", "/recaudo/configuracion/talonarios", "Receipts.Setup.View"),
         ("Pages/Recaudo/Configuracion/Suplencias.razor", "/recaudo/configuracion/suplencias", "Receipts.Setup.View"),
         ("Pages/Recaudo/Configuracion/Alcance.razor", "/recaudo/configuracion/alcance", "Receipts.Scope.Manage"),
+        // Fase 11 (T0199): los extractos, los abonos y las partidas.
+        ("Pages/Recaudo/Extractos.razor", "/recaudo/extractos", "Receipts.BankItems.View"),
+        ("Pages/Recaudo/Partidas.razor", "/recaudo/partidas", "Receipts.UnidentifiedItems.View"),
+        ("Pages/Tesoreria/Extractos.razor", "/tesoreria/extractos", "Treasury.Statements.View"),
     ];
 
     /// <summary>Páginas de detalle (con parámetro de ruta): archivo, la ruta tal como la declara <c>@page</c> y permiso.</summary>

@@ -115,7 +115,9 @@ public class EvaluadorDePoliticaTests
             "AccountWithdrawal", "AccountCashDeposit",
             // Feature 015 (T0061): las de Recaudo (aprobador presente) y Tesorería (diferida).
             "CashCountDifference", "CashMeansReclassification", "ReceiptBackdate", "CashSessionAdjustment", "ReceiptVoiding", "PaymentBatchApproval",
-            "LiquidityFundUse");
+            "LiquidityFundUse",
+            // Fase 11 (T0195): la clasificación de un abono o una partida y la partida vencida llevada a ingreso.
+            "BankItemClassification", "UnidentifiedItemToIncome");
         ApprovalSubjects.EsValido("DocumentConfirmation").Should().BeTrue();
         ApprovalSubjects.EsValido("documentconfirmation").Should().BeFalse("el sujeto se escribe exacto");
         ApprovalSubjects.EsValido("Otro").Should().BeFalse();

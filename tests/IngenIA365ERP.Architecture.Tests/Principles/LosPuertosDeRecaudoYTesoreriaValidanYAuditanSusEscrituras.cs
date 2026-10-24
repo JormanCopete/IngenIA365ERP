@@ -25,6 +25,8 @@ public class LosPuertosDeRecaudoYTesoreriaValidanYAuditanSusEscrituras
         // Fase 10 (T0177): la orden de pago que pide Recaudo y lo que Recaudo hace con su resultado.
         "Core/IngenIA365ERP.Application/Treasury/Orders/OrdenesDePagoDeTesoreria.cs",
         "Core/IngenIA365ERP.Application/Receipts/CreditBalances/CreditBalanceCommands.cs",
+        // Fase 11 (T0193): el extracto que Tesorería ofrece a Recaudo.
+        "Core/IngenIA365ERP.Application/Treasury/Statements/MovimientosBancariosParaRecaudo.cs",
     ];
 
     private static readonly Regex Valida = new(@"\bValidateAsync\(|\bValidar\w*\(", RegexOptions.Compiled);
