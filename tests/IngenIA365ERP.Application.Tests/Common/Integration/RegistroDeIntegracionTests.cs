@@ -1,4 +1,4 @@
-using FluentAssertions;
+﻿using FluentAssertions;
 using IngenIA365ERP.Application.Common.Execution;
 using IngenIA365ERP.Application.Common.Integration;
 using IngenIA365ERP.Application.Common.Interfaces;
@@ -241,6 +241,31 @@ public class RegistroDeIntegracionTests
         r.Value.ValidTo.Should().Be(Hoy);
         (await _db.IntegrationParticipants.AsNoTracking().SingleAsync()).ValidTo.Should().BeNull("todavía no se guardó");
         (await Escritor().RetirarAsync(Guid.NewGuid(), Hoy, default)).Error.Code.Should().Be("Integration.Participant.NotFound");
+    }
+
+    /// <summary>
+    /// Feature 015, R1 (T0352): adoptar la v2 suma las adopciones a la fila vigente —cierra la de antes la víspera y abre otra con las de antes más las
+    /// nuevas—, conserva la habilitación y no guarda. Prueba escrita, sin correr.
+    /// </summary>
+    [Fact]
+    public async Task Adoptar_la_v2_cierra_la_fila_vigente_y_abre_otra_con_las_dos_versiones()
+    {
+        Sembrar("REC", IntegrationParticipantClass.Receipts, IntegrationParticipantRole.ObligationsCollector, string.Empty, desde: Hoy.AddDays(-10),
+            adopciones: [(ContratosDeIntegracion.ProveedorDeObligaciones, 1), (ContratosDeIntegracion.ProveedorDeCuentas, 1)]);
+
+        var r = await Escritor().AdoptarAsync("REC", IntegrationParticipantRole.ObligationsCollector, string.Empty,
+            [new VersionAdoptada(ContratosDeIntegracion.ProveedorDeObligaciones, 2), new VersionAdoptada(ContratosDeIntegracion.ProveedorDeCuentas, 2)],
+            Hoy.AddDays(1), "Recaudo adopta la v2", default);
+
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? r.Error.Message : null);
+        r.Value.ValidFrom.Should().Be(Hoy.AddDays(1));
+        r.Value.Adoptions.Select(a => (a.ContractName, (int)a.Version)).Should().BeEquivalentTo(new[]
+        {
+            (ContratosDeIntegracion.ProveedorDeObligaciones, 1), (ContratosDeIntegracion.ProveedorDeCuentas, 1),
+            (ContratosDeIntegracion.ProveedorDeObligaciones, 2), (ContratosDeIntegracion.ProveedorDeCuentas, 2),
+        });
+        _db.IntegrationParticipants.Local.Single(p => p.ValidTo is not null).ValidTo.Should().Be(Hoy, "la fila de antes se cierra la víspera");
+        (await Escritor().AdoptarAsync("NOEXISTE", IntegrationParticipantRole.ObligationsCollector, string.Empty, [], Hoy, "x", default)).IsFailure.Should().BeTrue();
     }
 
     [Fact]

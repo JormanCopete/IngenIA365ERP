@@ -1,4 +1,4 @@
-using System.Reflection;
+﻿using System.Reflection;
 using System.Text.RegularExpressions;
 using ArchUnitNET.Loader;
 using ArchUnitNET.xUnit;
@@ -171,18 +171,23 @@ public class LaCarteraSoloSeTocaPorSusInterfaces
         Assert.Equal(["LiberarAsync", "ReservarAsync"], MetodosDe(typeof(IReservasDeCartera)));
         Assert.Equal(["CuotasDeNominaAsync", "ObligacionesAsync"], MetodosDe(typeof(IConsultaDeObligaciones)));
         Assert.Equal(["AplicarAsync", "ListarAsync", "ResolverSaldoAFavorAsync", "ReversarAsync", "SimularAsync"], MetodosDe(typeof(IContratoDeObligaciones)));
-        Assert.Equal(1, IContratoDeObligaciones.VersionDelContrato);
+        // Feature 015, R1 (E-01 a, E-02 a; contratos-v2.md §1, §3.1): las v2 conviven con las v1.
+        Assert.Equal(2, IContratoDeObligaciones.VersionDelContrato);
         // Feature 014 (T039, T041; R09, R20): el contrato de cuentas con sus siete métodos y la consulta de aportes en su versión 2.
         Assert.Equal(["ConsignarAsync", "ConsultarAsync", "ListarExigiblesAsync", "RetirarAsync", "ReversarAsync", "SimularAsync", "TrasladarAsync"],
             MetodosDe(typeof(IContratoDeCuentas)));
-        Assert.Equal(1, IContratoDeCuentas.VersionDelContrato);
+        Assert.Equal(2, IContratoDeCuentas.VersionDelContrato);
+        Assert.Equal([1, 2], IngenIA365ERP.Application.Common.Integration.ContratosDeIntegracion.VersionesDelContratoDeObligaciones);
+        Assert.Equal([1, 2], IngenIA365ERP.Application.Common.Integration.ContratosDeIntegracion.VersionesDelContratoDeCuentas);
+        // Feature 015, R1 (E-01 b; contratos-v2.md §2.1): la consulta de la carga aplicada sin activar.
+        Assert.Equal(["PersonaAsync"], MetodosDe(typeof(IConsultaDeCargaSinActivar)));
         Assert.Equal(["SaldosAsync"], MetodosDe(typeof(IConsultaDeAportes)));
         Assert.Equal(2, IConsultaDeAportes.VersionDelContrato);
         foreach (var puerto in PuertosOfrecidos)
             Assert.Equal("IngenIA365ERP.Application.Common.Integration.Lending", puerto.Namespace);
         // Feature 015 (decisión del dueño del 2026-10-24, T0113): la búsqueda de una obligación por su número, de sólo lectura.
         Assert.Equal(["PorNumeroAsync"], MetodosDe(typeof(IBusquedaDeObligaciones)));
-        Assert.Equal(8, PuertosOfrecidos.Length);
+        Assert.Equal(9, PuertosOfrecidos.Length);
     }
 
     [Fact]
@@ -331,6 +336,8 @@ public class LaCarteraSoloSeTocaPorSusInterfaces
         typeof(IDimensionesDeCartera), typeof(IContratoDeCuentas), typeof(IConsultaDeAportes),
         // Feature 015 (decisión del dueño del 2026-10-24, T0113): la búsqueda por número que usa la caja de Recaudo.
         typeof(IBusquedaDeObligaciones),
+        // Feature 015, R1 (E-01 b, T0350): la consulta de la carga aplicada sin activar, para el recaudo pendiente de aplicar.
+        typeof(IConsultaDeCargaSinActivar),
     ];
 
     /// <summary>
