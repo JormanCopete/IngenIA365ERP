@@ -12,14 +12,39 @@ using Microsoft.EntityFrameworkCore;
 namespace IngenIA365ERP.Application.Treasury.Reports;
 
 /// <summary>
-/// El registro de vistas de Tesorería (feature 015, US26, T0169; FR-153): por ahora sólo <c>recent-account-changes</c>; la fase 20 (US21) suma las demás vistas, la
-/// exportación y la ruta del centro de reportes sobre este mismo registro. Toda vista es una <see cref="TablaExportable"/> con alcance por cuenta propia. (nuevo)
+/// El registro de las vistas de T0 del centro de informes de Tesorería (feature 015, US26 T0169 y US21 T0314; R-36; FR-153 parte T0; api.md §17): cada una es una
+/// <see cref="TablaExportable"/> con alcance por cuenta propia (<see cref="IAlcanceDeTesoreria"/>). Las de T1 y T2 llegan con su entrega. (nuevo)
 /// </summary>
 public static class VistasDeTesoreria
 {
+    public const string OrdenesPorEstado = "orders-by-state";
+    public const string Lotes = "batches";
+    public const string RechazadasYRegiro = "rejected-and-reissue";
     public const string CambiosRecientesDeCuenta = "recent-account-changes";
+    public const string ChequesGirados = "issued-checks";
+    public const string SaldosBancarios = "bank-balances";
+    public const string ConciliacionMinima = "minimal-reconciliation";
 
-    public static IReadOnlyList<string> Todas { get; } = [CambiosRecientesDeCuenta];
+    public static IReadOnlyList<VistaDeInformeDeRecaudoYTesoreria> Vistas { get; } =
+    [
+        new(OrdenesPorEstado, "Órdenes de pago por estado", "Las órdenes vivas al corte por estado, con su antigüedad desde que llegaron, su origen y su lote.", "ordenes-por-estado",
+            ["asOf", "account"]),
+        new(Lotes, "Lotes de pago", "Los lotes con fecha de pago en el rango: cuenta, forma, órdenes, total, GMF estimado y estado.", "lotes-de-pago", ["from", "to", "account"]),
+        new(RechazadasYRegiro, "Rechazadas y regiro", "Los giros rechazados, anulados o con cheque no cobrado del rango, con su motivo y la orden que los reemplazó.",
+            "rechazadas-y-regiro", ["from", "to", "account"]),
+        new(CambiosRecientesDeCuenta, "Órdenes a cuentas destino cambiadas", "Las órdenes de los lotes marcadas por cambio reciente de la cuenta destino, con quién las revisó.",
+            "cuentas-destino-cambiadas", ["from", "to"]),
+        new(ChequesGirados, "Cheques girados", "Los cheques emitidos en el rango: cuenta, número, beneficiario, valor, estado y días sin cobrar.", "cheques-girados",
+            ["from", "to", "account"]),
+        new(SaldosBancarios, "Saldos bancarios", "Por cuenta propia al corte: saldo en libros, último saldo del extracto y su diferencia.", "saldos-bancarios", ["asOf", "account"]),
+        new(ConciliacionMinima, "Conciliación mínima", "Las conciliaciones de los meses del rango: saldo del extracto, en libros, partidas por clase y diferencia.", "conciliacion-minima",
+            ["from", "to", "account"]),
+    ];
+
+    /// <summary>Las claves (compatibilidad con la fase 9, que sólo tenía <c>recent-account-changes</c>).</summary>
+    public static IReadOnlyList<string> Todas { get; } = [.. Vistas.Select(v => v.Key)];
+
+    public static VistaDeInformeDeRecaudoYTesoreria? Buscar(string clave) => Vistas.FirstOrDefault(v => v.Key == clave);
 }
 
 /// <summary>

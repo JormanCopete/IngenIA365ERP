@@ -53,6 +53,25 @@ public class LasPantallasDeRecaudoYTesoreriaEstanEnElMenu
         // Fase 19 (T0304): la activación completa de cada módulo.
         ("Pages/Recaudo/Activacion.razor", "/recaudo/activacion", "Receipts.Activation.View"),
         ("Pages/Tesoreria/Activacion.razor", "/tesoreria/activacion", "Treasury.Activation.View"),
+        // Fases 5 a 10 (llenadas en la fase 20, T0316): la caja, las sesiones, el cierre, la bóveda, los recibos, las anulaciones, los reversos y los saldos a favor.
+        ("Pages/Recaudo/Caja.razor", "/recaudo/caja", "Receipts.Receipt.Register"),
+        ("Pages/Recaudo/Recibos.razor", "/recaudo/recibos", "Receipts.Receipt.View"),
+        ("Pages/Recaudo/Sesiones.razor", "/recaudo/sesiones", "Receipts.Session.Open"),
+        ("Pages/Recaudo/CierreDelDia.razor", "/recaudo/cierre-del-dia", "Receipts.Session.View"),
+        ("Pages/Recaudo/Boveda.razor", "/recaudo/boveda", "Receipts.Vault.View"),
+        ("Pages/Recaudo/Anulaciones.razor", "/recaudo/anulaciones", "Receipts.Voiding.Request"),
+        ("Pages/Recaudo/ReversosDeModulos.razor", "/recaudo/reversos-de-modulos", "Receipts.Reversals.View"),
+        ("Pages/Recaudo/SaldosAFavor.razor", "/recaudo/saldos-a-favor", "Receipts.CreditBalances.View"),
+        // Fases 7 a 9 (llenadas en la fase 20): las órdenes, los lotes, los archivos, los resultados, las cuentas propias y el fondo de liquidez.
+        ("Pages/Tesoreria/Ordenes.razor", "/tesoreria/ordenes", "Treasury.Orders.View"),
+        ("Pages/Tesoreria/Lotes.razor", "/tesoreria/lotes", "Treasury.Batches.Prepare"),
+        ("Pages/Tesoreria/ArchivosDePago.razor", "/tesoreria/archivos-de-pago", "Treasury.PaymentFiles.Download"),
+        ("Pages/Tesoreria/Resultados.razor", "/tesoreria/resultados", "Treasury.Results.Register"),
+        ("Pages/Tesoreria/CuentasBancarias.razor", "/tesoreria/cuentas-bancarias", "Treasury.BankAccounts.View"),
+        ("Pages/Tesoreria/FondoDeLiquidez.razor", "/tesoreria/fondo-de-liquidez", "Treasury.LiquidityFund.Request"),
+        // Fase 20 (T0316): los centros de informes.
+        ("Pages/Recaudo/Informes.razor", "/recaudo/informes", "Receipts.Reports.View"),
+        ("Pages/Tesoreria/Informes.razor", "/tesoreria/informes", "Treasury.Reports.View"),
         // Fase 18 (T0290): /recaudo/puesta-en-marcha y /tesoreria/puesta-en-marcha son páginas delgadas sobre Components/Recaudo/PuestaEnMarchaDeModulo, que lleva
         // un IndicadorDeCarga por zona (como las de la matriz de la fase 16); su enlace en el menú lo comprueba Las_puestas_en_marcha_estan_en_el_menu.
     ];
@@ -74,6 +93,37 @@ public class LasPantallasDeRecaudoYTesoreriaEstanEnElMenu
         }
         if (!componente.Contains("<IndicadorDeCarga", StringComparison.Ordinal)) infracciones.Add("PuestaEnMarchaDeModulo: sin IndicadorDeCarga");
         ReglaSobreFuente.SinInfracciones(infracciones, "Puestas en marcha de Recaudo o Tesorería fuera del contrato (FR-018, FR-162)");
+    }
+
+    /// <summary>
+    /// Fase 20 (T0316): las páginas delgadas de la matriz contable de los dos módulos (fase 16) delegan en un componente de <c>Components/Contabilidad</c> que lleva su
+    /// <c>IndicadorDeCarga</c>; aquí se exige que existan con su <c>@page</c> y su permiso y que el menú las enlace.
+    /// </summary>
+    private static readonly (string Archivo, string Ruta, string Permiso)[] Delgadas =
+    [
+        ("Pages/Contabilidad/Recaudo/Matriz.razor", "/contabilidad/recaudo/matriz", "Accounting.ReceiptsMatrix.View"),
+        ("Pages/Contabilidad/Recaudo/TiposDeComprobante.razor", "/contabilidad/recaudo/tipos-de-comprobante", "Accounting.ReceiptsMatrix.View"),
+        ("Pages/Contabilidad/Recaudo/Completitud.razor", "/contabilidad/recaudo/completitud", "Accounting.ReceiptsMatrix.View"),
+        ("Pages/Contabilidad/Tesoreria/Matriz.razor", "/contabilidad/tesoreria/matriz", "Accounting.TreasuryMatrix.View"),
+        ("Pages/Contabilidad/Tesoreria/TiposDeComprobante.razor", "/contabilidad/tesoreria/tipos-de-comprobante", "Accounting.TreasuryMatrix.View"),
+        ("Pages/Contabilidad/Tesoreria/Completitud.razor", "/contabilidad/tesoreria/completitud", "Accounting.TreasuryMatrix.View"),
+    ];
+
+    [Fact]
+    public void Las_paginas_delgadas_de_la_matriz_existen_protegidas_y_en_el_menu()
+    {
+        var menu = File.ReadAllText(Path.Combine(Shared, "Layout", "NavMenu.razor"));
+        var infracciones = new List<string>();
+        foreach (var (archivo, ruta, permiso) in Delgadas)
+        {
+            var camino = Path.Combine(Shared, archivo.Replace('/', Path.DirectorySeparatorChar));
+            if (!File.Exists(camino)) { infracciones.Add($"{archivo}: no existe"); continue; }
+            var texto = File.ReadAllText(camino);
+            if (!texto.Contains($"@page \"{ruta}\"", StringComparison.Ordinal)) infracciones.Add($"{archivo}: sin @page {ruta}");
+            if (!texto.Contains($"Required=\"{permiso}\"", StringComparison.Ordinal)) infracciones.Add($"{archivo}: sin permiso {permiso}");
+            if (!menu.Contains($"href=\"{ruta}\"", StringComparison.Ordinal)) infracciones.Add($"{ruta}: el menú no la enlaza");
+        }
+        ReglaSobreFuente.SinInfracciones(infracciones, "Páginas de la matriz de Recaudo o Tesorería fuera del contrato (FR-018, FR-162)");
     }
 
     /// <summary>Páginas de detalle (con parámetro de ruta): archivo, la ruta tal como la declara <c>@page</c> y permiso.</summary>

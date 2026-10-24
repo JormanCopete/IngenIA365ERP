@@ -627,6 +627,10 @@
             <PermissionGate Required="Receipts.Activation.View" AnyOf="@(new[] { "Receipts.Activation.Activate" })">
                 <NavLink href="/recaudo/activacion" class="nav-subitem">Activación</NavLink>
             </PermissionGate>
+            @* US21 (T0316): los informes de R0 del centro de informes de Recaudo. *@
+            <PermissionGate Required="Receipts.Reports.View">
+                <NavLink href="/recaudo/informes" class="nav-subitem">Informes</NavLink>
+            </PermissionGate>
         </NavMenuGroup>
 
         @* Feature 015, US10 (T0147; FR-162): el grupo «Tesorería» nace con las cuentas bancarias propias y la ejecución de órdenes de giro. *@
@@ -676,6 +680,10 @@
             @* US9 (T0304): la activación completa, que registra a Tesorería como destino de los giros. *@
             <PermissionGate Required="Treasury.Activation.View" AnyOf="@(new[] { "Treasury.Activation.Activate" })">
                 <NavLink href="/tesoreria/activacion" class="nav-subitem">Activación</NavLink>
+            </PermissionGate>
+            @* US21 (T0316): los informes de T0 del centro de informes de Tesorería. *@
+            <PermissionGate Required="Treasury.Reports.View">
+                <NavLink href="/tesoreria/informes" class="nav-subitem">Informes</NavLink>
             </PermissionGate>
         </NavMenuGroup>
 
