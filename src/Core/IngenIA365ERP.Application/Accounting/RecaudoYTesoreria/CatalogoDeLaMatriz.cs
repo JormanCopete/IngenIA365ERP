@@ -1,4 +1,4 @@
-using IngenIA365ERP.Application.Accounting.Posting;
+﻿using IngenIA365ERP.Application.Accounting.Posting;
 using IngenIA365ERP.Application.Common.Integration;
 using IngenIA365ERP.Application.Common.Integration.Contracts.Receipts;
 using IngenIA365ERP.Application.Common.Integration.Contracts.Treasury;
@@ -85,6 +85,8 @@ public static class MatricesDeRecaudoYTesoreria
             Resultado(RolesDeRecaudo.IngresoSobrantes, "Ingreso por sobrantes", Oficina),
             R(RolesDeRecaudo.CustodiaPorLista, "Dinero en custodia por listas", Oficina),
             R(RolesDeRecaudo.PuenteDeDevolucion, "Puente de la devolución por orden de pago", ClaseDeOrden),
+            // R1 (fase 25): el recaudo pendiente de aplicar, por módulo, con la persona como tercero.
+            R(RolesDeRecaudo.RecaudoPendienteDeAplicar, "Recaudo pendiente de aplicar", Modulo),
         ],
         [
             H(ReciboEmitidoV1.Type, "Recibo de caja", "RR", [RolesDeRecaudo.Caja, RolesDeRecaudo.PuenteDelModulo],
@@ -109,7 +111,7 @@ public static class MatricesDeRecaudoYTesoreria
             H(RemesaDespachadaV1.Type, "Remesa despachada", "MC", [RolesDeRecaudo.EfectivoEnTransito, RolesDeRecaudo.Boveda]),
             H(ReciboAnuladoV1.Type, "Recibo anulado", "AR", [RolesDeRecaudo.PuenteDelModulo],
                 RolesDeRecaudo.Caja, RolesDeRecaudo.BancoRecaudo, RolesDeRecaudo.ChequesEnCanje, RolesDeRecaudo.MedioPorCobrar, RolesDeRecaudo.ConceptoVario,
-                RolesDeRecaudo.SaldoAFavorDePagadores),
+                RolesDeRecaudo.SaldoAFavorDePagadores, RolesDeRecaudo.RecaudoPendienteDeAplicar),
             H(AplicacionReversadaPorModuloV1.Type, "Aplicación reversada por el módulo", "AR", [RolesDeRecaudo.PuenteDelModulo],
                 RolesDeRecaudo.SaldoAFavorDePagadores, RolesDeRecaudo.Caja, RolesDeRecaudo.BancoRecaudo, RolesDeRecaudo.ChequesEnCanje, RolesDeRecaudo.MedioPorCobrar),
             H(ChequeRecibidoDevueltoV1.Type, "Cheque recibido devuelto", "AR", [RolesDeRecaudo.ChequesEnCanje],
@@ -120,6 +122,10 @@ public static class MatricesDeRecaudoYTesoreria
             H(DevolucionNoGiradaV1.Type, "Devolución no girada", "AR", [RolesDeRecaudo.PuenteDeDevolucion],
                 RolesDeRecaudo.SaldoAFavorDePagadores, RolesDeRecaudo.SaldoDePagadurias, RolesDeRecaudo.PartidasPorIdentificar, RolesDeRecaudo.CustodiaPorLista,
                 RolesDeRecaudo.PuenteDelModulo),
+            // R1 (fase 25): el recaudo pendiente de aplicar (contabilidad.md §3), con el tipo de comprobante del recibo de caja.
+            H(RecaudoPendienteReconocidoV1.Type, "Recaudo pendiente de aplicar reconocido", "RR", [RolesDeRecaudo.RecaudoPendienteDeAplicar],
+                RolesDeRecaudo.Caja, RolesDeRecaudo.BancoRecaudo, RolesDeRecaudo.ChequesEnCanje, RolesDeRecaudo.MedioPorCobrar),
+            H(RecaudoPendienteAplicadoV1.Type, "Recaudo pendiente aplicado", "RR", [RolesDeRecaudo.RecaudoPendienteDeAplicar, RolesDeRecaudo.PuenteDelModulo]),
         ]);
 
     public static ModuloDeLaMatriz Tesoreria { get; } = new(

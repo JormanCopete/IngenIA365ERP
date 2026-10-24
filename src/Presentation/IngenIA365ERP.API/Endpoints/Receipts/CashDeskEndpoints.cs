@@ -1,4 +1,4 @@
-using Carter;
+﻿using Carter;
 using IngenIA365ERP.API.Filters;
 using IngenIA365ERP.Application.Receipts.CashDesk;
 using MediatR;
@@ -55,6 +55,10 @@ public class CashDeskEndpoints : ICarterModule
                     ApprovalRequestPublicId = SessionsEndpoints.SolicitudDeAprobacion(http),
                 }, ct))
             .WithName("Receipts_CashOperations_Confirm").ConClaveDeOperacion().RequirePermission(Registrar);
+        // Feature 015, R1 (T0365; FR-187): F4, todo lo exigible de todos los productos en una acción, con sus simulaciones.
+        g.MapPost("/{id:guid}/preselect", async (Guid id, bool? includeCoDebtor, HttpContext http, ISender s, CancellationToken ct) =>
+                await s.Send(new PreselectPayablesCommand(id, includeCoDebtor ?? false) { OperationKey = http.ClaveDeOperacion() }, ct))
+            .WithName("Receipts_CashOperations_Preselect").ConClaveDeOperacion().RequirePermission(Registrar);
         g.MapPost("/{id:guid}/abandon", async (Guid id, HttpContext http, ISender s, CancellationToken ct) =>
                 await s.Send(new AbandonCashOperationCommand(id) { OperationKey = http.ClaveDeOperacion() }, ct))
             .WithName("Receipts_CashOperations_Abandon").ConClaveDeOperacion().RequirePermission(Registrar);
@@ -73,7 +77,34 @@ public class CashDeskEndpoints : ICarterModule
                 return r.IsSuccess ? Results.File(pdf.Recibo(r.Value), "application/pdf", $"recibo-{r.Value.Number}.pdf") : (object)r;
             })
             .WithName("Receipts_Receipts_Document").RequirePermission(Imprimir);
+        // Feature 015, R1 (T0365; FR-020, FR-045): el recibo por correo, con la autorización del canal; SMS y mensajería simulados.
+        recibos.MapPost("/{id:guid}/notify", async (Guid id, AvisoRequest? body, HttpContext http, ISender s, CancellationToken ct) =>
+                await s.Send(new Application.Receipts.Notifications.SendReceiptNoticeCommand(id, body?.Channel ?? Domain.Enums.Lending.MessageChannel.Email, body?.Email)
+                {
+                    OperationKey = http.ClaveDeOperacion(),
+                }, ct))
+            .WithName("Receipts_Receipts_Notify").ConClaveDeOperacion().RequirePermission(Imprimir);
+
+        // Feature 015, R1 (T0365; FR-046; api.md §8): el recaudo pendiente de aplicar.
+        var pendientes = ReceiptsGroup.Grupo(app, "/pending-applications", "Recaudo Pendiente de aplicar");
+        pendientes.MapGet("/", async (Domain.Enums.Receipts.PendingApplicationState? state, Guid? person, ISender s, CancellationToken ct) =>
+                await s.Send(new ListPendingApplicationsQuery(state, person), ct))
+            .WithName("Receipts_PendingApplications_List").RequirePermission(new AlgunPermiso(VerPendientes, AplicarPendientes));
+        pendientes.MapPost("/{id:guid}/apply", async (Guid id, AplicarPendienteRequest body, HttpContext http, ISender s, CancellationToken ct) =>
+                await s.Send(new ApplyPendingApplicationCommand(id, body.ProductPublicId, body.LoanModality, body.AccountModality, body.Choice)
+                {
+                    OperationKey = http.ClaveDeOperacion(),
+                }, ct))
+            .WithName("Receipts_PendingApplications_Apply").ConClaveDeOperacion().RequirePermission(AplicarPendientes);
     }
+
+    public const string VerPendientes = "Receipts.PendingApplications.View";
+    public const string AplicarPendientes = "Receipts.PendingApplications.Apply";
+
+    public sealed record AvisoRequest(Domain.Enums.Lending.MessageChannel? Channel, string? Email);
+
+    public sealed record AplicarPendienteRequest(Guid ProductPublicId, Application.Common.Integration.Lending.ModalidadDePago? LoanModality,
+        Application.Common.Integration.Lending.ModalidadDeConsignacion? AccountModality, Application.Common.Integration.Lending.EleccionDeAbono? Choice);
 
     public sealed record ItemsRequest(IReadOnlyList<ItemPedidoDto>? Items);
 

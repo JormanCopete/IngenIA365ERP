@@ -568,6 +568,10 @@
             <PermissionGate Required="Receipts.CreditBalances.View">
                 <NavLink href="/recaudo/saldos-a-favor" class="nav-subitem">Saldos a favor</NavLink>
             </PermissionGate>
+            @* R1, US3 (T0365): el recaudo pendiente de aplicar de las personas de una carga sin activar. *@
+            <PermissionGate Required="Receipts.PendingApplications.View">
+                <NavLink href="/recaudo/pendiente-de-aplicar" class="nav-subitem">Recaudo pendiente de aplicar</NavLink>
+            </PermissionGate>
             @* US6 (T0199): los bancos —extractos, abonos por identificar y partidas—. *@
             <span class="nav-subgroup-title">Bancos y pagadurías</span>
             <PermissionGate Required="Receipts.BankItems.View">

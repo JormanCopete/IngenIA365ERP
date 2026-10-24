@@ -344,6 +344,7 @@ public static class PerfilesSugeridos
                 "Receipts.Setup.View", "Receipts.Session.*", "Receipts.Count.ApproveDifference", "Receipts.Day.Close", "Receipts.Vault.*",
                 "Receipts.Receipt.View", "Receipts.Receipt.Print", "Receipts.Receipt.RegisterContingency", "Receipts.Receipt.Backdate",
                 "Receipts.Voiding.*", "Receipts.Reversals.*", "Receipts.CreditBalances.*", "Receipts.Checks.*", "Receipts.Reports.View",
+                "Receipts.PendingApplications.*",
                 "Lending.Payments.BackdateBeforeClose", "Lending.Accounts.Deposit", "Lending.Accounts.Withdraw",
                 "Attachments.Upload", "Attachments.Download",
             ],

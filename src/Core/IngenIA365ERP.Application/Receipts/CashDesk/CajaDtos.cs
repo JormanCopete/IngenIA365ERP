@@ -1,4 +1,4 @@
-using IngenIA365ERP.Application.Common.Integration.Lending;
+﻿using IngenIA365ERP.Application.Common.Integration.Lending;
 using IngenIA365ERP.Domain.Enums.Receipts;
 
 namespace IngenIA365ERP.Application.Receipts.CashDesk;
@@ -21,7 +21,11 @@ public sealed record LoQuePuedePagarDto(
     IReadOnlyList<ConceptoVarioPagableDto> MiscConcepts,
     IReadOnlyList<string> Notices);
 
-/// <summary>Lo que el cajero elige pagar.</summary>
+/// <summary>
+/// Lo que el cajero elige pagar. Feature 015, R1 (T0363; FR-046): con <c>Target = PendingApplication</c>, <see cref="PendingTarget"/> dice a qué módulo irá (<c>Loan</c>
+/// o <c>Account</c>) y <see cref="LoadObligationPublicId"/>/<see cref="ProductReference"/> señalan lo de la carga; con <c>CommercialReceivable</c> (fase 30)
+/// <see cref="InvoicePublicId"/> y <see cref="CrossDocument"/> son la factura.
+/// </summary>
 public sealed record ItemPedidoDto(
     ApplicationTarget Target,
     decimal Amount,
@@ -36,7 +40,10 @@ public sealed record ItemPedidoDto(
     Guid? MiscConceptPublicId = null,
     string? CrossDocument = null,
     Guid? InvoicePublicId = null,
-    Guid? ItemId = null);
+    Guid? ItemId = null,
+    ApplicationTarget? PendingTarget = null,
+    Guid? LoadObligationPublicId = null,
+    string? ProductReference = null);
 
 /// <summary>Una alternativa del abono extraordinario (reducir plazo o cuota) con su nuevo plan.</summary>
 public sealed record AlternativaDeAbonoDto(EleccionDeAbono? Choice, decimal AppliedAmount, PlanResumidoDto? NewPlan);
@@ -64,7 +71,10 @@ public sealed record ItemDeCajaDto(
     bool AdvanceWithoutPrincipal,
     bool RequiresSourceOfFunds,
     IReadOnlyList<AlternativaDeAbonoDto> Alternatives,
-    IReadOnlyList<string> Notices);
+    IReadOnlyList<string> Notices,
+    ApplicationTarget? PendingTarget = null,
+    Guid? LoadObligationPublicId = null,
+    string? ProductReference = null);
 
 /// <summary>Un medio de la operación.</summary>
 public sealed record MedioDeCajaDto(

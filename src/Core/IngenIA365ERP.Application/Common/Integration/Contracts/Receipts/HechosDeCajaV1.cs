@@ -1,4 +1,4 @@
-using IngenIA365ERP.Application.Common.Integration.Contracts.Inventory;
+﻿using IngenIA365ERP.Application.Common.Integration.Contracts.Inventory;
 using IngenIA365ERP.Application.Common.Integration.Contracts.Lending;
 
 namespace IngenIA365ERP.Application.Common.Integration.Contracts.Receipts;
@@ -81,6 +81,12 @@ public static class RolesDeRecaudo
     public const string SaldoDePagadurias = "SaldoDePagadurias";
     public const string CuentaPorCobrarPagador = "CuentaPorCobrarPagador";
     public const string CustodiaPorLista = "CustodiaPorLista";
+
+    // R1 (fases 25 a 30; contabilidad.md §5): el recaudo pendiente de aplicar, las cuentas por cobrar comerciales y el GMF de los egresos de caja.
+    public const string RecaudoPendienteDeAplicar = "RecaudoPendienteDeAplicar";
+    public const string CuentasPorCobrarComerciales = "CuentasPorCobrarComerciales";
+    public const string GmfGasto = "GmfGasto";
+    public const string GmfPorPagar = "GmfPorPagar";
 }
 
 /// <summary>

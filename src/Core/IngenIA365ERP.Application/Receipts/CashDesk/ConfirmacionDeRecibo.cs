@@ -76,7 +76,8 @@ public sealed class ConfirmacionDeRecibo(
     IListasDeRecaudo listas,
     EmisionDeRecaudo emision,
     IAlertas alertas,
-    Compliance.RegistroDeEfectivo? registroDeEfectivo = null)
+    Compliance.RegistroDeEfectivo? registroDeEfectivo = null,
+    IConsultaDeCargaSinActivar? cargaSinActivar = null)
 {
     public const string CodigoDistribucionCambiadaDeCartera = "Lending.Payment.DistributionChanged";
     public const string PermisoDeFechaAnterior = "Receipts.Receipt.Backdate";
@@ -185,6 +186,14 @@ public sealed class ConfirmacionDeRecibo(
         if (resultadoDeListas == ScreeningOutcomeR.NonBindingMatch && operacion.ReleasedAt is null
             && await Compliance.CumplimientoDeCaja.RetieneAsync(parametros, hoy, ct))
             return Result.Failure<ReceiptDto>(ErroresDeRecaudo.RetencionRequerida());
+
+        // Feature 015, R1 (T0363; FR-046): el recaudo pendiente de aplicar se vuelve a revisar al confirmar (el módulo pudo activarse entre los dos pasos).
+        foreach (var i in items.Where(i => i.Target == ApplicationTarget.PendingApplication))
+        {
+            var noElegible = await new ReglasDelPendiente(obligaciones, cuentas, cargaSinActivar)
+                .ElegibleAsync(i.BeneficiaryPersonPublicId, i.PendingTarget ?? ApplicationTarget.Loan, operacion.ValueDate, ct);
+            if (noElegible is not null) return Result.Failure<ReceiptDto>(ErroresDeRecaudo.ItemRechazado([new { itemId = i.ItemId, code = noElegible.Code, message = noElegible.Message }]));
+        }
 
         // 3. Validación previa contable.
         var evaluacion = await contabilidad.EvaluarAsync(
@@ -366,10 +375,24 @@ public sealed class ConfirmacionDeRecibo(
         if (rechazos.Count > 0) return Result.Failure<ReceiptDto>(ErroresDeRecaudo.ItemRechazado(rechazos));
         if (simulaciones.Count > 0) return Result.Failure<ReceiptDto>(ErroresDeRecaudo.DistribucionCambiada(simulaciones));
 
-        // 7. Hechos.
+        // 7. Hechos. Feature 015, R1 (T0363): las porciones del recaudo pendiente de aplicar no van en ReciboEmitido sino en RecaudoPendienteReconocido, en línea.
         var naturalezas = await NaturalezasAsync(items, titulares, hoy, ct);
-        await emision.ReciboEmitidoAsync(recibo, filasDeItems.Values.ToList(), filasDeMedios.Values.ToList(), porciones.Select(p => p.Fila).ToList(), naturalezas,
-            sesion.PublicId, tipo.Code, ct);
+        var aRecibo = porciones.Where(p => p.Item.Target != ApplicationTarget.PendingApplication).Select(p => p.Fila).ToList();
+        if (aRecibo.Count > 0)
+            await emision.ReciboEmitidoAsync(recibo, filasDeItems.Values.ToList(), filasDeMedios.Values.ToList(), aRecibo, naturalezas, sesion.PublicId, tipo.Code, ct);
+        foreach (var i in items.Where(i => i.Target == ApplicationTarget.PendingApplication))
+        {
+            var aplicacion = filasDeItems[i.ItemId];
+            var pendiente = new PendingApplication
+            {
+                ReceiptId = recibo.Id, ReceiptApplicationId = aplicacion.Id, PersonId = aplicacion.BeneficiaryPersonId, TargetModule = i.PendingTarget ?? ApplicationTarget.Loan,
+                LoadObligationPublicId = i.LoadObligationPublicId, ProductReference = i.ProductReference, Amount = i.Amount, ValueDate = operacion.ValueDate, BranchId = oficina,
+            };
+            db.PendingApplications.Add(pendiente);
+            await db.SaveChangesAsync(ct);
+            await emision.RecaudoPendienteReconocidoAsync(recibo, pendiente,
+                porciones.Where(p => p.Item.ItemId == i.ItemId).Select(p => (p.Fila, filasDeMedios[p.Medio.MeansId!.Value])).ToList(), tipo.Code, ct);
+        }
 
         operacion.Status = CashOperationState.Confirmed;
         operacion.ReceiptId = recibo.Id;

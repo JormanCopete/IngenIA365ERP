@@ -1,4 +1,4 @@
-using IngenIA365ERP.Application.Common.Integration.Contracts.Inventory;
+﻿using IngenIA365ERP.Application.Common.Integration.Contracts.Inventory;
 using IngenIA365ERP.Domain.Enums.Integration;
 
 namespace IngenIA365ERP.Application.Common.Integration.Contracts.Receipts;
@@ -47,6 +47,9 @@ public static class CatalogoDeMensajesDeRecaudoV1
         Hecho(typeof(CustodiaLiberadaV1), CustodiaLiberadaV1.Type, "CLB"),
         // US8 (fase 16): la devolución por orden de pago que Tesorería no giró; el dinero vuelve a su origen.
         Hecho(typeof(DevolucionNoGiradaV1), DevolucionNoGiradaV1.Type, "DNG"),
+        // R1, US3 (fase 25): el recaudo pendiente de aplicar, en línea.
+        Hecho(typeof(RecaudoPendienteReconocidoV1), RecaudoPendienteReconocidoV1.Type, "RPR"),
+        Hecho(typeof(RecaudoPendienteAplicadoV1), RecaudoPendienteAplicadoV1.Type, "RPA"),
     ];
 
     private static TipoDeMensaje Hecho(Type record, string type, string codigoCorto) =>

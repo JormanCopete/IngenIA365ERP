@@ -1,4 +1,4 @@
-using IngenIA365ERP.Application.Common.Integration;
+﻿using IngenIA365ERP.Application.Common.Integration;
 using IngenIA365ERP.Application.Common.Integration.Contracts.Lending;
 using IngenIA365ERP.Application.Common.Integration.Contracts.Receipts;
 using IngenIA365ERP.Domain.Entities.Integration.Transactions;
@@ -47,6 +47,10 @@ public sealed partial class EmisionDeRecaudo
             if (a.Target == ApplicationTarget.MiscConcept)
                 lineas.Add(Linea(RolesDeRecaudo.ConceptoVario, RolesDeRecaudo.Debito, p.Amount, dim with { MiscConceptCode = codigos.GetValueOrDefault(a.MiscConceptId!.Value) },
                     cruce: anulacion.Number));
+            else if (a.Target == ApplicationTarget.PendingApplication)
+                // Feature 015, R1 (T0363): el pendiente se reconoció contra RecaudoPendienteDeAplicar; la anulación lo deshace contra ese rol.
+                lineas.Add(Linea(RolesDeRecaudo.RecaudoPendienteDeAplicar, RolesDeRecaudo.Debito, p.Amount, dim with { TargetModule = ModulosDeOrigen.Cartera },
+                    await PersonaPublicaAsync(a.BeneficiaryPersonId, ct), anulacion.Number));
             else
                 lineas.Add(Linea(RolesDeRecaudo.PuenteDelModulo, RolesDeRecaudo.Debito, p.Amount, dim with
                 {
@@ -64,6 +68,9 @@ public sealed partial class EmisionDeRecaudo
         };
         return await EmitirAsync(contenido, anulacion.PublicId, ClaseAnulacion, codigoDelTipo, anulacion.Number, contenido.VoidedOn, recibo.BranchId, pagador, ct);
     }
+
+    private async Task<Guid?> PersonaPublicaAsync(int personaId, CancellationToken ct) =>
+        await db.People.AsNoTracking().IgnoreQueryFilters().Where(p => p.Id == personaId).Select(p => (Guid?)p.PublicId).FirstOrDefaultAsync(ct);
 
     /// <summary><c>AplicacionReversadaPorModulo</c> con la causa confirmada.</summary>
     public async Task<IntegrationMessage> AplicacionReversadaPorModuloAsync(ModuleReversal reverso, Receipt recibo, ReceiptApplication aplicacion, ReceiptMeans? medio,

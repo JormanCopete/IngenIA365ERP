@@ -703,6 +703,8 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.SourceOfFundsDeclaration> SourceOfFundsDeclarations => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.SourceOfFundsDeclaration>();
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceiptVoiding> ReceiptVoidings => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceiptVoiding>();
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.ModuleReversal> ModuleReversals => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.ModuleReversal>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.PendingApplication> PendingApplications => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.PendingApplication>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.PendingApplicationResolution> PendingApplicationResolutions => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.PendingApplicationResolution>();
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.PayerCreditBalance> PayerCreditBalances => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.PayerCreditBalance>();
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.PayerCreditBalanceMovement> PayerCreditBalanceMovements => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.PayerCreditBalanceMovement>();
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.PayerReceivable> PayerReceivables => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.PayerReceivable>();

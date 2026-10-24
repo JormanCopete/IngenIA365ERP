@@ -1,4 +1,4 @@
-using System.Net.Http.Json;
+﻿using System.Net.Http.Json;
 using System.Text.Json;
 using IngenIA365ERP.Shared.Services.Http;
 using IngenIA365ERP.Shared.Services.Inventario;
@@ -17,7 +17,7 @@ public sealed record ConceptoVarioPagableDto(Guid MiscConceptPublicId, string Co
 public sealed record ObligacionPagableDto(Guid ObligationPublicId, string Number, string CreditLineName, int Role, int DaysPastDue, decimal DueToday,
     decimal CycleInstallment, decimal PastDue, decimal PayoffAmount, IReadOnlyList<int> AdmittedModalities, IReadOnlyList<string> BlockReasons);
 
-public sealed record ListadoPagableDto(IReadOnlyList<ObligacionPagableDto> Obligations);
+public sealed record ListadoPagableDto(IReadOnlyList<ObligacionPagableDto> Obligations, int LendingStatus = 2);
 
 public sealed record CuentaPagableDto(Guid AccountPublicId, string Number, int Nature, string LineName, int Status, bool AcceptsDeposits, IReadOnlyList<string> BlockReasons);
 
@@ -25,21 +25,31 @@ public sealed record CuentasPagablesDto(IReadOnlyList<CuentaPagableDto> Accounts
 
 public sealed record ExigiblePagableDto(Guid AccountPublicId, string AccountNumber, Guid InstallmentPublicId, string Period, DateOnly DueDate, decimal Pending);
 
-public sealed record ExigiblesPagablesDto(IReadOnlyList<ExigiblePagableDto> Installments);
+public sealed record ExigiblesPagablesDto(IReadOnlyList<ExigiblePagableDto> Installments, int DepositsStatus = 2, int ContributionsStatus = 2,
+    IReadOnlyList<Guid>? MigratedNotActivated = null);
 
 public sealed record LoQuePuedePagarDto(Guid PersonPublicId, string PersonName, string? TaxId, bool IsAssociate, ListadoPagableDto? Obligations,
     CuentasPagablesDto? Accounts, ExigiblesPagablesDto? DueInstallments, IReadOnlyList<ConceptoVarioPagableDto> MiscConcepts, IReadOnlyList<string> Notices);
 
 public sealed record ItemPedidoRequest(int Target, decimal Amount, Guid? ProductPublicId = null, Guid? BeneficiaryPersonPublicId = null, int? LoanModality = null,
     int? AccountModality = null, int? Choice = null, int? InstallmentNumber = null, IReadOnlyList<Guid>? InstallmentPublicIds = null,
-    bool AdvanceNoticeAccepted = false, Guid? MiscConceptPublicId = null, string? CrossDocument = null, Guid? InvoicePublicId = null, Guid? ItemId = null);
+    bool AdvanceNoticeAccepted = false, Guid? MiscConceptPublicId = null, string? CrossDocument = null, Guid? InvoicePublicId = null, Guid? ItemId = null,
+    int? PendingTarget = null, Guid? LoadObligationPublicId = null, string? ProductReference = null);
 
 public sealed record AlternativaDeAbonoDto(int? Choice, decimal AppliedAmount, JsonElement? NewPlan);
 
 public sealed record ItemDeCajaDto(Guid ItemId, int Target, decimal Amount, Guid? ProductPublicId, string? ProductNumber, Guid BeneficiaryPersonPublicId,
     int? LoanModality, int? AccountModality, int? Choice, int? InstallmentNumber, IReadOnlyList<Guid>? InstallmentPublicIds, bool AdvanceNoticeAccepted,
     Guid? MiscConceptPublicId, string? CrossDocument, Guid? InvoicePublicId, string? SimulationId, decimal? SimulatedApplied, decimal? SimulatedSurplus,
-    bool AdvanceWithoutPrincipal, bool RequiresSourceOfFunds, IReadOnlyList<AlternativaDeAbonoDto> Alternatives, IReadOnlyList<string> Notices);
+    bool AdvanceWithoutPrincipal, bool RequiresSourceOfFunds, IReadOnlyList<AlternativaDeAbonoDto> Alternatives, IReadOnlyList<string> Notices,
+    int? PendingTarget = null, Guid? LoadObligationPublicId = null, string? ProductReference = null);
+
+/// <summary>Feature 015, R1 (T0365): el resultado de enviar un aviso (recibo o egreso). (nuevo)</summary>
+public sealed record AvisoDeRecaudoDto(string Outcome, string Channel, string? Destination, string Message);
+
+/// <summary>Feature 015, R1 (T0365; FR-046): un recaudo pendiente de aplicar. (nuevo)</summary>
+public sealed record PendienteDeAplicarDto(Guid PublicId, Guid ReceiptPublicId, string ReceiptNumber, Guid PersonPublicId, string PersonName, int TargetModule,
+    string? ProductReference, decimal Amount, DateOnly ValueDate, int Status, Guid? AppliedToProductPublicId, string? ModuleVoucherNumber);
 
 public sealed record MedioDeCajaRequest(Guid PaymentMeansPublicId, decimal Amount, string? Reference = null, Guid? CardTerminalPublicId = null,
     string? TerminalBatch = null, string? ApprovalCode = null, string? VoucherNumber = null, Guid? MeansId = null, ChequeDeCajaRequest? Check = null);
@@ -140,7 +150,30 @@ public sealed class CajaClient(HttpClient http, CentralAuthClient auth)
         EnvioDeVentas.DescargarAsync(http, auth, $"{Base}/receipts/{recibo}/document?format={(carta ? "letter" : "thermal")}&copy={(copia ? "true" : "false")}",
             "recibo.pdf", ct);
 
-    public static string Destino(int destino) => destino switch { 1 => "Crédito", 2 => "Cuenta", 3 => "Concepto vario", _ => "—" };
+    /// <summary>Feature 015, R1 (T0365; FR-187): F4, todo lo exigible en una acción, con sus simulaciones.</summary>
+    public Task<ResultadoDeInventario<OperacionDeCajaDto>> PreseleccionarAsync(Guid operacion, bool incluirCodeudor, ClaveDeOperacion clave, CancellationToken ct = default) =>
+        EnvioDeVentas.EnviarAsync<OperacionDeCajaDto>(http, auth, HttpMethod.Post,
+            $"{Base}/cash-operations/{operacion}/preselect?includeCoDebtor={(incluirCodeudor ? "true" : "false")}", null, clave, ct);
+
+    /// <summary>Feature 015, R1 (T0365; FR-020): el recibo por correo con la autorización del canal.</summary>
+    public Task<ResultadoDeInventario<AvisoDeRecaudoDto>> AvisarAsync(Guid recibo, string? correo, ClaveDeOperacion clave, CancellationToken ct = default) =>
+        EnvioDeVentas.EnviarAsync<AvisoDeRecaudoDto>(http, auth, HttpMethod.Post, $"{Base}/receipts/{recibo}/notify", new { channel = 1, email = correo }, clave, ct);
+
+    /// <summary>Feature 015, R1 (T0365; FR-046): los recaudos pendientes de aplicar.</summary>
+    public Task<ResultadoDeInventario<IReadOnlyList<PendienteDeAplicarDto>>> PendientesAsync(int? estado, CancellationToken ct = default) =>
+        EnvioDeVentas.EnviarAsync<IReadOnlyList<PendienteDeAplicarDto>>(http, auth, HttpMethod.Get,
+            EnvioDeVentas.ConQuery($"{Base}/pending-applications", EnvioDeVentas.Query(("state", estado?.ToString(System.Globalization.CultureInfo.InvariantCulture)))),
+            null, null, ct);
+
+    public Task<ResultadoDeInventario<PendienteDeAplicarDto>> AplicarPendienteAsync(Guid pendiente, Guid producto, int? modalidadDeCredito, int? modalidadDeCuenta,
+        ClaveDeOperacion clave, CancellationToken ct = default) =>
+        EnvioDeVentas.EnviarAsync<PendienteDeAplicarDto>(http, auth, HttpMethod.Post, $"{Base}/pending-applications/{pendiente}/apply",
+            new { productPublicId = producto, loanModality = modalidadDeCredito, accountModality = modalidadDeCuenta }, clave, ct);
+
+    public static string Destino(int destino) => destino switch
+    {
+        1 => "Crédito", 2 => "Cuenta", 3 => "Concepto vario", 4 => "Cuenta por cobrar comercial", 5 => "Pendiente de aplicar", _ => "—",
+    };
 
     public static string Modalidad(int? modalidad) => modalidad switch
     {

@@ -1,4 +1,4 @@
-using IngenIA365ERP.Application.Common.Interfaces;
+﻿using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Domain.Entities.Security;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -88,6 +88,8 @@ public static class ReceiptsAndTreasuryPermissionCatalogSeeder
         ("Receipts.Reports",            "View",               "Ver los informes de Recaudo"),
         ("Receipts.Reports",            "Export",             "Exportar los informes de Recaudo"),
         // ------------------------------------------------------------------------------------------------- Recaudo · R1 y R2 --
+        ("Receipts.PendingApplications", "View",              "Ver el recaudo pendiente de aplicar (R1)"),
+        ("Receipts.PendingApplications", "Apply",             "Aplicar el recaudo pendiente en el módulo ya activado (R1)"),
         ("Receipts.Disbursements",      "View",               "Ver egresos de caja (R1)"),
         ("Receipts.Disbursements",      "Register",           "Registrar egresos de caja (R1)"),
         ("Receipts.Disbursements",      "Approve",            "Aprobar egresos de caja (R1)"),

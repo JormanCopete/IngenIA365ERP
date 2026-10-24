@@ -191,8 +191,12 @@ public sealed class UpdateCashOperationItemsCommandValidator : AbstractValidator
         RuleForEach(x => x.Items).ChildRules(i =>
         {
             i.RuleFor(x => x.Amount).GreaterThan(0m);
-            i.RuleFor(x => x.Target).Must(t => t is ApplicationTarget.Loan or ApplicationTarget.Account or ApplicationTarget.MiscConcept)
-                .WithMessage("En esta entrega la caja cobra créditos, cuentas y conceptos varios.");
+            i.RuleFor(x => x.Target).Must(t => t is ApplicationTarget.Loan or ApplicationTarget.Account or ApplicationTarget.MiscConcept
+                    or ApplicationTarget.PendingApplication)
+                .WithMessage("La caja cobra créditos, cuentas, conceptos varios y recaudo pendiente de aplicar.");
+            // Feature 015, R1 (T0363): el pendiente dice a qué módulo irá.
+            i.RuleFor(x => x.PendingTarget).Must(t => t is ApplicationTarget.Loan or ApplicationTarget.Account)
+                .When(x => x.Target == ApplicationTarget.PendingApplication).WithMessage("Diga si el pendiente es de un crédito o de una cuenta.");
             i.RuleFor(x => x.ProductPublicId).NotEmpty().When(x => x.Target is ApplicationTarget.Loan or ApplicationTarget.Account);
             i.RuleFor(x => x.LoanModality).NotNull().When(x => x.Target == ApplicationTarget.Loan);
             i.RuleFor(x => x.AccountModality).NotNull().When(x => x.Target == ApplicationTarget.Account);
@@ -206,7 +210,8 @@ public sealed class UpdateCashOperationItemsCommandHandler(
     IApplicationDbContext db,
     IAlcanceDeRecaudo alcance,
     IContratoDeObligaciones obligaciones,
-    IContratoDeCuentas cuentas) : IRequestHandler<UpdateCashOperationItemsCommand, Result<CashOperationDto>>
+    IContratoDeCuentas cuentas,
+    IConsultaDeCargaSinActivar? carga = null) : IRequestHandler<UpdateCashOperationItemsCommand, Result<CashOperationDto>>
 {
     public async Task<Result<CashOperationDto>> Handle(UpdateCashOperationItemsCommand request, CancellationToken ct)
     {
@@ -250,6 +255,16 @@ public sealed class UpdateCashOperationItemsCommandHandler(
                     items.Add(new ItemDeCajaDto(id, pedido.Target, pedido.Amount, pedido.ProductPublicId, null, titular, null, pedido.AccountModality, null, null,
                         pedido.InstallmentPublicIds, false, null, null, null, r.Value.SimulationId, pedido.Amount, 0m, false, r.Value.RequiresSourceOfFunds, [],
                         r.Value.Notices));
+                    break;
+                }
+                case ApplicationTarget.PendingApplication:
+                {
+                    // Feature 015, R1 (T0363; FR-046, D14): sólo para una persona de una carga aplicada sin activar; si no, el ítem se rechaza con el motivo.
+                    var error = await new ReglasDelPendiente(obligaciones, cuentas, carga).ElegibleAsync(titular, pedido.PendingTarget!.Value, operacion.ValueDate, ct);
+                    if (error is not null) { rechazos.Add(new { itemId = id, code = error.Code, message = error.Message }); continue; }
+                    items.Add(new ItemDeCajaDto(id, pedido.Target, pedido.Amount, null, pedido.ProductReference, titular, null, null, null, null, null, false, null, null,
+                        null, null, pedido.Amount, 0m, false, false, [], ["Recaudo pendiente de aplicar: se aplica el día de la activación del módulo."],
+                        pedido.PendingTarget, pedido.LoadObligationPublicId, pedido.ProductReference?.Trim()));
                     break;
                 }
                 default:

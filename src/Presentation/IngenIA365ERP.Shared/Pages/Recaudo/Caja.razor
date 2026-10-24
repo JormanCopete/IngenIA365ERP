@@ -17,7 +17,7 @@
 
 @* Feature 015, US3 (T0120; R-35; FR-018, FR-037 a FR-045, FR-188 a FR-191; SC-003): la caja en tres pasos —la persona (el buscador común, que acepta el lector
    y el documento), qué paga (cada ítem simulado con su módulo, con su aviso y las dos alternativas del abono extraordinario) y los medios con su imputación—
-   y la confirmación todo o nada. Atajos: F2 buscar, F8 medios, F9 confirmar, Esc cancelar. Los rechazos se leen por su código, nunca por el texto. La misma
+   y la confirmación todo o nada. Atajos: F2 buscar, F4 todo lo exigible (R1), F8 medios, F9 confirmar, Esc cancelar. Los rechazos se leen por su código, nunca por el texto. La misma
    clave de operación se repite al reconfirmar tras «la distribución cambió» o tras la aprobación presente. *@
 <PermissionGate Required="Receipts.Receipt.Register" MostrarAviso="true">
 <div class="pagina" tabindex="0" @onkeydown="@AtajoAsync">
@@ -48,6 +48,8 @@
             <div class="toolbar">
                 <input class="e-input" placeholder="Número del crédito o de la cuenta" @bind="_numeroDeObligacion" @onkeydown="@NumeroTecladoAsync" maxlength="40" />
                 <SfButton CssClass="e-outline" Disabled="@(_cargaDePagables.Activa || string.IsNullOrWhiteSpace(_numeroDeObligacion))" OnClick="@BuscarPorNumeroAsync">Buscar por número</SfButton>
+                @* Feature 015, R1 (T0365; FR-037): las obligaciones donde la persona es codeudora, a pedido. *@
+                <label class="campo"><input type="checkbox" checked="@_comoCodeudor" @onchange="@(e => CambiarCodeudorAsync(e.Value is true))" /> También como codeudor</label>
             </div>
             <IndicadorDeCarga Cargando="@_cargaDePagables.Activa" Texto="Consultando lo que puede pagar…">
                 @if (_pagables is not null)
@@ -72,6 +74,17 @@
                                     <td>@c.Number · @c.LineName</td><td colspan="4">@string.Join(" · ", (_pagables.DueInstallments?.Installments ?? []).Where(x => x.AccountPublicId == c.AccountPublicId).Select(x => $"{x.Period}: {x.Pending:N0}"))</td>
                                     <td><SfButton CssClass="e-flat" Disabled="@(!c.AcceptsDeposits)" OnClick="@(() => AgregarCuenta(c))">Consignar</SfButton></td>
                                 </tr>
+                            }
+                            @if (PuedeDejarPendiente(1))
+                            {
+                                @* Feature 015, R1 (T0365; FR-046): Cartera no está activada y la persona está en su carga aplicada: el valor queda pendiente de aplicar. *@
+                                <tr><td>Crédito de la carga (Cartera sin activar)</td><td colspan="4">Queda como recaudo pendiente de aplicar el día de la activación.</td>
+                                    <td><SfButton CssClass="e-flat" OnClick="@(() => AgregarPendiente(1))">Dejar pendiente</SfButton></td></tr>
+                            }
+                            @if (PuedeDejarPendiente(2))
+                            {
+                                <tr><td>Cuenta de la carga (Captaciones sin activar)</td><td colspan="4">Queda como recaudo pendiente de aplicar el día de la activación.</td>
+                                    <td><SfButton CssClass="e-flat" OnClick="@(() => AgregarPendiente(2))">Dejar pendiente</SfButton></td></tr>
                             }
                             @foreach (var k in _pagables.MiscConcepts)
                             {
@@ -125,6 +138,7 @@
                     </tbody>
                 </table>
                 <div class="toolbar">
+                    <SfButton CssClass="e-outline" Disabled="@(_pagables is null || _cargaDeItems.Activa)" OnClick="@PreseleccionarAsync">Todo lo exigible (F4)</SfButton>
                     <SfButton CssClass="e-outline" Disabled="@(_items.Count == 0)" OnClick="@SimularAsync">Simular</SfButton>
                     <span>Total: <strong>@_items.Sum(i => i.Amount).ToString("N0")</strong></span>
                 </div>
@@ -224,6 +238,9 @@
                 <div class="toolbar">
                     <SfButton CssClass="e-outline" OnClick="@(() => ImprimirAsync(false))">Imprimir tirilla</SfButton>
                     <SfButton CssClass="e-outline" OnClick="@(() => ImprimirAsync(true))">Imprimir carta</SfButton>
+                    @* Feature 015, R1 (T0365; FR-020, FR-045): por correo, sólo con la autorización del canal; el servidor dice si salió. *@
+                    <input class="e-input" placeholder="Correo (opcional)" @bind="_correoDelAviso" maxlength="200" />
+                    <SfButton CssClass="e-outline" Disabled="@_enviandoAviso.Activa" OnClick="@AvisarAsync">Enviar por correo</SfButton>
                     <SfButton CssClass="e-primary" OnClick="@NuevaAsync">Nueva operación</SfButton>
                 </div>
             </div>
@@ -295,6 +312,7 @@
         switch (e.Key)
         {
             case "F2": _persona = null; StateHasChanged(); break;
+            case "F4" when _pagables is not null: await PreseleccionarAsync(); break;
             case "F8": AgregarMedio(); break;
             case "F9" when _operacion is not null && _operacion.Imputation.Count > 0: await ConfirmarAsync(null); break;
             case "Escape": await CancelarAsync(); break;
@@ -332,10 +350,71 @@
         await CargarPagablesAsync(null, _numeroDeObligacion.Trim());
     }
 
+    // Feature 015, R1 (T0365): codeudor, F4, recaudo pendiente de aplicar y aviso por correo.
+    private bool _comoCodeudor;
+    private string? _correoDelAviso;
+    private readonly EstadoDeCarga _enviandoAviso = new();
+    private ClaveDeOperacion _claveDePreseleccion = new(), _claveDeAviso = new();
+
+    private async Task CambiarCodeudorAsync(bool incluir)
+    {
+        _comoCodeudor = incluir;
+        if (_pagables is not null) await CargarPagablesAsync(_pagables.PersonPublicId);
+    }
+
+    /// <summary>1 = Cartera, 2 = Captaciones: el módulo no está activado (estado 1) y, en cuentas, la persona está en la carga.</summary>
+    private bool PuedeDejarPendiente(int modulo) => _pagables is not null && modulo switch
+    {
+        1 => _pagables.Obligations?.LendingStatus == 1,
+        _ => (_pagables.DueInstallments?.DepositsStatus == 1 || _pagables.DueInstallments?.ContributionsStatus == 1)
+             && (_pagables.DueInstallments?.MigratedNotActivated ?? []).Contains(_pagables.PersonPublicId),
+    };
+
+    private void AgregarPendiente(int modulo) =>
+        Agregar(new ItemPedidoRequest(5, 0, PendingTarget: modulo), modulo == 1 ? "Pendiente de aplicar · crédito" : "Pendiente de aplicar · cuenta");
+
+    private async Task PreseleccionarAsync()
+    {
+        using var carga = _cargaDeItems.Iniciar();
+        if (!await AsegurarOperacionAsync()) return;
+        _rechazados.Clear();
+        var r = await Cliente.PreseleccionarAsync(_operacion!.PublicId, _comoCodeudor, _claveDePreseleccion);
+        _claveDePreseleccion = new ClaveDeOperacion();
+        if (!r.IsSuccess)
+        {
+            if (r.ErrorCode == "Receipts.Receipt.ItemRejected")
+                foreach (var x in r.Dato<List<RechazoDeItem>>("items") ?? []) _rechazados[x.ItemId] = x.Message;
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo preseleccionar lo exigible.");
+            return;
+        }
+        _operacion = r.Value;
+        // Los ítems de la pantalla pasan a ser los de la operación, que el cajero puede quitar.
+        _items.Clear();
+        foreach (var i in _operacion!.Items)
+        {
+            _items.Add(new ItemPedidoRequest(i.Target, i.Amount, i.ProductPublicId, i.BeneficiaryPersonPublicId, i.LoanModality, i.AccountModality, i.Choice,
+                i.InstallmentNumber, i.InstallmentPublicIds, i.AdvanceNoticeAccepted, i.MiscConceptPublicId, i.CrossDocument, i.InvoicePublicId, i.ItemId,
+                i.PendingTarget, i.LoadObligationPublicId, i.ProductReference));
+            if (!_rotulos.ContainsKey(i.ItemId)) _rotulos[i.ItemId] = $"{CajaClient.Destino(i.Target)} {i.ProductNumber}";
+        }
+        _pideDeclaracion = _operacion.Items.Any(x => x.RequiresSourceOfFunds) && !_operacion.SourceOfFundsDeclared;
+    }
+
+    private async Task AvisarAsync()
+    {
+        if (_recibo is null) return;
+        using var envio = _enviandoAviso.Iniciar();
+        var r = await Cliente.AvisarAsync(_recibo.PublicId, string.IsNullOrWhiteSpace(_correoDelAviso) ? null : _correoDelAviso.Trim(), _claveDeAviso);
+        _claveDeAviso = new ClaveDeOperacion();
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo enviar el aviso."); return; }
+        if (r.Value.Outcome == "Sent") await Notification.SuccessAsync(r.Value.Message);
+        else await Notification.WarningAsync(r.Value.Message);
+    }
+
     private async Task CargarPagablesAsync(Guid? persona, string? numero = null)
     {
         using var carga = _cargaDePagables.Iniciar();
-        var r = await Cliente.LoQuePuedePagarAsync(persona, null, numero: numero);
+        var r = await Cliente.LoQuePuedePagarAsync(persona, null, _comoCodeudor, numero: numero);
         if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo consultar lo que puede pagar."); return; }
         _pagables = r.Value;
         _items.Clear();

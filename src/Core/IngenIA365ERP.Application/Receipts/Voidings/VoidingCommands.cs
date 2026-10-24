@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using FluentValidation;
 using IngenIA365ERP.Application.Common.Approvals;
 using IngenIA365ERP.Application.Common.Behaviors;
@@ -243,6 +243,10 @@ public sealed class ApproveReceiptVoidingCommandHandler(
         var razon = $"Anulación del recibo {recibo.Number}: {anulacion.Reason}";
         var rechazos = new List<object>();
 
+        // Feature 015, R1 (T0363): un recaudo pendiente que ya se aplicó en su módulo impide anular; el vigente se anula con el recibo.
+        var pendientes = await db.PendingApplications.Where(x => x.ReceiptId == recibo.Id).ToListAsync(ct);
+        if (pendientes.Any(x => x.Status == PendingApplicationState.Applied)) return Result.Failure(CashDesk.ErroresDelPendiente.YaAplicado());
+
         // Obligaciones antes que cuentas (FR-170), una vez por porción.
         foreach (var p in vigentes.Where(p => Destino(aplicaciones, p) == ApplicationTarget.Loan))
         {
@@ -269,6 +273,7 @@ public sealed class ApproveReceiptVoidingCommandHandler(
             reversadas.Add((p, aplicaciones.First(a => a.Id == p.ReceiptApplicationId), medio, aSaldo));
         }
         foreach (var a in aplicaciones.Where(a => a.Status == ApplicationState.Applied)) a.Status = ApplicationState.Voided;
+        foreach (var x in pendientes.Where(x => x.Status == PendingApplicationState.Pending)) x.Status = PendingApplicationState.Voided;
         recibo.Status = ReceiptState.Voided;
         anulacion.Status = ReceiptVoidingState.Applied;
         anulacion.ApprovedByUserId = usuario;
