@@ -2027,12 +2027,43 @@ identificación tardía con la fecha valor del movimiento por la v2 (FR-067 part
 si el parámetro lo permite), uno se identifica por el documento del consignante y uno queda como partida; ≥ 90 % de los abonos
 con referencia válida quedan propuestos correctamente (SC-008).
 
-- [ ] T0376 [P] [US6] Escribir tests/IngenIA365ERP.Application.Tests/Receipts/BankItems/ReglasDeIdentificacionTests.cs (FR-067; D15; SC-008): criterios `PaymentReference`, `DepositorTaxId`, `ReportedDeposit`, `ExactDueAmount` por prioridad; la propuesta la confirma una persona; con «aplicar al cargar» y referencia exacta con dígito válido se aplica al cargar el extracto a nombre de quien carga; ninguna tarea programada aplica
-- [ ] T0377 [P] [US6] Escribir tests/IngenIA365ERP.Application.Tests/Receipts/BankItems/ConsignacionReportadaTests.cs (FR-069, FR-071; D11): por verificar hasta el extracto (por defecto) o aplicada de inmediato con medio «consignación» pendiente de cruzar; vencida en los días configurados alerta; la identificación tardía con v2 adoptada aplica con la fecha valor del movimiento y sin alerta de mora
-- [ ] T0378 [P] [US6] Crear en src/Core/IngenIA365ERP.Domain/Entities/Receipts/Banks/ `IdentificationRule` y `ReportedDeposit` con su configuración (data-model §8.1)
-- [ ] T0379 [US6] Implementar en src/Core/IngenIA365ERP.Application/Receipts/BankItems/ el motor de propuestas por reglas, la aplicación al cargar dentro de la carga del extracto (a nombre de quien carga, por `AplicacionNoInteractiva`), `RegisterReportedDepositCommand` y su cruce con el extracto, y el uso de `BankItem` en la v2 (FR-067, FR-069, FR-071)
-- [ ] T0380 [US6] Exponer `/api/receipts/identification-rules` y `/api/receipts/reported-deposits` y crear las pantallas src/Presentation/IngenIA365ERP.Shared/Pages/Recaudo/{ReglasDeIdentificacion,ConsignacionesReportadas}.razor con `IndicadorDeCarga`; mostrar las propuestas en `/recaudo/extractos`
-- [ ] T0381 [US6] Regenerar en src/Infrastructure/IngenIA365ERP.Persistence.Migrations.{PostgreSql,SqlServer}/Application/ el par `RecaudoCompleto` con reglas y consignaciones reportadas
+- [X] T0376 [P] [US6] Escribir tests/IngenIA365ERP.Application.Tests/Receipts/BankItems/ReglasDeIdentificacionTests.cs (FR-067; D15; SC-008): criterios `PaymentReference`, `DepositorTaxId`, `ReportedDeposit`, `ExactDueAmount` por prioridad; la propuesta la confirma una persona; con «aplicar al cargar» y referencia exacta con dígito válido se aplica al cargar el extracto a nombre de quien carga; ninguna tarea programada aplica
+- [X] T0377 [P] [US6] Escribir tests/IngenIA365ERP.Application.Tests/Receipts/BankItems/ConsignacionReportadaTests.cs (FR-069, FR-071; D11): por verificar hasta el extracto (por defecto) o aplicada de inmediato con medio «consignación» pendiente de cruzar; vencida en los días configurados alerta; la identificación tardía con v2 adoptada aplica con la fecha valor del movimiento y sin alerta de mora
+- [X] T0378 [P] [US6] Crear en src/Core/IngenIA365ERP.Domain/Entities/Receipts/Banks/ `IdentificationRule` y `ReportedDeposit` con su configuración (data-model §8.1)
+- [X] T0379 [US6] Implementar en src/Core/IngenIA365ERP.Application/Receipts/BankItems/ el motor de propuestas por reglas, la aplicación al cargar dentro de la carga del extracto (a nombre de quien carga, por `AplicacionNoInteractiva`), `RegisterReportedDepositCommand` y su cruce con el extracto, y el uso de `BankItem` en la v2 (FR-067, FR-069, FR-071)
+- [X] T0380 [US6] Exponer `/api/receipts/identification-rules` y `/api/receipts/reported-deposits` y crear las pantallas src/Presentation/IngenIA365ERP.Shared/Pages/Recaudo/{ReglasDeIdentificacion,ConsignacionesReportadas}.razor con `IndicadorDeCarga`; mostrar las propuestas en `/recaudo/extractos`
+- [X] T0381 [US6] Regenerar en src/Infrastructure/IngenIA365ERP.Persistence.Migrations.{PostgreSql,SqlServer}/Application/ el par `RecaudoCompleto` con reglas y consignaciones reportadas
+
+**Notas de la construcción de la fase 27 (2026-10-24)**. Pruebas escritas y compiladas, sin correr. Desviaciones y decisiones; los nombres nuevos quedan en
+decisiones-transversales §2.7:
+
+- **T0376–T0377**: `Receipts/BankItems/ReglasDeIdentificacionTests` (prioridad, ambigüedad, aplicar al cargar sólo con referencia exacta, regla marcada y parámetro;
+  reportada y valor exacto con un único candidato; proponer no escribe; al cargar a nombre de quien carga) y `ConsignacionReportadaTests` (por verificar por defecto,
+  aplicada de inmediato sin doble aplicación al cruzar, abono que no alcanza, alerta y «vencida» sin cambiarla), sobre `BancosDePrueba`.
+- **T0378**: `IdentificationRule` y `ReportedDeposit` (`Entities/Receipts/Banks/R1Banks.cs`) con su configuración. **Desviación**: la regla no guarda su propia
+  modalidad: lo que propone se aplica con la modalidad del canal banco (D38, `RCD_ChannelModalityRules`), como cualquier abono. `BankItemIdentification.RuleId` (de R0)
+  se llena ahora y sigue sin FK.
+- **T0379**: el motor puro **nuevo** `Domain/Receipts/Identificacion/MotorDeIdentificacion` y `PropuestasDeIdentificacion` (reglas activas por prioridad; un único
+  candidato o pasa a la siguiente; la referencia por `IBusquedaDeObligaciones`, el documento del consignante por `COR_People.TaxId`, la reportada por cuenta, valor y
+  ventana `ConsignacionReportada.DiasDeVentana`, el valor exacto sobre lo exigible de hoy de los créditos del consignante —las cuentas no entran en R1—).
+  `IdentifyBankItemCommand` acepta `IdentificationRulePublicId` **(nuevo, opcional)** para dejar la regla que confirmó la persona. **Desviaciones**: (a) la aplicación al
+  cargar es `ApplyIdentificationRulesOnLoadCommand` (`POST /api/receipts/bank-items/apply-on-load`), que la pantalla de extractos pide **enseguida** de cargar, como la
+  misma persona y en su propia transacción —dentro de la carga de Tesorería se invertiría el orden de cerrojos Recaudo → Tesorería—; (b) «referencia exacta con dígito
+  válido» en R1 es la referencia igual, carácter por carácter, al número completo de un único producto vivo: las referencias con dígito de verificación llegan con los
+  convenios de R2 (`RCD_PaymentReferences`). La identificación tardía con la fecha valor del movimiento por la v2 ya la hacía `AplicacionNoInteractiva` desde la fase 23
+  (`PartidaAsync`), y vale también para lo que se aplica al cargar y para la consignación verificada. Consignación reportada: `RegisterReportedDepositCommand`
+  (por verificar o aplicada de inmediato con medio «consignación», por `ConsignacionReportada.Modo`), `VerifyReportedDepositCommand` (cruza con la línea; si ya estaba
+  aplicada, identifica la línea con el mismo recibo) y la sección **nueva** `AntiguedadDeRecaudo.ConsignacionesReportadasAsync` con la alerta **nueva**
+  `Recaudo.ConsignacionReportadaSinVerificar` (sólo avisa; la lista la muestra `Expired`). Parámetros **nuevos** de R1: `Identificacion.AplicarAlCargar` (no),
+  `ConsignacionReportada.Modo` (`PorVerificar`), `ConsignacionReportada.DiasParaVerificar` (3, pendiente de validar) y `ConsignacionReportada.DiasDeVentana` (5).
+- **T0380**: rutas `/api/receipts/identification-rules` (`Receipts.Setup.View/Manage`), `GET /api/receipts/bank-items/{lineId}/proposal`,
+  `POST /api/receipts/bank-items/apply-on-load` (`Receipts.BankItems.Identify`) y `/api/receipts/reported-deposits` (registrar con `Receipts.Receipt.Register`, verificar con
+  `Receipts.BankItems.Identify`), sin permisos nuevos; pantallas `/recaudo/reglas-de-identificacion` y `/recaudo/consignaciones-reportadas` en el menú y en
+  `LasPantallasDeRecaudoYTesoreriaEstanEnElMenu`; `/recaudo/extractos` muestra la propuesta («Usar la propuesta», «Confirmar con la consignación reportada») y pide la
+  aplicación al cargar. El soporte de la consignación se indica por su identificador de adjunto, como los soportes de la caja. Sin probar en navegador.
+- **T0381**: `RecaudoCompleto` regenerado en par con reglas y consignaciones reportadas; «No changes» en los dos motores; paridad en par (Application 70). Compilan
+  API, Web, Web.Client, Persistence y las cinco de pruebas.
+
 
 ---
 

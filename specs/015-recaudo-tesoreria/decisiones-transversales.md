@@ -542,6 +542,17 @@ Lo que tasks.md marcaba **(nuevo)** y lo que trajeron el `/speckit-analyze` y la
 | `CodigosDelContratoDeCuentas.PendienteDeAprobacion` | el código del contrato de cuentas que el recaudador distingue | `Common/Integration/Lending/ContratoDeCuentasDtos.cs` |
 | `RegistroDeEfectivo.{AlEgresarAsync, AlAnularEgresoAsync}` · `IDocumentosDeRecaudoEnPdf.Egreso` · rutas `/api/receipts/cash-disbursements` · pantalla `/recaudo/egresos` · eventos `Receipts.Disbursement.{Delivered, Voided}` | registro, documento, rutas y pantalla | `Receipts/Compliance`, `API/Endpoints/Receipts/DisbursementsEndpoints.cs`, `Shared/Pages/Recaudo/Egresos.razor` |
 
+**Fijados en la construcción de la fase 27 (2026-10-24)**:
+
+| Nombre | Qué | Dónde |
+|---|---|---|
+| `RCD_IdentificationRules` (`IdentificationRule`) · `RCD_ReportedDeposits` (`ReportedDeposit`) | reglas de identificación y consignación reportada | par `RecaudoCompleto`; `Entities/Receipts/Banks/R1Banks.cs` |
+| `MotorDeIdentificacion` · `AbonoAIdentificar` · `ReglaDeIdentificacion` · `CandidatoPorReferencia` · `CandidatoReportado` · `CandidatoExigible` · `PropuestaDeIdentificacion` | el motor puro de propuestas | `Domain/Receipts/Identificacion/MotorDeIdentificacion.cs` |
+| `PropuestasDeIdentificacion` · `GetBankItemProposalQuery` · `ApplyIdentificationRulesOnLoadCommand` · `ListIdentificationRulesQuery` · `SaveIdentificationRuleCommand` · `RegisterReportedDepositCommand` · `VerifyReportedDepositCommand` · `ListReportedDepositsQuery` · `ConsignacionesReportadas` · `ErroresDeIdentificacion` (`Receipts.IdentificationRule.ApplyOnLoadOnlyByReference`, `Receipts.ReportedDeposit.{NotCollectionAccount, NotToVerify, AmountMismatch, Rejected}`) | servicios, comandos y errores | `Receipts/BankItems/IdentificacionPorReglas.cs` |
+| `IdentifyBankItemCommand.IdentificationRulePublicId` · `PedidoDeAbono.RuleId` | la regla que confirmó la persona | `Receipts/BankItems/BankItemCommands.cs` |
+| `Identificacion.AplicarAlCargar` · `ConsignacionReportada.{Modo, DiasParaVerificar, DiasDeVentana}` (RCD, R1) · alerta `Recaudo.ConsignacionReportadaSinVerificar` · `AntiguedadDeRecaudo.ConsignacionesReportadasAsync` | parámetros y aviso | `ParametrosDeRecaudoYTesoreria`, `TiposDeAlerta`, `Receipts/Tareas` |
+| rutas `/api/receipts/identification-rules`, `/api/receipts/bank-items/{lineId}/proposal`, `/api/receipts/bank-items/apply-on-load`, `/api/receipts/reported-deposits` · pantallas `/recaudo/reglas-de-identificacion`, `/recaudo/consignaciones-reportadas` · eventos `Receipts.IdentificationRule.Saved`, `Receipts.BankItems.AppliedOnLoad`, `Receipts.ReportedDeposit.{Registered, Verified}` | rutas, pantallas y auditoría | `API/Endpoints/Receipts/IdentificationEndpoints.cs`, `Shared/Pages/Recaudo` |
+
 ## 3. Decisiones transversales
 
 ### Módulos y frontera
