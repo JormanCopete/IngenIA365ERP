@@ -1219,6 +1219,9 @@ decisiones-transversales §2.7:
   `Domain/Receipts/Cumplimiento/SenalesDeEfectivo`: acumulado del mes calendario contra `Sarlaft.UmbralTransaccionesMultiples` (la anulación resta), fraccionamiento
   «operaciones;días» por debajo del umbral de declaración que juntos lo alcanzan, pagador tercero frecuente (titulares distintos en el mes) y consignante no identificado
   repetido. Los dos últimos umbrales (3 titulares, 2 partidas) no son parámetros todavía: quedan como constantes nombradas hasta que el oficial los valide (P7).
+  **Cerrado el 2026-10-24 (pendiente A1)**: los dos umbrales son ya parámetros `RCD` con vigencia, `Sarlaft.PagadorTerceroFrecuente.Titulares` (3) y
+  `Sarlaft.ConsignanteRepetido.Partidas` (2), «pendiente de validar» por el oficial (P7), mínimo 1; los leen `RegistroDeEfectivo.ParametrosAsync` y
+  `AntiguedadDeRecaudo.PartidasAsync`, y las constantes `TercerosFrecuentesPorDefecto`, `ConsignanteRepetidoPorDefecto` y `AntiguedadDeRecaudo.ConsignanteRepetido` se retiraron.
 - **T0233–T0236**: escritas. La declaración y quien efectúa ya los construyó la fase 6 (T0115); la prueba nueva los recorre de punta a punta. La declaración que pide la
   simulación de Captaciones y su viaje en `SourceOfFundsAttachmentPublicId` ya estaban cubiertos por las pruebas de la fase 6.
 - **T0237 (pendiente)**: las e2e se escriben con las demás e2e de la fase 22; sin marcar.

@@ -1116,6 +1116,7 @@ Los marcados **P** van «pendiente de validar». Los marcados **sin valor** no s
 | `Sarlaft.UmbralTransaccionIndividual` | RCD | 5.000.000 | proyecto de circular Supersolidaria dic-2024, respuesta UIAF 2025, **P** |
 | `Sarlaft.UmbralTransaccionesMultiples` | RCD | 30.000.000 | ídem, **P**; mes calendario por persona |
 | `Sarlaft.Fraccionamiento` | RCD | 3 operaciones bajo el umbral de declaración en 7 días | **P** |
+| `Sarlaft.PagadorTerceroFrecuente.Titulares` · `Sarlaft.ConsignanteRepetido.Partidas` | RCD | 3 titulares distintos en el mes · 2 partidas abiertas | **P** (P7); **(nuevo, 2026-10-24)** |
 | `Sarlaft.Reporte.Estado` | RCD | `Vigente` (por período) | **P**; la suspensión de 2025 se registra como versión |
 | `Sarlaft.Reporte.Alcance` · `Sarlaft.Reporte.ExigeAusencia` | RCD | `SoloEfectivo` · no | **P** |
 | `Sarlaft.ListasNoVinculantes.Efecto` | RCD, TES | `Sigue` | D22 |

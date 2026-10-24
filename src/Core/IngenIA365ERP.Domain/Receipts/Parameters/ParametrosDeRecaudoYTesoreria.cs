@@ -65,6 +65,8 @@ public static class ParametrosDeRecaudoYTesoreria
     public const string SarlaftReporteEstado = "Sarlaft.Reporte.Estado";
     public const string SarlaftReporteAlcance = "Sarlaft.Reporte.Alcance";
     public const string SarlaftReporteExigeAusencia = "Sarlaft.Reporte.ExigeAusencia";
+    public const string SarlaftPagadorTerceroFrecuenteTitulares = "Sarlaft.PagadorTerceroFrecuente.Titulares";
+    public const string SarlaftConsignanteRepetidoPartidas = "Sarlaft.ConsignanteRepetido.Partidas";
 
     // ------------------------------------------------------------------------------------------------------ comunes (RCD, TES) --
     public const string SarlaftListasNoVinculantesEfecto = "Sarlaft.ListasNoVinculantes.Efecto";
@@ -157,6 +159,12 @@ public static class ParametrosDeRecaudoYTesoreria
                 ["Vigente", "Suspendido"], "Vigente", R0), PendienteCumplimiento),
             Pendiente(Eleccion(ModuloRecaudo, SarlaftReporteAlcance, "Qué transacciones entran al reporte.", ["SoloEfectivo", "Todas"], "SoloEfectivo", R0), PendienteCumplimiento),
             Pendiente(SiNo(ModuloRecaudo, SarlaftReporteExigeAusencia, "Se reporta la ausencia de transacciones.", false, R0), PendienteCumplimiento),
+            Pendiente(Entero(ModuloRecaudo, SarlaftPagadorTerceroFrecuenteTitulares,
+                "Señal de pagador tercero frecuente: titulares distintos para los que una persona entregó efectivo en el mes calendario.", "3", R0) with { Minimo = 1 },
+                PendienteCumplimiento),
+            Pendiente(Entero(ModuloRecaudo, SarlaftConsignanteRepetidoPartidas,
+                "Señal de consignante no identificado repetido: partidas por identificar abiertas del mismo consignante que la levantan.", "2", R0) with { Minimo = 1 },
+                PendienteCumplimiento),
         };
 
         // ---- comunes: una definición por módulo ----

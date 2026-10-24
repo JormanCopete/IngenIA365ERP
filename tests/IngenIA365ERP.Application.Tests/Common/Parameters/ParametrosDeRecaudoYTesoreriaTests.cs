@@ -38,6 +38,8 @@ public class ParametrosDeRecaudoYTesoreriaTests
         { P.ModuloRecaudo, P.SarlaftUmbralTransaccionesMultiples, "30000000", true },
         { P.ModuloRecaudo, P.SarlaftReporteEstado, "Vigente", true },
         { P.ModuloRecaudo, P.SarlaftReporteAlcance, "SoloEfectivo", true },
+        { P.ModuloRecaudo, P.SarlaftPagadorTerceroFrecuenteTitulares, "3", true },
+        { P.ModuloRecaudo, P.SarlaftConsignanteRepetidoPartidas, "2", true },
         { P.ModuloRecaudo, P.SarlaftListasNoVinculantesEfecto, "Sigue", false },
         { P.ModuloRecaudo, P.ContabilidadFaltaDeRegla, "Bloquear", false },
         { P.ModuloRecaudo, P.ContabilidadModoDePaso, "PorLotes", false },

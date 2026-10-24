@@ -20,10 +20,6 @@ namespace IngenIA365ERP.Application.Receipts.Compliance;
 /// </summary>
 public sealed class RegistroDeEfectivo(IApplicationDbContext db, ILectorDeParametros lector, IAlertas alertas, IDateTimeService reloj)
 {
-    /// <summary>Cuántos titulares distintos hacen frecuente a un pagador tercero, y cuántas partidas abiertas repiten a un consignante (pendientes de P7: no son parámetros todavía).</summary>
-    public const int TercerosFrecuentesPorDefecto = 3;
-    public const int ConsignanteRepetidoPorDefecto = 2;
-
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
     /// <summary>El recibo confirmado con efectivo: su fila y las señales. Sin efectivo, nada.</summary>
@@ -68,10 +64,16 @@ public sealed class RegistroDeEfectivo(IApplicationDbContext db, ILectorDeParame
         var partes = (fraccion.IsSuccess ? fraccion.Value.Texto : string.Empty).Split(';');
         var operaciones = partes.Length == 2 && int.TryParse(partes[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out var o) ? o : 0;
         var dias = partes.Length == 2 && int.TryParse(partes[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var d) ? d : 0;
+        var terceros = await lector.LeerAsync(m, ParametrosDeRecaudoYTesoreria.SarlaftPagadorTerceroFrecuenteTitulares, fecha, ct: ct);
+        var consignante = await lector.LeerAsync(m, ParametrosDeRecaudoYTesoreria.SarlaftConsignanteRepetidoPartidas, fecha, ct: ct);
         var version = multiples.IsSuccess ? multiples.Value.Vigencia?.PublicId.ToString("N") ?? "defecto" : null;
-        return new ParametrosDeSenales(Decimal(individual), Decimal(multiples), Decimal(declaracion), operaciones, dias, TercerosFrecuentesPorDefecto,
-            ConsignanteRepetidoPorDefecto, version);
+        return new ParametrosDeSenales(Decimal(individual), Decimal(multiples), Decimal(declaracion), operaciones, dias, Entero(terceros), Entero(consignante),
+            version);
     }
+
+    /// <summary>Un entero del lector; si no se puede leer, cero: la señal no se evalúa (nunca un literal de negocio aquí).</summary>
+    private static int Entero(IngenIA365ERP.Application.Common.Models.Result<ValorDeParametro> r) =>
+        r.IsSuccess && r.Value.Valor is int v ? v : 0;
 
     private static decimal Decimal(IngenIA365ERP.Application.Common.Models.Result<ValorDeParametro> r) =>
         r.IsSuccess && r.Value.Valor is decimal v ? v : 0m;

@@ -35,9 +35,6 @@ public sealed class AntiguedadDeRecaudo(
     /// <summary>Los escalones por defecto (D10) si el parámetro no se puede leer.</summary>
     public static readonly IReadOnlyList<int> EscalonesPorDefecto = [30, 60, 90];
 
-    /// <summary>Cuántas partidas abiertas del mismo consignante levantan la señal al oficial.</summary>
-    public const int ConsignanteRepetido = 2;
-
     /// <summary>La señal del consignante repetido va al oficial de cumplimiento (quien tiene el permiso de cumplimiento).</summary>
     public const string PermisoDelOficial = "Receipts.Compliance.View";
 
@@ -119,7 +116,10 @@ public sealed class AntiguedadDeRecaudo(
                 ScopeBranchPublicId: await OficinaAsync(p.BranchId, ct)), ct);
             alertadas++;
         }
-        foreach (var g in abiertas.Where(p => !string.IsNullOrWhiteSpace(p.DepositorTaxId)).GroupBy(p => p.DepositorTaxId!).Where(g => g.Count() >= ConsignanteRepetido))
+        // Cuántas partidas abiertas del mismo consignante levantan la señal: parámetro con vigencia (Sarlaft.ConsignanteRepetido.Partidas, pendiente de P7).
+        var consignanteRepetido = await parametros.EnteroAsync(ParametrosDeRecaudoYTesoreria.SarlaftConsignanteRepetidoPartidas, hoy, ct) ?? 0;
+        foreach (var g in abiertas.Where(p => consignanteRepetido > 0 && !string.IsNullOrWhiteSpace(p.DepositorTaxId)).GroupBy(p => p.DepositorTaxId!)
+                     .Where(g => g.Count() >= consignanteRepetido))
         {
             await alertas.LevantarAsync(new AlertaALevantar(TiposDeAlerta.RecaudoPartidaAntigua, "Consignante no identificado que se repite",
                 string.Create(CultureInfo.InvariantCulture,
