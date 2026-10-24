@@ -7,7 +7,7 @@ namespace IngenIA365ERP.API.IntegrationTests.Receipts;
 
 /// <summary>
 /// Feature 015, T0183c (excepción declarada a «e2e una sola vez», riesgo R1 del analyze; FR-042, FR-170; SC-006, SC-007): la e2e de humo de la caja, en la colección
-/// «Recaudo y Tesorería e2e», en una cooperativa aislada con la configuración mínima y la <b>activación mínima</b> de T0183b (Recaudo y Tesorería reales registrados
+/// «Recaudo y Tesorería e2e», en una cooperativa aislada con la configuración mínima y la activación de Recaudo y Tesorería —completa desde la fase 19; la mínima de T0183b queda para el paralelo— (Recaudo y Tesorería reales registrados
 /// por su activación, sin nada a mano): abrir una sesión, un recibo de dos cuotas de crédito en efectivo y transferencia, la misma clave repetida devuelve el mismo
 /// recibo, y cerrar la sesión contando lo esperado. La cuota de aportes entra cuando el escenario de la caja se componga con el de Captaciones (fase 22). Escrita
 /// en la fase 10; el dueño pidió no correrla todavía (se corre con Docker en los dos motores antes de T0184).
@@ -22,7 +22,7 @@ public sealed class CajaDeHumoTests(CentralIdentityApiFixture fx)
         var c = await CajaE2E.PreparadaAsync(fx, http, "humo");
         var estado = await InventarioE2E.GetAsync(http, c.Token, "/api/receipts/activation/requirements");
         estado.GetProperty("status").GetString().Should().Be("Active");
-        estado.GetProperty("isMinimal").GetBoolean().Should().BeTrue();
+        estado.GetProperty("isMinimal").GetBoolean().Should().BeFalse("desde la fase 19 activar Cartera activa Recaudo y Tesorería reales con la activación completa");
 
         var op = await CajaE2E.OperacionAsync(http, c, [CajaE2E.Cuota(c.CreditoA, 150_000m), CajaE2E.Cuota(c.CreditoB, 100_000m)],
             [CajaE2E.Medio(c.Efectivo, 200_000m), CajaE2E.Medio(c.Transferencia, 50_000m, "TR-HUMO")]);
