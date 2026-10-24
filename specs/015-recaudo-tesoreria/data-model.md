@@ -1128,6 +1128,7 @@ Los marcados **P** van «pendiente de validar». Los marcados **sin valor** no s
 | `CuentasDestino.DiasDeEspera` · `CuentasDestino.DiasDeMarca` | plataforma | sin valor | D40, P4 |
 | `Remesas.DiasParaConfirmar` | TES | 2 | — |
 | `Conciliacion.DiasDeHolgura` | TES | 3 | FR-216 |
+| `Conciliacion.DiasPartidaAntigua` | TES | 30 | **P**; alerta de partida conciliatoria antigua **(nuevo, 2026-10-24)** |
 | `Contabilidad.CierreExigeConciliaciones` | ACC | no | D29 (T1) |
 | `Gmf.Tarifa` | TES (y RCD en R1) | 0,004 | ET art. 871, **P** (P10) |
 | `Gmf.HechosGeneradoresDeEgresos` · `Gmf.ExencionDesembolsos` · `Gmf.Redondeo` | TES | devoluciones de saldos a favor y partidas gravadas; desembolso al deudor exento · al peso | DUR 1625 de 2016 y ET art. 879, **P** |

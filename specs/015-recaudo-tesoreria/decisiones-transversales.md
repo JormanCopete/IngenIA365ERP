@@ -423,6 +423,21 @@ Lo que tasks.md marcaba **(nuevo)** y lo que trajeron el `/speckit-analyze` y la
 | `CashOperation.{RefundPaymentOrderPublicId, RefundReleasePublicId, RefundReleaseNumber}` · `ResultadoDeOrdenesDeRecaudo.InformarCustodiaAsync` · `EmisionDeRecaudo.VuelveALaCustodia` (`ComplianceCustody`) · evento `Receipts.Compliance.RefundOrderResult` | la devolución no girada del dinero retenido reabre la custodia | `RCD_CashOperations` (par `RecaudoNucleo`), `CreditBalanceCommands.cs` |
 | `EmisionDeTesoreria.ValidacionPreviaAsync` · `EmisionDeTesoreria.PoliticaBloquear` · `Treasury.Prevalidation.NotPostable` (`ErroresDeTesoreria.NoContabilizable`) | la validación previa de las pantallas de Tesorería | `Treasury/Accounting/EmisionDeTesoreria.ValidacionPrevia.cs`, `ErroresDeTesoreria.cs` |
 
+
+**Fijados en la construcción de la fase 17 (2026-10-24)**:
+
+| Nombre | Qué | Dónde |
+|---|---|---|
+| `CruceDeConciliacion.Cruzar` · `LineaACruzar` · `RegistroACruzar` · `CrucePropuesto` · reglas `StatementLink`, `ValueDateReference`, `ValueDateReferenceGroup` | el motor puro del cruce | `Domain/Treasury/Conciliacion` |
+| `Reconciliation` (`ClosedByUserId`, `PreviousReconciliationId`, `OutdatedAt`, `OutdatedReason`) · `ReconciliationMatch` (H; `GroupKey`, `RecordNumber`, `IsLive`, `UndoneBy…`) · `ReconcilingItem` (`StatementLineId`, `IsVoided`) · `ReconciliationKind` · `ReconciliationRecordKind` · `ReconciliationMatchMode` · `ReconcilingItemKind` · DbSets `TreasuryReconciliations`, `TreasuryReconciliationMatches`, `TreasuryReconcilingItems` · `UK_TES_Reconciliations_Account_Period_Version` | la conciliación mínima | `Entities/Treasury/Reconciliation`, `TES_Reconciliations…` (par `TesoreriaConciliacionMinima`) |
+| `RegistroConciliableDto.StatementLinePublicId` · `RecaudoParaConciliacion` (implementa `IRecaudoParaConciliacion` e `IPartidasDesdeConciliacion`) · evento `Receipts.UnidentifiedItem.FromReconciliation` | los puertos de Recaudo | `Common/Integration/Receipts`, `Receipts/Integration` |
+| `OpenReconciliationCommand` · `ListReconciliationsQuery` · `GetReconciliationQuery` · `AutoMatchReconciliationCommand` · `AddManualMatchCommand` (`RegistroElegido`) · `RemoveMatchCommand` · `AddReconcilingItemCommand` · `CloseReconciliationCommand` · `ReopenReconciliationCommand` · `ConciliacionesDeTesoreria` · `ConciliacionMinima` · `ReglasDelConciliador` · `RegistroDisponible` · `ReconciliationDto` · `ConciliacionModel` | los comandos de la conciliación | `Treasury/Reconciliation` |
+| `IConciliacionBancariaParaContabilidad.MarcarDesactualizadasAsync` · `ConciliacionBancariaParaContabilidad` · evento `Treasury.Reconciliation.Outdated` | Tesorería para la reapertura del período | `Common/Integration/Accounting`, `Treasury/Reconciliation` |
+| `Treasury.Reconciliation.{NotOpen, AmountMismatch, RecordNotAvailable, InvalidPeriod, ItemInvalid}` | errores que data-model no nombraba | `ErroresDeTesoreria.Conciliacion.cs` |
+| `Conciliacion.DiasPartidaAntigua` (TES, 30, pendiente del dueño) · `VigilanciaDeTesoreria.PartidasConciliatoriasAntiguasAsync` | la alerta `Tesoreria.PartidaConciliatoriaAntigua` | `ParametrosDeRecaudoYTesoreria`, `Treasury/Tareas` |
+| `IDocumentosDeTesoreriaEnPdf.Conciliacion` · `DocumentosDeTesoreriaReport.Conciliacion` | el informe de la conciliación cerrada | `Treasury/Checkbooks/DocumentoDeCheque.cs`, `API/Reports` |
+| `ReconciliationsEndpoints` (`/api/treasury/reconciliations…`) · pantalla `/tesoreria/conciliacion` · `ConciliacionClient` · `NadieEscribeLaConciliacionBancariaDeContabilidad` | rutas, pantalla y prueba | `API`, `Shared`, `Architecture.Tests` |
+
 ## 3. Decisiones transversales
 
 ### Módulos y frontera
