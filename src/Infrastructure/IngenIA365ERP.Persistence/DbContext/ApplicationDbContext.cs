@@ -701,6 +701,14 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceiptApplication> ReceiptApplications => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceiptApplication>();
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceiptApplicationPortion> ReceiptApplicationPortions => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceiptApplicationPortion>();
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.SourceOfFundsDeclaration> SourceOfFundsDeclarations => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.SourceOfFundsDeclaration>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceiptVoiding> ReceiptVoidings => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceiptVoiding>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.ModuleReversal> ModuleReversals => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.ModuleReversal>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.PayerCreditBalance> PayerCreditBalances => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.PayerCreditBalance>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.PayerCreditBalanceMovement> PayerCreditBalanceMovements => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.PayerCreditBalanceMovement>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.PayerReceivable> PayerReceivables => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.PayerReceivable>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceiptsInboundMessage> ReceiptsInboundMessages => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceiptsInboundMessage>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Activation.ReceiptsActivation> ReceiptsActivations => Set<IngenIA365ERP.Domain.Entities.Receipts.Activation.ReceiptsActivation>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Activation.TreasuryActivation> TreasuryActivations => Set<IngenIA365ERP.Domain.Entities.Treasury.Activation.TreasuryActivation>();
     public DbSet<IngenIA365ERP.Domain.Entities.Treasury.BankAccounts.OwnBankAccount> OwnBankAccounts => Set<IngenIA365ERP.Domain.Entities.Treasury.BankAccounts.OwnBankAccount>();
     public DbSet<IngenIA365ERP.Domain.Entities.Treasury.BankAccounts.LiquidityFundUse> LiquidityFundUses => Set<IngenIA365ERP.Domain.Entities.Treasury.BankAccounts.LiquidityFundUse>();
     public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Payments.TreasuryInboundMessage> TreasuryInboundMessages => Set<IngenIA365ERP.Domain.Entities.Treasury.Payments.TreasuryInboundMessage>();

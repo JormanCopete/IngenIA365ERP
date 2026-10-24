@@ -545,6 +545,15 @@
             <PermissionGate Required="Receipts.Vault.View">
                 <NavLink href="/recaudo/boveda" class="nav-subitem">Bóveda</NavLink>
             </PermissionGate>
+            <PermissionGate Required="Receipts.Voiding.Request">
+                <NavLink href="/recaudo/anulaciones" class="nav-subitem">Anulaciones de recibos</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Receipts.Reversals.View">
+                <NavLink href="/recaudo/reversos-de-modulos" class="nav-subitem">Reversos de los módulos</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Receipts.CreditBalances.View">
+                <NavLink href="/recaudo/saldos-a-favor" class="nav-subitem">Saldos a favor</NavLink>
+            </PermissionGate>
             <span class="nav-subgroup-title">Configuración</span>
             <PermissionGate Required="Receipts.Setup.View">
                 <NavLink href="/recaudo/configuracion/puntos" class="nav-subitem">Puntos de recaudo</NavLink>

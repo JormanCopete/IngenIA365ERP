@@ -314,6 +314,12 @@ public static class DependencyInjection
         services.AddScoped<Treasury.Results.RegistroDeResultadosDelGiro>();
         services.AddScoped<Treasury.Accounting.EmisionDeTesoreria>();
         services.AddScoped<Treasury.Tareas.VigilanciaDeTesoreria>();
+        // Feature 015, US5 (T0177): los puertos entre Recaudo y Tesorería de las devoluciones por orden de pago (R-05).
+        services.AddScoped<Common.Integration.Treasury.IOrdenesDePagoDeTesoreria, Treasury.Orders.OrdenesDePagoDeTesoreria>();
+        services.AddScoped<Common.Integration.Receipts.IResultadoDeOrdenesDeRecaudo, Receipts.CreditBalances.ResultadoDeOrdenesDeRecaudo>();
+        // Feature 015, T0183b: los requisitos de la activación mínima de los dos módulos.
+        services.AddScoped<Receipts.Activation.RequisitosDeActivacionDeRecaudo>();
+        services.AddScoped<Treasury.Activation.RequisitosDeActivacionDeTesoreria>();
         services.AddScoped<Lending.Segregation.RegistroDeIntervenciones>();
         services.AddScoped<Lending.Common.LendingAuditEmitter>();
         services.AddScoped<Common.Audit.RechazosDeFormaDeLaPeticion>();

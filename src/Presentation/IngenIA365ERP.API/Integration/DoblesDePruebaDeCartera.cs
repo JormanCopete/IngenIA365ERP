@@ -32,5 +32,6 @@ public static class ConsumidoresDeRecaudoYTesoreria
     public static void Registrar(IServiceCollection services)
     {
         services.AddScoped<IngenIA365ERP.Application.Common.Integration.IDestinoDeMensajes, IngenIA365ERP.Application.Treasury.Integration.DestinoTesoreria>();
+        services.AddScoped<IngenIA365ERP.Application.Common.Integration.IDestinoDeMensajes, IngenIA365ERP.Application.Receipts.Integration.DestinoRecaudo>();
     }
 }

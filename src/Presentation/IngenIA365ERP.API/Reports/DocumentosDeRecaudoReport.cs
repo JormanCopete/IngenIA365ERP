@@ -171,6 +171,36 @@ public static class DocumentosDeRecaudoReport
             });
         })).GeneratePdf();
 
+    /// <summary>
+    /// El documento de anulación de un recibo (fase 10, T0179; FR-156): número y código de verificación, el recibo original, el motivo, quién pidió y quién aprobó,
+    /// cada aplicación reversada u omitida (la que el módulo ya había reversado), y si el dinero quedó como saldo a favor del pagador.
+    /// </summary>
+    public static byte[] Anulacion(Application.Receipts.Voidings.AnulacionModel m)
+    {
+        ArgumentNullException.ThrowIfNull(m);
+        var detalle = $"Recibo {m.ReceiptNumber} del {m.ReceiptValueDate:yyyy-MM-dd} · pagador {m.Payer} · {Pesos(m.Amount)} · motivo: {m.Reason}"
+                      + (m.SessionClosed ? " · el dinero quedó como saldo a favor del pagador" : string.Empty);
+        return Documento(m.Company, "Anulación de recibo", m.Number, m.VerificationCode, $"Recibo {m.ReceiptNumber}",
+            m.DecidedAt is { } d ? $"Aplicada {Hora(d)}" : string.Empty, detalle,
+            col => col.Item().Table(t =>
+            {
+                t.ColumnsDefinition(c => { c.ConstantColumn(30); c.RelativeColumn(2); c.RelativeColumn(1.5f); c.ConstantColumn(90); c.RelativeColumn(2); });
+                t.Header(h =>
+                {
+                    foreach (var titulo in new[] { "#", "Aplicación", "Producto", "Valor", "Resultado" }) h.Cell().BorderBottom(1).Padding(2).Text(titulo).Bold();
+                });
+                foreach (var l in m.Lines)
+                {
+                    t.Cell().Padding(2).Text(l.Ordinal.ToString(Co));
+                    t.Cell().Padding(2).Text(l.Description);
+                    t.Cell().Padding(2).Text(l.Product ?? string.Empty);
+                    t.Cell().Padding(2).AlignRight().Text(Pesos(l.Amount));
+                    t.Cell().Padding(2).Text(l.Outcome);
+                }
+            }),
+            row => { Firma(row, "Pidió", m.RequestedBy); row.ConstantItem(40); Firma(row, "Aprobó", m.ApprovedBy ?? string.Empty); });
+    }
+
     private static void Lineas(ColumnDescriptor col, IReadOnlyList<LineaDelDocumentoDto> lineas) =>
         col.Item().Table(t =>
         {
@@ -219,4 +249,6 @@ public sealed class DocumentosDeRecaudoPdfRenderer : IDocumentosDeRecaudoEnPdf
     public byte[] Acta(ActaDeArqueoModel modelo) => DocumentosDeRecaudoReport.Acta(modelo);
 
     public byte[] Recibo(Application.Receipts.CashDesk.ReciboModel modelo) => DocumentosDeRecaudoReport.Recibo(modelo);
+
+    public byte[] Anulacion(Application.Receipts.Voidings.AnulacionModel modelo) => DocumentosDeRecaudoReport.Anulacion(modelo);
 }

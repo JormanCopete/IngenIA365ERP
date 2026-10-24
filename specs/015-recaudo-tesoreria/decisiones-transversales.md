@@ -295,6 +295,19 @@ Lo que tasks.md marcaba **(nuevo)** y lo que trajeron el `/speckit-analyze` y la
 | `VistasDeTesoreria` · `RecentAccountChangesQuery` · `GET /api/treasury/reports/recent-account-changes` | el registro de vistas de Tesorería nace con una vista; la fase 20 lo completa | `Application/Treasury/Reports` |
 | `ResultadosE2E.CargarRespuestaAsync` | la carga de la respuesta del banco por multipart en las e2e | `tests/…/Treasury/CuentaDestinoCambiadaYArchivoAlteradoTests.cs` |
 
+**Fijados en la construcción de la fase 10 (2026-10-24)**:
+
+| Nombre | Qué | Dónde |
+|---|---|---|
+| `ReceiptVoidingState` · `PayerCreditBalanceKind` · `PayerCreditBalanceOrigin` (+`LendingRefund = 7`) · `PayerCreditBalanceState` · `PayerCreditBalanceMovementKind` (+`RefundRejected = 5`) · `PayerReceivableState` | enumeraciones que data-model §20 no numeraba | `Domain/Enums/Receipts/ReceiptsReversalEnums.cs` |
+| `ReceiptVoiding.Number` (escritura única, nulo hasta aplicar) · `.DecidedAt` · `.DecisionReason` · `.VerificationCode` · `ModuleReversal.{MessageType, Reason, ConfirmedAt, ConfirmationNote}` · `PayerCreditBalance.{OriginDocumentNumber, BranchId}` · `PayerCreditBalanceMovement.{DocumentNumber, RecordedByUserId, RecordedAt, Note}` | columnas que data-model §4 no listaba | `RCD_ReceiptVoidings`, `RCD_ModuleReversals`, `RCD_PayerCreditBalances…` |
+| `ListReceiptVoidingsQuery` · `GET /api/receipts/voidings` · `GetVoidingDocumentQuery` · `GET /api/receipts/voidings/{id}/document` · `AnulacionModel` · `IDocumentosDeRecaudoEnPdf.Anulacion` | consulta y documento de la anulación | `Receipts/Voidings`, `VoidingsEndpoints.cs` |
+| `Receipts.Voiding.{AlreadyVoided, SelfApproval, ContractRejected, PayrollOwned, NotPending}` · `Receipts.Reversal.{UnknownApplication, NotOurs, CauseAlreadyConfirmed, InvalidCause}` · `Receipts.CreditBalance.{InsufficientBalance, Resolved, LendingRefundRejected, ReceiptNotOfPayer}` · `Receipts.Activation.{RequirementsMissing, AlreadyActive}` · `Treasury.Activation.{RequirementsMissing, AlreadyActive}` | errores de US5 y de la activación mínima | `ErroresDeRecaudo.Anulaciones.cs`, `ActivacionDeTesoreria.cs` |
+| `SaldosAFavor` · `ClasesDeOrdenDeRecaudo` · `ResultadoDeOrdenesDeRecaudo` · `OrdenesDePagoDeTesoreria` | los saldos a favor y los dos puertos de la devolución por orden de pago | `Receipts/CreditBalances`, `Treasury/Orders` |
+| `ReciboAnuladoV1` (`RAN`) · `AplicacionReversadaPorModuloV1` (`ARM`) · `SaldoAFavorDePagadorResueltoV1` (`SFP`) · `SaldoAFavorDeCarteraDevueltoV1` (`SFC`) · roles `SaldoAFavorDePagadores`, `PuenteDeDevolucion` · tipos de origen `RMOD`, `SAF` | los hechos de US5 | `Contracts/Receipts/HechosDeReversosV1.cs`, `EmisionDeRecaudo.Reversos.cs` |
+| `RequisitosDeActivacionDeRecaudo` · `RequisitosDeActivacionDeTesoreria` · `RequisitoDeActivacionDto` · `EstadoDeActivacionDto` · `ActivateReceiptsCommand` · `ActivateTreasuryCommand` | la activación mínima del bloque 2 (T0183b) | `Receipts/Activation`, `Treasury/Activation` |
+| `RecaudoYTesoreriaE2E.RegistrarYActivarAsync(http, coop)` | activa por las rutas lo que ya cumple sus requisitos básicos | `tests/…/Receipts/RecaudoYTesoreriaE2E.cs` |
+
 ## 3. Decisiones transversales
 
 ### Módulos y frontera

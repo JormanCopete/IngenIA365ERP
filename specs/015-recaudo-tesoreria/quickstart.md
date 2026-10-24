@@ -24,6 +24,10 @@ $env:DB_PROVIDER="SqlServer";  dotnet test tests/IngenIA365ERP.API.IntegrationTe
 $env:RUN_PERF_TESTS="1"; dotnet test tests/IngenIA365ERP.API.IntegrationTests --filter "Category=Perf&FullyQualifiedName~Receipts|FullyQualifiedName~Treasury"
 ```
 
+> **Resultado de la e2e de humo de la caja (T0183c, 2026-10-24)**: escrita en la fase 10 (`Receipts/CajaDeHumoTests`, sobre la activación mínima de T0183b
+> y `RecaudoYTesoreriaE2E.RegistrarYActivarAsync`) y **sin correr**: el dueño pidió no ejecutar pruebas durante la construcción. Se corre con Docker en
+> `DB_PROVIDER=PostgreSql` y `SqlServer` antes del hito T0184; lo que falle se corrige en su fase.
+
 | Grupo | Qué fija | Criterio |
 |---|---|---|
 | Casos dorados de imputación, arqueo, señales de efectivo, huella bancaria, cruce de la conciliación, transiciones del resultado, GMF | reglas puras | FR-188, FR-031, FR-095, FR-197, FR-216, FR-215, FR-205 |

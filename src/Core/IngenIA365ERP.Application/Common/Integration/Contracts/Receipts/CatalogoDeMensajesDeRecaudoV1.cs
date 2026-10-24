@@ -25,6 +25,11 @@ public static class CatalogoDeMensajesDeRecaudoV1
         Hecho(typeof(SobranteLlevadoAIngresoV1), SobranteLlevadoAIngresoV1.Type, "SLI"),
         // US3 (fase 6): el recibo de caja, por lotes resumidos (D25).
         Hecho(typeof(ReciboEmitidoV1), ReciboEmitidoV1.Type, "RCE"),
+        // US5 (fase 10): la anulación, el reverso del módulo y los saldos a favor, en línea.
+        Hecho(typeof(ReciboAnuladoV1), ReciboAnuladoV1.Type, "RAN"),
+        Hecho(typeof(AplicacionReversadaPorModuloV1), AplicacionReversadaPorModuloV1.Type, "ARM"),
+        Hecho(typeof(SaldoAFavorDePagadorResueltoV1), SaldoAFavorDePagadorResueltoV1.Type, "SFP"),
+        Hecho(typeof(SaldoAFavorDeCarteraDevueltoV1), SaldoAFavorDeCarteraDevueltoV1.Type, "SFC"),
     ];
 
     private static TipoDeMensaje Hecho(Type record, string type, string codigoCorto) =>

@@ -1,0 +1,113 @@
+@page "/recaudo/saldos-a-favor"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Recaudo
+@inject AnulacionesClient AnulacionesApi
+@inject INotificationService Notification
+
+<PageTitle>Saldos a favor - IngenIA365ERP</PageTitle>
+
+@* Feature 015, US5 (T0181; FR-053, FR-054): los saldos a favor de los pagadores con su antigüedad —se devuelven por orden de pago a Tesorería o se aplican con un
+   recibo nuevo— y la devolución del saldo a favor de Cartera por el recaudador. La orden se cierra cuando Tesorería la informa girada; rechazada, el saldo se reabre. *@
+<PermissionGate Required="Receipts.CreditBalances.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Saldos a favor</h3>
+        <div class="toolbar">
+            <select class="e-input" @bind="_estado">
+                <option value="1">Abiertos</option>
+                <option value="2">Resueltos</option>
+                <option value="0">Todos</option>
+            </select>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Cargando saldos…">
+        <table class="data-grid">
+            <thead><tr><th>Pagador</th><th>Documento</th><th>Origen</th><th>Valor</th><th>Saldo</th><th>Antigüedad</th><th>Estado</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var s in _saldos)
+                {
+                    <tr class="@(s.AgeDays > 30 && s.Status == 1 ? "fila-alerta" : "")">
+                        <td>@s.PersonName<br /><small>@s.PersonTaxId</small></td><td>@s.OriginDocumentNumber</td><td>@Origen(s.Origin)</td>
+                        <td>@s.Amount.ToString("N2")</td><td>@s.Balance.ToString("N2")</td><td>@s.AgeDays días</td><td>@(s.Status == 1 ? "Abierto" : "Resuelto")</td>
+                        <td>
+                            @if (s.Status == 1 && s.Balance > 0)
+                            {
+                                <PermissionGate Required="Receipts.CreditBalances.Resolve">
+                                    <SfButton CssClass="e-flat" OnClick="@(() => DevolverAsync(s))">Devolver por orden de pago</SfButton>
+                                </PermissionGate>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </IndicadorDeCarga>
+
+    <PermissionGate Required="Receipts.CreditBalances.Resolve">
+        <section class="info-card">
+            <h4>Devolver un saldo a favor de Cartera</h4>
+            <IndicadorDeCarga Cargando="@_cartera.Activa" Texto="Pidiendo la devolución…">
+                <div class="form-grid">
+                    <label class="campo">Obligación (identificador) * <input class="e-input" @bind="_obligacion" /></label>
+                    <label class="campo">Beneficiario (identificador) * <input class="e-input" @bind="_beneficiario" /></label>
+                    <label class="campo">Oficina (identificador) * <input class="e-input" @bind="_oficina" /></label>
+                    <label class="campo">Valor * <input type="number" class="e-input" @bind="_valor" /></label>
+                </div>
+                <div class="toolbar"><SfButton CssClass="e-primary" Disabled="@_cartera.Activa" OnClick="@DevolverDeCarteraAsync">Devolver por orden de pago</SfButton></div>
+            </IndicadorDeCarga>
+        </section>
+    </PermissionGate>
+</div>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new(), _cartera = new();
+    private IReadOnlyList<SaldoAFavorDto> _saldos = [];
+    private int _estado = 1;
+    private string _obligacion = "", _beneficiario = "", _oficina = "";
+    private decimal _valor;
+    private ClaveDeOperacion _claveCartera = new();
+
+    protected override async Task OnInitializedAsync() => await CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await AnulacionesApi.SaldosAsync(_estado == 0 ? null : _estado);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los saldos a favor."); return; }
+        _saldos = r.Value ?? [];
+    }
+
+    private static string Origen(int o) => o switch
+    {
+        1 => "Excedente", 2 => "Anulación con la sesión cerrada", 3 => "Reverso del módulo", 4 => "Excedente de pagaduría", 5 => "Pagaduría sin aplicar",
+        6 => "Línea rechazada", 7 => "Devolución de Cartera", _ => "—",
+    };
+
+    private async Task DevolverAsync(SaldoAFavorDto s)
+    {
+        using var g = _carga.Iniciar();
+        var r = await AnulacionesApi.DevolverPorOrdenAsync(s.PublicId, new DevolucionPorOrdenRequest(s.Balance, null, "Transfer"), new ClaveDeOperacion());
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo pedir la devolución."); return; }
+        await Notification.SuccessAsync("Orden de pago enviada a Tesorería: el saldo se cierra cuando la gire.");
+        await CargarAsync();
+    }
+
+    private async Task DevolverDeCarteraAsync()
+    {
+        if (!Guid.TryParse(_obligacion, out var obligacion) || !Guid.TryParse(_beneficiario, out var beneficiario) || !Guid.TryParse(_oficina, out var oficina) || _valor <= 0)
+        {
+            await Notification.WarningAsync("Indique la obligación, el beneficiario, la oficina y el valor.");
+            return;
+        }
+        using var g = _cartera.Iniciar();
+        var r = await AnulacionesApi.DevolverSaldoDeCarteraAsync(new DevolverSaldoDeCarteraRequest(obligacion, _valor, beneficiario, oficina, null, "Transfer"), _claveCartera);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo devolver el saldo de Cartera."); return; }
+        _claveCartera = new();
+        await Notification.SuccessAsync($"Orden {r.Value!.PaymentOrderNumber} enviada a Tesorería.");
+        await CargarAsync();
+    }
+}

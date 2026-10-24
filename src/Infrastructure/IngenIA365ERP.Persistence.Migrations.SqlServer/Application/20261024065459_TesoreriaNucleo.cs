@@ -1,10 +1,9 @@
 ﻿using System;
 using Microsoft.EntityFrameworkCore.Migrations;
-using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
-namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
+namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
 {
     /// <inheritdoc />
     public partial class TesoreriaNucleo : Migration
@@ -13,35 +12,71 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.CreateTable(
+                name: "TES_Activations",
+                schema: "dbo",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    ActivatedOn = table.Column<DateOnly>(type: "date", nullable: false),
+                    CutoffDate = table.Column<DateOnly>(type: "date", nullable: false),
+                    ActivatedByUserId = table.Column<int>(type: "int", nullable: false),
+                    RequirementsJson = table.Column<string>(type: "nvarchar(max)", maxLength: 8000, nullable: false),
+                    OpeningSquareId = table.Column<int>(type: "int", nullable: true),
+                    GoLiveChecklistPublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    IsMinimal = table.Column<bool>(type: "bit", nullable: false),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_TES_Activations", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_TES_Activations_SEC_Users_ActivatedByUserId",
+                        column: x => x.ActivatedByUserId,
+                        principalSchema: "dbo",
+                        principalTable: "SEC_Users",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "TES_BankAccounts",
                 schema: "dbo",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "integer", nullable: false)
-                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
-                    Code = table.Column<string>(type: "character varying(10)", maxLength: 10, nullable: false),
-                    Name = table.Column<string>(type: "character varying(120)", maxLength: 120, nullable: false),
-                    BankId = table.Column<int>(type: "integer", nullable: false),
-                    AccountNumber = table.Column<string>(type: "character varying(30)", maxLength: 30, nullable: false),
-                    AccountType = table.Column<int>(type: "integer", nullable: false),
-                    BranchId = table.Column<int>(type: "integer", nullable: false),
-                    Purposes = table.Column<int>(type: "integer", nullable: false),
-                    IsGmfExempt = table.Column<bool>(type: "boolean", nullable: false),
-                    BankThirdPartyPersonId = table.Column<int>(type: "integer", nullable: true),
-                    Status = table.Column<int>(type: "integer", nullable: false),
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    Code = table.Column<string>(type: "nvarchar(10)", maxLength: 10, nullable: false),
+                    Name = table.Column<string>(type: "nvarchar(120)", maxLength: 120, nullable: false),
+                    BankId = table.Column<int>(type: "int", nullable: false),
+                    AccountNumber = table.Column<string>(type: "nvarchar(30)", maxLength: 30, nullable: false),
+                    AccountType = table.Column<int>(type: "int", nullable: false),
+                    BranchId = table.Column<int>(type: "int", nullable: false),
+                    Purposes = table.Column<int>(type: "int", nullable: false),
+                    IsGmfExempt = table.Column<bool>(type: "bit", nullable: false),
+                    BankThirdPartyPersonId = table.Column<int>(type: "int", nullable: true),
+                    Status = table.Column<int>(type: "int", nullable: false),
                     ValidFrom = table.Column<DateOnly>(type: "date", nullable: false),
                     ValidTo = table.Column<DateOnly>(type: "date", nullable: true),
-                    LastStatementBalance = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: true),
+                    LastStatementBalance = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: true),
                     LastStatementDate = table.Column<DateOnly>(type: "date", nullable: true),
-                    xmin = table.Column<uint>(type: "xid", rowVersion: true, nullable: false),
-                    PublicId = table.Column<Guid>(type: "uuid", nullable: false),
-                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
-                    DeletedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    DeletedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    CreatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    UpdatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true)
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
                 },
                 constraints: table =>
                 {
@@ -74,57 +109,57 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 schema: "dbo",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "integer", nullable: false)
-                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
-                    Number = table.Column<string>(type: "character varying(30)", maxLength: 30, nullable: false),
-                    Origin = table.Column<int>(type: "integer", nullable: false),
-                    OriginOrderPublicId = table.Column<Guid>(type: "uuid", nullable: false),
-                    OriginOrderNumber = table.Column<string>(type: "character varying(30)", maxLength: 30, nullable: false),
-                    OriginMessagePublicId = table.Column<Guid>(type: "uuid", nullable: true),
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    Number = table.Column<string>(type: "nvarchar(30)", maxLength: 30, nullable: false),
+                    Origin = table.Column<int>(type: "int", nullable: false),
+                    OriginOrderPublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    OriginOrderNumber = table.Column<string>(type: "nvarchar(30)", maxLength: 30, nullable: false),
+                    OriginMessagePublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
                     OriginMessageVersion = table.Column<short>(type: "smallint", nullable: true),
-                    OrderKind = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
-                    Form = table.Column<int>(type: "integer", nullable: false),
-                    BeneficiaryPersonId = table.Column<int>(type: "integer", nullable: false),
-                    BeneficiaryName = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
-                    BeneficiaryTaxIdType = table.Column<string>(type: "character varying(10)", maxLength: 10, nullable: true),
-                    BeneficiaryTaxId = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
-                    DestinationBankCode = table.Column<string>(type: "character varying(10)", maxLength: 10, nullable: true),
-                    DestinationBankId = table.Column<int>(type: "integer", nullable: true),
-                    DestinationAccountNumber = table.Column<string>(type: "character varying(30)", maxLength: 30, nullable: true),
-                    DestinationAccountType = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: true),
-                    PersonBankAccountId = table.Column<int>(type: "integer", nullable: true),
-                    GrossAmount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
-                    NetAmount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    OrderKind = table.Column<string>(type: "nvarchar(40)", maxLength: 40, nullable: false),
+                    Form = table.Column<int>(type: "int", nullable: false),
+                    BeneficiaryPersonId = table.Column<int>(type: "int", nullable: false),
+                    BeneficiaryName = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
+                    BeneficiaryTaxIdType = table.Column<string>(type: "nvarchar(10)", maxLength: 10, nullable: true),
+                    BeneficiaryTaxId = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
+                    DestinationBankCode = table.Column<string>(type: "nvarchar(10)", maxLength: 10, nullable: true),
+                    DestinationBankId = table.Column<int>(type: "int", nullable: true),
+                    DestinationAccountNumber = table.Column<string>(type: "nvarchar(30)", maxLength: 30, nullable: true),
+                    DestinationAccountType = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: true),
+                    PersonBankAccountId = table.Column<int>(type: "int", nullable: true),
+                    GrossAmount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    NetAmount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
                     PayDate = table.Column<DateOnly>(type: "date", nullable: false),
-                    Concept = table.Column<string>(type: "character varying(120)", maxLength: 120, nullable: false),
-                    SourceDocumentPublicId = table.Column<Guid>(type: "uuid", nullable: true),
-                    BeneficiaryIsDebtor = table.Column<bool>(type: "boolean", nullable: false),
-                    BranchPublicId = table.Column<Guid>(type: "uuid", nullable: true),
-                    PaidByLendingFile = table.Column<bool>(type: "boolean", nullable: false),
-                    LendingDisbursementFileId = table.Column<int>(type: "integer", nullable: true),
-                    ReplacesOrderId = table.Column<int>(type: "integer", nullable: true),
-                    GmfExempt = table.Column<bool>(type: "boolean", nullable: false),
-                    GmfExemptionReason = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: true),
-                    GmfEstimate = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: true),
-                    Status = table.Column<int>(type: "integer", nullable: false),
-                    PendingReasonsJson = table.Column<string>(type: "text", nullable: false),
-                    Flags = table.Column<int>(type: "integer", nullable: false),
-                    AccountChangedRecently = table.Column<bool>(type: "boolean", nullable: false),
-                    VoidRequested = table.Column<bool>(type: "boolean", nullable: false),
-                    VoidReason = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
-                    VoidedByCentralUserId = table.Column<Guid>(type: "uuid", nullable: true),
-                    VoidedByName = table.Column<string>(type: "character varying(150)", maxLength: 150, nullable: true),
-                    ReceivedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    ValidatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    xmin = table.Column<uint>(type: "xid", rowVersion: true, nullable: false),
-                    PublicId = table.Column<Guid>(type: "uuid", nullable: false),
-                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
-                    DeletedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    DeletedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    CreatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    UpdatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true)
+                    Concept = table.Column<string>(type: "nvarchar(120)", maxLength: 120, nullable: false),
+                    SourceDocumentPublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    BeneficiaryIsDebtor = table.Column<bool>(type: "bit", nullable: false),
+                    BranchPublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    PaidByLendingFile = table.Column<bool>(type: "bit", nullable: false),
+                    LendingDisbursementFileId = table.Column<int>(type: "int", nullable: true),
+                    ReplacesOrderId = table.Column<int>(type: "int", nullable: true),
+                    GmfExempt = table.Column<bool>(type: "bit", nullable: false),
+                    GmfExemptionReason = table.Column<string>(type: "nvarchar(40)", maxLength: 40, nullable: true),
+                    GmfEstimate = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: true),
+                    Status = table.Column<int>(type: "int", nullable: false),
+                    PendingReasonsJson = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    Flags = table.Column<int>(type: "int", nullable: false),
+                    AccountChangedRecently = table.Column<bool>(type: "bit", nullable: false),
+                    VoidRequested = table.Column<bool>(type: "bit", nullable: false),
+                    VoidReason = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
+                    VoidedByCentralUserId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    VoidedByName = table.Column<string>(type: "nvarchar(150)", maxLength: 150, nullable: true),
+                    ReceivedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    ValidatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
                 },
                 constraints: table =>
                 {
@@ -164,20 +199,20 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 schema: "dbo",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "integer", nullable: false)
-                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
-                    Status = table.Column<int>(type: "integer", nullable: false),
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    Status = table.Column<int>(type: "int", nullable: false),
                     ActivatedOn = table.Column<DateOnly>(type: "date", nullable: true),
-                    ResultWithThirdPerson = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
-                    xmin = table.Column<uint>(type: "xid", rowVersion: true, nullable: false),
-                    PublicId = table.Column<Guid>(type: "uuid", nullable: false),
-                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
-                    DeletedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    DeletedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    CreatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    UpdatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true)
+                    ResultWithThirdPerson = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
                 },
                 constraints: table =>
                 {
@@ -189,32 +224,32 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 schema: "dbo",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "integer", nullable: false)
-                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
-                    Number = table.Column<string>(type: "character varying(30)", maxLength: 30, nullable: false),
-                    BankAccountId = table.Column<int>(type: "integer", nullable: false),
-                    Cause = table.Column<int>(type: "integer", nullable: false),
-                    Amount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
-                    Reason = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false),
-                    SupportAttachmentPublicId = table.Column<Guid>(type: "uuid", nullable: false),
-                    ApprovalRequestPublicId = table.Column<Guid>(type: "uuid", nullable: true),
-                    SupervisorNoticeAttachmentPublicId = table.Column<Guid>(type: "uuid", nullable: true),
-                    Status = table.Column<int>(type: "integer", nullable: false),
-                    RequestedByUserId = table.Column<int>(type: "integer", nullable: false),
-                    RequestedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    DecidedByUserId = table.Column<int>(type: "integer", nullable: true),
-                    DecidedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    DecisionReason = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
-                    UsedByDocumentPublicId = table.Column<Guid>(type: "uuid", nullable: true),
-                    xmin = table.Column<uint>(type: "xid", rowVersion: true, nullable: false),
-                    PublicId = table.Column<Guid>(type: "uuid", nullable: false),
-                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
-                    DeletedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    DeletedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    CreatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    UpdatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true)
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    Number = table.Column<string>(type: "nvarchar(30)", maxLength: 30, nullable: false),
+                    BankAccountId = table.Column<int>(type: "int", nullable: false),
+                    Cause = table.Column<int>(type: "int", nullable: false),
+                    Amount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    Reason = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: false),
+                    SupportAttachmentPublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    ApprovalRequestPublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    SupervisorNoticeAttachmentPublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    Status = table.Column<int>(type: "int", nullable: false),
+                    RequestedByUserId = table.Column<int>(type: "int", nullable: false),
+                    RequestedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    DecidedByUserId = table.Column<int>(type: "int", nullable: true),
+                    DecidedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DecisionReason = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
+                    UsedByDocumentPublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
                 },
                 constraints: table =>
                 {
@@ -247,19 +282,19 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 schema: "dbo",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "integer", nullable: false)
-                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
-                    UserId = table.Column<int>(type: "integer", nullable: false),
-                    BankAccountId = table.Column<int>(type: "integer", nullable: false),
-                    xmin = table.Column<uint>(type: "xid", rowVersion: true, nullable: false),
-                    PublicId = table.Column<Guid>(type: "uuid", nullable: false),
-                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
-                    DeletedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    DeletedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    CreatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    UpdatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true)
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    UserId = table.Column<int>(type: "int", nullable: false),
+                    BankAccountId = table.Column<int>(type: "int", nullable: false),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
                 },
                 constraints: table =>
                 {
@@ -285,33 +320,33 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 schema: "dbo",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "integer", nullable: false)
-                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
-                    PaymentOrderId = table.Column<int>(type: "integer", nullable: false),
-                    Outcome = table.Column<int>(type: "integer", nullable: false),
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    PaymentOrderId = table.Column<int>(type: "int", nullable: false),
+                    Outcome = table.Column<int>(type: "int", nullable: false),
                     OccurredOn = table.Column<DateOnly>(type: "date", nullable: false),
-                    Amount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
-                    TreasuryReference = table.Column<string>(type: "character varying(60)", maxLength: 60, nullable: false),
-                    CheckNumber = table.Column<string>(type: "character varying(30)", maxLength: 30, nullable: true),
-                    Reason = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
-                    Source = table.Column<int>(type: "integer", nullable: false),
-                    RecordedByUserId = table.Column<int>(type: "integer", nullable: true),
-                    RecordedByCentralUserId = table.Column<Guid>(type: "uuid", nullable: true),
-                    RecordedByName = table.Column<string>(type: "character varying(150)", maxLength: 150, nullable: false),
-                    RecordedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    SupportAttachmentPublicId = table.Column<Guid>(type: "uuid", nullable: true),
-                    PaymentResponseLineId = table.Column<int>(type: "integer", nullable: true),
-                    StatementLinePublicId = table.Column<Guid>(type: "uuid", nullable: true),
-                    EmittedMessagePublicId = table.Column<Guid>(type: "uuid", nullable: true),
-                    xmin = table.Column<uint>(type: "xid", rowVersion: true, nullable: false),
-                    PublicId = table.Column<Guid>(type: "uuid", nullable: false),
-                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
-                    DeletedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    DeletedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    CreatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    UpdatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true)
+                    Amount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    TreasuryReference = table.Column<string>(type: "nvarchar(60)", maxLength: 60, nullable: false),
+                    CheckNumber = table.Column<string>(type: "nvarchar(30)", maxLength: 30, nullable: true),
+                    Reason = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
+                    Source = table.Column<int>(type: "int", nullable: false),
+                    RecordedByUserId = table.Column<int>(type: "int", nullable: true),
+                    RecordedByCentralUserId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    RecordedByName = table.Column<string>(type: "nvarchar(150)", maxLength: 150, nullable: false),
+                    RecordedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    SupportAttachmentPublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    PaymentResponseLineId = table.Column<int>(type: "int", nullable: true),
+                    StatementLinePublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    EmittedMessagePublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
                 },
                 constraints: table =>
                 {
@@ -337,26 +372,26 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 schema: "dbo",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "integer", nullable: false)
-                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
-                    MessagePublicId = table.Column<Guid>(type: "uuid", nullable: false),
-                    Type = table.Column<string>(type: "character varying(80)", maxLength: 80, nullable: false),
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    MessagePublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    Type = table.Column<string>(type: "nvarchar(80)", maxLength: 80, nullable: false),
                     Version = table.Column<short>(type: "smallint", nullable: false),
-                    OriginModule = table.Column<string>(type: "character varying(3)", maxLength: 3, nullable: false),
-                    ReceivedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    Outcome = table.Column<int>(type: "integer", nullable: false),
-                    Code = table.Column<string>(type: "character varying(80)", maxLength: 80, nullable: true),
-                    Detail = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true),
-                    PaymentOrderId = table.Column<int>(type: "integer", nullable: true),
-                    xmin = table.Column<uint>(type: "xid", rowVersion: true, nullable: false),
-                    PublicId = table.Column<Guid>(type: "uuid", nullable: false),
-                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
-                    DeletedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    DeletedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    CreatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    UpdatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true)
+                    OriginModule = table.Column<string>(type: "nvarchar(3)", maxLength: 3, nullable: false),
+                    ReceivedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    Outcome = table.Column<int>(type: "int", nullable: false),
+                    Code = table.Column<string>(type: "nvarchar(80)", maxLength: 80, nullable: true),
+                    Detail = table.Column<string>(type: "nvarchar(1000)", maxLength: 1000, nullable: true),
+                    PaymentOrderId = table.Column<int>(type: "int", nullable: true),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
                 },
                 constraints: table =>
                 {
@@ -375,38 +410,38 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 schema: "dbo",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "integer", nullable: false)
-                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
-                    Number = table.Column<string>(type: "character varying(30)", maxLength: 30, nullable: false),
-                    BankAccountId = table.Column<int>(type: "integer", nullable: false),
-                    Form = table.Column<int>(type: "integer", nullable: false),
-                    BankFileFormatId = table.Column<int>(type: "integer", nullable: true),
-                    PreparedByUserId = table.Column<int>(type: "integer", nullable: false),
-                    PreparedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    Number = table.Column<string>(type: "nvarchar(30)", maxLength: 30, nullable: false),
+                    BankAccountId = table.Column<int>(type: "int", nullable: false),
+                    Form = table.Column<int>(type: "int", nullable: false),
+                    BankFileFormatId = table.Column<int>(type: "int", nullable: true),
+                    PreparedByUserId = table.Column<int>(type: "int", nullable: false),
+                    PreparedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
                     PayDate = table.Column<DateOnly>(type: "date", nullable: false),
-                    OrderCount = table.Column<int>(type: "integer", nullable: false),
-                    Total = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
-                    GmfEstimate = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
-                    ApprovalRequestPublicId = table.Column<Guid>(type: "uuid", nullable: true),
-                    LiquidityFundUseId = table.Column<int>(type: "integer", nullable: true),
-                    Status = table.Column<int>(type: "integer", nullable: false),
-                    InputsHash = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
-                    SubmittedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    ApprovedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    SentAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    SentByUserId = table.Column<int>(type: "integer", nullable: true),
-                    UploadedAtBankBy = table.Column<string>(type: "character varying(150)", maxLength: 150, nullable: true),
-                    AuthorizedAtBankBy = table.Column<string>(type: "character varying(150)", maxLength: 150, nullable: true),
-                    Note = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
-                    xmin = table.Column<uint>(type: "xid", rowVersion: true, nullable: false),
-                    PublicId = table.Column<Guid>(type: "uuid", nullable: false),
-                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
-                    DeletedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    DeletedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    CreatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    UpdatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true)
+                    OrderCount = table.Column<int>(type: "int", nullable: false),
+                    Total = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    GmfEstimate = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    ApprovalRequestPublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    LiquidityFundUseId = table.Column<int>(type: "int", nullable: true),
+                    Status = table.Column<int>(type: "int", nullable: false),
+                    InputsHash = table.Column<string>(type: "nvarchar(64)", maxLength: 64, nullable: false),
+                    SubmittedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    ApprovedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    SentAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    SentByUserId = table.Column<int>(type: "int", nullable: true),
+                    UploadedAtBankBy = table.Column<string>(type: "nvarchar(150)", maxLength: 150, nullable: true),
+                    AuthorizedAtBankBy = table.Column<string>(type: "nvarchar(150)", maxLength: 150, nullable: true),
+                    Note = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
                 },
                 constraints: table =>
                 {
@@ -453,27 +488,27 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 schema: "dbo",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "integer", nullable: false)
-                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
-                    PaymentBatchId = table.Column<int>(type: "integer", nullable: false),
-                    PaymentOrderId = table.Column<int>(type: "integer", nullable: false),
-                    Amount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
-                    GmfEstimate = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
-                    Flags = table.Column<int>(type: "integer", nullable: false),
-                    ExplicitlyReviewedByUserId = table.Column<int>(type: "integer", nullable: true),
-                    ReviewedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    ReviewNote = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
-                    Status = table.Column<int>(type: "integer", nullable: false),
-                    IsLive = table.Column<bool>(type: "boolean", nullable: false, defaultValue: true),
-                    xmin = table.Column<uint>(type: "xid", rowVersion: true, nullable: false),
-                    PublicId = table.Column<Guid>(type: "uuid", nullable: false),
-                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
-                    DeletedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    DeletedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    CreatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    UpdatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true)
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    PaymentBatchId = table.Column<int>(type: "int", nullable: false),
+                    PaymentOrderId = table.Column<int>(type: "int", nullable: false),
+                    Amount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    GmfEstimate = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    Flags = table.Column<int>(type: "int", nullable: false),
+                    ExplicitlyReviewedByUserId = table.Column<int>(type: "int", nullable: true),
+                    ReviewedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    ReviewNote = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
+                    Status = table.Column<int>(type: "int", nullable: false),
+                    IsLive = table.Column<bool>(type: "bit", nullable: false, defaultValue: true),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
                 },
                 constraints: table =>
                 {
@@ -506,38 +541,38 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 schema: "dbo",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "integer", nullable: false)
-                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
-                    PaymentBatchId = table.Column<int>(type: "integer", nullable: false),
-                    Version = table.Column<int>(type: "integer", nullable: false),
-                    BankFileFormatId = table.Column<int>(type: "integer", nullable: false),
-                    FileAttachmentPublicId = table.Column<Guid>(type: "uuid", nullable: false),
-                    FileName = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
-                    Sha256 = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    PaymentBatchId = table.Column<int>(type: "int", nullable: false),
+                    Version = table.Column<int>(type: "int", nullable: false),
+                    BankFileFormatId = table.Column<int>(type: "int", nullable: false),
+                    FileAttachmentPublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    FileName = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
+                    Sha256 = table.Column<string>(type: "nvarchar(64)", maxLength: 64, nullable: false),
                     SizeBytes = table.Column<long>(type: "bigint", nullable: false),
-                    LineCount = table.Column<int>(type: "integer", nullable: false),
-                    Total = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
-                    GeneratedByUserId = table.Column<int>(type: "integer", nullable: false),
-                    GeneratedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    DownloadedByUserId = table.Column<int>(type: "integer", nullable: true),
-                    DownloadedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    SentAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    SentByUserId = table.Column<int>(type: "integer", nullable: true),
-                    UploadedAtBankBy = table.Column<string>(type: "character varying(150)", maxLength: 150, nullable: true),
-                    AuthorizedAtBankBy = table.Column<string>(type: "character varying(150)", maxLength: 150, nullable: true),
-                    VoidedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    VoidReason = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
-                    RejectedByBankAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    RejectedByBankReason = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
-                    xmin = table.Column<uint>(type: "xid", rowVersion: true, nullable: false),
-                    PublicId = table.Column<Guid>(type: "uuid", nullable: false),
-                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
-                    DeletedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    DeletedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    CreatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    UpdatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true)
+                    LineCount = table.Column<int>(type: "int", nullable: false),
+                    Total = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    GeneratedByUserId = table.Column<int>(type: "int", nullable: false),
+                    GeneratedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    DownloadedByUserId = table.Column<int>(type: "int", nullable: true),
+                    DownloadedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    SentAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    SentByUserId = table.Column<int>(type: "int", nullable: true),
+                    UploadedAtBankBy = table.Column<string>(type: "nvarchar(150)", maxLength: 150, nullable: true),
+                    AuthorizedAtBankBy = table.Column<string>(type: "nvarchar(150)", maxLength: 150, nullable: true),
+                    VoidedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    VoidReason = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
+                    RejectedByBankAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    RejectedByBankReason = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
                 },
                 constraints: table =>
                 {
@@ -584,32 +619,32 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 schema: "dbo",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "integer", nullable: false)
-                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
-                    PaymentFileId = table.Column<int>(type: "integer", nullable: false),
-                    PaymentBatchItemId = table.Column<int>(type: "integer", nullable: false),
-                    LineNumber = table.Column<int>(type: "integer", nullable: false),
-                    BeneficiaryTaxId = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
-                    BankCode = table.Column<string>(type: "character varying(10)", maxLength: 10, nullable: false),
-                    AccountNumber = table.Column<string>(type: "character varying(30)", maxLength: 30, nullable: false),
-                    Amount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
-                    LineSha256 = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
-                    RecordText = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: false),
-                    xmin = table.Column<uint>(type: "xid", rowVersion: true, nullable: false),
-                    PublicId = table.Column<Guid>(type: "uuid", nullable: false),
-                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
-                    DeletedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    DeletedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    CreatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    UpdatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true)
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    PaymentFileId = table.Column<int>(type: "int", nullable: false),
+                    PaymentBatchItemId = table.Column<int>(type: "int", nullable: false),
+                    LineNumber = table.Column<int>(type: "int", nullable: false),
+                    BeneficiaryTaxId = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
+                    BankCode = table.Column<string>(type: "nvarchar(10)", maxLength: 10, nullable: false),
+                    AccountNumber = table.Column<string>(type: "nvarchar(30)", maxLength: 30, nullable: false),
+                    Amount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    LineSha256 = table.Column<string>(type: "nvarchar(64)", maxLength: 64, nullable: false),
+                    RecordText = table.Column<string>(type: "nvarchar(1000)", maxLength: 1000, nullable: false),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_TES_PaymentFileLines", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_TES_PaymentFileLines_TES_PaymentBatchItems_PaymentBatchItem~",
+                        name: "FK_TES_PaymentFileLines_TES_PaymentBatchItems_PaymentBatchItemId",
                         column: x => x.PaymentBatchItemId,
                         principalSchema: "dbo",
                         principalTable: "TES_PaymentBatchItems",
@@ -629,28 +664,28 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 schema: "dbo",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "integer", nullable: false)
-                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
-                    PaymentFileId = table.Column<int>(type: "integer", nullable: false),
-                    Source = table.Column<int>(type: "integer", nullable: false),
-                    BankFileFormatId = table.Column<int>(type: "integer", nullable: true),
-                    ResponseAttachmentPublicId = table.Column<Guid>(type: "uuid", nullable: true),
-                    FileName = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true),
-                    Sha256 = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true),
-                    LoadedByUserId = table.Column<int>(type: "integer", nullable: false),
-                    LoadedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    LineCount = table.Column<int>(type: "integer", nullable: false),
-                    DiscrepancyCount = table.Column<int>(type: "integer", nullable: false),
-                    InformedCount = table.Column<int>(type: "integer", nullable: false),
-                    xmin = table.Column<uint>(type: "xid", rowVersion: true, nullable: false),
-                    PublicId = table.Column<Guid>(type: "uuid", nullable: false),
-                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
-                    DeletedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    DeletedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    CreatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    UpdatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true)
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    PaymentFileId = table.Column<int>(type: "int", nullable: false),
+                    Source = table.Column<int>(type: "int", nullable: false),
+                    BankFileFormatId = table.Column<int>(type: "int", nullable: true),
+                    ResponseAttachmentPublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    FileName = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: true),
+                    Sha256 = table.Column<string>(type: "nvarchar(64)", maxLength: 64, nullable: true),
+                    LoadedByUserId = table.Column<int>(type: "int", nullable: false),
+                    LoadedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    LineCount = table.Column<int>(type: "int", nullable: false),
+                    DiscrepancyCount = table.Column<int>(type: "int", nullable: false),
+                    InformedCount = table.Column<int>(type: "int", nullable: false),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
                 },
                 constraints: table =>
                 {
@@ -683,34 +718,34 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 schema: "dbo",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "integer", nullable: false)
-                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
-                    PaymentResponseId = table.Column<int>(type: "integer", nullable: false),
-                    LineNumber = table.Column<int>(type: "integer", nullable: false),
-                    PaymentFileLineId = table.Column<int>(type: "integer", nullable: true),
-                    Outcome = table.Column<int>(type: "integer", nullable: false),
-                    BankCause = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true),
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    PaymentResponseId = table.Column<int>(type: "int", nullable: false),
+                    LineNumber = table.Column<int>(type: "int", nullable: false),
+                    PaymentFileLineId = table.Column<int>(type: "int", nullable: true),
+                    Outcome = table.Column<int>(type: "int", nullable: false),
+                    BankCause = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: true),
                     BankDate = table.Column<DateOnly>(type: "date", nullable: false),
-                    Amount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
-                    AccountNumber = table.Column<string>(type: "character varying(30)", maxLength: 30, nullable: false),
-                    BeneficiaryTaxId = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
-                    BankReference = table.Column<string>(type: "character varying(60)", maxLength: 60, nullable: true),
-                    Discrepancy = table.Column<bool>(type: "boolean", nullable: false),
-                    DiscrepancyDetail = table.Column<string>(type: "character varying(300)", maxLength: 300, nullable: true),
-                    ReviewedByUserId = table.Column<int>(type: "integer", nullable: true),
-                    ReviewedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    ReviewAccepted = table.Column<bool>(type: "boolean", nullable: true),
-                    ReviewNote = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
-                    DisbursementResultId = table.Column<int>(type: "integer", nullable: true),
-                    xmin = table.Column<uint>(type: "xid", rowVersion: true, nullable: false),
-                    PublicId = table.Column<Guid>(type: "uuid", nullable: false),
-                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
-                    DeletedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    DeletedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    CreatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    UpdatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true)
+                    Amount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    AccountNumber = table.Column<string>(type: "nvarchar(30)", maxLength: 30, nullable: false),
+                    BeneficiaryTaxId = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
+                    BankReference = table.Column<string>(type: "nvarchar(60)", maxLength: 60, nullable: true),
+                    Discrepancy = table.Column<bool>(type: "bit", nullable: false),
+                    DiscrepancyDetail = table.Column<string>(type: "nvarchar(300)", maxLength: 300, nullable: true),
+                    ReviewedByUserId = table.Column<int>(type: "int", nullable: true),
+                    ReviewedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    ReviewAccepted = table.Column<bool>(type: "bit", nullable: true),
+                    ReviewNote = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
+                    DisbursementResultId = table.Column<int>(type: "int", nullable: true),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
                 },
                 constraints: table =>
                 {
@@ -723,27 +758,46 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
-                        name: "FK_TES_PaymentResponseLines_TES_DisbursementResults_Disburseme~",
+                        name: "FK_TES_PaymentResponseLines_TES_DisbursementResults_DisbursementResultId",
                         column: x => x.DisbursementResultId,
                         principalSchema: "dbo",
                         principalTable: "TES_DisbursementResults",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
-                        name: "FK_TES_PaymentResponseLines_TES_PaymentFileLines_PaymentFileLi~",
+                        name: "FK_TES_PaymentResponseLines_TES_PaymentFileLines_PaymentFileLineId",
                         column: x => x.PaymentFileLineId,
                         principalSchema: "dbo",
                         principalTable: "TES_PaymentFileLines",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
-                        name: "FK_TES_PaymentResponseLines_TES_PaymentResponses_PaymentRespon~",
+                        name: "FK_TES_PaymentResponseLines_TES_PaymentResponses_PaymentResponseId",
                         column: x => x.PaymentResponseId,
                         principalSchema: "dbo",
                         principalTable: "TES_PaymentResponses",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
                 });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_TES_Activations_ActivatedByUserId",
+                schema: "dbo",
+                table: "TES_Activations",
+                column: "ActivatedByUserId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_TES_Activations_ActivatedOn",
+                schema: "dbo",
+                table: "TES_Activations",
+                column: "ActivatedOn");
+
+            migrationBuilder.CreateIndex(
+                name: "UK_TES_Activations_PublicId",
+                schema: "dbo",
+                table: "TES_Activations",
+                column: "PublicId",
+                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "IX_TES_BankAccounts_BankThirdPartyPersonId",
@@ -770,7 +824,7 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 table: "TES_BankAccounts",
                 column: "Code",
                 unique: true,
-                filter: "\"IsDeleted\" = FALSE");
+                filter: "[IsDeleted] = 0");
 
             migrationBuilder.CreateIndex(
                 name: "UK_TES_BankAccounts_PublicId",
@@ -913,7 +967,7 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 table: "TES_PaymentBatchItems",
                 column: "PaymentOrderId",
                 unique: true,
-                filter: "\"IsLive\" = TRUE AND \"IsDeleted\" = FALSE");
+                filter: "[IsLive] = 1 AND [IsDeleted] = 0");
 
             migrationBuilder.CreateIndex(
                 name: "UK_TES_PaymentBatchItems_PublicId",
@@ -1114,21 +1168,25 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 table: "TES_UserBankAccountScopes",
                 columns: new[] { "UserId", "BankAccountId" },
                 unique: true,
-                filter: "\"IsDeleted\" = FALSE");
+                filter: "[IsDeleted] = 0");
 
             // Feature 015 (T0050; data-model §9.1): la fila única de TES_Setup, con Id = 1 y sin activar. Idempotente. Nivel 1 del cerrojo de Tesorería.
             migrationBuilder.Sql(@"
-INSERT INTO dbo.""TES_Setup"" (""Id"", ""PublicId"", ""Status"", ""ResultWithThirdPerson"", ""IsDeleted"", ""CreatedAt"", ""CreatedBy"")
-OVERRIDING SYSTEM VALUE
-SELECT 1, gen_random_uuid(), 1, FALSE, FALSE, now(), 'SYSTEM'
-WHERE NOT EXISTS (SELECT 1 FROM dbo.""TES_Setup"");
-SELECT setval(pg_get_serial_sequence('dbo.""TES_Setup""', 'Id'), GREATEST((SELECT MAX(""Id"") FROM dbo.""TES_Setup""), 1));
+SET IDENTITY_INSERT [dbo].[TES_Setup] ON;
+INSERT INTO [dbo].[TES_Setup] ([Id], [PublicId], [Status], [ResultWithThirdPerson], [IsDeleted], [CreatedAt], [CreatedBy])
+SELECT 1, NEWID(), 1, 0, 0, SYSUTCDATETIME(), N'SYSTEM'
+WHERE NOT EXISTS (SELECT 1 FROM [dbo].[TES_Setup]);
+SET IDENTITY_INSERT [dbo].[TES_Setup] OFF;
 ");
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.DropTable(
+                name: "TES_Activations",
+                schema: "dbo");
+
             migrationBuilder.DropTable(
                 name: "TES_InboundMessages",
                 schema: "dbo");

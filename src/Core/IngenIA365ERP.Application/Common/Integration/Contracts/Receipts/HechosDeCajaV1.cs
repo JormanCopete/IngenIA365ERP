@@ -71,6 +71,10 @@ public static class RolesDeRecaudo
     public const string IngresoSobrantes = "IngresoSobrantes";
     public const string PuenteDelModulo = "PuenteDelModulo";
     public const string ConceptoVario = "ConceptoVario";
+
+    // US5 (fase 10; contabilidad.md §3): el saldo a favor de los pagadores y el puente de la devolución por orden de pago a Tesorería.
+    public const string SaldoAFavorDePagadores = "SaldoAFavorDePagadores";
+    public const string PuenteDeDevolucion = "PuenteDeDevolucion";
 }
 
 /// <summary>

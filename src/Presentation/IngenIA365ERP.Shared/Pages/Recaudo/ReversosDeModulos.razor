@@ -1,0 +1,82 @@
+@page "/recaudo/reversos-de-modulos"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Recaudo
+@inject AnulacionesClient AnulacionesApi
+@inject INotificationService Notification
+
+<PageTitle>Reversos de los módulos - IngenIA365ERP</PageTitle>
+
+@* Feature 015, US5 (T0181; FR-059, FR-063, FR-195): las aplicaciones de un recibo que Cartera o Captaciones reversaron. Recaudo nunca devuelve ni reaplica solo: una
+   persona confirma si el dinero se recibió (nace un saldo a favor del pagador) o no (el medio se da de baja). *@
+<PermissionGate Required="Receipts.Reversals.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Reversos de los módulos</h3>
+        <div class="toolbar">
+            <select class="e-input" @bind="_causa">
+                <option value="3">Por confirmar</option>
+                <option value="1">Dinero recibido</option>
+                <option value="2">Dinero no recibido</option>
+                <option value="0">Todos</option>
+            </select>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Cargando reversos…">
+        <table class="data-grid">
+            <thead><tr><th>Recibo</th><th>Producto</th><th>Módulo</th><th>Reverso</th><th>Valor</th><th>Motivo</th><th>Causa</th><th>Confirmó</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var r in _reversos)
+                {
+                    <tr class="@(r.Cause == 3 ? "fila-alerta" : "")">
+                        <td>@r.ReceiptNumber</td><td>@r.ProductNumber</td><td>@r.Module</td><td>@r.ModuleReversalNumber</td><td>@r.Amount.ToString("N2")</td>
+                        <td>@r.Reason</td><td>@Causa(r.Cause)</td><td>@r.ConfirmedByName</td>
+                        <td>
+                            @if (r.Cause == 3)
+                            {
+                                <PermissionGate Required="Receipts.Reversals.Resolve">
+                                    <SfButton CssClass="e-flat" OnClick="@(() => ConfirmarAsync(r, 1))">Dinero recibido</SfButton>
+                                    <SfButton CssClass="e-flat" OnClick="@(() => ConfirmarAsync(r, 2))">No se recibió</SfButton>
+                                </PermissionGate>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        <label class="campo">Cómo confirmó el dinero (extracto, arqueo…) * <input class="e-input" @bind="_nota" maxlength="500" /></label>
+    </IndicadorDeCarga>
+</div>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new();
+    private IReadOnlyList<ReversoDeModuloDto> _reversos = [];
+    private int _causa = 3;
+    private string? _nota;
+
+    protected override async Task OnInitializedAsync() => await CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await AnulacionesApi.ReversosAsync(_causa == 0 ? null : _causa);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los reversos."); return; }
+        _reversos = r.Value ?? [];
+    }
+
+    private static string Causa(int c) => c switch { 1 => "Dinero recibido", 2 => "Dinero no recibido", 3 => "Por confirmar", _ => "—" };
+
+    private async Task ConfirmarAsync(ReversoDeModuloDto reverso, int causa)
+    {
+        if (string.IsNullOrWhiteSpace(_nota)) { await Notification.WarningAsync("Escriba cómo confirmó el dinero."); return; }
+        using var g = _carga.Iniciar();
+        var r = await AnulacionesApi.ConfirmarCausaAsync(reverso.PublicId, new CausaDelReversoRequest(causa, _nota.Trim()), new ClaveDeOperacion());
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo confirmar la causa."); return; }
+        _nota = null;
+        await Notification.SuccessAsync(causa == 1 ? "Confirmado: nació un saldo a favor del pagador." : "Confirmado: el medio quedó dado de baja.");
+        await CargarAsync();
+    }
+}

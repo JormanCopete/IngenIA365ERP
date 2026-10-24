@@ -24,6 +24,9 @@ public interface IDocumentosDeRecaudoEnPdf
 
     /// <summary>El recibo de caja en tirilla de 80 mm o carta (fase 6, T0118).</summary>
     byte[] Recibo(CashDesk.ReciboModel modelo);
+
+    /// <summary>El documento de anulación de un recibo (fase 10, T0179).</summary>
+    byte[] Anulacion(Voidings.AnulacionModel modelo);
 }
 
 /// <summary>La empresa del encabezado. (nuevo)</summary>

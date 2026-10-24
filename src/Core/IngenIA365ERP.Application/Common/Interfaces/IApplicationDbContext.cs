@@ -646,6 +646,14 @@ public interface IApplicationDbContext
     DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceiptApplication> ReceiptApplications { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceiptApplicationPortion> ReceiptApplicationPortions { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.SourceOfFundsDeclaration> SourceOfFundsDeclarations { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceiptVoiding> ReceiptVoidings { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.ModuleReversal> ModuleReversals { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.PayerCreditBalance> PayerCreditBalances { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.PayerCreditBalanceMovement> PayerCreditBalanceMovements { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.PayerReceivable> PayerReceivables { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceiptsInboundMessage> ReceiptsInboundMessages { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Activation.ReceiptsActivation> ReceiptsActivations { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Treasury.Activation.TreasuryActivation> TreasuryActivations { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Treasury.BankAccounts.OwnBankAccount> OwnBankAccounts { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Treasury.BankAccounts.LiquidityFundUse> LiquidityFundUses { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Treasury.Payments.TreasuryInboundMessage> TreasuryInboundMessages { get; }
