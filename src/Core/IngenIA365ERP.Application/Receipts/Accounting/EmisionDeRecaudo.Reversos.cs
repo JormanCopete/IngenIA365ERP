@@ -47,6 +47,10 @@ public sealed partial class EmisionDeRecaudo
             if (a.Target == ApplicationTarget.MiscConcept)
                 lineas.Add(Linea(RolesDeRecaudo.ConceptoVario, RolesDeRecaudo.Debito, p.Amount, dim with { MiscConceptCode = codigos.GetValueOrDefault(a.MiscConceptId!.Value) },
                     cruce: anulacion.Number));
+            else if (a.Target == ApplicationTarget.CommercialReceivable)
+                // Feature 015, R1 (T0397): la anulación devuelve el saldo a la factura (tercero y cruce).
+                lineas.Add(Linea(RolesDeRecaudo.CuentasPorCobrarComerciales, RolesDeRecaudo.Debito, p.Amount, dim, await PersonaPublicaAsync(a.BeneficiaryPersonId, ct),
+                    a.CrossDocumentReference ?? a.ProductNumber ?? anulacion.Number));
             else if (a.Target == ApplicationTarget.PendingApplication)
                 // Feature 015, R1 (T0363): el pendiente se reconoció contra RecaudoPendienteDeAplicar; la anulación lo deshace contra ese rol.
                 lineas.Add(Linea(RolesDeRecaudo.RecaudoPendienteDeAplicar, RolesDeRecaudo.Debito, p.Amount, dim with { TargetModule = ModulosDeOrigen.Cartera },

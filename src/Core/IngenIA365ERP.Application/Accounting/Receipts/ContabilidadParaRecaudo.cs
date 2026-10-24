@@ -1,8 +1,9 @@
-using IngenIA365ERP.Application.Accounting.Lending.Consultas;
+﻿using IngenIA365ERP.Application.Accounting.Lending.Consultas;
 using IngenIA365ERP.Application.Accounting.RecaudoYTesoreria;
 using IngenIA365ERP.Application.Common.Integration.Accounting;
 using IngenIA365ERP.Application.Common.Interfaces;
 using MediatR;
+using Microsoft.EntityFrameworkCore;
 
 namespace IngenIA365ERP.Application.Accounting.Receipts;
 
@@ -40,8 +41,33 @@ public sealed class ContabilidadParaRecaudo(
             ? Task.FromResult<IReadOnlyList<SaldoContableDto>>([])
             : SaldosPorRol.SaldoAsync(db, resolutor, MatricesDeRecaudoYTesoreria.Recaudo, solicitud, ct);
 
-    public Task<IReadOnlyList<CuentaPorCobrarComercialDto>> CuentasPorCobrarComercialesAsync(Guid personPublicId, CancellationToken ct) =>
-        Task.FromResult<IReadOnlyList<CuentaPorCobrarComercialDto>>([]);
+    /// <summary>
+    /// Feature 015, R1 (T0396; FR-049, FR-167; E-04): las cuentas por cobrar comerciales pendientes de la persona, por factura (documento cruce), sobre las cuentas que la
+    /// matriz de Recaudo tiene (o tuvo) para el rol <c>CuentasPorCobrarComerciales</c>: lo contabilizado por los demás módulos (la venta de Comercial, sus notas) neto
+    /// de débitos y créditos. Lo que cobró Recaudo no entra aquí —Recaudo lo descuenta con sus propias aplicaciones, contabilizadas o no—, así un recibo que espera su lote
+    /// no deja cobrar dos veces. Sin base o sin cuentas, nada. (nuevo)
+    /// </summary>
+    public async Task<IReadOnlyList<CuentaPorCobrarComercialDto>> CuentasPorCobrarComercialesAsync(Guid personPublicId, CancellationToken ct)
+    {
+        if (db is null) return [];
+        // Toda cuenta que la matriz tuvo para el rol, vigente o no: una factura vieja sigue pendiente en la cuenta donde se cargó.
+        var cuentas = await db.ReceiptsPostingRules.AsNoTracking().Where(r => r.Role == RolCuentasPorCobrarComerciales).Select(r => r.AccountId).Distinct()
+            .ToListAsync(ct);
+        if (cuentas.Count == 0) return [];
+        var persona = await db.People.AsNoTracking().Where(p => p.PublicId == personPublicId).Select(p => (int?)p.Id).FirstOrDefaultAsync(ct);
+        if (persona is null) return [];
+        var filas = await (from l in db.JournalEntries.AsNoTracking()
+                           join d in db.AccountingDocuments.AsNoTracking() on l.DocumentId equals d.Id
+                           where l.IsPosted && l.PersonId == persona && cuentas.Contains(l.AccountId) && l.CrossDocumentNumber != null
+                                 && d.OriginModule != Posting.ModuloContable.Recaudo
+                           select new { l.CrossDocumentNumber, l.Date, l.Debit, l.Credit, l.Id, d.PublicId }).ToListAsync(ct);
+        return filas.GroupBy(f => f.CrossDocumentNumber!)
+            .Select(g => new CuentaPorCobrarComercialDto(g.OrderBy(x => x.Id).First().PublicId, g.Key, g.Min(x => x.Date), g.Sum(x => x.Debit - x.Credit)))
+            .Where(c => c.Pending > 0m).OrderBy(c => c.Date).ToList();
+    }
+
+    /// <summary>El rol de la matriz de Recaudo de las cuentas por cobrar comerciales (contabilidad.md §5).</summary>
+    public const string RolCuentasPorCobrarComerciales = "CuentasPorCobrarComerciales";
 
     /// <summary>La completitud de la matriz de Recaudo (fase 19, T0303): la misma consulta que la pantalla de completitud.</summary>
     public async Task<CompletitudContableDeModuloDto> CompletitudDeLaMatrizAsync(DateOnly fecha, CancellationToken ct) =>

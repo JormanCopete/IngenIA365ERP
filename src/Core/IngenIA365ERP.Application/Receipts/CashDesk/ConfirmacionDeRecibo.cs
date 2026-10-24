@@ -208,6 +208,15 @@ public sealed class ConfirmacionDeRecibo(
         await cerrojo.BloquearAsync(NivelDeRecaudo.Sesion, TablasDeRecaudo.Sesiones, [sesion.Id], ct: ct);
         await cerrojo.BloquearPagadoresAsync(personasDeLaOperacion, ct);
 
+        // Feature 015, R1 (T0397; FR-049): el saldo de cada factura comercial otra vez, bajo el cerrojo de la persona (otro recibo pudo cobrarla entre los dos pasos).
+        var saldosDeFacturas = new Dictionary<Guid, CommercialReceivableDto>();
+        foreach (var i in items.Where(i => i.Target == ApplicationTarget.CommercialReceivable))
+        {
+            var cxc = await CuentasPorCobrarDeRecaudo.ValidarAsync(db, contabilidad, i.BeneficiaryPersonPublicId, i.CrossDocument, i.Amount, ct);
+            if (cxc.IsFailure) return Result.Failure<ReceiptDto>(ErroresDeRecaudo.ItemRechazado([new { itemId = i.ItemId, code = cxc.Error.Code, message = cxc.Error.Message }]));
+            saldosDeFacturas[i.ItemId] = cxc.Value;
+        }
+
         // 5. Numeración, antes de los contratos.
         var (tipo, prefijo) = await SesionesDeCaja.TipoYPrefijoAsync(db, ReceiptDocumentKind.CashReceipt, punto, ct);
         var numero = await numerador.AsignarAsync(tipo.Code, prefijo, ct);
@@ -289,6 +298,16 @@ public sealed class ConfirmacionDeRecibo(
             filasDeItems[i.ItemId] = fila;
         }
         await db.SaveChangesAsync(ct);
+        // Feature 015, R1 (T0397): el detalle de cada cuenta por cobrar comercial, con el saldo que se consultó.
+        foreach (var (itemId, cxc) in saldosDeFacturas)
+        {
+            var aplicacion = filasDeItems[itemId];
+            db.CommercialReceivableApplications.Add(new CommercialReceivableApplication
+            {
+                ReceiptId = recibo.Id, ReceiptApplicationId = aplicacion.Id, PersonId = aplicacion.BeneficiaryPersonId, InvoiceNumber = cxc.InvoiceNumber,
+                AccountingDocumentPublicId = cxc.AccountingDocumentPublicId, ConsultedBalance = cxc.Pending, Amount = aplicacion.Amount,
+            });
+        }
 
         var porciones = new List<(ReceiptApplicationPortion Fila, ItemDeCajaDto Item, MedioDeCajaDto Medio)>();
         foreach (var grupo in porcionesPedidas.GroupBy(p => p.ItemId))

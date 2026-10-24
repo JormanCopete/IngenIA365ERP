@@ -657,6 +657,7 @@ public interface IApplicationDbContext
     DbSet<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PaymasterCalendarEntry> PaymasterCalendar { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Receipts.Compliance.CashTransactionReport> CashTransactionReports { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Receipts.Compliance.CashTransactionReportLine> CashTransactionReportLines { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.CommercialReceivableApplication> CommercialReceivableApplications { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.PayerCreditBalance> PayerCreditBalances { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.PayerCreditBalanceMovement> PayerCreditBalanceMovements { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.PayerReceivable> PayerReceivables { get; }

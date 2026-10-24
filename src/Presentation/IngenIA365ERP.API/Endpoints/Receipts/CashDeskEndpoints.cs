@@ -86,6 +86,14 @@ public class CashDeskEndpoints : ICarterModule
             .WithName("Receipts_Receipts_Notify").ConClaveDeOperacion().RequirePermission(Imprimir);
 
         // Feature 015, R1 (T0365; FR-046; api.md §8): el recaudo pendiente de aplicar.
+        // Feature 015, R1 (T0397; FR-049, FR-166): las cuentas por cobrar comerciales pendientes de la persona y lo cobrado a ellas en recibos.
+        var cxc = ReceiptsGroup.Grupo(app, "/commercial-receivables", "Recaudo Cuentas por cobrar comerciales");
+        cxc.MapGet("/", async (Guid person, ISender s, CancellationToken ct) => await s.Send(new GetCommercialReceivablesQuery(person), ct))
+            .WithName("Receipts_CommercialReceivables_Get").RequirePermission(Registrar);
+        cxc.MapGet("/applications", async (DateOnly? from, DateOnly? to, ISender s, CancellationToken ct) =>
+                await s.Send(new ListCommercialReceivableApplicationsQuery(from, to), ct))
+            .WithName("Receipts_CommercialReceivables_Applications").RequirePermission(new AlgunPermiso("Receipts.Reports.View", Ver));
+
         var pendientes = ReceiptsGroup.Grupo(app, "/pending-applications", "Recaudo Pendiente de aplicar");
         pendientes.MapGet("/", async (Domain.Enums.Receipts.PendingApplicationState? state, Guid? person, ISender s, CancellationToken ct) =>
                 await s.Send(new ListPendingApplicationsQuery(state, person), ct))

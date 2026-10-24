@@ -195,6 +195,56 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                 });
 
             migrationBuilder.CreateTable(
+                name: "RCD_CommercialReceivableApplications",
+                schema: "dbo",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    ReceiptId = table.Column<long>(type: "bigint", nullable: false),
+                    ReceiptApplicationId = table.Column<long>(type: "bigint", nullable: false),
+                    PersonId = table.Column<int>(type: "int", nullable: false),
+                    InvoiceNumber = table.Column<string>(type: "nvarchar(40)", maxLength: 40, nullable: false),
+                    AccountingDocumentPublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    ConsultedBalance = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    Amount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_RCD_CommercialReceivableApplications", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_RCD_CommercialReceivableApplications_COR_People_PersonId",
+                        column: x => x.PersonId,
+                        principalSchema: "dbo",
+                        principalTable: "COR_People",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_RCD_CommercialReceivableApplications_RCD_ReceiptApplications_ReceiptApplicationId",
+                        column: x => x.ReceiptApplicationId,
+                        principalSchema: "dbo",
+                        principalTable: "RCD_ReceiptApplications",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_RCD_CommercialReceivableApplications_RCD_Receipts_ReceiptId",
+                        column: x => x.ReceiptId,
+                        principalSchema: "dbo",
+                        principalTable: "RCD_Receipts",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "RCD_IdentificationRules",
                 schema: "dbo",
                 columns: table => new
@@ -716,6 +766,32 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                 unique: true);
 
             migrationBuilder.CreateIndex(
+                name: "IX_RCD_CommercialReceivableApplications_PersonId_InvoiceNumber",
+                schema: "dbo",
+                table: "RCD_CommercialReceivableApplications",
+                columns: new[] { "PersonId", "InvoiceNumber" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_RCD_CommercialReceivableApplications_ReceiptId",
+                schema: "dbo",
+                table: "RCD_CommercialReceivableApplications",
+                column: "ReceiptId");
+
+            migrationBuilder.CreateIndex(
+                name: "UK_RCD_CommercialReceivableApplications_PublicId",
+                schema: "dbo",
+                table: "RCD_CommercialReceivableApplications",
+                column: "PublicId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "UK_RCD_CommercialReceivableApplications_ReceiptApplicationId",
+                schema: "dbo",
+                table: "RCD_CommercialReceivableApplications",
+                column: "ReceiptApplicationId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
                 name: "IX_RCD_IdentificationRules_IsActive_Priority",
                 schema: "dbo",
                 table: "RCD_IdentificationRules",
@@ -891,6 +967,10 @@ WHERE NOT EXISTS (SELECT 1 FROM [dbo].[RCD_DocumentTypes] t WHERE t.[Code] = v.c
 
             migrationBuilder.DropTable(
                 name: "RCD_CashTransactionReportLines",
+                schema: "dbo");
+
+            migrationBuilder.DropTable(
+                name: "RCD_CommercialReceivableApplications",
                 schema: "dbo");
 
             migrationBuilder.DropTable(

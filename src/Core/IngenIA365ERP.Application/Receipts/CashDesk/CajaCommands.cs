@@ -192,7 +192,7 @@ public sealed class UpdateCashOperationItemsCommandValidator : AbstractValidator
         {
             i.RuleFor(x => x.Amount).GreaterThan(0m);
             i.RuleFor(x => x.Target).Must(t => t is ApplicationTarget.Loan or ApplicationTarget.Account or ApplicationTarget.MiscConcept
-                    or ApplicationTarget.PendingApplication)
+                    or ApplicationTarget.PendingApplication or ApplicationTarget.CommercialReceivable)
                 .WithMessage("La caja cobra créditos, cuentas, conceptos varios y recaudo pendiente de aplicar.");
             // Feature 015, R1 (T0363): el pendiente dice a qué módulo irá.
             i.RuleFor(x => x.PendingTarget).Must(t => t is ApplicationTarget.Loan or ApplicationTarget.Account)
@@ -211,7 +211,8 @@ public sealed class UpdateCashOperationItemsCommandHandler(
     IAlcanceDeRecaudo alcance,
     IContratoDeObligaciones obligaciones,
     IContratoDeCuentas cuentas,
-    IConsultaDeCargaSinActivar? carga = null) : IRequestHandler<UpdateCashOperationItemsCommand, Result<CashOperationDto>>
+    IConsultaDeCargaSinActivar? carga = null,
+    IngenIA365ERP.Application.Common.Integration.Accounting.IContabilidadParaRecaudo? contabilidad = null) : IRequestHandler<UpdateCashOperationItemsCommand, Result<CashOperationDto>>
 {
     public async Task<Result<CashOperationDto>> Handle(UpdateCashOperationItemsCommand request, CancellationToken ct)
     {
@@ -265,6 +266,17 @@ public sealed class UpdateCashOperationItemsCommandHandler(
                     items.Add(new ItemDeCajaDto(id, pedido.Target, pedido.Amount, null, pedido.ProductReference, titular, null, null, null, null, null, false, null, null,
                         null, null, pedido.Amount, 0m, false, false, [], ["Recaudo pendiente de aplicar: se aplica el día de la activación del módulo."],
                         pedido.PendingTarget, pedido.LoadObligationPublicId, pedido.ProductReference?.Trim()));
+                    break;
+                }
+                case ApplicationTarget.CommercialReceivable:
+                {
+                    // Feature 015, R1 (T0397; FR-049): la factura con saldo, por no más que el saldo; nunca como concepto vario.
+                    if (contabilidad is null) { rechazos.Add(new { itemId = id, code = ErroresDeCuentasPorCobrar.CodigoNoExiste, message = "No hay consulta de Contabilidad." }); continue; }
+                    var cxc = await CuentasPorCobrarDeRecaudo.ValidarAsync(db, contabilidad, titular, pedido.CrossDocument, pedido.Amount, ct);
+                    if (cxc.IsFailure) { rechazos.Add(new { itemId = id, code = cxc.Error.Code, message = cxc.Error.Message }); continue; }
+                    items.Add(new ItemDeCajaDto(id, pedido.Target, pedido.Amount, null, cxc.Value.InvoiceNumber, titular, null, null, null, null, null, false, null,
+                        cxc.Value.InvoiceNumber, cxc.Value.AccountingDocumentPublicId, null, pedido.Amount, 0m, false, false, [],
+                        [string.Create(System.Globalization.CultureInfo.InvariantCulture, $"Saldo de la factura {cxc.Value.InvoiceNumber}: {cxc.Value.Pending:N2}.")]));
                     break;
                 }
                 default:

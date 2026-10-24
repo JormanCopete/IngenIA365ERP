@@ -90,10 +90,13 @@ public static class MatricesDeRecaudoYTesoreria
             // R1 (fase 26): el GMF de los egresos de caja, que asume la cooperativa.
             Resultado(RolesDeRecaudo.GmfGasto, "Gasto por GMF de egresos de caja", Oficina),
             R(RolesDeRecaudo.GmfPorPagar, "GMF por pagar de egresos de caja"),
+            // R1 (fase 30): las cuentas por cobrar comerciales que se cobran en el recibo, con tercero y factura.
+            R(RolesDeRecaudo.CuentasPorCobrarComerciales, "Cuentas por cobrar comerciales"),
         ],
         [
             H(ReciboEmitidoV1.Type, "Recibo de caja", "RR", [RolesDeRecaudo.Caja, RolesDeRecaudo.PuenteDelModulo],
-                RolesDeRecaudo.BancoRecaudo, RolesDeRecaudo.ChequesEnCanje, RolesDeRecaudo.MedioPorCobrar, RolesDeRecaudo.ConceptoVario),
+                RolesDeRecaudo.BancoRecaudo, RolesDeRecaudo.ChequesEnCanje, RolesDeRecaudo.MedioPorCobrar, RolesDeRecaudo.ConceptoVario,
+                RolesDeRecaudo.CuentasPorCobrarComerciales),
             H(ReciboDeBancoEmitidoV1.Type, "Recibo de banco", "RB", [RolesDeRecaudo.PuenteDelModulo],
                 RolesDeRecaudo.BancoRecaudo, RolesDeRecaudo.PartidasPorIdentificar, RolesDeRecaudo.ConceptoVario),
             H(ReciboDePagaduriaEmitidoV1.Type, "Recibo de pagaduría", "RB", [RolesDeRecaudo.SaldoDePagadurias, RolesDeRecaudo.PuenteDelModulo]),
@@ -114,7 +117,7 @@ public static class MatricesDeRecaudoYTesoreria
             H(RemesaDespachadaV1.Type, "Remesa despachada", "MC", [RolesDeRecaudo.EfectivoEnTransito, RolesDeRecaudo.Boveda]),
             H(ReciboAnuladoV1.Type, "Recibo anulado", "AR", [RolesDeRecaudo.PuenteDelModulo],
                 RolesDeRecaudo.Caja, RolesDeRecaudo.BancoRecaudo, RolesDeRecaudo.ChequesEnCanje, RolesDeRecaudo.MedioPorCobrar, RolesDeRecaudo.ConceptoVario,
-                RolesDeRecaudo.SaldoAFavorDePagadores, RolesDeRecaudo.RecaudoPendienteDeAplicar),
+                RolesDeRecaudo.SaldoAFavorDePagadores, RolesDeRecaudo.RecaudoPendienteDeAplicar, RolesDeRecaudo.CuentasPorCobrarComerciales),
             H(AplicacionReversadaPorModuloV1.Type, "Aplicación reversada por el módulo", "AR", [RolesDeRecaudo.PuenteDelModulo],
                 RolesDeRecaudo.SaldoAFavorDePagadores, RolesDeRecaudo.Caja, RolesDeRecaudo.BancoRecaudo, RolesDeRecaudo.ChequesEnCanje, RolesDeRecaudo.MedioPorCobrar),
             H(ChequeRecibidoDevueltoV1.Type, "Cheque recibido devuelto", "AR", [RolesDeRecaudo.ChequesEnCanje],

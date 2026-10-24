@@ -38,6 +38,10 @@ public sealed record ItemPedidoRequest(int Target, decimal Amount, Guid? Product
 
 public sealed record AlternativaDeAbonoDto(int? Choice, decimal AppliedAmount, JsonElement? NewPlan);
 
+/// <summary>Feature 015, R1 (T0398): una cuenta por cobrar comercial pendiente (factura). (nuevo)</summary>
+public sealed record CuentaPorCobrarComercialDto(Guid? AccountingDocumentPublicId, string InvoiceNumber, DateOnly Date, decimal AccountingPending, decimal AppliedByReceipts,
+    decimal Pending);
+
 public sealed record ItemDeCajaDto(Guid ItemId, int Target, decimal Amount, Guid? ProductPublicId, string? ProductNumber, Guid BeneficiaryPersonPublicId,
     int? LoanModality, int? AccountModality, int? Choice, int? InstallmentNumber, IReadOnlyList<Guid>? InstallmentPublicIds, bool AdvanceNoticeAccepted,
     Guid? MiscConceptPublicId, string? CrossDocument, Guid? InvoicePublicId, string? SimulationId, decimal? SimulatedApplied, decimal? SimulatedSurplus,
@@ -85,6 +89,11 @@ public sealed record ReciboDto(Guid PublicId, string Number, int Status, int Cha
 public sealed class CajaClient(HttpClient http, CentralAuthClient auth)
 {
     private const string Base = "/api/receipts";
+
+    /// <summary>Feature 015, R1 (T0398): las cuentas por cobrar comerciales pendientes de la persona, por factura.</summary>
+    public Task<ResultadoDeInventario<IReadOnlyList<CuentaPorCobrarComercialDto>>> CuentasPorCobrarAsync(Guid persona, CancellationToken ct = default) =>
+        EnvioDeVentas.EnviarAsync<IReadOnlyList<CuentaPorCobrarComercialDto>>(http, auth, HttpMethod.Get,
+            EnvioDeVentas.ConQuery($"{Base}/commercial-receivables", EnvioDeVentas.Query(("person", EnvioDeVentas.Texto(persona)))), null, null, ct);
 
     public Task<ResultadoDeInventario<LoQuePuedePagarDto>> LoQuePuedePagarAsync(Guid? persona, string? documento, bool incluirCodeudor = false, CancellationToken ct = default,
         string? numero = null) =>

@@ -86,6 +86,12 @@
                                 <tr><td>Cuenta de la carga (Captaciones sin activar)</td><td colspan="4">Queda como recaudo pendiente de aplicar el día de la activación.</td>
                                     <td><SfButton CssClass="e-flat" OnClick="@(() => AgregarPendiente(2))">Dejar pendiente</SfButton></td></tr>
                             }
+                            @* R1 (T0398; FR-049): las facturas comerciales con saldo, con tercero y factura de cruce; nunca como concepto vario. *@
+                            @foreach (var f in _cuentasPorCobrar)
+                            {
+                                <tr><td>Factura @f.InvoiceNumber · @f.Date.ToString("dd/MM/yyyy")</td><td colspan="3">Saldo @f.Pending.ToString("N0")</td><td></td>
+                                    <td><SfButton CssClass="e-flat" OnClick="@(() => AgregarCuentaPorCobrar(f))">Cobrar</SfButton></td></tr>
+                            }
                             @foreach (var k in _pagables.MiscConcepts)
                             {
                                 <tr><td>Concepto @k.Code · @k.Name</td><td colspan="4"></td><td><SfButton CssClass="e-flat" OnClick="@(() => AgregarConcepto(k))">Cobrar</SfButton></td></tr>
@@ -261,6 +267,7 @@
     private OperacionDeCajaDto? _operacion;
     private ReciboDto? _recibo;
     private readonly List<ItemPedidoRequest> _items = [];
+    private IReadOnlyList<CuentaPorCobrarComercialDto> _cuentasPorCobrar = [];
     private readonly Dictionary<Guid, string> _rotulos = [];
     private readonly Dictionary<Guid, string> _rechazados = [];
     private readonly List<MedioDeCajaRequest> _medios = [];
@@ -417,6 +424,12 @@
         var r = await Cliente.LoQuePuedePagarAsync(persona, null, _comoCodeudor, numero: numero);
         if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo consultar lo que puede pagar."); return; }
         _pagables = r.Value;
+        _cuentasPorCobrar = [];
+        if (r.Value?.PersonPublicId is { } quien)
+        {
+            var cxc = await Cliente.CuentasPorCobrarAsync(quien);
+            if (cxc.IsSuccess) _cuentasPorCobrar = cxc.Value ?? [];
+        }
         _items.Clear();
         _rotulos.Clear();
         _medios.Clear();
@@ -442,6 +455,9 @@
         Agregar(new ItemPedidoRequest(2, exigibles.Sum(x => x.Pending), c.AccountPublicId, AccountModality: exigibles.Count > 0 ? 2 : 1,
             InstallmentPublicIds: exigibles.Select(x => x.InstallmentPublicId).ToList()), $"Cuenta {c.Number}");
     }
+
+    private void AgregarCuentaPorCobrar(CuentaPorCobrarComercialDto f) =>
+        Agregar(new ItemPedidoRequest(4, f.Pending, CrossDocument: f.InvoiceNumber, InvoicePublicId: f.AccountingDocumentPublicId), $"Factura {f.InvoiceNumber}");
 
     private void AgregarConcepto(ConceptoVarioPagableDto k) => Agregar(new ItemPedidoRequest(3, 0, MiscConceptPublicId: k.MiscConceptPublicId), $"Concepto {k.Code}");
 

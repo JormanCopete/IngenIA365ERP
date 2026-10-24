@@ -211,3 +211,22 @@ public class CashTransactionReportLineConfiguration : IEntityTypeConfiguration<C
         builder.HasIndex(e => new { e.CashTransactionReportId, e.LineNumber }).IsUnique().HasDatabaseName($"UK_{Tabla}_Report_Line");
     }
 }
+
+/// <summary><c>RCD_CommercialReceivableApplications</c> (H): la factura comercial que cobra una aplicación del recibo (FR-049), una por aplicación. (nuevo)</summary>
+public class CommercialReceivableApplicationConfiguration : IEntityTypeConfiguration<CommercialReceivableApplication>
+{
+    public const string Tabla = "RCD_CommercialReceivableApplications";
+
+    public void Configure(EntityTypeBuilder<CommercialReceivableApplication> builder)
+    {
+        builder.ComoEntidadDeRecaudo(Tabla);
+        builder.HasOne<Receipt>().WithMany().HasForeignKey(e => e.ReceiptId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<ReceiptApplication>().WithMany().HasForeignKey(e => e.ReceiptApplicationId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<Person>().WithMany().HasForeignKey(e => e.PersonId).OnDelete(DeleteBehavior.Restrict);
+        builder.Property(e => e.InvoiceNumber).HasMaxLength(40).IsRequired();
+        builder.Property(e => e.ConsultedBalance).Monto();
+        builder.Property(e => e.Amount).Monto();
+        builder.HasIndex(e => e.ReceiptApplicationId).IsUnique().HasDatabaseName($"UK_{Tabla}_ReceiptApplicationId");
+        builder.HasIndex(e => new { e.PersonId, e.InvoiceNumber }).HasDatabaseName($"IX_{Tabla}_PersonId_InvoiceNumber");
+    }
+}
