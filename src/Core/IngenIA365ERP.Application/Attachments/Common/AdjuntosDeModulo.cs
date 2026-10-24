@@ -370,6 +370,13 @@ public static class AdjuntosDeModulo
     /// <summary>La respuesta del banco a un archivo de pago (FR-118): se lee con <c>Treasury.Orders.View</c>.</summary>
     public const string RespuestaDelBancoDeTesoreria = "TreasuryPaymentResponse";
 
+    /// <summary>
+    /// Feature 015, US11 (T0158; FR-118, FR-213): el soporte del registro manual de un resultado del giro (la constancia del banco o del portal). El dueño es la
+    /// <b>orden</b> o, en el registro en bloque, el <b>lote</b> (su <c>PublicId</c>); se sube con <c>Treasury.Results.Register</c>, se lee con
+    /// <c>Treasury.Orders.View</c> y no se borra. (nuevo)
+    /// </summary>
+    public const string SoporteDeResultadoDelGiro = "TreasuryResultSupport";
+
     /// <summary>El extracto bancario cargado (FR-196): se lee con <c>Treasury.Statements.View</c>.</summary>
     public const string ExtractoDeTesoreria = "TreasuryStatement";
 
@@ -399,6 +406,7 @@ public static class AdjuntosDeModulo
         [RespuestaDePagaduria] = "Receipts.Paymasters.View",
         [RespuestaDelBancoDeTesoreria] = "Treasury.Orders.View",
         [ExtractoDeTesoreria] = "Treasury.Statements.View",
+        [SoporteDeResultadoDelGiro] = "Treasury.Orders.View",
         [ConstanciaDeEntregaDeCheque] = "Treasury.Checks.View",
         [CertificacionBancariaDePersona] = VerCuentasDePersona,
     };
@@ -699,6 +707,15 @@ public static class AdjuntosDeModulo
             if (!puede || !(await db.ReceiptsCashSessions.AnyAsync(s => s.PublicId == ownerEntityPublicId, ct)
                             || await db.Vaults.AnyAsync(v => v.PublicId == ownerEntityPublicId, ct)))
                 return new Error("Generic.NotFound", "Sesión o bóveda no encontrada.");
+            return null;
+        }
+        if (ownerEntityType == SoporteDeResultadoDelGiro)
+        {
+            // Feature 015, US11: el soporte del resultado de una orden o de un lote que existan, de quien registra resultados.
+            if (!await permisos.HasPermissionAsync("Treasury.Results.Register", ct)
+                || !(await db.PaymentOrders.AnyAsync(o => o.PublicId == ownerEntityPublicId, ct)
+                     || await db.PaymentBatches.AnyAsync(b => b.PublicId == ownerEntityPublicId, ct)))
+                return new Error("Generic.NotFound", "Orden o lote no encontrado.");
             return null;
         }
         if (ownerEntityType == CertificacionBancariaDePersona)

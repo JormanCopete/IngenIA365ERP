@@ -166,3 +166,67 @@ public class PaymentFileLineConfiguration : IEntityTypeConfiguration<PaymentFile
         builder.HasIndex(e => e.PaymentBatchItemId).HasDatabaseName($"IX_{Tabla}_PaymentBatchItemId");
     }
 }
+
+/// <summary><c>TES_PaymentResponses</c> (feature 015, US11, T0157; data-model §10.6). (nuevo)</summary>
+public class PaymentResponseConfiguration : IEntityTypeConfiguration<PaymentResponse>
+{
+    public const string Tabla = "TES_PaymentResponses";
+
+    public void Configure(EntityTypeBuilder<PaymentResponse> builder)
+    {
+        builder.ComoEntidadDeTesoreria(Tabla);
+        builder.HasOne<PaymentFile>().WithMany().HasForeignKey(e => e.PaymentFileId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<BankFileFormat>().WithMany().HasForeignKey(e => e.BankFileFormatId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<User>().WithMany().HasForeignKey(e => e.LoadedByUserId).OnDelete(DeleteBehavior.Restrict);
+        builder.Property(e => e.Source).HasConversion<int>();
+        builder.Property(e => e.FileName).HasMaxLength(200);
+        builder.Property(e => e.Sha256).HasMaxLength(64);
+        builder.HasIndex(e => e.PaymentFileId).HasDatabaseName($"IX_{Tabla}_PaymentFileId");
+    }
+}
+
+/// <summary><c>TES_PaymentResponseLines</c> (feature 015, US11, T0157; FR-212). (nuevo)</summary>
+public class PaymentResponseLineConfiguration : IEntityTypeConfiguration<PaymentResponseLine>
+{
+    public const string Tabla = "TES_PaymentResponseLines";
+
+    public void Configure(EntityTypeBuilder<PaymentResponseLine> builder)
+    {
+        builder.ComoEntidadDeTesoreria(Tabla);
+        builder.HasOne<PaymentResponse>().WithMany().HasForeignKey(e => e.PaymentResponseId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<PaymentFileLine>().WithMany().HasForeignKey(e => e.PaymentFileLineId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<User>().WithMany().HasForeignKey(e => e.ReviewedByUserId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<DisbursementResult>().WithMany().HasForeignKey(e => e.DisbursementResultId).OnDelete(DeleteBehavior.Restrict);
+        builder.Property(e => e.Outcome).HasConversion<int>();
+        builder.Property(e => e.BankCause).HasMaxLength(200);
+        builder.Property(e => e.Amount).Monto();
+        builder.Property(e => e.AccountNumber).HasMaxLength(30).IsRequired();
+        builder.Property(e => e.BeneficiaryTaxId).HasMaxLength(20).IsRequired();
+        builder.Property(e => e.BankReference).HasMaxLength(60);
+        builder.Property(e => e.DiscrepancyDetail).HasMaxLength(300);
+        builder.Property(e => e.ReviewNote).HasMaxLength(500);
+        builder.HasIndex(e => new { e.PaymentResponseId, e.LineNumber }).IsUnique().HasDatabaseName($"UK_{Tabla}_PaymentResponseId_LineNumber");
+        builder.HasIndex(e => e.PaymentFileLineId).HasDatabaseName($"IX_{Tabla}_PaymentFileLineId");
+    }
+}
+
+/// <summary><c>TES_DisbursementResults</c> (H; feature 015, US11, T0157; FR-215): UK <c>(PaymentOrderId, Outcome)</c>. (nuevo)</summary>
+public class DisbursementResultConfiguration : IEntityTypeConfiguration<DisbursementResult>
+{
+    public const string Tabla = "TES_DisbursementResults";
+
+    public void Configure(EntityTypeBuilder<DisbursementResult> builder)
+    {
+        builder.ComoEntidadDeTesoreria(Tabla);
+        builder.HasOne<PaymentOrder>().WithMany().HasForeignKey(e => e.PaymentOrderId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<User>().WithMany().HasForeignKey(e => e.RecordedByUserId).OnDelete(DeleteBehavior.Restrict);
+        builder.Property(e => e.Outcome).HasConversion<int>();
+        builder.Property(e => e.Source).HasConversion<int>();
+        builder.Property(e => e.Amount).Monto();
+        builder.Property(e => e.TreasuryReference).HasMaxLength(60).IsRequired();
+        builder.Property(e => e.CheckNumber).HasMaxLength(30);
+        builder.Property(e => e.Reason).HasMaxLength(500);
+        builder.Property(e => e.RecordedByName).HasMaxLength(150).IsRequired();
+        builder.HasIndex(e => new { e.PaymentOrderId, e.Outcome }).IsUnique().HasDatabaseName($"UK_{Tabla}_PaymentOrderId_Outcome");
+    }
+}

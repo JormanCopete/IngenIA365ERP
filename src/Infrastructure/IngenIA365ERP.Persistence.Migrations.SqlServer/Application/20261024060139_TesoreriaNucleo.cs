@@ -280,6 +280,58 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                 });
 
             migrationBuilder.CreateTable(
+                name: "TES_DisbursementResults",
+                schema: "dbo",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    PaymentOrderId = table.Column<int>(type: "int", nullable: false),
+                    Outcome = table.Column<int>(type: "int", nullable: false),
+                    OccurredOn = table.Column<DateOnly>(type: "date", nullable: false),
+                    Amount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    TreasuryReference = table.Column<string>(type: "nvarchar(60)", maxLength: 60, nullable: false),
+                    CheckNumber = table.Column<string>(type: "nvarchar(30)", maxLength: 30, nullable: true),
+                    Reason = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
+                    Source = table.Column<int>(type: "int", nullable: false),
+                    RecordedByUserId = table.Column<int>(type: "int", nullable: true),
+                    RecordedByCentralUserId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    RecordedByName = table.Column<string>(type: "nvarchar(150)", maxLength: 150, nullable: false),
+                    RecordedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    SupportAttachmentPublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    PaymentResponseLineId = table.Column<int>(type: "int", nullable: true),
+                    StatementLinePublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    EmittedMessagePublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_TES_DisbursementResults", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_TES_DisbursementResults_SEC_Users_RecordedByUserId",
+                        column: x => x.RecordedByUserId,
+                        principalSchema: "dbo",
+                        principalTable: "SEC_Users",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_TES_DisbursementResults_TES_PaymentOrders_PaymentOrderId",
+                        column: x => x.PaymentOrderId,
+                        principalSchema: "dbo",
+                        principalTable: "TES_PaymentOrders",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "TES_InboundMessages",
                 schema: "dbo",
                 columns: table => new
@@ -571,6 +623,127 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         onDelete: ReferentialAction.Restrict);
                 });
 
+            migrationBuilder.CreateTable(
+                name: "TES_PaymentResponses",
+                schema: "dbo",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    PaymentFileId = table.Column<int>(type: "int", nullable: false),
+                    Source = table.Column<int>(type: "int", nullable: false),
+                    BankFileFormatId = table.Column<int>(type: "int", nullable: true),
+                    ResponseAttachmentPublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    FileName = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: true),
+                    Sha256 = table.Column<string>(type: "nvarchar(64)", maxLength: 64, nullable: true),
+                    LoadedByUserId = table.Column<int>(type: "int", nullable: false),
+                    LoadedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    LineCount = table.Column<int>(type: "int", nullable: false),
+                    DiscrepancyCount = table.Column<int>(type: "int", nullable: false),
+                    InformedCount = table.Column<int>(type: "int", nullable: false),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_TES_PaymentResponses", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_TES_PaymentResponses_COR_BankFileFormats_BankFileFormatId",
+                        column: x => x.BankFileFormatId,
+                        principalSchema: "dbo",
+                        principalTable: "COR_BankFileFormats",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_TES_PaymentResponses_SEC_Users_LoadedByUserId",
+                        column: x => x.LoadedByUserId,
+                        principalSchema: "dbo",
+                        principalTable: "SEC_Users",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_TES_PaymentResponses_TES_PaymentFiles_PaymentFileId",
+                        column: x => x.PaymentFileId,
+                        principalSchema: "dbo",
+                        principalTable: "TES_PaymentFiles",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "TES_PaymentResponseLines",
+                schema: "dbo",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    PaymentResponseId = table.Column<int>(type: "int", nullable: false),
+                    LineNumber = table.Column<int>(type: "int", nullable: false),
+                    PaymentFileLineId = table.Column<int>(type: "int", nullable: true),
+                    Outcome = table.Column<int>(type: "int", nullable: false),
+                    BankCause = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: true),
+                    BankDate = table.Column<DateOnly>(type: "date", nullable: false),
+                    Amount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    AccountNumber = table.Column<string>(type: "nvarchar(30)", maxLength: 30, nullable: false),
+                    BeneficiaryTaxId = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
+                    BankReference = table.Column<string>(type: "nvarchar(60)", maxLength: 60, nullable: true),
+                    Discrepancy = table.Column<bool>(type: "bit", nullable: false),
+                    DiscrepancyDetail = table.Column<string>(type: "nvarchar(300)", maxLength: 300, nullable: true),
+                    ReviewedByUserId = table.Column<int>(type: "int", nullable: true),
+                    ReviewedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    ReviewAccepted = table.Column<bool>(type: "bit", nullable: true),
+                    ReviewNote = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
+                    DisbursementResultId = table.Column<int>(type: "int", nullable: true),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_TES_PaymentResponseLines", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_TES_PaymentResponseLines_SEC_Users_ReviewedByUserId",
+                        column: x => x.ReviewedByUserId,
+                        principalSchema: "dbo",
+                        principalTable: "SEC_Users",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_TES_PaymentResponseLines_TES_DisbursementResults_DisbursementResultId",
+                        column: x => x.DisbursementResultId,
+                        principalSchema: "dbo",
+                        principalTable: "TES_DisbursementResults",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_TES_PaymentResponseLines_TES_PaymentFileLines_PaymentFileLineId",
+                        column: x => x.PaymentFileLineId,
+                        principalSchema: "dbo",
+                        principalTable: "TES_PaymentFileLines",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_TES_PaymentResponseLines_TES_PaymentResponses_PaymentResponseId",
+                        column: x => x.PaymentResponseId,
+                        principalSchema: "dbo",
+                        principalTable: "TES_PaymentResponses",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
             migrationBuilder.CreateIndex(
                 name: "IX_TES_BankAccounts_BankThirdPartyPersonId",
                 schema: "dbo",
@@ -602,6 +775,26 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                 name: "UK_TES_BankAccounts_PublicId",
                 schema: "dbo",
                 table: "TES_BankAccounts",
+                column: "PublicId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_TES_DisbursementResults_RecordedByUserId",
+                schema: "dbo",
+                table: "TES_DisbursementResults",
+                column: "RecordedByUserId");
+
+            migrationBuilder.CreateIndex(
+                name: "UK_TES_DisbursementResults_PaymentOrderId_Outcome",
+                schema: "dbo",
+                table: "TES_DisbursementResults",
+                columns: new[] { "PaymentOrderId", "Outcome" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "UK_TES_DisbursementResults_PublicId",
+                schema: "dbo",
+                table: "TES_DisbursementResults",
                 column: "PublicId",
                 unique: true);
 
@@ -838,6 +1031,63 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                 unique: true);
 
             migrationBuilder.CreateIndex(
+                name: "IX_TES_PaymentResponseLines_DisbursementResultId",
+                schema: "dbo",
+                table: "TES_PaymentResponseLines",
+                column: "DisbursementResultId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_TES_PaymentResponseLines_PaymentFileLineId",
+                schema: "dbo",
+                table: "TES_PaymentResponseLines",
+                column: "PaymentFileLineId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_TES_PaymentResponseLines_ReviewedByUserId",
+                schema: "dbo",
+                table: "TES_PaymentResponseLines",
+                column: "ReviewedByUserId");
+
+            migrationBuilder.CreateIndex(
+                name: "UK_TES_PaymentResponseLines_PaymentResponseId_LineNumber",
+                schema: "dbo",
+                table: "TES_PaymentResponseLines",
+                columns: new[] { "PaymentResponseId", "LineNumber" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "UK_TES_PaymentResponseLines_PublicId",
+                schema: "dbo",
+                table: "TES_PaymentResponseLines",
+                column: "PublicId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_TES_PaymentResponses_BankFileFormatId",
+                schema: "dbo",
+                table: "TES_PaymentResponses",
+                column: "BankFileFormatId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_TES_PaymentResponses_LoadedByUserId",
+                schema: "dbo",
+                table: "TES_PaymentResponses",
+                column: "LoadedByUserId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_TES_PaymentResponses_PaymentFileId",
+                schema: "dbo",
+                table: "TES_PaymentResponses",
+                column: "PaymentFileId");
+
+            migrationBuilder.CreateIndex(
+                name: "UK_TES_PaymentResponses_PublicId",
+                schema: "dbo",
+                table: "TES_PaymentResponses",
+                column: "PublicId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
                 name: "UK_TES_Setup_PublicId",
                 schema: "dbo",
                 table: "TES_Setup",
@@ -883,7 +1133,7 @@ SET IDENTITY_INSERT [dbo].[TES_Setup] OFF;
                 schema: "dbo");
 
             migrationBuilder.DropTable(
-                name: "TES_PaymentFileLines",
+                name: "TES_PaymentResponseLines",
                 schema: "dbo");
 
             migrationBuilder.DropTable(
@@ -892,6 +1142,18 @@ SET IDENTITY_INSERT [dbo].[TES_Setup] OFF;
 
             migrationBuilder.DropTable(
                 name: "TES_UserBankAccountScopes",
+                schema: "dbo");
+
+            migrationBuilder.DropTable(
+                name: "TES_DisbursementResults",
+                schema: "dbo");
+
+            migrationBuilder.DropTable(
+                name: "TES_PaymentFileLines",
+                schema: "dbo");
+
+            migrationBuilder.DropTable(
+                name: "TES_PaymentResponses",
                 schema: "dbo");
 
             migrationBuilder.DropTable(

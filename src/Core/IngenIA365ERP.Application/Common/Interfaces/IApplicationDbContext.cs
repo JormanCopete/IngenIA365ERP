@@ -654,6 +654,9 @@ public interface IApplicationDbContext
     DbSet<IngenIA365ERP.Domain.Entities.Treasury.Payments.PaymentBatchItem> PaymentBatchItems { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Treasury.Payments.PaymentFile> PaymentFiles { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Treasury.Payments.PaymentFileLine> PaymentFileLines { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Treasury.Payments.PaymentResponse> PaymentResponses { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Treasury.Payments.PaymentResponseLine> PaymentResponseLines { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Treasury.Payments.DisbursementResult> DisbursementResults { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Accounting.Integration.OwnBankAccountLink> OwnBankAccountLinks { get; }
 
     /// <summary>

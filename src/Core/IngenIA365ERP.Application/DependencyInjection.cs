@@ -313,6 +313,7 @@ public static class DependencyInjection
         services.AddScoped<Treasury.Batches.GuardasDeAprobacionDelLote>();
         services.AddScoped<Treasury.Results.RegistroDeResultadosDelGiro>();
         services.AddScoped<Treasury.Accounting.EmisionDeTesoreria>();
+        services.AddScoped<Treasury.Tareas.VigilanciaDeTesoreria>();
         services.AddScoped<Lending.Segregation.RegistroDeIntervenciones>();
         services.AddScoped<Lending.Common.LendingAuditEmitter>();
         services.AddScoped<Common.Audit.RechazosDeFormaDeLaPeticion>();

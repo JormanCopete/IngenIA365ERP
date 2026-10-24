@@ -37,6 +37,9 @@ public sealed partial class EmisionDeTesoreria(
 {
     public const string ClaseResultado = "TreasuryResult";
 
+    /// <summary>El tipo de documento del origen de los hechos de una orden: su clase de numeración (<c>OP</c>); el emisor lo exige en un origen <c>Document</c>.</summary>
+    public const string TipoDeOrden = "OP";
+
     /// <summary>El código de una oficina en las dimensiones: su código propio, o su Id si no lo tiene (como Recaudo).</summary>
     public static string CodigoDeOficina(string? codigo, int id) => string.IsNullOrWhiteSpace(codigo) ? id.ToString(CultureInfo.InvariantCulture) : codigo;
 
@@ -78,7 +81,7 @@ public sealed partial class EmisionDeTesoreria(
                 Linea(RolesDeTesoreria.GmfPorPagar, RolesDeTesoreria.Credito, evaluacion.Gmf, dim, cruce: orden.Number),
             ],
         };
-        return await EmitirAsync(contenido, orden.PublicId, "PaymentOrderGmf", orden.Number, fecha, cuenta.BranchId, beneficiario, ClavesDeEvento.Confirmacion, ct);
+        return await EmitirAsync(contenido, orden.PublicId, "PaymentOrderGmf", TipoDeOrden, orden.Number, fecha, cuenta.BranchId, beneficiario, ClavesDeEvento.Confirmacion, ct);
     }
 
     private async Task<Guid> BeneficiarioAsync(PaymentOrder orden, CancellationToken ct) =>
@@ -105,13 +108,13 @@ public sealed partial class EmisionDeTesoreria(
     }
 
     /// <summary>Emite un hecho en línea con su origen de documento. Sin guardar.</summary>
-    private async Task<IntegrationMessage> EmitirAsync(object contenido, Guid origen, string claseDeDocumento, string numero, DateOnly fechaDeOperacion,
+    private async Task<IntegrationMessage> EmitirAsync(object contenido, Guid origen, string claseDeDocumento, string tipoDeDocumento, string numero, DateOnly fechaDeOperacion,
         int branchId, Guid? tercero, string claveDeEvento, CancellationToken ct)
     {
         var (fecha, modo) = await FechaYModoAsync(fechaDeOperacion, ct);
         var oficina = await db.Branches.AsNoTracking().IgnoreQueryFilters().Where(b => b.Id == branchId).Select(b => b.PublicId).FirstAsync(ct);
         var mensajes = await emisor.EmitirAsync(new SolicitudDeEmision(
-            new OrigenDeEmision(MessageOriginKind.Document, origen, claseDeDocumento, null, numero, fecha, oficina, PersonPublicId: tercero),
+            new OrigenDeEmision(MessageOriginKind.Document, origen, claseDeDocumento, tipoDeDocumento, numero, fecha, oficina, PersonPublicId: tercero),
             claveDeEvento,
             [contenido],
             modo), ct);

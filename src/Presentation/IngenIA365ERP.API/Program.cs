@@ -235,6 +235,9 @@ try
         new IngenIA365ERP.Application.Receipts.Sessions.Tareas.TareaDeSesionesOlvidadas());
     builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada>(
         new IngenIA365ERP.Application.Receipts.Sessions.Tareas.TareaDeCuadreDiario());
+    // Feature 015, US11 (T0160): la vigilancia de Tesorería (órdenes sin resultado), por cooperativa; sólo alerta.
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada>(
+        new IngenIA365ERP.Application.Treasury.Tareas.TareaDeVigilanciaDeTesoreria());
     // Feature 012 (T259, US2): la verificacion nocturna del kardex (inventario.integridad) en cada cooperativa.
     builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada,
         IngenIA365ERP.Application.Inventory.Kardex.VerificacionNocturnaDeIntegridad>();

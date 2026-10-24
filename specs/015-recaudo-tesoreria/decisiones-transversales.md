@@ -271,6 +271,21 @@ Lo que tasks.md marcaba **(nuevo)** y lo que trajeron el `/speckit-analyze` y la
 | `CatalogoDeMensajesDeTesoreriaV1` · `GMP` (`GmfDePagoCausado`) · `POG` (`PagoDeOrdenGirado`) · `TreasuryFactDimensionsV1` · `TreasuryFactLineV1` · `RolesDeTesoreria` | el catálogo de hechos `TES → Accounting` y su forma | `Contracts/Treasury`, `Treasury/Accounting/EmisionDeTesoreria.cs` |
 | `RecaudoNoConoceContabilidad` · `TesoreriaNoConoceContabilidad` | dejan fuera `Application.{Receipts,Treasury}.Accounting` (el emisor de hechos del propio módulo) | `tests/IngenIA365ERP.Architecture.Tests/Principles` |
 
+**Fijados en la construcción de la fase 8 (2026-10-24)**:
+
+| Nombre | Qué | Dónde |
+|---|---|---|
+| `TransicionDelResultado` · `TransicionesDelResultado.Evaluar` | la tabla fija de FR-215 como función pura; admite también la orden lista que paga un archivo de Cartera (FR-108) | `Domain/Treasury/Resultados` |
+| `PaymentResponse.{BankFileFormatId, FileName, DiscrepancyCount, InformedCount}` · `PaymentResponseLine.{BeneficiaryTaxId, BankReference, DiscrepancyDetail, ReviewedAt, ReviewAccepted, ReviewNote}` · `DisbursementResult.{Source, RecordedByCentralUserId, RecordedByName, RecordedAt}` | columnas que data-model §10.6 y §10.7 no listaban; `RecordedByUserId` es nulo en el «anulada» | `TES_PaymentResponses`, `TES_PaymentResponseLines`, `TES_DisbursementResults` |
+| `ResultadoARegistrar` · `QuienRegistra` · `ResultadoRegistrado` · `RegistroDeResultadosDelGiro.RegistrarAsync` / `.TomarCerrojosDeRecaudoAsync` | el único escritor del resultado y lo que recibe | `Application/Treasury/Results` |
+| origen del `ResultadoDelGiro` = el `DisbursementResult` (clase `TreasuryResult`, tipo `OP`), relacionado = la orden del origen (`DisbursementOrder`) | dos resultados de la misma orden no chocan en la UK de `COR_IntegrationMessages` | `RegistroDeResultadosDelGiro` |
+| `EmisionDeTesoreria.TipoDeOrden = "OP"` · `ClasePagoGirado = "PaymentOrderDisbursed"` · `PagoDeOrdenGiradoAsync` | el tipo de documento que el emisor exige en un origen `Document` y el hecho del pago girado | `Treasury/Accounting` |
+| `GetPaymentResponseQuery` · `ListPaymentResponsesQuery` · `ListDisbursementResultsQuery` · `GET /payment-files/{id}/responses` · `GET /payment-orders/{id}/results` | consultas y rutas que api.md §10 no listaba | `Treasury/Results`, `PaymentResultsEndpoints.cs` |
+| `Treasury.Result.{NotSent, InvalidTransition, SupportRequired, Discrepancy, InvalidOutcome, ReasonRequired}` · `Treasury.Response.{FormatNotFound, Unreadable, Empty, UnknownOutcome, NoDiscrepancy, AlreadyReviewed}` · `Treasury.File.HasResults` | errores de US11 | `ErroresDeTesoreria.Resultados.cs`, `MarkPaymentFileRejectedByBankCommandHandler` |
+| adjunto `TreasuryResultSupport` (`AdjuntosDeModulo.SoporteDeResultadoDelGiro`) | el soporte del registro manual; dueño la orden o el lote; sube `Treasury.Results.Register`, lee `Treasury.Orders.View`; no se borra | `Attachments/Common/AdjuntosDeModulo.cs` |
+| `VigilanciaDeTesoreria` · `TareaDeVigilanciaDeTesoreria` (`tesoreria.vigilancia`, cada 6 h) | sólo alerta; en T0 las órdenes enviadas sin resultado a `Giros.DiasSinResultado` días hábiles | `Application/Treasury/Tareas` |
+| `ResultadosClient` · `/tesoreria/resultados` | la pantalla de US11 | `Shared` |
+
 ## 3. Decisiones transversales
 
 ### Módulos y frontera
