@@ -336,6 +336,11 @@ public static class DependencyInjection
         services.AddScoped<Receipts.BankItems.IReprocesoDeCorrida>(sp => sp.GetRequiredService<Receipts.Paymasters.GirosDePagaduria>());
         services.AddScoped<Receipts.Tareas.AntiguedadDeRecaudo>();
         services.AddScoped<Receipts.Tareas.LoteDelDiaDeRecaudo>();
+        // Feature 015, US25 (fase 17, T0277, T0278a): los puertos de la conciliación mínima (Recaudo ofrece registros y partidas; Tesorería ofrece a Contabilidad).
+        services.AddScoped<Receipts.Integration.RecaudoParaConciliacion>();
+        services.AddScoped<Common.Integration.Receipts.IRecaudoParaConciliacion>(sp => sp.GetRequiredService<Receipts.Integration.RecaudoParaConciliacion>());
+        services.AddScoped<Common.Integration.Receipts.IPartidasDesdeConciliacion>(sp => sp.GetRequiredService<Receipts.Integration.RecaudoParaConciliacion>());
+        services.AddScoped<Common.Integration.Accounting.IConciliacionBancariaParaContabilidad, Treasury.Reconciliation.ConciliacionBancariaParaContabilidad>();
         // Feature 015, T0183b: los requisitos de la activación mínima de los dos módulos.
         services.AddScoped<Receipts.Activation.RequisitosDeActivacionDeRecaudo>();
         services.AddScoped<Treasury.Activation.RequisitosDeActivacionDeTesoreria>();

@@ -4,14 +4,18 @@ namespace IngenIA365ERP.Application.Common.Integration.Receipts;
 // de escritura (IPartidasDesdeConciliacion, IResultadoDeOrdenesDeRecaudo) tienen TomarCerrojosAsync: Tesorería lo llama ANTES de sus propios
 // cerrojos, para que el orden global Recaudo → Tesorería valga también en esa dirección (LosCerrojosDeRecaudoYTesoreriaVanEnOrden).
 
-/// <summary>Un registro de Recaudo que se cruza en la conciliación de la cuenta (recibo de banco, remesa, devolución). (nuevo)</summary>
+/// <summary>
+/// Un registro de Recaudo que se cruza en la conciliación de la cuenta: el recibo de banco y la partida por identificar (los dos son abonos). Lleva la línea del extracto
+/// de la que nació, si la tiene, para que el cruce la reconozca por su vínculo (US25, fase 17; nuevo, DT §2.7). (nuevo)
+/// </summary>
 public sealed record RegistroConciliableDto(
     Guid SourcePublicId,
     string SourceKind,
     string Number,
     DateOnly Date,
     decimal Amount,
-    string? Reference);
+    string? Reference,
+    Guid? StatementLinePublicId = null);
 
 /// <summary>La partida por identificar que nació de un abono sin registro en la conciliación (US25-2). (nuevo)</summary>
 public sealed record PartidaCreadaDto(Guid UnidentifiedItemPublicId, string Number);

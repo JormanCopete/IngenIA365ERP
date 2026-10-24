@@ -16,6 +16,9 @@ public sealed record ChequeModel(string Company, string BankName, string Account
 public interface IDocumentosDeTesoreriaEnPdf
 {
     byte[] Cheque(ChequeModel modelo);
+
+    /// <summary>El informe de una conciliación cerrada (US25, T0279; FR-156, FR-217): saldo del extracto, partidas por clase y antigüedad, saldo en libros y firmas.</summary>
+    byte[] Conciliacion(Reconciliation.ConciliacionModel modelo);
 }
 
 /// <summary><c>GET /api/treasury/issued-checks/{id}/document</c> (<c>Treasury.Checks.Print</c>): el modelo del cheque emitido para imprimirlo. (nuevo)</summary>

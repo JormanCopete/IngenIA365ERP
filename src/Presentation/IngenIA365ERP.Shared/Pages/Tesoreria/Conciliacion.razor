@@ -1,0 +1,312 @@
+@page "/tesoreria/conciliacion"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Inventario
+@using IngenIA365ERP.Shared.Services.Tesoreria
+@inject ConciliacionClient ConciliacionApi
+@inject CuentasBancariasClient CuentasApi
+@inject INotificationService Notification
+
+<PageTitle>Conciliación bancaria - IngenIA365ERP</PageTitle>
+
+@* Feature 015, US25 (T0280; FR-131, FR-209, FR-216, FR-217): la conciliación bancaria mínima por cuenta y mes —la única de la cooperativa—: el cruce automático por
+   valor, fecha con holgura y referencia; el cruce a mano de uno a varios; las partidas conciliatorias (el abono sin registro pasa a Recaudo como partida por identificar);
+   el cierre con diferencia cero y su informe; la reapertura con motivo como versión nueva. Quien preparó o aprobó pagos de la cuenta en el mes no la concilia. *@
+<PermissionGate Required="Treasury.Reconciliation.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Conciliación bancaria</h3>
+        <div class="toolbar">
+            <select class="e-input" @bind="_cuenta">
+                <option value="">— Cuenta bancaria —</option>
+                @foreach (var c in _cuentas)
+                {
+                    <option value="@c.PublicId">@c.Code · @c.BankName @c.AccountNumber</option>
+                }
+            </select>
+            <input type="month" class="e-input" @bind="_mes" @bind:format="yyyy-MM" />
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_lista.Activa" OnClick="@ListarAsync">Ver</SfButton>
+            <PermissionGate Required="Treasury.Reconciliation.Work">
+                <SfButton CssClass="e-primary" Disabled="@(_lista.Activa || string.IsNullOrEmpty(_cuenta))" OnClick="@AbrirAsync">Abrir conciliación</SfButton>
+            </PermissionGate>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_lista.Activa" Texto="Cargando conciliaciones…">
+        <table class="data-grid">
+            <thead><tr><th>Cuenta</th><th>Mes</th><th>Versión</th><th>Estado</th><th>Saldo extracto</th><th>Saldo libros</th><th>Partidas</th><th>Diferencia</th><th>Concilia</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var c in _conciliaciones)
+                {
+                    <tr class="@(c.Status == "Outdated" ? "fila-alerta" : "")">
+                        <td>@c.BankAccountCode</td><td>@c.Year-@c.Month.ToString("00")</td><td>@c.Version</td><td>@Estado(c.Status)</td>
+                        <td>@c.StatementBalance.ToString("N2")</td><td>@c.LedgerBalance.ToString("N2")</td><td>@c.ReconcilingItemsTotal.ToString("N2")</td>
+                        <td>@c.Difference.ToString("N2")</td><td>@c.Conciliator</td>
+                        <td><SfButton CssClass="e-flat" OnClick="@(() => VerAsync(c.PublicId))">Detalle</SfButton></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </IndicadorDeCarga>
+
+    @if (_actual is not null)
+    {
+        <section class="info-card">
+            <h4>@_actual.BankAccountCode · @_actual.Year-@_actual.Month.ToString("00") · versión @_actual.Version · @Estado(_actual.Status)</h4>
+            <IndicadorDeCarga Cargando="@_detalle.Activa" Texto="Trabajando la conciliación…">
+                <div class="kpi-grid">
+                    <div class="kpi-card"><span class="kpi-label">Saldo del extracto</span><span class="kpi-value">@_actual.StatementBalance.ToString("N2")</span></div>
+                    <div class="kpi-card"><span class="kpi-label">Partidas conciliatorias</span><span class="kpi-value">@_actual.ReconcilingItemsTotal.ToString("N2")</span></div>
+                    <div class="kpi-card"><span class="kpi-label">Saldo en libros</span><span class="kpi-value">@_actual.LedgerBalance.ToString("N2")</span></div>
+                    <div class="kpi-card"><span class="kpi-label">Diferencia</span><span class="kpi-value">@_actual.Difference.ToString("N2")</span></div>
+                </div>
+                <div class="toolbar">
+                    @if (_actual.Status == "Open")
+                    {
+                        <PermissionGate Required="Treasury.Reconciliation.Work">
+                            <SfButton CssClass="e-outline" Disabled="@_detalle.Activa" OnClick="@CruzarSoloAsync">Cruzar automáticamente</SfButton>
+                        </PermissionGate>
+                        <PermissionGate Required="Treasury.Reconciliation.Close">
+                            <SfButton CssClass="e-primary" Disabled="@(_detalle.Activa || _actual.Difference != 0m)" OnClick="@CerrarAsync">Cerrar con su informe</SfButton>
+                        </PermissionGate>
+                    }
+                    @if (_actual.Status == "Closed")
+                    {
+                        <PermissionGate Required="Treasury.Reconciliation.Reopen">
+                            <input class="e-input" placeholder="Motivo de la reapertura" @bind="_motivo" maxlength="500" />
+                            <SfButton CssClass="e-outline" Disabled="@_detalle.Activa" OnClick="@ReabrirAsync">Reabrir</SfButton>
+                        </PermissionGate>
+                    }
+                </div>
+
+                @if (_actual.Status == "Open")
+                {
+                    <h5>Líneas del extracto por cruzar</h5>
+                    <table class="data-grid">
+                        <thead><tr><th></th><th>Línea</th><th>Fecha</th><th>Sentido</th><th>Valor</th><th>Referencia</th><th>Descripción</th></tr></thead>
+                        <tbody>
+                            @foreach (var l in _actual.OpenLines ?? [])
+                            {
+                                <tr>
+                                    <td><input type="radio" name="linea" checked="@(_linea == l.PublicId)" @onchange="@(() => _linea = l.PublicId)" /></td>
+                                    <td>@l.LineNumber</td><td>@l.MovementDate.ToString("dd/MM/yyyy")</td><td>@(l.Direction == "Credit" ? "Abono" : "Cargo")</td>
+                                    <td>@l.Amount.ToString("N2")</td><td>@l.Reference</td><td>@l.Description</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+
+                    <h5>Registros de los libros por cruzar</h5>
+                    <table class="data-grid">
+                        <thead><tr><th></th><th>Origen</th><th>Número</th><th>Fecha</th><th>Sentido</th><th>Valor</th><th>Referencia</th></tr></thead>
+                        <tbody>
+                            @foreach (var r in _actual.AvailableRecords ?? [])
+                            {
+                                <tr>
+                                    <td><input type="checkbox" checked="@_elegidos.Contains(r)" @onchange="@(e => Elegir(r, e.Value is true))" /></td>
+                                    <td>@r.Source</td><td>@r.Number</td><td>@r.Date.ToString("dd/MM/yyyy")</td><td>@(r.Direction == "Credit" ? "Abono" : "Cargo")</td>
+                                    <td>@r.Amount.ToString("N2")</td><td>@r.Reference</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                    <PermissionGate Required="Treasury.Reconciliation.Work">
+                        <div class="toolbar">
+                            <span>Elegidos: @_elegidos.Sum(r => r.Amount).ToString("N2")</span>
+                            <SfButton CssClass="e-outline" Disabled="@(_detalle.Activa || _linea is null || _elegidos.Count == 0)" OnClick="@CruzarAManoAsync">Cruzar la línea con lo elegido</SfButton>
+                        </div>
+                        <h5>Partida conciliatoria</h5>
+                        <div class="form-grid">
+                            <label class="campo">Clase
+                                <select class="e-input" @bind="_clase">
+                                    <option value="IssuedCheckNotCashed">Cheque girado sin cobrar</option>
+                                    <option value="DepositInTransit">Consignación en tránsito</option>
+                                    <option value="RemittanceInTransit">Remesa en tránsito</option>
+                                    <option value="BankChargeNotRecorded">Cargo del banco sin registrar</option>
+                                    <option value="BankCreditNotRecorded">Abono del banco sin registrar</option>
+                                    <option value="UnidentifiedCredit">Abono no identificado (pasa a Recaudo)</option>
+                                    <option value="UnidentifiedDebit">Cargo no identificado</option>
+                                </select>
+                            </label>
+                            <label class="campo">Valor <input type="number" class="e-input" @bind="_valor" /></label>
+                            <label class="campo">Desde <input type="date" class="e-input" @bind="_desde" /></label>
+                            <label class="campo">Nota <input class="e-input" @bind="_nota" maxlength="500" /></label>
+                        </div>
+                        <div class="toolbar">
+                            <SfButton CssClass="e-outline" Disabled="@_detalle.Activa" OnClick="@PartidaAsync">Registrar la partida (con la línea elegida si la hay)</SfButton>
+                        </div>
+                    </PermissionGate>
+                }
+
+                <h5>Cruces</h5>
+                <table class="data-grid">
+                    <thead><tr><th>Registro</th><th>Número</th><th>Valor</th><th>Cómo</th><th>Regla</th><th>Quién</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var m in _actual.Matches ?? [])
+                        {
+                            <tr>
+                                <td>@m.RecordKind</td><td>@m.RecordNumber</td><td>@m.Amount.ToString("N2")</td><td>@(m.Mode == "Automatic" ? "Automático" : "Manual")</td>
+                                <td>@m.Rule</td><td>@m.MatchedBy</td>
+                                <td>
+                                    @if (_actual.Status == "Open")
+                                    {
+                                        <PermissionGate Required="Treasury.Reconciliation.Work">
+                                            <SfButton CssClass="e-flat" OnClick="@(() => DeshacerAsync(m.PublicId))">Deshacer</SfButton>
+                                        </PermissionGate>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+
+                <h5>Partidas conciliatorias</h5>
+                <table class="data-grid">
+                    <thead><tr><th>Clase</th><th>Desde</th><th>Días</th><th>Valor</th><th>Efecto</th><th>Nota</th></tr></thead>
+                    <tbody>
+                        @foreach (var i in _actual.Items ?? [])
+                        {
+                            <tr>
+                                <td>@i.Kind</td><td>@i.Since.ToString("dd/MM/yyyy")</td><td>@i.AgeDays</td><td>@i.Amount.ToString("N2")</td><td>@i.SignedAmount.ToString("N2")</td><td>@i.Note</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </IndicadorDeCarga>
+        </section>
+    }
+</div>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _lista = new();
+    private readonly EstadoDeCarga _detalle = new();
+    private IReadOnlyList<CuentaBancariaPropiaDto> _cuentas = [];
+    private IReadOnlyList<ConciliacionDto> _conciliaciones = [];
+    private ConciliacionDto? _actual;
+    private string _cuenta = string.Empty;
+    private DateTime _mes = new(DateTime.Today.Year, DateTime.Today.Month, 1);
+    private Guid? _linea;
+    private readonly List<RegistroPorCruzarDto> _elegidos = [];
+    private string _clase = "IssuedCheckNotCashed";
+    private decimal _valor;
+    private DateTime? _desde;
+    private string? _nota;
+    private string? _motivo;
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var carga = _lista.Iniciar();
+        var cuentas = await CuentasApi.CuentasAsync();
+        if (cuentas.IsSuccess) _cuentas = cuentas.Value ?? [];
+        await ListarSinIndicadorAsync();
+    }
+
+    private static string Estado(string s) => s switch
+    {
+        "Open" => "Abierta",
+        "Closed" => "Cerrada",
+        "Reopened" => "Reabierta",
+        "Outdated" => "Desactualizada",
+        _ => s,
+    };
+
+    private Guid? Cuenta() => Guid.TryParse(_cuenta, out var c) ? c : null;
+
+    private async Task ListarAsync()
+    {
+        using var carga = _lista.Iniciar();
+        await ListarSinIndicadorAsync();
+    }
+
+    private async Task ListarSinIndicadorAsync()
+    {
+        var r = await ConciliacionApi.ListarAsync(Cuenta(), _mes.Year, _mes.Month);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las conciliaciones."); return; }
+        _conciliaciones = r.Value ?? [];
+    }
+
+    private async Task AbrirAsync()
+    {
+        if (Cuenta() is not { } cuenta) { await Notification.WarningAsync("Elija la cuenta bancaria."); return; }
+        using var carga = _lista.Iniciar();
+        var r = await ConciliacionApi.AbrirAsync(new AbrirConciliacionRequest(cuenta, _mes.Year, _mes.Month, null), new ClaveDeOperacion());
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo abrir la conciliación."); return; }
+        await ListarSinIndicadorAsync();
+        if (r.Value is { } abierta) await VerSinIndicadorAsync(abierta.PublicId);
+    }
+
+    private async Task VerAsync(Guid id)
+    {
+        using var carga = _detalle.Iniciar();
+        await VerSinIndicadorAsync(id);
+    }
+
+    private async Task VerSinIndicadorAsync(Guid id)
+    {
+        var r = await ConciliacionApi.DetalleAsync(id);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo consultar la conciliación."); return; }
+        _actual = r.Value;
+        _linea = null;
+        _elegidos.Clear();
+    }
+
+    private void Elegir(RegistroPorCruzarDto r, bool elegido)
+    {
+        if (elegido) { if (!_elegidos.Contains(r)) _elegidos.Add(r); }
+        else _elegidos.Remove(r);
+    }
+
+    private async Task Despues(ResultadoDeInventario<ConciliacionDto> r, string error)
+    {
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? error); return; }
+        if (_actual is not null) await VerSinIndicadorAsync(r.Value?.PublicId ?? _actual.PublicId);
+        await ListarSinIndicadorAsync();
+    }
+
+    private async Task CruzarSoloAsync()
+    {
+        if (_actual is null) return;
+        using var carga = _detalle.Iniciar();
+        await Despues(await ConciliacionApi.CruzarSoloAsync(_actual.PublicId, new ClaveDeOperacion()), "No se pudo cruzar.");
+    }
+
+    private async Task CruzarAManoAsync()
+    {
+        if (_actual is null || _linea is not { } linea) return;
+        using var carga = _detalle.Iniciar();
+        var pedido = new CruceManualRequest(linea, _elegidos.Select(e => new RegistroElegidoRequest(e.Kind, e.PublicId)).ToList(), null);
+        await Despues(await ConciliacionApi.CruzarAManoAsync(_actual.PublicId, pedido, new ClaveDeOperacion()), "No se pudo cruzar la línea.");
+    }
+
+    private async Task DeshacerAsync(Guid cruce)
+    {
+        if (_actual is null) return;
+        using var carga = _detalle.Iniciar();
+        await Despues(await ConciliacionApi.DeshacerCruceAsync(_actual.PublicId, cruce, new ClaveDeOperacion()), "No se pudo deshacer el cruce.");
+    }
+
+    private async Task PartidaAsync()
+    {
+        if (_actual is null) return;
+        if (_valor <= 0m) { await Notification.WarningAsync("Indique el valor de la partida."); return; }
+        using var carga = _detalle.Iniciar();
+        var pedido = new PartidaConciliatoriaRequest(_clase, _valor, _desde is { } d ? DateOnly.FromDateTime(d) : null, _linea, null, _nota);
+        await Despues(await ConciliacionApi.PartidaAsync(_actual.PublicId, pedido, new ClaveDeOperacion()), "No se pudo registrar la partida.");
+    }
+
+    private async Task CerrarAsync()
+    {
+        if (_actual is null) return;
+        using var carga = _detalle.Iniciar();
+        await Despues(await ConciliacionApi.CerrarAsync(_actual.PublicId, new ClaveDeOperacion()), "No se pudo cerrar la conciliación.");
+    }
+
+    private async Task ReabrirAsync()
+    {
+        if (_actual is null) return;
+        if (string.IsNullOrWhiteSpace(_motivo)) { await Notification.WarningAsync("Indique el motivo de la reapertura."); return; }
+        using var carga = _detalle.Iniciar();
+        await Despues(await ConciliacionApi.ReabrirAsync(_actual.PublicId, _motivo, new ClaveDeOperacion()), "No se pudo reabrir la conciliación.");
+    }
+}

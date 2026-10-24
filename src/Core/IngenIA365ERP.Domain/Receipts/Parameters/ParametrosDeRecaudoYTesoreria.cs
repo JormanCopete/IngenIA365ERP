@@ -83,6 +83,7 @@ public static class ParametrosDeRecaudoYTesoreria
     public const string CuentasDestinoDiasDeMarca = "CuentasDestino.DiasDeMarca";
     public const string RemesasDiasParaConfirmar = "Remesas.DiasParaConfirmar";
     public const string ConciliacionDiasDeHolgura = "Conciliacion.DiasDeHolgura";
+    public const string ConciliacionDiasPartidaAntigua = "Conciliacion.DiasPartidaAntigua";
     public const string ContabilidadCierreExigeConciliaciones = "Contabilidad.CierreExigeConciliaciones";
     public const string GmfTarifa = "Gmf.Tarifa";
     public const string GmfHechosGeneradoresDeEgresos = "Gmf.HechosGeneradoresDeEgresos";
@@ -191,6 +192,8 @@ public static class ParametrosDeRecaudoYTesoreria
             SinValor(ModuloTesoreria, CuentasDestinoDiasDeMarca, "Días en que una cuenta destino recién cambiada lleva la marca de cambio; sin valor, sin marca (D40, P4).", T0, PendienteDueno),
             Entero(ModuloTesoreria, RemesasDiasParaConfirmar, "Días para confirmar en el banco una remesa de efectivo antes de avisar.", "2", T0),
             Entero(ModuloTesoreria, ConciliacionDiasDeHolgura, "Días de holgura en la fecha para el cruce automático de la conciliación (FR-216).", "3", T0),
+            Pendiente(Entero(ModuloTesoreria, ConciliacionDiasPartidaAntigua,
+                "Días de una partida conciliatoria abierta antes de alertar como antigua (Tesoreria.PartidaConciliatoriaAntigua); informativo.", "30", T0), PendienteDueno),
             SiNo(ModuloTesoreria, ContabilidadCierreExigeConciliaciones, "El cierre del mes contable exige las conciliaciones cerradas (D29); hasta entonces sólo avisa.", false, T1),
 
             // ---- GMF (TES) ----

@@ -103,6 +103,29 @@ public sealed class VigilanciaDeTesoreria(IApplicationDbContext db, ParametrosDe
                 "CashRemittance", r.PublicId, DedupKey: $"Tesoreria.RemesaSinConfirmar:{r.PublicId:N}", ModuloDeOrigen: "Treasury"), ct);
         return remesas.Count;
     }
+
+    /// <summary>
+    /// Feature 015, US25 (T0279; FR-217): alerta cada partida conciliatoria de una conciliación vigente con más de <c>Conciliacion.DiasPartidaAntigua</c> días a hoy
+    /// (<c>Tesoreria.PartidaConciliatoriaAntigua</c>), una vez por partida. Sólo informa. Devuelve cuántas alertó.
+    /// </summary>
+    public async Task<int> PartidasConciliatoriasAntiguasAsync(CancellationToken ct)
+    {
+        var hoy = reloj.HoyLocal;
+        var dias = await parametros.EnteroAsync(ParametrosDeRecaudoYTesoreria.ConciliacionDiasPartidaAntigua, hoy, ct);
+        if (dias is not { } limite || limite <= 0) return 0;
+        var desde = hoy.AddDays(-limite);
+        var partidas = await (from i in db.TreasuryReconcilingItems.AsNoTracking()
+                              join c in db.TreasuryReconciliations.AsNoTracking() on i.ReconciliationId equals c.Id
+                              join a in db.OwnBankAccounts.AsNoTracking() on c.BankAccountId equals a.Id
+                              where !i.IsVoided && i.Since < desde && (c.Status == ReconciliationState.Open || c.Status == ReconciliationState.Closed)
+                              select new { i.PublicId, i.Kind, i.Amount, i.Since, Cuenta = a.Code, c.PeriodYear, c.PeriodMonth, Conciliacion = c.PublicId }).ToListAsync(ct);
+        foreach (var p in partidas)
+            await alertas.LevantarAsync(new AlertaALevantar(TiposDeAlerta.TesoreriaPartidaConciliatoriaAntigua, "Partida conciliatoria antigua",
+                string.Create(CultureInfo.InvariantCulture,
+                    $"La partida «{Reconciliation.ConciliacionMinima.Clase(p.Kind)}» de {p.Amount:N0} de la cuenta {p.Cuenta} (conciliación {p.PeriodYear}-{p.PeriodMonth:00}) está abierta desde el {p.Since:dd/MM/yyyy}: regístrela en los libros o confírmela con el banco."),
+                "Reconciliation", p.Conciliacion, DedupKey: $"Tesoreria.PartidaConciliatoriaAntigua:{p.PublicId:N}", ModuloDeOrigen: "Treasury"), ct);
+        return partidas.Count;
+    }
 }
 
 /// <summary>La tarea <c>tesoreria.vigilancia</c>: una vez al día (cada <see cref="Intervalo"/>), por cooperativa. (nuevo)</summary>
@@ -123,5 +146,6 @@ public sealed class TareaDeVigilanciaDeTesoreria : ITareaProgramada
         await vigilancia.ChequesSinCobrarAsync(ct);
         await vigilancia.RemesasSinConfirmarAsync(ct);
         await vigilancia.PoliticaContableEnAdvertirAsync(ct);
+        await vigilancia.PartidasConciliatoriasAntiguasAsync(ct);
     }
 }

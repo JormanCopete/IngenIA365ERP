@@ -185,7 +185,7 @@ public sealed class ClosePeriodCommandHandler(IApplicationDbContext db, IDateTim
 
 // --------------------------------------------------------------------------- reabrir período --
 
-/// <summary>FR-022: reabrir exige motivo, queda auditado y deja desactualizadas las conciliaciones cerradas del mes.</summary>
+/// <summary>FR-022: reabrir exige motivo, queda auditado y deja desactualizadas las conciliaciones bancarias cerradas del mes (las de Tesorería, E-04 de la 015).</summary>
 public sealed record ReopenPeriodCommand(int Year, int Month, string Reason) : IRequest<Result>;
 
 public sealed class ReopenPeriodCommandValidator : AbstractValidator<ReopenPeriodCommand>
@@ -198,7 +198,8 @@ public sealed class ReopenPeriodCommandValidator : AbstractValidator<ReopenPerio
     }
 }
 
-public sealed class ReopenPeriodCommandHandler(IApplicationDbContext db, IDateTimeService clock, ICurrentUserService user, AccountingAuditEmitter audit)
+public sealed class ReopenPeriodCommandHandler(IApplicationDbContext db, IDateTimeService clock, ICurrentUserService user, AccountingAuditEmitter audit,
+    IngenIA365ERP.Application.Common.Integration.Accounting.IConciliacionBancariaParaContabilidad conciliaciones)
     : IRequestHandler<ReopenPeriodCommand, Result>
 {
     public async Task<Result> Handle(ReopenPeriodCommand request, CancellationToken ct)
@@ -217,14 +218,9 @@ public sealed class ReopenPeriodCommandHandler(IApplicationDbContext db, IDateTi
         periodo.UpdatedAt = ahora;
         periodo.UpdatedBy = quien;
 
-        var desactualizadas = 0;
-        foreach (var c in await db.BankReconciliations.Where(r => !r.IsDeleted && r.PeriodId == periodo.Id && r.Status == ReconciliationStatus.Closed).ToListAsync(ct))
-        {
-            c.Status = ReconciliationStatus.Outdated;
-            c.UpdatedAt = ahora;
-            c.UpdatedBy = quien;
-            desactualizadas++;
-        }
+        // Feature 015 (E-04, TR41; T0278a): la conciliación bancaria es de Tesorería. Las cerradas del mes quedan desactualizadas por su puerto, en esta misma
+        // unidad de trabajo; ACC_BankReconciliations quedó sin uso (NadieEscribeLaConciliacionBancariaDeContabilidad).
+        var desactualizadas = await conciliaciones.MarcarDesactualizadasAsync(request.Year, request.Month, request.Reason.Trim(), ct);
         await db.SaveChangesAsync(ct);
         await audit.EmitAsync("Accounting.Period.Reopened", nameof(AccountingPeriod), periodo.PublicId, new { status = "Closed" },
             new { status = "Open", request.Year, request.Month, reason = periodo.ReopenReason, outdatedReconciliations = desactualizadas }, ct);
