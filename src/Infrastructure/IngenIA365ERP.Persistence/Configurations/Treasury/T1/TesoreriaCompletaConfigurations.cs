@@ -120,3 +120,32 @@ public class BankAccountTokenConfiguration : IEntityTypeConfiguration<BankAccoun
         builder.HasIndex(e => e.Serial).HasDatabaseName($"IX_{Tabla}_Serial");
     }
 }
+
+/// <summary><c>TES_PaymentVouchers</c>: número único y uno por orden. (nuevo)</summary>
+public class PaymentVoucherConfiguration : IEntityTypeConfiguration<PaymentVoucher>
+{
+    public const string Tabla = "TES_PaymentVouchers";
+
+    public void Configure(EntityTypeBuilder<PaymentVoucher> builder)
+    {
+        builder.ComoEntidadDeTesoreria(Tabla);
+        builder.HasOne<PaymentOrder>().WithMany().HasForeignKey(e => e.PaymentOrderId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne(e => e.DisbursementResult).WithMany().HasForeignKey(e => e.DisbursementResultId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<Person>().WithMany().HasForeignKey(e => e.BeneficiaryPersonId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<OwnBankAccount>().WithMany().HasForeignKey(e => e.BankAccountId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<User>().WithMany().HasForeignKey(e => e.SentByUserId).OnDelete(DeleteBehavior.Restrict);
+        builder.Property(e => e.Number).HasMaxLength(30).IsRequired();
+        builder.Property(e => e.Form).HasConversion<int>();
+        builder.Property(e => e.GrossAmount).Monto();
+        builder.Property(e => e.WithholdingAmount).Monto();
+        builder.Property(e => e.NetAmount).Monto();
+        builder.Property(e => e.TreasuryReference).HasMaxLength(60).IsRequired();
+        builder.Property(e => e.CheckNumber).HasMaxLength(30);
+        builder.Property(e => e.Concept).HasMaxLength(120).IsRequired();
+        builder.Property(e => e.VerificationCode).HasMaxLength(20).IsRequired();
+        builder.Property(e => e.SentTo).HasMaxLength(120);
+        builder.HasIndex(e => e.Number).IsUnique().HasDatabaseName($"UK_{Tabla}_Number");
+        builder.HasIndex(e => e.PaymentOrderId).IsUnique().HasDatabaseName($"UK_{Tabla}_PaymentOrderId");
+        builder.HasIndex(e => e.PaidOn).HasDatabaseName($"IX_{Tabla}_PaidOn");
+    }
+}

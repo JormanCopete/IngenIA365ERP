@@ -54,7 +54,8 @@ public sealed partial class RegistroDeResultadosDelGiro(
     EmisorDeMensajes emisor,
     EmisionDeTesoreria emision,
     ParametrosDeTesoreria parametros,
-    IEnumerable<IResultadoDeOrdenesDeRecaudo> recaudo)
+    IEnumerable<IResultadoDeOrdenesDeRecaudo> recaudo,
+    NumeradorDeTesoreria? numerador = null)
 {
     /// <summary>La clase del documento relacionado en <c>ResultadoDelGiro</c>: la orden de giro del origen (la misma que usa Cartera).</summary>
     public const string ClaseOrdenDeGiro = "DisbursementOrder";
@@ -146,6 +147,10 @@ public sealed partial class RegistroDeResultadosDelGiro(
             resultado.EmittedMessagePublicId = await EmitirResultadoAsync(orden, resultado, quien, cuenta, ct);
         else if (orden.Origin == PaymentOrderOrigin.Receipts)
             foreach (var puerto in recaudo) await puerto.InformarAsync(orden.PublicId, r.Outcome.ToString(), r.OccurredOn, resultado.Reason, ct);
+
+        // T1 (fase 35, T0421; FR-117): el «girada» deja el comprobante de pago numerado de la orden, en esta misma unidad de trabajo.
+        if (r.Outcome == DisbursementOutcome.Disbursed && numerador is not null)
+            await ComprobantesDePago.EmitirAsync(db, numerador, orden, resultado, cuenta, reloj.UtcNow, ct);
 
         if (r.Outcome == DisbursementOutcome.Disbursed && cuenta is not null && orden.Form != PaymentForm.Check)
         {

@@ -107,12 +107,19 @@ public sealed class OpenFiscalYearCommandHandler(IApplicationDbContext db, IDate
 /// hechos de Cartera pendientes en el mes (<see cref="AcknowledgeLendingPending"/>) y de la carga de Cartera que el cierre dejaría sin activar
 /// (<see cref="AcknowledgeLendingLoad"/>). Todo se lee de los recibos <c>ACC_LendingPostings</c> y de las entregas, nunca de <c>LND_</c>.
 /// </summary>
+/// <remarks>
+/// Feature 015, T1 (fase 35, T0422; FR-132; D29; E-04): Recaudo y Tesorería informan por <c>IEstadoOperativoParaElCierre</c> las conciliaciones bancarias del mes sin cerrar
+/// (<c>Accounting.Period.ReconciliationsOpen</c>) y las sesiones de caja sin cerrar (<c>Accounting.Period.CashSessionsOpen</c>): son avisos que se reconocen con
+/// <see cref="AcknowledgeOperationalPending"/> y quedan en la auditoría del cierre, salvo que la cooperativa ponga <c>Contabilidad.CierreExigeConciliaciones</c>, y entonces
+/// bloquean como el cuadre provisional.
+/// </remarks>
 public sealed record ClosePeriodCommand(
     int Year,
     int Month,
     bool AcknowledgeInventoryPending = false,
     bool AcknowledgeLendingPending = false,
-    bool AcknowledgeLendingLoad = false) : IRequest<Result>;
+    bool AcknowledgeLendingLoad = false,
+    bool AcknowledgeOperationalPending = false) : IRequest<Result>;
 
 public sealed class ClosePeriodCommandValidator : AbstractValidator<ClosePeriodCommand>
 {
@@ -159,10 +166,17 @@ public sealed class ClosePeriodCommandHandler(IApplicationDbContext db, IDateTim
 
         // Feature 015, US24 (T0321; FR-228): el mes de la activación de Recaudo o Tesorería no cierra mientras su cuadre de apertura siga provisional. Se pregunta a
         // cada módulo por IEstadoOperativoParaElCierre, igual que a Cartera, sin leer sus tablas.
-        var bloqueos = new List<IngenIA365ERP.Application.Common.Integration.Accounting.PendienteDeCierreDto>();
+        var operativos = new List<IngenIA365ERP.Application.Common.Integration.Accounting.PendienteDeCierreDto>();
         foreach (var estado in estadosOperativos ?? [])
-            bloqueos.AddRange((await estado.PendientesAsync(request.Year, request.Month, ct)).Where(p => p.Blocks));
-        if (bloqueos.Count > 0) return Result.Failure(AccountingErrors.PeriodOpeningSquarePending(bloqueos));
+            operativos.AddRange(await estado.PendientesAsync(request.Year, request.Month, ct));
+        var bloqueos = operativos.Where(p => p.Blocks).ToList();
+        if (bloqueos.Count > 0)
+            return Result.Failure(bloqueos.Any(b => b.Code == IngenIA365ERP.Application.Common.Cuadres.CuadreProvisionalPendiente.CodigoDelPendiente)
+                ? AccountingErrors.PeriodOpeningSquarePending(bloqueos)
+                : AccountingErrors.PeriodOperationalPending(bloqueos));
+        // T1 (T0422): las conciliaciones abiertas y las sesiones sin cerrar que no bloquean son un aviso que se reconoce.
+        var avisos = operativos.Where(p => !p.Blocks).ToList();
+        if (avisos.Count > 0 && !request.AcknowledgeOperationalPending) return Result.Failure(AccountingErrors.PeriodOperationalPending(avisos));
 
         periodo.Status = PeriodStatus.Closed;
         periodo.ClosedAt = clock.UtcNow;
@@ -170,7 +184,7 @@ public sealed class ClosePeriodCommandHandler(IApplicationDbContext db, IDateTim
         periodo.UpdatedAt = periodo.ClosedAt;
         periodo.UpdatedBy = periodo.ClosedBy;
         await db.SaveChangesAsync(ct);
-        object despues = inventario.HayPendientes || cartera.Pendientes.HayPendientes || cartera.CargaQueVence is not null
+        object despues = inventario.HayPendientes || cartera.Pendientes.HayPendientes || cartera.CargaQueVence is not null || avisos.Count > 0
             ? new
             {
                 status = "Closed", request.Year, request.Month,
@@ -184,6 +198,8 @@ public sealed class ClosePeriodCommandHandler(IApplicationDbContext db, IDateTim
                     : null,
                 lendingLoadAcknowledged = cartera.CargaQueVence is not null,
                 lendingLoad = cartera.CargaQueVence is { } c ? new { cutoffDate = c.CutoffDate, loadPublicId = c.LoadPublicId } : null,
+                operationalPendingAcknowledged = avisos.Count > 0,
+                operationalPending = avisos.Count > 0 ? avisos.Select(a => new { module = a.Module, code = a.Code, message = a.Message }).ToList() : null,
             }
             : new { status = "Closed", request.Year, request.Month };
         await audit.EmitAsync("Accounting.Period.Closed", nameof(AccountingPeriod), periodo.PublicId, new { status = "Open" }, despues, ct);

@@ -20,7 +20,7 @@ public sealed record TreasuryReportQuery(string Vista, FiltrosDeInformeDeRecaudo
 /// sigue en su consulta de la fase 9 y aquí sólo se reenvía. Los saldos en libros los pregunta a Contabilidad (<see cref="IContabilidadParaTesoreria"/>), nunca
 /// leyendo cuentas, y su lectura queda en la auditoría como la de la pantalla (<c>Treasury.BankBalances.Read</c>). (nuevo)
 /// </summary>
-public sealed class TreasuryReportQueryHandler(
+public sealed partial class TreasuryReportQueryHandler(
     IApplicationDbContext db,
     IAlcanceDeTesoreria alcance,
     IContabilidadParaTesoreria contabilidad,
@@ -51,6 +51,10 @@ public sealed class TreasuryReportQueryHandler(
             VistasDeTesoreria.ChequesGirados => Result.Success(await ChequesAsync(Ve, cuentas, desde, hasta, corte, ct)),
             VistasDeTesoreria.SaldosBancarios => Result.Success(await SaldosAsync(Ve, cuentas, corte, ct)),
             VistasDeTesoreria.ConciliacionMinima => Result.Success(await ConciliacionesAsync(Ve, cuentas, desde, hasta, ct)),
+            // T1 (fase 35, T0423; FR-153 parte T1): los comprobantes de pago, los traslados y el cierre del mes de los cheques.
+            VistasDeTesoreria.ComprobantesDePago => Result.Success(await ComprobantesDePagoAsync(Ve, cuentas, desde, hasta, ct)),
+            VistasDeTesoreria.Traslados => Result.Success(await TrasladosAsync(Ve, cuentas, desde, hasta, ct)),
+            VistasDeTesoreria.CierreDeCheques => Result.Success(await CierresDeChequesAsync(Ve, cuentas, desde, hasta, ct)),
             _ => Result.Failure<TablaExportable>(new Error(CodigoVistaDesconocida, $"«{request.Vista}» no es una vista de Tesorería.")),
         };
     }

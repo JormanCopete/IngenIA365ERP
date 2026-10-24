@@ -314,7 +314,14 @@ public sealed record EstadoDeAperturaDto(DateOnly ExpectedDate, DateOnly MaxDate
 /// El cuerpo de cerrar un mes (feature 012, T536): reconocer los pendientes de Inventario y cerrar igual. Desde la feature 013 (T0652, api.md
 /// §24) también los hechos de Cartera pendientes y la carga de Cartera que el cierre dejaría sin activar.
 /// </summary>
-public sealed record CerrarPeriodoContableRequest(bool AcknowledgeInventoryPending, bool AcknowledgeLendingPending = false, bool AcknowledgeLendingLoad = false);
+public sealed record CerrarPeriodoContableRequest(bool AcknowledgeInventoryPending, bool AcknowledgeLendingPending = false, bool AcknowledgeLendingLoad = false,
+    bool AcknowledgeOperationalPending = false);
+
+/// <summary>Feature 015, T1 (T0422; FR-132): un pendiente operativo del cierre (conciliación abierta o sesión sin cerrar) y si bloquea. (nuevo)</summary>
+public sealed record PendienteOperativoDelCierreDto(string Module, string Code, string Message, bool Blocks);
+
+/// <summary>Los pendientes operativos del cierre que vienen en <c>data.pending</c>. (nuevo)</summary>
+public sealed record PendientesOperativosDelCierreDto(IReadOnlyList<PendienteOperativoDelCierreDto> Pending);
 
 /// <summary>El <c>data</c> de <c>Accounting.Period.InventoryPending</c> (feature 012, T536; contracts/contabilidad.md §8).</summary>
 public sealed record PendientesDeInventarioDelMesDto(int Pending, int InBatch, int Rejected, DateOnly? OldestOperationDate, IReadOnlyList<string> Types);

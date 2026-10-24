@@ -479,6 +479,16 @@ public static class AccountingErrors
             string.Join(" ", pendientes.Select(p => p.Message)),
             new { pending = pendientes.Select(p => new { module = p.Module, code = p.Code, message = p.Message }).ToList() });
 
+    /// <summary>
+    /// Feature 015, T1 (T0422; FR-132; D29): conciliaciones bancarias de Tesorería o sesiones de caja de Recaudo del mes sin cerrar. El código es el del primero
+    /// (<c>Accounting.Period.ReconciliationsOpen</c> o <c>.CashSessionsOpen</c>) y <c>data.pending[]</c> los lista todos; sin <c>Contabilidad.CierreExigeConciliaciones</c>
+    /// se reconoce con <c>acknowledgeOperationalPending</c>. (nuevo)
+    /// </summary>
+    public static Error PeriodOperationalPending(IReadOnlyList<IngenIA365ERP.Application.Common.Integration.Accounting.PendienteDeCierreDto> pendientes) =>
+        new ErrorConDatos(pendientes[0].Code,
+            string.Join(" ", pendientes.Select(p => p.Message)) + (pendientes.Any(p => p.Blocks) ? string.Empty : " Si debe cerrar igual, reconózcalo."),
+            new { pending = pendientes.Select(p => new { module = p.Module, code = p.Code, message = p.Message, blocks = p.Blocks }).ToList() });
+
     public static Error PeriodLendingNotClosed(string month, DateOnly activationDate, object? lastLendingClose, DateOnly? depositAccrualPendingFrom = null) =>
         new ErrorConDatos("Accounting.Period.LendingNotClosed",
             $"Cartera está activa desde el {activationDate:yyyy-MM-dd} y todavía no cerró {month}: ciérrelo primero en Cartera › Cierres y vuelva a intentarlo."

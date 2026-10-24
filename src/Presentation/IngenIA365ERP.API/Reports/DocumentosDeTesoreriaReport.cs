@@ -1,6 +1,7 @@
 using System.Globalization;
 using IngenIA365ERP.Application.Treasury.Checkbooks;
 using IngenIA365ERP.Application.Treasury.Reconciliation;
+using IngenIA365ERP.Application.Treasury.Results;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
@@ -51,6 +52,53 @@ public static class DocumentosDeTesoreriaReport
                         c.Item().AlignCenter().Text("Firma autorizada").FontSize(7);
                     });
                 });
+            });
+        })).GeneratePdf();
+    }
+
+    /// <summary>
+    /// El comprobante de pago (feature 015, T1, fase 35, T0421; FR-117, FR-156): número y código de verificación, beneficiario con su documento enmascarado, la orden y el
+    /// concepto, la forma, la cuenta de origen y la de destino enmascaradas, bruto, retención y neto (en letras), la referencia del banco o el número del cheque. (nuevo)
+    /// </summary>
+    public static byte[] ComprobanteDePago(ComprobanteDePagoModel m)
+    {
+        ArgumentNullException.ThrowIfNull(m);
+        return Document.Create(container => container.Page(page =>
+        {
+            page.Size(PageSizes.Letter);
+            page.Margin(18, Unit.Millimetre);
+            page.DefaultTextStyle(t => t.FontSize(10));
+            page.Header().Column(c =>
+            {
+                c.Item().Text(m.Company).Bold().FontSize(13);
+                c.Item().Text($"NIT {m.Nit}");
+                c.Item().PaddingTop(4).Row(r =>
+                {
+                    r.RelativeItem().Text("Comprobante de pago").Bold().FontSize(12);
+                    r.ConstantItem(180).AlignRight().Text($"No. {m.Number}").Bold();
+                });
+            });
+            page.Content().PaddingTop(10).Column(col =>
+            {
+                void Fila(string rotulo, string? valor) => col.Item().Row(r =>
+                {
+                    r.ConstantItem(150).Text(rotulo).Bold();
+                    r.RelativeItem().Text(valor ?? string.Empty);
+                });
+                Fila("Fecha del pago", m.PaidOn.ToString("yyyy-MM-dd", Co));
+                Fila("Beneficiario", $"{m.Beneficiary} · {m.BeneficiaryTaxId}");
+                Fila("Orden", m.OrderNumber);
+                Fila("Concepto", m.Concept);
+                Fila("Forma", m.Form);
+                if (m.BankName is not null) Fila("Cuenta de origen", $"{m.BankName} · {m.AccountNumberMasked}");
+                if (m.DestinationMasked is { Length: > 0 }) Fila("Cuenta de destino", m.DestinationMasked);
+                Fila(m.CheckNumber is null ? "Referencia del banco" : "Cheque", m.CheckNumber ?? m.TreasuryReference);
+                col.Item().PaddingTop(8).LineHorizontal(0.5f);
+                Fila("Valor bruto", m.GrossAmount.ToString("N2", Co));
+                if (m.WithholdingAmount > 0) Fila("Retención en la fuente", m.WithholdingAmount.ToString("N2", Co));
+                Fila("Valor pagado", m.NetAmount.ToString("N2", Co));
+                col.Item().PaddingTop(2).Text($"Son: {m.AmountInWords}").Italic();
+                col.Item().PaddingTop(16).Text($"Código de verificación: {m.VerificationCode}").FontSize(9);
             });
         })).GeneratePdf();
     }
@@ -138,10 +186,12 @@ public static class DocumentosDeTesoreriaReport
     }
 }
 
-/// <summary><see cref="IDocumentosDeTesoreriaEnPdf"/> con QuestPDF. (nuevo)</summary>
-public sealed class DocumentosDeTesoreriaPdfRenderer : IDocumentosDeTesoreriaEnPdf
+/// <summary><see cref="IDocumentosDeTesoreriaEnPdf"/> y el comprobante de pago con QuestPDF. (nuevo)</summary>
+public sealed class DocumentosDeTesoreriaPdfRenderer : IDocumentosDeTesoreriaEnPdf, IComprobanteDePagoEnPdf
 {
     public byte[] Cheque(ChequeModel modelo) => DocumentosDeTesoreriaReport.Cheque(modelo);
 
     public byte[] Conciliacion(ConciliacionModel modelo) => DocumentosDeTesoreriaReport.Conciliacion(modelo);
+
+    public byte[] ComprobanteDePago(ComprobanteDePagoModel modelo) => DocumentosDeTesoreriaReport.ComprobanteDePago(modelo);
 }

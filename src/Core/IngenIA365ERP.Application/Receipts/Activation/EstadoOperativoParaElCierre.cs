@@ -1,7 +1,9 @@
 using IngenIA365ERP.Application.Common.Cuadres;
 using IngenIA365ERP.Application.Common.Integration.Accounting;
 using IngenIA365ERP.Application.Common.Interfaces;
+using IngenIA365ERP.Application.Common.Parameters;
 using IngenIA365ERP.Application.Receipts.Common;
+using IngenIA365ERP.Domain.Enums.Receipts;
 using Microsoft.EntityFrameworkCore;
 
 namespace IngenIA365ERP.Application.Receipts.Activation;
@@ -12,10 +14,27 @@ namespace IngenIA365ERP.Application.Receipts.Activation;
 /// una sola clase para Recaudo y Tesorería en este archivo; son dos (<see cref="EstadoOperativoDeRecaudoParaElCierre"/> y su par en <c>Treasury/Activation</c>) para que
 /// ningún módulo lea las tablas del otro. Sólo lee. (nuevo)
 /// </summary>
-public sealed class EstadoOperativoDeRecaudoParaElCierre(IApplicationDbContext db) : IEstadoOperativoParaElCierre
+/// <remarks>
+/// T1 (fase 35, T0422; FR-132; D29): además, las sesiones de caja de días del mes que no se han cerrado —<c>Accounting.Period.CashSessionsOpen</c>—, un aviso que bloquea
+/// sólo con <c>Contabilidad.CierreExigeConciliaciones</c>.
+/// </remarks>
+public sealed class EstadoOperativoDeRecaudoParaElCierre(IApplicationDbContext db, ILectorDeParametros? lector = null) : IEstadoOperativoParaElCierre
 {
-    public async Task<IReadOnlyList<PendienteDeCierreDto>> PendientesAsync(int anio, int mes, CancellationToken ct) =>
-        CuadreProvisionalPendiente.PendienteDelCierre(ClavesDeRecaudo.Codigo, "Recaudo", await PendienteAsync(db, ct), anio, mes);
+    public async Task<IReadOnlyList<PendienteDeCierreDto>> PendientesAsync(int anio, int mes, CancellationToken ct)
+    {
+        var lista = CuadreProvisionalPendiente.PendienteDelCierre(ClavesDeRecaudo.Codigo, "Recaudo", await PendienteAsync(db, ct), anio, mes).ToList();
+        var desde = new DateOnly(anio, mes, 1);
+        var hasta = desde.AddMonths(1).AddDays(-1);
+        var abiertas = await (from s in db.ReceiptsCashSessions.AsNoTracking()
+                              join d in db.CollectionPointDays.AsNoTracking() on s.CollectionPointDayId equals d.Id
+                              where d.BusinessDate >= desde && d.BusinessDate <= hasta && s.Status != CashSessionState.Closed
+                              select s.Id).CountAsync(ct);
+        if (abiertas > 0)
+            lista.Add(new PendienteDeCierreDto(ClavesDeRecaudo.Codigo, AvisoOperativoDelCierre.CodigoSesionesSinCerrar,
+                $"Recaudo tiene {abiertas} sesión(es) de caja de días del mes sin cerrar: ciérrelas (o el supervisor las olvidadas) antes de cerrar el mes.",
+                Blocks: await AvisoOperativoDelCierre.BloqueaAsync(lector, anio, mes, ct)));
+        return lista;
+    }
 
     /// <summary>El cuadre provisional pendiente de la activación vigente de Recaudo, si lo hay.</summary>
     public static async Task<CuadreProvisionalPendienteDto?> PendienteAsync(IApplicationDbContext db, CancellationToken ct)

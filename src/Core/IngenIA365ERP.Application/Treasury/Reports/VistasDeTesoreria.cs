@@ -13,7 +13,7 @@ namespace IngenIA365ERP.Application.Treasury.Reports;
 
 /// <summary>
 /// El registro de las vistas de T0 del centro de informes de Tesorería (feature 015, US26 T0169 y US21 T0314; R-36; FR-153 parte T0; api.md §17): cada una es una
-/// <see cref="TablaExportable"/> con alcance por cuenta propia (<see cref="IAlcanceDeTesoreria"/>). Las de T1 y T2 llegan con su entrega. (nuevo)
+/// <see cref="TablaExportable"/> con alcance por cuenta propia (<see cref="IAlcanceDeTesoreria"/>). Las de T1 llegaron en la fase 35; las de T2, con su entrega. (nuevo)
 /// </summary>
 public static class VistasDeTesoreria
 {
@@ -24,6 +24,10 @@ public static class VistasDeTesoreria
     public const string ChequesGirados = "issued-checks";
     public const string SaldosBancarios = "bank-balances";
     public const string ConciliacionMinima = "minimal-reconciliation";
+    // T1 (fase 35, T0423; FR-153 parte T1).
+    public const string ComprobantesDePago = "payment-vouchers";
+    public const string Traslados = "transfers";
+    public const string CierreDeCheques = "month-end-checks";
 
     public static IReadOnlyList<VistaDeInformeDeRecaudoYTesoreria> Vistas { get; } =
     [
@@ -39,6 +43,12 @@ public static class VistasDeTesoreria
         new(SaldosBancarios, "Saldos bancarios", "Por cuenta propia al corte: saldo en libros, último saldo del extracto y su diferencia.", "saldos-bancarios", ["asOf", "account"]),
         new(ConciliacionMinima, "Conciliación mínima", "Las conciliaciones de los meses del rango: saldo del extracto, en libros, partidas por clase y diferencia.", "conciliacion-minima",
             ["from", "to", "account"]),
+        new(ComprobantesDePago, "Comprobantes de pago", "Los comprobantes de pago del rango: número, orden, beneficiario, forma, bruto, retención, neto y si se envió.",
+            "comprobantes-de-pago", ["from", "to", "account"]),
+        new(Traslados, "Traslados entre cuentas", "Los traslados pedidos en el rango: de qué cuenta a cuál, valor, estado, envío, confirmación y días en tránsito.",
+            "traslados", ["from", "to", "account"]),
+        new(CierreDeCheques, "Cierre del mes de cheques", "Los cierres de los meses del rango por cuenta: cheques reclasificados al efectivo y pasados a cuenta por pagar.",
+            "cierre-de-cheques", ["from", "to", "account"]),
     ];
 
     /// <summary>Las claves (compatibilidad con la fase 9, que sólo tenía <c>recent-account-changes</c>).</summary>
