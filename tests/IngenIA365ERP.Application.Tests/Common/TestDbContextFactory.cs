@@ -655,6 +655,8 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Checkbooks.IssuedCheck> IssuedChecks => Set<IngenIA365ERP.Domain.Entities.Treasury.Checkbooks.IssuedCheck>();
     public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Checkbooks.IssuedCheckEvent> IssuedCheckEvents => Set<IngenIA365ERP.Domain.Entities.Treasury.Checkbooks.IssuedCheckEvent>();
     public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Remittances.CashRemittance> CashRemittances => Set<IngenIA365ERP.Domain.Entities.Treasury.Remittances.CashRemittance>();
+    // Feature 015, R2 (fase 37): el lote de canje de los cheques recibidos.
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.ClearingBatch> ClearingBatches => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.ClearingBatch>();
     // Feature 015, T1 (fase 35): el comprobante de pago.
     public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Payments.PaymentVoucher> PaymentVouchers => Set<IngenIA365ERP.Domain.Entities.Treasury.Payments.PaymentVoucher>();
     // Feature 015, T1 (fase 34): el catálogo de órdenes manuales, los firmantes y los tokens.
@@ -767,6 +769,7 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Treasury.Checkbooks.IssuedCheck>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Treasury.Checkbooks.IssuedCheckEvent>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Treasury.Remittances.CashRemittance>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Operations.ClearingBatch>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Treasury.Payments.PaymentVoucher>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Treasury.Payments.ManualOrderConcept>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Treasury.BankAccounts.BankAccountSigner>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
