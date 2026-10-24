@@ -1674,7 +1674,7 @@ exige `Receipts.Reports.Export` y deja el evento de auditoría.
 - [X] T0316 [US21] Crear las pantallas src/Presentation/IngenIA365ERP.Shared/Pages/Recaudo/Informes.razor (`/recaudo/informes?vista=`) y src/Presentation/IngenIA365ERP.Shared/Pages/Tesoreria/Informes.razor (`/tesoreria/informes?vista=`) con `IndicadorDeCarga` por zona, y las tarjetas de Recaudo y Tesorería en el Centro de Reportes (`/reportes`), cuyos `NavigateTo` revisa `TodoEnlaceDelMenuTieneSuPagina`; llenar `LasPantallasDeRecaudoYTesoreriaEstanEnElMenu` con todas las pantallas de R0/T0
 
 
-**Notas de la construcción de la fase 20 (2026-10-24)**. Pruebas escritas y compiladas, sin correr. Detenida antes de las verificaciones de EF por falta de disco en C (0 bytes libres):
+**Notas de la construcción de la fase 20 (2026-10-24)**. Pruebas escritas y compiladas, sin correr. Las verificaciones de EF se hicieron después de liberar el disco C:
 
 - **T0311, T0312**: `Receipts/Reports/InformesDeRecaudoR0Tests` y `Treasury/Reports/InformesDeTesoreriaT0Tests` (registro, cada vista responde su tabla, cuadre del recaudo por medio con
   las vueltas, por módulo, alcance, saldos bancarios por el puerto, regiro). **T0313 (pendiente)**: la e2e se escribe y se corre en la fase 22; sin marcar.
@@ -1689,7 +1689,8 @@ exige `Receipts.Reports.Export` y deja el evento de auditoría.
 - **T0316**: pantallas `/recaudo/informes` y `/tesoreria/informes` (selector del registro, filtros, `TablaDeReporte`, Excel y PDF), en el menú; tarjetas de Recaudo y Tesorería
   en `/reportes`; `InformesDeRecaudoYTesoreriaClient` en Web, Web.Client y MAUI; `LasPantallasDeRecaudoYTesoreriaEstanEnElMenu` lista todas las pantallas de R0/T0 con
   indicador y suma `Las_paginas_delgadas_de_la_matriz_existen_protegidas_y_en_el_menu`. Sin probar en navegador.
-- Sin esquema: no hubo migración. Compilan API, Web, Web.Client, Persistence y las cinco de pruebas. **No se corrió** `has-pending-model-changes` ni la paridad (disco C lleno).
+- Sin esquema: no hubo migración. Compilan API, Web, Web.Client, Persistence y las cinco de pruebas. Liberado el disco, `has-pending-model-changes` dio «No changes» en
+  SqlServer y PostgreSQL y `check-migration-parity.ps1` en par (Admin 15, Application 68). Los nombres nuevos quedan en DT §2.7.
 
 ---
 

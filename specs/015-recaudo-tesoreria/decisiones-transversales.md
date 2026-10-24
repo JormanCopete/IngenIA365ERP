@@ -471,6 +471,16 @@ Lo que tasks.md marcaba **(nuevo)** y lo que trajeron el `/speckit-analyze` y la
 | `RecaudoEnsayoDelContrato` (`/api/e2e/recaudo/*`) | el arnés de las e2e del contrato como Recaudo real (`REC`), sólo en el proyecto de pruebas | `tests/IngenIA365ERP.API.IntegrationTests/Receipts` |
 | `ParticipantesRealesDeRecaudoYTesoreriaTests` | reemplaza a `DoblesDePruebaDeCarteraTests` | `tests/IngenIA365ERP.API.IntegrationTests/Lending` |
 
+**Fijados en la construcción de la fase 20 (2026-10-24)**:
+
+| Nombre | Qué | Dónde |
+|---|---|---|
+| `VistaDeInformeDeRecaudoYTesoreria` · `FiltrosDeInformeDeRecaudoYTesoreria` (`from`, `to`, `asOf`, `branch`, `point`, `cashBox`, `account`, `groupBy`; rango hasta 366 días) · `Reports.ReceiptsTreasury.{RangeInvalid, FilterInvalid}` | lo común de los informes de los dos módulos | `Application/Common/Reports/InformesDeRecaudoYTesoreria.cs` |
+| `VistasDeRecaudo` (11 vistas de R0) · `ReceiptsReportQuery` | el centro de informes de Recaudo | `Application/Receipts/Reports/InformesDeRecaudo.cs` |
+| `VistasDeTesoreria.Vistas` (7 vistas de T0) · `TreasuryReportQuery` · evento `Treasury.BankBalances.Read` | el centro de informes de Tesorería | `Application/Treasury/Reports` |
+| `ReceiptsReportsEndpoints` · `TreasuryReportsEndpoints` (`GET /api/reports/{receipts,treasury}` = registro de vistas) · eventos `Receipts.Report.Exported`, `Treasury.Report.Exported` | rutas y auditoría de la exportación | `API/Endpoints/Reports` |
+| pantallas `/recaudo/informes`, `/tesoreria/informes` · `InformesDeRecaudoYTesoreriaClient` · `Las_paginas_delgadas_de_la_matriz_existen_protegidas_y_en_el_menu` | pantallas, cliente y prueba de arquitectura | `Shared`, `Architecture.Tests` |
+
 ## 3. Decisiones transversales
 
 ### Módulos y frontera
