@@ -438,6 +438,23 @@ Lo que tasks.md marcaba **(nuevo)** y lo que trajeron el `/speckit-analyze` y la
 | `IDocumentosDeTesoreriaEnPdf.Conciliacion` · `DocumentosDeTesoreriaReport.Conciliacion` | el informe de la conciliación cerrada | `Treasury/Checkbooks/DocumentoDeCheque.cs`, `API/Reports` |
 | `ReconciliationsEndpoints` (`/api/treasury/reconciliations…`) · pantalla `/tesoreria/conciliacion` · `ConciliacionClient` · `NadieEscribeLaConciliacionBancariaDeContabilidad` | rutas, pantalla y prueba | `API`, `Shared`, `Architecture.Tests` |
 
+
+**Fijados en la construcción de la fase 18 (2026-10-24)**:
+
+| Nombre | Qué | Dónde |
+|---|---|---|
+| `CuadreDeAperturaBase` · `LineaDeCuadreDeAperturaBase` (H) · `CifraDeReferenciaBase` · `OpeningSquareKind` · `OpeningSquareState` · `CalculoDelCuadreDeApertura` · `LineaPropuestaDeCuadre` · `LineaCalculadaDeCuadre` · `CalculoDeCuadre` | lo común del cuadre y su motor puro | `Domain/Common/Cuadres/CuadreDeApertura.cs` |
+| `ReceiptsOpeningSquare` · `ReceiptsOpeningSquareLine` · `ReceiptsReferenceFigure` · `TreasuryOpeningSquare` · `TreasuryOpeningSquareLine` · `TreasuryReferenceFigure` · DbSets del mismo nombre en plural | las seis tablas | `RCD_OpeningSquares`, `RCD_OpeningSquareLines`, `RCD_ReferenceFigures`, `TES_*` (par `RecaudoYTesoreriaPuestaEnMarcha`) |
+| `ReceivedCheck.IsOpeningLoad` · `CashRemittance.IsOpeningLoad` · `OwnBankAccount.{OpeningBalance, OpeningBalanceOn}` · `VaultMovementKind.OpeningBalance = 7` | lo cargado por la puesta en marcha | mismo par |
+| `RegistroDeCuadres` · `ErroresDelCuadre` (`{Receipts,Treasury}.Activation.{SquareHasDifference, ProvisionalDeadlineInvalid}`) · `OpeningSquareDto` · `OpeningSquareLineDto` · `CurrentOpeningSquareDto` · `ReferenceFigureComparisonDto` · `ISolicitudDeCuadreProvisional` · `ValidadorDeCuadreProvisional<T>` | el registro común del cuadre | `Application/Common/Cuadres/CuadresDeApertura.cs` |
+| `LineasDelCuadreDeRecaudo` · `GetReceiptsOpeningSquareQuery` · `RegisterProvisionalOpeningSquareCommand` · `RegisterDefinitiveOpeningSquareCommand` · `ListReceiptsReferenceFiguresQuery` | el cuadre de Recaudo | `Receipts/Activation/CuadreDeAperturaDeRecaudo.cs` |
+| `LineasDelCuadreDeTesoreria` (`ChequesGiradosEnTransito` informativa) · `GetTreasuryOpeningSquareQuery` · `RegisterTreasuryProvisionalOpeningSquareCommand` · `RegisterTreasuryDefinitiveOpeningSquareCommand` · `ListTreasuryReferenceFiguresQuery` | el cuadre de Tesorería | `Treasury/Activation/CuadreDeAperturaDeTesoreria.cs` |
+| `PlantillasDePuestaEnMarchaDeRecaudo` (+ `recaudo.cifras-de-referencia`) · `ImportReceiptsGoLiveTemplateCommand` · `Receipts.Imports.{UserWithoutSecondFactor, VaultAlreadyLoaded, VaultTotalMismatch, TemplateNotFound}` | las plantillas de Recaudo | `Receipts/Imports` |
+| `PlantillasDePuestaEnMarchaDeTesoreria` (+ `tesoreria.cifras-de-referencia`) · `ImportTreasuryGoLiveTemplateCommand` · `Treasury.Imports.{CheckbookRangeOverlaps, CheckbookNotFound, TemplateNotFound}` | las plantillas de Tesorería | `Treasury/Imports` |
+| `PlantillaDeCuentasBancariasDePersonas` · `ImportPersonBankAccountsCommand` · `Core.PersonBankAccount.ImportedWithoutCertificate` | la plantilla de plataforma | `Core/PersonBankAccounts/Imports` |
+| eventos `{Receipts,Treasury}.Activation.{ProvisionalSquareRegistered, DefinitiveSquareRegistered}` | auditoría del cuadre | `CuadresDeRecaudo`, `CuadresDeTesoreria` |
+| `GET /api/{receipts,treasury}/opening-squares/current` · `POST …/provisional` · `POST …/definitive` · `GET /api/{receipts,treasury}/reference-figures` · `GET/POST /api/{receipts,treasury}/imports/{code}/{template.xlsx,import}` · pantallas `/recaudo/puesta-en-marcha`, `/tesoreria/puesta-en-marcha` · `PuestaEnMarchaDeModulo` · `PuestaEnMarchaClient` | rutas y pantallas (las plantillas por la forma común de la plataforma, no la de api.md §14) | `ActivationEndpoints.cs`, `Shared` |
+
 ## 3. Decisiones transversales
 
 ### Módulos y frontera

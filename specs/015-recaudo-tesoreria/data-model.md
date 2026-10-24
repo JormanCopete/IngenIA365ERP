@@ -808,6 +808,11 @@ tránsito de una chequera no registrada se rechaza (Edge Cases). Cifras de refer
 `TES_ReferenceFigures` (`Concept`, `Dimension`, `Amount`, `LoadedBy`) para cotejar totales y el paralelo (FR-160,
 FR-226).
 
+**Construido en la fase 18 (2026-10-24)**: la cabecera lleva además `CutoffDate`, `TotalLoaded`, `TotalLedger`, `TotalDifference`, `RegisteredBy`, `RegisteredAt` y
+`ApprovedAt`; la línea, `DimensionLabel` e `IsComparable` (la de cheques girados en tránsito es informativa); la cifra, `CutoffDate`, `LoadedAt`, `ImportBatchPublicId` y
+`SourceFileName`. Para marcar lo cargado sin hechos, el par suma `RCD_ReceivedChecks.IsOpeningLoad`, `TES_CashRemittances.IsOpeningLoad`,
+`TES_BankAccounts.OpeningBalance`/`OpeningBalanceOn` y el valor `VaultMovementKind.OpeningBalance = 7` **(nuevo)**.
+
 ---
 
 ## 16. Plataforma (`COR_`, E-06; `PlataformaParaRecaudoYTesoreria`, R0/T0)
