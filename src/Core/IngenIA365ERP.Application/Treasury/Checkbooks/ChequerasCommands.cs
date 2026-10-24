@@ -1,5 +1,6 @@
 using FluentValidation;
 using IngenIA365ERP.Application.Common.Behaviors;
+using IngenIA365ERP.Application.Common.Integration.Contracts.Treasury;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Security;
 using IngenIA365ERP.Application.Common.Models;
@@ -289,6 +290,11 @@ public sealed class IssueChecksForBatchCommandHandler(
         var pendientes = items.Where(i => !conCheque.Contains(i.PaymentOrderId)).ToList();
         if (pendientes.Count == 0) return Result.Failure<IReadOnlyList<IssuedCheckDto>>(ErroresDeTesoreria.LoteSinChequesPorEmitir());
 
+        // Validación previa contable (FR-221): ChequeGiradoEmitido tiene que tener su regla antes de emitir el primer cheque.
+        var cuentaPrevia = await db.OwnBankAccounts.AsNoTracking().FirstAsync(c => c.Id == loteLeido.BankAccountId, ct);
+        var previa = await emision.ValidacionPreviaAsync([ChequeGiradoEmitidoV1.Type], cuentaPrevia, hoy, ct);
+        if (previa.IsFailure) return Result.Failure<IReadOnlyList<IssuedCheckDto>>(previa.Error);
+
         await cerrojo.TomarSetupAsync(ct: ct);
         await cerrojo.BloquearAsync(NivelDeTesoreria.CuentaDeOrigen, [loteLeido.BankAccountId], ct: ct);
         await cerrojo.BloquearAsync(NivelDeTesoreria.Chequera, [chequeraLeida.Id], ct: ct);
@@ -441,6 +447,13 @@ public sealed class VoidIssuedCheckCommandHandler(
             if (leido.DeliveredOn is { } d && hoy.DayNumber - d.DayNumber < dias) return Result.Failure<IssuedCheckDto>(ErroresDeTesoreria.ChequeTodaviaCobrable(dias));
         }
         var ordenLeida = await db.PaymentOrders.AsNoTracking().FirstAsync(o => o.Id == ordenId, ct);
+        // Validación previa contable (FR-221): ChequeGiradoAnulado tiene que tener su regla antes de anular.
+        var cuentaPrevia = await (from k in db.Checkbooks.AsNoTracking()
+                                  join a in db.OwnBankAccounts.AsNoTracking() on k.BankAccountId equals a.Id
+                                  where k.Id == leido.CheckbookId
+                                  select a).FirstAsync(ct);
+        var previa = await emision.ValidacionPreviaAsync([ChequeGiradoAnuladoV1.Type], cuentaPrevia, hoy, ct);
+        if (previa.IsFailure) return Result.Failure<IssuedCheckDto>(previa.Error);
         await registro.TomarCerrojosDeRecaudoAsync([ordenLeida], ct);
         await cerrojo.TomarSetupAsync(ct: ct);
         await cerrojo.BloquearAsync(NivelDeTesoreria.Ordenes, [ordenId], ct: ct);

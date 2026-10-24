@@ -1,5 +1,6 @@
 using FluentValidation;
 using IngenIA365ERP.Application.Common.Behaviors;
+using IngenIA365ERP.Application.Common.Integration.Contracts.Treasury;
 using IngenIA365ERP.Application.Common.Integration.Treasury;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Security;
@@ -139,6 +140,10 @@ public sealed class ConfirmRemittanceCommandHandler(
         if (request.StatementLinePublicId is { } linea
             && !await db.TreasuryBankStatementLines.AsNoTracking().AnyAsync(l => l.PublicId == linea && l.BankAccountId == leida.BankAccountId, ct))
             return Result.Failure<CashRemittanceDto>(ErroresDeTesoreria.RemesaDeOtraCuenta());
+        // Validación previa contable (FR-221): RemesaConfirmada tiene que tener su regla antes de confirmar.
+        var cuentaPrevia = await db.OwnBankAccounts.AsNoTracking().FirstAsync(c => c.Id == leida.BankAccountId, ct);
+        var previa = await emision.ValidacionPreviaAsync([RemesaConfirmadaV1.Type], cuentaPrevia, request.ConfirmedOn ?? hoy, ct);
+        if (previa.IsFailure) return Result.Failure<CashRemittanceDto>(previa.Error);
         await cerrojo.TomarSetupAsync(ct: ct);
         await cerrojo.BloquearAsync(NivelDeTesoreria.CuentaDeOrigen, [leida.BankAccountId], ct: ct);
         var remesa = await db.CashRemittances.FirstAsync(r => r.Id == leida.Id, ct);
@@ -201,6 +206,9 @@ public sealed class RegisterBankToVaultRemittanceCommandHandler(
         if (!cuenta.Activa(hoy)) return Result.Failure<CashRemittanceDto>(ErroresDeTesoreria.RemesaCuentaInvalida());
         var oficina = await db.Branches.AsNoTracking().Where(b => b.PublicId == request.BranchPublicId).Select(b => (int?)b.Id).FirstOrDefaultAsync(ct);
         if (oficina is null) return Result.Failure<CashRemittanceDto>(ErroresDeTesoreria.NoEncontrado("La oficina"));
+        // Validación previa contable (FR-221): RemesaConfirmada tiene que tener su regla antes de registrar la remesa.
+        var previa = await emision.ValidacionPreviaAsync([RemesaConfirmadaV1.Type], cuenta, hoy, ct);
+        if (previa.IsFailure) return Result.Failure<CashRemittanceDto>(previa.Error);
         await cerrojo.TomarSetupAsync(ct: ct);
         await cerrojo.BloquearAsync(NivelDeTesoreria.CuentaDeOrigen, [cuenta.Id], ct: ct);
         var uso = await fondo.ExigirAsync(cuenta, request.Amount, request.LiquidityFundUsePublicId, ct);

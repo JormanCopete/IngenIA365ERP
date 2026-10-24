@@ -414,6 +414,14 @@ Lo que tasks.md marcaba **(nuevo)** y lo que trajeron el `/speckit-analyze` y la
 | `ArchivoDeDesembolsosGeneradoV1` · `ArchivoDeDesembolsosAnuladoV1` (clave `Confirmation:{archivo:N}` en los dos) · `EmisionDeCartera.ArchivoDeDesembolsosAsync` · clase de origen `DisbursementFile` · `ConsumeLendingDisbursementFileCommand` · `ConsumeKeyedTreasuryUnitCommand` · `LendingDisbursementFile` · `LendingDisbursementFileOrder` · `LendingDisbursementFileState` | E-01 c | `Contracts/Lending/ArchivoDeDesembolsosV1.cs`, `Treasury/Integration/ConsumoDelArchivoDeDesembolsos.cs`; `TES_LendingDisbursementFiles`, `TES_LendingDisbursementFileOrders` |
 | `/api/accounting/{receipts,treasury}/{rules, rules/{id}/deactivate, rules/template, rules/template.xlsx, rules/completeness, voucher-types, voucher-types/{factType}, batches}` · `PUT /api/receipts/accounting-policy` · `PUT /api/treasury/accounting-policy` · pantallas `/contabilidad/recaudo/{matriz, tipos-de-comprobante, completitud, lotes}`, `/contabilidad/tesoreria/{matriz, tipos-de-comprobante, completitud}` · `MatricesDeRecaudoYTesoreriaClient` | rutas y pantallas | `ReceiptsIntegrationEndpoints.cs`, `AccountingPolicyEndpoints.cs`, `Shared` |
 
+
+**Fijados en los pendientes de las fases 15 y 16 (2026-10-24)**:
+
+| Nombre | Qué | Dónde |
+|---|---|---|
+| `Sarlaft.PagadorTerceroFrecuente.Titulares` (3) · `Sarlaft.ConsignanteRepetido.Partidas` (2) | los dos umbrales de señales, parámetros `RCD` con vigencia «pendiente de validar» (P7); reemplazan a las constantes de `RegistroDeEfectivo` y `AntiguedadDeRecaudo` | `ParametrosDeRecaudoYTesoreria`, data-model §23 |
+| `EmisionDeTesoreria.ValidacionPreviaAsync` · `EmisionDeTesoreria.PoliticaBloquear` · `Treasury.Prevalidation.NotPostable` (`ErroresDeTesoreria.NoContabilizable`) | la validación previa de las pantallas de Tesorería | `Treasury/Accounting/EmisionDeTesoreria.ValidacionPrevia.cs`, `ErroresDeTesoreria.cs` |
+
 ## 3. Decisiones transversales
 
 ### Módulos y frontera

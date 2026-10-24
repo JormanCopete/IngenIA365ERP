@@ -1,6 +1,7 @@
 using IngenIA365ERP.Application.Common.Integration;
 using IngenIA365ERP.Application.Common.Integration.Contracts.Inventory;
 using IngenIA365ERP.Application.Common.Integration.Contracts.Lending;
+using IngenIA365ERP.Application.Common.Integration.Contracts.Treasury;
 using IngenIA365ERP.Application.Common.Integration.Receipts;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
@@ -98,6 +99,23 @@ public sealed partial class RegistroDeResultadosDelGiro(
             return Result.Failure<ResultadoRegistrado>(transicion.Codigo == TransicionesDelResultado.CodigoNoEnviada
                 ? ErroresDeTesoreria.ResultadoNoEnviada(orden.Number)
                 : ErroresDeTesoreria.TransicionInvalida(orden.Number, orden.Status.ToString(), r.Outcome.ToString()));
+
+        // Validación previa contable (pendiente de T0250, 2026-10-24; FR-221): el «girada» de una orden pagada desde una cuenta propia emite PagoDeOrdenGirado y, si
+        // grava, GmfDePagoCausado; antes de tocar nada se pregunta si tienen su regla. Con «Bloquear» la pantalla no registra el resultado.
+        if (r.Outcome == DisbursementOutcome.Disbursed && orden.Form != PaymentForm.Check)
+        {
+            var (_, _, cuentaPrevia) = await LoteDeLaOrdenAsync(orden, ct);
+            if (cuentaPrevia is not null)
+            {
+                var tipos = new List<string> { PagoDeOrdenGiradoV1.Type };
+                var pg = await parametros.GmfAsync(r.OccurredOn, ct);
+                var gmfPrevio = EvaluadorDeGmfDeEgresos.Evaluar(new EgresoAEvaluar(orden.Origin, orden.OrderKind, orden.Form, orden.NetAmount, orden.BeneficiaryIsDebtor,
+                    cuentaPrevia.IsGmfExempt, orden.Origin == PaymentOrderOrigin.DepositsPayout), pg);
+                if (gmfPrevio.EmiteHecho && gmfPrevio.Gmf > 0m) tipos.Add(GmfDePagoCausadoV1.Type);
+                var previa = await emision.ValidacionPreviaAsync(tipos, cuentaPrevia, r.OccurredOn, ct);
+                if (previa.IsFailure) return Result.Failure<ResultadoRegistrado>(previa.Error);
+            }
+        }
 
         var resultado = new DisbursementResult
         {

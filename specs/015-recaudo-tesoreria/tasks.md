@@ -1333,6 +1333,12 @@ decisiones-transversales §2.7:
 - **Pendiente de T0250 en Tesorería**: las pantallas de Tesorería (resultados del giro, cheques, remesas) todavía no preguntan la validación previa antes de confirmar
   (`Treasury.Prevalidation.NotPostable` no se emite): un hecho sin regla se rechaza al consumirlo y queda para reproceso en la bandeja. La evaluación ya responde por
   `IContabilidadParaTesoreria.EvaluarAsync`; falta el llamado en cada comando.
+  **Cerrado el 2026-10-24 (pendiente A2)**: `EmisionDeTesoreria.ValidacionPreviaAsync` (molde del paso 3 de `ConfirmacionDeRecibo`) pregunta antes de los cerrojos y de
+  tocar nada, con la cuenta propia en `OwnBankAccountPublicId` para los roles por vínculo; con «Bloquear» responde `Treasury.Prevalidation.NotPostable` con
+  `data.errors[] { factType, role, combination, whoFixes }`. La llaman `RegistroDeResultadosDelGiro.RegistrarAsync` (el «girada» de una orden pagada desde cuenta propia:
+  `PagoDeOrdenGirado` y `GmfDePagoCausado` si grava; cubre el registro manual, el masivo, la respuesta del banco y su revisión), `IssueChecksForBatchCommand`
+  (`ChequeGiradoEmitido`), `VoidIssuedCheckCommand` (`ChequeGiradoAnulado`), `ConfirmRemittanceCommand` y `RegisterBankToVaultRemittanceCommand` (`RemesaConfirmada`).
+  Prueba `Treasury/Accounting/ValidacionPreviaEnPantallasDeTesoreriaTests` escrita, sin correr.
 - **T0260**: `IDimensionesDeRecaudo` e `IDimensionesDeTesoreria` reemplazan los dos puertos vacíos del Setup (`DimensionesAsync(string)`, sin implementación ni usos) por uno
   que devuelve todos los valores (`DimensionDeMatrizDto`).
 - **T0261**: la guarda de `PrepareReversalAsync` y el mensaje de `ReverseDocumentCommand` (`DocumentReceiptsOrTreasuryOwned`, código `Accounting.Document.ModuleOwned`).
