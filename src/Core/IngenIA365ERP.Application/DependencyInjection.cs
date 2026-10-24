@@ -321,6 +321,7 @@ public static class DependencyInjection
         services.AddScoped<Common.Integration.Lending.IBusquedaDeObligaciones, Lending.Integration.BusquedaDeObligaciones>();
         // Feature 015, US6 (fase 11, T0193 a T0197): el extracto que Tesorería ofrece a Recaudo, la aplicación no interactiva, las partidas y la antigüedad.
         services.AddScoped<Common.Integration.Treasury.IMovimientosBancariosParaRecaudo, Treasury.Statements.MovimientosBancariosParaRecaudo>();
+        services.AddScoped<Common.Integration.Treasury.IRemesasDeTesoreria, Treasury.Remittances.RemesasDeTesoreria>();
         services.AddScoped<Receipts.BankItems.AplicacionNoInteractiva>();
         services.AddScoped<Receipts.BankItems.PartidasPorIdentificar>();
         services.AddScoped<Receipts.Paymasters.GirosDePagaduria>();

@@ -16,6 +16,7 @@ public class VaultsEndpoints : ICarterModule
 {
     public const string Ver = "Receipts.Vault.View";
     public const string Mover = "Receipts.Vault.Move";
+    public const string Remesar = "Receipts.Vault.Remit";
 
     public void AddRoutes(IEndpointRouteBuilder app)
     {
@@ -26,7 +27,18 @@ public class VaultsEndpoints : ICarterModule
                 await s.Send(new RegisterVaultMovementCommand(id, body.Kind, body.Denominations ?? [], body.Reason ?? string.Empty, body.SecondCustodianUserPublicId,
                     body.BagSeal, body.MinutesAttachmentPublicId, body.RemittancePublicId) { OperationKey = http.ClaveDeOperacion() }, ct))
             .WithName("Receipts_Vaults_Movement").ConClaveDeOperacion().RequirePermission(Mover);
+        // Feature 015, US19 (T0230): la remesa de la bóveda al banco, con la remesa de Tesorería en la misma transacción.
+        g.MapPost("/{id:guid}/remittances", async (Guid id, RemesaRequest body, HttpContext http, ISender s, CancellationToken ct) =>
+                await s.Send(new DispatchVaultRemittanceCommand(id, body.OwnBankAccountPublicId, body.Denominations ?? [], body.BagSeal ?? string.Empty,
+                    body.MinutesAttachmentPublicId, body.SecondCustodianUserPublicId, body.Reason) { OperationKey = http.ClaveDeOperacion() }, ct))
+            .WithName("Receipts_Vaults_Remittance").ConClaveDeOperacion().RequirePermission(Remesar);
+        var cuentas = ReceiptsGroup.Grupo(app, "/own-bank-accounts", "Recaudo Bóveda");
+        cuentas.MapGet("/", async (Guid? branch, ISender s, CancellationToken ct) => await s.Send(new ListReceiptsOwnBankAccountsQuery(branch), ct))
+            .WithName("Receipts_OwnBankAccounts_List").RequirePermission(new AlgunPermiso(Ver, Remesar));
     }
+
+    public sealed record RemesaRequest(Guid OwnBankAccountPublicId, IReadOnlyList<DenominacionContadaDto>? Denominations, string? BagSeal, Guid MinutesAttachmentPublicId,
+        Guid? SecondCustodianUserPublicId, string? Reason);
 
     public sealed record MovimientoDeBovedaRequest(VaultMovementKind Kind, IReadOnlyList<DenominacionContadaDto>? Denominations, string? Reason,
         Guid? SecondCustodianUserPublicId, string? BagSeal, Guid? MinutesAttachmentPublicId, Guid? RemittancePublicId);

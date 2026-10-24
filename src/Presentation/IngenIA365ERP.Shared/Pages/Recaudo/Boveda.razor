@@ -5,6 +5,7 @@
 @using IngenIA365ERP.Shared.Services.Recaudo
 @inject SesionesClient Sesiones
 @inject ConfiguracionDeRecaudoClient Configuracion
+@inject IngenIA365ERP.Shared.Services.Tesoreria.ChequesYRemesasClient RemesasApi
 @inject INotificationService Notification
 
 <PageTitle>Bóveda - IngenIA365ERP</PageTitle>
@@ -62,6 +63,7 @@
                 <div class="form-grid">
                     <label class="campo">Clase
                         <select class="e-input" @bind="_clase">
+                            <option value="3">Remesa al banco</option>
                             <option value="4">Remesa que vuelve del banco</option>
                             <option value="5">Conteo</option>
                             <option value="6">Billete retenido</option>
@@ -74,9 +76,23 @@
                         </select>
                     </label>
                     <label class="campo">Sello de la bolsa <input class="e-input" @bind="_sello" maxlength="40" /></label>
-                    @if (_clase == 6)
+                    @if (_clase is 3 or 6)
                     {
                         <label class="campo">Acta (adjunto) * <input class="e-input" @bind="_acta" /></label>
+                    }
+                    @if (_clase == 3)
+                    {
+                        @* US19 (T0230): la remesa al banco va a una cuenta propia de recaudo y queda en tránsito hasta que Tesorería la confirma. *@
+                        <label class="campo">Cuenta de destino *
+                            <select class="e-input" @bind="_cuentaDeRemesa">
+                                <option value="">Elija la cuenta…</option>
+                                @foreach (var c in _cuentas) { <option value="@c.PublicId">@c.Code · @c.BankName · @c.AccountNumberMasked</option> }
+                            </select>
+                        </label>
+                    }
+                    @if (_clase == 4)
+                    {
+                        <label class="campo">Remesa del banco (identificador) <input class="e-input" @bind="_remesaQueVuelve" /></label>
                     }
                     <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" maxlength="500" /></label>
                 </div>
@@ -102,6 +118,8 @@
     private string _boveda = "", _segundo = "", _acta = "";
     private string? _sello, _motivo;
     private int _clase = 4;
+    private string _cuentaDeRemesa = "", _remesaQueVuelve = "";
+    private IReadOnlyList<IngenIA365ERP.Shared.Services.Tesoreria.CuentaDeRecaudoDto> _cuentas = [];
     private bool _visible;
 
     protected override async Task OnInitializedAsync()
@@ -115,6 +133,8 @@
             var u = await Configuracion.UsuariosAsync();
             if (u.IsSuccess && u.Value is not null) _usuarios = u.Value.Items.Where(x => x.IsActive).ToList();
             _boveda = _bovedas.FirstOrDefault()?.PublicId.ToString() ?? "";
+            var cuentas = await RemesasApi.CuentasDeRecaudoAsync();
+            if (cuentas.IsSuccess && cuentas.Value is not null) _cuentas = cuentas.Value.Where(c => c.IsActive).ToList();
         }
         await CargarAsync();
     }
@@ -145,8 +165,25 @@
         if (string.IsNullOrWhiteSpace(_motivo)) { await Notification.WarningAsync("Escriba el motivo."); return; }
         using var g = _guardado.Iniciar();
         var billetes = _cantidades.Where(c => c.Value > 0).Select(c => new DenominacionContadaRequest(c.Key, c.Value)).ToList();
+        if (_clase == 3)
+        {
+            if (!Guid.TryParse(_cuentaDeRemesa, out var cuenta) || !Guid.TryParse(_acta, out var actaDeRemesa) || string.IsNullOrWhiteSpace(_sello))
+            {
+                await Notification.WarningAsync("La remesa al banco lleva cuenta de destino, acta y sello de la bolsa.");
+                return;
+            }
+            var remesa = await RemesasApi.RemesarAsync(boveda, new IngenIA365ERP.Shared.Services.Tesoreria.RemesarDesdeBovedaRequest(cuenta, billetes, _sello.Trim(), actaDeRemesa,
+                Guid.TryParse(_segundo, out var sr) ? sr : null, _motivo.Trim()), _clave);
+            if (!remesa.IsSuccess) { await Notification.ErrorAsync(remesa.ErrorMessage ?? "No se pudo despachar la remesa."); return; }
+            _clave = new ClaveDeOperacion();
+            _cantidades.Clear();
+            _visible = false;
+            await Notification.SuccessAsync($"Remesa {remesa.Value!.RemittanceNumber} en tránsito al banco.");
+            await CargarAsync();
+            return;
+        }
         var r = await Sesiones.MoverBovedaAsync(boveda, new MovimientoDeBovedaRequest(_clase, billetes, _motivo.Trim(), Guid.TryParse(_segundo, out var s) ? s : null,
-            _sello, Guid.TryParse(_acta, out var a) ? a : null, null), _clave);
+            _sello, Guid.TryParse(_acta, out var a) ? a : null, Guid.TryParse(_remesaQueVuelve, out var rv) ? rv : null), _clave);
         if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo registrar el movimiento."); return; }
         _clave = new ClaveDeOperacion();
         _cantidades.Clear();

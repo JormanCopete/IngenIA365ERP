@@ -1126,19 +1126,53 @@ sello: queda en tránsito y, sin confirmar a los días configurados, alerta.
 
 ### Tests for User Story 19
 
-- [ ] T0222 [P] [US19] Escribir tests/IngenIA365ERP.Application.Tests/Treasury/Checkbooks/ChequerasYChequesGiradosTests.cs (R-19; FR-113, FR-122, FR-134 a FR-136, FR-219): registro de la chequera con rango y custodio; numeración desde `NextNumber` bajo `CerrojoDeTesoreria`; `Treasury.Checkbook.Exhausted` pide la siguiente y `.NumberOutOfRange`; cheque en blanco dañado `SpoiledBlank` con su número; el hecho `ChequeGiradoEmitido` nace al **emitir**; la entrega con constancia registra «girada»; anulado antes de entregar → `ChequeGiradoAnulado` sin resultado; no cobrado a `Cheques.DiasSinCobrar` alerta `Tesoreria.ChequeSinCobrar` y, anulado con permiso, informa «cheque no cobrado»; cruce y primer beneficiario por defecto, ligados a la exención de GMF; huecos sólo explicados por anulaciones
-- [ ] T0223 [P] [US19] Escribir tests/IngenIA365ERP.Application.Tests/Treasury/Remittances/RemesasTests.cs (R-15; FR-035, FR-105, FR-182): Recaudo despacha desde la bóveda (doble custodia, acta, sello de bolsa) y registra la remesa por `IRemesasDeTesoreria.RegistrarAsync` en la misma transacción; hecho `RemesaDespachada` (REC) y, al confirmar con soporte o por cruce, `RemesaConfirmada` (TES); banco a bóveda; sin confirmar en `Remesas.DiasParaConfirmar` alerta `Tesoreria.RemesaSinConfirmar`; desde una cuenta del fondo de liquidez exige uso aprobado
+- [X] T0222 [P] [US19] Escribir tests/IngenIA365ERP.Application.Tests/Treasury/Checkbooks/ChequerasYChequesGiradosTests.cs (R-19; FR-113, FR-122, FR-134 a FR-136, FR-219): registro de la chequera con rango y custodio; numeración desde `NextNumber` bajo `CerrojoDeTesoreria`; `Treasury.Checkbook.Exhausted` pide la siguiente y `.NumberOutOfRange`; cheque en blanco dañado `SpoiledBlank` con su número; el hecho `ChequeGiradoEmitido` nace al **emitir**; la entrega con constancia registra «girada»; anulado antes de entregar → `ChequeGiradoAnulado` sin resultado; no cobrado a `Cheques.DiasSinCobrar` alerta `Tesoreria.ChequeSinCobrar` y, anulado con permiso, informa «cheque no cobrado»; cruce y primer beneficiario por defecto, ligados a la exención de GMF; huecos sólo explicados por anulaciones
+- [X] T0223 [P] [US19] Escribir tests/IngenIA365ERP.Application.Tests/Treasury/Remittances/RemesasTests.cs (R-15; FR-035, FR-105, FR-182): Recaudo despacha desde la bóveda (doble custodia, acta, sello de bolsa) y registra la remesa por `IRemesasDeTesoreria.RegistrarAsync` en la misma transacción; hecho `RemesaDespachada` (REC) y, al confirmar con soporte o por cruce, `RemesaConfirmada` (TES); banco a bóveda; sin confirmar en `Remesas.DiasParaConfirmar` alerta `Tesoreria.RemesaSinConfirmar`; desde una cuenta del fondo de liquidez exige uso aprobado
 - [ ] T0224 [P] [US19] Escribir la e2e tests/IngenIA365ERP.API.IntegrationTests/Treasury/ChequesGiradosYRemesasTests.cs (US19 «Independent Test», quickstart recorridos H paso 2 e I paso 1); se corre en la fase 22
 
 ### Implementation for User Story 19
 
-- [ ] T0225 [P] [US19] Crear en src/Core/IngenIA365ERP.Domain/Entities/Treasury/Checkbooks/ `Checkbook`, `IssuedCheck`, `IssuedCheckEvent` (H) y en Entities/Treasury/Remittances/ `CashRemittance`; los enums `IssuedCheckState`, `RemittanceState`; configurarlas (UK `CheckNumber` por chequera; el nombre `IssuedCheck` no choca con el heredado `Check`, R-04) (data-model §11)
-- [ ] T0226 [US19] Implementar en src/Core/IngenIA365ERP.Application/Treasury/Checkbooks/ `RegisterCheckbookCommand`, `VoidCheckbookCommand`, `SpoilBlankCheckCommand`, la emisión de cheques del lote de forma `Checks` (`IssueChecksForBatchCommand`), `DeliverIssuedCheckCommand` (constancia `TreasuryDeliveryReceipt` → resultado «girada») y `VoidIssuedCheckCommand` (antes de entregar o no cobrado) (FR-113, FR-122, FR-134 a FR-136, FR-219)
-- [ ] T0227 [US19] Implementar `IRemesasDeTesoreria` en src/Core/IngenIA365ERP.Application/Treasury/Remittances/RemesasDeTesoreria.cs, `ConfirmRemittanceCommand` (con soporte) y, del lado de Recaudo, `DispatchVaultRemittanceCommand` en src/Core/IngenIA365ERP.Application/Receipts/Vaults/ (movimiento de bóveda + remesa en la misma transacción) (R-15; FR-035, FR-105)
-- [ ] T0228 [US19] Emitir `ChequeGiradoEmitido`, `ChequeGiradoAnulado` (causa `SpoiledBeforeDelivery` o `NotCashed`), `RemesaConfirmada` en src/Core/IngenIA365ERP.Application/Treasury/Accounting/EmisionDeTesoreria.Cheques.cs y `RemesaDespachada` en …/Receipts/Accounting/EmisionDeRecaudo.Caja.cs; completar las secciones de cheques sin cobrar y remesas sin confirmar de la tarea T0160
-- [ ] T0229 [US19] Crear el documento `Cheque` (impresión sobre el formato de la chequera) en src/Presentation/IngenIA365ERP.API/Reports/DocumentosDeTesoreriaReport.cs (archivos-y-plantillas.md §7)
-- [ ] T0230 [US19] Exponer src/Presentation/IngenIA365ERP.API/Endpoints/Treasury/{CheckbooksEndpoints,IssuedChecksEndpoints,RemittancesEndpoints}.cs (api.md §11, §12) y `POST /api/receipts/vaults/{id}/remittances` (`Receipts.Vault.Remit`); crear las pantallas src/Presentation/IngenIA365ERP.Shared/Pages/Tesoreria/{Chequeras,ChequesGirados,Remesas}.razor (`/tesoreria/chequeras`, `/tesoreria/cheques-girados`, `/tesoreria/remesas`) con su cliente e `IndicadorDeCarga`, y la acción «Remesar» en `/recaudo/boveda` (CH13)
-- [ ] T0231 [US19] Regenerar en src/Infrastructure/IngenIA365ERP.Persistence.Migrations.{PostgreSql,SqlServer}/Application/ el par `TesoreriaNucleo` con chequeras, cheques girados y remesas
+- [X] T0225 [P] [US19] Crear en src/Core/IngenIA365ERP.Domain/Entities/Treasury/Checkbooks/ `Checkbook`, `IssuedCheck`, `IssuedCheckEvent` (H) y en Entities/Treasury/Remittances/ `CashRemittance`; los enums `IssuedCheckState`, `RemittanceState`; configurarlas (UK `CheckNumber` por chequera; el nombre `IssuedCheck` no choca con el heredado `Check`, R-04) (data-model §11)
+- [X] T0226 [US19] Implementar en src/Core/IngenIA365ERP.Application/Treasury/Checkbooks/ `RegisterCheckbookCommand`, `VoidCheckbookCommand`, `SpoilBlankCheckCommand`, la emisión de cheques del lote de forma `Checks` (`IssueChecksForBatchCommand`), `DeliverIssuedCheckCommand` (constancia `TreasuryDeliveryReceipt` → resultado «girada») y `VoidIssuedCheckCommand` (antes de entregar o no cobrado) (FR-113, FR-122, FR-134 a FR-136, FR-219)
+- [X] T0227 [US19] Implementar `IRemesasDeTesoreria` en src/Core/IngenIA365ERP.Application/Treasury/Remittances/RemesasDeTesoreria.cs, `ConfirmRemittanceCommand` (con soporte) y, del lado de Recaudo, `DispatchVaultRemittanceCommand` en src/Core/IngenIA365ERP.Application/Receipts/Vaults/ (movimiento de bóveda + remesa en la misma transacción) (R-15; FR-035, FR-105)
+- [X] T0228 [US19] Emitir `ChequeGiradoEmitido`, `ChequeGiradoAnulado` (causa `SpoiledBeforeDelivery` o `NotCashed`), `RemesaConfirmada` en src/Core/IngenIA365ERP.Application/Treasury/Accounting/EmisionDeTesoreria.Cheques.cs y `RemesaDespachada` en …/Receipts/Accounting/EmisionDeRecaudo.Caja.cs; completar las secciones de cheques sin cobrar y remesas sin confirmar de la tarea T0160
+- [X] T0229 [US19] Crear el documento `Cheque` (impresión sobre el formato de la chequera) en src/Presentation/IngenIA365ERP.API/Reports/DocumentosDeTesoreriaReport.cs (archivos-y-plantillas.md §7)
+- [X] T0230 [US19] Exponer src/Presentation/IngenIA365ERP.API/Endpoints/Treasury/{CheckbooksEndpoints,IssuedChecksEndpoints,RemittancesEndpoints}.cs (api.md §11, §12) y `POST /api/receipts/vaults/{id}/remittances` (`Receipts.Vault.Remit`); crear las pantallas src/Presentation/IngenIA365ERP.Shared/Pages/Tesoreria/{Chequeras,ChequesGirados,Remesas}.razor (`/tesoreria/chequeras`, `/tesoreria/cheques-girados`, `/tesoreria/remesas`) con su cliente e `IndicadorDeCarga`, y la acción «Remesar» en `/recaudo/boveda` (CH13)
+- [X] T0231 [US19] Regenerar en src/Infrastructure/IngenIA365ERP.Persistence.Migrations.{PostgreSql,SqlServer}/Application/ el par `TesoreriaNucleo` con chequeras, cheques girados y remesas
+
+
+**Notas de la construcción de la fase 14 (2026-10-24)**. Pruebas escritas y compiladas, sin correr. Desviaciones y decisiones; las nuevas quedan en
+decisiones-transversales §2.7:
+
+- **T0222, T0223**: escritas sobre `EscenarioDeTesoreria` (las chequeras, los cheques y la remesa del lado de Tesorería) y `CajaDePrueba` (el despacho de la bóveda con el
+  puerto simulado: las dos escenas tienen bases distintas). Además, el valor en letras del cheque.
+- **T0224 (pendiente)**: la e2e se escribe con las demás e2e de la fase 22; sin marcar.
+- **T0225**: `Checkbook`, `IssuedCheck`, `IssuedCheckEvent` (H) en `Entities/Treasury/Checkbooks` y `CashRemittance` en `Entities/Treasury/Remittances`; enums `CheckbookState`,
+  `IssuedCheckState`, `RemittanceDirection`, `RemittanceState`. Además de data-model §11: `RegisteredByUserId/At` y `VoidReason` en la chequera; en la remesa
+  `SourceDocumentPublicId/Number` (el movimiento de bóveda), `IdempotencyKey` (UK: la clave de quien la registra), `DispatchDate`, `ConfirmationSupportAttachmentPublicId`,
+  `ConfirmedOn` y `LiquidityFundUseId`. UK del número del cheque por chequera.
+- **T0226**: los comandos de la tarea más `MarkIssuedCheckCashedCommand` (el cobro manual en T0; la conciliación lo cruzará en T1) y las consultas. Desviación de permisos: el
+  catálogo sembrado no tiene `Treasury.Checks.Issue`; emitir, el cheque dañado y la impresión piden `Treasury.Checks.Print`. Rutas: `/checks` es área de la Tesorería
+  heredada (`TreasuryGroup.AreasHeredadas`), así que los nuevos van en `/api/treasury/checkbooks` e `/api/treasury/issued-checks` (la emisión de un lote es
+  `POST /issued-checks/batches/{lote}`). La emisión toma, en orden, configuración → cuenta → chequera → lote → órdenes; deja el lote y sus órdenes enviados. Anular antes de
+  entregar deja la orden enviada sin resultado y la misma emisión le da otro cheque del lote; anular un entregado exige que pasen `Cheques.DiasSinCobrar` días
+  (`Treasury.Check.StillCashable`, nuevo) y registra «cheque no cobrado» por el registro único de resultados.
+- **T0227**: `RemesasDeTesoreria` implementa el puerto, que suma `RecibidaEnBovedaAsync` (la bóveda recibe la remesa del banco; nuevo en el puerto) y amplía
+  `SolicitudDeRemesa` con la bóveda, el sello y el acta (opcionales). `DispatchVaultRemittanceCommand` hace en una transacción el movimiento `RemittanceOut` (doble custodia,
+  acta y sello obligatorios), la remesa por el puerto y el hecho. El banco → bóveda es `RegisterBankToVaultRemittanceCommand` (`POST /api/treasury/remittances/bank-to-vault`,
+  nuevo, con la guarda del fondo de liquidez) y lo cierra el movimiento de bóveda `RemittanceIn` con el `PublicId` de la remesa, que la confirma por el puerto
+  (`Receipts.Vault.RemittanceMismatch` si no coincide, nuevo). Además: `GET /api/receipts/own-bank-accounts` (las cuentas de recaudo por el puerto
+  `ICuentasBancariasPropias`, para la pantalla de la bóveda).
+- **T0228**: `ChequeGiradoEmitido` (`CHE`), `ChequeGiradoAnulado` (`CHA`, causa en la dimensión `Cause`) y `RemesaConfirmada` (`RMC`) de `TES`; `RemesaDespachada` (`RMD`) de
+  `REC`. `ElCatalogoDeMensajesEsUnico` cuenta 21 tipos `REC` (18 hechos) y 6 de `TES` (5 hechos). La vigilancia diaria de Tesorería suma `ChequesSinCobrarAsync` y
+  `RemesasSinConfirmarAsync` (sólo alertan).
+- **T0229**: el cheque en QuestPDF (`DocumentosDeTesoreriaReport.Cheque`, tamaño de cheque, valor en letras `ValorEnLetras`, cruce y primer beneficiario), por el puerto
+  `IDocumentosDeTesoreriaEnPdf` y `GET /api/treasury/issued-checks/{id}/document`.
+- **T0230**: `CheckbooksEndpoints` (chequeras y cheques girados en un archivo), `RemittancesEndpoints`, `POST /api/receipts/vaults/{id}/remittances`; pantallas
+  `/tesoreria/chequeras`, `/tesoreria/cheques-girados`, `/tesoreria/remesas` en el menú de Tesorería y la clase «Remesa al banco» en `/recaudo/boveda` (con la cuenta de
+  destino y el identificador de la remesa que vuelve); `ChequesYRemesasClient` en Web, Web.Client y MAUI. Sin probar en navegador.
+- **T0231**: regenerados en par los tres pares de la 015 en orden (+4 tablas en `TesoreriaNucleo`). Paridad OK (66 en par); `has-pending-model-changes` da «No changes» en
+  SQL Server y en PostgreSQL.
 
 ---
 

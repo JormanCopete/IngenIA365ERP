@@ -1,0 +1,157 @@
+@page "/tesoreria/cheques-girados"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Tesoreria
+@inject ChequesYRemesasClient ChequesApi
+@inject INotificationService Notification
+@inject IngenIA365ERP.Shared.Services.Nomina.DescargaDeArchivos Descargas
+
+<PageTitle>Cheques girados - IngenIA365ERP</PageTitle>
+
+@* Feature 015, US19 (T0230; FR-113, FR-135, FR-136): los cheques girados con su estado y los días sin cobrar; emitir los cheques de un lote de cheques desde una chequera,
+   imprimirlos, entregarlos con la constancia (la orden queda «girada»), marcarlos cobrados y anularlos (antes de entregar, o no cobrados). *@
+<PermissionGate Required="Treasury.Checks.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Cheques girados</h3>
+        <div class="toolbar">
+            <select class="e-input" @bind="_estado">
+                <option value="0">Todos</option>
+                <option value="1">Emitidos</option>
+                <option value="2">Entregados</option>
+                <option value="3">Cobrados</option>
+                <option value="4">Anulados</option>
+                <option value="5">No cobrados</option>
+                <option value="6">En blanco dañados</option>
+            </select>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+        </div>
+    </div>
+
+    <PermissionGate Required="Treasury.Checks.Print">
+        <section class="info-card">
+            <h4>Emitir los cheques de un lote</h4>
+            <IndicadorDeCarga Cargando="@_emision.Activa" Texto="Emitiendo…">
+                <div class="form-grid">
+                    <label class="campo">Lote (identificador) <input class="e-input" @bind="_lote" /></label>
+                    <label class="campo">Chequera
+                        <select class="e-input" @bind="_chequera">
+                            <option value="">— Elija —</option>
+                            @foreach (var k in _chequeras.Where(x => x.Status == 1)) { <option value="@k.PublicId">@k.BankAccountCode · desde @k.NextNumber</option> }
+                        </select>
+                    </label>
+                </div>
+                <div class="toolbar"><SfButton CssClass="e-primary" OnClick="@EmitirAsync">Emitir</SfButton></div>
+            </IndicadorDeCarga>
+        </section>
+    </PermissionGate>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Cargando cheques…">
+        <table class="data-grid">
+            <thead><tr><th>Cuenta</th><th>Número</th><th>Orden</th><th>Beneficiario</th><th>Valor</th><th>Emitido</th><th>Entregado</th><th>Días sin cobrar</th><th>Estado</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var c in _cheques)
+                {
+                    <tr class="@(c.Status == 2 && c.DaysWithoutCashing > 30 ? "fila-alerta" : "")">
+                        <td>@c.BankAccountCode</td><td>@c.CheckNumber</td><td>@c.OrderNumber</td><td>@c.BeneficiaryName</td><td>@c.Amount.ToString("N2")</td>
+                        <td>@c.IssuedOn.ToString("dd/MM/yyyy")</td><td>@(c.DeliveredOn?.ToString("dd/MM/yyyy") ?? "—")</td><td>@c.DaysWithoutCashing</td><td>@Estado(c.Status)</td>
+                        <td>
+                            @if (c.Status == 1)
+                            {
+                                <PermissionGate Required="Treasury.Checks.Print"><SfButton CssClass="e-flat" OnClick="@(() => ImprimirAsync(c))">Imprimir</SfButton></PermissionGate>
+                                <PermissionGate Required="Treasury.Checks.Deliver">
+                                    <input class="e-input" placeholder="Constancia (adjunto)" @bind="_constancia" />
+                                    <SfButton CssClass="e-flat" OnClick="@(() => EntregarAsync(c))">Entregar</SfButton>
+                                </PermissionGate>
+                            }
+                            @if (c.Status == 2)
+                            {
+                                <PermissionGate Required="Treasury.Checks.Deliver"><SfButton CssClass="e-flat" OnClick="@(() => CobradoAsync(c))">Cobrado</SfButton></PermissionGate>
+                            }
+                            @if (c.Status is 1 or 2)
+                            {
+                                <PermissionGate Required="Treasury.Checks.Void">
+                                    <input class="e-input" placeholder="Motivo" @bind="_motivo" />
+                                    <SfButton CssClass="e-flat" OnClick="@(() => AnularAsync(c))">Anular</SfButton>
+                                </PermissionGate>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </IndicadorDeCarga>
+</div>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new(), _emision = new();
+    private IReadOnlyList<ChequeGiradoDto> _cheques = [];
+    private IReadOnlyList<ChequeraDto> _chequeras = [];
+    private int _estado;
+    private string _lote = "", _chequera = "";
+    private string? _constancia, _motivo;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var k = await ChequesApi.ChequerasAsync();
+        if (k.IsSuccess) _chequeras = k.Value ?? [];
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await ChequesApi.ChequesAsync(null, _estado == 0 ? null : _estado);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los cheques."); return; }
+        _cheques = r.Value ?? [];
+    }
+
+    private async Task EmitirAsync()
+    {
+        if (!Guid.TryParse(_lote, out var lote) || !Guid.TryParse(_chequera, out var chequera)) { await Notification.WarningAsync("Indique el lote y la chequera."); return; }
+        using var carga = _emision.Iniciar();
+        var r = await ChequesApi.EmitirDelLoteAsync(lote, new EmitirChequesRequest(chequera, true, true), new ClaveDeOperacion());
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron emitir los cheques."); return; }
+        await Notification.SuccessAsync($"{r.Value?.Count ?? 0} cheque(s) emitidos.");
+        await CargarAsync();
+    }
+
+    private async Task EntregarAsync(ChequeGiradoDto c)
+    {
+        if (!Guid.TryParse(_constancia, out var constancia)) { await Notification.WarningAsync("Adjunte la constancia de entrega firmada."); return; }
+        using var carga = _carga.Iniciar();
+        var r = await ChequesApi.EntregarAsync(c.PublicId, new EntregarChequeRequest(constancia, null), new ClaveDeOperacion());
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo registrar la entrega."); return; }
+        await CargarAsync();
+    }
+
+    private async Task ImprimirAsync(ChequeGiradoDto c)
+    {
+        var r = await ChequesApi.DocumentoAsync(c.PublicId);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo generar el cheque."); return; }
+        await Descargas.GuardarAsync(r.Value!.Nombre, r.Value.TipoContenido, r.Value.Contenido);
+    }
+
+    private async Task CobradoAsync(ChequeGiradoDto c)
+    {
+        using var carga = _carga.Iniciar();
+        var r = await ChequesApi.CobradoAsync(c.PublicId, new ClaveDeOperacion());
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo marcar el cheque cobrado."); return; }
+        await CargarAsync();
+    }
+
+    private async Task AnularAsync(ChequeGiradoDto c)
+    {
+        if (string.IsNullOrWhiteSpace(_motivo)) { await Notification.WarningAsync("Escriba el motivo."); return; }
+        using var carga = _carga.Iniciar();
+        var r = await ChequesApi.AnularChequeAsync(c.PublicId, _motivo, new ClaveDeOperacion());
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo anular el cheque."); return; }
+        await CargarAsync();
+    }
+
+    private static string Estado(int s) => s switch
+    {
+        1 => "Emitido", 2 => "Entregado", 3 => "Cobrado", 4 => "Anulado", 5 => "No cobrado", 6 => "En blanco dañado", _ => s.ToString(),
+    };
+}

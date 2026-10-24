@@ -739,6 +739,10 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceivedCheck> ReceivedChecks => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceivedCheck>();
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceivedCheckEvent> ReceivedCheckEvents => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceivedCheckEvent>();
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.CheckReturnCause> CheckReturnCauses => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.CheckReturnCause>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Checkbooks.Checkbook> Checkbooks => Set<IngenIA365ERP.Domain.Entities.Treasury.Checkbooks.Checkbook>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Checkbooks.IssuedCheck> IssuedChecks => Set<IngenIA365ERP.Domain.Entities.Treasury.Checkbooks.IssuedCheck>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Checkbooks.IssuedCheckEvent> IssuedCheckEvents => Set<IngenIA365ERP.Domain.Entities.Treasury.Checkbooks.IssuedCheckEvent>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Remittances.CashRemittance> CashRemittances => Set<IngenIA365ERP.Domain.Entities.Treasury.Remittances.CashRemittance>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

@@ -368,6 +368,20 @@ Lo que tasks.md marcaba **(nuevo)** y lo que trajeron el `/speckit-analyze` y la
 | `Receipts.Check.{DataRequired, NotPostdated, Duplicate, InvalidTransition, UnknownReturnCause, ReturnRejectedByContract}` | errores que data-model no nombraba | `ErroresDeRecaudo.Cheques.cs` |
 | `POST /api/receipts/received-checks/custody` · `GET …/drawers-with-returns` · `GET …/return-causes` · pantalla `/recaudo/cheques-recibidos` · `ChequesRecibidosClient` · `ChequeDeCajaRequest` | rutas y pantalla que api.md no listaba | `ReceivedChecksEndpoints.cs`, `Shared` |
 
+**Fijados en la construcción de la fase 14 (2026-10-24)**:
+
+| Nombre | Qué | Dónde |
+|---|---|---|
+| `Checkbook` · `IssuedCheck` · `IssuedCheckEvent` (H) · `CashRemittance` (`IdempotencyKey`, `DispatchDate`, `SourceDocument…`, `ConfirmedOn`, `LiquidityFundUseId`) · `CheckbookState` · `IssuedCheckState` · `RemittanceDirection` · `RemittanceState` · DbSets `Checkbooks`, `IssuedChecks`, `IssuedCheckEvents`, `CashRemittances` | chequeras, cheques girados y remesas | `Entities/Treasury/Checkbooks`, `Entities/Treasury/Remittances`, `TES_*` |
+| `RegisterCheckbookCommand` · `VoidCheckbookCommand` · `SpoilBlankCheckCommand` · `IssueChecksForBatchCommand` · `DeliverIssuedCheckCommand` · `VoidIssuedCheckCommand` · `MarkIssuedCheckCashedCommand` · `ListCheckbooksQuery` · `ListIssuedChecksQuery` · `ChequerasDeTesoreria` · `CheckbookDto` · `IssuedCheckDto` | la chequera y el cheque girado | `Application/Treasury/Checkbooks` |
+| `ChequeModel` · `IDocumentosDeTesoreriaEnPdf` · `GetIssuedCheckDocumentQuery` · `ValorEnLetras` · `DocumentosDeTesoreriaReport` | la impresión del cheque | `Application/Treasury/Checkbooks/DocumentoDeCheque.cs`, `API/Reports` |
+| `RemesasDeTesoreria` (puerto) · `IRemesasDeTesoreria.RecibidaEnBovedaAsync` · `SolicitudDeRemesa.{VaultPublicId, BagSeal, MinutesAttachmentPublicId}` · `ConfirmRemittanceCommand` · `RegisterBankToVaultRemittanceCommand` · `ListCashRemittancesQuery` · `CashRemittanceDto` · clase de numeración `RM` | la remesa en Tesorería | `Application/Treasury/Remittances`, `Common/Integration/Treasury` |
+| `DispatchVaultRemittanceCommand` · `VaultRemittanceDto` · `ListReceiptsOwnBankAccountsQuery` · `GET /api/receipts/own-bank-accounts` · `RegisterVaultMovementCommand` confirma la remesa que vuelve por el puerto | la remesa en Recaudo | `Application/Receipts/Vaults/RemesasDeBoveda.cs` |
+| `ChequeGiradoEmitidoV1` (`CHE`) · `ChequeGiradoAnuladoV1` (`CHA`) · `RemesaConfirmadaV1` (`RMC`) · `RemesaDespachadaV1` (`RMD`) · `EmisionDeTesoreria.{ChequeGiradoEmitidoAsync, ChequeGiradoAnuladoAsync, RemesaConfirmadaAsync}` · `EmisionDeRecaudo.RemesaDespachadaAsync` · clases de origen `IssuedCheck`, `CashRemittance` | los hechos de cheques y remesas | `Contracts/Treasury/HechosDeChequesYRemesasV1.cs`, `Contracts/Receipts/HechosDeRemesasV1.cs` |
+| `VigilanciaDeTesoreria.{ChequesSinCobrarAsync, RemesasSinConfirmarAsync}` | alertas de la tarea `tesoreria.vigilancia` | `Application/Treasury/Tareas` |
+| `Treasury.Checkbook.{Exhausted, Voided, RangeOverlaps, AccountInactive, OtherAccount}` · `Treasury.Batch.{NotChecks, NoChecksToIssue}` · `Treasury.Check.{NotDeliverable, NotVoidable, StillCashable}` · `Treasury.Remittance.{NotInTransit, SupportRequired, OtherAccount, AccountNotAllowed}` · `Receipts.Vault.RemittanceMismatch` | errores | `ErroresDeTesoreria.Cheques.cs`, `ErroresDeRecaudo.Remesas.cs` |
+| `/api/treasury/checkbooks` · `/api/treasury/issued-checks` (no `/checks`, área heredada) · `POST /api/treasury/remittances/bank-to-vault` · `POST /api/receipts/vaults/{id}/remittances` · pantallas `/tesoreria/chequeras`, `/tesoreria/cheques-girados`, `/tesoreria/remesas` · `ChequesYRemesasClient` | rutas y pantallas | `CheckbooksEndpoints.cs`, `RemittancesEndpoints.cs`, `Shared` |
+
 ## 3. Decisiones transversales
 
 ### Módulos y frontera

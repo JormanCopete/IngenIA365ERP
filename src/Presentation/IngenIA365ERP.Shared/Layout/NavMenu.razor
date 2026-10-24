@@ -626,6 +626,16 @@
             <PermissionGate Required="Treasury.Statements.View">
                 <NavLink href="/tesoreria/extractos" class="nav-subitem">Extractos bancarios</NavLink>
             </PermissionGate>
+            @* US19 (T0230): chequeras, cheques girados y remesas de efectivo. *@
+            <PermissionGate Required="Treasury.Checkbooks.View">
+                <NavLink href="/tesoreria/chequeras" class="nav-subitem">Chequeras</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Treasury.Checks.View">
+                <NavLink href="/tesoreria/cheques-girados" class="nav-subitem">Cheques girados</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Treasury.Remittances.View">
+                <NavLink href="/tesoreria/remesas" class="nav-subitem">Remesas de efectivo</NavLink>
+            </PermissionGate>
         </NavMenuGroup>
 
         @* Feature 015 (T0047; R-04; FR-162): lo heredado de Tesorería convive hasta T2 bajo su propio grupo. Los grupos «Recaudo» y

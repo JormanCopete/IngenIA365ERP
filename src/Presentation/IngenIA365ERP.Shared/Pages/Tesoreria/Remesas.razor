@@ -1,0 +1,76 @@
+@page "/tesoreria/remesas"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Tesoreria
+@inject ChequesYRemesasClient ChequesApi
+@inject INotificationService Notification
+
+<PageTitle>Remesas - IngenIA365ERP</PageTitle>
+
+@* Feature 015, US19 (T0230; FR-035, FR-105): las remesas de efectivo entre las bóvedas y los bancos con los días en tránsito; confirmar la que llegó al banco con la
+   constancia o con la línea del extracto. La remesa sale de la bóveda desde «Bóveda» de Recaudo. *@
+<PermissionGate Required="Treasury.Remittances.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Remesas de efectivo</h3>
+        <div class="toolbar">
+            <select class="e-input" @bind="_estado">
+                <option value="0">Todas</option>
+                <option value="1">En tránsito</option>
+                <option value="2">Confirmadas</option>
+            </select>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Cargando remesas…">
+        <table class="data-grid">
+            <thead><tr><th>Número</th><th>Dirección</th><th>Cuenta</th><th>Valor</th><th>Sello</th><th>Salió</th><th>Días en tránsito</th><th>Estado</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var r in _remesas)
+                {
+                    <tr class="@(r.Status == 1 && r.DaysInTransit > 2 ? "fila-alerta" : "")">
+                        <td>@r.Number</td><td>@(r.Direction == 1 ? "Bóveda → banco" : "Banco → bóveda")</td><td>@r.BankAccountCode</td><td>@r.Amount.ToString("N2")</td><td>@r.BagSeal</td>
+                        <td>@r.DispatchDate.ToString("dd/MM/yyyy")</td><td>@r.DaysInTransit</td><td>@(r.Status == 1 ? "En tránsito" : r.Status == 2 ? "Confirmada" : r.Status.ToString())</td>
+                        <td>
+                            @if (r.Status == 1 && r.Direction == 1)
+                            {
+                                <PermissionGate Required="Treasury.Remittances.Confirm">
+                                    <input class="e-input" placeholder="Soporte (adjunto)" @bind="_soporte" />
+                                    <SfButton CssClass="e-flat" OnClick="@(() => ConfirmarAsync(r))">Confirmar</SfButton>
+                                </PermissionGate>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </IndicadorDeCarga>
+</div>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new();
+    private IReadOnlyList<RemesaDto> _remesas = [];
+    private int _estado = 1;
+    private string? _soporte;
+
+    protected override async Task OnInitializedAsync() => await CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await ChequesApi.RemesasAsync(_estado == 0 ? null : _estado);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las remesas."); return; }
+        _remesas = r.Value ?? [];
+    }
+
+    private async Task ConfirmarAsync(RemesaDto r)
+    {
+        if (!Guid.TryParse(_soporte, out var soporte)) { await Notification.WarningAsync("Adjunte el soporte del banco."); return; }
+        using var carga = _carga.Iniciar();
+        var c = await ChequesApi.ConfirmarRemesaAsync(r.PublicId, new ConfirmarRemesaRequest(soporte, null, null), new ClaveDeOperacion());
+        if (!c.IsSuccess) { await Notification.ErrorAsync(c.ErrorMessage ?? "No se pudo confirmar la remesa."); return; }
+        await CargarAsync();
+    }
+}

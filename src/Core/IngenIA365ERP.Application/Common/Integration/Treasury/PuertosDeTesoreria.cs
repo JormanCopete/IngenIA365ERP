@@ -59,7 +59,10 @@ public sealed record SolicitudDeRemesa(
     decimal Amount,
     DateOnly DispatchDate,
     string SourceDocumentNumber,
-    Guid SourceDocumentPublicId);
+    Guid SourceDocumentPublicId,
+    Guid? VaultPublicId = null,
+    string? BagSeal = null,
+    Guid? MinutesAttachmentPublicId = null);
 
 public sealed record RemesaRegistradaDto(Guid RemittancePublicId, string Number);
 
@@ -126,6 +129,12 @@ public interface IRemesasDeTesoreria
     Task<RemesaRegistradaDto> RegistrarAsync(SolicitudDeRemesa solicitud, CancellationToken ct);
 
     Task<EstadoDeRemesaDto> EstadoAsync(Guid remittancePublicId, CancellationToken ct);
+
+    /// <summary>
+    /// Feature 015, US19 (T0227): la bóveda recibió la remesa que Tesorería sacó del banco (<c>BankToVault</c>); la confirma en la transacción del movimiento de bóveda, sin
+    /// guardar. Lanza si la remesa no es de esa bóveda o no es por ese valor. (nuevo)
+    /// </summary>
+    Task<EstadoDeRemesaDto> RecibidaEnBovedaAsync(Guid remittancePublicId, Guid vaultPublicId, Guid vaultMovementPublicId, decimal amount, CancellationToken ct);
 }
 
 /// <summary>Ofrece Tesorería → usa Recaudo (T0): la orden de pago de una devolución. (nuevo)</summary>

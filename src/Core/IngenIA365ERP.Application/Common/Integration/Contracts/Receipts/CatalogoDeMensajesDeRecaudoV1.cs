@@ -40,6 +40,8 @@ public static class CatalogoDeMensajesDeRecaudoV1
         Hecho(typeof(ReciboDePagaduriaEmitidoV1), ReciboDePagaduriaEmitidoV1.Type, "RPG"),
         // US15 (fase 13): el cheque recibido devuelto, en línea.
         Hecho(typeof(ChequeRecibidoDevueltoV1), ChequeRecibidoDevueltoV1.Type, "CRD"),
+        // US19 (fase 14): la remesa que sale de la bóveda.
+        Hecho(typeof(RemesaDespachadaV1), RemesaDespachadaV1.Type, "RMD"),
     ];
 
     private static TipoDeMensaje Hecho(Type record, string type, string codigoCorto) =>

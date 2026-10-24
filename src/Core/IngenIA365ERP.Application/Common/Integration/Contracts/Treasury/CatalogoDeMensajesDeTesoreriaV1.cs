@@ -21,6 +21,10 @@ public static class CatalogoDeMensajesDeTesoreriaV1
         Hecho(typeof(GmfDePagoCausadoV1), GmfDePagoCausadoV1.Type, "GMP"),
         // US11 (fase 8): el pago girado de una orden.
         Hecho(typeof(PagoDeOrdenGiradoV1), PagoDeOrdenGiradoV1.Type, "POG"),
+        // US19 (fase 14): los cheques girados y la remesa confirmada.
+        Hecho(typeof(ChequeGiradoEmitidoV1), ChequeGiradoEmitidoV1.Type, "CHE"),
+        Hecho(typeof(ChequeGiradoAnuladoV1), ChequeGiradoAnuladoV1.Type, "CHA"),
+        Hecho(typeof(RemesaConfirmadaV1), RemesaConfirmadaV1.Type, "RMC"),
     ];
 
     private static TipoDeMensaje Hecho(Type record, string type, string codigoCorto) =>

@@ -510,6 +510,7 @@ try
     builder.Services.AddSingleton<IngenIA365ERP.Application.Inventory.Cash.IDocumentosDeCajaEnPdf, IngenIA365ERP.API.Reports.DocumentosDeCajaPdfRenderer>();
     // Feature 015, US2 (T0096): el cierre de la sesión, el cierre del día y el acta de arqueo de Recaudo.
     builder.Services.AddSingleton<IngenIA365ERP.Application.Receipts.Sessions.IDocumentosDeRecaudoEnPdf, IngenIA365ERP.API.Reports.DocumentosDeRecaudoPdfRenderer>();
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Treasury.Checkbooks.IDocumentosDeTesoreriaEnPdf, IngenIA365ERP.API.Reports.DocumentosDeTesoreriaPdfRenderer>();
     // Feature 012 (I5, T790): la orden de compra en PDF (la descarga y el envio al proveedor).
     builder.Services.AddSingleton<IngenIA365ERP.Application.Inventory.Purchasing.IOrdenDeCompraEnPdf, IngenIA365ERP.API.Reports.PurchaseOrderPdfRenderer>();
     // Feature 012 (I4, T750): la representacion grafica de los documentos electronicos, una sola plantilla para todos los canales.

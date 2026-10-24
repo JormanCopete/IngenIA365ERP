@@ -90,6 +90,28 @@ public sealed partial class EmisionDeRecaudo
         return await EmitirAsync(contenido, movimiento.PublicId, ClaseMovimientoDeBoveda, codigoDelTipo, movimiento.Number, fecha, boveda.BranchId, null, ct);
     }
 
+    /// <summary>
+    /// Feature 015, US19 (T0228): <c>RemesaDespachada</c> (RMD), la remesa de la bóveda al banco: débito <c>EfectivoEnTransito</c>, crédito <c>Boveda</c>, con la remesa de
+    /// Tesorería en el contenido. Sin guardar.
+    /// </summary>
+    public async Task<IntegrationMessage> RemesaDespachadaAsync(VaultMovement movimiento, Vault boveda, Guid remesa, string numeroDeRemesa, Guid cuenta, DateOnly fecha,
+        string codigoDelTipo, CancellationToken ct)
+    {
+        var oficina = await DimensionesDeOficinaAsync(boveda.BranchId, ct);
+        var valor = Math.Abs(movimiento.Amount);
+        var contenido = new RemesaDespachadaV1
+        {
+            MovementPublicId = movimiento.PublicId, Number = movimiento.Number, VaultPublicId = boveda.PublicId, RemittancePublicId = remesa, RemittanceNumber = numeroDeRemesa,
+            OwnBankAccountPublicId = cuenta, Amount = valor, BagSeal = movimiento.BagSeal, DispatchedOn = fecha, RegisteredBy = await UsuarioAsync(ct),
+            Lines =
+            [
+                Linea(RolesDeRecaudo.EfectivoEnTransito, RolesDeRecaudo.Debito, valor, oficina, cruce: numeroDeRemesa),
+                Linea(RolesDeRecaudo.Boveda, RolesDeRecaudo.Credito, valor, oficina, cruce: numeroDeRemesa),
+            ],
+        };
+        return await EmitirAsync(contenido, movimiento.PublicId, ClaseMovimientoDeBoveda, codigoDelTipo, movimiento.Number, fecha, boveda.BranchId, null, ct);
+    }
+
     /// <summary><c>MedioReclasificado</c>: rol del medio de destino ← rol del medio de origen; el recibo no se toca (US2-7). Sin guardar.</summary>
     public async Task<IntegrationMessage> MedioReclasificadoAsync(CashMovement movimiento, CashSession sesion, Guid? recibo, DateOnly fecha, string codigoDelTipo,
         CancellationToken ct)

@@ -181,7 +181,8 @@ public sealed class RegisterVaultMovementCommandHandler(
     NumeradorDeRecaudo numerador,
     SegregacionDeRecaudo segregacion,
     ParametrosDeCaja parametros,
-    EmisionDeRecaudo emision) : IRequestHandler<RegisterVaultMovementCommand, Result<VaultMovementDto>>
+    EmisionDeRecaudo emision,
+    IEnumerable<IngenIA365ERP.Application.Common.Integration.Treasury.IRemesasDeTesoreria> remesas) : IRequestHandler<RegisterVaultMovementCommand, Result<VaultMovementDto>>
 {
     public async Task<Result<VaultMovementDto>> Handle(RegisterVaultMovementCommand request, CancellationToken ct)
     {
@@ -225,6 +226,19 @@ public sealed class RegisterVaultMovementCommandHandler(
         db.VaultMovements.Add(movimiento);
         await db.SaveChangesAsync(ct);
         if (signo != 0) MovimientosDeBoveda.AgregarDenominaciones(db, movimiento, denominaciones.Value, signo);
+        // Feature 015, US19 (T0227): la remesa que Tesorería sacó del banco queda confirmada al recibirla la bóveda, por el puerto y en la misma transacción.
+        if (request.Kind == VaultMovementKind.RemittanceIn && request.RemittancePublicId is { } remesa)
+            foreach (var puerto in remesas)
+            {
+                try
+                {
+                    await puerto.RecibidaEnBovedaAsync(remesa, boveda.PublicId, movimiento.PublicId, valor, ct);
+                }
+                catch (InvalidOperationException ex)
+                {
+                    return Result.Failure<VaultMovementDto>(ErroresDeRecaudo.RemesaNoCoincide(ex.Message));
+                }
+            }
         if (request.Kind == VaultMovementKind.RemittanceIn) await emision.MovimientoDeBovedaAsync(movimiento, boveda, hoy, tipo.Code, ct);
         await db.SaveChangesAsync(ct);
         return Result.Success(MovimientosDeBoveda.Dto(movimiento));

@@ -46,6 +46,48 @@ public sealed class VigilanciaDeTesoreria(IApplicationDbContext db, ParametrosDe
         }
         return alertadas;
     }
+
+    /// <summary>
+    /// Feature 015, US19 (T0228; FR-136): alerta cada cheque entregado y no cobrado a <c>Cheques.DiasSinCobrar</c> días (<c>Tesoreria.ChequeSinCobrar</c>). No lo anula: lo
+    /// anula una persona con permiso. Devuelve cuántos alertó.
+    /// </summary>
+    public async Task<int> ChequesSinCobrarAsync(CancellationToken ct)
+    {
+        var hoy = reloj.HoyLocal;
+        var dias = await parametros.EnteroAsync(ParametrosDeRecaudoYTesoreria.ChequesDiasSinCobrar, hoy, ct) ?? 30;
+        if (dias <= 0) return 0;
+        var limite = hoy.AddDays(-dias);
+        var cheques = await (from c in db.IssuedChecks.AsNoTracking()
+                             join o in db.PaymentOrders.AsNoTracking() on c.PaymentOrderId equals o.Id
+                             where c.Status == IssuedCheckState.Delivered && c.DeliveredOn != null && c.DeliveredOn <= limite
+                             select new { c.PublicId, c.CheckNumber, c.Amount, c.DeliveredOn, o.Number, o.BeneficiaryName }).ToListAsync(ct);
+        foreach (var c in cheques)
+            await alertas.LevantarAsync(new AlertaALevantar(TiposDeAlerta.TesoreriaChequeSinCobrar, "Cheque girado sin cobrar",
+                string.Create(CultureInfo.InvariantCulture,
+                    $"El cheque {c.CheckNumber} de la orden {c.Number} ({c.BeneficiaryName}, {c.Amount:N0}) se entregó el {c.DeliveredOn:dd/MM/yyyy} y no se ha cobrado: confírmelo con el extracto o anúlelo como «no cobrado»."),
+                "IssuedCheck", c.PublicId, DedupKey: $"Tesoreria.ChequeSinCobrar:{c.PublicId:N}", ModuloDeOrigen: "Treasury"), ct);
+        return cheques.Count;
+    }
+
+    /// <summary>
+    /// Feature 015, US19 (T0228; FR-105): alerta cada remesa en tránsito más de <c>Remesas.DiasParaConfirmar</c> días (<c>Tesoreria.RemesaSinConfirmar</c>). Devuelve
+    /// cuántas alertó.
+    /// </summary>
+    public async Task<int> RemesasSinConfirmarAsync(CancellationToken ct)
+    {
+        var hoy = reloj.HoyLocal;
+        var dias = await parametros.EnteroAsync(ParametrosDeRecaudoYTesoreria.RemesasDiasParaConfirmar, hoy, ct) ?? 2;
+        if (dias < 0) return 0;
+        var limite = hoy.AddDays(-dias);
+        var remesas = await db.CashRemittances.AsNoTracking().Where(r => r.Status == RemittanceState.InTransit && r.DispatchDate < limite)
+            .Select(r => new { r.PublicId, r.Number, r.Amount, r.DispatchDate, r.Direction }).ToListAsync(ct);
+        foreach (var r in remesas)
+            await alertas.LevantarAsync(new AlertaALevantar(TiposDeAlerta.TesoreriaRemesaSinConfirmar, "Remesa sin confirmar",
+                string.Create(CultureInfo.InvariantCulture,
+                    $"La remesa {r.Number} por {r.Amount:N0} salió el {r.DispatchDate:dd/MM/yyyy} y sigue en tránsito: confírmela con el soporte del banco o con el extracto."),
+                "CashRemittance", r.PublicId, DedupKey: $"Tesoreria.RemesaSinConfirmar:{r.PublicId:N}", ModuloDeOrigen: "Treasury"), ct);
+        return remesas.Count;
+    }
 }
 
 /// <summary>La tarea <c>tesoreria.vigilancia</c>: una vez al día (cada <see cref="Intervalo"/>), por cooperativa. (nuevo)</summary>
@@ -59,6 +101,11 @@ public sealed class TareaDeVigilanciaDeTesoreria : ITareaProgramada
 
     public bool DebeCorrer(DateTimeOffset ahoraLocal, DateTimeOffset? ultimaCorrida) => ultimaCorrida is null || ahoraLocal - ultimaCorrida.Value >= Intervalo;
 
-    public async Task EjecutarAsync(IServiceProvider servicios, CancellationToken ct) =>
-        await servicios.GetRequiredService<VigilanciaDeTesoreria>().OrdenesSinResultadoAsync(ct);
+    public async Task EjecutarAsync(IServiceProvider servicios, CancellationToken ct)
+    {
+        var vigilancia = servicios.GetRequiredService<VigilanciaDeTesoreria>();
+        await vigilancia.OrdenesSinResultadoAsync(ct);
+        await vigilancia.ChequesSinCobrarAsync(ct);
+        await vigilancia.RemesasSinConfirmarAsync(ct);
+    }
 }
