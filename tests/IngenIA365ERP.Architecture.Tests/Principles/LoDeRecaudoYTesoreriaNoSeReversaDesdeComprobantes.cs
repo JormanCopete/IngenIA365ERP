@@ -19,6 +19,11 @@ public class LoDeRecaudoYTesoreriaNoSeReversaDesdeComprobantes
     /// <summary>(archivo relativo a <c>src/</c>, código del módulo que la guarda tiene que nombrar).</summary>
     private static readonly (string Archivo, string Modulo)[] Guardas =
     [
+        // Fase 16 (T0254, T0261): la guarda de PrepareReversalAsync y el mensaje de ReverseDocumentCommand.
+        ("Core/IngenIA365ERP.Application/Accounting/Posting/AccountingPoster.cs", "ModuloContable.Recaudo"),
+        ("Core/IngenIA365ERP.Application/Accounting/Posting/AccountingPoster.cs", "ModuloContable.Tesoreria"),
+        ("Core/IngenIA365ERP.Application/Accounting/Documents/DocumentCommands.cs", "ModuloContable.Recaudo"),
+        ("Core/IngenIA365ERP.Application/Accounting/Documents/DocumentCommands.cs", "ModuloContable.Tesoreria"),
     ];
 
     [Fact]

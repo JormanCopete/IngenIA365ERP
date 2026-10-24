@@ -63,6 +63,13 @@ public class LosComandosDeConsumoNoTienenRuta
         "ConsumeLendingPaymentReversalCommand",
         // Feature 015, US7 (T0206): el archivo de descuentos de una pagaduría (lo manda DestinoRecaudo).
         "ConsumePayrollDeductionFileCommand",
+        // Feature 015, US8 (T0257): los hechos de Recaudo y Tesorería a Contabilidad (los manda DestinoContabilidad); US10 (T0267): el archivo de
+        // desembolsos de Cartera y el enrutador de las claves Confirmation:{x} (los manda DestinoTesoreria).
+        "PostReceiptsFactsCommand",
+        "PostReceiptsSummaryGroupCommand",
+        "PostTreasuryFactsCommand",
+        "ConsumeLendingDisbursementFileCommand",
+        "ConsumeKeyedTreasuryUnitCommand",
     ];
 
     [Fact]

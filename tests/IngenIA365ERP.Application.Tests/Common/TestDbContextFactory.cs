@@ -606,9 +606,17 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Payments.PaymentResponseLine> PaymentResponseLines => Set<IngenIA365ERP.Domain.Entities.Treasury.Payments.PaymentResponseLine>();
     public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Payments.DisbursementResult> DisbursementResults => Set<IngenIA365ERP.Domain.Entities.Treasury.Payments.DisbursementResult>();
     public DbSet<IngenIA365ERP.Domain.Entities.Accounting.Integration.OwnBankAccountLink> OwnBankAccountLinks => Set<IngenIA365ERP.Domain.Entities.Accounting.Integration.OwnBankAccountLink>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Accounting.Integration.ReceiptsPostingRule> ReceiptsPostingRules => Set<IngenIA365ERP.Domain.Entities.Accounting.Integration.ReceiptsPostingRule>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Accounting.Integration.TreasuryPostingRule> TreasuryPostingRules => Set<IngenIA365ERP.Domain.Entities.Accounting.Integration.TreasuryPostingRule>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Accounting.Integration.ReceiptsVoucherMapping> ReceiptsVoucherMappings => Set<IngenIA365ERP.Domain.Entities.Accounting.Integration.ReceiptsVoucherMapping>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Accounting.Integration.TreasuryVoucherMapping> TreasuryVoucherMappings => Set<IngenIA365ERP.Domain.Entities.Accounting.Integration.TreasuryVoucherMapping>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Accounting.Integration.ReceiptsPosting> ReceiptsPostings => Set<IngenIA365ERP.Domain.Entities.Accounting.Integration.ReceiptsPosting>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Accounting.Integration.TreasuryPosting> TreasuryPostings => Set<IngenIA365ERP.Domain.Entities.Accounting.Integration.TreasuryPosting>();
     // Feature 015, fases 11 a 16 (DbSets).
     public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Statements.BankStatement> TreasuryBankStatements => Set<IngenIA365ERP.Domain.Entities.Treasury.Statements.BankStatement>();
     public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Statements.BankStatementLine> TreasuryBankStatementLines => Set<IngenIA365ERP.Domain.Entities.Treasury.Statements.BankStatementLine>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Payments.LendingDisbursementFile> LendingDisbursementFiles => Set<IngenIA365ERP.Domain.Entities.Treasury.Payments.LendingDisbursementFile>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Payments.LendingDisbursementFileOrder> LendingDisbursementFileOrders => Set<IngenIA365ERP.Domain.Entities.Treasury.Payments.LendingDisbursementFileOrder>();
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Banks.BankItemIdentification> BankItemIdentifications => Set<IngenIA365ERP.Domain.Entities.Receipts.Banks.BankItemIdentification>();
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Banks.UnidentifiedItem> UnidentifiedItems => Set<IngenIA365ERP.Domain.Entities.Receipts.Banks.UnidentifiedItem>();
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Banks.UnidentifiedItemResolution> UnidentifiedItemResolutions => Set<IngenIA365ERP.Domain.Entities.Receipts.Banks.UnidentifiedItemResolution>();
@@ -710,6 +718,12 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Treasury.Payments.DisbursementResult>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Treasury.Activation.TreasuryActivation>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Accounting.Integration.OwnBankAccountLink>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Accounting.Integration.ReceiptsPostingRule>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Accounting.Integration.TreasuryPostingRule>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Accounting.Integration.ReceiptsVoucherMapping>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Accounting.Integration.TreasuryVoucherMapping>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Accounting.Integration.ReceiptsPosting>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Accounting.Integration.TreasuryPosting>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceiptVoiding>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PayrollDeductionFile>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PayrollDeductionFileLine>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
@@ -729,6 +743,8 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Compliance.ComplianceAlertLog>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Treasury.Statements.BankStatement>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Treasury.Statements.BankStatementLine>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Treasury.Payments.LendingDisbursementFile>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Treasury.Payments.LendingDisbursementFileOrder>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Banks.BankItemIdentification>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Banks.UnidentifiedItem>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Banks.UnidentifiedItemResolution>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });

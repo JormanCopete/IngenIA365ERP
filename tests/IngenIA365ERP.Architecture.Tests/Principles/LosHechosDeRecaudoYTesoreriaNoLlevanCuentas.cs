@@ -24,6 +24,8 @@ public class LosHechosDeRecaudoYTesoreriaNoLlevanCuentas
     [
         // Feature 015, US2 (T0091): los hechos de la caja.
         "Core/IngenIA365ERP.Application/Common/Integration/Contracts/Receipts",
+        // Fase 16 (T0254): los hechos de Tesorería.
+        "Core/IngenIA365ERP.Application/Common/Integration/Contracts/Treasury",
     ];
 
     /// <summary>Propiedades con <c>Account</c> en el nombre que no son cuentas contables.</summary>

@@ -100,6 +100,18 @@ public class UnSoloConsumidorPorDestino
         Assert.EndsWith("Application/Accounting/Integration/DestinoContabilidad.cs", unico, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// Feature 015, US8 (T0254, T0258): el único consumidor de <c>Accounting</c> reparte también los hechos de Recaudo y de Tesorería, sin un segundo
+    /// consumidor: <c>DestinoContabilidad</c> nombra sus tres comandos y su agrupador. Prueba escrita, sin correr.
+    /// </summary>
+    [Fact]
+    public void DestinoContabilidad_reparte_Recaudo_y_Tesoreria()
+    {
+        var fuente = File.ReadAllText(Path.Combine(RepoPath.FindRepoRoot(), "src", "Core", "IngenIA365ERP.Application", "Accounting", "Integration", "DestinoContabilidad.cs"));
+        foreach (var nombre in new[] { "PostReceiptsFactsCommand", "PostReceiptsSummaryGroupCommand", "PostTreasuryFactsCommand", "AgrupadorDeRecaudo", "ModulosDeOrigen.Tesoreria" })
+            Assert.Contains(nombre, fuente, StringComparison.Ordinal);
+    }
+
     private sealed class Consumidor(string destino) : IDestinoDeMensajes
     {
         public string Destino => destino;

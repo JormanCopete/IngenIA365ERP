@@ -96,7 +96,8 @@ public class ElCatalogoDeMensajesEsUnico
         // Feature 014 (T048): + los 33 hechos de captaciones y aportes; T055: + la v2 de OrdenDeGiroEmitida; T098: + RetiroDeAsociadoAprobado;
         // US4 (T112): + ConsignacionReversadaPorCartera, CargoDeCaptacionCausado y CargoDeCaptacionReversado; T091 (D36): + la v2 de
         // DescuentosPorPagaduria (y, de Recaudo, la v2 de ResultadoDeDescuentos).
-        Assert.Equal(82, todos.Count(t => t.OriginModule == ModulosDeOrigen.Cartera));
+        // Feature 015, US10 (T0267; E-01 c): + ArchivoDeDesembolsosGenerado y ArchivoDeDesembolsosAnulado (CAR → Treasury).
+        Assert.Equal(84, todos.Count(t => t.OriginModule == ModulosDeOrigen.Cartera));
         // Feature 015, US10 y US11 (T0145, T0159): + GmfDePagoCausado (GMP) y PagoDeOrdenGirado (POG).
         // US19 (T0228): + ChequeGiradoEmitido (CHE), ChequeGiradoAnulado (CHA) y RemesaConfirmada (RMC).
         Assert.Equal(6, todos.Count(t => t.OriginModule == ModulosDeOrigen.Tesoreria));
@@ -104,15 +105,15 @@ public class ElCatalogoDeMensajesEsUnico
         // ReciboAnulado (RAN), AplicacionReversadaPorModulo (ARM), SaldoAFavorDePagadorResuelto (SFP) y SaldoAFavorDeCarteraDevuelto (SFC).
         // US6 (T0196): + ReciboDeBancoEmitido (RBE), PartidaPorIdentificarReconocida (PIR), PartidaClasificada (PCL) y PartidaDevueltaAlConsignante (PDC).
         // US7 (T0209): + GiroDePagaduriaRecibido (GPR) y ReciboDePagaduriaEmitido (RPG); US15 (T0218): + ChequeRecibidoDevuelto (CRD); US19 (T0228): + RemesaDespachada (RMD); US14 (T0242): + DineroRetenidoEnCustodia (DCU) y
-        // CustodiaLiberada (CLB).
-        Assert.Equal(23, todos.Count(t => t.OriginModule == ModulosDeOrigen.Recaudo));
+        // CustodiaLiberada (CLB); US8 (fase 16): + DevolucionNoGirada (DNG).
+        Assert.Equal(24, todos.Count(t => t.OriginModule == ModulosDeOrigen.Recaudo));
 
         var hechos = todos.Where(t => t.OriginModule == ModulosDeOrigen.Cartera && t.AdmiteDestino(IntegrationDestinations.Accounting)).ToList();
         Assert.Equal(70, hechos.Count);
         Assert.All(hechos, t => Assert.Matches("^[A-Z]{3,4}$", t.CodigoCorto ?? string.Empty));
         Assert.Equal(hechos.Count, hechos.Select(t => t.CodigoCorto).Distinct().Count());
         var hechosDeRecaudo = todos.Where(t => t.OriginModule == ModulosDeOrigen.Recaudo && t.AdmiteDestino(IntegrationDestinations.Accounting)).ToList();
-        Assert.Equal(20, hechosDeRecaudo.Count);
+        Assert.Equal(21, hechosDeRecaudo.Count);
         Assert.All(hechosDeRecaudo, t => Assert.Matches("^[A-Z]{3,4}$", t.CodigoCorto ?? string.Empty));
         var hechosDeTesoreria = todos.Where(t => t.OriginModule == ModulosDeOrigen.Tesoreria && t.AdmiteDestino(IntegrationDestinations.Accounting)).ToList();
         Assert.Equal(5, hechosDeTesoreria.Count);
