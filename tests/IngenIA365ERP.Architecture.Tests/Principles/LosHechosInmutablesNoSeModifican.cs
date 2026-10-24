@@ -324,6 +324,8 @@ public class LosHechosInmutablesNoSeModifican
         ["ReceivedCheckEvent"] = [],
         // Fase 14, US19 (T0225; data-model §11.2): cada transición de un cheque girado es un evento que no cambia.
         ["IssuedCheckEvent"] = [],
+        // Fase 15, US14 (T0239; data-model §7.1): el registro de transacciones en efectivo no se edita; la anulación escribe otra fila con signo contrario.
+        ["CashTransaction"] = [],
     };
 
     /// <summary>

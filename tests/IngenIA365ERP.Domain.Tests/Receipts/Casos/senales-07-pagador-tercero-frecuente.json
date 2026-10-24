@@ -1,0 +1,51 @@
+{
+  "nombre": "07-pagador-tercero-frecuente",
+  "descripcion": "El pagador 9 entrega efectivo para tres titulares distintos en el mes.",
+  "persona": 9,
+  "hoy": "2026-12-15",
+  "parametros": {
+    "umbralIndividual": 5000000,
+    "umbralMultiples": 30000000,
+    "umbralDeclaracion": 5000000,
+    "fraccionamientoOperaciones": 3,
+    "fraccionamientoDias": 7,
+    "tercerosFrecuentes": 3,
+    "consignanteRepetido": 2,
+    "version": "pv-2026-12"
+  },
+  "transacciones": [
+    {
+      "persona": 3,
+      "pagador": 9,
+      "fecha": "2026-12-02",
+      "efectivo": 500000
+    },
+    {
+      "persona": 4,
+      "pagador": 9,
+      "fecha": "2026-12-05",
+      "efectivo": 700000
+    },
+    {
+      "persona": 5,
+      "pagador": 9,
+      "fecha": "2026-12-10",
+      "efectivo": 400000
+    },
+    {
+      "persona": 9,
+      "pagador": 9,
+      "fecha": "2026-12-11",
+      "efectivo": 100000
+    }
+  ],
+  "consignante": null,
+  "partidas": [],
+  "esperado": [
+    {
+      "senal": "FrequentThirdPartyPayer",
+      "cantidad": 3,
+      "total": 1600000
+    }
+  ]
+}

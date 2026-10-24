@@ -125,7 +125,6 @@ public class RemesasTests
         var remesas = Substitute.For<IRemesasDeTesoreria>();
         var remesa = Guid.NewGuid();
         remesas.RegistrarAsync(Arg.Any<SolicitudDeRemesa>(), Arg.Any<CancellationToken>()).Returns(new RemesaRegistradaDto(remesa, "RM000001"));
-        c.E.Db.ReceiptDocumentTypes.Add(new ReceiptDocumentType { Code = "MC", Name = "Movimiento de caja", Kind = ReceiptDocumentKind.CashMovement });
         c.E.Db.VaultDenominationBalances.Add(new VaultDenominationBalance { VaultId = c.Boveda.Id, CashDenominationId = c.B50.Id, Quantity = 10, Amount = 10 * c.B50.Value });
         c.E.Db.SaveChanges();
         c.E.Como(c.E.Supervisor);

@@ -1,0 +1,39 @@
+{
+  "nombre": "06-fraccionamiento-no-suma-el-umbral",
+  "descripcion": "Tres pagos chicos que no llegan al umbral de declaración no son fraccionamiento.",
+  "persona": 2,
+  "hoy": "2026-12-07",
+  "parametros": {
+    "umbralIndividual": 5000000,
+    "umbralMultiples": 30000000,
+    "umbralDeclaracion": 5000000,
+    "fraccionamientoOperaciones": 3,
+    "fraccionamientoDias": 7,
+    "tercerosFrecuentes": 3,
+    "consignanteRepetido": 2,
+    "version": "pv-2026-12"
+  },
+  "transacciones": [
+    {
+      "persona": 2,
+      "pagador": 2,
+      "fecha": "2026-12-01",
+      "efectivo": 1000000
+    },
+    {
+      "persona": 2,
+      "pagador": 2,
+      "fecha": "2026-12-04",
+      "efectivo": 1000000
+    },
+    {
+      "persona": 2,
+      "pagador": 2,
+      "fecha": "2026-12-07",
+      "efectivo": 1000000
+    }
+  ],
+  "consignante": null,
+  "partidas": [],
+  "esperado": []
+}

@@ -43,6 +43,9 @@ public class LasPantallasDeRecaudoYTesoreriaEstanEnElMenu
         ("Pages/Tesoreria/Chequeras.razor", "/tesoreria/chequeras", "Treasury.Checkbooks.View"),
         ("Pages/Tesoreria/ChequesGirados.razor", "/tesoreria/cheques-girados", "Treasury.Checks.View"),
         ("Pages/Tesoreria/Remesas.razor", "/tesoreria/remesas", "Treasury.Remittances.View"),
+        // Fase 15 (T0245): el cumplimiento y la contingencia.
+        ("Pages/Recaudo/Cumplimiento.razor", "/recaudo/cumplimiento", "Receipts.Compliance.View"),
+        ("Pages/Recaudo/Contingencia.razor", "/recaudo/contingencia", "Receipts.Receipt.RegisterContingency"),
     ];
 
     /// <summary>Páginas de detalle (con parámetro de ruta): archivo, la ruta tal como la declara <c>@page</c> y permiso.</summary>
