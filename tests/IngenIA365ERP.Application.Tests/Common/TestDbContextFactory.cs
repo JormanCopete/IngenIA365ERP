@@ -595,6 +595,8 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Banks.IdentificationRule> IdentificationRules => Set<IngenIA365ERP.Domain.Entities.Receipts.Banks.IdentificationRule>();
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Banks.ReportedDeposit> ReportedDeposits => Set<IngenIA365ERP.Domain.Entities.Receipts.Banks.ReportedDeposit>();
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PaymasterCalendarEntry> PaymasterCalendar => Set<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PaymasterCalendarEntry>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Compliance.CashTransactionReport> CashTransactionReports => Set<IngenIA365ERP.Domain.Entities.Receipts.Compliance.CashTransactionReport>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Compliance.CashTransactionReportLine> CashTransactionReportLines => Set<IngenIA365ERP.Domain.Entities.Receipts.Compliance.CashTransactionReportLine>();
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.PayerCreditBalance> PayerCreditBalances => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.PayerCreditBalance>();
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.PayerCreditBalanceMovement> PayerCreditBalanceMovements => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.PayerCreditBalanceMovement>();
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.PayerReceivable> PayerReceivables => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.PayerReceivable>();
@@ -774,6 +776,8 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Banks.IdentificationRule>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Banks.ReportedDeposit>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PaymasterCalendarEntry>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Compliance.CashTransactionReport>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Compliance.CashTransactionReportLine>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Operations.PayerCreditBalance>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Operations.PayerCreditBalanceMovement>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Operations.PayerReceivable>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
