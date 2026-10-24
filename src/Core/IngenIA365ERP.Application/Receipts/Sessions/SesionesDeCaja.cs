@@ -80,11 +80,31 @@ public static class SesionesDeCaja
     };
 
     /// <summary>
-    /// Los cobros de la sesión por medio: los medios de los recibos de la sesión y si se anularon en ella. Los recibos llegan con la fase 6 (US3): hasta
-    /// entonces, ninguno.
+    /// Los cobros de la sesión por medio (fase 6): lo que cada medio de los recibos de la sesión dejó en la caja —su valor menos las vueltas, que salen del
+    /// efectivo— y si el recibo se anuló (la anulación llega con US5).
     /// </summary>
-    public static Task<IReadOnlyList<CobroDeLaSesion>> CobrosAsync(IApplicationDbContext db, CashSession sesion, CancellationToken ct) =>
-        Task.FromResult<IReadOnlyList<CobroDeLaSesion>>([]);
+    public static async Task<IReadOnlyList<CobroDeLaSesion>> CobrosAsync(IApplicationDbContext db, CashSession sesion, CancellationToken ct)
+    {
+        var filas = await (from m in db.ReceiptMeans.AsNoTracking()
+                           join r in db.IssuedReceipts.AsNoTracking() on m.ReceiptId equals r.Id
+                           where r.CashSessionId == sesion.Id
+                           orderby r.Id, m.Ordinal
+                           select new { m.ReceiptId, m.PaymentMeansId, m.MeansClass, m.Amount, m.Reference, r.ChangeGiven, Anulado = r.Status == ReceiptState.Voided })
+            .ToListAsync(ct);
+        var cobros = new List<CobroDeLaSesion>();
+        foreach (var recibo in filas.GroupBy(f => f.ReceiptId))
+        {
+            var vueltas = recibo.First().ChangeGiven;
+            // Las vueltas salen del último efectivo del recibo.
+            var ultimoEfectivo = recibo.LastOrDefault(f => f.MeansClass == PaymentMeansClass.Cash);
+            foreach (var f in recibo)
+            {
+                var valor = ReferenceEquals(f, ultimoEfectivo) ? f.Amount - vueltas : f.Amount;
+                cobros.Add(new CobroDeLaSesion(f.PaymentMeansId, valor, f.Anulado, f.Reference));
+            }
+        }
+        return cobros;
+    }
 
     /// <summary>Los movimientos que tocan la sesión: los suyos y los traslados que la tienen de contraparte (entradas).</summary>
     public static async Task<IReadOnlyList<MovimientoDeLaSesion>> MovimientosAsync(IApplicationDbContext db, CashSession sesion, int? medioDelEfectivo,

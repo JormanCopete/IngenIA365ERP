@@ -107,6 +107,8 @@ public static class GuardaDeInmutabilidad
 
         foreach (var propiedad in modificadas)
         {
+            // Feature 015 (T0110): una columna que data-model declara mutable en un hecho de Recaudo o Tesorería (el estado) cambia libremente.
+            if (propiedad.Metadata.PropertyInfo?.IsDefined(typeof(ColumnaMutableAttribute), inherit: true) == true) continue;
             var escrituraUnica = propiedad.Metadata.PropertyInfo?.IsDefined(typeof(EscrituraUnicaAttribute), inherit: true) == true;
             if (!escrituraUnica)
                 throw new ImmutableEntityModifiedException(tipo, propiedad.Metadata.Name, "es un hecho: sólo se inserta.");

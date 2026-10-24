@@ -243,6 +243,43 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                 });
 
             migrationBuilder.CreateTable(
+                name: "RCD_SourceOfFundsDeclarations",
+                schema: "dbo",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    PersonId = table.Column<int>(type: "int", nullable: false),
+                    ReceiptOperationPublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    CashAmount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    Origin = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: false),
+                    SupportAttachmentPublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    DeclaredAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    ThresholdVersionPublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    RequiredBy = table.Column<int>(type: "int", nullable: false),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_RCD_SourceOfFundsDeclarations", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_RCD_SourceOfFundsDeclarations_COR_People_PersonId",
+                        column: x => x.PersonId,
+                        principalSchema: "dbo",
+                        principalTable: "COR_People",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "RCD_UserPaymasterScopes",
                 schema: "dbo",
                 columns: table => new
@@ -905,100 +942,6 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                 });
 
             migrationBuilder.CreateTable(
-                name: "RCD_CashMovements",
-                schema: "dbo",
-                columns: table => new
-                {
-                    Id = table.Column<int>(type: "int", nullable: false)
-                        .Annotation("SqlServer:Identity", "1, 1"),
-                    Number = table.Column<string>(type: "nvarchar(30)", maxLength: 30, nullable: false),
-                    DocumentTypeId = table.Column<int>(type: "int", nullable: false),
-                    Kind = table.Column<int>(type: "int", nullable: false),
-                    CashSessionId = table.Column<int>(type: "int", nullable: false),
-                    CounterpartSessionId = table.Column<int>(type: "int", nullable: true),
-                    VaultId = table.Column<int>(type: "int", nullable: true),
-                    FromMeansId = table.Column<int>(type: "int", nullable: true),
-                    ToMeansId = table.Column<int>(type: "int", nullable: true),
-                    Amount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
-                    Reason = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: false),
-                    SupportAttachmentPublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
-                    ReceiptId = table.Column<long>(type: "bigint", nullable: true),
-                    ApprovalRequestPublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
-                    SecondCustodianUserId = table.Column<int>(type: "int", nullable: true),
-                    MovedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    RegisteredByUserId = table.Column<int>(type: "int", nullable: false),
-                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
-                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
-                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
-                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
-                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
-                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
-                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_RCD_CashMovements", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_RCD_CashMovements_COR_PaymentMeans_FromMeansId",
-                        column: x => x.FromMeansId,
-                        principalSchema: "dbo",
-                        principalTable: "COR_PaymentMeans",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_RCD_CashMovements_COR_PaymentMeans_ToMeansId",
-                        column: x => x.ToMeansId,
-                        principalSchema: "dbo",
-                        principalTable: "COR_PaymentMeans",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_RCD_CashMovements_RCD_CashSessions_CashSessionId",
-                        column: x => x.CashSessionId,
-                        principalSchema: "dbo",
-                        principalTable: "RCD_CashSessions",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_RCD_CashMovements_RCD_CashSessions_CounterpartSessionId",
-                        column: x => x.CounterpartSessionId,
-                        principalSchema: "dbo",
-                        principalTable: "RCD_CashSessions",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_RCD_CashMovements_RCD_DocumentTypes_DocumentTypeId",
-                        column: x => x.DocumentTypeId,
-                        principalSchema: "dbo",
-                        principalTable: "RCD_DocumentTypes",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_RCD_CashMovements_RCD_Vaults_VaultId",
-                        column: x => x.VaultId,
-                        principalSchema: "dbo",
-                        principalTable: "RCD_Vaults",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_RCD_CashMovements_SEC_Users_RegisteredByUserId",
-                        column: x => x.RegisteredByUserId,
-                        principalSchema: "dbo",
-                        principalTable: "SEC_Users",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_RCD_CashMovements_SEC_Users_SecondCustodianUserId",
-                        column: x => x.SecondCustodianUserId,
-                        principalSchema: "dbo",
-                        principalTable: "SEC_Users",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
                 name: "RCD_CashSessionAdjustments",
                 schema: "dbo",
                 columns: table => new
@@ -1053,6 +996,129 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     table.ForeignKey(
                         name: "FK_RCD_CashSessionAdjustments_SEC_Users_RegisteredByUserId",
                         column: x => x.RegisteredByUserId,
+                        principalSchema: "dbo",
+                        principalTable: "SEC_Users",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "RCD_Receipts",
+                schema: "dbo",
+                columns: table => new
+                {
+                    Id = table.Column<long>(type: "bigint", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    Number = table.Column<string>(type: "nvarchar(30)", maxLength: 30, nullable: false),
+                    DocumentTypeId = table.Column<int>(type: "int", nullable: false),
+                    Channel = table.Column<int>(type: "int", nullable: false),
+                    BranchId = table.Column<int>(type: "int", nullable: false),
+                    CollectionPointId = table.Column<int>(type: "int", nullable: true),
+                    CashBoxId = table.Column<int>(type: "int", nullable: true),
+                    CashSessionId = table.Column<int>(type: "int", nullable: true),
+                    CashierUserId = table.Column<int>(type: "int", nullable: true),
+                    OwnBankAccountPublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    PayerPersonId = table.Column<int>(type: "int", nullable: false),
+                    DeliveredByPersonId = table.Column<int>(type: "int", nullable: true),
+                    ValueDate = table.Column<DateOnly>(type: "date", nullable: false),
+                    ProposedAccountingDate = table.Column<DateOnly>(type: "date", nullable: false),
+                    RegisteredAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    TotalApplied = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    TotalMeans = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    ChangeGiven = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    Status = table.Column<int>(type: "int", nullable: false),
+                    SourceOfFundsDeclarationId = table.Column<int>(type: "int", nullable: true),
+                    IsContingency = table.Column<bool>(type: "bit", nullable: false),
+                    ContingencyBookId = table.Column<int>(type: "int", nullable: true),
+                    ContingencyNumber = table.Column<int>(type: "int", nullable: true),
+                    ContingencyImageAttachmentPublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    BackdatedApprovalRequestPublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    BackdatedReason = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
+                    PayerIsThirdParty = table.Column<bool>(type: "bit", nullable: false),
+                    InputsHash = table.Column<string>(type: "nvarchar(64)", maxLength: 64, nullable: false),
+                    OperationKey = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    BankStatementLinePublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    PaymasterRemittanceId = table.Column<int>(type: "int", nullable: true),
+                    VerificationCode = table.Column<string>(type: "nvarchar(40)", maxLength: 40, nullable: false),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_RCD_Receipts", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_RCD_Receipts_COR_Branches_BranchId",
+                        column: x => x.BranchId,
+                        principalSchema: "dbo",
+                        principalTable: "COR_Branches",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_RCD_Receipts_COR_People_DeliveredByPersonId",
+                        column: x => x.DeliveredByPersonId,
+                        principalSchema: "dbo",
+                        principalTable: "COR_People",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_RCD_Receipts_COR_People_PayerPersonId",
+                        column: x => x.PayerPersonId,
+                        principalSchema: "dbo",
+                        principalTable: "COR_People",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_RCD_Receipts_RCD_CashBoxes_CashBoxId",
+                        column: x => x.CashBoxId,
+                        principalSchema: "dbo",
+                        principalTable: "RCD_CashBoxes",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_RCD_Receipts_RCD_CashSessions_CashSessionId",
+                        column: x => x.CashSessionId,
+                        principalSchema: "dbo",
+                        principalTable: "RCD_CashSessions",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_RCD_Receipts_RCD_CollectionPoints_CollectionPointId",
+                        column: x => x.CollectionPointId,
+                        principalSchema: "dbo",
+                        principalTable: "RCD_CollectionPoints",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_RCD_Receipts_RCD_ContingencyBooks_ContingencyBookId",
+                        column: x => x.ContingencyBookId,
+                        principalSchema: "dbo",
+                        principalTable: "RCD_ContingencyBooks",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_RCD_Receipts_RCD_DocumentTypes_DocumentTypeId",
+                        column: x => x.DocumentTypeId,
+                        principalSchema: "dbo",
+                        principalTable: "RCD_DocumentTypes",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_RCD_Receipts_RCD_SourceOfFundsDeclarations_SourceOfFundsDeclarationId",
+                        column: x => x.SourceOfFundsDeclarationId,
+                        principalSchema: "dbo",
+                        principalTable: "RCD_SourceOfFundsDeclarations",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_RCD_Receipts_SEC_Users_CashierUserId",
+                        column: x => x.CashierUserId,
                         principalSchema: "dbo",
                         principalTable: "SEC_Users",
                         principalColumn: "Id",
@@ -1158,64 +1224,28 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                 });
 
             migrationBuilder.CreateTable(
-                name: "RCD_CashMovementDenominations",
-                schema: "dbo",
-                columns: table => new
-                {
-                    Id = table.Column<int>(type: "int", nullable: false)
-                        .Annotation("SqlServer:Identity", "1, 1"),
-                    CashMovementId = table.Column<int>(type: "int", nullable: false),
-                    CashDenominationId = table.Column<int>(type: "int", nullable: false),
-                    Quantity = table.Column<int>(type: "int", nullable: false),
-                    Amount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
-                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
-                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
-                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
-                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
-                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
-                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
-                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_RCD_CashMovementDenominations", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_RCD_CashMovementDenominations_COR_CashDenominations_CashDenominationId",
-                        column: x => x.CashDenominationId,
-                        principalSchema: "dbo",
-                        principalTable: "COR_CashDenominations",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_RCD_CashMovementDenominations_RCD_CashMovements_CashMovementId",
-                        column: x => x.CashMovementId,
-                        principalSchema: "dbo",
-                        principalTable: "RCD_CashMovements",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "RCD_VaultMovements",
+                name: "RCD_CashMovements",
                 schema: "dbo",
                 columns: table => new
                 {
                     Id = table.Column<int>(type: "int", nullable: false)
                         .Annotation("SqlServer:Identity", "1, 1"),
                     Number = table.Column<string>(type: "nvarchar(30)", maxLength: 30, nullable: false),
-                    VaultId = table.Column<int>(type: "int", nullable: false),
+                    DocumentTypeId = table.Column<int>(type: "int", nullable: false),
                     Kind = table.Column<int>(type: "int", nullable: false),
-                    CashMovementId = table.Column<int>(type: "int", nullable: true),
-                    RemittancePublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    CashSessionId = table.Column<int>(type: "int", nullable: false),
+                    CounterpartSessionId = table.Column<int>(type: "int", nullable: true),
+                    VaultId = table.Column<int>(type: "int", nullable: true),
+                    FromMeansId = table.Column<int>(type: "int", nullable: true),
+                    ToMeansId = table.Column<int>(type: "int", nullable: true),
                     Amount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
-                    CustodianUserId = table.Column<int>(type: "int", nullable: false),
+                    Reason = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: false),
+                    SupportAttachmentPublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    ReceiptId = table.Column<long>(type: "bigint", nullable: true),
+                    ApprovalRequestPublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
                     SecondCustodianUserId = table.Column<int>(type: "int", nullable: true),
-                    BagSeal = table.Column<string>(type: "nvarchar(40)", maxLength: 40, nullable: true),
-                    MinutesAttachmentPublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
-                    Reason = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
                     MovedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    RegisteredByUserId = table.Column<int>(type: "int", nullable: false),
                     PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
                     DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
@@ -1228,33 +1258,186 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_RCD_VaultMovements", x => x.Id);
+                    table.PrimaryKey("PK_RCD_CashMovements", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_RCD_VaultMovements_RCD_CashMovements_CashMovementId",
-                        column: x => x.CashMovementId,
+                        name: "FK_RCD_CashMovements_COR_PaymentMeans_FromMeansId",
+                        column: x => x.FromMeansId,
                         principalSchema: "dbo",
-                        principalTable: "RCD_CashMovements",
+                        principalTable: "COR_PaymentMeans",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
-                        name: "FK_RCD_VaultMovements_RCD_Vaults_VaultId",
+                        name: "FK_RCD_CashMovements_COR_PaymentMeans_ToMeansId",
+                        column: x => x.ToMeansId,
+                        principalSchema: "dbo",
+                        principalTable: "COR_PaymentMeans",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_RCD_CashMovements_RCD_CashSessions_CashSessionId",
+                        column: x => x.CashSessionId,
+                        principalSchema: "dbo",
+                        principalTable: "RCD_CashSessions",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_RCD_CashMovements_RCD_CashSessions_CounterpartSessionId",
+                        column: x => x.CounterpartSessionId,
+                        principalSchema: "dbo",
+                        principalTable: "RCD_CashSessions",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_RCD_CashMovements_RCD_DocumentTypes_DocumentTypeId",
+                        column: x => x.DocumentTypeId,
+                        principalSchema: "dbo",
+                        principalTable: "RCD_DocumentTypes",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_RCD_CashMovements_RCD_Receipts_ReceiptId",
+                        column: x => x.ReceiptId,
+                        principalSchema: "dbo",
+                        principalTable: "RCD_Receipts",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_RCD_CashMovements_RCD_Vaults_VaultId",
                         column: x => x.VaultId,
                         principalSchema: "dbo",
                         principalTable: "RCD_Vaults",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
-                        name: "FK_RCD_VaultMovements_SEC_Users_CustodianUserId",
-                        column: x => x.CustodianUserId,
+                        name: "FK_RCD_CashMovements_SEC_Users_RegisteredByUserId",
+                        column: x => x.RegisteredByUserId,
                         principalSchema: "dbo",
                         principalTable: "SEC_Users",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
-                        name: "FK_RCD_VaultMovements_SEC_Users_SecondCustodianUserId",
+                        name: "FK_RCD_CashMovements_SEC_Users_SecondCustodianUserId",
                         column: x => x.SecondCustodianUserId,
                         principalSchema: "dbo",
                         principalTable: "SEC_Users",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "RCD_ReceiptApplications",
+                schema: "dbo",
+                columns: table => new
+                {
+                    Id = table.Column<long>(type: "bigint", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    ReceiptId = table.Column<long>(type: "bigint", nullable: false),
+                    Ordinal = table.Column<int>(type: "int", nullable: false),
+                    Target = table.Column<int>(type: "int", nullable: false),
+                    ProductPublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    ProductNumber = table.Column<string>(type: "nvarchar(40)", maxLength: 40, nullable: true),
+                    BeneficiaryPersonId = table.Column<int>(type: "int", nullable: false),
+                    LoanModality = table.Column<int>(type: "int", nullable: true),
+                    AccountModality = table.Column<int>(type: "int", nullable: true),
+                    PrepaymentChoice = table.Column<int>(type: "int", nullable: true),
+                    InstallmentNumber = table.Column<int>(type: "int", nullable: true),
+                    InstallmentPublicIdsJson = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    AdvanceNoticeAccepted = table.Column<bool>(type: "bit", nullable: false),
+                    MiscConceptId = table.Column<int>(type: "int", nullable: true),
+                    CrossDocumentReference = table.Column<string>(type: "nvarchar(60)", maxLength: 60, nullable: true),
+                    InvoicePublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    Amount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    ModuleVoucherPublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    ModuleVoucherNumber = table.Column<string>(type: "nvarchar(40)", maxLength: 40, nullable: true),
+                    FinalityUntil = table.Column<DateOnly>(type: "date", nullable: true),
+                    Status = table.Column<int>(type: "int", nullable: false),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_RCD_ReceiptApplications", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_RCD_ReceiptApplications_COR_People_BeneficiaryPersonId",
+                        column: x => x.BeneficiaryPersonId,
+                        principalSchema: "dbo",
+                        principalTable: "COR_People",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_RCD_ReceiptApplications_RCD_MiscConcepts_MiscConceptId",
+                        column: x => x.MiscConceptId,
+                        principalSchema: "dbo",
+                        principalTable: "RCD_MiscConcepts",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_RCD_ReceiptApplications_RCD_Receipts_ReceiptId",
+                        column: x => x.ReceiptId,
+                        principalSchema: "dbo",
+                        principalTable: "RCD_Receipts",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "RCD_ReceiptMeans",
+                schema: "dbo",
+                columns: table => new
+                {
+                    Id = table.Column<long>(type: "bigint", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    ReceiptId = table.Column<long>(type: "bigint", nullable: false),
+                    Ordinal = table.Column<int>(type: "int", nullable: false),
+                    PaymentMeansId = table.Column<int>(type: "int", nullable: false),
+                    MeansClass = table.Column<int>(type: "int", nullable: false),
+                    Amount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    Reference = table.Column<string>(type: "nvarchar(80)", maxLength: 80, nullable: true),
+                    CardTerminalId = table.Column<int>(type: "int", nullable: true),
+                    TerminalBatch = table.Column<string>(type: "nvarchar(40)", maxLength: 40, nullable: true),
+                    ApprovalCode = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: true),
+                    ReceivedCheckId = table.Column<int>(type: "int", nullable: true),
+                    VoucherNumber = table.Column<string>(type: "nvarchar(40)", maxLength: 40, nullable: true),
+                    Status = table.Column<int>(type: "int", nullable: false),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_RCD_ReceiptMeans", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_RCD_ReceiptMeans_COR_CardTerminals_CardTerminalId",
+                        column: x => x.CardTerminalId,
+                        principalSchema: "dbo",
+                        principalTable: "COR_CardTerminals",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_RCD_ReceiptMeans_COR_PaymentMeans_PaymentMeansId",
+                        column: x => x.PaymentMeansId,
+                        principalSchema: "dbo",
+                        principalTable: "COR_PaymentMeans",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_RCD_ReceiptMeans_RCD_Receipts_ReceiptId",
+                        column: x => x.ReceiptId,
+                        principalSchema: "dbo",
+                        principalTable: "RCD_Receipts",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
                 });
@@ -1292,40 +1475,6 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
                         name: "FK_RCD_CashCountDenominations_RCD_CashCountLines_CashCountLineId",
-                        column: x => x.CashCountLineId,
-                        principalSchema: "dbo",
-                        principalTable: "RCD_CashCountLines",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "RCD_CashCountReferences",
-                schema: "dbo",
-                columns: table => new
-                {
-                    Id = table.Column<int>(type: "int", nullable: false)
-                        .Annotation("SqlServer:Identity", "1, 1"),
-                    CashCountLineId = table.Column<int>(type: "int", nullable: false),
-                    ReceiptMeansId = table.Column<long>(type: "bigint", nullable: true),
-                    Reference = table.Column<string>(type: "nvarchar(80)", maxLength: 80, nullable: false),
-                    Amount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
-                    Confirmed = table.Column<bool>(type: "bit", nullable: false),
-                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
-                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
-                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
-                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
-                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
-                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
-                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_RCD_CashCountReferences", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_RCD_CashCountReferences_RCD_CashCountLines_CashCountLineId",
                         column: x => x.CashCountLineId,
                         principalSchema: "dbo",
                         principalTable: "RCD_CashCountLines",
@@ -1446,6 +1595,291 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         column: x => x.CashCountLineId,
                         principalSchema: "dbo",
                         principalTable: "RCD_CashCountLines",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "RCD_CashMovementDenominations",
+                schema: "dbo",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    CashMovementId = table.Column<int>(type: "int", nullable: false),
+                    CashDenominationId = table.Column<int>(type: "int", nullable: false),
+                    Quantity = table.Column<int>(type: "int", nullable: false),
+                    Amount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_RCD_CashMovementDenominations", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_RCD_CashMovementDenominations_COR_CashDenominations_CashDenominationId",
+                        column: x => x.CashDenominationId,
+                        principalSchema: "dbo",
+                        principalTable: "COR_CashDenominations",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_RCD_CashMovementDenominations_RCD_CashMovements_CashMovementId",
+                        column: x => x.CashMovementId,
+                        principalSchema: "dbo",
+                        principalTable: "RCD_CashMovements",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "RCD_CashOperations",
+                schema: "dbo",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    CashSessionId = table.Column<int>(type: "int", nullable: false),
+                    PayerPersonId = table.Column<int>(type: "int", nullable: false),
+                    BeneficiaryPersonId = table.Column<int>(type: "int", nullable: true),
+                    DeliveredByPersonId = table.Column<int>(type: "int", nullable: true),
+                    Status = table.Column<int>(type: "int", nullable: false),
+                    ItemsJson = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    MeansJson = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    ImputationJson = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    ImputationFixed = table.Column<bool>(type: "bit", nullable: false),
+                    ValueDate = table.Column<DateOnly>(type: "date", nullable: false),
+                    BackdateReason = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
+                    BackdateSupportAttachmentPublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    OperationKey = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    ScreeningOutcome = table.Column<int>(type: "int", nullable: false),
+                    CustodyMovementId = table.Column<int>(type: "int", nullable: true),
+                    ReleasedByUserId = table.Column<int>(type: "int", nullable: true),
+                    ReleasedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    ReceiptId = table.Column<long>(type: "bigint", nullable: true),
+                    SourceOfFundsDeclarationId = table.Column<int>(type: "int", nullable: true),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_RCD_CashOperations", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_RCD_CashOperations_COR_People_BeneficiaryPersonId",
+                        column: x => x.BeneficiaryPersonId,
+                        principalSchema: "dbo",
+                        principalTable: "COR_People",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_RCD_CashOperations_COR_People_DeliveredByPersonId",
+                        column: x => x.DeliveredByPersonId,
+                        principalSchema: "dbo",
+                        principalTable: "COR_People",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_RCD_CashOperations_COR_People_PayerPersonId",
+                        column: x => x.PayerPersonId,
+                        principalSchema: "dbo",
+                        principalTable: "COR_People",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_RCD_CashOperations_RCD_CashMovements_CustodyMovementId",
+                        column: x => x.CustodyMovementId,
+                        principalSchema: "dbo",
+                        principalTable: "RCD_CashMovements",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_RCD_CashOperations_RCD_CashSessions_CashSessionId",
+                        column: x => x.CashSessionId,
+                        principalSchema: "dbo",
+                        principalTable: "RCD_CashSessions",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_RCD_CashOperations_RCD_Receipts_ReceiptId",
+                        column: x => x.ReceiptId,
+                        principalSchema: "dbo",
+                        principalTable: "RCD_Receipts",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_RCD_CashOperations_RCD_SourceOfFundsDeclarations_SourceOfFundsDeclarationId",
+                        column: x => x.SourceOfFundsDeclarationId,
+                        principalSchema: "dbo",
+                        principalTable: "RCD_SourceOfFundsDeclarations",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_RCD_CashOperations_SEC_Users_ReleasedByUserId",
+                        column: x => x.ReleasedByUserId,
+                        principalSchema: "dbo",
+                        principalTable: "SEC_Users",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "RCD_VaultMovements",
+                schema: "dbo",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    Number = table.Column<string>(type: "nvarchar(30)", maxLength: 30, nullable: false),
+                    VaultId = table.Column<int>(type: "int", nullable: false),
+                    Kind = table.Column<int>(type: "int", nullable: false),
+                    CashMovementId = table.Column<int>(type: "int", nullable: true),
+                    RemittancePublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    Amount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    CustodianUserId = table.Column<int>(type: "int", nullable: false),
+                    SecondCustodianUserId = table.Column<int>(type: "int", nullable: true),
+                    BagSeal = table.Column<string>(type: "nvarchar(40)", maxLength: 40, nullable: true),
+                    MinutesAttachmentPublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    Reason = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
+                    MovedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_RCD_VaultMovements", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_RCD_VaultMovements_RCD_CashMovements_CashMovementId",
+                        column: x => x.CashMovementId,
+                        principalSchema: "dbo",
+                        principalTable: "RCD_CashMovements",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_RCD_VaultMovements_RCD_Vaults_VaultId",
+                        column: x => x.VaultId,
+                        principalSchema: "dbo",
+                        principalTable: "RCD_Vaults",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_RCD_VaultMovements_SEC_Users_CustodianUserId",
+                        column: x => x.CustodianUserId,
+                        principalSchema: "dbo",
+                        principalTable: "SEC_Users",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_RCD_VaultMovements_SEC_Users_SecondCustodianUserId",
+                        column: x => x.SecondCustodianUserId,
+                        principalSchema: "dbo",
+                        principalTable: "SEC_Users",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "RCD_CashCountReferences",
+                schema: "dbo",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    CashCountLineId = table.Column<int>(type: "int", nullable: false),
+                    ReceiptMeansId = table.Column<long>(type: "bigint", nullable: true),
+                    Reference = table.Column<string>(type: "nvarchar(80)", maxLength: 80, nullable: false),
+                    Amount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    Confirmed = table.Column<bool>(type: "bit", nullable: false),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_RCD_CashCountReferences", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_RCD_CashCountReferences_RCD_CashCountLines_CashCountLineId",
+                        column: x => x.CashCountLineId,
+                        principalSchema: "dbo",
+                        principalTable: "RCD_CashCountLines",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_RCD_CashCountReferences_RCD_ReceiptMeans_ReceiptMeansId",
+                        column: x => x.ReceiptMeansId,
+                        principalSchema: "dbo",
+                        principalTable: "RCD_ReceiptMeans",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "RCD_ReceiptApplicationPortions",
+                schema: "dbo",
+                columns: table => new
+                {
+                    Id = table.Column<long>(type: "bigint", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    ReceiptApplicationId = table.Column<long>(type: "bigint", nullable: false),
+                    ReceiptMeansId = table.Column<long>(type: "bigint", nullable: false),
+                    MeansClass = table.Column<int>(type: "int", nullable: false),
+                    Amount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    IdempotencyKey = table.Column<string>(type: "nvarchar(120)", maxLength: 120, nullable: false),
+                    ModuleOperationPublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    ModuleOperationNumber = table.Column<string>(type: "nvarchar(40)", maxLength: 40, nullable: true),
+                    Status = table.Column<int>(type: "int", nullable: false),
+                    ReversalKey = table.Column<string>(type: "nvarchar(140)", maxLength: 140, nullable: true),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_RCD_ReceiptApplicationPortions", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_RCD_ReceiptApplicationPortions_RCD_ReceiptApplications_ReceiptApplicationId",
+                        column: x => x.ReceiptApplicationId,
+                        principalSchema: "dbo",
+                        principalTable: "RCD_ReceiptApplications",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_RCD_ReceiptApplicationPortions_RCD_ReceiptMeans_ReceiptMeansId",
+                        column: x => x.ReceiptMeansId,
+                        principalSchema: "dbo",
+                        principalTable: "RCD_ReceiptMeans",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
                 });
@@ -1745,6 +2179,61 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                 unique: true);
 
             migrationBuilder.CreateIndex(
+                name: "IX_RCD_CashOperations_BeneficiaryPersonId",
+                schema: "dbo",
+                table: "RCD_CashOperations",
+                column: "BeneficiaryPersonId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_RCD_CashOperations_CashSessionId",
+                schema: "dbo",
+                table: "RCD_CashOperations",
+                column: "CashSessionId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_RCD_CashOperations_CustodyMovementId",
+                schema: "dbo",
+                table: "RCD_CashOperations",
+                column: "CustodyMovementId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_RCD_CashOperations_DeliveredByPersonId",
+                schema: "dbo",
+                table: "RCD_CashOperations",
+                column: "DeliveredByPersonId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_RCD_CashOperations_PayerPersonId",
+                schema: "dbo",
+                table: "RCD_CashOperations",
+                column: "PayerPersonId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_RCD_CashOperations_ReceiptId",
+                schema: "dbo",
+                table: "RCD_CashOperations",
+                column: "ReceiptId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_RCD_CashOperations_ReleasedByUserId",
+                schema: "dbo",
+                table: "RCD_CashOperations",
+                column: "ReleasedByUserId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_RCD_CashOperations_SourceOfFundsDeclarationId",
+                schema: "dbo",
+                table: "RCD_CashOperations",
+                column: "SourceOfFundsDeclarationId");
+
+            migrationBuilder.CreateIndex(
+                name: "UK_RCD_CashOperations_PublicId",
+                schema: "dbo",
+                table: "RCD_CashOperations",
+                column: "PublicId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
                 name: "IX_RCD_CashSessionAdjustments_ApprovedByUserId",
                 schema: "dbo",
                 table: "RCD_CashSessionAdjustments",
@@ -2039,9 +2528,190 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                 unique: true);
 
             migrationBuilder.CreateIndex(
+                name: "IX_RCD_ReceiptApplicationPortions_ReceiptApplicationId",
+                schema: "dbo",
+                table: "RCD_ReceiptApplicationPortions",
+                column: "ReceiptApplicationId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_RCD_ReceiptApplicationPortions_ReceiptMeansId",
+                schema: "dbo",
+                table: "RCD_ReceiptApplicationPortions",
+                column: "ReceiptMeansId");
+
+            migrationBuilder.CreateIndex(
+                name: "UK_RCD_ReceiptApplicationPortions_IdempotencyKey",
+                schema: "dbo",
+                table: "RCD_ReceiptApplicationPortions",
+                column: "IdempotencyKey",
+                unique: true,
+                filter: "[IsDeleted] = 0");
+
+            migrationBuilder.CreateIndex(
+                name: "UK_RCD_ReceiptApplicationPortions_PublicId",
+                schema: "dbo",
+                table: "RCD_ReceiptApplicationPortions",
+                column: "PublicId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_RCD_ReceiptApplications_BeneficiaryPersonId",
+                schema: "dbo",
+                table: "RCD_ReceiptApplications",
+                column: "BeneficiaryPersonId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_RCD_ReceiptApplications_MiscConceptId",
+                schema: "dbo",
+                table: "RCD_ReceiptApplications",
+                column: "MiscConceptId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_RCD_ReceiptApplications_ProductPublicId",
+                schema: "dbo",
+                table: "RCD_ReceiptApplications",
+                column: "ProductPublicId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_RCD_ReceiptApplications_ReceiptId",
+                schema: "dbo",
+                table: "RCD_ReceiptApplications",
+                column: "ReceiptId");
+
+            migrationBuilder.CreateIndex(
+                name: "UK_RCD_ReceiptApplications_PublicId",
+                schema: "dbo",
+                table: "RCD_ReceiptApplications",
+                column: "PublicId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_RCD_ReceiptMeans_CardTerminalId",
+                schema: "dbo",
+                table: "RCD_ReceiptMeans",
+                column: "CardTerminalId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_RCD_ReceiptMeans_ReceiptId",
+                schema: "dbo",
+                table: "RCD_ReceiptMeans",
+                column: "ReceiptId");
+
+            migrationBuilder.CreateIndex(
+                name: "UK_RCD_ReceiptMeans_PaymentMeansId_VoucherNumber",
+                schema: "dbo",
+                table: "RCD_ReceiptMeans",
+                columns: new[] { "PaymentMeansId", "VoucherNumber" },
+                unique: true,
+                filter: "[VoucherNumber] IS NOT NULL AND [IsDeleted] = 0");
+
+            migrationBuilder.CreateIndex(
+                name: "UK_RCD_ReceiptMeans_PublicId",
+                schema: "dbo",
+                table: "RCD_ReceiptMeans",
+                column: "PublicId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_RCD_Receipts_BranchId_ValueDate",
+                schema: "dbo",
+                table: "RCD_Receipts",
+                columns: new[] { "BranchId", "ValueDate" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_RCD_Receipts_CashBoxId",
+                schema: "dbo",
+                table: "RCD_Receipts",
+                column: "CashBoxId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_RCD_Receipts_CashierUserId",
+                schema: "dbo",
+                table: "RCD_Receipts",
+                column: "CashierUserId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_RCD_Receipts_CashSessionId",
+                schema: "dbo",
+                table: "RCD_Receipts",
+                column: "CashSessionId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_RCD_Receipts_CollectionPointId",
+                schema: "dbo",
+                table: "RCD_Receipts",
+                column: "CollectionPointId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_RCD_Receipts_ContingencyBookId",
+                schema: "dbo",
+                table: "RCD_Receipts",
+                column: "ContingencyBookId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_RCD_Receipts_DeliveredByPersonId",
+                schema: "dbo",
+                table: "RCD_Receipts",
+                column: "DeliveredByPersonId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_RCD_Receipts_PayerPersonId_RegisteredAt",
+                schema: "dbo",
+                table: "RCD_Receipts",
+                columns: new[] { "PayerPersonId", "RegisteredAt" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_RCD_Receipts_SourceOfFundsDeclarationId",
+                schema: "dbo",
+                table: "RCD_Receipts",
+                column: "SourceOfFundsDeclarationId");
+
+            migrationBuilder.CreateIndex(
+                name: "UK_RCD_Receipts_DocumentTypeId_Number",
+                schema: "dbo",
+                table: "RCD_Receipts",
+                columns: new[] { "DocumentTypeId", "Number" },
+                unique: true,
+                filter: "[IsDeleted] = 0");
+
+            migrationBuilder.CreateIndex(
+                name: "UK_RCD_Receipts_OperationKey",
+                schema: "dbo",
+                table: "RCD_Receipts",
+                column: "OperationKey",
+                unique: true,
+                filter: "[IsDeleted] = 0");
+
+            migrationBuilder.CreateIndex(
+                name: "UK_RCD_Receipts_PublicId",
+                schema: "dbo",
+                table: "RCD_Receipts",
+                column: "PublicId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
                 name: "UK_RCD_Setup_PublicId",
                 schema: "dbo",
                 table: "RCD_Setup",
+                column: "PublicId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_RCD_SourceOfFundsDeclarations_PersonId",
+                schema: "dbo",
+                table: "RCD_SourceOfFundsDeclarations",
+                column: "PersonId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_RCD_SourceOfFundsDeclarations_ReceiptOperationPublicId",
+                schema: "dbo",
+                table: "RCD_SourceOfFundsDeclarations",
+                column: "ReceiptOperationPublicId");
+
+            migrationBuilder.CreateIndex(
+                name: "UK_RCD_SourceOfFundsDeclarations_PublicId",
+                schema: "dbo",
+                table: "RCD_SourceOfFundsDeclarations",
                 column: "PublicId",
                 unique: true);
 
@@ -2312,6 +2982,10 @@ WHERE NOT EXISTS (SELECT 1 FROM [dbo].[RCD_ChannelModalityRules] r WHERE r.[Chan
                 schema: "dbo");
 
             migrationBuilder.DropTable(
+                name: "RCD_CashOperations",
+                schema: "dbo");
+
+            migrationBuilder.DropTable(
                 name: "RCD_CashSessionAdjustments",
                 schema: "dbo");
 
@@ -2324,10 +2998,6 @@ WHERE NOT EXISTS (SELECT 1 FROM [dbo].[RCD_ChannelModalityRules] r WHERE r.[Chan
                 schema: "dbo");
 
             migrationBuilder.DropTable(
-                name: "RCD_ContingencyBooks",
-                schema: "dbo");
-
-            migrationBuilder.DropTable(
                 name: "RCD_DailySquares",
                 schema: "dbo");
 
@@ -2336,15 +3006,15 @@ WHERE NOT EXISTS (SELECT 1 FROM [dbo].[RCD_ChannelModalityRules] r WHERE r.[Chan
                 schema: "dbo");
 
             migrationBuilder.DropTable(
-                name: "RCD_MiscConcepts",
-                schema: "dbo");
-
-            migrationBuilder.DropTable(
                 name: "RCD_PayerControls",
                 schema: "dbo");
 
             migrationBuilder.DropTable(
                 name: "RCD_PaymentMeansCollectionPoints",
+                schema: "dbo");
+
+            migrationBuilder.DropTable(
+                name: "RCD_ReceiptApplicationPortions",
                 schema: "dbo");
 
             migrationBuilder.DropTable(
@@ -2384,6 +3054,14 @@ WHERE NOT EXISTS (SELECT 1 FROM [dbo].[RCD_ChannelModalityRules] r WHERE r.[Chan
                 schema: "dbo");
 
             migrationBuilder.DropTable(
+                name: "RCD_ReceiptApplications",
+                schema: "dbo");
+
+            migrationBuilder.DropTable(
+                name: "RCD_ReceiptMeans",
+                schema: "dbo");
+
+            migrationBuilder.DropTable(
                 name: "RCD_VaultMovements",
                 schema: "dbo");
 
@@ -2396,15 +3074,15 @@ WHERE NOT EXISTS (SELECT 1 FROM [dbo].[RCD_ChannelModalityRules] r WHERE r.[Chan
                 schema: "dbo");
 
             migrationBuilder.DropTable(
+                name: "RCD_MiscConcepts",
+                schema: "dbo");
+
+            migrationBuilder.DropTable(
                 name: "RCD_CashMovements",
                 schema: "dbo");
 
             migrationBuilder.DropTable(
-                name: "RCD_CashSessions",
-                schema: "dbo");
-
-            migrationBuilder.DropTable(
-                name: "RCD_DocumentTypes",
+                name: "RCD_Receipts",
                 schema: "dbo");
 
             migrationBuilder.DropTable(
@@ -2412,11 +3090,27 @@ WHERE NOT EXISTS (SELECT 1 FROM [dbo].[RCD_ChannelModalityRules] r WHERE r.[Chan
                 schema: "dbo");
 
             migrationBuilder.DropTable(
-                name: "RCD_CollectionPointDays",
+                name: "RCD_CashSessions",
+                schema: "dbo");
+
+            migrationBuilder.DropTable(
+                name: "RCD_ContingencyBooks",
+                schema: "dbo");
+
+            migrationBuilder.DropTable(
+                name: "RCD_DocumentTypes",
+                schema: "dbo");
+
+            migrationBuilder.DropTable(
+                name: "RCD_SourceOfFundsDeclarations",
                 schema: "dbo");
 
             migrationBuilder.DropTable(
                 name: "RCD_CashBoxes",
+                schema: "dbo");
+
+            migrationBuilder.DropTable(
+                name: "RCD_CollectionPointDays",
                 schema: "dbo");
 
             migrationBuilder.DropTable(

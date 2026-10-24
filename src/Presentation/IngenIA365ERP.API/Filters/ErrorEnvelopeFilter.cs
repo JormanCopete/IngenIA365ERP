@@ -167,7 +167,7 @@ public sealed class ErrorEnvelopeFilter : IEndpointFilter
             "Approvals.PresenceRequired" => StatusCodes.Status428PreconditionRequired,
             // Feature 015 (T0092, T0114): la caja ya tiene sesión abierta, o la operación de caja cambió desde que se vio: choques con el estado.
             "Receipts.Session.AlreadyOpen" or "Receipts.Session.CashierExclusive" or "Receipts.Day.AlreadyClosed" => StatusCodes.Status409Conflict,
-            "Receipts.CashOperation.Changed" => StatusCodes.Status409Conflict,
+            "Receipts.CashOperation.Changed" or "Receipts.Receipt.DistributionChanged" => StatusCodes.Status409Conflict,
 
             _ when code.StartsWith("Validation.", StringComparison.Ordinal) => StatusCodes.Status400BadRequest,
             _ when code.EndsWith(".NotFound", StringComparison.Ordinal) => StatusCodes.Status404NotFound,

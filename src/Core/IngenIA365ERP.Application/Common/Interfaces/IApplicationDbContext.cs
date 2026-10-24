@@ -640,6 +640,12 @@ public interface IApplicationDbContext
     DbSet<IngenIA365ERP.Domain.Entities.Receipts.Vaults.VaultMovement> VaultMovements { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Receipts.Vaults.VaultMovementDenomination> VaultMovementDenominations { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Receipts.Vaults.VaultDenominationBalance> VaultDenominationBalances { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.CashOperation> CashOperations { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.Receipt> IssuedReceipts { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceiptMeans> ReceiptMeans { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceiptApplication> ReceiptApplications { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceiptApplicationPortion> ReceiptApplicationPortions { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.SourceOfFundsDeclaration> SourceOfFundsDeclarations { get; }
 
     /// <summary>
     /// Descarta todo lo que el contexto tenga sin guardar (feature 009, R3): lo usa el reintento

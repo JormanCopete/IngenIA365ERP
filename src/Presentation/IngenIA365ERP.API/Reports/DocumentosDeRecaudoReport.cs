@@ -63,6 +63,73 @@ public static class DocumentosDeRecaudoReport
             row => { Firma(row, "Cajero", m.Cashier); row.ConstantItem(30); Firma(row, "Quien arquea", m.CountedBy); row.ConstantItem(30); Firma(row, "Testigo", m.Witness ?? string.Empty); });
     }
 
+    /// <summary>
+    /// El recibo de caja (fase 6, T0118; FR-044, FR-045, FR-177, FR-190): en tirilla de 80 mm o carta, «COPIA» al reimprimir, el código de verificación, las
+    /// aplicaciones con el comprobante de su módulo, la elección del deudor y la aceptación del aviso, la firmeza, la imputación por medio, quien efectúa y la
+    /// declaración de origen de fondos. Con pagador tercero el producto va enmascarado y sin saldos.
+    /// </summary>
+    public static byte[] Recibo(Application.Receipts.CashDesk.ReciboModel m)
+    {
+        ArgumentNullException.ThrowIfNull(m);
+        var termica = m.Format == Application.Receipts.CashDesk.FormatoDeRecibo.Thermal;
+        return Document.Create(container => container.Page(page =>
+        {
+            if (termica)
+            {
+                page.ContinuousSize(80, Unit.Millimetre);
+                page.Margin(4, Unit.Millimetre);
+                page.DefaultTextStyle(x => x.FontSize(7.5f));
+            }
+            else
+            {
+                page.Size(PageSizes.Letter);
+                page.Margin(30);
+                page.DefaultTextStyle(x => x.FontSize(9));
+            }
+            page.Content().Column(col =>
+            {
+                col.Item().AlignCenter().Text(m.Company.Name).Bold();
+                if (!string.IsNullOrWhiteSpace(m.Company.Nit)) col.Item().AlignCenter().Text($"NIT {m.Company.Nit}");
+                col.Item().AlignCenter().Text($"Recibo de caja N.º {m.Number}").SemiBold();
+                if (m.Copy) col.Item().AlignCenter().Text("COPIA").Bold();
+                if (m.Voided) col.Item().AlignCenter().Text("ANULADO").Bold();
+                col.Item().Text($"{m.Office}{(m.CollectionPoint is null ? "" : $" · {m.CollectionPoint}")}{(m.CashBox is null ? "" : $" · {m.CashBox}")}");
+                col.Item().Text($"Fecha valor {m.ValueDate:yyyy-MM-dd} · registrado {Hora(m.RegisteredAt)}");
+                col.Item().Text($"Pagador: {m.Payer}{(m.PayerIsThirdParty ? " (tercero)" : "")}");
+                if (m.DeliveredBy is not null) col.Item().Text($"Efectúa: {m.DeliveredBy}");
+                if (m.Cashier is not null) col.Item().Text($"Cajero: {m.Cashier}");
+                col.Item().PaddingVertical(3).LineHorizontal(0.5f);
+                foreach (var l in m.Lines)
+                {
+                    col.Item().Row(r =>
+                    {
+                        r.RelativeItem().Text($"{l.Ordinal}. {l.Description}{(l.Product is null ? "" : $" {l.Product}")}");
+                        r.ConstantItem(termica ? 70 : 110).AlignRight().Text(Pesos(l.Amount));
+                    });
+                    if (l.ModuleVoucher is not null) col.Item().PaddingLeft(8).Text($"Comprobante {l.ModuleVoucher}").FontSize(termica ? 6.5f : 8);
+                    if (l.Choice is not null) col.Item().PaddingLeft(8).Text($"Elección del deudor: {l.Choice}").FontSize(termica ? 6.5f : 8);
+                    if (l.NoticeAccepted) col.Item().PaddingLeft(8).Text("Aceptó el aviso del pago anticipado").FontSize(termica ? 6.5f : 8);
+                    if (l.FinalityUntil is { } f) col.Item().PaddingLeft(8).Text($"En firme desde {f:yyyy-MM-dd}").FontSize(termica ? 6.5f : 8);
+                }
+                col.Item().PaddingVertical(3).LineHorizontal(0.5f);
+                col.Item().Row(r => { r.RelativeItem().Text("Total aplicado").Bold(); r.ConstantItem(termica ? 70 : 110).AlignRight().Text(Pesos(m.TotalApplied)).Bold(); });
+                foreach (var medio in m.Means)
+                {
+                    col.Item().Row(r =>
+                    {
+                        r.RelativeItem().Text($"{medio.Code}{(medio.Reference is null ? "" : $" ref. {medio.Reference}")}");
+                        r.ConstantItem(termica ? 70 : 110).AlignRight().Text(Pesos(medio.Amount));
+                    });
+                    if (medio.Covers.Count > 1)
+                        col.Item().PaddingLeft(8).Text(string.Join(" · ", medio.Covers.Select(c => $"{c.Aplicacion}: {Pesos(c.Valor)}"))).FontSize(termica ? 6.5f : 8);
+                }
+                if (m.ChangeGiven > 0) col.Item().Row(r => { r.RelativeItem().Text("Vueltas"); r.ConstantItem(termica ? 70 : 110).AlignRight().Text(Pesos(m.ChangeGiven)); });
+                if (m.SourceOfFunds is not null) col.Item().PaddingTop(3).Text($"Origen de fondos declarado: {m.SourceOfFunds}");
+                col.Item().PaddingTop(6).AlignCenter().Text($"Código de verificación {m.VerificationCode}").FontSize(termica ? 6.5f : 8);
+            });
+        })).GeneratePdf();
+    }
+
     private static byte[] Documento(EmpresaDelDocumentoDto empresa, string titulo, string numero, string codigo, string lugar, string subtitulo, string detalle,
         Action<ColumnDescriptor> contenido, Action<RowDescriptor> firmas) =>
         Document.Create(container => container.Page(page =>
@@ -150,4 +217,6 @@ public sealed class DocumentosDeRecaudoPdfRenderer : IDocumentosDeRecaudoEnPdf
     public byte[] CierreDelDia(CierreDelDiaModel modelo) => DocumentosDeRecaudoReport.CierreDelDia(modelo);
 
     public byte[] Acta(ActaDeArqueoModel modelo) => DocumentosDeRecaudoReport.Acta(modelo);
+
+    public byte[] Recibo(Application.Receipts.CashDesk.ReciboModel modelo) => DocumentosDeRecaudoReport.Recibo(modelo);
 }

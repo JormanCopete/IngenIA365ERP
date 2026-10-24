@@ -69,6 +69,8 @@ public static class RolesDeRecaudo
     public const string GastoFaltante = "GastoFaltante";
     public const string SobrantesDeCaja = "SobrantesDeCaja";
     public const string IngresoSobrantes = "IngresoSobrantes";
+    public const string PuenteDelModulo = "PuenteDelModulo";
+    public const string ConceptoVario = "ConceptoVario";
 }
 
 /// <summary>

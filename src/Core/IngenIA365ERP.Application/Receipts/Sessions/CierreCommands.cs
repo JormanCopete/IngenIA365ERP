@@ -486,7 +486,7 @@ public sealed class CloseCollectionPointDayCommandHandler(
         {
             CollectionPointDayId = dia.Id,
             SessionCount = sesiones.Count,
-            ReceiptCount = 0, // los recibos llegan con la fase 6 (US3)
+            ReceiptCount = await db.IssuedReceipts.AsNoTracking().CountAsync(r => r.CashSessionId != null && ids.Contains(r.CashSessionId.Value), ct),
             VoidingCount = 0,
             Expected = porMedio.Sum(l => l.Expected),
             Counted = porMedio.Sum(l => l.Counted),

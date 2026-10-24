@@ -529,6 +529,13 @@
         <NavMenuGroup Icon="e-money" Title="Recaudo" Expanded="SidebarOpen">
             @* Feature 015, US2 (T0098): la operación de la caja. *@
             <span class="nav-subgroup-title">Caja</span>
+            @* US3 (T0120, T0121): la caja y los recibos. *@
+            <PermissionGate Required="Receipts.Receipt.Register">
+                <NavLink href="/recaudo/caja" class="nav-subitem">Caja</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Receipts.Receipt.View">
+                <NavLink href="/recaudo/recibos" class="nav-subitem">Recibos</NavLink>
+            </PermissionGate>
             <PermissionGate Required="Receipts.Session.Open">
                 <NavLink href="/recaudo/sesiones" class="nav-subitem">Sesiones de caja</NavLink>
             </PermissionGate>

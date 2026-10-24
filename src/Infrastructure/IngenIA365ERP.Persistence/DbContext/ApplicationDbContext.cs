@@ -695,6 +695,12 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Vaults.VaultMovement> VaultMovements => Set<IngenIA365ERP.Domain.Entities.Receipts.Vaults.VaultMovement>();
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Vaults.VaultMovementDenomination> VaultMovementDenominations => Set<IngenIA365ERP.Domain.Entities.Receipts.Vaults.VaultMovementDenomination>();
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Vaults.VaultDenominationBalance> VaultDenominationBalances => Set<IngenIA365ERP.Domain.Entities.Receipts.Vaults.VaultDenominationBalance>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.CashOperation> CashOperations => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.CashOperation>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.Receipt> IssuedReceipts => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.Receipt>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceiptMeans> ReceiptMeans => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceiptMeans>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceiptApplication> ReceiptApplications => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceiptApplication>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceiptApplicationPortion> ReceiptApplicationPortions => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceiptApplicationPortion>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.SourceOfFundsDeclaration> SourceOfFundsDeclarations => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.SourceOfFundsDeclaration>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

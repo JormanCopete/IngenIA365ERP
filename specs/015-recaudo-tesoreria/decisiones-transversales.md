@@ -233,6 +233,22 @@ Lo que tasks.md marcaba **(nuevo)** y lo que trajeron el `/speckit-analyze` y la
 | `GET /sessions/{id}/counts` · `GET /sessions/{id}/close-report` · `GET /surprise-counts/{id}/minutes` · `GET /collection-points/{id}/days/{date}/report` · `GET/POST /cashier-receivables[/{id}/payroll-authorization]` · `GET/POST /cash-surpluses[/{id}/to-income]` · `POST /daily-squares/{id}/explain` | rutas que api.md §3 no listaba | `API/Endpoints/Receipts/SessionsEndpoints.cs` |
 | `CashCountKind` · `CollectionPointDayStatus` · `SessionAdjustmentKind` · `DailySquareStatus` · `CashierReceivableState` · `CashSurplusState` · `VaultMovementKind.RetainedCounterfeit = 6` | enumeraciones que data-model §20 no numeraba | `Domain/Enums/Receipts` |
 
+**Fijados en la construcción de la fase 6 (2026-10-24)**:
+
+| Nombre | Qué | Dónde |
+|---|---|---|
+| `[ColumnaMutable]` | atributo de las columnas que data-model declara mutables en un hecho (el estado del recibo, del medio, de la aplicación, de la porción); `GuardaDeInmutabilidad` lo admite y sólo lo usan Recaudo y Tesorería | `Domain/Common` |
+| `IssuedReceipts` | el `DbSet` de `RCD_Receipts` (un miembro `Receipts` chocaba con el espacio `Application.Receipts`) | `IApplicationDbContext` |
+| `ReceiptMeans.MeansClass` como `PaymentMeansClass` | los números 1 a 9 y 99 son los de `ClaseDeMedioDeRecaudo` (`ClavesDeRecaudo.ClaseDelContrato`) | `Entities/Receipts/Operations` |
+| `ClavesDeRecaudo` (`REC:{recibo:N}:{aplicación:N}:{clase}[-n]`) · `HuellaDeRecibo` · `ClavesDeRecaudo.Recaudador` | la clave de cada porción (con `-n` desde el segundo medio de la misma clase en la misma aplicación) y la huella de lo confirmado | `Application/Receipts/Common` |
+| `IListasDeRecaudo` · `ListasDeRecaudoSinConsulta` | el gancho de listas de la confirmación; responde `Clear` hasta la fase 15 | `Application/Receipts/Common` |
+| `ConfirmacionDeRecibo` | el único camino del dinero que entra por la caja; numera antes de los contratos; guarda por pasos en la misma transacción | `Application/Receipts/CashDesk` |
+| `ReciboEmitido` (`RCE`) · `REC.RCE\|CierreDeTurno\|\|PorDia` · roles `PuenteDelModulo`, `ConceptoVario` | el hecho del recibo y su lote por defecto con alcance la sesión | `Contracts/Receipts`, `EmisionDeRecaudo.Recibos.cs` |
+| `Receipts.CashOperation.{NotPreparing, NoItems, Withheld}` · `Receipts.Receipt.{AdvanceNoticeRequired, ImputationInvalid, MiscConceptInvalid, CrossDocumentRequired, ThirdPartyRequired, MeansNotOffered}` · `Receipts.Accounting.NotPostable` · `Receipts.Payables.PersonNotFound` | errores de la operación de caja y el recibo; `DistributionChanged` responde 409 | `ErroresDeRecaudo.Recibos` |
+| `GET /cash-operations/{id}` · `GET /receipts` · `GET /receipts/{id}` | rutas que api.md §4 no listaba; todas en `CashDeskEndpoints.cs` | `API/Endpoints/Receipts` |
+| `ReceiptMeansState` · `PortionState` · `SourceOfFundsRequiredBy` | enumeraciones que data-model §20 no numeraba | `Domain/Enums/Receipts` |
+| **pendiente del dueño**: buscar por número de obligación · cuándo es obligatorio «quien efectúa» | la búsqueda por número necesita un puerto de Cartera (hoy sólo por persona); la regla de `DeliveredByRequired` no está escrita | T0113, T0115 |
+
 ## 3. Decisiones transversales
 
 ### Módulos y frontera

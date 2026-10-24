@@ -1,6 +1,7 @@
 using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Entities.Core.Payments;
 using IngenIA365ERP.Domain.Entities.Receipts.Configuration;
+using IngenIA365ERP.Domain.Entities.Receipts.Operations;
 using IngenIA365ERP.Domain.Entities.Receipts.Sessions;
 using IngenIA365ERP.Domain.Entities.Receipts.Vaults;
 using IngenIA365ERP.Domain.Entities.Security;
@@ -134,7 +135,7 @@ public class CashCountTerminalBatchConfiguration : IEntityTypeConfiguration<Cash
     }
 }
 
-/// <summary><c>RCD_CashCountReferences</c>: el medio de recibo que cubre se enlaza cuando existe <c>RCD_ReceiptMeans</c> (fase 6). (nuevo)</summary>
+/// <summary><c>RCD_CashCountReferences</c>: con el medio del recibo que cubre (<c>RCD_ReceiptMeans</c>). (nuevo)</summary>
 public class CashCountReferenceConfiguration : IEntityTypeConfiguration<CashCountReference>
 {
     public const string Tabla = "RCD_CashCountReferences";
@@ -143,6 +144,7 @@ public class CashCountReferenceConfiguration : IEntityTypeConfiguration<CashCoun
     {
         builder.ComoEntidadDeRecaudo(Tabla);
         builder.HasOne<CashCountLine>().WithMany().HasForeignKey(e => e.CashCountLineId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<ReceiptMeans>().WithMany().HasForeignKey(e => e.ReceiptMeansId).OnDelete(DeleteBehavior.Restrict);
         builder.Property(e => e.Reference).HasMaxLength(80).IsRequired();
         builder.Property(e => e.Amount).Monto();
         builder.HasIndex(e => e.CashCountLineId).HasDatabaseName($"IX_{Tabla}_CashCountLineId");
@@ -166,6 +168,7 @@ public class CashMovementConfiguration : IEntityTypeConfiguration<CashMovement>
         builder.HasOne<PaymentMeans>().WithMany().HasForeignKey(e => e.ToMeansId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<User>().WithMany().HasForeignKey(e => e.SecondCustodianUserId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<User>().WithMany().HasForeignKey(e => e.RegisteredByUserId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<Receipt>().WithMany().HasForeignKey(e => e.ReceiptId).OnDelete(DeleteBehavior.Restrict);
         builder.Property(e => e.Number).HasMaxLength(30).IsRequired();
         builder.Property(e => e.Kind).HasConversion<int>();
         builder.Property(e => e.Amount).Monto();

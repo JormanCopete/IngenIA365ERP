@@ -1,0 +1,412 @@
+@page "/recaudo/caja"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Components.Personas
+@using IngenIA365ERP.Shared.Components.Recaudo
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Nomina
+@using IngenIA365ERP.Shared.Services.Recaudo
+@inject CajaClient Cliente
+@inject SesionesClient Sesiones
+@inject INotificationService Notification
+@inject DescargaDeArchivos Descargas
+
+<PageTitle>Caja - IngenIA365ERP</PageTitle>
+
+@* Feature 015, US3 (T0120; R-35; FR-018, FR-037 a FR-045, FR-188 a FR-191; SC-003): la caja en tres pasos —la persona (el buscador común, que acepta el lector
+   y el documento), qué paga (cada ítem simulado con su módulo, con su aviso y las dos alternativas del abono extraordinario) y los medios con su imputación—
+   y la confirmación todo o nada. Atajos: F2 buscar, F8 medios, F9 confirmar, Esc cancelar. Los rechazos se leen por su código, nunca por el texto. La misma
+   clave de operación se repite al reconfirmar tras «la distribución cambió» o tras la aprobación presente. *@
+<PermissionGate Required="Receipts.Receipt.Register" MostrarAviso="true">
+<div class="pagina" tabindex="0" @onkeydown="@AtajoAsync">
+    <div class="page-header">
+        <h3>Caja</h3>
+        <div class="toolbar">
+            <SfButton CssClass="e-outline" OnClick="@CancelarAsync">Cancelar (Esc)</SfButton>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Cargando…">
+        @if (_sesion is null)
+        {
+            <p class="texto-alerta">No tiene una sesión de caja abierta: ábrala en <a href="/recaudo/sesiones">Sesiones de caja</a>.</p>
+        }
+        else
+        {
+            <p class="texto-tenue">Caja @_sesion.CollectionPointCode · @_sesion.CashBoxCode · @SesionesClient.Estado(_sesion.Status)</p>
+        }
+    </IndicadorDeCarga>
+
+    @if (_sesion is not null)
+    {
+        <div class="info-card">
+            <h4>1. Persona (F2)</h4>
+            <PersonSearchPicker @ref="_buscador" Selected="_persona" SelectedChanged="@PersonaElegidaAsync" PermitirCrear="true" OnCrearPersona="@CrearPersona" Compacto="true" />
+            <IndicadorDeCarga Cargando="@_cargaDePagables.Activa" Texto="Consultando lo que puede pagar…">
+                @if (_pagables is not null)
+                {
+                    <p><strong>@_pagables.PersonName</strong> @(_pagables.IsAssociate ? "· asociado" : "· no asociado")</p>
+                    @foreach (var n in _pagables.Notices) { <p class="texto-alerta">@n</p> }
+                    <table class="data-grid">
+                        <thead><tr><th>Producto</th><th>Exigible hoy</th><th>Cuota</th><th>Vencido</th><th>Para cancelar</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var o in _pagables.Obligations?.Obligations ?? [])
+                            {
+                                <tr>
+                                    <td>@o.Number · @o.CreditLineName @(o.DaysPastDue > 0 ? $"· {o.DaysPastDue} días de mora" : "")</td>
+                                    <td>@o.DueToday.ToString("N0")</td><td>@o.CycleInstallment.ToString("N0")</td><td>@o.PastDue.ToString("N0")</td><td>@o.PayoffAmount.ToString("N0")</td>
+                                    <td><SfButton CssClass="e-flat" Disabled="@(o.BlockReasons.Count > 0)" OnClick="@(() => AgregarCredito(o))">Pagar</SfButton>
+                                        @string.Join(", ", o.BlockReasons)</td>
+                                </tr>
+                            }
+                            @foreach (var c in _pagables.Accounts?.Accounts ?? [])
+                            {
+                                <tr>
+                                    <td>@c.Number · @c.LineName</td><td colspan="4">@string.Join(" · ", (_pagables.DueInstallments?.Installments ?? []).Where(x => x.AccountPublicId == c.AccountPublicId).Select(x => $"{x.Period}: {x.Pending:N0}"))</td>
+                                    <td><SfButton CssClass="e-flat" Disabled="@(!c.AcceptsDeposits)" OnClick="@(() => AgregarCuenta(c))">Consignar</SfButton></td>
+                                </tr>
+                            }
+                            @foreach (var k in _pagables.MiscConcepts)
+                            {
+                                <tr><td>Concepto @k.Code · @k.Name</td><td colspan="4"></td><td><SfButton CssClass="e-flat" OnClick="@(() => AgregarConcepto(k))">Cobrar</SfButton></td></tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </IndicadorDeCarga>
+        </div>
+
+        <div class="info-card">
+            <h4>2. Qué paga</h4>
+            <IndicadorDeCarga Cargando="@_cargaDeItems.Activa" Texto="Simulando con cada módulo…">
+                <table class="data-grid">
+                    <thead><tr><th>Producto</th><th>Modalidad</th><th>Valor</th><th>Elección / aviso</th><th>Simulación</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var i in _items)
+                        {
+                            var simulado = _operacion?.Items.FirstOrDefault(x => x.ItemId == i.ItemId);
+                            <tr class="@(_rechazados.ContainsKey(i.ItemId!.Value) ? "fila-error" : "")">
+                                <td>@_rotulos.GetValueOrDefault(i.ItemId!.Value)</td>
+                                <td>
+                                    @if (i.Target == 1)
+                                    {
+                                        <select class="e-input" value="@i.LoanModality" @onchange="@(e => CambiarModalidad(i, e.Value?.ToString()))">
+                                            @foreach (var m in new[] { 3, 2, 1, 5, 4, 7 }) { <option value="@m">@CajaClient.Modalidad(m)</option> }
+                                        </select>
+                                    }
+                                    else { @CajaClient.Destino(i.Target) }
+                                </td>
+                                <td><input class="e-input" type="number" min="0" value="@i.Amount" @onchange="@(e => CambiarValor(i, e.Value?.ToString()))" /></td>
+                                <td>
+                                    @if (i.LoanModality == 5)
+                                    {
+                                        <select class="e-input" value="@(i.Choice?.ToString() ?? "")" @onchange="@(e => CambiarEleccion(i, e.Value?.ToString()))">
+                                            <option value="">Elección del deudor…</option><option value="1">Reducir el plazo</option><option value="2">Reducir la cuota</option>
+                                        </select>
+                                        @foreach (var a in simulado?.Alternatives ?? []) { <div class="texto-tenue">@(a.Choice == 1 ? "Plazo" : "Cuota"): aplica @a.AppliedAmount.ToString("N0")</div> }
+                                    }
+                                    @if (simulado?.AdvanceWithoutPrincipal == true)
+                                    {
+                                        <label><input type="checkbox" checked="@i.AdvanceNoticeAccepted" @onchange="@(e => AceptarAviso(i, e.Value is true))" /> El deudor acepta que el anticipo no abona a capital</label>
+                                    }
+                                </td>
+                                <td>@(simulado is null ? "" : $"aplica {simulado.SimulatedApplied:N0}") @string.Join(" · ", simulado?.Notices ?? [])
+                                    @if (_rechazados.TryGetValue(i.ItemId!.Value, out var motivo)) { <div class="texto-alerta">@motivo</div> }</td>
+                                <td><SfButton CssClass="e-flat" OnClick="@(() => Quitar(i))">Quitar</SfButton></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                <div class="toolbar">
+                    <SfButton CssClass="e-outline" Disabled="@(_items.Count == 0)" OnClick="@SimularAsync">Simular</SfButton>
+                    <span>Total: <strong>@_items.Sum(i => i.Amount).ToString("N0")</strong></span>
+                </div>
+            </IndicadorDeCarga>
+        </div>
+
+        <div class="info-card">
+            <h4>3. Medios (F8) y confirmación (F9)</h4>
+            <IndicadorDeCarga Cargando="@_cargaDeMedios.Activa" Texto="Imputando…">
+                @foreach (var m in _medios)
+                {
+                    <div class="form-grid">
+                        <label class="campo">Medio
+                            <select class="e-input" value="@m.PaymentMeansPublicId" @onchange="@(e => CambiarMedio(m, e.Value?.ToString()))">
+                                @foreach (var x in _sesion.Means) { <option value="@x.PaymentMeansPublicId">@x.Code · @x.Name</option> }
+                            </select>
+                        </label>
+                        <label class="campo">Valor <input class="e-input" type="number" min="0" value="@m.Amount" @onchange="@(e => CambiarValorDelMedio(m, e.Value?.ToString()))" /></label>
+                        <label class="campo">Referencia <input class="e-input" value="@m.Reference" @onchange="@(e => CambiarReferencia(m, e.Value?.ToString()))" /></label>
+                    </div>
+                }
+                <div class="toolbar">
+                    <SfButton CssClass="e-outline" OnClick="@AgregarMedio">Agregar medio</SfButton>
+                    <SfButton CssClass="e-outline" Disabled="@(_operacion is null || _medios.Count == 0)" OnClick="@ImputarAsync">Imputar</SfButton>
+                    <SfButton CssClass="e-primary" Disabled="@(_operacion is null || _operacion.Imputation.Count == 0 || _confirmando.Activa)" OnClick="@(() => ConfirmarAsync(null))">Confirmar (F9)</SfButton>
+                </div>
+                @if (_operacion is not null && _operacion.Imputation.Count > 0)
+                {
+                    <p>Medios @_operacion.TotalMeans.ToString("N0") · aplicado @_operacion.TotalItems.ToString("N0") · vueltas <strong>@_operacion.Change.ToString("N0")</strong></p>
+                }
+                @if (_pideDeclaracion)
+                {
+                    <div class="form-grid">
+                        <label class="campo campo-ancho">Origen de los fondos * <input class="e-input" @bind="_origen" maxlength="500" /></label>
+                        <label class="campo">Soporte (adjunto) * <input class="e-input" @bind="_soporteDeDeclaracion" /></label>
+                        <SfButton CssClass="e-primary" OnClick="@DeclararAsync">Registrar la declaración</SfButton>
+                    </div>
+                }
+            </IndicadorDeCarga>
+        </div>
+
+        @if (_aprobacion is not null)
+        {
+            <AprobacionPresenteDeRecaudo Solicitud="_aprobacion.Value" Huella="@_huella" Motivo="Recibo con fecha valor anterior" Aprobada="@(id => ConfirmarAsync(id))"
+                                         Cancelada="@(() => _aprobacion = null)" />
+        }
+
+        @if (_recibo is not null)
+        {
+            <div class="info-card">
+                <h4>Recibo @_recibo.Number</h4>
+                @foreach (var a in _recibo.Applications) { <p>@a.Ordinal. @CajaClient.Destino(a.Target) @a.ProductNumber · @a.Amount.ToString("N0") · comprobante @a.ModuleVoucherNumber</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-outline" OnClick="@(() => ImprimirAsync(false))">Imprimir tirilla</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => ImprimirAsync(true))">Imprimir carta</SfButton>
+                    <SfButton CssClass="e-primary" OnClick="@NuevaAsync">Nueva operación</SfButton>
+                </div>
+            </div>
+        }
+    }
+</div>
+
+<PersonaDialog @bind-Visible="_crearPersona" DocumentoInicial="@_documentoNuevo" CapturarAutorizacion="true" Compacto="true" OnGuardado="@PersonaCreadaAsync" />
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new(), _cargaDePagables = new(), _cargaDeItems = new(), _cargaDeMedios = new(), _confirmando = new();
+    private ClaveDeOperacion _claveDeCreacion = new(), _claveDeItems = new(), _claveDeMedios = new(), _claveDeConfirmacion = new(), _claveDeDeclaracion = new();
+    private PersonSearchPicker? _buscador;
+    private PersonSearchPicker.PersonSearchItem? _persona;
+    private SesionDeCajaDto? _sesion;
+    private LoQuePuedePagarDto? _pagables;
+    private OperacionDeCajaDto? _operacion;
+    private ReciboDto? _recibo;
+    private readonly List<ItemPedidoRequest> _items = [];
+    private readonly Dictionary<Guid, string> _rotulos = [];
+    private readonly Dictionary<Guid, string> _rechazados = [];
+    private readonly List<MedioDeCajaRequest> _medios = [];
+    private Guid? _aprobacion;
+    private string? _huella, _origen, _soporteDeDeclaracion, _documentoNuevo;
+    private bool _pideDeclaracion, _crearPersona;
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Sesiones.ActualAsync();
+        _sesion = r.IsSuccess ? r.Value : null;
+    }
+
+    private async Task AtajoAsync(KeyboardEventArgs e)
+    {
+        switch (e.Key)
+        {
+            case "F2": _persona = null; StateHasChanged(); break;
+            case "F8": AgregarMedio(); break;
+            case "F9" when _operacion is not null && _operacion.Imputation.Count > 0: await ConfirmarAsync(null); break;
+            case "Escape": await CancelarAsync(); break;
+        }
+    }
+
+    private void CrearPersona(string documento)
+    {
+        _documentoNuevo = documento;
+        _crearPersona = true;
+    }
+
+    private async Task PersonaCreadaAsync(Guid persona)
+    {
+        _crearPersona = false;
+        await CargarPagablesAsync(persona);
+    }
+
+    private async Task PersonaElegidaAsync(PersonSearchPicker.PersonSearchItem? persona)
+    {
+        _persona = persona;
+        if (persona is null) { _pagables = null; return; }
+        await CargarPagablesAsync(persona.PublicId);
+    }
+
+    private async Task CargarPagablesAsync(Guid persona)
+    {
+        using var carga = _cargaDePagables.Iniciar();
+        var r = await Cliente.LoQuePuedePagarAsync(persona, null);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo consultar lo que puede pagar."); return; }
+        _pagables = r.Value;
+        _items.Clear();
+        _rotulos.Clear();
+        _medios.Clear();
+        _operacion = null;
+        _recibo = null;
+        _claveDeCreacion = new ClaveDeOperacion();
+        _claveDeConfirmacion = new ClaveDeOperacion();
+    }
+
+    private void Agregar(ItemPedidoRequest item, string rotulo)
+    {
+        var conId = item with { ItemId = Guid.NewGuid() };
+        _items.Add(conId);
+        _rotulos[conId.ItemId!.Value] = rotulo;
+    }
+
+    private void AgregarCredito(ObligacionPagableDto o) =>
+        Agregar(new ItemPedidoRequest(1, o.CycleInstallment > 0 ? o.CycleInstallment : o.DueToday, o.ObligationPublicId, LoanModality: 3), $"Crédito {o.Number}");
+
+    private void AgregarCuenta(CuentaPagableDto c)
+    {
+        var exigibles = (_pagables?.DueInstallments?.Installments ?? []).Where(x => x.AccountPublicId == c.AccountPublicId).ToList();
+        Agregar(new ItemPedidoRequest(2, exigibles.Sum(x => x.Pending), c.AccountPublicId, AccountModality: exigibles.Count > 0 ? 2 : 1,
+            InstallmentPublicIds: exigibles.Select(x => x.InstallmentPublicId).ToList()), $"Cuenta {c.Number}");
+    }
+
+    private void AgregarConcepto(ConceptoVarioPagableDto k) => Agregar(new ItemPedidoRequest(3, 0, MiscConceptPublicId: k.MiscConceptPublicId), $"Concepto {k.Code}");
+
+    private void Reemplazar(ItemPedidoRequest viejo, ItemPedidoRequest nuevo) => _items[_items.IndexOf(viejo)] = nuevo;
+
+    private void CambiarModalidad(ItemPedidoRequest i, string? valor) => Reemplazar(i, i with { LoanModality = int.TryParse(valor, out var m) ? m : 3, Choice = null });
+
+    private void CambiarValor(ItemPedidoRequest i, string? valor) => Reemplazar(i, i with { Amount = decimal.TryParse(valor, out var v) ? v : 0m });
+
+    private void CambiarEleccion(ItemPedidoRequest i, string? valor) => Reemplazar(i, i with { Choice = int.TryParse(valor, out var c) ? c : null });
+
+    private void AceptarAviso(ItemPedidoRequest i, bool acepta) => Reemplazar(i, i with { AdvanceNoticeAccepted = acepta });
+
+    private void Quitar(ItemPedidoRequest i) => _items.Remove(i);
+
+    private async Task<bool> AsegurarOperacionAsync()
+    {
+        if (_operacion is not null) return true;
+        if (_sesion is null || _pagables is null) return false;
+        var r = await Cliente.CrearAsync(new CrearOperacionRequest(_sesion.PublicId, _pagables.PersonPublicId, null, null, null, null, null), _claveDeCreacion);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo empezar la operación."); return false; }
+        _operacion = r.Value;
+        return true;
+    }
+
+    private async Task SimularAsync()
+    {
+        using var carga = _cargaDeItems.Iniciar();
+        if (!await AsegurarOperacionAsync()) return;
+        _rechazados.Clear();
+        var r = await Cliente.ItemsAsync(_operacion!.PublicId, _items, _claveDeItems);
+        _claveDeItems = new ClaveDeOperacion();
+        if (!r.IsSuccess)
+        {
+            if (r.ErrorCode == "Receipts.Receipt.ItemRejected")
+                foreach (var x in r.Dato<List<RechazoDeItem>>("items") ?? []) _rechazados[x.ItemId] = x.Message;
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo simular.");
+            return;
+        }
+        _operacion = r.Value;
+        _pideDeclaracion = _operacion!.Items.Any(x => x.RequiresSourceOfFunds) && !_operacion.SourceOfFundsDeclared;
+    }
+
+    private void AgregarMedio()
+    {
+        if (_sesion is null || _sesion.Means.Count == 0) return;
+        var pendiente = _items.Sum(i => i.Amount) - _medios.Sum(m => m.Amount);
+        _medios.Add(new MedioDeCajaRequest(_sesion.Means[0].PaymentMeansPublicId, Math.Max(0m, pendiente), MeansId: Guid.NewGuid()));
+    }
+
+    private void CambiarMedio(MedioDeCajaRequest m, string? valor) =>
+        _medios[_medios.IndexOf(m)] = m with { PaymentMeansPublicId = Guid.TryParse(valor, out var g) ? g : m.PaymentMeansPublicId };
+
+    private void CambiarValorDelMedio(MedioDeCajaRequest m, string? valor) => _medios[_medios.IndexOf(m)] = m with { Amount = decimal.TryParse(valor, out var v) ? v : 0m };
+
+    private void CambiarReferencia(MedioDeCajaRequest m, string? valor) => _medios[_medios.IndexOf(m)] = m with { Reference = valor };
+
+    private async Task ImputarAsync()
+    {
+        if (_operacion is null) return;
+        using var carga = _cargaDeMedios.Iniciar();
+        var r = await Cliente.MediosAsync(_operacion.PublicId, _medios, null, _claveDeMedios);
+        _claveDeMedios = new ClaveDeOperacion();
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo imputar."); return; }
+        _operacion = r.Value;
+    }
+
+    private async Task DeclararAsync()
+    {
+        if (_operacion is null || string.IsNullOrWhiteSpace(_origen) || !Guid.TryParse(_soporteDeDeclaracion, out var soporte))
+        {
+            await Notification.WarningAsync("Escriba el origen y adjunte el soporte.");
+            return;
+        }
+        using var carga = _cargaDeMedios.Iniciar();
+        var efectivo = _operacion.Means.Where(m => _sesion!.Means.FirstOrDefault(x => x.PaymentMeansPublicId == m.PaymentMeansPublicId)?.Class == 1).Sum(m => m.Amount);
+        var r = await Cliente.DeclararAsync(_operacion.PublicId, _origen.Trim(), efectivo, soporte, _claveDeDeclaracion);
+        _claveDeDeclaracion = new ClaveDeOperacion();
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo registrar la declaración."); return; }
+        _operacion = r.Value;
+        _pideDeclaracion = false;
+    }
+
+    private async Task ConfirmarAsync(Guid? aprobacion)
+    {
+        if (_operacion is null) return;
+        using var carga = _confirmando.Iniciar();
+        var r = await Cliente.ConfirmarAsync(_operacion.PublicId, _claveDeConfirmacion, aprobacion);
+        switch (r.ErrorCode)
+        {
+            case null when r.IsSuccess:
+                _recibo = r.Value;
+                _aprobacion = null;
+                await Notification.SuccessAsync($"Recibo {_recibo!.Number} confirmado.");
+                return;
+            case "Approvals.PresenceRequired":
+                _aprobacion = r.Dato<Guid?>("approvalRequestPublicId");
+                _huella = r.Dato<string>("contentSha256");
+                return;
+            case "Receipts.Compliance.DeclarationRequired":
+                _pideDeclaracion = true;
+                break;
+            case "Receipts.Receipt.DistributionChanged":
+                await SimularAsync();
+                break;
+            case "Receipts.Receipt.ItemRejected":
+                foreach (var x in r.Dato<List<RechazoDeItem>>("items") ?? []) _rechazados[x.ItemId] = x.Message;
+                break;
+        }
+        await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo confirmar el recibo.");
+    }
+
+    private async Task ImprimirAsync(bool carta)
+    {
+        if (_recibo is null) return;
+        var r = await Cliente.DocumentoAsync(_recibo.PublicId, carta, copia: false);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo generar el recibo."); return; }
+        await Descargas.GuardarAsync(r.Value!.Nombre, r.Value.TipoContenido, r.Value.Contenido);
+    }
+
+    private async Task CancelarAsync()
+    {
+        if (_operacion is not null && _recibo is null) await Cliente.AbandonarAsync(_operacion.PublicId, new ClaveDeOperacion());
+        await NuevaAsync();
+    }
+
+    private Task NuevaAsync()
+    {
+        _persona = null;
+        _pagables = null;
+        _operacion = null;
+        _recibo = null;
+        _items.Clear();
+        _medios.Clear();
+        _rechazados.Clear();
+        _aprobacion = null;
+        _claveDeCreacion = new ClaveDeOperacion();
+        _claveDeConfirmacion = new ClaveDeOperacion();
+        return Task.CompletedTask;
+    }
+
+    private sealed record RechazoDeItem(Guid ItemId, string Code, string Message);
+}

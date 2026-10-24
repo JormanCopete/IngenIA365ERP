@@ -1,0 +1,88 @@
+@page "/recaudo/recibos"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Nomina
+@using IngenIA365ERP.Shared.Services.Recaudo
+@inject CajaClient Cliente
+@inject INotificationService Notification
+@inject DescargaDeArchivos Descargas
+
+<PageTitle>Recibos - IngenIA365ERP</PageTitle>
+
+@* Feature 015, US3 (T0121; FR-044, FR-045, FR-177): los recibos al alcance, su detalle (con pagador tercero, el producto enmascarado y sin saldos) y la
+   reimpresión con la marca «COPIA». *@
+<PermissionGate Required="Receipts.Receipt.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Recibos</h3>
+        <div class="toolbar">
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@BuscarAsync">Buscar</SfButton>
+        </div>
+    </div>
+    <div class="form-grid">
+        <label class="campo">Desde <input class="e-input" type="date" @bind="_desde" /></label>
+        <label class="campo">Hasta <input class="e-input" type="date" @bind="_hasta" /></label>
+        <label class="campo">Número <input class="e-input" @bind="_numero" /></label>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Buscando…">
+        <table class="data-grid">
+            <thead><tr><th>Número</th><th>Fecha valor</th><th>Pagador</th><th>Aplicado</th><th>Estado</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var r in _recibos)
+                {
+                    <tr>
+                        <td>@r.Number</td><td>@r.ValueDate.ToString("yyyy-MM-dd")</td><td>@r.PayerName @(r.PayerIsThirdParty ? "(tercero)" : "")</td>
+                        <td>@r.TotalApplied.ToString("N0")</td><td>@(r.Status switch { 1 => "Vigente", 2 => "Anulación por aprobar", 3 => "Anulado", _ => "—" })</td>
+                        <td>
+                            <SfButton CssClass="e-flat" OnClick="@(() => _detalle = r)">Ver</SfButton>
+                            <PermissionGate Required="Receipts.Receipt.Print">
+                                <SfButton CssClass="e-flat" OnClick="@(() => ReimprimirAsync(r, false))">Copia tirilla</SfButton>
+                                <SfButton CssClass="e-flat" OnClick="@(() => ReimprimirAsync(r, true))">Copia carta</SfButton>
+                            </PermissionGate>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        @if (_detalle is not null)
+        {
+            <div class="info-card">
+                <h4>Recibo @_detalle.Number · código @_detalle.VerificationCode</h4>
+                @if (_detalle.Masked) { <p class="texto-tenue">Pagó un tercero: el producto va enmascarado y sin saldos.</p> }
+                @foreach (var a in _detalle.Applications)
+                {
+                    <p>@a.Ordinal. @CajaClient.Destino(a.Target) @a.ProductNumber · @CajaClient.Modalidad(a.LoanModality) · @a.Amount.ToString("N0") · comprobante @a.ModuleVoucherNumber
+                        @(a.FinalityUntil is { } f ? $"· en firme desde {f:yyyy-MM-dd}" : "")</p>
+                }
+                @foreach (var m in _detalle.Means) { <p>@m.MeansCode · @m.Amount.ToString("N0") @m.Reference</p> }
+                <p>Vueltas @_detalle.ChangeGiven.ToString("N0")</p>
+            </div>
+        }
+    </IndicadorDeCarga>
+</div>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new();
+    private IReadOnlyList<ReciboDto> _recibos = [];
+    private ReciboDto? _detalle;
+    private DateOnly? _desde = DateOnly.FromDateTime(DateTime.Now), _hasta = DateOnly.FromDateTime(DateTime.Now);
+    private string? _numero;
+
+    protected override Task OnInitializedAsync() => BuscarAsync();
+
+    private async Task BuscarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Cliente.RecibosAsync(_desde, _hasta, string.IsNullOrWhiteSpace(_numero) ? null : _numero.Trim());
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los recibos."); return; }
+        _recibos = r.Value ?? [];
+    }
+
+    private async Task ReimprimirAsync(ReciboDto recibo, bool carta)
+    {
+        var r = await Cliente.DocumentoAsync(recibo.PublicId, carta, copia: true);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo generar la copia."); return; }
+        await Descargas.GuardarAsync(r.Value!.Nombre, r.Value.TipoContenido, r.Value.Contenido);
+    }
+}

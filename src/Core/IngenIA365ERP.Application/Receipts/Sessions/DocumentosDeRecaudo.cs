@@ -21,6 +21,9 @@ public interface IDocumentosDeRecaudoEnPdf
     byte[] CierreDelDia(CierreDelDiaModel modelo);
 
     byte[] Acta(ActaDeArqueoModel modelo);
+
+    /// <summary>El recibo de caja en tirilla de 80 mm o carta (fase 6, T0118).</summary>
+    byte[] Recibo(CashDesk.ReciboModel modelo);
 }
 
 /// <summary>La empresa del encabezado. (nuevo)</summary>
