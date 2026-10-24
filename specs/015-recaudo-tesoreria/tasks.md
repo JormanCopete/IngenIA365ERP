@@ -2437,7 +2437,16 @@ decisiones-transversales §2.7:
 
 **Independent Test**: el par se aplica sin tocar los pares congelados; las rutas de R2 dejan de responder 404.
 
-- [ ] T0426 Generar en src/Infrastructure/IngenIA365ERP.Persistence.Migrations.{PostgreSql,SqlServer}/Application/ la primera versión del par `RecaudoCanales` (las nueve tablas `RCD_` de R2 llegan con sus historias y se regeneran hasta T0438) y activar las rutas de R2 de api.md §8; habilitar los ámbitos `CollectionAgreementFile = 8` y `PaymentGatewayFile = 10` para la lectura
+- [X] T0426 Generar en src/Infrastructure/IngenIA365ERP.Persistence.Migrations.{PostgreSql,SqlServer}/Application/ la primera versión del par `RecaudoCanales` (las nueve tablas `RCD_` de R2 llegan con sus historias y se regeneran hasta T0438) y activar las rutas de R2 de api.md §8; habilitar los ámbitos `CollectionAgreementFile = 8` y `PaymentGatewayFile = 10` para la lectura
+
+**Notas de la construcción de la fase 36 (2026-10-24)**. Desviaciones y decisiones; los nombres nuevos quedan en decisiones-transversales §2.7:
+
+- **T0426**: el par `RecaudoCanales` nace **vacío** (como `RecaudoCompleto` y `TesoreriaCompleta`), después de `TesoreriaCompleta` (los pares de R0/T0, de R1 y de T1 no se
+  tocan); se regenera en las fases 37 y 38, que suman sus tablas. `CatalogoDeRecaudo.EntregaVigente` sube a **R2** (`MediosDeR1Tests` pasa a «R1 o posterior»). Los
+  ámbitos `CollectionAgreementFile = 8` y `PaymentGatewayFile = 10` quedan habilitados para la lectura en `BankFileFormatValidator` (orígenes del detalle: fecha, fecha
+  valor, valor, `MovementReference` como la referencia de pago, `BankSequence` como el identificador del pago, documento y nombre del consignante, descripción, oficina;
+  y en la pasarela además `Outcome`, `BankReference` y `BankDate`); sin orígenes nuevos. Las rutas de api.md §8 de R2 **no existían**: se crean en su fase. Migración en
+  par; «No changes» en SqlServer y PostgreSQL; paridad en par (Application 72).
 
 ---
 

@@ -634,6 +634,12 @@ Lo que tasks.md marcaba **(nuevo)** y lo que trajeron el `/speckit-analyze` y la
 | `AvisoOperativoDelCierre` (`Accounting.Period.ReconciliationsOpen`, `Accounting.Period.CashSessionsOpen`) · `ClosePeriodCommand.AcknowledgeOperationalPending` · `AccountingErrors.PeriodOperationalPending` | el aviso al cierre contable (D29) | `Common/Cuadres/AvisoOperativoDelCierre.cs`, `Accounting/Periods/PeriodCommands.cs` |
 | vistas `payment-vouchers` · `transfers` · `month-end-checks` (`VistasDeTesoreria.{ComprobantesDePago, Traslados, CierreDeCheques}`) | las vistas de T1 | `Treasury/Reports/InformesDeTesoreriaT1.cs` |
 
+**Fijados en la construcción de la fase 36 (2026-10-24)**:
+
+| Nombre | Qué | Dónde |
+|---|---|---|
+| `CatalogoDeRecaudo.EntregaVigente = R2` · par `RecaudoCanales` · ámbitos de lectura `CollectionAgreementFile` y `PaymentGatewayFile` en `BankFileFormatValidator` | la base de R2 | `Domain/Receipts/CatalogoDeRecaudo.cs`, `Common/BankFiles/BankFileFormatValidator.cs`, `Persistence.Migrations.*` |
+
 ## 3. Decisiones transversales
 
 ### Módulos y frontera
