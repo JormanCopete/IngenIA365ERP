@@ -115,7 +115,7 @@ public sealed class CreateCashOperationCommandValidator : AbstractValidator<Crea
     }
 }
 
-public sealed class CreateCashOperationCommandHandler(IApplicationDbContext db, IAlcanceDeRecaudo alcance, IDateTimeService reloj)
+public sealed class CreateCashOperationCommandHandler(IApplicationDbContext db, IAlcanceDeRecaudo alcance, IDateTimeService reloj, IListasDeRecaudo? listas = null)
     : IRequestHandler<CreateCashOperationCommand, Result<CashOperationDto>>
 {
     public async Task<Result<CashOperationDto>> Handle(CreateCashOperationCommand request, CancellationToken ct)
@@ -147,6 +147,15 @@ public sealed class CreateCashOperationCommandHandler(IApplicationDbContext db, 
         };
         db.CashOperations.Add(operacion);
         await db.SaveChangesAsync(ct);
+        // Feature 015, US14 (T0240; FR-098, FR-203): pagador, titular y quien efectúa contra las listas desde que nace la operación. La vinculante la bloquea sin medios
+        // ni confirmación (la alerta al oficial es inmediata); la no vinculante queda anotada para la confirmación.
+        if (listas is not null)
+        {
+            var personas = new[] { pagador.Value, titular ?? 0, efectua ?? 0 }.Where(x => x != 0).Distinct().OrderBy(x => x).ToList();
+            operacion.ScreeningOutcome = await listas.EvaluarAsync(personas, operacion.PublicId, ct);
+            if (operacion.ScreeningOutcome == Domain.Enums.Receipts.ScreeningOutcomeR.BindingMatch) operacion.Status = CashOperationState.Blocked;
+            await db.SaveChangesAsync(ct);
+        }
         return Result.Success(await OperacionesDeCaja.DtoAsync(db, operacion, ct));
     }
 }

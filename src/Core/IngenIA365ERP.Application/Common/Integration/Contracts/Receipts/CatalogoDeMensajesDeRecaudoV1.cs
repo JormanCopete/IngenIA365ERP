@@ -42,6 +42,9 @@ public static class CatalogoDeMensajesDeRecaudoV1
         Hecho(typeof(ChequeRecibidoDevueltoV1), ChequeRecibidoDevueltoV1.Type, "CRD"),
         // US19 (fase 14): la remesa que sale de la bóveda.
         Hecho(typeof(RemesaDespachadaV1), RemesaDespachadaV1.Type, "RMD"),
+        // US14 (fase 15): el dinero retenido en custodia por cumplimiento y su liberación.
+        Hecho(typeof(DineroRetenidoEnCustodiaV1), DineroRetenidoEnCustodiaV1.Type, "DCU"),
+        Hecho(typeof(CustodiaLiberadaV1), CustodiaLiberadaV1.Type, "CLB"),
     ];
 
     private static TipoDeMensaje Hecho(Type record, string type, string codigoCorto) =>

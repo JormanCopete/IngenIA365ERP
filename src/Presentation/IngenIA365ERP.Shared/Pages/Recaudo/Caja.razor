@@ -10,6 +10,7 @@
 @inject INotificationService Notification
 @inject DescargaDeArchivos Descargas
 @inject HttpClient Http
+@inject CumplimientoClient CumplimientoApi
 
 <PageTitle>Caja - IngenIA365ERP</PageTitle>
 
@@ -441,6 +442,15 @@
                 return;
             case "Receipts.Compliance.DeclarationRequired":
                 _pideDeclaracion = true;
+                break;
+            case "Receipts.Compliance.WithholdRequired":
+                // US14 (T0245): coincidencia no vinculante con «retiene»: el efectivo queda en custodia hasta que el oficial lo libere o lo devuelva.
+                var retenida = await CumplimientoApi.RetenerAsync(_operacion.PublicId, new ClaveDeOperacion());
+                if (retenida.IsSuccess)
+                {
+                    await Notification.WarningAsync("La operación quedó retenida por cumplimiento: el efectivo está en custodia hasta que el oficial decida.");
+                    return;
+                }
                 break;
             case "Receipts.Compliance.DeliveredByRequired":
                 _pideQuienEfectua = true;

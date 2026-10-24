@@ -28,6 +28,8 @@ public sealed class OrdenesDePagoDeTesoreria(
     public static readonly IReadOnlySet<string> ClasesDeRecaudo = new HashSet<string>(StringComparer.Ordinal)
     {
         "PayerCreditBalanceRefund", "LendingCreditBalanceRefund", "UnidentifiedItemRefund",
+        // Feature 015, US14 (T0240): la devolución del dinero retenido en custodia por cumplimiento.
+        "WithheldMoneyRefund",
     };
 
     public async Task<OrdenDePagoEmitidaDto> EmitirAsync(SolicitudDeOrdenDePago solicitud, CancellationToken ct)

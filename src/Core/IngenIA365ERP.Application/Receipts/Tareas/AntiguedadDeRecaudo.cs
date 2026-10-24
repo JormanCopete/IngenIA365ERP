@@ -55,7 +55,32 @@ public sealed class AntiguedadDeRecaudo(
 
     /// <summary>Todas las secciones de la tarea.</summary>
     public async Task<int> RevisarAsync(CancellationToken ct) =>
-        await PartidasAsync(ct) + await SaldosAFavorAsync(ct) + await ExtractosSinCargarAsync(ct) + await PartidasAlCierreAsync(ct);
+        await PartidasAsync(ct) + await SaldosAFavorAsync(ct) + await ExtractosSinCargarAsync(ct) + await PartidasAlCierreAsync(ct) + await ContingenciaPorDigitarAsync(ct);
+
+    /// <summary>
+    /// Feature 015, US2 (T0243; FR-186): los talonarios de contingencia con números sin digitar por debajo del último digitado (un recibo del papel que todavía no
+    /// entró al sistema): una alerta por talonario con los números que faltan. Sólo informa.
+    /// </summary>
+    public async Task<int> ContingenciaPorDigitarAsync(CancellationToken ct)
+    {
+        var talonarios = await db.ContingencyBooks.AsNoTracking().Where(b => b.Status == ContingencyBookState.Active).ToListAsync(ct);
+        var alertadas = 0;
+        foreach (var t in talonarios)
+        {
+            var usados = await db.IssuedReceipts.AsNoTracking().Where(r => r.ContingencyBookId == t.Id && r.ContingencyNumber != null)
+                .Select(r => r.ContingencyNumber!.Value).ToListAsync(ct);
+            if (usados.Count == 0) continue;
+            var faltan = Enumerable.Range(t.FromNumber, usados.Max() - t.FromNumber + 1).Except(usados).ToList();
+            if (faltan.Count == 0) continue;
+            await alertas.LevantarAsync(new AlertaALevantar(TiposDeAlerta.RecaudoContingenciaPorDigitar, "Recibos de contingencia por digitar",
+                string.Create(CultureInfo.InvariantCulture,
+                    $"El talonario {t.FromNumber}–{t.ToNumber} tiene {faltan.Count} recibo(s) sin digitar antes del {usados.Max()}: {string.Join(", ", faltan.Take(20))}."),
+                "ContingencyBook", t.PublicId, DedupKey: string.Create(CultureInfo.InvariantCulture, $"Recaudo.ContingenciaPorDigitar:{t.PublicId:N}:{faltan.Count}"),
+                ModuloDeOrigen: "Receipts"), ct);
+            alertadas++;
+        }
+        return alertadas;
+    }
 
     /// <summary>Las partidas en cada escalón y el consignante repetido. Deja anotado el último escalón alertado de cada partida (sólo esa marca).</summary>
     public async Task<int> PartidasAsync(CancellationToken ct)

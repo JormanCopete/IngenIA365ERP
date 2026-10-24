@@ -1,0 +1,141 @@
+@page "/recaudo/cumplimiento"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Recaudo
+@inject CumplimientoClient CumplimientoApi
+@inject INotificationService Notification
+
+<PageTitle>Cumplimiento - IngenIA365ERP</PageTitle>
+
+@* Feature 015, US14 (T0245; FR-095, FR-097, FR-189, FR-203, FR-204): el registro de transacciones en efectivo por persona y mes, las señales evaluadas con la versión del
+   parámetro que las levantó, y las operaciones retenidas por una coincidencia no vinculante, que el oficial libera o devuelve por orden de pago con su soporte. Es una
+   lectura sensible: queda en la auditoría. *@
+<PermissionGate Required="Receipts.Compliance.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Cumplimiento</h3>
+        <div class="toolbar">
+            <input type="number" class="e-input" placeholder="Mes (aaaamm)" @bind="_mes" />
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+        </div>
+    </div>
+
+    <section class="info-card">
+        <h4>Operaciones retenidas</h4>
+        <IndicadorDeCarga Cargando="@_retenidas.Activa" Texto="Cargando retenidas…">
+            <table class="data-grid">
+                <thead><tr><th>Pagador</th><th>Efectivo</th><th>Retenida</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var o in _operaciones)
+                    {
+                        <tr class="fila-alerta">
+                            <td>@o.PayerName</td><td>@o.CashAmount.ToString("N2")</td><td>@o.WithheldAt.ToLocalTime().ToString("g")</td>
+                            <td>
+                                <PermissionGate Required="Receipts.Compliance.Release">
+                                    <input class="e-input" placeholder="Soporte (adjunto)" @bind="_soporte" />
+                                    <input class="e-input" placeholder="Motivo" @bind="_motivo" />
+                                    <SfButton CssClass="e-flat" OnClick="@(() => LiberarAsync(o))">Liberar</SfButton>
+                                    <SfButton CssClass="e-flat" OnClick="@(() => DevolverAsync(o))">Devolver por orden de pago</SfButton>
+                                </PermissionGate>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </IndicadorDeCarga>
+    </section>
+
+    <section class="info-card">
+        <h4>Señales</h4>
+        <IndicadorDeCarga Cargando="@_senales.Activa" Texto="Cargando señales…">
+            <table class="data-grid">
+                <thead><tr><th>Señal</th><th>Persona o consignante</th><th>Desde</th><th>Hasta</th><th>Operaciones</th><th>Total</th><th>Versión del parámetro</th></tr></thead>
+                <tbody>
+                    @foreach (var s in _listaDeSenales)
+                    {
+                        <tr><td>@Senal(s.Signal)</td><td>@(s.PersonName ?? s.DepositorKey)</td><td>@s.WindowFrom.ToString("dd/MM/yyyy")</td><td>@s.WindowTo.ToString("dd/MM/yyyy")</td>
+                            <td>@s.Count</td><td>@s.Total.ToString("N0")</td><td>@s.ParameterVersion</td></tr>
+                    }
+                </tbody>
+            </table>
+        </IndicadorDeCarga>
+    </section>
+
+    <section class="info-card">
+        <h4>Registro de transacciones en efectivo</h4>
+        <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Cargando el registro…">
+            <table class="data-grid">
+                <thead><tr><th>Documento</th><th>Clase</th><th>Persona</th><th>Fecha</th><th>Efectivo</th><th>Otros medios</th><th>Alertas</th></tr></thead>
+                <tbody>
+                    @foreach (var t in _transacciones)
+                    {
+                        <tr><td>@t.DocumentNumber</td><td>@(t.DocumentKind == 3 ? "Anulación" : "Recibo")</td><td>@t.PersonName</td><td>@t.OccurredOn.ToString("dd/MM/yyyy")</td>
+                            <td>@t.CashAmount.ToString("N2")</td><td>@t.OtherMeansAmount.ToString("N2")</td><td>@string.Join(", ", t.Alerts)</td></tr>
+                    }
+                </tbody>
+            </table>
+        </IndicadorDeCarga>
+    </section>
+</div>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new(), _senales = new(), _retenidas = new();
+    private IReadOnlyList<TransaccionDeEfectivoDto> _transacciones = [];
+    private IReadOnlyList<SenalDeCumplimientoDto> _listaDeSenales = [];
+    private IReadOnlyList<OperacionRetenidaDto> _operaciones = [];
+    private int? _mes;
+    private string? _soporte, _motivo;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _mes = DateTime.Today.Year * 100 + DateTime.Today.Month;
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        using (var carga = _carga.Iniciar())
+        {
+            var t = await CumplimientoApi.TransaccionesAsync(null, _mes);
+            if (t.IsSuccess) _transacciones = t.Value ?? [];
+            else await Notification.ErrorAsync(t.ErrorMessage ?? "No se pudo consultar el registro de efectivo.");
+        }
+        using (var carga = _senales.Iniciar())
+        {
+            var s = await CumplimientoApi.SenalesAsync();
+            if (s.IsSuccess) _listaDeSenales = s.Value ?? [];
+        }
+        using (var carga = _retenidas.Iniciar())
+        {
+            var r = await CumplimientoApi.RetenidasAsync();
+            if (r.IsSuccess) _operaciones = r.Value ?? [];
+        }
+    }
+
+    private async Task LiberarAsync(OperacionRetenidaDto o)
+    {
+        if (!Guid.TryParse(_soporte, out var soporte) || string.IsNullOrWhiteSpace(_motivo)) { await Notification.WarningAsync("Adjunte el soporte y escriba el motivo."); return; }
+        using var carga = _retenidas.Iniciar();
+        var r = await CumplimientoApi.LiberarAsync(o.OperationPublicId, new LiberarRetenidaRequest(soporte, _motivo), new ClaveDeOperacion());
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo liberar la operación."); return; }
+        await Notification.SuccessAsync("Operación liberada: el cajero ya puede confirmarla.");
+        await CargarAsync();
+    }
+
+    private async Task DevolverAsync(OperacionRetenidaDto o)
+    {
+        if (!Guid.TryParse(_soporte, out var soporte)) { await Notification.WarningAsync("Adjunte el soporte de la decisión."); return; }
+        using var carga = _retenidas.Iniciar();
+        var r = await CumplimientoApi.DevolverAsync(o.OperationPublicId, new DevolverRetenidaRequest(soporte, null, "Transfer"), new ClaveDeOperacion());
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo pedir la devolución."); return; }
+        await Notification.SuccessAsync("Devolución pedida a Tesorería.");
+        await CargarAsync();
+    }
+
+    private static string Senal(int s) => s switch
+    {
+        1 => "Acumulado del mes", 2 => "Fraccionamiento", 3 => "Pagador tercero frecuente", 4 => "Consignante repetido", 5 => "Lista vinculante",
+        6 => "Lista no vinculante", _ => s.ToString(),
+    };
+}

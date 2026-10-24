@@ -300,7 +300,8 @@ public static class DependencyInjection
         services.AddScoped<Receipts.Sessions.Tareas.CuadreDiarioDeRecaudo>();
         // US3 (T0115): la confirmación única del recibo y el gancho de listas (lo completa la fase 15).
         services.AddScoped<Receipts.CashDesk.ConfirmacionDeRecibo>();
-        services.TryAddScoped<Receipts.Common.IListasDeRecaudo, Receipts.Common.ListasDeRecaudoSinConsulta>();
+        services.TryAddScoped<Receipts.Common.IListasDeRecaudo, Receipts.Compliance.ListasDeRecaudo>();
+        services.AddScoped<Receipts.Compliance.RegistroDeEfectivo>();
         // US10 (fase 7): las cuentas propias y su puerto para Recaudo, el vínculo contable, el fondo de liquidez, la bandeja de órdenes, los lotes y los archivos.
         services.AddScoped<Common.Integration.Accounting.IContabilidadParaTesoreria, Accounting.Treasury.ContabilidadParaTesoreria>();
         services.AddScoped<Common.Integration.Treasury.ICuentasBancariasPropias, Treasury.BankAccounts.CuentasBancariasPropias>();

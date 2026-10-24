@@ -382,6 +382,19 @@ Lo que tasks.md marcaba **(nuevo)** y lo que trajeron el `/speckit-analyze` y la
 | `Treasury.Checkbook.{Exhausted, Voided, RangeOverlaps, AccountInactive, OtherAccount}` · `Treasury.Batch.{NotChecks, NoChecksToIssue}` · `Treasury.Check.{NotDeliverable, NotVoidable, StillCashable}` · `Treasury.Remittance.{NotInTransit, SupportRequired, OtherAccount, AccountNotAllowed}` · `Receipts.Vault.RemittanceMismatch` | errores | `ErroresDeTesoreria.Cheques.cs`, `ErroresDeRecaudo.Remesas.cs` |
 | `/api/treasury/checkbooks` · `/api/treasury/issued-checks` (no `/checks`, área heredada) · `POST /api/treasury/remittances/bank-to-vault` · `POST /api/receipts/vaults/{id}/remittances` · pantallas `/tesoreria/chequeras`, `/tesoreria/cheques-girados`, `/tesoreria/remesas` · `ChequesYRemesasClient` | rutas y pantallas | `CheckbooksEndpoints.cs`, `RemittancesEndpoints.cs`, `Shared` |
 
+**Fijados en la construcción de la fase 15 (2026-10-24)**:
+
+| Nombre | Qué | Dónde |
+|---|---|---|
+| `SenalesDeEfectivo.{Evaluar, Consignante}` · `TransaccionDeEfectivo` · `ParametrosDeSenales` · `SenalDeEfectivo` · `SenalDetectada` | el motor puro de las señales | `Domain/Receipts/Cumplimiento` |
+| `CashTransaction` (H) · `ComplianceAlertLog` · `CashTransactionDocumentKind` · `CashTransactionDirection` · DbSets `ReceiptsCashTransactions`, `ReceiptsComplianceAlertLogs` | el registro de efectivo y las señales evaluadas | `Entities/Receipts/Compliance`, `RCD_CashTransactions`, `RCD_ComplianceAlertsLog` |
+| `ListasDeRecaudo` (reemplaza a `ListasDeRecaudoSinConsulta`) · `RegistroDeEfectivo` (`TercerosFrecuentesPorDefecto`, `ConsignanteRepetidoPorDefecto`) · `CumplimientoDeCaja` | las listas y el registro de efectivo de la caja | `Application/Receipts/Compliance` |
+| `WithholdCashOperationCommand` · `ReleaseWithheldOperationCommand` · `RefundWithheldMoneyByOrderCommand` (clase de orden `WithheldMoneyRefund`) · `ListWithheldOperationsQuery` · `ListCashTransactionsQuery` · `ListComplianceSignalsQuery` | retener, liberar, devolver y consultar | `ComplianceCommands.cs` |
+| `RegisterContingencyReceiptCommand` · `GetContingencyBookStatusQuery` · `ContingencyBookStatusDto` · `AntiguedadDeRecaudo.ContingenciaPorDigitarAsync` | la contingencia de la caja | `Application/Receipts/CashDesk/ContingenciaDeCaja.cs` |
+| `DineroRetenidoEnCustodiaV1` (`DCU`) · `CustodiaLiberadaV1` (`CLB`) · `EmisionDeRecaudo.{DineroRetenidoEnCustodiaAsync, CustodiaLiberadaAsync}` · clase de origen `ComplianceCustody` | los hechos de la custodia | `Contracts/Receipts/HechosDeCumplimientoV1.cs`, `EmisionDeRecaudo.Cumplimiento.cs` |
+| `Receipts.Compliance.{WithholdRequired, WithholdNotApplicable, WithholdNoCash, NotWithheld, ReleaseBySameUser, SessionClosed}` · `Receipts.Contingency.{BookNotUsable, NumberOutOfRange, NumberUsed, ImageRequired, Rejected}` | errores | `ErroresDeRecaudo.Cumplimiento.cs` |
+| `POST /api/receipts/cash-operations/{id}/withhold` · `…/refund-by-order` · `GET /api/receipts/compliance/withheld` · `GET /api/receipts/contingency-books/{id}/status` · pantallas `/recaudo/cumplimiento`, `/recaudo/contingencia` · `CumplimientoClient` | rutas y pantallas que api.md no listaba | `ComplianceEndpoints.cs`, `Shared` |
+
 ## 3. Decisiones transversales
 
 ### Módulos y frontera

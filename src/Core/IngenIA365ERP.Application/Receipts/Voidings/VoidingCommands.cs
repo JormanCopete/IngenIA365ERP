@@ -175,7 +175,8 @@ public sealed class ApproveReceiptVoidingCommandHandler(
     IContratoDeCuentas cuentas,
     EmisionDeRecaudo emision,
     AuditoriaDeRecaudo auditoria,
-    IDateTimeService reloj) : IRequestHandler<ApproveReceiptVoidingCommand, Result<ReceiptVoidingDto>>
+    IDateTimeService reloj,
+    Compliance.RegistroDeEfectivo? registroDeEfectivo = null) : IRequestHandler<ApproveReceiptVoidingCommand, Result<ReceiptVoidingDto>>
 {
     public async Task<Result<ReceiptVoidingDto>> Handle(ApproveReceiptVoidingCommand request, CancellationToken ct)
     {
@@ -291,6 +292,8 @@ public sealed class ApproveReceiptVoidingCommandHandler(
             await db.SaveChangesAsync(ct);
         }
         await emision.ReciboAnuladoAsync(anulacion, recibo, reversadas, !sesionAbierta, tipo.Code, ct);
+        // Feature 015, US14 (T0241): la anulación escribe su fila con signo contrario en el registro de efectivo.
+        if (registroDeEfectivo is not null) await registroDeEfectivo.AlAnularAsync(recibo, anulacion.PublicId, anulacion.Number, ct);
         return Result.Success();
     }
 

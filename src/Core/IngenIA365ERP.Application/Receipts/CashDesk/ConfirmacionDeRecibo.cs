@@ -75,7 +75,8 @@ public sealed class ConfirmacionDeRecibo(
     IContratoDeCuentas cuentas,
     IListasDeRecaudo listas,
     EmisionDeRecaudo emision,
-    IAlertas alertas)
+    IAlertas alertas,
+    Compliance.RegistroDeEfectivo? registroDeEfectivo = null)
 {
     public const string CodigoDistribucionCambiadaDeCartera = "Lending.Payment.DistributionChanged";
     public const string PermisoDeFechaAnterior = "Receipts.Receipt.Backdate";
@@ -176,6 +177,11 @@ public sealed class ConfirmacionDeRecibo(
         }
         var resultadoDeListas = await listas.EvaluarAsync(personasDeLaOperacion, operacion.PublicId, ct);
         if (resultadoDeListas == ScreeningOutcomeR.BindingMatch) return Result.Failure<ReceiptDto>(ErroresDeRecaudo.ListaVinculante());
+        // Feature 015, US14 (T0240; FR-189, FR-203): una coincidencia no vinculante con «Retiene» detiene la confirmación hasta retener el dinero en custodia (la
+        // retención es su propio paso, porque un fallo aquí revierte todo); la operación que el oficial ya liberó sigue.
+        if (resultadoDeListas == ScreeningOutcomeR.NonBindingMatch && operacion.ReleasedAt is null
+            && await Compliance.CumplimientoDeCaja.RetieneAsync(parametros, hoy, ct))
+            return Result.Failure<ReceiptDto>(ErroresDeRecaudo.RetencionRequerida());
 
         // 3. Validación previa contable.
         var evaluacion = await contabilidad.EvaluarAsync(
@@ -369,6 +375,15 @@ public sealed class ConfirmacionDeRecibo(
         await db.SaveChangesAsync(ct);
         await SesionesDeCaja.ProyectarAsync(db, sesion, ct);
         await db.SaveChangesAsync(ct);
+
+        // Feature 015, US14 (T0241): el registro de transacciones en efectivo y sus señales, en la misma transacción.
+        if (registroDeEfectivo is not null)
+        {
+            await registroDeEfectivo.AlConfirmarAsync(recibo, efectivo, titulares.Values.FirstOrDefault(t => t != operacion.PayerPersonId) is var otro && otro != 0
+                ? otro
+                : operacion.PayerPersonId, ct);
+            await db.SaveChangesAsync(ct);
+        }
 
         await AvisarPagadorOcasionalAsync(operacion, efectivo, umbral, recibo, ct);
         return Result.Success(await RecibosDeCaja.DtoAsync(db, recibo, ct));

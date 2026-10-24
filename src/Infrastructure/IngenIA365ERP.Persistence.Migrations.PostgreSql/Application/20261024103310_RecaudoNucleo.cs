@@ -49,6 +49,79 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 });
 
             migrationBuilder.CreateTable(
+                name: "RCD_CashTransactions",
+                schema: "dbo",
+                columns: table => new
+                {
+                    Id = table.Column<long>(type: "bigint", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    DocumentPublicId = table.Column<Guid>(type: "uuid", nullable: false),
+                    DocumentNumber = table.Column<string>(type: "character varying(30)", maxLength: 30, nullable: false),
+                    DocumentKind = table.Column<int>(type: "integer", nullable: false),
+                    Direction = table.Column<int>(type: "integer", nullable: false),
+                    PersonId = table.Column<int>(type: "integer", nullable: false),
+                    PayerPersonId = table.Column<int>(type: "integer", nullable: false),
+                    DeliveredByPersonId = table.Column<int>(type: "integer", nullable: true),
+                    ReceivedByPersonId = table.Column<int>(type: "integer", nullable: true),
+                    CashAmount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    OtherMeansAmount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    Channel = table.Column<int>(type: "integer", nullable: false),
+                    BranchId = table.Column<int>(type: "integer", nullable: false),
+                    OccurredOn = table.Column<DateOnly>(type: "date", nullable: false),
+                    Month = table.Column<int>(type: "integer", nullable: false),
+                    DeclarationId = table.Column<int>(type: "integer", nullable: true),
+                    AlertsJson = table.Column<string>(type: "text", nullable: false),
+                    xmin = table.Column<uint>(type: "xid", rowVersion: true, nullable: false),
+                    PublicId = table.Column<Guid>(type: "uuid", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    DeletedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_RCD_CashTransactions", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_RCD_CashTransactions_COR_Branches_BranchId",
+                        column: x => x.BranchId,
+                        principalSchema: "dbo",
+                        principalTable: "COR_Branches",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_RCD_CashTransactions_COR_People_DeliveredByPersonId",
+                        column: x => x.DeliveredByPersonId,
+                        principalSchema: "dbo",
+                        principalTable: "COR_People",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_RCD_CashTransactions_COR_People_PayerPersonId",
+                        column: x => x.PayerPersonId,
+                        principalSchema: "dbo",
+                        principalTable: "COR_People",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_RCD_CashTransactions_COR_People_PersonId",
+                        column: x => x.PersonId,
+                        principalSchema: "dbo",
+                        principalTable: "COR_People",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_RCD_CashTransactions_COR_People_ReceivedByPersonId",
+                        column: x => x.ReceivedByPersonId,
+                        principalSchema: "dbo",
+                        principalTable: "COR_People",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "RCD_ChannelModalityRules",
                 schema: "dbo",
                 columns: table => new
@@ -137,6 +210,46 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         column: x => x.BranchId,
                         principalSchema: "dbo",
                         principalTable: "COR_Branches",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "RCD_ComplianceAlertsLog",
+                schema: "dbo",
+                columns: table => new
+                {
+                    Id = table.Column<long>(type: "bigint", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    PersonId = table.Column<int>(type: "integer", nullable: true),
+                    DepositorKey = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: true),
+                    Signal = table.Column<int>(type: "integer", nullable: false),
+                    WindowFrom = table.Column<DateOnly>(type: "date", nullable: false),
+                    WindowTo = table.Column<DateOnly>(type: "date", nullable: false),
+                    Count = table.Column<int>(type: "integer", nullable: false),
+                    Total = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    ParameterVersion = table.Column<string>(type: "character varying(60)", maxLength: 60, nullable: true),
+                    AlertPublicId = table.Column<Guid>(type: "uuid", nullable: true),
+                    DocumentPublicId = table.Column<Guid>(type: "uuid", nullable: true),
+                    EvaluatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    xmin = table.Column<uint>(type: "xid", rowVersion: true, nullable: false),
+                    PublicId = table.Column<Guid>(type: "uuid", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    DeletedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_RCD_ComplianceAlertsLog", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_RCD_ComplianceAlertsLog_COR_People_PersonId",
+                        column: x => x.PersonId,
+                        principalSchema: "dbo",
+                        principalTable: "COR_People",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
                 });
@@ -3516,6 +3629,50 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 unique: true);
 
             migrationBuilder.CreateIndex(
+                name: "IX_RCD_CashTransactions_BranchId",
+                schema: "dbo",
+                table: "RCD_CashTransactions",
+                column: "BranchId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_RCD_CashTransactions_DeliveredByPersonId",
+                schema: "dbo",
+                table: "RCD_CashTransactions",
+                column: "DeliveredByPersonId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_RCD_CashTransactions_Payer_Month",
+                schema: "dbo",
+                table: "RCD_CashTransactions",
+                columns: new[] { "PayerPersonId", "Month" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_RCD_CashTransactions_Person_Month",
+                schema: "dbo",
+                table: "RCD_CashTransactions",
+                columns: new[] { "PersonId", "Month" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_RCD_CashTransactions_ReceivedByPersonId",
+                schema: "dbo",
+                table: "RCD_CashTransactions",
+                column: "ReceivedByPersonId");
+
+            migrationBuilder.CreateIndex(
+                name: "UK_RCD_CashTransactions_Document_Kind",
+                schema: "dbo",
+                table: "RCD_CashTransactions",
+                columns: new[] { "DocumentPublicId", "DocumentKind" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "UK_RCD_CashTransactions_PublicId",
+                schema: "dbo",
+                table: "RCD_CashTransactions",
+                column: "PublicId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
                 name: "IX_RCD_ChannelModalityRules_Channel_Target_Priority",
                 schema: "dbo",
                 table: "RCD_ChannelModalityRules",
@@ -3581,6 +3738,19 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 name: "UK_RCD_CollectionPoints_PublicId",
                 schema: "dbo",
                 table: "RCD_CollectionPoints",
+                column: "PublicId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_RCD_ComplianceAlertsLog_Person_Signal",
+                schema: "dbo",
+                table: "RCD_ComplianceAlertsLog",
+                columns: new[] { "PersonId", "Signal", "WindowTo" });
+
+            migrationBuilder.CreateIndex(
+                name: "UK_RCD_ComplianceAlertsLog_PublicId",
+                schema: "dbo",
+                table: "RCD_ComplianceAlertsLog",
                 column: "PublicId",
                 unique: true);
 
@@ -4763,11 +4933,19 @@ WHERE NOT EXISTS (SELECT 1 FROM dbo.""RCD_CheckReturnCauses"" c WHERE c.""Code""
                 schema: "dbo");
 
             migrationBuilder.DropTable(
+                name: "RCD_CashTransactions",
+                schema: "dbo");
+
+            migrationBuilder.DropTable(
                 name: "RCD_ChannelModalityRules",
                 schema: "dbo");
 
             migrationBuilder.DropTable(
                 name: "RCD_CheckReturnCauses",
+                schema: "dbo");
+
+            migrationBuilder.DropTable(
+                name: "RCD_ComplianceAlertsLog",
                 schema: "dbo");
 
             migrationBuilder.DropTable(

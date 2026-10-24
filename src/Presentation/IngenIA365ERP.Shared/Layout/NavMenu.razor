@@ -570,6 +570,13 @@
             <PermissionGate Required="Receipts.Checks.View">
                 <NavLink href="/recaudo/cheques-recibidos" class="nav-subitem">Cheques recibidos</NavLink>
             </PermissionGate>
+            @* US14 y US2 (T0245): el cumplimiento de la caja y los recibos de contingencia. *@
+            <PermissionGate Required="Receipts.Compliance.View">
+                <NavLink href="/recaudo/cumplimiento" class="nav-subitem">Cumplimiento</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Receipts.Receipt.RegisterContingency">
+                <NavLink href="/recaudo/contingencia" class="nav-subitem">Recibos de contingencia</NavLink>
+            </PermissionGate>
             <span class="nav-subgroup-title">Configuración</span>
             <PermissionGate Required="Receipts.Setup.View">
                 <NavLink href="/recaudo/configuracion/puntos" class="nav-subitem">Puntos de recaudo</NavLink>
