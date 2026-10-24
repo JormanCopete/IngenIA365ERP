@@ -224,7 +224,7 @@ public sealed class RequisitosDeActivacionTests : IAsyncLifetime
             RequisitosDeActivacion.RolesDeCarteraCreados,
         ]);
         e.Faltantes.Should().OnlyContain(f => f.Status == EstadosDeRequisito.Missing && f.WhoFixes != null);
-        De(e, RequisitosDeActivacion.RecaudadorRegistrado).WhoFixes!.Permission.Should().Be("Core.IntegrationParticipants.Manage");
+        De(e, RequisitosDeActivacion.RecaudadorRegistrado).WhoFixes!.Permission.Should().Be("Receipts.Activation.Activate", "lo arregla activar Recaudo (feature 015, T0305)");
         De(e, RequisitosDeActivacion.RolesDeCarteraCreados).WhoFixes!.Permission.Should().Be("Security.Roles.Create");
     }
 

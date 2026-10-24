@@ -32,8 +32,10 @@ public class ActivacionMinimaTests
 
     private EscritorDelRegistroDeIntegracion Registro => new(_c.E.Db, _ambiente, _c.E.Actor, _c.E.Reloj);
 
-    private ActivateReceiptsCommandHandler ActivarRecaudo() => new(_c.E.Db, _c.E.Actor, _c.Cerrojo, new RequisitosDeActivacionDeRecaudo(_c.E.Db, _ambiente),
-        _c.E.Parametros, Registro, new AuditoriaDeRecaudo(_c.E.Servicios, NullLogger<AuditoriaDeRecaudo>.Instance), _c.E.Reloj);
+    private ActivateReceiptsCommandHandler ActivarRecaudo() => new(_c.E.Db, _c.E.Actor, _c.Cerrojo,
+        new RequisitosDeActivacionDeRecaudo(_c.E.Db, _ambiente, Substitute.For<IngenIA365ERP.Application.Common.Integration.Accounting.IContabilidadParaRecaudo>(),
+            Substitute.For<IngenIA365ERP.Application.Common.Approvals.IAutoridadDeOtroAprobador>(), _c.E.Parametros, []),
+        _c.E.Parametros, Registro, new AuditoriaDeRecaudo(_c.E.Servicios, NullLogger<AuditoriaDeRecaudo>.Instance), _ambiente, _c.E.Reloj);
 
     public ActivacionMinimaTests()
     {
@@ -51,7 +53,7 @@ public class ActivacionMinimaTests
     [Fact]
     public async Task Sin_un_requisito_basico_no_activa_y_dice_cual()
     {
-        var r = await ActivarRecaudo().Handle(new ActivateReceiptsCommand { OperationKey = Guid.NewGuid() }, default);
+        var r = await ActivarRecaudo().Handle(new ActivateReceiptsCommand(Minimal: true) { OperationKey = Guid.NewGuid() }, default);
 
         r.Error.Code.Should().Be(ErroresDeRecaudo.CodigoRequisitosDeActivacion);
         var datos = ((IngenIA365ERP.Application.Common.Models.ErrorConDatos)r.Error).Data;
@@ -63,7 +65,7 @@ public class ActivacionMinimaTests
     {
         TiposDeDocumento();
 
-        var r = await ActivarRecaudo().Handle(new ActivateReceiptsCommand { OperationKey = Guid.NewGuid() }, default);
+        var r = await ActivarRecaudo().Handle(new ActivateReceiptsCommand(Minimal: true) { OperationKey = Guid.NewGuid() }, default);
 
         r.IsSuccess.Should().BeTrue(r.IsFailure ? r.Error.Code + " " + r.Error.Message : null);
         r.Value.IsMinimal.Should().BeTrue();
@@ -89,9 +91,9 @@ public class ActivacionMinimaTests
         t.E.Db.SaveChanges();
         var registro = new EscritorDelRegistroDeIntegracion(t.E.Db, _ambiente, t.E.Actor, t.E.Reloj);
         var handler = new ActivateTreasuryCommandHandler(t.E.Db, t.E.Actor, t.Cerrojo, new RequisitosDeActivacionDeTesoreria(t.E.Db, t.Contabilidad, _ambiente), t.Parametros,
-            registro, new AuditoriaDeTesoreria(t.E.Servicios, NullLogger<AuditoriaDeTesoreria>.Instance), t.E.Reloj);
+            registro, new AuditoriaDeTesoreria(t.E.Servicios, NullLogger<AuditoriaDeTesoreria>.Instance), _ambiente, t.E.Reloj);
 
-        var r = await handler.Handle(new ActivateTreasuryCommand { OperationKey = Guid.NewGuid() }, default);
+        var r = await handler.Handle(new ActivateTreasuryCommand(Minimal: true) { OperationKey = Guid.NewGuid() }, default);
 
         r.IsSuccess.Should().BeTrue(r.IsFailure ? r.Error.Code + " " + r.Error.Message : null);
         t.E.Db.TreasurySetups.Single().Status.Should().Be(TreasuryModuleStatus.Active);

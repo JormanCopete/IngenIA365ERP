@@ -50,6 +50,9 @@ public class LasPantallasDeRecaudoYTesoreriaEstanEnElMenu
         ("Pages/Contabilidad/Recaudo/Lotes.razor", "/contabilidad/recaudo/lotes", "Accounting.ReceiptsMatrix.View"),
         // Fase 17 (T0280): la conciliación bancaria mínima.
         ("Pages/Tesoreria/Conciliacion.razor", "/tesoreria/conciliacion", "Treasury.Reconciliation.View"),
+        // Fase 19 (T0304): la activación completa de cada módulo.
+        ("Pages/Recaudo/Activacion.razor", "/recaudo/activacion", "Receipts.Activation.View"),
+        ("Pages/Tesoreria/Activacion.razor", "/tesoreria/activacion", "Treasury.Activation.View"),
         // Fase 18 (T0290): /recaudo/puesta-en-marcha y /tesoreria/puesta-en-marcha son páginas delgadas sobre Components/Recaudo/PuestaEnMarchaDeModulo, que lleva
         // un IndicadorDeCarga por zona (como las de la matriz de la fase 16); su enlace en el menú lo comprueba Las_puestas_en_marcha_estan_en_el_menu.
     ];
