@@ -72,6 +72,8 @@ public class LasPantallasDeRecaudoYTesoreriaEstanEnElMenu
         // Fase 20 (T0316): los centros de informes.
         ("Pages/Recaudo/Informes.razor", "/recaudo/informes", "Receipts.Reports.View"),
         ("Pages/Tesoreria/Informes.razor", "/tesoreria/informes", "Treasury.Reports.View"),
+        // Fase 21 (T0322): la lista de go/no-go de la salida en vivo, en Administración.
+        ("Pages/Administracion/GoNoGo.razor", "/admin/go-no-go", "Platform.GoLive.View"),
         // Fase 18 (T0290): /recaudo/puesta-en-marcha y /tesoreria/puesta-en-marcha son páginas delgadas sobre Components/Recaudo/PuestaEnMarchaDeModulo, que lleva
         // un IndicadorDeCarga por zona (como las de la matriz de la fase 16); su enlace en el menú lo comprueba Las_puestas_en_marcha_estan_en_el_menu.
     ];

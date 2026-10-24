@@ -25,12 +25,12 @@ public class InformesDeRecaudoR0Tests
         new() { From = EscenarioDeRecaudo.Hoy, To = EscenarioDeRecaudo.Hoy, AsOf = EscenarioDeRecaudo.Hoy, GroupBy = groupBy };
 
     [Fact]
-    public void Las_once_vistas_de_R0_estan_registradas()
+    public void Las_once_vistas_de_R0_y_la_del_paralelo_estan_registradas()
     {
         VistasDeRecaudo.Todas.Select(v => v.Key).Should().BeEquivalentTo(
         [
             "session-close", "day-close", "daily-collection", "receipts-by-cashier", "voided-receipts", "exceptions", "unidentified-items", "payer-credit-balances",
-            "paymasters", "returned-checks", "contingency-pending",
+            "paymasters", "returned-checks", "contingency-pending", "parallel-comparison",
         ]);
         VistasDeRecaudo.Todas.Should().OnlyContain(v => !string.IsNullOrWhiteSpace(v.Name) && !string.IsNullOrWhiteSpace(v.FileName));
     }
