@@ -481,6 +481,19 @@ Lo que tasks.md marcaba **(nuevo)** y lo que trajeron el `/speckit-analyze` y la
 | `ReceiptsReportsEndpoints` · `TreasuryReportsEndpoints` (`GET /api/reports/{receipts,treasury}` = registro de vistas) · eventos `Receipts.Report.Exported`, `Treasury.Report.Exported` | rutas y auditoría de la exportación | `API/Endpoints/Reports` |
 | pantallas `/recaudo/informes`, `/tesoreria/informes` · `InformesDeRecaudoYTesoreriaClient` · `Las_paginas_delgadas_de_la_matriz_existen_protegidas_y_en_el_menu` | pantallas, cliente y prueba de arquitectura | `Shared`, `Architecture.Tests` |
 
+**Fijados en la construcción de la fase 21 (2026-10-24)**:
+
+| Nombre | Qué | Dónde |
+|---|---|---|
+| `VerificacionDeSalidaDeRecaudo` (`TestReceiptPerPointAndMeans`, `TestReceiptPerConcept`, `SecondFactorCashiersAndSupervisors`, `CashierScopesAssigned`, prefijo `REQ.`) · `VerificacionDeSalidaDeTesoreria` (`TestDisbursementPerAccount`, `TestDisbursementPerForm`, `SecondFactorApprovers`, `PermisosDeAprobador`) · `VerificacionDeSalidaDeCartera` (módulo `CAR`, `CAR.*`, `APO.*`, `CAR.Activated`, `APO.Activated`) | las condiciones automáticas del go/no-go | `Receipts/Activation`, `Treasury/Activation`, `Lending/Activation` |
+| `EstadoOperativoDeRecaudoParaElCierre` · `EstadoOperativoDeTesoreriaParaElCierre` · `CuadreProvisionalPendiente` (`PendienteAsync`, `PendienteDelCierre`, `AlertarAsync`, `CerrarAlertasAsync`, `Clave`, `PermisoDelEscalamiento`) · `CuadreProvisionalPendienteDto` | la guarda del cuadre provisional y su alerta | `Receipts/Activation/EstadoOperativoParaElCierre.cs`, `Treasury/Activation`, `Common/Cuadres` |
+| `Accounting.Period.OpeningSquarePending` (`AccountingErrors.PeriodOpeningSquarePending`, `data.pending[] { module, code, message }`) | el cierre del mes de la activación negado | `Accounting/Posting/AccountingErrors.cs` |
+| `AntiguedadDeRecaudo.CuadreProvisionalPendienteAsync` · `VigilanciaDeTesoreria.CuadreProvisionalPendienteAsync` · claves `{tipo}:{cuadre:N}` y `{tipo}:{cuadre:N}:vencido` | la alerta diaria que escala | `Receipts/Tareas`, `Treasury/Tareas` |
+| vista `parallel-comparison` (`VistasDeRecaudo.ComparacionDelParalelo`) · conceptos `PARALELO.MEDIO`, `PARALELO.PRODUCTO` · `VistasDeRecaudo.ProductosDelParalelo` | el informe del paralelo | `Receipts/Reports/InformesDeRecaudo.cs` |
+| `AdjuntosDeModulo.EvidenciaDeGoLive` (`GoLiveEvidence`) | evidencias y escenario de no-go parcial de una lista | `Attachments/Common/AdjuntosDeModulo.cs` |
+| pantalla `/admin/go-no-go` · `GoNoGoClient` (`ManualesSugeridas`: `CRONOGRAMA`, `NOGO-PARCIAL`, `PARALELO`, `PRODUCCION-LIMPIA`, `RESPALDOS`, `CAPACITACION`) | la lista en la interfaz | `Shared/Pages/Administracion/GoNoGo.razor`, `Shared/Services/Core` |
+| `docs/manual/{recaudo-manual-del-cajero, recaudo-manual-del-supervisor, recaudo-manual-del-analista, tesoreria-manual-del-tesorero, recaudo-y-tesoreria-contabilizacion, recaudo-cumplimiento-sarlaft}.md` · `docs/operaciones/{recaudo-tesoreria-salida-en-vivo-cooflopal, recaudo-tesoreria-paralelo-en-qa, recaudo-tesoreria-despliegue, recaudo-tesoreria-go-no-go}.md` | manuales y runbooks de R0/T0 | `docs/` |
+
 ## 3. Decisiones transversales
 
 ### Módulos y frontera

@@ -188,6 +188,26 @@ los valores de la ley vienen del registro central de valores nacionales.
 | `docs/manual/plantillas-de-importacion.md` §5b | 013, fase 24 | **El registro de plantillas `lending.*`** con su ruta, permisos y entrega. |
 | `docs/manual/plataforma-de-integracion.md` §9 | 013 | **Varios emisores, el proceso como origen, el registro de participantes** y (§9.7) **los canales externos y los dos caminos de correo**. |
 
+### Feature 015: Recaudo y Tesorería (EN CURSO — R0/T0 construidas hasta la fase 21 en la rama `015-recaudo-tesoreria`, sin merge ni despliegue)
+Recaudo (caja, bancos, pagadurías, cheques, cumplimiento) y la Tesorería nueva (cuentas propias, órdenes, lotes, giros, chequeras,
+remesas, conciliación mínima) que reemplazan a los dobles de prueba de Cartera y Captaciones. Ninguno conoce cuentas: emiten hechos a
+Contabilidad, que los contabiliza por su matriz (E-04).
+
+| Archivo | Entrega | Descripción |
+|---|---|---|
+| `specs/015-recaudo-tesoreria/spec.md` · `plan.md` · `tasks.md` | — | Spec, plan por entregas R0/T0 a T2 y tareas con las notas de construcción de cada fase. |
+| `specs/015-recaudo-tesoreria/decisiones-transversales.md` | — | Nombres canónicos (§2, con los fijados en la construcción en §2.7) y decisiones. |
+| `docs/manual/recaudo-manual-del-cajero.md` | R0, fase 21 | **El cajero**: sesión, la caja en tres pasos, declaración y quien efectúa, listas, contingencia, arqueo y anulación. |
+| `docs/manual/recaudo-manual-del-supervisor.md` | R0, fase 21 | **El supervisor de caja**: día del punto y lote del día, diferencias, bóveda y remesas, anulaciones, reversos y saldos a favor. |
+| `docs/manual/recaudo-manual-del-analista.md` | R0, fase 21 | **El analista**: abonos del extracto, partidas por identificar, pagadurías y cheques recibidos. |
+| `docs/manual/tesoreria-manual-del-tesorero.md` | T0, fase 21 | **El tesorero, el aprobador y el conciliador**: cuentas y fondo de liquidez, de la orden al pago, cheques, remesas y conciliación mínima. |
+| `docs/manual/recaudo-y-tesoreria-contabilizacion.md` | R0/T0, fase 21 | **Para la contadora**: matrices por pesos, hechos y tipos de comprobante, puentes, validación previa, cierre y lo pendiente (P8, P10, P12). |
+| `docs/manual/recaudo-cumplimiento-sarlaft.md` | R0, fase 21 | **Para el oficial de cumplimiento**: parámetros `Sarlaft.*`, declaración, listas, retención y señales (P7). |
+| `docs/operaciones/recaudo-tesoreria-despliegue.md` | R0/T0, fase 21 | **Desplegar**: respaldo por base, las migraciones en orden, GitOps y la verificación (health, consumidores, permisos). |
+| `docs/operaciones/recaudo-tesoreria-paralelo-en-qa.md` | R0/T0, fase 21 | **El paralelo en QA**: preparar la cooperativa, registrar, cargar las cifras de referencia y el informe `parallel-comparison`. |
+| `docs/operaciones/recaudo-tesoreria-go-no-go.md` | R0/T0, fase 21 | **La lista de go/no-go**: condiciones automáticas por módulo, manuales con evidencia, aprobar seguir con un rojo y decidir. |
+| `docs/operaciones/recaudo-tesoreria-salida-en-vivo-cooflopal.md` | R0/T0, fase 21 | **La salida de COOFLOPAL**: cronograma del 23/11 al 04/12, carga definitiva, activación, cuadre provisional y definitivo, no-go parcial. |
+
 ### Fase 2A: Rediseño de Base de Datos (COMPLETADA)
 | Archivo | Descripción |
 |---|---|
