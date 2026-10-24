@@ -166,7 +166,7 @@ public sealed class ErrorEnvelopeFilter : IEndpointFilter
             // condición previa: la operación se repite con la misma Idempotency-Key y X-Approval-Request. Las fallas del desafío siguen en 422.
             "Approvals.PresenceRequired" => StatusCodes.Status428PreconditionRequired,
             // Feature 015 (T0092, T0114): la caja ya tiene sesión abierta, o la operación de caja cambió desde que se vio: choques con el estado.
-            "Receipts.Session.AlreadyOpen" => StatusCodes.Status409Conflict,
+            "Receipts.Session.AlreadyOpen" or "Receipts.Session.CashierExclusive" or "Receipts.Day.AlreadyClosed" => StatusCodes.Status409Conflict,
             "Receipts.CashOperation.Changed" => StatusCodes.Status409Conflict,
 
             _ when code.StartsWith("Validation.", StringComparison.Ordinal) => StatusCodes.Status400BadRequest,

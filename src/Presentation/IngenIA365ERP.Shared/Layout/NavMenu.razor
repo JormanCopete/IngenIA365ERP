@@ -527,6 +527,17 @@
 
         @* Feature 015 (T0063, T0077; FR-162): el grupo «Recaudo» nace con su configuración. *@
         <NavMenuGroup Icon="e-money" Title="Recaudo" Expanded="SidebarOpen">
+            @* Feature 015, US2 (T0098): la operación de la caja. *@
+            <span class="nav-subgroup-title">Caja</span>
+            <PermissionGate Required="Receipts.Session.Open">
+                <NavLink href="/recaudo/sesiones" class="nav-subitem">Sesiones de caja</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Receipts.Session.View">
+                <NavLink href="/recaudo/cierre-del-dia" class="nav-subitem">Cierre del día</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Receipts.Vault.View">
+                <NavLink href="/recaudo/boveda" class="nav-subitem">Bóveda</NavLink>
+            </PermissionGate>
             <span class="nav-subgroup-title">Configuración</span>
             <PermissionGate Required="Receipts.Setup.View">
                 <NavLink href="/recaudo/configuracion/puntos" class="nav-subitem">Puntos de recaudo</NavLink>

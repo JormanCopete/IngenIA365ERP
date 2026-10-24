@@ -346,6 +346,18 @@ public static class AdjuntosDeModulo
     /// <summary>La imagen de un recibo de contingencia del talonario (FR-186): se lee con <c>Receipts.Receipt.View</c>.</summary>
     public const string ImagenDeContingencia = "ReceiptsContingencyImage";
 
+    /// <summary>
+    /// Feature 015, US2 (T0092–T0094; FR-030, FR-033, FR-035, FR-183): los soportes que sube una persona en la caja —el de una reclasificación desde
+    /// efectivo, el de un ajuste, el acta de un arqueo sorpresivo o de un billete retenido, la autorización escrita de descontar un faltante por Nómina—.
+    /// El dueño es la <b>sesión</b> o la <b>bóveda</b> (su <c>PublicId</c>), porque se suben antes de registrar la operación que los cita. Se leen con
+    /// <c>Receipts.Session.View</c>, se suben con cualquiera de los permisos de la caja que los piden y no se borran: son evidencia. (nuevo)
+    /// </summary>
+    public const string SoporteDeCaja = "ReceiptsCashSupport";
+
+    private static readonly string[] PermisosQueSubenSoportesDeCaja =
+        ["Receipts.Session.Reclassify", "Receipts.Session.Adjust", "Receipts.Session.SurpriseCount", "Receipts.Session.Close",
+         "Receipts.Session.CloseForgotten", "Receipts.Vault.Move", "Receipts.Count.ApproveDifference"];
+
     /// <summary>El acta de arqueo que genera el cierre de la sesión: se lee con <c>Receipts.Session.View</c>.</summary>
     public const string ActaDeArqueo = "ReceiptsCountMinutes";
 
@@ -382,6 +394,7 @@ public static class AdjuntosDeModulo
     private static readonly IReadOnlyDictionary<string, string> DeRecaudoYTesoreriaSubidos = new Dictionary<string, string>(StringComparer.Ordinal)
     {
         [OrigenDeFondosDeRecaudo] = "Receipts.Compliance.View",
+        [SoporteDeCaja] = "Receipts.Session.View",
         [ImagenDeContingencia] = "Receipts.Receipt.View",
         [RespuestaDePagaduria] = "Receipts.Paymasters.View",
         [RespuestaDelBancoDeTesoreria] = "Treasury.Orders.View",
@@ -677,6 +690,16 @@ public static class AdjuntosDeModulo
                 ? null
                 : new ErrorConDatos(AttachmentErrorCodes.OwnerLocked, "La decisión de asamblea ya no está en borrador: sus soportes quedaron sellados.",
                     new { ownerEntityType });
+        }
+        if (ownerEntityType == SoporteDeCaja)
+        {
+            // Feature 015, US2: el soporte de una operación de caja, de una sesión o una bóveda que exista, de quien registra en la caja.
+            var puede = false;
+            foreach (var permiso in PermisosQueSubenSoportesDeCaja) puede = puede || await permisos.HasPermissionAsync(permiso, ct);
+            if (!puede || !(await db.ReceiptsCashSessions.AnyAsync(s => s.PublicId == ownerEntityPublicId, ct)
+                            || await db.Vaults.AnyAsync(v => v.PublicId == ownerEntityPublicId, ct)))
+                return new Error("Generic.NotFound", "Sesión o bóveda no encontrada.");
+            return null;
         }
         if (ownerEntityType == CertificacionBancariaDePersona)
         {

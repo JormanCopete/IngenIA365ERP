@@ -1,0 +1,157 @@
+@page "/recaudo/boveda"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Components.Recaudo
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Recaudo
+@inject SesionesClient Sesiones
+@inject ConfiguracionDeRecaudoClient Configuracion
+@inject INotificationService Notification
+
+<PageTitle>Bóveda - IngenIA365ERP</PageTitle>
+
+@* Feature 015, US2 (T0098; FR-035, FR-036, FR-182): la bóveda de la oficina —su saldo por denominación y sus movimientos— y lo que se registra desde ella
+   con doble custodia: la remesa que vuelve del banco, el conteo y el billete retenido con su acta. Abastecer una caja y recibir de ella se hacen desde la
+   sesión de la caja. *@
+<PermissionGate Required="Receipts.Vault.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Bóveda</h3>
+        <div class="toolbar">
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+            <PermissionGate Required="Receipts.Vault.Move">
+                <SfButton CssClass="e-primary" Disabled="@string.IsNullOrEmpty(_boveda)" OnClick="@(() => { _clave = new(); _visible = true; })">Registrar movimiento</SfButton>
+            </PermissionGate>
+        </div>
+    </div>
+
+    <label class="campo">Bóveda
+        <select class="e-input" @bind="_boveda" @bind:after="CargarAsync">
+            <option value="">Elija la bóveda…</option>
+            @foreach (var b in _bovedas) { <option value="@b.PublicId">@b.BranchName</option> }
+        </select>
+    </label>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Cargando…">
+        @if (_detalle is not null)
+        {
+            <div class="kpi-card"><span>Saldo</span><strong>@_detalle.Balance.ToString("N0")</strong></div>
+            <table class="data-grid">
+                <thead><tr><th>Denominación</th><th>Cantidad</th><th>Valor</th></tr></thead>
+                <tbody>
+                    @foreach (var d in _detalle.Denominations) { <tr><td>@d.Value.ToString("N0")</td><td>@d.Quantity</td><td>@d.Amount.ToString("N0")</td></tr> }
+                </tbody>
+            </table>
+            <h4>Movimientos</h4>
+            <table class="data-grid">
+                <thead><tr><th>Número</th><th>Clase</th><th>Valor</th><th>Sello</th><th>Motivo</th><th>Fecha</th></tr></thead>
+                <tbody>
+                    @foreach (var m in _detalle.Movements)
+                    {
+                        <tr><td>@m.Number</td><td>@Clase(m.Kind)</td><td>@m.Amount.ToString("N0")</td><td>@m.BagSeal</td><td>@m.Reason</td><td>@m.MovedAt.ToLocalTime().ToString("g")</td></tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </IndicadorDeCarga>
+</div>
+
+<SfDialog @bind-Visible="_visible" Header="Movimiento de bóveda" Width="560px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <div class="form-grid">
+                    <label class="campo">Clase
+                        <select class="e-input" @bind="_clase">
+                            <option value="4">Remesa que vuelve del banco</option>
+                            <option value="5">Conteo</option>
+                            <option value="6">Billete retenido</option>
+                        </select>
+                    </label>
+                    <label class="campo">Segundo custodio
+                        <select class="e-input" @bind="_segundo">
+                            <option value="">Elija el custodio…</option>
+                            @foreach (var u in _usuarios) { <option value="@u.PublicId">@u.Username</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Sello de la bolsa <input class="e-input" @bind="_sello" maxlength="40" /></label>
+                    @if (_clase == 6)
+                    {
+                        <label class="campo">Acta (adjunto) * <input class="e-input" @bind="_acta" /></label>
+                    }
+                    <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" maxlength="500" /></label>
+                </div>
+                <ConteoDeBilletes Denominaciones="_denominaciones" Cantidades="_cantidades" />
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _visible = false)" />
+        <DialogButton Content="Registrar" IsPrimary="true" OnClick="@RegistrarAsync" Disabled="@_guardado.Activa" />
+    </DialogButtons>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+    private ClaveDeOperacion _clave = new();
+    private IReadOnlyList<BovedaDto> _bovedas = [];
+    private IReadOnlyList<DenominacionDeCajaDto> _denominaciones = [];
+    private IReadOnlyList<Services.Inventario.PersonaDeLaCooperativaDto> _usuarios = [];
+    private readonly Dictionary<Guid, int> _cantidades = [];
+    private DetalleDeBovedaDto? _detalle;
+    private string _boveda = "", _segundo = "", _acta = "";
+    private string? _sello, _motivo;
+    private int _clase = 4;
+    private bool _visible;
+
+    protected override async Task OnInitializedAsync()
+    {
+        using (var carga = _carga.Iniciar())
+        {
+            var b = await Configuracion.BovedasAsync();
+            if (b.IsSuccess && b.Value is not null) _bovedas = b.Value;
+            var d = await Sesiones.DenominacionesAsync();
+            if (d.IsSuccess && d.Value is not null) _denominaciones = d.Value.Where(x => x.IsActive).OrderByDescending(x => x.Value).ToList();
+            var u = await Configuracion.UsuariosAsync();
+            if (u.IsSuccess && u.Value is not null) _usuarios = u.Value.Items.Where(x => x.IsActive).ToList();
+            _boveda = _bovedas.FirstOrDefault()?.PublicId.ToString() ?? "";
+        }
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        if (!Guid.TryParse(_boveda, out var boveda)) { _detalle = null; return; }
+        using var carga = _carga.Iniciar();
+        var r = await Sesiones.BovedaAsync(boveda);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo consultar la bóveda."); return; }
+        _detalle = r.Value;
+    }
+
+    private static string Clase(int clase) => clase switch
+    {
+        1 => "Abastece una caja",
+        2 => "Recibe de una caja",
+        3 => "Remesa al banco",
+        4 => "Remesa que vuelve",
+        5 => "Conteo",
+        6 => "Billete retenido",
+        _ => "—",
+    };
+
+    private async Task RegistrarAsync()
+    {
+        if (!Guid.TryParse(_boveda, out var boveda)) return;
+        if (string.IsNullOrWhiteSpace(_motivo)) { await Notification.WarningAsync("Escriba el motivo."); return; }
+        using var g = _guardado.Iniciar();
+        var billetes = _cantidades.Where(c => c.Value > 0).Select(c => new DenominacionContadaRequest(c.Key, c.Value)).ToList();
+        var r = await Sesiones.MoverBovedaAsync(boveda, new MovimientoDeBovedaRequest(_clase, billetes, _motivo.Trim(), Guid.TryParse(_segundo, out var s) ? s : null,
+            _sello, Guid.TryParse(_acta, out var a) ? a : null, null), _clave);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo registrar el movimiento."); return; }
+        _clave = new ClaveDeOperacion();
+        _cantidades.Clear();
+        _visible = false;
+        await Notification.SuccessAsync($"Movimiento {r.Value!.Number} registrado.");
+        await CargarAsync();
+    }
+}

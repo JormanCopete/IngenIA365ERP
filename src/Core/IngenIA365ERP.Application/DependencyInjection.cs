@@ -291,6 +291,13 @@ public static class DependencyInjection
         services.AddScoped<Treasury.Common.AuditoriaDeTesoreria>();
         // Feature 015, US1 (T0072): los parámetros de la caja leídos con su tipo, por el único lector.
         services.AddScoped<Receipts.Common.ParametrosDeCaja>();
+        // Feature 015, US2 (T0091–T0095): el emisor de hechos de Recaudo (sobre la respuesta provisional de Contabilidad hasta la fase 16), el arqueo de
+        // la sesión y lo que corren las tareas de la caja.
+        services.AddScoped<Common.Integration.Accounting.IContabilidadParaRecaudo, Accounting.Receipts.ContabilidadParaRecaudo>();
+        services.AddScoped<Receipts.Accounting.EmisionDeRecaudo>();
+        services.AddScoped<Receipts.Sessions.ArqueosDeSesion>();
+        services.AddScoped<Receipts.Sessions.Tareas.MarcaDeSesionesOlvidadas>();
+        services.AddScoped<Receipts.Sessions.Tareas.CuadreDiarioDeRecaudo>();
         services.AddScoped<Lending.Segregation.RegistroDeIntervenciones>();
         services.AddScoped<Lending.Common.LendingAuditEmitter>();
         services.AddScoped<Common.Audit.RechazosDeFormaDeLaPeticion>();

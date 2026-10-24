@@ -677,6 +677,24 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Configuration.ChannelModalityRule> ChannelModalityRules => Set<IngenIA365ERP.Domain.Entities.Receipts.Configuration.ChannelModalityRule>();
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Vaults.Vault> Vaults => Set<IngenIA365ERP.Domain.Entities.Receipts.Vaults.Vault>();
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Vaults.VaultCustodian> VaultCustodians => Set<IngenIA365ERP.Domain.Entities.Receipts.Vaults.VaultCustodian>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CollectionPointDay> CollectionPointDays => Set<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CollectionPointDay>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashSession> ReceiptsCashSessions => Set<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashSession>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashCount> ReceiptsCashCounts => Set<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashCount>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashCountLine> ReceiptsCashCountLines => Set<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashCountLine>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashCountDenomination> ReceiptsCashCountDenominations => Set<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashCountDenomination>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashCountTerminalBatch> ReceiptsCashCountTerminalBatches => Set<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashCountTerminalBatch>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashCountReference> CashCountReferences => Set<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashCountReference>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashMovement> CashMovements => Set<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashMovement>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashMovementDenomination> CashMovementDenominations => Set<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashMovementDenomination>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashSessionAdjustment> CashSessionAdjustments => Set<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashSessionAdjustment>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.DayClose> ReceiptsDayCloses => Set<IngenIA365ERP.Domain.Entities.Receipts.Sessions.DayClose>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.DayCloseLine> ReceiptsDayCloseLines => Set<IngenIA365ERP.Domain.Entities.Receipts.Sessions.DayCloseLine>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.DailySquare> DailySquares => Set<IngenIA365ERP.Domain.Entities.Receipts.Sessions.DailySquare>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashierReceivable> CashierReceivables => Set<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashierReceivable>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashSurplus> CashSurpluses => Set<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashSurplus>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Vaults.VaultMovement> VaultMovements => Set<IngenIA365ERP.Domain.Entities.Receipts.Vaults.VaultMovement>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Vaults.VaultMovementDenomination> VaultMovementDenominations => Set<IngenIA365ERP.Domain.Entities.Receipts.Vaults.VaultMovementDenomination>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Vaults.VaultDenominationBalance> VaultDenominationBalances => Set<IngenIA365ERP.Domain.Entities.Receipts.Vaults.VaultDenominationBalance>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

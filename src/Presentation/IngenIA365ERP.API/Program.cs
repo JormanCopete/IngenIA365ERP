@@ -230,6 +230,11 @@ try
         .Get<IngenIA365ERP.API.Integration.IntegrationOptions>() ?? new IngenIA365ERP.API.Integration.IntegrationOptions();
     builder.Services.AddScoped<IngenIA365ERP.Application.Common.Execution.IArrendamientos, IngenIA365ERP.Persistence.Services.ArrendamientosEnBase>();
 
+    // Feature 015, US2 (T0095): las sesiones olvidadas y el cuadre diario de Recaudo, por cooperativa, con su hora de corte.
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada>(
+        new IngenIA365ERP.Application.Receipts.Sessions.Tareas.TareaDeSesionesOlvidadas());
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada>(
+        new IngenIA365ERP.Application.Receipts.Sessions.Tareas.TareaDeCuadreDiario());
     // Feature 012 (T259, US2): la verificacion nocturna del kardex (inventario.integridad) en cada cooperativa.
     builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada,
         IngenIA365ERP.Application.Inventory.Kardex.VerificacionNocturnaDeIntegridad>();
@@ -497,6 +502,8 @@ try
     // Feature 012 (I3, T626): el comprobante no electrónico en carta y los documentos de caja (arqueo y comprobante de movimiento).
     builder.Services.AddSingleton<IngenIA365ERP.Application.Inventory.Sales.IRepresentacionDeVentaEnPdf, IngenIA365ERP.API.Reports.SalesDocumentPdfRenderer>();
     builder.Services.AddSingleton<IngenIA365ERP.Application.Inventory.Cash.IDocumentosDeCajaEnPdf, IngenIA365ERP.API.Reports.DocumentosDeCajaPdfRenderer>();
+    // Feature 015, US2 (T0096): el cierre de la sesión, el cierre del día y el acta de arqueo de Recaudo.
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Receipts.Sessions.IDocumentosDeRecaudoEnPdf, IngenIA365ERP.API.Reports.DocumentosDeRecaudoPdfRenderer>();
     // Feature 012 (I5, T790): la orden de compra en PDF (la descarga y el envio al proveedor).
     builder.Services.AddSingleton<IngenIA365ERP.Application.Inventory.Purchasing.IOrdenDeCompraEnPdf, IngenIA365ERP.API.Reports.PurchaseOrderPdfRenderer>();
     // Feature 012 (I4, T750): la representacion grafica de los documentos electronicos, una sola plantilla para todos los canales.

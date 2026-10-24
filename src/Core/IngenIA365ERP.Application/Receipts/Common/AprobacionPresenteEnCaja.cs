@@ -90,7 +90,7 @@ public sealed class AprobacionPresenteEnCaja(IApplicationDbContext db, IMotorDeA
 
         await GuardarFueraDeLaTransaccionAsync(nueva, ct);
         return Result.Failure<AprobacionPresenteObtenida>(ErroresDeRecaudo.PresenciaRequerida(nueva.PublicId, pedido.Sujeto, pedido.Monto,
-            VistaDeSolicitudes.NivelActual(nueva)?.PermissionCode ?? string.Empty));
+            VistaDeSolicitudes.NivelActual(nueva)?.PermissionCode ?? string.Empty, pedido.Huella));
     }
 
     private static Result<AprobacionPresenteObtenida> Desenlace(ApprovalRequest solicitud, PedidoDeAprobacionPresente pedido) => solicitud.Status switch
@@ -99,7 +99,7 @@ public sealed class AprobacionPresenteEnCaja(IApplicationDbContext db, IMotorDeA
             solicitud.Decisions.Where(d => d.Decision == ApprovalDecisionKind.Approve).OrderByDescending(d => d.Level).ThenByDescending(d => d.Id)
                 .Select(d => (int?)d.DecidedByUserId).FirstOrDefault())),
         ApprovalRequestStatus.Pending => Result.Failure<AprobacionPresenteObtenida>(ErroresDeRecaudo.PresenciaRequerida(solicitud.PublicId, pedido.Sujeto,
-            pedido.Monto, VistaDeSolicitudes.NivelActual(solicitud)?.PermissionCode ?? string.Empty)),
+            pedido.Monto, VistaDeSolicitudes.NivelActual(solicitud)?.PermissionCode ?? string.Empty, pedido.Huella)),
         _ => Result.Failure<AprobacionPresenteObtenida>(ErroresDeRecaudo.AprobacionRechazada(solicitud.PublicId)),
     };
 

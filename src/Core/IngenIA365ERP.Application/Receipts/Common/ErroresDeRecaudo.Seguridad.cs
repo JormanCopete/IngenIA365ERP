@@ -18,9 +18,10 @@ public static partial class ErroresDeRecaudo
     /// 428: la operación necesita el aprobador presente. La pantalla pide el desafío para <paramref name="solicitud"/> y repite la operación con la misma
     /// <c>Idempotency-Key</c> y el encabezado <c>X-Approval-Request</c>.
     /// </summary>
-    public static Error PresenciaRequerida(Guid solicitud, string sujeto, decimal monto, string permiso) => new ErrorConDatos(CodigoPresenciaRequerida,
+    /// <summary>El 428 de la aprobación presente; <paramref name="huella"/> es lo que el aprobador confirma en su decisión (<c>expectedContentSha256</c>).</summary>
+    public static Error PresenciaRequerida(Guid solicitud, string sujeto, decimal monto, string permiso, string? huella = null) => new ErrorConDatos(CodigoPresenciaRequerida,
         "La operación necesita la aprobación de otra persona presente, con su llave o su código: pídale que la apruebe en este equipo.",
-        new { approvalRequestPublicId = solicitud, subject = sujeto, amount = monto, permissionCode = permiso });
+        new { approvalRequestPublicId = solicitud, subject = sujeto, amount = monto, permissionCode = permiso, contentSha256 = huella });
 
     public static Error AprobacionRechazada(Guid solicitud) => new ErrorConDatos(CodigoAprobacionRechazada,
         "La aprobación fue rechazada: corrija la operación o cancélela.", new { approvalRequestPublicId = solicitud });

@@ -93,6 +93,7 @@ namespace IngenIA365ERP.App
             // Feature 015 (T0063, T0077): el alcance y la configuración de Recaudo.
             builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Recaudo.AlcanceDeRecaudoClient>();
             builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Recaudo.ConfiguracionDeRecaudoClient>();
+            builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Recaudo.SesionesClient>();
             builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Compliance.ListasRestrictivasClient>();
             builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Compliance.SolicitudesDelTitularClient>();
             // Feature 013, fase 4 (T0315, T0310): gobierno, configuración y mensajes al deudor de Cartera.

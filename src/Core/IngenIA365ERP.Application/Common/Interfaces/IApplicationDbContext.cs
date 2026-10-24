@@ -622,6 +622,24 @@ public interface IApplicationDbContext
     DbSet<IngenIA365ERP.Domain.Entities.Receipts.Configuration.ChannelModalityRule> ChannelModalityRules { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Receipts.Vaults.Vault> Vaults { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Receipts.Vaults.VaultCustodian> VaultCustodians { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CollectionPointDay> CollectionPointDays { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashSession> ReceiptsCashSessions { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashCount> ReceiptsCashCounts { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashCountLine> ReceiptsCashCountLines { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashCountDenomination> ReceiptsCashCountDenominations { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashCountTerminalBatch> ReceiptsCashCountTerminalBatches { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashCountReference> CashCountReferences { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashMovement> CashMovements { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashMovementDenomination> CashMovementDenominations { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashSessionAdjustment> CashSessionAdjustments { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.DayClose> ReceiptsDayCloses { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.DayCloseLine> ReceiptsDayCloseLines { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.DailySquare> DailySquares { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashierReceivable> CashierReceivables { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashSurplus> CashSurpluses { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Vaults.VaultMovement> VaultMovements { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Vaults.VaultMovementDenomination> VaultMovementDenominations { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Vaults.VaultDenominationBalance> VaultDenominationBalances { get; }
 
     /// <summary>
     /// Descarta todo lo que el contexto tenga sin guardar (feature 009, R3): lo usa el reintento

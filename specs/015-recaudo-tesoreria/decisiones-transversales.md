@@ -212,6 +212,27 @@ Lo que tasks.md marcaba **(nuevo)** y lo que trajeron el `/speckit-analyze` y la
 | catálogos `puntos-de-recaudo`, `cajas-de-recaudo`, `conceptos-varios`, `tipos-de-recibo` | duplicado de código antes de guardar | `BuscarCodigoDeCatalogoQuery` |
 | tipos de documento sembrados `RC`, `RB`, `RP`, `RT`, `AN`, `MC`, `AS` · conceptos `GIRODEV`, `SOBRANTE`, `REINTEGRO`, `RENDIM` | semilla de `RecaudoNucleo` (T0075) | migración |
 
+**Fijados en la construcción de la fase 5 (2026-10-24)**:
+
+| Nombre | Qué | Dónde |
+|---|---|---|
+| `ReceiptsCashSessions` · `ReceiptsCashCounts` · `ReceiptsCashCountLines` · `ReceiptsCashCountDenominations` · `ReceiptsCashCountTerminalBatches` · `ReceiptsDayCloses` · `ReceiptsDayCloseLines` | los `DbSet` de Recaudo cuyas clases se llaman como las del POS de la 012; las tablas son las `RCD_` | `IApplicationDbContext` |
+| `IX_RCD_CashSessions_CashierUserId_Live` | la de una sesión por cajero no es índice único: depende de `Caja.UnaSesionPorCajero` (parámetro con vigencia) y la comprueba la apertura | `CashSessionConfiguration` |
+| `CashCount.VerificationCode` · `CashSurplus.ToIncomeFrom` nulo | el código del informe del cierre y del acta; sin `Caja.Sobrantes.DiasAntesDeIngreso` el sobrante no tiene fecha de paso a ingreso | `Entities/Receipts/Sessions` |
+| `CatalogoDeMensajesDeRecaudoV1` · `MCR` `MRC` `DAA` `ASR` `SLI` · `ReceiptsFactDimensionsV1` · `FactLineV1` · `RolesDeRecaudo` | el catálogo de hechos `REC → Accounting` y su forma común | `Application/Common/Integration/Contracts/Receipts` |
+| `EmisionDeRecaudo` | único emisor de hechos de Recaudo; sin contabilidad iniciada `NotPosted`, con `Contabilidad.ModoDePaso = NoPasa` también, si no en línea; código de oficina = `LegacyCode` o su Id | `Application/Receipts/Accounting` |
+| `ContabilidadParaRecaudo` (provisional) | estado del período real, validación previa sin matriz (`SinMatriz`) y saldo contable vacío, hasta la fase 16 | `Application/Accounting/Receipts` |
+| `ValoresSelladosDeLaSesion` · `MedioSellado` | lo que la sesión sella al abrir (R-14) | `Application/Receipts/Sessions` |
+| `ArqueosDeSesion` · `SesionesDeCaja` · `MovimientosDeBoveda` · `TablasDeRecaudo` | el arqueo con `ArqueoDeCaja`, lo esperado y su proyección, el saldo de la bóveda y su verificación, los nombres de tabla del cerrojo | `Application/Receipts` |
+| `MovimientosDeBoveda.PrefijoDeBoveda = "BV"` | los movimientos de bóveda numeran con el tipo `MC` en otra fila de `COR_Sequences` | `Application/Receipts/Vaults` |
+| `MarcaDelLoteDelDia` (`RCD.LoteDelDia.Terminado`) | la marca de corrida que espera el cuadre diario; la deja `recaudo.lote-del-dia` (T0263) | `Application/Receipts/Sessions/Tareas` |
+| `recaudo.sesiones-olvidadas` (cada 15 min) · `recaudo.cuadre-diario` (cada 30 min) | deciden con la hora de corte de la cooperativa; sólo marcan, comparan y alertan | `TareasDeCaja.cs` |
+| `AdjuntosDeModulo.SoporteDeCaja` (`ReceiptsCashSupport`) | soportes y actas de la caja: dueño la sesión o la bóveda, no se borran | `Application/Attachments/Common` |
+| 428 `Approvals.PresenceRequired` con `data.contentSha256` | la huella que el aprobador presente confirma en `…/decide` | `ErroresDeRecaudo.Seguridad` |
+| `Receipts.Session.{NotCashierOfBox, CashBoxInactive, NoMeansOffered, BaseMismatch, NotClosed, NotForgotten, WitnessRequired}` · `Receipts.Count.{ReasonRequired, NotPending, ApproverLimitTooLow, TreatmentInvalid}` · `Receipts.Day.AlreadyClosed` · `Receipts.Movement.{DoubleCustodyRequired, InsufficientCash, Invalid, SupportRequired}` · `Receipts.Vault.{InsufficientBalance, MinutesRequired, Inactive}` · `Receipts.Receivable.AuthorizationRequired` · `Receipts.Surplus.{NotDue, NotLiability}` | errores de la sesión, el arqueo y la bóveda; 409 para `.CashierExclusive` y `.Day.AlreadyClosed` | `ErroresDeRecaudo.Sesiones` |
+| `GET /sessions/{id}/counts` · `GET /sessions/{id}/close-report` · `GET /surprise-counts/{id}/minutes` · `GET /collection-points/{id}/days/{date}/report` · `GET/POST /cashier-receivables[/{id}/payroll-authorization]` · `GET/POST /cash-surpluses[/{id}/to-income]` · `POST /daily-squares/{id}/explain` | rutas que api.md §3 no listaba | `API/Endpoints/Receipts/SessionsEndpoints.cs` |
+| `CashCountKind` · `CollectionPointDayStatus` · `SessionAdjustmentKind` · `DailySquareStatus` · `CashierReceivableState` · `CashSurplusState` · `VaultMovementKind.RetainedCounterfeit = 6` | enumeraciones que data-model §20 no numeraba | `Domain/Enums/Receipts` |
+
 ## 3. Decisiones transversales
 
 ### Módulos y frontera
