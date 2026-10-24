@@ -111,7 +111,7 @@ public class LotesDePagoTests
 
         _t.Motor.DecidirAsync(Arg.Any<DecisionDeAprobacion>(), Arg.Any<CancellationToken>())
             .Returns(Result.Failure<DecisionResultDto>(ErroresDeTesoreria.LoteAutoaprobado()));
-        var aprobado = await new ApprovePaymentBatchCommandHandler(_t.E.Db, _t.Alcance, _t.Cerrojo, _t.Motor, new GuardasDeAprobacionDelLote(_t.E.Db, _t.Listas))
+        var aprobado = await new ApprovePaymentBatchCommandHandler(_t.E.Db, _t.Alcance, _t.Cerrojo, _t.Motor, new GuardasDeAprobacionDelLote(_t.E.Db, _t.Listas, _t.E.Alertas))
             .Handle(new ApprovePaymentBatchCommand(creado.Value.PublicId) { OperationKey = Guid.NewGuid() }, default);
         aprobado.Error.Code.Should().Be("Treasury.Batch.SelfApproval");
     }
@@ -138,7 +138,7 @@ public class LotesDePagoTests
         var creado = await Crear().Handle(Pedido(_t.Pagos.PublicId, PaymentBatchForm.File, _t.Orden()), default);
         _t.Listas.EvaluarAsync(Arg.Any<IReadOnlyCollection<int>>(), Arg.Any<CancellationToken>())
             .Returns(new Application.Treasury.Orders.ResultadoDeListasDeTesoreria([_t.Beneficiaria.Id], []));
-        var r = await new GuardasDeAprobacionDelLote(_t.E.Db, _t.Listas).AntesDeAprobarAsync(_t.E.Db.PaymentBatches.Single(b => b.PublicId == creado.Value.PublicId), default);
+        var r = await new GuardasDeAprobacionDelLote(_t.E.Db, _t.Listas, _t.E.Alertas).AntesDeAprobarAsync(_t.E.Db.PaymentBatches.Single(b => b.PublicId == creado.Value.PublicId), default);
         r.Error.Code.Should().Be("Treasury.Compliance.BindingListMatch");
     }
 
