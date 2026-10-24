@@ -157,6 +157,15 @@ public sealed class ConfirmacionDeRecibo(
         var titulares = await db.People.AsNoTracking().Where(p => items.Select(i => i.BeneficiaryPersonPublicId).Contains(p.PublicId))
             .ToDictionaryAsync(p => p.PublicId, p => p.Id, ct);
         personasDeLaOperacion = personasDeLaOperacion.Union(titulares.Values).Distinct().OrderBy(x => x).ToList();
+        // Decisión del dueño del 2026-10-24 (T0115): quien efectúa el pago es obligatorio cuando el efectivo del recibo llega al umbral de la transacción individual
+        // (Sarlaft.UmbralTransaccionIndividual, con vigencia; nunca un literal) o cuando el pagador no es el titular de lo que paga; si no, es opcional.
+        if (operacion.DeliveredByPersonId is null)
+        {
+            var umbralIndividual = await parametros.DecimalAsync(ParametrosDeRecaudoYTesoreria.SarlaftUmbralTransaccionIndividual, hoy, ct);
+            if (umbralIndividual is { } ui && efectivo >= ui) return Result.Failure<ReceiptDto>(ErroresDeRecaudo.QuienEfectuaRequerido("CashThreshold", ui));
+            if (titulares.Values.Any(t => t != operacion.PayerPersonId))
+                return Result.Failure<ReceiptDto>(ErroresDeRecaudo.QuienEfectuaRequerido("PayerIsNotHolder", umbralIndividual));
+        }
         var resultadoDeListas = await listas.EvaluarAsync(personasDeLaOperacion, operacion.PublicId, ct);
         if (resultadoDeListas == ScreeningOutcomeR.BindingMatch) return Result.Failure<ReceiptDto>(ErroresDeRecaudo.ListaVinculante());
 

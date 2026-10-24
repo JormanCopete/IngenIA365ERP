@@ -88,6 +88,16 @@ public static partial class ErroresDeRecaudo
 
     public static Error QuienEfectuaRequerido() => new(CodigoQuienEfectuaRequerido, "Registre quién efectúa el pago en la ventanilla.");
 
+    /// <summary>
+    /// Decisión del dueño del 2026-10-24 (T0115): quien efectúa es obligatorio con el efectivo en el umbral de la transacción individual o cuando el pagador no
+    /// es el titular; <c>data.reason</c> dice cuál (<c>CashThreshold</c>, <c>PayerIsNotHolder</c>) y <c>data.threshold</c> el umbral vigente.
+    /// </summary>
+    public static Error QuienEfectuaRequerido(string motivo, decimal? umbral) => new ErrorConDatos(CodigoQuienEfectuaRequerido,
+        motivo == "CashThreshold"
+            ? $"El efectivo del recibo llega al umbral de la transacción individual ({umbral:N0}): registre quién efectúa el pago en la ventanilla."
+            : "Quien paga no es el titular de lo que se paga: registre quién efectúa el pago en la ventanilla.",
+        new { reason = motivo, threshold = umbral });
+
     public static Error OperacionNoEnPreparacion() => new(CodigoOperacionNoEnPreparacion, "La operación ya no está en preparación.");
 
     public static Error OperacionSinItems() => new(CodigoOperacionSinItems, "Elija al menos un pago.");

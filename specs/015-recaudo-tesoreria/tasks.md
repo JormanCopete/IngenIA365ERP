@@ -533,6 +533,12 @@ sin correr»). Desviaciones y decisiones; las que nacen aquí quedan en decision
   de listas es `IListasDeRecaudo` (responde `Clear` hasta la fase 15). La validación previa contable usa la respuesta provisional de la fase 5. La
   declaración de origen de fondos es exigible desde `Sarlaft.UmbralDeclaracionOrigenFondos` o si el contrato de cuentas la pidió; quien efectúa
   (`DeliveredByRequired`) **no se exige todavía**: falta la regla de cuándo es obligatorio (decisión pendiente).
+  **Resuelto por la decisión del dueño del 2026-10-24**: quien efectúa el pago (`Receipts.Compliance.DeliveredByRequired`) es **obligatorio** cuando el efectivo
+  del recibo llega al umbral de la transacción individual —el parámetro con vigencia `Sarlaft.UmbralTransaccionIndividual`, sembrado en 5.000.000 «pendiente de
+  cumplimiento», nunca un literal— y cuando el pagador no es el titular de lo que paga; en lo demás es opcional. `ConfirmacionDeRecibo` lo valida antes de las
+  listas; el error trae `data.reason` (`CashThreshold` o `PayerIsNotHolder`) y `data.threshold`. Para registrarlo en una operación ya creada nace
+  `SetCashOperationDeliveredByCommand` (`PUT /api/receipts/cash-operations/{id}/delivered-by`, `Receipts.Receipt.Register`, nuevo), y la caja lo pide al recibir el
+  error («Registrar y confirmar»). Pruebas `QuienEfectuaElPagoTests`, escritas sin correr.
 - **T0116**: `ReciboEmitido` (`RCE`) con una línea por porción; el modo por defecto es `PorLotes` (`REC.RCE|CierreDeTurno||PorDia`, alcance la sesión),
   `EnLinea` y `NoPasa` según `Contabilidad.ModoDePaso`, y sin contabilidad iniciada `NotPosted`. `ElCatalogoDeMensajesEsUnico` cuenta 9 tipos `REC`.
 - **T0117**: el pagador tercero viaja como `PayerPublicId` en cada porción y el recibo sale enmascarado (`RecibosDeCaja.Enmascarar`, sin saldos); el pagador

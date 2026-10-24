@@ -54,7 +54,8 @@ public class ActivacionMinimaTests
         var r = await ActivarRecaudo().Handle(new ActivateReceiptsCommand { OperationKey = Guid.NewGuid() }, default);
 
         r.Error.Code.Should().Be(ErroresDeRecaudo.CodigoRequisitosDeActivacion);
-        r.Error.ToString().Should().Contain(RequisitosDeActivacionDeRecaudo.TiposDeDocumento);
+        var datos = ((IngenIA365ERP.Application.Common.Models.ErrorConDatos)r.Error).Data;
+        ((IEnumerable<string>)datos.GetType().GetProperty("missing")!.GetValue(datos)!).Should().Contain(RequisitosDeActivacionDeRecaudo.TiposDeDocumento);
     }
 
     [Fact]

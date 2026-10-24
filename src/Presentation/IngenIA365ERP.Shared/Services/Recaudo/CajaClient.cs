@@ -95,6 +95,11 @@ public sealed class CajaClient(HttpClient http, CentralAuthClient auth)
         EnvioDeVentas.EnviarAsync<OperacionDeCajaDto>(http, auth, HttpMethod.Post, $"{Base}/cash-operations/{operacion}/declaration",
             new { origin = origen, cashAmount = efectivo, supportAttachmentPublicId = soporte }, clave, ct);
 
+    /// <summary>Quién efectúa el pago (decisión del dueño del 2026-10-24, T0115).</summary>
+    public Task<ResultadoDeInventario<OperacionDeCajaDto>> QuienEfectuaAsync(Guid operacion, Guid? persona, ClaveDeOperacion clave, CancellationToken ct = default) =>
+        EnvioDeVentas.EnviarAsync<OperacionDeCajaDto>(http, auth, HttpMethod.Put, $"{Base}/cash-operations/{operacion}/delivered-by",
+            new { deliveredByPersonPublicId = persona }, clave, ct);
+
     public Task<ResultadoDeInventario<OperacionDeCajaDto>> AbandonarAsync(Guid operacion, ClaveDeOperacion clave, CancellationToken ct = default) =>
         EnvioDeVentas.EnviarAsync<OperacionDeCajaDto>(http, auth, HttpMethod.Post, $"{Base}/cash-operations/{operacion}/abandon", null, clave, ct);
 

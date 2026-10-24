@@ -160,6 +160,14 @@
                         <SfButton CssClass="e-primary" OnClick="@DeclararAsync">Registrar la declaración</SfButton>
                     </div>
                 }
+                @if (_pideQuienEfectua)
+                {
+                    @* Decisión del dueño del 2026-10-24 (T0115): obligatorio con el efectivo en el umbral de la transacción individual o si el pagador no es el titular. *@
+                    <p class="texto-alerta">@_motivoQuienEfectua</p>
+                    <label class="campo campo-ancho">Quién efectúa el pago *</label>
+                    <PersonSearchPicker Selected="_quienEfectua" SelectedChanged="@(p => _quienEfectua = p)" Compacto="true" />
+                    <SfButton CssClass="e-primary" Disabled="@(_quienEfectua is null)" OnClick="@RegistrarQuienEfectuaAsync">Registrar y confirmar</SfButton>
+                }
             </IndicadorDeCarga>
         </div>
 
@@ -202,7 +210,10 @@
     private readonly List<MedioDeCajaRequest> _medios = [];
     private Guid? _aprobacion;
     private string? _huella, _origen, _soporteDeDeclaracion, _documentoNuevo, _numeroDeObligacion;
-    private bool _pideDeclaracion, _crearPersona;
+    private bool _pideDeclaracion, _crearPersona, _pideQuienEfectua;
+    private PersonSearchPicker.PersonSearchItem? _quienEfectua;
+    private string? _motivoQuienEfectua;
+    private ClaveDeOperacion _claveDeQuienEfectua = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -367,6 +378,18 @@
         _pideDeclaracion = false;
     }
 
+    private async Task RegistrarQuienEfectuaAsync()
+    {
+        if (_operacion is null || _quienEfectua is null) return;
+        IngenIA365ERP.Shared.Services.Inventario.ResultadoDeInventario<OperacionDeCajaDto> r;
+        using (_confirmando.Iniciar()) r = await Cliente.QuienEfectuaAsync(_operacion.PublicId, _quienEfectua.PublicId, _claveDeQuienEfectua);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo registrar quién efectúa el pago."); return; }
+        _claveDeQuienEfectua = new ClaveDeOperacion();
+        _operacion = r.Value;
+        _pideQuienEfectua = false;
+        await ConfirmarAsync(null);
+    }
+
     private async Task ConfirmarAsync(Guid? aprobacion)
     {
         if (_operacion is null) return;
@@ -386,6 +409,10 @@
             case "Receipts.Compliance.DeclarationRequired":
                 _pideDeclaracion = true;
                 break;
+            case "Receipts.Compliance.DeliveredByRequired":
+                _pideQuienEfectua = true;
+                _motivoQuienEfectua = r.ErrorMessage;
+                return;
             case "Receipts.Receipt.DistributionChanged":
                 await SimularAsync();
                 break;

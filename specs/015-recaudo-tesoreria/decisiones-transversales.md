@@ -316,6 +316,13 @@ Lo que tasks.md marcaba **(nuevo)** y lo que trajeron el `/speckit-analyze` y la
 | `BusquedaDeObligaciones` | su implementación sobre créditos y cuentas | `Application/Lending/Integration` |
 | `GetPayablesQuery.ObligationNumber` · `GET /api/receipts/payables?number=` · `Receipts.Payables.AmbiguousNumber` | la caja llega a la persona por el número | `Receipts/CashDesk`, `CashDeskEndpoints.cs` |
 
+**Decisión del dueño del 2026-10-24 sobre T0115 (quien efectúa el pago)**:
+
+| Nombre | Qué | Dónde |
+|---|---|---|
+| regla de `Receipts.Compliance.DeliveredByRequired` | obligatorio con el efectivo en `Sarlaft.UmbralTransaccionIndividual` (parámetro con vigencia, sembrado en 5.000.000) o con el pagador distinto del titular; si no, opcional; `data.reason` = `CashThreshold` / `PayerIsNotHolder`, `data.threshold` | `ConfirmacionDeRecibo`, `ErroresDeRecaudo.QuienEfectuaRequerido(motivo, umbral)` |
+| `SetCashOperationDeliveredByCommand` · `PUT /api/receipts/cash-operations/{id}/delivered-by` · `CajaClient.QuienEfectuaAsync` | registrar quién efectúa en una operación en preparación | `Receipts/CashDesk/CajaCommands.cs`, `CashDeskEndpoints.cs`, `/recaudo/caja` |
+
 ## 3. Decisiones transversales
 
 ### Módulos y frontera

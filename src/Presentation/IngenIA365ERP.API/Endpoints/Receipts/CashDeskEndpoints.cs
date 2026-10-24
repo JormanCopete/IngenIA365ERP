@@ -42,6 +42,10 @@ public class CashDeskEndpoints : ICarterModule
                     OperationKey = http.ClaveDeOperacion(),
                 }, ct))
             .WithName("Receipts_CashOperations_Declaration").ConClaveDeOperacion().RequirePermission(Registrar);
+        // Decisión del dueño del 2026-10-24 (T0115): quien efectúa el pago, obligatorio en el umbral de efectivo o si el pagador no es el titular.
+        g.MapPut("/{id:guid}/delivered-by", async (Guid id, QuienEfectuaRequest body, HttpContext http, ISender s, CancellationToken ct) =>
+                await s.Send(new SetCashOperationDeliveredByCommand(id, body.DeliveredByPersonPublicId) { OperationKey = http.ClaveDeOperacion() }, ct))
+            .WithName("Receipts_CashOperations_DeliveredBy").ConClaveDeOperacion().RequirePermission(Registrar);
         g.MapPost("/{id:guid}/confirm", async (Guid id, HttpContext http, ISender s, CancellationToken ct) =>
                 await s.Send(new ConfirmCashOperationCommand(id)
                 {
@@ -74,4 +78,6 @@ public class CashDeskEndpoints : ICarterModule
     public sealed record MediosRequest(IReadOnlyList<MedioDeCajaDto>? Means, IReadOnlyList<PorcionDeCajaDto>? FixedImputation);
 
     public sealed record DeclaracionRequest(string? Origin, decimal CashAmount, Guid SupportAttachmentPublicId);
+
+    public sealed record QuienEfectuaRequest(Guid? DeliveredByPersonPublicId);
 }

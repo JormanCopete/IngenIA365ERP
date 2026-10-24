@@ -417,3 +417,34 @@ public sealed class AbandonCashOperationCommandHandler(IApplicationDbContext db,
         return Result.Success(await OperacionesDeCaja.DtoAsync(db, v.Operacion, ct));
     }
 }
+
+/// <summary>
+/// <c>PUT /api/receipts/cash-operations/{id}/delivered-by</c> (<c>Receipts.Receipt.Register</c>; decisión del dueño del 2026-10-24 sobre T0115): registra (o quita, con
+/// nulo) quién efectúa el pago en la ventanilla de una operación en preparación; la confirmación lo exige con el efectivo en el umbral de la transacción individual
+/// o cuando el pagador no es el titular (<c>Receipts.Compliance.DeliveredByRequired</c>). (nuevo)
+/// </summary>
+public sealed record SetCashOperationDeliveredByCommand(Guid OperationPublicId, Guid? DeliveredByPersonPublicId) : IRequest<Result<CashOperationDto>>,
+    IOperacionIdempotente, IEscrituraDeRecaudo
+{
+    public Guid OperationKey { get; init; }
+}
+
+public sealed class SetCashOperationDeliveredByCommandHandler(IApplicationDbContext db, IAlcanceDeRecaudo alcance)
+    : IRequestHandler<SetCashOperationDeliveredByCommand, Result<CashOperationDto>>
+{
+    public async Task<Result<CashOperationDto>> Handle(SetCashOperationDeliveredByCommand request, CancellationToken ct)
+    {
+        if (await OperacionesDeCaja.VisibleAsync(db, alcance, request.OperationPublicId, seguir: true, ct) is not { } v)
+            return Result.Failure<CashOperationDto>(ErroresDeRecaudo.NoEncontrado("La operación de caja"));
+        if (v.Operacion.Status != CashOperationState.Preparing) return Result.Failure<CashOperationDto>(ErroresDeRecaudo.OperacionNoEnPreparacion());
+        int? persona = null;
+        if (request.DeliveredByPersonPublicId is { } p)
+        {
+            persona = await db.People.AsNoTracking().Where(x => x.PublicId == p).Select(x => (int?)x.Id).FirstOrDefaultAsync(ct);
+            if (persona is null) return Result.Failure<CashOperationDto>(ErroresDeRecaudo.PersonaNoEncontrada());
+        }
+        v.Operacion.DeliveredByPersonId = persona;
+        await db.SaveChangesAsync(ct);
+        return Result.Success(await OperacionesDeCaja.DtoAsync(db, v.Operacion, ct));
+    }
+}
