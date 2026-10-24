@@ -26,7 +26,8 @@ public static class CatalogoDeRecaudo
 
     /// <summary>
     /// Feature 015, R1 (T0357): la entrega desplegada es R1 —el resto de medios (tarjetas, bono, otro), el egreso de caja, las reglas de identificación, el
-    /// calendario de pagadurías y el reporte de transacciones—; lo que sólo trae R2 sigue sin ofrecerse.
+    /// calendario de pagadurías y el reporte de transacciones—. Feature 015, R2 (fase 36, T0426): sube a R2 con el par <c>RecaudoCanales</c> —convenios de recaudo,
+    /// referencias de pago con dígito de verificación, archivos de convenio y de pasarela, conciliación del convenio y canje completo de cheques—.
     /// </summary>
-    public const EntregaDeRecaudo EntregaVigente = EntregaDeRecaudo.R1;
+    public const EntregaDeRecaudo EntregaVigente = EntregaDeRecaudo.R2;
 }

@@ -92,6 +92,19 @@ public static class BankFileFormatValidator
             BankFieldSource.BeneficiaryTaxId, BankFieldSource.BankCode, BankFieldSource.AccountNumber, BankFieldSource.Amount,
             BankFieldSource.Outcome, BankFieldSource.BankCause, BankFieldSource.BankDate, BankFieldSource.BankReference,
         ],
+        // R2 (fase 36, T0426; archivos-y-plantillas.md §1): el archivo diario de un convenio de recaudo y el de una pasarela o PSE, de lectura. La referencia de pago va
+        // en MovementReference, el identificador del pago en BankSequence y el resultado de la pasarela (aprobado o rechazado) en Outcome.
+        [BankFileScope.CollectionAgreementFile] =
+        [
+            BankFieldSource.MovementDate, BankFieldSource.ValueDate, BankFieldSource.Amount, BankFieldSource.MovementReference, BankFieldSource.BankSequence,
+            BankFieldSource.DepositorTaxId, BankFieldSource.DepositorName, BankFieldSource.Description, BankFieldSource.OfficeCode,
+        ],
+        [BankFileScope.PaymentGatewayFile] =
+        [
+            BankFieldSource.MovementDate, BankFieldSource.ValueDate, BankFieldSource.Amount, BankFieldSource.MovementReference, BankFieldSource.BankSequence,
+            BankFieldSource.DepositorTaxId, BankFieldSource.DepositorName, BankFieldSource.Description, BankFieldSource.Outcome, BankFieldSource.BankReference,
+            BankFieldSource.BankDate,
+        ],
     };
 
     /// <summary>

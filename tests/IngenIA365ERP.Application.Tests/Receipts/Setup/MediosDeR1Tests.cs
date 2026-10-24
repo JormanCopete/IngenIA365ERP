@@ -49,9 +49,10 @@ public sealed class MediosDeR1Tests
     }
 
     [Fact]
-    public void La_entrega_desplegada_es_R1_y_admite_las_clases_de_R1()
+    public void La_entrega_desplegada_es_R1_o_posterior_y_admite_las_clases_de_R1()
     {
-        CatalogoDeRecaudo.EntregaVigente.Should().Be(EntregaDeRecaudo.R1);
+        // R2 (fase 36): la entrega sube a R2 y las clases de R1 se siguen ofreciendo.
+        ((int)CatalogoDeRecaudo.EntregaVigente).Should().BeGreaterThanOrEqualTo((int)EntregaDeRecaudo.R1);
         foreach (var clase in new[] { PaymentMeansClass.CreditCard, PaymentMeansClass.DebitCard, PaymentMeansClass.Voucher, PaymentMeansClass.Other })
             MediosDeRecaudo.EnLaEntrega(clase, CatalogoDeRecaudo.EntregaVigente).Should().BeTrue(clase.ToString());
     }
