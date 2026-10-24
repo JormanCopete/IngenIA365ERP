@@ -3916,3 +3916,15 @@ Comercial ofrece a Recaudo el efectivo de su punto de venta para el **registro �
 sobre `INV_DocumentPayments` de clase efectivo de documentos confirmados con contraparte (recibido y devuelto). Recaudo suma ese
 efectivo a sus acumulados, señales y reporte a la UIAF **sin copiar filas**; Comercial no lee nada de Recaudo ni cambia su
 esquema. No toca Contabilidad ni Cartera (`InventarioNoConoceContabilidadNiCartera`).
+
+### Enmienda E-03 de la feature 015, T1 (2026-10-24, fase 33, T0412)
+
+**La remesa del efectivo del punto de venta va por Tesorería** (FR-166 de la 015; contratos-v2.md §4): `ExecuteDayCloseCommand` acepta una
+`RemesaDelCierreDelDia` opcional (cuenta propia de destino, valor, sello y acta; `POST /api/inventory/day-closes` con `remittance`) y, en la
+misma transacción del cierre, la registra por el puerto `Application/Common/Integration/Treasury/IRemesasDeTesoreria.RegistrarAsync` con la
+clave de la operación, la oficina del punto y el punto como origen (`VaultPublicId` = el `PublicId` del punto); Tesorería la deja en tránsito
+hasta confirmarla por el extracto o con soporte. No pasa de lo contado en los medios de efectivo del día (`Inventory.DayClose.RemittanceOverCash`);
+sin Tesorería registrada responde `Inventory.DayClose.RemittanceUnavailable`, y un rechazo del puerto `Inventory.DayClose.RemittanceRejected`.
+Esquema: **una columna nula** en `INV_DayCloses` (`RemittancePublicId`, sin FK, R-05 de la 015), en el par `TesoreriaCompleta`. Comercial no lee
+tablas de Tesorería. **Pendiente del dueño**: el asiento de la salida del efectivo de la caja del punto hacia el tránsito no lo emite Comercial
+todavía (la confirmación de Tesorería acredita `EfectivoEnTransito`): ver la decisión anotada en la fase 33 de la 015.

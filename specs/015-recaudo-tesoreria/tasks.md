@@ -2276,13 +2276,52 @@ ingreso; la remesa del efectivo del punto de venta por Tesorería (FR-104, FR-16
 aprobación; al cierre, un cheque emitido no entregado se reclasifica y uno no cobrado de 200 días pasa a cuenta por pagar al
 beneficiario.
 
-- [ ] T0407 [P] [US19] Escribir tests/IngenIA365ERP.Application.Tests/Treasury/Transfers/TrasladosEntreCuentasTests.cs (FR-104, FR-207): aprobación diferida por monto (`Treasury.Transfers.Approve`); `TrasladoEntreCuentasEnviado` y, al cruzar el extracto o confirmar con soporte, `TrasladoConfirmado`; desde una cuenta del fondo de liquidez exige uso aprobado; segregación
-- [ ] T0408 [P] [US19] Escribir tests/IngenIA365ERP.Application.Tests/Treasury/Checkbooks/ChequesAlCierreDelMesTests.cs (FR-220): emitidos y no entregados reclasificados al efectivo de la cuenta con `ChequesReclasificadosAlCierre` (y su reverso al inicio del mes); no cobrados más allá de `Cheques.DiasACuentaPorPagar` a `ChequeNoCobradoACuentaPorPagar` al beneficiario, nunca a ingreso; lo ejecuta una persona
-- [ ] T0409 [P] [US19] Escribir tests/IngenIA365ERP.Application.Tests/Inventory/Integration/RemesaDelPuntoDeVentaTests.cs (E-03; contratos-v2.md §4): el cierre del día del punto de venta llama a `IRemesasDeTesoreria` en su transacción
-- [ ] T0410 [P] [US19] Crear en src/Core/IngenIA365ERP.Domain/Entities/Treasury/Remittances/ `Transfer` y en Entities/Treasury/Checkbooks/ `MonthEndCheckRun` con su configuración (data-model §13.1)
-- [ ] T0411 [US19] Implementar en src/Core/IngenIA365ERP.Application/Treasury/Transfers/ `RequestTransferCommand`, `ApproveTransferCommand`, `ConfirmTransferCommand` y en …/Treasury/Checkbooks/ `RunMonthEndChecksCommand`; emitir los cuatro hechos en EmisionDeTesoreria.Traslados.cs; el cruce de traslados en la conciliación (FR-104, FR-220)
-- [ ] T0412 [US19] Implementar la remesa del punto de venta desde el cierre del día de Comercial (src/Core/IngenIA365ERP.Application/Inventory/Cash/) por `IRemesasDeTesoreria`, y anotar la enmienda E-03 en specs/012-inventario-comercial/ (FR-166)
-- [ ] T0413 [US19] Exponer `/api/treasury/transfers` (`POST /{id}/approve`) y `POST /api/treasury/month-end/checks`, y crear las pantallas src/Presentation/IngenIA365ERP.Shared/Pages/Tesoreria/{Traslados,CierreDeCheques}.razor con `IndicadorDeCarga`; regenerar en src/Infrastructure/IngenIA365ERP.Persistence.Migrations.{PostgreSql,SqlServer}/Application/ el par `TesoreriaCompleta`
+- [X] T0407 [P] [US19] Escribir tests/IngenIA365ERP.Application.Tests/Treasury/Transfers/TrasladosEntreCuentasTests.cs (FR-104, FR-207): aprobación diferida por monto (`Treasury.Transfers.Approve`); `TrasladoEntreCuentasEnviado` y, al cruzar el extracto o confirmar con soporte, `TrasladoConfirmado`; desde una cuenta del fondo de liquidez exige uso aprobado; segregación
+- [X] T0408 [P] [US19] Escribir tests/IngenIA365ERP.Application.Tests/Treasury/Checkbooks/ChequesAlCierreDelMesTests.cs (FR-220): emitidos y no entregados reclasificados al efectivo de la cuenta con `ChequesReclasificadosAlCierre` (y su reverso al inicio del mes); no cobrados más allá de `Cheques.DiasACuentaPorPagar` a `ChequeNoCobradoACuentaPorPagar` al beneficiario, nunca a ingreso; lo ejecuta una persona
+- [X] T0409 [P] [US19] Escribir tests/IngenIA365ERP.Application.Tests/Inventory/Integration/RemesaDelPuntoDeVentaTests.cs (E-03; contratos-v2.md §4): el cierre del día del punto de venta llama a `IRemesasDeTesoreria` en su transacción
+- [X] T0410 [P] [US19] Crear en src/Core/IngenIA365ERP.Domain/Entities/Treasury/Remittances/ `Transfer` y en Entities/Treasury/Checkbooks/ `MonthEndCheckRun` con su configuración (data-model §13.1)
+- [X] T0411 [US19] Implementar en src/Core/IngenIA365ERP.Application/Treasury/Transfers/ `RequestTransferCommand`, `ApproveTransferCommand`, `ConfirmTransferCommand` y en …/Treasury/Checkbooks/ `RunMonthEndChecksCommand`; emitir los cuatro hechos en EmisionDeTesoreria.Traslados.cs; el cruce de traslados en la conciliación (FR-104, FR-220)
+- [X] T0412 [US19] Implementar la remesa del punto de venta desde el cierre del día de Comercial (src/Core/IngenIA365ERP.Application/Inventory/Cash/) por `IRemesasDeTesoreria`, y anotar la enmienda E-03 en specs/012-inventario-comercial/ (FR-166)
+- [X] T0413 [US19] Exponer `/api/treasury/transfers` (`POST /{id}/approve`) y `POST /api/treasury/month-end/checks`, y crear las pantallas src/Presentation/IngenIA365ERP.Shared/Pages/Tesoreria/{Traslados,CierreDeCheques}.razor con `IndicadorDeCarga`; regenerar en src/Infrastructure/IngenIA365ERP.Persistence.Migrations.{PostgreSql,SqlServer}/Application/ el par `TesoreriaCompleta`
+
+**Notas de la construcción de la fase 33 (2026-10-24)**. Pruebas escritas y compiladas, sin correr. Desviaciones y decisiones; los nombres nuevos quedan en
+decisiones-transversales §2.7:
+
+- **T0407–T0409**: `Treasury/Transfers/TrasladosEntreCuentasTests` (aprobación diferida con `Treasury.Transfers.Approve`, aprobar no emite, misma cuenta rechazada, enviar
+  emite `TrasladoEntreCuentasEnviado`, confirmar exige soporte o línea, el cruce del abono en la conciliación de destino lo confirma, fondo de liquidez, quien pide no
+  aprueba), `Treasury/Checkbooks/ChequesAlCierreDelMesTests` (reclasificación con su reverso, cuenta por pagar de los antiguos, una vez por cuenta y mes con el mes
+  terminado) e `Inventory/Integration/RemesaDelPuntoDeVentaTests` (la remesa por el puerto en la transacción del cierre, no más que lo contado en efectivo, sin Tesorería
+  o con su rechazo no hay cierre, sin remesa el cierre de siempre).
+- **T0410**: `Transfer` (`Entities/Treasury/Remittances/Transfer.cs`) y `MonthEndCheckRun` (`Entities/Treasury/Checkbooks/MonthEndCheckRun.cs`, hecho inmutable con el
+  plazo sellado y `ReversalPublicId` para que el reverso tenga su propio origen) con su configuración en `Persistence/Configurations/Treasury/T1/TesoreriaCompletaConfigurations.cs`
+  (UK por cuenta y mes). **Desviación**: además de las dos tablas, el par suma dos columnas nulas en `TES_IssuedChecks` (`MovedToPayableRunId` con FK y `MovedToPayableOn`),
+  para que un cheque no pase dos veces a cuenta por pagar, y una en `INV_DayCloses` (`RemittancePublicId`, sin FK, R-05) para la remesa del punto de venta; las tres
+  aditivas. Enumeraciones nuevas en `Enums/Treasury/TreasuryT1Enums.cs` (`TransferState` y, para las fases 34 y 35, `ManualOrderApprovalState` y
+  `BankAccountAuthorityState`) y `ReconciliationRecordKind.Transfer = 7`.
+- **T0411**: `Treasury/Transfers/TrasladosEntreCuentas.cs` con `RequestTransferCommand`, `ApproveTransferCommand`, `RejectTransferCommand` **(nuevo)**,
+  `MarkTransferSentCommand` **(nuevo)**, `ConfirmTransferCommand`, `VoidTransferCommand` **(nuevo)** y `ListTransfersQuery`; el sujeto de aprobación **nuevo**
+  `TreasuryTransfer` (regla fija de un nivel con `Treasury.Transfers.Approve`, con monto) con `AprobableTraslado`, y en la fuente de Tesorería el error propio
+  `Treasury.Transfer.SelfApproval`. **Desviación**: «aprobar no mueve dinero» (como el lote): el envío es un paso aparte, el de quien lo ejecuta en el portal del banco, y
+  ahí se emite `TrasladoEntreCuentasEnviado` y se consume el uso del fondo de liquidez (que el pedido ya exige). La confirmación es por pantalla con la constancia o la
+  línea, o **sola** al cruzar el abono en la conciliación de la cuenta de destino (`ConciliacionMinima.EfectosAsync`; los traslados entran a los registros por cruzar de las
+  dos cuentas como `Transfer`). El cierre del mes es `RunMonthEndChecksCommand` (`Treasury/Checkbooks/CierreDelMesDeCheques.cs`, con `ListMonthEndCheckRunsQuery`): una vez
+  por cuenta y mes (`Treasury.MonthEndChecks.AlreadyRun`) y con el mes terminado (`.MonthNotEnded`), en una transacción explícita; «emitido y no entregado al corte» es el
+  cheque de una orden emitido hasta el corte y sin entrega hasta esa fecha (uno entregado después del corte también cuenta), y la reclasificación va en **un** hecho por
+  cuenta con una pareja de líneas por cheque y su reverso fechado el primer día del mes siguiente; el cheque que pasa a cuenta por pagar **no cambia de estado** (sigue
+  entregado, con la marca de la corrida). Los cuatro hechos en `EmisionDeTesoreria.Traslados.cs` (con `DimensionesDeCuentaAsync`: cada línea de `Banco` lleva su cuenta).
+- **T0412**: `ExecuteDayCloseCommand.Remittance` (`RemesaDelCierreDelDia`, opcional) y, en la misma transacción del cierre, `IRemesasDeTesoreria.RegistrarAsync` con la clave
+  de la operación, la oficina del punto y el punto como origen; errores **nuevos** `Inventory.DayClose.{RemittanceUnavailable, RemittanceOverCash, RemittanceRejected}`; el
+  puerto entra al handler como parámetro opcional. Enmienda E-03 (T1) anotada en `specs/012-inventario-comercial/decisiones-transversales.md`. **Decisión para el dueño**:
+  Comercial no emite todavía el hecho de la salida del efectivo de la caja del punto hacia el tránsito (Tesorería acredita `EfectivoEnTransito` al confirmar); se recomienda
+  un hecho `INV → Accounting` propio (`RemesaDelPuntoDeVentaDespachada`) en una enmienda de la 012. La pantalla del cierre del día del punto todavía no pide la remesa: la
+  ruta la acepta (`remittance` en `POST /api/inventory/day-closes`).
+- **T0413**: rutas `/api/treasury/transfers` (`GET`, `POST`, `/{id}/approve`, `/reject`, `/sent`, `/confirm`, `/void`) y `/api/treasury/month-end/checks` (`GET` **(nuevo)**
+  y `POST`), con `Treasury.Transfers.Request/Approve` y `Treasury.Checkbooks.View/Manage` (sin permisos nuevos); pantallas `/tesoreria/traslados` y
+  `/tesoreria/cierre-de-cheques` con `IndicadorDeCarga`, en el menú y en `LasPantallasDeRecaudoYTesoreriaEstanEnElMenu` (cliente `TrasladosClient`). El par
+  `TesoreriaCompleta` regenerado (dos tablas y tres columnas, nada sobre los pares congelados); «No changes» en SqlServer y PostgreSQL; paridad en par (Application 71).
+  Compilan API, Web, Web.Client, Persistence y las cinco de pruebas. Sin probar en navegador.
+- **Pendiente para el dueño**: si un cheque pasado a cuenta por pagar se cobra después, falta el hecho que lo devuelva (hoy la conciliación lo cruza como cobrado sin
+  asiento); se recomienda anularlo en el banco al pasarlo a cuenta por pagar o sumar en T2 un hecho de cobro tardío.
 
 ---
 

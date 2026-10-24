@@ -599,6 +599,20 @@ Lo que tasks.md marcaba **(nuevo)** y lo que trajeron el `/speckit-analyze` y la
 | `RolesDeTesoreriaT1.{FondosEnTransito, ChequesPorEntregar, CuentaPorPagarChequesNoCobrados}` | los roles de T1, por cuenta propia | ídem |
 | tipo de comprobante `TB` («Notas y traslados bancarios») · `CatalogoDeTesoreria.EntregaVigente = T1` · par `TesoreriaCompleta` | la base de T1 | `voucher-types.json`, `Domain/Treasury/CatalogoDeTesoreria.cs`, `Persistence.Migrations.*` |
 
+**Fijados en la construcción de la fase 33 (2026-10-24)**:
+
+| Nombre | Qué | Dónde |
+|---|---|---|
+| `TES_Transfers` (`Transfer`) · `TES_MonthEndCheckRuns` (`MonthEndCheckRun`, con `ReversalPublicId`) · `TES_IssuedChecks.{MovedToPayableRunId, MovedToPayableOn}` · `INV_DayCloses.RemittancePublicId` | traslados, cierre del mes de cheques y la remesa del punto de venta | par `TesoreriaCompleta`; `Persistence/Configurations/Treasury/T1/TesoreriaCompletaConfigurations.cs` |
+| `TransferState` · `ManualOrderApprovalState` · `BankAccountAuthorityState` · `ReconciliationRecordKind.Transfer = 7` | enumeraciones de T1 | `Enums/Treasury/TreasuryT1Enums.cs`, `TreasuryReconciliationEnums.cs` |
+| sujetos de aprobación `TreasuryTransfer` y `BankAccountAuthorityChange` (fase 34) · `AprobableTraslado` | la aprobación diferida del traslado | `Domain/Approvals`, `Treasury/Transfers` |
+| `RequestTransferCommand` · `ApproveTransferCommand` · `RejectTransferCommand` · `MarkTransferSentCommand` · `ConfirmTransferCommand` · `VoidTransferCommand` · `ListTransfersQuery` · `TrasladosDeTesoreria` · `TransferDto` | los traslados | `Treasury/Transfers/TrasladosEntreCuentas.cs` |
+| `RunMonthEndChecksCommand` · `ListMonthEndCheckRunsQuery` · `CierreDelMesDeCheques` · `MonthEndCheckRunDto` | el cierre del mes de los cheques | `Treasury/Checkbooks/CierreDelMesDeCheques.cs` |
+| `EmisionDeTesoreria.{TrasladoEnviadoAsync, TrasladoConfirmadoAsync, ChequesReclasificadosAsync, ChequeNoCobradoACuentaPorPagarAsync, DimensionesDeCuentaAsync}` | los hechos de T1 | `Treasury/Accounting/EmisionDeTesoreria.Traslados.cs` |
+| errores `Treasury.Transfer.{SameAccount, AccountInactive, InvalidState, SelfApproval, SupportRequired, StatementLineMismatch}` · `Treasury.MonthEndChecks.{AlreadyRun, MonthNotEnded}` · `Inventory.DayClose.{RemittanceUnavailable, RemittanceOverCash, RemittanceRejected}` | los errores | `Treasury/Common/ErroresDeTesoreria.T1.cs`, `Inventory/Cash/ErroresDeCaja.cs` |
+| `ExecuteDayCloseCommand.Remittance` (`RemesaDelCierreDelDia`) | la remesa del punto de venta por Tesorería (E-03, T1) | `Inventory/Cash/DayCloseCommands.cs` |
+| rutas `/api/treasury/transfers` (`/{id}/approve`, `/reject`, `/sent`, `/confirm`, `/void`) · `GET/POST /api/treasury/month-end/checks` · pantallas `/tesoreria/traslados`, `/tesoreria/cierre-de-cheques` · `TrasladosClient` · eventos `Treasury.Transfer.{Requested, Sent, Confirmed, Voided}`, `Treasury.MonthEndChecks.Run` | rutas, pantallas y auditoría | `API/Endpoints/Treasury/TransfersEndpoints.cs`, `Shared/Pages/Tesoreria` |
+
 ## 3. Decisiones transversales
 
 ### Módulos y frontera
