@@ -27,7 +27,7 @@ public class MovimientosTests(CentralIdentityApiFixture fx)
 {
     private const string Cuentas = "/api/lending/accounts";
     private const string Lineas = "/api/lending/lines";
-    private const string Doble = "/api/lending/test-doubles/collector/accounts";
+    private const string Doble = Receipts.RecaudoEnsayoDelContrato.Ruta + "/accounts"; // T0300: Recaudo real (REC) por el arnés
 
     private static int _documento;
 
@@ -124,7 +124,7 @@ public class MovimientosTests(CentralIdentityApiFixture fx)
             {
                 new
                 {
-                    idempotencyKey = clave ?? $"TST:{Guid.NewGuid():N}", accountPublicId = cuenta, modality = "Free", amount = valor, valueDate = fecha,
+                    idempotencyKey = clave ?? $"REC:{Guid.NewGuid():N}", accountPublicId = cuenta, modality = "Free", amount = valor, valueDate = fecha,
                     meansClass = medio, depositorPublicId = depositante, receipt = Recibo(fecha),
                 },
             },
@@ -137,7 +137,7 @@ public class MovimientosTests(CentralIdentityApiFixture fx)
         IReadOnlyList<Guid>? firmas = null, string? clave = null) =>
         CarteraE2E.ConClaveAsync(http, admin, HttpMethod.Post, $"{Doble}/withdrawals", new
         {
-            idempotencyKey = clave ?? $"TST:{Guid.NewGuid():N}", accountPublicId = cuenta, amount = valor, valueDate = fecha, meansClass = "Cash",
+            idempotencyKey = clave ?? $"REC:{Guid.NewGuid():N}", accountPublicId = cuenta, amount = valor, valueDate = fecha, meansClass = "Cash",
             signerPersonPublicIds = firmas ?? [titular], receiverPersonPublicId = titular, receipt = Recibo(fecha),
         });
 
@@ -223,7 +223,7 @@ public class MovimientosTests(CentralIdentityApiFixture fx)
         using var http = fx.CreateClient();
         var fabio = await AsociadoAsync(http, esc.Admin, "Fabio");
         var cuenta = await CuentaAsync(http, esc.Admin, esc.Oficina, esc.LineaALaVista, fabio);
-        var clave = $"TST:{Guid.NewGuid():N}";
+        var clave = $"REC:{Guid.NewGuid():N}";
 
         var primera = await ConsignarAsync(http, esc.Admin, cuenta, fabio, 300_000m, esc.Hoy, clave);
         var segunda = await ConsignarAsync(http, esc.Admin, cuenta, fabio, 300_000m, esc.Hoy, clave);

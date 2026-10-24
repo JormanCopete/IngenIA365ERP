@@ -24,7 +24,7 @@ public class AhorroContractualTests(CentralIdentityApiFixture fx)
 {
     private const string Cuentas = "/api/lending/accounts";
     private const string Lineas = "/api/lending/lines";
-    private const string Doble = "/api/lending/test-doubles/collector/accounts";
+    private const string Doble = Receipts.RecaudoEnsayoDelContrato.Ruta + "/accounts"; // T0300: Recaudo real (REC) por el arnés
     private const decimal Cuota = 200_000m;
 
     private sealed record Escenario(CaptacionesE2E.CooperativaDeCaptaciones Coop, Guid Oficina, Guid Vista, Guid Titular, DateOnly Hoy);
@@ -92,7 +92,7 @@ public class AhorroContractualTests(CentralIdentityApiFixture fx)
             {
                 new
                 {
-                    idempotencyKey = $"TST:{Guid.NewGuid():N}", accountPublicId = cuenta, modality = "Installments", amount = Cuota, valueDate = fecha,
+                    idempotencyKey = $"REC:{Guid.NewGuid():N}", accountPublicId = cuenta, modality = "Installments", amount = Cuota, valueDate = fecha,
                     meansClass = "Transfer", depositorPublicId = e.Titular, receipt = MovimientosTests.Recibo(fecha),
                 },
             },

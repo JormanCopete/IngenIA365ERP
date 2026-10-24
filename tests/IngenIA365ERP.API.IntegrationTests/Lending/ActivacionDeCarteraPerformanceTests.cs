@@ -47,7 +47,7 @@ public sealed class ActivacionDeCarteraPerformanceTests(CentralIdentityApiFixtur
         var tenant = coop.TenantPublicId;
         await CarteraE2E.PersonaDelAdministradorAsync(http, coop);
         await LineaAsync(fx, coop, corte);
-        await CarteraE2E.RegistrarDoblesAsync(http, admin, corte);
+        await CarteraE2E.RecaudoYTesoreriaRealesAsync(fx, http, coop, corte);
         var oficina = await OficinaAsync(http, admin, tenant, "VOL");
         var deudores = new List<string>();
         for (var i = 0; i < Math.Min(500, creditos); i++) deudores.Add((await PersonaAsync(http, admin, $"Volumen{i:000}")).Documento);

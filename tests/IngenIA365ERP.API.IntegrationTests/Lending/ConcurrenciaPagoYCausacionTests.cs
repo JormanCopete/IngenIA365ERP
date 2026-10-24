@@ -4,7 +4,6 @@ using IngenIA365ERP.API.IntegrationTests.Identity;
 using IngenIA365ERP.Application.Common.Execution;
 using IngenIA365ERP.Application.Common.Integration.Lending;
 using IngenIA365ERP.Application.Common.Interfaces;
-using IngenIA365ERP.Application.Lending.Integration.DoblesDePrueba;
 using IngenIA365ERP.Application.Lending.Processes;
 using IngenIA365ERP.Domain.Enums.Lending;
 using Microsoft.Extensions.DependencyInjection;
@@ -138,7 +137,7 @@ public sealed class ConcurrenciaPagoYCausacionTests(CentralIdentityApiFixture fx
             Actor.ProcesoDeIntegracion(origen), origen, async (servicios, ct) =>
             {
                 var contrato = servicios.GetRequiredService<IContratoDeObligaciones>();
-                respuesta = await contrato.AplicarAsync(new SolicitudDeAplicacion(RecaudadorDePrueba.Recaudador, FormaDeAplicacion.NonInteractive,
+                respuesta = await contrato.AplicarAsync(new SolicitudDeAplicacion(IngenIA365ERP.Application.Receipts.Common.ClavesDeRecaudo.Recaudador, FormaDeAplicacion.NonInteractive,
                 [
                     new PagoAAplicar(Clave(), credito, ModalidadDePago.FreeAmount, 10_000m, hoy, ClaseDeMedioDeRecaudo.Cash, persona,
                         new ReferenciaDeRecibo("RC-SIN-TX", hoy, null, null, "Recibo")),

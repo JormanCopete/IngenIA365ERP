@@ -30,7 +30,7 @@ public class AsambleaTests(CentralIdentityApiFixture fx)
     private const string Asamblea = "/api/lending/assembly-distributions";
     private const string Cuentas = "/api/lending/accounts";
     private const string RutaDeLineas = "/api/lending/lines";
-    private const string Doble = "/api/lending/test-doubles/collector/accounts";
+    private const string Doble = Receipts.RecaudoEnsayoDelContrato.Ruta + "/accounts"; // T0300: Recaudo real (REC) por el arnés
 
     private static int _documento;
 
@@ -210,7 +210,7 @@ public class AsambleaTests(CentralIdentityApiFixture fx)
             var ordenes = await CausacionE2E.EnLaBaseAsync(fx, des.Coop.TenantPublicId, db => db.AccountPayoutOrders.AsNoTracking()
                 .Where(o => o.Purpose == PayoutPurpose.SurplusPayment).OrderBy(o => o.Id).Select(o => new { o.PublicId, o.Amount }).ToListAsync());
             ordenes.Should().HaveCount(2);
-            var rechazo = await DesembolsoE2E.ResultadoDelGiroAsync(http, des, ordenes[0].PublicId, "Rejected", ordenes[0].Amount);
+            var rechazo = await DesembolsoE2E.ResultadoDelGiroAsync(fx, http, des, ordenes[0].PublicId, "Rejected", ordenes[0].Amount);
             await DesembolsoE2E.ConsumirAsync(fx, des, rechazo);
 
             var ruta = $"{Asamblea}/{decision}/orders/{ordenes[0].PublicId}/reissue";
@@ -224,7 +224,7 @@ public class AsambleaTests(CentralIdentityApiFixture fx)
                 new { reason = "No aplica (e2e)" });
             (await CarteraE2E.CodigoDeErrorAsync(sinRechazo)).Should().Be("Lending.PayoutOrder.NotReissuable");
 
-            var giro = await DesembolsoE2E.ResultadoDelGiroAsync(http, des, nueva.GetProperty("orderPublicId").GetGuid(), "Disbursed", ordenes[0].Amount);
+            var giro = await DesembolsoE2E.ResultadoDelGiroAsync(fx, http, des, nueva.GetProperty("orderPublicId").GetGuid(), "Disbursed", ordenes[0].Amount);
             await DesembolsoE2E.ConsumirAsync(fx, des, giro);
             var estado = await CausacionE2E.EnLaBaseAsync(fx, des.Coop.TenantPublicId, db => db.AccountPayoutOrders.AsNoTracking()
                 .Where(o => o.PublicId == nueva.GetProperty("orderPublicId").GetGuid()).Select(o => o.Status).SingleAsync());
@@ -617,7 +617,7 @@ public class AsambleaTests(CentralIdentityApiFixture fx)
             {
                 new
                 {
-                    idempotencyKey = $"TST:{Guid.NewGuid():N}", accountPublicId = cuenta, modality = "Free", amount = aportes, valueDate = des.Hoy,
+                    idempotencyKey = $"REC:{Guid.NewGuid():N}", accountPublicId = cuenta, modality = "Free", amount = aportes, valueDate = des.Hoy,
                     meansClass = "Cash", depositorPublicId = persona,
                     receipt = new { number = "REC-ASAMBLEA", date = des.Hoy, officePublicId = (Guid?)null, meansReference = (string?)null, documentKind = "RC" },
                 },

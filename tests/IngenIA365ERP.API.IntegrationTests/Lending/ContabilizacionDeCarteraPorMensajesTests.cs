@@ -177,7 +177,7 @@ public sealed class ContabilizacionDeCarteraPorMensajesTests(CentralIdentityApiF
         var puente = await ContabilidadDeCarteraE2E.CuentaPorRolAsync(http, admin, "RecaudoPorAplicar");
         var regla = await CarteraE2E.EnviarAsync(http, admin, HttpMethod.Post, Reglas, new
         {
-            operation = "*", role = "RecaudoPorAplicar", dimensions = new { collectorClass = "Test" }, accountPublicId = puente,
+            operation = "*", role = "RecaudoPorAplicar", dimensions = new { collectorClass = "Receipts" }, accountPublicId = puente,
             validFrom = new DateOnly(hoy.Year, hoy.Month, 1), reason = "Puente del recaudador de prueba (e2e)",
         });
         regla.StatusCode.Should().Be(HttpStatusCode.Created, await regla.Content.ReadAsStringAsync());

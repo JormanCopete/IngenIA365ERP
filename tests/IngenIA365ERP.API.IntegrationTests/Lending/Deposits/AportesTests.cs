@@ -26,7 +26,7 @@ public class AportesTests(CentralIdentityApiFixture fx)
     private const string Cuentas = "/api/lending/accounts";
     private const string Lineas = "/api/lending/lines";
     private const string Aportes = "/api/lending/contributions";
-    private const string Doble = "/api/lending/test-doubles/collector/accounts";
+    private const string Doble = Receipts.RecaudoEnsayoDelContrato.Ruta + "/accounts"; // T0300: Recaudo real (REC) por el arnés
 
     private static int _documento;
 
@@ -169,7 +169,7 @@ public class AportesTests(CentralIdentityApiFixture fx)
 
     private static object Consignacion(Guid cuenta, Guid depositante, decimal valor, DateOnly fecha, string modalidad = "Installments") => new
     {
-        idempotencyKey = $"TST:{Guid.NewGuid():N}", accountPublicId = cuenta, modality = modalidad, amount = valor, valueDate = fecha, meansClass = "Cash",
+        idempotencyKey = $"REC:{Guid.NewGuid():N}", accountPublicId = cuenta, modality = modalidad, amount = valor, valueDate = fecha, meansClass = "Cash",
         depositorPublicId = depositante, receipt = new { number = "REC-E2E", date = fecha, officePublicId = (Guid?)null, meansReference = (string?)null, documentKind = "RC" },
     };
 
@@ -221,7 +221,7 @@ public class AportesTests(CentralIdentityApiFixture fx)
             {
                 new
                 {
-                    idempotencyKey = $"TST:{Guid.NewGuid():N}", accountPublicId = cuenta, installmentPublicId = primera.GetProperty("installmentPublicId").GetGuid(),
+                    idempotencyKey = $"REC:{Guid.NewGuid():N}", accountPublicId = cuenta, installmentPublicId = primera.GetProperty("installmentPublicId").GetGuid(),
                     expectedAmount = 50_000m, notDeductedAmount = 20_000m, reason = "DeductionCap", detail = "Tope de descuentos (e2e)",
                     sourceItemPublicId = (Guid?)null,
                 },

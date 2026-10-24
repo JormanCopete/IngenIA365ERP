@@ -182,16 +182,21 @@ public class CentralIdentityApiFixture : IAsyncLifetime
             // Las e2e de I4 escriben ahí {tenantPublicId}.{canal}.json (T685).
             builder.UseSetting("ElectronicInvoicing:CredentialsPath", DirectorioDeCredenciales);
             // Feature 013 (T0013; decisiones-transversales T5, T20): el ProcesadorDeCartera queda registrado sin arrancar (las
-            // pruebas corren cada tanda a mano), los dobles de prueba de Recaudo y Tesorería están permitidos porque este host no
-            // es de producción, y los canales externos leen sus credenciales de un directorio temporal. Las claves que todavía
-            // nadie lee no afectan el arranque.
+            // pruebas corren cada tanda a mano) y los canales externos leen sus credenciales de un directorio temporal. Feature 015,
+            // T0300a (FR-224): los dobles de prueba de Recaudo y Tesorería quedan APAGADOS: con la bandera en true el registro
+            // transitorio de T0141 no registraba DestinoRecaudo ni DestinoTesoreria y las e2e migradas no tendrían consumidores reales.
+            // Recaudo y Tesorería reales los activa RecaudoYTesoreriaE2E.RegistrarYActivarAsync. La clave se retira con el código de los
+            // dobles (T0307).
             builder.UseSetting("Lending:Process:Enabled", "false");
-            builder.UseSetting("Lending:TestDoubles:Enabled", "true");
+            builder.UseSetting("Lending:TestDoubles:Enabled", "false");
             builder.UseSetting("ExternalChannels:CredentialsPath", DirectorioDeCredencialesDeCanales);
 
             builder.ConfigureTestServices(services =>
             {
                 services.Replace(ServiceDescriptor.Singleton<IEmailSender>(Emails));
+
+                // Feature 015, T0299/T0300 (FR-224): el arnés de las e2e del contrato, que llama a los contratos de Cartera como Recaudo real (REC).
+                services.AddSingleton<Carter.ICarterModule, Receipts.RecaudoEnsayoDelContrato>();
 
                 // Feature 012, I2 (T471, T472): el reloj de la suite (desfase cero = el real) y los dobles de la
                 // integración contable, que sólo muerden en la cooperativa que una prueba marca.

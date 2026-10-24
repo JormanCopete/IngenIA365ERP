@@ -174,16 +174,14 @@ public sealed class DesembolsoYRecogidaTests(CentralIdentityApiFixture fx)
     {
         var esc = await EscenarioAsync(fx);
         using var http = fx.CreateClient();
-        var (_, _, hecho) = await CreditoDesembolsadoAsync(http, esc, "Rechazo");
+        var (_, _, hecho) = await CreditoDesembolsadoAsync(http, esc, "Rechazo", transferencia: true); // T0299: Tesorería real rechaza transferencias, no cheques
         var credito = hecho.GetProperty("loanPublicId").GetGuid();
         var operacion = hecho.GetProperty("operationPublicId").GetGuid();
         var orden = hecho.GetProperty("order").GetProperty("publicId").GetGuid();
 
-        var recibidas = await CarteraE2E.GetAsync(http, esc.Usuarios.Pruebas.Token, TesoreriaDePrueba);
-        recibidas.EnumerateArray().Should().Contain(o => o.GetProperty("orderPublicId").GetGuid() == orden
-            && o.GetProperty("orderMessagePublicId").ValueKind == JsonValueKind.String, "la tesorería de prueba ve la orden con su OrdenDeGiroEmitida");
+        (await OrdenDeTesoreriaAsync(fx, esc, orden)).ConMensaje.Should().BeTrue("Tesorería real recibió la orden con su OrdenDeGiroEmitida (T0299)");
 
-        var mensaje = await ResultadoDelGiroAsync(http, esc, orden, "Rejected");
+        var mensaje = await ResultadoDelGiroAsync(fx, http, esc, orden, "Rejected");
         var consumo = await ConsumirAsync(fx, esc, mensaje);
         consumo.Should().BeOfType<ResultadoDeConsumo.Processed>();
 
@@ -248,7 +246,7 @@ public sealed class DesembolsoYRecogidaTests(CentralIdentityApiFixture fx)
 
         // US3-3: la recogida del crédito al día, el mismo día: lo que cuesta cancelarlo sale del bruto.
         var solicitud = await AprobadaConRecogidaAsync(http, esc, persona, 3_000_000m, recogido);
-        var cuerpo = Desembolso(esc, solicitud, persona);
+        var cuerpo = Desembolso(esc, solicitud, persona, transferencia: true); // T0299: el rechazo de Tesorería real es de una transferencia
         cuerpo["ownLoanPayoffs"] = new[] { new { loanPublicId = recogido, mode = "Full" } };
         var previa = await CarteraE2E.ExitoAsync(http, jefe, HttpMethod.Post, $"/api/lending/applications/{solicitud}/disbursement-preview", cuerpo);
         var enPrevia = previa.GetProperty("payoffs").EnumerateArray().Single();
@@ -271,7 +269,7 @@ public sealed class DesembolsoYRecogidaTests(CentralIdentityApiFixture fx)
 
         // US3-6, C11: el giro rechazado deja el nuevo pendiente; anularlo reversa la recogida y el recogido vuelve a estar vivo.
         var nuevo = hecho.GetProperty("loanPublicId").GetGuid();
-        var mensaje = await ResultadoDelGiroAsync(http, esc, hecho.GetProperty("order").GetProperty("publicId").GetGuid(), "Rejected");
+        var mensaje = await ResultadoDelGiroAsync(fx, http, esc, hecho.GetProperty("order").GetProperty("publicId").GetGuid(), "Rejected");
         (await ConsumirAsync(fx, esc, mensaje)).Should().BeOfType<ResultadoDeConsumo.Processed>();
         var anulado = await CarteraE2E.ConClaveAsync(http, jefe, HttpMethod.Post, $"{Creditos}/{nuevo}/void", new { reason = "El deudor desistió (e2e)" });
         anulado.StatusCode.Should().Be(HttpStatusCode.OK, await anulado.Content.ReadAsStringAsync());
@@ -374,7 +372,7 @@ public sealed class DesembolsoYRecogidaTests(CentralIdentityApiFixture fx)
         var otroId = (await CarteraE2E.LeerAsync(otro)).GetProperty("file").GetProperty("publicId").GetGuid();
 
         // Con el resultado de Tesorería ya no se anula.
-        var mensaje = await ResultadoDelGiroAsync(http, esc, orden, "Disbursed");
+        var mensaje = await ResultadoDelGiroAsync(fx, http, esc, orden, "Disbursed");
         (await ConsumirAsync(fx, esc, mensaje)).Should().BeOfType<ResultadoDeConsumo.Processed>();
         (await CarteraE2E.GetAsync(http, jefe, $"{Ordenes}/{orden}")).GetProperty("status").GetString().Should().Be("Disbursed");
         var tarde = await CarteraE2E.ConClaveAsync(http, jefe, HttpMethod.Post, $"{Archivos}/{otroId}/void", new { reason = "Ya no" });
