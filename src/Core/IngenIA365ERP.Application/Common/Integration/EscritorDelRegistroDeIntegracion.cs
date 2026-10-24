@@ -1,4 +1,4 @@
-using IngenIA365ERP.Application.Common.Interfaces;
+﻿using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Security;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Domain.Entities.Integration;
@@ -118,6 +118,27 @@ public sealed class EscritorDelRegistroDeIntegracion(
             clave, abierta.Class, abierta.Role, destinoNormal, habilitado, abierta.IsTestDouble,
             abierta.Adoptions.Where(a => !a.IsDeleted && a.ValidTo is null).Select(a => new VersionAdoptada(a.ContractName, a.Version)).ToList(),
             desde, motivo), ct);
+    }
+
+    /// <summary>
+    /// Suma adopciones a la fila vigente de una clave desde <paramref name="desde"/>, conservando las que ya tiene y su habilitación (feature 015, R1, T0352: Recaudo
+    /// adopta las v2 de los contratos): cierra la vigente la víspera y abre otra con las adopciones de antes más las nuevas, como
+    /// <see cref="CambiarHabilitacionAsync"/>. La fecha no puede ser anterior ni igual al inicio de la fila vigente (<c>Integration.Participant.Overlaps</c>). No
+    /// guarda. (nuevo)
+    /// </summary>
+    public async Task<Result<IntegrationParticipant>> AdoptarAsync(
+        string codigo, IntegrationParticipantRole rol, string destino, IReadOnlyList<VersionAdoptada> nuevas, DateOnly desde, string motivo, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(nuevas);
+        var clave = codigo.Trim().ToUpperInvariant();
+        var destinoNormal = rol == IntegrationParticipantRole.MessageDestination ? destino.Trim() : string.Empty;
+        var abierta = (await ConLaClaveAsync(clave, rol, destinoNormal, ct)).FirstOrDefault(p => p.ValidTo is null);
+        if (abierta is null)
+            return Result.Failure<IntegrationParticipant>(ErroresDeIntegracion.ParticipanteSeCruza(clave, destinoNormal, desde));
+        var adopciones = abierta.Adoptions.Where(a => !a.IsDeleted && a.ValidTo is null).Select(a => new VersionAdoptada(a.ContractName, a.Version))
+            .Concat(nuevas).DistinctBy(a => (a.Contrato, a.Version)).ToList();
+        return await RegistrarAsync(new NuevoParticipante(clave, abierta.Class, abierta.Role, destinoNormal, abierta.IsEnabled, abierta.IsTestDouble, adopciones, desde,
+            motivo), ct);
     }
 
     /// <summary>Retira un participante: cierra su fila (y sus adopciones) en <paramref name="validTo"/>. No guarda.</summary>

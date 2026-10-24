@@ -1,4 +1,4 @@
-using IngenIA365ERP.Application.Common.Audit;
+﻿using IngenIA365ERP.Application.Common.Audit;
 using IngenIA365ERP.Application.Common.Execution;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Audit.Configuration;
@@ -73,7 +73,7 @@ public sealed class SelladoDeAuditoria(
                 && !await arrendamientos.RenovarAsync(NombresDeArrendamiento.ReenvioDeAuditoria, null, ct))
                 break; // otra réplica tomó el arrendamiento: ella sigue.
 
-            var sellados = await SellarAsync(db, reloj, ct);
+            var sellados = await SellarAsync(db, reloj, servicios.GetService<ConservacionDeAuditoria>(), ct);
             var enviadosEnTanda = await EnviarAsync(db, coleccion, reloj, ct);
             enviados += enviadosEnTanda;
             if (sellados == 0 && enviadosEnTanda == 0) break;
@@ -85,7 +85,7 @@ public sealed class SelladoDeAuditoria(
 
     // -------------------------------------------------------------- sellar --
 
-    private async Task<int> SellarAsync(IApplicationDbContext db, IDateTimeService reloj, CancellationToken ct)
+    private async Task<int> SellarAsync(IApplicationDbContext db, IDateTimeService reloj, ConservacionDeAuditoria? conservacion, CancellationToken ct)
     {
         for (var intento = 1; intento <= IntentosDeSellado; intento++)
         {
@@ -114,6 +114,7 @@ public sealed class SelladoDeAuditoria(
                     BsonDocument documento;
                     try
                     {
+                        await SellarConservacionAsync(entrada, conservacion, ct);
                         documento = Documento(entrada, cabeza.LastSeq + 1, cabeza.LastHash);
                     }
                     catch (Exception ex) when (ex is not OperationCanceledException)
@@ -154,6 +155,20 @@ public sealed class SelladoDeAuditoria(
 
         db.DescartarCambios();
         return 0;
+    }
+
+    /// <summary>
+    /// Feature 015, R1 (<c>Conservacion.Anios</c>): para Recaudo, Tesorería y go/no-go, sella en la carga los años de conservación vigentes a la fecha del evento
+    /// (piso de cinco) antes de calcular la huella, así el vencimiento que va a Mongo queda dentro de lo sellado. Lo que ya los trae no se toca.
+    /// </summary>
+    private static async Task SellarConservacionAsync(AuditOutboxEntry entrada, ConservacionDeAuditoria? conservacion, CancellationToken ct)
+    {
+        if (conservacion is null || ConservacionDeAuditoria.ModuloDeParametros(entrada.Module) is null || string.IsNullOrWhiteSpace(entrada.PayloadJson)) return;
+        var evento = AuditoriaEncadenada.LeerCarga(entrada.PayloadJson);
+        if (evento.RetentionYears is not null) return;
+        var fecha = DateOnly.FromDateTime(DateTime.SpecifyKind(entrada.OccurredAt, DateTimeKind.Utc).ToLocalTime());
+        if (await conservacion.AniosAsync(entrada.Module, fecha, ct) is not { } anios) return;
+        entrada.PayloadJson = AuditoriaEncadenada.EscribirCarga(evento with { RetentionYears = anios });
     }
 
     // ------------------------------------------------------------- reenviar --

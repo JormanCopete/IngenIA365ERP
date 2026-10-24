@@ -1,4 +1,4 @@
-namespace IngenIA365ERP.Application.Common.Integration.Lending;
+﻿namespace IngenIA365ERP.Application.Common.Integration.Lending;
 
 // DTO del contrato de obligaciones (feature 013, T0149; contracts/interfaces.md §3.4–§3.9). Entrada sin sufijo, salida con
 // «Dto»; propiedades en inglés (C26). Un DTO de este archivo cambia sólo con una VersionDelContrato nueva.
@@ -116,7 +116,10 @@ public sealed record SolicitudDeAplicacion(
     IReadOnlyList<PagoAAplicar> Payments,
     IReadOnlyList<NoDescontado> NotDeducted);
 
-/// <summary>Un pago del lote. (nuevo)</summary>
+/// <summary>
+/// Un pago del lote. Feature 015, R1 (E-01 a; contratos-v2.md §1): <see cref="BankItem"/> es de la versión 2 del contrato —la partida bancaria que el pago
+/// cita—; un recaudador que sólo adoptó la v1 y la manda recibe <c>Integration.Participant.VersionNotSupported</c>. (nuevo)
+/// </summary>
 public sealed record PagoAAplicar(
     string IdempotencyKey,
     Guid ObligationPublicId,
@@ -129,7 +132,18 @@ public sealed record PagoAAplicar(
     EleccionDeAbono? Choice = null,
     int? InstallmentNumber = null,
     string? SimulationId = null,
-    Guid? DeductionFileLinePublicId = null);
+    Guid? DeductionFileLinePublicId = null,
+    PartidaBancariaCitada? BankItem = null);
+
+/// <summary>
+/// La partida bancaria que cita un pago o una consignación de la versión 2 de los contratos (feature 015, R1, E-01 a y E-02 a; contratos-v2.md §1.1): la línea
+/// del extracto, su fecha de movimiento y la cuenta bancaria propia donde entró. Con <c>ValueDate = MovementDate</c> el módulo exime la ventana de fecha valor
+/// (no el corte de la carga ni el permiso con monto de un mes cerrado); con otra fecha responde <c>Lending.Payment.BankItemDateMismatch</c>. (nuevo)
+/// </summary>
+public sealed record PartidaBancariaCitada(
+    Guid BankItemPublicId,
+    DateOnly MovementDate,
+    Guid OwnBankAccountPublicId);
 
 /// <summary>El documento del recaudador que respalda el pago: recibo, NM o liquidación. (nuevo)</summary>
 public sealed record ReferenciaDeRecibo(

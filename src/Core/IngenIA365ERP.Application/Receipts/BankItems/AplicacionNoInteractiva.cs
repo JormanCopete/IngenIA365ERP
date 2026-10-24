@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using IngenIA365ERP.Application.Common.Alerts;
@@ -120,7 +120,8 @@ public sealed class AplicacionNoInteractiva(
     IListasDeRecaudo listas,
     IContabilidadParaRecaudo contabilidad,
     EmisionDeRecaudo emision,
-    IAlertas alertas)
+    IAlertas alertas,
+    IngenIA365ERP.Application.Common.Integration.IRegistroDeIntegracion? registroDeIntegracion = null)
 {
     /// <summary>Los códigos con que los contratos rechazan una fecha valor que no admiten (Cartera y Captaciones).</summary>
     public static readonly IReadOnlySet<string> CodigosDeFechaValor = new HashSet<string>(StringComparer.Ordinal)
@@ -385,9 +386,12 @@ public sealed class AplicacionNoInteractiva(
     {
         var pagadorPublicId = linea.PayerPersonPublicId;
         _ = pagador;
+        // Feature 015, R1 (T0352; E-01 a): con la v2 adoptada, el abono del extracto cita su partida y entra con la fecha valor del movimiento, sin la ventana.
+        var partida = await PartidaAsync(linea, IngenIA365ERP.Application.Common.Integration.ContratosDeIntegracion.ProveedorDeObligaciones, fecha, ct);
         async Task<RespuestaDeAplicacionDto> AplicarConAsync(DateOnly f) => await obligaciones.AplicarAsync(new SolicitudDeAplicacion(ClavesDeRecaudo.Recaudador,
             FormaDeAplicacion.NonInteractive, partes.Select(x => new PagoAAplicar(x.Porcion.IdempotencyKey, x.Aplicacion.ProductPublicId!.Value, x.Credito!.Value, x.Valor, f,
-                linea.ContractMeansClass, pagadorPublicId, referencia(f), DeductionFileLinePublicId: linea.Parts[x.Indice].DeductionFileLinePublicId)).ToList(), []), ct);
+                linea.ContractMeansClass, pagadorPublicId, referencia(f), DeductionFileLinePublicId: linea.Parts[x.Indice].DeductionFileLinePublicId,
+                BankItem: f == fecha ? partida : null)).ToList(), []), ct);
         var respuesta = await AplicarConAsync(fecha);
         if (!linea.AllowLateValueDate || !TodasPorFecha(respuesta.Payments.Select(p => (p.Result, p.Code)))) return (respuesta, fecha, false);
         var minima = FechaMinima(respuesta.Payments.Select(p => p.Data));
@@ -399,14 +403,29 @@ public sealed class AplicacionNoInteractiva(
         LineaNoInteractiva linea, int pagador, Func<DateOnly, ReferenciaDeRecibo> referencia, DateOnly fecha, CancellationToken ct)
     {
         _ = pagador;
+        var partida = await PartidaAsync(linea, IngenIA365ERP.Application.Common.Integration.ContratosDeIntegracion.ProveedorDeCuentas, fecha, ct);
         async Task<RespuestaDeConsignacionDto> ConsignarConAsync(DateOnly f) => await cuentas.ConsignarAsync(new SolicitudDeConsignacion(ClavesDeRecaudo.Recaudador,
             FormaDeAplicacion.NonInteractive, partes.Select(x => new ConsignacionAAplicar(x.Porcion.IdempotencyKey, x.Aplicacion.ProductPublicId!.Value,
                 x.Cuenta ?? ModalidadDeConsignacion.Free, x.Valor, f, linea.ContractMeansClass, linea.PayerPersonPublicId, referencia(f), linea.Parts[x.Indice].InstallmentPublicIds,
-                linea.SourceOfFundsAttachmentPublicId, linea.Parts[x.Indice].DeductionFileLinePublicId)).ToList(), []), ct);
+                linea.SourceOfFundsAttachmentPublicId, linea.Parts[x.Indice].DeductionFileLinePublicId, BankItem: f == fecha ? partida : null)).ToList(), []), ct);
         var respuesta = await ConsignarConAsync(fecha);
         if (!linea.AllowLateValueDate || !TodasPorFecha(respuesta.Deposits.Select(p => (p.Result, p.Code)))) return (respuesta, fecha, false);
         var minima = FechaMinima(respuesta.Deposits.Select(p => p.Data));
         return (await ConsignarConAsync(minima), minima, true);
+    }
+
+    /// <summary>
+    /// La partida bancaria que la línea cita en la v2 (feature 015, R1, T0352; contratos-v2.md §1, §3.1): sólo un abono del extracto con su línea y su cuenta propia,
+    /// con la fecha valor igual a la del movimiento, y sólo si el recaudador <c>REC</c> tiene adoptada hoy la v2 del contrato en el registro (la adopción rige
+    /// desde el día siguiente a <c>AdoptContractVersionCommand</c>). Si no, nula: la línea va como en la v1.
+    /// </summary>
+    private async Task<PartidaBancariaCitada?> PartidaAsync(LineaNoInteractiva linea, string contrato, DateOnly fecha, CancellationToken ct)
+    {
+        if (registroDeIntegracion is null || linea.BankStatementLinePublicId is not { } partida || linea.OwnBankAccountPublicId is not { } cuenta
+            || fecha != linea.ValueDate) return null;
+        var vigente = await registroDeIntegracion.RecaudadorAsync(ClavesDeRecaudo.Codigo, reloj.HoyLocal, ct);
+        var version = vigente?.Adopciones.Where(a => a.Contrato == contrato).Select(a => a.Version).DefaultIfEmpty(1).Max() ?? 1;
+        return version >= IngenIA365ERP.Application.Common.Integration.ContratosDeIntegracion.VersionConPartidaBancaria ? new PartidaBancariaCitada(partida, linea.ValueDate, cuenta) : null;
     }
 
     private static bool TodasPorFecha(IEnumerable<(ResultadoDelContrato Result, string Code)> respuestas)

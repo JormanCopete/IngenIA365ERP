@@ -1,4 +1,4 @@
-using Carter;
+﻿using Carter;
 using IngenIA365ERP.API.Endpoints.Common;
 using IngenIA365ERP.API.Filters;
 using IngenIA365ERP.Application.Common.Imports;
@@ -25,6 +25,10 @@ public class ReceiptsActivationEndpoints : ICarterModule
         g.MapPost("/", async (ActivacionRequest? body, HttpContext http, ISender s, CancellationToken ct) =>
                 await s.Send(new Application.Receipts.Activation.ActivateReceiptsCommand(body?.CutoffDate, body?.Minimal ?? false) { OperationKey = http.ClaveDeOperacion() }, ct))
             .WithName("Receipts_Activation_Activate").ConClaveDeOperacion().RequirePermission("Receipts.Activation.Activate");
+        // Feature 015, R1 (T0352; contratos-v2.md §1, §3.1): Recaudo adopta la v2 de los contratos de Cartera y Captaciones (la partida bancaria citada).
+        g.MapPost("/contract-versions", async (VersionesRequest? body, HttpContext http, ISender s, CancellationToken ct) =>
+                await s.Send(new AdoptContractVersionCommand(body?.Obligations ?? 2, body?.Accounts ?? 2) { OperationKey = http.ClaveDeOperacion() }, ct))
+            .WithName("Receipts_Activation_AdoptContractVersions").ConClaveDeOperacion().RequirePermission("Receipts.Activation.Activate");
 
         // Feature 015, US13 (fase 18, T0289; api.md §14): el cuadre de apertura, las plantillas de puesta en marcha y las cifras de referencia.
         var cuadres = ReceiptsGroup.Grupo(app, "/opening-squares", "Recaudo Puesta en marcha");
@@ -56,6 +60,9 @@ public class ReceiptsActivationEndpoints : ICarterModule
 
     /// <summary>Fase 19 (T0304): la activación completa por defecto; <c>minimal</c> sólo fuera de producción (el paralelo de QA).</summary>
     public sealed record ActivacionRequest(DateOnly? CutoffDate, bool? Minimal = null);
+
+    /// <summary>R1 (T0352): las versiones a adoptar; por defecto, la 2 de los dos contratos.</summary>
+    public sealed record VersionesRequest(int? Obligations, int? Accounts);
 
     public sealed record CuadreProvisionalRequest(string Reason, DateOnly DeadlineOn, DateOnly? CutoffDate);
 

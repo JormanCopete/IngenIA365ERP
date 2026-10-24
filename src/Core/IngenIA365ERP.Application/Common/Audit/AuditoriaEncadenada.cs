@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using IngenIA365ERP.Application.Common.Behaviors;
 using IngenIA365ERP.Application.Common.Execution;
 using IngenIA365ERP.Application.Common.Interfaces;
@@ -55,8 +55,8 @@ public static class AuditoriaEncadenada
         // Feature 013 (T0189, C89; FR-003, SC-014): todo evento Lending.* sale por COR_AuditOutbox, sellado.
         ModuloDeAuditoria.Lending,
         // Feature 015 (T0043; TR37, R-32; FR-014, FR-178; SC-019): Recaudo y Tesorería —con las cuentas bancarias de la persona— y la lista de
-        // go/no-go. La conservación es el flujo de diez años, el defecto de Conservacion.Anios; que el TTL lea el parámetro (piso de cinco años)
-        // queda pendiente: exige que la infraestructura de auditoría lea parámetros por cooperativa (decisiones-transversales §2.7).
+        // go/no-go. Van en el flujo de diez años y, desde R1, su vencimiento lo fija Conservacion.Anios de la cooperativa (piso de cinco años), que el
+        // reenviador sella en la carga antes de calcular la huella (ConservacionDeAuditoria).
         ModuloDeAuditoria.Receipts,
         ModuloDeAuditoria.Treasury,
         ModuloDeAuditoria.GoLive,
@@ -138,6 +138,12 @@ public static class AuditoriaEncadenada
             CreatedBy = Recortar(evento.UserName ?? "system", 100),
         };
     }
+
+    /// <summary>
+    /// Feature 015, R1 (<c>Conservacion.Anios</c>): la carga de un evento como se guarda en <see cref="AuditOutboxEntry.PayloadJson"/> (el reenviador la reescribe
+    /// con <see cref="AuditEventDocument.RetentionYears"/> antes de sellar).
+    /// </summary>
+    public static string EscribirCarga(AuditEventDocument evento) => JsonSerializer.Serialize(evento, Json);
 
     /// <summary>El evento guardado en <see cref="AuditOutboxEntry.PayloadJson"/>.</summary>
     public static AuditEventDocument LeerCarga(string payloadJson) =>

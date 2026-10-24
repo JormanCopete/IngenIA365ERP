@@ -1,4 +1,4 @@
-using IngenIA365ERP.Application.Common.Behaviors;
+﻿using IngenIA365ERP.Application.Common.Behaviors;
 using IngenIA365ERP.Application.Common.Integration.Contracts.Lending;
 using IngenIA365ERP.Application.Common.Integration.Lending;
 using IngenIA365ERP.Application.Common.Interfaces;
@@ -103,14 +103,17 @@ public sealed class AplicacionDePagos(
 
     private static readonly HashSet<LoanStatus> NoPagables = [LoanStatus.PendingDisbursement, LoanStatus.PaidOff, LoanStatus.Voided, LoanStatus.Novated];
 
-    /// <summary>La huella de un ítem (sin <c>SimulationId</c>: después de un «cambió» la clave sigue libre).</summary>
+    /// <summary>
+    /// La huella de un ítem (sin <c>SimulationId</c>: después de un «cambió» la clave sigue libre). Feature 015, R1 (E-01 a): la partida bancaria citada de la
+    /// v2 entra en la huella; sin ella el pago se mide como en la v1 (la clave <c>bankItem</c> no aparece), así una clave de antes de la v2 conserva su huella.
+    /// </summary>
     public static string Huella(Recaudador recaudador, FormaDeAplicacion forma, PagoAAplicar pago) =>
         HuellaDeOperacion.Calcular(MetodoAplicar, new
         {
             collector = recaudador.Code,
             collectorClass = recaudador.Class.ToString(),
             form = forma.ToString(),
-            payment = pago with { SimulationId = null },
+            payment = HuellasDeLaVersion2.SinPartidaNula(pago with { SimulationId = null }, pago.BankItem is null),
         });
 
     /// <summary>
@@ -219,7 +222,11 @@ public sealed class AplicacionDePagos(
             if (referido.IsFailure) return Falla(referido.Error);
             giro = referido.Value;
         }
-        if (await fechas.ValidarAsync(r.Class, giro?.DeductionDate ?? pago.ValueDate, pago.Amount, ct, conReferenciaDePagaduria: giro is not null) is { } fecha)
+        // Feature 015, R1 (E-01 a; contratos-v2.md §1.2): con la partida bancaria citada la fecha valor es la de su movimiento y la ventana no aplica.
+        if (pago.BankItem is { } partida && pago.ValueDate != partida.MovementDate)
+            return Falla(ErroresDePagos.PartidaConOtraFecha(pago.ValueDate, partida.MovementDate));
+        if (await fechas.ValidarAsync(r.Class, giro?.DeductionDate ?? pago.ValueDate, pago.Amount, ct, conReferenciaDePagaduria: giro is not null,
+                conPartidaBancaria: pago.BankItem is not null) is { } fecha)
             return Falla(fecha);
         var modalidad = ComprobantesDePago.Modalidad(pago.Modality);
         if (credito.Status == LoanStatus.WrittenOff && modalidad == PaymentModality.Advance)
@@ -315,6 +322,7 @@ public sealed class AplicacionDePagos(
             InsuranceClaimId = reclamacion?.Id,
             PayrollDeductionResultId = giro?.Id,
             PaymasterPendingLineReference = giro is null ? null : pago.DeductionFileLinePublicId?.ToString("D"),
+            BankItemPublicId = pago.BankItem?.BankItemPublicId,
             Payload = payload,
             InputsSha256 = TramoDeDesembolso.Sha256(payload),
             RulesVersion = d.Estado.RulesVersion,

@@ -1,4 +1,4 @@
-using IngenIA365ERP.Shared.Services.Http;
+﻿using IngenIA365ERP.Shared.Services.Http;
 using IngenIA365ERP.Shared.Services.Inventario;
 using IngenIA365ERP.Shared.Services.Security;
 
@@ -12,6 +12,9 @@ public sealed record EstadoDeActivacionDeModuloDto(string Status, DateOnly? Acti
     Guid? OpeningSquarePublicId, string? OpeningSquareKind, DateOnly? CutoffDate);
 
 public sealed record ActivacionDeModuloRequest(DateOnly? CutoffDate, bool? Minimal = null, bool? OffersChecks = null);
+
+/// <summary>Feature 015, R1 (T0352): las versiones de los contratos de Cartera y Captaciones que Recaudo usa. (nuevo)</summary>
+public sealed record VersionesDeContratosDeRecaudoDto(int Obligations, int Accounts, DateOnly? AdoptedFrom);
 
 /// <summary>
 /// Cliente tipado de la activación de Recaudo y de Tesorería (feature 015, US9, T0304; api.md §14): los requisitos completos (<c>GET …/activation/requirements</c>) y
@@ -30,4 +33,9 @@ public sealed class ActivacionDeModuloClient(HttpClient http, CentralAuthClient 
 
     public Task<ResultadoDeInventario<EstadoDeActivacionDeModuloDto>> ActivarAsync(string modulo, ActivacionDeModuloRequest r, ClaveDeOperacion clave, CancellationToken ct = default) =>
         EnvioDeRecaudo.EnviarAsync<EstadoDeActivacionDeModuloDto>(http, auth, HttpMethod.Post, $"/api/{modulo}/activation", r, clave, null, ct);
+
+    /// <summary>Feature 015, R1 (T0352): Recaudo adopta la versión 2 de los contratos (<c>POST /api/receipts/activation/contract-versions</c>).</summary>
+    public Task<ResultadoDeInventario<VersionesDeContratosDeRecaudoDto>> AdoptarVersion2Async(ClaveDeOperacion clave, CancellationToken ct = default) =>
+        EnvioDeRecaudo.EnviarAsync<VersionesDeContratosDeRecaudoDto>(http, auth, HttpMethod.Post, "/api/receipts/activation/contract-versions",
+            new { obligations = 2, accounts = 2 }, clave, null, ct);
 }

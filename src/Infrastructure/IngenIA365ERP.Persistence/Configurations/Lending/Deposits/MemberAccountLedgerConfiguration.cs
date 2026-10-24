@@ -1,4 +1,4 @@
-using IngenIA365ERP.Domain.Entities.Core;
+﻿using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Entities.Lending.Configuration;
 using IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts;
 using IngenIA365ERP.Domain.Entities.Lending.Deposits.Projections;
@@ -68,6 +68,8 @@ public class MemberAccountOperationConfiguration : IEntityTypeConfiguration<Memb
             .HasConstraintName("FK_LND_MemberAccountOperations_ReversedBy");
 
         builder.HasIndex(e => e.Number).IsUnique().HasDatabaseName("UK_LND_MemberAccountOperations_Number");
+        // Feature 015, R1 (E-02 a; CarteraYCaptacionesConPartidaCitada): la partida citada por la v2, con índice no único.
+        builder.HasIndex(e => e.BankItemPublicId).HasDatabaseName("IX_LND_MemberAccountOperations_BankItemPublicId");
         builder.HasIndex(e => new { e.MemberAccountId, e.Sequence }).IsUnique().HasDatabaseName("UK_LND_MemberAccountOperations_Account_Sequence");
         builder.HasIndex(e => new { e.CollectorCode, e.IdempotencyKey }).IsUnique()
             .HasDatabaseName("UK_LND_MemberAccountOperations_Collector_Key").HasFilter("[IdempotencyKey] IS NOT NULL");

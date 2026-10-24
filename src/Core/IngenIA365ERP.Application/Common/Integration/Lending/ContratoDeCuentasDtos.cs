@@ -1,4 +1,4 @@
-namespace IngenIA365ERP.Application.Common.Integration.Lending;
+﻿namespace IngenIA365ERP.Application.Common.Integration.Lending;
 
 // Los DTO del contrato de cuentas (feature 014, T039; contracts/contrato-de-cuentas.md §3.5–§3.11). Viajan en proceso, sin HTTP. Salida con
 // sufijo Dto, entrada sin sufijo; sólo PublicId y números visibles, nunca un Id interno. Un DTO cambia sólo con una VersionDelContrato nueva.
@@ -101,7 +101,11 @@ public sealed record SolicitudDeSimulacionDeCuenta(
     Guid? TargetAccountPublicId = null,
     ModalidadDeConsignacion? Modality = null);
 
-/// <summary>Lo que pasaría: si se admite, el disponible antes y después, GMF, cargos, firmas faltantes, atribución y avisos. (nuevo)</summary>
+/// <summary>
+/// Lo que pasaría: si se admite, el disponible antes y después, GMF, cargos, firmas faltantes, atribución y avisos. Feature 015, R1 (E-02 d): con la operación
+/// <c>Close</c> (la cancelación con entrega), <see cref="AmountToDeliver"/> es lo que el recaudador entrega y pide en <c>RetirarAsync</c> con
+/// <c>CloseAccount = true</c>. (nuevo)
+/// </summary>
 public sealed record SimulacionDeCuentaDto(
     string SimulationId,
     bool Allowed,
@@ -113,7 +117,8 @@ public sealed record SimulacionDeCuentaDto(
     AtribucionRequeridaDto? Attribution,
     bool RequiresSourceOfFunds,
     IReadOnlyList<DistribucionEnCuotaDto> InstallmentsCovered,
-    IReadOnlyList<string> Notices);
+    IReadOnlyList<string> Notices,
+    decimal? AmountToDeliver = null);
 
 /// <summary>El GMF calculado por su motor (FR-053), con la base, lo exento usado y aplicado, la tarifa y la explicación. (nuevo)</summary>
 public sealed record GmfCalculadoDto(decimal Base, decimal ExemptUsedBefore, decimal ExemptApplied, decimal TaxedBase, decimal Rate, decimal Amount,
@@ -151,7 +156,8 @@ public sealed record ConsignacionAAplicar(
     Guid? SourceOfFundsAttachmentPublicId = null,
     Guid? DeductionFileLinePublicId = null,
     string? SimulationId = null,
-    Guid? ApprovalPublicId = null);
+    Guid? ApprovalPublicId = null,
+    PartidaBancariaCitada? BankItem = null);
 
 /// <summary>Una cuota que Nómina o la pagaduría no descontó, con su motivo (FR-089); la cuota sigue exigible. (nuevo)</summary>
 public sealed record NoDescontadoDeCuenta(

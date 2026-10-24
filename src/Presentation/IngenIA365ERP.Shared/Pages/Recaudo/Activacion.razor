@@ -1,4 +1,4 @@
-@page "/recaudo/activacion"
+﻿@page "/recaudo/activacion"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
 @using IngenIA365ERP.Shared.Services.Http
 @using IngenIA365ERP.Shared.Services.Recaudo
@@ -39,6 +39,16 @@
             @if (e.Status == "Active")
             {
                 <p class="aviso aviso-ok">Recaudo está activo@(e.IsMinimal ? " con la activación mínima del paralelo" : string.Empty). Recaudo es el recaudador registrado de Cartera y Captaciones.</p>
+                @* Feature 015, R1 (T0352): la versión 2 de los contratos cita la partida bancaria y aplica la identificación tardía con la fecha del movimiento. *@
+                <PermissionGate Required="Receipts.Activation.Activate">
+                    <div class="toolbar">
+                        <SfButton CssClass="e-outline" Disabled="@_carga.Activa" OnClick="@AdoptarVersion2Async">Adoptar la versión 2 de los contratos</SfButton>
+                        @if (_versiones is { } v)
+                        {
+                            <span class="texto-apoyo">Obligaciones v@(v.Obligations), cuentas v@(v.Accounts)@(v.AdoptedFrom is { } d ? $", rige desde el {d:dd/MM/yyyy}" : string.Empty).</span>
+                        }
+                    </div>
+                </PermissionGate>
             }
             <div class="tabla-desplazable">
                 <table class="data-grid">
@@ -71,6 +81,18 @@
     private EstadoDeActivacionDeModuloDto? _estado;
     private DateTime? _corte;
     private ClaveDeOperacion _clave = new();
+    private ClaveDeOperacion _claveDeVersion = new();
+    private VersionesDeContratosDeRecaudoDto? _versiones;
+
+    private async Task AdoptarVersion2Async()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await ActivacionApi.AdoptarVersion2Async(_claveDeVersion);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo adoptar la versión 2 de los contratos."); return; }
+        _claveDeVersion = new ClaveDeOperacion();
+        _versiones = r.Value;
+        await Notification.SuccessAsync("Recaudo adoptó la versión 2 de los contratos de Cartera y Captaciones.");
+    }
 
     protected override Task OnInitializedAsync() => CargarAsync();
 

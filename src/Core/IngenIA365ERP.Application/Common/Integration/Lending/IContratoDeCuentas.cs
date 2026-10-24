@@ -1,4 +1,4 @@
-namespace IngenIA365ERP.Application.Common.Integration.Lending;
+﻿namespace IngenIA365ERP.Application.Common.Integration.Lending;
 
 /// <summary>
 /// El contrato «Proveedor de Cuentas» (feature 014, T039; research R09; FR-086–FR-093; contracts/contrato-de-cuentas.md §3): todo dinero que entra o
@@ -13,8 +13,11 @@ namespace IngenIA365ERP.Application.Common.Integration.Lending;
 /// </summary>
 public interface IContratoDeCuentas
 {
-    /// <summary>Versión que adopta cada participante en el registro («ProveedorDeCuentas»).</summary>
-    const int VersionDelContrato = 1;
+    /// <summary>
+    /// La versión vigente que adopta cada participante en el registro («ProveedorDeCuentas»). Feature 015, R1 (E-02 a): la 2 suma la partida bancaria citada
+    /// en <c>ConsignacionAAplicar.BankItem</c>; el despliegue implementa las dos (<c>ContratosDeIntegracion.VersionesDelContratoDeCuentas = [1, 2]</c>).
+    /// </summary>
+    const int VersionDelContrato = 2;
 
     /// <summary>FR-086: cuentas de una persona con estado, saldo y disponible desglosado. No escribe.</summary>
     Task<RespuestaDelContratoDto<CuentasDePersonaDto>> ConsultarAsync(SolicitudDeConsultaDeCuentas solicitud, CancellationToken ct);

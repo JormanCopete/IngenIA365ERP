@@ -33752,6 +33752,9 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.Property<int?>("AuthorizedByUserId")
                         .HasColumnType("integer");
 
+                    b.Property<Guid?>("BankItemPublicId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid?>("CashOriginDeclarationAttachmentPublicId")
                         .HasColumnType("uuid");
 
@@ -33923,6 +33926,9 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.HasIndex("AuthorizationDecisionId");
 
                     b.HasIndex("AuthorizedByUserId");
+
+                    b.HasIndex("BankItemPublicId")
+                        .HasDatabaseName("IX_LND_MemberAccountOperations_BankItemPublicId");
 
                     b.HasIndex("ClearingUntil")
                         .HasDatabaseName("IX_LND_MemberAccountOperations_Clearing")
@@ -41424,6 +41430,9 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)");
 
+                    b.Property<Guid?>("BankItemPublicId")
+                        .HasColumnType("uuid");
+
                     b.Property<bool?>("ChoiceFromPreference")
                         .HasColumnType("boolean");
 
@@ -41604,6 +41613,9 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.HasKey("Id");
 
                     b.HasIndex("ActorUserId");
+
+                    b.HasIndex("BankItemPublicId")
+                        .HasDatabaseName("IX_LND_LoanOperations_BankItemPublicId");
 
                     b.HasIndex("InboundMessageId");
 

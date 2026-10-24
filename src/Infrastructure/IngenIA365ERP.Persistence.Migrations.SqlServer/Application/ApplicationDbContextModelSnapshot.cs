@@ -34022,6 +34022,9 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.Property<int?>("AuthorizedByUserId")
                         .HasColumnType("int");
 
+                    b.Property<Guid?>("BankItemPublicId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<Guid?>("CashOriginDeclarationAttachmentPublicId")
                         .HasColumnType("uniqueidentifier");
 
@@ -34193,6 +34196,9 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.HasIndex("AuthorizationDecisionId");
 
                     b.HasIndex("AuthorizedByUserId");
+
+                    b.HasIndex("BankItemPublicId")
+                        .HasDatabaseName("IX_LND_MemberAccountOperations_BankItemPublicId");
 
                     b.HasIndex("ClearingUntil")
                         .HasDatabaseName("IX_LND_MemberAccountOperations_Clearing")
@@ -41760,6 +41766,9 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<Guid?>("BankItemPublicId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<bool?>("ChoiceFromPreference")
                         .HasColumnType("bit");
 
@@ -41940,6 +41949,9 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.HasKey("Id");
 
                     b.HasIndex("ActorUserId");
+
+                    b.HasIndex("BankItemPublicId")
+                        .HasDatabaseName("IX_LND_LoanOperations_BankItemPublicId");
 
                     b.HasIndex("InboundMessageId");
 

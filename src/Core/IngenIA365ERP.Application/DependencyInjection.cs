@@ -652,6 +652,8 @@ public static class DependencyInjection
         services.AddScoped<Lending.Deposits.Accrual.LiquidacionDeIntereses>();
         services.AddScoped<Lending.Deposits.Accrual.LiquidacionALaFecha>();
         services.AddScoped<Lending.Deposits.Accounts.CancelacionDeCuenta>();
+        // Feature 015, R1 (E-02 d, T0350): la cancelación con entrega por el contrato de cuentas, para Recaudo.
+        services.AddScoped<Lending.Deposits.Accounts.CancelacionConEntregaPorElContrato>();
         services.AddScoped<Lending.Deposits.Accrual.CausacionDeCaptaciones>();
         services.AddScoped<Lending.Deposits.Accrual.ISubpasoDeCaptaciones>(sp => sp.GetRequiredService<Lending.Deposits.Accrual.CausacionDeCaptaciones>());
         services.AddScoped<Lending.Deposits.Accrual.ISubpasoDeCaptaciones, Lending.Deposits.Accrual.LiquidacionPeriodicaDeIntereses>();
@@ -721,6 +723,10 @@ public static class DependencyInjection
         services.AddScoped<Lending.Migration.CuadreDeMigracion>();
         services.AddScoped<Lending.Migration.ConciliacionDeVentasDeMigracion>();
         services.AddScoped<Lending.Migration.CargaVigenteDeCartera>();
+        // Feature 015, R1 (Conservacion.Anios): la conservación de la auditoría de Recaudo, Tesorería y go/no-go.
+        services.AddScoped<Common.Audit.ConservacionDeAuditoria>();
+        // Feature 015, R1 (E-01 b, T0350): la consulta de la carga aplicada sin activar que usa Recaudo para el recaudo pendiente de aplicar.
+        services.AddScoped<Common.Integration.Lending.IConsultaDeCargaSinActivar, Lending.Integration.ConsultaDeCargaSinActivar>();
         services.AddScoped<Lending.Migration.RevalidacionDeCuposMigrados>();
         // US5 (bloque 9B, T0538–T0548): el núcleo de los pagos, sus reglas y su auditoría. Los validadores del contrato (Contrato/
         // ValidadoresDelContrato.cs) los registra AddValidatorsFromAssembly. Los cierres de Cartera (US9) y la vigencia de documentos (US13) nacen

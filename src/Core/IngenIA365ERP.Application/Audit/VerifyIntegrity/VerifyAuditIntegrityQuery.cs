@@ -1,4 +1,4 @@
-using FluentValidation;
+﻿using FluentValidation;
 using IngenIA365ERP.Application.Common.Audit;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
@@ -72,7 +72,8 @@ public sealed class VerifyAuditIntegrityQueryHandler(
     ICurrentTenantService cooperativa,
     ILectorDeCadenaDeAuditoria lector,
     IAuditService auditoria,
-    IDateTimeService reloj)
+    IDateTimeService reloj,
+    ConservacionDeAuditoria? conservacion = null)
     : IRequestHandler<VerifyAuditIntegrityQuery, Result<VerifyAuditIntegrityResult>>
 {
     private static readonly string HashInicial = new('0', 64);
@@ -108,7 +109,7 @@ public sealed class VerifyAuditIntegrityQueryHandler(
         // El testigo: las filas delgadas por posición (y la anterior al rango, para el primer enlace).
         var filas = await db.AuditOutbox.AsNoTracking()
             .Where(e => e.Stream == stream && e.Seq != null && e.Seq >= desdeSeq - 1 && e.Seq <= hastaSeq)
-            .Select(e => new { Seq = e.Seq!.Value, e.EventId, e.Hash, e.OccurredAt })
+            .Select(e => new { Seq = e.Seq!.Value, e.EventId, e.Hash, e.OccurredAt, e.Module })
             .ToListAsync(ct);
         var sql = filas.GroupBy(f => f.Seq).ToDictionary(g => g.Key, g => g.First());
 
@@ -128,7 +129,12 @@ public sealed class VerifyAuditIntegrityQueryHandler(
 
             if (documentos.Count == 0)
             {
-                var vencido = testigo is not null && testigo.OccurredAt + AuditoriaEncadenada.Retencion < ahora;
+                // Feature 015, R1: Recaudo, Tesorería y go/no-go vencen por Conservacion.Anios (piso de cinco), no por los diez años fijos.
+                var anios = testigo is null || conservacion is null ? null
+                    : await conservacion.AniosAsync(testigo.Module, DateOnly.FromDateTime(testigo.OccurredAt), ct);
+                var vence = testigo is null ? DateTime.MaxValue
+                    : anios is { } a ? ConservacionDeAuditoria.VenceEl(testigo.OccurredAt, a) : testigo.OccurredAt + AuditoriaEncadenada.Retencion;
+                var vencido = testigo is not null && vence < ahora;
                 incidentes.Add(new AuditIntegrityIncident(
                     vencido ? AuditIntegrityIncidentKinds.PurgedByRetention : AuditIntegrityIncidentKinds.Deleted,
                     seq, eventId, testigo?.OccurredAt));
