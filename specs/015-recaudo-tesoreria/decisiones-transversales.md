@@ -357,6 +357,17 @@ Lo que tasks.md marcaba **(nuevo)** y lo que trajeron el `/speckit-analyze` y la
 | `Receipts.Paymaster.{SupersedesSentFile, VersionNotAdopted, RemittanceExceedsPending, PaymasterUnknown, PersonUnknown, FileNotSendable, FileNotSent, ResponseFormatNotFound, ResponseUnreadable, ResponseEmpty, ResponseNotEmittable, RemittanceNoLines, RemittanceApplied, NotPaymasterBalance, SupportRequired}` | errores de las pagadurías | `ErroresDeRecaudo.Pagadurias.cs` |
 | `POST /api/receipts/payroll-files/{id}/responses/captured` · `GET …/responses` · `POST …/responses/{rid}/refresh` · `GET /api/receipts/paymaster-remittances` · `POST /api/receipts/paymaster-balances/{id}/resolve` · pantalla `/recaudo/pagadurias` · `PagaduriasClient` | rutas y pantalla que api.md §6 no listaba | `PaymastersEndpoints.cs`, `Shared` |
 
+**Fijados en la construcción de la fase 13 (2026-10-24)**:
+
+| Nombre | Qué | Dónde |
+|---|---|---|
+| `ReceivedCheck` (`DrawerName`, `PayerPersonId`, `BranchId`, `ReceiptId`, `PayerReceivableId`) · `ReceivedCheckEvent` (H) · `CheckReturnCause` (`CountsForDrawerList`) · `ReceivedCheckState` · `ApplicationState.ReversedByCheckReturn = 4` · DbSets `ReceivedChecks`, `ReceivedCheckEvents`, `CheckReturnCauses` | el cheque recibido, sus eventos y las causales | `Entities/Receipts/Operations/ReceivedChecks.cs`, `RCD_ReceivedChecks…` |
+| `ChequeDeCajaDto` · `MedioDeCajaDto.Check` · `ChequesRecibidos.{ValidarAsync, PlazoAsync, Nuevo, Transicion, VisibleAsync}` · `ReceivedCheckDto` · `DrawerWithReturnsDto` · `CheckReturnCauseDto` | el cheque como medio y su validación | `Application/Receipts/Checks`, `CashDesk/CajaDtos.cs` |
+| `RegisterCheckInCustodyCommand` · `MarkReceivedCheckDepositedCommand` · `MarkReceivedCheckInClearingCommand` · `MarkReceivedCheckPaidCommand` · `TransicionesDeChequeHandler` · `ReturnReceivedCheckCommand` (clase de numeración `CD`) · `ListReceivedChecksQuery` · `ListDrawersWithReturnsQuery` · `ListCheckReturnCausesQuery` | custodia, canje manual y devolución | `Application/Receipts/Checks` |
+| `ChequeRecibidoDevueltoV1` (`CRD`) · `EmisionDeRecaudo.ChequeRecibidoDevueltoAsync` · clase de origen `ReceivedCheckReturn` | el hecho del cheque devuelto | `Contracts/Receipts/HechosDeChequesV1.cs`, `EmisionDeRecaudo.Cheques.cs` |
+| `Receipts.Check.{DataRequired, NotPostdated, Duplicate, InvalidTransition, UnknownReturnCause, ReturnRejectedByContract}` | errores que data-model no nombraba | `ErroresDeRecaudo.Cheques.cs` |
+| `POST /api/receipts/received-checks/custody` · `GET …/drawers-with-returns` · `GET …/return-causes` · pantalla `/recaudo/cheques-recibidos` · `ChequesRecibidosClient` · `ChequeDeCajaRequest` | rutas y pantalla que api.md no listaba | `ReceivedChecksEndpoints.cs`, `Shared` |
+
 ## 3. Decisiones transversales
 
 ### Módulos y frontera

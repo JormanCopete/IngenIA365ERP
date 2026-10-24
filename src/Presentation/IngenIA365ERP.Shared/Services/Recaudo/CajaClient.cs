@@ -42,7 +42,11 @@ public sealed record ItemDeCajaDto(Guid ItemId, int Target, decimal Amount, Guid
     bool AdvanceWithoutPrincipal, bool RequiresSourceOfFunds, IReadOnlyList<AlternativaDeAbonoDto> Alternatives, IReadOnlyList<string> Notices);
 
 public sealed record MedioDeCajaRequest(Guid PaymentMeansPublicId, decimal Amount, string? Reference = null, Guid? CardTerminalPublicId = null,
-    string? TerminalBatch = null, string? ApprovalCode = null, string? VoucherNumber = null, Guid? MeansId = null);
+    string? TerminalBatch = null, string? ApprovalCode = null, string? VoucherNumber = null, Guid? MeansId = null, ChequeDeCajaRequest? Check = null);
+
+/// <summary>Feature 015, US15 (T0219): los datos del cheque que se recibe como medio. (nuevo)</summary>
+public sealed record ChequeDeCajaRequest(Guid DraweeBankPublicId, string CheckNumber, string AccountNumber, DateOnly IssueDate, bool SamePlace = true,
+    Guid? DrawerPersonPublicId = null, string? DrawerName = null);
 
 public sealed record PorcionDeCajaDto(Guid ItemId, Guid MeansId, decimal Amount);
 

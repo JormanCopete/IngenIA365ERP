@@ -566,6 +566,10 @@
             <PermissionGate Required="Receipts.Paymasters.View">
                 <NavLink href="/recaudo/pagadurias" class="nav-subitem">Pagadurías</NavLink>
             </PermissionGate>
+            @* US15 (T0219): los cheques recibidos, su canje y su devolución. *@
+            <PermissionGate Required="Receipts.Checks.View">
+                <NavLink href="/recaudo/cheques-recibidos" class="nav-subitem">Cheques recibidos</NavLink>
+            </PermissionGate>
             <span class="nav-subgroup-title">Configuración</span>
             <PermissionGate Required="Receipts.Setup.View">
                 <NavLink href="/recaudo/configuracion/puntos" class="nav-subitem">Puntos de recaudo</NavLink>

@@ -38,6 +38,8 @@ public static class CatalogoDeMensajesDeRecaudoV1
         // US7 (fase 12): la pagaduría, en línea.
         Hecho(typeof(GiroDePagaduriaRecibidoV1), GiroDePagaduriaRecibidoV1.Type, "GPR"),
         Hecho(typeof(ReciboDePagaduriaEmitidoV1), ReciboDePagaduriaEmitidoV1.Type, "RPG"),
+        // US15 (fase 13): el cheque recibido devuelto, en línea.
+        Hecho(typeof(ChequeRecibidoDevueltoV1), ChequeRecibidoDevueltoV1.Type, "CRD"),
     ];
 
     private static TipoDeMensaje Hecho(Type record, string type, string codigoCorto) =>

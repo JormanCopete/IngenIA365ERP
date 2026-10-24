@@ -75,7 +75,15 @@ public sealed record MedioDeCajaDto(
     string? TerminalBatch = null,
     string? ApprovalCode = null,
     string? VoucherNumber = null,
-    Guid? MeansId = null);
+    Guid? MeansId = null,
+    ChequeDeCajaDto? Check = null);
+
+/// <summary>
+/// Feature 015, US15 (T0217; FR-083): los datos del cheque que se recibe como medio: banco librado, número, cuenta, girador (una persona o sólo su nombre), fecha y si es
+/// de la misma plaza (el plazo de presentación). (nuevo)
+/// </summary>
+public sealed record ChequeDeCajaDto(Guid DraweeBankPublicId, string CheckNumber, string AccountNumber, DateOnly IssueDate, bool SamePlace = true,
+    Guid? DrawerPersonPublicId = null, string? DrawerName = null);
 
 /// <summary>Una porción: lo que un medio cubre de un ítem.</summary>
 public sealed record PorcionDeCajaDto(Guid ItemId, Guid MeansId, decimal Amount);

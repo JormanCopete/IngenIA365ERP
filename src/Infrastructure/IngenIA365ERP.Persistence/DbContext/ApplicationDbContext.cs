@@ -736,6 +736,9 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PaymasterResponseLine> PaymasterResponseLines => Set<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PaymasterResponseLine>();
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PaymasterRemittance> PaymasterRemittances => Set<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PaymasterRemittance>();
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PaymasterRemittanceLine> PaymasterRemittanceLines => Set<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PaymasterRemittanceLine>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceivedCheck> ReceivedChecks => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceivedCheck>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceivedCheckEvent> ReceivedCheckEvents => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceivedCheckEvent>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.CheckReturnCause> CheckReturnCauses => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.CheckReturnCause>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

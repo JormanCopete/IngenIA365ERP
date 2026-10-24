@@ -681,6 +681,9 @@ public interface IApplicationDbContext
     DbSet<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PaymasterResponseLine> PaymasterResponseLines { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PaymasterRemittance> PaymasterRemittances { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PaymasterRemittanceLine> PaymasterRemittanceLines { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceivedCheck> ReceivedChecks { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceivedCheckEvent> ReceivedCheckEvents { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.CheckReturnCause> CheckReturnCauses { get; }
 
     /// <summary>
     /// Descarta todo lo que el contexto tenga sin guardar (feature 009, R3): lo usa el reintento

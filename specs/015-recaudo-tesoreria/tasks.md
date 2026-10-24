@@ -1065,18 +1065,51 @@ favor, el pagador recibe aviso y la alerta queda; con una devolución ya entrega
 
 ### Tests for User Story 15
 
-- [ ] T0213 [P] [US15] Escribir tests/IngenIA365ERP.Application.Tests/Receipts/Checks/RecepcionYCanjeDeChequesTests.cs (FR-010, FR-083, FR-084, FR-086; D21, D37): con `Caja.AdmiteCheque` apagado el medio no se ofrece; banco, número, cuenta, girador (persona), fecha y valor; de tercero sólo con `Caja.AdmiteChequeDeTercero` (`Receipts.Check.ThirdPartyNotAllowed`); plazo de presentación por plaza, con **caso propio de FR-010** (fuera de plazo sólo avisa y no bloquea mientras `Cheques.BloquearFueraDePlazo` esté apagado; encendida, bloquea); posfechado `Receipts.Check.Postdated` o en custodia sin recibo con `Caja.AdmitePosfechadoEnCustodia`; estados manuales recibido → consignado → en canje → pagado; firmeza y canje informados por los módulos
-- [ ] T0214 [P] [US15] Escribir tests/IngenIA365ERP.Application.Tests/Receipts/Checks/DevolucionDeChequeTests.cs (FR-060, FR-085, FR-188): `ReturnReceivedCheckCommand` con causal del catálogo reversa en una sola operación sólo las porciones pagadas con el cheque (obligaciones antes que cuentas), aunque la cuenta quede en sobregiro técnico con bloqueo; baja del medio `WrittenOff` sin saldo a favor; cuenta por cobrar al pagador si ya se devolvió dinero; aviso al pagador y alerta `Recaudo.ChequeDevuelto`; lista de giradores con devoluciones que advierte al cajero; cargo por devolución apagado (`Cheques.CargoPorDevolucion`) y, si es un servicio, con factura (FR-179); `Receipts.Check.AlreadyReturned`
+- [X] T0213 [P] [US15] Escribir tests/IngenIA365ERP.Application.Tests/Receipts/Checks/RecepcionYCanjeDeChequesTests.cs (FR-010, FR-083, FR-084, FR-086; D21, D37): con `Caja.AdmiteCheque` apagado el medio no se ofrece; banco, número, cuenta, girador (persona), fecha y valor; de tercero sólo con `Caja.AdmiteChequeDeTercero` (`Receipts.Check.ThirdPartyNotAllowed`); plazo de presentación por plaza, con **caso propio de FR-010** (fuera de plazo sólo avisa y no bloquea mientras `Cheques.BloquearFueraDePlazo` esté apagado; encendida, bloquea); posfechado `Receipts.Check.Postdated` o en custodia sin recibo con `Caja.AdmitePosfechadoEnCustodia`; estados manuales recibido → consignado → en canje → pagado; firmeza y canje informados por los módulos
+- [X] T0214 [P] [US15] Escribir tests/IngenIA365ERP.Application.Tests/Receipts/Checks/DevolucionDeChequeTests.cs (FR-060, FR-085, FR-188): `ReturnReceivedCheckCommand` con causal del catálogo reversa en una sola operación sólo las porciones pagadas con el cheque (obligaciones antes que cuentas), aunque la cuenta quede en sobregiro técnico con bloqueo; baja del medio `WrittenOff` sin saldo a favor; cuenta por cobrar al pagador si ya se devolvió dinero; aviso al pagador y alerta `Recaudo.ChequeDevuelto`; lista de giradores con devoluciones que advierte al cajero; cargo por devolución apagado (`Cheques.CargoPorDevolucion`) y, si es un servicio, con factura (FR-179); `Receipts.Check.AlreadyReturned`
 - [ ] T0215 [P] [US15] Escribir la e2e tests/IngenIA365ERP.API.IntegrationTests/Receipts/ChequeRecibidoDevueltoTests.cs (US15 «Independent Test», quickstart recorrido H paso 1); se corre en la fase 22
 
 ### Implementation for User Story 15
 
-- [ ] T0216 [P] [US15] Crear en src/Core/IngenIA365ERP.Domain/Entities/Receipts/Operations/ `ReceivedCheck`, `ReceivedCheckEvent` (H) y `CheckReturnCause`, el enum `ReceivedCheckState`, con su configuración (UK `(DraweeBankId, AccountNumber, CheckNumber)` sin filtro) y la semilla de causales «pendiente de validar» en `RecaudoNucleo` (data-model §4.5)
-- [ ] T0217 [US15] Integrar el cheque recibido como medio en `UpdateCashOperationMeansCommand` y `ConfirmacionDeRecibo` (imputación al final, D35) e implementar en src/Core/IngenIA365ERP.Application/Receipts/Checks/ `MarkReceivedCheckDepositedCommand`, `MarkReceivedCheckInClearingCommand`, `MarkReceivedCheckPaidCommand` y `ReturnReceivedCheckCommand` (reverso por porción con `ReversarAsync` y clave `:reverso`) (FR-060, FR-083, FR-084)
-- [ ] T0218 [US15] Emitir `ChequeRecibidoDevuelto` en src/Core/IngenIA365ERP.Application/Receipts/Accounting/EmisionDeRecaudo.Cheques.cs (por porción reversada contra `ChequesEnCanje`; con cuenta por cobrar al pagador) y ampliar `ElCatalogoDeMensajesEsUnico` (contabilidad.md §3)
-- [ ] T0219 [US15] Exponer `/api/receipts/received-checks` (`…/deposit`, `/clearing`, `/paid`, `/return`) en src/Presentation/IngenIA365ERP.API/Endpoints/Receipts/ReceivedChecksEndpoints.cs y crear la pantalla src/Presentation/IngenIA365ERP.Shared/Pages/Recaudo/ChequesRecibidos.razor (`/recaudo/cheques-recibidos`) con su cliente e `IndicadorDeCarga` por zona
-- [ ] T0220 [US15] Regenerar en src/Infrastructure/IngenIA365ERP.Persistence.Migrations.{PostgreSql,SqlServer}/Application/ el par `RecaudoNucleo` con las tablas de cheques recibidos
+- [X] T0216 [P] [US15] Crear en src/Core/IngenIA365ERP.Domain/Entities/Receipts/Operations/ `ReceivedCheck`, `ReceivedCheckEvent` (H) y `CheckReturnCause`, el enum `ReceivedCheckState`, con su configuración (UK `(DraweeBankId, AccountNumber, CheckNumber)` sin filtro) y la semilla de causales «pendiente de validar» en `RecaudoNucleo` (data-model §4.5)
+- [X] T0217 [US15] Integrar el cheque recibido como medio en `UpdateCashOperationMeansCommand` y `ConfirmacionDeRecibo` (imputación al final, D35) e implementar en src/Core/IngenIA365ERP.Application/Receipts/Checks/ `MarkReceivedCheckDepositedCommand`, `MarkReceivedCheckInClearingCommand`, `MarkReceivedCheckPaidCommand` y `ReturnReceivedCheckCommand` (reverso por porción con `ReversarAsync` y clave `:reverso`) (FR-060, FR-083, FR-084)
+- [X] T0218 [US15] Emitir `ChequeRecibidoDevuelto` en src/Core/IngenIA365ERP.Application/Receipts/Accounting/EmisionDeRecaudo.Cheques.cs (por porción reversada contra `ChequesEnCanje`; con cuenta por cobrar al pagador) y ampliar `ElCatalogoDeMensajesEsUnico` (contabilidad.md §3)
+- [X] T0219 [US15] Exponer `/api/receipts/received-checks` (`…/deposit`, `/clearing`, `/paid`, `/return`) en src/Presentation/IngenIA365ERP.API/Endpoints/Receipts/ReceivedChecksEndpoints.cs y crear la pantalla src/Presentation/IngenIA365ERP.Shared/Pages/Recaudo/ChequesRecibidos.razor (`/recaudo/cheques-recibidos`) con su cliente e `IndicadorDeCarga` por zona
+- [X] T0220 [US15] Regenerar en src/Infrastructure/IngenIA365ERP.Persistence.Migrations.{PostgreSql,SqlServer}/Application/ el par `RecaudoNucleo` con las tablas de cheques recibidos
 - [ ] T0221 [US15] P2 · Confirmar si COOFLOPAL recibe cheques en ventanilla (para encender `Caja.AdmiteCheque` en R0) y si tiene convenios de recaudo con referencia o corresponsales (R2); registrarlo en specs/015-recaudo-tesoreria/research.md (dueño, fecha límite 06/11; no bloquea: rige la clase cheque apagada, D37, y sin convenios hasta R2)
+
+
+**Notas de la construcción de la fase 13 (2026-10-24)**. Pruebas escritas y compiladas, sin correr. Desviaciones y decisiones; las nuevas quedan en
+decisiones-transversales §2.7:
+
+- **T0213, T0214**: escritas sobre `ChequesDePrueba` (encima de `CajaConContratos`: el medio `CH` ofrecido en el punto antes de abrir la sesión, un banco librado, dos
+  causales y los reversos simulados). La firmeza y el canje «informados por los módulos» no tienen mensaje en R0: el canje es manual. El cargo por devolución
+  (`Cheques.CargoPorDevolucion`) sigue apagado y no se construye su cobro (FR-179 queda para cuando el dueño lo encienda); la prueba no lo cubre.
+- **T0215 (pendiente)**: la e2e se escribe con las demás e2e de la fase 22; sin marcar.
+- **T0216**: `ReceivedCheck` (no es hecho: su `Status` avanza), `ReceivedCheckEvent` (H) y `CheckReturnCause`, enum `ReceivedCheckState` (`Received`, `InCustody`,
+  `Deposited`, `InClearing`, `Paid`, `Returned`). Además de data-model §4.5: `DrawerName` (girador que no es persona del maestro), `PayerPersonId`, `BranchId`, `ReceiptId`,
+  `PayerReceivableId`; el catálogo lleva `CountsForDrawerList` (la causal cuenta para la lista de giradores con devoluciones). La FK `RCD_ReceiptMeans.ReceivedCheckId` →
+  `RCD_ReceivedChecks` se declara ahora. Semilla de nueve causales «pendiente de validar» (`01` fondos insuficientes … `09` fuera de plazo) en la cola a mano de
+  `RecaudoNucleo`. `ApplicationState` suma `ReversedByCheckReturn = 4`.
+- **T0217**: el cheque viaja en el medio de la operación (`MedioDeCajaDto.Check`, `ChequeDeCajaDto`, nuevo) y `ChequesRecibidos.ValidarAsync` lo revisa al imputar
+  (`UpdateCashOperationMeansCommand`) y otra vez al confirmar (`ConfirmacionDeRecibo` crea la fila y la enlaza al medio); la imputación ya lo dejaba al final (D35).
+  Reglas: `Caja.AdmiteCheque` (`Receipts.PaymentMeans.CheckDisabled`), datos (`Receipts.Check.DataRequired`, nuevo), tercero = girador distinto del pagador
+  (`.ThirdPartyNotAllowed`), posfechado (`.Postdated`; con `Caja.AdmitePosfechadoEnCustodia` se recibe en custodia por `POST /received-checks/custody`,
+  `RegisterCheckInCustodyCommand`, nuevo; `.NotPostdated` si no lo es), plazo por plaza (días en la misma, meses en otra; sólo avisa en la pantalla salvo
+  `Cheques.BloquearFueraDePlazo` → `.PresentationDeadlinePassed`) y el mismo cheque una sola vez (`.Duplicate`, nuevo). Las tres transiciones manuales van en un solo
+  manejador (`TransicionesDeChequeHandler`) con su evento y `.InvalidTransition` (nuevo). La devolución (`ReturnReceivedCheckCommand`) numera con la clase `CD` (nueva),
+  reversa las porciones aplicadas del medio por los contratos (todo o nada: `.ReturnRejectedByContract`, nuevo), deja el medio `WrittenOff` y la aplicación
+  `ReversedByCheckReturn`, y crea la cuenta por cobrar al pagador por la diferencia entre el valor del cheque y lo reversado (vueltas o un saldo ya devuelto). El
+  «aviso al pagador» es, en R0, la alerta `Recaudo.ChequeDevuelto` a la oficina con el texto para avisarle (no hay canal de mensajes al pagador en Recaudo). Además:
+  `GET /received-checks/drawers-with-returns` (FR-086) y `GET /received-checks/return-causes`.
+- **T0218**: `ChequeRecibidoDevuelto` (`CRD`), en línea: por porción, puente del módulo (o concepto vario) → `ChequesEnCanje`; la cuenta por cobrar,
+  `CuentaPorCobrarPagador` → `ChequesEnCanje`. `ElCatalogoDeMensajesEsUnico` cuenta 20 tipos `REC` y 17 hechos.
+- **T0219**: `ReceivedChecksEndpoints`, pantalla `/recaudo/cheques-recibidos` (lista, canje, devolución con causal, giradores con devoluciones) en «Bancos y
+  pagadurías», `ChequesRecibidosClient` en Web, Web.Client y MAUI; la pantalla de caja pide banco, número, cuenta, fecha, plaza y girador cuando el medio es cheque. Sin
+  probar en navegador.
+- **T0221**: tarea del dueño (P2), no ejecutada.
+- **T0220**: regenerados en par los tres pares de la 015 en orden (+3 tablas en `RecaudoNucleo` y la FK del medio al cheque), con la semilla de causales a mano. Paridad
+  OK (66 en par); `has-pending-model-changes` da «No changes» en SQL Server y en PostgreSQL.
 
 ---
 

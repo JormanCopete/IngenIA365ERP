@@ -35,6 +35,9 @@ public enum ApplicationState
     Applied = 1,
     ReversedByModule = 2,
     Voided = 3,
+
+    /// <summary>Feature 015, US15 (T0217): el banco devolvió el cheque que la pagaba y su porción se reversó (nuevo).</summary>
+    ReversedByCheckReturn = 4,
 }
 
 /// <summary>El estado de un medio del recibo (data-model §3.4). (nuevo)</summary>

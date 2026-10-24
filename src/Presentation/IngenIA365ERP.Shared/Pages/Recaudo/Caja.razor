@@ -9,6 +9,7 @@
 @inject SesionesClient Sesiones
 @inject INotificationService Notification
 @inject DescargaDeArchivos Descargas
+@inject HttpClient Http
 
 <PageTitle>Caja - IngenIA365ERP</PageTitle>
 
@@ -142,6 +143,23 @@
                         <label class="campo">Valor <input class="e-input" type="number" min="0" value="@m.Amount" @onchange="@(e => CambiarValorDelMedio(m, e.Value?.ToString()))" /></label>
                         <label class="campo">Referencia <input class="e-input" value="@m.Reference" @onchange="@(e => CambiarReferencia(m, e.Value?.ToString()))" /></label>
                     </div>
+                    @if (EsCheque(m))
+                    {
+                        @* US15 (T0219): un cheque trae banco librado, número, cuenta, fecha, plaza y girador si no es el pagador. *@
+                        <div class="form-grid">
+                            <label class="campo">Banco librado
+                                <select class="e-input" value="@m.Check?.DraweeBankPublicId" @onchange="@(e => CambiarCheque(m, c => c with { DraweeBankPublicId = Guid.TryParse(e.Value?.ToString(), out var g) ? g : Guid.Empty }))">
+                                    <option value="">— Elija —</option>
+                                    @foreach (var b in _bancos) { <option value="@b.PublicId">@b.Name</option> }
+                                </select>
+                            </label>
+                            <label class="campo">Número <input class="e-input" maxlength="20" value="@m.Check?.CheckNumber" @onchange="@(e => CambiarCheque(m, c => c with { CheckNumber = e.Value?.ToString() ?? "" }))" /></label>
+                            <label class="campo">Cuenta <input class="e-input" maxlength="30" value="@m.Check?.AccountNumber" @onchange="@(e => CambiarCheque(m, c => c with { AccountNumber = e.Value?.ToString() ?? "" }))" /></label>
+                            <label class="campo">Fecha <input class="e-input" type="date" value="@m.Check?.IssueDate.ToString("yyyy-MM-dd")" @onchange="@(e => CambiarCheque(m, c => c with { IssueDate = DateOnly.TryParse(e.Value?.ToString(), out var f) ? f : c.IssueDate }))" /></label>
+                            <label class="campo"><input type="checkbox" checked="@(m.Check?.SamePlace ?? true)" @onchange="@(e => CambiarCheque(m, c => c with { SamePlace = e.Value is true }))" /> Misma plaza</label>
+                            <label class="campo">Girador (si no es el pagador) <input class="e-input" maxlength="200" value="@m.Check?.DrawerName" @onchange="@(e => CambiarCheque(m, c => c with { DrawerName = string.IsNullOrWhiteSpace(e.Value?.ToString()) ? null : e.Value?.ToString() }))" /></label>
+                        </div>
+                    }
                 }
                 <div class="toolbar">
                     <SfButton CssClass="e-outline" OnClick="@AgregarMedio">Agregar medio</SfButton>
@@ -220,6 +238,21 @@
         using var carga = _carga.Iniciar();
         var r = await Sesiones.ActualAsync();
         _sesion = r.IsSuccess ? r.Value : null;
+        if (_sesion?.Means.Any(x => x.Class == ClaseCheque) == true)
+            _bancos = await Http.TryGetListAsync<BancoDeCheque>("/api/core/banks?PageNumber=1&PageSize=500&SortBy=name");
+    }
+
+    // Feature 015, US15 (T0219): los datos del cheque recibido como medio.
+    private const int ClaseCheque = 9;
+    private sealed record BancoDeCheque(Guid PublicId, string Name);
+    private List<BancoDeCheque> _bancos = [];
+
+    private bool EsCheque(MedioDeCajaRequest m) => _sesion?.Means.FirstOrDefault(x => x.PaymentMeansPublicId == m.PaymentMeansPublicId)?.Class == ClaseCheque;
+
+    private void CambiarCheque(MedioDeCajaRequest m, Func<ChequeDeCajaRequest, ChequeDeCajaRequest> cambio)
+    {
+        var actual = m.Check ?? new ChequeDeCajaRequest(Guid.Empty, "", "", DateOnly.FromDateTime(DateTime.Today));
+        _medios[_medios.IndexOf(m)] = m with { Check = cambio(actual) };
     }
 
     private async Task AtajoAsync(KeyboardEventArgs e)

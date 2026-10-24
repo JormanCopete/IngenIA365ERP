@@ -106,6 +106,14 @@ public sealed class ConfirmacionDeRecibo(
         var medios = OperacionesDeCaja.Medios(operacion);
         if (items.Count == 0) return Result.Failure<ReceiptDto>(ErroresDeRecaudo.OperacionSinItems());
         if (medios.Count == 0) return Result.Failure<ReceiptDto>(ErroresDeRecaudo.MediosNoCuadran());
+        // Feature 015, US15 (T0217): cada cheque se valida otra vez al confirmar (el mismo cheque no entra dos veces; el plazo, a la fecha de hoy).
+        var cheques = new Dictionary<Guid, Checks.ChequesRecibidos.Validacion>();
+        foreach (var m in medios.Where(m => sellados.Means.FirstOrDefault(x => x.PublicId == m.PaymentMeansPublicId)?.Class == PaymentMeansClass.Check))
+        {
+            var vc = await Checks.ChequesRecibidos.ValidarAsync(db, parametros, m.Check, m.Amount, operacion.PayerPersonId, hoy, enCustodia: false, ct);
+            if (vc.IsFailure) return Result.Failure<ReceiptDto>(vc.Error);
+            cheques[m.MeansId!.Value] = vc.Value;
+        }
 
         // 1. Validación.
         foreach (var i in items)
@@ -231,6 +239,14 @@ public sealed class ConfirmacionDeRecibo(
                 Reference = m.Reference?.Trim(), CardTerminalId = terminal, TerminalBatch = m.TerminalBatch?.Trim(), ApprovalCode = m.ApprovalCode?.Trim(),
                 VoucherNumber = string.IsNullOrWhiteSpace(m.VoucherNumber) ? null : m.VoucherNumber.Trim(),
             };
+            if (cheques.TryGetValue(m.MeansId!.Value, out var validado))
+            {
+                var cheque = Checks.ChequesRecibidos.Nuevo(m.Check!, validado, m.Amount, operacion.PayerPersonId, oficina, ReceivedCheckState.Received);
+                cheque.ReceiptId = recibo.Id;
+                db.ReceivedChecks.Add(cheque);
+                await db.SaveChangesAsync(ct);
+                fila.ReceivedCheckId = cheque.Id;
+            }
             db.ReceiptMeans.Add(fila);
             filasDeMedios[m.MeansId!.Value] = fila;
         }

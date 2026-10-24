@@ -1,0 +1,163 @@
+@page "/recaudo/cheques-recibidos"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Recaudo
+@inject ChequesRecibidosClient ChequesApi
+@inject INotificationService Notification
+
+<PageTitle>Cheques recibidos - IngenIA365ERP</PageTitle>
+
+@* Feature 015, US15 (T0219; FR-083 a FR-087): los cheques recibidos en caja o en custodia con su plazo de presentación; el canje manual (consignado, en canje, pagado)
+   y la devolución con causal, que reversa sólo las porciones pagadas con el cheque y avisa. Los giradores con devoluciones advierten al cajero. *@
+<PermissionGate Required="Receipts.Checks.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Cheques recibidos</h3>
+        <div class="toolbar">
+            <select class="e-input" @bind="_estado">
+                <option value="0">Todos</option>
+                <option value="1">Recibidos</option>
+                <option value="2">En custodia</option>
+                <option value="3">Consignados</option>
+                <option value="4">En canje</option>
+                <option value="5">Pagados</option>
+                <option value="6">Devueltos</option>
+            </select>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Cargando cheques…">
+        <table class="data-grid">
+            <thead><tr><th>Banco</th><th>Número</th><th>Cuenta</th><th>Girador</th><th>Pagador</th><th>Fecha</th><th>Valor</th><th>Presentar hasta</th><th>Recibo</th><th>Estado</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var c in _cheques)
+                {
+                    <tr class="@(c.PastDeadline || c.Status == 6 ? "fila-alerta" : "")">
+                        <td>@c.DraweeBankName</td><td>@c.CheckNumber</td><td>@c.AccountNumber</td><td>@c.DrawerName @(c.IsThirdParty ? "(tercero)" : "")</td><td>@c.PayerName</td>
+                        <td>@c.IssueDate.ToString("dd/MM/yyyy")</td><td>@c.Amount.ToString("N2")</td><td>@c.PresentationDeadline.ToString("dd/MM/yyyy")</td><td>@c.ReceiptNumber</td>
+                        <td>@Estado(c.Status) @(c.ReturnCauseCode is null ? "" : $"({c.ReturnCauseCode})")</td>
+                        <td>
+                            <PermissionGate Required="Receipts.Checks.Manage">
+                                @if (c.Status == 1) { <SfButton CssClass="e-flat" OnClick="@(() => MoverAsync(c, 3))">Consignado</SfButton> }
+                                @if (c.Status is 1 or 3) { <SfButton CssClass="e-flat" OnClick="@(() => MoverAsync(c, 4))">En canje</SfButton> }
+                                @if (c.Status is 3 or 4) { <SfButton CssClass="e-flat" OnClick="@(() => MoverAsync(c, 5))">Pagado</SfButton> }
+                            </PermissionGate>
+                            <PermissionGate Required="Receipts.Checks.Return">
+                                @if (c.Status is 1 or 3 or 4) { <SfButton CssClass="e-flat" OnClick="@(() => _devolver = c)">Devuelto</SfButton> }
+                            </PermissionGate>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </IndicadorDeCarga>
+
+    @if (_devolver is not null)
+    {
+        <section class="info-card">
+            <h4>Devolución del cheque @_devolver.CheckNumber — @_devolver.Amount.ToString("N2")</h4>
+            <IndicadorDeCarga Cargando="@_devolucion.Activa" Texto="Registrando la devolución…">
+                <div class="form-grid">
+                    <label class="campo">Causal
+                        <select class="e-input" @bind="_causal">
+                            <option value="">— Elija —</option>
+                            @foreach (var c in _causales)
+                            {
+                                <option value="@c.Code">@c.Code · @c.Description</option>
+                            }
+                        </select>
+                    </label>
+                    <label class="campo">Nota <input class="e-input" maxlength="500" @bind="_nota" /></label>
+                </div>
+                <p>Se reversan sólo las aplicaciones pagadas con este cheque; si ya se entregó dinero (vueltas o un saldo), queda una cuenta por cobrar al pagador.</p>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@string.IsNullOrEmpty(_causal)" OnClick="@DevolverAsync">Registrar la devolución</SfButton>
+                    <SfButton CssClass="e-flat" OnClick="@(() => _devolver = null)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </section>
+    }
+
+    <section class="info-card">
+        <h4>Giradores con devoluciones</h4>
+        <IndicadorDeCarga Cargando="@_giradores.Activa" Texto="Cargando giradores…">
+            <table class="data-grid">
+                <thead><tr><th>Girador</th><th>Cuenta</th><th>Devueltos</th><th>Último</th></tr></thead>
+                <tbody>
+                    @foreach (var g in _conDevoluciones)
+                    {
+                        <tr><td>@g.DrawerName</td><td>@g.AccountNumber</td><td>@g.Returned</td><td>@g.LastReturnedOn.ToString("dd/MM/yyyy")</td></tr>
+                    }
+                </tbody>
+            </table>
+        </IndicadorDeCarga>
+    </section>
+</div>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new(), _devolucion = new(), _giradores = new();
+    private IReadOnlyList<ChequeRecibidoDto> _cheques = [];
+    private IReadOnlyList<CausalDeDevolucionDto> _causales = [];
+    private IReadOnlyList<GiradorConDevolucionesDto> _conDevoluciones = [];
+    private ChequeRecibidoDto? _devolver;
+    private int _estado;
+    private string _causal = "";
+    private string? _nota;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var causales = await ChequesApi.CausalesAsync();
+        if (causales.IsSuccess) _causales = causales.Value ?? [];
+        await CargarAsync();
+        await GiradoresAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await ChequesApi.ChequesAsync(_estado == 0 ? null : _estado);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los cheques."); return; }
+        _cheques = r.Value ?? [];
+    }
+
+    private async Task GiradoresAsync()
+    {
+        using var carga = _giradores.Iniciar();
+        var r = await ChequesApi.GiradoresConDevolucionesAsync();
+        if (r.IsSuccess) _conDevoluciones = r.Value ?? [];
+    }
+
+    private async Task MoverAsync(ChequeRecibidoDto c, int hacia)
+    {
+        using var carga = _carga.Iniciar();
+        var clave = new ClaveDeOperacion();
+        var r = hacia switch
+        {
+            3 => await ChequesApi.ConsignarAsync(c.PublicId, clave),
+            4 => await ChequesApi.EnCanjeAsync(c.PublicId, clave),
+            _ => await ChequesApi.PagadoAsync(c.PublicId, clave),
+        };
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo cambiar el estado del cheque."); return; }
+        await CargarAsync();
+    }
+
+    private async Task DevolverAsync()
+    {
+        if (_devolver is null) return;
+        using var carga = _devolucion.Iniciar();
+        var r = await ChequesApi.DevolverAsync(_devolver.PublicId, new DevolverChequeRequest(_causal, null, _nota), new ClaveDeOperacion());
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo registrar la devolución."); return; }
+        await Notification.WarningAsync($"Cheque {_devolver.CheckNumber} devuelto: avise al pagador.");
+        _devolver = null;
+        _causal = "";
+        await CargarAsync();
+        await GiradoresAsync();
+    }
+
+    private static string Estado(int s) => s switch
+    {
+        1 => "Recibido", 2 => "En custodia", 3 => "Consignado", 4 => "En canje", 5 => "Pagado", 6 => "Devuelto", _ => s.ToString(),
+    };
+}

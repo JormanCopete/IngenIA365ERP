@@ -330,6 +330,12 @@ public sealed class UpdateCashOperationMeansCommandHandler(IApplicationDbContext
             if (medioId is { } id && await db.ReceiptMeans.AsNoTracking().AnyAsync(x => x.PaymentMeansId == id && x.VoucherNumber == bono, ct))
                 return Result.Failure<CashOperationDto>(ErroresDeRecaudo.BonoUsado(bono));
         }
+        // Feature 015, US15 (T0217; FR-083, FR-084, FR-086): un cheque trae sus datos y pasa sus reglas antes de imputarse (va al final, D35).
+        foreach (var m in medios.Where(m => sellados.Means.FirstOrDefault(x => x.PublicId == m.PaymentMeansPublicId)?.Class == PaymentMeansClass.Check))
+        {
+            var cheque = await Checks.ChequesRecibidos.ValidarAsync(db, parametros, m.Check, m.Amount, operacion.PayerPersonId, reloj.HoyLocal, enCustodia: false, ct);
+            if (cheque.IsFailure) return Result.Failure<CashOperationDto>(cheque.Error);
+        }
 
         var orden = await parametros.TextoAsync(ParametrosDeRecaudoYTesoreria.ReciboOrdenDeImputacion, reloj.HoyLocal, ct) == nameof(OrdenDeImputacion.ElegidoEnCaja)
             ? OrdenDeImputacion.ElegidoEnCaja
