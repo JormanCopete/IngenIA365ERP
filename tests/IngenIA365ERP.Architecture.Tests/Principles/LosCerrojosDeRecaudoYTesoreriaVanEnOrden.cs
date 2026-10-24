@@ -42,6 +42,26 @@ public class LosCerrojosDeRecaudoYTesoreriaVanEnOrden
         "TES_Setup", "TES_BankAccounts", "TES_Checkbooks", "TES_PaymentBatches", "TES_PaymentOrders", "TES_Reconciliations",
     ];
 
+    /// <summary>
+    /// Feature 015, US3 (T0107; FR-005, FR-170): en Recaudo, una operación que toca créditos y cuentas llama al contrato de obligaciones (<c>AplicarAsync</c>)
+    /// antes que al de cuentas (<c>ConsignarAsync</c>): la persona se bloquea antes que sus cuentas en Cartera, como en todo el orden de data-model §0.5.
+    /// </summary>
+    [Fact]
+    public void Recaudo_llama_al_contrato_de_obligaciones_antes_que_al_de_cuentas()
+    {
+        var root = RepoPath.FindRepoRoot();
+        var infracciones = new List<string>();
+        foreach (var archivo in ReglaSobreFuente.ArchivosEn(["Core/IngenIA365ERP.Application/Receipts"]))
+        {
+            var texto = FuenteSinComentarios.Leer(archivo);
+            var obligaciones = texto.IndexOf(".AplicarAsync(", StringComparison.Ordinal);
+            var cuentas = texto.IndexOf(".ConsignarAsync(", StringComparison.Ordinal);
+            if (cuentas >= 0 && (obligaciones < 0 || obligaciones > cuentas) && texto.Contains("IContratoDeObligaciones", StringComparison.Ordinal))
+                infracciones.Add(ReglaSobreFuente.Relativo(root, archivo));
+        }
+        ReglaSobreFuente.SinInfracciones(infracciones, "Recaudo llama a IContratoDeCuentas antes que a IContratoDeObligaciones (FR-170)");
+    }
+
     private static readonly Regex Candado = new(@"FOR\s+(UPDATE|SHARE)|UPDLOCK|XLOCK|HOLDLOCK", RegexOptions.Compiled);
     private static readonly Regex TablaDeLosModulos = new(@"\b(RCD|TES)_\w+", RegexOptions.Compiled);
 

@@ -297,7 +297,36 @@ public class LosHechosInmutablesNoSeModifican
         ["CashCountLine"] = ["ApprovalRequestPublicId", "ApprovedByUserId", "ApprovedAt", "ApprovalReason"],
         ["CashMovement"] = [], ["CashMovementDenomination"] = [], ["CashSessionAdjustment"] = [],
         ["DayClose"] = [], ["DayCloseLine"] = [], ["VaultMovement"] = [], ["VaultMovementDenomination"] = [],
+        // Fase 6, US3 (T0110; data-model §3.3 a §3.7): el recibo y sus filas se insertan al confirmar; lo que el contrato informa al aplicar (número del
+        // producto, comprobante y firmeza, la operación del módulo de cada porción) y la clave del reverso se escriben una vez.
+        ["Receipt"] = [], ["ReceiptMeans"] = [], ["SourceOfFundsDeclaration"] = [],
+        ["ReceiptApplication"] = ["ProductNumber", "ModuleVoucherPublicId", "ModuleVoucherNumber", "FinalityUntil"],
+        ["ReceiptApplicationPortion"] = ["ModuleOperationPublicId", "ModuleOperationNumber", "ReversalKey"],
     };
+
+    /// <summary>
+    /// Feature 015, T0110 (FR-002; data-model §3 «[columna mutable]»): las columnas de los hechos de Recaudo y Tesorería que cambian por su ciclo de estado
+    /// (<c>[ColumnaMutable]</c>). Sólo ellas; todo lo demás del hecho se inserta una vez.
+    /// </summary>
+    private static readonly Dictionary<string, string[]> MutablesDeRecaudoYTesoreria = new(StringComparer.Ordinal)
+    {
+        ["Receipt"] = ["Status"], ["ReceiptMeans"] = ["Status"], ["ReceiptApplication"] = ["Status"], ["ReceiptApplicationPortion"] = ["Status"],
+    };
+
+    [Fact]
+    public void Solo_las_columnas_declaradas_mutables_de_Recaudo_y_Tesoreria_llevan_ColumnaMutable()
+    {
+        var marcadas = typeof(IngenIA365ERP.Domain.Common.BaseEntity).Assembly.GetTypes()
+            .Where(t => t is { IsClass: true, IsAbstract: false })
+            .SelectMany(t => t.GetProperties().Where(p => p.IsDefined(typeof(IngenIA365ERP.Domain.Common.ColumnaMutableAttribute), true)).Select(p => (Tipo: t, p.Name)))
+            .ToList();
+        var fuera = marcadas.Where(m => m.Tipo.Namespace is not { } ns
+                || !(ns.StartsWith("IngenIA365ERP.Domain.Entities.Receipts", StringComparison.Ordinal) || ns.StartsWith("IngenIA365ERP.Domain.Entities.Treasury.", StringComparison.Ordinal)))
+            .Select(m => $"{m.Tipo.FullName}.{m.Name}").ToList();
+        Assert.True(fuera.Count == 0, "ColumnaMutable fuera de Recaudo y Tesorería: " + string.Join(", ", fuera));
+        var esperadas = MutablesDeRecaudoYTesoreria.SelectMany(kv => kv.Value.Select(p => $"{kv.Key}.{p}")).OrderBy(x => x).ToList();
+        Assert.Equal(esperadas, marcadas.Select(m => $"{m.Tipo.Name}.{m.Name}").OrderBy(x => x).ToList());
+    }
 
     [Fact]
     public void Los_hechos_de_Recaudo_y_Tesoreria_llevan_el_marcador_y_solo_sus_columnas_de_escritura_unica_tienen_set()

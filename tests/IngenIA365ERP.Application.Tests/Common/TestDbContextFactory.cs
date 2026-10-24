@@ -580,6 +580,12 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Vaults.VaultMovement> VaultMovements => Set<IngenIA365ERP.Domain.Entities.Receipts.Vaults.VaultMovement>();
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Vaults.VaultMovementDenomination> VaultMovementDenominations => Set<IngenIA365ERP.Domain.Entities.Receipts.Vaults.VaultMovementDenomination>();
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Vaults.VaultDenominationBalance> VaultDenominationBalances => Set<IngenIA365ERP.Domain.Entities.Receipts.Vaults.VaultDenominationBalance>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.CashOperation> CashOperations => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.CashOperation>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.Receipt> IssuedReceipts => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.Receipt>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceiptMeans> ReceiptMeans => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceiptMeans>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceiptApplication> ReceiptApplications => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceiptApplication>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceiptApplicationPortion> ReceiptApplicationPortions => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceiptApplicationPortion>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.SourceOfFundsDeclaration> SourceOfFundsDeclarations => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.SourceOfFundsDeclaration>();
     DbSet<DebitCard> IApplicationDbContext.DebitCards => throw new NotImplementedException();
     DbSet<DebitAgreementParameter> IApplicationDbContext.DebitAgreementParameters => throw new NotImplementedException();
     DbSet<PosTerminal> IApplicationDbContext.PosTerminals => throw new NotImplementedException();
@@ -644,6 +650,12 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Vaults.VaultMovement>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Vaults.VaultMovementDenomination>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Vaults.VaultDenominationBalance>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Operations.CashOperation>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Operations.Receipt>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceiptMeans>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceiptApplication>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceiptApplicationPortion>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Operations.SourceOfFundsDeclaration>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         // Feature 013 (T0236): Cartera nueva con su filtro de borrado lógico, sin RowVersion (InMemory).
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Lending.Collections.CreditReportClaim>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Lending.Collections.DebtorMessage>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });

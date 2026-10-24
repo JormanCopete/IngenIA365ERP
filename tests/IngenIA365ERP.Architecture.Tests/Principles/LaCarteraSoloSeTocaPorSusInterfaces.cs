@@ -49,6 +49,9 @@ public class LaCarteraSoloSeTocaPorSusInterfaces
         // y por la bandeja (el contenido de los mensajes, en Common.Integration.Contracts.Lending).
         "Core/IngenIA365ERP.Application/Accounting/Lending",
         "Core/IngenIA365ERP.Application/Accounting/Integration",
+        // Feature 015, US3 (T0107): Recaudo conoce a Cartera y Captaciones sólo por IContratoDeObligaciones e IContratoDeCuentas.
+        "Core/IngenIA365ERP.Application/Receipts",
+        "Core/IngenIA365ERP.Domain/Entities/Receipts",
     ];
 
     /// <summary>Carpetas de Cartera (relativas a <c>src/</c>) que no pueden nombrar a otros módulos salvo por sus puertos.</summary>
@@ -79,6 +82,9 @@ public class LaCarteraSoloSeTocaPorSusInterfaces
         // feature 014 lo retiró (T007, R28) y las captaciones son Cartera (Lending.Deposits).
         "IngenIA365ERP.Domain.Entities.Inventory",
         "IngenIA365ERP.Domain.Inventory",
+        // Feature 015, US3 (T0107).
+        "IngenIA365ERP.Application.Receipts",
+        "IngenIA365ERP.Domain.Entities.Receipts",
     ];
 
     private static readonly (Regex Patron, string Que)[] HaciaCartera =

@@ -1,0 +1,47 @@
+{
+  "nombre": "D35: los inmediatos cubren primero y el cheque lo restante",
+  "descripcion": "El cheque llega primero en la pantalla pero se imputa al final: el efectivo de 100.000 cubre parte de la primera aplicación y el cheque el resto de las dos.",
+  "orden": "InmediatosPrimeroChequeAlFinal",
+  "aplicaciones": [
+    {
+      "id": "A1",
+      "valor": 300000
+    },
+    {
+      "id": "A2",
+      "valor": 200000
+    }
+  ],
+  "medios": [
+    {
+      "id": "CH",
+      "clase": "Check",
+      "valor": 400000
+    },
+    {
+      "id": "EF",
+      "clase": "Cash",
+      "valor": 100000
+    }
+  ],
+  "fijada": null,
+  "porciones": [
+    {
+      "aplicacion": "A1",
+      "medio": "EF",
+      "valor": 100000
+    },
+    {
+      "aplicacion": "A1",
+      "medio": "CH",
+      "valor": 200000
+    },
+    {
+      "aplicacion": "A2",
+      "medio": "CH",
+      "valor": 200000
+    }
+  ],
+  "vueltas": 0,
+  "error": null
+}
