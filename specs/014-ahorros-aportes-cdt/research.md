@@ -3051,3 +3051,17 @@ cadena completa **sin cambios de código**:
   evidencia; no se repite al despachar de nuevo; el SMS de la misma cooperativa sigue simulado), `…E264_sin_autorizacion_de_tratamiento_el_correo_no_sale_…` y
   `CicloDeVidaDeCuentasTests.E264_el_aviso_de_inactividad_sale_por_correo_solo_con_la_autorizacion_del_canal` (un informativo de captaciones: canal `CORREO`, sin la autorización
   del canal de contacto no se escribe, con ella sale y deja su referencia).
+
+### 27.16 E265 · versión 2 del contrato de cuentas y cancelación con entrega por Recaudo (enmiendas E-02 a y E-02 d de la 015, R1, 2026-10-24)
+
+- **E-02 a, versión 2** (contratos-v2.md §3.1 de la 015): `IContratoDeCuentas.VersionDelContrato = 2` y `ContratosDeIntegracion.VersionesDelContratoDeCuentas = [1, 2]`;
+  `ConsignacionAAplicar.BankItem` (`PartidaBancariaCitada`). Un recaudador con sólo la v1 que la manda recibe `Integration.Participant.VersionNotSupported`; con
+  `ValueDate = MovementDate` se exime la ventana de `Captaciones.DiasMaximosFechaValor` (`ConsignacionEnCuentas.FechaValorAsync(..., sinVentana)`), y también con la línea de
+  pagaduría ya verificada (`DeductionFileLinePublicId`), como Cartera; con otra fecha, `Lending.Payment.BankItemDateMismatch`. `LND_MemberAccountOperations.BankItemPublicId` va en la
+  migración nueva y aditiva `CarteraYCaptacionesConPartidaCitada` (las de la 014 siguen congeladas). Sin partida, la huella de la consignación es la de la v1. La activación de
+  captaciones y aportes sigue aceptando la v1.
+- **E-02 d, cancelación con entrega** (contratos-v2.md §3.4 de la 015): `RetirarAsync` con `CloseAccount = true` de un recaudador `Receipts` real deja de responder
+  `Lending.Savings.DeliveryNotAvailable`: `CancelacionConEntregaPorElContrato` liquida a la fecha, cobra los cargos del saldo y el GMF de la cancelación y autoriza el retiro de
+  **todo el disponible** en efectivo o cheque, que Recaudo entrega con el mismo egreso; la cuenta queda cancelada. La simulación nueva `Operation = "Close"` devuelve
+  `SimulacionDeCuentaDto.AmountToDeliver` (campo opcional nuevo) y el retiro pide exactamente ese valor (si cambió, `Lending.Savings.CloseAmountChanged`, nuevo, y nada se escribe).
+  El contractual y los demás recaudadores siguen cancelándose desde Cartera.

@@ -494,6 +494,19 @@ Lo que tasks.md marcaba **(nuevo)** y lo que trajeron el `/speckit-analyze` y la
 | pantalla `/admin/go-no-go` · `GoNoGoClient` (`ManualesSugeridas`: `CRONOGRAMA`, `NOGO-PARCIAL`, `PARALELO`, `PRODUCCION-LIMPIA`, `RESPALDOS`, `CAPACITACION`) | la lista en la interfaz | `Shared/Pages/Administracion/GoNoGo.razor`, `Shared/Services/Core` |
 | `docs/manual/{recaudo-manual-del-cajero, recaudo-manual-del-supervisor, recaudo-manual-del-analista, tesoreria-manual-del-tesorero, recaudo-y-tesoreria-contabilizacion, recaudo-cumplimiento-sarlaft}.md` · `docs/operaciones/{recaudo-tesoreria-salida-en-vivo-cooflopal, recaudo-tesoreria-paralelo-en-qa, recaudo-tesoreria-despliegue, recaudo-tesoreria-go-no-go}.md` | manuales y runbooks de R0/T0 | `docs/` |
 
+**Fijados en la construcción de la fase 23 (2026-10-24, base de R1)**:
+
+| Nombre | Qué | Dónde |
+|---|---|---|
+| `PartidaBancariaCitada` (`BankItemPublicId`, `MovementDate`, `OwnBankAccountPublicId`) · `PagoAAplicar.BankItem` · `ConsignacionAAplicar.BankItem` · `ContratosDeIntegracion.VersionConPartidaBancaria` · `HuellasDeLaVersion2.SinPartidaNula` | la v2 de los contratos de obligaciones y de cuentas | `Common/Integration/Lending`, `Common/Integration/ContratosDeIntegracion.cs` |
+| `ErroresDePagos.{CodigoPartidaConOtraFecha, PartidaConOtraFecha, PartidaSinVersion2}` · `ReglasDeFechaValor.ValidarAsync(..., conPartidaBancaria)` · `ConsignacionEnCuentas.FechaValorAsync(..., sinVentana)` | las reglas de fecha valor de la v2 | `Lending/Payments`, `Lending/Deposits/Contributions` |
+| `LND_LoanOperations.BankItemPublicId` · `LND_MemberAccountOperations.BankItemPublicId` · `IX_LND_LoanOperations_BankItemPublicId` · `IX_LND_MemberAccountOperations_BankItemPublicId` | la partida guardada | par `CarteraYCaptacionesConPartidaCitada` |
+| `IConsultaDeCargaSinActivar` · `CargaSinActivarDto` · `ObligacionCargadaDto` · `ConsultaDeCargaSinActivar` (`Lending.Migration.InAppliedLoad`, `.NotInAppliedLoad`) | la consulta de la carga aplicada sin activar (noveno puerto ofrecido) | `Common/Integration/Lending`, `Lending/Integration` |
+| `CancelacionConEntregaPorElContrato` · `Lending.Savings.CloseAmountChanged` · simulación `Operation = "Close"` · `SimulacionDeCuentaDto.AmountToDeliver` | la cancelación con entrega por el contrato de cuentas (E-02 d) | `Lending/Deposits/Accounts`, `Lending/Integration/ContratoDeCuentasDeCartera.cs` |
+| `AdoptContractVersionCommand` · `VersionesDeContratosDto` · `POST /api/receipts/activation/contract-versions` · `EscritorDelRegistroDeIntegracion.AdoptarAsync` · evento `Receipts.ContractVersionAdopted` · `VersionesDeContratosDeRecaudoDto` | Recaudo adopta las v2 | `Receipts/Activation/AdopcionDeVersiones.cs`, `Common/Integration`, `Shared/Services/Recaudo` |
+| `ConservacionDeAuditoria` (`ModuloDeParametros`, `AniosAsync`, `VenceEl`, `Defecto`) · `AuditEventDocument.RetentionYears` · `AuditoriaEncadenada.EscribirCarga` | `Conservacion.Anios` en la auditoría (piso de cinco) | `Common/Audit`, `Common/Interfaces/Audit` |
+| `RecaudoCompleto` · `CarteraYCaptacionesConPartidaCitada` | los dos pares de R1 | `Persistence.Migrations.{PostgreSql,SqlServer}/Application` |
+
 ## 3. Decisiones transversales
 
 ### Módulos y frontera
