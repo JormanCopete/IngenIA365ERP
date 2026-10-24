@@ -320,6 +320,8 @@ public class LosHechosInmutablesNoSeModifican
         // Fase 12, US7 (T0205; data-model §6.2, §6.3): la línea del archivo de descuentos (su resultado se escribe una vez, al aceptarlo Cartera; lo girado es
         // columna mutable) y la confirmación del envío.
         ["PayrollDeductionFileLine"] = ["DeductionOutcome", "DeductedAmount", "DeductionDate"], ["PayrollFileSending"] = [],
+        // Fase 13, US15 (T0216; data-model §4.5): cada transición de un cheque recibido es un evento que no cambia.
+        ["ReceivedCheckEvent"] = [],
     };
 
     /// <summary>

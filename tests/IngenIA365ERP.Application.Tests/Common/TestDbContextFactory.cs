@@ -630,6 +630,9 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PaymasterResponseLine> PaymasterResponseLines => Set<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PaymasterResponseLine>();
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PaymasterRemittance> PaymasterRemittances => Set<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PaymasterRemittance>();
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PaymasterRemittanceLine> PaymasterRemittanceLines => Set<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PaymasterRemittanceLine>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceivedCheck> ReceivedChecks => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceivedCheck>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceivedCheckEvent> ReceivedCheckEvents => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceivedCheckEvent>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.CheckReturnCause> CheckReturnCauses => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.CheckReturnCause>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -709,6 +712,9 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PaymasterResponseLine>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PaymasterRemittance>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PaymasterRemittanceLine>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceivedCheck>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceivedCheckEvent>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Operations.CheckReturnCause>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Treasury.Statements.BankStatement>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Treasury.Statements.BankStatementLine>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Banks.BankItemIdentification>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });

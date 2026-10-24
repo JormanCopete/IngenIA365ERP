@@ -37,6 +37,8 @@ public class LasPantallasDeRecaudoYTesoreriaEstanEnElMenu
         ("Pages/Tesoreria/Extractos.razor", "/tesoreria/extractos", "Treasury.Statements.View"),
         // Fase 12 (T0210): las pagadurías.
         ("Pages/Recaudo/Pagadurias.razor", "/recaudo/pagadurias", "Receipts.Paymasters.View"),
+        // Fase 13 (T0219): los cheques recibidos.
+        ("Pages/Recaudo/ChequesRecibidos.razor", "/recaudo/cheques-recibidos", "Receipts.Checks.View"),
     ];
 
     /// <summary>Páginas de detalle (con parámetro de ruta): archivo, la ruta tal como la declara <c>@page</c> y permiso.</summary>
