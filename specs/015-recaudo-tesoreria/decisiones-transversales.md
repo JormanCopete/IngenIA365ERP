@@ -455,6 +455,22 @@ Lo que tasks.md marcaba **(nuevo)** y lo que trajeron el `/speckit-analyze` y la
 | eventos `{Receipts,Treasury}.Activation.{ProvisionalSquareRegistered, DefinitiveSquareRegistered}` | auditoría del cuadre | `CuadresDeRecaudo`, `CuadresDeTesoreria` |
 | `GET /api/{receipts,treasury}/opening-squares/current` · `POST …/provisional` · `POST …/definitive` · `GET /api/{receipts,treasury}/reference-figures` · `GET/POST /api/{receipts,treasury}/imports/{code}/{template.xlsx,import}` · pantallas `/recaudo/puesta-en-marcha`, `/tesoreria/puesta-en-marcha` · `PuestaEnMarchaDeModulo` · `PuestaEnMarchaClient` | rutas y pantallas (las plantillas por la forma común de la plataforma, no la de api.md §14) | `ActivationEndpoints.cs`, `Shared` |
 
+
+**Fijados en la construcción de la fase 19 (2026-10-24)**:
+
+| Nombre | Qué | Dónde |
+|---|---|---|
+| `RequisitosDeActivacionDeRecaudo.{Cuadre, CajeroConPermisos, SupervisorConPermisos, MesAbierto, MatrizCompleta, HoraDeCorte, PermisosDelCajero, PermisosDelSupervisor, EstadosQueActivan, CuadreAsync}` · códigos `OpeningSquare`, `CashierWithPermissions`, `SupervisorWithPermissions`, `OpenAccountingMonth`, `AccountingMatrixComplete`, `CutoffBeforeLendingCycle` | los requisitos de la activación completa de Recaudo | `Receipts/Activation/ActivacionDeRecaudo.cs` |
+| `RequisitosDeActivacionDeTesoreria.{Cuadre, Chequera, MesAbierto, MatrizCompleta, CuadreAsync}` · código `CheckbookIfChecks` · `offersChecks` | los de Tesorería | `Treasury/Activation/ActivacionDeTesoreria.cs` |
+| `CuadreParaActivar` · `EstadoDeActivacionDto.{OpeningSquarePublicId, OpeningSquareKind, CutoffDate}` · `ActivateReceiptsCommand(CutoffDate, Minimal)` · `ActivateTreasuryCommand(CutoffDate, Minimal, OffersChecks)` · `ActivateReceiptsCommandHandler.{VersionesDelDestino, VersionesDelRecaudador}` · `ActivateTreasuryCommandHandler.VersionesDelDestino` | la activación completa y la mínima | íd. |
+| `Receipts.Activation.MinimalNotAllowed` · `Treasury.Activation.MinimalNotAllowed` | la activación mínima no existe en producción | íd. |
+| `IContabilidadParaRecaudo.CompletitudDeLaMatrizAsync` · `IContabilidadParaTesoreria.CompletitudDeLaMatrizAsync` · `CompletitudContableDeModuloDto` (`Cumple`) · `CompletitudDeModulo` | la completitud de la matriz para la activación, por el puerto | `Common/Integration/Accounting`, `Accounting/Receipts/ContabilidadParaRecaudo.cs` |
+| `ReglasDeParametrosDeRecaudo.InicioDelCicloDeCartera` | el inicio del ciclo con que se comprueba el corte | `Receipts/Setup` |
+| `GET /api/{receipts,treasury}/activation/requirements?minimal=&cutoffDate=&offersChecks=` · `POST …/activation { cutoffDate, minimal, offersChecks }` · pantallas `/recaudo/activacion`, `/tesoreria/activacion` · `ActivacionDeModuloClient` · `EstadoDeActivacionDeModuloDto` · `RequisitoDeActivacionDeModuloDto` · `ActivacionDeModuloRequest` | rutas y pantallas | `ActivationEndpoints.cs`, `Shared` |
+| `RecaudoYTesoreriaE2E.{RegistrarYActivarAsync, PagarEnCajaAsync, IdentificarAbonoAsync, OrdenDeTesoreriaAsync, GirarOrdenAsync, RegistrarResultadoAsync, CuentaDePagosAsync}` · `CarteraE2E.RecaudoYTesoreriaRealesAsync` · `DesembolsoE2E.OrdenDeTesoreriaAsync` · `LibranzaE2E.{ArchivoEnRecaudoAsync, ResponderEnRecaudoAsync, ArchivosDeRecaudo}` | los ayudantes de las e2e sobre los módulos reales | `tests/IngenIA365ERP.API.IntegrationTests` |
+| `RecaudoEnsayoDelContrato` (`/api/e2e/recaudo/*`) | el arnés de las e2e del contrato como Recaudo real (`REC`), sólo en el proyecto de pruebas | `tests/IngenIA365ERP.API.IntegrationTests/Receipts` |
+| `ParticipantesRealesDeRecaudoYTesoreriaTests` | reemplaza a `DoblesDePruebaDeCarteraTests` | `tests/IngenIA365ERP.API.IntegrationTests/Lending` |
+
 ## 3. Decisiones transversales
 
 ### Módulos y frontera
