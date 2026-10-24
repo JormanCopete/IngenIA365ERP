@@ -123,7 +123,8 @@ public sealed class ClosePeriodCommandValidator : AbstractValidator<ClosePeriodC
     }
 }
 
-public sealed class ClosePeriodCommandHandler(IApplicationDbContext db, IDateTimeService clock, ICurrentUserService user, AccountingAuditEmitter audit)
+public sealed class ClosePeriodCommandHandler(IApplicationDbContext db, IDateTimeService clock, ICurrentUserService user, AccountingAuditEmitter audit,
+    IEnumerable<IngenIA365ERP.Application.Common.Integration.Accounting.IEstadoOperativoParaElCierre>? estadosOperativos = null)
     : IRequestHandler<ClosePeriodCommand, Result>
 {
     public async Task<Result> Handle(ClosePeriodCommand request, CancellationToken ct)
@@ -155,6 +156,13 @@ public sealed class ClosePeriodCommandHandler(IApplicationDbContext db, IDateTim
                 cartera.Pendientes.OldestOperationDate, cartera.Pendientes.Types));
         if (cartera.CargaQueVence is { } carga && !request.AcknowledgeLendingLoad)
             return Result.Failure(AccountingErrors.PeriodLendingLoadWillExpire(carga.CutoffDate, carga.LoadPublicId));
+
+        // Feature 015, US24 (T0321; FR-228): el mes de la activación de Recaudo o Tesorería no cierra mientras su cuadre de apertura siga provisional. Se pregunta a
+        // cada módulo por IEstadoOperativoParaElCierre, igual que a Cartera, sin leer sus tablas.
+        var bloqueos = new List<IngenIA365ERP.Application.Common.Integration.Accounting.PendienteDeCierreDto>();
+        foreach (var estado in estadosOperativos ?? [])
+            bloqueos.AddRange((await estado.PendientesAsync(request.Year, request.Month, ct)).Where(p => p.Blocks));
+        if (bloqueos.Count > 0) return Result.Failure(AccountingErrors.PeriodOpeningSquarePending(bloqueos));
 
         periodo.Status = PeriodStatus.Closed;
         periodo.ClosedAt = clock.UtcNow;

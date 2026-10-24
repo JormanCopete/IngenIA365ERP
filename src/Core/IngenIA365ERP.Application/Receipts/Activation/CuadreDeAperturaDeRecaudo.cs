@@ -101,7 +101,7 @@ internal static class CuadresDeRecaudo
 
     public static async Task<Result<OpeningSquareDto>> RegistrarAsync(IApplicationDbContext db, LineasDelCuadreDeRecaudo lineas, IActorActual actorActual,
         AuditoriaDeRecaudo auditoria, IDateTimeService reloj, OpeningSquareKind tipo, DateOnly? corteSolicitado, string? motivo, DateOnly? fechaLimite, Guid? acta,
-        CancellationToken ct)
+        CancellationToken ct, IngenIA365ERP.Application.Common.Alerts.IAlertas? alertas = null)
     {
         var actor = await actorActual.ObtenerAsync(ct);
         if (actor.UserId is not { } usuario) return Result.Failure<OpeningSquareDto>(ErroresDeRecaudo.NoEncontrado("El usuario"));
@@ -115,6 +115,10 @@ internal static class CuadresDeRecaudo
             new { cutoff = corte, status = r.Value.Status.ToString(), loaded = calculo.TotalCargado, ledger = calculo.TotalContable, difference = calculo.TotalDiferencia,
                 deadline = r.Value.DeadlineOn, reason = r.Value.Reason, minutes = acta, by = actor.Name }, ct);
         await db.SaveChangesAsync(ct);
+        // Fase 21 (T0321; FR-228): el definitivo cierra las alertas del provisional que reemplazó.
+        if (tipo == OpeningSquareKind.Definitive && alertas is not null)
+            foreach (var provisional in await db.ReceiptsOpeningSquares.AsNoTracking().Where(c => c.DefinitiveSquareId == r.Value.Id).Select(c => c.PublicId).ToListAsync(ct))
+                await CuadreProvisionalPendiente.CerrarAlertasAsync(alertas, IngenIA365ERP.Application.Common.Alerts.TiposDeAlerta.RecaudoCuadreProvisionalPendiente, provisional, ct);
         return Result.Success(await DtoAsync(db, r.Value, ct));
     }
 }
@@ -149,11 +153,11 @@ public sealed record RegisterDefinitiveOpeningSquareCommand(DateOnly? CutoffDate
 }
 
 public sealed class RegisterDefinitiveOpeningSquareCommandHandler(IApplicationDbContext db, LineasDelCuadreDeRecaudo lineas, IActorActual actor,
-    AuditoriaDeRecaudo auditoria, IDateTimeService reloj) : IRequestHandler<RegisterDefinitiveOpeningSquareCommand, Result<OpeningSquareDto>>
+    AuditoriaDeRecaudo auditoria, IDateTimeService reloj, IngenIA365ERP.Application.Common.Alerts.IAlertas? alertas = null) : IRequestHandler<RegisterDefinitiveOpeningSquareCommand, Result<OpeningSquareDto>>
 {
     public Task<Result<OpeningSquareDto>> Handle(RegisterDefinitiveOpeningSquareCommand request, CancellationToken ct) =>
         CuadresDeRecaudo.RegistrarAsync(db, lineas, actor, auditoria, reloj, OpeningSquareKind.Definitive, request.CutoffDate, request.Reason, null,
-            request.MinutesAttachmentPublicId, ct);
+            request.MinutesAttachmentPublicId, ct, alertas);
 }
 
 /// <summary>

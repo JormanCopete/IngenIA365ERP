@@ -322,6 +322,12 @@ public static class DependencyInjection
         services.AddScoped<Treasury.Results.RegistroDeResultadosDelGiro>();
         services.AddScoped<Treasury.Accounting.EmisionDeTesoreria>();
         services.AddScoped<Treasury.Tareas.VigilanciaDeTesoreria>();
+        // Feature 015, US24 (fase 21, T0320, T0321): las condiciones automáticas de la lista de go/no-go y la guarda del cuadre provisional en el cierre del mes.
+        services.AddScoped<Common.GoLive.IVerificacionDeSalida, Receipts.Activation.VerificacionDeSalidaDeRecaudo>();
+        services.AddScoped<Common.GoLive.IVerificacionDeSalida, Treasury.Activation.VerificacionDeSalidaDeTesoreria>();
+        services.AddScoped<Common.GoLive.IVerificacionDeSalida, Lending.Activation.VerificacionDeSalidaDeCartera>();
+        services.AddScoped<Common.Integration.Accounting.IEstadoOperativoParaElCierre, Receipts.Activation.EstadoOperativoDeRecaudoParaElCierre>();
+        services.AddScoped<Common.Integration.Accounting.IEstadoOperativoParaElCierre, Treasury.Activation.EstadoOperativoDeTesoreriaParaElCierre>();
         // Feature 015, US5 (T0177): los puertos entre Recaudo y Tesorería de las devoluciones por orden de pago (R-05).
         services.AddScoped<Common.Integration.Treasury.IOrdenesDePagoDeTesoreria, Treasury.Orders.OrdenesDePagoDeTesoreria>();
         services.AddScoped<Common.Integration.Receipts.IResultadoDeOrdenesDeRecaudo, Receipts.CreditBalances.ResultadoDeOrdenesDeRecaudo>();

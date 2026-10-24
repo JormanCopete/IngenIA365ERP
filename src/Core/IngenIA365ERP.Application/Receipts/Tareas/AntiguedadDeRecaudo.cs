@@ -53,7 +53,15 @@ public sealed class AntiguedadDeRecaudo(
     /// <summary>Todas las secciones de la tarea.</summary>
     public async Task<int> RevisarAsync(CancellationToken ct) =>
         await PartidasAsync(ct) + await SaldosAFavorAsync(ct) + await ExtractosSinCargarAsync(ct) + await PartidasAlCierreAsync(ct) + await ContingenciaPorDigitarAsync(ct)
-        + await PoliticaContableEnAdvertirAsync(ct);
+        + await PoliticaContableEnAdvertirAsync(ct) + await CuadreProvisionalPendienteAsync(ct);
+
+    /// <summary>
+    /// Feature 015, US24 (T0321; FR-228): mientras la activación de Recaudo siga con el cuadre de apertura provisional, la alerta <c>Recaudo.CuadreProvisionalPendiente</c>
+    /// se repite cada corrida; vencida la fecha límite del definitivo escala (otra clave, también a <c>Platform.GoLive.Override</c>). El definitivo la cierra.
+    /// </summary>
+    public async Task<int> CuadreProvisionalPendienteAsync(CancellationToken ct) =>
+        await IngenIA365ERP.Application.Common.Cuadres.CuadreProvisionalPendiente.AlertarAsync(alertas, TiposDeAlerta.RecaudoCuadreProvisionalPendiente, "Recaudo", "Receipts", "ReceiptsOpeningSquare",
+            await Activation.EstadoOperativoDeRecaudoParaElCierre.PendienteAsync(db, ct), reloj.HoyLocal, ct);
 
     /// <summary>
     /// Feature 015, US8 (T0262; FR-221): mientras <c>Contabilidad.FaltaDeRegla</c> de Recaudo esté en «advertir» se confirman operaciones sin regla contable; la

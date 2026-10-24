@@ -11,7 +11,7 @@ namespace IngenIA365ERP.Application.Receipts.Reports;
 /// <summary>
 /// El registro de las vistas de R0 del centro de informes de Recaudo (feature 015, US21, T0314; R-36; FR-152 parte R0; api.md §17). Cada vista es una
 /// <see cref="TablaExportable"/> con alcance por oficina, punto y caja (<see cref="IAlcanceDeRecaudo"/>) y columnas ocultas con <c>_</c> para profundizar. Las
-/// de R1 y R2 llegan con su entrega; <c>parallel-comparison</c> la suma la fase 21. (nuevo)
+/// de R1 y R2 llegan con su entrega; <c>parallel-comparison</c> la sumó la fase 21 (T0323). (nuevo)
 /// </summary>
 public static class VistasDeRecaudo
 {
@@ -26,6 +26,19 @@ public static class VistasDeRecaudo
     public const string Pagadurias = "paymasters";
     public const string ChequesDevueltos = "returned-checks";
     public const string ContingenciaPorDigitar = "contingency-pending";
+
+    /// <summary>Feature 015, US24 (T0323; FR-226; SC-024): el informe del paralelo en QA, lo registrado contra las cifras de referencia por día, medio y producto. (nuevo)</summary>
+    public const string ComparacionDelParalelo = "parallel-comparison";
+
+    /// <summary>
+    /// Los conceptos de las cifras de referencia del paralelo, cargados con la plantilla <c>recaudo.cifras-de-referencia</c> con la fecha de corte = el día:
+    /// <c>PARALELO.MEDIO</c> con el código del medio de pago como dimensión, y <c>PARALELO.PRODUCTO</c> con <see cref="ProductosDelParalelo"/>. (nuevo)
+    /// </summary>
+    public const string ConceptoParaleloMedio = "PARALELO.MEDIO";
+    public const string ConceptoParaleloProducto = "PARALELO.PRODUCTO";
+
+    /// <summary>Las dimensiones de <see cref="ConceptoParaleloProducto"/>: créditos, cuentas (aportes y ahorros), conceptos varios, cuentas por cobrar y por aplicar.</summary>
+    public static readonly IReadOnlyList<string> ProductosDelParalelo = ["CREDITOS", "CUENTAS", "CONCEPTOS", "CXC", "POR-APLICAR"];
 
     /// <summary>Las agrupaciones de <c>daily-collection</c> (FR-152): punto, caja, cajero, medio, canal, módulo y producto o línea.</summary>
     public static readonly IReadOnlyList<string> AgrupacionesDelRecaudo = ["point", "cashBox", "cashier", "means", "channel", "module", "product"];
@@ -47,6 +60,8 @@ public static class VistasDeRecaudo
         new(Pagadurias, "Pagadurías", "Por pagaduría: archivos de descuentos del rango, valor enviado y lo girado.", "pagadurias", ["from", "to", "branch"]),
         new(ChequesDevueltos, "Cheques devueltos", "Los cheques recibidos devueltos en el rango con su causal y el girador.", "cheques-devueltos", ["from", "to", "branch"]),
         new(ContingenciaPorDigitar, "Contingencia por digitar", "Por talonario activo: digitados, números por digitar antes del último y sin usar.", "contingencia-por-digitar", ["point"]),
+        new(ComparacionDelParalelo, "Comparación del paralelo", "Lo registrado en el paralelo contra las cifras de referencia, por día, medio y producto, con la explicación de cada diferencia.",
+            "comparacion-del-paralelo", ["from", "to"]),
     ];
 
     public static VistaDeInformeDeRecaudoYTesoreria? Buscar(string clave) => Todas.FirstOrDefault(v => v.Key == clave);
@@ -81,6 +96,7 @@ public sealed class ReceiptsReportQueryHandler(IApplicationDbContext db, IAlcanc
             VistasDeRecaudo.Pagadurias => Result.Success(await PagaduriasAsync(ambito, desde, hasta, ct)),
             VistasDeRecaudo.ChequesDevueltos => Result.Success(await ChequesDevueltosAsync(ambito, desde, hasta, ct)),
             VistasDeRecaudo.ContingenciaPorDigitar => Result.Success(await ContingenciaAsync(ambito, ct)),
+            VistasDeRecaudo.ComparacionDelParalelo => Result.Success(await ComparacionDelParaleloAsync(ambito, desde, hasta, ct)),
             _ => Result.Failure<TablaExportable>(new Error(CodigoVistaDesconocida, $"«{request.Vista}» no es una vista de Recaudo.")),
         };
     }
@@ -279,6 +295,100 @@ public sealed class ReceiptsReportQueryHandler(IApplicationDbContext db, IAlcanc
         var totales = new FilaExportable(["Total", null, recibos.Count, grupos.Sum(g => g.Valor)]);
         return Result.Success(new TablaExportable("Recaudo del día", Periodo(desde, hasta), columnas, filas, totales,
             ["Sólo recibos vigentes (los anulados no suman). Por medio, el efectivo va neto de las vueltas y cuadra con lo esperado en los cierres de sesión."]));
+    }
+
+    /// <summary>El código de producto del paralelo de una aplicación (<see cref="VistasDeRecaudo.ProductosDelParalelo"/>).</summary>
+    internal static string ProductoDelParalelo(ApplicationTarget t) => t switch
+    {
+        ApplicationTarget.Loan => "CREDITOS",
+        ApplicationTarget.Account => "CUENTAS",
+        ApplicationTarget.MiscConcept => "CONCEPTOS",
+        ApplicationTarget.CommercialReceivable => "CXC",
+        _ => "POR-APLICAR",
+    };
+
+    /// <summary>
+    /// Feature 015, US24 (T0323; FR-226; SC-024): por día del rango, lo registrado (recibos vigentes por fecha valor: por medio, el efectivo neto de las vueltas; por
+    /// producto, lo aplicado) contra las cifras de referencia <c>PARALELO.MEDIO</c> y <c>PARALELO.PRODUCTO</c> de ese día. Cada diferencia lleva su explicación: falta la
+    /// cifra, falta el registro, o los hechos del día que la pueden explicar (anulaciones, recibos con fecha valor distinta del día de registro, partidas por identificar
+    /// abiertas ese día); si ninguno la explica, «por explicar». Con el alcance de la persona. (nuevo)
+    /// </summary>
+    private async Task<TablaExportable> ComparacionDelParaleloAsync(Ambito a, DateOnly desde, DateOnly hasta, CancellationToken ct)
+    {
+        var recibos = await db.IssuedReceipts.AsNoTracking().Where(r => r.Status != ReceiptState.Voided && r.ValueDate >= desde && r.ValueDate <= hasta)
+            .Select(r => new { r.Id, r.ValueDate, r.CashBoxId, r.BranchId, r.ChangeGiven, r.RegisteredAt }).ToListAsync(ct);
+        recibos = recibos.Where(r => a.IncluyeRecibo(r.CashBoxId, r.BranchId)).ToList();
+        var porRecibo = recibos.ToDictionary(r => r.Id);
+        var ids = porRecibo.Keys.ToList();
+        var medios = await (from m in db.ReceiptMeans.AsNoTracking()
+                            join pm in db.PaymentMeans.AsNoTracking() on m.PaymentMeansId equals pm.Id
+                            where ids.Contains(m.ReceiptId)
+                            select new { m.ReceiptId, pm.Code, pm.Class, m.Amount }).ToListAsync(ct);
+        var aplicaciones = await db.ReceiptApplications.AsNoTracking().Where(x => ids.Contains(x.ReceiptId) && x.Status != ApplicationState.Voided)
+            .Select(x => new { x.ReceiptId, x.Target, x.Amount }).ToListAsync(ct);
+        var registrado = new Dictionary<(DateOnly Dia, string Concepto, string Codigo), decimal>();
+        void Sumar(DateOnly d, string c, string k, decimal v) => registrado[(d, c, k)] = registrado.GetValueOrDefault((d, c, k)) + v;
+        foreach (var m in medios)
+            Sumar(porRecibo[m.ReceiptId].ValueDate, VistasDeRecaudo.ConceptoParaleloMedio, m.Code.ToUpperInvariant(), m.Amount);
+        foreach (var g in medios.Where(m => m.Class == Domain.Enums.Core.PaymentMeansClass.Cash).GroupBy(m => m.ReceiptId))
+            Sumar(porRecibo[g.Key].ValueDate, VistasDeRecaudo.ConceptoParaleloMedio, g.First().Code.ToUpperInvariant(), -porRecibo[g.Key].ChangeGiven);
+        foreach (var x in aplicaciones)
+            Sumar(porRecibo[x.ReceiptId].ValueDate, VistasDeRecaudo.ConceptoParaleloProducto, ProductoDelParalelo(x.Target), x.Amount);
+
+        var conceptos = new[] { VistasDeRecaudo.ConceptoParaleloMedio, VistasDeRecaudo.ConceptoParaleloProducto };
+        var referencia = (await db.ReceiptsReferenceFigures.AsNoTracking()
+                .Where(c => c.CutoffDate >= desde && c.CutoffDate <= hasta && conceptos.Contains(c.Concept))
+                .Select(c => new { c.CutoffDate, c.Concept, c.Dimension, c.Amount }).ToListAsync(ct))
+            .GroupBy(c => (Dia: c.CutoffDate, Concepto: c.Concept, Codigo: c.Dimension.ToUpperInvariant())).ToDictionary(g => g.Key, g => g.Sum(c => c.Amount));
+
+        // Lo que puede explicar una diferencia del día.
+        var anulados = (await (from v in db.ReceiptVoidings.AsNoTracking()
+                               join r in db.IssuedReceipts.AsNoTracking() on v.ReceiptId equals r.Id
+                               where r.ValueDate >= desde && r.ValueDate <= hasta
+                               select new { r.ValueDate, r.CashBoxId, r.BranchId }).ToListAsync(ct))
+            .Where(x => a.IncluyeRecibo(x.CashBoxId, x.BranchId)).GroupBy(x => x.ValueDate).ToDictionary(g => g.Key, g => g.Count());
+        var fechaValorDistinta = recibos.Where(r => DateOnly.FromDateTime(r.RegisteredAt.ToLocalTime()) != r.ValueDate).GroupBy(r => r.ValueDate)
+            .ToDictionary(g => g.Key, g => g.Count());
+        var partidas = (await db.UnidentifiedItems.AsNoTracking().Where(p => p.OpenedOn >= desde && p.OpenedOn <= hasta).Select(p => p.OpenedOn).ToListAsync(ct))
+            .GroupBy(d => d).ToDictionary(g => g.Key, g => g.Count());
+
+        string Explicar(DateOnly dia, string concepto, decimal? reg, decimal? refe)
+        {
+            if (refe is null) return $"Sin cifra de referencia del día: cárguela con la plantilla recaudo.cifras-de-referencia (concepto {concepto}).";
+            if ((reg ?? 0m) == 0m && refe != 0m) return "La referencia lo trae y el paralelo no lo registró: falta digitar el recaudo del día.";
+            if (reg == refe) return "Cuadra.";
+            var motivos = new List<string>();
+            if (anulados.TryGetValue(dia, out var n)) motivos.Add($"{n} anulación(es) de recibos de ese día");
+            if (fechaValorDistinta.TryGetValue(dia, out var f)) motivos.Add($"{f} recibo(s) con fecha valor distinta del día en que se registraron");
+            if (partidas.TryGetValue(dia, out var p)) motivos.Add($"{p} partida(s) por identificar abiertas ese día");
+            return motivos.Count == 0 ? "Por explicar: ningún hecho del día la explica." : "Puede explicarla: " + string.Join("; ", motivos) + ".";
+        }
+
+        var llaves = registrado.Keys.Union(referencia.Keys).Distinct()
+            .OrderBy(k => k.Dia).ThenBy(k => k.Concepto, StringComparer.Ordinal).ThenBy(k => k.Codigo, StringComparer.Ordinal).ToList();
+        var columnas = new List<ColumnaExportable>
+        {
+            new("Día", TipoDeColumna.Fecha), new("Comparación"), new("Medio o producto"), new("Registrado", TipoDeColumna.Moneda), new("Referencia", TipoDeColumna.Moneda),
+            new("Diferencia", TipoDeColumna.Moneda), new("Explicación"),
+        };
+        var filas = llaves.Select(k =>
+        {
+            decimal? reg = registrado.TryGetValue(k, out var x) ? x : null;
+            decimal? refe = referencia.TryGetValue(k, out var y) ? y : null;
+            var diferencia = (reg ?? 0m) - (refe ?? 0m);
+            return new FilaExportable(
+            [
+                k.Dia, k.Concepto == VistasDeRecaudo.ConceptoParaleloMedio ? "Medio" : "Producto", k.Codigo, reg ?? 0m, refe, diferencia, Explicar(k.Dia, k.Concepto, reg, refe),
+            ], Seccion: $"{k.Dia:dd/MM/yyyy}", Resaltada: diferencia != 0m || refe is null);
+        }).ToList();
+        var porMedio = llaves.Where(k => k.Concepto == VistasDeRecaudo.ConceptoParaleloMedio).ToList();
+        var totales = new FilaExportable(["Total por medio", null, null, porMedio.Sum(k => registrado.GetValueOrDefault(k)), porMedio.Sum(k => referencia.GetValueOrDefault(k)),
+            porMedio.Sum(k => registrado.GetValueOrDefault(k) - referencia.GetValueOrDefault(k)), null]);
+        return new TablaExportable("Comparación del paralelo", Periodo(desde, hasta), columnas, filas, totales,
+        [
+            "Cifras de referencia con la plantilla recaudo.cifras-de-referencia: fecha de corte = el día; concepto PARALELO.MEDIO con el código del medio, o PARALELO.PRODUCTO con CREDITOS, CUENTAS, CONCEPTOS, CXC o POR-APLICAR.",
+            "Lo registrado son los recibos vigentes por fecha valor; por medio, el efectivo neto de las vueltas.",
+        ]);
     }
 
     private async Task<TablaExportable> RecibosPorCajeroAsync(Ambito a, DateOnly desde, DateOnly hasta, CancellationToken ct)

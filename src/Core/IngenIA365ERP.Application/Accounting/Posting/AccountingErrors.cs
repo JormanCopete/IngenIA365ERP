@@ -470,6 +470,15 @@ public static class AccountingErrors
             : string.Empty);
 
     /// <summary>Cierre contable de un mes que Cartera, activada, no cerró (§12, a): bloqueo sin reconocimiento.</summary>
+    /// <summary>
+    /// Feature 015, US24 (T0321; FR-167, FR-228; E-04): Recaudo o Tesorería se activaron en el mes con un cuadre de apertura provisional y todavía no registran el
+    /// definitivo: el mes de la activación no cierra. Sin reconocimiento. (nuevo)
+    /// </summary>
+    public static Error PeriodOpeningSquarePending(IReadOnlyList<IngenIA365ERP.Application.Common.Integration.Accounting.PendienteDeCierreDto> pendientes) =>
+        new ErrorConDatos("Accounting.Period.OpeningSquarePending",
+            string.Join(" ", pendientes.Select(p => p.Message)),
+            new { pending = pendientes.Select(p => new { module = p.Module, code = p.Code, message = p.Message }).ToList() });
+
     public static Error PeriodLendingNotClosed(string month, DateOnly activationDate, object? lastLendingClose, DateOnly? depositAccrualPendingFrom = null) =>
         new ErrorConDatos("Accounting.Period.LendingNotClosed",
             $"Cartera está activa desde el {activationDate:yyyy-MM-dd} y todavía no cerró {month}: ciérrelo primero en Cartera › Cierres y vuelva a intentarlo."

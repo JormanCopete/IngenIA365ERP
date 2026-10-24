@@ -20,6 +20,14 @@ namespace IngenIA365ERP.Application.Treasury.Tareas;
 public sealed class VigilanciaDeTesoreria(IApplicationDbContext db, ParametrosDeTesoreria parametros, ICalendarioHabil calendario, IAlertas alertas, IDateTimeService reloj)
 {
     /// <summary>Alerta cada orden enviada sin resultado más días hábiles que el parámetro. Devuelve cuántas alertó.</summary>
+    /// <summary>
+    /// Feature 015, US24 (T0321; FR-228): mientras la activación de Tesorería siga con el cuadre de apertura provisional, la alerta <c>Tesoreria.CuadreProvisionalPendiente</c>
+    /// se repite cada corrida; vencida la fecha límite del definitivo escala (otra clave, también a <c>Platform.GoLive.Override</c>). El definitivo la cierra.
+    /// </summary>
+    public async Task<int> CuadreProvisionalPendienteAsync(CancellationToken ct) =>
+        await IngenIA365ERP.Application.Common.Cuadres.CuadreProvisionalPendiente.AlertarAsync(alertas, TiposDeAlerta.TesoreriaCuadreProvisionalPendiente, "Tesorería", "Treasury",
+            "TreasuryOpeningSquare", await Activation.EstadoOperativoDeTesoreriaParaElCierre.PendienteAsync(db, ct), reloj.HoyLocal, ct);
+
     public async Task<int> OrdenesSinResultadoAsync(CancellationToken ct)
     {
         var hoy = reloj.HoyLocal;
@@ -147,5 +155,6 @@ public sealed class TareaDeVigilanciaDeTesoreria : ITareaProgramada
         await vigilancia.RemesasSinConfirmarAsync(ct);
         await vigilancia.PoliticaContableEnAdvertirAsync(ct);
         await vigilancia.PartidasConciliatoriasAntiguasAsync(ct);
+        await vigilancia.CuadreProvisionalPendienteAsync(ct);
     }
 }

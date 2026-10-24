@@ -789,6 +789,10 @@
             <PermissionGate Required="Core.IntegrationParticipants.View">
                 <NavLink href="/admin/participantes-de-integracion" class="nav-subitem">Participantes de la integración</NavLink>
             </PermissionGate>
+            @* Feature 015, US24 (T0322): la lista de go/no-go de la salida en vivo. *@
+            <PermissionGate Required="Platform.GoLive.View">
+                <NavLink href="/admin/go-no-go" class="nav-subitem">Lista de go/no-go</NavLink>
+            </PermissionGate>
         </NavMenuGroup>
 
         @* Feature 013, fase 2 (T0095): cumplimiento de habeas data y listas restrictivas. *@

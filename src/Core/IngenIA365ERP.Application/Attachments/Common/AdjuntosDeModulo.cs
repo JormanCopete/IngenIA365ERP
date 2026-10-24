@@ -394,6 +394,13 @@ public static class AdjuntosDeModulo
     /// </summary>
     public const string CertificacionBancariaDePersona = "PersonBankCertificate";
 
+    /// <summary>
+    /// Feature 015, US24 (T0322; FR-227): la evidencia de una condición manual de la lista de go/no-go y el escenario de no-go parcial con su plan de reversa (P15). El
+    /// dueño es la <b>lista</b> (su <c>PublicId</c>); se sube con <c>Platform.GoLive.Manage</c> mientras la lista exista, se lee con <c>Platform.GoLive.View</c> y no
+    /// se borra: respalda la decisión. (nuevo)
+    /// </summary>
+    public const string EvidenciaDeGoLive = "GoLiveEvidence";
+
     private const string VerCuentasDePersona = "Core.PersonBankAccounts.View";
     private const string PedirCuentasDePersona = "Core.PersonBankAccounts.Request";
 
@@ -409,6 +416,7 @@ public static class AdjuntosDeModulo
         [SoporteDeResultadoDelGiro] = "Treasury.Orders.View",
         [ConstanciaDeEntregaDeCheque] = "Treasury.Checks.View",
         [CertificacionBancariaDePersona] = VerCuentasDePersona,
+        [EvidenciaDeGoLive] = "Platform.GoLive.View",
     };
 
     private const string VerFondoDeLiquidez = "Lending.LiquidityFund.View";
@@ -716,6 +724,13 @@ public static class AdjuntosDeModulo
                 || !(await db.PaymentOrders.AnyAsync(o => o.PublicId == ownerEntityPublicId, ct)
                      || await db.PaymentBatches.AnyAsync(b => b.PublicId == ownerEntityPublicId, ct)))
                 return new Error("Generic.NotFound", "Orden o lote no encontrado.");
+            return null;
+        }
+        if (ownerEntityType == EvidenciaDeGoLive)
+        {
+            // Feature 015, US24: la evidencia y el escenario de una lista de go/no-go que exista, de quien la administra.
+            if (!await permisos.HasPermissionAsync("Platform.GoLive.Manage", ct) || !await db.GoLiveChecklists.AnyAsync(l => l.PublicId == ownerEntityPublicId, ct))
+                return new Error("Generic.NotFound", "Lista de go/no-go no encontrada.");
             return null;
         }
         if (ownerEntityType == CertificacionBancariaDePersona)
