@@ -317,6 +317,9 @@ public class LosHechosInmutablesNoSeModifican
         // Fase 11, US6 (T0191, T0192; data-model §5, §12.1): el extracto y sus líneas (lo que Recaudo identifica y el estado en la conciliación son columnas
         // mutables), la identificación de cada abono y las resoluciones de las partidas.
         ["BankStatement"] = [], ["BankStatementLine"] = [], ["BankItemIdentification"] = [], ["UnidentifiedItemResolution"] = [],
+        // Fase 12, US7 (T0205; data-model §6.2, §6.3): la línea del archivo de descuentos (su resultado se escribe una vez, al aceptarlo Cartera; lo girado es
+        // columna mutable) y la confirmación del envío.
+        ["PayrollDeductionFileLine"] = ["DeductionOutcome", "DeductedAmount", "DeductionDate"], ["PayrollFileSending"] = [],
     };
 
     /// <summary>
@@ -328,6 +331,7 @@ public class LosHechosInmutablesNoSeModifican
         ["Receipt"] = ["Status"], ["ReceiptMeans"] = ["Status"], ["ReceiptApplication"] = ["Status"], ["ReceiptApplicationPortion"] = ["Status"],
         ["ReceiptVoiding"] = ["Status"], ["ModuleReversal"] = ["Cause"],
         ["BankStatementLine"] = ["DuplicateDecision", "RecaudoStatus", "RecaudoIdentifiedAmount", "ReconciliationStatus"],
+        ["PayrollDeductionFileLine"] = ["RemittedAmount"],
     };
 
     [Fact]

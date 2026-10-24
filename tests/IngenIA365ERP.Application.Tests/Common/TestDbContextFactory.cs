@@ -623,6 +623,13 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     DbSet<Check> IApplicationDbContext.Checks => throw new NotImplementedException();
     DbSet<TreasuryConcept> IApplicationDbContext.TreasuryConcepts => throw new NotImplementedException();
     DbSet<TreasuryInvoice> IApplicationDbContext.TreasuryInvoices => throw new NotImplementedException();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PayrollDeductionFile> ReceiptsPayrollDeductionFiles => Set<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PayrollDeductionFile>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PayrollDeductionFileLine> ReceiptsPayrollDeductionFileLines => Set<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PayrollDeductionFileLine>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PayrollFileSending> PayrollFileSendings => Set<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PayrollFileSending>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PaymasterResponse> PaymasterResponses => Set<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PaymasterResponse>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PaymasterResponseLine> PaymasterResponseLines => Set<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PaymasterResponseLine>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PaymasterRemittance> PaymasterRemittances => Set<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PaymasterRemittance>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PaymasterRemittanceLine> PaymasterRemittanceLines => Set<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PaymasterRemittanceLine>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -695,6 +702,13 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Treasury.Activation.TreasuryActivation>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Accounting.Integration.OwnBankAccountLink>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceiptVoiding>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PayrollDeductionFile>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PayrollDeductionFileLine>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PayrollFileSending>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PaymasterResponse>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PaymasterResponseLine>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PaymasterRemittance>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PaymasterRemittanceLine>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Treasury.Statements.BankStatement>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Treasury.Statements.BankStatementLine>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Banks.BankItemIdentification>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });

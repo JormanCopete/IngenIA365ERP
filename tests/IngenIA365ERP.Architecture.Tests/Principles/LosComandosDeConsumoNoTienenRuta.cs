@@ -61,6 +61,8 @@ public class LosComandosDeConsumoNoTienenRuta
         "ConsumePaymentOrderVoidCommand",
         // Feature 015, US5 (T0176): el reverso de un pago o una consignación avisado por Cartera o Captaciones (lo manda DestinoRecaudo).
         "ConsumeLendingPaymentReversalCommand",
+        // Feature 015, US7 (T0206): el archivo de descuentos de una pagaduría (lo manda DestinoRecaudo).
+        "ConsumePayrollDeductionFileCommand",
     ];
 
     [Fact]

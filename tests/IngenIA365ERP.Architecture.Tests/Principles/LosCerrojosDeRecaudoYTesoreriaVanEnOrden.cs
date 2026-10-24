@@ -33,7 +33,8 @@ public class LosCerrojosDeRecaudoYTesoreriaVanEnOrden
     private static readonly string[] NivelesDeRecaudo =
     [
         "RCD_Setup", "RCD_CollectionPointDays", "RCD_CashSessions", "RCD_Vaults", "RCD_PayerControls",
-        "RCD_PayerCreditBalances", "RCD_UnidentifiedItems", "RCD_PaymasterRemittanceLines", "RCD_ReceivedChecks", "RCD_Receipts", "COR_Sequences",
+        "RCD_PayerCreditBalances", "RCD_UnidentifiedItems", "RCD_PaymasterRemittanceLines", "RCD_PayrollDeductionFileLines", "RCD_ReceivedChecks", "RCD_Receipts",
+        "COR_Sequences",
     ];
 
     /// <summary>Las tablas de los niveles de Tesorería, en su orden.</summary>
