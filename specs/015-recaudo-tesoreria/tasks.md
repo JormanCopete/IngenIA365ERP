@@ -1912,14 +1912,45 @@ correo con autorización (FR-020 parte R1, FR-037 parte R1, FR-045 correo, FR-04
 aplica el día de la activación por una persona que elige la modalidad; `F4` preselecciona lo exigible y corre todas las
 simulaciones; el recibo llega por correo sólo con la autorización del canal.
 
-- [ ] T0359 [P] [US3] Escribir tests/IngenIA365ERP.Application.Tests/Receipts/CashDesk/ReciboCompletoR1Tests.cs (FR-037, FR-187): `ListarAsync` con `includeCoDebtor`; preselección de todo lo exigible con todas las simulaciones en una acción; quitar ítems después
-- [ ] T0360 [P] [US3] Escribir tests/IngenIA365ERP.Application.Tests/Receipts/CashDesk/RecaudoPendienteDeAplicarTests.cs (FR-046; D14): sólo si el contrato responde «no habilitado» y la persona está en una carga aplicada sin activar (Captaciones lo informa; Cartera por `IConsultaDeCargaSinActivar`); por persona y producto, por valor libre; se aplica en el guardado de la activación o ese mismo día por una persona con permiso que elige la modalidad, con su fecha valor; fuera de ese caso el ítem se rechaza; hechos `RecaudoPendienteReconocido` y `RecaudoPendienteAplicado`
-- [ ] T0361 [P] [US3] Escribir tests/IngenIA365ERP.Application.Tests/Receipts/Notifications/AvisosDeRecaudoTests.cs (FR-020, FR-045, FR-177): el recibo y el egreso por correo sólo con la autorización del canal (`IAutorizacionDeDatos`) y con el contenido enmascarado para pagador tercero; SMS y mensajería simulados
-- [ ] T0362 [P] [US3] Crear en src/Core/IngenIA365ERP.Domain/Entities/Receipts/Operations/ `PendingApplication` y `PendingApplicationResolution` con su configuración (data-model §8.1)
-- [ ] T0363 [US3] Implementar en src/Core/IngenIA365ERP.Application/Receipts/CashDesk/ la preselección (`PreselectPayablesCommand`), `includeCoDebtor`, el destino `PendingApplication` en `ConfirmacionDeRecibo` y `ApplyPendingApplicationCommand`; emitir los dos hechos en EmisionDeRecaudo.Recibos.cs (FR-037, FR-046, FR-187)
-- [ ] T0364 [US3] Implementar los avisos por correo en src/Core/IngenIA365ERP.Application/Receipts/Notifications/ sobre la mensajería a personas de la plataforma (plantillas versionadas), con el PDF del recibo (FR-020, FR-045)
-- [ ] T0365 [US3] Exponer `/api/receipts/pending-applications` (`GET/POST`, `POST /{id}/apply`) y agregar a `/recaudo/caja` el atajo `F4`, la casilla de codeudor y el envío por correo, y la pantalla src/Presentation/IngenIA365ERP.Shared/Pages/Recaudo/RecaudoPendienteDeAplicar.razor con `IndicadorDeCarga` por zona
-- [ ] T0366 [US3] Regenerar en src/Infrastructure/IngenIA365ERP.Persistence.Migrations.{PostgreSql,SqlServer}/Application/ el par `RecaudoCompleto` con las tablas de recaudo pendiente de aplicar
+- [X] T0359 [P] [US3] Escribir tests/IngenIA365ERP.Application.Tests/Receipts/CashDesk/ReciboCompletoR1Tests.cs (FR-037, FR-187): `ListarAsync` con `includeCoDebtor`; preselección de todo lo exigible con todas las simulaciones en una acción; quitar ítems después
+- [X] T0360 [P] [US3] Escribir tests/IngenIA365ERP.Application.Tests/Receipts/CashDesk/RecaudoPendienteDeAplicarTests.cs (FR-046; D14): sólo si el contrato responde «no habilitado» y la persona está en una carga aplicada sin activar (Captaciones lo informa; Cartera por `IConsultaDeCargaSinActivar`); por persona y producto, por valor libre; se aplica en el guardado de la activación o ese mismo día por una persona con permiso que elige la modalidad, con su fecha valor; fuera de ese caso el ítem se rechaza; hechos `RecaudoPendienteReconocido` y `RecaudoPendienteAplicado`
+- [X] T0361 [P] [US3] Escribir tests/IngenIA365ERP.Application.Tests/Receipts/Notifications/AvisosDeRecaudoTests.cs (FR-020, FR-045, FR-177): el recibo y el egreso por correo sólo con la autorización del canal (`IAutorizacionDeDatos`) y con el contenido enmascarado para pagador tercero; SMS y mensajería simulados
+- [X] T0362 [P] [US3] Crear en src/Core/IngenIA365ERP.Domain/Entities/Receipts/Operations/ `PendingApplication` y `PendingApplicationResolution` con su configuración (data-model §8.1)
+- [X] T0363 [US3] Implementar en src/Core/IngenIA365ERP.Application/Receipts/CashDesk/ la preselección (`PreselectPayablesCommand`), `includeCoDebtor`, el destino `PendingApplication` en `ConfirmacionDeRecibo` y `ApplyPendingApplicationCommand`; emitir los dos hechos en EmisionDeRecaudo.Recibos.cs (FR-037, FR-046, FR-187)
+- [X] T0364 [US3] Implementar los avisos por correo en src/Core/IngenIA365ERP.Application/Receipts/Notifications/ sobre la mensajería a personas de la plataforma (plantillas versionadas), con el PDF del recibo (FR-020, FR-045)
+- [X] T0365 [US3] Exponer `/api/receipts/pending-applications` (`GET/POST`, `POST /{id}/apply`) y agregar a `/recaudo/caja` el atajo `F4`, la casilla de codeudor y el envío por correo, y la pantalla src/Presentation/IngenIA365ERP.Shared/Pages/Recaudo/RecaudoPendienteDeAplicar.razor con `IndicadorDeCarga` por zona
+- [X] T0366 [US3] Regenerar en src/Infrastructure/IngenIA365ERP.Persistence.Migrations.{PostgreSql,SqlServer}/Application/ el par `RecaudoCompleto` con las tablas de recaudo pendiente de aplicar
+
+**Notas de la construcción de la fase 25 (2026-10-24)**. Pruebas escritas y compiladas, sin correr. Desviaciones y decisiones; los nombres nuevos quedan en
+decisiones-transversales §2.7:
+
+- **T0359–T0361**: `Receipts/CashDesk/ReciboCompletoR1Tests` (codeudor a pedido, F4 con todas las simulaciones, quitar ítems), `RecaudoPendienteDeAplicarTests`
+  (elegibilidad, confirmar sin contrato con `RecaudoPendienteReconocido`, aplicar con la clave de la porción y `RecaudoPendienteAplicado`) y
+  `Receipts/Notifications/AvisosDeRecaudoTests` (autorización del canal, sin correo, SMS y mensajería simulados, cuerpo sin saldos).
+- **T0362**: `PendingApplication` y `PendingApplicationResolution` (`Entities/Receipts/Operations/PendingApplications.cs`), `PendingApplicationState` en el archivo nuevo
+  `Enums/Receipts/ReceiptsR1Enums.cs` (que trae también los enums del resto de R1) y su configuración en `Persistence/Configurations/Receipts/RecaudoCompletoConfigurations.cs`.
+- **T0363**: `includeCoDebtor` ya existía desde R0 (`GetPayablesQuery` → `SolicitudDeListado.IncludeAsCoDebtor`): sólo faltaba la casilla en la pantalla.
+  `PreselectPayablesCommand` (ruta **nueva** `POST /api/receipts/cash-operations/{id}/preselect`) arma los ítems y reusa el paso de ítems (las mismas simulaciones y
+  rechazos). El destino `PendingApplication` lleva `PendingTarget` (`Loan`/`Account`), `LoadObligationPublicId` y `ProductReference` **(nuevos)** en `ItemPedidoDto` e
+  `ItemDeCajaDto`; la elegibilidad vive en `ReglasDelPendiente` (Cartera: listado `NotActivated` + `IConsultaDeCargaSinActivar`; Captaciones: exigibles con la naturaleza sin
+  activar y la persona en `MigratedNotActivated`), se mide en el paso de ítems y otra vez al confirmar. Las porciones del pendiente **no van en `ReciboEmitido`** (que no
+  se emite si no queda otra porción) sino en `RecaudoPendienteReconocido` (rol del medio → `RecaudoPendienteDeAplicar` con la persona); al aplicar,
+  `RecaudoPendienteAplicado` (`RecaudoPendienteDeAplicar` → `PuenteDelModulo`), los dos en línea con el tipo de comprobante `RR`. **Desviación**: FR-046 dice «en el
+  guardado de la activación o ese mismo día»; Recaudo no ve la fecha de activación de Cartera ni de Captaciones por sus puertos, y aplicarlo dentro de la activación de otro
+  módulo lo acoplaría; se aplica a mano (`ApplyPendingApplicationCommand`, permisos **nuevos** `Receipts.PendingApplications.View/Apply`, en la plantilla del supervisor)
+  cuando el contrato ya responde activo, con la fecha valor del recibo. La anulación de un recibo con un pendiente ya aplicado se niega
+  (`Receipts.Voiding.PendingApplicationApplied`, **nuevo**); el pendiente vigente queda `Voided` y el espejo lleva `RecaudoPendienteDeAplicar`.
+- **T0364**: `SendReceiptNoticeCommand` (ruta **nueva** `POST /api/receipts/receipts/{id}/notify`, `Receipts.Receipt.Print`) y `AvisosDeRecaudo` (común con el egreso de la
+  fase 26): el PDF del recibo en carta por `IDocumentosDeRecaudoEnPdf` y el correo por `IEmailSender`, sólo con la autorización `ContactChannel`/`Email` del pagador;
+  SMS y WhatsApp responden «simulado». **Desviación**: la tarea decía «sobre la mensajería a personas de la plataforma (plantillas versionadas)»; las plantillas
+  versionadas que existen son las de Cartera (`ColaDeMensajesAlDeudor`), que Recaudo no puede tocar; el cuerpo es un texto fijo sin saldos y el detalle va en el PDF.
+- **T0365**: rutas `/api/receipts/pending-applications` (`GET`, `POST /{id}/apply`); `/recaudo/caja` con «Todo lo exigible (F4)», «También como codeudor», «Dejar
+  pendiente» (cuando el módulo no está activado) y «Enviar por correo»; pantalla `/recaudo/pendiente-de-aplicar` en el menú y en
+  `LasPantallasDeRecaudoYTesoreriaEstanEnElMenu`. La ruta `POST /api/receipts/pending-applications` de api.md §8 no hace falta: el pendiente nace al confirmar el recibo.
+  Sin probar en navegador.
+- **T0366**: `RecaudoCompleto` regenerado en par con las dos tablas; `has-pending-model-changes` «No changes» en SqlServer y PostgreSQL; paridad en par (Application 70).
+  Compilan API, Web, Web.Client, Persistence y las cinco de pruebas.
+
 
 ---
 

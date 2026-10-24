@@ -516,6 +516,18 @@ Lo que tasks.md marcaba **(nuevo)** y lo que trajeron el `/speckit-analyze` y la
 | tercero del `MedioPorCobrar` = persona del adquirente (`EmisionDeRecaudo.AdquirentesDeLosMediosAsync`) | el débito de las tarjetas en `ReciboEmitido` | `Receipts/Accounting/EmisionDeRecaudo.Recibos.cs` |
 | casos `arqueo-tarjetas-01..03` | casos dorados del arqueo de R1 | `tests/IngenIA365ERP.Domain.Tests/Receipts/Casos` |
 
+**Fijados en la construcción de la fase 25 (2026-10-24)**:
+
+| Nombre | Qué | Dónde |
+|---|---|---|
+| `RCD_PendingApplications` (`PendingApplication`) · `RCD_PendingApplicationResolutions` (`PendingApplicationResolution`) · `PendingApplicationState` | el recaudo pendiente de aplicar | par `RecaudoCompleto`; `Domain/Enums/Receipts/ReceiptsR1Enums.cs` |
+| `ReglasDelPendiente` · `ErroresDelPendiente` (`Receipts.PendingApplication.{NotEligible, ModuleNotActivated, NotPending}`, `Receipts.Voiding.PendingApplicationApplied`) · `ApplyPendingApplicationCommand` · `ListPendingApplicationsQuery` · `PendingApplicationDto` · `PendientesDeRecaudo` | reglas, errores, comando y consulta del pendiente | `Receipts/CashDesk/RecaudoPendienteDeAplicar.cs` |
+| `ItemPedidoDto.{PendingTarget, LoadObligationPublicId, ProductReference}` · `ItemDeCajaDto` igual | el destino `PendingApplication` en la caja | `Receipts/CashDesk/CajaDtos.cs` |
+| `PreselectPayablesCommand` · `POST /api/receipts/cash-operations/{id}/preselect?includeCoDebtor=` | F4, todo lo exigible en una acción | `Receipts/CashDesk/PreseleccionDeExigibles.cs` |
+| `RecaudoPendienteReconocidoV1` (`RPR`) · `RecaudoPendienteAplicadoV1` (`RPA`) · rol `RecaudoPendienteDeAplicar` · `EmisionDeRecaudo.{RecaudoPendienteReconocidoAsync, RecaudoPendienteAplicadoAsync}` · roles `CuentasPorCobrarComerciales`, `GmfGasto`, `GmfPorPagar` (para las fases 26 y 30) | los hechos de R1 y sus roles | `Common/Integration/Contracts/Receipts/HechosDeR1V1.cs`, `HechosDeCajaV1.cs`, `Receipts/Accounting/EmisionDeRecaudo.Pendientes.cs` |
+| `SendReceiptNoticeCommand` · `AvisosDeRecaudo` · `AvisoDeRecaudoDto` · `ResultadosDeAviso` (`Sent`, `NotAuthorized`, `NoDestination`, `Simulated`) · `POST /api/receipts/receipts/{id}/notify` · evento `Receipts.Receipt.Notified` | el aviso por correo | `Receipts/Notifications/AvisosDeRecaudo.cs` |
+| permisos `Receipts.PendingApplications.View` · `.Apply` · `GET /api/receipts/pending-applications` · `POST …/{id}/apply` · pantalla `/recaudo/pendiente-de-aplicar` · evento `Receipts.PendingApplication.Applied` | rutas, permisos y pantalla | `API/Endpoints/Receipts/CashDeskEndpoints.cs`, `Shared/Pages/Recaudo/RecaudoPendienteDeAplicar.razor` |
+
 ## 3. Decisiones transversales
 
 ### Módulos y frontera
