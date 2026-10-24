@@ -18,14 +18,16 @@ namespace IngenIA365ERP.Architecture.Tests.Principles;
 /// </summary>
 public class TesoreriaNoConoceContabilidad
 {
-    private const string Prohibido = @"^IngenIA365ERP\.(?!Application\.Common\.Integration\.Accounting(\.|$))([\w.]+\.)?Accounting(\..+)?$";
+    // Fase 7 (T0145): el emisor de hechos del propio módulo (Application.Treasury.Accounting) no es Contabilidad: es el lado del módulo que arma los hechos.
+    private const string Prohibido = @"^IngenIA365ERP\.(?!Application\.Common\.Integration\.Accounting(\.|$))(?!Application\.Treasury\.Accounting(\.|$))([\w.]+\.)?Accounting(\..+)?$";
 
     /// <summary>Los puertos contables de Tesorería y exactamente sus métodos.</summary>
     private static readonly (string Tipo, string[] Metodos)[] Puertos =
     [
         // Fase 2 (T0041; interfaces.md §3).
         ("IngenIA365ERP.Application.Common.Integration.Accounting.IContabilidadParaTesoreria",
-            ["CuentasBancariasDelPlanAsync", "CuentasPorPagarAsync", "EvaluarAsync", "MovimientosDeCuentaBancariaAsync", "SaldoContableAsync",
+            // Fase 7 (T0145): + EstadoDelPeriodoAsync, la fecha contable propuesta de los hechos de Tesorería (DT §2.7).
+            ["CuentasBancariasDelPlanAsync", "CuentasPorPagarAsync", "EstadoDelPeriodoAsync", "EvaluarAsync", "MovimientosDeCuentaBancariaAsync", "SaldoContableAsync",
              "SaldoEnLibrosAsync", "VincularCuentaBancariaAsync", "VinculoAsync"]),
     ];
 

@@ -1,0 +1,66 @@
+{
+  "nombre": "Anulación pedida y orden repetida",
+  "descripcion": "La anulada no entra; la repetida cuenta una vez.",
+  "forma": "File",
+  "ordenes": [
+    {
+      "id": 1,
+      "estado": "Ready",
+      "forma": "Transfer",
+      "neto": 100000,
+      "pagadaPorArchivo": false,
+      "enOtroLote": false,
+      "anulacionPedida": true,
+      "motivos": [],
+      "cambiada": false,
+      "compartida": false,
+      "usuarioInterno": false,
+      "importada": false
+    },
+    {
+      "id": 2,
+      "estado": "Ready",
+      "forma": "Transfer",
+      "neto": 50000,
+      "pagadaPorArchivo": false,
+      "enOtroLote": false,
+      "anulacionPedida": false,
+      "motivos": [],
+      "cambiada": false,
+      "compartida": false,
+      "usuarioInterno": false,
+      "importada": false
+    },
+    {
+      "id": 2,
+      "estado": "Ready",
+      "forma": "Transfer",
+      "neto": 50000,
+      "pagadaPorArchivo": false,
+      "enOtroLote": false,
+      "anulacionPedida": false,
+      "motivos": [],
+      "cambiada": false,
+      "compartida": false,
+      "usuarioInterno": false,
+      "importada": false
+    }
+  ],
+  "esperado": {
+    "incluidas": [
+      {
+        "id": 2,
+        "valor": 50000,
+        "marcas": 0
+      }
+    ],
+    "pendientes": [
+      {
+        "id": 1,
+        "motivo": "VoidRequested"
+      }
+    ],
+    "total": 50000,
+    "cantidad": 1
+  }
+}

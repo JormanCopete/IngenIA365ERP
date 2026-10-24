@@ -1,0 +1,90 @@
+{
+  "nombre": "Las que no entran, con su motivo",
+  "descripcion": "Una pendiente por cuenta no registrada, una pagada por archivo de Cartera, una en otro lote.",
+  "forma": "File",
+  "ordenes": [
+    {
+      "id": 1,
+      "estado": "Ready",
+      "forma": "Transfer",
+      "neto": 100000,
+      "pagadaPorArchivo": false,
+      "enOtroLote": false,
+      "anulacionPedida": false,
+      "motivos": [],
+      "cambiada": false,
+      "compartida": false,
+      "usuarioInterno": false,
+      "importada": false
+    },
+    {
+      "id": 2,
+      "estado": "Pending",
+      "forma": "Transfer",
+      "neto": 100000,
+      "pagadaPorArchivo": false,
+      "enOtroLote": false,
+      "anulacionPedida": false,
+      "motivos": [
+        "Treasury.Order.DestinationNotRegistered"
+      ],
+      "cambiada": false,
+      "compartida": false,
+      "usuarioInterno": false,
+      "importada": false
+    },
+    {
+      "id": 3,
+      "estado": "Ready",
+      "forma": "Transfer",
+      "neto": 100000,
+      "pagadaPorArchivo": true,
+      "enOtroLote": false,
+      "anulacionPedida": false,
+      "motivos": [],
+      "cambiada": false,
+      "compartida": false,
+      "usuarioInterno": false,
+      "importada": false
+    },
+    {
+      "id": 4,
+      "estado": "Ready",
+      "forma": "Transfer",
+      "neto": 100000,
+      "pagadaPorArchivo": false,
+      "enOtroLote": true,
+      "anulacionPedida": false,
+      "motivos": [],
+      "cambiada": false,
+      "compartida": false,
+      "usuarioInterno": false,
+      "importada": false
+    }
+  ],
+  "esperado": {
+    "incluidas": [
+      {
+        "id": 1,
+        "valor": 100000,
+        "marcas": 0
+      }
+    ],
+    "pendientes": [
+      {
+        "id": 2,
+        "motivo": "Treasury.Order.DestinationNotRegistered"
+      },
+      {
+        "id": 3,
+        "motivo": "PaidByLendingFile"
+      },
+      {
+        "id": 4,
+        "motivo": "AlreadyInBatch"
+      }
+    ],
+    "total": 100000,
+    "cantidad": 1
+  }
+}

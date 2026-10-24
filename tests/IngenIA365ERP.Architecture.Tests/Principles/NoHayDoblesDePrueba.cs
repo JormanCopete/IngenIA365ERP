@@ -21,6 +21,8 @@ public class NoHayDoblesDePrueba
     /// <summary>Los consumidores de mensajes admitidos en Recaudo y Tesorería, por nombre completo.</summary>
     private static readonly string[] Permitidos =
     [
+        // Fase 7 (T0132): el único consumidor real del destino Treasury.
+        "IngenIA365ERP.Application.Treasury.Integration.DestinoTesoreria",
     ];
 
     /// <summary>Los dobles de la 013 que la fase 19 retira (por nombre de tipo).</summary>

@@ -586,6 +586,15 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceiptApplication> ReceiptApplications => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceiptApplication>();
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceiptApplicationPortion> ReceiptApplicationPortions => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceiptApplicationPortion>();
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.SourceOfFundsDeclaration> SourceOfFundsDeclarations => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.SourceOfFundsDeclaration>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.BankAccounts.OwnBankAccount> OwnBankAccounts => Set<IngenIA365ERP.Domain.Entities.Treasury.BankAccounts.OwnBankAccount>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.BankAccounts.LiquidityFundUse> LiquidityFundUses => Set<IngenIA365ERP.Domain.Entities.Treasury.BankAccounts.LiquidityFundUse>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Payments.TreasuryInboundMessage> TreasuryInboundMessages => Set<IngenIA365ERP.Domain.Entities.Treasury.Payments.TreasuryInboundMessage>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Payments.PaymentOrder> PaymentOrders => Set<IngenIA365ERP.Domain.Entities.Treasury.Payments.PaymentOrder>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Payments.PaymentBatch> PaymentBatches => Set<IngenIA365ERP.Domain.Entities.Treasury.Payments.PaymentBatch>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Payments.PaymentBatchItem> PaymentBatchItems => Set<IngenIA365ERP.Domain.Entities.Treasury.Payments.PaymentBatchItem>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Payments.PaymentFile> PaymentFiles => Set<IngenIA365ERP.Domain.Entities.Treasury.Payments.PaymentFile>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Payments.PaymentFileLine> PaymentFileLines => Set<IngenIA365ERP.Domain.Entities.Treasury.Payments.PaymentFileLine>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Accounting.Integration.OwnBankAccountLink> OwnBankAccountLinks => Set<IngenIA365ERP.Domain.Entities.Accounting.Integration.OwnBankAccountLink>();
     DbSet<DebitCard> IApplicationDbContext.DebitCards => throw new NotImplementedException();
     DbSet<DebitAgreementParameter> IApplicationDbContext.DebitAgreementParameters => throw new NotImplementedException();
     DbSet<PosTerminal> IApplicationDbContext.PosTerminals => throw new NotImplementedException();

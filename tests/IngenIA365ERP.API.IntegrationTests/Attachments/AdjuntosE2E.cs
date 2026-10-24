@@ -68,9 +68,9 @@ public static class AdjuntosE2E
 
     /// <summary>Pedir → enviar al almacén (todos los campos, el archivo al final) → confirmar.</summary>
     public static async Task<Subida> SubirAsync(HttpClient api, string token, Guid dueno, byte[] contenido,
-        string nombre = "Factura 1234 – Núñez.pdf", string tipo = "application/pdf")
+        string nombre = "Factura 1234 – Núñez.pdf", string tipo = "application/pdf", string ownerEntityType = "AccountingDocument")
     {
-        using var pedido = await PedirSubidaAsync(api, token, dueno, contenido, nombre, tipo);
+        using var pedido = await PedirSubidaAsync(api, token, dueno, contenido, nombre, tipo, ownerEntityType);
         pedido.StatusCode.Should().Be(HttpStatusCode.Created, await pedido.Content.ReadAsStringAsync());
         var autorizacion = await LeerAsync(pedido);
         var adjunto = autorizacion.GetProperty("attachmentPublicId").GetGuid();

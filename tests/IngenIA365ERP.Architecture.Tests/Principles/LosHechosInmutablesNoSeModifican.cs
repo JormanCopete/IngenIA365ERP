@@ -302,6 +302,11 @@ public class LosHechosInmutablesNoSeModifican
         ["Receipt"] = [], ["ReceiptMeans"] = [], ["SourceOfFundsDeclaration"] = [],
         ["ReceiptApplication"] = ["ProductNumber", "ModuleVoucherPublicId", "ModuleVoucherNumber", "FinalityUntil"],
         ["ReceiptApplicationPortion"] = ["ModuleOperationPublicId", "ModuleOperationNumber", "ReversalKey"],
+        // Fase 7, US10 (T0135; data-model §10.5): el archivo de pago se inserta al generarlo; lo que pasa después (la primera descarga, el envío, la anulación, el
+        // rechazo técnico del banco) se escribe una vez. Sus líneas no cambian.
+        ["PaymentFile"] = ["DownloadedByUserId", "DownloadedAt", "SentAt", "SentByUserId", "UploadedAtBankBy", "AuthorizedAtBankBy", "VoidedAt", "VoidReason",
+            "RejectedByBankAt", "RejectedByBankReason"],
+        ["PaymentFileLine"] = [],
     };
 
     /// <summary>

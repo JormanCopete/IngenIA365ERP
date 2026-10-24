@@ -29,6 +29,8 @@ public class UnSoloConsumidorPorDestino
         IntegrationDestinations.Inventory,
     ];
 
+    private static readonly string[] DoblesPendientesDeRetiro = ["TesoreriaDePrueba", "RecaudadorDePrueba"];
+
     private static IReadOnlyList<string> TodosLosDestinos() => typeof(IntegrationDestinations)
         .GetFields(BindingFlags.Public | BindingFlags.Static).Where(f => f.IsLiteral).Select(f => (string)f.GetRawConstantValue()!).ToList();
 
@@ -43,7 +45,10 @@ public class UnSoloConsumidorPorDestino
     [Fact]
     public void Cada_destino_tiene_a_lo_sumo_un_consumidor_y_los_de_hoy_exactamente_uno()
     {
-        var fuentes = RepoPath.ProductionCSharpFiles().Select(File.ReadAllText).ToList();
+        // Fase 7 (T0132, T0141): mientras existan los dobles de la 013 (hasta la fase 19) su fuente no cuenta: la bandera transitoria registra el doble o el
+        // real, nunca los dos (lo vigila ConsumidoresPorDestino.Validar() al arrancar).
+        var fuentes = RepoPath.ProductionCSharpFiles().Where(f => !DoblesPendientesDeRetiro.Any(d => f.EndsWith(d + ".cs", StringComparison.Ordinal)))
+            .Select(File.ReadAllText).ToList();
         var infracciones = new List<string>();
         foreach (var destino in TodosLosDestinos())
         {

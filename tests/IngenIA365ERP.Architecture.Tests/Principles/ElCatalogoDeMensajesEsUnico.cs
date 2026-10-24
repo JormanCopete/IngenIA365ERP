@@ -26,6 +26,8 @@ public class ElCatalogoDeMensajesEsUnico
         "src/Core/IngenIA365ERP.Application/Common/Integration/Contracts/Lending/CatalogoDeMensajesHaciaCarteraV1.cs",
         // Feature 015, US2 (T0091): los hechos de Recaudo a Contabilidad.
         "src/Core/IngenIA365ERP.Application/Common/Integration/Contracts/Receipts/CatalogoDeMensajesDeRecaudoV1.cs",
+        // Feature 015, US10 (T0145): los hechos de Tesorería a Contabilidad.
+        "src/Core/IngenIA365ERP.Application/Common/Integration/Contracts/Treasury/CatalogoDeMensajesDeTesoreriaV1.cs",
     ];
 
     private static readonly (Regex Patron, string Que)[] Prohibidos = [
@@ -95,7 +97,8 @@ public class ElCatalogoDeMensajesEsUnico
         // US4 (T112): + ConsignacionReversadaPorCartera, CargoDeCaptacionCausado y CargoDeCaptacionReversado; T091 (D36): + la v2 de
         // DescuentosPorPagaduria (y, de Recaudo, la v2 de ResultadoDeDescuentos).
         Assert.Equal(82, todos.Count(t => t.OriginModule == ModulosDeOrigen.Cartera));
-        Assert.Equal(1, todos.Count(t => t.OriginModule == ModulosDeOrigen.Tesoreria));
+        // Feature 015, US10 y US11 (T0145, T0159): + GmfDePagoCausado (GMP) y PagoDeOrdenGirado (POG).
+        Assert.Equal(3, todos.Count(t => t.OriginModule == ModulosDeOrigen.Tesoreria));
         // Feature 015, US2 (T0091): + los cinco hechos de la caja a Contabilidad (MCR, MRC, DAA, ASR, SLI); US3 (T0116): + ReciboEmitido (RCE).
         Assert.Equal(9, todos.Count(t => t.OriginModule == ModulosDeOrigen.Recaudo));
 
@@ -106,7 +109,11 @@ public class ElCatalogoDeMensajesEsUnico
         var hechosDeRecaudo = todos.Where(t => t.OriginModule == ModulosDeOrigen.Recaudo && t.AdmiteDestino(IntegrationDestinations.Accounting)).ToList();
         Assert.Equal(6, hechosDeRecaudo.Count);
         Assert.All(hechosDeRecaudo, t => Assert.Matches("^[A-Z]{3,4}$", t.CodigoCorto ?? string.Empty));
-        Assert.Equal(hechos.Count + hechosDeRecaudo.Count, hechos.Concat(hechosDeRecaudo).Select(t => t.CodigoCorto).Distinct().Count());
-        Assert.All(todos.Except(hechos).Except(hechosDeRecaudo), t => Assert.Null(t.CodigoCorto));
+        var hechosDeTesoreria = todos.Where(t => t.OriginModule == ModulosDeOrigen.Tesoreria && t.AdmiteDestino(IntegrationDestinations.Accounting)).ToList();
+        Assert.Equal(2, hechosDeTesoreria.Count);
+        Assert.All(hechosDeTesoreria, t => Assert.Matches("^[A-Z]{3,4}$", t.CodigoCorto ?? string.Empty));
+        var conCodigo = hechos.Concat(hechosDeRecaudo).Concat(hechosDeTesoreria).ToList();
+        Assert.Equal(conCodigo.Count, conCodigo.Select(t => t.CodigoCorto).Distinct().Count());
+        Assert.All(todos.Except(conCodigo), t => Assert.Null(t.CodigoCorto));
     }
 }

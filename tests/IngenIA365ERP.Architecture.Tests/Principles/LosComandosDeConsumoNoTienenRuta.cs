@@ -56,6 +56,9 @@ public class LosComandosDeConsumoNoTienenRuta
         "ConsumePayrollDeductionResultCommand",
         "AlertPendingPayrollDeductionFilesCommand",
         "AlertOverduePayrollTransfersCommand",
+        // Feature 015, US10 (T0132): el consumo de las órdenes de giro y de su anulación (los manda DestinoTesoreria).
+        "ConsumePaymentOrderCommand",
+        "ConsumePaymentOrderVoidCommand",
     ];
 
     [Fact]

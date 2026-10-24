@@ -25,7 +25,8 @@ namespace IngenIA365ERP.Architecture.Tests.Principles;
 public class RecaudoNoConoceContabilidad
 {
     /// <summary>Todo espacio con un segmento <c>Accounting</c>, salvo los puertos de la plataforma.</summary>
-    private const string Prohibido = @"^IngenIA365ERP\.(?!Application\.Common\.Integration\.Accounting(\.|$))([\w.]+\.)?Accounting(\..+)?$";
+    // Fase 7 (T0145): el emisor de hechos del propio módulo (Application.Receipts.Accounting) no es Contabilidad: es el lado del módulo que arma los hechos.
+    private const string Prohibido = @"^IngenIA365ERP\.(?!Application\.Common\.Integration\.Accounting(\.|$))(?!Application\.Receipts\.Accounting(\.|$))([\w.]+\.)?Accounting(\..+)?$";
 
     /// <summary>Los puertos contables de Recaudo y exactamente sus métodos (orden ordinal).</summary>
     private static readonly (string Tipo, string[] Metodos)[] Puertos =
