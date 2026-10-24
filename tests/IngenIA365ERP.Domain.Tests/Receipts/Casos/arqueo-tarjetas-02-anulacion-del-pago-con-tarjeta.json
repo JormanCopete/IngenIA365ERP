@@ -1,0 +1,66 @@
+{
+  "nombre": "Tarjeta con un pago anulado en la sesión: el lote ya trae el reverso",
+  "descripcion": "R1 (T0356). Cobros de 120.000 y 30.000 con tarjeta de crédito; el de 30.000 se anula en la sesión: esperado 120.000. El lote 003 trae 120.000 neto del reverso.",
+  "tratamientoDelFaltante": "CashierReceivable",
+  "medios": [
+    {
+      "id": 3,
+      "codigo": "TC",
+      "clase": "CreditCard",
+      "arqueo": "VoucherTotal",
+      "tolerancia": 0
+    }
+  ],
+  "medioDeLaBase": null,
+  "base": 0,
+  "cobros": [
+    {
+      "medio": "TC",
+      "valor": 120000,
+      "anulado": false,
+      "referencia": null
+    },
+    {
+      "medio": "TC",
+      "valor": 30000,
+      "anulado": true,
+      "referencia": null
+    }
+  ],
+  "movimientos": [],
+  "conteo": [
+    {
+      "medio": "TC",
+      "total": null,
+      "denominaciones": null,
+      "referencias": null,
+      "lotes": [
+        {
+          "datafono": 1,
+          "lote": "003",
+          "valor": 120000
+        }
+      ],
+      "motivo": null
+    }
+  ],
+  "esperado": [
+    {
+      "medio": "TC",
+      "base": 0,
+      "cobros": 150000,
+      "anulaciones": 30000,
+      "entradas": 0,
+      "salidas": 0,
+      "esperado": 120000,
+      "contado": 120000,
+      "diferencia": 0,
+      "dentro": true,
+      "tratamiento": "None"
+    }
+  ],
+  "totalEsperado": 120000,
+  "totalContado": 120000,
+  "aAprobar": 0,
+  "sinMotivo": []
+}

@@ -1,4 +1,4 @@
-using FluentAssertions;
+﻿using FluentAssertions;
 using IngenIA365ERP.Application.Common.Parameters;
 using IngenIA365ERP.Application.Receipts.Common;
 using IngenIA365ERP.Application.Receipts.Setup;
@@ -94,9 +94,10 @@ public class ParametrosDeRecaudoYTesoreriaTests
     }
 
     [Fact]
-    public void Las_claves_de_R1_y_T1_no_se_ofrecen_en_R0_T0()
+    public void Las_claves_de_R1_se_ofrecen_desde_R1_y_las_de_T1_no_en_T0()
     {
-        Def(P.ModuloRecaudo, P.LibranzaDiasHabilesGiro).DisponibleEnLaEntrega().Should().BeFalse("es informativo de R1");
+        // Feature 015, R1 (T0357): la entrega desplegada de Recaudo es R1; la de Tesorería sigue en T0.
+        Def(P.ModuloRecaudo, P.LibranzaDiasHabilesGiro).DisponibleEnLaEntrega().Should().BeTrue("es informativo de R1, ya desplegada");
         Def(P.ModuloTesoreria, P.ContabilidadCierreExigeConciliaciones).DisponibleEnLaEntrega().Should().BeFalse("es de T1");
         Def(P.ModuloRecaudo, P.RecaudoHoraDeCorte).DisponibleEnLaEntrega().Should().BeTrue();
     }
