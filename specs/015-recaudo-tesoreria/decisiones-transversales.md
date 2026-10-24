@@ -591,6 +591,14 @@ Lo que tasks.md marcaba **(nuevo)** y lo que trajeron el `/speckit-analyze` y la
 | vistas `consolidated-collection` · `voidings-with-reissue` · `delinquent-paymasters` · `received-checks` · `cash-transactions` · `pending-application-load` (`VistasDeRecaudo.{Consolidado, AnulacionesConReemision, PagaduriasMorosas, ChequesRecibidos, TransaccionesEnEfectivo, CargaDelPendiente}`) | las vistas de R1 | `Receipts/Reports/InformesDeRecaudo.cs`, `InformesDeRecaudoR1.cs` |
 | `GetReceiptsDashboardQuery` · `TableroDeCajaDto` · `CifraDelTableroDto` · ruta `GET /api/receipts/dashboard` · pantalla `/recaudo/tablero` | el tablero de caja sin datos personales | `Receipts/Reports/TableroDeCaja.cs`, `API/Endpoints/Receipts/DashboardEndpoints.cs`, `Shared/Pages/Recaudo/Tablero.razor` |
 
+**Fijados en la construcción de la fase 32 (2026-10-24)**:
+
+| Nombre | Qué | Dónde |
+|---|---|---|
+| `TrasladoEntreCuentasEnviadoV1` (`TEE`) · `TrasladoConfirmadoV1` (`TCF`) · `ChequesReclasificadosAlCierreV1` (`CRC`, con `IsReversal`) · `ChequeNoCobradoACuentaPorPagarV1` (`CNP`) | los hechos de T1, con el comprobante sugerido `TB` | `Common/Integration/Contracts/Treasury/HechosDeTesoreriaT1V1.cs`, `CatalogoDeMensajesDeTesoreriaV1`, `CatalogoDeLaMatriz` |
+| `RolesDeTesoreriaT1.{FondosEnTransito, ChequesPorEntregar, CuentaPorPagarChequesNoCobrados}` | los roles de T1, por cuenta propia | ídem |
+| tipo de comprobante `TB` («Notas y traslados bancarios») · `CatalogoDeTesoreria.EntregaVigente = T1` · par `TesoreriaCompleta` | la base de T1 | `voucher-types.json`, `Domain/Treasury/CatalogoDeTesoreria.cs`, `Persistence.Migrations.*` |
+
 ## 3. Decisiones transversales
 
 ### Módulos y frontera

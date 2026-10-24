@@ -2250,7 +2250,19 @@ decisiones-transversales §2.7:
 **Independent Test**: el par se aplica sobre una base con R0/T0 congelados sin tocar sus tablas; las rutas de T1 dejan de
 responder 404 para quien tiene su permiso.
 
-- [ ] T0406 Generar en src/Infrastructure/IngenIA365ERP.Persistence.Migrations.{PostgreSql,SqlServer}/Application/ la primera versión del par `TesoreriaCompleta` con `tools/scripts/add-migration.ps1` (las seis tablas `TES_` de T1 llegan con sus historias y se regeneran hasta T0424), sin tocar los pares congelados; activar las rutas de T1 de api.md §13 y sembrar el tipo de comprobante `TB` con sus filas sugeridas de matriz (contabilidad.md §8)
+- [X] T0406 Generar en src/Infrastructure/IngenIA365ERP.Persistence.Migrations.{PostgreSql,SqlServer}/Application/ la primera versión del par `TesoreriaCompleta` con `tools/scripts/add-migration.ps1` (las seis tablas `TES_` de T1 llegan con sus historias y se regeneran hasta T0424), sin tocar los pares congelados; activar las rutas de T1 de api.md §13 y sembrar el tipo de comprobante `TB` con sus filas sugeridas de matriz (contabilidad.md §8)
+
+**Notas de la construcción de la fase 32 (2026-10-24)**. Desviaciones y decisiones; los nombres nuevos quedan en decisiones-transversales §2.7:
+
+- **T0406**: el par `TesoreriaCompleta` nace **vacío** (como `RecaudoCompleto` en la fase 23): ninguna tabla `TES_` de T1 llega todavía; se regenera en las fases 33 a
+  35 que las suman, y queda después de `RecaudoCompleto` (los pares de R0/T0 y de R1 no se tocan). `CatalogoDeTesoreria.EntregaVigente` sube a **T1** (con eso rige
+  `Contabilidad.CierreExigeConciliaciones`, declarado desde T1). `TB` («Notas y traslados bancarios», módulo `TES`) entra en `voucher-types.json` (la e2e de
+  aprovisionamiento pasa a 36) y sus filas sugeridas salen de la matriz: los cuatro hechos de T1 —`TrasladoEntreCuentasEnviado` (`TEE`), `TrasladoConfirmado` (`TCF`),
+  `ChequesReclasificadosAlCierre` (`CRC`) y `ChequeNoCobradoACuentaPorPagar` (`CNP`), en `Common/Integration/Contracts/Treasury/HechosDeTesoreriaT1V1.cs`— con sus roles
+  `FondosEnTransito`, `ChequesPorEntregar` y `CuentaPorPagarChequesNoCobrados` (`RolesDeTesoreriaT1`, por cuenta propia) y el comprobante sugerido `TB`; el sembrador de
+  mapeos (`ReceiptsTreasuryVoucherMappingsSeeder`) los mapea solo. Las rutas de api.md §13 **no existían** como rutas con 404: se crean en su fase (como R1).
+  `ElCatalogoDeMensajesEsUnico` pasa a 10 tipos de Tesorería y 9 hechos a Contabilidad. Migración en par; `has-pending-model-changes` «No changes» en SqlServer y
+  PostgreSQL; paridad en par (Application 71).
 
 ---
 
