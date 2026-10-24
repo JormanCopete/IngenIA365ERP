@@ -83,6 +83,9 @@ public class LasPantallasDeRecaudoYTesoreriaEstanEnElMenu
         ("Pages/Recaudo/ConsignacionesReportadas.razor", "/recaudo/consignaciones-reportadas", "Receipts.Receipt.Register"),
         // R1, US21 (fase 31): el tablero de caja.
         ("Pages/Recaudo/Tablero.razor", "/recaudo/tablero", "Receipts.Reports.View"),
+        // T1 (fase 33): los traslados entre cuentas propias y el cierre del mes de los cheques.
+        ("Pages/Tesoreria/Traslados.razor", "/tesoreria/traslados", "Treasury.Transfers.Request"),
+        ("Pages/Tesoreria/CierreDeCheques.razor", "/tesoreria/cierre-de-cheques", "Treasury.Checkbooks.View"),
         // Fase 18 (T0290): /recaudo/puesta-en-marcha y /tesoreria/puesta-en-marcha son páginas delgadas sobre Components/Recaudo/PuestaEnMarchaDeModulo, que lleva
         // un IndicadorDeCarga por zona (como las de la matriz de la fase 16); su enlace en el menú lo comprueba Las_puestas_en_marcha_estan_en_el_menu.
     ];

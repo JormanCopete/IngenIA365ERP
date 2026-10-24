@@ -119,7 +119,9 @@ public class EvaluadorDePoliticaTests
             // Fase 11 (T0195): la clasificación de un abono o una partida y la partida vencida llevada a ingreso.
             "BankItemClassification", "UnidentifiedItemToIncome",
             // R1, fase 26: el egreso vario de caja y la anulación de un egreso.
-            "CashDisbursementApproval");
+            "CashDisbursementApproval",
+            // T1, fases 33 y 34: el traslado entre cuentas propias y el cambio de firmantes o tokens.
+            "TreasuryTransfer", "BankAccountAuthorityChange");
         ApprovalSubjects.EsValido("DocumentConfirmation").Should().BeTrue();
         ApprovalSubjects.EsValido("documentconfirmation").Should().BeFalse("el sujeto se escribe exacto");
         ApprovalSubjects.EsValido("Otro").Should().BeFalse();
