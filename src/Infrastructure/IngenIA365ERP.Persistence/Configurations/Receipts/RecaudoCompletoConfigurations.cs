@@ -1,4 +1,5 @@
 ﻿using IngenIA365ERP.Domain.Entities.Core;
+using IngenIA365ERP.Domain.Entities.Receipts.Banks;
 using IngenIA365ERP.Domain.Entities.Receipts.Configuration;
 using IngenIA365ERP.Domain.Entities.Receipts.Sessions;
 using IngenIA365ERP.Domain.Entities.Receipts.Operations;
@@ -105,5 +106,46 @@ public class CashDisbursementVoidingConfiguration : IEntityTypeConfiguration<Cas
         builder.Property(e => e.ModuleReversalNumber).HasMaxLength(40);
         builder.Property(e => e.VerificationCode).HasMaxLength(40).IsRequired();
         builder.HasIndex(e => e.CashDisbursementId).IsUnique().HasDatabaseName($"UK_{Tabla}_CashDisbursementId");
+    }
+}
+
+/// <summary><c>RCD_IdentificationRules</c>: las reglas de identificación de abonos (FR-067; D15). Código único entre vivas. (nuevo)</summary>
+public class IdentificationRuleConfiguration : IEntityTypeConfiguration<IdentificationRule>
+{
+    public const string Tabla = "RCD_IdentificationRules";
+
+    public void Configure(EntityTypeBuilder<IdentificationRule> builder)
+    {
+        builder.ComoEntidadDeRecaudo(Tabla);
+        builder.Property(e => e.Code).HasMaxLength(10).IsRequired();
+        builder.Property(e => e.Name).HasMaxLength(120).IsRequired();
+        builder.Property(e => e.Criterion).HasConversion<int>();
+        builder.HasIndex(e => e.Code).IsUnique().HasFilter("[IsDeleted] = 0").HasDatabaseName($"UK_{Tabla}_Code");
+        builder.HasIndex(e => new { e.IsActive, e.Priority }).HasDatabaseName($"IX_{Tabla}_IsActive_Priority");
+    }
+}
+
+/// <summary><c>RCD_ReportedDeposits</c>: la consignación reportada en ventanilla (FR-069; D11). La línea del extracto, por su PublicId. (nuevo)</summary>
+public class ReportedDepositConfiguration : IEntityTypeConfiguration<ReportedDeposit>
+{
+    public const string Tabla = "RCD_ReportedDeposits";
+
+    public void Configure(EntityTypeBuilder<ReportedDeposit> builder)
+    {
+        builder.ComoEntidadDeRecaudo(Tabla);
+        builder.HasOne<Person>().WithMany().HasForeignKey(e => e.PersonId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<Branch>().WithMany().HasForeignKey(e => e.BranchId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<User>().WithMany().HasForeignKey(e => e.RegisteredByUserId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<User>().WithMany().HasForeignKey(e => e.VerifiedByUserId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<Receipt>().WithMany().HasForeignKey(e => e.ReceiptId).OnDelete(DeleteBehavior.Restrict);
+        builder.Property(e => e.Number).HasMaxLength(30).IsRequired();
+        builder.Property(e => e.Amount).Monto();
+        builder.Property(e => e.Reference).HasMaxLength(100);
+        builder.Property(e => e.Target).HasConversion<int>();
+        builder.Property(e => e.Status).HasConversion<int>();
+        builder.Property(e => e.IdempotencyKey).HasMaxLength(150).IsRequired();
+        builder.HasIndex(e => e.Number).IsUnique().HasFilter("[IsDeleted] = 0").HasDatabaseName($"UK_{Tabla}_Number");
+        builder.HasIndex(e => new { e.OwnBankAccountPublicId, e.Status, e.DepositDate }).HasDatabaseName($"IX_{Tabla}_Account_Status_Date");
+        builder.HasIndex(e => e.StatementLinePublicId).HasDatabaseName($"IX_{Tabla}_StatementLinePublicId");
     }
 }

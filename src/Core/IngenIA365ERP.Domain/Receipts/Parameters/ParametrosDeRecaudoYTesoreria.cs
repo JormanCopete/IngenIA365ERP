@@ -51,6 +51,11 @@ public static class ParametrosDeRecaudoYTesoreria
     public const string CajaFechaValorAnteriorMaxDias = "Caja.FechaValorAnterior.MaxDias";
     /// <summary>Feature 015, R1 (fase 26; FR-055) (nuevo): los egresos varios por la caja, apagados por defecto.</summary>
     public const string CajaEgresosVarios = "Caja.EgresosVarios";
+    /// <summary>Feature 015, R1 (fase 27; FR-067, FR-069; D11, D15) (nuevos): la aplicación al cargar lo de referencia exacta y la consignación reportada.</summary>
+    public const string IdentificacionAplicarAlCargar = "Identificacion.AplicarAlCargar";
+    public const string ConsignacionReportadaModo = "ConsignacionReportada.Modo";
+    public const string ConsignacionReportadaDiasParaVerificar = "ConsignacionReportada.DiasParaVerificar";
+    public const string ConsignacionReportadaDiasDeVentana = "ConsignacionReportada.DiasDeVentana";
     public const string ReciboOrdenDeImputacion = "Recibo.OrdenDeImputacion";
     public const string ChequesPlazoPresentacionMismaPlaza = "Cheques.PlazoPresentacionMismaPlaza";
     public const string ChequesPlazoPresentacionOtraPlaza = "Cheques.PlazoPresentacionOtraPlaza";
@@ -156,6 +161,16 @@ public static class ParametrosDeRecaudoYTesoreria
                 "Qué egresos de caja causan GMF: las devoluciones de saldos a favor (DevolucionesYPartidas), también los varios (Todos) o ninguno; nunca lo que el origen ya liquidó (FR-205).",
                 ["DevolucionesYPartidas", "Todos", "Ninguno"], "DevolucionesYPartidas", R1), PendienteTributarista),
             Pendiente(Eleccion(ModuloRecaudo, GmfRedondeo, "Redondeo del GMF de los egresos de caja.", ["AlPeso", "SinRedondeo"], "AlPeso", R1), PendienteTributarista),
+
+            // ---- identificación por reglas y consignación reportada (RCD, R1, fase 27) ----
+            SiNo(ModuloRecaudo, IdentificacionAplicarAlCargar,
+                "Lo propuesto con referencia exacta por una regla marcada se aplica al cargar el extracto, a nombre de quien lo carga (D15); si no, sólo se propone.", false, R1),
+            Eleccion(ModuloRecaudo, ConsignacionReportadaModo, "La consignación reportada en ventanilla queda por verificar hasta el extracto o se aplica de inmediato (D11).",
+                ["PorVerificar", "AplicarDeInmediato"], "PorVerificar", R1),
+            Pendiente(Entero(ModuloRecaudo, ConsignacionReportadaDiasParaVerificar,
+                "Días sin encontrar la consignación reportada en el extracto antes de alertar (FR-069); informativo.", "3", R1), PendienteDueno),
+            Entero(ModuloRecaudo, ConsignacionReportadaDiasDeVentana,
+                "Días antes del movimiento del extracto en que se busca la consignación reportada que lo confirma (FR-067).", "5", R1),
 
             // ---- SARLAFT (RCD) ----
             Pendiente(NumeroDecimal(ModuloRecaudo, SarlaftUmbralDeclaracionOrigenFondos, "Valor por operación desde el que se exige la declaración de origen de fondos (P7).", "5000000", R0), PendienteCumplimiento),

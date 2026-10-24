@@ -1,0 +1,151 @@
+@page "/recaudo/consignaciones-reportadas"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Components.Personas
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Recaudo
+@using IngenIA365ERP.Shared.Services.Tesoreria
+@inject BancosClient Cliente
+@inject CajaClient Caja
+@inject CuentasBancariasClient CuentasApi
+@inject INotificationService Notification
+
+<PageTitle>Consignaciones reportadas - IngenIA365ERP</PageTitle>
+
+@* Feature 015, R1, US6 (T0380; FR-069; D11): el asociado trae el soporte de su consignación. Por defecto queda por verificar hasta encontrarla en el extracto; si la
+   cooperativa lo eligió (ConsignacionReportada.Modo), se aplica de inmediato y queda pendiente de cruzar. La verificación se hace desde /recaudo/extractos. *@
+<PermissionGate Required="Receipts.Receipt.Register" AnyOf="@(new[] { "Receipts.BankItems.View", "Receipts.BankItems.Identify" })" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Consignaciones reportadas</h3>
+        <div class="toolbar">
+            <select class="e-input" @bind="_estado" @bind:after="@CargarAsync">
+                <option value="1">Por verificar</option>
+                <option value="3">Vencidas</option>
+                <option value="2">Verificadas</option>
+                <option value="0">Todas</option>
+            </select>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+        </div>
+    </div>
+
+    <PermissionGate Required="Receipts.Receipt.Register">
+        <section class="info-card">
+            <h4>Reportar una consignación</h4>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Registrando…">
+                <div class="form-grid">
+                    <div class="campo">Persona * <PersonSearchPicker Selected="_persona" SelectedChanged="@PersonaElegidaAsync" Compacto="true" /></div>
+                    <label class="campo">Crédito o cuenta *
+                        <select class="e-input" @bind="_producto">
+                            <option value="">— Elija —</option>
+                            @foreach (var (id, destino, texto) in _productos) { <option value="@id">@texto</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Cuenta bancaria *
+                        <select class="e-input" @bind="_cuenta">
+                            <option value="">— Elija —</option>
+                            @foreach (var c in _cuentas) { <option value="@c.PublicId">@c.Code · @c.BankName @c.AccountNumber</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Fecha de la consignación * <input type="date" class="e-input" @bind="_fecha" /></label>
+                    <label class="campo">Valor * <SfNumericTextBox TValue="decimal" @bind-Value="_valor" Format="N0" Min="0" /></label>
+                    <label class="campo">Referencia <input class="e-input" @bind="_referencia" maxlength="100" /></label>
+                    <label class="campo">Soporte (adjunto) * <input class="e-input" @bind="_soporte" placeholder="Identificador del adjunto" /></label>
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || !Listo)" OnClick="@ReportarAsync">Registrar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </section>
+    </PermissionGate>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Cargando las consignaciones…">
+        @if (_lista.Count == 0)
+        {
+            <p class="texto-tenue">No hay consignaciones reportadas en este estado.</p>
+        }
+        else
+        {
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Número</th><th>Persona</th><th>Fecha</th><th>Valor</th><th>Referencia</th><th>Aplicada</th><th>Recibo</th><th>Estado</th></tr></thead>
+                    <tbody>
+                        @foreach (var d in _lista)
+                        {
+                            <tr>
+                                <td>@d.Number</td><td>@d.PersonName</td><td>@d.DepositDate.ToString("dd/MM/yyyy")</td><td>@d.Amount.ToString("N0")</td><td>@d.Reference</td>
+                                <td>@(d.AppliedImmediately ? "De inmediato" : "Al verificar")</td><td>@d.ReceiptNumber</td><td>@Estado(d.Status)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </IndicadorDeCarga>
+</div>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+    private IReadOnlyList<ConsignacionReportadaDto> _lista = [];
+    private IReadOnlyList<CuentaBancariaPropiaDto> _cuentas = [];
+    private List<(Guid Id, int Destino, string Texto)> _productos = [];
+    private PersonSearchPicker.PersonSearchItem? _persona;
+    private string _producto = "", _cuenta = "", _soporte = "";
+    private string? _referencia;
+    private DateOnly _fecha = DateOnly.FromDateTime(DateTime.Today);
+    private decimal _valor;
+    private int _estado = 1;
+    private ClaveDeOperacion _clave = new();
+
+    private bool Listo => _persona is not null && Guid.TryParse(_producto, out _) && Guid.TryParse(_cuenta, out _) && Guid.TryParse(_soporte, out _) && _valor > 0m;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var cuentas = await CuentasApi.CuentasAsync();
+        if (cuentas.IsSuccess) _cuentas = cuentas.Value ?? [];
+        await CargarAsync();
+    }
+
+    private static string Estado(int e) => e switch { 1 => "Por verificar", 2 => "Verificada", 3 => "Vencida", _ => "" };
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Cliente.ConsignacionesReportadasAsync(_estado == 0 ? null : _estado);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las consignaciones."); return; }
+        _lista = r.Value;
+    }
+
+    private async Task PersonaElegidaAsync(PersonSearchPicker.PersonSearchItem? p)
+    {
+        _persona = p;
+        _producto = "";
+        _productos = [];
+        _clave = new ClaveDeOperacion();
+        if (p is null) return;
+        using var g = _guardado.Iniciar();
+        var r = await Caja.LoQuePuedePagarAsync(p.PublicId, null, false);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los productos de la persona."); return; }
+        _productos = (r.Value.Obligations?.Obligations ?? []).Select(o => (o.ObligationPublicId, 1, $"Crédito {o.Number} · {o.CreditLineName}"))
+            .Concat((r.Value.Accounts?.Accounts ?? []).Select(c => (c.AccountPublicId, 2, $"Cuenta {c.Number} · {c.LineName}"))).ToList();
+    }
+
+    private async Task ReportarAsync()
+    {
+        if (_persona is null || !Guid.TryParse(_producto, out var producto) || !Guid.TryParse(_cuenta, out var cuenta) || !Guid.TryParse(_soporte, out var soporte)) return;
+        var destino = _productos.First(x => x.Id == producto).Destino;
+        using (_guardado.Iniciar())
+        {
+            var r = await Cliente.ReportarConsignacionAsync(new ConsignacionReportadaRequest(_persona.PublicId, cuenta, _fecha, _valor, soporte, destino, producto,
+                string.IsNullOrWhiteSpace(_referencia) ? null : _referencia.Trim()), _clave);
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo registrar la consignación."); return; }
+            _clave = new ClaveDeOperacion();
+            _valor = 0m;
+            _soporte = "";
+            await Notification.SuccessAsync(r.Value!.AppliedImmediately
+                ? $"Consignación {r.Value.Number} aplicada (recibo {r.Value.ReceiptNumber}); queda pendiente de cruzar con el extracto."
+                : $"Consignación {r.Value.Number} registrada: queda por verificar hasta encontrarla en el extracto.");
+        }
+        await CargarAsync();
+    }
+}

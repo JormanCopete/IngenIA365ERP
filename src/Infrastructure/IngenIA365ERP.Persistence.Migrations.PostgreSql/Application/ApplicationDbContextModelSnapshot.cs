@@ -55186,6 +55186,88 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.ToTable("RCD_BankItemIdentifications", "dbo");
                 });
 
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Receipts.Banks.IdentificationRule", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("ApplyOnLoad")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int>("Criterion")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<int>("Priority")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique()
+                        .HasDatabaseName("UK_RCD_IdentificationRules_Code")
+                        .HasFilter("\"IsDeleted\" = FALSE");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_RCD_IdentificationRules_PublicId");
+
+                    b.HasIndex("IsActive", "Priority")
+                        .HasDatabaseName("IX_RCD_IdentificationRules_IsActive_Priority");
+
+                    b.ToTable("RCD_IdentificationRules", "dbo");
+                });
+
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Receipts.Banks.ProcessingRun", b =>
                 {
                     b.Property<int>("Id")
@@ -55388,6 +55470,142 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasDatabaseName("UK_RCD_ProcessingRunLines_Run_Key");
 
                     b.ToTable("RCD_ProcessingRunLines", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Receipts.Banks.ReportedDeposit", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<bool>("AppliedImmediately")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("BranchId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateOnly>("DepositDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("IdempotencyKey")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("Number")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<Guid>("OwnBankAccountPublicId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("PersonId")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("ProductPublicId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long?>("ReceiptId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Reference")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime>("RegisteredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("RegisteredByUserId")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("StatementLinePublicId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("SupportAttachmentPublicId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Target")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime?>("VerifiedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("VerifiedByUserId")
+                        .HasColumnType("integer");
+
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BranchId");
+
+                    b.HasIndex("Number")
+                        .IsUnique()
+                        .HasDatabaseName("UK_RCD_ReportedDeposits_Number")
+                        .HasFilter("\"IsDeleted\" = FALSE");
+
+                    b.HasIndex("PersonId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_RCD_ReportedDeposits_PublicId");
+
+                    b.HasIndex("ReceiptId");
+
+                    b.HasIndex("RegisteredByUserId");
+
+                    b.HasIndex("StatementLinePublicId")
+                        .HasDatabaseName("IX_RCD_ReportedDeposits_StatementLinePublicId");
+
+                    b.HasIndex("VerifiedByUserId");
+
+                    b.HasIndex("OwnBankAccountPublicId", "Status", "DepositDate")
+                        .HasDatabaseName("IX_RCD_ReportedDeposits_Account_Status_Date");
+
+                    b.ToTable("RCD_ReportedDeposits", "dbo");
                 });
 
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Receipts.Banks.UnidentifiedItem", b =>
@@ -75012,6 +75230,37 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.HasOne("IngenIA365ERP.Domain.Entities.Receipts.Operations.Receipt", null)
                         .WithMany()
                         .HasForeignKey("ReceiptId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Receipts.Banks.ReportedDeposit", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Core.Branch", null)
+                        .WithMany()
+                        .HasForeignKey("BranchId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Core.Person", null)
+                        .WithMany()
+                        .HasForeignKey("PersonId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Receipts.Operations.Receipt", null)
+                        .WithMany()
+                        .HasForeignKey("ReceiptId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Security.User", null)
+                        .WithMany()
+                        .HasForeignKey("RegisteredByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Security.User", null)
+                        .WithMany()
+                        .HasForeignKey("VerifiedByUserId")
                         .OnDelete(DeleteBehavior.Restrict);
                 });
 

@@ -1,4 +1,4 @@
-using Carter;
+﻿using Carter;
 using IngenIA365ERP.API.Filters;
 using IngenIA365ERP.Application.Receipts.BankItems;
 using IngenIA365ERP.Domain.Enums.Core;
@@ -27,7 +27,7 @@ public class BankItemsEndpoints : ICarterModule
             .WithName("Receipts_BankItems_Identifications").RequirePermission(new AlgunPermiso(Ver, Identificar, Clasificar));
         g.MapPost("/{lineId:guid}/identify", async (Guid lineId, IdentificacionRequest body, HttpContext http, ISender s, CancellationToken ct) =>
                 await s.Send(new IdentifyBankItemCommand(lineId, body.Parts ?? [], body.PayerPersonPublicId, body.RemainderAsUnidentified, body.Note, body.RunPublicId,
-                    body.MeansClass ?? PaymentMeansClass.Transfer) { OperationKey = http.ClaveDeOperacion() }, ct))
+                    body.MeansClass ?? PaymentMeansClass.Transfer, body.IdentificationRulePublicId) { OperationKey = http.ClaveDeOperacion() }, ct))
             .WithName("Receipts_BankItems_Identify").ConClaveDeOperacion().RequirePermission(Identificar);
         g.MapPost("/{lineId:guid}/unidentified", async (Guid lineId, NotaRequest body, HttpContext http, ISender s, CancellationToken ct) =>
                 await s.Send(new MarkBankItemUnidentifiedCommand(lineId, body.Note) { OperationKey = http.ClaveDeOperacion() }, ct))
@@ -44,7 +44,7 @@ public class BankItemsEndpoints : ICarterModule
     }
 
     public sealed record IdentificacionRequest(IReadOnlyList<ParteDeAbono>? Parts, Guid? PayerPersonPublicId, bool RemainderAsUnidentified, string? Note, Guid? RunPublicId,
-        PaymentMeansClass? MeansClass);
+        PaymentMeansClass? MeansClass, Guid? IdentificationRulePublicId = null);
 
     public sealed record NotaRequest(string? Note);
 

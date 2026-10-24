@@ -135,6 +135,34 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 });
 
             migrationBuilder.CreateTable(
+                name: "RCD_IdentificationRules",
+                schema: "dbo",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    Code = table.Column<string>(type: "character varying(10)", maxLength: 10, nullable: false),
+                    Name = table.Column<string>(type: "character varying(120)", maxLength: 120, nullable: false),
+                    Criterion = table.Column<int>(type: "integer", nullable: false),
+                    Priority = table.Column<int>(type: "integer", nullable: false),
+                    ApplyOnLoad = table.Column<bool>(type: "boolean", nullable: false),
+                    IsActive = table.Column<bool>(type: "boolean", nullable: false),
+                    xmin = table.Column<uint>(type: "xid", rowVersion: true, nullable: false),
+                    PublicId = table.Column<Guid>(type: "uuid", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    DeletedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_RCD_IdentificationRules", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "RCD_PendingApplications",
                 schema: "dbo",
                 columns: table => new
@@ -190,6 +218,82 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         column: x => x.ReceiptId,
                         principalSchema: "dbo",
                         principalTable: "RCD_Receipts",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "RCD_ReportedDeposits",
+                schema: "dbo",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    Number = table.Column<string>(type: "character varying(30)", maxLength: 30, nullable: false),
+                    PersonId = table.Column<int>(type: "integer", nullable: false),
+                    BranchId = table.Column<int>(type: "integer", nullable: false),
+                    RegisteredByUserId = table.Column<int>(type: "integer", nullable: false),
+                    OwnBankAccountPublicId = table.Column<Guid>(type: "uuid", nullable: false),
+                    DepositDate = table.Column<DateOnly>(type: "date", nullable: false),
+                    Amount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    Reference = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    SupportAttachmentPublicId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Target = table.Column<int>(type: "integer", nullable: false),
+                    ProductPublicId = table.Column<Guid>(type: "uuid", nullable: false),
+                    AppliedImmediately = table.Column<bool>(type: "boolean", nullable: false),
+                    RegisteredAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    Status = table.Column<int>(type: "integer", nullable: false),
+                    ReceiptId = table.Column<long>(type: "bigint", nullable: true),
+                    StatementLinePublicId = table.Column<Guid>(type: "uuid", nullable: true),
+                    VerifiedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    VerifiedByUserId = table.Column<int>(type: "integer", nullable: true),
+                    IdempotencyKey = table.Column<string>(type: "character varying(150)", maxLength: 150, nullable: false),
+                    xmin = table.Column<uint>(type: "xid", rowVersion: true, nullable: false),
+                    PublicId = table.Column<Guid>(type: "uuid", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    DeletedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_RCD_ReportedDeposits", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_RCD_ReportedDeposits_COR_Branches_BranchId",
+                        column: x => x.BranchId,
+                        principalSchema: "dbo",
+                        principalTable: "COR_Branches",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_RCD_ReportedDeposits_COR_People_PersonId",
+                        column: x => x.PersonId,
+                        principalSchema: "dbo",
+                        principalTable: "COR_People",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_RCD_ReportedDeposits_RCD_Receipts_ReceiptId",
+                        column: x => x.ReceiptId,
+                        principalSchema: "dbo",
+                        principalTable: "RCD_Receipts",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_RCD_ReportedDeposits_SEC_Users_RegisteredByUserId",
+                        column: x => x.RegisteredByUserId,
+                        principalSchema: "dbo",
+                        principalTable: "SEC_Users",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_RCD_ReportedDeposits_SEC_Users_VerifiedByUserId",
+                        column: x => x.VerifiedByUserId,
+                        principalSchema: "dbo",
+                        principalTable: "SEC_Users",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
                 });
@@ -413,6 +517,27 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 unique: true);
 
             migrationBuilder.CreateIndex(
+                name: "IX_RCD_IdentificationRules_IsActive_Priority",
+                schema: "dbo",
+                table: "RCD_IdentificationRules",
+                columns: new[] { "IsActive", "Priority" });
+
+            migrationBuilder.CreateIndex(
+                name: "UK_RCD_IdentificationRules_Code",
+                schema: "dbo",
+                table: "RCD_IdentificationRules",
+                column: "Code",
+                unique: true,
+                filter: "\"IsDeleted\" = FALSE");
+
+            migrationBuilder.CreateIndex(
+                name: "UK_RCD_IdentificationRules_PublicId",
+                schema: "dbo",
+                table: "RCD_IdentificationRules",
+                column: "PublicId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
                 name: "IX_RCD_PendingApplicationResolutions_ResolvedByUserId",
                 schema: "dbo",
                 table: "RCD_PendingApplicationResolutions",
@@ -464,6 +589,63 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 column: "ReceiptApplicationId",
                 unique: true);
 
+            migrationBuilder.CreateIndex(
+                name: "IX_RCD_ReportedDeposits_Account_Status_Date",
+                schema: "dbo",
+                table: "RCD_ReportedDeposits",
+                columns: new[] { "OwnBankAccountPublicId", "Status", "DepositDate" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_RCD_ReportedDeposits_BranchId",
+                schema: "dbo",
+                table: "RCD_ReportedDeposits",
+                column: "BranchId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_RCD_ReportedDeposits_PersonId",
+                schema: "dbo",
+                table: "RCD_ReportedDeposits",
+                column: "PersonId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_RCD_ReportedDeposits_ReceiptId",
+                schema: "dbo",
+                table: "RCD_ReportedDeposits",
+                column: "ReceiptId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_RCD_ReportedDeposits_RegisteredByUserId",
+                schema: "dbo",
+                table: "RCD_ReportedDeposits",
+                column: "RegisteredByUserId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_RCD_ReportedDeposits_StatementLinePublicId",
+                schema: "dbo",
+                table: "RCD_ReportedDeposits",
+                column: "StatementLinePublicId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_RCD_ReportedDeposits_VerifiedByUserId",
+                schema: "dbo",
+                table: "RCD_ReportedDeposits",
+                column: "VerifiedByUserId");
+
+            migrationBuilder.CreateIndex(
+                name: "UK_RCD_ReportedDeposits_Number",
+                schema: "dbo",
+                table: "RCD_ReportedDeposits",
+                column: "Number",
+                unique: true,
+                filter: "\"IsDeleted\" = FALSE");
+
+            migrationBuilder.CreateIndex(
+                name: "UK_RCD_ReportedDeposits_PublicId",
+                schema: "dbo",
+                table: "RCD_ReportedDeposits",
+                column: "PublicId",
+                unique: true);
+
             // Feature 015, R1 (fase 26, T0373): el tipo de documento del egreso de caja (clase 7). Idempotente: no repite el código ni ocupa una clase ya tomada.
             migrationBuilder.Sql(@"
 INSERT INTO dbo.""RCD_DocumentTypes"" (""PublicId"", ""Code"", ""Name"", ""Kind"", ""UsesPointPrefix"", ""Status"", ""IsDeleted"", ""CreatedAt"", ""CreatedBy"")
@@ -482,7 +664,15 @@ WHERE NOT EXISTS (SELECT 1 FROM dbo.""RCD_DocumentTypes"" t WHERE t.""Code"" = v
                 schema: "dbo");
 
             migrationBuilder.DropTable(
+                name: "RCD_IdentificationRules",
+                schema: "dbo");
+
+            migrationBuilder.DropTable(
                 name: "RCD_PendingApplicationResolutions",
+                schema: "dbo");
+
+            migrationBuilder.DropTable(
+                name: "RCD_ReportedDeposits",
                 schema: "dbo");
 
             migrationBuilder.DropTable(

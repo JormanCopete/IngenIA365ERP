@@ -1,0 +1,123 @@
+@page "/recaudo/reglas-de-identificacion"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Recaudo
+@inject BancosClient Cliente
+@inject INotificationService Notification
+
+<PageTitle>Reglas de identificación - IngenIA365ERP</PageTitle>
+
+@* Feature 015, R1, US6 (T0380; FR-067; D15): las reglas que proponen el destino de cada abono del extracto, por prioridad (la menor primero). Una persona confirma la
+   propuesta; sólo la regla por referencia de pago, marcada y con el parámetro Identificacion.AplicarAlCargar encendido, aplica al cargar lo de referencia exacta. *@
+<PermissionGate Required="Receipts.Setup.View" AnyOf="@(new[] { "Receipts.Setup.Manage", "Receipts.BankItems.Identify" })" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Reglas de identificación</h3>
+        <div class="toolbar">
+            <PermissionGate Required="Receipts.Setup.Manage">
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@(() => Editar(null))">Nueva regla</SfButton>
+            </PermissionGate>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Cargando las reglas…">
+        @if (_reglas.Count == 0)
+        {
+            <p class="texto-tenue">No hay reglas: los abonos se identifican a mano.</p>
+        }
+        else
+        {
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Prioridad</th><th>Código</th><th>Nombre</th><th>Criterio</th><th>Aplica al cargar</th><th>Activa</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var r in _reglas)
+                        {
+                            <tr>
+                                <td>@r.Priority</td><td>@r.Code</td><td>@r.Name</td><td>@Criterio(r.Criterion)</td><td>@(r.ApplyOnLoad ? "Sí" : "No")</td><td>@(r.IsActive ? "Sí" : "No")</td>
+                                <td><PermissionGate Required="Receipts.Setup.Manage"><SfButton CssClass="e-flat" OnClick="@(() => Editar(r))">Editar</SfButton></PermissionGate></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </IndicadorDeCarga>
+
+    @if (_editando)
+    {
+        <section class="info-card">
+            <h4>@(_publicId is null ? "Nueva regla" : "Editar regla")</h4>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <div class="form-grid">
+                    <label class="campo">Código * <input class="e-input" @bind="_codigo" maxlength="10" /></label>
+                    <label class="campo">Nombre * <input class="e-input" @bind="_nombre" maxlength="120" /></label>
+                    <label class="campo">Criterio *
+                        <select class="e-input" @bind="_criterio">
+                            <option value="1">Referencia de pago</option>
+                            <option value="2">Documento del consignante</option>
+                            <option value="3">Consignación reportada</option>
+                            <option value="4">Valor exacto de un exigible</option>
+                        </select>
+                    </label>
+                    <label class="campo">Prioridad * <input type="number" class="e-input" @bind="_prioridad" min="1" /></label>
+                    <label class="campo"><input type="checkbox" @bind="_aplicarAlCargar" disabled="@(_criterio != 1)" /> Aplicar al cargar lo de referencia exacta</label>
+                    <label class="campo"><input type="checkbox" @bind="_activa" /> Activa</label>
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-flat" OnClick="@(() => _editando = false)">Cancelar</SfButton>
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(_codigo) || string.IsNullOrWhiteSpace(_nombre))" OnClick="@GuardarAsync">Guardar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </section>
+    }
+</div>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+    private IReadOnlyList<ReglaDeIdentificacionDto> _reglas = [];
+    private bool _editando, _aplicarAlCargar, _activa = true;
+    private Guid? _publicId;
+    private string _codigo = "", _nombre = "";
+    private int _criterio = 1, _prioridad = 1;
+    private ClaveDeOperacion _clave = new();
+
+    protected override Task OnInitializedAsync() => CargarAsync();
+
+    private static string Criterio(int c) => c switch
+    {
+        1 => "Referencia de pago", 2 => "Documento del consignante", 3 => "Consignación reportada", 4 => "Valor exacto de un exigible", _ => "",
+    };
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Cliente.ReglasAsync();
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las reglas."); return; }
+        _reglas = r.Value;
+    }
+
+    private void Editar(ReglaDeIdentificacionDto? r)
+    {
+        _editando = true;
+        _clave = new ClaveDeOperacion();
+        (_publicId, _codigo, _nombre, _criterio, _prioridad, _aplicarAlCargar, _activa) = r is null
+            ? ((Guid?)null, "", "", 1, (_reglas.Count == 0 ? 0 : _reglas.Max(x => x.Priority)) + 1, false, true)
+            : ((Guid?)r.PublicId, r.Code, r.Name, r.Criterion, r.Priority, r.ApplyOnLoad, r.IsActive);
+    }
+
+    private async Task GuardarAsync()
+    {
+        using (_guardado.Iniciar())
+        {
+            var r = await Cliente.GuardarReglaAsync(_publicId, new ReglaDeIdentificacionRequest(_codigo.Trim(), _nombre.Trim(), _criterio, _prioridad,
+                _criterio == 1 && _aplicarAlCargar, _activa), _clave);
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo guardar la regla."); return; }
+            _editando = false;
+            await Notification.SuccessAsync($"Regla {r.Value?.Code} guardada.");
+        }
+        await CargarAsync();
+    }
+}

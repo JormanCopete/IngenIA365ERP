@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Text.Json.Serialization;
 using FluentValidation;
 using IngenIA365ERP.Application.Common.Alerts;
@@ -38,7 +38,7 @@ public sealed record IdentificacionDeAbonoDto(ProcessingRunDto Run, IReadOnlyLis
 
 /// <summary>Lo que se pide de un abono en la corrida (para reprocesarlo igual). (nuevo)</summary>
 public sealed record PedidoDeAbono(Guid LinePublicId, int Sequence, Guid PayerPersonPublicId, IReadOnlyList<ParteDeAbono> Parts, bool RemainderAsUnidentified,
-    PaymentMeansClass MeansClass, string? Note);
+    PaymentMeansClass MeansClass, string? Note, int? RuleId = null);
 
 /// <summary>
 /// <c>GET /api/receipts/bank-items?account=&amp;from=&amp;to=&amp;status=</c> (<c>Receipts.BankItems.View</c>): los abonos por identificar de los extractos de Tesorería, de las
@@ -71,7 +71,7 @@ public sealed class ListBankItemsQueryHandler(IApplicationDbContext db, IAlcance
 /// la operación: la línea queda rechazada en la corrida con su motivo y se reprocesa con su clave (FR-171). (nuevo)
 /// </summary>
 public sealed record IdentifyBankItemCommand(Guid LinePublicId, IReadOnlyList<ParteDeAbono> Parts, Guid? PayerPersonPublicId = null, bool RemainderAsUnidentified = false,
-    string? Note = null, Guid? RunPublicId = null, PaymentMeansClass MeansClass = PaymentMeansClass.Transfer)
+    string? Note = null, Guid? RunPublicId = null, PaymentMeansClass MeansClass = PaymentMeansClass.Transfer, Guid? IdentificationRulePublicId = null)
     : IRequest<Result<IdentificacionDeAbonoDto>>, IOperacionIdempotente, IEscrituraDeRecaudo
 {
     public Guid OperationKey { get; init; }
@@ -127,8 +127,12 @@ public sealed class IdentifyBankItemCommandHandler(
             request.RunPublicId, usuario, ahora, ct);
         await db.SaveChangesAsync(ct);
         var secuencia = await AbonosDeRecaudo.SiguienteSecuenciaAsync(db, linea.PublicId, ct);
+        // Feature 015, R1 (T0379; FR-067): la propuesta que confirma la persona deja la regla que la dio.
+        var regla = request.IdentificationRulePublicId is { } rp
+            ? await db.IdentificationRules.AsNoTracking().Where(x => x.PublicId == rp).Select(x => (int?)x.Id).FirstOrDefaultAsync(ct)
+            : null;
         var pedido = new PedidoDeAbono(linea.PublicId, secuencia, request.PayerPersonPublicId ?? request.Parts[0].BeneficiaryPersonPublicId, request.Parts,
-            request.RemainderAsUnidentified, request.MeansClass, request.Note);
+            request.RemainderAsUnidentified, request.MeansClass, request.Note, regla);
         return await AbonosDeRecaudo.ProcesarAsync(db, aplicacion, partidas, movimientos, auditoria, corrida, linea, oficina, pedido, usuario, reloj, ct);
     }
 }
@@ -470,7 +474,7 @@ public static class AbonosDeRecaudo
                 {
                     BankStatementLinePublicId = linea.PublicId, Sequence = pedido.Sequence, OwnBankAccountPublicId = linea.OwnBankAccountPublicId,
                     MovementDate = linea.MovementDate, Amount = recibo.TotalMeans, Outcome = BankItemOutcome.Receipt, ReceiptId = recibo.Id, IdentifiedByUserId = usuario,
-                    IdentifiedAt = ahora, Note = pedido.Note,
+                    IdentifiedAt = ahora, Note = pedido.Note, RuleId = pedido.RuleId,
                 };
                 db.BankItemIdentifications.Add(i);
                 identificaciones.Add(i);

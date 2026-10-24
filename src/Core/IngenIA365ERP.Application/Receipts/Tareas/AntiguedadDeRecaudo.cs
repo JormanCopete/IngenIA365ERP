@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using IngenIA365ERP.Application.Common.Alerts;
 using IngenIA365ERP.Application.Common.Calendar;
 using IngenIA365ERP.Application.Common.Execution;
@@ -53,7 +53,28 @@ public sealed class AntiguedadDeRecaudo(
     /// <summary>Todas las secciones de la tarea.</summary>
     public async Task<int> RevisarAsync(CancellationToken ct) =>
         await PartidasAsync(ct) + await SaldosAFavorAsync(ct) + await ExtractosSinCargarAsync(ct) + await PartidasAlCierreAsync(ct) + await ContingenciaPorDigitarAsync(ct)
-        + await PoliticaContableEnAdvertirAsync(ct) + await CuadreProvisionalPendienteAsync(ct);
+        + await PoliticaContableEnAdvertirAsync(ct) + await CuadreProvisionalPendienteAsync(ct) + await ConsignacionesReportadasAsync(ct);
+
+    /// <summary>
+    /// Feature 015, R1 (fase 27; FR-069): las consignaciones reportadas en ventanilla que no aparecen en el extracto en <c>ConsignacionReportada.DiasParaVerificar</c> días
+    /// (<c>Recaudo.ConsignacionReportadaSinVerificar</c>, una vez por consignación). Sólo avisa: no cambia la consignación ni aplica nada.
+    /// </summary>
+    public async Task<int> ConsignacionesReportadasAsync(CancellationToken ct)
+    {
+        var hoy = reloj.HoyLocal;
+        var dias = await parametros.EnteroAsync(ParametrosDeRecaudoYTesoreria.ConsignacionReportadaDiasParaVerificar, hoy, ct);
+        if (dias is not > 0) return 0;
+        var limite = hoy.AddDays(-dias.Value);
+        var vencidas = await db.ReportedDeposits.AsNoTracking()
+            .Where(d => d.Status == ReportedDepositStatus.ToVerify && d.DepositDate < limite).ToListAsync(ct);
+        foreach (var d in vencidas)
+            await alertas.LevantarAsync(new AlertaALevantar(TiposDeAlerta.RecaudoConsignacionReportadaSinVerificar, "Consignación reportada sin encontrar en el extracto",
+                string.Create(CultureInfo.InvariantCulture,
+                    $"La consignación reportada {d.Number} del {d.DepositDate:dd/MM/yyyy} por {d.Amount:N0} no aparece en el extracto después de {dias} días: revísela con el banco."),
+                "ReportedDeposit", d.PublicId, DedupKey: $"Recaudo.ConsignacionReportadaSinVerificar:{d.PublicId:N}", ModuloDeOrigen: "Receipts",
+                ScopeBranchPublicId: await OficinaAsync(d.BranchId, ct)), ct);
+        return vencidas.Count;
+    }
 
     /// <summary>
     /// Feature 015, US24 (T0321; FR-228): mientras la activación de Recaudo siga con el cuadre de apertura provisional, la alerta <c>Recaudo.CuadreProvisionalPendiente</c>

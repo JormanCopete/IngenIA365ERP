@@ -1,4 +1,4 @@
-@page "/recaudo/extractos"
+﻿@page "/recaudo/extractos"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
 @using IngenIA365ERP.Shared.Components.Recaudo
 @using IngenIA365ERP.Shared.Services.Http
@@ -85,7 +85,7 @@
                         <td>@a.Amount.ToString("N2")</td><td>@a.Pending.ToString("N2")</td><td>@a.Reference</td>
                         <td>@a.DepositorName<br /><small>@a.DepositorTaxId</small></td>
                         <td>@(a.PossibleDuplicate ? "Posible duplicado" : Estado(a.RecaudoStatus))</td>
-                        <td><SfButton CssClass="e-flat" OnClick="@(() => Elegir(a))">Identificar</SfButton></td>
+                        <td><SfButton CssClass="e-flat" OnClick="@(() => ElegirAsync(a))">Identificar</SfButton></td>
                     </tr>
                 }
             </tbody>
@@ -107,6 +107,23 @@
                 }
                 else
                 {
+                    @* R1 (T0380; FR-067): la propuesta de las reglas; una persona la confirma. *@
+                    @if (_propuesta is { } pr)
+                    {
+                        <div class="info-card">
+                            <p><strong>Propuesta (regla @pr.RuleCode):</strong> @pr.PersonName — @pr.Explanation</p>
+                            <div class="toolbar">
+                                @if (pr.ReportedDepositPublicId is { } rep)
+                                {
+                                    <SfButton CssClass="e-primary" OnClick="@(() => VerificarReportadaAsync(rep))">Confirmar con la consignación reportada</SfButton>
+                                }
+                                else if (pr.ProductPublicId is not null)
+                                {
+                                    <SfButton CssClass="e-outline" OnClick="@UsarPropuesta">Usar la propuesta</SfButton>
+                                }
+                            </div>
+                        </div>
+                    }
                     <div class="form-grid">
                         <label class="campo">Persona <PersonSearchPicker Selected="_persona" SelectedChanged="@PersonaElegidaAsync" Compacto="true" /></label>
                     </div>
@@ -200,6 +217,8 @@
     private readonly List<ParteDeAbonoRequest> _partes = [];
     private CorridaDto? _corrida;
     private Guid? _aprobacion;
+    private PropuestaDeAbonoDto? _propuesta;
+    private Guid? _reglaUsada;
 
     protected override async Task OnInitializedAsync()
     {
@@ -240,6 +259,13 @@
         if (!revisar)
         {
             await Notification.SuccessAsync($"Extracto {r.Value!.Number} cargado: {r.Value.Loaded} líneas, {r.Value.Omitted} omitidas por huella.");
+            // R1 (T0380; D15): enseguida de cargar, como la misma persona, lo de referencia exacta se aplica si el parámetro lo permite.
+            if (r.Value.Number is { Length: > 0 } numero)
+            {
+                var alCargar = await BancosApi.AplicarAlCargarAsync(cuenta, numero, new ClaveDeOperacion());
+                if (alCargar.IsSuccess && alCargar.Value is { Enabled: true } a)
+                    await Notification.InfoAsync($"Al cargar: {a.Applied} abonos aplicados por referencia exacta, {a.Proposed} con propuesta, {a.Rejected} rechazados.");
+            }
             _contenido = null;
             _revision = null;
             _claveExtracto = new();
@@ -247,7 +273,7 @@
         }
     }
 
-    private void Elegir(AbonoDto a)
+    private async Task ElegirAsync(AbonoDto a)
     {
         _elegido = a;
         _persona = null;
@@ -255,6 +281,34 @@
         _partes.Clear();
         _corrida = null;
         _clave = new();
+        _propuesta = null;
+        _reglaUsada = null;
+        if (a.PossibleDuplicate) return;
+        using var carga = _identificacion.Iniciar();
+        var p = await BancosApi.PropuestaAsync(a.PublicId);
+        if (p.IsSuccess) _propuesta = p.Value;
+    }
+
+    private void UsarPropuesta()
+    {
+        if (_elegido is null || _propuesta is not { ProductPublicId: { } producto, Target: { } destino } p) return;
+        _partes.Clear();
+        _partes.Add(new ParteDeAbonoRequest(destino, p.PersonPublicId, _elegido.Pending, producto));
+        _reglaUsada = p.RulePublicId;
+    }
+
+    private async Task VerificarReportadaAsync(Guid consignacion)
+    {
+        if (_elegido is null) return;
+        using (_identificacion.Iniciar())
+        {
+            var r = await BancosApi.VerificarConsignacionAsync(consignacion, _elegido.PublicId, _clave);
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo cruzar la consignación reportada."); return; }
+            _clave = new();
+            _elegido = null;
+            await Notification.SuccessAsync($"Consignación reportada {r.Value?.Number} verificada con el extracto.");
+        }
+        await CargarAbonosAsync();
     }
 
     private async Task PersonaElegidaAsync(PersonSearchPicker.PersonSearchItem? p)
@@ -282,8 +336,8 @@
     {
         if (_elegido is null) return;
         using var carga = _identificacion.Iniciar();
-        var r = await BancosApi.IdentificarAsync(_elegido.PublicId, new IdentificarAbonoRequest(_partes.ToList(), _persona?.PublicId, _restoComoPartida, _nota,
-            _corrida?.PublicId), _clave);
+        var r = await BancosApi.IdentificarAsync(_elegido.PublicId, new IdentificarAbonoRequest(_partes.ToList(), _persona?.PublicId ?? _propuesta?.PersonPublicId,
+            _restoComoPartida, _nota, _corrida?.PublicId, IdentificationRulePublicId: _reglaUsada), _clave);
         if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo identificar el abono."); return; }
         _clave = new();
         _corrida = r.Value!.Run;

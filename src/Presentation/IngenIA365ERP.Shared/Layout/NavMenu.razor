@@ -584,6 +584,13 @@
             <PermissionGate Required="Receipts.UnidentifiedItems.View">
                 <NavLink href="/recaudo/partidas" class="nav-subitem">Partidas por identificar</NavLink>
             </PermissionGate>
+            @* R1, US6 (T0380): las reglas de identificación y la consignación reportada en ventanilla. *@
+            <PermissionGate Required="Receipts.Setup.View" AnyOf="@(new[] { "Receipts.Setup.Manage", "Receipts.BankItems.Identify" })">
+                <NavLink href="/recaudo/reglas-de-identificacion" class="nav-subitem">Reglas de identificación</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Receipts.Receipt.Register" AnyOf="@(new[] { "Receipts.BankItems.View", "Receipts.BankItems.Identify" })">
+                <NavLink href="/recaudo/consignaciones-reportadas" class="nav-subitem">Consignaciones reportadas</NavLink>
+            </PermissionGate>
             @* US7 (T0210): los archivos de descuentos, sus respuestas y los giros de las pagadurías. *@
             <PermissionGate Required="Receipts.Paymasters.View">
                 <NavLink href="/recaudo/pagadurias" class="nav-subitem">Pagadurías</NavLink>

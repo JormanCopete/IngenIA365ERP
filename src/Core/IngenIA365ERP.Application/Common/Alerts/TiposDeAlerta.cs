@@ -1,4 +1,4 @@
-using IngenIA365ERP.Domain.Enums.Alerts;
+﻿using IngenIA365ERP.Domain.Enums.Alerts;
 
 namespace IngenIA365ERP.Application.Common.Alerts;
 
@@ -169,6 +169,8 @@ public static class TiposDeAlerta
     public const string RecaudoSaldoAFavorAntiguo = "Recaudo.SaldoAFavorAntiguo";
     public const string RecaudoNoAplicadoDePagaduria = "Recaudo.NoAplicadoDePagaduria";
     public const string RecaudoGiroDePagaduriaTardio = "Recaudo.GiroDePagaduriaTardio";
+    /// <summary>Feature 015, R1 (fase 27; FR-069) (nuevo): una consignación reportada en ventanilla sin encontrar en el extracto en los días configurados.</summary>
+    public const string RecaudoConsignacionReportadaSinVerificar = "Recaudo.ConsignacionReportadaSinVerificar";
     public const string RecaudoFechaValorTardia = "Recaudo.FechaValorTardia";
     public const string RecaudoListaVinculante = "Recaudo.ListaVinculante";
     public const string RecaudoListaNoVinculante = "Recaudo.ListaNoVinculante";
@@ -390,6 +392,8 @@ public static class TiposDeAlerta
             ["Receipts.Paymasters.ApplyRemittance"], SoloApp, AlertSeverity.Warning, "R0"),
         new(RecaudoGiroDePagaduriaTardio, Recaudo, "Una pagaduría giró después del plazo informativo de la libranza.",
             ["Receipts.Paymasters.RegisterRemittance"], SoloApp, AlertSeverity.Info, "R1"),
+        new(RecaudoConsignacionReportadaSinVerificar, Recaudo, "Una consignación reportada en ventanilla no aparece en el extracto en los días configurados.",
+            ["Receipts.BankItems.Identify"], SoloApp, AlertSeverity.Warning, "R1"),
         new(RecaudoFechaValorTardia, Recaudo, "Una partida se identificó con fecha valor anterior a la causación de la obligación.",
             ["Receipts.BankItems.Identify"], SoloApp, AlertSeverity.Warning, "R0"),
         new(RecaudoListaVinculante, Recaudo, "Un pagador, quien efectúa o un beneficiario coincidió en una lista vinculante: la operación se bloqueó.",

@@ -338,6 +338,8 @@ public static class DependencyInjection
         services.AddScoped<Common.Integration.Treasury.IRemesasDeTesoreria, Treasury.Remittances.RemesasDeTesoreria>();
         services.AddScoped<Receipts.BankItems.AplicacionNoInteractiva>();
         services.AddScoped<Receipts.BankItems.PartidasPorIdentificar>();
+        // Feature 015, R1 (fase 27): las propuestas de identificación por reglas.
+        services.AddScoped<Receipts.BankItems.PropuestasDeIdentificacion>();
         services.AddScoped<Receipts.Paymasters.GirosDePagaduria>();
         services.AddScoped<Receipts.BankItems.IReprocesoDeCorrida>(sp => sp.GetRequiredService<Receipts.Paymasters.GirosDePagaduria>());
         services.AddScoped<Receipts.Tareas.AntiguedadDeRecaudo>();

@@ -1,4 +1,4 @@
-using System.Net.Http.Headers;
+﻿using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
 using IngenIA365ERP.Shared.Services.Http;
@@ -23,7 +23,26 @@ public sealed record ParteDeAbonoRequest(int Target, Guid BeneficiaryPersonPubli
     string? CrossDocument = null);
 
 public sealed record IdentificarAbonoRequest(IReadOnlyList<ParteDeAbonoRequest> Parts, Guid? PayerPersonPublicId, bool RemainderAsUnidentified, string? Note, Guid? RunPublicId,
-    int? MeansClass = null);
+    int? MeansClass = null, Guid? IdentificationRulePublicId = null);
+
+/// <summary>Feature 015, R1 (T0380): una regla de identificación (criterio 1 referencia, 2 documento del consignante, 3 consignación reportada, 4 valor exacto). (nuevo)</summary>
+public sealed record ReglaDeIdentificacionDto(Guid PublicId, string Code, string Name, int Criterion, int Priority, bool ApplyOnLoad, bool IsActive);
+
+public sealed record ReglaDeIdentificacionRequest(string Code, string Name, int Criterion, int Priority, bool ApplyOnLoad, bool IsActive);
+
+/// <summary>La propuesta de destino de un abono. (nuevo)</summary>
+public sealed record PropuestaDeAbonoDto(Guid RulePublicId, string RuleCode, int Criterion, Guid PersonPublicId, string PersonName, Guid? ProductPublicId, int? Target,
+    decimal Amount, bool ApplyOnLoad, Guid? ReportedDepositPublicId, string Explanation);
+
+public sealed record AplicacionAlCargarDto(int Lines, int Proposed, int Applied, int Rejected, bool Enabled);
+
+/// <summary>Una consignación reportada en ventanilla (estado 1 por verificar, 2 verificada, 3 vencida). (nuevo)</summary>
+public sealed record ConsignacionReportadaDto(Guid PublicId, string Number, Guid PersonPublicId, string PersonName, Guid OwnBankAccountPublicId, DateOnly DepositDate,
+    decimal Amount, string? Reference, int Target, Guid ProductPublicId, bool AppliedImmediately, int Status, string? ReceiptNumber, Guid? StatementLinePublicId,
+    DateTime RegisteredAt);
+
+public sealed record ConsignacionReportadaRequest(Guid PersonPublicId, Guid OwnBankAccountPublicId, DateOnly DepositDate, decimal Amount, Guid SupportAttachmentPublicId,
+    int Target, Guid ProductPublicId, string? Reference);
 
 public sealed record LineaDeCorridaDto(Guid PublicId, string LineRef, string IdempotencyKey, int Outcome, decimal Amount, string? Code, string? Message, Guid? ReceiptPublicId,
     string? ReceiptNumber, int Attempts);
@@ -112,6 +131,33 @@ public sealed class BancosClient(HttpClient http, CentralAuthClient auth)
     public Task<ResultadoDeInventario<PartidaDto>> LlevarAIngresoAsync(Guid partida, PartidaAIngresoRequest r, ClaveDeOperacion clave, Guid? aprobacion,
         CancellationToken ct = default) =>
         Enviar<PartidaDto>(HttpMethod.Post, $"{Base}/unidentified-items/{partida}/move-to-income", r, clave, aprobacion, ct);
+
+    // ---- Feature 015, R1 (T0380): reglas, propuestas, aplicación al cargar y consignaciones reportadas ----
+    public Task<ResultadoDeInventario<IReadOnlyList<ReglaDeIdentificacionDto>>> ReglasAsync(CancellationToken ct = default) =>
+        Enviar<IReadOnlyList<ReglaDeIdentificacionDto>>(HttpMethod.Get, $"{Base}/identification-rules", null, null, null, ct);
+
+    public Task<ResultadoDeInventario<ReglaDeIdentificacionDto>> GuardarReglaAsync(Guid? regla, ReglaDeIdentificacionRequest r, ClaveDeOperacion clave,
+        CancellationToken ct = default) =>
+        Enviar<ReglaDeIdentificacionDto>(regla is null ? HttpMethod.Post : HttpMethod.Put, regla is null ? $"{Base}/identification-rules" : $"{Base}/identification-rules/{regla}",
+            r, clave, null, ct);
+
+    public Task<ResultadoDeInventario<PropuestaDeAbonoDto?>> PropuestaAsync(Guid linea, CancellationToken ct = default) =>
+        Enviar<PropuestaDeAbonoDto?>(HttpMethod.Get, $"{Base}/bank-items/{linea}/proposal", null, null, null, ct);
+
+    public Task<ResultadoDeInventario<AplicacionAlCargarDto>> AplicarAlCargarAsync(Guid cuenta, string extracto, ClaveDeOperacion clave, CancellationToken ct = default) =>
+        Enviar<AplicacionAlCargarDto>(HttpMethod.Post, $"{Base}/bank-items/apply-on-load", new { ownBankAccountPublicId = cuenta, statementNumber = extracto }, clave, null, ct);
+
+    public Task<ResultadoDeInventario<IReadOnlyList<ConsignacionReportadaDto>>> ConsignacionesReportadasAsync(int? estado = null, CancellationToken ct = default) =>
+        Enviar<IReadOnlyList<ConsignacionReportadaDto>>(HttpMethod.Get, EnvioDeVentas.ConQuery($"{Base}/reported-deposits",
+            EnvioDeVentas.Query(("state", EnvioDeVentas.Texto(estado)))), null, null, null, ct);
+
+    public Task<ResultadoDeInventario<ConsignacionReportadaDto>> ReportarConsignacionAsync(ConsignacionReportadaRequest r, ClaveDeOperacion clave,
+        CancellationToken ct = default) =>
+        Enviar<ConsignacionReportadaDto>(HttpMethod.Post, $"{Base}/reported-deposits", r, clave, null, ct);
+
+    public Task<ResultadoDeInventario<ConsignacionReportadaDto>> VerificarConsignacionAsync(Guid consignacion, Guid linea, ClaveDeOperacion clave,
+        CancellationToken ct = default) =>
+        Enviar<ConsignacionReportadaDto>(HttpMethod.Post, $"{Base}/reported-deposits/{consignacion}/verify", new { linePublicId = linea }, clave, null, ct);
 
     private Task<ResultadoDeInventario<T>> Enviar<T>(HttpMethod metodo, string url, object? cuerpo, ClaveDeOperacion? clave, Guid? aprobacion, CancellationToken ct) =>
         EnvioDeRecaudo.EnviarAsync<T>(http, auth, metodo, url, cuerpo, clave, aprobacion, ct);
