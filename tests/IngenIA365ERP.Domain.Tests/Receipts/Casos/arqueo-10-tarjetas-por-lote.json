@@ -1,0 +1,71 @@
+{
+  "nombre": "Tarjetas por lote de datáfono",
+  "descripcion": "Esperado 120.000 + 80.000 = 200.000; los lotes 001 y 002 del datáfono 1 suman 200.000.",
+  "tratamientoDelFaltante": "CashierReceivable",
+  "medios": [
+    {
+      "id": 3,
+      "codigo": "TC",
+      "clase": "CreditCard",
+      "arqueo": "VoucherTotal",
+      "tolerancia": 0
+    }
+  ],
+  "medioDeLaBase": null,
+  "base": 0,
+  "cobros": [
+    {
+      "medio": "TC",
+      "valor": 120000,
+      "anulado": false,
+      "referencia": null
+    },
+    {
+      "medio": "TC",
+      "valor": 80000,
+      "anulado": false,
+      "referencia": null
+    }
+  ],
+  "movimientos": [],
+  "conteo": [
+    {
+      "medio": "TC",
+      "total": null,
+      "denominaciones": null,
+      "referencias": null,
+      "lotes": [
+        {
+          "datafono": 1,
+          "lote": "001",
+          "valor": 150000
+        },
+        {
+          "datafono": 1,
+          "lote": "002",
+          "valor": 50000
+        }
+      ],
+      "motivo": null
+    }
+  ],
+  "esperado": [
+    {
+      "medio": "TC",
+      "base": 0,
+      "cobros": 200000,
+      "anulaciones": 0,
+      "entradas": 0,
+      "salidas": 0,
+      "esperado": 200000,
+      "contado": 200000,
+      "diferencia": 0,
+      "dentro": true,
+      "tratamiento": "None"
+    }
+  ],
+  "totalEsperado": 200000,
+  "totalContado": 200000,
+  "aAprobar": 0,
+  "sinMotivo": []
+}

@@ -22,6 +22,8 @@ public class LosHechosDeRecaudoYTesoreriaNoLlevanCuentas
     /// <summary>Carpetas de contratos de mensaje de Recaudo y Tesorería (relativas a <c>src/</c>).</summary>
     private static readonly string[] Carpetas =
     [
+        // Feature 015, US2 (T0091): los hechos de la caja.
+        "Core/IngenIA365ERP.Application/Common/Integration/Contracts/Receipts",
     ];
 
     /// <summary>Propiedades con <c>Account</c> en el nombre que no son cuentas contables.</summary>

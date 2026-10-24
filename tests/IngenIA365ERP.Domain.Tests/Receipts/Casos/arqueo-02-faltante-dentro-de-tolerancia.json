@@ -1,0 +1,54 @@
+{
+  "nombre": "Faltante de 500 con tolerancia de 1.000: con motivo y sin aprobación (Q7)",
+  "descripcion": "Esperado 200.000 + 150.000 = 350.000; contado 349.500 en total. El faltante se trata (cuenta por cobrar al cajero) pero no pide aprobación.",
+  "tratamientoDelFaltante": "CashierReceivable",
+  "medios": [
+    {
+      "id": 1,
+      "codigo": "EF",
+      "clase": "Cash",
+      "arqueo": "PhysicalCount",
+      "tolerancia": 1000
+    }
+  ],
+  "medioDeLaBase": "EF",
+  "base": 200000,
+  "cobros": [
+    {
+      "medio": "EF",
+      "valor": 150000,
+      "anulado": false,
+      "referencia": null
+    }
+  ],
+  "movimientos": [],
+  "conteo": [
+    {
+      "medio": "EF",
+      "total": 349500,
+      "denominaciones": null,
+      "referencias": null,
+      "lotes": null,
+      "motivo": "Moneda de 500 que no apareció"
+    }
+  ],
+  "esperado": [
+    {
+      "medio": "EF",
+      "base": 200000,
+      "cobros": 150000,
+      "anulaciones": 0,
+      "entradas": 0,
+      "salidas": 0,
+      "esperado": 350000,
+      "contado": 349500,
+      "diferencia": -500,
+      "dentro": true,
+      "tratamiento": "CashierReceivable"
+    }
+  ],
+  "totalEsperado": 350000,
+  "totalContado": 349500,
+  "aAprobar": 0,
+  "sinMotivo": []
+}

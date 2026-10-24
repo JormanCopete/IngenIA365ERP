@@ -1,0 +1,80 @@
+{
+  "nombre": "Un medio sin método de arqueo cuenta lo esperado",
+  "descripcion": "Efectivo 50.000 + 10.000 = 60.000 contados; el bono (método None) cuenta sus 25.000 esperados.",
+  "tratamientoDelFaltante": "CashierReceivable",
+  "medios": [
+    {
+      "id": 1,
+      "codigo": "EF",
+      "clase": "Cash",
+      "arqueo": "PhysicalCount",
+      "tolerancia": 1000
+    },
+    {
+      "id": 4,
+      "codigo": "BONO",
+      "clase": "Voucher",
+      "arqueo": "None",
+      "tolerancia": 0
+    }
+  ],
+  "medioDeLaBase": "EF",
+  "base": 50000,
+  "cobros": [
+    {
+      "medio": "EF",
+      "valor": 10000,
+      "anulado": false,
+      "referencia": null
+    },
+    {
+      "medio": "BONO",
+      "valor": 25000,
+      "anulado": false,
+      "referencia": null
+    }
+  ],
+  "movimientos": [],
+  "conteo": [
+    {
+      "medio": "EF",
+      "total": 60000,
+      "denominaciones": null,
+      "referencias": null,
+      "lotes": null,
+      "motivo": null
+    }
+  ],
+  "esperado": [
+    {
+      "medio": "EF",
+      "base": 50000,
+      "cobros": 10000,
+      "anulaciones": 0,
+      "entradas": 0,
+      "salidas": 0,
+      "esperado": 60000,
+      "contado": 60000,
+      "diferencia": 0,
+      "dentro": true,
+      "tratamiento": "None"
+    },
+    {
+      "medio": "BONO",
+      "base": 0,
+      "cobros": 25000,
+      "anulaciones": 0,
+      "entradas": 0,
+      "salidas": 0,
+      "esperado": 25000,
+      "contado": 25000,
+      "diferencia": 0,
+      "dentro": true,
+      "tratamiento": "None"
+    }
+  ],
+  "totalEsperado": 85000,
+  "totalContado": 85000,
+  "aAprobar": 0,
+  "sinMotivo": []
+}

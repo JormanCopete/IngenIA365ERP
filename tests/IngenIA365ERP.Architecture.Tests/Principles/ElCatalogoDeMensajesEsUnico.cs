@@ -24,6 +24,8 @@ public class ElCatalogoDeMensajesEsUnico
         "src/Core/IngenIA365ERP.Application/Common/Integration/Contracts/Inventory/CatalogoDeMensajesV1.cs",
         "src/Core/IngenIA365ERP.Application/Common/Integration/Contracts/Lending/CatalogoDeMensajesDeCarteraV1.cs",
         "src/Core/IngenIA365ERP.Application/Common/Integration/Contracts/Lending/CatalogoDeMensajesHaciaCarteraV1.cs",
+        // Feature 015, US2 (T0091): los hechos de Recaudo a Contabilidad.
+        "src/Core/IngenIA365ERP.Application/Common/Integration/Contracts/Receipts/CatalogoDeMensajesDeRecaudoV1.cs",
     ];
 
     private static readonly (Regex Patron, string Que)[] Prohibidos = [
@@ -94,12 +96,17 @@ public class ElCatalogoDeMensajesEsUnico
         // DescuentosPorPagaduria (y, de Recaudo, la v2 de ResultadoDeDescuentos).
         Assert.Equal(82, todos.Count(t => t.OriginModule == ModulosDeOrigen.Cartera));
         Assert.Equal(1, todos.Count(t => t.OriginModule == ModulosDeOrigen.Tesoreria));
-        Assert.Equal(3, todos.Count(t => t.OriginModule == ModulosDeOrigen.Recaudo));
+        // Feature 015, US2 (T0091): + los cinco hechos de la caja a Contabilidad (MCR, MRC, DAA, ASR, SLI).
+        Assert.Equal(8, todos.Count(t => t.OriginModule == ModulosDeOrigen.Recaudo));
 
         var hechos = todos.Where(t => t.OriginModule == ModulosDeOrigen.Cartera && t.AdmiteDestino(IntegrationDestinations.Accounting)).ToList();
         Assert.Equal(70, hechos.Count);
         Assert.All(hechos, t => Assert.Matches("^[A-Z]{3,4}$", t.CodigoCorto ?? string.Empty));
         Assert.Equal(hechos.Count, hechos.Select(t => t.CodigoCorto).Distinct().Count());
-        Assert.All(todos.Except(hechos), t => Assert.Null(t.CodigoCorto));
+        var hechosDeRecaudo = todos.Where(t => t.OriginModule == ModulosDeOrigen.Recaudo && t.AdmiteDestino(IntegrationDestinations.Accounting)).ToList();
+        Assert.Equal(5, hechosDeRecaudo.Count);
+        Assert.All(hechosDeRecaudo, t => Assert.Matches("^[A-Z]{3,4}$", t.CodigoCorto ?? string.Empty));
+        Assert.Equal(hechos.Count + hechosDeRecaudo.Count, hechos.Concat(hechosDeRecaudo).Select(t => t.CodigoCorto).Distinct().Count());
+        Assert.All(todos.Except(hechos).Except(hechosDeRecaudo), t => Assert.Null(t.CodigoCorto));
     }
 }

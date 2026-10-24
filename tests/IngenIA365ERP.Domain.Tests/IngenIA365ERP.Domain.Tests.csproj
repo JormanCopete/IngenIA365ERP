@@ -65,6 +65,8 @@
     <None Include="Lending\Payroll\Casos\*.json" CopyToOutputDirectory="PreserveNewest" />
     <!-- Feature 014 (T004): casos dorados de captaciones, calculados con la hoja Lending\Deposits\Casos\calcular.py (R12). -->
     <None Include="Lending\Deposits\Casos\*.json" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Feature 015 (T0079, T0101): casos dorados de Recaudo (arqueo e imputación de medios), calculados a mano en su descripción. -->
+    <None Include="Receipts\Casos\*.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Core\IngenIA365ERP.Domain\IngenIA365ERP.Domain.csproj" />

@@ -291,6 +291,12 @@ public class LosHechosInmutablesNoSeModifican
     /// </summary>
     private static readonly Dictionary<string, string[]> HechosDeRecaudoYTesoreria = new(StringComparer.Ordinal)
     {
+        // Fase 5, US2 (T0089; data-model §2): el arqueo se inserta completo al registrar lo contado; sólo la aprobación de la diferencia de una línea se
+        // escribe después, una vez. Movimientos de caja y de bóveda, ajustes y cierres del día no cambian: una corrección es otro documento.
+        ["CashCount"] = [], ["CashCountDenomination"] = [], ["CashCountTerminalBatch"] = [], ["CashCountReference"] = [],
+        ["CashCountLine"] = ["ApprovalRequestPublicId", "ApprovedByUserId", "ApprovedAt", "ApprovalReason"],
+        ["CashMovement"] = [], ["CashMovementDenomination"] = [], ["CashSessionAdjustment"] = [],
+        ["DayClose"] = [], ["DayCloseLine"] = [], ["VaultMovement"] = [], ["VaultMovementDenomination"] = [],
     };
 
     [Fact]
