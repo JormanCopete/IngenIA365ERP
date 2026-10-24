@@ -2109,14 +2109,46 @@ registro único de transacciones en efectivo con el punto de venta (E-03) (FR-09
 (SC-017); con un bloqueante queda una versión `Validated` sin archivo; regenerar deja la anterior `Superseded`; marcar cargado
 con radicado cierra el período; cada generación lleva la advertencia de layout sin cotejar.
 
-- [ ] T0385 [P] [US14] Escribir tests/IngenIA365ERP.Application.Tests/Receipts/Compliance/ReporteDeTransaccionesTests.cs (R-24; FR-096; archivos-y-plantillas.md §6): layout JSON con vigencia y `verified = false` sobre `Domain/Common/Layouts`; alcance `SoloEfectivo`/`Todas`; individuales sobre el umbral y múltiples del mes por persona; estado `Vigente`/`Suspendido` sellado e informado; reporte de ausencia si `Sarlaft.Reporte.ExigeAusencia`; bloqueantes → `Validated` sin archivo; regenerar → `Superseded`; cargado con radicado; `Recaudo.Sarlaft.LayoutSinCotejar` como advertencia, nunca en el archivo; lectura sensible `Receipts.Sarlaft.ReportRead`
-- [ ] T0386 [P] [US14] Escribir tests/IngenIA365ERP.Application.Tests/Receipts/Compliance/RegistroUnicoDeEfectivoTests.cs (FR-204; E-03; TR28): los acumulados, señales y el reporte suman el efectivo del punto de venta por `IEfectivoDelPuntoDeVenta` sin copiar sus filas; los egresos en efectivo cuentan (FR-099)
-- [ ] T0387 [P] [US14] Escribir la e2e tests/IngenIA365ERP.API.IntegrationTests/Receipts/ReporteDeTransaccionesTests.cs (SC-017) para la corrida de cierre de R1
-- [ ] T0388 [US14] Implementar en Comercial el puerto `IEfectivoDelPuntoDeVenta` (`PorPersonaAsync`, `PorPeriodoAsync`) en src/Core/IngenIA365ERP.Application/Inventory/Integration/EfectivoDelPuntoDeVenta.cs (E-03; contratos-v2.md §4) y anotar la enmienda en specs/012-inventario-comercial/
-- [ ] T0389 [P] [US14] Crear `RCD_CashTransactionReports` y `RCD_CashTransactionReportLines` en src/Core/IngenIA365ERP.Domain/Entities/Receipts/Compliance/ con su configuración (data-model §7.3) y el layout src/Core/IngenIA365ERP.Application/Receipts/Compliance/Layouts/uiaf-transacciones-2027-01.json embebido con `verified = false`
-- [ ] T0390 [US14] Implementar en src/Core/IngenIA365ERP.Application/Receipts/Compliance/ `GenerateCashTransactionReportCommand`, `RegenerateCashTransactionReportCommand`, `MarkCashTransactionReportUploadedCommand` (radicado y comprobante), `GetCashTransactionReportFileQuery` y el uso de `IEfectivoDelPuntoDeVenta` en `RegistroDeEfectivo` y `SenalesDeEfectivo` (FR-096, FR-204)
-- [ ] T0391 [US14] Exponer `/api/receipts/compliance/cash-transaction-reports` (`POST /{id}/regenerate`, `/uploaded`, `GET /{id}/file`) con `Receipts.Sarlaft.Report` y la pestaña «Reporte de transacciones» en `/recaudo/cumplimiento` con `IndicadorDeCarga`
-- [ ] T0392 [US14] Regenerar en src/Infrastructure/IngenIA365ERP.Persistence.Migrations.{PostgreSql,SqlServer}/Application/ el par `RecaudoCompleto` con el reporte de transacciones
+- [X] T0385 [P] [US14] Escribir tests/IngenIA365ERP.Application.Tests/Receipts/Compliance/ReporteDeTransaccionesTests.cs (R-24; FR-096; archivos-y-plantillas.md §6): layout JSON con vigencia y `verified = false` sobre `Domain/Common/Layouts`; alcance `SoloEfectivo`/`Todas`; individuales sobre el umbral y múltiples del mes por persona; estado `Vigente`/`Suspendido` sellado e informado; reporte de ausencia si `Sarlaft.Reporte.ExigeAusencia`; bloqueantes → `Validated` sin archivo; regenerar → `Superseded`; cargado con radicado; `Recaudo.Sarlaft.LayoutSinCotejar` como advertencia, nunca en el archivo; lectura sensible `Receipts.Sarlaft.ReportRead`
+- [X] T0386 [P] [US14] Escribir tests/IngenIA365ERP.Application.Tests/Receipts/Compliance/RegistroUnicoDeEfectivoTests.cs (FR-204; E-03; TR28): los acumulados, señales y el reporte suman el efectivo del punto de venta por `IEfectivoDelPuntoDeVenta` sin copiar sus filas; los egresos en efectivo cuentan (FR-099)
+- [X] T0387 [P] [US14] Escribir la e2e tests/IngenIA365ERP.API.IntegrationTests/Receipts/ReporteDeTransaccionesTests.cs (SC-017) para la corrida de cierre de R1
+- [X] T0388 [US14] Implementar en Comercial el puerto `IEfectivoDelPuntoDeVenta` (`PorPersonaAsync`, `PorPeriodoAsync`) en src/Core/IngenIA365ERP.Application/Inventory/Integration/EfectivoDelPuntoDeVenta.cs (E-03; contratos-v2.md §4) y anotar la enmienda en specs/012-inventario-comercial/
+- [X] T0389 [P] [US14] Crear `RCD_CashTransactionReports` y `RCD_CashTransactionReportLines` en src/Core/IngenIA365ERP.Domain/Entities/Receipts/Compliance/ con su configuración (data-model §7.3) y el layout src/Core/IngenIA365ERP.Application/Receipts/Compliance/Layouts/uiaf-transacciones-2027-01.json embebido con `verified = false`
+- [X] T0390 [US14] Implementar en src/Core/IngenIA365ERP.Application/Receipts/Compliance/ `GenerateCashTransactionReportCommand`, `RegenerateCashTransactionReportCommand`, `MarkCashTransactionReportUploadedCommand` (radicado y comprobante), `GetCashTransactionReportFileQuery` y el uso de `IEfectivoDelPuntoDeVenta` en `RegistroDeEfectivo` y `SenalesDeEfectivo` (FR-096, FR-204)
+- [X] T0391 [US14] Exponer `/api/receipts/compliance/cash-transaction-reports` (`POST /{id}/regenerate`, `/uploaded`, `GET /{id}/file`) con `Receipts.Sarlaft.Report` y la pestaña «Reporte de transacciones» en `/recaudo/cumplimiento` con `IndicadorDeCarga`
+- [X] T0392 [US14] Regenerar en src/Infrastructure/IngenIA365ERP.Persistence.Migrations.{PostgreSql,SqlServer}/Application/ el par `RecaudoCompleto` con el reporte de transacciones
+
+**Notas de la construcción de la fase 29 (2026-10-24)**. Pruebas escritas y compiladas, sin correr. Desviaciones y decisiones; los nombres nuevos quedan en
+decisiones-transversales §2.7:
+
+- **T0385–T0387**: `Receipts/Compliance/ReporteDeTransaccionesTests` (layout embebido con vigencia y sin cotejar; individuales y múltiples con su alcance; generar con
+  la advertencia fuera del archivo, regenerar, marcar cargado y no regenerar; bloqueante → `Validated` sin archivo; suspendido y ausencia), `RegistroUnicoDeEfectivoTests`
+  (el punto de venta suma sin copiar filas, los egresos cuentan, lo anulado no) y la e2e `Receipts/ReporteDeTransaccionesTests` (escrita, sin correr; si el «hoy» del
+  escenario es anterior a 2027 sólo comprueba `Receipts.CashTransactionReport.LayoutMissing`).
+- **T0388**: puerto `Application/Common/Integration/Inventory/IEfectivoDelPuntoDeVenta` (`PorPersonaAsync`, `PorPeriodoAsync`) y su implementación de Comercial
+  `Application/Inventory/Integration/EfectivoDelPuntoDeVenta` sobre `INV_DocumentPayments` de clase efectivo de documentos confirmados con contraparte (recibido y
+  devuelto); enmienda E-03 anotada en `specs/012-inventario-comercial/decisiones-transversales.md`.
+- **T0389**: `CashTransactionReport` y `CashTransactionReportLine` (`Entities/Receipts/Compliance/CashTransactionReports.cs`) con su configuración y el layout
+  `Receipts/Compliance/Layouts/uiaf-transacciones-2027-01.json` (embebido, vigente desde 2027-01-01, todos los campos `verified = false`; encabezado con período, NIT,
+  total y ausencia, y detalle con clase I/M, fecha, documento, nombre, valor, cantidad, soporte y oficina). **Desviación**: la estructura es una propuesta por cotejar
+  (P7, T0393), no la del anexo oficial; el catálogo **nuevo** `CatalogoDeLayoutsDeRecaudo` la lee con `LectorDeLayout` de la 013.
+- **T0390**: `PreparacionDelReporteDeTransacciones` (las transacciones del registro único —recibos y egresos sin lo anulado ni las filas de anulación, más el punto de
+  venta por el puerto—; el motor puro **nuevo** `Domain/Receipts/Cumplimiento/ReporteDeTransacciones` con `Sarlaft.Reporte.Alcance`, los umbrales individual y de
+  múltiples y `Sarlaft.Reporte.Estado`; el archivo por `EscritorPorLayout`), `GeneracionDelReporteDeTransacciones` con `GenerateCashTransactionReportCommand`,
+  `RegenerateCashTransactionReportCommand`, `MarkCashTransactionReportUploadedCommand` (radicado, fecha y comprobante opcional) y `GetCashTransactionReportFileQuery`
+  (enlace firmado con la lectura sensible `Receipts.Sarlaft.ReportRead`). El archivo es el adjunto de módulo **nuevo** `ReceiptsCashTransactionReport` (no borrable,
+  se lee con `Receipts.Sarlaft.Report`), subido antes de la fila. Avisos **nuevos** en la generación (nunca en el archivo): `Recaudo.Sarlaft.LayoutSinCotejar`,
+  `Recaudo.Sarlaft.ReporteSuspendido` y `Recaudo.Sarlaft.SinTransacciones`. `RegistroDeEfectivo` recibe el puerto (opcional) y `DelPuntoDeVentaAsync` suma el efectivo
+  del punto de venta a las señales. **Desviaciones**: (a) el plazo de presentación no se calcula: no hay parámetro del día límite en data-model §23 y no se escribe un
+  literal; la pantalla informa el estado del período (vigente o suspendido); (b) con el período suspendido o sin transacciones y sin `ExigeAusencia`, la generación queda
+  `Validated` sin archivo con su aviso; (c) el comprobante del cargue se guarda por su identificador de adjunto, sin tipo propio.
+- **T0391**: rutas `/api/receipts/compliance/cash-transaction-reports` (`GET`, `POST`, `POST /{id}/regenerate`, `POST /{id}/uploaded`, `GET /{id}/file`) con
+  `Receipts.Sarlaft.Report`; sección «Reporte de transacciones» en `/recaudo/cumplimiento` con `IndicadorDeCarga`. Sin probar en navegador.
+- **T0392**: `RecaudoCompleto` regenerado en par con el reporte; «No changes» en los dos motores; paridad en par (Application 70). Compilan API, Web, Web.Client,
+  Persistence y las cinco de pruebas.
+- **T0393** (P7) queda sin marcar: el cotejo del layout con el anexo vigente es del oficial de cumplimiento, antes del primer vencimiento de enero de 2027; no bloquea la
+  generación (cada una lleva la advertencia).
+
 - [ ] T0393 [US14] P7 (estructura) · El oficial coteja el layout del reporte de transacciones con el anexo vigente y marca `verified = true` en src/Core/IngenIA365ERP.Application/Receipts/Compliance/Layouts/; registrarlo en specs/015-recaudo-tesoreria/research.md (dueño, fecha límite antes del primer vencimiento de enero de 2027; no bloquea la generación: cada una lleva la advertencia)
 
 ---

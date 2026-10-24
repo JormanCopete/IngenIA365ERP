@@ -562,6 +562,17 @@ Lo que tasks.md marcaba **(nuevo)** y lo que trajeron el `/speckit-analyze` y la
 | `RegisterPaymasterPayDateCommand` · `GetPaymasterCalendarQuery` (con `OnlyLate`, el informe de morosas) · `PaymasterCalendarRowDto` · `CalendarioDePagadurias` · `AntiguedadDeRecaudo.GirosDePagaduriaTardiosAsync` · evento `Receipts.Paymaster.PayDateRegistered` | comando, consulta y aviso | `Receipts/Paymasters/CalendarioDePagadurias.cs`, `Receipts/Tareas` |
 | rutas `GET/POST /api/receipts/paymaster-calendar` · sección «Calendario de giro» de `/recaudo/pagadurias` | rutas y pantalla | `API/Endpoints/Receipts/PaymastersEndpoints.cs`, `Shared/Pages/Recaudo/Pagadurias.razor` |
 
+**Fijados en la construcción de la fase 29 (2026-10-24)**:
+
+| Nombre | Qué | Dónde |
+|---|---|---|
+| `RCD_CashTransactionReports` (`CashTransactionReport`) · `RCD_CashTransactionReportLines` (`CashTransactionReportLine`, con `Source`) | el reporte de transacciones y sus líneas | par `RecaudoCompleto`; `Entities/Receipts/Compliance/CashTransactionReports.cs` |
+| `ReporteDeTransacciones` · `TransaccionReportable` · `LineaDelReporte` | el armado puro del reporte | `Domain/Receipts/Cumplimiento/ReporteDeTransacciones.cs` |
+| `uiaf-transacciones-2027-01.json` (`UIAF-TRANSACCIONES-v1`) · `CatalogoDeLayoutsDeRecaudo` | la estructura como dato, sin cotejar | `Receipts/Compliance/Layouts`, `Receipts/Compliance/ReporteDeTransaccionesCommands.cs` |
+| `PreparacionDelReporteDeTransacciones` · `GeneracionDelReporteDeTransacciones` · `GenerateCashTransactionReportCommand` · `RegenerateCashTransactionReportCommand` · `MarkCashTransactionReportUploadedCommand` · `GetCashTransactionReportFileQuery` · `ListCashTransactionReportsQuery` · `ErroresDelReporteDeTransacciones` (`Receipts.CashTransactionReport.{AlreadyUploaded, LayoutMissing, NotGenerated}`; avisos `Recaudo.Sarlaft.{LayoutSinCotejar, ReporteSuspendido, SinTransacciones}`) | la generación y sus comandos | `Receipts/Compliance/ReporteDeTransaccionesCommands.cs` |
+| `IEfectivoDelPuntoDeVenta` · `EfectivoDelPuntoDeVentaDto` · `EfectivoDelPuntoDeVenta` (Comercial) · `RegistroDeEfectivo.DelPuntoDeVentaAsync` | el registro único con el punto de venta (E-03) | `Common/Integration/Inventory`, `Inventory/Integration`, `Receipts/Compliance/RegistroDeEfectivo.cs` |
+| adjunto `ReceiptsCashTransactionReport` · `AuditoriaDeRecaudo.ReporteDeEfectivoLeidoAsync` · eventos `Receipts.Sarlaft.{ReportGenerated, ReportUploaded}` · rutas `/api/receipts/compliance/cash-transaction-reports` · sección «Reporte de transacciones» de `/recaudo/cumplimiento` | adjunto, auditoría, rutas y pantalla | `Attachments/Common/AdjuntosDeModulo.cs`, `API/Endpoints/Receipts/ComplianceEndpoints.cs`, `Shared/Pages/Recaudo/Cumplimiento.razor` |
+
 ## 3. Decisiones transversales
 
 ### Módulos y frontera

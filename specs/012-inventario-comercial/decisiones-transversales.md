@@ -3907,3 +3907,12 @@ Corregir `ICurrentUserService.UserId` en toda la plataforma; arreglar el empuje 
 `COR_PaymentMethods` o `COR_Sequences`; migrar `PAY_CompanyPolicies` o la UVT a Core; encadenar la
 auditoría de Contabilidad; pasar Contabilidad y Nómina a la fecha local; POS fuera de línea; Ingenia365
 como proveedor tecnológico; lo interno de Cartera (D-02).
+
+### Enmienda E-03 de la feature 015 (2026-10-24, R1, T0388)
+
+Comercial ofrece a Recaudo el efectivo de su punto de venta para el **registro único de transacciones en efectivo** (FR-204 de la
+015; contratos-v2.md §4): el puerto `Application/Common/Integration/Inventory/IEfectivoDelPuntoDeVenta` (`PorPersonaAsync`,
+`PorPeriodoAsync`), de sólo lectura y síncrono, implementado en `Application/Inventory/Integration/EfectivoDelPuntoDeVenta`
+sobre `INV_DocumentPayments` de clase efectivo de documentos confirmados con contraparte (recibido y devuelto). Recaudo suma ese
+efectivo a sus acumulados, señales y reporte a la UIAF **sin copiar filas**; Comercial no lee nada de Recaudo ni cambia su
+esquema. No toca Contabilidad ni Cartera (`InventarioNoConoceContabilidadNiCartera`).
