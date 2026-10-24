@@ -45,6 +45,8 @@
   // Feature 015, R1 (fase 26, T0373): los egresos de caja y su GMF.
   { "code": "EG", "name": "Egreso de caja", "usage": "Module", "module": "REC" },
   { "code": "TP", "name": "Pago de Tesorería", "usage": "Module", "module": "TES" },
+  // Feature 015, T1 (fase 32, T0406): los traslados entre cuentas propias y el cierre del mes de los cheques (T2 le suma las notas bancarias).
+  { "code": "TB", "name": "Notas y traslados bancarios", "usage": "Module", "module": "TES" },
   { "code": "DP", "name": "Depreciación y amortización de activos", "usage": "Assets", "module": "ACT" },
   { "code": "AP", "name": "Apertura de saldos", "usage": "Opening", "module": null },
   { "code": "CI", "name": "Cierre del ejercicio", "usage": "Closing", "module": null }

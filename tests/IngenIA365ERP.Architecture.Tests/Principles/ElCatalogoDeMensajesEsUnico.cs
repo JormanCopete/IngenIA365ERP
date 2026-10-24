@@ -100,7 +100,8 @@ public class ElCatalogoDeMensajesEsUnico
         Assert.Equal(84, todos.Count(t => t.OriginModule == ModulosDeOrigen.Cartera));
         // Feature 015, US10 y US11 (T0145, T0159): + GmfDePagoCausado (GMP) y PagoDeOrdenGirado (POG).
         // US19 (T0228): + ChequeGiradoEmitido (CHE), ChequeGiradoAnulado (CHA) y RemesaConfirmada (RMC).
-        Assert.Equal(6, todos.Count(t => t.OriginModule == ModulosDeOrigen.Tesoreria));
+        // T1 (fase 32): + TrasladoEntreCuentasEnviado (TEE), TrasladoConfirmado (TCF), ChequesReclasificadosAlCierre (CRC) y ChequeNoCobradoACuentaPorPagar (CNP).
+        Assert.Equal(10, todos.Count(t => t.OriginModule == ModulosDeOrigen.Tesoreria));
         // Feature 015, US2 (T0091): + los cinco hechos de la caja a Contabilidad (MCR, MRC, DAA, ASR, SLI); US3 (T0116): + ReciboEmitido (RCE); US5 (T0178): +
         // ReciboAnulado (RAN), AplicacionReversadaPorModulo (ARM), SaldoAFavorDePagadorResuelto (SFP) y SaldoAFavorDeCarteraDevuelto (SFC).
         // US6 (T0196): + ReciboDeBancoEmitido (RBE), PartidaPorIdentificarReconocida (PIR), PartidaClasificada (PCL) y PartidaDevueltaAlConsignante (PDC).
@@ -116,7 +117,7 @@ public class ElCatalogoDeMensajesEsUnico
         Assert.Equal(21, hechosDeRecaudo.Count);
         Assert.All(hechosDeRecaudo, t => Assert.Matches("^[A-Z]{3,4}$", t.CodigoCorto ?? string.Empty));
         var hechosDeTesoreria = todos.Where(t => t.OriginModule == ModulosDeOrigen.Tesoreria && t.AdmiteDestino(IntegrationDestinations.Accounting)).ToList();
-        Assert.Equal(5, hechosDeTesoreria.Count);
+        Assert.Equal(9, hechosDeTesoreria.Count);
         Assert.All(hechosDeTesoreria, t => Assert.Matches("^[A-Z]{3,4}$", t.CodigoCorto ?? string.Empty));
         var conCodigo = hechos.Concat(hechosDeRecaudo).Concat(hechosDeTesoreria).ToList();
         Assert.Equal(conCodigo.Count, conCodigo.Select(t => t.CodigoCorto).Distinct().Count());

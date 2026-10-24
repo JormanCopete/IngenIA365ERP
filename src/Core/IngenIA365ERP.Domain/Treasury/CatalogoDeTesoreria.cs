@@ -17,5 +17,9 @@ public static class CatalogoDeTesoreria
     /// <summary>El módulo de Tesorería en los catálogos de plataforma, en la numeración y como participante.</summary>
     public const string Modulo = "TES";
 
-    public const EntregaDeTesoreria EntregaVigente = EntregaDeTesoreria.T0;
+    /// <summary>
+    /// Feature 015, T1 (fase 32, T0406): sube a T1 con la migración <c>TesoreriaCompleta</c>: traslados entre cuentas propias, cierre del mes de los cheques, órdenes
+    /// manuales, firmantes y tokens, comprobante de pago y el aviso al cierre contable; lo que sólo trae T2 sigue sin ofrecerse.
+    /// </summary>
+    public const EntregaDeTesoreria EntregaVigente = EntregaDeTesoreria.T1;
 }

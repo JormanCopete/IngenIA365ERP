@@ -82,7 +82,7 @@ public class Provisioning_SmokeTests(CentralIdentityApiFixture fixture)
         (await appDb.AccountCatalogs.CountAsync()).Should().Be(2, "PUC solidario y PUC comercial");
         (await appDb.AccountCatalogEntries.CountAsync()).Should().BeGreaterThan(2_000);
         (await appDb.FinancialStatementItems.CountAsync()).Should().BeGreaterThan(100);
-        (await appDb.VoucherTypes.CountAsync(v => v.IsSeeded)).Should().Be(35, "los 18 de la 009, NV, CP, TR, AC y CJ de Inventario (feature 012, T484), CN de Cartera (feature 013, T0224), MA, CC, TD, AO y RA de captaciones y aportes (feature 014) y RR, RB, MC, AR, TP y EG de Recaudo y Tesorería (feature 015; CH, FP y CB ya venían de la 009)");
+        (await appDb.VoucherTypes.CountAsync(v => v.IsSeeded)).Should().Be(36, "los 18 de la 009, NV, CP, TR, AC y CJ de Inventario (feature 012, T484), CN de Cartera (feature 013, T0224), MA, CC, TD, AO y RA de captaciones y aportes (feature 014) y RR, RB, MC, AR, TP, EG y TB de Recaudo y Tesorería (feature 015; CH, FP y CB ya venían de la 009)");
         (await appDb.CrossDocumentTypes.CountAsync(t => t.IsSeeded)).Should().Be(9, "los 8 de la 009 y CTA, la cuenta de captación o aportes, de la 014");
 
         // RunTestSeed=false en la fixture ⇒ cero datos demo (FR-017/SC-005).

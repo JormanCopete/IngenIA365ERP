@@ -149,6 +149,10 @@ public static class MatricesDeRecaudoYTesoreria
             Resultado(RolesDeTesoreria.GmfGasto, "Gasto por GMF", ClaseDeOrden, Causa),
             R(RolesDeTesoreria.GmfPorPagar, "GMF por pagar", ClaseDeOrden),
             R(RolesDeTesoreria.EfectivoEnTransito, "Efectivo en tránsito", Oficina, CuentaPropia),
+            // T1 (fase 32): los fondos en tránsito de los traslados y el cierre del mes de los cheques girados, por cuenta propia.
+            R(RolesDeTesoreriaT1.FondosEnTransito, "Fondos en tránsito entre cuentas propias", CuentaPropia),
+            R(RolesDeTesoreriaT1.ChequesPorEntregar, "Cheques girados por entregar", CuentaPropia),
+            R(RolesDeTesoreriaT1.CuentaPorPagarChequesNoCobrados, "Cuenta por pagar de cheques no cobrados", CuentaPropia),
         ],
         [
             H(PagoDeOrdenGiradoV1.Type, "Pago de orden girado", "TP", [RolesDeTesoreria.PuenteDeGiroDelOrigen], RolesDeTesoreria.Banco),
@@ -156,6 +160,12 @@ public static class MatricesDeRecaudoYTesoreria
             H(ChequeGiradoAnuladoV1.Type, "Cheque girado anulado", "TP", [RolesDeTesoreria.PuenteDeGiroDelOrigen], RolesDeTesoreria.Banco),
             H(GmfDePagoCausadoV1.Type, "GMF de un pago", "TP", [RolesDeTesoreria.GmfGasto], RolesDeTesoreria.GmfPorPagar, RolesDeTesoreria.Banco),
             H(RemesaConfirmadaV1.Type, "Remesa confirmada", "TP", [RolesDeTesoreria.EfectivoEnTransito], RolesDeTesoreria.Banco),
+            // T1 (fase 32; contabilidad.md §4, §8): los traslados y el cierre del mes de los cheques, con el tipo sugerido TB.
+            H(TrasladoEntreCuentasEnviadoV1.Type, "Traslado entre cuentas propias enviado", "TB", [RolesDeTesoreriaT1.FondosEnTransito], RolesDeTesoreria.Banco),
+            H(TrasladoConfirmadoV1.Type, "Traslado entre cuentas propias confirmado", "TB", [RolesDeTesoreriaT1.FondosEnTransito], RolesDeTesoreria.Banco),
+            H(ChequesReclasificadosAlCierreV1.Type, "Cheques por entregar reclasificados al cierre", "TB", [RolesDeTesoreriaT1.ChequesPorEntregar], RolesDeTesoreria.Banco),
+            H(ChequeNoCobradoACuentaPorPagarV1.Type, "Cheque no cobrado a cuenta por pagar", "TB", [RolesDeTesoreriaT1.CuentaPorPagarChequesNoCobrados],
+                RolesDeTesoreria.Banco),
         ]);
 
     public static IReadOnlyList<ModuloDeLaMatriz> Todas { get; } = [Recaudo, Tesoreria];

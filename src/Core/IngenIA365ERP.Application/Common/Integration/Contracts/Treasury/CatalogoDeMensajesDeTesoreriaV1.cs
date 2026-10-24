@@ -25,6 +25,11 @@ public static class CatalogoDeMensajesDeTesoreriaV1
         Hecho(typeof(ChequeGiradoEmitidoV1), ChequeGiradoEmitidoV1.Type, "CHE"),
         Hecho(typeof(ChequeGiradoAnuladoV1), ChequeGiradoAnuladoV1.Type, "CHA"),
         Hecho(typeof(RemesaConfirmadaV1), RemesaConfirmadaV1.Type, "RMC"),
+        // T1 (fase 32): los traslados entre cuentas propias y el cierre del mes de los cheques girados, con el comprobante sugerido TB.
+        Hecho(typeof(TrasladoEntreCuentasEnviadoV1), TrasladoEntreCuentasEnviadoV1.Type, "TEE"),
+        Hecho(typeof(TrasladoConfirmadoV1), TrasladoConfirmadoV1.Type, "TCF"),
+        Hecho(typeof(ChequesReclasificadosAlCierreV1), ChequesReclasificadosAlCierreV1.Type, "CRC"),
+        Hecho(typeof(ChequeNoCobradoACuentaPorPagarV1), ChequeNoCobradoACuentaPorPagarV1.Type, "CNP"),
     ];
 
     private static TipoDeMensaje Hecho(Type record, string type, string codigoCorto) =>
