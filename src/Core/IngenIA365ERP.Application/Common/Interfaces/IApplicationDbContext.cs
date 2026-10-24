@@ -701,6 +701,12 @@ public interface IApplicationDbContext
     DbSet<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.Reconciliation> TreasuryReconciliations { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.ReconciliationMatch> TreasuryReconciliationMatches { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.ReconcilingItem> TreasuryReconcilingItems { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Activation.ReceiptsOpeningSquare> ReceiptsOpeningSquares { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Activation.ReceiptsOpeningSquareLine> ReceiptsOpeningSquareLines { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Activation.ReceiptsReferenceFigure> ReceiptsReferenceFigures { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Treasury.Activation.TreasuryOpeningSquare> TreasuryOpeningSquares { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Treasury.Activation.TreasuryOpeningSquareLine> TreasuryOpeningSquareLines { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Treasury.Activation.TreasuryReferenceFigure> TreasuryReferenceFigures { get; }
 
     /// <summary>
     /// Descarta todo lo que el contexto tenga sin guardar (feature 009, R3): lo usa el reintento

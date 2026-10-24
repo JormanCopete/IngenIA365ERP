@@ -51,4 +51,7 @@ public class CashRemittance : AuditableEntity
 
     /// <summary>El uso aprobado del fondo de liquidez cuando la remesa sale de una cuenta del fondo (banco → bóveda).</summary>
     public int? LiquidityFundUseId { get; set; }
+
+    /// <summary>Remesa o consignación en tránsito cargada por la puesta en marcha (<c>tesoreria.remesas-y-consignaciones-en-transito</c>, US13): sin hecho. (nuevo)</summary>
+    public bool IsOpeningLoad { get; set; }
 }

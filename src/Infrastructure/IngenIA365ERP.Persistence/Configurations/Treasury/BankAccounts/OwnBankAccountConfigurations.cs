@@ -27,6 +27,7 @@ public class OwnBankAccountConfiguration : IEntityTypeConfiguration<OwnBankAccou
         builder.Property(e => e.Purposes).HasConversion<int>();
         builder.Property(e => e.Status).HasConversion<int>();
         builder.Property(e => e.LastStatementBalance).Monto();
+        builder.Property(e => e.OpeningBalance).Monto();
         builder.HasIndex(e => new { e.BankId, e.AccountNumber }).IsUnique().HasDatabaseName($"UK_{Tabla}_BankId_AccountNumber");
         builder.HasIndex(e => e.Code).IsUnique().HasFilter("[IsDeleted] = 0").HasDatabaseName($"UK_{Tabla}_Code");
         builder.HasIndex(e => e.BranchId).HasDatabaseName($"IX_{Tabla}_BranchId");

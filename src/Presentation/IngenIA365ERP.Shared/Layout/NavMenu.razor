@@ -619,6 +619,10 @@
             <PermissionGate Required="Receipts.Scope.Manage">
                 <NavLink href="/recaudo/configuracion/alcance" class="nav-subitem">Alcance de los usuarios</NavLink>
             </PermissionGate>
+            @* US13 (T0290): las plantillas, las cifras de referencia y el cuadre de apertura. *@
+            <PermissionGate Required="Receipts.Imports.Run" AnyOf="@(new[] { "Receipts.Activation.View", "Receipts.Activation.Square", "Receipts.Activation.ProvisionalSquare" })">
+                <NavLink href="/recaudo/puesta-en-marcha" class="nav-subitem">Puesta en marcha</NavLink>
+            </PermissionGate>
         </NavMenuGroup>
 
         @* Feature 015, US10 (T0147; FR-162): el grupo «Tesorería» nace con las cuentas bancarias propias y la ejecución de órdenes de giro. *@
@@ -660,6 +664,10 @@
             @* US25 (T0280): la conciliación bancaria mínima, la única de la cooperativa (E-04). *@
             <PermissionGate Required="Treasury.Reconciliation.View">
                 <NavLink href="/tesoreria/conciliacion" class="nav-subitem">Conciliación bancaria</NavLink>
+            </PermissionGate>
+            @* US13 (T0290): las plantillas, las cifras de referencia y el cuadre de apertura. *@
+            <PermissionGate Required="Treasury.Imports.Run" AnyOf="@(new[] { "Treasury.Activation.View", "Treasury.Activation.Square", "Treasury.Activation.ProvisionalSquare" })">
+                <NavLink href="/tesoreria/puesta-en-marcha" class="nav-subitem">Puesta en marcha</NavLink>
             </PermissionGate>
         </NavMenuGroup>
 

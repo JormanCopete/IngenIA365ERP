@@ -46,6 +46,11 @@ public class OwnBankAccount : AuditableEntity
 
     public DateOnly? LastStatementDate { get; set; }
 
+    /// <summary>El saldo en libros al corte que trajo la puesta en marcha (<c>tesoreria.cuentas-bancarias</c>, US13) y su fecha; el cuadre lo compara con Contabilidad. (nuevo)</summary>
+    public decimal? OpeningBalance { get; set; }
+
+    public DateOnly? OpeningBalanceOn { get; set; }
+
     public bool EsDelFondoDeLiquidez => Purposes.HasFlag(BankAccountPurpose.LiquidityFund);
 
     public bool Activa(DateOnly fecha) => Status == TreasuryCatalogStatus.Active && ValidFrom <= fecha && (ValidTo is null || ValidTo >= fecha);

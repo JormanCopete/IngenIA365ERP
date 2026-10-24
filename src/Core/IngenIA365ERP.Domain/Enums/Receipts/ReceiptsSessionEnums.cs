@@ -89,4 +89,7 @@ public enum VaultMovementKind
     RemittanceIn = 4,
     Count = 5,
     RetainedCounterfeit = 6,
+
+    /// <summary>El saldo de la bóveda al corte que trae la puesta en marcha (<c>recaudo.bovedas-al-corte</c>, US13): sin hecho contable. (nuevo)</summary>
+    OpeningBalance = 7,
 }

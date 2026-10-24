@@ -1,0 +1,36 @@
+@page "/recaudo/puesta-en-marcha"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Components.Recaudo
+@using IngenIA365ERP.Shared.Services.Recaudo
+
+<PageTitle>Puesta en marcha de Recaudo - IngenIA365ERP</PageTitle>
+
+@* Feature 015, US13 (T0290; FR-157, FR-158, FR-160, FR-228): las plantillas de puesta en marcha de Recaudo (puntos y cajas, cajeros y alcances, medios por punto,
+   bóvedas, partidas y cheques en canje al corte), las cifras de referencia y el cuadre de apertura contra Contabilidad, definitivo o provisional. *@
+<PermissionGate Required="Receipts.Imports.Run" AnyOf="@(new[] { "Receipts.Activation.View", "Receipts.Activation.Square", "Receipts.Activation.ProvisionalSquare" })" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Puesta en marcha de Recaudo</h3>
+    </div>
+    <p class="texto-apoyo">
+        Cargue la configuración y los saldos al corte con las plantillas: cada una se revisa primero (sin guardar nada) y se aplica todo junto o nada. Las cargas no
+        generan movimientos contables: el cuadre compara lo cargado con lo que dice Contabilidad. Si al activar todavía hay diferencia sin acta, se puede seguir con un
+        cuadre provisional con su motivo y su fecha límite.
+    </p>
+    <PuestaEnMarchaDeModulo Modulo="@PuestaEnMarchaClient.Recaudo" Plantillas="@Plantillas" PermisoDeImportar="Receipts.Imports.Run"
+                            PermisoDefinitivo="Receipts.Activation.Square" PermisoProvisional="Receipts.Activation.ProvisionalSquare" />
+</div>
+</PermissionGate>
+
+@code {
+    private static readonly IReadOnlyList<PuestaEnMarchaDeModulo.PlantillaDePuestaEnMarcha> Plantillas =
+    [
+        new("recaudo.puntos-y-cajas", "Puntos de recaudo y cajas"),
+        new("recaudo.cajeros-y-alcances", "Cajeros y alcances"),
+        new("recaudo.medios-por-punto", "Medios de pago por punto"),
+        new("recaudo.bovedas-al-corte", "Bóvedas al corte"),
+        new("recaudo.partidas-al-corte", "Partidas por identificar al corte"),
+        new("recaudo.cheques-en-canje", "Cheques recibidos en canje"),
+        new("recaudo.cifras-de-referencia", "Cifras de referencia"),
+    ];
+}

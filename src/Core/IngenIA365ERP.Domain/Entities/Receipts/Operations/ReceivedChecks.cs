@@ -48,6 +48,9 @@ public class ReceivedCheck : AuditableEntity
 
     /// <summary>La cuenta por cobrar que dejó la devolución si ya se había entregado dinero (FR-060).</summary>
     public int? PayerReceivableId { get; set; }
+
+    /// <summary>Cheque en canje cargado por la puesta en marcha (<c>recaudo.cheques-en-canje</c>, US13): sin recibo ni hecho contable. (nuevo)</summary>
+    public bool IsOpeningLoad { get; set; }
 }
 
 /// <summary><c>RCD_ReceivedCheckEvents</c> (H): cada transición del cheque con quién, cuándo, la causa y el soporte. (nuevo)</summary>

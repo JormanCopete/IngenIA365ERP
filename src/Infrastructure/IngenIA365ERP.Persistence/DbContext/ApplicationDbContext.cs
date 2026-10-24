@@ -756,6 +756,12 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.Reconciliation> TreasuryReconciliations => Set<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.Reconciliation>();
     public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.ReconciliationMatch> TreasuryReconciliationMatches => Set<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.ReconciliationMatch>();
     public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.ReconcilingItem> TreasuryReconcilingItems => Set<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.ReconcilingItem>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Activation.ReceiptsOpeningSquare> ReceiptsOpeningSquares => Set<IngenIA365ERP.Domain.Entities.Receipts.Activation.ReceiptsOpeningSquare>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Activation.ReceiptsOpeningSquareLine> ReceiptsOpeningSquareLines => Set<IngenIA365ERP.Domain.Entities.Receipts.Activation.ReceiptsOpeningSquareLine>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Activation.ReceiptsReferenceFigure> ReceiptsReferenceFigures => Set<IngenIA365ERP.Domain.Entities.Receipts.Activation.ReceiptsReferenceFigure>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Activation.TreasuryOpeningSquare> TreasuryOpeningSquares => Set<IngenIA365ERP.Domain.Entities.Treasury.Activation.TreasuryOpeningSquare>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Activation.TreasuryOpeningSquareLine> TreasuryOpeningSquareLines => Set<IngenIA365ERP.Domain.Entities.Treasury.Activation.TreasuryOpeningSquareLine>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Activation.TreasuryReferenceFigure> TreasuryReferenceFigures => Set<IngenIA365ERP.Domain.Entities.Treasury.Activation.TreasuryReferenceFigure>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

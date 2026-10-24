@@ -144,5 +144,7 @@ public class ReceiptsActivationConfiguration : IEntityTypeConfiguration<Receipts
         builder.HasOne<User>().WithMany().HasForeignKey(e => e.ActivatedByUserId).OnDelete(DeleteBehavior.Restrict);
         builder.Property(e => e.RequirementsJson).HasMaxLength(8000).IsRequired();
         builder.HasIndex(e => e.ActivatedOn).HasDatabaseName($"IX_{Tabla}_ActivatedOn");
+        // US13 (T0291): la FK del cuadre llega con el par RecaudoYTesoreriaPuestaEnMarcha.
+        builder.HasOne<ReceiptsOpeningSquare>().WithMany().HasForeignKey(e => e.OpeningSquareId).OnDelete(DeleteBehavior.Restrict);
     }
 }

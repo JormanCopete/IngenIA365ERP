@@ -344,6 +344,9 @@ public static class DependencyInjection
         // Feature 015, T0183b: los requisitos de la activación mínima de los dos módulos.
         services.AddScoped<Receipts.Activation.RequisitosDeActivacionDeRecaudo>();
         services.AddScoped<Treasury.Activation.RequisitosDeActivacionDeTesoreria>();
+        // US13 (fase 18): las líneas propuestas del cuadre de apertura de cada módulo.
+        services.AddScoped<Receipts.Activation.LineasDelCuadreDeRecaudo>();
+        services.AddScoped<Treasury.Activation.LineasDelCuadreDeTesoreria>();
         services.AddScoped<Lending.Segregation.RegistroDeIntervenciones>();
         services.AddScoped<Lending.Common.LendingAuditEmitter>();
         services.AddScoped<Common.Audit.RechazosDeFormaDeLaPeticion>();
