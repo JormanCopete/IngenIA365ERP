@@ -761,6 +761,9 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Checkbooks.IssuedCheck> IssuedChecks => Set<IngenIA365ERP.Domain.Entities.Treasury.Checkbooks.IssuedCheck>();
     public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Checkbooks.IssuedCheckEvent> IssuedCheckEvents => Set<IngenIA365ERP.Domain.Entities.Treasury.Checkbooks.IssuedCheckEvent>();
     public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Remittances.CashRemittance> CashRemittances => Set<IngenIA365ERP.Domain.Entities.Treasury.Remittances.CashRemittance>();
+    // Feature 015, T1 (fase 33): los traslados entre cuentas propias y el cierre del mes de los cheques.
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Remittances.Transfer> TreasuryTransfers => Set<IngenIA365ERP.Domain.Entities.Treasury.Remittances.Transfer>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Checkbooks.MonthEndCheckRun> MonthEndCheckRuns => Set<IngenIA365ERP.Domain.Entities.Treasury.Checkbooks.MonthEndCheckRun>();
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Compliance.CashTransaction> ReceiptsCashTransactions => Set<IngenIA365ERP.Domain.Entities.Receipts.Compliance.CashTransaction>();
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Compliance.ComplianceAlertLog> ReceiptsComplianceAlertLogs => Set<IngenIA365ERP.Domain.Entities.Receipts.Compliance.ComplianceAlertLog>();
     public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.Reconciliation> TreasuryReconciliations => Set<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.Reconciliation>();

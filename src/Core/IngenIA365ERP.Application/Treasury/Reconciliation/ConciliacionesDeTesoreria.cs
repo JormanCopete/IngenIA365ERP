@@ -100,6 +100,17 @@ public static class ConciliacionesDeTesoreria
             c.CashedOn ?? c.DeliveredOn ?? c.IssuedOn, StatementLineDirection.Debit, c.Amount, c.CheckNumber.ToString(CultureInfo.InvariantCulture), null,
             "Tesorería · cheque girado")));
 
+        // T1 (fase 33; FR-104): los traslados entre cuentas propias enviados o confirmados: el débito en la de origen (fecha del envío) y el abono en la de destino.
+        var traslados = await db.TreasuryTransfers.AsNoTracking()
+            .Where(t => (t.Status == TransferState.Sent || t.Status == TransferState.Confirmed) && (t.FromBankAccountId == cuenta.Id || t.ToBankAccountId == cuenta.Id)
+                        && t.SentOn >= desde && t.SentOn <= hasta)
+            .ToListAsync(ct);
+        lista.AddRange(traslados.Select(t => t.FromBankAccountId == cuenta.Id
+            ? new RegistroDisponible(ReconciliationRecordKind.Transfer, t.PublicId, t.Number, t.SentOn!.Value, StatementLineDirection.Debit, t.Amount, t.BankReference ?? t.Number,
+                null, "Tesorería · traslado enviado")
+            : new RegistroDisponible(ReconciliationRecordKind.Transfer, t.PublicId, t.Number, t.ConfirmedOn ?? t.SentOn!.Value, StatementLineDirection.Credit, t.Amount,
+                t.BankReference ?? t.Number, t.ConfirmedByStatementLinePublicId, "Tesorería · traslado recibido")));
+
         var archivos = await db.LendingDisbursementFiles.AsNoTracking()
             .Where(f => f.BankAccountId == cuenta.Id && f.Status != LendingDisbursementFileState.Voided).ToListAsync(ct);
         lista.AddRange(archivos.Select(f => (f, Fecha: DateOnly.FromDateTime(f.ReceivedAt.ToLocalTime())))

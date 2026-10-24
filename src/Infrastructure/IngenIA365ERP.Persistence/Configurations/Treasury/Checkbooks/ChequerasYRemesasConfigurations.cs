@@ -47,6 +47,9 @@ public class IssuedCheckConfiguration : IEntityTypeConfiguration<IssuedCheck>
         builder.HasIndex(e => new { e.CheckbookId, e.CheckNumber }).IsUnique().HasDatabaseName($"UK_{Tabla}_Checkbook_Number");
         builder.HasIndex(e => e.PaymentOrderId).HasDatabaseName($"IX_{Tabla}_PaymentOrderId");
         builder.HasIndex(e => e.Status).HasDatabaseName($"IX_{Tabla}_Status");
+        // T1 (par TesoreriaCompleta, fase 33; FR-220): el cierre del mes que lo pasó a cuenta por pagar.
+        builder.HasOne<MonthEndCheckRun>().WithMany().HasForeignKey(e => e.MovedToPayableRunId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasIndex(e => e.MovedToPayableRunId).HasDatabaseName($"IX_{Tabla}_MovedToPayableRunId");
     }
 }
 

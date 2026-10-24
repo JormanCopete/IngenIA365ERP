@@ -66,6 +66,11 @@ public class IssuedCheck : AuditableEntity
     public string? VoidReason { get; set; }
 
     public bool IsOpeningLoad { get; set; }
+
+    /// <summary>T1 (fase 33; FR-220): la corrida del cierre del mes que lo pasó a cuenta por pagar al beneficiario, y su corte. Nulos mientras no pase. (nuevo)</summary>
+    public int? MovedToPayableRunId { get; set; }
+
+    public DateOnly? MovedToPayableOn { get; set; }
 }
 
 /// <summary><c>TES_IssuedCheckEvents</c> (H): cada transición del cheque girado con quién, cuándo y su soporte. (nuevo)</summary>

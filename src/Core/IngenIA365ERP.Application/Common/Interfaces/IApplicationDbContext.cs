@@ -706,6 +706,9 @@ public interface IApplicationDbContext
     DbSet<IngenIA365ERP.Domain.Entities.Treasury.Checkbooks.IssuedCheck> IssuedChecks { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Treasury.Checkbooks.IssuedCheckEvent> IssuedCheckEvents { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Treasury.Remittances.CashRemittance> CashRemittances { get; }
+    // Feature 015, T1 (fase 33): los traslados entre cuentas propias y el cierre del mes de los cheques.
+    DbSet<IngenIA365ERP.Domain.Entities.Treasury.Remittances.Transfer> TreasuryTransfers { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Treasury.Checkbooks.MonthEndCheckRun> MonthEndCheckRuns { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Receipts.Compliance.CashTransaction> ReceiptsCashTransactions { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Receipts.Compliance.ComplianceAlertLog> ReceiptsComplianceAlertLogs { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.Reconciliation> TreasuryReconciliations { get; }

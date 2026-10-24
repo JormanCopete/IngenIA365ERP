@@ -152,11 +152,26 @@ public static class ConciliacionMinima
             remesa.ConfirmedByStatementLinePublicId = linea.PublicId;
             await emision.RemesaConfirmadaAsync(cuenta, remesa, ct);
         }
+        else if (clase == ReconciliationRecordKind.Transfer)
+        {
+            // T1 (fase 33; FR-104): el abono del traslado en la cuenta de destino lo confirma, con la línea y su hecho TrasladoConfirmado; el débito en la de origen no cambia nada.
+            var traslado = await db.TreasuryTransfers.FirstOrDefaultAsync(t => t.PublicId == registro, ct);
+            if (traslado is null || traslado.Status != TransferState.Sent || traslado.ToBankAccountId != cuenta.Id || !Transfers.TrasladosDeTesoreria.LineaLoConfirma(traslado, linea))
+                return;
+            await Transfers.TrasladosDeTesoreria.ConfirmarAsync(db, emision, traslado, usuario, ahora, linea.MovementDate, linea.PublicId, null, ct);
+        }
     }
 
-    /// <summary>Los tipos de hecho que emitiría cruzar estos registros (para la validación previa): sólo la remesa en tránsito emite.</summary>
-    public static IReadOnlyList<string> HechosDelCruce(IEnumerable<ReconciliationRecordKind> clases) =>
-        clases.Contains(ReconciliationRecordKind.Remittance) ? [RemesaConfirmadaV1.Type] : [];
+    /// <summary>Los tipos de hecho que emitiría cruzar estos registros (para la validación previa): la remesa en tránsito y el traslado recibido.</summary>
+    public static IReadOnlyList<string> HechosDelCruce(IEnumerable<ReconciliationRecordKind> clases)
+    {
+        var lista = clases.ToList();
+        var tipos = new List<string>();
+        if (lista.Contains(ReconciliationRecordKind.Remittance)) tipos.Add(RemesaConfirmadaV1.Type);
+        // T1 (fase 33): el traslado recibido emite TrasladoConfirmado.
+        if (lista.Contains(ReconciliationRecordKind.Transfer)) tipos.Add(TrasladoConfirmadoV1.Type);
+        return tipos;
+    }
 }
 
 // ---------------------------------------------------------------------------------------------------------------- abrir --
@@ -311,7 +326,8 @@ public sealed class AutoMatchReconciliationCommandHandler(
         var revision = await ReglasDelConciliador.RevisarAsync(db, segregacion, c, usuario, ct);
         if (revision.IsFailure) return Result.Failure<ReconciliationDto>(revision.Error);
         var fin = ConciliacionesDeTesoreria.Fin(c);
-        var previa = await emision.ValidacionPreviaAsync([RemesaConfirmadaV1.Type], cuenta, fin, ct);
+        var previa = await emision.ValidacionPreviaAsync(ConciliacionMinima.HechosDelCruce([ReconciliationRecordKind.Remittance, ReconciliationRecordKind.Transfer]),
+            cuenta, fin, ct);
         if (previa.IsFailure) return Result.Failure<ReconciliationDto>(previa.Error);
 
         await cerrojo.TomarSetupAsync(ct: ct);

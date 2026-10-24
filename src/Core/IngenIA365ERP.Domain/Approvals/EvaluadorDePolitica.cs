@@ -123,6 +123,9 @@ public static class EvaluadorDePolitica
         ApprovalSubjects.BankItemClassification => new NivelDeAprobacion(1, 0m, "Receipts.BankItems.Classify"),
         ApprovalSubjects.UnidentifiedItemToIncome => new NivelDeAprobacion(1, 0m, "Receipts.UnidentifiedItems.MoveToIncome"),
         ApprovalSubjects.CashDisbursementApproval => new NivelDeAprobacion(1, 0m, "Receipts.Disbursements.Approve"),
+        // T1 (fases 33 y 34): el traslado entre cuentas propias (con monto) y el cambio de firmantes o tokens.
+        ApprovalSubjects.TreasuryTransfer => new NivelDeAprobacion(1, 0m, "Treasury.Transfers.Approve"),
+        ApprovalSubjects.BankAccountAuthorityChange => new NivelDeAprobacion(1, 0m, "Treasury.Signers.Approve"),
         _ => null,
     };
 

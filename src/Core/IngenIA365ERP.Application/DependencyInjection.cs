@@ -316,6 +316,8 @@ public static class DependencyInjection
         services.AddScoped<Treasury.LiquidityFund.GuardaDelFondoDeLiquidez>();
         services.AddScoped<Treasury.Common.IAprobableDeTesoreria, Treasury.LiquidityFund.AprobableUsoDelFondo>();
         services.AddScoped<Treasury.Common.IAprobableDeTesoreria, Treasury.Batches.AprobableLoteDePago>();
+        // T1 (fase 33): el traslado entre cuentas propias.
+        services.AddScoped<Treasury.Common.IAprobableDeTesoreria, Treasury.Transfers.AprobableTraslado>();
         services.TryAddScoped<Treasury.Orders.IListasDeTesoreria, Treasury.Orders.ListasDeTesoreria>();
         services.AddScoped<Treasury.Orders.ValidadorDeOrdenes>();
         services.AddScoped<Treasury.Batches.GuardasDeAprobacionDelLote>();

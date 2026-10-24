@@ -1,0 +1,90 @@
+@page "/tesoreria/cierre-de-cheques"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Tesoreria
+@inject TrasladosClient TrasladosApi
+@inject CuentasBancariasClient Cuentas
+@inject INotificationService Notification
+
+<PageTitle>Cierre del mes de cheques - IngenIA365ERP</PageTitle>
+
+@* Feature 015, T1 (fase 33, T0413; FR-220): el cierre del mes de los cheques girados de una cuenta. Lo corre una persona, una vez por cuenta y mes, después de terminado
+   el mes: los emitidos y no entregados se reclasifican al efectivo de la cuenta (con su reverso el primer día del mes siguiente) y los entregados sin cobrar más allá del
+   plazo de la cooperativa pasan a cuenta por pagar al beneficiario, nunca a ingreso. *@
+<PermissionGate Required="Treasury.Checkbooks.View" AnyOf="@(new[] { "Treasury.Checkbooks.Manage" })" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Cierre del mes de los cheques girados</h3>
+        <div class="toolbar">
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+        </div>
+    </div>
+
+    <PermissionGate Required="Treasury.Checkbooks.Manage">
+        <div class="info-card">
+            <h4>Correr el cierre de un mes</h4>
+            <IndicadorDeCarga Cargando="@_corrida.Activa" Texto="Corriendo el cierre…">
+                <div class="form-grid">
+                    <label class="campo">Cuenta *
+                        <select class="e-input" @bind="_cuenta">
+                            <option value="">Elija la cuenta…</option>
+                            @foreach (var c in _cuentas) { <option value="@c.PublicId">@c.Code · @c.Name</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Año * <input class="e-input" type="number" @bind="_anio" /></label>
+                    <label class="campo">Mes * <input class="e-input" type="number" min="1" max="12" @bind="_mes" /></label>
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@_corrida.Activa" OnClick="@CorrerAsync">Correr el cierre</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </div>
+    </PermissionGate>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Cargando cierres…">
+        <table class="data-grid">
+            <thead><tr><th>Número</th><th>Cuenta</th><th>Mes</th><th>Plazo (días)</th><th>Reclasificados</th><th>Valor</th><th>A cuenta por pagar</th><th>Valor</th><th>Corrió</th></tr></thead>
+            <tbody>
+                @foreach (var r in _cierres)
+                {
+                    <tr>
+                        <td>@r.Number</td><td>@r.BankAccountCode</td><td>@($"{r.Month:00}/{r.Year}")</td><td>@r.DaysToPayable</td><td>@r.ReclassifiedCount</td>
+                        <td>@r.ReclassifiedAmount.ToString("N2")</td><td>@r.MovedToPayableCount</td><td>@r.MovedToPayableAmount.ToString("N2")</td>
+                        <td>@r.RunBy · @r.RunAt.ToLocalTime().ToString("g")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </IndicadorDeCarga>
+</div>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new(), _corrida = new();
+    private IReadOnlyList<CierreDeChequesDto> _cierres = [];
+    private IReadOnlyList<CuentaBancariaPropiaDto> _cuentas = [];
+    private string _cuenta = "";
+    private int _anio = DateTime.Today.AddMonths(-1).Year, _mes = DateTime.Today.AddMonths(-1).Month;
+
+    protected override async Task OnInitializedAsync() => await CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var c = await Cuentas.CuentasAsync();
+        if (c.IsSuccess && c.Value is not null) _cuentas = c.Value;
+        var r = await TrasladosApi.CierresDeChequesAsync();
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los cierres de cheques."); return; }
+        _cierres = r.Value ?? [];
+    }
+
+    private async Task CorrerAsync()
+    {
+        if (!Guid.TryParse(_cuenta, out var cuenta) || _mes is < 1 or > 12) { await Notification.WarningAsync("Elija la cuenta, el año y el mes."); return; }
+        using var g = _corrida.Iniciar();
+        var r = await TrasladosApi.CorrerCierreDeChequesAsync(new CorrerCierreDeChequesRequest(cuenta, _anio, _mes), new ClaveDeOperacion());
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo correr el cierre de los cheques."); return; }
+        await Notification.SuccessAsync($"Cierre {r.Value!.Number}: {r.Value.ReclassifiedCount} cheque(s) reclasificado(s) y {r.Value.MovedToPayableCount} a cuenta por pagar.");
+        await CargarAsync();
+    }
+}

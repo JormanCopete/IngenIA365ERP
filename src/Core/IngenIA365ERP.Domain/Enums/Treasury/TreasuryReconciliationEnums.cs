@@ -28,6 +28,9 @@ public enum ReconciliationRecordKind
     IssuedCheck = 4,
     LedgerMovement = 5,
     LendingDisbursementFile = 6,
+
+    /// <summary>T1 (fase 33; FR-104): un traslado entre cuentas propias: el débito en la de origen y el abono en la de destino, que lo confirma. (nuevo)</summary>
+    Transfer = 7,
 }
 
 /// <summary>Cómo se cruzó: el motor o una persona. (nuevo)</summary>

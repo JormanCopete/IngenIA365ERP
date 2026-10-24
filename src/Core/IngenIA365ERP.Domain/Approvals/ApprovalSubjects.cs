@@ -80,11 +80,23 @@ public static class ApprovalSubjects
     /// </summary>
     public const string CashDisbursementApproval = "CashDisbursementApproval";
 
-    /// <summary>Los cinco de data-model §21, en su orden, los dos de captaciones de la feature 014 y los siete de Recaudo y Tesorería de la 015.</summary>
+    /// <summary>
+    /// Feature 015, T1 (fase 33; FR-104; nuevo, DT §2.7): un traslado entre cuentas propias, con aprobación diferida por niveles hasta cubrir el monto. Sin política, regla
+    /// fija de un nivel con <c>Treasury.Transfers.Approve</c> (con monto).
+    /// </summary>
+    public const string TreasuryTransfer = "TreasuryTransfer";
+
+    /// <summary>
+    /// Feature 015, T1 (fase 34; FR-208; nuevo, DT §2.7): el alta o el retiro de un firmante o de un token de una cuenta propia, con su acta. Regla fija de un nivel con
+    /// <c>Treasury.Signers.Approve</c>; lo aprueba otra persona.
+    /// </summary>
+    public const string BankAccountAuthorityChange = "BankAccountAuthorityChange";
+
+    /// <summary>Los cinco de data-model §21, en su orden, los dos de captaciones de la feature 014 y los de Recaudo y Tesorería de la 015 (doce, con los dos de T1).</summary>
     public static readonly IReadOnlyList<string> Todos =
         [DocumentConfirmation, DiscountOverCap, ProvisionalCredit, TransferDiscrepancy, PurchaseMatchException, AccountWithdrawal, AccountCashDeposit,
             CashCountDifference, CashMeansReclassification, ReceiptBackdate, CashSessionAdjustment, ReceiptVoiding, PaymentBatchApproval, LiquidityFundUse,
-            BankItemClassification, UnidentifiedItemToIncome, CashDisbursementApproval];
+            BankItemClassification, UnidentifiedItemToIncome, CashDisbursementApproval, TreasuryTransfer, BankAccountAuthorityChange];
 
     /// <summary>Si el texto es uno de los sujetos, escrito exacto (distingue mayúsculas).</summary>
     public static bool EsValido(string? sujeto) => sujeto is not null && Todos.Contains(sujeto, StringComparer.Ordinal);

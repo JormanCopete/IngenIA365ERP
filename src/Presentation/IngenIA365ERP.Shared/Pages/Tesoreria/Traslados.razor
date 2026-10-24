@@ -1,0 +1,191 @@
+@page "/tesoreria/traslados"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Tesoreria
+@inject TrasladosClient TrasladosApi
+@inject CuentasBancariasClient Cuentas
+@inject INotificationService Notification
+
+<PageTitle>Traslados entre cuentas - IngenIA365ERP</PageTitle>
+
+@* Feature 015, T1 (fase 33, T0413; FR-104, FR-207): los traslados entre cuentas propias. Se piden con su motivo y otra persona los aprueba por monto; quien los ejecuta en
+   el portal del banco los marca enviados —salen de la cuenta de origen y quedan en tránsito— y llegan a la de destino por el cruce del extracto en la conciliación o con la
+   constancia del banco. Desde una cuenta del fondo de liquidez exigen un uso aprobado. *@
+<PermissionGate Required="Treasury.Transfers.Request" AnyOf="@(new[] { "Treasury.Transfers.Approve" })" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Traslados entre cuentas propias</h3>
+        <div class="toolbar">
+            <select class="e-input" @bind="_estado">
+                <option value="0">Todos</option>
+                <option value="1">Por aprobar</option>
+                <option value="2">Aprobados</option>
+                <option value="3">En tránsito</option>
+                <option value="4">Confirmados</option>
+            </select>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+            <PermissionGate Required="Treasury.Transfers.Request">
+                <SfButton CssClass="e-primary" Disabled="@(_cuentas.Count < 2)" OnClick="@(() => { _clave = new(); _visible = true; })">Pedir un traslado</SfButton>
+            </PermissionGate>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Cargando traslados…">
+        <table class="data-grid">
+            <thead><tr><th>Número</th><th>De</th><th>A</th><th>Valor</th><th>Motivo</th><th>Pedido</th><th>Estado</th><th>Enviado</th><th>Días en tránsito</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var t in _traslados)
+                {
+                    <tr class="@(t.Status == 3 && t.DaysInTransit > 2 ? "fila-alerta" : "")">
+                        <td>@t.Number</td><td>@t.FromBankAccountCode</td><td>@t.ToBankAccountCode</td><td>@t.Amount.ToString("N2")</td><td>@t.Reason</td>
+                        <td>@t.RequestedOn.ToString("dd/MM/yyyy")</td><td>@Estado(t.Status)</td><td>@t.SentOn?.ToString("dd/MM/yyyy")</td><td>@(t.Status == 3 ? t.DaysInTransit : "")</td>
+                        <td>
+                            @if (t.Status == 1)
+                            {
+                                <PermissionGate Required="Treasury.Transfers.Approve">
+                                    <SfButton CssClass="e-flat" OnClick="@(() => DecidirAsync(t, true))">Aprobar</SfButton>
+                                    <SfButton CssClass="e-flat" OnClick="@(() => DecidirAsync(t, false))">Rechazar</SfButton>
+                                </PermissionGate>
+                            }
+                            @if (t.Status == 2)
+                            {
+                                <PermissionGate Required="Treasury.Transfers.Request">
+                                    <input class="e-input" placeholder="Referencia del banco" @bind="_referencia" />
+                                    <SfButton CssClass="e-flat" OnClick="@(() => EnviarAsync(t))">Marcar enviado</SfButton>
+                                </PermissionGate>
+                            }
+                            @if (t.Status == 3)
+                            {
+                                <PermissionGate Required="Treasury.Transfers.Request">
+                                    <input class="e-input" placeholder="Constancia del banco (adjunto)" @bind="_soporte" />
+                                    <SfButton CssClass="e-flat" OnClick="@(() => ConfirmarAsync(t))">Confirmar llegada</SfButton>
+                                </PermissionGate>
+                            }
+                            @if (t.Status is 1 or 2)
+                            {
+                                <PermissionGate Required="Treasury.Transfers.Request">
+                                    <SfButton CssClass="e-flat" OnClick="@(() => AnularAsync(t))">Anular</SfButton>
+                                </PermissionGate>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        <p class="muted">Un traslado en tránsito se confirma solo al cruzar el abono en la conciliación de la cuenta de destino.</p>
+    </IndicadorDeCarga>
+</div>
+
+<SfDialog @bind-Visible="_visible" Header="Pedir un traslado" Width="560px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <div class="form-grid">
+                    <label class="campo">Cuenta de origen *
+                        <select class="e-input" @bind="_de">
+                            <option value="">Elija la cuenta…</option>
+                            @foreach (var c in _cuentas) { <option value="@c.PublicId">@c.Code · @c.Name</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Cuenta de destino *
+                        <select class="e-input" @bind="_a">
+                            <option value="">Elija la cuenta…</option>
+                            @foreach (var c in _cuentas) { <option value="@c.PublicId">@c.Code · @c.Name</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Valor * <input class="e-input" type="number" step="0.01" @bind="_valor" /></label>
+                    <label class="campo">Soporte (adjunto) <input class="e-input" @bind="_soportePedido" /></label>
+                    <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" maxlength="500" /></label>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _visible = false)" />
+        <DialogButton Content="Pedir" IsPrimary="true" OnClick="@PedirAsync" Disabled="@_guardado.Activa" />
+    </DialogButtons>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+    private ClaveDeOperacion _clave = new();
+    private IReadOnlyList<TrasladoDto> _traslados = [];
+    private IReadOnlyList<CuentaBancariaPropiaDto> _cuentas = [];
+    private int _estado;
+    private string _de = "", _a = "", _soportePedido = "";
+    private string? _motivo, _referencia, _soporte;
+    private decimal _valor;
+    private bool _visible;
+
+    protected override async Task OnInitializedAsync() => await CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var c = await Cuentas.CuentasAsync();
+        if (c.IsSuccess && c.Value is not null) _cuentas = c.Value.Where(x => x.Status == 1).ToList();
+        var r = await TrasladosApi.TrasladosAsync(_estado == 0 ? null : _estado);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los traslados."); return; }
+        _traslados = r.Value ?? [];
+    }
+
+    private static string Estado(int e) => e switch
+    {
+        1 => "Por aprobar", 2 => "Aprobado", 3 => "En tránsito", 4 => "Confirmado", 5 => "Rechazado", 6 => "Anulado", _ => "—",
+    };
+
+    private async Task PedirAsync()
+    {
+        if (!Guid.TryParse(_de, out var de) || !Guid.TryParse(_a, out var a) || _valor <= 0 || string.IsNullOrWhiteSpace(_motivo))
+        {
+            await Notification.WarningAsync("Elija las dos cuentas y escriba el valor y el motivo.");
+            return;
+        }
+        using var g = _guardado.Iniciar();
+        var r = await TrasladosApi.PedirAsync(new PedirTrasladoRequest(de, a, _valor, _motivo.Trim(), Guid.TryParse(_soportePedido, out var s) ? s : null), _clave);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo pedir el traslado."); return; }
+        _visible = false;
+        await Notification.SuccessAsync(r.Value!.Status == 1
+            ? $"Traslado {r.Value.Number} pedido: espera la aprobación de otra persona."
+            : $"Traslado {r.Value.Number} aprobado: márquelo enviado al ejecutarlo en el banco.");
+        await CargarAsync();
+    }
+
+    private async Task DecidirAsync(TrasladoDto t, bool aprobar)
+    {
+        using var g = _carga.Iniciar();
+        var r = aprobar
+            ? await TrasladosApi.AprobarAsync(t.PublicId, null, new ClaveDeOperacion())
+            : await TrasladosApi.RechazarAsync(t.PublicId, "Rechazado desde la pantalla de traslados", new ClaveDeOperacion());
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo decidir el traslado."); return; }
+        await CargarAsync();
+    }
+
+    private async Task EnviarAsync(TrasladoDto t)
+    {
+        using var g = _carga.Iniciar();
+        var r = await TrasladosApi.EnviarAsync(t.PublicId, new EnviarTrasladoRequest(null, _referencia, null), new ClaveDeOperacion());
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo marcar enviado el traslado."); return; }
+        _referencia = null;
+        await CargarAsync();
+    }
+
+    private async Task ConfirmarAsync(TrasladoDto t)
+    {
+        if (!Guid.TryParse(_soporte, out var soporte)) { await Notification.WarningAsync("Adjunte la constancia del banco, o crúcelo en la conciliación."); return; }
+        using var g = _carga.Iniciar();
+        var r = await TrasladosApi.ConfirmarAsync(t.PublicId, new ConfirmarTrasladoRequest(soporte, null, null), new ClaveDeOperacion());
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo confirmar el traslado."); return; }
+        _soporte = null;
+        await CargarAsync();
+    }
+
+    private async Task AnularAsync(TrasladoDto t)
+    {
+        using var g = _carga.Iniciar();
+        var r = await TrasladosApi.AnularAsync(t.PublicId, "Anulado desde la pantalla de traslados", new ClaveDeOperacion());
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo anular el traslado."); return; }
+        await CargarAsync();
+    }
+}

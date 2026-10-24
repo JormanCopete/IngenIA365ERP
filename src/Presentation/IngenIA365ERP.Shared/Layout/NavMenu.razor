@@ -685,8 +685,14 @@
             <PermissionGate Required="Treasury.Checks.View">
                 <NavLink href="/tesoreria/cheques-girados" class="nav-subitem">Cheques girados</NavLink>
             </PermissionGate>
+            <PermissionGate Required="Treasury.Checkbooks.View">
+                <NavLink href="/tesoreria/cierre-de-cheques" class="nav-subitem">Cierre del mes de cheques</NavLink>
+            </PermissionGate>
             <PermissionGate Required="Treasury.Remittances.View">
                 <NavLink href="/tesoreria/remesas" class="nav-subitem">Remesas de efectivo</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Treasury.Transfers.Request">
+                <NavLink href="/tesoreria/traslados" class="nav-subitem">Traslados entre cuentas</NavLink>
             </PermissionGate>
             @* US25 (T0280): la conciliación bancaria mínima, la única de la cooperativa (E-04). *@
             <PermissionGate Required="Treasury.Reconciliation.View">
