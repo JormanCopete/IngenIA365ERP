@@ -78,6 +78,9 @@ public class LasPantallasDeRecaudoYTesoreriaEstanEnElMenu
         ("Pages/Recaudo/RecaudoPendienteDeAplicar.razor", "/recaudo/pendiente-de-aplicar", "Receipts.PendingApplications.View"),
         // R1, US4 (fase 26): los egresos de caja.
         ("Pages/Recaudo/Egresos.razor", "/recaudo/egresos", "Receipts.Disbursements.View"),
+        // R1, US6 (fase 27): las reglas de identificación y la consignación reportada.
+        ("Pages/Recaudo/ReglasDeIdentificacion.razor", "/recaudo/reglas-de-identificacion", "Receipts.Setup.View"),
+        ("Pages/Recaudo/ConsignacionesReportadas.razor", "/recaudo/consignaciones-reportadas", "Receipts.Receipt.Register"),
         // Fase 18 (T0290): /recaudo/puesta-en-marcha y /tesoreria/puesta-en-marcha son páginas delgadas sobre Components/Recaudo/PuestaEnMarchaDeModulo, que lleva
         // un IndicadorDeCarga por zona (como las de la matriz de la fase 16); su enlace en el menú lo comprueba Las_puestas_en_marcha_estan_en_el_menu.
     ];

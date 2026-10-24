@@ -592,6 +592,8 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.PendingApplicationResolution> PendingApplicationResolutions => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.PendingApplicationResolution>();
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.CashDisbursement> CashDisbursements => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.CashDisbursement>();
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.CashDisbursementVoiding> CashDisbursementVoidings => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.CashDisbursementVoiding>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Banks.IdentificationRule> IdentificationRules => Set<IngenIA365ERP.Domain.Entities.Receipts.Banks.IdentificationRule>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Banks.ReportedDeposit> ReportedDeposits => Set<IngenIA365ERP.Domain.Entities.Receipts.Banks.ReportedDeposit>();
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.PayerCreditBalance> PayerCreditBalances => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.PayerCreditBalance>();
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.PayerCreditBalanceMovement> PayerCreditBalanceMovements => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.PayerCreditBalanceMovement>();
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.PayerReceivable> PayerReceivables => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.PayerReceivable>();
@@ -768,6 +770,8 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Operations.PendingApplicationResolution>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Operations.CashDisbursement>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Operations.CashDisbursementVoiding>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Banks.IdentificationRule>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Banks.ReportedDeposit>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Operations.PayerCreditBalance>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Operations.PayerCreditBalanceMovement>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Operations.PayerReceivable>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });

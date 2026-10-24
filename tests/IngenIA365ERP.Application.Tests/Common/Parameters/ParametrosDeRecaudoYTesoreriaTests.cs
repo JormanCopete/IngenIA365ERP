@@ -61,6 +61,11 @@ public class ParametrosDeRecaudoYTesoreriaTests
         { P.ModuloRecaudo, P.GmfTarifa, "0.004", true },
         { P.ModuloRecaudo, P.GmfHechosGeneradoresDeEgresos, "DevolucionesYPartidas", true },
         { P.ModuloRecaudo, P.GmfRedondeo, "AlPeso", true },
+        // Fase 27: identificación por reglas y consignación reportada.
+        { P.ModuloRecaudo, P.IdentificacionAplicarAlCargar, "false", false },
+        { P.ModuloRecaudo, P.ConsignacionReportadaModo, "PorVerificar", false },
+        { P.ModuloRecaudo, P.ConsignacionReportadaDiasParaVerificar, "3", true },
+        { P.ModuloRecaudo, P.ConsignacionReportadaDiasDeVentana, "5", false },
     };
 
     [Theory]
