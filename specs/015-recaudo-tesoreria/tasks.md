@@ -2203,13 +2203,39 @@ parte R1, FR-155 parte R1, FR-225 R1; E-05 consulta).
 **Independent Test**: el consolidado del día suma caja, bancos, pagadurías, Nómina y débito automático sin datos personales en
 el tablero; la e2e de R1 pasa en los dos motores.
 
-- [ ] T0399 [P] [US21] Escribir tests/IngenIA365ERP.Application.Tests/Receipts/Reports/InformesDeRecaudoR1Tests.cs: `consolidated-collection`, `voidings-with-reissue`, `delinquent-paymasters`, `received-checks`, `cash-transactions`, `pending-application-load`; y el tablero `GET /api/receipts/dashboard` sin datos personales (FR-087, FR-152, FR-155)
-- [ ] T0400 [US21] Implementar en Nómina la consulta de sólo lectura `IRecaudoDeNominaParaConsolidado` (src/Core/IngenIA365ERP.Application/Payroll/Integration/RecaudoDeNominaParaConsolidado.cs; contratos-v2.md §5) y la lectura del débito automático de Cartera por su consulta existente, para el consolidado (FR-081; D26)
-- [ ] T0401 [US21] Implementar las vistas de R1 en src/Core/IngenIA365ERP.Application/Receipts/Reports/, el tablero en src/Core/IngenIA365ERP.Application/Receipts/Reports/TableroDeCaja.cs y la pantalla src/Presentation/IngenIA365ERP.Shared/Pages/Recaudo/Tablero.razor (`/recaudo/tablero`) con `IndicadorDeCarga`
-- [ ] T0402 [P] [US21] Actualizar los manuales docs/manual/recaudo-manual-del-cajero.md, recaudo-manual-del-supervisor.md y recaudo-manual-del-analista.md con lo de R1 (medios, egresos, reglas, consignación reportada, recaudo pendiente, cuentas por cobrar comerciales, reporte de transacciones) (FR-225)
+- [X] T0399 [P] [US21] Escribir tests/IngenIA365ERP.Application.Tests/Receipts/Reports/InformesDeRecaudoR1Tests.cs: `consolidated-collection`, `voidings-with-reissue`, `delinquent-paymasters`, `received-checks`, `cash-transactions`, `pending-application-load`; y el tablero `GET /api/receipts/dashboard` sin datos personales (FR-087, FR-152, FR-155)
+- [X] T0400 [US21] Implementar en Nómina la consulta de sólo lectura `IRecaudoDeNominaParaConsolidado` (src/Core/IngenIA365ERP.Application/Payroll/Integration/RecaudoDeNominaParaConsolidado.cs; contratos-v2.md §5) y la lectura del débito automático de Cartera por su consulta existente, para el consolidado (FR-081; D26)
+- [X] T0401 [US21] Implementar las vistas de R1 en src/Core/IngenIA365ERP.Application/Receipts/Reports/, el tablero en src/Core/IngenIA365ERP.Application/Receipts/Reports/TableroDeCaja.cs y la pantalla src/Presentation/IngenIA365ERP.Shared/Pages/Recaudo/Tablero.razor (`/recaudo/tablero`) con `IndicadorDeCarga`
+- [X] T0402 [P] [US21] Actualizar los manuales docs/manual/recaudo-manual-del-cajero.md, recaudo-manual-del-supervisor.md y recaudo-manual-del-analista.md con lo de R1 (medios, egresos, reglas, consignación reportada, recaudo pendiente, cuentas por cobrar comerciales, reporte de transacciones) (FR-225)
 - [ ] T0403 Correr en tests/IngenIA365ERP.API.IntegrationTests la e2e de R1 (clases de R1 y las de R0/T0 que tocan Recaudo) con `DB_PROVIDER=PostgreSql` y `SqlServer`; corregir hasta verde
 - [ ] T0404 Congelar los pares `RecaudoCompleto` y `CarteraYCaptacionesConPartidaCitada` (última regeneración, revisión del SQL, paridad, huellas en tests/IngenIA365ERP.Architecture.Tests/Principles/LasMigracionesCongeladasNoSeRegeneran.cs, commit propio) antes de promover R1
 - [ ] T0405 Promover R1 a DEV, QA y producción con respaldo por base y autorización expresa del dueño, siguiendo docs/operaciones/recaudo-tesoreria-despliegue.md; el generador del reporte de transacciones debe estar en producción **antes del primer vencimiento de enero de 2027** si la suspensión no se prorroga (producción, fecha límite primer vencimiento de enero de 2027)
+
+**Notas de la construcción de la fase 31 (2026-10-24)**. Pruebas escritas y compiladas, sin correr. Desviaciones y decisiones; los nombres nuevos quedan en
+decisiones-transversales §2.7:
+
+- **T0399**: `Receipts/Reports/InformesDeRecaudoR1Tests` (las seis vistas en el registro y cada una responde su tabla; el consolidado suma Nómina y el débito
+  automático de sólo lectura; el tablero sólo lleva clave, rótulo, valor y conteo).
+- **T0400**: `Common/Integration/Payroll/IRecaudoDeNominaParaConsolidado` (implementado en `Payroll/Integration/RecaudoDeNominaParaConsolidado`: las deducciones de
+  crédito y de cuenta aplicadas de las corridas aprobadas, por fecha de pago) y, para el débito automático, el puerto **nuevo** de sólo lectura
+  `Common/Integration/Lending/IDebitoAutomaticoParaConsolidado` (implementado en `Lending/Integration/DebitoAutomaticoParaConsolidado` sobre las operaciones
+  `DirectDebit` no reversadas). **Desviación**: la tarea decía «por su consulta existente», pero Cartera no ofrecía ninguna consulta del débito automático por día; el
+  puerto es aditivo (enmienda E266 en `specs/014-ahorros-aportes-cdt/research.md` §27.17) y `LaCarteraSoloSeTocaPorSusInterfaces` pasa a diez puertos.
+- **T0401**: las vistas `consolidated-collection`, `voidings-with-reissue` (el recibo que reemplaza es el primero vigente del mismo pagador registrado desde la
+  anulación aplicada; sin reemplazo, resaltada), `delinquent-paymasters` (el calendario de la fase 28), `received-checks` (por estado, con sección), `cash-transactions`
+  (el registro único con el punto de venta) y `pending-application-load` en `Receipts/Reports/InformesDeRecaudoR1.cs` (el manejador de informes pasa a `partial` y
+  recibe los tres puertos **opcionales**); el tablero `GetReceiptsDashboardQuery` (`Receipts/Reports/TableroDeCaja.cs`, ruta `GET /api/receipts/dashboard` con
+  `Receipts.Reports.View`) y la pantalla `/recaudo/tablero` (en el menú y en `LasPantallasDeRecaudoYTesoreriaEstanEnElMenu`). Nómina y débito automático son de toda
+  la cooperativa (no tienen oficina): la nota del informe y del tablero lo dice. Sin probar en navegador.
+- **T0402**: los tres manuales (`docs/manual/recaudo-manual-del-{cajero,supervisor,analista}.md`) llevan su sección «Lo que trae R1».
+- **T0403** queda sin marcar: correr la e2e de R1 en los dos motores es de la corrida final (decisión vigente: las e2e se corren una sola vez al final); las clases
+  de R1 están escritas y compilan.
+- **T0404** queda sin marcar: congelar `RecaudoCompleto` y `CarteraYCaptacionesConPartidaCitada` (huellas en `LasMigracionesCongeladasNoSeRegeneran`) se hace después
+  de la corrida de T0403, porque si la e2e obliga a corregir el esquema la corrección todavía cabe en el par sin migración nueva. Recomendación: congelar en el mismo
+  commit en que T0403 quede verde y antes de cualquier despliegue.
+- **T0405** queda sin marcar: la promoción a DEV, QA y producción es del dueño (respaldo por base y autorización expresa); el reporte de transacciones tiene que estar en
+  producción antes del primer vencimiento de enero de 2027 si la suspensión no se prorroga.
+
 
 ---
 

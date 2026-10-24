@@ -582,6 +582,15 @@ Lo que tasks.md marcaba **(nuevo)** y lo que trajeron el `/speckit-analyze` y la
 | `CuentasPorCobrarDeRecaudo` · `CommercialReceivableDto` · `CommercialReceivableApplicationDto` · `GetCommercialReceivablesQuery` · `ListCommercialReceivableApplicationsQuery` · `ErroresDeCuentasPorCobrar` (`Receipts.CommercialReceivable.{NotFound, OverBalance, InvoiceRequired}`) | lo pendiente neto de Recaudo, la consulta, el informe y los errores | `Receipts/CashDesk/CuentasPorCobrarComerciales.cs` |
 | rutas `GET /api/receipts/commercial-receivables?person=` y `…/applications` · «Cobrar» factura en `/recaudo/caja` | rutas y pantalla | `API/Endpoints/Receipts/CashDeskEndpoints.cs`, `Shared/Pages/Recaudo/Caja.razor` |
 
+**Fijados en la construcción de la fase 31 (2026-10-24)**:
+
+| Nombre | Qué | Dónde |
+|---|---|---|
+| `IRecaudoDeNominaParaConsolidado` · `RecaudoDeNominaDelDiaDto` · `RecaudoDeNominaParaConsolidado` (Nómina) | lo descontado por Nómina, de sólo lectura (E-05) | `Common/Integration/Payroll`, `Payroll/Integration` |
+| `IDebitoAutomaticoParaConsolidado` · `DebitoAutomaticoDelDiaDto` · `DebitoAutomaticoParaConsolidado` (Cartera) | el débito automático del día, de sólo lectura (D26; enmienda E266 de la 014) | `Common/Integration/Lending`, `Lending/Integration` |
+| vistas `consolidated-collection` · `voidings-with-reissue` · `delinquent-paymasters` · `received-checks` · `cash-transactions` · `pending-application-load` (`VistasDeRecaudo.{Consolidado, AnulacionesConReemision, PagaduriasMorosas, ChequesRecibidos, TransaccionesEnEfectivo, CargaDelPendiente}`) | las vistas de R1 | `Receipts/Reports/InformesDeRecaudo.cs`, `InformesDeRecaudoR1.cs` |
+| `GetReceiptsDashboardQuery` · `TableroDeCajaDto` · `CifraDelTableroDto` · ruta `GET /api/receipts/dashboard` · pantalla `/recaudo/tablero` | el tablero de caja sin datos personales | `Receipts/Reports/TableroDeCaja.cs`, `API/Endpoints/Receipts/DashboardEndpoints.cs`, `Shared/Pages/Recaudo/Tablero.razor` |
+
 ## 3. Decisiones transversales
 
 ### Módulos y frontera

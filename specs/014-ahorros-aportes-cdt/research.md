@@ -3065,3 +3065,13 @@ cadena completa **sin cambios de código**:
   **todo el disponible** en efectivo o cheque, que Recaudo entrega con el mismo egreso; la cuenta queda cancelada. La simulación nueva `Operation = "Close"` devuelve
   `SimulacionDeCuentaDto.AmountToDeliver` (campo opcional nuevo) y el retiro pide exactamente ese valor (si cambió, `Lending.Savings.CloseAmountChanged`, nuevo, y nada se escribe).
   El contractual y los demás recaudadores siguen cancelándose desde Cartera.
+
+### 27.17 E266 · lectura del débito automático y código del pendiente de aprobación para Recaudo (feature 015, R1, 2026-10-24)
+
+Dos piezas aditivas, sin migración ni cambio de comportamiento de Captaciones: (a) el puerto de sólo lectura
+`Application/Common/Integration/Lending/IDebitoAutomaticoParaConsolidado.PorDiaAsync` (implementado en
+`Lending/Integration/DebitoAutomaticoParaConsolidado` sobre las operaciones `DirectDebit` no reversadas, por fecha valor),
+para que el consolidado de Recaudo muestre el débito automático (D26 de la 015); `LaCarteraSoloSeTocaPorSusInterfaces` pasa
+a diez puertos; (b) la constante `CodigosDelContratoDeCuentas.PendienteDeAprobacion` (`Lending.Savings.PendingApproval`) en
+los DTO del contrato, para que el egreso de caja de Recaudo distinga el retiro sobre la atribución sin tocar
+`ErroresDeMovimientos` por dentro; una prueba fija que ambos códigos son el mismo.

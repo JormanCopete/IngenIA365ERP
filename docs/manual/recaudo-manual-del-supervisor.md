@@ -1,4 +1,4 @@
-# Recaudo: manual del supervisor de caja (R0)
+# Recaudo: manual del supervisor de caja (R0 y R1)
 
 > Feature 015, entrega R0. Receta para **el supervisor de caja** (plantilla `recaudo.supervisor`). Contrato:
 > [contracts/api.md](../../specs/015-recaudo-tesoreria/contracts/api.md); historias US1, US2, US4 parte R0 y US5 de la
@@ -58,3 +58,17 @@ Con `Caja.DobleCustodia` (por defecto sí) cada movimiento de bóveda lleva dos 
 `recaudo.antiguedad` alerta: partidas por identificar por escalón de antigüedad, saldos a favor viejos, extractos sin cargar, recibos de
 contingencia por digitar, la política contable en «advertir» y, tras la salida en vivo, **el cuadre de apertura provisional** pendiente
 (`Recaudo.CuadreProvisionalPendiente`, que escala al vencer su fecha límite).
+
+## 7. Lo que trae R1
+
+- **Aprobaciones nuevas**: el egreso vario y la anulación de un egreso (`Receipts.Disbursements.Approve`, con monto). El retiro de ahorro sobre
+  la atribución del cajero lo aprueba quien tiene `Lending.Accounts.Withdraw`, presente.
+- **Tope diario de egresos** de cada caja (`DailyCashOutCap`): se sella al abrir la sesión.
+- **Recaudo pendiente de aplicar** (`/recaudo/pendiente-de-aplicar`): el día que Cartera o Captaciones se activen, aplique cada valor en su
+  crédito o cuenta con la modalidad; la fecha valor es la del recibo.
+- **Tablero de caja** (`/recaudo/tablero`): cifras del día sin datos personales —recaudo por canal, Nómina y débito automático de sólo
+  lectura, egresos, sesiones abiertas y olvidadas, partidas, saldos a favor, pendientes, consignaciones por verificar, anulaciones por
+  aprobar y pagadurías morosas—. El detalle está en los informes: `consolidated-collection`, `voidings-with-reissue`,
+  `delinquent-paymasters`, `received-checks`, `cash-transactions` y `pending-application-load`.
+- **La tarea diaria** suma dos avisos: la consignación reportada que no aparece en el extracto (`Recaudo.ConsignacionReportadaSinVerificar`) y
+  el giro de pagaduría pasado su fecha legal (`Recaudo.GiroDePagaduriaTardio`). Los dos son informativos.

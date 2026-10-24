@@ -1,4 +1,4 @@
-# Recaudo: manual del analista de recaudo (R0)
+# Recaudo: manual del analista de recaudo (R0 y R1)
 
 > Feature 015, entrega R0. Receta para **el analista de recaudo** (plantilla `recaudo.analista`): extractos, identificación de
 > abonos, partidas por identificar, pagadurías y cheques devueltos. Historias US6, US7 y US15 de la
@@ -50,3 +50,20 @@ Sólo si la cooperativa los admite (`Caja.AdmiteCheque`, por defecto **no**, P2)
 si el banco lo devuelve, regístrelo con su causal (`/recaudo/cheques-recibidos` → «Devolver»): las aplicaciones que pagó se reversan
 y, si la causal cuenta para la lista de giradores, el girador queda marcado. El plazo de presentación (`Cheques.PlazoPresentacion*`)
 se informa y no bloquea, salvo que la cooperativa active `Cheques.BloquearFueraDePlazo`.
+
+## 6. Lo que trae R1
+
+- **Reglas de identificación** (`/recaudo/reglas-de-identificacion`): por prioridad, por referencia de pago (el número del crédito o de la
+  cuenta), documento del consignante, consignación reportada o valor exacto de lo exigible. Al elegir un abono en `/recaudo/extractos`
+  aparece la propuesta: «Usar la propuesta» la pone en las partes y usted confirma. Sólo la regla por referencia, marcada «aplicar al
+  cargar» y con `Identificacion.AplicarAlCargar` encendido, aplica al cargar el extracto lo de referencia exacta, a su nombre. Ninguna
+  tarea aplica sola.
+- **Consignación reportada**: si el abono es una consignación que el asociado reportó en ventanilla, «Confirmar con la consignación
+  reportada» la cruza; si ya se había aplicado de inmediato, la línea queda identificada con el mismo recibo, sin aplicar dos veces.
+- **Identificación tardía**: cuando Cartera y Captaciones adoptan la versión 2 de sus contratos (`/recaudo/activacion`), el abono que se
+  identifica tarde entra con la fecha valor del movimiento y cita su partida.
+- **Calendario de pagadurías** (`/recaudo/pagadurias`): registre la fecha de pago de la nómina que informa cada pagaduría; el sistema
+  calcula la fecha legal de giro (`Libranza.DiasHabilesGiro`, días hábiles) y marca las morosas. Es informativo.
+- **Reporte de transacciones** (`/recaudo/cumplimiento`, oficial de cumplimiento): genere el del mes; con una inconsistencia bloqueante
+  queda validado sin archivo; regenerar deja la versión anterior reemplazada; marque cargado con el radicado. Cada generación advierte
+  que la estructura está sin cotejar hasta que el oficial la revise.

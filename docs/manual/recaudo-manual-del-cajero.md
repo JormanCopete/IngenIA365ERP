@@ -1,4 +1,4 @@
-# Recaudo: manual del cajero (R0)
+# Recaudo: manual del cajero (R0 y R1)
 
 > Feature 015 (Recaudo y Tesorería), entrega R0. Receta para **el cajero** (plantilla de rol `recaudo.cajero`). El contrato
 > está en [contracts/api.md](../../specs/015-recaudo-tesoreria/contracts/api.md) y en
@@ -74,3 +74,21 @@ supervisor (otra persona); un faltante aprobado se trata según `Caja.Tratamient
 
 Pida la anulación en `/recaudo/anulaciones` con su motivo; la aprueba otra persona con `Receipts.Voiding.Approve`. La anulación es
 un documento nuevo: el recibo original no se borra ni se edita, y cada módulo reversa lo que había aplicado.
+
+## 9. Lo que trae R1
+
+- **Medios de pago**: tarjeta débito y crédito (datáfono del adquirente, lote y aprobación; **nunca** escriba el número de la tarjeta),
+  bonos por referencia y «otro» con su referencia. El arqueo de tarjetas se cuenta por lote.
+- **Recibo completo**: «Todo lo exigible (F4)» trae de una vez lo que la persona debe hoy; «También como codeudor» suma los créditos donde
+  es codeudora. Si Cartera o Captaciones todavía no se activaron y la persona está en la carga, use «Dejar pendiente»: el valor queda como
+  **recaudo pendiente de aplicar** y se aplica el día de la activación. «Enviar por correo» manda el recibo sólo si la persona autorizó el
+  canal.
+- **Facturas comerciales**: en «qué paga» aparecen las facturas con saldo de ventas a crédito; «Cobrar» la agrega con su factura. No se
+  cobra más que el saldo ni como concepto vario.
+- **Egresos de caja** (`/recaudo/egresos`): retiro de ahorro, cancelación de cuenta con entrega, saldo a favor de un crédito o de un pagador y
+  egreso vario (si la cooperativa lo encendió, con aprobador presente). Verifique la identidad y las firmas y, si recibe otra persona,
+  regístrela: se cruza con las listas. Si la caja no tiene el efectivo, el sistema lo dice **antes** de pedir la autorización; abastézcala
+  desde la bóveda. El documento del egreso se imprime y lo firman quien entrega y quien recibe. Anular un egreso sólo se puede si el dinero
+  vuelve a esta misma caja, con aprobador.
+- **Consignación reportada** (`/recaudo/consignaciones-reportadas`): registre la consignación que trae el asociado con su soporte; por
+  defecto queda **por verificar** hasta que aparezca en el extracto.
