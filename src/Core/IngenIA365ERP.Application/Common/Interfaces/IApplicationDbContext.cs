@@ -666,6 +666,14 @@ public interface IApplicationDbContext
     DbSet<IngenIA365ERP.Domain.Entities.Treasury.Payments.PaymentResponseLine> PaymentResponseLines { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Treasury.Payments.DisbursementResult> DisbursementResults { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Accounting.Integration.OwnBankAccountLink> OwnBankAccountLinks { get; }
+    // Feature 015, fases 11 a 16 (DbSets).
+    DbSet<IngenIA365ERP.Domain.Entities.Treasury.Statements.BankStatement> TreasuryBankStatements { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Treasury.Statements.BankStatementLine> TreasuryBankStatementLines { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Banks.BankItemIdentification> BankItemIdentifications { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Banks.UnidentifiedItem> UnidentifiedItems { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Banks.UnidentifiedItemResolution> UnidentifiedItemResolutions { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Banks.ProcessingRun> ProcessingRuns { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Banks.ProcessingRunLine> ProcessingRunLines { get; }
 
     /// <summary>
     /// Descarta todo lo que el contexto tenga sin guardar (feature 009, R3): lo usa el reintento

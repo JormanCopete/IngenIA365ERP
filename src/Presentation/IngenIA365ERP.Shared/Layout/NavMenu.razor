@@ -554,6 +554,14 @@
             <PermissionGate Required="Receipts.CreditBalances.View">
                 <NavLink href="/recaudo/saldos-a-favor" class="nav-subitem">Saldos a favor</NavLink>
             </PermissionGate>
+            @* US6 (T0199): los bancos —extractos, abonos por identificar y partidas—. *@
+            <span class="nav-subgroup-title">Bancos y pagadurías</span>
+            <PermissionGate Required="Receipts.BankItems.View">
+                <NavLink href="/recaudo/extractos" class="nav-subitem">Extractos y abonos</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Receipts.UnidentifiedItems.View">
+                <NavLink href="/recaudo/partidas" class="nav-subitem">Partidas por identificar</NavLink>
+            </PermissionGate>
             <span class="nav-subgroup-title">Configuración</span>
             <PermissionGate Required="Receipts.Setup.View">
                 <NavLink href="/recaudo/configuracion/puntos" class="nav-subitem">Puntos de recaudo</NavLink>
@@ -605,6 +613,10 @@
             </PermissionGate>
             <PermissionGate Required="Treasury.LiquidityFund.Request">
                 <NavLink href="/tesoreria/fondo-de-liquidez" class="nav-subitem">Fondo de liquidez</NavLink>
+            </PermissionGate>
+            @* US6 (T0199): el extracto, que se carga una sola vez. *@
+            <PermissionGate Required="Treasury.Statements.View">
+                <NavLink href="/tesoreria/extractos" class="nav-subitem">Extractos bancarios</NavLink>
             </PermissionGate>
         </NavMenuGroup>
 

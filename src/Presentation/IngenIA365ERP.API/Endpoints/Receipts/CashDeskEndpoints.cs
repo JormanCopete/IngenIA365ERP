@@ -22,7 +22,9 @@ public class CashDeskEndpoints : ICarterModule
         var pagables = ReceiptsGroup.Grupo(app, "/payables", "Recaudo Caja");
         pagables.MapGet("/", async (Guid? person, string? document, bool? includeCoDebtor, string? number, ISender s, CancellationToken ct) =>
                 await s.Send(new GetPayablesQuery(person, document, includeCoDebtor ?? false, number), ct))
-            .WithName("Receipts_Payables_Get").RequirePermission(Registrar);
+            // Fase 11 (T0198): quien identifica abonos y partidas también ve lo que puede pagar la persona (para elegir sus productos).
+            .WithName("Receipts_Payables_Get").RequirePermission(new AlgunPermiso(Registrar, BankItemsEndpoints.Identificar, UnidentifiedItemsEndpoints.Resolver,
+                "Receipts.Paymasters.ApplyRemittance"));
 
         var g = ReceiptsGroup.Grupo(app, "/cash-operations", "Recaudo Caja");
         g.MapPost("/", async (CreateCashOperationCommand body, HttpContext http, ISender s, CancellationToken ct) =>

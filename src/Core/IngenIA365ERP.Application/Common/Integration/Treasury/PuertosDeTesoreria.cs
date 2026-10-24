@@ -19,10 +19,17 @@ public sealed record CuentaBancariaPropiaDto(
 /// <summary>Una página de resultados de un puerto. (nuevo)</summary>
 public sealed record PaginaDto<T>(IReadOnlyList<T> Items, int Total, int Page, int PageSize);
 
-/// <summary>Qué abonos del extracto pide Recaudo para identificar. (nuevo)</summary>
-public sealed record FiltroDeAbonos(Guid? OwnBankAccountPublicId, DateOnly? Desde, DateOnly? Hasta, string? Referencia, int Page = 1, int PageSize = 50);
+/// <summary>
+/// Qué abonos del extracto pide Recaudo para identificar. <see cref="SoloPendientes"/> deja fuera los ya identificados del todo; <see cref="OficinaPublicIds"/> es el
+/// alcance de Recaudo de quien pide (nulo = todas): Tesorería no aplica su propio alcance a una persona de Recaudo. (nuevo)
+/// </summary>
+public sealed record FiltroDeAbonos(Guid? OwnBankAccountPublicId, DateOnly? Desde, DateOnly? Hasta, string? Referencia, int Page = 1, int PageSize = 50,
+    bool SoloPendientes = true, IReadOnlyCollection<Guid>? OficinaPublicIds = null);
 
-/// <summary>Una línea de extracto (un abono) con lo que falta por identificar. (nuevo)</summary>
+/// <summary>
+/// Una línea de extracto (un abono) con lo que falta por identificar (US6, T0193 suma la cuenta, la oficina, el banco, la huella y el estado de Recaudo; DT §2.7).
+/// (nuevo)
+/// </summary>
 public sealed record LineaDeExtractoDto(
     Guid PublicId,
     Guid OwnBankAccountPublicId,
@@ -34,7 +41,15 @@ public sealed record LineaDeExtractoDto(
     string? DepositorTaxId,
     string? DepositorName,
     string? Description,
-    bool PossibleDuplicate);
+    bool PossibleDuplicate,
+    string OwnBankAccountCode = "",
+    Guid? BranchPublicId = null,
+    Guid? BankPublicId = null,
+    string? BankTransferCode = null,
+    string RecaudoStatus = "Pending",
+    string? DuplicateDecision = null,
+    string StatementNumber = "",
+    Guid? PossibleDuplicateOfPublicId = null);
 
 /// <summary>Lo que Recaudo pide al despachar efectivo al banco (remesa), en la transacción del despacho. (nuevo)</summary>
 public sealed record SolicitudDeRemesa(
@@ -84,7 +99,25 @@ public interface IMovimientosBancariosParaRecaudo
 
     /// <summary>Escribe <c>RecaudoStatus</c> de la línea: cuánto quedó identificado.</summary>
     Task MarcarIdentificacionAsync(Guid statementLinePublicId, decimal identificado, CancellationToken ct);
+
+    /// <summary>Un abono por su <c>PublicId</c> (nulo si no existe o no es un abono) (US6, T0193; nuevo).</summary>
+    Task<LineaDeExtractoDto?> LineaAsync(Guid statementLinePublicId, CancellationToken ct);
+
+    /// <summary>
+    /// Escribe la decisión de una persona sobre un posible duplicado (FR-197): <paramref name="esDuplicado"/> lo deja fuera de lo que Recaudo identifica; si no, sigue
+    /// pendiente como un movimiento distinto (US6, T0195; nuevo).
+    /// </summary>
+    Task DecidirDuplicadoAsync(Guid statementLinePublicId, bool esDuplicado, CancellationToken ct);
+
+    /// <summary>
+    /// La última carga de extracto de cada cuenta propia de recaudo activa, para la alerta de la cuenta sin extracto (FR-196; US6, T0197; nuevo): Recaudo no lee
+    /// <c>TES_</c>.
+    /// </summary>
+    Task<IReadOnlyList<UltimaCargaDeExtractoDto>> UltimasCargasAsync(CancellationToken ct);
 }
+
+/// <summary>La última carga de extracto de una cuenta de recaudo (nula si nunca se cargó). (nuevo)</summary>
+public sealed record UltimaCargaDeExtractoDto(Guid OwnBankAccountPublicId, string Code, Guid? BranchPublicId, DateOnly? LastStatementTo, DateTime? LastLoadedAt);
 
 /// <summary>Ofrece Tesorería → usan Recaudo (T0) y Comercial (T1): la remesa de efectivo al banco. (nuevo)</summary>
 public interface IRemesasDeTesoreria

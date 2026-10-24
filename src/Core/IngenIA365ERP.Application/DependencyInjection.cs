@@ -319,6 +319,11 @@ public static class DependencyInjection
         services.AddScoped<Common.Integration.Receipts.IResultadoDeOrdenesDeRecaudo, Receipts.CreditBalances.ResultadoDeOrdenesDeRecaudo>();
         // Feature 015 (decisión del dueño del 2026-10-24, T0113): la búsqueda de una obligación por su número que Cartera y Captaciones ofrecen a la caja.
         services.AddScoped<Common.Integration.Lending.IBusquedaDeObligaciones, Lending.Integration.BusquedaDeObligaciones>();
+        // Feature 015, US6 (fase 11, T0193 a T0197): el extracto que Tesorería ofrece a Recaudo, la aplicación no interactiva, las partidas y la antigüedad.
+        services.AddScoped<Common.Integration.Treasury.IMovimientosBancariosParaRecaudo, Treasury.Statements.MovimientosBancariosParaRecaudo>();
+        services.AddScoped<Receipts.BankItems.AplicacionNoInteractiva>();
+        services.AddScoped<Receipts.BankItems.PartidasPorIdentificar>();
+        services.AddScoped<Receipts.Tareas.AntiguedadDeRecaudo>();
         // Feature 015, T0183b: los requisitos de la activación mínima de los dos módulos.
         services.AddScoped<Receipts.Activation.RequisitosDeActivacionDeRecaudo>();
         services.AddScoped<Treasury.Activation.RequisitosDeActivacionDeTesoreria>();

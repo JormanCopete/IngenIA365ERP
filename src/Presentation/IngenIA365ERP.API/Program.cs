@@ -235,6 +235,9 @@ try
         new IngenIA365ERP.Application.Receipts.Sessions.Tareas.TareaDeSesionesOlvidadas());
     builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada>(
         new IngenIA365ERP.Application.Receipts.Sessions.Tareas.TareaDeCuadreDiario());
+    // Feature 015, US6 (T0197): la antigüedad de Recaudo (partidas, saldos a favor, extractos sin cargar, partidas al cierre), por cooperativa; sólo alerta.
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada>(
+        new IngenIA365ERP.Application.Receipts.Tareas.TareaDeAntiguedadDeRecaudo());
     // Feature 015, US11 (T0160): la vigilancia de Tesorería (órdenes sin resultado), por cooperativa; sólo alerta.
     builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada>(
         new IngenIA365ERP.Application.Treasury.Tareas.TareaDeVigilanciaDeTesoreria());

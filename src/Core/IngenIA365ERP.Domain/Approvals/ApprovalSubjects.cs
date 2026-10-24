@@ -62,10 +62,23 @@ public static class ApprovalSubjects
     /// <summary>Feature 015 (T0061; FR-207): un uso del fondo de liquidez. Regla fija de un nivel con <c>Treasury.LiquidityFund.Approve</c> (con monto). (nuevo)</summary>
     public const string LiquidityFundUse = "LiquidityFundUse";
 
+    /// <summary>
+    /// Feature 015, US6 (T0195; FR-072; nuevo, DT §2.7): la clasificación de un abono o de una partida por identificar a un concepto (rendimiento, reintegro, giro
+    /// devuelto). Regla fija de un nivel con <c>Receipts.BankItems.Classify</c>; lo aprueba otra persona, presente.
+    /// </summary>
+    public const string BankItemClassification = "BankItemClassification";
+
+    /// <summary>
+    /// Feature 015, US6 (T0195; FR-073; nuevo, DT §2.7): llevar a ingreso una partida vencida, una decisión registrada que nunca es automática. Regla fija de un nivel
+    /// con <c>Receipts.UnidentifiedItems.MoveToIncome</c>.
+    /// </summary>
+    public const string UnidentifiedItemToIncome = "UnidentifiedItemToIncome";
+
     /// <summary>Los cinco de data-model §21, en su orden, los dos de captaciones de la feature 014 y los siete de Recaudo y Tesorería de la 015.</summary>
     public static readonly IReadOnlyList<string> Todos =
         [DocumentConfirmation, DiscountOverCap, ProvisionalCredit, TransferDiscrepancy, PurchaseMatchException, AccountWithdrawal, AccountCashDeposit,
-            CashCountDifference, CashMeansReclassification, ReceiptBackdate, CashSessionAdjustment, ReceiptVoiding, PaymentBatchApproval, LiquidityFundUse];
+            CashCountDifference, CashMeansReclassification, ReceiptBackdate, CashSessionAdjustment, ReceiptVoiding, PaymentBatchApproval, LiquidityFundUse,
+            BankItemClassification, UnidentifiedItemToIncome];
 
     /// <summary>Si el texto es uno de los sujetos, escrito exacto (distingue mayúsculas).</summary>
     public static bool EsValido(string? sujeto) => sujeto is not null && Todos.Contains(sujeto, StringComparer.Ordinal);

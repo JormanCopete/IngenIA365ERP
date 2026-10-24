@@ -127,6 +127,12 @@ public class Receipt : AuditableEntityLong, IHechoInmutable
 
     public int? PaymasterRemittanceId { get; set; }
 
+    /// <summary>
+    /// La fecha del movimiento cuando el contrato no la admitió y el recibo se aplicó con la más antigua que admite (FR-071 en R0; feature 015, US6, T0194; nuevo): el
+    /// recibo lo dice y se alerta al módulo.
+    /// </summary>
+    public DateOnly? OriginalValueDate { get; set; }
+
     public string VerificationCode { get; set; } = string.Empty;
 }
 

@@ -30,6 +30,11 @@ public static class CatalogoDeMensajesDeRecaudoV1
         Hecho(typeof(AplicacionReversadaPorModuloV1), AplicacionReversadaPorModuloV1.Type, "ARM"),
         Hecho(typeof(SaldoAFavorDePagadorResueltoV1), SaldoAFavorDePagadorResueltoV1.Type, "SFP"),
         Hecho(typeof(SaldoAFavorDeCarteraDevueltoV1), SaldoAFavorDeCarteraDevueltoV1.Type, "SFC"),
+        // US6 (fase 11): los abonos del extracto, en línea.
+        Hecho(typeof(ReciboDeBancoEmitidoV1), ReciboDeBancoEmitidoV1.Type, "RBE"),
+        Hecho(typeof(PartidaPorIdentificarReconocidaV1), PartidaPorIdentificarReconocidaV1.Type, "PIR"),
+        Hecho(typeof(PartidaClasificadaV1), PartidaClasificadaV1.Type, "PCL"),
+        Hecho(typeof(PartidaDevueltaAlConsignanteV1), PartidaDevueltaAlConsignanteV1.Type, "PDC"),
     ];
 
     private static TipoDeMensaje Hecho(Type record, string type, string codigoCorto) =>

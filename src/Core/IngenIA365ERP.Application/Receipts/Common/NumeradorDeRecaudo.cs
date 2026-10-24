@@ -43,6 +43,19 @@ public sealed class NumeradorDeRecaudo(IApplicationDbContext db, ICerrojoDeRecau
         return numero;
     }
 
+    /// <summary>
+    /// Devuelve el último número asignado en esta unidad de trabajo si nadie lo usó (feature 015, US6, T0194; nuevo): un proceso no interactivo numera antes de los
+    /// contratos (el contrato guarda el número) y, si el contrato rechaza la línea entera, la tanda sigue en la misma transacción: el número vuelve para que no
+    /// quede un hueco. Sólo baja <c>NextSequence</c> si <paramref name="numero"/> es el último que dio esta fila; si no, no hace nada.
+    /// </summary>
+    public void Devolver(string codigoDelTipo, string prefijo, string numero)
+    {
+        var clave = Clave(codigoDelTipo, prefijo);
+        var secuencia = db.Sequences.Local.FirstOrDefault(s => s.Name == clave && s.DocumentType == CatalogoDeRecaudo.Modulo);
+        if (secuencia is null || secuencia.NextSequence <= 1) return;
+        if (Formatear(secuencia.ShortName ?? prefijo, secuencia.NextSequence - 1) == numero) secuencia.NextSequence -= 1;
+    }
+
     /// <summary><c>prefijo + valor</c> con al menos <see cref="DigitosPorDefecto"/> dígitos.</summary>
     public static string Formatear(string prefijo, long valor) =>
         prefijo + valor.ToString(CultureInfo.InvariantCulture).PadLeft(DigitosPorDefecto, '0');

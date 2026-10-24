@@ -49,5 +49,31 @@ public static class HuellaDeRecibo
 {
     public const string Operacion = "Recaudo.Recibo";
 
+    /// <summary>La operación de la huella de un recibo tal como quedó guardado (feature 015, T0194; TR37; nuevo).</summary>
+    public const string OperacionDelRecibo = "Recaudo.Recibo.Guardado";
+
     public static string Calcular(object insumos) => HuellaDeOperacion.Calcular(Operacion, insumos);
+
+    /// <summary>
+    /// La huella de un recibo <b>recalculada desde lo guardado</b> (feature 015, US6, T0189a, T0194; TR37; nuevo): número, canal, pagador, fecha valor, totales y, por
+    /// aplicación, destino, producto, titular y valor, y por porción su clave y valor. La lleva el evento <c>Receipts.ProcessingRun.Summary</c>; recalculada después, una
+    /// alteración del recibo no coincide.
+    /// </summary>
+    public static async Task<string> DelReciboAsync(IngenIA365ERP.Application.Common.Interfaces.IApplicationDbContext db,
+        IngenIA365ERP.Domain.Entities.Receipts.Operations.Receipt recibo, CancellationToken ct)
+    {
+        var aplicaciones = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(
+            db.ReceiptApplications.Where(a => a.ReceiptId == recibo.Id).OrderBy(a => a.Ordinal)
+                .Select(a => new { a.Id, a.Ordinal, a.Target, a.ProductPublicId, a.BeneficiaryPersonId, a.MiscConceptId, a.Amount }), ct);
+        var ids = aplicaciones.Select(a => a.Id).ToList();
+        var porciones = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(
+            db.ReceiptApplicationPortions.Where(p => ids.Contains(p.ReceiptApplicationId)).OrderBy(p => p.IdempotencyKey)
+                .Select(p => new { p.IdempotencyKey, p.Amount }), ct);
+        return HuellaDeOperacion.Calcular(OperacionDelRecibo, new
+        {
+            recibo.PublicId, recibo.Number, recibo.Channel, recibo.PayerPersonId, recibo.ValueDate, recibo.TotalApplied, recibo.TotalMeans, recibo.OperationKey,
+            Aplicaciones = aplicaciones.Select(a => new { a.Ordinal, a.Target, a.ProductPublicId, a.BeneficiaryPersonId, a.MiscConceptId, a.Amount }),
+            Porciones = porciones,
+        });
+    }
 }

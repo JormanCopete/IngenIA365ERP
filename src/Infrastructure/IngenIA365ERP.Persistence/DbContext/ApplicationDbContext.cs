@@ -721,6 +721,14 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Payments.PaymentResponseLine> PaymentResponseLines => Set<IngenIA365ERP.Domain.Entities.Treasury.Payments.PaymentResponseLine>();
     public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Payments.DisbursementResult> DisbursementResults => Set<IngenIA365ERP.Domain.Entities.Treasury.Payments.DisbursementResult>();
     public DbSet<IngenIA365ERP.Domain.Entities.Accounting.Integration.OwnBankAccountLink> OwnBankAccountLinks => Set<IngenIA365ERP.Domain.Entities.Accounting.Integration.OwnBankAccountLink>();
+    // Feature 015, fases 11 a 16 (DbSets).
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Statements.BankStatement> TreasuryBankStatements => Set<IngenIA365ERP.Domain.Entities.Treasury.Statements.BankStatement>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Statements.BankStatementLine> TreasuryBankStatementLines => Set<IngenIA365ERP.Domain.Entities.Treasury.Statements.BankStatementLine>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Banks.BankItemIdentification> BankItemIdentifications => Set<IngenIA365ERP.Domain.Entities.Receipts.Banks.BankItemIdentification>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Banks.UnidentifiedItem> UnidentifiedItems => Set<IngenIA365ERP.Domain.Entities.Receipts.Banks.UnidentifiedItem>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Banks.UnidentifiedItemResolution> UnidentifiedItemResolutions => Set<IngenIA365ERP.Domain.Entities.Receipts.Banks.UnidentifiedItemResolution>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Banks.ProcessingRun> ProcessingRuns => Set<IngenIA365ERP.Domain.Entities.Receipts.Banks.ProcessingRun>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Banks.ProcessingRunLine> ProcessingRunLines => Set<IngenIA365ERP.Domain.Entities.Receipts.Banks.ProcessingRunLine>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

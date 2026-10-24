@@ -120,6 +120,8 @@ public static class EvaluadorDePolitica
         ApprovalSubjects.ReceiptVoiding => new NivelDeAprobacion(1, 0m, "Receipts.Voiding.Approve"),
         ApprovalSubjects.PaymentBatchApproval => new NivelDeAprobacion(1, 0m, "Treasury.Batches.Approve"),
         ApprovalSubjects.LiquidityFundUse => new NivelDeAprobacion(1, 0m, "Treasury.LiquidityFund.Approve"),
+        ApprovalSubjects.BankItemClassification => new NivelDeAprobacion(1, 0m, "Receipts.BankItems.Classify"),
+        ApprovalSubjects.UnidentifiedItemToIncome => new NivelDeAprobacion(1, 0m, "Receipts.UnidentifiedItems.MoveToIncome"),
         _ => null,
     };
 

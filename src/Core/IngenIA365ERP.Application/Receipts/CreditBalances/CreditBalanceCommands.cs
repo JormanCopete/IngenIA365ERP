@@ -270,6 +270,11 @@ public sealed class ResultadoDeOrdenesDeRecaudo(IApplicationDbContext db, ICerro
                               where m.DocumentPublicId != null && paymentOrderPublicIds.Contains(m.DocumentPublicId.Value)
                               select s.PersonId).Distinct().ToListAsync(ct);
         if (personas.Count > 0) await cerrojo.BloquearPagadoresAsync(personas.Order().ToList(), ct);
+        // US6 (fase 11): la partida devuelta al consignante por la orden (nivel 6).
+        var partidas = await db.UnidentifiedItemResolutions.AsNoTracking()
+            .Where(r => r.Kind == Domain.Enums.Receipts.UnidentifiedItemResolutionKind.RefundedByOrder && paymentOrderPublicIds.Contains(r.DocumentPublicId))
+            .Select(r => (long)r.UnidentifiedItemId).Distinct().ToListAsync(ct);
+        if (partidas.Count > 0) await cerrojo.BloquearAsync(NivelDeRecaudo.Origenes, TablasDeRecaudo.Partidas, partidas.Order().ToList(), ct: ct);
     }
 
     /// <summary>Los resultados que Tesorería informa (FR-215).</summary>
@@ -285,6 +290,7 @@ public sealed class ResultadoDeOrdenesDeRecaudo(IApplicationDbContext db, ICerro
     public async Task InformarAsync(Guid paymentOrderPublicId, string outcome, DateOnly occurredOn, string? reason, CancellationToken ct)
     {
         ValidarResultado(paymentOrderPublicId, outcome);
+        if (await InformarPartidaAsync(paymentOrderPublicId, outcome, reason, ct)) return;
         var movimiento = await db.PayerCreditBalanceMovements.AsNoTracking()
             .Where(m => m.DocumentPublicId == paymentOrderPublicId && m.Kind == PayerCreditBalanceMovementKind.RefundedByOrder).OrderByDescending(m => m.Id)
             .FirstOrDefaultAsync(ct);
@@ -307,6 +313,32 @@ public sealed class ResultadoDeOrdenesDeRecaudo(IApplicationDbContext db, ICerro
             Note = string.IsNullOrWhiteSpace(reason) ? $"Orden {outcome}" : $"Orden {outcome}: {reason}",
         });
         _ = occurredOn;
+    }
+
+    /// <summary>
+    /// La devolución de una partida al consignante (US6, fase 11): «girada» la deja como está; «rechazada», «cheque no cobrado» o «anulada» devuelve el saldo a la
+    /// partida con la resolución <c>RefundRejected</c>. Devuelve si la orden era de una partida.
+    /// </summary>
+    private async Task<bool> InformarPartidaAsync(Guid orden, string outcome, string? reason, CancellationToken ct)
+    {
+        var devolucion = await db.UnidentifiedItemResolutions.AsNoTracking()
+            .Where(r => r.DocumentPublicId == orden && r.Kind == Domain.Enums.Receipts.UnidentifiedItemResolutionKind.RefundedByOrder).OrderByDescending(r => r.Id)
+            .FirstOrDefaultAsync(ct);
+        if (devolucion is null) return false;
+        var partida = await db.UnidentifiedItems.FirstAsync(p => p.Id == devolucion.UnidentifiedItemId, ct);
+        await auditoria.AgregarAsync("Receipts.UnidentifiedItem.OrderResult", "UnidentifiedItem", partida.PublicId, null, new { order = orden, outcome }, ct);
+        if (outcome == "Disbursed") return true;
+        if (await db.UnidentifiedItemResolutions.AnyAsync(r => r.DocumentPublicId == orden && r.Kind == Domain.Enums.Receipts.UnidentifiedItemResolutionKind.RefundRejected, ct))
+            return true;
+        partida.Balance += devolucion.Amount;
+        partida.Status = partida.Balance >= partida.Amount ? Domain.Enums.Receipts.UnidentifiedItemState.Open : Domain.Enums.Receipts.UnidentifiedItemState.PartiallyIdentified;
+        db.UnidentifiedItemResolutions.Add(new Domain.Entities.Receipts.Banks.UnidentifiedItemResolution
+        {
+            UnidentifiedItemId = partida.Id, Kind = Domain.Enums.Receipts.UnidentifiedItemResolutionKind.RefundRejected, Amount = devolucion.Amount, DocumentPublicId = orden,
+            DocumentNumber = devolucion.DocumentNumber, ByUserId = devolucion.ByUserId, At = reloj.UtcNow,
+            Note = string.IsNullOrWhiteSpace(reason) ? $"Orden {outcome}" : $"Orden {outcome}: {reason}",
+        });
+        return true;
     }
 
     private Task AuditarAsync(PayerCreditBalance saldo, Guid orden, string outcome, CancellationToken ct) =>

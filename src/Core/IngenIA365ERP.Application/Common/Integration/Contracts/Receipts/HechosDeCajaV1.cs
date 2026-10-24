@@ -75,6 +75,12 @@ public static class RolesDeRecaudo
     // US5 (fase 10; contabilidad.md §3): el saldo a favor de los pagadores y el puente de la devolución por orden de pago a Tesorería.
     public const string SaldoAFavorDePagadores = "SaldoAFavorDePagadores";
     public const string PuenteDeDevolucion = "PuenteDeDevolucion";
+
+    // US6, US7, US15, US14 (fases 11 a 15; contabilidad.md §5): las partidas, las pagadurías, el cheque devuelto y la custodia por listas.
+    public const string PartidasPorIdentificar = "PartidasPorIdentificar";
+    public const string SaldoDePagadurias = "SaldoDePagadurias";
+    public const string CuentaPorCobrarPagador = "CuentaPorCobrarPagador";
+    public const string CustodiaPorLista = "CustodiaPorLista";
 }
 
 /// <summary>
