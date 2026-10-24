@@ -528,6 +528,20 @@ Lo que tasks.md marcaba **(nuevo)** y lo que trajeron el `/speckit-analyze` y la
 | `SendReceiptNoticeCommand` · `AvisosDeRecaudo` · `AvisoDeRecaudoDto` · `ResultadosDeAviso` (`Sent`, `NotAuthorized`, `NoDestination`, `Simulated`) · `POST /api/receipts/receipts/{id}/notify` · evento `Receipts.Receipt.Notified` | el aviso por correo | `Receipts/Notifications/AvisosDeRecaudo.cs` |
 | permisos `Receipts.PendingApplications.View` · `.Apply` · `GET /api/receipts/pending-applications` · `POST …/{id}/apply` · pantalla `/recaudo/pendiente-de-aplicar` · evento `Receipts.PendingApplication.Applied` | rutas, permisos y pantalla | `API/Endpoints/Receipts/CashDeskEndpoints.cs`, `Shared/Pages/Recaudo/RecaudoPendienteDeAplicar.razor` |
 
+**Fijados en la construcción de la fase 26 (2026-10-24)**:
+
+| Nombre | Qué | Dónde |
+|---|---|---|
+| `RCD_CashDisbursements` (`CashDisbursement`, con `ProductNature`) · `RCD_CashDisbursementVoidings` (`CashDisbursementVoiding`) | el egreso de caja y su anulación | par `RecaudoCompleto` |
+| `RegisterCashDisbursementCommand` · `VoidCashDisbursementCommand` · `ListCashDisbursementsQuery` · `GetCashDisbursementDocumentQuery` · `CashDisbursementDto` · `EgresoModel` · `EgresosDeCaja` · `ErroresDeEgreso` (`Receipts.Disbursement.{InsufficientCash, DailyCashOutCapReached, MiscExpensesDisabled, ConceptNotExpense, OverConceptMax, KindNotSupported, ModuleRejected, CloseAmountMismatch, AlreadyVoided, NotSameCashBox}`) | comandos, consultas y errores | `Receipts/Disbursements/EgresosDeCaja.cs` |
+| `ReglasDeEgresoDeCaja` · `GmfDeEgreso` | el motor puro del GMF de Recaudo, el tope diario y el efectivo suficiente | `Domain/Receipts/Egresos/ReglasDeEgresoDeCaja.cs` |
+| `CashMovementKindR.CashDisbursement = 8` · `.CashDisbursementReturn = 9` · `PayerCreditBalanceMovementKind.CashRefundVoided = 6` | el egreso en el arqueo y la reapertura del saldo | enums de Recaudo |
+| `ApprovalSubjects.CashDisbursementApproval` (`Receipts.Disbursements.Approve`, con monto) | el egreso vario y la anulación de un egreso | `Domain/Approvals` |
+| `Caja.EgresosVarios` · `Gmf.Tarifa` · `Gmf.HechosGeneradoresDeEgresos` · `Gmf.Redondeo` en `RCD` (R1) | los parámetros de los egresos | `ParametrosDeRecaudoYTesoreria` |
+| `EgresoDeCajaEntregadoV1` (`EGE`) · `GmfDeEgresoCausadoV1` (`GEC`) · `EgresoDeCajaAnuladoV1` (`EGA`) · `EmisionDeRecaudo.{EgresoDeCajaEntregadoAsync, GmfDeEgresoCausadoAsync, EgresoDeCajaAnuladoAsync}` · tipo de comprobante `EG` · tipo de documento `EG` (clase 7) | los hechos del egreso | `HechosDeR1V1.cs`, `EmisionDeRecaudo.Egresos.cs` |
+| `CodigosDelContratoDeCuentas.PendienteDeAprobacion` | el código del contrato de cuentas que el recaudador distingue | `Common/Integration/Lending/ContratoDeCuentasDtos.cs` |
+| `RegistroDeEfectivo.{AlEgresarAsync, AlAnularEgresoAsync}` · `IDocumentosDeRecaudoEnPdf.Egreso` · rutas `/api/receipts/cash-disbursements` · pantalla `/recaudo/egresos` · eventos `Receipts.Disbursement.{Delivered, Voided}` | registro, documento, rutas y pantalla | `Receipts/Compliance`, `API/Endpoints/Receipts/DisbursementsEndpoints.cs`, `Shared/Pages/Recaudo/Egresos.razor` |
+
 ## 3. Decisiones transversales
 
 ### Módulos y frontera

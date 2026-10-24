@@ -1966,15 +1966,53 @@ FR-205 parte R1).
 Captaciones, se entrega en una operación con la autorización y baja lo esperado de la caja; sin efectivo suficiente se
 rechaza antes de pedir la autorización.
 
-- [ ] T0367 [P] [US4] Escribir tests/IngenIA365ERP.Application.Tests/Receipts/Disbursements/EgresosDeCajaTests.cs (FR-051 a FR-056, FR-101, FR-191): retiro con `SimularAsync` → `RetirarAsync(MeansClass = Cash, Signers, Receiver)` y entrega en la misma transacción, clave `REC:{egreso:N}:{cuenta:N}`; sin efectivo suficiente se rechaza antes de pedir la autorización; aprobador presente sobre la atribución; cancelación con entrega (E-02 d); saldo a favor de Cartera con `ResolverSaldoAFavorAsync` en efectivo y de pagador con egreso; egresos varios apagados por defecto, con aprobación y tope; `DailyCashOutCap`; quien recibe contra las listas; el GMF lo muestra el egreso del retiro
-- [ ] T0368 [P] [US4] Escribir tests/IngenIA365ERP.Application.Tests/Receipts/Disbursements/AnulacionDeEgresoYGmfTests.cs (FR-061, FR-099, FR-205): la anulación reversa el retiro o la resolución por su contrato y reingresa el dinero sólo si vuelve, con aprobación; el efectivo entregado cuenta para topes, umbrales, alertas y el reporte; el GMF de un egreso que dispone de una cuenta contable a favor de un tercero por los parámetros `Gmf.*` de `RCD` (`GmfDeEgresoCausado`), nunca lo que el origen ya liquidó
-- [ ] T0369 [P] [US4] Ampliar los casos dorados del arqueo con egresos de caja (esperado − egresos) en tests/IngenIA365ERP.Domain.Tests/Receipts/Casos/arqueo-egresos-*.json (R-14)
-- [ ] T0370 [P] [US4] Escribir la e2e tests/IngenIA365ERP.API.IntegrationTests/Receipts/EgresosDeCajaTests.cs (US4 «Independent Test») para la corrida de cierre de R1
-- [ ] T0371 [P] [US4] Crear en src/Core/IngenIA365ERP.Domain/Entities/Receipts/Operations/ `CashDisbursement` (H) y `CashDisbursementVoiding` (H) con su configuración (data-model §8.1)
-- [ ] T0372 [US4] Implementar en src/Core/IngenIA365ERP.Application/Receipts/Disbursements/ `RegisterCashDisbursementCommand` (retiro, cancelación con entrega, saldo a favor de Cartera, saldo a favor de pagador, egreso vario, devolución del dinero retenido en custodia) y `VoidCashDisbursementCommand`, con `CerrojoDeRecaudo`, `NumeradorDeRecaudo`, registro de efectivo `Out` y el GMF de `RCD` (FR-051 a FR-056, FR-061, FR-189, FR-205)
-- [ ] T0373 [US4] Emitir `EgresoDeCajaEntregado`, `EgresoDeCajaAnulado` y `GmfDeEgresoCausado` en src/Core/IngenIA365ERP.Application/Receipts/Accounting/EmisionDeRecaudo.Egresos.cs, sembrar el tipo de comprobante `EG` y sus filas sugeridas de matriz (contabilidad.md §3, §8; FR-141)
-- [ ] T0374 [US4] Crear el documento `Egreso` firmado en src/Presentation/IngenIA365ERP.API/Reports/DocumentosDeRecaudoReport.cs y la pantalla src/Presentation/IngenIA365ERP.Shared/Pages/Recaudo/Egresos.razor (`/recaudo/egresos`) con firmas, verificación de identidad, aprobación presente e `IndicadorDeCarga`; exponer `POST /api/receipts/cash-disbursements` y `POST /{id}/void` (`Receipts.Disbursements.*`)
-- [ ] T0375 [US4] Regenerar en src/Infrastructure/IngenIA365ERP.Persistence.Migrations.{PostgreSql,SqlServer}/Application/ el par `RecaudoCompleto` con los egresos
+- [X] T0367 [P] [US4] Escribir tests/IngenIA365ERP.Application.Tests/Receipts/Disbursements/EgresosDeCajaTests.cs (FR-051 a FR-056, FR-101, FR-191): retiro con `SimularAsync` → `RetirarAsync(MeansClass = Cash, Signers, Receiver)` y entrega en la misma transacción, clave `REC:{egreso:N}:{cuenta:N}`; sin efectivo suficiente se rechaza antes de pedir la autorización; aprobador presente sobre la atribución; cancelación con entrega (E-02 d); saldo a favor de Cartera con `ResolverSaldoAFavorAsync` en efectivo y de pagador con egreso; egresos varios apagados por defecto, con aprobación y tope; `DailyCashOutCap`; quien recibe contra las listas; el GMF lo muestra el egreso del retiro
+- [X] T0368 [P] [US4] Escribir tests/IngenIA365ERP.Application.Tests/Receipts/Disbursements/AnulacionDeEgresoYGmfTests.cs (FR-061, FR-099, FR-205): la anulación reversa el retiro o la resolución por su contrato y reingresa el dinero sólo si vuelve, con aprobación; el efectivo entregado cuenta para topes, umbrales, alertas y el reporte; el GMF de un egreso que dispone de una cuenta contable a favor de un tercero por los parámetros `Gmf.*` de `RCD` (`GmfDeEgresoCausado`), nunca lo que el origen ya liquidó
+- [X] T0369 [P] [US4] Ampliar los casos dorados del arqueo con egresos de caja (esperado − egresos) en tests/IngenIA365ERP.Domain.Tests/Receipts/Casos/arqueo-egresos-*.json (R-14)
+- [X] T0370 [P] [US4] Escribir la e2e tests/IngenIA365ERP.API.IntegrationTests/Receipts/EgresosDeCajaTests.cs (US4 «Independent Test») para la corrida de cierre de R1
+- [X] T0371 [P] [US4] Crear en src/Core/IngenIA365ERP.Domain/Entities/Receipts/Operations/ `CashDisbursement` (H) y `CashDisbursementVoiding` (H) con su configuración (data-model §8.1)
+- [X] T0372 [US4] Implementar en src/Core/IngenIA365ERP.Application/Receipts/Disbursements/ `RegisterCashDisbursementCommand` (retiro, cancelación con entrega, saldo a favor de Cartera, saldo a favor de pagador, egreso vario, devolución del dinero retenido en custodia) y `VoidCashDisbursementCommand`, con `CerrojoDeRecaudo`, `NumeradorDeRecaudo`, registro de efectivo `Out` y el GMF de `RCD` (FR-051 a FR-056, FR-061, FR-189, FR-205)
+- [X] T0373 [US4] Emitir `EgresoDeCajaEntregado`, `EgresoDeCajaAnulado` y `GmfDeEgresoCausado` en src/Core/IngenIA365ERP.Application/Receipts/Accounting/EmisionDeRecaudo.Egresos.cs, sembrar el tipo de comprobante `EG` y sus filas sugeridas de matriz (contabilidad.md §3, §8; FR-141)
+- [X] T0374 [US4] Crear el documento `Egreso` firmado en src/Presentation/IngenIA365ERP.API/Reports/DocumentosDeRecaudoReport.cs y la pantalla src/Presentation/IngenIA365ERP.Shared/Pages/Recaudo/Egresos.razor (`/recaudo/egresos`) con firmas, verificación de identidad, aprobación presente e `IndicadorDeCarga`; exponer `POST /api/receipts/cash-disbursements` y `POST /{id}/void` (`Receipts.Disbursements.*`)
+- [X] T0375 [US4] Regenerar en src/Infrastructure/IngenIA365ERP.Persistence.Migrations.{PostgreSql,SqlServer}/Application/ el par `RecaudoCompleto` con los egresos
+
+**Notas de la construcción de la fase 26 (2026-10-24)**. Pruebas escritas y compiladas, sin correr. Desviaciones y decisiones; los nombres nuevos quedan en
+decisiones-transversales §2.7:
+
+- **T0367–T0369**: `Receipts/Disbursements/EgresosDeCajaTests` (retiro por el contrato con su clave, sin efectivo antes de pedir la autorización, tope diario, 428 con la
+  solicitud de Captaciones, cancelación con entrega, saldo a favor de Cartera con GMF de Recaudo, saldo a favor de pagador, egresos varios apagados, listas de quien
+  recibe) y `AnulacionDeEgresoYGmfTests` (anulación por el contrato, el dinero vuelve sólo a la misma caja, registro de efectivo `Out` y su espejo, GMF por hechos
+  generadores), con el arnés `EgresosDePrueba`; casos dorados `arqueo-egresos-01..03` (el tercero, egreso anulado que vuelve en la misma sesión).
+- **T0370**: e2e `Receipts/EgresosDeCajaTests` (efectivo insuficiente, Cartera sin saldo a favor, egresos varios apagados, nada entregado). Escrita, sin correr.
+- **T0371**: `CashDisbursement` y `CashDisbursementVoiding` en `Entities/Receipts/Operations/CashDisbursements.cs`, con `ProductNature` **(nuevo)** para que el espejo
+  use la misma naturaleza del puente. Configuración en `RecaudoCompletoConfigurations.cs`.
+- **T0372**: `RegisterCashDisbursementCommand` y `VoidCashDisbursementCommand` (`Receipts/Disbursements/EgresosDeCaja.cs`). El retiro y la cancelación con entrega van
+  por `SimularAsync` → `RetirarAsync` (efectivo, firmantes, quien recibe; la cancelación entrega el `AmountToDeliver` de la simulación y exige confirmarlo:
+  `Receipts.Disbursement.CloseAmountMismatch`); sobre la atribución Captaciones responde `Lending.Savings.PendingApproval` con su solicitud y la caja la devuelve como
+  428 `Approvals.PresenceRequired` (el código queda en el contrato como `CodigosDelContratoDeCuentas.PendienteDeAprobacion` **(nuevo)**, para no tocar Captaciones por
+  dentro). El efectivo esperado de la sesión y el `DailyCashOutCap` sellado se miden **antes** de pedir la autorización y otra vez bajo el cerrojo. El egreso vario,
+  apagado por `Caja.EgresosVarios` **(nuevo, R1, `false`)**, exige un concepto de egreso activo, su `MaxAmount` y aprobador presente con el sujeto **nuevo**
+  `CashDisbursementApproval` (regla fija con `Receipts.Disbursements.Approve`, ahora permiso con monto), el mismo de la anulación. **Desviaciones**: (a) la «devolución
+  del dinero retenido en custodia» no es un egreso: ya la hace la liberación de la custodia de R0 (`CustodyRelease`), así que esa clase responde
+  `Receipts.Disbursement.KindNotSupported`; (b) en el arqueo el egreso es la clase **nueva** `CashMovementKindR.CashDisbursement = 8` (salida) y el dinero de un egreso
+  anulado vuelve como `CashDisbursementReturn = 9` (entrada) en la sesión donde se anula: la sesión que lo entregó no cambia aunque esté cerrada; (c) la anulación del
+  saldo a favor de Cartera usa `IContratoDeObligaciones.ReversarAsync` con la clave de la resolución: si Cartera no reversa resoluciones por esa clave, responde
+  `Receipts.Disbursement.ModuleRejected` (por confirmar en la e2e); (d) el saldo a favor de pagador se reabre con el movimiento **nuevo**
+  `PayerCreditBalanceMovementKind.CashRefundVoided = 6`. El GMF lo decide el motor puro **nuevo** `Domain/Receipts/Egresos/ReglasDeEgresoDeCaja` con
+  `Gmf.Tarifa`, `Gmf.HechosGeneradoresDeEgresos` y `Gmf.Redondeo` de `RCD` (**nuevos en RCD, R1**, pendientes del tributarista): nunca lo que el origen liquidó (retiro
+  y cancelación), las devoluciones de saldos a favor sí, el vario sólo con `Todos`. `RegistroDeEfectivo.AlEgresarAsync`/`AlAnularEgresoAsync` escriben la fila `Out` y su
+  espejo y evalúan las mismas señales.
+- **T0373**: `EgresoDeCajaEntregado` (`EGE`), `GmfDeEgresoCausado` (`GEC`) y `EgresoDeCajaAnulado` (`EGA`) en `HechosDeR1V1.cs` y
+  `EmisionDeRecaudo.Egresos.cs`; matriz con los roles `GmfGasto` (resultado, por oficina) y `GmfPorPagar`; tipo de comprobante `EG` en `voucher-types.json`
+  (la e2e de aprovisionamiento pasa a 35) y el tipo de documento `EG` (clase 7) en la cola de `RecaudoCompleto`.
+- **T0374**: documento `Egreso` en `DocumentosDeRecaudoReport` (por `IDocumentosDeRecaudoEnPdf.Egreso`), rutas `GET/POST /api/receipts/cash-disbursements`,
+  `POST /{id}/void` y `GET /{id}/document` (`Receipts.Disbursements.View/Register`; aprobar, `.Approve`), pantalla `/recaudo/egresos` en el menú y en
+  `LasPantallasDeRecaudoYTesoreriaEstanEnElMenu`; plantillas: cajero `View`/`Register`, supervisor `Receipts.Disbursements.*`. La firma va como verificación marcada
+  por el cajero y el documento firmado en papel; la foto de la firma (`SignatureAttachmentPublicId`) queda en el contrato pero la pantalla todavía no la sube.
+  Sin probar en navegador.
+- **T0375**: `RecaudoCompleto` regenerado en par con las dos tablas y la semilla de `EG`; `has-pending-model-changes` «No changes» en SqlServer y PostgreSQL; paridad
+  en par (Application 70). Compilan API, Web, Web.Client, Persistence y las cinco de pruebas.
+
 
 ---
 
