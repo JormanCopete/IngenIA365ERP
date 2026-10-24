@@ -13,6 +13,14 @@ namespace IngenIA365ERP.Application.Lending.Integration.DoblesDePrueba;
 /// <item>pedidos en producción: <see cref="InvalidOperationException"/> con un mensaje en español, y la API no arranca.</item>
 /// </list>
 /// Vive en Application para que las pruebas sin contenedores la fijen; la API sólo la llama. (nuevo)
+///
+/// <para>
+/// <b>Bandera transitoria de la feature 015 (T0141; DT Q9, R-26; del 04/11 al 19/11).</b> Cuando esto devuelve <c>false</c> (los dobles no se registran), la
+/// API registra los consumidores reales <c>DestinoTesoreria</c> y <c>DestinoRecaudo</c> (<c>API/Integration/ConsumidoresDeRecaudoYTesoreria</c>); con
+/// <c>true</c>, sólo los dobles. Así <c>ConsumidoresPorDestino.Validar()</c> nunca ve dos consumidores del mismo destino. <c>Lending:TestDoubles:Enabled</c>
+/// pasa a <c>false</c> en DEV desde el hito del 04/11, en QA desde el 10/11 y en la fixture de las e2e antes de la puerta (T0300a); la fase 19 borra los dobles,
+/// esta clase y la bandera (T0307).
+/// </para>
 /// </summary>
 public static class DoblesDePruebaDeCarteraEnDi
 {

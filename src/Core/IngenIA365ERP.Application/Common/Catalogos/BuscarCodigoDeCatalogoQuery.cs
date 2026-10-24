@@ -105,6 +105,8 @@ public sealed class BuscarCodigoDeCatalogoQueryHandler(IApplicationDbContext db)
         "cajas-de-recaudo" => db.CashBoxes.AsNoTracking().Where(e => !e.IsDeleted && e.Code == codigo).Select(e => new Hallazgo(e.PublicId, e.Name)),
         "conceptos-varios" => db.MiscConcepts.AsNoTracking().Where(e => !e.IsDeleted && e.Code == codigo).Select(e => new Hallazgo(e.PublicId, e.Name)),
         "tipos-de-recibo" => db.ReceiptDocumentTypes.AsNoTracking().Where(e => !e.IsDeleted && e.Code == codigo).Select(e => new Hallazgo(e.PublicId, e.Name)),
+        // Feature 015, US10 (T0138): el código de la cuenta bancaria propia es la dimensión OwnBankAccountCode de los hechos.
+        "cuentas-bancarias-propias" => db.OwnBankAccounts.AsNoTracking().Where(e => !e.IsDeleted && e.Code == codigo).Select(e => new Hallazgo(e.PublicId, e.Name)),
         _ => null,
     };
 }

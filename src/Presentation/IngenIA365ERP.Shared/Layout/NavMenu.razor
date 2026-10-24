@@ -575,6 +575,27 @@
             </PermissionGate>
         </NavMenuGroup>
 
+        @* Feature 015, US10 (T0147; FR-162): el grupo «Tesorería» nace con las cuentas bancarias propias y la ejecución de órdenes de giro. *@
+        <NavMenuGroup Icon="e-bank" Title="Tesorería" Expanded="SidebarOpen">
+            <span class="nav-subgroup-title">Giros</span>
+            <PermissionGate Required="Treasury.Orders.View">
+                <NavLink href="/tesoreria/ordenes" class="nav-subitem">Órdenes de pago</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Treasury.Batches.Prepare">
+                <NavLink href="/tesoreria/lotes" class="nav-subitem">Lotes de pago</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Treasury.PaymentFiles.Download">
+                <NavLink href="/tesoreria/archivos-de-pago" class="nav-subitem">Archivos de pago</NavLink>
+            </PermissionGate>
+            <span class="nav-subgroup-title">Cuentas</span>
+            <PermissionGate Required="Treasury.BankAccounts.View">
+                <NavLink href="/tesoreria/cuentas-bancarias" class="nav-subitem">Cuentas bancarias propias</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Treasury.LiquidityFund.Request">
+                <NavLink href="/tesoreria/fondo-de-liquidez" class="nav-subitem">Fondo de liquidez</NavLink>
+            </PermissionGate>
+        </NavMenuGroup>
+
         @* Feature 015 (T0047; R-04; FR-162): lo heredado de Tesorería convive hasta T2 bajo su propio grupo. Los grupos «Recaudo» y
            «Tesorería» nacen con su primera página (TodoEnlaceDelMenuTieneSuPagina): ninguno enlaza todavía a una ruta sin @page. *@
         <NavMenuGroup Icon="e-cheque" Title="Tesorería · heredada" Expanded="SidebarOpen">

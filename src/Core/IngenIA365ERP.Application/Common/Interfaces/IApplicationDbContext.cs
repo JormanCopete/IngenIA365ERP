@@ -646,6 +646,15 @@ public interface IApplicationDbContext
     DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceiptApplication> ReceiptApplications { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceiptApplicationPortion> ReceiptApplicationPortions { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.SourceOfFundsDeclaration> SourceOfFundsDeclarations { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Treasury.BankAccounts.OwnBankAccount> OwnBankAccounts { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Treasury.BankAccounts.LiquidityFundUse> LiquidityFundUses { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Treasury.Payments.TreasuryInboundMessage> TreasuryInboundMessages { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Treasury.Payments.PaymentOrder> PaymentOrders { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Treasury.Payments.PaymentBatch> PaymentBatches { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Treasury.Payments.PaymentBatchItem> PaymentBatchItems { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Treasury.Payments.PaymentFile> PaymentFiles { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Treasury.Payments.PaymentFileLine> PaymentFileLines { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Accounting.Integration.OwnBankAccountLink> OwnBankAccountLinks { get; }
 
     /// <summary>
     /// Descarta todo lo que el contexto tenga sin guardar (feature 009, R3): lo usa el reintento

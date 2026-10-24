@@ -1,0 +1,126 @@
+@page "/tesoreria/fondo-de-liquidez"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Tesoreria
+@inject CuentasBancariasClient Cuentas
+@inject INotificationService Notification
+
+<PageTitle>Fondo de liquidez - IngenIA365ERP</PageTitle>
+
+@* Feature 015, US10 (T0147; FR-207; SC-028): el fondo de liquidez restringido. Ningún lote, remesa ni traslado sale de una cuenta del fondo sin un uso aprobado por
+   el monto, con causal de la norma, soporte y aprobación de otra persona; pedirlo alerta el aviso previo a la Supersolidaria. Los abonos no se restringen. *@
+<PermissionGate Required="Treasury.LiquidityFund.Request" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Fondo de liquidez</h3>
+        <div class="toolbar">
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+            <SfButton CssClass="e-primary" Disabled="@(_cuentasDelFondo.Count == 0)" OnClick="@(() => { _clave = new(); _visible = true; })">Pedir un uso</SfButton>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Cargando usos del fondo…">
+        @if (_cuentasDelFondo.Count == 0) { <p>No hay cuentas con el propósito «fondo de liquidez».</p> }
+        <table class="data-grid">
+            <thead><tr><th>Número</th><th>Cuenta</th><th>Causal</th><th>Monto</th><th>Motivo</th><th>Estado</th><th>Pedido</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var u in _usos)
+                {
+                    <tr>
+                        <td>@u.Number</td><td>@u.BankAccountCode</td><td>@(u.Cause == 1 ? "Atender a depositantes" : "Reducción de depósitos")</td>
+                        <td>@u.Amount.ToString("N2")</td><td>@u.Reason</td><td>@Estado(u.Status)</td><td>@u.RequestedAt.ToLocalTime().ToString("g")</td>
+                        <td>
+                            @if (u.Status == 1)
+                            {
+                                <PermissionGate Required="Treasury.LiquidityFund.Approve">
+                                    <SfButton CssClass="e-flat" OnClick="@(() => DecidirAsync(u, true))">Aprobar</SfButton>
+                                    <SfButton CssClass="e-flat" OnClick="@(() => DecidirAsync(u, false))">Rechazar</SfButton>
+                                </PermissionGate>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </IndicadorDeCarga>
+</div>
+
+<SfDialog @bind-Visible="_visible" Header="Uso del fondo de liquidez" Width="560px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <div class="form-grid">
+                    <label class="campo">Cuenta del fondo *
+                        <select class="e-input" @bind="_cuenta">
+                            <option value="">Elija la cuenta…</option>
+                            @foreach (var c in _cuentasDelFondo) { <option value="@c.PublicId">@c.Code · @c.Name</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Causal *
+                        <select class="e-input" @bind="_causal"><option value="1">Atender a depositantes</option><option value="2">Reducción de depósitos</option></select>
+                    </label>
+                    <label class="campo">Monto * <input class="e-input" type="number" step="0.01" @bind="_monto" /></label>
+                    <label class="campo">Soporte (adjunto) * <input class="e-input" @bind="_soporte" /></label>
+                    <label class="campo">Aviso a la Supersolidaria (adjunto) <input class="e-input" @bind="_aviso" /></label>
+                    <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" maxlength="500" /></label>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _visible = false)" />
+        <DialogButton Content="Pedir" IsPrimary="true" OnClick="@PedirAsync" Disabled="@_guardado.Activa" />
+    </DialogButtons>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+    private ClaveDeOperacion _clave = new();
+    private IReadOnlyList<UsoDelFondoDto> _usos = [];
+    private IReadOnlyList<CuentaBancariaPropiaDto> _cuentasDelFondo = [];
+    private string _cuenta = "", _soporte = "", _aviso = "";
+    private string? _motivo;
+    private int _causal = 1;
+    private decimal _monto;
+    private bool _visible;
+
+    protected override async Task OnInitializedAsync() => await CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var c = await Cuentas.CuentasAsync();
+        if (c.IsSuccess && c.Value is not null) _cuentasDelFondo = c.Value.Where(x => (x.Purposes & 16) != 0).ToList();
+        var r = await Cuentas.UsosDelFondoAsync();
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los usos del fondo."); return; }
+        _usos = r.Value ?? [];
+    }
+
+    private static string Estado(int e) => e switch { 1 => "Por aprobar", 2 => "Aprobado", 3 => "Usado", 4 => "Rechazado", 5 => "Vencido", _ => "—" };
+
+    private async Task PedirAsync()
+    {
+        if (!Guid.TryParse(_cuenta, out var cuenta) || !Guid.TryParse(_soporte, out var soporte) || _monto <= 0 || string.IsNullOrWhiteSpace(_motivo))
+        {
+            await Notification.WarningAsync("Elija la cuenta, escriba el monto y el motivo, y adjunte el soporte.");
+            return;
+        }
+        using var g = _guardado.Iniciar();
+        var r = await Cuentas.PedirUsoAsync(new PedirUsoDelFondoRequest(cuenta, _causal, _monto, _motivo.Trim(), soporte, Guid.TryParse(_aviso, out var a) ? a : null), _clave);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo pedir el uso del fondo."); return; }
+        _visible = false;
+        await Notification.SuccessAsync($"Uso {r.Value!.Number} pedido: espera la aprobación de otra persona. Dé el aviso previo a la Supersolidaria.");
+        await CargarAsync();
+    }
+
+    private async Task DecidirAsync(UsoDelFondoDto u, bool aprobar)
+    {
+        using var g = _carga.Iniciar();
+        var r = aprobar
+            ? await Cuentas.AprobarUsoAsync(u.PublicId, null, new ClaveDeOperacion())
+            : await Cuentas.RechazarUsoAsync(u.PublicId, "Rechazado desde la pantalla del fondo", new ClaveDeOperacion());
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo decidir el uso del fondo."); return; }
+        await CargarAsync();
+    }
+}

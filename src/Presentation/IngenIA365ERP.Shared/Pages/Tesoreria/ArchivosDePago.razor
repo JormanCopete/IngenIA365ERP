@@ -1,0 +1,125 @@
+@page "/tesoreria/archivos-de-pago"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Tesoreria
+@inject LotesClient LotesApi
+@inject NavigationManager Navegacion
+@inject INotificationService Notification
+
+<PageTitle>Archivos de pago - IngenIA365ERP</PageTitle>
+
+@* Feature 015, US10 (T0147; FR-112): los archivos de pago generados, inmutables y con su huella. Los descarga una persona distinta de quien preparó o aprobó el lote
+   (cada descarga queda en la auditoría); se marcan enviados con quién los cargó y quién los autorizó en el banco, o se anulan si no se enviaron y sus órdenes vuelven
+   a la bandeja. Marcar enviado no deja nada «girado»: eso lo dice la respuesta del banco. *@
+<PermissionGate Required="Treasury.PaymentFiles.Download" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Archivos de pago</h3>
+        <div class="toolbar">
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Cargando archivos…">
+        <table class="data-grid">
+            <thead><tr><th>Lote</th><th>Versión</th><th>Archivo</th><th>Formato</th><th>Líneas</th><th>Total</th><th>Huella</th><th>Estado</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var a in _archivos)
+                {
+                    <tr>
+                        <td>@a.BatchNumber</td><td>@a.Version</td><td>@a.FileName</td><td>@a.FormatCode</td><td>@a.LineCount</td><td>@a.Total.ToString("N2")</td>
+                        <td><small>@a.Sha256[..12]…</small></td><td>@Estado(a)</td>
+                        <td>
+                            @if (a.VoidedAt is null && a.RejectedByBankAt is null)
+                            {
+                                <SfButton CssClass="e-flat" OnClick="@(() => DescargarAsync(a))">Descargar</SfButton>
+                                @if (a.SentAt is null)
+                                {
+                                    <PermissionGate Required="Treasury.PaymentFiles.MarkSent">
+                                        <SfButton CssClass="e-flat" OnClick="@(() => { _archivo = a; _clave = new(); _visible = true; })">Marcar enviado</SfButton>
+                                    </PermissionGate>
+                                    <PermissionGate Required="Treasury.PaymentFiles.Void">
+                                        <SfButton CssClass="e-flat" OnClick="@(() => AnularAsync(a))">Anular</SfButton>
+                                    </PermissionGate>
+                                }
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </IndicadorDeCarga>
+</div>
+
+<SfDialog @bind-Visible="_visible" Header="Marcar enviado al banco" Width="520px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <div class="form-grid">
+                    <label class="campo">Quién lo cargó en el banco * <input class="e-input" @bind="_cargo" maxlength="150" /></label>
+                    <label class="campo">Quién lo autorizó en el banco * <input class="e-input" @bind="_autorizo" maxlength="150" /></label>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _visible = false)" />
+        <DialogButton Content="Marcar enviado" IsPrimary="true" OnClick="@MarcarAsync" Disabled="@_guardado.Activa" />
+    </DialogButtons>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+    private ClaveDeOperacion _clave = new();
+    private IReadOnlyList<ArchivoDePagoDto> _archivos = [];
+    private ArchivoDePagoDto? _archivo;
+    private string? _cargo, _autorizo;
+    private bool _visible;
+
+    protected override async Task OnInitializedAsync() => await CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await LotesApi.ArchivosAsync();
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los archivos."); return; }
+        _archivos = r.Value ?? [];
+    }
+
+    private static string Estado(ArchivoDePagoDto a) =>
+        a.RejectedByBankAt is not null ? "Rechazado por el banco" : a.VoidedAt is not null ? "Anulado" : a.SentAt is not null ? "Enviado" : a.DownloadedAt is not null ? "Descargado" : "Generado";
+
+    private async Task DescargarAsync(ArchivoDePagoDto a)
+    {
+        using var g = _carga.Iniciar();
+        var r = await LotesApi.DescargarAsync(a.PublicId);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo descargar el archivo."); return; }
+        if (r.Value is { Direct: true, Url: { } url }) Navegacion.NavigateTo(url, forceLoad: true);
+        else await Notification.WarningAsync("Este archivo se guardó con el formato anterior: pídalo a soporte.");
+    }
+
+    private async Task MarcarAsync()
+    {
+        if (_archivo is null || string.IsNullOrWhiteSpace(_cargo) || string.IsNullOrWhiteSpace(_autorizo))
+        {
+            await Notification.WarningAsync("Indique quién lo cargó y quién lo autorizó en el banco.");
+            return;
+        }
+        using var g = _guardado.Iniciar();
+        var r = await LotesApi.MarcarEnviadoAsync(_archivo.PublicId, new EnvioAlBancoRequest(_cargo.Trim(), _autorizo.Trim()), _clave);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo marcar enviado."); return; }
+        _visible = false;
+        await Notification.SuccessAsync("Archivo marcado enviado: el resultado se registra con la respuesta del banco.");
+        await CargarAsync();
+    }
+
+    private async Task AnularAsync(ArchivoDePagoDto a)
+    {
+        using var g = _carga.Iniciar();
+        var r = await LotesApi.AnularArchivoAsync(a.PublicId, "Anulado antes de enviarlo", new ClaveDeOperacion());
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo anular el archivo."); return; }
+        await Notification.SuccessAsync("Archivo anulado: sus órdenes volvieron a la bandeja.");
+        await CargarAsync();
+    }
+}

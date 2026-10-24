@@ -38,7 +38,7 @@ public sealed class FuenteDeAprobacionDeTesoreria(IApplicationDbContext db, Pers
     public async Task<Result> AlAprobarElNivelAsync(ApprovalRequest solicitud, int aprobadorUserId, ApprovalMethod metodo, bool esElUltimo, CancellationToken ct)
     {
         if (await personas.AlgunaEsLaMismaAsync(aprobadorUserId, [solicitud.RequestedByUserId, solicitud.CreatedByUserId, .. solicitud.Excluidos()], ct))
-            return Result.Failure(ErroresDeTesoreria.LoteAutoaprobado());
+            return Result.Failure(solicitud.Subject == ApprovalSubjects.LiquidityFundUse ? ErroresDeTesoreria.UsoDelFondoAutoaprobado() : ErroresDeTesoreria.LoteAutoaprobado());
         if (solicitud.PolicyId is not null || EvaluadorDePolitica.ReglaFija(solicitud.Subject) is not { } fija) return Result.Success();
         if (await LimitesDePermisoPorUsuario.DeAsync(db, aprobadorUserId, fija.PermissionCode, solicitud.OperationDate, ct) is { } maximo && maximo < solicitud.Amount)
             return Result.Failure(new ErrorConDatos(CodigoAtribucionInsuficiente,

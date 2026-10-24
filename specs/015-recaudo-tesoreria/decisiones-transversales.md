@@ -249,6 +249,28 @@ Lo que tasks.md marcaba **(nuevo)** y lo que trajeron el `/speckit-analyze` y la
 | `ReceiptMeansState` · `PortionState` · `SourceOfFundsRequiredBy` | enumeraciones que data-model §20 no numeraba | `Domain/Enums/Receipts` |
 | **pendiente del dueño**: buscar por número de obligación · cuándo es obligatorio «quien efectúa» | la búsqueda por número necesita un puerto de Cartera (hoy sólo por persona); la regla de `DeliveredByRequired` no está escrita | T0113, T0115 |
 
+**Fijados en la construcción de la fase 7 (2026-10-24)**:
+
+| Nombre | Qué | Dónde |
+|---|---|---|
+| `OwnBankAccount.Code` · `.Name` · catálogo `cuentas-bancarias-propias` | la nomenclatura de la cuenta propia (`CodigoDeCatalogo`, dimensión `OwnBankAccountCode`) y su nombre | `TES_BankAccounts` |
+| `OwnBankAccountType` · `TreasuryCatalogStatus` · `LiquidityFundCause` · `LiquidityFundUseState` · `PaymentBatchItemFlags` · `PaymentBatchItemState` · `PaymentResponseSource` · `PaymentResponseOutcome` | enumeraciones que data-model §20 no numeraba | `Domain/Enums/Treasury/TreasuryPaymentEnums.cs` |
+| `InboundMessageOutcome` | `Processed = 1`, `Rejected = 2`: el resultado del recibo de `TES_InboundMessages` y `RCD_InboundMessages` | `Domain/Enums/Integration` |
+| `PaymentOrder.{BeneficiaryName, BeneficiaryTaxIdType, BeneficiaryTaxId, DestinationBankCode, BranchPublicId, BeneficiaryIsDebtor, VoidReason, VoidedByCentralUserId, VoidedByName, ReceivedAt, ValidatedAt, Flags}` | lo que la orden sella del mensaje (con ello se escribe el archivo, se coteja la respuesta, se exime el GMF y se nombra a quien anuló) | `TES_PaymentOrders` |
+| `PaymentBatchItem.IsLive` · `UK_TES_PaymentBatchItems_PaymentOrderId_Live` | «una orden en a lo sumo un lote vigente» (FR-116) como índice único filtrado `[IsLive] = 1` | `TES_PaymentBatchItems` |
+| `PaymentBatch.{PayDate, LiquidityFundUseId, SubmittedAt, ApprovedAt, SentAt, SentByUserId, UploadedAtBankBy, AuthorizedAtBankBy, Note}` · `PaymentFile.{FileName, SentByUserId, RejectedByBankReason}` · `PaymentFileLine.RecordText` | columnas que data-model §10 no listaba | `TES_PaymentBatches`, `TES_PaymentFiles` |
+| clases de numeración `OP` (orden), `LP` (lote), `UF` (uso del fondo) | `TES:{código}` en `COR_Sequences` | `NumeradorDeTesoreria` |
+| `IContabilidadParaTesoreria.EstadoDelPeriodoAsync` · `VincularCuentaBancariaAsync → Task<Result>` | la fecha contable de los hechos de Tesorería y el vínculo que rechaza sin excepción | `Common/Integration/Accounting`, `Accounting/Treasury/ContabilidadParaTesoreria` |
+| `Accounting.OwnBankAccount.NotBankAccount` | la cuenta contable elegida no es bancaria de movimiento activa | `ContabilidadParaTesoreria` |
+| `GET /api/treasury/bank-accounts/{id}` · `/bank-accounts/chart-accounts?bank=` · `GET /payment-batches` · `GET /payment-batches/{id}` · `POST /payment-batches/{id}/sent` · `GET /payment-files` | rutas que api.md §9 y §10 no listaban | `BankAccountsEndpoints.cs`, `PaymentsEndpoints.cs` |
+| `MarkPaymentBatchSentByPortalCommand` · `DownloadPaymentFileCommand` · `ListChartBankAccountsQuery` | comandos y consultas nuevos de US10 | `Application/Treasury` |
+| `Treasury.BankAccount.{Duplicate, Inactive, PurposeRequired}` · `Treasury.LiquidityFund.{NotLiquidityFundAccount, NotPending, SelfApproval}` · `Treasury.Order.{InvalidForm, BeneficiaryNotFound, DestinationMissing, NotReady, InvalidState, UnknownOrder}` · `Treasury.Batch.{NotDraft, NotPendingApproval, Empty, FormatNotFound, NoFileForm, SourceNotPayments, SelfReview}` · `Treasury.File.{Voided, Tampered, Missing, LineTooLong, BankActorsRequired}` | errores de US10 (y la revisión de US26) | `ErroresDeTesoreria.Pagos.cs` |
+| `IListasDeTesoreria` · `ListasDeTesoreria` | la consulta a listas (contexto `Disbursement`) que sólo lee; `Match` = vinculante, `PossibleMatch` = no vinculante (pendiente del dueño con el oficial) | `Application/Treasury/Orders` |
+| `GuardaDelFondoDeLiquidez` · `AprobableUsoDelFondo` · `AprobableLoteDePago` · `GuardasDeAprobacionDelLote` · `LotesDePago` · `LineasDelArchivo` · `RegistroDeResultadosDelGiro` | las piezas de US10 con nombre propio | `Application/Treasury` |
+| `ConsumidoresDeRecaudoYTesoreria` | la bandera transitoria (T0141): registra `DestinoTesoreria` (y `DestinoRecaudo`) sólo si los dobles no se registran | `API/Integration/DoblesDePruebaDeCartera.cs` |
+| `CatalogoDeMensajesDeTesoreriaV1` · `GMP` (`GmfDePagoCausado`) · `POG` (`PagoDeOrdenGirado`) · `TreasuryFactDimensionsV1` · `TreasuryFactLineV1` · `RolesDeTesoreria` | el catálogo de hechos `TES → Accounting` y su forma | `Contracts/Treasury`, `Treasury/Accounting/EmisionDeTesoreria.cs` |
+| `RecaudoNoConoceContabilidad` · `TesoreriaNoConoceContabilidad` | dejan fuera `Application.{Receipts,Treasury}.Accounting` (el emisor de hechos del propio módulo) | `tests/IngenIA365ERP.Architecture.Tests/Principles` |
+
 ## 3. Decisiones transversales
 
 ### Módulos y frontera

@@ -94,6 +94,9 @@ namespace IngenIA365ERP.App
             builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Recaudo.AlcanceDeRecaudoClient>();
             builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Recaudo.ConfiguracionDeRecaudoClient>();
             builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Recaudo.SesionesClient>();
+            builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Tesoreria.CuentasBancariasClient>();
+            builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Tesoreria.OrdenesClient>();
+            builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Tesoreria.LotesClient>();
             builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Recaudo.CajaClient>();
             builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Compliance.ListasRestrictivasClient>();
             builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Compliance.SolicitudesDelTitularClient>();

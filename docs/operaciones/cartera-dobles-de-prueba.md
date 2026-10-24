@@ -39,6 +39,20 @@ Hacen falta **las dos cosas**:
 Quien opera la pantalla necesita además `Lending.TestDoubles.Operate`, y Cartera tiene que estar **activada** en la
 cooperativa (antes, el contrato responde `Lending.NotActivated`; ver §11 del manual de pagos).
 
+### 1.1 Bandera transitoria de Recaudo y Tesorería reales (feature 015, T0141)
+
+Desde la feature 015 existen los consumidores **reales** de los destinos `Treasury` (`DestinoTesoreria`) y `Receipts`
+(`DestinoRecaudo`). Mientras los dobles sigan en el código, la misma clave decide cuál consume:
+
+| `Lending:TestDoubles:Enabled` | Consumidor de `Treasury` | Consumidor de `Receipts` |
+|---|---|---|
+| `true` (fuera de producción) | `TesoreriaDePrueba` | `RecaudadorDePrueba` |
+| `false` o ausente | `DestinoTesoreria` (real) | `DestinoRecaudo` (real) |
+
+Nunca hay dos consumidores del mismo destino: si los hubiera, el arranque falla con `Integration.Destination.DuplicateConsumer`.
+La bandera pasa a `false` en DEV desde el hito del 04/11 (T0184), en QA desde el 10/11 (T0271) y en la fixture de las e2e antes
+de la puerta de FR-224 (T0300a). La fase 19 borra los dobles, sus rutas y esta bandera (T0307).
+
 ## 2. Qué no existe en producción, y por qué el arranque falla si se piden
 
 En producción los dobles **no existen**:

@@ -301,6 +301,18 @@ public static class DependencyInjection
         // US3 (T0115): la confirmación única del recibo y el gancho de listas (lo completa la fase 15).
         services.AddScoped<Receipts.CashDesk.ConfirmacionDeRecibo>();
         services.TryAddScoped<Receipts.Common.IListasDeRecaudo, Receipts.Common.ListasDeRecaudoSinConsulta>();
+        // US10 (fase 7): las cuentas propias y su puerto para Recaudo, el vínculo contable, el fondo de liquidez, la bandeja de órdenes, los lotes y los archivos.
+        services.AddScoped<Common.Integration.Accounting.IContabilidadParaTesoreria, Accounting.Treasury.ContabilidadParaTesoreria>();
+        services.AddScoped<Common.Integration.Treasury.ICuentasBancariasPropias, Treasury.BankAccounts.CuentasBancariasPropias>();
+        services.AddScoped<Treasury.Common.ParametrosDeTesoreria>();
+        services.AddScoped<Treasury.LiquidityFund.GuardaDelFondoDeLiquidez>();
+        services.AddScoped<Treasury.Common.IAprobableDeTesoreria, Treasury.LiquidityFund.AprobableUsoDelFondo>();
+        services.AddScoped<Treasury.Common.IAprobableDeTesoreria, Treasury.Batches.AprobableLoteDePago>();
+        services.TryAddScoped<Treasury.Orders.IListasDeTesoreria, Treasury.Orders.ListasDeTesoreria>();
+        services.AddScoped<Treasury.Orders.ValidadorDeOrdenes>();
+        services.AddScoped<Treasury.Batches.GuardasDeAprobacionDelLote>();
+        services.AddScoped<Treasury.Results.RegistroDeResultadosDelGiro>();
+        services.AddScoped<Treasury.Accounting.EmisionDeTesoreria>();
         services.AddScoped<Lending.Segregation.RegistroDeIntervenciones>();
         services.AddScoped<Lending.Common.LendingAuditEmitter>();
         services.AddScoped<Common.Audit.RechazosDeFormaDeLaPeticion>();

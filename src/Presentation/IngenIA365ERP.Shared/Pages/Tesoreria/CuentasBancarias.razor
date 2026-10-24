@@ -1,0 +1,284 @@
+@page "/tesoreria/cuentas-bancarias"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Inventario
+@using IngenIA365ERP.Shared.Services.Recaudo
+@using IngenIA365ERP.Shared.Services.Tesoreria
+@inject CuentasBancariasClient Cuentas
+@inject ConfiguracionDeRecaudoClient Configuracion
+@inject HttpClient Http
+@inject INotificationService Notification
+
+<PageTitle>Cuentas bancarias propias - IngenIA365ERP</PageTitle>
+
+@* Feature 015, US10 (T0147; FR-102, FR-103, FR-106, FR-207): las cuentas bancarias propias de la cooperativa con su vínculo único a la cuenta contable bancaria
+   (lo guarda Contabilidad), sus propósitos (el fondo de liquidez es exclusivo), sus saldos (lectura auditada) y el alcance por cuenta de cada usuario. *@
+<PermissionGate Required="Treasury.BankAccounts.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Cuentas bancarias propias</h3>
+        <div class="toolbar">
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+            <PermissionGate Required="Treasury.BankAccounts.Manage">
+                <SfButton CssClass="e-primary" OnClick="@Nueva">Nueva cuenta</SfButton>
+            </PermissionGate>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Cargando cuentas…">
+        <table class="data-grid">
+            <thead><tr><th>Código</th><th>Nombre</th><th>Banco</th><th>Cuenta</th><th>Oficina</th><th>Propósitos</th><th>Cuenta contable</th><th>Estado</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var c in _cuentas)
+                {
+                    <tr>
+                        <td>@c.Code</td><td>@c.Name</td><td>@c.BankName</td><td>@c.AccountNumber</td><td>@c.BranchName</td><td>@Propositos(c.Purposes)</td>
+                        <td>@(c.LinkedChartAccountCode ?? "Sin vínculo")</td><td>@(c.Status == 1 ? "Activa" : "Inactiva")</td>
+                        <td>
+                            <PermissionGate Required="Treasury.BankBalances.View">
+                                <SfButton CssClass="e-flat" OnClick="@(() => SaldosAsync(c))">Saldos</SfButton>
+                            </PermissionGate>
+                            <PermissionGate Required="Treasury.BankAccounts.Manage">
+                                <SfButton CssClass="e-flat" OnClick="@(() => Editar(c))">Editar</SfButton>
+                                @if (c.Status == 1) { <SfButton CssClass="e-flat" OnClick="@(() => InactivarAsync(c))">Inactivar</SfButton> }
+                            </PermissionGate>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </IndicadorDeCarga>
+
+    <IndicadorDeCarga Cargando="@_saldosCarga.Activa" Texto="Consultando saldos…">
+        @if (_saldos is not null)
+        {
+            <div class="info-card">
+                <h4>Saldos de @_saldos.Code al @_saldos.Date.ToString("dd/MM/yyyy")</h4>
+                <div class="kpi-card"><span>En libros</span><strong>@_saldos.BookBalance.ToString("N2")</strong></div>
+                <div class="kpi-card"><span>Último extracto</span><strong>@(_saldos.StatementBalance?.ToString("N2") ?? "Sin extracto")</strong></div>
+                <div class="kpi-card"><span>Lotes aprobados sin enviar</span><strong>@_saldos.ApprovedNotSent.ToString("N2")</strong></div>
+                <div class="kpi-card"><span>Disponible proyectado</span><strong>@_saldos.ProjectedAvailable.ToString("N2")</strong></div>
+            </div>
+        }
+    </IndicadorDeCarga>
+
+    <PermissionGate Required="Treasury.Scope.Manage">
+        <h4>Alcance de un usuario</h4>
+        <IndicadorDeCarga Cargando="@_alcanceCarga.Activa" Texto="Cargando alcance…">
+            <label class="campo">Usuario
+                <select class="e-input" @bind="_usuario" @bind:after="AlcanceAsync">
+                    <option value="">Elija el usuario…</option>
+                    @foreach (var u in _usuarios) { <option value="@u.PublicId">@u.Username</option> }
+                </select>
+            </label>
+            @if (_alcance is not null)
+            {
+                @if (_alcance.HasAll) { <p>Este usuario tiene el alcance total de Tesorería.</p> }
+                @foreach (var c in _cuentas)
+                {
+                    <label class="campo-check"><input type="checkbox" checked="@_marcadas.Contains(c.PublicId)" @onchange="@(e => Marcar(c.PublicId, (bool)e.Value!))" /> @c.Code · @c.Name</label>
+                }
+                <SfButton CssClass="e-primary" Disabled="@_alcanceCarga.Activa" OnClick="@FijarAlcanceAsync">Guardar alcance</SfButton>
+            }
+        </IndicadorDeCarga>
+    </PermissionGate>
+</div>
+
+<SfDialog @bind-Visible="_visible" Header="@(_editando is null ? "Nueva cuenta bancaria propia" : "Editar cuenta bancaria propia")" Width="640px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <div class="form-grid">
+                    @if (_editando is null)
+                    {
+                        <CampoCodigo Catalogo="cuentas-bancarias-propias" @bind-Value="_codigo" Obligatorio="true" DuplicadoChanged="@(d => _duplicado = d)" />
+                        <label class="campo">Banco *
+                            <select class="e-input" @bind="_banco" @bind:after="CuentasDelPlanAsync">
+                                <option value="">Elija el banco…</option>
+                                @foreach (var b in _bancos) { <option value="@b.PublicId">@b.Name</option> }
+                            </select>
+                        </label>
+                        <label class="campo">Número de la cuenta * <input class="e-input" @bind="_numero" maxlength="30" /></label>
+                        <label class="campo">Tipo
+                            <select class="e-input" @bind="_tipo"><option value="1">Ahorros</option><option value="2">Corriente</option></select>
+                        </label>
+                    }
+                    <label class="campo">Nombre * <input class="e-input" @bind="_nombre" maxlength="120" /></label>
+                    <label class="campo">Oficina *
+                        <select class="e-input" @bind="_oficina">
+                            <option value="">Elija la oficina…</option>
+                            @foreach (var o in _oficinas) { <option value="@o.PublicId">@o.Name</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Cuenta contable bancaria
+                        <select class="e-input" @bind="_contable">
+                            <option value="">Sin vínculo por ahora</option>
+                            @foreach (var c in _delPlan) { <option value="@c.ChartAccountPublicId">@c.Code · @c.Name</option> }
+                        </select>
+                    </label>
+                    <label class="campo-check"><input type="checkbox" @bind="_exenta" /> Exenta de GMF</label>
+                </div>
+                <h5>Propósitos</h5>
+                @foreach (var (valor, texto) in PropositosPosibles)
+                {
+                    <label class="campo-check"><input type="checkbox" checked="@((_propositos & valor) != 0)" @onchange="@(e => Proposito(valor, (bool)e.Value!))" /> @texto</label>
+                }
+                <p class="ayuda">El fondo de liquidez no admite otro propósito.</p>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _visible = false)" />
+        <DialogButton Content="Guardar" IsPrimary="true" OnClick="@GuardarAsync" Disabled="@(_guardado.Activa || _duplicado)" />
+    </DialogButtons>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private static readonly (int Valor, string Texto)[] PropositosPosibles = [(1, "Recaudo"), (2, "Pagos"), (4, "Nómina"), (8, "Convenio"), (16, "Fondo de liquidez")];
+    private readonly EstadoDeCarga _carga = new(), _guardado = new(), _saldosCarga = new(), _alcanceCarga = new();
+    private ClaveDeOperacion _clave = new();
+    private IReadOnlyList<CuentaBancariaPropiaDto> _cuentas = [];
+    private IReadOnlyList<CuentaContableBancariaDto> _delPlan = [];
+    private IReadOnlyList<OficinaDeRecaudoItem> _oficinas = [];
+    private IReadOnlyList<Services.Inventario.PersonaDeLaCooperativaDto> _usuarios = [];
+    private List<BancoItem> _bancos = [];
+    private SaldosDeCuentaDto? _saldos;
+    private AlcanceDeTesoreriaDto? _alcance;
+    private readonly HashSet<Guid> _marcadas = [];
+    private CuentaBancariaPropiaDto? _editando;
+    private string? _codigo, _nombre, _numero;
+    private string _banco = "", _oficina = "", _contable = "", _usuario = "";
+    private int _tipo = 1, _propositos = 2;
+    private bool _exenta, _visible, _duplicado;
+
+    protected override async Task OnInitializedAsync()
+    {
+        using (var carga = _carga.Iniciar())
+        {
+            _oficinas = await Configuracion.OficinasAsync();
+            _bancos = await Http.TryGetListAsync<BancoItem>("/api/core/banks?PageNumber=1&PageSize=500&SortBy=name");
+            var u = await Configuracion.UsuariosAsync();
+            if (u.IsSuccess && u.Value is not null) _usuarios = u.Value.Items.Where(x => x.IsActive).ToList();
+        }
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Cuentas.CuentasAsync(incluirInactivas: true);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las cuentas."); return; }
+        _cuentas = r.Value ?? [];
+    }
+
+    private static string Propositos(int p) => string.Join(", ", PropositosPosibles.Where(x => (p & x.Valor) != 0).Select(x => x.Texto));
+
+    private void Proposito(int valor, bool marcado) => _propositos = marcado ? _propositos | valor : _propositos & ~valor;
+
+    private void Nueva()
+    {
+        _editando = null;
+        _codigo = _nombre = _numero = null;
+        _banco = _oficina = _contable = "";
+        _tipo = 1;
+        _propositos = 2;
+        _exenta = false;
+        _delPlan = [];
+        _clave = new();
+        _visible = true;
+    }
+
+    private async Task Editar(CuentaBancariaPropiaDto c)
+    {
+        _editando = c;
+        _nombre = c.Name;
+        _oficina = c.BranchPublicId.ToString();
+        _contable = c.LinkedChartAccountPublicId?.ToString() ?? "";
+        _propositos = c.Purposes;
+        _exenta = c.IsGmfExempt;
+        _banco = c.BankPublicId.ToString();
+        _clave = new();
+        await CuentasDelPlanAsync();
+        _visible = true;
+    }
+
+    private async Task CuentasDelPlanAsync()
+    {
+        if (!Guid.TryParse(_banco, out var banco)) { _delPlan = []; return; }
+        using var g = _guardado.Iniciar();
+        var r = await Cuentas.CuentasDelPlanAsync(banco);
+        _delPlan = r.IsSuccess ? r.Value ?? [] : [];
+    }
+
+    private async Task GuardarAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_nombre) || !Guid.TryParse(_oficina, out var oficina)) { await Notification.WarningAsync("Escriba el nombre y elija la oficina."); return; }
+        Guid? contable = Guid.TryParse(_contable, out var c) ? c : null;
+        using var g = _guardado.Iniciar();
+        ResultadoDeInventario<CuentaBancariaPropiaDto> r;
+        if (_editando is null)
+        {
+            if (string.IsNullOrWhiteSpace(_codigo) || !Guid.TryParse(_banco, out var banco) || string.IsNullOrWhiteSpace(_numero))
+            {
+                await Notification.WarningAsync("Escriba el código, el banco y el número de la cuenta.");
+                return;
+            }
+            r = await Cuentas.CrearAsync(new CrearCuentaBancariaRequest(_codigo.Trim(), _nombre.Trim(), banco, _numero.Trim(), _tipo, oficina, _propositos, _exenta, null,
+                contable, null), _clave);
+        }
+        else
+            r = await Cuentas.ActualizarAsync(_editando.PublicId, new ActualizarCuentaBancariaRequest(_nombre.Trim(), oficina, _propositos, _exenta,
+                _editando.BankThirdPartyPersonPublicId, contable), _clave);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo guardar la cuenta."); return; }
+        _visible = false;
+        await Notification.SuccessAsync($"Cuenta {r.Value!.Code} guardada.");
+        await CargarAsync();
+    }
+
+    private async Task InactivarAsync(CuentaBancariaPropiaDto c)
+    {
+        using var g = _carga.Iniciar();
+        var r = await Cuentas.InactivarAsync(c.PublicId, new ClaveDeOperacion());
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo inactivar la cuenta."); return; }
+        await CargarAsync();
+    }
+
+    private async Task SaldosAsync(CuentaBancariaPropiaDto c)
+    {
+        using var g = _saldosCarga.Iniciar();
+        var r = await Cuentas.SaldosAsync(c.PublicId);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los saldos."); return; }
+        _saldos = r.Value;
+    }
+
+    private async Task AlcanceAsync()
+    {
+        _marcadas.Clear();
+        _alcance = null;
+        if (!Guid.TryParse(_usuario, out var usuario)) return;
+        using var g = _alcanceCarga.Iniciar();
+        var r = await Cuentas.AlcanceAsync(usuario);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo consultar el alcance."); return; }
+        _alcance = r.Value;
+        foreach (var c in _alcance!.BankAccounts) _marcadas.Add(c.PublicId);
+    }
+
+    private void Marcar(Guid cuenta, bool marcada)
+    {
+        if (marcada) _marcadas.Add(cuenta);
+        else _marcadas.Remove(cuenta);
+    }
+
+    private async Task FijarAlcanceAsync()
+    {
+        if (!Guid.TryParse(_usuario, out var usuario)) return;
+        using var g = _alcanceCarga.Iniciar();
+        var r = await Cuentas.FijarAlcanceAsync(usuario, new FijarAlcanceDeTesoreriaRequest(_marcadas.ToList()), new ClaveDeOperacion());
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo guardar el alcance."); return; }
+        _alcance = r.Value;
+        await Notification.SuccessAsync("Alcance guardado.");
+    }
+
+    private sealed class BancoItem { public Guid PublicId { get; set; } public string Name { get; set; } = ""; }
+}

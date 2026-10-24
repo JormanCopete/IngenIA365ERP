@@ -1,6 +1,7 @@
 using IngenIA365ERP.Application.Common.Integration.Contracts.Inventory;
 using IngenIA365ERP.Application.Common.Integration.Contracts.Lending;
 using IngenIA365ERP.Application.Common.Integration.Contracts.Receipts;
+using IngenIA365ERP.Application.Common.Integration.Contracts.Treasury;
 
 namespace IngenIA365ERP.Application.Common.Integration;
 
@@ -16,7 +17,7 @@ public static class CatalogoDeMensajes
 {
     public static IReadOnlyList<TipoDeMensaje> Todos { get; } =
         [.. CatalogoDeMensajesV1.Todos, .. CatalogoDeMensajesDeCarteraV1.Todos, .. CatalogoDeMensajesHaciaCarteraV1.Todos,
-         .. CatalogoDeMensajesDeRecaudoV1.Todos];
+         .. CatalogoDeMensajesDeRecaudoV1.Todos, .. CatalogoDeMensajesDeTesoreriaV1.Todos];
 
     private static readonly Dictionary<Type, TipoDeMensaje> PorRecord = Todos.ToDictionary(t => t.Record);
 

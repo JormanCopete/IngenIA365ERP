@@ -1,3 +1,5 @@
+using IngenIA365ERP.Application.Common.Models;
+
 namespace IngenIA365ERP.Application.Common.Integration.Accounting;
 
 // Feature 015, T0041 (R-22; FR-004; E-04; contracts/interfaces.md §3): lo que Recaudo y Tesorería preguntan a Contabilidad y lo que le ofrecen.
@@ -60,10 +62,16 @@ public interface IContabilidadParaTesoreria
 {
     Task<EvaluacionContableDto> EvaluarAsync(IReadOnlyList<CombinacionDeHecho> combinaciones, CancellationToken ct);
 
+    /// <summary>La fecha contable propuesta de un hecho de Tesorería (US10, T0145; nuevo, DT §2.7): el mismo estado del período que lee Recaudo.</summary>
+    Task<EstadoDelPeriodoDto> EstadoDelPeriodoAsync(DateOnly fecha, CancellationToken ct);
+
     Task<IReadOnlyList<CuentaContableBancariaDto>> CuentasBancariasDelPlanAsync(Guid? bankPublicId, CancellationToken ct);
 
-    /// <summary>Escribe <c>ACC_OwnBankAccountLinks</c>.</summary>
-    Task VincularCuentaBancariaAsync(Guid ownBankAccountPublicId, Guid chartAccountPublicId, DateOnly desde, CancellationToken ct);
+    /// <summary>
+    /// Escribe <c>ACC_OwnBankAccountLinks</c> en la unidad de trabajo de quien llama, sin guardar (US10, T0137). Responde un <see cref="Result"/> (interfaces.md §3
+    /// decía <c>Task</c>; DT §2.7): la cuenta contable que no es bancaria o ya representa a otra cuenta propia es un rechazo, no una excepción.
+    /// </summary>
+    Task<Result> VincularCuentaBancariaAsync(Guid ownBankAccountPublicId, Guid chartAccountPublicId, DateOnly desde, CancellationToken ct);
 
     Task<VinculoDto?> VinculoAsync(Guid ownBankAccountPublicId, CancellationToken ct);
 

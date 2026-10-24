@@ -1,0 +1,129 @@
+@page "/tesoreria/ordenes"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Tesoreria
+@inject OrdenesClient OrdenesApi
+@inject INotificationService Notification
+
+<PageTitle>Órdenes de pago - IngenIA365ERP</PageTitle>
+
+@* Feature 015, US10 (T0147; FR-107 a FR-109, FR-121): la bandeja única de órdenes de pago de Cartera, Captaciones y Recaudo, con sus motivos de pendiente, sus
+   marcas antifraude y la cadena de regiros. Las órdenes llegan por la bandeja de integración; aquí se consultan y se vuelven a validar tras corregir el maestro. *@
+<PermissionGate Required="Treasury.Orders.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Órdenes de pago</h3>
+        <div class="toolbar">
+            <select class="e-input" @bind="_estado" @bind:after="CargarAsync">
+                <option value="">Todos los estados</option>
+                @foreach (var (v, t) in Estados) { <option value="@v">@t</option> }
+            </select>
+            <input class="e-input" placeholder="Número, documento o nombre" @bind="_buscar" @bind:after="CargarAsync" />
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Cargando órdenes…">
+        <table class="data-grid">
+            <thead><tr><th>Número</th><th>Origen</th><th>Beneficiario</th><th>Forma</th><th>Neto</th><th>Pago</th><th>Estado</th><th>Motivos</th><th>Lote</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var o in _ordenes)
+                {
+                    <tr>
+                        <td>@o.Number<br /><small>@o.OriginOrderNumber</small></td><td>@Origen(o.Origin)</td>
+                        <td>@o.BeneficiaryName<br /><small>@o.BeneficiaryTaxId @o.DestinationAccountNumberMasked</small></td><td>@Forma(o.Form)</td>
+                        <td>@o.NetAmount.ToString("N2")</td><td>@o.PayDate.ToString("dd/MM/yyyy")</td>
+                        <td>@Estado(o.Status)@(o.VoidRequested ? " · anulación pedida" : "")@(o.PaidByLendingFile ? " · archivo de Cartera" : "")</td>
+                        <td>@string.Join(", ", o.PendingReasons.Select(Motivo))@(o.Flags != 0 ? " · " + Marcas(o.Flags) : "")</td><td>@o.BatchNumber</td>
+                        <td>
+                            <SfButton CssClass="e-flat" OnClick="@(() => CadenaAsync(o))">Cadena</SfButton>
+                            @if (o.Status is 1 or 2 or 3 && !o.PaidByLendingFile)
+                            {
+                                <PermissionGate Required="Treasury.Orders.Manage">
+                                    <SfButton CssClass="e-flat" OnClick="@(() => RevalidarAsync(o))">Volver a validar</SfButton>
+                                </PermissionGate>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </IndicadorDeCarga>
+
+    <IndicadorDeCarga Cargando="@_cadenaCarga.Activa" Texto="Cargando la cadena…">
+        @if (_cadena.Count > 0)
+        {
+            <h4>Cadena de regiros</h4>
+            <table class="data-grid">
+                <thead><tr><th>Número</th><th>Orden del origen</th><th>Neto</th><th>Estado</th><th>Recibida</th></tr></thead>
+                <tbody>
+                    @foreach (var o in _cadena) { <tr><td>@o.Number</td><td>@o.OriginOrderNumber</td><td>@o.NetAmount.ToString("N2")</td><td>@Estado(o.Status)</td><td>@o.ReceivedAt.ToLocalTime().ToString("g")</td></tr> }
+                </tbody>
+            </table>
+        }
+    </IndicadorDeCarga>
+</div>
+</PermissionGate>
+
+@code {
+    public static readonly (int Valor, string Texto)[] Estados =
+    [
+        (1, "Recibida"), (2, "Pendiente"), (3, "Lista"), (4, "En lote"), (5, "Aprobada"), (6, "Enviada"), (7, "Girada"), (8, "Rechazada"),
+        (9, "Cheque no cobrado"), (10, "Anulada"), (11, "Rechazada al llegar"),
+    ];
+
+    private readonly EstadoDeCarga _carga = new(), _cadenaCarga = new();
+    private IReadOnlyList<OrdenDePagoDto> _ordenes = [];
+    private IReadOnlyList<OrdenDePagoDto> _cadena = [];
+    private string _estado = "";
+    private string? _buscar;
+
+    protected override async Task OnInitializedAsync() => await CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await OrdenesApi.OrdenesAsync(int.TryParse(_estado, out var e) ? e : null, null, _buscar);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las órdenes."); return; }
+        _ordenes = r.Value ?? [];
+    }
+
+    public static string Estado(int e) => Estados.FirstOrDefault(x => x.Valor == e).Texto ?? "—";
+
+    public static string Origen(int o) => o switch { 1 => "Desembolso", 2 => "Captaciones", 3 => "Recaudo", 4 => "Manual", 5 => "Proveedor", 6 => "Cuenta por pagar", _ => "—" };
+
+    public static string Forma(int f) => f switch { 1 => "Transferencia", 2 => "Cheque", 3 => "Pago a tercero", _ => "—" };
+
+    public static string Marcas(int m) => string.Join(", ", new[] { (1, "cuenta cambiada"), (2, "cuenta compartida"), (4, "cuenta de un usuario interno"),
+        (8, "importada sin certificación") }.Where(x => (m & x.Item1) != 0).Select(x => x.Item2));
+
+    public static string Motivo(string codigo) => codigo switch
+    {
+        "Treasury.Order.DestinationNotRegistered" => "cuenta destino no registrada",
+        "Treasury.Order.DestinationWaiting" => "cuenta destino en espera",
+        "Treasury.Order.DestinationMissing" => "sin cuenta destino",
+        "Treasury.BankAccount.BankWithoutTransferCode" => "banco sin código",
+        "Treasury.Order.BindingListMatch" => "lista vinculante",
+        "Treasury.Order.BeneficiaryNotFound" => "beneficiario inexistente",
+        "Treasury.Order.InvalidAmount" => "valor inválido",
+        "Treasury.Order.InvalidForm" => "forma inválida",
+        _ => codigo,
+    };
+
+    private async Task CadenaAsync(OrdenDePagoDto o)
+    {
+        using var g = _cadenaCarga.Iniciar();
+        var r = await OrdenesApi.CadenaAsync(o.PublicId);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo consultar la cadena."); return; }
+        _cadena = r.Value ?? [];
+    }
+
+    private async Task RevalidarAsync(OrdenDePagoDto o)
+    {
+        using var g = _carga.Iniciar();
+        var r = await OrdenesApi.RevalidarAsync(o.PublicId, new ClaveDeOperacion());
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo validar la orden."); return; }
+        await Notification.SuccessAsync($"La orden {r.Value!.Number} quedó {Estado(r.Value.Status).ToLowerInvariant()}.");
+        await CargarAsync();
+    }
+}

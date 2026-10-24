@@ -16,6 +16,21 @@ public static class DoblesDePruebaDeCartera
         ArgumentNullException.ThrowIfNull(configuration);
         ArgumentNullException.ThrowIfNull(environment);
         var pedidos = configuration.GetValue(DoblesDePruebaDeCarteraEnDi.ClaveDeConfiguracion, false);
-        DoblesDePruebaDeCarteraEnDi.Registrar(services, pedidos, environment.IsProduction());
+        var dobles = DoblesDePruebaDeCarteraEnDi.Registrar(services, pedidos, environment.IsProduction());
+        // Feature 015, T0141 (FR-223; DT Q9, R-26): la bandera transitoria. Mientras existan los dobles, los consumidores reales de Treasury y Receipts se
+        // registran sólo si los dobles no: ConsumidoresPorDestino.Validar() nunca ve dos consumidores del mismo destino. La fase 19 borra los dobles y esto.
+        if (!dobles) ConsumidoresDeRecaudoYTesoreria.Registrar(services);
+    }
+}
+
+/// <summary>
+/// Los consumidores reales de los destinos <c>Treasury</c> y <c>Receipts</c> (feature 015, T0141, T0176): <c>DestinoTesoreria</c> desde US10 y <c>DestinoRecaudo</c>
+/// desde US5. Los registra <see cref="DoblesDePruebaDeCartera"/> sólo cuando los dobles de prueba no están registrados (la bandera transitoria). (nuevo)
+/// </summary>
+public static class ConsumidoresDeRecaudoYTesoreria
+{
+    public static void Registrar(IServiceCollection services)
+    {
+        services.AddScoped<IngenIA365ERP.Application.Common.Integration.IDestinoDeMensajes, IngenIA365ERP.Application.Treasury.Integration.DestinoTesoreria>();
     }
 }
