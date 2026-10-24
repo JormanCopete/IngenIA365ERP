@@ -187,7 +187,9 @@ public class LaCarteraSoloSeTocaPorSusInterfaces
             Assert.Equal("IngenIA365ERP.Application.Common.Integration.Lending", puerto.Namespace);
         // Feature 015 (decisión del dueño del 2026-10-24, T0113): la búsqueda de una obligación por su número, de sólo lectura.
         Assert.Equal(["PorNumeroAsync"], MetodosDe(typeof(IBusquedaDeObligaciones)));
-        Assert.Equal(9, PuertosOfrecidos.Length);
+        // Feature 015, R1 (T0400): el débito automático del día, de sólo lectura.
+        Assert.Equal(["PorDiaAsync"], MetodosDe(typeof(IDebitoAutomaticoParaConsolidado)));
+        Assert.Equal(10, PuertosOfrecidos.Length);
     }
 
     [Fact]
@@ -338,6 +340,8 @@ public class LaCarteraSoloSeTocaPorSusInterfaces
         typeof(IBusquedaDeObligaciones),
         // Feature 015, R1 (E-01 b, T0350): la consulta de la carga aplicada sin activar, para el recaudo pendiente de aplicar.
         typeof(IConsultaDeCargaSinActivar),
+        // Feature 015, R1 (T0400; D26): la lectura del débito automático para el consolidado de Recaudo.
+        typeof(IDebitoAutomaticoParaConsolidado),
     ];
 
     /// <summary>
