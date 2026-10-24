@@ -47,7 +47,7 @@ public sealed class CajaAbrirArquearYCerrarTests(CentralIdentityApiFixture fx)
             new { branchPublicId = coop.SucursalPrincipal, mode = "Vault" }));
         var bovedaId = boveda.GetProperty("publicId").GetGuid();
 
-        await RecaudoYTesoreriaE2E.RegistrarYActivarAsync(coop);
+        await RecaudoYTesoreriaE2E.RegistrarYActivarAsync(http, coop);
 
         // 1. Abrir con 500.000 contados por denominaciones.
         var sesion = await RecaudoYTesoreriaE2E.LeerAsync(await InventarioE2E.MandarAsync(http, t, HttpMethod.Post, "/api/receipts/sessions",

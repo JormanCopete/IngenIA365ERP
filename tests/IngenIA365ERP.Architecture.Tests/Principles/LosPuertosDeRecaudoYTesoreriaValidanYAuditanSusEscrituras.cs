@@ -22,6 +22,9 @@ public class LosPuertosDeRecaudoYTesoreriaValidanYAuditanSusEscrituras
     /// <summary>Implementaciones de puertos de escritura (relativas a <c>src/</c>).</summary>
     private static readonly string[] Archivos =
     [
+        // Fase 10 (T0177): la orden de pago que pide Recaudo y lo que Recaudo hace con su resultado.
+        "Core/IngenIA365ERP.Application/Treasury/Orders/OrdenesDePagoDeTesoreria.cs",
+        "Core/IngenIA365ERP.Application/Receipts/CreditBalances/CreditBalanceCommands.cs",
     ];
 
     private static readonly Regex Valida = new(@"\bValidateAsync\(|\bValidar\w*\(", RegexOptions.Compiled);

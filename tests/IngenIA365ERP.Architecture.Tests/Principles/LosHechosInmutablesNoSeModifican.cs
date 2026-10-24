@@ -309,6 +309,11 @@ public class LosHechosInmutablesNoSeModifican
         ["PaymentFileLine"] = [],
         // Fase 8, US11 (T0157; data-model §10.7): el resultado del giro se inserta una vez y no cambia (UK (PaymentOrderId, Outcome)).
         ["DisbursementResult"] = [],
+        // Fase 10, US5 (T0174; data-model §4.1 a §4.3): la anulación (lo que decide su aprobación se escribe una vez), el reverso del módulo (la confirmación de
+        // la causa, una vez) y los movimientos del saldo a favor.
+        ["ReceiptVoiding"] = ["Number", "ApprovedByUserId", "DecidedAt", "DecisionReason", "OmittedApplicationsJson", "PayerCreditBalanceId"],
+        ["ModuleReversal"] = ["ConfirmedByUserId", "ConfirmedAt", "ConfirmationNote", "PayerCreditBalanceId"],
+        ["PayerCreditBalanceMovement"] = [],
     };
 
     /// <summary>
@@ -318,6 +323,7 @@ public class LosHechosInmutablesNoSeModifican
     private static readonly Dictionary<string, string[]> MutablesDeRecaudoYTesoreria = new(StringComparer.Ordinal)
     {
         ["Receipt"] = ["Status"], ["ReceiptMeans"] = ["Status"], ["ReceiptApplication"] = ["Status"], ["ReceiptApplicationPortion"] = ["Status"],
+        ["ReceiptVoiding"] = ["Status"], ["ModuleReversal"] = ["Cause"],
     };
 
     [Fact]

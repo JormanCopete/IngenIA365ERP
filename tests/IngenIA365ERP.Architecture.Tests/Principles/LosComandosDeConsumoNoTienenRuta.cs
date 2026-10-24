@@ -59,6 +59,8 @@ public class LosComandosDeConsumoNoTienenRuta
         // Feature 015, US10 (T0132): el consumo de las órdenes de giro y de su anulación (los manda DestinoTesoreria).
         "ConsumePaymentOrderCommand",
         "ConsumePaymentOrderVoidCommand",
+        // Feature 015, US5 (T0176): el reverso de un pago o una consignación avisado por Cartera o Captaciones (lo manda DestinoRecaudo).
+        "ConsumeLendingPaymentReversalCommand",
     ];
 
     [Fact]

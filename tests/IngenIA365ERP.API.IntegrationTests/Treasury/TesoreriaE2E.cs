@@ -27,7 +27,7 @@ public static class TesoreriaE2E
         var cuenta = await CuentaPropiaAsync(http, admin, esc, $"PAG{nombre.ToUpperInvariant()[..Math.Min(5, nombre.Length)]}", 2, esc.CuentaDeOrigen);
         var (beneficiario, _) = await DesembolsoE2E.DeudorAsync(http, admin, $"Giro{nombre}");
         await CuentaDestinoAprobadaAsync(http, esc, beneficiario, "0123456789");
-        await RecaudoYTesoreriaE2E.RegistrarYActivarAsync(esc.Coop);
+        await RecaudoYTesoreriaE2E.RegistrarYActivarAsync(http, esc.Coop);
         return new Tesoreria(esc, admin, cuenta, beneficiario);
     }
 

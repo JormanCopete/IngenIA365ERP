@@ -23,6 +23,8 @@ public class NoHayDoblesDePrueba
     [
         // Fase 7 (T0132): el único consumidor real del destino Treasury.
         "IngenIA365ERP.Application.Treasury.Integration.DestinoTesoreria",
+        // Fase 10 (T0176): el único consumidor real del destino Receipts.
+        "IngenIA365ERP.Application.Receipts.Integration.DestinoRecaudo",
     ];
 
     /// <summary>Los dobles de la 013 que la fase 19 retira (por nombre de tipo).</summary>

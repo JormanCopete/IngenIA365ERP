@@ -49,14 +49,22 @@ public static class RecaudoYTesoreriaE2E
     public static Task<string> CodigoDeErrorAsync(HttpResponseMessage resp) => CarteraE2E.CodigoDeErrorAsync(resp);
 
     /// <summary>
-    /// Esqueleto (T0009): registra a Recaudo y Tesorería como participantes reales y los activa en la cooperativa. Lo completa la fase 19
-    /// (US9, TR31 y TR42) con los requisitos y el registro en el mismo guardado de la activación; hasta entonces no hay activación que
-    /// llamar y avisa en vez de fingir que activó.
+    /// Registra a Recaudo y Tesorería como participantes reales y los activa en la cooperativa con la <b>activación mínima</b> del bloque 2 (T0183b;
+    /// <c>POST /api/receipts/activation</c> y <c>/api/treasury/activation</c>): cada módulo se activa si sus requisitos básicos ya se cumplen (Recaudo: punto, caja
+    /// con cajero, efectivo y transferencia; Tesorería: una cuenta de pagos vinculada) y la activación registra en el mismo guardado sus filas del registro de
+    /// integración. Un módulo ya activo no se vuelve a activar. La fase 19 completa la activación (el cuadre) sobre los mismos comandos.
     /// </summary>
-    public static Task RegistrarYActivarAsync(CarteraE2E.CooperativaAislada coop)
+    public static async Task RegistrarYActivarAsync(HttpClient http, CarteraE2E.CooperativaAislada coop)
     {
+        ArgumentNullException.ThrowIfNull(http);
         ArgumentNullException.ThrowIfNull(coop);
-        throw new NotImplementedException("La activación de Recaudo y Tesorería llega con la fase 19 (US9): esta e2e todavía no puede activarlos.");
+        foreach (var modulo in new[] { "receipts", "treasury" })
+        {
+            var estado = await LeerAsync(await EnviarAsync(http, coop.TokenAdmin, HttpMethod.Get, $"/api/{modulo}/activation/requirements", null));
+            if (estado.GetProperty("status").GetString() == "Active" || !estado.GetProperty("canActivate").GetBoolean()) continue;
+            var activado = await EnviarAsync(http, coop.TokenAdmin, HttpMethod.Post, $"/api/{modulo}/activation", new { });
+            ((int)activado.StatusCode).Should().BeInRange(200, 299, $"activar {modulo}: «{await activado.Content.ReadAsStringAsync()}»");
+        }
     }
 }
 

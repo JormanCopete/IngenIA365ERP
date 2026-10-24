@@ -35,7 +35,7 @@ public static class CajaE2E
             .StatusCode.Should().Be(HttpStatusCode.OK);
         var billete = await BilleteAsync(http, t, 50_000m);
 
-        await RecaudoYTesoreriaE2E.RegistrarYActivarAsync(esc.Coop);
+        await RecaudoYTesoreriaE2E.RegistrarYActivarAsync(http, esc.Coop);
         var sesion = await RecaudoYTesoreriaE2E.LeerAsync(await InventarioE2E.MandarAsync(http, t, HttpMethod.Post, "/api/receipts/sessions",
             new { cashBoxPublicId = caja, openingBase = new[] { new { denominationPublicId = billete, quantity = 10 } } }));
         return new Caja(esc, t, persona, creditoA, creditoB, punto, caja, sesion.GetProperty("publicId").GetGuid(), efectivo, transferencia, billete);
