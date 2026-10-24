@@ -50,7 +50,28 @@ public class LasPantallasDeRecaudoYTesoreriaEstanEnElMenu
         ("Pages/Contabilidad/Recaudo/Lotes.razor", "/contabilidad/recaudo/lotes", "Accounting.ReceiptsMatrix.View"),
         // Fase 17 (T0280): la conciliación bancaria mínima.
         ("Pages/Tesoreria/Conciliacion.razor", "/tesoreria/conciliacion", "Treasury.Reconciliation.View"),
+        // Fase 18 (T0290): /recaudo/puesta-en-marcha y /tesoreria/puesta-en-marcha son páginas delgadas sobre Components/Recaudo/PuestaEnMarchaDeModulo, que lleva
+        // un IndicadorDeCarga por zona (como las de la matriz de la fase 16); su enlace en el menú lo comprueba Las_puestas_en_marcha_estan_en_el_menu.
     ];
+
+    [Fact]
+    public void Las_puestas_en_marcha_estan_en_el_menu()
+    {
+        var menu = File.ReadAllText(Path.Combine(Shared, "Layout", "NavMenu.razor"));
+        var componente = File.ReadAllText(Path.Combine(Shared, "Components", "Recaudo", "PuestaEnMarchaDeModulo.razor"));
+        var infracciones = new List<string>();
+        foreach (var (archivo, ruta) in new[] { ("Pages/Recaudo/PuestaEnMarcha.razor", "/recaudo/puesta-en-marcha"), ("Pages/Tesoreria/PuestaEnMarcha.razor", "/tesoreria/puesta-en-marcha") })
+        {
+            var camino = Path.Combine(Shared, archivo.Replace('/', Path.DirectorySeparatorChar));
+            if (!File.Exists(camino)) { infracciones.Add($"{archivo}: no existe"); continue; }
+            var texto = File.ReadAllText(camino);
+            if (!texto.Contains($"@page \"{ruta}\"", StringComparison.Ordinal)) infracciones.Add($"{archivo}: sin @page {ruta}");
+            if (!texto.Contains("<PuestaEnMarchaDeModulo", StringComparison.Ordinal)) infracciones.Add($"{archivo}: no usa PuestaEnMarchaDeModulo");
+            if (!menu.Contains($"href=\"{ruta}\"", StringComparison.Ordinal)) infracciones.Add($"{ruta}: el menú no la enlaza");
+        }
+        if (!componente.Contains("<IndicadorDeCarga", StringComparison.Ordinal)) infracciones.Add("PuestaEnMarchaDeModulo: sin IndicadorDeCarga");
+        ReglaSobreFuente.SinInfracciones(infracciones, "Puestas en marcha de Recaudo o Tesorería fuera del contrato (FR-018, FR-162)");
+    }
 
     /// <summary>Páginas de detalle (con parámetro de ruta): archivo, la ruta tal como la declara <c>@page</c> y permiso.</summary>
     private static readonly (string Archivo, string Ruta, string Permiso)[] Detalles =
