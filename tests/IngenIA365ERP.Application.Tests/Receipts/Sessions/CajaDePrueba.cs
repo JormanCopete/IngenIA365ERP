@@ -99,7 +99,7 @@ internal sealed class CajaDePrueba
     public RegisterSessionAdjustmentCommandHandler Ajustar() => new(E.Db, E.Alcance, E.Actor, E.Reloj, Cerrojo, Numerador, Presente, Emision);
     public RegisterSurpriseCountCommandHandler Sorpresivo() => new(E.Db, E.Alcance, E.Actor, E.Reloj, Cerrojo, Arqueos);
     public CloseCollectionPointDayCommandHandler CerrarDia() => new(E.Db, E.Alcance, E.Actor, E.Reloj, Cerrojo);
-    public RegisterVaultMovementCommandHandler MoverBoveda() => new(E.Db, E.Alcance, E.Actor, E.Reloj, Cerrojo, Numerador, E.Segregacion, E.Parametros, Emision);
+    public RegisterVaultMovementCommandHandler MoverBoveda() => new(E.Db, E.Alcance, E.Actor, E.Reloj, Cerrojo, Numerador, E.Segregacion, E.Parametros, Emision, []);
     public AttachPayrollDeductionAuthorizationCommandHandler Autorizar() => new(E.Db, E.Alcance);
     public MoveSurplusToIncomeCommandHandler SobranteAIngreso() => new(E.Db, E.Alcance, E.Actor, E.Reloj, Cerrojo, E.Segregacion, Emision);
     public MarcaDeSesionesOlvidadas Olvidadas() => new(E.Db, E.Parametros, E.Reloj, E.Alertas);

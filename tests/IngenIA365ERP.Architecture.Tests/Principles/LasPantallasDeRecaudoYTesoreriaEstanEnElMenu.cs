@@ -39,6 +39,10 @@ public class LasPantallasDeRecaudoYTesoreriaEstanEnElMenu
         ("Pages/Recaudo/Pagadurias.razor", "/recaudo/pagadurias", "Receipts.Paymasters.View"),
         // Fase 13 (T0219): los cheques recibidos.
         ("Pages/Recaudo/ChequesRecibidos.razor", "/recaudo/cheques-recibidos", "Receipts.Checks.View"),
+        // Fase 14 (T0230): chequeras, cheques girados y remesas.
+        ("Pages/Tesoreria/Chequeras.razor", "/tesoreria/chequeras", "Treasury.Checkbooks.View"),
+        ("Pages/Tesoreria/ChequesGirados.razor", "/tesoreria/cheques-girados", "Treasury.Checks.View"),
+        ("Pages/Tesoreria/Remesas.razor", "/tesoreria/remesas", "Treasury.Remittances.View"),
     ];
 
     /// <summary>Páginas de detalle (con parámetro de ruta): archivo, la ruta tal como la declara <c>@page</c> y permiso.</summary>

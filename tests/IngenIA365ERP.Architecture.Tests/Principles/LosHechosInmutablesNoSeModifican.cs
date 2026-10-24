@@ -322,6 +322,8 @@ public class LosHechosInmutablesNoSeModifican
         ["PayrollDeductionFileLine"] = ["DeductionOutcome", "DeductedAmount", "DeductionDate"], ["PayrollFileSending"] = [],
         // Fase 13, US15 (T0216; data-model §4.5): cada transición de un cheque recibido es un evento que no cambia.
         ["ReceivedCheckEvent"] = [],
+        // Fase 14, US19 (T0225; data-model §11.2): cada transición de un cheque girado es un evento que no cambia.
+        ["IssuedCheckEvent"] = [],
     };
 
     /// <summary>
