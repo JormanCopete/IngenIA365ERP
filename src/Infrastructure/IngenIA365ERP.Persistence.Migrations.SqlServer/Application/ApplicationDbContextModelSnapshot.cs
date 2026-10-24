@@ -22623,9 +22623,6 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.Property<Guid>("PublicId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<Guid?>("RemittancePublicId")
-                        .HasColumnType("uniqueidentifier");
-
                     b.Property<string>("ReopenReason")
                         .HasMaxLength(300)
                         .HasColumnType("nvarchar(300)");
@@ -64958,12 +64955,6 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.Property<DateOnly>("IssuedOn")
                         .HasColumnType("date");
 
-                    b.Property<DateOnly?>("MovedToPayableOn")
-                        .HasColumnType("date");
-
-                    b.Property<int?>("MovedToPayableRunId")
-                        .HasColumnType("int");
-
                     b.Property<int?>("PaymentBatchItemId")
                         .HasColumnType("int");
 
@@ -64996,9 +64987,6 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.HasKey("Id");
 
                     b.HasIndex("BeneficiaryPersonId");
-
-                    b.HasIndex("MovedToPayableRunId")
-                        .HasDatabaseName("IX_TES_IssuedChecks_MovedToPayableRunId");
 
                     b.HasIndex("PaymentBatchItemId");
 
@@ -65095,120 +65083,6 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasDatabaseName("UK_TES_IssuedCheckEvents_PublicId");
 
                     b.ToTable("TES_IssuedCheckEvents", "dbo");
-                });
-
-            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Treasury.Checkbooks.MonthEndCheckRun", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<int>("BankAccountId")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("CreatedBy")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<DateOnly>("CutoffDate")
-                        .HasColumnType("date");
-
-                    b.Property<int>("DaysToPayable")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime?>("DeletedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("DeletedBy")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<string>("DetailJson")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bit")
-                        .HasDefaultValue(false);
-
-                    b.Property<decimal>("MovedToPayableAmount")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<int>("MovedToPayableCount")
-                        .HasColumnType("int");
-
-                    b.Property<string>("Number")
-                        .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("nvarchar(30)");
-
-                    b.Property<int>("PeriodMonth")
-                        .HasColumnType("int");
-
-                    b.Property<int>("PeriodYear")
-                        .HasColumnType("int");
-
-                    b.Property<Guid>("PublicId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<decimal>("ReclassifiedAmount")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<int>("ReclassifiedCount")
-                        .HasColumnType("int");
-
-                    b.Property<Guid>("ReversalPublicId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<byte[]>("RowVersion")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("rowversion");
-
-                    b.Property<DateTime>("RunAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int>("RunByUserId")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("UpdatedBy")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Number")
-                        .IsUnique()
-                        .HasDatabaseName("UK_TES_MonthEndCheckRuns_Number");
-
-                    b.HasIndex("PublicId")
-                        .IsUnique()
-                        .HasDatabaseName("UK_TES_MonthEndCheckRuns_PublicId");
-
-                    b.HasIndex("ReversalPublicId")
-                        .IsUnique()
-                        .HasDatabaseName("UK_TES_MonthEndCheckRuns_ReversalPublicId");
-
-                    b.HasIndex("RunByUserId");
-
-                    b.HasIndex("BankAccountId", "PeriodYear", "PeriodMonth")
-                        .IsUnique()
-                        .HasDatabaseName("UK_TES_MonthEndCheckRuns_Account_Period");
-
-                    b.ToTable("TES_MonthEndCheckRuns", "dbo");
                 });
 
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Treasury.Payments.DisbursementResult", b =>
@@ -67027,157 +66901,6 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasDatabaseName("IX_TES_CashRemittances_Status_Account");
 
                     b.ToTable("TES_CashRemittances", "dbo");
-                });
-
-            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Treasury.Remittances.Transfer", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<decimal>("Amount")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<Guid?>("ApprovalRequestPublicId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("BankReference")
-                        .HasMaxLength(60)
-                        .HasColumnType("nvarchar(60)");
-
-                    b.Property<Guid?>("ConfirmationSupportAttachmentPublicId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTime?>("ConfirmedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<Guid?>("ConfirmedByStatementLinePublicId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<int?>("ConfirmedByUserId")
-                        .HasColumnType("int");
-
-                    b.Property<DateOnly?>("ConfirmedOn")
-                        .HasColumnType("date");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("CreatedBy")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<DateTime?>("DecidedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("DecisionReason")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<DateTime?>("DeletedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("DeletedBy")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<int>("FromBankAccountId")
-                        .HasColumnType("int");
-
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bit")
-                        .HasDefaultValue(false);
-
-                    b.Property<int?>("LiquidityFundUseId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("Number")
-                        .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("nvarchar(30)");
-
-                    b.Property<Guid>("PublicId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("Reason")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<DateTime>("RequestedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int>("RequestedByUserId")
-                        .HasColumnType("int");
-
-                    b.Property<DateOnly>("RequestedOn")
-                        .HasColumnType("date");
-
-                    b.Property<byte[]>("RowVersion")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("rowversion");
-
-                    b.Property<DateTime?>("SentAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int?>("SentByUserId")
-                        .HasColumnType("int");
-
-                    b.Property<DateOnly?>("SentOn")
-                        .HasColumnType("date");
-
-                    b.Property<int>("Status")
-                        .HasColumnType("int");
-
-                    b.Property<Guid?>("SupportAttachmentPublicId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<int>("ToBankAccountId")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("UpdatedBy")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<string>("VoidReason")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ConfirmedByUserId");
-
-                    b.HasIndex("LiquidityFundUseId");
-
-                    b.HasIndex("Number")
-                        .IsUnique()
-                        .HasDatabaseName("UK_TES_Transfers_Number");
-
-                    b.HasIndex("PublicId")
-                        .IsUnique()
-                        .HasDatabaseName("UK_TES_Transfers_PublicId");
-
-                    b.HasIndex("RequestedByUserId");
-
-                    b.HasIndex("SentByUserId");
-
-                    b.HasIndex("FromBankAccountId", "Status")
-                        .HasDatabaseName("IX_TES_Transfers_From_Status");
-
-                    b.HasIndex("ToBankAccountId", "Status")
-                        .HasDatabaseName("IX_TES_Transfers_To_Status");
-
-                    b.ToTable("TES_Transfers", "dbo");
                 });
 
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Treasury.Statements.BankStatement", b =>
@@ -78059,11 +77782,6 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("IngenIA365ERP.Domain.Entities.Treasury.Checkbooks.MonthEndCheckRun", null)
-                        .WithMany()
-                        .HasForeignKey("MovedToPayableRunId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
                     b.HasOne("IngenIA365ERP.Domain.Entities.Treasury.Payments.PaymentBatchItem", null)
                         .WithMany()
                         .HasForeignKey("PaymentBatchItemId")
@@ -78080,21 +77798,6 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.HasOne("IngenIA365ERP.Domain.Entities.Treasury.Checkbooks.IssuedCheck", null)
                         .WithMany()
                         .HasForeignKey("IssuedCheckId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Treasury.Checkbooks.MonthEndCheckRun", b =>
-                {
-                    b.HasOne("IngenIA365ERP.Domain.Entities.Treasury.BankAccounts.OwnBankAccount", null)
-                        .WithMany()
-                        .HasForeignKey("BankAccountId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("IngenIA365ERP.Domain.Entities.Security.User", null)
-                        .WithMany()
-                        .HasForeignKey("RunByUserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
@@ -78408,42 +78111,6 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .WithMany()
                         .HasForeignKey("LiquidityFundUseId")
                         .OnDelete(DeleteBehavior.Restrict);
-                });
-
-            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Treasury.Remittances.Transfer", b =>
-                {
-                    b.HasOne("IngenIA365ERP.Domain.Entities.Security.User", null)
-                        .WithMany()
-                        .HasForeignKey("ConfirmedByUserId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("IngenIA365ERP.Domain.Entities.Treasury.BankAccounts.OwnBankAccount", null)
-                        .WithMany()
-                        .HasForeignKey("FromBankAccountId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("IngenIA365ERP.Domain.Entities.Treasury.BankAccounts.LiquidityFundUse", null)
-                        .WithMany()
-                        .HasForeignKey("LiquidityFundUseId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("IngenIA365ERP.Domain.Entities.Security.User", null)
-                        .WithMany()
-                        .HasForeignKey("RequestedByUserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("IngenIA365ERP.Domain.Entities.Security.User", null)
-                        .WithMany()
-                        .HasForeignKey("SentByUserId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("IngenIA365ERP.Domain.Entities.Treasury.BankAccounts.OwnBankAccount", null)
-                        .WithMany()
-                        .HasForeignKey("ToBankAccountId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
                 });
 
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Treasury.Statements.BankStatement", b =>

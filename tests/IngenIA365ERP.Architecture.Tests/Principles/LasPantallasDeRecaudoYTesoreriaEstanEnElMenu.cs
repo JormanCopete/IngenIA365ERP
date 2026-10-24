@@ -86,6 +86,9 @@ public class LasPantallasDeRecaudoYTesoreriaEstanEnElMenu
         // T1 (fase 33): los traslados entre cuentas propias y el cierre del mes de los cheques.
         ("Pages/Tesoreria/Traslados.razor", "/tesoreria/traslados", "Treasury.Transfers.Request"),
         ("Pages/Tesoreria/CierreDeCheques.razor", "/tesoreria/cierre-de-cheques", "Treasury.Checkbooks.View"),
+        // T1 (fase 34): las órdenes manuales y los firmantes y tokens.
+        ("Pages/Tesoreria/OrdenesManuales.razor", "/tesoreria/ordenes-manuales", "Treasury.ManualOrders.Create"),
+        ("Pages/Tesoreria/Firmantes.razor", "/tesoreria/firmantes", "Treasury.Signers.Manage"),
         // Fase 18 (T0290): /recaudo/puesta-en-marcha y /tesoreria/puesta-en-marcha son páginas delgadas sobre Components/Recaudo/PuestaEnMarchaDeModulo, que lleva
         // un IndicadorDeCarga por zona (como las de la matriz de la fase 16); su enlace en el menú lo comprueba Las_puestas_en_marcha_estan_en_el_menu.
     ];
