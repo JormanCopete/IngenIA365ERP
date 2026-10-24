@@ -2458,8 +2458,26 @@ pagado por el extracto o devuelto, sin registro manual (FR-084 parte R2, FR-087)
 **Independent Test**: tres cheques consignados en la remesa: dos se marcan pagados al cruzar el extracto y uno se devuelve con
 su reverso por porción.
 
-- [ ] T0427 [P] [US15] Escribir tests/IngenIA365ERP.Application.Tests/Receipts/Checks/CanjeCompletoTests.cs (FR-084): lote de canje `RCD_ClearingBatches` por remesa; pagado por el cruce del extracto; devolución por la misma vía de FR-060
-- [ ] T0428 [US15] Crear `RCD_ClearingBatches` (src/Core/IngenIA365ERP.Domain/Entities/Receipts/Operations/ClearingBatch.cs) con su configuración e implementar en src/Core/IngenIA365ERP.Application/Receipts/Checks/ el lote de canje y la marca de pagado desde el extracto; vista `received-checks` con el canje; regenerar en src/Infrastructure/IngenIA365ERP.Persistence.Migrations.{PostgreSql,SqlServer}/Application/ el par `RecaudoCanales`
+- [X] T0427 [P] [US15] Escribir tests/IngenIA365ERP.Application.Tests/Receipts/Checks/CanjeCompletoTests.cs (FR-084): lote de canje `RCD_ClearingBatches` por remesa; pagado por el cruce del extracto; devolución por la misma vía de FR-060
+- [X] T0428 [US15] Crear `RCD_ClearingBatches` (src/Core/IngenIA365ERP.Domain/Entities/Receipts/Operations/ClearingBatch.cs) con su configuración e implementar en src/Core/IngenIA365ERP.Application/Receipts/Checks/ el lote de canje y la marca de pagado desde el extracto; vista `received-checks` con el canje; regenerar en src/Infrastructure/IngenIA365ERP.Persistence.Migrations.{PostgreSql,SqlServer}/Application/ el par `RecaudoCanales`
+
+**Notas de la construcción de la fase 37 (2026-10-24)**. Pruebas escritas y compiladas, sin correr. Desviaciones y decisiones; los nombres nuevos quedan en
+decisiones-transversales §2.7:
+
+- **T0427**: `Receipts/Checks/CanjeCompletoTests` (el lote deja los cheques en canje; el abono del extracto que coincide paga los elegidos e identifica el abono; el que
+  no coincide no paga; un cheque no va en dos lotes; el lote recalcula lo pagado y lo devuelto).
+- **T0428**: `ClearingBatch` (`Entities/Receipts/Operations/ClearingBatch.cs`, `RCD_ClearingBatches`, numerado `CN`) con su configuración en
+  `Persistence/Configurations/Receipts/RecaudoCanalesConfigurations.cs`; en `RCD_ReceivedChecks` dos columnas nulas (`ClearingBatchId` con FK y
+  `PaidByStatementLinePublicId`). `Receipts/Checks/CanjeDeCheques.cs` con `CreateClearingBatchCommand`, `MatchClearingBatchStatementCommand`, `ListClearingBatchesQuery`
+  y los errores `Receipts.ClearingBatch.*`; la devolución de FR-060 recalcula el lote (`CanjeDeCheques.AlDevolverAsync`). El abono que paga queda identificado en Recaudo
+  con la salida **nueva** `BankItemOutcome.ClearingBatch = 7` (y `AgreementSettlement = 8` para la fase 38) y la conciliación de Tesorería lo ve por
+  `IRecaudoParaConciliacion` (clases `ClearingBatch` y `AgreementSettlement`). Rutas **nuevas** `GET/POST /api/receipts/clearing-batches` y
+  `POST /{id}/statement-match` (`Receipts.Checks.View/Manage`); sección «Canje de cheques» en `/recaudo/cheques-recibidos`; la vista `received-checks` suma el lote de
+  canje. **Desviaciones**: (a) el cruce lo hace una persona eligiendo el abono (no hay cruce automático al cargar el extracto: la carga es de Tesorería y correría en su
+  transacción, con el orden de cerrojos invertido); (b) pagar un cheque **no emite hecho**, igual que el «pagado» manual de R0 (lo que el recibo debitó a
+  `ChequesEnCanje` no pasa a `BancoRecaudo`): **decisión para el dueño**, ver la nota de pausa. Los cerrojos son los de los cheques (`RCD_ReceivedChecks`); la tabla del lote
+  no entra al cerrojo. Par `RecaudoCanales` regenerado (una tabla, dos columnas); «No changes» en SqlServer y PostgreSQL; paridad en par (Application 72). Compilan API,
+  Web, Web.Client, Persistence y las cinco de pruebas. Sin probar en navegador.
 
 ---
 
@@ -2483,6 +2501,17 @@ convenio explica la comisión con su hecho.
 - [ ] T0434 [US16] Implementar en src/Core/IngenIA365ERP.Application/Receipts/Agreements/ los comandos de convenios, referencias, carga de archivos de convenio y de pasarela (sobre `AplicacionNoInteractiva`), conciliación del convenio, la plantilla `recaudo.convenios` y el pagador aseguradora en `IdentifyBankItemCommand`; emitir `ComisionDeConvenioRegistrada` (contabilidad.md §3) (FR-088 a FR-093, FR-157, FR-200)
 - [ ] T0435 [US16] Exponer `/api/receipts/collection-agreements` (`…/files`, `…/reconciliations`), `/payment-references` y `/gateway-files`, y crear las pantallas src/Presentation/IngenIA365ERP.Shared/Pages/Recaudo/{Convenios,ArchivosDeConvenio}.razor con `IndicadorDeCarga`; regenerar en src/Infrastructure/IngenIA365ERP.Persistence.Migrations.{PostgreSql,SqlServer}/Application/ el par `RecaudoCanales`
 - [ ] T0436 [US16] Ofrecer la referencia de pago estable a los documentos al asociado de Cartera (extracto, plan de pagos) por una consulta de Recaudo (src/Core/IngenIA365ERP.Application/Common/Integration/Receipts/IReferenciasDePago.cs **(nuevo)**), sin que Cartera lea `RCD_` (FR-090; R-05)
+
+**PAUSA 2026-10-24** (el dueño pausó el trabajo hasta mañana). Fases 32 a 37 cerradas. **La fase 38 no se empezó** (no hay código suyo); quedan sin hacer
+T0429–T0436 y toda la fase 39 (T0437–T0439), y lo pedido para R2 fuera de tasks.md: la referencia de pago con dígito de verificación (`RCD_PaymentReferences`, que
+entra también a `PropuestasDeIdentificacion` del criterio `PaymentReference`) y los tipos de adjunto propios de Recaudo para la firma del egreso, el soporte de la
+consignación reportada y el comprobante de cargue del reporte UIAF, cableados en `/recaudo/egresos`, `/recaudo/consignaciones-reportadas` y `/recaudo/cumplimiento` con
+`SubirSoporte`. Lo que ya está listo para la fase 38: las enumeraciones de convenios, referencias, archivos y conciliación en `Domain/Enums/Receipts/ReceiptsR2Enums.cs`,
+la salida `BankItemOutcome.AgreementSettlement`, la clase `AgreementSettlement` en `IRecaudoParaConciliacion`, los ámbitos 8 y 10 habilitados para la lectura y el par
+`RecaudoCanales` (último par; se regenera restaurando el snapshot del commit `524a19fe`). Diseño previsto para retomar: el archivo se carga con su huella (no dos veces),
+cada línea es una unidad por `AplicacionNoInteractiva` con canal `Agreement`/`Online` a nombre de quien carga y corrida `ProcessingRunKind.AgreementFile`; la referencia
+inválida o desconocida va a partida (origen nuevo de `UnidentifiedItemOrigin`); la conciliación por archivo identifica el abono neto (`AgreementSettlement`) y emite
+`ComisionDeConvenioRegistrada` con comisión, IVA y cada retención con su tercero, con aprobación de otra persona sobre la tolerancia.
 
 ---
 

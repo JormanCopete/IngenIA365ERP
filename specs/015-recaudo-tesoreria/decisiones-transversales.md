@@ -640,6 +640,16 @@ Lo que tasks.md marcaba **(nuevo)** y lo que trajeron el `/speckit-analyze` y la
 |---|---|---|
 | `CatalogoDeRecaudo.EntregaVigente = R2` · par `RecaudoCanales` · ámbitos de lectura `CollectionAgreementFile` y `PaymentGatewayFile` en `BankFileFormatValidator` | la base de R2 | `Domain/Receipts/CatalogoDeRecaudo.cs`, `Common/BankFiles/BankFileFormatValidator.cs`, `Persistence.Migrations.*` |
 
+**Fijados en la construcción de la fase 37 (2026-10-24)**:
+
+| Nombre | Qué | Dónde |
+|---|---|---|
+| `RCD_ClearingBatches` (`ClearingBatch`, numeración `CN`) · `RCD_ReceivedChecks.{ClearingBatchId, PaidByStatementLinePublicId}` · `ClearingBatchState` | el lote de canje | par `RecaudoCanales`; `Entities/Receipts/Operations/ClearingBatch.cs`, `Enums/Receipts/ReceiptsR2Enums.cs` |
+| `CreateClearingBatchCommand` · `MatchClearingBatchStatementCommand` · `ListClearingBatchesQuery` · `CanjeDeCheques` · `ClearingBatchDto` · errores `Receipts.ClearingBatch.{CheckNotEligible, MixedBranches, StatementLineMismatch, NothingInClearing, AmountMismatch}` | el canje completo | `Receipts/Checks/CanjeDeCheques.cs` |
+| `BankItemOutcome.{ClearingBatch = 7, AgreementSettlement = 8}` · `RecaudoParaConciliacion.{ClaseCanje, ClaseConvenio}` | el abono que liquida un lote o un convenio | `Enums/Receipts/ReceiptsBankEnums.cs`, `Receipts/Integration/RecaudoParaConciliacion.cs` |
+| enumeraciones de R2 `CollectionAgreementKind`, `PaymentReferenceMode`, `CheckDigitAlgorithm`, `PaymentReferenceState`, `CollectionFileState`, `CollectionFileLineOutcome`, `AgreementReconciliationState` (para la fase 38) | convenios y referencias | `Enums/Receipts/ReceiptsR2Enums.cs` |
+| rutas `GET/POST /api/receipts/clearing-batches`, `POST /{id}/statement-match` · sección «Canje de cheques» de `/recaudo/cheques-recibidos` · eventos `Receipts.ClearingBatch.{Created, Paid}` | rutas, pantalla y auditoría | `API/Endpoints/Receipts/ClearingBatchesEndpoints.cs` |
+
 ## 3. Decisiones transversales
 
 ### Módulos y frontera
