@@ -60,3 +60,25 @@ referencia), se cruza a mano lo demás, y lo que no cruza queda como **partida c
 registro pasa a Recaudo como partida por identificar. Se cierra con diferencia cero (deja su informe) y se reabre con motivo como
 versión nueva. **El conciliador no puede haber preparado ni aprobado pagos de esa cuenta en el período.** Si Contabilidad reabre el mes,
 las conciliaciones cerradas del mes quedan desactualizadas y se vuelven a conciliar.
+
+## 6. Lo que trae T1
+
+- **Traslados entre cuentas propias** (`/tesoreria/traslados`): se piden con su motivo y otra persona los aprueba según el monto (aprobar no
+  mueve dinero). Quien lo ejecuta en el portal del banco lo marca **enviado** con la referencia: sale de la cuenta de origen y queda **en
+  tránsito**. Llega a la de destino sola al cruzar el abono en la conciliación de esa cuenta, o se confirma con la constancia del banco.
+  Desde una cuenta del fondo de liquidez exige un uso del fondo aprobado. Lo pedido o aprobado sin enviar se anula con motivo.
+- **Cierre del mes de los cheques** (`/tesoreria/cierre-de-cheques`): una vez por cuenta y mes, ya terminado el mes. Los cheques emitidos y
+  no entregados al corte vuelven al efectivo de la cuenta (y regresan el primer día del mes siguiente); los entregados sin cobrar más allá
+  de `Cheques.DiasACuentaPorPagar` días (180, pendiente de validar) pasan a **cuenta por pagar al beneficiario**, nunca a ingreso.
+- **Órdenes manuales** (`/tesoreria/ordenes-manuales`): sólo por un concepto del **catálogo cerrado** (lo administra el aprobador), con
+  soporte, dentro del tope del concepto y con la retención en la fuente que el concepto exija; sin ella, cause primero la cuenta por pagar
+  en Contabilidad. Las aprueban **dos personas** distintas de quien prepara; nadie prepara ni aprueba una orden a su propio nombre. Con las
+  dos aprobaciones entra a la bandeja y sigue el camino de todas.
+- **Firmantes y tokens** (`/tesoreria/firmantes`): por cuenta, cada firmante con su clase de firma, lo que firma solo y si firma en
+  conjunto, y cada token del portal con su serial y quién lo tiene. El alta y el retiro llevan el **acta** y los aprueba otra persona. Si un
+  firmante o el dueño de un token se retira de la cooperativa, llega la alerta `Tesoreria.FirmanteRetirado`: pida su retiro y avísele al banco.
+- **Comprobantes de pago** (`/tesoreria/comprobantes-de-pago`): cada giro registrado como «girado» deja su comprobante numerado con código de
+  verificación; se imprime y se envía al beneficiario por correo sólo si autorizó ese canal.
+- **Cierre contable**: si Contabilidad cierra un mes con conciliaciones de ese mes abiertas o sesiones de caja sin cerrar, avisa y lo deja
+  reconocer; si la cooperativa pone `Contabilidad.CierreExigeConciliaciones`, no cierra hasta cerrarlas.
+- **Informes de T1**: `payment-vouchers`, `transfers` y `month-end-checks` en `/tesoreria/informes`.

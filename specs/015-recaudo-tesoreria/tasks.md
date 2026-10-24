@@ -2386,13 +2386,44 @@ T1; el congelamiento y la promoción de T1 (FR-020 parte T1, FR-117, FR-132, FR-
 **Independent Test**: girar una orden emite su comprobante de pago y lo envía al beneficiario sólo con la autorización del
 canal; cerrar un mes con una conciliación abierta avisa (informativo) y, con `Contabilidad.CierreExigeConciliaciones`, bloquea.
 
-- [ ] T0419 [P] [US11] Escribir tests/IngenIA365ERP.Application.Tests/Treasury/Results/ComprobanteDePagoTests.cs (FR-020, FR-117): `TES_PaymentVouchers` numerado por pago, documento con código de verificación, envío al beneficiario por correo sólo con autorización
-- [ ] T0420 [P] [US25] Escribir tests/IngenIA365ERP.Application.Tests/Accounting/Periods/AvisoDeCierreContableTests.cs (FR-132; D29): `IEstadoOperativoParaElCierre` informa conciliaciones abiertas y sesiones sin cerrar (`Accounting.Period.ReconciliationsOpen`, `.CashSessionsOpen`); aviso por defecto, bloqueante con `Contabilidad.CierreExigeConciliaciones`
-- [ ] T0421 [US11] Crear `TES_PaymentVouchers` (src/Core/IngenIA365ERP.Domain/Entities/Treasury/Payments/PaymentVoucher.cs), su emisión al registrar «girada», el documento `ComprobanteDePago` en src/Presentation/IngenIA365ERP.API/Reports/DocumentosDeTesoreriaReport.cs y `GET /api/treasury/payment-vouchers/{id}/document`, `POST /{id}/send` (FR-117)
-- [ ] T0422 [US25] Completar src/Core/IngenIA365ERP.Application/Receipts/Activation/EstadoOperativoParaElCierre.cs y src/Core/IngenIA365ERP.Application/Accounting/Periods/PeriodCommands.cs con conciliaciones abiertas y sesiones sin cerrar y el parámetro `Contabilidad.CierreExigeConciliaciones` (`ACC`) en el cierre de mes (FR-132; E-04)
-- [ ] T0423 [US21] Implementar las vistas de T1 `payment-vouchers`, `transfers`, `month-end-checks` en src/Core/IngenIA365ERP.Application/Treasury/Reports/ y actualizar docs/manual/tesoreria-manual-del-tesorero.md con lo de T1 (FR-153, FR-225)
+- [X] T0419 [P] [US11] Escribir tests/IngenIA365ERP.Application.Tests/Treasury/Results/ComprobanteDePagoTests.cs (FR-020, FR-117): `TES_PaymentVouchers` numerado por pago, documento con código de verificación, envío al beneficiario por correo sólo con autorización
+- [X] T0420 [P] [US25] Escribir tests/IngenIA365ERP.Application.Tests/Accounting/Periods/AvisoDeCierreContableTests.cs (FR-132; D29): `IEstadoOperativoParaElCierre` informa conciliaciones abiertas y sesiones sin cerrar (`Accounting.Period.ReconciliationsOpen`, `.CashSessionsOpen`); aviso por defecto, bloqueante con `Contabilidad.CierreExigeConciliaciones`
+- [X] T0421 [US11] Crear `TES_PaymentVouchers` (src/Core/IngenIA365ERP.Domain/Entities/Treasury/Payments/PaymentVoucher.cs), su emisión al registrar «girada», el documento `ComprobanteDePago` en src/Presentation/IngenIA365ERP.API/Reports/DocumentosDeTesoreriaReport.cs y `GET /api/treasury/payment-vouchers/{id}/document`, `POST /{id}/send` (FR-117)
+- [X] T0422 [US25] Completar src/Core/IngenIA365ERP.Application/Receipts/Activation/EstadoOperativoParaElCierre.cs y src/Core/IngenIA365ERP.Application/Accounting/Periods/PeriodCommands.cs con conciliaciones abiertas y sesiones sin cerrar y el parámetro `Contabilidad.CierreExigeConciliaciones` (`ACC`) en el cierre de mes (FR-132; E-04)
+- [X] T0423 [US21] Implementar las vistas de T1 `payment-vouchers`, `transfers`, `month-end-checks` en src/Core/IngenIA365ERP.Application/Treasury/Reports/ y actualizar docs/manual/tesoreria-manual-del-tesorero.md con lo de T1 (FR-153, FR-225)
 - [ ] T0424 Correr en tests/IngenIA365ERP.API.IntegrationTests la e2e de T1 en los dos motores y congelar el par `TesoreriaCompleta` (huellas en tests/IngenIA365ERP.Architecture.Tests/Principles/LasMigracionesCongeladasNoSeRegeneran.cs, commit propio)
 - [ ] T0425 Promover T1 a DEV, QA y producción con respaldo por base y autorización expresa del dueño, siguiendo docs/operaciones/recaudo-tesoreria-despliegue.md (producción)
+
+**Notas de la construcción de la fase 35 (2026-10-24)**. Pruebas escritas y compiladas, sin correr. Desviaciones y decisiones; los nombres nuevos quedan en
+decisiones-transversales §2.7:
+
+- **T0419–T0420**: `Treasury/Results/ComprobanteDePagoTests` (girar deja un comprobante numerado con código, uno por orden; el documento enmascara; sin autorización del
+  canal no sale y con ella sale por correo; SMS simulado) y `Accounting/Periods/AvisoDeCierreContableTests` (las conciliaciones abiertas del mes son un aviso; con
+  `Contabilidad.CierreExigeConciliaciones` bloquean; el aviso se reconoce y el bloqueo no). `GuardaDelCuadreProvisionalTests` se ajusta: desde T1 un pendiente que no
+  bloquea **se reconoce** antes de cerrar.
+- **T0421**: `PaymentVoucher` (`Entities/Treasury/Payments/PaymentVoucher.cs`, `TES_PaymentVouchers`, uno por orden, con bruto, retención, neto, forma, cuenta de origen,
+  referencia o cheque, código de verificación y su envío) y `Treasury/Results/ComprobantesDePago.cs`: la emisión al registrar «girada» en `RegistroDeResultadosDelGiro`
+  (numerada `CE` con `NumeradorDeTesoreria`, que el registro recibe como parámetro opcional), `ListPaymentVouchersQuery` **(nuevo)**, `GetPaymentVoucherDocumentQuery`,
+  `SendPaymentVoucherCommand` y el puerto de PDF `IComprobanteDePagoEnPdf`, que implementa el mismo `DocumentosDeTesoreriaPdfRenderer`
+  (`DocumentosDeTesoreriaReport.ComprobanteDePago`). Rutas `GET /api/treasury/payment-vouchers` **(nuevo)**, `GET /{id}/document` (`Treasury.Orders.View`) y
+  `POST /{id}/send` (`Treasury.Results.Register`); pantalla **nueva** `/tesoreria/comprobantes-de-pago` (en el menú). **Desviación**: el envío no reusa el de Recaudo
+  (`AvisosDeRecaudo`) para que Tesorería no dependa de Recaudo; repite su regla —sólo correo con la autorización `ContactChannel` del beneficiario, SMS y mensajería
+  simulados— y deja `Treasury.PaymentVoucher.Sent` con el resultado.
+- **T0422**: `EstadoOperativoDeTesoreriaParaElCierre` suma las conciliaciones del mes abiertas o desactualizadas (`Accounting.Period.ReconciliationsOpen`) y
+  `EstadoOperativoDeRecaudoParaElCierre` (en `Receipts/Activation/EstadoOperativoParaElCierre.cs`) las sesiones de días del mes sin cerrar
+  (`Accounting.Period.CashSessionsOpen`); los dos leen `Contabilidad.CierreExigeConciliaciones` por el único lector (`AvisoOperativoDelCierre`, en `Common/Cuadres`) para
+  decidir si bloquean. `ClosePeriodCommand` gana `AcknowledgeOperationalPending` (y el cuerpo `acknowledgeOperationalPending`): el aviso se reconoce y queda en la
+  auditoría del cierre; el bloqueo responde `AccountingErrors.PeriodOperationalPending` con `data.pending[]`. `/contabilidad/periodos` muestra los pendientes y
+  «Cerrar de todos modos» cuando no bloquean. **Desviación**: el parámetro sigue en el módulo `TES` (no `ACC`), como ya decía DT §2.7.
+- **T0423**: vistas `payment-vouchers`, `transfers` y `month-end-checks` en `Treasury/Reports/InformesDeTesoreriaT1.cs` (el manejador de informes pasa a `partial`) y en el
+  registro `VistasDeTesoreria`; `docs/manual/tesoreria-manual-del-tesorero.md` lleva «Lo que trae T1».
+- **T0424** queda sin marcar: correr la e2e de T1 en los dos motores es de la corrida final (decisión vigente); congelar `TesoreriaCompleta` (huellas en
+  `LasMigracionesCongeladasNoSeRegeneran`) se hace en el commit en que esa corrida quede verde. **No hay clases e2e de T1 escritas** (tasks.md no las pide en las fases
+  33 a 35): quedan para la corrida de cierre.
+- **T0425** queda sin marcar: la promoción a DEV, QA y producción es del dueño (respaldo por base y autorización expresa).
+- El par `TesoreriaCompleta` regenerado con las seis tablas de T1 y trece columnas nuevas en tablas existentes (`TES_PaymentOrders`, `TES_IssuedChecks`,
+  `INV_DayCloses`); «No changes» en SqlServer y PostgreSQL; paridad en par (Application 71). Compilan API, Web, Web.Client, Persistence y las cinco de pruebas. Sin
+  probar en navegador.
 
 ---
 

@@ -625,6 +625,15 @@ Lo que tasks.md marcaba **(nuevo)** y lo que trajeron el `/speckit-analyze` y la
 | errores `Treasury.ManualOrder.{ConceptInactive, OverConceptCap, BeneficiaryIsPreparer, BeneficiaryIsApprover, DeriveToAccountingPayable, InvalidWithholding, SelfApproval, SameApprover, NotPendingApproval, PendingApproval}` · `Treasury.Signer.{SelfApproval, InvalidState, AlreadyActive}` · `Treasury.Token.SerialInUse` | los errores | `Treasury/Common/ErroresDeTesoreria.T1.cs` |
 | rutas `/api/treasury/manual-order-concepts` · `/api/treasury/manual-orders` (`/{id}/approve`, `/reject`) · `/api/treasury/bank-accounts/{id}/{signers,tokens}` (`/{authorityId}/retire`, `/approve`, `/reject`) · pantallas `/tesoreria/ordenes-manuales`, `/tesoreria/firmantes` · `OrdenesManualesClient` · eventos `Treasury.ManualOrder.{Prepared, Approved, Rejected}`, `Treasury.ManualOrderConcept.Saved`, `Treasury.Signer.{Requested, RetirementRequested}`, `Treasury.Token.{Requested, RetirementRequested}` | rutas, pantallas y auditoría | `API/Endpoints/Treasury/ManualOrdersEndpoints.cs`, `Shared/Pages/Tesoreria` |
 
+**Fijados en la construcción de la fase 35 (2026-10-24)**:
+
+| Nombre | Qué | Dónde |
+|---|---|---|
+| `TES_PaymentVouchers` (`PaymentVoucher`, clase de numeración `CE`) · `ComprobantesDePago` · `ListPaymentVouchersQuery` · `GetPaymentVoucherDocumentQuery` · `SendPaymentVoucherCommand` · `IComprobanteDePagoEnPdf` · `ComprobanteDePagoModel` · `PaymentVoucherDto` · `AvisoDeTesoreriaDto` · evento `Treasury.PaymentVoucher.Sent` | el comprobante de pago | par `TesoreriaCompleta`; `Treasury/Results/ComprobantesDePago.cs`, `API/Reports/DocumentosDeTesoreriaReport.cs` |
+| rutas `GET /api/treasury/payment-vouchers`, `GET /{id}/document`, `POST /{id}/send` · pantalla `/tesoreria/comprobantes-de-pago` · `ComprobantesDePagoClient` | rutas y pantalla | `API/Endpoints/Treasury/PaymentVouchersEndpoints.cs`, `Shared/Pages/Tesoreria/ComprobantesDePago.razor` |
+| `AvisoOperativoDelCierre` (`Accounting.Period.ReconciliationsOpen`, `Accounting.Period.CashSessionsOpen`) · `ClosePeriodCommand.AcknowledgeOperationalPending` · `AccountingErrors.PeriodOperationalPending` | el aviso al cierre contable (D29) | `Common/Cuadres/AvisoOperativoDelCierre.cs`, `Accounting/Periods/PeriodCommands.cs` |
+| vistas `payment-vouchers` · `transfers` · `month-end-checks` (`VistasDeTesoreria.{ComprobantesDePago, Traslados, CierreDeCheques}`) | las vistas de T1 | `Treasury/Reports/InformesDeTesoreriaT1.cs` |
+
 ## 3. Decisiones transversales
 
 ### Módulos y frontera
