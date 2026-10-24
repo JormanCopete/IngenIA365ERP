@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using System.Text.Json.Serialization;
 using FluentAssertions;
 using FluentAssertions.Execution;
@@ -117,7 +117,9 @@ public class EvaluadorDePoliticaTests
             "CashCountDifference", "CashMeansReclassification", "ReceiptBackdate", "CashSessionAdjustment", "ReceiptVoiding", "PaymentBatchApproval",
             "LiquidityFundUse",
             // Fase 11 (T0195): la clasificación de un abono o una partida y la partida vencida llevada a ingreso.
-            "BankItemClassification", "UnidentifiedItemToIncome");
+            "BankItemClassification", "UnidentifiedItemToIncome",
+            // R1, fase 26: el egreso vario de caja y la anulación de un egreso.
+            "CashDisbursementApproval");
         ApprovalSubjects.EsValido("DocumentConfirmation").Should().BeTrue();
         ApprovalSubjects.EsValido("documentconfirmation").Should().BeFalse("el sujeto se escribe exacto");
         ApprovalSubjects.EsValido("Otro").Should().BeFalse();

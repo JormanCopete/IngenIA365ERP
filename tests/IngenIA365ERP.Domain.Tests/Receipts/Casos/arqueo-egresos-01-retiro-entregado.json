@@ -1,0 +1,71 @@
+{
+  "nombre": "Retiro de ahorro entregado por la caja (R1, T0369)",
+  "descripcion": "Base 200.000 + recibo 50.000 - egreso por retiro 120.000 = 130.000 (esperado - egresos, R-14).",
+  "tratamientoDelFaltante": "CashierReceivable",
+  "medios": [
+    {
+      "id": 1,
+      "codigo": "EF",
+      "clase": "Cash",
+      "arqueo": "PhysicalCount",
+      "tolerancia": 1000
+    }
+  ],
+  "medioDeLaBase": "EF",
+  "base": 200000,
+  "cobros": [
+    {
+      "medio": "EF",
+      "valor": 50000,
+      "anulado": false,
+      "referencia": null
+    }
+  ],
+  "movimientos": [
+    {
+      "tipo": "CashDisbursement",
+      "medio": "EF",
+      "medioDestino": null,
+      "valor": 120000,
+      "esOrigen": true
+    }
+  ],
+  "conteo": [
+    {
+      "medio": "EF",
+      "total": null,
+      "denominaciones": [
+        {
+          "valor": 50000,
+          "cantidad": 2
+        },
+        {
+          "valor": 10000,
+          "cantidad": 3
+        }
+      ],
+      "referencias": null,
+      "lotes": null,
+      "motivo": null
+    }
+  ],
+  "esperado": [
+    {
+      "medio": "EF",
+      "base": 200000,
+      "cobros": 50000,
+      "anulaciones": 0,
+      "entradas": 0,
+      "salidas": 120000,
+      "esperado": 130000,
+      "contado": 130000,
+      "diferencia": 0,
+      "dentro": true,
+      "tratamiento": "None"
+    }
+  ],
+  "totalEsperado": 130000,
+  "totalContado": 130000,
+  "aAprobar": 0,
+  "sinMotivo": []
+}

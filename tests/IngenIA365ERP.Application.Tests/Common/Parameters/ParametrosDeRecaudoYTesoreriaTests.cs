@@ -56,6 +56,11 @@ public class ParametrosDeRecaudoYTesoreriaTests
         { P.ModuloTesoreria, P.ConciliacionDiasPartidaAntigua, "30", true },
         { P.ModuloTesoreria, P.GmfTarifa, "0.004", true },
         { P.ModuloTesoreria, P.GmfExencionDesembolsos, "true", true },
+        // Feature 015, R1 (fase 26): los egresos de caja, con su GMF propio en RCD.
+        { P.ModuloRecaudo, P.CajaEgresosVarios, "false", false },
+        { P.ModuloRecaudo, P.GmfTarifa, "0.004", true },
+        { P.ModuloRecaudo, P.GmfHechosGeneradoresDeEgresos, "DevolucionesYPartidas", true },
+        { P.ModuloRecaudo, P.GmfRedondeo, "AlPeso", true },
     };
 
     [Theory]
