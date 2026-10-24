@@ -573,6 +573,15 @@ Lo que tasks.md marcaba **(nuevo)** y lo que trajeron el `/speckit-analyze` y la
 | `IEfectivoDelPuntoDeVenta` · `EfectivoDelPuntoDeVentaDto` · `EfectivoDelPuntoDeVenta` (Comercial) · `RegistroDeEfectivo.DelPuntoDeVentaAsync` | el registro único con el punto de venta (E-03) | `Common/Integration/Inventory`, `Inventory/Integration`, `Receipts/Compliance/RegistroDeEfectivo.cs` |
 | adjunto `ReceiptsCashTransactionReport` · `AuditoriaDeRecaudo.ReporteDeEfectivoLeidoAsync` · eventos `Receipts.Sarlaft.{ReportGenerated, ReportUploaded}` · rutas `/api/receipts/compliance/cash-transaction-reports` · sección «Reporte de transacciones» de `/recaudo/cumplimiento` | adjunto, auditoría, rutas y pantalla | `Attachments/Common/AdjuntosDeModulo.cs`, `API/Endpoints/Receipts/ComplianceEndpoints.cs`, `Shared/Pages/Recaudo/Cumplimiento.razor` |
 
+**Fijados en la construcción de la fase 30 (2026-10-24)**:
+
+| Nombre | Qué | Dónde |
+|---|---|---|
+| `RCD_CommercialReceivableApplications` (`CommercialReceivableApplication`: `InvoiceNumber`, `AccountingDocumentPublicId`, `ConsultedBalance`) | el detalle de la aplicación `CommercialReceivable` | par `RecaudoCompleto`; `Entities/Receipts/Operations/CommercialReceivables.cs` |
+| `ContabilidadParaRecaudo.CuentasPorCobrarComercialesAsync` · `RolCuentasPorCobrarComerciales` | la consulta de Contabilidad por tercero y factura | `Accounting/Receipts/ContabilidadParaRecaudo.cs` |
+| `CuentasPorCobrarDeRecaudo` · `CommercialReceivableDto` · `CommercialReceivableApplicationDto` · `GetCommercialReceivablesQuery` · `ListCommercialReceivableApplicationsQuery` · `ErroresDeCuentasPorCobrar` (`Receipts.CommercialReceivable.{NotFound, OverBalance, InvoiceRequired}`) | lo pendiente neto de Recaudo, la consulta, el informe y los errores | `Receipts/CashDesk/CuentasPorCobrarComerciales.cs` |
+| rutas `GET /api/receipts/commercial-receivables?person=` y `…/applications` · «Cobrar» factura en `/recaudo/caja` | rutas y pantalla | `API/Endpoints/Receipts/CashDeskEndpoints.cs`, `Shared/Pages/Recaudo/Caja.razor` |
+
 ## 3. Decisiones transversales
 
 ### Módulos y frontera

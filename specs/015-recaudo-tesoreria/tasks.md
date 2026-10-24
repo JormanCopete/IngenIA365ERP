@@ -2162,11 +2162,34 @@ saldo ni como concepto vario (FR-049, FR-166 parte R1, FR-167 parte R1).
 **Independent Test**: vender a crédito un servicio, cobrarlo en caja junto con una cuota de crédito y comprobar que el hecho
 lleva el tercero y la factura como documento cruce y que el saldo pendiente baja; cobrar más que el saldo se rechaza.
 
-- [ ] T0394 [P] [US23] Escribir tests/IngenIA365ERP.Application.Tests/Receipts/CashDesk/CuentasPorCobrarComercialesTests.cs (FR-049, FR-179): consulta de pendientes por persona y factura por `IContabilidadParaRecaudo.CuentasPorCobrarComercialesAsync`; aplicación `CommercialReceivable` con tercero y factura de cruce; no más que el saldo; nunca como concepto vario; antes de activar Cartera, el recibo es la referencia que Cartera incorpora y un informe lo entrega
-- [ ] T0395 [P] [US23] Escribir la e2e tests/IngenIA365ERP.API.IntegrationTests/Receipts/CuentasPorCobrarComercialesTests.cs (US23 «Independent Test») para la corrida de cierre de R1
-- [ ] T0396 [US23] Implementar en Contabilidad la consulta de pendientes por tercero y documento cruce (`CuentasPorCobrarComercialesAsync` en src/Core/IngenIA365ERP.Application/Accounting/Receipts/ContabilidadParaRecaudo.cs) sobre las cuentas que Contabilidad marque por cobrar (E-04; FR-167)
-- [ ] T0397 [US23] Crear `RCD_CommercialReceivableApplications` (src/Core/IngenIA365ERP.Domain/Entities/Receipts/Operations/) con su configuración, el destino `CommercialReceivable` en `ConfirmacionDeRecibo` y `GET /api/receipts/commercial-receivables?person=`; emitir `ReciboEmitido` con el rol `CuentasPorCobrarComerciales` y tercero y cruce (contabilidad.md §3, §5)
-- [ ] T0398 [US23] Mostrar las cuentas por cobrar comerciales en el paso «qué paga» de `/recaudo/caja` y regenerar en src/Infrastructure/IngenIA365ERP.Persistence.Migrations.{PostgreSql,SqlServer}/Application/ el par `RecaudoCompleto`
+- [X] T0394 [P] [US23] Escribir tests/IngenIA365ERP.Application.Tests/Receipts/CashDesk/CuentasPorCobrarComercialesTests.cs (FR-049, FR-179): consulta de pendientes por persona y factura por `IContabilidadParaRecaudo.CuentasPorCobrarComercialesAsync`; aplicación `CommercialReceivable` con tercero y factura de cruce; no más que el saldo; nunca como concepto vario; antes de activar Cartera, el recibo es la referencia que Cartera incorpora y un informe lo entrega
+- [X] T0395 [P] [US23] Escribir la e2e tests/IngenIA365ERP.API.IntegrationTests/Receipts/CuentasPorCobrarComercialesTests.cs (US23 «Independent Test») para la corrida de cierre de R1
+- [X] T0396 [US23] Implementar en Contabilidad la consulta de pendientes por tercero y documento cruce (`CuentasPorCobrarComercialesAsync` en src/Core/IngenIA365ERP.Application/Accounting/Receipts/ContabilidadParaRecaudo.cs) sobre las cuentas que Contabilidad marque por cobrar (E-04; FR-167)
+- [X] T0397 [US23] Crear `RCD_CommercialReceivableApplications` (src/Core/IngenIA365ERP.Domain/Entities/Receipts/Operations/) con su configuración, el destino `CommercialReceivable` en `ConfirmacionDeRecibo` y `GET /api/receipts/commercial-receivables?person=`; emitir `ReciboEmitido` con el rol `CuentasPorCobrarComerciales` y tercero y cruce (contabilidad.md §3, §5)
+- [X] T0398 [US23] Mostrar las cuentas por cobrar comerciales en el paso «qué paga» de `/recaudo/caja` y regenerar en src/Infrastructure/IngenIA365ERP.Persistence.Migrations.{PostgreSql,SqlServer}/Application/ el par `RecaudoCompleto`
+
+**Notas de la construcción de la fase 30 (2026-10-24)**. Pruebas escritas y compiladas, sin correr. Desviaciones y decisiones; los nombres nuevos quedan en
+decisiones-transversales §2.7:
+
+- **T0394–T0395**: `Receipts/CashDesk/CuentasPorCobrarComercialesTests` (no más que el saldo, ni factura sin saldo o sin número; cobrada con una cuota, con tercero y
+  factura en `ReciboEmitido` y el saldo que baja; el informe de aplicaciones) y la e2e `Receipts/CuentasPorCobrarComercialesTests` (escrita, sin correr: consulta vacía y
+  factura inexistente rechazada; **el recorrido completo** —vender a crédito en Comercial y cobrarlo con una cuota— se compone en la corrida de cierre de R1 con el
+  escenario de ventas de la 012).
+- **T0396**: `ContabilidadParaRecaudo.CuentasPorCobrarComercialesAsync` (E-04): por tercero y documento cruce, sobre las cuentas que la matriz de Recaudo tiene **o tuvo**
+  para el rol `CuentasPorCobrarComerciales` (una factura vieja sigue en la cuenta donde se cargó), lo contabilizado por los **demás** módulos neto de débitos y créditos.
+  **Desviación**: lo que cobró Recaudo no entra en la consulta de Contabilidad; Recaudo lo descuenta con sus propias aplicaciones de recibos vigentes, contabilizadas o
+  no (`CuentasPorCobrarDeRecaudo`), así un recibo que espera su lote no deja cobrar dos veces la misma factura. «Las cuentas que Contabilidad marque por cobrar» son las
+  de ese rol de la matriz: no hay una marca nueva en el plan de cuentas.
+- **T0397**: `CommercialReceivableApplication` (`RCD_CommercialReceivableApplications`, con el saldo consultado) y su configuración; el destino `CommercialReceivable` en
+  el paso de ítems (`UpdateCashOperationItemsCommandHandler` recibe `IContabilidadParaRecaudo` **opcional**; errores **nuevos**
+  `Receipts.CommercialReceivable.{NotFound, OverBalance, InvoiceRequired}`) y en `ConfirmacionDeRecibo` (el saldo otra vez bajo el cerrojo de la persona y la fila del
+  detalle); `ReciboEmitido` acredita `CuentasPorCobrarComerciales` con el tercero y la factura de cruce y la anulación lo debita (`EmisionDeRecaudo.Recibos/Reversos`);
+  el rol entra a la matriz de Recaudo (y a los posibles de `ReciboEmitido` y `ReciboAnulado`). Rutas **nuevas** `GET /api/receipts/commercial-receivables?person=`
+  (`Receipts.Receipt.Register`) y `GET /api/receipts/commercial-receivables/applications` (el informe de lo cobrado que Cartera incorpora antes de activarse;
+  `Receipts.Reports.View` o `Receipts.Receipt.View`).
+- **T0398**: «qué paga» de `/recaudo/caja` lista las facturas con saldo («Cobrar»); `RecaudoCompleto` regenerado en par; «No changes» en los dos motores; paridad en par
+  (Application 70). Compilan API, Web, Web.Client, Persistence y las cinco de pruebas. Sin probar en navegador.
+
 
 ---
 
