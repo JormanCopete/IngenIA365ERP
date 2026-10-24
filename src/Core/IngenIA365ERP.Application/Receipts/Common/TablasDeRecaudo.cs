@@ -13,6 +13,7 @@ public static class TablasDeRecaudo
     // Feature 015, fases 11 a 15: los orígenes del nivel 6.
     public const string SaldosAFavor = "RCD_PayerCreditBalances";
     public const string Partidas = "RCD_UnidentifiedItems";
+    public const string LineasDeDescuento = "RCD_PayrollDeductionFileLines";
     public const string LineasDeGiro = "RCD_PaymasterRemittanceLines";
     public const string Cheques = "RCD_ReceivedChecks";
     public const string Recibos = "RCD_Receipts";

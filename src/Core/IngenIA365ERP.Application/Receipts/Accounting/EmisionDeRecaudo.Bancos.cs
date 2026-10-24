@@ -25,6 +25,7 @@ public sealed partial class EmisionDeRecaudo
     public static string TipoDelHechoDelCanal(ReceiptChannel canal) => canal switch
     {
         ReceiptChannel.Contingency or ReceiptChannel.CashDesk => ReciboEmitidoV1.Type,
+        ReceiptChannel.Paymaster => ReciboDePagaduriaEmitidoV1.Type,
         _ => ReciboDeBancoEmitidoV1.Type,
     };
 
@@ -51,6 +52,8 @@ public sealed partial class EmisionDeRecaudo
         string codigoDelTipo, CancellationToken ct)
     {
         _ = saldoDePagaduria;
+        if (recibo.Channel == ReceiptChannel.Paymaster)
+            return await ReciboDePagaduriaEmitidoAsync(recibo, aplicaciones, medio, porciones, naturalezas, codigoDelTipo, ct);
         if (recibo.Channel is ReceiptChannel.Contingency or ReceiptChannel.CashDesk)
             return await ReciboEmitidoAsync(recibo, aplicaciones, [medio], porciones, naturalezas, null, codigoDelTipo, ct);
 

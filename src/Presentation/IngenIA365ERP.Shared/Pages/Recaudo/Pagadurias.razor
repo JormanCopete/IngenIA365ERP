@@ -1,0 +1,412 @@
+@page "/recaudo/pagadurias"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Recaudo
+@inject PagaduriasClient PagaduriasApi
+@inject BancosClient BancosApi
+@inject NavigationManager Navegacion
+@inject INotificationService Notification
+
+<PageTitle>Pagadurías - IngenIA365ERP</PageTitle>
+
+@* Feature 015, US7 (T0210; FR-075 a FR-081, FR-201): los archivos de descuentos que llegan de Cartera por pagaduría y período; confirmar su envío; cargar la
+   respuesta de la pagaduría (formato, plantilla genérica o a mano), revisarla y devolverla a Cartera; leer su evaluación; registrar el giro desde un abono del
+   extracto y aplicarlo línea por línea, con lo no aplicado como saldo de la pagaduría. *@
+<PermissionGate Required="Receipts.Paymasters.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Pagadurías</h3>
+        <div class="toolbar">
+            <input type="number" class="e-input" placeholder="Año" @bind="_anio" />
+            <input type="number" class="e-input" placeholder="Mes" @bind="_mes" />
+            <select class="e-input" @bind="_estado">
+                <option value="0">Todos</option>
+                <option value="1">Recibidos</option>
+                <option value="2">Enviados</option>
+                <option value="3">Respondidos</option>
+                <option value="4">Reemplazados</option>
+            </select>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Cargando archivos…">
+        <table class="data-grid">
+            <thead><tr><th>Archivo</th><th>Pagaduría</th><th>Convenio</th><th>Período</th><th>Versión</th><th>Líneas</th><th>Valor</th><th>Enviar a más tardar</th><th>Estado</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var a in _archivos)
+                {
+                    <tr>
+                        <td>@a.FileNumber</td><td>@a.PaymasterName</td><td>@a.AgreementCode @(a.FileGroupCode is null ? "" : $"· {a.FileGroupCode}")</td>
+                        <td>@a.PeriodYear-@a.PeriodMonth.ToString("00")@(a.SubPeriod is null ? "" : $"·{a.SubPeriod}")</td><td>@a.FileVersion (v@a.MessageVersion)</td>
+                        <td>@a.LineCount</td><td>@a.Amount.ToString("N2")</td><td>@a.SendBy.ToString("dd/MM/yyyy")</td><td>@Estado(a.Status)</td>
+                        <td><SfButton CssClass="e-flat" OnClick="@(() => ElegirAsync(a))">Abrir</SfButton></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </IndicadorDeCarga>
+
+    @if (_elegido is not null)
+    {
+        <section class="info-card">
+            <h4>Archivo @_elegido.FileNumber — @_elegido.PaymasterName</h4>
+            <IndicadorDeCarga Cargando="@_detalle.Activa" Texto="Cargando el archivo…">
+                <div class="toolbar">
+                    <SfButton CssClass="e-outline" OnClick="@DescargarAsync">Descargar el archivo</SfButton>
+                    @if (_elegido.Status == 1)
+                    {
+                        <PermissionGate Required="Receipts.Paymasters.ConfirmSent">
+                            <select class="e-input" @bind="_canal">
+                                <option value="1">Correo</option>
+                                <option value="2">Portal</option>
+                                <option value="3">Físico</option>
+                                <option value="4">Otro</option>
+                            </select>
+                            <input class="e-input" placeholder="Radicado" maxlength="60" @bind="_radicado" />
+                            <SfButton CssClass="e-primary" OnClick="@ConfirmarEnvioAsync">Confirmar envío</SfButton>
+                        </PermissionGate>
+                    }
+                    else if (_elegido.SentAt is { } enviado)
+                    {
+                        <span>Enviado el @enviado.ToLocalTime().ToString("dd/MM/yyyy HH:mm") @(_elegido.SentReference is null ? "" : $"· radicado {_elegido.SentReference}")</span>
+                    }
+                </div>
+                <table class="data-grid">
+                    <thead><tr><th>Producto</th><th>Persona</th><th>Empleado</th><th>Código</th><th>Vence</th><th>Valor</th><th>Descontado</th><th>Girado</th></tr></thead>
+                    <tbody>
+                        @foreach (var l in _elegido.Lines)
+                        {
+                            <tr>
+                                <td>@(l.Kind == 2 ? "Cuenta" : "Crédito") @l.ProductNumber</td><td>@l.PersonName</td><td>@l.PayerEmployeeId</td><td>@l.PaymasterConceptCode</td>
+                                <td>@l.DueDate.ToString("dd/MM/yyyy")</td><td>@l.Amount.ToString("N2")</td><td>@(l.DeductedAmount?.ToString("N2") ?? "—")</td>
+                                <td>@l.RemittedAmount.ToString("N2")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </IndicadorDeCarga>
+        </section>
+
+        @if (_elegido.Status == 2)
+        {
+            <PermissionGate Required="Receipts.Paymasters.LoadResponse">
+                <section class="info-card">
+                    <h4>Respuesta de la pagaduría</h4>
+                    <IndicadorDeCarga Cargando="@_respuesta.Activa" Texto="Procesando la respuesta…">
+                        <div class="toolbar">
+                            <InputFile OnChange="@ArchivoElegidoAsync" accept=".txt,.csv" />
+                            <SfButton CssClass="e-primary" Disabled="@(_contenido is null)" OnClick="@CargarRespuestaAsync">Cargar con la plantilla genérica</SfButton>
+                        </div>
+                        <p>O capture a mano lo descontado por línea:</p>
+                        <table class="data-grid">
+                            <thead><tr><th>Producto</th><th>Empleado</th><th>Código</th><th>Descontado</th></tr></thead>
+                            <tbody>
+                                @foreach (var f in _captura)
+                                {
+                                    <tr><td>@f.ProductNumber</td><td>@f.PayerEmployeeId</td><td>@f.PaymasterConceptCode</td><td><input type="number" class="e-input" @bind="f.Deducted" /></td></tr>
+                                }
+                            </tbody>
+                        </table>
+                        <div class="toolbar"><SfButton CssClass="e-outline" OnClick="@CapturarAsync">Guardar la captura</SfButton></div>
+                    </IndicadorDeCarga>
+                </section>
+            </PermissionGate>
+        }
+
+        <section class="info-card">
+            <h4>Versiones de la respuesta</h4>
+            <IndicadorDeCarga Cargando="@_respuesta.Activa" Texto="Cargando respuestas…">
+                <table class="data-grid">
+                    <thead><tr><th>Versión</th><th>Origen</th><th>Líneas</th><th>Esperado</th><th>Descontado</th><th>Sin equivalencia</th><th>Estado</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var r in _respuestas)
+                        {
+                            <tr class="@(r.Status == 3 ? "fila-alerta" : "")">
+                                <td>@r.Version</td><td>@Origen(r.Source)</td><td>@r.LineCount</td><td>@r.Expected.ToString("N2")</td><td>@r.Deducted.ToString("N2")</td><td>@r.Unmatched</td>
+                                <td>@EstadoDeRespuesta(r.Status) @(r.RejectionCode is null ? "" : $"({r.RejectionCode})")</td>
+                                <td>
+                                    <SfButton CssClass="e-flat" OnClick="@(() => VistaPreviaAsync(r))">Revisar</SfButton>
+                                    @if (r.Status == 1)
+                                    {
+                                        <SfButton CssClass="e-flat" OnClick="@(() => DevolverAsync(r))">Devolver a Cartera</SfButton>
+                                    }
+                                    @if (r.Status == 2)
+                                    {
+                                        <SfButton CssClass="e-flat" OnClick="@(() => EvaluacionAsync(r))">Ver la evaluación de Cartera</SfButton>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                @if (_vista is not null)
+                {
+                    <table class="data-grid">
+                        <thead><tr><th>@(_vista.GroupBy == "PaymasterConcept" ? "Código de la pagaduría" : "Crédito")</th><th>Líneas</th><th>Esperado</th><th>Descontado</th><th>Sin equivalencia</th></tr></thead>
+                        <tbody>
+                            @foreach (var f in _vista.Rows)
+                            {
+                                <tr><td>@f.Key</td><td>@f.Lines</td><td>@f.Expected.ToString("N2")</td><td>@f.Deducted.ToString("N2")</td><td>@f.Unmatched</td></tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </IndicadorDeCarga>
+        </section>
+
+        @if (_elegido.Status == 3)
+        {
+            <PermissionGate Required="Receipts.Paymasters.RegisterRemittance">
+                <section class="info-card">
+                    <h4>Registrar el giro</h4>
+                    <IndicadorDeCarga Cargando="@_giro.Activa" Texto="Registrando el giro…">
+                        <div class="form-grid">
+                            <label class="campo">Abono del extracto
+                                <select class="e-input" @bind="_abono">
+                                    <option value="">— Elija —</option>
+                                    @foreach (var b in _abonos)
+                                    {
+                                        <option value="@b.PublicId">@b.MovementDate.ToString("dd/MM/yyyy") · @b.Pending.ToString("N2") · @b.Reference</option>
+                                    }
+                                </select>
+                            </label>
+                            <label class="campo">Valor (vacío = lo pendiente del abono) <input type="number" class="e-input" @bind="_valorDelGiro" /></label>
+                            <label class="campo"><input type="checkbox" @bind="_excedenteASaldo" /> El excedente queda como saldo de la pagaduría</label>
+                        </div>
+                        <div class="toolbar"><SfButton CssClass="e-primary" Disabled="@string.IsNullOrEmpty(_abono)" OnClick="@RegistrarGiroAsync">Registrar el giro</SfButton></div>
+                    </IndicadorDeCarga>
+                </section>
+            </PermissionGate>
+        }
+    }
+
+    <section class="info-card">
+        <h4>Giros</h4>
+        <IndicadorDeCarga Cargando="@_giro.Activa" Texto="Cargando giros…">
+            <table class="data-grid">
+                <thead><tr><th>Número</th><th>Pagaduría</th><th>Fecha</th><th>Valor</th><th>Asignado</th><th>Excedente</th><th>Aplicadas</th><th>No aplicadas</th><th>Pendientes</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var g in _giros)
+                    {
+                        <tr class="@(g.Rejected > 0 ? "fila-alerta" : "")">
+                            <td>@g.Number</td><td>@g.PaymasterName</td><td>@g.RemittedOn.ToString("dd/MM/yyyy")</td><td>@g.Amount.ToString("N2")</td><td>@g.Allocated.ToString("N2")</td>
+                            <td>@g.Surplus.ToString("N2")</td><td>@g.Applied</td><td>@g.Rejected</td><td>@g.Pending</td>
+                            <td>
+                                @if (g.Pending > 0)
+                                {
+                                    <PermissionGate Required="Receipts.Paymasters.ApplyRemittance">
+                                        <SfButton CssClass="e-flat" OnClick="@(() => AplicarGiroAsync(g))">Aplicar</SfButton>
+                                    </PermissionGate>
+                                }
+                                <SfButton CssClass="e-flat" OnClick="@(() => _giroElegido = g)">Ver líneas</SfButton>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            @if (_giroElegido is not null)
+            {
+                <table class="data-grid">
+                    <thead><tr><th>#</th><th>Producto</th><th>Persona</th><th>Valor</th><th>Resultado</th><th>Recibo</th><th>Motivo</th><th>Saldo de la pagaduría</th></tr></thead>
+                    <tbody>
+                        @foreach (var l in _giroElegido.Items)
+                        {
+                            <tr class="@(l.Outcome == 3 ? "fila-alerta" : "")">
+                                <td>@l.Order</td><td>@l.ProductNumber</td><td>@l.PersonName</td><td>@l.Amount.ToString("N2")</td><td>@ResultadoDeLinea(l.Outcome)</td><td>@l.ReceiptNumber</td>
+                                <td>@l.RejectionMessage</td><td>@l.CreditBalanceNumber</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </IndicadorDeCarga>
+    </section>
+</div>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new(), _detalle = new(), _respuesta = new(), _giro = new();
+    private IReadOnlyList<ArchivoDeDescuentosDto> _archivos = [];
+    private IReadOnlyList<RespuestaDePagaduriaDto> _respuestas = [];
+    private IReadOnlyList<GiroDePagaduriaDto> _giros = [];
+    private IReadOnlyList<AbonoDto> _abonos = [];
+    private List<FilaEditable> _captura = [];
+    private ArchivoDeDescuentosDto? _elegido;
+    private GiroDePagaduriaDto? _giroElegido;
+    private VistaPreviaDeRespuestaDto? _vista;
+    private int? _anio, _mes;
+    private int _estado, _canal = 2;
+    private string? _radicado, _nombreDelArchivo;
+    private string _abono = "";
+    private decimal? _valorDelGiro;
+    private bool _excedenteASaldo;
+    private byte[]? _contenido;
+    private ClaveDeOperacion _clave = new();
+
+    private sealed class FilaEditable
+    {
+        public string? ProductNumber { get; set; }
+        public string? PayerEmployeeId { get; set; }
+        public string? PaymasterConceptCode { get; set; }
+        public decimal Deducted { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarAsync();
+        await GirosAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await PagaduriasApi.ArchivosAsync(null, _anio, _mes, _estado == 0 ? null : _estado);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los archivos de descuentos."); return; }
+        _archivos = r.Value ?? [];
+    }
+
+    private async Task GirosAsync()
+    {
+        using var carga = _giro.Iniciar();
+        var r = await PagaduriasApi.GirosAsync();
+        if (r.IsSuccess) _giros = r.Value ?? [];
+    }
+
+    private async Task ElegirAsync(ArchivoDeDescuentosDto a)
+    {
+        using var carga = _detalle.Iniciar();
+        _clave = new();
+        _vista = null;
+        _contenido = null;
+        var r = await PagaduriasApi.ArchivoAsync(a.PublicId);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo abrir el archivo."); return; }
+        _elegido = r.Value;
+        _captura = _elegido.Lines.Select(l => new FilaEditable
+        {
+            ProductNumber = l.ProductNumber, PayerEmployeeId = l.PayerEmployeeId, PaymasterConceptCode = l.PaymasterConceptCode, Deducted = l.Amount,
+        }).ToList();
+        await RespuestasAsync();
+        if (_elegido.Status == 3)
+        {
+            var abonos = await BancosApi.AbonosAsync();
+            if (abonos.IsSuccess) _abonos = abonos.Value?.Items ?? [];
+        }
+    }
+
+    private async Task RespuestasAsync()
+    {
+        if (_elegido is null) return;
+        using var carga = _respuesta.Iniciar();
+        var r = await PagaduriasApi.RespuestasAsync(_elegido.PublicId);
+        if (r.IsSuccess) _respuestas = r.Value ?? [];
+    }
+
+    private async Task DescargarAsync()
+    {
+        if (_elegido is null) return;
+        var r = await PagaduriasApi.DescargaAsync(_elegido.PublicId);
+        if (!r.IsSuccess || r.Value?.Url is not { } url) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo descargar el archivo."); return; }
+        Navegacion.NavigateTo(url, forceLoad: true);
+    }
+
+    private async Task ConfirmarEnvioAsync()
+    {
+        if (_elegido is null) return;
+        using var carga = _detalle.Iniciar();
+        var r = await PagaduriasApi.ConfirmarEnvioAsync(_elegido.PublicId, new ConfirmarEnvioRequest(_canal, null, _radicado), _clave);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo confirmar el envío."); return; }
+        await Notification.SuccessAsync("Envío confirmado: Cartera ya lo sabe.");
+        await CargarAsync();
+        var actual = _archivos.FirstOrDefault(x => x.PublicId == _elegido.PublicId);
+        if (actual is not null) await ElegirAsync(actual);
+    }
+
+    private async Task ArchivoElegidoAsync(InputFileChangeEventArgs e)
+    {
+        using var ms = new MemoryStream();
+        await e.File.OpenReadStream(10 * 1024 * 1024).CopyToAsync(ms);
+        _contenido = ms.ToArray();
+        _nombreDelArchivo = e.File.Name;
+    }
+
+    private async Task CargarRespuestaAsync()
+    {
+        if (_elegido is null || _contenido is null) return;
+        using var carga = _respuesta.Iniciar();
+        var r = await PagaduriasApi.CargarRespuestaAsync(_elegido.PublicId, _nombreDelArchivo ?? "respuesta.csv", _contenido, null, _clave);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo leer la respuesta."); return; }
+        _clave = new();
+        await RespuestasAsync();
+    }
+
+    private async Task CapturarAsync()
+    {
+        if (_elegido is null) return;
+        using var carga = _respuesta.Iniciar();
+        var filas = _captura.Select(f => new FilaCapturadaRequest(f.Deducted, f.ProductNumber, f.PayerEmployeeId, f.PaymasterConceptCode)).ToList();
+        var r = await PagaduriasApi.CapturarRespuestaAsync(_elegido.PublicId, new CapturaDeRespuestaRequest(null, filas), _clave);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo guardar la captura."); return; }
+        _clave = new();
+        await RespuestasAsync();
+    }
+
+    private async Task VistaPreviaAsync(RespuestaDePagaduriaDto r)
+    {
+        if (_elegido is null) return;
+        using var carga = _respuesta.Iniciar();
+        var v = await PagaduriasApi.VistaPreviaAsync(_elegido.PublicId, r.PublicId);
+        if (v.IsSuccess) _vista = v.Value;
+    }
+
+    private async Task DevolverAsync(RespuestaDePagaduriaDto r)
+    {
+        if (_elegido is null) return;
+        using var carga = _respuesta.Iniciar();
+        var d = await PagaduriasApi.DevolverAsync(_elegido.PublicId, r.PublicId, new ClaveDeOperacion());
+        if (!d.IsSuccess) { await Notification.ErrorAsync(d.ErrorMessage ?? "No se pudo devolver la respuesta a Cartera."); return; }
+        await Notification.SuccessAsync("Respuesta devuelta a Cartera.");
+        await RespuestasAsync();
+    }
+
+    private async Task EvaluacionAsync(RespuestaDePagaduriaDto r)
+    {
+        if (_elegido is null) return;
+        using var carga = _respuesta.Iniciar();
+        var d = await PagaduriasApi.ActualizarEvaluacionAsync(_elegido.PublicId, r.PublicId, new ClaveDeOperacion());
+        if (!d.IsSuccess) { await Notification.ErrorAsync(d.ErrorMessage ?? "No se pudo leer la evaluación de Cartera."); return; }
+        if (d.Value?.Status == 2) await Notification.InfoAsync("Cartera todavía no evalúa la respuesta.");
+        await RespuestasAsync();
+        await CargarAsync();
+    }
+
+    private async Task RegistrarGiroAsync()
+    {
+        if (_elegido is null || !Guid.TryParse(_abono, out var abono)) return;
+        using var carga = _giro.Iniciar();
+        var r = await PagaduriasApi.RegistrarGiroAsync(new RegistrarGiroRequest(_elegido.PaymasterPersonPublicId, abono, [_elegido.PublicId], _valorDelGiro, null, null,
+            _excedenteASaldo, null), _clave);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo registrar el giro."); return; }
+        _clave = new();
+        await Notification.SuccessAsync($"Giro {r.Value?.Number} registrado: aplíquelo desde la lista de giros.");
+        await GirosAsync();
+    }
+
+    private async Task AplicarGiroAsync(GiroDePagaduriaDto g)
+    {
+        using var carga = _giro.Iniciar();
+        var r = await PagaduriasApi.AplicarGiroAsync(g.PublicId, new AplicarGiroRequest(null, null), new ClaveDeOperacion());
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo aplicar el giro."); return; }
+        _giroElegido = r.Value;
+        if (r.Value?.Rejected > 0) await Notification.WarningAsync($"{r.Value.Rejected} línea(s) no se aplicaron: quedaron como saldo de la pagaduría.");
+        await GirosAsync();
+    }
+
+    private static string Estado(int s) => s switch { 1 => "Recibido", 2 => "Enviado", 3 => "Respondido", 4 => "Reemplazado", _ => s.ToString() };
+
+    private static string EstadoDeRespuesta(int s) => s switch { 1 => "En revisión", 2 => "Devuelta", 3 => "Rechazada por Cartera", 4 => "Aceptada por Cartera", _ => s.ToString() };
+
+    private static string Origen(int s) => s switch { 1 => "Formato", 2 => "Plantilla genérica", 3 => "A mano", _ => s.ToString() };
+
+    private static string ResultadoDeLinea(int s) => s switch { 1 => "Pendiente", 2 => "Aplicada", 3 => "No aplicada", _ => s.ToString() };
+}

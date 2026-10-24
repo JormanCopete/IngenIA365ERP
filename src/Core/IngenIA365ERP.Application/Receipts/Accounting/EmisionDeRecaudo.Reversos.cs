@@ -98,13 +98,15 @@ public sealed partial class EmisionDeRecaudo
         var dim = await DimensionesDeOficinaAsync(saldo.BranchId, ct);
         var pagador = await db.People.AsNoTracking().IgnoreQueryFilters().Where(p => p.Id == saldo.PersonId).Select(p => p.PublicId).FirstAsync(ct);
         var porOrden = movimiento.Kind == PayerCreditBalanceMovementKind.RefundedByOrder;
+        // US7 (fase 12): el saldo de una pagaduría vive en SaldoDePagadurias.
+        var rolDelSaldo = saldo.Kind == PayerCreditBalanceKind.Paymaster ? RolesDeRecaudo.SaldoDePagadurias : RolesDeRecaudo.SaldoAFavorDePagadores;
         var contenido = new SaldoAFavorDePagadorResueltoV1
         {
             CreditBalancePublicId = saldo.PublicId, PayerPersonPublicId = pagador, Form = movimiento.Kind.ToString(), Amount = movimiento.Amount,
             DocumentPublicId = movimiento.DocumentPublicId, DocumentNumber = movimiento.DocumentNumber, ResolvedOn = fecha, ResolvedBy = await UsuarioAsync(ct),
             Lines =
             [
-                Linea(RolesDeRecaudo.SaldoAFavorDePagadores, RolesDeRecaudo.Debito, movimiento.Amount, dim, pagador, saldo.OriginDocumentNumber),
+                Linea(rolDelSaldo, RolesDeRecaudo.Debito, movimiento.Amount, dim, pagador, saldo.OriginDocumentNumber),
                 porOrden
                     ? Linea(RolesDeRecaudo.PuenteDeDevolucion, RolesDeRecaudo.Credito, movimiento.Amount, dim, pagador, movimiento.DocumentNumber)
                     : Linea(RolesDeRecaudo.PuenteDelModulo, RolesDeRecaudo.Credito, movimiento.Amount, dim with { TargetModule = ModulosDeOrigen.Cartera },

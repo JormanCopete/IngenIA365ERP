@@ -35,6 +35,9 @@ public static class CatalogoDeMensajesDeRecaudoV1
         Hecho(typeof(PartidaPorIdentificarReconocidaV1), PartidaPorIdentificarReconocidaV1.Type, "PIR"),
         Hecho(typeof(PartidaClasificadaV1), PartidaClasificadaV1.Type, "PCL"),
         Hecho(typeof(PartidaDevueltaAlConsignanteV1), PartidaDevueltaAlConsignanteV1.Type, "PDC"),
+        // US7 (fase 12): la pagaduría, en línea.
+        Hecho(typeof(GiroDePagaduriaRecibidoV1), GiroDePagaduriaRecibidoV1.Type, "GPR"),
+        Hecho(typeof(ReciboDePagaduriaEmitidoV1), ReciboDePagaduriaEmitidoV1.Type, "RPG"),
     ];
 
     private static TipoDeMensaje Hecho(Type record, string type, string codigoCorto) =>

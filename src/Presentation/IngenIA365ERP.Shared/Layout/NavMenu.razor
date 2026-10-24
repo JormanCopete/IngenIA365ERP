@@ -562,6 +562,10 @@
             <PermissionGate Required="Receipts.UnidentifiedItems.View">
                 <NavLink href="/recaudo/partidas" class="nav-subitem">Partidas por identificar</NavLink>
             </PermissionGate>
+            @* US7 (T0210): los archivos de descuentos, sus respuestas y los giros de las pagadurías. *@
+            <PermissionGate Required="Receipts.Paymasters.View">
+                <NavLink href="/recaudo/pagadurias" class="nav-subitem">Pagadurías</NavLink>
+            </PermissionGate>
             <span class="nav-subgroup-title">Configuración</span>
             <PermissionGate Required="Receipts.Setup.View">
                 <NavLink href="/recaudo/configuracion/puntos" class="nav-subitem">Puntos de recaudo</NavLink>

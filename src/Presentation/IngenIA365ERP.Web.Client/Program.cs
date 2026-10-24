@@ -131,6 +131,7 @@ builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Tesoreria.LotesClient>(
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Tesoreria.ResultadosClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Recaudo.AnulacionesClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Recaudo.BancosClient>();
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Recaudo.PagaduriasClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Tesoreria.ExtractosClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Recaudo.CajaClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Compliance.ListasRestrictivasClient>();

@@ -30,6 +30,7 @@ public static class SqlDelCerrojoDeRecaudo
     public const string TablaSaldosAFavor = "RCD_PayerCreditBalances";
     public const string TablaPartidas = "RCD_UnidentifiedItems";
     public const string TablaLineasDeGiro = "RCD_PaymasterRemittanceLines";
+    public const string TablaLineasDeDescuento = "RCD_PayrollDeductionFileLines";
     public const string TablaCheques = "RCD_ReceivedChecks";
     public const string TablaRecibos = "RCD_Receipts";
     public const string TablaNumeracion = "COR_Sequences";
@@ -40,7 +41,7 @@ public static class SqlDelCerrojoDeRecaudo
         [NivelDeRecaudo.DiaDelPunto] = [TablaDiasDelPunto],
         [NivelDeRecaudo.Sesion] = [TablaSesiones],
         [NivelDeRecaudo.Boveda] = [TablaBovedas],
-        [NivelDeRecaudo.Origenes] = [TablaSaldosAFavor, TablaPartidas, TablaLineasDeGiro, TablaCheques, TablaRecibos],
+        [NivelDeRecaudo.Origenes] = [TablaSaldosAFavor, TablaPartidas, TablaLineasDeDescuento, TablaLineasDeGiro, TablaCheques, TablaRecibos],
     };
 
     /// <summary>Nivel 1: la fila única de la configuración, compartida o exclusiva.</summary>

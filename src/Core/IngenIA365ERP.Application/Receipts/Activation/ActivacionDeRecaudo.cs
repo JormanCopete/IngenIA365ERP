@@ -122,7 +122,8 @@ public sealed class ActivateReceiptsCommandHandler(
         if (recaudador.IsFailure) return Result.Failure<EstadoDeActivacionDto>(recaudador.Error);
         var destino = await registro.RegistrarAsync(new NuevoParticipante(ClavesDeRecaudo.Codigo, IntegrationParticipantClass.Receipts,
             IntegrationParticipantRole.MessageDestination, IntegrationDestinations.Receipts, true, false,
-            [new VersionAdoptada(PagoReversadoPorCarteraV1.Type, 1), new VersionAdoptada(ConsignacionReversadaPorCarteraV1.Type, 1)], desde, motivo), ct);
+            [new VersionAdoptada(PagoReversadoPorCarteraV1.Type, 1), new VersionAdoptada(ConsignacionReversadaPorCarteraV1.Type, 1),
+                new VersionAdoptada(DescuentosPorPagaduriaV1.Type, 1), new VersionAdoptada(DescuentosPorPagaduriaV1.Type, 2)], desde, motivo), ct);
         if (destino.IsFailure) return Result.Failure<EstadoDeActivacionDto>(destino.Error);
 
         setup.Status = ReceiptsModuleStatus.Active;

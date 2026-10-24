@@ -674,6 +674,13 @@ public interface IApplicationDbContext
     DbSet<IngenIA365ERP.Domain.Entities.Receipts.Banks.UnidentifiedItemResolution> UnidentifiedItemResolutions { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Receipts.Banks.ProcessingRun> ProcessingRuns { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Receipts.Banks.ProcessingRunLine> ProcessingRunLines { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PayrollDeductionFile> ReceiptsPayrollDeductionFiles { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PayrollDeductionFileLine> ReceiptsPayrollDeductionFileLines { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PayrollFileSending> PayrollFileSendings { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PaymasterResponse> PaymasterResponses { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PaymasterResponseLine> PaymasterResponseLines { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PaymasterRemittance> PaymasterRemittances { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PaymasterRemittanceLine> PaymasterRemittanceLines { get; }
 
     /// <summary>
     /// Descarta todo lo que el contexto tenga sin guardar (feature 009, R3): lo usa el reintento

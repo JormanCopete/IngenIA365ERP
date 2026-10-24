@@ -323,6 +323,8 @@ public static class DependencyInjection
         services.AddScoped<Common.Integration.Treasury.IMovimientosBancariosParaRecaudo, Treasury.Statements.MovimientosBancariosParaRecaudo>();
         services.AddScoped<Receipts.BankItems.AplicacionNoInteractiva>();
         services.AddScoped<Receipts.BankItems.PartidasPorIdentificar>();
+        services.AddScoped<Receipts.Paymasters.GirosDePagaduria>();
+        services.AddScoped<Receipts.BankItems.IReprocesoDeCorrida>(sp => sp.GetRequiredService<Receipts.Paymasters.GirosDePagaduria>());
         services.AddScoped<Receipts.Tareas.AntiguedadDeRecaudo>();
         // Feature 015, T0183b: los requisitos de la activación mínima de los dos módulos.
         services.AddScoped<Receipts.Activation.RequisitosDeActivacionDeRecaudo>();

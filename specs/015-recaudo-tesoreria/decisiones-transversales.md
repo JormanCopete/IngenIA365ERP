@@ -343,6 +343,20 @@ Lo que tasks.md marcaba **(nuevo)** y lo que trajeron el `/speckit-analyze` y la
 | `AntiguedadDeRecaudo` · `TareaDeAntiguedadDeRecaudo` (`recaudo.antiguedad`, cada 24 h) · `PermisoDelOficial` | sólo alerta; deja `AgingStep` | `Application/Receipts/Tareas` |
 | `BancosClient` · `EnvioDeRecaudo` · `ExtractosClient` · `/recaudo/extractos` · `/recaudo/partidas` · `/tesoreria/extractos` | clientes y pantallas de US6 | `Shared` |
 
+**Fijados en la construcción de la fase 12 (2026-10-24)**:
+
+| Nombre | Qué | Dónde |
+|---|---|---|
+| `PayrollDeductionFile` · `PayrollDeductionFileLine` (H, `[EscrituraUnica]` `DeductionOutcome`/`DeductedAmount`/`DeductionDate`, `[ColumnaMutable]` `RemittedAmount`) · `PayrollFileSending` (H) · `PaymasterResponse` · `PaymasterResponseLine` · `PaymasterRemittance` · `PaymasterRemittanceLine` · DbSets `ReceiptsPayrollDeductionFiles`, `ReceiptsPayrollDeductionFileLines`, `PayrollFileSendings`, `PaymasterResponses`, `PaymasterResponseLines`, `PaymasterRemittances`, `PaymasterRemittanceLines` | la copia en Recaudo del archivo de descuentos, su envío, sus respuestas y los giros | `Entities/Receipts/Paymasters`, `RCD_*` |
+| `PayrollDeductionFileState` · `PayrollDeductionLineKind` · `PayrollFileChannel` · `PaymasterResponseSource` · `PaymasterResponseState` · `PaymasterDeductionOutcome` · `PaymasterRemittanceSource` · `PaymasterRemittanceState` · `PaymasterAllocationOrder` · `PaymasterRemittanceLineOutcome` | enumeraciones de las pagadurías | `Domain/Enums/Receipts/ReceiptsPaymasterEnums.cs` |
+| `ConsumePayrollDeductionFileCommand` | el consumo de `DescuentosPorPagaduria` v1 y v2 (lo manda `DestinoRecaudo`) | `Application/Receipts/Paymasters` |
+| `ConfirmPayrollFileSentCommand` · `LoadPaymasterResponseCommand` · `FilaDeRespuestaCapturada` · `PreviewPaymasterResponseQuery` · `EmitPaymasterResultCommand` · `RefreshPaymasterResponseStatusCommand` · `EvaluacionDeCarteraDeLaRespuesta` · `ListPayrollDeductionFilesQuery` · `GetPayrollDeductionFileQuery` · `DownloadPayrollDeductionFileCommand` · `ListPaymasterResponsesQuery` · `PagaduriasDeRecaudo` | envío, respuesta, devolución y evaluación de Cartera | `Application/Receipts/Paymasters` |
+| `RegisterPaymasterRemittanceCommand` · `ApplyPaymasterRemittanceCommand` · `ResolvePaymasterBalanceCommand` · `GetPaymasterRemittanceQuery` · `ListPaymasterRemittancesQuery` · `GirosDePagaduria` (`IReprocesoDeCorrida`) · `GirosDePagaduria.Clave` (`REC:{giro:N}:{línea:N}`) · clase de numeración `GP` | el giro y su aplicación línea por línea | `Application/Receipts/Paymasters` |
+| `EmisionDeRecaudo.{GiroDePagaduriaRecibidoAsync, ReciboDePagaduriaEmitidoAsync, MensajeDeLibranzaAsync}` · `GiroDePagaduriaRecibidoV1` (`GPR`) · `ReciboDePagaduriaEmitidoV1` (`RPG`) · clases de origen `PaymasterRemittance`, `PaymasterReceipt`, `PayrollFileDelivery`, `PayrollDeductionResponse` | los hechos y los mensajes de libranza de Recaudo | `Application/Receipts/Accounting`, `Contracts/Receipts/HechosDePagaduriasV1.cs` |
+| `TablasDeRecaudo.LineasDeDescuento` · `SqlDelCerrojoDeRecaudo.TablaLineasDeDescuento` | `RCD_PayrollDeductionFileLines` en el nivel 6 del cerrojo | `Receipts/Common`, `Persistence/Receipts` |
+| `Receipts.Paymaster.{SupersedesSentFile, VersionNotAdopted, RemittanceExceedsPending, PaymasterUnknown, PersonUnknown, FileNotSendable, FileNotSent, ResponseFormatNotFound, ResponseUnreadable, ResponseEmpty, ResponseNotEmittable, RemittanceNoLines, RemittanceApplied, NotPaymasterBalance, SupportRequired}` | errores de las pagadurías | `ErroresDeRecaudo.Pagadurias.cs` |
+| `POST /api/receipts/payroll-files/{id}/responses/captured` · `GET …/responses` · `POST …/responses/{rid}/refresh` · `GET /api/receipts/paymaster-remittances` · `POST /api/receipts/paymaster-balances/{id}/resolve` · pantalla `/recaudo/pagadurias` · `PagaduriasClient` | rutas y pantalla que api.md §6 no listaba | `PaymastersEndpoints.cs`, `Shared` |
+
 ## 3. Decisiones transversales
 
 ### Módulos y frontera

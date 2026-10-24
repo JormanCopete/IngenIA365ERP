@@ -729,6 +729,13 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Banks.UnidentifiedItemResolution> UnidentifiedItemResolutions => Set<IngenIA365ERP.Domain.Entities.Receipts.Banks.UnidentifiedItemResolution>();
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Banks.ProcessingRun> ProcessingRuns => Set<IngenIA365ERP.Domain.Entities.Receipts.Banks.ProcessingRun>();
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Banks.ProcessingRunLine> ProcessingRunLines => Set<IngenIA365ERP.Domain.Entities.Receipts.Banks.ProcessingRunLine>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PayrollDeductionFile> ReceiptsPayrollDeductionFiles => Set<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PayrollDeductionFile>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PayrollDeductionFileLine> ReceiptsPayrollDeductionFileLines => Set<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PayrollDeductionFileLine>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PayrollFileSending> PayrollFileSendings => Set<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PayrollFileSending>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PaymasterResponse> PaymasterResponses => Set<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PaymasterResponse>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PaymasterResponseLine> PaymasterResponseLines => Set<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PaymasterResponseLine>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PaymasterRemittance> PaymasterRemittances => Set<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PaymasterRemittance>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PaymasterRemittanceLine> PaymasterRemittanceLines => Set<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PaymasterRemittanceLine>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

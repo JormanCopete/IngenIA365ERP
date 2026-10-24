@@ -10,15 +10,17 @@ namespace IngenIA365ERP.Application.Receipts.Integration;
 /// El consumidor único del destino <c>Receipts</c> (feature 015, US5, T0176; FR-059, FR-063, FR-151, FR-195; contracts/mensajes.md §3.1): en R0 recibe de Cartera y
 /// Captaciones el aviso de que reversaron un pago o una consignación que había aplicado Recaudo (<c>PagoReversadoPorCartera</c> v1,
 /// <c>ConsignacionReversadaPorCartera</c> v1) y lo manda a <see cref="ConsumeLendingPaymentReversalCommand"/>, como «Proceso de integración». Los de libranza
-/// (<c>DescuentosPorPagaduria</c>) los suma la fase 12. Lo registra la bandera transitoria (<c>ConsumidoresDeRecaudoYTesoreria</c>) sólo si los dobles no se
+/// (<c>DescuentosPorPagaduria</c> v1 y v2) van a <see cref="IngenIA365ERP.Application.Receipts.Paymasters.ConsumePayrollDeductionFileCommand"/> (fase 12, T0206). Lo registra la bandera transitoria (<c>ConsumidoresDeRecaudoYTesoreria</c>) sólo si los dobles no se
 /// registran; nunca conviven dos consumidores del destino. (nuevo)
 /// </summary>
-public sealed class DestinoRecaudo(ISender sender, ILogger<DestinoRecaudo> logger) : IDestinoDeMensajes
+public sealed class DestinoRecaudo(ISender sender, IMensajesEntrantes entrantes, ILogger<DestinoRecaudo> logger) : IDestinoDeMensajes
 {
     public static readonly IReadOnlyList<(string Type, int Version)> Aceptados =
     [
         (PagoReversadoPorCarteraV1.Type, 1),
         (IngenIA365ERP.Application.Common.Integration.Contracts.Lending.Deposits.ConsignacionReversadaPorCarteraV1.Type, 1),
+        (DescuentosPorPagaduriaV1.Type, 1),
+        (DescuentosPorPagaduriaV2.Type, 2),
     ];
 
     public string Destino => IntegrationDestinations.Receipts;
@@ -33,7 +35,15 @@ public sealed class DestinoRecaudo(ISender sender, ILogger<DestinoRecaudo> logge
         {
             try
             {
-                var r = await sender.Send(new ConsumeLendingPaymentReversalCommand(unidad.MessagePublicIds), ct);
+                var leidos = await entrantes.LeerAsync(unidad.MessagePublicIds, Destino, ct);
+                if (leidos.IsFailure)
+                {
+                    resultados.Add(new ResultadoDeUnidad(unidad, new ResultadoDeConsumo.Rejected(leidos.Error.Code, leidos.Error.Message)));
+                    continue;
+                }
+                var r = leidos.Value[0].Type == DescuentosPorPagaduriaV1.Type
+                    ? await sender.Send(new IngenIA365ERP.Application.Receipts.Paymasters.ConsumePayrollDeductionFileCommand(unidad.MessagePublicIds), ct)
+                    : await sender.Send(new ConsumeLendingPaymentReversalCommand(unidad.MessagePublicIds), ct);
                 resultados.Add(new ResultadoDeUnidad(unidad, r.IsSuccess ? r.Value : new ResultadoDeConsumo.Rejected(r.Error.Code, r.Error.Message)));
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
