@@ -29,6 +29,9 @@ public class LosPuertosDeRecaudoYTesoreriaValidanYAuditanSusEscrituras
         "Core/IngenIA365ERP.Application/Treasury/Statements/MovimientosBancariosParaRecaudo.cs",
         // Fase 14 (T0227): la remesa que Tesorería ofrece a Recaudo.
         "Core/IngenIA365ERP.Application/Treasury/Remittances/RemesasDeTesoreria.cs",
+        // Fase 17 (T0277, T0278a): las partidas desde la conciliación (Recaudo) y la reapertura del período (Tesorería para Contabilidad).
+        "Core/IngenIA365ERP.Application/Receipts/Integration/RecaudoParaConciliacion.cs",
+        "Core/IngenIA365ERP.Application/Treasury/Reconciliation/ConciliacionBancariaParaContabilidad.cs",
     ];
 
     private static readonly Regex Valida = new(@"\bValidateAsync\(|\bValidar\w*\(", RegexOptions.Compiled);

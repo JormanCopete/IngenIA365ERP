@@ -53,6 +53,7 @@ public class ParametrosDeRecaudoYTesoreriaTests
         { P.ModuloTesoreria, P.LotesTerceraPersonaParaResultado, "false", false },
         { P.ModuloTesoreria, P.RemesasDiasParaConfirmar, "2", false },
         { P.ModuloTesoreria, P.ConciliacionDiasDeHolgura, "3", false },
+        { P.ModuloTesoreria, P.ConciliacionDiasPartidaAntigua, "30", true },
         { P.ModuloTesoreria, P.GmfTarifa, "0.004", true },
         { P.ModuloTesoreria, P.GmfExencionDesembolsos, "true", true },
     };

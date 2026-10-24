@@ -1,0 +1,42 @@
+{
+  "nombre": "Los recibos y la partida que nacieron del abono lo explican por su vínculo",
+  "diasDeHolgura": 3,
+  "lineas": [
+    {
+      "id": 1,
+      "publicId": "11111111-1111-1111-1111-111111111111",
+      "fecha": "2026-11-03",
+      "sentido": "Credit",
+      "valor": 1000000,
+      "referencia": null
+    }
+  ],
+  "registros": [
+    {
+      "clave": "rec:a",
+      "fecha": "2026-11-03",
+      "sentido": "Credit",
+      "valor": 600000,
+      "referencia": null,
+      "lineaDeOrigen": "11111111-1111-1111-1111-111111111111"
+    },
+    {
+      "clave": "partida:b",
+      "fecha": "2026-11-03",
+      "sentido": "Credit",
+      "valor": 400000,
+      "referencia": null,
+      "lineaDeOrigen": "11111111-1111-1111-1111-111111111111"
+    }
+  ],
+  "esperado": [
+    {
+      "linea": 1,
+      "registros": [
+        "rec:a",
+        "partida:b"
+      ],
+      "regla": "StatementLink"
+    }
+  ]
+}

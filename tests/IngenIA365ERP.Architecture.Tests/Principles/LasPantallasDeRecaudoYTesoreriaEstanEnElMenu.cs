@@ -48,6 +48,8 @@ public class LasPantallasDeRecaudoYTesoreriaEstanEnElMenu
         ("Pages/Recaudo/Contingencia.razor", "/recaudo/contingencia", "Receipts.Receipt.RegisterContingency"),
         // Fase 16 (T0266): los lotes de Recaudo en Contabilidad (la matriz, sus tipos y su completitud son páginas delgadas sobre componentes con su indicador).
         ("Pages/Contabilidad/Recaudo/Lotes.razor", "/contabilidad/recaudo/lotes", "Accounting.ReceiptsMatrix.View"),
+        // Fase 17 (T0280): la conciliación bancaria mínima.
+        ("Pages/Tesoreria/Conciliacion.razor", "/tesoreria/conciliacion", "Treasury.Reconciliation.View"),
     ];
 
     /// <summary>Páginas de detalle (con parámetro de ruta): archivo, la ruta tal como la declara <c>@page</c> y permiso.</summary>

@@ -1,0 +1,25 @@
+{
+  "nombre": "Un abono no cruza con un cargo del mismo valor",
+  "diasDeHolgura": 3,
+  "lineas": [
+    {
+      "id": 1,
+      "publicId": "00000000-0000-0000-0000-000000000001",
+      "fecha": "2026-11-08",
+      "sentido": "Credit",
+      "valor": 45000,
+      "referencia": null
+    }
+  ],
+  "registros": [
+    {
+      "clave": "pago:a",
+      "fecha": "2026-11-08",
+      "sentido": "Debit",
+      "valor": 45000,
+      "referencia": null,
+      "lineaDeOrigen": null
+    }
+  ],
+  "esperado": []
+}
