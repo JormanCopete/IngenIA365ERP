@@ -92,20 +92,25 @@ public sealed partial class ReceiptsReportQueryHandler
                              join b in db.Banks.AsNoTracking().IgnoreQueryFilters() on c.DraweeBankId equals b.Id
                              where c.CreatedAt >= desde.ToDateTime(TimeOnly.MinValue) && c.CreatedAt < hasta.AddDays(1).ToDateTime(TimeOnly.MinValue)
                              orderby c.Status, c.PresentationDeadline
+                             join l in db.ClearingBatches.AsNoTracking() on c.ClearingBatchId equals l.Id into ls
+                             from l in ls.DefaultIfEmpty()
                              select new { c.PublicId, Banco = b.Name, c.CheckNumber, c.PayerPersonId, c.DrawerName, c.IssueDate, c.Amount, c.IsThirdParty, c.PresentationDeadline,
-                                 c.BranchId, c.Status, c.ReturnCauseCode }).ToListAsync(ct);
+                                 c.BranchId, c.Status, c.ReturnCauseCode, Lote = l != null ? l.Number : null }).ToListAsync(ct);
         cheques = cheques.Where(c => a.Alcance.IncluyeOficina(c.BranchId) && (a.Oficina is null || a.Oficina == c.BranchId)).ToList();
         var personas = await PersonasAsync(cheques.Select(c => c.PayerPersonId), ct);
         var columnas = new List<ColumnaExportable>
         {
             new("Estado"), new("Banco"), new("Cheque"), new("Pagador"), new("Girador"), new("De tercero"), new("Fecha del cheque", TipoDeColumna.Fecha),
-            new("Presentar antes de", TipoDeColumna.Fecha), new("Valor", TipoDeColumna.Moneda), new("Causal de devolución"), new("_cheque", Clave: "_cheque"),
+            new("Presentar antes de", TipoDeColumna.Fecha), new("Valor", TipoDeColumna.Moneda), new("Causal de devolución"),
+            // R2 (fase 37; FR-084, FR-087): el lote de canje en que va el cheque.
+            new("Lote de canje"), new("_cheque", Clave: "_cheque"),
         };
         var filas = cheques.Select(c => new FilaExportable([Estado(c.Status), c.Banco, c.CheckNumber, personas.GetValueOrDefault(c.PayerPersonId).Nombre, c.DrawerName,
-            c.IsThirdParty ? "Sí" : "No", c.IssueDate, c.PresentationDeadline, c.Amount, c.ReturnCauseCode, c.PublicId], Seccion: Estado(c.Status),
+            c.IsThirdParty ? "Sí" : "No", c.IssueDate, c.PresentationDeadline, c.Amount, c.ReturnCauseCode, c.Lote, c.PublicId], Seccion: Estado(c.Status),
             Resaltada: c.Status == ReceivedCheckState.Returned)).ToList();
         return new TablaExportable("Cheques recibidos", Periodo(desde, hasta), columnas, filas,
-            new FilaExportable(["Total", null, null, null, null, null, null, null, cheques.Sum(c => c.Amount), null, null]), []);
+            new FilaExportable(["Total", null, null, null, null, null, null, null, cheques.Sum(c => c.Amount), null, null, null]),
+            ["Desde R2 los cheques consignados van en un lote de canje y quedan pagados al cruzar el abono del extracto que los paga (FR-084)."]);
 
         static string Estado(ReceivedCheckState s) => s switch
         {

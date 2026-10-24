@@ -706,6 +706,8 @@ public interface IApplicationDbContext
     DbSet<IngenIA365ERP.Domain.Entities.Treasury.Checkbooks.IssuedCheck> IssuedChecks { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Treasury.Checkbooks.IssuedCheckEvent> IssuedCheckEvents { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Treasury.Remittances.CashRemittance> CashRemittances { get; }
+    // Feature 015, R2 (fase 37): el lote de canje de los cheques recibidos.
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.ClearingBatch> ClearingBatches { get; }
     // Feature 015, T1 (fase 35): el comprobante de pago.
     DbSet<IngenIA365ERP.Domain.Entities.Treasury.Payments.PaymentVoucher> PaymentVouchers { get; }
     // Feature 015, T1 (fase 34): el catálogo de órdenes manuales, los firmantes y los tokens.

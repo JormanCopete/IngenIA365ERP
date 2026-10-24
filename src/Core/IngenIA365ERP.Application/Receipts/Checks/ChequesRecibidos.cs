@@ -357,6 +357,8 @@ public sealed class ReturnReceivedCheckCommandHandler(
         }
         cheque.ReturnCauseCode = causa.Code;
         ChequesRecibidos.Transicion(db, cheque, ReceivedCheckState.Returned, usuario, ahora, causa.Code, request.SupportAttachmentPublicId, request.Note);
+        // R2 (fase 37; FR-084): el cheque de un lote de canje que el banco devuelve recalcula su lote.
+        await CanjeDeCheques.AlDevolverAsync(db, cheque, ct);
         if (recibo is not null && medio is not null) await emision.ChequeRecibidoDevueltoAsync(cheque, numero, recibo, medio, reversadas, porCobrar, hoy, ct);
         await auditoria.AgregarAsync("Receipts.Check.Returned", "ReceivedCheck", cheque.PublicId, null,
             new { number = numero, check = cheque.CheckNumber, cause = causa.Code, reversed = reversadas.Count, receivable = porCobrar, by = actor.Name }, ct);

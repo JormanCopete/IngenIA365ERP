@@ -30,6 +30,9 @@ public sealed class RecaudoParaConciliacion(
 {
     public const string ClaseRecibo = "Receipt";
     public const string ClasePartida = "UnidentifiedItem";
+    /// <summary>R2 (fases 37 y 38): el abono que pagó cheques de un lote de canje y el que liquidó un archivo de convenio o de pasarela. (nuevo)</summary>
+    public const string ClaseCanje = "ClearingBatch";
+    public const string ClaseConvenio = "AgreementSettlement";
 
     public async Task<IReadOnlyList<RegistroConciliableDto>> RegistrosAsync(Guid ownBankAccountPublicId, DateOnly desde, DateOnly hasta, CancellationToken ct)
     {
@@ -43,7 +46,15 @@ public sealed class RecaudoParaConciliacion(
                         && p.MovementDate <= hasta)
             .Select(p => new RegistroConciliableDto(p.PublicId, ClasePartida, p.Number, p.MovementDate, p.Amount, p.Reference, p.BankStatementLinePublicId))
             .ToListAsync(ct);
-        return [.. recibos, .. deLasPartidas];
+        // R2 (fases 37 y 38; FR-084, FR-093): el abono del extracto que pagó cheques de un lote de canje o que liquidó un archivo de convenio queda en los libros por su
+        // identificación, con su línea: la conciliación de Tesorería lo cruza con ella.
+        var liquidaciones = await db.BankItemIdentifications.AsNoTracking()
+            .Where(i => i.OwnBankAccountPublicId == ownBankAccountPublicId && (i.Outcome == BankItemOutcome.ClearingBatch || i.Outcome == BankItemOutcome.AgreementSettlement)
+                        && i.MovementDate >= desde && i.MovementDate <= hasta)
+            .Select(i => new RegistroConciliableDto(i.PublicId, i.Outcome == BankItemOutcome.ClearingBatch ? ClaseCanje : ClaseConvenio, i.Note ?? string.Empty, i.MovementDate,
+                i.Amount, i.Note, i.BankStatementLinePublicId))
+            .ToListAsync(ct);
+        return [.. recibos, .. deLasPartidas, .. liquidaciones];
     }
 
     public async Task TomarCerrojosAsync(Guid ownBankAccountPublicId, CancellationToken ct)

@@ -19,6 +19,14 @@ public sealed record DevolverChequeRequest(string CauseCode, Guid? SupportAttach
 public sealed record NotaDeChequeRequest(string? Note);
 
 /// <summary>Cliente tipado de los cheques recibidos (feature 015, US15, T0219). Las escrituras llevan <see cref="ClaveDeOperacion"/>. (nuevo)</summary>
+/// <summary>R2 (fase 37; FR-084): un lote de canje. Estado: 1 en canje, 2 pagado en parte, 3 pagado, 4 cerrado. (nuevo)</summary>
+public sealed record LoteDeCanjeDto(Guid PublicId, string Number, Guid OwnBankAccountPublicId, DateOnly DepositedOn, int CheckCount, decimal TotalAmount, decimal PaidAmount,
+    decimal ReturnedAmount, decimal InClearingAmount, int Status, IReadOnlyList<ChequeRecibidoDto> Checks);
+
+public sealed record ArmarLoteDeCanjeRequest(Guid OwnBankAccountPublicId, IReadOnlyList<Guid> CheckPublicIds, Guid? RemittancePublicId, DateOnly? DepositedOn);
+
+public sealed record CruzarLoteDeCanjeRequest(Guid StatementLinePublicId, IReadOnlyList<Guid>? CheckPublicIds);
+
 public sealed class ChequesRecibidosClient(HttpClient http, CentralAuthClient auth)
 {
     private const string Base = "/api/receipts/received-checks";
@@ -45,6 +53,16 @@ public sealed class ChequesRecibidosClient(HttpClient http, CentralAuthClient au
 
     public Task<ResultadoDeInventario<ChequeRecibidoDto>> DevolverAsync(Guid cheque, DevolverChequeRequest r, ClaveDeOperacion clave, CancellationToken ct = default) =>
         Enviar<ChequeRecibidoDto>(HttpMethod.Post, $"{Base}/{cheque}/return", r, clave, ct);
+
+    // R2 (fase 37): el canje completo.
+    public Task<ResultadoDeInventario<IReadOnlyList<LoteDeCanjeDto>>> LotesDeCanjeAsync(int? estado = null, CancellationToken ct = default) =>
+        Enviar<IReadOnlyList<LoteDeCanjeDto>>(HttpMethod.Get, "/api/receipts/clearing-batches" + (estado is { } e ? $"?state={e}" : string.Empty), null, null, ct);
+
+    public Task<ResultadoDeInventario<LoteDeCanjeDto>> ArmarLoteDeCanjeAsync(ArmarLoteDeCanjeRequest r, ClaveDeOperacion clave, CancellationToken ct = default) =>
+        Enviar<LoteDeCanjeDto>(HttpMethod.Post, "/api/receipts/clearing-batches", r, clave, ct);
+
+    public Task<ResultadoDeInventario<LoteDeCanjeDto>> CruzarLoteDeCanjeAsync(Guid lote, CruzarLoteDeCanjeRequest r, ClaveDeOperacion clave, CancellationToken ct = default) =>
+        Enviar<LoteDeCanjeDto>(HttpMethod.Post, $"/api/receipts/clearing-batches/{lote}/statement-match", r, clave, ct);
 
     private Task<ResultadoDeInventario<T>> Enviar<T>(HttpMethod metodo, string url, object? cuerpo, ClaveDeOperacion? clave, CancellationToken ct) =>
         EnvioDeRecaudo.EnviarAsync<T>(http, auth, metodo, url, cuerpo, clave, null, ct);

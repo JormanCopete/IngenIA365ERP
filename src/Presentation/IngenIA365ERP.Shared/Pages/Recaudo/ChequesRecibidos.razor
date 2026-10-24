@@ -3,6 +3,7 @@
 @using IngenIA365ERP.Shared.Services.Http
 @using IngenIA365ERP.Shared.Services.Recaudo
 @inject ChequesRecibidosClient ChequesApi
+@inject IngenIA365ERP.Shared.Services.Tesoreria.ChequesYRemesasClient Remesas
 @inject INotificationService Notification
 
 <PageTitle>Cheques recibidos - IngenIA365ERP</PageTitle>
@@ -79,6 +80,48 @@
         </section>
     }
 
+    @* R2 (fase 37, T0428; FR-084): el canje completo. Los cheques recibidos o consignados se arman en un lote de canje con la cuenta propia de la remesa; el abono del
+       extracto que los paga se cruza con el lote y quedan pagados, sin registrarlos uno por uno. *@
+    <section class="info-card">
+        <h4>Canje de cheques</h4>
+        <IndicadorDeCarga Cargando="@_canje.Activa" Texto="Cargando lotes de canje…">
+            <PermissionGate Required="Receipts.Checks.Manage">
+                <div class="form-grid">
+                    <label class="campo">Cuenta propia de la consignación
+                        <select class="e-input" @bind="_cuentaDelLote">
+                            <option value="">Elija la cuenta…</option>
+                            @foreach (var c in _cuentas) { <option value="@c.PublicId">@c.Code · @c.BankName</option> }
+                        </select>
+                    </label>
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(!_cheques.Any(c => c.Status is 1 or 3))" OnClick="@ArmarLoteAsync">Armar el lote con los recibidos y consignados de la lista</SfButton>
+                </div>
+            </PermissionGate>
+            <table class="data-grid">
+                <thead><tr><th>Lote</th><th>Consignado</th><th>Cheques</th><th>Total</th><th>Pagado</th><th>Devuelto</th><th>En canje</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var l in _lotes)
+                    {
+                        <tr>
+                            <td>@l.Number</td><td>@l.DepositedOn.ToString("dd/MM/yyyy")</td><td>@l.CheckCount</td><td>@l.TotalAmount.ToString("N2")</td>
+                            <td>@l.PaidAmount.ToString("N2")</td><td>@l.ReturnedAmount.ToString("N2")</td><td>@l.InClearingAmount.ToString("N2")</td>
+                            <td>
+                                @if (l.InClearingAmount > 0)
+                                {
+                                    <PermissionGate Required="Receipts.Checks.Manage">
+                                        <input class="e-input" placeholder="Abono del extracto" @bind="_lineaDelExtracto" />
+                                        <SfButton CssClass="e-flat" OnClick="@(() => CruzarAsync(l))">Pagado por el extracto</SfButton>
+                                    </PermissionGate>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </IndicadorDeCarga>
+    </section>
+
     <section class="info-card">
         <h4>Giradores con devoluciones</h4>
         <IndicadorDeCarga Cargando="@_giradores.Activa" Texto="Cargando giradores…">
@@ -97,7 +140,11 @@
 </PermissionGate>
 
 @code {
-    private readonly EstadoDeCarga _carga = new(), _devolucion = new(), _giradores = new();
+    private readonly EstadoDeCarga _carga = new(), _devolucion = new(), _giradores = new(), _canje = new();
+    private IReadOnlyList<LoteDeCanjeDto> _lotes = [];
+    private IReadOnlyList<IngenIA365ERP.Shared.Services.Tesoreria.CuentaDeRecaudoDto> _cuentas = [];
+    private string _cuentaDelLote = "";
+    private string? _lineaDelExtracto;
     private IReadOnlyList<ChequeRecibidoDto> _cheques = [];
     private IReadOnlyList<CausalDeDevolucionDto> _causales = [];
     private IReadOnlyList<GiradorConDevolucionesDto> _conDevoluciones = [];
@@ -112,6 +159,39 @@
         if (causales.IsSuccess) _causales = causales.Value ?? [];
         await CargarAsync();
         await GiradoresAsync();
+        await LotesAsync();
+    }
+
+    private async Task LotesAsync()
+    {
+        using var carga = _canje.Iniciar();
+        var c = await Remesas.CuentasDeRecaudoAsync();
+        if (c.IsSuccess) _cuentas = c.Value ?? [];
+        var r = await ChequesApi.LotesDeCanjeAsync();
+        if (r.IsSuccess) _lotes = r.Value ?? [];
+    }
+
+    private async Task ArmarLoteAsync()
+    {
+        if (!Guid.TryParse(_cuentaDelLote, out var cuenta)) { await Notification.WarningAsync("Elija la cuenta propia en que se consignan los cheques."); return; }
+        using var carga = _canje.Iniciar();
+        var cheques = _cheques.Where(c => c.Status is 1 or 3).Select(c => c.PublicId).ToList();
+        var r = await ChequesApi.ArmarLoteDeCanjeAsync(new ArmarLoteDeCanjeRequest(cuenta, cheques, null, null), new ClaveDeOperacion());
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo armar el lote de canje."); return; }
+        await Notification.SuccessAsync($"Lote {r.Value!.Number}: {r.Value.CheckCount} cheque(s) en canje.");
+        await CargarAsync();
+        await LotesAsync();
+    }
+
+    private async Task CruzarAsync(LoteDeCanjeDto l)
+    {
+        if (!Guid.TryParse(_lineaDelExtracto, out var linea)) { await Notification.WarningAsync("Indique el abono del extracto que paga los cheques."); return; }
+        using var carga = _canje.Iniciar();
+        var r = await ChequesApi.CruzarLoteDeCanjeAsync(l.PublicId, new CruzarLoteDeCanjeRequest(linea, null), new ClaveDeOperacion());
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo cruzar el abono con el lote."); return; }
+        _lineaDelExtracto = null;
+        await CargarAsync();
+        await LotesAsync();
     }
 
     private async Task CargarAsync()

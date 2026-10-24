@@ -51,6 +51,11 @@ public class ReceivedCheck : AuditableEntity
 
     /// <summary>Cheque en canje cargado por la puesta en marcha (<c>recaudo.cheques-en-canje</c>, US13): sin recibo ni hecho contable. (nuevo)</summary>
     public bool IsOpeningLoad { get; set; }
+
+    /// <summary>R2 (fase 37; FR-084): el lote de canje en que va y la línea del extracto que lo pagó (por su <c>PublicId</c>). (nuevo)</summary>
+    public int? ClearingBatchId { get; set; }
+
+    public Guid? PaidByStatementLinePublicId { get; set; }
 }
 
 /// <summary><c>RCD_ReceivedCheckEvents</c> (H): cada transición del cheque con quién, cuándo, la causa y el soporte. (nuevo)</summary>

@@ -29,6 +29,9 @@ public class ReceivedCheckConfiguration : IEntityTypeConfiguration<ReceivedCheck
         builder.Property(e => e.Status).HasConversion<int>();
         builder.Property(e => e.ReturnCauseCode).HasMaxLength(10);
         builder.HasIndex(e => new { e.DraweeBankId, e.AccountNumber, e.CheckNumber }).IsUnique().HasDatabaseName($"UK_{Tabla}_Bank_Account_Number");
+        // R2 (par RecaudoCanales, fase 37; FR-084): el lote de canje del cheque.
+        builder.HasOne<ClearingBatch>().WithMany().HasForeignKey(e => e.ClearingBatchId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasIndex(e => e.ClearingBatchId).HasDatabaseName($"IX_{Tabla}_ClearingBatchId");
         builder.HasIndex(e => new { e.Status, e.BranchId }).HasDatabaseName($"IX_{Tabla}_Status_Branch");
     }
 }

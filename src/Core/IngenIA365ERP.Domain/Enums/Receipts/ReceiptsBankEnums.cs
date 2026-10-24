@@ -12,6 +12,12 @@ public enum BankItemOutcome
     ReturnedDisbursement = 4,
     PaymasterRemittance = 5,
     PossibleDuplicateDismissed = 6,
+
+    /// <summary>R2 (fase 37; FR-084): el abono del extracto que paga cheques de un lote de canje. (nuevo)</summary>
+    ClearingBatch = 7,
+
+    /// <summary>R2 (fase 38; FR-093): el abono del extracto que liquida un archivo de un convenio de recaudo o de una pasarela. (nuevo)</summary>
+    AgreementSettlement = 8,
 }
 
 /// <summary>El estado de una partida por identificar (data-model §19.6).</summary>
