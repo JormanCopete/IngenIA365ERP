@@ -344,6 +344,9 @@ public static class DependencyInjection
         services.AddScoped<Common.Integration.Inventory.IEfectivoDelPuntoDeVenta, Inventory.Integration.EfectivoDelPuntoDeVenta>();
         services.AddScoped<Receipts.Compliance.PreparacionDelReporteDeTransacciones>();
         services.AddScoped<Receipts.Compliance.GeneracionDelReporteDeTransacciones>();
+        // Feature 015, R1 (fase 31; E-05, D26): las consultas de sólo lectura del consolidado de Recaudo.
+        services.AddScoped<Common.Integration.Payroll.IRecaudoDeNominaParaConsolidado, Payroll.Integration.RecaudoDeNominaParaConsolidado>();
+        services.AddScoped<Common.Integration.Lending.IDebitoAutomaticoParaConsolidado, Lending.Integration.DebitoAutomaticoParaConsolidado>();
         services.AddScoped<Receipts.Paymasters.GirosDePagaduria>();
         services.AddScoped<Receipts.BankItems.IReprocesoDeCorrida>(sp => sp.GetRequiredService<Receipts.Paymasters.GirosDePagaduria>());
         services.AddScoped<Receipts.Tareas.AntiguedadDeRecaudo>();

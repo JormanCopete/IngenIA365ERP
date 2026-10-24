@@ -1,4 +1,4 @@
-using IngenIA365ERP.Application.Common.Interfaces;
+﻿using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Common.Reports;
 using IngenIA365ERP.Application.Common.Scope;
@@ -29,6 +29,14 @@ public static class VistasDeRecaudo
 
     /// <summary>Feature 015, US24 (T0323; FR-226; SC-024): el informe del paralelo en QA, lo registrado contra las cifras de referencia por día, medio y producto. (nuevo)</summary>
     public const string ComparacionDelParalelo = "parallel-comparison";
+
+    /// <summary>Feature 015, R1 (T0401; FR-081, FR-087, FR-152): las vistas de R1. (nuevo)</summary>
+    public const string Consolidado = "consolidated-collection";
+    public const string AnulacionesConReemision = "voidings-with-reissue";
+    public const string PagaduriasMorosas = "delinquent-paymasters";
+    public const string ChequesRecibidos = "received-checks";
+    public const string TransaccionesEnEfectivo = "cash-transactions";
+    public const string CargaDelPendiente = "pending-application-load";
 
     /// <summary>
     /// Los conceptos de las cifras de referencia del paralelo, cargados con la plantilla <c>recaudo.cifras-de-referencia</c> con la fecha de corte = el día:
@@ -62,6 +70,19 @@ public static class VistasDeRecaudo
         new(ContingenciaPorDigitar, "Contingencia por digitar", "Por talonario activo: digitados, números por digitar antes del último y sin usar.", "contingencia-por-digitar", ["point"]),
         new(ComparacionDelParalelo, "Comparación del paralelo", "Lo registrado en el paralelo contra las cifras de referencia, por día, medio y producto, con la explicación de cada diferencia.",
             "comparacion-del-paralelo", ["from", "to"]),
+        // Feature 015, R1 (T0401).
+        new(Consolidado, "Recaudo consolidado", "Por día: caja, bancos, pagadurías y, de sólo lectura, lo descontado por Nómina y el débito automático de Cartera.",
+            "recaudo-consolidado", Rango),
+        new(AnulacionesConReemision, "Anulaciones con reemisión", "Los recibos anulados del rango y el recibo que los reemplazó (mismo pagador, desde la fecha de la anulación).",
+            "anulaciones-con-reemision", Rango),
+        new(PagaduriasMorosas, "Pagadurías morosas", "Lo descontado por las pagadurías y no girado pasada la fecha legal de giro del calendario (informativo).",
+            "pagadurias-morosas", Corte),
+        new(ChequesRecibidos, "Cheques recibidos", "Los cheques recibidos del rango por estado: recibidos, en custodia, consignados, en canje, pagados y devueltos.",
+            "cheques-recibidos", ["from", "to", "branch"]),
+        new(TransaccionesEnEfectivo, "Transacciones en efectivo", "El registro único de efectivo del rango: recibos, egresos y punto de venta, por persona.",
+            "transacciones-en-efectivo", ["from", "to", "branch"]),
+        new(CargaDelPendiente, "Carga del recaudo pendiente", "El recaudo pendiente de aplicar por módulo y persona, para aplicarlo el día de la activación.",
+            "recaudo-pendiente-de-aplicar", ["branch"]),
     ];
 
     public static VistaDeInformeDeRecaudoYTesoreria? Buscar(string clave) => Todas.FirstOrDefault(v => v.Key == clave);
@@ -70,7 +91,10 @@ public static class VistasDeRecaudo
 /// <summary>Una vista de R0 de Recaudo con sus filtros (<c>GET /api/reports/receipts/{vista}</c>, <c>Receipts.Reports.View</c>). (nuevo)</summary>
 public sealed record ReceiptsReportQuery(string Vista, FiltrosDeInformeDeRecaudoYTesoreria Filtros) : IRequest<Result<TablaExportable>>;
 
-public sealed class ReceiptsReportQueryHandler(IApplicationDbContext db, IAlcanceDeRecaudo alcance, IDateTimeService reloj)
+public sealed partial class ReceiptsReportQueryHandler(IApplicationDbContext db, IAlcanceDeRecaudo alcance, IDateTimeService reloj,
+    IngenIA365ERP.Application.Common.Integration.Payroll.IRecaudoDeNominaParaConsolidado? nomina = null,
+    IngenIA365ERP.Application.Common.Integration.Lending.IDebitoAutomaticoParaConsolidado? debitoAutomatico = null,
+    IngenIA365ERP.Application.Common.Integration.Inventory.IEfectivoDelPuntoDeVenta? puntoDeVenta = null)
     : IRequestHandler<ReceiptsReportQuery, Result<TablaExportable>>
 {
     public const string CodigoVistaDesconocida = "Receipts.Report.UnknownView";
@@ -97,6 +121,13 @@ public sealed class ReceiptsReportQueryHandler(IApplicationDbContext db, IAlcanc
             VistasDeRecaudo.ChequesDevueltos => Result.Success(await ChequesDevueltosAsync(ambito, desde, hasta, ct)),
             VistasDeRecaudo.ContingenciaPorDigitar => Result.Success(await ContingenciaAsync(ambito, ct)),
             VistasDeRecaudo.ComparacionDelParalelo => Result.Success(await ComparacionDelParaleloAsync(ambito, desde, hasta, ct)),
+            // Feature 015, R1 (T0401): las vistas de R1.
+            VistasDeRecaudo.Consolidado => Result.Success(await ConsolidadoAsync(ambito, desde, hasta, ct)),
+            VistasDeRecaudo.AnulacionesConReemision => Result.Success(await AnulacionesConReemisionAsync(ambito, desde, hasta, ct)),
+            VistasDeRecaudo.PagaduriasMorosas => Result.Success(await PagaduriasMorosasAsync(ambito, corte, ct)),
+            VistasDeRecaudo.ChequesRecibidos => Result.Success(await ChequesRecibidosAsync(ambito, desde, hasta, ct)),
+            VistasDeRecaudo.TransaccionesEnEfectivo => Result.Success(await TransaccionesEnEfectivoAsync(ambito, desde, hasta, ct)),
+            VistasDeRecaudo.CargaDelPendiente => Result.Success(await CargaDelPendienteAsync(ambito, ct)),
             _ => Result.Failure<TablaExportable>(new Error(CodigoVistaDesconocida, $"«{request.Vista}» no es una vista de Recaudo.")),
         };
     }
