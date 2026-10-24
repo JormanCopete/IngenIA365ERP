@@ -1,4 +1,4 @@
-using Carter;
+﻿using Carter;
 using IngenIA365ERP.API.Filters;
 using IngenIA365ERP.Application.Receipts.Paymasters;
 using IngenIA365ERP.Domain.Enums.Receipts;
@@ -67,6 +67,15 @@ public class PaymastersEndpoints : ICarterModule
         g.MapPost("/{id:guid}/apply", async (Guid id, AplicarRequest? body, HttpContext http, ISender s, CancellationToken ct) =>
                 await s.Send(new ApplyPaymasterRemittanceCommand(id, body?.MaxLines ?? 200, body?.RunPublicId) { OperationKey = http.ClaveDeOperacion() }, ct))
             .WithName("Receipts_PaymasterRemittances_Apply").ConClaveDeOperacion().RequirePermission(AplicarGiro);
+
+        // Feature 015, R1 (T0384; FR-082): el calendario legal de giro y el informe de morosas (onlyLate).
+        var cal = ReceiptsGroup.Grupo(app, "/paymaster-calendar", "Recaudo Calendario de pagadurías");
+        cal.MapGet("/", async (Guid? paymaster, int? year, bool? onlyLate, ISender s, CancellationToken ct) =>
+                await s.Send(new GetPaymasterCalendarQuery(paymaster, year, onlyLate ?? false), ct))
+            .WithName("Receipts_PaymasterCalendar_Get").RequirePermission(todos);
+        cal.MapPost("/", async (RegisterPaymasterPayDateCommand body, HttpContext http, ISender s, CancellationToken ct) =>
+                await s.Send(body with { OperationKey = http.ClaveDeOperacion() }, ct))
+            .WithName("Receipts_PaymasterCalendar_Register").ConClaveDeOperacion().RequirePermission(RegistrarGiro);
 
         var b = ReceiptsGroup.Grupo(app, "/paymaster-balances", "Recaudo Saldos de pagadurías");
         b.MapPost("/{id:guid}/resolve", async (Guid id, ResolverRequest body, HttpContext http, ISender s, CancellationToken ct) =>

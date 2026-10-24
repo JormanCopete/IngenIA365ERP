@@ -1,4 +1,4 @@
-using IngenIA365ERP.Shared.Services.Http;
+﻿using IngenIA365ERP.Shared.Services.Http;
 using IngenIA365ERP.Shared.Services.Inventario;
 using IngenIA365ERP.Shared.Services.Security;
 using IngenIA365ERP.Shared.Services.Ventas;
@@ -50,6 +50,12 @@ public sealed record AplicarGiroRequest(int? MaxLines, Guid? RunPublicId);
 /// <summary>
 /// Cliente tipado de las pagadurías de Recaudo (feature 015, US7, T0210; contracts/api.md §6). Las escrituras llevan <see cref="ClaveDeOperacion"/>. (nuevo)
 /// </summary>
+/// <summary>Feature 015, R1 (T0384): una pagaduría en un período del calendario legal de giro. (nuevo)</summary>
+public sealed record CalendarioDePagaduriaDto(Guid PaymasterPersonPublicId, string PaymasterName, int Year, int Month, int SubPeriod, decimal Sent, decimal Deducted,
+    decimal Remitted, decimal Pending, DateOnly? PayrollPayDate, DateOnly? LegalRemittanceDate, bool IsLate);
+
+public sealed record FechaDePagoRequest(Guid PaymasterPersonPublicId, int Year, int Month, DateOnly PayrollPayDate, int SubPeriod, string? Note);
+
 public sealed class PagaduriasClient(HttpClient http, CentralAuthClient auth)
 {
     private const string Base = "/api/receipts";
@@ -99,6 +105,14 @@ public sealed class PagaduriasClient(HttpClient http, CentralAuthClient auth)
 
     public Task<ResultadoDeInventario<GiroDePagaduriaDto>> AplicarGiroAsync(Guid giro, AplicarGiroRequest r, ClaveDeOperacion clave, CancellationToken ct = default) =>
         Enviar<GiroDePagaduriaDto>(HttpMethod.Post, $"{Base}/paymaster-remittances/{giro}/apply", r, clave, ct);
+
+    // ---- Feature 015, R1 (T0384): el calendario legal de giro y el informe de morosas ----
+    public Task<ResultadoDeInventario<IReadOnlyList<CalendarioDePagaduriaDto>>> CalendarioAsync(int? anio = null, bool soloMorosas = false, CancellationToken ct = default) =>
+        Enviar<IReadOnlyList<CalendarioDePagaduriaDto>>(HttpMethod.Get, EnvioDeVentas.ConQuery($"{Base}/paymaster-calendar",
+            EnvioDeVentas.Query(("year", EnvioDeVentas.Texto(anio)), ("onlyLate", soloMorosas ? "true" : "false"))), null, null, ct);
+
+    public Task<ResultadoDeInventario<CalendarioDePagaduriaDto>> RegistrarFechaDePagoAsync(FechaDePagoRequest r, ClaveDeOperacion clave, CancellationToken ct = default) =>
+        Enviar<CalendarioDePagaduriaDto>(HttpMethod.Post, $"{Base}/paymaster-calendar", r, clave, ct);
 
     private Task<ResultadoDeInventario<T>> Enviar<T>(HttpMethod metodo, string url, object? cuerpo, ClaveDeOperacion? clave, CancellationToken ct) =>
         EnvioDeRecaudo.EnviarAsync<T>(http, auth, metodo, url, cuerpo, clave, null, ct);

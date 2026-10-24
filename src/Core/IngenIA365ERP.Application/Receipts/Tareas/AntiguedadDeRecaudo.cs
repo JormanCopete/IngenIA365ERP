@@ -53,7 +53,25 @@ public sealed class AntiguedadDeRecaudo(
     /// <summary>Todas las secciones de la tarea.</summary>
     public async Task<int> RevisarAsync(CancellationToken ct) =>
         await PartidasAsync(ct) + await SaldosAFavorAsync(ct) + await ExtractosSinCargarAsync(ct) + await PartidasAlCierreAsync(ct) + await ContingenciaPorDigitarAsync(ct)
-        + await PoliticaContableEnAdvertirAsync(ct) + await CuadreProvisionalPendienteAsync(ct) + await ConsignacionesReportadasAsync(ct);
+        + await PoliticaContableEnAdvertirAsync(ct) + await CuadreProvisionalPendienteAsync(ct) + await ConsignacionesReportadasAsync(ct)
+        + await GirosDePagaduriaTardiosAsync(ct);
+
+    /// <summary>
+    /// Feature 015, R1 (fase 28; FR-082; T0197): lo descontado por una pagaduría y no girado pasada la fecha legal de giro del calendario (<c>Recaudo.GiroDePagaduriaTardio</c>,
+    /// una vez por pagaduría y período). Informativo: nada se bloquea.
+    /// </summary>
+    public async Task<int> GirosDePagaduriaTardiosAsync(CancellationToken ct)
+    {
+        var hoy = reloj.HoyLocal;
+        var tardias = (await Paymasters.CalendarioDePagadurias.FilasAsync(db, null, null, null, hoy, ct)).Where(f => f.IsLate).ToList();
+        foreach (var f in tardias)
+            await alertas.LevantarAsync(new AlertaALevantar(TiposDeAlerta.RecaudoGiroDePagaduriaTardio, $"Giro de la pagaduría {f.PaymasterName} pasado el plazo",
+                string.Create(CultureInfo.InvariantCulture,
+                    $"La pagaduría {f.PaymasterName} descontó {f.Deducted:N0} del período {f.Year}-{f.Month:00} y le faltan {f.Pending:N0} por girar; la fecha legal era el {f.LegalRemittanceDate:dd/MM/yyyy}."),
+                "Person", f.PaymasterPersonPublicId, DedupKey: $"Recaudo.GiroDePagaduriaTardio:{f.PaymasterPersonPublicId:N}:{f.Year}{f.Month:00}{f.SubPeriod}",
+                ModuloDeOrigen: "Receipts"), ct);
+        return tardias.Count;
+    }
 
     /// <summary>
     /// Feature 015, R1 (fase 27; FR-069): las consignaciones reportadas en ventanilla que no aparecen en el extracto en <c>ConsignacionReportada.DiasParaVerificar</c> días

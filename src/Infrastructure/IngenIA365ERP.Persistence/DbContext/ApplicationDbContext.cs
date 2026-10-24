@@ -709,6 +709,7 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.CashDisbursementVoiding> CashDisbursementVoidings => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.CashDisbursementVoiding>();
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Banks.IdentificationRule> IdentificationRules => Set<IngenIA365ERP.Domain.Entities.Receipts.Banks.IdentificationRule>();
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Banks.ReportedDeposit> ReportedDeposits => Set<IngenIA365ERP.Domain.Entities.Receipts.Banks.ReportedDeposit>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PaymasterCalendarEntry> PaymasterCalendar => Set<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PaymasterCalendarEntry>();
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.PayerCreditBalance> PayerCreditBalances => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.PayerCreditBalance>();
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.PayerCreditBalanceMovement> PayerCreditBalanceMovements => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.PayerCreditBalanceMovement>();
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.PayerReceivable> PayerReceivables => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.PayerReceivable>();

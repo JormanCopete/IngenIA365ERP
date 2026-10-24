@@ -1,4 +1,4 @@
-@page "/recaudo/pagadurias"
+﻿@page "/recaudo/pagadurias"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
 @using IngenIA365ERP.Shared.Services.Http
 @using IngenIA365ERP.Shared.Services.Recaudo
@@ -181,6 +181,44 @@
         }
     }
 
+    @* R1, US7 (T0384; FR-082): el calendario legal de giro por pagaduría y período; informativo, nada se bloquea. *@
+    <section class="info-card">
+        <h4>Calendario de giro</h4>
+        <IndicadorDeCarga Cargando="@_calendarioCarga.Activa" Texto="Cargando el calendario…">
+            <div class="toolbar">
+                <label class="campo"><input type="checkbox" @bind="_soloMorosas" @bind:after="@CalendarioAsync" /> Sólo pagadurías morosas</label>
+            </div>
+            <table class="data-grid">
+                <thead><tr><th>Pagaduría</th><th>Período</th><th>Enviado</th><th>Descontado</th><th>Girado</th><th>Pendiente</th><th>Pago de la nómina</th><th>Fecha legal de giro</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var c in _calendario)
+                    {
+                        <tr class="@(c.IsLate ? "fila-alerta" : "")">
+                            <td>@c.PaymasterName</td><td>@c.Year-@c.Month.ToString("00")@(c.SubPeriod > 0 ? $"/{c.SubPeriod}" : "")</td><td>@c.Sent.ToString("N0")</td>
+                            <td>@c.Deducted.ToString("N0")</td><td>@c.Remitted.ToString("N0")</td><td>@c.Pending.ToString("N0")</td>
+                            <td>@c.PayrollPayDate?.ToString("dd/MM/yyyy")</td><td>@c.LegalRemittanceDate?.ToString("dd/MM/yyyy")@(c.IsLate ? " (vencida)" : "")</td>
+                            <td>
+                                <PermissionGate Required="Receipts.Paymasters.RegisterRemittance">
+                                    <SfButton CssClass="e-flat" OnClick="@(() => ElegirFilaDelCalendario(c))">Fecha de pago</SfButton>
+                                </PermissionGate>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            @if (_filaDelCalendario is { } fila)
+            {
+                <div class="form-grid">
+                    <label class="campo">Pago de la nómina de @fila.PaymasterName (@fila.Year-@fila.Month.ToString("00")) <input type="date" class="e-input" @bind="_fechaDePago" /></label>
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-flat" OnClick="@(() => _filaDelCalendario = null)">Cancelar</SfButton>
+                    <SfButton CssClass="e-primary" OnClick="@RegistrarFechaDePagoAsync">Registrar</SfButton>
+                </div>
+            }
+        </IndicadorDeCarga>
+    </section>
+
     <section class="info-card">
         <h4>Giros</h4>
         <IndicadorDeCarga Cargando="@_giro.Activa" Texto="Cargando giros…">
@@ -242,7 +280,12 @@
     private decimal? _valorDelGiro;
     private bool _excedenteASaldo;
     private byte[]? _contenido;
-    private ClaveDeOperacion _clave = new();
+    private ClaveDeOperacion _clave = new(), _claveCalendario = new();
+    private readonly EstadoDeCarga _calendarioCarga = new();
+    private IReadOnlyList<CalendarioDePagaduriaDto> _calendario = [];
+    private CalendarioDePagaduriaDto? _filaDelCalendario;
+    private DateOnly _fechaDePago = DateOnly.FromDateTime(DateTime.Today);
+    private bool _soloMorosas;
 
     private sealed class FilaEditable
     {
@@ -256,6 +299,36 @@
     {
         await CargarAsync();
         await GirosAsync();
+        await CalendarioAsync();
+    }
+
+    private void ElegirFilaDelCalendario(CalendarioDePagaduriaDto c)
+    {
+        _filaDelCalendario = c;
+        _fechaDePago = c.PayrollPayDate ?? DateOnly.FromDateTime(DateTime.Today);
+        _claveCalendario = new ClaveDeOperacion();
+    }
+
+    private async Task CalendarioAsync()
+    {
+        using var carga = _calendarioCarga.Iniciar();
+        var r = await PagaduriasApi.CalendarioAsync(_anio, _soloMorosas);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo consultar el calendario."); return; }
+        _calendario = r.Value;
+    }
+
+    private async Task RegistrarFechaDePagoAsync()
+    {
+        if (_filaDelCalendario is not { } f) return;
+        using (_calendarioCarga.Iniciar())
+        {
+            var r = await PagaduriasApi.RegistrarFechaDePagoAsync(new FechaDePagoRequest(f.PaymasterPersonPublicId, f.Year, f.Month, _fechaDePago, f.SubPeriod, null),
+                _claveCalendario);
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo registrar la fecha de pago."); return; }
+            _filaDelCalendario = null;
+            await Notification.SuccessAsync($"Fecha legal de giro: {r.Value!.LegalRemittanceDate:dd/MM/yyyy} (informativa).");
+        }
+        await CalendarioAsync();
     }
 
     private async Task CargarAsync()

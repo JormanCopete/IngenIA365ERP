@@ -162,6 +162,52 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                 });
 
             migrationBuilder.CreateTable(
+                name: "RCD_PaymasterCalendar",
+                schema: "dbo",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    PaymasterPersonId = table.Column<int>(type: "int", nullable: false),
+                    PeriodYear = table.Column<int>(type: "int", nullable: false),
+                    PeriodMonth = table.Column<int>(type: "int", nullable: false),
+                    SubPeriod = table.Column<int>(type: "int", nullable: false),
+                    PayrollPayDate = table.Column<DateOnly>(type: "date", nullable: false),
+                    BusinessDays = table.Column<int>(type: "int", nullable: false),
+                    LegalRemittanceDate = table.Column<DateOnly>(type: "date", nullable: false),
+                    RegisteredByUserId = table.Column<int>(type: "int", nullable: false),
+                    RegisteredAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    Note = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_RCD_PaymasterCalendar", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_RCD_PaymasterCalendar_COR_People_PaymasterPersonId",
+                        column: x => x.PaymasterPersonId,
+                        principalSchema: "dbo",
+                        principalTable: "COR_People",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_RCD_PaymasterCalendar_SEC_Users_RegisteredByUserId",
+                        column: x => x.RegisteredByUserId,
+                        principalSchema: "dbo",
+                        principalTable: "SEC_Users",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "RCD_PendingApplications",
                 schema: "dbo",
                 columns: table => new
@@ -537,6 +583,33 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                 unique: true);
 
             migrationBuilder.CreateIndex(
+                name: "IX_RCD_PaymasterCalendar_LegalRemittanceDate",
+                schema: "dbo",
+                table: "RCD_PaymasterCalendar",
+                column: "LegalRemittanceDate");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_RCD_PaymasterCalendar_RegisteredByUserId",
+                schema: "dbo",
+                table: "RCD_PaymasterCalendar",
+                column: "RegisteredByUserId");
+
+            migrationBuilder.CreateIndex(
+                name: "UK_RCD_PaymasterCalendar_Paymaster_Period",
+                schema: "dbo",
+                table: "RCD_PaymasterCalendar",
+                columns: new[] { "PaymasterPersonId", "PeriodYear", "PeriodMonth", "SubPeriod" },
+                unique: true,
+                filter: "[IsDeleted] = 0");
+
+            migrationBuilder.CreateIndex(
+                name: "UK_RCD_PaymasterCalendar_PublicId",
+                schema: "dbo",
+                table: "RCD_PaymasterCalendar",
+                column: "PublicId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
                 name: "IX_RCD_PendingApplicationResolutions_ResolvedByUserId",
                 schema: "dbo",
                 table: "RCD_PendingApplicationResolutions",
@@ -664,6 +737,10 @@ WHERE NOT EXISTS (SELECT 1 FROM [dbo].[RCD_DocumentTypes] t WHERE t.[Code] = v.c
 
             migrationBuilder.DropTable(
                 name: "RCD_IdentificationRules",
+                schema: "dbo");
+
+            migrationBuilder.DropTable(
+                name: "RCD_PaymasterCalendar",
                 schema: "dbo");
 
             migrationBuilder.DropTable(

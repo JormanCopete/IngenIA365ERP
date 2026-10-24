@@ -3,6 +3,7 @@ using IngenIA365ERP.Domain.Entities.Receipts.Banks;
 using IngenIA365ERP.Domain.Entities.Receipts.Configuration;
 using IngenIA365ERP.Domain.Entities.Receipts.Sessions;
 using IngenIA365ERP.Domain.Entities.Receipts.Operations;
+using IngenIA365ERP.Domain.Entities.Receipts.Paymasters;
 using IngenIA365ERP.Domain.Entities.Security;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
@@ -147,5 +148,22 @@ public class ReportedDepositConfiguration : IEntityTypeConfiguration<ReportedDep
         builder.HasIndex(e => e.Number).IsUnique().HasFilter("[IsDeleted] = 0").HasDatabaseName($"UK_{Tabla}_Number");
         builder.HasIndex(e => new { e.OwnBankAccountPublicId, e.Status, e.DepositDate }).HasDatabaseName($"IX_{Tabla}_Account_Status_Date");
         builder.HasIndex(e => e.StatementLinePublicId).HasDatabaseName($"IX_{Tabla}_StatementLinePublicId");
+    }
+}
+
+/// <summary><c>RCD_PaymasterCalendar</c>: la fecha de pago de la nómina de una pagaduría y su fecha legal de giro (FR-082), una por pagaduría y período. (nuevo)</summary>
+public class PaymasterCalendarEntryConfiguration : IEntityTypeConfiguration<PaymasterCalendarEntry>
+{
+    public const string Tabla = "RCD_PaymasterCalendar";
+
+    public void Configure(EntityTypeBuilder<PaymasterCalendarEntry> builder)
+    {
+        builder.ComoEntidadDeRecaudo(Tabla);
+        builder.HasOne<Person>().WithMany().HasForeignKey(e => e.PaymasterPersonId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<User>().WithMany().HasForeignKey(e => e.RegisteredByUserId).OnDelete(DeleteBehavior.Restrict);
+        builder.Property(e => e.Note).HasMaxLength(500);
+        builder.HasIndex(e => new { e.PaymasterPersonId, e.PeriodYear, e.PeriodMonth, e.SubPeriod }).IsUnique().HasFilter("[IsDeleted] = 0")
+            .HasDatabaseName($"UK_{Tabla}_Paymaster_Period");
+        builder.HasIndex(e => e.LegalRemittanceDate).HasDatabaseName($"IX_{Tabla}_LegalRemittanceDate");
     }
 }
