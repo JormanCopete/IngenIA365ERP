@@ -1,4 +1,4 @@
-namespace IngenIA365ERP.Domain.Receipts;
+﻿namespace IngenIA365ERP.Domain.Receipts;
 
 /// <summary>
 /// Las entregas de Recaudo (feature 015, T0042; plan.md «Entregas y fases»), en el orden en que salen. Se convierte sola a
@@ -24,5 +24,9 @@ public static class CatalogoDeRecaudo
     /// <summary>El código de Recaudo como participante y en <c>ModuloContable</c>.</summary>
     public const string Codigo = "REC";
 
-    public const EntregaDeRecaudo EntregaVigente = EntregaDeRecaudo.R0;
+    /// <summary>
+    /// Feature 015, R1 (T0357): la entrega desplegada es R1 —el resto de medios (tarjetas, bono, otro), el egreso de caja, las reglas de identificación, el
+    /// calendario de pagadurías y el reporte de transacciones—; lo que sólo trae R2 sigue sin ofrecerse.
+    /// </summary>
+    public const EntregaDeRecaudo EntregaVigente = EntregaDeRecaudo.R1;
 }

@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Text.Json.Serialization;
 using IngenIA365ERP.Application.Common.Alerts;
 using IngenIA365ERP.Application.Common.Behaviors;
@@ -107,6 +107,9 @@ public sealed class ConfirmacionDeRecibo(
         var medios = OperacionesDeCaja.Medios(operacion);
         if (items.Count == 0) return Result.Failure<ReceiptDto>(ErroresDeRecaudo.OperacionSinItems());
         if (medios.Count == 0) return Result.Failure<ReceiptDto>(ErroresDeRecaudo.MediosNoCuadran());
+        // Feature 015, R1 (T0357): la captura de tarjetas, bonos y «otro» otra vez al confirmar.
+        var captura = await CapturaDeMedios.ValidarAsync(db, sellados, medios, ct);
+        if (captura.IsFailure) return Result.Failure<ReceiptDto>(captura.Error);
         // Feature 015, US15 (T0217): cada cheque se valida otra vez al confirmar (el mismo cheque no entra dos veces; el plazo, a la fecha de hoy).
         var cheques = new Dictionary<Guid, Checks.ChequesRecibidos.Validacion>();
         foreach (var m in medios.Where(m => sellados.Means.FirstOrDefault(x => x.PublicId == m.PaymentMeansPublicId)?.Class == PaymentMeansClass.Check))

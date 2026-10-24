@@ -1,4 +1,4 @@
-@page "/recaudo/configuracion/medios"
+﻿@page "/recaudo/configuracion/medios"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
 @using IngenIA365ERP.Shared.Services.Http
 @using IngenIA365ERP.Shared.Services.Recaudo
@@ -10,7 +10,8 @@
 
 @* Feature 015, US1 (T0077; FR-023, FR-024; data-model §1.5): qué medios del catálogo común se ofrecen en cada punto de recaudo. El servidor decide qué se
    admite (las clases de crédito nunca, las tarjetas completas, el cheque sólo si la cooperativa lo recibe) y la pantalla muestra su mensaje. Retirar un
-   medio cierra su vigencia: la fila no se borra. *@
+   medio cierra su vigencia: la fila no se borra. Desde R1 (T0358) se ofrecen también las tarjetas de débito y crédito (con su adquirente y un datáfono activo),
+   el bono y «otro». *@
 <PermissionGate Required="Receipts.Setup.View" MostrarAviso="true">
 <div class="pagina">
     <div class="page-header">
@@ -27,6 +28,7 @@
         </div>
     </div>
 
+    <p class="texto-apoyo">Se ofrecen efectivo, transferencia, consignación, cheque (si la cooperativa los recibe), tarjetas de débito y crédito con su adquirente y datáfono, bono y «otro».</p>
     <IndicadorDeCarga Cargando="@(_carga.Activa || _guardado.Activa)" Texto="@(_guardado.Activa ? "Guardando…" : "Cargando…")">
         @if (!Guid.TryParse(_punto, out _))
         {

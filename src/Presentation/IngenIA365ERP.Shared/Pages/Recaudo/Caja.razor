@@ -1,4 +1,4 @@
-@page "/recaudo/caja"
+﻿@page "/recaudo/caja"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
 @using IngenIA365ERP.Shared.Components.Personas
 @using IngenIA365ERP.Shared.Components.Recaudo
@@ -11,6 +11,7 @@
 @inject DescargaDeArchivos Descargas
 @inject HttpClient Http
 @inject CumplimientoClient CumplimientoApi
+@inject MediosDePagoClient CatalogoDeMedios
 
 <PageTitle>Caja - IngenIA365ERP</PageTitle>
 
@@ -144,6 +145,25 @@
                         <label class="campo">Valor <input class="e-input" type="number" min="0" value="@m.Amount" @onchange="@(e => CambiarValorDelMedio(m, e.Value?.ToString()))" /></label>
                         <label class="campo">Referencia <input class="e-input" value="@m.Reference" @onchange="@(e => CambiarReferencia(m, e.Value?.ToString()))" /></label>
                     </div>
+                    @if (EsTarjeta(m))
+                    {
+                        @* Feature 015, R1 (T0358; FR-024, FR-031): la tarjeta lleva el datáfono, el lote y la aprobación; el número de la tarjeta nunca se registra. *@
+                        <div class="form-grid">
+                            <label class="campo">Datáfono *
+                                <select class="e-input" value="@m.CardTerminalPublicId" @onchange="@(e => _medios[_medios.IndexOf(m)] = m with { CardTerminalPublicId = Guid.TryParse(e.Value?.ToString(), out var g) ? g : null })">
+                                    <option value="">— Elija —</option>
+                                    @foreach (var d in _datafonos) { <option value="@d.CardTerminalPublicId">@d.Code · @d.CardAcquirerCode</option> }
+                                </select>
+                            </label>
+                            <label class="campo">Lote * <input class="e-input" maxlength="20" value="@m.TerminalBatch" @onchange="@(e => _medios[_medios.IndexOf(m)] = m with { TerminalBatch = e.Value?.ToString() })" /></label>
+                            <label class="campo">Aprobación * <input class="e-input" maxlength="20" value="@m.ApprovalCode" @onchange="@(e => _medios[_medios.IndexOf(m)] = m with { ApprovalCode = e.Value?.ToString() })" /></label>
+                        </div>
+                        <p class="texto-apoyo">No escriba el número de la tarjeta: sólo el lote y la aprobación del comprobante.</p>
+                    }
+                    @if (EsBono(m))
+                    {
+                        <label class="campo">Número del bono * <input class="e-input" maxlength="40" value="@m.VoucherNumber" @onchange="@(e => _medios[_medios.IndexOf(m)] = m with { VoucherNumber = e.Value?.ToString() })" /></label>
+                    }
                     @if (EsCheque(m))
                     {
                         @* US15 (T0219): un cheque trae banco librado, número, cuenta, fecha, plaza y girador si no es el pagador. *@
@@ -241,7 +261,21 @@
         _sesion = r.IsSuccess ? r.Value : null;
         if (_sesion?.Means.Any(x => x.Class == ClaseCheque) == true)
             _bancos = await Http.TryGetListAsync<BancoDeCheque>("/api/core/banks?PageNumber=1&PageSize=500&SortBy=name");
+        if (_sesion?.Means.Any(x => x.Class is ClaseTarjetaDeCredito or ClaseTarjetaDebito) == true)
+        {
+            var d = await CatalogoDeMedios.DatafonosAsync(activos: true);
+            if (d.IsSuccess && d.Value is not null) _datafonos = d.Value;
+        }
     }
+
+    // Feature 015, R1 (T0358): tarjetas (con su datáfono, lote y aprobación) y bonos.
+    private const int ClaseTarjetaDeCredito = 2, ClaseTarjetaDebito = 3, ClaseBono = 8;
+    private IReadOnlyList<DatafonoDto> _datafonos = [];
+
+    private bool EsTarjeta(MedioDeCajaRequest m) =>
+        _sesion?.Means.FirstOrDefault(x => x.PaymentMeansPublicId == m.PaymentMeansPublicId)?.Class is ClaseTarjetaDeCredito or ClaseTarjetaDebito;
+
+    private bool EsBono(MedioDeCajaRequest m) => _sesion?.Means.FirstOrDefault(x => x.PaymentMeansPublicId == m.PaymentMeansPublicId)?.Class == ClaseBono;
 
     // Feature 015, US15 (T0219): los datos del cheque recibido como medio.
     private const int ClaseCheque = 9;

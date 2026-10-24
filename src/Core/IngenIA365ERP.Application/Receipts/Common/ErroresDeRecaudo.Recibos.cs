@@ -1,4 +1,4 @@
-using IngenIA365ERP.Application.Common.Models;
+﻿using IngenIA365ERP.Application.Common.Models;
 
 namespace IngenIA365ERP.Application.Receipts.Common;
 
@@ -17,6 +17,15 @@ public static partial class ErroresDeRecaudo
     public const string CodigoFechaAnteriorNoAdmitida = "Receipts.Receipt.BackdatedNotAllowed";
     public const string CodigoFechaAnteriorConAprobacion = "Receipts.Receipt.BackdatedNeedsApproval";
     public const string CodigoBonoUsado = "Receipts.PaymentMeans.VoucherAlreadyUsed";
+
+    /// <summary>Feature 015, R1 (T0357; FR-024, FR-031) (nuevo): el pago con tarjeta sin datáfono del adquirente, lote o aprobación.</summary>
+    public const string CodigoCapturaDeTarjetaIncompleta = "Receipts.PaymentMeans.CardCaptureIncomplete";
+
+    /// <summary>Feature 015, R1 (T0357; FR-024) (nuevo): la referencia de una tarjeta parece el número de la tarjeta, que nunca se guarda.</summary>
+    public const string CodigoNumeroDeTarjeta = "Receipts.PaymentMeans.CardNumberNotAllowed";
+
+    /// <summary>Feature 015, R1 (T0357; FR-041) (nuevo): el bono sin número, o el medio que exige referencia sin ella.</summary>
+    public const string CodigoReferenciaRequerida = "Receipts.PaymentMeans.ReferenceRequired";
     public const string CodigoListaVinculante = "Receipts.Compliance.BindingListMatch";
     public const string CodigoDeclaracionRequerida = "Receipts.Compliance.DeclarationRequired";
     public const string CodigoQuienEfectuaRequerido = "Receipts.Compliance.DeliveredByRequired";
@@ -77,6 +86,15 @@ public static partial class ErroresDeRecaudo
 
     public static Error FechaAnteriorConAprobacion() => new(CodigoFechaAnteriorConAprobacion,
         "La fecha valor anterior exige motivo, soporte y la aprobación de otra persona presente.");
+
+    public static Error CapturaDeTarjetaIncompleta(string medio, string falta) => new ErrorConDatos(CodigoCapturaDeTarjetaIncompleta,
+        $"El pago con {medio} necesita {falta}: tómelo del comprobante del datáfono.", new { means = medio, missing = falta });
+
+    public static Error NumeroDeTarjeta(string medio) => new ErrorConDatos(CodigoNumeroDeTarjeta,
+        $"La referencia del pago con {medio} parece el número de la tarjeta: registre sólo el lote y la aprobación, nunca el número.", new { means = medio });
+
+    public static Error ReferenciaRequerida(string medio) => new ErrorConDatos(CodigoReferenciaRequerida,
+        $"El medio {medio} exige su número o referencia.", new { means = medio });
 
     public static Error BonoUsado(string bono) => new ErrorConDatos(CodigoBonoUsado, $"El bono {bono} ya se usó en otro recibo.", new { voucher = bono });
 

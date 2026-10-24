@@ -1,4 +1,4 @@
-@page "/recaudo/sesiones"
+﻿@page "/recaudo/sesiones"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
 @using IngenIA365ERP.Shared.Components.Recaudo
 @using IngenIA365ERP.Shared.Services.Http
@@ -6,6 +6,7 @@
 @using IngenIA365ERP.Shared.Services.Recaudo
 @inject SesionesClient Cliente
 @inject ConfiguracionDeRecaudoClient Configuracion
+@inject MediosDePagoClient CatalogoDeMedios
 @inject INotificationService Notification
 @inject DescargaDeArchivos Descargas
 
@@ -253,6 +254,24 @@
                     {
                         <ConteoDeBilletes Denominaciones="_denominaciones" Cantidades="@CantidadesDe(id)" />
                     }
+                    else if (m.CountMethod == MetodoPorLote)
+                    {
+                        @* Feature 015, R1 (T0358; FR-031): las tarjetas se arquean por lote de datáfono. *@
+                        @foreach (var lote in LotesDe(id))
+                        {
+                            <div class="form-grid">
+                                <label class="campo">Datáfono
+                                    <select class="e-input" value="@lote.Datafono" @onchange="@(e => lote.Datafono = Guid.TryParse(e.Value?.ToString(), out var g) ? g : null)">
+                                        <option value="">— Elija —</option>
+                                        @foreach (var d in _datafonos) { <option value="@d.CardTerminalPublicId">@d.Code · @d.CardAcquirerCode</option> }
+                                    </select>
+                                </label>
+                                <label class="campo">Lote <input class="e-input" maxlength="20" value="@lote.Numero" @onchange="@(e => lote.Numero = e.Value?.ToString() ?? "")" /></label>
+                                <label class="campo">Valor <input class="e-input" type="number" min="0" value="@lote.Valor" @onchange="@(e => lote.Valor = decimal.TryParse(e.Value?.ToString(), out var v) ? v : 0m)" /></label>
+                            </div>
+                        }
+                        <SfButton CssClass="e-flat" OnClick="@(() => LotesDe(id).Add(new LoteDelArqueo()))">Agregar lote</SfButton>
+                    }
                     else
                     {
                         <label class="campo">Total contado <input class="e-input" type="number" min="0" value="@TotalDe(id)" @onchange="@(e => _totales[id] = decimal.TryParse(e.Value?.ToString(), out var v) ? v : 0m)" /></label>
@@ -386,6 +405,28 @@
 
     private decimal TotalDe(Guid medio) => _totales.GetValueOrDefault(medio);
 
+    // Feature 015, R1 (T0358): el arqueo por lote de datáfono de las tarjetas (método «total de comprobantes»).
+    private const int MetodoPorLote = 2;
+    private readonly Dictionary<Guid, List<LoteDelArqueo>> _lotes = [];
+    private IReadOnlyList<DatafonoDto> _datafonos = [];
+
+    private sealed class LoteDelArqueo
+    {
+        public Guid? Datafono { get; set; }
+        public string Numero { get; set; } = "";
+        public decimal Valor { get; set; }
+    }
+
+    private List<LoteDelArqueo> LotesDe(Guid medio)
+    {
+        if (!_lotes.TryGetValue(medio, out var lista)) _lotes[medio] = lista = [];
+        return lista;
+    }
+
+    private IReadOnlyList<LoteContadoRequest>? LotesContados(Guid medio) =>
+        LotesDe(medio).Where(l => l.Datafono is not null && !string.IsNullOrWhiteSpace(l.Numero))
+            .Select(l => new LoteContadoRequest(l.Datafono!.Value, l.Numero.Trim(), l.Valor)).ToList() is { Count: > 0 } lista ? lista : null;
+
     private string? MotivoDe(Guid medio) => _motivos.GetValueOrDefault(medio);
 
     private async Task AbrirAsync()
@@ -465,9 +506,11 @@
         _billetesPorMedio.Clear();
         _totales.Clear();
         _motivos.Clear();
+        _lotes.Clear();
         _testigo = "";
         _clave = new ClaveDeOperacion();
         _conteoVisible = true;
+        if (sesion.Means.Any(m => m.CountMethod == MetodoPorLote) && _datafonos.Count == 0) _ = CargarDatafonosAsync();
     }
 
     private void AbrirSorpresivo(SesionDeCajaDto sesion)
@@ -477,10 +520,18 @@
         _acta = "";
     }
 
+    private async Task CargarDatafonosAsync()
+    {
+        var d = await CatalogoDeMedios.DatafonosAsync(activos: true);
+        if (d.IsSuccess && d.Value is not null) { _datafonos = d.Value; StateHasChanged(); }
+    }
+
     private IReadOnlyList<ConteoDeMedioRequest> Conteos() =>
         (_sesionDelConteo?.Means ?? []).Select(m => m.Class == 1
             ? new ConteoDeMedioRequest(m.PaymentMeansPublicId, Denominations: Billetes(CantidadesDe(m.PaymentMeansPublicId)), Reason: MotivoDe(m.PaymentMeansPublicId))
-            : new ConteoDeMedioRequest(m.PaymentMeansPublicId, Total: TotalDe(m.PaymentMeansPublicId), Reason: MotivoDe(m.PaymentMeansPublicId))).ToList();
+            : m.CountMethod == MetodoPorLote && LotesContados(m.PaymentMeansPublicId) is { } lotes
+                ? new ConteoDeMedioRequest(m.PaymentMeansPublicId, TerminalBatches: lotes, Reason: MotivoDe(m.PaymentMeansPublicId))
+                : new ConteoDeMedioRequest(m.PaymentMeansPublicId, Total: TotalDe(m.PaymentMeansPublicId), Reason: MotivoDe(m.PaymentMeansPublicId))).ToList();
 
     private async Task ContarAsync()
     {

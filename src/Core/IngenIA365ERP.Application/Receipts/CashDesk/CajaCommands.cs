@@ -1,4 +1,4 @@
-using FluentValidation;
+﻿using FluentValidation;
 using IngenIA365ERP.Application.Common.Behaviors;
 using IngenIA365ERP.Application.Common.Integration.Lending;
 using IngenIA365ERP.Application.Common.Interfaces;
@@ -313,6 +313,7 @@ public sealed class UpdateCashOperationMeansCommandValidator : AbstractValidator
             m.RuleFor(x => x.Reference).MaximumLength(80);
             m.RuleFor(x => x.VoucherNumber).MaximumLength(40);
             m.RuleFor(x => x.ApprovalCode).MaximumLength(20);
+            m.RuleFor(x => x.TerminalBatch).MaximumLength(20);
         });
     }
 }
@@ -339,6 +340,9 @@ public sealed class UpdateCashOperationMeansCommandHandler(IApplicationDbContext
             if (medioId is { } id && await db.ReceiptMeans.AsNoTracking().AnyAsync(x => x.PaymentMeansId == id && x.VoucherNumber == bono, ct))
                 return Result.Failure<CashOperationDto>(ErroresDeRecaudo.BonoUsado(bono));
         }
+        // Feature 015, R1 (T0357; FR-024, FR-031, FR-041): tarjetas con datáfono, lote y aprobación (sin el número), bono con número único, «otro» con referencia.
+        var captura = await CapturaDeMedios.ValidarAsync(db, sellados, medios, ct);
+        if (captura.IsFailure) return Result.Failure<CashOperationDto>(captura.Error);
         // Feature 015, US15 (T0217; FR-083, FR-084, FR-086): un cheque trae sus datos y pasa sus reglas antes de imputarse (va al final, D35).
         foreach (var m in medios.Where(m => sellados.Means.FirstOrDefault(x => x.PublicId == m.PaymentMeansPublicId)?.Class == PaymentMeansClass.Check))
         {
