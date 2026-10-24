@@ -112,6 +112,14 @@ public static class EvaluadorDePolitica
         // (y, por la fuente, un monto que alcance).
         ApprovalSubjects.AccountWithdrawal => new NivelDeAprobacion(1, 0m, "Lending.Accounts.Withdraw"),
         ApprovalSubjects.AccountCashDeposit => new NivelDeAprobacion(1, 0m, "Lending.Accounts.Deposit"),
+        // Feature 015 (T0061; FR-013): las de Recaudo, con aprobador presente desde el primer peso, y las de Tesorería, diferidas (sin política, un nivel).
+        ApprovalSubjects.CashCountDifference => new NivelDeAprobacion(1, 0m, "Receipts.Count.ApproveDifference"),
+        ApprovalSubjects.CashMeansReclassification => new NivelDeAprobacion(1, 0m, "Receipts.Session.Reclassify"),
+        ApprovalSubjects.ReceiptBackdate => new NivelDeAprobacion(1, 0m, "Receipts.Receipt.Backdate"),
+        ApprovalSubjects.CashSessionAdjustment => new NivelDeAprobacion(1, 0m, "Receipts.Session.Adjust"),
+        ApprovalSubjects.ReceiptVoiding => new NivelDeAprobacion(1, 0m, "Receipts.Voiding.Approve"),
+        ApprovalSubjects.PaymentBatchApproval => new NivelDeAprobacion(1, 0m, "Treasury.Batches.Approve"),
+        ApprovalSubjects.LiquidityFundUse => new NivelDeAprobacion(1, 0m, "Treasury.LiquidityFund.Approve"),
         _ => null,
     };
 

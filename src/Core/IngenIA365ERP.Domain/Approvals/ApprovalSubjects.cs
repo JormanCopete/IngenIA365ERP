@@ -35,9 +35,37 @@ public static class ApprovalSubjects
     /// </summary>
     public const string AccountCashDeposit = "AccountCashDeposit";
 
-    /// <summary>Los cinco de data-model §21, en su orden, y los dos de captaciones de la feature 014.</summary>
+    /// <summary>
+    /// Feature 015, US12 (T0061; FR-013, FR-032; api.md §1.4): una diferencia de arqueo sobre la tolerancia del medio. Regla fija de un nivel con
+    /// <c>Receipts.Count.ApproveDifference</c> (con monto); lo aprueba un presente con segundo factor, otra persona. (nuevo)
+    /// </summary>
+    public const string CashCountDifference = "CashCountDifference";
+
+    /// <summary>Feature 015 (T0061; FR-030): la reclasificación entre medios de un pago ya confirmado. Regla fija de un nivel con <c>Receipts.Session.Reclassify</c>. (nuevo)</summary>
+    public const string CashMeansReclassification = "CashMeansReclassification";
+
+    /// <summary>Feature 015 (T0061; FR-047, FR-192): un recibo de caja con fecha valor anterior. Regla fija de un nivel con <c>Receipts.Receipt.Backdate</c> (con monto). (nuevo)</summary>
+    public const string ReceiptBackdate = "ReceiptBackdate";
+
+    /// <summary>Feature 015 (T0061; FR-033): el ajuste de una sesión de caja cerrada. Regla fija de un nivel con <c>Receipts.Session.Adjust</c>. (nuevo)</summary>
+    public const string CashSessionAdjustment = "CashSessionAdjustment";
+
+    /// <summary>Feature 015 (T0061; FR-057): la anulación de un recibo. Regla fija de un nivel con <c>Receipts.Voiding.Approve</c> (con monto). (nuevo)</summary>
+    public const string ReceiptVoiding = "ReceiptVoiding";
+
+    /// <summary>
+    /// Feature 015 (T0061; FR-013, FR-110; US12-3): la aprobación diferida de un lote de pago de Tesorería, por niveles sucesivos hasta cubrir el monto.
+    /// Sin política, regla fija de un nivel con <c>Treasury.Batches.Approve</c> (con monto). (nuevo)
+    /// </summary>
+    public const string PaymentBatchApproval = "PaymentBatchApproval";
+
+    /// <summary>Feature 015 (T0061; FR-207): un uso del fondo de liquidez. Regla fija de un nivel con <c>Treasury.LiquidityFund.Approve</c> (con monto). (nuevo)</summary>
+    public const string LiquidityFundUse = "LiquidityFundUse";
+
+    /// <summary>Los cinco de data-model §21, en su orden, los dos de captaciones de la feature 014 y los siete de Recaudo y Tesorería de la 015.</summary>
     public static readonly IReadOnlyList<string> Todos =
-        [DocumentConfirmation, DiscountOverCap, ProvisionalCredit, TransferDiscrepancy, PurchaseMatchException, AccountWithdrawal, AccountCashDeposit];
+        [DocumentConfirmation, DiscountOverCap, ProvisionalCredit, TransferDiscrepancy, PurchaseMatchException, AccountWithdrawal, AccountCashDeposit,
+            CashCountDifference, CashMeansReclassification, ReceiptBackdate, CashSessionAdjustment, ReceiptVoiding, PaymentBatchApproval, LiquidityFundUse];
 
     /// <summary>Si el texto es uno de los sujetos, escrito exacto (distingue mayúsculas).</summary>
     public static bool EsValido(string? sujeto) => sujeto is not null && Todos.Contains(sujeto, StringComparer.Ordinal);
@@ -57,4 +85,10 @@ public static class ApprovalSourceTypes
 
     /// <summary>Feature 014, US4 (T111): un retiro, un traslado o una consignación en efectivo de una cuenta de captación sobre la atribución. (nuevo)</summary>
     public const string MemberAccountOperation = "MemberAccountOperation";
+
+    /// <summary>Feature 015 (T0061): una operación de Recaudo con aprobador presente (arqueo, reclasificación, fecha valor, ajuste, anulación). (nuevo)</summary>
+    public const string ReceiptsOperation = "ReceiptsOperation";
+
+    /// <summary>Feature 015 (T0061): un documento de Tesorería con aprobación diferida (lote de pago, uso del fondo de liquidez). (nuevo)</summary>
+    public const string TreasuryDocument = "TreasuryDocument";
 }

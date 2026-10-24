@@ -525,6 +525,38 @@
             <NavLink href="/debito/datafonos" class="nav-subitem">Datafonos</NavLink>
         </NavMenuGroup>
 
+        @* Feature 015 (T0063, T0077; FR-162): el grupo «Recaudo» nace con su configuración. *@
+        <NavMenuGroup Icon="e-money" Title="Recaudo" Expanded="SidebarOpen">
+            <span class="nav-subgroup-title">Configuración</span>
+            <PermissionGate Required="Receipts.Setup.View">
+                <NavLink href="/recaudo/configuracion/puntos" class="nav-subitem">Puntos de recaudo</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Receipts.Setup.View">
+                <NavLink href="/recaudo/configuracion/cajas" class="nav-subitem">Cajas y cajeros</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Receipts.Setup.View">
+                <NavLink href="/recaudo/configuracion/medios" class="nav-subitem">Medios por punto</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Receipts.Setup.View">
+                <NavLink href="/recaudo/configuracion/bovedas" class="nav-subitem">Bóvedas</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Receipts.Setup.View">
+                <NavLink href="/recaudo/configuracion/tipos-de-documento" class="nav-subitem">Tipos de documento</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Receipts.Setup.View">
+                <NavLink href="/recaudo/configuracion/conceptos" class="nav-subitem">Conceptos varios</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Receipts.Setup.View">
+                <NavLink href="/recaudo/configuracion/talonarios" class="nav-subitem">Talonarios de contingencia</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Receipts.Setup.View">
+                <NavLink href="/recaudo/configuracion/suplencias" class="nav-subitem">Suplencias</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Receipts.Scope.Manage">
+                <NavLink href="/recaudo/configuracion/alcance" class="nav-subitem">Alcance de los usuarios</NavLink>
+            </PermissionGate>
+        </NavMenuGroup>
+
         @* Feature 015 (T0047; R-04; FR-162): lo heredado de Tesorería convive hasta T2 bajo su propio grupo. Los grupos «Recaudo» y
            «Tesorería» nacen con su primera página (TodoEnlaceDelMenuTieneSuPagina): ninguno enlaza todavía a una ruta sin @page. *@
         <NavMenuGroup Icon="e-cheque" Title="Tesorería · heredada" Expanded="SidebarOpen">

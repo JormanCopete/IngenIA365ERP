@@ -274,6 +274,23 @@ public static class DependencyInjection
         services.AddScoped<Lending.Common.AlcanceDeCarteraDeUnUsuario>();
         services.AddScoped<Common.Integration.Accounting.IActivosLiquidosParaCartera, Accounting.Lending.ActivosLiquidosParaCartera>();
         services.TryAddScoped<Common.Interfaces.Security.IAlcanceDeCartera, Common.Interfaces.Security.AlcanceDeCarteraCerrado>();
+        // Feature 015, US12 (T0058, T0060–T0062): el alcance de Recaudo y Tesorería (la API registra el de la petición; aquí, el que falla cerrado), la
+        // segregación por persona, las aprobaciones presente (caja) y diferida (Tesorería) y los emisores de auditoría de los dos módulos.
+        services.AddScoped<Receipts.Security.AlcanceDeRecaudoDelActor>();
+        services.AddScoped<Treasury.Security.AlcanceDeTesoreriaDelActor>();
+        services.TryAddScoped<Common.Scope.IAlcanceDeRecaudo, Common.Scope.AlcanceDeRecaudoCerrado>();
+        services.TryAddScoped<Common.Scope.IAlcanceDeTesoreria, Common.Scope.AlcanceDeTesoreriaCerrado>();
+        services.AddScoped<Common.Security.PersonasDeLosUsuarios>();
+        services.AddScoped<Receipts.Common.SegregacionDeRecaudo>();
+        services.AddScoped<Treasury.Common.SegregacionDeTesoreria>();
+        services.AddScoped<Receipts.Common.AprobacionPresenteEnCaja>();
+        services.AddScoped<Treasury.Common.AprobacionDiferidaEnTesoreria>();
+        services.AddScoped<Common.Approvals.IFuenteDeAprobacion, Receipts.Common.FuenteDeAprobacionDeRecaudo>();
+        services.AddScoped<Common.Approvals.IFuenteDeAprobacion, Treasury.Common.FuenteDeAprobacionDeTesoreria>();
+        services.AddScoped<Receipts.Common.AuditoriaDeRecaudo>();
+        services.AddScoped<Treasury.Common.AuditoriaDeTesoreria>();
+        // Feature 015, US1 (T0072): los parámetros de la caja leídos con su tipo, por el único lector.
+        services.AddScoped<Receipts.Common.ParametrosDeCaja>();
         services.AddScoped<Lending.Segregation.RegistroDeIntervenciones>();
         services.AddScoped<Lending.Common.LendingAuditEmitter>();
         services.AddScoped<Common.Audit.RechazosDeFormaDeLaPeticion>();

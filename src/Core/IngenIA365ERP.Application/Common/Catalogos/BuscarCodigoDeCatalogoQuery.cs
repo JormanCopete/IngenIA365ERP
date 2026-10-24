@@ -99,6 +99,12 @@ public sealed class BuscarCodigoDeCatalogoQueryHandler(IApplicationDbContext db)
         "ciudades" => db.Cities.AsNoTracking().Where(e => !e.IsDeleted && e.LegacyCode == codigo).Select(e => new Hallazgo(e.PublicId, e.Name)),
         // Feature 013 (US1, api.md §27): el código de la línea es la dimensión CreditLineCode de la matriz contable y no cambia.
         "lineas-de-credito" => db.CreditLines.AsNoTracking().Where(e => !e.IsDeleted && e.Code == codigo).Select(e => new Hallazgo(e.PublicId, e.Name)),
+        // Feature 015, US1 (T0074; US1-4): puntos, cajas, conceptos varios y tipos de documento de Recaudo. La caja es única por punto: la consulta
+        // avisa la primera con el código (la pantalla lo pregunta antes de guardar y el comando decide por punto).
+        "puntos-de-recaudo" => db.CollectionPoints.AsNoTracking().Where(e => !e.IsDeleted && e.Code == codigo).Select(e => new Hallazgo(e.PublicId, e.Name)),
+        "cajas-de-recaudo" => db.CashBoxes.AsNoTracking().Where(e => !e.IsDeleted && e.Code == codigo).Select(e => new Hallazgo(e.PublicId, e.Name)),
+        "conceptos-varios" => db.MiscConcepts.AsNoTracking().Where(e => !e.IsDeleted && e.Code == codigo).Select(e => new Hallazgo(e.PublicId, e.Name)),
+        "tipos-de-recibo" => db.ReceiptDocumentTypes.AsNoTracking().Where(e => !e.IsDeleted && e.Code == codigo).Select(e => new Hallazgo(e.PublicId, e.Name)),
         _ => null,
     };
 }

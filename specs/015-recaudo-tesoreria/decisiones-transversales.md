@@ -101,9 +101,9 @@ la spec no se reabren.
 | `CruceDeConciliacion` | valor, fecha con holgura, referencia | Domain/Treasury/Conciliacion |
 | `EvaluadorDeGmfDeEgresos` · `CalculoDeGmf` | GMF | Domain/Treasury/Gmf · Domain/Common/Taxation |
 | `CerrojoDeRecaudo` · `CerrojoDeTesoreria` | orden fijo | Persistence |
-| `NumeradorDeRecaudo` · `NumeradorDeTesoreria` | numeración al final | Application |
+| `NumeradorDeRecaudo` · `NumeradorDeTesoreria` | numeración al final de la confirmación; en el recibo, después de los cerrojos de Recaudo y antes de los contratos (§2.7) | Application |
 | `DestinoRecaudo` · `DestinoTesoreria` | consumidores de `Receipts` y `Treasury` | Application/{Receipts,Treasury}/Integration |
-| `ConfirmacionDeRecibo` | el flujo único de confirmación (validación → listas → validación previa → cerrojos → contratos → numeración → hechos → un `SaveChanges`) | Application/Receipts/CashDesk |
+| `ConfirmacionDeRecibo` | el flujo único de confirmación (validación → listas → validación previa → cerrojos → numeración → contratos → hechos → un `SaveChanges`; §2.7) | Application/Receipts/CashDesk |
 | `AplicacionNoInteractiva` | línea por transacción con su clave | Application/Receipts/BankItems |
 | `RequisitosDeActivacionDeRecaudo` · `…DeTesoreria` | requisitos verificables | Application/*/Activation |
 | `AlcanceDeRecaudoDeLaPeticion` · `AlcanceDeTesoreriaDeLaPeticion` | alcance | API/Services |
@@ -139,7 +139,7 @@ Close/CloseForgotten/Adjust/SurpriseCount`, `Receipts.Count.ApproveDifference`, 
 RegisterRemittance/ApplyRemittance`, `Receipts.Compliance.View/Release`, `Receipts.Sarlaft.Report`,
 `Receipts.Accounting.PolicyChange`, `Receipts.Activation.View/Activate/Square/ProvisionalSquare`, `Receipts.Imports.Run`,
 `Receipts.Reports.View/Export`, `Receipts.Disbursements.*` (R1), `Receipts.Agreements.*` (R2);
-`Treasury.BankAccounts.View/Manage`, `Treasury.BankBalances.View`, `Treasury.Scope.Manage`,
+`Treasury.BankAccounts.View/Manage`, `Treasury.BankBalances.View`, `Treasury.Scope.All/Manage` (`All` por decisión del dueño del 2026-10-23, §2.7),
 `Treasury.LiquidityFund.Request/Approve`, `Treasury.Orders.View/Manage`, `Treasury.Batches.Prepare/Approve`,
 `Treasury.PaymentFiles.Generate/Download/MarkSent/Void`, `Treasury.Results.Register`, `Treasury.Checkbooks.View/Manage`,
 `Treasury.Checks.View/Deliver/Void/Print`, `Treasury.Remittances.View/Confirm`, `Treasury.Statements.Load/View`,
@@ -183,7 +183,7 @@ Lo que tasks.md marcaba **(nuevo)** y lo que trajeron el `/speckit-analyze` y la
 | `UK_COR_Sequences_Name_RcdTes` **(nuevo)** | la numeración de Recaudo y Tesorería vive en `COR_Sequences` con la clave en `Name` (`RCD:{código}:{prefijo}`, `TES:{código}`), el módulo en `DocumentType` y el prefijo en `ShortName`. Un índice único filtrado a `DocumentType IN ('RCD','TES')` deja al cerrojo crear la fila que falta sin numerar dos veces; las filas heredadas de `sys_consecu` quedan fuera del filtro | `SequenceConfiguration`; migración `PlataformaParaRecaudoYTesoreria` |
 | `OrdenDeCerrojos` | lleva, por unidad de trabajo, los niveles ya tomados por los dos cerrojos y lanza si llegan fuera del orden de data-model §0.5 (también una fila `RCD_` después de una `TES_`, CH16) | `Application/Receipts/Common` |
 | `ModuloActivoBehavior` · `IEscrituraDeRecaudo` · `IEscrituraDeTesoreria` | la guarda de módulo activo como comportamiento de MediatR, no como filtro de ruta. La escritura de negocio marcada responde `Receipts.NotActivated` o `Treasury.NotActivated`; la configuración y la puesta en marcha no se marcan | `Application/Common/Behaviors` |
-| `ModuloDeAuditoria.Receipts` · `ModuloDeAuditoria.GoLive` | módulos encadenados con diez años de conservación. Las cuentas bancarias de la persona (`.Core.PersonBankAccounts`) se auditan en `Treasury`. `Conservacion.Anios` se registra con piso de 5, pero el TTL del flujo sigue fijo en diez años: hacer que lo lea el parámetro queda **pendiente**, porque exige que la infraestructura de auditoría lea parámetros por cooperativa | `Application/Common/Audit` |
+| `ModuloDeAuditoria.Receipts` · `ModuloDeAuditoria.GoLive` | módulos encadenados con diez años de conservación. Las cuentas bancarias de la persona (`.Core.PersonBankAccounts`) se auditan en `Treasury`. `Conservacion.Anios` se registra con piso de 5, pero el TTL del flujo sigue fijo en diez años. **Decisión del dueño del 2026-10-24**: en R0/T0 la auditoría conserva diez años fijos; que el TTL lea el parámetro queda para **R1** | `Application/Common/Audit` |
 | `EntregaDeRecaudo` (`R0`, `R1`, `R2`) · `EntregaDeTesoreria` (`T0`, `T1`, `T2`) | las líneas de entregas `RCD` y `TES` de los parámetros | `Domain/Receipts`, `Domain/Treasury` |
 | `CatalogoDeParametros.ModulosConRutaPropia` | `LND`, `RCD` y `TES` no aparecen en la ruta de parámetros de Inventario | `Domain/Common/Parametros` |
 | `FormatosGenericosDeRecaudoYTesoreria` | los cuatro genéricos de §4 de archivos-y-plantillas. Los siembra `BankFileFormatsSeeder`, que es un `IDataSeeder` paramétrico idempotente por código, y no la migración. `RESPUESTA-PAGADURIA-GENERICA` es CSV, no XLSX: el motor común sólo lee archivos planos. El código admite 20 caracteres: `RESP-PAGOS-GENERICO` y `RESP-PAGADURIA-GEN` | `Application/Common/BankFiles` |
@@ -192,6 +192,25 @@ Lo que tasks.md marcaba **(nuevo)** y lo que trajeron el `/speckit-analyze` y la
 | `ReceiptsAndTreasuryPermissionCatalogSeeder.LecturasSensibles` | `Core.PersonBankAccounts.View`, `Treasury.BankBalances.View` y `Receipts.Session.ViewExpected` no van en el `*.View` de Operator, ReadOnly ni Auditor | `Identity/Seed` |
 | Claves `CuentasDestino.*` y `Contabilidad.CierreExigeConciliaciones` | van en el módulo de parámetros `TES`, que es quien las usa, en vez de abrir un módulo «plataforma» o `ACC` sin ruta ni permiso | `ParametrosDeRecaudoYTesoreria` |
 | Copia de `Person.SupplierBank*` | sólo se copia la cuenta cuyo código de banco casa con `COR_Banks.TransferCode` o `LegacyCode`; las demás siguen en la persona | migración `PlataformaParaRecaudoYTesoreria` |
+
+**Fijados en la construcción de las fases 3 y 4 (2026-10-24) y decisiones del dueño del 2026-10-23**:
+
+| Nombre | Qué | Dónde |
+|---|---|---|
+| `Treasury.Scope.All` | **decisión del dueño**: alcance total de Tesorería sin filas de asignación, como `Receipts.Scope.All`; lo trae el administrador de la cooperativa (que recibe todo el catálogo) | `ReceiptsAndTreasuryPermissionCatalogSeeder`; `AlcanceDeTesoreriaDelActor` |
+| Numeración del recibo antes de los contratos | **decisión del dueño**: el recibo se numera después de los cerrojos propios de Recaudo (niveles 1 a 6) y antes de llamar a los contratos, porque `ReferenciaDeRecibo.Number` queda guardado en la operación de Cartera y Captaciones. En la misma transacción: si algo falla, el número no se consume. Los demás documentos numeran al final | `ConfirmacionDeRecibo`; data-model §0.5 |
+| `GET /api/receipts/users` · `ListReceiptsUsersQuery` | **decisión del dueño**: los usuarios (id público y nombre) que eligen las pantallas de configuración de Recaudo, con `Receipts.Setup.View`, en vez de `/api/admin/users` | `Application/Receipts/Security` |
+| `Conservacion.Anios` | **decisión del dueño**: diez años fijos en R0/T0; leer el parámetro queda para R1 | `Application/Common/Audit` |
+| `IAlcanceDeRecaudo` · `AlcanceDeRecaudo` · `IAlcanceDeTesoreria` · `AlcanceDeTesoreria` | los alcances que fallan cerrado; el cajero vigente de una caja la tiene en su alcance sin otra fila | `Application/Common/Scope` |
+| `PersonasDeLosUsuarios` | la comparación por persona que comparten las dos segregaciones | `Application/Common/Security` |
+| `ApprovalSubjects.{CashCountDifference, CashMeansReclassification, ReceiptBackdate, CashSessionAdjustment, ReceiptVoiding, PaymentBatchApproval, LiquidityFundUse}` · `ApprovalSourceTypes.{ReceiptsOperation, TreasuryDocument}` | sujetos y fuentes de aprobación, con regla fija de un nivel sin política | `Domain/Approvals` |
+| `POST /api/receipts/approvals/{id}/presence-challenge` · `/decide` | el desafío y la decisión del aprobador presente desde la caja, con `Receipts.Session.Open` (las de la 012 piden `Inventory.Approvals.View`) | `API/Endpoints/Receipts/ScopeEndpoints.cs` |
+| `Receipts.Approval.{Rejected, Mismatch, SelfApproval, ApproverLimitTooLow}` · `Treasury.Approval.{Pending, ApproverLimitTooLow}` · `Treasury.Result.ThirdPersonRequired` | errores de aprobación y segregación | `ErroresDeRecaudo`, `ErroresDeTesoreria`, fuentes |
+| `Receipts.PaymentMeans.{Inactive, AlreadyOffered}` · `Receipts.Cashier.{PersonRequired, Overlaps}` · `Receipts.CashBox.{MainAlreadyExists, CapsInvalid}` · `Receipts.DocumentType.KindTaken` · `Receipts.MiscConcept.SystemConcept` · `Receipts.ContingencyBook.Overlaps` · `Receipts.Delegation.SamePerson` · `Receipts.Vault.{AlreadyExists, MainCashBoxRequired, CustodiansRequired}` | errores de la configuración de Recaudo | `ErroresDeRecaudo.Configuracion` |
+| `ReceiptsCatalogStatus` · `CashBoxBaseMode` · `VaultMode` · `MiscConceptDirection` · `ContingencyBookState` | enumeraciones que data-model §20 no numeraba | `Domain/Enums/Receipts` |
+| `ChannelModalityRule.OnlyWhenInstallmentsDue` | la regla de cuentas de D38 («cuotas si hay exigibles, si no libre») como dos filas por prioridad | `RCD_ChannelModalityRules` |
+| catálogos `puntos-de-recaudo`, `cajas-de-recaudo`, `conceptos-varios`, `tipos-de-recibo` | duplicado de código antes de guardar | `BuscarCodigoDeCatalogoQuery` |
+| tipos de documento sembrados `RC`, `RB`, `RP`, `RT`, `AN`, `MC`, `AS` · conceptos `GIRODEV`, `SOBRANTE`, `REINTEGRO`, `RENDIM` | semilla de `RecaudoNucleo` (T0075) | migración |
 
 ## 3. Decisiones transversales
 
@@ -215,7 +234,7 @@ Lo que tasks.md marcaba **(nuevo)** y lo que trajeron el `/speckit-analyze` y la
 - **TR10** · Cerrojos en orden fijo: Recaudo → Cartera → Captaciones → Tesorería → numeración (R-12). Vale en las dos
   direcciones: cuando Tesorería llama a Recaudo (`IResultadoDeOrdenesDeRecaudo`, `IPartidasDesdeConciliacion`), toma
   antes el nivel de Recaudo por `TomarCerrojosAsync` y sólo después los suyos (CH16).
-- **TR11** · Numeración al final, `COR_Sequences` (R-13).
+- **TR11** · Numeración al final, `COR_Sequences` (R-13); en el recibo, la numeración del recibo va después de los cerrojos propios de Recaudo y **antes** de los contratos (decisión del dueño del 2026-10-23: el contrato guarda el número del recibo en su operación); en la misma transacción, un rechazo no consume número.
 - **TR12** · Sesión con valores sellados al abrir; arqueo puro; un cierre no se reabre (R-14).
 - **TR13** · Bóveda de Recaudo; remesa de Tesorería registrada por puerto en la misma transacción (R-15).
 

@@ -210,6 +210,10 @@ try
     // Feature 013 (T62, R131, T0285): el alcance de Cartera por oficina y línea de la petición, que falla cerrado y es total en
     // segundo plano. Antes de AddApplicationServices, cuyo TryAdd deja el cerrado sólo para los anfitriones sin petición.
     builder.Services.AddScoped<IngenIA365ERP.Application.Common.Interfaces.Security.IAlcanceDeCartera, IngenIA365ERP.API.Services.AlcanceDeCarteraDeLaPeticion>();
+    // Feature 015 (T0058; R-30): los alcances de Recaudo (oficina, punto, caja, pagaduría) y de Tesorería (cuenta propia) de la petición, que fallan
+    // cerrado y son totales en segundo plano. Antes de AddApplicationServices, cuyo TryAdd deja los cerrados para los anfitriones sin petición.
+    builder.Services.AddScoped<IngenIA365ERP.Application.Common.Scope.IAlcanceDeRecaudo, IngenIA365ERP.API.Services.AlcanceDeRecaudoDeLaPeticion>();
+    builder.Services.AddScoped<IngenIA365ERP.Application.Common.Scope.IAlcanceDeTesoreria, IngenIA365ERP.API.Services.AlcanceDeTesoreriaDeLaPeticion>();
     // Feature 012 (T39, T092): a quien le llega una alerta (permiso y alcance; sin nadie, CompanyAdmin). Adelanto de T096.
     builder.Services.AddScoped<IngenIA365ERP.Application.Common.Alerts.IDestinatariosPorPermiso, IngenIA365ERP.API.Services.DestinatariosPorPermiso>();
 

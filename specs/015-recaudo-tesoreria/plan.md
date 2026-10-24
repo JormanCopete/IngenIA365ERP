@@ -39,7 +39,7 @@ amplían. La Tesorería heredada convive hasta T2 y se retira después con guard
   Tesorería, y Recaudo identifica sobre sus líneas.
 - **Operación de caja → recibo.** La caja prepara una operación con `PublicId` estable (será el del recibo); confirmar
   pasa por un solo flujo (`ConfirmacionDeRecibo`): listas → validación previa contable → cerrojos en orden fijo →
-  contratos → numeración al final → hechos → un `SaveChanges`. Las claves de los contratos son por porción
+  numeración → contratos → hechos → un `SaveChanges` (la numeración del recibo va después de los cerrojos propios de Recaudo y **antes** de los contratos (decisión del dueño del 2026-10-23: el contrato guarda el número del recibo en su operación); en la misma transacción, un rechazo no consume número). Las claves de los contratos son por porción
   (`REC:{recibo}:{aplicación}:{clase}`).
 - **Procesos no interactivos por línea**: cada línea de un extracto o un giro de pagaduría va en su transacción con su
   clave; un rechazo no tumba las demás. Ningún proceso aplica pagos ni informa resultados.
@@ -136,7 +136,7 @@ agregan a los proyectos actuales; las tareas por `ITareaProgramada` e `IEjecutor
 - Plazos regulatorios informativos; las **listas vinculantes** y el **fondo de liquidez** bloquean siempre (FR-010).
 - Lo inmutable no se edita: recibos, egresos, sesiones cerradas, archivos de pago, resultados, conciliaciones cerradas;
   se corrigen con un documento nuevo enlazado.
-- Una transacción explícita por comando; los contratos corren en la de Recaudo; cerrojos en orden fijo; numeración al
+- Una transacción explícita por comando; los contratos corren en la de Recaudo; cerrojos en orden fijo; en el recibo, numeración antes de los contratos y en lo demás al
   final.
 - Ningún proceso aplica pagos, llama a los contratos ni informa resultados: todo a nombre de una persona (FR-174).
 - Fecha local `America/Bogota`, tres fechas por documento.
@@ -291,7 +291,7 @@ Se adoptan TR1–TR43 de [decisiones-transversales.md](decisiones-transversales.
 | Tema | Decisión del plan |
 |---|---|
 | **Módulos y frontera** (TR1–TR4) | `Receipts`/`REC`/`RCD_` y `Treasury`/`TES`/`TES_`; puertos síncronos entre ellos; extracto único en Tesorería; lo heredado intacto hasta T2. |
-| **Caja y recibo** (TR5–TR13) | Operación de caja con `PublicId` estable; `ConfirmacionDeRecibo` único; un lote por contrato, obligaciones antes que cuentas; clave por porción; imputación pura; cerrojos en orden fijo; numeración al final; sesión con valores sellados; bóveda en Recaudo y remesa en Tesorería. |
+| **Caja y recibo** (TR5–TR13) | Operación de caja con `PublicId` estable; `ConfirmacionDeRecibo` único; un lote por contrato, obligaciones antes que cuentas; clave por porción; imputación pura; cerrojos en orden fijo; numeración al final (en el recibo, antes de los contratos); sesión con valores sellados; bóveda en Recaudo y remesa en Tesorería. |
 | **Bancos y pagadurías** (TR14–TR16) | Consumo de `DescuentosPorPagaduria` v1/v2, envío y resultado sin cambios; línea por transacción; ningún proceso aplica. |
 | **Tesorería** (TR17–TR22) | Bandeja única con validación de destino, banco y listas; `ResultadoDelGiro` v1 sin cambios con transiciones fijas; hecho de pago al confirmar el banco o al emitir el cheque; archivo por el motor común; cuentas destino con doble control; fondo de liquidez exclusivo. |
 | **Contabilidad** (TR23–TR26) | Dos emisores, dos matrices, vínculo en Contabilidad; validación previa que bloquea en pantalla; recibos por lotes; puesta en marcha sin hechos con cuadre provisional y guarda de cierre. |

@@ -6,7 +6,7 @@ namespace IngenIA365ERP.Application.Receipts.Common;
 /// Los errores de la base de Recaudo (feature 015, T0019, T0042; data-model §21): el mensaje dice qué hacer; las pantallas ramifican por el código,
 /// nunca por el texto. Cada historia agrega los suyos en su propio archivo. (nuevo)
 /// </summary>
-public static class ErroresDeRecaudo
+public static partial class ErroresDeRecaudo
 {
     public const string CodigoNoActivado = "Receipts.NotActivated";
     public const string CodigoCorteDespuesDelCicloDeCartera = "Receipts.Setup.CutoffAfterLendingCycle";

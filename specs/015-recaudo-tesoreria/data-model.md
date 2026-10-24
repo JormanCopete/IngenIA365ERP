@@ -92,7 +92,7 @@ en SQL Server. Los niveles que la transacción ya tiene no esperan.
 | 6 | Conciliación | `TES_Reconciliations` de la cuenta y mes | exclusivo al cruzar o cerrar |
 | 7 | Numeración | `COR_Sequences` | exclusivo, al final |
 
-Ninguna operación toma una persona después de una cuenta suya (FR-170). `LosCerrojosDeRecaudoYTesoreriaVanEnOrden`
+**El recibo numera antes de los contratos** (decisión del dueño del 2026-10-23, DT §2.7): el nivel 9 se toma después del 6 y antes del 7, porque el contrato guarda el número del recibo en su operación; todos los demás documentos numeran al final. Ninguna operación toma una persona después de una cuenta suya (FR-170). `LosCerrojosDeRecaudoYTesoreriaVanEnOrden`
 fija que sólo estos dos tipos toman cerrojos y el orden de las llamadas a los contratos.
 
 **Dirección Tesorería → Recaudo** (CH16, TR10). El orden global es Recaudo antes que Tesorería también cuando quien

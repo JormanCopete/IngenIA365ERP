@@ -606,6 +606,22 @@ public interface IApplicationDbContext
     DbSet<IngenIA365ERP.Domain.Entities.Receipts.Configuration.ReceiptsSetup> ReceiptsSetups { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.PayerControl> PayerControls { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Treasury.Activation.TreasurySetup> TreasurySetups { get; }
+    // ---- Feature 015, fases 3 a 6: Recaudo y Tesorería ----
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Configuration.UserCollectionPointScope> UserCollectionPointScopes { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Configuration.UserCashBoxScope> UserCashBoxScopes { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Configuration.UserPaymasterScope> UserPaymasterScopes { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Treasury.BankAccounts.UserBankAccountScope> UserBankAccountScopes { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Configuration.CollectionPoint> CollectionPoints { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Configuration.CashBox> CashBoxes { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Configuration.CashBoxCashier> CashBoxCashiers { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Configuration.PaymentMeansCollectionPoint> PaymentMeansCollectionPoints { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Configuration.ReceiptDocumentType> ReceiptDocumentTypes { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Configuration.MiscConcept> MiscConcepts { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Configuration.ContingencyBook> ContingencyBooks { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Configuration.SupervisorDelegation> SupervisorDelegations { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Configuration.ChannelModalityRule> ChannelModalityRules { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Vaults.Vault> Vaults { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Vaults.VaultCustodian> VaultCustodians { get; }
 
     /// <summary>
     /// Descarta todo lo que el contexto tenga sin guardar (feature 009, R3): lo usa el reintento

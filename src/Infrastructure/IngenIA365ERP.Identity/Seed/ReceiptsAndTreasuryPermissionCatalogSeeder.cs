@@ -99,6 +99,8 @@ public static class ReceiptsAndTreasuryPermissionCatalogSeeder
         ("Treasury.BankAccounts",       "View",               "Ver las cuentas bancarias propias"),
         ("Treasury.BankAccounts",       "Manage",             "Administrar las cuentas bancarias propias"),
         ("Treasury.BankBalances",       "View",               "Ver saldos bancarios (lectura auditada)"),
+        // Decisión del dueño del 2026-10-23 (DT §2.7): el alcance total de Tesorería, como Receipts.Scope.All; el administrador lo trae.
+        ("Treasury.Scope",              "All",                "Alcance sobre todas las cuentas bancarias propias sin filas de asignación"),
         ("Treasury.Scope",              "Manage",             "Asignar cuentas bancarias a los usuarios"),
         ("Treasury.LiquidityFund",      "Request",            "Pedir el uso del fondo de liquidez"),
         ("Treasury.LiquidityFund",      "Approve",            "Aprobar el uso del fondo de liquidez (con monto)"),
