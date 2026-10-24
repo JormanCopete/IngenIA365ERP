@@ -76,6 +76,9 @@ public sealed class ValidadorDeOrdenes(
             }
         }
 
+        // T1 (fase 34; FR-211): una orden manual sin sus dos aprobaciones no queda lista.
+        if (orden.EsManualSinAprobar) motivos.Add(ErroresDeTesoreria.CodigoOrdenManualSinAprobar);
+
         var antes = orden.Status;
         var resultado = await listas.EvaluarAsync([orden.BeneficiaryPersonId], ct);
         if (resultado.HayVinculante) motivos.Add(ErroresDeTesoreria.CodigoListaVinculante);

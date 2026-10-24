@@ -136,5 +136,34 @@ public class PaymentOrder : AuditableEntity
 
     public DateTime? ValidatedAt { get; set; }
 
+    // ---- T1 (fase 34, T0417; FR-211): la orden manual de Tesorería, con su concepto del catálogo cerrado, su soporte, la retención y sus dos aprobadores. ----
+
+    /// <summary>El concepto del catálogo cerrado (<c>TES_ManualOrderConcepts</c>) de una orden manual; nulo en las demás. (nuevo)</summary>
+    public int? ManualOrderConceptId { get; set; }
+
+    /// <summary>El soporte obligatorio de una orden manual (factura, cuenta de cobro, acta). (nuevo)</summary>
+    public Guid? SupportAttachmentPublicId { get; set; }
+
+    /// <summary>La retención en la fuente practicada en una orden manual: bruto = neto + retención. (nuevo)</summary>
+    public decimal? WithholdingAmount { get; set; }
+
+    /// <summary>Quien preparó la orden manual (<c>SEC_Users.Id</c>). (nuevo)</summary>
+    public int? PreparedByUserId { get; set; }
+
+    /// <summary>En qué va la aprobación de una orden manual; mientras no esté <c>Approved</c> la orden no queda lista. (nuevo)</summary>
+    public ManualOrderApprovalState? ManualApprovalState { get; set; }
+
+    public int? FirstApprovedByUserId { get; set; }
+
+    public DateTime? FirstApprovedAt { get; set; }
+
+    public int? SecondApprovedByUserId { get; set; }
+
+    public DateTime? SecondApprovedAt { get; set; }
+
+    public string? ManualRejectionReason { get; set; }
+
+    public bool EsManualSinAprobar => Origin == PaymentOrderOrigin.Manual && ManualApprovalState != ManualOrderApprovalState.Approved;
+
     public bool EsDeGiro => Origin is PaymentOrderOrigin.LendingDisbursement or PaymentOrderOrigin.DepositsPayout;
 }

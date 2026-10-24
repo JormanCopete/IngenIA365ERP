@@ -156,5 +156,7 @@ public sealed class TareaDeVigilanciaDeTesoreria : ITareaProgramada
         await vigilancia.PoliticaContableEnAdvertirAsync(ct);
         await vigilancia.PartidasConciliatoriasAntiguasAsync(ct);
         await vigilancia.CuadreProvisionalPendienteAsync(ct);
+        // T1 (fase 34; FR-208): los firmantes y dueños de tokens que se retiraron de la cooperativa.
+        await servicios.GetRequiredService<BankAccounts.VigilanciaDeFirmantes>().FirmantesRetiradosAsync(ct);
     }
 }

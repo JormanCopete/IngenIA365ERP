@@ -69,6 +69,15 @@ public class PaymentOrderConfiguration : IEntityTypeConfiguration<PaymentOrder>
         builder.HasIndex(e => new { e.Status, e.PayDate }).HasDatabaseName($"IX_{Tabla}_Status_PayDate");
         builder.HasIndex(e => e.BeneficiaryPersonId).HasDatabaseName($"IX_{Tabla}_BeneficiaryPersonId");
         builder.HasIndex(e => e.ReplacesOrderId).HasDatabaseName($"IX_{Tabla}_ReplacesOrderId");
+        // T1 (par TesoreriaCompleta, fase 34; FR-211): la orden manual con su concepto, su retención, quien la preparó y sus dos aprobadores.
+        builder.HasOne<ManualOrderConcept>().WithMany().HasForeignKey(e => e.ManualOrderConceptId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<IngenIA365ERP.Domain.Entities.Security.User>().WithMany().HasForeignKey(e => e.PreparedByUserId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<IngenIA365ERP.Domain.Entities.Security.User>().WithMany().HasForeignKey(e => e.FirstApprovedByUserId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<IngenIA365ERP.Domain.Entities.Security.User>().WithMany().HasForeignKey(e => e.SecondApprovedByUserId).OnDelete(DeleteBehavior.Restrict);
+        builder.Property(e => e.WithholdingAmount).Monto();
+        builder.Property(e => e.ManualApprovalState).HasConversion<int?>();
+        builder.Property(e => e.ManualRejectionReason).HasMaxLength(500);
+        builder.HasIndex(e => new { e.Origin, e.ManualApprovalState }).HasDatabaseName($"IX_{Tabla}_Origin_ManualApprovalState");
     }
 }
 

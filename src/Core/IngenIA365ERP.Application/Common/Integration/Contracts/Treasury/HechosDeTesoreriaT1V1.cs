@@ -11,6 +11,9 @@ public static class RolesDeTesoreriaT1
     public const string FondosEnTransito = "FondosEnTransito";
     public const string ChequesPorEntregar = "ChequesPorEntregar";
     public const string CuentaPorPagarChequesNoCobrados = "CuentaPorPagarChequesNoCobrados";
+
+    /// <summary>Fase 34 (FR-211): la retención en la fuente que practica una orden manual, con el beneficiario como tercero (en <c>PagoDeOrdenGirado</c>).</summary>
+    public const string RetencionEnLaFuentePorPagar = "RetencionEnLaFuentePorPagar";
 }
 
 /// <summary>

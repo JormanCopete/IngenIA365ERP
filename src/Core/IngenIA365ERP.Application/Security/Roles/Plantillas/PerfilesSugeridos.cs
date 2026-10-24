@@ -367,6 +367,8 @@ public static class PerfilesSugeridos
                 "Treasury.BankAccounts.*", "Treasury.BankBalances.View", "Treasury.Orders.*", "Treasury.Batches.Prepare", "Treasury.PaymentFiles.*",
                 "Treasury.Results.Register", "Treasury.Checkbooks.*", "Treasury.Checks.*", "Treasury.Remittances.*", "Treasury.LiquidityFund.Request",
                 "Treasury.Reports.View", "Treasury.Reports.Export", "Core.PersonBankAccounts.View", "Core.PersonBankAccounts.Request",
+                // T1 (fases 33 y 34): pide traslados, prepara órdenes manuales y lleva los firmantes y tokens (no los aprueba).
+                "Treasury.Transfers.Request", "Treasury.ManualOrders.Create", "Treasury.Signers.Manage",
                 "Attachments.Upload", "Attachments.Download",
             ],
             "Sus cuentas bancarias; no aprueba lotes ni el uso del fondo de liquidez (segregación) ni las cuentas destino que él pidió."),
@@ -375,7 +377,10 @@ public static class PerfilesSugeridos
             "Aprueba lotes de pago y el uso del fondo de liquidez, y aprueba las cuentas bancarias de las personas.",
             [
                 "Treasury.Orders.View", "Treasury.Batches.Approve", "Treasury.LiquidityFund.Approve", "Treasury.BankAccounts.View",
-                "Treasury.Reports.View", "Core.PersonBankAccounts.View", "Core.PersonBankAccounts.Approve", "Attachments.Download",
+                "Treasury.Reports.View", "Core.PersonBankAccounts.View", "Core.PersonBankAccounts.Approve",
+                // T1 (fases 33 y 34): aprueba traslados, órdenes manuales y cambios de firmantes; administra el catálogo de órdenes manuales.
+                "Treasury.Transfers.Approve", "Treasury.ManualOrders.Approve", "Treasury.ManualOrders.ManageConcepts", "Treasury.Signers.Approve",
+                "Attachments.Download",
             ],
             "Límite de monto en Treasury.Batches.Approve y LiquidityFund.Approve si la cooperativa lo fija. No aprueba lo que él armó."),
 

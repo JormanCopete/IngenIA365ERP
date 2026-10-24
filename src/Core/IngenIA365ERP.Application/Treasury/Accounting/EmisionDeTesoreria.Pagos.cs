@@ -30,13 +30,26 @@ public sealed partial class EmisionDeTesoreria
             OriginOrderNumber = orden.OriginOrderNumber, OrderOrigin = orden.Origin.ToString(), OrderKind = orden.OrderKind,
             BeneficiaryPersonPublicId = beneficiario, Amount = resultado.Amount, DebitDate = resultado.OccurredOn, TreasuryReference = resultado.TreasuryReference,
             RegisteredBy = await UsuarioAsync(ct),
-            Lines =
-            [
-                Linea(RolesDeTesoreria.PuenteDeGiroDelOrigen, RolesDeTesoreria.Debito, resultado.Amount, dim, beneficiario, orden.OriginOrderNumber),
-                Linea(RolesDeTesoreria.Banco, RolesDeTesoreria.Credito, resultado.Amount, dim, cruce: orden.Number),
-            ],
+            Lines = LineasDelPago(orden, resultado, dim, beneficiario),
         };
         return await EmitirAsync(contenido, orden.PublicId, ClasePagoGirado, TipoDeOrden, orden.Number, resultado.OccurredOn, cuenta.BranchId, beneficiario,
             ClavesDeEvento.Confirmacion, ct);
+    }
+
+    /// <summary>
+    /// Las líneas del pago girado: el puente del origen contra el banco por el neto y, en una orden manual con retención (T1, fase 34; FR-211), el puente por el bruto y la
+    /// retención en la fuente por pagar con el beneficiario como tercero.
+    /// </summary>
+    public static IReadOnlyList<TreasuryFactLineV1> LineasDelPago(PaymentOrder orden, DisbursementResult resultado, TreasuryFactDimensionsV1 dim, Guid beneficiario)
+    {
+        var retencion = orden.Origin == Domain.Enums.Treasury.PaymentOrderOrigin.Manual ? orden.WithholdingAmount ?? 0m : 0m;
+        var lineas = new List<TreasuryFactLineV1>
+        {
+            Linea(RolesDeTesoreria.PuenteDeGiroDelOrigen, RolesDeTesoreria.Debito, resultado.Amount + retencion, dim, beneficiario, orden.OriginOrderNumber),
+            Linea(RolesDeTesoreria.Banco, RolesDeTesoreria.Credito, resultado.Amount, dim, cruce: orden.Number),
+        };
+        if (retencion > 0m)
+            lineas.Add(Linea(RolesDeTesoreriaT1.RetencionEnLaFuentePorPagar, RolesDeTesoreria.Credito, retencion, dim, beneficiario, orden.Number));
+        return lineas;
     }
 }

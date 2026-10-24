@@ -43,6 +43,8 @@ public sealed class FuenteDeAprobacionDeTesoreria(IApplicationDbContext db, Pers
                 ApprovalSubjects.LiquidityFundUse => ErroresDeTesoreria.UsoDelFondoAutoaprobado(),
                 // T1 (fase 33): el traslado entre cuentas propias.
                 ApprovalSubjects.TreasuryTransfer => ErroresDeTesoreria.TrasladoAutoaprobado(),
+                // T1 (fase 34): el cambio de firmantes o tokens.
+                ApprovalSubjects.BankAccountAuthorityChange => ErroresDeTesoreria.CambioDeFirmantesAutoaprobado(),
                 _ => ErroresDeTesoreria.LoteAutoaprobado(),
             });
         if (solicitud.PolicyId is not null || EvaluadorDePolitica.ReglaFija(solicitud.Subject) is not { } fija) return Result.Success();

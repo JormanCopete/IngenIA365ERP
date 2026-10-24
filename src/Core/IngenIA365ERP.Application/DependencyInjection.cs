@@ -318,6 +318,9 @@ public static class DependencyInjection
         services.AddScoped<Treasury.Common.IAprobableDeTesoreria, Treasury.Batches.AprobableLoteDePago>();
         // T1 (fase 33): el traslado entre cuentas propias.
         services.AddScoped<Treasury.Common.IAprobableDeTesoreria, Treasury.Transfers.AprobableTraslado>();
+        // T1 (fase 34): el cambio de firmantes o tokens y su vigilancia.
+        services.AddScoped<Treasury.Common.IAprobableDeTesoreria, Treasury.BankAccounts.AprobableCambioDeFirmantes>();
+        services.AddScoped<Treasury.BankAccounts.VigilanciaDeFirmantes>();
         services.TryAddScoped<Treasury.Orders.IListasDeTesoreria, Treasury.Orders.ListasDeTesoreria>();
         services.AddScoped<Treasury.Orders.ValidadorDeOrdenes>();
         services.AddScoped<Treasury.Batches.GuardasDeAprobacionDelLote>();

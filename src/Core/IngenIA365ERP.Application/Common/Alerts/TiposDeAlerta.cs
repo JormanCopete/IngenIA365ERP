@@ -194,6 +194,8 @@ public static class TiposDeAlerta
     public const string TesoreriaUsoDelFondoDeLiquidez = "Tesoreria.UsoDelFondoDeLiquidez";
     public const string TesoreriaCuadreProvisionalPendiente = "Tesoreria.CuadreProvisionalPendiente";
     public const string TesoreriaPoliticaContableEnAdvertir = "Tesoreria.PoliticaContableEnAdvertir";
+    /// <summary>Feature 015, T1 (fase 34; FR-208) (nuevo): un firmante o el dueño de un token vigente se retiró de la cooperativa.</summary>
+    public const string TesoreriaFirmanteRetirado = "Tesoreria.FirmanteRetirado";
     public const string PlataformaCuentaDestinoCompartida = "Plataforma.CuentaDestinoCompartida";
     public const string PlataformaGoLiveEnRojo = "Plataforma.GoLiveEnRojo";
 
@@ -438,6 +440,8 @@ public static class TiposDeAlerta
             ["Treasury.LiquidityFund.Approve"], AppYCorreo, AlertSeverity.Critical, "T0"),
         new(TesoreriaCuadreProvisionalPendiente, Tesoreria, "La puesta en marcha de Tesorería sigue con el cuadre provisional: falta el definitivo.",
             ["Treasury.Activation.Square"], AppYCorreo, AlertSeverity.Warning, "T0"),
+        new(TesoreriaFirmanteRetirado, Tesoreria, "Un firmante o el dueño de un token de una cuenta propia se retiró de la cooperativa: hay que pedir su retiro.",
+            ["Treasury.Signers.Manage", "Treasury.Signers.Approve"], AppYCorreo, AlertSeverity.Critical, "T1"),
         new(TesoreriaPoliticaContableEnAdvertir, Tesoreria, "La política contable de Tesorería está en «advertir»: se confirman operaciones sin regla.",
             ["Treasury.Accounting.PolicyChange"], AppYCorreo, AlertSeverity.Warning, "T0"),
         new(PlataformaCuentaDestinoCompartida, "Core", "Una cuenta bancaria registrada para una persona es también la de otro beneficiario o la de un usuario interno.",

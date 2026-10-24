@@ -1,6 +1,8 @@
+using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Entities.Security;
 using IngenIA365ERP.Domain.Entities.Treasury.BankAccounts;
 using IngenIA365ERP.Domain.Entities.Treasury.Checkbooks;
+using IngenIA365ERP.Domain.Entities.Treasury.Payments;
 using IngenIA365ERP.Domain.Entities.Treasury.Remittances;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
@@ -53,5 +55,68 @@ public class MonthEndCheckRunConfiguration : IEntityTypeConfiguration<MonthEndCh
         builder.HasIndex(e => e.Number).IsUnique().HasDatabaseName($"UK_{Tabla}_Number");
         builder.HasIndex(e => e.ReversalPublicId).IsUnique().HasDatabaseName($"UK_{Tabla}_ReversalPublicId");
         builder.HasIndex(e => new { e.BankAccountId, e.PeriodYear, e.PeriodMonth }).IsUnique().HasDatabaseName($"UK_{Tabla}_Account_Period");
+    }
+}
+
+/// <summary><c>TES_ManualOrderConcepts</c>: el código de la cooperativa es único. (nuevo)</summary>
+public class ManualOrderConceptConfiguration : IEntityTypeConfiguration<ManualOrderConcept>
+{
+    public const string Tabla = "TES_ManualOrderConcepts";
+
+    public void Configure(EntityTypeBuilder<ManualOrderConcept> builder)
+    {
+        builder.ComoEntidadDeTesoreria(Tabla);
+        builder.Property(e => e.Code).HasMaxLength(10).IsRequired();
+        builder.Property(e => e.Name).HasMaxLength(120).IsRequired();
+        builder.Property(e => e.MaxAmount).Monto();
+        builder.Property(e => e.WithholdingNote).HasMaxLength(200);
+        builder.Property(e => e.Status).HasConversion<int>();
+        builder.HasIndex(e => e.Code).IsUnique().HasDatabaseName($"UK_{Tabla}_Code");
+    }
+}
+
+/// <summary>Lo común de la configuración de un firmante y un token. (nuevo)</summary>
+internal static class ConfiguracionDeAutoridad
+{
+    public static void Comun<T>(EntityTypeBuilder<T> builder, string tabla) where T : BankAccountAuthority
+    {
+        builder.ComoEntidadDeTesoreria(tabla);
+        builder.HasOne<OwnBankAccount>().WithMany().HasForeignKey(e => e.BankAccountId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<Person>().WithMany().HasForeignKey(e => e.PersonId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<User>().WithMany().HasForeignKey(e => e.UserId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<User>().WithMany().HasForeignKey(e => e.RequestedByUserId).OnDelete(DeleteBehavior.Restrict);
+        builder.Property(e => e.Status).HasConversion<int>();
+        builder.Property(e => e.DecisionReason).HasMaxLength(500);
+        builder.Property(e => e.RetirementReason).HasMaxLength(500);
+        builder.HasIndex(e => new { e.BankAccountId, e.Status }).HasDatabaseName($"IX_{tabla}_Account_Status");
+        builder.HasIndex(e => e.PersonId).HasDatabaseName($"IX_{tabla}_PersonId");
+    }
+}
+
+/// <summary><c>TES_BankAccountSigners</c>. (nuevo)</summary>
+public class BankAccountSignerConfiguration : IEntityTypeConfiguration<BankAccountSigner>
+{
+    public const string Tabla = "TES_BankAccountSigners";
+
+    public void Configure(EntityTypeBuilder<BankAccountSigner> builder)
+    {
+        ConfiguracionDeAutoridad.Comun(builder, Tabla);
+        builder.Property(e => e.SignatureClass).HasMaxLength(10).IsRequired();
+        builder.Property(e => e.MaxAmountAlone).Monto();
+        builder.Property(e => e.Role).HasMaxLength(80);
+    }
+}
+
+/// <summary><c>TES_BankAccountTokens</c>. (nuevo)</summary>
+public class BankAccountTokenConfiguration : IEntityTypeConfiguration<BankAccountToken>
+{
+    public const string Tabla = "TES_BankAccountTokens";
+
+    public void Configure(EntityTypeBuilder<BankAccountToken> builder)
+    {
+        ConfiguracionDeAutoridad.Comun(builder, Tabla);
+        builder.Property(e => e.Serial).HasMaxLength(40).IsRequired();
+        builder.Property(e => e.Purpose).HasMaxLength(80);
+        builder.HasIndex(e => e.Serial).HasDatabaseName($"IX_{Tabla}_Serial");
     }
 }

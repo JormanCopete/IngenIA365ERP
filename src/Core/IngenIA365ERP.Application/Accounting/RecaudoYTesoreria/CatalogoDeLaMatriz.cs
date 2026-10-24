@@ -153,9 +153,12 @@ public static class MatricesDeRecaudoYTesoreria
             R(RolesDeTesoreriaT1.FondosEnTransito, "Fondos en tránsito entre cuentas propias", CuentaPropia),
             R(RolesDeTesoreriaT1.ChequesPorEntregar, "Cheques girados por entregar", CuentaPropia),
             R(RolesDeTesoreriaT1.CuentaPorPagarChequesNoCobrados, "Cuenta por pagar de cheques no cobrados", CuentaPropia),
+            // T1 (fase 34): la retención en la fuente de una orden manual, por clase de orden (el concepto del catálogo).
+            R(RolesDeTesoreriaT1.RetencionEnLaFuentePorPagar, "Retención en la fuente por pagar de órdenes manuales", ClaseDeOrden),
         ],
         [
-            H(PagoDeOrdenGiradoV1.Type, "Pago de orden girado", "TP", [RolesDeTesoreria.PuenteDeGiroDelOrigen], RolesDeTesoreria.Banco),
+            H(PagoDeOrdenGiradoV1.Type, "Pago de orden girado", "TP", [RolesDeTesoreria.PuenteDeGiroDelOrigen], RolesDeTesoreria.Banco,
+                RolesDeTesoreriaT1.RetencionEnLaFuentePorPagar),
             H(ChequeGiradoEmitidoV1.Type, "Cheque girado emitido", "TP", [RolesDeTesoreria.PuenteDeGiroDelOrigen], RolesDeTesoreria.Banco),
             H(ChequeGiradoAnuladoV1.Type, "Cheque girado anulado", "TP", [RolesDeTesoreria.PuenteDeGiroDelOrigen], RolesDeTesoreria.Banco),
             H(GmfDePagoCausadoV1.Type, "GMF de un pago", "TP", [RolesDeTesoreria.GmfGasto], RolesDeTesoreria.GmfPorPagar, RolesDeTesoreria.Banco),
