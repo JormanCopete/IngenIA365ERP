@@ -2714,11 +2714,43 @@ FR-139, FR-155 parte T2, FR-164 d, FR-165 e y f).
 **Independent Test**: con saldos y compromisos conocidos, la posición del día coincide al peso; sin respuesta de la consulta de
 Cartera se muestra sin ese componente y con el aviso.
 
-- [ ] T0457 [P] [US20] Escribir tests/IngenIA365ERP.Application.Tests/Treasury/Liquidity/PosicionYFlujoTests.cs (FR-137, FR-138): componentes de la posición, compromisos (lotes aprobados, órdenes en bandeja, cheques en tránsito, dispersiones), recaudos esperados por `IRecaudosEsperadosDeCartera` e `IRecaudosEsperadosDeCaptaciones` (sin respuesta, sin el componente y con aviso); flujo con categorías configurables y real contra proyectado
-- [ ] T0458 [P] [US20] Escribir tests/IngenIA365ERP.Application.Tests/Treasury/LiquidityFund/SaldoDelFondoDeLiquidezTests.cs (FR-139; E-02 e): `SaldoDelFondoDeLiquidez` v1 (`TES → Lending`) con las cuentas del fondo y su saldo a la fecha, originado por la persona que concilia o el tesorero
-- [ ] T0459 [US20] Implementar en Cartera y Captaciones `IRecaudosEsperadosDeCartera` e `IRecaudosEsperadosDeCaptaciones` (src/Core/IngenIA365ERP.Application/Lending/Integration/) sin datos personales, y anotar las enmiendas E-01 (d) y E-02 (e, f) en sus specs (FR-164 d, FR-165 e y f)
-- [ ] T0460 [P] [US20] Crear en src/Core/IngenIA365ERP.Domain/Entities/Treasury/Liquidity/ `CashFlowCategory`, `CashFlowProjection`, `LiquiditySnapshot` con su configuración (data-model §13.2)
-- [ ] T0461 [US20] Implementar en src/Core/IngenIA365ERP.Application/Treasury/Liquidity/ la posición diaria, el flujo proyectado, la emisión de `SaldoDelFondoDeLiquidez` y el tablero sin datos personales (`/api/treasury/dashboard`); exponer `/api/treasury/liquidity` y `/cash-flow` y crear las pantallas src/Presentation/IngenIA365ERP.Shared/Pages/Tesoreria/{Liquidez,FlujoDeCaja,Tablero}.razor con `IndicadorDeCarga`; regenerar en src/Infrastructure/IngenIA365ERP.Persistence.Migrations.{PostgreSql,SqlServer}/Application/ el par `TesoreriaAmpliada` (FR-137 a FR-139, FR-155)
+- [X] T0457 [P] [US20] Escribir tests/IngenIA365ERP.Application.Tests/Treasury/Liquidity/PosicionYFlujoTests.cs (FR-137, FR-138): componentes de la posición, compromisos (lotes aprobados, órdenes en bandeja, cheques en tránsito, dispersiones), recaudos esperados por `IRecaudosEsperadosDeCartera` e `IRecaudosEsperadosDeCaptaciones` (sin respuesta, sin el componente y con aviso); flujo con categorías configurables y real contra proyectado
+- [X] T0458 [P] [US20] Escribir tests/IngenIA365ERP.Application.Tests/Treasury/LiquidityFund/SaldoDelFondoDeLiquidezTests.cs (FR-139; E-02 e): `SaldoDelFondoDeLiquidez` v1 (`TES → Lending`) con las cuentas del fondo y su saldo a la fecha, originado por la persona que concilia o el tesorero
+- [X] T0459 [US20] Implementar en Cartera y Captaciones `IRecaudosEsperadosDeCartera` e `IRecaudosEsperadosDeCaptaciones` (src/Core/IngenIA365ERP.Application/Lending/Integration/) sin datos personales, y anotar las enmiendas E-01 (d) y E-02 (e, f) en sus specs (FR-164 d, FR-165 e y f)
+- [X] T0460 [P] [US20] Crear en src/Core/IngenIA365ERP.Domain/Entities/Treasury/Liquidity/ `CashFlowCategory`, `CashFlowProjection`, `LiquiditySnapshot` con su configuración (data-model §13.2)
+- [X] T0461 [US20] Implementar en src/Core/IngenIA365ERP.Application/Treasury/Liquidity/ la posición diaria, el flujo proyectado, la emisión de `SaldoDelFondoDeLiquidez` y el tablero sin datos personales (`/api/treasury/dashboard`); exponer `/api/treasury/liquidity` y `/cash-flow` y crear las pantallas src/Presentation/IngenIA365ERP.Shared/Pages/Tesoreria/{Liquidez,FlujoDeCaja,Tablero}.razor con `IndicadorDeCarga`; regenerar en src/Infrastructure/IngenIA365ERP.Persistence.Migrations.{PostgreSql,SqlServer}/Application/ el par `TesoreriaAmpliada` (FR-137 a FR-139, FR-155)
+
+**Notas de la construcción de la fase 43 (2026-10-26)**. Pruebas escritas y compiladas, sin correr. Desviaciones y decisiones; los nombres nuevos quedan en
+decisiones-transversales §2.7:
+
+- **T0457, T0458**: `Treasury/Liquidity/PosicionYFlujoTests` (la posición es la suma de sus componentes con su signo, sin respuesta de una consulta sale sin ella y con el
+  aviso, sin los puertos faltan efectivo y recaudos, el flujo con categorías automáticas, digitadas y lo real) y `Treasury/LiquidityFund/SaldoDelFondoDeLiquidezTests`.
+- **T0459 (E-01 d, E-02 f)**: los puertos `IRecaudosEsperadosDeCartera` e `IRecaudosEsperadosDeCaptaciones` (`Common/Integration/Lending/IRecaudosEsperados.cs`) con sus
+  implementaciones en `Lending/Integration/RecaudosEsperados.cs`, por día y sin datos personales. **Desviación**: devuelven lo **programado** (cuotas del plan vigente de los
+  créditos activos; cuotas no anuladas de las cuentas activas), no lo pendiente: el saldo exacto sale de `ReconstruccionDeCredito` crédito por crédito y no se recalcula para
+  la posición. Enmiendas anotadas en specs/013-cartera-financiera/spec.md y specs/014-ahorros-aportes-cdt/spec.md. Sin cambio de esquema en `LND_`.
+- **T0460**: `TES_CashFlowCategories` (`CashFlowCategory`, código de catálogo, sentido y **fuente**: digitada, cuotas de Cartera, cuotas de Captaciones, órdenes de pago,
+  dispersiones de Nómina), `TES_CashFlowProjections` (`CashFlowProjection`, una viva por categoría, clase y comienzo) y `TES_LiquiditySnapshots` (`LiquiditySnapshot`, la
+  foto con sus componentes y los que faltaron, numeración `LQ`), en `Entities/Treasury/Liquidity/Liquidez.cs`; enums `CashFlowCategorySource` y `CashFlowPeriodKind`. El
+  par siembra seis **categorías sugeridas** (CARTERA, CAPTAC, OTROSING, ORDENES, NOMINA, OTROSEGR) que la cooperativa cambia o desactiva.
+- **T0461**: `Treasury/Liquidity/PosicionDeLiquidez.cs` (bancos por su saldo en libros, bóvedas y cajas por el puerto nuevo de Recaudo `IEfectivoDeRecaudo` —Tesorería no lee
+  `RCD_`—, compromisos: órdenes en lotes aprobados o enviados, órdenes en la bandeja y dispersiones de Nómina por pagar; los **cheques en tránsito son informativos**
+  (signo 0) porque el saldo en libros ya los descontó al emitirlos; lo esperado entra sólo en lo **proyectado**) y `Treasury/Liquidity/Liquidez.cs` (posición, foto, flujo,
+  categorías, lo digitado y el tablero). La foto emite `SaldoDelFondoDeLiquidez` v1 (`TES → Lending`) en el mismo guardado si hay cuentas del fondo; Cartera lo acepta y lo
+  deja como recibo procesado e informativo (`ConsumeTreasuryResultCommand`, sin efecto en el libro). El flujo: lo digitado manda sobre lo calculado de una categoría
+  automática; lo real de un período que ya empezó son los débitos y créditos contabilizados de las cuentas bancarias propias (así el real de un mes cerrado coincide con
+  Contabilidad); los traslados entre cuentas propias aparecen como entrada y salida. **Desviaciones**: (a) la ruta del flujo es `/api/treasury/cash-flow-projections` (y
+  `/categories`, `/entries`), no `/cash-flow`, que es del flujo heredado hasta su retiro (R-04); la pantalla nueva es `/tesoreria/flujo-de-caja` y la heredada
+  `/tesoreria/flujo-caja` sigue en el menú hasta la fase 46; (b) la foto se toma a mano (el tesorero o quien concilia), no hay tarea al cierre del día; (c) las rutas
+  `/api/treasury/liquidity` (`/snapshots`) y `/api/treasury/dashboard`, permisos `Treasury.Liquidity.View/Manage` (sembrados en la fase 41). Pantallas
+  `/tesoreria/liquidez`, `/tesoreria/flujo-de-caja` y `/tesoreria/tablero` con `IndicadorDeCarga`, en el menú; `LiquidezClient`. El par `TesoreriaAmpliada` regenerado (ocho
+  tablas) lleva además, por SQL idempotente, **las adopciones de los mensajes nuevos de T2** por sus destinos ya registrados (INV: `PagoDeFacturaDeProveedor`; CAR:
+  `SaldoDelFondoDeLiquidez`; TES: `DispersionDeNominaGenerada`, `FacturaDeProveedorPorPagar`, `AnulacionDeFacturaDeProveedor`) —con eso se resuelve la decisión abierta de
+  las fases 41 y 42 sobre una Tesorería activada antes de T2—. «No changes» en SqlServer y PostgreSQL; paridad en par (Application 73, Admin 15).
+- **Decisiones para el dueño**: (1) si Captaciones debe **usar** el saldo informado en su cálculo del fondo de liquidez (hoy lo recibe y lo guarda como recibo; el cálculo
+  sigue con sus inversiones registradas) —recomendado: mostrarlo al lado del constituido para cotejar, sin reemplazarlo—; (2) si la foto debe tomarse sola al cierre del día
+  —recomendado: no por ahora; a mano por quien concilia—; (3) si los recaudos esperados deben ser lo **pendiente** y no lo programado —recomendado: lo programado para la
+  posición (más rápido y estable) y lo pendiente sólo en los informes de Cartera—; (4) las categorías sugeridas del flujo.
 
 ---
 

@@ -705,6 +705,17 @@ Lo que tasks.md marcaba **(nuevo)** y lo que trajeron el `/speckit-analyze` y la
 | `ContabilidadParaTesoreria.CuentasPorPagarAsync` sobre el rol `CuentaPorPagarContable` | E-04 | `Accounting/Treasury/ContabilidadParaTesoreria.cs` |
 | ruta `/api/treasury/payables` (`/calendar`, `/orders`) · pantalla `/tesoreria/cuentas-por-pagar` · `CuentasPorPagarClient` | rutas y pantalla | `API/Endpoints/Treasury/PayablesEndpoints.cs`, `Shared/Pages/Tesoreria/CuentasPorPagar.razor` |
 
+**Fijados en la construcción de la fase 43 (2026-10-26)**:
+
+| Nombre | Qué | Dónde |
+|---|---|---|
+| `TES_CashFlowCategories` (`CashFlowCategory`) · `TES_CashFlowProjections` (`CashFlowProjection`) · `TES_LiquiditySnapshots` (`LiquiditySnapshot`, numeración `LQ`) · `CashFlowCategorySource.{Manual, ExpectedLending, ExpectedDeposits, PaymentOrders, PayrollDispersions}` · `CashFlowPeriodKind.{Week, Month}` · categorías sugeridas `CARTERA`, `CAPTAC`, `OTROSING`, `ORDENES`, `NOMINA`, `OTROSEGR` | flujo de caja y posición | `Entities/Treasury/Liquidity/Liquidez.cs`, par `TesoreriaAmpliada` |
+| `IRecaudosEsperadosDeCartera` · `IRecaudosEsperadosDeCaptaciones` · `RecaudoEsperadoDelDiaDto` · `RecaudosEsperadosDeCartera` · `RecaudosEsperadosDeCaptaciones` | E-01 d, E-02 f | `Common/Integration/Lending/IRecaudosEsperados.cs`, `Lending/Integration/RecaudosEsperados.cs` |
+| `IEfectivoDeRecaudo` · `EfectivoEnCustodiaDto` · `EfectivoDeRecaudoParaTesoreria` | el efectivo de bóvedas y cajas para la posición (Recaudo → Tesorería) | `Common/Integration/Receipts/PuertosDeRecaudo.cs`, `Receipts/Integration` |
+| `SaldoDelFondoDeLiquidezV1` · `CuentaDelFondoV1` · `EmisionDeTesoreria.SaldoDelFondoDeLiquidezAsync` (clase `LiquiditySnapshot`, tipo `LQ`) | E-02 e | `Contracts/Treasury/LiquidezDeTesoreriaT2V1.cs`, `Treasury/Accounting/EmisionDeTesoreria.Liquidez.cs` |
+| `PosicionDeLiquidez` (códigos `BANCO-*`, `BOVEDA-*`, `CAJA-*`, `C-LOTES`, `C-BANDEJA`, `C-NOMINA`, `C-CHEQUES`, `E-CARTERA`, `E-CAPTAC`, `RECAUDO`) · `GetLiquidityPositionQuery` · `TakeLiquiditySnapshotCommand` · `ListLiquiditySnapshotsQuery` · `SaveCashFlowCategoryCommand` · `ListCashFlowCategoriesQuery` · `SaveCashFlowProjectionCommand` · `GetCashFlowQuery` · `GetTreasuryDashboardQuery` · `ErroresDeTesoreriaT2Liquidez` (`Treasury.Liquidity.FutureSnapshot`) · eventos `Treasury.Liquidity.SnapshotTaken`, `Treasury.CashFlowCategory.Saved`, `Treasury.CashFlowProjection.Saved` | la liquidez | `Treasury/Liquidity/PosicionDeLiquidez.cs`, `Treasury/Liquidity/Liquidez.cs` |
+| rutas `/api/treasury/liquidity` (`/snapshots`), `/api/treasury/cash-flow-projections` (`/categories`, `/categories/{id}`, `/entries`), `/api/treasury/dashboard` · pantallas `/tesoreria/liquidez`, `/tesoreria/flujo-de-caja`, `/tesoreria/tablero` · `LiquidezClient` | rutas y pantallas | `API/Endpoints/Treasury/LiquidityEndpoints.cs`, `Shared/Pages/Tesoreria` |
+
 ## 3. Decisiones transversales
 
 ### Módulos y frontera

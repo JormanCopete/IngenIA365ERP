@@ -1,4 +1,4 @@
-# Feature Specification: Cartera financiera — captaciones: ahorro a la vista, contractual y permanente, CDAT y aportes sociales
+﻿# Feature Specification: Cartera financiera — captaciones: ahorro a la vista, contractual y permanente, CDAT y aportes sociales
 
 **Feature Branch**: `014-ahorros-aportes-cdt`
 **Created**: 2026-10-14 · **Revisada**: 2026-10-14 (el dueño pide que las captaciones sean parte integral
@@ -1684,3 +1684,13 @@ rigen como parámetro con fuente y «pendiente de validar».
   feature; decide las tablas SIPLA heredadas.
 - **Lo que deben validar**: el dueño (D1 a D35, P13 a P20, P22 a P24, P28), la contadora (P2, P3, P8 a
   P12, P26, la matriz y los casos dorados) y el abogado (P4 a P7).
+
+### Enmiendas de la feature 015 (Recaudo y Tesorería)
+
+- **E-02 (e), saldo del fondo de liquidez (T2, fase 43, T0461; 2026-10-26).** Tesorería informa a Captaciones
+  `SaldoDelFondoDeLiquidez` v1 (`TES → Lending`) con las cuentas bancarias marcadas como fondo y su saldo en
+  libros a la fecha, al tomar la foto de la posición. Captaciones lo recibe como recibo informativo; su cálculo
+  del fondo no cambia hasta que el dueño decida si lo usa (decisión pendiente).
+- **E-02 (f), recaudos esperados (T2, fase 43, T0459; 2026-10-26).** Captaciones ofrece a Tesorería
+  `IRecaudosEsperadosDeCaptaciones.PorFechaAsync(desde, hasta)`: lo programado de las cuotas de aportes y
+  ahorros no anuladas de las cuentas activas, por día, sin datos personales. Sin cambio de esquema.
