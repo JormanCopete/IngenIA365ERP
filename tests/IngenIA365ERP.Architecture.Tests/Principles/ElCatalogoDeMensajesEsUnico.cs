@@ -103,8 +103,9 @@ public class ElCatalogoDeMensajesEsUnico
         // US19 (T0228): + ChequeGiradoEmitido (CHE), ChequeGiradoAnulado (CHA) y RemesaConfirmada (RMC).
         // T1 (fase 32): + TrasladoEntreCuentasEnviado (TEE), TrasladoConfirmado (TCF), ChequesReclasificadosAlCierre (CRC) y ChequeNoCobradoACuentaPorPagar (CNP).
         // T2 (fase 41): + NotaBancariaRegistrada (NBR); T2 (fase 42): + PagoDeProveedorGirado (PPG), PagoDeCuentaPorPagarGirado (PCG), ChequeNoCobradoPagado (CTP) y
-        // PagoDeFacturaDeProveedor (TES → Inventory, sin código corto); T2 (fase 43; E-02 e): + SaldoDelFondoDeLiquidez (TES → Lending, sin código corto).
-        Assert.Equal(16, todos.Count(t => t.OriginModule == ModulosDeOrigen.Tesoreria));
+        // PagoDeFacturaDeProveedor (TES → Inventory, sin código corto); T2 (fase 43; E-02 e): + SaldoDelFondoDeLiquidez (TES → Lending, sin código corto); fase 44: +
+        // ConciliacionDeAdquirenteRegistrada (CAQ).
+        Assert.Equal(17, todos.Count(t => t.OriginModule == ModulosDeOrigen.Tesoreria));
         // T2 (fase 41; E-05): Nómina emite DispersionDeNominaGenerada a Tesorería.
         Assert.Equal(1, todos.Count(t => t.OriginModule == ModulosDeOrigen.Nomina));
         // Feature 015, US2 (T0091): + los cinco hechos de la caja a Contabilidad (MCR, MRC, DAA, ASR, SLI); US3 (T0116): + ReciboEmitido (RCE); US5 (T0178): +
@@ -124,7 +125,7 @@ public class ElCatalogoDeMensajesEsUnico
         Assert.Equal(27, hechosDeRecaudo.Count);
         Assert.All(hechosDeRecaudo, t => Assert.Matches("^[A-Z]{3,4}$", t.CodigoCorto ?? string.Empty));
         var hechosDeTesoreria = todos.Where(t => t.OriginModule == ModulosDeOrigen.Tesoreria && t.AdmiteDestino(IntegrationDestinations.Accounting)).ToList();
-        Assert.Equal(13, hechosDeTesoreria.Count);
+        Assert.Equal(14, hechosDeTesoreria.Count);
         Assert.All(hechosDeTesoreria, t => Assert.Matches("^[A-Z]{3,4}$", t.CodigoCorto ?? string.Empty));
         var conCodigo = hechos.Concat(hechosDeRecaudo).Concat(hechosDeTesoreria).ToList();
         Assert.Equal(conCodigo.Count, conCodigo.Select(t => t.CodigoCorto).Distinct().Count());
