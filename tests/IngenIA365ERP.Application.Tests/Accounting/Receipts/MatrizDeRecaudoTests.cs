@@ -24,7 +24,7 @@ public class MatrizDeRecaudoTests
             .SpecificityWeight.Should().Be(256 + 64 + 4);
         Regla<ReceiptsPostingRule>(RolesDeRecaudo.PuenteDelModulo, cuenta, dimensiones: r => { r.TargetModule = "CAR"; r.TargetNature = "Loan"; })
             .SpecificityWeight.Should().Be(32 + 32);
-        Regla<ReceiptsPostingRule>(RolesDeRecaudo.GastoFaltante, cuenta, hecho: DiferenciaDeArqueoAprobadaV1.Type, deResultado: true).SpecificityWeight.Should().Be(2);
+        Regla<ReceiptsPostingRule>(RolesDeRecaudo.GastoFaltante, cuenta, hecho: DiferenciaDeArqueoDeRecaudoAprobadaV1.Type, deResultado: true).SpecificityWeight.Should().Be(2);
         Regla<ReceiptsPostingRule>(RolesDeRecaudo.Caja, cuenta, dimensiones: r => r.CostCenterId = 7).SpecificityWeight.Should().Be(0, "el centro de costo no pesa");
         Regla<ReceiptsPostingRule>(RolesDeRecaudo.Caja, cuenta, dimensiones: r => r.CashBoxCode = "c1").CashBoxCode.Should().Be("C1", "los códigos se normalizan");
     }

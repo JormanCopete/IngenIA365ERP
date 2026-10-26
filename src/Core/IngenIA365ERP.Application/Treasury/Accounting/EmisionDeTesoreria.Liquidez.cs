@@ -23,7 +23,7 @@ public sealed partial class EmisionDeTesoreria
         var oficina = await db.Branches.AsNoTracking().IgnoreQueryFilters().Where(b => b.Id == oficinaId).Select(b => b.PublicId).FirstAsync(ct);
         var contenido = new SaldoDelFondoDeLiquidezV1
         {
-            SnapshotPublicId = foto.PublicId, Date = foto.Date, Accounts = cuentas, Total = cuentas.Sum(c => c.Balance), RegisteredBy = await UsuarioAsync(ct),
+            SnapshotPublicId = foto.PublicId, Date = foto.Date, BankAccounts = cuentas, Total = cuentas.Sum(c => c.Balance), RegisteredBy = await UsuarioAsync(ct),
         };
         var mensajes = await emisor.EmitirAsync(new SolicitudDeEmision(
             new OrigenDeEmision(MessageOriginKind.Document, foto.PublicId, ClaseFotoDeLiquidez, TipoDeFotoDeLiquidez, foto.Number, foto.Date, oficina),

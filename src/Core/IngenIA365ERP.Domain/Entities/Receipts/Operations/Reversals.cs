@@ -10,7 +10,7 @@ namespace IngenIA365ERP.Domain.Entities.Receipts.Operations;
 /// cerró, las aplicaciones omitidas porque el módulo ya las había reversado) se escribe una vez; <see cref="Status"/> cambia hasta <c>Applied</c> o <c>Rejected</c>.
 /// (nuevo)
 /// </summary>
-public class ReceiptVoiding : AuditableEntity, IHechoInmutable
+public class ReceiptVoiding : AuditableEntity, IHechoInmutable, IngenIA365ERP.Domain.Common.IDocumentoNumerado
 {
     /// <summary>El número del documento de anulación: se asigna al aplicarla (lo que queda en aprobación no consume número).</summary>
     [EscrituraUnica] public string? Number { get; set; }

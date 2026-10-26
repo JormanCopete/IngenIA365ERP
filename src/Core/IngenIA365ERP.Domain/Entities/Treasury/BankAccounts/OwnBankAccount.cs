@@ -62,7 +62,7 @@ public class OwnBankAccount : AuditableEntity
 /// monto (<c>Treasury.LiquidityFund.UseRequired</c>); al usarlo queda <see cref="LiquidityFundUseState.Used"/> con el documento que lo usó. Los abonos al
 /// fondo no se restringen. No es un hecho: cambia por su aprobación y su uso. (nuevo)
 /// </summary>
-public class LiquidityFundUse : AuditableEntity
+public class LiquidityFundUse : AuditableEntity, IngenIA365ERP.Domain.Common.IDocumentoNumerado
 {
     public string Number { get; set; } = string.Empty;
 

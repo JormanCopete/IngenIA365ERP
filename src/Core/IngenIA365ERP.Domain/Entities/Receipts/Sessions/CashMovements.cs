@@ -9,7 +9,7 @@ namespace IngenIA365ERP.Domain.Entities.Receipts.Sessions;
 /// número del tipo <c>MC</c>. La reclasificación <b>no toca el recibo</b>: mueve lo esperado de un medio a otro y entra al informe de excepciones
 /// (US2-7). (nuevo)
 /// </summary>
-public class CashMovement : AuditableEntity, IHechoInmutable
+public class CashMovement : AuditableEntity, IHechoInmutable, IngenIA365ERP.Domain.Common.IDocumentoNumerado
 {
     public string Number { get; set; } = string.Empty;
 
@@ -64,7 +64,7 @@ public class CashMovementDenomination : AuditableEntity, IHechoInmutable
 /// <c>RCD_CashSessionAdjustments</c> (H) (feature 015, T0089; FR-033, US2-5; data-model §2.5): el ajuste de una sesión cerrada, aprobado por otra persona y
 /// con soporte, con su número del tipo <c>AS</c> y su hecho <c>AjusteDeSesionRegistrado</c>. La sesión cerrada no se reabre. (nuevo)
 /// </summary>
-public class CashSessionAdjustment : AuditableEntity, IHechoInmutable
+public class CashSessionAdjustment : AuditableEntity, IHechoInmutable, IngenIA365ERP.Domain.Common.IDocumentoNumerado
 {
     public string Number { get; set; } = string.Empty;
 

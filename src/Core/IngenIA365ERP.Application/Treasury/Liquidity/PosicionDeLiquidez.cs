@@ -102,7 +102,7 @@ public sealed class PosicionDeLiquidez(
             {
                 var extracto = await db.TreasuryBankStatements.AsNoTracking().Where(e => e.BankAccountId == c.Id).OrderByDescending(e => e.To)
                     .Select(e => (DateOnly?)e.To).FirstOrDefaultAsync(ct);
-                fondo.Add(new CuentaDelFondoV1 { OwnBankAccountPublicId = c.PublicId, BankCode = c.Banco, AccountNumber = c.AccountNumber, Balance = saldo, StatementDate = extracto });
+                fondo.Add(new CuentaDelFondoV1 { OwnBankAccountPublicId = c.PublicId, BankCode = c.Banco, BankAccountNumber = c.AccountNumber, Balance = saldo, StatementDate = extracto });
             }
         }
 

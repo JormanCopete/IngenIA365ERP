@@ -154,7 +154,7 @@ public sealed class ConsumePaymentOrderCommandHandler(
                 orden.GmfExemptionReason = gmf.Evaluado ? gmf.Motivo : null;
                 orden.GmfEstimate = gmf.Gravado ? gmf.Gmf : 0m;
             }
-            orden.Number = await numerador.AsignarAsync(CodigoDeOrden, CodigoDeOrden, ct);
+            await numerador.NumerarAsync(orden, CodigoDeOrden, CodigoDeOrden, ct);
             db.PaymentOrders.Add(orden);
             await db.SaveChangesAsync(ct);
             db.TreasuryInboundMessages.Add(RecibosDeTesoreria.Nuevo(mensaje, ahora,

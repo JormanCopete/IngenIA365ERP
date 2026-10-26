@@ -103,9 +103,9 @@ public class ContabilizacionDeRecaudoYTesoreriaTests
     {
         var caja = Cuenta("110505");
         var matriz = Matriz(MatricesDeRecaudoYTesoreria.Recaudo, [Regla<ReceiptsPostingRule>(RolesDeRecaudo.Caja, caja), Regla<ReceiptsPostingRule>(RolesDeRecaudo.Boveda, caja)], [caja]);
-        var c = new CatalogosDeModulo(matriz, new Dictionary<string, (string, string?)> { [MovimientoDeCajaRegistradoV1.Type] = ("MC", null) }, new Dictionary<Guid, int>(),
+        var c = new CatalogosDeModulo(matriz, new Dictionary<string, (string, string?)> { [MovimientoDeCajaDeRecaudoRegistradoV1.Type] = ("MC", null) }, new Dictionary<Guid, int>(),
             new Dictionary<Guid, int> { [Sucursal] = 1 });
-        var movimiento = new MovimientoDeCajaRegistradoV1
+        var movimiento = new MovimientoDeCajaDeRecaudoRegistradoV1
         {
             MovementPublicId = Guid.NewGuid(), Number = "MV-1", Kind = "SupplyFromVault",
             Lines =
@@ -115,7 +115,7 @@ public class ContabilizacionDeRecaudoYTesoreriaTests
             ],
         };
 
-        var r = ConstructorDeComprobanteDeModulo.Construir(MatricesDeRecaudoYTesoreria.Recaudo, [Hecho(movimiento, MovimientoDeCajaRegistradoV1.Type)], c);
+        var r = ConstructorDeComprobanteDeModulo.Construir(MatricesDeRecaudoYTesoreria.Recaudo, [Hecho(movimiento, MovimientoDeCajaDeRecaudoRegistradoV1.Type)], c);
 
         r.SinLineas.Should().BeTrue();
         r.SinComprobante.Should().Be(RecepcionContableDeModulo.SinComprobanteMismasCuentas);

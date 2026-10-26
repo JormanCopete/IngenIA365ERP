@@ -1,15 +1,15 @@
 using IngenIA365ERP.Domain.Common.Cuadres;
 using IngenIA365ERP.Domain.Entities.Receipts.Activation;
 using IngenIA365ERP.Domain.Entities.Security;
-using IngenIA365ERP.Domain.Entities.Treasury.Activation;
-using IngenIA365ERP.Persistence.Configurations.Treasury;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace IngenIA365ERP.Persistence.Configurations.Receipts;
 
-// Feature 015, US13 (T0286, T0291; data-model §15.2, §15.3): los cuadres de apertura y las cifras de referencia de Recaudo (RCD_) y de Tesorería (TES_), en el par
-// RecaudoYTesoreriaPuestaEnMarcha. Las dos parejas de tablas tienen la misma forma (las bases de Domain/Common/Cuadres); FK Restrict, nada entre RCD_ y TES_.
+// Feature 015, US13 (T0286, T0291; data-model §15.2, §15.3): los cuadres de apertura y las cifras de referencia de Recaudo, en el par
+// RecaudoYTesoreriaPuestaEnMarcha. Los de Tesorería tienen la misma forma (las bases de Domain/Common/Cuadres) y su configuración vive en
+// Configurations/Treasury/Activation, sobre lo común de abajo, para que ninguna carpeta nombre las tablas del otro módulo (RecaudoYTesoreriaSeHablanPorSusPuertos;
+// corrida del 2026-10-26). FK Restrict, nada entre las tablas de los dos módulos.
 
 /// <summary>Lo común de la cabecera de un cuadre. (nuevo)</summary>
 internal static class ConfiguracionDeCuadres
@@ -83,42 +83,6 @@ public class ReceiptsReferenceFigureConfiguration : IEntityTypeConfiguration<Rec
     public void Configure(EntityTypeBuilder<ReceiptsReferenceFigure> builder)
     {
         builder.ComoEntidadDeRecaudo(Tabla);
-        ConfiguracionDeCuadres.Cifra(builder, Tabla);
-    }
-}
-
-/// <summary><c>TES_OpeningSquares</c>. (nuevo)</summary>
-public class TreasuryOpeningSquareConfiguration : IEntityTypeConfiguration<TreasuryOpeningSquare>
-{
-    public const string Tabla = "TES_OpeningSquares";
-
-    public void Configure(EntityTypeBuilder<TreasuryOpeningSquare> builder)
-    {
-        builder.ComoEntidadDeTesoreria(Tabla);
-        ConfiguracionDeCuadres.Cabecera(builder, Tabla);
-    }
-}
-
-/// <summary><c>TES_OpeningSquareLines</c> (H). (nuevo)</summary>
-public class TreasuryOpeningSquareLineConfiguration : IEntityTypeConfiguration<TreasuryOpeningSquareLine>
-{
-    public const string Tabla = "TES_OpeningSquareLines";
-
-    public void Configure(EntityTypeBuilder<TreasuryOpeningSquareLine> builder)
-    {
-        builder.ComoEntidadDeTesoreria(Tabla);
-        ConfiguracionDeCuadres.Linea<TreasuryOpeningSquareLine, TreasuryOpeningSquare>(builder, Tabla);
-    }
-}
-
-/// <summary><c>TES_ReferenceFigures</c>. (nuevo)</summary>
-public class TreasuryReferenceFigureConfiguration : IEntityTypeConfiguration<TreasuryReferenceFigure>
-{
-    public const string Tabla = "TES_ReferenceFigures";
-
-    public void Configure(EntityTypeBuilder<TreasuryReferenceFigure> builder)
-    {
-        builder.ComoEntidadDeTesoreria(Tabla);
         ConfiguracionDeCuadres.Cifra(builder, Tabla);
     }
 }

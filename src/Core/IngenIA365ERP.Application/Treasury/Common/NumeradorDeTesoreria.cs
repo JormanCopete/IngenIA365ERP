@@ -19,6 +19,16 @@ public sealed class NumeradorDeTesoreria(IApplicationDbContext db, ICerrojoDeTes
     /// <summary>La clave de la fila de numeración de una clase de documento.</summary>
     public static string Clave(string codigo) => $"{CatalogoDeTesoreria.Modulo}:{codigo}";
 
+    /// <summary>
+    /// Numera un documento ya armado, al final de la operación (R-13; corrida del 2026-10-26): el número lo escribe el numerador, no quien llama
+    /// (<c>SoloElNumeradorNumera</c>).
+    /// </summary>
+    public async Task NumerarAsync(IngenIA365ERP.Domain.Common.IDocumentoNumerado documento, string codigo, string prefijo, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(documento);
+        documento.Number = await AsignarAsync(codigo, prefijo, ct);
+    }
+
     /// <summary>Asigna el siguiente número de la clase <paramref name="codigo"/>; el <paramref name="prefijo"/> se fija al crear la fila.</summary>
     public async Task<string> AsignarAsync(string codigo, string prefijo, CancellationToken ct = default)
     {

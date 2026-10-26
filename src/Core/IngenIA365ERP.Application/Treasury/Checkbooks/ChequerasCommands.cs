@@ -48,10 +48,10 @@ public static class ChequerasDeTesoreria
     public static Result<long> Siguiente(Checkbook c)
     {
         if (c.Status == CheckbookState.Voided) return Result.Failure<long>(ErroresDeTesoreria.ChequeraAnulada());
-        if (c.Status == CheckbookState.Exhausted || c.NextNumber > c.ToNumber) return Result.Failure<long>(ErroresDeTesoreria.ChequeraAgotada());
-        var n = c.NextNumber;
-        c.NextNumber++;
-        if (c.NextNumber > c.ToNumber) c.Status = CheckbookState.Exhausted;
+        if (c.Status == CheckbookState.Exhausted || c.NextCheckNumber > c.ToNumber) return Result.Failure<long>(ErroresDeTesoreria.ChequeraAgotada());
+        var n = c.NextCheckNumber;
+        c.NextCheckNumber++;
+        if (c.NextCheckNumber > c.ToNumber) c.Status = CheckbookState.Exhausted;
         return Result.Success(n);
     }
 
@@ -69,8 +69,8 @@ public static class ChequerasDeTesoreria
     {
         var cuenta = await db.OwnBankAccounts.AsNoTracking().Where(x => x.Id == c.BankAccountId).Select(x => new { x.PublicId, x.Code }).FirstAsync(ct);
         var custodio = await db.Users.AsNoTracking().IgnoreQueryFilters().Where(u => u.Id == c.CustodianUserId).Select(u => u.Username).FirstOrDefaultAsync(ct) ?? string.Empty;
-        var restantes = c.Status == CheckbookState.Active ? (int)Math.Max(0, c.ToNumber - c.NextNumber + 1) : 0;
-        return new CheckbookDto(c.PublicId, cuenta.PublicId, cuenta.Code, c.FromNumber, c.ToNumber, c.NextNumber, restantes, c.Status, custodio, c.CustodyAttachmentPublicId,
+        var restantes = c.Status == CheckbookState.Active ? (int)Math.Max(0, c.ToNumber - c.NextCheckNumber + 1) : 0;
+        return new CheckbookDto(c.PublicId, cuenta.PublicId, cuenta.Code, c.FromNumber, c.ToNumber, c.NextCheckNumber, restantes, c.Status, custodio, c.CustodyAttachmentPublicId,
             c.RegisteredAt);
     }
 
@@ -142,7 +142,7 @@ public sealed class RegisterCheckbookCommandHandler(
             return Result.Failure<CheckbookDto>(ErroresDeTesoreria.ChequeraSeCruza());
         var chequera = new Checkbook
         {
-            BankAccountId = cuenta.Id, FromNumber = request.FromNumber, ToNumber = request.ToNumber, NextNumber = request.FromNumber, CustodianUserId = custodio,
+            BankAccountId = cuenta.Id, FromNumber = request.FromNumber, ToNumber = request.ToNumber, NextCheckNumber = request.FromNumber, CustodianUserId = custodio,
             CustodyAttachmentPublicId = request.CustodyAttachmentPublicId, RegisteredByUserId = usuario, RegisteredAt = reloj.UtcNow,
         };
         db.Checkbooks.Add(chequera);
@@ -183,7 +183,7 @@ public sealed class VoidCheckbookCommandHandler(IApplicationDbContext db, IAlcan
         chequera.Status = CheckbookState.Voided;
         chequera.VoidReason = request.Reason.Trim();
         await auditoria.AgregarAsync("Treasury.Checkbook.Voided", "Checkbook", chequera.PublicId, null,
-            new { next = chequera.NextNumber, to = chequera.ToNumber, reason = chequera.VoidReason, by = actor.Name }, ct);
+            new { next = chequera.NextCheckNumber, to = chequera.ToNumber, reason = chequera.VoidReason, by = actor.Name }, ct);
         await db.SaveChangesAsync(ct);
         return Result.Success(await ChequerasDeTesoreria.DtoAsync(db, chequera, ct));
     }
@@ -303,7 +303,7 @@ public sealed class IssueChecksForBatchCommandHandler(
         var chequera = await db.Checkbooks.FirstAsync(k => k.Id == chequeraLeida.Id, ct);
         var lote = await db.PaymentBatches.FirstAsync(b => b.Id == loteLeido.Id, ct);
         var cuenta = await db.OwnBankAccounts.AsNoTracking().FirstAsync(c => c.Id == lote.BankAccountId, ct);
-        if (chequera.ToNumber - chequera.NextNumber + 1 < pendientes.Count) return Result.Failure<IReadOnlyList<IssuedCheckDto>>(ErroresDeTesoreria.ChequeraAgotada());
+        if (chequera.ToNumber - chequera.NextCheckNumber + 1 < pendientes.Count) return Result.Failure<IReadOnlyList<IssuedCheckDto>>(ErroresDeTesoreria.ChequeraAgotada());
 
         var emitidos = new List<IssuedCheck>();
         foreach (var item in pendientes)

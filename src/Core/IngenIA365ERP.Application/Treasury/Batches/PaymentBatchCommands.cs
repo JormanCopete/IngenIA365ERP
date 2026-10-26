@@ -126,7 +126,7 @@ public sealed class CreatePaymentBatchCommandHandler(
         await LotesDePago.RecalcularAsync(db, lote, ct);
         if (lote.OrderCount == 0) return Result.Failure<PaymentBatchDto>(new ErrorConDatos("Treasury.Batch.Empty",
             "Ninguna de las órdenes elegidas puede entrar al lote: revise sus motivos.", new { pending = pendientes }));
-        lote.Number = await numerador.AsignarAsync(LotesDePago.Codigo, LotesDePago.Codigo, ct);
+        await numerador.NumerarAsync(lote, LotesDePago.Codigo, LotesDePago.Codigo, ct);
         await db.SaveChangesAsync(ct);
         return Result.Success(await LotesDePago.DtoAsync(db, lote, pendientes, ct));
     }

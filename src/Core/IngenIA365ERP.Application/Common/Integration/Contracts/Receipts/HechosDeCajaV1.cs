@@ -93,7 +93,7 @@ public static class RolesDeRecaudo
 /// <c>MovimientoDeCajaDeRecaudoRegistrado</c> v1 (<c>MCR</c>; el tipo no es <c>MovimientoDeCajaRegistrado</c>, que es de Comercial, feature 012): un movimiento de caja o de bóveda —abastecer, retirar a bóveda, trasladar entre cajas— con sus
 /// líneas <c>Caja</c> ↔ <c>Boveda</c> ↔ <c>Caja</c>. La base de apertura no emite (no mueve dinero entre cuentas). (nuevo)
 /// </summary>
-public sealed record MovimientoDeCajaRegistradoV1
+public sealed record MovimientoDeCajaDeRecaudoRegistradoV1
 {
     public const string Type = "MovimientoDeCajaDeRecaudoRegistrado";
 
@@ -158,7 +158,7 @@ public sealed record MedioReclasificadoV1
 /// <c>DiferenciaDeArqueoDeRecaudoAprobada</c> v1 (<c>DAA</c>; el tipo no es <c>DiferenciaDeArqueoAprobada</c>, que es de Comercial, feature 012): la diferencia de una línea de arqueo, aprobada o dentro de la tolerancia con motivo. Faltante:
 /// <c>CuentaPorCobrarCajero</c> (tercero = el cajero) o <c>GastoFaltante</c> → <c>Caja</c>; sobrante: <c>Caja</c> → <c>SobrantesDeCaja</c>. (nuevo)
 /// </summary>
-public sealed record DiferenciaDeArqueoAprobadaV1
+public sealed record DiferenciaDeArqueoDeRecaudoAprobadaV1
 {
     public const string Type = "DiferenciaDeArqueoDeRecaudoAprobada";
 

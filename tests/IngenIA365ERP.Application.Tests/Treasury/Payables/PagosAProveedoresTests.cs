@@ -143,7 +143,7 @@ public class PagosAProveedoresTests
     public async Task El_cheque_que_paso_a_cuenta_por_pagar_y_se_cobra_despues_deja_su_hecho_de_cobro_tardio()
     {
         _t.E.Como(_t.E.Cajera);
-        var chequera = new Checkbook { BankAccountId = _t.Pagos.Id, FromNumber = 1, ToNumber = 50, NextNumber = 5, CustodianUserId = _t.E.Cajera.Id, RegisteredByUserId = _t.E.Cajera.Id };
+        var chequera = new Checkbook { BankAccountId = _t.Pagos.Id, FromNumber = 1, ToNumber = 50, NextCheckNumber = 5, CustodianUserId = _t.E.Cajera.Id, RegisteredByUserId = _t.E.Cajera.Id };
         _t.E.Db.Checkbooks.Add(chequera);
         await _t.E.Db.SaveChangesAsync();
         var orden = _t.Orden(700_000m, PaymentOrderState.Disbursed, PaymentForm.Check);

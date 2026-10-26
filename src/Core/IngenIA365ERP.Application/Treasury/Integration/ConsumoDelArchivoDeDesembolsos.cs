@@ -52,15 +52,15 @@ public sealed class ConsumeLendingDisbursementFileCommandHandler(IApplicationDbC
                         await db.SaveChangesAsync(ct);
                         return Result.Success<ResultadoDeConsumo>(new ResultadoDeConsumo.Processed(null, null, null, MotivoSinComprobante.Informational));
                     }
-                    var cuenta = generado.SourceBankAccount is { AccountNumber.Length: > 0 } origen
-                        ? await db.OwnBankAccounts.AsNoTracking().Where(c => c.AccountNumber == origen.AccountNumber).Select(c => (int?)c.Id).FirstOrDefaultAsync(ct)
+                    var cuenta = generado.SourceBankAccount is { BankAccountNumber.Length: > 0 } origen
+                        ? await db.OwnBankAccounts.AsNoTracking().Where(c => c.AccountNumber == origen.BankAccountNumber).Select(c => (int?)c.Id).FirstOrDefaultAsync(ct)
                         : null;
                     var archivo = new LendingDisbursementFile
                     {
                         FileMessagePublicId = mensaje.MessageId, FilePublicId = generado.FilePublicId, FileNumber = generado.FileNumber, Version = generado.Version,
                         AttachmentPublicId = generado.File.AttachmentPublicId, FileName = Recortar(generado.File.FileName, 200), FileSha256 = generado.File.Sha256,
                         SizeBytes = generado.File.SizeBytes, FormatCode = generado.File.FormatCode, BankAccountId = cuenta, SourceBankCode = generado.SourceBankAccount?.BankCode,
-                        SourceAccountNumber = generado.SourceBankAccount?.AccountNumber, Total = generado.Total, LineCount = generado.LineCount, ReceivedAt = ahora,
+                        SourceAccountNumber = generado.SourceBankAccount?.BankAccountNumber, Total = generado.Total, LineCount = generado.LineCount, ReceivedAt = ahora,
                         GeneratedByName = Recortar(generado.GeneratedBy.Name, 150), CreatedAt = ahora, CreatedBy = RecibosDeTesoreria.Actor,
                     };
                     var publicos = generado.Orders.Select(o => o.OrderPublicId).ToList();

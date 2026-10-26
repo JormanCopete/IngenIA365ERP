@@ -94,7 +94,7 @@ anula el archivo.
 |---|---|---|---|
 | `filePublicId` · `fileNumber` · `version` | Guid · string · int | sí | |
 | `file` | objeto | sí | `{ attachmentPublicId, fileName, sha256, sizeBytes, formatCode }` (ámbito `LoanDisbursement` 4) |
-| `sourceBankAccount` | objeto | no | `{ bankCode, accountNumber }` de la cuenta de origen elegida al generar (Tesorería la casa con su cuenta propia) |
+| `sourceBankAccount` | objeto | no | `{ bankCode, bankAccountNumber }` de la cuenta de origen elegida al generar (Tesorería la casa con su cuenta propia) |
 | `orders` | [objeto] | sí | `{ orderPublicId, orderNumber, netAmount, payeePersonPublicId }` |
 | `total` · `lineCount` | decimal · int | sí | |
 | `generatedBy` | `UserRefV1` | sí | |
@@ -138,7 +138,7 @@ entrega con el mismo egreso (FR-052). Sin cambio de firma; cambia el comportamie
 
 ### 3.5 (e) Saldo del fondo de liquidez (T2)
 
-`SaldoDelFondoDeLiquidez` v1 (`TES → Lending`): `{ date, accounts: [{ ownBankAccountPublicId, bankCode, accountNumber,
+`SaldoDelFondoDeLiquidez` v1 (`TES → Lending`): `{ date, bankAccounts: [{ ownBankAccountPublicId, bankCode, bankAccountNumber,
 balance, statementDate }], total }`. Captaciones lo usa para su cálculo del fondo (US20-1).
 
 ### 3.6 (f) Recaudos esperados (T2)

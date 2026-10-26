@@ -192,7 +192,7 @@ public sealed class RequestLiquidityFundUseCommandHandler(
         if (pedida.IsFailure) return Result.Failure<LiquidityFundUseDto>(pedida.Error);
         uso.ApprovalRequestPublicId = pedida.Value?.PublicId;
         if (pedida.Value is null) uso.Status = LiquidityFundUseState.Approved;
-        uso.Number = await numerador.AsignarAsync(UsosDelFondo.Codigo, UsosDelFondo.Codigo, ct);
+        await numerador.NumerarAsync(uso, UsosDelFondo.Codigo, UsosDelFondo.Codigo, ct);
         db.LiquidityFundUses.Add(uso);
         await db.SaveChangesAsync(ct);
 

@@ -3,7 +3,7 @@ using IngenIA365ERP.Application.Common.Interfaces.Notifications;
 using IngenIA365ERP.Application.Compliance.HabeasData;
 using IngenIA365ERP.Application.Receipts.Notifications;
 using IngenIA365ERP.Domain.Enums.Compliance;
-using IngenIA365ERP.Domain.Enums.Lending;
+using IngenIA365ERP.Domain.Enums.Receipts;
 using NSubstitute;
 using Xunit;
 
@@ -24,7 +24,7 @@ public sealed class AvisosDeRecaudoTests
         _autorizaciones.VigenteAsync(_persona, DataAuthorizationPurpose.ContactChannel, AvisosDeRecaudo.CanalDeCorreo, Arg.Any<CancellationToken>())
             .Returns(new AutorizacionVigente(si ? "Accepted" : "Declined", si, Guid.NewGuid(), 1, DateTime.UtcNow, null));
 
-    private Task<AvisoDeRecaudoDto> EnviarAsync(MessageChannel canal = MessageChannel.Email, string? correo = "ana@coop.test") =>
+    private Task<AvisoDeRecaudoDto> EnviarAsync(ReceiptNoticeChannel canal = ReceiptNoticeChannel.Email, string? correo = "ana@coop.test") =>
         AvisosDeRecaudo.EnviarAsync(_autorizaciones, _correo, _persona, correo, canal, null, "Recibo RC-1",
             AvisosDeRecaudo.Cuerpo("Coop", "recibo de caja", "RC-1", new DateOnly(2026, 12, 1), 80_000m, "ABC123"),
             () => new EmailAttachment("recibo.pdf", "application/pdf", [1, 2, 3]), default);
@@ -56,8 +56,8 @@ public sealed class AvisosDeRecaudoTests
     public async Task SMS_y_mensajeria_siguen_simulados()
     {
         Autoriza(true);
-        (await EnviarAsync(MessageChannel.Sms)).Outcome.Should().Be(ResultadosDeAviso.Simulado);
-        (await EnviarAsync(MessageChannel.WhatsApp)).Outcome.Should().Be(ResultadosDeAviso.Simulado);
+        (await EnviarAsync(ReceiptNoticeChannel.Sms)).Outcome.Should().Be(ResultadosDeAviso.Simulado);
+        (await EnviarAsync(ReceiptNoticeChannel.WhatsApp)).Outcome.Should().Be(ResultadosDeAviso.Simulado);
         await _correo.DidNotReceive().SendAsync(Arg.Any<EmailMessage>(), Arg.Any<CancellationToken>());
     }
 

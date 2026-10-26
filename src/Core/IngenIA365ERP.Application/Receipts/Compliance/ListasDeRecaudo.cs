@@ -10,12 +10,11 @@ using IngenIA365ERP.Domain.Enums.ExternalChannels;
 using IngenIA365ERP.Domain.Enums.Receipts;
 using IngenIA365ERP.Domain.Receipts.Cumplimiento;
 using Microsoft.EntityFrameworkCore;
-using ScreeningContext = IngenIA365ERP.Domain.Enums.Lending.ScreeningContext;
 
 namespace IngenIA365ERP.Application.Receipts.Compliance;
 
 /// <summary>
-/// La consulta a listas de Recaudo (feature 015, US14, T0240; FR-098, FR-189, FR-203; contexto <see cref="ScreeningContext.Collection"/>), sobre la consulta común de listas
+/// La consulta a listas de Recaudo (feature 015, US14, T0240; FR-098, FR-189, FR-203; contexto de listas <c>Collection</c>, por nombre: Recaudo no conoce los tipos de Cartera, FR-008), sobre la consulta común de listas
 /// (el canal vigente o <c>CARGA-PROPIA</c>), con el mismo molde que <c>ListasDeTesoreria</c>. Decisión del dueño (pendiente de confirmar en P7): una coincidencia
 /// <b>exacta</b> (<c>Match</c>) es vinculante y bloquea siempre, con la alerta inmediata <c>Recaudo.ListaVinculante</c> al oficial; una <b>posible</b>
 /// (<c>PossibleMatch</c>) no es vinculante y alerta <c>Recaudo.ListaNoVinculante</c> (lo que hace la operación lo dice <c>Sarlaft.ListasNoVinculantes.Efecto</c>). En
@@ -31,7 +30,8 @@ public sealed class ListasDeRecaudo(
     IDateTimeService reloj,
     AlertasDiferidas? diferidas = null) : Common.IListasDeRecaudo
 {
-    public const ScreeningContext Contexto = ScreeningContext.Collection;
+    /// <summary>El contexto de la consulta (el <c>ScreeningContext.Collection</c> de Cartera, por nombre).</summary>
+    public const string Contexto = "Collection";
 
     public async Task<ScreeningOutcomeR> EvaluarAsync(IReadOnlyCollection<int> personIds, Guid operacionPublicId, CancellationToken ct)
     {

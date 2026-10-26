@@ -24,6 +24,7 @@ public class CheckbookConfiguration : IEntityTypeConfiguration<Checkbook>
         builder.HasOne<User>().WithMany().HasForeignKey(e => e.CustodianUserId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<User>().WithMany().HasForeignKey(e => e.RegisteredByUserId).OnDelete(DeleteBehavior.Restrict);
         builder.Property(e => e.Status).HasConversion<int>();
+        builder.Property(e => e.NextCheckNumber).HasColumnName("NextNumber");
         builder.Property(e => e.VoidReason).HasMaxLength(500);
         builder.HasIndex(e => new { e.BankAccountId, e.FromNumber }).HasDatabaseName($"IX_{Tabla}_Account_From");
     }

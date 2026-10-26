@@ -9,7 +9,7 @@ namespace IngenIA365ERP.Domain.Entities.Treasury.Payments;
 /// portal del banco o en cheques. No es un hecho: <see cref="Status"/> recorre su ciclo y la huella <see cref="InputsHash"/> es la que el aprobador confirma.
 /// Nunca se borra. (nuevo)
 /// </summary>
-public class PaymentBatch : AuditableEntity
+public class PaymentBatch : AuditableEntity, IngenIA365ERP.Domain.Common.IDocumentoNumerado
 {
     public string Number { get; set; } = string.Empty;
 

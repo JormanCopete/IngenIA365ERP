@@ -37,7 +37,7 @@ public class PendientesHeredadosTests
         _t.E.Como(_t.E.Cajera);
         _t.E.Db.Checkbooks.Add(new Checkbook
         {
-            BankAccountId = _t.Pagos.Id, FromNumber = 100, ToNumber = 200, NextNumber = 150, Status = CheckbookState.Active, CustodianUserId = _t.E.Cajera.Id,
+            BankAccountId = _t.Pagos.Id, FromNumber = 100, ToNumber = 200, NextCheckNumber = 150, Status = CheckbookState.Active, CustodianUserId = _t.E.Cajera.Id,
             RegisteredByUserId = _t.E.Cajera.Id, RegisteredAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc),
         });
         _t.E.Db.SaveChanges();

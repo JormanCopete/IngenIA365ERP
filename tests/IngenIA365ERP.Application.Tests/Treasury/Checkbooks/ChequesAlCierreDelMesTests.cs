@@ -24,7 +24,7 @@ public class ChequesAlCierreDelMesTests
 
     public ChequesAlCierreDelMesTests()
     {
-        _chequera = new Checkbook { BankAccountId = _t.Pagos.Id, FromNumber = 1, ToNumber = 100, NextNumber = 10, CustodianUserId = _t.E.Cajera.Id, RegisteredByUserId = _t.E.Cajera.Id };
+        _chequera = new Checkbook { BankAccountId = _t.Pagos.Id, FromNumber = 1, ToNumber = 100, NextCheckNumber = 10, CustodianUserId = _t.E.Cajera.Id, RegisteredByUserId = _t.E.Cajera.Id };
         _t.E.Db.Checkbooks.Add(_chequera);
         _t.E.Db.SaveChanges();
     }

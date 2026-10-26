@@ -63,7 +63,7 @@ public class CierreDeSesionTests
         linea.WithinTolerance.Should().BeTrue();
         linea.PendingApproval.Should().BeFalse();
         (await _c.E.Db.CashierReceivables.SingleAsync()).Amount.Should().Be(1_000);
-        (await _c.E.Db.IntegrationMessages.SingleAsync()).Type.Should().Be(DiferenciaDeArqueoAprobadaV1.Type);
+        (await _c.E.Db.IntegrationMessages.SingleAsync()).Type.Should().Be(DiferenciaDeArqueoDeRecaudoAprobadaV1.Type);
     }
 
     [Fact]
@@ -85,7 +85,7 @@ public class CierreDeSesionTests
         aprobada.IsSuccess.Should().BeTrue(aprobada.IsFailure ? aprobada.Error.Message : string.Empty);
         aprobada.Value.SessionStatus.Should().Be(CashSessionState.Closed);
         (await _c.E.Db.CashierReceivables.SingleAsync()).Amount.Should().Be(50_000);
-        (await _c.E.Db.IntegrationMessages.SingleAsync()).Type.Should().Be(DiferenciaDeArqueoAprobadaV1.Type);
+        (await _c.E.Db.IntegrationMessages.SingleAsync()).Type.Should().Be(DiferenciaDeArqueoDeRecaudoAprobadaV1.Type);
         var guardada = await _c.E.Db.ReceiptsCashCountLines.SingleAsync(l => l.PublicId == linea.PublicId);
         guardada.ApprovedByUserId.Should().Be(_c.E.Supervisor.Id);
         guardada.ApprovalReason.Should().Be("Revisado con la cajera");

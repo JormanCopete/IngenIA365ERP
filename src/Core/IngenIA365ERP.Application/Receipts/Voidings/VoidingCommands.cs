@@ -237,7 +237,7 @@ public sealed class ApproveReceiptVoidingCommandHandler(
 
         // Numeración antes de los contratos (el contrato guarda el número del documento): en la misma transacción, un rechazo no consume número.
         var (tipo, prefijo) = await SesionesDeCaja.TipoYPrefijoAsync(db, ReceiptDocumentKind.Voiding, recibo.CollectionPointId, ct);
-        anulacion.Number = await numerador.AsignarAsync(tipo.Code, prefijo, ct);
+        await numerador.NumerarAsync(anulacion, tipo.Code, prefijo, ct);
         var oficina = await db.Branches.AsNoTracking().Where(b => b.Id == recibo.BranchId).Select(b => (Guid?)b.PublicId).FirstOrDefaultAsync(ct);
         var referencia = new ReferenciaDeRecibo(anulacion.Number, hoy, oficina, recibo.Number, nameof(ReceiptDocumentKind.Voiding));
         var razon = $"Anulación del recibo {recibo.Number}: {anulacion.Reason}";

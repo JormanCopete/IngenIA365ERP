@@ -11,7 +11,8 @@ public sealed record CuentaDelFondoV1
 
     public string BankCode { get; init; } = string.Empty;
 
-    public string AccountNumber { get; init; } = string.Empty;
+    /// <summary>El número de la cuenta bancaria (no es una cuenta contable: FR-004).</summary>
+    public string BankAccountNumber { get; init; } = string.Empty;
 
     public decimal Balance { get; init; }
 
@@ -30,7 +31,7 @@ public sealed record SaldoDelFondoDeLiquidezV1
 
     public DateOnly Date { get; init; }
 
-    public IReadOnlyList<CuentaDelFondoV1> Accounts { get; init; } = [];
+    public IReadOnlyList<CuentaDelFondoV1> BankAccounts { get; init; } = [];
 
     public decimal Total { get; init; }
 

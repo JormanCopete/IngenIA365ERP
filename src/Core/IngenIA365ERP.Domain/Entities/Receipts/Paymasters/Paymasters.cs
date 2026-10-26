@@ -201,7 +201,7 @@ public class PaymasterResponseLine : AuditableEntity
 /// <c>RCD_PaymasterRemittances</c> (data-model §6.5): el dinero que giró la pagaduría —identificado en el extracto o recibido en caja— y las líneas descontadas que cubre en su
 /// orden; el excedente queda como saldo a favor de la pagaduría. (nuevo)
 /// </summary>
-public class PaymasterRemittance : AuditableEntity
+public class PaymasterRemittance : AuditableEntity, IngenIA365ERP.Domain.Common.IDocumentoNumerado
 {
     public string Number { get; set; } = string.Empty;
 

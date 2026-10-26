@@ -10,7 +10,7 @@ namespace IngenIA365ERP.Domain.Entities.Treasury.Remittances;
 /// extracto en la conciliación o confirmado con el soporte del banco (<c>TrasladoConfirmado</c>). Desde una cuenta del fondo de liquidez exige un uso aprobado. No es un
 /// hecho: cambia por sus comandos y nunca se borra. (nuevo)
 /// </summary>
-public class Transfer : AuditableEntity
+public class Transfer : AuditableEntity, IngenIA365ERP.Domain.Common.IDocumentoNumerado
 {
     public string Number { get; set; } = string.Empty;
 

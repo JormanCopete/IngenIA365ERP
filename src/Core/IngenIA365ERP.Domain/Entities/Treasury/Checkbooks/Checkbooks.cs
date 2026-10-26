@@ -15,7 +15,9 @@ public class Checkbook : AuditableEntity
 
     public long ToNumber { get; set; }
 
-    public long NextNumber { get; set; }
+    /// <summary>El siguiente número de cheque, mutable bajo el cerrojo de la chequera. La columna sigue siendo <c>NextNumber</c>; la propiedad no se llama así porque el
+    /// único <c>NextNumber</c> del modelo es el consecutivo contable (<c>VoucherType</c>, <c>NingunModuloEscribeMovimientosFueraDelContrato</c>; corrida del 2026-10-26).</summary>
+    public long NextCheckNumber { get; set; }
 
     public CheckbookState Status { get; set; } = CheckbookState.Active;
 

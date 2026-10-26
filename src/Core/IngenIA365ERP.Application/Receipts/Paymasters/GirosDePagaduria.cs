@@ -129,7 +129,7 @@ public sealed class RegisterPaymasterRemittanceCommandHandler(
             repartidas.Add((l, toca));
             resto -= toca;
         }
-        giro.Number = await numerador.AsignarAsync(EmisionDeRecaudo.TipoGiroDePagaduria, EmisionDeRecaudo.TipoGiroDePagaduria, ct);
+        await numerador.NumerarAsync(giro, EmisionDeRecaudo.TipoGiroDePagaduria, EmisionDeRecaudo.TipoGiroDePagaduria, ct);
         db.PaymasterRemittances.Add(giro);
         await db.SaveChangesAsync(ct);
         var n = 0;

@@ -67,7 +67,7 @@ public sealed class OrdenesDePagoDeTesoreria(
         orden.GmfExempt = gmf.Exento;
         orden.GmfExemptionReason = gmf.Evaluado ? gmf.Motivo : null;
         orden.GmfEstimate = gmf.Gravado ? gmf.Gmf : 0m;
-        orden.Number = await numerador.AsignarAsync(Integration.ConsumePaymentOrderCommandHandler.CodigoDeOrden, Integration.ConsumePaymentOrderCommandHandler.CodigoDeOrden, ct);
+        await numerador.NumerarAsync(orden, Integration.ConsumePaymentOrderCommandHandler.CodigoDeOrden, Integration.ConsumePaymentOrderCommandHandler.CodigoDeOrden, ct);
         db.PaymentOrders.Add(orden);
         await AuditarAsync(orden, ct);
         return new OrdenDePagoEmitidaDto(orden.PublicId, orden.Number, orden.Status.ToString());

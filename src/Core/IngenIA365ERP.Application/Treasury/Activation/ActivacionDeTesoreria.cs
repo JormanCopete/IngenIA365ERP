@@ -73,7 +73,7 @@ public sealed class RequisitosDeActivacionDeTesoreria(IApplicationDbContext db, 
 
         var idsDeCuentas = cuentas.Select(c => c.Id).ToList();
         var conChequera = await db.Checkbooks.AsNoTracking()
-            .AnyAsync(k => idsDeCuentas.Contains(k.BankAccountId) && k.Status == CheckbookState.Active && k.NextNumber <= k.ToNumber, ct);
+            .AnyAsync(k => idsDeCuentas.Contains(k.BankAccountId) && k.Status == CheckbookState.Active && k.NextCheckNumber <= k.ToNumber, ct);
         lista.Add(new(Chequera, !ofreceCheques || conChequera, ofreceCheques
             ? "La cooperativa gira cheques: una chequera activa con cheques disponibles en una cuenta de pagos (/tesoreria/chequeras)."
             : "La cooperativa no gira cheques: la chequera no se exige."));

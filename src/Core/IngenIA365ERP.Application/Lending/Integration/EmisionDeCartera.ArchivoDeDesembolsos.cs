@@ -41,7 +41,7 @@ public sealed partial class EmisionDeCartera
         {
             AttachmentPublicId = archivo.FileAttachmentPublicId, FileName = archivo.FileName, Sha256 = archivo.FileSha256, SizeBytes = tamano, FormatCode = archivo.FormatCode,
         };
-        var cuenta = new CuentaDeOrigenDelArchivoV1 { BankCode = banco, AccountNumber = archivo.SourceAccountNumber };
+        var cuenta = new BancoDeOrigenDelArchivoV1 { BankCode = banco, BankAccountNumber = archivo.SourceAccountNumber };
         var ordenes = lineas.Select(l => new OrdenDelArchivoV1 { OrderPublicId = l.PublicId, OrderNumber = l.Number, NetAmount = l.Neto, PayeePersonPublicId = l.Persona })
             .ToList();
         object contenido = anulado

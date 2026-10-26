@@ -18,9 +18,9 @@ public static class CatalogoDeMensajesDeRecaudoV1
     public static IReadOnlyList<TipoDeMensaje> Todos { get; } =
     [
         // US2 (fase 5): la caja.
-        Hecho(typeof(MovimientoDeCajaRegistradoV1), MovimientoDeCajaRegistradoV1.Type, "MCR"),
+        Hecho(typeof(MovimientoDeCajaDeRecaudoRegistradoV1), MovimientoDeCajaDeRecaudoRegistradoV1.Type, "MCR"),
         Hecho(typeof(MedioReclasificadoV1), MedioReclasificadoV1.Type, "MRC"),
-        Hecho(typeof(DiferenciaDeArqueoAprobadaV1), DiferenciaDeArqueoAprobadaV1.Type, "DAA"),
+        Hecho(typeof(DiferenciaDeArqueoDeRecaudoAprobadaV1), DiferenciaDeArqueoDeRecaudoAprobadaV1.Type, "DAA"),
         Hecho(typeof(AjusteDeSesionRegistradoV1), AjusteDeSesionRegistradoV1.Type, "ASR"),
         Hecho(typeof(SobranteLlevadoAIngresoV1), SobranteLlevadoAIngresoV1.Type, "SLI"),
         // US3 (fase 6): el recibo de caja, por lotes resumidos (D25).

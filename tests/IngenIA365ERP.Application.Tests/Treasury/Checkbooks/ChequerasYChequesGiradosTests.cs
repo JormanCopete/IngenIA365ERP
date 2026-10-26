@@ -87,7 +87,7 @@ public class ChequerasYChequesGiradosTests
         cheque.Status.Should().Be(IssuedCheckState.Issued);
         (await _t.E.Db.PaymentOrders.SingleAsync(o => o.Id == orden.Id)).Status.Should().Be(PaymentOrderState.Sent);
         (await _t.E.Db.PaymentBatches.SingleAsync(b => b.Id == lote.Id)).Status.Should().Be(PaymentBatchState.Sent);
-        (await _t.E.Db.Checkbooks.SingleAsync()).NextNumber.Should().Be(101);
+        (await _t.E.Db.Checkbooks.SingleAsync()).NextCheckNumber.Should().Be(101);
         (await _t.E.Db.IntegrationMessages.AnyAsync(m => m.Type == ChequeGiradoEmitidoV1.Type)).Should().BeTrue();
         await _t.Cerrojo.Received().BloquearAsync(NivelDeTesoreria.Chequera, Arg.Any<IReadOnlyCollection<long>>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
     }

@@ -75,3 +75,14 @@ public enum ContingencyBookState
     Exhausted = 2,
     Voided = 3,
 }
+
+/// <summary>
+/// El canal de un aviso de Recaudo al pagador (FR-020, FR-045): Recaudo no conoce el <c>MessageChannel</c> de Cartera (FR-008,
+/// <c>LaCarteraSoloSeTocaPorSusInterfaces</c>); los valores coinciden con los suyos. Sólo el correo sale de verdad; SMS y mensajería siguen simulados. (nuevo)
+/// </summary>
+public enum ReceiptNoticeChannel
+{
+    Email = 1,
+    Sms = 2,
+    WhatsApp = 3,
+}

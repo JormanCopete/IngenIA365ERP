@@ -77,7 +77,7 @@ public static class CuentasPorPagarDeTesoreria
         var gmf = EvaluadorDeGmfDeEgresos.Evaluar(new EgresoAEvaluar(orden.Origin, orden.OrderKind, orden.Form, orden.NetAmount, false, false, false),
             await parametros.GmfAsync(orden.PayDate, ct));
         (orden.GmfExempt, orden.GmfExemptionReason, orden.GmfEstimate) = (gmf.Exento, gmf.Evaluado ? gmf.Motivo : null, gmf.Gravado ? gmf.Gmf : 0m);
-        orden.Number = await numerador.AsignarAsync(ConsumePaymentOrderCommandHandler.CodigoDeOrden, ConsumePaymentOrderCommandHandler.CodigoDeOrden, ct);
+        await numerador.NumerarAsync(orden, ConsumePaymentOrderCommandHandler.CodigoDeOrden, ConsumePaymentOrderCommandHandler.CodigoDeOrden, ct);
         await validador.ValidarAsync(orden, ct);
         db.PaymentOrders.Add(orden);
         return orden;

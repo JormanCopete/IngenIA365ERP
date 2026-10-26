@@ -200,7 +200,7 @@ public sealed class RequestTransferCommandHandler(
         if (pedida.IsFailure) return Result.Failure<TransferDto>(pedida.Error);
         traslado.ApprovalRequestPublicId = pedida.Value?.PublicId;
         if (pedida.Value is null) traslado.Status = TransferState.Approved;
-        traslado.Number = await numerador.AsignarAsync(TrasladosDeTesoreria.Codigo, TrasladosDeTesoreria.Codigo, ct);
+        await numerador.NumerarAsync(traslado, TrasladosDeTesoreria.Codigo, TrasladosDeTesoreria.Codigo, ct);
         db.TreasuryTransfers.Add(traslado);
         await auditoria.AgregarAsync("Treasury.Transfer.Requested", "Transfer", traslado.PublicId, null,
             new { number = traslado.Number, from = origen.Code, to = destino.Code, amount = traslado.Amount, reason = traslado.Reason, by = actor.Name }, ct);

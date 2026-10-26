@@ -30,6 +30,16 @@ public sealed class NumeradorDeRecaudo(IApplicationDbContext db, ICerrojoDeRecau
     /// <summary>La clave de la fila de numeración de un tipo de documento y prefijo.</summary>
     public static string Clave(string codigoDelTipo, string prefijo) => $"{CatalogoDeRecaudo.Modulo}:{codigoDelTipo}:{prefijo}";
 
+    /// <summary>
+    /// Numera un documento ya armado, al final de la operación (R-13; corrida del 2026-10-26): el número lo escribe el numerador, no quien llama
+    /// (<c>SoloElNumeradorNumera</c>).
+    /// </summary>
+    public async Task NumerarAsync(IngenIA365ERP.Domain.Common.IDocumentoNumerado documento, string codigoDelTipo, string prefijo, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(documento);
+        documento.Number = await AsignarAsync(codigoDelTipo, prefijo, ct);
+    }
+
     /// <summary>Asigna el siguiente número del tipo <paramref name="codigoDelTipo"/> con su <paramref name="prefijo"/>.</summary>
     public async Task<string> AsignarAsync(string codigoDelTipo, string prefijo, CancellationToken ct = default)
     {

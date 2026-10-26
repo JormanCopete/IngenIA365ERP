@@ -250,7 +250,7 @@ public sealed class LoadBankStatementCommandHandler(
             if (subida.IsFailure) return Result.Failure<BankStatementLoadDto>(subida.Error);
             extracto.FileAttachmentPublicId = subida.Value;
         }
-        extracto.Number = await numerador.AsignarAsync(ClaseDeExtracto, ClaseDeExtracto, ct);
+        await numerador.NumerarAsync(extracto, ClaseDeExtracto, ClaseDeExtracto, ct);
         db.TreasuryBankStatements.Add(extracto);
         await db.SaveChangesAsync(ct);
 

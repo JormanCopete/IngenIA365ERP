@@ -57,7 +57,7 @@ public class PosicionYFlujoTests
         {
             MessagePublicId = Guid.NewGuid(), FilePublicId = Guid.NewGuid(), Total = 700_000m, LineCount = 3, PayDate = Hoy, ReceivedAt = DateTime.UtcNow,
         });
-        var chequera = new Checkbook { BankAccountId = _t.Pagos.Id, FromNumber = 1, ToNumber = 50, NextNumber = 2, CustodianUserId = _t.E.Cajera.Id, RegisteredByUserId = _t.E.Cajera.Id };
+        var chequera = new Checkbook { BankAccountId = _t.Pagos.Id, FromNumber = 1, ToNumber = 50, NextCheckNumber = 2, CustodianUserId = _t.E.Cajera.Id, RegisteredByUserId = _t.E.Cajera.Id };
         _t.E.Db.Checkbooks.Add(chequera);
         _t.E.Db.SaveChanges();
         var orden = _t.Orden(400_000m, PaymentOrderState.Disbursed, PaymentForm.Check);

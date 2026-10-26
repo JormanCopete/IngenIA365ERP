@@ -145,7 +145,7 @@ public sealed class OpenCashSessionCommandHandler(
             MovedAt = reloj.UtcNow,
             RegisteredByUserId = cajero,
         };
-        apertura.Number = await numerador.AsignarAsync(tipo.Code, prefijo, ct);
+        await numerador.NumerarAsync(apertura, tipo.Code, prefijo, ct);
         db.CashMovements.Add(apertura);
         await db.SaveChangesAsync(ct);
         foreach (var (d, cantidad, valor) in denominaciones.Value)
@@ -370,7 +370,7 @@ public sealed class RegisterCashMovementCommandHandler(
         if (boveda is not null)
         {
             var (tipoBoveda, prefijoBoveda) = await SesionesDeCaja.TipoYPrefijoAsync(db, ReceiptDocumentKind.CashMovement, null, ct);
-            movimiento.Number = await numerador.AsignarAsync(tipo.Code, prefijo, ct);
+            await numerador.NumerarAsync(movimiento, tipo.Code, prefijo, ct);
             var deBoveda = new VaultMovement
             {
                 VaultId = boveda.Id,
@@ -390,7 +390,7 @@ public sealed class RegisterCashMovementCommandHandler(
             MovimientosDeBoveda.AgregarDenominaciones(db, deBoveda, denominaciones.Value, request.Kind == CashMovementKindR.SupplyFromVault ? -1 : 1);
         }
         else
-            movimiento.Number = await numerador.AsignarAsync(tipo.Code, prefijo, ct);
+            await numerador.NumerarAsync(movimiento, tipo.Code, prefijo, ct);
         await db.SaveChangesAsync(ct);
         foreach (var (d, cantidad, monto) in denominaciones.Value)
             db.CashMovementDenominations.Add(new CashMovementDenomination { CashMovementId = movimiento.Id, CashDenominationId = d.Id, Quantity = cantidad, Amount = monto });
@@ -499,7 +499,7 @@ public sealed class ReclassifyMeansCommandHandler(
             MovedAt = reloj.UtcNow,
             RegisteredByUserId = usuario,
         };
-        movimiento.Number = await numerador.AsignarAsync(tipo.Code, prefijo, ct);
+        await numerador.NumerarAsync(movimiento, tipo.Code, prefijo, ct);
         db.CashMovements.Add(movimiento);
         await emision.MedioReclasificadoAsync(movimiento, sesion, null, hoy, tipo.Code, ct);
         await db.SaveChangesAsync(ct);

@@ -62,7 +62,7 @@ public class AjustesArqueosSorpresivosYBovedaTests
         var ajuste = await _c.E.Db.CashSessionAdjustments.SingleAsync();
         ajuste.ApprovedByUserId.Should().Be(_c.E.OtroCajero.Id);
         var hecho = await _c.E.Db.IntegrationMessages.SingleAsync(m => m.Type == AjusteDeSesionRegistradoV1.Type);
-        hecho.PayloadJson.Should().Contain(DiferenciaDeArqueoAprobadaV1.Type, "el ajuste se enlaza con el hecho de la diferencia que corrige");
+        hecho.PayloadJson.Should().Contain(DiferenciaDeArqueoDeRecaudoAprobadaV1.Type, "el ajuste se enlaza con el hecho de la diferencia que corrige");
         (await _c.E.Db.ReceiptsCashSessions.SingleAsync(s => s.PublicId == sesion.PublicId)).Status.Should().Be(CashSessionState.Closed, "no se reabre");
     }
 

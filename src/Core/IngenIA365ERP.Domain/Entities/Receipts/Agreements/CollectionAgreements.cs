@@ -103,7 +103,7 @@ public class PaymentReference : AuditableEntity
 }
 
 /// <summary>Lo común de un archivo cargado de un convenio o de una pasarela (sin tabla propia: cada clase tiene la suya). (nuevo)</summary>
-public abstract class CollectionFileBase : AuditableEntity
+public abstract class CollectionFileBase : AuditableEntity, IngenIA365ERP.Domain.Common.IDocumentoNumerado
 {
     public string Number { get; set; } = string.Empty;
 

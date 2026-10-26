@@ -9,7 +9,7 @@ namespace IngenIA365ERP.Domain.Entities.Treasury.Statements;
 /// por el puerto. El archivo se guarda como adjunto no borrable (<c>TreasuryStatement</c>) y se reconoce por su huella (<see cref="FileSha256"/>, UK filtrado). No
 /// cambia después de cargarse. (nuevo)
 /// </summary>
-public class BankStatement : AuditableEntity, IHechoInmutable
+public class BankStatement : AuditableEntity, IHechoInmutable, IngenIA365ERP.Domain.Common.IDocumentoNumerado
 {
     public string Number { get; set; } = string.Empty;
 

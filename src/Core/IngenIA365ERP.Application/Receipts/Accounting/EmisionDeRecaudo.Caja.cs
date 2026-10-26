@@ -50,7 +50,7 @@ public sealed partial class EmisionDeRecaudo
             ],
             _ => throw new ArgumentOutOfRangeException(nameof(movimiento), movimiento.Kind, "Ese movimiento no emite MovimientoDeCajaRegistrado."),
         };
-        var contenido = new MovimientoDeCajaRegistradoV1
+        var contenido = new MovimientoDeCajaDeRecaudoRegistradoV1
         {
             MovementPublicId = movimiento.PublicId,
             Number = movimiento.Number,
@@ -79,7 +79,7 @@ public sealed partial class EmisionDeRecaudo
         IReadOnlyList<FactLineV1> lineas = movimiento.Amount >= 0m
             ? [Linea(RolesDeRecaudo.Boveda, RolesDeRecaudo.Debito, valor, oficina), Linea(RolesDeRecaudo.EfectivoEnTransito, RolesDeRecaudo.Credito, valor, oficina)]
             : [Linea(RolesDeRecaudo.EfectivoEnTransito, RolesDeRecaudo.Debito, valor, oficina), Linea(RolesDeRecaudo.Boveda, RolesDeRecaudo.Credito, valor, oficina)];
-        var contenido = new MovimientoDeCajaRegistradoV1
+        var contenido = new MovimientoDeCajaDeRecaudoRegistradoV1
         {
             MovementPublicId = movimiento.PublicId,
             Number = movimiento.Number,
@@ -167,7 +167,7 @@ public sealed partial class EmisionDeRecaudo
                 [Linea(rolDelMedio, RolesDeRecaudo.Debito, valor, medio), Linea(RolesDeRecaudo.SobrantesDeCaja, RolesDeRecaudo.Credito, valor, oficina)],
             _ => throw new ArgumentOutOfRangeException(nameof(linea), linea.Treatment, "Una línea sin diferencia no emite."),
         };
-        var contenido = new DiferenciaDeArqueoAprobadaV1
+        var contenido = new DiferenciaDeArqueoDeRecaudoAprobadaV1
         {
             CountLinePublicId = linea.PublicId,
             SessionPublicId = sesion.PublicId,

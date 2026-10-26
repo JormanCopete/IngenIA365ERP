@@ -39,7 +39,7 @@ public class TreasuryInboundMessage : AuditableEntity
 /// origen. Una orden repetida no se duplica (UK <c>(Origin, OriginOrderPublicId)</c>); el valor girado es exactamente <see cref="NetAmount"/> (FR-116).
 /// Nunca se borra. (nuevo)
 /// </summary>
-public class PaymentOrder : AuditableEntity
+public class PaymentOrder : AuditableEntity, IngenIA365ERP.Domain.Common.IDocumentoNumerado
 {
     /// <summary>El número de Tesorería (clase <c>OP</c>).</summary>
     public string Number { get; set; } = string.Empty;

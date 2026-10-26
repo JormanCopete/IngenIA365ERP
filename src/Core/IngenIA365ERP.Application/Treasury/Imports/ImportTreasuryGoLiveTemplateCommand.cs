@@ -247,7 +247,7 @@ public sealed class ImportTreasuryGoLiveTemplateCommandHandler(
             if (fila.TieneErrores || cuenta is null || desde is null || hasta is null || siguiente is null || actor.UserId is not { } usuario) continue;
             var chequera = new Checkbook
             {
-                BankAccountId = cuenta.Id, FromNumber = desde.Value, ToNumber = hasta.Value, NextNumber = siguiente.Value,
+                BankAccountId = cuenta.Id, FromNumber = desde.Value, ToNumber = hasta.Value, NextCheckNumber = siguiente.Value,
                 Status = siguiente.Value > hasta.Value ? CheckbookState.Exhausted : CheckbookState.Active, CustodianUserId = usuario, RegisteredByUserId = usuario,
                 RegisteredAt = reloj.UtcNow,
             };

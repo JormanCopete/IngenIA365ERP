@@ -10,7 +10,7 @@ using IngenIA365ERP.Application.Receipts.CashDesk;
 using IngenIA365ERP.Application.Receipts.Common;
 using IngenIA365ERP.Application.Receipts.Sessions;
 using IngenIA365ERP.Domain.Enums.Compliance;
-using IngenIA365ERP.Domain.Enums.Lending;
+using IngenIA365ERP.Domain.Enums.Receipts;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -37,7 +37,7 @@ public static class ResultadosDeAviso
 /// recibo en carta (código de verificación) al correo del pagador o al indicado, sólo si el pagador autorizó el canal; sin autorización o sin correo no sale nada y
 /// se responde por qué. SMS y WhatsApp: simulados. Deja el evento <c>Receipts.Receipt.Notified</c> con el resultado (sin el contenido). (nuevo)
 /// </summary>
-public sealed record SendReceiptNoticeCommand(Guid ReceiptPublicId, MessageChannel Channel = MessageChannel.Email, string? Email = null)
+public sealed record SendReceiptNoticeCommand(Guid ReceiptPublicId, ReceiptNoticeChannel Channel = ReceiptNoticeChannel.Email, string? Email = null)
     : IRequest<Result<AvisoDeRecaudoDto>>, IOperacionIdempotente
 {
     public Guid OperationKey { get; init; }
@@ -72,12 +72,12 @@ public sealed class SendReceiptNoticeCommandHandler(
 /// <summary>El envío común de los avisos de Recaudo (recibo y egreso). (nuevo)</summary>
 public static class AvisosDeRecaudo
 {
-    public const string CanalDeCorreo = nameof(MessageChannel.Email);
+    public const string CanalDeCorreo = nameof(ReceiptNoticeChannel.Email);
 
     public static async Task<AvisoDeRecaudoDto> EnviarAsync(IAutorizacionDeDatos autorizaciones, IEmailSender correo, Guid persona, string? correoDelMaestro,
-        MessageChannel canal, string? correoIndicado, string asunto, string cuerpoHtml, Func<EmailAttachment> adjunto, CancellationToken ct)
+        ReceiptNoticeChannel canal, string? correoIndicado, string asunto, string cuerpoHtml, Func<EmailAttachment> adjunto, CancellationToken ct)
     {
-        if (canal is not MessageChannel.Email)
+        if (canal is not ReceiptNoticeChannel.Email)
             return new AvisoDeRecaudoDto(ResultadosDeAviso.Simulado, canal.ToString(), null,
                 "SMS y mensajería siguen simulados hasta que haya proveedor: el aviso no salió (FR-020).");
         var autorizada = await autorizaciones.VigenteAsync(persona, DataAuthorizationPurpose.ContactChannel, CanalDeCorreo, ct);

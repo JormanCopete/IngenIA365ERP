@@ -22,11 +22,12 @@ public sealed record ArchivoDeDesembolsosAdjuntoV1
 }
 
 /// <summary>La cuenta de origen elegida al generar: Tesorería la casa con su cuenta propia por banco y número. (nuevo)</summary>
-public sealed record CuentaDeOrigenDelArchivoV1
+public sealed record BancoDeOrigenDelArchivoV1
 {
     public string? BankCode { get; init; }
 
-    public string AccountNumber { get; init; } = string.Empty;
+    /// <summary>El número de la cuenta bancaria (no es una cuenta contable: FR-126; el nombre lo exige LosHechosDeCarteraNoLlevanCuentas).</summary>
+    public string BankAccountNumber { get; init; } = string.Empty;
 }
 
 /// <summary>Una orden del archivo. (nuevo)</summary>
@@ -54,7 +55,7 @@ public sealed record ArchivoDeDesembolsosGeneradoV1
 
     public ArchivoDeDesembolsosAdjuntoV1 File { get; init; } = new();
 
-    public CuentaDeOrigenDelArchivoV1? SourceBankAccount { get; init; }
+    public BancoDeOrigenDelArchivoV1? SourceBankAccount { get; init; }
 
     public IReadOnlyList<OrdenDelArchivoV1> Orders { get; init; } = [];
 
@@ -78,7 +79,7 @@ public sealed record ArchivoDeDesembolsosAnuladoV1
 
     public ArchivoDeDesembolsosAdjuntoV1 File { get; init; } = new();
 
-    public CuentaDeOrigenDelArchivoV1? SourceBankAccount { get; init; }
+    public BancoDeOrigenDelArchivoV1? SourceBankAccount { get; init; }
 
     public IReadOnlyList<OrdenDelArchivoV1> Orders { get; init; } = [];
 

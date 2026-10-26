@@ -364,7 +364,7 @@ public sealed class RegisterSessionAdjustmentCommandHandler(
             AdjustedAt = reloj.UtcNow,
             RegisteredByUserId = usuario,
         };
-        ajuste.Number = await numerador.AsignarAsync(tipo.Code, prefijo, ct);
+        await numerador.NumerarAsync(ajuste, tipo.Code, prefijo, ct);
         db.CashSessionAdjustments.Add(ajuste);
         await emision.AjusteDeSesionAsync(ajuste, sesion, original, hoy, tipo.Code, ct);
         await db.SaveChangesAsync(ct);

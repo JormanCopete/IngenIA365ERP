@@ -267,7 +267,7 @@ public sealed class LoadCollectionFileCommandHandler(
             formato.ContentType ?? "text/plain", request.Content), ct);
         if (subida.IsFailure) return Result.Failure<CollectionFileLoadDto>(subida.Error);
         archivo.FileAttachmentPublicId = subida.Value;
-        archivo.Number = await numerador.AsignarAsync(clase, clase, ct);
+        await numerador.NumerarAsync(archivo, clase, clase, ct);
         if (archivo is GatewayFile g) db.GatewayFiles.Add(g);
         else db.AgreementFiles.Add((AgreementFile)archivo);
         await db.SaveChangesAsync(ct);

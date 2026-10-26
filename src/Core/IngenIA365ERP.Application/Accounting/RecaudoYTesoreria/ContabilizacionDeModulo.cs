@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using FluentValidation;
 using IngenIA365ERP.Application.Accounting.Integration;
 using IngenIA365ERP.Application.Accounting.Posting;
 using IngenIA365ERP.Application.Accounting.Reports;
@@ -502,6 +503,15 @@ public sealed class ContabilizacionDeModulo(
 /// recibos. <c>DestinoContabilidad.TotalesDelLoteAsync</c> la suma con las de Inventario y Cartera. Sin ruta. (nuevo)
 /// </summary>
 public sealed record GetReceiptsAndTreasuryBatchTotalsQuery(Guid BatchPublicId) : MediatR.IRequest<Result<TotalesDeLoteEnDestino>>;
+
+/// <summary>Principio VIII (corrida del 2026-10-26): el lote se nombra por su PublicId, como en <c>GetLendingBatchTotalsQueryValidator</c>.</summary>
+public sealed class GetReceiptsAndTreasuryBatchTotalsQueryValidator : AbstractValidator<GetReceiptsAndTreasuryBatchTotalsQuery>
+{
+    public GetReceiptsAndTreasuryBatchTotalsQueryValidator()
+    {
+        RuleFor(x => x.BatchPublicId).NotEqual(Guid.Empty);
+    }
+}
 
 public sealed class GetReceiptsAndTreasuryBatchTotalsQueryHandler(IApplicationDbContext db)
     : MediatR.IRequestHandler<GetReceiptsAndTreasuryBatchTotalsQuery, Result<TotalesDeLoteEnDestino>>

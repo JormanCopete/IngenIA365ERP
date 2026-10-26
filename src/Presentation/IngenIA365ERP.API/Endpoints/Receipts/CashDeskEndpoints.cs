@@ -79,7 +79,7 @@ public class CashDeskEndpoints : ICarterModule
             .WithName("Receipts_Receipts_Document").RequirePermission(Imprimir);
         // Feature 015, R1 (T0365; FR-020, FR-045): el recibo por correo, con la autorización del canal; SMS y mensajería simulados.
         recibos.MapPost("/{id:guid}/notify", async (Guid id, AvisoRequest? body, HttpContext http, ISender s, CancellationToken ct) =>
-                await s.Send(new Application.Receipts.Notifications.SendReceiptNoticeCommand(id, body?.Channel ?? Domain.Enums.Lending.MessageChannel.Email, body?.Email)
+                await s.Send(new Application.Receipts.Notifications.SendReceiptNoticeCommand(id, body?.Channel ?? Domain.Enums.Receipts.ReceiptNoticeChannel.Email, body?.Email)
                 {
                     OperationKey = http.ClaveDeOperacion(),
                 }, ct))
@@ -109,7 +109,7 @@ public class CashDeskEndpoints : ICarterModule
     public const string VerPendientes = "Receipts.PendingApplications.View";
     public const string AplicarPendientes = "Receipts.PendingApplications.Apply";
 
-    public sealed record AvisoRequest(Domain.Enums.Lending.MessageChannel? Channel, string? Email);
+    public sealed record AvisoRequest(Domain.Enums.Receipts.ReceiptNoticeChannel? Channel, string? Email);
 
     public sealed record AplicarPendienteRequest(Guid ProductPublicId, Application.Common.Integration.Lending.ModalidadDePago? LoanModality,
         Application.Common.Integration.Lending.ModalidadDeConsignacion? AccountModality, Application.Common.Integration.Lending.EleccionDeAbono? Choice);

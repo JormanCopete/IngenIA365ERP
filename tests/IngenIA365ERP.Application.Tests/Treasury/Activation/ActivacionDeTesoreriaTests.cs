@@ -107,7 +107,7 @@ public class ActivacionDeTesoreriaTests
 
         _t.E.Db.Checkbooks.Add(new Checkbook
         {
-            BankAccountId = _t.Pagos.Id, FromNumber = 1001, ToNumber = 1100, NextNumber = 1001, CustodianUserId = _t.E.Supervisor.Id,
+            BankAccountId = _t.Pagos.Id, FromNumber = 1001, ToNumber = 1100, NextCheckNumber = 1001, CustodianUserId = _t.E.Supervisor.Id,
             RegisteredByUserId = _t.E.Supervisor.Id, RegisteredAt = DateTime.UtcNow,
         });
         _t.E.Db.SaveChanges();
