@@ -657,6 +657,10 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Remittances.CashRemittance> CashRemittances => Set<IngenIA365ERP.Domain.Entities.Treasury.Remittances.CashRemittance>();
     // Feature 015, R2 (fase 37): el lote de canje de los cheques recibidos.
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.ClearingBatch> ClearingBatches => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.ClearingBatch>();
+    // Feature 015, T2 (fase 43): flujo de caja y liquidez.
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Liquidity.CashFlowCategory> TreasuryCashFlowCategories => Set<IngenIA365ERP.Domain.Entities.Treasury.Liquidity.CashFlowCategory>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Liquidity.CashFlowProjection> TreasuryCashFlowProjections => Set<IngenIA365ERP.Domain.Entities.Treasury.Liquidity.CashFlowProjection>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Liquidity.LiquiditySnapshot> TreasuryLiquiditySnapshots => Set<IngenIA365ERP.Domain.Entities.Treasury.Liquidity.LiquiditySnapshot>();
     // Feature 015, T2 (fase 42): los pagos de facturas informados a Comercial.
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Purchasing.SupplierInvoicePayment> SupplierInvoicePayments => Set<IngenIA365ERP.Domain.Entities.Inventory.Purchasing.SupplierInvoicePayment>();
     // Feature 015, T2 (fase 41): conciliación completa.
@@ -789,6 +793,9 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Operations.ClearingBatch>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Treasury.Activation.LegacyPendingLoad>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Purchasing.SupplierInvoicePayment>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Treasury.Liquidity.CashFlowCategory>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Treasury.Liquidity.CashFlowProjection>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Treasury.Liquidity.LiquiditySnapshot>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.ReconciliationRule>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.BankNote>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.PayrollDispersion>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
