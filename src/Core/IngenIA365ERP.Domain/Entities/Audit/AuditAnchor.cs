@@ -25,6 +25,14 @@ public class AuditAnchor : AuditableEntity, IHechoInmutable
     /// <summary>HMAC-SHA256 en Base64 de <c>stream|seq|hash|anchoredAt</c>.</summary>
     public string Hmac { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Largo máximo de <see cref="KeyVersion"/> y, por eso, de toda versión de clave de <c>AuditSignature</c>
+    /// (<c>CurrentKeyVersion</c>, <c>AnchorKeyVersion</c>, <c>Keys[i].Version</c>): la configuración de EF y la validación al
+    /// arrancar leen esta misma constante. Hasta el 2026-10-26 la columna era de 20 y la versión del secreto de producción tenía
+    /// 21: ninguna ancla se insertaba (22001) y la cadena no se selló desde el 2026-10-01.
+    /// </summary>
+    public const int LongitudMaximaDeVersionDeClave = 64;
+
     /// <summary>Versión de la clave de anclaje (<c>AuditSignature:AnchorKeyVersion</c>; nunca <c>dev-v1</c>).</summary>
     public string KeyVersion { get; set; } = string.Empty;
 

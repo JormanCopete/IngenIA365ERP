@@ -31,6 +31,10 @@ namespace IngenIA365ERP.Application.Common.Behaviors;
 /// login, que corre sin cooperativa. Los comandos de <c>Navigation</c> no se auditan aquí: su handler
 /// escribe su propia fila (<see cref="AuditoriaEncadenada.RegistrarAsync"/>).
 /// </para>
+/// <para>
+/// Un éxito cuyo valor es un <see cref="IResultadoConEfecto"/> sin efecto (la vuelta de un proceso que no tenía nada que hacer)
+/// no se registra; con efecto, el evento lleva también el resultado. Incidente del 2026-10-26.
+/// </para>
 /// </summary>
 public class AuditBehavior<TRequest, TResponse>(
     IAuditService auditService,
@@ -47,6 +51,25 @@ public class AuditBehavior<TRequest, TResponse>(
 
     /// <summary>Ingresar a una opción registra su propia fila en el handler.</summary>
     private static readonly bool SeRegistraSolo = Modulo == ModuloDeAuditoria.Navigation;
+
+    /// <summary>
+    /// El <c>Value</c> de <c>Result&lt;T&gt;</c> cuando <c>T</c> es un <see cref="IResultadoConEfecto"/>; nulo en todo otro comando.
+    /// </summary>
+    private static readonly System.Reflection.PropertyInfo? ValorConEfecto =
+        typeof(TResponse).IsGenericType
+        && typeof(TResponse).GetGenericTypeDefinition() == typeof(Result<>)
+        && typeof(IResultadoConEfecto).IsAssignableFrom(typeof(TResponse).GetGenericArguments()[0])
+            ? typeof(TResponse).GetProperty(nameof(Result<object>.Value))
+            : null;
+
+    /// <summary>El resultado con efecto de un éxito; nulo si falló o si el comando no lo declara.</summary>
+    private static IResultadoConEfecto? Efecto(TResponse response) =>
+        ValorConEfecto is not null && response is Result { IsSuccess: true }
+            ? ValorConEfecto.GetValue(response) as IResultadoConEfecto
+            : null;
+
+    /// <summary>Un éxito sin efecto: la vuelta vacía de un proceso, que no se audita.</summary>
+    private static bool VueltaSinEfecto(TResponse response) => Efecto(response) is { HuboEfecto: false };
 
     public async Task<TResponse> Handle(
         TRequest request,
@@ -81,6 +104,7 @@ public class AuditBehavior<TRequest, TResponse>(
         {
             var response = await next(ct);
             sw.Stop();
+            if (VueltaSinEfecto(response)) return response;
 
             await auditService.LogAsync(AuditoriaEncadenada.ParaMongo(contexto,
                 Resultado(request, response, action, entityType, sw.ElapsedMilliseconds)), ct);
@@ -111,7 +135,7 @@ public class AuditBehavior<TRequest, TResponse>(
             response = await TransaccionExplicita.EjecutarAsync(db, async () =>
             {
                 var r = await next(ct);
-                if (r is Result { IsFailure: true }) return r;
+                if (r is Result { IsFailure: true } || VueltaSinEfecto(r)) return r;
 
                 var evento = Resultado(request, r, action, entityType, sw.ElapsedMilliseconds);
                 db.AuditOutbox.Add(AuditoriaEncadenada.Entrada(flujo, AuditoriaEncadenada.Evento(contexto, evento)));
@@ -186,7 +210,7 @@ public class AuditBehavior<TRequest, TResponse>(
             Action = action,
             EntityType = entityType,
             Module = Modulo,
-            NewValues = request,
+            NewValues = Efecto(response) is { } efecto ? new { Solicitud = request, Resultado = (object)efecto } : request,
             DurationMs = duracion,
             HttpStatusCode = 200,
         };
