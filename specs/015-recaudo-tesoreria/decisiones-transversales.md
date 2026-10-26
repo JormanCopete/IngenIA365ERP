@@ -727,6 +727,12 @@ Lo que tasks.md marcaba **(nuevo)** y lo que trajeron el `/speckit-analyze` y la
 | `LoadAcquirerSettlementCommand` · `DecideAcquirerSettlementCommand` · `ListAcquirerSettlementsQuery` · `ErroresDeAdquirentes` (`Treasury.AcquirerSettlement.{InvalidFormat, AlreadyLoaded, Illegible, Empty, StatementLineMismatch, NotPendingApproval, SelfApproval}`) · eventos `Treasury.AcquirerSettlement.{Loaded, Approved, Rejected}` | carga, decisión y lista | `Treasury/Reconciliation/Acquirers/ConciliacionDeAdquirentes.cs` |
 | permisos `Treasury.AcquirerSettlements.Load`, `.Approve` · ruta `/api/treasury/acquirer-settlements` (`/{id}/approve`, `/{id}/reject`) · pantalla `/tesoreria/adquirentes` · `AdquirentesClient` | permisos, rutas y pantalla | `ReceiptsAndTreasuryPermissionCatalogSeeder`, `API/Endpoints/Treasury/AcquirerSettlementsEndpoints.cs`, `Shared/Pages/Tesoreria/Adquirentes.razor` |
 
+**Fijados en la construcción de la fase 45 (2026-10-26)**:
+
+| Nombre | Qué | Dónde |
+|---|---|---|
+| vistas `reconciliations`, `liquidity`, `cash-flow` (`VistasDeTesoreria.Conciliaciones`, `.Liquidez`, `.FlujoDeCaja`) | los informes de T2 | `Treasury/Reports/VistasDeTesoreria.cs`, `Treasury/Reports/InformesDeTesoreriaT2.cs` |
+
 ## 3. Decisiones transversales
 
 ### Módulos y frontera

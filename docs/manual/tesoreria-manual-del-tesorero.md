@@ -1,4 +1,4 @@
-# Tesorería: manual del tesorero (T0)
+# Tesorería: manual del tesorero (T0 a T2)
 
 > Feature 015, entrega T0. Receta para **el tesorero** (plantilla `tesoreria.tesorero`), con lo que hacen **el aprobador**
 > (`tesoreria.aprobador`) y **el conciliador** (`tesoreria.conciliador`). Historias US10, US11, US19 parte T0, US25 y US26 parte T0 de la
@@ -82,3 +82,43 @@ las conciliaciones cerradas del mes quedan desactualizadas y se vuelven a concil
 - **Cierre contable**: si Contabilidad cierra un mes con conciliaciones de ese mes abiertas o sesiones de caja sin cerrar, avisa y lo deja
   reconocer; si la cooperativa pone `Contabilidad.CierreExigeConciliaciones`, no cierra hasta cerrarlas.
 - **Informes de T1**: `payment-vouchers`, `transfers` y `month-end-checks` en `/tesoreria/informes`.
+
+## 7. Lo que trae T2
+
+| Qué | Dónde | Permiso |
+|---|---|---|
+| Notas bancarias (GMF, comisiones, intereses, impuestos) | `/tesoreria/notas-bancarias` | `Treasury.BankNotes.Register` · `.Approve` |
+| Reglas de emparejamiento de la conciliación | `/tesoreria/reglas-de-conciliacion` | `Treasury.Reconciliation.View` · `.Work` |
+| Cuentas por pagar y calendario de pagos | `/tesoreria/cuentas-por-pagar` | `Treasury.Payables.View` · `.Manage` · `.Pay` |
+| Posición de liquidez y sus fotos | `/tesoreria/liquidez` | `Treasury.Liquidity.View` · `.Manage` |
+| Flujo de caja proyectado | `/tesoreria/flujo-de-caja` | `Treasury.Liquidity.View` · `.Manage` |
+| Tablero de Tesorería | `/tesoreria/tablero` | `Treasury.Liquidity.View` |
+| Conciliación de adquirentes (redes de tarjetas) | `/tesoreria/adquirentes` | `Treasury.AcquirerSettlements.Load` · `.Approve` |
+
+- **Conciliación completa** (desde T2 toda conciliación nueva lo es): el cruce automático usa primero el vínculo con la línea del extracto y
+  después las **reglas** de la cuenta (y las de todas), por prioridad y con sus días de holgura; un empate no se cruza. Las **notas
+  bancarias** se registran casi siempre desde su línea del extracto (la pantalla las sugiere por la descripción) y, si
+  `NotasBancarias.ExigenAprobacion`, las aprueba otra persona; al aprobarse quedan contabilizadas y se cruzan con su línea. Las
+  **dispersiones de Nómina** llegan solas y también se cruzan.
+- **Pagos a proveedores y cuentas por pagar**: desde T2 se pagan por Tesorería. Las facturas de proveedor **a crédito** que Comercial
+  confirma llegan a la bandeja con su vencimiento como fecha de pago y su neto; si Comercial la anula antes de enviarla al banco, sale del
+  lote. Las **cuentas por pagar contables** (las cuentas que la matriz de Tesorería asigna al rol de cuenta por pagar) se ven por tercero y
+  documento cruce y se convierten en orden por todo o por una parte. Tesorería no registra facturas ni causa gastos: paga lo causado. El
+  **calendario** agrupa lo abierto por fecha de pago.
+- **Firmas del lote**: al aprobar un lote, las aprobaciones tienen que venir de los firmantes vigentes de la cuenta en una combinación
+  válida para el monto —uno que firme solo por ese valor o dos que firmen en conjunto—. Una cuenta sin firmantes registrados no exige nada.
+- **Cheque cobrado tarde**: si un cheque que ya había pasado a cuenta por pagar se cobra después, al marcarlo cobrado se contabiliza contra
+  esa cuenta por pagar (pendiente de confirmar por el dueño).
+- **Posición de liquidez**: bancos por su saldo en libros, bóvedas y cajas (lo que informa Recaudo), menos los compromisos (órdenes en lotes
+  aprobados o enviados, órdenes en la bandeja, dispersiones de Nómina por pagar); los cheques en tránsito se muestran pero no restan (el
+  saldo en libros ya los descontó). Lo esperado de Cartera y Captaciones (sus cuotas por vencer) suma sólo a lo **proyectado**. Si una
+  consulta no responde, la posición sale sin ese componente y con el aviso. **Tomar foto** guarda la posición del día y le informa a
+  Captaciones el saldo de las cuentas del fondo de liquidez.
+- **Flujo de caja**: por semanas o meses, con las categorías de la cooperativa (vienen seis sugeridas). Una categoría automática toma lo
+  programado de su fuente; lo que se digite para un período manda sobre lo calculado. Lo real de cada período que ya empezó son los
+  movimientos contabilizados de las cuentas bancarias propias. Reemplaza al flujo de caja anterior (`/tesoreria/flujo-caja`).
+- **Adquirentes**: se carga el archivo de liquidación de la red (su formato se crea en Maestros → Formatos bancarios con el ámbito
+  «liquidación de una red de tarjetas»). Cada lote se cruza con lo cobrado por datáfono en Recaudo y en el punto de venta; dentro de
+  `Adquirentes.ToleranciaDeConciliacion` queda conciliado y contabilizado (banco, comisión, IVA y retenciones con la red como tercero
+  contra el medio por cobrar); fuera, la diferencia la decide otra persona con motivo.
+- **Informes de T2**: `reconciliations`, `liquidity` y `cash-flow` en `/tesoreria/informes` (los dos últimos, para quien ve todas las cuentas).

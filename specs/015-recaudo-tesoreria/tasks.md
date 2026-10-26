@@ -2802,9 +2802,22 @@ decisiones-transversales §2.7:
 
 **Independent Test**: las vistas cuadran con sus pantallas; la e2e de T2 pasa en los dos motores.
 
-- [ ] T0465 [P] [US21] Implementar las vistas de T2 en src/Core/IngenIA365ERP.Application/Treasury/Reports/ con su prueba en tests/IngenIA365ERP.Application.Tests/Treasury/Reports/InformesDeTesoreriaT2Tests.cs y actualizar docs/manual/tesoreria-manual-del-tesorero.md con lo de T2 (FR-153, FR-225)
+- [X] T0465 [P] [US21] Implementar las vistas de T2 en src/Core/IngenIA365ERP.Application/Treasury/Reports/ con su prueba en tests/IngenIA365ERP.Application.Tests/Treasury/Reports/InformesDeTesoreriaT2Tests.cs y actualizar docs/manual/tesoreria-manual-del-tesorero.md con lo de T2 (FR-153, FR-225)
 - [ ] T0466 Correr en tests/IngenIA365ERP.API.IntegrationTests la e2e de T2 en los dos motores (incluida `ConciliacionCompletaPerformanceTests` con `RUN_PERF_TESTS=1`, SC-016) y congelar el par `TesoreriaAmpliada` (huellas en tests/IngenIA365ERP.Architecture.Tests/Principles/LasMigracionesCongeladasNoSeRegeneran.cs, commit propio)
 - [ ] T0467 Promover T2 a DEV, QA y producción con respaldo por base y autorización expresa del dueño, siguiendo docs/operaciones/recaudo-tesoreria-despliegue.md (producción)
+
+**Notas de la construcción de la fase 45 (2026-10-26)**. Pruebas escritas y compiladas, sin correr:
+
+- **T0465**: `Treasury/Reports/InformesDeTesoreriaT2.cs` con las vistas `reconciliations` (mínimas y completas: saldos, cruces automáticos y manuales, notas
+  bancarias y liquidaciones de redes cruzadas, partidas y diferencia; alcance por cuenta), `liquidity` (las fotos de la posición del rango) y `cash-flow` (por mes,
+  lo proyectado por categoría y el neto proyectado contra lo real; reusa `GetCashFlowQuery`); **desviación**: `liquidity` y `cash-flow` son de toda la cooperativa y
+  salen vacías, con la nota, para quien no tiene `Treasury.Scope.All`. Prueba `Treasury/Reports/InformesDeTesoreriaT2Tests`; de paso `InformesDeTesoreriaT0Tests`
+  dejaba de pasar desde la fase 35 (exigía exactamente las siete vistas de T0) y ahora sólo exige que estén. `docs/manual/tesoreria-manual-del-tesorero.md` §7 «Lo
+  que trae T2».
+- **T0466 sin hacer, a propósito**: correr la e2e de T2 en los dos motores y congelar el par `TesoreriaAmpliada` es de la corrida final (las pruebas se corren una sola
+  vez al terminar el plan) y el congelamiento va en commit propio después de ella. Las e2e de T2 escritas: `Treasury/ConciliacionCompletaTests`,
+  `ConciliacionCompletaPerformanceTests` y `PagosAProveedoresTests`.
+- **T0467 sin hacer, a propósito**: la promoción a DEV, QA y producción necesita respaldo por base y autorización expresa del dueño.
 
 ---
 
