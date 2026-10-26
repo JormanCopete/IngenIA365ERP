@@ -301,7 +301,7 @@ aprobador presente (428) y, aprobada, se repite con la misma clave; la verificac
 - **T0063**: las pantallas de configuración eligen usuarios por una consulta propia, `GET /api/receipts/users` (`ListReceiptsUsersQuery`, sólo id y
   nombre, con `Receipts.Setup.View`), por decisión del dueño del 2026-10-23, en vez de `/api/admin/users`.
 - **Pruebas**: T0052–T0054 corrieron en verde (filtradas) el 2026-10-24, antes del cambio de estrategia del dueño; desde entonces las pruebas se
-  escriben y se compilan sin correr, y se corren una sola vez al terminar el plan. La e2e T0056 está escrita, sin correr (fase 22).
+  escriben y se compilan sin correr, y se corren una sola vez al terminar el plan (las sin contenedores, en verde el 2026-10-26). La e2e T0056 está escrita, sin correr (fase 22).
 
 ---
 
@@ -401,12 +401,12 @@ motivo; el cierre del día sólo procede con todas las sesiones cerradas; el inf
 
 
 **Notas de la construcción de la fase 5 (2026-10-24)**. Estrategia del dueño: las pruebas se escriben y se compilan, y se corren una sola vez al
-terminar el plan («prueba escrita, sin correr»). Desviaciones y decisiones; las que nacen aquí quedan en decisiones-transversales §2.7:
+terminar el plan (las sin contenedores, «corrida en verde (2026-10-26)»; las e2e siguen sin correr, aparte con Docker). Desviaciones y decisiones; las que nacen aquí quedan en decisiones-transversales §2.7:
 
 - **T0079, T0088**: los casos dorados son 13 (`arqueo-*.json`) y el motor `ArqueoDeCaja` es puro (esperado por medio, lo contado según el método de la
-  012, diferencia, tolerancia, tratamiento sellado del faltante, lo que hay que aprobar y los medios sin motivo). Prueba escrita, sin correr.
+  012, diferencia, tolerancia, tratamiento sellado del faltante, lo que hay que aprobar y los medios sin motivo). Prueba corrida en verde (2026-10-26).
 - **T0080–T0086**: escritas sobre `CajaDePrueba` (punto, dos cajas, efectivo y transferencia, billetes, tipos `MC` y `AS`, bóveda con custodios, cerrojo
-  simulado que crea la fila de numeración y Contabilidad sin iniciar), sin correr. El caso de `Receipts.Setup.CutoffAfterLendingCycle` vive en
+  simulado que crea la fila de numeración y Contabilidad sin iniciar), corridas en verde (2026-10-26). El caso de `Receipts.Setup.CutoffAfterLendingCycle` vive en
   `CierreDelDiaYSesionOlvidadaTests` (la regla ya existía desde la fase 2).
 - **T0087**: la e2e está escrita y llama a `RecaudoYTesoreriaE2E.RegistrarYActivarAsync`, que lanza hasta la fase 19 (activación); la aprobación de la
   diferencia por **otra** persona se prueba en Application (la e2e comprueba `SelfApproval` y que el día no cierra con la diferencia pendiente). Los recibos
@@ -494,12 +494,12 @@ rechazo en la tercera aplicación no deja nada ni consume número.
 - [ ] T0124 [US3] P13 · Entregar la lista de servicios a asociados (funerario, odontología y similares), cuáles se venden a plazos con financiación de Cartera y cuáles quedan como cuenta por cobrar de Comercial, y si alguna cuenta por cobrar comercial sin Cartera debe cobrarse en la caja antes de R1; registrarlo en specs/015-recaudo-tesoreria/research.md (dueño, fecha límite 13/11; no bloquea: rige que R0 cobra lo que financia Cartera por el contrato de obligaciones)
 
 
-**Notas de la construcción de la fase 6 (2026-10-24)**. Las pruebas se escriben y se compilan; se corren una sola vez al terminar el plan («prueba escrita,
-sin correr»). Desviaciones y decisiones; las que nacen aquí quedan en decisiones-transversales §2.7:
+**Notas de la construcción de la fase 6 (2026-10-24)**. Las pruebas se escriben y se compilan; se corren una sola vez al terminar el plan (las sin contenedores, «corrida en verde
+(2026-10-26)»; las e2e, sin correr). Desviaciones y decisiones; las que nacen aquí quedan en decisiones-transversales §2.7:
 
-- **T0101, T0109**: 12 casos dorados (`imputacion-*.json`) y el motor puro `ImputacionDeMedios`. Prueba escrita, sin correr.
+- **T0101, T0109**: 12 casos dorados (`imputacion-*.json`) y el motor puro `ImputacionDeMedios`. Prueba corrida en verde (2026-10-26).
 - **T0102–T0106**: escritas sobre `CajaConContratos` (los contratos de obligaciones y de cuentas simulados, una asociada con dos créditos y una cuenta de
-  aportes, un concepto vario), sin correr. La repetición con otra huella (`Operation.KeyReused`) la responde `IdempotencyBehavior` y la cubre la e2e; el
+  aportes, un concepto vario), corridas en verde (2026-10-26). La repetición con otra huella (`Operation.KeyReused`) la responde `IdempotencyBehavior` y la cubre la e2e; el
   rechazo «no deja nada» se comprueba de verdad en la e2e (en InMemory no hay transacción que revertir).
 - **T0107**: `LosComandosDeRecaudoYTesoreriaLlevanClave` ya recorría por reflexión todos los `*Command` de `Receipts` (no hay lista que llenar);
   `LosCerrojosDeRecaudoYTesoreriaVanEnOrden` suma la regla «`AplicarAsync` antes que `ConsignarAsync`» en `Application/Receipts`; `LaCarteraSoloSeTocaPorSusInterfaces`
@@ -526,7 +526,7 @@ sin correr»). Desviaciones y decisiones; las que nacen aquí quedan en decision
   número y deudor; cuentas de captación y aportes por su número y titular) —`LaCarteraSoloSeTocaPorSusInterfaces` exige ese espacio a todo puerto ofrecido y
   ahora cuenta ocho—. `GetPayablesQuery` suma `ObligationNumber` (`GET /api/receipts/payables?number=`): sin coincidencia, `Receipts.Payables.PersonNotFound`;
   con dos personas, `Receipts.Payables.AmbiguousNumber` (nuevo). La caja (`/recaudo/caja`) busca también por número (campo junto al buscador de personas, Enter).
-  Pruebas `BusquedaPorNumeroTests`, escritas sin correr.
+  Pruebas `BusquedaPorNumeroTests`, corridas en verde (2026-10-26).
 - **T0114**: el fondeo exacto del CDAT lo valida el contrato de cuentas al simular y al consignar (la caja no conoce el valor del título).
 - **T0115**: `ConfirmacionDeRecibo` numera después de los cerrojos propios y **antes de los contratos** (decisión del dueño del 2026-10-23). Guarda por pasos
   dentro de la misma transacción (las filas hijas necesitan el `Id` de su padre y las entidades no tienen navegaciones): sigue siendo todo o nada. El gancho
@@ -538,7 +538,7 @@ sin correr»). Desviaciones y decisiones; las que nacen aquí quedan en decision
   cumplimiento», nunca un literal— y cuando el pagador no es el titular de lo que paga; en lo demás es opcional. `ConfirmacionDeRecibo` lo valida antes de las
   listas; el error trae `data.reason` (`CashThreshold` o `PayerIsNotHolder`) y `data.threshold`. Para registrarlo en una operación ya creada nace
   `SetCashOperationDeliveredByCommand` (`PUT /api/receipts/cash-operations/{id}/delivered-by`, `Receipts.Receipt.Register`, nuevo), y la caja lo pide al recibir el
-  error («Registrar y confirmar»). Pruebas `QuienEfectuaElPagoTests`, escritas sin correr.
+  error («Registrar y confirmar»). Pruebas `QuienEfectuaElPagoTests`, corridas en verde (2026-10-26).
 - **T0116**: `ReciboEmitido` (`RCE`) con una línea por porción; el modo por defecto es `PorLotes` (`REC.RCE|CierreDeTurno||PorDia`, alcance la sesión),
   `EnLinea` y `NoPasa` según `Contabilidad.ModoDePaso`, y sin contabilidad iniciada `NotPosted`. `ElCatalogoDeMensajesEsUnico` cuenta 9 tipos `REC`.
 - **T0117**: el pagador tercero viaja como `PayerPublicId` en cada porción y el recibo sale enmascarado (`RecibosDeCaja.Enmascarar`, sin saldos); el pagador
@@ -601,7 +601,7 @@ rechaza y un lote desde la cuenta del fondo de liquidez se niega sin uso aprobad
 
 
 **Notas de la construcción de la fase 7 (2026-10-24)**. Estrategia del dueño: las pruebas se escriben y se compilan, y se corren una sola vez al terminar el plan
-(«prueba escrita, sin correr»). Desviaciones y decisiones; las que nacen aquí quedan en decisiones-transversales §2.7:
+(las sin contenedores, «corrida en verde (2026-10-26)»; las e2e siguen sin correr, aparte con Docker). Desviaciones y decisiones; las que nacen aquí quedan en decisiones-transversales §2.7:
 
 - **T0059 (mitad de Tesorería)**: `GetTreasuryUserScopeQuery`/`SetTreasuryUserScopeCommand` en `Application/Treasury/Security/TreasuryUserScopeCommands.cs` y
   las rutas `GET/PUT /api/treasury/users/{userId}/scope` (`Treasury.Scope.Manage`) en `BankAccountsEndpoints.cs`. `TES_UserBankAccountScopes` ganó su FK a
@@ -610,9 +610,9 @@ rechaza y un lote desde la cuenta del fondo de liquidez se niega sin uso aprobad
   `EvaluadorDeGmfDeEgresos` (Domain/Treasury/Gmf) reciben tarifa, hechos generadores, exención de desembolsos y redondeo como `ParametrosDeGmf`; el desembolso a un
   tercero se **estima** gravado sin hecho propio (lo cobra el banco en el débito, FR-100); sólo las devoluciones de Recaudo emiten `GmfDePagoCausado`.
   «Beneficiario es el deudor» se sella en la orden (`PaymentOrder.BeneficiaryIsDebtor`, nuevo) comparando el tercero del sobre con el beneficiario. Pruebas
-  escritas, sin correr.
+  corridas en verde (2026-10-26).
 - **T0127–T0131**: escritas sobre `EscenarioDeTesoreria` (banco con y sin código, cuentas `PAGOS` y `FONDO`, beneficiaria con su cuenta registrada, cerrojo y
-  Contabilidad simulados, listas limpias), sin correr.
+  Contabilidad simulados, listas limpias), corridas en verde (2026-10-26).
 - **T0132**: `NoHayDoblesDePrueba` admite `DestinoTesoreria`; `UnSoloConsumidorPorDestino` no cuenta la fuente de los dobles pendientes de retiro (el arranque
   sigue validando que sólo uno se registre); `LosComandosDeConsumoNoTienenRuta` suma los dos `Consume…Command`.
 - **T0133**: las dos e2e están escritas sobre `TesoreriaE2E` (escenario del desembolso de Cartera, cuenta de pagos vinculada, cuenta destino aprobada por otra
@@ -698,14 +698,14 @@ informa hasta revisarla.
 - [X] T0163 [US11] Regenerar en src/Infrastructure/IngenIA365ERP.Persistence.Migrations.{PostgreSql,SqlServer}/Application/ el par `TesoreriaNucleo` con `TES_PaymentResponses`, `TES_PaymentResponseLines` y `TES_DisbursementResults`
 
 
-**Notas de la construcción de la fase 8 (2026-10-24)**. Pruebas escritas y compiladas, sin correr («prueba escrita, sin correr»). Desviaciones y decisiones;
+**Notas de la construcción de la fase 8 (2026-10-24)**. Pruebas escritas y compiladas; las sin contenedores, corridas en verde (2026-10-26); las e2e, sin correr (aparte, con Docker). Desviaciones y decisiones;
 las que nacen aquí quedan en decisiones-transversales §2.7:
 
 - **T0151, T0156**: 10 casos dorados (`resultado-01..10.json`) sobre `TransicionesDelResultado.Evaluar(estado, forma, pagadaPorArchivo, anulacionDelOrigen,
   resultado)`, que devuelve `TransicionDelResultado(Admite, Hacia, Codigo)`. Además de la tabla de FR-215: la orden que paga un archivo de Cartera (`PaidByFile`)
   admite girada o rechazada estando lista (FR-108), y el pago a tercero sigue las reglas de la transferencia.
 - **T0152, T0153**: escritas sobre `EscenarioDeResultados` (lote enviado con su archivo y su huella por línea, formato `RESP-PAGOS-GENERICO`, soporte del registro
-  manual, calendario sin festivos), sin correr. El cotejo usa la **huella de la línea** (`LineasDelArchivo.HuellaDeLinea`); el detalle dice qué discrepó
+  manual, calendario sin festivos), corridas en verde (2026-10-26). El cotejo usa la **huella de la línea** (`LineasDelArchivo.HuellaDeLinea`); el detalle dice qué discrepó
   (documento, cuenta, valor, o «sin línea en el archivo generado»). El resultado informado lleva siempre el **neto de la orden**, nunca el valor de la línea.
 - **T0154**: `NingunProcesoAplicaPagosNiInformaResultados` lista las tres tareas de los módulos (`TareaDeSesionesOlvidadas` y `TareaDeCuadreDiario` de la fase 5,
   que faltaban, y `TareaDeVigilanciaDeTesoreria`); `EmisionesDeProcesoPermitidas` ya cubría que ningún tipo `TES` admite proceso y suma
@@ -766,7 +766,7 @@ entra a un lote aprobado.
 - [X] T0169 [US26] Agregar la vista `recent-account-changes` (órdenes marcadas por cambio de cuenta) al registro de vistas de Tesorería (src/Core/IngenIA365ERP.Application/Treasury/Reports/) que crea la fase 20 (FR-153)
 
 
-**Notas de la construcción de la fase 9 (2026-10-24)**. Pruebas escritas y compiladas, sin correr. Desviaciones y decisiones (las nuevas, en
+**Notas de la construcción de la fase 9 (2026-10-24)**. Pruebas escritas y compiladas; las sin contenedores, corridas en verde (2026-10-26); las e2e, sin correr (aparte, con Docker). Desviaciones y decisiones (las nuevas, en
 decisiones-transversales §2.7):
 
 - **T0164**: escritas sobre `EscenarioDeTesoreria` con `CuentasDestino.DiasDeMarca = 10`: cuenta cambiada hace 3 días (marca, revisión exigida, quien preparó no
@@ -827,10 +827,10 @@ orden de pago.
 - [ ] T0184 Hito del bloque 2 (04/11, ambiente): en DEV, con `Lending:TestDoubles:Enabled = false` en el manifiesto de GitOps de DEV (la bandera transitoria de T0141) y Recaudo y Tesorería activados con la activación mínima de T0183b, que registra `REC` (recaudador y destino) y `TES` (destino) sin nada a mano en `/admin/participantes-de-integracion` (la activación completa llega en la fase 19), y con la e2e de humo de T0183c en verde, un recibo de caja multiproducto y un giro por transferencia de punta a punta (recorridos A y G de quickstart.md sin contabilidad); anotar el resultado en specs/015-recaudo-tesoreria/quickstart.md
 
 
-**Notas de la construcción de la fase 10 (2026-10-24)**. Pruebas escritas y compiladas, sin correr (también la e2e de humo T0183c: el dueño pidió no ejecutar
+**Notas de la construcción de la fase 10 (2026-10-24)**. Pruebas escritas y compiladas; las sin contenedores, corridas en verde (2026-10-26); las e2e, sin correr (aparte, con Docker) (también la e2e de humo T0183c: el dueño pidió no ejecutar
 pruebas). Desviaciones y decisiones; las nuevas quedan en decisiones-transversales §2.7:
 
-- **T0170 a T0172**: escritas sobre `CajaConContratos` (recibo confirmado con contratos simulados) y el motor de aprobaciones simulado; sin correr.
+- **T0170 a T0172**: escritas sobre `CajaConContratos` (recibo confirmado con contratos simulados) y el motor de aprobaciones simulado; corridas en verde (2026-10-26).
   `TestDbContextFactory` suma la configuración de prueba (sin `RowVersion`, filtro de borrado) de las entidades de Tesorería de las fases 7 y 8, que faltaba,
   y de las nuevas.
 - **T0173**: e2e escrita sobre `CajaE2E` y Cartera real (reverso desde la pantalla del crédito, despacho, confirmación de la causa y devolución por orden); se
@@ -926,7 +926,7 @@ admite el contrato y el recibo lo dice.
 - [X] T0200 [US6] Regenerar en src/Infrastructure/IngenIA365ERP.Persistence.Migrations.{PostgreSql,SqlServer}/Application/ los pares `RecaudoNucleo` (identificaciones, partidas, corridas) y `TesoreriaNucleo` (extractos) (data-model §5, §12.1)
 
 
-**Notas de la construcción de la fase 11 (2026-10-24)**. Pruebas escritas y compiladas, sin correr («prueba escrita, sin correr»; estrategia del dueño). Desviaciones y
+**Notas de la construcción de la fase 11 (2026-10-24)**. Pruebas escritas y compiladas; las sin contenedores, corridas en verde (2026-10-26); las e2e, sin correr (aparte, con Docker) (estrategia del dueño). Desviaciones y
 decisiones; las nuevas quedan en decisiones-transversales §2.7:
 
 - **T0185, T0190**: 6 casos dorados (`huella-01..06.json`; las huellas ya cargadas van como movimientos y la prueba las calcula). `HuellaDeMovimientoBancario` es puro:
@@ -1010,7 +1010,7 @@ saldo de la pagaduría.
 - [ ] T0212 [US7] P6 · Entregar las pagadurías de COOFLOPAL, sus convenios, la prelación y la estructura de su respuesta, y confirmar si la libranza es un canal principal; cargar los formatos de vuelta como datos (ámbito 6) y registrarlo en specs/015-recaudo-tesoreria/research.md (dueño, fecha límite 06/11, porque la quincena del 15/12 exige el archivo hacia el 10/12; **bloquea la salida de la pagaduría**, no la de la caja; rige mientras tanto `RESPUESTA-PAGADURIA-GENERICA`)
 
 
-**Notas de la construcción de la fase 12 (2026-10-24)**. Pruebas escritas y compiladas, sin correr («prueba escrita, sin correr»). Desviaciones y decisiones; las
+**Notas de la construcción de la fase 12 (2026-10-24)**. Pruebas escritas y compiladas; las sin contenedores, corridas en verde (2026-10-26); las e2e, sin correr (aparte, con Docker) («prueba escrita, sin correr»). Desviaciones y decisiones; las
 nuevas quedan en decisiones-transversales §2.7:
 
 - **T0201–T0203**: escritas sobre `PagaduriasDePrueba` (encima de `BancosDePrueba`: la pagaduría, el tipo `RP`, los mensajes entrantes y el registro de participantes
@@ -1079,7 +1079,7 @@ favor, el pagador recibe aviso y la alerta queda; con una devolución ya entrega
 - [ ] T0221 [US15] P2 · Confirmar si COOFLOPAL recibe cheques en ventanilla (para encender `Caja.AdmiteCheque` en R0) y si tiene convenios de recaudo con referencia o corresponsales (R2); registrarlo en specs/015-recaudo-tesoreria/research.md (dueño, fecha límite 06/11; no bloquea: rige la clase cheque apagada, D37, y sin convenios hasta R2)
 
 
-**Notas de la construcción de la fase 13 (2026-10-24)**. Pruebas escritas y compiladas, sin correr. Desviaciones y decisiones; las nuevas quedan en
+**Notas de la construcción de la fase 13 (2026-10-24)**. Pruebas escritas y compiladas; las sin contenedores, corridas en verde (2026-10-26); las e2e, sin correr (aparte, con Docker). Desviaciones y decisiones; las nuevas quedan en
 decisiones-transversales §2.7:
 
 - **T0213, T0214**: escritas sobre `ChequesDePrueba` (encima de `CajaConContratos`: el medio `CH` ofrecido en el punto antes de abrir la sesión, un banco librado, dos
@@ -1141,7 +1141,7 @@ sello: queda en tránsito y, sin confirmar a los días configurados, alerta.
 - [X] T0231 [US19] Regenerar en src/Infrastructure/IngenIA365ERP.Persistence.Migrations.{PostgreSql,SqlServer}/Application/ el par `TesoreriaNucleo` con chequeras, cheques girados y remesas
 
 
-**Notas de la construcción de la fase 14 (2026-10-24)**. Pruebas escritas y compiladas, sin correr. Desviaciones y decisiones; las nuevas quedan en
+**Notas de la construcción de la fase 14 (2026-10-24)**. Pruebas escritas y compiladas; las sin contenedores, corridas en verde (2026-10-26); las e2e, sin correr (aparte, con Docker). Desviaciones y decisiones; las nuevas quedan en
 decisiones-transversales §2.7:
 
 - **T0222, T0223**: escritas sobre `EscenarioDeTesoreria` (las chequeras, los cheques y la remesa del lado de Tesorería) y `CajaDePrueba` (el despacho de la bóveda con el
@@ -1212,7 +1212,7 @@ recibe la alerta inmediata; un recibo de contingencia se digita después con su 
 - [ ] T0247 [US14] P7 · El oficial de cumplimiento valida los umbrales vigentes del sector solidario (5 y 30 millones o los que rijan en 2026), el estado de la suspensión del reporte, el alcance del Anexo 2 (sólo efectivo o todas), el reporte de ausencia, las señales de fraccionamiento y las listas vinculantes que la plataforma consulta; registrarlo como versiones de los parámetros `Sarlaft.*` y en specs/015-recaudo-tesoreria/research.md (dueño, fecha límite 20/11; **bloquea la salida** en umbrales y listas; la estructura del reporte de transacciones, antes del primer vencimiento de enero de 2027; rige mientras tanto 5.000.000 y 30.000.000 «pendiente de validar», reporte `Vigente`, alcance `SoloEfectivo`)
 
 
-**Notas de la construcción de la fase 15 (2026-10-24)**. Pruebas escritas y compiladas, sin correr. Desviaciones y decisiones; las nuevas quedan en
+**Notas de la construcción de la fase 15 (2026-10-24)**. Pruebas escritas y compiladas; las sin contenedores, corridas en verde (2026-10-26); las e2e, sin correr (aparte, con Docker). Desviaciones y decisiones; las nuevas quedan en
 decisiones-transversales §2.7:
 
 - **T0232, T0238**: ocho casos dorados `senales-01..08.json` (generados con una hoja de cálculo propia y revisados a mano) y el motor puro
@@ -1301,7 +1301,7 @@ de Recaudo no se reversa desde Comprobantes.
 - [ ] T0271 Hito del bloque 3 (10/11, ambiente): **antes de desplegar, congelar** los cuatro pares de R0/T0 que existen (`PlataformaParaRecaudoYTesoreria`, `RecaudoNucleo`, `TesoreriaNucleo`, `IntegracionContableDeRecaudoYTesoreria`): última regeneración con `tools/scripts/add-migration.ps1`; revisión a mano del snapshot y del SQL de cada par (sólo las tablas de su lista de DT §2.3, índices con nombre de 63 caracteres o menos, filtros por motor, FK `Restrict`, semillas por `INSERT … WHERE NOT EXISTS`, ninguna operación sobre `TRS_` ni sobre tablas de Cartera o Captaciones); `check-migration-parity.ps1` y `dotnet ef migrations has-pending-model-changes` limpios en los dos motores; las huellas de sus archivos y sus `.Designer` en tests/IngenIA365ERP.Architecture.Tests/Principles/LasMigracionesCongeladasNoSeRegeneran.cs; commit propio. **Desde aquí no se regenera nada de R0/T0**: todo cambio es un par nuevo y aditivo (decisión del dueño del 2026-10-23; TR40, R-34). Después, desplegar en QA por GitOps la versión de R0/T0 disponible (caja, recibo, extracto, pagaduría, giro, contabilidad) con `Lending:TestDoubles:Enabled = false` en QA, sobre una cooperativa de QA con copia de la parametrización de COOFLOPAL, **activada con la activación mínima de T0183b** (no a mano); comprobar el arranque con un solo consumidor por destino y registrar el resultado en specs/015-recaudo-tesoreria/quickstart.md §5; es la versión del paralelo que empieza el 11/11 (FR-226) **ruta crítica**
 
 
-**Notas de la construcción de la fase 16 (2026-10-24)**. Pruebas escritas y compiladas, sin correr. Desviaciones y decisiones; las nuevas quedan en
+**Notas de la construcción de la fase 16 (2026-10-24)**. Pruebas escritas y compiladas; las sin contenedores, corridas en verde (2026-10-26); las e2e, sin correr (aparte, con Docker). Desviaciones y decisiones; las nuevas quedan en
 decisiones-transversales §2.7:
 
 - **T0248–T0252**: escritas como pruebas de Application (`Accounting/Receipts/*`, `Accounting/Treasury/MatrizDeTesoreriaTests`, `Treasury/Orders/ConsumoDelArchivoDeDesembolsosTests`,
@@ -1338,7 +1338,7 @@ decisiones-transversales §2.7:
   `data.errors[] { factType, role, combination, whoFixes }`. La llaman `RegistroDeResultadosDelGiro.RegistrarAsync` (el «girada» de una orden pagada desde cuenta propia:
   `PagoDeOrdenGirado` y `GmfDePagoCausado` si grava; cubre el registro manual, el masivo, la respuesta del banco y su revisión), `IssueChecksForBatchCommand`
   (`ChequeGiradoEmitido`), `VoidIssuedCheckCommand` (`ChequeGiradoAnulado`), `ConfirmRemittanceCommand` y `RegisterBankToVaultRemittanceCommand` (`RemesaConfirmada`).
-  Prueba `Treasury/Accounting/ValidacionPreviaEnPantallasDeTesoreriaTests` escrita, sin correr.
+  Prueba `Treasury/Accounting/ValidacionPreviaEnPantallasDeTesoreriaTests` corrida en verde (2026-10-26).
 - **T0260**: `IDimensionesDeRecaudo` e `IDimensionesDeTesoreria` reemplazan los dos puertos vacíos del Setup (`DimensionesAsync(string)`, sin implementación ni usos) por uno
   que devuelve todos los valores (`DimensionDeMatrizDto`).
 - **T0261**: la guarda de `PrepareReversalAsync` y el mensaje de `ReverseDocumentCommand` (`DocumentReceiptsOrTreasuryOwned`, código `Accounting.Document.ModuleOwned`).
@@ -1370,7 +1370,7 @@ decisiones-transversales §2.7:
   regenerar los otros: sus `.Designer` y el snapshot llevan el mismo bloque, `has-pending-model-changes` «No changes» en los dos motores); y
   `ResultadoDeOrdenesDeRecaudo.InformarCustodiaAsync` con «rechazada», «anulada» o «cheque no cobrado» reabre la custodia (la operación vuelve a `Withheld`, sin
   liberación ni orden, para liberarla o devolverla otra vez) y emite `DevolucionNoGirada` de `PuenteDeDevolucion` a `CustodiaPorLista` (`ReturnsTo = ComplianceCustody`),
-  con la liberación como relacionado; «girada» la deja abandonada; repetir el resultado no hace nada. Pruebas en `ListasEnLaCajaTests`, escritas, sin correr.
+  con la liberación como relacionado; «girada» la deja abandonada; repetir el resultado no hace nada. Pruebas en `ListasEnLaCajaTests`, corridas en verde (2026-10-26).
 - **T0268**: regenerados en orden los pares `RecaudoNucleo`, `TesoreriaNucleo` (con `TES_LendingDisbursementFiles`, `…FileOrders` y la FK de
   `TES_PaymentOrders.LendingDisbursementFileId`) e `IntegracionContableDeRecaudoYTesoreria` (las seis tablas `ACC_` nuevas y `ACC_OwnBankAccountLinks`: siete);
   `check-migration-parity.ps1` en par (Admin 15, Application 66) y `has-pending-model-changes` «No changes» en los dos motores. Los nombres de FK largos los recorta EF
@@ -1418,7 +1418,7 @@ partida en Recaudo; quien aprobó pagos de la cuenta en el período no puede con
 - [X] T0281 [US25] Generar el par **nuevo y aditivo** `TesoreriaConciliacionMinima` **(DT §2.3)** con `tools/scripts/add-migration.ps1 -Name TesoreriaConciliacionMinima` en src/Infrastructure/IngenIA365ERP.Persistence.Migrations.{PostgreSql,SqlServer}/Application/: `TES_Reconciliations` (con `Outdated`), `TES_ReconciliationMatches`, `TES_ReconcilingItems` (data-model §12.2–§12.4, §25 #5a); `TesoreriaNucleo` está congelado desde T0271 y no se toca; revisar el SQL a mano y correr `check-migration-parity.ps1`
 
 
-**Notas de la construcción de la fase 17 (2026-10-24)**. Pruebas escritas y compiladas, sin correr. Desviaciones y decisiones; las nuevas quedan en
+**Notas de la construcción de la fase 17 (2026-10-24)**. Pruebas escritas y compiladas; las sin contenedores, corridas en verde (2026-10-26); las e2e, sin correr (aparte, con Docker). Desviaciones y decisiones; las nuevas quedan en
 decisiones-transversales §2.7:
 
 - **T0272, T0275**: doce casos dorados `cruce-01..12.json` y el motor puro `Domain/Treasury/Conciliacion/CruceDeConciliacion` con tres reglas en orden: el **vínculo**
@@ -1498,7 +1498,7 @@ muestra la diferencia y admite un cuadre provisional con motivo y fecha límite.
 - [ ] T0293 [US13] P18 · Definir quién aprueba el cuadre provisional y la fecha límite del definitivo (del 02/12 al 04/12 según el plan de implantación) y asignar `Receipts.Activation.ProvisionalSquare` y `Treasury.Activation.ProvisionalSquare` a esa persona; registrarlo en specs/015-recaudo-tesoreria/research.md (dueño, fecha límite 28/11; no bloquea: rige que aprueba quien tenga el permiso)
 
 
-**Notas de la construcción de la fase 18 (2026-10-24)**. Pruebas escritas y compiladas, sin correr. Desviaciones y decisiones; las nuevas quedan en
+**Notas de la construcción de la fase 18 (2026-10-24)**. Pruebas escritas y compiladas; las sin contenedores, corridas en verde (2026-10-26); las e2e, sin correr (aparte, con Docker). Desviaciones y decisiones; las nuevas quedan en
 decisiones-transversales §2.7:
 
 - **T0282–T0284**: `Receipts/Imports/PlantillasDePuestaEnMarchaDeRecaudoTests`, `Treasury/Imports/PlantillasDePuestaEnMarchaDeTesoreriaTests` y
@@ -1587,7 +1587,7 @@ de Aportes muestra en verde el recaudador y la tesorería.
 - [ ] T0310 [US9] Verificar con `check-migration-parity.ps1` y `LasMigracionesCongeladasNoSeRegeneran` que `RetiroDeLosDoblesDePrueba` es sólo datos y que ningún par congelado en T0271 cambió (las activaciones ya están en `RecaudoNucleo` y `TesoreriaNucleo` desde T0183b); si la activación completa necesitó esquema, que vaya en un par nuevo y aditivo — *espera la corrida de pruebas del final (puerta T0301)*
 
 
-**Notas de la construcción de la fase 19 (2026-10-24)**. Pruebas escritas y compiladas, sin correr. Desviaciones y decisiones; las nuevas quedan en
+**Notas de la construcción de la fase 19 (2026-10-24)**. Pruebas escritas y compiladas; las sin contenedores, corridas en verde (2026-10-26); las e2e, sin correr (aparte, con Docker). Desviaciones y decisiones; las nuevas quedan en
 decisiones-transversales §2.7:
 
 - **Regla especial de la fase (decisión del dueño)**: las pruebas se corren una sola vez al final y la puerta T0301 exige las e2e migradas en verde antes de borrar
@@ -1674,7 +1674,7 @@ exige `Receipts.Reports.Export` y deja el evento de auditoría.
 - [X] T0316 [US21] Crear las pantallas src/Presentation/IngenIA365ERP.Shared/Pages/Recaudo/Informes.razor (`/recaudo/informes?vista=`) y src/Presentation/IngenIA365ERP.Shared/Pages/Tesoreria/Informes.razor (`/tesoreria/informes?vista=`) con `IndicadorDeCarga` por zona, y las tarjetas de Recaudo y Tesorería en el Centro de Reportes (`/reportes`), cuyos `NavigateTo` revisa `TodoEnlaceDelMenuTieneSuPagina`; llenar `LasPantallasDeRecaudoYTesoreriaEstanEnElMenu` con todas las pantallas de R0/T0
 
 
-**Notas de la construcción de la fase 20 (2026-10-24)**. Pruebas escritas y compiladas, sin correr. Las verificaciones de EF se hicieron después de liberar el disco C:
+**Notas de la construcción de la fase 20 (2026-10-24)**. Pruebas escritas y compiladas; las sin contenedores, corridas en verde (2026-10-26); las e2e, sin correr (aparte, con Docker). Las verificaciones de EF se hicieron después de liberar el disco C:
 
 - **T0311, T0312**: `Receipts/Reports/InformesDeRecaudoR0Tests` y `Treasury/Reports/InformesDeTesoreriaT0Tests` (registro, cada vista responde su tabla, cuadre del recaudo por medio con
   las vueltas, por módulo, alcance, saldos bancarios por el puerto, regiro). **T0313 (pendiente)**: la e2e se escribe y se corre en la fase 22; sin marcar.
@@ -1726,7 +1726,7 @@ de la activación se niega.
 - [ ] T0329 [US24] Hito del bloque 4 (19/11, ambiente): desplegar en QA R0 y T0 completas (con la migración de los dobles y su código borrado), comprobar en `/admin/participantes-de-integracion` las filas de los dobles cerradas con su motivo, activar Recaudo y Tesorería con la activación **completa** en una cooperativa de QA que no se activó con la mínima (la del paralelo sigue con la suya, `IsMinimal = true`) y ver en verde la activación de Cartera y Aportes (specs/015-recaudo-tesoreria/quickstart.md §2)
 
 
-**Notas de la construcción de la fase 21 (2026-10-24)**. Pruebas escritas y compiladas, sin correr. Desviaciones y decisiones; las nuevas quedan en
+**Notas de la construcción de la fase 21 (2026-10-24)**. Pruebas escritas y compiladas; las sin contenedores, corridas en verde (2026-10-26); las e2e, sin correr (aparte, con Docker). Desviaciones y decisiones; las nuevas quedan en
 decisiones-transversales §2.7:
 
 - **T0317, T0318**: `Receipts/Activation/VerificacionesDeSalidaTests` (las tres verificaciones, con `ISender` sustituido para Cartera y Aportes) y
@@ -1827,7 +1827,7 @@ activación de Cartera sigue aceptando un recaudador con sólo v1.
 - [X] T0353 Generar en src/Infrastructure/IngenIA365ERP.Persistence.Migrations.{PostgreSql,SqlServer}/Application/ la primera versión del par `RecaudoCompleto` (las diez tablas `RCD_` de R1 llegan con sus historias y se regeneran hasta T0404) y activar las rutas de R1 que respondían 404 (api.md §8) (data-model §25 #6)
 - [ ] T0354 P11 · La contadora confirma las enmiendas E-01 (a) y E-02 (a) (versión 2 de los contratos para la fecha valor de las partidas tardías) y, mientras tanto, la corrección de la mora indebida por condonación con aprobación; registrarlo en specs/015-recaudo-tesoreria/research.md (dueño, fecha límite antes de construir R1, sin fecha en la spec; no bloquea: rige v1 con la fecha más antigua admitida y la alerta `Recaudo.FechaValorTardia`)
 
-**Notas de la construcción de la fase 23 (2026-10-24)**. Pruebas escritas y compiladas, sin correr. Desviaciones y decisiones; los nombres nuevos quedan en
+**Notas de la construcción de la fase 23 (2026-10-24)**. Pruebas escritas y compiladas; las sin contenedores, corridas en verde (2026-10-26); las e2e, sin correr (aparte, con Docker). Desviaciones y decisiones; los nombres nuevos quedan en
 decisiones-transversales §2.7:
 
 - **T0346–T0348**: `Lending/Payments/ContratoDeObligacionesV2Tests` (`PagosDePrueba.Versiones` fija la versión adoptada por recaudador), `Lending/Deposits/ContratoDeCuentasV2Tests`
@@ -1880,7 +1880,7 @@ pagar con tarjeta registrando lote y aprobación y arquear por lote; un bono usa
 - [X] T0357 [US1] Quitar la restricción de entrega R0 de `RCD_PaymentMeansCollectionPoints` (por la versión de reglas de Recaudo, no por código fijo), capturar en `UpdateCashOperationMeansCommand` red, datáfono, lote y aprobación, y emitir `ReciboEmitido` con el rol `MedioPorCobrar` para tarjetas (contabilidad.md §3, §5) en src/Core/IngenIA365ERP.Application/Receipts/
 - [X] T0358 [US1] Ampliar `/recaudo/configuracion/medios` y `/recaudo/caja` (src/Presentation/IngenIA365ERP.Shared/Pages/Recaudo/) con las clases de R1, el lote de datáfono en el arqueo de `/recaudo/sesiones`, con `IndicadorDeCarga` por zona
 
-**Notas de la construcción de la fase 24 (2026-10-24)**. Pruebas escritas y compiladas, sin correr:
+**Notas de la construcción de la fase 24 (2026-10-24)**. Pruebas escritas y compiladas; las sin contenedores, corridas en verde (2026-10-26); las e2e, sin correr (aparte, con Docker):
 
 - **T0355**: `Receipts/Setup/MediosDeR1Tests` (sobre `CajaConContratos`): la entrega desplegada es R1; bono y otro se ofrecen; la tarjeta sin adquirente sigue en
   `CardSetupIncomplete`; la captura de la tarjeta (datáfono del adquirente, lote, aprobación, sin el número) y el bono único también dentro de la operación.
@@ -1921,7 +1921,7 @@ simulaciones; el recibo llega por correo sólo con la autorización del canal.
 - [X] T0365 [US3] Exponer `/api/receipts/pending-applications` (`GET/POST`, `POST /{id}/apply`) y agregar a `/recaudo/caja` el atajo `F4`, la casilla de codeudor y el envío por correo, y la pantalla src/Presentation/IngenIA365ERP.Shared/Pages/Recaudo/RecaudoPendienteDeAplicar.razor con `IndicadorDeCarga` por zona
 - [X] T0366 [US3] Regenerar en src/Infrastructure/IngenIA365ERP.Persistence.Migrations.{PostgreSql,SqlServer}/Application/ el par `RecaudoCompleto` con las tablas de recaudo pendiente de aplicar
 
-**Notas de la construcción de la fase 25 (2026-10-24)**. Pruebas escritas y compiladas, sin correr. Desviaciones y decisiones; los nombres nuevos quedan en
+**Notas de la construcción de la fase 25 (2026-10-24)**. Pruebas escritas y compiladas; las sin contenedores, corridas en verde (2026-10-26); las e2e, sin correr (aparte, con Docker). Desviaciones y decisiones; los nombres nuevos quedan en
 decisiones-transversales §2.7:
 
 - **T0359–T0361**: `Receipts/CashDesk/ReciboCompletoR1Tests` (codeudor a pedido, F4 con todas las simulaciones, quitar ítems), `RecaudoPendienteDeAplicarTests`
@@ -1976,7 +1976,7 @@ rechaza antes de pedir la autorización.
 - [X] T0374 [US4] Crear el documento `Egreso` firmado en src/Presentation/IngenIA365ERP.API/Reports/DocumentosDeRecaudoReport.cs y la pantalla src/Presentation/IngenIA365ERP.Shared/Pages/Recaudo/Egresos.razor (`/recaudo/egresos`) con firmas, verificación de identidad, aprobación presente e `IndicadorDeCarga`; exponer `POST /api/receipts/cash-disbursements` y `POST /{id}/void` (`Receipts.Disbursements.*`)
 - [X] T0375 [US4] Regenerar en src/Infrastructure/IngenIA365ERP.Persistence.Migrations.{PostgreSql,SqlServer}/Application/ el par `RecaudoCompleto` con los egresos
 
-**Notas de la construcción de la fase 26 (2026-10-24)**. Pruebas escritas y compiladas, sin correr. Desviaciones y decisiones; los nombres nuevos quedan en
+**Notas de la construcción de la fase 26 (2026-10-24)**. Pruebas escritas y compiladas; las sin contenedores, corridas en verde (2026-10-26); las e2e, sin correr (aparte, con Docker). Desviaciones y decisiones; los nombres nuevos quedan en
 decisiones-transversales §2.7:
 
 - **T0367–T0369**: `Receipts/Disbursements/EgresosDeCajaTests` (retiro por el contrato con su clave, sin efectivo antes de pedir la autorización, tope diario, 428 con la
@@ -2034,7 +2034,7 @@ con referencia válida quedan propuestos correctamente (SC-008).
 - [X] T0380 [US6] Exponer `/api/receipts/identification-rules` y `/api/receipts/reported-deposits` y crear las pantallas src/Presentation/IngenIA365ERP.Shared/Pages/Recaudo/{ReglasDeIdentificacion,ConsignacionesReportadas}.razor con `IndicadorDeCarga`; mostrar las propuestas en `/recaudo/extractos`
 - [X] T0381 [US6] Regenerar en src/Infrastructure/IngenIA365ERP.Persistence.Migrations.{PostgreSql,SqlServer}/Application/ el par `RecaudoCompleto` con reglas y consignaciones reportadas
 
-**Notas de la construcción de la fase 27 (2026-10-24)**. Pruebas escritas y compiladas, sin correr. Desviaciones y decisiones; los nombres nuevos quedan en
+**Notas de la construcción de la fase 27 (2026-10-24)**. Pruebas escritas y compiladas; las sin contenedores, corridas en verde (2026-10-26); las e2e, sin correr (aparte, con Docker). Desviaciones y decisiones; los nombres nuevos quedan en
 decisiones-transversales §2.7:
 
 - **T0376–T0377**: `Receipts/BankItems/ReglasDeIdentificacionTests` (prioridad, ambigüedad, aplicar al cargar sólo con referencia exacta, regla marcada y parámetro;
@@ -2079,7 +2079,7 @@ sin giro a esa fecha, alerta `Recaudo.GiroDePagaduriaTardio` sin bloquear nada; 
 - [X] T0383 [US7] Crear `RCD_PaymasterCalendar` (src/Core/IngenIA365ERP.Domain/Entities/Receipts/Paymasters/PaymasterCalendarEntry.cs) y su configuración, `RegisterPaymasterPayDateCommand` en src/Core/IngenIA365ERP.Application/Receipts/Paymasters/ y la sección del giro tardío en la tarea T0197
 - [X] T0384 [US7] Mostrar el calendario por pagaduría en src/Presentation/IngenIA365ERP.Shared/Pages/Recaudo/Pagadurias.razor y regenerar en src/Infrastructure/IngenIA365ERP.Persistence.Migrations.{PostgreSql,SqlServer}/Application/ el par `RecaudoCompleto`
 
-**Notas de la construcción de la fase 28 (2026-10-24)**. Pruebas escritas y compiladas, sin correr. Desviaciones y decisiones; los nombres nuevos quedan en
+**Notas de la construcción de la fase 28 (2026-10-24)**. Pruebas escritas y compiladas; las sin contenedores, corridas en verde (2026-10-26); las e2e, sin correr (aparte, con Docker). Desviaciones y decisiones; los nombres nuevos quedan en
 decisiones-transversales §2.7:
 
 - **T0382**: `Receipts/Paymasters/CalendarioDePagaduriasTests` (la fecha legal cuenta días hábiles desde el día siguiente, sin fines de semana ni festivos; el parámetro
@@ -2118,7 +2118,7 @@ con radicado cierra el período; cada generación lleva la advertencia de layout
 - [X] T0391 [US14] Exponer `/api/receipts/compliance/cash-transaction-reports` (`POST /{id}/regenerate`, `/uploaded`, `GET /{id}/file`) con `Receipts.Sarlaft.Report` y la pestaña «Reporte de transacciones» en `/recaudo/cumplimiento` con `IndicadorDeCarga`
 - [X] T0392 [US14] Regenerar en src/Infrastructure/IngenIA365ERP.Persistence.Migrations.{PostgreSql,SqlServer}/Application/ el par `RecaudoCompleto` con el reporte de transacciones
 
-**Notas de la construcción de la fase 29 (2026-10-24)**. Pruebas escritas y compiladas, sin correr. Desviaciones y decisiones; los nombres nuevos quedan en
+**Notas de la construcción de la fase 29 (2026-10-24)**. Pruebas escritas y compiladas; las sin contenedores, corridas en verde (2026-10-26); las e2e, sin correr (aparte, con Docker). Desviaciones y decisiones; los nombres nuevos quedan en
 decisiones-transversales §2.7:
 
 - **T0385–T0387**: `Receipts/Compliance/ReporteDeTransaccionesTests` (layout embebido con vigencia y sin cotejar; individuales y múltiples con su alcance; generar con
@@ -2168,7 +2168,7 @@ lleva el tercero y la factura como documento cruce y que el saldo pendiente baja
 - [X] T0397 [US23] Crear `RCD_CommercialReceivableApplications` (src/Core/IngenIA365ERP.Domain/Entities/Receipts/Operations/) con su configuración, el destino `CommercialReceivable` en `ConfirmacionDeRecibo` y `GET /api/receipts/commercial-receivables?person=`; emitir `ReciboEmitido` con el rol `CuentasPorCobrarComerciales` y tercero y cruce (contabilidad.md §3, §5)
 - [X] T0398 [US23] Mostrar las cuentas por cobrar comerciales en el paso «qué paga» de `/recaudo/caja` y regenerar en src/Infrastructure/IngenIA365ERP.Persistence.Migrations.{PostgreSql,SqlServer}/Application/ el par `RecaudoCompleto`
 
-**Notas de la construcción de la fase 30 (2026-10-24)**. Pruebas escritas y compiladas, sin correr. Desviaciones y decisiones; los nombres nuevos quedan en
+**Notas de la construcción de la fase 30 (2026-10-24)**. Pruebas escritas y compiladas; las sin contenedores, corridas en verde (2026-10-26); las e2e, sin correr (aparte, con Docker). Desviaciones y decisiones; los nombres nuevos quedan en
 decisiones-transversales §2.7:
 
 - **T0394–T0395**: `Receipts/CashDesk/CuentasPorCobrarComercialesTests` (no más que el saldo, ni factura sin saldo o sin número; cobrada con una cuota, con tercero y
@@ -2211,7 +2211,7 @@ el tablero; la e2e de R1 pasa en los dos motores.
 - [ ] T0404 Congelar los pares `RecaudoCompleto` y `CarteraYCaptacionesConPartidaCitada` (última regeneración, revisión del SQL, paridad, huellas en tests/IngenIA365ERP.Architecture.Tests/Principles/LasMigracionesCongeladasNoSeRegeneran.cs, commit propio) antes de promover R1
 - [ ] T0405 Promover R1 a DEV, QA y producción con respaldo por base y autorización expresa del dueño, siguiendo docs/operaciones/recaudo-tesoreria-despliegue.md; el generador del reporte de transacciones debe estar en producción **antes del primer vencimiento de enero de 2027** si la suspensión no se prorroga (producción, fecha límite primer vencimiento de enero de 2027)
 
-**Notas de la construcción de la fase 31 (2026-10-24)**. Pruebas escritas y compiladas, sin correr. Desviaciones y decisiones; los nombres nuevos quedan en
+**Notas de la construcción de la fase 31 (2026-10-24)**. Pruebas escritas y compiladas; las sin contenedores, corridas en verde (2026-10-26); las e2e, sin correr (aparte, con Docker). Desviaciones y decisiones; los nombres nuevos quedan en
 decisiones-transversales §2.7:
 
 - **T0399**: `Receipts/Reports/InformesDeRecaudoR1Tests` (las seis vistas en el registro y cada una responde su tabla; el consolidado suma Nómina y el débito
@@ -2284,7 +2284,7 @@ beneficiario.
 - [X] T0412 [US19] Implementar la remesa del punto de venta desde el cierre del día de Comercial (src/Core/IngenIA365ERP.Application/Inventory/Cash/) por `IRemesasDeTesoreria`, y anotar la enmienda E-03 en specs/012-inventario-comercial/ (FR-166)
 - [X] T0413 [US19] Exponer `/api/treasury/transfers` (`POST /{id}/approve`) y `POST /api/treasury/month-end/checks`, y crear las pantallas src/Presentation/IngenIA365ERP.Shared/Pages/Tesoreria/{Traslados,CierreDeCheques}.razor con `IndicadorDeCarga`; regenerar en src/Infrastructure/IngenIA365ERP.Persistence.Migrations.{PostgreSql,SqlServer}/Application/ el par `TesoreriaCompleta`
 
-**Notas de la construcción de la fase 33 (2026-10-24)**. Pruebas escritas y compiladas, sin correr. Desviaciones y decisiones; los nombres nuevos quedan en
+**Notas de la construcción de la fase 33 (2026-10-24)**. Pruebas escritas y compiladas; las sin contenedores, corridas en verde (2026-10-26); las e2e, sin correr (aparte, con Docker). Desviaciones y decisiones; los nombres nuevos quedan en
 decisiones-transversales §2.7:
 
 - **T0407–T0409**: `Treasury/Transfers/TrasladosEntreCuentasTests` (aprobación diferida con `Treasury.Transfers.Approve`, aprobar no emite, misma cuenta rechazada, enviar
@@ -2341,7 +2341,7 @@ y a un lote; un firmante que se retira de la cooperativa levanta la alerta.
 - [X] T0417 [US26] Implementar en src/Core/IngenIA365ERP.Application/Treasury/Orders/ `CreateManualPaymentOrderCommand` y `ApproveManualPaymentOrderCommand`, el CRUD del catálogo, y en …/Treasury/BankAccounts/ los comandos de firmantes y tokens con su alerta (FR-208, FR-211)
 - [X] T0418 [US26] Exponer `/api/treasury/manual-orders`, `/manual-order-concepts`, `/bank-accounts/{id}/signers|tokens` y crear las pantallas src/Presentation/IngenIA365ERP.Shared/Pages/Tesoreria/{OrdenesManuales,Firmantes}.razor con `IndicadorDeCarga`; regenerar en src/Infrastructure/IngenIA365ERP.Persistence.Migrations.{PostgreSql,SqlServer}/Application/ el par `TesoreriaCompleta`
 
-**Notas de la construcción de la fase 34 (2026-10-24)**. Pruebas escritas y compiladas, sin correr. Desviaciones y decisiones; los nombres nuevos quedan en
+**Notas de la construcción de la fase 34 (2026-10-24)**. Pruebas escritas y compiladas; las sin contenedores, corridas en verde (2026-10-26); las e2e, sin correr (aparte, con Docker). Desviaciones y decisiones; los nombres nuevos quedan en
 decisiones-transversales §2.7:
 
 - **T0414–T0415**: `Treasury/Orders/OrdenesManualesTests` (tope, derivar a causación sin la retención, concepto inactivo, soporte obligatorio, espera dos aprobaciones y
@@ -2394,7 +2394,7 @@ canal; cerrar un mes con una conciliación abierta avisa (informativo) y, con `C
 - [ ] T0424 Correr en tests/IngenIA365ERP.API.IntegrationTests la e2e de T1 en los dos motores y congelar el par `TesoreriaCompleta` (huellas en tests/IngenIA365ERP.Architecture.Tests/Principles/LasMigracionesCongeladasNoSeRegeneran.cs, commit propio)
 - [ ] T0425 Promover T1 a DEV, QA y producción con respaldo por base y autorización expresa del dueño, siguiendo docs/operaciones/recaudo-tesoreria-despliegue.md (producción)
 
-**Notas de la construcción de la fase 35 (2026-10-24)**. Pruebas escritas y compiladas, sin correr. Desviaciones y decisiones; los nombres nuevos quedan en
+**Notas de la construcción de la fase 35 (2026-10-24)**. Pruebas escritas y compiladas; las sin contenedores, corridas en verde (2026-10-26); las e2e, sin correr (aparte, con Docker). Desviaciones y decisiones; los nombres nuevos quedan en
 decisiones-transversales §2.7:
 
 - **T0419–T0420**: `Treasury/Results/ComprobanteDePagoTests` (girar deja un comprobante numerado con código, uno por orden; el documento enmascara; sin autorización del
@@ -2461,7 +2461,7 @@ su reverso por porción.
 - [X] T0427 [P] [US15] Escribir tests/IngenIA365ERP.Application.Tests/Receipts/Checks/CanjeCompletoTests.cs (FR-084): lote de canje `RCD_ClearingBatches` por remesa; pagado por el cruce del extracto; devolución por la misma vía de FR-060
 - [X] T0428 [US15] Crear `RCD_ClearingBatches` (src/Core/IngenIA365ERP.Domain/Entities/Receipts/Operations/ClearingBatch.cs) con su configuración e implementar en src/Core/IngenIA365ERP.Application/Receipts/Checks/ el lote de canje y la marca de pagado desde el extracto; vista `received-checks` con el canje; regenerar en src/Infrastructure/IngenIA365ERP.Persistence.Migrations.{PostgreSql,SqlServer}/Application/ el par `RecaudoCanales`
 
-**Notas de la construcción de la fase 37 (2026-10-24)**. Pruebas escritas y compiladas, sin correr. Desviaciones y decisiones; los nombres nuevos quedan en
+**Notas de la construcción de la fase 37 (2026-10-24)**. Pruebas escritas y compiladas; las sin contenedores, corridas en verde (2026-10-26); las e2e, sin correr (aparte, con Docker). Desviaciones y decisiones; los nombres nuevos quedan en
 decisiones-transversales §2.7:
 
 - **T0427**: `Receipts/Checks/CanjeCompletoTests` (el lote deja los cheques en canje; el abono del extracto que coincide paga los elegidos e identifica el abono; el que
@@ -2502,7 +2502,7 @@ convenio explica la comisión con su hecho.
 - [X] T0435 [US16] Exponer `/api/receipts/collection-agreements` (`…/files`, `…/reconciliations`), `/payment-references` y `/gateway-files`, y crear las pantallas src/Presentation/IngenIA365ERP.Shared/Pages/Recaudo/{Convenios,ArchivosDeConvenio}.razor con `IndicadorDeCarga`; regenerar en src/Infrastructure/IngenIA365ERP.Persistence.Migrations.{PostgreSql,SqlServer}/Application/ el par `RecaudoCanales`
 - [X] T0436 [US16] Ofrecer la referencia de pago estable a los documentos al asociado de Cartera (extracto, plan de pagos) por una consulta de Recaudo (src/Core/IngenIA365ERP.Application/Common/Integration/Receipts/IReferenciasDePago.cs **(nuevo)**), sin que Cartera lea `RCD_` (FR-090; R-05)
 
-**Notas de la construcción de la fase 38 (2026-10-26)** (retoma la PAUSA del 2026-10-24). Pruebas escritas y compiladas, sin correr (decisión del dueño del 2026-10-23).
+**Notas de la construcción de la fase 38 (2026-10-26)** (retoma la PAUSA del 2026-10-24). Pruebas escritas y compiladas; las sin contenedores, corridas en verde (2026-10-26); las e2e, sin correr (aparte, con Docker) (decisión del dueño del 2026-10-23).
 Desviaciones y decisiones; los nombres nuevos quedan en decisiones-transversales §2.7:
 
 - **T0429–T0431**: `Receipts/Agreements/ConveniosDeRecaudoTests` (dígito módulo 10 y 11 determinista, estructura que rechaza dígito y longitud, base alfanumérica, revisión
@@ -2551,7 +2551,7 @@ Desviaciones y decisiones; los nombres nuevos quedan en decisiones-transversales
 - [ ] T0438 Correr en tests/IngenIA365ERP.API.IntegrationTests la e2e de R2 en los dos motores y congelar el par `RecaudoCanales` (huellas en tests/IngenIA365ERP.Architecture.Tests/Principles/LasMigracionesCongeladasNoSeRegeneran.cs, commit propio)
 - [ ] T0439 Promover R2 a DEV, QA y producción con respaldo por base y autorización expresa del dueño, siguiendo docs/operaciones/recaudo-tesoreria-despliegue.md (producción)
 
-**Notas de la construcción de la fase 39 (2026-10-26)**. Prueba escrita y compilada, sin correr:
+**Notas de la construcción de la fase 39 (2026-10-26)**. Prueba escrita y compilada; corrida en verde (2026-10-26):
 
 - **T0437**: vistas `channels` («Recaudo por canal»: los recibos vigentes del rango por canal, con su participación; cuadra con los recibos) y `agreements` («Convenios de
   recaudo»: cada archivo con lo informado —lo aplicado más lo que fue a partidas—, lo abonado, la comisión, el IVA, las retenciones, lo sin explicar y el estado de su
@@ -2616,7 +2616,7 @@ quedan como hechos aprobados y el informe cuadra; ≥ 85 % emparejado sola y cie
 - [X] T0449 [US17] Exponer `/api/treasury/bank-notes` y `/reconciliation-rules`, ampliar `/tesoreria/conciliacion` con reglas, notas y varios bancos, con `IndicadorDeCarga`; regenerar en src/Infrastructure/IngenIA365ERP.Persistence.Migrations.{PostgreSql,SqlServer}/Application/ el par `TesoreriaAmpliada`
 - [X] T0450 [US17] Exógena: comprobar que cada cuenta bancaria propia lleva su banco como tercero (`BankThirdPartyPersonId`) y que Contabilidad obtiene por ella los saldos por cuenta al 31 de diciembre y los pagos y retenciones por tercero para el formato 1012 y los de pagos; prueba en tests/IngenIA365ERP.Application.Tests/Accounting/Treasury/ExogenaDeCuentasBancariasTests.cs (FR-222)
 
-**Notas de la construcción de la fase 41 (2026-10-26)**. Pruebas escritas y compiladas, sin correr. Desviaciones y decisiones; los nombres nuevos quedan en
+**Notas de la construcción de la fase 41 (2026-10-26)**. Pruebas escritas y compiladas; las sin contenedores, corridas en verde (2026-10-26); las e2e, sin correr (aparte, con Docker). Desviaciones y decisiones; los nombres nuevos quedan en
 decisiones-transversales §2.7:
 
 - **T0443**: cuatro casos dorados `Treasury/Casos/cruce-reglas-0{1..4}-*.json` y `Domain.Tests/Treasury/CruceConReglasTests`; el motor suma
@@ -2667,7 +2667,7 @@ Comercial y el hecho con tercero y documento cruce; una factura anulada en Comer
 - [X] T0455 [US18] Implementar en Contabilidad `CuentasPorPagarAsync` sobre las cuentas que marque por pagar (E-04; FR-167) y en src/Core/IngenIA365ERP.Application/Treasury/Payables/ la conversión a órdenes (`SupplierInvoice`, `AccountingPayable`), el pago parcial y la programación; emitir `PagoDeProveedorGirado` y `PagoDeCuentaPorPagarGirado` en EmisionDeTesoreria.Pagos.cs (contabilidad.md §4)
 - [X] T0456 [US18] Exponer `/api/treasury/payables` y crear la pantalla src/Presentation/IngenIA365ERP.Shared/Pages/Tesoreria/CuentasPorPagar.razor con el calendario de pagos e `IndicadorDeCarga`; actualizar FR-209 en la documentación: desde T2 los pagos a proveedores van por Tesorería (FR-001)
 
-**Notas de la construcción de la fase 42 (2026-10-26)**. Pruebas escritas y compiladas, sin correr. Desviaciones y decisiones; los nombres nuevos quedan en
+**Notas de la construcción de la fase 42 (2026-10-26)**. Pruebas escritas y compiladas; las sin contenedores, corridas en verde (2026-10-26); las e2e, sin correr (aparte, con Docker). Desviaciones y decisiones; los nombres nuevos quedan en
 decisiones-transversales §2.7:
 
 - **T0451, T0452**: un solo archivo, `Treasury/Payables/PagosAProveedoresTests` (consumo de la factura y su anulación, factura repetida, proveedor inexistente, conversión
@@ -2720,7 +2720,7 @@ Cartera se muestra sin ese componente y con el aviso.
 - [X] T0460 [P] [US20] Crear en src/Core/IngenIA365ERP.Domain/Entities/Treasury/Liquidity/ `CashFlowCategory`, `CashFlowProjection`, `LiquiditySnapshot` con su configuración (data-model §13.2)
 - [X] T0461 [US20] Implementar en src/Core/IngenIA365ERP.Application/Treasury/Liquidity/ la posición diaria, el flujo proyectado, la emisión de `SaldoDelFondoDeLiquidez` y el tablero sin datos personales (`/api/treasury/dashboard`); exponer `/api/treasury/liquidity` y `/cash-flow` y crear las pantallas src/Presentation/IngenIA365ERP.Shared/Pages/Tesoreria/{Liquidez,FlujoDeCaja,Tablero}.razor con `IndicadorDeCarga`; regenerar en src/Infrastructure/IngenIA365ERP.Persistence.Migrations.{PostgreSql,SqlServer}/Application/ el par `TesoreriaAmpliada` (FR-137 a FR-139, FR-155)
 
-**Notas de la construcción de la fase 43 (2026-10-26)**. Pruebas escritas y compiladas, sin correr. Desviaciones y decisiones; los nombres nuevos quedan en
+**Notas de la construcción de la fase 43 (2026-10-26)**. Pruebas escritas y compiladas; las sin contenedores, corridas en verde (2026-10-26); las e2e, sin correr (aparte, con Docker). Desviaciones y decisiones; los nombres nuevos quedan en
 decisiones-transversales §2.7:
 
 - **T0457, T0458**: `Treasury/Liquidity/PosicionYFlujoTests` (la posición es la suma de sus componentes con su signo, sin respuesta de una consulta sale sin ella y con el
@@ -2766,7 +2766,7 @@ retención con su tercero y la diferencia sobre la tolerancia exige aprobación.
 - [X] T0463 [US22] Implementar en Comercial `ILotesDeDatafonoDelPuntoDeVenta` (src/Core/IngenIA365ERP.Application/Inventory/Integration/) y anotar la enmienda E-03 (FR-166)
 - [X] T0464 [US22] Crear `TES_AcquirerSettlements` y `TES_AcquirerSettlementLines` (src/Core/IngenIA365ERP.Domain/Entities/Treasury/Reconciliation/) e implementar en src/Core/IngenIA365ERP.Application/Treasury/Reconciliation/Acquirers/ la carga y la conciliación con su hecho; exponer `/api/treasury/acquirer-settlements` y la pantalla src/Presentation/IngenIA365ERP.Shared/Pages/Tesoreria/Adquirentes.razor con `IndicadorDeCarga`; regenerar en src/Infrastructure/IngenIA365ERP.Persistence.Migrations.{PostgreSql,SqlServer}/Application/ el par `TesoreriaAmpliada`
 
-**Notas de la construcción de la fase 44 (2026-10-26)**. Pruebas escritas y compiladas, sin correr. Desviaciones y decisiones; los nombres nuevos quedan en
+**Notas de la construcción de la fase 44 (2026-10-26)**. Pruebas escritas y compiladas; las sin contenedores, corridas en verde (2026-10-26); las e2e, sin correr (aparte, con Docker). Desviaciones y decisiones; los nombres nuevos quedan en
 decisiones-transversales §2.7:
 
 - **T0462**: `Treasury/Reconciliation/ConciliacionDeAdquirentesTests` (dos lotes —Recaudo y punto de venta— explicados con su hecho cuadrado; sobre la tolerancia, por
@@ -2806,7 +2806,7 @@ decisiones-transversales §2.7:
 - [ ] T0466 Correr en tests/IngenIA365ERP.API.IntegrationTests la e2e de T2 en los dos motores (incluida `ConciliacionCompletaPerformanceTests` con `RUN_PERF_TESTS=1`, SC-016) y congelar el par `TesoreriaAmpliada` (huellas en tests/IngenIA365ERP.Architecture.Tests/Principles/LasMigracionesCongeladasNoSeRegeneran.cs, commit propio)
 - [ ] T0467 Promover T2 a DEV, QA y producción con respaldo por base y autorización expresa del dueño, siguiendo docs/operaciones/recaudo-tesoreria-despliegue.md (producción)
 
-**Notas de la construcción de la fase 45 (2026-10-26)**. Pruebas escritas y compiladas, sin correr:
+**Notas de la construcción de la fase 45 (2026-10-26)**. Pruebas escritas y compiladas; las sin contenedores, corridas en verde (2026-10-26); las e2e, sin correr (aparte, con Docker):
 
 - **T0465**: `Treasury/Reports/InformesDeTesoreriaT2.cs` con las vistas `reconciliations` (mínimas y completas: saldos, cruces automáticos y manuales, notas
   bancarias y liquidaciones de redes cruzadas, partidas y diferencia; alcance por cuenta), `liquidity` (las fotos de la posición del rango) y `cash-flow` (por mes,
@@ -2851,7 +2851,7 @@ irreversible (FR-161; C3 = A; data-model §24; Principio XII).
 - [ ] T0479 Respaldo por base (`pg_dump`) y aplicación del retiro en DEV, QA y producción por GitOps con autorización expresa del dueño; verificar que las bases quedan sin las tablas `TRS_` y que nada más cambió, siguiendo docs/operaciones/tesoreria-retiro-heredado.md (producción)
 
 **Notas de la construcción de la fase 46 (2026-10-26)**. Código y migración construidos; **nada aplicado en ningún ambiente**. Pruebas escritas y
-compiladas, sin correr:
+compiladas; las sin contenedores, corridas en verde (2026-10-26); las e2e, sin correr (aparte, con Docker):
 
 - **Dos commits, no uno** (desviación de T0477, que pedía el retiro en un solo commit propio): la migración se aplica sola al desplegar, así que la
   versión que borra no puede ser la que exporta y carga. `2694c598` trae lo que se despliega **antes** —el diagnóstico, la exportación para archivo y
@@ -2903,20 +2903,20 @@ compiladas, sin correr:
 CLAUDE.md remedida.
 
 - [X] T0480 [P] Crear los índices de recetas docs/manual/recaudo.md y docs/manual/tesoreria.md (molde `docs/manual/cartera.md`) y enlazar en docs/INDICE-DOCUMENTACION.md los manuales, los runbooks y specs/015-recaudo-tesoreria/
-- [ ] T0481 [P] Correr `TextosDeRecaudoYTesoreriaTests`, `PrincipioIX_NoEmptyCatch` (también sobre los `.razor`), `LasPantallasNoRamificanPorElTextoDeUnError` y `TodoEnlaceDelMenuTieneSuPagina` sobre todo lo nuevo de R0 a T2 y corregir lo que aparezca (ningún texto dice «SOLIDO»; ninguna pantalla ramifica por texto)
+- [X] T0481 [P] Correr `TextosDeRecaudoYTesoreriaTests`, `PrincipioIX_NoEmptyCatch` (también sobre los `.razor`), `LasPantallasNoRamificanPorElTextoDeUnError` y `TodoEnlaceDelMenuTieneSuPagina` sobre todo lo nuevo de R0 a T2 y corregir lo que aparezca (ningún texto dice «SOLIDO»; ninguna pantalla ramifica por texto)
 - [X] T0482 [P] Escribir tests/IngenIA365ERP.Shared.Tests/Recaudo/ClaveDeOperacionTests.cs y tests/IngenIA365ERP.Shared.Tests/Recaudo/CajaEstadoTests.cs (la clave estable al reconfirmar tras `DistributionChanged` o una aprobación; los atajos y el paso de la caja) y tests/IngenIA365ERP.Shared.Tests/Tesoreria/LotesEstadoTests.cs
 - [X] T0484 Re-evaluar la constitución (plan.md «Re-evaluación de la constitución tras el diseño») contra lo construido y anotar en plan.md cualquier desviación nueva
 - [X] T0485 Actualizar CLAUDE.md al cierre de cada entrega (R1, T1, R2, T2, retiro) con su sección y remedir la tabla «Totales» (rutas, páginas, reportes PDF, pruebas sin contenedores y de integración) con los comandos de su columna
 - [X] T0486 Ampliar specs/015-recaudo-tesoreria/quickstart.md con los recorridos de R1, T1, R2 y T2 (egresos, reglas, reporte de transacciones, traslados, convenios, conciliación completa, proveedores, liquidez, adquirentes) a medida que cada entrega se cierra
 
-**Notas de la construcción de la fase 47 (2026-10-26)**. Pruebas escritas y compiladas, sin correr:
+**Notas de la construcción de la fase 47 (2026-10-26)**. Pruebas escritas y compiladas; las sin contenedores, corridas en verde (2026-10-26); las e2e, sin correr (aparte, con Docker):
 
 - **T0480**: `docs/manual/recaudo.md` y `docs/manual/tesoreria.md` (molde `cartera.md`: cinco líneas de cómo está armado cada módulo y una
   tabla por entrega con manual y operación; Tesorería suma «Después de T2»). `docs/INDICE-DOCUMENTACION.md`: la sección de la 015 pasa a
   «CONSTRUIDA», enlaza los dos índices, `RETOMAR.md`, el diagnóstico del retiro y su runbook, y pone al día las entregas de cada manual.
   De paso, `tesoreria-manual-del-tesorero.md` gana §8 (el retiro y los reemplazos de cada pantalla) y deja de decir que lo heredado
   «convive»; `recaudo-tesoreria-despliegue.md` §5 explica las dos versiones del retiro.
-- **T0481 sin marcar**: correr las pruebas es de la corrida final. Revisión estática hecha sobre lo nuevo de R0 a T2: ningún texto de
+- **T0481**: corrida en verde (2026-10-26) con Architecture, tras ajustar `TextosDeRecaudoYTesoreriaTests` (ver la corrida final). Revisión estática hecha sobre lo nuevo de R0 a T2: ningún texto de
   `Pages/Recaudo`, `Pages/Tesoreria`, `Components/Recaudo`, `Application/Receipts`, `Application/Treasury` ni de los manuales y runbooks de la
   015 dice «SOLIDO»; ningún `catch` vacío en esas carpetas; toda ruta `@page` de Recaudo y Tesorería tiene su enlace en el menú. Toda pantalla de
   los dos módulos lleva `IndicadorDeCarga` (las dos de puesta en marcha, en su componente `PuestaEnMarchaDeModulo`); `ModulosMigrados` ya tenía
@@ -2933,6 +2933,44 @@ CLAUDE.md remedida.
   escritos (1.278 Domain, 5.938 Application, 506 Architecture, 317 Shared, 625 de integración), que no son casos.
 - **T0486**: quickstart §3a con los recorridos M a R (R1, T1, R2, T2 y el retiro); el título dice ahora «R0/T0 a T2».
 - **DT §2.7**: la fase 47 no fija nombres nuevos de código (los de la 46 están en su tabla).
+
+**Notas de la corrida final de las pruebas sin contenedores (2026-10-26)**. Domain, Application, Architecture y Shared, de uno en uno
+(`dotnet test <proyecto> -m:1 --no-restore -- xUnit.MaxParallelThreads=4`), hasta verde: Domain 2.789/2.789, Application 6.986/6.986 (antes
+1.698 fallas: el catálogo de mensajes no arrancaba; luego 65), Architecture 859/859 (antes 21 fallas), Shared 521/521; ninguna omitida. Las e2e
+compilan y siguen sin correr (aparte, con Docker). `has-pending-model-changes` «No changes» en los dos motores; ninguna migración tocada.
+Commits `9b2fa7bb`, `18aba5e8`, `ad79eaf9`, `6f7e5749`. Los nombres nuevos, en decisiones-transversales §2.7 («Fijados en la corrida final»).
+
+- **Defectos de producto** (corregidos):
+  - los hechos de caja de Recaudo repetían `(Type, Version)` de Comercial (`MovimientoDeCajaRegistrado`, `DiferenciaDeArqueoAprobada`, 012 en
+    producción): el catálogo agregado lanzaba al iniciarse y caían 1.640 pruebas. Pasan a `MovimientoDeCajaDeRecaudoRegistrado` y
+    `DiferenciaDeArqueoDeRecaudoAprobada` (records y contabilidad.md al día);
+  - arqueo, sobrante y aplicación de un pendiente emitían un origen `Document` sin tipo (el emisor lanza): tipos `ARQ`, `SOB`, `APP`;
+  - la matriz de Tesorería no declaraba `MedioPorCobrar` ni `ComisionesDeRed`, que mueve la conciliación de adquirentes;
+  - FR-177: la confirmación devolvía el recibo sin enmascarar con pagador tercero;
+  - el extracto contaba campos ilegibles, no líneas; la posición sumaba lo esperado fuera del rango; la plantilla de cajeros elegía un usuario al azar
+    cuando una persona tiene dos;
+  - la cancelación con entrega por el contrato dejaba la cuenta en `Closing` con unos pesos: el GMF redondeado al peso hacía que
+    `CancelacionDeCuenta.EntregaAsync` (código de la 014) se quedara corto; ahora sube hacia el saldo (`HastaElSaldoAsync`). Toca también la
+    cancelación por pantalla de la 014 (en producción): todas sus pruebas siguen en verde, pero conviene que el dueño lo sepa;
+  - contra las pruebas de principio: `SoloElNumeradorNumera` (16 sitios escribían `x.Number = await numerador…`: `IDocumentoNumerado` y
+    `NumerarAsync`), el único `NextNumber` es el contable (`Checkbook.NextCheckNumber`, misma columna), los números de cuenta bancaria de los
+    mensajes se llaman `BankAccountNumber`/`BankAccounts` (contratos-v2.md al día), Recaudo no usa enums de Cartera (`ReceiptNoticeChannel`),
+    validador de `GetReceiptsAndTreasuryBatchTotalsQuery` (Principio VIII), las configuraciones `TES_` de cuadres salen de la carpeta de Recaudo.
+- **Defectos de prueba** (corregidos): escenarios incompletos (Contabilidad simulada sin `EvaluarAsync`, contratos sin listado ni exigibles, el
+  contexto de prueba sin filtro de borrado en cuadres, cifras y conciliación, el mediador sin flujo de caja); listas exactas que crecieron con R1, R2
+  y T2 (vistas, plantillas, permisos con monto, adopciones, tipos de comprobante, cerrojo, tareas, puertos, hechos inmutables, catálogos); pruebas
+  mal armadas (el lector de parámetros es de ámbito y se reusaba entre pedidos, la sesión se abría dos veces, la alteración de la huella no se
+  guardaba, valor de parámetro no admitido, umbral sobre el tope de la caja, quién efectúa con pagador tercero, el enrutador por clave de la bandeja).
+- **Pruebas de arquitectura ajustadas, a confirmar por el dueño** (no cambian la regla, pero sí su alcance):
+  - `LosComandosDeRecaudoYTesoreriaLlevanClave` contaba todo `*Command`: ahora deja fuera a los consumidores de la bandeja (`Consume…Command`,
+    sin HTTP, idempotentes por la bandeja) y a las dos descargas GET (`DownloadPaymentFileCommand`, `DownloadPayrollDeductionFileCommand`). Si el
+    dueño prefiere que las descargas lleven clave, son GET y habría que pasarlas a POST;
+  - `TextosDeRecaudoYTesoreriaTests`: su exención de los `PermissionGate` no exentaba nada (buscaba en el texto de la infracción); ahora exenta los
+    permisos de los atributos y los códigos que la pantalla compara para traducir (`== "…"`, `case "…"`, `"…" =>`);
+  - `LaContabilidadNoTieneCuentasEnCodigo`: los ejemplos de la plantilla de Recaudo (`500000`, `1098765432`, `50000`) van a su lista de permitidos.
+- **Para el dueño** (sin bloqueo): en la matriz de Tesorería el rol `PuenteDeDevolucion` está declarado pero ningún hecho de Tesorería lo mueve
+  (la devolución se gira por `PuenteDeGiroDelOrigen` con origen `Receipts`, contabilidad.md §4); la plantilla no lo sugiere. Recomendado: dejarlo así
+  o retirarlo del catálogo de roles de Tesorería.
 
 ---
 
