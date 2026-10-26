@@ -1,4 +1,4 @@
-# Decisiones transversales — 015 Recaudo y Tesorería
+﻿# Decisiones transversales — 015 Recaudo y Tesorería
 
 **Feature**: 015 | **Fecha**: 2026-10-22, actualizado el 2026-10-23 (`/speckit-analyze` y decisiones del dueño) | Molde: `013/decisiones-transversales.md`
 
@@ -693,6 +693,17 @@ Lo que tasks.md marcaba **(nuevo)** y lo que trajeron el `/speckit-analyze` y la
 | `ListBankAccountsForExogenaQuery` · `CuentaParaExogenaDto` | la exógena de las cuentas propias | `Treasury/BankAccounts/ExogenaDeCuentasBancarias.cs` |
 | permisos `Treasury.BankNotes.Approve`, `Treasury.Liquidity.View`, `Treasury.Liquidity.Manage` | nuevos | `ReceiptsAndTreasuryPermissionCatalogSeeder`, `PerfilesSugeridos` |
 | rutas `/api/treasury/bank-notes` (`/suggestions`, `/{id}/approve`, `/{id}/reject`), `/api/treasury/reconciliation-rules` (`/{id}`), `/api/treasury/bank-accounts/exogena` · pantallas `/tesoreria/notas-bancarias`, `/tesoreria/reglas-de-conciliacion` · `ConciliacionCompletaClient` · eventos `Treasury.BankNote.{Registered, Approved, Rejected}`, `Treasury.ReconciliationRule.Saved` | rutas, pantallas y auditoría | `API/Endpoints/Treasury/CompleteReconciliationEndpoints.cs`, `Shared/Pages/Tesoreria` |
+
+**Fijados en la construcción de la fase 42 (2026-10-26)**:
+
+| Nombre | Qué | Dónde |
+|---|---|---|
+| `FacturaDeProveedorPorPagarV1` · `AnulacionDeFacturaDeProveedorV1` (`INV → Treasury`) · `CatalogoDeMensajesDeComercialParaTesoreriaV1` · `PagoDeFacturaDeProveedorV1` (`TES → Inventory`) · `INV_SupplierInvoicePayments` (`SupplierInvoicePayment`) · `ConsumeSupplierInvoicePaymentCommand` | E-03: Comercial y Tesorería | `Contracts/Inventory/FacturasDeProveedorParaTesoreriaV1.cs`, `Contracts/Treasury/PagosDeTesoreriaT2V1.cs`, `Inventory/Integration`, par `TesoreriaAmpliada` |
+| `PagoDeProveedorGiradoV1` (`PPG`) · `PagoDeCuentaPorPagarGiradoV1` (`PCG`) · `ChequeNoCobradoPagadoV1` (`CTP`, clase `IssuedCheckLateCashing`) · `RolesDeTesoreriaT2.{CuentasPorPagarProveedores, CuentaPorPagarContable}` | los hechos de T2 de los pagos | `Contracts/Treasury/PagosDeTesoreriaT2V1.cs`, `Treasury/Accounting/EmisionDeTesoreria.PagosT2.cs` |
+| `ConsumeSupplierInvoiceMessageCommand` · `ListPayablesQuery` · `ConvertAccountingPayableCommand` · `GetPaymentCalendarQuery` · `PayableDto` · `DiaDelCalendarioDto` · `CuentasPorPagarDeTesoreria` · `ErroresDeTesoreriaT2Pagos` (`Treasury.Payable.{NotFound, OverPending, AlreadySent, SupplierNotFound}`) · evento `Treasury.Payable.OrderCreated` | cuentas por pagar | `Treasury/Payables/CuentasPorPagar.cs` |
+| `CombinacionDeFirmas` · `FirmanteVigente` · `VeredictoDeFirmas` · `FirmasDelLote` · `Treasury.Batch.SignatureCombinationNotMet` | la combinación de firmas del lote | `Domain/Treasury/Firmas/CombinacionDeFirmas.cs`, `Treasury/Batches/FirmasDelLote.cs` |
+| `ContabilidadParaTesoreria.CuentasPorPagarAsync` sobre el rol `CuentaPorPagarContable` | E-04 | `Accounting/Treasury/ContabilidadParaTesoreria.cs` |
+| ruta `/api/treasury/payables` (`/calendar`, `/orders`) · pantalla `/tesoreria/cuentas-por-pagar` · `CuentasPorPagarClient` | rutas y pantalla | `API/Endpoints/Treasury/PayablesEndpoints.cs`, `Shared/Pages/Tesoreria/CuentasPorPagar.razor` |
 
 ## 3. Decisiones transversales
 

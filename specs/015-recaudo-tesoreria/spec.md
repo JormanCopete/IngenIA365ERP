@@ -1,4 +1,4 @@
-# Feature Specification: Recaudo y Tesorería — caja, medios de pago, bancos, pagadurías y giros
+﻿# Feature Specification: Recaudo y Tesorería — caja, medios de pago, bancos, pagadurías y giros
 
 **Feature Branch**: `015-recaudo-tesoreria`
 
@@ -1560,7 +1560,9 @@ Cada requisito lleva su entrega entre paréntesis (ver «Entregas»). Los FR-170
   un **recibo** de Recaudo (de caja, de banco, de convenio o de pagaduría); todo dinero que sale por la caja sale
   por un **egreso** de Recaudo, y todo lo que sale de un banco, por un **pago** de Tesorería. Ningún módulo cambia
   el saldo de otro: lo pide por su contrato. Hasta T2 rige la transición de FR-209 para los pagos a proveedores y
-  los egresos contables manuales.
+  los egresos contables manuales. **Desde T2** (fase 42, 2026-10-26) los pagos a proveedores y de cuentas por pagar
+  contables también van por Tesorería: las facturas a crédito llegan de Comercial a la bandeja y las cuentas por pagar
+  se convierten en órdenes en `/tesoreria/cuentas-por-pagar`.
 - **FR-002 · Inmutabilidad.** *(R0, T0)* Recibos, egresos, sesiones cerradas, lotes y archivos de pago,
   resultados de giro y conciliaciones cerradas no se editan ni se borran. Se corrigen con un documento nuevo
   enlazado al original (anulación, ajuste, reverso, reapertura con motivo). Un documento anulado sigue visible con
@@ -2080,6 +2082,10 @@ Cada requisito lleva su entrega entre paréntesis (ver «Entregas»). Los FR-170
 - **FR-209 · Egresos fuera de Tesorería hasta T2.** *(T0)* Hasta T2, los pagos a proveedores, las cuentas por pagar
   y las notas bancarias se registran en la Tesorería heredada o en Contabilidad. Tesorería los ve como movimientos
   contables de la cuenta en su saldo, en la posición y en la conciliación mínima; FR-001 rige para ellos desde T2.
+  **Construido en T2 (fase 42, 2026-10-26)**: la transición terminó. Las facturas de proveedor a crédito llegan como
+  órdenes (`FacturaDeProveedorPorPagar`, E-03), las cuentas por pagar contables se consultan y convierten en órdenes
+  (`CuentasPorPagarAsync`, E-04) y las notas bancarias se registran en Tesorería (fase 41). Lo que se siga registrando en
+  Contabilidad se ve como movimiento contable de la cuenta, como antes.
 
 #### L · Órdenes de pago y ejecución
 

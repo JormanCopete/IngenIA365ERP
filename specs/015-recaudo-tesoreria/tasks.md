@@ -1,4 +1,4 @@
----
+﻿---
 
 description: "Lista de tareas de la feature 015 — Recaudo y Tesorería"
 ---
@@ -2660,12 +2660,47 @@ a FR-127, FR-166 parte T2, FR-167 parte T2, FR-209 fin).
 **Independent Test**: pagar en un lote dos facturas de proveedor y una cuenta por pagar contable, comprobar el pago informado a
 Comercial y el hecho con tercero y documento cruce; una factura anulada en Comercial sale del lote no enviado.
 
-- [ ] T0451 [P] [US18] Escribir tests/IngenIA365ERP.Application.Tests/Treasury/Payables/PagosAProveedoresTests.cs (FR-124, FR-126): consumo de `FacturaDeProveedorPorPagar` v1 y `AnulacionDeFacturaDeProveedor` v1 (`INV → Treasury`); orden con vencimiento y neto; al girar, `PagoDeFacturaDeProveedor` v1 (`TES → Inventory`); la anulada sale del lote no enviado; programación por vencimiento
-- [ ] T0452 [P] [US18] Escribir tests/IngenIA365ERP.Application.Tests/Treasury/Payables/CuentasPorPagarContablesTests.cs (FR-125, FR-127): consulta por `IContabilidadParaTesoreria.CuentasPorPagarAsync`; conversión en órdenes con pago parcial; el pago lleva tercero y cruce (`PagoDeCuentaPorPagarGirado`); Tesorería no registra facturas ni causa gastos
-- [ ] T0453 [P] [US18] Escribir la e2e tests/IngenIA365ERP.API.IntegrationTests/Treasury/PagosAProveedoresTests.cs (US18 «Independent Test») para la corrida de cierre de T2
-- [ ] T0454 [US18] Emitir desde Comercial `FacturaDeProveedorPorPagar` y su anulación y consumir `PagoDeFacturaDeProveedor` (src/Core/IngenIA365ERP.Application/Inventory/Purchasing/), anotando la enmienda E-03 en specs/012-inventario-comercial/ (FR-166)
-- [ ] T0455 [US18] Implementar en Contabilidad `CuentasPorPagarAsync` sobre las cuentas que marque por pagar (E-04; FR-167) y en src/Core/IngenIA365ERP.Application/Treasury/Payables/ la conversión a órdenes (`SupplierInvoice`, `AccountingPayable`), el pago parcial y la programación; emitir `PagoDeProveedorGirado` y `PagoDeCuentaPorPagarGirado` en EmisionDeTesoreria.Pagos.cs (contabilidad.md §4)
-- [ ] T0456 [US18] Exponer `/api/treasury/payables` y crear la pantalla src/Presentation/IngenIA365ERP.Shared/Pages/Tesoreria/CuentasPorPagar.razor con el calendario de pagos e `IndicadorDeCarga`; actualizar FR-209 en la documentación: desde T2 los pagos a proveedores van por Tesorería (FR-001)
+- [X] T0451 [P] [US18] Escribir tests/IngenIA365ERP.Application.Tests/Treasury/Payables/PagosAProveedoresTests.cs (FR-124, FR-126): consumo de `FacturaDeProveedorPorPagar` v1 y `AnulacionDeFacturaDeProveedor` v1 (`INV → Treasury`); orden con vencimiento y neto; al girar, `PagoDeFacturaDeProveedor` v1 (`TES → Inventory`); la anulada sale del lote no enviado; programación por vencimiento
+- [X] T0452 [P] [US18] Escribir tests/IngenIA365ERP.Application.Tests/Treasury/Payables/CuentasPorPagarContablesTests.cs (FR-125, FR-127): consulta por `IContabilidadParaTesoreria.CuentasPorPagarAsync`; conversión en órdenes con pago parcial; el pago lleva tercero y cruce (`PagoDeCuentaPorPagarGirado`); Tesorería no registra facturas ni causa gastos
+- [X] T0453 [P] [US18] Escribir la e2e tests/IngenIA365ERP.API.IntegrationTests/Treasury/PagosAProveedoresTests.cs (US18 «Independent Test») para la corrida de cierre de T2
+- [X] T0454 [US18] Emitir desde Comercial `FacturaDeProveedorPorPagar` y su anulación y consumir `PagoDeFacturaDeProveedor` (src/Core/IngenIA365ERP.Application/Inventory/Purchasing/), anotando la enmienda E-03 en specs/012-inventario-comercial/ (FR-166)
+- [X] T0455 [US18] Implementar en Contabilidad `CuentasPorPagarAsync` sobre las cuentas que marque por pagar (E-04; FR-167) y en src/Core/IngenIA365ERP.Application/Treasury/Payables/ la conversión a órdenes (`SupplierInvoice`, `AccountingPayable`), el pago parcial y la programación; emitir `PagoDeProveedorGirado` y `PagoDeCuentaPorPagarGirado` en EmisionDeTesoreria.Pagos.cs (contabilidad.md §4)
+- [X] T0456 [US18] Exponer `/api/treasury/payables` y crear la pantalla src/Presentation/IngenIA365ERP.Shared/Pages/Tesoreria/CuentasPorPagar.razor con el calendario de pagos e `IndicadorDeCarga`; actualizar FR-209 en la documentación: desde T2 los pagos a proveedores van por Tesorería (FR-001)
+
+**Notas de la construcción de la fase 42 (2026-10-26)**. Pruebas escritas y compiladas, sin correr. Desviaciones y decisiones; los nombres nuevos quedan en
+decisiones-transversales §2.7:
+
+- **T0451, T0452**: un solo archivo, `Treasury/Payables/PagosAProveedoresTests` (consumo de la factura y su anulación, factura repetida, proveedor inexistente, conversión
+  parcial sin pasar de lo pendiente, cruce inexistente, calendario y el cobro tardío del cheque). **Desviación**: no hay `CuentasPorPagarContablesTests` aparte —los casos de
+  T0452 están en el mismo archivo—; más `Domain.Tests/Treasury/CombinacionDeFirmasTests`. El hecho `PagoDeProveedorGirado`/`PagoDeCuentaPorPagarGirado` al girar y
+  `PagoDeFacturaDeProveedor` a Comercial se ejercitan en la e2e de cierre (el giro sale por `RegistroDeResultadosDelGiro`, ya cubierto en T0/T1).
+- **T0453**: e2e `Treasury/PagosAProveedoresTests`: consulta, calendario y conversión rechazada por HTTP. **Desviación**: el recorrido completo factura de Comercial →
+  lote → giro → pago informado a Comercial queda para la corrida de cierre de T2, sobre una cooperativa con Comercial y Contabilidad (la preparada de Tesorería no los tiene).
+- **T0454 (E-03)**: `EfectoFacturaDeProveedor` emite `FacturaDeProveedorPorPagar` v1 al confirmar **sólo la factura a crédito con saldo** (`AmountDue > 0`; la de contado
+  ya se pagó por otro camino) y `AnulacionDeFacturaDeProveedor` v1 al anularla; Comercial consume `PagoDeFacturaDeProveedor` v1 con
+  `Inventory/Integration/ConsumeSupplierInvoicePaymentCommand` y guarda el pago en `INV_SupplierInvoicePayments` (`SupplierInvoicePayment`). **Desviación**: la tabla nueva
+  de Inventario va en el par `TesoreriaAmpliada` (es parte de la enmienda E-03 y nace con T2), no en una migración de Inventario. Contrato y catálogo en
+  `Contracts/Inventory/FacturasDeProveedorParaTesoreriaV1.cs` (`CatalogoDeMensajesDeComercialParaTesoreriaV1`). Enmienda anotada en specs/012-inventario-comercial/spec.md.
+- **T0455 (E-04)**: `ContabilidadParaTesoreria.CuentasPorPagarAsync` lee las cuentas que la **matriz de Tesorería** asigna al rol nuevo `CuentaPorPagarContable` (no hay una
+  marca «por pagar» en el plan de cuentas: la marca es la regla de la matriz) y agrupa por tercero y documento cruce lo contabilizado (crédito − débito). **Desviación**: el
+  vencimiento es la **fecha del primer movimiento** del cruce (el libro no tiene vencimientos). En `Treasury/Payables/CuentasPorPagar.cs`: consumo de la factura y de su
+  anulación (sale del lote no enviado; si ya salió al banco se rechaza con `Treasury.Payable.AlreadySent`), consulta, conversión parcial (`Treasury.Payable.OverPending`) y
+  calendario. Hechos nuevos `PagoDeProveedorGirado` (PPG) y `PagoDeCuentaPorPagarGirado` (PCG) en `EmisionDeTesoreria.PagosT2.cs` (no en `Pagos.cs`, para no mezclar con
+  T0), con los roles `CuentasPorPagarProveedores` y `CuentaPorPagarContable`, el tercero y el cruce; `RegistroDeResultadosDelGiro` elige el hecho por el origen de la orden.
+  Una orden de proveedor pagada con cheque conserva el puente de giro del origen (como las de Cartera). **Pedido del dueño para T2, hechos**: (a) la **combinación de firmas**
+  se valida contra las aprobaciones del lote al aprobarlo (`FirmasDelLote` sobre `CombinacionDeFirmas`, `Treasury.Batch.SignatureCombinationNotMet`): un firmante con tope
+  solo suficiente o dos que firman en conjunto; **una cuenta sin firmantes registrados no exige nada** (informativo, no bloquea); (b) el **cobro tardío** del cheque que
+  pasó a cuenta por pagar: `ChequeNoCobradoPagado` (CTP, rol `CuentaPorPagarChequesNoCobrados` → `Banco`, con la fecha del cobro) al marcarlo cobrado o al cruzarlo en la
+  conciliación; **decisión pendiente del dueño** (ver abajo).
+- **T0456**: rutas `GET /api/treasury/payables`, `GET /api/treasury/payables/calendar` y `POST /api/treasury/payables/orders` (con clave) bajo
+  `Treasury.Payables.View/Manage/Pay`; pantalla `/tesoreria/cuentas-por-pagar` con el calendario, la conversión y `IndicadorDeCarga`, en el menú; `CuentasPorPagarClient`.
+  FR-209 y FR-001 actualizados en spec.md. Par `TesoreriaAmpliada` regenerado (cinco tablas: suma `INV_SupplierInvoicePayments`); «No changes» en SqlServer y PostgreSQL;
+  paridad en par (Application 73, Admin 15).
+- **Decisiones para el dueño**: (1) el hecho de cobro tardío CTP y su rol en la matriz —recomendado: dejarlo como está, contra la misma cuenta por pagar del CNP—; (2) si las
+  facturas de contado también deben llegar a Tesorería —recomendado: no, ya se pagaron en caja o por otro egreso—; (3) el vencimiento de la cuenta por pagar contable —
+  recomendado: la fecha del primer movimiento hasta que Contabilidad guarde vencimientos (E4 de la 009)—; (4) si una cuenta sin firmantes debe bloquear el lote —recomendado:
+  no, informar—; (5) la adopción de las versiones nuevas del destino Tesorería (`FacturaDeProveedorPorPagar`, `AnulacionDeFacturaDeProveedor`) para una Tesorería activada
+  antes de T2 (la misma pregunta de la fase 41).
 
 ---
 
