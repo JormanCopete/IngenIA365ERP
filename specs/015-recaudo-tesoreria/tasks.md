@@ -2762,9 +2762,36 @@ retenciones como hecho y diferencias con aprobación (FR-133, FR-166 parte T2, F
 **Independent Test**: conciliar un día con dos lotes y un abono con comisión y retención: el hecho desagrega comisión, IVA y
 retención con su tercero y la diferencia sobre la tolerancia exige aprobación.
 
-- [ ] T0462 [P] [US22] Escribir tests/IngenIA365ERP.Application.Tests/Treasury/Reconciliation/ConciliacionDeAdquirentesTests.cs (FR-133, FR-218): lotes de datáfono de Recaudo y del punto de venta por `ILotesDeDatafonoDelPuntoDeVenta`; archivo de la red en `AcquirerSettlement = 11`; `ConciliacionDeAdquirenteRegistrada` con comisión, IVA y retenciones con su tercero; diferencias con aprobación
-- [ ] T0463 [US22] Implementar en Comercial `ILotesDeDatafonoDelPuntoDeVenta` (src/Core/IngenIA365ERP.Application/Inventory/Integration/) y anotar la enmienda E-03 (FR-166)
-- [ ] T0464 [US22] Crear `TES_AcquirerSettlements` y `TES_AcquirerSettlementLines` (src/Core/IngenIA365ERP.Domain/Entities/Treasury/Reconciliation/) e implementar en src/Core/IngenIA365ERP.Application/Treasury/Reconciliation/Acquirers/ la carga y la conciliación con su hecho; exponer `/api/treasury/acquirer-settlements` y la pantalla src/Presentation/IngenIA365ERP.Shared/Pages/Tesoreria/Adquirentes.razor con `IndicadorDeCarga`; regenerar en src/Infrastructure/IngenIA365ERP.Persistence.Migrations.{PostgreSql,SqlServer}/Application/ el par `TesoreriaAmpliada`
+- [X] T0462 [P] [US22] Escribir tests/IngenIA365ERP.Application.Tests/Treasury/Reconciliation/ConciliacionDeAdquirentesTests.cs (FR-133, FR-218): lotes de datáfono de Recaudo y del punto de venta por `ILotesDeDatafonoDelPuntoDeVenta`; archivo de la red en `AcquirerSettlement = 11`; `ConciliacionDeAdquirenteRegistrada` con comisión, IVA y retenciones con su tercero; diferencias con aprobación
+- [X] T0463 [US22] Implementar en Comercial `ILotesDeDatafonoDelPuntoDeVenta` (src/Core/IngenIA365ERP.Application/Inventory/Integration/) y anotar la enmienda E-03 (FR-166)
+- [X] T0464 [US22] Crear `TES_AcquirerSettlements` y `TES_AcquirerSettlementLines` (src/Core/IngenIA365ERP.Domain/Entities/Treasury/Reconciliation/) e implementar en src/Core/IngenIA365ERP.Application/Treasury/Reconciliation/Acquirers/ la carga y la conciliación con su hecho; exponer `/api/treasury/acquirer-settlements` y la pantalla src/Presentation/IngenIA365ERP.Shared/Pages/Tesoreria/Adquirentes.razor con `IndicadorDeCarga`; regenerar en src/Infrastructure/IngenIA365ERP.Persistence.Migrations.{PostgreSql,SqlServer}/Application/ el par `TesoreriaAmpliada`
+
+**Notas de la construcción de la fase 44 (2026-10-26)**. Pruebas escritas y compiladas, sin correr. Desviaciones y decisiones; los nombres nuevos quedan en
+decisiones-transversales §2.7:
+
+- **T0462**: `Treasury/Reconciliation/ConciliacionDeAdquirentesTests` (dos lotes —Recaudo y punto de venta— explicados con su hecho cuadrado; sobre la tolerancia, por
+  aprobar, sin autoaprobación y aprobada por otra persona; línea que no suma; archivo repetido; lote que nadie cobró).
+- **T0463 (E-03)**: `ILotesDeDatafonoDelPuntoDeVenta` (`Common/Integration/Inventory`) con `LoteDeDatafonoDto`, implementado en `Inventory/Integration/LotesDeDatafonoDelPuntoDeVenta`
+  sobre los lotes de los arqueos confirmados (el último arqueo de cada lote). **Desviación**: Recaudo también ofrece sus lotes por un puerto nuevo,
+  `ILotesDeDatafonoDeRecaudo` (`Receipts/Integration/LotesDeDatafonoDeRecaudo`), porque Tesorería no lee `RCD_` (TR3). Enmienda anotada en specs/012-inventario-comercial.
+- **T0464**: `TES_AcquirerSettlements` y `TES_AcquirerSettlementLines` (`Entities/Treasury/Reconciliation/Adquirentes.cs`; numeración `AQ`; el mismo archivo de una red no
+  se carga dos veces); `Treasury/Reconciliation/Acquirers/ConciliacionDeAdquirentes.cs` (carga y conciliación, decisión, lista). El archivo de la red se lee con un formato
+  del ámbito `AcquirerSettlement = 11` y nueve orígenes nuevos de lectura en `BankFieldSource` (`TerminalCode = 130` … `SettledAmount = 138`; validador por ámbito,
+  catálogo de orígenes y tipo por defecto); todo o nada si una línea es ilegible o no suma (bruto − comisión − IVA − retenciones ≠ neto). Cada lote se cruza con lo cobrado
+  por datáfono y número de lote (o por datáfono y día si la red no trae lote), de la misma red; la diferencia es (cobrado − bruto) + (abono del extracto − neto, si se indicó
+  la línea) y se compara con `Adquirentes.ToleranciaDeConciliacion` (sembrado en la fase 38, sin valor = cero). Explicada o aprobada, nace
+  `ConciliacionDeAdquirenteRegistrada` (CAQ, comprobante `TB`; **el código corto `CAD` ya era de Cartera**): `Banco` (neto) + `ComisionesDeRed` (rol nuevo) +
+  `IvaDescontable` + `RetencionesAFavor` (la red como tercero) → `MedioPorCobrar` (el bruto liquidado), y queda como registro de los libros de la conciliación
+  (`ReconciliationRecordKind.AcquirerSettlement`). **Desviaciones**: (a) `MedioPorCobrar` es el rol de Recaudo; en la matriz de Tesorería se parametriza aparte (la
+  contadora le pone la misma cuenta); (b) lo cobrado que la red no liquidó queda en `MedioPorCobrar` (no hay rol de diferencia: la aprobación es de la diferencia, no
+  un ajuste); (c) un estado nuevo `AcquirerSettlementState.Rejected = 4`; (d) permisos nuevos `Treasury.AcquirerSettlements.Load` (conciliador) y `.Approve` (aprobador),
+  la lista con `Treasury.Reconciliation.View`. Rutas `GET/POST /api/treasury/acquirer-settlements` (multipart) y `POST /{id}/approve|reject`; pantalla
+  `/tesoreria/adquirentes` con `IndicadorDeCarga`, en el menú; `AdquirentesClient`. La pantalla de formatos bancarios ofrece ahora los ámbitos de convenio, pasarela y
+  liquidación de adquirentes (los dos primeros faltaban desde la fase 36). Par `TesoreriaAmpliada` regenerado (diez tablas); «No changes» en SqlServer y PostgreSQL;
+  paridad en par (Application 73, Admin 15).
+- **Decisiones para el dueño**: (1) el layout real de la liquidación de cada red (Redeban, Credibanco) para cargarlo como formato —sin él no se concilia—; (2) si lo
+  cobrado que la red no liquidó debe ir a una cuenta de diferencias al aprobar —recomendado: no, queda en el medio por cobrar hasta la siguiente liquidación—; (3) la
+  tolerancia por defecto (hoy cero).
 
 ---
 

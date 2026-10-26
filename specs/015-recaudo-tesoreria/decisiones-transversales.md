@@ -716,6 +716,17 @@ Lo que tasks.md marcaba **(nuevo)** y lo que trajeron el `/speckit-analyze` y la
 | `PosicionDeLiquidez` (códigos `BANCO-*`, `BOVEDA-*`, `CAJA-*`, `C-LOTES`, `C-BANDEJA`, `C-NOMINA`, `C-CHEQUES`, `E-CARTERA`, `E-CAPTAC`, `RECAUDO`) · `GetLiquidityPositionQuery` · `TakeLiquiditySnapshotCommand` · `ListLiquiditySnapshotsQuery` · `SaveCashFlowCategoryCommand` · `ListCashFlowCategoriesQuery` · `SaveCashFlowProjectionCommand` · `GetCashFlowQuery` · `GetTreasuryDashboardQuery` · `ErroresDeTesoreriaT2Liquidez` (`Treasury.Liquidity.FutureSnapshot`) · eventos `Treasury.Liquidity.SnapshotTaken`, `Treasury.CashFlowCategory.Saved`, `Treasury.CashFlowProjection.Saved` | la liquidez | `Treasury/Liquidity/PosicionDeLiquidez.cs`, `Treasury/Liquidity/Liquidez.cs` |
 | rutas `/api/treasury/liquidity` (`/snapshots`), `/api/treasury/cash-flow-projections` (`/categories`, `/categories/{id}`, `/entries`), `/api/treasury/dashboard` · pantallas `/tesoreria/liquidez`, `/tesoreria/flujo-de-caja`, `/tesoreria/tablero` · `LiquidezClient` | rutas y pantallas | `API/Endpoints/Treasury/LiquidityEndpoints.cs`, `Shared/Pages/Tesoreria` |
 
+**Fijados en la construcción de la fase 44 (2026-10-26)**:
+
+| Nombre | Qué | Dónde |
+|---|---|---|
+| `TES_AcquirerSettlements` (`AcquirerSettlement`, numeración `AQ`) · `TES_AcquirerSettlementLines` (`AcquirerSettlementLine`) · `AcquirerSettlementState.Rejected = 4` | la conciliación de adquirentes | `Entities/Treasury/Reconciliation/Adquirentes.cs`, par `TesoreriaAmpliada` |
+| `BankFieldSource.{TerminalCode = 130, TerminalBatchNumber = 131, GrossAmount = 132, CommissionAmount = 133, CommissionVatAmount = 134, WithholdingTaxAmount = 135, WithholdingVatAmount = 136, WithholdingIcaAmount = 137, SettledAmount = 138}` | los orígenes de lectura del ámbito `AcquirerSettlement = 11` | `Domain/Enums/Core/BankFiles.cs`, `BankFileFormatValidator`, `BankFileFormatQueries` |
+| `ILotesDeDatafonoDelPuntoDeVenta` · `LoteDeDatafonoDto` · `LotesDeDatafonoDelPuntoDeVenta` · `ILotesDeDatafonoDeRecaudo` · `LotesDeDatafonoDeRecaudo` | E-03 y el puerto de Recaudo | `Common/Integration/Inventory`, `Common/Integration/Receipts/PuertosDeRecaudo.cs`, `Inventory/Integration`, `Receipts/Integration` |
+| `ConciliacionDeAdquirenteRegistradaV1` (`CAQ`, comprobante `TB`) · `RolesDeTesoreriaT2.ComisionesDeRed` · `EmisionDeTesoreria.ConciliacionDeAdquirenteAsync` (clase `AcquirerSettlement`) | el hecho | `Contracts/Treasury/HechosDeTesoreriaT2V1.cs`, `Treasury/Accounting/EmisionDeTesoreria.Adquirentes.cs` |
+| `LoadAcquirerSettlementCommand` · `DecideAcquirerSettlementCommand` · `ListAcquirerSettlementsQuery` · `ErroresDeAdquirentes` (`Treasury.AcquirerSettlement.{InvalidFormat, AlreadyLoaded, Illegible, Empty, StatementLineMismatch, NotPendingApproval, SelfApproval}`) · eventos `Treasury.AcquirerSettlement.{Loaded, Approved, Rejected}` | carga, decisión y lista | `Treasury/Reconciliation/Acquirers/ConciliacionDeAdquirentes.cs` |
+| permisos `Treasury.AcquirerSettlements.Load`, `.Approve` · ruta `/api/treasury/acquirer-settlements` (`/{id}/approve`, `/{id}/reject`) · pantalla `/tesoreria/adquirentes` · `AdquirentesClient` | permisos, rutas y pantalla | `ReceiptsAndTreasuryPermissionCatalogSeeder`, `API/Endpoints/Treasury/AcquirerSettlementsEndpoints.cs`, `Shared/Pages/Tesoreria/Adquirentes.razor` |
+
 ## 3. Decisiones transversales
 
 ### Módulos y frontera
