@@ -1,4 +1,4 @@
-# Recaudo: manual del analista de recaudo (R0 y R1)
+# Recaudo: manual del analista de recaudo (R0, R1 y R2)
 
 > Feature 015, entrega R0. Receta para **el analista de recaudo** (plantilla `recaudo.analista`): extractos, identificación de
 > abonos, partidas por identificar, pagadurías y cheques devueltos. Historias US6, US7 y US15 de la
@@ -67,3 +67,31 @@ se informa y no bloquea, salvo que la cooperativa active `Cheques.BloquearFueraD
 - **Reporte de transacciones** (`/recaudo/cumplimiento`, oficial de cumplimiento): genere el del mes; con una inconsistencia bloqueante
   queda validado sin archivo; regenerar deja la versión anterior reemplazada; marque cargado con el radicado. Cada generación advierte
   que la estructura está sin cotejar hasta que el oficial la revise.
+  Adjunte el comprobante del cargue con «Adjuntar comprobante» antes de marcarlo cargado (R2).
+
+## 7. Lo que trae R2: canje, convenios y pasarelas
+
+- **Canje de cheques** (`/recaudo/cheques-recibidos` → «Canje de cheques»): arme el lote de canje de los cheques que salen en la remesa del
+  día a una cuenta propia; cuando llega el abono del extracto que los paga, «Cruzar con el extracto» los marca pagados (el lote entero o
+  los elegidos, con el valor exacto). El devuelto sigue la devolución de siempre.
+- **Convenios de recaudo** (`/recaudo/convenios`): un convenio por banco, corresponsal o pasarela, con su cuenta recaudadora, la estructura
+  de la referencia (por producto o por persona, longitud y dígito de verificación) y el formato del archivo diario (Maestros → Formatos
+  bancarios, ámbito «archivo de convenio» o «archivo de pasarela»). La comisión pactada es informativa. Si cambia la referencia, el formato
+  o la comisión, nace una versión nueva desde la fecha indicada; nunca es retroactiva. En la misma pantalla se emite la **referencia de
+  pago** de un producto: el número del crédito o de la cuenta con su dígito (`Referencias.DigitoDeVerificacion`), la misma que imprimen el
+  plan de pagos y el extracto.
+- **Archivo del convenio o de la pasarela** (`/recaudo/archivos-de-convenio`): elija el convenio, adjunte el archivo y «Revisar»: verá qué
+  se aplicaría, qué iría a partidas (referencia inválida, dígito que no corresponde o referencia desconocida), qué no salió aprobado en la
+  pasarela y qué pagos ya habían llegado en otro archivo. «Cargar y aplicar» aplica cada pago a su nombre con un recibo de convenio (o en
+  línea) y deja lo demás como partida por identificar con su motivo. El mismo archivo no se carga dos veces. Si el aliado informa cuántos
+  pagos y cuánto trae el archivo, escríbalo: si no cuadra, el archivo no se carga.
+- **Conciliar el archivo** («Conciliar»): elija el abono del extracto de la cuenta recaudadora que liquidó el archivo y escriba la comisión,
+  su IVA y las retenciones que descontó el aliado. Lo que quede sin explicar por encima de `Convenios.ToleranciaDeConciliacion` lo aprueba
+  otra persona en «Conciliaciones por aprobar». El abono queda identificado como liquidación del convenio.
+- **Pago de una aseguradora**: al identificar un abono de la reclamación de un seguro de crédito, elija a la aseguradora en
+  «Aseguradora que paga»: queda como pagadora y el pago se aplica al crédito del deudor por el contrato de Cartera.
+- **Soportes**: la firma de quien recibe un egreso (`/recaudo/egresos`), el soporte de una consignación reportada
+  (`/recaudo/consignaciones-reportadas`) y el comprobante del cargue a la UIAF (`/recaudo/cumplimiento`) se adjuntan en su pantalla con su
+  propio tipo de documento; no se borran.
+- **Informes** (`/recaudo/informes`): «Recaudo por canal» (cuadra con los recibos vigentes) y «Convenios de recaudo» (cada archivo con lo
+  informado, lo aplicado, lo que fue a partidas y su conciliación).

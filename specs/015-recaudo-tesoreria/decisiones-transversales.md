@@ -666,6 +666,13 @@ Lo que tasks.md marcaba **(nuevo)** y lo que trajeron el `/speckit-analyze` y la
 | rutas `/api/receipts/collection-agreements` (`/{id}`, `/{id}/files`, `/files`, `/{id}/reconciliations`, `/reconciliations`, `/reconciliations/{id}/approve`), `/api/receipts/payment-references`, `/api/receipts/gateway-files` · pantallas `/recaudo/convenios`, `/recaudo/archivos-de-convenio` · `ConveniosClient` · eventos `Receipts.Agreement.{Created, Updated}`, `Receipts.AgreementFile.Loaded`, `Receipts.GatewayFile.Loaded`, `Receipts.AgreementReconciliation.{Registered, Approved}`, `Receipts.PaymentReference.Issued` | rutas, pantallas y auditoría | `API/Endpoints/Receipts/AgreementsEndpoints.cs`, `Shared/Pages/Recaudo` |
 | `ConstructorDeDocumentosDeCartera.LeyendaDeReferenciaDePago` (dato `paymentReference`) | la referencia en el plan de pagos y el extracto | `Lending/Documents/ConstructorDeDocumentosDeCartera.cs` |
 
+**Fijados en la construcción de la fase 39 (2026-10-26)**:
+
+| Nombre | Qué | Dónde |
+|---|---|---|
+| vistas `channels` · `agreements` (`VistasDeRecaudo.{Canales, Convenios}`) | los informes de R2 | `Receipts/Reports/InformesDeRecaudoR2.cs` |
+| «Aseguradora que paga» (`IdentificarAbonoRequest.InsurerClaim`) | el pagador aseguradora en la identificación de un abono (FR-200) | `Shared/Pages/Recaudo/Extractos.razor` |
+
 ## 3. Decisiones transversales
 
 ### Módulos y frontera

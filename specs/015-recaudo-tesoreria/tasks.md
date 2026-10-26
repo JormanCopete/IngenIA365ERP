@@ -2547,9 +2547,20 @@ Desviaciones y decisiones; los nombres nuevos quedan en decisiones-transversales
 
 **Independent Test**: la vista de canales cuadra con los recibos por canal; la e2e de R2 pasa en los dos motores.
 
-- [ ] T0437 [P] [US21] Implementar las vistas `channels` y `agreements` en src/Core/IngenIA365ERP.Application/Receipts/Reports/ con su prueba en tests/IngenIA365ERP.Application.Tests/Receipts/Reports/InformesDeRecaudoR2Tests.cs, y actualizar docs/manual/recaudo-manual-del-analista.md con convenios, pasarelas y canje (FR-152, FR-225)
+- [X] T0437 [P] [US21] Implementar las vistas `channels` y `agreements` en src/Core/IngenIA365ERP.Application/Receipts/Reports/ con su prueba en tests/IngenIA365ERP.Application.Tests/Receipts/Reports/InformesDeRecaudoR2Tests.cs, y actualizar docs/manual/recaudo-manual-del-analista.md con convenios, pasarelas y canje (FR-152, FR-225)
 - [ ] T0438 Correr en tests/IngenIA365ERP.API.IntegrationTests la e2e de R2 en los dos motores y congelar el par `RecaudoCanales` (huellas en tests/IngenIA365ERP.Architecture.Tests/Principles/LasMigracionesCongeladasNoSeRegeneran.cs, commit propio)
 - [ ] T0439 Promover R2 a DEV, QA y producción con respaldo por base y autorización expresa del dueño, siguiendo docs/operaciones/recaudo-tesoreria-despliegue.md (producción)
+
+**Notas de la construcción de la fase 39 (2026-10-26)**. Prueba escrita y compilada, sin correr:
+
+- **T0437**: vistas `channels` («Recaudo por canal»: los recibos vigentes del rango por canal, con su participación; cuadra con los recibos) y `agreements` («Convenios de
+  recaudo»: cada archivo con lo informado —lo aplicado más lo que fue a partidas—, lo abonado, la comisión, el IVA, las retenciones, lo sin explicar y el estado de su
+  conciliación; resaltado si no está conciliado o espera aprobación) en `Receipts/Reports/InformesDeRecaudoR2.cs` (`VistasDeRecaudo.{Canales, Convenios}`); prueba
+  `Receipts/Reports/InformesDeRecaudoR2Tests`; el manual del analista suma la sección 7 (canje, convenios, pasarelas, conciliación, aseguradora y los soportes
+  propios). En `/recaudo/extractos` se suma «Aseguradora que paga» (FR-200).
+- **T0438 sin hacer (corrida e2e y congelamiento en ambiente)**: por la regla de esta tanda no se corre ninguna prueba; el par `RecaudoCanales` sigue sin huella en
+  `LasMigracionesCongeladasNoSeRegeneran` y se congela después de la corrida de cierre de R2 en los dos motores (commit propio).
+- **T0439 sin hacer (promoción)**: tarea de ambiente con respaldo por base y autorización expresa del dueño.
 
 ---
 
