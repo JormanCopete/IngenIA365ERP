@@ -31,9 +31,16 @@ public sealed record ResultadoDeReplicacion(
     long? DesdeSequence,
     long? HastaSequence,
     Guid? ReplicacionPublicId,
-    IReadOnlyDictionary<string, EfectoAplicado> Efectos)
+    IReadOnlyDictionary<string, EfectoAplicado> Efectos) : Behaviors.IResultadoConEfecto
 {
     public bool Copio => Valores + Documentos > 0;
+
+    /// <summary>
+    /// La tarea <c>valores-nacionales.replicar</c> envía el comando en cada pasada del programador (cada minuto): una pasada
+    /// <see cref="SinNovedad"/> no escribe nada y no se audita (incidente del 2026-10-26). Lo que copió se audita —además del evento
+    /// <c>NationalValues.Replicated</c>—, y también una pasada en que la central no respondió o un efecto falló: eso es un hecho.
+    /// </summary>
+    public bool HuboEfecto => Copio || !CentralDisponible || Motivo is not null;
 
     public static ResultadoDeReplicacion SinNovedad { get; } = new(true, null, 0, 0, null, null, null, new Dictionary<string, EfectoAplicado>());
 

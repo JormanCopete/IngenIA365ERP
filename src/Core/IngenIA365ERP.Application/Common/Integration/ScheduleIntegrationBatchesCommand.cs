@@ -39,8 +39,18 @@ namespace IngenIA365ERP.Application.Common.Integration;
 /// </summary>
 public sealed record ScheduleIntegrationBatchesCommand(int LateToleranceMinutes) : IRequest<Result<LotesProgramadosDto>>, Behaviors.IReintentableAnteConcurrencia;
 
-/// <summary>Lo que dejó la pasada: los lotes creados y los atrasados. (nuevo)</summary>
-public sealed record LotesProgramadosDto(IReadOnlyList<LoteProgramadoDto> Created, IReadOnlyList<LoteProgramadoDto> Late);
+/// <summary>
+/// Lo que dejó la pasada: los lotes creados y los atrasados. Una pasada que no creó ningún lote (no tomó ninguna entrega) no tiene
+/// efecto y no se audita (<see cref="Behaviors.IResultadoConEfecto"/>): el despachador la envía cada pocos segundos, y hasta el
+/// 2026-10-26 cada vuelta vacía dejaba un evento —unos 34.000 al día por cooperativa—. Los atrasados no cuentan: el comando no los
+/// toca, y la alerta que levanta el despachador con ellos se audita sola (<c>RaiseAlertCommand</c>). (nuevo)
+/// </summary>
+public sealed record LotesProgramadosDto(IReadOnlyList<LoteProgramadoDto> Created, IReadOnlyList<LoteProgramadoDto> Late)
+    : Behaviors.IResultadoConEfecto
+{
+    /// <summary>Verdadero si creó al menos un lote (y le asignó sus entregas).</summary>
+    public bool HuboEfecto => Created.Count > 0;
+}
 
 /// <summary>Un lote programado: su franja local y cuántos mensajes tomó. (nuevo)</summary>
 public sealed record LoteProgramadoDto(Guid BatchPublicId, long Number, string ScheduleKey, DateTime ScheduledFor, int Messages);
